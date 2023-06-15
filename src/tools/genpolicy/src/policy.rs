@@ -153,7 +153,13 @@ impl AgentPolicy {
             let doc_mapping = Value::deserialize(document)?;
             let yaml_string = serde_yaml::to_string(&doc_mapping)?;
             let (mut k8s_object, kind) = yaml::new_k8s_resource(&yaml_string)?;
-            k8s_object.init(files.use_cache, &yaml_string).await?;
+
+            let k: &str = &kind;
+            match k {
+                "Pod" => k8s_object.init2(files.use_cache, &doc_mapping).await?,
+                _ => k8s_object.init(files.use_cache, &yaml_string).await?,
+            }
+
             k8s_objects.push(k8s_object);
 
             if kind.eq("ConfigMap") {

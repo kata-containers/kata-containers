@@ -30,7 +30,7 @@ pub struct Pod {
     pub spec: PodSpec,
 
     #[serde(skip)]
-    yaml: String,
+    doc_mapping: serde_yaml::Value,
 
     #[serde(skip)]
     registry_containers: Vec<registry::Container>,
@@ -479,8 +479,12 @@ impl EnvVar {
 #[async_trait]
 impl yaml::K8sResource for Pod {
     async fn init(&mut self, use_cache: bool, yaml: &str) -> Result<()> {
+        Err(anyhow!("Unsupported"))
+    }
+
+    async fn init2(&mut self, use_cache: bool, doc_mapping: &serde_yaml::Value) -> Result<()> {
         yaml::k8s_resource_init(&mut self.spec, &mut self.registry_containers, use_cache).await?;
-        self.yaml = yaml.to_string();
+        self.doc_mapping = doc_mapping.clone();
         Ok(())
     }
 
@@ -546,11 +550,9 @@ impl yaml::K8sResource for Pod {
     }
 
     fn serialize(&mut self) -> Result<String> {
-        let mut resource: Self = serde_yaml::from_str(&self.yaml).unwrap();
-        resource
-            .metadata
-            .add_policy_annotation(&self.encoded_policy);
-        Ok(serde_yaml::to_string(&resource)?)
+        let metadata = self.doc_mapping.get_mut("metadata").unwrap();
+        yaml::add_policy_annotation(metadata, &self.encoded_policy);
+        Ok(serde_yaml::to_string(&self.doc_mapping)?)
     }
 }
 

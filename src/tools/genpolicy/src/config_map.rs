@@ -82,25 +82,28 @@ impl yaml::K8sResource for ConfigMap {
     async fn init(&mut self, _use_cache: bool, _yaml: &str) -> Result<()> {
         Ok(())
     }
+    async fn init2(&mut self, use_cache: bool, doc_mapping: &serde_yaml::Value) -> Result<()> {
+        Err(anyhow!("Unsupported"))
+    }
 
     fn requires_policy(&self) -> bool {
         false
     }
 
     fn get_metadata_name(&self) -> Result<String> {
-        Err(anyhow!("Unsupported"))?
+        Err(anyhow!("Unsupported"))
     }
 
     fn get_host_name(&self) -> Result<String> {
-        Err(anyhow!("Unsupported"))?
+        Err(anyhow!("Unsupported"))
     }
 
     fn get_sandbox_name(&self) -> Result<Option<String>> {
-        Err(anyhow!("Unsupported"))?
+        Err(anyhow!("Unsupported"))
     }
 
     fn get_namespace(&self) -> Result<String> {
-        Err(anyhow!("Unsupported"))?
+        Err(anyhow!("Unsupported"))
     }
 
     fn get_container_mounts_and_storages(
@@ -110,7 +113,7 @@ impl yaml::K8sResource for ConfigMap {
         _container: &pod::Container,
         _infra_policy: &infra::InfraPolicy,
     ) -> Result<()> {
-        Err(anyhow!("Unsupported"))?
+        Err(anyhow!("Unsupported"))
     }
 
     fn generate_policy(

@@ -17,7 +17,7 @@ use crate::registry;
 use crate::utils;
 use crate::yaml;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -69,6 +69,9 @@ impl yaml::K8sResource for StatefulSet {
         .await?;
         self.yaml = yaml.to_string();
         Ok(())
+    }
+    async fn init2(&mut self, use_cache: bool, doc_mapping: &serde_yaml::Value) -> Result<()> {
+        Err(anyhow!("Unsupported"))
     }
 
     fn requires_policy(&self) -> bool {

@@ -51,6 +51,9 @@ impl yaml::K8sResource for List {
 
         Ok(())
     }
+    async fn init2(&mut self, use_cache: bool, doc_mapping: &serde_yaml::Value) -> Result<()> {
+        Err(anyhow!("Unsupported"))
+    }
 
     fn requires_policy(&self) -> bool {
         for resource in &self.resources {
