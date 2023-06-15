@@ -30,7 +30,7 @@ pub struct DaemonSet {
     pub spec: DaemonSetSpec,
 
     #[serde(skip)]
-    yaml: String,
+    doc_mapping: serde_yaml::Value,
 
     #[serde(skip)]
     registry_containers: Vec<registry::Container>,
@@ -83,17 +83,17 @@ struct RollingUpdateDaemonSet {
 #[async_trait]
 impl yaml::K8sResource for DaemonSet {
     async fn init(&mut self, use_cache: bool, yaml: &str) -> Result<()> {
+        Err(anyhow!("Unsupported"))
+    }
+    async fn init2(&mut self, use_cache: bool, doc_mapping: &serde_yaml::Value) -> Result<()> {
         yaml::k8s_resource_init(
             &mut self.spec.template.spec,
             &mut self.registry_containers,
             use_cache,
         )
         .await?;
-        self.yaml = yaml.to_string();
+        self.doc_mapping = doc_mapping.clone();
         Ok(())
-    }
-    async fn init2(&mut self, use_cache: bool, doc_mapping: &serde_yaml::Value) -> Result<()> {
-        Err(anyhow!("Unsupported"))
     }
 
     fn requires_policy(&self) -> bool {
@@ -156,12 +156,10 @@ impl yaml::K8sResource for DaemonSet {
     }
 
     fn serialize(&mut self) -> Result<String> {
-        let mut resource: Self = serde_yaml::from_str(&self.yaml).unwrap();
-        resource
-            .spec
-            .template
-            .metadata
-            .add_policy_annotation(&self.encoded_policy);
-        Ok(serde_yaml::to_string(&resource)?)
+        let spec = self.doc_mapping.get_mut("spec").unwrap();
+        let template = spec.get_mut("template").unwrap();
+        let metadata = template.get_mut("metadata").unwrap();
+        yaml::add_policy_annotation(metadata, &self.encoded_policy);
+        Ok(serde_yaml::to_string(&self.doc_mapping)?)
     }
 }

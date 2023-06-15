@@ -156,7 +156,7 @@ impl AgentPolicy {
 
             let k: &str = &kind;
             match k {
-                "Pod" => k8s_object.init2(files.use_cache, &doc_mapping).await?,
+                "ConfigMap" | "DaemonSet" | "Pod" => k8s_object.init2(files.use_cache, &doc_mapping).await?,
                 _ => k8s_object.init(files.use_cache, &yaml_string).await?,
             }
 

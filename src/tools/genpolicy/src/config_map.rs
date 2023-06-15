@@ -80,10 +80,10 @@ pub fn get_value(value_from: &pod::EnvVarSource, config_maps: &Vec<ConfigMap>) -
 #[async_trait]
 impl yaml::K8sResource for ConfigMap {
     async fn init(&mut self, _use_cache: bool, _yaml: &str) -> Result<()> {
-        Ok(())
-    }
-    async fn init2(&mut self, use_cache: bool, doc_mapping: &serde_yaml::Value) -> Result<()> {
         Err(anyhow!("Unsupported"))
+    }
+    async fn init2(&mut self, _use_cache: bool, _doc_mapping: &serde_yaml::Value) -> Result<()> {
+        Ok(())
     }
 
     fn requires_policy(&self) -> bool {
