@@ -505,9 +505,13 @@ type HypervisorConfig struct {
 	// MemOffset specifies memory space for nvdimm device
 	MemOffset uint64
 
-	// RawDevics are used to get PCIe device info early before the sandbox
+	// VFIODevices are used to get PCIe device info early before the sandbox
 	// is started to make better PCIe topology decisions
 	VFIODevices []config.DeviceInfo
+	// VhostUserBlkDevices are handled differently in Q35 and Virt machine
+	// type. capture them early before the sandbox to make better PCIe topology
+	// decisions
+	VhostUserBlkDevices []config.DeviceInfo
 
 	// HotplugVFIO is used to indicate if devices need to be hotplugged on the
 	// root port or a switch

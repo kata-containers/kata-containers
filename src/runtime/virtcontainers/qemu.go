@@ -702,7 +702,7 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 	}
 
 	if machine.Type == QemuQ35 || machine.Type == QemuVirt {
-		if err := q.createPCIeTopology(&qemuConfig, hypervisorConfig); err != nil {
+		if err := q.createPCIeTopology(&qemuConfig, hypervisorConfig, machine.Type); err != nil {
 			q.Logger().WithError(err).Errorf("Cannot create PCIe topology")
 			return err
 		}
@@ -741,9 +741,10 @@ func (q *qemu) checkBpfEnabled() {
 // Max PCIe switch ports is 16
 // There is only 64kB of IO memory each root,switch port will consume 4k hence
 // only 16 ports possible.
-func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig *HypervisorConfig) error {
+func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig *HypervisorConfig, machineType string) error {
+
 	// If no-port set just return no need to add PCIe Root Port or PCIe Switches
-	if hypervisorConfig.HotPlugVFIO == config.NoPort && hypervisorConfig.ColdPlugVFIO == config.NoPort {
+	if hypervisorConfig.HotPlugVFIO == config.NoPort && hypervisorConfig.ColdPlugVFIO == config.NoPort && machineType == QemuQ35 {
 		return nil
 	}
 
@@ -767,7 +768,8 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 		qemuConfig.FwCfg = append(qemuConfig.FwCfg, fwCfg)
 	}
 
-	// Get the number of hot(cold)-pluggable ports needed from the provided devices
+	// Get the number of hot(cold)-pluggable ports needed from the provided
+	// VFIO devices and VhostUserBlockDevices
 	var numOfPluggablePorts uint32 = 0
 	for _, dev := range hypervisorConfig.VFIODevices {
 		var err error
@@ -785,22 +787,42 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 			}
 		}
 	}
+	vfioOnRootPort := (q.state.HotPlugVFIO == config.RootPort || q.state.ColdPlugVFIO == config.RootPort || q.state.HotplugVFIOOnRootBus)
+	vfioOnSwitchPort := (q.state.HotPlugVFIO == config.SwitchPort || q.state.ColdPlugVFIO == config.SwitchPort)
+
+	numOfVhostUserBlockDevices := len(hypervisorConfig.VhostUserBlkDevices)
+
 	// If number of PCIe root ports > 16 then bail out otherwise we may
 	// use up all slots or IO memory on the root bus and vfio-XXX-pci devices
 	// cannot be added which are crucial for Kata max slots on root bus is 32
 	// max slots on the complete pci(e) topology is 256 in QEMU
-	if numOfPluggablePorts > maxPCIeRootPort {
-		return fmt.Errorf("Number of PCIe Root Ports exceeed allowed max of %d", maxPCIeRootPort)
-	}
-	if numOfPluggablePorts > maxPCIeSwitchPort {
-		return fmt.Errorf("Number of PCIe Switch Ports exceeed allowed max of %d", maxPCIeSwitchPort)
-	}
-
-	if q.state.HotPlugVFIO == config.RootPort || q.state.ColdPlugVFIO == config.RootPort || q.state.HotplugVFIOOnRootBus {
+	if vfioOnRootPort {
+		// On Arm the vhost-user-block device is a PCIe device we need
+		// to account for it in the number of pluggable ports
+		if machineType == QemuVirt {
+			numOfPluggablePorts = numOfPluggablePorts + uint32(numOfVhostUserBlockDevices)
+		}
+		if numOfPluggablePorts > maxPCIeRootPort {
+			return fmt.Errorf("Number of PCIe Root Ports exceeed allowed max of %d", maxPCIeRootPort)
+		}
 		qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, numOfPluggablePorts, memSize32bit, memSize64bit)
+		return nil
 	}
-	if q.state.HotPlugVFIO == config.SwitchPort || q.state.ColdPlugVFIO == config.SwitchPort {
+	if vfioOnSwitchPort {
+		// On Arm the vhost-user-block device is a PCIe device we need
+		// to account for it in the number of pluggable ports
+		if machineType == QemuVirt {
+			numOfPluggableRootPorts := uint32(numOfVhostUserBlockDevices)
+			if numOfPluggableRootPorts > maxPCIeRootPort {
+				return fmt.Errorf("Number of PCIe Root Ports exceeed allowed max of %d", maxPCIeRootPort)
+			}
+			qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, numOfPluggableRootPorts, memSize32bit, memSize64bit)
+		}
+		if numOfPluggablePorts > maxPCIeSwitchPort {
+			return fmt.Errorf("Number of PCIe Switch Ports exceeed allowed max of %d", maxPCIeSwitchPort)
+		}
 		qemuConfig.Devices = q.arch.appendPCIeSwitchPortDevice(qemuConfig.Devices, numOfPluggablePorts, memSize32bit, memSize64bit)
+		return nil
 	}
 	return nil
 }
@@ -1585,6 +1607,7 @@ func (q *qemu) hotplugAddBlockDevice(ctx context.Context, drive *config.BlockDri
 }
 
 func (q *qemu) hotplugAddVhostUserBlkDevice(ctx context.Context, vAttr *config.VhostUserDeviceAttrs, op Operation, devID string) (err error) {
+
 	err = q.qmpMonitorCh.qmp.ExecuteCharDevUnixSocketAdd(q.qmpMonitorCh.ctx, vAttr.DevID, vAttr.SocketPath, false, false, vAttr.ReconnectTime)
 	if err != nil {
 		return err
@@ -1602,16 +1625,12 @@ func (q *qemu) hotplugAddVhostUserBlkDevice(ctx context.Context, vAttr *config.V
 
 	switch machineType {
 	case QemuVirt:
-		if q.state.ColdPlugVFIO.String() != "true" {
-			return fmt.Errorf("TODO: Vhost-user-blk device is a PCIe device if machine type is virt. Need to add the PCIe Root Port by setting the pcie_root_port parameter in the configuration for virt")
-		}
-
 		//The addr of a dev is corresponding with device:function for PCIe in qemu which starting from 0
 		//Since the dev is the first and only one on this bus(root port), it should be 0.
 		addr := "00"
 
-		bridgeID := fmt.Sprintf("%s%d", config.PCIeRootPortPrefix, len(drivers.AllPCIeDevs))
-		drivers.AllPCIeDevs[devID] = true
+		bridgeID := fmt.Sprintf("%s%d", config.PCIeRootPortPrefix, len(config.PCIeDevices[config.RootPort]))
+		config.PCIeDevices[config.RootPort][devID] = true
 
 		bridgeQomPath := fmt.Sprintf("%s%s", qomPathPrefix, bridgeID)
 		bridgeSlot, err := q.qomGetSlot(bridgeQomPath)

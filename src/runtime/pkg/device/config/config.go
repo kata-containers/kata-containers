@@ -216,6 +216,15 @@ func (p PCIePort) Valid() bool {
 	return false
 }
 
+type PCIePortMapping map[string]bool
+
+var (
+	// Each of this structures keeps track of the devices attached to the
+	// different types of PCI ports. We can deduces the Bus number from it
+	// and eliminate duplicates being assigned.
+	PCIeDevices = map[PCIePort]PCIePortMapping{}
+)
+
 // DeviceInfo is an embedded type that contains device data common to all types of devices.
 type DeviceInfo struct {
 	// DriverOptions is specific options for each device driver
