@@ -29,6 +29,7 @@ readonly kernel_builder="${static_build_dir}/kernel/build.sh"
 readonly ovmf_builder="${static_build_dir}/ovmf/build.sh"
 readonly qemu_builder="${static_build_dir}/qemu/build-static-qemu.sh"
 readonly qemu_experimental_builder="${static_build_dir}/qemu/build-static-qemu-experimental.sh"
+readonly qemu_experimental_cc_builder="${static_build_dir}/qemu/build-static-qemu-experimental-cc.sh"
 readonly shimv2_builder="${static_build_dir}/shim-v2/build.sh"
 readonly td_shim_builder="${static_build_dir}/td-shim/build.sh"
 readonly virtiofsd_builder="${static_build_dir}/virtiofsd/build.sh"
@@ -799,15 +800,16 @@ install_qemu_tdx_experimental() {
 		"${qemu_experimental_builder}"
 }
 
-install_qemu_snp_experimental() {
+install_cc_snp_qemu_experimental() {
 	export qemu_suffix="snp-experimental"
-	export qemu_tarball_name="kata-static-qemu-${qemu_suffix}.tar.gz"
+	export qemu_tarball_name="kata-static-qemu-${qemu_suffix}-cc.tar.gz"
+	export tee="snp"
 
 	install_qemu_helper \
 		"assets.hypervisor.qemu-${qemu_suffix}.url" \
 		"assets.hypervisor.qemu-${qemu_suffix}.tag" \
 		"qemu-${qemu_suffix}" \
-		"${qemu_experimental_builder}"
+		"${qemu_experimental_cc_builder}"
 }
 
 # Install static firecracker asset
@@ -975,7 +977,6 @@ handle_build() {
 		install_ovmf
 		install_ovmf_sev
 		install_qemu
-		install_qemu_snp_experimental
 		install_qemu_tdx_experimental
 		install_shimv2
 		install_tdvf
@@ -986,6 +987,7 @@ handle_build() {
 		install_cc_clh
 		install_cc_kernel
 		install_cc_qemu
+		install_cc_snp_qemu_experimental
 		install_cc_image
 		install_cc_shimv2
 		install_cc_virtiofsd
@@ -998,7 +1000,7 @@ handle_build() {
 
 	cc-qemu) install_cc_qemu ;;
 
-	cc-snp-qemu) install_qemu_snp_experimental ;;
+	cc-snp-qemu) install_cc_snp_qemu_experimental ;;
 
 	cc-rootfs-image) install_cc_image ;;
 

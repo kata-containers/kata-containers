@@ -13,7 +13,7 @@ CPUFEATURES := pmu=off
 QEMUCMD := qemu-system-x86_64
 QEMUTDXCMD := qemu-system-x86_64-tdx
 TDXCPUFEATURES := -vmx-rdseed-exit,pmu=off
-QEMUSNPCMD := qemu-system-x86_64-snp
+QEMUSNPCMD := qemu-system-x86_64-snp-experimental
 
 # Firecracker binary name
 FCCMD := firecracker
