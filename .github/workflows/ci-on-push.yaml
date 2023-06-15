@@ -52,3 +52,7 @@ jobs:
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
       tag: ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-amd64
+
+  run-metrics-tests:
+    needs: build-kata-static-tarball-amd64
+    uses: ./.github/workflows/run-launchtimes-metrics.yaml
