@@ -321,6 +321,8 @@ impl InfraPolicy {
                     yaml_volume,
                     yaml_mount,
                 )?;
+            } else if yaml_volume.projected.is_some() {
+                // TODO: add policy for projected volumes.
             } else {
                 todo!("Unsupported volume type {:?}", yaml_volume);
             }
