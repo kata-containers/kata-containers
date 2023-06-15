@@ -198,13 +198,30 @@ fn real_main() -> Result<(), std::io::Error> {
     // generate async
     #[cfg(feature = "async")]
     {
-        codegen("src", &["protos/agent.proto", "protos/health.proto"], true)?;
+        codegen(
+            "src",
+            &[
+                "protos/agent.proto",
+                "protos/health.proto",
+                "protos/image.proto",
+            ],
+            true,
+        )?;
 
         fs::rename("src/agent_ttrpc.rs", "src/agent_ttrpc_async.rs")?;
         fs::rename("src/health_ttrpc.rs", "src/health_ttrpc_async.rs")?;
+        fs::rename("src/image_ttrpc.rs", "src/image_ttrpc_async.rs")?;
     }
 
-    codegen("src", &["protos/agent.proto", "protos/health.proto"], false)?;
+    codegen(
+        "src",
+        &[
+            "protos/agent.proto",
+            "protos/health.proto",
+            "protos/image.proto",
+        ],
+        false,
+    )?;
 
     // There is a message named 'Box' in oci.proto
     // so there is a struct named 'Box', we should replace Box<Self> to ::std::boxed::Box<Self>

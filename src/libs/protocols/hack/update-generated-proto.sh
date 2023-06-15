@@ -71,7 +71,7 @@ if [ "$(basename $(pwd))" != "agent" ]; then
 fi
 
 # Protocol buffer files required to generate golang/rust bindings.
-proto_files_list=(agent.proto csi.proto health.proto oci.proto types.proto)
+proto_files_list=(agent.proto csi.proto health.proto image.proto oci.proto types.proto)
 
 if [ "$1" = "" ]; then
     show_usage "${proto_files_list[@]}"

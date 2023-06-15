@@ -1,0 +1,31 @@
+//
+// Copyright (c) 2021 Alibaba Inc.
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+syntax = "proto3";
+
+option go_package = "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc";
+
+package grpc;
+
+// Image defines the public APIs for managing images.
+service Image {
+    // PullImage pulls an image with authentication config.
+    rpc PullImage(PullImageRequest) returns (PullImageResponse) {}
+}
+
+message PullImageRequest {
+    // Image name (e.g. docker.io/library/busybox:latest).
+    string image = 1;
+    // Unique image identifier, used to avoid duplication when unpacking the image layers.
+    string container_id = 2;
+    // Use USERNAME[:PASSWORD] for accessing the registry
+    string source_creds = 3;
+}
+
+message PullImageResponse {
+    // Reference to the image in use. For most runtimes, this should be an
+    // image ID or digest.
+    string image_ref = 1;
+}
