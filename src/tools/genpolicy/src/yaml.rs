@@ -254,12 +254,17 @@ pub fn generate_policy(
     Ok(general_purpose::STANDARD.encode(policy.as_bytes()))
 }
 
-pub fn add_policy_annotation(metadata: &mut serde_yaml::Value, policy: &str) {
+pub fn add_policy_annotation(mut ancestor: &mut serde_yaml::Value, metadata_path: &str, policy: &str) {
     let annotations_key = serde_yaml::Value::String("annotations".to_string());
     let policy_key = serde_yaml::Value::String("io.katacontainers.config.agent.policy".to_string());
     let policy_value = serde_yaml::Value::String(policy.to_string());
 
-    if let Some(annotations) = metadata.get_mut(&annotations_key) {
+    let path_components = metadata_path.split('.');
+    for name in path_components {
+        ancestor = ancestor.get_mut(&name).unwrap();
+    }
+
+    if let Some(annotations) = ancestor.get_mut(&annotations_key) {
         if let Some(annotation) = annotations.get_mut(&policy_key) {
             *annotation = policy_value;
         } else if let Some(mapping_mut) = annotations.as_mapping_mut() {
@@ -272,7 +277,7 @@ pub fn add_policy_annotation(metadata: &mut serde_yaml::Value, policy: &str) {
     } else {
         let mut new_annotations = serde_yaml::Mapping::new();
         new_annotations.insert(policy_key, policy_value);
-        metadata
+        ancestor
             .as_mapping_mut()
             .unwrap()
             .insert(annotations_key, serde_yaml::Value::Mapping(new_annotations));

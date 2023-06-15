@@ -156,10 +156,11 @@ impl yaml::K8sResource for DaemonSet {
     }
 
     fn serialize(&mut self) -> Result<String> {
-        let spec = self.doc_mapping.get_mut("spec").unwrap();
-        let template = spec.get_mut("template").unwrap();
-        let metadata = template.get_mut("metadata").unwrap();
-        yaml::add_policy_annotation(metadata, &self.encoded_policy);
+        yaml::add_policy_annotation(
+            &mut self.doc_mapping,
+            "spec.template.metadata",
+            &self.encoded_policy,
+        );
         Ok(serde_yaml::to_string(&self.doc_mapping)?)
     }
 }
