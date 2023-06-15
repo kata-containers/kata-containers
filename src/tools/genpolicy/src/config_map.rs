@@ -14,7 +14,6 @@ use crate::policy;
 use crate::utils;
 use crate::yaml;
 
-use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use log::debug;
 use serde::{Deserialize, Serialize};
@@ -40,7 +39,7 @@ pub struct ConfigMap {
 }
 
 impl ConfigMap {
-    pub fn new(file: &str) -> Result<Self> {
+    pub fn new(file: &str) -> anyhow::Result<Self> {
         debug!("Reading ConfigMap...");
         let config_map: ConfigMap = serde_yaml::from_reader(File::open(file)?)?;
         debug!("\nRead ConfigMap => {:#?}", config_map);
@@ -79,10 +78,11 @@ pub fn get_value(value_from: &pod::EnvVarSource, config_maps: &Vec<ConfigMap>) -
 
 #[async_trait]
 impl yaml::K8sResource for ConfigMap {
-    async fn init(&mut self, _use_cache: bool, _yaml: &str) -> Result<()> {
-        Err(anyhow!("Unsupported"))
-    }
-    async fn init2(&mut self, _use_cache: bool, _doc_mapping: &serde_yaml::Value) -> Result<()> {
+    async fn init(
+        &mut self,
+        _use_cache: bool,
+        _doc_mapping: &serde_yaml::Value,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
 
@@ -90,20 +90,20 @@ impl yaml::K8sResource for ConfigMap {
         false
     }
 
-    fn get_metadata_name(&self) -> Result<String> {
-        Err(anyhow!("Unsupported"))
+    fn get_metadata_name(&self) -> anyhow::Result<String> {
+        panic!("Unsupported");
     }
 
-    fn get_host_name(&self) -> Result<String> {
-        Err(anyhow!("Unsupported"))
+    fn get_host_name(&self) -> anyhow::Result<String> {
+        panic!("Unsupported");
     }
 
-    fn get_sandbox_name(&self) -> Result<Option<String>> {
-        Err(anyhow!("Unsupported"))
+    fn get_sandbox_name(&self) -> anyhow::Result<Option<String>> {
+        panic!("Unsupported");
     }
 
-    fn get_namespace(&self) -> Result<String> {
-        Err(anyhow!("Unsupported"))
+    fn get_namespace(&self) -> anyhow::Result<String> {
+        panic!("Unsupported");
     }
 
     fn get_container_mounts_and_storages(
@@ -112,8 +112,8 @@ impl yaml::K8sResource for ConfigMap {
         _storages: &mut Vec<policy::SerializedStorage>,
         _container: &pod::Container,
         _infra_policy: &infra::InfraPolicy,
-    ) -> Result<()> {
-        Err(anyhow!("Unsupported"))
+    ) -> anyhow::Result<()> {
+        panic!("Unsupported");
     }
 
     fn generate_policy(
@@ -122,11 +122,11 @@ impl yaml::K8sResource for ConfigMap {
         _infra_policy: &infra::InfraPolicy,
         _config_map: &Vec<config_map::ConfigMap>,
         _in_out_files: &utils::InOutFiles,
-    ) -> Result<()> {
-        Err(anyhow!("Unsupported"))
+    ) -> anyhow::Result<()> {
+        panic!("Unsupported");
     }
 
-    fn serialize(&mut self) -> Result<String> {
+    fn serialize(&mut self) -> anyhow::Result<String> {
         Ok(serde_yaml::to_string(&self)?)
     }
 }

@@ -478,11 +478,7 @@ impl EnvVar {
 
 #[async_trait]
 impl yaml::K8sResource for Pod {
-    async fn init(&mut self, use_cache: bool, yaml: &str) -> Result<()> {
-        Err(anyhow!("Unsupported"))
-    }
-
-    async fn init2(&mut self, use_cache: bool, doc_mapping: &serde_yaml::Value) -> Result<()> {
+    async fn init(&mut self, use_cache: bool, doc_mapping: &serde_yaml::Value) -> Result<()> {
         yaml::k8s_resource_init(&mut self.spec, &mut self.registry_containers, use_cache).await?;
         self.doc_mapping = doc_mapping.clone();
         Ok(())

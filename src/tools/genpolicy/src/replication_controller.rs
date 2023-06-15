@@ -16,7 +16,6 @@ use crate::registry;
 use crate::utils;
 use crate::yaml;
 
-use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -31,7 +30,7 @@ pub struct ReplicationController {
     pub spec: ReplicationControllerSpec,
 
     #[serde(skip)]
-    yaml: String,
+    doc_mapping: serde_yaml::Value,
 
     #[serde(skip)]
     pub registry_containers: Vec<registry::Container>,
@@ -58,38 +57,35 @@ pub struct ReplicationControllerSpec {
 
 #[async_trait]
 impl yaml::K8sResource for ReplicationController {
-    async fn init(&mut self, use_cache: bool, yaml: &str) -> Result<()> {
+    async fn init(&mut self, use_cache: bool, doc_mapping: &serde_yaml::Value) -> anyhow::Result<()> {
         yaml::k8s_resource_init(
             &mut self.spec.template.spec,
             &mut self.registry_containers,
             use_cache,
         )
         .await?;
-        self.yaml = yaml.to_string();
+        self.doc_mapping = doc_mapping.clone();
         Ok(())
-    }
-    async fn init2(&mut self, use_cache: bool, doc_mapping: &serde_yaml::Value) -> Result<()> {
-        Err(anyhow!("Unsupported"))
     }
 
     fn requires_policy(&self) -> bool {
         true
     }
 
-    fn get_metadata_name(&self) -> Result<String> {
+    fn get_metadata_name(&self) -> anyhow::Result<String> {
         self.metadata.get_name()
     }
 
-    fn get_host_name(&self) -> Result<String> {
+    fn get_host_name(&self) -> anyhow::Result<String> {
         // Example: "hostname": "no-exist-tdtd7",
         Ok("^".to_string() + &self.get_metadata_name()? + "-[a-z0-9]{5}$")
     }
 
-    fn get_sandbox_name(&self) -> Result<Option<String>> {
+    fn get_sandbox_name(&self) -> anyhow::Result<Option<String>> {
         Ok(None)
     }
 
-    fn get_namespace(&self) -> Result<String> {
+    fn get_namespace(&self) -> anyhow::Result<String> {
         self.metadata.get_namespace()
     }
 
@@ -99,7 +95,7 @@ impl yaml::K8sResource for ReplicationController {
         storages: &mut Vec<policy::SerializedStorage>,
         container: &pod::Container,
         infra_policy: &infra::InfraPolicy,
-    ) -> Result<()> {
+    ) -> anyhow::Result<()> {
         if let Some(volumes) = &self.spec.template.spec.volumes {
             yaml::get_container_mounts_and_storages(
                 policy_mounts,
@@ -119,7 +115,7 @@ impl yaml::K8sResource for ReplicationController {
         infra_policy: &infra::InfraPolicy,
         config_maps: &Vec<config_map::ConfigMap>,
         in_out_files: &utils::InOutFiles,
-    ) -> Result<()> {
+    ) -> anyhow::Result<()> {
         self.encoded_policy = yaml::generate_policy(
             rules,
             infra_policy,
@@ -132,13 +128,12 @@ impl yaml::K8sResource for ReplicationController {
         Ok(())
     }
 
-    fn serialize(&mut self) -> Result<String> {
-        let mut resource: Self = serde_yaml::from_str(&self.yaml).unwrap();
-        resource
-            .spec
-            .template
-            .metadata
-            .add_policy_annotation(&self.encoded_policy);
-        Ok(serde_yaml::to_string(&resource)?)
+    fn serialize(&mut self) -> anyhow::Result<String> {
+        yaml::add_policy_annotation(
+            &mut self.doc_mapping,
+            "spec.template.metadata",
+            &self.encoded_policy,
+        );
+        Ok(serde_yaml::to_string(&self.doc_mapping)?)
     }
 }

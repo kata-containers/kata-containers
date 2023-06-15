@@ -10,8 +10,6 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-const POLICY_ANNOTATION_KEY: &str = "io.katacontainers.config.agent.policy";
-
 /// See ObjectMeta in the Kubernetes API reference.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -43,22 +41,6 @@ impl ObjectMeta {
             Ok(namespace.clone())
         } else {
             Ok("default".to_string())
-        }
-    }
-
-    pub fn add_policy_annotation(&mut self, encoded_policy: &str) {
-        if let Some(annotations) = &mut self.annotations {
-            annotations
-                .entry(POLICY_ANNOTATION_KEY.to_string())
-                .and_modify(|v| *v = encoded_policy.to_string())
-                .or_insert(encoded_policy.to_string());
-        } else {
-            let mut annotations = BTreeMap::new();
-            annotations.insert(
-                POLICY_ANNOTATION_KEY.to_string(),
-                encoded_policy.to_string(),
-            );
-            self.annotations = Some(annotations);
         }
     }
 }

@@ -16,7 +16,6 @@ use crate::registry;
 use crate::utils;
 use crate::yaml;
 
-use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
@@ -82,10 +81,7 @@ struct RollingUpdateDaemonSet {
 
 #[async_trait]
 impl yaml::K8sResource for DaemonSet {
-    async fn init(&mut self, use_cache: bool, yaml: &str) -> Result<()> {
-        Err(anyhow!("Unsupported"))
-    }
-    async fn init2(&mut self, use_cache: bool, doc_mapping: &serde_yaml::Value) -> Result<()> {
+    async fn init(&mut self, use_cache: bool, doc_mapping: &serde_yaml::Value) -> anyhow::Result<()> {
         yaml::k8s_resource_init(
             &mut self.spec.template.spec,
             &mut self.registry_containers,
@@ -100,19 +96,19 @@ impl yaml::K8sResource for DaemonSet {
         true
     }
 
-    fn get_metadata_name(&self) -> Result<String> {
+    fn get_metadata_name(&self) -> anyhow::Result<String> {
         self.metadata.get_name()
     }
 
-    fn get_host_name(&self) -> Result<String> {
+    fn get_host_name(&self) -> anyhow::Result<String> {
         Ok("^".to_string() + &self.get_metadata_name()? + "-[a-z0-9]{5}$")
     }
 
-    fn get_sandbox_name(&self) -> Result<Option<String>> {
+    fn get_sandbox_name(&self) -> anyhow::Result<Option<String>> {
         Ok(None)
     }
 
-    fn get_namespace(&self) -> Result<String> {
+    fn get_namespace(&self) -> anyhow::Result<String> {
         self.metadata.get_namespace()
     }
 
@@ -122,7 +118,7 @@ impl yaml::K8sResource for DaemonSet {
         storages: &mut Vec<policy::SerializedStorage>,
         container: &pod::Container,
         infra_policy: &infra::InfraPolicy,
-    ) -> Result<()> {
+    ) -> anyhow::Result<()> {
         if let Some(volumes) = &self.spec.template.spec.volumes {
             yaml::get_container_mounts_and_storages(
                 policy_mounts,
@@ -142,7 +138,7 @@ impl yaml::K8sResource for DaemonSet {
         infra_policy: &infra::InfraPolicy,
         config_maps: &Vec<config_map::ConfigMap>,
         in_out_files: &utils::InOutFiles,
-    ) -> Result<()> {
+    ) -> anyhow::Result<()> {
         self.encoded_policy = yaml::generate_policy(
             rules,
             infra_policy,
@@ -155,7 +151,7 @@ impl yaml::K8sResource for DaemonSet {
         Ok(())
     }
 
-    fn serialize(&mut self) -> Result<String> {
+    fn serialize(&mut self) -> anyhow::Result<String> {
         yaml::add_policy_annotation(
             &mut self.doc_mapping,
             "spec.template.metadata",

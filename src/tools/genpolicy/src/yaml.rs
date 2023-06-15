@@ -23,7 +23,7 @@ use crate::stateful_set;
 use crate::utils;
 use crate::volume;
 
-use anyhow::{anyhow, Result};
+use anyhow::anyhow;
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
 use core::fmt::Debug;
@@ -42,8 +42,11 @@ pub struct YamlHeader {
 
 #[async_trait]
 pub trait K8sResource {
-    async fn init(&mut self, use_cache: bool, yaml: &str) -> Result<()>;
-    async fn init2(&mut self, use_cache: bool, doc_mapping: &serde_yaml::Value) -> Result<()>;
+    async fn init(
+        &mut self,
+        use_cache: bool,
+        doc_mapping: &serde_yaml::Value,
+    ) -> anyhow::Result<()>;
 
     fn requires_policy(&self) -> bool;
 
@@ -53,14 +56,14 @@ pub trait K8sResource {
         infra_policy: &infra::InfraPolicy,
         config_maps: &Vec<config_map::ConfigMap>,
         in_out_files: &utils::InOutFiles,
-    ) -> Result<()>;
+    ) -> anyhow::Result<()>;
 
-    fn serialize(&mut self) -> Result<String>;
+    fn serialize(&mut self) -> anyhow::Result<String>;
 
-    fn get_metadata_name(&self) -> Result<String>;
-    fn get_host_name(&self) -> Result<String>;
-    fn get_sandbox_name(&self) -> Result<Option<String>>;
-    fn get_namespace(&self) -> Result<String>;
+    fn get_metadata_name(&self) -> anyhow::Result<String>;
+    fn get_host_name(&self) -> anyhow::Result<String>;
+    fn get_sandbox_name(&self) -> anyhow::Result<Option<String>>;
+    fn get_namespace(&self) -> anyhow::Result<String>;
 
     fn get_container_mounts_and_storages(
         &self,
@@ -68,7 +71,7 @@ pub trait K8sResource {
         storages: &mut Vec<policy::SerializedStorage>,
         container: &pod::Container,
         infra_policy: &infra::InfraPolicy,
-    ) -> Result<()>;
+    ) -> anyhow::Result<()>;
 }
 
 /// See Reference / Kubernetes API / Common Definitions / LabelSelector.
@@ -94,7 +97,9 @@ pub struct LabelSelectorRequirement {
 }
 
 /// Creates one of the supported K8s objects from a YAML string.
-pub fn new_k8s_resource(yaml: &str) -> Result<(boxed::Box<dyn K8sResource + Sync + Send>, String)> {
+pub fn new_k8s_resource(
+    yaml: &str,
+) -> anyhow::Result<(boxed::Box<dyn K8sResource + Sync + Send>, String)> {
     let header = get_yaml_header(yaml)?;
     let kind: &str = &header.kind;
 
@@ -164,7 +169,7 @@ pub fn new_k8s_resource(yaml: &str) -> Result<(boxed::Box<dyn K8sResource + Sync
     }
 }
 
-pub fn get_input_yaml(yaml_file: &Option<String>) -> Result<String> {
+pub fn get_input_yaml(yaml_file: &Option<String>) -> anyhow::Result<String> {
     let yaml_string = if let Some(yaml) = yaml_file {
         read_to_string(&yaml)?
     } else {
@@ -174,7 +179,7 @@ pub fn get_input_yaml(yaml_file: &Option<String>) -> Result<String> {
     Ok(yaml_string)
 }
 
-pub fn get_yaml_header(yaml: &str) -> Result<YamlHeader> {
+pub fn get_yaml_header(yaml: &str) -> anyhow::Result<YamlHeader> {
     return Ok(serde_yaml::from_str(yaml)?);
 }
 
@@ -182,7 +187,7 @@ pub async fn k8s_resource_init(
     spec: &mut pod::PodSpec,
     registry_containers: &mut Vec<registry::Container>,
     use_cache: bool,
-) -> Result<()> {
+) -> anyhow::Result<()> {
     pause_container::add_pause_container(&mut spec.containers);
 
     if let Some(init_containers) = &spec.initContainers {
@@ -201,7 +206,7 @@ pub fn get_container_mounts_and_storages(
     container: &pod::Container,
     infra_policy: &infra::InfraPolicy,
     volumes: &Vec<volume::Volume>,
-) -> Result<()> {
+) -> anyhow::Result<()> {
     for volume in volumes {
         policy::get_container_mounts_and_storages(
             policy_mounts,
@@ -223,7 +228,7 @@ pub fn generate_policy(
     k8s_object: &dyn K8sResource,
     registry_containers: &Vec<registry::Container>,
     yaml_containers: &Vec<pod::Container>,
-) -> Result<String> {
+) -> anyhow::Result<String> {
     let mut policy_containers = Vec::new();
 
     for i in 0..yaml_containers.len() {
@@ -254,7 +259,11 @@ pub fn generate_policy(
     Ok(general_purpose::STANDARD.encode(policy.as_bytes()))
 }
 
-pub fn add_policy_annotation(mut ancestor: &mut serde_yaml::Value, metadata_path: &str, policy: &str) {
+pub fn add_policy_annotation(
+    mut ancestor: &mut serde_yaml::Value,
+    metadata_path: &str,
+    policy: &str,
+) {
     let annotations_key = serde_yaml::Value::String("annotations".to_string());
     let policy_key = serde_yaml::Value::String("io.katacontainers.config.agent.policy".to_string());
     let policy_value = serde_yaml::Value::String(policy.to_string());
