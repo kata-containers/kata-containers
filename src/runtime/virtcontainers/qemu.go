@@ -65,6 +65,11 @@ const romFile = ""
 // Default value is false.
 const defaultDisableModern = false
 
+// A deeper PCIe topology than 5 is already not advisable just for the sake
+// of having enough buffer we limit ourselves to 10 and exit if we reach
+// the root bus
+const maxPCIeTopoDepth = 10
+
 type qmpChannel struct {
 	qmp     *govmmQemu.QMP
 	ctx     context.Context
@@ -1771,6 +1776,7 @@ func (q *qemu) qomGetPciPath(qemuID string) (types.PciPath, error) {
 	}
 	slots = append(slots, devSlot)
 
+	// This only works for Q35 and Virt
 	r, _ := regexp.Compile(`^/machine/.*/pcie.0`)
 
 	var parentPath = qemuID
@@ -1778,7 +1784,7 @@ func (q *qemu) qomGetPciPath(qemuID string) (types.PciPath, error) {
 	// than 5 is already not advisable just for the sake of having enough
 	// buffer we limit ourselves to 10 and leave the loop early if we hit
 	// the root bus.
-	for i := 1; i <= 10; i++ {
+	for i := 1; i <= maxPCIeTopoDepth; i++ {
 		parenBusQOM, err := q.qmpMonitorCh.qmp.ExecQomGet(q.qmpMonitorCh.ctx, parentPath, "parent_bus")
 		if err != nil {
 			return types.PciPath{}, err
