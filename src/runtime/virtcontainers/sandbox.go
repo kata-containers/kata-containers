@@ -621,9 +621,17 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	hotPlugVFIO := (sandboxConfig.HypervisorConfig.HotPlugVFIO != config.NoPort)
 
 	var vfioDevices []config.DeviceInfo
+	// vhost-user-block device is a PCIe device in Virt, keep track of it
+	// for correct number of PCIe root ports.
+	var vhostUserBlkDevices []config.DeviceInfo
 
 	for cnt, containers := range sandboxConfig.Containers {
 		for dev, device := range containers.DeviceInfos {
+
+			if deviceManager.IsVhostUserBlk(device) {
+				vhostUserBlkDevices = append(vhostUserBlkDevices, device)
+				continue
+			}
 			isVFIO := deviceManager.IsVFIO(device.ContainerPath)
 			if hotPlugVFIO && isVFIO {
 				vfioDevices = append(vfioDevices, device)
@@ -649,6 +657,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 
 	}
 	sandboxConfig.HypervisorConfig.VFIODevices = vfioDevices
+	sandboxConfig.HypervisorConfig.VhostUserBlkDevices = vhostUserBlkDevices
 
 	// store doesn't require hypervisor to be stored immediately
 	if err = s.hypervisor.CreateVM(ctx, s.id, s.network, &sandboxConfig.HypervisorConfig); err != nil {
@@ -1930,6 +1939,7 @@ func (s *Sandbox) HotplugAddDevice(ctx context.Context, device api.Device, devTy
 		return err
 	case config.VhostUserBlk:
 		vhostUserBlkDevice, ok := device.(*drivers.VhostUserBlkDevice)
+
 		if !ok {
 			return fmt.Errorf("device type mismatch, expect device type to be %s", devType)
 		}

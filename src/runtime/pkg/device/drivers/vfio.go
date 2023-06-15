@@ -31,13 +31,6 @@ const (
 	vfioAPSysfsDir      = "/sys/devices/vfio_ap"
 )
 
-var (
-	// AllPCIeDevs deduces the correct bus number. The BDF keeps track that
-	// we're not accounting for the very same device, if a user provides the
-	// devices multiple times.
-	AllPCIeDevs = map[string]bool{}
-)
-
 // VFIODevice is a vfio device meant to be passed to the hypervisor
 // to be used by the Virtual Machine.
 type VFIODevice struct {
@@ -78,9 +71,11 @@ func (device *VFIODevice) Attach(ctx context.Context, devReceiver api.DeviceRece
 	}
 	for _, vfio := range device.VfioDevs {
 		if vfio.IsPCIe {
-			vfio.Rank = len(AllPCIeDevs)
-			AllPCIeDevs[vfio.BDF] = true
-			vfio.Bus = fmt.Sprintf("%s%d", config.PCIePortPrefixMapping[vfio.Port], vfio.Rank)
+			//vfio.Rank = len(AllPCIeDevs)
+			//AllPCIeDevs[vfio.BDF] = true
+			busIndex := len(config.PCIeDevices[vfio.Port])
+			vfio.Bus = fmt.Sprintf("%s%d", config.PCIePortPrefixMapping[vfio.Port], busIndex)
+			config.PCIeDevices[vfio.Port][vfio.BDF] = true
 		}
 	}
 
@@ -214,10 +209,10 @@ func GetVFIODetails(deviceFileName, iommuDevicesPath string) (deviceBDF, deviceS
 	switch vfioDeviceType {
 	case config.VFIOPCIDeviceNormalType:
 		// Get bdf of device eg. 0000:00:1c.0
-		//deviceBDF = getBDF(deviceFileName)
+		// OLD IMPL: deviceBDF = getBDF(deviceFileName)
 		// The old implementation did not consider the case where
-		// vfio devices are located on differente root busses. The
-		// kata-agent will handle the case now, here use the full PCI addr
+		// vfio devices are located on different root busses. The
+		// kata-agent will handle the case now, here, use the full PCI addr
 		deviceBDF = deviceFileName
 		// Get sysfs path used by cloud-hypervisor
 		deviceSysfsDev = filepath.Join(config.SysBusPciDevicesPath, deviceFileName)
