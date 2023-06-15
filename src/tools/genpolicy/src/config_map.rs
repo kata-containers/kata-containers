@@ -82,6 +82,7 @@ impl yaml::K8sResource for ConfigMap {
         &mut self,
         _use_cache: bool,
         _doc_mapping: &serde_yaml::Value,
+        _silent_unsupported_fields: bool,
     ) -> anyhow::Result<()> {
         Ok(())
     }
@@ -121,7 +122,7 @@ impl yaml::K8sResource for ConfigMap {
         _rules: &str,
         _infra_policy: &infra::InfraPolicy,
         _config_map: &Vec<config_map::ConfigMap>,
-        _in_out_files: &utils::InOutFiles,
+        _config: &utils::Config,
     ) -> anyhow::Result<()> {
         panic!("Unsupported");
     }

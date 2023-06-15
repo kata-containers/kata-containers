@@ -35,6 +35,7 @@ async-trait = {version = "0.1.68"}
 flate2 = { version = "1.0.26", features = ["zlib-ng"], default-features = false }
 oci-distribution = { git = "https://github.com/krustlet/oci-distribution", rev = "1ba0d94a900a97aa1bcac032a67ea23766bcfdef" }
 openssl = { version = "=0.10.45", features = ["vendored"] }
+serde_ignored = "0.1.7"
 serde_json = "1.0.39"
 serde-transcode = "1.1.1"
 tokio = {version = "1.0", features = ["full"]}

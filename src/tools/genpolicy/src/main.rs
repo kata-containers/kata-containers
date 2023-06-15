@@ -46,6 +46,9 @@ struct CommandLineOptions {
 
     #[clap(short, long)]
     use_cached_files: bool,
+
+    #[clap(short, long)]
+    silent_unsupported_fields: bool,
 }
 
 #[tokio::main]
@@ -59,12 +62,13 @@ async fn main() {
         config_map_files.push(config_map_file.clone());
     }
 
-    let in_out_files = utils::InOutFiles::new(
+    let in_out_files = utils::Config::new(
         args.use_cached_files,
         args.yaml_file,
         args.input_files_path,
         args.output_policy_file,
         &config_map_files,
+        args.silent_unsupported_fields,
     );
 
     debug!("Creating policy from yaml, infra data and rules files...");

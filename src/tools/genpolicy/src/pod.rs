@@ -22,7 +22,6 @@ use std::collections::BTreeMap;
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Pod {
     apiVersion: String,
     kind: String,
@@ -41,7 +40,6 @@ pub struct Pod {
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct PodSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     nodeSelector: Option<BTreeMap<String, String>>,
@@ -78,7 +76,6 @@ pub struct PodSpec {
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Container {
     pub name: String,
     pub image: String,
@@ -119,7 +116,6 @@ pub struct Container {
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Affinity {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub podAntiAffinity: Option<PodAntiAffinity>,
@@ -128,7 +124,6 @@ pub struct Affinity {
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct PodAntiAffinity {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub preferredDuringSchedulingIgnoredDuringExecution: Option<Vec<WeightedPodAffinityTerm>>,
@@ -137,7 +132,6 @@ pub struct PodAntiAffinity {
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct WeightedPodAffinityTerm {
     pub weight: i32,
     pub podAffinityTerm: PodAffinityTerm,
@@ -145,7 +139,6 @@ pub struct WeightedPodAffinityTerm {
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct PodAffinityTerm {
     #[serde(skip_serializing_if = "Option::is_none")]
     labelSelector: Option<yaml::LabelSelector>,
@@ -156,7 +149,6 @@ pub struct PodAffinityTerm {
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Probe {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exec: Option<ExecAction>,
@@ -183,7 +175,6 @@ pub struct Probe {
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct HTTPGetAction {
     pub port: String,
 
@@ -200,7 +191,6 @@ pub struct HTTPGetAction {
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct SecurityContext {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub readOnlyRootFilesystem: Option<bool>,
@@ -217,7 +207,6 @@ pub struct SecurityContext {
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Lifecycle {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub postStart: Option<LifecycleHandler>,
@@ -228,7 +217,6 @@ pub struct Lifecycle {
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct LifecycleHandler {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exec: Option<ExecAction>,
@@ -237,14 +225,12 @@ pub struct LifecycleHandler {
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct ExecAction {
     pub command: Vec<String>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Capabilities {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub add: Option<Vec<String>>,
@@ -255,7 +241,6 @@ pub struct Capabilities {
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct ContainerPort {
     containerPort: i32,
 
@@ -274,7 +259,6 @@ pub struct ContainerPort {
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct EnvVar {
     pub name: String,
 
@@ -287,7 +271,6 @@ pub struct EnvVar {
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct EnvVarSource {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub configMapKeyRef: Option<ConfigMapKeySelector>,
@@ -298,7 +281,6 @@ pub struct EnvVarSource {
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct ConfigMapKeySelector {
     pub key: String,
 
@@ -311,7 +293,6 @@ pub struct ConfigMapKeySelector {
 
 /// See Reference / Kubernetes API / Common Definitions / ObjectFieldSelector.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct ObjectFieldSelector {
     pub fieldPath: String,
 
@@ -321,7 +302,6 @@ pub struct ObjectFieldSelector {
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct VolumeMount {
     pub mountPath: String,
     pub name: String,
@@ -333,7 +313,6 @@ pub struct VolumeMount {
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct ResourceRequirements {
     #[serde(skip_serializing_if = "Option::is_none")]
     requests: Option<BTreeMap<String, String>>,
@@ -345,7 +324,6 @@ pub struct ResourceRequirements {
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Toleration {
     #[serde(skip_serializing_if = "Option::is_none")]
     operator: Option<String>,
@@ -354,7 +332,6 @@ pub struct Toleration {
 
 /// See Reference / Kubernetes API / Common Definitions / LocalObjectReference.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct LocalObjectReference {
     pub name: String,
 }
@@ -478,7 +455,12 @@ impl EnvVar {
 
 #[async_trait]
 impl yaml::K8sResource for Pod {
-    async fn init(&mut self, use_cache: bool, doc_mapping: &serde_yaml::Value) -> Result<()> {
+    async fn init(
+        &mut self,
+        use_cache: bool,
+        doc_mapping: &serde_yaml::Value,
+        _silent_unsupported_fields: bool,
+    ) -> Result<()> {
         yaml::k8s_resource_init(&mut self.spec, &mut self.registry_containers, use_cache).await?;
         self.doc_mapping = doc_mapping.clone();
         Ok(())
@@ -530,13 +512,13 @@ impl yaml::K8sResource for Pod {
         rules: &str,
         infra_policy: &infra::InfraPolicy,
         config_maps: &Vec<config_map::ConfigMap>,
-        in_out_files: &utils::InOutFiles,
+        config: &utils::Config,
     ) -> Result<()> {
         self.encoded_policy = yaml::generate_policy(
             rules,
             infra_policy,
             config_maps,
-            in_out_files,
+            config,
             self,
             &self.registry_containers,
             &self.spec.containers,

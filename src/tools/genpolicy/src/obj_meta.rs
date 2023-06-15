@@ -12,7 +12,6 @@ use std::collections::BTreeMap;
 
 /// See ObjectMeta in the Kubernetes API reference.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct ObjectMeta {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,

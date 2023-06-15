@@ -46,6 +46,7 @@ pub trait K8sResource {
         &mut self,
         use_cache: bool,
         doc_mapping: &serde_yaml::Value,
+        silent_unsupported_fields: bool,
     ) -> anyhow::Result<()>;
 
     fn requires_policy(&self) -> bool;
@@ -55,7 +56,7 @@ pub trait K8sResource {
         rules: &str,
         infra_policy: &infra::InfraPolicy,
         config_maps: &Vec<config_map::ConfigMap>,
-        in_out_files: &utils::InOutFiles,
+        config: &utils::Config,
     ) -> anyhow::Result<()>;
 
     fn serialize(&mut self) -> anyhow::Result<String>;
@@ -99,54 +100,74 @@ pub struct LabelSelectorRequirement {
 /// Creates one of the supported K8s objects from a YAML string.
 pub fn new_k8s_resource(
     yaml: &str,
+    silent_unsupported_fields: bool,
 ) -> anyhow::Result<(boxed::Box<dyn K8sResource + Sync + Send>, String)> {
     let header = get_yaml_header(yaml)?;
     let kind: &str = &header.kind;
+    let d = serde_yaml::Deserializer::from_str(&yaml);
 
     match kind {
         "ConfigMap" => {
-            let config_map: config_map::ConfigMap = serde_yaml::from_str(&yaml)?;
+            let config_map: config_map::ConfigMap = serde_ignored::deserialize(d, |path| {
+                handle_unused_field(&path.to_string(), silent_unsupported_fields);
+            })?;
             debug!("{:#?}", &config_map);
             Ok((boxed::Box::new(config_map), header.kind))
         }
         "DaemonSet" => {
-            let daemon: daemon_set::DaemonSet = serde_yaml::from_str(&yaml)?;
+            let daemon: daemon_set::DaemonSet = serde_ignored::deserialize(d, |path| {
+                handle_unused_field(&path.to_string(), silent_unsupported_fields);
+            })?;
             debug!("{:#?}", &daemon);
             Ok((boxed::Box::new(daemon), header.kind))
         }
         "Deployment" => {
-            let deployment: deployment::Deployment = serde_yaml::from_str(&yaml)?;
+            let deployment: deployment::Deployment = serde_ignored::deserialize(d, |path| {
+                handle_unused_field(&path.to_string(), silent_unsupported_fields);
+            })?;
             debug!("{:#?}", &deployment);
             Ok((boxed::Box::new(deployment), header.kind))
         }
         "Job" => {
-            let job: job::Job = serde_yaml::from_str(&yaml)?;
+            let job: job::Job = serde_ignored::deserialize(d, |path| {
+                handle_unused_field(&path.to_string(), silent_unsupported_fields);
+            })?;
             debug!("{:#?}", &job);
             Ok((boxed::Box::new(job), header.kind))
         }
         "List" => {
-            let list: list::List = serde_yaml::from_str(&yaml)?;
+            let list: list::List = serde_ignored::deserialize(d, |path| {
+                handle_unused_field(&path.to_string(), silent_unsupported_fields);
+            })?;
             debug!("{:#?}", &list);
             Ok((boxed::Box::new(list), header.kind))
         }
         "Pod" => {
-            let pod: pod::Pod = serde_yaml::from_str(&yaml)?;
+            let pod: pod::Pod = serde_ignored::deserialize(d, |path| {
+                handle_unused_field(&path.to_string(), silent_unsupported_fields);
+            })?;
             debug!("{:#?}", &pod);
             Ok((boxed::Box::new(pod), header.kind))
         }
         "ReplicationController" => {
             let controller: replication_controller::ReplicationController =
-                serde_yaml::from_str(&yaml)?;
+                serde_ignored::deserialize(d, |path| {
+                    handle_unused_field(&path.to_string(), silent_unsupported_fields);
+                })?;
             debug!("{:#?}", &controller);
             Ok((boxed::Box::new(controller), header.kind))
         }
         "ReplicaSet" => {
-            let set: replica_set::ReplicaSet = serde_yaml::from_str(&yaml)?;
+            let set: replica_set::ReplicaSet = serde_ignored::deserialize(d, |path| {
+                handle_unused_field(&path.to_string(), silent_unsupported_fields);
+            })?;
             debug!("{:#?}", &set);
             Ok((boxed::Box::new(set), header.kind))
         }
         "StatefulSet" => {
-            let set: stateful_set::StatefulSet = serde_yaml::from_str(&yaml)?;
+            let set: stateful_set::StatefulSet = serde_ignored::deserialize(d, |path| {
+                handle_unused_field(&path.to_string(), silent_unsupported_fields);
+            })?;
             debug!("{:#?}", &set);
             Ok((boxed::Box::new(set), header.kind))
         }
@@ -224,7 +245,7 @@ pub fn generate_policy(
     rules: &str,
     infra_policy: &infra::InfraPolicy,
     config_maps: &Vec<config_map::ConfigMap>,
-    in_out_files: &utils::InOutFiles,
+    config: &utils::Config,
     k8s_object: &dyn K8sResource,
     registry_containers: &Vec<registry::Container>,
     yaml_containers: &Vec<pod::Container>,
@@ -252,7 +273,7 @@ pub fn generate_policy(
 
     let policy = rules.to_string() + "\npolicy_data := " + &json_data;
 
-    if let Some(file_name) = &in_out_files.output_policy_file {
+    if let Some(file_name) = &config.output_policy_file {
         policy::export_decoded_policy(&policy, &file_name)?;
     }
 
@@ -290,5 +311,11 @@ pub fn add_policy_annotation(
             .as_mapping_mut()
             .unwrap()
             .insert(annotations_key, serde_yaml::Value::Mapping(new_annotations));
+    }
+}
+
+fn handle_unused_field(path: &str, silent_unsupported_fields: bool) {
+    if !silent_unsupported_fields {
+        panic!("Unsupported field: {}", path);
     }
 }

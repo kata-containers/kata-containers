@@ -5,7 +5,7 @@
 
 use log::debug;
 
-pub struct InOutFiles {
+pub struct Config {
     pub use_cache: bool,
 
     pub yaml_file: Option<String>,
@@ -13,15 +13,18 @@ pub struct InOutFiles {
     pub infra_data_file: String,
     pub output_policy_file: Option<String>,
     pub config_map_files: Option<Vec<String>>,
+
+    pub silent_unsupported_fields: bool,
 }
 
-impl InOutFiles {
+impl Config {
     pub fn new(
         use_cache: bool,
         yaml_file: Option<String>,
         input_files_path: Option<String>,
         output_policy_file: Option<String>,
         config_map_files: &Vec<String>,
+        silent_unsupported_fields: bool,
     ) -> Self {
         let mut input_path = ".".to_string();
         if let Some(path) = input_files_path {
@@ -46,6 +49,7 @@ impl InOutFiles {
             infra_data_file,
             output_policy_file,
             config_map_files: cm_files,
+            silent_unsupported_fields,
         }
     }
 }

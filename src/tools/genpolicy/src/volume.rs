@@ -10,7 +10,6 @@ use serde::{Deserialize, Serialize};
 
 /// See Reference / Kubernetes API / Config and Storage Resources / Volume.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Volume {
     pub name: String,
 
@@ -33,7 +32,6 @@ pub struct Volume {
 
 /// See Reference / Kubernetes API / Config and Storage Resources / Volume.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct HostPathVolumeSource {
     pub path: String,
 
@@ -43,7 +41,6 @@ pub struct HostPathVolumeSource {
 
 /// See Reference / Kubernetes API / Config and Storage Resources / Volume.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct EmptyDirVolumeSource {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sizeLimit: Option<String>,
@@ -51,7 +48,6 @@ pub struct EmptyDirVolumeSource {
 
 /// See Reference / Kubernetes API / Config and Storage Resources / Volume.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct PersistentVolumeClaimVolumeSource {
     pub claimName: String,
     // TODO: additional fields.
@@ -59,7 +55,6 @@ pub struct PersistentVolumeClaimVolumeSource {
 
 /// See Reference / Kubernetes API / Config and Storage Resources / Volume.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct ConfigMapVolumeSource {
     pub name: String,
     pub items: Vec<KeyToPath>,
@@ -68,7 +63,6 @@ pub struct ConfigMapVolumeSource {
 
 /// See Reference / Kubernetes API / Config and Storage Resources / Volume.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct KeyToPath {
     pub key: String,
     pub path: String,
@@ -76,7 +70,6 @@ pub struct KeyToPath {
 
 /// See Reference / Kubernetes API / Config and Storage Resources / Volume.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct AzureFileVolumeSource {
     pub secretName: String,
     pub shareName: String,

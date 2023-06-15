@@ -144,16 +144,23 @@ pub struct PersistentVolumeClaimVolume {
 }
 
 impl AgentPolicy {
-    pub async fn from_files(files: &utils::InOutFiles) -> Result<AgentPolicy> {
+    pub async fn from_files(config: &utils::Config) -> Result<AgentPolicy> {
         let mut config_maps = Vec::new();
         let mut k8s_objects = Vec::new();
-        let yaml_contents = yaml::get_input_yaml(&files.yaml_file)?;
+        let yaml_contents = yaml::get_input_yaml(&config.yaml_file)?;
 
         for document in serde_yaml::Deserializer::from_str(&yaml_contents) {
             let doc_mapping = Value::deserialize(document)?;
             let yaml_string = serde_yaml::to_string(&doc_mapping)?;
-            let (mut k8s_object, kind) = yaml::new_k8s_resource(&yaml_string)?;
-            k8s_object.init(files.use_cache, &doc_mapping).await?;
+            let (mut k8s_object, kind) =
+                yaml::new_k8s_resource(&yaml_string, config.silent_unsupported_fields)?;
+            k8s_object
+                .init(
+                    config.use_cache,
+                    &doc_mapping,
+                    config.silent_unsupported_fields,
+                )
+                .await?;
             k8s_objects.push(k8s_object);
 
             if kind.eq("ConfigMap") {
@@ -163,9 +170,9 @@ impl AgentPolicy {
             }
         }
 
-        let infra_policy = infra::InfraPolicy::new(&files.infra_data_file)?;
+        let infra_policy = infra::InfraPolicy::new(&config.infra_data_file)?;
 
-        if let Some(config_map_files) = &files.config_map_files {
+        if let Some(config_map_files) = &config.config_map_files {
             for file in config_map_files {
                 config_maps.push(config_map::ConfigMap::new(&file)?);
             }
@@ -173,25 +180,30 @@ impl AgentPolicy {
 
         Ok(AgentPolicy {
             k8s_objects,
-            rules_input_file: files.rules_file.to_string(),
+            rules_input_file: config.rules_file.to_string(),
             infra_policy,
             config_maps,
         })
     }
 
-    pub fn export_policy(&mut self, files: &utils::InOutFiles) -> Result<()> {
+    pub fn export_policy(&mut self, config: &utils::Config) -> Result<()> {
         let mut yaml_string = String::new();
 
         for k8s_object in &mut self.k8s_objects {
             if k8s_object.requires_policy() {
                 let rules = read_to_string(&self.rules_input_file)?;
-                k8s_object.generate_policy(&rules, &self.infra_policy, &self.config_maps, files)?;
+                k8s_object.generate_policy(
+                    &rules,
+                    &self.infra_policy,
+                    &self.config_maps,
+                    config,
+                )?;
             }
 
             yaml_string += &k8s_object.serialize()?;
         }
 
-        if let Some(yaml_file) = &files.yaml_file {
+        if let Some(yaml_file) = &config.yaml_file {
             std::fs::OpenOptions::new()
                 .write(true)
                 .truncate(true)

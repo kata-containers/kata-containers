@@ -63,6 +63,7 @@ impl yaml::K8sResource for StatefulSet {
         &mut self,
         use_cache: bool,
         doc_mapping: &serde_yaml::Value,
+        _silent_unsupported_fields: bool,
     ) -> anyhow::Result<()> {
         yaml::k8s_resource_init(
             &mut self.spec.template.spec,
@@ -159,13 +160,13 @@ impl yaml::K8sResource for StatefulSet {
         rules: &str,
         infra_policy: &infra::InfraPolicy,
         config_maps: &Vec<config_map::ConfigMap>,
-        in_out_files: &utils::InOutFiles,
+        config: &utils::Config,
     ) -> anyhow::Result<()> {
         self.encoded_policy = yaml::generate_policy(
             rules,
             infra_policy,
             config_maps,
-            in_out_files,
+            config,
             self,
             &self.registry_containers,
             &self.spec.template.spec.containers,

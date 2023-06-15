@@ -44,11 +44,15 @@ impl yaml::K8sResource for List {
         &mut self,
         use_cache: bool,
         _doc_mapping: &serde_yaml::Value,
+        silent_unsupported_fields: bool,
     ) -> anyhow::Result<()> {
         for item in &self.items {
             let yaml_string = serde_yaml::to_string(&item)?;
-            let (mut resource, _kind) = yaml::new_k8s_resource(&yaml_string)?;
-            resource.init(use_cache, item).await?;
+            let (mut resource, _kind) =
+                yaml::new_k8s_resource(&yaml_string, silent_unsupported_fields)?;
+            resource
+                .init(use_cache, item, silent_unsupported_fields)
+                .await?;
             self.resources.push(resource);
         }
 
@@ -96,11 +100,11 @@ impl yaml::K8sResource for List {
         rules: &str,
         infra_policy: &infra::InfraPolicy,
         config_maps: &Vec<config_map::ConfigMap>,
-        in_out_files: &utils::InOutFiles,
+        config: &utils::Config,
     ) -> anyhow::Result<()> {
         for resource in &mut self.resources {
             if resource.requires_policy() {
-                resource.generate_policy(rules, infra_policy, config_maps, in_out_files)?;
+                resource.generate_policy(rules, infra_policy, config_maps, config)?;
             }
         }
 
