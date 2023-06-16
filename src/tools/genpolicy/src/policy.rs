@@ -230,8 +230,10 @@ fn get_image_layer_storages(
     root: &Option<Root>,
 ) -> Result<()> {
     if let Some(root_mount) = root {
+        let mut new_storages: Vec<SerializedStorage> = Vec::new();
+
         let mut overlay_storage = SerializedStorage {
-            driver: "blk".to_string(),
+            driver: "overlayfs".to_string(),
             driver_options: Vec::new(),
             source: String::new(), // TODO
             fstype: "tar-overlay".to_string(),
@@ -246,10 +248,11 @@ fn get_image_layer_storages(
         // TODO: load this path from data.json.
         let layers_path = "/run/kata-containers/sandbox/layers/".to_string();
 
+        let mut lowerdirs: Vec<String> = Vec::new();
         let mut previous_chain_id = String::new();
-        for layer in image_layers {
-            let verity_option = "kata.dm-verity=".to_string() + &layer.verity_hash;
+        let mut previous_layer_name = String::new();
 
+        for layer in image_layers {
             // See https://github.com/opencontainers/image-spec/blob/main/config.md#layer-chainid
             let chain_id = if previous_chain_id.is_empty() {
                 layer.diff_id.clone()
@@ -264,14 +267,20 @@ fn get_image_layer_storages(
             );
             previous_chain_id = chain_id.clone();
 
+            let options = vec![
+                "ro".to_string(),
+                "io.katacontainers.fs-opt.block_device=file".to_string(),
+                "io.katacontainers.fs-opt.is-layer".to_string(),
+                "io.katacontainers.fs-opt.root-hash=".to_string() + &layer.verity_hash,
+            ];
             let layer_name = name_to_hash(&chain_id);
 
-            storages.push(SerializedStorage {
+            new_storages.push(SerializedStorage {
                 driver: "blk".to_string(),
                 driver_options: Vec::new(),
                 source: String::new(), // TODO
                 fstype: "tar".to_string(),
-                options: vec!["ro".to_string(), verity_option],
+                options,
                 mount_point: layers_path.clone() + &layer_name,
                 fs_group: SerializedFsGroup {
                     group_id: 0,
@@ -279,9 +288,42 @@ fn get_image_layer_storages(
                 },
             });
 
-            overlay_storage
-                .options
-                .push("kata.layer=".to_string() + &layer_name + "," + &layer.verity_hash);
+            let mut fs_opt_layer = "io.katacontainers.fs-opt.layer=".to_string();
+            fs_opt_layer += "/var/lib/containerd/io.containerd.snapshotter.v1.tardev/layers/";
+            fs_opt_layer += &layer_name;
+            fs_opt_layer += ",tar,ro,io.katacontainers.fs-opt.block_device=file,io.katacontainers.fs-opt.is-layer,io.katacontainers.fs-opt.root-hash=";
+            fs_opt_layer += &layer.verity_hash;
+            overlay_storage.options.push(fs_opt_layer);
+
+            if !previous_layer_name.is_empty() {
+                let mut lowerdir = "lowerdir=/run/kata-containers/sandbox/layers/".to_string();
+                lowerdir += &layer_name;
+                lowerdir += ":/run/kata-containers/sandbox/layers/";
+                lowerdir += &previous_layer_name;
+
+                lowerdirs.push(lowerdir);
+            } else if image_layers.len() == 1 {
+                let mut lowerdir = "lowerdir=/run/kata-containers/sandbox/layers/".to_string();
+                lowerdir += &layer_name;
+
+                lowerdirs.push(lowerdir);
+            }
+
+            previous_layer_name = layer_name.clone();
+        }
+
+        new_storages.reverse();
+        for storage in new_storages {
+            storages.push(storage);
+        }
+
+        overlay_storage.options.reverse();
+        overlay_storage
+            .options
+            .push("io.katacontainers.fs-opt.overlay-rw".to_string());
+
+        for lowerdir in lowerdirs {
+            overlay_storage.options.push(lowerdir);
         }
 
         storages.push(overlay_storage);
