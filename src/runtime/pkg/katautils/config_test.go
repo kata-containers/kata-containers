@@ -86,8 +86,8 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (testConfig testRuntime
 	blockDeviceAIO := "io_uring"
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
-	hotPlugVFIO = config.BridgePort
-	coldPlugVFIO = config.RootPort
+	hotPlugVFIO = config.NoPort
+	coldPlugVFIO = config.BridgePort
 	disableNewNetNs := false
 	sharedFS := "virtio-9p"
 	virtioFSdaemon := path.Join(dir, "virtiofsd")
@@ -612,7 +612,7 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 	disableBlock := true
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
-	coldPlugVFIO = config.RootPort
+	coldPlugVFIO = config.BridgePort
 	orgVHostVSockDevicePath := utils.VHostVSockDevicePath
 	blockDeviceAIO := "io_uring"
 	defer func() {
