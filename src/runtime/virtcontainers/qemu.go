@@ -2633,7 +2633,7 @@ func genericBridges(number uint32, machineType string) []types.Bridge {
 */
 
 // The recommendation is to populate one PCI-PCI Bridge under the
-// PCI Express to PCI Bridge until is full and then plug a new PCI-PCI Bridge...
+/* PCI Express to PCI Bridge until is full and then plug a new PCI-PCI Bridge...
 //
 //	pcie.0 bus
 //	----------------------------------------------
@@ -2653,7 +2653,8 @@ func genericBridges(number uint32, machineType string) []types.Bridge {
 // genericAppendPCIBridgePort appends a PCI Bridge to the topoloty
 // special handling for Q35, Virt, Pseries and CCWVirtio, we are keeping the
 // root bus clean for PCIe root ports, we can attach up to 32 devices to a single
-// PCI-PCI Bridge
+// PCIe-PCI Bridge
+*/
 func genericAppendPCIBridgePort(devices []govmmQemu.Device, numOfPorts uint32, machineType string) []govmmQemu.Device {
 
 	// The hierarchy starts with a PCIePCI Bridge and on a seond level we're

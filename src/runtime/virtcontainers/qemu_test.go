@@ -32,7 +32,6 @@ func newQemuConfig() HypervisorConfig {
 		HypervisorPath:      testQemuPath,
 		NumVCPUs:            defaultVCPUs,
 		MemorySize:          defaultMemSzMiB,
-		DefaultBridges:      defaultBridges,
 		BlockDeviceDriver:   defaultBlockDriver,
 		DefaultMaxVCPUs:     defaultMaxVCPUs,
 		Msize9p:             defaultMsize9p,

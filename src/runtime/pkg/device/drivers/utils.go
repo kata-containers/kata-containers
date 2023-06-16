@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/container-orchestrated-devices/container-device-interface/pkg/cdi"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
@@ -155,6 +156,57 @@ func checkIgnorePCIClass(pciClass string, deviceBDF string, bitmask uint64) (boo
 	return false, nil
 }
 
+type attachInfo struct {
+	cliqueID    uint32
+	attachToPCI bool
+}
+
+// CDI provides us with additional meta information that we can parse to make
+// better topology decisions.
+func getAttachAffinity() map[string]attachInfo {
+	var (
+		registry = cdi.GetRegistry()
+		devices  = registry.DeviceDB().ListDevices()
+		info     = make(map[string]attachInfo)
+	)
+	if len(devices) == 0 {
+		return nil
+	}
+
+	for _, device := range devices {
+		dev := registry.DeviceDB().GetDevice(device)
+
+		var (
+			bdf string
+			id  string
+			pci string
+		)
+
+		if _bdf, ok := dev.Annotations["bdf"]; ok {
+			bdf = _bdf
+		}
+		if _id, ok := dev.Annotations["clique-id"]; ok {
+			id = _id
+		}
+		if _pci, ok := dev.Annotations["attach-to-pci"]; ok {
+			pci = _pci
+		}
+
+		num, _ := strconv.ParseUint(id, 10, 32)
+
+		device := attachInfo{}
+
+		device.cliqueID = uint32(num)
+		if pci == "true" {
+			device.attachToPCI = true
+		} else {
+			device.attachToPCI = false
+		}
+		info[bdf] = device
+	}
+	return info
+}
+
 // GetAllVFIODevicesFromIOMMUGroup returns all the VFIO devices in the IOMMU group
 // We can reuse this function at various levels, sandbox, container.
 func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODev, error) {
@@ -169,6 +221,8 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODe
 		return nil, err
 	}
 
+	info := getAttachAffinity()
+
 	// Pass all devices in iommu group
 	for i, deviceFile := range deviceFiles {
 		//Get bdf of device eg 0000:00:1c.0
@@ -176,8 +230,6 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODe
 		if err != nil {
 			return nil, err
 		}
-		id := utils.MakeNameID("vfio", device.ID+strconv.Itoa(i), maxDevIDSize)
-
 		pciClass := getPCIDeviceProperty(deviceBDF, PCISysFsDevicesClass)
 		// We need to ignore Host or PCI Bridges that are in the same IOMMU group as the
 		// passed-through devices. One CANNOT pass-through a PCI bridge or Host bridge.
@@ -192,6 +244,9 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODe
 
 		var vfio config.VFIODev
 
+		id := utils.MakeNameID("vfio", device.ID+strconv.Itoa(i), maxDevIDSize)
+		attachToPCI := info[deviceBDF].attachToPCI
+
 		switch vfioDeviceType {
 		case config.VFIOPCIDeviceNormalType, config.VFIOPCIDeviceMediatedType:
 			// Do not directly assign to `vfio` -- need to access field still
@@ -200,9 +255,8 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODe
 				Type:     vfioDeviceType,
 				BDF:      deviceBDF,
 				SysfsDev: deviceSysfsDev,
-				IsPCIe:   IsPCIeDevice(deviceBDF),
+				IsPCIe:   IsPCIeDevice(deviceBDF) && !attachToPCI,
 				Class:    pciClass,
-				Rank:     -1,
 				Port:     device.Port,
 			}
 

@@ -354,7 +354,7 @@ func (m *VFIOModeType) VFIOSetMode(modeName string) error {
 		*m = VFIOModeGuestKernel
 		return nil
 	}
-	return fmt.Errorf("Unknown VFIO mode %s", modeName)
+	return fmt.Errorf("unknown VFIO mode %s", modeName)
 }
 
 // VFIODeviceType indicates VFIO device type
@@ -409,11 +409,13 @@ type VFIODev struct {
 	// APDevices are the Adjunct Processor devices assigned to the mdev
 	APDevices []string
 
-	// Rank identifies a device in a IOMMU group
-	Rank int
-
 	// Port is the PCIe port type to which the device is attached
 	Port PCIePort
+
+	// CliqueID identifies a logical group that belong together
+	// e.g. to hot-plug a GPU & NIC or GPU & GPU on a switch port to
+	// enable P2P in PCIe terminiology
+	CliqueID int
 }
 
 // RNGDev represents a random number generator device
