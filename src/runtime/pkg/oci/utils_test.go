@@ -660,8 +660,8 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.GuestHookPath] = "/usr/bin/"
 	ocispec.Annotations[vcAnnotations.DisableImageNvdimm] = "true"
 	ocispec.Annotations[vcAnnotations.HotplugVFIOOnRootBus] = "true"
-	ocispec.Annotations[vcAnnotations.ColdPlugVFIO] = string(config.InvalidPort)
-	ocispec.Annotations[vcAnnotations.HotPlugVFIO] = string(config.RootPort)
+	ocispec.Annotations[vcAnnotations.ColdPlugVFIO] = config.BridgePort
+	ocispec.Annotations[vcAnnotations.HotPlugVFIO] = config.NoPort
 	ocispec.Annotations[vcAnnotations.IOMMUPlatform] = "true"
 	ocispec.Annotations[vcAnnotations.SGXEPC] = "64Mi"
 	ocispec.Annotations[vcAnnotations.UseLegacySerial] = "true"
@@ -669,7 +669,9 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.RxRateLimiterMaxRate] = "10000000"
 	ocispec.Annotations[vcAnnotations.TxRateLimiterMaxRate] = "10000000"
 
-	addAnnotations(ocispec, &sbConfig, runtimeConfig)
+	err := addAnnotations(ocispec, &sbConfig, runtimeConfig)
+	assert.NoError(err)
+
 	assert.Equal(sbConfig.HypervisorConfig.NumVCPUs, uint32(1))
 	assert.Equal(sbConfig.HypervisorConfig.DefaultMaxVCPUs, uint32(1))
 	assert.Equal(sbConfig.HypervisorConfig.MemorySize, uint32(1024))
@@ -699,8 +701,8 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	assert.Equal(sbConfig.HypervisorConfig.GuestHookPath, "/usr/bin/")
 	assert.Equal(sbConfig.HypervisorConfig.DisableImageNvdimm, true)
 	assert.Equal(sbConfig.HypervisorConfig.HotplugVFIOOnRootBus, true)
-	assert.Equal(sbConfig.HypervisorConfig.ColdPlugVFIO, config.InvalidPort)
-	assert.Equal(sbConfig.HypervisorConfig.HotPlugVFIO, config.RootPort)
+	assert.Equal(string(sbConfig.HypervisorConfig.ColdPlugVFIO), string(config.BridgePort))
+	assert.Equal(string(sbConfig.HypervisorConfig.HotPlugVFIO), string(config.NoPort))
 	assert.Equal(sbConfig.HypervisorConfig.IOMMUPlatform, true)
 	assert.Equal(sbConfig.HypervisorConfig.SGXEPCSize, int64(67108864))
 	assert.Equal(sbConfig.HypervisorConfig.LegacySerial, true)
@@ -709,7 +711,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 
 	// In case an absurd large value is provided, the config value if not over-ridden
 	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "655536"
-	err := addAnnotations(ocispec, &sbConfig, runtimeConfig)
+	err = addAnnotations(ocispec, &sbConfig, runtimeConfig)
 	assert.Error(err)
 
 	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "-1"
