@@ -249,6 +249,7 @@ async fn overlayfs_storage_handler(
     cid: Option<&str>,
     _sandbox: Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
+    let mut storage = storage.clone();
     if storage
         .options
         .iter()
@@ -262,7 +263,6 @@ async fn overlayfs_storage_handler(
         fs::create_dir_all(&work)?;
         fs::create_dir_all(&upper)?;
 
-        let mut storage = storage.clone();
         storage.fstype = "overlay".into();
         storage
             .options
@@ -270,10 +270,15 @@ async fn overlayfs_storage_handler(
         storage
             .options
             .push(format!("workdir={}", work.to_string_lossy()));
-        return common_storage_handler(logger, &storage);
     }
 
-    common_storage_handler(logger, storage)
+    // Switch to the pod layers path. This allows snapshotters to skip the path of directories in
+    // lowerdir.
+    let saved = std::env::current_dir()?;
+    std::env::set_current_dir(Path::new("/run/kata-containers/sandbox/layers"))?;
+    let ret = common_storage_handler(logger, &storage);
+    std::env::set_current_dir(saved)?;
+    ret
 }
 
 #[instrument]

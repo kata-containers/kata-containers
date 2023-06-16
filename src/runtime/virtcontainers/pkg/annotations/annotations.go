@@ -319,6 +319,9 @@ const (
 	// FileSystemLayer describes a layer of an overlay filesystem.
 	FileSystemLayer = kataAnnotFsOptPrefix + "layer="
 
+	// FileSystemLayerSourcePrefix determines the prefix path of the source files of the subquent layers.
+	FileSystemLayerSourcePrefix = kataAnnotFsOptPrefix + "layer-src-prefix="
+
 	// IsFileSystemLayer indicates that the annotated filesystem is a layer of an overlay fs.
 	IsFileSystemLayer = kataAnnotFsOptPrefix + "is-layer"
 
