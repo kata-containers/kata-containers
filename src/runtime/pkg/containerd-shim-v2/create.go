@@ -52,7 +52,13 @@ var defaultStartManagementServerFunc startManagementServerFunc = func(s *service
 }
 
 func copyLayersToMounts(rootFs *vc.RootFs, spec *specs.Spec) error {
+	prefix := ""
 	for _, o := range rootFs.Options {
+		if strings.HasPrefix(o, annotations.FileSystemLayerSourcePrefix) {
+			prefix = o[len(annotations.FileSystemLayerSourcePrefix):]
+			continue
+		}
+
 		if !strings.HasPrefix(o, annotations.FileSystemLayer) {
 			continue
 		}
@@ -62,10 +68,15 @@ func copyLayersToMounts(rootFs *vc.RootFs, spec *specs.Spec) error {
 			return fmt.Errorf("Missing fields in rootfs layer: %q", o)
 		}
 
+		source := fields[0]
+		if len(source) > 0 && source[0] != '/' {
+			source = filepath.Join(prefix, source)
+		}
+
 		spec.Mounts = append(spec.Mounts, specs.Mount{
-			Destination: "/run/kata-containers/sandbox/layers/" + filepath.Base(fields[0]),
+			Destination: "/run/kata-containers/sandbox/layers/" + filepath.Base(source),
 			Type:        fields[1],
-			Source:      fields[0],
+			Source:      source,
 			Options:     fields[2:],
 		})
 	}
