@@ -27,7 +27,7 @@ pub type ArcMutexDevice = Arc<Mutex<dyn Device>>;
 /// in Sandbox.
 ///
 /// @block_driver to be used for block device;
-/// @block_index generally default is 1 for <vdb>;
+/// @block_index generally default is 0 for <vda>;
 /// @released_block_index for blk devices removed and indexes will released at the same time.
 #[derive(Clone, Debug, Default)]
 struct SharedInfo {
@@ -54,7 +54,7 @@ impl SharedInfo {
 
         SharedInfo {
             block_driver,
-            block_index: 1,
+            block_index: 0,
             released_block_index: vec![],
         }
     }
