@@ -128,10 +128,10 @@ impl Store {
             };
 
             let name = name_to_hash(&p);
-            layers.push(format!("/run/kata-containers/sandbox/layers/{name}"));
             opts.push(format!(
                 "{PREFIX}.layer={name},tar,ro,{PREFIX}.block_device=file,{PREFIX}.is-layer,{PREFIX}.root-hash={root_hash}",
             ));
+            layers.push(name);
 
             next_parent = (!info.parent.is_empty()).then_some(info.parent);
         }
