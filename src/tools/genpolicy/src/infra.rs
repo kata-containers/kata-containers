@@ -14,6 +14,7 @@ use anyhow::Result;
 use log::debug;
 use oci;
 use serde::{Deserialize, Serialize};
+use core::panic;
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::fs::File;
@@ -328,7 +329,7 @@ impl InfraPolicy {
                     yaml_mount,
                 )?;
             } else if yaml_volume.projected.is_some() {
-                // TODO: add policy for projected volumes.
+                verify_projected_volume_mount(yaml_mount, policy_mounts);
             } else {
                 todo!("Unsupported volume type {:?}", yaml_volume);
             }
@@ -677,4 +678,31 @@ impl InfraPolicy {
 
         Ok(())
     }
+}
+
+/// Verify that the policy corresponding to this mount has been created
+/// already, based on the information from data.json. An example of such
+/// mount is:
+/// {
+///    "destination": "/var/run/secrets/kubernetes.io/serviceaccount",
+///    "type": "bind",
+///    "source": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-serviceaccount$",
+///    "options": [
+///      "rbind",
+///      "rprivate",
+///      "ro"
+///    ]
+/// }
+fn verify_projected_volume_mount(
+    yaml_mount: &pod::VolumeMount,
+    policy_mounts: &mut Vec<oci::Mount>,
+) {
+    for policy_mount in policy_mounts {
+        if policy_mount.destination == yaml_mount.mountPath {
+            debug!("verify_projected_volume_mount: found already existing infrastructure mount {}.", &yaml_mount.mountPath);
+            return;
+        }
+    }
+
+    panic!("Unsupported pod mount {}", &yaml_mount.mountPath);
 }
