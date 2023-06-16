@@ -30,6 +30,9 @@ pub struct Volume {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub projected: Option<ProjectedVolumeSource>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secret: Option<SecretVolumeSource>,
     // TODO: additional fields.
 }
 
@@ -86,5 +89,18 @@ pub struct AzureFileVolumeSource {
 pub struct ProjectedVolumeSource {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub defaultMode: Option<i32>,
+    // TODO: additional fields.
+}
+
+/// See Reference / Kubernetes API / Config and Storage Resources / Volume.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SecretVolumeSource {
+    secretName: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub defaultMode: Option<i32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub items: Option<Vec<KeyToPath>>,
     // TODO: additional fields.
 }

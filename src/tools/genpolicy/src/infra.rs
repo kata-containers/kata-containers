@@ -14,7 +14,6 @@ use anyhow::Result;
 use log::debug;
 use oci;
 use serde::{Deserialize, Serialize};
-use core::panic;
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::fs::File;
@@ -310,11 +309,14 @@ impl InfraPolicy {
                     storages,
                 );
             } else if yaml_volume.persistentVolumeClaim.is_some() {
-                self.shared_bind_mount(yaml_mount, policy_mounts, false)?;
+                self.shared_bind_mount(yaml_mount, policy_mounts, false)
+                    .unwrap();
             } else if yaml_volume.azureFile.is_some() {
-                self.shared_bind_mount(yaml_mount, policy_mounts, false)?;
+                self.shared_bind_mount(yaml_mount, policy_mounts, false)
+                    .unwrap();
             } else if yaml_volume.hostPath.is_some() {
-                self.host_path_mount(yaml_mount, yaml_volume, policy_mounts)?;
+                self.host_path_mount(yaml_mount, yaml_volume, policy_mounts)
+                    .unwrap();
             } else if yaml_volume.configMap.is_some() {
                 Self::config_map_mount_and_storage(
                     &infra_volumes,
@@ -322,9 +324,19 @@ impl InfraPolicy {
                     storages,
                     yaml_volume,
                     yaml_mount,
-                )?;
+                )
+                .unwrap();
             } else if yaml_volume.projected.is_some() {
-                verify_projected_volume_mount(yaml_mount, policy_mounts);
+                Self::verify_projected_volume_mount(yaml_mount, policy_mounts);
+            } else if yaml_volume.secret.is_some() {
+                Self::secret_mount_and_storage(
+                    &infra_volumes,
+                    policy_mounts,
+                    storages,
+                    yaml_volume,
+                    yaml_mount,
+                )
+                .unwrap();
             } else {
                 todo!("Unsupported volume type {:?}", yaml_volume);
             }
@@ -638,66 +650,126 @@ impl InfraPolicy {
         yaml_mount: &pod::VolumeMount,
     ) -> Result<()> {
         let infra_config_map = &infra_volumes.configMap;
-        debug!("Infra configMap: {:?}", infra_config_map);
+        debug!(
+            "secret_mount_and_storage: infra configMap: {:?}",
+            infra_config_map
+        );
 
-        // Remove the / prefix from the the mount path.
-        if let Some(mount_path) = yaml_mount.mountPath.get(1..) {
-            storages.push(policy::SerializedStorage {
-                driver: infra_config_map.driver.clone(),
-                driver_options: Vec::new(),
-                source: infra_config_map.mount_source.clone() + &yaml_mount.name + "$",
-                fstype: infra_config_map.fstype.clone(),
-                options: infra_config_map.options.clone(),
-                mount_point: infra_config_map.mount_point.clone() + mount_path + "$",
-                fs_group: policy::SerializedFsGroup {
-                    group_id: 0,
-                    group_change_policy: 0,
-                },
-            });
+        let mount_path = Path::new(&yaml_mount.mountPath).file_name().unwrap();
+        let mount_path_str = OsString::from(mount_path).into_string().unwrap();
+        storages.push(policy::SerializedStorage {
+            driver: infra_config_map.driver.clone(),
+            driver_options: Vec::new(),
+            source: infra_config_map.mount_source.clone() + &yaml_mount.name + "$",
+            fstype: infra_config_map.fstype.clone(),
+            options: infra_config_map.options.clone(),
+            mount_point: infra_config_map.mount_point.clone() + &mount_path_str + "$",
+            fs_group: policy::SerializedFsGroup {
+                group_id: 0,
+                group_change_policy: 0,
+            },
+        });
 
-            if let Some(file_name) = Path::new(&yaml_mount.mountPath).file_name() {
-                if let Ok(name) = OsString::from(file_name).into_string() {
-                    policy_mounts.push(oci::Mount {
-                        destination: yaml_mount.mountPath.to_string(),
-                        r#type: infra_config_map.mount_type.to_string(),
-                        source: infra_config_map.mount_point.clone() + &name + "$",
-                        options: infra_config_map.options.clone(),
-                    });
-                } else {
-                    panic!("Unsupported mount path: {:?}", &yaml_mount.mountPath);
-                }
-            } else {
-                panic!("No file name in mount path: {:?}", &yaml_mount.mountPath);
-            }
-        }
+        let file_name = Path::new(&yaml_mount.mountPath).file_name().unwrap();
+        let name = OsString::from(file_name).into_string().unwrap();
+        policy_mounts.push(oci::Mount {
+            destination: yaml_mount.mountPath.to_string(),
+            r#type: infra_config_map.mount_type.to_string(),
+            source: infra_config_map.mount_point.clone() + &name + "$",
+            options: infra_config_map.options.clone(),
+        });
 
         Ok(())
     }
-}
 
-/// Verify that the policy corresponding to this mount has been created
-/// already, based on the information from data.json. An example of such
-/// mount is:
-/// {
-///    "destination": "/var/run/secrets/kubernetes.io/serviceaccount",
-///    "type": "bind",
-///    "source": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-serviceaccount$",
-///    "options": [
-///      "rbind",
-///      "rprivate",
-///      "ro"
-///    ]
-/// }
-fn verify_projected_volume_mount(
-    yaml_mount: &pod::VolumeMount,
-    policy_mounts: &mut Vec<oci::Mount>,
-) {
-    for policy_mount in policy_mounts {
-        if policy_mount.destination == yaml_mount.mountPath {
-            debug!("verify_projected_volume_mount: found already existing infrastructure mount {}.", &yaml_mount.mountPath);
-            return;
+    /// Verify that the policy corresponding to this mount has been created
+    /// already, based on the information from data.json. An example of such
+    /// mount is:
+    /// {
+    ///    "destination": "/var/run/secrets/kubernetes.io/serviceaccount",
+    ///    "type": "bind",
+    ///    "source": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-serviceaccount$",
+    ///    "options": [
+    ///      "rbind",
+    ///      "rprivate",
+    ///      "ro"
+    ///    ]
+    /// }
+    fn verify_projected_volume_mount(
+        yaml_mount: &pod::VolumeMount,
+        policy_mounts: &mut Vec<oci::Mount>,
+    ) {
+        for policy_mount in policy_mounts {
+            if policy_mount.destination == yaml_mount.mountPath {
+                debug!("verify_projected_volume_mount: found already existing infrastructure mount {}.", &yaml_mount.mountPath);
+                return;
+            }
         }
+
+        panic!("Unsupported pod mount {}", &yaml_mount.mountPath);
     }
 
-    panic!("Unsupported pod mount {}", &yaml_mount.mountPath);
+    // Example of input yaml:
+    //
+    // containers:
+    //   - image: "docker.io/library/busybox:1.36.0"
+    //     name: busybox
+    //     volumeMounts:
+    //       - mountPath: /etc/secret-volume
+    //         name: secret-volume
+    // volumes:
+    //   - name: secret-volume
+    //     secret:
+    //       defaultMode: 420
+    //       items:
+    //         - key: data-1
+    //           path: new-path-data-1
+    //       secretName: secret-test-map-a464d595-bac4-4b14-bade-3ffd0c195a08
+    //
+    // Corresponding output policy data:
+    //
+    // {
+    //   "destination": "/etc/secret-volume",
+    //   "type": "bind",
+    //   "source": "/run/kata-containers/shared/containers/watchable/4c29b2429319dcbdefbe9edc5bdcf58589d1b172cfafdb32bc670451f590d09f-afe191a457b0b559-secret-volume",
+    //   "options": [
+    //      "rbind",
+    //      "rprivate",
+    //      "ro"
+    //   ]
+    // },
+    //...
+    // "storages": [
+    //   {
+    //      "driver": "watchable-bind",
+    //      "driver_options": [],
+    //      "source": "/run/kata-containers/shared/containers/4c29b2429319dcbdefbe9edc5bdcf58589d1b172cfafdb32bc670451f590d09f-afe191a457b0b559-secret-volume",
+    //      "fstype": "bind",
+    //      "options": [
+    //      "rbind",
+    //      "rprivate",
+    //      "ro"
+    //      ],
+    //      "mount_point": "/run/kata-containers/shared/containers/watchable/4c29b2429319dcbdefbe9edc5bdcf58589d1b172cfafdb32bc670451f590d09f-afe191a457b0b559-secret-volume",
+    //      "fs_group": {
+    //          "group_id": 0,
+    //          "group_change_policy": 0
+    //      }
+    //    }
+    //  ]
+    fn secret_mount_and_storage(
+        infra_volumes: &Volumes,
+        policy_mounts: &mut Vec<oci::Mount>,
+        storages: &mut Vec<policy::SerializedStorage>,
+        yaml_volume: &volume::Volume,
+        yaml_mount: &pod::VolumeMount,
+    ) -> Result<()> {
+        Self::config_map_mount_and_storage(
+            infra_volumes,
+            policy_mounts,
+            storages,
+            yaml_volume,
+            yaml_mount,
+        )
+    }
 }
