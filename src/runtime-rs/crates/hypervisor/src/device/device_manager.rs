@@ -26,7 +26,7 @@ const DEVICE_TYPE_BLOCK: &str = "b";
 /// block_index and released_block_index are used to search an available block index
 /// in Sandbox.
 ///
-/// @block_index generally default is 1 for <vdb>;
+/// @block_index generally default is 0 for <vda>;
 /// @released_block_index for blk devices removed and indexes will released at the same time.
 #[derive(Clone, Debug, Default)]
 struct SharedInfo {
@@ -37,7 +37,7 @@ struct SharedInfo {
 impl SharedInfo {
     fn new() -> Self {
         SharedInfo {
-            block_index: 1,
+            block_index: 0,
             released_block_index: vec![],
         }
     }
