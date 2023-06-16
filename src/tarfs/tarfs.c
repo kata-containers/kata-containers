@@ -468,9 +468,8 @@ int tarfs_xattr_trusted_get(const struct xattr_handler *handler,
 	bool opaque = (info->flags & TARFS_INODE_FLAG_OPAQUE) != 0;
 
 	if (opaque && strcmp(name, "overlay.opaque") == 0) {
-		if (size < 1)
-			return -ERANGE;
-
+		if (size == 0)
+			return 1;
 		*(char *)buffer = 'y';
 		return 1;
 	}

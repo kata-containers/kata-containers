@@ -29,8 +29,8 @@ h2 = "0.3.17"
 simple_asn1 = "0.6.1"
 verity = { path = "../tardev-snapshotter/verity" }
 zerocopy = "0.6.1"
-sha2 = "0.10.6"
 devicemapper = "0.33.1"
+proc-mounts = "0.3.0"
 
 # Async helpers
 async-trait = "0.1.42"

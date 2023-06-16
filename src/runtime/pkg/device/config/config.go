@@ -351,6 +351,10 @@ func GetHostPath(devInfo DeviceInfo, vhostUserStoreEnabled bool, vhostUserStoreP
 		return "", fmt.Errorf("Empty path provided for device")
 	}
 
+	if devInfo.Major == -1 {
+		return devInfo.HostPath, nil
+	}
+
 	// Filter out vhost-user storage devices by device Major numbers.
 	if vhostUserStoreEnabled && devInfo.DevType == "b" &&
 		(devInfo.Major == VhostUserSCSIMajor || devInfo.Major == VhostUserBlkMajor) {

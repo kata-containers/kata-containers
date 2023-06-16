@@ -60,8 +60,6 @@ var cdromMajors = map[int64]string{
 // #define FLOPPY_MAJOR		2
 const floppyMajor = int64(2)
 
-const layerOption = "kata.layer="
-
 // Process gathers data related to a container process.
 type Process struct {
 	StartTime time.Time
@@ -609,8 +607,9 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 			continue
 		}
 
-		if c.mounts[i].Type != "bind" {
-			// We only handle for bind-mounts
+		isBlockFile := HasOption(c.mounts[i].Options, vcAnnotations.IsFileBlockDevice)
+		if c.mounts[i].Type != "bind" && !isBlockFile {
+			// We only handle for bind and block device mounts.
 			continue
 		}
 
@@ -672,13 +671,22 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 
 		// Check if mount is a block device file. If it is, the block device will be attached to the host
 		// instead of passing this as a shared mount.
-		if stat.Mode&unix.S_IFBLK == unix.S_IFBLK {
+		if stat.Mode&unix.S_IFMT == unix.S_IFBLK {
 			di = &config.DeviceInfo{
 				HostPath:      c.mounts[i].Source,
 				ContainerPath: c.mounts[i].Destination,
 				DevType:       "b",
 				Major:         int64(unix.Major(uint64(stat.Rdev))),
 				Minor:         int64(unix.Minor(uint64(stat.Rdev))),
+				ReadOnly:      c.mounts[i].ReadOnly,
+			}
+		} else if isBlockFile && stat.Mode&unix.S_IFMT == unix.S_IFREG {
+			di = &config.DeviceInfo{
+				HostPath:      c.mounts[i].Source,
+				ContainerPath: c.mounts[i].Destination,
+				DevType:       "b",
+				Major:         -1,
+				Minor:         0,
 				ReadOnly:      c.mounts[i].ReadOnly,
 			}
 			// Check whether source can be used as a pmem device
@@ -1204,59 +1212,11 @@ func (c *Container) resume(ctx context.Context) error {
 	return c.setContainerState(types.StateRunning)
 }
 
-func (c *Container) hotplugTarDrives(ctx context.Context) error {
-	// TODO: We need to remember the ones that succeeded so that we can cleanup.
-	for _, opt := range c.rootFs.Options {
-		if !strings.HasPrefix(opt, layerOption) {
-			continue
-		}
-
-		strs := strings.Split(opt[len(layerOption):], ",")
-		if len(strs) != 2 {
-			continue
-		}
-		l := strs[0]
-
-		id, ok := c.sandbox.GetLayerDevice(l)
-		if !ok {
-			path := filepath.Join(c.rootFs.Source, l)
-			b, err := c.sandbox.devManager.NewDevice(config.DeviceInfo{
-				HostPath:      path,
-				ContainerPath: filepath.Join(kataGuestSandboxDir(), "layers", l),
-				DevType:       "b",
-				Major:         -1,
-				ReadOnly:      true,
-			})
-			if err != nil {
-				return fmt.Errorf("device manager failed to create rootfs layer device for %q: %v", path, err)
-			}
-			id = c.sandbox.SetLayerDevice(l, b.DeviceID())
-		}
-
-		// Remember the last device that was added. We will wait for it to appear in the
-		// guest before mounting all the layers.
-		// TODO: Do we need to remember all layers? Probably not because we can get it from
-		// from the options + sandbox.
-		c.state.BlockDeviceID = id
-
-		// Attach the device.
-		if err := c.sandbox.devManager.AttachDevice(ctx, id, c.sandbox); err != nil {
-			return err
-		}
-	}
-	c.rootfsSuffix = ""
-	return c.setStateFstype(c.rootFs.Type)
-}
-
 // hotplugDrive will attempt to hotplug the container rootfs if it is backed by a
 // block device
 func (c *Container) hotplugDrive(ctx context.Context) error {
 	var dev device
 	var err error
-
-	if c.rootFs.Type == TarRootFSType {
-		return c.hotplugTarDrives(ctx)
-	}
 
 	// Check to see if the rootfs is an umounted block device (source) or if the
 	// mount (target) is backed by a block device:

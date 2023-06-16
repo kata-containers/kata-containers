@@ -14,7 +14,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"syscall"
 
@@ -24,6 +23,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
@@ -391,82 +391,37 @@ func (f *FilesystemShare) shareRootFilesystemWithNydus(ctx context.Context, c *C
 	}, nil
 }
 
-func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container) ([]*SharedFile, error) {
-	if c.rootFs.Type == NydusRootFSType {
-		f, err := f.shareRootFilesystemWithNydus(ctx, c)
-		if err != nil {
-			return nil, err
-		}
-		return []*SharedFile{f}, nil
-	}
-
-	result := []*SharedFile{}
-	if c.rootFs.Type == TarRootFSType {
-		for _, opt := range c.rootFs.Options {
-			storage := &grpc.Storage{}
-
-			if !strings.HasPrefix(opt, layerOption) {
-				continue
-			}
-
-			strs := strings.Split(opt[len(layerOption):], ",")
-			if len(strs) != 2 {
-				return nil, fmt.Errorf("Unknown layer/roothash pair: %q", opt)
-			}
-			l := strs[0]
-			root_hash := strs[1]
-
-			id, ok := c.sandbox.GetLayerDevice(l)
-			if !ok {
-				f.Logger().WithField("layer", l).Error("failed to find device for layer")
-				return nil, fmt.Errorf("failed to find device by for layer %q", l)
-			}
-
-			// TODO: A lot of repetitive work below. Move this to a common file.
-			device := f.sandbox.devManager.GetDeviceByID(id)
-			c.sandbox.RemoveLayerDevice(l) // Decrement the refcount we incremented above.
-			if device == nil {
-				f.Logger().WithField("device", c.state.BlockDeviceID).Error("failed to find device by id")
-				return nil, fmt.Errorf("failed to find device by id %q", c.state.BlockDeviceID)
-			}
-
-			blockDrive, ok := device.GetDeviceInfo().(*config.BlockDrive)
-			if !ok || blockDrive == nil {
-				f.Logger().Error("malformed block drive")
-				return nil, fmt.Errorf("malformed block drive")
-			}
-			switch {
-			case f.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioMmio:
-				storage.Driver = kataMmioBlkDevType
-				storage.Source = blockDrive.VirtPath
-			case f.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlockCCW:
-				storage.Driver = kataBlkCCWDevType
-				storage.Source = blockDrive.DevNo
-			case f.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlock:
-				storage.Driver = kataBlkDevType
-				storage.Source = blockDrive.PCIPath.String()
-			case f.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioSCSI:
-				storage.Driver = kataSCSIDevType
-				storage.Source = blockDrive.SCSIAddr
-			default:
-				return nil, fmt.Errorf("Unknown block device driver: %s", f.sandbox.config.HypervisorConfig.BlockDeviceDriver)
-			}
-
-			f.Logger().Infof("adding shared file for layer %q", l)
-			storage.MountPoint = filepath.Join(kataGuestSandboxDir(), "layers", l)
-			storage.Fstype = "tar"
-			storage.Options = []string{"ro", fmt.Sprintf("kata.dm-verity=%s", root_hash)}
-
-			result = append(result, &SharedFile{
-				storage:   storage,
-				guestPath: storage.MountPoint,
-			})
-		}
-	}
-
+// func (c *Container) shareRootfs(ctx context.Context) (*grpc.Storage, string, error) {
+func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container) (*SharedFile, error) {
 	rootfsGuestPath := filepath.Join(kataGuestSharedDir(), c.id, c.rootfsSuffix)
 
-	f.Logger().Infof("In ShareRootFilesystem, fstype=%q, blockDeviceID=%q", c.state.Fstype, c.state.BlockDeviceID)
+	// In the confidential computing, there is no Image information on the host,
+	// so there is no Rootfs.Target.
+	if f.sandbox.config.ServiceOffload && c.rootFs.Target == "" {
+		return &SharedFile{
+			storage:   nil,
+			guestPath: rootfsGuestPath,
+		}, nil
+	}
+
+	if c.rootFs.Type == NydusRootFSType {
+		return f.shareRootFilesystemWithNydus(ctx, c)
+	}
+
+	if HasOptionPrefix(c.rootFs.Options, annotations.FileSystemLayer) {
+		path := filepath.Join("/run/kata-containers", c.id, "rootfs")
+		return &SharedFile{
+			storage: &grpc.Storage{
+				MountPoint: path,
+				Source:     "none",
+				Fstype:     c.rootFs.Type,
+				Driver:     kataOverlayDevType,
+				Options:    c.rootFs.Options,
+			},
+			guestPath: path,
+		}, nil
+	}
+
 	if c.state.Fstype != "" && c.state.BlockDeviceID != "" {
 		// The rootfs storage volume represents the container rootfs
 		// mount point inside the guest.
@@ -513,7 +468,6 @@ func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container)
 		// So we have to build the bundle path explicitly.
 		rootfsStorage.MountPoint = filepath.Join(kataGuestSharedDir(), c.id)
 		rootfsStorage.Fstype = c.state.Fstype
-		rootfsStorage.Options = c.rootFs.Options
 
 		if c.state.Fstype == "xfs" {
 			rootfsStorage.Options = []string{"nouuid"}
@@ -527,10 +481,10 @@ func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container)
 			return nil, err
 		}
 
-		return append(result, &SharedFile{
+		return &SharedFile{
 			storage:   rootfsStorage,
 			guestPath: rootfsGuestPath,
-		}), nil
+		}, nil
 	}
 
 	// This is not a block based device rootfs. We are going to bind mount it into the shared drive
@@ -542,20 +496,16 @@ func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container)
 		return nil, err
 	}
 
-	return append(result, &SharedFile{
+	return &SharedFile{
 		storage:   nil,
 		guestPath: rootfsGuestPath,
-	}), nil
+	}, nil
 }
 
 func (f *FilesystemShare) UnshareRootFilesystem(ctx context.Context, c *Container) error {
 	if c.rootFs.Type == NydusRootFSType {
 		if err2 := nydusContainerCleanup(ctx, getMountPath(c.sandbox.id), c); err2 != nil {
 			f.Logger().WithError(err2).Error("rollback failed nydusContainerCleanup")
-		}
-	} else if c.rootFs.Type == TarRootFSType {
-		for _, l := range c.rootFs.Options {
-			c.sandbox.RemoveLayerDevice(l)
 		}
 	} else {
 		if err := bindUnmountContainerRootfs(ctx, getMountPath(f.sandbox.ID()), c.id); err != nil {

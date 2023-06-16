@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::fs;
 use std::fs::{File, OpenOptions};
-use std::io::{BufRead, BufReader, Read, Seek, Write};
+use std::io::{self, BufRead, BufReader, Read, Seek, Write};
 use std::iter;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
@@ -246,8 +246,33 @@ async fn ephemeral_storage_handler(
 async fn overlayfs_storage_handler(
     logger: &Logger,
     storage: &Storage,
+    cid: Option<&str>,
     _sandbox: Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
+    if storage
+        .options
+        .iter()
+        .any(|e| e == "io.katacontainers.fs-opt.overlay-rw")
+    {
+        let cid = cid.ok_or_else(|| anyhow!("No container id in rw overlay"))?;
+        let cpath = Path::new(crate::rpc::CONTAINER_BASE).join(cid);
+        let work = cpath.join("work");
+        let upper = cpath.join("upper");
+
+        fs::create_dir_all(&work)?;
+        fs::create_dir_all(&upper)?;
+
+        let mut storage = storage.clone();
+        storage.fstype = "overlay".into();
+        storage
+            .options
+            .push(format!("upperdir={}", upper.to_string_lossy()));
+        storage
+            .options
+            .push(format!("workdir={}", work.to_string_lossy()));
+        return common_storage_handler(logger, &storage);
+    }
+
     common_storage_handler(logger, storage)
 }
 
@@ -453,7 +478,17 @@ fn prepare_dm_target(path: &str, hash: &str) -> Result<(u64, u64, String, String
     }
 
     // TODO: Store other parameters in super block: version, hash type, salt.
-    Ok((0, data_size / 512, "verity".into(), format!("1 {path} {path} {data_block_size} {hash_block_size} {} {} sha256 {hash} 0000000000000000000000000000000000000000000000000000000000000000", data_size / data_block_size, (data_size + hash_block_size - 1) / hash_block_size)))
+    Ok((
+        0,
+        data_size / 512,
+        "verity".into(),
+        format!(
+            "1 {path} {path} {data_block_size} {hash_block_size
+} {} {} sha256 {hash} 0000000000000000000000000000000000000000000000000000000000000000",
+            data_size / data_block_size,
+            (data_size + hash_block_size - 1) / hash_block_size
+        ),
+    ))
 }
 
 // virtio_blk_storage_handler handles the storage for blk driver.
@@ -478,80 +513,6 @@ async fn virtio_blk_storage_handler(
         let pcipath = pci::Path::from_str(&storage.source)?;
         let dev_path = get_virtio_blk_pci_device_name(&sandbox, &pcipath).await?;
         storage.source = dev_path;
-    }
-
-    // Filter out all kata-specific options.
-    let mut layers = Vec::new();
-    let mut root_hash: Option<String> = None;
-    storage.options.retain(|opt| {
-        if opt.starts_with("kata.dm-verity=") {
-            root_hash = Some(opt["kata.dm-verity=".len()..].to_string());
-        } else if opt.starts_with("kata.layer=") {
-            layers.push(opt["kata.layer=".len()..].to_string());
-        }
-        !opt.starts_with("kata.")
-    });
-
-    // Enable dm-verity if the option was specified.
-    if let Some(rh) = root_hash {
-        let mount_path = Path::new(&storage.mount_point);
-
-        info!(
-            logger,
-            "dm-verity enabled for mount source={:?}, dest={:?}", storage.source, mount_path
-        );
-
-        let hash = mount_path
-            .file_name()
-            .ok_or_else(|| anyhow!("Unable to get file name from mount path: {:?}", mount_path))?
-            .to_str()
-            .ok_or_else(|| {
-                anyhow!(
-                    "Unable to convert file name to utf8 string: {:?}",
-                    mount_path
-                )
-            })?;
-
-        // TODO: Remove device on failure.
-        let dm = devicemapper::DM::new()?;
-        let name = devicemapper::DmName::new(hash)?;
-        let opts = devicemapper::DmOptions::default().set_flags(devicemapper::DmFlags::DM_READONLY);
-        dm.device_create(&name, None, opts)?;
-        let id = devicemapper::DevId::Name(name);
-        dm.table_load(&id, &[prepare_dm_target(&storage.source, &rh)?], opts)?;
-        dm.device_suspend(&id, opts)?;
-        storage.source = format!("/dev/mapper/{hash}");
-    }
-
-    // TODO: Should we try to mount something else?
-    if storage.get_fstype() == "tar-overlay" {
-        let mount_point = storage.mount_point.to_string();
-        info!(
-            logger,
-            "tar-overlay mount source={:?}, dest={:?}", storage.source, mount_point
-        );
-        for layer in &mut layers {
-            let l = if let Some(i) = layer.find(',') {
-                &layer[..i]
-            } else {
-                &layer
-            };
-            let new = format!("/run/kata-containers/sandbox/layers/{l}");
-            *layer = new;
-        }
-        info!(
-            logger,
-            "mounts are: {}", layers.join(":")
-        );
-        layers.reverse();
-        let status = std::process::Command::new("mount_tar.sh")
-            .arg(layers.join(":"))
-            .arg(&mount_point)
-            .status()?;
-        if !status.success() {
-            return Err(anyhow!("mount_script failed: {status}"));
-        }
-        return Ok(mount_point);
     }
 
     common_storage_handler(logger, &storage)
@@ -598,14 +559,68 @@ async fn virtio_scsi_storage_handler(
     common_storage_handler(logger, &storage)
 }
 
-#[instrument]
-fn common_storage_handler(logger: &Logger, storage: &Storage) -> Result<String> {
+fn mount_storage_handler(logger: &Logger, storage: &Storage) -> Result<String> {
     // Mount the storage device.
     let mount_point = storage.mount_point.to_string();
 
     mount_storage(logger, storage)?;
     set_ownership(logger, storage)?;
     Ok(mount_point)
+}
+
+#[instrument]
+fn common_storage_handler(logger: &Logger, storage: &Storage) -> Result<String> {
+    const DM_VERITY: &str = "io.katacontainers.fs-opt.root-hash=";
+    let opt = if let Some(o) = storage.options.iter().find(|e| e.starts_with(DM_VERITY)) {
+        o
+    } else {
+        // No dm-verity, so just run the regular handler.
+        return mount_storage_handler(logger, storage);
+    };
+
+    // Enable dm-verity then call the handler.
+    let mount_path = Path::new(&storage.mount_point);
+    info!(
+        logger,
+        "dm-verity enabled for mount source={:?}, dest={:?}", storage.source, mount_path
+    );
+
+    let fname = mount_path
+        .file_name()
+        .ok_or_else(|| anyhow!("Unable to get file name from mount path: {:?}", mount_path))?
+        .to_str()
+        .ok_or_else(|| {
+            anyhow!(
+                "Unable to convert file name to utf8 string: {:?}",
+                mount_path
+            )
+        })?;
+
+    let dm = devicemapper::DM::new()?;
+    let name = devicemapper::DmName::new(fname)?;
+    let opts = devicemapper::DmOptions::default().set_flags(devicemapper::DmFlags::DM_READONLY);
+    dm.device_create(&name, None, opts)?;
+
+    let id = devicemapper::DevId::Name(name);
+
+    (|| {
+        dm.table_load(
+            &id,
+            &[prepare_dm_target(&storage.source, &opt[DM_VERITY.len()..])?],
+            opts,
+        )?;
+        dm.device_suspend(&id, opts)?;
+
+        let mut storage = storage.clone();
+        storage.source = format!("/dev/mapper/{fname}");
+        mount_storage_handler(logger, &storage)
+    })()
+    .map_err(|e| {
+        if let Err(err) = dm.device_remove(&id, devicemapper::DmOptions::default()) {
+            error!(logger, "Unable to remove dm device ({fname}): {:?}", err);
+        }
+        e
+    })
 }
 
 // nvdimm_storage_handler handles the storage for NVDIMM driver.
@@ -810,10 +825,14 @@ fn parse_mount_flags_and_options(options_vec: Vec<&str>) -> (MsFlags, String) {
                     }
                 }
                 None => {
+                    if opt.starts_with("io.katacontainers.") {
+                        continue;
+                    }
+
                     if !options.is_empty() {
                         options.push_str(format!(",{}", opt).as_str());
                     } else {
-                        options.push_str(opt.to_string().as_str());
+                        options.push_str(opt);
                     }
                 }
             };
@@ -862,7 +881,7 @@ pub async fn add_storages(
                 ephemeral_storage_handler(&logger, &storage, sandbox.clone()).await
             }
             DRIVER_OVERLAYFS_TYPE => {
-                overlayfs_storage_handler(&logger, &storage, sandbox.clone()).await
+                overlayfs_storage_handler(&logger, &storage, cid.as_deref(), sandbox.clone()).await
             }
             DRIVER_MMIO_BLK_TYPE => {
                 virtiommio_blk_storage_handler(&logger, &storage, sandbox.clone()).await
@@ -1092,10 +1111,43 @@ pub fn cgroups_mount(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result<
     Ok(())
 }
 
+pub fn find_dm_name(mount_point: &str) -> io::Result<Option<String>> {
+    let mapper = Path::new("/dev/mapper");
+    let target = Path::new(mount_point);
+
+    for mount in proc_mounts::MountIter::new()? {
+        if let Ok(m) = mount {
+            if m.dest != target {
+                continue;
+            }
+
+            if let Some(p) = m.source.parent() {
+                if p == mapper {
+                    if let Some(f) = m.source.file_name() {
+                        return Ok(Some(f.to_string_lossy().into()));
+                    }
+                }
+            }
+
+            break;
+        }
+    }
+    Ok(None)
+}
+
 #[instrument]
 pub fn remove_mounts(mounts: &[String]) -> Result<()> {
     for m in mounts.iter() {
+        let dm_target = find_dm_name(&m);
         nix::mount::umount(m.as_str()).context(format!("failed to umount {:?}", m))?;
+        if let Some(dm_name) = dm_target? {
+            let dm = devicemapper::DM::new()?;
+            let name = devicemapper::DmName::new(&dm_name)?;
+            dm.device_remove(
+                &devicemapper::DevId::Name(&name),
+                devicemapper::DmOptions::default(),
+            )?;
+        }
     }
     Ok(())
 }

@@ -7,9 +7,8 @@ use std::{collections::HashMap, fs, fs::OpenOptions, io, io::Seek};
 use tokio::sync::RwLock;
 use tonic::Status;
 
-const SNAPSHOT_REF_LABEL: &str = "containerd.io/snapshot.ref";
+const ROOT_HASH_LABEL: &str = "io.katacontainers.dm-verity.root-hash";
 const TARGET_LAYER_DIGEST_LABEL: &str = "containerd.io/snapshot/cri.layer-digest";
-const TARGET_REF_LABEL: &str = "containerd.io/snapshot/cri.image-ref";
 
 struct Store {
     root: PathBuf,
@@ -42,16 +41,16 @@ impl Store {
     }
 
     /// Creates the layer file path from its name.
-    ///
-    /// If `write` is `true`, it also ensures that the directory exists.
-    fn layer_path(&self, name: &str, write: bool) -> Result<PathBuf, Status> {
-        let path = self.root.join("layers").join(name_to_hash(name));
-        if write {
-            if let Some(parent) = path.parent() {
-                fs::create_dir_all(parent)?;
-            }
-        }
+    fn layer_path(&self, name: &str) -> PathBuf {
+        self.root.join("layers").join(name_to_hash(name))
+    }
 
+    /// Creates the layer file path from its name and ensures that the directory exists.
+    fn layer_path_to_write(&self, name: &str) -> Result<PathBuf, Status> {
+        let path = self.layer_path(name);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
         Ok(path)
     }
 
@@ -103,9 +102,12 @@ impl Store {
     }
 
     fn mounts_from_snapshot(&self, parent: &str) -> Result<Vec<api::types::Mount>, Status> {
-        // Get chain of parents.
+        const PREFIX: &str = "io.katacontainers.fs-opt";
+
+        // Get chain of layers.
         let mut next_parent = Some(parent.to_string());
-        let mut parents = Vec::new();
+        let mut layers = Vec::new();
+        let mut opts = Vec::new();
         while let Some(p) = next_parent {
             let info = self.read_snapshot(&p)?;
             if info.kind != Kind::Committed {
@@ -114,7 +116,7 @@ impl Store {
                 ));
             }
 
-            let root_hash = if let Some(rh) = info.labels.get("kata.dm-verity") {
+            let root_hash = if let Some(rh) = info.labels.get(ROOT_HASH_LABEL) {
                 rh
             } else {
                 return Err(Status::failed_precondition(
@@ -122,18 +124,24 @@ impl Store {
                 ));
             };
 
-            parents.push(format!("kata.layer={},{}", name_to_hash(&p), root_hash));
+            let name = name_to_hash(&p);
+            layers.push(format!("/run/kata-containers/sandbox/layers/{name}"));
+            opts.push(format!(
+                "{PREFIX}.layer={},tar,ro,{PREFIX}.block_device=file,{PREFIX}.is-layer,{PREFIX}.root-hash={root_hash}",
+                self.layer_path(&p).to_string_lossy()
+            ));
 
             next_parent = (!info.parent.is_empty()).then_some(info.parent);
         }
 
-        parents.reverse();
+        opts.push(format!("{PREFIX}.overlay-rw"));
+        opts.push(format!("lowerdir={}", layers.join(":")));
 
         Ok(vec![api::types::Mount {
             r#type: "tar-overlay".to_string(),
-            source: self.root.join("layers").to_string_lossy().into_owned(),
+            source: "/".to_string(),
             target: String::new(),
-            options: parents,
+            options: opts,
         }])
     }
 }
@@ -163,6 +171,8 @@ impl TarDevSnapshotter {
         parent: String,
         mut labels: HashMap<String, String>,
     ) -> Result<Vec<api::types::Mount>, Status> {
+        const TARGET_REF_LABEL: &str = "containerd.io/snapshot/cri.image-ref";
+
         let reference: Reference = {
             let image_ref = if let Some(r) = labels.get(TARGET_REF_LABEL) {
                 r
@@ -196,8 +206,6 @@ impl TarDevSnapshotter {
                 .await
                 .map_err(|_| Status::internal("unable to authenticate"))?;
 
-            // TODO: Eventually when we have the layer reference-count, switch to use `digest_str`
-            // here.
             let name = dir.path().join(&key);
             let mut gzname = name.clone();
             gzname.set_extension("gz");
@@ -212,11 +220,10 @@ impl TarDevSnapshotter {
 
             // TODO: Decompress in stream instead of reopening.
             // Decompress data.
-            let mut file;
             trace!("Decompressing {:?} to {:?}", &gzname, &name);
-            {
+            let root_hash = tokio::task::spawn_blocking(move || -> io::Result<_> {
                 let compressed = fs::File::open(&gzname)?;
-                file = OpenOptions::new()
+                let mut file = OpenOptions::new()
                     .read(true)
                     .write(true)
                     .create(true)
@@ -224,25 +231,29 @@ impl TarDevSnapshotter {
                     .open(&name)?;
                 let mut gz_decoder = flate2::read::GzDecoder::new(compressed);
                 std::io::copy(&mut gz_decoder, &mut file)?;
-            }
 
-            trace!("Appending index to {:?}", &name);
-            file.rewind()?;
-            tarindex::append_index(&mut file)?;
+                trace!("Appending index to {:?}", &name);
+                file.rewind()?;
+                tarindex::append_index(&mut file)?;
 
-            trace!("Appending dm-verity tree to {:?}", &name);
-            let root_hash = verity::append_tree::<Sha256>(&mut file)?;
-            trace!("Root hash for {:?} is {:x}", &name, root_hash);
+                trace!("Appending dm-verity tree to {:?}", &name);
+                let root_hash = verity::append_tree::<Sha256>(&mut file)?;
+
+                trace!("Root hash for {:?} is {:x}", &name, root_hash);
+                Ok(root_hash)
+            })
+            .await
+            .map_err(|_| Status::unknown("error in worker task"))??;
 
             // Store a label with the root hash so that we can recall it later when mounting.
-            labels.insert("kata.dm-verity".to_string(), format!("{:x}", root_hash));
+            labels.insert(ROOT_HASH_LABEL.into(), format!("{:x}", root_hash));
         }
 
         // Move file to its final location and write the snapshot.
         {
             let from = dir.path().join(&key);
             let mut store = self.store.write().await;
-            let to = store.layer_path(&key, true)?;
+            let to = store.layer_path_to_write(&key)?;
             trace!("Renaming from {:?} to {:?}", &from, &to);
             tokio::fs::rename(from, to).await?;
             store.write_snapshot(Kind::Committed, key, parent, labels)?;
@@ -281,7 +292,7 @@ impl Snapshotter for TarDevSnapshotter {
             return Ok(Usage { inodes: 0, size: 0 });
         }
 
-        let mut file = fs::File::open(store.layer_path(&key, false)?)?;
+        let mut file = fs::File::open(store.layer_path(&key))?;
         let len = file.seek(io::SeekFrom::End(0))?;
         Ok(Usage {
             // TODO: Read the index "header" to determine the inode count.
@@ -309,6 +320,8 @@ impl Snapshotter for TarDevSnapshotter {
         parent: String,
         labels: HashMap<String, String>,
     ) -> Result<Vec<api::types::Mount>, Status> {
+        const SNAPSHOT_REF_LABEL: &str = "containerd.io/snapshot.ref";
+
         trace!("prepare({}, {}, {:?})", key, parent, labels);
 
         // There are two reasons for preparing a snapshot: to build an image and to actually use it
@@ -356,14 +369,9 @@ impl Snapshotter for TarDevSnapshotter {
             if info.kind == Kind::Committed {
                 if let Some(_digest) = info.labels.get(TARGET_LAYER_DIGEST_LABEL) {
                     // Try to delete a layer. It's ok if it's not found.
-                    // TODO: We need to ref-count the layer file so that we don't remove it here
-                    // when the first reference goes away. For now we're using the snapshot name
-                    // as the layer name, but eventually we want to use `digest`.
-                    if let Ok(layer_path) = store.layer_path(&key, false) {
-                        if let Err(e) = fs::remove_file(layer_path) {
-                            if e.kind() != io::ErrorKind::NotFound {
-                                return Err(e.into());
-                            }
+                    if let Err(e) = fs::remove_file(store.layer_path(&key)) {
+                        if e.kind() != io::ErrorKind::NotFound {
+                            return Err(e.into());
                         }
                     }
                 }
