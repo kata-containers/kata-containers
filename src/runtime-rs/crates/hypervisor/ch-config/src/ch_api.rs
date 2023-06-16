@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{DeviceConfig, FsConfig, VmConfig};
+use crate::{DeviceConfig, DiskConfig, FsConfig, VmConfig};
 use anyhow::{anyhow, Result};
 use api_client::simple_api_full_command_and_response;
 
@@ -63,6 +63,24 @@ pub async fn cloud_hypervisor_vm_stop(mut socket: UnixStream) -> Result<Option<S
         let response =
             simple_api_full_command_and_response(&mut socket, "PUT", "vm.shutdown", None)
                 .map_err(|e| anyhow!(e))?;
+
+        Ok(response)
+    })
+    .await?
+}
+
+pub async fn cloud_hypervisor_vm_blockdev_add(
+    mut socket: UnixStream,
+    blk_config: DiskConfig,
+) -> Result<Option<String>> {
+    task::spawn_blocking(move || -> Result<Option<String>> {
+        let response = simple_api_full_command_and_response(
+            &mut socket,
+            "PUT",
+            "vm.add-disk",
+            Some(&serde_json::to_string(&blk_config)?),
+        )
+        .map_err(|e| anyhow!(e))?;
 
         Ok(response)
     })
