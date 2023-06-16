@@ -3,18 +3,31 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use crate::config::AgentConfig;
 use anyhow::{anyhow, Result};
 use futures::StreamExt;
+use std::env;
 use std::io;
 use std::io::ErrorKind;
 use std::os::unix::io::{FromRawFd, RawFd};
+use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::watch::Receiver;
+use tokio::sync::RwLock;
 use tokio_vsock::{Incoming, VsockListener, VsockStream};
 use tracing::instrument;
 
 // Size of I/O read buffer
 const BUF_SIZE: usize = 8192;
+
+lazy_static! {
+    pub static ref AGENT_CONFIG: Arc<RwLock<AgentConfig>> = Arc::new(RwLock::new(
+        // Note: We can't do AgentOpts.parse() here to send through the processed arguments to AgentConfig
+        // clap::Parser::parse() greedily process all command line input including cargo test parameters,
+        // so should only be used inside main.
+        AgentConfig::from_cmdline("/proc/cmdline", env::args().collect()).unwrap()
+    ));
+}
 
 // Interruptable I/O copy using readers and writers
 // (an interruptable version of "io::copy()").

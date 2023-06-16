@@ -32,6 +32,8 @@ use crate::process::Process;
 use crate::seccomp;
 use crate::selinux;
 use crate::specconv::CreateOpts;
+#[cfg(feature = "wasm-runtime")]
+use crate::wasm_runtime;
 use crate::{mount, validator};
 
 use protocols::agent::StatsContainerResponse;
@@ -39,6 +41,7 @@ use protocols::agent::StatsContainerResponse;
 use nix::errno::Errno;
 use nix::fcntl::{self, OFlag};
 use nix::fcntl::{FcntlArg, FdFlag};
+#[cfg(not(feature = "containerd-shim"))]
 use nix::mount::MntFlags;
 use nix::pty;
 use nix::sched::{self, CloneFlags};
@@ -73,6 +76,7 @@ use kata_sys_util::validate::valid_env;
 pub const EXEC_FIFO_FILENAME: &str = "exec.fifo";
 
 const INIT: &str = "INIT";
+const WASM_RT: &str = "WASM_RT";
 const NO_PIVOT: &str = "NO_PIVOT";
 const CRFD_FD: &str = "CRFD_FD";
 const CWFD_FD: &str = "CWFD_FD";
@@ -81,6 +85,16 @@ const FIFO_FD: &str = "FIFO_FD";
 const HOME_ENV_KEY: &str = "HOME";
 const PIDNS_FD: &str = "PIDNS_FD";
 const CONSOLE_SOCKET_FD: &str = "CONSOLE_SOCKET_FD";
+
+#[cfg(feature = "wasm-runtime")]
+const SUPPORT_WASM_RUNTIME: bool = cfg!(any(
+    target_arch = "x86_64",
+    target_arch = "x86",
+    target_arch = "aarch64",
+    target_arch = "arm",
+    target_arch = "riscv64",
+    target_arch = "riscv32"
+));
 
 #[derive(Debug)]
 pub struct ContainerStatus {
@@ -237,12 +251,12 @@ pub trait BaseContainer {
     async fn exec(&mut self) -> Result<()>;
 }
 
-// LinuxContainer protected by Mutex
+// HybridContainer protected by Mutex
 // Arc<Mutex<Innercontainer>> or just Mutex<InnerContainer>?
 // Or use Mutex<xx> as a member of struct, like C?
 // a lot of String in the struct might be &str
 #[derive(Debug)]
-pub struct LinuxContainer {
+pub struct HybridContainer {
     pub id: String,
     pub root: String,
     pub config: Config,
@@ -285,7 +299,7 @@ pub trait Container: BaseContainer {
     fn resume(&mut self) -> Result<()>;
 }
 
-impl Container for LinuxContainer {
+impl Container for HybridContainer {
     fn pause(&mut self) -> Result<()> {
         let status = self.status();
         if status != ContainerState::Running && status != ContainerState::Created {
@@ -338,6 +352,9 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let no_pivot = std::env::var(NO_PIVOT)?.eq(format!("{}", true).as_str());
     let crfd = std::env::var(CRFD_FD)?.parse::<i32>().unwrap();
     let cfd_log = std::env::var(CLOG_FD)?.parse::<i32>().unwrap();
+
+    #[cfg(feature = "wasm-runtime")]
+    let wasm_rt = std::env::var(WASM_RT)?.eq(format!("{}", true).as_str());
 
     // get the pidns fd from parent, if parent had passed the pidns fd,
     // then get it and join in this pidns; otherwise, create a new pidns
@@ -771,6 +788,12 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         }
     }
 
+    // With WASM_RT, we should execute wasm file by wasm runtime.
+    #[cfg(feature = "wasm-runtime")]
+    if wasm_rt {
+        wasm_runtime::wasm_task(&args);
+    }
+
     do_exec(&args);
 }
 
@@ -806,7 +829,7 @@ fn set_stdio_permissions(uid: Uid) -> Result<()> {
 }
 
 #[async_trait]
-impl BaseContainer for LinuxContainer {
+impl BaseContainer for HybridContainer {
     fn id(&self) -> String {
         self.id.clone()
     }
@@ -998,12 +1021,26 @@ impl BaseContainer for LinuxContainer {
             console_name = self.console_socket.clone();
         }
 
+        // check whether the current environment supports wasm runtime
+        // if config.wasm_runtime enabled
+        #[cfg(feature = "wasm-runtime")]
+        if self.config.wasm_runtime && !SUPPORT_WASM_RUNTIME {
+            return Err(anyhow!(
+                "do not support wasm runtime in the current architecture"
+            ));
+        }
+
         let mut child = child
-            .arg("init")
+            .arg(if cfg!(feature = "containerd-shim") {
+                "-init"
+            } else {
+                "init"
+            })
             .stdin(child_stdin)
             .stdout(child_stdout)
             .stderr(child_stderr)
             .env(INIT, format!("{}", p.init))
+            .env(WASM_RT, format!("{}", self.config.wasm_runtime))
             .env(NO_PIVOT, format!("{}", self.config.no_pivot_root))
             .env(CRFD_FD, format!("{}", crfd))
             .env(CWFD_FD, format!("{}", cwfd))
@@ -1130,6 +1167,7 @@ impl BaseContainer for LinuxContainer {
         }
 
         self.status.transition(ContainerState::Stopped);
+        #[cfg(not(feature = "containerd-shim"))]
         mount::umount2(
             spec.root.as_ref().unwrap().path.as_str(),
             MntFlags::MNT_DETACH,
@@ -1469,7 +1507,7 @@ fn setid(uid: Uid, gid: Gid) -> Result<()> {
     Ok(())
 }
 
-impl LinuxContainer {
+impl HybridContainer {
     pub fn new<T: Into<String> + Display + Clone>(
         id: T,
         base: T,
@@ -1530,7 +1568,7 @@ impl LinuxContainer {
         };
         info!(logger, "new cgroup_manager {:?}", &cgroup_manager);
 
-        Ok(LinuxContainer {
+        Ok(HybridContainer {
             id: id.clone(),
             root,
             cgroup_manager,
@@ -1714,10 +1752,11 @@ mod tests {
             spec: Some(spec),
             rootless_euid: false,
             rootless_cgroup: false,
+            wasm_runtime: false,
         }
     }
 
-    fn new_linux_container() -> (Result<LinuxContainer>, tempfile::TempDir) {
+    fn new_linux_container() -> (Result<HybridContainer>, tempfile::TempDir) {
         // Create a temporal directory
         let dir = tempdir()
             .map_err(|e| anyhow!(e).context("tempdir failed"))
@@ -1725,7 +1764,7 @@ mod tests {
 
         // Create a new container
         (
-            LinuxContainer::new(
+            HybridContainer::new(
                 "some_id",
                 &dir.path().join("rootfs").to_str().unwrap(),
                 create_dummy_opts(),
@@ -1735,7 +1774,7 @@ mod tests {
         )
     }
 
-    fn new_linux_container_and_then<U, F: FnOnce(LinuxContainer) -> Result<U, anyhow::Error>>(
+    fn new_linux_container_and_then<U, F: FnOnce(HybridContainer) -> Result<U, anyhow::Error>>(
         op: F,
     ) -> Result<U, anyhow::Error> {
         let (container, _dir) = new_linux_container();
@@ -1743,8 +1782,8 @@ mod tests {
     }
 
     #[test]
-    fn test_linuxcontainer_pause_bad_status() {
-        let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
+    fn test_hybridcontainer_pause_bad_status() {
+        let ret = new_linux_container_and_then(|mut c: HybridContainer| {
             // Change state to pause, c.pause() should fail
             c.status.transition(ContainerState::Paused);
             c.pause().map_err(|e| anyhow!(e))
@@ -1755,8 +1794,8 @@ mod tests {
     }
 
     #[test]
-    fn test_linuxcontainer_pause() {
-        let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
+    fn test_hybridcontainer_pause() {
+        let ret = new_linux_container_and_then(|mut c: HybridContainer| {
             c.cgroup_manager = Box::new(FsManager::new("").map_err(|e| {
                 anyhow!(format!("fail to create cgroup manager with path: {:}", e))
             })?);
@@ -1767,8 +1806,8 @@ mod tests {
     }
 
     #[test]
-    fn test_linuxcontainer_resume_bad_status() {
-        let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
+    fn test_hybridcontainer_resume_bad_status() {
+        let ret = new_linux_container_and_then(|mut c: HybridContainer| {
             // Change state to created, c.resume() should fail
             c.status.transition(ContainerState::Created);
             c.resume().map_err(|e| anyhow!(e))
@@ -1779,8 +1818,8 @@ mod tests {
     }
 
     #[test]
-    fn test_linuxcontainer_resume() {
-        let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
+    fn test_hybridcontainer_resume() {
+        let ret = new_linux_container_and_then(|mut c: HybridContainer| {
             c.cgroup_manager = Box::new(FsManager::new("").map_err(|e| {
                 anyhow!(format!("fail to create cgroup manager with path: {:}", e))
             })?);
@@ -1793,8 +1832,8 @@ mod tests {
     }
 
     #[test]
-    fn test_linuxcontainer_state() {
-        let ret = new_linux_container_and_then(|c: LinuxContainer| c.state());
+    fn test_hybridcontainer_state() {
+        let ret = new_linux_container_and_then(|c: HybridContainer| c.state());
         assert!(ret.is_err(), "Expecting Err, Got {:?}", ret);
         assert!(
             format!("{:?}", ret).contains("not supported"),
@@ -1804,8 +1843,8 @@ mod tests {
     }
 
     #[test]
-    fn test_linuxcontainer_oci_state_no_root_parent() {
-        let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
+    fn test_hybridcontainer_oci_state_no_root_parent() {
+        let ret = new_linux_container_and_then(|mut c: HybridContainer| {
             c.config.spec.as_mut().unwrap().root.as_mut().unwrap().path = "/".to_string();
             c.oci_state()
         });
@@ -1818,14 +1857,14 @@ mod tests {
     }
 
     #[test]
-    fn test_linuxcontainer_oci_state() {
-        let ret = new_linux_container_and_then(|c: LinuxContainer| c.oci_state());
+    fn test_hybridcontainer_oci_state() {
+        let ret = new_linux_container_and_then(|c: HybridContainer| c.oci_state());
         assert!(ret.is_ok(), "Expecting Ok, Got {:?}", ret);
     }
 
     #[test]
-    fn test_linuxcontainer_config() {
-        let ret = new_linux_container_and_then(|c: LinuxContainer| Ok(c));
+    fn test_hybridcontainer_config() {
+        let ret = new_linux_container_and_then(|c: HybridContainer| Ok(c));
         assert!(ret.is_ok(), "Expecting ok, Got {:?}", ret);
         assert!(
             ret.as_ref().unwrap().config().is_ok(),
@@ -1835,14 +1874,14 @@ mod tests {
     }
 
     #[test]
-    fn test_linuxcontainer_processes() {
-        let ret = new_linux_container_and_then(|c: LinuxContainer| c.processes());
+    fn test_hybridcontainer_processes() {
+        let ret = new_linux_container_and_then(|c: HybridContainer| c.processes());
         assert!(ret.is_ok(), "Expecting Ok, Got {:?}", ret);
     }
 
     #[test]
-    fn test_linuxcontainer_get_process_not_found() {
-        let _ = new_linux_container_and_then(|mut c: LinuxContainer| {
+    fn test_hybridcontainer_get_process_not_found() {
+        let _ = new_linux_container_and_then(|mut c: HybridContainer| {
             let p = c.get_process("123");
             assert!(p.is_err(), "Expecting Err, Got {:?}", p);
             Ok(())
@@ -1850,8 +1889,8 @@ mod tests {
     }
 
     #[test]
-    fn test_linuxcontainer_get_process() {
-        let _ = new_linux_container_and_then(|mut c: LinuxContainer| {
+    fn test_hybridcontainer_get_process() {
+        let _ = new_linux_container_and_then(|mut c: HybridContainer| {
             c.processes.insert(
                 1,
                 Process::new(&sl!(), &oci::Process::default(), "123", true, 1).unwrap(),
@@ -1863,21 +1902,21 @@ mod tests {
     }
 
     #[test]
-    fn test_linuxcontainer_stats() {
-        let ret = new_linux_container_and_then(|c: LinuxContainer| c.stats());
+    fn test_hybridcontainer_stats() {
+        let ret = new_linux_container_and_then(|c: HybridContainer| c.stats());
         assert!(ret.is_ok(), "Expecting Ok, Got {:?}", ret);
     }
 
     #[test]
-    fn test_linuxcontainer_set() {
-        let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
+    fn test_hybridcontainer_set() {
+        let ret = new_linux_container_and_then(|mut c: HybridContainer| {
             c.set(oci::LinuxResources::default())
         });
         assert!(ret.is_ok(), "Expecting Ok, Got {:?}", ret);
     }
 
     #[tokio::test]
-    async fn test_linuxcontainer_start() {
+    async fn test_hybridcontainer_start() {
         let (c, _dir) = new_linux_container();
         let ret = c
             .unwrap()
@@ -1887,7 +1926,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_linuxcontainer_run() {
+    async fn test_hybridcontainer_run() {
         let (c, _dir) = new_linux_container();
         let ret = c
             .unwrap()
@@ -1897,7 +1936,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_linuxcontainer_destroy() {
+    async fn test_hybridcontainer_destroy() {
         let (c, _dir) = new_linux_container();
 
         let ret = c.unwrap().destroy().await;
@@ -1905,14 +1944,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_linuxcontainer_exec() {
+    async fn test_hybridcontainer_exec() {
         let (c, _dir) = new_linux_container();
         let ret = c.unwrap().exec().await;
         assert!(ret.is_err(), "Expecting Err, Got {:?}", ret);
     }
 
     #[test]
-    fn test_linuxcontainer_do_init_child() {
+    fn test_hybridcontainer_do_init_child() {
         let ret = do_init_child(std::io::stdin().as_raw_fd());
         assert!(ret.is_err(), "Expecting Err, Got {:?}", ret);
     }

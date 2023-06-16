@@ -171,6 +171,7 @@ pub(crate) mod test_utils {
             spec: Some(spec),
             rootless_euid: false,
             rootless_cgroup: false,
+            wasm_runtime: false,
         }
     }
 

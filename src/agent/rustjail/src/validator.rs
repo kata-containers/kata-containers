@@ -562,6 +562,7 @@ mod tests {
             no_new_keyring: true,
             rootless_euid: false,
             rootless_cgroup: false,
+            wasm_runtime: false,
             spec: Some(spec),
         };
 

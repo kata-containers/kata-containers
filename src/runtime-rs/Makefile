@@ -319,6 +319,14 @@ COMMIT_MSG = $(if $(COMMIT),$(COMMIT),unknown)
 
 EXTRA_RUSTFEATURES :=
 
+##VAR WASM_RUNTIME=yes|no define if agent enables wasm-runtime feature
+WASM_RUNTIME := no
+
+# Enable WASM_RUNTIME feature of rust build
+ifeq ($(WASM_RUNTIME),yes)
+    override EXTRA_RUSTFEATURES += wasm
+endif
+
 ifneq ($(EXTRA_RUSTFEATURES),)
     override EXTRA_RUSTFEATURES := --features $(EXTRA_RUSTFEATURES)
 endif

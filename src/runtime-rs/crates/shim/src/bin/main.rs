@@ -23,6 +23,8 @@ const ENV_TOKIO_RUNTIME_WORKER_THREADS: &str = "TOKIO_RUNTIME_WORKER_THREADS";
 
 #[derive(Debug)]
 enum Action {
+    #[cfg(feature = "wasm")]
+    Init,
     Run(Args),
     Start(Args),
     Delete(Args),
@@ -31,12 +33,16 @@ enum Action {
 }
 
 fn parse_args(args: &[OsString]) -> Result<Action> {
+    #[cfg(feature = "wasm")]
+    let mut init = false;
     let mut help = false;
     let mut version = false;
     let mut shim_args = Args::default();
 
     // Crate `go_flag` is used to keep compatible with go/flag package.
     let rest_args = go_flag::parse_args_with_warnings::<String, _, _>(&args[1..], None, |flags| {
+        #[cfg(feature = "wasm")]
+        flags.add_flag("init", &mut init);
         flags.add_flag("address", &mut shim_args.address);
         flags.add_flag("bundle", &mut shim_args.bundle);
         flags.add_flag("debug", &mut shim_args.debug);
@@ -48,6 +54,10 @@ fn parse_args(args: &[OsString]) -> Result<Action> {
     })
     .context(Error::ParseArgument(format!("{:?}", args)))?;
 
+    #[cfg(feature = "wasm")]
+    if init {
+        return Ok(Action::Init);
+    }
     if help {
         Ok(Action::Help)
     } else if version {
@@ -74,6 +84,8 @@ fn show_help(cmd: &OsStr) {
 
     println!(
         r#"Usage of {}:
+  -init
+		launch an init process (do not call it outside of shim)
   -address string
         grpc address back to main containerd
   -bundle string
@@ -138,6 +150,8 @@ fn real_main() -> Result<()> {
 
     let action = parse_args(&args).context("parse args")?;
     match action {
+        #[cfg(feature = "wasm")]
+        Action::Init => rustjail::container::init_child(),
         Action::Start(args) => ShimExecutor::new(args).start().context("shim start")?,
         Action::Delete(args) => {
             let mut shim = ShimExecutor::new(args);

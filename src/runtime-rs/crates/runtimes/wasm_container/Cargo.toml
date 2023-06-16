@@ -8,6 +8,30 @@ edition = "2018"
 anyhow = "^1.0"
 async-trait = "0.1.48"
 tokio = { version = "1.28.1" }
+slog = "2.5.2"
+slog-scope = "4.4.0"
+slog-async = "2.7.0"
+nix = "0.24.2"
+scopeguard = "1.1.0"
+capctl = "0.2.0"
+lazy_static = "1.3.0"
+url = "2.1.1"
+libc = ">=0.2.39"
+awaitgroup = "0.6.0"
+tracing = "0.1.26"
+tracing-subscriber = "0.2.18"
+tracing-opentelemetry = "0.13.0"
+futures = "0.3.17"
+cgroups = { package = "cgroups-rs", version = "0.3.2" }
+serde = { version = "1.0.100", features = ["derive"] }
+serde_derive = "1.0.27"
+serde_json = "1.0.82"
 
 common = { path = "../common" }
 kata-types = { path = "../../../../libs/kata-types" }
+oci = { path = "../../../../libs/oci" }
+agent = { path = "../../agent" }
+kata-agent = { path = "../../../../agent", features = ["wasm-runtime", "containerd-shim"] }
+rustjail = { path = "../../../../agent/rustjail", features = ["wasm-runtime", "containerd-shim"] }
+logging = { path = "../../../../libs/logging"}
+shim-interface = { path = "../../../../libs/shim-interface" }

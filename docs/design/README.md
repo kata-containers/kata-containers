@@ -11,6 +11,7 @@ Kata Containers design documents:
 - [VCPU threads pinning](vcpu-threads-pinning.md)
 - [Host cgroups](host-cgroups.md)
 - [Agent systemd cgroup](agent-systemd-cgroup.md)
+- [Agent wasm containers](agent-wasm-containers.md)
 - [`Inotify` support](inotify.md)
 - [`Hooks` support](hooks-handling.md)
 - [Metrics(Kata 2.0)](kata-2-0-metrics.md)

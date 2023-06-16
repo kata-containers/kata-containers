@@ -43,6 +43,8 @@ pub mod specconv;
 pub mod sync;
 pub mod sync_with_async;
 pub mod validator;
+#[cfg(feature = "wasm-runtime")]
+pub mod wasm_runtime;
 
 use std::collections::HashMap;
 

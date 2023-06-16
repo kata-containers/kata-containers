@@ -31,7 +31,7 @@ use crate::linux_abi::*;
 use crate::pci;
 use crate::protocols::agent::Storage;
 use crate::protocols::types::FSGroupChangePolicy;
-use crate::Sandbox;
+use crate::sandbox::Sandbox;
 #[cfg(target_arch = "s390x")]
 use crate::{ccw, device::get_virtio_blk_ccw_device_name};
 use anyhow::{anyhow, Context, Result};

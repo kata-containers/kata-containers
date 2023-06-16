@@ -58,6 +58,7 @@ use sandbox::Sandbox;
 use signal::setup_signal_handler;
 use slog::{error, info, o, warn, Logger};
 use uevent::watch_uevents;
+use util::AGENT_CONFIG;
 
 use futures::future::join_all;
 use rustjail::pipestream::PipeStream;
@@ -65,7 +66,7 @@ use tokio::{
     io::AsyncWrite,
     sync::{
         watch::{channel, Receiver},
-        Mutex, RwLock,
+        Mutex,
     },
     task::JoinHandle,
 };
@@ -81,15 +82,6 @@ cfg_if! {
 }
 
 const NAME: &str = "kata-agent";
-
-lazy_static! {
-    static ref AGENT_CONFIG: Arc<RwLock<AgentConfig>> = Arc::new(RwLock::new(
-        // Note: We can't do AgentOpts.parse() here to send through the processed arguments to AgentConfig
-        // clap::Parser::parse() greedily process all command line input including cargo test parameters,
-        // so should only be used inside main.
-        AgentConfig::from_cmdline("/proc/cmdline", env::args().collect()).unwrap()
-    ));
-}
 
 #[derive(Parser)]
 // The default clap version info doesn't match our form, so we need to override it

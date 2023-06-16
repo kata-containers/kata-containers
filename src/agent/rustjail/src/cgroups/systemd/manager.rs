@@ -29,7 +29,6 @@ pub struct Manager {
     pub mounts: HashMap<String, String>,
     pub cgroups_path: CgroupsPath,
     pub cpath: String,
-    pub unit_name: String,
     // dbus client for set properties
     dbus_client: DBusClient,
     // fs manager for get properties
@@ -40,14 +39,12 @@ pub struct Manager {
 
 impl CgroupManager for Manager {
     fn apply(&self, pid: pid_t) -> Result<()> {
-        let unit_name = self.unit_name.as_str();
-        if self.dbus_client.unit_exists(unit_name)? {
-            self.dbus_client.add_process(pid, self.unit_name.as_str())?;
+        if self.dbus_client.unit_exists()? {
+            self.dbus_client.add_process(pid)?;
         } else {
             self.dbus_client.start_unit(
                 (pid as u32).try_into().unwrap(),
                 self.cgroups_path.slice.as_str(),
-                self.unit_name.as_str(),
                 &self.cg_hierarchy,
             )?;
         }
@@ -66,8 +63,7 @@ impl CgroupManager for Manager {
         Pids::apply(r, &mut properties, &self.cg_hierarchy, systemd_version_str)?;
         CpuSet::apply(r, &mut properties, &self.cg_hierarchy, systemd_version_str)?;
 
-        self.dbus_client
-            .set_properties(self.unit_name.as_str(), &properties)?;
+        self.dbus_client.set_properties(&properties)?;
 
         Ok(())
     }
@@ -81,7 +77,7 @@ impl CgroupManager for Manager {
     }
 
     fn destroy(&mut self) -> Result<()> {
-        self.dbus_client.stop_unit(self.unit_name.as_str())?;
+        self.dbus_client.kill_unit()?;
         self.fs_manager.destroy()
     }
 
@@ -120,8 +116,7 @@ impl Manager {
             mounts: fs_manager.mounts.clone(),
             cgroups_path,
             cpath,
-            unit_name,
-            dbus_client: DBusClient {},
+            dbus_client: DBusClient::new(unit_name),
             fs_manager,
             cg_hierarchy: if cgroups::hierarchies::is_cgroup2_unified_mode() {
                 CgroupHierarchy::Unified

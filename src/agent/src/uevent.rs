@@ -6,7 +6,7 @@
 use crate::device::online_device;
 use crate::linux_abi::*;
 use crate::sandbox::Sandbox;
-use crate::AGENT_CONFIG;
+use crate::util::AGENT_CONFIG;
 use slog::Logger;
 
 use anyhow::{anyhow, Result};

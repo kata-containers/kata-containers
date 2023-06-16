@@ -19,7 +19,7 @@ use protocols::agent::OnlineCPUMemRequest;
 use regex::Regex;
 use rustjail::cgroups as rustjail_cgroups;
 use rustjail::container::BaseContainer;
-use rustjail::container::LinuxContainer;
+use rustjail::container::HybridContainer;
 use rustjail::process::Process;
 use slog::Logger;
 use std::collections::HashMap;
@@ -43,7 +43,7 @@ pub struct Sandbox {
     pub logger: Logger,
     pub id: String,
     pub hostname: String,
-    pub containers: HashMap<String, LinuxContainer>,
+    pub containers: HashMap<String, HybridContainer>,
     pub network: Network,
     pub mounts: Vec<String>,
     pub container_mounts: HashMap<String, Vec<String>>,
@@ -196,12 +196,12 @@ impl Sandbox {
         Ok(true)
     }
 
-    pub fn add_container(&mut self, c: LinuxContainer) {
+    pub fn add_container(&mut self, c: HybridContainer) {
         self.containers.insert(c.id.clone(), c);
     }
 
     #[instrument]
-    pub fn update_shared_pidns(&mut self, c: &LinuxContainer) -> Result<()> {
+    pub fn update_shared_pidns(&mut self, c: &HybridContainer) -> Result<()> {
         // Populate the shared pid path only if this is an infra container and
         // sandbox_pidns has not been passed in the create_sandbox request.
         // This means a separate pause process has not been created. We treat the
@@ -224,7 +224,7 @@ impl Sandbox {
         Ok(())
     }
 
-    pub fn get_container(&mut self, id: &str) -> Option<&mut LinuxContainer> {
+    pub fn get_container(&mut self, id: &str) -> Option<&mut HybridContainer> {
         self.containers.get_mut(id)
     }
 
@@ -494,7 +494,7 @@ mod tests {
     use anyhow::{anyhow, Error};
     use nix::mount::MsFlags;
     use oci::{Linux, Root, Spec};
-    use rustjail::container::LinuxContainer;
+    use rustjail::container::HybridContainer;
     use rustjail::process::Process;
     use rustjail::specconv::CreateOpts;
     use slog::Logger;
@@ -717,10 +717,11 @@ mod tests {
             spec: Some(spec),
             rootless_euid: false,
             rootless_cgroup: false,
+            wasm_runtime: false,
         }
     }
 
-    fn create_linuxcontainer() -> (LinuxContainer, TempDir) {
+    fn create_hybridcontainer() -> (HybridContainer, TempDir) {
         // Create a temporal directory
         let dir = tempdir()
             .map_err(|e| anyhow!(e).context("tempdir failed"))
@@ -728,7 +729,7 @@ mod tests {
 
         // Create a new container
         (
-            LinuxContainer::new(
+            HybridContainer::new(
                 "some_id",
                 dir.path().join("rootfs").to_str().unwrap(),
                 create_dummy_opts(),
@@ -744,7 +745,7 @@ mod tests {
     async fn get_container_entry_exist() {
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
-        let (linux_container, _root) = create_linuxcontainer();
+        let (linux_container, _root) = create_hybridcontainer();
 
         s.containers
             .insert("testContainerID".to_string(), linux_container);
@@ -767,7 +768,7 @@ mod tests {
     async fn add_and_get_container() {
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
-        let (linux_container, _root) = create_linuxcontainer();
+        let (linux_container, _root) = create_hybridcontainer();
 
         s.add_container(linux_container);
         assert!(s.get_container("some_id").is_some());
@@ -780,7 +781,7 @@ mod tests {
         let mut s = Sandbox::new(&logger).unwrap();
         let test_pid = 9999;
 
-        let (mut linux_container, _root) = create_linuxcontainer();
+        let (mut linux_container, _root) = create_hybridcontainer();
         linux_container.init_process_pid = test_pid;
 
         s.update_shared_pidns(&linux_container).unwrap();
@@ -830,7 +831,7 @@ mod tests {
         let mut s = Sandbox::new(&logger).unwrap();
         let cid = "container-123";
 
-        let (mut linux_container, _root) = create_linuxcontainer();
+        let (mut linux_container, _root) = create_hybridcontainer();
         linux_container.init_process_pid = 1;
         linux_container.id = cid.to_string();
         // add init process
@@ -877,7 +878,7 @@ mod tests {
 
         for test_pid in test_pids {
             let mut s = Sandbox::new(&logger).unwrap();
-            let (mut linux_container, _root) = create_linuxcontainer();
+            let (mut linux_container, _root) = create_hybridcontainer();
 
             let mut test_process = Process::new(
                 &logger,
@@ -909,7 +910,7 @@ mod tests {
         }
 
         // to test for nonexistent pids, any pid that isn't the one set
-        // above should work, as linuxcontainer starts with no processes
+        // above should work, as hybridcontainer starts with no processes
         let mut s = Sandbox::new(&logger).unwrap();
 
         let nonexistent_test_pid = 1234;

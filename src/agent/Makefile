@@ -33,6 +33,14 @@ ifeq ($(SECCOMP),yes)
     override EXTRA_RUSTFEATURES += seccomp
 endif
 
+##VAR WASM_RUNTIME=yes|no define if agent enables wasm-runtime feature
+WASM_RUNTIME := no
+
+# Enable WASM_RUNTIME feature of rust build
+ifeq ($(WASM_RUNTIME),yes)
+    override EXTRA_RUSTFEATURES += wasm-runtime
+endif
+
 include ../../utils.mk
 
 ifeq ($(ARCH), ppc64le)

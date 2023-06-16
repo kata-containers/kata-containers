@@ -39,7 +39,7 @@ use protocols::health::{
 use protocols::types::Interface;
 use protocols::{agent_ttrpc_async as agent_ttrpc, health_ttrpc_async as health_ttrpc};
 use rustjail::cgroups::notifier;
-use rustjail::container::{BaseContainer, Container, LinuxContainer, SYSTEMD_CGROUP_PATH_FORMAT};
+use rustjail::container::{BaseContainer, Container, HybridContainer, SYSTEMD_CGROUP_PATH_FORMAT};
 use rustjail::mount::parse_mount_table;
 use rustjail::process::Process;
 use rustjail::specconv::CreateOpts;
@@ -61,8 +61,8 @@ use crate::network::setup_guest_dns;
 use crate::pci;
 use crate::random;
 use crate::sandbox::Sandbox;
+use crate::util::AGENT_CONFIG;
 use crate::version::{AGENT_VERSION, API_VERSION};
-use crate::AGENT_CONFIG;
 
 use crate::trace_rpc_call;
 use crate::tracer::extract_carrier_from_ttrpc;
@@ -109,6 +109,9 @@ const ERR_NO_SANDBOX_PIDNS: &str = "Sandbox does not have sandbox_pidns";
 // filesystem lock. Based on this, 5 seconds seems a resonable timeout period in case the lock is
 // not available.
 const IPTABLES_RESTORE_WAIT_SEC: u64 = 5;
+
+#[cfg(feature = "wasm-runtime")]
+const ANNOTATIONS_WASM: &str = "io.katacontainers.platform.wasi/wasm32";
 
 // Convenience macro to obtain the scope logger
 macro_rules! sl {
@@ -227,6 +230,16 @@ impl AgentService {
             SYSTEMD_CGROUP_PATH_FORMAT.is_match(cgroups_path)
         };
 
+        // determine whether to use wasm runtime to execute the process, which
+        // requires the feature wasm-runtime to be enabled and corresponding
+        // ANNOTATIONS_WASM to be provided.
+        #[allow(unused_mut)]
+        let mut wasm_runtime = false;
+        #[cfg(feature = "wasm-runtime")]
+        if let Some(value) = oci.annotations.get(ANNOTATIONS_WASM) {
+            wasm_runtime = value.eq_ignore_ascii_case("yes") || value.eq_ignore_ascii_case("true");
+        };
+
         let opts = CreateOpts {
             cgroup_name: "".to_string(),
             use_systemd_cgroup,
@@ -235,10 +248,11 @@ impl AgentService {
             spec: Some(oci.clone()),
             rootless_euid: false,
             rootless_cgroup: false,
+            wasm_runtime,
         };
 
-        let mut ctr: LinuxContainer =
-            LinuxContainer::new(cid.as_str(), CONTAINER_BASE, opts, &sl!())?;
+        let mut ctr: HybridContainer =
+            HybridContainer::new(cid.as_str(), CONTAINER_BASE, opts, &sl!())?;
 
         let pipe_size = AGENT_CONFIG.read().await.container_pipe_size;
 
@@ -2133,14 +2147,15 @@ mod tests {
             spec: Some(spec),
             rootless_euid: false,
             rootless_cgroup: false,
+            wasm_runtime: false,
         }
     }
 
-    fn create_linuxcontainer() -> (LinuxContainer, TempDir) {
+    fn create_hybridcontainer() -> (HybridContainer, TempDir) {
         let dir = tempdir().expect("failed to make tempdir");
 
         (
-            LinuxContainer::new(
+            HybridContainer::new(
                 "some_id",
                 dir.path().join("rootfs").to_str().unwrap(),
                 create_dummy_opts(),
@@ -2331,7 +2346,7 @@ mod tests {
             }
 
             if d.create_container {
-                let (mut linux_container, _root) = create_linuxcontainer();
+                let (mut linux_container, _root) = create_hybridcontainer();
                 let exec_process_id = 2;
 
                 linux_container.id = "1".to_string();

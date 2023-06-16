@@ -19,7 +19,7 @@ use oci::{ContainerState, State as OCIState};
 use procfs;
 use rustjail::cgroups::fs::Manager as CgroupManager;
 use rustjail::{
-    container::{BaseContainer, LinuxContainer, EXEC_FIFO_FILENAME},
+    container::{BaseContainer, HybridContainer, EXEC_FIFO_FILENAME},
     process::{Process, ProcessOperations},
     specconv::CreateOpts,
 };
@@ -208,7 +208,7 @@ pub struct ContainerLauncher {
     pub bundle: PathBuf,
     pub state_root: PathBuf,
     pub init: bool,
-    pub runner: LinuxContainer,
+    pub runner: HybridContainer,
     pub pid_file: Option<PathBuf>,
 }
 
@@ -218,7 +218,7 @@ impl ContainerLauncher {
         bundle: &Path,
         state_root: &Path,
         init: bool,
-        runner: LinuxContainer,
+        runner: HybridContainer,
         pid_file: Option<PathBuf>,
     ) -> Self {
         ContainerLauncher {
@@ -350,8 +350,8 @@ pub fn create_linux_container(
     config: CreateOpts,
     console_socket: Option<PathBuf>,
     logger: &Logger,
-) -> Result<LinuxContainer> {
-    let mut container = LinuxContainer::new(
+) -> Result<HybridContainer> {
+    let mut container = HybridContainer::new(
         id,
         root.to_str()
             .map(|s| s.to_string())
@@ -372,8 +372,8 @@ pub fn load_linux_container(
     status: &Status,
     console_socket: Option<PathBuf>,
     logger: &Logger,
-) -> Result<LinuxContainer> {
-    let mut container = LinuxContainer::new(
+) -> Result<HybridContainer> {
+    let mut container = HybridContainer::new(
         &status.id,
         &status
             .root
