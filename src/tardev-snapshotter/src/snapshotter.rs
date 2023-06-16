@@ -107,7 +107,10 @@ impl Store {
         // Get chain of layers.
         let mut next_parent = Some(parent.to_string());
         let mut layers = Vec::new();
-        let mut opts = Vec::new();
+        let mut opts = vec![format!(
+            "{PREFIX}.layer-src-prefix={}",
+            self.root.join("layers").to_string_lossy()
+        )];
         while let Some(p) = next_parent {
             let info = self.read_snapshot(&p)?;
             if info.kind != Kind::Committed {
@@ -127,8 +130,7 @@ impl Store {
             let name = name_to_hash(&p);
             layers.push(format!("/run/kata-containers/sandbox/layers/{name}"));
             opts.push(format!(
-                "{PREFIX}.layer={},tar,ro,{PREFIX}.block_device=file,{PREFIX}.is-layer,{PREFIX}.root-hash={root_hash}",
-                self.layer_path(&p).to_string_lossy()
+                "{PREFIX}.layer={name},tar,ro,{PREFIX}.block_device=file,{PREFIX}.is-layer,{PREFIX}.root-hash={root_hash}",
             ));
 
             next_parent = (!info.parent.is_empty()).then_some(info.parent);
