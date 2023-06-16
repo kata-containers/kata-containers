@@ -655,7 +655,8 @@ install_cached_kernel_tarball_component() {
 }
 
 install_cc_initrd() {
-	info "Create initrd"
+	export AA_KBC="${AA_KBC:-offline_fs_kbc}"
+	info "Create CC initrd configured with AA_KBC=${AA_KBC}"
 	"${rootfs_builder}" --imagetype=initrd --prefix="${cc_prefix}" --destdir="${destdir}"
 }
 
