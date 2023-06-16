@@ -123,7 +123,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 			legacySerial:         config.LegacySerial,
 		},
 		vmFactory: factory,
-		snpGuest:  config.SevSnpGuest,
+		snpGuest:  config.ConfidentialGuest,
 	}
 
 	if config.ConfidentialGuest {
@@ -169,9 +169,11 @@ func (q *qemuAmd64) capabilities() types.Capabilities {
 	return caps
 }
 
+/*
 func (q *qemuAmd64) bridges(number uint32) {
 	q.Bridges = genericBridges(number, q.qemuMachine.Type)
 }
+*/
 
 func (q *qemuAmd64) cpuModel() string {
 	var err error
@@ -305,6 +307,7 @@ func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 				ReducedPhysBits: 1,
 			}), "", nil
 	case noneProtection:
+
 		return devices, firmware, nil
 
 	default:

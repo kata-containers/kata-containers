@@ -235,10 +235,10 @@ func TestHandleDeviceBlockVolume(t *testing.T) {
 
 	// nolint: govet
 	tests := []struct {
-		BlockDeviceDriver string
-		inputMount        Mount
 		inputDev          *drivers.BlockDevice
 		resultVol         *pb.Storage
+		BlockDeviceDriver string
+		inputMount        Mount
 	}{
 		{
 			inputDev: &drivers.BlockDevice{
@@ -1024,10 +1024,10 @@ func TestKataAgentKernelParams(t *testing.T) {
 
 	// nolint: govet
 	type testData struct {
+		expectedParams    []Param
+		containerPipeSize uint32
 		debug             bool
 		trace             bool
-		containerPipeSize uint32
-		expectedParams    []Param
 	}
 
 	debugParam := Param{Key: "agent.log", Value: "debug"}
@@ -1036,28 +1036,28 @@ func TestKataAgentKernelParams(t *testing.T) {
 	containerPipeSizeParam := Param{Key: vcAnnotations.ContainerPipeSizeKernelParam, Value: "2097152"}
 
 	data := []testData{
-		{false, false, 0, []Param{}},
+		{debug: false, trace: false, containerPipeSize: 0, expectedParams: []Param{}},
 
 		// Debug
-		{true, false, 0, []Param{debugParam}},
+		{debug: true, trace: false, containerPipeSize: 0, expectedParams: []Param{debugParam}},
 
 		// Tracing
-		{false, true, 0, []Param{traceParam}},
+		{debug: false, trace: true, containerPipeSize: 0, expectedParams: []Param{traceParam}},
 
 		// Debug + Tracing
-		{true, true, 0, []Param{debugParam, traceParam}},
+		{debug: true, trace: true, containerPipeSize: 0, expectedParams: []Param{debugParam, traceParam}},
 
 		// pipesize
-		{false, false, 2097152, []Param{containerPipeSizeParam}},
+		{debug: false, trace: false, containerPipeSize: 2097152, expectedParams: []Param{containerPipeSizeParam}},
 
 		// Debug + pipesize
-		{true, false, 2097152, []Param{debugParam, containerPipeSizeParam}},
+		{debug: true, trace: false, containerPipeSize: 2097152, expectedParams: []Param{debugParam, containerPipeSizeParam}},
 
 		// Tracing + pipesize
-		{false, true, 2097152, []Param{traceParam, containerPipeSizeParam}},
+		{debug: false, trace: true, containerPipeSize: 2097152, expectedParams: []Param{traceParam, containerPipeSizeParam}},
 
 		// Debug + Tracing + pipesize
-		{true, true, 2097152, []Param{debugParam, traceParam, containerPipeSizeParam}},
+		{debug: true, trace: true, containerPipeSize: 2097152, expectedParams: []Param{debugParam, traceParam, containerPipeSizeParam}},
 	}
 
 	for i, d := range data {

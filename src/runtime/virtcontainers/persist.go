@@ -200,10 +200,10 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 	}
 
 	ss.Config.HypervisorConfig = persistapi.HypervisorConfig{
-		NumVCPUs:                sconfig.HypervisorConfig.NumVCPUs,
-		DefaultMaxVCPUs:         sconfig.HypervisorConfig.DefaultMaxVCPUs,
-		MemorySize:              sconfig.HypervisorConfig.MemorySize,
-		DefaultBridges:          sconfig.HypervisorConfig.DefaultBridges,
+		NumVCPUs:        sconfig.HypervisorConfig.NumVCPUs,
+		DefaultMaxVCPUs: sconfig.HypervisorConfig.DefaultMaxVCPUs,
+		MemorySize:      sconfig.HypervisorConfig.MemorySize,
+		//DefaultBridges:          sconfig.HypervisorConfig.DefaultBridges,
 		Msize9p:                 sconfig.HypervisorConfig.Msize9p,
 		MemSlots:                sconfig.HypervisorConfig.MemSlots,
 		MemOffset:               sconfig.HypervisorConfig.MemOffset,
@@ -245,7 +245,6 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 		DisableNestingChecks:    sconfig.HypervisorConfig.DisableNestingChecks,
 		DisableImageNvdimm:      sconfig.HypervisorConfig.DisableImageNvdimm,
 		HotplugVFIOOnRootBus:    sconfig.HypervisorConfig.HotplugVFIOOnRootBus,
-		PCIeRootPort:            sconfig.HypervisorConfig.PCIeRootPort,
 		BootToBeTemplate:        sconfig.HypervisorConfig.BootToBeTemplate,
 		BootFromTemplate:        sconfig.HypervisorConfig.BootFromTemplate,
 		DisableVhostNet:         sconfig.HypervisorConfig.DisableVhostNet,
@@ -442,10 +441,10 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 
 	hconf := savedConf.HypervisorConfig
 	sconfig.HypervisorConfig = HypervisorConfig{
-		NumVCPUs:                hconf.NumVCPUs,
-		DefaultMaxVCPUs:         hconf.DefaultMaxVCPUs,
-		MemorySize:              hconf.MemorySize,
-		DefaultBridges:          hconf.DefaultBridges,
+		NumVCPUs:        hconf.NumVCPUs,
+		DefaultMaxVCPUs: hconf.DefaultMaxVCPUs,
+		MemorySize:      hconf.MemorySize,
+		//DefaultBridges:          hconf.DefaultBridges,
 		Msize9p:                 hconf.Msize9p,
 		MemSlots:                hconf.MemSlots,
 		MemOffset:               hconf.MemOffset,
@@ -487,8 +486,8 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 		DisableNestingChecks:    hconf.DisableNestingChecks,
 		DisableImageNvdimm:      hconf.DisableImageNvdimm,
 		HotplugVFIOOnRootBus:    hconf.HotplugVFIOOnRootBus,
+		HotPlugVFIO:             hconf.HotPlugVFIO,
 		ColdPlugVFIO:            hconf.ColdPlugVFIO,
-		PCIeRootPort:            hconf.PCIeRootPort,
 		BootToBeTemplate:        hconf.BootToBeTemplate,
 		BootFromTemplate:        hconf.BootFromTemplate,
 		DisableVhostNet:         hconf.DisableVhostNet,

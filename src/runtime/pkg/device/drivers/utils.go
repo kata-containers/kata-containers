@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/container-orchestrated-devices/container-device-interface/pkg/cdi"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
@@ -47,9 +48,9 @@ func deviceLogger() *logrus.Entry {
 	return api.DeviceLogger()
 }
 
-// Identify PCIe device by reading the size of the PCI config space
+// IsPCIeDevice Identifies PCIe device by reading the size of the PCI config space
 // Plain PCI device have 256 bytes of config space where PCIe devices have 4K
-func isPCIeDevice(bdf string) bool {
+func IsPCIeDevice(bdf string) bool {
 	if len(strings.Split(bdf, ":")) == 2 {
 		bdf = PCIDomain + ":" + bdf
 	}
@@ -155,31 +156,80 @@ func checkIgnorePCIClass(pciClass string, deviceBDF string, bitmask uint64) (boo
 	return false, nil
 }
 
+type attachInfo struct {
+	cliqueID    uint32
+	attachToPCI bool
+}
+
+// CDI provides us with additional meta information that we can parse to make
+// better topology decisions.
+func getAttachAffinity() map[string]attachInfo {
+	var (
+		registry = cdi.GetRegistry()
+		devices  = registry.DeviceDB().ListDevices()
+		info     = make(map[string]attachInfo)
+	)
+	if len(devices) == 0 {
+		return nil
+	}
+
+	for _, device := range devices {
+		dev := registry.DeviceDB().GetDevice(device)
+
+		var (
+			bdf string
+			id  string
+			pci string
+		)
+
+		if _bdf, ok := dev.Annotations["bdf"]; ok {
+			bdf = _bdf
+		}
+		if _id, ok := dev.Annotations["clique-id"]; ok {
+			id = _id
+		}
+		if _pci, ok := dev.Annotations["attach-to-pci"]; ok {
+			pci = _pci
+		}
+
+		num, _ := strconv.ParseUint(id, 10, 32)
+
+		device := attachInfo{}
+
+		device.cliqueID = uint32(num)
+		if pci == "true" {
+			device.attachToPCI = true
+		} else {
+			device.attachToPCI = false
+		}
+		info[bdf] = device
+	}
+	return info
+}
+
 // GetAllVFIODevicesFromIOMMUGroup returns all the VFIO devices in the IOMMU group
 // We can reuse this function at various levels, sandbox, container.
-// Only the VFIO module is allowed to do bus assignments, all other modules need to
-// ignore it if used as helper function to get VFIO information.
-func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo, ignoreBusAssignment bool) ([]*config.VFIODev, error) {
+func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODev, error) {
 
 	vfioDevs := []*config.VFIODev{}
 
 	vfioGroup := filepath.Base(device.HostPath)
-	iommuDevicesPath := filepath.Join(config.SysIOMMUPath, vfioGroup, "devices")
+	iommuDevicesPath := filepath.Join(config.SysIOMMUGroupPath, vfioGroup, "devices")
 
 	deviceFiles, err := os.ReadDir(iommuDevicesPath)
 	if err != nil {
 		return nil, err
 	}
 
+	info := getAttachAffinity()
+
 	// Pass all devices in iommu group
 	for i, deviceFile := range deviceFiles {
 		//Get bdf of device eg 0000:00:1c.0
-		deviceBDF, deviceSysfsDev, vfioDeviceType, err := getVFIODetails(deviceFile.Name(), iommuDevicesPath)
+		deviceBDF, deviceSysfsDev, vfioDeviceType, err := GetVFIODetails(deviceFile.Name(), iommuDevicesPath)
 		if err != nil {
 			return nil, err
 		}
-		id := utils.MakeNameID("vfio", device.ID+strconv.Itoa(i), maxDevIDSize)
-
 		pciClass := getPCIDeviceProperty(deviceBDF, PCISysFsDevicesClass)
 		// We need to ignore Host or PCI Bridges that are in the same IOMMU group as the
 		// passed-through devices. One CANNOT pass-through a PCI bridge or Host bridge.
@@ -194,29 +244,28 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo, ignoreBusAssignme
 
 		var vfio config.VFIODev
 
+		id := utils.MakeNameID("vfio", device.ID+strconv.Itoa(i), maxDevIDSize)
+		attachToPCI := info[deviceBDF].attachToPCI
+
 		switch vfioDeviceType {
 		case config.VFIOPCIDeviceNormalType, config.VFIOPCIDeviceMediatedType:
-			isPCIe := isPCIeDevice(deviceBDF)
 			// Do not directly assign to `vfio` -- need to access field still
-			vfioPCI := config.VFIOPCIDev{
+			vfio = config.VFIODev{
 				ID:       id,
 				Type:     vfioDeviceType,
 				BDF:      deviceBDF,
 				SysfsDev: deviceSysfsDev,
-				IsPCIe:   isPCIe,
+				IsPCIe:   IsPCIeDevice(deviceBDF) && !attachToPCI,
 				Class:    pciClass,
+				Port:     device.Port,
 			}
-			if isPCIe && !ignoreBusAssignment {
-				vfioPCI.Bus = fmt.Sprintf("%s%d", pcieRootPortPrefix, len(AllPCIeDevs))
-				AllPCIeDevs[deviceBDF] = true
-			}
-			vfio = vfioPCI
+
 		case config.VFIOAPDeviceMediatedType:
 			devices, err := GetAPVFIODevices(deviceSysfsDev)
 			if err != nil {
 				return nil, err
 			}
-			vfio = config.VFIOAPDev{
+			vfio = config.VFIODev{
 				ID:        id,
 				SysfsDev:  deviceSysfsDev,
 				Type:      config.VFIOAPDeviceMediatedType,

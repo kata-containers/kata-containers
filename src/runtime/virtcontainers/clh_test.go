@@ -188,13 +188,13 @@ func TestCloudHypervisorAddNetCheckEnpointTypes(t *testing.T) {
 	}
 	// nolint: govet
 	tests := []struct {
-		name    string
 		args    args
+		name    string
 		wantErr bool
 	}{
-		{"TapEndpoint", args{e: &TapEndpoint{}}, true},
-		{"Empty VethEndpoint", args{e: &VethEndpoint{}}, true},
-		{"Valid VethEndpoint", args{e: validVeth}, false},
+		{name: "TapEndpoint", args: args{e: &TapEndpoint{}}, wantErr: true},
+		{name: "Empty VethEndpoint", args: args{e: &VethEndpoint{}}, wantErr: true},
+		{name: "Valid VethEndpoint", args: args{e: validVeth}, wantErr: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -673,7 +673,7 @@ func TestCloudHypervisorHotplugRemoveDevice(t *testing.T) {
 	_, err = clh.HotplugRemoveDevice(context.Background(), &config.BlockDrive{}, BlockDev)
 	assert.NoError(err, "Hotplug remove block device expected no error")
 
-	_, err = clh.HotplugRemoveDevice(context.Background(), &config.VFIOPCIDev{}, VfioDev)
+	_, err = clh.HotplugRemoveDevice(context.Background(), &config.VFIODev{}, VfioDev)
 	assert.NoError(err, "Hotplug remove vfio block device expected no error")
 
 	_, err = clh.HotplugRemoveDevice(context.Background(), nil, NetDev)

@@ -70,7 +70,7 @@ func TestIsVhostUserBlk(t *testing.T) {
 	}
 
 	for _, d := range data {
-		isVhostUserBlk := isVhostUserBlk(
+		isVhostUserBlk := IsVhostUserBlk(
 			config.DeviceInfo{
 				DevType: d.devType,
 				Major:   d.major,

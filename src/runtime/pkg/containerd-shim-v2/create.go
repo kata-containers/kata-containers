@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"syscall"
 
+	"github.com/container-orchestrated-devices/container-device-interface/pkg/cdi"
 	containerd_types "github.com/containerd/containerd/api/types"
 	"github.com/containerd/containerd/mount"
 	taskAPI "github.com/containerd/containerd/runtime/v2/task"
@@ -48,6 +49,60 @@ var defaultStartManagementServerFunc startManagementServerFunc = func(s *service
 	shimLog.Info("management server started")
 }
 
+// CDI (Container Device Interface), is a specification, for container- runtimes,
+// to support third-party devices.
+// It introduces an abstract notion of a device as a resource. Such devices are
+// uniquely specified by a fully-qualified name that is constructed from a
+// vendor ID, a device class, and a name that is unique per vendor ID-device
+// class pair.
+//
+// vendor.com/class=unique_name
+//
+// The combination of vendor ID and device class (vendor.com/class in the
+// above example) is referred to as the device kind.
+// CDI concerns itself only with enabling containers to be device aware.
+// Areas like resource management are explicitly left out of CDI (and are
+// expected to be handled by the orchestrator). Because of this focus, the CDI
+// specification is simple to implement and allows great flexibility for
+// runtimes and orchestrators.
+func withCDI(annotations map[string]string, cdiSpecDirs []string, s *specs.Spec) ([]*cdi.Device, error) {
+	// TODO: Once CRI is extended with native CDI support this will need to be updated...
+	_, cdiDevices, err := cdi.ParseAnnotations(annotations)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse CDI device annotations: %w", err)
+	}
+	if cdiDevices == nil {
+		shimLog.Warn("No CDI devices found. Check your spec files")
+		return nil, nil
+	}
+
+	registry := cdi.GetRegistry(cdi.WithSpecDirs(cdiSpecDirs...))
+	if err = registry.Refresh(); err != nil {
+		// We don't consider registry refresh failure a fatal error.
+		// For instance, a dynamically generated invalid CDI Spec file for
+		// any particular vendor shouldn't prevent injection of devices of
+		// different vendors. CDI itself knows better and it will fail the
+		// injection if necessary.
+		shimLog.Warnf("CDI registry refresh failed: %v", err)
+	}
+
+	if _, err := registry.InjectDevices(s, cdiDevices...); err != nil {
+		return nil, fmt.Errorf("CDI device injection failed: %w", err)
+	}
+	// Only if injection of the devices succeeds we're returning the instances
+	// for further handling.
+	var devices []*cdi.Device
+	for _, dev := range cdiDevices {
+		devices = append(devices, registry.DeviceDB().GetDevice(dev))
+	}
+
+	// One crucial thing to keep in mind is that CDI device injection
+	// might add OCI Spec environment variables, hooks, and mounts as
+	// well. Therefore it is important that none of the corresponding
+	// OCI Spec fields are reset up in the call stack once we return.
+	return devices, nil
+}
+
 func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*container, error) {
 	rootFs := vc.RootFs{}
 	if len(r.Rootfs) == 1 {
@@ -59,13 +114,18 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 
 	detach := !r.Terminal
 	ociSpec, bundlePath, err := loadSpec(r)
-
 	if err != nil {
 		return nil, err
 	}
+
 	containerType, err := oci.ContainerType(*ociSpec)
 	if err != nil {
 		return nil, err
+	}
+
+	_, err = withCDI(ociSpec.Annotations, []string{"/etc/cdi"}, ociSpec)
+	if err != nil {
+		return nil, fmt.Errorf("adding CDI devices failed")
 	}
 
 	disableOutput := noNeedForOutput(detach, ociSpec.Process.Terminal)

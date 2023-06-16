@@ -99,21 +99,17 @@ type FactoryConfig struct {
 // RuntimeConfig aggregates all runtime specific settings
 // nolint: govet
 type RuntimeConfig struct {
-	//Paths to be bindmounted RO into the guest.
-	SandboxBindMounts []string
-
-	//Experimental features enabled
-	Experimental []exp.Feature
-
 	JaegerEndpoint string
 	JaegerUser     string
 	JaegerPassword string
 	HypervisorType vc.HypervisorType
-
-	FactoryConfig    FactoryConfig
-	HypervisorConfig vc.HypervisorConfig
-	AgentConfig      vc.KataAgentConfig
-
+	//Experimental features enabled
+	Experimental []exp.Feature
+	//Paths to be bindmounted RO into the guest.
+	SandboxBindMounts []string
+	FactoryConfig     FactoryConfig
+	AgentConfig       vc.KataAgentConfig
+	HypervisorConfig  vc.HypervisorConfig
 	//Determines how the VM should be connected to the
 	//the container network interface
 	InterNetworkModel vc.NetInterworkingModel
@@ -138,20 +134,22 @@ type RuntimeConfig struct {
 	// the sandbox needed for the workload(s)
 	SandboxCPUs  uint32
 	SandboxMemMB uint32
-
+	//Determines how VFIO devices should be presented to the
+	//container
+	VfioMode config.VFIOModeType
+	//Determines if seccomp should be applied inside guest
+	DisableGuestSeccomp bool
+	Trace               bool
+	Debug               bool
 	// Determines if we should attempt to size the VM at boot time and skip
 	// any later resource updates.
 	StaticSandboxResourceMgmt bool
-
 	// Determines if create a netns for hypervisor process
 	DisableNewNetNs bool
-
 	//Determines kata processes are managed only in sandbox cgroup
 	SandboxCgroupOnly bool
-
 	// Determines if enable pprof
 	EnablePprof bool
-
 	// Determines if Kata creates emptyDir on the guest
 	DisableGuestEmptyDir bool
 }
@@ -453,6 +451,10 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		return err
 	}
 
+	if err := addHypervisorHotColdPlugVfioOverrides(ocispec, config); err != nil {
+		return err
+	}
+
 	if value, ok := ocispec.Annotations[vcAnnotations.MachineType]; ok {
 		if value != "" {
 			config.HypervisorConfig.HypervisorMachineType = value
@@ -504,12 +506,6 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.UseLegacySerial).setBool(func(useLegacySerial bool) {
 		config.HypervisorConfig.LegacySerial = useLegacySerial
-	}); err != nil {
-		return err
-	}
-
-	if err := newAnnotationConfiguration(ocispec, vcAnnotations.PCIeRootPort).setUint(func(pcieRootPort uint64) {
-		config.HypervisorConfig.PCIeRootPort = uint32(pcieRootPort)
 	}); err != nil {
 		return err
 	}
@@ -573,6 +569,37 @@ func addHypervisorPathOverrides(ocispec specs.Spec, config *vc.SandboxConfig, ru
 		}
 	}
 
+	return nil
+}
+
+func addHypervisorPCIePortOverride(value string) (config.PCIePort, error) {
+	if value == "" {
+		return config.NoPort, nil
+	}
+	port := config.PCIePort(value)
+	if port.InValid() {
+		return config.InvalidPort, fmt.Errorf("Invalid PCIe port \"%v\" specified in annotation", value)
+	}
+	return port, nil
+}
+
+func addHypervisorHotColdPlugVfioOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+
+	var err error
+	if value, ok := ocispec.Annotations[vcAnnotations.HotPlugVFIO]; ok {
+		if sbConfig.HypervisorConfig.HotPlugVFIO, err = addHypervisorPCIePortOverride(value); err != nil {
+			return err
+		}
+		// If hot-plug is specified disable cold-plug and vice versa
+		sbConfig.HypervisorConfig.ColdPlugVFIO = config.NoPort
+	}
+	if value, ok := ocispec.Annotations[vcAnnotations.ColdPlugVFIO]; ok {
+		if sbConfig.HypervisorConfig.ColdPlugVFIO, err = addHypervisorPCIePortOverride(value); err != nil {
+			return err
+		}
+		// If cold-plug is specified disable hot-plug and vice versa
+		sbConfig.HypervisorConfig.HotPlugVFIO = config.NoPort
+	}
 	return nil
 }
 

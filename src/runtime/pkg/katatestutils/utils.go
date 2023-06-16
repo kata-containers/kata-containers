@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"testing"
 
-	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 )
@@ -224,8 +224,8 @@ type RuntimeConfigOptions struct {
 	JaegerUser           string
 	JaegerPassword       string
 	PFlash               []string
-	PCIeRootPort         uint32
-	ColdPlugVFIO         hv.PCIePort
+	HotPlugVFIO          config.PCIePort
+	ColdPlugVFIO         config.PCIePort
 	DefaultVCPUCount     uint32
 	DefaultMaxVCPUCount  uint32
 	DefaultMemSize       uint32
@@ -318,7 +318,6 @@ func MakeRuntimeConfigFileData(config RuntimeConfigOptions) string {
 	disable_block_device_use =  ` + strconv.FormatBool(config.DisableBlock) + `
 	enable_iothreads =  ` + strconv.FormatBool(config.EnableIOThreads) + `
 	hotplug_vfio_on_root_bus =  ` + strconv.FormatBool(config.HotplugVFIOOnRootBus) + `
-	pcie_root_port = ` + strconv.FormatUint(uint64(config.PCIeRootPort), 10) + `
 	cold_plug_vfio =  "` + config.ColdPlugVFIO.String() + `"
 	msize_9p = ` + strconv.FormatUint(uint64(config.DefaultMsize9p), 10) + `
 	enable_debug = ` + strconv.FormatBool(config.HypervisorDebug) + `

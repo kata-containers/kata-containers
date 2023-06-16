@@ -7,7 +7,7 @@
 package persistapi
 
 import (
-	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 )
@@ -131,10 +131,6 @@ type HypervisorConfig struct {
 	// Enable SGX. Hardware-based isolation and memory encryption.
 	SGXEPCSize int64
 
-	// PCIeRootPort is used to indicate the number of PCIe Root Port devices
-	// The PCIe Root Port device is used to hot-plug the PCIe device
-	PCIeRootPort uint32
-
 	// NumVCPUs specifies default number of vCPUs for the VM.
 	NumVCPUs uint32
 
@@ -199,9 +195,13 @@ type HypervisorConfig struct {
 	// root bus instead of a bridge.
 	HotplugVFIOOnRootBus bool
 
+	// HotPlugVFIO is used to indicate if devices need to be hotplugged on the
+	// root, switch, bridge or no-port
+	HotPlugVFIO config.PCIePort
+
 	// ColdPlugVFIO is used to indicate if devices need to be coldplugged on the
-	// root port or a switch or no-port
-	ColdPlugVFIO hv.PCIePort
+	// root, bridge, switch or no-port
+	ColdPlugVFIO config.PCIePort
 
 	// BootToBeTemplate used to indicate if the VM is created to be a template VM
 	BootToBeTemplate bool

@@ -599,7 +599,7 @@ func TestContainerPipeSizeAnnotation(t *testing.T) {
 func TestAddHypervisorAnnotations(t *testing.T) {
 	assert := assert.New(t)
 
-	config := vc.SandboxConfig{
+	sbConfig := vc.SandboxConfig{
 		Annotations: make(map[string]string),
 	}
 
@@ -628,8 +628,8 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	runtimeConfig.HypervisorConfig.VirtioFSDaemonList = []string{"/bin/*ls*"}
 
 	ocispec.Annotations[vcAnnotations.KernelParams] = "vsyscall=emulate iommu=on"
-	addHypervisorConfigOverrides(ocispec, &config, runtimeConfig)
-	assert.Exactly(expectedHyperConfig, config.HypervisorConfig)
+	addHypervisorConfigOverrides(ocispec, &sbConfig, runtimeConfig)
+	assert.Exactly(expectedHyperConfig, sbConfig.HypervisorConfig)
 
 	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "1"
 	ocispec.Annotations[vcAnnotations.DefaultMaxVCPUs] = "1"
@@ -660,7 +660,8 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.GuestHookPath] = "/usr/bin/"
 	ocispec.Annotations[vcAnnotations.DisableImageNvdimm] = "true"
 	ocispec.Annotations[vcAnnotations.HotplugVFIOOnRootBus] = "true"
-	ocispec.Annotations[vcAnnotations.PCIeRootPort] = "2"
+	ocispec.Annotations[vcAnnotations.ColdPlugVFIO] = string(config.InvalidPort)
+	ocispec.Annotations[vcAnnotations.HotPlugVFIO] = string(config.RootPort)
 	ocispec.Annotations[vcAnnotations.IOMMUPlatform] = "true"
 	ocispec.Annotations[vcAnnotations.SGXEPC] = "64Mi"
 	ocispec.Annotations[vcAnnotations.UseLegacySerial] = "true"
@@ -668,55 +669,56 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.RxRateLimiterMaxRate] = "10000000"
 	ocispec.Annotations[vcAnnotations.TxRateLimiterMaxRate] = "10000000"
 
-	addAnnotations(ocispec, &config, runtimeConfig)
-	assert.Equal(config.HypervisorConfig.NumVCPUs, uint32(1))
-	assert.Equal(config.HypervisorConfig.DefaultMaxVCPUs, uint32(1))
-	assert.Equal(config.HypervisorConfig.MemorySize, uint32(1024))
-	assert.Equal(config.HypervisorConfig.MemSlots, uint32(20))
-	assert.Equal(config.HypervisorConfig.MemOffset, uint64(512))
-	assert.Equal(config.HypervisorConfig.VirtioMem, true)
-	assert.Equal(config.HypervisorConfig.MemPrealloc, true)
-	assert.Equal(config.HypervisorConfig.FileBackedMemRootDir, "/dev/shm")
-	assert.Equal(config.HypervisorConfig.HugePages, true)
-	assert.Equal(config.HypervisorConfig.IOMMU, true)
-	assert.Equal(config.HypervisorConfig.BlockDeviceDriver, "virtio-scsi")
-	assert.Equal(config.HypervisorConfig.BlockDeviceAIO, "io_uring")
-	assert.Equal(config.HypervisorConfig.DisableBlockDeviceUse, true)
-	assert.Equal(config.HypervisorConfig.EnableIOThreads, true)
-	assert.Equal(config.HypervisorConfig.BlockDeviceCacheSet, true)
-	assert.Equal(config.HypervisorConfig.BlockDeviceCacheDirect, true)
-	assert.Equal(config.HypervisorConfig.BlockDeviceCacheNoflush, true)
-	assert.Equal(config.HypervisorConfig.SharedFS, "virtio-fs")
-	assert.Equal(config.HypervisorConfig.VirtioFSDaemon, "/bin/false")
-	assert.Equal(config.HypervisorConfig.VirtioFSCache, "auto")
-	assert.ElementsMatch(config.HypervisorConfig.VirtioFSExtraArgs, [2]string{"arg0", "arg1"})
-	assert.Equal(config.HypervisorConfig.Msize9p, uint32(512))
-	assert.Equal(config.HypervisorConfig.HypervisorMachineType, "q35")
-	assert.Equal(config.HypervisorConfig.MachineAccelerators, "nofw")
-	assert.Equal(config.HypervisorConfig.CPUFeatures, "pmu=off")
-	assert.Equal(config.HypervisorConfig.DisableVhostNet, true)
-	assert.Equal(config.HypervisorConfig.GuestHookPath, "/usr/bin/")
-	assert.Equal(config.HypervisorConfig.DisableImageNvdimm, true)
-	assert.Equal(config.HypervisorConfig.HotplugVFIOOnRootBus, true)
-	assert.Equal(config.HypervisorConfig.PCIeRootPort, uint32(2))
-	assert.Equal(config.HypervisorConfig.IOMMUPlatform, true)
-	assert.Equal(config.HypervisorConfig.SGXEPCSize, int64(67108864))
-	assert.Equal(config.HypervisorConfig.LegacySerial, true)
-	assert.Equal(config.HypervisorConfig.RxRateLimiterMaxRate, uint64(10000000))
-	assert.Equal(config.HypervisorConfig.TxRateLimiterMaxRate, uint64(10000000))
+	addAnnotations(ocispec, &sbConfig, runtimeConfig)
+	assert.Equal(sbConfig.HypervisorConfig.NumVCPUs, uint32(1))
+	assert.Equal(sbConfig.HypervisorConfig.DefaultMaxVCPUs, uint32(1))
+	assert.Equal(sbConfig.HypervisorConfig.MemorySize, uint32(1024))
+	assert.Equal(sbConfig.HypervisorConfig.MemSlots, uint32(20))
+	assert.Equal(sbConfig.HypervisorConfig.MemOffset, uint64(512))
+	assert.Equal(sbConfig.HypervisorConfig.VirtioMem, true)
+	assert.Equal(sbConfig.HypervisorConfig.MemPrealloc, true)
+	assert.Equal(sbConfig.HypervisorConfig.FileBackedMemRootDir, "/dev/shm")
+	assert.Equal(sbConfig.HypervisorConfig.HugePages, true)
+	assert.Equal(sbConfig.HypervisorConfig.IOMMU, true)
+	assert.Equal(sbConfig.HypervisorConfig.BlockDeviceDriver, "virtio-scsi")
+	assert.Equal(sbConfig.HypervisorConfig.BlockDeviceAIO, "io_uring")
+	assert.Equal(sbConfig.HypervisorConfig.DisableBlockDeviceUse, true)
+	assert.Equal(sbConfig.HypervisorConfig.EnableIOThreads, true)
+	assert.Equal(sbConfig.HypervisorConfig.BlockDeviceCacheSet, true)
+	assert.Equal(sbConfig.HypervisorConfig.BlockDeviceCacheDirect, true)
+	assert.Equal(sbConfig.HypervisorConfig.BlockDeviceCacheNoflush, true)
+	assert.Equal(sbConfig.HypervisorConfig.SharedFS, "virtio-fs")
+	assert.Equal(sbConfig.HypervisorConfig.VirtioFSDaemon, "/bin/false")
+	assert.Equal(sbConfig.HypervisorConfig.VirtioFSCache, "auto")
+	assert.ElementsMatch(sbConfig.HypervisorConfig.VirtioFSExtraArgs, [2]string{"arg0", "arg1"})
+	assert.Equal(sbConfig.HypervisorConfig.Msize9p, uint32(512))
+	assert.Equal(sbConfig.HypervisorConfig.HypervisorMachineType, "q35")
+	assert.Equal(sbConfig.HypervisorConfig.MachineAccelerators, "nofw")
+	assert.Equal(sbConfig.HypervisorConfig.CPUFeatures, "pmu=off")
+	assert.Equal(sbConfig.HypervisorConfig.DisableVhostNet, true)
+	assert.Equal(sbConfig.HypervisorConfig.GuestHookPath, "/usr/bin/")
+	assert.Equal(sbConfig.HypervisorConfig.DisableImageNvdimm, true)
+	assert.Equal(sbConfig.HypervisorConfig.HotplugVFIOOnRootBus, true)
+	assert.Equal(sbConfig.HypervisorConfig.ColdPlugVFIO, config.InvalidPort)
+	assert.Equal(sbConfig.HypervisorConfig.HotPlugVFIO, config.RootPort)
+	assert.Equal(sbConfig.HypervisorConfig.IOMMUPlatform, true)
+	assert.Equal(sbConfig.HypervisorConfig.SGXEPCSize, int64(67108864))
+	assert.Equal(sbConfig.HypervisorConfig.LegacySerial, true)
+	assert.Equal(sbConfig.HypervisorConfig.RxRateLimiterMaxRate, uint64(10000000))
+	assert.Equal(sbConfig.HypervisorConfig.TxRateLimiterMaxRate, uint64(10000000))
 
 	// In case an absurd large value is provided, the config value if not over-ridden
 	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "655536"
-	err := addAnnotations(ocispec, &config, runtimeConfig)
+	err := addAnnotations(ocispec, &sbConfig, runtimeConfig)
 	assert.Error(err)
 
 	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "-1"
-	err = addAnnotations(ocispec, &config, runtimeConfig)
+	err = addAnnotations(ocispec, &sbConfig, runtimeConfig)
 	assert.Error(err)
 
 	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "1"
 	ocispec.Annotations[vcAnnotations.DefaultMaxVCPUs] = "-1"
-	err = addAnnotations(ocispec, &config, runtimeConfig)
+	err = addAnnotations(ocispec, &sbConfig, runtimeConfig)
 	assert.Error(err)
 
 	ocispec.Annotations[vcAnnotations.DefaultMaxVCPUs] = "1"
@@ -821,22 +823,22 @@ func TestRegexpContains(t *testing.T) {
 
 	//nolint: govet
 	type testData struct {
-		regexps  []string
 		toMatch  string
+		regexps  []string
 		expected bool
 	}
 
 	data := []testData{
-		{[]string{}, "", false},
-		{[]string{}, "nonempty", false},
-		{[]string{"simple"}, "simple", true},
-		{[]string{"simple"}, "some_simple_text", true},
-		{[]string{"simple"}, "simp", false},
-		{[]string{"one", "two"}, "one", true},
-		{[]string{"one", "two"}, "two", true},
-		{[]string{"o*"}, "oooo", true},
-		{[]string{"o*"}, "oooa", true},
-		{[]string{"^o*$"}, "oooa", false},
+		{regexps: []string{}, toMatch: "", expected: false},
+		{regexps: []string{}, toMatch: "nonempty", expected: false},
+		{regexps: []string{"simple"}, toMatch: "simple", expected: true},
+		{regexps: []string{"simple"}, toMatch: "some_simple_text", expected: true},
+		{regexps: []string{"simple"}, toMatch: "simp", expected: false},
+		{regexps: []string{"one", "two"}, toMatch: "one", expected: true},
+		{regexps: []string{"one", "two"}, toMatch: "two", expected: true},
+		{regexps: []string{"o*"}, toMatch: "oooo", expected: true},
+		{regexps: []string{"o*"}, toMatch: "oooa", expected: true},
+		{regexps: []string{"^o*$"}, toMatch: "oooa", expected: false},
 	}
 
 	for _, d := range data {
@@ -850,25 +852,25 @@ func TestCheckPathIsInGlobs(t *testing.T) {
 
 	//nolint: govet
 	type testData struct {
-		globs    []string
 		toMatch  string
+		globs    []string
 		expected bool
 	}
 
 	data := []testData{
-		{[]string{}, "", false},
-		{[]string{}, "nonempty", false},
-		{[]string{"simple"}, "simple", false},
-		{[]string{"simple"}, "some_simple_text", false},
-		{[]string{"/bin/ls"}, "/bin/ls", true},
-		{[]string{"/bin/ls", "/bin/false"}, "/bin/ls", true},
-		{[]string{"/bin/ls", "/bin/false"}, "/bin/false", true},
-		{[]string{"/bin/ls", "/bin/false"}, "/bin/bar", false},
-		{[]string{"/bin/*ls*"}, "/bin/ls", true},
-		{[]string{"/bin/*ls*"}, "/bin/false", true},
-		{[]string{"bin/ls"}, "/bin/ls", false},
-		{[]string{"./bin/ls"}, "/bin/ls", false},
-		{[]string{"*/bin/ls"}, "/bin/ls", false},
+		{globs: []string{}, toMatch: "", expected: false},
+		{globs: []string{}, toMatch: "nonempty", expected: false},
+		{globs: []string{"simple"}, toMatch: "simple", expected: false},
+		{globs: []string{"simple"}, toMatch: "some_simple_text", expected: false},
+		{globs: []string{"/bin/ls"}, toMatch: "/bin/ls", expected: true},
+		{globs: []string{"/bin/ls", "/bin/false"}, toMatch: "/bin/ls", expected: true},
+		{globs: []string{"/bin/ls", "/bin/false"}, toMatch: "/bin/false", expected: true},
+		{globs: []string{"/bin/ls", "/bin/false"}, toMatch: "/bin/bar", expected: false},
+		{globs: []string{"/bin/*ls*"}, toMatch: "/bin/ls", expected: true},
+		{globs: []string{"/bin/*ls*"}, toMatch: "/bin/false", expected: true},
+		{globs: []string{"bin/ls"}, toMatch: "/bin/ls", expected: false},
+		{globs: []string{"./bin/ls"}, toMatch: "/bin/ls", expected: false},
+		{globs: []string{"*/bin/ls"}, toMatch: "/bin/ls", expected: false},
 	}
 
 	for _, d := range data {
@@ -923,10 +925,10 @@ func TestParseAnnotationUintConfiguration(t *testing.T) {
 
 	// nolint: govet
 	testCases := []struct {
-		annotations map[string]string
-		expected    uint64
 		err         error
+		annotations map[string]string
 		validFunc   func(uint64) error
+		expected    uint64
 	}{
 		{
 			annotations: map[string]string{key: ""},
@@ -1007,10 +1009,10 @@ func TestParseAnnotationBoolConfiguration(t *testing.T) {
 
 	// nolint: govet
 	testCases := []struct {
+		err                 error
 		annotationKey       string
 		annotationValueList []string
 		expected            bool
-		err                 error
 	}{
 		{
 			annotationKey:       boolKey,
@@ -1207,8 +1209,8 @@ func TestNewMount(t *testing.T) {
 	assert := assert.New(t)
 
 	testCases := []struct {
-		out vc.Mount
 		in  specs.Mount
+		out vc.Mount
 	}{
 		{
 			in: specs.Mount{

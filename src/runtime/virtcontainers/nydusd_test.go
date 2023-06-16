@@ -20,16 +20,16 @@ import (
 func TestNydusdStart(t *testing.T) {
 	// nolint: govet
 	type fields struct {
-		pid             int
-		path            string
-		sockPath        string
-		apiSockPath     string
-		sourcePath      string
-		debug           bool
-		extraArgs       []string
 		startFn         func(cmd *exec.Cmd) error
 		waitFn          func() error
 		setupShareDirFn func() error
+		apiSockPath     string
+		sourcePath      string
+		path            string
+		sockPath        string
+		extraArgs       []string
+		pid             int
+		debug           bool
 	}
 
 	sourcePath := t.TempDir()
@@ -57,13 +57,13 @@ func TestNydusdStart(t *testing.T) {
 
 	// nolint: govet
 	tests := []struct {
-		name    string
 		fields  fields
+		name    string
 		wantErr bool
 	}{
-		{"empty config", fields{}, true},
-		{"directory source path not exist", SourcePathNoExist, true},
-		{"valid config", validConfig, false},
+		{name: "empty config", fields: fields{}, wantErr: true},
+		{name: "directory source path not exist", fields: SourcePathNoExist, wantErr: true},
+		{name: "valid config", fields: validConfig, wantErr: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

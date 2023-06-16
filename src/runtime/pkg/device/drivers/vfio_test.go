@@ -29,7 +29,7 @@ func TestGetVFIODetails(t *testing.T) {
 	}
 
 	for _, d := range data {
-		deviceBDF, deviceSysfsDev, vfioDeviceType, err := getVFIODetails(d.deviceStr, "")
+		deviceBDF, deviceSysfsDev, vfioDeviceType, err := GetVFIODetails(d.deviceStr, "")
 
 		switch vfioDeviceType {
 		case config.VFIOPCIDeviceNormalType:

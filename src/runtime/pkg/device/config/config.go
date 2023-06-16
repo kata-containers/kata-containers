@@ -114,13 +114,116 @@ const (
 // SysDevPrefix is static string of /sys/dev
 var SysDevPrefix = "/sys/dev"
 
-// SysIOMMUPath is static string of /sys/kernel/iommu_groups
-var SysIOMMUPath = "/sys/kernel/iommu_groups"
+// SysIOMMUGroupPath is static string of /sys/kernel/iommu_groups
+var SysIOMMUGroupPath = "/sys/kernel/iommu_groups"
 
 // SysBusPciDevicesPath is static string of /sys/bus/pci/devices
 var SysBusPciDevicesPath = "/sys/bus/pci/devices"
 
 var getSysDevPath = getSysDevPathImpl
+
+// PCIePortBusPrefix gives us the correct bus nameing dependeing on the port
+// used to hot(cold)-plug the device
+type PCIePortBusPrefix string
+
+const (
+	PCIeRootPortPrefix              PCIePortBusPrefix = "rp"
+	PCIeSwitchPortPrefix            PCIePortBusPrefix = "sw"
+	PCIeSwitchUpstreamPortPrefix    PCIePortBusPrefix = "swup"
+	PCIeSwitchhDownstreamPortPrefix PCIePortBusPrefix = "swdp"
+	PCIBridgePortPrefix             PCIePortBusPrefix = "bp"
+)
+
+func (p PCIePortBusPrefix) String() string {
+	switch p {
+	case PCIeRootPortPrefix:
+		fallthrough
+	case PCIeSwitchPortPrefix:
+		fallthrough
+	case PCIeSwitchUpstreamPortPrefix:
+		fallthrough
+	case PCIeSwitchhDownstreamPortPrefix:
+		fallthrough
+	case PCIBridgePortPrefix:
+		return string(p)
+	}
+	return fmt.Sprintf("<unknown PCIePortBusPrefix: %s>", string(p))
+}
+
+// PCIePort distinguish only between root and switch port
+type PCIePort string
+
+const (
+	// RootPort attach VFIO devices to a root-port
+	RootPort PCIePort = "root-port"
+	// SwitchPort attach VFIO devices to a switch-port
+	SwitchPort = "switch-port"
+	// BridgePort is the default
+	BridgePort = "bridge-port"
+	// NoPort is for disabling VFIO hotplug/coldplug
+	NoPort = "no-port"
+	// InvalidPort is for invalid port
+	InvalidPort = "invalid-port"
+)
+
+func (p PCIePort) String() string {
+	switch p {
+	case RootPort:
+		fallthrough
+	case SwitchPort:
+		fallthrough
+	case BridgePort:
+		fallthrough
+	case NoPort:
+		fallthrough
+	case InvalidPort:
+		return string(p)
+	}
+	return fmt.Sprintf("<unknown PCIePort: %s>", string(p))
+}
+
+var PCIePortPrefixMapping = map[PCIePort]PCIePortBusPrefix{
+	RootPort:   PCIeRootPortPrefix,
+	SwitchPort: PCIeSwitchhDownstreamPortPrefix,
+	BridgePort: PCIBridgePortPrefix,
+}
+
+func (p PCIePort) InValid() bool {
+	switch p {
+	case RootPort:
+		fallthrough
+	case SwitchPort:
+		fallthrough
+	case BridgePort:
+		fallthrough
+	case NoPort:
+		return false
+	}
+	return true
+}
+
+func (p PCIePort) Valid() bool {
+	switch p {
+	case RootPort:
+		fallthrough
+	case SwitchPort:
+		fallthrough
+	case BridgePort:
+		fallthrough
+	case NoPort:
+		return true
+	}
+	return false
+}
+
+type PCIePortMapping map[string]bool
+
+var (
+	// Each of this structures keeps track of the devices attached to the
+	// different types of PCI ports. We can deduces the Bus number from it
+	// and eliminate duplicates being assigned.
+	PCIeDevices = map[PCIePort]PCIePortMapping{}
+)
 
 // DeviceInfo is an embedded type that contains device data common to all types of devices.
 type DeviceInfo struct {
@@ -167,6 +270,9 @@ type DeviceInfo struct {
 	// ColdPlug specifies whether the device must be cold plugged (true)
 	// or hot plugged (false).
 	ColdPlug bool
+
+	// Specifies the PCIe port type to which the device is attached
+	Port PCIePort
 }
 
 // BlockDrive represents a block storage drive which may be used in case the storage
@@ -248,7 +354,7 @@ func (m *VFIOModeType) VFIOSetMode(modeName string) error {
 		*m = VFIOModeGuestKernel
 		return nil
 	}
-	return fmt.Errorf("Unknown VFIO mode %s", modeName)
+	return fmt.Errorf("unknown VFIO mode %s", modeName)
 }
 
 // VFIODeviceType indicates VFIO device type
@@ -268,14 +374,8 @@ const (
 	VFIOAPDeviceMediatedType
 )
 
-type VFIODev interface {
-	GetID() *string
-	GetType() VFIODeviceType
-	GetSysfsDev() *string
-}
-
 // VFIOPCIDev represents a VFIO PCI device used for hotplugging
-type VFIOPCIDev struct {
+type VFIODev struct {
 	// ID is used to identify this drive in the hypervisor options.
 	ID string
 
@@ -305,44 +405,17 @@ type VFIOPCIDev struct {
 
 	// IsPCIe specifies device is PCIe or PCI
 	IsPCIe bool
-}
-
-func (d VFIOPCIDev) GetID() *string {
-	return &d.ID
-}
-
-func (d VFIOPCIDev) GetType() VFIODeviceType {
-	return d.Type
-}
-
-func (d VFIOPCIDev) GetSysfsDev() *string {
-	return &d.SysfsDev
-}
-
-type VFIOAPDev struct {
-	// ID is used to identify this drive in the hypervisor options.
-	ID string
-
-	// sysfsdev of VFIO mediated device
-	SysfsDev string
 
 	// APDevices are the Adjunct Processor devices assigned to the mdev
 	APDevices []string
 
-	// Type of VFIO device
-	Type VFIODeviceType
-}
+	// Port is the PCIe port type to which the device is attached
+	Port PCIePort
 
-func (d VFIOAPDev) GetID() *string {
-	return &d.ID
-}
-
-func (d VFIOAPDev) GetType() VFIODeviceType {
-	return d.Type
-}
-
-func (d VFIOAPDev) GetSysfsDev() *string {
-	return &d.SysfsDev
+	// CliqueID identifies a logical group that belong together
+	// e.g. to hot-plug a GPU & NIC or GPU & GPU on a switch port to
+	// enable P2P in PCIe terminiology
+	CliqueID int
 }
 
 // RNGDev represents a random number generator device
