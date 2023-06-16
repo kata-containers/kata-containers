@@ -12,8 +12,8 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
-    - name: run launch times on qemu
-      run: bash tests/metrics/gha-run.sh run-test-launchtimes-qemu
+      - name: run launch times on qemu
+        run: bash tests/metrics/gha-run.sh run-test-launchtimes-qemu
 
-    - name: run launch times on clh
-      run:  bash tests/metrics/gha-run.sh run-test-launchtimes-clh
+      - name: run launch times on clh
+        run:  bash tests/metrics/gha-run.sh run-test-launchtimes-clh
