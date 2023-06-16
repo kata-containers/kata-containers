@@ -250,7 +250,6 @@ fn get_image_layer_storages(
 
         let mut lowerdirs: Vec<String> = Vec::new();
         let mut previous_chain_id = String::new();
-        let mut previous_layer_name = String::new();
 
         for layer in image_layers {
             // See https://github.com/opencontainers/image-spec/blob/main/config.md#layer-chainid
@@ -295,21 +294,8 @@ fn get_image_layer_storages(
             fs_opt_layer += &layer.verity_hash;
             overlay_storage.options.push(fs_opt_layer);
 
-            if !previous_layer_name.is_empty() {
-                let mut lowerdir = "lowerdir=/run/kata-containers/sandbox/layers/".to_string();
-                lowerdir += &layer_name;
-                lowerdir += ":/run/kata-containers/sandbox/layers/";
-                lowerdir += &previous_layer_name;
-
-                lowerdirs.push(lowerdir);
-            } else if image_layers.len() == 1 {
-                let mut lowerdir = "lowerdir=/run/kata-containers/sandbox/layers/".to_string();
-                lowerdir += &layer_name;
-
-                lowerdirs.push(lowerdir);
-            }
-
-            previous_layer_name = layer_name.clone();
+            let lowerdir = "/run/kata-containers/sandbox/layers/".to_string() + &layer_name;
+            lowerdirs.push(lowerdir);
         }
 
         new_storages.reverse();
@@ -322,9 +308,8 @@ fn get_image_layer_storages(
             .options
             .push("io.katacontainers.fs-opt.overlay-rw".to_string());
 
-        for lowerdir in lowerdirs {
-            overlay_storage.options.push(lowerdir);
-        }
+        lowerdirs.reverse();
+        overlay_storage.options.push("lowerdir=".to_string() + &lowerdirs.join(":"));
 
         storages.push(overlay_storage);
     }

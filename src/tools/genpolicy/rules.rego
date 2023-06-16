@@ -127,8 +127,13 @@ allow_by_sandbox_name(policy_oci, input_oci, policy_storages, input_storages, sa
 
 allow_by_container_types(policy_oci, input_oci, sandbox_name, sandbox_namespace) {
     print("allow_by_container_types: checking io.kubernetes.cri.container-type")
+    
     policy_cri_type := policy_oci.annotations["io.kubernetes.cri.container-type"]
+    print("allow_by_container_types: policy type =", policy_cri_type)
+    
     input_cri_type := input_oci.annotations["io.kubernetes.cri.container-type"]
+    print("allow_by_container_types: input type =", input_cri_type)
+    
     policy_cri_type == input_cri_type
 
     print("allow_by_container_types: allow_by_container_type")
