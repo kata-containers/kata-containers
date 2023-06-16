@@ -178,6 +178,7 @@ pub fn new_k8s_resource(
         | "PersistentVolume"
         | "PersistentVolumeClaim"
         | "ResourceQuota"
+        | "Secret"
         | "Service"
         | "ServiceAccount" => {
             let no_policy = no_policy::NoPolicyResource {
@@ -186,7 +187,7 @@ pub fn new_k8s_resource(
             debug!("{:#?}", &no_policy);
             Ok((boxed::Box::new(no_policy), header.kind))
         }
-        _ => Err(anyhow!("Unsupported YAML spec kind: {}", kind)),
+        _ => todo!("Unsupported YAML spec kind: {}", kind),
     }
 }
 
