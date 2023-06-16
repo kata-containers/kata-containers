@@ -79,12 +79,12 @@ func TestVirtiofsdArgs(t *testing.T) {
 		cache:      "none",
 	}
 
-	expected := "--syslog -o cache=none -o no_posix_lock -o source=/run/kata-shared/foo --fd=123 -f"
+	expected := "--syslog --cache=none --shared-dir=/run/kata-shared/foo --fd=123"
 	args, err := v.args(123)
 	assert.NoError(err)
 	assert.Equal(expected, strings.Join(args, " "))
 
-	expected = "--syslog -o cache=none -o no_posix_lock -o source=/run/kata-shared/foo --fd=456 -f"
+	expected = "--syslog --cache=none --shared-dir=/run/kata-shared/foo --fd=456"
 	args, err = v.args(456)
 	assert.NoError(err)
 	assert.Equal(expected, strings.Join(args, " "))
