@@ -4,7 +4,7 @@
     },
     "pause_container": {
         "root": {
-            "path": "/run/kata-containers/$(bundle-id)/rootfs",
+            "path": "/run/kata-containers/shared/containers/$(bundle-id)",
             "readonly": true
         },
         "mounts": [
@@ -31,7 +31,7 @@
     },
     "other_container": {
         "root": {
-            "path": "/run/kata-containers/$(bundle-id)/rootfs"
+            "path": "/run/kata-containers/shared/containers/$(bundle-id)"
         },
         "mounts": [
             {
