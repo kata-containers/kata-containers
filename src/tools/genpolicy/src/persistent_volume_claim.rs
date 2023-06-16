@@ -13,7 +13,6 @@ use std::collections::BTreeMap;
 
 /// See Reference / Kubernetes API / Config and Storage Resources / PersistentVolumeClaim.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct PersistentVolumeClaim {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub apiVersion: Option<String>,
@@ -27,7 +26,6 @@ pub struct PersistentVolumeClaim {
 
 /// See Reference / Kubernetes API / Config and Storage Resources / PersistentVolumeClaim.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct PersistentVolumeClaimSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub accessModes: Option<Vec<String>>,
@@ -39,7 +37,6 @@ pub struct PersistentVolumeClaimSpec {
 
 /// See Reference / Kubernetes API / Config and Storage Resources / PersistentVolumeClaim.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct ResourceRequirements {
     #[serde(skip_serializing_if = "Option::is_none")]
     requests: Option<BTreeMap<String, String>>,

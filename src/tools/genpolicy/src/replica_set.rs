@@ -21,7 +21,6 @@ use serde::{Deserialize, Serialize};
 
 /// See Reference / Kubernetes API / Workload Resources / ReplicaSet.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct ReplicaSet {
     pub apiVersion: String,
     pub kind: String,
@@ -40,7 +39,6 @@ pub struct ReplicaSet {
 
 /// See ReplicaSetSpec in the Kubernetes API reference.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct ReplicaSetSpec {
     selector: yaml::LabelSelector,
     pub template: pod_template::PodTemplateSpec,

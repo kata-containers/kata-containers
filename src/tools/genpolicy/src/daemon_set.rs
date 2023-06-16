@@ -21,7 +21,6 @@ use serde::{Deserialize, Serialize};
 
 /// See Reference Kubernetes API / Workload Resources / DaemonSet.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct DaemonSet {
     apiVersion: String,
     kind: String,
@@ -40,7 +39,6 @@ pub struct DaemonSet {
 
 /// See Reference Kubernetes API / Workload Resources / DaemonSet.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct DaemonSetSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     selector: Option<yaml::LabelSelector>,
@@ -59,7 +57,6 @@ pub struct DaemonSetSpec {
 
 /// See Reference Kubernetes API / Workload Resources / DaemonSet.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct DaemonSetUpdateStrategy {
     #[serde(skip_serializing_if = "Option::is_none")]
     r#type: Option<String>,
@@ -70,7 +67,6 @@ struct DaemonSetUpdateStrategy {
 
 /// See Reference Kubernetes API / Workload Resources / DaemonSet.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct RollingUpdateDaemonSet {
     #[serde(skip_serializing_if = "Option::is_none")]
     maxSurge: Option<i32>,

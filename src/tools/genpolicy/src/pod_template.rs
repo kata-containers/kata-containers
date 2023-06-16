@@ -13,7 +13,6 @@ use serde::{Deserialize, Serialize};
 
 /// Reference / Kubernetes API / Workload/  Resources / PodTemplate.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct PodTemplate {
     apiVersion: String,
     kind: String,
@@ -23,7 +22,6 @@ pub struct PodTemplate {
 
 /// Reference / Kubernetes API / Workload/  Resources / PodTemplate.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct PodTemplateSpec {
     pub metadata: obj_meta::ObjectMeta,
     pub spec: pod::PodSpec,

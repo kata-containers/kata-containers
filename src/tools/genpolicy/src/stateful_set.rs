@@ -23,7 +23,6 @@ use std::path::Path;
 
 /// See Reference / Kubernetes API / Workload Resources / StatefulSet.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct StatefulSet {
     pub apiVersion: String,
     pub kind: String,
@@ -42,7 +41,6 @@ pub struct StatefulSet {
 
 /// See Reference / Kubernetes API / Workload Resources / StatefulSet.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct StatefulSetSpec {
     serviceName: String,
 

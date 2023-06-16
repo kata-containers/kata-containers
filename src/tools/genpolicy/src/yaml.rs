@@ -77,7 +77,6 @@ pub trait K8sResource {
 
 /// See Reference / Kubernetes API / Common Definitions / LabelSelector.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct LabelSelector {
     #[serde(skip_serializing_if = "Option::is_none")]
     matchLabels: Option<BTreeMap<String, String>>,
@@ -88,7 +87,6 @@ pub struct LabelSelector {
 
 /// See Reference / Kubernetes API / Common Definitions / LabelSelector.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct LabelSelectorRequirement {
     key: String,
     operator: String,
@@ -110,42 +108,42 @@ pub fn new_k8s_resource(
         "ConfigMap" => {
             let config_map: config_map::ConfigMap = serde_ignored::deserialize(d, |path| {
                 handle_unused_field(&path.to_string(), silent_unsupported_fields);
-            })?;
+            }).unwrap();
             debug!("{:#?}", &config_map);
             Ok((boxed::Box::new(config_map), header.kind))
         }
         "DaemonSet" => {
             let daemon: daemon_set::DaemonSet = serde_ignored::deserialize(d, |path| {
                 handle_unused_field(&path.to_string(), silent_unsupported_fields);
-            })?;
+            }).unwrap();
             debug!("{:#?}", &daemon);
             Ok((boxed::Box::new(daemon), header.kind))
         }
         "Deployment" => {
             let deployment: deployment::Deployment = serde_ignored::deserialize(d, |path| {
                 handle_unused_field(&path.to_string(), silent_unsupported_fields);
-            })?;
+            }).unwrap();
             debug!("{:#?}", &deployment);
             Ok((boxed::Box::new(deployment), header.kind))
         }
         "Job" => {
             let job: job::Job = serde_ignored::deserialize(d, |path| {
                 handle_unused_field(&path.to_string(), silent_unsupported_fields);
-            })?;
+            }).unwrap();
             debug!("{:#?}", &job);
             Ok((boxed::Box::new(job), header.kind))
         }
         "List" => {
             let list: list::List = serde_ignored::deserialize(d, |path| {
                 handle_unused_field(&path.to_string(), silent_unsupported_fields);
-            })?;
+            }).unwrap();
             debug!("{:#?}", &list);
             Ok((boxed::Box::new(list), header.kind))
         }
         "Pod" => {
             let pod: pod::Pod = serde_ignored::deserialize(d, |path| {
                 handle_unused_field(&path.to_string(), silent_unsupported_fields);
-            })?;
+            }).unwrap();
             debug!("{:#?}", &pod);
             Ok((boxed::Box::new(pod), header.kind))
         }
@@ -153,21 +151,21 @@ pub fn new_k8s_resource(
             let controller: replication_controller::ReplicationController =
                 serde_ignored::deserialize(d, |path| {
                     handle_unused_field(&path.to_string(), silent_unsupported_fields);
-                })?;
+                }).unwrap();
             debug!("{:#?}", &controller);
             Ok((boxed::Box::new(controller), header.kind))
         }
         "ReplicaSet" => {
             let set: replica_set::ReplicaSet = serde_ignored::deserialize(d, |path| {
                 handle_unused_field(&path.to_string(), silent_unsupported_fields);
-            })?;
+            }).unwrap();
             debug!("{:#?}", &set);
             Ok((boxed::Box::new(set), header.kind))
         }
         "StatefulSet" => {
             let set: stateful_set::StatefulSet = serde_ignored::deserialize(d, |path| {
                 handle_unused_field(&path.to_string(), silent_unsupported_fields);
-            })?;
+            }).unwrap();
             debug!("{:#?}", &set);
             Ok((boxed::Box::new(set), header.kind))
         }

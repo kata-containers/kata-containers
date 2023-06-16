@@ -21,7 +21,6 @@ use serde::{Deserialize, Serialize};
 
 /// Reference / Kubernetes API / Workload Resources / Deployment.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Deployment {
     apiVersion: String,
     kind: String,
@@ -40,7 +39,6 @@ pub struct Deployment {
 
 /// Reference / Kubernetes API / Workload Resources / Deployment.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct DeploymentSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     replicas: Option<i32>,
@@ -57,7 +55,6 @@ pub struct DeploymentSpec {
 
 /// Reference / Kubernetes API / Workload Resources / Deployment.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct DeploymentStrategy {
     #[serde(skip_serializing_if = "Option::is_none")]
     r#type: Option<String>,
@@ -68,7 +65,6 @@ struct DeploymentStrategy {
 
 /// Reference / Kubernetes API / Workload Resources / Deployment.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct RollingUpdateDeployment {
     #[serde(skip_serializing_if = "Option::is_none")]
     maxSurge: Option<i32>,

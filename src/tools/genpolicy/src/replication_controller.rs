@@ -22,7 +22,6 @@ use std::collections::BTreeMap;
 
 /// See ReplicationController in the Kubernetes API reference.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct ReplicationController {
     pub apiVersion: String,
     pub kind: String,
@@ -41,7 +40,6 @@ pub struct ReplicationController {
 
 /// See ReplicationControllerSpec in the Kubernetes API reference.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct ReplicationControllerSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     replicas: Option<i32>,

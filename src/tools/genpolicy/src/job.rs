@@ -21,7 +21,6 @@ use serde::{Deserialize, Serialize};
 
 /// See Reference / Kubernetes API / Workload Resources / Job.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Job {
     apiVersion: String,
     kind: String,
@@ -40,7 +39,6 @@ pub struct Job {
 
 /// See Reference / Kubernetes API / Workload Resources / Job.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct JobSpec {
     pub template: pod_template::PodTemplateSpec,
 

@@ -52,7 +52,6 @@ const OTHER_CONTAINERS_ANNOTATIONS: [(&'static str, &'static str); 4] = [
 ];
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct InfraPolicy {
     pub pause_container: policy::OciSpec,
     pub other_container: policy::OciSpec,
@@ -61,14 +60,12 @@ pub struct InfraPolicy {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct Volumes {
     pub emptyDir: EmptyDirVolume,
     pub configMap: ConfigMapVolume,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct EmptyDirVolume {
     pub mount_type: String,
     pub mount_source: String,
@@ -81,7 +78,6 @@ pub struct EmptyDirVolume {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct ConfigMapVolume {
     pub mount_type: String,
     pub mount_source: String,
@@ -92,7 +88,6 @@ pub struct ConfigMapVolume {
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 struct SharedFiles {
     source_path: String,
 }

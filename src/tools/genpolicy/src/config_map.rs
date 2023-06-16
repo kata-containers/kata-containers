@@ -22,7 +22,6 @@ use std::fs::File;
 
 /// See Reference / Kubernetes API / Config and Storage Resources / ConfigMap.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct ConfigMap {
     apiVersion: String,
     kind: String,

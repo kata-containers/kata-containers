@@ -21,7 +21,6 @@ use std::boxed;
 use std::marker::{Send, Sync};
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct List {
     apiVersion: String,
     kind: String,
