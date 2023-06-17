@@ -18,14 +18,14 @@
                 "env": [
                     "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
                     "HOSTNAME=three-containers",
+                    "KUBERNETES_PORT_443_TCP_ADDR=10.0.0.1",
                     "KUBERNETES_SERVICE_HOST=10.0.0.1",
                     "KUBERNETES_SERVICE_PORT=443",
                     "KUBERNETES_SERVICE_PORT_HTTPS=443",
                     "KUBERNETES_PORT=tcp://10.0.0.1:443",
                     "KUBERNETES_PORT_443_TCP=tcp://10.0.0.1:443",
                     "KUBERNETES_PORT_443_TCP_PROTO=tcp",
-                    "KUBERNETES_PORT_443_TCP_PORT=443",
-                    "KUBERNETES_PORT_443_TCP_ADDR=10.0.0.1"
+                    "KUBERNETES_PORT_443_TCP_PORT=443"
                 ],
                 "cwd": "/",
                 "capabilities": {
@@ -83,7 +83,7 @@
                 "oomScoreAdj": 1000
             },
             "root": {
-                "path": "/run/kata-containers/fb3677f1dc4ea7772016525d0e0338a8908f099d0e46dbdfe101644d7134c2ad/rootfs",
+                "path": "/run/kata-containers/shared/containers/a7e7aefb0b1bcb020a9477e3b860c2d37da05c7b582a074de20ac04d3bc8a0bc",
                 "readonly": true
             },
             "mounts": [
@@ -157,7 +157,7 @@
                 {
                     "destination": "/etc/hosts",
                     "type": "bind",
-                    "source": "/run/kata-containers/shared/containers/fb3677f1dc4ea7772016525d0e0338a8908f099d0e46dbdfe101644d7134c2ad-8d7012b562a950c8-hosts",
+                    "source": "/run/kata-containers/shared/containers/a7e7aefb0b1bcb020a9477e3b860c2d37da05c7b582a074de20ac04d3bc8a0bc-924f5a47e6e9e3fe-hosts",
                     "options": [
                         "rbind",
                         "rprivate",
@@ -167,7 +167,7 @@
                 {
                     "destination": "/dev/termination-log",
                     "type": "bind",
-                    "source": "/run/kata-containers/shared/containers/fb3677f1dc4ea7772016525d0e0338a8908f099d0e46dbdfe101644d7134c2ad-1a35208ba671069c-termination-log",
+                    "source": "/run/kata-containers/shared/containers/a7e7aefb0b1bcb020a9477e3b860c2d37da05c7b582a074de20ac04d3bc8a0bc-1136d3d4d76f5b3e-termination-log",
                     "options": [
                         "rbind",
                         "rprivate",
@@ -177,7 +177,7 @@
                 {
                     "destination": "/etc/hostname",
                     "type": "bind",
-                    "source": "/run/kata-containers/shared/containers/fb3677f1dc4ea7772016525d0e0338a8908f099d0e46dbdfe101644d7134c2ad-40c6ecb41cbe5720-hostname",
+                    "source": "/run/kata-containers/shared/containers/a7e7aefb0b1bcb020a9477e3b860c2d37da05c7b582a074de20ac04d3bc8a0bc-f95b99db5d020585-hostname",
                     "options": [
                         "rbind",
                         "rprivate",
@@ -187,7 +187,7 @@
                 {
                     "destination": "/etc/resolv.conf",
                     "type": "bind",
-                    "source": "/run/kata-containers/shared/containers/fb3677f1dc4ea7772016525d0e0338a8908f099d0e46dbdfe101644d7134c2ad-3ba08c23dc6d0717-resolv.conf",
+                    "source": "/run/kata-containers/shared/containers/a7e7aefb0b1bcb020a9477e3b860c2d37da05c7b582a074de20ac04d3bc8a0bc-8f5ab2d3c2a1901c-resolv.conf",
                     "options": [
                         "rbind",
                         "rprivate",
@@ -205,7 +205,7 @@
                 {
                     "destination": "/var/run/secrets/kubernetes.io/serviceaccount",
                     "type": "bind",
-                    "source": "/run/kata-containers/shared/containers/fb3677f1dc4ea7772016525d0e0338a8908f099d0e46dbdfe101644d7134c2ad-1f5d244df0330433-serviceaccount",
+                    "source": "/run/kata-containers/shared/containers/a7e7aefb0b1bcb020a9477e3b860c2d37da05c7b582a074de20ac04d3bc8a0bc-0282ad7437cb767c-serviceaccount",
                     "options": [
                         "rbind",
                         "rprivate",
@@ -214,15 +214,15 @@
                 }
             ],
             "annotations": {
-                "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/fb3677f1dc4ea7772016525d0e0338a8908f099d0e46dbdfe101644d7134c2ad",
-                "io.kubernetes.cri.container-name": "busybox",
                 "io.kubernetes.cri.sandbox-namespace": "default",
-                "io.kubernetes.cri.image-name": "mcr.microsoft.com/aks/e2e/library-busybox:master.220314.1-linux-amd64",
-                "io.katacontainers.pkg.oci.container_type": "pod_container",
-                "io.kubernetes.cri.sandbox-uid": "465176d0-75ac-416d-a8ea-bf978f2cbc25",
-                "io.kubernetes.cri.container-type": "container",
                 "io.kubernetes.cri.sandbox-name": "three-containers",
-                "io.kubernetes.cri.sandbox-id": "cb4386030c997f5cb9368f8b9a5997563ec75f9b44c65c7a4f8ccfb25305031e"
+                "io.kubernetes.cri.sandbox-uid": "a142c276-fe81-4d3e-9893-c6f3ac2adb1f",
+                "io.katacontainers.pkg.oci.container_type": "pod_container",
+                "io.kubernetes.cri.container-type": "container",
+                "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/a7e7aefb0b1bcb020a9477e3b860c2d37da05c7b582a074de20ac04d3bc8a0bc",
+                "io.kubernetes.cri.image-name": "mcr.microsoft.com/aks/e2e/library-busybox:master.220314.1-linux-amd64",
+                "io.kubernetes.cri.container-name": "busybox",
+                "io.kubernetes.cri.sandbox-id": "8a49cdf6b791387443dc24797b978370747d5b9374e5bfed87d596c43cb7258f"
             },
             "linux": {
                 "resources": {
@@ -243,7 +243,7 @@
                         "realtimePeriod": 0
                     }
                 },
-                "cgroupsPath": "/kubepods/besteffort/pod465176d0-75ac-416d-a8ea-bf978f2cbc25/fb3677f1dc4ea7772016525d0e0338a8908f099d0e46dbdfe101644d7134c2ad",
+                "cgroupsPath": "/kubepods/besteffort/poda142c276-fe81-4d3e-9893-c6f3ac2adb1f/a7e7aefb0b1bcb020a9477e3b860c2d37da05c7b582a074de20ac04d3bc8a0bc",
                 "namespaces": [
                     {
                         "type": "ipc"
@@ -317,12 +317,13 @@
                 "source": "none",
                 "fstype": "tar-overlay",
                 "options": [
-                    "io.katacontainers.fs-opt.layer=/var/lib/containerd/io.containerd.snapshotter.v1.tardev/layers/2c342a137e693c7898aec36da1047f191dc7c1687e66198adacc439cf4adf379,tar,ro,io.katacontainers.fs-opt.block_device=file,io.katacontainers.fs-opt.is-layer,io.katacontainers.fs-opt.root-hash=8568c70c0ccfe0051092e818da769111a59882cd19dd799d3bca5ffa82791080",
-                    "io.katacontainers.fs-opt.layer=/var/lib/containerd/io.containerd.snapshotter.v1.tardev/layers/2570e3a19e1bf20ddda45498a9627f61555d2d6c01479b9b76460b679b27d552,tar,ro,io.katacontainers.fs-opt.block_device=file,io.katacontainers.fs-opt.is-layer,io.katacontainers.fs-opt.root-hash=b643b6217748983830b26ac14a35a3322dd528c00963eaadd91ef55f513dc73f",
+                    "io.katacontainers.fs-opt.layer-src-prefix=/var/lib/containerd/io.containerd.snapshotter.v1.tardev/layers",
+                    "io.katacontainers.fs-opt.layer=2c342a137e693c7898aec36da1047f191dc7c1687e66198adacc439cf4adf379,tar,ro,io.katacontainers.fs-opt.block_device=file,io.katacontainers.fs-opt.is-layer,io.katacontainers.fs-opt.root-hash=8568c70c0ccfe0051092e818da769111a59882cd19dd799d3bca5ffa82791080",
+                    "io.katacontainers.fs-opt.layer=2570e3a19e1bf20ddda45498a9627f61555d2d6c01479b9b76460b679b27d552,tar,ro,io.katacontainers.fs-opt.block_device=file,io.katacontainers.fs-opt.is-layer,io.katacontainers.fs-opt.root-hash=b643b6217748983830b26ac14a35a3322dd528c00963eaadd91ef55f513dc73f",
                     "io.katacontainers.fs-opt.overlay-rw",
-                    "lowerdir=/run/kata-containers/sandbox/layers/2c342a137e693c7898aec36da1047f191dc7c1687e66198adacc439cf4adf379:/run/kata-containers/sandbox/layers/2570e3a19e1bf20ddda45498a9627f61555d2d6c01479b9b76460b679b27d552"
+                    "lowerdir=2c342a137e693c7898aec36da1047f191dc7c1687e66198adacc439cf4adf379:2570e3a19e1bf20ddda45498a9627f61555d2d6c01479b9b76460b679b27d552"
                 ],
-                "mount_point": "/run/kata-containers/fb3677f1dc4ea7772016525d0e0338a8908f099d0e46dbdfe101644d7134c2ad/rootfs",
+                "mount_point": "/run/kata-containers/shared/containers/a7e7aefb0b1bcb020a9477e3b860c2d37da05c7b582a074de20ac04d3bc8a0bc",
                 "fs_group": {
                     "group_id": 0,
                     "group_change_policy": 0

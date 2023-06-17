@@ -288,14 +288,12 @@ fn get_image_layer_storages(
             });
 
             let mut fs_opt_layer = "io.katacontainers.fs-opt.layer=".to_string();
-            fs_opt_layer += "/var/lib/containerd/io.containerd.snapshotter.v1.tardev/layers/";
             fs_opt_layer += &layer_name;
             fs_opt_layer += ",tar,ro,io.katacontainers.fs-opt.block_device=file,io.katacontainers.fs-opt.is-layer,io.katacontainers.fs-opt.root-hash=";
             fs_opt_layer += &layer.verity_hash;
             overlay_storage.options.push(fs_opt_layer);
 
-            let lowerdir = "/run/kata-containers/sandbox/layers/".to_string() + &layer_name;
-            lowerdirs.push(lowerdir);
+            lowerdirs.push(layer_name);
         }
 
         new_storages.reverse();
@@ -304,12 +302,17 @@ fn get_image_layer_storages(
         }
 
         overlay_storage.options.reverse();
+        overlay_storage.options.insert(0,
+            "io.katacontainers.fs-opt.layer-src-prefix=/var/lib/containerd/io.containerd.snapshotter.v1.tardev/layers".to_string()
+        );
         overlay_storage
             .options
             .push("io.katacontainers.fs-opt.overlay-rw".to_string());
 
         lowerdirs.reverse();
-        overlay_storage.options.push("lowerdir=".to_string() + &lowerdirs.join(":"));
+        overlay_storage
+            .options
+            .push("lowerdir=".to_string() + &lowerdirs.join(":"));
 
         storages.push(overlay_storage);
     }
