@@ -16,7 +16,7 @@ use dragonball::api::v1::{
 use super::DragonballInner;
 use crate::{
     device::DeviceType, HybridVsockConfig, NetworkConfig, ShareFsDeviceConfig, ShareFsMountConfig,
-    ShareFsMountType, ShareFsOperation, VmmState,
+    ShareFsMountType, ShareFsOperation, VfioBusMode, VfioDevice, VmmState,
 };
 
 const MB_TO_B: u32 = 1024 * 1024;
@@ -47,9 +47,7 @@ impl DragonballInner {
             DeviceType::Network(network) => self
                 .add_net_device(&network.config, network.id)
                 .context("add net device"),
-            DeviceType::Vfio(_) => {
-                todo!()
-            }
+            DeviceType::Vfio(hostdev) => self.add_vfio_device(&hostdev).context("add vfio device"),
             DeviceType::Block(block) => self
                 .add_block_device(
                     block.config.path_on_host.as_str(),
@@ -80,11 +78,75 @@ impl DragonballInner {
                 self.remove_block_drive(drive_id.as_str())
                     .context("remove block drive")
             }
-            DeviceType::Vfio(_config) => {
-                todo!()
+            DeviceType::Vfio(hostdev) => {
+                let primary_device = hostdev.devices.first().unwrap().clone();
+                let hostdev_id = primary_device.hostdev_id;
+
+                self.remove_vfio_device(hostdev_id)
             }
             _ => Err(anyhow!("unsupported device {:?}", device)),
         }
+    }
+
+    fn add_vfio_device(&mut self, device: &VfioDevice) -> Result<()> {
+        let vfio_device = device.clone();
+
+        // FIXME:
+        // A device with multi-funtions, or a IOMMU group with one more
+        // devices, the Primary device is selected to be passed to VM.
+        // And the the first one is Primary device.
+        // safe here, devices is not empty.
+        let primary_device = vfio_device.devices.first().unwrap().clone();
+
+        let vendor_device_id = if let Some(vd) = primary_device.device_vendor {
+            vd.get_device_vendor_id()?
+        } else {
+            0
+        };
+
+        let guest_dev_id = if let Some(pci_path) = primary_device.guest_pci_path {
+            // safe here, dragonball's pci device directly connects to root bus.
+            // usually, it has been assigned in vfio device manager.
+            pci_path.get_device_slot().unwrap().0
+        } else {
+            0
+        };
+
+        let bus_mode = VfioBusMode::to_string(vfio_device.bus_mode);
+
+        info!(sl!(), "Mock for dragonball insert host device.");
+        info!(
+            sl!(),
+            " Mock for dragonball insert host device. 
+            host device id: {:?}, 
+            bus_slot_func: {:?}, 
+            bus mod: {:?}, 
+            guest device id: {:?}, 
+            vendor/device id: {:?}",
+            primary_device.hostdev_id,
+            primary_device.bus_slot_func,
+            bus_mode,
+            guest_dev_id,
+            vendor_device_id,
+        );
+
+        // FIXME:
+        // interface implementation to be done when dragonball supports
+        // self.vmm_instance.insert_host_device(host_cfg)?;
+
+        Ok(())
+    }
+
+    fn remove_vfio_device(&mut self, hostdev_id: String) -> Result<()> {
+        info!(
+            sl!(),
+            "Mock for dragonball remove host_device with hostdev id {:?}", hostdev_id
+        );
+        // FIXME:
+        // interface implementation to be done when dragonball supports
+        // self.vmm_instance.remove_host_device(hostdev_id)?;
+
+        Ok(())
     }
 
     fn add_block_device(
