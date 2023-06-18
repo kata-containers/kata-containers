@@ -10,18 +10,17 @@ use anyhow::{anyhow, Context, Result};
 use kata_sys_util::rand::RandomBytes;
 use tokio::sync::{Mutex, RwLock};
 
-use super::{
-    util::{get_host_path, get_virt_drive_name},
-    Device, DeviceConfig, DeviceType,
-};
 use crate::{
-    BlockConfig, BlockDevice, Hypervisor, KATA_BLK_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE,
+    BlockConfig, BlockDevice, Hypervisor, VfioDevice, KATA_BLK_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE,
     VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI,
 };
 
-pub type ArcMutexDevice = Arc<Mutex<dyn Device>>;
+use super::{
+    util::{get_host_path, get_virt_drive_name, DEVICE_TYPE_BLOCK},
+    Device, DeviceConfig, DeviceType,
+};
 
-const DEVICE_TYPE_BLOCK: &str = "b";
+pub type ArcMutexDevice = Arc<Mutex<dyn Device>>;
 
 /// block_index and released_block_index are used to search an available block index
 /// in Sandbox.
@@ -90,9 +89,24 @@ impl DeviceManager {
 
         // handle attach error
         if let Err(e) = result {
-            if let DeviceType::Block(device) = device_guard.get_device_info().await {
-                self.shared_info.release_device_index(device.config.index);
-            };
+            match device_guard.get_device_info().await {
+                DeviceType::Block(device) => {
+                    self.shared_info.release_device_index(device.config.index);
+                }
+                DeviceType::Vfio(device) => {
+                    // safe here:
+                    // Only when vfio dev_type is `b`, virt_path MUST be Some(X),
+                    // and needs do release_device_index. otherwise, let it go.
+                    if device.config.dev_type == DEVICE_TYPE_BLOCK {
+                        self.shared_info
+                            .release_device_index(device.config.virt_path.unwrap().0);
+                    }
+                }
+                _ => {
+                    debug!(sl!(), "no need to do release device index.");
+                }
+            }
+
             drop(device_guard);
             self.devices.remove(device_id);
             return Err(e);
@@ -149,6 +163,11 @@ impl DeviceManager {
                         return Some(device_id.to_string());
                     }
                 }
+                DeviceType::Vfio(device) => {
+                    if device.config.host_path == host_path {
+                        return Some(device_id.to_string());
+                    }
+                }
                 _ => {
                     // TODO: support find other device type
                     continue;
@@ -168,7 +187,7 @@ impl DeviceManager {
 
             Some((current_index, virt_path_name))
         } else {
-            // only dev_type is block, otherwise, it's useless.
+            // only dev_type is block, otherwise, it's None.
             None
         };
 
@@ -181,21 +200,30 @@ impl DeviceManager {
         let device_id = self.new_device_id()?;
         let dev: ArcMutexDevice = match device_config {
             DeviceConfig::BlockCfg(config) => {
-                // try to find the device, found and just return id.
-                if let Some(dev_id_matched) = self.find_device(config.path_on_host.clone()).await {
-                    info!(
-                        sl!(),
-                        "device with host path:{:?} found. just return device id: {:?}",
-                        config.path_on_host.clone(),
-                        dev_id_matched
-                    );
-
-                    return Ok(dev_id_matched);
+                // try to find the device, if found and just return id.
+                if let Some(device_matched_id) = self.find_device(config.path_on_host.clone()).await
+                {
+                    return Ok(device_matched_id);
                 }
 
                 self.create_block_device(config, device_id.clone())
                     .await
                     .context("failed to create device")?
+            }
+            DeviceConfig::VfioCfg(config) => {
+                let mut vfio_dev_config = config.clone();
+                let dev_host_path = vfio_dev_config.host_path.clone();
+                if let Some(device_matched_id) = self.find_device(dev_host_path).await {
+                    return Ok(device_matched_id);
+                }
+
+                let virt_path = self.get_dev_virt_path(vfio_dev_config.dev_type.as_str())?;
+                vfio_dev_config.virt_path = virt_path;
+
+                Arc::new(Mutex::new(VfioDevice::new(
+                    device_id.clone(),
+                    &vfio_dev_config,
+                )))
             }
             _ => {
                 return Err(anyhow!("invliad device type"));
@@ -230,8 +258,7 @@ impl DeviceManager {
         };
         block_config.driver_option = block_driver;
 
-        // generate block device index and virt path
-        // safe here, Block device always has virt_path.
+        // generate virt path
         if let Some(virt_path) = self.get_dev_virt_path(DEVICE_TYPE_BLOCK)? {
             block_config.index = virt_path.0;
             block_config.virt_path = virt_path.1;
@@ -239,10 +266,10 @@ impl DeviceManager {
 
         // if the path on host is empty, we need to get device host path from the device major and minor number
         // Otherwise, it might be rawfile based block device, the host path is already passed from the runtime,
-        // so we don't need to do anything here
+        // so we don't need to do anything here.
         if block_config.path_on_host.is_empty() {
             block_config.path_on_host =
-                get_host_path(DEVICE_TYPE_BLOCK.to_owned(), config.major, config.minor)
+                get_host_path(DEVICE_TYPE_BLOCK, config.major, config.minor)
                     .context("failed to get host path")?;
         }
 

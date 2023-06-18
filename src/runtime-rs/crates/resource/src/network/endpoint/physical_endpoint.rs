@@ -10,7 +10,7 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::device::DeviceType;
 use hypervisor::{device::driver, Hypervisor};
-use hypervisor::{VfioConfig, VfioDevice};
+use hypervisor::{HostDevice, VfioDevice};
 
 use super::endpoint_persist::{EndpointState, PhysicalEndpointState};
 use super::Endpoint;
@@ -111,13 +111,14 @@ impl Endpoint for PhysicalEndpoint {
 
         // add vfio device
         let d = DeviceType::Vfio(VfioDevice {
-            id: format!("physical_nic_{}", self.name().await),
-            config: VfioConfig {
-                sysfs_path: "".to_string(),
+            attach_count: 0,
+            bus_mode: driver::VfioBusMode::new(mode),
+            devices: vec![HostDevice {
+                hostdev_id: format!("physical_nic_{}", self.name().await),
                 bus_slot_func: self.bdf.clone(),
-                mode: driver::VfioBusMode::new(mode)
-                    .with_context(|| format!("new vfio bus mode {:?}", mode))?,
-            },
+                ..Default::default()
+            }],
+            ..Default::default()
         });
         hypervisor.add_device(d).await.context("add device")?;
         Ok(())
