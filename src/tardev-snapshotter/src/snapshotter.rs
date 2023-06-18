@@ -1,3 +1,4 @@
+use base64::prelude::{Engine, BASE64_STANDARD};
 use containerd_snapshots::{api, Info, Kind, Snapshotter, Usage};
 use log::{debug, trace};
 use oci_distribution::{secrets::RegistryAuth, Client, Reference, RegistryOperation};
@@ -128,10 +129,14 @@ impl Store {
             };
 
             let name = name_to_hash(&p);
-            opts.push(format!(
-                "{PREFIX}.layer={name},tar,ro,{PREFIX}.block_device=file,{PREFIX}.is-layer,{PREFIX}.root-hash={root_hash}",
-            ));
+            let layer_info = format!(
+                "{name},tar,ro,{PREFIX}.block_device=file,{PREFIX}.is-layer,{PREFIX}.root-hash={root_hash}");
             layers.push(name);
+
+            opts.push(format!(
+                "{PREFIX}.layer={}",
+                BASE64_STANDARD.encode(layer_info.as_bytes())
+            ));
 
             next_parent = (!info.parent.is_empty()).then_some(info.parent);
         }
