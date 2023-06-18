@@ -10,6 +10,7 @@ package containerdshim
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"os/user"
@@ -63,7 +64,12 @@ func copyLayersToMounts(rootFs *vc.RootFs, spec *specs.Spec) error {
 			continue
 		}
 
-		fields := strings.Split(o[len(annotations.FileSystemLayer):], ",")
+		decoded, err := base64.StdEncoding.DecodeString(o[len(annotations.FileSystemLayer):])
+		if err != nil {
+			return fmt.Errorf("Unable to decode layer %q: %w", o, err)
+		}
+
+		fields := strings.Split(string(decoded), ",")
 		if len(fields) < 2 {
 			return fmt.Errorf("Missing fields in rootfs layer: %q", o)
 		}
