@@ -360,7 +360,7 @@ pub fn get_container_policy(
     }
 
     let mut annotations = BTreeMap::new();
-    infra::get_annotations(&mut annotations, infra_container)?;
+    infra::get_annotations(&mut annotations, infra_container);
     if let Some(name) = k8s_object.get_sandbox_name() {
         annotations.insert("io.kubernetes.cri.sandbox-name".to_string(), name);
     }
@@ -407,7 +407,7 @@ pub fn get_container_policy(
     yaml_container.get_env_variables(&mut process.env, config_maps, &namespace)?;
     substitute_env_variables(&mut process.env);
 
-    infra::get_process(&mut process, &infra_container)?;
+    infra::get_process(&mut process, &infra_container);
     process.noNewPrivileges = !yaml_container.allow_privilege_escalation();
 
     let mut mounts = containerd::get_mounts(is_pause_container, is_privileged);
@@ -416,22 +416,21 @@ pub fn get_container_policy(
         &infra_container.mounts,
         &yaml_container,
         is_pause_container,
-    )?;
+    );
 
     let image_layers = registry_container.get_image_layers();
     let mut storages = Default::default();
     get_image_layer_storages(&mut storages, &image_layers, &root)?;
-
     k8s_object.get_container_mounts_and_storages(
         &mut mounts,
         &mut storages,
         &yaml_container,
         infra_policy,
-    )?;
+    );
 
     let mut linux = containerd::get_linux(is_privileged);
     linux.namespaces = kata::get_namespaces();
-    infra::get_linux(&mut linux, &infra_container.linux)?;
+    infra::get_linux(&mut linux, &infra_container.linux);
 
     let exec_commands = yaml_container.get_exec_commands();
 
@@ -457,7 +456,7 @@ pub fn get_container_mounts_and_storages(
     container: &pod::Container,
     infra_policy: &infra::InfraPolicy,
     volume: &volume::Volume,
-) -> Result<()> {
+) {
     if let Some(volume_mounts) = &container.volumeMounts {
         for volume_mount in volume_mounts {
             if volume_mount.name.eq(&volume.name) {
@@ -466,11 +465,10 @@ pub fn get_container_mounts_and_storages(
                     storages,
                     volume,
                     volume_mount,
-                )?;
+                );
             }
         }
     }
-    Ok(())
 }
 
 fn substitute_env_variables(env: &mut Vec<String>) {

@@ -80,8 +80,7 @@ impl yaml::K8sResource for List {
         _storages: &mut Vec<policy::SerializedStorage>,
         _container: &pod::Container,
         _infra_policy: &infra::InfraPolicy,
-    ) -> anyhow::Result<()> {
-        Ok(())
+    ) {
     }
 
     fn generate_policy(

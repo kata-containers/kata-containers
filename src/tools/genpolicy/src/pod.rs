@@ -489,7 +489,7 @@ impl yaml::K8sResource for Pod {
         storages: &mut Vec<policy::SerializedStorage>,
         container: &Container,
         infra_policy: &infra::InfraPolicy,
-    ) -> Result<()> {
+    ) {
         if let Some(volumes) = &self.spec.volumes {
             yaml::get_container_mounts_and_storages(
                 policy_mounts,
@@ -497,9 +497,7 @@ impl yaml::K8sResource for Pod {
                 container,
                 infra_policy,
                 volumes,
-            )
-        } else {
-            Ok(())
+            );
         }
     }
 

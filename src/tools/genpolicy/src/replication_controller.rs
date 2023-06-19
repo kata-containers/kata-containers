@@ -94,7 +94,7 @@ impl yaml::K8sResource for ReplicationController {
         storages: &mut Vec<policy::SerializedStorage>,
         container: &pod::Container,
         infra_policy: &infra::InfraPolicy,
-    ) -> anyhow::Result<()> {
+    ) {
         if let Some(volumes) = &self.spec.template.spec.volumes {
             yaml::get_container_mounts_and_storages(
                 policy_mounts,
@@ -102,9 +102,7 @@ impl yaml::K8sResource for ReplicationController {
                 container,
                 infra_policy,
                 volumes,
-            )
-        } else {
-            Ok(())
+            );
         }
     }
 

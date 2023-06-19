@@ -96,7 +96,7 @@ impl yaml::K8sResource for StatefulSet {
         _storages: &mut Vec<policy::SerializedStorage>,
         _container: &pod::Container,
         _infra_policy: &infra::InfraPolicy,
-    ) -> anyhow::Result<()> {
+    ) {
         // Example:
         //
         // containers:
@@ -123,21 +123,21 @@ impl yaml::K8sResource for StatefulSet {
                         for claim in claims {
                             if let Some(claim_name) = &claim.metadata.name {
                                 if claim_name.eq(&mount.name) {
-                                    if let Some(file_name) = Path::new(&mount.mountPath).file_name()
-                                    {
-                                        if let Some(file_name) = file_name.to_str() {
-                                            // TODO:
-                                            // - Get the source path below from the infra module.
-                                            // - Generate proper options value.
-                                            policy_mounts.push(oci::Mount {
-                                                destination: mount.mountPath.clone(),
-                                                r#type: "bind".to_string(),
-                                                source: "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-".to_string() 
-                                                    + &file_name + "$",
-                                                options: vec!["rbind".to_string(), "rprivate".to_string(), "rw".to_string()],
-                                            });
-                                        }
-                                    }
+                                    let file_name = Path::new(&mount.mountPath)
+                                        .file_name()
+                                        .unwrap()
+                                        .to_str()
+                                        .unwrap();
+                                    // TODO:
+                                    // - Get the source path below from the infra module.
+                                    // - Generate proper options value.
+                                    policy_mounts.push(oci::Mount {
+                                        destination: mount.mountPath.clone(),
+                                        r#type: "bind".to_string(),
+                                        source: "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-".to_string() 
+                                            + &file_name + "$",
+                                        options: vec!["rbind".to_string(), "rprivate".to_string(), "rw".to_string()],
+                                    });
                                 }
                             }
                         }
@@ -145,8 +145,6 @@ impl yaml::K8sResource for StatefulSet {
                 }
             }
         }
-
-        Ok(())
     }
 
     fn generate_policy(

@@ -70,7 +70,7 @@ pub trait K8sResource {
         storages: &mut Vec<policy::SerializedStorage>,
         container: &pod::Container,
         infra_policy: &infra::InfraPolicy,
-    ) -> anyhow::Result<()>;
+    );
 }
 
 /// See Reference / Kubernetes API / Common Definitions / LabelSelector.
@@ -224,7 +224,7 @@ pub fn get_container_mounts_and_storages(
     container: &pod::Container,
     infra_policy: &infra::InfraPolicy,
     volumes: &Vec<volume::Volume>,
-) -> anyhow::Result<()> {
+) {
     for volume in volumes {
         policy::get_container_mounts_and_storages(
             policy_mounts,
@@ -232,10 +232,8 @@ pub fn get_container_mounts_and_storages(
             container,
             infra_policy,
             &volume,
-        )?;
+        );
     }
-
-    Ok(())
 }
 
 pub fn generate_policy(
