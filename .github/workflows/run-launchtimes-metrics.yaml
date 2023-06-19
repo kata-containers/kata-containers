@@ -17,3 +17,8 @@ jobs:
 
       - name: run launch times on clh
         run:  bash tests/metrics/gha-run.sh run-test-launchtimes-clh
+
+      - name: get-kata-tarball
+        uses: actions/download-artifact@v3
+        with:
+          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
