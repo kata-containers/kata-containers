@@ -49,8 +49,6 @@ pub trait K8sResource {
         silent_unsupported_fields: bool,
     ) -> anyhow::Result<()>;
 
-    fn requires_policy(&self) -> bool;
-
     fn generate_policy(
         &mut self,
         rules: &str,

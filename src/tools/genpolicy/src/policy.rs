@@ -187,39 +187,35 @@ impl AgentPolicy {
     }
 
     pub fn export_policy(&mut self, config: &utils::Config) -> Result<()> {
-        let mut yaml_string = String::new();
-
-        for k8s_object in &mut self.k8s_objects {
-            if k8s_object.requires_policy() {
-                if let Ok(rules) = read_to_string(&self.rules_input_file) {
-                    k8s_object.generate_policy(
-                        &rules,
-                        &self.infra_policy,
-                        &self.config_maps,
-                        config,
-                    )?;
-                } else {
-                    panic!("Cannot open file {}. Please copy it to the current directory or specify the path to it using the -i parameter.", 
-                        &self.rules_input_file);
-                }
+        if let Ok(rules) = read_to_string(&self.rules_input_file) {
+            let mut yaml_string = String::new();
+            for k8s_object in &mut self.k8s_objects {
+                k8s_object.generate_policy(
+                    &rules,
+                    &self.infra_policy,
+                    &self.config_maps,
+                    config,
+                )?;
+                yaml_string += &k8s_object.serialize()?;
             }
 
-            yaml_string += &k8s_object.serialize()?;
-        }
-
-        if let Some(yaml_file) = &config.yaml_file {
-            std::fs::OpenOptions::new()
-                .write(true)
-                .truncate(true)
-                .create(true)
-                .open(yaml_file)
-                .map_err(|e| anyhow!(e))?
-                .write_all(&yaml_string.as_bytes())
-                .map_err(|e| anyhow!(e))
+            if let Some(yaml_file) = &config.yaml_file {
+                std::fs::OpenOptions::new()
+                    .write(true)
+                    .truncate(true)
+                    .create(true)
+                    .open(yaml_file)
+                    .map_err(|e| anyhow!(e))?
+                    .write_all(&yaml_string.as_bytes())
+                    .map_err(|e| anyhow!(e))
+            } else {
+                std::io::stdout()
+                    .write_all(&yaml_string.as_bytes())
+                    .map_err(|e| anyhow!(e))
+            }
         } else {
-            std::io::stdout()
-                .write_all(&yaml_string.as_bytes())
-                .map_err(|e| anyhow!(e))
+            panic!("Cannot open file {}. Please copy it to the current directory or specify the path to it using the -i parameter.", 
+                &self.rules_input_file);
         }
     }
 }

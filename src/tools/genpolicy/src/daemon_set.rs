@@ -93,10 +93,6 @@ impl yaml::K8sResource for DaemonSet {
         Ok(())
     }
 
-    fn requires_policy(&self) -> bool {
-        true
-    }
-
     fn get_metadata_name(&self) -> anyhow::Result<String> {
         self.metadata.get_name()
     }

@@ -58,16 +58,6 @@ impl yaml::K8sResource for List {
         Ok(())
     }
 
-    fn requires_policy(&self) -> bool {
-        for resource in &self.resources {
-            if resource.requires_policy() {
-                return true;
-            }
-        }
-
-        false
-    }
-
     fn get_metadata_name(&self) -> anyhow::Result<String> {
         panic!("Unsupported");
     }
@@ -102,9 +92,7 @@ impl yaml::K8sResource for List {
         config: &utils::Config,
     ) -> anyhow::Result<()> {
         for resource in &mut self.resources {
-            if resource.requires_policy() {
-                resource.generate_policy(rules, infra_policy, config_maps, config)?;
-            }
+            resource.generate_policy(rules, infra_policy, config_maps, config)?;
         }
 
         Ok(())

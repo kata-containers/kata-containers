@@ -86,10 +86,6 @@ impl yaml::K8sResource for ConfigMap {
         Ok(())
     }
 
-    fn requires_policy(&self) -> bool {
-        false
-    }
-
     fn get_metadata_name(&self) -> anyhow::Result<String> {
         panic!("Unsupported");
     }
@@ -123,7 +119,7 @@ impl yaml::K8sResource for ConfigMap {
         _config_map: &Vec<config_map::ConfigMap>,
         _config: &utils::Config,
     ) -> anyhow::Result<()> {
-        panic!("Unsupported");
+        Ok(())
     }
 
     fn serialize(&mut self) -> anyhow::Result<String> {
