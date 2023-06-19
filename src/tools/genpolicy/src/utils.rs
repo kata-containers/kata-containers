@@ -5,6 +5,7 @@
 
 use log::debug;
 
+#[derive(Clone, Debug)]
 pub struct Config {
     pub use_cache: bool,
 

@@ -32,6 +32,7 @@ pub struct AgentPolicy {
     config_maps: Vec<config_map::ConfigMap>,
     rules_input_file: String,
     infra_policy: infra::InfraPolicy,
+    config: utils::Config,
 }
 
 // Example:
@@ -183,10 +184,11 @@ impl AgentPolicy {
             rules_input_file: config.rules_file.to_string(),
             infra_policy,
             config_maps,
+            config: config.clone(),
         })
     }
 
-    pub fn export_policy(&mut self, config: &utils::Config) -> Result<()> {
+    pub fn export_policy(&mut self) -> Result<()> {
         if let Ok(rules) = read_to_string(&self.rules_input_file) {
             let mut yaml_string = String::new();
             for k8s_object in &mut self.k8s_objects {
@@ -194,12 +196,12 @@ impl AgentPolicy {
                     &rules,
                     &self.infra_policy,
                     &self.config_maps,
-                    config,
+                    &self.config,
                 )?;
                 yaml_string += &k8s_object.serialize();
             }
 
-            if let Some(yaml_file) = &config.yaml_file {
+            if let Some(yaml_file) = &self.config.yaml_file {
                 std::fs::OpenOptions::new()
                     .write(true)
                     .truncate(true)

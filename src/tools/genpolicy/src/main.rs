@@ -62,7 +62,7 @@ async fn main() {
         config_map_files.push(config_map_file.clone());
     }
 
-    let in_out_files = utils::Config::new(
+    let config = utils::Config::new(
         args.use_cached_files,
         args.yaml_file,
         args.input_files_path,
@@ -72,12 +72,12 @@ async fn main() {
     );
 
     debug!("Creating policy from yaml, infra data and rules files...");
-    let mut policy = policy::AgentPolicy::from_files(&in_out_files)
+    let mut policy = policy::AgentPolicy::from_files(&config)
         .await
         .unwrap();
 
     debug!("Exporting policy to yaml file...");
-    if let Err(e) = policy.export_policy(&in_out_files) {
+    if let Err(e) = policy.export_policy() {
         println!("export_policy failed: {:?}", e);
         std::process::exit(1);
     }
