@@ -3,14 +3,25 @@ on:
   pull_request_target:
     branches:
       - 'main'
+    types:
+      # Adding 'labeled' to the list of activity types that trigger this event
+      # (default: opened, synchronize, reopened) so that we can run this
+      # workflow when the 'ok-to-test' label is added.
+      # Reference: https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#pull_request_target
+      - opened
+      - synchronize
+      - reopened
+      - labeled
 
 jobs:
   build-kata-static-tarball-amd64:
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
     uses: ./.github/workflows/build-kata-static-tarball-amd64.yaml
     with:
       tarball-suffix: -${{ github.event.pull_request.number}}-${{ github.event.pull_request.head.sha }}
 
   publish-kata-deploy-payload-amd64:
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
     needs: build-kata-static-tarball-amd64
     uses: ./.github/workflows/publish-kata-deploy-payload-amd64.yaml
     with:
@@ -21,6 +32,7 @@ jobs:
     secrets: inherit
 
   run-k8s-tests-on-aks:
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
     needs: publish-kata-deploy-payload-amd64
     uses: ./.github/workflows/run-k8s-tests-on-aks.yaml
     with:
@@ -30,6 +42,7 @@ jobs:
     secrets: inherit
 
   run-k8s-tests-on-sev:
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
     needs: publish-kata-deploy-payload-amd64
     uses: ./.github/workflows/run-k8s-tests-on-sev.yaml
     with:
@@ -38,6 +51,7 @@ jobs:
       tag: ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-amd64
 
   run-k8s-tests-on-snp:
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
     needs: publish-kata-deploy-payload-amd64
     uses: ./.github/workflows/run-k8s-tests-on-snp.yaml
     with:
@@ -46,6 +60,7 @@ jobs:
       tag: ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-amd64
 
   run-k8s-tests-on-tdx:
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
     needs: publish-kata-deploy-payload-amd64
     uses: ./.github/workflows/run-k8s-tests-on-tdx.yaml
     with:
@@ -54,6 +69,7 @@ jobs:
       tag: ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-amd64
 
   run-metrics-tests:
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
     needs: build-kata-static-tarball-amd64
     uses: ./.github/workflows/run-metrics.yaml
     with:
