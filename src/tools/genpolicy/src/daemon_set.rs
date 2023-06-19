@@ -140,8 +140,6 @@ impl yaml::K8sResource for DaemonSet {
             config_maps,
             config,
             self,
-            &self.registry_containers,
-            &self.spec.template.spec.containers,
         )?;
         Ok(())
     }
@@ -153,5 +151,12 @@ impl yaml::K8sResource for DaemonSet {
             &self.encoded_policy,
         );
         serde_yaml::to_string(&self.doc_mapping).unwrap()
+    }
+
+    fn get_containers(&self) -> (&Vec<registry::Container>, &Vec<pod::Container>) {
+        (
+            &self.registry_containers,
+            &self.spec.template.spec.containers,
+        )
     }
 }

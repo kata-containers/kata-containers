@@ -514,8 +514,6 @@ impl yaml::K8sResource for Pod {
             config_maps,
             config,
             self,
-            &self.registry_containers,
-            &self.spec.containers,
         )?;
 
         Ok(())
@@ -524,6 +522,13 @@ impl yaml::K8sResource for Pod {
     fn serialize(&mut self) -> String {
         yaml::add_policy_annotation(&mut self.doc_mapping, "metadata", &self.encoded_policy);
         serde_yaml::to_string(&self.doc_mapping).unwrap()
+    }
+
+    fn get_containers(&self) -> (&Vec<registry::Container>, &Vec<Container>) {
+        (
+            &self.registry_containers,
+            &self.spec.containers,
+        )
     }
 }
 

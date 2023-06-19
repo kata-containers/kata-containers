@@ -10,6 +10,7 @@ use crate::config_map;
 use crate::infra;
 use crate::pod;
 use crate::policy;
+use crate::registry;
 use crate::utils;
 use crate::yaml;
 
@@ -69,5 +70,9 @@ impl yaml::K8sResource for NoPolicyResource {
 
     fn serialize(&mut self) -> String {
         self.yaml.clone()
+    }
+
+    fn get_containers(&self) -> (&Vec<registry::Container>, &Vec<pod::Container>) {
+        panic!("Unsupported");
     }
 }

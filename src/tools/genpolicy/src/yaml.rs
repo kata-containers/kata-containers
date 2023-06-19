@@ -71,6 +71,8 @@ pub trait K8sResource {
         container: &pod::Container,
         infra_policy: &infra::InfraPolicy,
     );
+
+    fn get_containers(&self) -> (&Vec<registry::Container>, &Vec<pod::Container>);
 }
 
 /// See Reference / Kubernetes API / Common Definitions / LabelSelector.
@@ -242,9 +244,8 @@ pub fn generate_policy(
     config_maps: &Vec<config_map::ConfigMap>,
     config: &utils::Config,
     k8s_object: &dyn K8sResource,
-    registry_containers: &Vec<registry::Container>,
-    yaml_containers: &Vec<pod::Container>,
 ) -> anyhow::Result<String> {
+    let (registry_containers, yaml_containers) = k8s_object.get_containers();
     let mut policy_containers = Vec::new();
 
     for i in 0..yaml_containers.len() {

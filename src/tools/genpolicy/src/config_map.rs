@@ -11,6 +11,7 @@ use crate::infra;
 use crate::obj_meta;
 use crate::pod;
 use crate::policy;
+use crate::registry;
 use crate::utils;
 use crate::yaml;
 
@@ -124,5 +125,9 @@ impl yaml::K8sResource for ConfigMap {
 
     fn serialize(&mut self) -> String {
         serde_yaml::to_string(&self).unwrap()
+    }
+
+    fn get_containers(&self) -> (&Vec<registry::Container>, &Vec<pod::Container>) {
+        panic!("Unsupported");
     }
 }
