@@ -56,3 +56,5 @@ jobs:
   run-metrics-tests:
     needs: build-kata-static-tarball-amd64
     uses: ./.github/workflows/run-launchtimes-metrics.yaml
+    with:
+      tarball-suffix: -${{ github.event.pull_request.number}}-${{ github.event.pull_request.head.sha }}

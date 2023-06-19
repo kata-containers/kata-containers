@@ -18,10 +18,6 @@ function run_test_launchtimes() {
 
 	if [ "${hypervisor}" = 'qemu' ]; then
 		echo "qemu"
-		echo "Check kata installation"
-		kata-runtime kata-env
-		echo "Kata config:"
-		cat $(kata-runtime kata-env  --json | jq .Runtime.Config.Path -r)
 	elif [ "${hypervisor}" = 'clh' ]; then
 		echo "clh"
 	fi
