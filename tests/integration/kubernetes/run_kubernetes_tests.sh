@@ -23,6 +23,7 @@ else
 	K8S_TEST_SMALL_HOST_UNION=( \
 		"k8s-confidential.bats" \
 		"k8s-attach-handlers.bats" \
+		"k8s-block-volume.bats" \
 		"k8s-caps.bats" \
 		"k8s-configmap.bats" \
 		"k8s-copy-file.bats" \
