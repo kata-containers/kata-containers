@@ -8,13 +8,11 @@
 MK_DIR :=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 SED := sed
 YQ := $(MK_DIR)/yq
-SNAPCRAFT_FILE := ../../snap/snapcraft.yaml
 VERSIONS_YAML_FILE := ../../versions.yaml
 VERSION_FILE := ../../VERSION
 
 export MK_DIR
 export YQ
-export SNAPCRAFT_FILE
 export VERSION_FILE
 export VERSIONS_YAML_FILE
 
@@ -25,10 +23,4 @@ test-static-build:
 $(YQ):
 	@bash -c "source scripts/lib.sh; install_yq $${MK_DIR}"
 
-snap: $(YQ)
-	@if [ "$$(cat $(VERSION_FILE))" != "$$($(YQ) r $(SNAPCRAFT_FILE) version)" ]; then \
-		>&2 echo "Warning: $(SNAPCRAFT_FILE) version is different to upstream $(VERSION_FILE) file"; \
-	fi
-	snapcraft -d --destructive-mode
-
-.PHONY: test-static-build snap
+.PHONY: test-static-build

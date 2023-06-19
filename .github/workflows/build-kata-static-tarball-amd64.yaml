@@ -2,6 +2,10 @@ name: CI | Build kata-static tarball for amd64
 on:
   workflow_call:
     inputs:
+      stage:
+        required: false
+        type: string
+        default: test
       tarball-suffix:
         required: false
         type: string
@@ -15,8 +19,11 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
+        stage:
+          - ${{ inputs.stage }}
         asset:
           - cloud-hypervisor
+          - cloud-hypervisor-glibc
           - firecracker
           - kernel
           - kernel-sev
@@ -32,11 +39,16 @@ jobs:
           - qemu-snp-experimental
           - qemu-tdx-experimental
           - rootfs-image
+          - rootfs-image-tdx
           - rootfs-initrd
+          - rootfs-initrd-mariner
           - rootfs-initrd-sev
           - shim-v2
           - tdvf
           - virtiofsd
+        exclude:
+          - stage: release
+            asset: cloud-hypervisor-glibc
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}

@@ -45,6 +45,8 @@
 - [How to run Kata Containers with `nydus`](how-to-use-virtio-fs-nydus-with-kata.md)
 - [How to run Kata Containers with AMD SEV-SNP](how-to-run-kata-containers-with-SNP-VMs.md)
 - [How to use EROFS to build rootfs in Kata Containers](how-to-use-erofs-build-rootfs.md)
+- [How to run Kata Containers with kinds of Block Volumes](how-to-run-kata-containers-with-kinds-of-Block-Volumes.md)
+
 ## Confidential Containers
 - [How to use build and test the Confidential Containers `CCv0` proof of concept](how-to-build-and-test-ccv0.md)
 - [How to generate a Kata Containers payload for the Confidential Containers Operator](how-to-generate-a-kata-containers-payload-for-the-confidential-containers-operator.md)

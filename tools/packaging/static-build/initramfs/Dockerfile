@@ -14,12 +14,13 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 ENV TZ=UTC
 RUN apt-get update &&\
     apt-get --no-install-recommends install -y software-properties-common &&\
+    add-apt-repository ppa:git-core/ppa -y &&\
     apt-get update && apt-get upgrade -y && \
     apt-get --no-install-recommends install -y \
 	    apt-utils \
 	    asciidoctor \
 	    autoconf \
-            autopoint \
+	    autopoint \
 	    automake \
 	    busybox-static \
 	    ca-certificates \
@@ -31,8 +32,8 @@ RUN apt-get update &&\
 	    libblkid-dev \
 	    libselinux1-dev \
 	    libtool \
-            libpopt-dev \
-            libjson-c-dev \
+	    libpopt-dev \
+	    libjson-c-dev \
 	    libssl-dev \
 	    make \
 	    ninja-build \

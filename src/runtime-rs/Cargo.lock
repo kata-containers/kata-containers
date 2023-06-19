@@ -242,6 +242,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "debc29dde2e69f9e47506b525f639ed42300fc014a3e007832592448fa8e4599"
 
 [[package]]
+name = "atty"
+version = "0.2.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9b39be18770d11421cdb1b9947a45dd3f37e93092cbf377614828a319d5fee8"
+dependencies = [
+ "hermit-abi 0.1.19",
+ "libc",
+ "winapi",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -644,11 +655,12 @@ dependencies = [
 
 [[package]]
 name = "dbs-address-space"
-version = "0.2.2"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6bcc37dc0b8ffae1c5911d13ae630dc7a9020fa0de0edd178d6ab71daf56c8fc"
+checksum = "95e20d28a9cd13bf00d0ecd1bd073d242242b04f0acb663d7adfc659f8879322"
 dependencies = [
  "arc-swap",
+ "lazy_static",
  "libc",
  "nix 0.23.2",
  "thiserror",
@@ -682,9 +694,9 @@ dependencies = [
 
 [[package]]
 name = "dbs-boot"
-version = "0.3.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a74a8c05a1674d3032e610b4f201c7440c345559bad3dfe6b455ce195785108"
+checksum = "5466a92f75aa928a9103dcb2088f6d1638ef9da8945fad7389a73864dfa0182c"
 dependencies = [
  "dbs-arch",
  "kvm-bindings",
@@ -735,9 +747,9 @@ dependencies = [
 
 [[package]]
 name = "dbs-upcall"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "699e62afa444ae4b00d474fd91bc37785ba050acdfbe179731c81898e32efc3f"
+checksum = "ea3a78128fd0be8b8b10257675c262b378dc5d00b1e18157736a6c27e45ce4fb"
 dependencies = [
  "anyhow",
  "dbs-utils",
@@ -765,9 +777,9 @@ dependencies = [
 
 [[package]]
 name = "dbs-virtio-devices"
-version = "0.2.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88e5c6c48b766afb95851b04b6b193871a59d0b2a3ed19990d4f8f651ae5c668"
+checksum = "24d671cc3e5f98b84ef6b6bed007d28f72f16d3aea8eb38e2d42b00b2973c1d8"
 dependencies = [
  "byteorder",
  "caps",
@@ -781,7 +793,7 @@ dependencies = [
  "kvm-ioctls",
  "libc",
  "log",
- "nix 0.23.2",
+ "nix 0.24.3",
  "nydus-api",
  "nydus-blobfs",
  "nydus-rafs",
@@ -825,6 +837,27 @@ dependencies = [
  "block-buffer 0.10.3",
  "crypto-common",
  "subtle",
+]
+
+[[package]]
+name = "dirs-next"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b98cf8ebf19c3d1b223e151f99a4f9f0690dca41414773390fc824184ac833e1"
+dependencies = [
+ "cfg-if 1.0.0",
+ "dirs-sys-next",
+]
+
+[[package]]
+name = "dirs-sys-next"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ebda144c4fe02d1f7ea1a7d9641b6fc6b580adcfa024ae48797ecdeb6825b4d"
+dependencies = [
+ "libc",
+ "redox_users",
+ "winapi",
 ]
 
 [[package]]
@@ -1214,6 +1247,15 @@ checksum = "95505c38b4572b2d910cecb0281560f54b440a19336cbbcb27bf6ce6adc6f5a8"
 
 [[package]]
 name = "hermit-abi"
+version = "0.1.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62b467343b94ba476dcb2500d242dadbb39557df889310ac77c5d99100aaac33"
+dependencies = [
+ "libc",
+]
+
+[[package]]
+name = "hermit-abi"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee512640fe35acbfb4bb779db6f0d80704c2cacfa2e39b601ef3e3f47d1ae4c7"
@@ -1481,6 +1523,7 @@ dependencies = [
  "num_cpus",
  "oci",
  "regex",
+ "safe-path 0.1.0",
  "serde",
  "serde_json",
  "slog",
@@ -1618,6 +1661,7 @@ dependencies = [
  "slog-async",
  "slog-json",
  "slog-scope",
+ "slog-term",
 ]
 
 [[package]]
@@ -1845,7 +1889,16 @@ version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fac9e2da13b5eb447a6ce3d392f23a29d8694bff781bf03a16cd9ac8697593b"
 dependencies = [
- "hermit-abi",
+ "hermit-abi 0.2.6",
+ "libc",
+]
+
+[[package]]
+name = "num_threads"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2819ce041d2ee131036f4fc9d6ae7ae125a3a40e97ba64d04fe799ad9dabbb44"
+dependencies = [
  "libc",
 ]
 
@@ -2434,6 +2487,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "redox_users"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b033d837a7cf162d7993aded9304e30a83213c648b6e389db233191f891e5c2b"
+dependencies = [
+ "getrandom 0.2.8",
+ "redox_syscall",
+ "thiserror",
+]
+
+[[package]]
 name = "regex"
 version = "1.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2845,6 +2909,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "slog-term"
+version = "2.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "87d29185c55b7b258b4f120eab00f48557d4d9bc814f41713f449d35b0f8977c"
+dependencies = [
+ "atty",
+ "slog",
+ "term",
+ "thread_local",
+ "time 0.3.20",
+]
+
+[[package]]
 name = "smallvec"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2963,6 +3040,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "term"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c59df8ac95d96ff9bede18eb7300b0fda5e5d8d90960e76f8e14ae765eedbf1f"
+dependencies = [
+ "dirs-next",
+ "rustversion",
+ "winapi",
+]
+
+[[package]]
 name = "termcolor"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3042,6 +3130,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cd0cbfecb4d19b5ea75bb31ad904eb5b9fa13f21079c3b92017ebdf4999a5890"
 dependencies = [
  "itoa",
+ "libc",
+ "num_threads",
  "serde",
  "time-core",
  "time-macros",

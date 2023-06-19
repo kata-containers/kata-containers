@@ -26,6 +26,7 @@ final_initrd_name="kata-containers-initrd"
 image_initrd_extension=".img"
 
 arch_target="$(uname -m)"
+final_image_name="kata-containers"
 final_initrd_name="kata-containers-initrd"
 image_initrd_extension=".img"
 
@@ -105,6 +106,7 @@ main() {
 	image_type=image
 	destdir="$PWD"
 	prefix="/opt/kata"
+	image_suffix=""
 	image_initrd_suffix=""
 	root_hash_suffix=""
 	builddir="${PWD}"
@@ -133,16 +135,11 @@ main() {
 					initrd_os_version=$(get_from_kata_deps "assets.initrd.architecture.${arch_target}.sev.version")
 					initrd_name="kata-${initrd_distro}-${initrd_os_version}-${image_initrd_suffix}.${image_type}"
 					final_initrd_name="${final_initrd_name}-${image_initrd_suffix}"
-				elif [ -n "${image_initrd_suffix}" ]; then
+				elif [ "${image_initrd_suffix}" == "tdx" ]; then
 					img_distro=$(get_from_kata_deps "assets.image.architecture.${arch_target}.name")
 					img_os_version=$(get_from_kata_deps "assets.image.architecture.${arch_target}.version")
 					image_name="kata-${img_distro}-${img_os_version}-${image_initrd_suffix}.${image_type}"
 					final_image_name="${final_image_name}-${image_initrd_suffix}"
-
-					initrd_distro=$(get_from_kata_deps "assets.initrd.architecture.${arch_target}.name")
-					initrd_os_version=$(get_from_kata_deps "assets.initrd.architecture.${arch_target}.version")
-					initrd_name="kata-${initrd_distro}-${initrd_os_version}-${image_initrd_suffix}.${image_type}"
-					final_initrd_name="${final_initrd_name}-${image_initrd_suffix}"
 				fi
 				;;
 			root_hash_suffix=*)

@@ -7,7 +7,7 @@ OS_NAME=ubuntu
 OS_VERSION=${OS_VERSION:-focal}
 PACKAGES="chrony iptables dbus kmod"
 [ "$AGENT_INIT" = no ] && PACKAGES+=" init"
-[ "$KATA_BUILD_CC" = yes ] && PACKAGES+=" cryptsetup-bin e2fsprogs"
+[ "$MEASURED_ROOTFS" = yes ] && PACKAGES+=" cryptsetup-bin e2fsprogs"
 [ "$SECCOMP" = yes ] && PACKAGES+=" libseccomp2"
 REPO_URL=http://ports.ubuntu.com
 

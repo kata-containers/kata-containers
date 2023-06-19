@@ -8,7 +8,7 @@
 export GOPATH=${GOPATH:-${HOME}/go}
 export tests_repo="${tests_repo:-github.com/kata-containers/tests}"
 export tests_repo_dir="$GOPATH/src/$tests_repo"
-export CC_BUILDER_REGISTRY="quay.io/kata-containers/cc-builders"
+export CC_BUILDER_REGISTRY="${CC_BUILDER_REGISTRY:-quay.io/kata-containers/cc-builders}"
 export PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-"no"}"
 
 this_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

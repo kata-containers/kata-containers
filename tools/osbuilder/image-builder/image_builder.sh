@@ -11,7 +11,7 @@ set -o errexit
 set -o pipefail
 
 DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
-KATA_BUILD_CC=${KATA_BUILD_CC:-no}
+MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
 
 readonly script_name="${0##*/}"
 readonly script_dir=$(dirname "$(readlink -f "$0")")
@@ -186,7 +186,7 @@ build_with_container() {
 		   --env BLOCK_SIZE="${block_size}" \
 		   --env ROOT_FREE_SPACE="${root_free_space}" \
 		   --env NSDAX_BIN="${nsdax_bin}" \
-		   --env KATA_BUILD_CC="${KATA_BUILD_CC}" \
+		   --env MEASURED_ROOTFS="${MEASURED_ROOTFS}" \
 		   --env SELINUX="${SELINUX}" \
 		   --env DEBUG="${DEBUG}" \
 		   -v /dev:/dev \
@@ -394,7 +394,7 @@ create_disk() {
 	# The partition is the rootfs content
 	info "Creating partitions"
 
-	if [ "${KATA_BUILD_CC}" == "yes" ]; then
+	if [ "${MEASURED_ROOTFS}" == "yes" ]; then
 		info "Creating partitions with hash device"
 		# The hash data will take less than one percent disk space to store
 		hash_start=$(echo $img_size | awk '{print $1 * 0.99}' |cut -d $(locale decimal_point) -f 1)
@@ -504,7 +504,7 @@ create_rootfs_image() {
 		fsck.ext4 -D -y "${device}p1"
 	fi
 
-	if [ "${KATA_BUILD_CC}" == "yes" ] && [ -b "${device}p2" ]; then
+	if [ "${MEASURED_ROOTFS}" == "yes" ] && [ -b "${device}p2" ]; then
 		info "veritysetup format rootfs device: ${device}p1, hash device: ${device}p2"
 		local image_dir=$(dirname "${image}")
 		veritysetup format "${device}p1" "${device}p2" > "${image_dir}"/root_hash.txt 2>&1

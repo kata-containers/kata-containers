@@ -30,6 +30,7 @@ package_output_dir="${package_output_dir:-}"
 [ -n "${lvm2_repo}" ] || die "Failed to get lvm2 repo"
 [ -n "${lvm2_version}" ] || die "Failed to get lvm2 version"
 
+
 container_image="${INITRAMFS_CONTAINER_BUILDER:-$(get_initramfs_image_name)}"
 
 sudo docker pull ${container_image} || (sudo docker build \

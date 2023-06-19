@@ -186,16 +186,11 @@ func (v *virtiofsd) args(FdSocketNumber uint) ([]string, error) {
 		// Send logs to syslog
 		"--syslog",
 		// cache mode for virtiofsd
-		"-o", "cache=" + v.cache,
-		// disable posix locking in daemon: bunch of basic posix locks properties are broken
-		// apt-get update is broken if enabled
-		"-o", "no_posix_lock",
+		"--cache=" + v.cache,
 		// shared directory tree
-		"-o", "source=" + v.sourcePath,
+		"--shared-dir=" + v.sourcePath,
 		// fd number of vhost-user socket
 		fmt.Sprintf("--fd=%v", FdSocketNumber),
-		// foreground operation
-		"-f",
 	}
 
 	if len(v.extraArgs) != 0 {

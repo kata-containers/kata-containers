@@ -14,6 +14,6 @@ RUN ([ -n "$http_proxy" ] && \
         gdisk \
         parted \
         qemu-img \
-	veritysetup \
+        veritysetup \
         xfsprogs && \
     dnf clean all
