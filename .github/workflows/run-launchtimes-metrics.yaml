@@ -1,6 +1,10 @@
 name: CI | Run launch-times metrics
 on:
   workflow_call:
+    inputs:
+      tarball-suffix:
+        required: false
+        type: string
 
 jobs:
   launch-times-tests:
@@ -12,13 +16,13 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
+      - name: get-kata-tarball
+        uses: actions/download-artifact@v3
+        with:
+          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
+
       - name: run launch times on qemu
         run: bash tests/metrics/gha-run.sh run-test-launchtimes-qemu
 
       - name: run launch times on clh
         run:  bash tests/metrics/gha-run.sh run-test-launchtimes-clh
-
-      - name: get-kata-tarball
-        uses: actions/download-artifact@v3
-        with:
-          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
