@@ -22,6 +22,7 @@ shims=(
 	"qemu-snp"
 	"clh"
 	"dragonball"
+	"remote"
 )
 
 default_shim="qemu"
