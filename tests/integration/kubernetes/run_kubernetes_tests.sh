@@ -47,6 +47,7 @@ else
 		"k8s-projected-volume.bats" \
 		"k8s-qos-pods.bats" \
 		"k8s-replication.bats" \
+		"k8s-ro-volume.bats" \
 		"k8s-scale-nginx.bats" \
 		"k8s-seccomp.bats" \
 		"k8s-sysctls.bats" \
