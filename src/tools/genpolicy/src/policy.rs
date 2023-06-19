@@ -196,7 +196,7 @@ impl AgentPolicy {
                     &self.config_maps,
                     config,
                 )?;
-                yaml_string += &k8s_object.serialize()?;
+                yaml_string += &k8s_object.serialize();
             }
 
             if let Some(yaml_file) = &config.yaml_file {
@@ -205,18 +205,20 @@ impl AgentPolicy {
                     .truncate(true)
                     .create(true)
                     .open(yaml_file)
-                    .map_err(|e| anyhow!(e))?
+                    .unwrap()
                     .write_all(&yaml_string.as_bytes())
-                    .map_err(|e| anyhow!(e))
+                    .unwrap();
             } else {
                 std::io::stdout()
                     .write_all(&yaml_string.as_bytes())
-                    .map_err(|e| anyhow!(e))
+                    .unwrap();
             }
         } else {
             panic!("Cannot open file {}. Please copy it to the current directory or specify the path to it using the -i parameter.", 
                 &self.rules_input_file);
         }
+
+        Ok(())
     }
 }
 

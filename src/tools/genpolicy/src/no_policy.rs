@@ -67,7 +67,7 @@ impl yaml::K8sResource for NoPolicyResource {
         Ok(())
     }
 
-    fn serialize(&mut self) -> anyhow::Result<String> {
-        Ok(self.yaml.clone())
+    fn serialize(&mut self) -> String {
+        self.yaml.clone()
     }
 }

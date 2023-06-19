@@ -122,7 +122,7 @@ impl yaml::K8sResource for ConfigMap {
         Ok(())
     }
 
-    fn serialize(&mut self) -> anyhow::Result<String> {
-        Ok(serde_yaml::to_string(&self)?)
+    fn serialize(&mut self) -> String {
+        serde_yaml::to_string(&self).unwrap()
     }
 }

@@ -523,9 +523,9 @@ impl yaml::K8sResource for Pod {
         Ok(())
     }
 
-    fn serialize(&mut self) -> Result<String> {
+    fn serialize(&mut self) -> String {
         yaml::add_policy_annotation(&mut self.doc_mapping, "metadata", &self.encoded_policy);
-        Ok(serde_yaml::to_string(&self.doc_mapping)?)
+        serde_yaml::to_string(&self.doc_mapping).unwrap()
     }
 }
 

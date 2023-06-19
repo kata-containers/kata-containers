@@ -127,12 +127,12 @@ impl yaml::K8sResource for ReplicationController {
         Ok(())
     }
 
-    fn serialize(&mut self) -> anyhow::Result<String> {
+    fn serialize(&mut self) -> String {
         yaml::add_policy_annotation(
             &mut self.doc_mapping,
             "spec.template.metadata",
             &self.encoded_policy,
         );
-        Ok(serde_yaml::to_string(&self.doc_mapping)?)
+        serde_yaml::to_string(&self.doc_mapping).unwrap()
     }
 }

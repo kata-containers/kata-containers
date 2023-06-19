@@ -57,7 +57,7 @@ pub trait K8sResource {
         config: &utils::Config,
     ) -> anyhow::Result<()>;
 
-    fn serialize(&mut self) -> anyhow::Result<String>;
+    fn serialize(&mut self) -> String;
 
     fn get_metadata_name(&self) -> anyhow::Result<String>;
     fn get_host_name(&self) -> anyhow::Result<String>;
@@ -267,13 +267,11 @@ pub fn generate_policy(
     let json_data = serde_json::to_string_pretty(&policy_data)
         .map_err(|e| anyhow!(e))
         .unwrap();
-
     let policy = rules.to_string() + "\npolicy_data := " + &json_data;
 
     if let Some(file_name) = &config.output_policy_file {
         policy::export_decoded_policy(&policy, &file_name)?;
     }
-
     Ok(general_purpose::STANDARD.encode(policy.as_bytes()))
 }
 

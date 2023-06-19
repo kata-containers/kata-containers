@@ -98,14 +98,14 @@ impl yaml::K8sResource for List {
         Ok(())
     }
 
-    fn serialize(&mut self) -> anyhow::Result<String> {
+    fn serialize(&mut self) -> String {
         self.items.clear();
         for resource in &mut self.resources {
-            let yaml = resource.serialize()?;
+            let yaml = resource.serialize();
             let document = serde_yaml::Deserializer::from_str(&yaml);
-            let doc_value = Value::deserialize(document)?;
+            let doc_value = Value::deserialize(document).unwrap();
             self.items.push(doc_value.clone());
         }
-        Ok(serde_yaml::to_string(&self)?)
+        serde_yaml::to_string(&self).unwrap()
     }
 }
