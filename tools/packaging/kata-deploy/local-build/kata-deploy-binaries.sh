@@ -389,21 +389,25 @@ install_cc_shimv2() {
 	export RUST_VERSION
 	export REMOVE_VMM_CONFIGS="acrn fc"
 
-        extra_opts="DEFSERVICEOFFLOAD=true"
-	if [ -f "${repo_root_dir}/tools/osbuilder/root_hash_vanilla.txt" ]; then
-		root_hash=$(sudo sed -e 's/Root hash:\s*//g;t;d' "${repo_root_dir}/tools/osbuilder/root_hash_vanilla.txt")
-		root_measure_config="cc_rootfs_verity.scheme=dm-verity cc_rootfs_verity.hash=${root_hash}"
-		extra_opts+=" ROOTMEASURECONFIG=\"${root_measure_config}\""
-	fi
+	if [ "${MEASURED_ROOTFS}" == "yes" ]; then
+	    extra_opts="DEFSERVICEOFFLOAD=true"
+		if [ -f "${repo_root_dir}/tools/osbuilder/root_hash_vanilla.txt" ]; then
+			root_hash=$(sudo sed -e 's/Root hash:\s*//g;t;d' "${repo_root_dir}/tools/osbuilder/root_hash_vanilla.txt")
+			root_measure_config="cc_rootfs_verity.scheme=dm-verity cc_rootfs_verity.hash=${root_hash}"
+			extra_opts+=" ROOTMEASURECONFIG=\"${root_measure_config}\""
+		fi
 
-	if [ -f "${repo_root_dir}/tools/osbuilder/root_hash_tdx.txt" ]; then
-		root_hash=$(sudo sed -e 's/Root hash:\s*//g;t;d' "${repo_root_dir}/tools/osbuilder/root_hash_tdx.txt")
-		root_measure_config="cc_rootfs_verity.scheme=dm-verity cc_rootfs_verity.hash=${root_hash}"
-		extra_opts+=" ROOTMEASURECONFIGTDX=\"${root_measure_config}\""
+		if [ -f "${repo_root_dir}/tools/osbuilder/root_hash_tdx.txt" ]; then
+			root_hash=$(sudo sed -e 's/Root hash:\s*//g;t;d' "${repo_root_dir}/tools/osbuilder/root_hash_tdx.txt")
+			root_measure_config="cc_rootfs_verity.scheme=dm-verity cc_rootfs_verity.hash=${root_hash}"
+			extra_opts+=" ROOTMEASURECONFIGTDX=\"${root_measure_config}\""
+		fi
+		
+		info "extra_opts: ${extra_opts}"
+		DESTDIR="${destdir}" PREFIX="${cc_prefix}" EXTRA_OPTS="${extra_opts}" "${shimv2_builder}"
+	else
+		DESTDIR="${destdir}" PREFIX="${cc_prefix}" "${shimv2_builder}"
 	fi
-
-	info "extra_opts: ${extra_opts}"
-	DESTDIR="${destdir}" PREFIX="${cc_prefix}" EXTRA_OPTS="${extra_opts}" "${shimv2_builder}"
 }
 
 # Install static CC virtiofsd asset
