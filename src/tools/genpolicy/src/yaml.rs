@@ -59,10 +59,10 @@ pub trait K8sResource {
 
     fn serialize(&mut self) -> String;
 
-    fn get_metadata_name(&self) -> anyhow::Result<String>;
-    fn get_host_name(&self) -> anyhow::Result<String>;
-    fn get_sandbox_name(&self) -> anyhow::Result<Option<String>>;
-    fn get_namespace(&self) -> anyhow::Result<String>;
+    fn get_metadata_name(&self) -> String;
+    fn get_host_name(&self) -> String;
+    fn get_sandbox_name(&self) -> Option<String>;
+    fn get_namespace(&self) -> String;
 
     fn get_container_mounts_and_storages(
         &self,

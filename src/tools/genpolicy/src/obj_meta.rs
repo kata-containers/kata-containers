@@ -6,7 +6,6 @@
 // Allow K8s YAML field names.
 #![allow(non_snake_case)]
 
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -27,19 +26,19 @@ pub struct ObjectMeta {
 }
 
 impl ObjectMeta {
-    pub fn get_name(&self) -> Result<String> {
+    pub fn get_name(&self) -> String {
         if let Some(name) = &self.name {
-            Ok(name.clone())
+            name.clone()
         } else {
-            Ok(String::new())
+            String::new()
         }
     }
 
-    pub fn get_namespace(&self) -> Result<String> {
+    pub fn get_namespace(&self) -> String {
         if let Some(namespace) = &self.namespace {
-            Ok(namespace.clone())
+            namespace.clone()
         } else {
-            Ok("default".to_string())
+            "default".to_string()
         }
     }
 }

@@ -71,20 +71,20 @@ impl yaml::K8sResource for ReplicationController {
         Ok(())
     }
 
-    fn get_metadata_name(&self) -> anyhow::Result<String> {
+    fn get_metadata_name(&self) -> String {
         self.metadata.get_name()
     }
 
-    fn get_host_name(&self) -> anyhow::Result<String> {
+    fn get_host_name(&self) -> String {
         // Example: "hostname": "no-exist-tdtd7",
-        Ok("^".to_string() + &self.get_metadata_name()? + "-[a-z0-9]{5}$")
+        "^".to_string() + &self.get_metadata_name() + "-[a-z0-9]{5}$"
     }
 
-    fn get_sandbox_name(&self) -> anyhow::Result<Option<String>> {
-        Ok(None)
+    fn get_sandbox_name(&self) -> Option<String> {
+        None
     }
 
-    fn get_namespace(&self) -> anyhow::Result<String> {
+    fn get_namespace(&self) -> String {
         self.metadata.get_namespace()
     }
 

@@ -347,9 +347,6 @@ pub fn get_container_policy(
     is_pause_container: bool,
     registry_container: &registry::Container,
 ) -> Result<ContainerPolicy> {
-    let pod_name = k8s_object.get_metadata_name()?;
-    let hostname = k8s_object.get_host_name()?;
-
     let mut infra_container = &infra_policy.pause_container;
     if !is_pause_container {
         infra_container = &infra_policy.other_container;
@@ -364,7 +361,7 @@ pub fn get_container_policy(
 
     let mut annotations = BTreeMap::new();
     infra::get_annotations(&mut annotations, infra_container)?;
-    if let Some(name) = k8s_object.get_sandbox_name()? {
+    if let Some(name) = k8s_object.get_sandbox_name() {
         annotations.insert("io.kubernetes.cri.sandbox-name".to_string(), name);
     }
 
@@ -376,7 +373,7 @@ pub fn get_container_policy(
         annotations.insert("io.kubernetes.cri.image-name".to_string(), image_name);
     }
 
-    let namespace = k8s_object.get_namespace()?;
+    let namespace = k8s_object.get_namespace();
     annotations.insert(
         "io.kubernetes.cri.sandbox-namespace".to_string(),
         namespace.clone(),
@@ -402,7 +399,9 @@ pub fn get_container_policy(
     registry_container.get_process(&mut process, yaml_has_command, yaml_has_args)?;
 
     if !is_pause_container {
-        process.env.push("HOSTNAME=".to_string() + &pod_name);
+        process
+            .env
+            .push("HOSTNAME=".to_string() + &k8s_object.get_metadata_name());
     }
 
     yaml_container.get_env_variables(&mut process.env, config_maps, &namespace)?;
@@ -441,7 +440,7 @@ pub fn get_container_policy(
             ociVersion: Some("1.1.0-rc.1".to_string()),
             process: Some(process),
             root,
-            hostname: Some(hostname),
+            hostname: Some(k8s_object.get_host_name()),
             mounts,
             hooks: None,
             annotations: Some(annotations),

@@ -466,20 +466,20 @@ impl yaml::K8sResource for Pod {
         Ok(())
     }
 
-    fn get_metadata_name(&self) -> Result<String> {
+    fn get_metadata_name(&self) -> String {
         self.metadata.get_name()
     }
 
-    fn get_host_name(&self) -> Result<String> {
+    fn get_host_name(&self) -> String {
         // Example: "hostname": "^busybox-cc$",
-        Ok("^".to_string() + &self.get_metadata_name()? + "$")
+        "^".to_string() + &self.get_metadata_name() + "$"
     }
 
-    fn get_sandbox_name(&self) -> Result<Option<String>> {
-        Ok(Some(self.get_metadata_name()?))
+    fn get_sandbox_name(&self) -> Option<String> {
+        Some(self.get_metadata_name())
     }
 
-    fn get_namespace(&self) -> Result<String> {
+    fn get_namespace(&self) -> String {
         self.metadata.get_namespace()
     }
 
