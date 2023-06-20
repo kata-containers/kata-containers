@@ -184,6 +184,7 @@ pub fn new_k8s_resource(
         | "PersistentVolume"
         | "PersistentVolumeClaim"
         | "ResourceQuota"
+        | "RoleBinding"
         | "Service"
         | "ServiceAccount" => {
             let no_policy = no_policy::NoPolicyResource {
