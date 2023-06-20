@@ -6,14 +6,12 @@
 // Allow K8s YAML field names.
 #![allow(non_snake_case)]
 
-use crate::config_map;
 use crate::infra;
 use crate::obj_meta;
 use crate::pod;
 use crate::pod_template;
 use crate::policy;
 use crate::registry;
-use crate::utils;
 use crate::yaml;
 
 use async_trait::async_trait;
@@ -32,9 +30,6 @@ pub struct ReplicaSet {
 
     #[serde(skip)]
     pub registry_containers: Vec<registry::Container>,
-
-    #[serde(skip)]
-    encoded_policy: String,
 }
 
 /// See ReplicaSetSpec in the Kubernetes API reference.
@@ -103,29 +98,12 @@ impl yaml::K8sResource for ReplicaSet {
         }
     }
 
-    fn generate_policy(
-        &mut self,
-        rules: &str,
-        infra_policy: &infra::InfraPolicy,
-        config_maps: &Vec<config_map::ConfigMap>,
-        config: &utils::Config,
-    ) -> anyhow::Result<()> {
-        self.encoded_policy = yaml::generate_policy(
-            rules,
-            infra_policy,
-            config_maps,
-            config,
-            self,
-        )?;
-        Ok(())
+    fn generate_policy(&self, agent_policy: &policy::AgentPolicy) -> String {
+        yaml::generate_policy(self, agent_policy)
     }
 
-    fn serialize(&mut self) -> String {
-        yaml::add_policy_annotation(
-            &mut self.doc_mapping,
-            "spec.template.metadata",
-            &self.encoded_policy,
-        );
+    fn serialize(&mut self, policy: &str) -> String {
+        yaml::add_policy_annotation(&mut self.doc_mapping, "spec.template.metadata", policy);
         serde_yaml::to_string(&self.doc_mapping).unwrap()
     }
 

@@ -20,10 +20,8 @@ use crate::registry;
 use crate::replica_set;
 use crate::replication_controller;
 use crate::stateful_set;
-use crate::utils;
 use crate::volume;
 
-use anyhow::anyhow;
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
 use core::fmt::Debug;
@@ -49,15 +47,8 @@ pub trait K8sResource {
         silent_unsupported_fields: bool,
     ) -> anyhow::Result<()>;
 
-    fn generate_policy(
-        &mut self,
-        rules: &str,
-        infra_policy: &infra::InfraPolicy,
-        config_maps: &Vec<config_map::ConfigMap>,
-        config: &utils::Config,
-    ) -> anyhow::Result<()>;
-
-    fn serialize(&mut self) -> String;
+    fn generate_policy(&self, agent_policy: &policy::AgentPolicy) -> String;
+    fn serialize(&mut self, policy: &str) -> String;
 
     fn get_metadata_name(&self) -> String;
     fn get_host_name(&self) -> String;
@@ -108,42 +99,48 @@ pub fn new_k8s_resource(
         "ConfigMap" => {
             let config_map: config_map::ConfigMap = serde_ignored::deserialize(d, |path| {
                 handle_unused_field(&path.to_string(), silent_unsupported_fields);
-            }).unwrap();
+            })
+            .unwrap();
             debug!("{:#?}", &config_map);
             Ok((boxed::Box::new(config_map), header.kind))
         }
         "DaemonSet" => {
             let daemon: daemon_set::DaemonSet = serde_ignored::deserialize(d, |path| {
                 handle_unused_field(&path.to_string(), silent_unsupported_fields);
-            }).unwrap();
+            })
+            .unwrap();
             debug!("{:#?}", &daemon);
             Ok((boxed::Box::new(daemon), header.kind))
         }
         "Deployment" => {
             let deployment: deployment::Deployment = serde_ignored::deserialize(d, |path| {
                 handle_unused_field(&path.to_string(), silent_unsupported_fields);
-            }).unwrap();
+            })
+            .unwrap();
             debug!("{:#?}", &deployment);
             Ok((boxed::Box::new(deployment), header.kind))
         }
         "Job" => {
             let job: job::Job = serde_ignored::deserialize(d, |path| {
                 handle_unused_field(&path.to_string(), silent_unsupported_fields);
-            }).unwrap();
+            })
+            .unwrap();
             debug!("{:#?}", &job);
             Ok((boxed::Box::new(job), header.kind))
         }
         "List" => {
             let list: list::List = serde_ignored::deserialize(d, |path| {
                 handle_unused_field(&path.to_string(), silent_unsupported_fields);
-            }).unwrap();
+            })
+            .unwrap();
             debug!("{:#?}", &list);
             Ok((boxed::Box::new(list), header.kind))
         }
         "Pod" => {
             let pod: pod::Pod = serde_ignored::deserialize(d, |path| {
                 handle_unused_field(&path.to_string(), silent_unsupported_fields);
-            }).unwrap();
+            })
+            .unwrap();
             debug!("{:#?}", &pod);
             Ok((boxed::Box::new(pod), header.kind))
         }
@@ -151,21 +148,24 @@ pub fn new_k8s_resource(
             let controller: replication_controller::ReplicationController =
                 serde_ignored::deserialize(d, |path| {
                     handle_unused_field(&path.to_string(), silent_unsupported_fields);
-                }).unwrap();
+                })
+                .unwrap();
             debug!("{:#?}", &controller);
             Ok((boxed::Box::new(controller), header.kind))
         }
         "ReplicaSet" => {
             let set: replica_set::ReplicaSet = serde_ignored::deserialize(d, |path| {
                 handle_unused_field(&path.to_string(), silent_unsupported_fields);
-            }).unwrap();
+            })
+            .unwrap();
             debug!("{:#?}", &set);
             Ok((boxed::Box::new(set), header.kind))
         }
         "StatefulSet" => {
             let set: stateful_set::StatefulSet = serde_ignored::deserialize(d, |path| {
                 handle_unused_field(&path.to_string(), silent_unsupported_fields);
-            }).unwrap();
+            })
+            .unwrap();
             debug!("{:#?}", &set);
             Ok((boxed::Box::new(set), header.kind))
         }
@@ -238,40 +238,29 @@ pub fn get_container_mounts_and_storages(
     }
 }
 
-pub fn generate_policy(
-    rules: &str,
-    infra_policy: &infra::InfraPolicy,
-    config_maps: &Vec<config_map::ConfigMap>,
-    config: &utils::Config,
-    k8s_object: &dyn K8sResource,
-) -> anyhow::Result<String> {
+pub fn generate_policy(k8s_object: &dyn K8sResource, agent_policy: &policy::AgentPolicy) -> String {
     let (registry_containers, yaml_containers) = k8s_object.get_containers();
     let mut policy_containers = Vec::new();
 
     for i in 0..yaml_containers.len() {
-        policy_containers.push(policy::get_container_policy(
+        policy_containers.push(agent_policy.get_container_policy(
             k8s_object,
-            infra_policy,
-            config_maps,
             &yaml_containers[i],
             i == 0,
             &registry_containers[i],
-        )?);
+        ));
     }
 
     let policy_data = policy::PolicyData {
         containers: policy_containers,
     };
 
-    let json_data = serde_json::to_string_pretty(&policy_data)
-        .map_err(|e| anyhow!(e))
-        .unwrap();
-    let policy = rules.to_string() + "\npolicy_data := " + &json_data;
-
-    if let Some(file_name) = &config.output_policy_file {
-        policy::export_decoded_policy(&policy, &file_name)?;
+    let json_data = serde_json::to_string_pretty(&policy_data).unwrap();
+    let policy = agent_policy.rules.clone() + "\npolicy_data := " + &json_data;
+    if let Some(file_name) = &agent_policy.config.output_policy_file {
+        policy::export_decoded_policy(&policy, &file_name);
     }
-    Ok(general_purpose::STANDARD.encode(policy.as_bytes()))
+    general_purpose::STANDARD.encode(policy.as_bytes())
 }
 
 pub fn add_policy_annotation(

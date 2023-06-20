@@ -6,12 +6,10 @@
 // Allow K8s YAML field names.
 #![allow(non_snake_case)]
 
-use crate::config_map;
 use crate::infra;
 use crate::pod;
 use crate::policy;
 use crate::registry;
-use crate::utils;
 use crate::yaml;
 
 use async_trait::async_trait;
@@ -84,24 +82,22 @@ impl yaml::K8sResource for List {
     ) {
     }
 
-    fn generate_policy(
-        &mut self,
-        rules: &str,
-        infra_policy: &infra::InfraPolicy,
-        config_maps: &Vec<config_map::ConfigMap>,
-        config: &utils::Config,
-    ) -> anyhow::Result<()> {
-        for resource in &mut self.resources {
-            resource.generate_policy(rules, infra_policy, config_maps, config)?;
+    fn generate_policy(&self, agent_policy: &policy::AgentPolicy) -> String {
+        let mut policies: Vec<String> = Vec::new();
+        for resource in &self.resources {
+            policies.push(resource.generate_policy(agent_policy));
         }
-
-        Ok(())
+        policies.join(":")
     }
 
-    fn serialize(&mut self) -> String {
+    fn serialize(&mut self, policy: &str) -> String {
+        let policies: Vec<&str> = policy.split(":").collect();
+        let len = policies.len();
+        assert!(len == self.resources.len());
+
         self.items.clear();
-        for resource in &mut self.resources {
-            let yaml = resource.serialize();
+        for i in 0..len {
+            let yaml = self.resources[i].serialize(policies[i]);
             let document = serde_yaml::Deserializer::from_str(&yaml);
             let doc_value = Value::deserialize(document).unwrap();
             self.items.push(doc_value.clone());

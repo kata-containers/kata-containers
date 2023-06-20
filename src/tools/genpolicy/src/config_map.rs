@@ -6,13 +6,11 @@
 // Allow K8s YAML field names.
 #![allow(non_snake_case)]
 
-use crate::config_map;
 use crate::infra;
 use crate::obj_meta;
 use crate::pod;
 use crate::policy;
 use crate::registry;
-use crate::utils;
 use crate::yaml;
 
 use async_trait::async_trait;
@@ -113,17 +111,11 @@ impl yaml::K8sResource for ConfigMap {
         panic!("Unsupported");
     }
 
-    fn generate_policy(
-        &mut self,
-        _rules: &str,
-        _infra_policy: &infra::InfraPolicy,
-        _config_map: &Vec<config_map::ConfigMap>,
-        _config: &utils::Config,
-    ) -> anyhow::Result<()> {
-        Ok(())
+    fn generate_policy(&self, _agent_policy: &policy::AgentPolicy) -> String {
+        "".to_string()
     }
 
-    fn serialize(&mut self) -> String {
+    fn serialize(&mut self, _policy: &str) -> String {
         serde_yaml::to_string(&self).unwrap()
     }
 

@@ -11,11 +11,10 @@ use crate::infra;
 use crate::obj_meta;
 use crate::policy;
 use crate::registry;
-use crate::utils;
 use crate::volume;
 use crate::yaml;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -33,9 +32,6 @@ pub struct Pod {
 
     #[serde(skip)]
     registry_containers: Vec<registry::Container>,
-
-    #[serde(skip)]
-    encoded_policy: String,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -342,17 +338,16 @@ impl Container {
         dest_env: &mut Vec<String>,
         config_maps: &Vec<config_map::ConfigMap>,
         namespace: &str,
-    ) -> Result<()> {
+    ) {
         if let Some(source_env) = &self.env {
             for env_variable in source_env {
                 let mut src_string = env_variable.name.clone() + "=";
-                src_string += &env_variable.get_value(config_maps, namespace)?;
+                src_string += &env_variable.get_value(config_maps, namespace);
                 if !dest_env.contains(&src_string) {
                     dest_env.push(src_string.clone());
                 }
             }
         }
-        Ok(())
     }
 
     pub fn allow_privilege_escalation(&self) -> bool {
@@ -430,18 +425,18 @@ impl EnvVar {
         &self,
         config_maps: &Vec<config_map::ConfigMap>,
         namespace: &str,
-    ) -> Result<String> {
+    ) -> String {
         if let Some(value) = &self.value {
-            return Ok(value.clone());
+            return value.clone();
         } else if let Some(value_from) = &self.valueFrom {
             if let Some(value) = config_map::get_value(value_from, config_maps) {
-                return Ok(value.clone());
+                return value.clone();
             } else if let Some(field_ref) = &value_from.fieldRef {
                 let path: &str = &field_ref.fieldPath;
                 match path {
-                    "metadata.namespace" => return Ok(namespace.to_string()),
-                    "status.podIP" => return Ok("$(pod-ip)".to_string()),
-                    "spec.nodeName" => return Ok("$(node-name)".to_string()),
+                    "metadata.namespace" => return namespace.to_string(),
+                    "status.podIP" => return "$(pod-ip)".to_string(),
+                    "spec.nodeName" => return "$(node-name)".to_string(),
                     _ => panic!("Unsupported field reference: {}", &field_ref.fieldPath),
                 }
             }
@@ -449,7 +444,7 @@ impl EnvVar {
             panic!("Environment variable without value or valueFrom!");
         }
 
-        Err(anyhow!("Unknown EnvVar value: {}", &self.name))
+        panic!("Unknown EnvVar value: {}", &self.name);
     }
 }
 
@@ -501,26 +496,12 @@ impl yaml::K8sResource for Pod {
         }
     }
 
-    fn generate_policy(
-        &mut self,
-        rules: &str,
-        infra_policy: &infra::InfraPolicy,
-        config_maps: &Vec<config_map::ConfigMap>,
-        config: &utils::Config,
-    ) -> Result<()> {
-        self.encoded_policy = yaml::generate_policy(
-            rules,
-            infra_policy,
-            config_maps,
-            config,
-            self,
-        )?;
-
-        Ok(())
+    fn generate_policy(&self, agent_policy: &policy::AgentPolicy) -> String {
+        yaml::generate_policy(self, agent_policy)
     }
 
-    fn serialize(&mut self) -> String {
-        yaml::add_policy_annotation(&mut self.doc_mapping, "metadata", &self.encoded_policy);
+    fn serialize(&mut self, policy: &str) -> String {
+        yaml::add_policy_annotation(&mut self.doc_mapping, "metadata", policy);
         serde_yaml::to_string(&self.doc_mapping).unwrap()
     }
 
@@ -533,7 +514,7 @@ impl yaml::K8sResource for Pod {
 }
 
 impl Container {
-    pub fn apply_capabilities(&self, capabilities: &mut oci::LinuxCapabilities) -> Result<()> {
+    pub fn apply_capabilities(&self, capabilities: &mut oci::LinuxCapabilities) {
         if let Some(securityContext) = &self.securityContext {
             if let Some(yaml_capabilities) = &securityContext.capabilities {
                 if let Some(add) = &yaml_capabilities.add {
@@ -562,7 +543,5 @@ impl Container {
                 }
             }
         }
-
-        Ok(())
     }
 }

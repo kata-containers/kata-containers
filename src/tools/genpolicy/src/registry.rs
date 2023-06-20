@@ -105,7 +105,7 @@ impl Container {
         process: &mut policy::OciProcess,
         yaml_has_command: bool,
         yaml_has_args: bool,
-    ) -> Result<()> {
+    ) {
         debug!("Getting process field from docker config layer...");
         let docker_config = &self.config_layer.config;
 
@@ -130,7 +130,7 @@ impl Container {
                 }
                 if user.len() > 1 {
                     debug!("Parsing gid from user[1] = {:?}", user[1]);
-                    process.user.gid = user[1].parse()?;
+                    process.user.gid = user[1].parse().unwrap();
                 }
             }
         }
@@ -191,7 +191,6 @@ impl Container {
         }
 
         debug!("get_process succeeded.");
-        Ok(())
     }
 
     pub fn get_image_layers(&self) -> Vec<ImageLayer> {

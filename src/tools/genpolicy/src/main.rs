@@ -77,10 +77,6 @@ async fn main() {
         .unwrap();
 
     debug!("Exporting policy to yaml file...");
-    if let Err(e) = policy.export_policy() {
-        println!("export_policy failed: {:?}", e);
-        std::process::exit(1);
-    }
-
+    policy.export_policy();
     info!("Success!");
 }
