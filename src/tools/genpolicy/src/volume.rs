@@ -63,7 +63,7 @@ pub struct PersistentVolumeClaimVolumeSource {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConfigMapVolumeSource {
     pub name: String,
-    pub items: Vec<KeyToPath>,
+    pub items: Option<Vec<KeyToPath>>,
     // TODO: additional fields.
 }
 
