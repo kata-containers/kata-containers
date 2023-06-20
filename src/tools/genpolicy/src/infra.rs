@@ -300,6 +300,8 @@ impl InfraPolicy {
             Self::config_map_mount_and_storage(&self.volumes, policy_mounts, storages, yaml_mount);
         } else if yaml_volume.projected.is_some() {
             Self::verify_projected_volume_mount(yaml_mount, policy_mounts);
+        } else if yaml_volume.downwardAPI.is_some() {
+            self.downward_api_mount(yaml_mount, policy_mounts);
         } else {
             todo!("Unsupported volume type {:?}", yaml_volume);
         }
@@ -485,19 +487,6 @@ impl InfraPolicy {
         });
     }
 
-    /// Verify that the policy corresponding to this mount has been created
-    /// already, based on the information from data.json. An example of such
-    /// mount is:
-    /// {
-    ///    "destination": "/var/run/secrets/kubernetes.io/serviceaccount",
-    ///    "type": "bind",
-    ///    "source": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-serviceaccount$",
-    ///    "options": [
-    ///      "rbind",
-    ///      "rprivate",
-    ///      "ro"
-    ///    ]
-    /// }
     fn verify_projected_volume_mount(
         yaml_mount: &pod::VolumeMount,
         policy_mounts: &mut Vec<oci::Mount>,
@@ -509,5 +498,48 @@ impl InfraPolicy {
             }
         }
         panic!("Unsupported pod mount {}", &yaml_mount.mountPath);
+    }
+
+    fn downward_api_mount(
+        &self,
+        yaml_mount: &pod::VolumeMount,
+        policy_mounts: &mut Vec<oci::Mount>,
+    ) {
+        let mut source = self.shared_files.source_path.clone();
+        if let Some(byte_index) = str::rfind(&yaml_mount.mountPath, '/') {
+            source += str::from_utf8(&yaml_mount.mountPath.as_bytes()[byte_index + 1..]).unwrap();
+        } else {
+            source += &yaml_mount.mountPath;
+        }
+        source += "$";
+
+        let destination = yaml_mount.mountPath.to_string();
+        let r#type = "bind".to_string();
+        let mount_option = "rprivate".to_string();
+        let options = vec!["rbind".to_string(), mount_option, "ro".to_string()];
+
+        if let Some(policy_mount) = policy_mounts
+            .iter_mut()
+            .find(|m| m.destination.eq(&destination))
+        {
+            debug!(
+                "downward_api_mount: updating destination = {}, source = {}",
+                &destination, &source
+            );
+            policy_mount.r#type = r#type;
+            policy_mount.source = source;
+            policy_mount.options = options;
+        } else {
+            debug!(
+                "downward_api_mount: adding destination = {}, source = {}",
+                &destination, &source
+            );
+            policy_mounts.push(oci::Mount {
+                destination,
+                r#type,
+                source,
+                options,
+            });
+        }
     }
 }

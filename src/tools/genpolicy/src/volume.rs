@@ -6,6 +6,8 @@
 // Allow K8s YAML field names.
 #![allow(non_snake_case)]
 
+use crate::pod;
+
 use serde::{Deserialize, Serialize};
 
 /// See Reference / Kubernetes API / Config and Storage Resources / Volume.
@@ -33,6 +35,9 @@ pub struct Volume {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub secret: Option<SecretVolumeSource>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub downwardAPI: Option<DownwardAPIVolumeSource>
     // TODO: additional fields.
 }
 
@@ -103,4 +108,21 @@ pub struct SecretVolumeSource {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub items: Option<Vec<KeyToPath>>,
     // TODO: additional fields.
+}
+
+/// See Reference / Kubernetes API / Config and Storage Resources / Volume.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DownwardAPIVolumeSource {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub items: Option<Vec<DownwardAPIVolumeFile>>,
+    // TODO: additional fields.
+}
+
+/// See Reference / Kubernetes API / Config and Storage Resources / Volume.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DownwardAPIVolumeFile {
+    pub path: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fieldRef: Option<pod::ObjectFieldSelector>,
 }
