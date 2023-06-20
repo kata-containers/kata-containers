@@ -145,8 +145,8 @@ impl Store {
         opts.push(format!("lowerdir={}", layers.join(":")));
 
         Ok(vec![api::types::Mount {
-            r#type: "tar-overlay".to_string(),
-            source: "/".to_string(),
+            r#type: "fuse3.kata-overlay".into(),
+            source: "/".into(),
             target: String::new(),
             options: opts,
         }])
