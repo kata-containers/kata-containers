@@ -301,6 +301,7 @@ impl AgentPolicy {
             &metadata_name,
         );
         substitute_env_variables(&mut process.env);
+        substitute_args_env_variables(&mut process.args, &process.env);
 
         infra::get_process(&mut process, &infra_container);
         process.noNewPrivileges = !yaml_container.allow_privilege_escalation();
@@ -536,15 +537,56 @@ fn substitute_variable(
         if components[0].eq(&name) {
             debug!("Found {} in <{}>", &name, &other_var);
             if components.len() == 2 {
-                // Don't substitute if the value includes variable to be substituted,
-                // to avoid recursive substitutions.
-                if find_subst_target(&components[1]).is_none() {
+                let mut replace = true;
+                let value = &components[1];
+
+                if let Some((start, end)) = find_subst_target(value) {
+                    if value[start..end].eq("node-name") {
+                        // $(node-name) never gets expanded in the current design,
+                        // so it's OK to use it as replacement in other env variables
+                        // or command arguments.
+                    } else {
+                        // Don't substitute if the value includes variables to be
+                        // substituted, to avoid circular substitutions.
+                        replace = false;
+                    }
+                }
+
+                if replace {
                     let from = "$(".to_string() + &name + ")";
-                    return Some(env_var.replace(&from, &components[1]));
+                    return Some(env_var.replace(&from, value));
                 }
             }
         }
     }
 
     None
+}
+
+fn substitute_args_env_variables(args: &mut Vec<String>, env: &Vec<String>) {
+    for arg in args {
+        substitute_arg_env_variables(arg, env);
+    }
+}
+
+fn substitute_arg_env_variables(arg: &mut String, env: &Vec<String>) {
+    loop {
+        let mut substituted = false;
+
+        if let Some((start, end)) = find_subst_target(arg) {
+            if let Some(new_value) = substitute_variable(arg, start, end, env) {
+                debug!(
+                    "substitute_arg_env_variables: replacing {} with {}",
+                    &arg[start..end],
+                    &new_value
+                );
+                *arg = new_value;
+                substituted = true;
+            }
+        }
+
+        if !substituted {
+            break;
+        }
+    }
 }

@@ -1,0 +1,435 @@
+{
+    "input": {
+        "oci": {
+            "ociVersion": "1.1.0-rc.1",
+            "process": {
+                "terminal": false,
+                "user": {
+                    "uid": 0,
+                    "gid": 0,
+                    "additionalGids": [
+                        0
+                    ]
+                },
+                "args": [
+                    "/hostpathplugin",
+                    "--drivername=hostpath.csi.k8s.io",
+                    "--v=5",
+                    "--endpoint=unix:///csi/csi.sock",
+                    "--nodeid=aks-nodepool1-97767938-vmss000000"
+                ],
+                "env": [
+                    "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                    "HOSTNAME=csi-hostpathplugin-0",
+                    "CSI_ENDPOINT=unix:///csi/csi.sock",
+                    "KUBE_NODE_NAME=aks-nodepool1-97767938-vmss000000",
+                    "KUBERNETES_PORT_443_TCP_PROTO=tcp",
+                    "KUBERNETES_PORT_443_TCP_PORT=443",
+                    "KUBERNETES_PORT_443_TCP_ADDR=10.0.0.1",
+                    "KUBERNETES_SERVICE_HOST=10.0.0.1",
+                    "KUBERNETES_SERVICE_PORT=443",
+                    "KUBERNETES_SERVICE_PORT_HTTPS=443",
+                    "KUBERNETES_PORT=tcp://10.0.0.1:443",
+                    "KUBERNETES_PORT_443_TCP=tcp://10.0.0.1:443"
+                ],
+                "cwd": "/",
+                "capabilities": {
+                    "bounding": [
+                        "CAP_CHOWN",
+                        "CAP_DAC_OVERRIDE",
+                        "CAP_DAC_READ_SEARCH",
+                        "CAP_FOWNER",
+                        "CAP_FSETID",
+                        "CAP_KILL",
+                        "CAP_SETGID",
+                        "CAP_SETUID",
+                        "CAP_SETPCAP",
+                        "CAP_LINUX_IMMUTABLE",
+                        "CAP_NET_BIND_SERVICE",
+                        "CAP_NET_BROADCAST",
+                        "CAP_NET_ADMIN",
+                        "CAP_NET_RAW",
+                        "CAP_IPC_LOCK",
+                        "CAP_IPC_OWNER",
+                        "CAP_SYS_MODULE",
+                        "CAP_SYS_RAWIO",
+                        "CAP_SYS_CHROOT",
+                        "CAP_SYS_PTRACE",
+                        "CAP_SYS_PACCT",
+                        "CAP_SYS_ADMIN",
+                        "CAP_SYS_BOOT",
+                        "CAP_SYS_NICE",
+                        "CAP_SYS_RESOURCE",
+                        "CAP_SYS_TIME",
+                        "CAP_SYS_TTY_CONFIG",
+                        "CAP_MKNOD",
+                        "CAP_LEASE",
+                        "CAP_AUDIT_WRITE",
+                        "CAP_AUDIT_CONTROL",
+                        "CAP_SETFCAP",
+                        "CAP_MAC_OVERRIDE",
+                        "CAP_MAC_ADMIN",
+                        "CAP_SYSLOG",
+                        "CAP_WAKE_ALARM",
+                        "CAP_BLOCK_SUSPEND",
+                        "CAP_AUDIT_READ",
+                        "CAP_PERFMON",
+                        "CAP_BPF",
+                        "CAP_CHECKPOINT_RESTORE"
+                    ],
+                    "effective": [
+                        "CAP_CHOWN",
+                        "CAP_DAC_OVERRIDE",
+                        "CAP_DAC_READ_SEARCH",
+                        "CAP_FOWNER",
+                        "CAP_FSETID",
+                        "CAP_KILL",
+                        "CAP_SETGID",
+                        "CAP_SETUID",
+                        "CAP_SETPCAP",
+                        "CAP_LINUX_IMMUTABLE",
+                        "CAP_NET_BIND_SERVICE",
+                        "CAP_NET_BROADCAST",
+                        "CAP_NET_ADMIN",
+                        "CAP_NET_RAW",
+                        "CAP_IPC_LOCK",
+                        "CAP_IPC_OWNER",
+                        "CAP_SYS_MODULE",
+                        "CAP_SYS_RAWIO",
+                        "CAP_SYS_CHROOT",
+                        "CAP_SYS_PTRACE",
+                        "CAP_SYS_PACCT",
+                        "CAP_SYS_ADMIN",
+                        "CAP_SYS_BOOT",
+                        "CAP_SYS_NICE",
+                        "CAP_SYS_RESOURCE",
+                        "CAP_SYS_TIME",
+                        "CAP_SYS_TTY_CONFIG",
+                        "CAP_MKNOD",
+                        "CAP_LEASE",
+                        "CAP_AUDIT_WRITE",
+                        "CAP_AUDIT_CONTROL",
+                        "CAP_SETFCAP",
+                        "CAP_MAC_OVERRIDE",
+                        "CAP_MAC_ADMIN",
+                        "CAP_SYSLOG",
+                        "CAP_WAKE_ALARM",
+                        "CAP_BLOCK_SUSPEND",
+                        "CAP_AUDIT_READ",
+                        "CAP_PERFMON",
+                        "CAP_BPF",
+                        "CAP_CHECKPOINT_RESTORE"
+                    ],
+                    "permitted": [
+                        "CAP_CHOWN",
+                        "CAP_DAC_OVERRIDE",
+                        "CAP_DAC_READ_SEARCH",
+                        "CAP_FOWNER",
+                        "CAP_FSETID",
+                        "CAP_KILL",
+                        "CAP_SETGID",
+                        "CAP_SETUID",
+                        "CAP_SETPCAP",
+                        "CAP_LINUX_IMMUTABLE",
+                        "CAP_NET_BIND_SERVICE",
+                        "CAP_NET_BROADCAST",
+                        "CAP_NET_ADMIN",
+                        "CAP_NET_RAW",
+                        "CAP_IPC_LOCK",
+                        "CAP_IPC_OWNER",
+                        "CAP_SYS_MODULE",
+                        "CAP_SYS_RAWIO",
+                        "CAP_SYS_CHROOT",
+                        "CAP_SYS_PTRACE",
+                        "CAP_SYS_PACCT",
+                        "CAP_SYS_ADMIN",
+                        "CAP_SYS_BOOT",
+                        "CAP_SYS_NICE",
+                        "CAP_SYS_RESOURCE",
+                        "CAP_SYS_TIME",
+                        "CAP_SYS_TTY_CONFIG",
+                        "CAP_MKNOD",
+                        "CAP_LEASE",
+                        "CAP_AUDIT_WRITE",
+                        "CAP_AUDIT_CONTROL",
+                        "CAP_SETFCAP",
+                        "CAP_MAC_OVERRIDE",
+                        "CAP_MAC_ADMIN",
+                        "CAP_SYSLOG",
+                        "CAP_WAKE_ALARM",
+                        "CAP_BLOCK_SUSPEND",
+                        "CAP_AUDIT_READ",
+                        "CAP_PERFMON",
+                        "CAP_BPF",
+                        "CAP_CHECKPOINT_RESTORE"
+                    ]
+                },
+                "noNewPrivileges": false,
+                "oomScoreAdj": 1000
+            },
+            "root": {
+                "path": "/run/kata-containers/shared/containers/e5eae60d89b84f6154dc88482b729d9a808485ac7ee04ae678d976369649aac2",
+                "readonly": false
+            },
+            "mounts": [
+                {
+                    "destination": "/proc",
+                    "type": "proc",
+                    "source": "proc",
+                    "options": [
+                        "nosuid",
+                        "noexec",
+                        "nodev"
+                    ]
+                },
+                {
+                    "destination": "/sys",
+                    "type": "sysfs",
+                    "source": "sysfs",
+                    "options": [
+                        "nosuid",
+                        "noexec",
+                        "nodev",
+                        "rw"
+                    ]
+                },
+                {
+                    "destination": "/sys/fs/cgroup",
+                    "type": "cgroup",
+                    "source": "cgroup",
+                    "options": [
+                        "nosuid",
+                        "noexec",
+                        "nodev",
+                        "relatime",
+                        "rw"
+                    ]
+                },
+                {
+                    "destination": "/csi",
+                    "type": "bind",
+                    "source": "/run/kata-containers/shared/containers/e5eae60d89b84f6154dc88482b729d9a808485ac7ee04ae678d976369649aac2-3c91103253088f6e-csi",
+                    "options": [
+                        "rbind",
+                        "rprivate",
+                        "rw"
+                    ]
+                },
+                {
+                    "destination": "/csi-data-dir",
+                    "type": "bind",
+                    "source": "/run/kata-containers/shared/containers/e5eae60d89b84f6154dc88482b729d9a808485ac7ee04ae678d976369649aac2-64c6443ed410af93-csi-data-dir",
+                    "options": [
+                        "rbind",
+                        "rprivate",
+                        "rw"
+                    ]
+                },
+                {
+                    "destination": "/dev",
+                    "type": "bind",
+                    "source": "/dev",
+                    "options": [
+                        "rbind",
+                        "rprivate",
+                        "rw"
+                    ]
+                },
+                {
+                    "destination": "/etc/hosts",
+                    "type": "bind",
+                    "source": "/run/kata-containers/shared/containers/e5eae60d89b84f6154dc88482b729d9a808485ac7ee04ae678d976369649aac2-0c494eb998ec4c9b-hosts",
+                    "options": [
+                        "rbind",
+                        "rprivate",
+                        "rw"
+                    ]
+                },
+                {
+                    "destination": "/dev/termination-log",
+                    "type": "bind",
+                    "source": "/run/kata-containers/shared/containers/e5eae60d89b84f6154dc88482b729d9a808485ac7ee04ae678d976369649aac2-52a2c11c79bc570f-termination-log",
+                    "options": [
+                        "rbind",
+                        "rprivate",
+                        "rw"
+                    ]
+                },
+                {
+                    "destination": "/etc/hostname",
+                    "type": "bind",
+                    "source": "/run/kata-containers/shared/containers/e5eae60d89b84f6154dc88482b729d9a808485ac7ee04ae678d976369649aac2-1e63bba732fd99aa-hostname",
+                    "options": [
+                        "rbind",
+                        "rprivate",
+                        "rw"
+                    ]
+                },
+                {
+                    "destination": "/etc/resolv.conf",
+                    "type": "bind",
+                    "source": "/run/kata-containers/shared/containers/e5eae60d89b84f6154dc88482b729d9a808485ac7ee04ae678d976369649aac2-49589caaac5016d3-resolv.conf",
+                    "options": [
+                        "rbind",
+                        "rprivate",
+                        "rw"
+                    ]
+                },
+                {
+                    "destination": "/dev/shm",
+                    "type": "bind",
+                    "source": "/run/kata-containers/sandbox/shm",
+                    "options": [
+                        "rbind"
+                    ]
+                },
+                {
+                    "destination": "/var/lib/kubelet/pods",
+                    "type": "bind",
+                    "source": "/run/kata-containers/shared/containers/e5eae60d89b84f6154dc88482b729d9a808485ac7ee04ae678d976369649aac2-58789eb5cefdb972-pods",
+                    "options": [
+                        "rbind",
+                        "rshared",
+                        "rw"
+                    ]
+                },
+                {
+                    "destination": "/var/lib/kubelet/plugins",
+                    "type": "bind",
+                    "source": "/run/kata-containers/shared/containers/e5eae60d89b84f6154dc88482b729d9a808485ac7ee04ae678d976369649aac2-7728d70d64c340f3-plugins",
+                    "options": [
+                        "rbind",
+                        "rshared",
+                        "rw"
+                    ]
+                },
+                {
+                    "destination": "/var/run/secrets/kubernetes.io/serviceaccount",
+                    "type": "bind",
+                    "source": "/run/kata-containers/shared/containers/e5eae60d89b84f6154dc88482b729d9a808485ac7ee04ae678d976369649aac2-09c3e7ba0225b7c3-serviceaccount",
+                    "options": [
+                        "rbind",
+                        "rprivate",
+                        "ro"
+                    ]
+                }
+            ],
+            "annotations": {
+                "io.kubernetes.cri.container-type": "container",
+                "io.kubernetes.cri.container-name": "hostpath",
+                "io.katacontainers.pkg.oci.container_type": "pod_container",
+                "io.kubernetes.cri.sandbox-namespace": "default",
+                "io.kubernetes.cri.sandbox-uid": "1f25af64-547e-4870-b016-1fa7c8b8209c",
+                "io.kubernetes.cri.sandbox-id": "bea56104369e4586583768f47666529799cbf3d51727aa2d9f5fe93143a000d2",
+                "io.kubernetes.cri.image-name": "registry.k8s.io/sig-storage/hostpathplugin:v1.11.0",
+                "io.kubernetes.cri.sandbox-name": "csi-hostpathplugin-0",
+                "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e5eae60d89b84f6154dc88482b729d9a808485ac7ee04ae678d976369649aac2"
+            },
+            "linux": {
+                "resources": {
+                    "memory": {
+                        "limit": 0,
+                        "reservation": 0,
+                        "swap": 0,
+                        "kernel": 0,
+                        "kernelTCP": 0,
+                        "swappiness": 0,
+                        "disableOOMKiller": false
+                    },
+                    "cpu": {
+                        "shares": 2,
+                        "quota": 0,
+                        "period": 100000,
+                        "realtimeRuntime": 0,
+                        "realtimePeriod": 0
+                    }
+                },
+                "cgroupsPath": "/kubepods/besteffort/pod1f25af64-547e-4870-b016-1fa7c8b8209c/e5eae60d89b84f6154dc88482b729d9a808485ac7ee04ae678d976369649aac2",
+                "namespaces": [
+                    {
+                        "type": "ipc"
+                    },
+                    {
+                        "type": "uts"
+                    },
+                    {
+                        "type": "mount"
+                    }
+                ],
+                "rootfsPropagation": "rshared"
+            }
+        },
+        "storages": [
+            {
+                "driver": "blk",
+                "driver_options": [],
+                "source": "07",
+                "fstype": "tar",
+                "options": [
+                    "ro",
+                    "io.katacontainers.fs-opt.block_device=file",
+                    "io.katacontainers.fs-opt.is-layer",
+                    "io.katacontainers.fs-opt.root-hash=26e79e65bd9883beeb1f3bdb3b5833247e6c6882c840308a9a3fa9024eead789"
+                ],
+                "mount_point": "/run/kata-containers/sandbox/layers/bee15e7fb454a3ca358dc7f931750cfe94de1768afd2a1b4902731cd5deddf41",
+                "fs_group": {
+                    "group_id": 0,
+                    "group_change_policy": 0
+                }
+            },
+            {
+                "driver": "blk",
+                "driver_options": [],
+                "source": "08",
+                "fstype": "tar",
+                "options": [
+                    "ro",
+                    "io.katacontainers.fs-opt.block_device=file",
+                    "io.katacontainers.fs-opt.is-layer",
+                    "io.katacontainers.fs-opt.root-hash=039aa36a69f3f5984938761ee9c16a1e6ffdb21935f13ec0060cada6891266f8"
+                ],
+                "mount_point": "/run/kata-containers/sandbox/layers/5c88c5406d1f1f5cad444ed1c0591a516c8f63529a61f59472e4b26bf310f33a",
+                "fs_group": {
+                    "group_id": 0,
+                    "group_change_policy": 0
+                }
+            },
+            {
+                "driver": "blk",
+                "driver_options": [],
+                "source": "09",
+                "fstype": "tar",
+                "options": [
+                    "ro",
+                    "io.katacontainers.fs-opt.block_device=file",
+                    "io.katacontainers.fs-opt.is-layer",
+                    "io.katacontainers.fs-opt.root-hash=e62697be7087bea2b8793b22e475171385d08e2c3e1c6b5e4da2eeb529259c79"
+                ],
+                "mount_point": "/run/kata-containers/sandbox/layers/10122699488255f704e8a8a930dff4aa76f42c693eecdb5665f3827243702a46",
+                "fs_group": {
+                    "group_id": 0,
+                    "group_change_policy": 0
+                }
+            },
+            {
+                "driver": "overlayfs",
+                "driver_options": [],
+                "source": "none",
+                "fstype": "tar-overlay",
+                "options": [
+                    "io.katacontainers.fs-opt.layer-src-prefix=/var/lib/containerd/io.containerd.snapshotter.v1.tardev/layers",
+                    "io.katacontainers.fs-opt.layer=bee15e7fb454a3ca358dc7f931750cfe94de1768afd2a1b4902731cd5deddf41,tar,ro,io.katacontainers.fs-opt.block_device=file,io.katacontainers.fs-opt.is-layer,io.katacontainers.fs-opt.root-hash=26e79e65bd9883beeb1f3bdb3b5833247e6c6882c840308a9a3fa9024eead789",
+                    "io.katacontainers.fs-opt.layer=5c88c5406d1f1f5cad444ed1c0591a516c8f63529a61f59472e4b26bf310f33a,tar,ro,io.katacontainers.fs-opt.block_device=file,io.katacontainers.fs-opt.is-layer,io.katacontainers.fs-opt.root-hash=039aa36a69f3f5984938761ee9c16a1e6ffdb21935f13ec0060cada6891266f8",
+                    "io.katacontainers.fs-opt.layer=10122699488255f704e8a8a930dff4aa76f42c693eecdb5665f3827243702a46,tar,ro,io.katacontainers.fs-opt.block_device=file,io.katacontainers.fs-opt.is-layer,io.katacontainers.fs-opt.root-hash=e62697be7087bea2b8793b22e475171385d08e2c3e1c6b5e4da2eeb529259c79",
+                    "io.katacontainers.fs-opt.overlay-rw",
+                    "lowerdir=bee15e7fb454a3ca358dc7f931750cfe94de1768afd2a1b4902731cd5deddf41:5c88c5406d1f1f5cad444ed1c0591a516c8f63529a61f59472e4b26bf310f33a:10122699488255f704e8a8a930dff4aa76f42c693eecdb5665f3827243702a46"
+                ],
+                "mount_point": "/run/kata-containers/shared/containers/e5eae60d89b84f6154dc88482b729d9a808485ac7ee04ae678d976369649aac2",
+                "fs_group": {
+                    "group_id": 0,
+                    "group_change_policy": 0
+                }
+            }
+        ]
+    }
+}

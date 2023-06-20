@@ -88,10 +88,20 @@ impl yaml::K8sResource for StatefulSet {
     fn get_container_mounts_and_storages(
         &self,
         policy_mounts: &mut Vec<oci::Mount>,
-        _storages: &mut Vec<policy::SerializedStorage>,
+        storages: &mut Vec<policy::SerializedStorage>,
         container: &pod::Container,
-        _agent_policy: &policy::AgentPolicy,
+        agent_policy: &policy::AgentPolicy,
     ) {
+        if let Some(volumes) = &self.spec.template.spec.volumes {
+            yaml::get_container_mounts_and_storages(
+                policy_mounts,
+                storages,
+                container,
+                agent_policy,
+                volumes,
+            );
+        }
+
         // Example:
         //
         // containers:

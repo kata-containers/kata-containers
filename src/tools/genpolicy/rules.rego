@@ -427,7 +427,7 @@ allow_user(policy_process, input_process) {
 # OCI process.args field
 
 allow_args(policy_process, input_process) {
-    print("allow_args 1: no policy or input args")
+    print("allow_args 1: no args")
 
     not policy_process.args
     not input_process.args
@@ -435,11 +435,30 @@ allow_args(policy_process, input_process) {
     print("allow_args 1: success")
 }
 allow_args(policy_process, input_process) {
-    print("allow_args 2: policy args =", policy_process.args, "input args =", input_process.arg)
+    print("allow_args 2: policy args =", policy_process.args)
+    print("allow_args 2: input args =", input_process.args)
 
-    policy_process.args == input_process.args
+    count(policy_process.args) == count(input_process.args)
+
+    every i, input_arg in input_process.args {
+        allow_arg(i, input_arg, policy_process)
+    }
 
     print("allow_args 2: success")
+}
+
+allow_arg(i, input_arg, policy_process) {
+    print("allow_arg 1: i =", i, "input_arg =", input_arg, "policy_arg =", policy_process.args[i])
+    input_arg == policy_process.args[i]
+    print("allow_arg 1: success")
+}
+allow_arg(i, input_arg, policy_process) {
+    print("allow_arg 2: i =", i, "input_arg =", input_arg, "policy_arg =", policy_process.args[i])
+
+    # TODO: can $(node-name) be handled better?
+    contains(policy_process.args[i], "$(node-name)")
+
+    print("allow_arg 2: success")
 }
 
 ######################################################################
