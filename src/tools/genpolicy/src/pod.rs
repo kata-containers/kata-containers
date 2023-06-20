@@ -337,11 +337,12 @@ impl Container {
         dest_env: &mut Vec<String>,
         config_maps: &Vec<config_map::ConfigMap>,
         namespace: &str,
+        metadata_name: &str,
     ) {
         if let Some(source_env) = &self.env {
             for env_variable in source_env {
                 let mut src_string = env_variable.name.clone() + "=";
-                src_string += &env_variable.get_value(config_maps, namespace);
+                src_string += &env_variable.get_value(config_maps, namespace, metadata_name);
                 if !dest_env.contains(&src_string) {
                     dest_env.push(src_string.clone());
                 }
@@ -424,6 +425,7 @@ impl EnvVar {
         &self,
         config_maps: &Vec<config_map::ConfigMap>,
         namespace: &str,
+        metadata_name: &str,
     ) -> String {
         if let Some(value) = &self.value {
             return value.clone();
@@ -433,6 +435,7 @@ impl EnvVar {
             } else if let Some(field_ref) = &value_from.fieldRef {
                 let path: &str = &field_ref.fieldPath;
                 match path {
+                    "metadata.name" => return metadata_name.to_string(),
                     "metadata.namespace" => return namespace.to_string(),
                     "status.podIP" => return "$(pod-ip)".to_string(),
                     "spec.nodeName" => return "$(node-name)".to_string(),
@@ -505,10 +508,7 @@ impl yaml::K8sResource for Pod {
     }
 
     fn get_containers(&self) -> (&Vec<registry::Container>, &Vec<Container>) {
-        (
-            &self.registry_containers,
-            &self.spec.containers,
-        )
+        (&self.registry_containers, &self.spec.containers)
     }
 }
 

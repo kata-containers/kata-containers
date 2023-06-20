@@ -281,13 +281,16 @@ impl AgentPolicy {
         let (yaml_has_command, yaml_has_args) = yaml_container.get_process_args(&mut process.args);
         registry_container.get_process(&mut process, yaml_has_command, yaml_has_args);
 
+        let metadata_name = k8s_object.get_metadata_name();
         if !is_pause_container {
-            process
-                .env
-                .push("HOSTNAME=".to_string() + &k8s_object.get_metadata_name());
+            process.env.push("HOSTNAME=".to_string() + &metadata_name);
         }
-
-        yaml_container.get_env_variables(&mut process.env, &self.config_maps, &namespace);
+        yaml_container.get_env_variables(
+            &mut process.env,
+            &self.config_maps,
+            &namespace,
+            &metadata_name,
+        );
         substitute_env_variables(&mut process.env);
 
         infra::get_process(&mut process, &infra_container);
