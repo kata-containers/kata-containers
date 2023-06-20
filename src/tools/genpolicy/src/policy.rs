@@ -297,7 +297,7 @@ impl AgentPolicy {
         self.infra_policy.get_policy_mounts(
             &mut mounts,
             &infra_container.mounts,
-            &yaml_container,
+            yaml_container,
             is_pause_container,
         );
 
@@ -307,8 +307,8 @@ impl AgentPolicy {
         k8s_object.get_container_mounts_and_storages(
             &mut mounts,
             &mut storages,
-            &yaml_container,
-            &self.infra_policy,
+            yaml_container,
+            self,
         );
 
         let mut linux = containerd::get_linux(is_privileged);
@@ -330,6 +330,27 @@ impl AgentPolicy {
             },
             storages,
             exec_commands,
+        }
+    }
+
+    pub fn get_container_mounts_and_storages(
+        &self,
+        policy_mounts: &mut Vec<oci::Mount>,
+        storages: &mut Vec<SerializedStorage>,
+        container: &pod::Container,
+        volume: &volume::Volume,
+    ) {
+        if let Some(volume_mounts) = &container.volumeMounts {
+            for volume_mount in volume_mounts {
+                if volume_mount.name.eq(&volume.name) {
+                    self.infra_policy.get_mount_and_storage(
+                        policy_mounts,
+                        storages,
+                        volume,
+                        volume_mount,
+                    );
+                }
+            }
         }
     }
 }
@@ -443,25 +464,10 @@ pub fn export_decoded_policy(policy: &str, file_name: &str) {
         .truncate(true)
         .create(true)
         .open(file_name)
-        .map_err(|e| anyhow!(e)).unwrap();
+        .map_err(|e| anyhow!(e))
+        .unwrap();
     f.write_all(policy.as_bytes()).unwrap();
     f.flush().map_err(|e| anyhow!(e)).unwrap();
-}
-
-pub fn get_container_mounts_and_storages(
-    policy_mounts: &mut Vec<oci::Mount>,
-    storages: &mut Vec<SerializedStorage>,
-    container: &pod::Container,
-    infra_policy: &infra::InfraPolicy,
-    volume: &volume::Volume,
-) {
-    if let Some(volume_mounts) = &container.volumeMounts {
-        for volume_mount in volume_mounts {
-            if volume_mount.name.eq(&volume.name) {
-                infra_policy.get_mount_and_storage(policy_mounts, storages, volume, volume_mount);
-            }
-        }
-    }
 }
 
 fn substitute_env_variables(env: &mut Vec<String>) {

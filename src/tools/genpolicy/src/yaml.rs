@@ -9,7 +9,6 @@
 use crate::config_map;
 use crate::daemon_set;
 use crate::deployment;
-use crate::infra;
 use crate::job;
 use crate::list;
 use crate::no_policy;
@@ -60,7 +59,7 @@ pub trait K8sResource {
         policy_mounts: &mut Vec<oci::Mount>,
         storages: &mut Vec<policy::SerializedStorage>,
         container: &pod::Container,
-        infra_policy: &infra::InfraPolicy,
+        agent_policy: &policy::AgentPolicy,
     );
 
     fn get_containers(&self) -> (&Vec<registry::Container>, &Vec<pod::Container>);
@@ -224,15 +223,14 @@ pub fn get_container_mounts_and_storages(
     policy_mounts: &mut Vec<oci::Mount>,
     storages: &mut Vec<policy::SerializedStorage>,
     container: &pod::Container,
-    infra_policy: &infra::InfraPolicy,
+    agent_policy: &policy::AgentPolicy,
     volumes: &Vec<volume::Volume>,
 ) {
     for volume in volumes {
-        policy::get_container_mounts_and_storages(
+        agent_policy.get_container_mounts_and_storages(
             policy_mounts,
             storages,
             container,
-            infra_policy,
             &volume,
         );
     }

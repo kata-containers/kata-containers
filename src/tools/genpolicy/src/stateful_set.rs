@@ -6,7 +6,6 @@
 // Allow K8s YAML field names.
 #![allow(non_snake_case)]
 
-use crate::infra;
 use crate::obj_meta;
 use crate::persistent_volume_claim;
 use crate::pod;
@@ -90,7 +89,7 @@ impl yaml::K8sResource for StatefulSet {
         policy_mounts: &mut Vec<oci::Mount>,
         _storages: &mut Vec<policy::SerializedStorage>,
         _container: &pod::Container,
-        _infra_policy: &infra::InfraPolicy,
+        _agent_policy: &policy::AgentPolicy,
     ) {
         // Example:
         //

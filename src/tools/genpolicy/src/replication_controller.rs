@@ -6,7 +6,6 @@
 // Allow K8s YAML field names.
 #![allow(non_snake_case)]
 
-use crate::infra;
 use crate::obj_meta;
 use crate::pod;
 use crate::pod_template;
@@ -88,14 +87,14 @@ impl yaml::K8sResource for ReplicationController {
         policy_mounts: &mut Vec<oci::Mount>,
         storages: &mut Vec<policy::SerializedStorage>,
         container: &pod::Container,
-        infra_policy: &infra::InfraPolicy,
+        agent_policy: &policy::AgentPolicy,
     ) {
         if let Some(volumes) = &self.spec.template.spec.volumes {
             yaml::get_container_mounts_and_storages(
                 policy_mounts,
                 storages,
                 container,
-                infra_policy,
+                agent_policy,
                 volumes,
             );
         }

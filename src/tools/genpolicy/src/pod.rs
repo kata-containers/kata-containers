@@ -7,7 +7,6 @@
 #![allow(non_snake_case)]
 
 use crate::config_map;
-use crate::infra;
 use crate::obj_meta;
 use crate::policy;
 use crate::registry;
@@ -483,14 +482,14 @@ impl yaml::K8sResource for Pod {
         policy_mounts: &mut Vec<oci::Mount>,
         storages: &mut Vec<policy::SerializedStorage>,
         container: &Container,
-        infra_policy: &infra::InfraPolicy,
+        agent_policy: &policy::AgentPolicy,
     ) {
         if let Some(volumes) = &self.spec.volumes {
             yaml::get_container_mounts_and_storages(
                 policy_mounts,
                 storages,
                 container,
-                infra_policy,
+                agent_policy,
                 volumes,
             );
         }
