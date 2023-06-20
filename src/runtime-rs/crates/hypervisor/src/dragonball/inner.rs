@@ -7,13 +7,12 @@
 use super::vmm_instance::VmmInstance;
 use crate::{
     device::DeviceType, hypervisor_persist::HypervisorState, kernel_param::KernelParams, VmmState,
-    DEV_HUGEPAGES, HUGETLBFS, HYPERVISOR_DRAGONBALL, SHMEM, VM_ROOTFS_DRIVER_BLK,
-    VM_ROOTFS_DRIVER_MMIO,
+    DEV_HUGEPAGES, HUGETLBFS, HYPERVISOR_DRAGONBALL, SHMEM,
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use dragonball::{
-    api::v1::{BlockDeviceConfigInfo, BootSourceConfig, VcpuResizeInfo},
+    api::v1::{BootSourceConfig, VcpuResizeInfo},
     vm::VmConfigInfo,
 };
 
@@ -25,7 +24,7 @@ use kata_types::{
 use nix::mount::MsFlags;
 use persist::sandbox_persist::Persist;
 use shim_interface::KATA_PATH;
-use std::{collections::HashSet, fs::create_dir_all, path::PathBuf};
+use std::{collections::HashSet, fs::create_dir_all};
 
 const DRAGONBALL_KERNEL: &str = "vmlinux";
 const DRAGONBALL_ROOT_FS: &str = "rootfs";
@@ -121,22 +120,6 @@ impl DragonballInner {
                 .context("kernel params to string")?,
         )
         .context("set_boot_source")?;
-
-        // get vm rootfs
-        let image = {
-            let initrd_path = self.config.boot_info.initrd.clone();
-            let image_path = self.config.boot_info.image.clone();
-            if !initrd_path.is_empty() {
-                Ok(initrd_path)
-            } else if !image_path.is_empty() {
-                Ok(image_path)
-            } else {
-                Err(anyhow!("failed to get image"))
-            }
-        }
-        .context("get image")?;
-        self.set_vm_rootfs(&image, &rootfs_driver)
-            .context("set vm rootfs")?;
 
         // add pending devices
         while let Some(dev) = self.pending_devices.pop() {
@@ -262,37 +245,6 @@ impl DragonballInner {
         self.vmm_instance
             .put_boot_source(boot_cfg)
             .context("put boot source")
-    }
-
-    fn set_vm_rootfs(&mut self, path: &str, driver: &str) -> Result<()> {
-        info!(sl!(), "set vm rootfs {} {}", path, driver);
-        let jail_drive = self
-            .get_resource(path, DRAGONBALL_ROOT_FS)
-            .context("get resource")?;
-
-        if driver == VM_ROOTFS_DRIVER_BLK || driver == VM_ROOTFS_DRIVER_MMIO {
-            let blk_cfg = BlockDeviceConfigInfo {
-                path_on_host: PathBuf::from(jail_drive),
-                drive_id: DRAGONBALL_ROOT_FS.to_string(),
-                is_root_device: false,
-                // Add it as a regular block device
-                // This allows us to use a partitioned root block device
-                // is_read_only
-                is_read_only: true,
-                is_direct: false,
-                ..Default::default()
-            };
-
-            self.vmm_instance
-                .insert_block_device(blk_cfg)
-                .context("inert block device")
-        } else {
-            Err(anyhow!(
-                "Unknown vm_rootfs driver {} path {:?}",
-                driver,
-                path
-            ))
-        }
     }
 
     fn start_vmm_instance(&mut self) -> Result<()> {
