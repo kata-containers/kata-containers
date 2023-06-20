@@ -1,0 +1,33 @@
+name: CI | Run test metrics
+on:
+  workflow_call:
+    inputs:
+      tarball-suffix:
+        required: false
+        type: string
+
+jobs:
+  run-metrics:
+    runs-on: metrics
+    env:
+      GOPATH: ${{ github.workspace }}
+      ARTIFACTS_DIR: kata-artifacts
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: get-kata-tarball
+        uses: actions/download-artifact@v3
+        with:
+          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
+          path: ${{ ARTIFACTS_DIR }}
+
+      - name: Install kata
+        run: bash tests/metrics/gha-run.sh install-kata ${{ ARTIFACTS_DIR }}
+
+      - name: run launch times on qemu
+        run: bash tests/metrics/gha-run.sh run-test-launchtimes-qemu
+
+      - name: run launch times on clh
+        run:  bash tests/metrics/gha-run.sh run-test-launchtimes-clh
