@@ -87,7 +87,7 @@ impl KernelParams {
                         params.push(Param::new("rootflags", "dax ro"));
                     }
                     _ => {
-                        return Err(anyhow!("Unsupported rootfs type"));
+                        return Err(anyhow!("Unsupported rootfs type {}", rootfs_type));
                     }
                 }
             }
@@ -101,12 +101,12 @@ impl KernelParams {
                         params.push(Param::new("rootflags", "ro"));
                     }
                     _ => {
-                        return Err(anyhow!("Unsupported rootfs type"));
+                        return Err(anyhow!("Unsupported rootfs type {}", rootfs_type));
                     }
                 }
             }
             _ => {
-                return Err(anyhow!("Unsupported rootfs driver"));
+                return Err(anyhow!("Unsupported rootfs driver {}", rootfs_driver));
             }
         }
 
@@ -310,7 +310,7 @@ mod tests {
                     ]
                     .to_vec(),
                 },
-                result: Err(anyhow!("Unsupported rootfs driver")),
+                result: Err(anyhow!("Unsupported rootfs driver foo")),
             },
             // Unsupported rootfs type
             TestData {
@@ -324,7 +324,7 @@ mod tests {
                     ]
                     .to_vec(),
                 },
-                result: Err(anyhow!("Unsupported rootfs type")),
+                result: Err(anyhow!("Unsupported rootfs type foo")),
             },
         ];
 
@@ -332,7 +332,6 @@ mod tests {
             let msg = format!("test[{}]: {:?}", i, t);
             let result = KernelParams::new_rootfs_kernel_params(t.rootfs_driver, t.rootfs_type);
             let msg = format!("{}, result: {:?}", msg, result);
-
             if t.result.is_ok() {
                 assert!(result.is_ok(), "{}", msg);
                 assert_eq!(t.expect_params, result.unwrap());
