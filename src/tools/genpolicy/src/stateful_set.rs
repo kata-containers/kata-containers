@@ -46,7 +46,8 @@ pub struct StatefulSetSpec {
     pub template: pod_template::PodTemplateSpec,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    volumeClaimTemplates: Option<Vec<persistent_volume_claim::PersistentVolumeClaim>>, // TODO: additional fields.
+    volumeClaimTemplates: Option<Vec<persistent_volume_claim::PersistentVolumeClaim>>,
+    // TODO: additional fields.
 }
 
 #[async_trait]
@@ -88,7 +89,7 @@ impl yaml::K8sResource for StatefulSet {
         &self,
         policy_mounts: &mut Vec<oci::Mount>,
         _storages: &mut Vec<policy::SerializedStorage>,
-        _container: &pod::Container,
+        container: &pod::Container,
         _agent_policy: &policy::AgentPolicy,
     ) {
         // Example:
@@ -110,33 +111,9 @@ impl yaml::K8sResource for StatefulSet {
         //       resources:
         //         requests:
         //           storage: 1Gi
-        for container in &self.spec.template.spec.containers {
-            if let Some(volume_mounts) = &container.volumeMounts {
-                for mount in volume_mounts {
-                    if let Some(claims) = &self.spec.volumeClaimTemplates {
-                        for claim in claims {
-                            if let Some(claim_name) = &claim.metadata.name {
-                                if claim_name.eq(&mount.name) {
-                                    let file_name = Path::new(&mount.mountPath)
-                                        .file_name()
-                                        .unwrap()
-                                        .to_str()
-                                        .unwrap();
-                                    // TODO:
-                                    // - Get the source path below from the infra module.
-                                    // - Generate proper options value.
-                                    policy_mounts.push(oci::Mount {
-                                        destination: mount.mountPath.clone(),
-                                        r#type: "bind".to_string(),
-                                        source: "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-".to_string() 
-                                            + &file_name + "$",
-                                        options: vec!["rbind".to_string(), "rprivate".to_string(), "rw".to_string()],
-                                    });
-                                }
-                            }
-                        }
-                    }
-                }
+        if let Some(volume_mounts) = &container.volumeMounts {
+            if let Some(claims) = &self.spec.volumeClaimTemplates {
+                StatefulSet::get_mounts_and_storages(policy_mounts, volume_mounts, claims);
             }
         }
     }
@@ -155,5 +132,44 @@ impl yaml::K8sResource for StatefulSet {
             &self.registry_containers,
             &self.spec.template.spec.containers,
         )
+    }
+}
+
+impl StatefulSet {
+    fn get_mounts_and_storages(
+        policy_mounts: &mut Vec<oci::Mount>,
+        volume_mounts: &Vec<pod::VolumeMount>,
+        claims: &Vec<persistent_volume_claim::PersistentVolumeClaim>,
+    ) {
+        for mount in volume_mounts {
+            for claim in claims {
+                if let Some(claim_name) = &claim.metadata.name {
+                    if claim_name.eq(&mount.name) {
+                        let file_name = Path::new(&mount.mountPath)
+                            .file_name()
+                            .unwrap()
+                            .to_str()
+                            .unwrap();
+                        // TODO:
+                        // - Get the source path below from the infra module.
+                        // - Generate proper options value.
+                        policy_mounts.push(oci::Mount {
+                            destination: mount.mountPath.clone(),
+                            r#type: "bind".to_string(),
+                            source:
+                                "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-"
+                                    .to_string()
+                                    + &file_name
+                                    + "$",
+                            options: vec![
+                                "rbind".to_string(),
+                                "rprivate".to_string(),
+                                "rw".to_string(),
+                            ],
+                        });
+                    }
+                }
+            }
+        }
     }
 }
