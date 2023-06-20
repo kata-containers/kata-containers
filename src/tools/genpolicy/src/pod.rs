@@ -437,9 +437,10 @@ impl EnvVar {
                 match path {
                     "metadata.name" => return metadata_name.to_string(),
                     "metadata.namespace" => return namespace.to_string(),
+                    "status.hostIP" => return "$(host-ip)".to_string(),
                     "status.podIP" => return "$(pod-ip)".to_string(),
                     "spec.nodeName" => return "$(node-name)".to_string(),
-                    _ => panic!("Unsupported field reference: {}", &field_ref.fieldPath),
+                    _ => panic!("Env var: unsupported field reference: {}", &field_ref.fieldPath),
                 }
             }
         } else {

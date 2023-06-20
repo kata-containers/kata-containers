@@ -667,6 +667,20 @@ allow_env_var(policy_process, input_process, env_var, sandbox_name) {
     print("allow_env_var 12: success")
 }
 
+# Allow fieldRef "fieldPath: status.hostIP" values.
+allow_env_var(policy_process, input_process, env_var, sandbox_name) {
+    print("allow_env_var 13: fieldPath: status.hostIP")
+
+    name_value := split(env_var, "=")
+    count(name_value) == 2
+    is_ip(name_value[1])
+
+    some policy_env_var in policy_process.env
+    allow_host_ip_var(name_value[0], policy_env_var)
+
+    print("allow_env_var 13: success")
+}
+
 allow_pod_ip_var(var_name, policy_env_var) {
     print("allow_pod_ip_var: var_name =", var_name, "policy_env_var =", policy_env_var)
 
@@ -677,6 +691,18 @@ allow_pod_ip_var(var_name, policy_env_var) {
     policy_name_value[1] == "$(pod-ip)"
 
     print("allow_pod_ip_var: success")
+}
+
+allow_host_ip_var(var_name, policy_env_var) {
+    print("allow_host_ip_var: var_name =", var_name, "policy_env_var =", policy_env_var)
+
+    policy_name_value := split(policy_env_var, "=")
+    count(policy_name_value) == 2
+
+    policy_name_value[0] == var_name
+    policy_name_value[1] == "$(host-ip)"
+
+    print("allow_host_ip_var: success")
 }
 
 is_ip(value) {
