@@ -115,7 +115,17 @@ pub struct Container {
 pub struct Affinity {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub podAntiAffinity: Option<PodAntiAffinity>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub podAffinity: Option<PodAffinity>,
     // TODO: additional fields.
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct PodAffinity {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    requiredDuringSchedulingIgnoredDuringExecution: Option<Vec<PodAffinityTerm>>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
