@@ -13,14 +13,13 @@ use crate::registry;
 use crate::yaml;
 
 use async_trait::async_trait;
-use log::debug;
+use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::fs::File;
 
-/// See Reference / Kubernetes API / Config and Storage Resources / ConfigMap.
+/// See Reference / Kubernetes API / Config and Storage Resources / Secret.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ConfigMap {
+pub struct Secret {
     apiVersion: String,
     kind: String,
     pub metadata: obj_meta::ObjectMeta,
@@ -29,32 +28,24 @@ pub struct ConfigMap {
     pub data: Option<BTreeMap<String, String>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub binaryData: Option<BTreeMap<String, Vec<u8>>>,
-
-    #[serde(skip_serializing_if = "Option::is_none")]
     immutable: Option<bool>,
+    // TODO: additional fields.
 
     #[serde(skip)]
     doc_mapping: serde_yaml::Value,
 }
 
-impl ConfigMap {
-    pub fn new(file: &str) -> anyhow::Result<Self> {
-        debug!("Reading ConfigMap...");
-        let config_map: ConfigMap = serde_yaml::from_reader(File::open(file)?)?;
-        debug!("\nRead ConfigMap => {:#?}", config_map);
-
-        Ok(config_map)
-    }
-
+impl Secret {
     pub fn get_value(&self, value_from: &pod::EnvVarSource) -> Option<String> {
-        if let Some(key_ref) = &value_from.configMapKeyRef {
+        if let Some(key_ref) = &value_from.secretKeyRef {
             if let Some(name) = &key_ref.name {
                 if let Some(my_name) = &self.metadata.name {
                     if my_name.eq(name) {
                         if let Some(data) = &self.data {
                             if let Some(value) = data.get(&key_ref.key) {
-                                return Some(value.clone());
+                                let value_bytes = general_purpose::STANDARD.decode(&value).unwrap();
+                                let value_string = std::str::from_utf8(&value_bytes).unwrap();
+                                return Some(value_string.to_string());
                             }
                         }
                     }
@@ -66,9 +57,9 @@ impl ConfigMap {
     }
 }
 
-pub fn get_value(value_from: &pod::EnvVarSource, config_maps: &Vec<ConfigMap>) -> Option<String> {
-    for config_map in config_maps {
-        if let Some(value) = config_map.get_value(value_from) {
+pub fn get_value(value_from: &pod::EnvVarSource, secrets: &Vec<Secret>) -> Option<String> {
+    for secret in secrets {
+        if let Some(value) = secret.get_value(value_from) {
             return Some(value);
         }
     }
@@ -77,7 +68,7 @@ pub fn get_value(value_from: &pod::EnvVarSource, config_maps: &Vec<ConfigMap>) -
 }
 
 #[async_trait]
-impl yaml::K8sResource for ConfigMap {
+impl yaml::K8sResource for Secret {
     async fn init(
         &mut self,
         _use_cache: bool,

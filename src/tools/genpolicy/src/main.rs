@@ -25,6 +25,7 @@ mod policy;
 mod registry;
 mod replica_set;
 mod replication_controller;
+mod secret;
 mod stateful_set;
 mod utils;
 mod volume;

@@ -10,6 +10,7 @@ use crate::config_map;
 use crate::obj_meta;
 use crate::policy;
 use crate::registry;
+use crate::secret;
 use crate::volume;
 use crate::yaml;
 
@@ -272,6 +273,21 @@ pub struct EnvVarSource {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub fieldRef: Option<ObjectFieldSelector>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secretKeyRef: Option<SecretKeySelector>,
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SecretKeySelector {
+    pub key: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub optional: Option<bool>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -336,13 +352,15 @@ impl Container {
         &self,
         dest_env: &mut Vec<String>,
         config_maps: &Vec<config_map::ConfigMap>,
+        secrets: &Vec<secret::Secret>,
         namespace: &str,
         metadata_name: &str,
     ) {
         if let Some(source_env) = &self.env {
             for env_variable in source_env {
                 let mut src_string = env_variable.name.clone() + "=";
-                src_string += &env_variable.get_value(config_maps, namespace, metadata_name);
+                src_string +=
+                    &env_variable.get_value(config_maps, secrets, namespace, metadata_name);
                 if !dest_env.contains(&src_string) {
                     dest_env.push(src_string.clone());
                 }
@@ -424,6 +442,7 @@ impl EnvVar {
     pub fn get_value(
         &self,
         config_maps: &Vec<config_map::ConfigMap>,
+        secrets: &Vec<secret::Secret>,
         namespace: &str,
         metadata_name: &str,
     ) -> String {
@@ -431,6 +450,8 @@ impl EnvVar {
             return value.clone();
         } else if let Some(value_from) = &self.valueFrom {
             if let Some(value) = config_map::get_value(value_from, config_maps) {
+                return value.clone();
+            } else if let Some(value) = secret::get_value(value_from, secrets) {
                 return value.clone();
             } else if let Some(field_ref) = &value_from.fieldRef {
                 let path: &str = &field_ref.fieldPath;
@@ -440,7 +461,10 @@ impl EnvVar {
                     "status.hostIP" => return "$(host-ip)".to_string(),
                     "status.podIP" => return "$(pod-ip)".to_string(),
                     "spec.nodeName" => return "$(node-name)".to_string(),
-                    _ => panic!("Env var: unsupported field reference: {}", &field_ref.fieldPath),
+                    _ => panic!(
+                        "Env var: unsupported field reference: {}",
+                        &field_ref.fieldPath
+                    ),
                 }
             }
         } else {

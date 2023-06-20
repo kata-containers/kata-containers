@@ -12,6 +12,7 @@ use crate::infra;
 use crate::kata;
 use crate::pod;
 use crate::registry;
+use crate::secret;
 use crate::utils;
 use crate::volume;
 use crate::yaml;
@@ -30,6 +31,7 @@ use std::io::Write;
 pub struct AgentPolicy {
     k8s_objects: Vec<boxed::Box<dyn yaml::K8sResource + Send + Sync>>,
     config_maps: Vec<config_map::ConfigMap>,
+    secrets: Vec<secret::Secret>,
     pub rules: String,
     pub infra_policy: infra::InfraPolicy,
     pub config: utils::Config,
@@ -147,6 +149,7 @@ pub struct PersistentVolumeClaimVolume {
 impl AgentPolicy {
     pub async fn from_files(config: &utils::Config) -> Result<AgentPolicy> {
         let mut config_maps = Vec::new();
+        let mut secrets = Vec::new();
         let mut k8s_objects = Vec::new();
         let yaml_contents = yaml::get_input_yaml(&config.yaml_file)?;
 
@@ -168,6 +171,10 @@ impl AgentPolicy {
                 let config_map: config_map::ConfigMap = serde_yaml::from_str(&yaml_string)?;
                 debug!("{:#?}", &config_map);
                 config_maps.push(config_map);
+            } else if kind.eq("Secret") {
+                let secret: secret::Secret = serde_yaml::from_str(&yaml_string)?;
+                debug!("{:#?}", &secret);
+                secrets.push(secret);
             }
         }
 
@@ -185,6 +192,7 @@ impl AgentPolicy {
                 rules,
                 infra_policy,
                 config_maps,
+                secrets,
                 config: config.clone(),
             })
         } else {
@@ -288,6 +296,7 @@ impl AgentPolicy {
         yaml_container.get_env_variables(
             &mut process.env,
             &self.config_maps,
+            &self.secrets,
             &namespace,
             &metadata_name,
         );
