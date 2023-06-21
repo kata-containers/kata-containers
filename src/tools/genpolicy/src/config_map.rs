@@ -88,10 +88,6 @@ impl yaml::K8sResource for ConfigMap {
         Ok(())
     }
 
-    fn get_metadata_name(&self) -> String {
-        panic!("Unsupported");
-    }
-
     fn get_host_name(&self) -> String {
         panic!("Unsupported");
     }

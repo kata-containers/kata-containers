@@ -370,13 +370,12 @@ impl Container {
         config_maps: &Vec<config_map::ConfigMap>,
         secrets: &Vec<secret::Secret>,
         namespace: &str,
-        metadata_name: &str,
     ) {
         if let Some(source_env) = &self.env {
             for env_variable in source_env {
                 let mut src_string = env_variable.name.clone() + "=";
                 src_string +=
-                    &env_variable.get_value(config_maps, secrets, namespace, metadata_name);
+                    &env_variable.get_value(config_maps, secrets, namespace);
                 if !dest_env.contains(&src_string) {
                     dest_env.push(src_string.clone());
                 }
@@ -460,7 +459,6 @@ impl EnvVar {
         config_maps: &Vec<config_map::ConfigMap>,
         secrets: &Vec<secret::Secret>,
         namespace: &str,
-        metadata_name: &str,
     ) -> String {
         if let Some(value) = &self.value {
             return value.clone();
@@ -504,17 +502,13 @@ impl yaml::K8sResource for Pod {
         Ok(())
     }
 
-    fn get_metadata_name(&self) -> String {
-        self.metadata.get_name()
-    }
-
     fn get_host_name(&self) -> String {
         // Example: "hostname": "^busybox-cc$",
-        "^".to_string() + &self.get_metadata_name() + "$"
+        "^".to_string() + &self.metadata.get_name() + "$"
     }
 
     fn get_sandbox_name(&self) -> Option<String> {
-        Some(self.get_metadata_name())
+        Some(self.metadata.get_name())
     }
 
     fn get_namespace(&self) -> String {

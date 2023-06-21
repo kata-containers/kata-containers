@@ -297,7 +297,6 @@ impl AgentPolicy {
             &self.config_maps,
             &self.secrets,
             &namespace,
-            "$(sandbox-name)",
         );
         substitute_env_variables(&mut process.env);
         substitute_args_env_variables(&mut process.args, &process.env);

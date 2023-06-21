@@ -68,13 +68,9 @@ impl yaml::K8sResource for StatefulSet {
         Ok(())
     }
 
-    fn get_metadata_name(&self) -> String {
-        self.metadata.get_name()
-    }
-
     fn get_host_name(&self) -> String {
         // Example: "hostname": "no-exist-tdtd7",
-        "^".to_string() + &self.get_metadata_name() + "-[a-z0-9]*$"
+        "^".to_string() + &self.metadata.get_name() + "-[a-z0-9]*$"
     }
 
     fn get_sandbox_name(&self) -> Option<String> {
