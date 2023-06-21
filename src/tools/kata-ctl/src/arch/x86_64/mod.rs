@@ -238,13 +238,9 @@ mod arch_specific {
 
         let running_on_vmm_alt = running_on_vmm()?;
 
+        // Kernel param "unrestricted_guest" is not required when running under a hypervisor
         if running_on_vmm_alt {
-            let msg = format!("You are running in a VM, where the kernel module '{}' parameter '{:}' has a value '{:}'. This causes conflict when running kata.",
-                module,
-                param_name,
-                param_value_host
-            );
-            return Err(anyhow!(msg));
+            return Ok(());
         }
 
         if param_value_host == expected_param_value.to_string() {
