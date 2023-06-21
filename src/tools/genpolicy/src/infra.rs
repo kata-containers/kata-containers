@@ -293,13 +293,13 @@ impl InfraPolicy {
         if yaml_volume.emptyDir.is_some() {
             Self::empty_dir_mount_and_storage(&self.volumes, policy_mounts, storages, yaml_mount);
         } else if yaml_volume.persistentVolumeClaim.is_some() || yaml_volume.azureFile.is_some() {
-            self.shared_bind_mount(yaml_mount, policy_mounts, false);
+            self.shared_bind_mount(yaml_mount, policy_mounts, "rprivate", "rw");
         } else if yaml_volume.hostPath.is_some() {
             self.host_path_mount(yaml_mount, yaml_volume, policy_mounts);
         } else if yaml_volume.configMap.is_some() || yaml_volume.secret.is_some() {
             Self::config_map_mount_and_storage(&self.volumes, policy_mounts, storages, yaml_mount);
         } else if yaml_volume.projected.is_some() {
-            Self::verify_projected_volume_mount(yaml_mount, policy_mounts);
+            self.shared_bind_mount(yaml_mount, policy_mounts, "rprivate", "ro");
         } else if yaml_volume.downwardAPI.is_some() {
             self.downward_api_mount(yaml_mount, policy_mounts);
         } else {
@@ -345,7 +345,8 @@ impl InfraPolicy {
         &self,
         yaml_mount: &pod::VolumeMount,
         policy_mounts: &mut Vec<oci::Mount>,
-        shared: bool,
+        propagation: &str,
+        access: &str,
     ) {
         let mut source = self.shared_files.source_path.clone();
         if let Some(byte_index) = str::rfind(&yaml_mount.mountPath, '/') {
@@ -357,12 +358,7 @@ impl InfraPolicy {
 
         let destination = yaml_mount.mountPath.to_string();
         let r#type = "bind".to_string();
-        let mount_option = if shared {
-            "rshared".to_string()
-        } else {
-            "rprivate".to_string()
-        };
-        let options = vec!["rbind".to_string(), mount_option, "rw".to_string()];
+        let options = vec!["rbind".to_string(), propagation.to_string(), access.to_string()];
 
         if let Some(policy_mount) = policy_mounts
             .iter_mut()
@@ -416,7 +412,12 @@ impl InfraPolicy {
         // What is the reason for this source path difference in the Guest OS?
         if !path.starts_with("/dev/") && !path.starts_with("/sys/") {
             debug!("host_path_mount: calling shared_bind_mount");
-            self.shared_bind_mount(yaml_mount, policy_mounts, biderectional);
+            let propagation = if biderectional {
+                "rshared"
+            } else {
+                "rprivate"
+            };
+            self.shared_bind_mount(yaml_mount, policy_mounts, propagation, "rw");
         } else {
             let dest = yaml_mount.mountPath.to_string();
             let r#type = "bind".to_string();
@@ -485,19 +486,6 @@ impl InfraPolicy {
             source: infra_config_map.mount_point.clone() + &name + "$",
             options: infra_config_map.options.clone(),
         });
-    }
-
-    fn verify_projected_volume_mount(
-        yaml_mount: &pod::VolumeMount,
-        policy_mounts: &mut Vec<oci::Mount>,
-    ) {
-        for policy_mount in policy_mounts {
-            if policy_mount.destination == yaml_mount.mountPath {
-                debug!("verify_projected_volume_mount: found already existing infrastructure mount {}.", &yaml_mount.mountPath);
-                return;
-            }
-        }
-        panic!("Unsupported pod mount {}", &yaml_mount.mountPath);
     }
 
     fn downward_api_mount(
