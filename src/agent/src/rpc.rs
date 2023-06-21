@@ -1842,7 +1842,11 @@ async fn read_stream(reader: Arc<Mutex<ReadHalf<PipeStream>>>, l: usize) -> Resu
     Ok(content)
 }
 
-pub fn start(s: Arc<Mutex<Sandbox>>, server_address: &str, init_mode: bool) -> Result<TtrpcServer> {
+pub async fn start(
+    s: Arc<Mutex<Sandbox>>,
+    server_address: &str,
+    init_mode: bool,
+) -> Result<TtrpcServer> {
     let agent_service = Box::new(AgentService {
         sandbox: s.clone(),
         init_mode,
@@ -1853,8 +1857,8 @@ pub fn start(s: Arc<Mutex<Sandbox>>, server_address: &str, init_mode: bool) -> R
     let health_service = Box::new(HealthService {}) as Box<dyn health_ttrpc::Health + Send + Sync>;
     let health_worker = Arc::new(health_service);
 
-    let image_service =
-        Box::new(image_rpc::ImageService::new(s)) as Box<dyn image_ttrpc::Image + Send + Sync>;
+    let image_service = Box::new(image_rpc::ImageService::new(s).await)
+        as Box<dyn image_ttrpc::Image + Send + Sync>;
 
     let aservice = agent_ttrpc::create_agent_service(agent_worker);
 

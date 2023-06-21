@@ -31,6 +31,9 @@ const HTTPS_PROXY: &str = "agent.https_proxy";
 const NO_PROXY: &str = "agent.no_proxy";
 const ENABLE_DATA_INTEGRITY: &str = "agent.data_integrity";
 const ENABLE_SIGNATURE_VERIFICATION: &str = "agent.enable_signature_verification";
+const IMAGE_POLICY_FILE: &str = "agent.image_policy";
+const IMAGE_REGISTRY_AUTH_FILE: &str = "agent.image_registry_auth";
+const SIMPLE_SIGNING_SIGSTORE_CONFIG: &str = "agent.simple_signing_sigstore_config";
 
 const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
 const DEFAULT_HOTPLUG_TIMEOUT: time::Duration = time::Duration::from_secs(3);
@@ -89,6 +92,9 @@ pub struct AgentConfig {
     pub no_proxy: String,
     pub data_integrity: bool,
     pub enable_signature_verification: bool,
+    pub image_policy_file: String,
+    pub image_registry_auth_file: String,
+    pub simple_signing_sigstore_config: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -110,6 +116,9 @@ pub struct AgentConfigBuilder {
     pub no_proxy: Option<String>,
     pub data_integrity: Option<bool>,
     pub enable_signature_verification: Option<bool>,
+    pub image_policy_file: Option<String>,
+    pub image_registry_auth_file: Option<String>,
+    pub simple_signing_sigstore_config: Option<String>,
 }
 
 macro_rules! config_override {
@@ -177,6 +186,9 @@ impl Default for AgentConfig {
             no_proxy: String::from(""),
             data_integrity: false,
             enable_signature_verification: true,
+            image_policy_file: String::from(""),
+            image_registry_auth_file: String::from(""),
+            simple_signing_sigstore_config: String::from(""),
         }
     }
 }
@@ -214,6 +226,13 @@ impl FromStr for AgentConfig {
             agent_config_builder,
             agent_config,
             enable_signature_verification
+        );
+        config_override!(agent_config_builder, agent_config, image_policy_file);
+        config_override!(agent_config_builder, agent_config, image_registry_auth_file);
+        config_override!(
+            agent_config_builder,
+            agent_config,
+            simple_signing_sigstore_config
         );
 
         // Populate the allowed endpoints hash set, if we got any from the config file.
@@ -338,6 +357,31 @@ impl AgentConfig {
                 ENABLE_SIGNATURE_VERIFICATION,
                 config.enable_signature_verification,
                 get_bool_value
+            );
+
+            // URI of the image security file
+            parse_cmdline_param!(
+                param,
+                IMAGE_POLICY_FILE,
+                config.image_policy_file,
+                get_string_value
+            );
+
+            // URI of the registry auth file
+            parse_cmdline_param!(
+                param,
+                IMAGE_REGISTRY_AUTH_FILE,
+                config.image_registry_auth_file,
+                get_string_value
+            );
+
+            // URI of the simple signing sigstore file
+            // used when simple signing verification is used
+            parse_cmdline_param!(
+                param,
+                SIMPLE_SIGNING_SIGSTORE_CONFIG,
+                config.simple_signing_sigstore_config,
+                get_string_value
             );
         }
 
@@ -521,6 +565,9 @@ mod tests {
         assert_eq!(config.hotplug_timeout, DEFAULT_HOTPLUG_TIMEOUT);
         assert_eq!(config.container_policy_path, "");
         assert!(config.enable_signature_verification);
+        assert_eq!(config.image_policy_file, "");
+        assert_eq!(config.image_registry_auth_file, "");
+        assert_eq!(config.simple_signing_sigstore_config, "");
     }
 
     #[test]
@@ -545,6 +592,9 @@ mod tests {
             no_proxy: &'a str,
             data_integrity: bool,
             enable_signature_verification: bool,
+            image_policy_file: &'a str,
+            image_registry_auth_file: &'a str,
+            simple_signing_sigstore_config: &'a str,
         }
 
         impl Default for TestData<'_> {
@@ -566,6 +616,9 @@ mod tests {
                     no_proxy: "",
                     data_integrity: false,
                     enable_signature_verification: true,
+                    image_policy_file: "",
+                    image_registry_auth_file: "",
+                    simple_signing_sigstore_config: "",
                 }
             }
         }
@@ -1010,6 +1063,51 @@ mod tests {
                 enable_signature_verification: false,
                 ..Default::default()
             },
+            TestData {
+                contents: "agent.image_policy=file:///etc/policy.json",
+                image_policy_file: "file:///etc/policy.json",
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.image_policy=kbs:///default/security-policy/test",
+                image_policy_file: "kbs:///default/security-policy/test",
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.image_policy=kbs://example.kbs.org/default/security-policy/test",
+                image_policy_file: "kbs://example.kbs.org/default/security-policy/test",
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.image_registry_auth=file:///etc/auth.json",
+                image_registry_auth_file: "file:///etc/auth.json",
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.image_registry_auth=kbs:///default/credential/test",
+                image_registry_auth_file: "kbs:///default/credential/test",
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.image_registry_auth=kbs://example.kbs.org/default/credential/test",
+                image_registry_auth_file: "kbs://example.kbs.org/default/credential/test",
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.simple_signing_sigstore_config=file:///etc/containers/signature/default.yml",
+                simple_signing_sigstore_config: "file:///etc/containers/signature/default.yml",
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.simple_signing_sigstore_config=kbs:///default/sigstore-config/test",
+                simple_signing_sigstore_config: "kbs:///default/sigstore-config/test",
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.simple_signing_sigstore_config=kbs://example.kbs.org/default/sigstore-config/test",
+                simple_signing_sigstore_config: "kbs://example.kbs.org/default/sigstore-config/test",
+                ..Default::default()
+            },
         ];
 
         let dir = tempdir().expect("failed to create tmpdir");
@@ -1068,6 +1166,17 @@ mod tests {
             assert_eq!(d.data_integrity, config.data_integrity, "{}", msg);
             assert_eq!(
                 d.enable_signature_verification, config.enable_signature_verification,
+                "{}",
+                msg
+            );
+            assert_eq!(d.image_policy_file, config.image_policy_file, "{}", msg);
+            assert_eq!(
+                d.image_registry_auth_file, config.image_registry_auth_file,
+                "{}",
+                msg
+            );
+            assert_eq!(
+                d.simple_signing_sigstore_config, config.simple_signing_sigstore_config,
                 "{}",
                 msg
             );
