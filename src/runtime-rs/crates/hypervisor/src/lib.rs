@@ -91,7 +91,7 @@ pub trait Hypervisor: std::fmt::Debug + Send + Sync {
     async fn save_vm(&self) -> Result<()>;
     async fn resume_vm(&self) -> Result<()>;
     async fn resize_vcpu(&self, old_vcpus: u32, new_vcpus: u32) -> Result<(u32, u32)>; // returns (old_vcpus, new_vcpus)
-    async fn resize_memory(&self, req_mem_mb: u32) -> Result<(u32, MemoryConfig)>;
+    async fn resize_memory(&self, new_mem_mb: u32) -> Result<(u32, MemoryConfig)>;
 
     // device manager
     async fn add_device(&self, device: DeviceType) -> Result<DeviceType>;

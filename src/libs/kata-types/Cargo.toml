@@ -14,7 +14,7 @@ edition = "2018"
 bitmask-enum = "2.1.0"
 anyhow = "1.0"
 base64 = "0.13.0"
-byte-unit = "3.1.4"
+byte-unit = "5.0.3"
 glob = "0.3.0"
 lazy_static = "1.4.0"
 num_cpus = "1.13.1"
@@ -26,6 +26,7 @@ serde_json = "1.0.73"
 thiserror = "1.0"
 toml = "0.5.8"
 serde-enum-str = "0.4"
+sysinfo = "0.29.11"
 
 oci = { path = "../oci" }
 safe-path = { path = "../safe-path" }

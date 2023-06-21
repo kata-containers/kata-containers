@@ -153,7 +153,7 @@ impl QemuInner {
         todo!()
     }
 
-    pub(crate) fn resize_memory(&self, _req_mem_mb: u32) -> Result<(u32, MemoryConfig)> {
+    pub(crate) fn resize_memory(&self, _new_mem_mb: u32) -> Result<(u32, MemoryConfig)> {
         todo!()
     }
 }
