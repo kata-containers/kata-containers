@@ -22,6 +22,7 @@ pub fn add_pause_container(containers: &mut Vec<pod::Container>) {
             allowPrivilegeEscalation: Some(false),
             privileged: None,
             capabilities: None,
+            runAsUser: None,
         }),
         volumeMounts: None,
         env: None,

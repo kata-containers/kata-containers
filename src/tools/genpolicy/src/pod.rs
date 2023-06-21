@@ -212,6 +212,9 @@ pub struct SecurityContext {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub capabilities: Option<Capabilities>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runAsUser: Option<i64>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -469,7 +472,7 @@ impl EnvVar {
             } else if let Some(field_ref) = &value_from.fieldRef {
                 let path: &str = &field_ref.fieldPath;
                 match path {
-                    "metadata.name" => return metadata_name.to_string(),
+                    "metadata.name" => return "$(sandbox-name)".to_string(),
                     "metadata.namespace" => return namespace.to_string(),
                     "status.hostIP" => return "$(host-ip)".to_string(),
                     "status.podIP" => return "$(pod-ip)".to_string(),
@@ -554,6 +557,21 @@ impl Container {
     pub fn apply_capabilities(&self, capabilities: &mut oci::LinuxCapabilities) {
         if let Some(securityContext) = &self.securityContext {
             if let Some(yaml_capabilities) = &securityContext.capabilities {
+                if let Some(drop) = &yaml_capabilities.drop {
+                    for c in drop {
+                        if c == "ALL" {
+                            capabilities.bounding.clear();
+                            capabilities.permitted.clear();
+                            capabilities.effective.clear();
+                        } else {
+                            let cap = "CAP_".to_string() + &c;
+
+                            capabilities.bounding.retain(|x| !x.eq(&cap));
+                            capabilities.permitted.retain(|x| !x.eq(&cap));
+                            capabilities.effective.retain(|x| !x.eq(&cap));
+                        }
+                    }
+                }
                 if let Some(add) = &yaml_capabilities.add {
                     for c in add {
                         let cap = "CAP_".to_string() + &c;
@@ -567,15 +585,6 @@ impl Container {
                         if !capabilities.effective.contains(&cap) {
                             capabilities.effective.push(cap.clone());
                         }
-                    }
-                }
-                if let Some(drop) = &yaml_capabilities.drop {
-                    for c in drop {
-                        let cap = "CAP_".to_string() + &c;
-
-                        capabilities.bounding.retain(|x| !x.eq(&cap));
-                        capabilities.permitted.retain(|x| !x.eq(&cap));
-                        capabilities.effective.retain(|x| !x.eq(&cap));
                     }
                 }
             }

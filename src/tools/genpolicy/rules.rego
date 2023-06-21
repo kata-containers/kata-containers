@@ -465,8 +465,10 @@ allow_arg(i, input_arg, policy_process) {
 # OCI process.env field
 
 allow_env(policy_process, input_process, sandbox_name) {
+    print("allow_env: policy env =", policy_process.env)
+
     every env_var in input_process.env {
-        print("allow_env =>", env_var)
+        print("allow_env => allow_env_var:", env_var)
         allow_env_var(policy_process, input_process, env_var, sandbox_name)
     }
 
@@ -483,13 +485,15 @@ allow_env_var(policy_process, input_process, env_var, sandbox_name) {
     print("allow_env_var 1: success")
 }
 
-# Allow "HOSTNAME=<sandbox_name>".
+# Match input with one of the policy variables, after substituting $(sandbox-name).
 allow_env_var(policy_process, input_process, env_var, sandbox_name) {
-    print("allow_env_var 2: HOSTNAME")
-    host_name_env_var := concat("", ["HOSTNAME=", sandbox_name])
+    print("allow_env_var 2: replace $(sandbox-name)")
 
-    print(host_name_env_var, env_var)
-    host_name_env_var == env_var
+    some policy_env_var in policy_process.env
+    policy_var = replace(policy_env_var, "$(sandbox-name)", sandbox_name)
+
+    print("allow_env_var 2: input =", env_var, "policy =", policy_var)
+    policy_var == env_var
 
     print("allow_env_var 2: success")
 }
