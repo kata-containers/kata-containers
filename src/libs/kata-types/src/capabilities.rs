@@ -20,7 +20,7 @@ pub enum CapabilityBits {
     /// hypervisor supports hybrid-vsock
     HybridVsockSupport,
     /// hypervisor supports memory hotplug probe interface
-    GuestMemoryHotplugProbe,
+    GuestMemoryProbe,
 }
 
 /// Capabilities describe a virtcontainers hypervisor capabilities through a bit mask.
@@ -81,7 +81,7 @@ impl Capabilities {
 
     /// is_mem_hotplug_probe_supported tells if the hypervisor supports hotplug probe interface
     pub fn is_mem_hotplug_probe_supported(&self) -> bool {
-        self.flags.and(CapabilityBits::GuestMemoryHotplugProbe) != 0
+        self.flags.and(CapabilityBits::GuestMemoryProbe) != 0
     }
 }
 
@@ -130,7 +130,7 @@ mod tests {
         cap.set(CapabilityBits::HybridVsockSupport);
         assert!(cap.is_hybrid_vsock_supported());
         // test append capabilities
-        cap.add(CapabilityBits::GuestMemoryHotplugProbe);
+        cap.add(CapabilityBits::GuestMemoryProbe);
         assert!(cap.is_mem_hotplug_probe_supported());
         assert!(cap.is_fs_sharing_supported());
     }

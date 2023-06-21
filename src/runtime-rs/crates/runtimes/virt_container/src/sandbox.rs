@@ -222,7 +222,7 @@ impl VirtSandbox {
         // set memory hotplug probe
         if guest_details.support_mem_hotplug_probe {
             self.hypervisor
-                .set_capabilities(CapabilityBits::GuestMemoryHotplugProbe)
+                .set_capabilities(CapabilityBits::GuestMemoryProbe)
                 .await;
         }
         info!(

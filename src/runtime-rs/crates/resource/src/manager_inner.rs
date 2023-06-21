@@ -66,7 +66,7 @@ impl ResourceManagerInner {
 
         let cgroups_resource = CgroupsResource::new(sid, &toml_config)?;
         let cpu_resource = CpuResource::new(toml_config.clone())?;
-        let mem_resource = MemResource::new(toml_config.clone(), init_size_manager)?;
+        let mem_resource = MemResource::new(init_size_manager)?;
         Ok(Self {
             sid: sid.to_string(),
             toml_config,
