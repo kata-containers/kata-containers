@@ -101,6 +101,13 @@ default_bridges = @DEFBRIDGES@
 # If unspecified then it will be set @DEFMEMSZ@ MiB.
 default_memory = @DEFMEMSZ@
 
+# Default maximum memory in MiB per SB / VM
+# unspecified or == 0           --> will be set to the actual amount of physical RAM
+# > 0 <= amount of physical RAM --> will be set to the specified number
+# > amount of physical RAM      --> will be set to the actual amount of physical RAM
+default_maxmemory = @DEFMAXMEMSZ@
+
+
 # Block storage driver to be used for the hypervisor in case the container
 # rootfs is backed by a block device. DB only supports virtio-blk.
 block_device_driver = "@DEFBLOCKSTORAGEDRIVER_DB@"

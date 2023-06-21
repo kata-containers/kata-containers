@@ -653,6 +653,13 @@ pub struct MemoryInfo {
     /// If swap_in_bytes and memory_limit_in_bytes is not set, the size should be default_memory.
     #[serde(default)]
     pub enable_guest_swap: bool,
+
+    /// Default maximum memory in MiB per SB / VM
+    /// unspecified or == 0           --> will be set to the actual amount of physical RAM
+    /// > 0 <= amount of physical RAM --> will be set to the specified number
+    /// > amount of physical RAM      --> will be set to the actual amount of physical RAM
+    #[serde(default)]
+    pub default_maxmemory: u32,
 }
 
 impl MemoryInfo {
