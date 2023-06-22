@@ -9,11 +9,14 @@ use ini::Ini;
 
 const SYS_DEV_PREFIX: &str = "/sys/dev";
 
+pub const DEVICE_TYPE_BLOCK: &str = "b";
+pub const DEVICE_TYPE_CHAR: &str = "c";
+
 // get_host_path is used to fetch the host path for the device.
 // The path passed in the spec refers to the path that should appear inside the container.
 // We need to find the actual device path on the host based on the major-minor numbers of the device.
-pub fn get_host_path(dev_type: String, major: i64, minor: i64) -> Result<String> {
-    let path_comp = match dev_type.as_str() {
+pub fn get_host_path(dev_type: &str, major: i64, minor: i64) -> Result<String> {
+    let path_comp = match dev_type {
         "c" | "u" => "char",
         "b" => "block",
         // for device type p will return an empty string

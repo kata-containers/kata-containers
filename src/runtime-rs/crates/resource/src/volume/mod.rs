@@ -11,6 +11,9 @@ mod share_fs_volume;
 mod shm_volume;
 pub mod utils;
 
+pub mod vfio_volume;
+use vfio_volume::is_vfio_volume;
+
 use std::{sync::Arc, vec::Vec};
 
 use anyhow::{Context, Result};
@@ -74,6 +77,12 @@ impl VolumeResource {
                     block_volume::BlockVolume::new(d, m, read_only, cid, sid)
                         .await
                         .with_context(|| format!("new share fs volume {:?}", m))?,
+                )
+            } else if is_vfio_volume(m) {
+                Arc::new(
+                    vfio_volume::VfioVolume::new(d, m, read_only, cid, sid)
+                        .await
+                        .with_context(|| format!("new vfio volume {:?}", m))?,
                 )
             } else if let Some(options) =
                 get_huge_page_option(m).context("failed to check huge page")?

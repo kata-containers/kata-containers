@@ -12,9 +12,10 @@ use async_trait::async_trait;
 use hypervisor::{
     device::{
         device_manager::{do_handle_device, DeviceManager},
+        util::{get_host_path, DEVICE_TYPE_CHAR},
         DeviceConfig, DeviceType,
     },
-    BlockConfig, Hypervisor,
+    BlockConfig, Hypervisor, VfioConfig,
 };
 use kata_types::config::TomlConfig;
 use kata_types::mount::Mount;
@@ -277,17 +278,57 @@ impl ResourceManagerInner {
                         ..Default::default()
                     });
 
-                    let device_info = do_handle_device(&self.device_manager, &dev_info)
+                    let device_info = do_handle_device(&self.device_manager.clone(), &dev_info)
                         .await
                         .context("do handle device")?;
 
-                    // create agent device
+                    // create block device for kata agent,
+                    // if driver is virtio-blk-pci, the id will be pci address.
                     if let DeviceType::Block(device) = device_info {
                         let agent_device = Device {
-                            id: device.device_id.clone(),
+                            id: device.config.virt_path.clone(),
                             container_path: d.path.clone(),
                             field_type: device.config.driver_option,
                             vm_path: device.config.virt_path,
+                            ..Default::default()
+                        };
+                        devices.push(agent_device);
+                    }
+                }
+                "c" => {
+                    let host_path = get_host_path(DEVICE_TYPE_CHAR, d.major, d.minor)
+                        .context("get host path failed")?;
+                    // First of all, filter vfio devices.
+                    if !host_path.starts_with("/dev/vfio") {
+                        continue;
+                    }
+
+                    let dev_info = DeviceConfig::VfioCfg(VfioConfig {
+                        host_path,
+                        dev_type: "c".to_string(),
+                        hostdev_prefix: "vfio_device".to_owned(),
+                        ..Default::default()
+                    });
+
+                    let device_info = do_handle_device(&self.device_manager.clone(), &dev_info)
+                        .await
+                        .context("do handle device")?;
+
+                    // vfio mode: vfio-pci and vfio-pci-gk for x86_64
+                    // - vfio-pci, devices appear as VFIO character devices under /dev/vfio in container.
+                    // - vfio-pci-gk, devices are managed by whatever driver in Guest kernel.
+                    let vfio_mode = match self.toml_config.runtime.vfio_mode.as_str() {
+                        "vfio" => "vfio-pci".to_string(),
+                        _ => "vfio-pci-gk".to_string(),
+                    };
+
+                    // create agent device
+                    if let DeviceType::Vfio(device) = device_info {
+                        let agent_device = Device {
+                            id: device.device_id, // just for kata-agent
+                            container_path: d.path.clone(),
+                            field_type: vfio_mode,
+                            options: device.device_options,
                             ..Default::default()
                         };
                         devices.push(agent_device);
