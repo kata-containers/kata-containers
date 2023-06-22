@@ -704,6 +704,24 @@ allow_env_var(policy_process, input_process, env_var, sandbox_name) {
     print("allow_env_var 13: success")
 }
 
+# Allow resourceFieldRef values (e.g., "limits.cpu").
+allow_env_var(policy_process, input_process, env_var, sandbox_name) {
+    print("allow_env_var 14: resourceFieldRef")
+
+    name_value := split(env_var, "=")
+    count(name_value) == 2
+
+    some policy_env_var in policy_process.env
+    policy_name_value := split(policy_env_var, "=")
+    count(policy_name_value) == 2
+
+    policy_name_value[0] == name_value[0]
+    contains(policy_name_value[1], "$(resource-field)")
+
+    print("allow_env_var 14: success")
+}
+
+
 allow_pod_ip_var(var_name, policy_env_var) {
     print("allow_pod_ip_var: var_name =", var_name, "policy_env_var =", policy_env_var)
 

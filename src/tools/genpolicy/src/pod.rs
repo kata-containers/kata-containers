@@ -292,6 +292,9 @@ pub struct EnvVarSource {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub secretKeyRef: Option<SecretKeySelector>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resourceFieldRef: Option<ResourceFieldSelector>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -316,6 +319,13 @@ pub struct ConfigMapKeySelector {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub optional: Option<bool>,
+}
+
+/// See Reference / Kubernetes API / Common Definitions / ObjectFieldSelector.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ResourceFieldSelector {
+    pub resource: String,
+    // TODO: additional fields.
 }
 
 /// See Reference / Kubernetes API / Common Definitions / ObjectFieldSelector.
@@ -480,12 +490,16 @@ impl EnvVar {
                         &field_ref.fieldPath
                     ),
                 }
+            } else if value_from.resourceFieldRef.is_some() {
+                // TODO: should resource fields such as "limits.cpu" or "limits.memory"
+                // be handled in a different way?
+                return "$(resource-field)".to_string()
             }
         } else {
             panic!("Environment variable without value or valueFrom!");
         }
 
-        panic!("Unknown EnvVar value: {}", &self.name);
+        panic!("Couldn't get the value of env var: {}", &self.name);
     }
 }
 
