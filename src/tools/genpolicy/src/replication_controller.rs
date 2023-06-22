@@ -111,4 +111,11 @@ impl yaml::K8sResource for ReplicationController {
             &self.spec.template.spec.containers,
         )
     }
+
+    fn get_annotations(&self) -> Option<BTreeMap<String, String>> {
+        if let Some(annotations) = &self.spec.template.metadata.annotations {
+            return Some(annotations.clone());
+        }
+        None
+    }
 }

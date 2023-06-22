@@ -722,7 +722,7 @@ allow_env_var(policy_process, input_process, env_var, sandbox_name) {
     policy_name_value[0] == name_value[0]
 
     # TODO: should these be handled in a different way?
-    always_allowed = ["$(resource-field)", "$(job-completion-index)"]
+    always_allowed = ["$(resource-field)", "$(todo-annotation)"]
     some allowed in always_allowed
     contains(policy_name_value[1], allowed)
 

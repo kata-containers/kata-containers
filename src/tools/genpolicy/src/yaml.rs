@@ -63,6 +63,7 @@ pub trait K8sResource {
     );
 
     fn get_containers(&self) -> (&Vec<registry::Container>, &Vec<pod::Container>);
+    fn get_annotations(&self) -> Option<BTreeMap<String, String>>;
 }
 
 /// See Reference / Kubernetes API / Common Definitions / LabelSelector.

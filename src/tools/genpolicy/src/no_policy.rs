@@ -12,6 +12,7 @@ use crate::registry;
 use crate::yaml;
 
 use async_trait::async_trait;
+use std::collections::BTreeMap;
 
 #[derive(Clone, Debug)]
 pub struct NoPolicyResource {
@@ -60,6 +61,10 @@ impl yaml::K8sResource for NoPolicyResource {
     }
 
     fn get_containers(&self) -> (&Vec<registry::Container>, &Vec<pod::Container>) {
+        panic!("Unsupported");
+    }
+
+    fn get_annotations(&self) -> Option<BTreeMap<String, String>> {
         panic!("Unsupported");
     }
 }

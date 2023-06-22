@@ -15,6 +15,7 @@ use crate::yaml;
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 /// See Reference / Kubernetes API / Workload Resources / ReplicaSet.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -107,5 +108,12 @@ impl yaml::K8sResource for ReplicaSet {
             &self.registry_containers,
             &self.spec.template.spec.containers,
         )
+    }
+
+    fn get_annotations(&self) -> Option<BTreeMap<String, String>> {
+        if let Some(annotations) = &self.spec.template.metadata.annotations {
+            return Some(annotations.clone());
+        }
+        None
     }
 }

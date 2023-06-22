@@ -316,23 +316,39 @@ impl InfraPolicy {
         let infra_empty_dir = &infra_volumes.emptyDir;
         debug!("Infra emptyDir: {:?}", infra_empty_dir);
 
-        storages.push(policy::SerializedStorage {
-            driver: infra_empty_dir.driver.clone(),
-            driver_options: Vec::new(),
-            source: infra_empty_dir.source.clone(),
-            fstype: infra_empty_dir.fstype.clone(),
-            options: infra_empty_dir.options.clone(),
-            mount_point: infra_empty_dir.mount_point.clone() + &yaml_mount.name + "$",
-            fs_group: policy::SerializedFsGroup {
-                group_id: 0,
-                group_change_policy: 0,
-            },
-        });
+        if yaml_mount.subPathExpr.is_none() {
+            storages.push(policy::SerializedStorage {
+                driver: infra_empty_dir.driver.clone(),
+                driver_options: Vec::new(),
+                source: infra_empty_dir.source.clone(),
+                fstype: infra_empty_dir.fstype.clone(),
+                options: infra_empty_dir.options.clone(),
+                mount_point: infra_empty_dir.mount_point.clone() + &yaml_mount.name + "$",
+                fs_group: policy::SerializedFsGroup {
+                    group_id: 0,
+                    group_change_policy: 0,
+                },
+            });
+        }
+
+        let source = if yaml_mount.subPathExpr.is_some() {
+            let file_name = Path::new(&yaml_mount.mountPath).file_name().unwrap();
+            let name = OsString::from(file_name).into_string().unwrap();
+            infra_volumes.configMap.mount_source.clone() + &name + "$"
+        } else {
+            infra_empty_dir.mount_source.to_string() + &yaml_mount.name + "$"
+        };
+
+        let r#type = if yaml_mount.subPathExpr.is_some() {
+            "bind".to_string()
+        } else {
+            infra_empty_dir.mount_type.clone()
+        };
 
         policy_mounts.push(oci::Mount {
             destination: yaml_mount.mountPath.to_string(),
-            r#type: infra_empty_dir.mount_type.to_string(),
-            source: infra_empty_dir.mount_source.to_string() + &yaml_mount.name + "$",
+            r#type,
+            source,
             options: vec![
                 "rbind".to_string(),
                 "rprivate".to_string(),

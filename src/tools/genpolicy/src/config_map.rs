@@ -121,4 +121,11 @@ impl yaml::K8sResource for ConfigMap {
     fn get_containers(&self) -> (&Vec<registry::Container>, &Vec<pod::Container>) {
         panic!("Unsupported");
     }
+
+    fn get_annotations(&self) -> Option<BTreeMap<String, String>> {
+        if let Some(annotations) = &self.metadata.annotations {
+            return Some(annotations.clone());
+        }
+        None
+    }
 }

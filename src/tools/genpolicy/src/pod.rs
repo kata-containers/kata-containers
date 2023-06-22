@@ -16,6 +16,7 @@ use crate::yaml;
 
 use anyhow::Result;
 use async_trait::async_trait;
+use log::warn;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -345,6 +346,9 @@ pub struct VolumeMount {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mountPropagation: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subPathExpr: Option<String>,
     // TODO: additional fields.
 }
 
@@ -380,11 +384,12 @@ impl Container {
         config_maps: &Vec<config_map::ConfigMap>,
         secrets: &Vec<secret::Secret>,
         namespace: &str,
+        annotations: &Option<BTreeMap<String, String>>,
     ) {
         if let Some(source_env) = &self.env {
             for env_variable in source_env {
                 let mut src_string = env_variable.name.clone() + "=";
-                src_string += &env_variable.get_value(config_maps, secrets, namespace);
+                src_string += &env_variable.get_value(config_maps, secrets, namespace, annotations);
                 if !dest_env.contains(&src_string) {
                     dest_env.push(src_string.clone());
                 }
@@ -468,6 +473,7 @@ impl EnvVar {
         config_maps: &Vec<config_map::ConfigMap>,
         secrets: &Vec<secret::Secret>,
         namespace: &str,
+        annotations: &Option<BTreeMap<String, String>>,
     ) -> String {
         if let Some(value) = &self.value {
             return value.clone();
@@ -479,19 +485,22 @@ impl EnvVar {
             } else if let Some(field_ref) = &value_from.fieldRef {
                 let path: &str = &field_ref.fieldPath;
                 match path {
-                    "metadata.annotations['batch.kubernetes.io/job-completion-index']" => {
-                        return "$(job-completion-index)".to_string()
-                    }
                     "metadata.name" => return "$(sandbox-name)".to_string(),
                     "metadata.namespace" => return namespace.to_string(),
                     "metadata.uid" => return "$(pod-uid)".to_string(),
                     "status.hostIP" => return "$(host-ip)".to_string(),
                     "status.podIP" => return "$(pod-ip)".to_string(),
                     "spec.nodeName" => return "$(node-name)".to_string(),
-                    _ => panic!(
-                        "Env var: unsupported field reference: {}",
-                        &field_ref.fieldPath
-                    ),
+                    _ => {
+                        if let Some(value) = self.get_annotation_value(path, annotations) {
+                            return value;
+                        } else {
+                            panic!(
+                                "Env var: unsupported field reference: {}",
+                                &field_ref.fieldPath
+                            )
+                        }
+                    }
                 }
             } else if value_from.resourceFieldRef.is_some() {
                 // TODO: should resource fields such as "limits.cpu" or "limits.memory"
@@ -503,6 +512,35 @@ impl EnvVar {
         }
 
         panic!("Couldn't get the value of env var: {}", &self.name);
+    }
+
+    fn get_annotation_value(
+        &self,
+        reference: &str,
+        anno: &Option<BTreeMap<String, String>>,
+    ) -> Option<String> {
+        let prefix = "metadata.annotations['";
+        let suffix = "']";
+        if reference.starts_with(prefix) && reference.ends_with(suffix) {
+            if let Some(annotations) = anno {
+                let start = prefix.len();
+                let end = reference.len() - 2;
+                let annotation = reference[start..end].to_string();
+
+                if let Some(value) = annotations.get(&annotation) {
+                    return Some(value.clone());
+                } else {
+                    warn!(
+                        "Can't find the value of annotation {}. Allowing any value.",
+                        &annotation
+                    );
+                }
+            }
+
+            // TODO: should missing annotations be handled differently?
+            return Some("$(todo-annotation)".to_string());
+        }
+        None
     }
 }
 
@@ -561,6 +599,13 @@ impl yaml::K8sResource for Pod {
 
     fn get_containers(&self) -> (&Vec<registry::Container>, &Vec<Container>) {
         (&self.registry_containers, &self.spec.containers)
+    }
+
+    fn get_annotations(&self) -> Option<BTreeMap<String, String>> {
+        if let Some(annotations) = &self.metadata.annotations {
+            return Some(annotations.clone());
+        }
+        None
     }
 }
 
