@@ -384,8 +384,7 @@ impl Container {
         if let Some(source_env) = &self.env {
             for env_variable in source_env {
                 let mut src_string = env_variable.name.clone() + "=";
-                src_string +=
-                    &env_variable.get_value(config_maps, secrets, namespace);
+                src_string += &env_variable.get_value(config_maps, secrets, namespace);
                 if !dest_env.contains(&src_string) {
                     dest_env.push(src_string.clone());
                 }
@@ -480,6 +479,9 @@ impl EnvVar {
             } else if let Some(field_ref) = &value_from.fieldRef {
                 let path: &str = &field_ref.fieldPath;
                 match path {
+                    "metadata.annotations['batch.kubernetes.io/job-completion-index']" => {
+                        return "$(job-completion-index)".to_string()
+                    }
                     "metadata.name" => return "$(sandbox-name)".to_string(),
                     "metadata.namespace" => return namespace.to_string(),
                     "status.hostIP" => return "$(host-ip)".to_string(),
@@ -493,7 +495,7 @@ impl EnvVar {
             } else if value_from.resourceFieldRef.is_some() {
                 // TODO: should resource fields such as "limits.cpu" or "limits.memory"
                 // be handled in a different way?
-                return "$(resource-field)".to_string()
+                return "$(resource-field)".to_string();
             }
         } else {
             panic!("Environment variable without value or valueFrom!");

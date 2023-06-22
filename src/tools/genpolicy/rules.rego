@@ -716,7 +716,11 @@ allow_env_var(policy_process, input_process, env_var, sandbox_name) {
     count(policy_name_value) == 2
 
     policy_name_value[0] == name_value[0]
-    contains(policy_name_value[1], "$(resource-field)")
+
+    # TODO: should these be handled in a different way?
+    always_allowed = ["$(resource-field)", "$(job-completion-index)"]
+    some allowed in always_allowed
+    contains(policy_name_value[1], allowed)
 
     print("allow_env_var 14: success")
 }
