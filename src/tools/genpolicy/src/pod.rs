@@ -484,6 +484,7 @@ impl EnvVar {
                     }
                     "metadata.name" => return "$(sandbox-name)".to_string(),
                     "metadata.namespace" => return namespace.to_string(),
+                    "metadata.uid" => return "$(pod-uid)".to_string(),
                     "status.hostIP" => return "$(host-ip)".to_string(),
                     "status.podIP" => return "$(pod-ip)".to_string(),
                     "spec.nodeName" => return "$(node-name)".to_string(),

@@ -672,9 +672,9 @@ allow_env_var(policy_process, input_process, env_var, sandbox_name) {
     print("allow_env_var 11: success")
 }
 
-# Allow fieldRef "fieldPath: spec.nodeName" values.
+# Allow common fieldRef variables.
 allow_env_var(policy_process, input_process, env_var, sandbox_name) {
-    print("allow_env_var 12: fieldPath: spec.nodeName")
+    print("allow_env_var 12: fieldRef")
 
     name_value := split(env_var, "=")
     count(name_value) == 2
@@ -685,7 +685,11 @@ allow_env_var(policy_process, input_process, env_var, sandbox_name) {
     count(policy_name_value) == 2
 
     policy_name_value[0] == name_value[0]
-    policy_name_value[1] == "$(node-name)"
+
+    # TODO: should these be handled in a different way?
+    always_allowed := ["$(node-name)", "$(pod-uid)"]
+    some allowed in always_allowed
+    contains(policy_name_value[1], allowed)
 
     print("allow_env_var 12: success")
 }
