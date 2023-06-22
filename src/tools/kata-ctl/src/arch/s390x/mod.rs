@@ -78,6 +78,21 @@ mod arch_specific {
         Some(CHECK_LIST)
     }
 
+    pub fn host_is_vmcontainer_capable() -> Result<bool> {
+        let mut count = 0;
+        if check_cpu().is_err() {
+            count += 1;
+        };
+
+        // TODO: Add additional checks for kernel modules
+
+        if count == 0 {
+            return Ok(true);
+        };
+
+        Err(anyhow!("System is not capable of running a VM"))
+    }
+
     #[allow(dead_code)]
     fn retrieve_cpu_facilities() -> Result<HashMap<i32, bool>> {
         let f = std::fs::File::open(check::PROC_CPUINFO)?;
