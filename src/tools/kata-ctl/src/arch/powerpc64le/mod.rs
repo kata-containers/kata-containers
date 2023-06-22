@@ -33,6 +33,11 @@ mod arch_specific {
         // to the goloang implementation of function getCPUDetails()
     }
 
+    pub fn host_is_vmcontainer_capable() -> Result<bool> {
+        // TODO: Not implemented
+        Ok(true)
+    }
+
     pub fn available_guest_protection() -> Result<check::GuestProtection, check::ProtectionError> {
         if !Uid::effective().is_root() {
             return Err(check::ProtectionError::NoPerms);
