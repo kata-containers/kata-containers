@@ -303,7 +303,8 @@ mod tests {
     fn test_fdtutils_fdt_device_info() {
         let kvm = Kvm::new().unwrap();
         let vm = kvm.create_vm().unwrap();
-        let gic = create_gic(&vm, 0).unwrap();
+        let _ = vm.create_vcpu(0).unwrap();
+        let gic = create_gic(&vm, 1).unwrap();
         let mmio_device_info: Option<HashMap<(DeviceType, String), MMIODeviceInfo>> = Some(
             [
                 (
