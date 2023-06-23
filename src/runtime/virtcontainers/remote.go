@@ -8,12 +8,14 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"time"
 
 	cri "github.com/containerd/containerd/pkg/cri/annotations"
 	"github.com/containerd/ttrpc"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	pb "github.com/kata-containers/kata-containers/src/runtime/protocols/hypervisor"
+	hypannotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -74,6 +76,9 @@ func (rh *remoteHypervisor) CreateVM(ctx context.Context, id string, network Net
 	annotations := map[string]string{}
 	annotations[cri.SandboxName] = hypervisorConfig.SandboxName
 	annotations[cri.SandboxNamespace] = hypervisorConfig.SandboxNamespace
+	annotations[hypannotations.MachineType] = hypervisorConfig.HypervisorMachineType
+	annotations[hypannotations.DefaultVCPUs] = strconv.FormatUint(uint64(hypervisorConfig.NumVCPUs), 10)
+	annotations[hypannotations.DefaultMemory] = strconv.FormatUint(uint64(hypervisorConfig.MemorySize), 10)
 
 	req := &pb.CreateVMRequest{
 		Id:                   id,
