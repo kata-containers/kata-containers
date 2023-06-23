@@ -1212,7 +1212,9 @@ func (clh *cloudHypervisor) Capabilities(ctx context.Context) types.Capabilities
 
 	clh.Logger().WithField("function", "Capabilities").Info("get Capabilities")
 	var caps types.Capabilities
-	caps.SetFsSharingSupport()
+	if !clh.config.ConfidentialGuest {
+		caps.SetFsSharingSupport()
+	}
 	caps.SetBlockDeviceHotplugSupport()
 	return caps
 }
