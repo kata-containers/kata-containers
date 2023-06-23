@@ -9,7 +9,7 @@ results, stored in JSON files, against a set of baseline metrics
 
 It returns non zero if any of the TOML metrics are not met.
 
-It prints out a tabluated report summary at the end of the run.
+It prints out a tabulated report summary at the end of the run.
 */
 
 package main
