@@ -50,6 +50,7 @@ pub trait K8sResource {
     fn generate_policy(&self, agent_policy: &policy::AgentPolicy) -> String;
     fn serialize(&mut self, policy: &str) -> String;
 
+    fn get_yaml_host_name(&self) -> Option<String>;
     fn get_host_name(&self) -> String;
     fn get_sandbox_name(&self) -> Option<String>;
     fn get_namespace(&self) -> String;

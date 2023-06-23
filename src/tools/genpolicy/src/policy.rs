@@ -290,7 +290,11 @@ impl AgentPolicy {
         registry_container.get_process(&mut process, yaml_has_command, yaml_has_args);
 
         if !is_pause_container {
-            process.env.push("HOSTNAME=".to_string() + "$(sandbox-name)");
+            if let Some(name) = k8s_object.get_yaml_host_name() {
+                process.env.push("HOSTNAME=".to_string() + &name);
+            } else {
+                process.env.push("HOSTNAME=".to_string() + "$(sandbox-name)");
+            }
         }
         yaml_container.get_env_variables(
             &mut process.env,

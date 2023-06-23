@@ -88,7 +88,7 @@ allow_by_annotations(policy_oci, input_oci, policy_storages, input_storages) {
     input_sandbox_name := input_oci.annotations["io.kubernetes.cri.sandbox-name"]
 
     print("allow_by_annotations 2: input sandbox =", input_sandbox_name, "policy sandbox =", policy_sandbox_name)
-    policy_sandbox_name == input_sandbox_name
+    allow_sandbox_name(policy_sandbox_name, input_sandbox_name)
 
     print("allow_by_annotations 2: allow_by_sandbox_name", input_sandbox_name)
     allow_by_sandbox_name(policy_oci, input_oci, policy_storages, input_storages, input_sandbox_name)
@@ -116,6 +116,19 @@ allow_by_sandbox_name(policy_oci, input_oci, policy_storages, input_storages, sa
     print("allow_by_sandbox_name: success")
 }
 
+allow_sandbox_name(policy_sandbox_name, input_sandbox_name) {
+    print("allow_sandbox_name 1: same name")
+    policy_sandbox_name == input_sandbox_name
+    print("allow_sandbox_name 1: success")
+}
+allow_sandbox_name(policy_sandbox_name, input_sandbox_name) {
+    print("allow_sandbox_name 2: generated name")
+
+    # TODO: should generated names be handled differently?
+    contains(policy_sandbox_name, "$(generated-name)")
+
+    print("allow_sandbox_name 2: success")
+}
 ######################################################################
 # - Check that the "io.kubernetes.cri.container-type" and
 #   "io.katacontainers.pkg.oci.container_type" annotations
@@ -148,7 +161,7 @@ allow_by_container_type(input_cri_type, policy_oci, input_oci, sandbox_name, san
     input_cri_type == "sandbox"
 
     print("allow_by_container_type 1: input hostname =", input_oci.hostname, "policy hostname =", policy_oci.hostname)
-    regex.match(policy_oci.hostname, input_oci.hostname)
+    allow_host_name(policy_oci.hostname, input_oci.hostname)
 
     input_kata_type := input_oci.annotations["io.katacontainers.pkg.oci.container_type"]
     print("allow_by_container_type 1: input container type", input_kata_type)
@@ -180,6 +193,20 @@ allow_by_container_type(input_cri_type, policy_oci, input_oci, sandbox_name, san
     allow_log_directory(policy_oci, input_oci)
 
     print("allow_by_container_type 2: success")
+}
+
+allow_host_name(policy_hostname, input_hostname) {
+    print("allow_host_name 1: regex match")
+    regex.match(policy_hostname, input_hostname)
+    print("allow_host_name 1: success")
+}
+allow_host_name(policy_hostname, input_hostname) {
+    print("allow_host_name 2: generated name")
+
+    # TODO: should generated names be handled differently?
+    contains(policy_hostname, "$(generated-name)")
+
+    print("allow_host_name 2: success")
 }
 
 ######################################################################
