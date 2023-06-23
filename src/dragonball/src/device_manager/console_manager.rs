@@ -79,16 +79,17 @@ impl ConsoleManager {
             .unwrap()
             .set_output_stream(Some(Box::new(std::io::stdout())));
         let stdin_handle = std::io::stdin();
-        stdin_handle
-            .lock()
-            .set_raw_mode()
-            .map_err(|e| DeviceMgrError::ConsoleManager(ConsoleManagerError::StdinHandle(e)))?;
-        stdin_handle
-            .lock()
-            .set_non_block(true)
-            .map_err(ConsoleManagerError::StdinHandle)
-            .map_err(DeviceMgrError::ConsoleManager)?;
-
+        {
+            let guard = stdin_handle.lock();
+            guard
+                .set_raw_mode()
+                .map_err(ConsoleManagerError::StdinHandle)
+                .map_err(DeviceMgrError::ConsoleManager)?;
+            guard
+                .set_non_block(true)
+                .map_err(ConsoleManagerError::StdinHandle)
+                .map_err(DeviceMgrError::ConsoleManager)?;
+        }
         let handler = ConsoleEpollHandler::new(device, Some(stdin_handle), None, &self.logger);
         self.subscriber_id = Some(self.epoll_mgr.add_subscriber(Box::new(handler)));
         self.backend = Some(Backend::StdinHandle(std::io::stdin()));
