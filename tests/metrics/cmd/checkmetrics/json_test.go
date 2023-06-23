@@ -120,7 +120,7 @@ func TestLoad(t *testing.T) {
 	err = CreateBadFile(badFileName)
 	assert.NoError(err)
 
-	// Set up our basci metrics struct
+	// Set up our basic metrics struct
 	var m = metrics{
 		Name:        "name",
 		Description: "desc",
