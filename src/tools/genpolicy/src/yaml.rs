@@ -184,6 +184,7 @@ pub fn new_k8s_resource(
         | "Namespace"
         | "PersistentVolume"
         | "PersistentVolumeClaim"
+        | "PriorityClass"
         | "ResourceQuota"
         | "RoleBinding"
         | "Service"
