@@ -675,7 +675,8 @@ fn common_storage_handler(logger: &Logger, storage: &Storage) -> Result<String> 
     let dm = devicemapper::DM::new()?;
     let name = devicemapper::DmName::new(fname)?;
     let opts = devicemapper::DmOptions::default().set_flags(devicemapper::DmFlags::DM_READONLY);
-    dm.device_create(&name, None, opts)?;
+    dm.device_create(&name, None, opts)
+        .context("Unable to create dm device")?;
 
     let id = devicemapper::DevId::Name(name);
 
@@ -684,8 +685,10 @@ fn common_storage_handler(logger: &Logger, storage: &Storage) -> Result<String> 
             &id,
             &[prepare_dm_target(&storage.source, &opt[DM_VERITY.len()..])?],
             opts,
-        )?;
-        dm.device_suspend(&id, opts)?;
+        )
+        .context("Unable to load dm-verity table")?;
+        dm.device_suspend(&id, opts)
+            .context("Unable to unsuspend dm device")?;
 
         let mut storage = storage.clone();
         storage.source = format!("/dev/mapper/{fname}");
