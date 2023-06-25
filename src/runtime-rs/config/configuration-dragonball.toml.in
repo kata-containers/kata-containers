@@ -23,6 +23,11 @@ image = "@IMAGEPATH@"
 #   - erofs
 rootfs_type=@DEFROOTFSTYPE@
 
+ 
+# Block storage driver to be used for the VM rootfs is backed
+# by a block device. This is virtio-blk-pci, virtio-blk-mmio or nvdimm
+vm_rootfs_driver = "@VMROOTFSDRIVER_DB@"
+
 # List of valid annotation names for the hypervisor
 # Each member of the list is a regular expression, which is the base name
 # of the annotation, e.g. "path" for io.katacontainers.config.hypervisor.path"
