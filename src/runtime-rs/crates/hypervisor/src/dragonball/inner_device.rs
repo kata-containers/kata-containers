@@ -8,9 +8,12 @@ use std::path::PathBuf;
 
 use anyhow::{anyhow, Context, Result};
 use dbs_utils::net::MacAddr;
-use dragonball::api::v1::{
-    BlockDeviceConfigInfo, FsDeviceConfigInfo, FsMountConfigInfo, VirtioNetDeviceConfigInfo,
-    VsockDeviceConfigInfo,
+use dragonball::{
+    api::v1::{
+        BlockDeviceConfigInfo, FsDeviceConfigInfo, FsMountConfigInfo, VirtioNetDeviceConfigInfo,
+        VsockDeviceConfigInfo,
+    },
+    device_manager::blk_dev_mgr::BlockDeviceType,
 };
 
 use super::DragonballInner;
@@ -56,6 +59,14 @@ impl DragonballInner {
                     block.config.no_drop,
                 )
                 .context("add block device"),
+            DeviceType::VhostUserBlk(block) => self
+                .add_block_device(
+                    block.config.socket_path.as_str(),
+                    block.device_id.as_str(),
+                    block.is_readonly,
+                    block.no_drop,
+                )
+                .context("add vhost user based block device"),
             DeviceType::HybridVsock(hvsock) => self.add_hvsock(&hvsock.config).context("add vsock"),
             DeviceType::ShareFs(sharefs) => self
                 .add_share_fs_device(&sharefs.config)
@@ -161,6 +172,7 @@ impl DragonballInner {
 
         let blk_cfg = BlockDeviceConfigInfo {
             drive_id: id.to_string(),
+            device_type: BlockDeviceType::get_type(path),
             path_on_host: PathBuf::from(jailed_drive),
             is_direct: self.config.blockdev_info.block_device_cache_direct,
             no_drop,

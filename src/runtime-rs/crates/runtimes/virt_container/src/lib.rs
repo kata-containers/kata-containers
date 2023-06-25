@@ -74,12 +74,8 @@ impl RuntimeHandler for VirtContainer {
 
         // get uds from hypervisor and get config from toml_config
         let agent = new_agent(&config).context("new agent")?;
-        let resource_manager = Arc::new(ResourceManager::new(
-            sid,
-            agent.clone(),
-            hypervisor.clone(),
-            config,
-        )?);
+        let resource_manager =
+            Arc::new(ResourceManager::new(sid, agent.clone(), hypervisor.clone(), config).await?);
         let pid = std::process::id();
 
         let sandbox = sandbox::VirtSandbox::new(

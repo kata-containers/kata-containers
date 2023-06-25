@@ -1,25 +1,21 @@
-// Copyright (c) 2022-2023 Alibaba Cloud
-// Copyright (c) 2022-2023 Ant Group
+// Copyright (c) 2023 Alibaba Cloud
+// Copyright (c) 2023 Ant Group
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use crate::device::Device;
-use crate::device::DeviceType;
-use crate::Hypervisor as hypervisor;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 
-/// VIRTIO_BLOCK_PCI indicates block driver is virtio-pci based
-pub const VIRTIO_BLOCK_PCI: &str = "virtio-blk-pci";
-pub const VIRTIO_BLOCK_MMIO: &str = "virtio-blk-mmio";
-pub const KATA_MMIO_BLK_DEV_TYPE: &str = "mmioblk";
-pub const KATA_BLK_DEV_TYPE: &str = "blk";
+use super::VhostUserConfig;
+use crate::{
+    device::{Device, DeviceType},
+    Hypervisor as hypervisor,
+};
 
 #[derive(Debug, Clone, Default)]
-pub struct BlockConfig {
-    /// Path of the drive.
-    pub path_on_host: String,
+pub struct VhostUserBlkDevice {
+    pub device_id: String,
 
     /// If set to true, the drive is opened in read-only mode. Otherwise, the
     /// drive is opened as read-write.
@@ -28,45 +24,27 @@ pub struct BlockConfig {
     /// Don't close `path_on_host` file when dropping the device.
     pub no_drop: bool,
 
-    /// device index
-    pub index: u64,
-
     /// driver type for block device
     pub driver_option: String,
 
-    /// device path in guest
-    pub virt_path: String,
-
-    /// device attach count
     pub attach_count: u64,
-
-    /// device major number
-    pub major: i64,
-
-    /// device minor number
-    pub minor: i64,
+    pub config: VhostUserConfig,
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct BlockDevice {
-    pub device_id: String,
-    pub attach_count: u64,
-    pub config: BlockConfig,
-}
-
-impl BlockDevice {
-    // new creates a new VirtioBlkDevice
-    pub fn new(device_id: String, config: BlockConfig) -> Self {
-        BlockDevice {
+impl VhostUserBlkDevice {
+    // new creates a new VhostUserBlkDevice
+    pub fn new(device_id: String, config: VhostUserConfig) -> Self {
+        VhostUserBlkDevice {
             device_id,
             attach_count: 0,
             config,
+            ..Default::default()
         }
     }
 }
 
 #[async_trait]
-impl Device for BlockDevice {
+impl Device for VhostUserBlkDevice {
     async fn attach(&mut self, h: &dyn hypervisor) -> Result<()> {
         // increase attach count, skip attach the device if the device is already attached
         if self
@@ -76,15 +54,18 @@ impl Device for BlockDevice {
         {
             return Ok(());
         }
-        if let Err(e) = h.add_device(DeviceType::Block(self.clone())).await {
+
+        if let Err(e) = h.add_device(DeviceType::VhostUserBlk(self.clone())).await {
             self.decrease_attach_count().await?;
+
             return Err(e);
         }
+
         return Ok(());
     }
 
     async fn detach(&mut self, h: &dyn hypervisor) -> Result<Option<u64>> {
-        // get the count of device detached, skip detach once it reaches the 0
+        // get the count of device detached, and detach once it reaches 0
         if self
             .decrease_attach_count()
             .await
@@ -92,15 +73,21 @@ impl Device for BlockDevice {
         {
             return Ok(None);
         }
-        if let Err(e) = h.remove_device(DeviceType::Block(self.clone())).await {
+
+        if let Err(e) = h
+            .remove_device(DeviceType::VhostUserBlk(self.clone()))
+            .await
+        {
             self.increase_attach_count().await?;
+
             return Err(e);
         }
+
         Ok(Some(self.config.index))
     }
 
     async fn get_device_info(&self) -> DeviceType {
-        DeviceType::Block(self.clone())
+        DeviceType::VhostUserBlk(self.clone())
     }
 
     async fn increase_attach_count(&mut self) -> Result<bool> {

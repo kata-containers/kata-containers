@@ -20,6 +20,7 @@ pub const KATA_MOUNT_BIND_TYPE: &str = "bind";
 pub const KATA_DIRECT_VOLUME_TYPE: &str = "directvol";
 pub const KATA_VFIO_VOLUME_TYPE: &str = "vfiovol";
 pub const KATA_SPDK_VOLUME_TYPE: &str = "spdkvol";
+pub const KATA_SPOOL_VOLUME_TYPE: &str = "spoolvol";
 
 // volume mount info load infomation from mountinfo.json
 pub fn volume_mount_info(volume_path: &str) -> Result<DirectVolumeMountInfo> {

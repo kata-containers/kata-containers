@@ -51,15 +51,16 @@ pub(crate) struct ResourceManagerInner {
 }
 
 impl ResourceManagerInner {
-    pub(crate) fn new(
+    pub(crate) async fn new(
         sid: &str,
         agent: Arc<dyn Agent>,
         hypervisor: Arc<dyn Hypervisor>,
         toml_config: Arc<TomlConfig>,
     ) -> Result<Self> {
         // create device manager
-        let dev_manager =
-            DeviceManager::new(hypervisor.clone()).context("failed to create device manager")?;
+        let dev_manager = DeviceManager::new(hypervisor.clone())
+            .await
+            .context("failed to create device manager")?;
 
         let cgroups_resource = CgroupsResource::new(sid, &toml_config)?;
         let cpu_resource = CpuResource::new(toml_config.clone())?;
@@ -473,7 +474,9 @@ impl Persist for ResourceManagerInner {
             sid: resource_args.sid,
             agent: resource_args.agent,
             hypervisor: resource_args.hypervisor.clone(),
-            device_manager: Arc::new(RwLock::new(DeviceManager::new(resource_args.hypervisor)?)),
+            device_manager: Arc::new(RwLock::new(
+                DeviceManager::new(resource_args.hypervisor).await?,
+            )),
             network: None,
             share_fs: None,
             rootfs_resource: RootFsResource::new(),
