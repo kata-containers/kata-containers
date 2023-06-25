@@ -1,61 +1,73 @@
-// Copyright (c) 2019-2023 Alibaba Cloud
-// Copyright (c) 2019-2023 Ant Group
+// Copyright (c) 2022-2023 Alibaba Cloud
+// Copyright (c) 2022-2023 Ant Group
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use crate::device::Device;
-use crate::device::DeviceType;
-use crate::Hypervisor as hypervisor;
-use anyhow::Result;
-use async_trait::async_trait;
+#[derive(Debug, Clone)]
+pub enum VhostUserType {
+    /// Blk - represents a block vhostuser device type
+    /// "vhost-user-blk-pci"
+    Blk(String),
+
+    /// SCSI - represents SCSI based vhost-user type
+    /// "vhost-user-scsi-pci"
+    SCSI(String),
+
+    /// Net - represents Net based vhost-user type
+    /// "virtio-net-pci"
+    Net(String),
+
+    /// FS - represents a virtio-fs vhostuser device type
+    /// "vhost-user-fs-pci"
+    FS(String),
+}
+
+impl Default for VhostUserType {
+    fn default() -> Self {
+        VhostUserType::Blk("vhost-user-blk-pci".to_owned())
+    }
+}
 
 #[derive(Debug, Clone, Default)]
 /// VhostUserConfig represents data shared by most vhost-user devices
 pub struct VhostUserConfig {
-    /// Device id
+    /// device id
     pub dev_id: String,
-    /// Socket path
+    /// socket path
     pub socket_path: String,
-    /// Mac_address is only meaningful for vhost user net device
+    /// mac_address is only meaningful for vhost user net device
     pub mac_address: String,
-    /// These are only meaningful for vhost user fs devices
+
+    /// vhost-user-fs is only meaningful for vhost-user-fs device
     pub tag: String,
-    pub cache: String,
-    pub device_type: String,
-    /// Pci_addr is the PCI address used to identify the slot at which the drive is attached.
-    pub pci_addr: Option<String>,
-    /// Block index of the device if assigned
-    pub index: u8,
+    /// vhost-user-fs cache mode
+    pub cache_mode: String,
+    /// vhost-user-fs cache size in MB
     pub cache_size: u32,
-    pub queue_siez: u32,
+
+    /// vhost user device type
+    pub device_type: VhostUserType,
+    /// guest block driver
+    pub driver_option: String,
+    /// pci_addr is the PCI address used to identify the slot at which the drive is attached.
+    pub pci_addr: Option<String>,
+
+    /// Block index of the device if assigned
+    /// type u64 is not OK
+    pub index: u64,
+
+    /// Virtio queue size. Size: byte
+    pub queue_size: u32,
+    /// Block device multi-queue
+    pub num_queues: usize,
+
+    /// device path in guest
+    pub virt_path: String,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct VhostUserDevice {
     pub device_id: String,
     pub config: VhostUserConfig,
-}
-
-#[async_trait]
-impl Device for VhostUserConfig {
-    async fn attach(&mut self, _h: &dyn hypervisor) -> Result<()> {
-        todo!()
-    }
-
-    async fn detach(&mut self, _h: &dyn hypervisor) -> Result<Option<u64>> {
-        todo!()
-    }
-
-    async fn get_device_info(&self) -> DeviceType {
-        todo!()
-    }
-
-    async fn increase_attach_count(&mut self) -> Result<bool> {
-        todo!()
-    }
-
-    async fn decrease_attach_count(&mut self) -> Result<bool> {
-        todo!()
-    }
 }

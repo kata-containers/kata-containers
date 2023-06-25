@@ -14,6 +14,9 @@ pub mod utils;
 pub mod vfio_volume;
 use vfio_volume::is_vfio_volume;
 
+pub mod spdk_volume;
+use spdk_volume::is_spdk_volume;
+
 use std::{sync::Arc, vec::Vec};
 
 use anyhow::{Context, Result};
@@ -83,6 +86,12 @@ impl VolumeResource {
                     vfio_volume::VfioVolume::new(d, m, read_only, cid, sid)
                         .await
                         .with_context(|| format!("new vfio volume {:?}", m))?,
+                )
+            } else if is_spdk_volume(m) {
+                Arc::new(
+                    spdk_volume::SPDKVolume::new(d, m, read_only, cid, sid)
+                        .await
+                        .with_context(|| format!("create spdk volume {:?}", m))?,
                 )
             } else if let Some(options) =
                 get_huge_page_option(m).context("failed to check huge page")?
