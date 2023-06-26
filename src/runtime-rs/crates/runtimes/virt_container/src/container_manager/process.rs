@@ -225,7 +225,7 @@ impl Process {
         };
 
         if let Err(e) = agent.close_stdin(req).await {
-            warn!(self.logger, "failed clsoe process io: {:?}", e);
+            warn!(self.logger, "failed to close process io: {:?}", e);
         }
     }
 
