@@ -25,8 +25,8 @@ Finally, when running a Kata Containers with `ctr run --mount type=X, src=Y, dst
 Now, supported types: 
 
 - `directvol` for direct volume
-- `spdkvol` for SPDK volume (TBD)
 - `vfiovol` for VFIO device based volume
+- `spdkvol` for SPDK/vhost-user based volume
 
 
 ## Setup Device and Run a Kata-Containers
@@ -147,6 +147,80 @@ $ sudo ctr run -t --rm --runtime io.containerd.kata.v2 --mount type=vfiovol,src=
 ```
 
 
-### SPDK Device Based Volume
+### SPDK Device Based Block Volume
 
-TBD
+SPDK vhost-user devices in runtime-rs, unlike runtime (golang version), there is no need to `mknod` device node under `/dev/` any more.
+Just using the `kata-ctl direct-volume add ..` to make a mount info config is enough.
+
+#### Run SPDK vhost target and Expose vhost block device
+
+Run a SPDK vhost target and get vhost-user block controller as an example:
+
+First, run SPDK vhost target:
+
+> **Tips:** If driver `vfio-pci` supported, you can run SPDK with `DRIVER_OVERRIDE=vfio-pci`
+> Otherwise, Just run without it `sudo HUGEMEM=4096 ./scripts/setup.sh`.
+
+```bash
+$ SPDK_DEVEL=/xx/spdk
+$ VHU_UDS_PATH=/tmp/vhu-targets
+$ RAW_DISKS=/xx/rawdisks
+$ # Reset first
+$ ${SPDK_DEVEL}/scripts/setup.sh reset
+$ sudo sysctl -w vm.nr_hugepages=2048
+$ #4G Huge Memory for spdk
+$ sudo HUGEMEM=4096 DRIVER_OVERRIDE=vfio-pci ${SPDK_DEVEL}/scripts/setup.sh
+$ sudo ${SPDK_DEVEL}/build/bin/spdk_tgt -S $VHU_UDS_PATH -s 1024 -m 0x3 &
+```
+
+Second, create a vhost controller:
+
+```bash
+$ sudo dd if=/dev/zero of=${RAW_DISKS}/rawdisk01.20g bs=1M count=20480
+$ sudo ${SPDK_DEVEL}/scripts/rpc.py bdev_aio_create ${RAW_DISKS}/rawdisk01.20g vhu-rawdisk01.20g 512
+$ sudo ${SPDK_DEVEL}/scripts/rpc.py vhost_create_blk_controller vhost-blk-rawdisk01.sock vhu-rawdisk01.20g
+```
+
+Here, a vhost controller `vhost-blk-rawdisk01.sock` is created, and the controller will
+be passed to Hypervisor, such as Dragonball, Cloud-Hypervisor, Firecracker or QEMU.
+
+
+#### setup vhost-user block device for kata-containers
+
+
+First, `mkdir` a sub-path `kubelet/kata-test-vol-001/` under `/run/kata-containers/shared/direct-volumes/`.
+
+Second, fill fields in `mountinfo.json`, it looks like as below:
+```json
+{
+  "device": "/tmp/vhu-targets/vhost-blk-rawdisk01.sock",
+  "volume_type": "spdkvol",
+  "fs_type": "ext4",
+  "metadata":"{}",
+  "options": []
+}
+```
+
+Third, with the help of `kata-ctl direct-volume` to add block device to generate `mountinfo.json`, and run a kata container with `--mount`.
+
+```bash
+$ # kata-ctl direct-volume add
+$ sudo kata-ctl direct-volume add /kubelet/kata-test-vol-001/volume001 "{\"device\": \"/tmp/vhu-targets/vhost-blk-rawdisk01.sock\", \"volume_type\":\"spdkvol\", \"fs_type\": \"ext4\", \"metadata\":"{}", \"options\": []}"
+$ # /kubelet/kata-test-vol-001/volume001 <==> /run/kata-containers/shared/direct-volumes/L2t1YmVsZXQva2F0YS10ZXN0LXZvbC0wMDEvdm9sdW1lMDAx
+$ cat L2t1YmVsZXQva2F0YS10ZXN0LXZvbC0wMDEvdm9sdW1lMDAx/mountInfo.json
+$ {"volume_type":"spdkvol","device":"/tmp/vhu-targets/vhost-blk-rawdisk01.sock","fs_type":"ext4","metadata":{},"options":[]}
+```
+
+As `/run/kata-containers/shared/direct-volumes/` is a fixed path , we will be able to run a kata pod with `--mount` and set
+`src` sub-path. And the `--mount` argument looks like: `--mount type=spdkvol,src=/kubelet/kata-test-vol-001/volume001,dst=/disk001`.
+
+
+#### Run a Kata container with SPDK vhost-user block device
+
+
+In the case, `ctr run --mount type=X, src=source, dst=dest`, the X will be set `spdkvol` which is a proprietary type specifically designed for SPDK volumes.
+
+```bash
+$ # ctr run with --mount type=spdkvol,src=/kubelet/kata-test-vol-001/volume001,dst=/disk001
+$ sudo ctr run -t --rm --runtime io.containerd.kata.v2 --mount type=spdkvol,src=/kubelet/kata-test-vol-001/volume001,dst=/disk001,options=rbind:rw "$image" kata-spdk-vol-xx0530 /bin/bash
+```
