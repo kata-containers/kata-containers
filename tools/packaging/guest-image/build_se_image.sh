@@ -40,9 +40,12 @@ Options:
   --destdir=${destdir}
 
 Environment variables:
-  HKD_PATH (required): Secure Execution host key document, generally specific to your machine. See
+  HKD_PATH (required): a path for a directory which includes at least one host key document
+                  for Secure Execution, generally specific to your machine. See
                   https://www.ibm.com/docs/en/linux-on-systems?topic=tasks-verify-host-key-document
                   for information on how to retrieve and verify this document.
+  SIGNING_KEY_CERT_PATH: a path for the IBM zSystem signing key certificate
+  INTERMEDIATE_CA_CERT_PATH: a path for the intermediate CA certificate signed by the root CA
   DEBUG         : If set, display debug information.
 EOF
 	exit "${1:-0}"
@@ -62,6 +65,15 @@ build_secure_image() {
 	kernel_params="${1:-}"
 	install_src_dir="${2:-}"
 	install_dest_dir="${3:-}"
+	key_verify_option="--no-verify" # no verification for CI testing purposes
+
+	if [ -n "${SIGNING_KEY_CERT_PATH:-}" ] && [ -n "${INTERMEDIATE_CA_CERT_PATH:-}" ]; then
+		if [ -e "${SIGNING_KEY_CERT_PATH}" ] && [ -e "${INTERMEDIATE_CA_CERT_PATH}" ]; then
+			key_verify_option="--cert=${SIGNING_KEY_CERT_PATH} --cert=${INTERMEDIATE_CA_CERT_PATH}"
+		else
+			die "Specified certificate(s) not found"
+		fi
+	fi
 
 	if [ ! -f "${install_src_dir}/vmlinuz.container" ] ||
 		[ ! -f "${install_src_dir}/kata-containers-initrd.img" ]; then
@@ -99,7 +111,7 @@ EOF
 		--image="${install_src_dir}/vmlinuz.container" \
 		--ramdisk="${install_src_dir}/kata-containers-initrd.img" \
 		--parmfile="${parmfile}" \
-		--no-verify # no verification for CI testing purposes
+		"${key_verify_option}"
 
 	build_result=$?
 	if [ $build_result -eq 0 ]; then
