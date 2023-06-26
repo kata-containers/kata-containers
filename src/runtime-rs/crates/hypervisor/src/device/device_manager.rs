@@ -11,9 +11,9 @@ use kata_sys_util::rand::RandomBytes;
 use tokio::sync::{Mutex, RwLock};
 
 use crate::{
-    device::VhostUserBlkDevice, BlockConfig, BlockDevice, Hypervisor, NetworkDevice, VfioDevice,
-    VhostUserConfig, KATA_BLK_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE, VIRTIO_BLOCK_MMIO,
-    VIRTIO_BLOCK_PCI,
+    vhost_user_blk::VhostUserBlkDevice, BlockConfig, BlockDevice, Hypervisor, NetworkDevice,
+    VfioDevice, VhostUserConfig, KATA_BLK_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE, KATA_NVDIMM_DEV_TYPE,
+    VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
 };
 
 use super::{
@@ -23,57 +23,66 @@ use super::{
 
 pub type ArcMutexDevice = Arc<Mutex<dyn Device>>;
 
+macro_rules! declare_index {
+    ($self:ident, $index:ident, $released_index:ident) => {{
+        let current_index = if let Some(index) = $self.$released_index.pop() {
+            index
+        } else {
+            $self.$index
+        };
+        $self.$index += 1;
+        Ok(current_index)
+    }};
+}
+
+macro_rules! release_index {
+    ($self:ident, $index:ident, $released_index:ident) => {{
+        $self.$released_index.push($index);
+        $self.$released_index.sort_by(|a, b| b.cmp(a));
+    }};
+}
+
 /// block_index and released_block_index are used to search an available block index
 /// in Sandbox.
+/// pmem_index and released_pmem_index are used to search an available pmem index
+/// in Sandbox.
 ///
-/// @block_driver to be used for block device;
+/// @pmem_index generally default is 0 for <pmem0>;
 /// @block_index generally default is 0 for <vda>;
+/// @released_pmem_index for pmem devices removed and indexes will released at the same time.
 /// @released_block_index for blk devices removed and indexes will released at the same time.
 #[derive(Clone, Debug, Default)]
 struct SharedInfo {
-    block_driver: String,
+    pmem_index: u64,
     block_index: u64,
+    released_pmem_index: Vec<u64>,
     released_block_index: Vec<u64>,
 }
 
 impl SharedInfo {
-    async fn new(hypervisor: Arc<dyn Hypervisor>) -> Self {
-        // get hypervisor block driver
-        let block_driver = match hypervisor
-            .hypervisor_config()
-            .await
-            .blockdev_info
-            .block_device_driver
-            .as_str()
-        {
-            // convert the block driver to kata type
-            VIRTIO_BLOCK_MMIO => KATA_MMIO_BLK_DEV_TYPE.to_string(),
-            VIRTIO_BLOCK_PCI => KATA_BLK_DEV_TYPE.to_string(),
-            _ => "".to_string(),
-        };
-
+    async fn new() -> Self {
         SharedInfo {
-            block_driver,
+            pmem_index: 0,
             block_index: 0,
+            released_pmem_index: vec![],
             released_block_index: vec![],
         }
     }
 
-    // declare the available block index
-    fn declare_device_index(&mut self) -> Result<u64> {
-        let current_index = if let Some(index) = self.released_block_index.pop() {
-            index
+    fn declare_device_index(&mut self, is_pmem: bool) -> Result<u64> {
+        if is_pmem {
+            declare_index!(self, pmem_index, released_pmem_index)
         } else {
-            self.block_index
-        };
-        self.block_index += 1;
-
-        Ok(current_index)
+            declare_index!(self, block_index, released_block_index)
+        }
     }
 
-    fn release_device_index(&mut self, index: u64) {
-        self.released_block_index.push(index);
-        self.released_block_index.sort_by(|a, b| b.cmp(a));
+    fn release_device_index(&mut self, index: u64, is_pmem: bool) {
+        if is_pmem {
+            release_index!(self, index, released_pmem_index);
+        } else {
+            release_index!(self, index, released_block_index);
+        }
     }
 }
 
@@ -90,12 +99,20 @@ impl DeviceManager {
         let devices = HashMap::<String, ArcMutexDevice>::new();
         Ok(DeviceManager {
             devices,
-            hypervisor: hypervisor.clone(),
-            shared_info: SharedInfo::new(hypervisor.clone()).await,
+            hypervisor,
+            shared_info: SharedInfo::new().await,
         })
     }
 
-    pub async fn try_add_device(&mut self, device_id: &str) -> Result<()> {
+    async fn get_block_driver(&self) -> String {
+        self.hypervisor
+            .hypervisor_config()
+            .await
+            .blockdev_info
+            .block_device_driver
+    }
+
+    async fn try_add_device(&mut self, device_id: &str) -> Result<()> {
         // find the device
         let device = self
             .devices
@@ -108,7 +125,10 @@ impl DeviceManager {
         if let Err(e) = result {
             match device_guard.get_device_info().await {
                 DeviceType::Block(device) => {
-                    self.shared_info.release_device_index(device.config.index);
+                    self.shared_info.release_device_index(
+                        device.config.index,
+                        device.config.driver_option == *KATA_NVDIMM_DEV_TYPE,
+                    );
                 }
                 DeviceType::Vfio(device) => {
                     // safe here:
@@ -116,11 +136,12 @@ impl DeviceManager {
                     // and needs do release_device_index. otherwise, let it go.
                     if device.config.dev_type == DEVICE_TYPE_BLOCK {
                         self.shared_info
-                            .release_device_index(device.config.virt_path.unwrap().0);
+                            .release_device_index(device.config.virt_path.unwrap().0, false);
                     }
                 }
                 DeviceType::VhostUserBlk(device) => {
-                    self.shared_info.release_device_index(device.config.index);
+                    self.shared_info
+                        .release_device_index(device.config.index, false);
                 }
                 _ => {
                     debug!(sl!(), "no need to do release device index.");
@@ -142,8 +163,14 @@ impl DeviceManager {
             let result = match device_guard.detach(self.hypervisor.as_ref()).await {
                 Ok(index) => {
                     if let Some(i) = index {
-                        // release the declared block device index
-                        self.shared_info.release_device_index(i);
+                        // release the declared device index
+                        let is_pmem =
+                            if let DeviceType::Block(blk) = device_guard.get_device_info().await {
+                                blk.config.driver_option == *KATA_NVDIMM_DEV_TYPE
+                            } else {
+                                false
+                            };
+                        self.shared_info.release_device_index(i, is_pmem);
                     }
                     Ok(())
                 }
@@ -209,13 +236,19 @@ impl DeviceManager {
         None
     }
 
-    fn get_dev_virt_path(&mut self, dev_type: &str) -> Result<Option<(u64, String)>> {
+    fn get_dev_virt_path(
+        &mut self,
+        dev_type: &str,
+        is_pmem: bool,
+    ) -> Result<Option<(u64, String)>> {
         let virt_path = if dev_type == DEVICE_TYPE_BLOCK {
-            // generate virt path
-            let current_index = self.shared_info.declare_device_index()?;
-            let drive_name = get_virt_drive_name(current_index as i32)?;
+            let current_index = self.shared_info.declare_device_index(is_pmem)?;
+            let drive_name = if is_pmem {
+                format!("pmem{}", current_index)
+            } else {
+                get_virt_drive_name(current_index as i32)?
+            };
             let virt_path_name = format!("/dev/{}", drive_name);
-
             Some((current_index, virt_path_name))
         } else {
             // only dev_type is block, otherwise, it's None.
@@ -247,8 +280,7 @@ impl DeviceManager {
                 if let Some(device_matched_id) = self.find_device(dev_host_path).await {
                     return Ok(device_matched_id);
                 }
-
-                let virt_path = self.get_dev_virt_path(vfio_dev_config.dev_type.as_str())?;
+                let virt_path = self.get_dev_virt_path(vfio_dev_config.dev_type.as_str(), false)?;
                 vfio_dev_config.virt_path = virt_path;
 
                 Arc::new(Mutex::new(VfioDevice::new(
@@ -304,12 +336,28 @@ impl DeviceManager {
         config: &VhostUserConfig,
         device_id: String,
     ) -> Result<ArcMutexDevice> {
+        // TODO virtio-scsi
         let mut vhu_blk_config = config.clone();
-        vhu_blk_config.driver_option = self.shared_info.block_driver.clone();
+
+        match vhu_blk_config.driver_option.as_str() {
+            // convert the block driver to kata type
+            VIRTIO_BLOCK_MMIO => {
+                vhu_blk_config.driver_option = KATA_MMIO_BLK_DEV_TYPE.to_string();
+            }
+            VIRTIO_BLOCK_PCI => {
+                vhu_blk_config.driver_option = KATA_BLK_DEV_TYPE.to_string();
+            }
+            _ => {
+                return Err(anyhow!(
+                    "unsupported driver type {}",
+                    vhu_blk_config.driver_option
+                ));
+            }
+        };
 
         // generate block device index and virt path
         // safe here, Block device always has virt_path.
-        if let Some(virt_path) = self.get_dev_virt_path(DEVICE_TYPE_BLOCK)? {
+        if let Some(virt_path) = self.get_dev_virt_path(DEVICE_TYPE_BLOCK, false)? {
             vhu_blk_config.index = virt_path.0;
             vhu_blk_config.virt_path = virt_path.1;
         }
@@ -326,10 +374,30 @@ impl DeviceManager {
         device_id: String,
     ) -> Result<ArcMutexDevice> {
         let mut block_config = config.clone();
-        block_config.driver_option = self.shared_info.block_driver.clone();
+        let mut is_pmem = false;
+
+        match block_config.driver_option.as_str() {
+            // convert the block driver to kata type
+            VIRTIO_BLOCK_MMIO => {
+                block_config.driver_option = KATA_MMIO_BLK_DEV_TYPE.to_string();
+            }
+            VIRTIO_BLOCK_PCI => {
+                block_config.driver_option = KATA_BLK_DEV_TYPE.to_string();
+            }
+            VIRTIO_PMEM => {
+                block_config.driver_option = KATA_NVDIMM_DEV_TYPE.to_string();
+                is_pmem = true;
+            }
+            _ => {
+                return Err(anyhow!(
+                    "unsupported driver type {}",
+                    block_config.driver_option
+                ));
+            }
+        };
 
         // generate virt path
-        if let Some(virt_path) = self.get_dev_virt_path(DEVICE_TYPE_BLOCK)? {
+        if let Some(virt_path) = self.get_dev_virt_path(DEVICE_TYPE_BLOCK, is_pmem)? {
             block_config.index = virt_path.0;
             block_config.virt_path = virt_path.1;
         }
@@ -397,4 +465,8 @@ pub async fn do_handle_device(
         .context("failed to get device info")?;
 
     Ok(device_info)
+}
+
+pub async fn get_block_driver(d: &RwLock<DeviceManager>) -> String {
+    d.read().await.get_block_driver().await
 }
