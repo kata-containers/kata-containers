@@ -11,8 +11,8 @@ use kata_sys_util::rand::RandomBytes;
 use tokio::sync::{Mutex, RwLock};
 
 use crate::{
-    BlockConfig, BlockDevice, Hypervisor, VfioDevice, KATA_BLK_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE,
-    VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI,
+    device::VhostUserBlkDevice, BlockConfig, BlockDevice, Hypervisor, VfioDevice, VhostUserConfig,
+    KATA_BLK_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE, VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI,
 };
 
 use super::{
@@ -25,17 +25,34 @@ pub type ArcMutexDevice = Arc<Mutex<dyn Device>>;
 /// block_index and released_block_index are used to search an available block index
 /// in Sandbox.
 ///
+/// @block_driver to be used for block device;
 /// @block_index generally default is 1 for <vdb>;
 /// @released_block_index for blk devices removed and indexes will released at the same time.
 #[derive(Clone, Debug, Default)]
 struct SharedInfo {
+    block_driver: String,
     block_index: u64,
     released_block_index: Vec<u64>,
 }
 
 impl SharedInfo {
-    fn new() -> Self {
+    async fn new(hypervisor: Arc<dyn Hypervisor>) -> Self {
+        // get hypervisor block driver
+        let block_driver = match hypervisor
+            .hypervisor_config()
+            .await
+            .blockdev_info
+            .block_device_driver
+            .as_str()
+        {
+            // convert the block driver to kata type
+            VIRTIO_BLOCK_MMIO => KATA_MMIO_BLK_DEV_TYPE.to_string(),
+            VIRTIO_BLOCK_PCI => KATA_BLK_DEV_TYPE.to_string(),
+            _ => "".to_string(),
+        };
+
         SharedInfo {
+            block_driver,
             block_index: 1,
             released_block_index: vec![],
         }
@@ -67,26 +84,24 @@ pub struct DeviceManager {
 }
 
 impl DeviceManager {
-    pub fn new(hypervisor: Arc<dyn Hypervisor>) -> Result<Self> {
+    pub async fn new(hypervisor: Arc<dyn Hypervisor>) -> Result<Self> {
         let devices = HashMap::<String, ArcMutexDevice>::new();
         Ok(DeviceManager {
             devices,
-            hypervisor,
-            shared_info: SharedInfo::new(),
+            hypervisor: hypervisor.clone(),
+            shared_info: SharedInfo::new(hypervisor.clone()).await,
         })
     }
 
-    async fn try_add_device(&mut self, device_id: &str) -> Result<()> {
+    pub async fn try_add_device(&mut self, device_id: &str) -> Result<()> {
         // find the device
         let device = self
             .devices
             .get(device_id)
             .context("failed to find device")?;
-
-        // attach device
         let mut device_guard = device.lock().await;
+        // attach device
         let result = device_guard.attach(self.hypervisor.as_ref()).await;
-
         // handle attach error
         if let Err(e) = result {
             match device_guard.get_device_info().await {
@@ -102,6 +117,9 @@ impl DeviceManager {
                             .release_device_index(device.config.virt_path.unwrap().0);
                     }
                 }
+                DeviceType::VhostUserBlk(device) => {
+                    self.shared_info.release_device_index(device.config.index);
+                }
                 _ => {
                     debug!(sl!(), "no need to do release device index.");
                 }
@@ -109,6 +127,7 @@ impl DeviceManager {
 
             drop(device_guard);
             self.devices.remove(device_id);
+
             return Err(e);
         }
 
@@ -165,6 +184,11 @@ impl DeviceManager {
                 }
                 DeviceType::Vfio(device) => {
                     if device.config.host_path == host_path {
+                        return Some(device_id.to_string());
+                    }
+                }
+                DeviceType::VhostUserBlk(device) => {
+                    if device.config.socket_path == host_path {
                         return Some(device_id.to_string());
                     }
                 }
@@ -225,6 +249,23 @@ impl DeviceManager {
                     &vfio_dev_config,
                 )))
             }
+            DeviceConfig::VhostUserBlkCfg(config) => {
+                // try to find the device, found and just return id.
+                if let Some(dev_id_matched) = self.find_device(config.socket_path.clone()).await {
+                    info!(
+                        sl!(),
+                        "vhost blk device with path:{:?} found. just return device id: {:?}",
+                        config.socket_path.clone(),
+                        dev_id_matched
+                    );
+
+                    return Ok(dev_id_matched);
+                }
+
+                self.create_vhost_blk_device(config, device_id.clone())
+                    .await
+                    .context("failed to create vhost blk device")?
+            }
             _ => {
                 return Err(anyhow!("invliad device type"));
             }
@@ -236,27 +277,34 @@ impl DeviceManager {
         Ok(device_id)
     }
 
+    async fn create_vhost_blk_device(
+        &mut self,
+        config: &VhostUserConfig,
+        device_id: String,
+    ) -> Result<ArcMutexDevice> {
+        let mut vhu_blk_config = config.clone();
+        vhu_blk_config.driver_option = self.shared_info.block_driver.clone();
+
+        // generate block device index and virt path
+        // safe here, Block device always has virt_path.
+        if let Some(virt_path) = self.get_dev_virt_path(DEVICE_TYPE_BLOCK)? {
+            vhu_blk_config.index = virt_path.0;
+            vhu_blk_config.virt_path = virt_path.1;
+        }
+
+        Ok(Arc::new(Mutex::new(VhostUserBlkDevice::new(
+            device_id,
+            vhu_blk_config,
+        ))))
+    }
+
     async fn create_block_device(
         &mut self,
         config: &BlockConfig,
         device_id: String,
     ) -> Result<ArcMutexDevice> {
         let mut block_config = config.clone();
-        // get hypervisor block driver
-        let block_driver = match self
-            .hypervisor
-            .hypervisor_config()
-            .await
-            .blockdev_info
-            .block_device_driver
-            .as_str()
-        {
-            // convert the block driver to kata type
-            VIRTIO_BLOCK_MMIO => KATA_MMIO_BLK_DEV_TYPE.to_string(),
-            VIRTIO_BLOCK_PCI => KATA_BLK_DEV_TYPE.to_string(),
-            _ => "".to_string(),
-        };
-        block_config.driver_option = block_driver;
+        block_config.driver_option = self.shared_info.block_driver.clone();
 
         // generate virt path
         if let Some(virt_path) = self.get_dev_virt_path(DEVICE_TYPE_BLOCK)? {

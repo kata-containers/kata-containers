@@ -114,6 +114,8 @@ pub enum BlockDeviceType {
     /// SPOOL is a reliable NVMe virtualization system for the cloud environment.
     /// You could learn more SPOOL here: https://www.usenix.org/conference/atc20/presentation/xue
     Spool,
+    /// The standard vhost-user-blk based device such as Spdk device.
+    Spdk,
     /// Local disk/file based low level device.
     RawBlock,
 }
@@ -124,6 +126,8 @@ impl BlockDeviceType {
         // SPOOL path should be started with "spool", e.g. "spool:/device1"
         if path.starts_with("spool:/") {
             BlockDeviceType::Spool
+        } else if path.starts_with("spdk:/") {
+            BlockDeviceType::Spdk
         } else {
             BlockDeviceType::RawBlock
         }
@@ -399,6 +403,10 @@ impl BlockDeviceMgr {
                             );
                             BlockDeviceError::DeviceManager(e)
                         })
+                    }
+                    BlockDeviceType::Spool | BlockDeviceType::Spdk => {
+                        // TBD
+                        todo!()
                     }
                     _ => Err(BlockDeviceError::InvalidBlockDeviceType),
                 }

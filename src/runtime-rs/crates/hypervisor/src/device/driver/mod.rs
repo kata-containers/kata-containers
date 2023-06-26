@@ -1,5 +1,5 @@
-// Copyright (c) 2019-2022 Alibaba Cloud
-// Copyright (c) 2019-2022 Ant Group
+// Copyright (c) 2019-2023 Alibaba Cloud
+// Copyright (c) 2019-2023 Ant Group
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -25,6 +25,9 @@ pub use virtio_fs::{
 };
 pub use virtio_net::{Address, NetworkConfig, NetworkDevice};
 pub use virtio_vsock::{HybridVsockConfig, HybridVsockDevice, VsockConfig, VsockDevice};
+
+pub mod vhost_user_blk;
+pub use vhost_user::{VhostUserConfig, VhostUserDevice, VhostUserType};
 
 use anyhow::{anyhow, Context, Result};
 
