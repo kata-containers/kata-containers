@@ -31,7 +31,7 @@ use std::fs::{self, File};
 use std::os::unix::fs as unixfs;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
-use std::process::exit;
+use std::process::{Command, exit};
 use std::sync::Arc;
 use tracing::{instrument, span};
 
@@ -81,6 +81,10 @@ cfg_if! {
 }
 
 const NAME: &str = "kata-agent";
+
+const AA_PATH: &str = "/usr/local/bin/attestation-agent";
+const AA_KEYPROVIDER_PORT: &str = "127.0.0.1:50000";
+const AA_GETRESOURCE_PORT: &str = "127.0.0.1:50001";
 
 lazy_static! {
     static ref AGENT_CONFIG: AgentConfig =
@@ -320,6 +324,12 @@ async fn start_sandbox(
         tasks.push(debug_console_task);
     }
 
+    // Start attestation agent if applicable
+    if !config.aa_kbc_params.is_empty() {
+        start_attestation_agent()?;
+
+    }
+
     // Initialize unique sandbox structure.
     let s = Sandbox::new(logger).context("Failed to create sandbox")?;
     if init_mode {
@@ -384,6 +394,16 @@ fn init_agent_as_init(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result
         warn!(logger, "failed to set hostname");
     }
 
+    Ok(())
+}
+
+fn start_attestation_agent() -> Result<()> {
+    Command::new(AA_PATH)
+        .arg("--keyprovider_sock")
+        .arg(AA_KEYPROVIDER_PORT)
+        .arg("--getresource_sock")
+        .arg(AA_GETRESOURCE_PORT)
+        .spawn()?;
     Ok(())
 }
 
