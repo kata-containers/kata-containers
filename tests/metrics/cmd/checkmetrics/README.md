@@ -2,12 +2,12 @@
 
 ## Overview
 
-The checkmetrics tool is used to check the metrics results files in 
+The `checkmetrics` tool is used to check the metrics results files in 
 JSON format. Results files are checked against configs stored in a TOML
 file that contains baseline expectations for the results.
 
 `checkmetrics` checks for a matching results file for each entry in the
-TOML file with an appropriate json file extension. Failure to find a matching
+TOML file with an appropriate `json` file extension. Failure to find a matching
 file is classified as a failure for that individual TOML entry.
 
 `checkmetrics` continues to process all entries in the TOML file and prints its
@@ -27,28 +27,28 @@ The baseline TOML file is composed of one `[[metric]]` section per result that i
 Each section contains a number of parameters, some optional:
 
 ```
-|name	     |   type	  |    description                                   | 
+|name	       |   type	  |    description                                   | 
 |----------------------------------------------------------------------------
-|name	     |   string	  |    Filename containing results (minus .json ext.)|
-|type	     |   string	  |    json (optional, json is the default)          |
-|description |	 string	  |    Description of test (optional)                |
-|checkvar    |	 string	  |    jq query string to extract results from JSON  |
-|checktype   |	 string	  |    Property to check ("mean", "max" etc.)        |
-|minval	     |   float	  |    Minimum value the checked property should be  |
-|maxval	     |   float	  |    Maximum value the checked property should be  |
-|midval	     |   float	  |    Middle value used for percentage range check  |
-|minpercent  |	 float	  |    Minimum percentage from midval check boundary |
-|maxpercent  |	 float	  |    Maximum percentage from midval check boundary |
+|`name`	       |   string	  |    Filename containing results (minus .json ext.)|
+|`type`	       |   string	  |    json (optional, json is the default)          |
+|`description` |   string	  |    Description of test (optional)                |
+|`checkvar`    |   string	  |    jq query string to extract results from JSON  |
+|`checktype`   |   string	  |    Property to check ("mean", "max" etc.)        |
+|`minval`      |   float	  |    Minimum value the checked property should be  |
+|`maxval`      |   float	  |    Maximum value the checked property should be  |
+|`midval`      |   float	  |    Middle value used for percentage range check  |
+|`minpercent`  |   float	  |    Minimum percentage from midval check boundary |
+|`maxpercent`  |   float	  |    Maximum percentage from midval check boundary |
 ```
 
 ### Supported file types
 
 At this time only JSON formatted results files are supported.
 
-### Supported checktypes
+### Supported `checktypes`
 
-The following checktypes are supported. All are tested to fall within the bounds set by the minval
-and maxval. That is:
+The following `checktypes` are supported. All are tested to fall within the bounds set by the `minval`
+and `maxval`. That is:
 
 > `minval <= Result <= maxval`
 
@@ -110,7 +110,7 @@ and maxval. That is:
 
 ## Output
 
-The checkmetrics tool outputs a summary table after processing all metrics sections, and returns
+The `checkmetrics` tool outputs a summary table after processing all metrics sections, and returns
 a non-zero return code if any of the metrics checks fail.
 
 Example output:
@@ -161,7 +161,7 @@ Fails: 2, Passes 1
 
 ## Example invocation
 
-For example, to invoke the checkmetrics tool, enter the following:
+For example, to invoke the `checkmetrics` tool, enter the following:
 
 ```
 BASEFILE=`pwd`/../../metrics/baseline/baseline.toml
