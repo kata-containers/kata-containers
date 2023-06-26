@@ -13,8 +13,10 @@ use async_trait::async_trait;
 /// VIRTIO_BLOCK_PCI indicates block driver is virtio-pci based
 pub const VIRTIO_BLOCK_PCI: &str = "virtio-blk-pci";
 pub const VIRTIO_BLOCK_MMIO: &str = "virtio-blk-mmio";
+pub const VIRTIO_PMEM: &str = "virtio-pmem";
 pub const KATA_MMIO_BLK_DEV_TYPE: &str = "mmioblk";
 pub const KATA_BLK_DEV_TYPE: &str = "blk";
+pub const KATA_NVDIMM_DEV_TYPE: &str = "nvdimm";
 
 #[derive(Debug, Clone, Default)]
 pub struct BlockConfig {

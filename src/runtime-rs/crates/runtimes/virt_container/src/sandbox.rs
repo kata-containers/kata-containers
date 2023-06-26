@@ -186,11 +186,11 @@ impl VirtSandbox {
     }
 
     async fn prepare_rootfs_config(&self) -> Result<BlockConfig> {
-        let hypervisor_config = self.hypervisor.hypervisor_config().await;
+        let boot_info = self.hypervisor.hypervisor_config().await.boot_info;
 
         let image = {
-            let initrd_path = hypervisor_config.boot_info.initrd.clone();
-            let image_path = hypervisor_config.boot_info.image;
+            let initrd_path = boot_info.initrd.clone();
+            let image_path = boot_info.image;
             if !initrd_path.is_empty() {
                 Ok(initrd_path)
             } else if !image_path.is_empty() {
@@ -204,6 +204,7 @@ impl VirtSandbox {
         Ok(BlockConfig {
             path_on_host: image,
             is_readonly: true,
+            driver_option: boot_info.vm_rootfs_driver,
             ..Default::default()
         })
     }
