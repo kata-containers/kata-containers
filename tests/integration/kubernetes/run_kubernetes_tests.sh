@@ -55,6 +55,12 @@ else
 		"k8s-volume.bats" \
 		"k8s-nginx-connectivity.bats" \
 	)
+
+	if [[ " ${SUPPORTED_HYPERVISORS[*]} " =~ " ${KATA_HYPERVISOR} " ]]; then
+		K8S_TEST_UNION+=( \
+			"k8s-confidential.bats" \
+		)
+	fi
 fi
 
 # we may need to skip a few test cases when running on non-x86_64 arch
