@@ -61,6 +61,7 @@ docker run \
 	--env KATA_BUILD_CC="${KATA_BUILD_CC:-}" \
 	--env INCLUDE_ROOTFS="$(realpath "${INCLUDE_ROOTFS:-}" 2> /dev/null || true)" \
 	--env HKD_PATH="$(realpath "${HKD_PATH:-}" 2> /dev/null || true)" \
+	--env CC_BUILDER_REGISTRY="${CC_BUILDER_REGISTRY:-}" \
 	--env PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-"no"}" \
 	--env INITRAMFS_CONTAINER_BUILDER="${INITRAMFS_CONTAINER_BUILDER:-}" \
 	--env KERNEL_CONTAINER_BUILDER="${KERNEL_CONTAINER_BUILDER:-}" \
@@ -69,6 +70,7 @@ docker run \
 	--env SHIM_V2_CONTAINER_BUILDER="${SHIM_V2_CONTAINER_BUILDER:-}" \
 	--env TDSHIM_CONTAINER_BUILDER="${TDSHIM_CONTAINER_BUILDER:-}" \
 	--env VIRTIOFSD_CONTAINER_BUILDER="${VIRTIOFSD_CONTAINER_BUILDER:-}" \
+	--env MEASURED_ROOTFS="${MEASURED_ROOTFS:-}" \
 	--rm \
 	-w ${script_dir} \
 	build-kata-deploy "${kata_deploy_create}" $@

@@ -14,6 +14,7 @@ use common::{
 };
 use hypervisor::device::device_manager::DeviceManager;
 use nix::sys::signal::Signal;
+use oci::LinuxResources;
 use resource::{rootfs::Rootfs, volume::Volume};
 use tokio::sync::RwLock;
 
@@ -32,10 +33,16 @@ pub struct ContainerInner {
     pub(crate) exec_processes: HashMap<String, Exec>,
     pub(crate) rootfs: Vec<Arc<dyn Rootfs>>,
     pub(crate) volumes: Vec<Arc<dyn Volume>>,
+    pub(crate) linux_resources: Option<LinuxResources>,
 }
 
 impl ContainerInner {
-    pub(crate) fn new(agent: Arc<dyn Agent>, init_process: Process, logger: slog::Logger) -> Self {
+    pub(crate) fn new(
+        agent: Arc<dyn Agent>,
+        init_process: Process,
+        logger: slog::Logger,
+        linux_resources: Option<LinuxResources>,
+    ) -> Self {
         Self {
             agent,
             logger,
@@ -43,6 +50,7 @@ impl ContainerInner {
             exec_processes: HashMap::new(),
             rootfs: vec![],
             volumes: vec![],
+            linux_resources,
         }
     }
 

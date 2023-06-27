@@ -22,6 +22,7 @@ pub mod rootfs;
 pub mod share_fs;
 pub mod volume;
 pub use manager::ResourceManager;
+pub mod cpu_mem;
 
 use kata_types::config::hypervisor::SharedFsInfo;
 
@@ -29,4 +30,11 @@ use kata_types::config::hypervisor::SharedFsInfo;
 pub enum ResourceConfig {
     Network(NetworkConfig),
     ShareFs(SharedFsInfo),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ResourceUpdateOp {
+    Add,
+    Del,
+    Update,
 }

@@ -1924,7 +1924,8 @@ type OnlineCPUMemRequest struct {
 	// If true the agent returns once all resources have been connected, otherwise all
 	// resources are connected asynchronously and the agent returns immediately.
 	Wait bool `protobuf:"varint,1,opt,name=wait,proto3" json:"wait,omitempty"`
-	// NbCpus specifies the number of CPUs that were added and the agent has to online.
+	// NbCpus specifies the number of CPUs that should be onlined in the guest.
+	// Special value 0 means agent will skip this check.
 	NbCpus uint32 `protobuf:"varint,2,opt,name=nb_cpus,json=nbCpus,proto3" json:"nb_cpus,omitempty"`
 	// CpuOnly specifies whether only online CPU or not.
 	CpuOnly              bool     `protobuf:"varint,3,opt,name=cpu_only,json=cpuOnly,proto3" json:"cpu_only,omitempty"`

@@ -5,7 +5,7 @@
 //
 
 use crate::device::Device;
-use crate::device::DeviceConfig;
+use crate::device::DeviceType;
 use crate::Hypervisor as hypervisor;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -47,7 +47,7 @@ impl Device for VhostUserConfig {
         todo!()
     }
 
-    async fn get_device_info(&self) -> DeviceConfig {
+    async fn get_device_info(&self) -> DeviceType {
         todo!()
     }
 

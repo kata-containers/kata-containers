@@ -1,4 +1,6 @@
-<img src="https://www.openstack.org/assets/kata/kata-vertical-on-white.png" width="150">
+<img src="https://object-storage-ca-ymq-1.vexxhost.net/swift/v1/6e4619c416ff4bd19e1c087f27a43eea/www-images-prod/openstack-logo/kata/SVG/kata-1.svg" width="900">
+
+[![CI | Publish Kata Containers payload](https://github.com/kata-containers/kata-containers/actions/workflows/payload-after-push.yaml/badge.svg)](https://github.com/kata-containers/kata-containers/actions/workflows/payload-after-push.yaml)
 
 # Kata Containers
 
@@ -144,8 +146,6 @@ The table below lists the remaining parts of the project:
 
 Kata Containers is now
 [available natively for most distributions](docs/install/README.md#packaged-installation-methods).
-However, packaging scripts and metadata are still used to generate [snap](snap/local) and GitHub releases. See
-the [components](#components) section for further details.
 
 ## Glossary of Terms
 

@@ -56,14 +56,20 @@ all: serial-targets \
 serial-targets:
 	${MAKE} -f $(MK_PATH) -j 1 V= \
 	rootfs-image-tarball \
+	rootfs-image-tdx-tarball \
+	rootfs-initrd-mariner-tarball \
 	rootfs-initrd-sev-tarball \
 	rootfs-initrd-tarball \
-	cloud-hypervisor-tarball
+	cloud-hypervisor-tarball \
+	cloud-hypervisor-glibc-tarball
 
 %-tarball-build: $(MK_DIR)/dockerbuild/install_yq.sh
 	$(call BUILD,$*)
 
 cloud-hypervisor-tarball:
+	${MAKE} $@-build
+
+cloud-hypervisor-glibc-tarball:
 	${MAKE} $@-build
 
 firecracker-tarball:
@@ -112,6 +118,12 @@ qemu-tdx-experimental-tarball:
 	${MAKE} $@-build
 
 rootfs-image-tarball:
+	${MAKE} $@-build
+
+rootfs-image-tdx-tarball: kernel-tdx-experimental-tarball
+	${MAKE} $@-build
+
+rootfs-initrd-mariner-tarball:
 	${MAKE} $@-build
 
 rootfs-initrd-sev-tarball: kernel-sev-tarball

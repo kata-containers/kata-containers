@@ -10,7 +10,10 @@ use agent::Storage;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::{
-    device::{device_manager::DeviceManager, DeviceConfig},
+    device::{
+        device_manager::{do_handle_device, DeviceManager},
+        DeviceConfig, DeviceType,
+    },
     BlockConfig,
 };
 use kata_types::mount::Mount;
@@ -46,18 +49,10 @@ impl BlockRootfs {
             ..Default::default()
         };
 
-        let device_id = d
-            .write()
+        // create and insert block device into Kata VM
+        let device_info = do_handle_device(d, &DeviceConfig::BlockCfg(block_device_config.clone()))
             .await
-            .new_device(&DeviceConfig::BlockCfg(block_device_config.clone()))
-            .await
-            .context("failed to create deviec")?;
-
-        d.write()
-            .await
-            .try_add_device(device_id.as_str())
-            .await
-            .context("failed to add deivce")?;
+            .context("do handle device failed.")?;
 
         let mut storage = Storage {
             fs_type: rootfs.fs_type.clone(),
@@ -66,17 +61,11 @@ impl BlockRootfs {
             ..Default::default()
         };
 
-        // get complete device information
-        let dev_info = d
-            .read()
-            .await
-            .get_device_info(device_id.as_str())
-            .await
-            .context("failed to get device info")?;
-
-        if let DeviceConfig::BlockCfg(config) = dev_info {
-            storage.driver = config.driver_option;
-            storage.source = config.virt_path;
+        let mut device_id: String = "".to_owned();
+        if let DeviceType::Block(device) = device_info {
+            storage.driver = device.config.driver_option;
+            storage.source = device.config.virt_path;
+            device_id = device.device_id;
         }
 
         Ok(Self {

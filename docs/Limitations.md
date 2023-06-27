@@ -147,7 +147,8 @@ these commands is potentially challenging.
 See issue https://github.com/clearcontainers/runtime/issues/341 and [the constraints challenge](#the-constraints-challenge) for more information.
 
 For CPUs resource management see
-[CPU constraints](design/vcpu-handling.md).
+[CPU constraints(in runtime-go)](design/vcpu-handling-runtime-go.md).
+[CPU constraints(in runtime-rs)](design/vcpu-handling-runtime-rs.md).
 
 # Architectural limitations
 

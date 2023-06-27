@@ -54,6 +54,7 @@ pub trait Agent: AgentManager + HealthService + Send + Sync {
     // sandbox
     async fn create_sandbox(&self, req: CreateSandboxRequest) -> Result<Empty>;
     async fn destroy_sandbox(&self, req: Empty) -> Result<Empty>;
+    async fn online_cpu_mem(&self, req: OnlineCPUMemRequest) -> Result<Empty>;
 
     // network
     async fn add_arp_neighbors(&self, req: AddArpNeighborRequest) -> Result<Empty>;

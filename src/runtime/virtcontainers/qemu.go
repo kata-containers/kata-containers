@@ -1207,22 +1207,21 @@ func (q *qemu) StopVM(ctx context.Context, waitOnly bool) (err error) {
 		return err
 	}
 
+	pids := q.GetPids()
+	if len(pids) == 0 {
+		return errors.New("cannot determine QEMU PID")
+	}
+	pid := pids[0]
+
 	if waitOnly {
-		pids := q.GetPids()
-		if len(pids) == 0 {
-			return errors.New("cannot determine QEMU PID")
-		}
-
-		pid := pids[0]
-
 		err := utils.WaitLocalProcess(pid, qemuStopSandboxTimeoutSecs, syscall.Signal(0), q.Logger())
 		if err != nil {
 			return err
 		}
 	} else {
-		err := q.qmpMonitorCh.qmp.ExecuteQuit(q.qmpMonitorCh.ctx)
+		err = syscall.Kill(pid, syscall.SIGKILL)
 		if err != nil {
-			q.Logger().WithError(err).Error("Fail to execute qmp QUIT")
+			q.Logger().WithError(err).Error("Fail to send SIGKILL to qemu")
 			return err
 		}
 	}

@@ -63,7 +63,8 @@ kernel_url=""
 #Linux headers for GPU guest fs module building
 linux_headers=""
 
-KATA_BUILD_CC=${KATA_BUILD_CC:-no}
+MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
+
 packaging_scripts_dir="${script_dir}/../scripts"
 source "${packaging_scripts_dir}/lib.sh"
 
@@ -129,7 +130,13 @@ get_tee_kernel() {
 
 	mkdir -p ${kernel_path}
 
-	[ -z "${kernel_url}" ] && kernel_url=$(get_from_kata_deps "assets.kernel.${tee}.url")
+	if [ -z "${kernel_url}" ]; then
+		if [[ "${conf_guest}" == "tdx" ]]; then
+			kernel_url=$(get_from_kata_deps "assets.kernel-tdx-experimental.url")
+		else
+			kernel_url=$(get_from_kata_deps "assets.kernel.${tee}.url")
+		fi
+	fi
 
 	local kernel_tarball="${version}.tar.gz"
 
@@ -263,7 +270,7 @@ get_kernel_frag_path() {
 		fi
 	fi
 
-	if [ "${KATA_BUILD_CC}" == "yes" ]; then
+	if [ "${MEASURED_ROOTFS}" == "yes" ]; then
 		info "Enabling config for confidential guest trust storage protection"
 		local cryptsetup_configs="$(ls ${common_path}/confidential_containers/cryptsetup.conf)"
 		all_configs="${all_configs} ${cryptsetup_configs}"
@@ -408,7 +415,7 @@ setup_kernel() {
 	[ -n "${hypervisor_target}" ] || hypervisor_target="kvm"
 	[ -n "${kernel_config_path}" ] || kernel_config_path=$(get_default_kernel_config "${kernel_version}" "${hypervisor_target}" "${arch_target}" "${kernel_path}")
 
-	if [ "${KATA_BUILD_CC}" == "yes" ] && [ -f "${default_initramfs}" ]; then
+	if [ "${MEASURED_ROOTFS}" == "yes" ] && [ -f "${default_initramfs}" ]; then
 		info "Copying initramfs from: ${default_initramfs}"
 		cp "${default_initramfs}" ./
 	fi
@@ -612,8 +619,12 @@ main() {
 			kernel_version=$(get_from_kata_deps "assets.kernel-dragonball-experimental.version")
 		elif [[ "${conf_guest}" != "" ]]; then
 			#If specifying a tag for kernel_version, must be formatted version-like to avoid unintended parsing issues
-			kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.version" 2>/dev/null || true)
-			[ -n "${kernel_version}" ] || kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.tag")
+			if [[ "${conf_guest}" == "tdx" ]]; then
+				kernel_version=$(get_from_kata_deps "assets.kernel-tdx-experimental.version" 2>/dev/null || true)
+			else
+				kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.version" 2>/dev/null || true)
+				[ -n "${kernel_version}" ] || kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.tag")
+			fi
 		else
 			kernel_version=$(get_from_kata_deps "assets.kernel.version")
 		fi

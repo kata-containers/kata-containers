@@ -254,7 +254,7 @@ DEFVIRTIOFSQUEUESIZE ?= 1024
 #
 # see `virtiofsd -h` for possible options.
 # Make sure you quote args.
-DEFVIRTIOFSEXTRAARGS ?= [\"--thread-pool-size=1\", \"-o\", \"announce_submounts\"]
+DEFVIRTIOFSEXTRAARGS ?= [\"--thread-pool-size=1\", \"--announce-submounts\"]
 DEFENABLEIOTHREADS := false
 DEFENABLEVHOSTUSERSTORE := false
 DEFVHOSTUSERSTOREPATH := $(PKGRUNDIR)/vhost-user
@@ -386,31 +386,6 @@ ifneq (,$(QEMUCMD))
     SYSCONFIG_PATHS += $(SYSCONFIG_REMOTE)
 
     CONFIGS += $(CONFIG_REMOTE)
-
-
-    CONFIG_FILE_QEMU_GPU = configuration-qemu-gpu.toml
-    CONFIG_QEMU_GPU = config/$(CONFIG_FILE_QEMU_GPU)
-    CONFIG_QEMU_GPU_IN = $(CONFIG_QEMU_GPU).in
-
-    CONFIG_PATH_QEMU_SEV = $(abspath $(CONFDIR)/$(CONFIG_FILE_QEMU_SEV))
-    CONFIG_PATHS += $(CONFIG_PATH_QEMU_SEV)
-
-    SYSCONFIG_QEMU_SEV = $(abspath $(SYSCONFDIR)/$(CONFIG_FILE_QEMU_SEV))
-    SYSCONFIG_PATHS_SEV += $(SYSCONFIG_QEMU_SEV)
-
-    CONFIGS += $(CONFIG_QEMU_SEV)
-
-    CONFIG_FILE_QEMU_SNP = configuration-qemu-snp.toml
-    CONFIG_QEMU_SNP = config/$(CONFIG_FILE_QEMU_SNP)
-    CONFIG_QEMU_SNP_IN = $(CONFIG_QEMU_SNP).in
-
-    CONFIG_PATH_QEMU_SNP = $(abspath $(CONFDIR)/$(CONFIG_FILE_QEMU_SNP))
-    CONFIG_PATHS += $(CONFIG_PATH_QEMU_SNP)
-
-    SYSCONFIG_QEMU_SNP = $(abspath $(SYSCONFDIR)/$(CONFIG_FILE_QEMU_SNP))
-    SYSCONFIG_PATHS_SNP += $(SYSCONFIG_QEMU_SNP)
-
-    CONFIGS += $(CONFIG_QEMU_SNP)
 
     CONFIG_FILE_QEMU_NVIDIA_GPU = configuration-qemu-nvidia-gpu.toml
     CONFIG_QEMU_NVIDIA_GPU = config/$(CONFIG_FILE_QEMU_NVIDIA_GPU)

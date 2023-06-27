@@ -157,7 +157,11 @@ impl DragonballInner {
             .context("insert vsock")
     }
 
-    fn parse_inline_virtiofs_args(&self, fs_cfg: &mut FsDeviceConfigInfo) -> Result<()> {
+    fn parse_inline_virtiofs_args(
+        &self,
+        fs_cfg: &mut FsDeviceConfigInfo,
+        options: &mut Vec<String>,
+    ) -> Result<()> {
         let mut debug = false;
         let mut opt_list = String::new();
 
@@ -169,14 +173,17 @@ impl DragonballInner {
             sl!(),
             "args: {:?}", &self.config.shared_fs.virtio_fs_extra_args
         );
-        let args = &self.config.shared_fs.virtio_fs_extra_args;
-        let _ = go_flag::parse_args_with_warnings::<String, _, _>(args, None, |flags| {
+        let mut args = self.config.shared_fs.virtio_fs_extra_args.clone();
+        let _ = go_flag::parse_args_with_warnings::<String, _, _>(&args, None, |flags| {
             flags.add_flag("d", &mut debug);
             flags.add_flag("thread-pool-size", &mut fs_cfg.thread_pool_size);
             flags.add_flag("drop-sys-resource", &mut fs_cfg.drop_sys_resource);
             flags.add_flag("o", &mut opt_list);
         })
         .with_context(|| format!("parse args: {:?}", args))?;
+
+        // more options parsed for inline virtio-fs' custom config
+        args.append(options);
 
         if debug {
             warn!(
@@ -202,6 +209,7 @@ impl DragonballInner {
                     "xattr" => fs_cfg.xattr = true,
                     "no_xattr" => fs_cfg.xattr = false,
                     "cache_symlinks" => {} // inline virtiofs always cache symlinks
+                    "no_readdir" => fs_cfg.no_readdir = true,
                     "trace" => warn!(
                         sl!(),
                         "Inline virtiofs \"-o trace\" option not supported yet, ignored."
@@ -234,16 +242,25 @@ impl DragonballInner {
             xattr: true,
             ..Default::default()
         };
-        self.do_add_fs_device(&config.fs_type, &mut fs_cfg)
+
+        let mut options = config.options.clone();
+        self.do_add_fs_device(&config.fs_type, &mut fs_cfg, &mut options)
     }
 
-    fn do_add_fs_device(&self, fs_type: &str, fs_cfg: &mut FsDeviceConfigInfo) -> Result<()> {
+    fn do_add_fs_device(
+        &self,
+        fs_type: &str,
+        fs_cfg: &mut FsDeviceConfigInfo,
+        options: &mut Vec<String>,
+    ) -> Result<()> {
         match fs_type {
             VIRTIO_FS => {
                 fs_cfg.mode = String::from("vhostuser");
             }
             INLINE_VIRTIO_FS => {
-                self.parse_inline_virtiofs_args(fs_cfg)?;
+                // All parameters starting with --patch-fs do not need to be processed, these are the parameters required by patch fs
+                options.retain(|x| !x.starts_with("--patch-fs"));
+                self.parse_inline_virtiofs_args(fs_cfg, options)?;
             }
             _ => {
                 return Err(anyhow!(
@@ -311,8 +328,12 @@ mod tests {
             "--drop-sys-resource".to_string(),
             "-d".to_string(),
         ];
+
+        let mut options: Vec<String> = Vec::new();
         dragonball.config.shared_fs.virtio_fs_cache = "auto".to_string();
-        dragonball.parse_inline_virtiofs_args(&mut fs_cfg).unwrap();
+        dragonball
+            .parse_inline_virtiofs_args(&mut fs_cfg, &mut options)
+            .unwrap();
 
         assert!(!fs_cfg.no_open);
         assert!(fs_cfg.xattr);

@@ -47,6 +47,7 @@ readonly jenkins_url="http://jenkins.katacontainers.io"
 readonly cached_artifacts_path="lastSuccessfulBuild/artifact/artifacts"
 
 ARCH=$(uname -m)
+MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
 
 workdir="${WORKDIR:-$PWD}"
 
@@ -102,6 +103,7 @@ options:
 	qemu-snp-experimental
 	qemu-tdx-experimental
 	rootfs-image
+	rootfs-image-tdx
 	rootfs-initrd
 	rootfs-initrd-sev
 	shim-v2
@@ -387,21 +389,25 @@ install_cc_shimv2() {
 	export RUST_VERSION
 	export REMOVE_VMM_CONFIGS="acrn fc"
 
-        extra_opts="DEFSERVICEOFFLOAD=true"
-	if [ -f "${repo_root_dir}/tools/osbuilder/root_hash_vanilla.txt" ]; then
-		root_hash=$(sudo sed -e 's/Root hash:\s*//g;t;d' "${repo_root_dir}/tools/osbuilder/root_hash_vanilla.txt")
-		root_measure_config="cc_rootfs_verity.scheme=dm-verity cc_rootfs_verity.hash=${root_hash}"
-		extra_opts+=" ROOTMEASURECONFIG=\"${root_measure_config}\""
-	fi
+	if [ "${MEASURED_ROOTFS}" == "yes" ]; then
+	    extra_opts="DEFSERVICEOFFLOAD=true"
+		if [ -f "${repo_root_dir}/tools/osbuilder/root_hash_vanilla.txt" ]; then
+			root_hash=$(sudo sed -e 's/Root hash:\s*//g;t;d' "${repo_root_dir}/tools/osbuilder/root_hash_vanilla.txt")
+			root_measure_config="cc_rootfs_verity.scheme=dm-verity cc_rootfs_verity.hash=${root_hash}"
+			extra_opts+=" ROOTMEASURECONFIG=\"${root_measure_config}\""
+		fi
 
-	if [ -f "${repo_root_dir}/tools/osbuilder/root_hash_tdx.txt" ]; then
-		root_hash=$(sudo sed -e 's/Root hash:\s*//g;t;d' "${repo_root_dir}/tools/osbuilder/root_hash_tdx.txt")
-		root_measure_config="cc_rootfs_verity.scheme=dm-verity cc_rootfs_verity.hash=${root_hash}"
-		extra_opts+=" ROOTMEASURECONFIGTDX=\"${root_measure_config}\""
+		if [ -f "${repo_root_dir}/tools/osbuilder/root_hash_tdx.txt" ]; then
+			root_hash=$(sudo sed -e 's/Root hash:\s*//g;t;d' "${repo_root_dir}/tools/osbuilder/root_hash_tdx.txt")
+			root_measure_config="cc_rootfs_verity.scheme=dm-verity cc_rootfs_verity.hash=${root_hash}"
+			extra_opts+=" ROOTMEASURECONFIGTDX=\"${root_measure_config}\""
+		fi
+		
+		info "extra_opts: ${extra_opts}"
+		DESTDIR="${destdir}" PREFIX="${cc_prefix}" EXTRA_OPTS="${extra_opts}" "${shimv2_builder}"
+	else
+		DESTDIR="${destdir}" PREFIX="${cc_prefix}" "${shimv2_builder}"
 	fi
-
-	info "extra_opts: ${extra_opts}"
-	DESTDIR="${destdir}" PREFIX="${cc_prefix}" EXTRA_OPTS="${extra_opts}" "${shimv2_builder}"
 }
 
 # Install static CC virtiofsd asset
@@ -564,8 +570,10 @@ install_cc_x86_64_ovmf(){
 
 #Install guest image
 install_image() {
-	local jenkins="${jenkins_url}/job/kata-containers-main-rootfs-image-$(uname -m)/${cached_artifacts_path}"
-	local component="rootfs-image"
+	local image_type="${1:-"image"}"
+	local initrd_suffix="${2:-""}"
+	local jenkins="${jenkins_url}/job/kata-containers-main-rootfs-${image_type}-$(uname -m)/${cached_artifacts_path}"
+	local component="rootfs-${image_type}"
 
 	local osbuilder_last_commit="$(get_last_modification "${repo_root_dir}/tools/osbuilder")"
 	local guest_image_last_commit="$(get_last_modification "${repo_root_dir}/tools/packaging/guest-image")"
@@ -585,7 +593,12 @@ install_image() {
 		&& return 0
 
 	info "Create image"
-	"${rootfs_builder}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}"
+	"${rootfs_builder}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${initrd_suffix}"
+}
+
+#Install guest image for tdx
+install_image_tdx() {
+	install_image "image-tdx" "tdx"
 }
 
 #Install guest initrd
@@ -678,6 +691,11 @@ install_kernel_helper() {
 
 	install_cached_kernel_tarball_component ${kernel_name} ${module_dir} && return 0
 
+	if [ "${MEASURED_ROOTFS}" == "yes" ]; then
+		info "build initramfs for cc kernel"
+		"${initramfs_builder}"
+	fi
+
 	info "build ${kernel_name}"
 	info "Kernel version ${kernel_version}"
 	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -v "${kernel_version}" ${extra_cmd}
@@ -739,6 +757,8 @@ install_kernel_experimental() {
 #Install experimental TDX kernel asset
 install_kernel_tdx_experimental() {
 	local kernel_url="$(get_from_kata_deps assets.kernel-tdx-experimental.url)"
+
+	export MEASURED_ROOTFS=yes
 
 	install_kernel_helper \
 		"assets.kernel-tdx-experimental.version" \
@@ -916,7 +936,19 @@ install_shimv2() {
 
 	export GO_VERSION
 	export RUST_VERSION
-	DESTDIR="${destdir}" PREFIX="${prefix}" "${shimv2_builder}"
+
+	if [ "${MEASURED_ROOTFS}" == "yes" ]; then
+	        extra_opts="DEFSERVICEOFFLOAD=true"
+		if [ -f "${repo_root_dir}/tools/osbuilder/root_hash.txt" ]; then
+			root_hash=$(sudo sed -e 's/Root hash:\s*//g;t;d' "${repo_root_dir}/tools/osbuilder//root_hash.txt")
+			root_measure_config="rootfs_verity.scheme=dm-verity rootfs_verity.hash=${root_hash}"
+			extra_opts+=" ROOTMEASURECONFIG=\"${root_measure_config}\""
+		fi
+
+		DESTDIR="${destdir}" PREFIX="${prefix}" EXTRA_OPTS="${extra_opts}" "${shimv2_builder}"
+	else
+		DESTDIR="${destdir}" PREFIX="${prefix}" "${shimv2_builder}"
+	fi
 }
 
 install_ovmf() {
@@ -1033,6 +1065,8 @@ handle_build() {
 
 	cloud-hypervisor) install_clh ;;
 
+	cloud-hypervisor-glibc) ;;
+
 	firecracker) install_firecracker ;;
 
 	kernel) install_kernel ;;
@@ -1065,7 +1099,11 @@ handle_build() {
 
 	rootfs-image) install_image ;;
 
+	rootfs-image-tdx) install_image_tdx ;;
+
 	rootfs-initrd) install_initrd ;;
+
+	rootfs-initrd-mariner) ;;
 
 	rootfs-initrd-sev) install_initrd_sev ;;
 	
