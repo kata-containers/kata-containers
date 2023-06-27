@@ -48,6 +48,8 @@ boot into a workload or kill a container.
 This directory does *not* contain "speed" tests that measure network or storage
 for instance.
 
+For further details see the [time tests documentation](time).
+
 ### Density
 
 Tests that measure the size and overheads of the runtime. Generally this is looking at
