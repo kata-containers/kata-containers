@@ -192,3 +192,7 @@ happen if `JSON_URL` is set. The settings are not mutually exclusive, and both c
 set if necessary.
 
 `JSON_TX_ONELINE` applies to both types of transmission.
+
+## `checkmetrics`
+
+`checkmetrics` is a CLI tool to check a metrics CI results file. For further reference see the [`checkmetrics`](cmd/checkmetrics).
