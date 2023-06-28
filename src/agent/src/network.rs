@@ -29,7 +29,7 @@ impl Network {
     }
 }
 
-pub fn setup_guest_dns(logger: Logger, dns_list: Vec<String>) -> Result<()> {
+pub fn setup_guest_dns(logger: Logger, dns_list: &[String]) -> Result<()> {
     do_setup_guest_dns(
         logger,
         dns_list,
@@ -38,7 +38,7 @@ pub fn setup_guest_dns(logger: Logger, dns_list: Vec<String>) -> Result<()> {
     )
 }
 
-fn do_setup_guest_dns(logger: Logger, dns_list: Vec<String>, src: &str, dst: &str) -> Result<()> {
+fn do_setup_guest_dns(logger: Logger, dns_list: &[String], src: &str, dst: &str) -> Result<()> {
     let logger = logger.new(o!( "subsystem" => "network"));
 
     if dns_list.is_empty() {
@@ -124,7 +124,7 @@ mod tests {
             .expect("failed to write file contents");
 
         // call do_setup_guest_dns
-        let result = do_setup_guest_dns(logger, dns.clone(), src_filename, dst_filename);
+        let result = do_setup_guest_dns(logger, &dns, src_filename, dst_filename);
 
         assert!(result.is_ok(), "result should be ok, but {:?}", result);
 
