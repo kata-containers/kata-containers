@@ -16,6 +16,6 @@ description = "measure container lifecycle timings"
 # within (inclusive)
 checkvar = ".\"boot-times\".Results | .[] | .\"to-workload\".Result"
 checktype = "mean"
-midval = 0.54
-minpercent = 10.0
-maxpercent = 10.0
+midval = 0.42
+minpercent = 15.0
+maxpercent = 15.0

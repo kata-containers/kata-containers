@@ -8,6 +8,7 @@
 set -o errexit
 set -o nounset
 set -o pipefail
+set -x
 
 kata_tarball_dir="${2:-kata-artifacts}"
 metrics_dir="$(dirname "$(readlink -f "$0")")"
@@ -94,7 +95,7 @@ function check_metrics() {
 	sudo make install
 	popd
 
-	local cm_base_file="${checkmetrics_config_dir}/checkmetrics-json-${hypervisor}-$(uname -n).toml"
+	local cm_base_file="${checkmetrics_config_dir}/checkmetrics-json-clh-kata-metric8.toml"
 	checkmetrics --debug --percentage --basefile "${cm_base_file}" --metricsdir "${results_dir}"
 	cm_result=$?
 	if [ "${cm_result}" != 0 ]; then
@@ -110,6 +111,10 @@ function run_test_launchtimes() {
 	exit 0
 	create_symbolic_links
 	bash tests/metrics/time/launch_times.sh -i public.ecr.aws/ubuntu/ubuntu:latest -n 20
+
+	if [ "${hypervisor}" = "clh" ]; then
+		check_metrics
+	fi
 }
 
 function run_test_memory_usage() {
@@ -139,8 +144,6 @@ function main() {
 		run-test-memory-usage-inside-container) run_test_memory_usage_inside_container ;;
 		*) >&2 die "Invalid argument" ;;
 	esac
-
-	check_metrics
 }
 
 main "$@"
