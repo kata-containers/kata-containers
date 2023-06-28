@@ -211,7 +211,7 @@ func (q *qemu) Capabilities(ctx context.Context) types.Capabilities {
 	span, _ := katatrace.Trace(ctx, q.Logger(), "Capabilities", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	defer span.End()
 
-	return q.arch.capabilities()
+	return q.arch.capabilities(q.config)
 }
 
 func (q *qemu) HypervisorConfig() HypervisorConfig {

@@ -349,6 +349,10 @@ func (clh *cloudHypervisor) createVirtiofsDaemon(sharedPath string) (VirtiofsDae
 }
 
 func (clh *cloudHypervisor) setupVirtiofsDaemon(ctx context.Context) error {
+	if clh.config.SharedFS == config.NoSharedFS {
+		return nil
+	}
+
 	if clh.config.SharedFS == config.Virtio9P {
 		return errors.New("cloud-hypervisor only supports virtio based file sharing")
 	}
@@ -1205,7 +1209,9 @@ func (clh *cloudHypervisor) Capabilities(ctx context.Context) types.Capabilities
 
 	clh.Logger().WithField("function", "Capabilities").Info("get Capabilities")
 	var caps types.Capabilities
-	caps.SetFsSharingSupport()
+	if clh.config.SharedFS != config.NoSharedFS {
+		caps.SetFsSharingSupport()
+	}
 	caps.SetBlockDeviceHotplugSupport()
 	return caps
 }
