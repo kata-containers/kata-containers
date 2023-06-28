@@ -9,7 +9,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-kata_tarball_dir=${2:-kata-artifacts}
+kata_tarball_dir="${2:-kata-artifacts}"
 metrics_dir="$(dirname "$(readlink -f "$0")")"
 source "${metrics_dir}/../common.bash"
 
@@ -58,7 +58,7 @@ function install_kata() {
 	# Removing previous kata installation
 	sudo rm -rf "${katadir}"
 
-	pushd ${kata_tarball_dir}
+	pushd "${kata_tarball_dir}"
 	sudo tar -xvf "${kata_tarball}" -C "${destdir}"
 	popd
 
@@ -77,9 +77,9 @@ function check_containerd_config_for_kata() {
 	declare -r line2="runtime_type = \"io.containerd.kata.v2\""
 	declare -r num_lines_containerd=2
 	declare -r containerd_path="/etc/containerd/config.toml"
-	local count_matches=$(grep -ic  "$line1\|$line2" ${containerd_path})
+	local count_matches=$(grep -ic  "$line1\|$line2" "${containerd_path}")
 
-	if [ $count_matches = $num_lines_containerd ]; then
+	if [ "${count_matches}" = "${num_lines_containerd}" ]; then
 		info "containerd ok"
 	else
 		info "overwriting containerd configuration w/ a valid one"
