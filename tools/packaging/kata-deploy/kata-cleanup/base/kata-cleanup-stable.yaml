@@ -6,40 +6,39 @@ metadata:
   namespace: kube-system
 spec:
   selector:
-      matchLabels:
-        name: kubelet-kata-cleanup
+    matchLabels:
+      name: kubelet-kata-cleanup
   template:
     metadata:
-        labels:
-          name: kubelet-kata-cleanup
+      labels:
+        name: kubelet-kata-cleanup
     spec:
-      serviceAccountName: kata-label-node
+      serviceAccountName: kata-deploy-sa
+      hostPID: true
       nodeSelector:
-          katacontainers.io/kata-runtime: cleanup
+        katacontainers.io/kata-runtime: cleanup
       containers:
-      - name: kube-kata-cleanup
-        image: quay.io/kata-containers/kata-deploy:stable
-        imagePullPolicy: Always
-        command: [ "bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh reset" ]
-        env:
-        - name: NODE_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: spec.nodeName
-        securityContext:
-          privileged: false
-        volumeMounts:
-        - name: dbus
-          mountPath: /var/run/dbus
-        - name: systemd
-          mountPath: /run/systemd
-      volumes:
-        - name: dbus
-          hostPath:
-            path: /var/run/dbus
-        - name: systemd
-          hostPath:
-            path: /run/systemd
+        - name: kube-kata-cleanup
+          image: quay.io/kata-containers/kata-deploy:stable
+          imagePullPolicy: Always
+          command: ["bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh reset"]
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: DEBUG
+              value: "false"
+            - name: SHIMS
+              value: "clh dragonball fc qemu-nvidia-gpu qemu-sev qemu-snp qemu-tdx qemu"
+            - name: DEFAULT_SHIM
+              value: "qemu"
+            - name: CREATE_RUNTIMECLASSES
+              value: "false"
+            - name: CREATE_DEFAULT_RUNTIMECLASS
+              value: "false"
+          securityContext:
+            privileged: true
   updateStrategy:
     rollingUpdate:
       maxUnavailable: 1
