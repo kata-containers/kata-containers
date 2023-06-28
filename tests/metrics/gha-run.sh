@@ -13,7 +13,7 @@ kata_tarball_dir=${2:-kata-artifacts}
 metrics_dir="$(dirname "$(readlink -f "$0")")"
 source "${metrics_dir}/../common.bash"
 
-create_symbolic_links() {
+function create_symbolic_links() {
 	hypervisor="${1:-qemu}"
 	local link_configuration_file="/opt/kata/share/defaults/kata-containers/configuration.toml"
 	local source_configuration_file="/opt/kata/share/defaults/kata-containers/configuration-${hypervisor}.toml"
@@ -26,7 +26,7 @@ create_symbolic_links() {
 }
 
 # Configures containerd
-overwrite_containerd_config() {
+function overwrite_containerd_config() {
 	containerd_config="/etc/containerd/config.toml"
 	sudo rm "${containerd_config}"
 	sudo tee "${containerd_config}" << EOF
@@ -44,7 +44,7 @@ version = 2
 EOF
 }
 
-install_kata() {
+function install_kata() {
 	local kata_tarball="kata-static.tar.xz"
 	declare -r katadir="/opt/kata"
 	declare -r destdir="/"
@@ -66,7 +66,7 @@ install_kata() {
 	restart_containerd_service
 }
 
-check_containerd_config_for_kata() {
+function check_containerd_config_for_kata() {
 	# check containerd config
 	declare -r line1="default_runtime_name = \"kata\""
 	declare -r line2="runtime_type = \"io.containerd.kata.v2\""
