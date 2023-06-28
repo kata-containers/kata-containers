@@ -39,11 +39,9 @@ use std::path::Path;
 
 const GUEST_CPUS_PATH: &str = "/sys/devices/system/cpu/online";
 
-// Convenience macro to obtain the scope logger
-macro_rules! sl {
-    () => {
-        slog_scope::logger().new(o!("subsystem" => "cgroups"))
-    };
+// Convenience function to obtain the scope logger.
+fn sl() -> slog::Logger {
+    slog_scope::logger().new(o!("subsystem" => "cgroups"))
 }
 
 macro_rules! get_controller_or_return_singular_none {
@@ -82,7 +80,7 @@ impl CgroupManager for Manager {
 
     fn set(&self, r: &LinuxResources, update: bool) -> Result<()> {
         info!(
-            sl!(),
+            sl(),
             "cgroup manager set resources for container. Resources input {:?}", r
         );
 
@@ -120,7 +118,7 @@ impl CgroupManager for Manager {
 
         // set devices resources
         set_devices_resources(&self.cgroup, &r.devices, res);
-        info!(sl!(), "resources after processed {:?}", res);
+        info!(sl(), "resources after processed {:?}", res);
 
         // apply resources
         self.cgroup.apply(res)?;
@@ -197,7 +195,7 @@ impl CgroupManager for Manager {
         if guest_cpuset.is_empty() {
             return Ok(());
         }
-        info!(sl!(), "update_cpuset_path to: {}", guest_cpuset);
+        info!(sl(), "update_cpuset_path to: {}", guest_cpuset);
 
         let h = cgroups::hierarchies::auto();
         let root_cg = h.root_control_group();
@@ -205,12 +203,12 @@ impl CgroupManager for Manager {
         let root_cpuset_controller: &CpuSetController = root_cg.controller_of().unwrap();
         let path = root_cpuset_controller.path();
         let root_path = Path::new(path);
-        info!(sl!(), "root cpuset path: {:?}", &path);
+        info!(sl(), "root cpuset path: {:?}", &path);
 
         let container_cpuset_controller: &CpuSetController = self.cgroup.controller_of().unwrap();
         let path = container_cpuset_controller.path();
         let container_path = Path::new(path);
-        info!(sl!(), "container cpuset path: {:?}", &path);
+        info!(sl(), "container cpuset path: {:?}", &path);
 
         let mut paths = vec![];
         for ancestor in container_path.ancestors() {
@@ -219,7 +217,7 @@ impl CgroupManager for Manager {
             }
             paths.push(ancestor);
         }
-        info!(sl!(), "parent paths to update cpuset: {:?}", &paths);
+        info!(sl(), "parent paths to update cpuset: {:?}", &paths);
 
         let mut i = paths.len();
         loop {
@@ -233,7 +231,7 @@ impl CgroupManager for Manager {
                 .to_str()
                 .unwrap()
                 .trim_start_matches(root_path.to_str().unwrap());
-            info!(sl!(), "updating cpuset for parent path {:?}", &r_path);
+            info!(sl(), "updating cpuset for parent path {:?}", &r_path);
             let cg = new_cgroup(cgroups::hierarchies::auto(), r_path)?;
             let cpuset_controller: &CpuSetController = cg.controller_of().unwrap();
             cpuset_controller.set_cpus(guest_cpuset)?;
@@ -241,7 +239,7 @@ impl CgroupManager for Manager {
 
         if !container_cpuset.is_empty() {
             info!(
-                sl!(),
+                sl(),
                 "updating cpuset for container path: {:?} cpuset: {}",
                 &container_path,
                 container_cpuset
@@ -276,7 +274,7 @@ fn set_network_resources(
     network: &LinuxNetwork,
     res: &mut cgroups::Resources,
 ) {
-    info!(sl!(), "cgroup manager set network");
+    info!(sl(), "cgroup manager set network");
 
     // set classid
     // description can be found at https://www.kernel.org/doc/html/latest/admin-guide/cgroup-v1/net_cls.html
@@ -303,7 +301,7 @@ fn set_devices_resources(
     device_resources: &[LinuxDeviceCgroup],
     res: &mut cgroups::Resources,
 ) {
-    info!(sl!(), "cgroup manager set devices");
+    info!(sl(), "cgroup manager set devices");
     let mut devices = vec![];
 
     for d in device_resources.iter() {
@@ -332,7 +330,7 @@ fn set_hugepages_resources(
     hugepage_limits: &[LinuxHugepageLimit],
     res: &mut cgroups::Resources,
 ) {
-    info!(sl!(), "cgroup manager set hugepage");
+    info!(sl(), "cgroup manager set hugepage");
     let mut limits = vec![];
     let hugetlb_controller = cg.controller_of::<HugeTlbController>();
 
@@ -346,7 +344,7 @@ fn set_hugepages_resources(
             limits.push(hr);
         } else {
             warn!(
-                sl!(),
+                sl(),
                 "{} page size support cannot be verified, dropping requested limit", l.page_size
             );
         }
@@ -359,7 +357,7 @@ fn set_block_io_resources(
     blkio: &LinuxBlockIo,
     res: &mut cgroups::Resources,
 ) {
-    info!(sl!(), "cgroup manager set block io");
+    info!(sl(), "cgroup manager set block io");
 
     res.blkio.weight = blkio.weight;
     res.blkio.leaf_weight = blkio.leaf_weight;
@@ -387,13 +385,13 @@ fn set_block_io_resources(
 }
 
 fn set_cpu_resources(cg: &cgroups::Cgroup, cpu: &LinuxCpu) -> Result<()> {
-    info!(sl!(), "cgroup manager set cpu");
+    info!(sl(), "cgroup manager set cpu");
 
     let cpuset_controller: &CpuSetController = cg.controller_of().unwrap();
 
     if !cpu.cpus.is_empty() {
         if let Err(e) = cpuset_controller.set_cpus(&cpu.cpus) {
-            warn!(sl!(), "write cpuset failed: {:?}", e);
+            warn!(sl(), "write cpuset failed: {:?}", e);
         }
     }
 
@@ -424,7 +422,7 @@ fn set_cpu_resources(cg: &cgroups::Cgroup, cpu: &LinuxCpu) -> Result<()> {
 }
 
 fn set_memory_resources(cg: &cgroups::Cgroup, memory: &LinuxMemory, update: bool) -> Result<()> {
-    info!(sl!(), "cgroup manager set memory");
+    info!(sl(), "cgroup manager set memory");
     let mem_controller: &MemController = cg.controller_of().unwrap();
 
     if !update {
@@ -493,7 +491,7 @@ fn set_memory_resources(cg: &cgroups::Cgroup, memory: &LinuxMemory, update: bool
 }
 
 fn set_pids_resources(cg: &cgroups::Cgroup, pids: &LinuxPids) -> Result<()> {
-    info!(sl!(), "cgroup manager set pids");
+    info!(sl(), "cgroup manager set pids");
     let pid_controller: &PidController = cg.controller_of().unwrap();
     let v = if pids.limit > 0 {
         MaxValue::Value(pids.limit)
@@ -962,7 +960,7 @@ pub fn get_paths() -> Result<HashMap<String, String>> {
     for l in fs::read_to_string(PATHS)?.lines() {
         let fl: Vec<&str> = l.split(':').collect();
         if fl.len() != 3 {
-            info!(sl!(), "Corrupted cgroup data!");
+            info!(sl(), "Corrupted cgroup data!");
             continue;
         }
 
@@ -983,7 +981,7 @@ pub fn get_mounts(paths: &HashMap<String, String>) -> Result<HashMap<String, Str
         let post: Vec<&str> = p[1].split(' ').collect();
 
         if post.len() != 3 {
-            warn!(sl!(), "can't parse {} line {:?}", MOUNTS, l);
+            warn!(sl(), "can't parse {} line {:?}", MOUNTS, l);
             continue;
         }
 
