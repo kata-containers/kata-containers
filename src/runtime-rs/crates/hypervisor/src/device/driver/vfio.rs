@@ -4,7 +4,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use std::{
     collections::HashMap,
     fs,
@@ -40,6 +39,7 @@ const VFIO_PCI_DRIVER_UNBIND: &str = "/sys/bus/pci/drivers/vfio-pci/unbind";
 const SYS_CLASS_IOMMU: &str = "/sys/class/iommu";
 const INTEL_IOMMU_PREFIX: &str = "dmar";
 const AMD_IOMMU_PREFIX: &str = "ivhd";
+const ARM_IOMMU_PREFIX: &str = "smmu";
 
 lazy_static! {
     static ref GUEST_DEVICE_ID: Arc<AtomicU8> = Arc::new(AtomicU8::new(0_u8));
@@ -89,7 +89,9 @@ pub fn do_check_iommu_on() -> Result<bool> {
     Ok(element
         .map(|e| {
             let x = e.file_name().to_string_lossy().into_owned();
-            x.starts_with(INTEL_IOMMU_PREFIX) || x.starts_with(AMD_IOMMU_PREFIX)
+            x.starts_with(INTEL_IOMMU_PREFIX)
+                || x.starts_with(AMD_IOMMU_PREFIX)
+                || x.starts_with(ARM_IOMMU_PREFIX)
         })
         .unwrap())
 }
@@ -578,10 +580,10 @@ pub fn bind_device_to_vfio(bdf: &str, host_driver: &str, _vendor_device_id: &str
         if cmdline.contains("iommu=off") || !cmdline.contains("iommu=") {
             return Err(anyhow!("iommu isn't set on kernel cmdline"));
         }
+    }
 
-        if !do_check_iommu_on().context("check iommu on failed")? {
-            return Err(anyhow!("IOMMU not enabled yet."));
-        }
+    if !do_check_iommu_on().context("check iommu on failed")? {
+        return Err(anyhow!("IOMMU not enabled yet."));
     }
 
     // if it's already bound to vfio
