@@ -13,6 +13,10 @@ kata_tarball_dir=${2:-kata-artifacts}
 metrics_dir="$(dirname "$(readlink -f "$0")")"
 source "${metrics_dir}/../common.bash"
 
+declare -r results_dir="${metrics_dir}/results"
+declare -r checkmetrics_dir="${metrics_dir}/cmd/checkmetrics"
+declare -r checkmetrics_config_dir="${checkmetrics_dir}/ci_worker"
+
 function create_symbolic_links() {
 	local link_configuration_file="/opt/kata/share/defaults/kata-containers/configuration.toml"
 	local source_configuration_file="/opt/kata/share/defaults/kata-containers/configuration-${KATA_HYPERVISOR}.toml"
@@ -83,6 +87,22 @@ function check_containerd_config_for_kata() {
 	fi
 }
 
+function check_metrics() {
+	# Ensure we have the latest checkemtrics
+	pushd "${checkmetrics_dir}"
+	make
+	sudo make install
+	popd
+
+	local cm_base_file="${checkmetrics_config_dir}/checkmetrics-json-${hypervisor}-$(uname -n).toml"
+	checkmetrics --debug --percentage --basefile "${cm_base_file}" --metricsdir "${results_dir}"
+	cm_result=$?
+	if [ "${cm_result}" != 0 ]; then
+		info "run-metrics-ci: checkmetrics FAILED (${cm_result})"
+		exit "${cm_result}"
+	fi
+}
+
 function run_test_launchtimes() {
 	info "Running Launch Time test using ${KATA_HYPERVISOR} hypervisor"
 
@@ -119,6 +139,8 @@ function main() {
 		run-test-memory-usage-inside-container) run_test_memory_usage_inside_container ;;
 		*) >&2 die "Invalid argument" ;;
 	esac
+
+	check_metrics
 }
 
 main "$@"
