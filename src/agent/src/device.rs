@@ -26,11 +26,9 @@ use oci::{LinuxDeviceCgroup, LinuxResources, Spec};
 use protocols::agent::Device;
 use tracing::instrument;
 
-// Convenience macro to obtain the scope logger
-macro_rules! sl {
-    () => {
-        slog_scope::logger().new(o!("subsystem" => "device"))
-    };
+// Convenience function to obtain the scope logger.
+fn sl() -> slog::Logger {
+    slog_scope::logger().new(o!("subsystem" => "device"))
 }
 
 const VM_ROOTFS: &str = "/";
@@ -78,7 +76,7 @@ where
 {
     let syspci = Path::new(&syspci);
     let drv = drv.as_ref();
-    info!(sl!(), "rebind_pci_driver: {} => {:?}", dev, drv);
+    info!(sl(), "rebind_pci_driver: {} => {:?}", dev, drv);
 
     let devpath = syspci.join("devices").join(dev.to_string());
     let overridepath = &devpath.join("driver_override");
@@ -606,7 +604,7 @@ fn update_spec_devices(spec: &mut Spec, mut updates: HashMap<&str, DevUpdate>) -
             let host_minor = specdev.minor;
 
             info!(
-                sl!(),
+                sl(),
                 "update_spec_devices() updating device";
                 "container_path" => &specdev.path,
                 "type" => &specdev.r#type,
@@ -657,7 +655,7 @@ fn update_spec_devices(spec: &mut Spec, mut updates: HashMap<&str, DevUpdate>) -
                 if let Some(update) = res_updates.get(&(r.r#type.as_str(), host_major, host_minor))
                 {
                     info!(
-                        sl!(),
+                        sl(),
                         "update_spec_devices() updating resource";
                         "type" => &r.r#type,
                         "host_major" => host_major,
@@ -921,7 +919,7 @@ pub async fn add_devices(
 #[instrument]
 async fn add_device(device: &Device, sandbox: &Arc<Mutex<Sandbox>>) -> Result<SpecUpdate> {
     // log before validation to help with debugging gRPC protocol version differences.
-    info!(sl!(), "device-id: {}, device-type: {}, device-vm-path: {}, device-container-path: {}, device-options: {:?}",
+    info!(sl(), "device-id: {}, device-type: {}, device-vm-path: {}, device-container-path: {}, device-options: {:?}",
           device.id, device.type_, device.vm_path, device.container_path, device.options);
 
     if device.type_.is_empty() {
