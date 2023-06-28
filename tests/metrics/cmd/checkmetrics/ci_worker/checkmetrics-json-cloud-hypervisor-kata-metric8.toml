@@ -1,0 +1,21 @@
+# Copyright (c) 2023 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# This file contains baseline expectations
+# for checked results by checkmetrics tool.
+#
+# values set specifically for packet.com c1.small worker.
+
+[[metric]]
+name = "boot-times"
+type = "json"
+description = "measure container lifecycle timings"
+# Min and Max values to set a 'range' that
+# the median of the CSV Results data must fall
+# within (inclusive)
+checkvar = ".\"boot-times\".Results | .[] | .\"to-workload\".Result"
+checktype = "mean"
+midval = 0.54
+minpercent = 10.0
+maxpercent = 10.0
