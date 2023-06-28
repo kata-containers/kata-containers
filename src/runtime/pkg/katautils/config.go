@@ -512,7 +512,7 @@ func (h hypervisor) blockDeviceAIO() (string, error) {
 }
 
 func (h hypervisor) sharedFS() (string, error) {
-	supportedSharedFS := []string{config.Virtio9P, config.VirtioFS, config.VirtioFSNydus}
+	supportedSharedFS := []string{config.Virtio9P, config.VirtioFS, config.VirtioFSNydus, config.NoSharedFS}
 
 	if h.SharedFS == "" {
 		return config.VirtioFS, nil
@@ -1009,11 +1009,12 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
-	if sharedFS != config.VirtioFS && sharedFS != config.VirtioFSNydus {
-		return vc.HypervisorConfig{}, errors.New("clh only support virtio-fs or virtio-fs-nydus")
+	if sharedFS != config.VirtioFS && sharedFS != config.VirtioFSNydus && sharedFS != config.NoSharedFS {
+		return vc.HypervisorConfig{},
+			fmt.Errorf("Cloud Hypervisor does not support %s shared filesystem option", sharedFS)
 	}
 
-	if h.VirtioFSDaemon == "" {
+	if (sharedFS == config.VirtioFS || sharedFS == config.VirtioFSNydus) && h.VirtioFSDaemon == "" {
 		return vc.HypervisorConfig{},
 			fmt.Errorf("cannot enable %s without daemon path in configuration file", sharedFS)
 	}
