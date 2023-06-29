@@ -1,0 +1,9 @@
+[package]
+name = "kata-overlay"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.3.2", features = ["derive"] }
+base64 = "0.21.2"
+tempfile = "3.3.0"

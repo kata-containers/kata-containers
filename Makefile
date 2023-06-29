@@ -13,6 +13,7 @@ COMPONENTS += runtime
 COMPONENTS += runtime-rs
 COMPONENTS += tarfs
 COMPONENTS += tardev-snapshotter
+COMPONENTS += overlay
 
 # List of available tools
 TOOLS =
