@@ -11,7 +11,7 @@ use kata_types::capabilities::{Capabilities, CapabilityBits};
 const VSOCK_SCHEME: &str = "vsock";
 const VSOCK_AGENT_CID: u32 = 3;
 const VSOCK_AGENT_PORT: u32 = 1024;
-
+#[derive(Debug)]
 pub struct QemuInner {
     config: HypervisorConfig,
 }

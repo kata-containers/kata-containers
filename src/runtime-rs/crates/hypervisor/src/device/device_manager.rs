@@ -77,6 +77,7 @@ impl SharedInfo {
 }
 
 // Device manager will manage the lifecycle of sandbox device
+#[derive(Debug)]
 pub struct DeviceManager {
     devices: HashMap<String, ArcMutexDevice>,
     hypervisor: Arc<dyn Hypervisor>,
