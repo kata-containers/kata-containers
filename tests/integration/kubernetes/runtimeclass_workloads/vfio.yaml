@@ -1,0 +1,24 @@
+#
+# Copyright (c) 2020 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: vfio
+spec:
+  terminationGracePeriodSeconds: 0
+  runtimeClassName: kata
+  containers:
+  - name: c1
+    image: quay.io/prometheus/busybox:latest
+    command:
+      - sh
+    tty: true
+    stdin: true
+    resources:
+      limits:
+        intel.com/virtio_net: "1"
+      requests:
+        intel.com/virtio_net: "1"

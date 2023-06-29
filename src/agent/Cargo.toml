@@ -10,8 +10,8 @@ oci = { path = "../libs/oci" }
 rustjail = { path = "rustjail" }
 protocols = { path = "../libs/protocols", features = ["async"] }
 lazy_static = "1.3.0"
-ttrpc = { version = "0.6.0", features = ["async"], default-features = false }
-protobuf = "2.27.0"
+ttrpc = { version = "0.7.1", features = ["async"], default-features = false }
+protobuf = "3.2.0"
 libc = "0.2.58"
 nix = "0.24.2"
 capctl = "0.2.0"
@@ -35,10 +35,10 @@ proc-mounts = "0.3.0"
 # Async helpers
 async-trait = "0.1.42"
 async-recursion = "0.3.2"
-futures = "0.3.17"
+futures = "0.3.28"
 
 # Async runtime
-tokio = { version = "1.23.1", features = ["full"] }
+tokio = { version = "1.28.1", features = ["full"] }
 tokio-vsock = "0.3.1"
 
 netlink-sys = { version = "0.7.0", features = ["tokio_socket",]}
@@ -56,10 +56,11 @@ slog-scope = "4.1.2"
 slog-stdlog = "4.0.0"
 log = "0.4.11"
 
+cfg-if = "1.0.0"
 prometheus = { version = "0.13.0", features = ["process"] }
 procfs = "0.12.0"
 anyhow = "1.0.32"
-cgroups = { package = "cgroups-rs", version = "0.3.1" }
+cgroups = { package = "cgroups-rs", version = "0.3.2" }
 
 # Tracing
 tracing = "0.1.26"
@@ -82,11 +83,10 @@ http = "0.2.8"
 reqwest = { version = "0.11.14" }
 
 # Image pull/decrypt
-[target.'cfg(target_arch = "s390x")'.dependencies]
-image-rs = { git = "https://github.com/confidential-containers/image-rs", rev = "v0.4.0", default-features = false, features = ["kata-cc-s390x"] }
+image-rs = { git = "https://github.com/confidential-containers/image-rs", tag = "v0.6.0", default-features = false, features = ["kata-cc-native-tls"] }
 
-[target.'cfg(not(target_arch = "s390x"))'.dependencies]
-image-rs = { git = "https://github.com/confidential-containers/image-rs", rev = "v0.4.0", default-features = true, features = ["kata-cc", "signature-simple"] }
+[patch.crates-io]
+oci-distribution = { git = "https://github.com/krustlet/oci-distribution.git", rev = "f44124c" }
 
 [dev-dependencies]
 tempfile = "3.1.0"

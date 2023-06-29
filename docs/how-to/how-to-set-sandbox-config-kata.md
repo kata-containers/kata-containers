@@ -94,6 +94,16 @@ There are several kinds of Kata configurations and they are listed below.
 | `io.katacontainers.config.hypervisor.enable_guest_swap` | `boolean` | enable swap in the guest |
 | `io.katacontainers.config.hypervisor.use_legacy_serial` | `boolean` | uses legacy serial device for guest's console (QEMU) |
 
+## Confidential Computing Options
+| Key | Value Type | Comments |
+|-------| ----- | ----- |
+| `io.katacontainers.config.pre_attestation.enabled"` | `bool` |
+determines if SEV/-ES attestation is enabled |
+| `io.katacontainers.config.pre_attestation.uri"` | `string` |
+specify the location of the attestation server |
+| `io.katacontainers.config.sev.policy"` | `uint32` |
+specify the SEV guest policy |
+
 ## Container Options
 | Key | Value Type | Comments |
 |-------| ----- | ----- |

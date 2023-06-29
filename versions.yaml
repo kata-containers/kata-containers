@@ -83,7 +83,7 @@ assets:
       uscan-url: >-
         https://github.com/firecracker-microvm/firecracker/tags
         .*/v?(\d\S+)\.tar\.gz
-      version: "v1.1.0"
+      version: "v1.3.1"
 
     qemu:
       description: "VMM that uses KVM"
@@ -102,16 +102,16 @@ assets:
         description: "VMM that uses KVM and supports TDX"
         url: "https://github.com/kata-containers/qemu"
         tag: "TDX-v3.1"
-      snp:
-        description: "VMM that uses KVM and supports AMD SEV-SNP"
-        url: "https://github.com/AMDESE/qemu"
-        branch: "snp-v3"
-        commit: "ffa95097ee"
 
     qemu-experimental:
       description: "QEMU with virtiofs support"
       url: "https://github.com/qemu/qemu"
       version: "7a800cf9496fddddf71b21a00991e0ec757a170a"
+
+    qemu-snp-experimental:
+      description: "QEMU with experimental SNP support (no UPM)"
+      url: "https://github.com/AMDESE/qemu"
+      tag: "3b6a2b6b7466f6dea53243900b7516c3f29027b7"
 
   image:
     description: |
@@ -152,6 +152,9 @@ assets:
       x86_64:
         name: *default-initrd-name
         version: *default-initrd-version
+        sev:
+          name: *glibc-initrd-name
+          version: *glibc-initrd-version
 
   kernel:
     description: "Linux kernel optimised for virtual machines"
@@ -162,7 +165,7 @@ assets:
       url: "https://github.com/kata-containers/linux/archive/refs/tags"
       tag: "5.15-plus-TDX"
     sev:
-      description: "Linux kernel that supports SEV"
+      description: "Linux kernel that supports SEV and SNP"
       url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
       version: "v5.19.2"
     snp:
@@ -175,12 +178,12 @@ assets:
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
     tag: "v5.13.10"
 
-  arm-kernel-experimental:
+  kernel-arm-experimental:
     description: "Linux kernel with cpu/mem hotplug support on arm64"
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
     version: "v5.15.7"
 
-  dragonball-kernel-experimental:
+  kernel-dragonball-experimental:
     description: "Linux kernel with Dragonball VMM optimizations like upcall"
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
     version: "v5.10.25"
@@ -191,7 +194,7 @@ externals:
   attestation-agent:
     description: "Provide attested key unwrapping for image decryption"
     url: "https://github.com/confidential-containers/attestation-agent"
-    version: "v0.4.0"
+    version: "v0.6.0"
 
   cni-plugins:
     description: "CNI network plugins"
@@ -278,7 +281,7 @@ externals:
   nydus:
     description: "Nydus image acceleration service"
     url: "https://github.com/dragonflyoss/image-service"
-    version: "v2.1.1"
+    version: "v2.2.1"
 
   nydus-snapshotter:
     description: "Snapshotter for Nydus image acceleration service"
@@ -295,10 +298,7 @@ externals:
       package_output_dir: "OvmfX64"
     sev:
       description: "AmdSev build needed for SEV measured direct boot."
-      # CCv0 switching to this fork until new release of edk2 has fix
-      # per #5893, will need to be reverted to upstream
-      url: "https://github.com/kata-containers/edk2"
-      version: "edk2-202208-sev-alloc-runtime-secret-area"
+      version: "edk2-stable202302"
       package: "OvmfPkg/AmdSev/AmdSevX64.dsc"
       package_output_dir: "AmdSev"
     tdx:
@@ -311,20 +311,20 @@ externals:
   td-shim:
     description: "Confidential Containers Shim Firmware"
     url: "https://github.com/confidential-containers/td-shim"
-    version: "v0.4.0"
+    version: "v0.6.0"
     toolchain: "nightly-2022-11-15"
 
   virtiofsd:
     description: "vhost-user virtio-fs device backend written in Rust"
     url: "https://gitlab.com/virtio-fs/virtiofsd"
-    version: "v1.3.0"
-    toolchain: "1.62.0"
+    version: "v1.6.1"
+    toolchain: "1.66.0"
     meta:
-      # From https://gitlab.com/virtio-fs/virtiofsd/-/releases/v1.3.0,
-      # this is the link labelled virtiofsd-v1.3.0.zip
+      # From https://gitlab.com/virtio-fs/virtiofsd/-/releases/v1.6.1,
+      # this is the link labelled virtiofsd-v1.6.1.zip
       #
       # yamllint disable-line rule:line-length
-      binary: "https://gitlab.com/virtio-fs/virtiofsd/uploads/9a4f2261fcb1701f1e709694b5c5d980/virtiofsd-v1.3.0.zip"
+      binary: "https://gitlab.com/virtio-fs/virtiofsd/uploads/14c1e8a7acc82d515cec6608727a1e4a/virtiofsd-v1.6.1.zip"
 
   open-policy-agent:
     description: "General-purpose policy engine"
@@ -349,12 +349,12 @@ languages:
   rust:
     description: "Rust language"
     notes: "'version' is the default minimum version used by this project."
-    version: "1.66.0"
+    version: "1.68.0"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.66.0"
+      newest-version: "1.68.0"
 
   golangci-lint:
     description: "golangci-lint"

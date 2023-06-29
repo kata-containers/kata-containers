@@ -17,6 +17,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	//"strconv"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -33,6 +36,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	deviceManager "github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
+	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	resCtrl "github.com/kata-containers/kata-containers/src/runtime/pkg/resourcecontrol"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
@@ -47,6 +51,9 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
+
+	"google.golang.org/grpc/codes"
+	grpcStatus "google.golang.org/grpc/status"
 )
 
 // sandboxTracingTags defines tags for the trace span
@@ -323,6 +330,7 @@ func (s *Sandbox) Release(ctx context.Context) error {
 	if s.monitor != nil {
 		s.monitor.stop()
 	}
+	s.fsShare.StopFileEventWatcher(ctx)
 	s.hypervisor.Disconnect(ctx)
 	return s.agent.disconnect(ctx)
 }
@@ -606,7 +614,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	}
 
 	if len(sandboxConfig.Containers) > 0 {
-		// These values are required by remove hypervisor
+		// These values are required by remote hypervisor
 		for _, a := range []string{cri.SandboxName, crio.SandboxName} {
 			if value, ok := sandboxConfig.Containers[0].Annotations[a]; ok {
 				sandboxConfig.HypervisorConfig.SandboxName = value
@@ -620,6 +628,25 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		}
 	}
 
+	// If we have a confidential guest we need to cold-plug the PCIe VFIO devices
+	// until we have TDISP/IDE PCIe support.
+	coldPlugVFIO := (sandboxConfig.HypervisorConfig.ColdPlugVFIO != hv.NoPort)
+	var devs []config.DeviceInfo
+	for cnt, containers := range sandboxConfig.Containers {
+		for dev, device := range containers.DeviceInfos {
+			if coldPlugVFIO && deviceManager.IsVFIO(device.ContainerPath) {
+				device.ColdPlug = true
+				devs = append(devs, device)
+				// We need to remove the devices marked for cold-plug
+				// otherwise at the container level the kata-agent
+				// will try to hot-plug them.
+				infos := sandboxConfig.Containers[cnt].DeviceInfos
+				infos = append(infos[:dev], infos[dev+1:]...)
+				sandboxConfig.Containers[cnt].DeviceInfos = infos
+			}
+		}
+	}
+
 	// store doesn't require hypervisor to be stored immediately
 	if err = s.hypervisor.CreateVM(ctx, s.id, s.network, &sandboxConfig.HypervisorConfig); err != nil {
 		return nil, err
@@ -629,6 +656,17 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return nil, err
 	}
 
+	if !coldPlugVFIO {
+		return s, nil
+	}
+
+	for _, dev := range devs {
+		_, err := s.AddDevice(ctx, dev)
+		if err != nil {
+			s.Logger().WithError(err).Debug("Cannot cold-plug add device")
+			return nil, err
+		}
+	}
 	return s, nil
 }
 
@@ -666,6 +704,7 @@ func (s *Sandbox) createResourceController() error {
 			// Determine if device /dev/null and /dev/urandom exist, and add if they don't
 			nullDeviceExist := false
 			urandomDeviceExist := false
+			ptmxDeviceExist := false
 			for _, device := range resources.Devices {
 				if device.Type == "c" && device.Major == intptr(1) && device.Minor == intptr(3) {
 					nullDeviceExist = true
@@ -673,6 +712,10 @@ func (s *Sandbox) createResourceController() error {
 
 				if device.Type == "c" && device.Major == intptr(1) && device.Minor == intptr(9) {
 					urandomDeviceExist = true
+				}
+
+				if device.Type == "c" && device.Major == intptr(5) && device.Minor == intptr(2) {
+					ptmxDeviceExist = true
 				}
 			}
 
@@ -687,6 +730,18 @@ func (s *Sandbox) createResourceController() error {
 				resources.Devices = append(resources.Devices, []specs.LinuxDeviceCgroup{
 					{Type: "c", Major: intptr(1), Minor: intptr(9), Access: rwm, Allow: true},
 				}...)
+			}
+
+			// If the hypervisor debug console is enabled and
+			// sandbox_cgroup_only are configured, then the vmm needs access to
+			// /dev/ptmx.  Add this to the device allowlist if it is not
+			// already present in the config.
+			if s.config.HypervisorConfig.Debug && s.config.SandboxCgroupOnly && !ptmxDeviceExist {
+				// "/dev/ptmx"
+				resources.Devices = append(resources.Devices, []specs.LinuxDeviceCgroup{
+					{Type: "c", Major: intptr(5), Minor: intptr(2), Access: rwm, Allow: true},
+				}...)
+
 			}
 
 			if spec.Linux.Resources.CPU != nil {
@@ -1863,11 +1918,15 @@ func (s *Sandbox) HotplugAddDevice(ctx context.Context, device api.Device, devTy
 		// adding a group of VFIO devices
 		for _, dev := range vfioDevices {
 			if _, err := s.hypervisor.HotplugAddDevice(ctx, dev, VfioDev); err != nil {
+				bdf := ""
+				if pciDevice, ok := (*dev).(config.VFIOPCIDev); ok {
+					bdf = pciDevice.BDF
+				}
 				s.Logger().
 					WithFields(logrus.Fields{
 						"sandbox":         s.id,
-						"vfio-device-ID":  dev.ID,
-						"vfio-device-BDF": dev.BDF,
+						"vfio-device-ID":  (*dev).GetID(),
+						"vfio-device-BDF": bdf,
 					}).WithError(err).Error("failed to hotplug VFIO device")
 				return err
 			}
@@ -1916,11 +1975,15 @@ func (s *Sandbox) HotplugRemoveDevice(ctx context.Context, device api.Device, de
 		// remove a group of VFIO devices
 		for _, dev := range vfioDevices {
 			if _, err := s.hypervisor.HotplugRemoveDevice(ctx, dev, VfioDev); err != nil {
+				bdf := ""
+				if pciDevice, ok := (*dev).(config.VFIOPCIDev); ok {
+					bdf = pciDevice.BDF
+				}
 				s.Logger().WithError(err).
 					WithFields(logrus.Fields{
 						"sandbox":         s.id,
-						"vfio-device-ID":  dev.ID,
-						"vfio-device-BDF": dev.BDF,
+						"vfio-device-ID":  (*dev).GetID(),
+						"vfio-device-BDF": bdf,
 					}).Error("failed to hot unplug VFIO device")
 				return err
 			}
@@ -2120,11 +2183,69 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 		if newMemoryMB == finalMemoryMB {
 			break
 		}
+	}
 
+	tmpfsMounts, err := s.prepareEphemeralMounts(finalMemoryMB)
+	if err != nil {
+		return err
+	}
+	if err := s.agent.updateEphemeralMounts(ctx, tmpfsMounts); err != nil {
+		// upgrade path: if runtime is newer version, but agent is old
+		// then ignore errUnimplemented
+		if grpcStatus.Convert(err).Code() == codes.Unimplemented {
+			s.Logger().Warnf("agent does not support updateMounts")
+			return nil
+		}
+		return err
 	}
 
 	return nil
+}
 
+func (s *Sandbox) prepareEphemeralMounts(memoryMB uint32) ([]*grpc.Storage, error) {
+	tmpfsMounts := []*grpc.Storage{}
+	for _, c := range s.containers {
+		for _, mount := range c.mounts {
+			// if a tmpfs ephemeral mount is present
+			// update its size to occupy the entire sandbox's memory
+			if mount.Type == KataEphemeralDevType {
+				sizeLimited := false
+				for _, opt := range mount.Options {
+					if strings.HasPrefix(opt, "size") {
+						sizeLimited = true
+					}
+				}
+				if sizeLimited { // do not resize sizeLimited emptyDirs
+					continue
+				}
+
+				mountOptions := []string{"remount", fmt.Sprintf("size=%dM", memoryMB)}
+
+				origin_src := mount.Source
+				stat := syscall.Stat_t{}
+				err := syscall.Stat(origin_src, &stat)
+				if err != nil {
+					return nil, err
+				}
+
+				// if volume's gid isn't root group(default group), this means there's
+				// an specific fsGroup is set on this local volume, then it should pass
+				// to guest.
+				if stat.Gid != 0 {
+					mountOptions = append(mountOptions, fmt.Sprintf("%s=%d", fsGid, stat.Gid))
+				}
+
+				tmpfsMounts = append(tmpfsMounts, &grpc.Storage{
+					Driver:     KataEphemeralDevType,
+					MountPoint: filepath.Join(ephemeralPath(), filepath.Base(mount.Source)),
+					Source:     "tmpfs",
+					Fstype:     "tmpfs",
+					Options:    mountOptions,
+				})
+			}
+		}
+	}
+	return tmpfsMounts, nil
 }
 
 func (s *Sandbox) updateMemory(ctx context.Context, newMemoryMB uint32) error {

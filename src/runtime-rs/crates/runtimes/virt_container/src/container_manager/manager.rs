@@ -5,11 +5,10 @@
 //
 
 use anyhow::{anyhow, Context, Result};
-
+use async_trait::async_trait;
 use std::{collections::HashMap, sync::Arc};
 
 use agent::Agent;
-use async_trait::async_trait;
 use common::{
     error::Error,
     types::{
@@ -19,9 +18,13 @@ use common::{
     },
     ContainerManager,
 };
+use hypervisor::Hypervisor;
 use oci::Process as OCIProcess;
+use resource::network::NetnsGuard;
 use resource::ResourceManager;
 use tokio::sync::RwLock;
+
+use kata_sys_util::hooks::HookStates;
 
 use super::{logger_with_process, Container};
 
@@ -31,6 +34,7 @@ pub struct VirtContainerManager {
     containers: Arc<RwLock<HashMap<String, Container>>>,
     resource_manager: Arc<ResourceManager>,
     agent: Arc<dyn Agent>,
+    hypervisor: Arc<dyn Hypervisor>,
 }
 
 impl VirtContainerManager {
@@ -38,6 +42,7 @@ impl VirtContainerManager {
         sid: &str,
         pid: u32,
         agent: Arc<dyn Agent>,
+        hypervisor: Arc<dyn Hypervisor>,
         resource_manager: Arc<ResourceManager>,
     ) -> Self {
         Self {
@@ -46,6 +51,7 @@ impl VirtContainerManager {
             containers: Default::default(),
             resource_manager,
             agent,
+            hypervisor,
         }
     }
 }
@@ -55,11 +61,37 @@ impl ContainerManager for VirtContainerManager {
     async fn create_container(&self, config: ContainerConfig, spec: oci::Spec) -> Result<PID> {
         let container = Container::new(
             self.pid,
-            config,
+            config.clone(),
+            spec.clone(),
             self.agent.clone(),
             self.resource_manager.clone(),
         )
         .context("new container")?;
+
+        // CreateContainer Hooks:
+        // * should be run in vmm namespace (hook path in runtime namespace)
+        // * should be run after the vm is started, before container is created, and after CreateRuntime Hooks
+        // * spec details: https://github.com/opencontainers/runtime-spec/blob/c1662686cff159595277b79322d0272f5182941b/config.md#createcontainer-hooks
+        let vmm_master_tid = self.hypervisor.get_vmm_master_tid().await?;
+        let vmm_ns_path = self.hypervisor.get_ns_path().await?;
+        let vmm_netns_path = format!("{}/{}", vmm_ns_path, "net");
+        let state = oci::State {
+            version: spec.version.clone(),
+            id: config.container_id.clone(),
+            status: oci::ContainerState::Creating,
+            pid: vmm_master_tid as i32,
+            bundle: config.bundle.clone(),
+            annotations: spec.annotations.clone(),
+        };
+
+        // new scope, CreateContainer hooks in which will execute in a new network namespace
+        {
+            let _netns_guard = NetnsGuard::new(&vmm_netns_path).context("vmm netns guard")?;
+            if let Some(hooks) = spec.hooks.as_ref() {
+                let mut create_container_hook_states = HookStates::new();
+                create_container_hook_states.execute_hooks(&hooks.create_container, Some(state))?;
+            }
+        }
 
         let mut containers = self.containers.write().await;
         container.create(spec).await.context("create")?;
@@ -87,6 +119,26 @@ impl ContainerManager for VirtContainerManager {
                 let c = containers
                     .remove(container_id)
                     .ok_or_else(|| Error::ContainerNotFound(container_id.to_string()))?;
+
+                // Poststop Hooks:
+                // * should be run in runtime namespace
+                // * should be run after the container is deleted but before delete operation returns
+                // * spec details: https://github.com/opencontainers/runtime-spec/blob/c1662686cff159595277b79322d0272f5182941b/config.md#poststop
+                let c_spec = c.spec().await;
+                let vmm_master_tid = self.hypervisor.get_vmm_master_tid().await?;
+                let state = oci::State {
+                    version: c_spec.version.clone(),
+                    id: c.container_id.to_string(),
+                    status: oci::ContainerState::Stopped,
+                    pid: vmm_master_tid as i32,
+                    bundle: c.config().await.bundle,
+                    annotations: c_spec.annotations.clone(),
+                };
+                if let Some(hooks) = c_spec.hooks.as_ref() {
+                    let mut poststop_hook_states = HookStates::new();
+                    poststop_hook_states.execute_hooks(&hooks.poststop, Some(state))?;
+                }
+
                 c.state_process(process).await.context("state process")
             }
             ProcessType::Exec => {
@@ -190,6 +242,26 @@ impl ContainerManager for VirtContainerManager {
             .get(container_id)
             .ok_or_else(|| Error::ContainerNotFound(container_id.clone()))?;
         c.start(process).await.context("start")?;
+
+        // Poststart Hooks:
+        // * should be run in runtime namespace
+        // * should be run after user-specific command is executed but before start operation returns
+        // * spec details: https://github.com/opencontainers/runtime-spec/blob/c1662686cff159595277b79322d0272f5182941b/config.md#poststart
+        let c_spec = c.spec().await;
+        let vmm_master_tid = self.hypervisor.get_vmm_master_tid().await?;
+        let state = oci::State {
+            version: c_spec.version.clone(),
+            id: c.container_id.to_string(),
+            status: oci::ContainerState::Running,
+            pid: vmm_master_tid as i32,
+            bundle: c.config().await.bundle,
+            annotations: c_spec.annotations.clone(),
+        };
+        if let Some(hooks) = c_spec.hooks.as_ref() {
+            let mut poststart_hook_states = HookStates::new();
+            poststart_hook_states.execute_hooks(&hooks.poststart, Some(state))?;
+        }
+
         Ok(PID { pid: self.pid })
     }
 

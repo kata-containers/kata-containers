@@ -59,6 +59,10 @@ pub fn get_host_rw_shared_path(sid: &str) -> PathBuf {
     Path::new(KATA_HOST_SHARED_DIR).join(sid).join("rw")
 }
 
+pub fn get_host_shared_path(sid: &str) -> PathBuf {
+    Path::new(KATA_HOST_SHARED_DIR).join(sid)
+}
+
 fn do_get_guest_any_path(
     target: &str,
     cid: &str,
@@ -93,7 +97,7 @@ pub fn do_get_guest_share_path(target: &str, cid: &str, is_rafs: bool) -> String
     do_get_guest_any_path(target, cid, false, is_rafs, true)
 }
 
-pub(crate) fn do_get_host_path(
+pub fn do_get_host_path(
     target: &str,
     sid: &str,
     cid: &str,

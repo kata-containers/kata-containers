@@ -6,8 +6,9 @@
 
 use super::vmm_instance::VmmInstance;
 use crate::{
-    device::Device, hypervisor_persist::HypervisorState, kernel_param::KernelParams, VmmState,
+    device::DeviceType, hypervisor_persist::HypervisorState, kernel_param::KernelParams, VmmState,
     DEV_HUGEPAGES, HUGETLBFS, HYPERVISOR_DRAGONBALL, SHMEM, VM_ROOTFS_DRIVER_BLK,
+    VM_ROOTFS_DRIVER_MMIO,
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
@@ -27,7 +28,6 @@ use std::{collections::HashSet, fs::create_dir_all, path::PathBuf};
 const DRAGONBALL_KERNEL: &str = "vmlinux";
 const DRAGONBALL_ROOT_FS: &str = "rootfs";
 
-unsafe impl Sync for DragonballInner {}
 pub struct DragonballInner {
     /// sandbox id
     pub(crate) id: String,
@@ -57,7 +57,7 @@ pub struct DragonballInner {
     pub(crate) run_dir: String,
 
     /// pending device
-    pub(crate) pending_devices: Vec<Device>,
+    pub(crate) pending_devices: Vec<DeviceType>,
 
     /// cached block device
     pub(crate) cached_block_devices: HashSet<String>,
@@ -266,7 +266,7 @@ impl DragonballInner {
             .get_resource(path, DRAGONBALL_ROOT_FS)
             .context("get resource")?;
 
-        if driver == VM_ROOTFS_DRIVER_BLK {
+        if driver == VM_ROOTFS_DRIVER_BLK || driver == VM_ROOTFS_DRIVER_MMIO {
             let blk_cfg = BlockDeviceConfigInfo {
                 path_on_host: PathBuf::from(jail_drive),
                 drive_id: DRAGONBALL_ROOT_FS.to_string(),

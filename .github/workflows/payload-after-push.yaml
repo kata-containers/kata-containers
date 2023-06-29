@@ -1,0 +1,74 @@
+name: CI | Publish Kata Containers payload
+on:
+  push:
+    branches:
+      - main
+      - stable-*
+
+jobs:
+  build-assets-amd64:
+    uses: ./.github/workflows/build-kata-static-tarball-amd64.yaml
+    with:
+      push-to-registry: yes
+    secrets: inherit
+
+  build-assets-arm64:
+    uses: ./.github/workflows/build-kata-static-tarball-arm64.yaml
+    with:
+      push-to-registry: yes
+    secrets: inherit
+
+  build-assets-s390x:
+    uses: ./.github/workflows/build-kata-static-tarball-s390x.yaml
+    with:
+      push-to-registry: yes
+    secrets: inherit
+
+  publish-kata-deploy-payload-amd64:
+    needs: build-assets-amd64
+    uses: ./.github/workflows/publish-kata-deploy-payload-amd64.yaml
+    with:
+      registry: quay.io
+      repo: kata-containers/kata-deploy-ci
+      tag: kata-containers-amd64
+    secrets: inherit
+
+  publish-kata-deploy-payload-arm64:
+    needs: build-assets-arm64
+    uses: ./.github/workflows/publish-kata-deploy-payload-arm64.yaml
+    with:
+      registry: quay.io
+      repo: kata-containers/kata-deploy-ci
+      tag: kata-containers-arm64
+    secrets: inherit
+
+  publish-kata-deploy-payload-s390x:
+    needs: build-assets-s390x
+    uses: ./.github/workflows/publish-kata-deploy-payload-s390x.yaml
+    with:
+      registry: quay.io
+      repo: kata-containers/kata-deploy-ci
+      tag: kata-containers-s390x
+    secrets: inherit
+
+  publish-manifest:
+    runs-on: ubuntu-latest
+    needs: [publish-kata-deploy-payload-amd64, publish-kata-deploy-payload-arm64, publish-kata-deploy-payload-s390x]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Login to Kata Containers quay.io
+        uses: docker/login-action@v2
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
+          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
+      - name: Push multi-arch manifest
+        run: |
+          docker manifest create quay.io/kata-containers/kata-deploy-ci:kata-containers-latest \
+          --amend quay.io/kata-containers/kata-deploy-ci:kata-containers-amd64 \
+          --amend quay.io/kata-containers/kata-deploy-ci:kata-containers-arm64 \
+          --amend quay.io/kata-containers/kata-deploy-ci:kata-containers-s390x
+          docker manifest push quay.io/kata-containers/kata-deploy-ci:kata-containers-latest

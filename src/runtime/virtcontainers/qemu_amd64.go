@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/sev"
+	sevKbs "github.com/kata-containers/kata-containers/src/runtime/pkg/sev/kbs"
 	pb "github.com/kata-containers/kata-containers/src/runtime/protocols/simple-kbs"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/sirupsen/logrus"
@@ -330,7 +331,7 @@ func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 }
 
 // Add the SEV Object qemu parameters for sev guest protection
-func (q *qemuAmd64) appendSEVObject(devices []govmmQemu.Device, firmware, firmwareVolume string, config sev.GuestPreAttestationConfig) ([]govmmQemu.Device, string, error) {
+func (q *qemuAmd64) appendSEVObject(devices []govmmQemu.Device, firmware, firmwareVolume string, config sevKbs.GuestPreAttestationConfig) ([]govmmQemu.Device, string, error) {
 	attestationDataPath := filepath.Join(os.TempDir(), sevAttestationTempDir, config.LaunchId)
 	sevGodhPath := filepath.Join(attestationDataPath, sevAttestationGodhName)
 	sevSessionFilePath := filepath.Join(attestationDataPath, sevAttestationSessionFileName)
@@ -367,7 +368,7 @@ func (q *qemuAmd64) appendSEVObject(devices []govmmQemu.Device, firmware, firmwa
 }
 
 // setup prelaunch attestation for AMD SEV guests
-func (q *qemuAmd64) setupSEVGuestPreAttestation(ctx context.Context, config sev.GuestPreAttestationConfig) (string, error) {
+func (q *qemuAmd64) setupSEVGuestPreAttestation(ctx context.Context, config sevKbs.GuestPreAttestationConfig) (string, error) {
 
 	logger := virtLog.WithField("subsystem", "SEV attestation")
 	logger.Info("Set up prelaunch attestation")
@@ -430,7 +431,7 @@ func getCPUSig(cpuModel string) sev.VCPUSig {
 	return sev.NewVCPUSig(cpuid.DisplayFamily, cpuid.DisplayModel, cpuid.SteppingId)
 }
 
-func calculateGuestLaunchDigest(config sev.GuestPreAttestationConfig, numVCPUs int, cpuModel string) ([sha256.Size]byte, error) {
+func calculateGuestLaunchDigest(config sevKbs.GuestPreAttestationConfig, numVCPUs int, cpuModel string) ([sha256.Size]byte, error) {
 	if config.Policy&sevPolicyBitSevEs != 0 {
 		// SEV-ES guest
 		return sev.CalculateSEVESLaunchDigest(
@@ -452,7 +453,7 @@ func calculateGuestLaunchDigest(config sev.GuestPreAttestationConfig, numVCPUs i
 
 // wait for prelaunch attestation to complete
 func (q *qemuAmd64) sevGuestPreAttestation(ctx context.Context,
-	qmp *govmmQemu.QMP, config sev.GuestPreAttestationConfig) error {
+	qmp *govmmQemu.QMP, config sevKbs.GuestPreAttestationConfig) error {
 
 	logger := virtLog.WithField("subsystem", "SEV attestation")
 	logger.Info("Processing prelaunch attestation")
@@ -480,9 +481,9 @@ func (q *qemuAmd64) sevGuestPreAttestation(ctx context.Context,
 	defer cancel()
 
 	requestDetails := pb.RequestDetails{
-		Guid:       config.KeyBrokerSecretGuid,
+		Guid:       config.SecretGuid,
 		Format:     "JSON",
-		SecretType: config.KeyBrokerSecretType,
+		SecretType: config.SecretType,
 		Id:         config.Keyset,
 	}
 

@@ -13,11 +13,13 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
+	goruntime "runtime"
 	"strings"
 	"syscall"
 	"testing"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/govmm"
+	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
@@ -69,7 +71,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 	if hypervisor == "" {
 		return config, fmt.Errorf("BUG: need hypervisor")
 	}
-
+	var coldPlugVFIO hv.PCIePort
 	hypervisorPath := path.Join(dir, "hypervisor")
 	kernelPath := path.Join(dir, "kernel")
 	kernelParams := "foo=bar xyz"
@@ -84,6 +86,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
 	pcieRootPort := uint32(2)
+	coldPlugVFIO = hv.RootPort
 	disableNewNetNs := false
 	sharedFS := "virtio-9p"
 	virtioFSdaemon := path.Join(dir, "virtiofsd")
@@ -106,6 +109,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		EnableIOThreads:      enableIOThreads,
 		HotplugVFIOOnRootBus: hotplugVFIOOnRootBus,
 		PCIeRootPort:         pcieRootPort,
+		ColdPlugVFIO:         coldPlugVFIO,
 		DisableNewNetNs:      disableNewNetNs,
 		DefaultVCPUCount:     defaultVCPUCount,
 		DefaultMaxVCPUCount:  defaultMaxVCPUCount,
@@ -169,6 +173,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		EnableIOThreads:       enableIOThreads,
 		HotplugVFIOOnRootBus:  hotplugVFIOOnRootBus,
 		PCIeRootPort:          pcieRootPort,
+		ColdPlugVFIO:          coldPlugVFIO,
 		Msize9p:               defaultMsize9p,
 		MemSlots:              defaultMemSlots,
 		EntropySource:         defaultEntropySource,
@@ -180,6 +185,10 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config testRuntimeConf
 		PFlash:                []string{},
 		SGXEPCSize:            epcSize,
 		SNPGuestPolicy:        defaultSNPGuestPolicy,
+	}
+
+	if goruntime.GOARCH == "arm64" && len(hypervisorConfig.PFlash) == 0 && hypervisorConfig.FirmwarePath == "" {
+		hypervisorConfig.DisableImageNvdimm = true
 	}
 
 	agentConfig := vc.KataAgentConfig{
@@ -561,6 +570,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		BlockDeviceAIO:        defaultBlockDeviceAIO,
 		DisableGuestSeLinux:   defaultDisableGuestSeLinux,
 		SNPGuestPolicy:        defaultSNPGuestPolicy,
+		ColdPlugVFIO:          defaultColdPlugVFIO,
 	}
 
 	expectedAgentConfig := vc.KataAgentConfig{
@@ -594,7 +604,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 
 func TestNewQemuHypervisorConfig(t *testing.T) {
 	dir := t.TempDir()
-
+	var coldPlugVFIO hv.PCIePort
 	hypervisorPath := path.Join(dir, "hypervisor")
 	kernelPath := path.Join(dir, "kernel")
 	imagePath := path.Join(dir, "image")
@@ -603,6 +613,7 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 	enableIOThreads := true
 	hotplugVFIOOnRootBus := true
 	pcieRootPort := uint32(2)
+	coldPlugVFIO = hv.RootPort
 	orgVHostVSockDevicePath := utils.VHostVSockDevicePath
 	blockDeviceAIO := "io_uring"
 	defer func() {
@@ -622,6 +633,7 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 		EnableIOThreads:       enableIOThreads,
 		HotplugVFIOOnRootBus:  hotplugVFIOOnRootBus,
 		PCIeRootPort:          pcieRootPort,
+		ColdPlugVFIO:          coldPlugVFIO,
 		RxRateLimiterMaxRate:  rxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:  txRateLimiterMaxRate,
 		SharedFS:              "virtio-fs",

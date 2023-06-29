@@ -7,14 +7,12 @@
 use std::{
     fs::{File, OpenOptions},
     os::unix::{io::IntoRawFd, prelude::AsRawFd},
-    sync::{
-        mpsc::{channel, Receiver, Sender},
-        Arc, Mutex, RwLock,
-    },
+    sync::{Arc, Mutex, RwLock},
     thread,
 };
 
 use anyhow::{anyhow, Context, Result};
+use crossbeam_channel::{unbounded, Receiver, Sender};
 use dragonball::{
     api::v1::{
         BlockDeviceConfigInfo, BootSourceConfig, FsDeviceConfigInfo, FsMountConfigInfo,
@@ -77,6 +75,19 @@ impl VmmInstance {
         share_info_lock.write().unwrap().id = String::from(id);
     }
 
+    pub fn get_vmm_master_tid(&self) -> u32 {
+        let info = self.vmm_shared_info.clone();
+        let result = info.read().unwrap().master_tid;
+        result
+    }
+
+    pub fn get_ns_path(&self) -> String {
+        let info_binding = self.vmm_shared_info.clone();
+        let info = info_binding.read().unwrap();
+        let result = format!("/proc/{}/task/{}/ns", info.pid, info.master_tid);
+        result
+    }
+
     pub fn get_vcpu_tids(&self) -> Vec<(u8, u32)> {
         let info = self.vmm_shared_info.clone();
         let result = info.read().unwrap().tids.clone();
@@ -86,8 +97,8 @@ impl VmmInstance {
     pub fn run_vmm_server(&mut self, id: &str, netns: Option<String>) -> Result<()> {
         let kvm = OpenOptions::new().read(true).write(true).open(KVM_DEVICE)?;
 
-        let (to_vmm, from_runtime) = channel();
-        let (to_runtime, from_vmm) = channel();
+        let (to_vmm, from_runtime) = unbounded();
+        let (to_runtime, from_vmm) = unbounded();
 
         self.set_instance_id(id);
 
@@ -105,6 +116,7 @@ impl VmmInstance {
             Some(kvm.into_raw_fd()),
         )
         .expect("Failed to start vmm");
+        let vmm_shared_info = self.get_shared_info();
 
         self.vmm_thread = Some(
             thread::Builder::new()
@@ -112,6 +124,9 @@ impl VmmInstance {
                 .spawn(move || {
                     || -> Result<i32> {
                         debug!(sl!(), "run vmm thread start");
+                        let cur_tid = nix::unistd::gettid().as_raw() as u32;
+                        vmm_shared_info.write().unwrap().master_tid = cur_tid;
+
                         if let Some(netns_path) = netns {
                             info!(sl!(), "set netns for vmm master {}", &netns_path);
                             let netns_fd = File::open(&netns_path)

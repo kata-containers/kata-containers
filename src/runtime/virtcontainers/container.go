@@ -529,6 +529,12 @@ func (c *Container) mountSharedDirMounts(ctx context.Context, sharedDirMounts, i
 		sharedDirMounts[sharedDirMount.Destination] = sharedDirMount
 	}
 
+	// Start the event loop to watch for file change notifications
+	// The event loop will only start if there are watches added
+	if c.sandbox.fsShare != nil {
+		go c.sandbox.fsShare.StartFileEventWatcher(ctx)
+	}
+
 	return storages, nil
 }
 
@@ -1028,6 +1034,10 @@ func (c *Container) stop(ctx context.Context, force bool) error {
 		if err := c.sandbox.fsShare.UnshareRootFilesystem(ctx, c); err != nil && !force {
 			return err
 		}
+	}
+
+	if err := c.sandbox.agent.removeStaleVirtiofsShareMounts(ctx); err != nil && !force {
+		return err
 	}
 
 	if err := c.detachDevices(ctx); err != nil && !force {

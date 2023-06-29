@@ -30,6 +30,7 @@ default StatsContainerRequest := true
 default StopTracingRequest := true
 default TtyWinResizeRequest := true
 default UpdateContainerRequest := true
+default UpdateEphemeralMountsRequest := true
 default UpdateInterfaceRequest := true
 default UpdateRoutesRequest := true
 default WaitProcessRequest := true

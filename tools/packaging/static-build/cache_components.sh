@@ -22,6 +22,7 @@ cache_qemu_artifacts() {
 	if [ -n "${TEE}" ]; then
 		qemu_tarball_name="kata-static-cc-${TEE}-qemu.tar.xz"
 		[ "${TEE}" == "tdx" ] && current_qemu_version=$(get_from_kata_deps "assets.hypervisor.qemu.tdx.tag")
+        [ "${TEE}" == "snp" ] && current_qemu_version=$(get_from_kata_deps "assets.hypervisor.qemu.snp.tag")
 	fi
 	local qemu_sha=$(calc_qemu_files_sha256sum)
 	local current_qemu_image="$(get_qemu_image_name)"
@@ -39,17 +40,21 @@ cache_kernel_artifacts() {
 	local kernel_tarball_name="kata-static-cc-kernel.tar.xz"
 	local current_kernel_image="$(get_kernel_image_name)"
 	local current_kernel_version="$(get_from_kata_deps "assets.kernel.version")"
+	local current_kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
+	local kernel_modules_tarball_path="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/kata-static-cc-sev-kernel-modules.tar.xz"
 	if [ -n "${TEE}" ]; then
 		kernel_tarball_name="kata-static-cc-${TEE}-kernel.tar.xz"
 		[ "${TEE}" == "tdx" ] && current_kernel_version="$(get_from_kata_deps "assets.kernel.${TEE}.tag")"
 		[ "${TEE}" == "sev" ] && current_kernel_version="$(get_from_kata_deps "assets.kernel.${TEE}.version")"
 	fi
-	create_cache_asset "${kernel_tarball_name}" "${current_kernel_version}" "${current_kernel_image}"
+	create_cache_asset "${kernel_tarball_name}" "${current_kernel_version}-${current_kernel_kata_config_version}" "${current_kernel_image}"
 
 	if [ "${TEE}" == "sev" ]; then
 		module_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/cc-sev-kernel/builddir/kata-linux-${current_kernel_version#v}-$(get_config_version)/lib/modules/${current_kernel_version#v}"
-		tar cvfJ "${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/kata-static-cc-sev-kernel-modules.tar.xz" "${module_dir}/kernel/drivers/virt/coco/efi_secret/"
-		create_cache_asset "kata-static-cc-sev-kernel-modules.tar.xz" "${current_kernel_version}" "${current_kernel_image}"
+		if [ ! -f "${kernel_modules_tarball_path}" ]; then
+			tar cvfJ "${kernel_modules_tarball_path}" "${module_dir}/kernel/drivers/virt/coco/efi_secret/"
+		fi
+		create_cache_asset "kata-static-cc-sev-kernel-modules.tar.xz" "${current_kernel_version}-${current_kernel_kata_config_version}" "${current_kernel_image}"
 	fi
 
 }
@@ -106,7 +111,7 @@ cache_rootfs_artifacts() {
 	if [ -n "${TEE}" ]; then
 		if [ "${TEE}" == "tdx" ]; then
 			rootfs_tarball_name="kata-static-cc-tdx-rootfs-image.tar.xz"
-			aa_kbc="eaa_kbc"
+			aa_kbc="cc_kbc_tdx"
 			image_type="image"
 			root_hash_vanilla=""
 			root_hash_tdx="${repo_root_dir}/tools/osbuilder/root_hash_tdx.txt"

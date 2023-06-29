@@ -16,7 +16,7 @@ use std::{
     path::PathBuf,
 };
 
-fn trans_from_shim_mount(from: api::Mount) -> Mount {
+fn trans_from_shim_mount(from: &api::Mount) -> Mount {
     let options = from.options.to_vec();
     let mut read_only = false;
     for o in &options {
@@ -29,7 +29,7 @@ fn trans_from_shim_mount(from: api::Mount) -> Mount {
     Mount {
         source: from.source.clone(),
         destination: PathBuf::from(&from.target),
-        fs_type: from.field_type,
+        fs_type: from.type_.clone(),
         options,
         device_id: None,
         host_shared_fs_path: None,
@@ -41,19 +41,14 @@ impl TryFrom<api::CreateTaskRequest> for Request {
     type Error = anyhow::Error;
     fn try_from(from: api::CreateTaskRequest) -> Result<Self> {
         let options = if from.has_options() {
-            Some(from.get_options().get_value().to_vec())
+            Some(from.options().value.to_vec())
         } else {
             None
         };
         Ok(Request::CreateContainer(ContainerConfig {
             container_id: from.id.clone(),
             bundle: from.bundle.clone(),
-            rootfs_mounts: from
-                .rootfs
-                .to_vec()
-                .into_iter()
-                .map(trans_from_shim_mount)
-                .collect(),
+            rootfs_mounts: from.rootfs.iter().map(trans_from_shim_mount).collect(),
             terminal: from.terminal,
             options,
             stdin: (!from.stdin.is_empty()).then(|| from.stdin.clone()),
@@ -84,15 +79,15 @@ impl TryFrom<api::DeleteRequest> for Request {
 impl TryFrom<api::ExecProcessRequest> for Request {
     type Error = anyhow::Error;
     fn try_from(from: api::ExecProcessRequest) -> Result<Self> {
-        let spec = from.get_spec();
+        let spec = from.spec();
         Ok(Request::ExecProcess(ExecProcessRequest {
             process: ContainerProcess::new(&from.id, &from.exec_id).context("new process id")?,
             terminal: from.terminal,
             stdin: (!from.stdin.is_empty()).then(|| from.stdin.clone()),
             stdout: (!from.stdout.is_empty()).then(|| from.stdout.clone()),
             stderr: (!from.stderr.is_empty()).then(|| from.stderr.clone()),
-            spec_type_url: spec.get_type_url().to_string(),
-            spec_value: spec.get_value().to_vec(),
+            spec_type_url: spec.type_url.to_string(),
+            spec_value: spec.value.to_vec(),
         }))
     }
 }
@@ -182,7 +177,7 @@ impl TryFrom<api::UpdateTaskRequest> for Request {
     fn try_from(from: api::UpdateTaskRequest) -> Result<Self> {
         Ok(Request::UpdateContainer(UpdateRequest {
             container_id: from.id.to_string(),
-            value: from.get_resources().get_value().to_vec(),
+            value: from.resources().value.to_vec(),
         }))
     }
 }

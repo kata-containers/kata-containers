@@ -60,6 +60,8 @@ DESTDIR="${DESTDIR:-/}"
 PREFIX="${PREFIX:-/usr}"
 #Kernel URL
 kernel_url=""
+#Linux headers for GPU guest fs module building
+linux_headers=""
 
 KATA_BUILD_CC=${KATA_BUILD_CC:-no}
 packaging_scripts_dir="${script_dir}/../scripts"
@@ -95,6 +97,7 @@ Options:
 	-f          	: Enable force generate config when setup.
 	-g <vendor> 	: GPU vendor, intel or nvidia.
 	-h          	: Display this help.
+	-H <deb|rpm>	: Linux headers for guest fs module building.
 	-k <path>   	: Path to kernel to build.
 	-p <path>   	: Path to a directory with patches to apply to kernel.
 	-s          	: Skip .config checks
@@ -241,6 +244,23 @@ get_kernel_frag_path() {
 		info "Add kernel config for GPU due to '-g ${gpu_vendor}'"
 		local gpu_configs="$(ls ${gpu_path}/${gpu_vendor}.conf)"
 		all_configs="${all_configs} ${gpu_configs}"
+		# If conf_guest is set we need to update the CONFIG_LOCALVERSION
+		# to match the suffix created in install_kata
+		# -nvidia-gpu-{snp|tdx}, the linux headers will be named the very
+		# same if build with make deb-pkg for TDX or SNP.
+		if [[ "${conf_guest}" != "" ]];then
+			local gpu_cc_configs=$(mktemp).conf
+			local gpu_subst_configs="$(ls ${gpu_path}/${gpu_vendor}.conf.in)"
+
+			export CONF_GUEST_SUFFIX="-${conf_guest}"
+			envsubst <${gpu_subst_configs} >${gpu_cc_configs}
+			unset CONF_GUEST_SUFFIX
+
+			all_configs="${all_configs} ${gpu_cc_configs}"
+		else
+			local gpu_configs="$(ls ${gpu_path}/${gpu_vendor}.conf)"
+			all_configs="${all_configs} ${gpu_configs}"
+		fi
 	fi
 
 	if [ "${KATA_BUILD_CC}" == "yes" ]; then
@@ -416,10 +436,30 @@ build_kernel() {
 	popd >>/dev/null
 }
 
+build_kernel_headers() {
+	local kernel_path=${1:-}
+	[ -n "${kernel_path}" ] || die "kernel_path not provided"
+	[ -d "${kernel_path}" ] || die "path to kernel does not exist, use ${script_name} setup"
+	[ -n "${arch_target}" ] || arch_target="$(uname -m)"
+	arch_target=$(arch_to_kernel "${arch_target}")
+	pushd "${kernel_path}" >>/dev/null
+
+	if [ "$linux_headers" == "deb" ]; then
+		make -j $(nproc ${CI:+--ignore 1}) deb-pkg ARCH="${arch_target}"
+	fi
+	if [ "$linux_headers" == "rpm" ]; then
+		make -j $(nproc ${CI:+--ignore 1}) rpm-pkg ARCH="${arch_target}"
+	fi
+
+	popd >>/dev/null
+}
+
 install_kata() {
 	local kernel_path=${1:-}
 	[ -n "${kernel_path}" ] || die "kernel_path not provided"
 	[ -d "${kernel_path}" ] || die "path to kernel does not exist, use ${script_name} setup"
+	[ -n "${arch_target}" ] || arch_target="$(uname -m)"
+	arch_target=$(arch_to_kernel "${arch_target}")
 	pushd "${kernel_path}" >>/dev/null
 	config_version=$(get_config_version)
 	[ -n "${config_version}" ] || die "failed to get config version"
@@ -429,12 +469,13 @@ install_kata() {
 	if [[ ${build_type} != "" ]]; then
 		suffix="-${build_type}"
 	fi
-	if [[ ${gpu_vendor} != "" ]];then
-		suffix="-${gpu_vendor}-gpu${suffix}"
-	fi
 
 	if [[ ${conf_guest} != "" ]];then
 		suffix="-${conf_guest}${suffix}"
+	fi
+
+	if [[ ${gpu_vendor} != "" ]];then
+		suffix="-${gpu_vendor}-gpu${suffix}"
 	fi
 
 	vmlinuz="vmlinuz-${kernel_version}-${config_version}${suffix}"
@@ -474,7 +515,7 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:b:c:deEfg:hk:p:t:u:v:x:" opt; do
+	while getopts "a:b:c:deEfg:hH:k:p:t:u:v:x:" opt; do
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
@@ -504,6 +545,9 @@ main() {
 				;;
 			h)
 				usage 0
+				;;
+			H)
+				linux_headers="${OPTARG}"
 				;;
 			k)
 				kernel_path="$(realpath ${OPTARG})"
@@ -557,7 +601,7 @@ main() {
 			case "${arch_target}" in
 			"aarch64")
 				build_type="arm-experimental"
-				kernel_version=$(get_from_kata_deps "assets.arm-kernel-experimental.version")
+				kernel_version=$(get_from_kata_deps "assets.kernel-arm-experimental.version")
 			;;
 			*)
 				info "No arch-specific experimental kernel supported, using experimental one instead"
@@ -565,7 +609,7 @@ main() {
 			;;
 			esac
 		elif [[ ${build_type} == "dragonball-experimental" ]]; then
-			kernel_version=$(get_from_kata_deps "assets.dragonball-kernel-experimental.version")
+			kernel_version=$(get_from_kata_deps "assets.kernel-dragonball-experimental.version")
 		elif [[ "${conf_guest}" != "" ]]; then
 			#If specifying a tag for kernel_version, must be formatted version-like to avoid unintended parsing issues
 			kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.version" 2>/dev/null || true)
@@ -593,8 +637,10 @@ main() {
 		build)
 			build_kernel "${kernel_path}"
 			;;
+		build-headers)
+			build_kernel_headers "${kernel_path}"
+			;;
 		install)
-			build_kernel "${kernel_path}"
 			install_kata "${kernel_path}"
 			;;
 		setup)

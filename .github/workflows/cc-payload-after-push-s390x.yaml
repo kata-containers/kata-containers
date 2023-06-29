@@ -15,6 +15,8 @@ jobs:
           - cc-kernel
           - cc-qemu
           - cc-rootfs-image
+          - cc-rootfs-initrd
+          - cc-se-image
           - cc-virtiofsd
     steps:
       - name: Login to Kata Containers quay.io
@@ -31,6 +33,14 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0 # This is needed in order to keep the commit ids history
+
+      - name: Place a host key document
+        run: |
+          mkdir -p "host-key-document"
+          cp "${CI_HKD_PATH}" "host-key-document"
+        env:
+          CI_HKD_PATH: ${{ secrets.CI_HKD_PATH }}
+
       - name: Build ${{ matrix.asset }}
         run: |
           make "${KATA_ASSET}-tarball"
@@ -42,6 +52,7 @@ jobs:
           KATA_ASSET: ${{ matrix.asset }}
           TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
           PUSH_TO_REGISTRY: yes
+          HKD_PATH: "host-key-document"
 
       - name: store-artifact ${{ matrix.asset }}
         uses: actions/upload-artifact@v3

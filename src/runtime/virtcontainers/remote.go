@@ -134,6 +134,15 @@ func (rh *remoteHypervisor) AttestVM(ctx context.Context) error {
 
 func (rh *remoteHypervisor) StopVM(ctx context.Context, waitOnly bool) error {
 
+	// waitOnly doesn't make sense for remote hypervisor and suited for local hypervisor.
+	// Instead use a similar logic like StartVM to handle StopVM with timeout.
+
+	timeout := defaultMinTimeout
+
+	if rh.config.RemoteHypervisorTimeout > 0 {
+		timeout = int(rh.config.RemoteHypervisorTimeout)
+	}
+
 	s, err := openRemoteService(rh.config.RemoteHypervisorSocket)
 	if err != nil {
 		return err
@@ -143,8 +152,11 @@ func (rh *remoteHypervisor) StopVM(ctx context.Context, waitOnly bool) error {
 	req := &pb.StopVMRequest{
 		Id: string(rh.sandboxID),
 	}
+	ctx2, cancel := context.WithTimeout(context.Background(), time.Duration(timeout)*time.Second)
+	defer cancel()
 
-	if _, err := s.client.StopVM(context.Background(), req); err != nil {
+	logrus.Printf("calling remote hypervisor StopVM (timeout: %d)", timeout)
+	if _, err := s.client.StopVM(ctx2, req); err != nil {
 		return fmt.Errorf("remote hypervisor call failed: %w", err)
 	}
 

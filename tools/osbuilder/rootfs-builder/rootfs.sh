@@ -214,11 +214,11 @@ docker_extra_args()
 		args+=" -v ${gentoo_local_portage_dir}:/usr/portage/packages"
 		args+=" --volumes-from ${gentoo_portage_container}"
 		;;
-        debian | ubuntu | suse)
+	debian | ubuntu | suse)
 		source /etc/os-release
 
 		case "$ID" in
-                fedora | centos | rhel)
+		fedora | centos | rhel)
 			# Depending on the podman version, we'll face issues when passing
 		        # `--security-opt apparmor=unconfined` on a system where not apparmor is not installed.
 			# Because of this, let's just avoid adding this option when the host OS comes from Red Hat.
@@ -486,9 +486,6 @@ prepare_overlay()
 		ln -sf  /init ./sbin/init
 	fi
 
-	# Kata systemd unit file
-	mkdir -p ./etc/systemd/system/basic.target.wants/
-	ln -sf /usr/lib/systemd/system/kata-containers.target ./etc/systemd/system/basic.target.wants/kata-containers.target
 	popd  > /dev/null
 }
 
@@ -637,9 +634,12 @@ EOF
 	if [ "${AGENT_INIT}" == "yes" ]; then
 		setup_agent_init "${AGENT_DEST}" "${init}"
 	else
-		# Setup systemd service for kata-agent
+		# Setup systemd-based environment for kata-agent
 		mkdir -p "${ROOTFS_DIR}/etc/systemd/system/basic.target.wants"
 		ln -sf "/usr/lib/systemd/system/kata-containers.target" "${ROOTFS_DIR}/etc/systemd/system/basic.target.wants/kata-containers.target"
+		mkdir -p "${ROOTFS_DIR}/etc/systemd/system/kata-containers.target.wants"
+		ln -sf "/usr/lib/systemd/system/dbus.socket" "${ROOTFS_DIR}/etc/systemd/system/kata-containers.target.wants/dbus.socket"
+		chmod g+rx,o+x "${ROOTFS_DIR}"
 
 		open_policy_agent_url="$(get_package_version_from_kata_yaml externals.open-policy-agent.url)"
 		open_policy_agent_version="$(get_package_version_from_kata_yaml externals.open-policy-agent.version)"
@@ -691,23 +691,12 @@ EOF
 		info "Install attestation-agent with KBC ${AA_KBC}"
 		#git clone "${attestation_agent_url}" --branch "${attestation_agent_tag}" --single-branch
 		git clone --depth=1 "${attestation_agent_url}" attestation-agent
-		pushd attestation-agent/app
+
+		pushd attestation-agent
 		git fetch --depth=1 origin "${attestation_agent_version}"
 		git checkout FETCH_HEAD
-		source "${HOME}/.cargo/env"
-		target="${ARCH}-unknown-linux-${LIBC}"
-		if [ "${AA_KBC}" == "eaa_kbc" ] && [ "${ARCH}" == "x86_64" ]; then
-			RUSTFLAGS="-C link-args=-Wl,-rpath,/usr/local/lib/rats-tls"
-			# Currently eaa_kbc module only support this specific platform
-			target="x86_64-unknown-linux-gnu"
-		fi
-		if [ "$(uname -m)" != "$ARCH" ]; then
-			RUSTFLAGS+=" -C linker=$CC"
-		fi
-		export RUSTFLAGS
-		# Foreign CC is incompatible with libgit2 -- CC is still handled by `-C linker=...` flag
-		CC= cargo build --release --target "${target}" --no-default-features --features "${AA_KBC}"
-		install -D -o root -g root -m 0755 "target/${target}/release/attestation-agent" -t "${ROOTFS_DIR}/usr/local/bin/"
+		( [ "${AA_KBC}" == "eaa_kbc" ] || [ "${AA_KBC}" == "cc_kbc_tdx" ] ) && [ "${ARCH}" == "x86_64" ] && LIBC="gnu"
+		make KBC=${AA_KBC} ttrpc=true && make install DESTDIR="${ROOTFS_DIR}/usr/local/bin/"
 		popd
 	fi
 

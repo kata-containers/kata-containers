@@ -7,13 +7,17 @@ use std::net::Ipv4Addr;
 use std::path::PathBuf;
 
 pub mod ch_api;
+pub mod convert;
 pub mod net_util;
 mod virtio_devices;
 
 use crate::virtio_devices::RateLimiterConfig;
+use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 pub use net_util::MacAddr;
 
 pub const MAX_NUM_PCI_SEGMENTS: u16 = 16;
+
+mod errors;
 
 #[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize, Default)]
 pub struct BalloonConfig {
@@ -328,7 +332,6 @@ pub struct PlatformConfig {
     pub uuid: Option<String>,
     #[serde(default)]
     pub oem_strings: Option<Vec<String>>,
-    #[cfg(feature = "tdx")]
     #[serde(default)]
     pub tdx: bool,
 }
@@ -423,9 +426,7 @@ pub struct VmConfig {
     pub fs: Option<Vec<FsConfig>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pmem: Option<Vec<PmemConfig>>,
-    //#[serde(default = "ConsoleConfig::default_serial")]
     pub serial: ConsoleConfig,
-    //#[serde(default = "ConsoleConfig::default_console")]
     pub console: ConsoleConfig,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub devices: Option<Vec<DeviceConfig>>,
@@ -478,4 +479,17 @@ fn usize_is_zero(v: &usize) -> bool {
 #[allow(clippy::trivially_copy_pass_by_ref)]
 fn u16_is_zero(v: &u16) -> bool {
     *v == 0
+}
+
+// Type used to simplify conversion from a generic Hypervisor config
+// to a CH specific VmConfig.
+#[derive(Debug, Clone, Default)]
+pub struct NamedHypervisorConfig {
+    pub kernel_params: String,
+    pub sandbox_path: String,
+    pub vsock_socket_path: String,
+    pub cfg: HypervisorConfig,
+    pub tdx_enabled: bool,
+
+    pub shared_fs_devices: Option<Vec<FsConfig>>,
 }

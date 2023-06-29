@@ -47,6 +47,7 @@ Options:
 	-f          	: Enable force generate config when setup.
 	-g <vendor> 	: GPU vendor, intel or nvidia.
 	-h          	: Display this help.
+  -H <deb|rpm>  : Linux headers for guest fs module building.
 	-k <path>   	: Path to kernel to build.
 	-p <path>   	: Path to a directory with patches to apply to kernel, only patches in top-level directory are applied.
 	-t <hypervisor>	: Hypervisor_target.
@@ -69,7 +70,7 @@ $ ./build-kernel.sh -v 5.10.25 -g nvidia -f -d setup
 ## Setup kernel source code
 
 ```bash
-$ git clone github.com/kata-containers/kata-containers
+$ git clone https://github.com/kata-containers/kata-containers.git
 $ cd kata-containers/tools/packaging/kernel
 $ ./build-kernel.sh setup
 ```

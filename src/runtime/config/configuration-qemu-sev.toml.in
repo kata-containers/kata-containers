@@ -5,7 +5,7 @@
 
 # XXX: WARNING: this file is auto-generated.
 # XXX:
-# XXX: Source file: "@CONFIG_QEMU_IN@"
+# XXX: Source file: "@CONFIG_QEMU_SEV_IN@"
 # XXX: Project:
 # XXX:   Name: @PROJECT_NAME@
 # XXX:   Type: @PROJECT_TYPE@
@@ -32,24 +32,21 @@ machine_type = "@MACHINETYPE@"
 # Default false
 confidential_guest = true
 
-# Enable pre-attestation AMD SEV and SEV-ES confidential guests.
+# Enable pre-attestation for AMD SEV and SEV-ES guests.
 # Applies only if confidential_guest is true.
 # (default: false)
 guest_pre_attestation = true
 
-# Guest owner proxy that handles remote attestation
-guest_pre_attestation_proxy = "@DEFGUESTPREATTESTATIONPROXY@"
-
-# Keyset ID for injected secrets
-guest_pre_attestation_keyset = "@DEFGUESTPREATTESTATIONKEYSET@"
-
-# GUID of injected secret
-# Key Broker Server for SEV(-ES) expects secrets with this guid
+# A remote key broker server (KBS) is required to validate the attestation
+# measurement and inject a secret key.  
 # See https://github.com/confidential-containers/simple-kbs
-guest_pre_attestation_secret_guid = "@DEFGUESTPREATTESTATIONSECRETGUID@"
+guest_pre_attestation_kbs_uri = "@DEFGUESTPREATTESTATIONPROXY@"
 
-# Type of injected secret
-guest_pre_attestation_secret_type = "@DEFGUESTPREATTESTATIONSECRETTYPE@"
+# The simple-kbs can be run in "online" and "offline" modes
+guest_pre_attestation_kbs_mode="@DEFGUESTPREATTESTATIONMODE@" 
+
+# Keyset ID for injected secrets (offline kbs)
+guest_pre_attestation_keyset = "@DEFGUESTPREATTESTATIONKEYSET@"
 
 # SEV guest policy
 sev_guest_policy = @DEFSEVGUESTPOLICY@
@@ -87,7 +84,7 @@ kernel_params = "@SEVKERNELPARAMS@"
 
 # Path to the firmware.
 # If you want that qemu uses the default firmware leave this option empty
-firmware = "@SEVFIRMWAREPATH@"
+firmware = "@FIRMWARESEVPATH@"
 
 # Path to the firmware volume.
 # firmware TDVF or OVMF can be split into FIRMWARE_VARS.fd (UEFI variables
@@ -189,7 +186,7 @@ disable_block_device_use = @DEFDISABLEBLOCK@
 #   - virtio-fs (default)
 #   - virtio-9p
 #   - virtio-fs-nydus
-shared_fs = "virtio-9p"
+shared_fs = "@DEFSHAREDFS_QEMU_SEV_VIRTIOFS@"
 
 # Path to vhost-user-fs daemon.
 virtio_fs_daemon = "@DEFVIRTIOFSDAEMON@"
@@ -523,8 +520,8 @@ kernel_modules=[]
 #debug_console_enabled = true
 
 # Agent connection dialing timeout value in seconds
-# (default: 30)
-#dial_timeout = 30
+# (default: 90)
+dial_timeout = 90
 
 [runtime]
 # If enabled, the runtime will log additional debug messages to the
@@ -603,7 +600,7 @@ sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY@
 # - When running with pods, sandbox sizing information will only be available if using Kubernetes >= 1.23 and containerd >= 1.6. CRI-O
 #   does not yet support sandbox sizing annotations.
 # - When running single containers using a tool like ctr, container sizing information will be available.
-static_sandbox_resource_mgmt=@DEFSTATICRESOURCEMGMT@
+static_sandbox_resource_mgmt=@DEFSTATICRESOURCEMGMT_TEE@
 
 # If specified, sandbox_bind_mounts identifieds host paths to be mounted (ro) into the sandboxes shared path.
 # This is only valid if filesystem sharing is utilized. The provided path(s) will be bindmounted into the shared fs directory.

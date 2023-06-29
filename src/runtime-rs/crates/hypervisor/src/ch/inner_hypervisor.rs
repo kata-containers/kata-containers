@@ -6,18 +6,23 @@
 use super::inner::CloudHypervisorInner;
 use crate::ch::utils::get_api_socket_path;
 use crate::ch::utils::{get_jailer_root, get_sandbox_path, get_vsock_path};
-use crate::Device;
-use crate::VsockConfig;
+use crate::device::DeviceType;
+use crate::kernel_param::KernelParams;
+use crate::VsockDevice;
+use crate::VM_ROOTFS_DRIVER_PMEM;
 use crate::{VcpuThreadIds, VmmState};
 use anyhow::{anyhow, Context, Result};
 use ch_config::ch_api::{
     cloud_hypervisor_vm_create, cloud_hypervisor_vm_start, cloud_hypervisor_vmm_ping,
     cloud_hypervisor_vmm_shutdown,
 };
+use ch_config::{NamedHypervisorConfig, VmConfig};
 use core::future::poll_fn;
 use futures::executor::block_on;
 use futures::future::join_all;
 use kata_types::capabilities::{Capabilities, CapabilityBits};
+use kata_types::config::default::DEFAULT_CH_ROOTFS_TYPE;
+use std::convert::TryFrom;
 use std::fs::create_dir_all;
 use std::os::unix::net::UnixStream;
 use std::path::Path;
@@ -54,10 +59,56 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
+    async fn get_kernel_params(&self) -> Result<String> {
+        let cfg = self
+            .config
+            .as_ref()
+            .ok_or("no hypervisor config for CH")
+            .map_err(|e| anyhow!(e))?;
+
+        let enable_debug = cfg.debug_info.enable_debug;
+
+        let confidential_guest = cfg.security_info.confidential_guest;
+
+        // Note that the configuration option hypervisor.block_device_driver is not used.
+        let rootfs_driver = VM_ROOTFS_DRIVER_PMEM;
+
+        let rootfs_type = match cfg.boot_info.rootfs_type.is_empty() {
+            true => DEFAULT_CH_ROOTFS_TYPE,
+            false => &cfg.boot_info.rootfs_type,
+        };
+
+        // Start by adding the default set of kernel parameters.
+        let mut params = KernelParams::new(enable_debug);
+
+        let mut rootfs_param = KernelParams::new_rootfs_kernel_params(rootfs_driver, rootfs_type)?;
+
+        let mut extra_params = if enable_debug {
+            if confidential_guest {
+                KernelParams::from_string("console=hvc0")
+            } else {
+                KernelParams::from_string("console=ttyS0,115200n8")
+            }
+        } else {
+            KernelParams::from_string("quiet")
+        };
+
+        params.append(&mut extra_params);
+
+        // Add the rootfs device
+        params.append(&mut rootfs_param);
+
+        // Finally, add the user-specified options at the end
+        // (so they will take priority).
+        params.append(&mut KernelParams::from_string(&cfg.boot_info.kernel_params));
+
+        let kernel_params = params.to_string()?;
+
+        Ok(kernel_params)
+    }
+
     async fn boot_vm(&mut self) -> Result<()> {
         let shared_fs_devices = self.get_shared_fs_devices().await?;
-
-        let pmem_devices = self.get_pmem_devices().await?;
 
         let socket = self
             .api_socket
@@ -71,14 +122,41 @@ impl CloudHypervisorInner {
 
         let vsock_socket_path = get_vsock_path(&self.id)?;
 
-        let response = cloud_hypervisor_vm_create(
+        let hypervisor_config = self
+            .config
+            .as_ref()
+            .ok_or("no hypervisor config for CH")
+            .map_err(|e| anyhow!(e))?;
+
+        debug!(
+            sl!(),
+            "generic Hypervisor configuration: {:?}", hypervisor_config
+        );
+
+        let kernel_params = self.get_kernel_params().await?;
+
+        // FIXME: See:
+        //
+        // - https://github.com/kata-containers/kata-containers/issues/6383
+        // - https://github.com/kata-containers/kata-containers/pull/6257
+        let tdx_enabled = false;
+
+        let named_cfg = NamedHypervisorConfig {
+            kernel_params,
             sandbox_path,
             vsock_socket_path,
-            socket.try_clone().context("failed to clone socket")?,
+            cfg: hypervisor_config.clone(),
+            tdx_enabled,
             shared_fs_devices,
-            pmem_devices,
-        )
-        .await?;
+        };
+
+        let cfg = VmConfig::try_from(named_cfg)?;
+
+        debug!(sl!(), "CH specific VmConfig configuration: {:?}", cfg);
+
+        let response =
+            cloud_hypervisor_vm_create(socket.try_clone().context("failed to clone socket")?, cfg)
+                .await?;
 
         if let Some(detail) = response {
             debug!(sl!(), "vm boot response: {:?}", detail);
@@ -150,11 +228,9 @@ impl CloudHypervisorInner {
 
         let join_handle = self.cloud_hypervisor_ping_until_ready(CH_POLL_TIME_MS);
 
-        let result = tokio::time::timeout(Duration::new(timeout_secs as u64, 0), join_handle)
+        tokio::time::timeout(Duration::new(timeout_secs as u64, 0), join_handle)
             .await
-            .context(timeout_msg)?;
-
-        result
+            .context(timeout_msg)?
     }
 
     async fn cloud_hypervisor_ensure_not_launched(&self) -> Result<()> {
@@ -172,7 +248,13 @@ impl CloudHypervisorInner {
     async fn cloud_hypervisor_launch(&mut self, _timeout_secs: i32) -> Result<()> {
         self.cloud_hypervisor_ensure_not_launched().await?;
 
-        let debug = false;
+        let cfg = self
+            .config
+            .as_ref()
+            .ok_or("no hypervisor config for CH")
+            .map_err(|e| anyhow!(e))?;
+
+        let debug = cfg.debug_info.enable_debug;
 
         let disable_seccomp = true;
 
@@ -335,10 +417,11 @@ impl CloudHypervisorInner {
 
         self.netns = netns;
 
-        let vsock_cfg = VsockConfig::new(self.id.clone()).await?;
+        let vsock_dev = VsockDevice::new(self.id.clone()).await?;
 
-        let dev = Device::Vsock(vsock_cfg);
-        self.add_device(dev).await.context("add vsock device")?;
+        self.add_device(DeviceType::Vsock(vsock_dev))
+            .await
+            .context("add vsock device")?;
 
         self.start_hypervisor(self.timeout_secs).await?;
 
@@ -413,6 +496,23 @@ impl CloudHypervisorInner {
 
     pub(crate) async fn get_pids(&self) -> Result<Vec<u32>> {
         Ok(Vec::<u32>::new())
+    }
+
+    pub(crate) async fn get_vmm_master_tid(&self) -> Result<u32> {
+        if let Some(pid) = self.pid {
+            Ok(pid)
+        } else {
+            Err(anyhow!("could not get vmm master tid"))
+        }
+    }
+
+    pub(crate) async fn get_ns_path(&self) -> Result<String> {
+        if let Some(pid) = self.pid {
+            let ns_path = format!("/proc/{}/ns", pid);
+            Ok(ns_path)
+        } else {
+            Err(anyhow!("could not get ns path"))
+        }
     }
 
     pub(crate) async fn check(&self) -> Result<()> {

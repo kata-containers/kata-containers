@@ -11,7 +11,7 @@ use std::sync::mpsc::{channel, Sender};
 use std::sync::Arc;
 
 use crate::IoManagerCached;
-use dbs_arch::regs;
+use dbs_arch::{regs, VpmuFeatureLevel};
 use dbs_boot::get_fdt_addr;
 use dbs_utils::time::TimestampUs;
 use kvm_ioctls::{VcpuFd, VmFd};
@@ -81,7 +81,7 @@ impl Vcpu {
     /// * `_pgtable_addr` - pgtable address for ap vcpu (not used in aarch64)
     pub fn configure(
         &mut self,
-        _vcpu_config: &VcpuConfig,
+        vcpu_config: &VcpuConfig,
         vm_fd: &VmFd,
         vm_as: &GuestAddressSpaceImpl,
         kernel_load_addr: Option<GuestAddress>,
@@ -98,6 +98,9 @@ impl Vcpu {
         // Non-boot cpus are powered off initially.
         if self.id > 0 {
             kvi.features[0] |= 1 << kvm_bindings::KVM_ARM_VCPU_POWER_OFF;
+        }
+        if vcpu_config.vpmu_feature == VpmuFeatureLevel::FullyEnabled {
+            kvi.features[0] |= 1 << kvm_bindings::KVM_ARM_VCPU_PMU_V3;
         }
 
         self.fd.vcpu_init(&kvi).map_err(VcpuError::VcpuArmInit)?;

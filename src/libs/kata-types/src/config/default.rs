@@ -16,6 +16,7 @@ lazy_static! {
     pub static ref DEFAULT_RUNTIME_CONFIGURATIONS: Vec::<&'static str> = vec![
         "/etc/kata-containers/configuration.toml",
         "/usr/share/defaults/kata-containers/configuration.toml",
+        "/opt/kata/share/defaults/kata-containers/configuration.toml",
     ];
 }
 
@@ -24,6 +25,7 @@ pub const DEFAULT_AGENT_VSOCK_PORT: u32 = 1024;
 pub const DEFAULT_AGENT_LOG_PORT: u32 = 1025;
 pub const DEFAULT_AGENT_DBG_CONSOLE_PORT: u32 = 1026;
 pub const DEFAULT_AGENT_TYPE_NAME: &str = AGENT_NAME_KATA;
+pub const DEFAULT_AGENT_DIAL_TIMEOUT_MS: u32 = 10;
 
 pub const DEFAULT_RUNTIME_NAME: &str = RUNTIME_NAME_VIRTCONTAINER;
 pub const DEFAULT_HYPERVISOR: &str = HYPERVISOR_NAME_DRAGONBALL;
@@ -71,6 +73,7 @@ pub const MIN_QEMU_MEMORY_SIZE_MB: u32 = 64;
 
 // Default configuration for Cloud Hypervisor (CH)
 pub const DEFAULT_CH_BINARY_PATH: &str = "/usr/bin/cloud-hypervisor";
+pub const DEFAULT_CH_ROOTFS_TYPE: &str = "ext4";
 pub const DEFAULT_CH_CONTROL_PATH: &str = "";
 pub const DEFAULT_CH_ENTROPY_SOURCE: &str = "/dev/urandom";
 pub const DEFAULT_CH_GUEST_KERNEL_IMAGE: &str = "vmlinuz";

@@ -12,6 +12,8 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 source "${script_dir}/../../scripts/lib.sh"
 
+source "${script_dir}/../../scripts/lib.sh"
+
 readonly kernel_builder="${repo_root_dir}/tools/packaging/kernel/build-kernel.sh"
 VMM_CONFIGS="qemu fc"
 
@@ -27,10 +29,11 @@ VMM_CONFIGS="qemu fc"
 REMOVE_VMM_CONFIGS="${REMOVE_VMM_CONFIGS:-""}"
 
 sudo docker pull ${container_image} || \
-	(sudo docker build \
+       	(sudo docker build  \
 		--build-arg GO_VERSION="${GO_VERSION}" \
-	      	--build-arg RUST_VERSION="${RUST_VERSION}" \
-		-t "${container_image}" "${script_dir}" && \
+		--build-arg RUST_VERSION="${RUST_VERSION}" \
+		-t "${container_image}" \
+		"${script_dir}" && \
 	 # No-op unless PUSH_TO_REGISTRY is exported as "yes"
 	 push_to_registry "${container_image}")
 

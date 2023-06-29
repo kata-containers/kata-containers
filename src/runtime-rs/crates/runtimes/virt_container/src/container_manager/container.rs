@@ -37,6 +37,7 @@ pub struct Container {
     pid: u32,
     pub container_id: ContainerID,
     config: ContainerConfig,
+    spec: oci::Spec,
     inner: Arc<RwLock<ContainerInner>>,
     agent: Arc<dyn Agent>,
     resource_manager: Arc<ResourceManager>,
@@ -47,6 +48,7 @@ impl Container {
     pub fn new(
         pid: u32,
         config: ContainerConfig,
+        spec: oci::Spec,
         agent: Arc<dyn Agent>,
         resource_manager: Arc<ResourceManager>,
     ) -> Result<Self> {
@@ -67,6 +69,7 @@ impl Container {
             pid,
             container_id,
             config,
+            spec,
             inner: Arc::new(RwLock::new(ContainerInner::new(
                 agent.clone(),
                 init_process,
@@ -137,7 +140,15 @@ impl Container {
         }
         spec.mounts = oci_mounts;
 
-        // TODO: handler device
+        let linux = spec
+            .linux
+            .as_ref()
+            .context("OCI spec missing linux field")?;
+
+        let devices_agent = self
+            .resource_manager
+            .handler_devices(&config.container_id, linux)
+            .await?;
 
         // update cgroups
         self.resource_manager
@@ -155,6 +166,7 @@ impl Container {
             storages,
             oci: Some(spec),
             sandbox_pidns,
+            devices: devices_agent,
             ..Default::default()
         };
 
@@ -171,7 +183,8 @@ impl Container {
         match process.process_type {
             ProcessType::Container => {
                 if let Err(err) = inner.start_container(&process.container_id).await {
-                    let _ = inner.stop_process(process, true).await;
+                    let device_manager = self.resource_manager.get_device_manager().await;
+                    let _ = inner.stop_process(process, true, &device_manager).await;
                     return Err(err);
                 }
 
@@ -183,7 +196,8 @@ impl Container {
             }
             ProcessType::Exec => {
                 if let Err(e) = inner.start_exec_process(process).await {
-                    let _ = inner.stop_process(process, true).await;
+                    let device_manager = self.resource_manager.get_device_manager().await;
+                    let _ = inner.stop_process(process, true, &device_manager).await;
                     return Err(e).context("enter process");
                 }
 
@@ -265,7 +279,10 @@ impl Container {
         all: bool,
     ) -> Result<()> {
         let mut inner = self.inner.write().await;
-        inner.signal_process(container_process, signal, all).await
+        let device_manager = self.resource_manager.get_device_manager().await;
+        inner
+            .signal_process(container_process, signal, all, &device_manager)
+            .await
     }
 
     pub async fn exec_process(
@@ -302,8 +319,9 @@ impl Container {
 
     pub async fn stop_process(&self, container_process: &ContainerProcess) -> Result<()> {
         let mut inner = self.inner.write().await;
+        let device_manager = self.resource_manager.get_device_manager().await;
         inner
-            .stop_process(container_process, true)
+            .stop_process(container_process, true, &device_manager)
             .await
             .context("stop process")
     }
@@ -341,20 +359,33 @@ impl Container {
         height: u32,
     ) -> Result<()> {
         let logger = logger_with_process(process);
-        let inner = self.inner.read().await;
+        let mut inner = self.inner.write().await;
         if inner.init_process.get_status().await != ProcessStatus::Running {
             warn!(logger, "container is not running");
             return Ok(());
         }
-        self.agent
-            .tty_win_resize(agent::TtyWinResizeRequest {
-                process_id: process.clone().into(),
-                row: height,
-                column: width,
-            })
-            .await
-            .context("resize pty")?;
-        Ok(())
+
+        if process.exec_id.is_empty() {
+            inner.init_process.height = height;
+            inner.init_process.width = width;
+        } else if let Some(exec) = inner.exec_processes.get_mut(&process.exec_id) {
+            exec.process.height = height;
+            exec.process.width = width;
+
+            // for some case, resize_pty request should be handled while the process has not been started in agent
+            // just return here, and truly resize_pty will happen in start_process
+            if exec.process.get_status().await != ProcessStatus::Running {
+                return Ok(());
+            }
+        } else {
+            return Err(anyhow!(
+                "could not find process {} in container {}",
+                process.exec_id(),
+                process.container_id()
+            ));
+        }
+
+        inner.win_resize_process(process, height, width).await
     }
 
     pub async fn stats(&self) -> Result<Option<agent::StatsContainerResponse>> {
@@ -382,11 +413,31 @@ impl Container {
             .context("agent update container")?;
         Ok(())
     }
+
+    pub async fn config(&self) -> ContainerConfig {
+        self.config.clone()
+    }
+
+    pub async fn spec(&self) -> oci::Spec {
+        self.spec.clone()
+    }
 }
 
 fn amend_spec(spec: &mut oci::Spec, disable_guest_seccomp: bool) -> Result<()> {
-    // hook should be done on host
-    spec.hooks = None;
+    // Only the StartContainer hook needs to be reserved for execution in the guest
+    let start_container_hooks = match spec.hooks.as_ref() {
+        Some(hooks) => hooks.start_container.clone(),
+        None => Vec::new(),
+    };
+
+    spec.hooks = if start_container_hooks.is_empty() {
+        None
+    } else {
+        Some(oci::Hooks {
+            start_container: start_container_hooks,
+            ..Default::default()
+        })
+    };
 
     // special process K8s ephemeral volumes.
     update_ephemeral_storage_type(spec);

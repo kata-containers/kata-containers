@@ -28,17 +28,22 @@ readonly initramfs_builder="${static_build_dir}/initramfs/build.sh"
 readonly kernel_builder="${static_build_dir}/kernel/build.sh"
 readonly ovmf_builder="${static_build_dir}/ovmf/build.sh"
 readonly qemu_builder="${static_build_dir}/qemu/build-static-qemu.sh"
+readonly qemu_experimental_builder="${static_build_dir}/qemu/build-static-qemu-experimental.sh"
 readonly shimv2_builder="${static_build_dir}/shim-v2/build.sh"
 readonly td_shim_builder="${static_build_dir}/td-shim/build.sh"
 readonly virtiofsd_builder="${static_build_dir}/virtiofsd/build.sh"
 readonly nydus_builder="${static_build_dir}/nydus/build.sh"
 
 readonly rootfs_builder="${repo_root_dir}/tools/packaging/guest-image/build_image.sh"
+readonly se_image_builder="${repo_root_dir}/tools/packaging/guest-image/build_se_image.sh"
 
 readonly cc_prefix="/opt/confidential-containers"
 readonly qemu_cc_builder="${static_build_dir}/qemu/build-static-qemu-cc.sh"
 
 source "${script_dir}/../../scripts/lib.sh"
+
+readonly jenkins_url="http://jenkins.katacontainers.io"
+readonly cached_artifacts_path="lastSuccessfulBuild/artifact/artifacts"
 
 ARCH=$(uname -m)
 
@@ -84,11 +89,22 @@ options:
 	kernel
 	kernel-dragonball-experimental
 	kernel-experimental
+	kernel-nvidia-gpu
+	kernel-nvidia-gpu-snp
+	kernel-nvidia-gpu-tdx-experimental
+	kernel-sev-tarball
+	kernel-tdx-experimental
 	nydus
+	ovmf
+	ovmf-sev
 	qemu
+	qemu-snp-experimental
+	qemu-tdx-experimental
 	rootfs-image
 	rootfs-initrd
+	rootfs-initrd-sev
 	shim-v2
+	tdvf
 	virtiofsd
 	cc
 	cc-cloud-hypervisor
@@ -96,12 +112,16 @@ options:
 	cc-tdx-kernel
 	cc-sev-kernel
 	cc-qemu
+	cc-snp-qemu
 	cc-tdx-qemu
 	cc-rootfs-image
+	cc-rootfs-initrd
 	cc-sev-rootfs-initrd
+	cc-se-image
 	cc-shimv2
 	cc-virtiofsd
 	cc-sev-ovmf
+	cc-x86_64-ovmf
 EOF
 
 	exit "${return_code}"
@@ -130,9 +150,9 @@ install_cached_component() {
 
 	info "Using cached tarball of ${component}"
 	echo "Downloading tarball from: ${jenkins_build_url}/${component_tarball_name}"
-	wget "${jenkins_build_url}/${component_tarball_name}" || return cleanup_and_fail
-	wget "${jenkins_build_url}/sha256sum-${component_tarball_name}" || return cleanup_and_fail
-	sha256sum -c "sha256sum-${component_tarball_name}" || return cleanup_and_fail
+	wget "${jenkins_build_url}/${component_tarball_name}" || return $(cleanup_and_fail)
+	wget "${jenkins_build_url}/sha256sum-${component_tarball_name}" || return $(cleanup_and_fail)
+	sha256sum -c "sha256sum-${component_tarball_name}" || return $(cleanup_and_fail)
 	if [ -n "${root_hash_vanilla}" ]; then
 		wget "${jenkins_build_url}/${root_hash_vanilla}" || return cleanup_and_fail
 		mv "${root_hash_vanilla}" "${repo_root_dir}/tools/osbuilder/"
@@ -251,7 +271,7 @@ install_cc_image() {
 			root_hash_vanilla=""
 			initramfs_last_commit="$(get_initramfs_image_name)"
 		fi
-	fi	
+	fi
 
 	local osbuilder_last_commit="$(echo $(get_last_modification "${repo_root_dir}/tools/osbuilder") | sed s/-dirty//)"
 	local guest_image_last_commit="$(get_last_modification "${repo_root_dir}/tools/packaging/guest-image")"
@@ -289,8 +309,13 @@ install_cc_sev_image() {
 	install_cc_image "${AA_KBC}" "${image_type}" "sev" "" "sev"
 }
 
+install_cc_se_image() {
+	info "Create IBM SE image configured with AA_KBC=${AA_KBC}"
+	"${se_image_builder}" --destdir="${destdir}"
+}
+
 install_cc_tdx_image() {
-	AA_KBC="eaa_kbc"
+	AA_KBC="cc_kbc_tdx"
 	image_type="image"
 	image_suffix="tdx"
 	root_hash_suffix="tdx"
@@ -302,10 +327,12 @@ install_cc_kernel() {
 	export KATA_BUILD_CC=yes
 	export kernel_version="$(yq r $versions_yaml assets.kernel.version)"
 
+	local kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
+
 	install_cached_component \
 		"kernel" \
 		"${jenkins_url}/job/kata-containers-2.0-kernel-cc-$(uname -m)/${cached_artifacts_path}" \
-		"${kernel_version}" \
+		"${kernel_version}-${kernel_kata_config_version}" \
 		"$(get_kernel_image_name)" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
@@ -401,10 +428,12 @@ install_cached_kernel_component() {
 	kernel_version="${2}"
 	module_dir="${3:-}"
 
+	local kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
+
 	install_cached_component \
 		"kernel" \
 		"${jenkins_url}/job/kata-containers-2.0-kernel-${tee}-cc-$(uname -m)/${cached_artifacts_path}" \
-		"${kernel_version}" \
+		"${kernel_version}-${kernel_kata_config_version}" \
 		"$(get_kernel_image_name)" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
@@ -421,7 +450,8 @@ install_cached_kernel_component() {
 		"kata-static-cc-sev-kernel-modules.tar.xz" \
 		"${workdir}/kata-static-cc-sev-kernel-modules.tar.xz" \
 	|| return 1
-		
+
+	mkdir -p "${module_dir}"
 	tar xvf "${workdir}/kata-static-cc-sev-kernel-modules.tar.xz" -C  "${module_dir}" && return 0
 
 	return 1
@@ -462,7 +492,7 @@ install_cc_sev_kernel() {
 install_cc_tee_qemu() {
 	tee="${1}"
 
-	[ "${tee}" != "tdx" ] && die "Non supported TEE"
+	[[ "${tee}" != "tdx" && "${tee}" != "snp" ]] && die "Non supported TEE"
 
 	export qemu_repo="$(yq r $versions_yaml assets.hypervisor.qemu.${tee}.url)"
 	export qemu_version="$(yq r $versions_yaml assets.hypervisor.qemu.${tee}.tag)"
@@ -483,6 +513,10 @@ install_cc_tee_qemu() {
 
 install_cc_tdx_qemu() {
 	install_cc_tee_qemu "tdx"
+}
+
+install_cc_snp_qemu() {
+	install_cc_tee_qemu "snp"
 }
 
 install_cc_tdx_td_shim() {
@@ -527,61 +561,291 @@ install_cc_sev_ovmf(){
  	install_cc_tee_ovmf "sev" "edk2-sev.tar.gz"
 }
 
+install_cc_x86_64_ovmf(){
+ 	install_cc_tee_ovmf "x86_64" "edk2-x86_64.tar.gz"
+}
+
 #Install guest image
 install_image() {
+	local jenkins="${jenkins_url}/job/kata-containers-main-rootfs-image-$(uname -m)/${cached_artifacts_path}"
+	local component="rootfs-image"
+
+	local osbuilder_last_commit="$(get_last_modification "${repo_root_dir}/tools/osbuilder")"
+	local guest_image_last_commit="$(get_last_modification "${repo_root_dir}/tools/packaging/guest-image")"
+	local agent_last_commit="$(get_last_modification "${repo_root_dir}/src/agent")"
+	local libs_last_commit="$(get_last_modification "${repo_root_dir}/src/libs")"
+	local gperf_version="$(get_from_kata_deps "externals.gperf.version")"
+	local libseccomp_version="$(get_from_kata_deps "externals.libseccomp.version")"
+	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
+
+	install_cached_component \
+		"${component}" \
+		"${jenkins}" \
+		"${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-image" \
+		"" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
 	info "Create image"
 	"${rootfs_builder}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}"
 }
 
 #Install guest initrd
 install_initrd() {
+	local initrd_type="${1:-"initrd"}"
+	local initrd_suffix="${2:-""}"
+	local jenkins="${jenkins_url}/job/kata-containers-main-rootfs-${initrd_type}-$(uname -m)/${cached_artifacts_path}"
+	local component="rootfs-${initrd_type}"
+
+	local osbuilder_last_commit="$(get_last_modification "${repo_root_dir}/tools/osbuilder")"
+	local guest_image_last_commit="$(get_last_modification "${repo_root_dir}/tools/packaging/guest-image")"
+	local agent_last_commit="$(get_last_modification "${repo_root_dir}/src/agent")"
+	local libs_last_commit="$(get_last_modification "${repo_root_dir}/src/libs")"
+	local gperf_version="$(get_from_kata_deps "externals.gperf.version")"
+	local libseccomp_version="$(get_from_kata_deps "externals.libseccomp.version")"
+	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
+
+	install_cached_component \
+		"${component}" \
+		"${jenkins}" \
+		"${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${initrd_type}" \
+		"" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
 	info "Create initrd"
-	"${rootfs_builder}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}"
+	"${rootfs_builder}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${initrd_suffix}"
+}
+
+#Install guest initrd for sev
+install_initrd_sev() {
+	install_initrd "initrd-sev" "sev"
+}
+
+#Install kernel component helper
+install_cached_kernel_tarball_component() {
+	local kernel_name=${1}
+
+	install_cached_tarball_component \
+		"${kernel_name}" \
+		"${jenkins_url}/job/kata-containers-main-${kernel_name}-$(uname -m)/${cached_artifacts_path}" \
+		"${kernel_version}-${kernel_kata_config_version}" \
+		"$(get_kernel_image_name)" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		|| return 1
+	
+	if [[ "${kernel_name}" != "kernel-sev" ]]; then
+		return 0
+	fi
+
+	# SEV specific code path
+	install_cached_tarball_component \
+		"${kernel_name}" \
+		"${jenkins_url}/job/kata-containers-main-${kernel_name}-$(uname -m)/${cached_artifacts_path}" \
+		"${kernel_version}-${kernel_kata_config_version}" \
+		"$(get_kernel_image_name)" \
+		"kata-static-kernel-sev-modules.tar.xz" \
+		"${workdir}/kata-static-kernel-sev-modules.tar.xz" \
+		|| return 1
+
+	mkdir -p "${module_dir}"
+	tar xvf "${workdir}/kata-static-kernel-sev-modules.tar.xz" -C  "${module_dir}" && return 0
+
+	return 1
+}
+
+install_cc_initrd() {
+	info "Create initrd"
+	"${rootfs_builder}" --imagetype=initrd --prefix="${cc_prefix}" --destdir="${destdir}"
+}
+
+#Install kernel asset
+install_kernel_helper() {
+	local kernel_version_yaml_path="${1}"
+	local kernel_name="${2}"
+	local extra_cmd=${3}
+
+	export kernel_version="$(get_from_kata_deps ${kernel_version_yaml_path})"
+	export kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
+	local module_dir=""
+
+	if [[ "${kernel_name}" == "kernel-sev" ]]; then
+		kernel_version="$(get_from_kata_deps assets.kernel.sev.version)"
+		default_patches_dir="${repo_root_dir}/tools/packaging/kernel/patches"
+		module_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/kernel-sev/builddir/kata-linux-${kernel_version#v}-${kernel_kata_config_version}/lib/modules/${kernel_version#v}"
+	fi
+
+	install_cached_kernel_tarball_component ${kernel_name} ${module_dir} && return 0
+
+	info "build ${kernel_name}"
+	info "Kernel version ${kernel_version}"
+	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -v "${kernel_version}" ${extra_cmd}
 }
 
 #Install kernel asset
 install_kernel() {
-	export kernel_version="$(yq r $versions_yaml assets.kernel.version)"
-	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -f -v "${kernel_version}"
+	install_kernel_helper \
+		"assets.kernel.version" \
+		"kernel" \
+		"-f"
 }
 
-#Install dragonball experimental kernel asset
-install_dragonball_experimental_kernel() {
-	info "build dragonball experimental kernel"
-	export kernel_version="$(yq r $versions_yaml assets.dragonball-kernel-experimental.version)"
-	info "kernel version ${kernel_version}"
-	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -e -t dragonball -v ${kernel_version}	
+install_kernel_dragonball_experimental() {
+	install_kernel_helper \
+		"assets.kernel-dragonball-experimental.version" \
+		"kernel-dragonball-experimental" \
+		"-e -t dragonball"
+}
+
+#Install GPU enabled kernel asset
+install_kernel_nvidia_gpu() {
+	local kernel_url="$(get_from_kata_deps assets.kernel.url)"
+
+	install_kernel_helper \
+		"assets.kernel.version" \
+		"kernel-nvidia-gpu" \
+		"-g nvidia -u ${kernel_url} -H deb"
+}
+
+#Install GPU and SNP enabled kernel asset
+install_kernel_nvidia_gpu_snp() {
+	local kernel_url="$(get_from_kata_deps assets.kernel.snp.url)"
+
+	install_kernel_helper \
+		"assets.kernel.snp.version" \
+		"kernel-nvidia-gpu-snp" \
+		"-x snp -g nvidia -u ${kernel_url} -H deb"
+}
+
+#Install GPU and TDX experimental enabled kernel asset
+install_kernel_nvidia_gpu_tdx_experimental() {
+	local kernel_url="$(get_from_kata_deps assets.kernel-tdx-experimental.url)"
+
+	install_kernel_helper \
+		"assets.kernel-tdx-experimental.version" \
+		"kernel-nvidia-gpu-tdx-experimental" \
+		"-x tdx -g nvidia -u ${kernel_url} -H deb"
 }
 
 #Install experimental kernel asset
-install_experimental_kernel() {
-	info "build experimental kernel"
-	export kernel_version="$(yq r $versions_yaml assets.kernel-experimental.tag)"
-	info "Kernel version ${kernel_version}"
-	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -f -b experimental -v ${kernel_version}
+install_kernel_experimental() {
+	install_kernel_helper \
+		"assets.kernel-experimental.version" \
+		"kernel-experimental" \
+		"-f -b experimental"
+}
+
+#Install experimental TDX kernel asset
+install_kernel_tdx_experimental() {
+	local kernel_url="$(get_from_kata_deps assets.kernel-tdx-experimental.url)"
+
+	install_kernel_helper \
+		"assets.kernel-tdx-experimental.version" \
+		"kernel-tdx-experimental" \
+		"-x tdx -u ${kernel_url}"
+}
+
+#Install sev kernel asset
+install_kernel_sev() {
+	info "build sev kernel"
+	local kernel_url="$(get_from_kata_deps assets.kernel.sev.url)"
+
+	install_kernel_helper \
+		"assets.kernel.sev.version" \
+		"kernel-sev" \
+		"-x sev -u ${kernel_url}"
+}
+
+install_qemu_helper() {
+	local qemu_repo_yaml_path="${1}"
+	local qemu_version_yaml_path="${2}"
+	local qemu_name="${3}"
+	local builder="${4}"
+	local qemu_tarball_name="${qemu_tarball_name:-kata-static-qemu.tar.gz}"
+
+	export qemu_repo="$(get_from_kata_deps ${qemu_repo_yaml_path})"
+	export qemu_version="$(get_from_kata_deps ${qemu_version_yaml_path})"
+
+	install_cached_tarball_component \
+		"${qemu_name}" \
+		"${jenkins_url}/job/kata-containers-main-${qemu_name}-$(uname -m)/${cached_artifacts_path}" \
+		"${qemu_version}-$(calc_qemu_files_sha256sum)" \
+		"$(get_qemu_image_name)" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
+	info "build static ${qemu_name}"
+	"${builder}"
+	tar xvf "${qemu_tarball_name}" -C "${destdir}"
 }
 
 # Install static qemu asset
 install_qemu() {
-	info "build static qemu"
-	export qemu_repo="$(yq r $versions_yaml assets.hypervisor.qemu.url)"
-	export qemu_version="$(yq r $versions_yaml assets.hypervisor.qemu.version)"
-	"${qemu_builder}"
-	tar xvf "${builddir}/kata-static-qemu.tar.gz" -C "${destdir}"
+	install_qemu_helper \
+		"assets.hypervisor.qemu.url" \
+		"assets.hypervisor.qemu.version" \
+		"qemu" \
+		"${qemu_builder}"
+}
+
+install_qemu_tdx_experimental() {
+	export qemu_suffix="tdx-experimental"
+	export qemu_tarball_name="kata-static-qemu-${qemu_suffix}.tar.gz"
+
+	install_qemu_helper \
+		"assets.hypervisor.qemu-${qemu_suffix}.url" \
+		"assets.hypervisor.qemu-${qemu_suffix}.tag" \
+		"qemu-${qemu_suffix}" \
+		"${qemu_experimental_builder}"
+}
+
+install_qemu_snp_experimental() {
+	export qemu_suffix="snp-experimental"
+	export qemu_tarball_name="kata-static-qemu-${qemu_suffix}.tar.gz"
+
+	install_qemu_helper \
+		"assets.hypervisor.qemu-${qemu_suffix}.url" \
+		"assets.hypervisor.qemu-${qemu_suffix}.tag" \
+		"qemu-${qemu_suffix}" \
+		"${qemu_experimental_builder}"
 }
 
 # Install static firecracker asset
 install_firecracker() {
+	local firecracker_version=$(get_from_kata_deps "assets.hypervisor.firecracker.version")
+
+	install_cached_tarball_component \
+		"firecracker" \
+		"${jenkins_url}/job/kata-containers-main-firecracker-$(uname -m)/${cached_artifacts_path}" \
+		"${firecracker_version}" \
+		"" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
 	info "build static firecracker"
 	"${firecracker_builder}"
 	info "Install static firecracker"
 	mkdir -p "${destdir}/opt/kata/bin/"
-	sudo install -D --owner root --group root --mode 0744 firecracker/firecracker-static "${destdir}/opt/kata/bin/firecracker"
-	sudo install -D --owner root --group root --mode 0744 firecracker/jailer-static "${destdir}/opt/kata/bin/jailer"
+	sudo install -D --owner root --group root --mode 0744 release-${firecracker_version}-${ARCH}/firecracker-${firecracker_version}-${ARCH} "${destdir}/opt/kata/bin/firecracker"
+	sudo install -D --owner root --group root --mode 0744 release-${firecracker_version}-${ARCH}/jailer-${firecracker_version}-${ARCH} "${destdir}/opt/kata/bin/jailer"
 }
 
 # Install static cloud-hypervisor asset
 install_clh() {
+	install_cached_component \
+		"cloud-hypervisor" \
+		"${jenkins_url}/job/kata-containers-main-clh-$(uname -m)/${cached_artifacts_path}" \
+		"$(get_from_kata_deps "assets.hypervisor.cloud_hypervisor.version")" \
+		"" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
 	if [[ "${ARCH}" == "x86_64" ]]; then
 		export features="tdx"
 	fi
@@ -595,6 +859,15 @@ install_clh() {
 
 # Install static virtiofsd asset
 install_virtiofsd() {
+	install_cached_component \
+		"virtiofsd" \
+		"${jenkins_url}/job/kata-containers-main-virtiofsd-$(uname -m)/${cached_artifacts_path}" \
+		"$(get_from_kata_deps "externals.virtiofsd.version")-$(get_from_kata_deps "externals.virtiofsd.toolchain")" \
+		"$(get_virtiofsd_image_name)" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
 	info "build static virtiofsd"
 	"${virtiofsd_builder}"
 	info "Install static virtiofsd"
@@ -604,6 +877,17 @@ install_virtiofsd() {
 
 # Install static nydus asset
 install_nydus() {
+	[ "${ARCH}" == "aarch64" ] && ARCH=arm64
+
+	install_cached_tarball_component \
+		"nydus" \
+		"${jenkins_url}/job/kata-containers-main-nydus-$(uname -m)/${cached_artifacts_path}" \
+		"$(get_from_kata_deps "externals.nydus.version")" \
+		"" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
 	info "build static nydus"
 	"${nydus_builder}"
 	info "Install static nydus"
@@ -615,11 +899,55 @@ install_nydus() {
 
 #Install all components that are not assets
 install_shimv2() {
-	GO_VERSION="$(yq r ${versions_yaml} languages.golang.meta.newest-version)"
-	RUST_VERSION="$(yq r ${versions_yaml} languages.rust.meta.newest-version)"
+	local shim_v2_last_commit="$(get_last_modification "${repo_root_dir}/src/runtime")"
+	local runtime_rs_last_commit="$(get_last_modification "${repo_root_dir}/src/runtime-rs")"
+	local protocols_last_commit="$(get_last_modification "${repo_root_dir}/src/libs/protocols")"
+	local GO_VERSION="$(get_from_kata_deps "languages.golang.meta.newest-version")"
+	local RUST_VERSION="$(get_from_kata_deps "languages.rust.meta.newest-version")"
+	local shim_v2_version="${shim_v2_last_commit}-${protocols_last_commit}-${runtime_rs_last_commit}-${GO_VERSION}-${RUST_VERSION}"
+
+	install_cached_component \
+		"shim-v2" \
+		"${jenkins_url}/job/kata-containers-main-shim-v2-$(uname -m)/${cached_artifacts_path}" \
+		"${shim_v2_version}" \
+		"$(get_shim_v2_image_name)" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
 	export GO_VERSION
 	export RUST_VERSION
 	DESTDIR="${destdir}" PREFIX="${prefix}" "${shimv2_builder}"
+}
+
+install_ovmf() {
+	ovmf_type="${1:-x86_64}"
+	tarball_name="${2:-edk2-x86_64.tar.gz}"
+
+	local component_name="ovmf"
+	local component_version="$(get_from_kata_deps "externals.ovmf.${ovmf_type}.version")"
+	[ "${ovmf_type}" == "tdx" ] && component_name="tdvf"
+	install_cached_tarball_component \
+		"${component_name}" \
+		"${jenkins_url}/job/kata-containers-main-ovmf-${ovmf_type}-$(uname -m)/${cached_artifacts_path}" \
+		"${component_version}" \
+		"$(get_ovmf_image_name)" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
+	DESTDIR="${destdir}" PREFIX="${prefix}" ovmf_build="${ovmf_type}" "${ovmf_builder}"
+	tar xvf "${builddir}/${tarball_name}" -C "${destdir}"
+}
+
+# Install TDVF
+install_tdvf() {
+	install_ovmf "tdx" "edk2-tdx.tar.gz"
+}
+
+# Install OVMF SEV
+install_ovmf_sev() {
+	install_ovmf "sev" "edk2-sev.tar.gz"
 }
 
 get_kata_version() {
@@ -643,10 +971,18 @@ handle_build() {
 		install_firecracker
 		install_image
 		install_initrd
+		install_initrd_sev
 		install_kernel
+		install_kernel_dragonball_experimental
+		install_kernel_tdx_experimental
 		install_nydus
+		install_ovmf
+		install_ovmf_sev
 		install_qemu
+		install_qemu_snp_experimental
+		install_qemu_tdx_experimental
 		install_shimv2
+		install_tdvf
 		install_virtiofsd
 		;;
 
@@ -666,9 +1002,15 @@ handle_build() {
 
 	cc-qemu) install_cc_qemu ;;
 
+	cc-snp-qemu) install_cc_snp_qemu ;;
+
 	cc-rootfs-image) install_cc_image ;;
 
+	cc-rootfs-initrd) install_cc_initrd ;;
+
 	cc-sev-rootfs-initrd) install_cc_sev_image ;;
+
+	cc-se-image) install_cc_se_image ;;
 
 	cc-tdx-rootfs-image) install_cc_tdx_image ;;
 
@@ -688,25 +1030,49 @@ handle_build() {
 
 	cc-sev-ovmf) install_cc_sev_ovmf ;;
 
+	cc-x86_64-ovmf) install_cc_x86_64_ovmf ;;
+
 	cloud-hypervisor) install_clh ;;
 
 	firecracker) install_firecracker ;;
 
 	kernel) install_kernel ;;
 
+	kernel-dragonball-experimental) install_kernel_dragonball_experimental ;;
+
+	kernel-experimental) install_kernel_experimental ;;
+
+	kernel-nvidia-gpu) install_kernel_nvidia_gpu ;;
+
+	kernel-nvidia-gpu-snp) install_kernel_nvidia_gpu_snp;;
+
+	kernel-nvidia-gpu-tdx-experimental) install_kernel_nvidia_gpu_tdx_experimental;;
+
+	kernel-tdx-experimental) install_kernel_tdx_experimental ;;
+
+	kernel-sev) install_kernel_sev ;;
+
 	nydus) install_nydus ;;
 
-	kernel-dragonball-experimental) install_dragonball_experimental_kernel;;
+	ovmf) install_ovmf ;;
 
-	kernel-experimental) install_experimental_kernel;;
+	ovmf-sev) install_ovmf_sev ;;
 
 	qemu) install_qemu ;;
+
+	qemu-snp-experimental) install_qemu_snp_experimental ;;
+
+	qemu-tdx-experimental) install_qemu_tdx_experimental ;;
 
 	rootfs-image) install_image ;;
 
 	rootfs-initrd) install_initrd ;;
 
+	rootfs-initrd-sev) install_initrd_sev ;;
+	
 	shim-v2) install_shimv2 ;;
+
+	tdvf) install_tdvf ;;
 
 	virtiofsd) install_virtiofsd ;;
 

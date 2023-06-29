@@ -9,6 +9,10 @@
 
 package katautils
 
+import (
+	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
+)
+
 // name is the name of the runtime
 var NAME = "@RUNTIME_NAME@"
 
@@ -96,10 +100,9 @@ const defaultDisableGuestSeLinux = true
 const defaultVfioMode = "guest-kernel"
 const defaultLegacySerial = false
 const defaultGuestPreAttestation = false
-const defaultGuestPreAttestationProxy string = ""
+const defaultGuestPreAttestationURI string = ""
+const defaultGuestPreAttestationMode string = ""
 const defaultGuestPreAttestationKeyset string = ""
-const defaultGuestPreAttestationSecretGuid string = ""
-const defaultGuestPreAttestationSecretType string = ""
 const defaultSEVCertChainPath string = ""
 const defaultSEVGuestPolicy uint32 = 0
 const defaultSNPGuestPolicy uint64 = 0x30000
@@ -111,3 +114,5 @@ const defaultVMCacheEndpoint string = "/var/run/kata-containers/cache.sock"
 
 // Default config file used by stateless systems.
 var defaultRuntimeConfiguration = "@CONFIG_PATH@"
+
+const defaultColdPlugVFIO = hv.NoPort

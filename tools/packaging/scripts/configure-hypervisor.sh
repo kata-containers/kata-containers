@@ -242,8 +242,10 @@ generate_qemu_options() {
 	# Disable graphical network access
 	qemu_options+=(size:--disable-vnc)
 	qemu_options+=(size:--disable-vnc-jpeg)
-	if ! gt_eq "${qemu_version}" "7.1.0" ; then
+	if ! gt_eq "${qemu_version}" "7.0.50" ; then
 		qemu_options+=(size:--disable-vnc-png)
+	else
+		qemu_options+=(size:--disable-png)
 	fi
 	qemu_options+=(size:--disable-vnc-sasl)
 
@@ -338,7 +340,7 @@ generate_qemu_options() {
 		qemu_options+=(functionality:--disable-virtiofsd)
 		;;
 	ppc64le)
-		qemu_options+=(functionality:--enable-virtiofsd)
+		qemu_options+=(functionality:--disable-virtiofsd)
 		;;
 	s390x)
 		qemu_options+=(functionality:--disable-virtiofsd)
@@ -358,7 +360,7 @@ generate_qemu_options() {
 	qemu_options+=(size:--disable-vde)
 
 	# Don't build other options which can't be depent on build server.
-	if ! gt_eq "${qemu_version}" "7.1.0" ; then
+	if ! gt_eq "${qemu_version}" "7.0.50" ; then
 		qemu_options+=(size:--disable-xfsctl)
 		qemu_options+=(size:--disable-libxml2)
 	fi

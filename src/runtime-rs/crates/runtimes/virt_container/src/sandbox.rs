@@ -8,19 +8,18 @@ use std::sync::Arc;
 
 use agent::{
     self, kata::KataAgent, types::KernelModule, Agent, GetIPTablesRequest, SetIPTablesRequest,
+    VolumeStatsRequest,
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use common::{
     message::{Action, Message},
-    Sandbox,
+    Sandbox, SandboxNetworkEnv,
 };
 use containerd_shim_protos::events::task::TaskOOM;
 use hypervisor::{dragonball::Dragonball, Hypervisor, HYPERVISOR_DRAGONBALL};
-use kata_types::config::{
-    default::{DEFAULT_AGENT_LOG_PORT, DEFAULT_AGENT_VSOCK_PORT},
-    TomlConfig,
-};
+use kata_sys_util::hooks::HookStates;
+use kata_types::config::TomlConfig;
 use resource::{
     manager::ManagerArgs,
     network::{NetworkConfig, NetworkWithNetNsConfig},
@@ -76,6 +75,8 @@ impl VirtSandbox {
         hypervisor: Arc<dyn Hypervisor>,
         resource_manager: Arc<ResourceManager>,
     ) -> Result<Self> {
+        let config = resource_manager.config().await;
+        let keep_abnormal = config.runtime.keep_abnormal;
         Ok(Self {
             sid: sid.to_string(),
             msg_sender: Arc::new(Mutex::new(msg_sender)),
@@ -83,45 +84,102 @@ impl VirtSandbox {
             agent,
             hypervisor,
             resource_manager,
-            monitor: Arc::new(HealthCheck::new(true, false)),
+            monitor: Arc::new(HealthCheck::new(true, keep_abnormal)),
         })
     }
 
-    async fn prepare_for_start_sandbox(
+    async fn prepare_config_for_sandbox(
         &self,
         _id: &str,
-        netns: Option<String>,
+        network_env: SandboxNetworkEnv,
     ) -> Result<Vec<ResourceConfig>> {
         let mut resource_configs = vec![];
-
-        let config = self.resource_manager.config().await;
-        if let Some(netns_path) = netns {
-            let network_config = ResourceConfig::Network(NetworkConfig::NetworkResourceWithNetNs(
-                NetworkWithNetNsConfig {
-                    network_model: config.runtime.internetworking_model.clone(),
-                    netns_path,
-                    queues: self
-                        .hypervisor
-                        .hypervisor_config()
-                        .await
-                        .network_info
-                        .network_queues as usize,
-                },
-            ));
-            resource_configs.push(network_config);
+        if !network_env.network_created {
+            if let Some(netns_path) = network_env.netns {
+                let network_config = ResourceConfig::Network(
+                    self.prepare_network_config(netns_path, network_env.network_created)
+                        .await,
+                );
+                resource_configs.push(network_config);
+            }
         }
-
         let hypervisor_config = self.hypervisor.hypervisor_config().await;
         let virtio_fs_config = ResourceConfig::ShareFs(hypervisor_config.shared_fs);
         resource_configs.push(virtio_fs_config);
 
         Ok(resource_configs)
     }
+
+    async fn execute_oci_hook_functions(
+        &self,
+        prestart_hooks: &[oci::Hook],
+        create_runtime_hooks: &[oci::Hook],
+        state: &oci::State,
+    ) -> Result<()> {
+        let mut st = state.clone();
+        // for dragonball, we use vmm_master_tid
+        let vmm_pid = self
+            .hypervisor
+            .get_vmm_master_tid()
+            .await
+            .context("get vmm master tid")?;
+        st.pid = vmm_pid as i32;
+
+        // Prestart Hooks [DEPRECATED in newest oci spec]:
+        // * should be run in runtime namespace
+        // * should be run after vm is started, but before container is created
+        //      if Prestart Hook and CreateRuntime Hook are both supported
+        // * spec details: https://github.com/opencontainers/runtime-spec/blob/c1662686cff159595277b79322d0272f5182941b/config.md#prestart
+        let mut prestart_hook_states = HookStates::new();
+        prestart_hook_states.execute_hooks(prestart_hooks, Some(st.clone()))?;
+
+        // CreateRuntime Hooks:
+        // * should be run in runtime namespace
+        // * should be run when creating the runtime
+        // * spec details: https://github.com/opencontainers/runtime-spec/blob/c1662686cff159595277b79322d0272f5182941b/config.md#createruntime-hooks
+        let mut create_runtime_hook_states = HookStates::new();
+        create_runtime_hook_states.execute_hooks(create_runtime_hooks, Some(st.clone()))?;
+
+        Ok(())
+    }
+
+    async fn prepare_network_config(
+        &self,
+        netns_path: String,
+        network_created: bool,
+    ) -> NetworkConfig {
+        let config = self.resource_manager.config().await;
+        NetworkConfig::NetworkResourceWithNetNs(NetworkWithNetNsConfig {
+            network_model: config.runtime.internetworking_model.clone(),
+            netns_path,
+            queues: self
+                .hypervisor
+                .hypervisor_config()
+                .await
+                .network_info
+                .network_queues as usize,
+            network_created,
+        })
+    }
+
+    fn has_prestart_hooks(
+        &self,
+        prestart_hooks: Vec<oci::Hook>,
+        create_runtime_hooks: Vec<oci::Hook>,
+    ) -> bool {
+        !prestart_hooks.is_empty() || !create_runtime_hooks.is_empty()
+    }
 }
 
 #[async_trait]
 impl Sandbox for VirtSandbox {
-    async fn start(&self, netns: Option<String>, dns: Vec<String>) -> Result<()> {
+    async fn start(
+        &self,
+        dns: Vec<String>,
+        spec: &oci::Spec,
+        state: &oci::State,
+        network_env: SandboxNetworkEnv,
+    ) -> Result<()> {
         let id = &self.sid;
 
         // if sandbox running, return
@@ -133,13 +191,15 @@ impl Sandbox for VirtSandbox {
         }
 
         self.hypervisor
-            .prepare_vm(id, netns.clone())
+            .prepare_vm(id, network_env.netns.clone())
             .await
             .context("prepare vm")?;
 
         // generate device and setup before start vm
         // should after hypervisor.prepare_vm
-        let resources = self.prepare_for_start_sandbox(id, netns).await?;
+        let resources = self
+            .prepare_config_for_sandbox(id, network_env.clone())
+            .await?;
         self.resource_manager
             .prepare_before_start_vm(resources)
             .await
@@ -148,6 +208,37 @@ impl Sandbox for VirtSandbox {
         // start vm
         self.hypervisor.start_vm(10_000).await.context("start vm")?;
         info!(sl!(), "start vm");
+
+        // execute pre-start hook functions, including Prestart Hooks and CreateRuntime Hooks
+        let (prestart_hooks, create_runtime_hooks) = match spec.hooks.as_ref() {
+            Some(hooks) => (hooks.prestart.clone(), hooks.create_runtime.clone()),
+            None => (Vec::new(), Vec::new()),
+        };
+        self.execute_oci_hook_functions(&prestart_hooks, &create_runtime_hooks, state)
+            .await?;
+
+        // 1. if there are pre-start hook functions, network config might have been changed.
+        //    We need to rescan the netns to handle the change.
+        // 2. Do not scan the netns if we want no network for the VM.
+        // TODO In case of vm factory, scan the netns to hotplug interfaces after the VM is started.
+        if self.has_prestart_hooks(prestart_hooks, create_runtime_hooks)
+            && !self
+                .resource_manager
+                .config()
+                .await
+                .runtime
+                .disable_new_netns
+        {
+            if let Some(netns_path) = network_env.netns {
+                let network_resource = self
+                    .prepare_network_config(netns_path, network_env.network_created)
+                    .await;
+                self.resource_manager
+                    .handle_network(network_resource)
+                    .await
+                    .context("set up device after start vm")?;
+            }
+        }
 
         // connect agent
         // set agent socket
@@ -167,7 +258,7 @@ impl Sandbox for VirtSandbox {
         let agent_config = self.agent.agent_config().await;
         let kernel_modules = KernelModule::set_kernel_modules(agent_config.kernel_modules)?;
         let req = agent::CreateSandboxRequest {
-            hostname: "".to_string(),
+            hostname: spec.hostname.clone(),
             dns,
             storages: self
                 .resource_manager
@@ -194,7 +285,7 @@ impl Sandbox for VirtSandbox {
         let agent = self.agent.clone();
         let sender = self.msg_sender.clone();
         info!(sl!(), "oom watcher start");
-        let _ = tokio::spawn(async move {
+        tokio::spawn(async move {
             loop {
                 match agent
                     .get_oom_event(agent::Empty::new())
@@ -240,17 +331,7 @@ impl Sandbox for VirtSandbox {
 
         self.stop().await.context("stop")?;
 
-        info!(sl!(), "delete cgroup");
-        self.resource_manager
-            .delete_cgroups()
-            .await
-            .context("delete cgroups")?;
-
-        info!(sl!(), "delete hypervisor");
-        self.hypervisor
-            .cleanup()
-            .await
-            .context("delete hypervisor")?;
+        self.cleanup().await.context("do the clean up")?;
 
         info!(sl!(), "stop monitor");
         self.monitor.stop().await;
@@ -267,15 +348,45 @@ impl Sandbox for VirtSandbox {
         Ok(())
     }
 
-    async fn cleanup(&self, _id: &str) -> Result<()> {
-        self.resource_manager.delete_cgroups().await?;
-        self.hypervisor.cleanup().await?;
+    async fn cleanup(&self) -> Result<()> {
+        info!(sl!(), "delete hypervisor");
+        self.hypervisor
+            .cleanup()
+            .await
+            .context("delete hypervisor")?;
+
+        info!(sl!(), "resource clean up");
+        self.resource_manager
+            .cleanup()
+            .await
+            .context("resource clean up")?;
+
         // TODO: cleanup other snadbox resource
         Ok(())
     }
 
     async fn agent_sock(&self) -> Result<String> {
         self.agent.agent_sock().await
+    }
+
+    async fn direct_volume_stats(&self, volume_guest_path: &str) -> Result<String> {
+        let req: agent::VolumeStatsRequest = VolumeStatsRequest {
+            volume_guest_path: volume_guest_path.to_string(),
+        };
+        let result = self
+            .agent
+            .get_volume_stats(req)
+            .await
+            .context("sandbox: failed to process direct volume stats query")?;
+        Ok(result.data)
+    }
+
+    async fn direct_volume_resize(&self, resize_req: agent::ResizeVolumeRequest) -> Result<()> {
+        self.agent
+            .resize_volume(resize_req)
+            .await
+            .context("sandbox: failed to resize direct-volume")?;
+        Ok(())
     }
 
     async fn set_iptables(&self, is_ipv6: bool, data: Vec<u8>) -> Result<Vec<u8>> {
@@ -329,20 +440,9 @@ impl Persist for VirtSandbox {
             HYPERVISOR_DRAGONBALL => Ok(Arc::new(Dragonball::restore((), h).await?)),
             _ => Err(anyhow!("Unsupported hypervisor {}", &h.hypervisor_type)),
         }?;
-        let agent = Arc::new(KataAgent::new(kata_types::config::Agent {
-            debug: true,
-            enable_tracing: false,
-            server_port: DEFAULT_AGENT_VSOCK_PORT,
-            log_port: DEFAULT_AGENT_LOG_PORT,
-            dial_timeout_ms: 10,
-            reconnect_timeout_ms: 3_000,
-            request_timeout_ms: 30_000,
-            health_check_request_timeout_ms: 90_000,
-            kernel_modules: Default::default(),
-            container_pipe_size: 0,
-            debug_console_enabled: false,
-        }));
+        let agent = Arc::new(KataAgent::new(kata_types::config::Agent::default()));
         let sid = sandbox_args.sid;
+        let keep_abnormal = config.runtime.keep_abnormal;
         let args = ManagerArgs {
             sid: sid.clone(),
             agent: agent.clone(),
@@ -357,7 +457,7 @@ impl Persist for VirtSandbox {
             agent,
             hypervisor,
             resource_manager,
-            monitor: Arc::new(HealthCheck::new(true, false)),
+            monitor: Arc::new(HealthCheck::new(true, keep_abnormal)),
         })
     }
 }

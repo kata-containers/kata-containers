@@ -231,7 +231,7 @@ where
                         info.config.check_conflicts(config)?;
                     }
                 }
-                self.info_list[index] = device_info;
+                self.info_list[index].config = config.clone();
                 index
             }
             None => {
@@ -276,6 +276,11 @@ where
     /// Mutable iterator for configuration information objects.
     pub fn iter_mut(&mut self) -> std::slice::IterMut<DeviceConfigInfo<T>> {
         self.info_list.iter_mut()
+    }
+
+    /// Remove the last device config info from the `info_list`.
+    pub fn pop(&mut self) -> Option<DeviceConfigInfo<T>> {
+        self.info_list.pop()
     }
 
     fn get_index_by_id(&self, config: &T) -> Option<usize> {

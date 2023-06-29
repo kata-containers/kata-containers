@@ -9,6 +9,8 @@
 
 //! Error codes for the virtual machine monitor subsystem.
 
+#[cfg(target_arch = "aarch64")]
+use dbs_arch::pmu::PmuError;
 #[cfg(feature = "dbs-virtio-devices")]
 use dbs_virtio_devices::Error as VirtIoError;
 
@@ -60,6 +62,11 @@ pub enum Error {
     #[cfg(target_arch = "x86_64")]
     #[error("failed to write MP table to guest memory: {0}")]
     MpTableSetup(#[source] dbs_boot::mptable::Error),
+
+    /// Create pmu device error
+    #[cfg(target_arch = "aarch64")]
+    #[error("Create pmu device error: {0}")]
+    PmuDeviceError(#[source] PmuError),
 
     /// Fail to boot system
     #[error("failed to boot system: {0}")]

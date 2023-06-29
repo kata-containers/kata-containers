@@ -7,7 +7,7 @@
 use agent::Storage;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use kata_sys_util::mount::{bind_remount, umount_timeout};
+use kata_sys_util::mount::{bind_remount, umount_all, umount_timeout};
 use kata_types::k8s::is_watchable_mount;
 use kata_types::mount;
 use nix::sys::stat::stat;
@@ -20,7 +20,8 @@ const WATCHABLE_BIND_DEV_TYPE: &str = "watchable-bind";
 pub const EPHEMERAL_PATH: &str = "/run/kata-containers/sandbox/ephemeral";
 
 use super::{
-    utils::{self, do_get_host_path},
+    get_host_rw_shared_path,
+    utils::{self, do_get_host_path, get_host_ro_shared_path, get_host_shared_path},
     ShareFsMount, ShareFsMountResult, ShareFsRootfsConfig, ShareFsVolumeConfig,
     KATA_GUEST_SHARE_DIR, PASSTHROUGH_FS_DIR,
 };
@@ -222,6 +223,20 @@ impl ShareFsMount for VirtiofsShareMount {
             }
         }
 
+        Ok(())
+    }
+
+    async fn cleanup(&self, sid: &str) -> Result<()> {
+        // Unmount ro path
+        let host_ro_dest = get_host_ro_shared_path(sid);
+        umount_all(host_ro_dest.clone(), true).context("failed to umount ro path")?;
+        fs::remove_dir_all(host_ro_dest).context("failed to remove ro path")?;
+        // As the rootfs and volume have been umounted before calling this function, so just remove the rw dir directly
+        let host_rw_dest = get_host_rw_shared_path(sid);
+        fs::remove_dir_all(host_rw_dest).context("failed to remove rw path")?;
+        // remove the host share directory
+        let host_path = get_host_shared_path(sid);
+        fs::remove_dir_all(host_path).context("failed to remove host shared path")?;
         Ok(())
     }
 }

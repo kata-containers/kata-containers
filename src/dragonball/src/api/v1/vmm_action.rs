@@ -7,8 +7,8 @@
 // found in the THIRD-PARTY file.
 
 use std::fs::File;
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 
+use crossbeam_channel::{Receiver, Sender, TryRecvError};
 use log::{debug, error, info, warn};
 
 use crate::error::{Result, StartMicroVmError, StopMicrovmError};
@@ -486,7 +486,9 @@ impl VmmService {
                 VmmActionError::Block(BlockDeviceError::UpdateNotAllowedPostBoot)
             })?;
 
-        BlockDeviceMgr::insert_device(vm.device_manager_mut(), ctx, config)
+        vm.device_manager_mut()
+            .block_manager
+            .insert_device(ctx, config)
             .map(|_| VmmData::Empty)
             .map_err(VmmActionError::Block)
     }
@@ -500,7 +502,9 @@ impl VmmService {
     ) -> VmmRequestResult {
         let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
 
-        BlockDeviceMgr::update_device_ratelimiters(vm.device_manager_mut(), config)
+        vm.device_manager_mut()
+            .block_manager
+            .update_device_ratelimiters(config)
             .map(|_| VmmData::Empty)
             .map_err(VmmActionError::Block)
     }
@@ -518,7 +522,9 @@ impl VmmService {
             .create_device_op_context(Some(event_mgr.epoll_manager()))
             .map_err(|_| VmmActionError::Block(BlockDeviceError::UpdateNotAllowedPostBoot))?;
 
-        BlockDeviceMgr::remove_device(vm.device_manager_mut(), ctx, drive_id)
+        vm.device_manager_mut()
+            .block_manager
+            .remove_device(ctx, drive_id)
             .map(|_| VmmData::Empty)
             .map_err(VmmActionError::Block)
     }
@@ -543,7 +549,9 @@ impl VmmService {
                 }
             })?;
 
-        VirtioNetDeviceMgr::insert_device(vm.device_manager_mut(), ctx, config)
+        vm.device_manager_mut()
+            .virtio_net_manager
+            .insert_device(ctx, config)
             .map(|_| VmmData::Empty)
             .map_err(VmmActionError::VirtioNet)
     }
@@ -556,7 +564,9 @@ impl VmmService {
     ) -> VmmRequestResult {
         let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
 
-        VirtioNetDeviceMgr::update_device_ratelimiters(vm.device_manager_mut(), config)
+        vm.device_manager_mut()
+            .virtio_net_manager
+            .update_device_ratelimiters(config)
             .map(|_| VmmData::Empty)
             .map_err(VmmActionError::VirtioNet)
     }
@@ -676,9 +686,9 @@ fn handle_cpu_topology(
 
 #[cfg(test)]
 mod tests {
-    use std::sync::mpsc::channel;
     use std::sync::{Arc, Mutex};
 
+    use crossbeam_channel::unbounded;
     use dbs_utils::epoll_manager::EpollManager;
     use test_utils::skip_if_not_root;
     use vmm_sys_util::tempfile::TempFile;
@@ -702,8 +712,8 @@ mod tests {
         }
 
         fn check_request(&mut self) {
-            let (to_vmm, from_api) = channel();
-            let (to_api, from_vmm) = channel();
+            let (to_vmm, from_api) = unbounded();
+            let (to_api, from_vmm) = unbounded();
 
             let epoll_mgr = EpollManager::default();
             let vmm = Arc::new(Mutex::new(create_vmm_instance(epoll_mgr.clone())));
@@ -728,8 +738,8 @@ mod tests {
     fn test_vmm_action_receive_unknown() {
         skip_if_not_root!();
 
-        let (_to_vmm, from_api) = channel();
-        let (to_api, _from_vmm) = channel();
+        let (_to_vmm, from_api) = unbounded();
+        let (to_api, _from_vmm) = unbounded();
         let epoll_mgr = EpollManager::default();
         let vmm = Arc::new(Mutex::new(create_vmm_instance(epoll_mgr.clone())));
         let mut vservice = VmmService::new(from_api, to_api);
@@ -742,8 +752,8 @@ mod tests {
     #[should_panic]
     #[test]
     fn test_vmm_action_disconnected() {
-        let (to_vmm, from_api) = channel();
-        let (to_api, _from_vmm) = channel();
+        let (to_vmm, from_api) = unbounded();
+        let (to_api, _from_vmm) = unbounded();
         let epoll_mgr = EpollManager::default();
         let vmm = Arc::new(Mutex::new(create_vmm_instance(epoll_mgr.clone())));
         let mut vservice = VmmService::new(from_api, to_api);

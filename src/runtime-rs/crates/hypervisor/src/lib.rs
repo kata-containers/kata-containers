@@ -11,7 +11,8 @@ logging::logger_with_subsystem!(sl, "hypervisor");
 
 pub mod device;
 pub mod hypervisor_persist;
-pub use device::*;
+pub use device::driver::*;
+use device::DeviceType;
 pub mod dragonball;
 mod kernel_param;
 pub mod qemu;
@@ -31,8 +32,9 @@ use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 pub use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
 
 // Config which driver to use as vm root dev
-const VM_ROOTFS_DRIVER_BLK: &str = "virtio-blk";
+const VM_ROOTFS_DRIVER_BLK: &str = "virtio-blk-pci";
 const VM_ROOTFS_DRIVER_PMEM: &str = "virtio-pmem";
+const VM_ROOTFS_DRIVER_MMIO: &str = "virtio-blk-mmio";
 
 //Configure the root corresponding to the driver
 const VM_ROOTFS_ROOT_BLK: &str = "/dev/vda1";
@@ -78,8 +80,8 @@ pub trait Hypervisor: Send + Sync {
     async fn resume_vm(&self) -> Result<()>;
 
     // device manager
-    async fn add_device(&self, device: device::Device) -> Result<()>;
-    async fn remove_device(&self, device: device::Device) -> Result<()>;
+    async fn add_device(&self, device: DeviceType) -> Result<()>;
+    async fn remove_device(&self, device: DeviceType) -> Result<()>;
 
     // utils
     async fn get_agent_socket(&self) -> Result<String>;
@@ -87,6 +89,8 @@ pub trait Hypervisor: Send + Sync {
     async fn hypervisor_config(&self) -> HypervisorConfig;
     async fn get_thread_ids(&self) -> Result<VcpuThreadIds>;
     async fn get_pids(&self) -> Result<Vec<u32>>;
+    async fn get_vmm_master_tid(&self) -> Result<u32>;
+    async fn get_ns_path(&self) -> Result<String>;
     async fn cleanup(&self) -> Result<()>;
     async fn check(&self) -> Result<()>;
     async fn get_jailer_root(&self) -> Result<String>;

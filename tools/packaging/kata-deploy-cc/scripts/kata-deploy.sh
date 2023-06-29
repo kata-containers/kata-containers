@@ -8,15 +8,20 @@ set -o errexit
 set -o pipefail
 set -o nounset
 
+crio_drop_in_conf_dir="/etc/crio/crio.conf.d/"
+crio_drop_in_conf_file="${crio_drop_in_conf_dir}/99-kata-deploy"
 containerd_conf_file="/etc/containerd/config.toml"
 containerd_conf_file_backup="${containerd_conf_file}.bak"
 
 shims=(
-	"qemu"
-	"qemu-tdx"
-	"qemu-sev"
-	"clh"
-	"clh-tdx"
+        "remote"
+        "qemu"
+        "qemu-tdx"
+        "qemu-sev"
+        "qemu-se"
+        "qemu-snp"
+        "clh"
+        "clh-tdx"
 )
 
 default_shim="qemu"
@@ -59,16 +64,30 @@ function install_artifacts() {
 	chmod +x /opt/confidential-containers/bin/*
 }
 
+function wait_till_node_is_ready() {
+	local ready="False"
+
+	while ! [[ "${ready}" == "True" ]]; do
+		sleep 2s
+		ready=$(kubectl get node $NODE_NAME -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+	done
+}
+
 function configure_cri_runtime() {
 	configure_different_shims_base
 
 	case $1 in
+	crio)
+		configure_crio
+		;;
 	containerd | k3s | k3s-agent | rke2-agent | rke2-server)
 		configure_containerd
 		;;
 	esac
 	systemctl daemon-reload
 	systemctl restart "$1"
+
+	wait_till_node_is_ready
 }
 
 function backup_shim() {
@@ -138,6 +157,47 @@ function cleanup_different_shims_base() {
 	restore_shim "${default_shim_file}"
 }
 
+function configure_crio_runtime() {
+	local runtime="kata"
+	local configuration="configuration"
+	if [ -n "${1-}" ]; then
+		runtime+="-$1"
+		configuration+="-$1"
+	fi
+
+	local kata_path="/usr/local/bin/containerd-shim-${runtime}-v2"
+	local kata_conf="crio.runtime.runtimes.${runtime}"
+	local kata_config_path="/opt/confidential-containers/share/defaults/kata-containers/$configuration.toml"
+
+	cat <<EOF | tee -a "$crio_drop_in_conf_file"
+
+[$kata_conf]
+	runtime_path = "${kata_path}"
+	runtime_type = "vm"
+	runtime_root = "/run/vc"
+	runtime_config_path = "${kata_config_path}"
+	privileged_without_host_devices = true
+EOF
+}
+
+function configure_crio() {
+        # Configure crio to use Kata:
+        echo "Add Kata Containers as a supported runtime for CRIO:"
+
+        # As we don't touch the original configuration file in any way,
+        # let's just ensure we remove any exist configuration from a
+        # previous deployment.
+        mkdir -p "$crio_drop_in_conf_dir"
+        rm -f "$crio_drop_in_conf_file"
+        touch "$crio_drop_in_conf_file"
+
+        configure_crio_runtime
+
+        for shim in "${shims[@]}"; do
+                configure_crio_runtime $shim
+        done
+}
+
 function configure_containerd_runtime() {
 	local runtime="kata"
 	local configuration="configuration"
@@ -151,6 +211,10 @@ function configure_containerd_runtime() {
 	fi
 	local runtime_table="plugins.${pluginid}.containerd.runtimes.$runtime"
 	local runtime_type="io.containerd.$runtime.v2"
+	local cri_handler_value=""
+        if echo "${runtime_type}" | grep -q -v -e "kata-remote\.v2" -e "kata\.v2"; then
+                cri_handler_value="cc"
+	fi
 	local options_table="$runtime_table.options"
 	local config_path="/opt/confidential-containers/share/defaults/kata-containers/$configuration.toml"
 	if grep -q "\[$runtime_table\]" $containerd_conf_file; then
@@ -159,7 +223,7 @@ function configure_containerd_runtime() {
 	else
 		cat <<EOF | tee -a "$containerd_conf_file"
 [$runtime_table]
-  cri_handler = "cc"
+  cri_handler = "${cri_handler_value}"
   runtime_type = "${runtime_type}"
   privileged_without_host_devices = true
   pod_annotations = ["io.katacontainers.*"]
@@ -206,21 +270,34 @@ function remove_artifacts() {
 		/opt/confidential-containers/bin/kata-runtime \
 		/opt/confidential-containers/bin/kata-collect-data.sh \
 		/opt/confidential-containers/bin/qemu-system-x86_64 \
+		/opt/confidential-containers/bin/qemu-system-x86_64-snp \
 		/opt/confidential-containers/bin/qemu-system-x86_64-tdx \
+		/opt/confidential-containers/bin/qemu-system-s390x \
 		/opt/confidential-containers/bin/cloud-hypervisor \
 		/opt/confidential-containers/runtime-rs
 
-	# Try to remove the /opt/confidential-containers directory.
-	# If it's not empty, don't bother force removing it, as the
-	# pre-install script also drops files here.
-	rmdir --ignore-fail-on-non-empty -p /opt/confidential-containers/bin
+        # Try to remove the /opt/confidential-containers directory.
+        # If it's not empty, don't bother force removing it, as the
+        # pre-install script also drops files here.
+        rmdir --ignore-fail-on-non-empty -p /opt/confidential-containers/bin
 }
 
 function cleanup_cri_runtime() {
 	cleanup_different_shims_base
 
-	cleanup_containerd
+	case $1 in
+	crio)
+		cleanup_crio
+		;;
+	containerd | k3s | k3s-agent | rke2-agent | rke2-server)
+		cleanup_containerd
+		;;
+	esac
 
+}
+
+function cleanup_crio() {
+	rm $crio_drop_in_conf_file
 }
 
 function cleanup_containerd() {
@@ -234,7 +311,11 @@ function reset_runtime() {
 	kubectl label node "$NODE_NAME" katacontainers.io/kata-runtime-
 	systemctl daemon-reload
 	systemctl restart "$1"
-	systemctl restart kubelet
+	if [ "$1" == "crio" ] || [ "$1" == "containerd" ]; then
+		systemctl restart kubelet
+	fi
+
+	wait_till_node_is_ready
 }
 
 function main() {
@@ -245,13 +326,24 @@ function main() {
 	fi
 
 	runtime=$(get_container_runtime)
-	if [ "$runtime" != "containerd" ]; then
-		die "$runtime is not supported for now"
-	fi
 
-	if [ ! -f "$containerd_conf_file" ] && [ -d $(dirname "$containerd_conf_file") ] && \
-		[ -x $(command -v containerd) ]; then
-		containerd config default > "$containerd_conf_file"
+	# CRI-O isn't consistent with the naming -- let's use crio to match the service file
+	if [ "$runtime" == "cri-o" ]; then
+		runtime="crio"
+	elif [ "$runtime" == "k3s" ] || [ "$runtime" == "k3s-agent" ] || [ "$runtime" == "rke2-agent" ] || [ "$runtime" == "rke2-server" ]; then
+		containerd_conf_tmpl_file="${containerd_conf_file}.tmpl"
+		if [ ! -f "$containerd_conf_tmpl_file" ]; then
+			cp "$containerd_conf_file" "$containerd_conf_tmpl_file"
+		fi
+
+		containerd_conf_file="${containerd_conf_tmpl_file}"
+		containerd_conf_file_backup="${containerd_conf_file}.bak"
+	else
+		# runtime == containerd
+		if [ ! -f "$containerd_conf_file" ] && [ -d $(dirname "$containerd_conf_file") ] && \
+			[ -x $(command -v containerd) ]; then
+			containerd config default > "$containerd_conf_file"
+		fi
 	fi
 
 	action=${1:-}
@@ -260,25 +352,29 @@ function main() {
 		die "invalid arguments"
 	fi
 
-	case "$action" in
-	install)
-		install_artifacts
-		configure_cri_runtime "$runtime"
-		kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=true
-		;;
-	cleanup)
-		cleanup_cri_runtime "$runtime"
-		kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=cleanup
-		remove_artifacts
-		;;
-	reset)
-		reset_runtime $runtime
-		;;
-	*)
-		echo invalid arguments
-		print_usage
-		;;
-	esac
+	# only install / remove / update if we are dealing with CRIO or containerd
+	if [[ "$runtime" =~ ^(crio|containerd|k3s|k3s-agent|rke2-agent|rke2-server)$ ]]; then
+
+		case "$action" in
+		install)
+			install_artifacts
+			configure_cri_runtime "$runtime"
+			kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=true
+			;;
+		cleanup)
+			cleanup_cri_runtime "$runtime"
+			kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=cleanup
+			remove_artifacts
+			;;
+		reset)
+			reset_runtime $runtime
+			;;
+		*)
+			echo invalid arguments
+			print_usage
+			;;
+		esac
+	fi
 
 	#It is assumed this script will be called as a daemonset. As a result, do
         # not return, otherwise the daemon will restart and rexecute the script

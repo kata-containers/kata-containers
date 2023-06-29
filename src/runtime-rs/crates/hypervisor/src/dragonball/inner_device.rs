@@ -15,7 +15,7 @@ use dragonball::api::v1::{
 
 use super::DragonballInner;
 use crate::{
-    device::Device, HybridVsockConfig, NetworkConfig, ShareFsDeviceConfig, ShareFsMountConfig,
+    device::DeviceType, HybridVsockConfig, NetworkConfig, ShareFsDeviceConfig, ShareFsMountConfig,
     ShareFsMountType, ShareFsOperation, VmmState,
 };
 
@@ -31,7 +31,7 @@ pub(crate) fn drive_index_to_id(index: u64) -> String {
 }
 
 impl DragonballInner {
-    pub(crate) async fn add_device(&mut self, device: Device) -> Result<()> {
+    pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<()> {
         if self.state == VmmState::NotReady {
             info!(sl!(), "VMM not ready, queueing device {}", device);
 
@@ -44,41 +44,43 @@ impl DragonballInner {
 
         info!(sl!(), "dragonball add device {:?}", &device);
         match device {
-            Device::Network(config) => self.add_net_device(&config).context("add net device"),
-            Device::Vfio(_config) => {
+            DeviceType::Network(network) => self
+                .add_net_device(&network.config, network.id)
+                .context("add net device"),
+            DeviceType::Vfio(_) => {
                 todo!()
             }
-            Device::Block(config) => self
+            DeviceType::Block(block) => self
                 .add_block_device(
-                    config.path_on_host.as_str(),
-                    config.id.as_str(),
-                    config.is_readonly,
-                    config.no_drop,
+                    block.config.path_on_host.as_str(),
+                    block.device_id.as_str(),
+                    block.config.is_readonly,
+                    block.config.no_drop,
                 )
                 .context("add block device"),
-            Device::HybridVsock(config) => self.add_hvsock(&config).context("add vsock"),
-            Device::ShareFsDevice(config) => self
-                .add_share_fs_device(&config)
+            DeviceType::HybridVsock(hvsock) => self.add_hvsock(&hvsock.config).context("add vsock"),
+            DeviceType::ShareFs(sharefs) => self
+                .add_share_fs_device(&sharefs.config)
                 .context("add share fs device"),
-            Device::ShareFsMount(config) => self
-                .add_share_fs_mount(&config)
+            DeviceType::ShareFsMount(sharefs_mount) => self
+                .add_share_fs_mount(&sharefs_mount.config)
                 .context("add share fs mount"),
-            Device::Vsock(_) => {
+            DeviceType::Vsock(_) => {
                 todo!()
             }
         }
     }
 
-    pub(crate) async fn remove_device(&mut self, device: Device) -> Result<()> {
+    pub(crate) async fn remove_device(&mut self, device: DeviceType) -> Result<()> {
         info!(sl!(), "remove device {} ", device);
 
         match device {
-            Device::Block(config) => {
-                let drive_id = drive_index_to_id(config.index);
+            DeviceType::Block(block) => {
+                let drive_id = drive_index_to_id(block.config.index);
                 self.remove_block_drive(drive_id.as_str())
                     .context("remove block drive")
             }
-            Device::Vfio(_config) => {
+            DeviceType::Vfio(_config) => {
                 todo!()
             }
             _ => Err(anyhow!("unsupported device {:?}", device)),
@@ -121,9 +123,9 @@ impl DragonballInner {
         Ok(())
     }
 
-    fn add_net_device(&mut self, config: &NetworkConfig) -> Result<()> {
+    fn add_net_device(&mut self, config: &NetworkConfig, device_id: String) -> Result<()> {
         let iface_cfg = VirtioNetDeviceConfigInfo {
-            iface_id: config.id.clone(),
+            iface_id: device_id,
             host_dev_name: config.host_dev_name.clone(),
             guest_mac: match &config.guest_mac {
                 Some(mac) => MacAddr::from_bytes(&mac.0).ok(),
@@ -188,6 +190,9 @@ impl DragonballInner {
             let args: Vec<&str> = opt_list.split(',').collect();
             for arg in args {
                 match arg {
+                    "cache=none" => fs_cfg.cache_policy = String::from("none"),
+                    "cache=auto" => fs_cfg.cache_policy = String::from("auto"),
+                    "cache=always" => fs_cfg.cache_policy = String::from("always"),
                     "no_open" => fs_cfg.no_open = true,
                     "open" => fs_cfg.no_open = false,
                     "writeback_cache" => fs_cfg.writeback_cache = true,

@@ -7,12 +7,17 @@
 // This defines the handlers corresponding to the url when a request is sent to destined url,
 // the handler function should be invoked, and the corresponding data will be in the response
 
-use anyhow::{anyhow, Result};
+use agent::ResizeVolumeRequest;
+use anyhow::{anyhow, Context, Result};
 use common::Sandbox;
 use hyper::{Body, Method, Request, Response, StatusCode};
 use std::sync::Arc;
+use url::Url;
 
-use shim_interface::shim_mgmt::{AGENT_URL, IP6_TABLE_URL, IP_TABLE_URL};
+use shim_interface::shim_mgmt::{
+    AGENT_URL, DIRECT_VOLUME_PATH_KEY, DIRECT_VOLUME_RESIZE_URL, DIRECT_VOLUME_STATS_URL,
+    IP6_TABLE_URL, IP_TABLE_URL,
+};
 
 // main router for response, this works as a multiplexer on
 // http arrival which invokes the corresponding handler function
@@ -33,6 +38,10 @@ pub(crate) async fn handler_mux(
         }
         (&Method::PUT, IP6_TABLE_URL) | (&Method::GET, IP6_TABLE_URL) => {
             ipv6_table_handler(sandbox, req).await
+        }
+        (&Method::POST, DIRECT_VOLUME_STATS_URL) => direct_volume_stats_handler(sandbox, req).await,
+        (&Method::POST, DIRECT_VOLUME_RESIZE_URL) => {
+            direct_volume_resize_handler(sandbox, req).await
         }
         _ => Ok(not_found(req).await),
     }
@@ -99,5 +108,41 @@ async fn generic_ip_table_handler(
         }
 
         _ => Err(anyhow!("IP Tables only takes PUT and GET")),
+    }
+}
+
+async fn direct_volume_stats_handler(
+    sandbox: Arc<dyn Sandbox>,
+    req: Request<Body>,
+) -> Result<Response<Body>> {
+    let params = Url::parse(&req.uri().to_string())
+        .map_err(|e| anyhow!(e))?
+        .query_pairs()
+        .into_owned()
+        .collect::<std::collections::HashMap<String, String>>();
+    let volume_path = params
+        .get(DIRECT_VOLUME_PATH_KEY)
+        .context("shim-mgmt: volume path key not found in request params")?;
+    let result = sandbox.direct_volume_stats(volume_path).await;
+    match result {
+        Ok(stats) => Ok(Response::new(Body::from(stats))),
+        _ => Err(anyhow!("handler: Failed to get volume stats")),
+    }
+}
+
+async fn direct_volume_resize_handler(
+    sandbox: Arc<dyn Sandbox>,
+    req: Request<Body>,
+) -> Result<Response<Body>> {
+    let body = hyper::body::to_bytes(req.into_body()).await?;
+
+    // unserialize json body into resizeRequest struct
+    let resize_req: ResizeVolumeRequest =
+        serde_json::from_slice(&body).context("shim-mgmt: deserialize resizeRequest failed")?;
+    let result = sandbox.direct_volume_resize(resize_req).await;
+
+    match result {
+        Ok(_) => Ok(Response::new(Body::from(""))),
+        _ => Err(anyhow!("handler: Failed to resize volume")),
     }
 }

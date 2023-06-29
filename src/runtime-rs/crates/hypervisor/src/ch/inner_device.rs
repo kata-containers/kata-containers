@@ -5,12 +5,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::inner::CloudHypervisorInner;
-use crate::device::{Device, ShareFsDeviceConfig};
+use crate::device::DeviceType;
 use crate::HybridVsockConfig;
+use crate::ShareFsDeviceConfig;
 use crate::VmmState;
 use anyhow::{anyhow, Context, Result};
 use ch_config::ch_api::cloud_hypervisor_vm_fs_add;
-use ch_config::{FsConfig, PmemConfig};
+use ch_config::FsConfig;
 use safe_path::scoped_join;
 use std::convert::TryFrom;
 use std::path::PathBuf;
@@ -18,9 +19,9 @@ use std::path::PathBuf;
 const VIRTIO_FS: &str = "virtio-fs";
 
 impl CloudHypervisorInner {
-    pub(crate) async fn add_device(&mut self, device: Device) -> Result<()> {
+    pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<()> {
         if self.state != VmmState::VmRunning {
-            let mut devices: Vec<Device> = if let Some(devices) = self.pending_devices.take() {
+            let mut devices: Vec<DeviceType> = if let Some(devices) = self.pending_devices.take() {
                 devices
             } else {
                 vec![]
@@ -38,11 +39,11 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
-    async fn handle_add_device(&mut self, device: Device) -> Result<()> {
+    async fn handle_add_device(&mut self, device: DeviceType) -> Result<()> {
         match device {
-            Device::ShareFsDevice(cfg) => self.handle_share_fs_device(cfg).await,
-            Device::HybridVsock(cfg) => self.handle_hvsock_device(&cfg).await,
-            _ => return Err(anyhow!("unhandled device: {:?}", device)),
+            DeviceType::ShareFs(sharefs) => self.handle_share_fs_device(sharefs.config).await,
+            DeviceType::HybridVsock(hvsock) => self.handle_hvsock_device(&hvsock.config).await,
+            _ => Err(anyhow!("unhandled device: {:?}", device)),
         }
     }
 
@@ -66,7 +67,7 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
-    pub(crate) async fn remove_device(&mut self, _device: Device) -> Result<()> {
+    pub(crate) async fn remove_device(&mut self, _device: DeviceType) -> Result<()> {
         Ok(())
     }
 
@@ -132,8 +133,8 @@ impl CloudHypervisorInner {
         if let Some(devices) = pending_root_devices {
             for dev in devices {
                 match dev {
-                    Device::ShareFsDevice(dev) => {
-                        let settings = ShareFsSettings::new(dev, self.vm_path.clone());
+                    DeviceType::ShareFs(dev) => {
+                        let settings = ShareFsSettings::new(dev.config, self.vm_path.clone());
 
                         let fs_cfg = FsConfig::try_from(settings)?;
 
@@ -147,41 +148,6 @@ impl CloudHypervisorInner {
         } else {
             Ok(None)
         }
-    }
-
-    pub(crate) async fn get_boot_file(&mut self) -> Result<PathBuf> {
-        if let Some(ref config) = self.config {
-            let boot_info = &config.boot_info;
-
-            let file = if !boot_info.initrd.is_empty() {
-                boot_info.initrd.clone()
-            } else if !boot_info.image.is_empty() {
-                boot_info.image.clone()
-            } else {
-                return Err(anyhow!("missing boot file (no image or initrd)"));
-            };
-
-            Ok(PathBuf::from(file))
-        } else {
-            Err(anyhow!("no hypervisor config"))
-        }
-    }
-
-    pub(crate) async fn get_pmem_devices(&mut self) -> Result<Option<Vec<PmemConfig>>> {
-        let file = self.get_boot_file().await?;
-
-        let pmem_cfg = PmemConfig {
-            file,
-            size: None,
-            iommu: false,
-            discard_writes: true,
-            id: None,
-            pci_segment: 0,
-        };
-
-        let pmem_devices = vec![pmem_cfg];
-
-        Ok(Some(pmem_devices))
     }
 }
 

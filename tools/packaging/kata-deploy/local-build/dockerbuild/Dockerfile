@@ -45,6 +45,7 @@ RUN apt-get update && \
   unzip \
   wget \
   xz-utils && \
+  if uname -m | grep -Eq 's390x'; then apt-get install -y s390-tools; fi && \
   apt-get clean && rm -rf /var/lib/apt/lists
 
 ENV USER ${IMG_USER}

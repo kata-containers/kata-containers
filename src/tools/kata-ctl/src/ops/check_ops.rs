@@ -73,15 +73,21 @@ pub fn handle_check(checkcmd: CheckArgument) -> Result<()> {
     match command {
         CheckSubCommand::All => {
             // run architecture-specific tests
-            handle_builtin_check(CheckType::CheckCpu, "")?;
+            handle_builtin_check(CheckType::Cpu, "")?;
 
             // run code that uses network checks
             check::run_network_checks()?;
+
+            // run kernel module checks
+            handle_builtin_check(CheckType::KernelModules, "")?;
+
+            // run kvm checks
+            handle_builtin_check(CheckType::KvmIsUsable, "")?;
         }
 
         CheckSubCommand::NoNetworkChecks => {
             // run architecture-specific tests
-            handle_builtin_check(CheckType::CheckCpu, "")?;
+            handle_builtin_check(CheckType::Cpu, "")?;
         }
 
         CheckSubCommand::CheckVersionOnly => {
@@ -101,14 +107,6 @@ pub fn handle_check(checkcmd: CheckArgument) -> Result<()> {
         }
     }
 
-    Ok(())
-}
-
-pub fn handle_env() -> Result<()> {
-    Ok(())
-}
-
-pub fn handle_exec() -> Result<()> {
     Ok(())
 }
 

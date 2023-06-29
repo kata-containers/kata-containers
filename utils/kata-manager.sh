@@ -160,6 +160,8 @@ github_get_release_file_url()
 		-r '.[] | select(.tag_name == $version) | .assets[].browser_download_url' |\
 		grep "/${regex}$")
 
+        download_url=$(echo $download_url | awk '{print $1}')
+
 	[ -z "$download_url" ] && die "Cannot determine download URL for version $version ($url)"
 
 	echo "$download_url"
@@ -238,23 +240,6 @@ Advice:
 EOF
 }
 
-# Determine if the system only supports cgroups v2.
-#
-# - Writes "true" to stdout if only cgroups v2 are supported.
-# - Writes "false" to stdout if cgroups v1 or v1+v2 are available.
-# - Writes a blank string to stdout if cgroups are not available.
-only_supports_cgroups_v2()
-{
-	local v1=$(mount|awk '$5 ~ /^cgroup$/ { print; }' || true)
-	local v2=$(mount|awk '$5 ~ /^cgroup2$/ { print; }' || true)
-
-	[ -n "$v1" ] && [ -n "$v2" ] && { echo "false"; return 0; } || true
-	[ -n "$v1" ] && { echo "false"; return 0; } || true
-	[ -n "$v2" ] && { echo "true"; return 0; } || true
-
-	return 0
-}
-
 # Return 0 if containerd is already installed, else return 1.
 containerd_installed()
 {
@@ -271,21 +256,19 @@ pre_checks()
 {
 	info "Running pre-checks"
 
+	local skip_containerd="${1:-}"
+	[ -z "$skip_containerd" ] && die "no skip_containerd value"
+
 	command -v "${kata_shim_v2}" &>/dev/null \
 		&& die "Please remove existing $kata_project installation"
+
+	[ "$skip_containerd" = 'true' ] && return 0
 
 	local ret
 
 	{ containerd_installed; ret=$?; } || true
 
 	[ "$ret" -eq 0 ] && die "$containerd_project already installed"
-
-	local cgroups_v2_only=$(only_supports_cgroups_v2 || true)
-
-	local url="https://github.com/kata-containers/kata-containers/issues/927"
-
-	[ "$cgroups_v2_only" = "true" ] && \
-		die "$kata_project does not yet fully support cgroups v2 - see $url"
 
 	return 0
 }
@@ -327,7 +310,7 @@ check_deps()
 		debian|ubuntu) sudo apt-get -y install $packages ;;
 		fedora) sudo dnf -y install $packages ;;
 		opensuse*|sles) sudo zypper install -y $packages ;;
-		*) die "Unsupported distro: $ID"
+		*) die "Cannot automatically install packages on $ID, install $packages manually and re-run"
 	esac
 }
 
@@ -339,14 +322,19 @@ setup()
 	local force="${2:-}"
 	[ -z "$force" ] && die "no force value"
 
+	local skip_containerd="${3:-}"
+	[ -z "$skip_containerd" ] && die "no skip_containerd value"
+
 	[ "$cleanup" = "true" ] && trap cleanup EXIT
 
 	source /etc/os-release || source /usr/lib/os-release
 
+	#these dependencies are needed inside this script, and should be checked regardless of the -f option.
+	check_deps
+
 	[ "$force" = "true" ] && return 0
 
-	pre_checks
-	check_deps
+	pre_checks "$skip_containerd"
 }
 
 # Download the requested version of the specified project.
@@ -660,6 +648,8 @@ test_installation()
 {
 	info "Testing $kata_project\n"
 
+	sudo kata-runtime check -v
+
 	local image="docker.io/library/busybox:latest"
 	sudo ctr image pull "$image"
 
@@ -693,8 +683,8 @@ handle_installation()
 	local force="${2:-}"
 	[ -z "$force" ] && die "no force value"
 
-	local only_kata="${3:-}"
-	[ -z "$only_kata" ] && die "no only Kata value"
+	local skip_containerd="${3:-}"
+	[ -z "$skip_containerd" ] && die "no only Kata value"
 
 	local enable_debug="${4:-}"
 	[ -z "$enable_debug" ] && die "no enable debug value"
@@ -711,11 +701,11 @@ handle_installation()
 
 	[ "$only_run_test" = "true" ] && test_installation && return 0
 
-	setup "$cleanup" "$force"
+	setup "$cleanup" "$force" "$skip_containerd"
 
 	handle_kata "$kata_version" "$enable_debug"
 
-	[ "$only_kata" = "false" ] && \
+	[ "$skip_containerd" = "false" ] && \
 		handle_containerd \
 		"$containerd_version" \
 		"$force" \
@@ -723,7 +713,7 @@ handle_installation()
 
 	[ "$disable_test" = "false" ] && test_installation
 
-	if [ "$only_kata" = "true" ]
+	if [ "$skip_containerd" = "true" ]
 	then
 		info "$kata_project is now installed"
 	else
@@ -737,7 +727,7 @@ handle_args()
 {
 	local cleanup="true"
 	local force="false"
-	local only_kata="false"
+	local skip_containerd="false"
 	local disable_test="false"
 	local only_run_test="false"
 	local enable_debug="false"
@@ -755,7 +745,7 @@ handle_args()
 			f) force="true" ;;
 			h) usage; exit 0 ;;
 			k) kata_version="$OPTARG" ;;
-			o) only_kata="true" ;;
+			o) skip_containerd="true" ;;
 			r) cleanup="false" ;;
 			t) disable_test="true" ;;
 			T) only_run_test="true" ;;
@@ -770,7 +760,7 @@ handle_args()
 	handle_installation \
 		"$cleanup" \
 		"$force" \
-		"$only_kata" \
+		"$skip_containerd" \
 		"$enable_debug" \
 		"$disable_test" \
 		"$only_run_test" \

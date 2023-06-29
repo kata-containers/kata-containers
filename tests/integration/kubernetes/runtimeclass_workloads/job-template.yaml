@@ -1,0 +1,25 @@
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: process-item-$ITEM
+  labels:
+    jobgroup: jobtest
+spec:
+  template:
+    metadata:
+      name: jobtest
+      labels:
+        jobgroup: jobtest
+    spec:
+      terminationGracePeriodSeconds: 0
+      runtimeClassName: kata
+      containers:
+      - name: test
+        image: quay.io/prometheus/busybox:latest
+        command: ["tail", "-f", "/dev/null"]
+      restartPolicy: Never

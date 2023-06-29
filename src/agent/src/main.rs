@@ -20,6 +20,7 @@ extern crate scopeguard;
 extern crate slog;
 
 use anyhow::{anyhow, Context, Result};
+use cfg_if::cfg_if;
 use clap::{AppSettings, Parser};
 use nix::fcntl::OFlag;
 use nix::sys::socket::{self, AddressFamily, SockFlag, SockType, VsockAddr};
@@ -34,8 +35,6 @@ use std::process::exit;
 use std::sync::Arc;
 use tracing::{instrument, span};
 
-#[cfg(target_arch = "s390x")]
-mod ccw;
 mod config;
 mod console;
 mod device;
@@ -75,6 +74,13 @@ mod image_rpc;
 mod rpc;
 mod tracer;
 mod policy;
+
+cfg_if! {
+    if #[cfg(target_arch = "s390x")] {
+        mod ap;
+        mod ccw;
+    }
+}
 
 const NAME: &str = "kata-agent";
 
@@ -349,7 +355,7 @@ async fn start_sandbox(
     sandbox.lock().await.sender = Some(tx);
 
     // vsock:///dev/vsock, port
-    let mut server = rpc::start(sandbox.clone(), config.server_addr.as_str())?;
+    let mut server = rpc::start(sandbox.clone(), config.server_addr.as_str(), init_mode)?;
     server.start().await?;
 
     rx.await?;
@@ -447,9 +453,8 @@ mod tests {
             let msg = format!("test[{}]: {:?}", i, d);
             let (rfd, wfd) = unistd::pipe2(OFlag::O_CLOEXEC).unwrap();
             defer!({
-                // rfd is closed by the use of PipeStream in the crate_logger_task function,
-                // but we will attempt to close in case of a failure
-                let _ = unistd::close(rfd);
+                // XXX: Never try to close rfd, because it will be closed by PipeStream in
+                // create_logger_task() and it's not safe to close the same fd twice time.
                 unistd::close(wfd).unwrap();
             });
 

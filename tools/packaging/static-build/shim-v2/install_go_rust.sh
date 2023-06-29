@@ -58,6 +58,10 @@ case "${ARCH}" in
 	aarch64)
 		goarch=arm64
 		LIBC=musl
+		# This is a hack needed as part of Ubuntu 20.04
+		if [ ! -f /usr/bin/aarch64-linux-musl-gcc ]; then
+			ln -sf /usr/bin/musl-gcc /usr/bin/aarch64-linux-musl-gcc
+		fi
 		;;
 	ppc64le) 
 		goarch=${ARCH}

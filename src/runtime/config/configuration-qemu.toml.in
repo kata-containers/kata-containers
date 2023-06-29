@@ -40,27 +40,24 @@ rootfs_type=@DEFROOTFSTYPE@
 # Default false
 # confidential_guest = true
 
-# Enable pre-attestation AMD SEV and SEV-ES confidential guests.
+# Enable pre-attestation for AMD SEV and SEV-ES guests.
 # Applies only if confidential_guest is true.
 # (default: false)
 #guest_pre_attestation = true
 #
-# Guest owner proxy that handles remote attestation
-#guest_pre_attestation_proxy="localhost:50051"
-#
-# Keyset ID for injected secrets
-#guest_pre_attestation_keyset="KEYSET-1"
-#
-# GUID of injected secret
-# Key Broker Server for SEV(-ES) expects secrets with this guid
+# A remote key broker server (KBS) is required to validate the attestation
+# measurement and inject a secret key.  
 # See https://github.com/confidential-containers/simple-kbs
-#guest_pre_attestation_secret_guid = "@DEFGUESTPREATTESTATIONSECRETGUID@"
+#guest_pre_attestation_kbs_uri = "@DEFGUESTPREATTESTATIONPROXY@"
 #
-# Type of injected secret
-#guest_pre_attestation_secret_type = "@DEFGUESTPREATTESTATIONSECRETTYPE@"
+# The simple-kbs can be run in "online" and "offline" modes
+#guest_pre_attestation_kbs_mode="@DEFGUESTPREATTESTATIONMODE@" 
+#
+# Keyset ID of the injected secret (offline kbs)
+#guest_pre_attestation_keyset = "@DEFGUESTPREATTESTATIONKEYSET@"
 #
 # SEV guest policy
-#sev_guest_policy=0
+#sev_guest_policy = @DEFSEVGUESTPOLICY@
 
 # SEV certificate chain path 
 #sev_cert_chain="@DEFSEVCERTCHAIN@"
@@ -383,6 +380,11 @@ pflashes = []
 # Default false
 #hotplug_vfio_on_root_bus = true
 
+# In a confidential compute environment hot-plugging can compromise
+# security. Enable cold-plugging of VFIO devices to a root-port.
+# The default setting is  "no-port", which means disabled. 
+#cold_plug_vfio = "root-port" 
+
 # Before hot plugging a PCIe device, you need to add a pcie_root_port device.
 # Use this parameter when using some large PCI bar devices, such as Nvidia GPU
 # The value means the number of pcie_root_port
@@ -566,8 +568,8 @@ kernel_modules=[]
 #debug_console_enabled = true
 
 # Agent connection dialing timeout value in seconds
-# (default: 30)
-#dial_timeout = 30
+# (default: 45)
+dial_timeout = 45
 
 [runtime]
 # If enabled, the runtime will log additional debug messages to the

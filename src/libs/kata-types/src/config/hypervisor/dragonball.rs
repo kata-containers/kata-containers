@@ -12,7 +12,7 @@ use super::{default, register_hypervisor_plugin};
 use crate::config::default::MAX_DRAGONBALL_VCPUS;
 use crate::config::default::MIN_DRAGONBALL_MEMORY_SIZE_MB;
 use crate::config::hypervisor::{
-    VIRTIO_BLK, VIRTIO_BLK_MMIO, VIRTIO_FS, VIRTIO_FS_INLINE, VIRTIO_PMEM,
+    VIRTIO_BLK_MMIO, VIRTIO_BLK_PCI, VIRTIO_FS, VIRTIO_FS_INLINE, VIRTIO_PMEM,
 };
 use crate::config::{ConfigPlugin, TomlConfig};
 use crate::{eother, resolve_path, validate_path};
@@ -107,7 +107,7 @@ impl ConfigPlugin for DragonballConfig {
             }
 
             if !db.blockdev_info.disable_block_device_use
-                && db.blockdev_info.block_device_driver != VIRTIO_BLK
+                && db.blockdev_info.block_device_driver != VIRTIO_BLK_PCI
                 && db.blockdev_info.block_device_driver != VIRTIO_BLK_MMIO
                 && db.blockdev_info.block_device_driver != VIRTIO_PMEM
             {

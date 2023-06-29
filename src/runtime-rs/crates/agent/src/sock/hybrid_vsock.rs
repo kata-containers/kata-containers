@@ -15,9 +15,6 @@ use tokio::{
 
 use super::{ConnectConfig, Sock, Stream};
 
-unsafe impl Send for HybridVsock {}
-unsafe impl Sync for HybridVsock {}
-
 #[derive(Debug, PartialEq)]
 pub struct HybridVsock {
     uds: String,

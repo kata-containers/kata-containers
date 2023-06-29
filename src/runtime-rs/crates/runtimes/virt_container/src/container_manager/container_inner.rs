@@ -12,6 +12,7 @@ use common::{
     error::Error,
     types::{ContainerID, ContainerProcess, ProcessExitStatus, ProcessStatus, ProcessType},
 };
+use hypervisor::device::device_manager::DeviceManager;
 use nix::sys::signal::Signal;
 use resource::{rootfs::Rootfs, volume::Volume};
 use tokio::sync::RwLock;
@@ -164,9 +165,12 @@ impl ContainerInner {
         let exit_status = self.get_exit_status().await;
         let _locked_exit_status = exit_status.read().await;
         info!(self.logger, "container terminated");
-        let timeout: u32 = 10;
+        let remove_request = agent::RemoveContainerRequest {
+            container_id: cid.to_string(),
+            ..Default::default()
+        };
         self.agent
-            .remove_container(agent::RemoveContainerRequest::new(cid, timeout))
+            .remove_container(remove_request)
             .await
             .or_else(|e| {
                 if force {
@@ -190,6 +194,7 @@ impl ContainerInner {
         &mut self,
         process: &ContainerProcess,
         force: bool,
+        device_manager: &RwLock<DeviceManager>,
     ) -> Result<()> {
         let logger = logger_with_process(process);
         info!(logger, "begin to stop process");
@@ -200,20 +205,22 @@ impl ContainerInner {
             return Ok(());
         }
 
-        self.check_state(vec![ProcessStatus::Running])
+        self.check_state(vec![ProcessStatus::Running, ProcessStatus::Exited])
             .await
             .context("check state")?;
 
-        // if use force mode to stop container, stop always successful
-        // send kill signal to container
-        // ignore the error of sending signal, since the process would
-        // have been killed and exited yet.
-        self.signal_process(process, Signal::SIGKILL as u32, false)
-            .await
-            .map_err(|e| {
-                warn!(logger, "failed to signal kill. {:?}", e);
-            })
-            .ok();
+        if state == ProcessStatus::Running {
+            // if use force mode to stop container, stop always successful
+            // send kill signal to container
+            // ignore the error of sending signal, since the process would
+            // have been killed and exited yet.
+            self.signal_process(process, Signal::SIGKILL as u32, false, device_manager)
+                .await
+                .map_err(|e| {
+                    warn!(logger, "failed to signal kill. {:?}", e);
+                })
+                .ok();
+        }
 
         match process.process_type {
             ProcessType::Container => self
@@ -237,6 +244,7 @@ impl ContainerInner {
         process: &ContainerProcess,
         signal: u32,
         all: bool,
+        device_manager: &RwLock<DeviceManager>,
     ) -> Result<()> {
         let mut process_id: agent::ContainerProcessID = process.clone().into();
         if all {
@@ -248,8 +256,12 @@ impl ContainerInner {
             .signal_process(agent::SignalProcessRequest { process_id, signal })
             .await?;
 
-        self.clean_volumes().await.context("clean volumes")?;
-        self.clean_rootfs().await.context("clean rootfs")?;
+        self.clean_volumes(device_manager)
+            .await
+            .context("clean volumes")?;
+        self.clean_rootfs(device_manager)
+            .await
+            .context("clean rootfs")?;
 
         Ok(())
     }
@@ -273,10 +285,10 @@ impl ContainerInner {
         Ok(())
     }
 
-    async fn clean_volumes(&mut self) -> Result<()> {
+    async fn clean_volumes(&mut self, device_manager: &RwLock<DeviceManager>) -> Result<()> {
         let mut unhandled = Vec::new();
         for v in self.volumes.iter() {
-            if let Err(err) = v.cleanup().await {
+            if let Err(err) = v.cleanup(device_manager).await {
                 unhandled.push(Arc::clone(v));
                 warn!(
                     sl!(),
@@ -292,10 +304,10 @@ impl ContainerInner {
         Ok(())
     }
 
-    async fn clean_rootfs(&mut self) -> Result<()> {
+    async fn clean_rootfs(&mut self, device_manager: &RwLock<DeviceManager>) -> Result<()> {
         let mut unhandled = Vec::new();
         for rootfs in self.rootfs.iter() {
-            if let Err(err) = rootfs.cleanup().await {
+            if let Err(err) = rootfs.cleanup(device_manager).await {
                 unhandled.push(Arc::clone(rootfs));
                 warn!(
                     sl!(),

@@ -206,15 +206,22 @@ container_pipe_size=@PIPESIZE@
 #debug_console_enabled = true
 
 # Agent connection dialing timeout value in seconds
-# (default: 30)
-#dial_timeout = 30
+# (default: 45)
+dial_timeout = 45
 
 [runtime]
 # If enabled, the runtime will log additional debug messages to the
 # system log
 # (default: disabled)
 #enable_debug = true
-#
+
+# If enabled, enabled, it means that 1) if the runtime exits abnormally,
+# the cleanup process will be skipped, and 2) the runtime will not exit
+# even if the health check fails.
+# This option is typically used to retain abnormal information for debugging.
+# (default: false)
+#keep_abnormal = true
+
 # Internetworking model
 # Determines how the VM should be connected to the
 # the container network interface
@@ -293,5 +300,12 @@ experimental=@DEFAULTEXPFEATURES@
 # (default: false)
 # enable_pprof = true
 
-static_resource_mgmt=@DEFSTATICRESOURCEMGMT_DB@
+# If enabled, the runtime will attempt to determine appropriate sandbox size (memory, CPU) before booting the virtual machine. In
+# this case, the runtime will not dynamically update the amount of memory and CPU in the virtual machine. This is generally helpful
+# when a hardware architecture or hypervisor solutions is utilized which does not support CPU and/or memory hotplug.
+# Compatibility for determining appropriate sandbox (VM) size:
+# - When running with pods, sandbox sizing information will only be available if using Kubernetes >= 1.23 and containerd >= 1.6. CRI-O
+#   does not yet support sandbox sizing annotations.
+# - When running single containers using a tool like ctr, container sizing information will be available.
+static_sandbox_resource_mgmt=@DEFSTATICRESOURCEMGMT_DB@
 

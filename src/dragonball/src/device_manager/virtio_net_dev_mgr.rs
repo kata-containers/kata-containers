@@ -223,7 +223,7 @@ impl VirtioNetDeviceMgr {
 
     /// Insert or update a virtio net device into the manager.
     pub fn insert_device(
-        device_mgr: &mut DeviceManager,
+        &mut self,
         mut ctx: DeviceOpContext,
         config: VirtioNetDeviceConfigInfo,
     ) -> std::result::Result<(), VirtioNetDeviceError> {
@@ -234,8 +234,6 @@ impl VirtioNetDeviceMgr {
             return Err(VirtioNetDeviceError::UpdateNotAllowedPostBoot);
         }
 
-        let mgr = &mut device_mgr.virtio_net_manager;
-
         slog::info!(
             ctx.logger(),
             "add virtio-net device configuration";
@@ -244,7 +242,7 @@ impl VirtioNetDeviceMgr {
             "host_dev_name" => &config.host_dev_name,
         );
 
-        let device_index = mgr.info_list.insert_or_update(&config)?;
+        let device_index = self.info_list.insert_or_update(&config)?;
 
         if ctx.is_hotplug {
             slog::info!(
@@ -260,17 +258,17 @@ impl VirtioNetDeviceMgr {
                     let dev = DeviceManager::create_mmio_virtio_device(
                         device,
                         &mut ctx,
-                        config.use_shared_irq.unwrap_or(mgr.use_shared_irq),
+                        config.use_shared_irq.unwrap_or(self.use_shared_irq),
                         config.use_generic_irq.unwrap_or(USE_GENERIC_IRQ),
                     )
                     .map_err(VirtioNetDeviceError::DeviceManager)?;
                     ctx.insert_hotplug_mmio_device(&dev, None)
                         .map_err(VirtioNetDeviceError::DeviceManager)?;
                     // live-upgrade need save/restore device from info.device.
-                    mgr.info_list[device_index].set_device(dev);
+                    self.info_list[device_index].set_device(dev);
                 }
                 Err(e) => {
-                    mgr.info_list.remove(device_index);
+                    self.info_list.remove(device_index);
                     return Err(VirtioNetDeviceError::Virtio(e));
                 }
             }
@@ -281,16 +279,15 @@ impl VirtioNetDeviceMgr {
 
     /// Update the ratelimiter settings of a virtio net device.
     pub fn update_device_ratelimiters(
-        device_mgr: &mut DeviceManager,
+        &mut self,
         new_cfg: VirtioNetDeviceConfigUpdateInfo,
     ) -> std::result::Result<(), VirtioNetDeviceError> {
-        let mgr = &mut device_mgr.virtio_net_manager;
-        match mgr.get_index_of_iface_id(&new_cfg.iface_id) {
+        match self.get_index_of_iface_id(&new_cfg.iface_id) {
             Some(index) => {
-                let config = &mut mgr.info_list[index].config;
+                let config = &mut self.info_list[index].config;
                 config.rx_rate_limiter = new_cfg.rx_rate_limiter.clone();
                 config.tx_rate_limiter = new_cfg.tx_rate_limiter.clone();
-                let device = mgr.info_list[index].device.as_mut().ok_or_else(|| {
+                let device = self.info_list[index].device.as_mut().ok_or_else(|| {
                     VirtioNetDeviceError::InvalidIfaceId(new_cfg.iface_id.clone())
                 })?;
 
@@ -373,6 +370,21 @@ impl VirtioNetDeviceMgr {
         )?;
 
         Ok(Box::new(net_device))
+    }
+
+    /// Remove all virtio-net devices.
+    pub fn remove_devices(&mut self, ctx: &mut DeviceOpContext) -> Result<(), DeviceMgrError> {
+        while let Some(mut info) = self.info_list.pop() {
+            slog::info!(
+                ctx.logger(),
+                "remove virtio-net device: {}",
+                info.config.iface_id
+            );
+            if let Some(device) = info.device.take() {
+                DeviceManager::destroy_mmio_virtio_device(device, ctx)?;
+            }
+        }
+        Ok(())
     }
 }
 

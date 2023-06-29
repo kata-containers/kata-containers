@@ -19,13 +19,14 @@ jobs:
           - "make test"
           - "sudo -E PATH=\"$PATH\" make test"
     env:
-      TRAVIS: "true"
-      TRAVIS_BRANCH: ${{ github.base_ref }}
-      TRAVIS_PULL_REQUEST_BRANCH: ${{ github.head_ref }}
-      TRAVIS_PULL_REQUEST_SHA : ${{ github.event.pull_request.head.sha }}
       RUST_BACKTRACE: "1"
       target_branch: ${{ github.base_ref }}
+      GOPATH: ${{ github.workspace }}
     steps:
+    - name: Free disk space
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
     - name: Checkout code
       uses: actions/checkout@v3
       with:
@@ -35,16 +36,13 @@ jobs:
       uses: actions/setup-go@v3
       with:
         go-version: 1.19.3
-      env:
-        GOPATH: ${{ runner.workspace }}/kata-containers
     - name: Check kernel config version
       run: |
         cd "${{ github.workspace }}/src/github.com/${{ github.repository }}"
         kernel_dir="tools/packaging/kernel/"
         kernel_version_file="${kernel_dir}kata_config_version"
         modified_files=$(git diff --name-only origin/CCv0..HEAD)
-        result=$(git whatchanged origin/CCv0..HEAD "${kernel_dir}" >>"/dev/null")
-        if git whatchanged origin/CCv0..HEAD "${kernel_dir}" >>"/dev/null"; then
+        if git diff --name-only origin/CCv0..HEAD "${kernel_dir}" | grep "${kernel_dir}"; then
           echo "Kernel directory has changed, checking if $kernel_version_file has been updated"
           if echo "$modified_files" | grep -v "README.md" | grep "${kernel_dir}" >>"/dev/null"; then
             echo "$modified_files" | grep "$kernel_version_file" >>/dev/null || ( echo "Please bump version in $kernel_version_file" && exit 1)
@@ -53,29 +51,14 @@ jobs:
           fi
           echo "Check passed"
         fi
-    - name: Setup GOPATH
+    - name: Set PATH
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
-        echo "TRAVIS_BRANCH: ${TRAVIS_BRANCH}"
-        echo "TRAVIS_PULL_REQUEST_BRANCH: ${TRAVIS_PULL_REQUEST_BRANCH}"
-        echo "TRAVIS_PULL_REQUEST_SHA: ${TRAVIS_PULL_REQUEST_SHA}"
-        echo "TRAVIS: ${TRAVIS}"
-    - name: Set env
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
-      run: |
-        echo "GOPATH=${{ github.workspace }}" >> $GITHUB_ENV
         echo "${{ github.workspace }}/bin" >> $GITHUB_PATH
-    - name: Setup travis references
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
-      run: |
-        echo "TRAVIS_BRANCH=${TRAVIS_BRANCH:-$(echo $GITHUB_REF | awk 'BEGIN { FS = \"/\" } ; { print $3 }')}"
-        target_branch=${TRAVIS_BRANCH}
     - name: Setup
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
         cd ${GOPATH}/src/github.com/${{ github.repository }} && ./ci/setup.sh
-      env:
-        GOPATH: ${{ runner.workspace }}/kata-containers
     - name: Installing rust
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |

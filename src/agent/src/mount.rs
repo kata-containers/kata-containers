@@ -23,10 +23,11 @@ use nix::unistd::{Gid, Uid};
 use regex::Regex;
 
 use crate::device::{
-    get_scsi_device_name, get_virtio_blk_pci_device_name, online_device, wait_for_pmem_device,
-    DRIVER_9P_TYPE, DRIVER_BLK_CCW_TYPE, DRIVER_BLK_TYPE, DRIVER_EPHEMERAL_TYPE, DRIVER_LOCAL_TYPE,
-    DRIVER_MMIO_BLK_TYPE, DRIVER_NVDIMM_TYPE, DRIVER_OVERLAYFS_TYPE, DRIVER_SCSI_TYPE,
-    DRIVER_VIRTIOFS_TYPE, DRIVER_WATCHABLE_BIND_TYPE, FS_TYPE_HUGETLB,
+    get_scsi_device_name, get_virtio_blk_pci_device_name, get_virtio_mmio_device_name,
+    online_device, wait_for_pmem_device, DRIVER_9P_TYPE, DRIVER_BLK_CCW_TYPE, DRIVER_BLK_TYPE,
+    DRIVER_EPHEMERAL_TYPE, DRIVER_LOCAL_TYPE, DRIVER_MMIO_BLK_TYPE, DRIVER_NVDIMM_TYPE,
+    DRIVER_OVERLAYFS_TYPE, DRIVER_SCSI_TYPE, DRIVER_VIRTIOFS_TYPE, DRIVER_WATCHABLE_BIND_TYPE,
+    FS_TYPE_HUGETLB,
 };
 use crate::linux_abi::*;
 use crate::pci;
@@ -213,10 +214,10 @@ async fn ephemeral_storage_handler(
     // By now we only support one option field: "fsGroup" which
     // isn't an valid mount option, thus we should remove it when
     // do mount.
-    if storage.options.len() > 0 {
+    if !storage.options.is_empty() {
         // ephemeral_storage didn't support mount options except fsGroup.
         let mut new_storage = storage.clone();
-        new_storage.options = protobuf::RepeatedField::default();
+        new_storage.options = Default::default();
         common_storage_handler(logger, &new_storage)?;
 
         let opts_vec: Vec<String> = storage.options.to_vec();
@@ -240,6 +241,70 @@ async fn ephemeral_storage_handler(
     }
 
     Ok("".to_string())
+}
+
+// update_ephemeral_mounts takes a list of ephemeral mounts and remounts them
+// with mount options passed by the caller
+#[instrument]
+pub async fn update_ephemeral_mounts(
+    logger: Logger,
+    storages: Vec<Storage>,
+    sandbox: Arc<Mutex<Sandbox>>,
+) -> Result<()> {
+    for (_, storage) in storages.iter().enumerate() {
+        let handler_name = storage.driver.clone();
+        let logger = logger.new(o!(
+	    "msg" => "updating tmpfs storage",
+            "subsystem" => "storage",
+            "storage-type" => handler_name.to_owned()));
+
+        match handler_name.as_str() {
+            DRIVER_EPHEMERAL_TYPE => {
+                fs::create_dir_all(Path::new(&storage.mount_point))?;
+
+                if storage.options.is_empty() {
+                    continue;
+                } else {
+                    // assume that fsGid has already been set
+                    let mut opts = Vec::<&str>::new();
+                    for (_, opt) in storage.options.iter().enumerate() {
+                        if opt.starts_with(FS_GID) {
+                            continue;
+                        }
+                        opts.push(opt)
+                    }
+                    let mount_path = Path::new(&storage.mount_point);
+                    let src_path = Path::new(&storage.source);
+
+                    let (flags, options) = parse_mount_flags_and_options(opts);
+
+                    info!(logger, "mounting storage";
+                    "mount-source" => src_path.display(),
+                    "mount-destination" => mount_path.display(),
+                    "mount-fstype"  => storage.fstype.as_str(),
+                    "mount-options" => options.as_str(),
+                    );
+
+                    return baremount(
+                        src_path,
+                        mount_path,
+                        storage.fstype.as_str(),
+                        flags,
+                        options.as_str(),
+                        &logger,
+                    );
+                }
+            }
+            _ => {
+                return Err(anyhow!(
+                    "Unsupported storage type for syncing mounts {}. Only ephemeral storage update is supported",
+                    storage.driver.to_owned()
+                ));
+            }
+        };
+    }
+
+    Ok(())
 }
 
 #[instrument]
@@ -441,8 +506,14 @@ async fn virtiommio_blk_storage_handler(
     storage: &Storage,
     sandbox: Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
+    let storage = storage.clone();
+    if !Path::new(&storage.source).exists() {
+        get_virtio_mmio_device_name(&sandbox, &storage.source)
+            .await
+            .context("failed to get mmio device name")?;
+    }
     //The source path is VmPath
-    common_storage_handler(logger, storage)
+    common_storage_handler(logger, &storage)
 }
 
 // virtiofs_storage_handler handles the storage for virtio-fs.
@@ -717,7 +788,7 @@ pub fn set_ownership(logger: &Logger, storage: &Storage) -> Result<()> {
     if storage.fs_group.is_none() {
         return Ok(());
     }
-    let fs_group = storage.get_fs_group();
+    let fs_group = storage.fs_group();
 
     let mut read_only = false;
     let opts_vec: Vec<String> = storage.options.to_vec();
@@ -734,7 +805,7 @@ pub fn set_ownership(logger: &Logger, storage: &Storage) -> Result<()> {
         err
     })?;
 
-    if fs_group.group_change_policy == FSGroupChangePolicy::OnRootMismatch
+    if fs_group.group_change_policy == FSGroupChangePolicy::OnRootMismatch.into()
         && metadata.gid() == fs_group.group_id
     {
         let mut mask = if read_only { RO_MASK } else { RW_MASK };
@@ -1194,7 +1265,6 @@ fn parse_options(option_list: Vec<String>) -> HashMap<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use protobuf::RepeatedField;
     use protocols::agent::FSGroup;
     use std::fs::File;
     use std::fs::OpenOptions;
@@ -2115,9 +2185,8 @@ mod tests {
                 mount_path: "rw_mount",
                 fs_group: Some(FSGroup {
                     group_id: 3000,
-                    group_change_policy: FSGroupChangePolicy::Always,
-                    unknown_fields: Default::default(),
-                    cached_size: Default::default(),
+                    group_change_policy: FSGroupChangePolicy::Always.into(),
+                    ..Default::default()
                 }),
                 read_only: false,
                 expected_group_id: 3000,
@@ -2127,9 +2196,8 @@ mod tests {
                 mount_path: "ro_mount",
                 fs_group: Some(FSGroup {
                     group_id: 3000,
-                    group_change_policy: FSGroupChangePolicy::OnRootMismatch,
-                    unknown_fields: Default::default(),
-                    cached_size: Default::default(),
+                    group_change_policy: FSGroupChangePolicy::OnRootMismatch.into(),
+                    ..Default::default()
                 }),
                 read_only: true,
                 expected_group_id: 3000,
@@ -2149,10 +2217,7 @@ mod tests {
             let directory_mode = mount_dir.as_path().metadata().unwrap().permissions().mode();
             let mut storage_data = Storage::new();
             if d.read_only {
-                storage_data.set_options(RepeatedField::from_slice(&[
-                    "foo".to_string(),
-                    "ro".to_string(),
-                ]));
+                storage_data.set_options(vec!["foo".to_string(), "ro".to_string()]);
             }
             if let Some(fs_group) = d.fs_group.clone() {
                 storage_data.set_fs_group(fs_group);

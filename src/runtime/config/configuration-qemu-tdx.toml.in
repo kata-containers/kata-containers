@@ -15,7 +15,14 @@
 path = "@QEMUTDXPATH@"
 kernel = "@KERNELTDXPATH@"
 image = "@IMAGETDXPATH@"
+# initrd = "@INITRDPATH@"
 machine_type = "@MACHINETYPE@"
+
+# rootfs filesystem type:
+#   - ext4 (default)
+#   - xfs
+#   - erofs
+rootfs_type=@DEFROOTFSTYPE@
 
 # Enable confidential guest support.
 # Toggling that setting may trigger different hardware features, ranging
@@ -59,17 +66,17 @@ valid_hypervisor_paths = @QEMUTDXVALIDHYPERVISORPATHS@
 # may stop the virtual machine from booting.
 # To see the list of default parameters, enable hypervisor debug, create a
 # container and look for 'default-kernel-parameters' log entries.
-kernel_params = "@TDXKERNELPARAMS_QEMU@"
+kernel_params = "@KERNELTDXPARAMS@"
 
 # Path to the firmware.
 # If you want that qemu uses the default firmware leave this option empty
-firmware = "@TDVFFIRMWAREPATH@"
+firmware = "@FIRMWARETDVFPATH@"
 
 # Path to the firmware volume.
 # firmware TDVF or OVMF can be split into FIRMWARE_VARS.fd (UEFI variables
 # as configuration) and FIRMWARE_CODE.fd (UEFI program image). UEFI variables
 # can be customized per each user while UEFI code is kept same.
-firmware_volume = "@TDVFFIRMWAREVOLUMEPATH@"
+firmware_volume = "@FIRMWARETDVFVOLUMEPATH@"
 
 # Machine accelerators
 # comma-separated list of machine accelerators to pass to the hypervisor.
@@ -165,7 +172,7 @@ disable_block_device_use = @DEFDISABLEBLOCK@
 #   - virtio-fs (default)
 #   - virtio-9p
 #   - virtio-fs-nydus
-shared_fs = "@DEFSHAREDFS_QEMU_VIRTIOFS@"
+shared_fs = "@DEFSHAREDFS_QEMU_TDX_VIRTIOFS@"
 
 # Path to vhost-user-fs daemon.
 virtio_fs_daemon = "@DEFVIRTIOFSDAEMON@"
@@ -177,6 +184,9 @@ valid_virtio_fs_daemon_paths = @DEFVALIDVIRTIOFSDAEMONPATHS@
 
 # Default size of DAX cache in MiB
 virtio_fs_cache_size = @DEFVIRTIOFSCACHESIZE@
+
+# Default size of virtqueues
+virtio_fs_queue_size = @DEFVIRTIOFSQUEUESIZE@
 
 # Extra args for virtiofsd daemon
 #
@@ -190,7 +200,7 @@ virtio_fs_extra_args = @DEFVIRTIOFSEXTRAARGS@
 
 # Cache mode:
 #
-#  - none
+#  - never
 #    Metadata, data, and pathname lookup are not cached in guest. They are
 #    always fetched from host and any changes are immediately pushed to host.
 #
@@ -207,6 +217,20 @@ virtio_fs_cache = "@DEFVIRTIOFSCACHE@"
 # rootfs is backed by a block device. This is virtio-scsi, virtio-blk
 # or nvdimm.
 block_device_driver = "@DEFBLOCKSTORAGEDRIVER_QEMU@"
+
+# aio is the I/O mechanism used by qemu
+# Options:
+#
+#   - threads
+#     Pthread based disk I/O.
+#
+#   - native
+#     Native Linux I/O.
+#
+#   - io_uring
+#     Linux io_uring API. This provides the fastest I/O operations on Linux, requires kernel>5.1 and
+#     qemu >=5.0.
+block_device_aio = "@DEFBLOCKDEVICEAIO_QEMU@"
 
 # Specifies cache-related options will be set to block devices or not.
 # Default false
@@ -271,6 +295,11 @@ vhost_user_store_path = "@DEFVHOSTUSERSTOREPATH@"
 # Your distribution recommends: @DEFVALIDVHOSTUSERSTOREPATHS@
 valid_vhost_user_store_paths = @DEFVALIDVHOSTUSERSTOREPATHS@
 
+# The timeout for reconnecting on non-server spdk sockets when the remote end goes away.
+# qemu will delay this many seconds and then attempt to reconnect.
+# Zero disables reconnecting, and the default is zero.
+vhost_user_reconnect_timeout_sec = 0
+
 # Enable file based guest memory support. The default is an empty string which
 # will disable this feature. In the case of virtio-fs, this is enabled
 # automatically and '/dev/shm' is used as the backing folder.
@@ -287,7 +316,7 @@ valid_file_mem_backends = @DEFVALIDFILEMEMBACKENDS@
 pflashes = []
 
 # This option changes the default hypervisor and kernel parameters
-# to enable debug output where available.
+# to enable debug output where available. And Debug also enable the hmp socket.
 #
 # Default false
 #enable_debug = true
@@ -499,8 +528,8 @@ kernel_modules=[]
 #debug_console_enabled = true
 
 # Agent connection dialing timeout value in seconds
-# (default: 30)
-#dial_timeout = 30
+# (default: 60)
+dial_timeout = 60
 
 [runtime]
 # If enabled, the runtime will log additional debug messages to the
@@ -532,6 +561,11 @@ internetworking_model="@DEFNETWORKMODEL_QEMU@"
 # within the guest
 # (default: true)
 disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
+
+# vCPUs pinning settings
+# if enabled, each vCPU thread will be scheduled to a fixed CPU
+# qualified condition: num(vCPU threads) == num(CPUs in sandbox's CPUSet)
+# enable_vcpus_pinning = false
 
 # Apply a custom SELinux security policy to the container process inside the VM.
 # This is used when you want to apply a type other than the default `container_t`,
@@ -579,7 +613,7 @@ sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY@
 # - When running with pods, sandbox sizing information will only be available if using Kubernetes >= 1.23 and containerd >= 1.6. CRI-O
 #   does not yet support sandbox sizing annotations.
 # - When running single containers using a tool like ctr, container sizing information will be available.
-static_sandbox_resource_mgmt=@DEFSTATICRESOURCEMGMT@
+static_sandbox_resource_mgmt=@DEFSTATICRESOURCEMGMT_TEE@
 
 # If specified, sandbox_bind_mounts identifieds host paths to be mounted (ro) into the sandboxes shared path.
 # This is only valid if filesystem sharing is utilized. The provided path(s) will be bindmounted into the shared fs directory.
@@ -630,7 +664,7 @@ experimental=@DEFAULTEXPFEATURES@
 #
 # Offload the CRI image management service to the Kata agent.
 # (default: false)
-service_offload = @DEFSERVICEOFFLOAD@
+service_offload = true
 
 # Container image decryption keys provisioning.
 # Applies only if service_offload is true.

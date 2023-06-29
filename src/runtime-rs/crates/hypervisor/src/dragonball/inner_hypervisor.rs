@@ -13,7 +13,9 @@ use anyhow::{Context, Ok, Result};
 use kata_types::capabilities::Capabilities;
 
 use super::inner::DragonballInner;
-use crate::{utils, VcpuThreadIds, VmmState};
+use crate::{
+    device::DeviceType, utils, HybridVsockConfig, HybridVsockDevice, VcpuThreadIds, VmmState,
+};
 use shim_interface::KATA_PATH;
 const DEFAULT_HYBRID_VSOCK_NAME: &str = "kata.hvsock";
 
@@ -32,10 +34,12 @@ impl DragonballInner {
 
         // prepare vsock
         let uds_path = [&self.jailer_root, DEFAULT_HYBRID_VSOCK_NAME].join("/");
-        let d = crate::device::Device::HybridVsock(crate::device::HybridVsockConfig {
+        let d = DeviceType::HybridVsock(HybridVsockDevice {
             id: format!("vsock-{}", &self.id),
-            guest_cid: 3,
-            uds_path,
+            config: HybridVsockConfig {
+                guest_cid: 3,
+                uds_path,
+            },
         });
 
         self.add_device(d).await.context("add device")?;
@@ -125,6 +129,16 @@ impl DragonballInner {
 
         info!(sl!(), "get pids {:?}", pids);
         Ok(Vec::from_iter(pids.into_iter()))
+    }
+
+    pub(crate) async fn get_vmm_master_tid(&self) -> Result<u32> {
+        let master_tid = self.vmm_instance.get_vmm_master_tid();
+        Ok(master_tid)
+    }
+
+    pub(crate) async fn get_ns_path(&self) -> Result<String> {
+        let ns_path = self.vmm_instance.get_ns_path();
+        Ok(ns_path)
     }
 
     pub(crate) async fn check(&self) -> Result<()> {

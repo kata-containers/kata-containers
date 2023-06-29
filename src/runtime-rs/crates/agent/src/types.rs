@@ -9,6 +9,8 @@ use std::convert::TryFrom;
 
 use serde::{Deserialize, Serialize};
 
+pub const DEFAULT_REMOVE_CONTAINER_REQUEST_TIMEOUT: u32 = 10;
+
 #[derive(PartialEq, Clone, Default)]
 pub struct Empty {}
 
@@ -18,14 +20,9 @@ impl Empty {
     }
 }
 
-impl Default for FSGroupChangePolicy {
-    fn default() -> Self {
-        FSGroupChangePolicy::Always
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub enum FSGroupChangePolicy {
+    #[default]
     Always = 0,
     OnRootMismatch = 1,
 }
@@ -63,16 +60,11 @@ pub struct Storage {
     pub mount_point: String,
 }
 
-#[derive(Deserialize, Clone, PartialEq, Eq, Debug, Hash)]
+#[derive(Deserialize, Default, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum IPFamily {
+    #[default]
     V4 = 0,
     V6 = 1,
-}
-
-impl ::std::default::Default for IPFamily {
-    fn default() -> Self {
-        IPFamily::V4
-    }
 }
 
 #[derive(Deserialize, Debug, PartialEq, Clone, Default)]
@@ -124,7 +116,6 @@ pub struct CreateContainerRequest {
     pub devices: Vec<Device>,
     pub storages: Vec<Storage>,
     pub oci: Option<oci::Spec>,
-    pub guest_hooks: Option<oci::Hooks>,
     pub sandbox_pidns: bool,
     pub rootfs_mounts: Vec<oci::Mount>,
 }
@@ -165,7 +156,7 @@ impl ContainerProcessID {
     }
 }
 
-#[derive(PartialEq, Clone, Debug, Default)]
+#[derive(PartialEq, Clone, Debug)]
 pub struct RemoveContainerRequest {
     pub container_id: String,
     pub timeout: u32,
@@ -176,6 +167,15 @@ impl RemoveContainerRequest {
         Self {
             container_id: id.to_string(),
             timeout,
+        }
+    }
+}
+
+impl std::default::Default for RemoveContainerRequest {
+    fn default() -> Self {
+        Self {
+            container_id: "".to_string(),
+            timeout: DEFAULT_REMOVE_CONTAINER_REQUEST_TIMEOUT,
         }
     }
 }
@@ -567,6 +567,16 @@ pub struct OomEventResponse {
 pub struct ResizeVolumeRequest {
     pub volume_guest_path: String,
     pub size: u64,
+}
+
+#[derive(PartialEq, Clone, Default, Debug)]
+pub struct VolumeStatsRequest {
+    pub volume_guest_path: String,
+}
+
+#[derive(PartialEq, Clone, Default, Debug)]
+pub struct VolumeStatsResponse {
+    pub data: String,
 }
 
 #[cfg(test)]

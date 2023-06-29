@@ -114,25 +114,32 @@ func (km *KataMonitor) ProcessMetricsRequest(w http.ResponseWriter, r *http.Requ
 		writer = gz
 	}
 
-	// create encoder to encode metrics.
-	encoder := expfmt.NewEncoder(writer, contentType)
-
-	// gather metrics collected for management agent.
-	mfs, err := prometheus.DefaultGatherer.Gather()
+	filterFamilies, err := getFilterFamilyFromReq(r)
 	if err != nil {
-		monitorLog.WithError(err).Error("failed to Gather metrics from prometheus.DefaultGatherer")
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
 		return
 	}
 
-	// encode metric gathered in current process
-	if err := encodeMetricFamily(mfs, encoder); err != nil {
-		monitorLog.WithError(err).Warnf("failed to encode metrics")
+	// create encoder to encode metrics.
+	encoder := expfmt.NewEncoder(writer, contentType)
+
+	if len(filterFamilies) == 0 {
+		// gather metrics collected for management agent.
+		mfs, err := prometheus.DefaultGatherer.Gather()
+		if err != nil {
+			monitorLog.WithError(err).Error("failed to Gather metrics from prometheus.DefaultGatherer")
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+			return
+		}
+
+		// encode metric gathered in current process
+		if err := encodeMetricFamily(mfs, encoder); err != nil {
+			monitorLog.WithError(err).Warnf("failed to encode metrics")
+		}
 	}
 
 	// aggregate sandboxes metrics and write to response by encoder
-	if err := km.aggregateSandboxMetrics(encoder); err != nil {
+	if err := km.aggregateSandboxMetrics(encoder, filterFamilies); err != nil {
 		monitorLog.WithError(err).Errorf("failed aggregateSandboxMetrics")
 		scrapeFailedCount.Inc()
 	}
@@ -155,7 +162,7 @@ func encodeMetricFamily(mfs []*dto.MetricFamily, encoder expfmt.Encoder) error {
 }
 
 // aggregateSandboxMetrics will get metrics from one sandbox and do some process
-func (km *KataMonitor) aggregateSandboxMetrics(encoder expfmt.Encoder) error {
+func (km *KataMonitor) aggregateSandboxMetrics(encoder expfmt.Encoder, filterFamilies []string) error {
 	// get all kata sandboxes from cache
 	sandboxes := km.sandboxCache.getSandboxList()
 	// save running kata pods as a metrics.
@@ -230,9 +237,21 @@ func (km *KataMonitor) aggregateSandboxMetrics(encoder expfmt.Encoder) error {
 	}
 
 	// write metrics to response.
-	for _, mf := range metricsMap {
-		if err := encoder.Encode(mf); err != nil {
-			return err
+	if len(filterFamilies) > 0 {
+		for _, filterName := range filterFamilies {
+			for fullName, mf := range metricsMap {
+				if strings.HasPrefix(fullName, filterName) {
+					if err := encoder.Encode(mf); err != nil {
+						return err
+					}
+				}
+			}
+		}
+	} else {
+		for _, mf := range metricsMap {
+			if err := encoder.Encode(mf); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

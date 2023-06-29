@@ -62,6 +62,9 @@ jobs:
         #   to be specified at the start of the regex as the action is passed
         #   the entire commit message.
         #
+        # - This check will pass if the commit message only contains a subject
+        #   line, as other body message properties are enforced elsewhere.
+        #
         # - Body lines *can* be longer than the maximum if they start
         #   with a non-alphabetic character or if there is no whitespace in
         #   the line.
@@ -75,7 +78,7 @@ jobs:
         #
         # - A SoB comment can be any length (as it is unreasonable to penalise
         #   people with long names/email addresses :)
-        pattern: '^.+(\n([a-zA-Z].{0,150}|[^a-zA-Z\n].*|[^\s\n]*|Signed-off-by:.*|))+$'
+        pattern: '(^[^\n]+$|^.+(\n([a-zA-Z].{0,150}|[^a-zA-Z\n].*|[^\s\n]*|Signed-off-by:.*|))+$)'
         error: 'Body line too long (max 150)'
         post_error: ${{ env.error_msg }}
 

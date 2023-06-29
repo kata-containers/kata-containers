@@ -334,7 +334,7 @@ impl AgentPolicy {
         serialized_storages: &mut Vec<SerializedStorage>,
     ) {
         for grpc_storage in grpc_storages {
-            let protocol_fsgroup = grpc_storage.get_fs_group();
+            let protocol_fsgroup = grpc_storage.fs_group();
 
             serialized_storages.push(SerializedStorage {
                 driver: grpc_storage.driver.clone(),
@@ -345,7 +345,7 @@ impl AgentPolicy {
                 mount_point: grpc_storage.mount_point.clone(),
                 fs_group: SerializedFsGroup {
                     group_id: protocol_fsgroup.group_id,
-                    group_change_policy: protocol_fsgroup.group_change_policy as u32,
+                    group_change_policy: protocol_fsgroup.group_change_policy.value() as u32,
                 },
             });
         }

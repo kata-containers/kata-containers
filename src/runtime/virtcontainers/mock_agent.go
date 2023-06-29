@@ -122,6 +122,11 @@ func (n *mockAgent) listRoutes(ctx context.Context) ([]*pbTypes.Route, error) {
 	return nil, nil
 }
 
+// updateEphemeralMounts is the Noop agent updateEphemeralMounts implementation. It does nothing.
+func (n *mockAgent) updateEphemeralMounts(ctx context.Context, storages []*grpc.Storage) error {
+	return nil
+}
+
 // check is the Noop agent health checker. It does nothing.
 func (n *mockAgent) check(ctx context.Context) error {
 	return nil
@@ -135,6 +140,11 @@ func (n *mockAgent) statsContainer(ctx context.Context, sandbox *Sandbox, c Cont
 // waitProcess is the Noop agent process waiter. It does nothing.
 func (n *mockAgent) waitProcess(ctx context.Context, c *Container, processID string) (int32, error) {
 	return 0, nil
+}
+
+// removeStaleVirtiofsShareMounts is the Noop agent removeStaleVirtiofsShareMounts implementation. It does nothing.
+func (n *mockAgent) removeStaleVirtiofsShareMounts(ctx context.Context) error {
+	return nil
 }
 
 // winsizeProcess is the Noop agent process tty resizer. It does nothing.

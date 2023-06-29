@@ -4,18 +4,21 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{sync::Arc, thread};
+use std::{sync::Arc, thread, vec};
 
-use crate::resource_persist::ResourceState;
-use agent::{Agent, Storage};
-use anyhow::{anyhow, Context, Result};
+use crate::{network::NetworkConfig, resource_persist::ResourceState};
+use agent::{types::Device, Agent, Storage};
+use anyhow::{anyhow, Context, Ok, Result};
 use async_trait::async_trait;
-use hypervisor::Hypervisor;
+use hypervisor::{
+    device::{device_manager::DeviceManager, DeviceConfig},
+    BlockConfig, Hypervisor,
+};
 use kata_types::config::TomlConfig;
 use kata_types::mount::Mount;
-use oci::LinuxResources;
+use oci::{Linux, LinuxResources};
 use persist::sandbox_persist::Persist;
-use tokio::runtime;
+use tokio::{runtime, sync::RwLock};
 
 use crate::{
     cgroups::{CgroupArgs, CgroupsResource},
@@ -32,6 +35,7 @@ pub(crate) struct ResourceManagerInner {
     toml_config: Arc<TomlConfig>,
     agent: Arc<dyn Agent>,
     hypervisor: Arc<dyn Hypervisor>,
+    device_manager: Arc<RwLock<DeviceManager>>,
     network: Option<Arc<dyn Network>>,
     share_fs: Option<Arc<dyn ShareFs>>,
 
@@ -48,11 +52,17 @@ impl ResourceManagerInner {
         toml_config: Arc<TomlConfig>,
     ) -> Result<Self> {
         let cgroups_resource = CgroupsResource::new(sid, &toml_config)?;
+
+        // create device manager
+        let dev_manager =
+            DeviceManager::new(hypervisor.clone()).context("failed to create device manager")?;
+
         Ok(Self {
             sid: sid.to_string(),
             toml_config,
             agent,
             hypervisor,
+            device_manager: Arc::new(RwLock::new(dev_manager)),
             network: None,
             share_fs: None,
             rootfs_resource: RootFsResource::new(),
@@ -63,6 +73,10 @@ impl ResourceManagerInner {
 
     pub fn config(&self) -> Arc<TomlConfig> {
         self.toml_config.clone()
+    }
+
+    pub fn get_device_manager(&self) -> Arc<RwLock<DeviceManager>> {
+        self.device_manager.clone()
     }
 
     pub async fn prepare_before_start_vm(
@@ -89,36 +103,45 @@ impl ResourceManagerInner {
                     };
                 }
                 ResourceConfig::Network(c) => {
-                    // 1. When using Rust asynchronous programming, we use .await to
-                    //    allow other task to run instead of waiting for the completion of the current task.
-                    // 2. Also, when handling the pod network, we need to set the shim threads
-                    //    into the network namespace to perform those operations.
-                    // However, as the increase of the I/O intensive tasks, two issues could be caused by the two points above:
-                    // a. When the future is blocked, the current thread (which is in the pod netns)
-                    //    might be take over by other tasks. After the future is finished, the thread take over
-                    //    the current task might not be in the pod netns. But the current task still need to run in pod netns
-                    // b. When finish setting up the network, the current thread will be set back to the host namespace.
-                    //    In Rust Async, if the current thread is taken over by other task, the netns is dropped on another thread,
-                    //    but it is not in netns. So, the previous thread would still remain in the pod netns.
-                    // The solution is to block the future on the current thread, it is enabled by spawn an os thread, create a
-                    // tokio runtime, and block the task on it.
-                    let hypervisor = self.hypervisor.clone();
-                    let network = thread::spawn(move || -> Result<Arc<dyn Network>> {
-                        let rt = runtime::Builder::new_current_thread().enable_io().build()?;
-                        let d = rt.block_on(network::new(&c)).context("new network")?;
-                        rt.block_on(d.setup(hypervisor.as_ref()))
-                            .context("setup network")?;
-                        Ok(d)
-                    })
-                    .join()
-                    .map_err(|e| anyhow!("{:?}", e))
-                    .context("Couldn't join on the associated thread")?
-                    .context("failed to set up network")?;
-                    self.network = Some(network);
+                    self.handle_network(c)
+                        .await
+                        .context("failed to handle network")?;
                 }
             };
         }
 
+        Ok(())
+    }
+
+    pub async fn handle_network(&mut self, network_config: NetworkConfig) -> Result<()> {
+        // 1. When using Rust asynchronous programming, we use .await to
+        //    allow other task to run instead of waiting for the completion of the current task.
+        // 2. Also, when handling the pod network, we need to set the shim threads
+        //    into the network namespace to perform those operations.
+        // However, as the increase of the I/O intensive tasks, two issues could be caused by the two points above:
+        // a. When the future is blocked, the current thread (which is in the pod netns)
+        //    might be take over by other tasks. After the future is finished, the thread take over
+        //    the current task might not be in the pod netns. But the current task still need to run in pod netns
+        // b. When finish setting up the network, the current thread will be set back to the host namespace.
+        //    In Rust Async, if the current thread is taken over by other task, the netns is dropped on another thread,
+        //    but it is not in netns. So, the previous thread would still remain in the pod netns.
+        // The solution is to block the future on the current thread, it is enabled by spawn an os thread, create a
+        // tokio runtime, and block the task on it.
+        let hypervisor = self.hypervisor.clone();
+        let network = thread::spawn(move || -> Result<Arc<dyn Network>> {
+            let rt = runtime::Builder::new_current_thread().enable_io().build()?;
+            let d = rt
+                .block_on(network::new(&network_config))
+                .context("new network")?;
+            rt.block_on(d.setup(hypervisor.as_ref()))
+                .context("setup network")?;
+            Ok(d)
+        })
+        .join()
+        .map_err(|e| anyhow!("{:?}", e))
+        .context("Couldn't join on the associated thread")?
+        .context("failed to set up network")?;
+        self.network = Some(network);
         Ok(())
     }
 
@@ -203,6 +226,7 @@ impl ResourceManagerInner {
         self.rootfs_resource
             .handler_rootfs(
                 &self.share_fs,
+                self.device_manager.as_ref(),
                 self.hypervisor.as_ref(),
                 &self.sid,
                 cid,
@@ -219,8 +243,69 @@ impl ResourceManagerInner {
         spec: &oci::Spec,
     ) -> Result<Vec<Arc<dyn Volume>>> {
         self.volume_resource
-            .handler_volumes(&self.share_fs, cid, spec)
+            .handler_volumes(
+                &self.share_fs,
+                cid,
+                spec,
+                self.device_manager.as_ref(),
+                &self.sid,
+            )
             .await
+    }
+
+    pub async fn handler_devices(&self, _cid: &str, linux: &Linux) -> Result<Vec<Device>> {
+        let mut devices = vec![];
+        for d in linux.devices.iter() {
+            match d.r#type.as_str() {
+                "b" => {
+                    let device_info = DeviceConfig::BlockCfg(BlockConfig {
+                        major: d.major,
+                        minor: d.minor,
+                        ..Default::default()
+                    });
+                    let device_id = self
+                        .device_manager
+                        .write()
+                        .await
+                        .new_device(&device_info)
+                        .await
+                        .context("failed to create deviec")?;
+
+                    self.device_manager
+                        .write()
+                        .await
+                        .try_add_device(&device_id)
+                        .await
+                        .context("failed to add deivce")?;
+
+                    // get complete device information
+                    let dev_info = self
+                        .device_manager
+                        .read()
+                        .await
+                        .get_device_info(&device_id)
+                        .await
+                        .context("failed to get device info")?;
+
+                    // create agent device
+                    if let DeviceConfig::BlockCfg(config) = dev_info {
+                        let agent_device = Device {
+                            id: device_id.clone(),
+                            container_path: d.path.clone(),
+                            field_type: config.driver_option,
+                            vm_path: config.virt_path,
+                            ..Default::default()
+                        };
+                        devices.push(agent_device);
+                    }
+                }
+                _ => {
+                    // TODO enable other devices type
+                    continue;
+                }
+            }
+        }
+        Ok(devices)
     }
 
     pub async fn update_cgroups(
@@ -233,8 +318,22 @@ impl ResourceManagerInner {
             .await
     }
 
-    pub async fn delete_cgroups(&self) -> Result<()> {
-        self.cgroups_resource.delete().await
+    pub async fn cleanup(&self) -> Result<()> {
+        // clean up cgroup
+        self.cgroups_resource
+            .delete()
+            .await
+            .context("delete cgroup")?;
+        // clean up share fs mount
+        if let Some(share_fs) = &self.share_fs {
+            share_fs
+                .get_share_fs_mount()
+                .cleanup(&self.sid)
+                .await
+                .context("failed to cleanup host path")?;
+        }
+        // TODO cleanup other resources
+        Ok(())
     }
 
     pub async fn dump(&self) {
@@ -275,7 +374,8 @@ impl Persist for ResourceManagerInner {
         Ok(Self {
             sid: resource_args.sid,
             agent: resource_args.agent,
-            hypervisor: resource_args.hypervisor,
+            hypervisor: resource_args.hypervisor.clone(),
+            device_manager: Arc::new(RwLock::new(DeviceManager::new(resource_args.hypervisor)?)),
             network: None,
             share_fs: None,
             rootfs_resource: RootFsResource::new(),

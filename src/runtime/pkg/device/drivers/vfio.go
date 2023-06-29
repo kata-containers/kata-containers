@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -30,6 +29,7 @@ const (
 	iommuGroupPath      = "/sys/bus/pci/devices/%s/iommu_group"
 	vfioDevPath         = "/dev/vfio/%s"
 	pcieRootPortPrefix  = "rp"
+	vfioAPSysfsDir      = "/sys/devices/vfio_ap"
 )
 
 var (
@@ -70,34 +70,9 @@ func (device *VFIODevice) Attach(ctx context.Context, devReceiver api.DeviceRece
 		}
 	}()
 
-	vfioGroup := filepath.Base(device.DeviceInfo.HostPath)
-	iommuDevicesPath := filepath.Join(config.SysIOMMUPath, vfioGroup, "devices")
-
-	deviceFiles, err := os.ReadDir(iommuDevicesPath)
+	device.VfioDevs, err = GetAllVFIODevicesFromIOMMUGroup(*device.DeviceInfo, false)
 	if err != nil {
 		return err
-	}
-
-	// Pass all devices in iommu group
-	for i, deviceFile := range deviceFiles {
-		//Get bdf of device eg 0000:00:1c.0
-		deviceBDF, deviceSysfsDev, vfioDeviceType, err := getVFIODetails(deviceFile.Name(), iommuDevicesPath)
-		if err != nil {
-			return err
-		}
-		vfio := &config.VFIODev{
-			ID:       utils.MakeNameID("vfio", device.DeviceInfo.ID+strconv.Itoa(i), maxDevIDSize),
-			Type:     vfioDeviceType,
-			BDF:      deviceBDF,
-			SysfsDev: deviceSysfsDev,
-			IsPCIe:   isPCIeDevice(deviceBDF),
-			Class:    getPCIDeviceProperty(deviceBDF, PCISysFsDevicesClass),
-		}
-		device.VfioDevs = append(device.VfioDevs, vfio)
-		if vfio.IsPCIe {
-			vfio.Bus = fmt.Sprintf("%s%d", pcieRootPortPrefix, len(AllPCIeDevs))
-			AllPCIeDevs[vfio.BDF] = true
-		}
 	}
 
 	coldPlug := device.DeviceInfo.ColdPlug
@@ -192,31 +167,60 @@ func (device *VFIODevice) Load(ds config.DeviceState) {
 	device.GenericDevice.Load(ds)
 
 	for _, dev := range ds.VFIODevs {
-		device.VfioDevs = append(device.VfioDevs, &config.VFIODev{
-			ID:       dev.ID,
-			Type:     config.VFIODeviceType(dev.Type),
-			BDF:      dev.BDF,
-			SysfsDev: dev.SysfsDev,
-		})
+		var vfio config.VFIODev
+
+		vfioDeviceType := (*device.VfioDevs[0]).GetType()
+		switch vfioDeviceType {
+		case config.VFIOPCIDeviceNormalType, config.VFIOPCIDeviceMediatedType:
+			bdf := ""
+			if pciDev, ok := (*dev).(config.VFIOPCIDev); ok {
+				bdf = pciDev.BDF
+			}
+			vfio = config.VFIOPCIDev{
+				ID:       *(*dev).GetID(),
+				Type:     config.VFIODeviceType((*dev).GetType()),
+				BDF:      bdf,
+				SysfsDev: *(*dev).GetSysfsDev(),
+			}
+		case config.VFIOAPDeviceMediatedType:
+			vfio = config.VFIOAPDev{
+				ID:       *(*dev).GetID(),
+				SysfsDev: *(*dev).GetSysfsDev(),
+			}
+		default:
+			deviceLogger().WithError(
+				fmt.Errorf("VFIO device type unrecognized"),
+			).Error("Failed to append device")
+			return
+		}
+
+		device.VfioDevs = append(device.VfioDevs, &vfio)
 	}
 }
 
 // It should implement GetAttachCount() and DeviceID() as api.Device implementation
 // here it shares function from *GenericDevice so we don't need duplicate codes
 func getVFIODetails(deviceFileName, iommuDevicesPath string) (deviceBDF, deviceSysfsDev string, vfioDeviceType config.VFIODeviceType, err error) {
-	vfioDeviceType = GetVFIODeviceType(deviceFileName)
+	sysfsDevStr := filepath.Join(iommuDevicesPath, deviceFileName)
+	vfioDeviceType, err = GetVFIODeviceType(sysfsDevStr)
+	if err != nil {
+		return deviceBDF, deviceSysfsDev, vfioDeviceType, err
+	}
 
 	switch vfioDeviceType {
-	case config.VFIODeviceNormalType:
+	case config.VFIOPCIDeviceNormalType:
 		// Get bdf of device eg. 0000:00:1c.0
 		deviceBDF = getBDF(deviceFileName)
 		// Get sysfs path used by cloud-hypervisor
 		deviceSysfsDev = filepath.Join(config.SysBusPciDevicesPath, deviceFileName)
-	case config.VFIODeviceMediatedType:
+	case config.VFIOPCIDeviceMediatedType:
 		// Get sysfsdev of device eg. /sys/devices/pci0000:00/0000:00:02.0/f79944e4-5a3d-11e8-99ce-479cbab002e4
 		sysfsDevStr := filepath.Join(iommuDevicesPath, deviceFileName)
-		deviceSysfsDev, err = getSysfsDev(sysfsDevStr)
+		deviceSysfsDev, err = GetSysfsDev(sysfsDevStr)
 		deviceBDF = getBDF(getMediatedBDF(deviceSysfsDev))
+	case config.VFIOAPDeviceMediatedType:
+		sysfsDevStr := filepath.Join(iommuDevicesPath, deviceFileName)
+		deviceSysfsDev, err = GetSysfsDev(sysfsDevStr)
 	default:
 		err = fmt.Errorf("Incorrect tokens found while parsing vfio details: %s", deviceFileName)
 	}
@@ -242,13 +246,6 @@ func getBDF(deviceSysStr string) string {
 		return ""
 	}
 	return tokens[1]
-}
-
-// getSysfsDev returns the sysfsdev of mediated device
-// Expected input string format is absolute path to the sysfs dev node
-// eg. /sys/kernel/iommu_groups/0/devices/f79944e4-5a3d-11e8-99ce-479cbab002e4
-func getSysfsDev(sysfsDevStr string) (string, error) {
-	return filepath.EvalSymlinks(sysfsDevStr)
 }
 
 // BindDevicetoVFIO binds the device to vfio driver after unbinding from host.

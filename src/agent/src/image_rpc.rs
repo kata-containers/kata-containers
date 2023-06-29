@@ -9,7 +9,7 @@ use std::env;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
@@ -27,8 +27,12 @@ use image_rs::image::ImageClient;
 use std::io::Write;
 
 const AA_PATH: &str = "/usr/local/bin/attestation-agent";
-const AA_KEYPROVIDER_PORT: &str = "127.0.0.1:50000";
-const AA_GETRESOURCE_PORT: &str = "127.0.0.1:50001";
+
+const AA_KEYPROVIDER_URI: &str =
+    "unix:///run/confidential-containers/attestation-agent/keyprovider.sock";
+const AA_GETRESOURCE_URI: &str =
+    "unix:///run/confidential-containers/attestation-agent/getresource.sock";
+
 const OCICRYPT_CONFIG_PATH: &str = "/tmp/ocicrypt_config.json";
 // kata rootfs is readonly, use tmpfs before CC storage is implemented.
 const KATA_CC_IMAGE_WORK_DIR: &str = "/run/image/";
@@ -60,6 +64,7 @@ pub struct ImageService {
     sandbox: Arc<Mutex<Sandbox>>,
     attestation_agent_started: AtomicBool,
     image_client: Arc<Mutex<ImageClient>>,
+    container_count: Arc<AtomicU16>,
 }
 
 impl ImageService {
@@ -69,6 +74,7 @@ impl ImageService {
             sandbox,
             attestation_agent_started: AtomicBool::new(false),
             image_client: Arc::new(Mutex::new(ImageClient::default())),
+            container_count: Arc::new(AtomicU16::new(0)),
         }
     }
 
@@ -108,7 +114,7 @@ impl ImageService {
         let ocicrypt_config = serde_json::json!({
             "key-providers": {
                 "attestation-agent":{
-                    "grpc":AA_KEYPROVIDER_PORT
+                    "ttrpc":AA_KEYPROVIDER_URI
                 }
             }
         });
@@ -119,9 +125,9 @@ impl ImageService {
         // The Attestation Agent will run for the duration of the guest.
         Command::new(AA_PATH)
             .arg("--keyprovider_sock")
-            .arg(AA_KEYPROVIDER_PORT)
+            .arg(AA_KEYPROVIDER_URI)
             .arg("--getresource_sock")
-            .arg(AA_GETRESOURCE_PORT)
+            .arg(AA_GETRESOURCE_URI)
             .spawn()?;
         Ok(())
     }
@@ -130,15 +136,18 @@ impl ImageService {
     ///
     /// If the request specifies a non-empty id, use it; otherwise derive it from the image path.
     /// In either case, verify that the chosen id is valid.
-    fn cid_from_request(req: &image::PullImageRequest) -> Result<String> {
-        let req_cid = req.get_container_id();
+    fn cid_from_request(&self, req: &image::PullImageRequest) -> Result<String> {
+        let req_cid = req.container_id();
         let cid = if !req_cid.is_empty() {
             req_cid.to_string()
-        } else if let Some(last) = req.get_image().rsplit('/').next() {
+        } else if let Some(last) = req.image().rsplit('/').next() {
+            // Support multiple containers with same image
+            let index = self.container_count.fetch_add(1, Ordering::Relaxed);
+
             // ':' not valid for container id
-            last.replace(':', "_")
+            format!("{}_{}", last.replace(':', "_"), index)
         } else {
-            return Err(anyhow!("Invalid image name. {}", req.get_image()));
+            return Err(anyhow!("Invalid image name. {}", req.image()));
         };
         verify_cid(&cid)?;
         Ok(cid)
@@ -159,8 +168,8 @@ impl ImageService {
             env::set_var("NO_PROXY", no_proxy);
         }
 
-        let cid = Self::cid_from_request(req)?;
-        let image = req.get_image();
+        let cid = self.cid_from_request(req)?;
+        let image = req.image();
         if cid.starts_with("pause") {
             Self::unpack_pause_image(&cid)?;
 
@@ -198,7 +207,7 @@ impl ImageService {
         );
         self.image_client.lock().await.config.security_validate = *enable_signature_verification;
 
-        let source_creds = (!req.get_source_creds().is_empty()).then(|| req.get_source_creds());
+        let source_creds = (!req.source_creds().is_empty()).then(|| req.source_creds());
 
         let bundle_path = Path::new(CONTAINER_BASE).join(&cid);
         fs::create_dir_all(&bundle_path)?;
@@ -263,10 +272,13 @@ impl protocols::image_ttrpc_async::Image for ImageService {
 #[cfg(test)]
 mod tests {
     use super::ImageService;
+    use crate::sandbox::Sandbox;
     use protocols::image;
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
 
-    #[test]
-    fn test_cid_from_request() {
+    #[tokio::test]
+    async fn test_cid_from_request() {
         struct Case {
             cid: &'static str,
             image: &'static str,
@@ -302,12 +314,12 @@ mod tests {
             Case {
                 cid: "",
                 image: "../abc",
-                result: Some("abc"),
+                result: Some("abc_4"),
             },
             Case {
                 cid: "",
                 image: "../9abc",
-                result: Some("9abc"),
+                result: Some("9abc_5"),
             },
             Case {
                 cid: "some-string.1_2",
@@ -327,20 +339,23 @@ mod tests {
             Case {
                 cid: "",
                 image: "prefix/a:b",
-                result: Some("a_b"),
+                result: Some("a_b_6"),
             },
             Case {
                 cid: "",
                 image: "/a/b/c/d:e",
-                result: Some("d_e"),
+                result: Some("d_e_7"),
             },
         ];
 
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let s = Sandbox::new(&logger).unwrap();
+        let image_service = ImageService::new(Arc::new(Mutex::new(s)));
         for case in &cases {
             let mut req = image::PullImageRequest::new();
             req.set_image(case.image.to_string());
             req.set_container_id(case.cid.to_string());
-            let ret = ImageService::cid_from_request(&req);
+            let ret = image_service.cid_from_request(&req);
             match (case.result, ret) {
                 (Some(expected), Ok(actual)) => assert_eq!(expected, actual),
                 (None, Err(_)) => (),

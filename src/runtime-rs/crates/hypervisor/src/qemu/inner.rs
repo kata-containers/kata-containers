@@ -12,9 +12,6 @@ const VSOCK_SCHEME: &str = "vsock";
 const VSOCK_AGENT_CID: u32 = 3;
 const VSOCK_AGENT_PORT: u32 = 1024;
 
-unsafe impl Send for QemuInner {}
-unsafe impl Sync for QemuInner {}
-
 pub struct QemuInner {
     config: HypervisorConfig,
 }
@@ -92,6 +89,16 @@ impl QemuInner {
         todo!()
     }
 
+    pub(crate) async fn get_vmm_master_tid(&self) -> Result<u32> {
+        info!(sl!(), "QemuInner::get_vmm_master_tid()");
+        todo!()
+    }
+
+    pub(crate) async fn get_ns_path(&self) -> Result<String> {
+        info!(sl!(), "QemuInner::get_ns_path()");
+        todo!()
+    }
+
     pub(crate) async fn cleanup(&self) -> Result<()> {
         info!(sl!(), "QemuInner::cleanup()");
         todo!()
@@ -126,16 +133,16 @@ impl QemuInner {
     }
 }
 
-use crate::device::Device;
+use crate::device::DeviceType;
 
 // device manager part of Hypervisor
 impl QemuInner {
-    pub(crate) async fn add_device(&mut self, device: Device) -> Result<()> {
+    pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<()> {
         info!(sl!(), "QemuInner::add_device() {}", device);
         todo!()
     }
 
-    pub(crate) async fn remove_device(&mut self, device: Device) -> Result<()> {
+    pub(crate) async fn remove_device(&mut self, device: DeviceType) -> Result<()> {
         info!(sl!(), "QemuInner::remove_device() {} ", device);
         todo!()
     }

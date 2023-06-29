@@ -139,6 +139,9 @@ type agent interface {
 	// resumeContainer will resume a paused container
 	resumeContainer(ctx context.Context, sandbox *Sandbox, c Container) error
 
+	// removeStaleVirtiofsShareMounts will tell the agent to remove stale virtiofs share mounts in the guest.
+	removeStaleVirtiofsShareMounts(ctx context.Context) error
+
 	// configure will update agent settings based on provided arguments
 	configure(ctx context.Context, h Hypervisor, id, sharePath string, config KataAgentConfig) error
 
@@ -153,6 +156,9 @@ type agent interface {
 
 	// listInterfaces will tell the agent to list interfaces of an existed Sandbox
 	listInterfaces(ctx context.Context) ([]*pbTypes.Interface, error)
+
+	// updateEphemeralMounts will tell the agent to update tmpfs mounts in the Sandbox.
+	updateEphemeralMounts(ctx context.Context, storages []*grpc.Storage) error
 
 	// updateRoutes will tell the agent to update route table for an existed Sandbox.
 	updateRoutes(ctx context.Context, routes []*pbTypes.Route) ([]*pbTypes.Route, error)

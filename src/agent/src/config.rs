@@ -234,7 +234,7 @@ impl AgentConfig {
         let config_position = args.iter().position(|a| a == "--config" || a == "-c");
         if let Some(config_position) = config_position {
             if let Some(config_file) = args.get(config_position + 1) {
-                return AgentConfig::from_config_file(config_file);
+                return AgentConfig::from_config_file(config_file).context("AgentConfig from args");
             } else {
                 panic!("The config argument wasn't formed properly: {:?}", args);
             }
@@ -254,7 +254,9 @@ impl AgentConfig {
             // or if it can't be parsed properly.
             if param.starts_with(format!("{}=", CONFIG_FILE).as_str()) {
                 let config_file = get_string_value(param)?;
-                config = AgentConfig::from_config_file(&config_file)?;
+                config = AgentConfig::from_config_file(&config_file)
+                    .context("AgentConfig from kernel cmdline")
+                    .unwrap();
                 using_config_file = true;
                 break;
             }
@@ -365,7 +367,8 @@ impl AgentConfig {
 
     #[instrument]
     pub fn from_config_file(file: &str) -> Result<AgentConfig> {
-        let config = fs::read_to_string(file)?;
+        let config = fs::read_to_string(file)
+            .with_context(|| format!("Failed to read config file {}", file))?;
         AgentConfig::from_str(&config)
     }
 

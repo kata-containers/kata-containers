@@ -14,7 +14,7 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0.31"
-clap = { version = "3.2.20", features = ["derive", "cargo"] }
+clap = { version = "4.1.13", features = ["derive", "cargo"] }
 serde_json = "1.0.85"
 thiserror = "1.0.35"
 privdrop = "0.5.2"
@@ -25,12 +25,21 @@ serde = { version = "1.0.149", features = ["derive"] }
 url = "2.3.1"
 futures = "0.3.24"
 base64 = "0.13.0"
+toml = "0.5.8"
+sys-info = "0.9.1"
 
 shim-interface = { path = "../../libs/shim-interface"}
 kata-types = { path = "../../libs/kata-types" }
 safe-path = { path = "../../libs/safe-path" }
 agent = { path = "../../runtime-rs/crates/agent"}
 serial_test = "0.5.1"
+vmm-sys-util = "0.11.0"
+epoll = "4.0.1"
+libc = "0.2.138"
+slog = "2.7.0"
+slog-scope = "4.4.0"
+hyper = "0.14.20"
+tokio = "1.28.1"
 
 [target.'cfg(target_arch = "s390x")'.dependencies]
 reqwest = { version = "0.11", default-features = false, features = ["json", "blocking", "native-tls"] }
@@ -41,4 +50,6 @@ reqwest = { version = "0.11", default-features = false, features = ["json", "blo
 [dev-dependencies]
 semver = "1.0.12"
 tempfile = "3.1.0"
+nix = "0.25.0"
 test-utils = { path = "../../libs/test-utils" }
+micro_http = { git = "https://github.com/firecracker-microvm/micro-http", branch = "main" }

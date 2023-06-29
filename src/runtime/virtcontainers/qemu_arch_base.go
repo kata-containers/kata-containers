@@ -20,7 +20,7 @@ import (
 	"gitlab.com/nvidia/cloud-native/go-nvlib/pkg/nvpci"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
-	"github.com/kata-containers/kata-containers/src/runtime/pkg/sev"
+	sevKbs "github.com/kata-containers/kata-containers/src/runtime/pkg/sev/kbs"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
@@ -167,14 +167,14 @@ type qemuArch interface {
 	getBARsMaxAddressableMemory() (uint64, uint64)
 
 	// append SEV object type to the VM definition
-	appendSEVObject(devices []govmmQemu.Device, firmware, firmwareVolume string, config sev.GuestPreAttestationConfig) ([]govmmQemu.Device, string, error)
+	appendSEVObject(devices []govmmQemu.Device, firmware, firmwareVolume string, config sevKbs.GuestPreAttestationConfig) ([]govmmQemu.Device, string, error)
 
 	// setup SEV guest prelaunch attestation
-	setupSEVGuestPreAttestation(ctx context.Context, config sev.GuestPreAttestationConfig) (string, error)
+	setupSEVGuestPreAttestation(ctx context.Context, config sevKbs.GuestPreAttestationConfig) (string, error)
 
 	// wait for prelaunch attestation to complete
 	sevGuestPreAttestation(ctx context.Context,
-		qmp *govmmQemu.QMP, config sev.GuestPreAttestationConfig) error
+		qmp *govmmQemu.QMP, config sevKbs.GuestPreAttestationConfig) error
 }
 
 type qemuArchBase struct {
@@ -708,16 +708,17 @@ func (q *qemuArchBase) appendVhostUserDevice(ctx context.Context, devices []govm
 }
 
 func (q *qemuArchBase) appendVFIODevice(devices []govmmQemu.Device, vfioDev config.VFIODev) []govmmQemu.Device {
-	if vfioDev.BDF == "" {
+	pciDevice := vfioDev.(config.VFIOPCIDev)
+	if pciDevice.BDF == "" {
 		return devices
 	}
 
 	devices = append(devices,
 		govmmQemu.VFIODevice{
-			BDF:      vfioDev.BDF,
-			VendorID: vfioDev.VendorID,
-			DeviceID: vfioDev.DeviceID,
-			Bus:      vfioDev.Bus,
+			BDF:      pciDevice.BDF,
+			VendorID: pciDevice.VendorID,
+			DeviceID: pciDevice.DeviceID,
+			Bus:      pciDevice.Bus,
 		},
 	)
 
@@ -902,20 +903,20 @@ func (q *qemuArchBase) appendProtectionDevice(devices []govmmQemu.Device, firmwa
 }
 
 // AMD SEV methods
-func (q *qemuArchBase) appendSEVObject(devices []govmmQemu.Device, firmware, firmwareVolume string, config sev.GuestPreAttestationConfig) ([]govmmQemu.Device, string, error) {
+func (q *qemuArchBase) appendSEVObject(devices []govmmQemu.Device, firmware, firmwareVolume string, config sevKbs.GuestPreAttestationConfig) ([]govmmQemu.Device, string, error) {
 	hvLogger.WithField("arch", runtime.GOARCH).Warnf("Confidential Computing has not been implemented for this architecture")
 	return devices, firmware, nil
 }
 
 // Setup SEV guest attestation
-func (q *qemuArchBase) setupSEVGuestPreAttestation(ctx context.Context, config sev.GuestPreAttestationConfig) (string, error) {
+func (q *qemuArchBase) setupSEVGuestPreAttestation(ctx context.Context, config sevKbs.GuestPreAttestationConfig) (string, error) {
 	hvLogger.WithField("arch", runtime.GOARCH).Warnf("Confidential Computing has not been implemented for this architecture")
 	return "", nil
 }
 
 // Wait for SEV prelaunch attestation to complete
 func (q *qemuArchBase) sevGuestPreAttestation(ctx context.Context,
-	qmp *govmmQemu.QMP, config sev.GuestPreAttestationConfig) error {
+	qmp *govmmQemu.QMP, config sevKbs.GuestPreAttestationConfig) error {
 	hvLogger.WithField("arch", runtime.GOARCH).Warnf("Confidential Computing has not been implemented for this architecture")
 	return nil
 }

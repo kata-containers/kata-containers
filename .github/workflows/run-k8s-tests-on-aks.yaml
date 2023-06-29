@@ -1,0 +1,95 @@
+name: CI | Run kubernetes tests on AKS
+on:
+  workflow_call:
+    inputs:
+      registry:
+        required: true
+        type: string
+      repo:
+        required: true
+        type: string
+      tag:
+        required: true
+        type: string
+
+jobs:
+  run-k8s-tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        vmm:
+          - clh
+          - dragonball
+          - qemu
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Download Azure CLI
+        run: |
+          curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+
+      - name: Log into the Azure account
+        run: |
+          az login \
+            --service-principal \
+            -u "${{ secrets.AZ_APPID }}" \
+            -p "${{ secrets.AZ_PASSWORD }}" \
+            --tenant "${{ secrets.AZ_TENANT_ID }}"
+
+      - name: Create AKS cluster
+        run: |
+          az aks create \
+            -g "kataCI" \
+            -n "${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-${{ matrix.vmm }}-amd64" \
+            -s "Standard_D4s_v5" \
+            --node-count 1 \
+            --generate-ssh-keys
+
+      - name: Install `bats`
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install bats
+
+      - name: Install `kubectl`
+        run: |
+          sudo az aks install-cli
+
+      - name: Download credentials for the Kubernetes CLI to use them
+        run: |
+          az aks get-credentials -g "kataCI" -n ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-${{ matrix.vmm }}-amd64
+
+      - name: Run tests
+        timeout-minutes: 35
+        run: |
+          sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${{ inputs.registry }}/${{ inputs.repo }}:${{ inputs.tag }}|g" tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
+          cat tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
+          cat tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml | grep "${{ inputs.registry }}/${{ inputs.repo }}:${{ inputs.tag }}" || die "Failed to setup the tests image"
+
+          kubectl apply -f tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
+          kubectl apply -f tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml
+          kubectl -n kube-system wait --timeout=10m --for=condition=Ready -l name=kata-deploy pod
+          kubectl apply -f tools/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml
+
+          # This is needed as the kata-deploy pod will be set to "Ready" when it starts running,
+          # which may cause issues like not having the node properly labeled or the artefacts
+          # properly deployed when the tests actually start running.
+          sleep 150s
+
+          pushd tests/integration/kubernetes
+          sed -i -e 's|runtimeClassName: kata|runtimeClassName: kata-${{ matrix.vmm }}|' runtimeclass_workloads/*.yaml
+          bash run_kubernetes_tests.sh
+          popd
+        env:
+          KATA_HYPERVISOR: ${{ matrix.vmm }}
+
+      - name: Delete AKS cluster
+        if: always()
+        run: |
+          az aks delete \
+            -g "kataCI" \
+            -n "${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-${{ matrix.vmm }}-amd64" \
+            --yes \
+            --no-wait

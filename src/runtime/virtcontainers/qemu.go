@@ -41,7 +41,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
-	"github.com/kata-containers/kata-containers/src/runtime/pkg/sev"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/sev/kbs"
 	pkgUtils "github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
@@ -84,6 +84,7 @@ type QemuState struct {
 	VirtiofsDaemonPid    int
 	PCIeRootPort         int
 	HotplugVFIOOnRootBus bool
+	ColdPlugVFIO         hv.PCIePort
 }
 
 // qemu is an Hypervisor interface implementation for the Linux qemu hypervisor.
@@ -184,6 +185,13 @@ func (q *qemu) kernelParameters() string {
 		params = append(params, Param{"selinux", "1"})
 	}
 
+	// set the location of the online-kbs for SEV(-ES) guest attestation
+	if q.arch.guestProtection() == sevProtection &&
+		q.config.GuestPreAttestation &&
+		q.config.GuestPreAttestationMode == kbs.Online {
+		params = append(params, Param{"agent.aa_kbc_params", kbs.OnlineBootParam + "::" + q.config.GuestPreAttestationURI})
+	}
+
 	// add the params specified by the provided config. As the kernel
 	// honours the last parameter value set and since the config-provided
 	// params are added here, they will take priority over the defaults.
@@ -271,6 +279,7 @@ func (q *qemu) setup(ctx context.Context, id string, hypervisorConfig *Hyperviso
 		q.Logger().Debug("Creating UUID")
 		q.state.UUID = uuid.Generate().String()
 
+		q.state.ColdPlugVFIO = q.config.ColdPlugVFIO
 		q.state.HotplugVFIOOnRootBus = q.config.HotplugVFIOOnRootBus
 		q.state.PCIeRootPort = int(q.config.PCIeRootPort)
 
@@ -517,6 +526,7 @@ func (q *qemu) createVirtiofsDaemon(sharedPath string) (VirtiofsDaemon, error) {
 }
 
 // CreateVM is the Hypervisor VM creation implementation for govmmQemu.
+// nolint: gocyclo
 func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervisorConfig *HypervisorConfig) error {
 	// Save the tracing context
 	q.ctx = ctx
@@ -667,8 +677,8 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		PidFile:        filepath.Join(q.config.VMStorePath, q.id, "pid"),
 	}
 	if q.arch.guestProtection() == sevProtection {
-		sevConfig := sev.GuestPreAttestationConfig{
-			Proxy:         q.config.GuestPreAttestationProxy,
+		sevConfig := kbs.GuestPreAttestationConfig{
+			Proxy:         q.config.GuestPreAttestationURI,
 			Policy:        q.config.SEVGuestPolicy,
 			CertChainPath: q.config.SEVCertChainPath,
 		}
@@ -724,6 +734,18 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 
 	if hypervisorConfig.PCIeRootPort > 0 {
 		qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, hypervisorConfig.PCIeRootPort, memSize32bit, memSize64bit)
+	}
+
+	// The default OVMF MMIO aperture is too small for some PCIe devices
+	// with huge BARs so we need to increase it.
+	// memSize64bit is in bytes, convert to MB, OVMF expects MB as a string
+	if strings.Contains(strings.ToLower(hypervisorConfig.FirmwarePath), "ovmf") {
+		pciMmio64Mb := fmt.Sprintf("%d", (memSize64bit / 1024 / 1024))
+		fwCfg := govmmQemu.FwCfg{
+			Name: "opt/ovmf/X-PciMmio64Mb",
+			Str:  pciMmio64Mb,
+		}
+		qemuConfig.FwCfg = append(qemuConfig.FwCfg, fwCfg)
 	}
 
 	q.qemuConfig = qemuConfig
@@ -883,18 +905,27 @@ func (q *qemu) AttestVM(ctx context.Context) error {
 
 	// Guest must be paused so that secrets can be injected.
 	// Guest will be continued by the Attestation function
-	sevConfig := sev.GuestPreAttestationConfig{
-		Proxy:               q.config.GuestPreAttestationProxy,
-		Policy:              q.config.SEVGuestPolicy,
-		Keyset:              q.config.GuestPreAttestationKeyset,
-		KeyBrokerSecretGuid: q.config.GuestPreAttestationSecretGuid,
-		KeyBrokerSecretType: q.config.GuestPreAttestationSecretType,
-		LaunchId:            launchId,
-		KernelPath:          kernelPath,
-		InitrdPath:          initrdPath,
-		FwPath:              firmwarePath,
-		KernelParameters:    kernelParameters,
+	sevConfig := kbs.GuestPreAttestationConfig{
+		Proxy:            q.config.GuestPreAttestationURI,
+		Policy:           q.config.SEVGuestPolicy,
+		Keyset:           q.config.GuestPreAttestationKeyset,
+		LaunchId:         launchId,
+		KernelPath:       kernelPath,
+		InitrdPath:       initrdPath,
+		FwPath:           firmwarePath,
+		KernelParameters: kernelParameters,
 	}
+
+	if q.config.GuestPreAttestationMode == kbs.Online {
+		sevConfig.SecretGuid = kbs.OnlineSecretGuid
+		sevConfig.SecretType = kbs.OnlineSecretType
+	} else if q.config.GuestPreAttestationMode == kbs.Offline {
+		sevConfig.SecretGuid = kbs.OfflineSecretGuid
+		sevConfig.SecretType = kbs.OfflineSecretType
+	} else {
+		return fmt.Errorf("Unsupported pre-attestation mode: %s", q.config.GuestPreAttestationMode)
+	}
+
 	if err := q.arch.sevGuestPreAttestation(
 		q.qmpMonitorCh.ctx,
 		q.qmpMonitorCh.qmp,
@@ -1251,6 +1282,7 @@ func (q *qemu) cleanupVM() error {
 					"user": q.config.User,
 					"uid":  q.config.Uid,
 				}).Warn("failed to delete the user")
+			return nil
 		}
 		q.Logger().WithFields(
 			logrus.Fields{
@@ -1781,7 +1813,7 @@ func (q *qemu) hotplugVFIODevice(ctx context.Context, device *config.VFIODev, op
 		return err
 	}
 
-	devID := device.ID
+	devID := *(*device).GetID()
 	machineType := q.HypervisorConfig().HypervisorMachineType
 
 	if op == AddDevice {
@@ -1798,29 +1830,31 @@ func (q *qemu) hotplugVFIODevice(ctx context.Context, device *config.VFIODev, op
 		// for pc machine type instead of bridge. This is useful for devices that require
 		// a large PCI BAR which is a currently a limitation with PCI bridges.
 		if q.state.HotplugVFIOOnRootBus {
-
-			// In case MachineType is q35, a PCIe device is hotplugged on a PCIe Root Port.
-			switch machineType {
-			case QemuQ35:
-				if device.IsPCIe && q.state.PCIeRootPort <= 0 {
-					q.Logger().WithField("dev-id", device.ID).Warn("VFIO device is a PCIe device. It's recommended to add the PCIe Root Port by setting the pcie_root_port parameter in the configuration for q35")
-					device.Bus = ""
+			switch (*device).GetType() {
+			case config.VFIOPCIDeviceNormalType, config.VFIOPCIDeviceMediatedType:
+				// In case MachineType is q35, a PCIe device is hotplugged on a PCIe Root Port.
+				pciDevice, ok := (*device).(config.VFIOPCIDev)
+				if !ok {
+					return fmt.Errorf("VFIO device %+v is not PCI, but its Type said otherwise", device)
 				}
-			default:
-				device.Bus = ""
-			}
+				switch machineType {
+				case QemuQ35:
+					if pciDevice.IsPCIe && q.state.PCIeRootPort <= 0 {
+						q.Logger().WithField("dev-id", (*device).GetID()).Warn("VFIO device is a PCIe device. It's recommended to add the PCIe Root Port by setting the pcie_root_port parameter in the configuration for q35")
+						pciDevice.Bus = ""
+					}
+				default:
+					pciDevice.Bus = ""
+				}
+				*device = pciDevice
 
-			switch device.Type {
-			case config.VFIODeviceNormalType:
-				err = q.qmpMonitorCh.qmp.ExecuteVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF, device.Bus, romFile)
-			case config.VFIODeviceMediatedType:
-				if utils.IsAPVFIOMediatedDevice(device.SysfsDev) {
-					err = q.qmpMonitorCh.qmp.ExecuteAPVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, device.SysfsDev)
+				if pciDevice.Type == config.VFIOPCIDeviceNormalType {
+					err = q.qmpMonitorCh.qmp.ExecuteVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, pciDevice.BDF, pciDevice.Bus, romFile)
 				} else {
-					err = q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, device.SysfsDev, "", device.Bus, romFile)
+					err = q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, *(*device).GetSysfsDev(), "", pciDevice.Bus, romFile)
 				}
-			default:
-				return fmt.Errorf("Incorrect VFIO device type found")
+			case config.VFIOAPDeviceMediatedType:
+				err = q.qmpMonitorCh.qmp.ExecuteAPVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, *(*device).GetSysfsDev())
 			}
 		} else {
 			addr, bridge, err := q.arch.addDeviceToBridge(ctx, devID, types.PCI)
@@ -1834,15 +1868,17 @@ func (q *qemu) hotplugVFIODevice(ctx context.Context, device *config.VFIODev, op
 				}
 			}()
 
-			switch device.Type {
-			case config.VFIODeviceNormalType:
-				err = q.qmpMonitorCh.qmp.ExecutePCIVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, device.BDF, addr, bridge.ID, romFile)
-			case config.VFIODeviceMediatedType:
-				if utils.IsAPVFIOMediatedDevice(device.SysfsDev) {
-					err = q.qmpMonitorCh.qmp.ExecuteAPVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, device.SysfsDev)
-				} else {
-					err = q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, device.SysfsDev, addr, bridge.ID, romFile)
+			switch (*device).GetType() {
+			case config.VFIOPCIDeviceNormalType:
+				pciDevice, ok := (*device).(config.VFIOPCIDev)
+				if !ok {
+					return fmt.Errorf("VFIO device %+v is not PCI, but its Type said otherwise", device)
 				}
+				err = q.qmpMonitorCh.qmp.ExecutePCIVFIODeviceAdd(q.qmpMonitorCh.ctx, devID, pciDevice.BDF, addr, bridge.ID, romFile)
+			case config.VFIOPCIDeviceMediatedType:
+				err = q.qmpMonitorCh.qmp.ExecutePCIVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, devID, *(*device).GetSysfsDev(), addr, bridge.ID, romFile)
+			case config.VFIOAPDeviceMediatedType:
+				err = q.qmpMonitorCh.qmp.ExecuteAPVFIOMediatedDeviceAdd(q.qmpMonitorCh.ctx, *(*device).GetSysfsDev())
 			default:
 				return fmt.Errorf("Incorrect VFIO device type found")
 			}
@@ -1850,13 +1886,24 @@ func (q *qemu) hotplugVFIODevice(ctx context.Context, device *config.VFIODev, op
 		if err != nil {
 			return err
 		}
-		// XXX: Depending on whether we're doing root port or
-		// bridge hotplug, and how the bridge is set up in
-		// other parts of the code, we may or may not already
-		// have information about the slot number of the
-		// bridge and or the device.  For simplicity, just
-		// query both of them back from qemu
-		device.GuestPciPath, err = q.qomGetPciPath(devID)
+
+		switch (*device).GetType() {
+		case config.VFIOPCIDeviceNormalType, config.VFIOPCIDeviceMediatedType:
+			pciDevice, ok := (*device).(config.VFIOPCIDev)
+			if !ok {
+				return fmt.Errorf("VFIO device %+v is not PCI, but its Type said otherwise", device)
+			}
+			// XXX: Depending on whether we're doing root port or
+			// bridge hotplug, and how the bridge is set up in
+			// other parts of the code, we may or may not already
+			// have information about the slot number of the
+			// bridge and or the device.  For simplicity, just
+			// query both of them back from qemu
+			guestPciPath, err := q.qomGetPciPath(devID)
+			pciDevice.GuestPciPath = guestPciPath
+			*device = pciDevice
+			return err
+		}
 		return err
 	} else {
 		q.Logger().WithField("dev-id", devID).Info("Start hot-unplug VFIO device")

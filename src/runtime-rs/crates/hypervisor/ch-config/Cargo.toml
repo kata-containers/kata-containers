@@ -13,10 +13,14 @@ edition = "2021"
 anyhow = "1.0.68"
 serde = { version = "1.0.145", features = ["rc", "derive"] }
 serde_json = "1.0.91"
-tokio = { version = "1.25.0", features = ["sync", "rt"] }
+tokio = { version = "1.28.1", features = ["sync", "rt"] }
 
 # Cloud Hypervisor public HTTP API functions
 # Note that the version specified is not necessarily the version of CH
 # being used. This version is used to pin the CH config structure
 # which is relatively static.
 api_client = { git = "https://github.com/cloud-hypervisor/cloud-hypervisor", crate = "api_client", tag = "v27.0" }
+
+kata-types = { path = "../../../../libs/kata-types"}
+nix = "0.26.2"
+thiserror = "1.0.38"

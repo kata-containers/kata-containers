@@ -20,7 +20,7 @@ use kata_types::capabilities::Capabilities;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use tokio::sync::RwLock;
 
-use crate::{device::Device, Hypervisor, VcpuThreadIds};
+use crate::{DeviceType, Hypervisor, VcpuThreadIds};
 
 pub struct Dragonball {
     inner: Arc<RwLock<DragonballInner>>,
@@ -77,12 +77,12 @@ impl Hypervisor for Dragonball {
         inner.save_vm().await
     }
 
-    async fn add_device(&self, device: Device) -> Result<()> {
+    async fn add_device(&self, device: DeviceType) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.add_device(device).await
     }
 
-    async fn remove_device(&self, device: Device) -> Result<()> {
+    async fn remove_device(&self, device: DeviceType) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.remove_device(device).await
     }
@@ -115,6 +115,16 @@ impl Hypervisor for Dragonball {
     async fn get_pids(&self) -> Result<Vec<u32>> {
         let inner = self.inner.read().await;
         inner.get_pids().await
+    }
+
+    async fn get_vmm_master_tid(&self) -> Result<u32> {
+        let inner = self.inner.read().await;
+        inner.get_vmm_master_tid().await
+    }
+
+    async fn get_ns_path(&self) -> Result<String> {
+        let inner = self.inner.read().await;
+        inner.get_ns_path().await
     }
 
     async fn check(&self) -> Result<()> {

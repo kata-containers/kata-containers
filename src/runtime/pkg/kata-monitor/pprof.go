@@ -32,7 +32,7 @@ func (km *KataMonitor) composeSocketAddress(r *http.Request) (string, error) {
 		return "", err
 	}
 
-	return shim.SocketAddress(sandbox), nil
+	return shim.ClientSocketAddress(sandbox), nil
 }
 
 func (km *KataMonitor) proxyRequest(w http.ResponseWriter, r *http.Request,

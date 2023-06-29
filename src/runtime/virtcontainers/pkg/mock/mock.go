@@ -125,6 +125,10 @@ func (p *HybridVSockTTRPCMockImp) UpdateContainer(ctx context.Context, req *pb.U
 	return emptyResp, nil
 }
 
+func (p *HybridVSockTTRPCMockImp) UpdateEphemeralMounts(ctx context.Context, req *pb.UpdateEphemeralMountsRequest) (*gpb.Empty, error) {
+	return emptyResp, nil
+}
+
 func (p *HybridVSockTTRPCMockImp) RemoveContainer(ctx context.Context, req *pb.RemoveContainerRequest) (*gpb.Empty, error) {
 	return emptyResp, nil
 }
@@ -238,6 +242,10 @@ func (p *HybridVSockTTRPCMockImp) GetVolumeStats(ctx context.Context, req *pb.Vo
 }
 
 func (p *HybridVSockTTRPCMockImp) ResizeVolume(ctx context.Context, req *pb.ResizeVolumeRequest) (*gpb.Empty, error) {
+	return &gpb.Empty{}, nil
+}
+
+func (p *HybridVSockTTRPCMockImp) RemoveStaleVirtiofsShareMounts(ctx context.Context, req *pb.RemoveStaleVirtiofsShareMountsRequest) (*gpb.Empty, error) {
 	return &gpb.Empty{}, nil
 }
 
