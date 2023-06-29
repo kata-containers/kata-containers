@@ -26,10 +26,10 @@ package_output_dir="${package_output_dir:-}"
 if [ -z "$ovmf_repo" ]; then
 	case "${ovmf_build}" in
 		"tdx")
-			ovmf_repo=$(get_from_kata_deps "externals.ovmf.tdx.url" "${kata_version}")
+			ovmf_repo=$(get_from_kata_deps "externals.ovmf.tdx.url")
 			;;
 		*)
-			ovmf_repo=$(get_from_kata_deps "externals.ovmf.url" "${kata_version}")
+			ovmf_repo=$(get_from_kata_deps "externals.ovmf.url")
 			;;
 	esac
 fi
@@ -37,17 +37,17 @@ fi
 [ -n "$ovmf_repo" ] || die "failed to get ovmf repo"
 
 if [ "${ovmf_build}" == "x86_64" ]; then
-       [ -n "$ovmf_version" ] || ovmf_version=$(get_from_kata_deps "externals.ovmf.x86_64.version" "${kata_version}")
-       [ -n "$ovmf_package" ] || ovmf_package=$(get_from_kata_deps "externals.ovmf.x86_64.package" "${kata_version}")
-       [ -n "$package_output_dir" ] || package_output_dir=$(get_from_kata_deps "externals.ovmf.x86_64.package_output_dir" "${kata_version}")
+       [ -n "$ovmf_version" ] || ovmf_version=$(get_from_kata_deps "externals.ovmf.x86_64.version")
+       [ -n "$ovmf_package" ] || ovmf_package=$(get_from_kata_deps "externals.ovmf.x86_64.package")
+       [ -n "$package_output_dir" ] || package_output_dir=$(get_from_kata_deps "externals.ovmf.x86_64.package_output_dir")
 elif [ "${ovmf_build}" == "sev" ]; then
-       [ -n "$ovmf_version" ] || ovmf_version=$(get_from_kata_deps "externals.ovmf.sev.version" "${kata_version}")
-       [ -n "$ovmf_package" ] || ovmf_package=$(get_from_kata_deps "externals.ovmf.sev.package" "${kata_version}")
-       [ -n "$package_output_dir" ] || package_output_dir=$(get_from_kata_deps "externals.ovmf.sev.package_output_dir" "${kata_version}")
+       [ -n "$ovmf_version" ] || ovmf_version=$(get_from_kata_deps "externals.ovmf.sev.version")
+       [ -n "$ovmf_package" ] || ovmf_package=$(get_from_kata_deps "externals.ovmf.sev.package")
+       [ -n "$package_output_dir" ] || package_output_dir=$(get_from_kata_deps "externals.ovmf.sev.package_output_dir")
 elif [ "${ovmf_build}" == "tdx" ]; then
-       [ -n "$ovmf_version" ] || ovmf_version=$(get_from_kata_deps "externals.ovmf.tdx.version" "${kata_version}")
-       [ -n "$ovmf_package" ] || ovmf_package=$(get_from_kata_deps "externals.ovmf.tdx.package" "${kata_version}")
-       [ -n "$package_output_dir" ] || package_output_dir=$(get_from_kata_deps "externals.ovmf.tdx.package_output_dir" "${kata_version}")
+       [ -n "$ovmf_version" ] || ovmf_version=$(get_from_kata_deps "externals.ovmf.tdx.version")
+       [ -n "$ovmf_package" ] || ovmf_package=$(get_from_kata_deps "externals.ovmf.tdx.package")
+       [ -n "$package_output_dir" ] || package_output_dir=$(get_from_kata_deps "externals.ovmf.tdx.package_output_dir")
 fi
 
 [ -n "$ovmf_version" ] || die "failed to get ovmf version or commit"

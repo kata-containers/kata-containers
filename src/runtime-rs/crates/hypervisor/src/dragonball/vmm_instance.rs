@@ -36,6 +36,7 @@ const DRAGONBALL_VERSION: &str = env!("CARGO_PKG_VERSION");
 const REQUEST_RETRY: u32 = 500;
 const KVM_DEVICE: &str = "/dev/kvm";
 
+#[derive(Debug)]
 pub struct VmmInstance {
     /// VMM instance info directly accessible from runtime
     vmm_shared_info: Arc<RwLock<InstanceInfo>>,

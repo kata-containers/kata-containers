@@ -1,17 +1,18 @@
-// Copyright (c) 2019-2022 Alibaba Cloud
-// Copyright (c) 2019-2022 Ant Group
+// Copyright (c) 2022-2023 Alibaba Cloud
+// Copyright (c) 2022-2023 Ant Group
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 
-pub const VIRTIO_BLOCK_MMIO: &str = "virtio-blk-mmio";
 use crate::device::Device;
 use crate::device::DeviceType;
 use crate::Hypervisor as hypervisor;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
+
 /// VIRTIO_BLOCK_PCI indicates block driver is virtio-pci based
 pub const VIRTIO_BLOCK_PCI: &str = "virtio-blk-pci";
+pub const VIRTIO_BLOCK_MMIO: &str = "virtio-blk-mmio";
 pub const KATA_MMIO_BLK_DEV_TYPE: &str = "mmioblk";
 pub const KATA_BLK_DEV_TYPE: &str = "blk";
 

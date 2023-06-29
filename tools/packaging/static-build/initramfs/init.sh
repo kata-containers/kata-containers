@@ -18,11 +18,11 @@ echo "/sbin/mdev" > /proc/sys/kernel/hotplug
 mdev -s
 
 get_option() {
-    local value
-    value=" $(cat /proc/cmdline) "
-    value="${value##* ${1}=}"
-    value="${value%% *}"
-    [ "${value}" != "" ] && echo "${value}"
+	local value
+	value=" $(cat /proc/cmdline) "
+	value="${value##* ${1}=}"
+	value="${value%% *}"
+	[ "${value}" != "" ] && echo "${value}"
 }
 
 rootfs_verifier=$(get_option cc_rootfs_verity.scheme)
@@ -32,11 +32,11 @@ hash_device=${root_device%?}2
 
 if [ -e ${root_device} ] && [ -e ${hash_device} ] && [ "${rootfs_verifier}" = "dm-verity" ]
 then
-    veritysetup open "${root_device}" root "${hash_device}" "${rootfs_hash}"
-    mount /dev/mapper/root /mnt
+	veritysetup open "${root_device}" root "${hash_device}" "${rootfs_hash}"
+	mount /dev/mapper/root /mnt
 else
-    echo "No LUKS device found"
-    mount "${root_device}" /mnt
+	echo "No LUKS device found"
+	mount "${root_device}" /mnt
 fi
 
 umount /proc

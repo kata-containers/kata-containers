@@ -1354,9 +1354,11 @@ dependencies = [
  "go-flag",
  "kata-sys-util",
  "kata-types",
+ "lazy_static",
  "libc",
  "logging",
  "nix 0.24.3",
+ "path-clean",
  "persist",
  "rand 0.8.5",
  "rust-ini",
@@ -2123,6 +2125,12 @@ name = "paste"
 version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d01a5bd0424d00070b0098dd17ebca6f961a959dead1dbcbbbc1d1cd8d3deeba"
+
+[[package]]
+name = "path-clean"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "17359afc20d7ab31fdb42bb844c8b3bb1dabd7dcf7e68428492da7f16966fcef"
 
 [[package]]
 name = "percent-encoding"

@@ -5,12 +5,15 @@
 //
 
 use std::path::Path;
+use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use hypervisor::device::DeviceType;
+use hypervisor::device::device_manager::{do_handle_device, DeviceManager};
+use hypervisor::device::DeviceConfig;
 use hypervisor::{device::driver, Hypervisor};
-use hypervisor::{VfioConfig, VfioDevice};
+use hypervisor::{get_vfio_device, VfioConfig};
+use tokio::sync::RwLock;
 
 use super::endpoint_persist::{EndpointState, PhysicalEndpointState};
 use super::Endpoint;
@@ -50,10 +53,11 @@ pub struct PhysicalEndpoint {
     bdf: String,
     driver: String,
     vendor_device_id: VendorDevice,
+    d: Arc<RwLock<DeviceManager>>,
 }
 
 impl PhysicalEndpoint {
-    pub fn new(name: &str, hardware_addr: &[u8]) -> Result<Self> {
+    pub fn new(name: &str, hardware_addr: &[u8], d: Arc<RwLock<DeviceManager>>) -> Result<Self> {
         let driver_info = link::get_driver_info(name).context("get driver info")?;
         let bdf = driver_info.bus_info;
         let sys_pci_devices_path = Path::new(SYS_PCI_DEVICES_PATH);
@@ -80,6 +84,7 @@ impl PhysicalEndpoint {
                 .context("new vendor device")?,
             driver,
             bdf,
+            d,
         })
     }
 }
@@ -94,7 +99,7 @@ impl Endpoint for PhysicalEndpoint {
         self.hard_addr.clone()
     }
 
-    async fn attach(&self, hypervisor: &dyn Hypervisor) -> Result<()> {
+    async fn attach(&self, _hypervisor: &dyn Hypervisor) -> Result<()> {
         // bind physical interface from host driver and bind to vfio
         driver::bind_device_to_vfio(
             &self.bdf,
@@ -103,23 +108,19 @@ impl Endpoint for PhysicalEndpoint {
         )
         .with_context(|| format!("bind physical endpoint from {} to vfio", &self.driver))?;
 
-        // set vfio's bus type, pci or mmio. Mostly use pci by default.
-        let mode = match self.driver.as_str() {
-            "virtio-pci" => "mmio",
-            _ => "pci",
+        let vfio_device = get_vfio_device(self.bdf.clone()).context("get vfio device failed.")?;
+        let vfio_dev_config = &mut VfioConfig {
+            host_path: vfio_device.clone(),
+            dev_type: "pci".to_string(),
+            hostdev_prefix: "physical_nic_".to_owned(),
+            ..Default::default()
         };
 
-        // add vfio device
-        let d = DeviceType::Vfio(VfioDevice {
-            id: format!("physical_nic_{}", self.name().await),
-            config: VfioConfig {
-                sysfs_path: "".to_string(),
-                bus_slot_func: self.bdf.clone(),
-                mode: driver::VfioBusMode::new(mode)
-                    .with_context(|| format!("new vfio bus mode {:?}", mode))?,
-            },
-        });
-        hypervisor.add_device(d).await.context("add device")?;
+        // create and insert VFIO device into Kata VM
+        do_handle_device(&self.d, &DeviceConfig::VfioCfg(vfio_dev_config.clone()))
+            .await
+            .context("do handle device failed.")?;
+
         Ok(())
     }
 
