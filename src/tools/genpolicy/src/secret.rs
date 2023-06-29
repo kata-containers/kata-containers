@@ -79,6 +79,10 @@ impl yaml::K8sResource for Secret {
         Ok(())
     }
 
+    fn get_yaml_host_name(&self) -> Option<String> {
+        panic!("Unsupported");
+    }
+
     fn get_host_name(&self) -> String {
         panic!("Unsupported");
     }

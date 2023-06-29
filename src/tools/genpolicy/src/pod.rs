@@ -72,6 +72,9 @@ pub struct PodSpec {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tolerations: Option<Vec<Toleration>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hostname: Option<String>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -557,13 +560,32 @@ impl yaml::K8sResource for Pod {
         Ok(())
     }
 
+    fn get_yaml_host_name(&self) -> Option<String> {
+        if let Some(hostname) = &self.spec.hostname {
+            return Some(hostname.clone());
+        }
+        None
+    }
+
     fn get_host_name(&self) -> String {
-        // Example: "hostname": "^busybox-cc$",
-        "^".to_string() + &self.metadata.get_name() + "$"
+        if let Some(hostname) = &self.get_yaml_host_name() {
+            return hostname.clone();
+        }
+
+        let name = self.metadata.get_name();
+        if !name.is_empty() {
+            return "^".to_string() + &name + "$";
+        }
+
+        panic!("No pod name.");
     }
 
     fn get_sandbox_name(&self) -> Option<String> {
-        Some(self.metadata.get_name())
+        let name = self.metadata.get_name();
+        if !name.is_empty() {
+            return Some(name);
+        }
+        panic!("No pod name.");
     }
 
     fn get_namespace(&self) -> String {

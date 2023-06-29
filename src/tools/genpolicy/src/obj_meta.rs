@@ -16,6 +16,9 @@ pub struct ObjectMeta {
     pub name: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub generateName: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     labels: Option<BTreeMap<String, String>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -29,6 +32,8 @@ impl ObjectMeta {
     pub fn get_name(&self) -> String {
         if let Some(name) = &self.name {
             name.clone()
+        } else if self.generateName.is_some() {
+            return "$(generated-name)".to_string();
         } else {
             String::new()
         }
