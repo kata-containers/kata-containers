@@ -81,6 +81,17 @@ const (
 
 	// VirtioFSNydus means use nydus for the shared file system
 	VirtioFSNydus = "virtio-fs-nydus"
+
+	// NoSharedFS means *no* shared file system solution will be used
+	// and files will be copied into the guest system.
+	//
+	// WARNING: This should be carefully used, and only used in very few
+	// specific cases, as any update to the mount will *NOT* be reflected
+	// during the lifecycle of the pod, causing issues with rotation of
+	// secrets, certs, or configurations via kubernetes objects like
+	// configMaps or secrets, as those will be copied into the guest at
+	// *pod* *creation* *time*.
+	NoSharedFS = "none"
 )
 
 const (

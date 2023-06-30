@@ -726,3 +726,30 @@ func TestClhSetConfig(t *testing.T) {
 
 	assert.Equal(clh.config, config)
 }
+
+func TestClhCapabilities(t *testing.T) {
+	assert := assert.New(t)
+
+	hConfig, err := newClhConfig()
+	assert.NoError(err)
+
+	clh := &cloudHypervisor{}
+	assert.Equal(clh.config, HypervisorConfig{})
+
+	hConfig.SharedFS = config.VirtioFS
+
+	err = clh.setConfig(&hConfig)
+	assert.NoError(err)
+
+	var ctx context.Context
+	c := clh.Capabilities(ctx)
+	assert.True(c.IsFsSharingSupported())
+
+	hConfig.SharedFS = config.NoSharedFS
+
+	err = clh.setConfig(&hConfig)
+	assert.NoError(err)
+
+	c = clh.Capabilities(ctx)
+	assert.False(c.IsFsSharingSupported())
+}

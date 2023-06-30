@@ -51,7 +51,7 @@ type qemuArch interface {
 	kernelParameters(debug bool) []Param
 
 	//capabilities returns the capabilities supported by QEMU
-	capabilities() types.Capabilities
+	capabilities(config HypervisorConfig) types.Capabilities
 
 	// bridges sets the number bridges for the machine type
 	bridges(number uint32)
@@ -280,11 +280,13 @@ func (q *qemuArchBase) kernelParameters(debug bool) []Param {
 	return params
 }
 
-func (q *qemuArchBase) capabilities() types.Capabilities {
+func (q *qemuArchBase) capabilities(hConfig HypervisorConfig) types.Capabilities {
 	var caps types.Capabilities
 	caps.SetBlockDeviceHotplugSupport()
 	caps.SetMultiQueueSupport()
-	caps.SetFsSharingSupport()
+	if hConfig.SharedFS != config.NoSharedFS {
+		caps.SetFsSharingSupport()
+	}
 	return caps
 }
 
