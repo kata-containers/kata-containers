@@ -188,7 +188,7 @@ var PCIePortPrefixMapping = map[PCIePort]PCIePortBusPrefix{
 	BridgePort: PCIBridgePortPrefix,
 }
 
-func (p PCIePort) InValid() bool {
+func (p PCIePort) Invalid() bool {
 	switch p {
 	case RootPort:
 		fallthrough
@@ -374,7 +374,7 @@ const (
 	VFIOAPDeviceMediatedType
 )
 
-// VFIOPCIDev represents a VFIO PCI device used for hotplugging
+// VFIODev represents a VFIO PCI device used for hotplugging
 type VFIODev struct {
 	// ID is used to identify this drive in the hypervisor options.
 	ID string

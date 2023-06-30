@@ -579,7 +579,7 @@ func addHypervisorPCIePortOverride(value string) (config.PCIePort, error) {
 		return config.NoPort, nil
 	}
 	port := config.PCIePort(value)
-	if port.InValid() {
+	if port.Invalid() {
 		return config.InvalidPort, fmt.Errorf("Invalid PCIe port \"%v\" specified in annotation", value)
 	}
 	return port, nil
