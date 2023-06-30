@@ -71,13 +71,13 @@ func (endpoint *MacvtapEndpoint) Attach(ctx context.Context, s *Sandbox) error {
 
 	h := s.hypervisor
 
-	endpoint.VMFds, err = createMacvtapFds(endpoint.EndpointProperties.Iface.Index, int(h.HypervisorConfig().NumVCPUs))
+	endpoint.VMFds, err = createMacvtapFds(endpoint.EndpointProperties.Iface.Index, int(h.HypervisorConfig().NumVCPUs()))
 	if err != nil {
 		return fmt.Errorf("Could not setup macvtap fds %s: %s", endpoint.EndpointProperties.Iface.Name, err)
 	}
 
 	if !h.HypervisorConfig().DisableVhostNet {
-		vhostFds, err := createVhostFds(int(h.HypervisorConfig().NumVCPUs))
+		vhostFds, err := createVhostFds(int(h.HypervisorConfig().NumVCPUs()))
 		if err != nil {
 			return fmt.Errorf("Could not setup vhost fds %s : %s", endpoint.EndpointProperties.Iface.Name, err)
 		}

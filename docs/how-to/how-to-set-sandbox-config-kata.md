@@ -47,7 +47,7 @@ There are several kinds of Kata configurations and they are listed below.
 | `io.katacontainers.config.hypervisor.ctlpath` (R) | `string` | Path to the `acrnctl` binary for the ACRN hypervisor |
 | `io.katacontainers.config.hypervisor.default_max_vcpus` | uint32| the maximum number of vCPUs allocated for the VM by the hypervisor |
 | `io.katacontainers.config.hypervisor.default_memory` | uint32| the memory assigned for a VM by the hypervisor in `MiB` |
-| `io.katacontainers.config.hypervisor.default_vcpus` | uint32| the default vCPUs assigned for a VM by the hypervisor |
+| `io.katacontainers.config.hypervisor.default_vcpus` | float32| the default vCPUs assigned for a VM by the hypervisor |
 | `io.katacontainers.config.hypervisor.disable_block_device_use` | `boolean` | disallow a block device from being used |
 | `io.katacontainers.config.hypervisor.disable_image_nvdimm` | `boolean` | specify if a `nvdimm` device should be used as rootfs for the guest (QEMU) |
 | `io.katacontainers.config.hypervisor.disable_vhost_net` | `boolean` | specify if `vhost-net` is not available on the host |

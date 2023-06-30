@@ -22,7 +22,7 @@ func validateHypervisorConfig(conf *HypervisorConfig) error {
 	}
 
 	if conf.NumVCPUs == 0 {
-		conf.NumVCPUs = defaultVCPUs
+		conf.NumVCPUsF = defaultVCPUs
 	}
 
 	if conf.MemorySize == 0 {

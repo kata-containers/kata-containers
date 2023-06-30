@@ -671,7 +671,7 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	err := addAnnotations(ocispec, &sbConfig, runtimeConfig)
 	assert.NoError(err)
 
-	assert.Equal(sbConfig.HypervisorConfig.NumVCPUs, uint32(1))
+	assert.Equal(sbConfig.HypervisorConfig.NumVCPUsF, float32(1))
 	assert.Equal(sbConfig.HypervisorConfig.DefaultMaxVCPUs, uint32(1))
 	assert.Equal(sbConfig.HypervisorConfig.MemorySize, uint32(1024))
 	assert.Equal(sbConfig.HypervisorConfig.MemSlots, uint32(20))
@@ -1087,7 +1087,7 @@ func TestCalculateContainerSizing(t *testing.T) {
 
 	testCases := []struct {
 		spec        *specs.Spec
-		expectedCPU uint32
+		expectedCPU float32
 		expectedMem uint32
 	}{
 		{
@@ -1152,7 +1152,7 @@ func TestCalculateSandboxSizing(t *testing.T) {
 
 	testCases := []struct {
 		spec        *specs.Spec
-		expectedCPU uint32
+		expectedCPU float32
 		expectedMem uint32
 	}{
 		{

@@ -103,7 +103,7 @@ func TestHypervisorConfigDefaults(t *testing.T) {
 		KernelPath:          fmt.Sprintf("%s/%s", testDir, testKernel),
 		ImagePath:           fmt.Sprintf("%s/%s", testDir, testImage),
 		HypervisorPath:      "",
-		NumVCPUs:            defaultVCPUs,
+		NumVCPUsF:           defaultVCPUs,
 		MemorySize:          defaultMemSzMiB,
 		DefaultBridges:      defaultBridges,
 		BlockDeviceDriver:   defaultBlockDriver,

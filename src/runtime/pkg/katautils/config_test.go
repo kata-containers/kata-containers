@@ -161,7 +161,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (testConfig testRuntime
 		RootfsType:            rootfsType,
 		KernelParams:          vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
 		HypervisorMachineType: machineType,
-		NumVCPUs:              defaultVCPUCount,
+		NumVCPUsF:             float32(defaultVCPUCount),
 		DefaultMaxVCPUs:       getCurrentCpuNum(),
 		MemorySize:            defaultMemSize,
 		DefaultMaxMemorySize:  maxMemory,
@@ -554,7 +554,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		InitrdPath:            defaultInitrdPath,
 		RootfsType:            defaultRootfsType,
 		HypervisorMachineType: defaultMachineType,
-		NumVCPUs:              defaultVCPUCount,
+		NumVCPUsF:             float32(defaultVCPUCount),
 		DefaultMaxVCPUs:       defaultMaxVCPUCount,
 		MemorySize:            defaultMemSize,
 		DisableBlockDeviceUse: defaultDisableBlockDeviceUse,
@@ -926,7 +926,7 @@ func TestHypervisorDefaults(t *testing.T) {
 	h := hypervisor{}
 
 	assert.Equal(h.machineType(), defaultMachineType, "default hypervisor machine type wrong")
-	assert.Equal(h.defaultVCPUs(), defaultVCPUCount, "default vCPU number is wrong")
+	assert.Equal(h.defaultVCPUs(), float32(defaultVCPUCount), "default vCPU number is wrong")
 	assert.Equal(h.defaultMaxVCPUs(), numCPUs, "default max vCPU number is wrong")
 	assert.Equal(h.defaultMemSz(), defaultMemSize, "default memory size is wrong")
 
@@ -936,13 +936,13 @@ func TestHypervisorDefaults(t *testing.T) {
 
 	// auto inferring
 	h.NumVCPUs = -1
-	assert.Equal(h.defaultVCPUs(), numCPUs, "default vCPU number is wrong")
+	assert.Equal(h.defaultVCPUs(), float32(numCPUs), "default vCPU number is wrong")
 
 	h.NumVCPUs = 2
-	assert.Equal(h.defaultVCPUs(), uint32(2), "default vCPU number is wrong")
+	assert.Equal(h.defaultVCPUs(), float32(2), "default vCPU number is wrong")
 
-	h.NumVCPUs = int32(numCPUs) + 1
-	assert.Equal(h.defaultVCPUs(), numCPUs, "default vCPU number is wrong")
+	h.NumVCPUs = float32(numCPUs + 1)
+	assert.Equal(h.defaultVCPUs(), float32(numCPUs), "default vCPU number is wrong")
 
 	h.DefaultMaxVCPUs = 2
 	assert.Equal(h.defaultMaxVCPUs(), uint32(2), "default max vCPU number is wrong")
@@ -1395,7 +1395,7 @@ func TestDefaultCPUFeatures(t *testing.T) {
 func TestUpdateRuntimeConfigurationVMConfig(t *testing.T) {
 	assert := assert.New(t)
 
-	vcpus := uint(2)
+	vcpus := float32(2)
 	mem := uint32(2048)
 
 	config := oci.RuntimeConfig{}
@@ -1404,7 +1404,7 @@ func TestUpdateRuntimeConfigurationVMConfig(t *testing.T) {
 	tomlConf := tomlConfig{
 		Hypervisor: map[string]hypervisor{
 			qemuHypervisorTableType: {
-				NumVCPUs:       int32(vcpus),
+				NumVCPUs:       vcpus,
 				MemorySize:     mem,
 				Path:           "/",
 				Kernel:         "/",
@@ -1727,7 +1727,7 @@ vfio_mode="vfio"
 	assert.NoError(t, err)
 
 	assert.Equal(t, config.Hypervisor["qemu"].Path, "/usr/bin/qemu-kvm")
-	assert.Equal(t, config.Hypervisor["qemu"].NumVCPUs, int32(2))
+	assert.Equal(t, config.Hypervisor["qemu"].NumVCPUs, float32(2))
 	assert.Equal(t, config.Hypervisor["qemu"].DefaultBridges, uint32(4))
 	assert.Equal(t, config.Hypervisor["qemu"].SharedFS, "virtio-9p")
 	assert.Equal(t, config.Runtime.Debug, true)
@@ -1765,7 +1765,7 @@ func TestUpdateRuntimeConfigHypervisor(t *testing.T) {
 		tomlConf := tomlConfig{
 			Hypervisor: map[string]hypervisor{
 				h.name: {
-					NumVCPUs:       int32(2),
+					NumVCPUs:       float32(2),
 					MemorySize:     uint32(2048),
 					Path:           "/",
 					Kernel:         "/",

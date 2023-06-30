@@ -160,7 +160,7 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 		id:         id,
 		hypervisor: hypervisor,
 		agent:      agent,
-		cpu:        config.HypervisorConfig.NumVCPUs,
+		cpu:        config.HypervisorConfig.NumVCPUs(),
 		memory:     config.HypervisorConfig.MemorySize,
 		store:      store,
 	}, nil

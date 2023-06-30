@@ -133,7 +133,7 @@ type hypervisor struct {
 	MemSlots                       uint32                    `toml:"memory_slots"`
 	DefaultBridges                 uint32                    `toml:"default_bridges"`
 	Msize9p                        uint32                    `toml:"msize_9p"`
-	NumVCPUs                       int32                     `toml:"default_vcpus"`
+	NumVCPUs                       float32                   `toml:"default_vcpus"`
 	BlockDeviceCacheSet            bool                      `toml:"block_device_cache_set"`
 	BlockDeviceCacheDirect         bool                      `toml:"block_device_cache_direct"`
 	BlockDeviceCacheNoflush        bool                      `toml:"block_device_cache_noflush"`
@@ -395,17 +395,17 @@ func getCurrentCpuNum() uint32 {
 	return cpu
 }
 
-func (h hypervisor) defaultVCPUs() uint32 {
-	numCPUs := getCurrentCpuNum()
+func (h hypervisor) defaultVCPUs() float32 {
+	numCPUs := float32(getCurrentCpuNum())
 
-	if h.NumVCPUs < 0 || h.NumVCPUs > int32(numCPUs) {
+	if h.NumVCPUs < 0 || h.NumVCPUs > numCPUs {
 		return numCPUs
 	}
 	if h.NumVCPUs == 0 { // or unspecified
-		return defaultVCPUCount
+		return float32(defaultVCPUCount)
 	}
 
-	return uint32(h.NumVCPUs)
+	return h.NumVCPUs
 }
 
 func (h hypervisor) defaultMaxVCPUs() uint32 {
@@ -723,7 +723,7 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		RootfsType:            rootfsType,
 		FirmwarePath:          firmware,
 		KernelParams:          vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
-		NumVCPUs:              h.defaultVCPUs(),
+		NumVCPUsF:             h.defaultVCPUs(),
 		DefaultMaxVCPUs:       h.defaultMaxVCPUs(),
 		MemorySize:            h.defaultMemSz(),
 		MemSlots:              h.defaultMemSlots(),
@@ -857,7 +857,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		CPUFeatures:             cpuFeatures,
 		KernelParams:            vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
 		HypervisorMachineType:   machineType,
-		NumVCPUs:                h.defaultVCPUs(),
+		NumVCPUsF:               h.defaultVCPUs(),
 		DefaultMaxVCPUs:         h.defaultMaxVCPUs(),
 		MemorySize:              h.defaultMemSz(),
 		MemSlots:                h.defaultMemSlots(),
@@ -968,7 +968,7 @@ func newAcrnHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		HypervisorCtlPathList: h.CtlPathList,
 		FirmwarePath:          firmware,
 		KernelParams:          vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
-		NumVCPUs:              h.defaultVCPUs(),
+		NumVCPUsF:             h.defaultVCPUs(),
 		DefaultMaxVCPUs:       h.defaultMaxVCPUs(),
 		MemorySize:            h.defaultMemSz(),
 		MemSlots:              h.defaultMemSlots(),
@@ -1059,7 +1059,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		MachineAccelerators:            machineAccelerators,
 		KernelParams:                   vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
 		HypervisorMachineType:          machineType,
-		NumVCPUs:                       h.defaultVCPUs(),
+		NumVCPUsF:                      h.defaultVCPUs(),
 		DefaultMaxVCPUs:                h.defaultMaxVCPUs(),
 		MemorySize:                     h.defaultMemSz(),
 		MemSlots:                       h.defaultMemSlots(),
@@ -1132,7 +1132,7 @@ func newDragonballHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		ImagePath:       image,
 		RootfsType:      rootfsType,
 		KernelParams:    vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
-		NumVCPUs:        h.defaultVCPUs(),
+		NumVCPUsF:       h.defaultVCPUs(),
 		DefaultMaxVCPUs: h.defaultMaxVCPUs(),
 		MemorySize:      h.defaultMemSz(),
 		MemSlots:        h.defaultMemSlots(),
@@ -1297,7 +1297,7 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		MachineAccelerators:      defaultMachineAccelerators,
 		CPUFeatures:              defaultCPUFeatures,
 		HypervisorMachineType:    defaultMachineType,
-		NumVCPUs:                 defaultVCPUCount,
+		NumVCPUsF:                float32(defaultVCPUCount),
 		DefaultMaxVCPUs:          defaultMaxVCPUCount,
 		MemorySize:               defaultMemSize,
 		MemOffset:                defaultMemOffset,

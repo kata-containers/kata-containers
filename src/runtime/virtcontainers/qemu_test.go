@@ -30,7 +30,7 @@ func newQemuConfig() HypervisorConfig {
 		KernelPath:          testQemuKernelPath,
 		InitrdPath:          testQemuInitrdPath,
 		HypervisorPath:      testQemuPath,
-		NumVCPUs:            defaultVCPUs,
+		NumVCPUsF:           defaultVCPUs,
 		MemorySize:          defaultMemSzMiB,
 		DefaultBridges:      defaultBridges,
 		BlockDeviceDriver:   defaultBlockDriver,
@@ -258,12 +258,12 @@ func TestQemuCreateVMMissingParentDirFail(t *testing.T) {
 
 func TestQemuCPUTopology(t *testing.T) {
 	assert := assert.New(t)
-	vcpus := 1
+	vcpus := float32(1)
 
 	q := &qemu{
 		arch: &qemuArchBase{},
 		config: HypervisorConfig{
-			NumVCPUs:        uint32(vcpus),
+			NumVCPUsF:       vcpus,
 			DefaultMaxVCPUs: uint32(vcpus),
 		},
 	}
