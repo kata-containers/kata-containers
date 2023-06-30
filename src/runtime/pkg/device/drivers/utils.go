@@ -47,7 +47,7 @@ func deviceLogger() *logrus.Entry {
 	return api.DeviceLogger()
 }
 
-// IsPCIeDevice Identifies PCIe device by reading the size of the PCI config space
+// IsPCIeDevice identifies PCIe device by reading the size of the PCI config space
 // Plain PCI device have 256 bytes of config space where PCIe devices have 4K
 func IsPCIeDevice(bdf string) bool {
 	if len(strings.Split(bdf, ":")) == 2 {
