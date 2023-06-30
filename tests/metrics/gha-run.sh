@@ -14,12 +14,11 @@ metrics_dir="$(dirname "$(readlink -f "$0")")"
 source "${metrics_dir}/../common.bash"
 
 function create_symbolic_links() {
-	hypervisor="${1:-qemu}"
 	local link_configuration_file="/opt/kata/share/defaults/kata-containers/configuration.toml"
-	local source_configuration_file="/opt/kata/share/defaults/kata-containers/configuration-${hypervisor}.toml"
+	local source_configuration_file="/opt/kata/share/defaults/kata-containers/configuration-${KATA_HYPERVISOR}.toml"
 
-	if [ ${hypervisor} != 'qemu' ] && [ ${hypervisor} != 'clh' ]; then
-		die "Failed to set the configuration.toml: '${hypervisor}' is not recognized as a valid hypervisor name."
+	if [ ${KATA_HYPERVISOR} != 'qemu' ] && [ ${KATA_HYPERVISOR} != 'clh' ]; then
+		die "Failed to set the configuration.toml: '${KATA_HYPERVISOR}' is not recognized as a valid hypervisor name."
 	fi
 
 	sudo ln -sf "${source_configuration_file}" "${link_configuration_file}"
@@ -45,6 +44,8 @@ EOF
 }
 
 function install_kata() {
+	# ToDo: remove the exit once the metrics workflow is stable
+	exit 0
 	local kata_tarball="kata-static.tar.xz"
 	declare -r katadir="/opt/kata"
 	declare -r destdir="/"
@@ -83,20 +84,39 @@ function check_containerd_config_for_kata() {
 }
 
 function run_test_launchtimes() {
-	hypervisor="${1}"
+	info "Running Launch Time test using ${KATA_HYPERVISOR} hypervisor"
 
-	info "Running Launch Time test using ${hypervisor} hypervisor"
-
-	create_symbolic_links "${hypervisor}"
+	# ToDo: remove the exit once the metrics workflow is stable
+	exit 0
+	create_symbolic_links
 	bash tests/metrics/time/launch_times.sh -i public.ecr.aws/ubuntu/ubuntu:latest -n 20
+}
+
+function run_test_memory_usage() {
+	info "Running memory-usage test using ${KATA_HYPERVISOR} hypervisor"
+
+	# ToDo: remove the exit once the metrics workflow is stable
+	exit 0
+	create_symbolic_links
+	bash tests/metrics/density/memory_usage.sh 20 5
+}
+
+function run_test_memory_usage_inside_container() {
+	info "Running memory-usage inside the container test using ${KATA_HYPERVISOR} hypervisor"
+
+	# ToDo: remove the exit once the metrics workflow is stable
+	exit 0
+	create_symbolic_links
+	bash tests/metrics/density/memory_usage_inside_container.sh 5
 }
 
 function main() {
 	action="${1:-}"
 	case "${action}" in
 		install-kata) install_kata ;;
-		run-test-launchtimes-qemu) run_test_launchtimes "qemu" ;;
-		run-test-launchtimes-clh) run_test_launchtimes "clh" ;;
+		run-test-launchtimes) run_test_launchtimes ;;
+		run-test-memory-usage) run_test_memory_usage ;;
+		run-test-memory-usage-inside-container) run_test_memory_usage_inside_container ;;
 		*) >&2 die "Invalid argument" ;;
 	esac
 }

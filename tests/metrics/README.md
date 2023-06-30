@@ -55,6 +55,8 @@ For further details see the [time tests documentation](time).
 Tests that measure the size and overheads of the runtime. Generally this is looking at
 memory footprint sizes, but could also cover disk space or even CPU consumption.
 
+For further details see the [density tests documentation](density).
+
 ### Networking
 
 Tests relating to networking. General items could include:
