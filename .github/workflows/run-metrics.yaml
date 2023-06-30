@@ -8,9 +8,15 @@ on:
 
 jobs:
   run-metrics:
+    strategy:
+      fail-fast: true
+      matrix:
+        vmm: ['clh', 'qemu']
+      max-parallel: 1
     runs-on: metrics
     env:
       GOPATH: ${{ github.workspace }}
+      KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
       - uses: actions/checkout@v3
         with:
@@ -25,8 +31,12 @@ jobs:
       - name: Install kata
         run: bash tests/metrics/gha-run.sh install-kata kata-artifacts
 
-      - name: run launch times on qemu
-        run: bash tests/metrics/gha-run.sh run-test-launchtimes-qemu
+      - name: run launch times test
+        run: bash tests/metrics/gha-run.sh run-test-launchtimes
 
-      - name: run launch times on clh
-        run:  bash tests/metrics/gha-run.sh run-test-launchtimes-clh
+      - name: run memory foot print test
+        run:  bash tests/metrics/gha-run.sh run-test-memory-usage
+
+      - name: run memory usage inside container test
+        run:  bash tests/metrics/gha-run.sh run-test-memory-usage-inside-container
+
