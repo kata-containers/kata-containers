@@ -341,8 +341,10 @@ install_cc_kernel() {
 		"${final_tarball_path}" \
 		&& return 0
 
-	info "build initramfs for CC kernel"
-	"${initramfs_builder}"
+	if [ "${MEASURED_ROOTFS}" == "yes" ]; then
+		info "build initramfs for cc kernel"
+		"${initramfs_builder}"
+	fi
 	DESTDIR="${destdir}" PREFIX="${cc_prefix}" "${kernel_builder}" -f -v "${kernel_version}"
 }
 
