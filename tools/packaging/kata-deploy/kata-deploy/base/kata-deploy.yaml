@@ -29,7 +29,7 @@ spec:
             fieldRef:
               fieldPath: spec.nodeName
         securityContext:
-          privileged: false
+          privileged: true
         volumeMounts:
         - name: crio-conf
           mountPath: /etc/crio/
@@ -38,9 +38,9 @@ spec:
         - name: kata-artifacts
           mountPath: /opt/kata/
         - name: dbus
-          mountPath: /var/run/dbus
+          mountPath: /var/run/dbus/system_bus_socket
         - name: systemd
-          mountPath: /run/systemd
+          mountPath: /run/systemd/system
         - name: local-bin
           mountPath: /usr/local/bin/
       volumes:
@@ -56,10 +56,10 @@ spec:
             type: DirectoryOrCreate
         - name: dbus
           hostPath:
-            path: /var/run/dbus
+            path: /var/run/dbus/system_bus_socket
         - name: systemd
           hostPath:
-            path: /run/systemd
+            path: /run/systemd/system
         - name: local-bin
           hostPath:
             path: /usr/local/bin/
