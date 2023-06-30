@@ -22,7 +22,7 @@ function create_symbolic_links() {
 	local link_configuration_file="/opt/kata/share/defaults/kata-containers/configuration.toml"
 	local source_configuration_file="/opt/kata/share/defaults/kata-containers/configuration-${KATA_HYPERVISOR}.toml"
 
-	if [ ${KATA_HYPERVISOR} != 'qemu' ] && [ ${KATA_HYPERVISOR} != 'clh' ]; then
+	if [ "${KATA_HYPERVISOR}" != 'qemu' ] && [ "${KATA_HYPERVISOR}" != 'clh' ]; then
 		die "Failed to set the configuration.toml: '${KATA_HYPERVISOR}' is not recognized as a valid hypervisor name."
 	fi
 
@@ -89,13 +89,14 @@ function check_containerd_config_for_kata() {
 }
 
 function check_metrics() {
+	KATA_HYPERVISOR="${1}"
 	# Ensure we have the latest checkemtrics
 	pushd "${checkmetrics_dir}"
 	make
 	sudo make install
 	popd
 
-	local cm_base_file="${checkmetrics_config_dir}/checkmetrics-json-clh-kata-metric8.toml"
+	local cm_base_file="${checkmetrics_config_dir}/checkmetrics-json-${KATA_HYPERVISOR}-kata-metric8.toml"
 	checkmetrics --debug --percentage --basefile "${cm_base_file}" --metricsdir "${results_dir}"
 	cm_result=$?
 	if [ "${cm_result}" != 0 ]; then
@@ -112,9 +113,7 @@ function run_test_launchtimes() {
 	create_symbolic_links
 	bash tests/metrics/time/launch_times.sh -i public.ecr.aws/ubuntu/ubuntu:latest -n 20
 
-	if [ "${hypervisor}" = "clh" ]; then
-		check_metrics
-	fi
+	check_metrics "${KATA_HYPERVISOR}"
 }
 
 function run_test_memory_usage() {
