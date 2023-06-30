@@ -126,7 +126,7 @@ func TestCalculateSandboxCPUs(t *testing.T) {
 	tests := []struct {
 		name       string
 		containers []ContainerConfig
-		want       uint32
+		want       float32
 	}{
 		{"1-unconstrained", []ContainerConfig{unconstrained}, 0},
 		{"2-unconstrained", []ContainerConfig{unconstrained, unconstrained}, 0},

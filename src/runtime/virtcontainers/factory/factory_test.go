@@ -246,7 +246,7 @@ func TestFactoryGetVM(t *testing.T) {
 	assert.Nil(err)
 
 	// CPU hotplug
-	vmConfig.HypervisorConfig.NumVCPUs++
+	vmConfig.HypervisorConfig.NumVCPUsF++
 	vm, err = f.GetVM(ctx, vmConfig)
 	assert.Nil(err)
 
@@ -278,9 +278,9 @@ func TestDeepCompare(t *testing.T) {
 	bar := vc.VMConfig{}
 	assert.True(utils.DeepCompare(foo, bar))
 
-	foo.HypervisorConfig.NumVCPUs = 1
+	foo.HypervisorConfig.NumVCPUsF = 1
 	assert.False(utils.DeepCompare(foo, bar))
-	bar.HypervisorConfig.NumVCPUs = 1
+	bar.HypervisorConfig.NumVCPUsF = 1
 	assert.True(utils.DeepCompare(foo, bar))
 
 	// slice

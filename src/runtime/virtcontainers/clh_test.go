@@ -56,7 +56,7 @@ func newClhConfig() (HypervisorConfig, error) {
 		ImagePath:                     testClhImagePath,
 		RootfsType:                    string(EXT4),
 		HypervisorPath:                testClhPath,
-		NumVCPUs:                      defaultVCPUs,
+		NumVCPUsF:                     defaultVCPUs,
 		BlockDeviceDriver:             config.VirtioBlock,
 		MemorySize:                    defaultMemSzMiB,
 		DefaultBridges:                defaultBridges,
