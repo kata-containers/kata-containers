@@ -8,7 +8,7 @@
 #[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 use crate::arch::arch_specific;
 #[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
-use crate::check::get_single_cpu_info;
+use kata_sys_util::cpu::get_single_cpu_info;
 
 use anyhow::{anyhow, Context, Result};
 use std::fs;

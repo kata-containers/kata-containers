@@ -269,6 +269,7 @@ pub fn check_kernel_module_loaded(module: &str, parameter: &str) -> Result<Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+    use kata_sys_util::cpu::{get_cpu_flags, get_single_cpu_info};
     use semver::Version;
     use std::fs;
     use std::io::Write;

@@ -30,6 +30,7 @@ shim-interface = { path = "../../libs/shim-interface"}
 kata-types = { path = "../../libs/kata-types" }
 safe-path = { path = "../../libs/safe-path" }
 agent = { path = "../../runtime-rs/crates/agent"}
+kata-sys-util = { path = "../../libs/kata-sys-util"}
 serial_test = "0.5.1"
 vmm-sys-util = "0.11.0"
 epoll = "4.0.1"

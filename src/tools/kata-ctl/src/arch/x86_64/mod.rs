@@ -67,9 +67,9 @@ mod arch_specific {
     fn check_cpu(_args: &str) -> Result<()> {
         println!("INFO: check CPU: x86_64");
 
-        let cpu_info = check::get_single_cpu_info(check::PROC_CPUINFO, CPUINFO_DELIMITER)?;
+        let cpu_info = kata_sys_util::cpu::get_single_cpu_info(check::PROC_CPUINFO, CPUINFO_DELIMITER)?;
 
-        let cpu_flags = check::get_cpu_flags(&cpu_info, CPUINFO_FLAGS_TAG).map_err(|e| {
+        let cpu_flags = kata_sys_util::cpu::get_cpu_flags(&cpu_info, CPUINFO_FLAGS_TAG).map_err(|e| {
             anyhow!(
                 "Error parsing CPU flags, file {:?}, {:?}",
                 check::PROC_CPUINFO,
@@ -96,9 +96,9 @@ mod arch_specific {
     }
 
     fn retrieve_cpu_flags() -> Result<String> {
-        let cpu_info = check::get_single_cpu_info(check::PROC_CPUINFO, CPUINFO_DELIMITER)?;
+        let cpu_info = kata_sys_util::cpu::get_single_cpu_info(check::PROC_CPUINFO, CPUINFO_DELIMITER)?;
 
-        let cpu_flags = check::get_cpu_flags(&cpu_info, CPUINFO_FLAGS_TAG).map_err(|e| {
+        let cpu_flags = kata_sys_util::cpu::get_cpu_flags(&cpu_info, CPUINFO_FLAGS_TAG).map_err(|e| {
             anyhow!(
                 "Error parsing CPU flags, file {:?}, {:?}",
                 check::PROC_CPUINFO,
@@ -170,7 +170,7 @@ mod arch_specific {
     }
 
     fn running_on_vmm() -> Result<bool> {
-        match check::get_single_cpu_info(check::PROC_CPUINFO, CPUINFO_DELIMITER) {
+        match kata_sys_util::cpu::get_single_cpu_info(check::PROC_CPUINFO, CPUINFO_DELIMITER) {
             Ok(cpu_info) => {
                 // check if the 'hypervisor' flag exist in the cpu features
                 let missing_hypervisor_flag = check::check_cpu_attribs(&cpu_info, VMM_FLAGS)?;
