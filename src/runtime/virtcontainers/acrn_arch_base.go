@@ -33,7 +33,7 @@ type acrnArch interface {
 	kernelParameters(debug bool) []Param
 
 	//capabilities returns the capabilities supported by acrn
-	capabilities() types.Capabilities
+	capabilities(config HypervisorConfig) types.Capabilities
 
 	// memoryTopology returns the memory topology using the given amount of memoryMb and hostMemoryMb
 	memoryTopology(memMb uint64) Memory
@@ -361,7 +361,7 @@ func (a *acrnArchBase) memoryTopology(memoryMb uint64) Memory {
 	return memory
 }
 
-func (a *acrnArchBase) capabilities() types.Capabilities {
+func (a *acrnArchBase) capabilities(config HypervisorConfig) types.Capabilities {
 	var caps types.Capabilities
 
 	caps.SetBlockDeviceSupport()
