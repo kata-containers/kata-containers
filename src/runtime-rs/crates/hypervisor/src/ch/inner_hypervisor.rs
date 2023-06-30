@@ -6,9 +6,9 @@
 use super::inner::CloudHypervisorInner;
 use crate::ch::utils::get_api_socket_path;
 use crate::ch::utils::{get_jailer_root, get_sandbox_path, get_vsock_path};
+use crate::device::DeviceType;
 use crate::kernel_param::KernelParams;
-use crate::Device;
-use crate::VsockConfig;
+use crate::VsockDevice;
 use crate::VM_ROOTFS_DRIVER_PMEM;
 use crate::{VcpuThreadIds, VmmState};
 use anyhow::{anyhow, Context, Result};
@@ -228,11 +228,9 @@ impl CloudHypervisorInner {
 
         let join_handle = self.cloud_hypervisor_ping_until_ready(CH_POLL_TIME_MS);
 
-        let result = tokio::time::timeout(Duration::new(timeout_secs as u64, 0), join_handle)
+        tokio::time::timeout(Duration::new(timeout_secs as u64, 0), join_handle)
             .await
-            .context(timeout_msg)?;
-
-        result
+            .context(timeout_msg)?
     }
 
     async fn cloud_hypervisor_ensure_not_launched(&self) -> Result<()> {
@@ -419,10 +417,11 @@ impl CloudHypervisorInner {
 
         self.netns = netns;
 
-        let vsock_cfg = VsockConfig::new(self.id.clone()).await?;
+        let vsock_dev = VsockDevice::new(self.id.clone()).await?;
 
-        let dev = Device::Vsock(vsock_cfg);
-        self.add_device(dev).await.context("add vsock device")?;
+        self.add_device(DeviceType::Vsock(vsock_dev))
+            .await
+            .context("add vsock device")?;
 
         self.start_hypervisor(self.timeout_secs).await?;
 
@@ -493,6 +492,10 @@ impl CloudHypervisorInner {
 
     pub(crate) async fn cleanup(&self) -> Result<()> {
         Ok(())
+    }
+
+    pub(crate) async fn resize_vcpu(&self, old_vcpu: u32, new_vcpu: u32) -> Result<(u32, u32)> {
+        Ok((old_vcpu, new_vcpu))
     }
 
     pub(crate) async fn get_pids(&self) -> Result<Vec<u32>> {

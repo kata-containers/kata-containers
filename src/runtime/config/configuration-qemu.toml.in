@@ -178,6 +178,11 @@ disable_block_device_use = @DEFDISABLEBLOCK@
 #   - virtio-fs (default)
 #   - virtio-9p
 #   - virtio-fs-nydus
+#   - none
+# WARNING: "none" should be carefully used, and only used in very few specific cases, as
+# any update to the mount will *NOT* be reflected during the lifecycle of the pod, causing
+# issues with rotation of secrets, certs, or configurations via kubernetes objects like
+# configMaps or secrets, as those will be copied into the guest at *pod* *creation* *time*.
 shared_fs = "@DEFSHAREDFS_QEMU_VIRTIOFS@"
 
 # Path to vhost-user-fs daemon.
@@ -197,9 +202,9 @@ virtio_fs_queue_size = @DEFVIRTIOFSQUEUESIZE@
 # Extra args for virtiofsd daemon
 #
 # Format example:
-#   ["-o", "arg1=xxx,arg2", "-o", "hello world", "--arg3=yyy"]
+#   ["--arg1=xxx", "--arg2=yyy"]
 # Examples:
-#   Set virtiofsd log level to debug : ["-o", "log_level=debug"] or ["-d"]
+#   Set virtiofsd log level to debug : ["--log-level=debug"]
 #
 # see `virtiofsd -h` for possible options.
 virtio_fs_extra_args = @DEFVIRTIOFSEXTRAARGS@
@@ -351,6 +356,11 @@ pflashes = []
 # a bridge.
 # Default false
 #hotplug_vfio_on_root_bus = true
+
+# In a confidential compute environment hot-plugging can compromise
+# security. Enable cold-plugging of VFIO devices to a root-port.
+# The default setting is  "no-port", which means disabled. 
+#cold_plug_vfio = "root-port" 
 
 # Before hot plugging a PCIe device, you need to add a pcie_root_port device.
 # Use this parameter when using some large PCI bar devices, such as Nvidia GPU

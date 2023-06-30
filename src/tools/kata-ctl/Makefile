@@ -10,12 +10,13 @@ PROJECT_URL = https://github.com/kata-containers
 PROJECT_COMPONENT = kata-ctl
 
 TARGET = $(PROJECT_COMPONENT)
+INSTALL_PATH = $(HOME)/.cargo
 
 VERSION_FILE := ./VERSION
-VERSION := $(shell grep -v ^\# $(VERSION_FILE))
+export VERSION := $(shell grep -v ^\# $(VERSION_FILE))
 COMMIT_NO := $(shell git rev-parse HEAD 2>/dev/null || true)
 COMMIT_NO_SHORT := $(shell git rev-parse --short HEAD 2>/dev/null || true)
-COMMIT := $(if $(shell git status --porcelain --untracked-files=no 2>/dev/null || true),${COMMIT_NO}-dirty,${COMMIT_NO})
+export COMMIT := $(if $(shell git status --porcelain --untracked-files=no 2>/dev/null || true),${COMMIT_NO}-dirty,${COMMIT_NO})
 
 # Exported to allow cargo to see it
 export KATA_CTL_VERSION := $(if $(COMMIT),$(VERSION)-$(COMMIT),$(VERSION))
@@ -23,7 +24,9 @@ export KATA_CTL_VERSION := $(if $(COMMIT),$(VERSION)-$(COMMIT),$(VERSION))
 GENERATED_CODE = src/ops/version.rs
 
 GENERATED_REPLACEMENTS= \
-    KATA_CTL_VERSION
+    KATA_CTL_VERSION \
+    VERSION \
+    COMMIT
 
 GENERATED_FILES := $(GENERATED_CODE)
 
@@ -53,7 +56,7 @@ test:
 	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo test --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES) -- --nocapture
 
 install:
-	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo install --locked --target $(TRIPLE) --path .
+	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo install --locked --target $(TRIPLE) --path . --root $(INSTALL_PATH)
 
 check: standard_rust_check
 

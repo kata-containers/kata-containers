@@ -11,7 +11,8 @@ logging::logger_with_subsystem!(sl, "hypervisor");
 
 pub mod device;
 pub mod hypervisor_persist;
-pub use device::*;
+pub use device::driver::*;
+use device::DeviceType;
 pub mod dragonball;
 mod kernel_param;
 pub mod qemu;
@@ -31,8 +32,9 @@ use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 pub use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
 
 // Config which driver to use as vm root dev
-const VM_ROOTFS_DRIVER_BLK: &str = "virtio-blk";
+const VM_ROOTFS_DRIVER_BLK: &str = "virtio-blk-pci";
 const VM_ROOTFS_DRIVER_PMEM: &str = "virtio-pmem";
+const VM_ROOTFS_DRIVER_MMIO: &str = "virtio-blk-mmio";
 
 //Configure the root corresponding to the driver
 const VM_ROOTFS_ROOT_BLK: &str = "/dev/vda1";
@@ -68,7 +70,7 @@ pub struct VcpuThreadIds {
 }
 
 #[async_trait]
-pub trait Hypervisor: Send + Sync {
+pub trait Hypervisor: std::fmt::Debug + Send + Sync {
     // vm manager
     async fn prepare_vm(&self, id: &str, netns: Option<String>) -> Result<()>;
     async fn start_vm(&self, timeout: i32) -> Result<()>;
@@ -76,10 +78,11 @@ pub trait Hypervisor: Send + Sync {
     async fn pause_vm(&self) -> Result<()>;
     async fn save_vm(&self) -> Result<()>;
     async fn resume_vm(&self) -> Result<()>;
+    async fn resize_vcpu(&self, old_vcpus: u32, new_vcpus: u32) -> Result<(u32, u32)>; // returns (old_vcpus, new_vcpus)
 
     // device manager
-    async fn add_device(&self, device: device::Device) -> Result<()>;
-    async fn remove_device(&self, device: device::Device) -> Result<()>;
+    async fn add_device(&self, device: DeviceType) -> Result<()>;
+    async fn remove_device(&self, device: DeviceType) -> Result<()>;
 
     // utils
     async fn get_agent_socket(&self) -> Result<String>;

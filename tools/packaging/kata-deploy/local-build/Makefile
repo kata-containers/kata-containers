@@ -23,10 +23,16 @@ all-parallel: $(MK_DIR)/dockerbuild/install_yq.sh
 
 all: serial-targets \
 	firecracker-tarball \
-	kernel-tarball \
 	kernel-dragonball-experimental-tarball \
+	kernel-nvidia-gpu-tarball \
+	kernel-nvidia-gpu-snp-tarball \
+	kernel-nvidia-gpu-tdx-experimental-tarball \
+	kernel-tarball \
 	kernel-tdx-experimental-tarball \
 	nydus-tarball \
+	ovmf-sev-tarball \
+	ovmf-tarball \
+	qemu-snp-experimental-tarball \
 	qemu-tarball \
 	qemu-tdx-experimental-tarball \
 	shim-v2-tarball \
@@ -36,8 +42,12 @@ all: serial-targets \
 serial-targets:
 	${MAKE} -f $(MK_PATH) -j 1 V= \
 	rootfs-image-tarball \
+	rootfs-image-tdx-tarball \
+	rootfs-initrd-mariner-tarball \
+	rootfs-initrd-sev-tarball \
 	rootfs-initrd-tarball \
-	cloud-hypervisor-tarball
+	cloud-hypervisor-tarball \
+	cloud-hypervisor-glibc-tarball
 
 %-tarball-build: $(MK_DIR)/dockerbuild/install_yq.sh
 	$(call BUILD,$*)
@@ -45,10 +55,10 @@ serial-targets:
 cloud-hypervisor-tarball:
 	${MAKE} $@-build
 
-firecracker-tarball:
+cloud-hypervisor-glibc-tarball:
 	${MAKE} $@-build
 
-kernel-tarball:
+firecracker-tarball:
 	${MAKE} $@-build
 
 kernel-dragonball-experimental-tarball:
@@ -57,10 +67,34 @@ kernel-dragonball-experimental-tarball:
 kernel-experimental-tarball:
 	${MAKE} $@-build
 
+kernel-nvidia-gpu-tarball:
+	${MAKE} $@-build
+
+kernel-nvidia-gpu-snp-tarball:
+	${MAKE} $@-build
+
+kernel-nvidia-gpu-tdx-experimental-tarball:
+	${MAKE} $@-build	
+
+kernel-tarball:
+	${MAKE} $@-build
+
 kernel-tdx-experimental-tarball:
 	${MAKE} $@-build
 
+kernel-sev-tarball:
+	${MAKE} $@-build
+
 nydus-tarball:
+	${MAKE} $@-build
+
+ovmf-sev-tarball:
+	${MAKE} $@-build
+
+ovmf-tarball:
+	${MAKE} $@-build
+
+qemu-snp-experimental-tarball:
 	${MAKE} $@-build
 
 qemu-tarball:
@@ -70,6 +104,15 @@ qemu-tdx-experimental-tarball:
 	${MAKE} $@-build
 
 rootfs-image-tarball:
+	${MAKE} $@-build
+
+rootfs-image-tdx-tarball: kernel-tdx-experimental-tarball
+	${MAKE} $@-build
+
+rootfs-initrd-mariner-tarball:
+	${MAKE} $@-build
+
+rootfs-initrd-sev-tarball: kernel-sev-tarball
 	${MAKE} $@-build
 
 rootfs-initrd-tarball:

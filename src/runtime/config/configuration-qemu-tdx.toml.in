@@ -172,6 +172,11 @@ disable_block_device_use = @DEFDISABLEBLOCK@
 #   - virtio-fs (default)
 #   - virtio-9p
 #   - virtio-fs-nydus
+#   - none
+# WARNING: "none" should be carefully used, and only used in very few specific cases, as
+# any update to the mount will *NOT* be reflected during the lifecycle of the pod, causing
+# issues with rotation of secrets, certs, or configurations via kubernetes objects like
+# configMaps or secrets, as those will be copied into the guest at *pod* *creation* *time*.
 shared_fs = "@DEFSHAREDFS_QEMU_TDX_VIRTIOFS@"
 
 # Path to vhost-user-fs daemon.
@@ -614,7 +619,7 @@ sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY@
 # - When running with pods, sandbox sizing information will only be available if using Kubernetes >= 1.23 and containerd >= 1.6. CRI-O
 #   does not yet support sandbox sizing annotations.
 # - When running single containers using a tool like ctr, container sizing information will be available.
-static_sandbox_resource_mgmt=@DEFSTATICRESOURCEMGMT@
+static_sandbox_resource_mgmt=@DEFSTATICRESOURCEMGMT_TEE@
 
 # If specified, sandbox_bind_mounts identifieds host paths to be mounted (ro) into the sandboxes shared path.
 # This is only valid if filesystem sharing is utilized. The provided path(s) will be bindmounted into the shared fs directory.

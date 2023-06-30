@@ -214,7 +214,14 @@ dial_timeout = 45
 # system log
 # (default: disabled)
 #enable_debug = true
-#
+
+# If enabled, enabled, it means that 1) if the runtime exits abnormally,
+# the cleanup process will be skipped, and 2) the runtime will not exit
+# even if the health check fails.
+# This option is typically used to retain abnormal information for debugging.
+# (default: false)
+#keep_abnormal = true
+
 # Internetworking model
 # Determines how the VM should be connected to the
 # the container network interface
@@ -302,3 +309,12 @@ experimental=@DEFAULTEXPFEATURES@
 # - When running single containers using a tool like ctr, container sizing information will be available.
 static_sandbox_resource_mgmt=@DEFSTATICRESOURCEMGMT_DB@
 
+# If specified, sandbox_bind_mounts identifieds host paths to be mounted(ro, rw) into the sandboxes shared path.
+# This is only valid if filesystem sharing is utilized. The provided path(s) will be bindmounted into the shared fs directory.
+# If defaults are utilized, these mounts should be available in the guest at `/run/kata-containers/shared/containers/sandbox-mounts`
+# These will not be exposed to the container workloads, and are only provided for potential guest services.
+# Now it supports three kinds of bind mount format:
+# - "/path/to", default readonly mode.
+# - "/path/to:ro", readonly mode.
+# - "/path/to:rw", readwrite mode.
+sandbox_bind_mounts=@DEFBINDMOUNTS@

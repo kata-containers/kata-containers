@@ -20,14 +20,9 @@ impl Empty {
     }
 }
 
-impl Default for FSGroupChangePolicy {
-    fn default() -> Self {
-        FSGroupChangePolicy::Always
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Default, Debug, Clone, PartialEq)]
 pub enum FSGroupChangePolicy {
+    #[default]
     Always = 0,
     OnRootMismatch = 1,
 }
@@ -65,16 +60,11 @@ pub struct Storage {
     pub mount_point: String,
 }
 
-#[derive(Deserialize, Clone, PartialEq, Eq, Debug, Hash)]
+#[derive(Deserialize, Default, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum IPFamily {
+    #[default]
     V4 = 0,
     V6 = 1,
-}
-
-impl ::std::default::Default for IPFamily {
-    fn default() -> Self {
-        IPFamily::V4
-    }
 }
 
 #[derive(Deserialize, Debug, PartialEq, Clone, Default)]
@@ -211,7 +201,7 @@ pub struct ListProcessesRequest {
 #[derive(PartialEq, Clone, Default)]
 pub struct UpdateContainerRequest {
     pub container_id: String,
-    pub resources: oci::LinuxResources,
+    pub resources: Option<oci::LinuxResources>,
     pub mounts: Vec<oci::Mount>,
 }
 

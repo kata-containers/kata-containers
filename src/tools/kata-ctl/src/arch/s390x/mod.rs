@@ -10,8 +10,10 @@ pub use arch_specific::*;
 mod arch_specific {
     use crate::check;
     use crate::types::*;
+    use crate::utils;
     use anyhow::{anyhow, Result};
     use nix::unistd::Uid;
+    use slog::{info, o, warn};
     use std::collections::HashMap;
     use std::io::BufRead;
     use std::io::BufReader;
@@ -20,6 +22,12 @@ mod arch_specific {
     const CPUINFO_FEATURES_TAG: &str = "features";
     const CPU_FEATURES_REQ: &[&str] = &["sie"];
 
+    macro_rules! sl {
+        () => {
+            slog_scope::logger().new(o!("subsystem" => "s390x"))
+        };
+    }
+
     #[allow(dead_code)]
     pub const ARCH_CPU_VENDOR_FIELD: &str = check::GENERIC_CPU_VENDOR_FIELD;
     #[allow(dead_code)]
@@ -27,7 +35,7 @@ mod arch_specific {
 
     // check cpu
     fn check_cpu() -> Result<()> {
-        println!("INFO: check CPU: s390x");
+        info!(sl!(), "check CPU: s390x");
 
         let cpu_info =
             kata_sys_util::cpu::get_single_cpu_info(check::PROC_CPUINFO, CPUINFO_DELIMITER)?;
@@ -43,14 +51,14 @@ mod arch_specific {
 
         let missing_cpu_features = check::check_cpu_flags(&cpu_features, CPU_FEATURES_REQ)?;
         if !missing_cpu_features.is_empty() {
-            eprintln!("WARNING: Missing CPU flags {:?}", missing_cpu_features);
+            warn!(sl!(), "Missing CPU flags {:?}", missing_cpu_features);
         }
 
         Ok(())
     }
 
     pub fn check(_args: &str) -> Result<()> {
-        println!("INFO: check: s390x");
+        info!(sl!(), "check: s390x");
 
         let _cpu_result = check_cpu();
 
@@ -70,6 +78,21 @@ mod arch_specific {
 
     pub fn get_checks() -> Option<&'static [CheckItem<'static>]> {
         Some(CHECK_LIST)
+    }
+
+    pub fn host_is_vmcontainer_capable() -> Result<bool> {
+        let mut count = 0;
+        if check_cpu().is_err() {
+            count += 1;
+        };
+
+        // TODO: Add additional checks for kernel modules
+
+        if count == 0 {
+            return Ok(true);
+        };
+
+        Err(anyhow!("System is not capable of running a VM"))
     }
 
     #[allow(dead_code)]
@@ -144,6 +167,14 @@ mod arch_specific {
             }
         }
         Ok(false)
+    }
+
+    pub fn get_cpu_details() -> Result<(String, String)> {
+        utils::get_generic_cpu_details(check::PROC_CPUINFO)
+
+        // TODO: In case of error from get_generic_cpu_details, implement functionality
+        // to get cpu details specific to s390x architecture similar
+        // to the goloang implementation of function getS390xCPUDetails()
     }
 
     #[allow(dead_code)]

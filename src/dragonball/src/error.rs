@@ -188,6 +188,11 @@ pub enum StartMicroVmError {
     /// Virtio-fs errors.
     #[error("virtio-fs errors: {0}")]
     FsDeviceError(#[source] device_manager::fs_dev_mgr::FsDeviceError),
+
+    #[cfg(feature = "virtio-balloon")]
+    /// Virtio-balloon errors.
+    #[error("virtio-balloon errors: {0}")]
+    BalloonDeviceError(#[source] device_manager::balloon_dev_mgr::BalloonDeviceError),
 }
 
 /// Errors associated with starting the instance.

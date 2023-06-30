@@ -8,15 +8,18 @@ use std::path::PathBuf;
 
 use anyhow::{anyhow, Context, Result};
 use dbs_utils::net::MacAddr;
-use dragonball::api::v1::{
-    BlockDeviceConfigInfo, FsDeviceConfigInfo, FsMountConfigInfo, VirtioNetDeviceConfigInfo,
-    VsockDeviceConfigInfo,
+use dragonball::{
+    api::v1::{
+        BlockDeviceConfigInfo, FsDeviceConfigInfo, FsMountConfigInfo, VirtioNetDeviceConfigInfo,
+        VsockDeviceConfigInfo,
+    },
+    device_manager::blk_dev_mgr::BlockDeviceType,
 };
 
 use super::DragonballInner;
 use crate::{
-    device::Device, HybridVsockConfig, NetworkConfig, ShareFsDeviceConfig, ShareFsMountConfig,
-    ShareFsMountType, ShareFsOperation, VmmState,
+    device::DeviceType, HybridVsockConfig, NetworkConfig, ShareFsDeviceConfig, ShareFsMountConfig,
+    ShareFsMountType, ShareFsOperation, VfioBusMode, VfioDevice, VmmState,
 };
 
 const MB_TO_B: u32 = 1024 * 1024;
@@ -31,7 +34,7 @@ pub(crate) fn drive_index_to_id(index: u64) -> String {
 }
 
 impl DragonballInner {
-    pub(crate) async fn add_device(&mut self, device: Device) -> Result<()> {
+    pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<()> {
         if self.state == VmmState::NotReady {
             info!(sl!(), "VMM not ready, queueing device {}", device);
 
@@ -44,45 +47,117 @@ impl DragonballInner {
 
         info!(sl!(), "dragonball add device {:?}", &device);
         match device {
-            Device::Network(config) => self.add_net_device(&config).context("add net device"),
-            Device::Vfio(_config) => {
-                todo!()
-            }
-            Device::Block(config) => self
+            DeviceType::Network(network) => self
+                .add_net_device(&network.config, network.id)
+                .context("add net device"),
+            DeviceType::Vfio(hostdev) => self.add_vfio_device(&hostdev).context("add vfio device"),
+            DeviceType::Block(block) => self
                 .add_block_device(
-                    config.path_on_host.as_str(),
-                    config.id.as_str(),
-                    config.is_readonly,
-                    config.no_drop,
+                    block.config.path_on_host.as_str(),
+                    block.device_id.as_str(),
+                    block.config.is_readonly,
+                    block.config.no_drop,
                 )
                 .context("add block device"),
-            Device::HybridVsock(config) => self.add_hvsock(&config).context("add vsock"),
-            Device::ShareFsDevice(config) => self
-                .add_share_fs_device(&config)
+            DeviceType::VhostUserBlk(block) => self
+                .add_block_device(
+                    block.config.socket_path.as_str(),
+                    block.device_id.as_str(),
+                    block.is_readonly,
+                    block.no_drop,
+                )
+                .context("add vhost user based block device"),
+            DeviceType::HybridVsock(hvsock) => self.add_hvsock(&hvsock.config).context("add vsock"),
+            DeviceType::ShareFs(sharefs) => self
+                .add_share_fs_device(&sharefs.config)
                 .context("add share fs device"),
-            Device::ShareFsMount(config) => self
-                .add_share_fs_mount(&config)
+            DeviceType::ShareFsMount(sharefs_mount) => self
+                .add_share_fs_mount(&sharefs_mount.config)
                 .context("add share fs mount"),
-            Device::Vsock(_) => {
+            DeviceType::Vsock(_) => {
                 todo!()
             }
         }
     }
 
-    pub(crate) async fn remove_device(&mut self, device: Device) -> Result<()> {
+    pub(crate) async fn remove_device(&mut self, device: DeviceType) -> Result<()> {
         info!(sl!(), "remove device {} ", device);
 
         match device {
-            Device::Block(config) => {
-                let drive_id = drive_index_to_id(config.index);
+            DeviceType::Block(block) => {
+                let drive_id = drive_index_to_id(block.config.index);
                 self.remove_block_drive(drive_id.as_str())
                     .context("remove block drive")
             }
-            Device::Vfio(_config) => {
-                todo!()
+            DeviceType::Vfio(hostdev) => {
+                let primary_device = hostdev.devices.first().unwrap().clone();
+                let hostdev_id = primary_device.hostdev_id;
+
+                self.remove_vfio_device(hostdev_id)
             }
             _ => Err(anyhow!("unsupported device {:?}", device)),
         }
+    }
+
+    fn add_vfio_device(&mut self, device: &VfioDevice) -> Result<()> {
+        let vfio_device = device.clone();
+
+        // FIXME:
+        // A device with multi-funtions, or a IOMMU group with one more
+        // devices, the Primary device is selected to be passed to VM.
+        // And the the first one is Primary device.
+        // safe here, devices is not empty.
+        let primary_device = vfio_device.devices.first().unwrap().clone();
+
+        let vendor_device_id = if let Some(vd) = primary_device.device_vendor {
+            vd.get_device_vendor_id()?
+        } else {
+            0
+        };
+
+        let guest_dev_id = if let Some(pci_path) = primary_device.guest_pci_path {
+            // safe here, dragonball's pci device directly connects to root bus.
+            // usually, it has been assigned in vfio device manager.
+            pci_path.get_device_slot().unwrap().0
+        } else {
+            0
+        };
+
+        let bus_mode = VfioBusMode::to_string(vfio_device.bus_mode);
+
+        info!(sl!(), "Mock for dragonball insert host device.");
+        info!(
+            sl!(),
+            " Mock for dragonball insert host device. 
+            host device id: {:?}, 
+            bus_slot_func: {:?}, 
+            bus mod: {:?}, 
+            guest device id: {:?}, 
+            vendor/device id: {:?}",
+            primary_device.hostdev_id,
+            primary_device.bus_slot_func,
+            bus_mode,
+            guest_dev_id,
+            vendor_device_id,
+        );
+
+        // FIXME:
+        // interface implementation to be done when dragonball supports
+        // self.vmm_instance.insert_host_device(host_cfg)?;
+
+        Ok(())
+    }
+
+    fn remove_vfio_device(&mut self, hostdev_id: String) -> Result<()> {
+        info!(
+            sl!(),
+            "Mock for dragonball remove host_device with hostdev id {:?}", hostdev_id
+        );
+        // FIXME:
+        // interface implementation to be done when dragonball supports
+        // self.vmm_instance.remove_host_device(hostdev_id)?;
+
+        Ok(())
     }
 
     fn add_block_device(
@@ -97,6 +172,7 @@ impl DragonballInner {
 
         let blk_cfg = BlockDeviceConfigInfo {
             drive_id: id.to_string(),
+            device_type: BlockDeviceType::get_type(path),
             path_on_host: PathBuf::from(jailed_drive),
             is_direct: self.config.blockdev_info.block_device_cache_direct,
             no_drop,
@@ -121,9 +197,9 @@ impl DragonballInner {
         Ok(())
     }
 
-    fn add_net_device(&mut self, config: &NetworkConfig) -> Result<()> {
+    fn add_net_device(&mut self, config: &NetworkConfig, device_id: String) -> Result<()> {
         let iface_cfg = VirtioNetDeviceConfigInfo {
-            iface_id: config.id.clone(),
+            iface_id: device_id,
             host_dev_name: config.host_dev_name.clone(),
             guest_mac: match &config.guest_mac {
                 Some(mac) => MacAddr::from_bytes(&mac.0).ok(),
@@ -155,7 +231,11 @@ impl DragonballInner {
             .context("insert vsock")
     }
 
-    fn parse_inline_virtiofs_args(&self, fs_cfg: &mut FsDeviceConfigInfo) -> Result<()> {
+    fn parse_inline_virtiofs_args(
+        &self,
+        fs_cfg: &mut FsDeviceConfigInfo,
+        options: &mut Vec<String>,
+    ) -> Result<()> {
         let mut debug = false;
         let mut opt_list = String::new();
 
@@ -167,14 +247,17 @@ impl DragonballInner {
             sl!(),
             "args: {:?}", &self.config.shared_fs.virtio_fs_extra_args
         );
-        let args = &self.config.shared_fs.virtio_fs_extra_args;
-        let _ = go_flag::parse_args_with_warnings::<String, _, _>(args, None, |flags| {
+        let mut args = self.config.shared_fs.virtio_fs_extra_args.clone();
+        let _ = go_flag::parse_args_with_warnings::<String, _, _>(&args, None, |flags| {
             flags.add_flag("d", &mut debug);
             flags.add_flag("thread-pool-size", &mut fs_cfg.thread_pool_size);
             flags.add_flag("drop-sys-resource", &mut fs_cfg.drop_sys_resource);
             flags.add_flag("o", &mut opt_list);
         })
         .with_context(|| format!("parse args: {:?}", args))?;
+
+        // more options parsed for inline virtio-fs' custom config
+        args.append(options);
 
         if debug {
             warn!(
@@ -200,6 +283,7 @@ impl DragonballInner {
                     "xattr" => fs_cfg.xattr = true,
                     "no_xattr" => fs_cfg.xattr = false,
                     "cache_symlinks" => {} // inline virtiofs always cache symlinks
+                    "no_readdir" => fs_cfg.no_readdir = true,
                     "trace" => warn!(
                         sl!(),
                         "Inline virtiofs \"-o trace\" option not supported yet, ignored."
@@ -232,16 +316,25 @@ impl DragonballInner {
             xattr: true,
             ..Default::default()
         };
-        self.do_add_fs_device(&config.fs_type, &mut fs_cfg)
+
+        let mut options = config.options.clone();
+        self.do_add_fs_device(&config.fs_type, &mut fs_cfg, &mut options)
     }
 
-    fn do_add_fs_device(&self, fs_type: &str, fs_cfg: &mut FsDeviceConfigInfo) -> Result<()> {
+    fn do_add_fs_device(
+        &self,
+        fs_type: &str,
+        fs_cfg: &mut FsDeviceConfigInfo,
+        options: &mut Vec<String>,
+    ) -> Result<()> {
         match fs_type {
             VIRTIO_FS => {
                 fs_cfg.mode = String::from("vhostuser");
             }
             INLINE_VIRTIO_FS => {
-                self.parse_inline_virtiofs_args(fs_cfg)?;
+                // All parameters starting with --patch-fs do not need to be processed, these are the parameters required by patch fs
+                options.retain(|x| !x.starts_with("--patch-fs"));
+                self.parse_inline_virtiofs_args(fs_cfg, options)?;
             }
             _ => {
                 return Err(anyhow!(
@@ -309,8 +402,12 @@ mod tests {
             "--drop-sys-resource".to_string(),
             "-d".to_string(),
         ];
+
+        let mut options: Vec<String> = Vec::new();
         dragonball.config.shared_fs.virtio_fs_cache = "auto".to_string();
-        dragonball.parse_inline_virtiofs_args(&mut fs_cfg).unwrap();
+        dragonball
+            .parse_inline_virtiofs_args(&mut fs_cfg, &mut options)
+            .unwrap();
 
         assert!(!fs_cfg.no_open);
         assert!(fs_cfg.xattr);

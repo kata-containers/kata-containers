@@ -8,7 +8,8 @@ use std::path::Path;
 
 use super::default;
 use crate::config::{ConfigOps, TomlConfig};
-use crate::{eother, resolve_path, validate_path};
+use crate::mount::split_bind_mounts;
+use crate::{eother, validate_path};
 
 /// Type of runtime VirtContainer.
 pub const RUNTIME_NAME_VIRTCONTAINER: &str = "virt_container";
@@ -130,6 +131,12 @@ pub struct Runtime {
     /// Vendor customized runtime configuration.
     #[serde(default, flatten)]
     pub vendor: RuntimeVendor,
+
+    /// If keep_abnormal is enabled, it means that 1) if the runtime exits abnormally, the cleanup process
+    /// will be skipped, and 2) the runtime will not exit even if the health check fails.
+    /// This option is typically used to retain abnormal information for debugging.
+    #[serde(default)]
+    pub keep_abnormal: bool,
 }
 
 impl ConfigOps for Runtime {
@@ -140,7 +147,14 @@ impl ConfigOps for Runtime {
         }
 
         for bind in conf.runtime.sandbox_bind_mounts.iter_mut() {
-            resolve_path!(*bind, "sandbox bind mount `{}` is invalid: {}")?;
+            // Split the bind mount, canonicalize the path and then append rw mode to it.
+            let (real_path, mode) = split_bind_mounts(bind);
+            match Path::new(real_path).canonicalize() {
+                Err(e) => return Err(eother!("sandbox bind mount `{}` is invalid: {}", bind, e)),
+                Ok(path) => {
+                    *bind = format!("{}{}", path.display(), mode);
+                }
+            }
         }
 
         Ok(())
@@ -170,7 +184,12 @@ impl ConfigOps for Runtime {
         }
 
         for bind in conf.runtime.sandbox_bind_mounts.iter() {
-            validate_path!(*bind, "sandbox bind mount `{}` is invalid: {}")?;
+            // Just validate the real_path.
+            let (real_path, _mode) = split_bind_mounts(bind);
+            validate_path!(
+                real_path.to_owned(),
+                "sandbox bind mount `{}` is invalid: {}"
+            )?;
         }
 
         Ok(())

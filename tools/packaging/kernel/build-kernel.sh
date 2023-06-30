@@ -31,6 +31,7 @@ readonly default_kernel_config_dir="${script_dir}/configs"
 # Default path to search for kernel config fragments
 readonly default_config_frags_dir="${script_dir}/configs/fragments"
 readonly default_config_whitelist="${script_dir}/configs/fragments/whitelist.conf"
+readonly default_initramfs="${script_dir}/initramfs.cpio.gz"
 # GPU vendor
 readonly GV_INTEL="intel"
 readonly GV_NVIDIA="nvidia"
@@ -61,6 +62,10 @@ DESTDIR="${DESTDIR:-/}"
 PREFIX="${PREFIX:-/usr}"
 #Kernel URL
 kernel_url=""
+#Linux headers for GPU guest fs module building
+linux_headers=""
+
+MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
 
 packaging_scripts_dir="${script_dir}/../scripts"
 source "${packaging_scripts_dir}/lib.sh"
@@ -95,6 +100,7 @@ Options:
 	-f          	: Enable force generate config when setup.
 	-g <vendor> 	: GPU vendor, intel or nvidia.
 	-h          	: Display this help.
+	-H <deb|rpm>	: Linux headers for guest fs module building.
 	-k <path>   	: Path to kernel to build.
 	-p <path>   	: Path to a directory with patches to apply to kernel.
 	-s          	: Skip .config checks
@@ -126,7 +132,13 @@ get_tee_kernel() {
 
 	mkdir -p ${kernel_path}
 
-	[ -z "${kernel_url}" ] && kernel_url=$(get_from_kata_deps "assets.kernel.${tee}.url")
+	if [ -z "${kernel_url}" ]; then
+		if [[ "${conf_guest}" == "tdx" ]]; then
+			kernel_url=$(get_from_kata_deps "assets.kernel-tdx-experimental.url")
+		else
+			kernel_url=$(get_from_kata_deps "assets.kernel.${tee}.url")
+		fi
+	fi
 
 	local kernel_tarball="${version}.tar.gz"
 
@@ -241,6 +253,35 @@ get_kernel_frag_path() {
 		info "Add kernel config for GPU due to '-g ${gpu_vendor}'"
 		local gpu_configs="$(ls ${gpu_path}/${gpu_vendor}.conf)"
 		all_configs="${all_configs} ${gpu_configs}"
+		# If conf_guest is set we need to update the CONFIG_LOCALVERSION
+		# to match the suffix created in install_kata
+		# -nvidia-gpu-{snp|tdx}, the linux headers will be named the very
+		# same if build with make deb-pkg for TDX or SNP.
+		if [[ "${conf_guest}" != "" ]];then
+			local gpu_cc_configs=$(mktemp).conf
+			local gpu_subst_configs="$(ls ${gpu_path}/${gpu_vendor}.conf.in)"
+
+			export CONF_GUEST_SUFFIX="-${conf_guest}"
+			envsubst <${gpu_subst_configs} >${gpu_cc_configs}
+			unset CONF_GUEST_SUFFIX
+
+			all_configs="${all_configs} ${gpu_cc_configs}"
+		else
+			local gpu_configs="$(ls ${gpu_path}/${gpu_vendor}.conf)"
+			all_configs="${all_configs} ${gpu_configs}"
+		fi
+	fi
+
+	if [ "${MEASURED_ROOTFS}" == "yes" ]; then
+		info "Enabling config for confidential guest trust storage protection"
+		local cryptsetup_configs="$(ls ${common_path}/confidential_containers/cryptsetup.conf)"
+		all_configs="${all_configs} ${cryptsetup_configs}"
+
+		if [ -f "${default_initramfs}" ]; then
+			info "Enabling config for confidential guest measured boot"
+			local initramfs_configs="$(ls ${common_path}/confidential_containers/initramfs.conf)"
+			all_configs="${all_configs} ${initramfs_configs}"
+		fi
 	fi
 
 	if [[ "${conf_guest}" != "" ]];then
@@ -392,6 +433,11 @@ setup_kernel() {
 	[ -n "${hypervisor_target}" ] || hypervisor_target="kvm"
 	[ -n "${kernel_config_path}" ] || kernel_config_path=$(get_default_kernel_config "${kernel_version}" "${hypervisor_target}" "${arch_target}" "${kernel_path}")
 
+	if [ "${MEASURED_ROOTFS}" == "yes" ] && [ -f "${default_initramfs}" ]; then
+		info "Copying initramfs from: ${default_initramfs}"
+		cp "${default_initramfs}" ./
+	fi
+
 	info "Copying config file from: ${kernel_config_path}"
 	cp "${kernel_config_path}" ./.config
 	make oldconfig
@@ -415,6 +461,24 @@ build_kernel() {
 	popd >>/dev/null
 }
 
+build_kernel_headers() {
+	local kernel_path=${1:-}
+	[ -n "${kernel_path}" ] || die "kernel_path not provided"
+	[ -d "${kernel_path}" ] || die "path to kernel does not exist, use ${script_name} setup"
+	[ -n "${arch_target}" ] || arch_target="$(uname -m)"
+	arch_target=$(arch_to_kernel "${arch_target}")
+	pushd "${kernel_path}" >>/dev/null
+
+	if [ "$linux_headers" == "deb" ]; then
+		make -j $(nproc ${CI:+--ignore 1}) deb-pkg ARCH="${arch_target}"
+	fi
+	if [ "$linux_headers" == "rpm" ]; then
+		make -j $(nproc ${CI:+--ignore 1}) rpm-pkg ARCH="${arch_target}"
+	fi
+
+	popd >>/dev/null
+}
+
 install_kata() {
 	local kernel_path=${1:-}
 	[ -n "${kernel_path}" ] || die "kernel_path not provided"
@@ -430,12 +494,13 @@ install_kata() {
 	if [[ ${build_type} != "" ]]; then
 		suffix="-${build_type}"
 	fi
-	if [[ ${gpu_vendor} != "" ]];then
-		suffix="-${gpu_vendor}-gpu${suffix}"
-	fi
 
 	if [[ ${conf_guest} != "" ]];then
 		suffix="-${conf_guest}${suffix}"
+	fi
+
+	if [[ ${gpu_vendor} != "" ]];then
+		suffix="-${gpu_vendor}-gpu${suffix}"
 	fi
 
 	vmlinuz="vmlinuz-${kernel_version}-${config_version}${suffix}"
@@ -475,7 +540,7 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:b:c:deEfg:hk:p:t:u:v:x:" opt; do
+	while getopts "a:b:c:deEfg:hH:k:p:t:u:v:x:" opt; do
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
@@ -505,6 +570,9 @@ main() {
 				;;
 			h)
 				usage 0
+				;;
+			H)
+				linux_headers="${OPTARG}"
 				;;
 			k)
 				kernel_path="$(realpath ${OPTARG})"
@@ -569,8 +637,12 @@ main() {
 			kernel_version=$(get_from_kata_deps "assets.kernel-dragonball-experimental.version")
 		elif [[ "${conf_guest}" != "" ]]; then
 			#If specifying a tag for kernel_version, must be formatted version-like to avoid unintended parsing issues
-			kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.version" 2>/dev/null || true)
-			[ -n "${kernel_version}" ] || kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.tag")
+			if [[ "${conf_guest}" == "tdx" ]]; then
+				kernel_version=$(get_from_kata_deps "assets.kernel-tdx-experimental.version" 2>/dev/null || true)
+			else
+				kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.version" 2>/dev/null || true)
+				[ -n "${kernel_version}" ] || kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.tag")
+			fi
 		else
 			kernel_version=$(get_from_kata_deps "assets.kernel.version")
 		fi
@@ -593,6 +665,9 @@ main() {
 	case "${subcmd}" in
 		build)
 			build_kernel "${kernel_path}"
+			;;
+		build-headers)
+			build_kernel_headers "${kernel_path}"
 			;;
 		install)
 			install_kata "${kernel_path}"

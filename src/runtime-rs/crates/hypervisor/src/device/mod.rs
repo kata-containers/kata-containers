@@ -1,37 +1,70 @@
-// Copyright (c) 2019-2022 Alibaba Cloud
-// Copyright (c) 2019-2022 Ant Group
+// Copyright (c) 2019-2023 Alibaba Cloud
+// Copyright (c) 2019-2023 Ant Group
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 
-mod block;
-pub use block::BlockConfig;
-mod network;
-pub use network::{Address, NetworkConfig};
-mod share_fs_device;
-pub use share_fs_device::ShareFsDeviceConfig;
-mod vfio;
-pub use vfio::{bind_device_to_host, bind_device_to_vfio, VfioBusMode, VfioConfig};
-mod share_fs_mount;
-pub use share_fs_mount::{ShareFsMountConfig, ShareFsMountType, ShareFsOperation};
-mod vsock;
-pub use vsock::{HybridVsockConfig, VsockConfig};
-
 use std::fmt;
 
+use crate::device::driver::vhost_user_blk::VhostUserBlkDevice;
+use crate::{
+    BlockConfig, BlockDevice, HybridVsockConfig, HybridVsockDevice, Hypervisor as hypervisor,
+    NetworkConfig, NetworkDevice, ShareFsDevice, ShareFsDeviceConfig, ShareFsMountConfig,
+    ShareFsMountDevice, VfioConfig, VfioDevice, VhostUserConfig, VsockConfig, VsockDevice,
+};
+use anyhow::Result;
+use async_trait::async_trait;
+
+pub mod device_manager;
+pub mod driver;
+pub mod util;
+
 #[derive(Debug)]
-pub enum Device {
-    Block(BlockConfig),
-    Network(NetworkConfig),
-    ShareFsDevice(ShareFsDeviceConfig),
-    Vfio(VfioConfig),
-    ShareFsMount(ShareFsMountConfig),
-    Vsock(VsockConfig),
-    HybridVsock(HybridVsockConfig),
+pub enum DeviceConfig {
+    BlockCfg(BlockConfig),
+    VhostUserBlkCfg(VhostUserConfig),
+    NetworkCfg(NetworkConfig),
+    ShareFsCfg(ShareFsDeviceConfig),
+    VfioCfg(VfioConfig),
+    ShareFsMountCfg(ShareFsMountConfig),
+    VsockCfg(VsockConfig),
+    HybridVsockCfg(HybridVsockConfig),
 }
 
-impl fmt::Display for Device {
+#[derive(Debug)]
+pub enum DeviceType {
+    Block(BlockDevice),
+    VhostUserBlk(VhostUserBlkDevice),
+    Vfio(VfioDevice),
+    Network(NetworkDevice),
+    ShareFs(ShareFsDevice),
+    ShareFsMount(ShareFsMountDevice),
+    HybridVsock(HybridVsockDevice),
+    Vsock(VsockDevice),
+}
+
+impl fmt::Display for DeviceType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
     }
+}
+
+#[async_trait]
+pub trait Device: std::fmt::Debug + Send + Sync {
+    // attach is to plug device into VM
+    async fn attach(&mut self, h: &dyn hypervisor) -> Result<()>;
+    // detach is to unplug device from VM
+    async fn detach(&mut self, h: &dyn hypervisor) -> Result<Option<u64>>;
+    // get_device_info returns device config
+    async fn get_device_info(&self) -> DeviceType;
+    // increase_attach_count is used to increase the attach count for a device
+    // return values:
+    // * true: no need to do real attach when current attach count is zero, skip following actions.
+    // * err error: error while do increase attach count
+    async fn increase_attach_count(&mut self) -> Result<bool>;
+    // decrease_attach_count is used to decrease the attach count for a device
+    // return values:
+    // * false: no need to do real dettach when current attach count is not zero, skip following actions.
+    // * err error: error while do decrease attach count
+    async fn decrease_attach_count(&mut self) -> Result<bool>;
 }

@@ -6,25 +6,33 @@
 
 use std::{sync::Arc, thread};
 
-use crate::{network::NetworkConfig, resource_persist::ResourceState};
-use agent::{Agent, Storage};
+use agent::{types::Device, Agent, Storage};
 use anyhow::{anyhow, Context, Ok, Result};
 use async_trait::async_trait;
-use hypervisor::Hypervisor;
+use hypervisor::{
+    device::{
+        device_manager::{do_handle_device, DeviceManager},
+        util::{get_host_path, DEVICE_TYPE_CHAR},
+        DeviceConfig, DeviceType,
+    },
+    BlockConfig, Hypervisor, VfioConfig,
+};
 use kata_types::config::TomlConfig;
 use kata_types::mount::Mount;
-use oci::LinuxResources;
+use oci::{Linux, LinuxCpu, LinuxResources};
 use persist::sandbox_persist::Persist;
-use tokio::runtime;
+use tokio::{runtime, sync::RwLock};
 
 use crate::{
     cgroups::{CgroupArgs, CgroupsResource},
+    cpu_mem::cpu::CpuResource,
     manager::ManagerArgs,
-    network::{self, Network},
+    network::{self, Network, NetworkConfig},
+    resource_persist::ResourceState,
     rootfs::{RootFsResource, Rootfs},
-    share_fs::{self, ShareFs},
+    share_fs::{self, sandbox_bind_mounts::SandboxBindMounts, ShareFs},
     volume::{Volume, VolumeResource},
-    ResourceConfig,
+    ResourceConfig, ResourceUpdateOp,
 };
 
 pub(crate) struct ResourceManagerInner {
@@ -32,37 +40,51 @@ pub(crate) struct ResourceManagerInner {
     toml_config: Arc<TomlConfig>,
     agent: Arc<dyn Agent>,
     hypervisor: Arc<dyn Hypervisor>,
+    device_manager: Arc<RwLock<DeviceManager>>,
     network: Option<Arc<dyn Network>>,
     share_fs: Option<Arc<dyn ShareFs>>,
 
     pub rootfs_resource: RootFsResource,
     pub volume_resource: VolumeResource,
     pub cgroups_resource: CgroupsResource,
+    pub cpu_resource: CpuResource,
 }
 
 impl ResourceManagerInner {
-    pub(crate) fn new(
+    pub(crate) async fn new(
         sid: &str,
         agent: Arc<dyn Agent>,
         hypervisor: Arc<dyn Hypervisor>,
         toml_config: Arc<TomlConfig>,
     ) -> Result<Self> {
+        // create device manager
+        let dev_manager = DeviceManager::new(hypervisor.clone())
+            .await
+            .context("failed to create device manager")?;
+
         let cgroups_resource = CgroupsResource::new(sid, &toml_config)?;
+        let cpu_resource = CpuResource::new(toml_config.clone())?;
         Ok(Self {
             sid: sid.to_string(),
             toml_config,
             agent,
             hypervisor,
+            device_manager: Arc::new(RwLock::new(dev_manager)),
             network: None,
             share_fs: None,
             rootfs_resource: RootFsResource::new(),
             volume_resource: VolumeResource::new(),
             cgroups_resource,
+            cpu_resource,
         })
     }
 
     pub fn config(&self) -> Arc<TomlConfig> {
         self.toml_config.clone()
+    }
+
+    pub fn get_device_manager(&self) -> Arc<RwLock<DeviceManager>> {
+        self.device_manager.clone()
     }
 
     pub async fn prepare_before_start_vm(
@@ -83,6 +105,12 @@ impl ResourceManagerInner {
                             .setup_device_before_start_vm(self.hypervisor.as_ref())
                             .await
                             .context("setup share fs device before start vm")?;
+
+                        // setup sandbox bind mounts: setup = true
+                        self.handle_sandbox_bindmounts(true)
+                            .await
+                            .context("failed setup sandbox bindmounts")?;
+
                         Some(share_fs)
                     } else {
                         None
@@ -114,10 +142,11 @@ impl ResourceManagerInner {
         // The solution is to block the future on the current thread, it is enabled by spawn an os thread, create a
         // tokio runtime, and block the task on it.
         let hypervisor = self.hypervisor.clone();
+        let device_manager = self.device_manager.clone();
         let network = thread::spawn(move || -> Result<Arc<dyn Network>> {
             let rt = runtime::Builder::new_current_thread().enable_io().build()?;
             let d = rt
-                .block_on(network::new(&network_config))
+                .block_on(network::new(&network_config, device_manager))
                 .context("new network")?;
             rt.block_on(d.setup(hypervisor.as_ref()))
                 .context("setup network")?;
@@ -212,6 +241,7 @@ impl ResourceManagerInner {
         self.rootfs_resource
             .handler_rootfs(
                 &self.share_fs,
+                self.device_manager.as_ref(),
                 self.hypervisor.as_ref(),
                 &self.sid,
                 cid,
@@ -228,18 +258,107 @@ impl ResourceManagerInner {
         spec: &oci::Spec,
     ) -> Result<Vec<Arc<dyn Volume>>> {
         self.volume_resource
-            .handler_volumes(&self.share_fs, cid, spec)
+            .handler_volumes(
+                &self.share_fs,
+                cid,
+                spec,
+                self.device_manager.as_ref(),
+                &self.sid,
+                self.agent.clone(),
+            )
             .await
     }
 
-    pub async fn update_cgroups(
-        &self,
-        cid: &str,
-        linux_resources: Option<&LinuxResources>,
-    ) -> Result<()> {
-        self.cgroups_resource
-            .update_cgroups(cid, linux_resources, self.hypervisor.as_ref())
-            .await
+    pub async fn handler_devices(&self, _cid: &str, linux: &Linux) -> Result<Vec<Device>> {
+        let mut devices = vec![];
+        for d in linux.devices.iter() {
+            match d.r#type.as_str() {
+                "b" => {
+                    let dev_info = DeviceConfig::BlockCfg(BlockConfig {
+                        major: d.major,
+                        minor: d.minor,
+                        ..Default::default()
+                    });
+
+                    let device_info = do_handle_device(&self.device_manager.clone(), &dev_info)
+                        .await
+                        .context("do handle device")?;
+
+                    // create block device for kata agent,
+                    // if driver is virtio-blk-pci, the id will be pci address.
+                    if let DeviceType::Block(device) = device_info {
+                        let agent_device = Device {
+                            id: device.config.virt_path.clone(),
+                            container_path: d.path.clone(),
+                            field_type: device.config.driver_option,
+                            vm_path: device.config.virt_path,
+                            ..Default::default()
+                        };
+                        devices.push(agent_device);
+                    }
+                }
+                "c" => {
+                    let host_path = get_host_path(DEVICE_TYPE_CHAR, d.major, d.minor)
+                        .context("get host path failed")?;
+                    // First of all, filter vfio devices.
+                    if !host_path.starts_with("/dev/vfio") {
+                        continue;
+                    }
+
+                    let dev_info = DeviceConfig::VfioCfg(VfioConfig {
+                        host_path,
+                        dev_type: "c".to_string(),
+                        hostdev_prefix: "vfio_device".to_owned(),
+                        ..Default::default()
+                    });
+
+                    let device_info = do_handle_device(&self.device_manager.clone(), &dev_info)
+                        .await
+                        .context("do handle device")?;
+
+                    // vfio mode: vfio-pci and vfio-pci-gk for x86_64
+                    // - vfio-pci, devices appear as VFIO character devices under /dev/vfio in container.
+                    // - vfio-pci-gk, devices are managed by whatever driver in Guest kernel.
+                    let vfio_mode = match self.toml_config.runtime.vfio_mode.as_str() {
+                        "vfio" => "vfio-pci".to_string(),
+                        _ => "vfio-pci-gk".to_string(),
+                    };
+
+                    // create agent device
+                    if let DeviceType::Vfio(device) = device_info {
+                        let agent_device = Device {
+                            id: device.device_id, // just for kata-agent
+                            container_path: d.path.clone(),
+                            field_type: vfio_mode,
+                            options: device.device_options,
+                            ..Default::default()
+                        };
+                        devices.push(agent_device);
+                    }
+                }
+                _ => {
+                    // TODO enable other devices type
+                    continue;
+                }
+            }
+        }
+        Ok(devices)
+    }
+
+    async fn handle_sandbox_bindmounts(&self, setup: bool) -> Result<()> {
+        let bindmounts = self.toml_config.runtime.sandbox_bind_mounts.clone();
+        if bindmounts.is_empty() {
+            info!(sl!(), "sandbox bindmounts empty, just skip it.");
+            return Ok(());
+        }
+
+        let sb_bindmnt = SandboxBindMounts::new(self.sid.clone(), bindmounts)?;
+
+        if setup {
+            sb_bindmnt.setup_sandbox_bind_mounts()
+        } else {
+            sb_bindmnt.cleanup_sandbox_bind_mounts()
+        }
     }
 
     pub async fn cleanup(&self) -> Result<()> {
@@ -248,6 +367,12 @@ impl ResourceManagerInner {
             .delete()
             .await
             .context("delete cgroup")?;
+
+        // cleanup sandbox bind mounts: setup = false
+        self.handle_sandbox_bindmounts(false)
+            .await
+            .context("failed to cleanup sandbox bindmounts")?;
+
         // clean up share fs mount
         if let Some(share_fs) = &self.share_fs {
             share_fs
@@ -263,6 +388,57 @@ impl ResourceManagerInner {
     pub async fn dump(&self) {
         self.rootfs_resource.dump().await;
         self.volume_resource.dump().await;
+    }
+
+    pub async fn update_linux_resource(
+        &self,
+        cid: &str,
+        linux_resources: Option<&LinuxResources>,
+        op: ResourceUpdateOp,
+    ) -> Result<Option<LinuxResources>> {
+        let linux_cpus = || -> Option<&LinuxCpu> { linux_resources.as_ref()?.cpu.as_ref() }();
+
+        // if static_sandbox_resource_mgmt, we will not have to update sandbox's cpu or mem resource
+        if !self.toml_config.runtime.static_sandbox_resource_mgmt {
+            self.cpu_resource
+                .update_cpu_resources(
+                    cid,
+                    linux_cpus,
+                    op,
+                    self.hypervisor.as_ref(),
+                    self.agent.as_ref(),
+                )
+                .await?;
+        }
+
+        // we should firstly update the vcpus and mems, and then update the host cgroups
+        self.cgroups_resource
+            .update_cgroups(cid, linux_resources, op, self.hypervisor.as_ref())
+            .await?;
+
+        // update the linux resources for agent
+        self.agent_linux_resources(linux_resources)
+    }
+
+    fn agent_linux_resources(
+        &self,
+        linux_resources: Option<&LinuxResources>,
+    ) -> Result<Option<LinuxResources>> {
+        let mut resources = match linux_resources {
+            Some(linux_resources) => linux_resources.clone(),
+            None => {
+                return Ok(None);
+            }
+        };
+
+        // clear the cpuset
+        // for example, if there are only 5 vcpus now, and the cpuset in LinuxResources is 0-2,6, guest os will report
+        // error when creating the container. so we choose to clear the cpuset here.
+        if let Some(cpu) = &mut resources.cpu {
+            cpu.cpus = String::new();
+        }
+
+        Ok(Some(resources))
     }
 }
 
@@ -298,7 +474,10 @@ impl Persist for ResourceManagerInner {
         Ok(Self {
             sid: resource_args.sid,
             agent: resource_args.agent,
-            hypervisor: resource_args.hypervisor,
+            hypervisor: resource_args.hypervisor.clone(),
+            device_manager: Arc::new(RwLock::new(
+                DeviceManager::new(resource_args.hypervisor).await?,
+            )),
             network: None,
             share_fs: None,
             rootfs_resource: RootFsResource::new(),
@@ -309,6 +488,7 @@ impl Persist for ResourceManagerInner {
             )
             .await?,
             toml_config: Arc::new(TomlConfig::default()),
+            cpu_resource: CpuResource::default(),
         })
     }
 }

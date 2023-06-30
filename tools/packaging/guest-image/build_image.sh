@@ -22,6 +22,9 @@ readonly osbuilder_dir="$(cd "${repo_root_dir}/tools/osbuilder" && pwd)"
 export GOPATH=${GOPATH:-${HOME}/go}
 
 arch_target="$(uname -m)"
+final_image_name="kata-containers"
+final_initrd_name="kata-containers-initrd"
+image_initrd_extension=".img"
 
 build_initrd() {
 	info "Build initrd"
@@ -37,7 +40,7 @@ build_initrd() {
 	mv "kata-containers-initrd.img" "${install_dir}/${initrd_name}"
 	(
 		cd "${install_dir}"
-		ln -sf "${initrd_name}" kata-containers-initrd.img
+		ln -sf "${initrd_name}" "${final_initrd_name}${image_initrd_extension}"
 	)
 }
 
@@ -52,9 +55,12 @@ build_image() {
 		IMG_OS_VERSION="${img_os_version}" \
 		ROOTFS_BUILD_DEST="${builddir}/rootfs-image"
 	mv -f "kata-containers.img" "${install_dir}/${image_name}"
+	if [ -e "root_hash.txt" ]; then
+	    cp root_hash.txt "${install_dir}/"
+	fi
 	(
 		cd "${install_dir}"
-		ln -sf "${image_name}" kata-containers.img
+		ln -sf "${image_name}" "${final_image_name}${image_initrd_extension}"
 	)
 }
 
@@ -71,6 +77,7 @@ Options:
  --imagetype=${image_type}
  --prefix=${prefix}
  --destdir=${destdir}
+ --image_initrd_suffix=${image_initrd_suffix}
 EOF
 
 	exit "${return_code}"
@@ -80,6 +87,8 @@ main() {
 	image_type=image
 	destdir="$PWD"
 	prefix="/opt/kata"
+	image_suffix=""
+	image_initrd_suffix=""
 	builddir="${PWD}"
 	while getopts "h-:" opt; do
 		case "$opt" in
@@ -98,6 +107,20 @@ main() {
 				initrd_distro=$(get_from_kata_deps "assets.initrd.architecture.${arch_target}.name")
 				initrd_os_version=$(get_from_kata_deps "assets.initrd.architecture.${arch_target}.version")
 				initrd_name="kata-${initrd_distro}-${initrd_os_version}.${image_type}"
+				;;
+			image_initrd_suffix=*)
+				image_initrd_suffix=${OPTARG#*=}
+				if [ "${image_initrd_suffix}" == "sev" ]; then
+					initrd_distro=$(get_from_kata_deps "assets.initrd.architecture.${arch_target}.sev.name")
+					initrd_os_version=$(get_from_kata_deps "assets.initrd.architecture.${arch_target}.sev.version")
+					initrd_name="kata-${initrd_distro}-${initrd_os_version}-${image_initrd_suffix}.${image_type}"
+					final_initrd_name="${final_initrd_name}-${image_initrd_suffix}"
+				elif [ "${image_initrd_suffix}" == "tdx" ]; then
+					img_distro=$(get_from_kata_deps "assets.image.architecture.${arch_target}.name")
+					img_os_version=$(get_from_kata_deps "assets.image.architecture.${arch_target}.version")
+					image_name="kata-${img_distro}-${img_os_version}-${image_initrd_suffix}.${image_type}"
+					final_image_name="${final_image_name}-${image_initrd_suffix}"
+				fi
 				;;
 			prefix=*)
 				prefix=${OPTARG#*=}

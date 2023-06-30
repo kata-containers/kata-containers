@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+[ -z "${DEBUG}" ] || set -x
 set -o errexit
 set -o nounset
 set -o pipefail
@@ -19,8 +20,8 @@ mkdir "${tarball_content_dir}"
 
 for c in kata-static-*.tar.xz
 do
-    echo "untarring tarball "${c}" into ${tarball_content_dir}"
-    tar -xvf "${c}" -C "${tarball_content_dir}"
+	echo "untarring tarball "${c}" into ${tarball_content_dir}"
+	tar -xvf "${c}" -C "${tarball_content_dir}"
 done
 
 echo "create ${tar_path}"

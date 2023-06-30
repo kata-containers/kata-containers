@@ -83,6 +83,7 @@ type QemuState struct {
 	VirtiofsDaemonPid    int
 	PCIeRootPort         int
 	HotplugVFIOOnRootBus bool
+	ColdPlugVFIO         hv.PCIePort
 }
 
 // qemu is an Hypervisor interface implementation for the Linux qemu hypervisor.
@@ -210,7 +211,7 @@ func (q *qemu) Capabilities(ctx context.Context) types.Capabilities {
 	span, _ := katatrace.Trace(ctx, q.Logger(), "Capabilities", qemuTracingTags, map[string]string{"sandbox_id": q.id})
 	defer span.End()
 
-	return q.arch.capabilities()
+	return q.arch.capabilities(q.config)
 }
 
 func (q *qemu) HypervisorConfig() HypervisorConfig {
@@ -282,6 +283,7 @@ func (q *qemu) setup(ctx context.Context, id string, hypervisorConfig *Hyperviso
 		q.Logger().Debug("Creating UUID")
 		q.state.UUID = uuid.Generate().String()
 
+		q.state.ColdPlugVFIO = q.config.ColdPlugVFIO
 		q.state.HotplugVFIOOnRootBus = q.config.HotplugVFIOOnRootBus
 		q.state.PCIeRootPort = int(q.config.PCIeRootPort)
 
@@ -708,6 +710,18 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		qemuConfig.Devices = q.arch.appendPCIeRootPortDevice(qemuConfig.Devices, hypervisorConfig.PCIeRootPort, memSize32bit, memSize64bit)
 	}
 
+	// The default OVMF MMIO aperture is too small for some PCIe devices
+	// with huge BARs so we need to increase it.
+	// memSize64bit is in bytes, convert to MB, OVMF expects MB as a string
+	if strings.Contains(strings.ToLower(hypervisorConfig.FirmwarePath), "ovmf") {
+		pciMmio64Mb := fmt.Sprintf("%d", (memSize64bit / 1024 / 1024))
+		fwCfg := govmmQemu.FwCfg{
+			Name: "opt/ovmf/X-PciMmio64Mb",
+			Str:  pciMmio64Mb,
+		}
+		qemuConfig.FwCfg = append(qemuConfig.FwCfg, fwCfg)
+	}
+
 	q.qemuConfig = qemuConfig
 
 	q.virtiofsDaemon, err = q.createVirtiofsDaemon(hypervisorConfig.SharedPath)
@@ -1108,22 +1122,21 @@ func (q *qemu) StopVM(ctx context.Context, waitOnly bool) (err error) {
 		return err
 	}
 
+	pids := q.GetPids()
+	if len(pids) == 0 {
+		return errors.New("cannot determine QEMU PID")
+	}
+	pid := pids[0]
+
 	if waitOnly {
-		pids := q.GetPids()
-		if len(pids) == 0 {
-			return errors.New("cannot determine QEMU PID")
-		}
-
-		pid := pids[0]
-
 		err := utils.WaitLocalProcess(pid, qemuStopSandboxTimeoutSecs, syscall.Signal(0), q.Logger())
 		if err != nil {
 			return err
 		}
 	} else {
-		err := q.qmpMonitorCh.qmp.ExecuteQuit(q.qmpMonitorCh.ctx)
+		err = syscall.Kill(pid, syscall.SIGKILL)
 		if err != nil {
-			q.Logger().WithError(err).Error("Fail to execute qmp QUIT")
+			q.Logger().WithError(err).Error("Fail to send SIGKILL to qemu")
 			return err
 		}
 	}

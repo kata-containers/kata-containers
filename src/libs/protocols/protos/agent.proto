@@ -38,6 +38,7 @@ service AgentService {
 	rpc StatsContainer(StatsContainerRequest) returns (StatsContainerResponse);
 	rpc PauseContainer(PauseContainerRequest) returns (google.protobuf.Empty);
 	rpc ResumeContainer(ResumeContainerRequest) returns (google.protobuf.Empty);
+	rpc RemoveStaleVirtiofsShareMounts(RemoveStaleVirtiofsShareMountsRequest) returns (google.protobuf.Empty);
 
 	// stdio
 	rpc WriteStdin(WriteStreamRequest) returns (WriteStreamResponse);
@@ -301,6 +302,8 @@ message CreateSandboxRequest {
 message DestroySandboxRequest {
 }
 
+message RemoveStaleVirtiofsShareMountsRequest {}
+
 message Interfaces {
 	repeated types.Interface Interfaces = 1;
 }
@@ -363,7 +366,8 @@ message OnlineCPUMemRequest {
 	// resources are connected asynchronously and the agent returns immediately.
 	bool wait = 1;
 
-	// NbCpus specifies the number of CPUs that were added and the agent has to online.
+	// NbCpus specifies the number of CPUs that should be onlined in the guest.
+	// Special value 0 means agent will skip this check.
 	uint32 nb_cpus = 2;
 
 	// CpuOnly specifies whether only online CPU or not.

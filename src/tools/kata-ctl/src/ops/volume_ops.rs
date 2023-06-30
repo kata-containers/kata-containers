@@ -8,12 +8,13 @@ use crate::args::{DirectVolSubcommand, DirectVolumeCommand};
 use anyhow::{anyhow, Ok, Result};
 use futures::executor;
 use kata_types::mount::{
-    DirectVolumeMountInfo, KATA_DIRECT_VOLUME_ROOT_PATH, KATA_MOUNT_INFO_FILE_NAME,
+    get_volume_mount_info, join_path, DirectVolumeMountInfo, KATA_DIRECT_VOLUME_ROOT_PATH,
+    KATA_MOUNT_INFO_FILE_NAME,
 };
 use nix;
 use reqwest::StatusCode;
-use safe_path;
-use std::{fs, path::PathBuf, time::Duration};
+use slog::{info, o};
+use std::{fs, time::Duration};
 use url;
 
 use agent::ResizeVolumeRequest;
@@ -24,6 +25,12 @@ use shim_interface::shim_mgmt::{
 
 const TIMEOUT: Duration = Duration::from_millis(2000);
 const CONTENT_TYPE_JSON: &str = "application/json";
+
+macro_rules! sl {
+    () => {
+        slog_scope::logger().new(o!("subsystem" => "volume_ops"))
+    };
+}
 
 pub fn handle_direct_volume(vol_cmd: DirectVolumeCommand) -> Result<()> {
     if !nix::unistd::Uid::effective().is_root() {
@@ -41,7 +48,7 @@ pub fn handle_direct_volume(vol_cmd: DirectVolumeCommand) -> Result<()> {
         }
     };
     if let Some(cmd_result) = cmd_result {
-        println!("{:?}", cmd_result);
+        info!(sl!(), "{:?}", cmd_result);
     }
 
     Ok(())
@@ -90,17 +97,6 @@ async fn stats(volume_path: &str) -> Result<Option<String>> {
     Ok(Some(body))
 }
 
-// join_path joins user provided volumepath with kata direct-volume root path
-// the volume_path is base64-encoded and then safely joined to the end of path prefix
-fn join_path(prefix: &str, volume_path: &str) -> Result<PathBuf> {
-    if volume_path.is_empty() {
-        return Err(anyhow!("volume path must not be empty"));
-    }
-    let b64_encoded_path = base64::encode(volume_path.as_bytes());
-
-    Ok(safe_path::scoped_join(prefix, b64_encoded_path)?)
-}
-
 // add writes the mount info (json string) of a direct volume into a filesystem path known to Kata Containers.
 pub fn add(volume_path: &str, mount_info: &str) -> Result<Option<String>> {
     let mount_info_dir_path = join_path(KATA_DIRECT_VOLUME_ROOT_PATH, volume_path)?;
@@ -129,15 +125,6 @@ pub fn remove(volume_path: &str) -> Result<Option<String>> {
     Ok(None)
 }
 
-pub fn get_volume_mount_info(volume_path: &str) -> Result<DirectVolumeMountInfo> {
-    let mount_info_file_path =
-        join_path(KATA_DIRECT_VOLUME_ROOT_PATH, volume_path)?.join(KATA_MOUNT_INFO_FILE_NAME);
-    let mount_info_file = fs::read_to_string(mount_info_file_path)?;
-    let mount_info: DirectVolumeMountInfo = serde_json::from_str(&mount_info_file)?;
-
-    Ok(mount_info)
-}
-
 // get_sandbox_id_for_volume finds the id of the first sandbox found in the dir.
 // We expect a direct-assigned volume is associated with only a sandbox at a time.
 pub fn get_sandbox_id_for_volume(volume_path: &str) -> Result<String> {
@@ -162,7 +149,7 @@ pub fn get_sandbox_id_for_volume(volume_path: &str) -> Result<String> {
         return Ok(String::from(file_name));
     }
 
-    return Err(anyhow!("no sandbox found for {}", volume_path));
+    Err(anyhow!("no sandbox found for {}", volume_path))
 }
 
 #[cfg(test)]
@@ -170,7 +157,7 @@ mod tests {
     use super::*;
     use kata_types::mount::DirectVolumeMountInfo;
     use serial_test::serial;
-    use std::{collections::HashMap, fs};
+    use std::{collections::HashMap, fs, path::PathBuf};
     use tempfile::tempdir;
     use test_utils::skip_if_not_root;
 

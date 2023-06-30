@@ -2,6 +2,10 @@ name: CI | Build kata-static tarball for amd64
 on:
   workflow_call:
     inputs:
+      stage:
+        required: false
+        type: string
+        default: test
       tarball-suffix:
         required: false
         type: string
@@ -15,25 +19,50 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
+        stage:
+          - ${{ inputs.stage }}
         asset:
           - cloud-hypervisor
+          - cloud-hypervisor-glibc
           - firecracker
           - kernel
+          - kernel-sev
           - kernel-dragonball-experimental
           - kernel-tdx-experimental
+          - kernel-nvidia-gpu
+          - kernel-nvidia-gpu-snp
+          - kernel-nvidia-gpu-tdx-experimental
           - nydus
+          - ovmf
+          - ovmf-sev
           - qemu
+          - qemu-snp-experimental
           - qemu-tdx-experimental
           - rootfs-image
+          - rootfs-image-tdx
           - rootfs-initrd
+          - rootfs-initrd-mariner
+          - rootfs-initrd-sev
           - shim-v2
           - tdvf
           - virtiofsd
+        exclude:
+          - stage: release
+            asset: cloud-hypervisor-glibc
     steps:
+      - name: Login to Kata Containers quay.io
+        if: ${{ inputs.push-to-registry == 'yes' }}
+        uses: docker/login-action@v2
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
+          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
       - uses: actions/checkout@v3
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0 # This is needed in order to keep the commit ids history
+
       - name: Build ${{ matrix.asset }}
         run: |
           make "${KATA_ASSET}-tarball"

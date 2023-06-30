@@ -80,6 +80,7 @@ pub struct Agent {
     pub kernel_modules: Vec<String>,
 
     /// container pipe size
+    #[serde(default)]
     pub container_pipe_size: u32,
 }
 

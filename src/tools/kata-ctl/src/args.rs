@@ -12,6 +12,25 @@ use thiserror::Error;
 pub struct KataCtlCli {
     #[clap(subcommand)]
     pub command: Commands,
+    #[clap(short, long, value_enum, value_parser = parse_log_level)]
+    /// Sets the minimum log level required for log messages to be displayed. Default is 'info'.
+    /// Valid values are: trace, debug, info, warning, error, critical
+    pub log_level: Option<slog::Level>,
+    #[clap(short, long, action)]
+    /// If enabled, log messages will be JSON formatted for easier machine parsing
+    pub json_logging: bool,
+}
+
+fn parse_log_level(arg: &str) -> Result<slog::Level, String> {
+    match arg {
+        "trace" => Ok(slog::Level::Trace),
+        "debug" => Ok(slog::Level::Debug),
+        "info" => Ok(slog::Level::Info),
+        "warning" => Ok(slog::Level::Warning),
+        "error" => Ok(slog::Level::Error),
+        "critical" => Ok(slog::Level::Critical),
+        _ => Err("Must be one of [trace, debug, info, warning, error, critical]".to_string()),
+    }
 }
 
 #[derive(Debug, Subcommand)]
@@ -23,7 +42,7 @@ pub enum Commands {
     DirectVolume(DirectVolumeCommand),
 
     /// Display settings
-    Env,
+    Env(EnvArgument),
 
     /// Enter into guest VM by debug console
     Exec(ExecArguments),
@@ -69,6 +88,15 @@ pub enum CheckSubCommand {
     List,
 }
 
+#[derive(Debug, Args)]
+pub struct EnvArgument {
+    /// Format output as JSON
+    #[arg(long)]
+    pub json: bool,
+    /// File to write env output to
+    #[arg(short = 'f', long = "file")]
+    pub file: Option<String>,
+}
 #[derive(Debug, Args)]
 pub struct MetricsCommand {
     #[clap(subcommand)]

@@ -32,6 +32,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	deviceManager "github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
+	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	resCtrl "github.com/kata-containers/kata-containers/src/runtime/pkg/resourcecontrol"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
@@ -620,6 +621,25 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return nil, err
 	}
 
+	// If we have a confidential guest we need to cold-plug the PCIe VFIO devices
+	// until we have TDISP/IDE PCIe support.
+	coldPlugVFIO := (sandboxConfig.HypervisorConfig.ColdPlugVFIO != hv.NoPort)
+	var devs []config.DeviceInfo
+	for cnt, containers := range sandboxConfig.Containers {
+		for dev, device := range containers.DeviceInfos {
+			if coldPlugVFIO && deviceManager.IsVFIO(device.ContainerPath) {
+				device.ColdPlug = true
+				devs = append(devs, device)
+				// We need to remove the devices marked for cold-plug
+				// otherwise at the container level the kata-agent
+				// will try to hot-plug them.
+				infos := sandboxConfig.Containers[cnt].DeviceInfos
+				infos = append(infos[:dev], infos[dev+1:]...)
+				sandboxConfig.Containers[cnt].DeviceInfos = infos
+			}
+		}
+	}
+
 	// store doesn't require hypervisor to be stored immediately
 	if err = s.hypervisor.CreateVM(ctx, s.id, s.network, &sandboxConfig.HypervisorConfig); err != nil {
 		return nil, err
@@ -629,6 +649,17 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return nil, err
 	}
 
+	if !coldPlugVFIO {
+		return s, nil
+	}
+
+	for _, dev := range devs {
+		_, err := s.AddDevice(ctx, dev)
+		if err != nil {
+			s.Logger().WithError(err).Debug("Cannot cold-plug add device")
+			return nil, err
+		}
+	}
 	return s, nil
 }
 
@@ -666,6 +697,7 @@ func (s *Sandbox) createResourceController() error {
 			// Determine if device /dev/null and /dev/urandom exist, and add if they don't
 			nullDeviceExist := false
 			urandomDeviceExist := false
+			ptmxDeviceExist := false
 			for _, device := range resources.Devices {
 				if device.Type == "c" && device.Major == intptr(1) && device.Minor == intptr(3) {
 					nullDeviceExist = true
@@ -673,6 +705,10 @@ func (s *Sandbox) createResourceController() error {
 
 				if device.Type == "c" && device.Major == intptr(1) && device.Minor == intptr(9) {
 					urandomDeviceExist = true
+				}
+
+				if device.Type == "c" && device.Major == intptr(5) && device.Minor == intptr(2) {
+					ptmxDeviceExist = true
 				}
 			}
 
@@ -687,6 +723,18 @@ func (s *Sandbox) createResourceController() error {
 				resources.Devices = append(resources.Devices, []specs.LinuxDeviceCgroup{
 					{Type: "c", Major: intptr(1), Minor: intptr(9), Access: rwm, Allow: true},
 				}...)
+			}
+
+			// If the hypervisor debug console is enabled and
+			// sandbox_cgroup_only are configured, then the vmm needs access to
+			// /dev/ptmx.  Add this to the device allowlist if it is not
+			// already present in the config.
+			if s.config.HypervisorConfig.Debug && s.config.SandboxCgroupOnly && !ptmxDeviceExist {
+				// "/dev/ptmx"
+				resources.Devices = append(resources.Devices, []specs.LinuxDeviceCgroup{
+					{Type: "c", Major: intptr(5), Minor: intptr(2), Access: rwm, Allow: true},
+				}...)
+
 			}
 
 			if spec.Linux.Resources.CPU != nil {
@@ -2069,9 +2117,8 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 	s.Logger().Debugf("Request to hypervisor to update oldCPUs/newCPUs: %d/%d", oldCPUs, newCPUs)
 	// If the CPUs were increased, ask agent to online them
 	if oldCPUs < newCPUs {
-		vcpusAdded := newCPUs - oldCPUs
-		s.Logger().Debugf("Request to onlineCPUMem with %d CPUs", vcpusAdded)
-		if err := s.agent.onlineCPUMem(ctx, vcpusAdded, true); err != nil {
+		s.Logger().Debugf("Request to onlineCPUMem with %d CPUs", newCPUs)
+		if err := s.agent.onlineCPUMem(ctx, newCPUs, true); err != nil {
 			return err
 		}
 	}

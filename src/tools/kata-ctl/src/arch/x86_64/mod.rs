@@ -12,8 +12,10 @@ mod arch_specific {
     use crate::check;
     use crate::check::{GuestProtection, ProtectionError};
     use crate::types::*;
-    use anyhow::{anyhow, Result};
+    use crate::utils;
+    use anyhow::{anyhow, Context, Result};
     use nix::unistd::Uid;
+    use slog::{info, o, warn};
     use std::fs;
     use std::path::Path;
 
@@ -25,6 +27,12 @@ mod arch_specific {
 
     pub const ARCH_CPU_VENDOR_FIELD: &str = check::GENERIC_CPU_VENDOR_FIELD;
     pub const ARCH_CPU_MODEL_FIELD: &str = check::GENERIC_CPU_MODEL_FIELD;
+
+    macro_rules! sl {
+         () => {
+             slog_scope::logger().new(o!("subsystem" => "x86_64"))
+         };
+    }
 
     // List of check functions
     static CHECK_LIST: &[CheckItem] = &[
@@ -40,22 +48,40 @@ mod arch_specific {
             fp: check_kernel_modules,
             perm: PermissionType::NonPrivileged,
         },
+        CheckItem {
+            name: CheckType::KvmIsUsable,
+            descr: "This parameter performs check to see if KVM is usable",
+            fp: check_kvm_is_usable,
+            perm: PermissionType::Privileged,
+        },
     ];
 
     static MODULE_LIST: &[KernelModule] = &[
         KernelModule {
             name: "kvm",
-            parameter: KernelParam {
+            params: &[KernelParam {
                 name: "kvmclock_periodic_sync",
                 value: KernelParamType::Simple("Y"),
-            },
+            }],
         },
         KernelModule {
             name: "kvm_intel",
-            parameter: KernelParam {
+            params: &[KernelParam {
                 name: "unrestricted_guest",
                 value: KernelParamType::Predicate(unrestricted_guest_param_check),
-            },
+            }],
+        },
+        KernelModule {
+            name: "vhost",
+            params: &[],
+        },
+        KernelModule {
+            name: "vhost_net",
+            params: &[],
+        },
+        KernelModule {
+            name: "vhost_vsock",
+            params: &[],
         },
     ];
 
@@ -65,7 +91,7 @@ mod arch_specific {
 
     // check cpu
     fn check_cpu(_args: &str) -> Result<()> {
-        println!("INFO: check CPU: x86_64");
+        info!(sl!(), "check CPU: x86_64");
 
         let cpu_info =
             kata_sys_util::cpu::get_single_cpu_info(check::PROC_CPUINFO, CPUINFO_DELIMITER)?;
@@ -84,14 +110,11 @@ mod arch_specific {
         // TODO: Add more information to output (see kata-check in go tool); adjust formatting
         let missing_cpu_attributes = check::check_cpu_attribs(&cpu_info, CPU_ATTRIBS_INTEL)?;
         if !missing_cpu_attributes.is_empty() {
-            eprintln!(
-                "WARNING: Missing CPU attributes {:?}",
-                missing_cpu_attributes
-            );
+            warn!(sl!(), "Missing CPU attributes {:?}", missing_cpu_attributes);
         }
         let missing_cpu_flags = check::check_cpu_flags(&cpu_flags, CPU_FLAGS_INTEL)?;
         if !missing_cpu_flags.is_empty() {
-            eprintln!("WARNING: Missing CPU flags {:?}", missing_cpu_flags);
+            warn!(sl!(), "Missing CPU flags {:?}", missing_cpu_flags);
         }
 
         Ok(())
@@ -111,6 +134,19 @@ mod arch_specific {
             })?;
 
         Ok(cpu_flags)
+    }
+
+    pub fn get_cpu_details() -> Result<(String, String)> {
+        utils::get_generic_cpu_details(check::PROC_CPUINFO)
+    }
+
+    // check if kvm is usable
+    fn check_kvm_is_usable(_args: &str) -> Result<()> {
+        info!(sl!(), "check if kvm is usable: x86_64");
+
+        let result = check::check_kvm_is_usable_generic();
+
+        result.context("KVM check failed")
     }
 
     pub const TDX_SYS_FIRMWARE_DIR: &str = "/sys/firmware/tdx_seam/";
@@ -206,13 +242,9 @@ mod arch_specific {
 
         let running_on_vmm_alt = running_on_vmm()?;
 
+        // Kernel param "unrestricted_guest" is not required when running under a hypervisor
         if running_on_vmm_alt {
-            let msg = format!("You are running in a VM, where the kernel module '{}' parameter '{:}' has a value '{:}'. This causes conflict when running kata.",
-                module,
-                param_name,
-                param_value_host
-            );
-            return Err(anyhow!(msg));
+            return Ok(());
         }
 
         if param_value_host == expected_param_value.to_string() {
@@ -229,8 +261,40 @@ mod arch_specific {
                 expected_param_value
             );
 
-            return Err(anyhow!("{} {}", error_msg, action_msg));
+            Err(anyhow!("{} {}", error_msg, action_msg))
         }
+    }
+
+    fn check_kernel_params(kernel_module: &KernelModule) -> Result<()> {
+        const MODULES_PATH: &str = "/sys/module";
+
+        for param in kernel_module.params {
+            let module_param_path = format!(
+                "{}/{}/parameters/{}",
+                MODULES_PATH, kernel_module.name, param.name
+            );
+
+            // Here the currently loaded kernel parameter value
+            // is retrieved and returned on success
+            let param_value_host = std::fs::read_to_string(module_param_path)
+                .map(|val| val.replace('\n', ""))
+                .map_err(|_err| {
+                    anyhow!(
+                        "'{:}' kernel module parameter `{:}` not found.",
+                        kernel_module.name,
+                        param.name
+                    )
+                })?;
+
+            check_kernel_param(
+                kernel_module.name,
+                param.name,
+                &param_value_host,
+                param.value.clone(),
+            )
+            .map_err(|e| anyhow!(e.to_string()))?;
+        }
+        Ok(())
     }
 
     fn check_kernel_param(
@@ -259,32 +323,42 @@ mod arch_specific {
     }
 
     fn check_kernel_modules(_args: &str) -> Result<()> {
-        println!("INFO: check kernel modules for: x86_64");
+        info!(sl!(), "check kernel modules for: x86_64");
 
         for module in MODULE_LIST {
-            let module_loaded =
-                check::check_kernel_module_loaded(module.name, module.parameter.name);
+            let module_loaded = check::check_kernel_module_loaded(module);
 
             match module_loaded {
-                Ok(param_value_host) => {
-                    let parameter_check = check_kernel_param(
-                        module.name,
-                        module.parameter.name,
-                        &param_value_host,
-                        module.parameter.value.clone(),
-                    );
-
-                    match parameter_check {
-                        Ok(_v) => println!("{} Ok", module.name),
+                Ok(_) => {
+                    let check = check_kernel_params(module);
+                    match check {
+                        Ok(_v) => info!(sl!(), "{} Ok", module.name),
                         Err(e) => return Err(e),
                     }
                 }
                 Err(err) => {
-                    eprintln!("WARNING {:}", err.replace('\n', ""))
+                    warn!(sl!(), "{:}", err.replace('\n', ""))
                 }
             }
         }
         Ok(())
+    }
+
+    pub fn host_is_vmcontainer_capable() -> Result<bool> {
+        let mut count = 0;
+        if check_cpu("check_cpu").is_err() {
+            count += 1;
+        };
+
+        if check_kernel_modules("check_modules").is_err() {
+            count += 1;
+        };
+
+        if count == 0 {
+            return Ok(true);
+        };
+
+        Err(anyhow!("System is not capable of running a VM"))
     }
 }
 

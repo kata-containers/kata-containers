@@ -7,4 +7,5 @@ This repository contains a number of packages in addition to the
 |-|-|
 | [`katatestutils`](katatestutils) | Unit test utilities. |
 | [`katautils`](katautils) | Utilities. |
+| [`sev`](sev) | AMD SEV confidential guest utilities. |
 | [`signals`](signals) | Signal handling functions. |

@@ -35,7 +35,7 @@ use crate::log_child;
 // struct is populated from the content in the /proc/<pid>/mountinfo file.
 #[derive(std::fmt::Debug, PartialEq)]
 pub struct Info {
-    mount_point: String,
+    pub mount_point: String,
     optional: String,
     fstype: String,
 }
@@ -553,7 +553,7 @@ fn rootfs_parent_mount_private(path: &str) -> Result<()> {
 
 // Parse /proc/self/mountinfo because comparing Dev and ino does not work from
 // bind mounts
-fn parse_mount_table(mountinfo_path: &str) -> Result<Vec<Info>> {
+pub fn parse_mount_table(mountinfo_path: &str) -> Result<Vec<Info>> {
     let file = File::open(mountinfo_path)?;
     let reader = BufReader::new(file);
     let mut infos = Vec::new();

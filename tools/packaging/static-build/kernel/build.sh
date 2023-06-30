@@ -25,6 +25,7 @@ sudo docker pull ${container_image} || \
 
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
+	--env MEASURED_ROOTFS="${MEASURED_ROOTFS:-}" \
 	"${container_image}" \
 	bash -c "${kernel_builder} $* setup"
 
@@ -38,3 +39,9 @@ sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	--env DESTDIR="${DESTDIR}" --env PREFIX="${PREFIX}" \
 	"${container_image}" \
 	bash -c "${kernel_builder} $* install"
+
+sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
+	-w "${PWD}" \
+	--env DESTDIR="${DESTDIR}" --env PREFIX="${PREFIX}" \
+	"${container_image}" \
+	bash -c "${kernel_builder} $* build-headers"

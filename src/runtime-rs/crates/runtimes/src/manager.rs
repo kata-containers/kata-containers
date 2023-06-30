@@ -6,7 +6,6 @@
 
 use std::{path::PathBuf, str::from_utf8, sync::Arc};
 
-use crate::{shim_mgmt::server::MgmtServer, static_resource::StaticResourceManager};
 use anyhow::{anyhow, Context, Result};
 use common::{
     message::Message,
@@ -14,15 +13,15 @@ use common::{
     RuntimeHandler, RuntimeInstance, Sandbox, SandboxNetworkEnv,
 };
 use hypervisor::Param;
+use kata_sys_util::spec::load_oci_spec;
 use kata_types::{
     annotations::Annotation, config::default::DEFAULT_GUEST_DNS_FILE, config::TomlConfig,
 };
-use netns_rs::NetNs;
-use resource::network::generate_netns_name;
-
 #[cfg(feature = "linux")]
 use linux_container::LinuxContainer;
+use netns_rs::NetNs;
 use persist::sandbox_persist::Persist;
+use resource::{cpu_mem::initial_size::InitialSizeManager, network::generate_netns_name};
 use shim_interface::shim_mgmt::ERR_NO_SHIM_SERVER;
 use tokio::fs;
 use tokio::sync::{mpsc::Sender, RwLock};
@@ -34,6 +33,8 @@ use virt_container::{
 };
 #[cfg(feature = "wasm")]
 use wasm_container::WasmContainer;
+
+use crate::shim_mgmt::server::MgmtServer;
 
 struct RuntimeHandlerManagerInner {
     id: String,
@@ -190,9 +191,16 @@ impl RuntimeHandlerManager {
         let sender = inner.msg_sender.clone();
         let sandbox_state = persist::from_disk::<SandboxState>(&inner.id)
             .context("failed to load the sandbox state")?;
+
+        let config = if let Ok(spec) = load_oci_spec() {
+            load_config(&spec, &None).context("load config")?
+        } else {
+            TomlConfig::default()
+        };
+
         let sandbox_args = SandboxRestoreArgs {
             sid: inner.id.clone(),
-            toml_config: TomlConfig::default(),
+            toml_config: config,
             sender,
         };
         match sandbox_state.sandbox_type.clone() {
@@ -208,6 +216,10 @@ impl RuntimeHandlerManager {
             }
             #[cfg(feature = "virt")]
             name if name == VirtContainer::name() => {
+                if sandbox_args.toml_config.runtime.keep_abnormal {
+                    info!(sl!(), "skip cleanup for keep_abnormal");
+                    return Ok(());
+                }
                 let sandbox = VirtSandbox::restore(sandbox_args, sandbox_state)
                     .await
                     .context("failed to restore the sandbox")?;
@@ -385,12 +397,11 @@ fn load_config(spec: &oci::Spec, option: &Option<Vec<u8>>) -> Result<TomlConfig>
         path
     } else if let Some(option) = option {
         // get rid of the special characters in options to get the config path
-        let path = if option.len() > 2 {
+        if option.len() > 2 {
             from_utf8(&option[2..])?.to_string()
         } else {
             String::from("")
-        };
-        path
+        }
     } else {
         String::from("")
     };
@@ -411,14 +422,11 @@ fn load_config(spec: &oci::Spec, option: &Option<Vec<u8>>) -> Result<TomlConfig>
     //   2. If this is not a sandbox infrastructure container, but instead a standalone single container (analogous to "docker run..."),
     //	then the container spec itself will contain appropriate sizing information for the entire sandbox (since it is
     //	a single container.
-    if toml_config.runtime.static_sandbox_resource_mgmt {
-        info!(sl!(), "static resource management enabled");
-        let static_resource_manager = StaticResourceManager::new(spec)
-            .context("failed to construct static resource manager")?;
-        static_resource_manager
-            .setup_config(&mut toml_config)
-            .context("failed to setup static resource mgmt config")?;
-    }
+    let initial_size_manager =
+        InitialSizeManager::new(spec).context("failed to construct static resource manager")?;
+    initial_size_manager
+        .setup_config(&mut toml_config)
+        .context("failed to setup static resource mgmt config")?;
 
     info!(sl!(), "get config content {:?}", &toml_config);
     Ok(toml_config)

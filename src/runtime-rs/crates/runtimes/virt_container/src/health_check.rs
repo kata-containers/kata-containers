@@ -21,17 +21,17 @@ const HEALTH_CHECK_STOP_CHANNEL_BUFFER_SIZE: usize = 1;
 
 pub struct HealthCheck {
     pub keep_alive: bool,
-    keep_vm: bool,
+    keep_abnormal: bool,
     stop_tx: mpsc::Sender<()>,
     stop_rx: Arc<Mutex<mpsc::Receiver<()>>>,
 }
 
 impl HealthCheck {
-    pub fn new(keep_alive: bool, keep_vm: bool) -> HealthCheck {
+    pub fn new(keep_alive: bool, keep_abnormal: bool) -> HealthCheck {
         let (tx, rx) = mpsc::channel(HEALTH_CHECK_STOP_CHANNEL_BUFFER_SIZE);
         HealthCheck {
             keep_alive,
-            keep_vm,
+            keep_abnormal,
             stop_tx: tx,
             stop_rx: Arc::new(Mutex::new(rx)),
         }
@@ -46,8 +46,8 @@ impl HealthCheck {
         info!(sl!(), "start runtime keep alive");
 
         let stop_rx = self.stop_rx.clone();
-        let keep_vm = self.keep_vm;
-        let _ = tokio::spawn(async move {
+        let keep_abnormal = self.keep_abnormal;
+        tokio::spawn(async move {
             let mut version_check_threshold_count = 0;
 
             loop {
@@ -87,7 +87,7 @@ impl HealthCheck {
                                 error!(sl!(), "failed to do {} agent health check: {}", id, e);
                                 if let Err(mpsc::error::TryRecvError::Empty) = stop_rx.try_recv() {
                                     error!(sl!(), "failed to receive stop monitor signal");
-                                    if !keep_vm {
+                                    if !keep_abnormal {
                                         ::std::process::exit(1);
                                     }
                                 } else {

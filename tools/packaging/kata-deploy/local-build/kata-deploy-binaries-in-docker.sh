@@ -5,6 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+[ -z "${DEBUG}" ] || set -x
 set -o errexit
 set -o nounset
 set -o pipefail
@@ -15,6 +16,8 @@ kata_dir=$(realpath "${script_dir}/../../../../")
 kata_deploy_create="${script_dir}/kata-deploy-binaries.sh"
 uid=$(id -u ${USER})
 gid=$(id -g ${USER})
+http_proxy="${http_proxy:-}"
+https_proxy="${https_proxy:-}"
 
 if [ "${script_dir}" != "${PWD}" ]; then
 	ln -sf "${script_dir}/build" "${PWD}/build"
@@ -41,6 +44,8 @@ docker build -q -t build-kata-deploy \
 	--build-arg IMG_USER="${USER}" \
 	--build-arg UID=${uid} \
 	--build-arg GID=${gid} \
+	--build-arg http_proxy="${http_proxy}" \
+	--build-arg https_proxy="${https_proxy}" \
 	--build-arg HOST_DOCKER_GID=${docker_gid} \
 	"${script_dir}/dockerbuild/"
 
@@ -50,6 +55,7 @@ docker run \
 	-v "${kata_dir}:${kata_dir}" \
 	--env CI="${CI:-}" \
 	--env USER=${USER} \
+	--env BUILDER_REGISTRY="${BUILDER_REGISTRY:-}" \
 	--env PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-"no"}" \
 	--env INITRAMFS_CONTAINER_BUILDER="${INITRAMFS_CONTAINER_BUILDER:-}" \
 	--env KERNEL_CONTAINER_BUILDER="${KERNEL_CONTAINER_BUILDER:-}" \
@@ -58,6 +64,7 @@ docker run \
 	--env SHIM_V2_CONTAINER_BUILDER="${SHIM_V2_CONTAINER_BUILDER:-}" \
 	--env TDSHIM_CONTAINER_BUILDER="${TDSHIM_CONTAINER_BUILDER:-}" \
 	--env VIRTIOFSD_CONTAINER_BUILDER="${VIRTIOFSD_CONTAINER_BUILDER:-}" \
+	--env MEASURED_ROOTFS="${MEASURED_ROOTFS:-}" \
 	--rm \
 	-w ${script_dir} \
 	build-kata-deploy "${kata_deploy_create}" $@
