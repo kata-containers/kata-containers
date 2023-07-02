@@ -35,7 +35,7 @@ pub enum NetworkConfig {
 
 #[async_trait]
 pub trait Network: Send + Sync {
-    async fn setup(&self, h: &dyn Hypervisor) -> Result<()>;
+    async fn setup(&self) -> Result<()>;
     async fn interfaces(&self) -> Result<Vec<agent::Interface>>;
     async fn routes(&self) -> Result<Vec<agent::Route>>;
     async fn neighs(&self) -> Result<Vec<agent::ARPNeighbor>>;

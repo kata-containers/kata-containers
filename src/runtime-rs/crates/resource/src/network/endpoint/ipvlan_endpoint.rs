@@ -4,37 +4,54 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::io::{self, Error};
+use std::{
+    io::{self, Error},
+    sync::Arc,
+};
 
-use super::endpoint_persist::{EndpointState, IpVlanEndpointState};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use hypervisor::device::DeviceType;
-use hypervisor::NetworkDevice;
+use tokio::sync::RwLock;
 
-use super::Endpoint;
-use crate::network::network_model::TC_FILTER_NET_MODEL_STR;
-use crate::network::{utils, NetworkPair};
-use hypervisor::{device::driver::NetworkConfig, Hypervisor};
+use hypervisor::{
+    device::{
+        device_manager::{do_handle_device, DeviceManager},
+        driver::NetworkConfig,
+        DeviceConfig, DeviceType,
+    },
+    Hypervisor, NetworkDevice,
+};
+
+use super::{
+    endpoint_persist::{EndpointState, IpVlanEndpointState},
+    Endpoint,
+};
+use crate::network::{network_model::TC_FILTER_NET_MODEL_STR, utils, NetworkPair};
 
 // IPVlanEndpoint is the endpoint bridged to VM
 #[derive(Debug)]
 pub struct IPVlanEndpoint {
     pub(crate) net_pair: NetworkPair,
+    pub(crate) d: Arc<RwLock<DeviceManager>>,
 }
 
 impl IPVlanEndpoint {
     pub async fn new(
+        d: &Arc<RwLock<DeviceManager>>,
         handle: &rtnetlink::Handle,
         name: &str,
         idx: u32,
         queues: usize,
     ) -> Result<Self> {
-        // tc filter network model is the only one works for ipvlan
+        // tc filter network model is the only for ipvlan
         let net_pair = NetworkPair::new(handle, idx, name, TC_FILTER_NET_MODEL_STR, queues)
             .await
             .context("error creating new NetworkPair")?;
-        Ok(IPVlanEndpoint { net_pair })
+
+        Ok(IPVlanEndpoint {
+            net_pair,
+            d: d.clone(),
+        })
     }
 
     fn get_network_config(&self) -> Result<NetworkConfig> {
@@ -45,9 +62,12 @@ impl IPVlanEndpoint {
                 format!("hard_addr {}", &iface.hard_addr),
             )
         })?;
+
         Ok(NetworkConfig {
             host_dev_name: iface.name.clone(),
+            virt_iface_name: self.net_pair.virt_iface.name.clone(),
             guest_mac: Some(guest_mac),
+            ..Default::default()
         })
     }
 }
@@ -62,18 +82,16 @@ impl Endpoint for IPVlanEndpoint {
         self.net_pair.tap.tap_iface.hard_addr.clone()
     }
 
-    async fn attach(&self, h: &dyn Hypervisor) -> Result<()> {
+    async fn attach(&self) -> Result<()> {
         self.net_pair
             .add_network_model()
             .await
             .context("error adding network model")?;
+
         let config = self.get_network_config().context("get network config")?;
-        h.add_device(DeviceType::Network(NetworkDevice {
-            id: self.net_pair.virt_iface.name.clone(),
-            config,
-        }))
-        .await
-        .context("error adding device by hypervisor")?;
+        do_handle_device(&self.d, &DeviceConfig::NetworkCfg(config))
+            .await
+            .context("do handle network IPVlan endpoint device failed.")?;
 
         Ok(())
     }
@@ -86,12 +104,13 @@ impl Endpoint for IPVlanEndpoint {
         let config = self
             .get_network_config()
             .context("error getting network config")?;
+
         h.remove_device(DeviceType::Network(NetworkDevice {
-            id: self.net_pair.virt_iface.name.clone(),
             config,
+            ..Default::default()
         }))
         .await
-        .context("error removing device by hypervisor")?;
+        .context("remove IPVlan endpoint device by hypervisor failed.")?;
 
         Ok(())
     }

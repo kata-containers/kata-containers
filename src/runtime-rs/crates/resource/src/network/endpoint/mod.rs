@@ -27,7 +27,7 @@ use super::EndpointState;
 pub trait Endpoint: std::fmt::Debug + Send + Sync {
     async fn name(&self) -> String;
     async fn hardware_addr(&self) -> String;
-    async fn attach(&self, hypervisor: &dyn Hypervisor) -> Result<()>;
+    async fn attach(&self) -> Result<()>;
     async fn detach(&self, hypervisor: &dyn Hypervisor) -> Result<()>;
     async fn save(&self) -> Option<EndpointState>;
 }
