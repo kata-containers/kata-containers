@@ -408,6 +408,11 @@ configure_containerd()
 	local enable_debug="${1:-}"
 	[ -z "$enable_debug" ] && die "no enable debug value"
 
+	local http_proxy_set="${2:-}"
+	[ -z "$http_proxy_set" ] && die "no http_proxy_set value"
+
+	local http_proxy="${3:-}"
+
 	local project="$containerd_project"
 
 	info "Configuring $project"
@@ -497,6 +502,25 @@ configure_containerd()
 		}
 
 		modified="true"
+	fi
+
+	if [ "$http_proxy_set" = "true" ] 
+	then
+		info "Configuring proxy information for containerd service"
+		if grep -q "\[Service\]" "$dest"; then
+			line_number=$(grep -n "\[Service\]" "$dest" | cut -d ":" -f1)
+			env_search="Environment=\"HTTP_PROXY=.*\""
+			env_http_proxy="Environment=\"HTTP_PROXY=$http_proxy\""
+			if grep -q "$env_search" "$dest"; then
+				info "Replacing existing HTTP Proxy"
+				sudo sed -i "s@$env_search@$env_http_proxy@g" "$dest"
+			else
+				info "Setting new HTTP Proxy to containerd Environment"
+				sudo sed -i "/\[Service\]/a $env_http_proxy" "$dest"
+			fi
+		modified="true"
+		fi
+
 	fi
 
 	[ "$modified" = "true" ] && info "Modified $cfg"
@@ -623,6 +647,11 @@ handle_containerd()
 	local enable_debug="${3:-}"
 	[ -z "$enable_debug" ] && die "no enable debug value"
 
+	local http_proxy_set="${4:-}"
+	[ -z "$http_proxy_set" ] && die "no enable proxy set value"
+
+	local http_proxy="${5:-}"
+
 	local ret
 
 	if [ "$force" = "true" ]
@@ -639,7 +668,7 @@ handle_containerd()
 		fi
 	fi
 
-	configure_containerd "$enable_debug"
+	configure_containerd "$enable_debug" "$http_proxy_set" "$http_proxy"
 
 	containerd --version
 }
@@ -695,10 +724,14 @@ handle_installation()
 	local only_run_test="${6:-}"
 	[ -z "$only_run_test" ] && die "no only run test value"
 
+	local http_proxy_set="${9:-}"
+	[ -z "$http_proxy_set" ] && die "no http_proxy_set value"
+
 	# These params can be blank
 	local kata_version="${7:-}"
 	local containerd_version="${8:-}"
-
+	local http_proxy="${10:-}"
+	
 	[ "$only_run_test" = "true" ] && test_installation && return 0
 
 	setup "$cleanup" "$force" "$skip_containerd"
@@ -709,7 +742,9 @@ handle_installation()
 		handle_containerd \
 		"$containerd_version" \
 		"$force" \
-		"$enable_debug"
+		"$enable_debug" \
+		"$http_proxy_set" \
+		"$http_proxy"
 
 	[ "$disable_test" = "false" ] && test_installation
 
@@ -731,13 +766,15 @@ handle_args()
 	local disable_test="false"
 	local only_run_test="false"
 	local enable_debug="false"
+	local http_proxy_set="false"
+	local http_proxy=""
 
 	local opt
 
 	local kata_version=""
 	local containerd_version=""
 
-	while getopts "c:dfhk:ortT" opt "$@"
+	while getopts "c:dfhk:op:rtT" opt "$@"
 	do
 		case "$opt" in
 			c) containerd_version="$OPTARG" ;;
@@ -746,6 +783,7 @@ handle_args()
 			h) usage; exit 0 ;;
 			k) kata_version="$OPTARG" ;;
 			o) skip_containerd="true" ;;
+			p) http_proxy_set="true"; http_proxy="$OPTARG" ;;
 			r) cleanup="false" ;;
 			t) disable_test="true" ;;
 			T) only_run_test="true" ;;
@@ -765,7 +803,9 @@ handle_args()
 		"$disable_test" \
 		"$only_run_test" \
 		"$kata_version" \
-		"$containerd_version"
+		"$containerd_version" \
+		"$http_proxy_set" \
+		"$http_proxy"
 }
 
 main()
