@@ -8,7 +8,6 @@
 set -o errexit
 set -o nounset
 set -o pipefail
-set -x
 
 kata_tarball_dir="${2:-kata-artifacts}"
 metrics_dir="$(dirname "$(readlink -f "$0")")"
@@ -49,8 +48,6 @@ EOF
 }
 
 function install_kata() {
-	# ToDo: remove the exit once the metrics workflow is stable
-	exit 0
 	local kata_tarball="kata-static.tar.xz"
 	declare -r katadir="/opt/kata"
 	declare -r destdir="/"
@@ -70,6 +67,15 @@ function install_kata() {
 
 	check_containerd_config_for_kata
 	restart_containerd_service
+	install_checkmetrics
+}
+
+function install_checkmetrics() {
+	# Ensure we have the latest checkmetrics
+	pushd "${checkmetrics_dir}"
+	make
+	sudo make install
+	popd
 }
 
 function check_containerd_config_for_kata() {
@@ -90,26 +96,17 @@ function check_containerd_config_for_kata() {
 
 function check_metrics() {
 	KATA_HYPERVISOR="${1}"
-	# Ensure we have the latest checkemtrics
-	pushd "${checkmetrics_dir}"
-	make
-	sudo make install
-	popd
-
 	local cm_base_file="${checkmetrics_config_dir}/checkmetrics-json-${KATA_HYPERVISOR}-kata-metric8.toml"
 	checkmetrics --debug --percentage --basefile "${cm_base_file}" --metricsdir "${results_dir}"
 	cm_result=$?
 	if [ "${cm_result}" != 0 ]; then
-		info "run-metrics-ci: checkmetrics FAILED (${cm_result})"
-		exit "${cm_result}"
+		die "run-metrics-ci: checkmetrics FAILED (${cm_result})"
 	fi
 }
 
 function run_test_launchtimes() {
 	info "Running Launch Time test using ${KATA_HYPERVISOR} hypervisor"
 
-	# ToDo: remove the exit once the metrics workflow is stable
-	exit 0
 	create_symbolic_links
 	bash tests/metrics/time/launch_times.sh -i public.ecr.aws/ubuntu/ubuntu:latest -n 20
 

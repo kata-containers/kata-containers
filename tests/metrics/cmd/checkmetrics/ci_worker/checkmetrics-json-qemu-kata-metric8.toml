@@ -5,7 +5,7 @@
 # This file contains baseline expectations
 # for checked results by checkmetrics tool.
 #
-# values set specifically for packet.com c1.small worker.
+# values set specifically for Equinix m3.small.x86.
 
 [[metric]]
 name = "boot-times"
