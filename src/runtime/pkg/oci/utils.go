@@ -453,6 +453,10 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		return err
 	}
 
+	if err := addHypervisorHotColdPlugVfioOverrides(ocispec, config); err != nil {
+		return err
+	}
+
 	if value, ok := ocispec.Annotations[vcAnnotations.MachineType]; ok {
 		if value != "" {
 			config.HypervisorConfig.HypervisorMachineType = value
@@ -504,12 +508,6 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.UseLegacySerial).setBool(func(useLegacySerial bool) {
 		config.HypervisorConfig.LegacySerial = useLegacySerial
-	}); err != nil {
-		return err
-	}
-
-	if err := newAnnotationConfiguration(ocispec, vcAnnotations.PCIeRootPort).setUint(func(pcieRootPort uint64) {
-		config.HypervisorConfig.PCIeRootPort = uint32(pcieRootPort)
 	}); err != nil {
 		return err
 	}
@@ -573,6 +571,37 @@ func addHypervisorPathOverrides(ocispec specs.Spec, config *vc.SandboxConfig, ru
 		}
 	}
 
+	return nil
+}
+
+func addHypervisorPCIePortOverride(value string) (config.PCIePort, error) {
+	if value == "" {
+		return config.NoPort, nil
+	}
+	port := config.PCIePort(value)
+	if port.Invalid() {
+		return config.InvalidPort, fmt.Errorf("Invalid PCIe port \"%v\" specified in annotation", value)
+	}
+	return port, nil
+}
+
+func addHypervisorHotColdPlugVfioOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+
+	var err error
+	if value, ok := ocispec.Annotations[vcAnnotations.HotPlugVFIO]; ok {
+		if sbConfig.HypervisorConfig.HotPlugVFIO, err = addHypervisorPCIePortOverride(value); err != nil {
+			return err
+		}
+		// If hot-plug is specified disable cold-plug and vice versa
+		sbConfig.HypervisorConfig.ColdPlugVFIO = config.NoPort
+	}
+	if value, ok := ocispec.Annotations[vcAnnotations.ColdPlugVFIO]; ok {
+		if sbConfig.HypervisorConfig.ColdPlugVFIO, err = addHypervisorPCIePortOverride(value); err != nil {
+			return err
+		}
+		// If cold-plug is specified disable hot-plug and vice versa
+		sbConfig.HypervisorConfig.HotPlugVFIO = config.NoPort
+	}
 	return nil
 }
 

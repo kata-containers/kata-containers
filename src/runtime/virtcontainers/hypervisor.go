@@ -505,13 +505,21 @@ type HypervisorConfig struct {
 	// MemOffset specifies memory space for nvdimm device
 	MemOffset uint64
 
-	// PCIeRootPort is used to indicate the number of PCIe Root Port devices
-	// The PCIe Root Port device is used to hot-plug the PCIe device
-	PCIeRootPort uint32
+	// VFIODevices are used to get PCIe device info early before the sandbox
+	// is started to make better PCIe topology decisions
+	VFIODevices []config.DeviceInfo
+	// VhostUserBlkDevices are handled differently in Q35 and Virt machine
+	// type. capture them early before the sandbox to make better PCIe topology
+	// decisions
+	VhostUserBlkDevices []config.DeviceInfo
+
+	// HotplugVFIO is used to indicate if devices need to be hotplugged on the
+	// root port or a switch
+	HotPlugVFIO config.PCIePort
 
 	// ColdPlugVFIO is used to indicate if devices need to be coldplugged on the
 	// root port, switch or no port
-	ColdPlugVFIO hv.PCIePort
+	ColdPlugVFIO config.PCIePort
 
 	// NumVCPUs specifies default number of vCPUs for the VM.
 	NumVCPUs uint32
