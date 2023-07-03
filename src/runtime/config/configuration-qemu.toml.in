@@ -357,8 +357,15 @@ pflashes = []
 # Default false
 #hotplug_vfio_on_root_bus = true
 
+# Enable hot-plugging of VFIO devices to a bridge-port, 
+# root-port or switch-port. 
+# The default setting is  "no-port"
+#hot_plug_vfio = "root-port" 
+
 # In a confidential compute environment hot-plugging can compromise
-# security. Enable cold-plugging of VFIO devices to a root-port.
+# security. 
+# Enable cold-plugging of VFIO devices to a bridge-port, 
+# root-port or switch-port. 
 # The default setting is  "no-port", which means disabled. 
 #cold_plug_vfio = "root-port" 
 

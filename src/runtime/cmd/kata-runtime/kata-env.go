@@ -17,7 +17,7 @@ import (
 	"github.com/prometheus/procfs"
 	"github.com/urfave/cli"
 
-	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
@@ -113,8 +113,8 @@ type HypervisorInfo struct {
 	SocketPath           string
 	Msize9p              uint32
 	MemorySlots          uint32
-	PCIeRootPort         uint32
-	ColdPlugVFIO         hv.PCIePort
+	HotPlugVFIO          config.PCIePort
+	ColdPlugVFIO         config.PCIePort
 	HotplugVFIOOnRootBus bool
 	Debug                bool
 }
@@ -317,9 +317,9 @@ func getHypervisorInfo(config oci.RuntimeConfig) (HypervisorInfo, error) {
 		EntropySource:        config.HypervisorConfig.EntropySource,
 		SharedFS:             config.HypervisorConfig.SharedFS,
 		VirtioFSDaemon:       config.HypervisorConfig.VirtioFSDaemon,
+		HotPlugVFIO:          config.HypervisorConfig.HotPlugVFIO,
 		ColdPlugVFIO:         config.HypervisorConfig.ColdPlugVFIO,
 		HotplugVFIOOnRootBus: config.HypervisorConfig.HotplugVFIOOnRootBus,
-		PCIeRootPort:         config.HypervisorConfig.PCIeRootPort,
 		SocketPath:           socketPath,
 	}, nil
 }
