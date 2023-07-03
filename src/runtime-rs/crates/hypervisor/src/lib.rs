@@ -70,7 +70,7 @@ pub struct VcpuThreadIds {
 }
 
 #[async_trait]
-pub trait Hypervisor: Send + Sync {
+pub trait Hypervisor: std::fmt::Debug + Send + Sync {
     // vm manager
     async fn prepare_vm(&self, id: &str, netns: Option<String>) -> Result<()>;
     async fn start_vm(&self, timeout: i32) -> Result<()>;

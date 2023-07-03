@@ -35,19 +35,16 @@ pub struct ResourceManager {
 }
 
 impl ResourceManager {
-    pub fn new(
+    pub async fn new(
         sid: &str,
         agent: Arc<dyn Agent>,
         hypervisor: Arc<dyn Hypervisor>,
         toml_config: Arc<TomlConfig>,
     ) -> Result<Self> {
         Ok(Self {
-            inner: Arc::new(RwLock::new(ResourceManagerInner::new(
-                sid,
-                agent,
-                hypervisor,
-                toml_config,
-            )?)),
+            inner: Arc::new(RwLock::new(
+                ResourceManagerInner::new(sid, agent, hypervisor, toml_config).await?,
+            )),
         })
     }
 

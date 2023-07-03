@@ -8,7 +8,7 @@ THIS_FILE=$(readlink -f ${BASH_SOURCE[0]})
 LIB_DIR=${THIS_FILE%/*}
 RESULT_DIR="${LIB_DIR}/../results"
 
-source ${LIB_DIR}/../../lib/common.bash
+source ${LIB_DIR}/../../common.bash
 source ${LIB_DIR}/json.bash
 source /etc/os-release || source /usr/lib/os-release
 

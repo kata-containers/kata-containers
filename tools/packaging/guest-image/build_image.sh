@@ -140,6 +140,13 @@ main() {
 					img_os_version=$(get_from_kata_deps "assets.image.architecture.${arch_target}.version")
 					image_name="kata-${img_distro}-${img_os_version}-${image_initrd_suffix}.${image_type}"
 					final_image_name="${final_image_name}-${image_initrd_suffix}"
+
+					initrd_distro=$(get_from_kata_deps "assets.initrd.architecture.${arch_target}.name")
+					initrd_os_version=$(get_from_kata_deps "assets.initrd.architecture.${arch_target}.version")
+					initrd_name="kata-${initrd_distro}-${initrd_os_version}-${image_initrd_suffix}.${image_type}"
+					final_initrd_name="${final_initrd_name}-${image_initrd_suffix}"
+				elif [ -n "${image_initrd_suffix}" ]; then
+					die "Invalid image_initrd_suffix ${image_initrd_suffix}"
 				fi
 				;;
 			root_hash_suffix=*)

@@ -22,6 +22,7 @@ use tokio::sync::RwLock;
 
 use crate::{DeviceType, Hypervisor, VcpuThreadIds};
 
+#[derive(Debug)]
 pub struct Dragonball {
     inner: Arc<RwLock<DragonballInner>>,
 }

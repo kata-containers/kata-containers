@@ -11,8 +11,8 @@ use tokio::sync::RwLock;
 
 use super::Volume;
 use crate::volume::utils::{
-    generate_shared_path, volume_mount_info, DEFAULT_VOLUME_FS_TYPE, KATA_DIRECT_VOLUME_TYPE,
-    KATA_MOUNT_BIND_TYPE,
+    generate_shared_path, get_direct_volume_path, volume_mount_info, DEFAULT_VOLUME_FS_TYPE,
+    KATA_DIRECT_VOLUME_TYPE, KATA_MOUNT_BIND_TYPE,
 };
 use hypervisor::{
     device::{
@@ -182,8 +182,14 @@ pub(crate) fn is_block_volume(m: &oci::Mount) -> Result<bool> {
         return Ok(false);
     }
 
+    let source = if m.r#type.as_str() == KATA_DIRECT_VOLUME_TYPE {
+        get_direct_volume_path(&m.source).context("get direct volume path failed")?
+    } else {
+        m.source.clone()
+    };
+
     let fstat =
-        stat::stat(m.source.as_str()).context(format!("stat mount source {} failed.", m.source))?;
+        stat::stat(source.as_str()).context(format!("stat mount source {} failed.", source))?;
     let s_flag = SFlag::from_bits_truncate(fstat.st_mode);
 
     match m.r#type.as_str() {
