@@ -288,12 +288,12 @@ install_kernel_nvidia_gpu() {
 
 #Install GPU and SNP enabled kernel asset
 install_kernel_nvidia_gpu_snp() {
-	local kernel_url="$(get_from_kata_deps assets.kernel.snp.url)"
+	local kernel_url="$(get_from_kata_deps assets.kernel.sev.url)"
 
 	install_kernel_helper \
-		"assets.kernel.snp.version" \
+		"assets.kernel.sev.version" \
 		"kernel-nvidia-gpu-snp" \
-		"-x snp -g nvidia -u ${kernel_url} -H deb"
+		"-x sev -g nvidia -u ${kernel_url} -H deb"
 }
 
 #Install GPU and TDX experimental enabled kernel asset
