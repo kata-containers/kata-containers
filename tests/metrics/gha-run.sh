@@ -9,15 +9,19 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-kata_tarball_dir=${2:-kata-artifacts}
+kata_tarball_dir="${2:-kata-artifacts}"
 metrics_dir="$(dirname "$(readlink -f "$0")")"
 source "${metrics_dir}/../common.bash"
+
+declare -r results_dir="${metrics_dir}/results"
+declare -r checkmetrics_dir="${metrics_dir}/cmd/checkmetrics"
+declare -r checkmetrics_config_dir="${checkmetrics_dir}/ci_worker"
 
 function create_symbolic_links() {
 	local link_configuration_file="/opt/kata/share/defaults/kata-containers/configuration.toml"
 	local source_configuration_file="/opt/kata/share/defaults/kata-containers/configuration-${KATA_HYPERVISOR}.toml"
 
-	if [ ${KATA_HYPERVISOR} != 'qemu' ] && [ ${KATA_HYPERVISOR} != 'clh' ]; then
+	if [ "${KATA_HYPERVISOR}" != 'qemu' ] && [ "${KATA_HYPERVISOR}" != 'clh' ]; then
 		die "Failed to set the configuration.toml: '${KATA_HYPERVISOR}' is not recognized as a valid hypervisor name."
 	fi
 
@@ -44,8 +48,6 @@ EOF
 }
 
 function install_kata() {
-	# ToDo: remove the exit once the metrics workflow is stable
-	exit 0
 	local kata_tarball="kata-static.tar.xz"
 	declare -r katadir="/opt/kata"
 	declare -r destdir="/"
@@ -54,7 +56,7 @@ function install_kata() {
 	# Removing previous kata installation
 	sudo rm -rf "${katadir}"
 
-	pushd ${kata_tarball_dir}
+	pushd "${kata_tarball_dir}"
 	sudo tar -xvf "${kata_tarball}" -C "${destdir}"
 	popd
 
@@ -65,6 +67,15 @@ function install_kata() {
 
 	check_containerd_config_for_kata
 	restart_containerd_service
+	install_checkmetrics
+}
+
+function install_checkmetrics() {
+	# Ensure we have the latest checkmetrics
+	pushd "${checkmetrics_dir}"
+	make
+	sudo make install
+	popd
 }
 
 function check_containerd_config_for_kata() {
@@ -73,9 +84,9 @@ function check_containerd_config_for_kata() {
 	declare -r line2="runtime_type = \"io.containerd.kata.v2\""
 	declare -r num_lines_containerd=2
 	declare -r containerd_path="/etc/containerd/config.toml"
-	local count_matches=$(grep -ic  "$line1\|$line2" ${containerd_path})
+	local count_matches=$(grep -ic  "$line1\|$line2" "${containerd_path}")
 
-	if [ $count_matches = $num_lines_containerd ]; then
+	if [ "${count_matches}" = "${num_lines_containerd}" ]; then
 		info "containerd ok"
 	else
 		info "overwriting containerd configuration w/ a valid one"
@@ -83,13 +94,23 @@ function check_containerd_config_for_kata() {
 	fi
 }
 
+function check_metrics() {
+	KATA_HYPERVISOR="${1}"
+	local cm_base_file="${checkmetrics_config_dir}/checkmetrics-json-${KATA_HYPERVISOR}-kata-metric8.toml"
+	checkmetrics --debug --percentage --basefile "${cm_base_file}" --metricsdir "${results_dir}"
+	cm_result=$?
+	if [ "${cm_result}" != 0 ]; then
+		die "run-metrics-ci: checkmetrics FAILED (${cm_result})"
+	fi
+}
+
 function run_test_launchtimes() {
 	info "Running Launch Time test using ${KATA_HYPERVISOR} hypervisor"
 
-	# ToDo: remove the exit once the metrics workflow is stable
-	exit 0
 	create_symbolic_links
 	bash tests/metrics/time/launch_times.sh -i public.ecr.aws/ubuntu/ubuntu:latest -n 20
+
+	check_metrics "${KATA_HYPERVISOR}"
 }
 
 function run_test_memory_usage() {
