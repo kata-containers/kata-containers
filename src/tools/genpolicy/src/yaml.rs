@@ -23,7 +23,6 @@ use crate::stateful_set;
 use crate::volume;
 
 use async_trait::async_trait;
-use base64::{engine::general_purpose, Engine as _};
 use core::fmt::Debug;
 use log::debug;
 use serde::{Deserialize, Serialize};
@@ -245,31 +244,6 @@ pub fn get_container_mounts_and_storages(
             &volume,
         );
     }
-}
-
-pub fn generate_policy(k8s_object: &dyn K8sResource, agent_policy: &policy::AgentPolicy) -> String {
-    let (registry_containers, yaml_containers) = k8s_object.get_containers();
-    let mut policy_containers = Vec::new();
-
-    for i in 0..yaml_containers.len() {
-        policy_containers.push(agent_policy.get_container_policy(
-            k8s_object,
-            &yaml_containers[i],
-            i == 0,
-            &registry_containers[i],
-        ));
-    }
-
-    let policy_data = policy::PolicyData {
-        containers: policy_containers,
-    };
-
-    let json_data = serde_json::to_string_pretty(&policy_data).unwrap();
-    let policy = agent_policy.rules.clone() + "\npolicy_data := " + &json_data;
-    if let Some(file_name) = &agent_policy.config.output_policy_file {
-        policy::export_decoded_policy(&policy, &file_name);
-    }
-    general_purpose::STANDARD.encode(policy.as_bytes())
 }
 
 pub fn add_policy_annotation(

@@ -11,6 +11,7 @@ use crate::containerd;
 use crate::infra;
 use crate::kata;
 use crate::pod;
+use crate::policy;
 use crate::registry;
 use crate::secret;
 use crate::utils;
@@ -18,6 +19,7 @@ use crate::volume;
 use crate::yaml;
 
 use anyhow::{anyhow, Result};
+use base64::{engine::general_purpose, Engine as _};
 use log::debug;
 use oci::*;
 use serde::{Deserialize, Serialize};
@@ -29,7 +31,7 @@ use std::fs::read_to_string;
 use std::io::Write;
 
 pub struct AgentPolicy {
-    k8s_objects: Vec<boxed::Box<dyn yaml::K8sResource + Send + Sync>>,
+    resources: Vec<boxed::Box<dyn yaml::K8sResource + Send + Sync>>,
     config_maps: Vec<config_map::ConfigMap>,
     secrets: Vec<secret::Secret>,
     pub rules: String,
@@ -150,22 +152,22 @@ impl AgentPolicy {
     pub async fn from_files(config: &utils::Config) -> Result<AgentPolicy> {
         let mut config_maps = Vec::new();
         let mut secrets = Vec::new();
-        let mut k8s_objects = Vec::new();
+        let mut resources = Vec::new();
         let yaml_contents = yaml::get_input_yaml(&config.yaml_file)?;
 
         for document in serde_yaml::Deserializer::from_str(&yaml_contents) {
             let doc_mapping = Value::deserialize(document)?;
             let yaml_string = serde_yaml::to_string(&doc_mapping)?;
-            let (mut k8s_object, kind) =
+            let (mut resource, kind) =
                 yaml::new_k8s_resource(&yaml_string, config.silent_unsupported_fields)?;
-            k8s_object
+            resource
                 .init(
                     config.use_cache,
                     &doc_mapping,
                     config.silent_unsupported_fields,
                 )
                 .await?;
-            k8s_objects.push(k8s_object);
+            resources.push(resource);
 
             if kind.eq("ConfigMap") {
                 let config_map: config_map::ConfigMap = serde_yaml::from_str(&yaml_string)?;
@@ -188,7 +190,7 @@ impl AgentPolicy {
 
         if let Ok(rules) = read_to_string(&config.rules_file) {
             Ok(AgentPolicy {
-                k8s_objects,
+                resources,
                 rules,
                 infra_policy,
                 config_maps,
@@ -203,15 +205,15 @@ impl AgentPolicy {
 
     pub fn export_policy(&mut self) {
         let mut policies: Vec<String> = Vec::new();
-        let len = self.k8s_objects.len();
+        let len = self.resources.len();
 
         for i in 0..len {
-            policies.push(self.k8s_objects[i].generate_policy(&self));
+            policies.push(self.resources[i].generate_policy(&self));
         }
 
         let mut yaml_string = String::new();
         for i in 0..len {
-            yaml_string += &self.k8s_objects[i].serialize(&policies[i]);
+            yaml_string += &self.resources[i].serialize(&policies[i]);
         }
 
         if let Some(yaml_file) = &self.config.yaml_file {
@@ -230,9 +232,34 @@ impl AgentPolicy {
         }
     }
 
+    pub fn generate_policy(&self, resource: &dyn yaml::K8sResource) -> String {
+        let (registry_containers, yaml_containers) = resource.get_containers();
+        let mut policy_containers = Vec::new();
+
+        for i in 0..yaml_containers.len() {
+            policy_containers.push(self.get_container_policy(
+                resource,
+                &yaml_containers[i],
+                i == 0,
+                &registry_containers[i],
+            ));
+        }
+
+        let policy_data = policy::PolicyData {
+            containers: policy_containers,
+        };
+
+        let json_data = serde_json::to_string_pretty(&policy_data).unwrap();
+        let policy = self.rules.clone() + "\npolicy_data := " + &json_data;
+        if let Some(file_name) = &self.config.output_policy_file {
+            policy::export_decoded_policy(&policy, &file_name);
+        }
+        general_purpose::STANDARD.encode(policy.as_bytes())
+    }
+
     pub fn get_container_policy(
         &self,
-        k8s_object: &dyn yaml::K8sResource,
+        resource: &dyn yaml::K8sResource,
         yaml_container: &pod::Container,
         is_pause_container: bool,
         registry_container: &registry::Container,
@@ -252,7 +279,7 @@ impl AgentPolicy {
 
         let mut annotations = BTreeMap::new();
         infra::get_annotations(&mut annotations, infra_container);
-        if let Some(name) = k8s_object.get_sandbox_name() {
+        if let Some(name) = resource.get_sandbox_name() {
             annotations.insert("io.kubernetes.cri.sandbox-name".to_string(), name);
         }
 
@@ -264,7 +291,7 @@ impl AgentPolicy {
             annotations.insert("io.kubernetes.cri.image-name".to_string(), image_name);
         }
 
-        let namespace = k8s_object.get_namespace();
+        let namespace = resource.get_namespace();
         annotations.insert(
             "io.kubernetes.cri.sandbox-namespace".to_string(),
             namespace.clone(),
@@ -290,7 +317,7 @@ impl AgentPolicy {
         registry_container.get_process(&mut process, yaml_has_command, yaml_has_args);
 
         if !is_pause_container {
-            if let Some(name) = k8s_object.get_yaml_host_name() {
+            if let Some(name) = resource.get_yaml_host_name() {
                 process.env.push("HOSTNAME=".to_string() + &name);
             } else {
                 process
@@ -310,7 +337,7 @@ impl AgentPolicy {
             &self.config_maps,
             &self.secrets,
             &namespace,
-            &k8s_object.get_annotations(),
+            &resource.get_annotations(),
             &service_account_name,
         );
 
@@ -331,7 +358,7 @@ impl AgentPolicy {
         let image_layers = registry_container.get_image_layers();
         let mut storages = Default::default();
         get_image_layer_storages(&mut storages, &image_layers, &root);
-        k8s_object.get_container_mounts_and_storages(
+        resource.get_container_mounts_and_storages(
             &mut mounts,
             &mut storages,
             yaml_container,
@@ -349,7 +376,7 @@ impl AgentPolicy {
                 ociVersion: Some("1.1.0-rc.1".to_string()),
                 process: Some(process),
                 root,
-                hostname: Some(k8s_object.get_host_name()),
+                hostname: Some(resource.get_host_name()),
                 mounts,
                 hooks: None,
                 annotations: Some(annotations),

@@ -102,7 +102,7 @@ impl yaml::K8sResource for ReplicaSet {
     }
 
     fn generate_policy(&self, agent_policy: &policy::AgentPolicy) -> String {
-        yaml::generate_policy(self, agent_policy)
+        agent_policy.generate_policy(self)
     }
 
     fn serialize(&mut self, policy: &str) -> String {
