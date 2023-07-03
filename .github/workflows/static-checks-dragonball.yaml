@@ -23,7 +23,7 @@ jobs:
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
         run: |
           ./ci/install_rust.sh
-          PATH=$PATH:"$HOME/.cargo/bin"
+          echo PATH="$HOME/.cargo/bin:$PATH" >> $GITHUB_ENV
       - name: Run Unit Test
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
         run: |
