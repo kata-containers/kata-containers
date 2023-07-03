@@ -115,6 +115,9 @@ pub struct Container {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub livenessProbe: Option<Probe>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub serviceAccountName: Option<String>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -388,11 +391,20 @@ impl Container {
         secrets: &Vec<secret::Secret>,
         namespace: &str,
         annotations: &Option<BTreeMap<String, String>>,
+        service_account_name: &str,
     ) {
         if let Some(source_env) = &self.env {
             for env_variable in source_env {
                 let mut src_string = env_variable.name.clone() + "=";
-                src_string += &env_variable.get_value(config_maps, secrets, namespace, annotations);
+
+                src_string += &env_variable.get_value(
+                    config_maps,
+                    secrets,
+                    namespace,
+                    annotations,
+                    service_account_name,
+                );
+
                 if !dest_env.contains(&src_string) {
                     dest_env.push(src_string.clone());
                 }
@@ -477,6 +489,7 @@ impl EnvVar {
         secrets: &Vec<secret::Secret>,
         namespace: &str,
         annotations: &Option<BTreeMap<String, String>>,
+        service_account_name: &str,
     ) -> String {
         if let Some(value) = &self.value {
             return value.clone();
@@ -494,6 +507,7 @@ impl EnvVar {
                     "status.hostIP" => return "$(host-ip)".to_string(),
                     "status.podIP" => return "$(pod-ip)".to_string(),
                     "spec.nodeName" => return "$(node-name)".to_string(),
+                    "spec.serviceAccountName" => return service_account_name.to_string(),
                     _ => {
                         if let Some(value) = self.get_annotation_value(path, annotations) {
                             return value;

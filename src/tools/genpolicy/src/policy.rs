@@ -293,16 +293,27 @@ impl AgentPolicy {
             if let Some(name) = k8s_object.get_yaml_host_name() {
                 process.env.push("HOSTNAME=".to_string() + &name);
             } else {
-                process.env.push("HOSTNAME=".to_string() + "$(sandbox-name)");
+                process
+                    .env
+                    .push("HOSTNAME=".to_string() + "$(sandbox-name)");
             }
         }
+
+        let service_account_name = if let Some(s) = &yaml_container.serviceAccountName {
+            s.clone()
+        } else {
+            "default".to_string()
+        };
+
         yaml_container.get_env_variables(
             &mut process.env,
             &self.config_maps,
             &self.secrets,
             &namespace,
-            &k8s_object.get_annotations()
+            &k8s_object.get_annotations(),
+            &service_account_name,
         );
+
         substitute_env_variables(&mut process.env);
         substitute_args_env_variables(&mut process.args, &process.env);
 

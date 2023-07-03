@@ -33,6 +33,7 @@ pub fn add_pause_container(containers: &mut Vec<pod::Container>) {
         lifecycle: None,
         readinessProbe: None,
         livenessProbe: None,
+        serviceAccountName: None,
     };
     containers.insert(0, pause_container);
     debug!("pause container added.");
