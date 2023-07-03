@@ -29,7 +29,6 @@ set_initrd_path() {
 }
 
 main() {
-    INSTALL_IN_GOPATH=false bash "${repo_root_dir}/ci/install_yq.sh"
     set_runtime_class
     set_kernel_path
     set_initrd_path

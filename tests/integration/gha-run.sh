@@ -56,10 +56,16 @@ function get_cluster_credentials() {
         -n "$(_print_cluster_name)"
 }
 
-function run_tests() {
-    INSTALL_IN_GOPATH=false bash "${repo_root_dir}/ci/install_yq.sh"
+function ensure_yq() {
+    : "${GOPATH:=${GITHUB_WORKSPACE}}"
+    export GOPATH
+    export PATH="${GOPATH}/bin:${PATH}"
+    INSTALL_IN_GOPATH=true "${repo_root_dir}/ci/install_yq.sh"
+}
 
+function run_tests() {
     platform="${1}"
+    ensure_yq
 
     sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
     yq write -i "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[+].name' "HOST_OS"
