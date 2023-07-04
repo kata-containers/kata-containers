@@ -19,11 +19,9 @@ use tokio::sync::watch::Receiver;
 use tokio::sync::Mutex;
 use tracing::instrument;
 
-// Convenience macro to obtain the scope logger
-macro_rules! sl {
-    () => {
-        slog_scope::logger().new(o!("subsystem" => "uevent"))
-    };
+// Convenience function to obtain the scope logger.
+fn sl() -> slog::Logger {
+    slog_scope::logger().new(o!("subsystem" => "uevent"))
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -120,11 +118,11 @@ pub async fn wait_for_uevent(
 ) -> Result<Uevent> {
     let logprefix = format!("Waiting for {:?}", &matcher);
 
-    info!(sl!(), "{}", logprefix);
+    info!(sl(), "{}", logprefix);
     let mut sb = sandbox.lock().await;
     for uev in sb.uevent_map.values() {
         if matcher.is_match(uev) {
-            info!(sl!(), "{}: found {:?} in uevent map", logprefix, &uev);
+            info!(sl(), "{}: found {:?} in uevent map", logprefix, &uev);
             return Ok(uev.clone());
         }
     }
@@ -139,9 +137,9 @@ pub async fn wait_for_uevent(
     sb.uevent_watchers.push(Some((Box::new(matcher), tx)));
     drop(sb); // unlock
 
-    info!(sl!(), "{}: waiting on channel", logprefix);
+    info!(sl(), "{}: waiting on channel", logprefix);
 
-    let hotplug_timeout = AGENT_CONFIG.read().await.hotplug_timeout;
+    let hotplug_timeout = AGENT_CONFIG.hotplug_timeout;
 
     let uev = match tokio::time::timeout(hotplug_timeout, rx).await {
         Ok(v) => v?,
@@ -157,7 +155,7 @@ pub async fn wait_for_uevent(
         }
     };
 
-    info!(sl!(), "{}: found {:?} on channel", logprefix, &uev);
+    info!(sl(), "{}: found {:?} on channel", logprefix, &uev);
     Ok(uev)
 }
 
