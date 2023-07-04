@@ -38,7 +38,7 @@ function create_cluster() {
         -s "Standard_D4s_v5" \
         --node-count 1 \
         --generate-ssh-keys \
-        $([ "${KATA_HOST_OS}" = "cbl-mariner" ] && echo "--os-sku mariner --workload-runtime KataMshvVmIsolation")
+        $([ "${KATA_HOST_OS}" = "cbl-mariner" ] && echo "--os-sku AzureLinux --workload-runtime KataMshvVmIsolation")
 }
 
 function install_bats() {
