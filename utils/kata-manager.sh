@@ -215,6 +215,7 @@ Options:
  -h           : Show this help statement.
  -k <version> : Specify Kata Containers version.
  -o           : Only install Kata Containers.
+ -p <proxy>	  : Configure proxy information for containerd service
  -r           : Don't cleanup on failure (retain files).
  -t           : Disable self test (don't try to create a container after install).
  -T           : Only run self test (do not install anything).
@@ -408,10 +409,7 @@ configure_containerd()
 	local enable_debug="${1:-}"
 	[ -z "$enable_debug" ] && die "no enable debug value"
 
-	local http_proxy_set="${2:-}"
-	[ -z "$http_proxy_set" ] && die "no http_proxy_set value"
-
-	local http_proxy="${3:-}"
+	local http_proxy="${2:-}"
 
 	local project="$containerd_project"
 
@@ -504,7 +502,7 @@ configure_containerd()
 		modified="true"
 	fi
 
-	if [ "$http_proxy_set" = "true" ] 
+	if [ -n "$http_proxy" ]; 
 	then
 		info "Configuring proxy information for containerd service"
 		if grep -q "\[Service\]" "$dest"; then
@@ -647,10 +645,8 @@ handle_containerd()
 	local enable_debug="${3:-}"
 	[ -z "$enable_debug" ] && die "no enable debug value"
 
-	local http_proxy_set="${4:-}"
-	[ -z "$http_proxy_set" ] && die "no enable proxy set value"
-
-	local http_proxy="${5:-}"
+	#HTTP Proxy value is optional
+	local http_proxy="${4:-}"
 
 	local ret
 
@@ -668,7 +664,7 @@ handle_containerd()
 		fi
 	fi
 
-	configure_containerd "$enable_debug" "$http_proxy_set" "$http_proxy"
+	configure_containerd "$enable_debug" "$http_proxy"
 
 	containerd --version
 }
@@ -724,13 +720,10 @@ handle_installation()
 	local only_run_test="${6:-}"
 	[ -z "$only_run_test" ] && die "no only run test value"
 
-	local http_proxy_set="${9:-}"
-	[ -z "$http_proxy_set" ] && die "no http_proxy_set value"
-
 	# These params can be blank
 	local kata_version="${7:-}"
 	local containerd_version="${8:-}"
-	local http_proxy="${10:-}"
+	local http_proxy="${9:-}"
 	
 	[ "$only_run_test" = "true" ] && test_installation && return 0
 
@@ -743,7 +736,6 @@ handle_installation()
 		"$containerd_version" \
 		"$force" \
 		"$enable_debug" \
-		"$http_proxy_set" \
 		"$http_proxy"
 
 	[ "$disable_test" = "false" ] && test_installation
@@ -766,13 +758,12 @@ handle_args()
 	local disable_test="false"
 	local only_run_test="false"
 	local enable_debug="false"
-	local http_proxy_set="false"
-	local http_proxy=""
 
 	local opt
 
 	local kata_version=""
 	local containerd_version=""
+	local http_proxy=""
 
 	while getopts "c:dfhk:op:rtT" opt "$@"
 	do
@@ -783,7 +774,7 @@ handle_args()
 			h) usage; exit 0 ;;
 			k) kata_version="$OPTARG" ;;
 			o) skip_containerd="true" ;;
-			p) http_proxy_set="true"; http_proxy="$OPTARG" ;;
+			p) http_proxy="$OPTARG" ;;
 			r) cleanup="false" ;;
 			t) disable_test="true" ;;
 			T) only_run_test="true" ;;
@@ -804,7 +795,6 @@ handle_args()
 		"$only_run_test" \
 		"$kata_version" \
 		"$containerd_version" \
-		"$http_proxy_set" \
 		"$http_proxy"
 }
 
