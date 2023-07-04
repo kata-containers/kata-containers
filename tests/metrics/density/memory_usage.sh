@@ -33,7 +33,7 @@ MEM_TMP_FILE=$(mktemp meminfo.XXXXXXXXXX)
 PS_TMP_FILE=$(mktemp psinfo.XXXXXXXXXX)
 
 function remove_tmp_file() {
-	rm -rf "${MEM_TMP_FILE $PS_TMP_FILE}"
+	rm -rf "${MEM_TMP_FILE}" "${PS_TMP_FILE}"
 }
 
 trap remove_tmp_file EXIT
@@ -99,7 +99,7 @@ get_pss_memory(){
 	# This will be help us to retrieve raw information
 	echo "${ps}" >> "${PS_TMP_FILE}"
 
-	data=$(sudo "${SMEM_BIN}" --no-header -P "^$ps" -c "pss" | sed 's/[[:space:]]//g')
+	data=$(sudo "${SMEM_BIN}" --no-header -P "^${ps}" -c "pss" | sed 's/[[:space:]]//g')
 
 	# Save all the smem results
 	# This will help us to retrieve raw information
@@ -220,7 +220,7 @@ EOF
 }
 
 # Try to work out the 'average memory footprint' of a container.
-get_docker_memory_usage(){
+get_memory_usage(){
 	hypervisor_mem=0
 	virtiofsd_mem=0
 	shim_mem=0
@@ -277,16 +277,16 @@ EOF
 		# Now if you do not have enough rights
 		#  the smem failure to read the stats will also be trapped.
 
-		hypervisor_mem="$(get_pss_memory "${HYPERVISOR_PATH}")"
+		hypervisor_mem="$(get_pss_memory ${HYPERVISOR_PATH})"
 		if [ "${hypervisor_mem}" == "0" ]; then
 			die "Failed to find PSS for ${HYPERVISOR_PATH}"
 		fi
 
-		virtiofsd_mem="$(get_pss_memory_virtiofsd "${VIRTIOFSD_PATH}")"
+		virtiofsd_mem="$(get_pss_memory_virtiofsd ${VIRTIOFSD_PATH})"
 		if [ "${virtiofsd_mem}" == "0" ]; then
 			echo >&2 "WARNING: Failed to find PSS for ${VIRTIOFSD_PATH}"
 		fi
-		shim_mem="$(get_pss_memory "${SHIM_PATH}")"
+		shim_mem="$(get_pss_memory ${SHIM_PATH})"
 		if [ "${shim_mem}" == "0" ]; then
 			die "Failed to find PSS for ${SHIM_PATH}"
 		fi
@@ -353,8 +353,6 @@ main(){
 	#Check for KSM before reporting test name, as it can modify it
 	check_for_ksm
 
-	sudo systemctl restart containerd
-
 	init_env
 
 	check_cmds "${SMEM_BIN}" bc
@@ -370,7 +368,7 @@ main(){
 
 	metrics_json_init
 	save_config
-	get_docker_memory_usage
+	get_memory_usage
 
 	if [ "$RUNTIME" == "runc" ]; then
 		get_runc_individual_memory
