@@ -204,16 +204,10 @@ impl AgentPolicy {
     }
 
     pub fn export_policy(&mut self) {
-        let mut policies: Vec<String> = Vec::new();
-        let len = self.resources.len();
-
-        for i in 0..len {
-            policies.push(self.resources[i].generate_policy(&self));
-        }
-
         let mut yaml_string = String::new();
-        for i in 0..len {
-            yaml_string += &self.resources[i].serialize(&policies[i]);
+        for i in 0..self.resources.len() {
+            let policy = self.resources[i].generate_policy(self);
+            yaml_string += &self.resources[i].serialize(&policy);
         }
 
         if let Some(yaml_file) = &self.config.yaml_file {
