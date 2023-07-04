@@ -39,7 +39,7 @@ function remove_tmp_file() {
 trap remove_tmp_file EXIT
 
 # Show help about this script
-help(){
+function help(){
 cat << EOF
 Usage: $0 <count> <wait_time> [auto]
    Description:
@@ -52,12 +52,12 @@ EOF
 }
 
 
-get_runc_pss_memory(){
+function get_runc_pss_memory(){
 	ctr_runc_shim_path="/usr/local/bin/containerd-shim-runc-v2"
 	get_pss_memory "${ctr_runc_shim_path}"
 }
 
-get_runc_individual_memory() {
+function get_runc_individual_memory() {
 	runc_process_result=$(cat "${MEM_TMP_FILE}" | tr "\n" " " | sed -e 's/\s$//g' | sed 's/ /, /g')
 
 	# Verify runc process result
@@ -85,7 +85,7 @@ EOF
 
 # This function measures the PSS average
 # memory of a process.
-get_pss_memory(){
+function get_pss_memory(){
 	ps="$1"
 	mem_amount=0
 	count=0
@@ -106,7 +106,7 @@ get_pss_memory(){
 	echo "${data}" >> "${MEM_TMP_FILE}"
 
 	for i in "${data}"; do
-		if (( i > 0 ));then
+		if (( $i > 0 ));then
 			mem_amount=$(( i + mem_amount ))
 			(( count++ ))
 		fi
@@ -119,7 +119,7 @@ get_pss_memory(){
 	echo "${avg}"
 }
 
-ppid() {
+function ppid() {
 	local pid
 	pid=$(ps -p "${1:-nopid}" -o ppid=)
 	echo "${pid//[[:blank:]]/}"
@@ -131,7 +131,7 @@ ppid() {
 # virtiofsd forks itself so, smem sees the process
 # two times, this function sum both pss values:
 # pss_virtiofsd=pss_fork + pss_parent
-get_pss_memory_virtiofsd() {
+function get_pss_memory_virtiofsd() {
 	mem_amount=0
 	count=0
 	avg=0
@@ -175,7 +175,7 @@ get_pss_memory_virtiofsd() {
 	echo "${avg}"
 }
 
-get_individual_memory(){
+function get_individual_memory(){
 	# Getting all the individual container information
 	first_process_name=$(cat "${PS_TMP_FILE}" | awk 'NR==1' | awk -F "/" '{print $NF}' | sed 's/[[:space:]]//g')
 	first_process_result=$(cat "${MEM_TMP_FILE}" | awk 'NR==1' | sed 's/ /, /g')
@@ -194,19 +194,19 @@ get_individual_memory(){
 
 	local json="$(cat << EOF
 	{
-		"${first_process_name memory}": [
+		"${first_process_name} memory": [
 			$(for ((i=0;i<"${NUM_CONTAINERS[@]}";++i)); do
 				[ -n "${first_values[i]}" ] &&
 				printf '%s\n\t\t\t' "${first_values[i]}"
 			done)
 		],
-		"${second_process_name memory}": [
+		"${second_process_name} memory": [
 			$(for ((i=0;i<"${NUM_CONTAINERS[@]}";++i)); do
 				[ -n "${second_values[i]}" ] &&
 				printf '%s\n\t\t\t' "${second_values[i]}"
 			done)
 		],
-		"${third_process_name memory}": [
+		"${third_process_name} memory": [
 			$(for ((i=0;i<"${NUM_CONTAINERS[@]}";++i)); do
 				[ -n "${third_values[i]}" ] &&
 				printf '%s\n\t\t\t' "${third_values[i]}"
@@ -220,7 +220,7 @@ EOF
 }
 
 # Try to work out the 'average memory footprint' of a container.
-get_memory_usage(){
+function get_memory_usage(){
 	hypervisor_mem=0
 	virtiofsd_mem=0
 	shim_mem=0
@@ -228,9 +228,10 @@ get_memory_usage(){
 
 	containers=()
 
-	for ((i=1; i<"${NUM_CONTAINERS[@]}"; i++)); do
+	info "Creating ${NUM_CONTAINERS} containers"
+	for ((i=1; i<="${NUM_CONTAINERS}"; i++)); do
 		containers+=($(random_name))
-		sudo "${CTR_EXE}" run --runtime "${CTR_RUNTIME}" -d "${IMAGE}" "${containers[-1]}" "${CMD}"
+		sudo "${CTR_EXE}" run --runtime "${CTR_RUNTIME}" -d "${IMAGE}" "${containers[-1]}" sh -c "${CMD}"
 	done
 
 	if [ "${AUTO_MODE}" == "auto" ]; then
@@ -323,7 +324,7 @@ EOF
 	clean_env_ctr
 }
 
-save_config(){
+function save_config(){
 	metrics_json_start_array
 
 	local json="$(cat << EOF
@@ -342,7 +343,7 @@ EOF
 	metrics_json_end_array "Config"
 }
 
-main(){
+function main(){
 	# Verify enough arguments
 	if [ $# != 2 ] && [ $# != 3 ];then
 		echo >&2 "error: Not enough arguments [$@]"
