@@ -599,18 +599,7 @@ install_shimv2() {
 	export GO_VERSION
 	export RUST_VERSION
 
-	if [ "${MEASURED_ROOTFS}" == "yes" ]; then
-	        extra_opts="DEFSERVICEOFFLOAD=true"
-		if [ -f "${repo_root_dir}/tools/osbuilder/root_hash.txt" ]; then
-			root_hash=$(sudo sed -e 's/Root hash:\s*//g;t;d' "${repo_root_dir}/tools/osbuilder//root_hash.txt")
-			root_measure_config="rootfs_verity.scheme=dm-verity rootfs_verity.hash=${root_hash}"
-			extra_opts+=" ROOTMEASURECONFIG=\"${root_measure_config}\""
-		fi
-
-		DESTDIR="${destdir}" PREFIX="${prefix}" EXTRA_OPTS="${extra_opts}" "${shimv2_builder}"
-	else
-		DESTDIR="${destdir}" PREFIX="${prefix}" "${shimv2_builder}"
-	fi
+	DESTDIR="${destdir}" PREFIX="${prefix}" "${shimv2_builder}"
 }
 
 install_ovmf() {
