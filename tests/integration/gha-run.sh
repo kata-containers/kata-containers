@@ -75,7 +75,7 @@ function run_tests() {
     # which may cause issues like not having the node properly labeled or the artefacts
     # properly deployed when the tests actually start running.
     if [ "${platform}" = "aks" ]; then
-        sleep 240s
+        sleep 300s
     else
         sleep 60s
     fi
