@@ -39,7 +39,6 @@ sudo docker pull ${container_image} || \
 
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
-	--env MEASURED_ROOTFS="${MEASURED_ROOTFS:-}" \
 	"${container_image}" \
 	bash -c "${kernel_builder} -a ${ARCH} $* setup"
 

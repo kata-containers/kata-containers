@@ -300,7 +300,7 @@ install_cached_kernel_tarball_component() {
 install_kernel_helper() {
 	local kernel_version_yaml_path="${1}"
 	local kernel_name="${2}"
-	local extra_cmd=${3}
+	local extra_cmd="${3:-}"
 
 	export kernel_version="$(get_from_kata_deps ${kernel_version_yaml_path})"
 	export kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
@@ -317,6 +317,9 @@ install_kernel_helper() {
 	if [ "${MEASURED_ROOTFS}" == "yes" ]; then
 		info "build initramfs for cc kernel"
 		"${initramfs_builder}"
+		# Turn on the flag to build the kernel with support to
+		# measured rootfs.
+		extra_cmd+=" -m"
 	fi
 
 	info "build ${kernel_name}"
