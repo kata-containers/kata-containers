@@ -27,12 +27,15 @@ EXTRA_OPTS="${EXTRA_OPTS:-""}"
 [ "${CROSS_BUILD}" == "true" ] && container_image_bk="${container_image}" && container_image="${container_image}-cross-build"
 if [ "${MEASURED_ROOTFS}" == "yes" ]; then
 	EXTRA_OPTS+=" DEFSERVICEOFFLOAD=true"
-	if [ -f "${repo_root_dir}/tools/osbuilder/root_hash.txt" ]; then
-		info "Enable rootfs measurement config"
-		root_hash=$(sudo sed -e 's/Root hash:\s*//g;t;d' "${repo_root_dir}/tools/osbuilder/root_hash.txt")
-		root_measure_config="rootfs_verity.scheme=dm-verity rootfs_verity.hash=${root_hash}"
-		EXTRA_OPTS+=" ROOTMEASURECONFIG=\"${root_measure_config}\""
-	fi
+	info "Enable rootfs measurement config"
+
+	root_hash_file="${repo_root_dir}/tools/osbuilder/root_hash.txt"
+	[ -f "$root_hash_file" ] || \
+		die "Root hash file for measured rootfs not found at ${root_hash_file}"
+
+	root_hash=$(sudo sed -e 's/Root hash:\s*//g;t;d' "${root_hash_file}")
+	root_measure_config="rootfs_verity.scheme=dm-verity rootfs_verity.hash=${root_hash}"
+	EXTRA_OPTS+=" ROOTMEASURECONFIG=\"${root_measure_config}\""
 fi
 
 sudo docker pull ${container_image} || \
