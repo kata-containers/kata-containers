@@ -116,8 +116,6 @@ function run_test_launchtimes() {
 function run_test_memory_usage() {
 	info "Running memory-usage test using ${KATA_HYPERVISOR} hypervisor"
 
-	# ToDo: remove the exit once the metrics workflow is stable
-	exit 0
 	create_symbolic_links
 	bash tests/metrics/density/memory_usage.sh 20 5
 }
