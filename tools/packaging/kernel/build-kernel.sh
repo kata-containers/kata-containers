@@ -128,6 +128,12 @@ arch_to_kernel() {
 	esac
 }
 
+# When building for measured rootfs the initramfs image should be previously built.
+check_initramfs_or_die() {
+	[ -f "${default_initramfs}" ] || \
+		die "Initramfs for measured rootfs not found at ${default_initramfs}"
+}
+
 get_tee_kernel() {
 	local version="${1}"
 	local kernel_path="${2}"
@@ -276,11 +282,10 @@ get_kernel_frag_path() {
 		local cryptsetup_configs="$(ls ${common_path}/confidential_containers/cryptsetup.conf)"
 		all_configs="${all_configs} ${cryptsetup_configs}"
 
-		if [ -f "${default_initramfs}" ]; then
-			info "Enabling config for confidential guest measured boot"
-			local initramfs_configs="$(ls ${common_path}/confidential_containers/initramfs.conf)"
-			all_configs="${all_configs} ${initramfs_configs}"
-		fi
+		check_initramfs_or_die
+		info "Enabling config for confidential guest measured boot"
+		local initramfs_configs="$(ls ${common_path}/confidential_containers/initramfs.conf)"
+		all_configs="${all_configs} ${initramfs_configs}"
 	fi
 
 	if [[ "${conf_guest}" != "" ]];then
@@ -432,7 +437,8 @@ setup_kernel() {
 	[ -n "${hypervisor_target}" ] || hypervisor_target="kvm"
 	[ -n "${kernel_config_path}" ] || kernel_config_path=$(get_default_kernel_config "${kernel_version}" "${hypervisor_target}" "${arch_target}" "${kernel_path}")
 
-	if [ "${measured_rootfs}" == "true" ] && [ -f "${default_initramfs}" ]; then
+	if [ "${measured_rootfs}" == "true" ]; then
+		check_initramfs_or_die
 		info "Copying initramfs from: ${default_initramfs}"
 		cp "${default_initramfs}" ./
 	fi
