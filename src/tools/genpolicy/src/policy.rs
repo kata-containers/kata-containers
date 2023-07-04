@@ -166,7 +166,7 @@ impl AgentPolicy {
                     &doc_mapping,
                     config.silent_unsupported_fields,
                 )
-                .await?;
+                .await;
             resources.push(resource);
 
             if kind.eq("ConfigMap") {
@@ -227,7 +227,7 @@ impl AgentPolicy {
     }
 
     pub fn generate_policy(&self, resource: &dyn yaml::K8sResource) -> String {
-        let (registry_containers, yaml_containers) = resource.get_containers();
+        let yaml_containers = resource.get_containers();
         let mut policy_containers = Vec::new();
 
         for i in 0..yaml_containers.len() {
@@ -235,7 +235,6 @@ impl AgentPolicy {
                 resource,
                 &yaml_containers[i],
                 i == 0,
-                &registry_containers[i],
             ));
         }
 
@@ -256,7 +255,6 @@ impl AgentPolicy {
         resource: &dyn yaml::K8sResource,
         yaml_container: &pod::Container,
         is_pause_container: bool,
-        registry_container: &registry::Container,
     ) -> ContainerPolicy {
         let infra_container = if is_pause_container {
             &self.infra_policy.pause_container
@@ -308,7 +306,9 @@ impl AgentPolicy {
         }
 
         let (yaml_has_command, yaml_has_args) = yaml_container.get_process_args(&mut process.args);
-        registry_container.get_process(&mut process, yaml_has_command, yaml_has_args);
+        yaml_container
+            .registry
+            .get_process(&mut process, yaml_has_command, yaml_has_args);
 
         if !is_pause_container {
             if let Some(name) = resource.get_yaml_host_name() {
@@ -349,7 +349,7 @@ impl AgentPolicy {
             is_pause_container,
         );
 
-        let image_layers = registry_container.get_image_layers();
+        let image_layers = yaml_container.registry.get_image_layers();
         let mut storages = Default::default();
         get_image_layer_storages(&mut storages, &image_layers, &root);
         resource.get_container_mounts_and_storages(

@@ -9,7 +9,6 @@
 use crate::obj_meta;
 use crate::pod;
 use crate::policy;
-use crate::registry;
 use crate::yaml;
 
 use async_trait::async_trait;
@@ -83,9 +82,8 @@ impl yaml::K8sResource for ConfigMap {
         _use_cache: bool,
         doc_mapping: &serde_yaml::Value,
         _silent_unsupported_fields: bool,
-    ) -> anyhow::Result<()> {
+    ) {
         self.doc_mapping = doc_mapping.clone();
-        Ok(())
     }
 
     fn get_yaml_host_name(&self) -> Option<String> {
@@ -122,7 +120,7 @@ impl yaml::K8sResource for ConfigMap {
         serde_yaml::to_string(&self.doc_mapping).unwrap()
     }
 
-    fn get_containers(&self) -> (&Vec<registry::Container>, &Vec<pod::Container>) {
+    fn get_containers(&self) -> &Vec<pod::Container> {
         panic!("Unsupported");
     }
 

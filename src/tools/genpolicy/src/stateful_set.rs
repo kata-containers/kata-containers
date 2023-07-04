@@ -11,7 +11,6 @@ use crate::persistent_volume_claim;
 use crate::pod;
 use crate::pod_template;
 use crate::policy;
-use crate::registry;
 use crate::yaml;
 
 use async_trait::async_trait;
@@ -29,9 +28,6 @@ pub struct StatefulSet {
 
     #[serde(skip)]
     doc_mapping: serde_yaml::Value,
-
-    #[serde(skip)]
-    pub registry_containers: Vec<registry::Container>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / StatefulSet.
@@ -58,17 +54,10 @@ impl yaml::K8sResource for StatefulSet {
         use_cache: bool,
         doc_mapping: &serde_yaml::Value,
         _silent_unsupported_fields: bool,
-    ) -> anyhow::Result<()> {
-        yaml::k8s_resource_init(
-            &mut self.spec.template.spec,
-            &mut self.registry_containers,
-            use_cache,
-        )
-        .await?;
+    ) {
+        yaml::k8s_resource_init(&mut self.spec.template.spec, use_cache).await;
         self.doc_mapping = doc_mapping.clone();
-        Ok(())
     }
-
 
     fn get_yaml_host_name(&self) -> Option<String> {
         if let Some(hostname) = &self.spec.template.spec.hostname {
@@ -142,11 +131,8 @@ impl yaml::K8sResource for StatefulSet {
         serde_yaml::to_string(&self.doc_mapping).unwrap()
     }
 
-    fn get_containers(&self) -> (&Vec<registry::Container>, &Vec<pod::Container>) {
-        (
-            &self.registry_containers,
-            &self.spec.template.spec.containers,
-        )
+    fn get_containers(&self) -> &Vec<pod::Container> {
+        &self.spec.template.spec.containers
     }
 
     fn get_annotations(&self) -> Option<BTreeMap<String, String>> {

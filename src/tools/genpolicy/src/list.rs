@@ -8,7 +8,6 @@
 
 use crate::pod;
 use crate::policy;
-use crate::registry;
 use crate::yaml;
 
 use async_trait::async_trait;
@@ -43,18 +42,16 @@ impl yaml::K8sResource for List {
         use_cache: bool,
         _doc_mapping: &serde_yaml::Value,
         silent_unsupported_fields: bool,
-    ) -> anyhow::Result<()> {
+    ) {
         for item in &self.items {
-            let yaml_string = serde_yaml::to_string(&item)?;
+            let yaml_string = serde_yaml::to_string(&item).unwrap();
             let (mut resource, _kind) =
-                yaml::new_k8s_resource(&yaml_string, silent_unsupported_fields)?;
+                yaml::new_k8s_resource(&yaml_string, silent_unsupported_fields).unwrap();
             resource
                 .init(use_cache, item, silent_unsupported_fields)
-                .await?;
+                .await;
             self.resources.push(resource);
         }
-
-        Ok(())
     }
 
     fn get_yaml_host_name(&self) -> Option<String> {
@@ -105,7 +102,7 @@ impl yaml::K8sResource for List {
         serde_yaml::to_string(&self).unwrap()
     }
 
-    fn get_containers(&self) -> (&Vec<registry::Container>, &Vec<pod::Container>) {
+    fn get_containers(&self) -> &Vec<pod::Container> {
         panic!("Unsupported");
     }
 

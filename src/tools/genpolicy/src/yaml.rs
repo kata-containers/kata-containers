@@ -15,7 +15,6 @@ use crate::no_policy;
 use crate::pause_container;
 use crate::pod;
 use crate::policy;
-use crate::registry;
 use crate::replica_set;
 use crate::replication_controller;
 use crate::secret;
@@ -44,7 +43,7 @@ pub trait K8sResource {
         use_cache: bool,
         doc_mapping: &serde_yaml::Value,
         silent_unsupported_fields: bool,
-    ) -> anyhow::Result<()>;
+    );
 
     fn generate_policy(&self, agent_policy: &policy::AgentPolicy) -> String;
     fn serialize(&mut self, policy: &str) -> String;
@@ -62,7 +61,7 @@ pub trait K8sResource {
         agent_policy: &policy::AgentPolicy,
     );
 
-    fn get_containers(&self) -> (&Vec<registry::Container>, &Vec<pod::Container>);
+    fn get_containers(&self) -> &Vec<pod::Container>;
     fn get_annotations(&self) -> Option<BTreeMap<String, String>>;
 }
 
@@ -212,21 +211,20 @@ pub fn get_yaml_header(yaml: &str) -> anyhow::Result<YamlHeader> {
     return Ok(serde_yaml::from_str(yaml)?);
 }
 
-pub async fn k8s_resource_init(
-    spec: &mut pod::PodSpec,
-    registry_containers: &mut Vec<registry::Container>,
-    use_cache: bool,
-) -> anyhow::Result<()> {
-    pause_container::add_pause_container(&mut spec.containers);
+pub async fn k8s_resource_init(spec: &mut pod::PodSpec, use_cache: bool) {
+    for container in &mut spec.containers {
+        container.init(use_cache).await;
+    }
+
+    pause_container::add_pause_container(&mut spec.containers, use_cache).await;
 
     if let Some(init_containers) = &spec.initContainers {
         for container in init_containers {
-            spec.containers.insert(1, container.clone());
+            let mut new_container = container.clone();
+            new_container.init(use_cache).await;
+            spec.containers.insert(1, new_container);
         }
     }
-
-    *registry_containers = registry::get_registry_containers(use_cache, &spec.containers).await?;
-    Ok(())
 }
 
 pub fn get_container_mounts_and_storages(
@@ -237,12 +235,7 @@ pub fn get_container_mounts_and_storages(
     volumes: &Vec<volume::Volume>,
 ) {
     for volume in volumes {
-        agent_policy.get_container_mounts_and_storages(
-            policy_mounts,
-            storages,
-            container,
-            &volume,
-        );
+        agent_policy.get_container_mounts_and_storages(policy_mounts, storages, container, &volume);
     }
 }
 

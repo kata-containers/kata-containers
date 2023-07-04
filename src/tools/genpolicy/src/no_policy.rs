@@ -8,7 +8,6 @@
 
 use crate::pod;
 use crate::policy;
-use crate::registry;
 use crate::yaml;
 
 use async_trait::async_trait;
@@ -26,8 +25,7 @@ impl yaml::K8sResource for NoPolicyResource {
         _use_cache: bool,
         _doc_mapping: &serde_yaml::Value,
         _silent_unsupported_fields: bool,
-    ) -> anyhow::Result<()> {
-        Ok(())
+    ) {
     }
 
     fn get_yaml_host_name(&self) -> Option<String> {
@@ -64,7 +62,7 @@ impl yaml::K8sResource for NoPolicyResource {
         self.yaml.clone()
     }
 
-    fn get_containers(&self) -> (&Vec<registry::Container>, &Vec<pod::Container>) {
+    fn get_containers(&self) -> &Vec<pod::Container> {
         panic!("Unsupported");
     }
 

@@ -10,7 +10,6 @@ use crate::obj_meta;
 use crate::pod;
 use crate::pod_template;
 use crate::policy;
-use crate::registry;
 use crate::yaml;
 
 use async_trait::async_trait;
@@ -27,9 +26,6 @@ pub struct Job {
 
     #[serde(skip)]
     doc_mapping: serde_yaml::Value,
-
-    #[serde(skip)]
-    registry_containers: Vec<registry::Container>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Job.
@@ -49,15 +45,9 @@ impl yaml::K8sResource for Job {
         use_cache: bool,
         doc_mapping: &serde_yaml::Value,
         _silent_unsupported_fields: bool,
-    ) -> anyhow::Result<()> {
-        yaml::k8s_resource_init(
-            &mut self.spec.template.spec,
-            &mut self.registry_containers,
-            use_cache,
-        )
-        .await?;
+    ) {
+        yaml::k8s_resource_init(&mut self.spec.template.spec, use_cache).await;
         self.doc_mapping = doc_mapping.clone();
-        Ok(())
     }
 
     fn get_yaml_host_name(&self) -> Option<String> {
@@ -107,11 +97,8 @@ impl yaml::K8sResource for Job {
         serde_yaml::to_string(&self.doc_mapping).unwrap()
     }
 
-    fn get_containers(&self) -> (&Vec<registry::Container>, &Vec<pod::Container>) {
-        (
-            &self.registry_containers,
-            &self.spec.template.spec.containers,
-        )
+    fn get_containers(&self) -> &Vec<pod::Container> {
+        &self.spec.template.spec.containers
     }
 
     fn get_annotations(&self) -> Option<BTreeMap<String, String>> {

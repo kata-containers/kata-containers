@@ -14,7 +14,6 @@ use crate::secret;
 use crate::volume;
 use crate::yaml;
 
-use anyhow::Result;
 use async_trait::async_trait;
 use log::warn;
 use serde::{Deserialize, Serialize};
@@ -30,14 +29,13 @@ pub struct Pod {
 
     #[serde(skip)]
     doc_mapping: serde_yaml::Value,
-
-    #[serde(skip)]
-    registry_containers: Vec<registry::Container>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PodSpec {
+    pub containers: Vec<Container>,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     nodeSelector: Option<BTreeMap<String, String>>,
 
@@ -55,8 +53,6 @@ pub struct PodSpec {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub affinity: Option<Affinity>,
-
-    pub containers: Vec<Container>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub volumes: Option<Vec<volume::Volume>>,
@@ -78,7 +74,7 @@ pub struct PodSpec {
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Container {
     pub name: String,
     pub image: String,
@@ -118,6 +114,9 @@ pub struct Container {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub serviceAccountName: Option<String>,
+
+    #[serde(skip)]
+    pub registry: registry::Container,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -384,6 +383,12 @@ pub struct LocalObjectReference {
 }
 
 impl Container {
+    pub async fn init(&mut self, use_cache: bool) {
+        self.registry = registry::get_container(use_cache, &self.image)
+            .await
+            .unwrap();
+    }
+
     pub fn get_env_variables(
         &self,
         dest_env: &mut Vec<String>,
@@ -568,10 +573,9 @@ impl yaml::K8sResource for Pod {
         use_cache: bool,
         doc_mapping: &serde_yaml::Value,
         _silent_unsupported_fields: bool,
-    ) -> Result<()> {
-        yaml::k8s_resource_init(&mut self.spec, &mut self.registry_containers, use_cache).await?;
+    ) {
+        yaml::k8s_resource_init(&mut self.spec, use_cache).await;
         self.doc_mapping = doc_mapping.clone();
-        Ok(())
     }
 
     fn get_yaml_host_name(&self) -> Option<String> {
@@ -633,8 +637,8 @@ impl yaml::K8sResource for Pod {
         serde_yaml::to_string(&self.doc_mapping).unwrap()
     }
 
-    fn get_containers(&self) -> (&Vec<registry::Container>, &Vec<Container>) {
-        (&self.registry_containers, &self.spec.containers)
+    fn get_containers(&self) -> &Vec<Container> {
+        &self.spec.containers
     }
 
     fn get_annotations(&self) -> Option<BTreeMap<String, String>> {
