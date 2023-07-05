@@ -873,6 +873,8 @@ impl Vm {
 
 #[cfg(test)]
 pub mod tests {
+    #[cfg(target_arch = "aarch64")]
+    use dbs_boot::layout::GUEST_MEM_START;
     #[cfg(target_arch = "x86_64")]
     use kvm_ioctls::VcpuExit;
     use linux_loader::cmdline::Cmdline;
@@ -936,7 +938,13 @@ pub mod tests {
         let vm_memory = vm.address_space.vm_memory().unwrap();
 
         assert_eq!(vm_memory.num_regions(), 1);
+        #[cfg(target_arch = "x86_64")]
         assert_eq!(vm_memory.last_addr(), GuestAddress(0xffffff));
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(
+            vm_memory.last_addr(),
+            GuestAddress(GUEST_MEM_START + 0xffffff)
+        );
 
         // Reconfigure an already configured vm will be ignored and just return OK.
         let vm_config = VmConfigInfo {
@@ -959,9 +967,18 @@ pub mod tests {
         assert!(vm.init_guest_memory().is_ok());
         let vm_memory = vm.address_space.vm_memory().unwrap();
         assert_eq!(vm_memory.num_regions(), 1);
+        #[cfg(target_arch = "x86_64")]
         assert_eq!(vm_memory.last_addr(), GuestAddress(0xffffff));
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(
+            vm_memory.last_addr(),
+            GuestAddress(GUEST_MEM_START + 0xffffff)
+        );
 
+        #[cfg(target_arch = "x86_64")]
         let obj_addr = GuestAddress(0xf0);
+        #[cfg(target_arch = "aarch64")]
+        let obj_addr = GuestAddress(GUEST_MEM_START + 0xf0);
         vm_memory.write_obj(67u8, obj_addr).unwrap();
         let read_val: u8 = vm_memory.read_obj(obj_addr).unwrap();
         assert_eq!(read_val, 67u8);
@@ -1001,7 +1018,13 @@ pub mod tests {
 
         let vm_memory = vm.address_space.vm_memory().unwrap();
         assert_eq!(vm_memory.num_regions(), 1);
+        #[cfg(target_arch = "x86_64")]
         assert_eq!(vm_memory.last_addr(), GuestAddress(0xffffff));
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(
+            vm_memory.last_addr(),
+            GuestAddress(GUEST_MEM_START + 0xffffff)
+        );
 
         let kernel_file = TempFile::new().unwrap();
         let cmd_line = Cmdline::new(64);
