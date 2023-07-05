@@ -16,8 +16,6 @@ use nix::{ioctl_write_int_bad, request_code_none};
 use reqwest::header::{CONTENT_TYPE, USER_AGENT};
 use serde::{Deserialize, Serialize};
 use slog::{info, o};
-use std::fmt;
-use thiserror::Error;
 
 #[cfg(any(target_arch = "x86_64"))]
 use std::process::{Command, Stdio};
@@ -96,43 +94,6 @@ pub fn check_cpu_attribs(
 
     let missing_attribs = get_missing_strings(&cpu_info_processed, required_attribs)?;
     Ok(missing_attribs)
-}
-
-#[allow(dead_code)]
-#[derive(Debug, PartialEq)]
-pub enum GuestProtection {
-    NoProtection,
-    Tdx,
-    Sev,
-    Snp,
-    Pef,
-    Se,
-}
-
-impl fmt::Display for GuestProtection {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            GuestProtection::Tdx => write!(f, "tdx"),
-            GuestProtection::Sev => write!(f, "sev"),
-            GuestProtection::Snp => write!(f, "snp"),
-            GuestProtection::Pef => write!(f, "pef"),
-            GuestProtection::Se => write!(f, "se"),
-            GuestProtection::NoProtection => write!(f, "none"),
-        }
-    }
-}
-
-#[allow(dead_code)]
-#[derive(Error, Debug)]
-pub enum ProtectionError {
-    #[error("No permission to check guest protection")]
-    NoPerms,
-
-    #[error("Failed to check guest protection: {0}")]
-    CheckFailed(String),
-
-    #[error("Invalid guest protection value: {0}")]
-    InvalidValue(String),
 }
 
 pub fn run_network_checks() -> Result<()> {

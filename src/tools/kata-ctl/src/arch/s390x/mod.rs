@@ -12,9 +12,7 @@ mod arch_specific {
     use crate::types::*;
     use crate::utils;
     use anyhow::{anyhow, Result};
-    use nix::unistd::Uid;
     use slog::{info, o, warn};
-    use std::collections::HashMap;
     use std::io::BufRead;
     use std::io::BufReader;
 
@@ -96,41 +94,6 @@ mod arch_specific {
     }
 
     #[allow(dead_code)]
-    fn retrieve_cpu_facilities() -> Result<HashMap<i32, bool>> {
-        let f = std::fs::File::open(check::PROC_CPUINFO)?;
-        let mut reader = BufReader::new(f);
-        let mut contents = String::new();
-        let facilities_field = "facilities";
-        let mut facilities = HashMap::new();
-
-        while reader.read_line(&mut contents)? > 0 {
-            let fields: Vec<&str> = contents.split_whitespace().collect();
-            if fields.len() < 2 {
-                contents.clear();
-                continue;
-            }
-
-            if !fields[0].starts_with(facilities_field) {
-                contents.clear();
-                continue;
-            }
-
-            let mut start = 1;
-            if fields[1] == ":" {
-                start = 2;
-            }
-
-            for field in fields.iter().skip(start) {
-                let bit = field.parse::<i32>()?;
-                facilities.insert(bit, true);
-            }
-            return Ok(facilities);
-        }
-
-        Ok(facilities)
-    }
-
-    #[allow(dead_code)]
     pub fn check_cmd_line(
         kernel_cmdline_path: &str,
         search_param: &str,
@@ -175,42 +138,5 @@ mod arch_specific {
         // TODO: In case of error from get_generic_cpu_details, implement functionality
         // to get cpu details specific to s390x architecture similar
         // to the goloang implementation of function getS390xCPUDetails()
-    }
-
-    #[allow(dead_code)]
-    // Guest protection is not supported on ARM64.
-    pub fn available_guest_protection() -> Result<check::GuestProtection, check::ProtectionError> {
-        if !Uid::effective().is_root() {
-            return Err(check::ProtectionError::NoPerms)?;
-        }
-
-        let facilities = retrieve_cpu_facilities().map_err(|err| {
-            check::ProtectionError::CheckFailed(format!(
-                "Error retrieving cpu facilities file : {}",
-                err.to_string()
-            ))
-        })?;
-
-        // Secure Execution
-        // https://www.kernel.org/doc/html/latest/virt/kvm/s390-pv.html
-        let se_cpu_facility_bit: i32 = 158;
-        if !facilities.contains_key(&se_cpu_facility_bit) {
-            return Ok(check::GuestProtection::NoProtection);
-        }
-
-        let cmd_line_values = vec!["1", "on", "y", "yes"];
-        let se_cmdline_param = "prot_virt";
-
-        let se_cmdline_present =
-            check_cmd_line("/proc/cmdline", se_cmdline_param, &cmd_line_values)
-                .map_err(|err| check::ProtectionError::CheckFailed(err.to_string()))?;
-
-        if !se_cmdline_present {
-            return Err(check::ProtectionError::InvalidValue(String::from(
-                "Protected Virtualization is not enabled on kernel command line!",
-            )));
-        }
-
-        Ok(check::GuestProtection::Se)
     }
 }
