@@ -11,6 +11,8 @@ jobs:
     runs-on: s390x
     strategy:
       matrix:
+        measured_rootfs:
+          - no
         asset:
           - cc-kernel
           - cc-qemu
@@ -18,6 +20,10 @@ jobs:
           - cc-rootfs-initrd
           - cc-se-image
           - cc-virtiofsd
+        include:
+          - measured_rootfs: yes
+            asset:
+              - cc-kernel
     steps:
       - name: Login to Kata Containers quay.io
         uses: docker/login-action@v2
@@ -52,6 +58,7 @@ jobs:
           KATA_ASSET: ${{ matrix.asset }}
           TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
           PUSH_TO_REGISTRY: yes
+          MEASURED_ROOTFS: ${{ matrix.measured_rootfs }}
           HKD_PATH: "host-key-document"
 
       - name: store-artifact ${{ matrix.asset }}
@@ -101,6 +108,7 @@ jobs:
           sudo cp -r "${build_dir}" "kata-build"
         env:
           PUSH_TO_REGISTRY: yes
+          MEASURED_ROOTFS: yes
 
       - name: store-artifact cc-shim-v2
         uses: actions/upload-artifact@v3

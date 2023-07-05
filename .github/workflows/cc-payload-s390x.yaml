@@ -11,11 +11,16 @@ jobs:
     runs-on: s390x
     strategy:
       matrix:
+        measured_rootfs: no
         asset:
           - cc-kernel
           - cc-qemu
           - cc-rootfs-image
           - cc-virtiofsd
+        include:
+          - measured_rootfs: yes
+            asset:
+              - cc-kernel
     steps:
       - name: Adjust a permission for repo
         run: |
@@ -31,6 +36,7 @@ jobs:
         env:
           KATA_ASSET: ${{ matrix.asset }}
           TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
+          MEASURED_ROOTFS: ${{ matrix.measured_rootfs }}
 
       - name: store-artifact ${{ matrix.asset }}
         uses: actions/upload-artifact@v3
@@ -70,6 +76,8 @@ jobs:
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
           sudo cp -r "${build_dir}" "kata-build"
+        env:
+          MEASURED_ROOTFS: yes
 
       - name: store-artifact cc-shim-v2
         uses: actions/upload-artifact@v3
