@@ -58,6 +58,12 @@ function get_cluster_credentials() {
 function run_tests() {
     platform="${1}"
 
+    # Emsure we're in the default namespace
+    kubectl config set-context --current --namespace=default
+
+    # Delete any spurious tests namespace that was left behind
+    kubectl delete namespace kata-containers-k8s-tests &> /dev/null || true
+
     sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
     cat "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
     cat "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" | grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" || die "Failed to setup the tests image"
@@ -80,6 +86,10 @@ function run_tests() {
         sleep 60s
     fi
 
+    # Create a new namespace for the tests and switch to it
+    kubectl apply -f ${integration_dir}/kubernetes/runtimeclass_workloads/tests-namespace.yaml
+    kubectl config set-context --current --namespace=kata-containers-k8s-tests
+
     pushd "${integration_dir}/kubernetes"
     bash setup.sh
     bash run_kubernetes_tests.sh
@@ -88,6 +98,10 @@ function run_tests() {
 
 function cleanup() {
     platform="${1}"
+
+    # Switch back to the default namespace and delete the tests one
+    kubectl config set-context --current --namespace=default
+    kubectl delete namespace kata-containers-k8s-tests
 
     if [ "${platform}" = "tdx" ]; then
         deploy_spec="-k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k3s""
