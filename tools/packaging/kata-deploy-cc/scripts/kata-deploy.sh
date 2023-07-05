@@ -272,7 +272,7 @@ function remove_artifacts() {
 		/opt/confidential-containers/bin/kata-runtime \
 		/opt/confidential-containers/bin/kata-collect-data.sh \
 		/opt/confidential-containers/bin/qemu-system-x86_64 \
-		/opt/confidential-containers/bin/qemu-system-x86_64-snp \
+		/opt/confidential-containers/bin/qemu-system-x86_64-snp-experimental \
 		/opt/confidential-containers/bin/qemu-system-x86_64-tdx \
 		/opt/confidential-containers/bin/qemu-system-s390x \
 		/opt/confidential-containers/bin/cloud-hypervisor \
