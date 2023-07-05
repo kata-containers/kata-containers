@@ -3,7 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 use anyhow::{anyhow, Result};
+
+#[cfg(target_arch = "s390x")]
+use std::collections::HashMap;
+#[cfg(target_arch = "s390x")]
+use std::io::BufRead;
+#[cfg(target_arch = "s390x")]
+use std::io::BufReader;
 
 #[allow(dead_code)]
 const ERR_NO_CPUINFO: &str = "cpu_info string is empty";
@@ -112,6 +120,41 @@ fn get_cpu_flags_from_file(cpu_info: &str, cpu_flags_tag: &str) -> Result<String
     }
 
     Ok("".to_string())
+}
+
+#[cfg(target_arch = "s390x")]
+pub fn retrieve_cpu_facilities() -> Result<HashMap<i32, bool>> {
+    let f = std::fs::File::open(PROC_CPUINFO)?;
+    let mut reader = BufReader::new(f);
+    let mut contents = String::new();
+    let facilities_field = "facilities";
+    let mut facilities = HashMap::new();
+
+    while reader.read_line(&mut contents)? > 0 {
+        let fields: Vec<&str> = contents.split_whitespace().collect();
+        if fields.len() < 2 {
+            contents.clear();
+            continue;
+        }
+
+        if !fields[0].starts_with(facilities_field) {
+            contents.clear();
+            continue;
+        }
+
+        let mut start = 1;
+        if fields[1] == ":" {
+            start = 2;
+        }
+
+        for field in fields.iter().skip(start) {
+            let bit = field.parse::<i32>()?;
+            facilities.insert(bit, true);
+        }
+        return Ok(facilities);
+    }
+
+    Ok(facilities)
 }
 
 #[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
