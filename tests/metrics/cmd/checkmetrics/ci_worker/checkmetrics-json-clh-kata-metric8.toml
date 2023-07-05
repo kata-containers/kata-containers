@@ -19,3 +19,17 @@ checktype = "mean"
 midval = 0.42
 minpercent = 15.0
 maxpercent = 15.0
+
+[[metric]]
+name = "memory-footprint"
+type = "json"
+description = "measure memory usage"
+# Min and Max values to set a 'range' that
+# the median of the CSV Results data must fall
+# within (inclusive)
+checkvar = ".\"memory-footprint\".Results | .[] | .average.Result"
+checktype = "mean"
+midval = 2518364.00
+minpercent = 15.0
+maxpercent = 15.0
+
