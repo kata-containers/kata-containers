@@ -12,7 +12,6 @@
 #  This test uses smem tool to get the memory used.
 
 set -e
-set -x
 
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 source "${SCRIPT_PATH}/../lib/common.bash"
