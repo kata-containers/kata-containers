@@ -671,9 +671,9 @@ EOF
 		attestation_agent_version="$(get_package_version_from_kata_yaml externals.attestation-agent.version)"
 		info "Install attestation-agent with KBC ${AA_KBC}"
 		#git clone "${attestation_agent_url}" --branch "${attestation_agent_tag}" --single-branch
-		git clone --depth=1 "${attestation_agent_url}" attestation-agent
+		git clone --depth=1 "${attestation_agent_url}" guest-components
 
-		pushd attestation-agent
+		pushd guest-components/attestation-agent
 		git fetch --depth=1 origin "${attestation_agent_version}"
 		git checkout FETCH_HEAD
 		( [ "${AA_KBC}" == "eaa_kbc" ] || [ "${AA_KBC}" == "cc_kbc_tdx" ] ) && [ "${ARCH}" == "x86_64" ] && LIBC="gnu"
