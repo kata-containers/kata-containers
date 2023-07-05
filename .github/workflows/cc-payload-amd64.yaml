@@ -11,6 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
+        measured_rootfs:
+          - no
         asset:
           - cc-cloud-hypervisor
           - cc-kernel
@@ -27,6 +29,11 @@ jobs:
           - cc-tdx-qemu
           - cc-tdx-td-shim
           - cc-tdx-tdvf
+        include:
+          - measured_rootfs: yes
+            asset:
+              - cc-kernel
+              - cc-tdx-kernel
     steps:
       - uses: actions/checkout@v3
       - name: Build ${{ matrix.asset }}
@@ -38,6 +45,7 @@ jobs:
         env:
           KATA_ASSET: ${{ matrix.asset }}
           TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
+          MEASURED_ROOTFS: ${{ matrix.measured_rootfs }}
 
       - name: store-artifact ${{ matrix.asset }}
         uses: actions/upload-artifact@v3
@@ -87,6 +95,8 @@ jobs:
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
           sudo cp -r "${build_dir}" "kata-build"
+        env:
+          MEASURED_ROOTFS: yes
 
       - name: store-artifact cc-shim-v2
         uses: actions/upload-artifact@v3
