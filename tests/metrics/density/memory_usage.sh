@@ -99,13 +99,14 @@ function get_pss_memory(){
 	# This will be help us to retrieve raw information
 	echo "${ps}" >> "${PS_TMP_FILE}"
 
-	data=$(sudo "${SMEM_BIN}" --no-header -P "^${ps}" -c "pss" | sed 's/[[:space:]]//g')
+	data=$(sudo "${SMEM_BIN}" --no-header -P "^${ps}" -c "pss" | sed 's/[[:space:]]//g' | tr '\n' ' ' | sed 's/[[:blank:]]*$//')
 
 	# Save all the smem results
 	# This will help us to retrieve raw information
 	echo "${data}" >> "${MEM_TMP_FILE}"
 
-	for i in "${data}"; do
+	gral_data=$(echo "${data// /+}" | bc)
+	for i in "${gral_data}"; do
 		if (( $i > 0 ));then
 			mem_amount=$(( i + mem_amount ))
 			(( count++ ))
@@ -143,7 +144,7 @@ function get_pss_memory_virtiofsd() {
 
 	echo "${virtiofsd_path}" >> "${PS_TMP_FILE}"
 
-	virtiofsd_pids=$(ps aux | grep virtiofsd | awk '{print $2}')
+	virtiofsd_pids=$(ps aux | grep [v]irtiofsd | awk '{print $2}' | head -1)
 	data=$(sudo smem --no-header -P "^${virtiofsd_path}" -c pid -c "pid pss")
 
 	for p in "${virtiofsd_pids}"; do
