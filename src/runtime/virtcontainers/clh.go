@@ -692,9 +692,7 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 	}
 	clh.state.PID = pid
 
-	// TODO: revisit the value of this timeout. It currently allows a slower guest VM startup.
-	// ctx, cancel := context.WithTimeout(context.Background(), clh.getClhAPITimeout()*time.Second)
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), clh.getClhAPITimeout()*time.Second)
 	defer cancel()
 
 	if err := clh.bootVM(ctx); err != nil {
