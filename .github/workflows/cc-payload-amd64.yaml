@@ -31,9 +31,9 @@ jobs:
           - cc-tdx-tdvf
         include:
           - measured_rootfs: yes
-            asset:
-              - cc-kernel
-              - cc-tdx-kernel
+            asset: cc-kernel
+          - measured_rootfs: yes
+            asset: cc-tdx-kernel
     steps:
       - uses: actions/checkout@v3
       - name: Build ${{ matrix.asset }}

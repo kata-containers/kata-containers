@@ -19,8 +19,7 @@ jobs:
           - cc-virtiofsd
         include:
           - measured_rootfs: yes
-            asset:
-              - cc-kernel
+            asset: cc-kernel
     steps:
       - name: Adjust a permission for repo
         run: |

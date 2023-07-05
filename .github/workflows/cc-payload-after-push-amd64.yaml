@@ -31,9 +31,9 @@ jobs:
           - cc-tdx-tdvf
         include:
           - measured_rootfs: yes
-            asset:
-              - cc-kernel
-              - cc-tdx-kernel
+            asset: cc-kernel
+          - measured_rootfs: yes
+            asset: cc-tdx-kernel
     steps:
       - name: Login to Kata Containers quay.io
         uses: docker/login-action@v2
