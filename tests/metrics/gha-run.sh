@@ -12,6 +12,7 @@ set -o pipefail
 kata_tarball_dir="${2:-kata-artifacts}"
 metrics_dir="$(dirname "$(readlink -f "$0")")"
 source "${metrics_dir}/../common.bash"
+source "${metrics_dir}/lib/common.bash"
 
 declare -r results_dir="${metrics_dir}/results"
 declare -r checkmetrics_dir="${metrics_dir}/cmd/checkmetrics"
@@ -104,6 +105,10 @@ function check_metrics() {
 	fi
 }
 
+function make_tarball_results() {
+	compress_metrics_results_dir "${metrics_dir}/results" "${GITHUB_WORKSPACE}/results-${KATA_HYPERVISOR}.tar.gz"
+}
+
 function run_test_launchtimes() {
 	info "Running Launch Time test using ${KATA_HYPERVISOR} hypervisor"
 
@@ -144,6 +149,7 @@ function main() {
 	action="${1:-}"
 	case "${action}" in
 		install-kata) install_kata ;;
+		make-tarball-results) make_tarball_results ;;
 		run-test-launchtimes) run_test_launchtimes ;;
 		run-test-memory-usage) run_test_memory_usage ;;
 		run-test-memory-usage-inside-container) run_test_memory_usage_inside_container ;;
