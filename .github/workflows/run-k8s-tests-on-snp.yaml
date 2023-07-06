@@ -11,6 +11,9 @@ on:
       tag:
         required: true
         type: string
+      commit-hash:
+        required: false
+        type: string
 
 jobs:
   run-k8s-tests:
@@ -29,7 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ inputs.commit-hash }}
 
       - name: Run tests
         timeout-minutes: 30
