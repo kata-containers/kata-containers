@@ -3,9 +3,6 @@ on:
   schedule:
     - cron: '0 0 * * *'
 
-env:
-  COMMIT_HASH: ${GITHUB_REF}
-
 jobs:
   set-fake-pr-number:
     runs-on: ubuntu-latest
@@ -18,6 +15,6 @@ jobs:
     needs: set-fake-pr-number
     uses: ./.github/workflows/ci.yaml
     with:
-      commit-hash: $COMMIT_HASH
-      pr-number: $PR_NUMBER
-      tag: $PR_NUMBER-$COMMIT_HASH-nightly
+      commit-hash: ${GITHUB_REF}
+      pr-number: ${PR_NUMBER}
+      tag: ${PR_NUMBER}-${GITHUB_REF}-nightly

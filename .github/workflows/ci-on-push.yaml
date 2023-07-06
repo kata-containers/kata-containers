@@ -12,15 +12,11 @@ on:
       - synchronize
       - reopened
       - labeled
-env:
-  COMMIT_HASH: ${{ github.event.pull_request.head.sha }}
-  PR_NUMBER: ${{ github.event.pull_request.number }}
-
 jobs:
   kata-containers-ci-on-push:
     if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
     uses: ./.github/workflows/ci.yaml
     with:
-      commit-hash: $COMMIT_HASH
-      pr-number: $PR_NUMBER
-      tag: $PR_NUMBER-$COMMIT_HASH
+      commit-hash: ${{ github.event.pull_request.sha }}
+      pr-number: ${{ github.event.pull_request.number }}
+      tag: ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
