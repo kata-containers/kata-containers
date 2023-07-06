@@ -96,7 +96,6 @@ function check_containerd_config_for_kata() {
 }
 
 function check_metrics() {
-	KATA_HYPERVISOR="${1}"
 	local cm_base_file="${checkmetrics_config_dir}/checkmetrics-json-${KATA_HYPERVISOR}-kata-metric8.toml"
 	checkmetrics --debug --percentage --basefile "${cm_base_file}" --metricsdir "${results_dir}"
 	cm_result=$?
@@ -114,17 +113,15 @@ function run_test_launchtimes() {
 
 	create_symbolic_links
 	bash tests/metrics/time/launch_times.sh -i public.ecr.aws/ubuntu/ubuntu:latest -n 20
-
-	check_metrics "${KATA_HYPERVISOR}"
 }
 
 function run_test_memory_usage() {
 	info "Running memory-usage test using ${KATA_HYPERVISOR} hypervisor"
 
-	# ToDo: remove the exit once the metrics workflow is stable
-	exit 0
 	create_symbolic_links
 	bash tests/metrics/density/memory_usage.sh 20 5
+
+	check_metrics
 }
 
 function run_test_memory_usage_inside_container() {
