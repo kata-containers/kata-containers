@@ -63,9 +63,6 @@ pub struct OciSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub root: Option<Root>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub hostname: Option<String>,
-
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub mounts: Vec<Mount>,
 
@@ -311,13 +308,7 @@ impl AgentPolicy {
             .get_process(&mut process, yaml_has_command, yaml_has_args);
 
         if !is_pause_container {
-            if let Some(name) = resource.get_yaml_host_name() {
-                process.env.push("HOSTNAME=".to_string() + &name);
-            } else {
-                process
-                    .env
-                    .push("HOSTNAME=".to_string() + "$(sandbox-name)");
-            }
+            process.env.push("HOSTNAME=".to_string() + "$(host-name)");
         }
 
         let service_account_name = if let Some(s) = &yaml_container.serviceAccountName {
@@ -370,7 +361,6 @@ impl AgentPolicy {
                 ociVersion: Some("1.1.0-rc.1".to_string()),
                 process: Some(process),
                 root,
-                hostname: Some(resource.get_host_name()),
                 mounts,
                 hooks: None,
                 annotations: Some(annotations),

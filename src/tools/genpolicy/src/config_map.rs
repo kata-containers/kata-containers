@@ -86,14 +86,6 @@ impl yaml::K8sResource for ConfigMap {
         self.doc_mapping = doc_mapping.clone();
     }
 
-    fn get_yaml_host_name(&self) -> Option<String> {
-        panic!("Unsupported");
-    }
-
-    fn get_host_name(&self) -> String {
-        panic!("Unsupported");
-    }
-
     fn get_sandbox_name(&self) -> Option<String> {
         panic!("Unsupported");
     }

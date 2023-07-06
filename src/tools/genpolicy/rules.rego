@@ -25,11 +25,13 @@ default OnlineCPUMemRequest := true
 default PullImageRequest := true
 default ReadStreamRequest := true
 default RemoveContainerRequest := true
+default RemoveStaleVirtiofsShareMountsRequest := true
 default SetPolicyRequest := true
 default SignalProcessRequest := true
 default StartContainerRequest := true
 default StatsContainerRequest := true
 default TtyWinResizeRequest := true
+default UpdateEphemeralMountsRequest := true
 default UpdateInterfaceRequest := true
 default UpdateRoutesRequest := true
 default WaitProcessRequest := true
@@ -160,9 +162,6 @@ allow_by_container_type(input_cri_type, policy_oci, input_oci, sandbox_name, san
     print("allow_by_container_type 1: input_cri_type =", input_cri_type)
     input_cri_type == "sandbox"
 
-    print("allow_by_container_type 1: input hostname =", input_oci.hostname, "policy hostname =", policy_oci.hostname)
-    allow_host_name(policy_oci.hostname, input_oci.hostname)
-
     input_kata_type := input_oci.annotations["io.katacontainers.pkg.oci.container_type"]
     print("allow_by_container_type 1: input container type", input_kata_type)
     input_kata_type == "pod_sandbox"
@@ -193,20 +192,6 @@ allow_by_container_type(input_cri_type, policy_oci, input_oci, sandbox_name, san
     allow_log_directory(policy_oci, input_oci)
 
     print("allow_by_container_type 2: success")
-}
-
-allow_host_name(policy_hostname, input_hostname) {
-    print("allow_host_name 1: regex match")
-    regex.match(policy_hostname, input_hostname)
-    print("allow_host_name 1: success")
-}
-allow_host_name(policy_hostname, input_hostname) {
-    print("allow_host_name 2: generated name")
-
-    # TODO: should generated names be handled differently?
-    contains(policy_hostname, "$(generated-name)")
-
-    print("allow_host_name 2: success")
 }
 
 ######################################################################
@@ -705,7 +690,6 @@ allow_env_var(policy_process, input_process, env_var, sandbox_name) {
 
     name_value := split(env_var, "=")
     count(name_value) == 2
-    # TODO: check that name_value[1] looks like a hostname.
 
     some policy_env_var in policy_process.env
     policy_name_value := split(policy_env_var, "=")
@@ -714,7 +698,7 @@ allow_env_var(policy_process, input_process, env_var, sandbox_name) {
     policy_name_value[0] == name_value[0]
 
     # TODO: should these be handled in a different way?
-    always_allowed := ["$(node-name)", "$(pod-uid)"]
+    always_allowed := ["$(host-name)", "$(node-name)", "$(pod-uid)"]
     some allowed in always_allowed
     contains(policy_name_value[1], allowed)
 

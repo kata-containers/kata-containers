@@ -53,18 +53,6 @@ impl yaml::K8sResource for ReplicaSet {
         self.doc_mapping = doc_mapping.clone();
     }
 
-    fn get_yaml_host_name(&self) -> Option<String> {
-        if let Some(hostname) = &self.spec.template.spec.hostname {
-            return Some(hostname.clone());
-        }
-        None
-    }
-
-    fn get_host_name(&self) -> String {
-        // Example: "hostname": "no-exist-tdtd7",
-        "^".to_string() + &self.metadata.get_name() + "-[a-z0-9]{5}$"
-    }
-
     fn get_sandbox_name(&self) -> Option<String> {
         None
     }

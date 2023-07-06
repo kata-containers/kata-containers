@@ -578,26 +578,6 @@ impl yaml::K8sResource for Pod {
         self.doc_mapping = doc_mapping.clone();
     }
 
-    fn get_yaml_host_name(&self) -> Option<String> {
-        if let Some(hostname) = &self.spec.hostname {
-            return Some(hostname.clone());
-        }
-        None
-    }
-
-    fn get_host_name(&self) -> String {
-        if let Some(hostname) = &self.get_yaml_host_name() {
-            return hostname.clone();
-        }
-
-        let name = self.metadata.get_name();
-        if !name.is_empty() {
-            return "^".to_string() + &name + "$";
-        }
-
-        panic!("No pod name.");
-    }
-
     fn get_sandbox_name(&self) -> Option<String> {
         let name = self.metadata.get_name();
         if !name.is_empty() {
