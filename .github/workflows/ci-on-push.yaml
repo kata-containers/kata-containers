@@ -14,7 +14,7 @@ on:
       - labeled
 env:
   COMMIT_HASH: ${{ github.event.pull_request.head.sha }}
-  PR_NUMBER: ${{ github.event.pull_requesst.number }}
+  PR_NUMBER: ${{ github.event.pull_request.number }}
 
 jobs:
   kata-containers-ci-on-push:
