@@ -21,6 +21,6 @@ jobs:
     if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
     uses: ./.github/workflows/ci.yaml
     with:
-      commit-hash: ${{ env.COMMIT_HASH }}
-      pr-number: ${{ env.PR_NUMBER }}
-      tag: ${{ env.PR_NUMBER }}-${{ env.COMMIT_HASH }}
+      commit-hash: $COMMIT_HASH
+      pr-number: $PR_NUMBER
+      tag: $PR_NUMBER-$COMMIT_HASH
