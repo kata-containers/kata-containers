@@ -5,6 +5,9 @@ on:
       tarball-suffix:
         required: false
         type: string
+      commit-hash:
+        required: false
+        type: string
 
 jobs:
   run-metrics:
@@ -20,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ inputs.commit-hash }}
 
       - name: get-kata-tarball
         uses: actions/download-artifact@v3

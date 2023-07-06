@@ -5,22 +5,28 @@ on:
       - main
       - stable-*
 
+env:
+  COMMIT_HASH: $GITHUB_REF
+
 jobs:
   build-assets-amd64:
     uses: ./.github/workflows/build-kata-static-tarball-amd64.yaml
     with:
+      commit-hash: ${{ env.COMMIT_HASH }}
       push-to-registry: yes
     secrets: inherit
 
   build-assets-arm64:
     uses: ./.github/workflows/build-kata-static-tarball-arm64.yaml
     with:
+      commit-hash: ${{ env.COMMIT_HASH }}
       push-to-registry: yes
     secrets: inherit
 
   build-assets-s390x:
     uses: ./.github/workflows/build-kata-static-tarball-s390x.yaml
     with:
+      commit-hash: ${{ env.COMMIT_HASH }}
       push-to-registry: yes
     secrets: inherit
 
@@ -28,6 +34,7 @@ jobs:
     needs: build-assets-amd64
     uses: ./.github/workflows/publish-kata-deploy-payload-amd64.yaml
     with:
+      commit-hash: ${{ env.COMMIT_HASH }}
       registry: quay.io
       repo: kata-containers/kata-deploy-ci
       tag: kata-containers-amd64
@@ -37,6 +44,7 @@ jobs:
     needs: build-assets-arm64
     uses: ./.github/workflows/publish-kata-deploy-payload-arm64.yaml
     with:
+      commit-hash: ${{ env.COMMIT_HASH }}
       registry: quay.io
       repo: kata-containers/kata-deploy-ci
       tag: kata-containers-arm64
@@ -46,6 +54,7 @@ jobs:
     needs: build-assets-s390x
     uses: ./.github/workflows/publish-kata-deploy-payload-s390x.yaml
     with:
+      commit-hash: ${{ env.COMMIT_HASH }}
       registry: quay.io
       repo: kata-containers/kata-deploy-ci
       tag: kata-containers-s390x
