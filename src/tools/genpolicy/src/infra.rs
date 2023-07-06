@@ -30,10 +30,9 @@ const INFRA_MOUNT_DESTINATIONS: [&'static str; 7] = [
     "/var/run/secrets/kubernetes.io/serviceaccount",
 ];
 
-const PAUSE_CONTAINER_ANNOTATIONS: [(&'static str, &'static str); 7] = [
+const PAUSE_CONTAINER_ANNOTATIONS: [(&'static str, &'static str); 6] = [
     ("io.kubernetes.cri.container-type", "sandbox"),
     ("io.kubernetes.cri.sandbox-id", "^[a-z0-9]{64}$"),
-    ("nerdctl/network-namespace", "^/var/run/netns/cni-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"),
     ("io.kubernetes.cri.sandbox-log-directory", "^/var/log/pods/$(sandbox-namespace)_$(sandbox-name)_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"),
     ("io.katacontainers.pkg.oci.container_type", "pod_sandbox"),
     ("io.kubernetes.cri.sandbox-namespace", "default"),

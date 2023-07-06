@@ -61,4 +61,8 @@ impl yaml::K8sResource for NoPolicyResource {
     fn get_annotations(&self) -> Option<BTreeMap<String, String>> {
         panic!("Unsupported");
     }
+
+    fn use_host_network(&self) -> bool {
+        panic!("Unsupported");
+    }
 }

@@ -239,8 +239,12 @@ allow_container_annotation(policy_oci, input_oci, annotation_key) {
 
 allow_sandbox_net_namespace(policy_oci, input_oci) {
     print("allow_sandbox_net_namespace: start")
+
     policy_namespace := policy_oci.annotations["nerdctl/network-namespace"]
+    print("allow_sandbox_net_namespace: policy_namespace =", policy_namespace)
+
     input_namespace := input_oci.annotations["nerdctl/network-namespace"]
+    print("allow_sandbox_net_namespace: input_namespace =", input_namespace)
 
     regex.match(policy_namespace, input_namespace)
     print("allow_sandbox_net_namespace: success")
@@ -283,7 +287,8 @@ allow_log_directory(policy_oci, input_oci) {
 # Validate the linux fields from config.json.
 
 allow_linux(policy_oci, input_oci) {
-    print("allow_linux: policy namespaces =", policy_oci.linux.namespaces, "input namespaces =", input_oci.linux.namespaces)
+    print("allow_linux: policy namespaces =", policy_oci.linux.namespaces)
+    print("allow_linux: input namespaces =", input_oci.linux.namespaces)
     policy_oci.linux.namespaces     == input_oci.linux.namespaces
 
     print("allow_linux: allow_masked_paths")

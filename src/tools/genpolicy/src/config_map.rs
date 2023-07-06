@@ -122,4 +122,8 @@ impl yaml::K8sResource for ConfigMap {
         }
         None
     }
+
+    fn use_host_network(&self) -> bool {
+        panic!("Unsupported");
+    }
 }

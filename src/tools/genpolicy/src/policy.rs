@@ -232,6 +232,7 @@ impl AgentPolicy {
                 resource,
                 &yaml_containers[i],
                 i == 0,
+                resource.use_host_network(),
             ));
         }
 
@@ -252,6 +253,7 @@ impl AgentPolicy {
         resource: &dyn yaml::K8sResource,
         yaml_container: &pod::Container,
         is_pause_container: bool,
+        use_host_network: bool,
     ) -> ContainerPolicy {
         let infra_container = if is_pause_container {
             &self.infra_policy.pause_container
@@ -291,6 +293,15 @@ impl AgentPolicy {
                 "io.kubernetes.cri.container-name".to_string(),
                 yaml_container.name.to_string(),
             );
+        }
+
+        if is_pause_container {
+            let mut network_namespace = "^/var/run/netns/cni".to_string();
+            if use_host_network {
+                network_namespace += "test";
+            }
+            network_namespace += "-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$";
+            annotations.insert("nerdctl/network-namespace".to_string(), network_namespace);
         }
 
         // Start with the Default Unix Spec from
@@ -351,7 +362,7 @@ impl AgentPolicy {
         );
 
         let mut linux = containerd::get_linux(is_privileged);
-        linux.namespaces = kata::get_namespaces();
+        linux.namespaces = kata::get_namespaces(is_pause_container, use_host_network);
         infra::get_linux(&mut linux, &infra_container.linux);
 
         let exec_commands = yaml_container.get_exec_commands();

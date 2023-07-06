@@ -71,6 +71,9 @@ pub struct PodSpec {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hostname: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hostNetwork: Option<bool>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -626,6 +629,13 @@ impl yaml::K8sResource for Pod {
             return Some(annotations.clone());
         }
         None
+    }
+
+    fn use_host_network(&self) -> bool {
+        if let Some(host_network) = self.spec.hostNetwork {
+            return host_network;
+        }
+        false
     }
 }
 

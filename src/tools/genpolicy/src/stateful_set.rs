@@ -129,6 +129,13 @@ impl yaml::K8sResource for StatefulSet {
         }
         None
     }
+
+    fn use_host_network(&self) -> bool {
+        if let Some(host_network) = self.spec.template.spec.hostNetwork {
+            return host_network;
+        }
+        false
+    }
 }
 
 impl StatefulSet {
