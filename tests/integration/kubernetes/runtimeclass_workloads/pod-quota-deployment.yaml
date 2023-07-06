@@ -7,7 +7,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: deploymenttest
-  namespace: test-quota-ns
 spec:
   selector:
     matchLabels:
