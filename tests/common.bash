@@ -240,3 +240,17 @@ restart_containerd_service() {
 	clean_env_ctr
 	return 0
 }
+
+# @path_results: path to the input metric-results folder
+# @tarball_fname: path and filename to the output tarball
+function compress_metrics_results_dir()
+{
+	local path_results="${1:-results}"
+	local tarball_fname="${2:-}"
+
+	[ -z "${tarball_fname}" ] && die "Missing the tarball filename or the path to save the tarball results is incorrect."
+	[ ! -d "${path_results}" ] && die "Missing path to the results folder."
+
+	cd "${path_results}" && tar -czf "${tarball_fname}" *.json && cd -
+	info "tarball generated: ${tarball_fname}"
+}

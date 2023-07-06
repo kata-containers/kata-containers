@@ -42,3 +42,14 @@ jobs:
 
       - name: run blogbench test
         run:  bash tests/metrics/gha-run.sh run-test-blogbench
+
+      - name: make metrics tarball ${{ matrix.vmm }}
+        run: bash tests/metrics/gha-run.sh make-tarball-results
+          
+      - name: archive metrics results ${{ matrix.vmm }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: metrics-artifacts-${{ matrix.vmm }}
+          path: results-${{ matrix.vmm }}.tar.gz
+          retention-days: 1
+          if-no-files-found: error
