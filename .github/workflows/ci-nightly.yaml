@@ -9,10 +9,13 @@ env:
 jobs:
   set-fake-pr-number:
     runs-on: ubuntu-latest
-    run: |
-      echo "PR_NUMBER=$(date +%Y%m%d%H%M%S)" >> "$GITHUB_ENV"
+    steps:
+      - name: Set fake PR number
+        run: |
+          echo "PR_NUMBER=$(date +%Y%m%d%H%M%S)" >> "$GITHUB_ENV"
 
   kata-containers-ci-on-push:
+    needs: set-fake-pr-number
     uses: ./.github/workflows/ci.yaml
     with:
       commit-hash: $COMMIT_HASH
