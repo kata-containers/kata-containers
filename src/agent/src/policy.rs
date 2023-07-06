@@ -17,31 +17,33 @@ static OPA_POLICIES_PATH: &str = "/policies";
 
 static COCO_POLICY_NAME: &str = "/coco_policy";
 
-// Convenience macro to obtain the scope logger
+/// Convenience macro to obtain the scope logger
 macro_rules! sl {
     () => {
         slog_scope::logger()
     };
 }
 
-// Example of HTTP response from OPA: {"result":true}
+//// Example of HTTP response from OPA: {"result":true}
 #[derive(Debug, Serialize, Deserialize)]
 struct AllowResponse {
     result: bool,
 }
 
-// OPA input data for CreateContainerRequest.
+/// OPA input data for CreateContainerRequest.
 #[derive(Debug, Serialize, Deserialize)]
 struct CreateContainerRequestInput {
     input: CreateContainerRequestData,
 }
 
+/// OPA input data for CreateContainerRequest.
 #[derive(Debug, Serialize, Deserialize)]
 struct CreateContainerRequestData {
     oci: oci::Spec,
     storages: Vec<SerializedStorage>,
 }
 
+/// OPA input data for CreateContainerRequest.
 #[derive(Debug, Serialize, Deserialize)]
 struct SerializedStorage {
     driver: String,
@@ -53,6 +55,7 @@ struct SerializedStorage {
     fs_group: SerializedFsGroup,
 }
 
+/// OPA input data for CreateContainerRequest.
 #[derive(Debug, Serialize, Deserialize)]
 struct SerializedFsGroup {
     group_id: u32,
@@ -65,6 +68,7 @@ struct CreateSandboxRequestInput {
     input: CreateSandboxRequestData,
 }
 
+/// OPA input data for CreateSandboxRequest.
 #[derive(Debug, Serialize, Deserialize)]
 struct CreateSandboxRequestData {
     storages: Vec<SerializedStorage>,
@@ -76,6 +80,7 @@ struct ExecProcessRequestInput {
     input: ExecProcessRequestData,
 }
 
+/// OPA input data for ExecProcessRequest.
 #[derive(Debug, Serialize, Deserialize)]
 struct ExecProcessRequestData {
 	// container_id: String,
@@ -90,21 +95,28 @@ struct PullImageRequestInput {
     input: PullImageRequestData,
 }
 
+/// OPA input data for PullImageRequest.
 #[derive(Debug, Serialize, Deserialize)]
 struct PullImageRequestData {
     image: String,
 }
 
-// Singleton policy object.
+/// Singleton policy object.
 #[derive(Debug)]
 pub struct AgentPolicy {
+    /// When true policy errors are ignored, for debug purposes.
     allow_failures: bool,
-    request_count: u64,
 
-    // opa_data_uri: String,
-    coco_policy_query_prefix: String,
-    coco_policy_id_uri: String,
+    /// OPA path used to query if an Agent gRPC request should be allowed.
+    /// The request name (e.g., CreateContainerRequest) must be added to
+    /// this path.
+    query_path: String,
 
+    /// OPA path used to add or delete a rego format Policy.
+    policy_path: String,
+
+    /// Client used to connect a single time to the OPA service and reused
+    /// for all the future communication with OPA.
     opa_client: Client,
 }
 
@@ -113,14 +125,12 @@ impl AgentPolicy {
     pub fn new() -> Result<Self> {
         Ok(AgentPolicy {
             allow_failures: false,
-            request_count: 0,
 
-            // opa_data_uri: OPA_V1_URI.to_string() + OPA_DATA_PATH,
-            coco_policy_query_prefix: OPA_V1_URI.to_string()
+            query_path: OPA_V1_URI.to_string()
                 + OPA_DATA_PATH
                 + COCO_POLICY_NAME
                 + "/",
-            coco_policy_id_uri: OPA_V1_URI.to_string() + OPA_POLICIES_PATH + COCO_POLICY_NAME,
+            policy_path: OPA_V1_URI.to_string() + OPA_POLICIES_PATH + COCO_POLICY_NAME,
 
             opa_client: Client::builder().http1_only().build()?,
         })
@@ -245,7 +255,7 @@ impl AgentPolicy {
     // Replace the security policy in OPA.
     pub async fn set_policy(&mut self, policy: &str) -> Result<()> {
         // Delete the old rules.
-        let mut uri = self.coco_policy_id_uri.clone();
+        let mut uri = self.policy_path.clone();
         info!(sl!(), "set_policy: deleting rules, uri {}", uri);
         self.opa_client
             .delete(uri)
@@ -254,7 +264,7 @@ impl AgentPolicy {
             .map_err(|e| anyhow!(e))?;
 
         // Put the new rules.
-        uri = self.coco_policy_id_uri.clone();
+        uri = self.policy_path.clone();
         info!(sl!(), "set_policy: rules uri {}", uri);
         self.opa_client
             .put(uri)
@@ -275,16 +285,9 @@ impl AgentPolicy {
 
     // Post query to OPA.
     async fn post_query(&mut self, ep: &str, post_input: &str) -> Result<bool> {
-        if self.request_count == 0 {
-            info!(
-                sl!(),
-                "policy: post_query: base uri {}", &self.coco_policy_query_prefix
-            );
-        }
-        self.request_count += 1;
         info!(sl!(), "policy check: {}", ep);
 
-        let uri = self.coco_policy_query_prefix.clone() + ep;
+        let uri = self.query_path.clone() + ep;
         let response = self
             .opa_client
             .post(uri)
