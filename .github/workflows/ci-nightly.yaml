@@ -1,7 +1,7 @@
 name: Kata Containers Nightly CI
 on:
   schedule:
-    cron: '0 0 * * *'
+    - cron: '0 0 * * *'
 
 env:
   COMMIT_HASH: ${GITHUB_REF}
@@ -9,12 +9,15 @@ env:
 jobs:
   set-fake-pr-number:
     runs-on: ubuntu-latest
-    run: |
-      echo "PR_NUMBER=$(date +%Y%m%d%H%M%S)" >> "$GITHUB_ENV"
+    steps:
+      - name: Set fake PR number
+        run: |
+          echo "PR_NUMBER=$(date +%Y%m%d%H%M%S)" >> "$GITHUB_ENV"
 
   kata-containers-ci-on-push:
+    needs: set-fake-pr-number
     uses: ./.github/workflows/ci.yaml
     with:
-      commit-hash: ${{ env.COMMIT_HASH }}
-      pr-number: ${{ env.PR_NUMBER }}
-      tag: ${{ env.PR_NUMBER }}-${{ env.COMMIT_HASH }}-nightly
+      commit-hash: $COMMIT_HASH
+      pr-number: $PR_NUMBER
+      tag: $PR_NUMBER-$COMMIT_HASH-nightly
