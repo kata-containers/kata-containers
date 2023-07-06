@@ -131,6 +131,15 @@ function run_test_memory_usage_inside_container() {
 	bash tests/metrics/density/memory_usage_inside_container.sh 5
 }
 
+function run_test_blogbench() {
+	info "Running Blogbench test using ${KATA_HYPERVISOR} hypervisor"
+
+	# ToDo: remove the exit once the metrics workflow is stable
+	exit 0
+	create_symbolic_links
+	bash tests/metrics/storage/blogbench.sh
+}
+
 function main() {
 	action="${1:-}"
 	case "${action}" in
@@ -138,6 +147,7 @@ function main() {
 		run-test-launchtimes) run_test_launchtimes ;;
 		run-test-memory-usage) run_test_memory_usage ;;
 		run-test-memory-usage-inside-container) run_test_memory_usage_inside_container ;;
+		run-test-blogbench) run_test_blogbench ;;
 		*) >&2 die "Invalid argument" ;;
 	esac
 }
