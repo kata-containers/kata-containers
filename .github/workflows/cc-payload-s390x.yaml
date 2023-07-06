@@ -20,6 +20,8 @@ jobs:
         include:
           - measured_rootfs: yes
             asset: cc-kernel
+          - measured_rootfs: yes
+            asset: cc-rootfs-image
     steps:
       - name: Adjust a permission for repo
         run: |

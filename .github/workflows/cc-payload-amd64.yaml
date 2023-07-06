@@ -34,6 +34,10 @@ jobs:
             asset: cc-kernel
           - measured_rootfs: yes
             asset: cc-tdx-kernel
+          - measured_rootfs: yes
+            asset: cc-rootfs-image
+          - measured_rootfs: yes
+            asset: cc-tdx-rootfs-image
     steps:
       - uses: actions/checkout@v3
       - name: Build ${{ matrix.asset }}
