@@ -15,17 +15,13 @@ jobs:
           - no
         asset:
           - cc-cloud-hypervisor
-          - cc-kernel
           - cc-qemu
-          - cc-rootfs-image
           - cc-virtiofsd
           - cc-sev-kernel
           - cc-sev-ovmf
           - cc-x86_64-ovmf
           - cc-snp-qemu
           - cc-sev-rootfs-initrd
-          - cc-tdx-kernel
-          - cc-tdx-rootfs-image
           - cc-tdx-qemu
           - cc-tdx-td-shim
           - cc-tdx-tdvf
