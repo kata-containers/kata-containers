@@ -40,3 +40,5 @@ jobs:
       - name: run memory usage inside container test
         run:  bash tests/metrics/gha-run.sh run-test-memory-usage-inside-container
 
+      - name: run blogbench test
+        run:  bash tests/metrics/gha-run.sh run-test-blogbench
