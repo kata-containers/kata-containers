@@ -32,13 +32,13 @@ MEM_TMP_FILE=$(mktemp meminfo.XXXXXXXXXX)
 PS_TMP_FILE=$(mktemp psinfo.XXXXXXXXXX)
 
 function remove_tmp_file() {
-	rm -rf $MEM_TMP_FILE $PS_TMP_FILE
+	rm -rf "${MEM_TMP_FILE}" "${PS_TMP_FILE}"
 }
 
 trap remove_tmp_file EXIT
 
 # Show help about this script
-help(){
+function help(){
 cat << EOF
 Usage: $0 <count> <wait_time> [auto]
    Description:
@@ -51,16 +51,16 @@ EOF
 }
 
 
-get_runc_pss_memory(){
+function get_runc_pss_memory(){
 	ctr_runc_shim_path="/usr/local/bin/containerd-shim-runc-v2"
-	get_pss_memory "$ctr_runc_shim_path"
+	get_pss_memory "${ctr_runc_shim_path}"
 }
 
-get_runc_individual_memory() {
-	runc_process_result=$(cat $MEM_TMP_FILE | tr "\n" " " | sed -e 's/\s$//g' | sed 's/ /, /g')
+function get_runc_individual_memory() {
+	runc_process_result=$(cat "${MEM_TMP_FILE}" | tr "\n" " " | sed -e 's/\s$//g' | sed 's/ /, /g')
 
 	# Verify runc process result
-	if [ -z "$runc_process_result" ];then
+	if [ -z "${runc_process_result}" ];then
 		die "Runc process not found"
 	fi
 
@@ -71,7 +71,7 @@ get_runc_individual_memory() {
 	local json="$(cat << EOF
 	{
 		"runc individual results": [
-			$(for ((i=0;i<${NUM_CONTAINERS[@]};++i)); do
+			$(for ((i=0;i<"${NUM_CONTAINERS[@]}";++i)); do
 				printf '%s\n\t\t\t' "${runc_values[i]}"
 			done)
 		]
@@ -84,41 +84,42 @@ EOF
 
 # This function measures the PSS average
 # memory of a process.
-get_pss_memory(){
+function get_pss_memory(){
 	ps="$1"
 	mem_amount=0
 	count=0
 	avg=0
 
-	if [ -z "$ps" ]; then
+	if [ -z "${ps}" ]; then
 		die "No argument to get_pss_memory()"
 	fi
 
 	# Save all the processes names
 	# This will be help us to retrieve raw information
-	echo $ps >> $PS_TMP_FILE
+	echo "${ps}" >> "${PS_TMP_FILE}"
 
-	data=$(sudo "$SMEM_BIN" --no-header -P "^$ps" -c "pss" | sed 's/[[:space:]]//g')
+	data=$(sudo "${SMEM_BIN}" --no-header -P "^${ps}" -c "pss" | sed 's/[[:space:]]//g' | tr '\n' ' ' | sed 's/[[:blank:]]*$//')
 
 	# Save all the smem results
 	# This will help us to retrieve raw information
-	echo $data >> $MEM_TMP_FILE
+	echo "${data}" >> "${MEM_TMP_FILE}"
 
-	for i in $data;do
-		if (( i > 0 ));then
+	gral_data=$(echo "${data// /+}" | bc)
+	for i in "${gral_data}"; do
+		if (( $i > 0 ));then
 			mem_amount=$(( i + mem_amount ))
 			(( count++ ))
 		fi
 	done
 
-	if (( $count > 0 ));then
-		avg=$(bc -l <<< "scale=2; $mem_amount / $count")
+	if (( "${count}" > 0 ));then
+		avg=$(bc -l <<< "scale=2; ${mem_amount} / ${count}")
 	fi
 
-	echo "$avg"
+	echo "${avg}"
 }
 
-ppid() {
+function ppid() {
 	local pid
 	pid=$(ps -p "${1:-nopid}" -o ppid=)
 	echo "${pid//[[:blank:]]/}"
@@ -130,7 +131,7 @@ ppid() {
 # virtiofsd forks itself so, smem sees the process
 # two times, this function sum both pss values:
 # pss_virtiofsd=pss_fork + pss_parent
-get_pss_memory_virtiofsd() {
+function get_pss_memory_virtiofsd() {
 	mem_amount=0
 	count=0
 	avg=0
@@ -140,26 +141,26 @@ get_pss_memory_virtiofsd() {
 		die "virtiofsd_path not provided"
 	fi
 
-	echo "${virtiofsd_path}" >> $PS_TMP_FILE
+	echo "${virtiofsd_path}" >> "${PS_TMP_FILE}"
 
-	virtiofsd_pids=$(ps aux | grep [v]irtiofsd | awk '{print $2}')
+	virtiofsd_pids=$(ps aux | grep [v]irtiofsd | awk '{print $2}' | head -1)
 	data=$(sudo smem --no-header -P "^${virtiofsd_path}" -c pid -c "pid pss")
 
-	for p in ${virtiofsd_pids}; do
-		parent_pid=$(ppid ${p})
+	for p in "${virtiofsd_pids}"; do
+		parent_pid=$(ppid "${p}")
 		cmd="$(cat /proc/${p}/cmdline | tr -d '\0')"
 		cmd_parent="$(cat /proc/${parent_pid}/cmdline | tr -d '\0')"
 		if [ "${cmd}" != "${cmd_parent}" ]; then
 			pss_parent=$(printf "%s" "${data}" | grep "\s^${p}" | awk '{print $2}')
 
-			fork=$(pgrep -P ${p})
+			fork=$(pgrep -P "${p}")
 
 			pss_fork=$(printf "%s" "${data}" | grep "^\s*${fork}" | awk '{print $2}')
 			pss_process=$((pss_fork + pss_parent))
 
 			# Save all the smem results
 			# This will help us to retrieve raw information
-			echo "${pss_process}" >>$MEM_TMP_FILE
+			echo "${pss_process}" >>"${MEM_TMP_FILE}"
 
 			if ((pss_process > 0)); then
 				mem_amount=$((pss_process + mem_amount))
@@ -168,22 +169,22 @@ get_pss_memory_virtiofsd() {
 		fi
 	done
 
-	if (( $count > 0 ));then
-		avg=$(bc -l <<< "scale=2; $mem_amount / $count")
+	if (( "${count}" > 0 ));then
+		avg=$(bc -l <<< "scale=2; ${mem_amount} / ${count}")
 	fi
 	echo "${avg}"
 }
 
-get_individual_memory(){
+function get_individual_memory(){
 	# Getting all the individual container information
-	first_process_name=$(cat $PS_TMP_FILE | awk 'NR==1' | awk -F "/" '{print $NF}' | sed 's/[[:space:]]//g')
-	first_process_result=$(cat $MEM_TMP_FILE | awk 'NR==1' | sed 's/ /, /g')
+	first_process_name=$(cat "${PS_TMP_FILE}" | awk 'NR==1' | awk -F "/" '{print $NF}' | sed 's/[[:space:]]//g')
+	first_process_result=$(cat "${MEM_TMP_FILE}" | awk 'NR==1' | sed 's/ /, /g')
 
-	second_process_name=$(cat $PS_TMP_FILE | awk 'NR==2' | awk -F "/" '{print $NF}' | sed 's/[[:space:]]//g')
-	second_process_result=$(cat $MEM_TMP_FILE | awk 'NR==2' | sed 's/ /, /g')
+	second_process_name=$(cat "${PS_TMP_FILE}" | awk 'NR==2' | awk -F "/" '{print $NF}' | sed 's/[[:space:]]//g')
+	second_process_result=$(cat "${MEM_TMP_FILE}" | awk 'NR==2' | sed 's/ /, /g')
 
-	third_process_name=$(cat $PS_TMP_FILE | awk 'NR==3' | awk -F "/" '{print $NF}' | sed 's/[[:space:]]//g')
-	third_process_result=$(cat $MEM_TMP_FILE | awk 'NR==3' | sed 's/ /, /g')
+	third_process_name=$(cat "${PS_TMP_FILE}" | awk 'NR==3' | awk -F "/" '{print $NF}' | sed 's/[[:space:]]//g')
+	third_process_result=$(cat "${MEM_TMP_FILE}" | awk 'NR==3' | sed 's/ /, /g')
 
 	read -r -a first_values <<< "${first_process_result}"
 	read -r -a second_values <<< "${second_process_result}"
@@ -193,20 +194,20 @@ get_individual_memory(){
 
 	local json="$(cat << EOF
 	{
-		"$first_process_name memory": [
-			$(for ((i=0;i<${NUM_CONTAINERS[@]};++i)); do
+		"${first_process_name} memory": [
+			$(for ((i=0;i<"${NUM_CONTAINERS[@]}";++i)); do
 				[ -n "${first_values[i]}" ] &&
 				printf '%s\n\t\t\t' "${first_values[i]}"
 			done)
 		],
-		"$second_process_name memory": [
-			$(for ((i=0;i<${NUM_CONTAINERS[@]};++i)); do
+		"${second_process_name} memory": [
+			$(for ((i=0;i<"${NUM_CONTAINERS[@]}";++i)); do
 				[ -n "${second_values[i]}" ] &&
 				printf '%s\n\t\t\t' "${second_values[i]}"
 			done)
 		],
-		"$third_process_name memory": [
-			$(for ((i=0;i<${NUM_CONTAINERS[@]};++i)); do
+		"${third_process_name} memory": [
+			$(for ((i=0;i<"${NUM_CONTAINERS[@]}";++i)); do
 				[ -n "${third_values[i]}" ] &&
 				printf '%s\n\t\t\t' "${third_values[i]}"
 			done)
@@ -219,7 +220,7 @@ EOF
 }
 
 # Try to work out the 'average memory footprint' of a container.
-get_docker_memory_usage(){
+function get_memory_usage(){
 	hypervisor_mem=0
 	virtiofsd_mem=0
 	shim_mem=0
@@ -227,40 +228,41 @@ get_docker_memory_usage(){
 
 	containers=()
 
-	for ((i=1; i<= NUM_CONTAINERS; i++)); do
+	info "Creating ${NUM_CONTAINERS} containers"
+	for ((i=1; i<="${NUM_CONTAINERS}"; i++)); do
 		containers+=($(random_name))
-		${CTR_EXE} run --runtime "${CTR_RUNTIME}" -d ${IMAGE}  ${containers[-1]} ${CMD}
+		sudo "${CTR_EXE}" run --runtime "${CTR_RUNTIME}" -d "${IMAGE}" "${containers[-1]}" sh -c "${CMD}"
 	done
 
-	if [ "$AUTO_MODE" == "auto" ]; then
+	if [ "${AUTO_MODE}" == "auto" ]; then
 		if (( ksm_on != 1 )); then
 			die "KSM not enabled, cannot use auto mode"
 		fi
 
 		echo "Entering KSM settle auto detect mode..."
-		wait_ksm_settle $WAIT_TIME
+		wait_ksm_settle "${WAIT_TIME}"
 	else
 		# If KSM is enabled, then you normally want to sleep long enough to
 		# let it do its work and for the numbers to 'settle'.
-		echo "napping $WAIT_TIME s"
-		sleep "$WAIT_TIME"
+		echo "napping ${WAIT_TIME} s"
+		sleep "${WAIT_TIME}"
 	fi
 
 	metrics_json_start_array
 	# Check the runtime in order in order to determine which process will
 	# be measured about PSS
-	if [ "$RUNTIME" == "runc" ]; then
+	if [ "${RUNTIME}" == "runc" ]; then
 		runc_workload_mem="$(get_runc_pss_memory)"
-		memory_usage="$runc_workload_mem"
+		memory_usage="${runc_workload_mem}"
 
 	local json="$(cat << EOF
 	{
 		"average": {
-			"Result": $memory_usage,
+			"Result": ${memory_usage},
 			"Units" : "KB"
 		},
 		"runc": {
-			"Result": $runc_workload_mem,
+			"Result": ${runc_workload_mem},
 			"Units" : "KB"
 		}
 	}
@@ -276,39 +278,39 @@ EOF
 		# Now if you do not have enough rights
 		#  the smem failure to read the stats will also be trapped.
 
-		hypervisor_mem="$(get_pss_memory "$HYPERVISOR_PATH")"
-		if [ "$hypervisor_mem" == "0" ]; then
-			die "Failed to find PSS for $HYPERVISOR_PATH"
+		hypervisor_mem="$(get_pss_memory ${HYPERVISOR_PATH})"
+		if [ "${hypervisor_mem}" == "0" ]; then
+			die "Failed to find PSS for ${HYPERVISOR_PATH}"
 		fi
 
-		virtiofsd_mem="$(get_pss_memory_virtiofsd "$VIRTIOFSD_PATH")"
-		if [ "$virtiofsd_mem" == "0" ]; then
-			echo >&2 "WARNING: Failed to find PSS for $VIRTIOFSD_PATH"
+		virtiofsd_mem="$(get_pss_memory_virtiofsd ${VIRTIOFSD_PATH})"
+		if [ "${virtiofsd_mem}" == "0" ]; then
+			echo >&2 "WARNING: Failed to find PSS for ${VIRTIOFSD_PATH}"
 		fi
-		shim_mem="$(get_pss_memory "$SHIM_PATH")"
-		if [ "$shim_mem" == "0" ]; then
-			die "Failed to find PSS for $SHIM_PATH"
+		shim_mem="$(get_pss_memory ${SHIM_PATH})"
+		if [ "${shim_mem}" == "0" ]; then
+			die "Failed to find PSS for ${SHIM_PATH}"
 		fi
 
-		mem_usage="$(bc -l <<< "scale=2; $hypervisor_mem +$virtiofsd_mem + $shim_mem")"
-		memory_usage="$mem_usage"
+		mem_usage="$(bc -l <<< "scale=2; ${hypervisor_mem} +${virtiofsd_mem} + ${shim_mem}")"
+		memory_usage="${mem_usage}"
 
 	local json="$(cat << EOF
 	{
 		"average": {
-			"Result": $mem_usage,
+			"Result": ${mem_usage},
 			"Units" : "KB"
 		},
 		"qemus": {
-			"Result": $hypervisor_mem,
+			"Result": ${hypervisor_mem},
 			"Units" : "KB"
 		},
 		"virtiofsds": {
-			"Result": $virtiofsd_mem,
+			"Result": ${virtiofsd_mem},
 			"Units" : "KB"
 		},
 		"shims": {
-			"Result": $shim_mem,
+			"Result": ${shim_mem},
 			"Units" : "KB"
 		}
 	}
@@ -322,17 +324,17 @@ EOF
 	clean_env_ctr
 }
 
-save_config(){
+function save_config(){
 	metrics_json_start_array
 
 	local json="$(cat << EOF
 	{
-		"containers": $NUM_CONTAINERS,
-		"ksm": $ksm_on,
-		"auto": "$AUTO_MODE",
-		"waittime": $WAIT_TIME,
-		"image": "$IMAGE",
-		"command": "$CMD"
+		"containers": "${NUM_CONTAINERS}",
+		"ksm": "${ksm_on}",
+		"auto": "${AUTO_MODE}",
+		"waittime": "${WAIT_TIME}",
+		"image": "${IMAGE}",
+		"command": "${CMD}"
 	}
 EOF
 
@@ -341,7 +343,7 @@ EOF
 	metrics_json_end_array "Config"
 }
 
-main(){
+function main(){
 	# Verify enough arguments
 	if [ $# != 2 ] && [ $# != 3 ];then
 		echo >&2 "error: Not enough arguments [$@]"
@@ -355,7 +357,7 @@ main(){
 	init_env
 
 	check_cmds "${SMEM_BIN}" bc
-	check_images "$IMAGE"
+	check_images "${IMAGE}"
 
 	if [ "${CTR_RUNTIME}" == "io.containerd.kata.v2" ]; then
 		export RUNTIME="kata-runtime"
@@ -367,7 +369,7 @@ main(){
 
 	metrics_json_init
 	save_config
-	get_docker_memory_usage
+	get_memory_usage
 
 	if [ "$RUNTIME" == "runc" ]; then
 		get_runc_individual_memory
