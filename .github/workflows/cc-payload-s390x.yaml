@@ -13,9 +13,7 @@ jobs:
       matrix:
         measured_rootfs: no
         asset:
-          - cc-kernel
           - cc-qemu
-          - cc-rootfs-image
           - cc-virtiofsd
         include:
           - measured_rootfs: yes
