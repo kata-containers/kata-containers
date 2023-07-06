@@ -127,8 +127,6 @@ function run_test_memory_usage() {
 function run_test_memory_usage_inside_container() {
 	info "Running memory-usage inside the container test using ${KATA_HYPERVISOR} hypervisor"
 
-	# ToDo: remove the exit once the metrics workflow is stable
-	exit 0
 	create_symbolic_links
 	bash tests/metrics/density/memory_usage_inside_container.sh 5
 }
