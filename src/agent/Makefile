@@ -33,6 +33,11 @@ ifeq ($(SECCOMP),yes)
     override EXTRA_RUSTFEATURES += seccomp
 endif
 
+# Enable security policy feature of rust build
+ifeq ($(SECURITY_POLICY),yes)
+    override EXTRA_RUSTFEATURES += security-policy
+endif
+
 include ../../utils.mk
 
 ifeq ($(ARCH), ppc64le)

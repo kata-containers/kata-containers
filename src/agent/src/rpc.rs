@@ -67,6 +67,8 @@ use crate::random;
 use crate::sandbox::Sandbox;
 use crate::version::{AGENT_VERSION, API_VERSION};
 use crate::AGENT_CONFIG;
+
+#[cfg(feature = "security-policy")]
 use crate::AGENT_POLICY;
 
 use crate::trace_rpc_call;
@@ -152,6 +154,7 @@ macro_rules! is_allowed {
     ($req:ident) => {
         config_allows!($req);
 
+        #[cfg(feature = "security-policy")]
         if !AGENT_POLICY
             .lock()
             .await
@@ -171,6 +174,7 @@ macro_rules! is_allowed_create_container {
     ($req:ident) => {
         config_allows!($req);
 
+        #[cfg(feature = "security-policy")]
         if !AGENT_POLICY
             .lock()
             .await
@@ -190,6 +194,7 @@ macro_rules! is_allowed_create_sandbox {
     ($req:ident) => {
         config_allows!($req);
 
+        #[cfg(feature = "security-policy")]
         if !AGENT_POLICY
             .lock()
             .await
@@ -209,6 +214,7 @@ macro_rules! is_allowed_exec_process {
     ($req:ident) => {
         config_allows!($req);
 
+        #[cfg(feature = "security-policy")]
         if !AGENT_POLICY
             .lock()
             .await
@@ -1778,6 +1784,7 @@ impl agent_ttrpc::AgentService for AgentService {
         Ok(Empty::new())
     }
 
+    #[cfg(feature = "security-policy")]
     async fn set_policy(
         &self,
         ctx: &TtrpcContext,
