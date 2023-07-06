@@ -12,23 +12,28 @@ on:
       - synchronize
       - reopened
       - labeled
+env:
+  COMMIT_HASH: ${{ github.event.pull_request.head.sha }}
+  PR_NUMBER: ${{ github.event.pull_requesst.number }}
 
 jobs:
   build-kata-static-tarball-amd64:
     if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
     uses: ./.github/workflows/build-kata-static-tarball-amd64.yaml
     with:
-      tarball-suffix: -${{ github.event.pull_request.number}}-${{ github.event.pull_request.head.sha }}
+      tarball-suffix: -${{ env.PR_NUMBER }}-${{ env.COMMIT_HASH }}
+      commit-hash: ${{ env.COMMIT_HASH }}
 
   publish-kata-deploy-payload-amd64:
     if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
     needs: build-kata-static-tarball-amd64
     uses: ./.github/workflows/publish-kata-deploy-payload-amd64.yaml
     with:
-      tarball-suffix: -${{ github.event.pull_request.number}}-${{ github.event.pull_request.head.sha }}
+      tarball-suffix: -${{ env.PR_NUMBER }}-${{ env.COMMIT_HASH }}
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-amd64
+      tag: ${{ env.PR_NUMBER }}-${{ env.COMMIT_HASH }}-amd64
+      commit-hash: ${{ env.COMMIT_HASH }}
     secrets: inherit
 
   run-k8s-tests-on-aks:
@@ -38,7 +43,8 @@ jobs:
     with:
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-amd64
+      tag: ${{ env.PR_NUMBER }}-${{ env.COMMIT_HASH }}-amd64
+      commit-hash: ${{ env.COMMIT_HASH }}
     secrets: inherit
 
   run-k8s-tests-on-sev:
@@ -48,7 +54,8 @@ jobs:
     with:
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-amd64
+      tag: ${{ env.PR_NUMBER }}-${{ env.COMMIT_HASH }}-amd64
+      commit-hash: ${{ env.COMMIT_HASH }}
 
   run-k8s-tests-on-snp:
     if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
@@ -57,7 +64,9 @@ jobs:
     with:
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-amd64
+      tag: ${{ env.PR_NUMBER }}-${{ env.COMMIT_HASH }}-amd64
+      pr-number: ${{ env.PR_NUMBER }}
+      commit-hash: ${{ env.COMMIT_HASH }}
 
   run-k8s-tests-on-tdx:
     if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
@@ -66,11 +75,13 @@ jobs:
     with:
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-amd64
+      tag: ${{ env.PR_NUMBER }}-${{ env.COMMIT_HASH }}-amd64
+      commit-hash: ${{ env.COMMIT_HASH }}
 
   run-metrics-tests:
     if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
     needs: build-kata-static-tarball-amd64
     uses: ./.github/workflows/run-metrics.yaml
     with:
-      tarball-suffix: -${{ github.event.pull_request.number}}-${{ github.event.pull_request.head.sha }}
+      tarball-suffix: -${{ env.PR_NUMBER }}-${{ env.COMMIT_HASH }}-amd64
+      commit-hash: ${{ env.COMMIT_HASH }}
