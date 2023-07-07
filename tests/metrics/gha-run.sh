@@ -120,8 +120,6 @@ function run_test_memory_usage() {
 
 	create_symbolic_links
 	bash tests/metrics/density/memory_usage.sh 20 5
-
-	check_metrics
 }
 
 function run_test_memory_usage_inside_container() {
@@ -129,6 +127,8 @@ function run_test_memory_usage_inside_container() {
 
 	create_symbolic_links
 	bash tests/metrics/density/memory_usage_inside_container.sh 5
+
+	check_metrics
 }
 
 function run_test_blogbench() {
