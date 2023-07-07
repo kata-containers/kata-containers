@@ -112,7 +112,7 @@ pub struct SerializedStorage {
     pub fstype: String,
     pub options: Vec<String>,
     pub mount_point: String,
-    pub fs_group: SerializedFsGroup,
+    pub fs_group: Option<SerializedFsGroup>,
 }
 
 // TODO: can struct FsGroup from agent.proto be used here?
@@ -419,10 +419,7 @@ fn get_image_layer_storages(
             fstype: "tar-overlay".to_string(),
             options: Vec::new(),
             mount_point: root_mount.path.clone(),
-            fs_group: SerializedFsGroup {
-                group_id: 0,
-                group_change_policy: 0,
-            },
+            fs_group: None,
         };
 
         // TODO: load this path from data.json.
@@ -461,10 +458,7 @@ fn get_image_layer_storages(
                 fstype: "tar".to_string(),
                 options,
                 mount_point: layers_path.clone() + &layer_name,
-                fs_group: SerializedFsGroup {
-                    group_id: 0,
-                    group_change_policy: 0,
-                },
+                fs_group: None,
             });
 
             let mut fs_opt_layer = "io.katacontainers.fs-opt.layer=".to_string();

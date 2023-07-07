@@ -38,26 +38,7 @@ struct CreateContainerRequestInput {
 #[derive(Debug, Serialize, Deserialize)]
 struct CreateContainerRequestData {
     oci: oci::Spec,
-    storages: Vec<SerializedStorage>,
-}
-
-/// OPA input data for CreateContainerRequest.
-#[derive(Debug, Serialize, Deserialize)]
-struct SerializedStorage {
-    driver: String,
-    driver_options: Vec<String>,
-    source: String,
-    fstype: String,
-    options: Vec<String>,
-    mount_point: String,
-    fs_group: SerializedFsGroup,
-}
-
-/// OPA input data for CreateContainerRequest.
-#[derive(Debug, Serialize, Deserialize)]
-struct SerializedFsGroup {
-    group_id: u32,
-    group_change_policy: u32,
+    storages: Vec<agent::Storage>,
 }
 
 /// OPA input data for CreateSandboxRequest.
@@ -69,7 +50,7 @@ struct CreateSandboxRequestInput {
 /// OPA input data for CreateSandboxRequest.
 #[derive(Debug, Serialize, Deserialize)]
 struct CreateSandboxRequestData {
-    storages: Vec<SerializedStorage>,
+    storages: Vec<agent::Storage>,
 }
 
 /// OPA input data for ExecProcessRequest.
@@ -168,13 +149,12 @@ impl AgentPolicy {
         ep: &str,
         req: &agent::CreateContainerRequest,
     ) -> bool {
-        let mut opa_input = CreateContainerRequestInput {
+        let opa_input = CreateContainerRequestInput {
             input: CreateContainerRequestData {
                 oci: rustjail::grpc_to_oci(&req.OCI),
-                storages: Vec::new(),
+                storages: req.storages.clone(),
             },
         };
-        Self::convert_storages(req.storages.to_vec(), &mut opa_input.input.storages);
         let post_input = serde_json::to_string(&opa_input).unwrap();
         Self::log_create_container_input(&post_input).await;
         self.post_query(ep, &post_input).await.unwrap_or(false)
@@ -187,12 +167,11 @@ impl AgentPolicy {
         ep: &str,
         req: &agent::CreateSandboxRequest,
     ) -> bool {
-        let mut opa_input = CreateSandboxRequestInput {
+        let opa_input = CreateSandboxRequestInput {
             input: CreateSandboxRequestData {
-                storages: Vec::new(),
+                storages: req.storages.clone(),
             },
         };
-        Self::convert_storages(req.storages.to_vec(), &mut opa_input.input.storages);
         let post_input = serde_json::to_string(&opa_input).unwrap();
         self.post_query(ep, &post_input).await.unwrap_or(false)
     }
@@ -302,28 +281,6 @@ impl AgentPolicy {
                 );
                 Ok(false)
             }
-        }
-    }
-
-    fn convert_storages(
-        grpc_storages: Vec<agent::Storage>,
-        serialized_storages: &mut Vec<SerializedStorage>,
-    ) {
-        for grpc_storage in grpc_storages {
-            let protocol_fsgroup = grpc_storage.fs_group();
-
-            serialized_storages.push(SerializedStorage {
-                driver: grpc_storage.driver.clone(),
-                driver_options: grpc_storage.driver_options.to_vec(),
-                source: grpc_storage.source.clone(),
-                fstype: grpc_storage.fstype.clone(),
-                options: grpc_storage.options.to_vec(),
-                mount_point: grpc_storage.mount_point.clone(),
-                fs_group: SerializedFsGroup {
-                    group_id: protocol_fsgroup.group_id,
-                    group_change_policy: protocol_fsgroup.group_change_policy.value() as u32,
-                },
-            });
         }
     }
 

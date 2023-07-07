@@ -3590,6 +3590,8 @@ dependencies = [
  "async-trait",
  "oci",
  "protobuf 3.2.0",
+ "serde",
+ "serde_json",
  "ttrpc",
  "ttrpc-codegen",
 ]

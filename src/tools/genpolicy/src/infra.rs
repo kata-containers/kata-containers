@@ -323,10 +323,7 @@ impl InfraPolicy {
                 fstype: infra_empty_dir.fstype.clone(),
                 options: infra_empty_dir.options.clone(),
                 mount_point: infra_empty_dir.mount_point.clone() + &yaml_mount.name + "$",
-                fs_group: policy::SerializedFsGroup {
-                    group_id: 0,
-                    group_change_policy: 0,
-                },
+                fs_group: None,
             });
         }
 
@@ -487,10 +484,7 @@ impl InfraPolicy {
             fstype: infra_config_map.fstype.clone(),
             options: infra_config_map.options.clone(),
             mount_point: infra_config_map.mount_point.clone() + &mount_path_str + "$",
-            fs_group: policy::SerializedFsGroup {
-                group_id: 0,
-                group_change_policy: 0,
-            },
+            fs_group: None,
         });
 
         let file_name = Path::new(&yaml_mount.mountPath).file_name().unwrap();
