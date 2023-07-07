@@ -842,6 +842,7 @@ dependencies = [
  "slog",
  "slog-scope",
  "slog-stdlog",
+ "slog-term",
  "tempfile",
  "test-utils",
  "thiserror",

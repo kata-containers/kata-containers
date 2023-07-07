@@ -36,6 +36,7 @@ use crate::Sandbox;
 use crate::{ccw, device::get_virtio_blk_ccw_device_name};
 use anyhow::{anyhow, Context, Result};
 use slog::Logger;
+
 use tracing::instrument;
 
 pub const TYPE_ROOTFS: &str = "rootfs";
@@ -1132,6 +1133,7 @@ fn parse_options(option_list: Vec<String>) -> HashMap<String, String> {
 mod tests {
     use super::*;
     use protocols::agent::FSGroup;
+    use slog::Drain;
     use std::fs::File;
     use std::fs::OpenOptions;
     use std::io::Write;
@@ -1142,25 +1144,11 @@ mod tests {
         skip_if_not_root, skip_loop_by_user, skip_loop_if_not_root, skip_loop_if_root,
     };
 
-    // Shadow get_mounts during tests since this is only used in the test
-    // context, compiler will warn about dead-code.
-    #[allow(dead_code)]
-    fn get_mounts() -> Result<String, std::io::Error> {
-        Ok(String::from(
-            "
-            rootfs / rootfs rw,size=1694984k,nr_inodes=423746 0 0
-            proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0
-            sys /sys sysfs rw,nosuid,nodev,noexec,relatime 0 0
-            dev /dev devtmpfs rw,nosuid,relatime,size=1695000k,nr_inodes=423750,mode=755 0 0
-            run /run tmpfs rw,nosuid,nodev,relatime,mode=755 0 0
-        ",
-        ))
-    }
-
     #[test]
     fn test_already_baremounted() {
-        let drain = slog::Discard;
-        let logger = slog::Logger::root(drain, o!());
+        let plain = slog_term::PlainSyncDecorator::new(std::io::stdout());
+        let logger = Logger::root(slog_term::FullFormat::new(plain).build().fuse(), o!());
+
         let test_cases = [
             ("dev", "/dev", "devtmpfs"),
             ("udev", "/dev", "devtmpfs"),
@@ -1173,7 +1161,10 @@ mod tests {
             let destination = Path::new(destination);
             let flags = MsFlags::MS_RDONLY;
             let options = "mode=755";
-            println!("baremount({:?} {:?} {:?}", source, destination, fs_type);
+            println!(
+                "testing if already mounted baremount({:?} {:?} {:?})",
+                source, destination, fs_type
+            );
             assert!(baremount(source, destination, fs_type, flags, options, &logger).is_ok());
         }
     }
