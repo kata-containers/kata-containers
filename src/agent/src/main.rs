@@ -98,7 +98,7 @@ lazy_static! {
 #[cfg(feature = "security-policy")]
 lazy_static! {
     static ref AGENT_POLICY: Arc<Mutex<AgentPolicy>> = Arc::new(Mutex::new(
-        AgentPolicy::new().unwrap()
+        AgentPolicy::new("http://localhost:8181/v1", "/coco_policy").unwrap()
     ));
 }
 

@@ -12,11 +12,8 @@ use tokio::time::{sleep, Duration};
 
 static EMPTY_JSON_INPUT: &str = "{\"input\":{}}";
 
-static OPA_V1_URI: &str = "http://localhost:8181/v1";
 static OPA_DATA_PATH: &str = "/data";
 static OPA_POLICIES_PATH: &str = "/policies";
-
-static COCO_POLICY_NAME: &str = "/coco_policy";
 
 /// Convenience macro to obtain the scope logger
 macro_rules! sl {
@@ -123,11 +120,11 @@ pub struct AgentPolicy {
 
 impl AgentPolicy {
     /// Create AgentPolicy object.
-    pub fn new() -> Result<Self> {
+    pub fn new(opa_uri: &str, coco_policy: &str) -> Result<Self> {
         Ok(AgentPolicy {
             allow_failures: false,
-            query_path: OPA_V1_URI.to_string() + OPA_DATA_PATH + COCO_POLICY_NAME + "/",
-            policy_path: OPA_V1_URI.to_string() + OPA_POLICIES_PATH + COCO_POLICY_NAME,
+            query_path: opa_uri.to_string() + OPA_DATA_PATH + coco_policy + "/",
+            policy_path: opa_uri.to_string() + OPA_POLICIES_PATH + coco_policy,
             opa_client: Client::builder().http1_only().build()?,
         })
     }
