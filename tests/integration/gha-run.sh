@@ -32,6 +32,9 @@ function login_azure() {
 }
 
 function create_cluster() {
+    # First, ensure that the cluster didn't fail to get cleaned up from a previous run.
+    delete_cluster || true
+
     az aks create \
         -g "kataCI" \
         -n "$(_print_cluster_name)" \
@@ -142,8 +145,7 @@ function delete_cluster() {
     az aks delete \
         -g "kataCI" \
         -n "$(_print_cluster_name)" \
-        --yes \
-        --no-wait
+        --yes
 }
 
 function main() {
