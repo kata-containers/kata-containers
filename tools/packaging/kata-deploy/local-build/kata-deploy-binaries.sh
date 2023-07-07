@@ -40,6 +40,7 @@ readonly cached_artifacts_path="lastSuccessfulBuild/artifact/artifacts"
 
 ARCH=$(uname -m)
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
+USE_CACHE="${USE_CACHE:-"yes"}"
 
 workdir="${WORKDIR:-$PWD}"
 
@@ -79,6 +80,7 @@ options:
 --build=<asset>       :
 	all
 	cloud-hypervisor
+	cloud-hypervisor-glibc
 	firecracker
 	kernel
 	kernel-dragonball-experimental
@@ -97,6 +99,7 @@ options:
 	rootfs-image
 	rootfs-image-tdx
 	rootfs-initrd
+	rootfs-initrd-mariner
 	rootfs-initrd-sev
 	shim-v2
 	tdvf
@@ -113,6 +116,10 @@ cleanup_and_fail() {
 }
 
 install_cached_tarball_component() {
+	if [ "${USE_CACHE}" != "yes" ]; then
+		return 1
+	fi
+
 	local component="${1}"
 	local jenkins_build_url="${2}"
 	local current_version="${3}"
@@ -136,8 +143,13 @@ install_cached_tarball_component() {
 
 #Install guest image
 install_image() {
-	local image_type="${1:-"image"}"
-	local initrd_suffix="${2:-""}"
+	local variant="${1:-}"
+
+	image_type="image"
+	if [ -n "${variant}" ]; then
+		image_type+="-${variant}"
+	fi
+
 	local jenkins="${jenkins_url}/job/kata-containers-main-rootfs-${image_type}-$(uname -m)/${cached_artifacts_path}"
 	local component="rootfs-${image_type}"
 
@@ -152,25 +164,39 @@ install_image() {
 	install_cached_tarball_component \
 		"${component}" \
 		"${jenkins}" \
-		"${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-image" \
+		"${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${image_type}" \
 		"" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
 		&& return 0
 
 	info "Create image"
-	"${rootfs_builder}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${initrd_suffix}"
+
+	if [ -n "${variant}" ]; then
+		os_name="$(get_from_kata_deps "assets.image.architecture.${ARCH}.${variant}.name")"
+		os_version="$(get_from_kata_deps "assets.image.architecture.${ARCH}.${variant}.version")"
+	else
+		os_name="$(get_from_kata_deps "assets.image.architecture.${ARCH}.name")"
+		os_version="$(get_from_kata_deps "assets.image.architecture.${ARCH}.version")"
+	fi
+	
+	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
 
 #Install guest image for tdx
 install_image_tdx() {
-	install_image "image-tdx" "tdx"
+	install_image "tdx"
 }
 
 #Install guest initrd
 install_initrd() {
-	local initrd_type="${1:-"initrd"}"
-	local initrd_suffix="${2:-""}"
+	local variant="${1:-}"
+
+	initrd_type="initrd"
+	if [ -n "${variant}" ]; then
+		initrd_type+="-${variant}"
+	fi
+
 	local jenkins="${jenkins_url}/job/kata-containers-main-rootfs-${initrd_type}-$(uname -m)/${cached_artifacts_path}"
 	local component="rootfs-${initrd_type}"
 
@@ -192,12 +218,26 @@ install_initrd() {
 		&& return 0
 
 	info "Create initrd"
-	"${rootfs_builder}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${initrd_suffix}"
+
+	if [ -n "${variant}" ]; then
+		os_name="$(get_from_kata_deps "assets.initrd.architecture.${ARCH}.${variant}.name")"
+		os_version="$(get_from_kata_deps "assets.initrd.architecture.${ARCH}.${variant}.version")"
+	else
+		os_name="$(get_from_kata_deps "assets.initrd.architecture.${ARCH}.name")"
+		os_version="$(get_from_kata_deps "assets.initrd.architecture.${ARCH}.version")"
+	fi
+
+	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
+}
+
+#Install Mariner guest initrd
+install_initrd_mariner() {
+	install_initrd "cbl-mariner"
 }
 
 #Install guest initrd for sev
 install_initrd_sev() {
-	install_initrd "initrd-sev" "sev"
+	install_initrd "sev"
 }
 
 #Install kernel component helper
@@ -413,26 +453,47 @@ install_firecracker() {
 	sudo install -D --owner root --group root --mode 0744 release-${firecracker_version}-${ARCH}/jailer-${firecracker_version}-${ARCH} "${destdir}/opt/kata/bin/jailer"
 }
 
-# Install static cloud-hypervisor asset
-install_clh() {
+install_clh_helper() {
+	libc="${1}"
+	features="${2}"
+	suffix="${3:-""}"
+
 	install_cached_tarball_component \
-		"cloud-hypervisor" \
-		"${jenkins_url}/job/kata-containers-main-clh-$(uname -m)/${cached_artifacts_path}" \
+		"cloud-hypervisor${suffix}" \
+		"${jenkins_url}/job/kata-containers-main-clh-$(uname -m)${suffix}/${cached_artifacts_path}" \
 		"$(get_from_kata_deps "assets.hypervisor.cloud_hypervisor.version")" \
 		"" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
 		&& return 0
 
-	if [[ "${ARCH}" == "x86_64" ]]; then
-		export features="tdx"
-	fi
-
 	info "build static cloud-hypervisor"
-	"${clh_builder}"
+	libc="${libc}" features="${features}" "${clh_builder}"
 	info "Install static cloud-hypervisor"
 	mkdir -p "${destdir}/opt/kata/bin/"
-	sudo install -D --owner root --group root --mode 0744 cloud-hypervisor/cloud-hypervisor "${destdir}/opt/kata/bin/cloud-hypervisor"
+	sudo install -D --owner root --group root --mode 0744 cloud-hypervisor/cloud-hypervisor "${destdir}/opt/kata/bin/cloud-hypervisor${suffix}"
+}
+
+# Install static cloud-hypervisor asset
+install_clh() {
+	if [[ "${ARCH}" == "x86_64" ]]; then
+		features="mshv,tdx"
+	else
+		features=""
+	fi
+
+	install_clh_helper "musl" "${features}"
+}
+
+# Install static cloud-hypervisor-glibc asset
+install_clh_glibc() {
+	if [[ "${ARCH}" == "x86_64" ]]; then
+		features="mshv"
+	else
+		features=""
+	fi
+
+	install_clh_helper "gnu" "${features}" "-glibc"
 }
 
 # Install static virtiofsd asset
@@ -561,6 +622,7 @@ handle_build() {
 		install_firecracker
 		install_image
 		install_initrd
+		install_initrd_mariner
 		install_initrd_sev
 		install_kernel
 		install_kernel_dragonball_experimental
@@ -578,7 +640,7 @@ handle_build() {
 
 	cloud-hypervisor) install_clh ;;
 
-	cloud-hypervisor-glibc) ;;
+	cloud-hypervisor-glibc) install_clh_glibc ;;
 
 	firecracker) install_firecracker ;;
 
@@ -616,7 +678,7 @@ handle_build() {
 
 	rootfs-initrd) install_initrd ;;
 
-	rootfs-initrd-mariner) ;;
+	rootfs-initrd-mariner) install_initrd_mariner ;;
 
 	rootfs-initrd-sev) install_initrd_sev ;;
 	
@@ -662,6 +724,7 @@ main() {
 		qemu
 		rootfs-image
 		rootfs-initrd
+		rootfs-initrd-mariner
 		shim-v2
 		virtiofsd
 	)
