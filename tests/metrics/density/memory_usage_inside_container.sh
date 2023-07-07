@@ -9,7 +9,6 @@
 #  is measured by using /proc/meminfo.
 
 set -e
-set -x
 
 # General env
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")

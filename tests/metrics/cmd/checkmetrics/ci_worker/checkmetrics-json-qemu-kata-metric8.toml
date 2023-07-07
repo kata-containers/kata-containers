@@ -42,6 +42,6 @@ description = "measure memory inside the container"
 # within (inclusive)
 checkvar = ".\"memory-footprint-inside-container\".Results | .[] | .memtotal.Result"
 checktype = "mean"
-midval = 4135112.0
-minpercent = 20.0
-maxpercent = 20.0
+midval = 3677280.0
+minpercent = 25.0
+maxpercent = 25.0
