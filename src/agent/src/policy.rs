@@ -4,6 +4,7 @@
 //
 
 use anyhow::{anyhow, Result};
+use protocols::{agent, image};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
@@ -24,7 +25,7 @@ macro_rules! sl {
     };
 }
 
-//// Example of HTTP response from OPA: {"result":true}
+/// Example of HTTP response from OPA: {"result":true}
 #[derive(Debug, Serialize, Deserialize)]
 struct AllowResponse {
     result: bool,
@@ -83,10 +84,10 @@ struct ExecProcessRequestInput {
 /// OPA input data for ExecProcessRequest.
 #[derive(Debug, Serialize, Deserialize)]
 struct ExecProcessRequestData {
-	// container_id: String,
-	// exec_id: String,
-	// user: oci::User,
-	process: oci::Process,
+    // container_id: String,
+    // exec_id: String,
+    // user: oci::User,
+    process: oci::Process,
 }
 
 /// OPA input data for PullImageRequest.
@@ -121,22 +122,17 @@ pub struct AgentPolicy {
 }
 
 impl AgentPolicy {
-    // Create AgentPolicy object.
+    /// Create AgentPolicy object.
     pub fn new() -> Result<Self> {
         Ok(AgentPolicy {
             allow_failures: false,
-
-            query_path: OPA_V1_URI.to_string()
-                + OPA_DATA_PATH
-                + COCO_POLICY_NAME
-                + "/",
+            query_path: OPA_V1_URI.to_string() + OPA_DATA_PATH + COCO_POLICY_NAME + "/",
             policy_path: OPA_V1_URI.to_string() + OPA_POLICIES_PATH + COCO_POLICY_NAME,
-
             opa_client: Client::builder().http1_only().build()?,
         })
     }
 
-    // Wait for OPA to start.
+    /// Wait for OPA to start and connect to it.
     pub async fn initialize(&mut self) -> Result<()> {
         for i in 0..50 {
             if i > 0 {
@@ -145,9 +141,9 @@ impl AgentPolicy {
             }
 
             // Check in a loop if requests causing policy errors should
-            // actually be allowed. That is an unsecure configuration but is
-            // useful for allowing unsecure pods to start, then connect to
-            // them and inspect OPA logs for the root cause of a failure.
+            // actually be allowed. That is an insecure configuration but is
+            // useful for allowing insecure pods to start, then connect to
+            // them and inspect Guest logs for the root cause of a failure.
             //
             // The loop is necessary to get the opa_client connected to the
             // OPA service. Future requests to OPA are expected to work
@@ -163,120 +159,101 @@ impl AgentPolicy {
         Err(anyhow!("failed to connect to OPA"))
     }
 
-    // Post query for endpoints that don't require OPA input data.
+    /// Post query to OPA for endpoints that don't require OPA input data.
     pub async fn is_allowed_endpoint(&mut self, ep: &str) -> bool {
         self.post_query(ep, EMPTY_JSON_INPUT).await.unwrap_or(false)
     }
 
-    // Post CreateContainerRequest input to OPA.
+    /// Check if the current Policy allows a CreateContainerRequest, based on
+    /// request's inputs.
     pub async fn is_allowed_create_container(
         &mut self,
         ep: &str,
-        req: &protocols::agent::CreateContainerRequest,
+        req: &agent::CreateContainerRequest,
     ) -> bool {
-        let grpc_spec = req.OCI.clone();
-        if grpc_spec.is_none() {
-            error!(sl!(), "no oci spec in the create container request!");
-            return false;
-        }
-
         let mut opa_input = CreateContainerRequestInput {
             input: CreateContainerRequestData {
-                oci: rustjail::grpc_to_oci(&grpc_spec.unwrap()),
+                oci: rustjail::grpc_to_oci(&req.OCI),
                 storages: Vec::new(),
             },
         };
-
         Self::convert_storages(req.storages.to_vec(), &mut opa_input.input.storages);
         let post_input = serde_json::to_string(&opa_input).unwrap();
-
-        // TODO: remove this log.
         Self::log_create_container_input(&post_input).await;
-
         self.post_query(ep, &post_input).await.unwrap_or(false)
     }
 
-    // Post CreateSandboxRequest input to OPA.
+    /// Check if the current Policy allows a CreateSandboxRequest, based on
+    /// request's inputs.
     pub async fn is_allowed_create_sandbox(
         &mut self,
         ep: &str,
-        req: &protocols::agent::CreateSandboxRequest,
+        req: &agent::CreateSandboxRequest,
     ) -> bool {
         let mut opa_input = CreateSandboxRequestInput {
             input: CreateSandboxRequestData {
                 storages: Vec::new(),
             },
         };
-
         Self::convert_storages(req.storages.to_vec(), &mut opa_input.input.storages);
         let post_input = serde_json::to_string(&opa_input).unwrap();
         self.post_query(ep, &post_input).await.unwrap_or(false)
     }
 
-    // Post ExecProcessRequest input to OPA.
+    /// Check if the current Policy allows an ExecProcessRequest, based on
+    /// request's inputs.
     pub async fn is_allowed_exec_process(
         &mut self,
         ep: &str,
-        req: &protocols::agent::ExecProcessRequest,
+        req: &agent::ExecProcessRequest,
     ) -> bool {
-        let grpc_process = req.process.clone();
-        if grpc_process.is_none() {
-            error!(sl!(), "failed to convert process for ExecProcess request!");
-            return false;
-        }
-
         let opa_input = ExecProcessRequestInput {
             input: ExecProcessRequestData {
                 // TODO: should other fields of grpc_process be validated as well?
-                process: rustjail::process_grpc_to_oci(&grpc_process.unwrap()),
+                process: rustjail::process_grpc_to_oci(&req.process),
             },
         };
-
         let post_input = serde_json::to_string(&opa_input).unwrap();
         self.post_query(ep, &post_input).await.unwrap_or(false)
     }
 
-    // Post query with PullImageRequest input data to OPA.
+    /// Check if the current Policy allows a PullImageRequest, based on
+    /// request's inputs.
     pub async fn is_allowed_pull_image_endpoint(
         &mut self,
         ep: &str,
-        req: &protocols::image::PullImageRequest,
+        req: &image::PullImageRequest,
     ) -> bool {
         let opa_input = PullImageRequestInput {
             input: PullImageRequestData {
-                image: req.image.to_string(),
+                image: req.image.clone(),
             },
         };
-
         let post_input = serde_json::to_string(&opa_input).unwrap();
         self.post_query(ep, &post_input).await.unwrap_or(false)
     }
 
-    // Replace the security policy in OPA.
+    /// Replace the Policy in OPA.
     pub async fn set_policy(&mut self, policy: &str) -> Result<()> {
         // Delete the old rules.
-        let mut uri = self.policy_path.clone();
-        info!(sl!(), "set_policy: deleting rules, uri {}", uri);
         self.opa_client
-            .delete(uri)
+            .delete(&self.policy_path)
             .send()
             .await
             .map_err(|e| anyhow!(e))?;
 
         // Put the new rules.
-        uri = self.policy_path.clone();
-        info!(sl!(), "set_policy: rules uri {}", uri);
         self.opa_client
-            .put(uri)
+            .put(&self.policy_path)
             .body(policy.to_string())
             .send()
             .await
             .map_err(|e| anyhow!(e))?;
 
         // Check if requests causing policy errors should actually be allowed.
-        // That is an unsecure configuration but is useful for allowing unsecure
-        // pods to start, then connect to them and inspect OPA logs for the root
-        // cause of a failure.
+        // That is an insecure configuration but is useful for allowing insecure
+        // pods to start, then connect to them and inspect Guest logs for the
+        // root cause of a failure.
         self.allow_failures = self
             .post_query("AllowRequestsFailingPolicy", EMPTY_JSON_INPUT)
             .await?;
@@ -291,7 +268,7 @@ impl AgentPolicy {
         let response = self
             .opa_client
             .post(uri)
-            .body(post_input.to_owned())
+            .body(post_input.to_string())
             .send()
             .await
             .map_err(|e| anyhow!(e))?;
@@ -322,7 +299,6 @@ impl AgentPolicy {
                 Ok(resp.result)
             }
             Err(_) => {
-                // Return a policy failure for undefined requests.
                 warn!(
                     sl!(),
                     "policy: post_query: {} not found in policy. Returning false.", ep,
@@ -333,7 +309,7 @@ impl AgentPolicy {
     }
 
     fn convert_storages(
-        grpc_storages: Vec<protocols::agent::Storage>,
+        grpc_storages: Vec<agent::Storage>,
         serialized_storages: &mut Vec<SerializedStorage>,
     ) {
         for grpc_storage in grpc_storages {
@@ -355,6 +331,8 @@ impl AgentPolicy {
     }
 
     async fn log_create_container_input(ci: &str) {
+        // TODO: disable this log by default and allow it to be enabled
+        // through Policy.
         let log_entry = ci.to_string() + "\n\n";
 
         let mut f = tokio::fs::OpenOptions::new()
