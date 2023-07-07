@@ -37,8 +37,8 @@ remote_hypervisor_timeout = 600
 # List of valid annotation names for the hypervisor
 # Each member of the list is a regular expression, which is the base name
 # of the annotation, e.g. "path" for io.katacontainers.config.hypervisor.path"
-# Note: remote hypervisor is not handling any annotations
-enable_annotations = []
+# Note: Remote hypervisor is only handling the following annotations
+enable_annotations = ["machine_type", "default_memory", "default_vcpus"]
 
 # Optional space-separated list of options to pass to the guest kernel.
 # For example, use `kernel_params = "vsyscall=emulate"` if you are having
@@ -62,7 +62,6 @@ firmware = "@FIRMWAREPATH@"
 # < 0                             --> will be set to the actual number of physical cores
 # > 0 <= number of physical cores --> will be set to the specified number
 # > number of physical cores      --> will be set to the actual number of physical cores
-# Note: the remote hypervisor uses the peer pod config to determine the CPUs of the VM
 # default_vcpus = 1
 
 # Default maximum number of vCPUs per SB/VM:
@@ -80,7 +79,6 @@ firmware = "@FIRMWAREPATH@"
 # vCPUs supported by the SB/VM. In general, we recommend that you do not edit this variable,
 # unless you know what are you doing.
 # NOTICE: on arm platform with gicv2 interrupt controller, set it to 8.
-# Note: the remote hypervisor uses the peer pod config to determine the CPUs of the VM
 # default_maxvcpus = @DEFMAXVCPUS@
 
 # Bridges can be used to hot plug devices.
