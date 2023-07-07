@@ -9,7 +9,8 @@ set -o nounset
 set -o pipefail
 
 integration_dir="$(dirname "$(readlink -f "$0")")"
-tools_dir="${integration_dir}/../../tools"
+repo_root_dir="$(cd "${integration_dir}/../../" && pwd)"
+tools_dir="${repo_root_dir}/tools"
 
 function _print_cluster_name() {
     short_sha="$(git rev-parse --short=12 HEAD)"
@@ -37,7 +38,7 @@ function create_cluster() {
         -s "Standard_D4s_v5" \
         --node-count 1 \
         --generate-ssh-keys \
-        $([ "${KATA_HOST_OS}" = "cbl-mariner" ] && echo "--os-sku mariner --workload-runtime KataMshvVmIsolation")
+        $([ "${KATA_HOST_OS}" = "cbl-mariner" ] && echo "--os-sku AzureLinux --workload-runtime KataMshvVmIsolation")
 }
 
 function install_bats() {
@@ -55,8 +56,16 @@ function get_cluster_credentials() {
         -n "$(_print_cluster_name)"
 }
 
+function ensure_yq() {
+    : "${GOPATH:=${GITHUB_WORKSPACE}}"
+    export GOPATH
+    export PATH="${GOPATH}/bin:${PATH}"
+    INSTALL_IN_GOPATH=true "${repo_root_dir}/ci/install_yq.sh"
+}
+
 function run_tests() {
     platform="${1}"
+    ensure_yq
 
     # Emsure we're in the default namespace
     kubectl config set-context --current --namespace=default
@@ -65,6 +74,10 @@ function run_tests() {
     kubectl delete namespace kata-containers-k8s-tests &> /dev/null || true
 
     sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
+    if [ "${KATA_HOST_OS}" = "cbl-mariner" ]; then
+        yq write -i "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[+].name' "HOST_OS"
+        yq write -i "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[-1].value' "${KATA_HOST_OS}"
+    fi
     cat "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
     cat "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" | grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" || die "Failed to setup the tests image"
 
@@ -134,6 +147,8 @@ function delete_cluster() {
 }
 
 function main() {
+    export KATA_HOST_OS="${KATA_HOST_OS:-}"
+
     action="${1:-}"
 
     case "${action}" in

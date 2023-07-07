@@ -22,8 +22,6 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        stage:
-          - ${{ inputs.stage }}
         asset:
           - cloud-hypervisor
           - cloud-hypervisor-glibc
@@ -49,9 +47,11 @@ jobs:
           - shim-v2
           - tdvf
           - virtiofsd
+        stage:
+          - ${{ inputs.stage }}
         exclude:
-          - stage: release
-            asset: cloud-hypervisor-glibc
+          - asset: cloud-hypervisor-glibc
+            stage: release
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}

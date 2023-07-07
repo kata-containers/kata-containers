@@ -54,10 +54,6 @@ else
 	)
 fi
 
-if [ ${KATA_HOST_OS} == "cbl-mariner" ]; then
-	exit 0
-fi
-
 # we may need to skip a few test cases when running on non-x86_64 arch
 arch_config_file="${kubernetes_dir}/filter_out_per_arch/${TARGET_ARCH}.yaml"
 if [ -f "${arch_config_file}" ]; then
