@@ -20,3 +20,10 @@ spec:
           image: "mcr.microsoft.com/cbl-mariner/base/nginx:1.22.1-5-cm2.0.20230609-amd64"
           ports:
             - containerPort: 80
+          startupProbe:
+            tcpSocket:
+              port: 80
+            failureThreshold: 5
+            periodSeconds: 5
+            timeoutSeconds: 5
+            initialDelaySeconds: 5
