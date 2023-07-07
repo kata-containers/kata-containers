@@ -4,18 +4,10 @@ on:
     - cron: '0 0 * * *'
 
 jobs:
-  set-fake-pr-number:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Set fake PR number
-        run: |
-          echo "PR_NUMBER=$(date +%Y%m%d%H%M%S)" >> "$GITHUB_ENV"
-
   kata-containers-ci-on-push:
-    needs: set-fake-pr-number
     uses: ./.github/workflows/ci.yaml
     with:
-      commit-hash: ${GITHUB_REF}
-      pr-number: ${PR_NUMBER}
-      tag: ${PR_NUMBER}-${GITHUB_REF}-nightly
+      commit-hash: ${{ github.ref }}
+      pr-number: ${{ github.ref }}
+      tag: ${{ github.ref }}-nightly
     secrets: inherit
