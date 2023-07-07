@@ -72,5 +72,5 @@ jobs:
     needs: build-kata-static-tarball-amd64
     uses: ./.github/workflows/run-metrics.yaml
     with:
-      tarball-suffix: -${{ inputs.tag }}-amd64
+      tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
