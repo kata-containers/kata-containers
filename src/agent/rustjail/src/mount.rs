@@ -793,7 +793,7 @@ fn mount_from(
         })?;
 
         // make sure file exists so we can bind over it
-        if !src.is_dir() {
+        if !src.is_dir() && !Path::new(&dest).exists() {
             let _ = OpenOptions::new()
                 .create(true)
                 .write(true)
