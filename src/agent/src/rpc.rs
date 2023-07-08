@@ -147,7 +147,7 @@ macro_rules! config_allows {
                 format!("{} is blocked", $req.descriptor_dyn().name()),
             ));
         }
-    }
+    };
 }
 
 macro_rules! is_allowed {
@@ -155,19 +155,25 @@ macro_rules! is_allowed {
         config_allows!($req);
 
         #[cfg(feature = "security-policy")]
-        if !AGENT_POLICY
-            .lock()
-            .await
-            .is_allowed_endpoint($req.descriptor_dyn().name())
-            .await
         {
-            warn!(sl!(), "{} is blocked by policy", $req.descriptor_dyn().name());
-            return Err(ttrpc_error!(
-                ttrpc::Code::PERMISSION_DENIED,
-                format!("{} is blocked by policy", $req.descriptor_dyn().name()),
-            ));
+            let request = serde_json::to_string(&$req).unwrap();
+            let mut policy = AGENT_POLICY.lock().await;
+            if !policy
+                .is_allowed_endpoint($req.descriptor_dyn().name(), &request)
+                .await
+            {
+                warn!(
+                    sl!(),
+                    "{} is blocked by policy",
+                    $req.descriptor_dyn().name()
+                );
+                return Err(ttrpc_error!(
+                    ttrpc::Code::PERMISSION_DENIED,
+                    format!("{} is blocked by policy", $req.descriptor_dyn().name()),
+                ));
+            }
         }
-    }
+    };
 }
 
 macro_rules! is_allowed_create_container {
@@ -181,33 +187,17 @@ macro_rules! is_allowed_create_container {
             .is_allowed_create_container($req.descriptor_dyn().name(), &$req)
             .await
         {
-            warn!(sl!(), "{} is blocked by policy", $req.descriptor_dyn().name());
+            warn!(
+                sl!(),
+                "{} is blocked by policy",
+                $req.descriptor_dyn().name()
+            );
             return Err(ttrpc_error!(
                 ttrpc::Code::PERMISSION_DENIED,
                 format!("{} is blocked by policy", $req.descriptor_dyn().name()),
             ));
         }
-    }
-}
-
-macro_rules! is_allowed_create_sandbox {
-    ($req:ident) => {
-        config_allows!($req);
-
-        #[cfg(feature = "security-policy")]
-        if !AGENT_POLICY
-            .lock()
-            .await
-            .is_allowed_create_sandbox($req.descriptor_dyn().name(), &$req)
-            .await
-        {
-            warn!(sl!(), "{} is blocked by policy", $req.descriptor_dyn().name());
-            return Err(ttrpc_error!(
-                ttrpc::Code::PERMISSION_DENIED,
-                format!("{} is blocked by policy", $req.descriptor_dyn().name()),
-            ));
-        }
-    }
+    };
 }
 
 macro_rules! is_allowed_exec_process {
@@ -221,13 +211,17 @@ macro_rules! is_allowed_exec_process {
             .is_allowed_exec_process($req.descriptor_dyn().name(), &$req)
             .await
         {
-            warn!(sl!(), "{} is blocked by policy", $req.descriptor_dyn().name());
+            warn!(
+                sl!(),
+                "{} is blocked by policy",
+                $req.descriptor_dyn().name()
+            );
             return Err(ttrpc_error!(
                 ttrpc::Code::PERMISSION_DENIED,
                 format!("{} is blocked by policy", $req.descriptor_dyn().name()),
             ));
         }
-    }
+    };
 }
 
 #[derive(Clone, Debug)]
@@ -1450,7 +1444,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::CreateSandboxRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "create_sandbox", req);
-        is_allowed_create_sandbox!(req);
+        is_allowed!(req);
 
         {
             let sandbox = self.sandbox.clone();
@@ -1793,7 +1787,8 @@ impl agent_ttrpc::AgentService for AgentService {
         trace_rpc_call!(ctx, "set_policy", req);
         is_allowed!(req);
 
-        AGENT_POLICY.lock()
+        AGENT_POLICY
+            .lock()
             .await
             .set_policy(&req.policy)
             .await

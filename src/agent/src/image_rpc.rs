@@ -51,10 +51,10 @@ macro_rules! sl {
 #[cfg(feature = "security-policy")]
 macro_rules! is_allowed_pull_image {
     ($req:ident) => {
-        if !AGENT_POLICY
-            .lock()
-            .await
-            .is_allowed_pull_image_endpoint("PullImageRequest", &$req)
+        let request = serde_json::to_string(&$req).unwrap();
+        let mut policy = AGENT_POLICY.lock().await;
+        if !policy
+            .is_allowed_endpoint("PullImageRequest", &request)
             .await
         {
             return Err(anyhow!("Image {} is blocked by policy", $req.image));

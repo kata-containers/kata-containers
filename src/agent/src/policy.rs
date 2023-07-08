@@ -4,7 +4,7 @@
 //
 
 use anyhow::{anyhow, Result};
-use protocols::{agent, image};
+use protocols::agent;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
@@ -138,8 +138,9 @@ impl AgentPolicy {
     }
 
     /// Post query to OPA for endpoints that don't require OPA input data.
-    pub async fn is_allowed_endpoint(&mut self, ep: &str) -> bool {
-        self.post_query(ep, EMPTY_JSON_INPUT).await.unwrap_or(false)
+    pub async fn is_allowed_endpoint(&mut self, ep: &str, request: &str) -> bool {
+        let post_input = "{\"input\":".to_string() + request + "}";
+        self.post_query(ep, &post_input).await.unwrap_or(false)
     }
 
     /// Check if the current Policy allows a CreateContainerRequest, based on
@@ -160,22 +161,6 @@ impl AgentPolicy {
         self.post_query(ep, &post_input).await.unwrap_or(false)
     }
 
-    /// Check if the current Policy allows a CreateSandboxRequest, based on
-    /// request's inputs.
-    pub async fn is_allowed_create_sandbox(
-        &mut self,
-        ep: &str,
-        req: &agent::CreateSandboxRequest,
-    ) -> bool {
-        let opa_input = CreateSandboxRequestInput {
-            input: CreateSandboxRequestData {
-                storages: req.storages.clone(),
-            },
-        };
-        let post_input = serde_json::to_string(&opa_input).unwrap();
-        self.post_query(ep, &post_input).await.unwrap_or(false)
-    }
-
     /// Check if the current Policy allows an ExecProcessRequest, based on
     /// request's inputs.
     pub async fn is_allowed_exec_process(
@@ -187,22 +172,6 @@ impl AgentPolicy {
             input: ExecProcessRequestData {
                 // TODO: should other fields of grpc_process be validated as well?
                 process: rustjail::process_grpc_to_oci(&req.process),
-            },
-        };
-        let post_input = serde_json::to_string(&opa_input).unwrap();
-        self.post_query(ep, &post_input).await.unwrap_or(false)
-    }
-
-    /// Check if the current Policy allows a PullImageRequest, based on
-    /// request's inputs.
-    pub async fn is_allowed_pull_image_endpoint(
-        &mut self,
-        ep: &str,
-        req: &image::PullImageRequest,
-    ) -> bool {
-        let opa_input = PullImageRequestInput {
-            input: PullImageRequestData {
-                image: req.image.clone(),
             },
         };
         let post_input = serde_json::to_string(&opa_input).unwrap();
