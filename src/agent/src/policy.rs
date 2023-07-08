@@ -34,7 +34,8 @@ struct CreateContainerRequestInput {
     input: CreateContainerRequestData,
 }
 
-/// OPA input data for CreateContainerRequest.
+/// OPA input data for CreateContainerRequest. The "OCI" field of
+/// the input request is converted into the "oci" field below.
 #[derive(Debug, Serialize, Deserialize)]
 struct CreateContainerRequestData {
     oci: oci::Spec,
@@ -51,21 +52,6 @@ struct CreateSandboxRequestInput {
 #[derive(Debug, Serialize, Deserialize)]
 struct CreateSandboxRequestData {
     storages: Vec<agent::Storage>,
-}
-
-/// OPA input data for ExecProcessRequest.
-#[derive(Debug, Serialize)]
-struct ExecProcessRequestInput {
-    input: ExecProcessRequestData,
-}
-
-/// OPA input data for ExecProcessRequest.
-#[derive(Debug, Serialize, Deserialize)]
-struct ExecProcessRequestData {
-    // container_id: String,
-    // exec_id: String,
-    // user: oci::User,
-    process: oci::Process,
 }
 
 /// OPA input data for PullImageRequest.
@@ -140,6 +126,7 @@ impl AgentPolicy {
     /// Post query to OPA for endpoints that don't require OPA input data.
     pub async fn is_allowed_endpoint(&mut self, ep: &str, request: &str) -> bool {
         let post_input = "{\"input\":".to_string() + request + "}";
+        Self::log_opa_input(ep, &post_input).await;
         self.post_query(ep, &post_input).await.unwrap_or(false)
     }
 
@@ -157,24 +144,7 @@ impl AgentPolicy {
             },
         };
         let post_input = serde_json::to_string(&opa_input).unwrap();
-        Self::log_create_container_input(&post_input).await;
-        self.post_query(ep, &post_input).await.unwrap_or(false)
-    }
-
-    /// Check if the current Policy allows an ExecProcessRequest, based on
-    /// request's inputs.
-    pub async fn is_allowed_exec_process(
-        &mut self,
-        ep: &str,
-        req: &agent::ExecProcessRequest,
-    ) -> bool {
-        let opa_input = ExecProcessRequestInput {
-            input: ExecProcessRequestData {
-                // TODO: should other fields of grpc_process be validated as well?
-                process: rustjail::process_grpc_to_oci(&req.process),
-            },
-        };
-        let post_input = serde_json::to_string(&opa_input).unwrap();
+        Self::log_opa_input(ep, &post_input).await;
         self.post_query(ep, &post_input).await.unwrap_or(false)
     }
 
@@ -253,18 +223,23 @@ impl AgentPolicy {
         }
     }
 
-    async fn log_create_container_input(ci: &str) {
+    async fn log_opa_input(ep: &str, opa_input: &str) {
         // TODO: disable this log by default and allow it to be enabled
         // through Policy.
-        let log_entry = ci.to_string() + "\n\n";
 
-        let mut f = tokio::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open("/tmp/oci.json")
-            .await
-            .unwrap();
-        f.write_all(log_entry.as_bytes()).await.unwrap();
-        f.flush().await.unwrap();
+        match ep {
+            "StatsContainerRequest" | "ReadStreamRequest" | "SetPolicyRequest" => {}
+            _ => {
+                let log_entry = "# ".to_string() + ep + "\n\n" + opa_input + "\n\n";
+                let mut f = tokio::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open("/tmp/oci.json")
+                    .await
+                    .unwrap();
+                f.write_all(log_entry.as_bytes()).await.unwrap();
+                f.flush().await.unwrap();
+            }
+        }
     }
 }

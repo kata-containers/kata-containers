@@ -960,7 +960,7 @@ allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id) {
 ######################################################################
 ExecProcessRequest {
     print("==============================================")
-    input_command = concat(" ", input.process.args)
+    input_command = concat(" ", input.process.Args)
     print("ExecProcessRequest: input_command =", input_command)
 
     some container in policy_data.containers

@@ -200,30 +200,6 @@ macro_rules! is_allowed_create_container {
     };
 }
 
-macro_rules! is_allowed_exec_process {
-    ($req:ident) => {
-        config_allows!($req);
-
-        #[cfg(feature = "security-policy")]
-        if !AGENT_POLICY
-            .lock()
-            .await
-            .is_allowed_exec_process($req.descriptor_dyn().name(), &$req)
-            .await
-        {
-            warn!(
-                sl!(),
-                "{} is blocked by policy",
-                $req.descriptor_dyn().name()
-            );
-            return Err(ttrpc_error!(
-                ttrpc::Code::PERMISSION_DENIED,
-                format!("{} is blocked by policy", $req.descriptor_dyn().name()),
-            ));
-        }
-    };
-}
-
 #[derive(Clone, Debug)]
 pub struct AgentService {
     sandbox: Arc<Mutex<Sandbox>>,
@@ -888,7 +864,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::ExecProcessRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "exec_process", req);
-        is_allowed_exec_process!(req);
+        is_allowed!(req);
         match self.do_exec_process(req).await {
             Err(e) => Err(ttrpc_error!(ttrpc::Code::INTERNAL, e)),
             Ok(_) => Ok(Empty::new()),
