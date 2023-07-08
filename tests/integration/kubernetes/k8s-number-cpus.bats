@@ -9,8 +9,6 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	[ "${KATA_HYPERVISOR}" == "dragonball" ] && skip "Test is currently failing, aee: https://github.com/kata-containers/kata-containers/issues/7270"
-
 	pod_name="cpu-test"
 	container_name="c1"
 	get_pod_config_dir
@@ -18,8 +16,6 @@ setup() {
 
 # Skip on aarch64 due to missing cpu hotplug related functionality.
 @test "Check number of cpus" {
-	[ "${KATA_HYPERVISOR}" == "dragonball" ] && skip "Test is currently failing, see: https://github.com/kata-containers/kata-containers/issues/7270"
-
 	# Create pod
 	kubectl create -f "${pod_config_dir}/pod-number-cpu.yaml"
 
@@ -44,8 +40,6 @@ setup() {
 }
 
 teardown() {
-	[ "${KATA_HYPERVISOR}" == "dragonball" ] && skip "Test is currently failing, see: https://github.com/kata-containers/kata-containers/issues/7270"
-
 	# Debugging information
 	kubectl describe "pod/$pod_name"
 
