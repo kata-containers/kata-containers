@@ -105,7 +105,12 @@ impl InitialSizeManager {
             hv.cpu_info.default_vcpus = self.resource.vcpu as i32
         }
         if self.resource.mem_mb > 0 {
-            hv.memory_info.default_memory = self.resource.mem_mb;
+            // since the memory overhead introduced by kata-agent and system components
+            // will really affect the amount of memory the user can use, so we choose to
+            // plus the default_memory here, instead of overriding it.
+            // (if we override the default_memory here, and user apllications still
+            // use memory as they orignally expected, it would be easy to OOM.)
+            hv.memory_info.default_memory += self.resource.mem_mb;
         }
         Ok(())
     }
