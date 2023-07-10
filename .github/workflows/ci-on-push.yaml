@@ -12,6 +12,8 @@ on:
       - synchronize
       - reopened
       - labeled
+    paths-ignore:
+      - 'docs/**'
 jobs:
   kata-containers-ci-on-push:
     if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
