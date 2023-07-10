@@ -16,8 +16,8 @@ spec:
       serviceAccountName: kata-label-node
       nodeSelector:
           katacontainers.io/kata-runtime: cleanup
-      initContainers:
-      - name: kube-kata-cleanup-init
+      containers:
+      - name: kube-kata-cleanup
         image: quay.io/kata-containers/kata-deploy:latest
         imagePullPolicy: Always
         command: [ "bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh reset" ]
@@ -40,11 +40,6 @@ spec:
         - name: systemd
           hostPath:
             path: /run/systemd/system
-      containers:
-      - name: kube-kata-cleanup
-        image: quay.io/kata-containers/kata-deploy:latest
-        imagePullPolicy: Always
-        command: [ "bash", "-c", "sleep infinity" ]
   updateStrategy:
     rollingUpdate:
       maxUnavailable: 1

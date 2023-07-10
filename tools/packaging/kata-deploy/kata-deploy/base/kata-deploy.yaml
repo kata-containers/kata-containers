@@ -14,31 +14,6 @@ spec:
           name: kata-deploy
     spec:
       serviceAccountName: kata-label-node
-      initContainers:
-      - name: kube-kata-init
-        image: quay.io/kata-containers/kata-deploy:latest
-        imagePullPolicy: Always
-        command: [ "bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh install" ]
-        env:
-        - name: NODE_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: spec.nodeName
-        securityContext:
-          privileged: true
-        volumeMounts:
-        - name: crio-conf
-          mountPath: /etc/crio/
-        - name: containerd-conf
-          mountPath: /etc/containerd/
-        - name: kata-artifacts
-          mountPath: /opt/kata/
-        - name: dbus
-          mountPath: /var/run/dbus/system_bus_socket
-        - name: systemd
-          mountPath: /run/systemd/system
-        - name: local-bin
-          mountPath: /usr/local/bin/
       containers:
       - name: kube-kata
         image: quay.io/kata-containers/kata-deploy:latest
@@ -47,7 +22,7 @@ spec:
           preStop:
             exec:
               command: ["bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh cleanup"]
-        command: [ "bash", "-c", "sleep infinity" ]
+        command: [ "bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh install" ]
         env:
         - name: NODE_NAME
           valueFrom:

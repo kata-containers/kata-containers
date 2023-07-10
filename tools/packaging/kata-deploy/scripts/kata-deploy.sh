@@ -369,6 +369,10 @@ function main() {
 			;;
 		esac
 	fi
+
+	#It is assumed this script will be called as a daemonset. As a result, do
+        # not return, otherwise the daemon will restart and rexecute the script
+	sleep infinity
 }
 
 main "$@"
