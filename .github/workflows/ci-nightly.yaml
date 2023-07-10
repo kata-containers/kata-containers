@@ -7,7 +7,7 @@ jobs:
   kata-containers-ci-on-push:
     uses: ./.github/workflows/ci.yaml
     with:
-      commit-hash: ${{ github.ref }}
-      pr-number: ${{ github.ref }}
-      tag: ${{ github.ref }}-nightly
+      commit-hash: ${{ github.sha }}
+      pr-number: ${{ github.sha }}
+      tag: ${{ github.sha }}-nightly
     secrets: inherit
