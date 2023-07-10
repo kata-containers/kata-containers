@@ -27,7 +27,7 @@ ITERATIONS="${ITERATIONS:-30}"
 
 # Directory to run the test on
 # This is run inside of the container
-TESTDIR="${TESTDIR:-/tmp}"
+TESTDIR="${TESTDIR:-/home}"
 CMD="blogbench -i ${ITERATIONS} -d ${TESTDIR}"
 
 function main() {
@@ -39,7 +39,7 @@ function main() {
 	check_ctr_images "${IMAGE}" "${DOCKERFILE}"
 	metrics_json_init
 
-	local output=$(sudo -E "${CTR_EXE}" run --rm --runtime="${CTR_RUNTIME}" "${IMAGE}" test "${CMD}")
+	local output=$(sudo -E ${CTR_EXE} run --rm --runtime=${CTR_RUNTIME} ${IMAGE} test ${CMD})
 
 	# Save configuration
 	metrics_json_start_array
