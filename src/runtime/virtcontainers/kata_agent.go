@@ -78,7 +78,7 @@ const (
 )
 
 var (
-	checkRequestTimeout           = 30 * time.Second
+	checkRequestTimeout           = 60 * time.Second
 	defaultRequestTimeout         = 60 * time.Second
 	errorMissingOCISpec           = errors.New("Missing OCI specification")
 	defaultKataHostSharedDir      = "/run/kata-containers/shared/sandboxes/"
