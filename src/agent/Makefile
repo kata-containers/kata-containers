@@ -26,7 +26,7 @@ export VERSION_COMMIT := $(if $(COMMIT),$(VERSION)-$(COMMIT),$(VERSION))
 EXTRA_RUSTFEATURES :=
 
 ##VAR SECCOMP=yes|no define if agent enables seccomp feature
-SECCOMP := yes
+SECCOMP ?= yes
 
 # Enable seccomp feature of rust build
 ifeq ($(SECCOMP),yes)
