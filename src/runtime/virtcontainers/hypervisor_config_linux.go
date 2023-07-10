@@ -17,8 +17,8 @@ func validateHypervisorConfig(conf *HypervisorConfig) error {
 		return nil
 	}
 
-	if conf.KernelPath == "" {
-		return fmt.Errorf("Missing kernel path")
+	if conf.KernelPath == "" && conf.IgvmPath == "" {
+		return fmt.Errorf("Missing kernel or igvm path")
 	}
 
 	if conf.ConfidentialGuest && conf.HypervisorMachineType == QemuCCWVirtio {
@@ -26,10 +26,12 @@ func validateHypervisorConfig(conf *HypervisorConfig) error {
 			fmt.Println("yes, failing")
 			return fmt.Errorf("Neither the image or initrd path may be set for Secure Execution")
 		}
-	} else if conf.ImagePath == "" && conf.InitrdPath == "" {
-		return fmt.Errorf("Missing image and initrd path")
+	} else if conf.ImagePath == "" && conf.InitrdPath == "" && conf.IgvmPath == "" {
+		return fmt.Errorf("Missing image, initrd, and igvm path")
 	} else if conf.ImagePath != "" && conf.InitrdPath != "" {
 		return fmt.Errorf("Image and initrd path cannot be both set")
+	} else if conf.IgvmPath != "" && (conf.ImagePath != "" || conf.InitrdPath != "") {
+		return fmt.Errorf("Igvm and image or initrd path cannot be both set")
 	}
 
 	if err := conf.CheckTemplateConfig(); err != nil {

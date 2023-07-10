@@ -515,6 +515,8 @@ components:
           type: string
         initramfs:
           type: string
+        igvm:
+          type: string
       description: Payloads to boot in guest
 
     VmConfig:

@@ -25,6 +25,9 @@ const (
 	// ImageAsset is an image asset.
 	ImageAsset AssetType = "image"
 
+	// IgvmAsset is an image asset.
+	IgvmAsset AssetType = "igvm"
+
 	// InitrdAsset is an initrd asset.
 	InitrdAsset AssetType = "initrd"
 
@@ -53,6 +56,7 @@ func AssetTypes() []AssetType {
 		HypervisorAsset,
 		HypervisorCtlAsset,
 		ImageAsset,
+		IgvmAsset,
 		InitrdAsset,
 		JailerAsset,
 		KernelAsset,
@@ -82,6 +86,8 @@ func (t AssetType) Annotations() (string, string, error) {
 		return annotations.KernelPath, annotations.KernelHash, nil
 	case ImageAsset:
 		return annotations.ImagePath, annotations.ImageHash, nil
+	case IgvmAsset:
+		return annotations.IgvmPath, annotations.IgvmHash, nil
 	case InitrdAsset:
 		return annotations.InitrdPath, annotations.InitrdHash, nil
 	case HypervisorAsset:

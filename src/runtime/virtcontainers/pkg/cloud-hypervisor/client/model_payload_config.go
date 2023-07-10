@@ -20,6 +20,7 @@ type PayloadConfig struct {
 	Kernel    *string `json:"kernel,omitempty"`
 	Cmdline   *string `json:"cmdline,omitempty"`
 	Initramfs *string `json:"initramfs,omitempty"`
+	Igvm      *string `json:"igvm,omitempty"`
 }
 
 // NewPayloadConfig instantiates a new PayloadConfig object
@@ -38,6 +39,39 @@ func NewPayloadConfigWithDefaults() *PayloadConfig {
 	this := PayloadConfig{}
 	return &this
 }
+
+// GetIgvm returns the Igvm field value if set, zero value otherwise.
+func (o *PayloadConfig) GetIgvm() string {
+	if o == nil || o.Igvm == nil {
+		var ret string
+		return ret
+	}
+	return *o.Igvm
+}
+
+// GetIgvmOk returns a tuple with the Igvm field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *PayloadConfig) GetIgvmOk() (*string, bool) {
+	if o == nil || o.Igvm == nil {
+		return nil, false
+	}
+	return o.Igvm, true
+}
+
+// HasIgvm returns a boolean if a field has been set.
+func (o *PayloadConfig) HasIgvm() bool {
+	if o != nil && o.Igvm != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetIgvm gets a reference to the given string and assigns it to the Igvm field.
+func (o *PayloadConfig) SetIgvm(v string) {
+	o.Igvm = &v
+}
+
 
 // GetFirmware returns the Firmware field value if set, zero value otherwise.
 func (o *PayloadConfig) GetFirmware() string {
@@ -169,6 +203,9 @@ func (o *PayloadConfig) SetInitramfs(v string) {
 
 func (o PayloadConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
+	if o.Igvm != nil {
+		toSerialize["igvm"] = o.Igvm
+	}
 	if o.Firmware != nil {
 		toSerialize["firmware"] = o.Firmware
 	}
