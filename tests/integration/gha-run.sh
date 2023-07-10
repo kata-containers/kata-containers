@@ -93,6 +93,9 @@ function run_tests() {
     kubectl -n kube-system wait --timeout=10m --for=condition=Ready -l name=kata-deploy pod
     kubectl apply -f "${tools_dir}/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml"
 
+    echo "Gather information about the nodes and pods after having kata-deploy ready"
+    get_nodes_and_pods_info
+
     # This is needed as the kata-deploy pod will be set to "Ready" when it starts running,
     # which may cause issues like not having the node properly labeled or the artefacts
     # properly deployed when the tests actually start running.
@@ -106,6 +109,9 @@ function run_tests() {
     kubectl apply -f ${integration_dir}/kubernetes/runtimeclass_workloads/tests-namespace.yaml
     kubectl config set-context --current --namespace=kata-containers-k8s-tests
 
+    echo "Gather information about the nodes and pods just before starting the tests"
+    get_nodes_and_pods_info
+
     pushd "${integration_dir}/kubernetes"
     bash setup.sh
     bash run_kubernetes_tests.sh
@@ -114,6 +120,9 @@ function run_tests() {
 
 function cleanup() {
     platform="${1}"
+
+    echo "Gather information about the nodes and pods before cleaning up the node"
+    get_nodes_and_pods_info "yes"
 
     # Switch back to the default namespace and delete the tests one
     kubectl config set-context --current --namespace=default
@@ -146,6 +155,16 @@ function delete_cluster() {
         -g "kataCI" \
         -n "$(_print_cluster_name)" \
         --yes
+}
+
+function get_nodes_and_pods_info() {
+    describe_pods="${1:-"no"}"
+
+    kubectl get nodes -o wide --show-labels=true
+    kubectl get pods -A
+    if [[ "${describe_pods}" == "yes" ]]; then
+    	kubectl describe pods -A
+    fi
 }
 
 function main() {
