@@ -28,20 +28,6 @@ struct AllowResponse {
     result: bool,
 }
 
-/// OPA input data for CreateContainerRequest.
-#[derive(Debug, Serialize, Deserialize)]
-struct CreateContainerRequestInput {
-    input: CreateContainerRequestData,
-}
-
-/// OPA input data for CreateContainerRequest. The "OCI" field of
-/// the input request is converted into the "oci" field below.
-#[derive(Debug, Serialize, Deserialize)]
-struct CreateContainerRequestData {
-    oci: oci::Spec,
-    storages: Vec<agent::Storage>,
-}
-
 /// OPA input data for CreateSandboxRequest.
 #[derive(Debug, Serialize, Deserialize)]
 struct CreateSandboxRequestInput {
@@ -126,24 +112,6 @@ impl AgentPolicy {
     /// Post query to OPA for endpoints that don't require OPA input data.
     pub async fn is_allowed_endpoint(&mut self, ep: &str, request: &str) -> bool {
         let post_input = "{\"input\":".to_string() + request + "}";
-        Self::log_opa_input(ep, &post_input).await;
-        self.post_query(ep, &post_input).await.unwrap_or(false)
-    }
-
-    /// Check if the current Policy allows a CreateContainerRequest, based on
-    /// request's inputs.
-    pub async fn is_allowed_create_container(
-        &mut self,
-        ep: &str,
-        req: &agent::CreateContainerRequest,
-    ) -> bool {
-        let opa_input = CreateContainerRequestInput {
-            input: CreateContainerRequestData {
-                oci: rustjail::grpc_to_oci(&req.OCI),
-                storages: req.storages.clone(),
-            },
-        };
-        let post_input = serde_json::to_string(&opa_input).unwrap();
         Self::log_opa_input(ep, &post_input).await;
         self.post_query(ep, &post_input).await.unwrap_or(false)
     }

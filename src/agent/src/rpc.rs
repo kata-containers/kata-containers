@@ -5,6 +5,7 @@
 
 use async_trait::async_trait;
 use rustjail::{pipestream::PipeStream, process::StreamType};
+use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf};
 use tokio::sync::Mutex;
 
@@ -150,41 +151,12 @@ macro_rules! config_allows {
     };
 }
 
-macro_rules! is_allowed {
-    ($req:ident) => {
-        config_allows!($req);
-
-        #[cfg(feature = "security-policy")]
-        {
-            let request = serde_json::to_string(&$req).unwrap();
-            let mut policy = AGENT_POLICY.lock().await;
-            if !policy
-                .is_allowed_endpoint($req.descriptor_dyn().name(), &request)
-                .await
-            {
-                warn!(
-                    sl!(),
-                    "{} is blocked by policy",
-                    $req.descriptor_dyn().name()
-                );
-                return Err(ttrpc_error!(
-                    ttrpc::Code::PERMISSION_DENIED,
-                    format!("{} is blocked by policy", $req.descriptor_dyn().name()),
-                ));
-            }
-        }
-    };
-}
-
-macro_rules! is_allowed_create_container {
-    ($req:ident) => {
-        config_allows!($req);
-
-        #[cfg(feature = "security-policy")]
-        if !AGENT_POLICY
-            .lock()
-            .await
-            .is_allowed_create_container($req.descriptor_dyn().name(), &$req)
+#[cfg(feature = "security-policy")]
+macro_rules! policy_allows {
+    ($req:ident, $serialized_req:ident) => {
+        let mut policy = AGENT_POLICY.lock().await;
+        if !policy
+            .is_allowed_endpoint($req.descriptor_dyn().name(), &$serialized_req)
             .await
         {
             warn!(
@@ -198,6 +170,39 @@ macro_rules! is_allowed_create_container {
             ));
         }
     };
+}
+
+macro_rules! is_allowed {
+    ($req:ident) => {
+        config_allows!($req);
+        #[cfg(feature = "security-policy")]
+        {
+            let request = serde_json::to_string(&$req).unwrap();
+            policy_allows!($req, request);
+        }
+    };
+}
+macro_rules! is_allowed_create_container {
+    ($req:ident) => {
+        config_allows!($req);
+        #[cfg(feature = "security-policy")]
+        {
+            let opa_input = CreateContainerRequestData {
+                oci: rustjail::grpc_to_oci(&$req.OCI),
+                storages: $req.storages.clone(),
+            };
+            let request = serde_json::to_string(&opa_input).unwrap();
+            policy_allows!($req, request);
+        }
+    };
+}
+
+/// OPA input data for CreateContainerRequest. The "OCI" field of
+/// the input request is converted into the "oci" field below.
+#[derive(Debug, Serialize, Deserialize)]
+struct CreateContainerRequestData {
+    oci: oci::Spec,
+    storages: Vec<protocols::agent::Storage>,
 }
 
 #[derive(Clone, Debug)]
