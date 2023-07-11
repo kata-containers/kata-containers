@@ -75,8 +75,8 @@ toml = "0.5.8"
 clap = { version = "3.0.1", features = ["derive"] }
 
 # "vendored" feature for openssl is required by musl build
-openssl = "0.10.48"
-openssl-src = "111.25.3"
+openssl = "0.10.54"
+openssl-src = "111.26.0"
 
 # OPA requests
 http = "0.2.8"

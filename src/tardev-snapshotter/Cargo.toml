@@ -18,7 +18,6 @@ verity = { path = "./verity" }
 log = "0.4.17"
 env_logger = "0.10.0"
 tempfile = "3.3.0"
-openssl = "0.10.48"
-openssl-src = "111.25.3"
+openssl = "0.10.54"
 h2 = "0.3.17"
 flate2 = { version = "1.0.26", features = ["zlib-ng"], default-features = false }
