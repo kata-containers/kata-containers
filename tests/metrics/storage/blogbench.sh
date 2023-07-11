@@ -11,7 +11,6 @@
 # they are total scores for all iterations (this is the blogbench default output)
 
 set -e
-set -x
 
 # General env
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
@@ -27,7 +26,7 @@ ITERATIONS="${ITERATIONS:-30}"
 
 # Directory to run the test on
 # This is run inside of the container
-TESTDIR="${TESTDIR:-/home}"
+TESTDIR="${TESTDIR:-/tmp}"
 CMD="blogbench -i ${ITERATIONS} -d ${TESTDIR}"
 
 function main() {
@@ -37,6 +36,7 @@ function main() {
 	init_env
 	check_cmds "${cmds[@]}"
 	check_ctr_images "${IMAGE}" "${DOCKERFILE}"
+	sudo systemctl restart containerd
 	metrics_json_init
 
 	local output=$(sudo -E ${CTR_EXE} run --rm --runtime=${CTR_RUNTIME} ${IMAGE} test ${CMD})
@@ -84,11 +84,11 @@ EOF
 	local json="$(cat << EOF
 	{
 		"write": {
-			"Result" : "${writes}",
+			"Result" : ${writes},
 			"Units"  : "items"
 		},
 		"read": {
-			"Result" : "${reads}",
+			"Result" : ${reads},
 			"Units"  : "items"
 		},
 		"Nb blogs": {
