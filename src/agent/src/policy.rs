@@ -4,7 +4,6 @@
 //
 
 use anyhow::{anyhow, Result};
-use protocols::agent;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tokio::io::AsyncWriteExt;
@@ -26,30 +25,6 @@ macro_rules! sl {
 #[derive(Debug, Serialize, Deserialize)]
 struct AllowResponse {
     result: bool,
-}
-
-/// OPA input data for CreateSandboxRequest.
-#[derive(Debug, Serialize, Deserialize)]
-struct CreateSandboxRequestInput {
-    input: CreateSandboxRequestData,
-}
-
-/// OPA input data for CreateSandboxRequest.
-#[derive(Debug, Serialize, Deserialize)]
-struct CreateSandboxRequestData {
-    storages: Vec<agent::Storage>,
-}
-
-/// OPA input data for PullImageRequest.
-#[derive(Debug, Serialize, Deserialize)]
-struct PullImageRequestInput {
-    input: PullImageRequestData,
-}
-
-/// OPA input data for PullImageRequest.
-#[derive(Debug, Serialize, Deserialize)]
-struct PullImageRequestData {
-    image: String,
 }
 
 /// Singleton policy object.
