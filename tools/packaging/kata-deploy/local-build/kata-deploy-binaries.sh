@@ -232,7 +232,7 @@ install_initrd() {
 
 #Install Mariner guest initrd
 install_initrd_mariner() {
-	install_initrd "cbl-mariner"
+	install_initrd "mariner"
 }
 
 #Install guest initrd for sev
