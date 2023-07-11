@@ -3,6 +3,10 @@ on:
   schedule:
     - cron: '0 0 * * *'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   kata-containers-ci-on-push:
     uses: ./.github/workflows/ci.yaml
