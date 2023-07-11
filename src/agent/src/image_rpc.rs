@@ -38,11 +38,9 @@ const KATA_CC_IMAGE_WORK_DIR: &str = "/run/image/";
 const KATA_CC_PAUSE_BUNDLE: &str = "/pause_bundle";
 const CONFIG_JSON: &str = "config.json";
 
-// Convenience macro to obtain the scope logger
-macro_rules! sl {
-    () => {
-        slog_scope::logger()
-    };
+// Convenience function to obtain the scope logger.
+fn sl() -> slog::Logger {
+    slog_scope::logger().new(o!("subsystem" => "cgroups"))
 }
 
 pub struct ImageService {
@@ -87,7 +85,7 @@ impl ImageService {
             return Err(anyhow!("Pause image not present in rootfs"));
         }
 
-        info!(sl!(), "use guest pause image cid {:?}", cid);
+        info!(sl(), "use guest pause image cid {:?}", cid);
         let pause_bundle = Path::new(CONTAINER_BASE).join(cid);
         let pause_rootfs = pause_bundle.join("rootfs");
         let pause_config = pause_bundle.join(CONFIG_JSON);
@@ -187,12 +185,12 @@ impl ImageService {
                 Ordering::SeqCst,
             ) {
                 Ok(_) => Self::init_attestation_agent()?,
-                Err(_) => info!(sl!(), "Attestation Agent already running"),
+                Err(_) => info!(sl(), "Attestation Agent already running"),
             }
         }
         // If the attestation-agent is being used, then enable the authenticated credentials support
         info!(
-            sl!(),
+            sl(),
             "image_client.config.auth set to: {}",
             !aa_kbc_params.is_empty()
         );
@@ -201,7 +199,7 @@ impl ImageService {
         // Read enable signature verification from the agent config and set it in the image_client
         let enable_signature_verification = &AGENT_CONFIG.enable_signature_verification;
         info!(
-            sl!(),
+            sl(),
             "enable_signature_verification set to: {}", enable_signature_verification
         );
         self.image_client.lock().await.config.security_validate = *enable_signature_verification;
@@ -213,7 +211,7 @@ impl ImageService {
 
         let decrypt_config = format!("provider:attestation-agent:{}", aa_kbc_params);
 
-        info!(sl!(), "pull image {:?}, bundle path {:?}", cid, bundle_path);
+        info!(sl(), "pull image {:?}, bundle path {:?}", cid, bundle_path);
         // Image layers will store at KATA_CC_IMAGE_WORK_DIR, generated bundles
         // with rootfs and config.json will store under CONTAINER_BASE/cid.
         let res = self
@@ -226,13 +224,13 @@ impl ImageService {
         match res {
             Ok(image) => {
                 info!(
-                    sl!(),
+                    sl(),
                     "pull and unpack image {:?}, cid: {:?}, with image-rs succeed. ", image, cid
                 );
             }
             Err(e) => {
                 error!(
-                    sl!(),
+                    sl(),
                     "pull and unpack image {:?}, cid: {:?}, with image-rs failed with {:?}. ",
                     image,
                     cid,

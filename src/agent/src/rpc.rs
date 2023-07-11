@@ -231,7 +231,7 @@ impl AgentService {
             if specdev.path == TRUSTED_STORAGE_DEVICE {
                 let data_integrity = AGENT_CONFIG.data_integrity;
                 info!(
-                    sl!(),
+                    sl(),
                     "trusted_store device major:min {}, enable data integrity {}",
                     dev_major_minor,
                     data_integrity.to_string()
@@ -718,7 +718,7 @@ impl AgentService {
                     .join(container_id)
                     .join(CONFIG_JSON);
                 debug!(
-                    sl!(),
+                    sl(),
                     "Image bundle config path: {:?}", image_oci_config_path
                 );
 
