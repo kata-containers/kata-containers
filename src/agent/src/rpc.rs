@@ -229,7 +229,7 @@ impl AgentService {
             let dev_major_minor = format!("{}:{}", specdev.major, specdev.minor);
 
             if specdev.path == TRUSTED_STORAGE_DEVICE {
-                let data_integrity = AGENT_CONFIG.read().await.data_integrity;
+                let data_integrity = AGENT_CONFIG.data_integrity;
                 info!(
                     sl!(),
                     "trusted_store device major:min {}, enable data integrity {}",
