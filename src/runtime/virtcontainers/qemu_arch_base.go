@@ -61,7 +61,7 @@ type qemuArch interface {
 	kernelParameters(debug bool) []Param
 
 	//capabilities returns the capabilities supported by QEMU
-	capabilities() types.Capabilities
+	capabilities(config HypervisorConfig) types.Capabilities
 
 	// bridges sets the number bridges for the machine type
 	bridges(number uint32)
@@ -150,6 +150,9 @@ type qemuArch interface {
 	// appendPCIeRootPortDevice appends a pcie-root-port device to pcie.0 bus
 	appendPCIeRootPortDevice(devices []govmmQemu.Device, number uint32, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device
 
+	// appendPCIeSwitch appends a ioh3420 device to a pcie-root-port
+	appendPCIeSwitchPortDevice(devices []govmmQemu.Device, number uint32, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device
+
 	// append vIOMMU device
 	appendIOMMU(devices []govmmQemu.Device) ([]govmmQemu.Device, error)
 
@@ -204,7 +207,8 @@ const (
 	defaultBridgeBus          = "pcie.0"
 	defaultPCBridgeBus        = "pci.0"
 	maxDevIDSize              = 31
-	pcieRootPortPrefix        = "rp"
+	maxPCIeRootPort           = 16 // Limitation from QEMU
+	maxPCIeSwitchPort         = 16 // Limitation from QEMU
 )
 
 // This is the PCI start address assigned to the first bridge that
@@ -313,11 +317,13 @@ func (q *qemuArchBase) kernelParameters(debug bool) []Param {
 	return params
 }
 
-func (q *qemuArchBase) capabilities() types.Capabilities {
+func (q *qemuArchBase) capabilities(hConfig HypervisorConfig) types.Capabilities {
 	var caps types.Capabilities
 	caps.SetBlockDeviceHotplugSupport()
 	caps.SetMultiQueueSupport()
-	caps.SetFsSharingSupport()
+	if hConfig.SharedFS != config.NoSharedFS {
+		caps.SetFsSharingSupport()
+	}
 	return caps
 }
 
@@ -708,17 +714,17 @@ func (q *qemuArchBase) appendVhostUserDevice(ctx context.Context, devices []govm
 }
 
 func (q *qemuArchBase) appendVFIODevice(devices []govmmQemu.Device, vfioDev config.VFIODev) []govmmQemu.Device {
-	pciDevice := vfioDev.(config.VFIOPCIDev)
-	if pciDevice.BDF == "" {
+
+	if vfioDev.BDF == "" {
 		return devices
 	}
 
 	devices = append(devices,
 		govmmQemu.VFIODevice{
-			BDF:      pciDevice.BDF,
-			VendorID: pciDevice.VendorID,
-			DeviceID: pciDevice.DeviceID,
-			Bus:      pciDevice.Bus,
+			BDF:      vfioDev.BDF,
+			VendorID: vfioDev.VendorID,
+			DeviceID: vfioDev.DeviceID,
+			Bus:      vfioDev.Bus,
 		},
 	)
 
@@ -834,6 +840,13 @@ func (q *qemuArchBase) appendPCIeRootPortDevice(devices []govmmQemu.Device, numb
 	return genericAppendPCIeRootPort(devices, number, q.qemuMachine.Type, memSize32bit, memSize64bit)
 }
 
+// appendPCIeSwitchPortDevice appends a PCIe Switch with <number> ports
+func (q *qemuArchBase) appendPCIeSwitchPortDevice(devices []govmmQemu.Device, number uint32, memSize32bit uint64, memSize64bit uint64) []govmmQemu.Device {
+	return genericAppendPCIeSwitchPort(devices, number, q.qemuMachine.Type, memSize32bit, memSize64bit)
+}
+
+// getBARsMaxAddressableMemory we need to know the BAR sizes to configure the
+// PCIe Root Port or PCIe Downstream Port attaching a device with huge BARs.
 func (q *qemuArchBase) getBARsMaxAddressableMemory() (uint64, uint64) {
 
 	pci := nvpci.New()

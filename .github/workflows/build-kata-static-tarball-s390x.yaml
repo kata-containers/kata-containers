@@ -9,6 +9,9 @@ on:
         required: false
         type: string
         default: no
+      commit-hash:
+        required: false
+        type: string
 
 jobs:
   build-asset:
@@ -37,7 +40,7 @@ jobs:
 
       - uses: actions/checkout@v3
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ inputs.commit-hash }}
           fetch-depth: 0 # This is needed in order to keep the commit ids history
       - name: Build ${{ matrix.asset }}
         run: |
@@ -69,7 +72,7 @@ jobs:
 
       - uses: actions/checkout@v3
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ inputs.commit-hash }}
       - name: get-artifacts
         uses: actions/download-artifact@v3
         with:

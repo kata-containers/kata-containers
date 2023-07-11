@@ -1,0 +1,14 @@
+name: Kata Containers Nightly CI
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  kata-containers-ci-on-push:
+    uses: ./.github/workflows/ci.yaml
+    with:
+      commit-hash: ${{ github.sha }}
+      pr-number: "nightly"
+      tag: ${{ github.sha }}-nightly
+    secrets: inherit

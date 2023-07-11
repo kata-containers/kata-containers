@@ -48,6 +48,7 @@ readonly cached_artifacts_path="lastSuccessfulBuild/artifact/artifacts"
 
 ARCH=$(uname -m)
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
+USE_CACHE="${USE_CACHE:-"yes"}"
 
 workdir="${WORKDIR:-$PWD}"
 
@@ -87,6 +88,7 @@ options:
 --build=<asset>       :
 	all
 	cloud-hypervisor
+	cloud-hypervisor-glibc
 	firecracker
 	kernel
 	kernel-dragonball-experimental
@@ -135,7 +137,11 @@ cleanup_and_fail() {
 	return 1
 }
 
-install_cached_component() {
+install_cached_tarball_component() {
+	if [ "${USE_CACHE}" != "yes" ]; then
+		return 1
+	fi
+
 	local component="${1}"
 	local jenkins_build_url="${2}"
 	local current_version="${3}"
@@ -214,7 +220,7 @@ install_cached_cc_shim_v2() {
 	wget "${jenkins_build_url}/root_hash_tdx.txt" -O "shim_v2_root_hash_tdx.txt" || return 1
 	diff "${root_hash_tdx}" "shim_v2_root_hash_tdx.txt" > /dev/null || return 1
 
-	install_cached_component \
+	install_cached_tarball_component \
 		"${component}" \
 		"${jenkins_build_url}" \
 		"${current_version}" \
@@ -227,7 +233,7 @@ install_cached_cc_shim_v2() {
 
 # Install static CC cloud-hypervisor asset
 install_cc_clh() {
-	install_cached_component \
+	install_cached_tarball_component \
 		"cloud-hypervisor" \
 		"${jenkins_url}/job/kata-containers-2.0-clh-cc-$(uname -m)/${cached_artifacts_path}" \
 		"$(get_from_kata_deps "assets.hypervisor.cloud_hypervisor.version")" \
@@ -287,7 +293,7 @@ install_cc_image() {
 	local pause_version="$(get_from_kata_deps "externals.pause.version")"
 	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
 
-	install_cached_component \
+	install_cached_tarball_component \
 		"${component}" \
 		"${jenkins}" \
 		"${osbuilder_last_commit}-${guest_image_last_commit}-${initramfs_last_commit}-${agent_last_commit}-${libs_last_commit}-${attestation_agent_version}-${gperf_version}-${libseccomp_version}-${pause_version}-${rust_version}-${image_type}-${AA_KBC}" \
@@ -333,7 +339,7 @@ install_cc_kernel() {
 
 	local kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
 
-	install_cached_component \
+	install_cached_tarball_component \
 		"kernel" \
 		"${jenkins_url}/job/kata-containers-2.0-kernel-cc-$(uname -m)/${cached_artifacts_path}" \
 		"${kernel_version}-${kernel_kata_config_version}" \
@@ -355,7 +361,7 @@ install_cc_qemu() {
 	export qemu_repo="$(yq r $versions_yaml assets.hypervisor.qemu.url)"
 	export qemu_version="$(yq r $versions_yaml assets.hypervisor.qemu.version)"
 
-	install_cached_component \
+	install_cached_tarball_component \
 		"QEMU" \
 		"${jenkins_url}/job/kata-containers-2.0-qemu-cc-$(uname -m)/${cached_artifacts_path}" \
 		"${qemu_version}-$(calc_qemu_files_sha256sum)" \
@@ -416,7 +422,7 @@ install_cc_shimv2() {
 # Install static CC virtiofsd asset
 install_cc_virtiofsd() {
 	local virtiofsd_version="$(get_from_kata_deps "externals.virtiofsd.version")-$(get_from_kata_deps "externals.virtiofsd.toolchain")"
-	install_cached_component \
+	install_cached_tarball_component \
 		"virtiofsd" \
 		"${jenkins_url}/job/kata-containers-2.0-virtiofsd-cc-$(uname -m)/${cached_artifacts_path}" \
 		"${virtiofsd_version}" \
@@ -440,7 +446,7 @@ install_cached_kernel_component() {
 
 	local kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
 
-	install_cached_component \
+	install_cached_tarball_component \
 		"kernel" \
 		"${jenkins_url}/job/kata-containers-2.0-kernel-${tee}-cc-$(uname -m)/${cached_artifacts_path}" \
 		"${kernel_version}-${kernel_kata_config_version}" \
@@ -452,7 +458,7 @@ install_cached_kernel_component() {
 	[ "${tee}" == "tdx" ] && return 0
 
 	# SEV specific code path
-	install_cached_component \
+	install_cached_tarball_component \
 		"kernel-modules" \
 		"${jenkins_url}/job/kata-containers-2.0-kernel-sev-cc-$(uname -m)/${cached_artifacts_path}" \
 		"${kernel_version}" \
@@ -508,7 +514,7 @@ install_cc_tee_qemu() {
 	export qemu_version="$(yq r $versions_yaml assets.hypervisor.qemu.${tee}.tag)"
 	export tee="${tee}"
 
-	install_cached_component \
+	install_cached_tarball_component \
 		"QEMU ${tee}" \
 		"${jenkins_url}/job/kata-containers-2.0-qemu-${tee}-cc-$(uname -m)/${cached_artifacts_path}" \
 		"${qemu_version}-$(calc_qemu_files_sha256sum)" \
@@ -526,7 +532,7 @@ install_cc_tdx_qemu() {
 }
 
 install_cc_tdx_td_shim() {
-	install_cached_component \
+	install_cached_tarball_component \
 		"td-shim" \
 		"${jenkins_url}/job/kata-containers-2.0-td-shim-cc-$(uname -m)/${cached_artifacts_path}" \
 		"$(get_from_kata_deps "externals.td-shim.version")-$(get_from_kata_deps "externals.td-shim.toolchain")" \
@@ -546,7 +552,7 @@ install_cc_tee_ovmf() {
 	local component_name="ovmf"
 	local component_version="$(get_from_kata_deps "externals.ovmf.${tee}.version")"
 	[ "${tee}" == "tdx" ] && component_name="tdvf"
-	install_cached_component \
+	install_cached_tarball_component \
 		"${component_name}" \
 		"${jenkins_url}/job/kata-containers-2.0-${component_name}-cc-$(uname -m)/${cached_artifacts_path}" \
 		"${component_version}" \
@@ -586,7 +592,7 @@ install_image() {
 	local libseccomp_version="$(get_from_kata_deps "externals.libseccomp.version")"
 	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
 
-	install_cached_component \
+	install_cached_tarball_component \
 		"${component}" \
 		"${jenkins}" \
 		"${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-image" \
@@ -619,7 +625,7 @@ install_initrd() {
 	local libseccomp_version="$(get_from_kata_deps "externals.libseccomp.version")"
 	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
 
-	install_cached_component \
+	install_cached_tarball_component \
 		"${component}" \
 		"${jenkins}" \
 		"${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${initrd_type}" \
@@ -731,12 +737,12 @@ install_kernel_nvidia_gpu() {
 
 #Install GPU and SNP enabled kernel asset
 install_kernel_nvidia_gpu_snp() {
-	local kernel_url="$(get_from_kata_deps assets.kernel.snp.url)"
+	local kernel_url="$(get_from_kata_deps assets.kernel.sev.url)"
 
 	install_kernel_helper \
-		"assets.kernel.snp.version" \
+		"assets.kernel.sev.version" \
 		"kernel-nvidia-gpu-snp" \
-		"-x snp -g nvidia -u ${kernel_url} -H deb"
+		"-x sev -g nvidia -u ${kernel_url} -H deb"
 }
 
 #Install GPU and TDX experimental enabled kernel asset
@@ -857,31 +863,52 @@ install_firecracker() {
 	sudo install -D --owner root --group root --mode 0744 release-${firecracker_version}-${ARCH}/jailer-${firecracker_version}-${ARCH} "${destdir}/opt/kata/bin/jailer"
 }
 
-# Install static cloud-hypervisor asset
-install_clh() {
-	install_cached_component \
-		"cloud-hypervisor" \
-		"${jenkins_url}/job/kata-containers-main-clh-$(uname -m)/${cached_artifacts_path}" \
+install_clh_helper() {
+	libc="${1}"
+	features="${2}"
+	suffix="${3:-""}"
+
+	install_cached_tarball_component \
+		"cloud-hypervisor${suffix}" \
+		"${jenkins_url}/job/kata-containers-main-clh-$(uname -m)${suffix}/${cached_artifacts_path}" \
 		"$(get_from_kata_deps "assets.hypervisor.cloud_hypervisor.version")" \
 		"" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
 		&& return 0
 
-	if [[ "${ARCH}" == "x86_64" ]]; then
-		export features="tdx"
-	fi
-
 	info "build static cloud-hypervisor"
-	"${clh_builder}"
+	libc="${libc}" features="${features}" "${clh_builder}"
 	info "Install static cloud-hypervisor"
 	mkdir -p "${destdir}/opt/kata/bin/"
-	sudo install -D --owner root --group root --mode 0744 cloud-hypervisor/cloud-hypervisor "${destdir}/opt/kata/bin/cloud-hypervisor"
+	sudo install -D --owner root --group root --mode 0744 cloud-hypervisor/cloud-hypervisor "${destdir}/opt/kata/bin/cloud-hypervisor${suffix}"
+}
+
+# Install static cloud-hypervisor asset
+install_clh() {
+	if [[ "${ARCH}" == "x86_64" ]]; then
+		features="mshv,tdx"
+	else
+		features=""
+	fi
+
+	install_clh_helper "musl" "${features}"
+}
+
+# Install static cloud-hypervisor-glibc asset
+install_clh_glibc() {
+	if [[ "${ARCH}" == "x86_64" ]]; then
+		features="mshv"
+	else
+		features=""
+	fi
+
+	install_clh_helper "gnu" "${features}" "-glibc"
 }
 
 # Install static virtiofsd asset
 install_virtiofsd() {
-	install_cached_component \
+	install_cached_tarball_component \
 		"virtiofsd" \
 		"${jenkins_url}/job/kata-containers-main-virtiofsd-$(uname -m)/${cached_artifacts_path}" \
 		"$(get_from_kata_deps "externals.virtiofsd.version")-$(get_from_kata_deps "externals.virtiofsd.toolchain")" \
@@ -928,7 +955,7 @@ install_shimv2() {
 	local RUST_VERSION="$(get_from_kata_deps "languages.rust.meta.newest-version")"
 	local shim_v2_version="${shim_v2_last_commit}-${protocols_last_commit}-${runtime_rs_last_commit}-${GO_VERSION}-${RUST_VERSION}"
 
-	install_cached_component \
+	install_cached_tarball_component \
 		"shim-v2" \
 		"${jenkins_url}/job/kata-containers-main-shim-v2-$(uname -m)/${cached_artifacts_path}" \
 		"${shim_v2_version}" \
@@ -1068,7 +1095,7 @@ handle_build() {
 
 	cloud-hypervisor) install_clh ;;
 
-	cloud-hypervisor-glibc) ;;
+	cloud-hypervisor-glibc) install_clh_glibc ;;
 
 	firecracker) install_firecracker ;;
 

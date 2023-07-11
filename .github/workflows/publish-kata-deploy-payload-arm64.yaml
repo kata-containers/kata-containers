@@ -14,6 +14,9 @@ on:
       tag:
         required: true
         type: string
+      commit-hash:
+        required: false
+        type: string
 
 jobs:
   kata-payload:
@@ -25,7 +28,7 @@ jobs:
 
       - uses: actions/checkout@v3
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ inputs.commit-hash }}
 
       - name: get-kata-tarball
         uses: actions/download-artifact@v3

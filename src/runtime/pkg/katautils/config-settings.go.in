@@ -10,7 +10,7 @@
 package katautils
 
 import (
-	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
+	config "github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 )
 
 // name is the name of the runtime
@@ -82,7 +82,6 @@ const defaultEnableDebug bool = false
 const defaultDisableNestingChecks bool = false
 const defaultMsize9p uint32 = 8192
 const defaultHotplugVFIOOnRootBus bool = false
-const defaultPCIeRootPort = 0
 const defaultEntropySource = "/dev/urandom"
 const defaultGuestHookPath string = ""
 const defaultVirtioFSCacheMode = "never"
@@ -115,4 +114,5 @@ const defaultVMCacheEndpoint string = "/var/run/kata-containers/cache.sock"
 // Default config file used by stateless systems.
 var defaultRuntimeConfiguration = "@CONFIG_PATH@"
 
-const defaultColdPlugVFIO = hv.NoPort
+const defaultHotPlugVFIO = config.NoPort
+const defaultColdPlugVFIO = config.NoPort
