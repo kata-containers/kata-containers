@@ -320,8 +320,6 @@ EOF
 
 	metrics_json_add_array_element "$json"
 	metrics_json_end_array "Results"
-
-	clean_env_ctr
 }
 
 function save_config(){
@@ -378,6 +376,7 @@ function main(){
 	fi
 
 	metrics_json_save
+	clean_env_ctr
 }
 
 main "$@"
