@@ -389,7 +389,6 @@ type HypervisorConfig struct {
 	Gid                            uint32
 	SEVGuestPolicy                 uint32
 	SNPGuestPolicy                 uint64
-	PCIeRootPort                   uint32
 	NumVCPUs                       uint32
 	RemoteHypervisorTimeout        uint32
 	IOMMUPlatform                  bool
@@ -421,7 +420,7 @@ type HypervisorConfig struct {
 	DisableGuestSeLinux            bool
 	LegacySerial                   bool
 	HotPlugVFIO                    config.PCIePort
-	ColdPlugVFIO                   hv.PCIePort
+	ColdPlugVFIO                   config.PCIePort
 	VFIODevices                    []config.DeviceInfo
 	VhostUserBlkDevices            []config.DeviceInfo
 }

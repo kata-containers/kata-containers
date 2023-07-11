@@ -136,7 +136,6 @@ type hypervisor struct {
 	MemSlots                       uint32          `toml:"memory_slots"`
 	DefaultBridges                 uint32          `toml:"default_bridges"`
 	Msize9p                        uint32          `toml:"msize_9p"`
-	PCIeRootPort                   uint32          `toml:"pcie_root_port"`
 	GuestPreAttestationGRPCTimeout uint32          `toml:"guest_pre_attestation_grpc_timeout"`
 	SEVGuestPolicy                 uint32          `toml:"sev_guest_policy"`
 	SNPGuestPolicy                 uint64          `toml:"snp_guest_policy"`
@@ -159,7 +158,7 @@ type hypervisor struct {
 	DisableImageNvdimm             bool            `toml:"disable_image_nvdimm"`
 	HotplugVFIOOnRootBus           bool            `toml:"hotplug_vfio_on_root_bus"`
 	HotPlugVFIO                    config.PCIePort `toml:"hot_plug_vfio"`
-	ColdPlugVFIO                   hv.PCIePort     `toml:"cold_plug_vfio"`
+	ColdPlugVFIO                   config.PCIePort `toml:"cold_plug_vfio"`
 	DisableVhostNet                bool            `toml:"disable_vhost_net"`
 	GuestMemoryDumpPaging          bool            `toml:"guest_memory_dump_paging"`
 	ConfidentialGuest              bool            `toml:"confidential_guest"`
@@ -889,7 +888,6 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		HotplugVFIOOnRootBus:      h.HotplugVFIOOnRootBus,
 		HotPlugVFIO:               h.hotPlugVFIO(),
 		ColdPlugVFIO:              h.coldPlugVFIO(),
-		PCIeRootPort:              h.PCIeRootPort,
 		DisableVhostNet:           h.DisableVhostNet,
 		EnableVhostUserStore:      h.EnableVhostUserStore,
 		VhostUserStorePath:        h.vhostUserStorePath(),
@@ -1340,7 +1338,6 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		HotplugVFIOOnRootBus:      defaultHotplugVFIOOnRootBus,
 		ColdPlugVFIO:              defaultColdPlugVFIO,
 		HotPlugVFIO:               defaultHotPlugVFIO,
-		PCIeRootPort:              defaultPCIeRootPort,
 		GuestHookPath:             defaultGuestHookPath,
 		VhostUserStorePath:        defaultVhostUserStorePath,
 		VhostUserDeviceReconnect:  defaultVhostUserDeviceReconnect,
@@ -1363,7 +1360,6 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		SEVGuestPolicy:            defaultSEVGuestPolicy,
 		SNPGuestPolicy:            defaultSNPGuestPolicy,
 		SEVCertChainPath:          defaultSEVCertChainPath,
-		VhostUserDeviceReconnect:  defaultVhostUserDeviceReconnect,
 	}
 }
 
