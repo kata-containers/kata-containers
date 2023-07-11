@@ -7,6 +7,10 @@ on:
       - synchronize
     paths-ignore: [ '**.md', '**.png', '**.jpg', '**.jpeg', '**.svg', '/docs/**' ]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 name: Static checks dragonball
 jobs:
   test-dragonball:
