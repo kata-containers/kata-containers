@@ -524,6 +524,7 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 	return s, nil
 }
 
+//nolint:gocyclo
 func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (sb *Sandbox, retErr error) {
 	span, ctx := katatrace.Trace(ctx, nil, "newSandbox", sandboxTracingTags, map[string]string{"sandbox_id": sandboxConfig.ID})
 	defer span.End()
