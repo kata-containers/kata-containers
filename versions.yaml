@@ -122,20 +122,17 @@ assets:
     url: "https://github.com/kata-containers/kata-containers/tools/osbuilder"
     architecture:
       aarch64:
-        name: &default-image-name "ubuntu"
-        version: &default-image-version "latest"
+        name: "ubuntu"
+        version: "latest"
       ppc64le:
-        name: *default-image-name
-        version: *default-image-version
+        name: "ubuntu"
+        version: "latest"
       s390x:
-        name: *default-image-name
-        version: *default-image-version
+        name: "ubuntu"
+        version: "latest"
       x86_64:
-        name: *default-image-name
-        version: *default-image-version
-        tdx:
-          name: *default-image-name
-          version: *default-image-version
+        name: &default-image-name "ubuntu"
+        version: "latest"
     meta:
       image-type: *default-image-name
 
@@ -159,9 +156,6 @@ assets:
       x86_64:
         name: *default-initrd-name
         version: *default-initrd-version
-        cbl-mariner:
-          name: "cbl-mariner"
-          version: "2.0"
         sev:
           name: *glibc-initrd-name
           version: *glibc-initrd-version

@@ -8,7 +8,6 @@ set -o nounset
 set -o pipefail
 
 kubernetes_dir=$(dirname "$(readlink -f "$0")")
-repo_root_dir="$(cd "${kubernetes_dir}/../../../" && pwd)"
 
 set_runtime_class() {
     sed -i -e "s|runtimeClassName: kata|runtimeClassName: kata-${KATA_HYPERVISOR}|" ${kubernetes_dir}/runtimeclass_workloads/*.yaml

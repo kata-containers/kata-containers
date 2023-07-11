@@ -9,8 +9,7 @@ set -o nounset
 set -o pipefail
 
 integration_dir="$(dirname "$(readlink -f "$0")")"
-repo_root_dir="$(cd "${integration_dir}/../../" && pwd)"
-tools_dir="${repo_root_dir}/tools"
+tools_dir="${integration_dir}/../../tools"
 
 function _print_cluster_name() {
     short_sha="$(git rev-parse --short=12 HEAD)"
