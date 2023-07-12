@@ -79,6 +79,8 @@ Test relating to measure reading and writing against clusters.
 Tests relating with TensorFlow and Pytorch implementations of several popular
 convolutional models.
 
+For further details see the [machine learning tests documentation](machine_learning).
+
 ## Saving Results
 
 In order to ensure continuity, and thus testing and historical tracking of results,
