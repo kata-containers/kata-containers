@@ -11,6 +11,8 @@ FROM docker.io/library/ubuntu:latest
 # Version of the Dockerfile
 LABEL DOCKERFILE_VERSION="1.0"
 
+ENV DEBIAN_FRONTEND=noninteractive
+
 # URL for blogbench test and blogbench version
 ENV BLOGBENCH_URL "https://download.pureftpd.org/pub/blogbench"
 ENV BLOGBENCH_VERSION 1.1
