@@ -22,7 +22,7 @@ timestamp_ns() {
 	t="$(date +%-s:%-N)"
 	s=$(echo $t | awk -F ':' '{print $1}')
 	n=$(echo $t | awk -F ':' '{print $2}')
-	ns=$(( (s * 1000000000) + n ))
+	ns=$(echo "$s * 1000000000 + $n" | bc)
 
 	echo $ns
 }
