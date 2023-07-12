@@ -60,6 +60,9 @@ CreateContainerRequest {
     print("CreateContainerRequest: policy_oci.root.readonly")
     policy_oci.root.readonly  == input_oci.root.readonly
 
+    print("CreateContainerRequest: allow annotations")
+    allow_annotations(policy_oci, input_oci)
+
     print("CreateContainerRequest: allow_by_annotations")
     allow_by_annotations(policy_oci, input_oci, policy_storages, input_storages)
 
@@ -68,6 +71,29 @@ CreateContainerRequest {
 
     print("CreateContainerRequest: success")
 }
+
+######################################################################
+# Reject unexpected annotations.
+allow_annotations(policy_oci, input_oci) {
+    not input_oci.annotations
+}
+allow_annotations(policy_oci, input_oci) {
+    input_keys := object.keys(input_oci.annotations)
+
+    every input_key in input_keys {
+        print("allow_annotations: checking input key =", input_key)
+        allow_annotation_key(input_key, policy_oci)
+    }
+}
+
+allow_annotation_key(input_key, policy_oci) {
+    startswith(input_key, "io.kubernetes.cri.")
+}
+allow_annotation_key(input_key, policy_oci) {
+    some policy_key, _ in policy_oci.annotations
+    policy_key == input_key
+}
+
 
 ######################################################################
 # Get "io.kubernetes.cri.sandbox-name", and correlate its value with other

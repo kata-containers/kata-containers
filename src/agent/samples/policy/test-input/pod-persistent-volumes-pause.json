@@ -1,9 +1,212 @@
 {
     "input": {
-        "container_id": "bd1c9412778b4c06d740b1c5b1b9da5cc42f7e2ead7062f2aaab30bafb99eea5",
-        "exec_id": "bd1c9412778b4c06d740b1c5b1b9da5cc42f7e2ead7062f2aaab30bafb99eea5",
-        "string_user": null,
-        "devices": [],
+        "oci": {
+            "ociVersion": "1.1.0-rc.1",
+            "process": {
+                "terminal": false,
+                "user": {
+                    "uid": 65535,
+                    "gid": 65535,
+                    "additionalGids": [
+                        65535
+                    ]
+                },
+                "args": [
+                    "/pause"
+                ],
+                "env": [
+                    "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+                ],
+                "cwd": "/",
+                "capabilities": {
+                    "bounding": [
+                        "CAP_CHOWN",
+                        "CAP_DAC_OVERRIDE",
+                        "CAP_FSETID",
+                        "CAP_FOWNER",
+                        "CAP_MKNOD",
+                        "CAP_NET_RAW",
+                        "CAP_SETGID",
+                        "CAP_SETUID",
+                        "CAP_SETFCAP",
+                        "CAP_SETPCAP",
+                        "CAP_NET_BIND_SERVICE",
+                        "CAP_SYS_CHROOT",
+                        "CAP_KILL",
+                        "CAP_AUDIT_WRITE"
+                    ],
+                    "effective": [
+                        "CAP_CHOWN",
+                        "CAP_DAC_OVERRIDE",
+                        "CAP_FSETID",
+                        "CAP_FOWNER",
+                        "CAP_MKNOD",
+                        "CAP_NET_RAW",
+                        "CAP_SETGID",
+                        "CAP_SETUID",
+                        "CAP_SETFCAP",
+                        "CAP_SETPCAP",
+                        "CAP_NET_BIND_SERVICE",
+                        "CAP_SYS_CHROOT",
+                        "CAP_KILL",
+                        "CAP_AUDIT_WRITE"
+                    ],
+                    "permitted": [
+                        "CAP_CHOWN",
+                        "CAP_DAC_OVERRIDE",
+                        "CAP_FSETID",
+                        "CAP_FOWNER",
+                        "CAP_MKNOD",
+                        "CAP_NET_RAW",
+                        "CAP_SETGID",
+                        "CAP_SETUID",
+                        "CAP_SETFCAP",
+                        "CAP_SETPCAP",
+                        "CAP_NET_BIND_SERVICE",
+                        "CAP_SYS_CHROOT",
+                        "CAP_KILL",
+                        "CAP_AUDIT_WRITE"
+                    ]
+                },
+                "noNewPrivileges": true,
+                "oomScoreAdj": -998
+            },
+            "root": {
+                "path": "/run/kata-containers/shared/containers/18f731be35a30c8286a14621246082f6e57c237033ccf48d28854becc6cb7b6a",
+                "readonly": true
+            },
+            "mounts": [
+                {
+                    "destination": "/proc",
+                    "type": "proc",
+                    "source": "proc",
+                    "options": [
+                        "nosuid",
+                        "noexec",
+                        "nodev"
+                    ]
+                },
+                {
+                    "destination": "/dev",
+                    "type": "tmpfs",
+                    "source": "tmpfs",
+                    "options": [
+                        "nosuid",
+                        "strictatime",
+                        "mode=755",
+                        "size=65536k"
+                    ]
+                },
+                {
+                    "destination": "/dev/pts",
+                    "type": "devpts",
+                    "source": "devpts",
+                    "options": [
+                        "nosuid",
+                        "noexec",
+                        "newinstance",
+                        "ptmxmode=0666",
+                        "mode=0620",
+                        "gid=5"
+                    ]
+                },
+                {
+                    "destination": "/dev/mqueue",
+                    "type": "mqueue",
+                    "source": "mqueue",
+                    "options": [
+                        "nosuid",
+                        "noexec",
+                        "nodev"
+                    ]
+                },
+                {
+                    "destination": "/sys",
+                    "type": "sysfs",
+                    "source": "sysfs",
+                    "options": [
+                        "nosuid",
+                        "noexec",
+                        "nodev",
+                        "ro"
+                    ]
+                },
+                {
+                    "destination": "/dev/shm",
+                    "type": "bind",
+                    "source": "/run/kata-containers/sandbox/shm",
+                    "options": [
+                        "rbind"
+                    ]
+                },
+                {
+                    "destination": "/etc/resolv.conf",
+                    "type": "bind",
+                    "source": "/run/kata-containers/shared/containers/18f731be35a30c8286a14621246082f6e57c237033ccf48d28854becc6cb7b6a-d6b2bbf1efa7156f-resolv.conf",
+                    "options": [
+                        "rbind",
+                        "ro",
+                        "nosuid",
+                        "nodev",
+                        "noexec"
+                    ]
+                }
+            ],
+            "annotations": {
+                "io.katacontainers.pkg.oci.container_type": "pod_sandbox",
+                "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/18f731be35a30c8286a14621246082f6e57c237033ccf48d28854becc6cb7b6a",
+                "io.kubernetes.cri.sandbox-cpu-period": "100000",
+                "io.kubernetes.cri.sandbox-name": "persistent",
+                "io.kubernetes.cri.sandbox-memory": "0",
+                "io.kubernetes.cri.sandbox-namespace": "default",
+                "nerdctl/network-namespace": "/var/run/netns/cnitest-92ef429e-0995-5b63-3567-642991cbf124",
+                "io.kubernetes.cri.sandbox-cpu-shares": "2",
+                "io.kubernetes.cri.sandbox-uid": "50d82a7c-3614-423a-8613-1aaacebc885f",
+                "io.kubernetes.cri.sandbox-id": "18f731be35a30c8286a14621246082f6e57c237033ccf48d28854becc6cb7b6a",
+                "io.kubernetes.cri.sandbox-cpu-quota": "0",
+                "io.kubernetes.cri.container-type": "sandbox",
+                "io.kubernetes.cri.sandbox-log-directory": "/var/log/pods/default_persistent_50d82a7c-3614-423a-8613-1aaacebc885f"
+            },
+            "linux": {
+                "resources": {
+                    "cpu": {
+                        "shares": 2,
+                        "quota": 0,
+                        "period": 0,
+                        "realtimeRuntime": 0,
+                        "realtimePeriod": 0
+                    }
+                },
+                "cgroupsPath": "/kubepods/besteffort/pod50d82a7c-3614-423a-8613-1aaacebc885f/18f731be35a30c8286a14621246082f6e57c237033ccf48d28854becc6cb7b6a",
+                "namespaces": [
+                    {
+                        "type": "ipc"
+                    },
+                    {
+                        "type": "mount"
+                    }
+                ],
+                "maskedPaths": [
+                    "/proc/acpi",
+                    "/proc/asound",
+                    "/proc/kcore",
+                    "/proc/keys",
+                    "/proc/latency_stats",
+                    "/proc/timer_list",
+                    "/proc/timer_stats",
+                    "/proc/sched_debug",
+                    "/sys/firmware",
+                    "/proc/scsi"
+                ],
+                "readonlyPaths": [
+                    "/proc/bus",
+                    "/proc/fs",
+                    "/proc/irq",
+                    "/proc/sys",
+                    "/proc/sysrq-trigger"
+                ]
+            }
+        },
         "storages": [
             {
                 "driver": "blk",
@@ -30,246 +233,9 @@
                     "io.katacontainers.fs-opt.overlay-rw",
                     "lowerdir=5a5aad80055ff20012a50dc25f8df7a29924474324d65f7d5306ee8ee27ff71d"
                 ],
-                "mount_point": "/run/kata-containers/shared/containers/bd1c9412778b4c06d740b1c5b1b9da5cc42f7e2ead7062f2aaab30bafb99eea5",
+                "mount_point": "/run/kata-containers/shared/containers/18f731be35a30c8286a14621246082f6e57c237033ccf48d28854becc6cb7b6a",
                 "fs_group": null
             }
-        ],
-        "OCI": {
-            "Version": "1.1.0-rc.1",
-            "Process": {
-                "Terminal": false,
-                "ConsoleSize": null,
-                "User": {
-                    "UID": 65535,
-                    "GID": 65535,
-                    "AdditionalGids": [
-                        65535
-                    ],
-                    "Username": ""
-                },
-                "Args": [
-                    "/pause"
-                ],
-                "Env": [
-                    "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-                ],
-                "Cwd": "/",
-                "Capabilities": {
-                    "Bounding": [
-                        "CAP_CHOWN",
-                        "CAP_DAC_OVERRIDE",
-                        "CAP_FSETID",
-                        "CAP_FOWNER",
-                        "CAP_MKNOD",
-                        "CAP_NET_RAW",
-                        "CAP_SETGID",
-                        "CAP_SETUID",
-                        "CAP_SETFCAP",
-                        "CAP_SETPCAP",
-                        "CAP_NET_BIND_SERVICE",
-                        "CAP_SYS_CHROOT",
-                        "CAP_KILL",
-                        "CAP_AUDIT_WRITE"
-                    ],
-                    "Effective": [
-                        "CAP_CHOWN",
-                        "CAP_DAC_OVERRIDE",
-                        "CAP_FSETID",
-                        "CAP_FOWNER",
-                        "CAP_MKNOD",
-                        "CAP_NET_RAW",
-                        "CAP_SETGID",
-                        "CAP_SETUID",
-                        "CAP_SETFCAP",
-                        "CAP_SETPCAP",
-                        "CAP_NET_BIND_SERVICE",
-                        "CAP_SYS_CHROOT",
-                        "CAP_KILL",
-                        "CAP_AUDIT_WRITE"
-                    ],
-                    "Inheritable": [],
-                    "Permitted": [
-                        "CAP_CHOWN",
-                        "CAP_DAC_OVERRIDE",
-                        "CAP_FSETID",
-                        "CAP_FOWNER",
-                        "CAP_MKNOD",
-                        "CAP_NET_RAW",
-                        "CAP_SETGID",
-                        "CAP_SETUID",
-                        "CAP_SETFCAP",
-                        "CAP_SETPCAP",
-                        "CAP_NET_BIND_SERVICE",
-                        "CAP_SYS_CHROOT",
-                        "CAP_KILL",
-                        "CAP_AUDIT_WRITE"
-                    ],
-                    "Ambient": []
-                },
-                "Rlimits": [],
-                "NoNewPrivileges": true,
-                "ApparmorProfile": "",
-                "OOMScoreAdj": -998,
-                "SelinuxLabel": ""
-            },
-            "Root": {
-                "Path": "/run/kata-containers/shared/containers/bd1c9412778b4c06d740b1c5b1b9da5cc42f7e2ead7062f2aaab30bafb99eea5",
-                "Readonly": true
-            },
-            "Hostname": "",
-            "Mounts": [
-                {
-                    "destination": "/proc",
-                    "source": "proc",
-                    "type_": "proc",
-                    "options": [
-                        "nosuid",
-                        "noexec",
-                        "nodev"
-                    ]
-                },
-                {
-                    "destination": "/dev",
-                    "source": "tmpfs",
-                    "type_": "tmpfs",
-                    "options": [
-                        "nosuid",
-                        "strictatime",
-                        "mode=755",
-                        "size=65536k"
-                    ]
-                },
-                {
-                    "destination": "/dev/pts",
-                    "source": "devpts",
-                    "type_": "devpts",
-                    "options": [
-                        "nosuid",
-                        "noexec",
-                        "newinstance",
-                        "ptmxmode=0666",
-                        "mode=0620",
-                        "gid=5"
-                    ]
-                },
-                {
-                    "destination": "/dev/mqueue",
-                    "source": "mqueue",
-                    "type_": "mqueue",
-                    "options": [
-                        "nosuid",
-                        "noexec",
-                        "nodev"
-                    ]
-                },
-                {
-                    "destination": "/sys",
-                    "source": "sysfs",
-                    "type_": "sysfs",
-                    "options": [
-                        "nosuid",
-                        "noexec",
-                        "nodev",
-                        "ro"
-                    ]
-                },
-                {
-                    "destination": "/dev/shm",
-                    "source": "/run/kata-containers/sandbox/shm",
-                    "type_": "bind",
-                    "options": [
-                        "rbind"
-                    ]
-                },
-                {
-                    "destination": "/etc/resolv.conf",
-                    "source": "/run/kata-containers/shared/containers/bd1c9412778b4c06d740b1c5b1b9da5cc42f7e2ead7062f2aaab30bafb99eea5-c486e13ff6262e6b-resolv.conf",
-                    "type_": "bind",
-                    "options": [
-                        "rbind",
-                        "ro",
-                        "nosuid",
-                        "nodev",
-                        "noexec"
-                    ]
-                }
-            ],
-            "Hooks": null,
-            "Annotations": {
-                "io.kubernetes.cri.sandbox-cpu-shares": "2",
-                "io.kubernetes.cri.sandbox-id": "bd1c9412778b4c06d740b1c5b1b9da5cc42f7e2ead7062f2aaab30bafb99eea5",
-                "io.katacontainers.pkg.oci.container_type": "pod_sandbox",
-                "io.kubernetes.cri.sandbox-cpu-quota": "0",
-                "io.kubernetes.cri.container-type": "sandbox",
-                "io.kubernetes.cri.sandbox-namespace": "default",
-                "io.kubernetes.cri.sandbox-uid": "b00c66d4-a155-4b5e-ada0-3baf9acc2f91",
-                "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/bd1c9412778b4c06d740b1c5b1b9da5cc42f7e2ead7062f2aaab30bafb99eea5",
-                "io.kubernetes.cri.sandbox-memory": "0",
-                "io.kubernetes.cri.sandbox-log-directory": "/var/log/pods/default_persistent_b00c66d4-a155-4b5e-ada0-3baf9acc2f91",
-                "nerdctl/network-namespace": "/var/run/netns/cnitest-db6cb28a-35c7-707e-f943-e5bfa2f815d0",
-                "io.kubernetes.cri.sandbox-cpu-period": "100000",
-                "io.kubernetes.cri.sandbox-name": "persistent"
-            },
-            "Linux": {
-                "UIDMappings": [],
-                "GIDMappings": [],
-                "Sysctl": {},
-                "Resources": {
-                    "Devices": [],
-                    "Memory": null,
-                    "CPU": {
-                        "Shares": 2,
-                        "Quota": 0,
-                        "Period": 0,
-                        "RealtimeRuntime": 0,
-                        "RealtimePeriod": 0,
-                        "Cpus": "",
-                        "Mems": ""
-                    },
-                    "Pids": null,
-                    "BlockIO": null,
-                    "HugepageLimits": [],
-                    "Network": null
-                },
-                "CgroupsPath": "/kubepods/besteffort/podb00c66d4-a155-4b5e-ada0-3baf9acc2f91/bd1c9412778b4c06d740b1c5b1b9da5cc42f7e2ead7062f2aaab30bafb99eea5",
-                "Namespaces": [
-                    {
-                        "Type": "ipc",
-                        "Path": ""
-                    },
-                    {
-                        "Type": "mount",
-                        "Path": ""
-                    }
-                ],
-                "Devices": [],
-                "Seccomp": null,
-                "RootfsPropagation": "",
-                "MaskedPaths": [
-                    "/proc/acpi",
-                    "/proc/asound",
-                    "/proc/kcore",
-                    "/proc/keys",
-                    "/proc/latency_stats",
-                    "/proc/timer_list",
-                    "/proc/timer_stats",
-                    "/proc/sched_debug",
-                    "/sys/firmware",
-                    "/proc/scsi"
-                ],
-                "ReadonlyPaths": [
-                    "/proc/bus",
-                    "/proc/fs",
-                    "/proc/irq",
-                    "/proc/sys",
-                    "/proc/sysrq-trigger"
-                ],
-                "MountLabel": "",
-                "IntelRdt": null
-            },
-            "Solaris": null,
-            "Windows": null
-        },
-        "sandbox_pidns": false
+        ]
     }
 }
