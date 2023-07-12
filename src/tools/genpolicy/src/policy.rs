@@ -318,6 +318,13 @@ impl AgentPolicy {
             .registry
             .get_process(&mut process, yaml_has_command, yaml_has_args);
 
+        if let Some(tty) = yaml_container.tty {
+            process.terminal = tty;
+            if tty && !is_pause_container {
+                process.env.push("TERM=".to_string() + "xterm");
+            }
+        }
+
         if !is_pause_container {
             process.env.push("HOSTNAME=".to_string() + "$(host-name)");
         }
