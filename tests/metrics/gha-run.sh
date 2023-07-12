@@ -26,6 +26,20 @@ function install_checkmetrics() {
 	popd
 }
 
+# @path_results: path to the input metric-results folder
+# @tarball_fname: path and filename to the output tarball
+function compress_metrics_results_dir()
+{
+	local path_results="${1:-results}"
+	local tarball_fname="${2:-}"
+
+	[ -z "${tarball_fname}" ] && die "Missing the tarball filename or the path to save the tarball results is incorrect."
+	[ ! -d "${path_results}" ] && die "Missing path to the results folder."
+
+	cd "${path_results}" && tar -czf "${tarball_fname}" *.json && cd -
+	info "tarball generated: ${tarball_fname}"
+}
+
 function check_metrics() {
 	local cm_base_file="${checkmetrics_config_dir}/checkmetrics-json-${KATA_HYPERVISOR}-kata-metric8.toml"
 	checkmetrics --debug --percentage --basefile "${cm_base_file}" --metricsdir "${results_dir}"
