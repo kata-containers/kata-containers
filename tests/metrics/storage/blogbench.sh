@@ -36,6 +36,7 @@ function main() {
 	init_env
 	check_cmds "${cmds[@]}"
 	check_ctr_images "${IMAGE}" "${DOCKERFILE}"
+	sudo systemctl restart containerd
 	metrics_json_init
 
 	local output=$(sudo -E ${CTR_EXE} run --rm --runtime=${CTR_RUNTIME} ${IMAGE} test ${CMD})
@@ -83,11 +84,11 @@ EOF
 	local json="$(cat << EOF
 	{
 		"write": {
-			"Result" : "${writes}",
+			"Result" : ${writes},
 			"Units"  : "items"
 		},
 		"read": {
-			"Result" : "${reads}",
+			"Result" : ${reads},
 			"Units"  : "items"
 		},
 		"Nb blogs": {

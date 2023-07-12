@@ -72,17 +72,15 @@ function run_test_memory_usage_inside_container() {
 
 	create_symbolic_links ${KATA_HYPERVISOR}
 	bash tests/metrics/density/memory_usage_inside_container.sh 5
-
-	check_metrics
 }
 
 function run_test_blogbench() {
 	info "Running Blogbench test using ${KATA_HYPERVISOR} hypervisor"
 
-	# ToDo: remove the exit once the metrics workflow is stable
-	exit 0
 	create_symbolic_links ${KATA_HYPERVISOR}
 	bash tests/metrics/storage/blogbench.sh
+
+	check_metrics
 }
 
 function main() {
