@@ -28,15 +28,15 @@ See below example config:
 
 ```toml
 [plugins]
-  [plugins.cri]
-    [plugins.cri.containerd]
-       [plugins.cri.containerd.runtimes.runc]
+  [plugins."io.containerd.grpc.v1.cri"]
+    [plugins."io.containerd.grpc.v1.cri".containerd]
+       [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
          runtime_type = "io.containerd.runc.v2"
          privileged_without_host_devices = false
-       [plugins.cri.containerd.runtimes.kata]
+       [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata]
          runtime_type = "io.containerd.kata.v2"
          privileged_without_host_devices = true
-         [plugins.cri.containerd.runtimes.kata.options]
+         [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata.options]
            ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration.toml"
 ```
 
@@ -71,4 +71,3 @@ See below example config:
 ```
 
  - [Kata Containers with CRI-O](../how-to/run-kata-with-k8s.md#cri-o)
-

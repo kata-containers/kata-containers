@@ -336,17 +336,17 @@ to the containerd `config.toml`. Below is a sample snippet that can be added
 to allow QEMU and Cloud Hypervisor (CLH) to work with `ctr`.
 
 ```
-[plugins.cri.containerd.runtimes.kata-qemu]
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata-qemu]
   runtime_type = "io.containerd.kata-qemu.v2"
   privileged_without_host_devices = true
   pod_annotations = ["io.katacontainers.*"]
-  [plugins.cri.containerd.runtimes.kata-qemu.options]
+  [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata-qemu.options]
     ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration-qemu.toml"
-[plugins.cri.containerd.runtimes.kata-clh]
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata-clh]
   runtime_type = "io.containerd.kata-clh.v2"
   privileged_without_host_devices = true
   pod_annotations = ["io.katacontainers.*"]
-  [plugins.cri.containerd.runtimes.kata-clh.options]
+  [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata-clh.options]
     ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration-clh.toml"
 ```
 

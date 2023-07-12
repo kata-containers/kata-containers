@@ -225,8 +225,8 @@ $ sudo chmod +x /usr/local/bin/containerd-shim-kata-fc-v2
 Add the relevant section in `containerd`’s `config.toml` file (`/etc/containerd/config.toml`):
 
 ```
-[plugins.cri.containerd.runtimes]
-  [plugins.cri.containerd.runtimes.kata-fc]
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
+  [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata-fc]
     runtime_type = "io.containerd.kata-fc.v2"
 ```
 

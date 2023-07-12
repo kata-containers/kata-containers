@@ -109,12 +109,12 @@ By default, the configuration of containerd is located at `/etc/containerd/confi
 
 ```toml
 [plugins]
-  [plugins.cri]
-    [plugins.cri.containerd]
-      [plugins.cri.containerd.default_runtime]
+  [plugins."io.containerd.grpc.v1.cri"]
+    [plugins."io.containerd.grpc.v1.cri".containerd]
+      [plugins."io.containerd.grpc.v1.cri".containerd.default_runtime]
         #runtime_type = "io.containerd.runtime.v1.linux"
 
-    [plugins.cri.cni]
+    [plugins."io.containerd.grpc.v1.cri".cni]
       # conf_dir is the directory in which the admin places a CNI conf.
       conf_dir = "/etc/cni/net.d"
 ```
@@ -131,15 +131,15 @@ For
 The `RuntimeClass` is suggested.
 
 The following configuration includes two runtime classes:
-- `plugins.cri.containerd.runtimes.runc`: the runc, and it is the default runtime.
-- `plugins.cri.containerd.runtimes.kata`: The function in containerd (reference [the document here](https://github.com/containerd/containerd/tree/main/runtime/v2#binary-naming))
+- `plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc`: the runc, and it is the default runtime.
+- `plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata`: The function in containerd (reference [the document here](https://github.com/containerd/containerd/tree/main/runtime/v2#binary-naming))
   where the dot-connected string `io.containerd.kata.v2` is translated to `containerd-shim-kata-v2` (i.e. the
   binary name of the Kata implementation of [Containerd Runtime V2 (Shim API)](https://github.com/containerd/containerd/tree/main/runtime/v2)).
 
 ```toml
-    [plugins.cri.containerd]
+    [plugins."io.containerd.grpc.v1.cri".containerd]
       no_pivot = false
-    [plugins.cri.containerd.runtimes]
+    [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
       [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
          privileged_without_host_devices = false
          runtime_type = "io.containerd.runc.v2"
@@ -149,7 +149,7 @@ The following configuration includes two runtime classes:
             CriuPath = ""
             CriuWorkPath = ""
             IoGid = 0
-      [plugins.cri.containerd.runtimes.kata]
+      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata]
          runtime_type = "io.containerd.kata.v2"
          privileged_without_host_devices = true
          pod_annotations = ["io.katacontainers.*"]
@@ -173,14 +173,14 @@ for an untrusted workload. With the following configuration, you can run trusted
 and then, run an untrusted workload with Kata Containers:
 
 ```toml
-    [plugins.cri.containerd]
-    # "plugins.cri.containerd.default_runtime" is the runtime to use in containerd.
-    [plugins.cri.containerd.default_runtime]
+    [plugins."io.containerd.grpc.v1.cri".containerd]
+    # "plugins."io.containerd.grpc.v1.cri".containerd.default_runtime" is the runtime to use in containerd.
+    [plugins."io.containerd.grpc.v1.cri".containerd.default_runtime]
       # runtime_type is the runtime type to use in containerd e.g. io.containerd.runtime.v1.linux
       runtime_type = "io.containerd.runtime.v1.linux"
 
-    # "plugins.cri.containerd.untrusted_workload_runtime" is a runtime to run untrusted workloads on it.
-    [plugins.cri.containerd.untrusted_workload_runtime]
+    # "plugins."io.containerd.grpc.v1.cri".containerd.untrusted_workload_runtime" is a runtime to run untrusted workloads on it.
+    [plugins."io.containerd.grpc.v1.cri".containerd.untrusted_workload_runtime]
       # runtime_type is the runtime type to use in containerd e.g. io.containerd.runtime.v1.linux
       runtime_type = "io.containerd.kata.v2"
 ```
@@ -192,8 +192,8 @@ You can find more information on the [Containerd config documentation](https://g
 If you want to set Kata Containers as the only runtime in the deployment, you can simply configure as follows:
 
 ```toml
-    [plugins.cri.containerd]
-    [plugins.cri.containerd.default_runtime]
+    [plugins."io.containerd.grpc.v1.cri".containerd]
+    [plugins."io.containerd.grpc.v1.cri".containerd.default_runtime]
       runtime_type = "io.containerd.kata.v2"
 ```
 
@@ -228,7 +228,7 @@ Put the CNI configuration as `/etc/cni/net.d/10-mynet.conf`:
 Next, reference the configuration directory through containerd `config.toml`:
 
 ```toml
-[plugins.cri.cni]
+[plugins."io.containerd.grpc.v1.cri".cni]
     # conf_dir is the directory in which the admin places a CNI conf.
     conf_dir = "/etc/cni/net.d"
 ```
