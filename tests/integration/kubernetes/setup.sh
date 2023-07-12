@@ -23,7 +23,7 @@ set_kernel_path() {
 
 set_initrd_path() {
     if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
-        initrd_path="/opt/kata/share/kata-containers/kata-containers-initrd-cbl-mariner.img"
+        initrd_path="/opt/kata/share/kata-containers/kata-containers-initrd-mariner.img"
         find ${kubernetes_dir}/runtimeclass_workloads/*.yaml -exec yq write -i {} 'metadata.annotations[io.katacontainers.config.hypervisor.initrd]' "${initrd_path}" \;
     fi
 }
