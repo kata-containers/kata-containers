@@ -20,7 +20,7 @@ IMAGE='quay.io/prometheus/busybox:latest'
 CMD="sleep 10; cat /proc/meminfo"
 # We specify here in 'k', as that then matches the results we get from the meminfo,
 # which makes later direct comparison easier.
-MEMSIZE=${MEMSIZE:-$((2048*1024))}
+MEMSIZE="${MEMSIZE:-$((2048*1024))}"
 
 # this variable determines the number of attempts when a test
 # result is considered not valid (a zero value or a negative value)
@@ -47,20 +47,20 @@ parse_results() {
 	local memfree_acu="${3:-0}"
 	local memavailable_acu="${4:-0}"
 
-	local memtotal=$(echo "$raw_results" | awk '/MemTotal/ {print $2}')
-	units_memtotal=$(echo "$raw_results" | awk '/MemTotal/ {print $3}')
+	local memtotal=$(echo "${raw_results}" | awk '/MemTotal/ {print $2}')
+	units_memtotal=$(echo "${raw_results}" | awk '/MemTotal/ {print $3}')
 
-	local memfree=$(echo "$raw_results" | awk '/MemFree/ {print $2}')
-	units_memfree=$(echo "$raw_results" | awk '/MemFree/ {print $3}')
+	local memfree=$(echo "${raw_results}" | awk '/MemFree/ {print $2}')
+	units_memfree=$(echo "${raw_results}" | awk '/MemFree/ {print $3}')
 
-	local memavailable=$(echo "$raw_results" | awk '/MemAvailable/ {print $2}')
-	units_memavailable=$(echo "$raw_results" | awk '/MemAvailable/ {print $3}')
+	local memavailable=$(echo "${raw_results}" | awk '/MemAvailable/ {print $2}')
+	units_memavailable=$(echo "${raw_results}" | awk '/MemAvailable/ {print $3}')
 
 	# check results: if any result is zero or negative, it is considered as invalid, and the test will be repeated.
-	if ((  $(echo "$memtotal <= 0" | bc -l) )) || ((  $(echo "$memfree <= 0" | bc -l) )) || ((  $(echo "$memavailable <= 0" | bc -l) )); then
+	if ((  $(echo "${memtotal} <= 0" | bc -l) )) || ((  $(echo "${memfree} <= 0" | bc -l) )) || ((  $(echo "${memavailable} <= 0" | bc -l) )); then
 		MAX_FAILED_ATTEMPTS=$((MAX_FAILED_ATTEMPTS-1))
 		valid_result=0
-		info "Skipping invalid result:  memtotal: $memtotal  memfree: $memfree  memavailable: $memavailable"
+		info "Skipping invalid result:  memtotal: ${memtotal}  memfree: ${memfree}  memavailable: ${memavailable}"
 		return 0
 	fi
 
@@ -68,14 +68,14 @@ parse_results() {
 	memfreeAvg=$((memfree+memfree_acu))
 	memavailableAvg=$((memavailable+memavailable_acu))
 	valid_result=1
-	info "Iteration# $count_iters  memtotal: $memtotal  memfree: $memfree  memavailable: $memavailable"
+	info "Iteration# ${count_iters}  memtotal: ${memtotal}  memfree: ${memfree}  memavailable: ${memavailable}"
 }
 
 store_results_json() {
 	metrics_json_start_array
-	memtotalAvg=$(echo "scale=2; $memtotalAvg / $count_iters" | bc)
-	memfreeAvg=$(echo "scale=2; $memfreeAvg / $count_iters" | bc)
-	memavailableAvg=$(echo "scale=2; $memavailableAvg / $count_iters" | bc)
+	memtotalAvg=$(echo "scale=2; ${memtotalAvg} / ${count_iters}" | bc)
+	memfreeAvg=$(echo "scale=2; ${memfreeAvg} / ${count_iters}" | bc)
+	memavailableAvg=$(echo "scale=2; ${memavailableAvg} / ${count_iters}" | bc)
 
 	local json="$(cat << EOF
 	{
@@ -109,7 +109,7 @@ EOF
 function main() {
 	# switch to select output format
 	local num_iterations=${1:-1}
-	info "Iterations: $num_iterations"
+	info "Iterations: ${num_iterations}"
 
 	# Check tools/commands dependencies
 	cmds=("awk" "ctr")
@@ -117,13 +117,13 @@ function main() {
 	check_cmds "${cmds[@]}"
 	check_images "${IMAGE}"
 	metrics_json_init
-	while [  $count_iters -lt $num_iterations ]; do
-		local output=$(sudo -E "${CTR_EXE}" run --memory-limit $((MEMSIZE*1024)) --rm --runtime=$CTR_RUNTIME $IMAGE busybox sh -c "$CMD" 2>&1)
+	while [  "${count_iters}" -lt "${num_iterations}" ]; do
+		local output=$(sudo -E "${CTR_EXE}" run --memory-limit $((MEMSIZE*1024)) --rm --runtime="${CTR_RUNTIME}" "${IMAGE}" busybox sh -c "${CMD}" 2>&1)
 		parse_results "${output}" "${memtotalAvg}" "${memfreeAvg}" "${memavailableAvg}"
 
 		# quit if number of attempts exceeds the allowed value.
-		[ ${MAX_FAILED_ATTEMPTS} -eq 0 ] && die "Max number of attempts exceeded."
-		[ ${valid_result} -eq 1 ] && count_iters=$((count_iters+1))
+		[ "${MAX_FAILED_ATTEMPTS}" -eq 0 ] && die "Max number of attempts exceeded."
+		[ "${valid_result}" -eq 1 ] && count_iters=$((count_iters+1))
 	done
 	store_results_json
 	clean_env_ctr
