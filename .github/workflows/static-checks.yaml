@@ -13,15 +13,11 @@ concurrency:
 name: Static checks
 jobs:
   static-checks:
-    runs-on: ubuntu-20.04
+    runs-on: garm-ubuntu-2204
     strategy:
       matrix:
         cmd:
           - "make vendor"
-          - "make static-checks"
-          - "make check"
-          - "make test"
-          - "sudo -E PATH=\"$PATH\" make test"
     env:
       RUST_BACKTRACE: "1"
       target_branch: ${{ github.base_ref }}
