@@ -23,23 +23,23 @@ KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 
 RUNTIME="${RUNTIME:-containerd-shim-kata-v2}"
 
-die() {
+function die() {
 	local msg="$*"
 	echo -e "[$(basename $0):${BASH_LINENO[0]}] ERROR: $msg" >&2
 	exit 1
 }
 
-warn() {
+function warn() {
 	local msg="$*"
 	echo -e "[$(basename $0):${BASH_LINENO[0]}] WARNING: $msg"
 }
 
-info() {
+function info() {
 	local msg="$*"
 	echo -e "[$(basename $0):${BASH_LINENO[0]}] INFO: $msg"
 }
 
-handle_error() {
+function handle_error() {
 	local exit_code="${?}"
 	local line_number="${1:-}"
 	echo -e "[$(basename $0):$line_number] ERROR: $(eval echo "$BASH_COMMAND")"
@@ -47,7 +47,7 @@ handle_error() {
 }
 trap 'handle_error $LINENO' ERR
 
-waitForProcess() {
+function waitForProcess() {
 	wait_time="$1"
 	sleep_time="$2"
 	cmd="$3"
@@ -66,7 +66,7 @@ waitForProcess() {
 # Kata runtime. Of course, the end user can choose any name they
 # want in reality, but this function knows the names of the default
 # and recommended Kata docker runtime install names.
-is_a_kata_runtime() {
+function is_a_kata_runtime() {
 	if [ "$1" = "containerd-shim-kata-v2" ] || [ "$1" = "io.containerd.kata.v2" ]; then
 		echo "1"
 	else
@@ -76,7 +76,7 @@ is_a_kata_runtime() {
 
 # Gets versions and paths of all the components
 # list in kata-env
-extract_kata_env() {
+function extract_kata_env() {
 	RUNTIME_CONFIG_PATH=$(kata-runtime kata-env --json | jq -r .Runtime.Config.Path)
 	RUNTIME_VERSION=$(kata-runtime kata-env --json | jq -r .Runtime.Version | grep Semver | cut -d'"' -f4)
 	RUNTIME_COMMIT=$(kata-runtime kata-env --json | jq -r .Runtime.Version | grep Commit | cut -d'"' -f4)
@@ -97,7 +97,7 @@ extract_kata_env() {
 }
 
 # Checks that processes are not running
-check_processes() {
+function check_processes() {
 	extract_kata_env
 
 	# Only check the kata-env if we have managed to find the kata executable...
@@ -120,7 +120,7 @@ check_processes() {
 
 # Clean environment, this function will try to remove all
 # stopped/running containers.
-clean_env()
+function clean_env()
 {
 	# If the timeout has not been set, default it to 30s
 	# Docker has a built in 10s default timeout, so make ours
@@ -139,7 +139,7 @@ clean_env()
 	fi
 }
 
-clean_env_ctr()
+function clean_env_ctr()
 {
 	local count_running="$(sudo ctr c list -q | wc -l)"
 	local remaining_attempts=10
@@ -189,7 +189,7 @@ clean_env_ctr()
 # Outputs warnings to stdio if something has gone wrong.
 #
 # Returns 0 on success, 1 otherwise
-restart_systemd_service_with_no_burst_limit() {
+function restart_systemd_service_with_no_burst_limit() {
 	local service=$1
 	info "restart $service service"
 
@@ -224,7 +224,7 @@ restart_systemd_service_with_no_burst_limit() {
 	return 0
 }
 
-restart_containerd_service() {
+function restart_containerd_service() {
 	restart_systemd_service_with_no_burst_limit containerd || return 1
 
 	local retries=5
