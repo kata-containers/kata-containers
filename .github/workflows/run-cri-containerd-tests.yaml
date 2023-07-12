@@ -1,0 +1,36 @@
+name: CI | Run cri-containerd tests
+on:
+  workflow_call:
+    inputs:
+      tarball-suffix:
+        required: false
+        type: string
+      commit-hash:
+        required: false
+        type: string
+
+jobs:
+  run-cri-containerd:
+    strategy:
+      fail-fast: true
+      matrix:
+        vmm: ['clh', 'qemu']
+    runs-on: garm-ubuntu-2204
+    env:
+      KATA_HYPERVSIOR: ${{ matrix.vmm }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ inputs.commit-hash }}
+
+      - name: get-kata-tarball
+        uses: actions/download-artifact@v3
+        with:
+          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
+          path: kata-artifacts
+
+      - name: Install kata
+        run: bash tests/integration/cri-containerd/gha-run.sh install-kata kata-artifacts
+
+      - name: Run cri-containerd tests
+        run: bash tests/integration/cri-containerd/gha-run.sh run
