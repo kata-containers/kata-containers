@@ -49,7 +49,13 @@ struct NetworkWithNetnsInner {
 impl NetworkWithNetnsInner {
     async fn new(config: &NetworkWithNetNsConfig, d: Arc<RwLock<DeviceManager>>) -> Result<Self> {
         let entity_list = if config.netns_path.is_empty() {
-            warn!(sl!(), "skip to scan for empty netns");
+            warn!(sl!(), "Skip to scan network for empty netns");
+            vec![]
+        } else if config.network_model.as_str() == "none" {
+            warn!(
+                sl!(),
+                "Skip to scan network from netns due to the none network model"
+            );
             vec![]
         } else {
             // get endpoint
