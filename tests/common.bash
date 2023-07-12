@@ -23,23 +23,23 @@ KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 
 RUNTIME="${RUNTIME:-containerd-shim-kata-v2}"
 
-die() {
+function die() {
 	local msg="$*"
 	echo -e "[$(basename $0):${BASH_LINENO[0]}] ERROR: $msg" >&2
 	exit 1
 }
 
-warn() {
+function warn() {
 	local msg="$*"
 	echo -e "[$(basename $0):${BASH_LINENO[0]}] WARNING: $msg"
 }
 
-info() {
+function info() {
 	local msg="$*"
 	echo -e "[$(basename $0):${BASH_LINENO[0]}] INFO: $msg"
 }
 
-handle_error() {
+function handle_error() {
 	local exit_code="${?}"
 	local line_number="${1:-}"
 	echo -e "[$(basename $0):$line_number] ERROR: $(eval echo "$BASH_COMMAND")"
@@ -47,7 +47,7 @@ handle_error() {
 }
 trap 'handle_error $LINENO' ERR
 
-waitForProcess() {
+function waitForProcess() {
 	wait_time="$1"
 	sleep_time="$2"
 	cmd="$3"
@@ -66,7 +66,7 @@ waitForProcess() {
 # Kata runtime. Of course, the end user can choose any name they
 # want in reality, but this function knows the names of the default
 # and recommended Kata docker runtime install names.
-is_a_kata_runtime() {
+function is_a_kata_runtime() {
 	if [ "$1" = "containerd-shim-kata-v2" ] || [ "$1" = "io.containerd.kata.v2" ]; then
 		echo "1"
 	else
@@ -76,7 +76,7 @@ is_a_kata_runtime() {
 
 # Gets versions and paths of all the components
 # list in kata-env
-extract_kata_env() {
+function extract_kata_env() {
 	RUNTIME_CONFIG_PATH=$(kata-runtime kata-env --json | jq -r .Runtime.Config.Path)
 	RUNTIME_VERSION=$(kata-runtime kata-env --json | jq -r .Runtime.Version | grep Semver | cut -d'"' -f4)
 	RUNTIME_COMMIT=$(kata-runtime kata-env --json | jq -r .Runtime.Version | grep Commit | cut -d'"' -f4)
@@ -97,7 +97,7 @@ extract_kata_env() {
 }
 
 # Checks that processes are not running
-check_processes() {
+function check_processes() {
 	extract_kata_env
 
 	# Only check the kata-env if we have managed to find the kata executable...
@@ -120,7 +120,7 @@ check_processes() {
 
 # Clean environment, this function will try to remove all
 # stopped/running containers.
-clean_env()
+function clean_env()
 {
 	# If the timeout has not been set, default it to 30s
 	# Docker has a built in 10s default timeout, so make ours
@@ -139,7 +139,7 @@ clean_env()
 	fi
 }
 
-clean_env_ctr()
+function clean_env_ctr()
 {
 	local count_running="$(sudo ctr c list -q | wc -l)"
 	local remaining_attempts=10
@@ -189,7 +189,7 @@ clean_env_ctr()
 # Outputs warnings to stdio if something has gone wrong.
 #
 # Returns 0 on success, 1 otherwise
-restart_systemd_service_with_no_burst_limit() {
+function restart_systemd_service_with_no_burst_limit() {
 	local service=$1
 	info "restart $service service"
 
@@ -224,7 +224,7 @@ restart_systemd_service_with_no_burst_limit() {
 	return 0
 }
 
-restart_containerd_service() {
+function restart_containerd_service() {
 	restart_systemd_service_with_no_burst_limit containerd || return 1
 
 	local retries=5
@@ -241,16 +241,73 @@ restart_containerd_service() {
 	return 0
 }
 
-# @path_results: path to the input metric-results folder
-# @tarball_fname: path and filename to the output tarball
-function compress_metrics_results_dir()
-{
-	local path_results="${1:-results}"
-	local tarball_fname="${2:-}"
+function create_symbolic_links() {
+	local KATA_HYPERVISOR="${1}"
 
-	[ -z "${tarball_fname}" ] && die "Missing the tarball filename or the path to save the tarball results is incorrect."
-	[ ! -d "${path_results}" ] && die "Missing path to the results folder."
+	local link_configuration_file="/opt/kata/share/defaults/kata-containers/configuration.toml"
+	local source_configuration_file="/opt/kata/share/defaults/kata-containers/configuration-${KATA_HYPERVISOR}.toml"
 
-	cd "${path_results}" && tar -czf "${tarball_fname}" *.json && cd -
-	info "tarball generated: ${tarball_fname}"
+	if [ "${KATA_HYPERVISOR}" != 'qemu' ] && [ "${KATA_HYPERVISOR}" != 'clh' ]; then
+		die "Failed to set the configuration.toml: '${KATA_HYPERVISOR}' is not recognized as a valid hypervisor name."
+	fi
+
+	sudo ln -sf "${source_configuration_file}" "${link_configuration_file}"
+}
+
+# Configures containerd
+function overwrite_containerd_config() {
+	containerd_config="/etc/containerd/config.toml"
+	sudo rm "${containerd_config}"
+	sudo tee "${containerd_config}" << EOF
+version = 2
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+  SystemdCgroup = true
+
+[plugins]
+  [plugins."io.containerd.grpc.v1.cri"]
+    [plugins."io.containerd.grpc.v1.cri".containerd]
+      default_runtime_name = "kata"
+      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata]
+          runtime_type = "io.containerd.kata.v2"
+EOF
+}
+
+function install_kata() {
+	local kata_tarball="kata-static.tar.xz"
+	declare -r katadir="/opt/kata"
+	declare -r destdir="/"
+	declare -r local_bin_dir="/usr/local/bin/"
+
+	# Removing previous kata installation
+	sudo rm -rf "${katadir}"
+
+	pushd "${kata_tarball_dir}"
+	sudo tar -xvf "${kata_tarball}" -C "${destdir}"
+	popd
+
+	# create symbolic links to kata components
+	for b in "${katadir}/bin/*" ; do
+		sudo ln -sf "${b}" "${local_bin_dir}/$(basename $b)"
+	done
+
+	check_containerd_config_for_kata
+	restart_containerd_service
+	install_checkmetrics
+}
+
+function check_containerd_config_for_kata() {
+	# check containerd config
+	declare -r line1="default_runtime_name = \"kata\""
+	declare -r line2="runtime_type = \"io.containerd.kata.v2\""
+	declare -r num_lines_containerd=2
+	declare -r containerd_path="/etc/containerd/config.toml"
+	local count_matches=$(grep -ic  "$line1\|$line2" "${containerd_path}")
+
+	if [ "${count_matches}" = "${num_lines_containerd}" ]; then
+		info "containerd ok"
+	else
+		info "overwriting containerd configuration w/ a valid one"
+		overwrite_containerd_config
+	fi
 }
