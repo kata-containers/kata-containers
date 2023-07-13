@@ -256,7 +256,7 @@ function set_ksm_aggressive()
 	fi
 }
 
-restore_virtio_fs(){
+function restore_virtio_fs(){
 	# Re-enable virtio-fs if it was enabled previously
 	[ -n "${was_virtio_fs}" ] && sudo -E PATH="$PATH" "${LIB_DIR}/../../.ci/set_kata_config.sh" shared_fs virtio-fs || \
 		info "Not restoring virtio-fs since it wasn't enabled previously"
