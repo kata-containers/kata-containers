@@ -360,3 +360,14 @@ function get_latest_patch_release_from_a_github_project() {
 
        curl --silent https://api.github.com/repos/${project}/releases | jq -r .[].tag_name | grep "^${base_version}.[0-9]*$" -m1
 }
+
+# project: org/repo format
+# version: the version of the tarball that will be downloaded
+# tarball-name: the name of the tarball that will be downloaded
+function download_github_project_tarball() {
+	project="${1}" 
+	version="${2}"
+	tarball_name="${3}"
+
+	wget https://github.com/${project}/releases/download/${version}/${tarball_name}
+}
