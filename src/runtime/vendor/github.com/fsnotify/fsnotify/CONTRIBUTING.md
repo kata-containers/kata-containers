@@ -23,10 +23,10 @@ Please indicate that you have signed the CLA in your pull request.
 * To issue a new release, the maintainers will:
   * Update the CHANGELOG
   * Tag a version, which will become available through gopkg.in.
- 
+
 ### How to Fork
 
-For smooth sailing, always use the original import path. Installing with `go get` makes this easy. 
+For smooth sailing, always use the original import path. Installing with `go get` makes this easy.
 
 1. Install from GitHub (`go get -u github.com/fsnotify/fsnotify`)
 2. Create your feature branch (`git checkout -b my-new-feature`)

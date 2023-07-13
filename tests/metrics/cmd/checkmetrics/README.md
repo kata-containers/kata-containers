@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `checkmetrics` tool is used to check the metrics results files in 
+The `checkmetrics` tool is used to check the metrics results files in
 JSON format. Results files are checked against configs stored in a TOML
 file that contains baseline expectations for the results.
 
@@ -27,7 +27,7 @@ The baseline TOML file is composed of one `[[metric]]` section per result that i
 Each section contains a number of parameters, some optional:
 
 ```
-|name	       |   type	  |    description                                   | 
+|name	       |   type	  |    description                                   |
 |----------------------------------------------------------------------------
 |`name`	       |   string	  |    Filename containing results (minus .json ext.)|
 |`type`	       |   string	  |    json (optional, json is the default)          |

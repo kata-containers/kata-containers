@@ -4,12 +4,12 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Tag** | **string** |  | 
-**Socket** | **string** |  | 
+**Tag** | **string** |  |
+**Socket** | **string** |  |
 **NumQueues** | **int32** |  | [default to 1]
 **QueueSize** | **int32** |  | [default to 1024]
-**PciSegment** | Pointer to **int32** |  | [optional] 
-**Id** | Pointer to **string** |  | [optional] 
+**PciSegment** | Pointer to **int32** |  | [optional]
+**Id** | Pointer to **string** |  | [optional]
 
 ## Methods
 

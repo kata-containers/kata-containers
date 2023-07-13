@@ -4,11 +4,11 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Cid** | **int64** | Guest Vsock CID | 
-**Socket** | **string** | Path to UNIX domain socket, used to proxy vsock connections. | 
+**Cid** | **int64** | Guest Vsock CID |
+**Socket** | **string** | Path to UNIX domain socket, used to proxy vsock connections. |
 **Iommu** | Pointer to **bool** |  | [optional] [default to false]
-**PciSegment** | Pointer to **int32** |  | [optional] 
-**Id** | Pointer to **string** |  | [optional] 
+**PciSegment** | Pointer to **int32** |  | [optional]
+**Id** | Pointer to **string** |  | [optional]
 
 ## Methods
 

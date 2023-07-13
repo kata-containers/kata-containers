@@ -386,7 +386,7 @@ table.Render()
 
 ##### Output 10
 ```
-NAME             	STATUS  	ROLE   	VERSION 
+NAME             	STATUS  	ROLE   	VERSION
 node1.example.com	Ready   	compute	1.11   	
 node2.example.com	Ready   	compute	1.11   	
 node3.example.com	Ready   	compute	1.11   	

@@ -1,11 +1,11 @@
 # cpuid
 ### Intel CPUID library for Go Programming Language
 
-The cpuid package provides convenient and fast access to information from 
-the x86 CPUID instruction. 
-The package gathers all information during package initialization phase 
+The cpuid package provides convenient and fast access to information from
+the x86 CPUID instruction.
+The package gathers all information during package initialization phase
 so its public interface will not need to execute the CPUID instruction at runtime.
-Frequent calls to the CPUID instruction can hurt performance, 
+Frequent calls to the CPUID instruction can hurt performance,
 so this package makes it easier to do CPU-specific optimizations.
 
 [![GoDoc](https://godoc.org/github.com/intel-go/cpuid?status.svg)](https://godoc.org/github.com/intel-go/cpuid)
@@ -57,7 +57,7 @@ func main() {
 
 ### API description
 Most data is available with simple variables:
- 
+
 * **SteppingId uint32** Processor Stepping ID
 * **ProcessorType uint32** Processor type
 * **DisplayFamily uint32** Processor family
@@ -68,14 +68,14 @@ Most data is available with simple variables:
 * **CacheDescriptors []CacheDescriptor** Cache descriptor's array
 
 You can iterate over them as follows:
-     
+
 ```go
 for _, cacheDescription := range cpuid.CacheDescriptors {
     fmt.Printf("CacheDescriptor: %v\n", cacheDescription)
 }
 ```
 
-* **MonLineSizeMin uint32** Smallest monitor-line size in bytes (default is processor's monitor granularity) 
+* **MonLineSizeMin uint32** Smallest monitor-line size in bytes (default is processor's monitor granularity)
 * **MonLineSizeMax uint32** Largest monitor-line size in bytes (default is processor's monitor granularity)
 * **MonitorEMX bool** Enumeration of Monitor-Mwait extensions availability status
 * **MonitorIBE bool** Supports treating interrupts as break-event for MWAIT flag

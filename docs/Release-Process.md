@@ -48,7 +48,7 @@
 
 ### Point tests repository to stable branch
 
-  If your release changes a major or minor version number(not a patch release), then the above 
+  If your release changes a major or minor version number(not a patch release), then the above
   `./tag_repos.sh` script will create a new stable branch in all the repositories in addition to tagging them.
   This happens when you are making the first `rc` release for a new major or minor version in Kata.
   In this case, you should modify the `tests` repository to point to the newly created stable branch and not the `main` branch.

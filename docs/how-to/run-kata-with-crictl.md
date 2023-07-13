@@ -30,7 +30,7 @@ POD ID              CREATED             STATE               NAME                
 #### Create container in the pod sandbox with config file
 
 ```bash
-$ sudo crictl create 16a62b035940f container_config.json sandbox_config.json 
+$ sudo crictl create 16a62b035940f container_config.json sandbox_config.json
 e6ca0e0f7f532686236b8b1f549e4878e4fe32ea6b599a5d684faf168b429202
 ```
 
@@ -66,7 +66,7 @@ $ sudo crictl exec -it e6ca0e0f7f532 sh
 And run commands in it:
 
 ```
-/ # hostname 
+/ # hostname
 busybox_host
 / # id
 uid=0(root) gid=0(root)

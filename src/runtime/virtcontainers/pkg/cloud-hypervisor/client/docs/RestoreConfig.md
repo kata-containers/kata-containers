@@ -4,8 +4,8 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**SourceUrl** | **string** |  | 
-**Prefault** | Pointer to **bool** |  | [optional] 
+**SourceUrl** | **string** |  |
+**Prefault** | Pointer to **bool** |  | [optional]
 
 ## Methods
 

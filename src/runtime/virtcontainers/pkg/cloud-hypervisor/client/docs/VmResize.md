@@ -4,9 +4,9 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**DesiredVcpus** | Pointer to **int32** |  | [optional] 
-**DesiredRam** | Pointer to **int64** | desired memory ram in bytes | [optional] 
-**DesiredBalloon** | Pointer to **int64** | desired balloon size in bytes | [optional] 
+**DesiredVcpus** | Pointer to **int32** |  | [optional]
+**DesiredRam** | Pointer to **int64** | desired memory ram in bytes | [optional]
+**DesiredBalloon** | Pointer to **int64** | desired balloon size in bytes | [optional]
 
 ## Methods
 

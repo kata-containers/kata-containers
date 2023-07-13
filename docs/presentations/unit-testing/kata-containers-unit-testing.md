@@ -48,7 +48,7 @@ $ make test
 - Run a test in the current package in verbose mode:
 
   ```bash
-  # Example 
+  # Example
   $ test="config::tests::test_get_log_level"
 
   $ cargo test "$test" -vv -- --exact --nocapture

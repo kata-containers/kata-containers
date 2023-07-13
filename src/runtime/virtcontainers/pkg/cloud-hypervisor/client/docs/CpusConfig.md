@@ -6,11 +6,11 @@ Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **BootVcpus** | **int32** |  | [default to 1]
 **MaxVcpus** | **int32** |  | [default to 1]
-**Topology** | Pointer to [**CpuTopology**](CpuTopology.md) |  | [optional] 
+**Topology** | Pointer to [**CpuTopology**](CpuTopology.md) |  | [optional]
 **KvmHyperv** | Pointer to **bool** |  | [optional] [default to false]
-**MaxPhysBits** | Pointer to **int32** |  | [optional] 
-**Affinity** | Pointer to [**[]CpuAffinity**](CpuAffinity.md) |  | [optional] 
-**Features** | Pointer to [**CpuFeatures**](CpuFeatures.md) |  | [optional] 
+**MaxPhysBits** | Pointer to **int32** |  | [optional]
+**Affinity** | Pointer to [**[]CpuAffinity**](CpuAffinity.md) |  | [optional]
+**Features** | Pointer to [**CpuFeatures**](CpuFeatures.md) |  | [optional]
 
 ## Methods
 

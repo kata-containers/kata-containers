@@ -322,7 +322,7 @@ The runtime is responsible for starting the [hypervisor](#hypervisor)
 and it's VM, and communicating with the [agent](#agent) using a
 [ttRPC based protocol](#agent-communications-protocol) over a VSOCK
 socket that provides a communications link between the VM and the
-host. 
+host.
 
 This protocol allows the runtime to send container management commands
 to the agent. The protocol is also used to carry the standard I/O

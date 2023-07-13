@@ -4,12 +4,12 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**File** | **string** |  | 
-**Size** | Pointer to **int64** |  | [optional] 
+**File** | **string** |  |
+**Size** | Pointer to **int64** |  | [optional]
 **Iommu** | Pointer to **bool** |  | [optional] [default to false]
 **DiscardWrites** | Pointer to **bool** |  | [optional] [default to false]
-**PciSegment** | Pointer to **int32** |  | [optional] 
-**Id** | Pointer to **string** |  | [optional] 
+**PciSegment** | Pointer to **int32** |  | [optional]
+**Id** | Pointer to **string** |  | [optional]
 
 ## Methods
 

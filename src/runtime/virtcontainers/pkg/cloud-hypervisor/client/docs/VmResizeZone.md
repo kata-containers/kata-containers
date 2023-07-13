@@ -4,8 +4,8 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Id** | Pointer to **string** |  | [optional] 
-**DesiredRam** | Pointer to **int64** | desired memory zone size in bytes | [optional] 
+**Id** | Pointer to **string** |  | [optional]
+**DesiredRam** | Pointer to **int64** | desired memory zone size in bytes | [optional]
 
 ## Methods
 

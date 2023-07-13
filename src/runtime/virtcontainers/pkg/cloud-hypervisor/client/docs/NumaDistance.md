@@ -4,8 +4,8 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Destination** | **int32** |  | 
-**Distance** | **int32** |  | 
+**Destination** | **int32** |  |
+**Distance** | **int32** |  |
 
 ## Methods
 

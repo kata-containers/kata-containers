@@ -13,7 +13,7 @@ backwards-incompatible ways without warnings. Use it at your own risk.
 ## Usage
 
 The procfs library is organized by packages based on whether the gathered data is coming from
-/proc, /sys, or both.  Each package contains an `FS` type which represents the path to either /proc, 
+/proc, /sys, or both.  Each package contains an `FS` type which represents the path to either /proc,
 /sys, or both.  For example, cpu statistics are gathered from
 `/proc/stat` and are available via the root procfs package.  First, the proc filesystem mount
 point is initialized, and then the stat information is read.
@@ -39,7 +39,7 @@ is available in the `blockdevices` sub-package.
 
 ## Building and Testing
 
-The procfs library is intended to be built as part of another application, so there are no distributable binaries.  
+The procfs library is intended to be built as part of another application, so there are no distributable binaries.
 However, most of the API includes unit tests which can be run with `make test`.
 
 ### Updating Test Fixtures

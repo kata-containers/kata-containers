@@ -4,11 +4,11 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**NumPciSegments** | Pointer to **int32** |  | [optional] 
-**IommuSegments** | Pointer to **[]int32** |  | [optional] 
-**SerialNumber** | Pointer to **string** |  | [optional] 
-**Uuid** | Pointer to **string** |  | [optional] 
-**OemStrings** | Pointer to **[]string** |  | [optional] 
+**NumPciSegments** | Pointer to **int32** |  | [optional]
+**IommuSegments** | Pointer to **[]int32** |  | [optional]
+**SerialNumber** | Pointer to **string** |  | [optional]
+**Uuid** | Pointer to **string** |  | [optional]
+**OemStrings** | Pointer to **[]string** |  | [optional]
 **Tdx** | Pointer to **bool** |  | [optional] [default to false]
 
 ## Methods

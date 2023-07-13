@@ -118,7 +118,7 @@ all vCPU and I/O related threads) will be created in the `/kata_<PodSandboxID>` 
 
 ### Why create a kata-cgroup under the parent cgroup?
 
-And why not directly adding the per sandbox shim directly to the pod cgroup (e.g. 
+And why not directly adding the per sandbox shim directly to the pod cgroup (e.g.
 `/kubepods` in the Kubernetes context)?
 
 The Kata Containers shim implementation creates a per-sandbox cgroup
@@ -219,13 +219,13 @@ the `/kubepods` cgroup hierarchy, and a `/<PodSandboxID>` under the `/kata_overh
 
 On a typical cgroup v1 hierarchy mounted under `/sys/fs/cgroup/`, for a pod which sandbox
 ID is `12345678`, create with `sandbox_cgroup_only` disabled, the 2 memory subsystems
-for the sandbox cgroup and the overhead cgroup would respectively live under 
+for the sandbox cgroup and the overhead cgroup would respectively live under
 `/sys/fs/cgroup/memory/kubepods/kata_12345678` and `/sys/fs/cgroup/memory/kata_overhead/12345678`.
 
 Unlike when `sandbox_cgroup_only` is enabled, the Kata Containers shim will move itself
 to the overhead cgroup first, and then move the vCPU threads to the sandbox cgroup as
 they're created. All Kata processes and threads will run under the overhead cgroup except for
-the vCPU threads. 
+the vCPU threads.
 
 With `sandbox_cgroup_only` disabled, Kata Containers assumes the pod cgroup is only sized
 to accommodate for the actual container workloads processes. For Kata, this maps
@@ -247,7 +247,7 @@ cgroup size and constraints accordingly.
 
 # Supported cgroups
 
-Kata Containers currently supports cgroups `v1` and `v2`. 
+Kata Containers currently supports cgroups `v1` and `v2`.
 
 In the following sections each cgroup is described briefly.
 

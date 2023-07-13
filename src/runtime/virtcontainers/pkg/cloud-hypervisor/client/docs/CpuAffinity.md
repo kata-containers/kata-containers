@@ -4,8 +4,8 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Vcpu** | **int32** |  | 
-**HostCpus** | **[]int32** |  | 
+**Vcpu** | **int32** |  |
+**HostCpus** | **[]int32** |  |
 
 ## Methods
 

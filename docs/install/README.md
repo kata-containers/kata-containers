@@ -1,11 +1,11 @@
 # Kata Containers installation guides
 
-The following is an overview of the different installation methods available. 
+The following is an overview of the different installation methods available.
 
 ## Prerequisites
 
-Kata Containers requires nested virtualization or bare metal. Check 
-[hardware requirements](/src/runtime/README.md#hardware-requirements) to see if your system is capable of running Kata 
+Kata Containers requires nested virtualization or bare metal. Check
+[hardware requirements](/src/runtime/README.md#hardware-requirements) to see if your system is capable of running Kata
 Containers.
 
 ## Packaged installation methods
@@ -17,7 +17,7 @@ Packaged installation methods uses your distribution's native package format (su
 
 | Installation method                                  | Description                                                                                  | Automatic updates | Use case                                                                                      |
 |------------------------------------------------------|----------------------------------------------------------------------------------------------|-------------------|-----------------------------------------------------------------------------------------------|
-| [Using kata-deploy](#kata-deploy-installation)       | The preferred way to deploy the Kata Containers distributed binaries on a Kubernetes cluster | **No!**           | Best way to give it a try on kata-containers on an already up and running Kubernetes cluster. | 
+| [Using kata-deploy](#kata-deploy-installation)       | The preferred way to deploy the Kata Containers distributed binaries on a Kubernetes cluster | **No!**           | Best way to give it a try on kata-containers on an already up and running Kubernetes cluster. |
 | [Using official distro packages](#official-packages) | Kata packages provided by Linux distributions official repositories                          | yes               | Recommended for most users.                                                                   |
 | [Automatic](#automatic-installation)                 | Run a single command to install a full system                                                | **No!**           | For those wanting the latest release quickly.                                                 |
 | [Manual](#manual-installation)                       | Follow a guide step-by-step to install a working system                                      | **No!**           | For those who want the latest release with more control.                                      |

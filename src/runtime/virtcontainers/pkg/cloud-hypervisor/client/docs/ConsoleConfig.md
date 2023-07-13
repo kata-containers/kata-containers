@@ -4,8 +4,8 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**File** | Pointer to **string** |  | [optional] 
-**Mode** | **string** |  | 
+**File** | Pointer to **string** |  | [optional]
+**Mode** | **string** |  |
 **Iommu** | Pointer to **bool** |  | [optional] [default to false]
 
 ## Methods

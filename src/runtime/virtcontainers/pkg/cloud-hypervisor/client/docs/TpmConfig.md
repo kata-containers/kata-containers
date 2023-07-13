@@ -4,7 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Socket** | **string** |  | 
+**Socket** | **string** |  |
 
 ## Methods
 
