@@ -318,7 +318,6 @@ function install_kata() {
 
 	check_containerd_config_for_kata
 	restart_containerd_service
-	install_checkmetrics
 }
 
 function check_containerd_config_for_kata() {
