@@ -65,7 +65,7 @@ To merge all logs:
    ```
    $ sudo systemctl stop systemd-journald
    $ sudo rm -f /var/log/journal/*/* /run/log/journal/*/*
-   $ sudo systemctl start systemd-journald   
+   $ sudo systemctl start systemd-journald
    ```
 1. Create a Kata container.
 1. Collect the logs (alternatively to journal clearing you may consider constraining collected logs by adding `--since=<container creation time>`).

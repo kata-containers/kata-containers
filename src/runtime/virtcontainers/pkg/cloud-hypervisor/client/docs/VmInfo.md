@@ -4,10 +4,10 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Config** | [**VmConfig**](VmConfig.md) |  | 
-**State** | **string** |  | 
-**MemoryActualSize** | Pointer to **int64** |  | [optional] 
-**DeviceTree** | Pointer to [**map[string]DeviceNode**](DeviceNode.md) |  | [optional] 
+**Config** | [**VmConfig**](VmConfig.md) |  |
+**State** | **string** |  |
+**MemoryActualSize** | Pointer to **int64** |  | [optional]
+**DeviceTree** | Pointer to [**map[string]DeviceNode**](DeviceNode.md) |  | [optional]
 
 ## Methods
 

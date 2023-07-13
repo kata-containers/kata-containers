@@ -64,7 +64,7 @@ Tests relating to networking. General items could include:
 - latency
 - jitter
 - parallel bandwidth
-- write and read percentiles 
+- write and read percentiles
 
 ### Storage
 

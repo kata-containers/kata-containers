@@ -1,58 +1,58 @@
 # Motivation
-Today, there exist a few gaps between Container Storage Interface (CSI) and virtual machine (VM) based runtimes such as Kata Containers 
+Today, there exist a few gaps between Container Storage Interface (CSI) and virtual machine (VM) based runtimes such as Kata Containers
 that prevent them from working together smoothly.
 
 First, it’s cumbersome to use a persistent volume (PV) with Kata Containers. Today, for a PV with Filesystem volume mode, Virtio-fs
-is the only way to surface it inside a Kata Container guest VM. But often mounting the filesystem (FS) within the guest operating system (OS) is 
+is the only way to surface it inside a Kata Container guest VM. But often mounting the filesystem (FS) within the guest operating system (OS) is
 desired due to performance benefits, availability of native FS features and security benefits over the Virtio-fs mechanism.
 
-Second, it’s difficult if not impossible to resize a PV online with Kata Containers. While a PV can be expanded on the host OS, 
-the updated metadata needs to be propagated to the guest OS in order for the application container to use the expanded volume. 
+Second, it’s difficult if not impossible to resize a PV online with Kata Containers. While a PV can be expanded on the host OS,
+the updated metadata needs to be propagated to the guest OS in order for the application container to use the expanded volume.
 Currently, there is not a way to propagate the PV metadata from the host OS to the guest OS without restarting the Pod sandbox.
 
 # Proposed Solution
 
-Because of the OS boundary, these features cannot be implemented in the CSI node driver plugin running on the host OS 
-as is normally done in the runc container. Instead, they can be done by the Kata Containers agent inside the guest OS, 
-but it requires the CSI driver to pass the relevant information to the Kata Containers runtime. 
-An ideal long term solution would be to have the `kubelet` coordinating the communication between the CSI driver and 
-the container runtime, as described in [KEP-2857](https://github.com/kubernetes/enhancements/pull/2893/files). 
+Because of the OS boundary, these features cannot be implemented in the CSI node driver plugin running on the host OS
+as is normally done in the runc container. Instead, they can be done by the Kata Containers agent inside the guest OS,
+but it requires the CSI driver to pass the relevant information to the Kata Containers runtime.
+An ideal long term solution would be to have the `kubelet` coordinating the communication between the CSI driver and
+the container runtime, as described in [KEP-2857](https://github.com/kubernetes/enhancements/pull/2893/files).
 However, as the KEP is still under review, we would like to propose a short/medium term solution to unblock our use case.
 
-The proposed solution is built on top of a previous [proposal](https://github.com/egernst/kata-containers/blob/da-proposal/docs/design/direct-assign-volume.md) 
+The proposed solution is built on top of a previous [proposal](https://github.com/egernst/kata-containers/blob/da-proposal/docs/design/direct-assign-volume.md)
 described by Eric Ernst. The previous proposal has two gaps:
 
-1. Writing a `csiPlugin.json` file to the volume root path introduced a security risk. A malicious user can gain unauthorized 
-access to a block device by writing their own `csiPlugin.json` to the above location through an ephemeral CSI plugin.  
+1. Writing a `csiPlugin.json` file to the volume root path introduced a security risk. A malicious user can gain unauthorized
+access to a block device by writing their own `csiPlugin.json` to the above location through an ephemeral CSI plugin.
 
-2. The proposal didn't describe how to establish a mapping between a volume and a kata sandbox, which is needed for 
+2. The proposal didn't describe how to establish a mapping between a volume and a kata sandbox, which is needed for
 implementing CSI volume resize and volume stat collection APIs.
 
 This document particularly focuses on how to address these two gaps.
 
 ## Assumptions and Limitations
-1. The proposal assumes that a block device volume will only be used by one Pod on a node at a time, which we believe 
-is the most common pattern in Kata Containers use cases. It’s also unsafe to have the same block device attached to more than 
-one Kata pod. In the context of Kubernetes, the `PersistentVolumeClaim` (PVC) needs to have the `accessMode` as `ReadWriteOncePod`. 
-2. More advanced Kubernetes volume features such as, `fsGroup`, `fsGroupChangePolicy`, and `subPath` are not supported. 
+1. The proposal assumes that a block device volume will only be used by one Pod on a node at a time, which we believe
+is the most common pattern in Kata Containers use cases. It’s also unsafe to have the same block device attached to more than
+one Kata pod. In the context of Kubernetes, the `PersistentVolumeClaim` (PVC) needs to have the `accessMode` as `ReadWriteOncePod`.
+2. More advanced Kubernetes volume features such as, `fsGroup`, `fsGroupChangePolicy`, and `subPath` are not supported.
 
 ## End User Interface
 
 1. The user specifies a PV as a direct-assigned volume. How a PV is specified as a direct-assigned volume is left for each CSI implementation to decide.
 There are a few options for reference:
-   1. A storage class parameter specifies whether it's a direct-assigned volume. This avoids any lookups of PVC 
-   or Pod information from the CSI plugin (as external provisioner takes care of these). However, all PVs in the storage class with the parameter set 
+   1. A storage class parameter specifies whether it's a direct-assigned volume. This avoids any lookups of PVC
+   or Pod information from the CSI plugin (as external provisioner takes care of these). However, all PVs in the storage class with the parameter set
    will have host mounts skipped.
    2. Use a PVC annotation. This approach requires the CSI plugins have `--extra-create-metadata` [set](https://kubernetes-csi.github.io/docs/external-provisioner.html#persistentvolumeclaim-and-persistentvolume-parameters)
-   to be able to perform a lookup of the PVC annotations from the API server. Pro: API server lookup of annotations only required during creation of PV. 
+   to be able to perform a lookup of the PVC annotations from the API server. Pro: API server lookup of annotations only required during creation of PV.
    Con: The CSI plugin will always skip host mounting of the PV.
    3. The CSI plugin can also lookup pod `runtimeclass` during `NodePublish`. This approach can be found in the [ALIBABA CSI plugin](https://github.com/kubernetes-sigs/alibaba-cloud-csi-driver/blob/master/pkg/disk/nodeserver.go#L248).
-2. The CSI node driver delegates the direct assigned volume to the Kata Containers runtime. The CSI node driver APIs need to 
+2. The CSI node driver delegates the direct assigned volume to the Kata Containers runtime. The CSI node driver APIs need to
    be modified to pass the volume mount information and collect volume information to/from the Kata Containers runtime by invoking `kata-runtime` command line commands.
-   * **NodePublishVolume** -- It invokes `kata-runtime direct-volume add --volume-path [volumePath] --mount-info [mountInfo]` 
+   * **NodePublishVolume** -- It invokes `kata-runtime direct-volume add --volume-path [volumePath] --mount-info [mountInfo]`
    to propagate the volume mount information to the Kata Containers runtime for it to carry out the filesystem mount operation.
    The `volumePath` is the [target_path](https://github.com/container-storage-interface/spec/blob/master/csi.proto#L1364) in the CSI `NodePublishVolumeRequest`.
-   The `mountInfo` is a serialized JSON string. 
+   The `mountInfo` is a serialized JSON string.
    * **NodeGetVolumeStats** -- It invokes `kata-runtime direct-volume stats --volume-path [volumePath]` to retrieve the filesystem stats of direct-assigned volume.
    * **NodeExpandVolume** -- It invokes `kata-runtime direct-volume resize --volume-path [volumePath] --size [size]` to send a resize request to the Kata Containers runtime to
    resize the direct-assigned volume.
@@ -78,17 +78,17 @@ Notes: given that the `mountInfo` is persisted to the disk by the Kata runtime, 
 ## Implementation Details
 
 ### Kata runtime
-Instead of the CSI node driver writing the mount info into a `csiPlugin.json` file under the volume root, 
-as described in the original proposal, here we propose that the CSI node driver passes the mount information to 
-the Kata Containers runtime through a new `kata-runtime` commandline command. The `kata-runtime` then writes the mount 
+Instead of the CSI node driver writing the mount info into a `csiPlugin.json` file under the volume root,
+as described in the original proposal, here we propose that the CSI node driver passes the mount information to
+the Kata Containers runtime through a new `kata-runtime` commandline command. The `kata-runtime` then writes the mount
 information to a `mountInfo.json` file in a predefined location (`/run/kata-containers/shared/direct-volumes/[volume_path]/`).
 
-When the Kata Containers runtime starts a container, it verifies whether a volume mount is a direct-assigned volume by checking 
-whether there is a `mountInfo` file under the computed Kata `direct-volumes` directory. If it is, the runtime parses the `mountInfo` file, 
+When the Kata Containers runtime starts a container, it verifies whether a volume mount is a direct-assigned volume by checking
+whether there is a `mountInfo` file under the computed Kata `direct-volumes` directory. If it is, the runtime parses the `mountInfo` file,
 updates the mount spec with the data in `mountInfo`. The updated mount spec is then passed to the Kata agent in the guest VM together
-with other mounts. The Kata Containers runtime also creates a file named by the sandbox id under the `direct-volumes/[volume_path]/` 
-directory. The reason for adding a sandbox id file is to establish a mapping between the volume and the sandbox using it. 
-Later, when the Kata Containers runtime handles the `get-stats` and `resize` commands, it uses the sandbox id to identify 
+with other mounts. The Kata Containers runtime also creates a file named by the sandbox id under the `direct-volumes/[volume_path]/`
+directory. The reason for adding a sandbox id file is to establish a mapping between the volume and the sandbox using it.
+Later, when the Kata Containers runtime handles the `get-stats` and `resize` commands, it uses the sandbox id to identify
 the endpoint of the corresponding `containerd-shim-kata-v2`.
 
 ### containerd-shim-kata-v2 changes
@@ -101,12 +101,12 @@ $ curl --unix-socket "$shim_socket_path" -I -X GET 'http://localhost/direct-volu
 $ curl --unix-socket "$shim_socket_path" -I -X POST 'http://localhost/direct-volume/resize' -d '{ "volumePath"": [volumePath], "Size": "123123" }'
 ```
 
-The shim then forwards the corresponding request to the `kata-agent` to carry out the operations inside the guest VM. For `resize` operation, 
-the Kata runtime also needs to notify the hypervisor to resize the block device (e.g. call `block_resize` in QEMU). 
+The shim then forwards the corresponding request to the `kata-agent` to carry out the operations inside the guest VM. For `resize` operation,
+the Kata runtime also needs to notify the hypervisor to resize the block device (e.g. call `block_resize` in QEMU).
 
 ### Kata agent changes
 
-The mount spec of a direct-assigned volume is passed to `kata-agent` through the existing `Storage` GRPC object. 
+The mount spec of a direct-assigned volume is passed to `kata-agent` through the existing `Storage` GRPC object.
 Two new APIs and three new GRPC objects are added to GRPC protocol between the shim and agent for resizing and getting volume stats:
 ```protobuf
 

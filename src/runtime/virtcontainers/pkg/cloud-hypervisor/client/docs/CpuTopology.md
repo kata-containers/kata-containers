@@ -4,10 +4,10 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**ThreadsPerCore** | Pointer to **int32** |  | [optional] 
-**CoresPerDie** | Pointer to **int32** |  | [optional] 
-**DiesPerPackage** | Pointer to **int32** |  | [optional] 
-**Packages** | Pointer to **int32** |  | [optional] 
+**ThreadsPerCore** | Pointer to **int32** |  | [optional]
+**CoresPerDie** | Pointer to **int32** |  | [optional]
+**DiesPerPackage** | Pointer to **int32** |  | [optional]
+**Packages** | Pointer to **int32** |  | [optional]
 
 ## Methods
 

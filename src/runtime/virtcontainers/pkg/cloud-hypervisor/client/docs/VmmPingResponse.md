@@ -4,9 +4,9 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**BuildVersion** | Pointer to **string** |  | [optional] 
-**Version** | **string** |  | 
-**Pid** | Pointer to **int64** |  | [optional] 
+**BuildVersion** | Pointer to **string** |  | [optional]
+**Version** | **string** |  |
+**Pid** | Pointer to **int64** |  | [optional]
 
 ## Methods
 

@@ -4,17 +4,17 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Path** | **string** |  | 
+**Path** | **string** |  |
 **Readonly** | Pointer to **bool** |  | [optional] [default to false]
 **Direct** | Pointer to **bool** |  | [optional] [default to false]
 **Iommu** | Pointer to **bool** |  | [optional] [default to false]
 **NumQueues** | Pointer to **int32** |  | [optional] [default to 1]
 **QueueSize** | Pointer to **int32** |  | [optional] [default to 128]
 **VhostUser** | Pointer to **bool** |  | [optional] [default to false]
-**VhostSocket** | Pointer to **string** |  | [optional] 
-**RateLimiterConfig** | Pointer to [**RateLimiterConfig**](RateLimiterConfig.md) |  | [optional] 
-**PciSegment** | Pointer to **int32** |  | [optional] 
-**Id** | Pointer to **string** |  | [optional] 
+**VhostSocket** | Pointer to **string** |  | [optional]
+**RateLimiterConfig** | Pointer to [**RateLimiterConfig**](RateLimiterConfig.md) |  | [optional]
+**PciSegment** | Pointer to **int32** |  | [optional]
+**Id** | Pointer to **string** |  | [optional]
 
 ## Methods
 

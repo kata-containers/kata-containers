@@ -4,7 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Size** | **int64** |  | 
+**Size** | **int64** |  |
 **DeflateOnOom** | Pointer to **bool** | Deflate balloon when the guest is under memory pressure. | [optional] [default to false]
 **FreePageReporting** | Pointer to **bool** | Enable guest to report free pages. | [optional] [default to false]
 

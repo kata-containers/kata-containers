@@ -4,7 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**DestinationUrl** | Pointer to **string** |  | [optional] 
+**DestinationUrl** | Pointer to **string** |  | [optional]
 
 ## Methods
 

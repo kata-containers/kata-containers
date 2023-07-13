@@ -4,21 +4,21 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Tap** | Pointer to **string** |  | [optional] 
+**Tap** | Pointer to **string** |  | [optional]
 **Ip** | Pointer to **string** |  | [optional] [default to "192.168.249.1"]
 **Mask** | Pointer to **string** |  | [optional] [default to "255.255.255.0"]
-**Mac** | Pointer to **string** |  | [optional] 
-**HostMac** | Pointer to **string** |  | [optional] 
-**Mtu** | Pointer to **int32** |  | [optional] 
+**Mac** | Pointer to **string** |  | [optional]
+**HostMac** | Pointer to **string** |  | [optional]
+**Mtu** | Pointer to **int32** |  | [optional]
 **Iommu** | Pointer to **bool** |  | [optional] [default to false]
 **NumQueues** | Pointer to **int32** |  | [optional] [default to 2]
 **QueueSize** | Pointer to **int32** |  | [optional] [default to 256]
 **VhostUser** | Pointer to **bool** |  | [optional] [default to false]
-**VhostSocket** | Pointer to **string** |  | [optional] 
+**VhostSocket** | Pointer to **string** |  | [optional]
 **VhostMode** | Pointer to **string** |  | [optional] [default to "Client"]
-**Id** | Pointer to **string** |  | [optional] 
-**PciSegment** | Pointer to **int32** |  | [optional] 
-**RateLimiterConfig** | Pointer to [**RateLimiterConfig**](RateLimiterConfig.md) |  | [optional] 
+**Id** | Pointer to **string** |  | [optional]
+**PciSegment** | Pointer to **int32** |  | [optional]
+**RateLimiterConfig** | Pointer to [**RateLimiterConfig**](RateLimiterConfig.md) |  | [optional]
 
 ## Methods
 

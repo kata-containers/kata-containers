@@ -4,16 +4,16 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Id** | **string** |  | 
-**Size** | **int64** |  | 
-**File** | Pointer to **string** |  | [optional] 
+**Id** | **string** |  |
+**Size** | **int64** |  |
+**File** | Pointer to **string** |  | [optional]
 **Mergeable** | Pointer to **bool** |  | [optional] [default to false]
 **Shared** | Pointer to **bool** |  | [optional] [default to false]
 **Hugepages** | Pointer to **bool** |  | [optional] [default to false]
-**HugepageSize** | Pointer to **int64** |  | [optional] 
-**HostNumaNode** | Pointer to **int32** |  | [optional] 
-**HotplugSize** | Pointer to **int64** |  | [optional] 
-**HotpluggedSize** | Pointer to **int64** |  | [optional] 
+**HugepageSize** | Pointer to **int64** |  | [optional]
+**HostNumaNode** | Pointer to **int32** |  | [optional]
+**HotplugSize** | Pointer to **int64** |  | [optional]
+**HotpluggedSize** | Pointer to **int64** |  | [optional]
 **Prefault** | Pointer to **bool** |  | [optional] [default to false]
 
 ## Methods

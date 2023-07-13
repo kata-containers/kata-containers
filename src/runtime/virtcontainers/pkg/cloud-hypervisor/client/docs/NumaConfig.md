@@ -4,11 +4,11 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**GuestNumaId** | **int32** |  | 
-**Cpus** | Pointer to **[]int32** |  | [optional] 
-**Distances** | Pointer to [**[]NumaDistance**](NumaDistance.md) |  | [optional] 
-**MemoryZones** | Pointer to **[]string** |  | [optional] 
-**SgxEpcSections** | Pointer to **[]string** |  | [optional] 
+**GuestNumaId** | **int32** |  |
+**Cpus** | Pointer to **[]int32** |  | [optional]
+**Distances** | Pointer to [**[]NumaDistance**](NumaDistance.md) |  | [optional]
+**MemoryZones** | Pointer to **[]string** |  | [optional]
+**SgxEpcSections** | Pointer to **[]string** |  | [optional]
 
 ## Methods
 

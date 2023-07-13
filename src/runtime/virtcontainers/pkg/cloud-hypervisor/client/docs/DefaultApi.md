@@ -133,7 +133,7 @@ Other parameters are passed through a pointer to a apiCreateVMRequest struct via
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
- **vmConfig** | [**VmConfig**](VmConfig.md) | The VM configuration | 
+ **vmConfig** | [**VmConfig**](VmConfig.md) | The VM configuration |
 
 ### Return type
 
@@ -596,7 +596,7 @@ Other parameters are passed through a pointer to a apiVmAddDevicePutRequest stru
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
- **deviceConfig** | [**DeviceConfig**](DeviceConfig.md) | The path of the new device | 
+ **deviceConfig** | [**DeviceConfig**](DeviceConfig.md) | The path of the new device |
 
 ### Return type
 
@@ -660,7 +660,7 @@ Other parameters are passed through a pointer to a apiVmAddDiskPutRequest struct
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
- **diskConfig** | [**DiskConfig**](DiskConfig.md) | The details of the new disk | 
+ **diskConfig** | [**DiskConfig**](DiskConfig.md) | The details of the new disk |
 
 ### Return type
 
@@ -724,7 +724,7 @@ Other parameters are passed through a pointer to a apiVmAddFsPutRequest struct v
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
- **fsConfig** | [**FsConfig**](FsConfig.md) | The details of the new virtio-fs | 
+ **fsConfig** | [**FsConfig**](FsConfig.md) | The details of the new virtio-fs |
 
 ### Return type
 
@@ -788,7 +788,7 @@ Other parameters are passed through a pointer to a apiVmAddNetPutRequest struct 
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
- **netConfig** | [**NetConfig**](NetConfig.md) | The details of the new network device | 
+ **netConfig** | [**NetConfig**](NetConfig.md) | The details of the new network device |
 
 ### Return type
 
@@ -852,7 +852,7 @@ Other parameters are passed through a pointer to a apiVmAddPmemPutRequest struct
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
- **pmemConfig** | [**PmemConfig**](PmemConfig.md) | The details of the new pmem device | 
+ **pmemConfig** | [**PmemConfig**](PmemConfig.md) | The details of the new pmem device |
 
 ### Return type
 
@@ -916,7 +916,7 @@ Other parameters are passed through a pointer to a apiVmAddVdpaPutRequest struct
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
- **vdpaConfig** | [**VdpaConfig**](VdpaConfig.md) | The details of the new vDPA device | 
+ **vdpaConfig** | [**VdpaConfig**](VdpaConfig.md) | The details of the new vDPA device |
 
 ### Return type
 
@@ -980,7 +980,7 @@ Other parameters are passed through a pointer to a apiVmAddVsockPutRequest struc
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
- **vsockConfig** | [**VsockConfig**](VsockConfig.md) | The details of the new vsock device | 
+ **vsockConfig** | [**VsockConfig**](VsockConfig.md) | The details of the new vsock device |
 
 ### Return type
 
@@ -1042,7 +1042,7 @@ Other parameters are passed through a pointer to a apiVmCoredumpPutRequest struc
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
- **vmCoredumpData** | [**VmCoredumpData**](VmCoredumpData.md) | The coredump configuration | 
+ **vmCoredumpData** | [**VmCoredumpData**](VmCoredumpData.md) | The coredump configuration |
 
 ### Return type
 
@@ -1222,7 +1222,7 @@ Other parameters are passed through a pointer to a apiVmReceiveMigrationPutReque
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
- **receiveMigrationData** | [**ReceiveMigrationData**](ReceiveMigrationData.md) | The URL for the reception of migration state | 
+ **receiveMigrationData** | [**ReceiveMigrationData**](ReceiveMigrationData.md) | The URL for the reception of migration state |
 
 ### Return type
 
@@ -1284,7 +1284,7 @@ Other parameters are passed through a pointer to a apiVmRemoveDevicePutRequest s
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
- **vmRemoveDevice** | [**VmRemoveDevice**](VmRemoveDevice.md) | The identifier of the device | 
+ **vmRemoveDevice** | [**VmRemoveDevice**](VmRemoveDevice.md) | The identifier of the device |
 
 ### Return type
 
@@ -1346,7 +1346,7 @@ Other parameters are passed through a pointer to a apiVmResizePutRequest struct 
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
- **vmResize** | [**VmResize**](VmResize.md) | The target size for the VM | 
+ **vmResize** | [**VmResize**](VmResize.md) | The target size for the VM |
 
 ### Return type
 
@@ -1408,7 +1408,7 @@ Other parameters are passed through a pointer to a apiVmResizeZonePutRequest str
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
- **vmResizeZone** | [**VmResizeZone**](VmResizeZone.md) | The target size for the memory zone | 
+ **vmResizeZone** | [**VmResizeZone**](VmResizeZone.md) | The target size for the memory zone |
 
 ### Return type
 
@@ -1470,7 +1470,7 @@ Other parameters are passed through a pointer to a apiVmRestorePutRequest struct
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
- **restoreConfig** | [**RestoreConfig**](RestoreConfig.md) | The restore configuration | 
+ **restoreConfig** | [**RestoreConfig**](RestoreConfig.md) | The restore configuration |
 
 ### Return type
 
@@ -1532,7 +1532,7 @@ Other parameters are passed through a pointer to a apiVmSendMigrationPutRequest 
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
- **sendMigrationData** | [**SendMigrationData**](SendMigrationData.md) | The URL for sending the migration state | 
+ **sendMigrationData** | [**SendMigrationData**](SendMigrationData.md) | The URL for sending the migration state |
 
 ### Return type
 
@@ -1594,7 +1594,7 @@ Other parameters are passed through a pointer to a apiVmSnapshotPutRequest struc
 
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
- **vmSnapshotConfig** | [**VmSnapshotConfig**](VmSnapshotConfig.md) | The snapshot configuration | 
+ **vmSnapshotConfig** | [**VmSnapshotConfig**](VmSnapshotConfig.md) | The snapshot configuration |
 
 ### Return type
 

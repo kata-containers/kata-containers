@@ -4,7 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**ReceiverUrl** | **string** |  | 
+**ReceiverUrl** | **string** |  |
 
 ## Methods
 

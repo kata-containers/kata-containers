@@ -139,7 +139,7 @@ See [Kata Containers Architecture](../../../docs/design/architecture/README.md#s
 
 # Devices
 
-Support has been added to pass [VFIO](https://www.kernel.org/doc/Documentation/vfio.txt) 
+Support has been added to pass [VFIO](https://www.kernel.org/doc/Documentation/vfio.txt)
 assigned devices on the docker command line with --device.
 Support for passing other devices including block devices with --device has
 not been added yet. [PCI](#how-to-pass-a-device-using-vfio-pci-passthrough) and
@@ -152,7 +152,7 @@ cards) devices can be passed.
 
 IOMMU group represents the smallest set of devices for which the IOMMU has
 visibility and which is isolated from other groups.  VFIO uses this information
-to enforce safe ownership of devices for userspace. 
+to enforce safe ownership of devices for userspace.
 
 You will need Intel VT-d capable hardware. Check if IOMMU is enabled in your host
 kernel by verifying `CONFIG_VFIO_NOIOMMU` is not in the kernel configuration. If it is set,
@@ -160,7 +160,7 @@ you will need to rebuild your kernel.
 
 The following kernel configuration options need to be enabled:
 ```
-CONFIG_VFIO_IOMMU_TYPE1=m 
+CONFIG_VFIO_IOMMU_TYPE1=m
 CONFIG_VFIO=m
 CONFIG_VFIO_PCI=m
 ```
@@ -218,7 +218,7 @@ $ ls /dev/vfio
 docker run -it --device=/dev/vfio/16 centos/tools bash
 ```
 
-9. Running `lspci` within the container should show the device among the 
+9. Running `lspci` within the container should show the device among the
 PCI devices. The driver for the device needs to be present within the
 Clear Containers kernel. If the driver is missing,  you can add it to your
 custom container kernel using the [osbuilder](https://github.com/clearcontainers/osbuilder)

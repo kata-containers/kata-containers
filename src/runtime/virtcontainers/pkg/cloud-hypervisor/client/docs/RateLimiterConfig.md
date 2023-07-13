@@ -4,8 +4,8 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Bandwidth** | Pointer to [**TokenBucket**](TokenBucket.md) |  | [optional] 
-**Ops** | Pointer to [**TokenBucket**](TokenBucket.md) |  | [optional] 
+**Bandwidth** | Pointer to [**TokenBucket**](TokenBucket.md) |  | [optional]
+**Ops** | Pointer to [**TokenBucket**](TokenBucket.md) |  | [optional]
 
 ## Methods
 

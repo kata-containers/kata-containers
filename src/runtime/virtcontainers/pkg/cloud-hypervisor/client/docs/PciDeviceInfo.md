@@ -4,8 +4,8 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Id** | **string** |  | 
-**Bdf** | **string** |  | 
+**Id** | **string** |  |
+**Bdf** | **string** |  |
 
 ## Methods
 

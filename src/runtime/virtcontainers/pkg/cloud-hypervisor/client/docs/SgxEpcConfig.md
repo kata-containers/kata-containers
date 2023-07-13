@@ -4,8 +4,8 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Id** | **string** |  | 
-**Size** | **int64** |  | 
+**Id** | **string** |  |
+**Size** | **int64** |  |
 **Prefault** | Pointer to **bool** |  | [optional] [default to false]
 
 ## Methods

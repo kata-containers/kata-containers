@@ -4,7 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Amx** | Pointer to **bool** |  | [optional] 
+**Amx** | Pointer to **bool** |  | [optional]
 
 ## Methods
 

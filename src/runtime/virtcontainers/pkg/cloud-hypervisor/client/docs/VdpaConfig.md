@@ -4,11 +4,11 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Path** | **string** |  | 
+**Path** | **string** |  |
 **NumQueues** | **int32** |  | [default to 1]
 **Iommu** | Pointer to **bool** |  | [optional] [default to false]
-**PciSegment** | Pointer to **int32** |  | [optional] 
-**Id** | Pointer to **string** |  | [optional] 
+**PciSegment** | Pointer to **int32** |  | [optional]
+**Id** | Pointer to **string** |  | [optional]
 
 ## Methods
 

@@ -4,10 +4,10 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Id** | Pointer to **string** |  | [optional] 
-**Resources** | Pointer to **[]map[string]interface{}** |  | [optional] 
-**Children** | Pointer to **[]string** |  | [optional] 
-**PciBdf** | Pointer to **string** |  | [optional] 
+**Id** | Pointer to **string** |  | [optional]
+**Resources** | Pointer to **[]map[string]interface{}** |  | [optional]
+**Children** | Pointer to **[]string** |  | [optional]
+**PciBdf** | Pointer to **string** |  | [optional]
 
 ## Methods
 

@@ -4,26 +4,26 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Cpus** | Pointer to [**CpusConfig**](CpusConfig.md) |  | [optional] 
-**Memory** | Pointer to [**MemoryConfig**](MemoryConfig.md) |  | [optional] 
-**Payload** | [**PayloadConfig**](PayloadConfig.md) |  | 
-**Disks** | Pointer to [**[]DiskConfig**](DiskConfig.md) |  | [optional] 
-**Net** | Pointer to [**[]NetConfig**](NetConfig.md) |  | [optional] 
-**Rng** | Pointer to [**RngConfig**](RngConfig.md) |  | [optional] 
-**Balloon** | Pointer to [**BalloonConfig**](BalloonConfig.md) |  | [optional] 
-**Fs** | Pointer to [**[]FsConfig**](FsConfig.md) |  | [optional] 
-**Pmem** | Pointer to [**[]PmemConfig**](PmemConfig.md) |  | [optional] 
-**Serial** | Pointer to [**ConsoleConfig**](ConsoleConfig.md) |  | [optional] 
-**Console** | Pointer to [**ConsoleConfig**](ConsoleConfig.md) |  | [optional] 
-**Devices** | Pointer to [**[]DeviceConfig**](DeviceConfig.md) |  | [optional] 
-**Vdpa** | Pointer to [**[]VdpaConfig**](VdpaConfig.md) |  | [optional] 
-**Vsock** | Pointer to [**VsockConfig**](VsockConfig.md) |  | [optional] 
-**SgxEpc** | Pointer to [**[]SgxEpcConfig**](SgxEpcConfig.md) |  | [optional] 
-**Numa** | Pointer to [**[]NumaConfig**](NumaConfig.md) |  | [optional] 
+**Cpus** | Pointer to [**CpusConfig**](CpusConfig.md) |  | [optional]
+**Memory** | Pointer to [**MemoryConfig**](MemoryConfig.md) |  | [optional]
+**Payload** | [**PayloadConfig**](PayloadConfig.md) |  |
+**Disks** | Pointer to [**[]DiskConfig**](DiskConfig.md) |  | [optional]
+**Net** | Pointer to [**[]NetConfig**](NetConfig.md) |  | [optional]
+**Rng** | Pointer to [**RngConfig**](RngConfig.md) |  | [optional]
+**Balloon** | Pointer to [**BalloonConfig**](BalloonConfig.md) |  | [optional]
+**Fs** | Pointer to [**[]FsConfig**](FsConfig.md) |  | [optional]
+**Pmem** | Pointer to [**[]PmemConfig**](PmemConfig.md) |  | [optional]
+**Serial** | Pointer to [**ConsoleConfig**](ConsoleConfig.md) |  | [optional]
+**Console** | Pointer to [**ConsoleConfig**](ConsoleConfig.md) |  | [optional]
+**Devices** | Pointer to [**[]DeviceConfig**](DeviceConfig.md) |  | [optional]
+**Vdpa** | Pointer to [**[]VdpaConfig**](VdpaConfig.md) |  | [optional]
+**Vsock** | Pointer to [**VsockConfig**](VsockConfig.md) |  | [optional]
+**SgxEpc** | Pointer to [**[]SgxEpcConfig**](SgxEpcConfig.md) |  | [optional]
+**Numa** | Pointer to [**[]NumaConfig**](NumaConfig.md) |  | [optional]
 **Iommu** | Pointer to **bool** |  | [optional] [default to false]
 **Watchdog** | Pointer to **bool** |  | [optional] [default to false]
-**Platform** | Pointer to [**PlatformConfig**](PlatformConfig.md) |  | [optional] 
-**Tpm** | Pointer to [**TpmConfig**](TpmConfig.md) |  | [optional] 
+**Platform** | Pointer to [**PlatformConfig**](PlatformConfig.md) |  | [optional]
+**Tpm** | Pointer to [**TpmConfig**](TpmConfig.md) |  | [optional]
 
 ## Methods
 

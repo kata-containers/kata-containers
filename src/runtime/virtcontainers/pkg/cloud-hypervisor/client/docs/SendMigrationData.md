@@ -4,8 +4,8 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**DestinationUrl** | **string** |  | 
-**Local** | Pointer to **bool** |  | [optional] 
+**DestinationUrl** | **string** |  |
+**Local** | Pointer to **bool** |  | [optional]
 
 ## Methods
 
