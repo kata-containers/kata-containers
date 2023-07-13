@@ -37,15 +37,17 @@ mod arch_specific {
     fn check_cpu() -> Result<()> {
         info!(sl!(), "check CPU: s390x");
 
-        let cpu_info = check::get_single_cpu_info(check::PROC_CPUINFO, CPUINFO_DELIMITER)?;
+        let cpu_info =
+            kata_sys_util::cpu::get_single_cpu_info(check::PROC_CPUINFO, CPUINFO_DELIMITER)?;
 
-        let cpu_features = check::get_cpu_flags(&cpu_info, CPUINFO_FEATURES_TAG).map_err(|e| {
-            anyhow!(
-                "Error parsing CPU features, file {:?}, {:?}",
-                check::PROC_CPUINFO,
-                e
-            )
-        })?;
+        let cpu_features = kata_sys_util::cpu::get_cpu_flags(&cpu_info, CPUINFO_FEATURES_TAG)
+            .map_err(|e| {
+                anyhow!(
+                    "Error parsing CPU features, file {:?}, {:?}",
+                    check::PROC_CPUINFO,
+                    e
+                )
+            })?;
 
         let missing_cpu_features = check::check_cpu_flags(&cpu_features, CPU_FEATURES_REQ)?;
         if !missing_cpu_features.is_empty() {
