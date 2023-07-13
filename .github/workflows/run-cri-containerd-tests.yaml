@@ -23,6 +23,9 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
 
+      - name: Install dependencies
+        run: bash tests/integration/cri-containerd/gha-run.sh install-dependencies
+
       - name: get-kata-tarball
         uses: actions/download-artifact@v3
         with:
