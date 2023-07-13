@@ -341,4 +341,13 @@ function ensure_yq() {
     INSTALL_IN_GOPATH=true "${repo_root_dir}/ci/install_yq.sh"
 }
 
+# dependency: What we want to get the version from the versions.yaml file
+function get_from_kata_deps() {
+        local dependency="$1"
+        versions_file="${repo_root_dir}/versions.yaml"
 
+        command -v yq &>/dev/null || die 'yq command is not in your $PATH'
+        result=$("yq" read -X "$versions_file" "$dependency")
+        [ "$result" = "null" ] && result=""
+        echo "$result"
+}
