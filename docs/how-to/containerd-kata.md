@@ -105,7 +105,7 @@ $ popd
 ### Configure containerd to use Kata Containers
 
 By default, the configuration of containerd is located at `/etc/containerd/config.toml`, and the
-`cri` plugins are placed in the following section:
+`cri` plugins are placed in the following section (`version = 2` syntax):
 
 ```toml
 [plugins]
@@ -118,6 +118,10 @@ By default, the configuration of containerd is located at `/etc/containerd/confi
       # conf_dir is the directory in which the admin places a CNI conf.
       conf_dir = "/etc/cni/net.d"
 ```
+
+**NOTE** If your `/etc/containerd/config.toml` file uses `version = 1`, then you
+need to replace `plugins."io.containerd.grpc.v1.cri"` with `plugins.cri`in this
+example and the following ones.
 
 The following sections outline how to add Kata Containers to the configurations.
 

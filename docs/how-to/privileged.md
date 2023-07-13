@@ -40,6 +40,10 @@ See below example config:
            ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration.toml"
 ```
 
+**NOTE** If your `/etc/containerd/config.toml` file uses `version = 1`, then you
+need to replace `plugins."io.containerd.grpc.v1.cri"` with `plugins.cri`in this
+example and the following ones.
+
  - [How to use Kata Containers and containerd with Kubernetes](how-to-use-k8s-with-containerd-and-kata.md)
  - [Containerd CRI config documentation](https://github.com/containerd/containerd/blob/main/docs/cri/config.md)
 

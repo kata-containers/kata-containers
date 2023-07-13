@@ -230,6 +230,10 @@ Add the relevant section in `containerd`’s `config.toml` file (`/etc/container
     runtime_type = "io.containerd.kata-fc.v2"
 ```
 
+**Note** If your `/etc/containerd/config.toml` file uses `version = 1`, then you
+need to replace `plugins."io.containerd.grpc.v1.cri"` with `plugins.cri`in this
+example and the following ones.
+
 > **Note:** If you are using the default `containerd` configuration (`containerd config default >> /etc/containerd/config.toml`),
 > the configuration should change to :
 ```
