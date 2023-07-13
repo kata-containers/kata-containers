@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-set -o pipefial
+set -o pipefail
 
 # General env
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
@@ -22,7 +22,7 @@ TESTDIR="${TESTDIR:-/testdir}"
 dst_dir="/host"
 src_dir=$(mktemp --tmpdir -d tensorflowai.XXXXXXXXXX)
 MOUNT_OPTIONS="type=bind,src=$src_dir,dst=$dst_dir,options=rbind:ro"
-start_script="mobilnet_start.sh"
+start_script="mobilenet_start.sh"
 # CMD points to the script that starts the workload
 CMD="$dst_dir/$start_script"
 guest_trigger_file="$dst_dir/$trigger_file"
@@ -100,13 +100,13 @@ function mobilenet_test() {
 		sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${i}" sh -c "${CMD_RESULTS}"  >> "${tensorflow_file}"
 	done
 
-	local mobilnet_results=$(cat "${tensorflow_file}" | sed 's/.$//')
-	local average_mobilnet=$(echo "${mobilnet_results}" | sed 's/.$//' | sed "s/,/+/g;s/.*/(&)\/$NUM_CONTAINERS/g" | bc -l)
+	local mobilenet_results=$(cat "${tensorflow_file}" | sed 's/.$//')
+	local average_mobilenet=$(echo "${mobilenet_results}" | sed 's/.$//' | sed "s/,/+/g;s/.*/(&)\/$NUM_CONTAINERS/g" | bc -l)
 	local json="$(cat << EOF
 	{
-		"Mobilnet": {
-			"Result": "${mobilnet_results}",
-			"Average": "${average_mobilnet}",
+		"Mobilenet": {
+			"Result": "${mobilenet_results}",
+			"Average": "${average_mobilenet}",
 			"Units": "images/s"
 		}
 	}
