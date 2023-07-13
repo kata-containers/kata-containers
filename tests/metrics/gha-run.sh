@@ -95,7 +95,7 @@ function run_test_tensorflow() {
 function main() {
 	action="${1:-}"
 	case "${action}" in
-		install-kata) install_kata ;;
+		install-kata) install_kata && install_checkmetrics ;;
 		make-tarball-results) make_tarball_results ;;
 		run-test-launchtimes) run_test_launchtimes ;;
 		run-test-memory-usage) run_test_memory_usage ;;
