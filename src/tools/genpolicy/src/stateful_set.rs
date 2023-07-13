@@ -44,6 +44,9 @@ pub struct StatefulSetSpec {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     volumeClaimTemplates: Option<Vec<persistent_volume_claim::PersistentVolumeClaim>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    podManagementPolicy: Option<String>,
     // TODO: additional fields.
 }
 

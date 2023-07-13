@@ -328,6 +328,13 @@ impl AgentPolicy {
             .registry
             .get_process(&mut process, yaml_has_command, yaml_has_args);
 
+        if let Some(tty) = yaml_container.tty {
+            process.terminal = tty;
+            if tty && !is_pause_container {
+                process.env.push("TERM=".to_string() + "xterm");
+            }
+        }
+
         if !is_pause_container {
             process.env.push("HOSTNAME=".to_string() + "$(host-name)");
         }
@@ -567,6 +574,17 @@ fn substitute_variable(
     name_end: usize,
     env: &Vec<String>,
 ) -> Option<String> {
+    let internal_vars = vec![
+        "bundle-id",
+        "host-ip",
+        "node-name",
+        "pod-ip",
+        "pod-uid",
+        "sandbox-id",
+        "sandbox-name",
+        "sandbox-namespace",
+    ];
+
     assert!(name_start < name_end);
     assert!(name_end < env_var.len());
     let name = env_var[name_start..name_end].to_string();
@@ -581,10 +599,10 @@ fn substitute_variable(
                 let value = &components[1];
 
                 if let Some((start, end)) = find_subst_target(value) {
-                    if value[start..end].eq("node-name") {
-                        // $(node-name) never gets expanded in the current design,
-                        // so it's OK to use it as replacement in other env variables
-                        // or command arguments.
+                    if internal_vars.contains(&&value[start..end]) {
+                        // Variables used internally for Policy don't get expanded
+                        // in the current design, so it's OK to use them as replacement
+                        // in other env variables or command arguments.
                     } else {
                         // Don't substitute if the value includes variables to be
                         // substituted, to avoid circular substitutions.

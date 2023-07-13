@@ -79,6 +79,10 @@ pub struct PodSpec {
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Container {
+    /// Container image registry information.
+    #[serde(skip)]
+    pub registry: registry::Container,
+
     pub name: String,
     pub image: String,
 
@@ -110,16 +114,22 @@ pub struct Container {
     pub lifecycle: Option<Lifecycle>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub livenessProbe: Option<Probe>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub readinessProbe: Option<Probe>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub livenessProbe: Option<Probe>,
+    pub startupProbe: Option<Probe>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub serviceAccountName: Option<String>,
 
-    #[serde(skip)]
-    pub registry: registry::Container,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stdin: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tty: Option<bool>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -145,6 +155,9 @@ pub struct PodAffinity {
 pub struct PodAntiAffinity {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub preferredDuringSchedulingIgnoredDuringExecution: Option<Vec<WeightedPodAffinityTerm>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub requiredDuringSchedulingIgnoredDuringExecution: Option<Vec<PodAffinityTerm>>,
     // TODO: additional fields.
 }
 
@@ -158,10 +171,10 @@ pub struct WeightedPodAffinityTerm {
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PodAffinityTerm {
+    topologyKey: String,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     labelSelector: Option<yaml::LabelSelector>,
-
-    topologyKey: String,
     // TODO: additional fields.
 }
 
@@ -188,7 +201,19 @@ pub struct Probe {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub httpGet: Option<HTTPGetAction>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tcpSocket: Option<TCPSocketAction>,
     // TODO: additional fiels.
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TCPSocketAction {
+    pub port: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub host: Option<String>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -204,7 +229,16 @@ pub struct HTTPGetAction {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub scheme: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub httpHeaders: Option<Vec<HTTPHeader>>,
     // TODO: additional fiels.
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HTTPHeader {
+    name: String,
+    value: String,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -473,11 +507,24 @@ impl Container {
     pub fn get_exec_commands(&self) -> Vec<String> {
         let mut commands = Vec::new();
 
+        if let Some(probe) = &self.livenessProbe {
+            if let Some(exec) = &probe.exec {
+                commands.push(exec.command.join(" "));
+            }
+        }
+
         if let Some(probe) = &self.readinessProbe {
             if let Some(exec) = &probe.exec {
                 commands.push(exec.command.join(" "));
             }
         }
+
+        if let Some(probe) = &self.startupProbe {
+            if let Some(exec) = &probe.exec {
+                commands.push(exec.command.join(" "));
+            }
+        }
+
         if let Some(lifecycle) = &self.lifecycle {
             if let Some(preStop) = &lifecycle.preStop {
                 if let Some(exec) = &preStop.exec {

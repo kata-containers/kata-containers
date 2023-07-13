@@ -27,11 +27,13 @@ pub struct PersistentVolumeClaim {
 /// See Reference / Kubernetes API / Config and Storage Resources / PersistentVolumeClaim.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct PersistentVolumeClaimSpec {
+    pub resources: ResourceRequirements,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub accessModes: Option<Vec<String>>,
 
-    pub resources: ResourceRequirements,
-
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub storageClassName: Option<String>,
     // TODO: additional fields.
 }
 
