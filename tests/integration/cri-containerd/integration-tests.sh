@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright (c) 2017-2018 Intel Corporation
+# Copyright (c) 2017-2023 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 #
