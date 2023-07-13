@@ -196,10 +196,12 @@ fn keep_infra_mount(infra_mount: &oci::Mount, yaml_mounts: &Option<Vec<pod::Volu
     false
 }
 
-pub fn get_annotations(annotations: &mut BTreeMap<String, String>, infra_policy: &policy::OciSpec) {
+pub fn add_annotations(annotations: &mut BTreeMap<String, String>, infra_policy: &policy::OciSpec) {
     if let Some(infra_annotations) = &infra_policy.annotations {
         for annotation in infra_annotations {
-            annotations.insert(annotation.0.clone(), annotation.1.clone());
+            annotations
+                .entry(annotation.0.to_string())
+                .or_insert(annotation.1.clone());
         }
     }
 }
@@ -323,10 +325,7 @@ impl InfraPolicy {
                 fstype: infra_empty_dir.fstype.clone(),
                 options: infra_empty_dir.options.clone(),
                 mount_point: infra_empty_dir.mount_point.clone() + &yaml_mount.name + "$",
-                fs_group: policy::SerializedFsGroup {
-                    group_id: 0,
-                    group_change_policy: 0,
-                },
+                fs_group: None,
             });
         }
 
@@ -487,10 +486,7 @@ impl InfraPolicy {
             fstype: infra_config_map.fstype.clone(),
             options: infra_config_map.options.clone(),
             mount_point: infra_config_map.mount_point.clone() + &mount_path_str + "$",
-            fs_group: policy::SerializedFsGroup {
-                group_id: 0,
-                group_change_policy: 0,
-            },
+            fs_group: None,
         });
 
         let file_name = Path::new(&yaml_mount.mountPath).file_name().unwrap();

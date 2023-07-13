@@ -33,6 +33,14 @@ ifeq ($(SECCOMP),yes)
     override EXTRA_RUSTFEATURES += seccomp
 endif
 
+##VAR SECURITY_POLICY=yes|no define if agent enables security policy feature
+SECURITY_POLICY := no
+
+# Enable security policy feature of rust build
+ifeq ($(SECURITY_POLICY),yes)
+    override EXTRA_RUSTFEATURES += security-policy
+endif
+
 include ../../utils.mk
 
 ifeq ($(ARCH), ppc64le)

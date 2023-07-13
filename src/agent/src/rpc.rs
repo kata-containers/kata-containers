@@ -5,6 +5,7 @@
 
 use async_trait::async_trait;
 use rustjail::{pipestream::PipeStream, process::StreamType};
+use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf};
 use tokio::sync::Mutex;
 
@@ -67,6 +68,8 @@ use crate::random;
 use crate::sandbox::Sandbox;
 use crate::version::{AGENT_VERSION, API_VERSION};
 use crate::AGENT_CONFIG;
+
+#[cfg(feature = "security-policy")]
 use crate::AGENT_POLICY;
 
 use crate::trace_rpc_call;
@@ -145,83 +148,61 @@ macro_rules! config_allows {
                 format!("{} is blocked", $req.descriptor_dyn().name()),
             ));
         }
-    }
+    };
+}
+
+#[cfg(feature = "security-policy")]
+macro_rules! policy_allows {
+    ($req:ident, $serialized_req:ident) => {
+        let mut policy = AGENT_POLICY.lock().await;
+        if !policy
+            .is_allowed_endpoint($req.descriptor_dyn().name(), &$serialized_req)
+            .await
+        {
+            warn!(
+                sl!(),
+                "{} is blocked by policy",
+                $req.descriptor_dyn().name()
+            );
+            return Err(ttrpc_error!(
+                ttrpc::Code::PERMISSION_DENIED,
+                format!("{} is blocked by policy", $req.descriptor_dyn().name()),
+            ));
+        }
+    };
 }
 
 macro_rules! is_allowed {
     ($req:ident) => {
         config_allows!($req);
-
-        if !AGENT_POLICY
-            .lock()
-            .await
-            .is_allowed_endpoint($req.descriptor_dyn().name())
-            .await
+        #[cfg(feature = "security-policy")]
         {
-            warn!(sl!(), "{} is blocked by policy", $req.descriptor_dyn().name());
-            return Err(ttrpc_error!(
-                ttrpc::Code::PERMISSION_DENIED,
-                format!("{} is blocked by policy", $req.descriptor_dyn().name()),
-            ));
+            let request = serde_json::to_string(&$req).unwrap();
+            policy_allows!($req, request);
         }
-    }
+    };
 }
-
 macro_rules! is_allowed_create_container {
     ($req:ident) => {
         config_allows!($req);
-
-        if !AGENT_POLICY
-            .lock()
-            .await
-            .is_allowed_create_container($req.descriptor_dyn().name(), &$req)
-            .await
+        #[cfg(feature = "security-policy")]
         {
-            warn!(sl!(), "{} is blocked by policy", $req.descriptor_dyn().name());
-            return Err(ttrpc_error!(
-                ttrpc::Code::PERMISSION_DENIED,
-                format!("{} is blocked by policy", $req.descriptor_dyn().name()),
-            ));
+            let opa_input = CreateContainerRequestData {
+                oci: rustjail::grpc_to_oci(&$req.OCI),
+                storages: $req.storages.clone(),
+            };
+            let request = serde_json::to_string(&opa_input).unwrap();
+            policy_allows!($req, request);
         }
-    }
+    };
 }
 
-macro_rules! is_allowed_create_sandbox {
-    ($req:ident) => {
-        config_allows!($req);
-
-        if !AGENT_POLICY
-            .lock()
-            .await
-            .is_allowed_create_sandbox($req.descriptor_dyn().name(), &$req)
-            .await
-        {
-            warn!(sl!(), "{} is blocked by policy", $req.descriptor_dyn().name());
-            return Err(ttrpc_error!(
-                ttrpc::Code::PERMISSION_DENIED,
-                format!("{} is blocked by policy", $req.descriptor_dyn().name()),
-            ));
-        }
-    }
-}
-
-macro_rules! is_allowed_exec_process {
-    ($req:ident) => {
-        config_allows!($req);
-
-        if !AGENT_POLICY
-            .lock()
-            .await
-            .is_allowed_exec_process($req.descriptor_dyn().name(), &$req)
-            .await
-        {
-            warn!(sl!(), "{} is blocked by policy", $req.descriptor_dyn().name());
-            return Err(ttrpc_error!(
-                ttrpc::Code::PERMISSION_DENIED,
-                format!("{} is blocked by policy", $req.descriptor_dyn().name()),
-            ));
-        }
-    }
+/// OPA input data for CreateContainerRequest. The "OCI" field of
+/// the input request is converted into the "oci" field below.
+#[derive(Debug, Serialize, Deserialize)]
+struct CreateContainerRequestData {
+    oci: oci::Spec,
+    storages: Vec<protocols::agent::Storage>,
 }
 
 #[derive(Clone, Debug)]
@@ -888,7 +869,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::ExecProcessRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "exec_process", req);
-        is_allowed_exec_process!(req);
+        is_allowed!(req);
         match self.do_exec_process(req).await {
             Err(e) => Err(ttrpc_error!(ttrpc::Code::INTERNAL, e)),
             Ok(_) => Ok(Empty::new()),
@@ -1444,7 +1425,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::CreateSandboxRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "create_sandbox", req);
-        is_allowed_create_sandbox!(req);
+        is_allowed!(req);
 
         {
             let sandbox = self.sandbox.clone();
@@ -1778,6 +1759,7 @@ impl agent_ttrpc::AgentService for AgentService {
         Ok(Empty::new())
     }
 
+    #[cfg(feature = "security-policy")]
     async fn set_policy(
         &self,
         ctx: &TtrpcContext,
@@ -1786,7 +1768,8 @@ impl agent_ttrpc::AgentService for AgentService {
         trace_rpc_call!(ctx, "set_policy", req);
         is_allowed!(req);
 
-        AGENT_POLICY.lock()
+        AGENT_POLICY
+            .lock()
             .await
             .set_policy(&req.policy)
             .await

@@ -21,6 +21,8 @@ use ttrpc::{self, error::get_rpc_status as ttrpc_error};
 use crate::rpc::{verify_cid, CONTAINER_BASE};
 use crate::sandbox::Sandbox;
 use crate::AGENT_CONFIG;
+
+#[cfg(feature = "security-policy")]
 use crate::AGENT_POLICY;
 
 use image_rs::image::ImageClient;
@@ -46,12 +48,13 @@ macro_rules! sl {
     };
 }
 
+#[cfg(feature = "security-policy")]
 macro_rules! is_allowed_pull_image {
     ($req:ident) => {
-        if !AGENT_POLICY
-            .lock()
-            .await
-            .is_allowed_pull_image_endpoint("PullImageRequest", &$req)
+        let request = serde_json::to_string(&$req).unwrap();
+        let mut policy = AGENT_POLICY.lock().await;
+        if !policy
+            .is_allowed_endpoint("PullImageRequest", &request)
             .await
         {
             return Err(anyhow!("Image {} is blocked by policy", $req.image));
@@ -154,6 +157,7 @@ impl ImageService {
     }
 
     async fn pull_image(&self, req: &image::PullImageRequest) -> Result<String> {
+        #[cfg(feature = "security-policy")]
         is_allowed_pull_image!(req);
 
         env::set_var("OCICRYPT_KEYPROVIDER_CONFIG", OCICRYPT_CONFIG_PATH);

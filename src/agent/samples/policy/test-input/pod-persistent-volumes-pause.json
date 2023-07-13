@@ -72,7 +72,7 @@
                 "oomScoreAdj": -998
             },
             "root": {
-                "path": "/run/kata-containers/shared/containers/df0c277bc5ba1ca897fed16f2e89067b1f7adcf1a2b15e45c6143c6616f07764",
+                "path": "/run/kata-containers/shared/containers/18f731be35a30c8286a14621246082f6e57c237033ccf48d28854becc6cb7b6a",
                 "readonly": true
             },
             "mounts": [
@@ -142,7 +142,7 @@
                 {
                     "destination": "/etc/resolv.conf",
                     "type": "bind",
-                    "source": "/run/kata-containers/shared/containers/df0c277bc5ba1ca897fed16f2e89067b1f7adcf1a2b15e45c6143c6616f07764-3f8e405d602c9f21-resolv.conf",
+                    "source": "/run/kata-containers/shared/containers/18f731be35a30c8286a14621246082f6e57c237033ccf48d28854becc6cb7b6a-d6b2bbf1efa7156f-resolv.conf",
                     "options": [
                         "rbind",
                         "ro",
@@ -153,19 +153,19 @@
                 }
             ],
             "annotations": {
-                "io.kubernetes.cri.sandbox-cpu-quota": "0",
-                "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/df0c277bc5ba1ca897fed16f2e89067b1f7adcf1a2b15e45c6143c6616f07764",
                 "io.katacontainers.pkg.oci.container_type": "pod_sandbox",
-                "io.kubernetes.cri.sandbox-log-directory": "/var/log/pods/default_persistent_d2dc84b6-1bde-4901-90f5-3bc3411a25b1",
-                "io.kubernetes.cri.sandbox-cpu-shares": "2",
-                "nerdctl/network-namespace": "/var/run/netns/cnitest-c309bd0f-e2ce-893e-8af8-90bb03511f00",
-                "io.kubernetes.cri.sandbox-namespace": "default",
-                "io.kubernetes.cri.sandbox-uid": "d2dc84b6-1bde-4901-90f5-3bc3411a25b1",
-                "io.kubernetes.cri.sandbox-memory": "0",
-                "io.kubernetes.cri.sandbox-name": "persistent",
+                "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/18f731be35a30c8286a14621246082f6e57c237033ccf48d28854becc6cb7b6a",
                 "io.kubernetes.cri.sandbox-cpu-period": "100000",
+                "io.kubernetes.cri.sandbox-name": "persistent",
+                "io.kubernetes.cri.sandbox-memory": "0",
+                "io.kubernetes.cri.sandbox-namespace": "default",
+                "nerdctl/network-namespace": "/var/run/netns/cnitest-92ef429e-0995-5b63-3567-642991cbf124",
+                "io.kubernetes.cri.sandbox-cpu-shares": "2",
+                "io.kubernetes.cri.sandbox-uid": "50d82a7c-3614-423a-8613-1aaacebc885f",
+                "io.kubernetes.cri.sandbox-id": "18f731be35a30c8286a14621246082f6e57c237033ccf48d28854becc6cb7b6a",
+                "io.kubernetes.cri.sandbox-cpu-quota": "0",
                 "io.kubernetes.cri.container-type": "sandbox",
-                "io.kubernetes.cri.sandbox-id": "df0c277bc5ba1ca897fed16f2e89067b1f7adcf1a2b15e45c6143c6616f07764"
+                "io.kubernetes.cri.sandbox-log-directory": "/var/log/pods/default_persistent_50d82a7c-3614-423a-8613-1aaacebc885f"
             },
             "linux": {
                 "resources": {
@@ -177,7 +177,7 @@
                         "realtimePeriod": 0
                     }
                 },
-                "cgroupsPath": "/kubepods/besteffort/podd2dc84b6-1bde-4901-90f5-3bc3411a25b1/df0c277bc5ba1ca897fed16f2e89067b1f7adcf1a2b15e45c6143c6616f07764",
+                "cgroupsPath": "/kubepods/besteffort/pod50d82a7c-3614-423a-8613-1aaacebc885f/18f731be35a30c8286a14621246082f6e57c237033ccf48d28854becc6cb7b6a",
                 "namespaces": [
                     {
                         "type": "ipc"
@@ -220,10 +220,7 @@
                     "io.katacontainers.fs-opt.root-hash=817250f1a3e336da76f5bd3fa784e1b26d959b9c131876815ba2604048b70c18"
                 ],
                 "mount_point": "/run/kata-containers/sandbox/layers/5a5aad80055ff20012a50dc25f8df7a29924474324d65f7d5306ee8ee27ff71d",
-                "fs_group": {
-                    "group_id": 0,
-                    "group_change_policy": 0
-                }
+                "fs_group": null
             },
             {
                 "driver": "overlayfs",
@@ -236,11 +233,8 @@
                     "io.katacontainers.fs-opt.overlay-rw",
                     "lowerdir=5a5aad80055ff20012a50dc25f8df7a29924474324d65f7d5306ee8ee27ff71d"
                 ],
-                "mount_point": "/run/kata-containers/shared/containers/df0c277bc5ba1ca897fed16f2e89067b1f7adcf1a2b15e45c6143c6616f07764",
-                "fs_group": {
-                    "group_id": 0,
-                    "group_change_policy": 0
-                }
+                "mount_point": "/run/kata-containers/shared/containers/18f731be35a30c8286a14621246082f6e57c237033ccf48d28854becc6cb7b6a",
+                "fs_group": null
             }
         ]
     }

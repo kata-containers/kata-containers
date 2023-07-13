@@ -73,6 +73,8 @@ use tokio::{
 mod image_rpc;
 mod rpc;
 mod tracer;
+
+#[cfg(feature = "security-policy")]
 mod policy;
 
 cfg_if! {
@@ -93,9 +95,10 @@ lazy_static! {
     ));
 }
 
+#[cfg(feature = "security-policy")]
 lazy_static! {
     static ref AGENT_POLICY: Arc<Mutex<AgentPolicy>> = Arc::new(Mutex::new(
-        AgentPolicy::new().unwrap()
+        AgentPolicy::new("http://localhost:8181/v1", "/coco_policy").unwrap()
     ));
 }
 
@@ -230,6 +233,7 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     let root_span = span!(tracing::Level::TRACE, "root-span");
 
+    #[cfg(feature = "security-policy")]
     AGENT_POLICY.lock().await.initialize().await?;
 
     // XXX: Start the root trace transaction.
@@ -410,7 +414,10 @@ fn reset_sigpipe() {
 }
 
 use crate::config::AgentConfig;
+
+#[cfg(feature = "security-policy")]
 use crate::policy::AgentPolicy;
+
 use std::os::unix::io::{FromRawFd, RawFd};
 
 #[cfg(test)]
