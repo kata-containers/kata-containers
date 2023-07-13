@@ -257,7 +257,7 @@ function create_symbolic_links() {
 # Configures containerd
 function overwrite_containerd_config() {
 	containerd_config="/etc/containerd/config.toml"
-	sudo rm "${containerd_config}"
+	sudo rm -f "${containerd_config}"
 	sudo tee "${containerd_config}" << EOF
 version = 2
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
