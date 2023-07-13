@@ -394,7 +394,7 @@ mod tests {
 
         for (i, d) in tests.iter().enumerate() {
             let msg = format!("test[{}]: {:?}", i, d);
-            let result = contains_cpu_flag(&d.cpu_flags_vec, d.cpu_flag);
+            let result = contains_cpu_flag(d.cpu_flags_vec, d.cpu_flag);
             let msg = format!("{}, result: {:?}", msg, result);
 
             if d.result.is_ok() {
