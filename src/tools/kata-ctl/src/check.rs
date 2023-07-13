@@ -61,57 +61,6 @@ macro_rules! sl {
     };
 }
 
-fn read_file_contents(file_path: &str) -> Result<String> {
-    let contents = std::fs::read_to_string(file_path)?;
-    Ok(contents)
-}
-
-// get_single_cpu_info returns the contents of the first cpu from
-// the specified cpuinfo file by parsing based on a specified delimiter
-pub fn get_single_cpu_info(cpu_info_file: &str, substring: &str) -> Result<String> {
-    let contents = read_file_contents(cpu_info_file)?;
-
-    if contents.is_empty() {
-        return Err(anyhow!(ERR_NO_CPUINFO));
-    }
-
-    let subcontents: Vec<&str> = contents.split(substring).collect();
-    let result = subcontents
-        .first()
-        .ok_or("error splitting contents of cpuinfo")
-        .map_err(|e| anyhow!(e))?
-        .to_string();
-    Ok(result)
-}
-
-// get_cpu_flags returns a string of cpu flags from cpuinfo, passed in
-// as a string
-#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
-pub fn get_cpu_flags(cpu_info: &str, cpu_flags_tag: &str) -> Result<String> {
-    if cpu_info.is_empty() {
-        return Err(anyhow!(ERR_NO_CPUINFO));
-    }
-
-    if cpu_flags_tag.is_empty() {
-        return Err(anyhow!("cpu flags delimiter string is empty"))?;
-    }
-
-    let subcontents: Vec<&str> = cpu_info.split('\n').collect();
-    for line in subcontents {
-        if line.starts_with(cpu_flags_tag) {
-            let line_data: Vec<&str> = line.split(':').collect();
-            let flags = line_data
-                .last()
-                .ok_or("error splitting flags in cpuinfo")
-                .map_err(|e| anyhow!(e))?
-                .to_string();
-            return Ok(flags);
-        }
-    }
-
-    Ok("".to_string())
-}
-
 // get_missing_strings searches for required (strings) in data and returns
 // a vector containing the missing strings
 #[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
@@ -397,6 +346,7 @@ mod tests {
     use super::*;
     #[cfg(any(target_arch = "x86_64"))]
     use crate::types::{KernelModule, KernelParam, KernelParamType};
+    use kata_sys_util::cpu::{get_cpu_flags, get_single_cpu_info};
     use semver::Version;
     use slog::warn;
     use std::fs;
