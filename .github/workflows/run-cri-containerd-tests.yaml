@@ -14,14 +14,20 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
+        containerd_version: ['lts', 'active']
         vmm: ['clh', 'qemu']
     runs-on: garm-ubuntu-2204
     env:
+      CONTAINERD_VERSION: ${{ matrix.containerd_version }}
+      GOPATH: ${{ github.workspace }}
       KATA_HYPERVSIOR: ${{ matrix.vmm }}
     steps:
       - uses: actions/checkout@v3
         with:
           ref: ${{ inputs.commit-hash }}
+
+      - name: Install dependencies
+        run: bash tests/integration/cri-containerd/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
         uses: actions/download-artifact@v3
