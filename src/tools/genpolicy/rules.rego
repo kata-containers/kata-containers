@@ -331,7 +331,7 @@ allow_masked_paths(policy_oci, input_oci) {
     print("allow_masked_paths 1: policy maskedPaths =", policy_oci.linux.maskedPaths)
     print("allow_masked_paths 1: input maskedPaths =", input_oci.linux.maskedPaths)
 
-    allow_array(policy_oci.linux.maskedPaths, input_oci.linux.maskedPaths)
+    allow_masked_paths_array(policy_oci.linux.maskedPaths, input_oci.linux.maskedPaths)
 
     print("allow_masked_paths 1: success")
 }
@@ -344,12 +344,29 @@ allow_masked_paths(policy_oci, input_oci) {
     print("allow_masked_paths 2: success")
 }
 
+# All the policy masked paths must be masked in the input data too.
+# Input is allowed to have more masked paths than the policy.
+allow_masked_paths_array(policy_array, input_array) {
+    every policy_element in policy_array {
+        allow_masked_path(policy_element, input_array)
+    }
+}
+
+allow_masked_path(policy_element, input_array) {
+    print("allow_masked_path: policy_element =", policy_element)
+
+    some input_element in input_array
+    policy_element == input_element
+
+    print("allow_masked_path: success")
+}
+
 ######################################################################
 allow_readonly_paths(policy_oci, input_oci) {
     print("allow_readonly_paths 1: policy readonlyPaths =", policy_oci.linux.readonlyPaths)
     print("allow_readonly_paths 1: input readonlyPaths =", input_oci.linux.readonlyPaths)
 
-    allow_array(policy_oci.linux.readonlyPaths, input_oci.linux.readonlyPaths)
+    allow_readonly_paths_array(policy_oci.linux.readonlyPaths, input_oci.linux.readonlyPaths, input_oci.linux.maskedPaths)
 
     print("allow_readonly_paths 1: success")
 }
@@ -362,20 +379,31 @@ allow_readonly_paths(policy_oci, input_oci) {
     print("allow_readonly_paths 2: success")
 }
 
-######################################################################
-allow_array(policy_array, input_array) {
-    every input_element in input_array {
-        allow_array_element(policy_array, input_element)
+# All the policy readonly paths must be either:
+# - Present in the input readonly paths, or
+# - Present in the input masked paths.
+# Input is allowed to have more readonly paths than the policy.
+allow_readonly_paths_array(policy_array, input_array, masked_paths) {
+    every policy_element in policy_array {
+        allow_readonly_path(policy_element, input_array, masked_paths)
     }
 }
 
-allow_array_element(policy_array, input_element) {
-    print("allow_array_element: input_element =", input_element)
+allow_readonly_path(policy_element, input_array, masked_paths) {
+    print("allow_readonly_path 1: policy_element =", policy_element)
 
-    some policy_element in policy_array
+    some input_element in input_array
     policy_element == input_element
 
-    print("allow_array_element: success")
+    print("allow_readonly_path 1: success")
+}
+allow_readonly_path(policy_element, input_array, masked_paths) {
+    print("allow_readonly_path 2: policy_element =", policy_element)
+
+    some input_masked in masked_paths
+    policy_element == input_masked
+
+    print("allow_readonly_path 2: success")
 }
 
 ######################################################################
