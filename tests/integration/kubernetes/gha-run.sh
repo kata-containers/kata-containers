@@ -9,7 +9,7 @@ set -o nounset
 set -o pipefail
 
 kubernetes_dir="$(dirname "$(readlink -f "$0")")"
-repo_root_dir="$(cd "${kubernetes_dir}/../../../" && pwd)"
+source "${kubernetes_dir}/../../common.bash"
 tools_dir="${repo_root_dir}/tools"
 
 function _print_cluster_name() {
@@ -57,13 +57,6 @@ function get_cluster_credentials() {
     az aks get-credentials \
         -g "kataCI" \
         -n "$(_print_cluster_name)"
-}
-
-function ensure_yq() {
-    : "${GOPATH:=${GITHUB_WORKSPACE}}"
-    export GOPATH
-    export PATH="${GOPATH}/bin:${PATH}"
-    INSTALL_IN_GOPATH=true "${repo_root_dir}/ci/install_yq.sh"
 }
 
 function run_tests() {

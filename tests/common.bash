@@ -7,6 +7,9 @@
 # This file contains common functions that
 # are being used by our metrics and integration tests
 
+this_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export repo_root_dir="$(cd "${this_script_dir}/../" && pwd)"
+
 # Kata tests directory used for storing various test-related artifacts.
 KATA_TESTS_BASEDIR="${KATA_TESTS_BASEDIR:-/var/log/kata-tests}"
 
@@ -329,4 +332,11 @@ function check_containerd_config_for_kata() {
 		info "overwriting containerd configuration w/ a valid one"
 		overwrite_containerd_config
 	fi
+}
+
+function ensure_yq() {
+    : "${GOPATH:=${GITHUB_WORKSPACE}}"
+    export GOPATH
+    export PATH="${GOPATH}/bin:${PATH}"
+    INSTALL_IN_GOPATH=true "${repo_root_dir}/ci/install_yq.sh"
 }
