@@ -335,8 +335,10 @@ function check_containerd_config_for_kata() {
 }
 
 function ensure_yq() {
-    : "${GOPATH:=${GITHUB_WORKSPACE}}"
+    : "${GOPATH:=${GITHUB_WORKSPACE:-$HOME/go}}"
     export GOPATH
     export PATH="${GOPATH}/bin:${PATH}"
     INSTALL_IN_GOPATH=true "${repo_root_dir}/ci/install_yq.sh"
 }
+
+
