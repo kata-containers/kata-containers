@@ -351,3 +351,12 @@ function get_from_kata_deps() {
         [ "$result" = "null" ] && result=""
         echo "$result"
 }
+
+# project: org/repo format
+# base_version: ${major}.${minor}
+function get_latest_patch_release_from_a_github_project() {
+       project="${1}"
+       base_version="${2}"
+
+       curl --silent https://api.github.com/repos/${project}/releases | jq -r .[].tag_name | grep "^${base_version}.[0-9]*$" -m1
+}
