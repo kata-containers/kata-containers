@@ -17,6 +17,7 @@ jobs:
         vmm: ['clh', 'qemu']
     runs-on: garm-ubuntu-2204
     env:
+      GOPATH: ${{ github.workspace }}
       KATA_HYPERVSIOR: ${{ matrix.vmm }}
     steps:
       - uses: actions/checkout@v3
