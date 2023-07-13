@@ -875,6 +875,23 @@ func (c *Container) create(ctx context.Context) (err error) {
 		}
 	}
 
+	// If cold-plug we've attached the devices already, do not try to
+	// attach them a second time.
+	coldPlugVFIO := (c.sandbox.config.HypervisorConfig.ColdPlugVFIO != config.NoPort)
+	if coldPlugVFIO {
+		var cntDevices []ContainerDevice
+		for _, dev := range c.devices {
+			if strings.HasPrefix(dev.ContainerPath, vfioPath) {
+				c.Logger().WithFields(logrus.Fields{
+					"device": dev,
+				}).Info("Remvoing device since we're cold-plugging no Attach needed")
+				continue
+			}
+			cntDevices = append(cntDevices, dev)
+		}
+		c.devices = cntDevices
+	}
+
 	c.Logger().WithFields(logrus.Fields{
 		"devices": c.devices,
 	}).Info("Attach devices")

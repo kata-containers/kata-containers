@@ -219,7 +219,7 @@ externals:
     url: "github.com/confidential-containers/containerd"
     # yamllint disable-line rule:line-length
     tarball_url: "https://github.com/confidential-containers/containerd/releases/download"
-    version: "v1.6.8.1"
+    version: "v1.6.8.2"
     # CCv0 needs to know about the specific branch for the integration tests
     branch: "CC-main"
 
