@@ -196,10 +196,12 @@ fn keep_infra_mount(infra_mount: &oci::Mount, yaml_mounts: &Option<Vec<pod::Volu
     false
 }
 
-pub fn get_annotations(annotations: &mut BTreeMap<String, String>, infra_policy: &policy::OciSpec) {
+pub fn add_annotations(annotations: &mut BTreeMap<String, String>, infra_policy: &policy::OciSpec) {
     if let Some(infra_annotations) = &infra_policy.annotations {
         for annotation in infra_annotations {
-            annotations.insert(annotation.0.clone(), annotation.1.clone());
+            annotations
+                .entry(annotation.0.to_string())
+                .or_insert(annotation.1.clone());
         }
     }
 }

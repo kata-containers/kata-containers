@@ -272,6 +272,10 @@ pub fn add_policy_annotation(
     }
 }
 
+pub fn remove_policy_annotation(annotations: &mut BTreeMap<String, String>) {
+    annotations.remove("io.katacontainers.config.agent.policy");
+}
+
 fn handle_unused_field(path: &str, silent_unsupported_fields: bool) {
     if !silent_unsupported_fields {
         panic!("Unsupported field: {}", path);
