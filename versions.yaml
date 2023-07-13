@@ -228,6 +228,8 @@ externals:
     # instead of abstract socket, thus kata wouldn's support the containerd's
     # version older than them.
     version: "v1.6.8"
+    lts: "v1.6"
+    active: "v1.7"
 
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"
