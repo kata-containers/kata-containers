@@ -860,6 +860,7 @@ dependencies = [
 name = "kata-sys-util"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "byteorder",
  "cgroups-rs",
  "chrono",
