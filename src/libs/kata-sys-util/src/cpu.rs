@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 use anyhow::{anyhow, Result};
 
 #[cfg(target_arch = "s390x")]
