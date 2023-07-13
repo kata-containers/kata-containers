@@ -10,8 +10,8 @@ set -o pipefial
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 source "${SCRIPT_PATH}/../lib/common.bash"
 
-IMAGE="docker.io/library/amextdx:latest"
-DOCKERFILE="${SCRIPT_PATH}/amex_tensorflow_dockerfile/Dockerfile"
+IMAGE="docker.io/library/tensorflowmobilenet:latest"
+DOCKERFILE="${SCRIPT_PATH}/tensorflow_mobilenet_dockerfile/Dockerfile"
 tensorflow_file=$(mktemp tensorflowresults.XXXXXXXXXX)
 NUM_CONTAINERS="$1"
 TIMEOUT="$2"
