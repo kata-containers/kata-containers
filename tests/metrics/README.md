@@ -70,6 +70,8 @@ Tests relating to networking. General items could include:
 
 Tests relating to the storage (graph, volume) drivers.
 
+For further details see the [storage tests documentation](storage).
+
 ### Disk
 
 Test relating to measure reading and writing against clusters.
