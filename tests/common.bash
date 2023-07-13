@@ -388,3 +388,17 @@ function install_cri_containerd() {
 	sudo mkdir -p /etc/containerd
 	containerd config default | sudo tee /etc/containerd/config.toml
 }
+
+# base_version: The version to be intalled in the ${major}.${minor} format
+function install_cri_tools() {
+	base_version="${1}"
+
+	project="kubernetes-sigs/cri-tools"
+	version=$(get_latest_patch_release_from_a_github_project "${project}" "${base_version}")
+
+	tarball_name="crictl-${version}-linux-$(${repo_root_dir}/tests/kata-arch.sh -g).tar.gz"
+
+	download_github_project_tarball "${project}" "${version}" "${tarball_name}"
+	sudo tar -xvf "${tarball_name}" -C /usr/local/bin
+	rm -f "${tarball_name}"
+}
