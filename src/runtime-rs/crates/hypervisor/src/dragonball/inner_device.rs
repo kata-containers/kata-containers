@@ -128,11 +128,11 @@ impl DragonballInner {
         info!(sl!(), "Mock for dragonball insert host device.");
         info!(
             sl!(),
-            " Mock for dragonball insert host device. 
-            host device id: {:?}, 
-            bus_slot_func: {:?}, 
-            bus mod: {:?}, 
-            guest device id: {:?}, 
+            " Mock for dragonball insert host device.
+            host device id: {:?},
+            bus_slot_func: {:?},
+            bus mod: {:?},
+            guest device id: {:?},
             vendor/device id: {:?}",
             primary_device.hostdev_id,
             primary_device.bus_slot_func,
