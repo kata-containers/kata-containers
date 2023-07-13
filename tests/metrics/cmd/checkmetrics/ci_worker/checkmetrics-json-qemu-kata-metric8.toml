@@ -14,7 +14,7 @@ description = "measure container lifecycle timings"
 # Min and Max values to set a 'range' that
 # the median of the CSV Results data must fall
 # within (inclusive)
-checkvar = ".\"boot-times\".Results | .[] | .\"to-workload\".Result"
+checkvar = ".["boot-times"].Results | .[] | .["to-workload"].Result"
 checktype = "mean"
 midval = 0.61
 minpercent = 20.0
@@ -27,7 +27,7 @@ description = "measure memory usage"
 # Min and Max values to set a 'range' that
 # the median of the CSV Results data must fall
 # within (inclusive)
-checkvar = ".\"memory-footprint\".Results | .[] | .average.Result"
+checkvar = ".["memory-footprint"].Results | .[] | .average.Result"
 checktype = "mean"
 midval = 2435844.00
 minpercent = 20.0
@@ -40,7 +40,7 @@ description = "measure memory inside the container"
 # Min and Max values to set a 'range' that
 # the median of the CSV Results data must fall
 # within (inclusive)
-checkvar = ".\"memory-footprint-inside-container\".Results | .[] | .memtotal.Result"
+checkvar = ".["memory-footprint-inside-container"].Results | .[] | .memtotal.Result"
 checktype = "mean"
 midval = 3677280.0
 minpercent = 25.0
@@ -53,7 +53,7 @@ description = "measure container average of blogbench write"
 # Min and Max values to set a 'range' that
 # the median of the CSV Results data must fall
 # within (inclusive)
-checkvar = ".\"blogbench\".Results | .[] | .write.Result"
+checkvar = ".["blogbench"].Results | .[] | .write.Result"
 checktype = "mean"
 midval = 1639.0
 minpercent = 20.0
@@ -66,7 +66,7 @@ description = "measure container average of blogbench read"
 # Min and Max values to set a 'range' that
 # the median of the CSV Results data must fall
 # within (inclusive)
-checkvar = ".\"blogbench\".Results | .[] | .read.Result"
+checkvar = ".["blogbench"].Results | .[] | .read.Result"
 checktype = "mean"
 midval = 98687.0
 minpercent = 20.0
