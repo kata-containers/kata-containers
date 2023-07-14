@@ -110,6 +110,21 @@
                 "rprivate",
                 "ro"
             ]
+        },
+        "confidential_configMap": {
+            "mount_type": "bind",
+            "mount_source": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-",
+            "mount_point": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-",
+            "driver": "local",
+            "fstype": "bind",
+            "options": [
+                "rbind",
+                "rprivate",
+                "ro"
+            ]
         }
+    },
+    "kata_config": {
+        "confidential_guest": true
     }
 }

@@ -55,12 +55,14 @@ pub struct InfraPolicy {
     pub other_container: policy::OciSpec,
     pub volumes: Volumes,
     shared_files: SharedFiles,
+    kata_config: KataConfig,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Volumes {
     pub emptyDir: EmptyDirVolume,
     pub configMap: ConfigMapVolume,
+    pub confidential_configMap: ConfigMapVolume,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -90,14 +92,22 @@ struct SharedFiles {
     source_path: String,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct KataConfig {
+    pub confidential_guest: bool,
+}
+
 impl InfraPolicy {
     pub fn new(infra_data_file: &str) -> Result<Self> {
         debug!("Loading containers policy data...");
 
         if let Ok(file) = File::open(infra_data_file) {
             let mut infra_policy: Self = serde_json::from_reader(file).unwrap();
+            debug!("infra_policy = {:?}", &infra_policy);
+
             add_pause_container_data(&mut infra_policy.pause_container);
             add_other_container_data(&mut infra_policy.other_container);
+
             debug!("Finished loading containers policy data.");
             Ok(infra_policy)
         } else {
@@ -298,7 +308,13 @@ impl InfraPolicy {
         } else if yaml_volume.hostPath.is_some() {
             self.host_path_mount(yaml_mount, yaml_volume, policy_mounts);
         } else if yaml_volume.configMap.is_some() || yaml_volume.secret.is_some() {
-            Self::config_map_mount_and_storage(&self.volumes, policy_mounts, storages, yaml_mount);
+            Self::config_map_mount_and_storage(
+                &self.volumes,
+                policy_mounts,
+                storages,
+                yaml_mount,
+                self.kata_config.confidential_guest,
+            );
         } else if yaml_volume.projected.is_some() {
             self.shared_bind_mount(yaml_mount, policy_mounts, "rprivate", "ro");
         } else if yaml_volume.downwardAPI.is_some() {
@@ -372,7 +388,11 @@ impl InfraPolicy {
 
         let destination = yaml_mount.mountPath.to_string();
         let r#type = "bind".to_string();
-        let options = vec!["rbind".to_string(), propagation.to_string(), access.to_string()];
+        let options = vec![
+            "rbind".to_string(),
+            propagation.to_string(),
+            access.to_string(),
+        ];
 
         if let Some(policy_mount) = policy_mounts
             .iter_mut()
@@ -426,11 +446,7 @@ impl InfraPolicy {
         // What is the reason for this source path difference in the Guest OS?
         if !path.starts_with("/dev/") && !path.starts_with("/sys/") {
             debug!("host_path_mount: calling shared_bind_mount");
-            let propagation = if biderectional {
-                "rshared"
-            } else {
-                "rprivate"
-            };
+            let propagation = if biderectional { "rshared" } else { "rprivate" };
             self.shared_bind_mount(yaml_mount, policy_mounts, propagation, "rw");
         } else {
             let dest = yaml_mount.mountPath.to_string();
@@ -470,24 +486,33 @@ impl InfraPolicy {
         policy_mounts: &mut Vec<oci::Mount>,
         storages: &mut Vec<policy::SerializedStorage>,
         yaml_mount: &pod::VolumeMount,
+        confidential_guest: bool,
     ) {
-        let infra_config_map = &infra_volumes.configMap;
+        let infra_config_map = if confidential_guest {
+            &infra_volumes.confidential_configMap
+        } else {
+            &infra_volumes.configMap
+        };
+
         debug!(
             "config_map_mount_and_storage: infra configMap: {:?}",
             infra_config_map
         );
 
-        let mount_path = Path::new(&yaml_mount.mountPath).file_name().unwrap();
-        let mount_path_str = OsString::from(mount_path).into_string().unwrap();
-        storages.push(policy::SerializedStorage {
-            driver: infra_config_map.driver.clone(),
-            driver_options: Vec::new(),
-            source: infra_config_map.mount_source.clone() + &yaml_mount.name + "$",
-            fstype: infra_config_map.fstype.clone(),
-            options: infra_config_map.options.clone(),
-            mount_point: infra_config_map.mount_point.clone() + &mount_path_str + "$",
-            fs_group: None,
-        });
+        if !confidential_guest {
+            let mount_path = Path::new(&yaml_mount.mountPath).file_name().unwrap();
+            let mount_path_str = OsString::from(mount_path).into_string().unwrap();
+
+            storages.push(policy::SerializedStorage {
+                driver: infra_config_map.driver.clone(),
+                driver_options: Vec::new(),
+                source: infra_config_map.mount_source.clone() + &yaml_mount.name + "$",
+                fstype: infra_config_map.fstype.clone(),
+                options: infra_config_map.options.clone(),
+                mount_point: infra_config_map.mount_point.clone() + &mount_path_str + "$",
+                fs_group: None,
+            });
+        }
 
         let file_name = Path::new(&yaml_mount.mountPath).file_name().unwrap();
         let name = OsString::from(file_name).into_string().unwrap();
