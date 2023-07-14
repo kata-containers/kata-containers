@@ -21,7 +21,6 @@ export PATH="$PATH:/usr/local/sbin"
 # Runtime to be used for testing
 RUNTIME=${RUNTIME:-containerd-shim-kata-v2}
 FACTORY_TEST=${FACTORY_TEST:-""}
-KILL_VMM_TEST=${KILL_VMM_TEST:-""}
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 USE_DEVMAPPER="${USE_DEVMAPPER:-false}"
 ARCH=$(uname -m)
@@ -74,7 +73,7 @@ ci_cleanup() {
 		sudo -E PATH=$PATH "$RUNTIME" factory destroy
 	fi
 
-	if [ -n "${KILL_VMM_TEST}" ] && [ -e "$default_containerd_config_backup" ]; then
+	if [ -e "$default_containerd_config_backup" ]; then
 		echo "restore containerd config"
 		sudo systemctl stop containerd
 		sudo cp "$default_containerd_config_backup" "$default_containerd_config"
@@ -210,8 +209,9 @@ testContainerStop() {
 }
 
 TestKilledVmmCleanup() {
-	if [ -z "${KILL_VMM_TEST}" ]; then
-		return
+	if [[ "${KATA_HYPERVISOR}" != "qemu" ]]; then
+		info "TestKilledVmmCleanup is skipped for ${KATA_HYPERVISOR}, only QEMU is currently tested"
+		return 0
 	fi
 
 	info "test killed vmm cleanup"
