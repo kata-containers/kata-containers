@@ -1660,16 +1660,12 @@ func (s *Sandbox) Stats(ctx context.Context) (SandboxStats, error) {
 	var metrics interface{}
 	var err error
 	if !s.config.SandboxCgroupOnly {
-
 		metrics, err = s.overheadController.Stat()
-		if err != nil {
-			return SandboxStats{}, err
-		}
 	} else {
 		metrics, err = s.sandboxController.Stat()
-		if err != nil {
-			return SandboxStats{}, err
-		}
+	}
+	if err != nil {
+		return SandboxStats{}, err
 	}
 
 	stats := SandboxStats{}
