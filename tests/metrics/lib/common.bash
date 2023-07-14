@@ -18,7 +18,6 @@ DOCKER_EXE="${DOCKER_EXE:-docker}"
 CTR_RUNTIME="${CTR_RUNTIME:-io.containerd.kata.v2}"
 RUNTIME="${RUNTIME:-containerd-shim-kata-v2}"
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
-TEST_REPO="${TEST_REPO:-github.com/kata-containers/tests}"
 JSON_HOST="${JSON_HOST:-}"
 
 KSM_BASE="/sys/kernel/mm/ksm"
@@ -220,11 +219,11 @@ function show_system_ctr_state()
 
 function common_init()
 {
-	if [ "$CTR_RUNTIME" == "io.containerd.kata.v2" ] || [ "$RUNTIME" == "containerd-shim-kata-v2" ]; then
+	if [ "${CTR_RUNTIME}" = "io.containerd.kata.v2" ] || [ "${RUNTIME}" = "containerd-shim-kata-v2" ]; then
 		extract_kata_env
 	else
 		# We know we have nothing to do for runc or shimv2
-		if [ "$CTR_RUNTIME" != "io.containerd.runc.v2" ] || [ "$RUNTIME" != "runc" ]; then
+		if [ "${CTR_RUNTIME}" != "io.containerd.runc.v2" ] && [ "${RUNTIME}" != "runc" ]; then
 			warn "Unrecognised runtime"
 		fi
 	fi
@@ -359,5 +358,3 @@ function wait_ksm_settle()
 	done
 	info "Timed out after ${1}s waiting for KSM to settle"
 }
-
-common_init
