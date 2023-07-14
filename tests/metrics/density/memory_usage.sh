@@ -342,6 +342,9 @@ EOF
 }
 
 function main(){
+	# Collect kata-env data
+	common_init
+
 	# Verify enough arguments
 	if [ $# != 2 ] && [ $# != 3 ];then
 		echo >&2 "error: Not enough arguments [$@]"

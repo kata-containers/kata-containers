@@ -32,8 +32,11 @@ timestamp_ms() {
 	echo $(($(date +%s%N)/1000000))
 }
 
-# Intialise the json subsystem
+# Initialise the json subsystem
 metrics_json_init() {
+	#  collect kata-env data
+	common_init
+
 	# Clear out any previous results
 	json_result_array=()
 
