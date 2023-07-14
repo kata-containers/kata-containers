@@ -18,8 +18,6 @@ source "${SCRIPT_PATH}/../../../.ci/lib.sh"
 # runc is installed in /usr/local/sbin/ add that path
 export PATH="$PATH:/usr/local/sbin"
 
-containerd_tarball_version=$(get_version "externals.containerd.version")
-
 # Runtime to be used for testing
 RUNTIME=${RUNTIME:-containerd-shim-kata-v2}
 SHIMV2_TEST=${SHIMV2_TEST:-""}
@@ -41,14 +39,10 @@ fi
 
 readonly runc_runtime_bin=$(command -v "runc")
 
-readonly CRITEST=${GOPATH}/bin/critest
-
 # Flag to do tasks for CI
 CI=${CI:-""}
 
 containerd_shim_path="$(command -v containerd-shim)"
-readonly cri_containerd_repo=$(get_version "externals.containerd.url")
-readonly cri_containerd_repo_git="https://${cri_containerd_repo}.git"
 
 #containerd config file
 readonly tmp_dir=$(mktemp -t -d test-cri-containerd.XXXX)
@@ -449,17 +443,7 @@ main() {
 	# Configure enviroment if running in CI
 	ci_config
 
-	# make sure cri-containerd test install the proper critest version its testing
-	rm -f "${CRITEST}"
-
-	if [ ! -d "${GOPATH}/src/${cri_containerd_repo}" ]; then
-		mkdir -p "${GOPATH}/src/${cri_containerd_repo}"
-		git clone ${cri_containerd_repo_git} "${GOPATH}/src/${cri_containerd_repo}"
-	fi
-	pushd "${GOPATH}/src/${cri_containerd_repo}"
-
-	git reset HEAD
-	git checkout ${containerd_tarball_version}
+	pushd "containerd"
 
 	# Make sure the right artifacts are going to be built
 	make clean
