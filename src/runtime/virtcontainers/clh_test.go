@@ -127,6 +127,31 @@ func TestCloudHypervisorAddVSock(t *testing.T) {
 	assert.Equal(clh.vmconfig.Vsock.Socket, "path")
 }
 
+func TestCloudHypervisorAddVfioDevice(t *testing.T) {
+	Id := "vfio123"
+	path := "/dev/vfio/101"
+
+	vfDevice := config.VFIODev{
+		ID:       Id,
+		SysfsDev: path,
+	}
+	testCloudHypervisorAddDevice(t, vfDevice)
+}
+
+func testCloudHypervisorAddDevice(t *testing.T, structure interface{}) {
+	assert := assert.New(t)
+	clh := cloudHypervisor{}
+	switch s := structure.(type) {
+	case config.VFIODev:
+		Id := "vfio123"
+		path := "/dev/vfio/101"
+		_ = clh.addVfioDevice(s)
+
+		assert.Equal(s.ID, Id)
+		assert.Equal(s.SysfsDev, path)
+	}
+}
+
 // Check addNet appends to the network config list new configurations.
 // Check that the elements in the list has the correct values
 func TestCloudHypervisorAddNetCheckNetConfigListValues(t *testing.T) {
