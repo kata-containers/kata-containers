@@ -1657,7 +1657,13 @@ func (s *Sandbox) StatsContainer(ctx context.Context, containerID string) (Conta
 // Stats returns the stats of a running sandbox
 func (s *Sandbox) Stats(ctx context.Context) (SandboxStats, error) {
 
-	metrics, err := s.sandboxController.Stat()
+	var metrics interface{}
+	var err error
+	if !s.config.SandboxCgroupOnly {
+		metrics, err = s.overheadController.Stat()
+	} else {
+		metrics, err = s.sandboxController.Stat()
+	}
 	if err != nil {
 		return SandboxStats{}, err
 	}
