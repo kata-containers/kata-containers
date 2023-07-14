@@ -155,6 +155,8 @@ function cleanup() {
 }
 
 function delete_cluster() {
+    cleanup "aks"
+
     az aks delete \
         -g "kataCI" \
         -n "$(_print_cluster_name)" \
@@ -164,6 +166,7 @@ function delete_cluster() {
 function get_nodes_and_pods_info() {
     describe_pods="${1:-"no"}"
 
+    kubectl debug $(kubectl get nodes -o name) -it --image=quay.io/fidencio/kata-deploy:kata-debug
     kubectl get nodes -o wide --show-labels=true
     kubectl get pods -A
     if [[ "${describe_pods}" == "yes" ]]; then
