@@ -20,22 +20,13 @@ export PATH="$PATH:/usr/local/sbin"
 
 # Runtime to be used for testing
 RUNTIME=${RUNTIME:-containerd-shim-kata-v2}
-SHIMV2_TEST=${SHIMV2_TEST:-""}
 FACTORY_TEST=${FACTORY_TEST:-""}
 KILL_VMM_TEST=${KILL_VMM_TEST:-""}
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 USE_DEVMAPPER="${USE_DEVMAPPER:-false}"
 ARCH=$(uname -m)
 
-default_runtime_type="io.containerd.runc.v2"
-# Type of containerd runtime to be tested
-containerd_runtime_type="${default_runtime_type}"
-# Runtime to be use for the test in containerd
-containerd_runtime_test=${RUNTIME}
-if [ -n "${SHIMV2_TEST}" ]; then
-	containerd_runtime_type="io.containerd.kata.v2"
-	containerd_runtime_test="io.containerd.kata.v2"
-fi
+containerd_runtime_type="io.containerd.kata-${KATA_HYPERVISOR}.v2"
 
 readonly runc_runtime_bin=$(command -v "runc")
 
@@ -104,12 +95,7 @@ create_containerd_config() {
 	if [ "${runtime}" == "runc" ]; then
 		runtime_type="io.containerd.runc.v2"
 	fi
-	local containerd_runtime="${runtime}"
-	if [ "${runtime_type}" == "${default_runtime_type}" ];then
-		local containerd_runtime=$(command -v "${runtime}")
-	fi
-	# Remove dots.  Dots are used by toml syntax as atribute separator
-	runtime="${runtime//./-}"
+	local containerd_runtime=$(command -v "containerd-shim-${runtime}-v2")
 
 cat << EOF | sudo tee "${CONTAINERD_CONFIG_FILE}"
 [debug]
@@ -224,7 +210,7 @@ testContainerStop() {
 }
 
 TestKilledVmmCleanup() {
-	if [ -z "${SHIMV2_TEST}" ] || [ -z "${KILL_VMM_TEST}" ]; then
+	if [ -z "${KILL_VMM_TEST}" ]; then
 		return
 	fi
 
@@ -313,7 +299,7 @@ TestContainerSwap() {
 
 	info "Test container with guest swap"
 
-	create_containerd_config "${containerd_runtime_test}" 1
+	create_containerd_config "kata-${KATA_HYPERVISOR}" 1
 	sudo sed -i -e 's/^#enable_guest_swap.*$/enable_guest_swap = true/g' "${kata_config}"
 
 	# Test without swap device
@@ -421,7 +407,7 @@ EOF
 		die "The VM swap size $swap_size without memory_limit_in_bytes is not right"
 	fi
 
-	create_containerd_config "${containerd_runtime_test}"
+	create_containerd_config "kata-${KATA_HYPERVISOR}"
 }
 
 # k8s may restart docker which will impact on containerd stop
@@ -450,9 +436,9 @@ main() {
 
 	check_daemon_setup
 
-	info "containerd(cri): testing using runtime: ${containerd_runtime_test}"
+	info "containerd(cri): testing using runtime: ${containerd_runtime_type}"
 
-	create_containerd_config "${containerd_runtime_test}"
+	create_containerd_config "kata-${KATA_HYPERVISOR}"
 
 	info "containerd(cri): Running cri-integration"
 
