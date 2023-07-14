@@ -44,6 +44,9 @@ pub struct AgentPolicy {
     /// Client used to connect a single time to the OPA service and reused
     /// for all the future communication with OPA.
     opa_client: Client,
+
+    /// "/tmp/policy.txt" log file for policy activity.
+    log_file: Option<tokio::fs::File>,
 }
 
 impl AgentPolicy {
@@ -53,12 +56,22 @@ impl AgentPolicy {
             allow_failures: false,
             query_path: opa_uri.to_string() + OPA_DATA_PATH + coco_policy + "/",
             policy_path: opa_uri.to_string() + OPA_POLICIES_PATH + coco_policy,
-            opa_client: Client::builder().http1_only().build()?,
+            opa_client: Client::builder().http1_only().build().unwrap(),
+            log_file: None,
         })
     }
 
     /// Wait for OPA to start and connect to it.
     pub async fn initialize(&mut self) -> Result<()> {
+        let log_file = tokio::fs::OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .create(true)
+            .open("/tmp/policy.txt")
+            .await
+            .unwrap();
+        self.log_file = Some(log_file);
+
         for i in 0..50 {
             if i > 0 {
                 sleep(Duration::from_millis(100)).await;
@@ -87,7 +100,7 @@ impl AgentPolicy {
     /// Post query to OPA for endpoints that don't require OPA input data.
     pub async fn is_allowed_endpoint(&mut self, ep: &str, request: &str) -> bool {
         let post_input = "{\"input\":".to_string() + request + "}";
-        Self::log_opa_input(ep, &post_input).await;
+        self.log_opa_input(ep, &post_input).await;
         self.post_query(ep, &post_input).await.unwrap_or(false)
     }
 
@@ -166,22 +179,18 @@ impl AgentPolicy {
         }
     }
 
-    async fn log_opa_input(ep: &str, opa_input: &str) {
+    async fn log_opa_input(&mut self, ep: &str, opa_input: &str) {
         // TODO: disable this log by default and allow it to be enabled
         // through Policy.
 
-        match ep {
-            "StatsContainerRequest" | "ReadStreamRequest" | "SetPolicyRequest" => {}
-            _ => {
-                let log_entry = "# ".to_string() + ep + "\n\n" + opa_input + "\n\n";
-                let mut f = tokio::fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open("/tmp/oci.json")
-                    .await
-                    .unwrap();
-                f.write_all(log_entry.as_bytes()).await.unwrap();
-                f.flush().await.unwrap();
+        if let Some(log_file) = &mut self.log_file {
+            match ep {
+                "StatsContainerRequest" | "ReadStreamRequest" | "SetPolicyRequest" => {}
+                _ => {
+                    let log_entry = "# ".to_string() + ep + "\n\n" + opa_input + "\n\n";
+                    log_file.write_all(log_entry.as_bytes()).await.unwrap();
+                    log_file.flush().await.unwrap();
+                }
             }
         }
     }
