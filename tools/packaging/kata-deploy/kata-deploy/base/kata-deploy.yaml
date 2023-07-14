@@ -28,6 +28,8 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        - name: DEBUG
+          value: "no"
         securityContext:
           privileged: true
         volumeMounts:
