@@ -12,7 +12,8 @@ import input
 # - false for requests that have additional policy rules, defined below.
 # - Requests that are not listed here get rejected by default.
 
-# More detailed policy rules are below.
+# Detailed policy rules for these requests are below.
+default CopyFileRequest := false
 default CreateContainerRequest := false
 default ExecProcessRequest := false
 
@@ -1022,7 +1023,6 @@ allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id) {
 
 ######################################################################
 ExecProcessRequest {
-    print("==============================================")
     input_command = concat(" ", input.process.Args)
     print("ExecProcessRequest: input_command =", input_command)
 
@@ -1034,4 +1034,13 @@ ExecProcessRequest {
     policy_command == input_command
 
     print("ExecProcessRequest: success")
+}
+
+CopyFileRequest {
+    print("CopyFileRequest:", input)
+
+    # TODO: review and improve if needed.
+    startswith(input.path, "/run/kata-containers/shared/containers/")
+
+    print("CopyFileRequest: success")
 }
