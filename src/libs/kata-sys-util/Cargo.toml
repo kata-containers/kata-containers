@@ -11,6 +11,7 @@ license = "Apache-2.0"
 edition = "2018"
 
 [dependencies]
+anyhow = "1.0.31"
 byteorder = "1.4.3"
 cgroups = { package = "cgroups-rs", version = "0.3.2" }
 chrono = "0.4.0"
