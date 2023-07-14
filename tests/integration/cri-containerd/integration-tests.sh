@@ -139,9 +139,6 @@ check_daemon_setup() {
 	info "containerd(cri): Check daemon works with runc"
 	create_containerd_config "runc"
 
-	#restart docker service as TestImageLoad depends on it
-	[ -z "${USE_PODMAN:-}" ] && restart_docker_service
-
 	# containerd cri-integration will modify the passed in config file. Let's
 	# give it a temp one.
 	cp $CONTAINERD_CONFIG_FILE $CONTAINERD_CONFIG_FILE_TEMP
