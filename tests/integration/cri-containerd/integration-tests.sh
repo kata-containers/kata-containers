@@ -27,9 +27,6 @@ ARCH=$(uname -m)
 
 containerd_runtime_type="io.containerd.kata-${KATA_HYPERVISOR}.v2"
 
-# Flag to do tasks for CI
-CI=${CI:-""}
-
 containerd_shim_path="$(command -v containerd-shim)"
 
 #containerd config file
@@ -50,7 +47,7 @@ ci_config() {
 
 	source /etc/os-release || source /usr/lib/os-release
 	ID=${ID:-""}
-	if [ "$ID" == ubuntu ] &&  [ -n "${CI}" ] ;then
+	if [ "$ID" == ubuntu ]; then
 		# https://github.com/kata-containers/tests/issues/352
 		if [ -n "${FACTORY_TEST}" ]; then
 			sudo sed -i -e 's/^#enable_template.*$/enable_template = true/g' "${kata_config}"
