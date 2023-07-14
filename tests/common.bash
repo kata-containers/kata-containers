@@ -361,6 +361,17 @@ function get_latest_patch_release_from_a_github_project() {
        curl --silent https://api.github.com/repos/${project}/releases | jq -r .[].tag_name | grep "^${base_version}.[0-9]*$" -m1
 }
 
+# base_version: The version to be intalled in the ${major}.${minor} format
+function clone_cri_containerd() {
+	base_version="${1}"
+
+	project="containerd/containerd"
+	version=$(get_latest_patch_release_from_a_github_project "${project}" "${base_version}")
+
+	rm -rf containerd
+	git clone -b ${version} https://github.com/${project}
+}
+
 # project: org/repo format
 # version: the version of the tarball that will be downloaded
 # tarball-name: the name of the tarball that will be downloaded
