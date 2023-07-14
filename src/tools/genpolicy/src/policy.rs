@@ -204,6 +204,9 @@ impl AgentPolicy {
         let mut yaml_string = String::new();
         for i in 0..self.resources.len() {
             let policy = self.resources[i].generate_policy(self);
+            if self.config.base64_out {
+                println!("{}", policy);
+            }
             yaml_string += &self.resources[i].serialize(&policy);
         }
 
@@ -244,6 +247,9 @@ impl AgentPolicy {
         let policy = self.rules.clone() + "\npolicy_data := " + &json_data;
         if let Some(file_name) = &self.config.output_policy_file {
             policy::export_decoded_policy(&policy, &file_name);
+        }
+        if self.config.raw_out {
+            policy::base64_out(&policy);
         }
         general_purpose::STANDARD.encode(policy.as_bytes())
     }
@@ -528,6 +534,12 @@ pub fn export_decoded_policy(policy: &str, file_name: &str) {
         .unwrap();
     f.write_all(policy.as_bytes()).unwrap();
     f.flush().map_err(|e| anyhow!(e)).unwrap();
+}
+
+pub fn base64_out(policy: &str) {
+    std::io::stdout()
+        .write_all(policy.as_bytes())
+        .unwrap();
 }
 
 fn substitute_env_variables(env: &mut Vec<String>) {
