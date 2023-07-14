@@ -12,8 +12,7 @@ set -o pipefail
 set -o errtrace
 
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
-source "${SCRIPT_PATH}/../../../lib/common.bash"
-source "${SCRIPT_PATH}/../../../.ci/lib.sh"
+source "${SCRIPT_PATH}/../../common.bash"
 
 # runc is installed in /usr/local/sbin/ add that path
 export PATH="$PATH:/usr/local/sbin"
