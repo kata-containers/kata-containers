@@ -27,8 +27,6 @@ ARCH=$(uname -m)
 
 containerd_runtime_type="io.containerd.kata-${KATA_HYPERVISOR}.v2"
 
-readonly runc_runtime_bin=$(command -v "runc")
-
 # Flag to do tasks for CI
 CI=${CI:-""}
 
