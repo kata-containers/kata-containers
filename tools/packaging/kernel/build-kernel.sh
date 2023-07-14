@@ -526,7 +526,7 @@ install_kata() {
 		install --mode 0644 -D "vmlinux" "${install_path}/${vmlinux}"
 	fi
 
-	install --mode 0644 -D ./.config "${install_path}/config-${kernel_version}"
+	install --mode 0644 -D ./.config "${install_path}/config-${kernel_version}-${config_version}${suffix}"
 
 	ln -sf "${vmlinuz}" "${install_path}/vmlinuz${suffix}.container"
 	ln -sf "${vmlinux}" "${install_path}/vmlinux${suffix}.container"
