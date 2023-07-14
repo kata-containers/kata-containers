@@ -50,6 +50,12 @@ struct CommandLineOptions {
 
     #[clap(short, long)]
     silent_unsupported_fields: bool,
+
+    #[clap(short, long)]
+    raw_out: bool,
+
+    #[clap(short, long)]
+    base64_out: bool,
 }
 
 #[tokio::main]
@@ -70,6 +76,8 @@ async fn main() {
         args.output_policy_file,
         &config_map_files,
         args.silent_unsupported_fields,
+        args.raw_out,
+        args.base64_out,
     );
 
     debug!("Creating policy from yaml, infra data and rules files...");

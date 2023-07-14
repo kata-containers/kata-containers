@@ -16,6 +16,8 @@ pub struct Config {
     pub config_map_files: Option<Vec<String>>,
 
     pub silent_unsupported_fields: bool,
+    pub raw_out: bool,
+    pub base64_out: bool,
 }
 
 impl Config {
@@ -26,6 +28,8 @@ impl Config {
         output_policy_file: Option<String>,
         config_map_files: &Vec<String>,
         silent_unsupported_fields: bool,
+        raw_out: bool,
+        base64_out: bool,
     ) -> Self {
         let mut input_path = ".".to_string();
         if let Some(path) = input_files_path {
@@ -51,6 +55,8 @@ impl Config {
             output_policy_file,
             config_map_files: cm_files,
             silent_unsupported_fields,
+            raw_out,
+            base64_out,
         }
     }
 }
