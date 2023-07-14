@@ -33,8 +33,8 @@ serde_yaml = "0.8"
 anyhow = "1.0.32"
 async-trait = {version = "0.1.68"}
 flate2 = { version = "1.0.26", features = ["zlib-ng"], default-features = false }
-oci-distribution = { git = "https://github.com/krustlet/oci-distribution", rev = "1ba0d94a900a97aa1bcac032a67ea23766bcfdef" }
-openssl = { version = "=0.10.45", features = ["vendored"] }
+oci-distribution = { version = "0.9.4" }
+openssl = { version = "0.10.54", features = ["vendored"] }
 serde_ignored = "0.1.7"
 serde_json = "1.0.39"
 serde-transcode = "1.1.1"
