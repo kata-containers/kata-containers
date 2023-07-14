@@ -44,7 +44,6 @@ readonly runc_runtime_bin=$(command -v "runc")
 readonly CRITEST=${GOPATH}/bin/critest
 
 # Flag to do tasks for CI
-SNAP_CI=${SNAP_CI:-""}
 CI=${CI:-""}
 
 containerd_shim_path="$(command -v containerd-shim)"
