@@ -103,6 +103,8 @@ pub enum Error {
     MountOptionTooBig,
     #[error("Path for mountpoint is null")]
     NullMountPointPath,
+    #[error("Invalid Propagation type Flag")]
+    InvalidPgMountFlag,
     #[error("Faile to open file {0} by path, {1}")]
     OpenByPath(PathBuf, io::Error),
     #[error("Can not read metadata of {0}, {1}")]
@@ -227,7 +229,13 @@ pub fn bind_remount<P: AsRef<Path>>(dst: P, readonly: bool) -> Result<()> {
     do_rebind_mount(dst, readonly, MsFlags::empty())
 }
 
-/// Bind mount `src` to `dst` in slave mode, optionally in readonly mode if `readonly` is true.
+/// Bind mount `src` to `dst` with a custom propagation type, optionally in readonly mode if
+/// `readonly` is true.
+///
+/// Propagation type: MsFlags::MS_SHARED or MsFlags::MS_SLAVE
+/// MsFlags::MS_SHARED is used to bind mount the sandbox path to enable `exec` (in case of FC
+/// jailer).
+/// MsFlags::MS_SLAVE is used on all other cases.
 ///
 /// # Safety
 /// Caller needs to ensure:
@@ -238,6 +246,7 @@ pub fn bind_mount_unchecked<S: AsRef<Path>, D: AsRef<Path>>(
     src: S,
     dst: D,
     readonly: bool,
+    pgflag: MsFlags,
 ) -> Result<()> {
     fail::fail_point!("bind_mount", |_| {
         Err(Error::FailureInject(
@@ -268,8 +277,11 @@ pub fn bind_mount_unchecked<S: AsRef<Path>, D: AsRef<Path>>(
     )
     .map_err(|e| Error::BindMount(abs_src, dst.to_path_buf(), e))?;
 
-    // Change into slave propagation mode.
-    mount(Some(""), dst, Some(""), MsFlags::MS_SLAVE, Some(""))
+    // Change into the chosen propagation mode.
+    if !(pgflag == MsFlags::MS_SHARED || pgflag == MsFlags::MS_SLAVE) {
+        return Err(Error::InvalidPgMountFlag);
+    }
+    mount(Some(""), dst, Some(""), pgflag, Some(""))
         .map_err(|e| Error::Mount(PathBuf::new(), dst.to_path_buf(), e))?;
 
     // Optionally rebind into readonly mode.
@@ -828,7 +840,7 @@ mod tests {
             Err(Error::InvalidPath(_))
         ));
 
-        bind_mount_unchecked(tmpdir2.path(), tmpdir.path(), true).unwrap();
+        bind_mount_unchecked(tmpdir2.path(), tmpdir.path(), true, MsFlags::MS_SLAVE).unwrap();
         bind_remount(tmpdir.path(), true).unwrap();
         umount_timeout(tmpdir.path().to_str().unwrap(), 0).unwrap();
     }
@@ -844,25 +856,26 @@ mod tests {
         dst.push("src");
 
         assert!(matches!(
-            bind_mount_unchecked(Path::new(""), Path::new(""), false),
+            bind_mount_unchecked(Path::new(""), Path::new(""), false, MsFlags::MS_SLAVE),
             Err(Error::NullMountPointPath)
         ));
         assert!(matches!(
-            bind_mount_unchecked(tmpdir2.path(), Path::new(""), false),
+            bind_mount_unchecked(tmpdir2.path(), Path::new(""), false, MsFlags::MS_SLAVE),
             Err(Error::NullMountPointPath)
         ));
         assert!(matches!(
             bind_mount_unchecked(
                 Path::new("/_does_not_exist_/___aahhhh"),
                 Path::new("/tmp/_does_not_exist/___bbb"),
-                false
+                false,
+                MsFlags::MS_SLAVE
             ),
             Err(Error::InvalidPath(_))
         ));
 
         let dst = create_mount_destination(tmpdir2.path(), &dst, tmpdir.path(), "bind").unwrap();
-        bind_mount_unchecked(tmpdir2.path(), dst.as_ref(), true).unwrap();
-        bind_mount_unchecked(&src, dst.as_ref(), false).unwrap();
+        bind_mount_unchecked(tmpdir2.path(), dst.as_ref(), true, MsFlags::MS_SLAVE).unwrap();
+        bind_mount_unchecked(&src, dst.as_ref(), false, MsFlags::MS_SLAVE).unwrap();
         umount_all(dst.as_ref(), false).unwrap();
 
         let mut src = tmpdir.path().to_owned();
@@ -871,7 +884,7 @@ mod tests {
         let mut dst = tmpdir.path().to_owned();
         dst.push("file");
         let dst = create_mount_destination(&src, &dst, tmpdir.path(), "bind").unwrap();
-        bind_mount_unchecked(&src, dst.as_ref(), false).unwrap();
+        bind_mount_unchecked(&src, dst.as_ref(), false, MsFlags::MS_SLAVE).unwrap();
         assert!(dst.as_ref().is_file());
         umount_timeout(dst.as_ref(), 0).unwrap();
     }
