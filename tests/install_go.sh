@@ -16,7 +16,7 @@ force=""
 USE_VERSIONS_FILE=""
 PROJECT="Kata Containers"
 
-source "${script_dir}/lib.sh"
+source "${script_dir}/common.bash"
 
 install_dest="/usr/local/"
 
@@ -87,7 +87,7 @@ if command -v go; then
 	fi
 fi
 
-goarch=$("${script_dir}/kata-arch.sh" --golang)
+goarch=$("${repo_root_dir}/tests/kata-arch.sh" --golang)
 
 info "Download go version ${go_version}"
 kernel_name=$(uname -s)
