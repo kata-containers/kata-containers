@@ -39,7 +39,7 @@ readonly kata_config="/etc/kata-containers/configuration.toml"
 readonly kata_config_backup="$kata_config.backup"
 readonly default_kata_config="/opt/kata/share/defaults/kata-containers/configuration.toml"
 
-ci_config() {
+function ci_config() {
 	sudo mkdir -p $(dirname "${kata_config}")
 	[ -f "$kata_config" ] && sudo cp "$kata_config" "$kata_config_backup" || \
 		sudo cp "$default_kata_config" "$kata_config"
@@ -59,7 +59,7 @@ ci_config() {
 	sudo sed -i 's/^#enable_debug =/enable_debug =/g' ${kata_config}
 }
 
-ci_cleanup() {
+function ci_cleanup() {
 	source /etc/os-release || source /usr/lib/os-release
 
 	if [ -n "${FACTORY_TEST}" ]; then
@@ -77,7 +77,7 @@ ci_cleanup() {
 		sudo rm "$kata_config"
 }
 
-create_containerd_config() {
+function create_containerd_config() {
 	local runtime="$1"
 	# kata_annotations is set to 1 if caller want containerd setup with
 	# kata annotations support.
@@ -117,14 +117,14 @@ fi
 
 }
 
-cleanup() {
+function cleanup() {
 	ci_cleanup
 	[ -d "$tmp_dir" ] && rm -rf "${tmp_dir}"
 }
 
 trap cleanup EXIT
 
-err_report() {
+function err_report() {
 	local log_file="${REPORT_DIR}/containerd.log"
 	if [ -f "$log_file" ]; then
 		echo "ERROR: containerd log :"
@@ -135,7 +135,7 @@ err_report() {
 }
 
 
-check_daemon_setup() {
+function check_daemon_setup() {
 	info "containerd(cri): Check daemon works with runc"
 	create_containerd_config "runc"
 
@@ -152,7 +152,7 @@ check_daemon_setup() {
 		make GO_BUILDTAGS="no_btrfs" -e cri-integration
 }
 
-testContainerStart() {
+function testContainerStart() {
 	# no_container_yaml set to 1 will not create container_yaml
 	# because caller has created its own container_yaml.
 	no_container_yaml=${1-0}
@@ -189,7 +189,7 @@ EOF
 	sudo crictl start $cid
 }
 
-testContainerStop() {
+function testContainerStop() {
 	info "stop pod $podid"
 	sudo crictl stopp $podid
 	info "remove pod $podid"
@@ -199,7 +199,7 @@ testContainerStop() {
 	restart_containerd_service
 }
 
-TestKilledVmmCleanup() {
+function TestKilledVmmCleanup() {
 	if [[ "${KATA_HYPERVISOR}" != "qemu" ]]; then
 		info "TestKilledVmmCleanup is skipped for ${KATA_HYPERVISOR}, only QEMU is currently tested"
 		return 0
@@ -222,7 +222,7 @@ TestKilledVmmCleanup() {
 	info "stop containerd"
 }
 
-TestContainerMemoryUpdate() {
+function TestContainerMemoryUpdate() {
 	if [[ "${KATA_HYPERVISOR}" != "qemu" ]] || [[ "${ARCH}" == "ppc64le" ]] || [[ "${ARCH}" == "s390x" ]]; then
 		return
 	fi
@@ -273,14 +273,14 @@ TestContainerMemoryUpdate() {
 	testContainerStop
 }
 
-getContainerSwapInfo() {
+function getContainerSwapInfo() {
 	swap_size=$(($(crictl exec $cid cat /proc/meminfo | grep "SwapTotal:" | awk '{print $2}')*1024))
 	# NOTE: these below two checks only works on cgroup v1
 	swappiness=$(crictl exec $cid cat /sys/fs/cgroup/memory/memory.swappiness)
 	swap_in_bytes=$(crictl exec $cid cat /sys/fs/cgroup/memory/memory.memsw.limit_in_bytes)
 }
 
-TestContainerSwap() {
+function TestContainerSwap() {
 	if [[ "${KATA_HYPERVISOR}" != "qemu" ]] || [[ "${ARCH}" != "x86_64" ]]; then
 		return
 	fi
@@ -402,14 +402,14 @@ EOF
 }
 
 # k8s may restart docker which will impact on containerd stop
-stop_containerd() {
+function stop_containerd() {
 	local tmp=$(pgrep kubelet || true)
 	[ -n "$tmp" ] && sudo kubeadm reset -f
 
 	sudo systemctl stop containerd
 }
 
-main() {
+function main() {
 
 	info "Stop crio service"
 	systemctl is-active --quiet crio && sudo systemctl stop crio
