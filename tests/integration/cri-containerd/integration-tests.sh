@@ -17,6 +17,9 @@ source "${SCRIPT_PATH}/../../common.bash"
 # runc is installed in /usr/local/sbin/ add that path
 export PATH="$PATH:/usr/local/sbin"
 
+# golang is installed in /usr/local/go/bin/ add that path
+export PATH="$PATH:/usr/local/go/bin"
+
 # Runtime to be used for testing
 RUNTIME=${RUNTIME:-containerd-shim-kata-v2}
 FACTORY_TEST=${FACTORY_TEST:-""}
