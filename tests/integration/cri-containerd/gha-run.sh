@@ -20,7 +20,6 @@ function install_dependencies() {
 function run() {
 	info "Running cri-containerd tests using ${KATA_HYPERVISOR} hypervisor"
 
-	create_symbolic_links ${KATA_HYPERVISOR}
 	return 0
 }
 

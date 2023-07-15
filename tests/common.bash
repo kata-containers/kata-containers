@@ -266,19 +266,6 @@ function restart_containerd_service() {
 	return 0
 }
 
-function create_symbolic_links() {
-	local KATA_HYPERVISOR="${1}"
-
-	local link_configuration_file="/opt/kata/share/defaults/kata-containers/configuration.toml"
-	local source_configuration_file="/opt/kata/share/defaults/kata-containers/configuration-${KATA_HYPERVISOR}.toml"
-
-	if [ "${KATA_HYPERVISOR}" != 'qemu' ] && [ "${KATA_HYPERVISOR}" != 'clh' ]; then
-		die "Failed to set the configuration.toml: '${KATA_HYPERVISOR}' is not recognized as a valid hypervisor name."
-	fi
-
-	sudo ln -sf "${source_configuration_file}" "${link_configuration_file}"
-}
-
 # Configures containerd
 function overwrite_containerd_config() {
 	containerd_config="/etc/containerd/config.toml"
@@ -315,6 +302,14 @@ function install_kata() {
 	for b in "${katadir}/bin/*" ; do
 		sudo ln -sf "${b}" "${local_bin_dir}/$(basename $b)"
 	done
+
+	if [[ ${KATA_HYPERVISOR} == "dragonball" ]]; then
+		sudo ln -sf "${katadir}/runtime-rs/bin/containerd-shim-kata-v2" "${local_bin_dir}/containerd-shim-kata-${KATA_HYPERVISOR}-v2"
+	else
+		sudo ln -sf "${katadir}/bin/containerd-shim-kata-v2" "${local_bin_dir}/containerd-shim-kata-${KATA_HYPERVISOR}-v2"
+	fi
+
+	sudo ln -sf ${katadir}/share/defaults/kata-containers/configuration-${KATA_HYPERVISOR}.toml ${katadir}/share/defaults/kata-containers/configuration.toml 
 
 	check_containerd_config_for_kata
 	restart_containerd_service

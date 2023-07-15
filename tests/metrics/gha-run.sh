@@ -56,28 +56,24 @@ function make_tarball_results() {
 function run_test_launchtimes() {
 	info "Running Launch Time test using ${KATA_HYPERVISOR} hypervisor"
 
-	create_symbolic_links ${KATA_HYPERVISOR}
 	bash tests/metrics/time/launch_times.sh -i public.ecr.aws/ubuntu/ubuntu:latest -n 20
 }
 
 function run_test_memory_usage() {
 	info "Running memory-usage test using ${KATA_HYPERVISOR} hypervisor"
 
-	create_symbolic_links ${KATA_HYPERVISOR}
 	bash tests/metrics/density/memory_usage.sh 20 5
 }
 
 function run_test_memory_usage_inside_container() {
 	info "Running memory-usage inside the container test using ${KATA_HYPERVISOR} hypervisor"
 
-	create_symbolic_links ${KATA_HYPERVISOR}
 	bash tests/metrics/density/memory_usage_inside_container.sh 5
 }
 
 function run_test_blogbench() {
 	info "Running Blogbench test using ${KATA_HYPERVISOR} hypervisor"
 
-	create_symbolic_links ${KATA_HYPERVISOR}
 	bash tests/metrics/storage/blogbench.sh
 
 	check_metrics
@@ -88,7 +84,6 @@ function run_test_tensorflow() {
 	# ToDo: remove the exit once the metrics workflow is stable
 	exit 0
 
-	create_symbolic_links ${KATA_HYPERVISOR}
 	bash tests/metrics/machine_learning/tensorflow.sh 1 20
 }
 
