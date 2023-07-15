@@ -20,11 +20,11 @@ source "${script_dir}/common.bash"
 
 install_dest="/usr/local/"
 
-finish() {
+function finish() {
 	rm -rf "$tmp_dir"
 }
 
-usage(){
+function usage(){
 	exit_code="$1"
 	cat <<EOF
 Usage:
