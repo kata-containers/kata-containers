@@ -10,7 +10,6 @@ set -e
 typeset -r script_name=${0##*/}
 
 typeset -r cidir=$(dirname "$0")
-source "${cidir}/lib.sh"
 
 function usage() {
 	cat <<EOF
@@ -48,10 +47,9 @@ function arch_to_rust() {
 
 	if [ "${arch}" == "ppc64le" ]; then
 		arch="powerpc64le"
-		ARCH="${arch}"
 	fi
 
-	[ "${CROSS_BUILD}" == "false" ] && echo "${arch}" || echo "${ARCH}"
+	echo "${arch}"
 }
 
 # Convert architecture to the name used by the Linux kernel build system
