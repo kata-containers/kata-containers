@@ -247,7 +247,7 @@ function TestContainerMemoryUpdate() {
 
 	testContainerStart
 
-	vm_size=$(($(crictl exec $cid cat /proc/meminfo | grep "MemTotal:" | awk '{print $2}')*1024))
+	vm_size=$(($(sudo crictl exec $cid cat /proc/meminfo | grep "MemTotal:" | awk '{print $2}')*1024))
 	if [ $vm_size -gt $((2*1024*1024*1024)) ] || [ $vm_size -lt $((2*1024*1024*1024-128*1024*1024)) ]; then
 		testContainerStop
 		die "The VM memory size $vm_size before update is not right"
@@ -256,7 +256,7 @@ function TestContainerMemoryUpdate() {
 	sudo crictl update --memory $((2*1024*1024*1024)) $cid
 	sleep 1
 
-	vm_size=$(($(crictl exec $cid cat /proc/meminfo | grep "MemTotal:" | awk '{print $2}')*1024))
+	vm_size=$(($(sudo crictl exec $cid cat /proc/meminfo | grep "MemTotal:" | awk '{print $2}')*1024))
 	if [ $vm_size -gt $((4*1024*1024*1024)) ] || [ $vm_size -lt $((4*1024*1024*1024-128*1024*1024)) ]; then
 		testContainerStop
 		die "The VM memory size $vm_size after increase is not right"
@@ -266,7 +266,7 @@ function TestContainerMemoryUpdate() {
 		sudo crictl update --memory $((1*1024*1024*1024)) $cid
 		sleep 1
 
-		vm_size=$(($(crictl exec $cid cat /proc/meminfo | grep "MemTotal:" | awk '{print $2}')*1024))
+		vm_size=$(($(sudo crictl exec $cid cat /proc/meminfo | grep "MemTotal:" | awk '{print $2}')*1024))
 		if [ $vm_size -gt $((3*1024*1024*1024)) ] || [ $vm_size -lt $((3*1024*1024*1024-128*1024*1024)) ]; then
 			testContainerStop
 			die "The VM memory size $vm_size after decrease is not right"
@@ -277,10 +277,10 @@ function TestContainerMemoryUpdate() {
 }
 
 function getContainerSwapInfo() {
-	swap_size=$(($(crictl exec $cid cat /proc/meminfo | grep "SwapTotal:" | awk '{print $2}')*1024))
+	swap_size=$(($(sudo crictl exec $cid cat /proc/meminfo | grep "SwapTotal:" | awk '{print $2}')*1024))
 	# NOTE: these below two checks only works on cgroup v1
-	swappiness=$(crictl exec $cid cat /sys/fs/cgroup/memory/memory.swappiness)
-	swap_in_bytes=$(crictl exec $cid cat /sys/fs/cgroup/memory/memory.memsw.limit_in_bytes)
+	swappiness=$(sudo crictl exec $cid cat /sys/fs/cgroup/memory/memory.swappiness)
+	swap_in_bytes=$(sudo crictl exec $cid cat /sys/fs/cgroup/memory/memory.memsw.limit_in_bytes)
 }
 
 function TestContainerSwap() {
