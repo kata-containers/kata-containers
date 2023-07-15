@@ -9,6 +9,7 @@
 use crate::policy;
 
 use anyhow::{anyhow, Result};
+use docker_credential::{CredentialRetrievalError, DockerCredential};
 use log::warn;
 use log::{debug, info, LevelFilter};
 use oci_distribution::client::{linux_amd64_resolver, ClientConfig};
@@ -58,13 +59,15 @@ impl Container {
         info!("============================================");
         info!("Pulling manifest and config for {:?}", image);
         let reference: Reference = image.to_string().parse().unwrap();
+        let auth = build_auth(&reference);
+
         let mut client = Client::new(ClientConfig {
             platform_resolver: Some(Box::new(linux_amd64_resolver)),
             ..Default::default()
         });
 
         let (manifest, digest_hash, config_layer_str) = client
-            .pull_manifest_and_config(&reference, &RegistryAuth::Anonymous)
+            .pull_manifest_and_config(&reference, &auth)
             .await
             .unwrap();
 
@@ -387,4 +390,35 @@ fn do_create_verity_hash_file(path: &Path, verity_path: &Path) -> Result<()> {
 
 pub async fn get_container(use_cache: bool, image: &str) -> Result<Container> {
     Container::new(use_cache, image).await
+}
+
+fn build_auth(reference: &Reference) -> RegistryAuth {
+    debug!("build_auth: {:?}", reference);
+
+    let server = reference
+        .resolve_registry()
+        .strip_suffix("/")
+        .unwrap_or_else(|| reference.resolve_registry());
+
+    match docker_credential::get_credential(server) {
+        Ok(DockerCredential::UsernamePassword(username, password)) => {
+            debug!("build_auth: Found docker credentials");
+            return RegistryAuth::Basic(username, password);
+        }
+        Ok(DockerCredential::IdentityToken(_)) => {
+            warn!("build_auth: Cannot use contents of docker config, identity token not supported. Using anonymous access.");
+        }
+        Err(CredentialRetrievalError::ConfigNotFound) => {
+            debug!("build_auth: Docker config not found - using anonymous access.");
+        }
+        Err(CredentialRetrievalError::NoCredentialConfigured) => {
+            debug!("build_auth: Docker credentials not configured - using anonymous access.");
+        }
+        Err(CredentialRetrievalError::ConfigReadError) => {
+            warn!("build_auth: Cannot read docker credentials - using anonymous access.");
+        }
+        Err(e) => panic!("Error handling docker configuration file: {}", e),
+    }
+
+    RegistryAuth::Anonymous
 }
