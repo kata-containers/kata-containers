@@ -12,7 +12,7 @@ typeset -r script_name=${0##*/}
 typeset -r cidir=$(dirname "$0")
 source "${cidir}/lib.sh"
 
-usage()
+function usage()
 {
 cat <<EOF
 Description: Display host architecture name in various formats.
@@ -31,7 +31,7 @@ EOF
 }
 
 # Convert architecture to the name used by golang
-arch_to_golang()
+function arch_to_golang()
 {
 	local -r arch="$1"
 
@@ -45,7 +45,7 @@ arch_to_golang()
 }
 
 # Convert architecture to the name used by rust
-arch_to_rust()
+function arch_to_rust()
 {
 	local arch="$1"
 
@@ -58,7 +58,7 @@ arch_to_rust()
 }
 
 # Convert architecture to the name used by the Linux kernel build system
-arch_to_kernel()
+function arch_to_kernel()
 {
 	local -r arch="$1"
 
@@ -71,7 +71,7 @@ arch_to_kernel()
 	esac
 }
 
-main()
+function main()
 {
 	local type="default"
 
@@ -125,4 +125,3 @@ main()
 }
 
 main "$@"
-
