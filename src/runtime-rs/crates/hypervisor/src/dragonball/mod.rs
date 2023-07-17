@@ -19,12 +19,18 @@ use async_trait::async_trait;
 use kata_types::capabilities::Capabilities;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use tokio::sync::RwLock;
+use tracing::instrument;
 
 use crate::{DeviceType, Hypervisor, VcpuThreadIds};
 
-#[derive(Debug)]
 pub struct Dragonball {
     inner: Arc<RwLock<DragonballInner>>,
+}
+
+impl std::fmt::Debug for Dragonball {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Dragonball").finish()
+    }
 }
 
 impl Default for Dragonball {
@@ -48,11 +54,13 @@ impl Dragonball {
 
 #[async_trait]
 impl Hypervisor for Dragonball {
+    #[instrument]
     async fn prepare_vm(&self, id: &str, netns: Option<String>) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.prepare_vm(id, netns).await
     }
 
+    #[instrument]
     async fn start_vm(&self, timeout: i32) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.start_vm(timeout).await

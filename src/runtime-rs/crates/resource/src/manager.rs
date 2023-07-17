@@ -17,6 +17,7 @@ use kata_types::mount::Mount;
 use oci::{Linux, LinuxResources};
 use persist::sandbox_persist::Persist;
 use tokio::sync::RwLock;
+use tracing::instrument;
 
 use crate::network::NetworkConfig;
 use crate::resource_persist::ResourceState;
@@ -32,6 +33,12 @@ pub struct ManagerArgs {
 
 pub struct ResourceManager {
     inner: Arc<RwLock<ResourceManagerInner>>,
+}
+
+impl std::fmt::Debug for ResourceManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ResourceManager").finish()
+    }
 }
 
 impl ResourceManager {
@@ -58,6 +65,7 @@ impl ResourceManager {
         inner.get_device_manager()
     }
 
+    #[instrument]
     pub async fn prepare_before_start_vm(&self, device_configs: Vec<ResourceConfig>) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.prepare_before_start_vm(device_configs).await
@@ -68,6 +76,7 @@ impl ResourceManager {
         inner.handle_network(network_config).await
     }
 
+    #[instrument]
     pub async fn setup_after_start_vm(&self) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.setup_after_start_vm().await
