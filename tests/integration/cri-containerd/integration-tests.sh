@@ -167,6 +167,8 @@ function testContainerStart() {
 	cat << EOF > "${pod_yaml}"
 metadata:
   name: busybox-sandbox1
+  namespace: default
+  uid: busybox-sandbox1-uid
 EOF
 
 	#TestContainerSwap has created its own container_yaml.
@@ -174,6 +176,8 @@ EOF
 		cat << EOF > "${container_yaml}"
 metadata:
   name: busybox-killed-vmm
+  namespace: default
+  uid: busybox-killed-vmm-uid
 image:
   image: "$image"
 command:
@@ -318,6 +322,8 @@ function TestContainerSwap() {
 	cat << EOF > "${container_yaml}"
 metadata:
   name: busybox-swap
+  namespace: default
+  uid: busybox-swap-uid
 annotations:
   io.katacontainers.container.resource.swappiness: "100"
   io.katacontainers.container.resource.swap_in_bytes: "1610612736"
@@ -348,6 +354,8 @@ EOF
 	cat << EOF > "${container_yaml}"
 metadata:
   name: busybox-swap
+  namespace: default
+  uid: busybox-swap-uid
 annotations:
   io.katacontainers.container.resource.swappiness: "100"
 linux:
@@ -378,6 +386,8 @@ EOF
 	cat << EOF > "${container_yaml}"
 metadata:
   name: busybox-swap
+  namespace: default
+  uid: busybox-swap-uid
 annotations:
   io.katacontainers.container.resource.swappiness: "100"
 image:
