@@ -18,7 +18,7 @@ use crate::utils;
 use crate::volume;
 use crate::yaml;
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use base64::{engine::general_purpose, Engine as _};
 use log::debug;
 use oci::*;
@@ -245,9 +245,6 @@ impl AgentPolicy {
 
         let json_data = serde_json::to_string_pretty(&policy_data).unwrap();
         let policy = self.rules.clone() + "\npolicy_data := " + &json_data;
-        if let Some(file_name) = &self.config.output_policy_file {
-            policy::export_decoded_policy(&policy, &file_name);
-        }
         if self.config.raw_out {
             policy::base64_out(&policy);
         }
@@ -521,19 +518,6 @@ fn name_to_hash(name: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(name);
     format!("{:x}", hasher.finalize())
-}
-
-/// Creates a text file including the Rego rules and data.
-pub fn export_decoded_policy(policy: &str, file_name: &str) {
-    let mut f = std::fs::OpenOptions::new()
-        .write(true)
-        .truncate(true)
-        .create(true)
-        .open(file_name)
-        .map_err(|e| anyhow!(e))
-        .unwrap();
-    f.write_all(policy.as_bytes()).unwrap();
-    f.flush().map_err(|e| anyhow!(e)).unwrap();
 }
 
 pub fn base64_out(policy: &str) {
