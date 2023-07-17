@@ -6,6 +6,7 @@
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
+use tracing::instrument;
 use ttrpc::context as ttrpc_ctx;
 
 use kata_types::config::Agent as AgentConfig;
@@ -22,6 +23,7 @@ fn new_ttrpc_ctx(timeout: i64) -> ttrpc_ctx::Context {
 
 #[async_trait]
 impl AgentManager for KataAgent {
+    #[instrument]
     async fn start(&self, address: &str) -> Result<()> {
         info!(sl!(), "begin to connect agent {:?}", address);
         self.set_socket_address(address)
@@ -73,6 +75,7 @@ macro_rules! impl_agent {
     ($($name: tt | $req: ty | $resp: ty | $new_timeout: expr),*) => {
         #[async_trait]
         impl Agent for KataAgent {
+            #[instrument(skip(req))]
             $(async fn $name(&self, req: $req) -> Result<$resp> {
                 let r = req.into();
                 let (client, mut timeout, _) = self.get_agent_client().await.context("get client")?;

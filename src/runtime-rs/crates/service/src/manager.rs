@@ -39,6 +39,19 @@ pub struct ServiceManager {
     namespace: String,
 }
 
+impl std::fmt::Debug for ServiceManager {
+    // todo: some how to implement debug for handler
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ServiceManager")
+            .field("receiver", &self.receiver)
+            .field("task_server.is_some()", &self.task_server.is_some())
+            .field("binary", &self.binary)
+            .field("address", &self.address)
+            .field("namespace", &self.namespace)
+            .finish()
+    }
+}
+
 async fn send_event(
     containerd_binary: String,
     address: String,

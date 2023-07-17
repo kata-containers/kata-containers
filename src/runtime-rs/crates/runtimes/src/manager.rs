@@ -24,7 +24,8 @@ use persist::sandbox_persist::Persist;
 use resource::{cpu_mem::initial_size::InitialSizeManager, network::generate_netns_name};
 use shim_interface::shim_mgmt::ERR_NO_SHIM_SERVER;
 use tokio::fs;
-use tokio::sync::{mpsc::Sender, RwLock};
+use tokio::sync::{mpsc::Sender, Mutex, RwLock};
+use tracing::instrument;
 #[cfg(feature = "virt")]
 use virt_container::{
     sandbox::{SandboxRestoreArgs, VirtSandbox},
@@ -34,23 +35,39 @@ use virt_container::{
 #[cfg(feature = "wasm")]
 use wasm_container::WasmContainer;
 
-use crate::shim_mgmt::server::MgmtServer;
+use crate::{
+    shim_mgmt::server::MgmtServer,
+    tracer::{KataTracer, ROOTSPAN},
+};
 
 struct RuntimeHandlerManagerInner {
     id: String,
     msg_sender: Sender<Message>,
+    kata_tracer: Arc<Mutex<KataTracer>>,
     runtime_instance: Option<Arc<RuntimeInstance>>,
+}
+
+impl std::fmt::Debug for RuntimeHandlerManagerInner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RuntimeHandlerManagerInner")
+            .field("id", &self.id)
+            .field("msg_sender", &self.msg_sender)
+            .finish()
+    }
 }
 
 impl RuntimeHandlerManagerInner {
     fn new(id: &str, msg_sender: Sender<Message>) -> Result<Self> {
+        let tracer = KataTracer::new();
         Ok(Self {
             id: id.to_string(),
             msg_sender,
+            kata_tracer: Arc::new(Mutex::new(tracer)),
             runtime_instance: None,
         })
     }
 
+    #[instrument]
     async fn init_runtime_handler(
         &mut self,
         spec: &oci::Spec,
@@ -72,9 +89,22 @@ impl RuntimeHandlerManagerInner {
             _ => return Err(anyhow!("Unsupported runtime: {}", &config.runtime.name)),
         };
         let runtime_instance = runtime_handler
-            .new_instance(&self.id, self.msg_sender.clone(), config)
+            .new_instance(&self.id, self.msg_sender.clone(), config.clone())
             .await
             .context("new runtime instance")?;
+
+        // initilize the trace subscriber
+        if config.runtime.enable_tracing {
+            let mut tracer = self.kata_tracer.lock().await;
+            if let Err(e) = tracer.trace_setup(
+                &self.id,
+                &config.runtime.jaeger_endpoint,
+                &config.runtime.jaeger_user,
+                &config.runtime.jaeger_password,
+            ) {
+                warn!(sl!(), "failed to setup tracing, {:?}", e);
+            }
+        }
 
         // start sandbox
         runtime_instance
@@ -86,6 +116,7 @@ impl RuntimeHandlerManagerInner {
         Ok(())
     }
 
+    #[instrument]
     async fn try_init(
         &mut self,
         spec: &oci::Spec,
@@ -149,6 +180,7 @@ impl RuntimeHandlerManagerInner {
             netns,
             network_created,
         };
+
         self.init_runtime_handler(spec, state, network_env, dns, Arc::new(config))
             .await
             .context("init runtime handler")?;
@@ -171,10 +203,21 @@ impl RuntimeHandlerManagerInner {
     fn get_runtime_instance(&self) -> Option<Arc<RuntimeInstance>> {
         self.runtime_instance.clone()
     }
+
+    fn get_kata_tracer(&self) -> Arc<Mutex<KataTracer>> {
+        self.kata_tracer.clone()
+    }
 }
 
 pub struct RuntimeHandlerManager {
     inner: Arc<RwLock<RuntimeHandlerManagerInner>>,
+}
+
+// todo: a more detailed impl for fmt::Debug
+impl std::fmt::Debug for RuntimeHandlerManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RuntimeHandlerManager").finish()
+    }
 }
 
 impl RuntimeHandlerManager {
@@ -243,6 +286,12 @@ impl RuntimeHandlerManager {
             .ok_or_else(|| anyhow!("runtime not ready"))
     }
 
+    async fn get_kata_tracer(&self) -> Result<Arc<Mutex<KataTracer>>> {
+        let inner = self.inner.read().await;
+        Ok(inner.get_kata_tracer())
+    }
+
+    #[instrument]
     async fn try_init_runtime_instance(
         &self,
         spec: &oci::Spec,
@@ -253,6 +302,7 @@ impl RuntimeHandlerManager {
         inner.try_init(spec, state, options).await
     }
 
+    #[instrument(parent = &*(ROOTSPAN))]
     pub async fn handler_message(&self, req: Request) -> Result<Response> {
         if let Request::CreateContainer(container_config) = req {
             // get oci spec
@@ -291,6 +341,7 @@ impl RuntimeHandlerManager {
         }
     }
 
+    #[instrument(parent = &(*ROOTSPAN))]
     pub async fn handler_request(&self, req: Request) -> Result<Response> {
         let instance = self
             .get_runtime_instance()
@@ -320,6 +371,11 @@ impl RuntimeHandlerManager {
             Request::ShutdownContainer(req) => {
                 if cm.need_shutdown_sandbox(&req).await {
                     sandbox.shutdown().await.context("do shutdown")?;
+
+                    // stop the tracer collector
+                    let kata_tracer = self.get_kata_tracer().await.context("get kata tracer")?;
+                    let tracer = kata_tracer.lock().await;
+                    tracer.trace_end();
                 }
                 Ok(Response::ShutdownContainer)
             }
@@ -388,6 +444,7 @@ impl RuntimeHandlerManager {
 /// 3. shimv2 create task option
 /// 4. If above three are not set, then get default path from DEFAULT_RUNTIME_CONFIGURATIONS
 /// in kata-containers/src/libs/kata-types/src/config/default.rs, in array order.
+#[instrument]
 fn load_config(spec: &oci::Spec, option: &Option<Vec<u8>>) -> Result<TomlConfig> {
     const KATA_CONF_FILE: &str = "KATA_CONF_FILE";
     let annotation = Annotation::new(spec.annotations.clone());
