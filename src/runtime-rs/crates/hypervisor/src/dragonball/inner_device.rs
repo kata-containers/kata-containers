@@ -48,7 +48,7 @@ impl DragonballInner {
         info!(sl!(), "dragonball add device {:?}", &device);
         match device {
             DeviceType::Network(network) => self
-                .add_net_device(&network.config, network.id)
+                .add_net_device(&network.config)
                 .context("add net device"),
             DeviceType::Vfio(hostdev) => self.add_vfio_device(&hostdev).context("add vfio device"),
             DeviceType::Block(block) => self
@@ -84,6 +84,15 @@ impl DragonballInner {
         info!(sl!(), "remove device {} ", device);
 
         match device {
+            DeviceType::Network(network) => {
+                // Dragonball doesn't support remove network device, just print message.
+                info!(
+                    sl!(),
+                    "dragonball remove network device: {:?}.", network.config.virt_iface_name
+                );
+
+                Ok(())
+            }
             DeviceType::Block(block) => {
                 let drive_id = drive_index_to_id(block.config.index);
                 self.remove_block_drive(drive_id.as_str())
@@ -197,9 +206,9 @@ impl DragonballInner {
         Ok(())
     }
 
-    fn add_net_device(&mut self, config: &NetworkConfig, device_id: String) -> Result<()> {
+    fn add_net_device(&mut self, config: &NetworkConfig) -> Result<()> {
         let iface_cfg = VirtioNetDeviceConfigInfo {
-            iface_id: device_id,
+            iface_id: config.virt_iface_name.clone(),
             host_dev_name: config.host_dev_name.clone(),
             guest_mac: match &config.guest_mac {
                 Some(mac) => MacAddr::from_bytes(&mac.0).ok(),

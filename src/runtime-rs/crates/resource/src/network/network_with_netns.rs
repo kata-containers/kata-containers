@@ -88,11 +88,11 @@ impl NetworkWithNetns {
 
 #[async_trait]
 impl Network for NetworkWithNetns {
-    async fn setup(&self, h: &dyn Hypervisor) -> Result<()> {
+    async fn setup(&self) -> Result<()> {
         let inner = self.inner.read().await;
         let _netns_guard = netns::NetnsGuard::new(&inner.netns_path).context("net netns guard")?;
         for e in &inner.entity_list {
-            e.endpoint.attach(h).await.context("attach")?;
+            e.endpoint.attach().await.context("attach")?;
         }
         Ok(())
     }
@@ -241,6 +241,7 @@ async fn create_endpoint(
         match link_type {
             "veth" => {
                 let ret = VethEndpoint::new(
+                    &d,
                     handle,
                     &attrs.name,
                     idx,
@@ -252,19 +253,20 @@ async fn create_endpoint(
                 Arc::new(ret)
             }
             "vlan" => {
-                let ret = VlanEndpoint::new(handle, &attrs.name, idx, config.queues)
+                let ret = VlanEndpoint::new(&d, handle, &attrs.name, idx, config.queues)
                     .await
                     .context("vlan endpoint")?;
                 Arc::new(ret)
             }
             "ipvlan" => {
-                let ret = IPVlanEndpoint::new(handle, &attrs.name, idx, config.queues)
+                let ret = IPVlanEndpoint::new(&d, handle, &attrs.name, idx, config.queues)
                     .await
                     .context("ipvlan endpoint")?;
                 Arc::new(ret)
             }
             "macvlan" => {
                 let ret = MacVlanEndpoint::new(
+                    &d,
                     handle,
                     &attrs.name,
                     idx,

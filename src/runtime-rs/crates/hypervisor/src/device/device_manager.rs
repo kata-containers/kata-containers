@@ -11,8 +11,9 @@ use kata_sys_util::rand::RandomBytes;
 use tokio::sync::{Mutex, RwLock};
 
 use crate::{
-    device::VhostUserBlkDevice, BlockConfig, BlockDevice, Hypervisor, VfioDevice, VhostUserConfig,
-    KATA_BLK_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE, VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI,
+    device::VhostUserBlkDevice, BlockConfig, BlockDevice, Hypervisor, NetworkDevice, VfioDevice,
+    VhostUserConfig, KATA_BLK_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE, VIRTIO_BLOCK_MMIO,
+    VIRTIO_BLOCK_PCI,
 };
 
 use super::{
@@ -193,6 +194,11 @@ impl DeviceManager {
                         return Some(device_id.to_string());
                     }
                 }
+                DeviceType::Network(device) => {
+                    if device.config.host_dev_name == host_path {
+                        return Some(device_id.to_string());
+                    }
+                }
                 _ => {
                     // TODO: support find other device type
                     continue;
@@ -266,6 +272,21 @@ impl DeviceManager {
                 self.create_vhost_blk_device(config, device_id.clone())
                     .await
                     .context("failed to create vhost blk device")?
+            }
+            DeviceConfig::NetworkCfg(config) => {
+                // try to find the device, found and just return id.
+                if let Some(dev_id_matched) = self.find_device(config.host_dev_name.clone()).await {
+                    info!(
+                        sl!(),
+                        "network device with path:{:?} found. return network device id: {:?}",
+                        config.host_dev_name.clone(),
+                        dev_id_matched
+                    );
+
+                    return Ok(dev_id_matched);
+                }
+
+                Arc::new(Mutex::new(NetworkDevice::new(device_id.clone(), config)))
             }
             _ => {
                 return Err(anyhow!("invliad device type"));
