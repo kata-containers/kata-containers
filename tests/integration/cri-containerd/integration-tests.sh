@@ -158,7 +158,7 @@ function check_daemon_setup() {
 function testContainerStart() {
 	# no_container_yaml set to 1 will not create container_yaml
 	# because caller has created its own container_yaml.
-	no_container_yaml=${1-0}
+	no_container_yaml=${1:-0}
 
 	local pod_yaml=${REPORT_DIR}/pod.yaml
 	local container_yaml=${REPORT_DIR}/container.yaml
