@@ -194,7 +194,7 @@ externals:
   attestation-agent:
     description: "Provide attested key unwrapping for image decryption"
     url: "https://github.com/confidential-containers/guest-components/"
-    version: "43f68320ed78cef438c838c10a6f462c06bad83f"
+    version: "88dcc147ba8ddf34e8425c98d5931df8a995f04a"
 
   cni-plugins:
     description: "CNI network plugins"
