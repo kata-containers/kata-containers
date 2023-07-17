@@ -53,7 +53,7 @@ behaviour.
 To show the available options without installing anything, run:
 
 ```sh
-$ bash -c "$(curl -fsSL https://raw.githubusercontent.com/kata-containers/kata-containers/main/utils/kata-manager.sh) -h"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/kata-containers/kata-containers/main/utils/kata-manager.sh) -h"
 ```
 
 ### To install Kata Containers only
@@ -61,7 +61,7 @@ $ bash -c "$(curl -fsSL https://raw.githubusercontent.com/kata-containers/kata-c
 If your system already has containerd installed, to install Kata Containers and only configure containerd, run:
 
 ```sh
-$ bash -c "$(curl -fsSL https://raw.githubusercontent.com/kata-containers/kata-containers/main/utils/kata-manager.sh) -o"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/kata-containers/kata-containers/main/utils/kata-manager.sh) -o"
 ```
 
 ### To install Kata Containers and containerd
