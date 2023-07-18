@@ -1,0 +1,23 @@
+[package]
+name = "dbs-legacy-devices"
+version = "0.1.1"
+authors = ["Alibaba Dragonball Team"]
+license = "Apache-2.0 AND BSD-3-Clause"
+edition = "2018"
+description = "dbs-legacy-devices provides emulation for legacy devices."
+homepage = "https://github.com/openanolis/dragonball-sandbox"
+repository = "https://github.com/openanolis/dragonball-sandbox"
+keywords = ["dragonball", "secure-sandbox", "devices", "legacy"]
+readme = "README.md"
+
+[dependencies]
+dbs-device = { path = "../dbs_device" }
+dbs-utils = { path = "../dbs_utils" }
+libc = "0.2.39"
+log = "0.4.14"
+serde = { version = "1.0.27", features = ["derive", "rc"] }
+vm-superio = "0.5.0"
+vmm-sys-util = "0.11.0"
+
+[dev-dependencies]
+libc = "0.2.39"
