@@ -299,7 +299,7 @@ function install_kata() {
 	popd
 
 	# create symbolic links to kata components
-	for b in "${katadir}/bin/*" ; do
+	for b in "${katadir}"/bin/* ; do
 		sudo ln -sf "${b}" "${local_bin_dir}/$(basename $b)"
 	done
 
