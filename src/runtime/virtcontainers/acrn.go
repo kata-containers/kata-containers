@@ -90,7 +90,7 @@ func (a *Acrn) Capabilities(ctx context.Context) types.Capabilities {
 	span, _ := katatrace.Trace(ctx, a.Logger(), "Capabilities", acrnTracingTags, map[string]string{"sandbox_id": a.id})
 	defer span.End()
 
-	return a.arch.capabilities()
+	return a.arch.capabilities(a.config)
 }
 
 func (a *Acrn) HypervisorConfig() HypervisorConfig {

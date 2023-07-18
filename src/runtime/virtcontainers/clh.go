@@ -349,6 +349,10 @@ func (clh *cloudHypervisor) createVirtiofsDaemon(sharedPath string) (VirtiofsDae
 }
 
 func (clh *cloudHypervisor) setupVirtiofsDaemon(ctx context.Context) error {
+	if clh.config.SharedFS == config.NoSharedFS {
+		return nil
+	}
+
 	if clh.config.SharedFS == config.Virtio9P {
 		return errors.New("cloud-hypervisor only supports virtio based file sharing")
 	}
@@ -860,12 +864,12 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device *config.VFIODev) error {
 	defer cancel()
 
 	// Create the clh device config via the constructor to ensure default values are properly assigned
-	clhDevice := *chclient.NewDeviceConfig(*(*device).GetSysfsDev())
+	clhDevice := *chclient.NewDeviceConfig(device.SysfsDev)
 	pciInfo, _, err := cl.VmAddDevicePut(ctx, clhDevice)
 	if err != nil {
 		return fmt.Errorf("Failed to hotplug device %+v %s", device, openAPIClientError(err))
 	}
-	clh.devicesIds[*(*device).GetID()] = pciInfo.GetId()
+	clh.devicesIds[device.ID] = pciInfo.GetId()
 
 	// clh doesn't use bridges, so the PCI path is simply the slot
 	// number of the device.  This will break if clh starts using
@@ -882,14 +886,11 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device *config.VFIODev) error {
 		return fmt.Errorf("Unexpected PCI address %q from clh hotplug", pciInfo.Bdf)
 	}
 
-	guestPciPath, err := types.PciPathFromString(tokens[0])
-
-	pciDevice, ok := (*device).(config.VFIOPCIDev)
-	if !ok {
+	if device.Type == config.VFIOAPDeviceMediatedType {
 		return fmt.Errorf("VFIO device %+v is not PCI, only PCI is supported in Cloud Hypervisor", device)
 	}
-	pciDevice.GuestPciPath = guestPciPath
-	*device = pciDevice
+
+	device.GuestPciPath, err = types.PciPathFromString(tokens[0])
 
 	return err
 }
@@ -933,7 +934,7 @@ func (clh *cloudHypervisor) HotplugRemoveDevice(ctx context.Context, devInfo int
 	case BlockDev:
 		deviceID = clhDriveIndexToID(devInfo.(*config.BlockDrive).Index)
 	case VfioDev:
-		deviceID = *devInfo.(config.VFIODev).GetID()
+		deviceID = devInfo.(*config.VFIODev).ID
 	default:
 		clh.Logger().WithFields(log.Fields{"devInfo": devInfo,
 			"deviceType": devType}).Error("HotplugRemoveDevice: unsupported device")
@@ -1210,7 +1211,9 @@ func (clh *cloudHypervisor) Capabilities(ctx context.Context) types.Capabilities
 
 	clh.Logger().WithField("function", "Capabilities").Info("get Capabilities")
 	var caps types.Capabilities
-	caps.SetFsSharingSupport()
+	if clh.config.SharedFS != config.NoSharedFS {
+		caps.SetFsSharingSupport()
+	}
 	caps.SetBlockDeviceHotplugSupport()
 	return caps
 }

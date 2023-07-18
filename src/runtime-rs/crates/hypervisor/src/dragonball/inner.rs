@@ -341,7 +341,10 @@ impl DragonballInner {
 
         // cannot exceed maximum value
         if new_vcpus > self.config.cpu_info.default_maxvcpus {
-            return Err(anyhow!("resize vcpu error: cannot greater than maxvcpus"));
+            warn!(
+                sl!(),
+                "Cannot allocate more vcpus than the max allowed number of vcpus. The maximum allowed amount of vcpus will be used instead.");
+            return Ok((current_vcpus, self.config.cpu_info.default_maxvcpus));
         }
 
         Ok((current_vcpus, new_vcpus))

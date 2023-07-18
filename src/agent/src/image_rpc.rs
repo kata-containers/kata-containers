@@ -38,11 +38,9 @@ const KATA_CC_IMAGE_WORK_DIR: &str = "/run/image/";
 const KATA_CC_PAUSE_BUNDLE: &str = "/pause_bundle";
 const CONFIG_JSON: &str = "config.json";
 
-// Convenience macro to obtain the scope logger
-macro_rules! sl {
-    () => {
-        slog_scope::logger()
-    };
+// Convenience function to obtain the scope logger.
+fn sl() -> slog::Logger {
+    slog_scope::logger().new(o!("subsystem" => "cgroups"))
 }
 
 pub struct ImageService {
@@ -57,18 +55,17 @@ impl ImageService {
         env::set_var("CC_IMAGE_WORK_DIR", KATA_CC_IMAGE_WORK_DIR);
         let mut image_client = ImageClient::default();
 
-        let image_policy_file = &AGENT_CONFIG.read().await.image_policy_file;
+        let image_policy_file = &AGENT_CONFIG.image_policy_file;
         if !image_policy_file.is_empty() {
             image_client.config.file_paths.sigstore_config = image_policy_file.clone();
         }
 
-        let simple_signing_sigstore_config =
-            &AGENT_CONFIG.read().await.simple_signing_sigstore_config;
+        let simple_signing_sigstore_config = &AGENT_CONFIG.simple_signing_sigstore_config;
         if !simple_signing_sigstore_config.is_empty() {
             image_client.config.file_paths.sigstore_config = simple_signing_sigstore_config.clone();
         }
 
-        let image_registry_auth_file = &AGENT_CONFIG.read().await.image_registry_auth_file;
+        let image_registry_auth_file = &AGENT_CONFIG.image_registry_auth_file;
         if !image_registry_auth_file.is_empty() {
             image_client.config.file_paths.auth_file = image_registry_auth_file.clone();
         }
@@ -88,7 +85,7 @@ impl ImageService {
             return Err(anyhow!("Pause image not present in rootfs"));
         }
 
-        info!(sl!(), "use guest pause image cid {:?}", cid);
+        info!(sl(), "use guest pause image cid {:?}", cid);
         let pause_bundle = Path::new(CONTAINER_BASE).join(cid);
         let pause_rootfs = pause_bundle.join("rootfs");
         let pause_config = pause_bundle.join(CONFIG_JSON);
@@ -159,12 +156,12 @@ impl ImageService {
     async fn pull_image(&self, req: &image::PullImageRequest) -> Result<String> {
         env::set_var("OCICRYPT_KEYPROVIDER_CONFIG", OCICRYPT_CONFIG_PATH);
 
-        let https_proxy = &AGENT_CONFIG.read().await.https_proxy;
+        let https_proxy = &AGENT_CONFIG.https_proxy;
         if !https_proxy.is_empty() {
             env::set_var("HTTPS_PROXY", https_proxy);
         }
 
-        let no_proxy = &AGENT_CONFIG.read().await.no_proxy;
+        let no_proxy = &AGENT_CONFIG.no_proxy;
         if !no_proxy.is_empty() {
             env::set_var("NO_PROXY", no_proxy);
         }
@@ -179,7 +176,7 @@ impl ImageService {
             return Ok(image.to_owned());
         }
 
-        let aa_kbc_params = &AGENT_CONFIG.read().await.aa_kbc_params;
+        let aa_kbc_params = &AGENT_CONFIG.aa_kbc_params;
         if !aa_kbc_params.is_empty() {
             match self.attestation_agent_started.compare_exchange_weak(
                 false,
@@ -188,22 +185,21 @@ impl ImageService {
                 Ordering::SeqCst,
             ) {
                 Ok(_) => Self::init_attestation_agent()?,
-                Err(_) => info!(sl!(), "Attestation Agent already running"),
+                Err(_) => info!(sl(), "Attestation Agent already running"),
             }
         }
         // If the attestation-agent is being used, then enable the authenticated credentials support
         info!(
-            sl!(),
+            sl(),
             "image_client.config.auth set to: {}",
             !aa_kbc_params.is_empty()
         );
         self.image_client.lock().await.config.auth = !aa_kbc_params.is_empty();
 
         // Read enable signature verification from the agent config and set it in the image_client
-        let enable_signature_verification =
-            &AGENT_CONFIG.read().await.enable_signature_verification;
+        let enable_signature_verification = &AGENT_CONFIG.enable_signature_verification;
         info!(
-            sl!(),
+            sl(),
             "enable_signature_verification set to: {}", enable_signature_verification
         );
         self.image_client.lock().await.config.security_validate = *enable_signature_verification;
@@ -215,7 +211,7 @@ impl ImageService {
 
         let decrypt_config = format!("provider:attestation-agent:{}", aa_kbc_params);
 
-        info!(sl!(), "pull image {:?}, bundle path {:?}", cid, bundle_path);
+        info!(sl(), "pull image {:?}, bundle path {:?}", cid, bundle_path);
         // Image layers will store at KATA_CC_IMAGE_WORK_DIR, generated bundles
         // with rootfs and config.json will store under CONTAINER_BASE/cid.
         let res = self
@@ -228,13 +224,13 @@ impl ImageService {
         match res {
             Ok(image) => {
                 info!(
-                    sl!(),
+                    sl(),
                     "pull and unpack image {:?}, cid: {:?}, with image-rs succeed. ", image, cid
                 );
             }
             Err(e) => {
                 error!(
-                    sl!(),
+                    sl(),
                     "pull and unpack image {:?}, cid: {:?}, with image-rs failed with {:?}. ",
                     image,
                     cid,

@@ -599,7 +599,7 @@ func TestContainerPipeSizeAnnotation(t *testing.T) {
 func TestAddHypervisorAnnotations(t *testing.T) {
 	assert := assert.New(t)
 
-	config := vc.SandboxConfig{
+	sbConfig := vc.SandboxConfig{
 		Annotations: make(map[string]string),
 	}
 
@@ -628,8 +628,8 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	runtimeConfig.HypervisorConfig.VirtioFSDaemonList = []string{"/bin/*ls*"}
 
 	ocispec.Annotations[vcAnnotations.KernelParams] = "vsyscall=emulate iommu=on"
-	addHypervisorConfigOverrides(ocispec, &config, runtimeConfig)
-	assert.Exactly(expectedHyperConfig, config.HypervisorConfig)
+	addHypervisorConfigOverrides(ocispec, &sbConfig, runtimeConfig)
+	assert.Exactly(expectedHyperConfig, sbConfig.HypervisorConfig)
 
 	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "1"
 	ocispec.Annotations[vcAnnotations.DefaultMaxVCPUs] = "1"
@@ -660,7 +660,8 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.GuestHookPath] = "/usr/bin/"
 	ocispec.Annotations[vcAnnotations.DisableImageNvdimm] = "true"
 	ocispec.Annotations[vcAnnotations.HotplugVFIOOnRootBus] = "true"
-	ocispec.Annotations[vcAnnotations.PCIeRootPort] = "2"
+	ocispec.Annotations[vcAnnotations.ColdPlugVFIO] = config.BridgePort
+	ocispec.Annotations[vcAnnotations.HotPlugVFIO] = config.NoPort
 	ocispec.Annotations[vcAnnotations.IOMMUPlatform] = "true"
 	ocispec.Annotations[vcAnnotations.SGXEPC] = "64Mi"
 	ocispec.Annotations[vcAnnotations.UseLegacySerial] = "true"
@@ -668,55 +669,58 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.RxRateLimiterMaxRate] = "10000000"
 	ocispec.Annotations[vcAnnotations.TxRateLimiterMaxRate] = "10000000"
 
-	addAnnotations(ocispec, &config, runtimeConfig)
-	assert.Equal(config.HypervisorConfig.NumVCPUs, uint32(1))
-	assert.Equal(config.HypervisorConfig.DefaultMaxVCPUs, uint32(1))
-	assert.Equal(config.HypervisorConfig.MemorySize, uint32(1024))
-	assert.Equal(config.HypervisorConfig.MemSlots, uint32(20))
-	assert.Equal(config.HypervisorConfig.MemOffset, uint64(512))
-	assert.Equal(config.HypervisorConfig.VirtioMem, true)
-	assert.Equal(config.HypervisorConfig.MemPrealloc, true)
-	assert.Equal(config.HypervisorConfig.FileBackedMemRootDir, "/dev/shm")
-	assert.Equal(config.HypervisorConfig.HugePages, true)
-	assert.Equal(config.HypervisorConfig.IOMMU, true)
-	assert.Equal(config.HypervisorConfig.BlockDeviceDriver, "virtio-scsi")
-	assert.Equal(config.HypervisorConfig.BlockDeviceAIO, "io_uring")
-	assert.Equal(config.HypervisorConfig.DisableBlockDeviceUse, true)
-	assert.Equal(config.HypervisorConfig.EnableIOThreads, true)
-	assert.Equal(config.HypervisorConfig.BlockDeviceCacheSet, true)
-	assert.Equal(config.HypervisorConfig.BlockDeviceCacheDirect, true)
-	assert.Equal(config.HypervisorConfig.BlockDeviceCacheNoflush, true)
-	assert.Equal(config.HypervisorConfig.SharedFS, "virtio-fs")
-	assert.Equal(config.HypervisorConfig.VirtioFSDaemon, "/bin/false")
-	assert.Equal(config.HypervisorConfig.VirtioFSCache, "auto")
-	assert.ElementsMatch(config.HypervisorConfig.VirtioFSExtraArgs, [2]string{"arg0", "arg1"})
-	assert.Equal(config.HypervisorConfig.Msize9p, uint32(512))
-	assert.Equal(config.HypervisorConfig.HypervisorMachineType, "q35")
-	assert.Equal(config.HypervisorConfig.MachineAccelerators, "nofw")
-	assert.Equal(config.HypervisorConfig.CPUFeatures, "pmu=off")
-	assert.Equal(config.HypervisorConfig.DisableVhostNet, true)
-	assert.Equal(config.HypervisorConfig.GuestHookPath, "/usr/bin/")
-	assert.Equal(config.HypervisorConfig.DisableImageNvdimm, true)
-	assert.Equal(config.HypervisorConfig.HotplugVFIOOnRootBus, true)
-	assert.Equal(config.HypervisorConfig.PCIeRootPort, uint32(2))
-	assert.Equal(config.HypervisorConfig.IOMMUPlatform, true)
-	assert.Equal(config.HypervisorConfig.SGXEPCSize, int64(67108864))
-	assert.Equal(config.HypervisorConfig.LegacySerial, true)
-	assert.Equal(config.HypervisorConfig.RxRateLimiterMaxRate, uint64(10000000))
-	assert.Equal(config.HypervisorConfig.TxRateLimiterMaxRate, uint64(10000000))
+	err := addAnnotations(ocispec, &sbConfig, runtimeConfig)
+	assert.NoError(err)
+
+	assert.Equal(sbConfig.HypervisorConfig.NumVCPUs, uint32(1))
+	assert.Equal(sbConfig.HypervisorConfig.DefaultMaxVCPUs, uint32(1))
+	assert.Equal(sbConfig.HypervisorConfig.MemorySize, uint32(1024))
+	assert.Equal(sbConfig.HypervisorConfig.MemSlots, uint32(20))
+	assert.Equal(sbConfig.HypervisorConfig.MemOffset, uint64(512))
+	assert.Equal(sbConfig.HypervisorConfig.VirtioMem, true)
+	assert.Equal(sbConfig.HypervisorConfig.MemPrealloc, true)
+	assert.Equal(sbConfig.HypervisorConfig.FileBackedMemRootDir, "/dev/shm")
+	assert.Equal(sbConfig.HypervisorConfig.HugePages, true)
+	assert.Equal(sbConfig.HypervisorConfig.IOMMU, true)
+	assert.Equal(sbConfig.HypervisorConfig.BlockDeviceDriver, "virtio-scsi")
+	assert.Equal(sbConfig.HypervisorConfig.BlockDeviceAIO, "io_uring")
+	assert.Equal(sbConfig.HypervisorConfig.DisableBlockDeviceUse, true)
+	assert.Equal(sbConfig.HypervisorConfig.EnableIOThreads, true)
+	assert.Equal(sbConfig.HypervisorConfig.BlockDeviceCacheSet, true)
+	assert.Equal(sbConfig.HypervisorConfig.BlockDeviceCacheDirect, true)
+	assert.Equal(sbConfig.HypervisorConfig.BlockDeviceCacheNoflush, true)
+	assert.Equal(sbConfig.HypervisorConfig.SharedFS, "virtio-fs")
+	assert.Equal(sbConfig.HypervisorConfig.VirtioFSDaemon, "/bin/false")
+	assert.Equal(sbConfig.HypervisorConfig.VirtioFSCache, "auto")
+	assert.ElementsMatch(sbConfig.HypervisorConfig.VirtioFSExtraArgs, [2]string{"arg0", "arg1"})
+	assert.Equal(sbConfig.HypervisorConfig.Msize9p, uint32(512))
+	assert.Equal(sbConfig.HypervisorConfig.HypervisorMachineType, "q35")
+	assert.Equal(sbConfig.HypervisorConfig.MachineAccelerators, "nofw")
+	assert.Equal(sbConfig.HypervisorConfig.CPUFeatures, "pmu=off")
+	assert.Equal(sbConfig.HypervisorConfig.DisableVhostNet, true)
+	assert.Equal(sbConfig.HypervisorConfig.GuestHookPath, "/usr/bin/")
+	assert.Equal(sbConfig.HypervisorConfig.DisableImageNvdimm, true)
+	assert.Equal(sbConfig.HypervisorConfig.HotplugVFIOOnRootBus, true)
+	assert.Equal(string(sbConfig.HypervisorConfig.ColdPlugVFIO), string(config.BridgePort))
+	assert.Equal(string(sbConfig.HypervisorConfig.HotPlugVFIO), string(config.NoPort))
+	assert.Equal(sbConfig.HypervisorConfig.IOMMUPlatform, true)
+	assert.Equal(sbConfig.HypervisorConfig.SGXEPCSize, int64(67108864))
+	assert.Equal(sbConfig.HypervisorConfig.LegacySerial, true)
+	assert.Equal(sbConfig.HypervisorConfig.RxRateLimiterMaxRate, uint64(10000000))
+	assert.Equal(sbConfig.HypervisorConfig.TxRateLimiterMaxRate, uint64(10000000))
 
 	// In case an absurd large value is provided, the config value if not over-ridden
 	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "655536"
-	err := addAnnotations(ocispec, &config, runtimeConfig)
+	err = addAnnotations(ocispec, &sbConfig, runtimeConfig)
 	assert.Error(err)
 
 	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "-1"
-	err = addAnnotations(ocispec, &config, runtimeConfig)
+	err = addAnnotations(ocispec, &sbConfig, runtimeConfig)
 	assert.Error(err)
 
 	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "1"
 	ocispec.Annotations[vcAnnotations.DefaultMaxVCPUs] = "-1"
-	err = addAnnotations(ocispec, &config, runtimeConfig)
+	err = addAnnotations(ocispec, &sbConfig, runtimeConfig)
 	assert.Error(err)
 
 	ocispec.Annotations[vcAnnotations.DefaultMaxVCPUs] = "1"

@@ -21,6 +21,7 @@ import (
 	"github.com/docker/go-units"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	volume "github.com/kata-containers/kata-containers/src/runtime/pkg/direct-volume"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/uuid"
@@ -1148,7 +1149,7 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 		ContainerPath: dev.ContainerPath,
 		Type:          kataVfioPciDevType,
 		Id:            groupNum,
-		Options:       nil,
+		Options:       make([]string, len(devList)),
 	}
 
 	// We always pass the device information to the agent, since
@@ -1158,16 +1159,16 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 	if c.sandbox.config.VfioMode == config.VFIOModeGuestKernel {
 		kataDevice.Type = kataVfioPciGuestKernelDevType
 	}
+	for i, dev := range devList {
+		if dev.Type == config.VFIOAPDeviceMediatedType {
+			kataDevice.Type = kataVfioApDevType
+			kataDevice.Options = dev.APDevices
+		} else {
 
-	if (*devList[0]).GetType() == config.VFIOAPDeviceMediatedType {
-		kataDevice.Type = kataVfioApDevType
-		kataDevice.Options = (*devList[0]).(config.VFIOAPDev).APDevices
-	} else {
-		kataDevice.Options = make([]string, len(devList))
-		for i, device := range devList {
-			pciDevice := (*device).(config.VFIOPCIDev)
-			kataDevice.Options[i] = fmt.Sprintf("0000:%s=%s", pciDevice.BDF, pciDevice.GuestPciPath)
+			devBDF := drivers.GetBDF(dev.BDF)
+			kataDevice.Options[i] = fmt.Sprintf("0000:%s=%s", devBDF, dev.GuestPciPath)
 		}
+
 	}
 
 	return kataDevice
@@ -1354,7 +1355,6 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	if _, err = k.sendReq(ctx, req); err != nil {
 		return nil, err
 	}
-
 	return buildProcessFromExecID(req.ExecId)
 }
 

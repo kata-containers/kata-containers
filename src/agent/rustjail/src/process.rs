@@ -161,7 +161,7 @@ impl Process {
 
     pub fn notify_term_close(&mut self) {
         let notify = self.term_exit_notifier.clone();
-        notify.notify_waiters();
+        notify.notify_one();
     }
 
     pub fn close_stdin(&mut self) {

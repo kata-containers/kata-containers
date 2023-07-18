@@ -1,0 +1,34 @@
+# Copyright (c) 2023 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# This file contains baseline expectations
+# for checked results by checkmetrics tool.
+#
+# values set specifically for Equinix m3.small.x86.
+
+[[metric]]
+name = "boot-times"
+type = "json"
+description = "measure container lifecycle timings"
+# Min and Max values to set a 'range' that
+# the median of the CSV Results data must fall
+# within (inclusive)
+checkvar = ".\"boot-times\".Results | .[] | .\"to-workload\".Result"
+checktype = "mean"
+midval = 0.61
+minpercent = 20.0
+maxpercent = 20.0
+
+[[metric]]
+name = "memory-footprint"
+type = "json"
+description = "measure memory usage"
+# Min and Max values to set a 'range' that
+# the median of the CSV Results data must fall
+# within (inclusive)
+checkvar = ".\"memory-footprint\".Results | .[] | .average.Result"
+checktype = "mean"
+midval = 2435844.00
+minpercent = 20.0
+maxpercent = 20.0

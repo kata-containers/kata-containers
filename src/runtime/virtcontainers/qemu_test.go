@@ -111,9 +111,6 @@ func TestQemuCreateVM(t *testing.T) {
 	config6 := newQemuConfig()
 	config6.DisableGuestSeLinux = false
 
-	config7 := newQemuConfig()
-	config7.PCIeRootPort = 1
-
 	config8 := newQemuConfig()
 	config8.EnableVhostUserStore = true
 	config8.HugePages = true
@@ -161,7 +158,6 @@ func TestQemuCreateVM(t *testing.T) {
 		{config3, false, true},
 		{config5, false, true},
 		{config6, false, false},
-		{config7, false, true},
 		{config8, false, true},
 		{config9, true, false},
 		{config10, false, true},

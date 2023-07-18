@@ -13,14 +13,15 @@ on:
         required: false
         type: string
         default: no
+      commit-hash:
+        required: false
+        type: string
 
 jobs:
   build-asset:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        stage:
-          - ${{ inputs.stage }}
         asset:
           - cloud-hypervisor
           - cloud-hypervisor-glibc
@@ -46,9 +47,11 @@ jobs:
           - shim-v2
           - tdvf
           - virtiofsd
+        stage:
+          - ${{ inputs.stage }}
         exclude:
-          - stage: release
-            asset: cloud-hypervisor-glibc
+          - asset: cloud-hypervisor-glibc
+            stage: release
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
@@ -60,7 +63,7 @@ jobs:
 
       - uses: actions/checkout@v3
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ inputs.commit-hash }}
           fetch-depth: 0 # This is needed in order to keep the commit ids history
 
       - name: Build ${{ matrix.asset }}
@@ -88,7 +91,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ inputs.commit-hash }}
       - name: get-artifacts
         uses: actions/download-artifact@v3
         with:

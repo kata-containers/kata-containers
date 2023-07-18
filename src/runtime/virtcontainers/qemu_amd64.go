@@ -26,6 +26,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	"github.com/intel-go/cpuid"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
 )
 
@@ -182,7 +183,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 	return q, nil
 }
 
-func (q *qemuAmd64) capabilities() types.Capabilities {
+func (q *qemuAmd64) capabilities(hConfig HypervisorConfig) types.Capabilities {
 	var caps types.Capabilities
 
 	if q.qemuMachine.Type == QemuQ35 ||
@@ -191,7 +192,9 @@ func (q *qemuAmd64) capabilities() types.Capabilities {
 	}
 
 	caps.SetMultiQueueSupport()
-	caps.SetFsSharingSupport()
+	if hConfig.SharedFS != config.NoSharedFS {
+		caps.SetFsSharingSupport()
+	}
 
 	return caps
 }
@@ -323,6 +326,7 @@ func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 				ReducedPhysBits: 1,
 			}), "", nil
 	case noneProtection:
+
 		return devices, firmware, nil
 
 	default:

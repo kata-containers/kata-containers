@@ -11,6 +11,12 @@ on:
       tag:
         required: true
         type: string
+      pr-number:
+        required: true
+        type: string
+      commit-hash:
+        required: false
+        type: string
 
 jobs:
   run-k8s-tests:
@@ -31,13 +37,13 @@ jobs:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
       DOCKER_TAG: ${{ inputs.tag }}
-      GH_PR_NUMBER: ${{ github.event.pull_request.number }}
+      GH_PR_NUMBER: ${{ inputs.pr-number }}
       KATA_HOST_OS: ${{ matrix.host_os }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
       - uses: actions/checkout@v3
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ inputs.commit-hash }}
 
       - name: Download Azure CLI
         run: bash tests/integration/gha-run.sh install-azure-cli

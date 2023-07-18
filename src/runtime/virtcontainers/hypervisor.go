@@ -389,7 +389,6 @@ type HypervisorConfig struct {
 	Gid                            uint32
 	SEVGuestPolicy                 uint32
 	SNPGuestPolicy                 uint64
-	PCIeRootPort                   uint32
 	NumVCPUs                       uint32
 	RemoteHypervisorTimeout        uint32
 	IOMMUPlatform                  bool
@@ -420,7 +419,10 @@ type HypervisorConfig struct {
 	DisableSeLinux                 bool
 	DisableGuestSeLinux            bool
 	LegacySerial                   bool
-	ColdPlugVFIO                   hv.PCIePort
+	HotPlugVFIO                    config.PCIePort
+	ColdPlugVFIO                   config.PCIePort
+	VFIODevices                    []config.DeviceInfo
+	VhostUserBlkDevices            []config.DeviceInfo
 }
 
 // vcpu mapping from vcpu number to thread number
