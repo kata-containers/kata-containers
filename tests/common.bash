@@ -181,7 +181,32 @@ function clean_env_ctr()
 	count_tasks="$(sudo ctr t list -q | wc -l)"
 
 	if (( count_tasks > 0 )); then
-		die "Can't remove running contaienrs."
+		die "Can't remove running containers."
+	fi
+
+	kill_kata_components
+}
+
+# Kills running shim and hypervisor components
+function kill_kata_components() {
+	local kata_bin_dir="/opt/kata/bin"
+	local shim_path="${kata_bin_dir}/containerd-shim-kata-v2"
+	local hypervisor_path="${kata_bin_dir}/qemu-system-x86_64"
+	local pid_shim_count="$(pgrep -fc ${shim_path} || exit 0)"
+
+	[ ${pid_shim_count} -gt "0" ] && sudo kill -SIGKILL "$(pgrep -f ${shim_path})" > /dev/null 2>&1
+
+        if [ "${KATA_HYPERVISOR}" = 'clh' ]; then
+		hypervisor_path="${kata_bin_dir}/cloud-hypervisor"
+	elif [ "${KATA_HYPERVISOR}" != 'qemu' ]; then
+                echo "Failed to stop the hypervisor: '${KATA_HYPERVISOR}' as it is not recognized"
+		return
+        fi
+
+	local pid_hypervisor_count="$(pgrep -fc ${hypervisor_path} || exit 0)"
+
+	if [ ${pid_hypervisor_count} -gt "0" ]; then
+		sudo kill -SIGKILL "$(pgrep -f ${hypervisor_path})" > /dev/null 2>&1
 	fi
 }
 
