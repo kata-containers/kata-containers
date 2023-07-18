@@ -178,6 +178,7 @@ function init_env()
 	# This clean up is more aggressive, this is in order to
 	# decrease the factors that could affect the metrics results.
 	kill_processes_before_start
+	info "init environment complete"
 }
 
 # This function checks if there are containers or
