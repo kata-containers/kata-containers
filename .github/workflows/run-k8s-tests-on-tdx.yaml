@@ -28,7 +28,6 @@ jobs:
       DOCKER_REPO: ${{ inputs.repo }}
       DOCKER_TAG: ${{ inputs.tag }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
-      KUBECONFIG: /etc/rancher/k3s/k3s.yaml
     steps:
       - uses: actions/checkout@v3
         with:
