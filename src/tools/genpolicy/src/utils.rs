@@ -12,7 +12,6 @@ pub struct Config {
     pub yaml_file: Option<String>,
     pub rules_file: String,
     pub infra_data_file: String,
-    pub output_policy_file: Option<String>,
     pub config_map_files: Option<Vec<String>>,
 
     pub silent_unsupported_fields: bool,
@@ -25,7 +24,6 @@ impl Config {
         use_cache: bool,
         yaml_file: Option<String>,
         input_files_path: Option<String>,
-        output_policy_file: Option<String>,
         config_map_files: &Vec<String>,
         silent_unsupported_fields: bool,
         raw_out: bool,
@@ -52,7 +50,6 @@ impl Config {
             yaml_file,
             rules_file,
             infra_data_file,
-            output_policy_file,
             config_map_files: cm_files,
             silent_unsupported_fields,
             raw_out,

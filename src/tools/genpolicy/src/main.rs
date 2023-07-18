@@ -40,9 +40,6 @@ struct CommandLineOptions {
     input_files_path: Option<String>,
 
     #[clap(short, long)]
-    output_policy_file: Option<String>,
-
-    #[clap(short, long)]
     config_map_file: Option<String>,
 
     #[clap(short, long)]
@@ -73,7 +70,6 @@ async fn main() {
         args.use_cached_files,
         args.yaml_file,
         args.input_files_path,
-        args.output_policy_file,
         &config_map_files,
         args.silent_unsupported_fields,
         args.raw_out,
