@@ -46,31 +46,31 @@ jobs:
           ref: ${{ inputs.commit-hash }}
 
       - name: Download Azure CLI
-        run: bash tests/integration/gha-run.sh install-azure-cli
+        run: bash tests/integration/kubernetes/gha-run.sh install-azure-cli
 
       - name: Log into the Azure account
-        run: bash tests/integration/gha-run.sh login-azure
+        run: bash tests/integration/kubernetes/gha-run.sh login-azure
         env:
           AZ_APPID: ${{ secrets.AZ_APPID }}
           AZ_PASSWORD: ${{ secrets.AZ_PASSWORD }}
           AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
 
       - name: Create AKS cluster
-        run: bash tests/integration/gha-run.sh create-cluster
+        run: bash tests/integration/kubernetes/gha-run.sh create-cluster
 
       - name: Install `bats`
-        run: bash tests/integration/gha-run.sh install-bats
+        run: bash tests/integration/kubernetes/gha-run.sh install-bats
 
       - name: Install `kubectl`
-        run: bash tests/integration/gha-run.sh install-kubectl
+        run: bash tests/integration/kubernetes/gha-run.sh install-kubectl
 
       - name: Download credentials for the Kubernetes CLI to use them
-        run: bash tests/integration/gha-run.sh get-cluster-credentials
+        run: bash tests/integration/kubernetes/gha-run.sh get-cluster-credentials
 
       - name: Run tests
         timeout-minutes: 60
-        run: bash tests/integration/gha-run.sh run-tests-aks
+        run: bash tests/integration/kubernetes/gha-run.sh run-tests-aks
 
       - name: Delete AKS cluster
         if: always()
-        run: bash tests/integration/gha-run.sh delete-cluster
+        run: bash tests/integration/kubernetes/gha-run.sh delete-cluster
