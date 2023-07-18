@@ -17,6 +17,7 @@ import (
 	volume "github.com/kata-containers/kata-containers/src/runtime/pkg/direct-volume"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	otelLabel "go.opentelemetry.io/otel/attribute"
@@ -543,7 +544,7 @@ func isSecret(path string) bool {
 	return checkKubernetesVolume(path, K8sSecret)
 }
 
-func isIdentityCert(path string) bool {
+func IsIdentityCert(path string) bool {
 	if !isEmptyDir(path) {
 		return false
 	}
@@ -556,6 +557,16 @@ func isIdentityCert(path string) bool {
 		}
 	}
 
+	return false
+}
+
+// Check if a storage path is read only
+func IsReadOnlyStorage(mnt specs.Mount) bool {
+	for _, opt := range *&mnt.Options {
+		if opt == "ro" {
+			return true
+		}
+	}
 	return false
 }
 
@@ -597,7 +608,7 @@ func countFiles(path string, limit int) (numFiles int, err error) {
 }
 
 func isWatchableMount(path string) bool {
-	if isSecret(path) || isConfigMap(path) || isIdentityCert(path) {
+	if isSecret(path) || isConfigMap(path) || IsIdentityCert(path) {
 		// we have a cap on number of FDs which can be present in mount
 		// to determine if watchable. A similar Check exists within the agent,
 		// which may or may not help handle case where extra files are added to

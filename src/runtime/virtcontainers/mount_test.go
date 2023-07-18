@@ -18,6 +18,7 @@ import (
 	"testing"
 
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
+	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -305,14 +306,14 @@ func TestIsSecret(t *testing.T) {
 func TestIsIdentityCert(t *testing.T) {
 	assert := assert.New(t)
 	path := "/var/lib/kubelet/pods/5f0861a0-a987-4a3a-bb0f-1058ddb9678f/volumes/kubernetes.io~empty-dir"
-	result := isIdentityCert(path)
+	result := IsIdentityCert(path)
 	assert.False(result)
 
 	// expect the basename to be identity-certs
-	result = isIdentityCert(filepath.Join(path, "identity-certs"))
+	result = IsIdentityCert(filepath.Join(path, "identity-certs"))
 	assert.True(result)
 
-	result = isIdentityCert(filepath.Join(path, "identity-certs", "meaculpa"))
+	result = IsIdentityCert(filepath.Join(path, "identity-certs", "meaculpa"))
 	assert.False(result)
 }
 
@@ -527,5 +528,25 @@ func TestBindUnmountContainerRootfsRemoveRootfsDest(t *testing.T) {
 		t.Fatal("empty rootfs dest should be removed")
 	} else if !os.IsNotExist(err) {
 		t.Fatal(err)
+	}
+}
+
+func TestIsReadOnlyStorage(t *testing.T) {
+	tests := []struct {
+		name string
+		mnt specs.Mount
+		want bool
+	}{
+		{"test isn't ro", specs.Mount{}, false},
+		{"test is ro", specs.Mount{Options: []string{"ro"}}, true},
+		{"test is not ro again", specs.Mount{Options: []string{"rod"}}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsReadOnlyStorage(tt.mnt); got != tt.want {
+				t.Errorf("IsReadOnlyStorage() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
