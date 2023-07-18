@@ -37,6 +37,7 @@ K8S_TEST_UNION=( \
 	"k8s-scale.bats" \
 	"k8s-security-context.bats" \
 	"k8s-shared-volume.bats" \
+	"k8s-test-rorw.bats" \
 	"k8s-tiny.bats" \
 	"k8s-volume.bats" \
 )
