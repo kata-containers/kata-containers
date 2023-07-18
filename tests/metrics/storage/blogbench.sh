@@ -11,6 +11,7 @@
 # they are total scores for all iterations (this is the blogbench default output)
 
 set -e
+set -x
 
 # General env
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
