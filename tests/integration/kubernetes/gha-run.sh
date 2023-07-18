@@ -8,8 +8,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-integration_dir="$(dirname "$(readlink -f "$0")")"
-repo_root_dir="$(cd "${integration_dir}/../../" && pwd)"
+kubernetes_dir="$(dirname "$(readlink -f "$0")")"
+repo_root_dir="$(cd "${kubernetes_dir}/../../../" && pwd)"
 tools_dir="${repo_root_dir}/tools"
 
 function _print_cluster_name() {
@@ -110,13 +110,13 @@ function run_tests() {
     fi
 
     # Create a new namespace for the tests and switch to it
-    kubectl apply -f ${integration_dir}/kubernetes/runtimeclass_workloads/tests-namespace.yaml
+    kubectl apply -f ${kubernetes_dir}/runtimeclass_workloads/tests-namespace.yaml
     kubectl config set-context --current --namespace=kata-containers-k8s-tests
 
     echo "Gather information about the nodes and pods just before starting the tests"
     get_nodes_and_pods_info
 
-    pushd "${integration_dir}/kubernetes"
+    pushd "${kubernetes_dir}"
     bash setup.sh
     bash run_kubernetes_tests.sh
     popd
