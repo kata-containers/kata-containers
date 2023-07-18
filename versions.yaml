@@ -260,7 +260,7 @@ externals:
 
   pause:
     description: "Kubernetes pause container image"
-    repo: "docker://k8s.gcr.io/pause"
+    repo: "docker://registry.k8s.io/pause"
     version: "3.6"
 
   runc:

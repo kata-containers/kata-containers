@@ -15,7 +15,7 @@ spec:
         run: php-apache-runc
     spec:
       containers:
-      - image: k8s.gcr.io/hpa-example
+      - image: registry.k8s.io/hpa-example
         imagePullPolicy: Always
         name: php-apache
         ports:
