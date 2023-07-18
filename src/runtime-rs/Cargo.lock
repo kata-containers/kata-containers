@@ -612,8 +612,6 @@ dependencies = [
 [[package]]
 name = "dbs-address-space"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95e20d28a9cd13bf00d0ecd1bd073d242242b04f0acb663d7adfc659f8879322"
 dependencies = [
  "arc-swap",
  "lazy_static",
@@ -627,8 +625,6 @@ dependencies = [
 [[package]]
 name = "dbs-allocator"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "543711b94b4bc1437d2ebb45f856452e96a45a67ab39f8dcf8c887c2a3701004"
 dependencies = [
  "thiserror",
 ]
@@ -636,8 +632,6 @@ dependencies = [
 [[package]]
 name = "dbs-arch"
 version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "194c844946cd1d13f7a9eb29b84afbc5354578eee2b06fea96226bc3872e7424"
 dependencies = [
  "kvm-bindings",
  "kvm-ioctls",
@@ -651,8 +645,6 @@ dependencies = [
 [[package]]
 name = "dbs-boot"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5466a92f75aa928a9103dcb2088f6d1638ef9da8945fad7389a73864dfa0182c"
 dependencies = [
  "dbs-arch",
  "kvm-bindings",
@@ -667,8 +659,6 @@ dependencies = [
 [[package]]
 name = "dbs-device"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14ecea44b4bc861c0c2ccb51868bea781286dc70e40ae46b54d4511e690a654a"
 dependencies = [
  "thiserror",
 ]
@@ -676,8 +666,6 @@ dependencies = [
 [[package]]
 name = "dbs-interrupt"
 version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1eb2c5bb9f8f123ace33b1b2e8d53dd2d87331ee770ad1f82e56c3382c6bed6d"
 dependencies = [
  "dbs-arch",
  "dbs-device",
@@ -690,11 +678,10 @@ dependencies = [
 [[package]]
 name = "dbs-legacy-devices"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4d089ac1c4d186c8133be59de09462e9793f7add10017c5b040318a3a7f431f"
 dependencies = [
  "dbs-device",
  "dbs-utils",
+ "libc",
  "log",
  "serde",
  "vm-superio",
@@ -704,8 +691,6 @@ dependencies = [
 [[package]]
 name = "dbs-upcall"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea3a78128fd0be8b8b10257675c262b378dc5d00b1e18157736a6c27e45ce4fb"
 dependencies = [
  "anyhow",
  "dbs-utils",
@@ -718,8 +703,6 @@ dependencies = [
 [[package]]
 name = "dbs-utils"
 version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0cb6ff873451b76e22789af7fbe1d0478c42c717f817e66908be7a3a2288068c"
 dependencies = [
  "anyhow",
  "event-manager",
@@ -734,8 +717,6 @@ dependencies = [
 [[package]]
 name = "dbs-virtio-devices"
 version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24d671cc3e5f98b84ef6b6bed007d28f72f16d3aea8eb38e2d42b00b2973c1d8"
 dependencies = [
  "byteorder",
  "caps",
@@ -751,9 +732,10 @@ dependencies = [
  "log",
  "nix 0.24.3",
  "nydus-api",
- "nydus-blobfs",
  "nydus-rafs",
+ "nydus-storage",
  "rlimit",
+ "sendfd",
  "serde",
  "serde_json",
  "thiserror",
@@ -967,6 +949,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
+name = "foreign-types"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6f339eb8adc052cd2ca78910fda869aefa38d22d5cb648e6485e4d3fc06f3b1"
+dependencies = [
+ "foreign-types-shared",
+]
+
+[[package]]
+name = "foreign-types-shared"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "00b0228411908ca8685dba7fc2cdd70ec9990a6e753e89b6ac91a84c40fbaf4b"
+
+[[package]]
 name = "form_urlencoded"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -983,9 +980,9 @@ checksum = "a06f77d526c1a601b7c4cdd98f54b5eaabffc14d5f2f0296febdc7f357c6d3ba"
 
 [[package]]
 name = "fuse-backend-rs"
-version = "0.10.3"
+version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "58a8f2394690faff745335f120fad1d7d8bd737069690c856c11befa7bca1b18"
+checksum = "dc24820b14267bec37fa87f5c2a32b5f1c5405b8c60cc3aa77afd481bd2628a6"
 dependencies = [
  "arc-swap",
  "bitflags",
@@ -1507,6 +1504,7 @@ dependencies = [
 name = "kata-sys-util"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "byteorder",
  "cgroups-rs",
  "chrono",
@@ -1925,82 +1923,45 @@ dependencies = [
 
 [[package]]
 name = "nydus-api"
-version = "0.2.2"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1899def1a22ed32b1d60de4e444f525c4023a208ee0d1136a65399cff82837ce"
+checksum = "33a6ca41dd10813e3d29397550fbb0f15ad149381f312e04659d39e0adcf2002"
 dependencies = [
+ "backtrace",
  "libc",
  "log",
- "nydus-error",
  "serde",
  "serde_json",
  "toml 0.5.11",
 ]
 
 [[package]]
-name = "nydus-blobfs"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "784cf6e1319da7a94734987dcc71d2940f74231256922431a505c832fc778dd3"
-dependencies = [
- "fuse-backend-rs",
- "libc",
- "log",
- "nydus-api",
- "nydus-error",
- "nydus-rafs",
- "nydus-storage",
- "serde",
- "serde_json",
- "vm-memory",
-]
-
-[[package]]
-name = "nydus-error"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae2ec1efd1589377dbefca6b1047294c71b2fbab164d93319f97b20faae92001"
-dependencies = [
- "backtrace",
- "httpdate",
- "libc",
- "log",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "nydus-rafs"
-version = "0.2.2"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0ace6945daa16842e72e9fe7647e2b8715856f50f07350cce82bd68db1ed02c"
+checksum = "ed21e44a99472850d2afc4fb07427ed46d4e6a8b1cce28b42bd689319e45076d"
 dependencies = [
  "anyhow",
  "arc-swap",
  "bitflags",
- "blake3",
  "fuse-backend-rs",
- "futures 0.3.28",
  "lazy_static",
  "libc",
  "log",
- "lz4-sys",
  "nix 0.24.3",
  "nydus-api",
- "nydus-error",
  "nydus-storage",
  "nydus-utils",
  "serde",
  "serde_json",
- "spmc",
  "vm-memory",
 ]
 
 [[package]]
 name = "nydus-storage"
-version = "0.6.2"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e08bc5ea9054fca2ec8b19dcce25ea600679b7fbf035aad86cfe4a659002c88b"
+checksum = "9591fbee1875895bf1f765656695d0be6887fe65372fbf4924b8b3959bd61375"
 dependencies = [
  "arc-swap",
  "bitflags",
@@ -2012,7 +1973,6 @@ dependencies = [
  "log",
  "nix 0.24.3",
  "nydus-api",
- "nydus-error",
  "nydus-utils",
  "serde",
  "serde_json",
@@ -2023,12 +1983,13 @@ dependencies = [
 
 [[package]]
 name = "nydus-utils"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1e681d7207a1ec500323d5ca39ebb7e381fc4f14db5ff0c532c18ff1226a81f"
+checksum = "fe8b9269e3a370682f272a1b2cac4bdaf6d6657f3f6966560c4fedab36548362"
 dependencies = [
  "blake3",
  "flate2",
+ "httpdate",
  "lazy_static",
  "libc",
  "libz-sys",
@@ -2036,7 +1997,8 @@ dependencies = [
  "lz4",
  "lz4-sys",
  "nix 0.24.3",
- "nydus-error",
+ "nydus-api",
+ "openssl",
  "serde",
  "serde_json",
  "sha2 0.10.6",
@@ -2074,6 +2036,54 @@ name = "opaque-debug"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
+
+[[package]]
+name = "openssl"
+version = "0.10.55"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "345df152bc43501c5eb9e4654ff05f794effb78d4efe3d53abc158baddc0703d"
+dependencies = [
+ "bitflags",
+ "cfg-if 1.0.0",
+ "foreign-types",
+ "libc",
+ "once_cell",
+ "openssl-macros",
+ "openssl-sys",
+]
+
+[[package]]
+name = "openssl-macros"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a948666b637a0f465e8564c73e89d4dde00d72d4d473cc972f390fc3dcee7d9c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.18",
+]
+
+[[package]]
+name = "openssl-src"
+version = "111.26.0+1.1.1u"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "efc62c9f12b22b8f5208c23a7200a442b2e5999f8bdf80233852122b5a4f6f37"
+dependencies = [
+ "cc",
+]
+
+[[package]]
+name = "openssl-sys"
+version = "0.9.90"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "374533b0e45f3a7ced10fcaeccca020e66656bc03dac384f852e4e5a7a8104a6"
+dependencies = [
+ "cc",
+ "libc",
+ "openssl-src",
+ "pkg-config",
+ "vcpkg",
+]
 
 [[package]]
 name = "opentelemetry"
@@ -2837,6 +2847,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sendfd"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "604b71b8fc267e13bb3023a2c901126c8f349393666a6d98ac1ae5729b701798"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "serde"
 version = "1.0.164"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3105,12 +3124,6 @@ dependencies = [
  "libc",
  "winapi",
 ]
-
-[[package]]
-name = "spmc"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02a8428da277a8e3a15271d79943e80ccc2ef254e78813a166a08d65e4c3ece5"
 
 [[package]]
 name = "static_assertions"

@@ -12,16 +12,16 @@ edition = "2018"
 [dependencies]
 arc-swap = "1.5.0"
 bytes = "1.1.0"
-dbs-address-space = "0.3.0"
-dbs-allocator = "0.1.0"
-dbs-arch = "0.2.0"
-dbs-boot = "0.4.0"
-dbs-device = "0.2.0"
-dbs-interrupt = { version = "0.2.0", features = ["kvm-irq"] }
-dbs-legacy-devices = "0.1.0"
-dbs-upcall = { version = "0.3.0", optional = true }
-dbs-utils = "0.2.0"
-dbs-virtio-devices = { version = "0.3.1", optional = true, features = ["virtio-mmio"] }
+dbs-address-space =  { path = "./src/dbs_address_space" }
+dbs-allocator = { path = "./src/dbs_allocator" }
+dbs-arch = { path = "./src/dbs_arch" }
+dbs-boot = { path = "./src/dbs_boot" }
+dbs-device = { path = "./src/dbs_device" }
+dbs-interrupt = { path = "./src/dbs_interrupt", features = ["kvm-irq"] }
+dbs-legacy-devices = { path = "./src/dbs_legacy_devices" }
+dbs-upcall = { path = "./src/dbs_upcall" , optional = true }
+dbs-utils = { path = "./src/dbs_utils" }
+dbs-virtio-devices = { path = "./src/dbs_virtio_devices", optional = true, features = ["virtio-mmio"] }
 kvm-bindings = "0.6.0"
 kvm-ioctls = "0.12.0"
 lazy_static = "1.2"
