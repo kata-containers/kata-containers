@@ -137,6 +137,17 @@ pub struct Runtime {
     /// This option is typically used to retain abnormal information for debugging.
     #[serde(default)]
     pub keep_abnormal: bool,
+
+    /// Base directory of directly attachable network config, the default value
+    /// is "/run/kata-containers/dans".
+    ///
+    /// Network devices for VM-based containers are allowed to be placed in the
+    /// host netns to eliminate as many hops as possible, which is what we
+    /// called a "directly attachable network". The config, set by special CNI
+    /// plugins, is used to tell the Kata Containers what devices are attached
+    /// to the hypervisor.
+    #[serde(default)]
+    pub dan_conf: String,
 }
 
 impl ConfigOps for Runtime {
