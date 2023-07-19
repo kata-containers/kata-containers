@@ -28,12 +28,7 @@ const (
 	vfioRemoveIDPath    = "/sys/bus/pci/drivers/vfio-pci/remove_id"
 	iommuGroupPath      = "/sys/bus/pci/devices/%s/iommu_group"
 	vfioDevPath         = "/dev/vfio/%s"
-	pcieRootPortPrefix  = "rp"
 	vfioAPSysfsDir      = "/sys/devices/vfio_ap"
-)
-
-var (
-	AllPCIeDevs = map[string]bool{}
 )
 
 // VFIODevice is a vfio device meant to be passed to the hypervisor
@@ -70,21 +65,36 @@ func (device *VFIODevice) Attach(ctx context.Context, devReceiver api.DeviceRece
 		}
 	}()
 
-	device.VfioDevs, err = GetAllVFIODevicesFromIOMMUGroup(*device.DeviceInfo, false)
+	device.VfioDevs, err = GetAllVFIODevicesFromIOMMUGroup(*device.DeviceInfo)
 	if err != nil {
 		return err
+	}
+	for _, vfio := range device.VfioDevs {
+		// If vfio.Port is not set we bail out, users should set
+		// explicitly the port in the config file
+		if vfio.Port == "" {
+			return fmt.Errorf("cold_plug_vfio= or hot_plug_vfio= port is not set for device %s (BridgePort | RootPort | SwitchPort)", vfio.BDF)
+		}
+
+		if vfio.IsPCIe {
+			busIndex := len(config.PCIeDevices[vfio.Port])
+			vfio.Bus = fmt.Sprintf("%s%d", config.PCIePortPrefixMapping[vfio.Port], busIndex)
+			config.PCIeDevices[vfio.Port][vfio.BDF] = true
+		}
 	}
 
 	coldPlug := device.DeviceInfo.ColdPlug
 	deviceLogger().WithField("cold-plug", coldPlug).Info("Attaching VFIO device")
 
 	if coldPlug {
+		deviceLogger().Info("### vfio.go cold-plug device: ", device)
 		if err := devReceiver.AppendDevice(ctx, device); err != nil {
 			deviceLogger().WithError(err).Error("Failed to append device")
 			return err
 		}
 	} else {
 		// hotplug a VFIO device is actually hotplugging a group of iommu devices
+		deviceLogger().Info("### vfio.go hot-plug device: ", device)
 		if err := devReceiver.HotplugAddDevice(ctx, device, config.DeviceVFIO); err != nil {
 			deviceLogger().WithError(err).Error("Failed to add device")
 			return err
@@ -169,23 +179,18 @@ func (device *VFIODevice) Load(ds config.DeviceState) {
 	for _, dev := range ds.VFIODevs {
 		var vfio config.VFIODev
 
-		vfioDeviceType := (*device.VfioDevs[0]).GetType()
-		switch vfioDeviceType {
+		switch dev.Type {
 		case config.VFIOPCIDeviceNormalType, config.VFIOPCIDeviceMediatedType:
-			bdf := ""
-			if pciDev, ok := (*dev).(config.VFIOPCIDev); ok {
-				bdf = pciDev.BDF
-			}
-			vfio = config.VFIOPCIDev{
-				ID:       *(*dev).GetID(),
-				Type:     config.VFIODeviceType((*dev).GetType()),
-				BDF:      bdf,
-				SysfsDev: *(*dev).GetSysfsDev(),
+			vfio = config.VFIODev{
+				ID:       dev.ID,
+				Type:     config.VFIODeviceType(dev.Type),
+				BDF:      dev.BDF,
+				SysfsDev: dev.SysfsDev,
 			}
 		case config.VFIOAPDeviceMediatedType:
-			vfio = config.VFIOAPDev{
-				ID:       *(*dev).GetID(),
-				SysfsDev: *(*dev).GetSysfsDev(),
+			vfio = config.VFIODev{
+				ID:       dev.ID,
+				SysfsDev: dev.SysfsDev,
 			}
 		default:
 			deviceLogger().WithError(
@@ -200,7 +205,7 @@ func (device *VFIODevice) Load(ds config.DeviceState) {
 
 // It should implement GetAttachCount() and DeviceID() as api.Device implementation
 // here it shares function from *GenericDevice so we don't need duplicate codes
-func getVFIODetails(deviceFileName, iommuDevicesPath string) (deviceBDF, deviceSysfsDev string, vfioDeviceType config.VFIODeviceType, err error) {
+func GetVFIODetails(deviceFileName, iommuDevicesPath string) (deviceBDF, deviceSysfsDev string, vfioDeviceType config.VFIODeviceType, err error) {
 	sysfsDevStr := filepath.Join(iommuDevicesPath, deviceFileName)
 	vfioDeviceType, err = GetVFIODeviceType(sysfsDevStr)
 	if err != nil {
@@ -210,14 +215,18 @@ func getVFIODetails(deviceFileName, iommuDevicesPath string) (deviceBDF, deviceS
 	switch vfioDeviceType {
 	case config.VFIOPCIDeviceNormalType:
 		// Get bdf of device eg. 0000:00:1c.0
-		deviceBDF = getBDF(deviceFileName)
+		// OLD IMPL: deviceBDF = getBDF(deviceFileName)
+		// The old implementation did not consider the case where
+		// vfio devices are located on different root busses. The
+		// kata-agent will handle the case now, here, use the full PCI addr
+		deviceBDF = deviceFileName
 		// Get sysfs path used by cloud-hypervisor
 		deviceSysfsDev = filepath.Join(config.SysBusPciDevicesPath, deviceFileName)
 	case config.VFIOPCIDeviceMediatedType:
 		// Get sysfsdev of device eg. /sys/devices/pci0000:00/0000:00:02.0/f79944e4-5a3d-11e8-99ce-479cbab002e4
 		sysfsDevStr := filepath.Join(iommuDevicesPath, deviceFileName)
 		deviceSysfsDev, err = GetSysfsDev(sysfsDevStr)
-		deviceBDF = getBDF(getMediatedBDF(deviceSysfsDev))
+		deviceBDF = GetBDF(getMediatedBDF(deviceSysfsDev))
 	case config.VFIOAPDeviceMediatedType:
 		sysfsDevStr := filepath.Join(iommuDevicesPath, deviceFileName)
 		deviceSysfsDev, err = GetSysfsDev(sysfsDevStr)
@@ -240,7 +249,7 @@ func getMediatedBDF(deviceSysfsDev string) string {
 
 // getBDF returns the BDF of pci device
 // Expected input string format is [<domain>]:[<bus>][<slot>].[<func>] eg. 0000:02:10.0
-func getBDF(deviceSysStr string) string {
+func GetBDF(deviceSysStr string) string {
 	tokens := strings.SplitN(deviceSysStr, ":", 2)
 	if len(tokens) == 1 {
 		return ""

@@ -1,0 +1,4 @@
+Script started on 2023-07-17 11:15:59+00:00 [TERM="xterm" TTY="/dev/pts/1" COLUMNS="266" LINES="79"]
+sudo: ./initrd_builder.sh: command not found
+
+Script done on 2023-07-17 11:15:59+00:00 [COMMAND_EXIT_CODE="1"]

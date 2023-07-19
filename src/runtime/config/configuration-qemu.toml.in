@@ -178,6 +178,11 @@ disable_block_device_use = @DEFDISABLEBLOCK@
 #   - virtio-fs (default)
 #   - virtio-9p
 #   - virtio-fs-nydus
+#   - none
+# WARNING: "none" should be carefully used, and only used in very few specific cases, as
+# any update to the mount will *NOT* be reflected during the lifecycle of the pod, causing
+# issues with rotation of secrets, certs, or configurations via kubernetes objects like
+# configMaps or secrets, as those will be copied into the guest at *pod* *creation* *time*.
 shared_fs = "@DEFSHAREDFS_QEMU_VIRTIOFS@"
 
 # Path to vhost-user-fs daemon.
@@ -352,8 +357,15 @@ pflashes = []
 # Default false
 #hotplug_vfio_on_root_bus = true
 
+# Enable hot-plugging of VFIO devices to a bridge-port, 
+# root-port or switch-port. 
+# The default setting is  "no-port"
+#hot_plug_vfio = "root-port" 
+
 # In a confidential compute environment hot-plugging can compromise
-# security. Enable cold-plugging of VFIO devices to a root-port.
+# security. 
+# Enable cold-plugging of VFIO devices to a bridge-port, 
+# root-port or switch-port. 
 # The default setting is  "no-port", which means disabled. 
 #cold_plug_vfio = "root-port" 
 

@@ -305,6 +305,9 @@ func (q *qemuS390x) appendIOMMU(devices []govmmQemu.Device) ([]govmmQemu.Device,
 }
 
 func (q *qemuS390x) addDeviceToBridge(ctx context.Context, ID string, t types.Type) (string, types.Bridge, error) {
+
+	hvLogger.Infof("### addDeviceToBridge bridges: %+v", q.Bridges)
+
 	addr, b, err := genericAddDeviceToBridge(ctx, q.Bridges, ID, types.CCW)
 	if err != nil {
 		return "", b, err
@@ -350,4 +353,31 @@ func (q *qemuS390x) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 	default:
 		return devices, firmware, fmt.Errorf("Unsupported guest protection technology: %v", q.protection)
 	}
+}
+
+func (q *qemuS390x) appendVFIODevice(devices []govmmQemu.Device, vfioDev config.VFIODev) []govmmQemu.Device {
+
+	hvLogger.Info("### appendVFIODevice: vfioDev ", vfioDev)
+	if vfioDev.SysfsDev == "" {
+		return devices
+	}
+
+	if len(vfioDev.APDevices) > 0 {
+		devices = append(devices,
+			govmmQemu.VFIODevice{
+				SysfsDev:  vfioDev.SysfsDev,
+				Transport: govmmQemu.TransportAP,
+			},
+		)
+		return devices
+
+	}
+	devices = append(devices,
+		govmmQemu.VFIODevice{
+			SysfsDev: vfioDev.SysfsDev,
+		},
+	)
+
+	hvLogger.Info("### appendVFIODevice: devices ", vfioDev)
+	return devices
 }

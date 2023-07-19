@@ -28,6 +28,7 @@ use std::{collections::HashSet, fs::create_dir_all, path::PathBuf};
 const DRAGONBALL_KERNEL: &str = "vmlinux";
 const DRAGONBALL_ROOT_FS: &str = "rootfs";
 
+#[derive(Debug)]
 pub struct DragonballInner {
     /// sandbox id
     pub(crate) id: String,

@@ -37,7 +37,7 @@ func isBlock(devInfo config.DeviceInfo) bool {
 }
 
 // isVhostUserBlk checks if the device is a VhostUserBlk device.
-func isVhostUserBlk(devInfo config.DeviceInfo) bool {
+func IsVhostUserBlk(devInfo config.DeviceInfo) bool {
 	return devInfo.DevType == "b" && devInfo.Major == config.VhostUserBlkMajor
 }
 

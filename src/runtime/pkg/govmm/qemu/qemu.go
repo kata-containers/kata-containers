@@ -123,6 +123,14 @@ const (
 	// PCIeRootPort is a PCIe Root Port, the PCIe device should be hotplugged to this port.
 	PCIeRootPort DeviceDriver = "pcie-root-port"
 
+	// PCIeSwitchUpstreamPort is a PCIe switch upstream port
+	// A upstream port connects to a PCIe Root Port
+	PCIeSwitchUpstreamPort DeviceDriver = "x3130-upstream"
+
+	// PCIeSwitchDownstreamPort is a PCIe switch downstream port
+	// PCIe devices can be hot-plugged to the downstream port.
+	PCIeSwitchDownstreamPort DeviceDriver = "xio3130-downstream"
+
 	// Loader is the Loader device driver.
 	Loader DeviceDriver = "loader"
 
@@ -155,6 +163,8 @@ const (
 
 	// TransportMMIO is the MMIO transport for virtio devices.
 	TransportMMIO VirtioTransport = "mmio"
+
+	TransportAP VirtioTransport = "ap"
 )
 
 // defaultTransport returns the default transport for the current combination
@@ -189,6 +199,14 @@ func (transport VirtioTransport) isVirtioCCW(config *Config) bool {
 	}
 
 	return transport == TransportCCW
+}
+
+func (transport VirtioTransport) isVirtioAP(config *Config) bool {
+	if transport == "" {
+		transport = transport.defaultTransport(config)
+	}
+
+	return transport == TransportAP
 }
 
 // getName returns the name of the current transport.
@@ -236,6 +254,7 @@ const (
 
 	// SecExecGuest represents an s390x Secure Execution (Protected Virtualization in QEMU) object
 	SecExecGuest ObjectType = "s390-pv-guest"
+
 	// PEFGuest represent ppc64le PEF(Protected Execution Facility) object.
 	PEFGuest ObjectType = "pef-guest"
 )
@@ -369,7 +388,6 @@ func (object Object) QemuParams(config *Config) []string {
 		deviceParams = append(deviceParams, string(object.Driver))
 		deviceParams = append(deviceParams, fmt.Sprintf("id=%s", object.DeviceID))
 		deviceParams = append(deviceParams, fmt.Sprintf("host-path=%s", object.File))
-
 	}
 
 	if len(deviceParams) > 0 {
@@ -1681,6 +1699,106 @@ func (b PCIeRootPortDevice) Valid() bool {
 	return true
 }
 
+// PCIeSwitchUpstreamPortDevice is the port connecting to the root port
+type PCIeSwitchUpstreamPortDevice struct {
+	ID  string // format: sup{n}, n>=0
+	Bus string // default is rp0
+}
+
+// QemuParams returns the qemu parameters built out of the PCIeSwitchUpstreamPortDevice.
+func (b PCIeSwitchUpstreamPortDevice) QemuParams(config *Config) []string {
+	var qemuParams []string
+	var deviceParams []string
+
+	driver := PCIeSwitchUpstreamPort
+
+	deviceParams = append(deviceParams, fmt.Sprintf("%s,id=%s", driver, b.ID))
+	deviceParams = append(deviceParams, fmt.Sprintf("bus=%s", b.Bus))
+
+	qemuParams = append(qemuParams, "-device")
+	qemuParams = append(qemuParams, strings.Join(deviceParams, ","))
+	return qemuParams
+}
+
+// Valid returns true if the PCIeSwitchUpstreamPortDevice structure is valid and complete.
+func (b PCIeSwitchUpstreamPortDevice) Valid() bool {
+	if b.ID == "" {
+		return false
+	}
+	if b.Bus == "" {
+		return false
+	}
+	return true
+}
+
+// PCIeSwitchDownstreamPortDevice is the port connecting to the root port
+type PCIeSwitchDownstreamPortDevice struct {
+	ID      string // format: sup{n}, n>=0
+	Bus     string // default is rp0
+	Chassis string // (slot, chassis) pair is mandatory and must be unique for each downstream port, >=0, default is 0x00
+	Slot    string // >=0, default is 0x00
+	// This to work needs patches to QEMU
+	BusReserve string
+	// Pref64 and Pref32 are not allowed to be set simultaneously
+	Pref64Reserve string // reserve prefetched MMIO aperture, 64-bit
+	Pref32Reserve string // reserve prefetched MMIO aperture, 32-bit
+	MemReserve    string // reserve non-prefetched MMIO aperture, 32-bit *only*
+	IOReserve     string // IO reservation
+
+}
+
+// QemuParams returns the qemu parameters built out of the PCIeSwitchUpstreamPortDevice.
+func (b PCIeSwitchDownstreamPortDevice) QemuParams(config *Config) []string {
+	var qemuParams []string
+	var deviceParams []string
+	driver := PCIeSwitchDownstreamPort
+
+	deviceParams = append(deviceParams, fmt.Sprintf("%s,id=%s", driver, b.ID))
+	deviceParams = append(deviceParams, fmt.Sprintf("bus=%s", b.Bus))
+	deviceParams = append(deviceParams, fmt.Sprintf("chassis=%s", b.Chassis))
+	deviceParams = append(deviceParams, fmt.Sprintf("slot=%s", b.Slot))
+	if b.BusReserve != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf("bus-reserve=%s", b.BusReserve))
+	}
+
+	if b.Pref64Reserve != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf("pref64-reserve=%s", b.Pref64Reserve))
+	}
+
+	if b.Pref32Reserve != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf("pref32-reserve=%s", b.Pref32Reserve))
+	}
+
+	if b.MemReserve != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf("mem-reserve=%s", b.MemReserve))
+	}
+
+	if b.IOReserve != "" {
+		deviceParams = append(deviceParams, fmt.Sprintf("io-reserve=%s", b.IOReserve))
+	}
+
+	qemuParams = append(qemuParams, "-device")
+	qemuParams = append(qemuParams, strings.Join(deviceParams, ","))
+	return qemuParams
+}
+
+// Valid returns true if the PCIeSwitchUpstremPortDevice structure is valid and complete.
+func (b PCIeSwitchDownstreamPortDevice) Valid() bool {
+	if b.ID == "" {
+		return false
+	}
+	if b.Bus == "" {
+		return false
+	}
+	if b.Chassis == "" {
+		return false
+	}
+	if b.Slot == "" {
+		return false
+	}
+	return true
+}
+
 // VFIODevice represents a qemu vfio device meant for direct access by guest OS.
 type VFIODevice struct {
 	// Bus-Device-Function of device
@@ -1703,6 +1821,8 @@ type VFIODevice struct {
 
 	// Transport is the virtio transport for this device.
 	Transport VirtioTransport
+
+	SysfsDev string
 }
 
 // VFIODeviceTransport is a map of the vfio device name that corresponds to
@@ -1711,11 +1831,13 @@ var VFIODeviceTransport = map[VirtioTransport]string{
 	TransportPCI:  "vfio-pci",
 	TransportCCW:  "vfio-ccw",
 	TransportMMIO: "vfio-device",
+	TransportAP:   "vfio-ap",
 }
 
 // Valid returns true if the VFIODevice structure is valid and complete.
+// s390x architecture requires SysfsDev to be set.
 func (vfioDev VFIODevice) Valid() bool {
-	return vfioDev.BDF != ""
+	return vfioDev.BDF != "" || vfioDev.SysfsDev != ""
 }
 
 // QemuParams returns the qemu parameters built out of this vfio device.
@@ -1724,6 +1846,15 @@ func (vfioDev VFIODevice) QemuParams(config *Config) []string {
 	var deviceParams []string
 
 	driver := vfioDev.deviceName(config)
+
+	if vfioDev.Transport.isVirtioAP(config) {
+		deviceParams = append(deviceParams, fmt.Sprintf("%s,sysfsdev=%s", driver, vfioDev.SysfsDev))
+
+		qemuParams = append(qemuParams, "-device")
+		qemuParams = append(qemuParams, strings.Join(deviceParams, ","))
+
+		return qemuParams
+	}
 
 	deviceParams = append(deviceParams, fmt.Sprintf("%s,host=%s", driver, vfioDev.BDF))
 	if vfioDev.Transport.isVirtioPCI(config) {
@@ -2729,9 +2860,11 @@ func (config *Config) appendDevices(logger QMPLog) {
 
 	for _, d := range config.Devices {
 		if !d.Valid() {
-			logger.Errorf("vm device is not valid: %+v", config.Devices)
+			logger.Errorf("vm device is not valid: %+v", d)
 			continue
 		}
+
+		logger.Infof("### govmm/qemu.go device %+v", d)
 
 		config.qemuParams = append(config.qemuParams, d.QemuParams(config)...)
 	}

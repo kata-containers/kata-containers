@@ -438,6 +438,9 @@ func (q *QMP) writeNextQMPCommand(cmdQueue *list.List) {
 		cmdQueue.Remove(cmdEl)
 	}
 	encodedCmd = append(encodedCmd, '\n')
+
+	q.cfg.Logger.Infof("### writeNextQMPCommand encodedCmd: ", string(encodedCmd))
+
 	if unixConn, ok := q.conn.(*net.UnixConn); ok && len(cmd.oob) > 0 {
 		_, _, err = unixConn.WriteMsgUnix(encodedCmd, cmd.oob, nil)
 	} else {
@@ -649,13 +652,22 @@ func (q *QMP) executeCommandWithResponse(ctx context.Context, name string, args 
 		err = ctx.Err()
 	}
 
+	if err != nil {
+		q.cfg.Logger.Infof("### ERROR<653> executeCommandWithResponse: ", err, " response: ", response, " name: ", name, " args: ", args, " filter: ", filter)
+	}
 	return response, err
 }
 
 func (q *QMP) executeCommand(ctx context.Context, name string, args map[string]interface{},
 	filter *qmpEventFilter) error {
 
+	q.cfg.Logger.Infof("### executeCommand: ", name, " args: ", args, " filter: ", filter)
+
 	_, err := q.executeCommandWithResponse(ctx, name, args, nil, filter)
+	if err != nil {
+		q.cfg.Logger.Infof("### ERROR executeCommand: ", err)
+	}
+
 	return err
 }
 
@@ -1217,11 +1229,15 @@ func (q *QMP) ExecutePCIVFIOMediatedDeviceAdd(ctx context.Context, devID, sysfsd
 }
 
 // ExecuteAPVFIOMediatedDeviceAdd adds a VFIO mediated AP device to a QEMU instance using the device_add command.
-func (q *QMP) ExecuteAPVFIOMediatedDeviceAdd(ctx context.Context, sysfsdev string) error {
+func (q *QMP) ExecuteAPVFIOMediatedDeviceAdd(ctx context.Context, sysfsdev string, devID string) error {
 	args := map[string]interface{}{
 		"driver":   VfioAP,
 		"sysfsdev": sysfsdev,
+		"id":       devID,
 	}
+
+	q.cfg.Logger.Infof("### ExecuteAPVFIOMediatedDeviceAdd: ", args)
+
 	return q.executeCommand(ctx, "device_add", args, nil)
 }
 
