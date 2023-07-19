@@ -66,39 +66,48 @@ impl Container {
             ..Default::default()
         });
 
-        let (manifest, digest_hash, config_layer_str) = client
-            .pull_manifest_and_config(&reference, &auth)
-            .await
-            .unwrap();
+        match client.pull_manifest_and_config(&reference, &auth).await {
+            Ok((manifest, digest_hash, config_layer_str)) => {
+                debug!("digest_hash: {:?}", digest_hash);
+                debug!(
+                    "manifest: {}",
+                    serde_json::to_string_pretty(&manifest).unwrap()
+                );
 
-        debug!("digest_hash: {:?}", digest_hash);
-        debug!(
-            "manifest: {}",
-            serde_json::to_string_pretty(&manifest).unwrap()
-        );
+                // Log the contents of the config layer.
+                if log::max_level() >= LevelFilter::Debug {
+                    let mut deserializer = serde_json::Deserializer::from_str(&config_layer_str);
+                    let mut serializer = serde_json::Serializer::pretty(io::stderr());
+                    serde_transcode::transcode(&mut deserializer, &mut serializer).unwrap();
+                }
 
-        // Log the contents of the config layer.
-        if log::max_level() >= LevelFilter::Debug {
-            let mut deserializer = serde_json::Deserializer::from_str(&config_layer_str);
-            let mut serializer = serde_json::Serializer::pretty(io::stderr());
-            serde_transcode::transcode(&mut deserializer, &mut serializer).unwrap();
+                let config_layer: DockerConfigLayer =
+                    serde_json::from_str(&config_layer_str).unwrap();
+                let image_layers = get_image_layers(
+                    use_cached_files,
+                    &mut client,
+                    &reference,
+                    &manifest,
+                    &config_layer,
+                )
+                .await
+                .unwrap();
+
+                Ok(Container {
+                    config_layer,
+                    image_layers,
+                })
+            }
+            Err(oci_distribution::errors::OciDistributionError::AuthenticationFailure(message)) => {
+                panic!("Container image registry authentication failure ({}). Are docker credentials set-up for current user?", &message);
+            }
+            Err(e) => {
+                panic!(
+                    "Failed to pull container image manifest and config - error: {:#?}",
+                    &e
+                );
+            }
         }
-
-        let config_layer: DockerConfigLayer = serde_json::from_str(&config_layer_str).unwrap();
-        let image_layers = get_image_layers(
-            use_cached_files,
-            &mut client,
-            &reference,
-            &manifest,
-            &config_layer,
-        )
-        .await
-        .unwrap();
-
-        Ok(Container {
-            config_layer,
-            image_layers,
-        })
     }
 
     // Convert Docker image config to policy data.
@@ -415,7 +424,17 @@ fn build_auth(reference: &Reference) -> RegistryAuth {
             debug!("build_auth: Docker credentials not configured - using anonymous access.");
         }
         Err(CredentialRetrievalError::ConfigReadError) => {
-            warn!("build_auth: Cannot read docker credentials - using anonymous access.");
+            debug!("build_auth: Cannot read docker credentials - using anonymous access.");
+        }
+        Err(CredentialRetrievalError::HelperFailure { stdout, stderr }) => {
+            if stdout == "credentials not found in native keychain\n" {
+                // On WSL, this error is generated when credentials are not
+                // available in ~/.docker/config.json.
+                debug!("build_auth: Docker credentials not found - using anonymous access.");
+            } else {
+                warn!("build_auth: Docker credentials not found - using anonymous access. stderr = {}, stdout = {}",
+                    &stderr, &stdout);
+            }
         }
         Err(e) => panic!("Error handling docker configuration file: {}", e),
     }
