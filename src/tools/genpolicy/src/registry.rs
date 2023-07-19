@@ -272,6 +272,10 @@ async fn get_verity_hash(
     let mut verity_path = decompressed_path.clone();
     verity_path.set_extension("verity");
 
+    let mut verity_hash = "".to_string();
+    let mut error_message = "".to_string();
+    let mut error = false;
+
     if use_cached_files && verity_path.exists() {
         info!("Using cached file {:?}", &verity_path);
     } else if let Err(e) = create_verity_hash_file(
@@ -286,22 +290,36 @@ async fn get_verity_hash(
     )
     .await
     {
-        delete_files(&decompressed_path, &compressed_path, &verity_path);
-        panic!(
+        error = true;
+        error_message = format!(
             "Failed to create verity hash for {}, error {:?}",
             layer_digest, &e
         );
     }
 
-    match std::fs::read_to_string(&verity_path) {
-        Err(e) => {
-            delete_files(&decompressed_path, &compressed_path, &verity_path);
-            panic!("Failed to read {:?}, error {:?}", &verity_path, &e);
+    if !error {
+        match std::fs::read_to_string(&verity_path) {
+            Err(e) => {
+                error = true;
+                error_message = format!("Failed to read {:?}, error {:?}", &verity_path, &e);
+            }
+            Ok(v) => {
+                verity_hash = v;
+                info!("dm-verity root hash: {}", &verity_hash);
+            }
         }
-        Ok(v) => {
-            info!("dm-verity root hash: {}", &v);
-            return Ok(v);
-        }
+    }
+
+    if !use_cached_files {
+        let _ = std::fs::remove_dir_all(&base_dir);
+    } else if error {
+        delete_files(&decompressed_path, &compressed_path, &verity_path);
+    }
+
+    if error {
+        panic!("{}", &error_message);
+    } else {
+        Ok(verity_hash)
     }
 }
 
