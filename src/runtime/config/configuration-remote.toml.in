@@ -299,6 +299,12 @@ experimental=@DEFAULTEXPFEATURES@
 # Note: The remote hypervisor offloads the pulling on images on the peer pod VM, so requries this to be true
 service_offload = true
 
+# Image request timeout in seconds.
+# If specified, indicates the image request timeout in the guest needed for the workload(s)
+# If unspecified then it will be set @DEFIMAGEREQUESTTIMEOUT@ second(s) 
+# to reduce image pull failures caused by network problems and quickly obtain request failure information at the same time.
+image_request_timeout = @DEFIMAGEREQUESTTIMEOUT@
+
 # Container image decryption keys provisioning.
 # Applies only if service_offload is true.
 # Keys can be provisioned locally (e.g. through a special command or

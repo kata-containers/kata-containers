@@ -161,6 +161,9 @@ type SandboxConfig struct {
 	StaticResourceMgmt bool
 	// Offload the CRI image management service to the Kata agent.
 	ServiceOffload bool
+	// Image request timeout which, if provided, indicates the image request timeout
+	// in the guest needed for the workload(s)
+	ImageRequestTimeout uint64
 	// SharePidNs sets all containers to share the same sandbox level pid namespace.
 	SharePidNs bool
 	// SystemdCgroup enables systemd cgroup support
