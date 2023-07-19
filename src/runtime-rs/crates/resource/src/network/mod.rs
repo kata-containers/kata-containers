@@ -4,9 +4,11 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-mod endpoint;
 use std::sync::Arc;
 
+mod dan;
+mod endpoint;
+pub use dan::{dan_config_path, Dan, DanNetworkConfig};
 pub use endpoint::endpoint_persist::EndpointState;
 pub use endpoint::Endpoint;
 mod network_entity;
@@ -20,9 +22,8 @@ use network_with_netns::NetworkWithNetns;
 mod network_pair;
 use network_pair::NetworkPair;
 mod utils;
-pub use utils::netns::{generate_netns_name, NetnsGuard};
-
 use tokio::sync::RwLock;
+pub use utils::netns::{generate_netns_name, NetnsGuard};
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
@@ -30,7 +31,8 @@ use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
 
 #[derive(Debug)]
 pub enum NetworkConfig {
-    NetworkResourceWithNetNs(NetworkWithNetNsConfig),
+    NetNs(NetworkWithNetNsConfig),
+    Dan(DanNetworkConfig),
 }
 
 #[async_trait]
@@ -48,10 +50,15 @@ pub async fn new(
     d: Arc<RwLock<DeviceManager>>,
 ) -> Result<Arc<dyn Network>> {
     match config {
-        NetworkConfig::NetworkResourceWithNetNs(c) => Ok(Arc::new(
+        NetworkConfig::NetNs(c) => Ok(Arc::new(
             NetworkWithNetns::new(c, d)
                 .await
                 .context("new network with netns")?,
+        )),
+        NetworkConfig::Dan(c) => Ok(Arc::new(
+            Dan::new(c, d)
+                .await
+                .context("New directly attachable network")?,
         )),
     }
 }

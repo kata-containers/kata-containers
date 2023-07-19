@@ -214,6 +214,8 @@ impl DragonballInner {
                 Some(mac) => MacAddr::from_bytes(&mac.0).ok(),
                 None => None,
             },
+            num_queues: config.queue_num,
+            queue_size: config.queue_size as u16,
             ..Default::default()
         };
 
