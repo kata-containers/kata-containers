@@ -31,6 +31,16 @@ SELINUX=${SELINUX:-"no"}
 lib_file="${script_dir}/../scripts/lib.sh"
 source "$lib_file"
 
+#For cross build
+CROSS_BUILD=${CROSS_BUILD:-false}
+BUILDX=""
+PLATFORM=""
+TARGET_ARCH=${TARGET_ARCH:-$(uname -m)}
+ARCH=${ARCH:-$(uname -m)}
+[ "${TARGET_ARCH}" == "aarch64" ] && TARGET_ARCH=arm64
+TARGET_OS=${TARGET_OS:-linux}
+[ "${CROSS_BUILD}" == "true" ] && BUILDX=buildx && PLATFORM="--platform=${TARGET_OS}/${TARGET_ARCH}"
+
 handle_error() {
 	local exit_code="${?}"
 	local line_number="${1:-}"

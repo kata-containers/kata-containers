@@ -208,6 +208,8 @@ install_initrd() {
 	local libseccomp_version="$(get_from_kata_deps "externals.libseccomp.version")"
 	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
 
+	[[ "${ARCH}" == "aarch64" && "${CROSS_BUILD}" == "true" ]] && echo "warning: Don't cross build initrd for aarch64 as it's too slow" && exit 0
+
 	install_cached_tarball_component \
 		"${component}" \
 		"${jenkins}" \
