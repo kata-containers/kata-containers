@@ -194,7 +194,7 @@ externals:
   attestation-agent:
     description: "Provide attested key unwrapping for image decryption"
     url: "https://github.com/confidential-containers/guest-components/"
-    version: "43f68320ed78cef438c838c10a6f462c06bad83f"
+    version: "88dcc147ba8ddf34e8425c98d5931df8a995f04a"
 
   cni-plugins:
     description: "CNI network plugins"
@@ -260,7 +260,7 @@ externals:
 
   pause:
     description: "Kubernetes pause container image"
-    repo: "docker://k8s.gcr.io/pause"
+    repo: "docker://registry.k8s.io/pause"
     version: "3.6"
 
   runc:
@@ -311,7 +311,7 @@ externals:
   td-shim:
     description: "Confidential Containers Shim Firmware"
     url: "https://github.com/confidential-containers/td-shim"
-    version: "v0.6.0"
+    version: "4ecf76ab8bc57c2e857937487d1923961c2b6769"
     toolchain: "nightly-2022-11-15"
 
   virtiofsd:
