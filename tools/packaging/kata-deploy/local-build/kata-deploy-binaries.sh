@@ -29,7 +29,6 @@ readonly kernel_builder="${static_build_dir}/kernel/build.sh"
 readonly ovmf_builder="${static_build_dir}/ovmf/build.sh"
 readonly qemu_builder="${static_build_dir}/qemu/build-static-qemu.sh"
 readonly qemu_experimental_builder="${static_build_dir}/qemu/build-static-qemu-experimental.sh"
-readonly qemu_experimental_cc_builder="${static_build_dir}/qemu/build-static-qemu-experimental-cc.sh"
 readonly shimv2_builder="${static_build_dir}/shim-v2/build.sh"
 readonly td_shim_builder="${static_build_dir}/td-shim/build.sh"
 readonly virtiofsd_builder="${static_build_dir}/virtiofsd/build.sh"
@@ -39,7 +38,6 @@ readonly rootfs_builder="${repo_root_dir}/tools/packaging/guest-image/build_imag
 readonly se_image_builder="${repo_root_dir}/tools/packaging/guest-image/build_se_image.sh"
 
 readonly cc_prefix="/opt/confidential-containers"
-readonly qemu_cc_builder="${static_build_dir}/qemu/build-static-qemu-cc.sh"
 
 source "${script_dir}/../../scripts/lib.sh"
 
@@ -112,13 +110,9 @@ options:
 	tdvf
 	virtiofsd
 	cc
-	cc-cloud-hypervisor
 	cc-kernel
 	cc-tdx-kernel
 	cc-sev-kernel
-	cc-qemu
-	cc-snp-qemu
-	cc-tdx-qemu
 	cc-rootfs-image
 	cc-rootfs-initrd
 	cc-sev-rootfs-initrd
@@ -231,28 +225,6 @@ install_cached_cc_shim_v2() {
 		"$(basename ${root_hash_tdx})"
 }
 
-# Install static CC cloud-hypervisor asset
-install_cc_clh() {
-	install_cached_tarball_component \
-		"cloud-hypervisor" \
-		"${jenkins_url}/job/kata-containers-2.0-clh-cc-$(uname -m)/${cached_artifacts_path}" \
-		"$(get_from_kata_deps "assets.hypervisor.cloud_hypervisor.version")" \
-		"" \
-		"${final_tarball_name}" \
-		"${final_tarball_path}" \
-		&& return 0
-
-	if [[ "${ARCH}" == "x86_64" ]]; then
-		export features="tdx"
-	fi
-
-	info "build static CC cloud-hypervisor"
-	"${clh_builder}"
-	info "Install static CC cloud-hypervisor"
-	mkdir -p "${destdir}/${cc_prefix}/bin/"
-	sudo install -D --owner root --group root --mode 0744 cloud-hypervisor/cloud-hypervisor "${destdir}/${cc_prefix}/bin/cloud-hypervisor"
-}
-
 #Install cc capable guest image
 install_cc_image() {
 	export AA_KBC="${1:-offline_fs_kbc}"
@@ -353,25 +325,6 @@ install_cc_kernel() {
 		"${initramfs_builder}"
 	fi
 	DESTDIR="${destdir}" PREFIX="${cc_prefix}" "${kernel_builder}" -f -v "${kernel_version}"
-}
-
-# Install static CC qemu asset
-install_cc_qemu() {
-	info "build static CC qemu"
-	export qemu_repo="$(yq r $versions_yaml assets.hypervisor.qemu.url)"
-	export qemu_version="$(yq r $versions_yaml assets.hypervisor.qemu.version)"
-
-	install_cached_tarball_component \
-		"QEMU" \
-		"${jenkins_url}/job/kata-containers-2.0-qemu-cc-$(uname -m)/${cached_artifacts_path}" \
-		"${qemu_version}-$(calc_qemu_files_sha256sum)" \
-		"$(get_qemu_image_name)" \
-		"${final_tarball_name}" \
-		"${final_tarball_path}" \
-		&& return 0
-
-	"${qemu_cc_builder}"
-	tar xvf "${builddir}/kata-static-qemu-cc.tar.gz" -C "${destdir}"
 }
 
 #Install all components that are not assets
@@ -500,32 +453,6 @@ install_cc_sev_kernel() {
 	default_patches_dir="${repo_root_dir}/tools/packaging/kernel/patches"
 	module_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/cc-sev-kernel/builddir/kata-linux-${kernel_version#v}-$(get_config_version)/lib/modules/${kernel_version#v}"
 	install_cc_tee_kernel "sev" "${kernel_version}" "${module_dir}"
-}
-
-install_cc_tee_qemu() {
-	tee="${1}"
-
-	[ "${tee}" != "tdx" ] && die "Non supported TEE"
-
-	export qemu_repo="$(yq r $versions_yaml assets.hypervisor.qemu.${tee}.url)"
-	export qemu_version="$(yq r $versions_yaml assets.hypervisor.qemu.${tee}.tag)"
-	export tee="${tee}"
-
-	install_cached_tarball_component \
-		"QEMU ${tee}" \
-		"${jenkins_url}/job/kata-containers-2.0-qemu-${tee}-cc-$(uname -m)/${cached_artifacts_path}" \
-		"${qemu_version}-$(calc_qemu_files_sha256sum)" \
-		"$(get_qemu_image_name)" \
-		"${final_tarball_name}" \
-		"${final_tarball_path}" \
-		&& return 0
-
-	"${qemu_cc_builder}"
-	tar xvf "${builddir}/kata-static-${tee}-qemu-cc.tar.gz" -C "${destdir}"
-}
-
-install_cc_tdx_qemu() {
-	install_cc_tee_qemu "tdx"
 }
 
 install_cc_tdx_td_shim() {
@@ -827,16 +754,15 @@ install_qemu_tdx_experimental() {
 		"${qemu_experimental_builder}"
 }
 
-install_cc_snp_qemu_experimental() {
+install_qemu_snp_experimental() {
 	export qemu_suffix="snp-experimental"
-	export qemu_tarball_name="kata-static-qemu-${qemu_suffix}-cc.tar.gz"
-	export tee="snp"
+	export qemu_tarball_name="kata-static-qemu-${qemu_suffix}.tar.gz"
 
 	install_qemu_helper \
 		"assets.hypervisor.qemu-${qemu_suffix}.url" \
 		"assets.hypervisor.qemu-${qemu_suffix}.tag" \
 		"qemu-${qemu_suffix}" \
-		"${qemu_experimental_cc_builder}"
+		"${qemu_experimental_builder}"
 }
 
 # Install static firecracker asset
@@ -1044,23 +970,14 @@ handle_build() {
 		;;
 
 	cc)
-		install_cc_clh
 		install_cc_kernel
-		install_cc_qemu
-		install_cc_snp_qemu_experimental
 		install_cc_image
 		install_cc_shimv2
 		install_cc_virtiofsd
 		install_cc_sev_image
 		;;
 
-	cc-cloud-hypervisor) install_cc_clh ;;
-
 	cc-kernel) install_cc_kernel ;;
-
-	cc-qemu) install_cc_qemu ;;
-
-	cc-snp-qemu) install_cc_snp_qemu_experimental ;;
 
 	cc-rootfs-image) install_cc_image ;;
 
@@ -1079,8 +996,6 @@ handle_build() {
 	cc-tdx-kernel) install_cc_tdx_kernel ;;
 
 	cc-sev-kernel) install_cc_sev_kernel ;;
-
-	cc-tdx-qemu) install_cc_tdx_qemu ;;
 
 	cc-tdx-td-shim) install_cc_tdx_td_shim ;;
 

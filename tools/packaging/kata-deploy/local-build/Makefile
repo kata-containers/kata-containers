@@ -11,15 +11,13 @@ V := 1
 ARCH := $(shell uname -m)
 
 ifeq ($(ARCH), x86_64)
-EXTRA_TARBALL=cc-cloud-hypervisor-tarball \
+EXTRA_TARBALL=\
 	cc-tdx-kernel-tarball \
-	cc-tdx-qemu-tarball \
 	cc-tdx-td-shim-tarball \
 	cc-tdx-tdvf-tarball \
 	cc-sev-ovmf-tarball \
 	cc-x86_64-ovmf-tarball \
 	cc-sev-rootfs-initrd-tarball \
-	cc-snp-qemu-tarball \
 	cc-tdx-rootfs-image-tarball
 endif
 
@@ -156,22 +154,12 @@ cc-parallel: $(MK_DIR)/dockerbuild/install_yq.sh
 	${MAKE} -f $(MK_PATH) cc -j$$(( $$(nproc) - 1  )) V=
 
 cc: cc-kernel-tarball \
-	cc-qemu-tarball \
 	cc-rootfs-image-tarball \
 	cc-virtiofsd-tarball \
 	cc-shim-v2-tarball \
 	${EXTRA_TARBALL}
 
-cc-cloud-hypervisor-tarball:
-	${MAKE} $@-build
-
 cc-kernel-tarball:
-	${MAKE} $@-build
-
-cc-qemu-tarball:
-	${MAKE} $@-build
-
-cc-snp-qemu-tarball:
 	${MAKE} $@-build
 
 cc-rootfs-image-tarball:
@@ -199,9 +187,6 @@ cc-tdx-kernel-tarball:
 	${MAKE} $@-build
 
 cc-sev-kernel-tarball:
-	${MAKE} $@-build
-
-cc-tdx-qemu-tarball:
 	${MAKE} $@-build
 
 cc-tdx-td-shim-tarball:
