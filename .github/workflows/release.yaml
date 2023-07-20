@@ -121,6 +121,19 @@ jobs:
           GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a "${tarball}" "${tag}"
           popd
 
+  upload-versions-yaml-tarball:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: upload versions.yaml
+        run: |
+          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
+          pushd $GITHUB_WORKSPACE
+          versions_file="kata-containers-$tag-versions.yaml"
+          cp versions.yaml ${versions_file}
+          hub release edit -m "" -a "${versions_file}" "${tag}"
+          popd
+
   upload-cargo-vendored-tarball:
     needs: upload-multi-arch-static-tarball
     runs-on: ubuntu-latest

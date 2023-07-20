@@ -64,9 +64,6 @@ firecracker-tarball:
 kernel-dragonball-experimental-tarball:
 	${MAKE} $@-build
 
-kernel-experimental-tarball:
-	${MAKE} $@-build
-
 kernel-nvidia-gpu-tarball:
 	${MAKE} $@-build
 
@@ -128,7 +125,7 @@ virtiofsd-tarball:
 	${MAKE} $@-build
 
 merge-builds:
-	$(MK_DIR)/kata-deploy-merge-builds.sh build
+	$(MK_DIR)/kata-deploy-merge-builds.sh build "$(MK_DIR)/../../../../versions.yaml"
 
 install-tarball:
 	tar -xf ./kata-static.tar.xz -C /
