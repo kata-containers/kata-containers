@@ -619,7 +619,9 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	// Aggregate all the containner devices for hot-plug and use them to dedcue
 	// the correct amount of ports to reserve for the hypervisor.
 	hotPlugVFIO := (sandboxConfig.HypervisorConfig.HotPlugVFIO != config.NoPort)
-	stripVFIO := sandboxConfig.VfioMode == config.VFIOModeGuestKernel
+
+	modeGK := (sandboxConfig.VfioMode == config.VFIOModeGuestKernel)
+	modeVFIO := (sandboxConfig.VfioMode == config.VFIOModeVFIO)
 
 	var vfioDevices []config.DeviceInfo
 	// vhost-user-block device is a PCIe device in Virt, keep track of it
@@ -633,19 +635,26 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 				vhostUserBlkDevices = append(vhostUserBlkDevices, device)
 				continue
 			}
-			isVFIO := deviceManager.IsVFIO(device.ContainerPath)
-			if hotPlugVFIO && isVFIO {
+			isVFIODevice := deviceManager.IsVFIODevice(device.ContainerPath)
+			isVFIOControlDevice := deviceManager.IsVFIOControlDevice(device.ContainerPath)
+			// vfio_mode=vfio needs the VFIO control device add it to the list
+			// of devices to be added to the VM.
+			if modeVFIO && isVFIOControlDevice {
+				vfioDevices = append(vfioDevices, device)
+			}
+
+			if hotPlugVFIO && isVFIODevice {
 				vfioDevices = append(vfioDevices, device)
 				sandboxConfig.Containers[cnt].DeviceInfos[dev].Port = sandboxConfig.HypervisorConfig.HotPlugVFIO
 			}
-			if coldPlugVFIO && isVFIO {
+			if coldPlugVFIO && isVFIODevice {
 				device.ColdPlug = true
 				device.Port = sandboxConfig.HypervisorConfig.ColdPlugVFIO
 				vfioDevices = append(vfioDevices, device)
 				// We need to remove the devices marked for cold-plug
 				// otherwise at the container level the kata-agent
 				// will try to hot-plug them.
-				if stripVFIO {
+				if modeGK {
 					sandboxConfig.Containers[cnt].DeviceInfos[dev].ID = "remove-we-are-cold-plugging"
 				}
 			}
@@ -2053,26 +2062,26 @@ func (s *Sandbox) AddDevice(ctx context.Context, info config.DeviceInfo) (api.De
 	}
 
 	var err error
-	b, err := s.devManager.NewDevice(info)
+	add, err := s.devManager.NewDevice(info)
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
 		if err != nil {
-			s.devManager.RemoveDevice(b.DeviceID())
+			s.devManager.RemoveDevice(add.DeviceID())
 		}
 	}()
 
-	if err = s.devManager.AttachDevice(ctx, b.DeviceID(), s); err != nil {
+	if err = s.devManager.AttachDevice(ctx, add.DeviceID(), s); err != nil {
 		return nil, err
 	}
 	defer func() {
 		if err != nil {
-			s.devManager.DetachDevice(ctx, b.DeviceID(), s)
+			s.devManager.DetachDevice(ctx, add.DeviceID(), s)
 		}
 	}()
 
-	return b, nil
+	return add, nil
 }
 
 // updateResources will:
