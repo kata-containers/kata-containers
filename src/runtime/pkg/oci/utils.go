@@ -500,12 +500,6 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		return err
 	}
 
-	if err := newAnnotationConfiguration(ocispec, vcAnnotations.HotplugVFIOOnRootBus).setBool(func(hotplugVFIOOnRootBus bool) {
-		config.HypervisorConfig.HotplugVFIOOnRootBus = hotplugVFIOOnRootBus
-	}); err != nil {
-		return err
-	}
-
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.UseLegacySerial).setBool(func(useLegacySerial bool) {
 		config.HypervisorConfig.LegacySerial = useLegacySerial
 	}); err != nil {

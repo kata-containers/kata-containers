@@ -233,7 +233,6 @@ type RuntimeConfigOptions struct {
 	DefaultMsize9p       uint32
 	DisableBlock         bool
 	EnableIOThreads      bool
-	HotplugVFIOOnRootBus bool
 	DisableNewNetNs      bool
 	HypervisorDebug      bool
 	RuntimeDebug         bool
@@ -317,8 +316,8 @@ func MakeRuntimeConfigFileData(config RuntimeConfigOptions) string {
 	default_memory = ` + strconv.FormatUint(uint64(config.DefaultMemSize), 10) + `
 	disable_block_device_use =  ` + strconv.FormatBool(config.DisableBlock) + `
 	enable_iothreads =  ` + strconv.FormatBool(config.EnableIOThreads) + `
-	hotplug_vfio_on_root_bus =  ` + strconv.FormatBool(config.HotplugVFIOOnRootBus) + `
 	cold_plug_vfio =  "` + config.ColdPlugVFIO.String() + `"
+	hot_plug_vfio =   "` + config.HotPlugVFIO.String() + `"
 	msize_9p = ` + strconv.FormatUint(uint64(config.DefaultMsize9p), 10) + `
 	enable_debug = ` + strconv.FormatBool(config.HypervisorDebug) + `
 	guest_hook_path = "` + config.DefaultGuestHookPath + `"

@@ -85,7 +85,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (testConfig testRuntime
 	blockDeviceDriver := "virtio-scsi"
 	blockDeviceAIO := "io_uring"
 	enableIOThreads := true
-	hotplugVFIOOnRootBus := true
 	hotPlugVFIO = config.NoPort
 	coldPlugVFIO = config.BridgePort
 	disableNewNetNs := false
@@ -108,7 +107,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (testConfig testRuntime
 		BlockDeviceDriver:    blockDeviceDriver,
 		BlockDeviceAIO:       blockDeviceAIO,
 		EnableIOThreads:      enableIOThreads,
-		HotplugVFIOOnRootBus: hotplugVFIOOnRootBus,
 		HotPlugVFIO:          hotPlugVFIO,
 		ColdPlugVFIO:         coldPlugVFIO,
 		DisableNewNetNs:      disableNewNetNs,
@@ -172,7 +170,6 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (testConfig testRuntime
 		BlockDeviceAIO:        defaultBlockDeviceAIO,
 		DefaultBridges:        defaultBridgesCount,
 		EnableIOThreads:       enableIOThreads,
-		HotplugVFIOOnRootBus:  hotplugVFIOOnRootBus,
 		HotPlugVFIO:           hotPlugVFIO,
 		ColdPlugVFIO:          coldPlugVFIO,
 		Msize9p:               defaultMsize9p,
@@ -611,7 +608,6 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 	machineType := "machineType"
 	disableBlock := true
 	enableIOThreads := true
-	hotplugVFIOOnRootBus := true
 	coldPlugVFIO = config.BridgePort
 	orgVHostVSockDevicePath := utils.VHostVSockDevicePath
 	blockDeviceAIO := "io_uring"
@@ -630,7 +626,6 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 		MachineType:           machineType,
 		DisableBlockDeviceUse: disableBlock,
 		EnableIOThreads:       enableIOThreads,
-		HotplugVFIOOnRootBus:  hotplugVFIOOnRootBus,
 		ColdPlugVFIO:          coldPlugVFIO,
 		RxRateLimiterMaxRate:  rxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:  txRateLimiterMaxRate,
@@ -680,10 +675,6 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 
 	if config.EnableIOThreads != enableIOThreads {
 		t.Errorf("Expected value for enable IOThreads  %v, got %v", enableIOThreads, config.EnableIOThreads)
-	}
-
-	if config.HotplugVFIOOnRootBus != hotplugVFIOOnRootBus {
-		t.Errorf("Expected value for HotplugVFIOOnRootBus %v, got %v", hotplugVFIOOnRootBus, config.HotplugVFIOOnRootBus)
 	}
 
 	if config.RxRateLimiterMaxRate != rxRateLimiterMaxRate {
@@ -807,7 +798,6 @@ func TestNewQemuHypervisorConfigImageAndInitrd(t *testing.T) {
 	machineType := "machineType"
 	disableBlock := true
 	enableIOThreads := true
-	hotplugVFIOOnRootBus := true
 
 	hypervisor := hypervisor{
 		Path:                  hypervisorPath,
@@ -817,7 +807,6 @@ func TestNewQemuHypervisorConfigImageAndInitrd(t *testing.T) {
 		MachineType:           machineType,
 		DisableBlockDeviceUse: disableBlock,
 		EnableIOThreads:       enableIOThreads,
-		HotplugVFIOOnRootBus:  hotplugVFIOOnRootBus,
 	}
 
 	_, err := newQemuHypervisorConfig(hypervisor)

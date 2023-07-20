@@ -284,10 +284,6 @@ type HypervisorConfig struct {
 	// DisableImageNvdimm is used to disable guest rootfs image nvdimm devices
 	DisableImageNvdimm bool
 
-	// HotplugVFIOOnRootBus is used to indicate if devices need to be hotplugged on the
-	// root bus instead of a bridge.
-	HotplugVFIOOnRootBus bool
-
 	// HotPlugVFIO is used to indicate if devices need to be hotplugged on the
 	// root port, switch, bridge or no port
 	HotPlugVFIO hv.PCIePort

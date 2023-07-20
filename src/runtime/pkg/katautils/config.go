@@ -146,7 +146,6 @@ type hypervisor struct {
 	DisableNestingChecks           bool            `toml:"disable_nesting_checks"`
 	EnableIOThreads                bool            `toml:"enable_iothreads"`
 	DisableImageNvdimm             bool            `toml:"disable_image_nvdimm"`
-	HotplugVFIOOnRootBus           bool            `toml:"hotplug_vfio_on_root_bus"`
 	HotPlugVFIO                    config.PCIePort `toml:"hot_plug_vfio"`
 	ColdPlugVFIO                   config.PCIePort `toml:"cold_plug_vfio"`
 	DisableVhostNet                bool            `toml:"disable_vhost_net"`
@@ -867,7 +866,6 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		EnableIOThreads:         h.EnableIOThreads,
 		Msize9p:                 h.msize9p(),
 		DisableImageNvdimm:      h.DisableImageNvdimm,
-		HotplugVFIOOnRootBus:    h.HotplugVFIOOnRootBus,
 		HotPlugVFIO:             h.hotPlugVFIO(),
 		ColdPlugVFIO:            h.coldPlugVFIO(),
 		DisableVhostNet:         h.DisableVhostNet,
@@ -1063,7 +1061,6 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		BlockDeviceCacheNoflush:        h.BlockDeviceCacheNoflush,
 		EnableIOThreads:                h.EnableIOThreads,
 		Msize9p:                        h.msize9p(),
-		HotplugVFIOOnRootBus:           h.HotplugVFIOOnRootBus,
 		ColdPlugVFIO:                   h.coldPlugVFIO(),
 		HotPlugVFIO:                    h.hotPlugVFIO(),
 		DisableVhostNet:                true,
@@ -1294,7 +1291,6 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		BlockDeviceCacheNoflush:  defaultBlockDeviceCacheNoflush,
 		EnableIOThreads:          defaultEnableIOThreads,
 		Msize9p:                  defaultMsize9p,
-		HotplugVFIOOnRootBus:     defaultHotplugVFIOOnRootBus,
 		ColdPlugVFIO:             defaultColdPlugVFIO,
 		HotPlugVFIO:              defaultHotPlugVFIO,
 		GuestHookPath:            defaultGuestHookPath,
@@ -1682,18 +1678,19 @@ func checkConfig(config oci.RuntimeConfig) error {
 // Only allow one of the following settings for cold-plug:
 // no-port, root-port, switch-port
 func checkPCIeConfig(coldPlug config.PCIePort, hotPlug config.PCIePort, machineType string) error {
-	// Currently only QEMU q35 supports advanced PCIe topologies
+	// Currently only QEMU q35,virt support advanced PCIe topologies
 	// firecracker, dragonball do not have right now any PCIe support
-	if machineType != "q35" {
-		return nil
-	}
-
 	if coldPlug != config.NoPort && hotPlug != config.NoPort {
 		return fmt.Errorf("invalid hot-plug=%s and cold-plug=%s settings, only one of them can be set", coldPlug, hotPlug)
 	}
 	if coldPlug == config.NoPort && hotPlug == config.NoPort {
 		return nil
 	}
+
+	if machineType != "q35" && machineType != "virt" {
+		return nil
+	}
+
 	var port config.PCIePort
 	if coldPlug != config.NoPort {
 		port = coldPlug
@@ -1701,10 +1698,13 @@ func checkPCIeConfig(coldPlug config.PCIePort, hotPlug config.PCIePort, machineT
 	if hotPlug != config.NoPort {
 		port = hotPlug
 	}
-	if port == config.NoPort || port == config.BridgePort || port == config.RootPort || port == config.SwitchPort {
+	if port == config.NoPort {
+		return fmt.Errorf("invalid vfio_port=%s setting, use on of %s, %s, %s",
+			port, config.BridgePort, config.RootPort, config.SwitchPort)
+	}
+	if port == config.BridgePort || port == config.RootPort || port == config.SwitchPort {
 		return nil
 	}
-
 	return fmt.Errorf("invalid vfio_port=%s setting, allowed values %s, %s, %s, %s",
 		coldPlug, config.NoPort, config.BridgePort, config.RootPort, config.SwitchPort)
 }
