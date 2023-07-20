@@ -178,22 +178,22 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODe
 		}
 		id := utils.MakeNameID("vfio", device.ID+strconv.Itoa(i), maxDevIDSize)
 
-		pciClass := getPCIDeviceProperty(deviceBDF, PCISysFsDevicesClass)
-		// We need to ignore Host or PCI Bridges that are in the same IOMMU group as the
-		// passed-through devices. One CANNOT pass-through a PCI bridge or Host bridge.
-		// Class 0x0604 is PCI bridge, 0x0600 is Host bridge
-		ignorePCIDevice, err := checkIgnorePCIClass(pciClass, deviceBDF, 0x0600)
-		if err != nil {
-			return nil, err
-		}
-		if ignorePCIDevice {
-			continue
-		}
-
 		var vfio config.VFIODev
 
 		switch vfioDeviceType {
 		case config.VFIOPCIDeviceNormalType, config.VFIOPCIDeviceMediatedType:
+			// This is vfio-pci and vfio-mdev specific
+			pciClass := getPCIDeviceProperty(deviceBDF, PCISysFsDevicesClass)
+			// We need to ignore Host or PCI Bridges that are in the same IOMMU group as the
+			// passed-through devices. One CANNOT pass-through a PCI bridge or Host bridge.
+			// Class 0x0604 is PCI bridge, 0x0600 is Host bridge
+			ignorePCIDevice, err := checkIgnorePCIClass(pciClass, deviceBDF, 0x0600)
+			if err != nil {
+				return nil, err
+			}
+			if ignorePCIDevice {
+				continue
+			}
 			// Do not directly assign to `vfio` -- need to access field still
 			vfio = config.VFIODev{
 				ID:       id,

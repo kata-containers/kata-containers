@@ -351,3 +351,32 @@ func (q *qemuS390x) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 		return devices, firmware, fmt.Errorf("Unsupported guest protection technology: %v", q.protection)
 	}
 }
+
+func (q *qemuS390x) appendVFIODevice(devices []govmmQemu.Device, vfioDev config.VFIODev) []govmmQemu.Device {
+	if vfioDev.SysfsDev == "" {
+		return devices
+	}
+
+	if len(vfioDev.APDevices) > 0 {
+		devices = append(devices,
+			govmmQemu.VFIODevice{
+				SysfsDev:  vfioDev.SysfsDev,
+				Transport: govmmQemu.TransportAP,
+			},
+		)
+		return devices
+
+	}
+	devices = append(devices,
+		govmmQemu.VFIODevice{
+			SysfsDev: vfioDev.SysfsDev,
+		},
+	)
+	return devices
+}
+
+// Query QMP to find a device's PCI path given its QOM path or ID
+func (q *qemuArchBase) qomGetPciPath(qemuID string, qmpCh *qmpChannel) (types.PciPath, error) {
+	hvLogger.Warnf("qomGetPciPath not implemented for s390x")
+	return types.PciPath{}, nil
+}

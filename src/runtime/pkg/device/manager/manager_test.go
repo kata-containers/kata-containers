@@ -132,6 +132,8 @@ func TestAttachVFIODevice(t *testing.T) {
 		HostPath:      path,
 		ContainerPath: path,
 		DevType:       "c",
+		ColdPlug:      false,
+		Port:          config.RootPort,
 	}
 
 	device, err := dm.NewDevice(deviceInfo)

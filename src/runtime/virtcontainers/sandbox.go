@@ -619,6 +619,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	// Aggregate all the containner devices for hot-plug and use them to dedcue
 	// the correct amount of ports to reserve for the hypervisor.
 	hotPlugVFIO := (sandboxConfig.HypervisorConfig.HotPlugVFIO != config.NoPort)
+	stripVFIO := sandboxConfig.VfioMode == config.VFIOModeGuestKernel
 
 	var vfioDevices []config.DeviceInfo
 	// vhost-user-block device is a PCIe device in Virt, keep track of it
@@ -644,7 +645,9 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 				// We need to remove the devices marked for cold-plug
 				// otherwise at the container level the kata-agent
 				// will try to hot-plug them.
-				sandboxConfig.Containers[cnt].DeviceInfos[dev].ID = "remove-we-are-cold-plugging"
+				if stripVFIO {
+					sandboxConfig.Containers[cnt].DeviceInfos[dev].ID = "remove-we-are-cold-plugging"
+				}
 			}
 		}
 		var filteredDevices []config.DeviceInfo
@@ -656,6 +659,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		sandboxConfig.Containers[cnt].DeviceInfos = filteredDevices
 
 	}
+
 	sandboxConfig.HypervisorConfig.VFIODevices = vfioDevices
 	sandboxConfig.HypervisorConfig.VhostUserBlkDevices = vhostUserBlkDevices
 
