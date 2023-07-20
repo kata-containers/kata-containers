@@ -115,8 +115,6 @@ options:
 	cc-sev-rootfs-initrd
 	cc-se-image
 	cc-shimv2
-	cc-sev-ovmf
-	cc-x86_64-ovmf
 EOF
 
 	exit "${return_code}"
@@ -354,38 +352,6 @@ install_cc_tdx_td_shim() {
 
 	DESTDIR="${destdir}" PREFIX="${cc_prefix}" "${td_shim_builder}"
 	tar xvf "${builddir}/td-shim.tar.gz" -C "${destdir}"
-}
-
-install_cc_tee_ovmf() {
-	tee="${1}"
-	tarball_name="${2}"
-
-	local component_name="ovmf"
-	local component_version="$(get_from_kata_deps "externals.ovmf.${tee}.version")"
-	[ "${tee}" == "tdx" ] && component_name="tdvf"
-	install_cached_tarball_component \
-		"${component_name}" \
-		"${jenkins_url}/job/kata-containers-2.0-${component_name}-cc-$(uname -m)/${cached_artifacts_path}" \
-		"${component_version}" \
-		"$(get_ovmf_image_name)" \
-		"${final_tarball_name}" \
-		"${final_tarball_path}" \
-		&& return 0
-
-	DESTDIR="${destdir}" PREFIX="${cc_prefix}" ovmf_build="${tee}" "${ovmf_builder}"
-	tar xvf "${builddir}/${tarball_name}" -C "${destdir}"
-}
-
-install_cc_tdx_tdvf() {
-	install_cc_tee_ovmf "tdx" "edk2-staging-tdx.tar.gz"
-}
-
-install_cc_sev_ovmf(){
- 	install_cc_tee_ovmf "sev" "edk2-sev.tar.gz"
-}
-
-install_cc_x86_64_ovmf(){
- 	install_cc_tee_ovmf "x86_64" "edk2-x86_64.tar.gz"
 }
 
 #Install guest image
@@ -875,12 +841,6 @@ handle_build() {
 	cc-shim-v2) install_cc_shimv2 ;;
 
 	cc-tdx-td-shim) install_cc_tdx_td_shim ;;
-
-	cc-tdx-tdvf) install_cc_tdx_tdvf ;;
-
-	cc-sev-ovmf) install_cc_sev_ovmf ;;
-
-	cc-x86_64-ovmf) install_cc_x86_64_ovmf ;;
 
 	cloud-hypervisor) install_clh ;;
 

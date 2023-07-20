@@ -13,9 +13,6 @@ ARCH := $(shell uname -m)
 ifeq ($(ARCH), x86_64)
 EXTRA_TARBALL=\
 	cc-tdx-td-shim-tarball \
-	cc-tdx-tdvf-tarball \
-	cc-sev-ovmf-tarball \
-	cc-x86_64-ovmf-tarball \
 	cc-sev-rootfs-initrd-tarball \
 	cc-tdx-rootfs-image-tarball
 endif
@@ -176,13 +173,4 @@ cc-tdx-td-shim-tarball:
 	${MAKE} $@-build
 
 cc-shim-v2-tarball:
-	${MAKE} $@-build
-
-cc-tdx-tdvf-tarball:
-	${MAKE} $@-build
-
-cc-sev-ovmf-tarball:
-	${MAKE} $@-build
-
-cc-x86_64-ovmf-tarball:
 	${MAKE} $@-build
