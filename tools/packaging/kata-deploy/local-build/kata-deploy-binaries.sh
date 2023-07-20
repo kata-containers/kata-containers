@@ -346,14 +346,6 @@ install_kernel_nvidia_gpu_tdx_experimental() {
 		"-x tdx -g nvidia -u ${kernel_url} -H deb"
 }
 
-#Install experimental kernel asset
-install_kernel_experimental() {
-	install_kernel_helper \
-		"assets.kernel-experimental.version" \
-		"kernel-experimental" \
-		"-f -b experimental"
-}
-
 #Install experimental TDX kernel asset
 install_kernel_tdx_experimental() {
 	local kernel_url="$(get_from_kata_deps assets.kernel-tdx-experimental.url)"
@@ -647,8 +639,6 @@ handle_build() {
 	kernel) install_kernel ;;
 
 	kernel-dragonball-experimental) install_kernel_dragonball_experimental ;;
-
-	kernel-experimental) install_kernel_experimental ;;
 
 	kernel-nvidia-gpu) install_kernel_nvidia_gpu ;;
 

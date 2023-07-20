@@ -179,11 +179,6 @@ assets:
       url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
       version: "v5.19.2"
 
-  kernel-experimental:
-    description: "Linux kernel with virtio-fs support"
-    url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
-    tag: "v5.13.10"
-
   kernel-arm-experimental:
     description: "Linux kernel with cpu/mem hotplug support on arm64"
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"

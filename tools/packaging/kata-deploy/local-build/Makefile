@@ -64,9 +64,6 @@ firecracker-tarball:
 kernel-dragonball-experimental-tarball:
 	${MAKE} $@-build
 
-kernel-experimental-tarball:
-	${MAKE} $@-build
-
 kernel-nvidia-gpu-tarball:
 	${MAKE} $@-build
 
