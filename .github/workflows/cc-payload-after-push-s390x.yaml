@@ -14,13 +14,13 @@ jobs:
         measured_rootfs:
           - no
         asset:
-          - cc-qemu
+          - qemu
           - cc-rootfs-initrd
           - cc-se-image
-          - cc-virtiofsd
+          - virtiofsd
         include:
           - measured_rootfs: yes
-            asset: cc-kernel
+            asset: kernel
           - measured_rootfs: yes
             asset: cc-rootfs-image
     steps:
