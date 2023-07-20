@@ -376,7 +376,7 @@ func (q *qemuS390x) appendVFIODevice(devices []govmmQemu.Device, vfioDev config.
 }
 
 // Query QMP to find a device's PCI path given its QOM path or ID
-func (q *qemuArchBase) qomGetPciPath(qemuID string, qmpCh *qmpChannel) (types.PciPath, error) {
+func (q *qemuS390x) qomGetPciPath(qemuID string, qmpCh *qmpChannel) (types.PciPath, error) {
 	hvLogger.Warnf("qomGetPciPath not implemented for s390x")
 	return types.PciPath{}, nil
 }
