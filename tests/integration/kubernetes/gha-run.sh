@@ -168,10 +168,18 @@ function delete_cluster() {
 function get_nodes_and_pods_info() {
     describe_pods="${1:-"no"}"
 
+    echo "::group::Get node information"
     kubectl get nodes -o wide --show-labels=true
+    echo "::endgroup::"
+    echo ""
+    echo "::group::Get all the pods running"
     kubectl get pods -A
+    echo "::endgroup::"
+    echo ""
     if [[ "${describe_pods}" == "yes" ]]; then
+	echo "::group::Describe all the pods"
     	kubectl describe pods -A
+	echo "::endgroup::"
     fi
     kubectl debug $(kubectl get nodes -o name) -it --image=quay.io/kata-containers/kata-debug:latest
 }
