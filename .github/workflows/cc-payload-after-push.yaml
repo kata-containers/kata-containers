@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - CCv0
+  workflow_dispatch:
 
 jobs:
   build-assets-amd64:
