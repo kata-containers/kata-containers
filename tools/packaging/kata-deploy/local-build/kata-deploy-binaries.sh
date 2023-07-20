@@ -118,7 +118,6 @@ options:
 	cc-sev-rootfs-initrd
 	cc-se-image
 	cc-shimv2
-	cc-virtiofsd
 	cc-sev-ovmf
 	cc-x86_64-ovmf
 EOF
@@ -367,25 +366,6 @@ install_cc_shimv2() {
 	fi
 	info "extra_opts: ${extra_opts}"
 	DESTDIR="${destdir}" PREFIX="${cc_prefix}" EXTRA_OPTS="${extra_opts}" "${shimv2_builder}"
-}
-
-# Install static CC virtiofsd asset
-install_cc_virtiofsd() {
-	local virtiofsd_version="$(get_from_kata_deps "externals.virtiofsd.version")-$(get_from_kata_deps "externals.virtiofsd.toolchain")"
-	install_cached_tarball_component \
-		"virtiofsd" \
-		"${jenkins_url}/job/kata-containers-2.0-virtiofsd-cc-$(uname -m)/${cached_artifacts_path}" \
-		"${virtiofsd_version}" \
-		"$(get_virtiofsd_image_name)" \
-		"${final_tarball_name}" \
-		"${final_tarball_path}" \
-		&& return 0
-
-	info "build static CC virtiofsd"
-	"${virtiofsd_builder}"
-	info "Install static CC virtiofsd"
-	mkdir -p "${destdir}/${cc_prefix}/libexec/"
-	sudo install -D --owner root --group root --mode 0744 virtiofsd/virtiofsd "${destdir}/${cc_prefix}/libexec/virtiofsd"
 }
 
 # Install cached kernel compoenent
@@ -973,7 +953,6 @@ handle_build() {
 		install_cc_kernel
 		install_cc_image
 		install_cc_shimv2
-		install_cc_virtiofsd
 		install_cc_sev_image
 		;;
 
@@ -990,8 +969,6 @@ handle_build() {
 	cc-tdx-rootfs-image) install_cc_tdx_image ;;
 
 	cc-shim-v2) install_cc_shimv2 ;;
-
-	cc-virtiofsd) install_cc_virtiofsd ;;
 
 	cc-tdx-kernel) install_cc_tdx_kernel ;;
 

@@ -155,7 +155,6 @@ cc-parallel: $(MK_DIR)/dockerbuild/install_yq.sh
 
 cc: cc-kernel-tarball \
 	cc-rootfs-image-tarball \
-	cc-virtiofsd-tarball \
 	cc-shim-v2-tarball \
 	${EXTRA_TARBALL}
 
@@ -178,9 +177,6 @@ cc-tdx-rootfs-image-tarball:
 	${MAKE} $@-build
 
 cc-shim-v2-tarball:
-	${MAKE} $@-build
-
-cc-virtiofsd-tarball:
 	${MAKE} $@-build
 
 cc-tdx-kernel-tarball:
