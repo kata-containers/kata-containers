@@ -83,6 +83,12 @@ convolutional models.
 
 For further details see the [machine learning tests documentation](machine_learning).
 
+### `CPU`
+
+Tests related with `CPU` performance.
+
+For further details see the [`cpu` tests documentation](cpu).
+
 ## Saving Results
 
 In order to ensure continuity, and thus testing and historical tracking of results,
