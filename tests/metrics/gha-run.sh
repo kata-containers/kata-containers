@@ -81,8 +81,6 @@ function run_test_blogbench() {
 
 function run_test_tensorflow() {
 	info "Running TensorFlow test using ${KATA_HYPERVISOR} hypervisor"
-	# ToDo: remove the exit once the metrics workflow is stable
-	exit 0
 
 	bash tests/metrics/machine_learning/tensorflow.sh 1 20
 }
