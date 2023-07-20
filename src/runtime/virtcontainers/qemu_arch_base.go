@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"runtime"
 	"strings"
 
@@ -23,6 +24,11 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
+
+// A deeper PCIe topology than 5 is already not advisable just for the sake
+// of having enough buffer we limit ourselves to 10 and exit if we reach
+// the root bus
+const maxPCIeTopoDepth = 10
 
 type qemuArch interface {
 	// enableNestingChecks nesting checks will be honoured
@@ -158,6 +164,12 @@ type qemuArch interface {
 	// scans the PCIe space and returns the biggest BAR sizes for 32-bit
 	// and 64-bit addressable memory
 	getBARsMaxAddressableMemory() (uint64, uint64)
+
+	// Query QMP to find a device's PCI path given its QOM path or ID
+	qomGetPciPath(qemuID string, qmpCh *qmpChannel) (types.PciPath, error)
+
+	// Query QMP to find the PCI slot of a device, given its QOM path or ID
+	qomGetSlot(qomPath string, qmpCh *qmpChannel) (types.PciSlot, error)
 }
 
 type qemuArchBase struct {
@@ -880,4 +892,86 @@ func (q *qemuArchBase) setPFlash(p []string) {
 func (q *qemuArchBase) appendProtectionDevice(devices []govmmQemu.Device, firmware, firmwareVolume string) ([]govmmQemu.Device, string, error) {
 	hvLogger.WithField("arch", runtime.GOARCH).Warnf("Confidential Computing has not been implemented for this architecture")
 	return devices, firmware, nil
+}
+
+// Query QMP to find the PCI slot of a device, given its QOM path or ID
+func (q *qemuArchBase) qomGetSlot(qomPath string, qmpCh *qmpChannel) (types.PciSlot, error) {
+	addr, err := qmpCh.qmp.ExecQomGet(qmpCh.ctx, qomPath, "addr")
+	if err != nil {
+		return types.PciSlot{}, err
+	}
+	addrf, ok := addr.(float64)
+	// XXX going via float makes no real sense, but that's how
+	// JSON works, and we'll get away with it for the small values
+	// we have here
+	if !ok {
+		return types.PciSlot{}, fmt.Errorf("addr QOM property of %q is %T not a number", qomPath, addr)
+	}
+	addri := int(addrf)
+
+	slotNum, funcNum := addri>>3, addri&0x7
+	if funcNum != 0 {
+		return types.PciSlot{}, fmt.Errorf("Unexpected non-zero PCI function (%02x.%1x) on %q",
+			slotNum, funcNum, qomPath)
+	}
+
+	return types.PciSlotFromInt(slotNum)
+}
+
+// Query QMP to find a device's PCI path given its QOM path or ID
+func (q *qemuArchBase) qomGetPciPath(qemuID string, qmpCh *qmpChannel) (types.PciPath, error) {
+
+	var slots []types.PciSlot
+
+	devSlot, err := q.qomGetSlot(qemuID, qmpCh)
+	if err != nil {
+		return types.PciPath{}, err
+	}
+	slots = append(slots, devSlot)
+
+	// This only works for Q35 and Virt
+	r, _ := regexp.Compile(`^/machine/.*/pcie.0`)
+
+	var parentPath = qemuID
+	// We do not want to use a forever loop here, a deeper PCIe topology
+	// than 5 is already not advisable just for the sake of having enough
+	// buffer we limit ourselves to 10 and leave the loop early if we hit
+	// the root bus.
+	for i := 1; i <= maxPCIeTopoDepth; i++ {
+		parenBusQOM, err := qmpCh.qmp.ExecQomGet(qmpCh.ctx, parentPath, "parent_bus")
+		if err != nil {
+			return types.PciPath{}, err
+		}
+
+		busQOM, ok := parenBusQOM.(string)
+		if !ok {
+			return types.PciPath{}, fmt.Errorf("parent_bus QOM property of %s is %t not a string", qemuID, parenBusQOM)
+		}
+
+		// If we hit /machine/q35/pcie.0 we're done this is the root bus
+		// we climbed the complete hierarchy
+		if r.Match([]byte(busQOM)) {
+			break
+		}
+
+		// `bus` is the QOM path of the QOM bus object, but we need
+		// the PCI parent_bus which manages that bus.  There doesn't seem
+		// to be a way to get that other than to simply drop the last
+		// path component.
+		idx := strings.LastIndex(busQOM, "/")
+		if idx == -1 {
+			return types.PciPath{}, fmt.Errorf("Bus has unexpected QOM path %s", busQOM)
+		}
+		parentBus := busQOM[:idx]
+
+		parentSlot, err := q.qomGetSlot(parentBus, qmpCh)
+		if err != nil {
+			return types.PciPath{}, err
+		}
+
+		// Prepend the slots, since we're climbing the hierarchy
+		slots = append([]types.PciSlot{parentSlot}, slots...)
+		parentPath = parentBus
+	}
+	return types.PciPathFromSlots(slots...)
 }
