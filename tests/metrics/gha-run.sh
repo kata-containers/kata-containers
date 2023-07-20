@@ -83,6 +83,15 @@ function run_test_blogbench() {
 	check_metrics
 }
 
+function run_test_tensorflow() {
+	info "Running TensorFlow test using ${KATA_HYPERVISOR} hypervisor"
+	# ToDo: remove the exit once the metrics workflow is stable
+	exit 0
+
+	create_symbolic_links ${KATA_HYPERVISOR}
+	bash tests/metrics/machine_learning/tensorflow.sh 1 20
+}
+
 function main() {
 	action="${1:-}"
 	case "${action}" in
@@ -92,6 +101,7 @@ function main() {
 		run-test-memory-usage) run_test_memory_usage ;;
 		run-test-memory-usage-inside-container) run_test_memory_usage_inside_container ;;
 		run-test-blogbench) run_test_blogbench ;;
+		run-test-tensorflow) run_test_tensorflow ;;
 		*) >&2 die "Invalid argument" ;;
 	esac
 }
