@@ -96,7 +96,7 @@ impl InitialSizeManager {
     pub fn setup_config(&self, config: &mut TomlConfig) -> Result<()> {
         // update this data to the hypervisor config for later use by hypervisor
         let hypervisor_name = &config.runtime.hypervisor_name;
-        let mut hv = config
+        let hv = config
             .hypervisor
             .get_mut(hypervisor_name)
             .context("failed to get hypervisor config")?;

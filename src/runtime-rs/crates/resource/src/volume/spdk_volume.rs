@@ -73,7 +73,7 @@ impl SPDKVolume {
             }
         }
 
-        let mut vhu_blk_config = &mut VhostUserConfig {
+        let vhu_blk_config = &mut VhostUserConfig {
             socket_path: device,
             device_type: VhostUserType::Blk("vhost-user-blk-pci".to_owned()),
             ..Default::default()
