@@ -152,6 +152,10 @@ function cleanup() {
     kubectl delete ${cleanup_spec}
     kubectl delete -f "${tools_dir}/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
     kubectl delete -f "${tools_dir}/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml"
+
+   if [ "${platform}" = "aks" ]; then
+	   delete_cluster
+   fi
 }
 
 function delete_cluster() {
@@ -190,7 +194,7 @@ function main() {
         cleanup-sev) cleanup "sev" ;;
         cleanup-snp) cleanup "snp" ;;
         cleanup-tdx) cleanup "tdx" ;;
-        delete-cluster) delete_cluster ;;
+        delete-cluster) cleanup "aks" ;;
         *) >&2 echo "Invalid argument"; exit 2 ;;
     esac
 }
