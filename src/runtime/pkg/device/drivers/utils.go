@@ -216,6 +216,7 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODe
 				SysfsDev:  deviceSysfsDev,
 				Type:      config.VFIOAPDeviceMediatedType,
 				APDevices: devices,
+				Port:      device.Port,
 			}
 		default:
 			return nil, fmt.Errorf("Failed to append device: VFIO device type unrecognized")
