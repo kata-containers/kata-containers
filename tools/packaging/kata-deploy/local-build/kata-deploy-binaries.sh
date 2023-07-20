@@ -247,7 +247,7 @@ install_cached_kernel_tarball_component() {
 	install_cached_tarball_component \
 		"${kernel_name}" \
 		"${jenkins_url}/job/kata-containers-main-${kernel_name}-$(uname -m)/${cached_artifacts_path}" \
-		"${kernel_version}-${kernel_kata_config_version}" \
+		"${kernel_version}-${kernel_kata_config_version}-$(get_last_modification $(dirname $kernel_builder))" \
 		"$(get_kernel_image_name)" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
@@ -261,7 +261,7 @@ install_cached_kernel_tarball_component() {
 	install_cached_tarball_component \
 		"${kernel_name}" \
 		"${jenkins_url}/job/kata-containers-main-${kernel_name}-$(uname -m)/${cached_artifacts_path}" \
-		"${kernel_version}-${kernel_kata_config_version}" \
+		"${kernel_version}-${kernel_kata_config_version}-$(get_last_modification $(dirname $kernel_builder))" \
 		"$(get_kernel_image_name)" \
 		"kata-static-kernel-sev-modules.tar.xz" \
 		"${workdir}/kata-static-kernel-sev-modules.tar.xz" \
