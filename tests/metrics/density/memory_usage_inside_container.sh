@@ -38,7 +38,7 @@ count_iters=0
 # valid_result: if value stored is '1' the result is valid, '0' otherwise
 valid_result=0
 
-parse_results() {
+function parse_results() {
 	local raw_results="${1}"
 
 	# Variables used for sum cummulative values in the case of two or more reps.
@@ -71,7 +71,7 @@ parse_results() {
 	info "Iteration# ${count_iters}  memtotal: ${memtotal}  memfree: ${memfree}  memavailable: ${memavailable}"
 }
 
-store_results_json() {
+function store_results_json() {
 	metrics_json_start_array
 	memtotalAvg=$(echo "scale=2; ${memtotalAvg} / ${count_iters}" | bc)
 	memfreeAvg=$(echo "scale=2; ${memfreeAvg} / ${count_iters}" | bc)
