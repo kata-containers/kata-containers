@@ -173,6 +173,7 @@ function get_nodes_and_pods_info() {
     if [[ "${describe_pods}" == "yes" ]]; then
     	kubectl describe pods -A
     fi
+    kubectl debug $(kubectl get nodes -o name) -it --image=quay.io/kata-containers/kata-debug:latest
 }
 
 function main() {
