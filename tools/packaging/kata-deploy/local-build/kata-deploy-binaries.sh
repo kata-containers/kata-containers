@@ -37,8 +37,6 @@ readonly nydus_builder="${static_build_dir}/nydus/build.sh"
 readonly rootfs_builder="${repo_root_dir}/tools/packaging/guest-image/build_image.sh"
 readonly se_image_builder="${repo_root_dir}/tools/packaging/guest-image/build_se_image.sh"
 
-readonly cc_prefix="/opt/confidential-containers"
-
 source "${script_dir}/../../scripts/lib.sh"
 
 readonly jenkins_url="http://jenkins.katacontainers.io"
@@ -273,7 +271,7 @@ install_cc_image() {
 	info "Create CC image configured with AA_KBC=${AA_KBC}"
 	"${rootfs_builder}" \
 		--imagetype="${image_type}" \
-		--prefix="${cc_prefix}" \
+		--prefix="${prefix}" \
 		--destdir="${destdir}" \
 		--image_initrd_suffix="${image_initrd_suffix}" \
 		--root_hash_suffix="${root_hash_suffix}"
@@ -337,7 +335,7 @@ install_cc_shimv2() {
 		fi
 	fi
 	info "extra_opts: ${extra_opts}"
-	DESTDIR="${destdir}" PREFIX="${cc_prefix}" EXTRA_OPTS="${extra_opts}" "${shimv2_builder}"
+	DESTDIR="${destdir}" PREFIX="${prefix}" EXTRA_OPTS="${extra_opts}" "${shimv2_builder}"
 }
 
 install_cc_tdx_td_shim() {
@@ -350,7 +348,7 @@ install_cc_tdx_td_shim() {
 		"${final_tarball_path}" \
 		&& return 0
 
-	DESTDIR="${destdir}" PREFIX="${cc_prefix}" "${td_shim_builder}"
+	DESTDIR="${destdir}" PREFIX="${prefix}" "${td_shim_builder}"
 	tar xvf "${builddir}/td-shim.tar.gz" -C "${destdir}"
 }
 
@@ -456,7 +454,7 @@ install_cached_kernel_tarball_component() {
 install_cc_initrd() {
 	export AA_KBC="${AA_KBC:-offline_fs_kbc}"
 	info "Create CC initrd configured with AA_KBC=${AA_KBC}"
-	"${rootfs_builder}" --imagetype=initrd --prefix="${cc_prefix}" --destdir="${destdir}"
+	"${rootfs_builder}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}"
 }
 
 #Install kernel asset
