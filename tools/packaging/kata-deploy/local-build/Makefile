@@ -12,7 +12,6 @@ ARCH := $(shell uname -m)
 
 ifeq ($(ARCH), x86_64)
 EXTRA_TARBALL=\
-	cc-tdx-kernel-tarball \
 	cc-tdx-td-shim-tarball \
 	cc-tdx-tdvf-tarball \
 	cc-sev-ovmf-tarball \
@@ -153,13 +152,10 @@ cc-tarball: | cc merge-builds
 cc-parallel: $(MK_DIR)/dockerbuild/install_yq.sh
 	${MAKE} -f $(MK_PATH) cc -j$$(( $$(nproc) - 1  )) V=
 
-cc: cc-kernel-tarball \
+cc:\
 	cc-rootfs-image-tarball \
 	cc-shim-v2-tarball \
 	${EXTRA_TARBALL}
-
-cc-kernel-tarball:
-	${MAKE} $@-build
 
 cc-rootfs-image-tarball:
 	${MAKE} $@-build
@@ -167,25 +163,19 @@ cc-rootfs-image-tarball:
 cc-rootfs-initrd-tarball:
 	${MAKE} $@-build
 
-cc-sev-rootfs-initrd-tarball: cc-sev-kernel-tarball
+cc-sev-rootfs-initrd-tarball: kernel-sev-tarball
 	${MAKE} $@-build
 
-cc-se-image-tarball: cc-kernel-tarball cc-rootfs-initrd-tarball
+cc-se-image-tarball: kernel-tarball cc-rootfs-initrd-tarball
 	${MAKE} $@-build
 
 cc-tdx-rootfs-image-tarball:
 	${MAKE} $@-build
 
-cc-shim-v2-tarball:
-	${MAKE} $@-build
-
-cc-tdx-kernel-tarball:
-	${MAKE} $@-build
-
-cc-sev-kernel-tarball:
-	${MAKE} $@-build
-
 cc-tdx-td-shim-tarball:
+	${MAKE} $@-build
+
+cc-shim-v2-tarball:
 	${MAKE} $@-build
 
 cc-tdx-tdvf-tarball:

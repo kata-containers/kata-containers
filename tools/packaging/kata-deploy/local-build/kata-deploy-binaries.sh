@@ -110,9 +110,6 @@ options:
 	tdvf
 	virtiofsd
 	cc
-	cc-kernel
-	cc-tdx-kernel
-	cc-sev-kernel
 	cc-rootfs-image
 	cc-rootfs-initrd
 	cc-sev-rootfs-initrd
@@ -303,29 +300,6 @@ install_cc_tdx_image() {
 	install_cc_image "${AA_KBC}" "${image_type}" "${image_suffix}" "${root_hash_suffix}" "tdx"
 }
 
-#Install CC kernel asset
-install_cc_kernel() {
-	export KATA_BUILD_CC=yes
-	export kernel_version="$(yq r $versions_yaml assets.kernel.version)"
-
-	local kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
-
-	install_cached_tarball_component \
-		"kernel" \
-		"${jenkins_url}/job/kata-containers-2.0-kernel-cc-$(uname -m)/${cached_artifacts_path}" \
-		"${kernel_version}-${kernel_kata_config_version}" \
-		"$(get_kernel_image_name)" \
-		"${final_tarball_name}" \
-		"${final_tarball_path}" \
-		&& return 0
-
-	if [ "${MEASURED_ROOTFS}" == "yes" ]; then
-		info "build initramfs for cc kernel"
-		"${initramfs_builder}"
-	fi
-	DESTDIR="${destdir}" PREFIX="${cc_prefix}" "${kernel_builder}" -f -v "${kernel_version}"
-}
-
 #Install all components that are not assets
 install_cc_shimv2() {
 	local shim_v2_last_commit="$(get_last_modification "${repo_root_dir}/src/runtime")"
@@ -366,73 +340,6 @@ install_cc_shimv2() {
 	fi
 	info "extra_opts: ${extra_opts}"
 	DESTDIR="${destdir}" PREFIX="${cc_prefix}" EXTRA_OPTS="${extra_opts}" "${shimv2_builder}"
-}
-
-# Install cached kernel compoenent
-install_cached_kernel_component() {
-	tee="${1}"
-	kernel_version="${2}"
-	module_dir="${3:-}"
-
-	local kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
-
-	install_cached_tarball_component \
-		"kernel" \
-		"${jenkins_url}/job/kata-containers-2.0-kernel-${tee}-cc-$(uname -m)/${cached_artifacts_path}" \
-		"${kernel_version}-${kernel_kata_config_version}" \
-		"$(get_kernel_image_name)" \
-		"${final_tarball_name}" \
-		"${final_tarball_path}" \
-		|| return 1
-
-	[ "${tee}" == "tdx" ] && return 0
-
-	# SEV specific code path
-	install_cached_tarball_component \
-		"kernel-modules" \
-		"${jenkins_url}/job/kata-containers-2.0-kernel-sev-cc-$(uname -m)/${cached_artifacts_path}" \
-		"${kernel_version}" \
-		"$(get_kernel_image_name)" \
-		"kata-static-cc-sev-kernel-modules.tar.xz" \
-		"${workdir}/kata-static-cc-sev-kernel-modules.tar.xz" \
-	|| return 1
-
-	mkdir -p "${module_dir}"
-	tar xvf "${workdir}/kata-static-cc-sev-kernel-modules.tar.xz" -C  "${module_dir}" && return 0
-
-	return 1
-}
-
-#Install CC kernel assert, with TEE support
-install_cc_tee_kernel() {
-	export KATA_BUILD_CC=yes
-	tee="${1}"
-	kernel_version="${2}"
-	module_dir="${3:-}"
-
-	[[ "${tee}" != "tdx" && "${tee}" != "sev" ]] && die "Non supported TEE"
-
-	export kernel_version=${kernel_version}
-
-	install_cached_kernel_component "${tee}" "${kernel_version}" "${module_dir}" && return 0
-
-	info "build initramfs for TEE kernel"
-	"${initramfs_builder}"
-	kernel_url="$(yq r $versions_yaml assets.kernel.${tee}.url)"
-	DESTDIR="${destdir}" PREFIX="${cc_prefix}" "${kernel_builder}" -x "${tee}" -v "${kernel_version}" -u "${kernel_url}"
-}
-
-#Install CC kernel assert for Intel TDX
-install_cc_tdx_kernel() {
-	kernel_version="$(yq r $versions_yaml assets.kernel.tdx.tag)"
-	install_cc_tee_kernel "tdx" "${kernel_version}"
-}
-
-install_cc_sev_kernel() {
-	kernel_version="$(yq r $versions_yaml assets.kernel.sev.version)"
-	default_patches_dir="${repo_root_dir}/tools/packaging/kernel/patches"
-	module_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/cc-sev-kernel/builddir/kata-linux-${kernel_version#v}-$(get_config_version)/lib/modules/${kernel_version#v}"
-	install_cc_tee_kernel "sev" "${kernel_version}" "${module_dir}"
 }
 
 install_cc_tdx_td_shim() {
@@ -950,13 +857,10 @@ handle_build() {
 		;;
 
 	cc)
-		install_cc_kernel
 		install_cc_image
 		install_cc_shimv2
 		install_cc_sev_image
 		;;
-
-	cc-kernel) install_cc_kernel ;;
 
 	cc-rootfs-image) install_cc_image ;;
 
@@ -969,10 +873,6 @@ handle_build() {
 	cc-tdx-rootfs-image) install_cc_tdx_image ;;
 
 	cc-shim-v2) install_cc_shimv2 ;;
-
-	cc-tdx-kernel) install_cc_tdx_kernel ;;
-
-	cc-sev-kernel) install_cc_sev_kernel ;;
 
 	cc-tdx-td-shim) install_cc_tdx_td_shim ;;
 
