@@ -644,6 +644,8 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 			}
 
 			if hotPlugVFIO && isVFIODevice {
+				device.ColdPlug = false
+				device.Port = sandboxConfig.HypervisorConfig.HotPlugVFIO
 				vfioDevices = append(vfioDevices, device)
 				sandboxConfig.Containers[cnt].DeviceInfos[dev].Port = sandboxConfig.HypervisorConfig.HotPlugVFIO
 			}
@@ -686,6 +688,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	}
 
 	for _, dev := range vfioDevices {
+		s.Logger().Info("cold-plug device: ", dev)
 		_, err := s.AddDevice(ctx, dev)
 		if err != nil {
 			s.Logger().WithError(err).Debug("Cannot cold-plug add device")

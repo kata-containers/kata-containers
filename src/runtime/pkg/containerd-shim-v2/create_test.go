@@ -334,7 +334,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (runtimeConfig string, 
 	sharedFS := "virtio-9p"
 	virtioFSdaemon := path.Join(dir, "virtiofsd")
 	hotPlugVFIO = config.BridgePort
-	coldPlugVFIO = config.RootPort
+	coldPlugVFIO = config.NoPort
 
 	configFileOptions := ktu.RuntimeConfigOptions{
 		Hypervisor:        "qemu",
