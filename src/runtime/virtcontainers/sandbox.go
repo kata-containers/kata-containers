@@ -613,6 +613,36 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return nil, err
 	}
 
+	coldPlugVFIO, err := s.coldOrHotPlugVFIO(&sandboxConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	// store doesn't require hypervisor to be stored immediately
+	if err = s.hypervisor.CreateVM(ctx, s.id, s.network, &sandboxConfig.HypervisorConfig); err != nil {
+		return nil, err
+	}
+
+	if s.disableVMShutdown, err = s.agent.init(ctx, s, sandboxConfig.AgentConfig); err != nil {
+		return nil, err
+	}
+
+	if !coldPlugVFIO {
+		return s, nil
+	}
+
+	for _, dev := range sandboxConfig.HypervisorConfig.VFIODevices {
+		s.Logger().Info("cold-plug device: ", dev)
+		_, err := s.AddDevice(ctx, dev)
+		if err != nil {
+			s.Logger().WithError(err).Debug("Cannot cold-plug add device")
+			return nil, err
+		}
+	}
+	return s, nil
+}
+
+func (s *Sandbox) coldOrHotPlugVFIO(sandboxConfig *SandboxConfig) (bool, error) {
 	// If we have a confidential guest we need to cold-plug the PCIe VFIO devices
 	// until we have TDISP/IDE PCIe support.
 	coldPlugVFIO := (sandboxConfig.HypervisorConfig.ColdPlugVFIO != config.NoPort)
@@ -620,8 +650,8 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	// the correct amount of ports to reserve for the hypervisor.
 	hotPlugVFIO := (sandboxConfig.HypervisorConfig.HotPlugVFIO != config.NoPort)
 
-	modeGK := (sandboxConfig.VfioMode == config.VFIOModeGuestKernel)
-	modeVFIO := (sandboxConfig.VfioMode == config.VFIOModeVFIO)
+	modeIsGK := (sandboxConfig.VfioMode == config.VFIOModeGuestKernel)
+	modeIsVFIO := (sandboxConfig.VfioMode == config.VFIOModeVFIO)
 
 	var vfioDevices []config.DeviceInfo
 	// vhost-user-block device is a PCIe device in Virt, keep track of it
@@ -639,7 +669,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 			isVFIOControlDevice := deviceManager.IsVFIOControlDevice(device.ContainerPath)
 			// vfio_mode=vfio needs the VFIO control device add it to the list
 			// of devices to be added to the VM.
-			if modeVFIO && isVFIOControlDevice {
+			if modeIsVFIO && isVFIOControlDevice && !hotPlugVFIO {
 				vfioDevices = append(vfioDevices, device)
 			}
 
@@ -656,7 +686,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 				// We need to remove the devices marked for cold-plug
 				// otherwise at the container level the kata-agent
 				// will try to hot-plug them.
-				if modeGK {
+				if modeIsGK {
 					sandboxConfig.Containers[cnt].DeviceInfos[dev].ID = "remove-we-are-cold-plugging"
 				}
 			}
@@ -668,34 +698,12 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 			}
 		}
 		sandboxConfig.Containers[cnt].DeviceInfos = filteredDevices
-
 	}
 
 	sandboxConfig.HypervisorConfig.VFIODevices = vfioDevices
 	sandboxConfig.HypervisorConfig.VhostUserBlkDevices = vhostUserBlkDevices
 
-	// store doesn't require hypervisor to be stored immediately
-	if err = s.hypervisor.CreateVM(ctx, s.id, s.network, &sandboxConfig.HypervisorConfig); err != nil {
-		return nil, err
-	}
-
-	if s.disableVMShutdown, err = s.agent.init(ctx, s, sandboxConfig.AgentConfig); err != nil {
-		return nil, err
-	}
-
-	if !coldPlugVFIO {
-		return s, nil
-	}
-
-	for _, dev := range vfioDevices {
-		s.Logger().Info("cold-plug device: ", dev)
-		_, err := s.AddDevice(ctx, dev)
-		if err != nil {
-			s.Logger().WithError(err).Debug("Cannot cold-plug add device")
-			return nil, err
-		}
-	}
-	return s, nil
+	return coldPlugVFIO, nil
 }
 
 func (s *Sandbox) createResourceController() error {

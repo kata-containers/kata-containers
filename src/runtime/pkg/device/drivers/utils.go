@@ -111,7 +111,7 @@ func GetVFIODeviceType(deviceFilePath string) (config.VFIODeviceType, error) {
 		return config.VFIODeviceErrorType, err
 	}
 
-	if strings.HasPrefix(deviceSysfsDev, vfioAPSysfsDir) {
+	if strings.Contains(deviceSysfsDev, vfioAPSysfsDir) {
 		return config.VFIOAPDeviceMediatedType, nil
 	}
 

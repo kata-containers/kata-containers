@@ -90,6 +90,100 @@ func TestNewDevice(t *testing.T) {
 	assert.Equal(t, vfioDev.DeviceInfo.GID, uint32(2))
 }
 
+func TestAttachVFIOAPDevice(t *testing.T) {
+
+	var err error
+	var ok bool
+
+	dm := &deviceManager{
+		devices: make(map[string]api.Device),
+	}
+
+	tmpDir := t.TempDir()
+	// sys/devices/vfio_ap/matrix/f94290f8-78ac-45fb-bb22-e55e519fa64f
+	testSysfsAP := "/sys/devices/vfio_ap/"
+	testDeviceAP := "f94290f8-78ac-45fb-bb22-e55e519fa64f"
+	testVFIOGroup := "42"
+
+	matrixDir := filepath.Join(tmpDir, testSysfsAP, "matrix")
+	err = os.MkdirAll(matrixDir, dirMode)
+	assert.Nil(t, err)
+
+	deviceAPFile := filepath.Join(matrixDir, testDeviceAP)
+	err = os.MkdirAll(deviceAPFile, dirMode)
+	assert.Nil(t, err)
+
+	matrixDeviceAPFile := filepath.Join(deviceAPFile, "matrix")
+	_, err = os.Create(matrixDeviceAPFile)
+	assert.Nil(t, err)
+	// create AP devices in the matrix file
+	APDevices := []byte("05.001f\n")
+	err = os.WriteFile(matrixDeviceAPFile, APDevices, 0644)
+	assert.Nil(t, err)
+
+	devicesVFIOGroupDir := filepath.Join(tmpDir, testVFIOGroup, "devices")
+	err = os.MkdirAll(devicesVFIOGroupDir, dirMode)
+	assert.Nil(t, err)
+
+	deviceAPSymlink := filepath.Join(devicesVFIOGroupDir, testDeviceAP)
+	err = os.Symlink(deviceAPFile, deviceAPSymlink)
+	assert.Nil(t, err)
+
+	savedIOMMUPath := config.SysIOMMUGroupPath
+	config.SysIOMMUGroupPath = tmpDir
+
+	savedSysBusPciDevicesPath := config.SysBusPciDevicesPath
+	config.SysBusPciDevicesPath = devicesVFIOGroupDir
+
+	defer func() {
+		config.SysIOMMUGroupPath = savedIOMMUPath
+		config.SysBusPciDevicesPath = savedSysBusPciDevicesPath
+	}()
+
+	path := filepath.Join(vfioPath, testVFIOGroup)
+	deviceInfo := config.DeviceInfo{
+		HostPath:      path,
+		ContainerPath: path,
+		DevType:       "c",
+		ColdPlug:      false,
+		Port:          config.RootPort,
+	}
+
+	device, err := dm.NewDevice(deviceInfo)
+	assert.Nil(t, err)
+	_, ok = device.(*drivers.VFIODevice)
+	assert.True(t, ok)
+
+	devReceiver := &api.MockDeviceReceiver{}
+	err = device.Attach(context.Background(), devReceiver)
+	assert.Nil(t, err)
+
+	err = device.Detach(context.Background(), devReceiver)
+	assert.Nil(t, err)
+
+	// If we omit the port setting we should fail
+	failDm := &deviceManager{
+		devices: make(map[string]api.Device),
+	}
+
+	failDeviceInfo := config.DeviceInfo{
+		HostPath:      path,
+		ContainerPath: path,
+		DevType:       "c",
+		ColdPlug:      false,
+	}
+
+	failDevice, err := failDm.NewDevice(failDeviceInfo)
+	assert.Nil(t, err)
+	_, ok = failDevice.(*drivers.VFIODevice)
+	assert.True(t, ok)
+
+	failDevReceiver := &api.MockDeviceReceiver{}
+	err = failDevice.Attach(context.Background(), failDevReceiver)
+	assert.Error(t, err)
+
+}
+
 func TestAttachVFIODevice(t *testing.T) {
 	dm := &deviceManager{
 		blockDriver: config.VirtioBlock,
