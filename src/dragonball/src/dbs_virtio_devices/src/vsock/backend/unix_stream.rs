@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::any::Any;
-use std::io::{Read, Write};
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::time::Duration;
@@ -12,66 +11,6 @@ use sendfd::RecvWithFd;
 
 use super::super::{Result, VsockError};
 use super::{VsockBackend, VsockBackendType, VsockStream};
-
-pub struct HybridUnixStreamBackend {
-    pub unix_stream: Box<dyn VsockStream>,
-    pub slave_stream: Option<Box<dyn VsockStream>>,
-}
-
-impl VsockStream for HybridUnixStreamBackend {
-    fn backend_type(&self) -> VsockBackendType {
-        self.unix_stream.backend_type()
-    }
-
-    fn set_nonblocking(&mut self, nonblocking: bool) -> std::io::Result<()> {
-        self.unix_stream.set_nonblocking(nonblocking)
-    }
-
-    fn set_read_timeout(&mut self, dur: Option<Duration>) -> std::io::Result<()> {
-        self.unix_stream.set_read_timeout(dur)
-    }
-
-    fn set_write_timeout(&mut self, dur: Option<Duration>) -> std::io::Result<()> {
-        self.unix_stream.set_write_timeout(dur)
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self.unix_stream.as_any()
-    }
-
-    fn recv_data_fd(&self, bytes: &mut [u8], fds: &mut [RawFd]) -> std::io::Result<(usize, usize)> {
-        self.unix_stream.recv_data_fd(bytes, fds)
-    }
-}
-
-impl AsRawFd for HybridUnixStreamBackend {
-    fn as_raw_fd(&self) -> RawFd {
-        self.unix_stream.as_raw_fd()
-    }
-}
-
-impl Read for HybridUnixStreamBackend {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        self.unix_stream.read(buf)
-    }
-}
-
-impl Write for HybridUnixStreamBackend {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        // The slave stream was only used to reply the connect result "ok <port>",
-        // thus it was only used once here, and the data would be replied by the
-        // main stream.
-        if let Some(mut stream) = self.slave_stream.take() {
-            stream.write(buf)
-        } else {
-            self.unix_stream.write(buf)
-        }
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        self.unix_stream.flush()
-    }
-}
 
 impl VsockStream for UnixStream {
     fn backend_type(&self) -> VsockBackendType {
