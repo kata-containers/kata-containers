@@ -84,3 +84,16 @@ checktype = "mean"
 midval = 4379.2
 minpercent = 20.0
 maxpercent = 20.0
+
+[[metric]]
+name = "tensorflow"
+type = "json"
+description = "tensorflow alexnet model"
+# Min and Max values to set a 'range' that
+# the median of the CSV Results data must fall
+# within (inclusive)
+checkvar = ".\"tensorflow\".Results | .[] | .AlexNet.Result"
+checktype = "mean"
+midval = 98.0
+minpercent = 20.0
+maxpercent = 20.0
