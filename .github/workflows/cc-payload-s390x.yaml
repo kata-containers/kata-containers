@@ -11,7 +11,8 @@ jobs:
     runs-on: s390x
     strategy:
       matrix:
-        measured_rootfs: no
+        measured_rootfs:
+          - no
         asset:
           - cc-qemu
           - cc-virtiofsd
