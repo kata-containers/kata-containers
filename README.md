@@ -134,6 +134,7 @@ The table below lists the remaining parts of the project:
 | [packaging](tools/packaging) | infrastructure | Scripts and metadata for producing packaged binaries<br/>(components, hypervisors, kernel and rootfs). |
 | [kernel](https://www.kernel.org) | kernel | Linux kernel used by the hypervisor to boot the guest image. Patches are stored [here](tools/packaging/kernel). |
 | [osbuilder](tools/osbuilder) | infrastructure | Tool to create "mini O/S" rootfs and initrd images and kernel for the hypervisor. |
+| [kata-debug](tools/packaging/kata-debug/README.md) | infrastructure | Utility tool to gather Kata Containers debug information from Kubernetes clusters. |
 | [`agent-ctl`](src/tools/agent-ctl) | utility | Tool that provides low-level access for testing the agent. |
 | [`kata-ctl`](src/tools/kata-ctl) | utility | Tool that provides advanced commands and debug facilities. |
 | [`log-parser-rs`](src/tools/log-parser-rs) | utility | Tool that aid in analyzing logs from the kata runtime. |
