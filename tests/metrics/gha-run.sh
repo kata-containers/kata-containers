@@ -76,14 +76,14 @@ function run_test_blogbench() {
 	info "Running Blogbench test using ${KATA_HYPERVISOR} hypervisor"
 
 	bash tests/metrics/storage/blogbench.sh
-
-	check_metrics
 }
 
 function run_test_tensorflow() {
 	info "Running TensorFlow test using ${KATA_HYPERVISOR} hypervisor"
 
 	bash tests/metrics/machine_learning/tensorflow.sh 1 20
+
+	check_metrics
 }
 
 function main() {
