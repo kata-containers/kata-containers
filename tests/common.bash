@@ -7,6 +7,9 @@
 # This file contains common functions that
 # are being used by our metrics and integration tests
 
+this_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export repo_root_dir="$(cd "${this_script_dir}/../" && pwd)"
+
 # Kata tests directory used for storing various test-related artifacts.
 KATA_TESTS_BASEDIR="${KATA_TESTS_BASEDIR:-/var/log/kata-tests}"
 
@@ -266,19 +269,6 @@ function restart_containerd_service() {
 	return 0
 }
 
-function create_symbolic_links() {
-	local KATA_HYPERVISOR="${1}"
-
-	local link_configuration_file="/opt/kata/share/defaults/kata-containers/configuration.toml"
-	local source_configuration_file="/opt/kata/share/defaults/kata-containers/configuration-${KATA_HYPERVISOR}.toml"
-
-	if [ "${KATA_HYPERVISOR}" != 'qemu' ] && [ "${KATA_HYPERVISOR}" != 'clh' ]; then
-		die "Failed to set the configuration.toml: '${KATA_HYPERVISOR}' is not recognized as a valid hypervisor name."
-	fi
-
-	sudo ln -sf "${source_configuration_file}" "${link_configuration_file}"
-}
-
 # Configures containerd
 function overwrite_containerd_config() {
 	containerd_config="/etc/containerd/config.toml"
@@ -312,13 +302,20 @@ function install_kata() {
 	popd
 
 	# create symbolic links to kata components
-	for b in "${katadir}/bin/*" ; do
+	for b in "${katadir}"/bin/* ; do
 		sudo ln -sf "${b}" "${local_bin_dir}/$(basename $b)"
 	done
 
+	if [[ ${KATA_HYPERVISOR} == "dragonball" ]]; then
+		sudo ln -sf "${katadir}/runtime-rs/bin/containerd-shim-kata-v2" "${local_bin_dir}/containerd-shim-kata-${KATA_HYPERVISOR}-v2"
+	else
+		sudo ln -sf "${katadir}/bin/containerd-shim-kata-v2" "${local_bin_dir}/containerd-shim-kata-${KATA_HYPERVISOR}-v2"
+	fi
+
+	sudo ln -sf ${katadir}/share/defaults/kata-containers/configuration-${KATA_HYPERVISOR}.toml ${katadir}/share/defaults/kata-containers/configuration.toml 
+
 	check_containerd_config_for_kata
 	restart_containerd_service
-	install_checkmetrics
 }
 
 function check_containerd_config_for_kata() {
@@ -335,4 +332,84 @@ function check_containerd_config_for_kata() {
 		info "overwriting containerd configuration w/ a valid one"
 		overwrite_containerd_config
 	fi
+}
+
+function ensure_yq() {
+    : "${GOPATH:=${GITHUB_WORKSPACE:-$HOME/go}}"
+    export GOPATH
+    export PATH="${GOPATH}/bin:${PATH}"
+    INSTALL_IN_GOPATH=true "${repo_root_dir}/ci/install_yq.sh"
+}
+
+# dependency: What we want to get the version from the versions.yaml file
+function get_from_kata_deps() {
+        local dependency="$1"
+        versions_file="${repo_root_dir}/versions.yaml"
+
+        command -v yq &>/dev/null || die 'yq command is not in your $PATH'
+        result=$("yq" read -X "$versions_file" "$dependency")
+        [ "$result" = "null" ] && result=""
+        echo "$result"
+}
+
+# project: org/repo format
+# base_version: ${major}.${minor}
+function get_latest_patch_release_from_a_github_project() {
+       project="${1}"
+       base_version="${2}"
+
+       curl --silent https://api.github.com/repos/${project}/releases | jq -r .[].tag_name | grep "^${base_version}.[0-9]*$" -m1
+}
+
+# base_version: The version to be intalled in the ${major}.${minor} format
+function clone_cri_containerd() {
+	base_version="${1}"
+
+	project="containerd/containerd"
+	version=$(get_latest_patch_release_from_a_github_project "${project}" "${base_version}")
+
+	rm -rf containerd
+	git clone -b ${version} https://github.com/${project}
+}
+
+# project: org/repo format
+# version: the version of the tarball that will be downloaded
+# tarball-name: the name of the tarball that will be downloaded
+function download_github_project_tarball() {
+	project="${1}" 
+	version="${2}"
+	tarball_name="${3}"
+
+	wget https://github.com/${project}/releases/download/${version}/${tarball_name}
+}
+
+# base_version: The version to be intalled in the ${major}.${minor} format
+function install_cri_containerd() {
+	base_version="${1}"
+
+	project="containerd/containerd"
+	version=$(get_latest_patch_release_from_a_github_project "${project}" "${base_version}")
+
+	tarball_name="cri-containerd-cni-${version//v}-linux-$(${repo_root_dir}/tests/kata-arch.sh -g).tar.gz"
+
+	download_github_project_tarball "${project}" "${version}" "${tarball_name}"
+	sudo tar -xvf "${tarball_name}" -C /
+	rm -f "${tarball_name}"
+
+	sudo mkdir -p /etc/containerd
+	containerd config default | sudo tee /etc/containerd/config.toml
+}
+
+# base_version: The version to be intalled in the ${major}.${minor} format
+function install_cri_tools() {
+	base_version="${1}"
+
+	project="kubernetes-sigs/cri-tools"
+	version=$(get_latest_patch_release_from_a_github_project "${project}" "${base_version}")
+
+	tarball_name="crictl-${version}-linux-$(${repo_root_dir}/tests/kata-arch.sh -g).tar.gz"
+
+	download_github_project_tarball "${project}" "${version}" "${tarball_name}"
+	sudo tar -xvf "${tarball_name}" -C /usr/local/bin
+	rm -f "${tarball_name}"
 }
