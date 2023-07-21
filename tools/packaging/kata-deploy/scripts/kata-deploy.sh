@@ -29,6 +29,41 @@ function print_usage() {
 	echo "Usage: $0 [install/cleanup/reset]"
 }
 
+function create_runtimeclasses() {
+	echo "Creating the runtime classes"
+
+	for shim in "${shims[@]}"; do
+		echo "Creating the kata-${shim} runtime class"
+		kubectl apply -f /opt/kata-artifacts/runtimeclasses/kata-${shim}.yaml
+	done
+
+	if [[ "${CREATE_DEFAULT_RUNTIMECLASS}" == "true" ]]; then
+		echo "Creating the kata runtime class for the default shim (an alias for kata-${default_shim})"
+		cp /opt/kata-artifacts/runtimeclasses/kata-${default_shim}.yaml /tmp/kata.yaml
+		sed -i -e 's/kata-'${default_shim}'/kata/g' /tmp/kata.yaml
+		kubectl apply -f /tmp/kata.yaml
+		rm -f /tmp/kata.yaml
+	fi
+}
+
+function delete_runtimeclasses() {
+	echo "Deleting the runtime classes"
+
+	for shim in "${shims[@]}"; do
+		echo "Deleting the kata-${shim} runtime class"
+		kubectl delete -f /opt/kata-artifacts/runtimeclasses/kata-${shim}.yaml
+	done
+
+
+	if [[ "${CREATE_DEFAULT_RUNTIMECLASS}" == "true" ]]; then
+		echo "Deleting the kata runtime class for the default shim (an alias for kata-${default_shim})"
+		cp /opt/kata-artifacts/runtimeclasses/kata-${default_shim}.yaml /tmp/kata.yaml
+		sed -i -e 's/kata-'${default_shim}'/kata/g' /tmp/kata.yaml
+		kubectl delete -f /tmp/kata.yaml
+		rm -f /tmp/kata.yaml
+	fi
+}
+
 function get_container_runtime() {
 
 	local runtime=$(kubectl get node $NODE_NAME -o jsonpath='{.status.nodeInfo.containerRuntimeVersion}')
@@ -74,6 +109,10 @@ function install_artifacts() {
 		sed -i -E 's|(enable_annotations) = .+|\1 = ["enable_iommu", "initrd", "kernel"]|' "${config_path}"
 		sed -i -E "s|(valid_hypervisor_paths) = .+|\1 = [\"${clh_path}\"]|" "${config_path}"
 		sed -i -E "s|(path) = \".+/cloud-hypervisor\"|\1 = \"${clh_path}\"|" "${config_path}"
+	fi
+
+	if [[ "${CREATE_RUNTIMECLASSES}" == "true" ]]; then
+		create_runtimeclasses
 	fi
 }
 
@@ -174,6 +213,10 @@ function cleanup_different_shims_base() {
 
 	rm "${default_shim_file}" || true
 	restore_shim "${default_shim_file}"
+
+	if [[ "${CREATE_RUNTIMECLASSES}" == "true" ]]; then
+		delete_runtimeclasses
+	fi
 }
 
 function configure_crio_runtime() {
