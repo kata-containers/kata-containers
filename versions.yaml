@@ -230,6 +230,9 @@ externals:
     description: "CLI tool for Container Runtime Interface (CRI)"
     url: "https://github.com/kubernetes-sigs/cri-tools"
     version: "1.23.0"
+    # As we don't want to disrupt what we have on the `tests` repo, let's
+    # create a "latest" entry and use that for the GitHub actions tests.
+    latest: "v1.27"
 
   cryptsetup:
     description: "A utility used to setup disk encryption, integrity protection"
