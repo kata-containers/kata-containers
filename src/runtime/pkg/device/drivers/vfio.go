@@ -69,6 +69,7 @@ func (device *VFIODevice) Attach(ctx context.Context, devReceiver api.DeviceRece
 	if err != nil {
 		return err
 	}
+
 	for _, vfio := range device.VfioDevs {
 		// If vfio.Port is not set we bail out, users should set
 		// explicitly the port in the config file

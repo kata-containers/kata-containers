@@ -775,6 +775,7 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 		if err != nil {
 			return fmt.Errorf("Cannot get host path for device: %v err: %v", dev, err)
 		}
+
 		devicesPerIOMMUGroup, err := drivers.GetAllVFIODevicesFromIOMMUGroup(dev)
 		if err != nil {
 			return fmt.Errorf("Cannot get all VFIO devices from IOMMU group with device: %v err: %v", dev, err)

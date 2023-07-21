@@ -22,6 +22,7 @@ import (
 	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
@@ -1667,7 +1668,8 @@ func checkConfig(config oci.RuntimeConfig) error {
 	hotPlugVFIO := config.HypervisorConfig.HotPlugVFIO
 	coldPlugVFIO := config.HypervisorConfig.ColdPlugVFIO
 	machineType := config.HypervisorConfig.HypervisorMachineType
-	if err := checkPCIeConfig(coldPlugVFIO, hotPlugVFIO, machineType); err != nil {
+	hypervisorType := config.HypervisorType
+	if err := checkPCIeConfig(coldPlugVFIO, hotPlugVFIO, machineType, hypervisorType); err != nil {
 		return err
 	}
 
@@ -1677,16 +1679,20 @@ func checkConfig(config oci.RuntimeConfig) error {
 // checkPCIeConfig ensures the PCIe configuration is valid.
 // Only allow one of the following settings for cold-plug:
 // no-port, root-port, switch-port
-func checkPCIeConfig(coldPlug config.PCIePort, hotPlug config.PCIePort, machineType string) error {
-	// Currently only QEMU q35,virt support advanced PCIe topologies
-	// firecracker, dragonball do not have right now any PCIe support
+func checkPCIeConfig(coldPlug config.PCIePort, hotPlug config.PCIePort, machineType string, hypervisorType virtcontainers.HypervisorType) error {
+	if hypervisorType != virtcontainers.QemuHypervisor {
+		kataUtilsLogger.Warn("Advanced PCIe Topology only available for QEMU hypervisor, ignoring hot(cold)_vfio_port setting")
+		return nil
+	}
+
 	if coldPlug != config.NoPort && hotPlug != config.NoPort {
 		return fmt.Errorf("invalid hot-plug=%s and cold-plug=%s settings, only one of them can be set", coldPlug, hotPlug)
 	}
 	if coldPlug == config.NoPort && hotPlug == config.NoPort {
 		return nil
 	}
-
+	// Currently only QEMU q35,virt support advanced PCIe topologies
+	// firecracker, dragonball do not have right now any PCIe support
 	if machineType != "q35" && machineType != "virt" {
 		return nil
 	}
