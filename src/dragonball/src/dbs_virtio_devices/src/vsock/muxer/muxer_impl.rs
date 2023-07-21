@@ -36,14 +36,14 @@
 ///       route all these events to their handlers, the muxer uses another
 ///       `HashMap` object, mapping `RawFd`s to `EpollListener`s.
 use std::collections::{HashMap, HashSet};
+use std::fs::File;
 use std::io::Read;
 use std::os::fd::FromRawFd;
 use std::os::unix::io::{AsRawFd, RawFd};
-use std::os::unix::net::UnixStream;
 
 use log::{debug, error, info, trace, warn};
 
-use super::super::backend::{HybridUnixStreamBackend, VsockBackend, VsockBackendType, VsockStream};
+use super::super::backend::{HybridStream, VsockBackend, VsockBackendType, VsockStream};
 
 use super::super::csm::{ConnState, VsockConnection};
 use super::super::defs::uapi;
@@ -480,12 +480,16 @@ impl VsockMuxer {
                         .and_then(|(nfd, local_port, peer_port)| {
                             // Here we should make sure the nfd the sole owner to convert it
                             // into an UnixStream object, otherwise, it could cause memory unsafety.
-                            let nstream = unsafe { UnixStream::from_raw_fd(nfd) };
+                            let nstream = unsafe { File::from_raw_fd(nfd) };
 
-                            let hybridstream = HybridUnixStreamBackend {
-                                unix_stream: Box::new(nstream),
+                            let mut hybridstream = HybridStream {
+                                hybrid_stream: nstream,
                                 slave_stream: Some(stream),
                             };
+
+                            hybridstream
+                                .set_nonblocking(true)
+                                .map_err(Error::BackendSetNonBlock)?;
 
                             self.add_connection(
                                 ConnMapKey {

@@ -60,6 +60,10 @@ pub enum Error {
     #[error("error connecting to a backend: {0}")]
     BackendConnect(#[source] std::io::Error),
 
+    /// Error set nonblock to a backend stream.
+    #[error("error set nonblocking to a backend: {0}")]
+    BackendSetNonBlock(#[source] std::io::Error),
+
     /// Error reading from backend.
     #[error("error reading from backend: {0}")]
     BackendRead(#[source] std::io::Error),

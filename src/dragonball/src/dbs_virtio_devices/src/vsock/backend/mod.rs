@@ -9,13 +9,14 @@ use std::io::{Read, Write};
 use std::os::unix::io::{AsRawFd, RawFd};
 use std::time::Duration;
 
+mod hybrid_stream;
 mod inner;
 mod tcp;
 mod unix_stream;
 
+pub use self::hybrid_stream::HybridStream;
 pub use self::inner::{VsockInnerBackend, VsockInnerConnector, VsockInnerStream};
 pub use self::tcp::VsockTcpBackend;
-pub use self::unix_stream::HybridUnixStreamBackend;
 pub use self::unix_stream::VsockUnixStreamBackend;
 
 /// The type of vsock backend.
@@ -27,6 +28,8 @@ pub enum VsockBackendType {
     Tcp,
     /// Inner backend
     Inner,
+    /// Fd passed hybrid stream backend
+    HybridStream,
     /// For test purpose
     #[cfg(test)]
     Test,
