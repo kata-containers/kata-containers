@@ -45,7 +45,7 @@ build_initrd() {
 		config_version=$(get_config_version)
 		kernel_version="$(get_from_kata_deps "assets.kernel.sev.version")"
 		kernel_version=${kernel_version#v}
-		module_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/cc-sev-kernel/builddir/kata-linux-${kernel_version}-${config_version}/lib/modules/${kernel_version}"
+		module_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/kernel-sev/builddir/kata-linux-${kernel_version}-${config_version}/lib/modules/${kernel_version}"
 		sudo -E PATH="$PATH" make rootfs ROOTFS_BUILD_DEST="${rootfs_build_dest}" KERNEL_MODULES_DIR="${module_dir}"
 	else
 		sudo -E PATH="$PATH" make rootfs ROOTFS_BUILD_DEST="${rootfs_build_dest}"
