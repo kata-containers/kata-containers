@@ -124,6 +124,12 @@ cleanup_and_fail() {
 }
 
 install_cached_tarball_component() {
+	case ${5} in
+		"kata-static-cc-rootfs-image.tar.xz" | "kata-static-cc-rootfs-initrd.tar.xz" | "kata-static-cc-se-image.tar.xz" | "kata-static-cc-tdx-rootfs-image.tar.xz" | "kata-static-cc-tdx-td-shim.tar.xz" | "kata-static-cc-sev-rootfs-initrd.tar.xz" )
+			USE_CACHE="no"
+			;;
+	esac
+
 	if [ "${USE_CACHE}" != "yes" ]; then
 		return 1
 	fi
@@ -163,6 +169,16 @@ install_cached_tarball_component() {
 # we have to rely and check some artefacts coming from the cc-rootfs-image and the
 # cc-tdx-rootfs-image jobs.
 install_cached_cc_shim_v2() {
+	case ${5} in
+		"kata-static-cc-shim-v2.tar.xz")
+			USE_CACHE="no"
+			;;
+	esac
+
+	if [ "${USE_CACHE}" != "yes" ]; then
+		return 1
+	fi
+
 	local component="${1}"
 	local jenkins_build_url="${2}"
 	local current_version="${3}"
