@@ -72,6 +72,8 @@ function deploy_kata() {
 
     # Enable debug for Kata Containers
     yq write -i "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[1].value' --tag '!!str' "true"
+    # Let the `kata-deploy` script take care of the runtime class creation / removal
+    yq write -i "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[4].value' --tag '!!str' "true"
 
     if [ "${KATA_HOST_OS}" = "cbl-mariner" ]; then
         yq write -i "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[+].name' "HOST_OS"
@@ -87,7 +89,6 @@ function deploy_kata() {
         kubectl apply -f "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
     fi
     kubectl -n kube-system wait --timeout=10m --for=condition=Ready -l name=kata-deploy pod
-    kubectl apply -f "${tools_dir}/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml"
 
     echo "Gather information about the nodes and pods after having kata-deploy ready"
     get_nodes_and_pods_info
@@ -100,6 +101,8 @@ function deploy_kata() {
     else
         sleep 60s
     fi
+
+    kubectl get runtimeclass
 }
 
 function run_tests() {
@@ -121,6 +124,7 @@ function run_tests() {
 
 function cleanup() {
     platform="${1}"
+    ensure_yq
 
     echo "Gather information about the nodes and pods before cleaning up the node"
     get_nodes_and_pods_info "yes"
@@ -145,6 +149,9 @@ function cleanup() {
     kubectl delete ${deploy_spec}
     kubectl -n kube-system wait --timeout=10m --for=delete -l name=kata-deploy pod
 
+    # Let the `kata-deploy` script take care of the runtime class creation / removal
+    yq write -i "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" 'spec.template.spec.containers[0].env[4].value' --tag '!!str' "true"
+
     sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
     cat "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
     cat "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" | grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" || die "Failed to setup the tests image"
@@ -153,7 +160,6 @@ function cleanup() {
 
     kubectl delete ${cleanup_spec}
     kubectl delete -f "${tools_dir}/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
-    kubectl delete -f "${tools_dir}/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml"
 }
 
 function delete_cluster() {
