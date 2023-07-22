@@ -1,0 +1,6 @@
+{
+    "input": {
+        "mem_block_size": true,
+        "mem_hotplug_probe": true
+    }
+}

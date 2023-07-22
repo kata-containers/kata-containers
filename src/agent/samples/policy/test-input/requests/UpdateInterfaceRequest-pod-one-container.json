@@ -1,0 +1,25 @@
+{
+    "input": {
+        "interface": {
+            "device": "eth0",
+            "name": "eth0",
+            "IPAddresses": [
+                {
+                    "family": 0,
+                    "address": "10.244.1.11",
+                    "mask": "24"
+                },
+                {
+                    "family": 1,
+                    "address": "fe80::8424:52ff:fe09:a609",
+                    "mask": "64"
+                }
+            ],
+            "mtu": 1500,
+            "hwAddr": "86:24:52:09:a6:09",
+            "pciPath": "",
+            "type_": "",
+            "raw_flags": 0
+        }
+    }
+}

@@ -1,0 +1,16 @@
+{
+    "input": {
+        "routes": {
+            "Routes": [
+                {
+                    "dest": "",
+                    "gateway": "10.244.1.1",
+                    "device": "eth0",
+                    "source": "",
+                    "scope": 0,
+                    "family": 0
+                }
+            ]
+        }
+    }
+}

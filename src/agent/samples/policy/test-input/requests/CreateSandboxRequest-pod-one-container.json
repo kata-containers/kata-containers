@@ -1,0 +1,32 @@
+{
+    "input": {
+        "hostname": "one-container",
+        "dns": [
+            "search default.svc.cluster.local svc.cluster.local cluster.local",
+            "nameserver 10.0.0.10",
+            "options ndots:5",
+            ""
+        ],
+        "storages": [
+            {
+                "driver": "ephemeral",
+                "driver_options": [],
+                "source": "shm",
+                "fstype": "tmpfs",
+                "options": [
+                    "noexec",
+                    "nosuid",
+                    "nodev",
+                    "mode=1777",
+                    "size=67108864"
+                ],
+                "mount_point": "/run/kata-containers/sandbox/shm",
+                "fs_group": null
+            }
+        ],
+        "sandbox_pidns": false,
+        "sandbox_id": "45b1240219e79f558227f8df01384a0d35b9c1d8691a9a156d52051aca9531ca",
+        "guest_hook_path": "",
+        "kernel_modules": []
+    }
+}
