@@ -38,7 +38,7 @@ readonly rootfs_builder="${repo_root_dir}/tools/packaging/guest-image/build_imag
 readonly jenkins_url="http://jenkins.katacontainers.io"
 readonly cached_artifacts_path="lastSuccessfulBuild/artifact/artifacts"
 
-ARCH=$(uname -m)
+ARCH=${ARCH:-$(uname -m)}
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
 USE_CACHE="${USE_CACHE:-"yes"}"
 
@@ -150,7 +150,7 @@ install_image() {
 		image_type+="-${variant}"
 	fi
 
-	local jenkins="${jenkins_url}/job/kata-containers-main-rootfs-${image_type}-$(uname -m)/${cached_artifacts_path}"
+	local jenkins="${jenkins_url}/job/kata-containers-main-rootfs-${image_type}-${ARCH}/${cached_artifacts_path}"
 	local component="rootfs-${image_type}"
 
 	local osbuilder_last_commit="$(get_last_modification "${repo_root_dir}/tools/osbuilder")"
@@ -197,7 +197,7 @@ install_initrd() {
 		initrd_type+="-${variant}"
 	fi
 
-	local jenkins="${jenkins_url}/job/kata-containers-main-rootfs-${initrd_type}-$(uname -m)/${cached_artifacts_path}"
+	local jenkins="${jenkins_url}/job/kata-containers-main-rootfs-${initrd_type}-${ARCH}/${cached_artifacts_path}"
 	local component="rootfs-${initrd_type}"
 
 	local osbuilder_last_commit="$(get_last_modification "${repo_root_dir}/tools/osbuilder")"
@@ -247,7 +247,7 @@ install_cached_kernel_tarball_component() {
 
 	install_cached_tarball_component \
 		"${kernel_name}" \
-		"${jenkins_url}/job/kata-containers-main-${kernel_name}-$(uname -m)/${cached_artifacts_path}" \
+		"${jenkins_url}/job/kata-containers-main-${kernel_name}-${ARCH}/${cached_artifacts_path}" \
 		"${kernel_version}-${kernel_kata_config_version}-$(get_last_modification $(dirname $kernel_builder))" \
 		"$(get_kernel_image_name)" \
 		"${final_tarball_name}" \
@@ -384,7 +384,7 @@ install_qemu_helper() {
 
 	install_cached_tarball_component \
 		"${qemu_name}" \
-		"${jenkins_url}/job/kata-containers-main-${qemu_name}-$(uname -m)/${cached_artifacts_path}" \
+		"${jenkins_url}/job/kata-containers-main-${qemu_name}-${ARCH}/${cached_artifacts_path}" \
 		"${qemu_version}-$(calc_qemu_files_sha256sum)" \
 		"$(get_qemu_image_name)" \
 		"${final_tarball_name}" \
@@ -495,7 +495,7 @@ install_clh_glibc() {
 install_virtiofsd() {
 	install_cached_tarball_component \
 		"virtiofsd" \
-		"${jenkins_url}/job/kata-containers-main-virtiofsd-$(uname -m)/${cached_artifacts_path}" \
+		"${jenkins_url}/job/kata-containers-main-virtiofsd-${ARCH}/${cached_artifacts_path}" \
 		"$(get_from_kata_deps "externals.virtiofsd.version")-$(get_from_kata_deps "externals.virtiofsd.toolchain")" \
 		"$(get_virtiofsd_image_name)" \
 		"${final_tarball_name}" \
@@ -542,7 +542,7 @@ install_shimv2() {
 
 	install_cached_tarball_component \
 		"shim-v2" \
-		"${jenkins_url}/job/kata-containers-main-shim-v2-$(uname -m)/${cached_artifacts_path}" \
+		"${jenkins_url}/job/kata-containers-main-shim-v2-${ARCH}/${cached_artifacts_path}" \
 		"${shim_v2_version}" \
 		"$(get_shim_v2_image_name)" \
 		"${final_tarball_name}" \
