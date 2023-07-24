@@ -136,8 +136,8 @@ function tensorflow_test() {
 	local json="$(cat << EOF
 	{
 		"Resnet": {
-			"Result": "${resnet_results}",
-			"Average": "${average_resnet}",
+			"Result": ${resnet_results},
+			"Average": ${average_resnet},
 			"Units": "images/s"
 		}
 	}
@@ -152,8 +152,8 @@ EOF
 	local json="$(cat << EOF
 	{
 		"AlexNet": {
-			"Result": "${alexnet_results}",
-			"Average": "${average_alexnet}",
+			"Result": ${alexnet_results},
+			"Average": ${average_alexnet},
 			"Units": "images/s"
 		}
 	}
