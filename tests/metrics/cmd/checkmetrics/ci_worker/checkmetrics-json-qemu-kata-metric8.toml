@@ -81,7 +81,7 @@ description = "tensorflow resnet model"
 # within (inclusive)
 checkvar = ".\"tensorflow\".Results | .[] | .Resnet.Result"
 checktype = "mean"
-midval = 4396.2
+midval = 4396.0
 minpercent = 20.0
 maxpercent = 20.0
 
@@ -94,6 +94,6 @@ description = "tensorflow alexnet model"
 # within (inclusive)
 checkvar = ".\"tensorflow\".Results | .[] | .AlexNet.Result"
 checktype = "mean"
-midval = 98.3
+midval = 98.0
 minpercent = 20.0
 maxpercent = 20.0
