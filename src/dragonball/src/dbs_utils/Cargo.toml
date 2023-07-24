@@ -1,0 +1,24 @@
+[package]
+name = "dbs-utils"
+version = "0.2.1"
+authors = ["Alibaba Dragonball Team"]
+description = "helpers and utilities used by dragonball-sandbox components"
+license = "Apache-2.0 AND BSD-3-Clause"
+edition = "2018"
+homepage = "https://github.com/openanolis/dragonball-sandbox"
+repository = "https://github.com/openanolis/dragonball-sandbox"
+keywords = ["dragonball", "secure-sandbox", "utils"]
+readme = "README.md"
+
+[dependencies]
+anyhow = "1.0"
+event-manager = { version = "0.2.1", features = [ "remote_endpoint" ] }
+libc = "0.2.39"
+log = "0.4.14"
+serde = { version = "1.0.27", features = ["derive", "rc"] }
+thiserror = "1.0"
+timerfd = "1.0"
+vmm-sys-util = "0.11.0"
+
+[dev-dependencies]
+serde_json = "1.0.9"
