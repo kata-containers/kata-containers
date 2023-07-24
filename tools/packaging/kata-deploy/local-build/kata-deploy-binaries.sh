@@ -243,6 +243,7 @@ install_initrd_sev() {
 #Install kernel component helper
 install_cached_kernel_tarball_component() {
 	local kernel_name=${1}
+	local module_dir=${2:-""}
 
 	install_cached_tarball_component \
 		"${kernel_name}" \
@@ -267,8 +268,10 @@ install_cached_kernel_tarball_component() {
 		"${workdir}/kata-static-kernel-sev-modules.tar.xz" \
 		|| return 1
 
-	mkdir -p "${module_dir}"
-	tar xvf "${workdir}/kata-static-kernel-sev-modules.tar.xz" -C  "${module_dir}" && return 0
+	if [[ -n "${module_dir}" ]]; then
+		mkdir -p "${module_dir}"
+		tar xvf "${workdir}/kata-static-kernel-sev-modules.tar.xz" -C  "${module_dir}" && return 0
+	fi
 
 	return 1
 }
