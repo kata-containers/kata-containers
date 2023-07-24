@@ -709,7 +709,13 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 	}
 	clh.state.PID = pid
 
-	ctx, cancel := context.WithTimeout(context.Background(), clh.getClhAPITimeout()*time.Second)
+	bootvm_timeout := clh.getClhAPITimeout()
+	// TODO: review this 10 second minimum timeout value.
+	if bootvm_timeout < 10 {
+		bootvm_timeout = 10
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), bootvm_timeout*time.Second)
 	defer cancel()
 
 	if err := clh.bootVM(ctx); err != nil {
