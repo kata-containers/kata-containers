@@ -11,7 +11,7 @@ set -o pipefail
 
 kata_tarball_dir="${2:-kata-artifacts}"
 nydus_dir="$(dirname "$(readlink -f "$0")")" 
-source "${cri_containerd_dir}/../../common.bash"
+source "${nydus_dir}/../../common.bash"
 
 function install_dependencies() {
 	info "Installing the dependencies needed for running the nydus tests"
