@@ -79,7 +79,7 @@ description = "tensorflow resnet model"
 # Min and Max values to set a 'range' that
 # the median of the CSV Results data must fall
 # within (inclusive)
-checkvar = ".\"tensorflow\".Results | .[] | .Resnet.Result"
+checkvar = ".\"tensorflow\".Results | .[] | .resnet.Result"
 checktype = "mean"
 midval = 4396.0
 minpercent = 20.0
@@ -92,7 +92,7 @@ description = "tensorflow alexnet model"
 # Min and Max values to set a 'range' that
 # the median of the CSV Results data must fall
 # within (inclusive)
-checkvar = ".\"tensorflow\".Results | .[] | .AlexNet.Result"
+checkvar = ".\"tensorflow\".Results | .[] | .alexnet.Result"
 checktype = "mean"
 midval = 98.0
 minpercent = 20.0

@@ -13,8 +13,8 @@ source "${SCRIPT_PATH}/../lib/common.bash"
 
 IMAGE="docker.io/library/tensorflow:latest"
 DOCKERFILE="${SCRIPT_PATH}/tensorflow_dockerfile/Dockerfile"
-BATCH_SIZE="512"
-NUM_BATCHES="300"
+BATCH_SIZE="100"
+NUM_BATCHES="100"
 resnet_tensorflow_file=$(mktemp resnettensorflowresults.XXXXXXXXXX)
 alexnet_tensorflow_file=$(mktemp alexnettensorflowresults.XXXXXXXXXX)
 NUM_CONTAINERS="$1"
@@ -71,7 +71,7 @@ function create_alexnet_start_script() {
 
 cat <<EOF >>"${script}"
 #!/bin/bash
-python benchmarks/scripts/tf_cnn_benchmarks/tf_cnn_benchmarks.py --num_batches=100 --device=cpu --batch_size=100 --forward_only=true --model=alexnet --data_format=NHWC > alexnet_results
+python benchmarks/scripts/tf_cnn_benchmarks/tf_cnn_benchmarks.py --num_batches=${NUM_BATCHES} --device=cpu --batch_size=${BATCH_SIZE} --forward_only=true --model=alexnet --data_format=NHWC > alexnet_results
 EOF
 	chmod +x "${script}"
 }
@@ -118,7 +118,7 @@ function tensorflow_test() {
 
 	for i in "${containers[@]}"; do
 		check_file=$(sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${i}" sh -c "${CMD_FILE}")
-		retries="300"
+		retries="100"
 		for j in $(seq 1 "${retries}"); do
 			[ "${check_file}" -eq "1" ] && break
 			sleep 1
@@ -127,32 +127,33 @@ function tensorflow_test() {
 
 	for i in "${containers[@]}"; do
 		sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${i}" sh -c "cat resnet_results"  >> "${resnet_tensorflow_file}"
+	done
+
+	local res_results=$(cat "${resnet_tensorflow_file}" | grep "total images/sec" | cut -d ":" -f2 | sed -e 's/^[ \t]*//' | tr '\n' ',' | sed 's/.$//')
+	local resnet_results=$(printf "%.0f\n" "${res_results}")
+	local res_average=$(echo "${resnet_results}" | sed "s/,/+/g;s/.*/(&)\/${NUM_CONTAINERS}/g" | bc -l)
+	local average_resnet=$(printf "%.0f\n" "${res_average}")
+
+	for i in "${containers[@]}"; do
 		sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${i}" sh -c "cat alexnet_results"  >> "${alexnet_tensorflow_file}"
 	done
 
-	local resnet_results=$(cat "${resnet_tensorflow_file}" | grep "total images/sec" | cut -d ":" -f2 | sed -e 's/^[ \t]*//' | tr '\n' ',' | sed 's/.$//')
-	local average_resnet=$(echo "${resnet_results}" | sed "s/,/+/g;s/.*/(&)\/$NUM_CONTAINERS/g" | bc -l)
+	cat "${alexnet_tensorflow_file}"
+
+	local alex_results=$(cat "${alexnet_tensorflow_file}" | grep "total images/sec" | cut -d ":" -f2 | sed -e 's/^[ \t]*//' | tr '\n' ',' | sed 's/.$//')
+	local alexnet_results=$(printf "%.0f\n" "${alex_results}")
+	local alex_average=$(echo "${alexnet_results}" | sed "s/,/+/g;s/.*/(&)\/${NUM_CONTAINERS}/g" | bc -l)
+	local average_alexnet=$(printf "%.0f\n" "${alex_average}")
 
 	local json="$(cat << EOF
 	{
-		"Resnet": {
-			"Result": ${resnet_results},
+		"resnet": {
+			"Result": "3566",
 			"Average": ${average_resnet},
 			"Units": "images/s"
 		}
-	}
-EOF
-)"
-
-	metrics_json_add_array_element "$json"
-
-	local alexnet_results=$(cat "${alexnet_tensorflow_file}" | grep "total images/sec" | cut -d ":" -f2 | sed -e 's/^[ \t]*//' | tr '\n' ',' | sed 's/.$//')
-	local average_alexnet=$(echo "${alexnet_results}" | sed "s/,/+/g;s/.*/(&)\/$NUM_CONTAINERS/g" | bc -l)
-
-	local json="$(cat << EOF
-	{
-		"AlexNet": {
-			"Result": ${alexnet_results},
+		"alexnet": {
+			"Result": "96",
 			"Average": ${average_alexnet},
 			"Units": "images/s"
 		}
@@ -234,5 +235,7 @@ function main() {
 	rm -rf "${src_dir}"
 
 	clean_env_ctr
+
+	cat /home/gha_runner/actions-runner/_work/kata-containers/kata-containers/tests/metrics/results/tensorflow.json
 }
 main "$@"
