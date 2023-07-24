@@ -12,6 +12,7 @@ use std::fs;
 
 pub const SYSFS_DIR: &str = "/sys";
 #[cfg(any(
+    target_arch = "loongarch64",
     target_arch = "powerpc64",
     target_arch = "s390x",
     target_arch = "x86_64",
