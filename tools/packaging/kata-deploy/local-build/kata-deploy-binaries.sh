@@ -793,7 +793,7 @@ install_ovmf() {
 
 # Install TDVF
 install_tdvf() {
-	install_ovmf "tdx" "edk2-tdx.tar.gz"
+	install_ovmf "tdx" "edk2-staging-tdx.tar.gz"
 }
 
 # Install OVMF SEV
