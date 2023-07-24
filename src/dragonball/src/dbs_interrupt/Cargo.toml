@@ -1,0 +1,30 @@
+[package]
+name = "dbs-interrupt"
+version = "0.2.2"
+authors = ["Alibaba Dragonball Team"]
+description = "Traits and structs to manage interrupts for virtual devices"
+license = "Apache-2.0"
+edition = "2018"
+homepage = "https://github.com/openanolis/dragonball-sandbox"
+repository = "https://github.com/openanolis/dragonball-sandbox/tree/main/crates/dbs-interrupt"
+keywords = ["dragonball", "secure-sandbox", "device", "interrupt"]
+readme = "README.md"
+
+[dependencies]
+dbs-device = { path = "../dbs_device" }
+dbs-arch = { path = "../dbs_arch" }
+kvm-bindings = { version = "0.6.0", optional = true }
+kvm-ioctls = { version = "0.12.0", optional = true }
+libc = "0.2"
+vmm-sys-util = "0.11.0"
+
+[features]
+default = ["legacy-irq", "msi-irq"]
+
+legacy-irq = []
+msi-irq = []
+
+kvm-irq = ["kvm-ioctls", "kvm-bindings"]
+kvm-legacy-irq = ["legacy-irq", "kvm-irq"]
+kvm-msi-generic = ["msi-irq", "kvm-irq"]
+kvm-msi-irq = ["kvm-msi-generic"]
