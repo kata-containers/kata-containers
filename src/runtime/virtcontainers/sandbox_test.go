@@ -606,6 +606,7 @@ func TestSandboxAttachDevicesVFIO(t *testing.T) {
 		HostPath:      path,
 		ContainerPath: path,
 		DevType:       "c",
+		Port:          config.RootPort,
 	}
 	dev, err := dm.NewDevice(deviceInfo)
 	assert.Nil(t, err, "deviceManager.NewDevice return error: %v", err)

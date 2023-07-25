@@ -599,10 +599,6 @@ type HypervisorConfig struct {
 	// DisableImageNvdimm is used to disable guest rootfs image nvdimm devices
 	DisableImageNvdimm bool
 
-	// HotplugVFIOOnRootBus is used to indicate if devices need to be hotplugged on the
-	// root bus instead of a bridge.
-	HotplugVFIOOnRootBus bool
-
 	// GuestMemoryDumpPaging is used to indicate if enable paging
 	// for QEMU dump-guest-memory command
 	GuestMemoryDumpPaging bool

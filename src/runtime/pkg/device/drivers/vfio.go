@@ -69,7 +69,14 @@ func (device *VFIODevice) Attach(ctx context.Context, devReceiver api.DeviceRece
 	if err != nil {
 		return err
 	}
+
 	for _, vfio := range device.VfioDevs {
+		// If vfio.Port is not set we bail out, users should set
+		// explicitly the port in the config file
+		if vfio.Port == "" {
+			return fmt.Errorf("cold_plug_vfio= or hot_plug_vfio= port is not set for device %s (BridgePort | RootPort | SwitchPort)", vfio.BDF)
+		}
+
 		if vfio.IsPCIe {
 			busIndex := len(config.PCIeDevices[vfio.Port])
 			vfio.Bus = fmt.Sprintf("%s%d", config.PCIePortPrefixMapping[vfio.Port], busIndex)

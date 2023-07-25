@@ -613,51 +613,10 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return nil, err
 	}
 
-	// If we have a confidential guest we need to cold-plug the PCIe VFIO devices
-	// until we have TDISP/IDE PCIe support.
-	coldPlugVFIO := (sandboxConfig.HypervisorConfig.ColdPlugVFIO != config.NoPort)
-	// Aggregate all the containner devices for hot-plug and use them to dedcue
-	// the correct amount of ports to reserve for the hypervisor.
-	hotPlugVFIO := (sandboxConfig.HypervisorConfig.HotPlugVFIO != config.NoPort)
-
-	var vfioDevices []config.DeviceInfo
-	// vhost-user-block device is a PCIe device in Virt, keep track of it
-	// for correct number of PCIe root ports.
-	var vhostUserBlkDevices []config.DeviceInfo
-
-	for cnt, containers := range sandboxConfig.Containers {
-		for dev, device := range containers.DeviceInfos {
-
-			if deviceManager.IsVhostUserBlk(device) {
-				vhostUserBlkDevices = append(vhostUserBlkDevices, device)
-				continue
-			}
-			isVFIO := deviceManager.IsVFIO(device.ContainerPath)
-			if hotPlugVFIO && isVFIO {
-				vfioDevices = append(vfioDevices, device)
-				sandboxConfig.Containers[cnt].DeviceInfos[dev].Port = sandboxConfig.HypervisorConfig.HotPlugVFIO
-			}
-			if coldPlugVFIO && isVFIO {
-				device.ColdPlug = true
-				device.Port = sandboxConfig.HypervisorConfig.ColdPlugVFIO
-				vfioDevices = append(vfioDevices, device)
-				// We need to remove the devices marked for cold-plug
-				// otherwise at the container level the kata-agent
-				// will try to hot-plug them.
-				sandboxConfig.Containers[cnt].DeviceInfos[dev].ID = "remove-we-are-cold-plugging"
-			}
-		}
-		var filteredDevices []config.DeviceInfo
-		for _, device := range containers.DeviceInfos {
-			if device.ID != "remove-we-are-cold-plugging" {
-				filteredDevices = append(filteredDevices, device)
-			}
-		}
-		sandboxConfig.Containers[cnt].DeviceInfos = filteredDevices
-
+	coldPlugVFIO, err := s.coldOrHotPlugVFIO(&sandboxConfig)
+	if err != nil {
+		return nil, err
 	}
-	sandboxConfig.HypervisorConfig.VFIODevices = vfioDevices
-	sandboxConfig.HypervisorConfig.VhostUserBlkDevices = vhostUserBlkDevices
 
 	// store doesn't require hypervisor to be stored immediately
 	if err = s.hypervisor.CreateVM(ctx, s.id, s.network, &sandboxConfig.HypervisorConfig); err != nil {
@@ -672,7 +631,8 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return s, nil
 	}
 
-	for _, dev := range vfioDevices {
+	for _, dev := range sandboxConfig.HypervisorConfig.VFIODevices {
+		s.Logger().Info("cold-plug device: ", dev)
 		_, err := s.AddDevice(ctx, dev)
 		if err != nil {
 			s.Logger().WithError(err).Debug("Cannot cold-plug add device")
@@ -680,6 +640,70 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		}
 	}
 	return s, nil
+}
+
+func (s *Sandbox) coldOrHotPlugVFIO(sandboxConfig *SandboxConfig) (bool, error) {
+	// If we have a confidential guest we need to cold-plug the PCIe VFIO devices
+	// until we have TDISP/IDE PCIe support.
+	coldPlugVFIO := (sandboxConfig.HypervisorConfig.ColdPlugVFIO != config.NoPort)
+	// Aggregate all the containner devices for hot-plug and use them to dedcue
+	// the correct amount of ports to reserve for the hypervisor.
+	hotPlugVFIO := (sandboxConfig.HypervisorConfig.HotPlugVFIO != config.NoPort)
+
+	modeIsGK := (sandboxConfig.VfioMode == config.VFIOModeGuestKernel)
+	modeIsVFIO := (sandboxConfig.VfioMode == config.VFIOModeVFIO)
+
+	var vfioDevices []config.DeviceInfo
+	// vhost-user-block device is a PCIe device in Virt, keep track of it
+	// for correct number of PCIe root ports.
+	var vhostUserBlkDevices []config.DeviceInfo
+
+	for cnt, containers := range sandboxConfig.Containers {
+		for dev, device := range containers.DeviceInfos {
+
+			if deviceManager.IsVhostUserBlk(device) {
+				vhostUserBlkDevices = append(vhostUserBlkDevices, device)
+				continue
+			}
+			isVFIODevice := deviceManager.IsVFIODevice(device.ContainerPath)
+			isVFIOControlDevice := deviceManager.IsVFIOControlDevice(device.ContainerPath)
+			// vfio_mode=vfio needs the VFIO control device add it to the list
+			// of devices to be added to the VM.
+			if modeIsVFIO && isVFIOControlDevice && !hotPlugVFIO {
+				vfioDevices = append(vfioDevices, device)
+			}
+
+			if hotPlugVFIO && isVFIODevice {
+				device.ColdPlug = false
+				device.Port = sandboxConfig.HypervisorConfig.HotPlugVFIO
+				vfioDevices = append(vfioDevices, device)
+				sandboxConfig.Containers[cnt].DeviceInfos[dev].Port = sandboxConfig.HypervisorConfig.HotPlugVFIO
+			}
+			if coldPlugVFIO && isVFIODevice {
+				device.ColdPlug = true
+				device.Port = sandboxConfig.HypervisorConfig.ColdPlugVFIO
+				vfioDevices = append(vfioDevices, device)
+				// We need to remove the devices marked for cold-plug
+				// otherwise at the container level the kata-agent
+				// will try to hot-plug them.
+				if modeIsGK {
+					sandboxConfig.Containers[cnt].DeviceInfos[dev].ID = "remove-we-are-cold-plugging"
+				}
+			}
+		}
+		var filteredDevices []config.DeviceInfo
+		for _, device := range containers.DeviceInfos {
+			if device.ID != "remove-we-are-cold-plugging" {
+				filteredDevices = append(filteredDevices, device)
+			}
+		}
+		sandboxConfig.Containers[cnt].DeviceInfos = filteredDevices
+	}
+
+	sandboxConfig.HypervisorConfig.VFIODevices = vfioDevices
+	sandboxConfig.HypervisorConfig.VhostUserBlkDevices = vhostUserBlkDevices
+
+	return coldPlugVFIO, nil
 }
 
 func (s *Sandbox) createResourceController() error {
@@ -2049,26 +2073,26 @@ func (s *Sandbox) AddDevice(ctx context.Context, info config.DeviceInfo) (api.De
 	}
 
 	var err error
-	b, err := s.devManager.NewDevice(info)
+	add, err := s.devManager.NewDevice(info)
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
 		if err != nil {
-			s.devManager.RemoveDevice(b.DeviceID())
+			s.devManager.RemoveDevice(add.DeviceID())
 		}
 	}()
 
-	if err = s.devManager.AttachDevice(ctx, b.DeviceID(), s); err != nil {
+	if err = s.devManager.AttachDevice(ctx, add.DeviceID(), s); err != nil {
 		return nil, err
 	}
 	defer func() {
 		if err != nil {
-			s.devManager.DetachDevice(ctx, b.DeviceID(), s)
+			s.devManager.DetachDevice(ctx, add.DeviceID(), s)
 		}
 	}()
 
-	return b, nil
+	return add, nil
 }
 
 // updateResources will:
