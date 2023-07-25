@@ -18,6 +18,7 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
+	deviceManager "github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
 	volume "github.com/kata-containers/kata-containers/src/runtime/pkg/direct-volume"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
@@ -867,6 +868,30 @@ func (c *Container) create(ctx context.Context) (err error) {
 		if err = c.hotplugDrive(ctx); err != nil {
 			return
 		}
+	}
+
+	// If cold-plug we've attached the devices already, do not try to
+	// attach them a second time.
+	coldPlugVFIO := (c.sandbox.config.HypervisorConfig.ColdPlugVFIO != config.NoPort)
+	modeVFIO := (c.sandbox.config.VfioMode == config.VFIOModeVFIO)
+
+	if coldPlugVFIO {
+		var cntDevices []ContainerDevice
+		for _, dev := range c.devices {
+			isVFIOControlDevice := deviceManager.IsVFIOControlDevice(dev.ContainerPath)
+			if isVFIOControlDevice && modeVFIO {
+				cntDevices = append(cntDevices, dev)
+			}
+
+			if strings.HasPrefix(dev.ContainerPath, vfioPath) {
+				c.Logger().WithFields(logrus.Fields{
+					"device": dev,
+				}).Info("Remvoing device since we're cold-plugging no Attach needed")
+				continue
+			}
+			cntDevices = append(cntDevices, dev)
+		}
+		c.devices = cntDevices
 	}
 
 	c.Logger().WithFields(logrus.Fields{
