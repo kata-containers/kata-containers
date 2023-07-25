@@ -4,8 +4,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-#set -e
-set -x
+set -o pipefail
 
 # General env
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
@@ -44,13 +43,13 @@ trap remove_tmp_file EXIT
 function help() {
 cat << EOF
 Usage: $0 <count> <timeout>
-        Description:
-                This script launches n number of containers
-                to run the tf cnn benchmarks using a Tensorflow
-                container.
-        Options:
-                <count> : Number of containers to run.
-                <timeout> : Timeout to launch the containers.
+	Description:
+		This script launches n number of containers
+		to run the tf cnn benchmarks using a Tensorflow
+		container.
+	Options:
+		<count> : Number of containers to run.
+	<timeout> : Timeout to launch the containers.
 EOF
 }
 
@@ -95,7 +94,7 @@ function tensorflow_test() {
 
 	for i in "${containers[@]}"; do
 		check_file=$(sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${i}" sh -c "${RESNET_CMD_FILE}")
-		retries="100"
+		retries="300"
 		for j in $(seq 1 "${retries}"); do
 			[ "${check_file}" -eq "1" ] && break
 			sleep 1
@@ -118,7 +117,7 @@ function tensorflow_test() {
 
 	for i in "${containers[@]}"; do
 		check_file=$(sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${i}" sh -c "${CMD_FILE}")
-		retries="100"
+		retries="300"
 		for j in $(seq 1 "${retries}"); do
 			[ "${check_file}" -eq "1" ] && break
 			sleep 1
@@ -138,8 +137,6 @@ function tensorflow_test() {
 		sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${i}" sh -c "cat alexnet_results"  >> "${alexnet_tensorflow_file}"
 	done
 
-	cat "${alexnet_tensorflow_file}"
-
 	local alex_results=$(cat "${alexnet_tensorflow_file}" | grep "total images/sec" | cut -d ":" -f2 | sed -e 's/^[ \t]*//' | tr '\n' ',' | sed 's/.$//')
 	local alexnet_results=$(printf "%.0f\n" "${alex_results}")
 	local alex_average=$(echo "${alexnet_results}" | sed "s/,/+/g;s/.*/(&)\/${NUM_CONTAINERS}/g" | bc -l)
@@ -148,12 +145,12 @@ function tensorflow_test() {
 	local json="$(cat << EOF
 	{
 		"resnet": {
-			"Result": "3566",
+			"Result": ${resnet_results},
 			"Average": ${average_resnet},
 			"Units": "images/s"
-		}
+		},
 		"alexnet": {
-			"Result": "96",
+			"Result": ${alexnet_results},
 			"Average": ${average_alexnet},
 			"Units": "images/s"
 		}
@@ -235,7 +232,5 @@ function main() {
 	rm -rf "${src_dir}"
 
 	clean_env_ctr
-
-	cat /home/gha_runner/actions-runner/_work/kata-containers/kata-containers/tests/metrics/results/tensorflow.json
 }
 main "$@"
