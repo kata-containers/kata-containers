@@ -439,9 +439,16 @@ install_cached_kernel_tarball_component() {
 	local kernel_name=${1}
 	local module_dir=${2:-""}
 
+	# This must only be done as part of the CCv0 branch, as TDX version of
+	# Kernel is not the same as the one used on main
+	local url="${jenkins_url}/job/kata-containers-main-${kernel_name}-$(uname -m)/${cached_artifacts_path}"
+	if [[ "${kernel_name}" == "kernel-tdx-experimental" ]]; then
+		url="${jenkins_url}/job/kata-containers-2.0-kernel-tdx-cc-$(uname -m)/${cached_artifacts_path}"
+	fi
+
 	install_cached_tarball_component \
 		"${kernel_name}" \
-		"${jenkins_url}/job/kata-containers-main-${kernel_name}-$(uname -m)/${cached_artifacts_path}" \
+		"${url}" \
 		"${kernel_version}-${kernel_kata_config_version}" \
 		"$(get_kernel_image_name)" \
 		"${final_tarball_name}" \
