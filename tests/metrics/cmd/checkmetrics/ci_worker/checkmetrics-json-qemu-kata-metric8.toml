@@ -81,7 +81,7 @@ description = "tensorflow resnet model"
 # within (inclusive)
 checkvar = ".\"tensorflow\".Results | .[] | .resnet.Result"
 checktype = "mean"
-midval = 4396.0
+midval = 3546.0
 minpercent = 20.0
 maxpercent = 20.0
 
