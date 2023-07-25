@@ -175,10 +175,6 @@ install_cached_cc_shim_v2() {
 			;;
 	esac
 
-	if [ "${USE_CACHE}" != "yes" ]; then
-		return 1
-	fi
-
 	local component="${1}"
 	local jenkins_build_url="${2}"
 	local current_version="${3}"
@@ -221,6 +217,10 @@ install_cached_cc_shim_v2() {
 
 	wget "${jenkins_build_url}/root_hash_tdx.txt" -O "shim_v2_root_hash_tdx.txt" || return 1
 	diff "${root_hash_tdx}" "shim_v2_root_hash_tdx.txt" > /dev/null || return 1
+
+	if [ "${USE_CACHE}" != "yes" ]; then
+		return 1
+	fi
 
 	install_cached_tarball_component \
 		"${component}" \
