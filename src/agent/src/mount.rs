@@ -756,6 +756,14 @@ pub fn recursive_ownership_change(
         mask |= EXEC_MASK;
         mask |= MODE_SETGID;
     }
+
+    // We do not want to change the permission of the underlying file
+    // using symlink. Hence we skip symlinks from recursive ownership
+    // and permission changes.
+    if path.is_symlink() {
+        return Ok(());
+    }
+
     nix::unistd::chown(path, uid, gid)?;
 
     if gid.is_some() {
