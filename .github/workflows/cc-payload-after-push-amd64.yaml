@@ -21,7 +21,7 @@ jobs:
           - ovmf-sev
           - ovmf
           - qemu-snp-experimental
-          - qemu-tdx-exprimental
+          - qemu-tdx-experimental
           - cc-sev-rootfs-initrd
           - cc-tdx-td-shim
           - tdvf
