@@ -788,9 +788,20 @@ install_ovmf() {
 	local component_name="ovmf"
 	local component_version="$(get_from_kata_deps "externals.ovmf.${ovmf_type}.version")"
 	[ "${ovmf_type}" == "tdx" ] && component_name="tdvf"
+
+	# I am not expanding the if above just to make it easier for us in the
+	# future to deal with the rebases
+	#
+	# This must only be done as part of the CCv0 branch, as the version of
+	# TDVF is not the same as the one used on main
+	local url="${jenkins_url}/job/kata-containers-main-ovmf-${ovmf_type}-$(uname -m)/${cached_artifacts_path}"
+	if [[ "${ovmf_type}" == "tdx" ]]; then
+		url="${jenkins_url}/job/kata-containers-2.0-tdvf-cc-$(uname -m)/${cached_artifacts_path}"
+	fi
+
 	install_cached_tarball_component \
 		"${component_name}" \
-		"${jenkins_url}/job/kata-containers-main-ovmf-${ovmf_type}-$(uname -m)/${cached_artifacts_path}" \
+		"${url}" \
 		"${component_version}" \
 		"$(get_ovmf_image_name)" \
 		"${final_tarball_name}" \
