@@ -36,8 +36,10 @@ function main() {
 	init_env
 	check_cmds "${cmds[@]}"
 	check_ctr_images "${IMAGE}" "${DOCKERFILE}"
+	sudo systemctl restart containerd
 	metrics_json_init
 
+	info "Running Blogbench test"
 	local output=$(sudo -E ${CTR_EXE} run --rm --runtime=${CTR_RUNTIME} ${IMAGE} test ${CMD})
 
 	# Save configuration
@@ -65,6 +67,7 @@ EOF
 	metrics_json_end_array "Config"
 
 	# Save results
+	info "Saving Blogbench results"
 	metrics_json_start_array
 
 	local writes=$(tail -2 <<< "${output}" | head -1 | awk '{print $5}')
@@ -83,11 +86,11 @@ EOF
 	local json="$(cat << EOF
 	{
 		"write": {
-			"Result" : "${writes}",
+			"Result" : ${writes},
 			"Units"  : "items"
 		},
 		"read": {
-			"Result" : "${reads}",
+			"Result" : ${reads},
 			"Units"  : "items"
 		},
 		"Nb blogs": {

@@ -320,8 +320,6 @@ EOF
 
 	metrics_json_add_array_element "$json"
 	metrics_json_end_array "Results"
-
-	clean_env_ctr
 }
 
 function save_config(){
@@ -344,6 +342,9 @@ EOF
 }
 
 function main(){
+	# Collect kata-env data
+	common_init
+
 	# Verify enough arguments
 	if [ $# != 2 ] && [ $# != 3 ];then
 		echo >&2 "error: Not enough arguments [$@]"
@@ -378,6 +379,7 @@ function main(){
 	fi
 
 	metrics_json_save
+	clean_env_ctr
 }
 
 main "$@"

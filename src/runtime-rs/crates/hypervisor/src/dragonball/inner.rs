@@ -16,11 +16,13 @@ use dragonball::{
     api::v1::{BlockDeviceConfigInfo, BootSourceConfig, VcpuResizeInfo},
     vm::VmConfigInfo,
 };
+
 use kata_sys_util::mount;
 use kata_types::{
     capabilities::{Capabilities, CapabilityBits},
     config::hypervisor::Hypervisor as HypervisorConfig,
 };
+use nix::mount::MsFlags;
 use persist::sandbox_persist::Persist;
 use shim_interface::KATA_PATH;
 use std::{collections::HashSet, fs::create_dir_all, path::PathBuf};
@@ -232,7 +234,8 @@ impl DragonballInner {
         }
 
         let jailed_location = [self.jailer_root.as_str(), dst].join("/");
-        mount::bind_mount_unchecked(src, jailed_location.as_str(), false).context("bind_mount")?;
+        mount::bind_mount_unchecked(src, jailed_location.as_str(), false, MsFlags::MS_SLAVE)
+            .context("bind_mount")?;
 
         let mut abs_path = String::from("/");
         abs_path.push_str(dst);

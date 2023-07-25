@@ -13,6 +13,15 @@ pub struct SandboxNetworkEnv {
     pub network_created: bool,
 }
 
+impl std::fmt::Debug for SandboxNetworkEnv {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SandboxNetworkEnv")
+            .field("netns", &self.netns)
+            .field("network_created", &self.network_created)
+            .finish()
+    }
+}
+
 #[async_trait]
 pub trait Sandbox: Send + Sync {
     async fn start(

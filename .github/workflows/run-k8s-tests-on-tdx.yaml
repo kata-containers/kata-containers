@@ -28,7 +28,6 @@ jobs:
       DOCKER_REPO: ${{ inputs.repo }}
       DOCKER_TAG: ${{ inputs.tag }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
-      KUBECONFIG: /etc/rancher/k3s/k3s.yaml
     steps:
       - uses: actions/checkout@v3
         with:
@@ -36,8 +35,8 @@ jobs:
 
       - name: Run tests
         timeout-minutes: 30
-        run: bash tests/integration/gha-run.sh run-tests-tdx
+        run: bash tests/integration/kubernetes/gha-run.sh run-tests-tdx
 
       - name: Delete kata-deploy
         if: always()
-        run: bash tests/integration/gha-run.sh cleanup-tdx
+        run: bash tests/integration/kubernetes/gha-run.sh cleanup-tdx

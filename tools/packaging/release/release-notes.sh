@@ -135,6 +135,25 @@ ${image_info}
 ### Default Initrd Guest OS:
 ${initrd_info}
 
+## Kata Containers builder images
+The majority of the components of the project were built using containers.  In order to do a step towards
+build reproducibility we publish those container images, and when those are used combined with the version
+of the projects listed as part of the "versions.yaml" file, users can get as close to the environment we
+used to build the release artefacts.
+* Kernel (on all its different flavours): $(get_kernel_image_name)
+* OVMF (on all its diferent flavours): $(get_ovmf_image_name)
+* QEMU (on all its different flavurs): $(get_qemu_image_name)
+* shim-v2: $(get_shim_v2_image_name)
+* virtiofsd: $(get_virtiofsd_image_name)
+
+The users who want to rebuild the tarballs using exactly the same images can simply use the following environment
+variables:
+* `KERNEL_CONTAINER_BUILDER`
+* `OVMF_CONTAINER_BUILDER`
+* `QEMU_CONTAINER_BUILDER`
+* `SHIM_V2_CONTAINER_BUILDER`
+* `VIRTIOFSD_CONTAINER_BUILDER`
+
 ## Kata Linux Containers Kernel
 Kata Containers ${runtime_version} suggest to use the Linux kernel [${kernel_version}][kernel]
 See the kernel suggested [Guest Kernel patches][kernel-patches]

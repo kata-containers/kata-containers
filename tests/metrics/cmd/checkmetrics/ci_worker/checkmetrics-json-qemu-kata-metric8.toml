@@ -32,3 +32,42 @@ checktype = "mean"
 midval = 2435844.00
 minpercent = 20.0
 maxpercent = 20.0
+
+[[metric]]
+name = "memory-footprint-inside-container"
+type = "json"
+description = "measure memory inside the container"
+# Min and Max values to set a 'range' that
+# the median of the CSV Results data must fall
+# within (inclusive)
+checkvar = ".\"memory-footprint-inside-container\".Results | .[] | .memtotal.Result"
+checktype = "mean"
+midval = 3677280.0
+minpercent = 25.0
+maxpercent = 25.0
+
+[[metric]]
+name = "blogbench"
+type = "json"
+description = "measure container average of blogbench write"
+# Min and Max values to set a 'range' that
+# the median of the CSV Results data must fall
+# within (inclusive)
+checkvar = ".\"blogbench\".Results | .[] | .write.Result"
+checktype = "mean"
+midval = 1639.0
+minpercent = 20.0
+maxpercent = 20.0
+
+[[metric]]
+name = "blogbench"
+type = "json"
+description = "measure container average of blogbench read"
+# Min and Max values to set a 'range' that
+# the median of the CSV Results data must fall
+# within (inclusive)
+checkvar = ".\"blogbench\".Results | .[] | .read.Result"
+checktype = "mean"
+midval = 98687.0
+minpercent = 20.0
+maxpercent = 20.0

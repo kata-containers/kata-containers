@@ -10,21 +10,13 @@ set -o nounset
 
 crio_drop_in_conf_dir="/etc/crio/crio.conf.d/"
 crio_drop_in_conf_file="${crio_drop_in_conf_dir}/99-kata-deploy"
+crio_drop_in_conf_file_debug="${crio_drop_in_conf_dir}/100-debug"
 containerd_conf_file="/etc/containerd/config.toml"
 containerd_conf_file_backup="${containerd_conf_file}.bak"
 
-shims=(
-	"fc"
-	"qemu"
-	"qemu-nvidia-gpu"
-	"qemu-tdx"
-	"qemu-sev"
-	"qemu-snp"
-	"clh"
-	"dragonball"
-)
+IFS=' ' read -a shims <<< "$SHIMS"
 
-default_shim="qemu"
+default_shim="$DEFAULT_SHIM"
 
 # If we fail for any reason a message will be displayed
 die() {
@@ -64,6 +56,16 @@ function install_artifacts() {
 	chmod +x /opt/kata/bin/*
 	[ -d /opt/kata/runtime-rs/bin ] && \
 		chmod +x /opt/kata/runtime-rs/bin/*
+
+	# Allow enabling debug for Kata Containers
+	if [[ "${DEBUG:-"no"}" == "yes" ]]; then
+		config_path="/opt/kata/share/defaults/kata-containers/"
+		for shim in "${shims[@]}"; do
+			sed -i -e 's/^#\(enable_debug\).*=.*$/\1 = true/g' "${config_path}/configuration-${shim}.toml"
+			sed -i -e 's/^#\(debug_console_enabled\).*=.*$/\1 = true/g' "${config_path}/configuration-${shim}.toml"
+			sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug initcall_debug"/g' "${config_path}/configuration-${shim}.toml"
+		done
+	fi
 
 	# Allow Mariner to use custom configuration.
 	if [ "${HOST_OS:-}" == "cbl-mariner" ]; then
@@ -212,6 +214,14 @@ function configure_crio() {
 	for shim in "${shims[@]}"; do
 		configure_crio_runtime $shim
 	done
+
+
+	if [ "${DEBUG:-"no"}" == "yes" ]; then
+		cat <<EOF | tee -a $crio_drop_in_conf_file_debug
+[crio]
+log_level = "debug"
+EOF
+	fi
 }
 
 function configure_containerd_runtime() {
@@ -249,6 +259,18 @@ EOF
   [$options_table]
     ConfigPath = "${config_path}"
 EOF
+	fi
+
+	if [ "${DEBUG:-"no"}" == "yes" ]; then
+		if grep -q "\[debug\]" $containerd_conf_file; then
+			sed -i 's/level.*/level = \"debug\"/' $containerd_conf_file
+		else
+			cat <<EOF | tee -a "$containerd_conf_file"
+[debug]
+  level = "debug"
+EOF
+		fi
+
 	fi
 }
 
@@ -292,6 +314,9 @@ function cleanup_cri_runtime() {
 
 function cleanup_crio() {
 	rm $crio_drop_in_conf_file
+	if [[ "${DEBUG:-"no"}" == "yes" ]]; then
+		rm $crio_drop_in_conf_file_debug
+	fi
 }
 
 function cleanup_containerd() {

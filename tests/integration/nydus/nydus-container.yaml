@@ -1,0 +1,12 @@
+metadata:
+  name: nydus-container
+image:
+  image: ghcr.io/dragonflyoss/image-service/alpine:nydus-latest
+command:
+- tail
+- -f
+- /dev/null 
+linux:
+  resources:
+    memory_limit_in_bytes: 524288000
+log_path: nydus.0.log

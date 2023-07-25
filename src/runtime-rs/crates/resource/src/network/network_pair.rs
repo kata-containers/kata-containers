@@ -39,6 +39,7 @@ pub struct NetworkPair {
     pub model: Arc<dyn network_model::NetworkModel>,
     pub network_qos: bool,
 }
+
 impl NetworkPair {
     pub(crate) async fn new(
         handle: &rtnetlink::Handle,

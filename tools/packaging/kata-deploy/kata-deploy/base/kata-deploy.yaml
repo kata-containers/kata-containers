@@ -28,8 +28,12 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
-        - name: CONFIGURE_CC
-          value: "yes"
+        - name: DEBUG
+          value: "no"
+        - name: SHIMS
+          value: "clh dragonball fc qemu qemu-nvidia-gpu qemu-sev qemu-snp qemu-tdx"
+        - name: DEFAULT_SHIM
+          value: "qemu"
         securityContext:
           privileged: true
         volumeMounts:

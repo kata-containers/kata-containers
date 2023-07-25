@@ -26,6 +26,7 @@ use resource::{
     ResourceConfig, ResourceManager,
 };
 use tokio::sync::{mpsc::Sender, Mutex, RwLock};
+use tracing::instrument;
 
 use crate::health_check::HealthCheck;
 use persist::{self, sandbox_persist::Persist};
@@ -67,6 +68,15 @@ pub struct VirtSandbox {
     monitor: Arc<HealthCheck>,
 }
 
+impl std::fmt::Debug for VirtSandbox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VirtSandbox")
+            .field("sid", &self.sid)
+            .field("msg_sender", &self.msg_sender)
+            .finish()
+    }
+}
+
 impl VirtSandbox {
     pub async fn new(
         sid: &str,
@@ -88,7 +98,8 @@ impl VirtSandbox {
         })
     }
 
-    async fn prepare_config_for_sandbox(
+    #[instrument]
+    async fn prepare_for_start_sandbox(
         &self,
         _id: &str,
         network_env: SandboxNetworkEnv,
@@ -173,6 +184,7 @@ impl VirtSandbox {
 
 #[async_trait]
 impl Sandbox for VirtSandbox {
+    #[instrument(name = "sb: start")]
     async fn start(
         &self,
         dns: Vec<String>,
@@ -198,7 +210,7 @@ impl Sandbox for VirtSandbox {
         // generate device and setup before start vm
         // should after hypervisor.prepare_vm
         let resources = self
-            .prepare_config_for_sandbox(id, network_env.clone())
+            .prepare_for_start_sandbox(id, network_env.clone())
             .await?;
         self.resource_manager
             .prepare_before_start_vm(resources)

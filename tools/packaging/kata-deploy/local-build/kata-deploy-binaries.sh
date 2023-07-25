@@ -397,8 +397,13 @@ install_image_tdx() {
 
 #Install guest initrd
 install_initrd() {
-	local initrd_type="${1:-"initrd"}"
-	local initrd_suffix="${2:-""}"
+	local variant="${1:-}"
+
+	initrd_type="initrd"
+	if [ -n "${variant}" ]; then
+		initrd_type+="-${variant}"
+	fi
+
 	local jenkins="${jenkins_url}/job/kata-containers-main-rootfs-${initrd_type}-$(uname -m)/${cached_artifacts_path}"
 	local component="rootfs-${initrd_type}"
 
@@ -420,12 +425,26 @@ install_initrd() {
 		&& return 0
 
 	info "Create initrd"
-	"${rootfs_builder}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${initrd_suffix}"
+
+	if [ -n "${variant}" ]; then
+		os_name="$(get_from_kata_deps "assets.initrd.architecture.${ARCH}.${variant}.name")"
+		os_version="$(get_from_kata_deps "assets.initrd.architecture.${ARCH}.${variant}.version")"
+	else
+		os_name="$(get_from_kata_deps "assets.initrd.architecture.${ARCH}.name")"
+		os_version="$(get_from_kata_deps "assets.initrd.architecture.${ARCH}.version")"
+	fi
+
+	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
+}
+
+#Install Mariner guest initrd
+install_initrd_mariner() {
+	install_initrd "mariner"
 }
 
 #Install guest initrd for sev
 install_initrd_sev() {
-	install_initrd "initrd-sev" "sev"
+	install_initrd "sev"
 }
 
 #Install kernel component helper
@@ -443,7 +462,7 @@ install_cached_kernel_tarball_component() {
 	install_cached_tarball_component \
 		"${kernel_name}" \
 		"${url}" \
-		"${kernel_version}-${kernel_kata_config_version}" \
+		"${kernel_version}-${kernel_kata_config_version}-$(get_last_modification $(dirname $kernel_builder))" \
 		"$(get_kernel_image_name)" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
@@ -457,7 +476,7 @@ install_cached_kernel_tarball_component() {
 	install_cached_tarball_component \
 		"${kernel_name}" \
 		"${jenkins_url}/job/kata-containers-main-${kernel_name}-$(uname -m)/${cached_artifacts_path}" \
-		"${kernel_version}-${kernel_kata_config_version}" \
+		"${kernel_version}-${kernel_kata_config_version}-$(get_last_modification $(dirname $kernel_builder))" \
 		"$(get_kernel_image_name)" \
 		"kata-static-kernel-sev-modules.tar.xz" \
 		"${workdir}/kata-static-kernel-sev-modules.tar.xz" \
@@ -548,14 +567,6 @@ install_kernel_nvidia_gpu_tdx_experimental() {
 		"assets.kernel-tdx-experimental.version" \
 		"kernel-nvidia-gpu-tdx-experimental" \
 		"-x tdx -g nvidia -u ${kernel_url} -H deb"
-}
-
-#Install experimental kernel asset
-install_kernel_experimental() {
-	install_kernel_helper \
-		"assets.kernel-experimental.version" \
-		"kernel-experimental" \
-		"-f -b experimental"
 }
 
 #Install experimental TDX kernel asset
@@ -894,8 +905,6 @@ handle_build() {
 	kernel) install_kernel ;;
 
 	kernel-dragonball-experimental) install_kernel_dragonball_experimental ;;
-
-	kernel-experimental) install_kernel_experimental ;;
 
 	kernel-nvidia-gpu) install_kernel_nvidia_gpu ;;
 

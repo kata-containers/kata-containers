@@ -155,14 +155,17 @@ assets:
       x86_64:
         name: *default-initrd-name
         version: *default-initrd-version
+        mariner:
+          name: "cbl-mariner"
+          version: "2.0"
         sev:
           name: *glibc-initrd-name
           version: *glibc-initrd-version
 
   kernel:
     description: "Linux kernel optimised for virtual machines"
-    url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
-    version: "v5.19.2"
+    url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
+    version: "v6.1.38"
     sev:
       description: "Linux kernel that supports SEV and SNP"
       url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
@@ -171,11 +174,6 @@ assets:
       description: "Linux kernel that supports AMD SEV-SNP for VMs"
       url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
       version: "v5.19.2"
-
-  kernel-experimental:
-    description: "Linux kernel with virtio-fs support"
-    url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
-    tag: "v5.13.10"
 
   kernel-arm-experimental:
     description: "Linux kernel with cpu/mem hotplug support on arm64"
@@ -232,6 +230,9 @@ externals:
     description: "CLI tool for Container Runtime Interface (CRI)"
     url: "https://github.com/kubernetes-sigs/cri-tools"
     version: "1.23.0"
+    # As we don't want to disrupt what we have on the `tests` repo, let's
+    # create a "latest" entry and use that for the GitHub actions tests.
+    latest: "v1.27"
 
   cryptsetup:
     description: "A utility used to setup disk encryption, integrity protection"
@@ -327,11 +328,11 @@ externals:
     version: "v1.6.1"
     toolchain: "1.66.0"
     meta:
-      # From https://gitlab.com/virtio-fs/virtiofsd/-/releases/v1.6.1,
-      # this is the link labelled virtiofsd-v1.6.1.zip
+      # From https://gitlab.com/virtio-fs/virtiofsd/-/releases/v1.7.0,
+      # this is the link labelled virtiofsd-v1.7.0.zip
       #
       # yamllint disable-line rule:line-length
-      binary: "https://gitlab.com/virtio-fs/virtiofsd/uploads/14c1e8a7acc82d515cec6608727a1e4a/virtiofsd-v1.6.1.zip"
+      binary: "https://gitlab.com/virtio-fs/virtiofsd/uploads/dc56ecbf86ce1226bdc31f946cfded75/virtiofsd-v1.7.0.zip"
 
 languages:
   description: |

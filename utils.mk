@@ -130,7 +130,7 @@ endef
 
 
 ##VAR BUILD_TYPE=release|debug type of rust build
-BUILD_TYPE = release
+BUILD_TYPE ?= release
 
 HOST_ARCH = $(shell uname -m)
 ##VAR ARCH=arch target to build (format: uname -m)

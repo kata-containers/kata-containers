@@ -312,117 +312,354 @@ type Param struct {
 // HypervisorConfig is the hypervisor configuration.
 // nolint: govet
 type HypervisorConfig struct {
-	customAssets                   map[types.AssetType]*types.Asset
-	SeccompSandbox                 string
-	KernelPath                     string
-	ImagePath                      string
-	InitrdPath                     string
-	FirmwarePath                   string
-	FirmwareVolumePath             string
-	MachineAccelerators            string
-	CPUFeatures                    string
-	HypervisorPath                 string
-	HypervisorCtlPath              string
-	GuestPreAttestationKeyset      string
-	BlockDeviceDriver              string
-	HypervisorMachineType          string
-	GuestPreAttestationURI         string
-	GuestPreAttestationMode        string
-	DevicesStatePath               string
-	EntropySource                  string
-	SharedFS                       string
-	SharedPath                     string
-	VirtioFSDaemon                 string
-	VirtioFSCache                  string
-	FileBackedMemRootDir           string
-	VhostUserStorePath             string
-	GuestMemoryDumpPath            string
-	GuestHookPath                  string
-	VMid                           string
-	VMStorePath                    string
-	RunStorePath                   string
-	SELinuxProcessLabel            string
-	JailerPath                     string
-	MemoryPath                     string
-	SEVCertChainPath               string
-	BlockDeviceAIO                 string
-	User                           string
-	RemoteHypervisorSocket         string
-	SandboxName                    string
-	SandboxNamespace               string
-	JailerPathList                 []string
-	EntropySourceList              []string
-	VirtioFSDaemonList             []string
-	VirtioFSExtraArgs              []string
-	EnableAnnotations              []string
-	FileBackedMemRootList          []string
-	PFlash                         []string
-	VhostUserStorePathList         []string
-	HypervisorCtlPathList          []string
-	KernelParams                   []Param
-	Groups                         []uint32
-	HypervisorPathList             []string
-	HypervisorParams               []Param
-	DiskRateLimiterBwOneTimeBurst  int64
-	DiskRateLimiterOpsMaxRate      int64
-	RootfsType                     string
-	VhostUserDeviceReconnect       uint32
+	// customAssets is a map of assets.
+	// Each value in that map takes precedence over the configured assets.
+	// For example, if there is a value for the "kernel" key in this map,
+	// it will be used for the sandbox's kernel path instead of KernelPath.
+	customAssets map[types.AssetType]*types.Asset
+
+	// Supplementary group IDs.
+	Groups []uint32
+
+	// KernelPath is the guest kernel host path.
+	KernelPath string
+
+	// ImagePath is the guest image host path.
+	ImagePath string
+
+	// InitrdPath is the guest initrd image host path.
+	// ImagePath and InitrdPath cannot be set at the same time.
+	InitrdPath string
+
+	// RootfsType is filesystem type of rootfs.
+	RootfsType string
+
+	// FirmwarePath is the bios host path
+	FirmwarePath string
+
+	// FirmwareVolumePath is the configuration volume path for the firmware
+	FirmwareVolumePath string
+
+	// MachineAccelerators are machine specific accelerators
+	MachineAccelerators string
+
+	// CPUFeatures are cpu specific features
+	CPUFeatures string
+
+	// HypervisorPath is the hypervisor executable host path.
+	HypervisorPath string
+
+	// HypervisorCtlPath is the hypervisor ctl executable host path.
+	HypervisorCtlPath string
+
+	// JailerPath is the jailer executable host path.
+	JailerPath string
+
+	// BlockDeviceDriver specifies the driver to be used for block device
+	// either VirtioSCSI or VirtioBlock with the default driver being defaultBlockDriver
+	BlockDeviceDriver string
+
+	// HypervisorMachineType specifies the type of machine being
+	// emulated.
+	HypervisorMachineType string
+
+	// MemoryPath is the memory file path of VM memory. Used when either BootToBeTemplate or
+	// BootFromTemplate is true.
+	MemoryPath string
+
+	// DevicesStatePath is the VM device state file path. Used when either BootToBeTemplate or
+	// BootFromTemplate is true.
+	DevicesStatePath string
+
+	// EntropySource is the path to a host source of
+	// entropy (/dev/random, /dev/urandom or real hardware RNG device)
+	EntropySource string
+
+	// Shared file system type:
+	//   - virtio-9p
+	//   - virtio-fs (default)
+	SharedFS string
+
+	// Path for filesystem sharing
+	SharedPath string
+
+	// VirtioFSDaemon is the virtio-fs vhost-user daemon path
+	VirtioFSDaemon string
+
+	// VirtioFSCache cache mode for fs version cache
+	VirtioFSCache string
+
+	// File based memory backend root directory
+	FileBackedMemRootDir string
+
+	// VhostUserStorePath is the directory path where vhost-user devices
+	// related folders, sockets and device nodes should be.
+	VhostUserStorePath string
+
+	// VhostUserDeviceReconnect is the timeout for reconnecting on non-server spdk sockets
+	// when the remote end goes away. Zero disables reconnecting.
+	VhostUserDeviceReconnect uint32
+
+	// GuestCoredumpPath is the path in host for saving guest memory dump
+	GuestMemoryDumpPath string
+
+	// GuestHookPath is the path within the VM that will be used for 'drop-in' hooks
+	GuestHookPath string
+
+	// VMid is the id of the VM that create the hypervisor if the VM is created by the factory.
+	// VMid is "" if the hypervisor is not created by the factory.
+	VMid string
+
+	// VMStorePath is the location on disk where VM information will persist
+	VMStorePath string
+
+	// VMStorePath is the location on disk where runtime information will persist
+	RunStorePath string
+
+	// SELinux label for the VM
+	SELinuxProcessLabel string
+
+	// HypervisorPathList is the list of hypervisor paths names allowed in annotations
+	HypervisorPathList []string
+
+	// HypervisorCtlPathList is the list of hypervisor control paths names allowed in annotations
+	HypervisorCtlPathList []string
+
+	// JailerPathList is the list of jailer paths names allowed in annotations
+	JailerPathList []string
+
+	// EntropySourceList is the list of valid entropy sources
+	EntropySourceList []string
+
+	// VirtioFSDaemonList is the list of valid virtiofs names for annotations
+	VirtioFSDaemonList []string
+
+	// VirtioFSExtraArgs passes options to virtiofsd daemon
+	VirtioFSExtraArgs []string
+
+	// Enable annotations by name
+	EnableAnnotations []string
+
+	// FileBackedMemRootList is the list of valid root directories values for annotations
+	FileBackedMemRootList []string
+
+	// PFlash image paths
+	PFlash []string
+
+	// VhostUserStorePathList is the list of valid values for vhost-user paths
+	VhostUserStorePathList []string
+
+	// SeccompSandbox is the qemu function which enables the seccomp feature
+	SeccompSandbox string
+
+	// BlockiDeviceAIO specifies the I/O API to be used.
+	BlockDeviceAIO string
+
+	// The user maps to the uid.
+	User string
+
+	// KernelParams are additional guest kernel parameters.
+	KernelParams []Param
+
+	// HypervisorParams are additional hypervisor parameters.
+	HypervisorParams []Param
+
+	// SGXEPCSize specifies the size in bytes for the EPC Section.
+	// Enable SGX. Hardware-based isolation and memory encryption.
+	SGXEPCSize int64
+
+	// DiskRateLimiterBwRate is used to control disk I/O bandwidth on VM level.
+	// The same value, defined in bits per second, is used for inbound and outbound bandwidth.
+	DiskRateLimiterBwMaxRate int64
+
+	// DiskRateLimiterBwOneTimeBurst is used to control disk I/O bandwidth on VM level.
+	// This increases the initial max rate and this initial extra credit does *NOT* replenish
+	// and can be used for an *initial* burst of data.
+	DiskRateLimiterBwOneTimeBurst int64
+
+	// DiskRateLimiterOpsRate is used to control disk I/O operations on VM level.
+	// The same value, defined in operations per second, is used for inbound and outbound bandwidth.
+	DiskRateLimiterOpsMaxRate int64
+
+	// DiskRateLimiterOpsOneTimeBurst is used to control disk I/O operations on VM level.
+	// This increases the initial max rate and this initial extra credit does *NOT* replenish
+	// and can be used for an *initial* burst of data.
 	DiskRateLimiterOpsOneTimeBurst int64
-	SGXEPCSize                     int64
-	DefaultMaxMemorySize           uint64
-	NetRateLimiterBwMaxRate        int64
-	NetRateLimiterBwOneTimeBurst   int64
-	NetRateLimiterOpsMaxRate       int64
-	NetRateLimiterOpsOneTimeBurst  int64
-	MemOffset                      uint64
-	TxRateLimiterMaxRate           uint64
-	DiskRateLimiterBwMaxRate       int64
-	RxRateLimiterMaxRate           uint64
-	MemorySize                     uint32
-	DefaultMaxVCPUs                uint32
-	DefaultBridges                 uint32
-	Msize9p                        uint32
-	MemSlots                       uint32
-	VirtioFSCacheSize              uint32
-	VirtioFSQueueSize              uint32
-	Uid                            uint32
-	Gid                            uint32
-	SEVGuestPolicy                 uint32
-	SNPGuestPolicy                 uint64
-	NumVCPUs                       uint32
-	RemoteHypervisorTimeout        uint32
-	IOMMUPlatform                  bool
-	EnableIOThreads                bool
-	Debug                          bool
-	MemPrealloc                    bool
-	HugePages                      bool
-	VirtioMem                      bool
-	IOMMU                          bool
-	DisableBlockDeviceUse          bool
-	DisableNestingChecks           bool
-	DisableImageNvdimm             bool
-	HotplugVFIOOnRootBus           bool
-	GuestMemoryDumpPaging          bool
-	ConfidentialGuest              bool
-	SevSnpGuest                    bool
-	GuestPreAttestation            bool
-	BlockDeviceCacheNoflush        bool
-	BlockDeviceCacheDirect         bool
-	BlockDeviceCacheSet            bool
-	BootToBeTemplate               bool
-	BootFromTemplate               bool
-	DisableVhostNet                bool
-	EnableVhostUserStore           bool
-	GuestSwap                      bool
-	Rootless                       bool
-	DisableSeccomp                 bool
-	DisableSeLinux                 bool
-	DisableGuestSeLinux            bool
-	LegacySerial                   bool
-	HotPlugVFIO                    config.PCIePort
-	ColdPlugVFIO                   config.PCIePort
-	VFIODevices                    []config.DeviceInfo
-	VhostUserBlkDevices            []config.DeviceInfo
+
+	// RxRateLimiterMaxRate is used to control network I/O inbound bandwidth on VM level.
+	RxRateLimiterMaxRate uint64
+
+	// TxRateLimiterMaxRate is used to control network I/O outbound bandwidth on VM level.
+	TxRateLimiterMaxRate uint64
+
+	// NetRateLimiterBwRate is used to control network I/O bandwidth on VM level.
+	// The same value, defined in bits per second, is used for inbound and outbound bandwidth.
+	NetRateLimiterBwMaxRate int64
+
+	// NetRateLimiterBwOneTimeBurst is used to control network I/O bandwidth on VM level.
+	// This increases the initial max rate and this initial extra credit does *NOT* replenish
+	// and can be used for an *initial* burst of data.
+	NetRateLimiterBwOneTimeBurst int64
+
+	// NetRateLimiterOpsRate is used to control network I/O operations on VM level.
+	// The same value, defined in operations per second, is used for inbound and outbound bandwidth.
+	NetRateLimiterOpsMaxRate int64
+
+	// NetRateLimiterOpsOneTimeBurst is used to control network I/O operations on VM level.
+	// This increases the initial max rate and this initial extra credit does *NOT* replenish
+	// and can be used for an *initial* burst of data.
+	NetRateLimiterOpsOneTimeBurst int64
+
+	// MemOffset specifies memory space for nvdimm device
+	MemOffset uint64
+
+	// VFIODevices are used to get PCIe device info early before the sandbox
+	// is started to make better PCIe topology decisions
+	VFIODevices []config.DeviceInfo
+	// VhostUserBlkDevices are handled differently in Q35 and Virt machine
+	// type. capture them early before the sandbox to make better PCIe topology
+	// decisions
+	VhostUserBlkDevices []config.DeviceInfo
+
+	// HotplugVFIO is used to indicate if devices need to be hotplugged on the
+	// root port or a switch
+	HotPlugVFIO config.PCIePort
+
+	// ColdPlugVFIO is used to indicate if devices need to be coldplugged on the
+	// root port, switch or no port
+	ColdPlugVFIO config.PCIePort
+
+	// NumVCPUs specifies default number of vCPUs for the VM.
+	NumVCPUs uint32
+
+	//DefaultMaxVCPUs specifies the maximum number of vCPUs for the VM.
+	DefaultMaxVCPUs uint32
+
+	// DefaultMem specifies default memory size in MiB for the VM.
+	MemorySize uint32
+
+	// DefaultMaxMemorySize specifies the maximum amount of RAM in MiB for the VM.
+	DefaultMaxMemorySize uint64
+
+	// DefaultBridges specifies default number of bridges for the VM.
+	// Bridges can be used to hot plug devices
+	DefaultBridges uint32
+
+	// Msize9p is used as the msize for 9p shares
+	Msize9p uint32
+
+	// MemSlots specifies default memory slots the VM.
+	MemSlots uint32
+
+	// VirtioFSCacheSize is the DAX cache size in MiB
+	VirtioFSCacheSize uint32
+
+	// Size of virtqueues
+	VirtioFSQueueSize uint32
+
+	// User ID.
+	Uid uint32
+
+	// Group ID.
+	Gid uint32
+
+	// BlockDeviceCacheSet specifies cache-related options will be set to block devices or not.
+	BlockDeviceCacheSet bool
+
+	// BlockDeviceCacheDirect specifies cache-related options for block devices.
+	// Denotes whether use of O_DIRECT (bypass the host page cache) is enabled.
+	BlockDeviceCacheDirect bool
+
+	// BlockDeviceCacheNoflush specifies cache-related options for block devices.
+	// Denotes whether flush requests for the device are ignored.
+	BlockDeviceCacheNoflush bool
+
+	// DisableBlockDeviceUse disallows a block device from being used.
+	DisableBlockDeviceUse bool
+
+	// EnableIOThreads enables IO to be processed in a separate thread.
+	// Supported currently for virtio-scsi driver.
+	EnableIOThreads bool
+
+	// Debug changes the default hypervisor and kernel parameters to
+	// enable debug output where available. And Debug also enable the hmp socket.
+	Debug bool
+
+	// MemPrealloc specifies if the memory should be pre-allocated
+	MemPrealloc bool
+
+	// HugePages specifies if the memory should be pre-allocated from huge pages
+	HugePages bool
+
+	// VirtioMem is used to enable/disable virtio-mem
+	VirtioMem bool
+
+	// IOMMU specifies if the VM should have a vIOMMU
+	IOMMU bool
+
+	// IOMMUPlatform is used to indicate if IOMMU_PLATFORM is enabled for supported devices
+	IOMMUPlatform bool
+
+	// DisableNestingChecks is used to override customizations performed
+	// when running on top of another VMM.
+	DisableNestingChecks bool
+
+	// DisableImageNvdimm is used to disable guest rootfs image nvdimm devices
+	DisableImageNvdimm bool
+
+	// GuestMemoryDumpPaging is used to indicate if enable paging
+	// for QEMU dump-guest-memory command
+	GuestMemoryDumpPaging bool
+
+	// Enable confidential guest support.
+	// Enable or disable different hardware features, ranging
+	// from memory encryption to both memory and CPU-state encryption and integrity.
+	ConfidentialGuest bool
+
+	// Enable SEV-SNP guests on AMD machines capable of both
+	SevSnpGuest bool
+
+	// BootToBeTemplate used to indicate if the VM is created to be a template VM
+	BootToBeTemplate bool
+
+	// BootFromTemplate used to indicate if the VM should be created from a template VM
+	BootFromTemplate bool
+
+	// DisableVhostNet is used to indicate if host supports vhost_net
+	DisableVhostNet bool
+
+	// EnableVhostUserStore is used to indicate if host supports vhost-user-blk/scsi
+	EnableVhostUserStore bool
+
+	// GuestSwap Used to enable/disable swap in the guest
+	GuestSwap bool
+
+	// Rootless is used to enable rootless VMM process
+	Rootless bool
+
+	// Disable seccomp from the hypervisor process
+	DisableSeccomp bool
+
+	// Disable selinux from the hypervisor process
+	DisableSeLinux bool
+
+	// Disable selinux from the container process
+	DisableGuestSeLinux bool
+
+	// Use legacy serial for the guest console
+	LegacySerial bool
+
+	GuestPreAttestation       bool
+	GuestPreAttestationKeyset string
+	GuestPreAttestationURI    string
+	GuestPreAttestationMode   string
+	SandboxName               string
+	SandboxNamespace          string
+	SEVCertChainPath          string
+	SEVGuestPolicy            uint32
+	SNPGuestPolicy            uint64
+	RemoteHypervisorSocket    string
+	RemoteHypervisorTimeout   uint32
 }
 
 // vcpu mapping from vcpu number to thread number

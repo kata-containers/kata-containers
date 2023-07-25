@@ -330,31 +330,29 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (runtimeConfig string, 
 	disableBlockDevice := true
 	blockDeviceDriver := "virtio-scsi"
 	enableIOThreads := true
-	hotplugVFIOOnRootBus := true
 	disableNewNetNs := false
 	sharedFS := "virtio-9p"
 	virtioFSdaemon := path.Join(dir, "virtiofsd")
 	hotPlugVFIO = config.BridgePort
-	coldPlugVFIO = config.RootPort
+	coldPlugVFIO = config.NoPort
 
 	configFileOptions := ktu.RuntimeConfigOptions{
-		Hypervisor:           "qemu",
-		HypervisorPath:       hypervisorPath,
-		KernelPath:           kernelPath,
-		ImagePath:            imagePath,
-		RootfsType:           rootfsType,
-		KernelParams:         kernelParams,
-		MachineType:          machineType,
-		LogPath:              logPath,
-		DisableBlock:         disableBlockDevice,
-		BlockDeviceDriver:    blockDeviceDriver,
-		EnableIOThreads:      enableIOThreads,
-		HotplugVFIOOnRootBus: hotplugVFIOOnRootBus,
-		DisableNewNetNs:      disableNewNetNs,
-		SharedFS:             sharedFS,
-		VirtioFSDaemon:       virtioFSdaemon,
-		HotPlugVFIO:          hotPlugVFIO,
-		ColdPlugVFIO:         coldPlugVFIO,
+		Hypervisor:        "qemu",
+		HypervisorPath:    hypervisorPath,
+		KernelPath:        kernelPath,
+		ImagePath:         imagePath,
+		RootfsType:        rootfsType,
+		KernelParams:      kernelParams,
+		MachineType:       machineType,
+		LogPath:           logPath,
+		DisableBlock:      disableBlockDevice,
+		BlockDeviceDriver: blockDeviceDriver,
+		EnableIOThreads:   enableIOThreads,
+		DisableNewNetNs:   disableNewNetNs,
+		SharedFS:          sharedFS,
+		VirtioFSDaemon:    virtioFSdaemon,
+		HotPlugVFIO:       hotPlugVFIO,
+		ColdPlugVFIO:      coldPlugVFIO,
 	}
 
 	runtimeConfigFileData := ktu.MakeRuntimeConfigFileData(configFileOptions)

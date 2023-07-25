@@ -8,8 +8,9 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-integration_dir="$(dirname "$(readlink -f "$0")")"
-tools_dir="${integration_dir}/../../tools"
+kubernetes_dir="$(dirname "$(readlink -f "$0")")"
+source "${kubernetes_dir}/../../common.bash"
+tools_dir="${repo_root_dir}/tools"
 
 function _print_cluster_name() {
     short_sha="$(git rev-parse --short=12 HEAD)"
@@ -58,13 +59,6 @@ function get_cluster_credentials() {
         -n "$(_print_cluster_name)"
 }
 
-function ensure_yq() {
-    : "${GOPATH:=${GITHUB_WORKSPACE}}"
-    export GOPATH
-    export PATH="${GOPATH}/bin:${PATH}"
-    INSTALL_IN_GOPATH=true "${repo_root_dir}/ci/install_yq.sh"
-}
-
 function run_tests() {
     platform="${1}"
     ensure_yq
@@ -76,6 +70,10 @@ function run_tests() {
     kubectl delete namespace kata-containers-k8s-tests &> /dev/null || true
 
     sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
+
+    # Enable debug for Kata Containers
+    yq write -i "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[1].value' "\"yes\""
+
     if [ "${KATA_HOST_OS}" = "cbl-mariner" ]; then
         yq write -i "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[+].name' "HOST_OS"
         yq write -i "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[-1].value' "${KATA_HOST_OS}"
@@ -92,6 +90,9 @@ function run_tests() {
     kubectl -n kube-system wait --timeout=10m --for=condition=Ready -l name=kata-deploy pod
     kubectl apply -f "${tools_dir}/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml"
 
+    echo "Gather information about the nodes and pods after having kata-deploy ready"
+    get_nodes_and_pods_info
+
     # This is needed as the kata-deploy pod will be set to "Ready" when it starts running,
     # which may cause issues like not having the node properly labeled or the artefacts
     # properly deployed when the tests actually start running.
@@ -102,10 +103,13 @@ function run_tests() {
     fi
 
     # Create a new namespace for the tests and switch to it
-    kubectl apply -f ${integration_dir}/kubernetes/runtimeclass_workloads/tests-namespace.yaml
+    kubectl apply -f ${kubernetes_dir}/runtimeclass_workloads/tests-namespace.yaml
     kubectl config set-context --current --namespace=kata-containers-k8s-tests
 
-    pushd "${integration_dir}/kubernetes"
+    echo "Gather information about the nodes and pods just before starting the tests"
+    get_nodes_and_pods_info
+
+    pushd "${kubernetes_dir}"
     bash setup.sh
     bash run_kubernetes_tests.sh
     popd
@@ -113,6 +117,9 @@ function run_tests() {
 
 function cleanup() {
     platform="${1}"
+
+    echo "Gather information about the nodes and pods before cleaning up the node"
+    get_nodes_and_pods_info "yes"
 
     # Switch back to the default namespace and delete the tests one
     kubectl config set-context --current --namespace=default
@@ -138,6 +145,10 @@ function cleanup() {
     kubectl delete ${cleanup_spec}
     kubectl delete -f "${tools_dir}/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
     kubectl delete -f "${tools_dir}/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml"
+
+   if [ "${platform}" = "aks" ]; then
+	   delete_cluster
+   fi
 }
 
 function delete_cluster() {
@@ -145,6 +156,25 @@ function delete_cluster() {
         -g "kataCI" \
         -n "$(_print_cluster_name)" \
         --yes
+}
+
+function get_nodes_and_pods_info() {
+    describe_pods="${1:-"no"}"
+
+    echo "::group::Get node information"
+    kubectl get nodes -o wide --show-labels=true
+    echo "::endgroup::"
+    echo ""
+    echo "::group::Get all the pods running"
+    kubectl get pods -A
+    echo "::endgroup::"
+    echo ""
+    if [[ "${describe_pods}" == "yes" ]]; then
+	echo "::group::Describe all the pods"
+    	kubectl describe pods -A
+	echo "::endgroup::"
+    fi
+    kubectl debug $(kubectl get nodes -o name) -it --image=quay.io/kata-containers/kata-debug:latest
 }
 
 function main() {
@@ -166,7 +196,7 @@ function main() {
         cleanup-sev) cleanup "sev" ;;
         cleanup-snp) cleanup "snp" ;;
         cleanup-tdx) cleanup "tdx" ;;
-        delete-cluster) delete_cluster ;;
+        delete-cluster) cleanup "aks" ;;
         *) >&2 echo "Invalid argument"; exit 2 ;;
     esac
 }
