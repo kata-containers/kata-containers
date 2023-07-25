@@ -175,6 +175,7 @@ function get_nodes_and_pods_info() {
 	echo "::endgroup::"
     fi
     kubectl debug $(kubectl get nodes -o name) -it --image=quay.io/kata-containers/kata-debug:latest
+    kubectl get pods -o name | grep node-debugger | xargs kubectl delete
 }
 
 function main() {
