@@ -54,7 +54,7 @@ build_image() {
 }
 
 main() {
-	readonly prefix="/opt/confidential-containers"
+	readonly prefix="/opt/kata"
 	builddir="${PWD}"
 	tarball_dir="${builddir}/../.."
 	while getopts "h-:" opt; do
