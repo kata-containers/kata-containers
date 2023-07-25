@@ -124,12 +124,6 @@ cleanup_and_fail() {
 }
 
 install_cached_tarball_component() {
-	case ${5} in
-		"kata-static-cc-rootfs-image.tar.xz" | "kata-static-cc-rootfs-initrd.tar.xz" | "kata-static-cc-se-image.tar.xz" | "kata-static-cc-tdx-rootfs-image.tar.xz" | "kata-static-cc-tdx-td-shim.tar.xz" | "kata-static-cc-sev-rootfs-initrd.tar.xz" )
-			USE_CACHE="no"
-			;;
-	esac
-
 	if [ "${USE_CACHE}" != "yes" ]; then
 		return 1
 	fi
