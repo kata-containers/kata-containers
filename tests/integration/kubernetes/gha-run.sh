@@ -121,6 +121,11 @@ function cleanup() {
     echo "Gather information about the nodes and pods before cleaning up the node"
     get_nodes_and_pods_info "yes"
 
+    if [ "${platform}" = "aks" ]; then
+        delete_cluster
+        return
+    fi
+
     # Switch back to the default namespace and delete the tests one
     kubectl config set-context --current --namespace=default
     kubectl delete namespace kata-containers-k8s-tests
@@ -145,10 +150,6 @@ function cleanup() {
     kubectl delete ${cleanup_spec}
     kubectl delete -f "${tools_dir}/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
     kubectl delete -f "${tools_dir}/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml"
-
-   if [ "${platform}" = "aks" ]; then
-	   delete_cluster
-   fi
 }
 
 function delete_cluster() {
