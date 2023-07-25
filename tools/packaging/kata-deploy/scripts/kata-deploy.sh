@@ -14,18 +14,9 @@ crio_drop_in_conf_file_debug="${crio_drop_in_conf_dir}/100-debug"
 containerd_conf_file="/etc/containerd/config.toml"
 containerd_conf_file_backup="${containerd_conf_file}.bak"
 
-shims=(
-	"fc"
-	"qemu"
-	"qemu-nvidia-gpu"
-	"qemu-tdx"
-	"qemu-sev"
-	"qemu-snp"
-	"clh"
-	"dragonball"
-)
+IFS=' ' read -a shims <<< "$SHIMS"
 
-default_shim="qemu"
+default_shim="$DEFAULT_SHIM"
 
 # If we fail for any reason a message will be displayed
 die() {
