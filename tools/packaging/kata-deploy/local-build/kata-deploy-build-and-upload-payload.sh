@@ -11,7 +11,7 @@ set -o nounset
 set -o pipefail
 set -o errtrace
 
-KATA_DEPLOY_DIR="`dirname ${0}`/../../kata-deploy-cc"
+KATA_DEPLOY_DIR="`dirname ${0}`/../../kata-deploy"
 KATA_DEPLOY_ARTIFACT="${1:-"kata-static.tar.xz"}"
 REGISTRY="${2:-"quay.io/confidential-containers/runtime-payload"}"
 TAG="${3:-}"

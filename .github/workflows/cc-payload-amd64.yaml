@@ -14,22 +14,23 @@ jobs:
         measured_rootfs:
           - no
         asset:
-          - cc-cloud-hypervisor
-          - cc-qemu
-          - cc-virtiofsd
-          - cc-sev-kernel
-          - cc-sev-ovmf
-          - cc-x86_64-ovmf
-          - cc-snp-qemu
+          - cloud-hypervisor
+          - qemu
+          - virtiofsd
+          - kernel-sev
+          - kernel-snp-experimental
+          - ovmf-sev
+          - ovmf
+          - qemu-snp-experimental
+          - qemu-tdx-experimental
           - cc-sev-rootfs-initrd
-          - cc-tdx-qemu
           - cc-tdx-td-shim
-          - cc-tdx-tdvf
+          - tdvf
         include:
           - measured_rootfs: yes
-            asset: cc-kernel
+            asset: kernel
           - measured_rootfs: yes
-            asset: cc-tdx-kernel
+            asset: kernel-tdx-experimental
           - measured_rootfs: yes
             asset: cc-rootfs-image
           - measured_rootfs: yes
