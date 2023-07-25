@@ -12,6 +12,8 @@ kubernetes_dir="$(dirname "$(readlink -f "$0")")"
 source "${kubernetes_dir}/../../common.bash"
 tools_dir="${repo_root_dir}/tools"
 
+AZ_RG="${AZ_RG:-kataCI}"
+
 function _print_cluster_name() {
     short_sha="$(git rev-parse --short=12 HEAD)"
     echo "${GH_PR_NUMBER}-${short_sha}-${KATA_HYPERVISOR}-${KATA_HOST_OS}-amd64"
@@ -36,7 +38,7 @@ function create_cluster() {
     delete_cluster || true
 
     az aks create \
-        -g "kataCI" \
+        -g "${AZ_RG}" \
         -n "$(_print_cluster_name)" \
         -s "Standard_D4s_v5" \
         --node-count 1 \
@@ -55,7 +57,7 @@ function install_kubectl() {
 
 function get_cluster_credentials() {
     az aks get-credentials \
-        -g "kataCI" \
+        -g "${AZ_RG}" \
         -n "$(_print_cluster_name)"
 }
 
@@ -156,7 +158,7 @@ function cleanup() {
 
 function delete_cluster() {
     az aks delete \
-        -g "kataCI" \
+        -g "${AZ_RG}" \
         -n "$(_print_cluster_name)" \
         --yes
 }
