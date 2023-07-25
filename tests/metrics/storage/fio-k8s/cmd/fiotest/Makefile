@@ -15,9 +15,9 @@ run: build
 	$(MKFILE_DIR)/fio-k8s --debug --fio.size 10M --output-dir test-results --test-name runc --container-runtime runc $(MKFILE_DIR)/../../configs/example-config/
 
 gomod:
-	 go mod edit -replace=github.com/kata-containers/tests/metrics/k8s=../../pkg/k8s
-	 go mod edit -replace=github.com/kata-containers/tests/metrics/exec=../../pkg/exec
-	 go mod edit -replace=github.com/kata-containers/tests/metrics/env=../../pkg/env
+	 go mod edit -replace=github.com/kata-containers/kata-containers/tests/metrics/k8s=../../pkg/k8s
+	 go mod edit -replace=github.com/kata-containers/kata-containers/tests/metrics/exec=../../pkg/exec
+	 go mod edit -replace=github.com/kata-containers/kata-containers/tests/metrics/env=../../pkg/env
 	 go mod tidy
 
 runci: build

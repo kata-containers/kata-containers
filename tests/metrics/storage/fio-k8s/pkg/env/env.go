@@ -5,7 +5,7 @@
 package env
 
 import (
-	exec "github.com/kata-containers/tests/metrics/exec"
+	exec "github.com/kata-containers/kata-containers/tests/metrics/exec"
 )
 
 //logger interface for pkg
