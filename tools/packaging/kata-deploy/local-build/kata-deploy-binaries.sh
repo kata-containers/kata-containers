@@ -163,12 +163,6 @@ install_cached_tarball_component() {
 # we have to rely and check some artefacts coming from the cc-rootfs-image and the
 # cc-tdx-rootfs-image jobs.
 install_cached_cc_shim_v2() {
-	case ${5} in
-		"kata-static-cc-shim-v2.tar.xz")
-			USE_CACHE="no"
-			;;
-	esac
-
 	local component="${1}"
 	local jenkins_build_url="${2}"
 	local current_version="${3}"
