@@ -439,9 +439,16 @@ install_cached_kernel_tarball_component() {
 	local kernel_name=${1}
 	local module_dir=${2:-""}
 
+	# This must only be done as part of the CCv0 branch, as TDX version of
+	# Kernel is not the same as the one used on main
+	local url="${jenkins_url}/job/kata-containers-main-${kernel_name}-$(uname -m)/${cached_artifacts_path}"
+	if [[ "${kernel_name}" == "kernel-tdx-experimental" ]]; then
+		url="${jenkins_url}/job/kata-containers-2.0-kernel-tdx-cc-$(uname -m)/${cached_artifacts_path}"
+	fi
+
 	install_cached_tarball_component \
 		"${kernel_name}" \
-		"${jenkins_url}/job/kata-containers-main-${kernel_name}-$(uname -m)/${cached_artifacts_path}" \
+		"${url}" \
 		"${kernel_version}-${kernel_kata_config_version}" \
 		"$(get_kernel_image_name)" \
 		"${final_tarball_name}" \
@@ -590,9 +597,16 @@ install_qemu_helper() {
 	export qemu_repo="$(get_from_kata_deps ${qemu_repo_yaml_path})"
 	export qemu_version="$(get_from_kata_deps ${qemu_version_yaml_path})"
 
+	# This must only be done as part of the CCv0 branch, as TDX version of 
+	# QEMU is not the same as the one used on main
+	local url="${jenkins_url}/job/kata-containers-main-${qemu_name}-$(uname -m)/${cached_artifacts_path}"
+	if [[ "${qemu_name}" == "qemu-tdx-experimental" ]]; then
+		url="${jenkins_url}/job/kata-containers-2.0-qemu-tdx-cc-$(uname -m)/${cached_artifacts_path}"
+	fi
+
 	install_cached_tarball_component \
 		"${qemu_name}" \
-		"${jenkins_url}/job/kata-containers-main-${qemu_name}-$(uname -m)/${cached_artifacts_path}" \
+		"${url}" \
 		"${qemu_version}-$(calc_qemu_files_sha256sum)" \
 		"$(get_qemu_image_name)" \
 		"${final_tarball_name}" \
@@ -661,9 +675,16 @@ install_clh_helper() {
 	features="${2}"
 	suffix="${3:-""}"
 
+	# This must only be done as part of the CCv0 branch, as TDX version of
+	# CLH is not the same as the one used on main
+	local url="${jenkins_url}/job/kata-containers-main-clh-$(uname -m)${suffix}/${cached_artifacts_path}"
+	if [[ "${features}" =~ "tdx" ]]; then
+		local url="${jenkins_url}/job/kata-containers-2.0-clh-cc-$(uname -m)${suffix}/${cached_artifacts_path}"
+	fi
+
 	install_cached_tarball_component \
 		"cloud-hypervisor${suffix}" \
-		"${jenkins_url}/job/kata-containers-main-clh-$(uname -m)${suffix}/${cached_artifacts_path}" \
+		"${url}" \
 		"$(get_from_kata_deps "assets.hypervisor.cloud_hypervisor.version")" \
 		"" \
 		"${final_tarball_name}" \
@@ -781,9 +802,20 @@ install_ovmf() {
 	local component_name="ovmf"
 	local component_version="$(get_from_kata_deps "externals.ovmf.${ovmf_type}.version")"
 	[ "${ovmf_type}" == "tdx" ] && component_name="tdvf"
+
+	# I am not expanding the if above just to make it easier for us in the
+	# future to deal with the rebases
+	#
+	# This must only be done as part of the CCv0 branch, as the version of
+	# TDVF is not the same as the one used on main
+	local url="${jenkins_url}/job/kata-containers-main-ovmf-${ovmf_type}-$(uname -m)/${cached_artifacts_path}"
+	if [[ "${ovmf_type}" == "tdx" ]]; then
+		url="${jenkins_url}/job/kata-containers-2.0-tdvf-cc-$(uname -m)/${cached_artifacts_path}"
+	fi
+
 	install_cached_tarball_component \
 		"${component_name}" \
-		"${jenkins_url}/job/kata-containers-main-ovmf-${ovmf_type}-$(uname -m)/${cached_artifacts_path}" \
+		"${url}" \
 		"${component_version}" \
 		"$(get_ovmf_image_name)" \
 		"${final_tarball_name}" \
