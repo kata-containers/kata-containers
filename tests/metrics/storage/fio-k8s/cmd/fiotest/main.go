@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	env "github.com/kata-containers/tests/metrics/env"
-	exec "github.com/kata-containers/tests/metrics/exec"
-	"github.com/kata-containers/tests/metrics/k8s"
+	env "github.com/kata-containers/kata-containers/tests/metrics/env"
+	exec "github.com/kata-containers/kata-containers/tests/metrics/exec"
+	"github.com/kata-containers/kata-containers/tests/metrics/k8s"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
