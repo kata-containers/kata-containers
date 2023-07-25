@@ -57,7 +57,7 @@ async fn handle_sigchild(logger: Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result
                 continue;
             }
 
-            let mut p = process.unwrap();
+            let p = process.unwrap();
 
             let ret: i32 = match wait_status {
                 WaitStatus::Exited(_, c) => c,
