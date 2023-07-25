@@ -13,7 +13,7 @@ concurrency:
 name: Static checks
 jobs:
   static-checks:
-    runs-on: ubuntu-20.04
+    runs-on: garm-ubuntu-2004
     strategy:
       matrix:
         cmd:
@@ -36,6 +36,10 @@ jobs:
       with:
         fetch-depth: 0
         path: ./src/github.com/${{ github.repository }}
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends build-essential haveged
     - name: Install Go
       uses: actions/setup-go@v3
       with:
@@ -82,4 +86,6 @@ jobs:
     - name: Run check
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
+        export PATH=$PATH:"$HOME/.cargo/bin"
+        export XDG_RUNTIME_DIR=$(mktemp -d /tmp/kata-tests-$USER.XXX | tee >(xargs chmod 0700))
         cd ${GOPATH}/src/github.com/${{ github.repository }} && ${{ matrix.cmd }}
