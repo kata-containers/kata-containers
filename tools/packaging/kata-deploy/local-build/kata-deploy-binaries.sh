@@ -661,9 +661,16 @@ install_clh_helper() {
 	features="${2}"
 	suffix="${3:-""}"
 
+	# This must only be done as part of the CCv0 branch, as TDX version of
+	# CLH is not the same as the one used on main
+	local url="${jenkins_url}/job/kata-containers-main-clh-$(uname -m)${suffix}/${cached_artifacts_path}"
+	if [[ "${features}" =~ "tdx" ]]; then
+		local url="${jenkins_url}/job/kata-containers-2.0-clh-cc-$(uname -m)${suffix}/${cached_artifacts_path}"
+	fi
+
 	install_cached_tarball_component \
 		"cloud-hypervisor${suffix}" \
-		"${jenkins_url}/job/kata-containers-main-clh-$(uname -m)${suffix}/${cached_artifacts_path}" \
+		"${url}" \
 		"$(get_from_kata_deps "assets.hypervisor.cloud_hypervisor.version")" \
 		"" \
 		"${final_tarball_name}" \
