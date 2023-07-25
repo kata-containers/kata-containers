@@ -88,3 +88,10 @@ jobs:
     with:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
+
+  run-vfio-tests:
+    needs: build-kata-static-tarball-amd64
+    uses: ./.github/workflows/run-vfio-tests.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      commit-hash: ${{ inputs.commit-hash }}
