@@ -27,6 +27,9 @@ jobs:
       target_branch: ${{ github.base_ref }}
       GOPATH: ${{ github.workspace }}
     steps:
+    - name: What's the XDG_RUNTIME_DIR
+      run: |
+        echo "${XDG_RUNTIME_DIR}"
     - name: Free disk space
       run: |
         sudo rm -rf /usr/share/dotnet
