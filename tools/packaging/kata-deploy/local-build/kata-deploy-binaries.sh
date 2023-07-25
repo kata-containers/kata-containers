@@ -590,9 +590,16 @@ install_qemu_helper() {
 	export qemu_repo="$(get_from_kata_deps ${qemu_repo_yaml_path})"
 	export qemu_version="$(get_from_kata_deps ${qemu_version_yaml_path})"
 
+	# This must only be done as part of the CCv0 branch, as TDX version of 
+	# QEMU is not the same as the one used on main
+	local url="${jenkins_url}/job/kata-containers-main-${qemu_name}-$(uname -m)/${cached_artifacts_path}"
+	if [[ "${qemu_name}" == "qemu-tdx-experimental" ]]; then
+		url="${jenkins_url}/job/kata-containers-2.0-qemu-tdx-cc-$(uname -m)/${cached_artifacts_path}"
+	fi
+
 	install_cached_tarball_component \
 		"${qemu_name}" \
-		"${jenkins_url}/job/kata-containers-main-${qemu_name}-$(uname -m)/${cached_artifacts_path}" \
+		"${url}" \
 		"${qemu_version}-$(calc_qemu_files_sha256sum)" \
 		"$(get_qemu_image_name)" \
 		"${final_tarball_name}" \
