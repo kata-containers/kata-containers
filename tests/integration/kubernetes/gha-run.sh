@@ -59,15 +59,12 @@ function get_cluster_credentials() {
         -n "$(_print_cluster_name)"
 }
 
-function run_tests() {
+function deploy_kata() {
     platform="${1}"
     ensure_yq
 
     # Emsure we're in the default namespace
     kubectl config set-context --current --namespace=default
-
-    # Delete any spurious tests namespace that was left behind
-    kubectl delete namespace kata-containers-k8s-tests &> /dev/null || true
 
     sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 
@@ -101,6 +98,11 @@ function run_tests() {
     else
         sleep 60s
     fi
+}
+
+function run_tests() {
+    # Delete any spurious tests namespace that was left behind
+    kubectl delete namespace kata-containers-k8s-tests &> /dev/null || true
 
     # Create a new namespace for the tests and switch to it
     kubectl apply -f ${kubernetes_dir}/runtimeclass_workloads/tests-namespace.yaml
@@ -190,10 +192,11 @@ function main() {
         install-bats) install_bats ;;
         install-kubectl) install_kubectl ;;
         get-cluster-credentials) get_cluster_credentials ;;
-        run-tests-aks) run_tests "aks" ;;
-        run-tests-sev) run_tests "sev" ;;
-        run-tests-snp) run_tests "snp" ;;
-        run-tests-tdx) run_tests "tdx" ;;
+        deploy-kata-aks) deploy_kata "aks" ;;
+        deploy-kata-sev) deploy_kata "sev" ;;
+        deploy-kata-snp) deploy_kata "snp" ;;
+        deploy-kata-tdx) deploy_kata "tdx" ;;
+        run-tests) run_tests ;;
         cleanup-sev) cleanup "sev" ;;
         cleanup-snp) cleanup "snp" ;;
         cleanup-tdx) cleanup "tdx" ;;
