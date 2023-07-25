@@ -102,6 +102,7 @@ function deploy_kata() {
         sleep 60s
     fi
 
+    kubectl -n kube-system logs -l name=kata-deploy
     kubectl get runtimeclass
 }
 
