@@ -7,7 +7,7 @@ package k8s
 import (
 	"fmt"
 
-	exec "github.com/kata-containers/kata-containers/tests/metrics/storage/fio-k8s/pkg/exec"
+	exec "github.com/kata-containers/kata-containers/tests/metrics/exec"
 	"github.com/pkg/errors"
 )
 
