@@ -58,7 +58,7 @@ function install_artifacts() {
 		chmod +x /opt/kata/runtime-rs/bin/*
 
 	# Allow enabling debug for Kata Containers
-	if [[ "${DEBUG:-"no"}" == "yes" ]]; then
+	if [[ "${DEBUG}" == "true" ]]; then
 		config_path="/opt/kata/share/defaults/kata-containers/"
 		for shim in "${shims[@]}"; do
 			sed -i -e 's/^#\(enable_debug\).*=.*$/\1 = true/g' "${config_path}/configuration-${shim}.toml"
@@ -216,7 +216,7 @@ function configure_crio() {
 	done
 
 
-	if [ "${DEBUG:-"no"}" == "yes" ]; then
+	if [ "${DEBUG}" == "true" ]; then
 		cat <<EOF | tee -a $crio_drop_in_conf_file_debug
 [crio]
 log_level = "debug"
@@ -261,7 +261,7 @@ EOF
 EOF
 	fi
 
-	if [ "${DEBUG:-"no"}" == "yes" ]; then
+	if [ "${DEBUG}" == "true" ]; then
 		if grep -q "\[debug\]" $containerd_conf_file; then
 			sed -i 's/level.*/level = \"debug\"/' $containerd_conf_file
 		else
@@ -314,7 +314,7 @@ function cleanup_cri_runtime() {
 
 function cleanup_crio() {
 	rm $crio_drop_in_conf_file
-	if [[ "${DEBUG:-"no"}" == "yes" ]]; then
+	if [[ "${DEBUG}" == "true" ]]; then
 		rm $crio_drop_in_conf_file_debug
 	fi
 }
