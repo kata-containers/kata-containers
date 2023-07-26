@@ -1,14 +1,13 @@
 // Copyright (c) 2021 Intel Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
-//
 package env
 
 import (
 	exec "github.com/kata-containers/kata-containers/tests/metrics/exec"
 )
 
-//logger interface for pkg
+// logger interface for pkg
 var log logger
 var Debug bool = false
 
