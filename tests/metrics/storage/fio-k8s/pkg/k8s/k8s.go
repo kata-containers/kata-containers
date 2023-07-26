@@ -1,7 +1,6 @@
 // Copyright (c) 2021 Intel Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
-//
 package k8s
 
 import (
@@ -11,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-//logger interface for pkg
+// logger interface for pkg
 var log logger
 var Debug bool = false
 
