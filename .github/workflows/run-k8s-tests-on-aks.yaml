@@ -67,9 +67,13 @@ jobs:
       - name: Download credentials for the Kubernetes CLI to use them
         run: bash tests/integration/kubernetes/gha-run.sh get-cluster-credentials
 
+      - name: Deploy Kata
+        timeout-minutes: 10
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-aks
+      
       - name: Run tests
         timeout-minutes: 60
-        run: bash tests/integration/kubernetes/gha-run.sh run-tests-aks
+        run: bash tests/integration/kubernetes/gha-run.sh run-tests
 
       - name: Delete AKS cluster
         if: always()

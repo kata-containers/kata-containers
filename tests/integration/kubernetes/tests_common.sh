@@ -34,6 +34,6 @@ dragonball_limitations="https://github.com/kata-containers/kata-containers/issue
 export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
 
 get_pod_config_dir() {
-	pod_config_dir="${BATS_TEST_DIRNAME}/runtimeclass_workloads"
+	pod_config_dir="${BATS_TEST_DIRNAME}/runtimeclass_workloads_work"
 	info "k8s configured to use runtimeclass"
 }

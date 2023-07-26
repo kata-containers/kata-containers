@@ -8,6 +8,7 @@
 set -e
 
 kubernetes_dir=$(dirname "$(readlink -f "$0")")
+source "${kubernetes_dir}/../../common.bash"
 
 TARGET_ARCH="${TARGET_ARCH:-x86_64}"
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
