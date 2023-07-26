@@ -381,6 +381,14 @@ function reset_runtime() {
 }
 
 function main() {
+	echo "Environment variables passed to this script"
+	echo "* NODE_NAME: ${NODE_NAME}"
+	echo "* DEBUG: ${DEBUG}"
+	echo "* SHIMS: ${SHIMS}"
+	echo "* DEFAULT_SHIM: ${DEFAULT_SHIM}"
+	echo "* CREATE_RUNTIMECLASSES: ${CREATE_RUNTIMECLASSES}"
+	echo "* CREATE_DEFAULT_RUNTIMECLASS: ${CREATE_DEFAULT_RUNTIMECLASS}"
+
 	# script requires that user is root
 	euid=$(id -u)
 	if [[ $euid -ne 0 ]]; then
