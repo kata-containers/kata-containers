@@ -12,6 +12,8 @@ kubernetes_dir="$(dirname "$(readlink -f "$0")")"
 source "${kubernetes_dir}/../../common.bash"
 tools_dir="${repo_root_dir}/tools"
 
+AZ_RG="${AZ_RG:-kataCI}"
+
 function _print_cluster_name() {
     short_sha="$(git rev-parse --short=12 HEAD)"
     echo "${GH_PR_NUMBER}-${short_sha}-${KATA_HYPERVISOR}-${KATA_HOST_OS}-amd64"
@@ -36,7 +38,7 @@ function create_cluster() {
     delete_cluster || true
 
     az aks create \
-        -g "kataCI" \
+        -g "${AZ_RG}" \
         -n "$(_print_cluster_name)" \
         -s "Standard_D4s_v5" \
         --node-count 1 \
@@ -55,19 +57,16 @@ function install_kubectl() {
 
 function get_cluster_credentials() {
     az aks get-credentials \
-        -g "kataCI" \
+        -g "${AZ_RG}" \
         -n "$(_print_cluster_name)"
 }
 
-function run_tests() {
+function deploy_kata() {
     platform="${1}"
     ensure_yq
 
     # Emsure we're in the default namespace
     kubectl config set-context --current --namespace=default
-
-    # Delete any spurious tests namespace that was left behind
-    kubectl delete namespace kata-containers-k8s-tests &> /dev/null || true
 
     sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 
@@ -101,6 +100,11 @@ function run_tests() {
     else
         sleep 60s
     fi
+}
+
+function run_tests() {
+    # Delete any spurious tests namespace that was left behind
+    kubectl delete namespace kata-containers-k8s-tests &> /dev/null || true
 
     # Create a new namespace for the tests and switch to it
     kubectl apply -f ${kubernetes_dir}/runtimeclass_workloads/tests-namespace.yaml
@@ -120,6 +124,11 @@ function cleanup() {
 
     echo "Gather information about the nodes and pods before cleaning up the node"
     get_nodes_and_pods_info "yes"
+
+    if [ "${platform}" = "aks" ]; then
+        delete_cluster
+        return
+    fi
 
     # Switch back to the default namespace and delete the tests one
     kubectl config set-context --current --namespace=default
@@ -145,15 +154,11 @@ function cleanup() {
     kubectl delete ${cleanup_spec}
     kubectl delete -f "${tools_dir}/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
     kubectl delete -f "${tools_dir}/packaging/kata-deploy/runtimeclasses/kata-runtimeClasses.yaml"
-
-   if [ "${platform}" = "aks" ]; then
-	   delete_cluster
-   fi
 }
 
 function delete_cluster() {
     az aks delete \
-        -g "kataCI" \
+        -g "${AZ_RG}" \
         -n "$(_print_cluster_name)" \
         --yes
 }
@@ -189,10 +194,11 @@ function main() {
         install-bats) install_bats ;;
         install-kubectl) install_kubectl ;;
         get-cluster-credentials) get_cluster_credentials ;;
-        run-tests-aks) run_tests "aks" ;;
-        run-tests-sev) run_tests "sev" ;;
-        run-tests-snp) run_tests "snp" ;;
-        run-tests-tdx) run_tests "tdx" ;;
+        deploy-kata-aks) deploy_kata "aks" ;;
+        deploy-kata-sev) deploy_kata "sev" ;;
+        deploy-kata-snp) deploy_kata "snp" ;;
+        deploy-kata-tdx) deploy_kata "tdx" ;;
+        run-tests) run_tests ;;
         cleanup-sev) cleanup "sev" ;;
         cleanup-snp) cleanup "snp" ;;
         cleanup-tdx) cleanup "tdx" ;;

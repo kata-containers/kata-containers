@@ -33,10 +33,14 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
 
+      - name: Deploy Kata
+        timeout-minutes: 10
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-tdx
+  
       - name: Run tests
         timeout-minutes: 30
-        run: bash tests/integration/kubernetes/gha-run.sh run-tests-tdx
-
+        run: bash tests/integration/kubernetes/gha-run.sh run-tests
+  
       - name: Delete kata-deploy
         if: always()
         run: bash tests/integration/kubernetes/gha-run.sh cleanup-tdx
