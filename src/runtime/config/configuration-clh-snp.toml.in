@@ -43,18 +43,13 @@ rootfs_type=@DEFROOTFSTYPE@
 # Default false
 confidential_guest = true
 
-# enable SEV SNP VMs
+# enable SEV SNP VMs. This is not currently used by CLH
 sev_snp_guest = @DEFSNPGUEST@
-
-# Disable the customizations done in the runtime when it detects
-# that it is running on top a VMM. This will result in the runtime
-# behaving as it would when running on bare metal.
-# Needed for nested-SNP on hyper-V
-disable_nesting_checks = true
 
 # SNP guest policy
 # Based on SEV Secure Nested Paging Firmware ABI Specification section 4.3
 # If it is unspecified or 0, it will default to 0x30000 (i.e. Bit#17 is '1' which is reserved and Bit#16 is '1' which means SMT is allowed).
+# This is not currently used by CLH
 snp_guest_policy=@DEFSNPGUESTPOLICY@
 
 # Enable running clh VMM as a non-root user.

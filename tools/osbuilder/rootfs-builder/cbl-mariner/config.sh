@@ -6,6 +6,5 @@ OS_NAME=cbl-mariner
 OS_VERSION=${OS_VERSION:-2.0}
 LIBC="gnu"
 PACKAGES="core-packages-base-image ca-certificates device-mapper"
-PACKAGES="core-packages-base-image ca-certificates"
 [ "$AGENT_INIT" = no ] && PACKAGES+=" systemd"
 [ "$SECCOMP" = yes ] && PACKAGES+=" libseccomp"
