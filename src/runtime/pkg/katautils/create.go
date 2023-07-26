@@ -57,7 +57,7 @@ func getKernelParams(needSystemd, trace bool) []vc.Param {
 }
 
 func needSystemd(config vc.HypervisorConfig) bool {
-	return config.ImagePath != ""
+	return config.ImagePath != "" || config.InitrdPath != ""
 }
 
 // HandleFactory  set the factory
