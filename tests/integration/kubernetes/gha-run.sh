@@ -93,9 +93,6 @@ function deploy_kata() {
     fi
     kubectl -n kube-system wait --timeout=10m --for=condition=Ready -l name=kata-deploy pod
 
-    echo "Gather information about the nodes and pods after having kata-deploy ready"
-    get_nodes_and_pods_info
-
     # This is needed as the kata-deploy pod will be set to "Ready" when it starts running,
     # which may cause issues like not having the node properly labeled or the artefacts
     # properly deployed when the tests actually start running.
@@ -121,9 +118,6 @@ function run_tests() {
     # Create a new namespace for the tests and switch to it
     kubectl apply -f ${kubernetes_dir}/runtimeclass_workloads/tests-namespace.yaml
     kubectl config set-context --current --namespace=kata-containers-k8s-tests
-
-    echo "Gather information about the nodes and pods just before starting the tests"
-    get_nodes_and_pods_info
 
     pushd "${kubernetes_dir}"
     bash setup.sh
