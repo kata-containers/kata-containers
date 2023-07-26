@@ -29,7 +29,7 @@ spec:
             fieldRef:
               fieldPath: spec.nodeName
         - name: DEBUG
-          value: "no"
+          value: "false"
         - name: SHIMS
           value: "clh dragonball fc qemu qemu-nvidia-gpu qemu-sev qemu-snp qemu-tdx"
         - name: DEFAULT_SHIM
