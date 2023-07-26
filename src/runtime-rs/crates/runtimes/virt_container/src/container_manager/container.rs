@@ -95,7 +95,7 @@ impl Container {
         amend_spec(&mut spec, toml_config.runtime.disable_guest_seccomp).context("amend spec")?;
 
         // get mutable root from oci spec
-        let mut root = match spec.root.as_mut() {
+        let root = match spec.root.as_mut() {
             Some(root) => root,
             None => return Err(anyhow!("spec miss root field")),
         };
