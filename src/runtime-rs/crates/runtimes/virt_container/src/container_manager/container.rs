@@ -43,6 +43,7 @@ pub struct Container {
     agent: Arc<dyn Agent>,
     resource_manager: Arc<ResourceManager>,
     logger: slog::Logger,
+    passfd_listener_addr: Option<(String, u32)>,
 }
 
 impl Container {
@@ -84,6 +85,7 @@ impl Container {
             agent,
             resource_manager,
             logger,
+            None,
         })
     }
 

@@ -140,6 +140,11 @@ async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>>
             hypervisor
                 .set_hypervisor_config(hypervisor_config.clone())
                 .await;
+            if toml_config.runtime.use_passfd_io {
+                hypervisor
+                    .set_passfd_listener_port(toml_config.runtime.passfd_listener_port)
+                    .await;
+            }
             Ok(Arc::new(hypervisor))
         }
         HYPERVISOR_QEMU => {

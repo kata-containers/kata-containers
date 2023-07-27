@@ -22,7 +22,7 @@ use kata_types::{
     capabilities::{Capabilities, CapabilityBits},
     config::{
         hypervisor::{HugePageType, Hypervisor as HypervisorConfig},
-        KATA_PATH,
+        KATA_PATH, PASSFD_LISTENER_PORT,
     },
 };
 use nix::mount::MsFlags;
@@ -80,6 +80,10 @@ pub struct DragonballInner {
 
     /// the balloon size
     pub(crate) balloon_size: u32,
+
+    /// guest-side fd passthrough io listener port, used to initialize
+    /// connections for io
+    pub(crate) passfd_listener_port: Option<u32>,
 }
 
 impl DragonballInner {
@@ -108,6 +112,7 @@ impl DragonballInner {
             guest_memory_block_size_mb: 0,
             mem_hotplug_size_mb: 0,
             balloon_size: 0,
+            passfd_listener_port: None,
         }
     }
 
@@ -128,6 +133,12 @@ impl DragonballInner {
         kernel_params.append(&mut KernelParams::from_string(
             &self.config.boot_info.kernel_params,
         ));
+        if let Some(passfd_listener_port) = self.passfd_listener_port {
+            kernel_params.append(&mut KernelParams::from_string(&format!(
+                "{}={}",
+                PASSFD_LISTENER_PORT, passfd_listener_port
+            )));
+        }
         info!(sl!(), "prepared kernel_params={:?}", kernel_params);
 
         // set boot source
@@ -458,6 +469,10 @@ impl DragonballInner {
     pub(crate) fn guest_memory_block_size_mb(&self) -> u32 {
         self.guest_memory_block_size_mb
     }
+
+    pub fn set_passfd_listener_port(&mut self, port: u32) {
+        self.passfd_listener_port = Some(port);
+    }
 }
 
 #[async_trait]
@@ -477,6 +492,7 @@ impl Persist for DragonballInner {
             config: self.hypervisor_config(),
             run_dir: self.run_dir.clone(),
             cached_block_devices: self.cached_block_devices.clone(),
+            passfd_listener_port: self.passfd_listener_port,
             ..Default::default()
         })
     }
@@ -502,6 +518,7 @@ impl Persist for DragonballInner {
             guest_memory_block_size_mb: 0,
             mem_hotplug_size_mb: 0,
             balloon_size: 0,
+            passfd_listener_port: hypervisor_state.passfd_listener_port,
         })
     }
 }
