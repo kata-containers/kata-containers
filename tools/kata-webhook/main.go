@@ -46,6 +46,25 @@ func annotatePodMutator(_ context.Context, ar *kwhmodel.AdmissionReview, obj met
 		return &kwhmutating.MutatorResult{}, nil
 	}
 
+	if getEnvValue("MANAGE_RESOURCES", "true") == "true" {
+		fmt.Println("setting default limits and request values: ", pod.GetNamespace(), pod.GetName())
+
+		cpuLimit := getEnvValue("CPU_LIMIT", "1")
+		memoryLimit := getEnvValue("MEMORY_LIMIT", "1Gi")
+		for i := range pod.Spec.Containers {
+			// clear resource requests, takes value of limits when not specified
+			pod.Spec.Containers[i].Resources.Requests = corev1.ResourceList{}
+
+			// set limits if not set already
+			if pod.Spec.Containers[i].Resources.Limits == nil {
+				pod.Spec.Containers[i].Resources.Limits = corev1.ResourceList{
+					"cpu":    resource.MustParse(cpuLimit),
+					"memory": resource.MustParse(memoryLimit),
+				}
+			}
+		}
+	}
+
 	// We cannot support --net=host in Kata
 	// https://github.com/kata-containers/documentation/blob/master/Limitations.md#docker---nethost
 	if pod.Spec.HostNetwork {
@@ -78,23 +97,6 @@ func annotatePodMutator(_ context.Context, ar *kwhmodel.AdmissionReview, obj met
 	runtimeClassEnvKey := "RUNTIME_CLASS"
 	kataRuntimeClassName := getEnvValue(runtimeClassEnvKey, "kata")
 	pod.Spec.RuntimeClassName = &kataRuntimeClassName
-
-	fmt.Println("setting default limits and request values: ", pod.GetNamespace(), pod.GetName())
-
-	cpuLimit := getEnvValue("CPU_LIMIT", "1")
-	memoryLimit := getEnvValue("MEMORY_LIMIT", "1Gi")
-	for i := range pod.Spec.Containers {
-		// clear resource requests, takes value of limits when not specified
-		pod.Spec.Containers[i].Resources.Requests = corev1.ResourceList{}
-
-		// set limits if not set already
-		if pod.Spec.Containers[i].Resources.Limits == nil {
-			pod.Spec.Containers[i].Resources.Limits = corev1.ResourceList{
-				"cpu":    resource.MustParse(cpuLimit),
-				"memory": resource.MustParse(memoryLimit),
-			}
-		}
-	}
 
 	return &kwhmutating.MutatorResult{
 		MutatedObject: pod,

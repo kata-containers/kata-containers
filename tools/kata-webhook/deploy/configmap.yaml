@@ -6,3 +6,4 @@ data:
   cpu_limit: "1"
   memory_limit: "1Gi"
   runtime_class: "kata"
+  manage_resources: "true"
