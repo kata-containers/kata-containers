@@ -14,7 +14,7 @@ concurrency:
 name: Static checks dragonball
 jobs:
   test-dragonball:
-    runs-on: self-hosted
+    runs-on: dragonball
     env:
       RUST_BACKTRACE: "1"
     steps:
