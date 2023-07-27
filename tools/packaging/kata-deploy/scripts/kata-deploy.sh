@@ -24,6 +24,13 @@ shims=(
 	"dragonball"
 )
 
+# THOSE ARE NOT YET ON MAIN, PLEASE, MOVE THEM TO THE UPPDER LIST WHENEVER THEY MAKE THEIR WAY IN.
+shims+=(
+	"remote"
+	"qemu-se"
+	"clh-tdx"
+)
+
 default_shim="qemu"
 
 # If we fail for any reason a message will be displayed
