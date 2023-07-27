@@ -392,6 +392,7 @@ function main() {
 	echo "* DEFAULT_SHIM: ${DEFAULT_SHIM}"
 	echo "* CREATE_RUNTIMECLASSES: ${CREATE_RUNTIMECLASSES}"
 	echo "* CREATE_DEFAULT_RUNTIMECLASS: ${CREATE_DEFAULT_RUNTIMECLASS}"
+	echo "* USING_NFD: ${USING_NFD}"
 
 	# script requires that user is root
 	euid=$(id -u)

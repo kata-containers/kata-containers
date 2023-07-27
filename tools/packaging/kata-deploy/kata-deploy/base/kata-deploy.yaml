@@ -63,6 +63,18 @@ spec:
         - name: CREATE_DEFAULT_RUNTIMECLASS
           value: "false"
 
+        # Whether the admin is relying on NFD (Node Feature Discovery) to do their node labeling
+        # value: A string with one of the valid values:
+        #          -  "false" | "true"
+        # NOTE: This will only be relevant in case CREATE_RUNTIMECLASSES is set to "true", and it'll perform
+        #       operations like:
+        #          - Creating an extended resource rule for the TEEs related runtime classes, such as
+        #            "qemu-sev", "qemu-snp", "qemu-tdx" -- NOT YET IMPLEMENTED
+        #          - Adjusting the podOverhead to be used together with the extensed resource, so the TEE
+        #            keys book keeping is taken care of
+        - name: USING_NFD
+          value: "false"
+
         securityContext:
           privileged: true
         volumeMounts:
