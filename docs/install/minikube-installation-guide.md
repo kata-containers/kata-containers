@@ -91,7 +91,7 @@ Before you install Kata Containers, check that your Minikube is operating. On yo
 $ kubectl get nodes
 ```
 
-You should see your `master` node listed as being `Ready`.
+You should see your `control-plane` node listed as being `Ready`.
 
 Check you have virtualization enabled inside your Minikube. The following should return
 a number larger than `0` if you have either of the `vmx` or `svm` nested virtualization features
