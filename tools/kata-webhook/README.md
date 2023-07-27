@@ -1,7 +1,7 @@
 # Kata Admission controller webhook
 
 Implement a simple admission controller webhook to annotate pods with the
-Kata runtime class.
+Kata runtime class, resources requests and limits.
 
 ## How to build the admission controller
 
@@ -58,3 +58,5 @@ those with
 
 * `hostNetwork: true`
 * namespace: `rook-ceph` and `rook-ceph-system`
+
+The webhook will also set appropiate default values for resource requests and limits for all pods
