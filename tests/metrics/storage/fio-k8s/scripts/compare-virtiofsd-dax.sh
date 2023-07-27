@@ -11,8 +11,8 @@ set -o errtrace
 
 script_dir=$(dirname "$(readlink -f "$0")")
 
-runtime_path="/usr/local/bin/kata-runtime"
-kata_config_path="/usr/share/defaults/kata-containers/configuration.toml"
+runtime_path="/opt/kata/bin/kata-runtime"
+kata_config_path="/opt/kata/share/defaults/kata-containers/configuration.toml"
 
 results_dir="$(realpath ./)/results"
 
