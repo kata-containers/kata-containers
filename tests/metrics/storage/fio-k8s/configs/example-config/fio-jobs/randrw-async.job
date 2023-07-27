@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2022 Intel Corporation
+[global]
+name=io_uring
+filename=fio-file
+rw=randrw
+rwmixread=75
+ioengine=io_uring
+
+[randrw-io_uring]
