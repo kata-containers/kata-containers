@@ -13,9 +13,15 @@ rules:
 - apiGroups: [""]
   resources: ["nodes"]
   verbs: ["get", "patch"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["list"]
 - apiGroups: ["node.k8s.io"]
   resources: ["runtimeclasses"]
   verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["nfd.k8s-sigs.io"]
+  resources: ["nodefeaturerules"]
+  verbs: ["create", "delete", "get", "update"]
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1

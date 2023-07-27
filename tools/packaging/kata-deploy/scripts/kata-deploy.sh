@@ -18,6 +18,9 @@ IFS=' ' read -a shims <<< "$SHIMS"
 
 default_shim="$DEFAULT_SHIM"
 
+declare -A tees_relying_on_nfd
+tees_relying_on_nfd[qemu-tdx]="tdx"
+
 # If we fail for any reason a message will be displayed
 die() {
         msg="$*"
@@ -37,6 +40,25 @@ function create_runtimeclasses() {
 	echo "Creating the runtime classes"
 
 	for shim in "${shims[@]}"; do
+		if [[ "${USING_NFD}" == "true" ]]; then
+
+			# Safety check to ensure NFD worker is deployed and is running
+			[[ $(kubectl get pods -n node-feature-discovery | grep nfd-worker) ]] || die "NFD worker was not found in the cluster"
+			[[ $(kubectl get pods -n node-feature-discovery | grep nfd-worker | grep Running) ]] || die "NFD worker is not currently running"
+
+			if [[ " ${!tees_relying_on_nfd[*]} " =~ " ${shim} " ]]; then
+				tee=${tees_relying_on_nfd[${shim}]}
+				echo "As the cluster relies on NodeFeatureDiscovery, let's create the NodeFatureRule for ${shim}"
+				kubectl apply -f /opt/kata-artifacts/nodefeaturerules/${tee}-nfd-rule.yaml
+
+				echo "Uncomment the value from the kata-${shim} podOverhead definition"
+				sed -i -e 's|#'${tee}'|'${tee}'|' /opt/kata-artifacts/runtimeclasses/kata-${shim}.yaml
+
+				echo "NodeFeatureRule created for ${shim}"
+				cat /opt/kata-artifacts/runtimeclasses/kata-${shim}.yaml
+			fi
+		fi
+
 		echo "Creating the kata-${shim} runtime class"
 		kubectl apply -f /opt/kata-artifacts/runtimeclasses/kata-${shim}.yaml
 	done
@@ -54,6 +76,19 @@ function delete_runtimeclasses() {
 	echo "Deleting the runtime classes"
 
 	for shim in "${shims[@]}"; do
+		if [[ "${USING_NFD}" == "true" ]]; then
+
+			# Safety check to ensure NFD worker is deployed and is running
+			[[ $(kubectl get pods -n node-feature-discovery | grep nfd-worker) ]] || die "NFD worker was not found in the cluster"
+			[[ $(kubectl get pods -n node-feature-discovery | grep nfd-worker | grep Running) ]] || die "NFD worker is not currently running"
+
+			if [[ " ${!tees_relying_on_nfd[*]} " =~ " ${shim} " ]]; then
+				tee=${tees_relying_on_nfd[${shim}]}
+				echo "As the cluster relies on NodeFeatureDiscovery, let's delete the NodeFatureRule for ${shim}"
+				kubectl delete -f /opt/kata-artifacts/nodefeaturerules/${tee}-nfd-rule.yaml
+			fi
+		fi
+
 		echo "Deleting the kata-${shim} runtime class"
 		kubectl delete -f /opt/kata-artifacts/runtimeclasses/kata-${shim}.yaml
 	done

@@ -67,7 +67,7 @@ spec:
         # NOTE: This will only be relevant in case CREATE_RUNTIMECLASSES is set to "true", and it'll perform
         #       operations like:
         #          - Creating an extended resource rule for the TEEs related runtime classes, such as
-        #            "qemu-sev", "qemu-snp", "qemu-tdx" -- NOT YET IMPLEMENTED
+        #            "qemu-sev", "qemu-snp", "qemu-tdx" -- ONLY IMPLEMENTED for "qemu-tdx"
         #          - Adjusting the podOverhead to be used together with the extensed resource, so the TEE
         #            keys book keeping is taken care of
         - name: USING_NFD
