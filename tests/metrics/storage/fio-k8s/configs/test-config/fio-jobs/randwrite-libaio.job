@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2021 Intel Corporation
+[global]
+name=randwrite-libaio
+filename=fio-file
+rw=randwrite
+ioengine=libaio
+
+[randwrite-libaio]
