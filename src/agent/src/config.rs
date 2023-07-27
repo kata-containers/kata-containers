@@ -18,6 +18,7 @@ const DEV_MODE_FLAG: &str = "agent.devmode";
 const TRACE_MODE_OPTION: &str = "agent.trace";
 const LOG_LEVEL_OPTION: &str = "agent.log";
 const SERVER_ADDR_OPTION: &str = "agent.server_addr";
+const PASSFD_LISTENER_PORT: &str = "agent.passfd_listener_port";
 const HOTPLUG_TIMOUT_OPTION: &str = "agent.hotplug_timeout";
 const DEBUG_CONSOLE_VPORT_OPTION: &str = "agent.debug_console_vport";
 const LOG_VPORT_OPTION: &str = "agent.log_vport";
@@ -61,6 +62,7 @@ pub struct AgentConfig {
     pub log_vport: i32,
     pub container_pipe_size: i32,
     pub server_addr: String,
+    pub passfd_listener_port: i32,
     pub unified_cgroup_hierarchy: bool,
     pub tracing: bool,
     pub supports_seccomp: bool,
@@ -76,6 +78,7 @@ pub struct AgentConfigBuilder {
     pub log_vport: Option<i32>,
     pub container_pipe_size: Option<i32>,
     pub server_addr: Option<String>,
+    pub passfd_listener_port: Option<i32>,
     pub unified_cgroup_hierarchy: Option<bool>,
     pub tracing: Option<bool>,
 }
@@ -135,6 +138,7 @@ impl Default for AgentConfig {
             log_vport: 0,
             container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
             server_addr: format!("{}:{}", VSOCK_ADDR, DEFAULT_AGENT_VSOCK_PORT),
+            passfd_listener_port: 0,
             unified_cgroup_hierarchy: false,
             tracing: false,
             supports_seccomp: rpc::have_seccomp(),
@@ -164,6 +168,7 @@ impl FromStr for AgentConfig {
         config_override!(agent_config_builder, agent_config, log_vport);
         config_override!(agent_config_builder, agent_config, container_pipe_size);
         config_override!(agent_config_builder, agent_config, server_addr);
+        config_override!(agent_config_builder, agent_config, passfd_listener_port);
         config_override!(agent_config_builder, agent_config, unified_cgroup_hierarchy);
         config_override!(agent_config_builder, agent_config, tracing);
 
@@ -242,6 +247,13 @@ impl AgentConfig {
                 param,
                 LOG_VPORT_OPTION,
                 config.log_vport,
+                get_vsock_port,
+                |port| port > 0
+            );
+            parse_cmdline_param!(
+                param,
+                PASSFD_LISTENER_PORT,
+                config.passfd_listener_port,
                 get_vsock_port,
                 |port| port > 0
             );
