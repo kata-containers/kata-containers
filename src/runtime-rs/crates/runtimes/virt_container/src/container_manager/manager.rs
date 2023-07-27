@@ -78,6 +78,7 @@ impl ContainerManager for VirtContainerManager {
             self.agent.clone(),
             self.resource_manager.clone(),
         )
+        .await
         .context("new container")?;
 
         // CreateContainer Hooks:
