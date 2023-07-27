@@ -13,7 +13,7 @@ crio_drop_in_conf_file="${crio_drop_in_conf_dir}/99-kata-deploy"
 containerd_conf_file="/etc/containerd/config.toml"
 containerd_conf_file_backup="${containerd_conf_file}.bak"
 
-shims=(
+shims_x86_64=(
 	"fc"
 	"qemu"
 	"qemu-nvidia-gpu"
@@ -25,11 +25,30 @@ shims=(
 )
 
 # THOSE ARE NOT YET ON MAIN, PLEASE, MOVE THEM TO THE UPPDER LIST WHENEVER THEY MAKE THEIR WAY IN.
-shims+=(
+shims_x86_64+=(
 	"remote"
-	"qemu-se"
 	"clh-tdx"
 )
+
+shims_s390x=(
+	"qemu"
+)
+
+
+# THOSE ARE NOT YET ON MAIN, PLEASE, MOVE THEM TO THE UPPDER LIST WHENEVER THEY MAKE THEIR WAY IN.
+shims_s390x+=(
+	"remote"
+	"qemu-se"
+)
+
+arch=$(uname -m)
+if [[ "${arch}" == "x86_64" ]]; then
+	shims=${shims_x86_64[@]}
+else if [[ "${arch}" == "s390x" ]]; then
+	shims=${shims_s390x[@]}
+else
+	die "${arch} is a not supported architecture"
+fi
 
 default_shim="qemu"
 
