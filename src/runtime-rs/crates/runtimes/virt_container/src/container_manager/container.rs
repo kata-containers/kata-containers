@@ -46,7 +46,7 @@ pub struct Container {
 }
 
 impl Container {
-    pub fn new(
+    pub async fn new(
         pid: u32,
         config: ContainerConfig,
         spec: oci::Spec,
