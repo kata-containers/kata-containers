@@ -23,20 +23,44 @@ spec:
         imagePullPolicy: Always
         command: [ "bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh reset" ]
         env:
+
+        # The Kubernetes node name
+        # NOTE: Do NOT change this, as this is dynamically read for each one of the nodes in your cluster
         - name: NODE_NAME
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+
+        # Whether to enable debug for the CRI engine / kata-containers or not
+        # value: A string with one of the valid values:
+        #          -  "false" | "true"
         - name: DEBUG
           value: "false"
+
+        # Which shims will be configured for Kata Containers
+        # value: A string containing at least one of the following valid values:
+        #          - "clh" | "dragonball" | "fc" | "qemu-nvidia-gpu" | "qemu-sev" | "qemu-snp" | "qemu-tdx | "qemu"
         - name: SHIMS
           value: "clh dragonball fc qemu-nvidia-gpu qemu-sev qemu-snp qemu-tdx qemu"
+
+        # Which is the default shim to be configured to be used as "containerd.shim.kata.v2"
+        # value: A string containing one of the following valid values:
+        #          - "clh" | "dragonball" | "fc" | "qemu" | "qemu-nvidia-gpu" | "qemu-sev" | "qemu-snp" | "qemu-tdx"
         - name: DEFAULT_SHIM
           value: "qemu"
+
+        # Whether to delegate the runtime classes creation to the kata-deploy script
+        # value: A string with one of the valid values:
+        #          -  "false" | "true"
         - name: CREATE_RUNTIMECLASSES
           value: "false"
+
+        # Whether to create the default "kata" runtime class for the DEFAULT_SHIM
+        # value: A string with one of the valid values:
+        #          -  "false" | "true"
         - name: CREATE_DEFAULT_RUNTIMECLASS
           value: "false"
+
         securityContext:
           privileged: true
   updateStrategy:
