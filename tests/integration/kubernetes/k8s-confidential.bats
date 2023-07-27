@@ -10,7 +10,7 @@ load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	SUPPORTED_HYPERVISORS=("qemu-sev")
+	SUPPORTED_HYPERVISORS=("qemu-sev" "qemu-snp")
 
 	# This check must be done with "<SPACE>${KATA_HYPERVISOR}<SPACE>" to avoid
 	# having substrings, like qemu, being matched with qemu-$something.
