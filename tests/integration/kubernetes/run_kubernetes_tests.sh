@@ -28,6 +28,7 @@ else
 		"k8s-empty-dirs.bats" \
 		"k8s-env.bats" \
 		"k8s-exec.bats" \
+		"k8s-file-volume.bats" \
 		"k8s-inotify.bats" \
 		"k8s-job.bats" \
 		"k8s-kill-all-process-in-container.bats" \
@@ -51,6 +52,7 @@ else
 		"k8s-sysctls.bats" \
 		"k8s-security-context.bats" \
 		"k8s-shared-volume.bats" \
+		"k8s-volume.bats" \
 		"k8s-nginx-connectivity.bats" \
 	)
 fi

@@ -37,3 +37,16 @@ get_pod_config_dir() {
 	pod_config_dir="${BATS_TEST_DIRNAME}/runtimeclass_workloads_work"
 	info "k8s configured to use runtimeclass"
 }
+
+# Runs a command in the host filesystem.
+exec_host() {
+	node="$(kubectl get node -o name)"
+	# `kubectl debug` always returns 0, so we hack it to return the right exit code.
+	command="$@"
+	command+='; echo -en \\n$?'
+	output="$(kubectl debug -qit "${node}" --image=alpine:latest -- chroot /host bash -c "${command}")"
+	kubectl get pods -o name | grep node-debugger | xargs kubectl delete > /dev/null
+	exit_code="$(echo "${output}" | tail -1)"
+	echo "$(echo "${output}" | head -n -1)"
+	return ${exit_code}
+}
