@@ -160,6 +160,11 @@ impl Hypervisor for Dragonball {
         let inner = self.inner.read().await;
         inner.capabilities().await
     }
+
+    async fn get_hypervisor_metrics(&self) -> Result<String> {
+        let inner = self.inner.read().await;
+        inner.get_hypervisor_metrics().await
+    }
 }
 
 #[async_trait]

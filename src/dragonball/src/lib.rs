@@ -9,6 +9,9 @@
 //TODO: Remove this, after the rest of dragonball has been committed.
 #![allow(dead_code)]
 
+#[macro_use]
+extern crate lazy_static;
+
 /// Address space manager for virtual machines.
 pub mod address_space_manager;
 /// API to handle vmm requests.
@@ -19,6 +22,8 @@ pub mod config_manager;
 pub mod device_manager;
 /// Errors related to Virtual machine manager.
 pub mod error;
+/// Prometheus Metrics.
+pub mod hypervisor_metrics;
 /// KVM operation context for virtual machines.
 pub mod kvm_context;
 /// Metrics system.
