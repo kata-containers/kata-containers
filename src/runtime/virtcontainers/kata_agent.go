@@ -83,6 +83,7 @@ type customRequestTimeoutKeyType struct{}
 var (
 	checkRequestTimeout           = 30 * time.Second
 	defaultRequestTimeout         = 60 * time.Second
+	imageRequestTimeout           = 60 * time.Second
 	remoteRequestTimeout          = 300 * time.Second
 	customRequestTimeoutKey       = customRequestTimeoutKeyType(struct{}{})
 	errorMissingOCISpec           = errors.New("Missing OCI specification")
@@ -363,6 +364,11 @@ func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config KataAgent
 	k.keepConn = config.LongLiveConn
 	k.kmodules = config.KernelModules
 	k.dialTimout = config.DialTimeout
+
+	imageRequestTimeout = time.Duration(sandbox.config.ImageRequestTimeout) * time.Second
+	k.Logger().WithFields(logrus.Fields{
+		"imageRequestTimeout": fmt.Sprintf("%+v", imageRequestTimeout),
+	}).Info("The imageRequestTimeout has been set ")
 
 	return disableVMShutdown, nil
 }
@@ -2089,6 +2095,8 @@ func (k *kataAgent) getReqContext(ctx context.Context, reqName string) (newCtx c
 		// Wait and GetOOMEvent have no timeout
 	case grpcCheckRequest:
 		newCtx, cancel = context.WithTimeout(ctx, checkRequestTimeout)
+	case grpcPullImageRequest:
+		newCtx, cancel = context.WithTimeout(ctx, imageRequestTimeout)
 	default:
 		var requestTimeout = defaultRequestTimeout
 

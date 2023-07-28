@@ -292,6 +292,9 @@ const (
 	// VfioMode is a sandbox annotation to specify how attached VFIO devices should be treated
 	// Overrides the runtime.vfio_mode parameter in the global configuration.toml
 	VfioMode = kataAnnotRuntimePrefix + "vfio_mode"
+
+	// ImageRequestTimeout is a sandbox annotaion that sets the image pull timeout in the guest.
+	ImageRequestTimeout = kataAnnotRuntimePrefix + "image_request_timeout"
 )
 
 // Agent related annotations

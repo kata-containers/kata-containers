@@ -812,12 +812,15 @@ func TestAddRuntimeAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.SandboxCgroupOnly] = "true"
 	ocispec.Annotations[vcAnnotations.DisableNewNetNs] = "true"
 	ocispec.Annotations[vcAnnotations.InterNetworkModel] = "macvtap"
+	ocispec.Annotations[vcAnnotations.ImageRequestTimeout] = "100"
 
 	addAnnotations(ocispec, &config, runtimeConfig)
 	assert.Equal(config.DisableGuestSeccomp, true)
 	assert.Equal(config.SandboxCgroupOnly, true)
 	assert.Equal(config.NetworkConfig.DisableNewNetwork, true)
 	assert.Equal(config.NetworkConfig.InterworkingModel, vc.NetXConnectMacVtapModel)
+	assert.Equal(config.ImageRequestTimeout, uint64(100))
+
 }
 
 func TestRegexpContains(t *testing.T) {

@@ -66,8 +66,9 @@ type tomlConfig struct {
 }
 
 type image struct {
-	Provision      string `toml:"provision"`
-	ServiceOffload bool   `toml:"service_offload"`
+	Provision           string `toml:"provision"`
+	ServiceOffload      bool   `toml:"service_offload"`
+	ImageRequestTimeout uint64 `toml:"image_request_timeout"`
 }
 
 type factory struct {
@@ -1456,6 +1457,7 @@ func LoadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 	config.JaegerUser = tomlConf.Runtime.JaegerUser
 	config.JaegerPassword = tomlConf.Runtime.JaegerPassword
 	config.ServiceOffload = tomlConf.Image.ServiceOffload
+	config.ImageRequestTimeout = tomlConf.Image.ImageRequestTimeout
 	for _, f := range tomlConf.Runtime.Experimental {
 		feature := exp.Get(f)
 		if feature == nil {
