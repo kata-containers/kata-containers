@@ -13,7 +13,7 @@ spec:
         labels:
           name: kubelet-kata-cleanup
     spec:
-      serviceAccountName: kata-label-node
+      serviceAccountName: kata-deploy-sa
       nodeSelector:
           katacontainers.io/kata-runtime: cleanup
       containers:
@@ -27,11 +27,15 @@ spec:
             fieldRef:
               fieldPath: spec.nodeName
         - name: DEBUG
-          value: "no"
+          value: "false"
         - name: SHIMS
           value: "clh dragonball fc qemu-nvidia-gpu qemu-sev qemu-snp qemu-tdx qemu"
         - name: DEFAULT_SHIM
           value: "qemu"
+        - name: CREATE_RUNTIMECLASSES
+          value: "false"
+        - name: CREATE_DEFAULT_RUNTIMECLASS
+          value: "false"
         securityContext:
           privileged: true
         volumeMounts:
