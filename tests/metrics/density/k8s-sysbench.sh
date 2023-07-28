@@ -8,7 +8,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-SCRIPT_PATH=$(dirname "$(readlink -f "$0")"
+SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 source "${SCRIPT_PATH}/../lib/common.bash"
 sysbench_file=$(mktemp sysbenchresults.XXXXXXXXXX)
 TEST_NAME="${TEST_NAME:-sysbench}"
@@ -48,25 +48,15 @@ function sysbench_start_deployment() {
 	# Check no processes are left behind
 	check_processes
 
-	if [ -z "${CI_JOB}" ]; then
-		# Start kubernetes
-		start_kubernetes
-	fi
-
-	export KUBECONFIG="$HOME/.kube/config"
 	export pod_name="test-sysbench"
 
 	kubectl create -f "${SCRIPT_PATH}/runtimeclass_workloads/sysbench-pod.yaml"
 	kubectl wait --for=condition=Ready --timeout=120s pod "$pod_name"
-
 }
 
 function sysbench_cleanup() {
 	kubectl delete pod "$pod_name"
-	if [ -z "${CI_JOB}" ]; then
-		end_kubernetes
-		check_processes
-	fi
+	check_processes
 }
 
 function main() {
