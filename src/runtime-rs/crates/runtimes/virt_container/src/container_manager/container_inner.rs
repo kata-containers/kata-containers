@@ -87,6 +87,24 @@ impl ContainerInner {
                 process_id: process.clone().into(),
                 string_user: None,
                 process: Some(exec.oci_process.clone()),
+                stdin_port: exec
+                    .process
+                    .passfd_io
+                    .as_ref()
+                    .map(|io| io.stdin_port)
+                    .flatten(),
+                stdout_port: exec
+                    .process
+                    .passfd_io
+                    .as_ref()
+                    .map(|io| io.stdout_port)
+                    .flatten(),
+                stderr_port: exec
+                    .process
+                    .passfd_io
+                    .as_ref()
+                    .map(|io| io.stderr_port)
+                    .flatten(),
             })
             .await
             .context("exec process")?;

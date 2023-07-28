@@ -203,6 +203,11 @@ impl Hypervisor for Dragonball {
         let mut inner = self.inner.write().await;
         inner.resize_memory(new_mem_mb)
     }
+
+    async fn get_passfd_listener_addr(&self) -> Result<(String, u32)> {
+        let inner = self.inner.read().await;
+        inner.get_passfd_listener_addr().await
+    }
 }
 
 #[async_trait]

@@ -14,6 +14,7 @@ use std::fs;
 use std::os::unix::io::RawFd;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
+use tokio::fs::File;
 
 use cgroups::freezer::FreezerState;
 
@@ -989,13 +990,47 @@ impl BaseContainer for LinuxContainer {
             child_stdin = unsafe { std::process::Stdio::from_raw_fd(pseudo.slave) };
             child_stdout = unsafe { std::process::Stdio::from_raw_fd(pseudo.slave) };
             child_stderr = unsafe { std::process::Stdio::from_raw_fd(pseudo.slave) };
+
+            if let Some(proc_io) = &mut p.proc_io {
+                if let Some(mut stdin_stream) = proc_io.stdin.take() {
+                    let mut term_master = unsafe { File::from_raw_fd(pseudo.master) };
+                    let logger = logger.clone();
+                    tokio::spawn(async move {
+                        let res = tokio::io::copy(&mut stdin_stream, &mut term_master).await;
+                        debug!(logger, "copy from stdin to term_master end: {:?}", res);
+                        std::mem::forget(term_master); // Avoid auto closing of term_master
+                    });
+                }
+
+                if let Some(mut stdout_stream) = proc_io.stdout.take() {
+                    let wgw_output = proc_io.wg_output.worker();
+                    let mut term_master = unsafe { File::from_raw_fd(pseudo.master) };
+                    let logger = logger.clone();
+                    tokio::spawn(async move {
+                        let res = tokio::io::copy(&mut term_master, &mut stdout_stream).await;
+                        debug!(logger, "copy from term_master to stdout end: {:?}", res);
+                        wgw_output.done();
+                        std::mem::forget(term_master); // Avoid auto closing of term_master
+                    });
+                }
+            }
         } else {
-            let stdin = p.stdin.unwrap();
-            let stdout = p.stdout.unwrap();
-            let stderr = p.stderr.unwrap();
-            child_stdin = unsafe { std::process::Stdio::from_raw_fd(stdin) };
-            child_stdout = unsafe { std::process::Stdio::from_raw_fd(stdout) };
-            child_stderr = unsafe { std::process::Stdio::from_raw_fd(stderr) };
+            // Allow null io in passfd io mode when vsock streams are not provided
+            child_stdin = if let Some(stdin) = p.stdin {
+                unsafe { std::process::Stdio::from_raw_fd(stdin) }
+            } else {
+                std::process::Stdio::null()
+            };
+            child_stdout = if let Some(stdout) = p.stdout {
+                unsafe { std::process::Stdio::from_raw_fd(stdout) }
+            } else {
+                std::process::Stdio::null()
+            };
+            child_stderr = if let Some(stderr) = p.stderr {
+                unsafe { std::process::Stdio::from_raw_fd(stderr) }
+            } else {
+                std::process::Stdio::null()
+            };
         }
 
         let pidns = get_pid_namespace(&self.logger, linux)?;
@@ -1904,7 +1939,7 @@ mod tests {
         let _ = new_linux_container_and_then(|mut c: LinuxContainer| {
             c.processes.insert(
                 1,
-                Process::new(&sl(), &oci::Process::default(), "123", true, 1).unwrap(),
+                Process::new(&sl(), &oci::Process::default(), "123", true, 1, None).unwrap(),
             );
             let p = c.get_process("123");
             assert!(p.is_ok(), "Expecting Ok, Got {:?}", p);
@@ -1931,7 +1966,7 @@ mod tests {
         let (c, _dir) = new_linux_container();
         let ret = c
             .unwrap()
-            .start(Process::new(&sl(), &oci::Process::default(), "123", true, 1).unwrap())
+            .start(Process::new(&sl(), &oci::Process::default(), "123", true, 1, None).unwrap())
             .await;
         assert!(ret.is_err(), "Expecting Err, Got {:?}", ret);
     }
@@ -1941,7 +1976,7 @@ mod tests {
         let (c, _dir) = new_linux_container();
         let ret = c
             .unwrap()
-            .run(Process::new(&sl(), &oci::Process::default(), "123", true, 1).unwrap())
+            .run(Process::new(&sl(), &oci::Process::default(), "123", true, 1, None).unwrap())
             .await;
         assert!(ret.is_err(), "Expecting Err, Got {:?}", ret);
     }

@@ -6,5 +6,7 @@
 
 mod container_io;
 pub use container_io::ContainerIo;
+mod passfd_io;
 mod shim_io;
+pub use passfd_io::PassfdIo;
 pub use shim_io::ShimIo;
