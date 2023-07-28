@@ -32,7 +32,7 @@ pub const DEFAULT_HYPERVISOR: &str = HYPERVISOR_NAME_DRAGONBALL;
 
 pub const DEFAULT_INTERNETWORKING_MODEL: &str = "tcfilter";
 
-pub const DEFAULT_BLOCK_DEVICE_TYPE: &str = "virtio-blk";
+pub const DEFAULT_BLOCK_DEVICE_TYPE: &str = "virtio-blk-pci";
 pub const DEFAULT_VHOST_USER_STORE_PATH: &str = "/var/run/vhost-user";
 pub const DEFAULT_BLOCK_NVDIMM_MEM_OFFSET: u64 = 0;
 
