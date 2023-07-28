@@ -7,6 +7,7 @@ use libc::pid_t;
 use std::fs::File;
 use std::os::unix::io::{AsRawFd, RawFd};
 use tokio::sync::mpsc::Sender;
+use tokio_vsock::VsockStream;
 
 use nix::errno::Errno;
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
@@ -18,6 +19,7 @@ use oci::Process as OCIProcess;
 use slog::Logger;
 
 use crate::pipestream::PipeStream;
+use awaitgroup::WaitGroup;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::io::{split, ReadHalf, WriteHalf};
@@ -48,6 +50,31 @@ type Reader = Arc<Mutex<ReadHalf<PipeStream>>>;
 type Writer = Arc<Mutex<WriteHalf<PipeStream>>>;
 
 #[derive(Debug)]
+pub struct ProcessIo {
+    pub stdin: Option<VsockStream>,
+    pub stdout: Option<VsockStream>,
+    pub stderr: Option<VsockStream>,
+    // used to wait for all process outputs to be copied to the vsock streams
+    // only used when tty is used.
+    pub wg_output: WaitGroup,
+}
+
+impl ProcessIo {
+    pub fn new(
+        stdin: Option<VsockStream>,
+        stdout: Option<VsockStream>,
+        stderr: Option<VsockStream>,
+    ) -> Self {
+        ProcessIo {
+            stdin,
+            stdout,
+            stderr,
+            wg_output: WaitGroup::new(),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Process {
     pub exec_id: String,
     pub stdin: Option<RawFd>,
@@ -74,6 +101,8 @@ pub struct Process {
 
     readers: HashMap<StreamType, Reader>,
     writers: HashMap<StreamType, Writer>,
+
+    pub proc_io: Option<ProcessIo>,
 }
 
 pub trait ProcessOperations {
@@ -105,6 +134,7 @@ impl Process {
         id: &str,
         init: bool,
         pipe_size: i32,
+        proc_io: Option<ProcessIo>,
     ) -> Result<Self> {
         let logger = logger.new(o!("subsystem" => "process"));
         let (exit_tx, exit_rx) = tokio::sync::watch::channel(false);
@@ -131,6 +161,7 @@ impl Process {
             term_exit_notifier: Arc::new(Notify::new()),
             readers: HashMap::new(),
             writers: HashMap::new(),
+            proc_io,
         };
 
         info!(logger, "before create console socket!");
@@ -143,17 +174,40 @@ impl Process {
             } else {
                 info!(logger, "created console socket!");
 
-                let (stdin, pstdin) = unistd::pipe2(OFlag::O_CLOEXEC)?;
-                p.parent_stdin = Some(pstdin);
-                p.stdin = Some(stdin);
+                if let Some(proc_io) = p.proc_io.as_mut() {
+                    // In passfd io mode
+                    if let Some(stdin) = proc_io.stdin.take() {
+                        p.stdin = Some(stdin.as_raw_fd());
+                        std::mem::forget(stdin);
+                    }
+                    // p.stdin can be None if the connection for stdin is not provided.
+                } else {
+                    let (stdin, pstdin) = unistd::pipe2(OFlag::O_CLOEXEC)?;
+                    p.parent_stdin = Some(pstdin);
+                    p.stdin = Some(stdin);
+                }
 
-                let (pstdout, stdout) = create_extended_pipe(OFlag::O_CLOEXEC, pipe_size)?;
-                p.parent_stdout = Some(pstdout);
-                p.stdout = Some(stdout);
+                if let Some(proc_io) = p.proc_io.as_mut() {
+                    if let Some(stdout) = proc_io.stdout.take() {
+                        p.stdout = Some(stdout.as_raw_fd());
+                        std::mem::forget(stdout);
+                    }
+                } else {
+                    let (pstdout, stdout) = create_extended_pipe(OFlag::O_CLOEXEC, pipe_size)?;
+                    p.parent_stdout = Some(pstdout);
+                    p.stdout = Some(stdout);
+                }
 
-                let (pstderr, stderr) = create_extended_pipe(OFlag::O_CLOEXEC, pipe_size)?;
-                p.parent_stderr = Some(pstderr);
-                p.stderr = Some(stderr);
+                if let Some(proc_io) = p.proc_io.as_mut() {
+                    if let Some(stderr) = proc_io.stderr.take() {
+                        p.stderr = Some(stderr.as_raw_fd());
+                        std::mem::forget(stderr);
+                    }
+                } else {
+                    let (pstderr, stderr) = create_extended_pipe(OFlag::O_CLOEXEC, pipe_size)?;
+                    p.parent_stderr = Some(pstderr);
+                    p.stderr = Some(stderr);
+                }
             }
         }
         Ok(p)
@@ -164,6 +218,7 @@ impl Process {
         notify.notify_waiters();
     }
 
+    /// won't be use in passfd io mode.
     pub fn close_stdin(&mut self) {
         close_process_stream!(self, term_master, TermMaster);
         close_process_stream!(self, parent_stdin, ParentStdin);
@@ -172,6 +227,13 @@ impl Process {
     }
 
     pub fn cleanup_process_stream(&mut self) {
+        if let Some(_) = self.proc_io.take() {
+            // taken
+
+            return;
+        }
+
+        // legacy io mode
         close_process_stream!(self, parent_stdin, ParentStdin);
         close_process_stream!(self, parent_stdout, ParentStdout);
         close_process_stream!(self, parent_stderr, ParentStderr);
@@ -277,6 +339,7 @@ mod tests {
             id,
             init,
             32,
+            None,
         );
 
         let mut process = process.unwrap();

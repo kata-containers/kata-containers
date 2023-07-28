@@ -9,7 +9,7 @@ use std::{
     iter::FromIterator,
 };
 
-use anyhow::{Context, Ok, Result};
+use anyhow::{anyhow, Context, Ok, Result};
 use kata_types::capabilities::Capabilities;
 
 use super::inner::DragonballInner;
@@ -74,6 +74,15 @@ impl DragonballInner {
             HYBRID_VSOCK_SCHEME,
             get_hvsock_path(&self.id),
         ))
+    }
+
+    /// Get the address of agent vsock server used to init connections for io
+    pub(crate) async fn get_passfd_listener_addr(&self) -> Result<(String, u32)> {
+        if let Some(passfd_port) = self.passfd_listener_port {
+            Ok((get_hvsock_path(&self.id), passfd_port))
+        } else {
+            Err(anyhow!("passfd io listener port not set"))
+        }
     }
 
     pub(crate) async fn get_hypervisor_metrics(&self) -> Result<String> {

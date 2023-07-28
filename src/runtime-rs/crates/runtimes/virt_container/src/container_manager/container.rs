@@ -43,7 +43,7 @@ pub struct Container {
     agent: Arc<dyn Agent>,
     resource_manager: Arc<ResourceManager>,
     logger: slog::Logger,
-    passfd_listener_addr: Option<(String, u32)>,
+    pub(crate) passfd_listener_addr: Option<(String, u32)>,
 }
 
 impl Container {
@@ -53,6 +53,7 @@ impl Container {
         spec: oci::Spec,
         agent: Arc<dyn Agent>,
         resource_manager: Arc<ResourceManager>,
+        passfd_listener_addr: Option<(String, u32)>,
     ) -> Result<Self> {
         let container_id = ContainerID::new(&config.container_id).context("new container id")?;
         let logger = sl!().new(o!("container_id" => config.container_id.clone()));
@@ -85,7 +86,7 @@ impl Container {
             agent,
             resource_manager,
             logger,
-            None,
+            passfd_listener_addr,
         })
     }
 
@@ -186,6 +187,17 @@ impl Container {
             }
         }
 
+        // In passfd io mode, we create vsock connections for io in advance
+        // and pass port info to agent in `CreateContainerRequest`.
+        // These vsock connections will be used as stdin/stdout/stderr of the container process.
+        // See agent/src/passfd_io.rs for more details.
+        if let Some((hvsock_uds_path, passfd_port)) = &self.passfd_listener_addr {
+            inner
+                .init_process
+                .passfd_io_init(hvsock_uds_path, *passfd_port)
+                .await?;
+        }
+
         // create container
         let r = agent::CreateContainerRequest {
             process_id: agent::ContainerProcessID::new(&config.container_id, ""),
@@ -194,6 +206,24 @@ impl Container {
             sandbox_pidns,
             devices: devices_agent,
             shared_mounts,
+            stdin_port: inner
+                .init_process
+                .passfd_io
+                .as_ref()
+                .map(|io| io.stdin_port)
+                .flatten(),
+            stdout_port: inner
+                .init_process
+                .passfd_io
+                .as_ref()
+                .map(|io| io.stdout_port)
+                .flatten(),
+            stderr_port: inner
+                .init_process
+                .passfd_io
+                .as_ref()
+                .map(|io| io.stderr_port)
+                .flatten(),
             ..Default::default()
         };
 
@@ -219,20 +249,39 @@ impl Container {
                     return Err(err);
                 }
 
-                let container_io = inner.new_container_io(process).await?;
-                inner
-                    .init_process
-                    .start_io_and_wait(containers, self.agent.clone(), container_io)
-                    .await?;
+                if self.passfd_listener_addr.is_some() {
+                    inner
+                        .init_process
+                        .passfd_io_wait(containers, self.agent.clone())
+                        .await?;
+                } else {
+                    let container_io = inner.new_container_io(process).await?;
+                    inner
+                        .init_process
+                        .start_io_and_wait(containers, self.agent.clone(), container_io)
+                        .await?;
+                }
             }
             ProcessType::Exec => {
+                // In passfd io mode, we create vsock connections for io in advance
+                // and pass port info to agent in `ExecProcessRequest`.
+                // These vsock connections will be used as stdin/stdout/stderr of the exec process.
+                // See agent/src/passfd_io.rs for more details.
+                if let Some((hvsock_uds_path, passfd_port)) = &self.passfd_listener_addr {
+                    let exec = inner
+                        .exec_processes
+                        .get_mut(&process.exec_id)
+                        .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
+                    exec.process
+                        .passfd_io_init(hvsock_uds_path, *passfd_port)
+                        .await?;
+                }
+
                 if let Err(e) = inner.start_exec_process(process).await {
                     let device_manager = self.resource_manager.get_device_manager().await;
                     let _ = inner.stop_process(process, true, &device_manager).await;
                     return Err(e).context("enter process");
                 }
-
-                let container_io = inner.new_container_io(process).await.context("io stream")?;
 
                 {
                     let exec = inner
@@ -247,13 +296,29 @@ impl Container {
                     }
                 }
 
-                // start io and wait
-                {
+                if self.passfd_listener_addr.is_some() {
+                    // In passfd io mode, we don't bother with the IO.
+                    // We send `WaitProcessRequest` immediately to the agent
+                    // and wait for the response in a separate thread.
+                    // The agent will only respond after IO is done.
                     let exec = inner
                         .exec_processes
                         .get_mut(&process.exec_id)
                         .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
+                    exec.process
+                        .passfd_io_wait(containers, self.agent.clone())
+                        .await?;
+                } else {
+                    // In legacy io mode, we handle IO by polling the agent.
+                    // When IO is done, we send `WaitProcessRequest` to agent
+                    // to get the exit status.
+                    let container_io =
+                        inner.new_container_io(process).await.context("io stream")?;
 
+                    let exec = inner
+                        .exec_processes
+                        .get_mut(&process.exec_id)
+                        .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
                     exec.process
                         .start_io_and_wait(containers, self.agent.clone(), container_io)
                         .await

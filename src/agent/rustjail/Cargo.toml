@@ -6,6 +6,7 @@ edition = "2018"
 license = "Apache-2.0"
 
 [dependencies]
+awaitgroup = "0.6.0"
 serde = "1.0.91"
 serde_json = "1.0.39"
 serde_derive = "1.0.91"
@@ -30,6 +31,7 @@ rlimit = "0.5.3"
 cfg-if = "0.1.0"
 
 tokio = { version = "1.28.1", features = ["sync", "io-util", "process", "time", "macros", "rt"] }
+tokio-vsock = "0.3.1"
 futures = "0.3.17"
 async-trait = "0.1.31"
 inotify = "0.9.2"
