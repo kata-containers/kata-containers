@@ -7,6 +7,7 @@
 // This defines the handlers corresponding to the url when a request is sent to destined url,
 // the handler function should be invoked, and the corresponding data will be in the response
 
+use crate::shim_metrics::get_shim_metrics;
 use agent::ResizeVolumeRequest;
 use anyhow::{anyhow, Context, Result};
 use common::Sandbox;
@@ -16,7 +17,7 @@ use url::Url;
 
 use shim_interface::shim_mgmt::{
     AGENT_URL, DIRECT_VOLUME_PATH_KEY, DIRECT_VOLUME_RESIZE_URL, DIRECT_VOLUME_STATS_URL,
-    IP6_TABLE_URL, IP_TABLE_URL,
+    IP6_TABLE_URL, IP_TABLE_URL, METRICS_URL,
 };
 
 // main router for response, this works as a multiplexer on
@@ -43,6 +44,7 @@ pub(crate) async fn handler_mux(
         (&Method::POST, DIRECT_VOLUME_RESIZE_URL) => {
             direct_volume_resize_handler(sandbox, req).await
         }
+        (&Method::GET, METRICS_URL) => metrics_url_handler(sandbox, req).await,
         _ => Ok(not_found(req).await),
     }
 }
@@ -145,4 +147,20 @@ async fn direct_volume_resize_handler(
         Ok(_) => Ok(Response::new(Body::from(""))),
         _ => Err(anyhow!("handler: Failed to resize volume")),
     }
+}
+
+// returns the url for metrics
+async fn metrics_url_handler(
+    sandbox: Arc<dyn Sandbox>,
+    _req: Request<Body>,
+) -> Result<Response<Body>> {
+    // get metrics from agent, hypervisor, and shim
+    let agent_metrics = sandbox.agent_metrics().await.unwrap_or_default();
+    let hypervisor_metrics = sandbox.hypervisor_metrics().await.unwrap_or_default();
+    let shim_metrics = get_shim_metrics().unwrap_or_default();
+
+    Ok(Response::new(Body::from(format!(
+        "{}{}{}",
+        agent_metrics, hypervisor_metrics, shim_metrics
+    ))))
 }

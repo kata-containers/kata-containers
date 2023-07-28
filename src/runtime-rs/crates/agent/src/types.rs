@@ -557,6 +557,11 @@ pub struct VersionCheckResponse {
 }
 
 #[derive(PartialEq, Clone, Default, Debug)]
+pub struct MetricsResponse {
+    pub metrics: String,
+}
+
+#[derive(PartialEq, Clone, Default, Debug)]
 pub struct OomEventResponse {
     pub container_id: String,
 }
