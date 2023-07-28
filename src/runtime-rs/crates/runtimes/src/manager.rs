@@ -221,7 +221,7 @@ impl std::fmt::Debug for RuntimeHandlerManager {
 }
 
 impl RuntimeHandlerManager {
-    pub async fn new(id: &str, msg_sender: Sender<Message>) -> Result<Self> {
+    pub fn new(id: &str, msg_sender: Sender<Message>) -> Result<Self> {
         Ok(Self {
             inner: Arc::new(RwLock::new(RuntimeHandlerManagerInner::new(
                 id, msg_sender,
