@@ -16,7 +16,7 @@ use crate::volume::utils::{
 };
 use hypervisor::{
     device::{
-        device_manager::{do_handle_device, DeviceManager},
+        device_manager::{do_handle_device, get_block_driver, DeviceManager},
         DeviceConfig, DeviceType,
     },
     BlockConfig,
@@ -42,6 +42,8 @@ impl BlockVolume {
         // default block device fs type: ext4.
         let mut blk_dev_fstype = DEFAULT_VOLUME_FS_TYPE.to_string();
 
+        let block_driver = get_block_driver(d).await;
+
         let block_device_config = match m.r#type.as_str() {
             KATA_MOUNT_BIND_TYPE => {
                 let fstat = stat::stat(mnt_src).context(format!("stat {}", m.source))?;
@@ -49,6 +51,7 @@ impl BlockVolume {
                 BlockConfig {
                     major: stat::major(fstat.st_rdev) as i64,
                     minor: stat::minor(fstat.st_rdev) as i64,
+                    driver_option: block_driver,
                     ..Default::default()
                 }
             }
@@ -77,6 +80,7 @@ impl BlockVolume {
 
                 BlockConfig {
                     path_on_host: v.device,
+                    driver_option: block_driver,
                     ..Default::default()
                 }
             }

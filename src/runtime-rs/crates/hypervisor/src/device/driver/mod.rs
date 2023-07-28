@@ -16,8 +16,8 @@ pub use vfio::{
     VfioBusMode, VfioConfig, VfioDevice,
 };
 pub use virtio_blk::{
-    BlockConfig, BlockDevice, KATA_BLK_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE, VIRTIO_BLOCK_MMIO,
-    VIRTIO_BLOCK_PCI,
+    BlockConfig, BlockDevice, KATA_BLK_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE, KATA_NVDIMM_DEV_TYPE,
+    VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
 };
 pub use virtio_fs::{
     ShareFsDevice, ShareFsDeviceConfig, ShareFsMountConfig, ShareFsMountDevice, ShareFsMountType,

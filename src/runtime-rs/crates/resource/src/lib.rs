@@ -17,6 +17,7 @@ pub mod manager;
 mod manager_inner;
 pub mod network;
 pub mod resource_persist;
+use hypervisor::BlockConfig;
 use network::NetworkConfig;
 pub mod rootfs;
 pub mod share_fs;
@@ -30,6 +31,7 @@ use kata_types::config::hypervisor::SharedFsInfo;
 pub enum ResourceConfig {
     Network(NetworkConfig),
     ShareFs(SharedFsInfo),
+    VmRootfs(BlockConfig),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
