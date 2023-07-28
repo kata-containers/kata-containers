@@ -8,9 +8,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
-
-source "${SCRIPT_PATH}/../../.ci/lib.sh"
+SCRIPT_PATH=$(dirname "$(readlink -f "$0")"
 source "${SCRIPT_PATH}/../lib/common.bash"
 sysbench_file=$(mktemp sysbenchresults.XXXXXXXXXX)
 TEST_NAME="${TEST_NAME:-sysbench}"
