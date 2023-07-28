@@ -43,9 +43,9 @@ shims_s390x+=(
 
 arch=$(uname -m)
 if [[ "${arch}" == "x86_64" ]]; then
-	shims=${shims_x86_64[@]}
+	shims=(${shims_x86_64[@]})
 elif [[ "${arch}" == "s390x" ]]; then
-	shims=${shims_s390x[@]}
+	shims=(${shims_s390x[@]})
 else
 	die "${arch} is a not supported architecture"
 fi
