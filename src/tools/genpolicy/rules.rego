@@ -27,7 +27,6 @@ default PullImageRequest := true
 default ReadStreamRequest := true
 default RemoveContainerRequest := true
 default RemoveStaleVirtiofsShareMountsRequest := true
-default SetPolicyRequest := true
 default SignalProcessRequest := true
 default StartContainerRequest := true
 default StatsContainerRequest := true
