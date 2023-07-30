@@ -117,17 +117,18 @@ impl ServiceManager {
     pub async fn cleanup(sid: &str) -> Result<()> {
         let (sender, _receiver) = channel::<Message>(MESSAGE_BUFFER_SIZE);
         let handler = RuntimeHandlerManager::new(sid, sender).context("new runtime handler")?;
-        handler.cleanup().await.context("runtime handler cleanup")?;
-        let temp_dir = [KATA_PATH, sid].join("/");
-        if std::fs::metadata(temp_dir.as_str()).is_ok() {
-            // try to remove dir and skip the result
-            fs::remove_dir_all(temp_dir)
-                .map_err(|err| {
-                    warn!(sl!(), "failed to clean up sandbox tmp dir");
-                    err
-                })
-                .ok();
+        if let Err(e) = handler.cleanup().await {
+            warn!(sl!(), "failed to clean up runtime state, {}", e);
         }
+
+        let temp_dir = [KATA_PATH, sid].join("/");
+        if fs::metadata(temp_dir.as_str()).is_ok() {
+            // try to remove dir and skip the result
+            if let Err(e) = fs::remove_dir_all(temp_dir) {
+                warn!(sl!(), "failed to clean up sandbox tmp dir, {}", e);
+            }
+        }
+
         Ok(())
     }
 
