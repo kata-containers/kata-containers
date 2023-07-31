@@ -2,6 +2,10 @@ name: CI | Build kata-static tarball for arm64
 on:
   workflow_call:
     inputs:
+      stage:
+        required: false
+        type: string
+        default: test
       tarball-suffix:
         required: false
         type: string
@@ -29,6 +33,8 @@ jobs:
           - rootfs-initrd
           - shim-v2
           - virtiofsd
+        stage:
+          - ${{ inputs.stage }}
     steps:
       - name: Adjust a permission for repo
         run: |
