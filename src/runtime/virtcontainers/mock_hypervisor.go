@@ -56,6 +56,10 @@ func (m *mockHypervisor) PauseVM(ctx context.Context) error {
 	return nil
 }
 
+func (m *mockHypervisor) AttestVM(ctx context.Context) error {
+	return nil
+}
+
 func (m *mockHypervisor) ResumeVM(ctx context.Context) error {
 	return nil
 }
