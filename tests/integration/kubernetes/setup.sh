@@ -15,10 +15,6 @@ reset_workloads_work_dir() {
     cp -R ${kubernetes_dir}/runtimeclass_workloads ${kubernetes_dir}/runtimeclass_workloads_work
 }
 
-set_runtime_class() {
-    sed -i -e "s|runtimeClassName: kata|runtimeClassName: kata-${KATA_HYPERVISOR}|" ${kubernetes_dir}/runtimeclass_workloads_work/*.yaml
-}
-
 set_kernel_path() {
     if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
         mariner_kernel_path="/usr/share/cloud-hypervisor/vmlinux.bin"
@@ -35,7 +31,6 @@ set_initrd_path() {
 
 main() {
     reset_workloads_work_dir
-    set_runtime_class
     set_kernel_path
     set_initrd_path
 }
