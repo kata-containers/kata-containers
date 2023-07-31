@@ -1482,6 +1482,13 @@ func (s *Sandbox) startVM(ctx context.Context, prestartHookFunc func(context.Con
 		}
 	}
 
+	// not sure how we know that this callback has been executed
+	if s.config.HypervisorConfig.ConfidentialGuest && s.config.HypervisorConfig.GuestPreAttestation {
+		if err := s.hypervisor.AttestVM(ctx); err != nil {
+			return err
+		}
+	}
+
 	// 1. Do not scan the netns if we want no network for the vmm
 	// 2. Do not scan the netns if the vmm does not support device hotplug, in which case
 	//    the network is already set up statically

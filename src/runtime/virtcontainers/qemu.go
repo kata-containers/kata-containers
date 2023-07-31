@@ -41,6 +41,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/sev/kbs"
 	pkgUtils "github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
@@ -195,6 +196,13 @@ func (q *qemu) kernelParameters() string {
 	} else {
 		q.Logger().Info("Set selinux=1 to kernel params because SELinux on the guest is enabled")
 		params = append(params, Param{"selinux", "1"})
+	}
+
+	// set the location of the online-kbs for SEV(-ES) guest attestation
+	if q.arch.getProtection() == sevProtection &&
+		q.config.GuestPreAttestation &&
+		q.config.GuestPreAttestationMode == kbs.Online {
+		params = append(params, Param{"agent.aa_kbc_params", kbs.OnlineBootParam + "::" + q.config.GuestPreAttestationURI})
 	}
 
 	// add the params specified by the provided config. As the kernel
@@ -681,9 +689,39 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		Debug:          hypervisorConfig.Debug,
 	}
 
-	qemuConfig.Devices, qemuConfig.Bios, err = q.arch.appendProtectionDevice(qemuConfig.Devices, firmwarePath, firmwareVolumePath)
-	if err != nil {
-		return err
+	if q.arch.getProtection() == sevProtection {
+		sevConfig := kbs.GuestPreAttestationConfig{
+			Proxy:         q.config.GuestPreAttestationURI,
+			Policy:        q.config.SEVGuestPolicy,
+			CertChainPath: q.config.SEVCertChainPath,
+		}
+		sevConfig.LaunchId = ""
+
+		if q.config.GuestPreAttestation {
+			sevConfig.LaunchId, err = q.arch.setupSEVGuestPreAttestation(ctx, sevConfig)
+			if err != nil {
+				q.Logger().Warning("SEV attestation setup failed.")
+				return err
+			}
+
+			// SEV(-ES) guest is started paused for launch secrets injection
+			qemuConfig.Knobs.Stopped = true
+			q.arch.setSEVPreAttestationId(sevConfig.LaunchId)
+		} else {
+			q.Logger().Infof("SEV guest attestation skipped")
+		}
+
+		qemuConfig.Devices, qemuConfig.Bios, err = q.arch.appendSEVObject(qemuConfig.Devices, firmwarePath, firmwareVolumePath, sevConfig)
+		if err != nil {
+			q.Logger().Warning("Unable to append SEV object to qemu command")
+			return err
+		}
+
+	} else {
+		qemuConfig.Devices, qemuConfig.Bios, err = q.arch.appendProtectionDevice(qemuConfig.Devices, firmwarePath, firmwareVolumePath)
+		if err != nil {
+			return err
+		}
 	}
 
 	if ioThread != nil {
@@ -1025,6 +1063,65 @@ func (q *qemu) LogAndWait(qemuCmd *exec.Cmd, reader io.ReadCloser) {
 	}
 	q.Logger().Infof("Stop logging QEMU (qemuPid=%d)", pid)
 	qemuCmd.Wait()
+}
+
+func (q *qemu) AttestVM(ctx context.Context) error {
+	if q.arch.getProtection() != sevProtection {
+		return nil
+	}
+
+	if err := q.qmpSetup(); err != nil {
+		return err
+	}
+	kernelPath, err := q.config.KernelAssetPath()
+	if err != nil {
+		return err
+	}
+
+	initrdPath, err := q.config.InitrdAssetPath()
+	if err != nil {
+		return err
+	}
+
+	firmwarePath, err := q.config.FirmwareAssetPath()
+	if err != nil {
+		return err
+	}
+
+	kernelParameters := q.kernelParameters()
+	launchId := q.arch.getSEVPreAttestationId()
+
+	// Guest must be paused so that secrets can be injected.
+	// Guest will be continued by the Attestation function
+	sevConfig := kbs.GuestPreAttestationConfig{
+		Proxy:            q.config.GuestPreAttestationURI,
+		Policy:           q.config.SEVGuestPolicy,
+		Keyset:           q.config.GuestPreAttestationKeyset,
+		LaunchId:         launchId,
+		KernelPath:       kernelPath,
+		InitrdPath:       initrdPath,
+		FwPath:           firmwarePath,
+		KernelParameters: kernelParameters,
+	}
+
+	if q.config.GuestPreAttestationMode == kbs.Online {
+		sevConfig.SecretGuid = kbs.OnlineSecretGuid
+		sevConfig.SecretType = kbs.OnlineSecretType
+	} else if q.config.GuestPreAttestationMode == kbs.Offline {
+		sevConfig.SecretGuid = kbs.OfflineSecretGuid
+		sevConfig.SecretType = kbs.OfflineSecretType
+	} else {
+		return fmt.Errorf("Unsupported pre-attestation mode: %s", q.config.GuestPreAttestationMode)
+	}
+
+	if err := q.arch.sevGuestPreAttestation(
+		q.qmpMonitorCh.ctx,
+		q.qmpMonitorCh.qmp,
+		sevConfig); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // StartVM will start the Sandbox's VM.

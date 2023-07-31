@@ -21,6 +21,7 @@ import (
 	"gitlab.com/nvidia/cloud-native/go-nvlib/pkg/nvpci"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
+	sevKbs "github.com/kata-containers/kata-containers/src/runtime/pkg/sev/kbs"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
@@ -48,6 +49,12 @@ type qemuArch interface {
 
 	// machine returns the machine type
 	machine() govmmQemu.Machine
+
+	// set attestation id for SEV guests with pre-attestation
+	setSEVPreAttestationId(attestationId string)
+
+	// get attestation id for SEV guests with pre-attestation
+	getSEVPreAttestationId() string
 
 	// qemuPath returns the path to the QEMU binary
 	qemuPath() string
@@ -173,6 +180,16 @@ type qemuArch interface {
 
 	// Query QMP to find the PCI slot of a device, given its QOM path or ID
 	qomGetSlot(qomPath string, qmpCh *qmpChannel) (types.PciSlot, error)
+
+	// append SEV object type to the VM definition
+	appendSEVObject(devices []govmmQemu.Device, firmware, firmwareVolume string, config sevKbs.GuestPreAttestationConfig) ([]govmmQemu.Device, string, error)
+
+	// setup SEV guest prelaunch attestation
+	setupSEVGuestPreAttestation(ctx context.Context, config sevKbs.GuestPreAttestationConfig) (string, error)
+
+	// wait for prelaunch attestation to complete
+	sevGuestPreAttestation(ctx context.Context,
+		qmp *govmmQemu.QMP, config sevKbs.GuestPreAttestationConfig) error
 }
 
 type qemuArchBase struct {
@@ -185,6 +202,7 @@ type qemuArchBase struct {
 	Bridges              []types.Bridge
 	memoryOffset         uint64
 	networkIndex         int
+	sevAttestationId     string
 	// Exclude from lint checking for it is ultimately only used in architecture-specific code
 	protection    guestProtection //nolint:structcheck
 	nestedRun     bool
@@ -285,6 +303,14 @@ func (q *qemuArchBase) machine() govmmQemu.Machine {
 
 func (q *qemuArchBase) getProtection() guestProtection {
 	return q.protection
+}
+
+func (q *qemuArchBase) setSEVPreAttestationId(attestation_id string) {
+	q.sevAttestationId = attestation_id
+}
+
+func (q *qemuArchBase) getSEVPreAttestationId() string {
+	return q.sevAttestationId
 }
 
 func (q *qemuArchBase) qemuPath() string {
@@ -982,4 +1008,23 @@ func (q *qemuArchBase) qomGetPciPath(qemuID string, qmpCh *qmpChannel) (types.Pc
 		parentPath = parentBus
 	}
 	return types.PciPathFromSlots(slots...)
+}
+
+// AMD SEV methods
+func (q *qemuArchBase) appendSEVObject(devices []govmmQemu.Device, firmware, firmwareVolume string, config sevKbs.GuestPreAttestationConfig) ([]govmmQemu.Device, string, error) {
+	hvLogger.WithField("arch", runtime.GOARCH).Warnf("Confidential Computing has not been implemented for this architecture")
+	return devices, firmware, nil
+}
+
+// Setup SEV guest attestation
+func (q *qemuArchBase) setupSEVGuestPreAttestation(ctx context.Context, config sevKbs.GuestPreAttestationConfig) (string, error) {
+	hvLogger.WithField("arch", runtime.GOARCH).Warnf("Confidential Computing has not been implemented for this architecture")
+	return "", nil
+}
+
+// Wait for SEV prelaunch attestation to complete
+func (q *qemuArchBase) sevGuestPreAttestation(ctx context.Context,
+	qmp *govmmQemu.QMP, config sevKbs.GuestPreAttestationConfig) error {
+	hvLogger.WithField("arch", runtime.GOARCH).Warnf("Confidential Computing has not been implemented for this architecture")
+	return nil
 }

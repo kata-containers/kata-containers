@@ -1121,6 +1121,11 @@ func (clh *cloudHypervisor) PauseVM(ctx context.Context) error {
 	return nil
 }
 
+func (clh *cloudHypervisor) AttestVM(ctx context.Context) error {
+	clh.Logger().WithField("function", "AttestVM").Info("Attest Sandbox")
+	return nil
+}
+
 func (clh *cloudHypervisor) SaveVM() error {
 	clh.Logger().WithField("function", "saveSandboxC").Info("Save Sandbox")
 	return nil
