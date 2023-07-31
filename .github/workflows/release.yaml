@@ -121,11 +121,13 @@ jobs:
           GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a "${tarball}" "${tag}"
           popd
 
-  upload-versions-yaml-tarball:
+  upload-versions-yaml:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - name: upload versions.yaml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GIT_UPLOAD_TOKEN }}
         run: |
           tag=$(echo $GITHUB_REF | cut -d/ -f3-)
           pushd $GITHUB_WORKSPACE
