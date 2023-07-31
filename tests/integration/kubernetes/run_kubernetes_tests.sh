@@ -18,6 +18,7 @@ if [ -n "${K8S_TEST_UNION:-}" ]; then
 	K8S_TEST_UNION=($K8S_TEST_UNION)
 else
 	K8S_TEST_UNION=( \
+		"kata-deploy-ensure-runtimec-classes-created.bats" \
 		"k8s-attach-handlers.bats" \
 		"k8s-caps.bats" \
 		"k8s-configmap.bats" \
