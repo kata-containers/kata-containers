@@ -126,5 +126,13 @@
     },
     "kata_config": {
         "confidential_guest": true
+    },
+    "request_defaults": {
+        "CopyFileRequest": [
+            "^/run/kata-containers/shared/containers/"
+        ],
+        "ExecProcessRequest": [],
+        "ReadStreamRequest": false,
+        "WriteStreamRequest": false
     }
 }

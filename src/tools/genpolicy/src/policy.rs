@@ -50,6 +50,7 @@ pub struct AgentPolicy {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PolicyData {
     pub containers: Vec<ContainerPolicy>,
+    pub request_defaults: RequestDefaults,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -143,6 +144,21 @@ pub struct EmptyDirVolume {
 pub struct PersistentVolumeClaimVolume {
     pub mount_type: String,
     pub mount_source: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RequestDefaults {
+    /// Guest file paths matching these regular expressions can be copied by the Host.
+    pub CopyFileRequest: Vec<String>,
+
+    /// Array of commands allowed to be executed by the Host in all Guest containers.
+    pub ExecProcessRequest: Vec<String>,
+
+    /// Allow Host reading from Guest containers stdout and stderr.
+    pub ReadStreamRequest: bool,
+
+    /// Allow Host writing to Guest containers stdin.
+    pub WriteStreamRequest: bool,
 }
 
 impl AgentPolicy {
@@ -241,6 +257,7 @@ impl AgentPolicy {
 
         let policy_data = policy::PolicyData {
             containers: policy_containers,
+            request_defaults: self.infra_policy.request_defaults.clone(),
         };
 
         let json_data = serde_json::to_string_pretty(&policy_data).unwrap();

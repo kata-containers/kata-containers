@@ -5,18 +5,6 @@ import future.keywords.every
 
 import input
 
-######################################################################
-# Default values:
-#
-# - true for requests that are allowed by default.
-# - false for requests that have additional policy rules, defined below.
-# - Requests that are not listed here get rejected by default.
-
-# Detailed policy rules for these requests are below.
-default CopyFileRequest := false
-default CreateContainerRequest := false
-default ExecProcessRequest := false
-
 # Requests that are always allowed.
 default CreateSandboxRequest := true
 default DestroySandboxRequest := true
@@ -24,7 +12,6 @@ default GetOOMEventRequest := true
 default GuestDetailsRequest := true
 default OnlineCPUMemRequest := true
 default PullImageRequest := true
-default ReadStreamRequest := true
 default RemoveContainerRequest := true
 default RemoveStaleVirtiofsShareMountsRequest := true
 default SignalProcessRequest := true
@@ -35,7 +22,6 @@ default UpdateEphemeralMountsRequest := true
 default UpdateInterfaceRequest := true
 default UpdateRoutesRequest := true
 default WaitProcessRequest := true
-default WriteStreamRequest := true
 
 # Configure the Agent to *allow any requests causing a policy failure*.
 # This is an unsecure configuration but is useful for allowing unsecure
@@ -1021,7 +1007,26 @@ allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id) {
 }
 
 ######################################################################
+CopyFileRequest {
+    print("CopyFileRequest:", input)
+
+    some policy_regex in policy_data.request_defaults.CopyFileRequest
+    regex.match(policy_regex, input.path)
+
+    print("CopyFileRequest: success")
+}
+
 ExecProcessRequest {
+    input_command = concat(" ", input.process.Args)
+    print("ExecProcessRequest: input_command =", input_command)
+
+    some policy_command in policy_data.request_defaults.ExecProcessRequest
+    policy_command == input_command
+
+    print("ExecProcessRequest: success")
+}
+ExecProcessRequest {
+    # TODO: match input container ID with its corresponding container.exec_commands.
     input_command = concat(" ", input.process.Args)
     print("ExecProcessRequest: input_command =", input_command)
 
@@ -1035,11 +1040,10 @@ ExecProcessRequest {
     print("ExecProcessRequest: success")
 }
 
-CopyFileRequest {
-    print("CopyFileRequest:", input)
+ReadStreamRequest {
+    policy_data.request_defaults.ReadStreamRequest == true
+}
 
-    # TODO: review and improve if needed.
-    startswith(input.path, "/run/kata-containers/shared/containers/")
-
-    print("CopyFileRequest: success")
+WriteStreamRequest {
+    policy_data.request_defaults.WriteStreamRequest == true
 }
