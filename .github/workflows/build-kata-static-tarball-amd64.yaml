@@ -51,7 +51,7 @@ jobs:
           - ${{ inputs.stage }}
         exclude:
           - asset: cloud-hypervisor-glibc
-            stage: release
+            stage: "release"
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
