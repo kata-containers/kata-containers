@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-set -e
+set -o pipefail
 
 # General env
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
@@ -12,18 +12,30 @@ source "${SCRIPT_PATH}/../lib/common.bash"
 
 IMAGE="docker.io/library/tensorflow:latest"
 DOCKERFILE="${SCRIPT_PATH}/tensorflow_dockerfile/Dockerfile"
-BATCH_SIZE="512"
-NUM_BATCHES="300"
-CMD_RESULT="cd benchmarks/scripts/tf_cnn_benchmarks/ && cat result"
-CMD_FILE="cat benchmarks/scripts/tf_cnn_benchmarks/result | grep 'total images' | wc -l"
-tensorflow_file=$(mktemp tensorflowresults.XXXXXXXXXX)
+BATCH_SIZE="100"
+NUM_BATCHES="100"
+resnet_tensorflow_file=$(mktemp resnettensorflowresults.XXXXXXXXXX)
+alexnet_tensorflow_file=$(mktemp alexnettensorflowresults.XXXXXXXXXX)
 NUM_CONTAINERS="$1"
 TIMEOUT="$2"
 TEST_NAME="tensorflow"
 PAYLOAD_ARGS="tail -f /dev/null"
+# Options to control the start of the workload using a trigger-file
+dst_dir="/host"
+src_dir=$(mktemp --tmpdir -d tensorflow.XXXXXXXXXX)
+MOUNT_OPTIONS="type=bind,src=$src_dir,dst=$dst_dir,options=rbind:ro"
+# CMD points to the script that starts the workload
+alexnet_start_script="alexnet_start.sh"
+resnet_start_script="resnet_start.sh"
+CMD_RESNET="$dst_dir/$resnet_start_script"
+CMD_ALEXNET="$dst_dir/$alexnet_start_script"
+timeout=600
+INITIAL_NUM_PIDS=1
+CMD_FILE="cat alexnet_results | grep 'total images' | wc -l"
+RESNET_CMD_FILE="cat resnet_results | grep 'total images' | wc -l"
 
 function remove_tmp_file() {
-	rm -rf "${tensorflow_file}"
+	rm -rf "${resnet_tensorflow_file}" "${alexnet_tensorflow_file}"
 }
 
 trap remove_tmp_file EXIT
@@ -37,75 +49,110 @@ Usage: $0 <count> <timeout>
 		container.
 	Options:
 		<count> : Number of containers to run.
-		<timeout> : Timeout to launch the containers.
+	<timeout> : Timeout to launch the containers.
 EOF
 }
 
-function resnet50_test() {
-	local CMD_RUN="cd benchmarks/scripts/tf_cnn_benchmarks/ && python tf_cnn_benchmarks.py -data_format=NHWC --device cpu --batch_size=${BATCH_SIZE} --num_batches=${NUM_BATCHES} > result"
-	info "Running Resnet50 Tensorflow test"
+function create_resnet_start_script() {
+	local script="${src_dir}/${resnet_start_script}"
+	rm -rf "${script}"
+
+cat <<EOF >>"${script}"
+#!/bin/bash
+python benchmarks/scripts/tf_cnn_benchmarks/tf_cnn_benchmarks.py -data_format=NHWC --device cpu --batch_size=${BATCH_SIZE} --num_batches=${NUM_BATCHES} > resnet_results
+EOF
+	chmod +x "${script}"
+}
+
+function create_alexnet_start_script() {
+	local script="${src_dir}/${alexnet_start_script}"
+	rm -rf "${script}"
+
+cat <<EOF >>"${script}"
+#!/bin/bash
+python benchmarks/scripts/tf_cnn_benchmarks/tf_cnn_benchmarks.py --num_batches=${NUM_BATCHES} --device=cpu --batch_size=${BATCH_SIZE} --forward_only=true --model=alexnet --data_format=NHWC > alexnet_results
+EOF
+	chmod +x "${script}"
+}
+
+function tensorflow_test() {
+	info "Copy Resnet Tensorflow test"
+	local pids=()
+	local j=0
 	for i in "${containers[@]}"; do
-		sudo -E "${CTR_EXE}" t exec -d --exec-id "$(random_name)" "${i}" sh -c "${CMD_RUN}"
+		$(sudo -E "${CTR_EXE}" t exec -d --exec-id "$(random_name)" "${i}" sh -c "${CMD_RESNET}")&
+		pids["${j}"]=$!
+		((j++))
+	done
+
+	# wait for all pids
+	for pid in ${pids[*]}; do
+		wait "${pid}"
+	done
+
+	info "All containers are running the workload..."
+
+	for i in "${containers[@]}"; do
+		check_file=$(sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${i}" sh -c "${RESNET_CMD_FILE}")
+		retries="300"
+		for j in $(seq 1 "${retries}"); do
+			[ "${check_file}" -eq "1" ] && break
+			sleep 1
+		done
+	done
+
+	info "Copy Alexnet Tensorflow test"
+	local pids=()
+	local j=0
+	for i in "${containers[@]}"; do
+		$(sudo -E "${CTR_EXE}" t exec -d --exec-id "$(random_name)" "${i}" sh -c "${CMD_ALEXNET}")&
+		pids["${j}"]=$!
+		((j++))
+	done
+
+	# wait for all pids
+	for pid in ${pids[*]}; do
+		wait "${pid}"
 	done
 
 	for i in "${containers[@]}"; do
 		check_file=$(sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${i}" sh -c "${CMD_FILE}")
-		retries="200"
+		retries="300"
 		for j in $(seq 1 "${retries}"); do
-			[ "${check_file}" -eq 1 ] && break
+			[ "${check_file}" -eq "1" ] && break
 			sleep 1
 		done
 	done
 
 	for i in "${containers[@]}"; do
-		sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${i}" sh -c "${CMD_RESULT}"  >> "${tensorflow_file}"
+		sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${i}" sh -c "cat resnet_results"  >> "${resnet_tensorflow_file}"
 	done
 
-	local resnet50_results=$(cat "${tensorflow_file}" | grep "total images/sec" | cut -d ":" -f2 | sed -e 's/^[ \t]*//' | tr '\n' ',' | sed 's/.$//')
-	local average_resnet50=$(echo "${resnet50_results}" | sed "s/,/+/g;s/.*/(&)\/$NUM_CONTAINERS/g" | bc -l)
+	local res_results=$(cat "${resnet_tensorflow_file}" | grep "total images/sec" | cut -d ":" -f2 | sed -e 's/^[ \t]*//' | tr '\n' ',' | sed 's/.$//')
+	local resnet_results=$(printf "%.0f\n" "${res_results}")
+	local res_average=$(echo "${resnet_results}" | sed "s/,/+/g;s/.*/(&)\/${NUM_CONTAINERS}/g" | bc -l)
+	local average_resnet=$(printf "%.0f\n" "${res_average}")
+
+	for i in "${containers[@]}"; do
+		sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${i}" sh -c "cat alexnet_results"  >> "${alexnet_tensorflow_file}"
+	done
+
+	local alex_results=$(cat "${alexnet_tensorflow_file}" | grep "total images/sec" | cut -d ":" -f2 | sed -e 's/^[ \t]*//' | tr '\n' ',' | sed 's/.$//')
+	local alexnet_results=$(printf "%.0f\n" "${alex_results}")
+	local alex_average=$(echo "${alexnet_results}" | sed "s/,/+/g;s/.*/(&)\/${NUM_CONTAINERS}/g" | bc -l)
+	local average_alexnet=$(printf "%.0f\n" "${alex_average}")
 
 	local json="$(cat << EOF
 	{
-		"Resnet50": {
-			"Result": "${resnet50_results}",
-			"Average": "${average_resnet50}",
-			"Units": "s"
-		}
-	}
-EOF
-)"
-	metrics_json_add_array_element "$json"
-}
-
-function axelnet_test() {
-	local CMD_RUN="cd benchmarks/scripts/tf_cnn_benchmarks/ && python tf_cnn_benchmarks.py --num_batches=${NUM_BATCHES} --device=cpu --batch_size=${BATCH_SIZE} --forward_only=true --model=alexnet --data_format=NHWC > result"
-	info "Running AxelNet Tensorflow test"
-	for i in "${containers[@]}"; do
-		sudo -E "${CTR_EXE}" t exec -d --exec-id "$(random_name)" "${i}" sh -c "${CMD_RUN}"
-	done
-
-	for i in "${containers[@]}"; do
-		check_file=$(sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${i}" sh -c "${CMD_FILE}")
-		retries="200"
-		for j in $(seq 1 "${retries}"); do
-			[ "${check_file}" -eq 1 ] && break
-			sleep 1
-		done
-	done
-
-	for i in "${containers[@]}"; do
-		sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${i}" sh -c "${CMD_RESULT}"  >> "${tensorflow_file}"
-	done
-
-	local axelnet_results=$(cat "${tensorflow_file}" | grep "total images/sec" | cut -d ":" -f2 | sed -e 's/^[ \t]*//' | tr '\n' ',' | sed 's/.$//')
-	local average_axelnet=$(echo "${axelnet_results}" | sed "s/,/+/g;s/.*/(&)\/$NUM_CONTAINERS/g" | bc -l)
-
-	local json="$(cat << EOF
-	{
-		"AxelNet": {
-			"Result": "${axelnet_results}",
-			"Average": "${average_axelnet}",
-			"Units": "s"
+		"resnet": {
+			"Result": ${resnet_results},
+			"Average": ${average_resnet},
+			"Units": "images/s"
+		},
+		"alexnet": {
+			"Result": ${alexnet_results},
+			"Average": ${average_alexnet},
+			"Units": "images/s"
 		}
 	}
 EOF
@@ -143,11 +190,14 @@ function main() {
 	check_ctr_images "${IMAGE}" "${DOCKERFILE}"
 
 	init_env
+	create_resnet_start_script
+	create_alexnet_start_script
+
 	info "Creating ${NUM_CONTAINERS} containers"
 
 	for ((i=1; i<= "${NUM_CONTAINERS}"; i++)); do
 		containers+=($(random_name))
-		sudo -E "${CTR_EXE}" run -d --runtime "${CTR_RUNTIME}" "${IMAGE}" "${containers[-1]}" sh -c "${PAYLOAD_ARGS}"
+		sudo -E "${CTR_EXE}" run -d --runtime "${CTR_RUNTIME}" --mount="${MOUNT_OPTIONS}" "${IMAGE}" "${containers[-1]}" sh -c "${PAYLOAD_ARGS}"
 		((not_started_count--))
 		info "$not_started_count remaining containers"
 	done
@@ -158,11 +208,28 @@ function main() {
 	# Check that the requested number of containers are running
 	check_containers_are_up
 
-	resnet50_test
+	# Check that the requested number of containers are running
+	local timeout_launch="10"
+	check_containers_are_up & pid=$!
+	(sleep "${timeout_launch}" && kill -HUP "${pid}") 2>/dev/null & pid_tout=$!
 
-	axelnet_test
+	if wait "${pid}" 2>/dev/null; then
+		pkill -HUP -P "${pid_tout}"
+		wait "${pid_tout}"
+	else
+		warn "Time out exceeded"
+		return 1
+	fi
+
+	# Get the initial number of pids in a single container before the workload starts
+	INITIAL_NUM_PIDS=$(sudo -E "${CTR_EXE}" t metrics "${containers[-1]}" | grep pids.current | grep pids.current | xargs | cut -d ' ' -f 2)
+	((INITIAL_NUM_PIDS++))
+
+	tensorflow_test
 
 	metrics_json_save
+
+	rm -rf "${src_dir}"
 
 	clean_env_ctr
 }
