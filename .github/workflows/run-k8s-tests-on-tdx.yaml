@@ -28,6 +28,7 @@ jobs:
       DOCKER_REPO: ${{ inputs.repo }}
       DOCKER_TAG: ${{ inputs.tag }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
+      USING_NFD: "true"
     steps:
       - uses: actions/checkout@v3
         with:
