@@ -4,12 +4,13 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**NumPciSegments** | Pointer to **int32** |  | [optional] 
-**IommuSegments** | Pointer to **[]int32** |  | [optional] 
-**SerialNumber** | Pointer to **string** |  | [optional] 
-**Uuid** | Pointer to **string** |  | [optional] 
-**OemStrings** | Pointer to **[]string** |  | [optional] 
+**NumPciSegments** | Pointer to **int32** |  | [optional]
+**IommuSegments** | Pointer to **[]int32** |  | [optional]
+**SerialNumber** | Pointer to **string** |  | [optional]
+**Uuid** | Pointer to **string** |  | [optional]
+**OemStrings** | Pointer to **[]string** |  | [optional]
 **Tdx** | Pointer to **bool** |  | [optional] [default to false]
+**Snp** | Pointer to **bool** |  | [optional] [default to false]
 
 ## Methods
 
@@ -180,6 +181,30 @@ SetTdx sets Tdx field to given value.
 
 HasTdx returns a boolean if a field has been set.
 
+### GetSnp
+
+`func (o *PlatformConfig) GetSnp() bool`
+
+GetSnp returns the Snp field if non-nil, zero value otherwise.
+
+### GetSnpOk
+
+`func (o *PlatformConfig) GetSnpOk() (*bool, bool)`
+
+GetSnpOk returns a tuple with the Snp field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetSnp
+
+`func (o *PlatformConfig) SetSnp(v bool)`
+
+SetSnp sets Snp field to given value.
+
+### HasSnp
+
+`func (o *PlatformConfig) HasSnp() bool`
+
+HasSnp returns a boolean if a field has been set.
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 
