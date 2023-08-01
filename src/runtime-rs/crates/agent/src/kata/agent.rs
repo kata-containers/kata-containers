@@ -9,8 +9,9 @@ use async_trait::async_trait;
 use ttrpc::context as ttrpc_ctx;
 
 use kata_types::config::Agent as AgentConfig;
+use protocols::image;
 
-use crate::{kata::KataAgent, Agent, AgentManager, HealthService};
+use crate::{kata::KataAgent, Agent, AgentManager, HealthService, ImageService};
 
 /// millisecond to nanosecond
 const MILLISECOND_TO_NANOSECOND: i64 = 1_000_000;
@@ -68,6 +69,22 @@ impl_health_service!(
     check | crate::CheckRequest | crate::HealthCheckResponse,
     version | crate::CheckRequest | crate::VersionCheckResponse
 );
+
+// implement for image service
+macro_rules! impl_image_service {
+    ($($name: tt | $req: ty | $resp: ty),*) => {
+        #[async_trait]
+        impl ImageService for KataAgent {
+            $(async fn $name(&self, req: $req) -> Result<$resp> {
+                let (client, timeout, _) = self.get_image_client().await.context("get health client")?;
+                let resp = client.$name(new_ttrpc_ctx(timeout * MILLISECOND_TO_NANOSECOND), &req).await?;
+                Ok(resp)
+            })*
+        }
+    };
+}
+
+impl_image_service!(pull_image | image::PullImageRequest | image::PullImageResponse);
 
 macro_rules! impl_agent {
     ($($name: tt | $req: ty | $resp: ty | $new_timeout: expr),*) => {

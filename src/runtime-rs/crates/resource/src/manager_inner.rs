@@ -234,10 +234,10 @@ impl ResourceManagerInner {
     pub async fn handler_rootfs(
         &self,
         cid: &str,
-        root: &oci::Root,
+        root_path: &str,
         bundle_path: &str,
         rootfs_mounts: &[Mount],
-    ) -> Result<Arc<dyn Rootfs>> {
+    ) -> Result<Option<Arc<dyn Rootfs>>> {
         self.rootfs_resource
             .handler_rootfs(
                 &self.share_fs,
@@ -245,9 +245,10 @@ impl ResourceManagerInner {
                 self.hypervisor.as_ref(),
                 &self.sid,
                 cid,
-                root,
+                root_path,
                 bundle_path,
                 rootfs_mounts,
+                self.toml_config.image.service_offload,
             )
             .await
     }

@@ -17,22 +17,21 @@ use crate::{eother, sl};
 
 /// Default configuration values.
 pub mod default;
+mod drop_in;
 
 mod agent;
-mod drop_in;
 pub mod hypervisor;
+mod image;
+mod runtime;
 
-pub use self::agent::Agent;
+pub use self::agent::{Agent, AGENT_NAME_KATA};
 use self::default::DEFAULT_AGENT_DBG_CONSOLE_PORT;
 pub use self::hypervisor::{
     BootInfo, CloudHypervisorConfig, DragonballConfig, Hypervisor, QemuConfig,
     HYPERVISOR_NAME_DRAGONBALL, HYPERVISOR_NAME_QEMU,
 };
-
-mod runtime;
+pub use self::image::Image;
 pub use self::runtime::{Runtime, RuntimeVendor, RUNTIME_NAME_VIRTCONTAINER};
-
-pub use self::agent::AGENT_NAME_KATA;
 
 // TODO: let agent use the constants here for consistency
 /// Debug console enabled flag for agent
@@ -108,6 +107,9 @@ pub struct TomlConfig {
     /// Kata runtime configuration information.
     #[serde(default)]
     pub runtime: Runtime,
+    /// Image configuration information.
+    #[serde(default)]
+    pub image: Image,
 }
 
 impl TomlConfig {
@@ -121,6 +123,7 @@ impl TomlConfig {
             Hypervisor::adjust_config(config)?;
             Runtime::adjust_config(config)?;
             Agent::adjust_config(config)?;
+            Image::adjust_config(config)?;
             info!(sl!(), "get kata config: {:?}", config);
         }
 
@@ -165,6 +168,7 @@ impl TomlConfig {
         Hypervisor::adjust_config(&mut config)?;
         Runtime::adjust_config(&mut config)?;
         Agent::adjust_config(&mut config)?;
+        Image::adjust_config(&mut config)?;
         info!(sl!(), "get kata config: {:?}", config);
         Ok(config)
     }
@@ -174,6 +178,7 @@ impl TomlConfig {
         Hypervisor::validate(self)?;
         Runtime::validate(self)?;
         Agent::validate(self)?;
+        Image::validate(self)?;
 
         Ok(())
     }

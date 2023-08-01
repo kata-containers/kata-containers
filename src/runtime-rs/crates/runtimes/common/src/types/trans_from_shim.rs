@@ -11,6 +11,7 @@ use super::{
 use anyhow::{Context, Result};
 use containerd_shim_protos::api;
 use kata_types::mount::Mount;
+use protocols::image_runtime;
 use std::{
     convert::{From, TryFrom},
     path::PathBuf,
@@ -193,5 +194,12 @@ impl TryFrom<api::ConnectRequest> for Request {
     type Error = anyhow::Error;
     fn try_from(from: api::ConnectRequest) -> Result<Self> {
         Ok(Request::ConnectContainer(ContainerID::new(&from.id)?))
+    }
+}
+
+impl TryFrom<image_runtime::PullImageRequest> for Request {
+    type Error = anyhow::Error;
+    fn try_from(from: image_runtime::PullImageRequest) -> Result<Self> {
+        Ok(Request::PullImage(from))
     }
 }
