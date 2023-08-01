@@ -9,6 +9,7 @@ license = "Apache-2.0"
 default = []
 with-serde = [ "serde", "serde_json" ]
 async = ["ttrpc/async", "async-trait"]
+sealed-secret = []
 
 [dependencies]
 ttrpc = { version = "0.7.1" }
