@@ -53,7 +53,7 @@ cfg-if = "1.0.0"
 prometheus = { version = "0.13.0", features = ["process"] }
 procfs = "0.12.0"
 anyhow = "1.0.32"
-cgroups = { package = "cgroups-rs", version = "0.3.2" }
+cgroups = { package = "cgroups-rs", version = "0.3.3" }
 
 # Tracing
 tracing = "0.1.26"

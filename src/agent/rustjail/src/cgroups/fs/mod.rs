@@ -18,13 +18,14 @@ use cgroups::{
     DeviceResource, HugePageResource, MaxValue, NetworkPriority,
 };
 
-use crate::cgroups::Manager as CgroupManager;
+use crate::cgroups::{is_all_devices_rule, Manager as CgroupManager};
+#[cfg(not(test))]
 use crate::container::DEFAULT_DEVICES;
 use anyhow::{anyhow, Context, Result};
 use libc::{self, pid_t};
 use oci::{
     LinuxBlockIo, LinuxCpu, LinuxDevice, LinuxDeviceCgroup, LinuxHugepageLimit, LinuxMemory,
-    LinuxNetwork, LinuxPids, LinuxResources,
+    LinuxNetwork, LinuxPids, LinuxResources, Spec,
 };
 
 use protobuf::MessageField;
@@ -35,7 +36,10 @@ use protocols::agent::{
 use std::any::Any;
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, RwLock};
+
+use super::DevicesCgroupInfo;
 
 const GUEST_CPUS_PATH: &str = "/sys/devices/system/cpu/online";
 
@@ -60,6 +64,10 @@ pub struct Manager {
     pub cpath: String,
     #[serde(skip)]
     cgroup: cgroups::Cgroup,
+    #[serde(skip)]
+    pod_cgroup: cgroups::Cgroup,
+    #[serde(skip)]
+    devcg_whitelist: bool,
 }
 
 // set_resource is used to set reources by cgroup controller.
@@ -85,6 +93,7 @@ impl CgroupManager for Manager {
         );
 
         let res = &mut cgroups::Resources::default();
+        let pod_res = &mut cgroups::Resources::default();
 
         // set cpuset and cpu reources
         if let Some(cpu) = &r.cpu {
@@ -117,10 +126,16 @@ impl CgroupManager for Manager {
         }
 
         // set devices resources
-        set_devices_resources(&self.cgroup, &r.devices, res);
-        info!(sl(), "resources after processed {:?}", res);
+        if !self.devcg_whitelist {
+            set_devices_resources(&self.cgroup, &r.devices, res, pod_res);
+        }
+        info!(
+            sl(),
+            "Resources after processed, pod_res = {:?}, res = {:?}", pod_res, res
+        );
 
         // apply resources
+        self.pod_cgroup.apply(pod_res)?;
         self.cgroup.apply(res)?;
 
         Ok(())
@@ -179,7 +194,15 @@ impl CgroupManager for Manager {
     }
 
     fn destroy(&mut self) -> Result<()> {
-        let _ = self.cgroup.delete();
+        if let Err(err) = self.cgroup.delete() {
+            warn!(
+                sl(),
+                "Failed to delete cgroup {}: {}",
+                self.cgroup.path(),
+                err
+            );
+        }
+        // TODO: Clean up pod cgroup if pod cgroup has no children.
         Ok(())
     }
 
@@ -300,28 +323,21 @@ fn set_devices_resources(
     _cg: &cgroups::Cgroup,
     device_resources: &[LinuxDeviceCgroup],
     res: &mut cgroups::Resources,
+    pod_res: &mut cgroups::Resources,
 ) {
     info!(sl(), "cgroup manager set devices");
     let mut devices = vec![];
 
     for d in device_resources.iter() {
-        if let Some(dev) = linux_device_group_to_cgroup_device(d) {
+        if is_all_devices_rule(d) {
+            continue;
+        }
+        if let Some(dev) = linux_device_cgroup_to_device_resource(d) {
             devices.push(dev);
         }
     }
 
-    for d in DEFAULT_DEVICES.iter() {
-        if let Some(dev) = linux_device_to_cgroup_device(d) {
-            devices.push(dev);
-        }
-    }
-
-    for d in DEFAULT_ALLOWED_DEVICES.iter() {
-        if let Some(dev) = linux_device_group_to_cgroup_device(d) {
-            devices.push(dev);
-        }
-    }
-
+    pod_res.devices.devices = devices.clone();
     res.devices.devices = devices;
 }
 
@@ -519,7 +535,8 @@ fn build_blk_io_device_throttle_resource(
     blk_io_device_throttle_resources
 }
 
-fn linux_device_to_cgroup_device(d: &LinuxDevice) -> Option<DeviceResource> {
+#[allow(dead_code)]
+fn linux_device_to_device_resource(d: &LinuxDevice) -> Option<DeviceResource> {
     let dev_type = match DeviceType::from_char(d.r#type.chars().next()) {
         Some(t) => t,
         None => return None,
@@ -540,7 +557,7 @@ fn linux_device_to_cgroup_device(d: &LinuxDevice) -> Option<DeviceResource> {
     })
 }
 
-fn linux_device_group_to_cgroup_device(d: &LinuxDeviceCgroup) -> Option<DeviceResource> {
+fn linux_device_cgroup_to_device_resource(d: &LinuxDeviceCgroup) -> Option<DeviceResource> {
     let dev_type = match DeviceType::from_char(d.r#type.chars().next()) {
         Some(t) => t,
         None => return None,
@@ -1001,13 +1018,134 @@ pub fn get_mounts(paths: &HashMap<String, String>) -> Result<HashMap<String, Str
     Ok(m)
 }
 
+#[inline]
 fn new_cgroup(h: Box<dyn cgroups::Hierarchy>, path: &str) -> Result<Cgroup> {
     let valid_path = path.trim_start_matches('/').to_string();
     cgroups::Cgroup::new(h, valid_path.as_str()).map_err(anyhow::Error::from)
 }
 
+#[inline]
+fn load_cgroup(h: Box<dyn cgroups::Hierarchy>, path: &str) -> Cgroup {
+    let valid_path = path.trim_start_matches('/').to_string();
+    cgroups::Cgroup::load(h, valid_path.as_str())
+}
+
 impl Manager {
-    pub fn new(cpath: &str) -> Result<Self> {
+    pub fn new(
+        cpath: &str,
+        spec: &Spec,
+        devcg_info: Arc<RwLock<DevicesCgroupInfo>>,
+    ) -> Result<Self> {
+        let (paths, mounts) = Self::get_paths_and_mounts(cpath)?;
+
+        // Do not expect poisoning lock
+        let mut devices_group_info = devcg_info.write().unwrap();
+
+        // Cgroup path of parent of container
+        let pod_cpath = PathBuf::from(cpath)
+            .parent()
+            .context("Get parent of cgroup path")?
+            .display()
+            .to_string();
+
+        // Create a cgroup for the pod if not exists.
+        // Note that this step MUST be done before the pause container's
+        // cgroup created, since children inherit upper nodes' rules, which
+        // have excessive permission. You'll feel painful to shrink upper
+        // nodes' permission.
+        let pod_cg = load_cgroup(cgroups::hierarchies::auto(), &pod_cpath);
+
+        // The default is blacklist mode.
+        let is_whitelist_mode = Self::devcg_whitelist_rule(spec).unwrap_or(false);
+        if devices_group_info.inited {
+            // Do nothing for whitelist except for updating whitelist
+            // field of devices_group_info.
+            debug!(sl(), "Devices cgroup has been initialzied.");
+
+            // Set allowed all devices to pod cgroup
+            if !devices_group_info.whitelist && is_whitelist_mode {
+                info!(
+                    sl(),
+                    "Pod devices cgroup is changed to whitelist mode, devices_group_info = {:?}",
+                    devices_group_info
+                );
+                Self::setup_whitelist_mode(&pod_cg)
+                    .with_context(|| format!("Setup whitelist mode for {}", pod_cpath))?;
+                devices_group_info.whitelist = true;
+            }
+        } else {
+            // This is the first container (aka pause container)
+            debug!(sl(), "Started to init devices cgroup");
+
+            pod_cg.create().context("Create pod cgroup")?;
+
+            // Setup blacklist for pod cgroup
+            if !is_whitelist_mode {
+                // Setup blacklist rule and allowed default devices for
+                // blacklist.
+                Self::setup_blacklist_mode(&pod_cg)
+                    .with_context(|| format!("Setup blacklist mode for {}", pod_cpath))?;
+            } else {
+                Self::setup_whitelist_mode(&pod_cg)
+                    .with_context(|| format!("Setup whitelist mode for {}", pod_cpath))?;
+                devices_group_info.whitelist = true;
+            }
+
+            devices_group_info.inited = true
+        }
+
+        // Create a cgroup for the container.
+        let cg = new_cgroup(cgroups::hierarchies::auto(), cpath)?;
+        // The rules of container cgroup are copied from its parent, which
+        // contains some permissions that the container doesn't need.
+        // Therefore, resetting the container's devices cgroup is required.
+        if !devices_group_info.whitelist {
+            Self::setup_blacklist_mode(&cg)
+                .with_context(|| format!("Setup blacklist mode for {}", cpath))?;
+        }
+
+        Ok(Self {
+            paths,
+            mounts,
+            // rels: paths,
+            cpath: cpath.to_string(),
+            cgroup: cg,
+            pod_cgroup: pod_cg,
+            devcg_whitelist: devices_group_info.whitelist,
+        })
+    }
+
+    /// Create a cgroupfs manager without creating any cgroups.
+    /// A typical case is for systemd cgroup: Systemd manager retains a
+    /// cgroupfs manager to read cgroup information only. Writing cgroup
+    /// rules is done by the systemd. That is, the cgroupfs manager runs in
+    /// read-only mode.
+    pub fn new_read_only(cpath: &str) -> Result<Self> {
+        let (paths, mounts) = Self::get_paths_and_mounts(cpath)?;
+
+        // Cgroup path of parent of container
+        let pod_cpath = PathBuf::from(cpath)
+            .parent()
+            .context("Get parent of cgroup path")?
+            .display()
+            .to_string();
+
+        let pod_cg = load_cgroup(cgroups::hierarchies::auto(), &pod_cpath);
+        let cg = load_cgroup(cgroups::hierarchies::auto(), cpath);
+
+        Ok(Self {
+            paths,
+            mounts,
+            cpath: cpath.to_string(),
+            pod_cgroup: pod_cg,
+            cgroup: cg,
+            devcg_whitelist: false,
+        })
+    }
+
+    fn get_paths_and_mounts(
+        cpath: &str,
+    ) -> Result<(HashMap<String, String>, HashMap<String, String>)> {
         let mut m = HashMap::new();
 
         let paths = get_paths()?;
@@ -1020,20 +1158,120 @@ impl Manager {
                 continue;
             }
 
-            let p = format!("{}/{}", mnt.unwrap(), cpath);
-
-            m.insert(key.to_string(), p);
+            m.insert(key.to_string(), format!("{}/{}", mnt.unwrap(), cpath));
         }
 
-        let cg = new_cgroup(cgroups::hierarchies::auto(), cpath)?;
+        Ok((m, mounts))
+    }
 
-        Ok(Self {
-            paths: m,
-            mounts,
-            // rels: paths,
-            cpath: cpath.to_string(),
-            cgroup: cg,
-        })
+    fn setup_whitelist_mode(cgroup: &cgroups::Cgroup) -> Result<()> {
+        // Insert two rules: `b *:* rwm` and `c *:* rwm`.
+        // The reason of not inserting `a *:* rwm` is that the Linux kernel
+        // will deny writing `a` to `devices.allow` once a cgroup has
+        // children. You can refer to
+        // https://www.kernel.org/doc/Documentation/cgroup-v1/devices.txt.
+        let res = cgroups::Resources {
+            devices: cgroups::DeviceResources {
+                devices: vec![
+                    DeviceResource {
+                        allow: true,
+                        devtype: DeviceType::Block,
+                        major: -1,
+                        minor: -1,
+                        access: vec![
+                            DevicePermissions::Read,
+                            DevicePermissions::Write,
+                            DevicePermissions::MkNod,
+                        ],
+                    },
+                    DeviceResource {
+                        allow: true,
+                        devtype: DeviceType::Char,
+                        major: -1,
+                        minor: -1,
+                        access: vec![
+                            DevicePermissions::Read,
+                            DevicePermissions::Write,
+                            DevicePermissions::MkNod,
+                        ],
+                    },
+                ],
+            },
+            ..Default::default()
+        };
+        cgroup.apply(&res)?;
+
+        Ok(())
+    }
+
+    fn setup_blacklist_mode(cgroup: &cgroups::Cgroup) -> Result<()> {
+        #[allow(unused_mut)]
+        let mut dev_res_list = vec![DeviceResource {
+            allow: false,
+            devtype: DeviceType::All,
+            major: -1,
+            minor: -1,
+            access: vec![
+                DevicePermissions::Read,
+                DevicePermissions::Write,
+                DevicePermissions::MkNod,
+            ],
+        }];
+        // Do not append default allowed devices for simplicity while
+        // testing.
+        #[cfg(not(test))]
+        dev_res_list.append(&mut Self::default_allowed_devices());
+
+        let res = cgroups::Resources {
+            devices: cgroups::DeviceResources {
+                devices: dev_res_list,
+            },
+            ..Default::default()
+        };
+        cgroup.apply(&res)?;
+
+        Ok(())
+    }
+
+    /// Generate a list for allowed devices including `DEFAULT_DEVICES` and
+    /// `DEFAULT_ALLOWED_DEVICES`.
+    #[cfg(not(test))]
+    fn default_allowed_devices() -> Vec<DeviceResource> {
+        let mut dev_res_list = Vec::new();
+        DEFAULT_DEVICES.iter().for_each(|dev| {
+            if let Some(dev_res) = linux_device_to_device_resource(dev) {
+                dev_res_list.push(dev_res)
+            }
+        });
+        DEFAULT_ALLOWED_DEVICES.iter().for_each(|dev| {
+            if let Some(dev_res) = linux_device_cgroup_to_device_resource(dev) {
+                dev_res_list.push(dev_res)
+            }
+        });
+        dev_res_list
+    }
+
+    /// Check if OCI spec contains a whiltlist rule.
+    ///
+    /// # Returns
+    ///
+    /// * `Some(true)` - Contains whitelist all rule;
+    /// * `Some(false)` - Contains blacklist all rule;
+    /// * `None` - Neither whitelist rule nor blacklist rule found.
+    fn devcg_whitelist_rule(spec: &Spec) -> Option<bool> {
+        let linux = match spec.linux.as_ref() {
+            Some(linux) => linux,
+            None => return None,
+        };
+        let resources = match linux.resources.as_ref() {
+            Some(resource) => resource,
+            None => return None,
+        };
+        resources
+            .devices
+            .iter()
+            .find(|dev| is_all_devices_rule(dev))
+            .map(|dev| dev.allow)
     }
 }
 
@@ -1085,6 +1323,12 @@ fn convert_memory_swap_to_v2_value(memory_swap: i64, memory: i64) -> Result<i64>
 
 #[cfg(test)]
 mod tests {
+    use std::process::Command;
+
+    use oci::Linux;
+    use oci::LinuxResources;
+    use test_utils::skip_if_not_root;
+
     use super::*;
 
     #[test]
@@ -1131,6 +1375,158 @@ mod tests {
                 "except: {:?} for input {}",
                 test_case.1, test_case.0
             );
+        }
+    }
+
+    struct MockSandbox {
+        devcg_info: Arc<RwLock<DevicesCgroupInfo>>,
+    }
+
+    impl MockSandbox {
+        fn new() -> Self {
+            Self {
+                devcg_info: Arc::new(RwLock::new(DevicesCgroupInfo::default())),
+            }
+        }
+    }
+
+    #[test]
+    fn test_new_fs_manager() {
+        skip_if_not_root!();
+
+        struct TestCase {
+            cpath: Vec<String>,
+            devices: Vec<Vec<LinuxDeviceCgroup>>,
+            whitelist: Vec<bool>,
+            pod_devices_list: Vec<String>,
+            container_devices_list: Vec<String>,
+        }
+
+        let allow_all = LinuxDeviceCgroup {
+            allow: true,
+            r#type: String::new(),
+            major: Some(0),
+            minor: Some(0),
+            access: String::from("rwm"),
+        };
+
+        let deny_all = LinuxDeviceCgroup {
+            allow: false,
+            r#type: String::new(),
+            major: Some(0),
+            minor: Some(0),
+            access: String::from("rwm"),
+        };
+
+        let test_cases = vec![
+            TestCase {
+                cpath: vec![String::from(
+                    "/kata-agent-fs-manager-test/449ccd81-9320-4f3e-bb67-78f84700fac9",
+                )],
+                devices: vec![vec![allow_all.clone()]],
+                whitelist: vec![true],
+                pod_devices_list: vec![String::from("a *:* rwm\n")],
+                container_devices_list: vec![String::from("a *:* rwm\n")],
+            },
+            TestCase {
+                cpath: vec![String::from(
+                    "/kata-agent-fs-manager-test/449ccd81-9320-4f3e-bb67-78f84700fac9",
+                )],
+                devices: vec![vec![deny_all.clone()]],
+                whitelist: vec![false],
+                pod_devices_list: vec![String::new()],
+                container_devices_list: vec![String::new()],
+            },
+            TestCase {
+                cpath: vec![
+                    String::from(
+                        "/kata-agent-fs-manager-test/449ccd81-9320-4f3e-bb67-78f84700fac9",
+                    ),
+                    String::from(
+                        "/kata-agent-fs-manager-test/1c7affca-1f65-427c-ba92-caff1cea61f6",
+                    ),
+                ],
+                devices: vec![vec![deny_all.clone()], vec![allow_all.clone()]],
+                whitelist: vec![false, true],
+                pod_devices_list: vec![String::new(), String::from("b *:* rwm\nc *:* rwm\n")],
+                container_devices_list: vec![String::new(), String::from("b *:* rwm\nc *:* rwm\n")],
+            },
+            TestCase {
+                cpath: vec![
+                    String::from(
+                        "/kata-agent-fs-manager-test/449ccd81-9320-4f3e-bb67-78f84700fac9",
+                    ),
+                    String::from(
+                        "/kata-agent-fs-manager-test/1c7affca-1f65-427c-ba92-caff1cea61f6",
+                    ),
+                ],
+                devices: vec![vec![allow_all], vec![deny_all]],
+                whitelist: vec![true, true],
+                pod_devices_list: vec![String::from("a *:* rwm\n"), String::from("a *:* rwm\n")],
+                container_devices_list: vec![
+                    String::from("a *:* rwm\n"),
+                    String::from("a *:* rwm\n"),
+                ],
+            },
+        ];
+
+        for (round, tc) in test_cases.iter().enumerate() {
+            let sandbox = MockSandbox::new();
+            let devcg_info = sandbox.devcg_info.read().unwrap();
+            assert!(!devcg_info.inited);
+            assert!(!devcg_info.whitelist);
+            drop(devcg_info);
+            let mut managers = Vec::with_capacity(tc.devices.len());
+
+            for cid in 0..tc.devices.len() {
+                let spec = Spec {
+                    linux: Some(Linux {
+                        resources: Some(LinuxResources {
+                            devices: tc.devices[cid].clone(),
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                };
+                managers
+                    .push(Manager::new(&tc.cpath[cid], &spec, sandbox.devcg_info.clone()).unwrap());
+
+                let devcg_info = sandbox.devcg_info.read().unwrap();
+                assert!(devcg_info.inited);
+                assert_eq!(
+                    devcg_info.whitelist, tc.whitelist[cid],
+                    "Round {}, cid {} whitelist assertion failure",
+                    round, cid
+                );
+                drop(devcg_info);
+
+                // TODO: Assertions go here
+                let pod_devices_list = Command::new("cat")
+                    .arg("/sys/fs/cgroup/devices/kata-agent-fs-manager-test/devices.list")
+                    .output()
+                    .unwrap();
+                let container_devices_list = Command::new("cat")
+                    .arg(&format!(
+                        "/sys/fs/cgroup/devices{}/devices.list",
+                        tc.cpath[cid]
+                    ))
+                    .output()
+                    .unwrap();
+
+                let pod_devices_list = String::from_utf8(pod_devices_list.stdout).unwrap();
+                let container_devices_list =
+                    String::from_utf8(container_devices_list.stdout).unwrap();
+
+                assert_eq!(&pod_devices_list, &tc.pod_devices_list[cid]);
+                assert_eq!(&container_devices_list, &tc.container_devices_list[cid])
+            }
+
+            // Clean up cgroups
+            managers
+                .iter()
+                .for_each(|manager| manager.cgroup.delete().unwrap());
+            managers[0].pod_cgroup.delete().unwrap();
         }
     }
 }
