@@ -53,7 +53,8 @@ use nix::unistd::{self, Pid};
 use rustjail::process::ProcessOperations;
 
 use crate::device::{
-    add_devices, get_virtio_blk_pci_device_name, update_device_cgroup, update_env_pci,
+    add_devices, get_virtio_blk_pci_device_name, insert_devices_cgroup_rule, update_env_pci,
+    DeviceInfo, VM_ROOTFS,
 };
 use crate::linux_abi::*;
 use crate::metrics::get_metrics;
@@ -239,7 +240,8 @@ impl AgentService {
         update_container_namespaces(&s, &mut oci, use_sandbox_pidns)?;
 
         // Add the root partition to the device cgroup to prevent access
-        update_device_cgroup(&mut oci)?;
+        let dev_info = DeviceInfo::new(VM_ROOTFS, false)?;
+        insert_devices_cgroup_rule(&mut oci, &dev_info, false, "rw")?;
 
         // Append guest hooks
         append_guest_hooks(&s, &mut oci)?;
@@ -272,8 +274,13 @@ impl AgentService {
             container_name,
         };
 
-        let mut ctr: LinuxContainer =
-            LinuxContainer::new(cid.as_str(), CONTAINER_BASE, opts, &sl())?;
+        let mut ctr: LinuxContainer = LinuxContainer::new(
+            cid.as_str(),
+            CONTAINER_BASE,
+            s.devcg_info.clone(),
+            opts,
+            &sl(),
+        )?;
 
         let pipe_size = AGENT_CONFIG.container_pipe_size;
 
@@ -1981,15 +1988,21 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::RwLock;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
     use super::*;
     use crate::{namespace::Namespace, protocols::agent_ttrpc_async::AgentService as _};
     use nix::mount;
     use nix::sched::{unshare, CloneFlags};
-    use oci::{Hook, Hooks, Linux, LinuxNamespace};
+    use oci::{Hook, Hooks, Linux, LinuxDeviceCgroup, LinuxNamespace, LinuxResources};
+    use rustjail::cgroups::DevicesCgroupInfo;
     use tempfile::{tempdir, TempDir};
     use test_utils::{assert_result, skip_if_not_root};
     use ttrpc::{r#async::TtrpcContext, MessageHeader};
     use which::which;
+
+    const CGROUP_PARENT: &str = "kata.agent.test.k8s.io";
 
     fn check_command(cmd: &str) -> bool {
         which(cmd).is_ok()
@@ -2005,13 +2018,39 @@ mod tests {
     }
 
     fn create_dummy_opts() -> CreateOpts {
+        let start = SystemTime::now();
+        let since_the_epoch = start
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards");
+
         let root = Root {
             path: String::from("/"),
             ..Default::default()
         };
 
+        let linux_resources = LinuxResources {
+            devices: vec![LinuxDeviceCgroup {
+                allow: true,
+                r#type: String::new(),
+                major: None,
+                minor: None,
+                access: String::from("rwm"),
+            }],
+            ..Default::default()
+        };
+
+        let cgroups_path = format!(
+            "/{}/dummycontainer{}",
+            CGROUP_PARENT,
+            since_the_epoch.as_millis()
+        );
+
         let spec = Spec {
-            linux: Some(oci::Linux::default()),
+            linux: Some(Linux {
+                cgroups_path,
+                resources: Some(linux_resources),
+                ..Default::default()
+            }),
             root: Some(root),
             ..Default::default()
         };
@@ -2035,6 +2074,7 @@ mod tests {
             LinuxContainer::new(
                 "some_id",
                 dir.path().join("rootfs").to_str().unwrap(),
+                Arc::new(RwLock::new(DevicesCgroupInfo::default())),
                 create_dummy_opts(),
                 &slog_scope::logger(),
             )
@@ -2141,6 +2181,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_do_write_stream() {
+        skip_if_not_root!();
+
         #[derive(Debug)]
         struct TestData<'a> {
             create_container: bool,

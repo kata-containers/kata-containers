@@ -5,7 +5,7 @@
 
 use anyhow::{anyhow, Result};
 use core::fmt::Debug;
-use oci::LinuxResources;
+use oci::{LinuxDeviceCgroup, LinuxResources};
 use protocols::agent::CgroupStats;
 use std::any::Any;
 
@@ -15,6 +15,15 @@ pub mod fs;
 pub mod mock;
 pub mod notifier;
 pub mod systemd;
+
+#[derive(Default, Debug)]
+pub struct DevicesCgroupInfo {
+    /// Indicate if the pod cgroup is initialized.
+    inited: bool,
+    /// Indicate if pod's devices cgroup is in whitelist mode. Returns true
+    /// once one container requires `a *:* rwm` permission.
+    whitelist: bool,
+}
 
 pub trait Manager {
     fn apply(&self, _pid: i32) -> Result<()> {
@@ -60,4 +69,21 @@ impl Debug for dyn Manager + Send + Sync {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "{}", self.name())
     }
+}
+
+/// Check if device cgroup is an all rule from OCI spec.
+///
+/// The formats representing all devices between OCI spec and cgroups-rs
+/// are different.
+/// - OCI spec: major: 0, minor: 0, type: "" (All devices), access: "rwm";
+/// - Cgroups-rs: major: -1, minor: -1, type: "a", access: "rwm";
+/// - Linux: a *:* rwm
+#[inline]
+fn is_all_devices_rule(dev_cgroup: &LinuxDeviceCgroup) -> bool {
+    dev_cgroup.major.unwrap_or(0) == 0
+        && dev_cgroup.minor.unwrap_or(0) == 0
+        && (dev_cgroup.r#type.as_str() == "" || dev_cgroup.r#type.as_str() == "a")
+        && dev_cgroup.access.contains('r')
+        && dev_cgroup.access.contains('w')
+        && dev_cgroup.access.contains('m')
 }

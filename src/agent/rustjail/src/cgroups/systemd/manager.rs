@@ -113,7 +113,7 @@ impl Manager {
         let (parent_slice, unit_name) = cgroups_path.parse()?;
         let cpath = parent_slice + "/" + &unit_name;
 
-        let fs_manager = FsManager::new(cpath.as_str())?;
+        let fs_manager = FsManager::new_read_only(cpath.as_str())?;
 
         Ok(Manager {
             paths: fs_manager.paths.clone(),
