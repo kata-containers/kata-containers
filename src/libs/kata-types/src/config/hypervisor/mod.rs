@@ -47,7 +47,7 @@ const VIRTIO_BLK_PCI: &str = "virtio-blk-pci";
 const VIRTIO_BLK_MMIO: &str = "virtio-blk-mmio";
 const VIRTIO_BLK_CCW: &str = "virtio-blk-ccw";
 const VIRTIO_SCSI: &str = "virtio-scsi";
-const VIRTIO_PMEM: &str = "nvdimm";
+const VIRTIO_PMEM: &str = "virtio-pmem";
 const VIRTIO_9P: &str = "virtio-9p";
 const VIRTIO_FS: &str = "virtio-fs";
 const VIRTIO_FS_INLINE: &str = "inline-virtio-fs";
@@ -221,6 +221,10 @@ pub struct BootInfo {
     /// If you want that qemu uses the default firmware leave this option empty.
     #[serde(default)]
     pub firmware: String,
+    /// Block storage driver to be used for the VM rootfs is backed
+    /// by a block device. This is virtio-pmem, virtio-blk-pci or virtio-blk-mmio
+    #[serde(default)]
+    pub vm_rootfs_driver: String,
 }
 
 impl BootInfo {
@@ -230,6 +234,11 @@ impl BootInfo {
         resolve_path!(self.image, "guest boot image file {} is invalid: {}")?;
         resolve_path!(self.initrd, "guest initrd image file {} is invalid: {}")?;
         resolve_path!(self.firmware, "firmware image file {} is invalid: {}")?;
+
+        if self.vm_rootfs_driver.is_empty() {
+            self.vm_rootfs_driver = default::DEFAULT_BLOCK_DEVICE_TYPE.to_string();
+        }
+
         Ok(())
     }
 
@@ -242,6 +251,21 @@ impl BootInfo {
         if !self.image.is_empty() && !self.initrd.is_empty() {
             return Err(eother!("Can not configure both initrd and image for boot"));
         }
+
+        let l = [
+            VIRTIO_BLK_PCI,
+            VIRTIO_BLK_CCW,
+            VIRTIO_BLK_MMIO,
+            VIRTIO_PMEM,
+            VIRTIO_SCSI,
+        ];
+        if !l.contains(&self.vm_rootfs_driver.as_str()) {
+            return Err(eother!(
+                "{} is unsupported block device type.",
+                self.vm_rootfs_driver
+            ));
+        }
+
         Ok(())
     }
 

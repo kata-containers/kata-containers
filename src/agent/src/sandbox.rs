@@ -435,7 +435,7 @@ fn online_resources(logger: &Logger, path: &str, pattern: &str, num: i32) -> Res
 }
 
 // max wait for all CPUs to online will use 50 * 100 = 5 seconds.
-const ONLINE_CPUMEM_WATI_MILLIS: u64 = 50;
+const ONLINE_CPUMEM_WAIT_MILLIS: u64 = 50;
 const ONLINE_CPUMEM_MAX_RETRIES: i32 = 100;
 
 #[instrument]
@@ -465,7 +465,7 @@ fn online_cpus(logger: &Logger, num: i32) -> Result<i32> {
             );
             return Ok(num);
         }
-        thread::sleep(time::Duration::from_millis(ONLINE_CPUMEM_WATI_MILLIS));
+        thread::sleep(time::Duration::from_millis(ONLINE_CPUMEM_WAIT_MILLIS));
     }
 
     Err(anyhow!(

@@ -10,47 +10,13 @@ set -o nounset
 
 crio_drop_in_conf_dir="/etc/crio/crio.conf.d/"
 crio_drop_in_conf_file="${crio_drop_in_conf_dir}/99-kata-deploy"
+crio_drop_in_conf_file_debug="${crio_drop_in_conf_dir}/100-debug"
 containerd_conf_file="/etc/containerd/config.toml"
 containerd_conf_file_backup="${containerd_conf_file}.bak"
 
-shims_x86_64=(
-	"fc"
-	"qemu"
-	"qemu-nvidia-gpu"
-	"qemu-tdx"
-	"qemu-sev"
-	"qemu-snp"
-	"clh"
-	"dragonball"
-)
+IFS=' ' read -a shims <<< "$SHIMS"
 
-# THOSE ARE NOT YET ON MAIN, PLEASE, MOVE THEM TO THE UPPDER LIST WHENEVER THEY MAKE THEIR WAY IN.
-shims_x86_64+=(
-	"remote"
-	"clh-tdx"
-)
-
-shims_s390x=(
-	"qemu"
-)
-
-
-# THOSE ARE NOT YET ON MAIN, PLEASE, MOVE THEM TO THE UPPDER LIST WHENEVER THEY MAKE THEIR WAY IN.
-shims_s390x+=(
-	"remote"
-	"qemu-se"
-)
-
-arch=$(uname -m)
-if [[ "${arch}" == "x86_64" ]]; then
-	shims=(${shims_x86_64[@]})
-elif [[ "${arch}" == "s390x" ]]; then
-	shims=(${shims_s390x[@]})
-else
-	die "${arch} is a not supported architecture"
-fi
-
-default_shim="qemu"
+default_shim="$DEFAULT_SHIM"
 
 # If we fail for any reason a message will be displayed
 die() {
@@ -61,6 +27,41 @@ die() {
 
 function print_usage() {
 	echo "Usage: $0 [install/cleanup/reset]"
+}
+
+function create_runtimeclasses() {
+	echo "Creating the runtime classes"
+
+	for shim in "${shims[@]}"; do
+		echo "Creating the kata-${shim} runtime class"
+		kubectl apply -f /opt/kata-artifacts/runtimeclasses/kata-${shim}.yaml
+	done
+
+	if [[ "${CREATE_DEFAULT_RUNTIMECLASS}" == "true" ]]; then
+		echo "Creating the kata runtime class for the default shim (an alias for kata-${default_shim})"
+		cp /opt/kata-artifacts/runtimeclasses/kata-${default_shim}.yaml /tmp/kata.yaml
+		sed -i -e 's/kata-'${default_shim}'/kata/g' /tmp/kata.yaml
+		kubectl apply -f /tmp/kata.yaml
+		rm -f /tmp/kata.yaml
+	fi
+}
+
+function delete_runtimeclasses() {
+	echo "Deleting the runtime classes"
+
+	for shim in "${shims[@]}"; do
+		echo "Deleting the kata-${shim} runtime class"
+		kubectl delete -f /opt/kata-artifacts/runtimeclasses/kata-${shim}.yaml
+	done
+
+
+	if [[ "${CREATE_DEFAULT_RUNTIMECLASS}" == "true" ]]; then
+		echo "Deleting the kata runtime class for the default shim (an alias for kata-${default_shim})"
+		cp /opt/kata-artifacts/runtimeclasses/kata-${default_shim}.yaml /tmp/kata.yaml
+		sed -i -e 's/kata-'${default_shim}'/kata/g' /tmp/kata.yaml
+		kubectl delete -f /tmp/kata.yaml
+		rm -f /tmp/kata.yaml
+	fi
 }
 
 function get_container_runtime() {
@@ -91,6 +92,16 @@ function install_artifacts() {
 	[ -d /opt/kata/runtime-rs/bin ] && \
 		chmod +x /opt/kata/runtime-rs/bin/*
 
+	# Allow enabling debug for Kata Containers
+	if [[ "${DEBUG}" == "true" ]]; then
+		config_path="/opt/kata/share/defaults/kata-containers/"
+		for shim in "${shims[@]}"; do
+			sed -i -e 's/^#\(enable_debug\).*=.*$/\1 = true/g' "${config_path}/configuration-${shim}.toml"
+			sed -i -e 's/^#\(debug_console_enabled\).*=.*$/\1 = true/g' "${config_path}/configuration-${shim}.toml"
+			sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug initcall_debug"/g' "${config_path}/configuration-${shim}.toml"
+		done
+	fi
+
 	# Allow Mariner to use custom configuration.
 	if [ "${HOST_OS:-}" == "cbl-mariner" ]; then
 		config_path="/opt/kata/share/defaults/kata-containers/configuration-clh.toml"
@@ -98,6 +109,10 @@ function install_artifacts() {
 		sed -i -E 's|(enable_annotations) = .+|\1 = ["enable_iommu", "initrd", "kernel"]|' "${config_path}"
 		sed -i -E "s|(valid_hypervisor_paths) = .+|\1 = [\"${clh_path}\"]|" "${config_path}"
 		sed -i -E "s|(path) = \".+/cloud-hypervisor\"|\1 = \"${clh_path}\"|" "${config_path}"
+	fi
+
+	if [[ "${CREATE_RUNTIMECLASSES}" == "true" ]]; then
+		create_runtimeclasses
 	fi
 }
 
@@ -198,6 +213,10 @@ function cleanup_different_shims_base() {
 
 	rm "${default_shim_file}" || true
 	restore_shim "${default_shim_file}"
+
+	if [[ "${CREATE_RUNTIMECLASSES}" == "true" ]]; then
+		delete_runtimeclasses
+	fi
 }
 
 function configure_crio_runtime() {
@@ -238,6 +257,14 @@ function configure_crio() {
 	for shim in "${shims[@]}"; do
 		configure_crio_runtime $shim
 	done
+
+
+	if [ "${DEBUG}" == "true" ]; then
+		cat <<EOF | tee -a $crio_drop_in_conf_file_debug
+[crio]
+log_level = "debug"
+EOF
+	fi
 }
 
 function configure_containerd_runtime() {
@@ -276,6 +303,18 @@ EOF
   [$options_table]
     ConfigPath = "${config_path}"
 EOF
+	fi
+
+	if [ "${DEBUG}" == "true" ]; then
+		if grep -q "\[debug\]" $containerd_conf_file; then
+			sed -i 's/level.*/level = \"debug\"/' $containerd_conf_file
+		else
+			cat <<EOF | tee -a "$containerd_conf_file"
+[debug]
+  level = "debug"
+EOF
+		fi
+
 	fi
 }
 
@@ -319,6 +358,9 @@ function cleanup_cri_runtime() {
 
 function cleanup_crio() {
 	rm $crio_drop_in_conf_file
+	if [[ "${DEBUG}" == "true" ]]; then
+		rm $crio_drop_in_conf_file_debug
+	fi
 }
 
 function cleanup_containerd() {
@@ -340,6 +382,14 @@ function reset_runtime() {
 }
 
 function main() {
+	echo "Environment variables passed to this script"
+	echo "* NODE_NAME: ${NODE_NAME}"
+	echo "* DEBUG: ${DEBUG}"
+	echo "* SHIMS: ${SHIMS}"
+	echo "* DEFAULT_SHIM: ${DEFAULT_SHIM}"
+	echo "* CREATE_RUNTIMECLASSES: ${CREATE_RUNTIMECLASSES}"
+	echo "* CREATE_DEFAULT_RUNTIMECLASS: ${CREATE_DEFAULT_RUNTIMECLASS}"
+
 	# script requires that user is root
 	euid=$(id -u)
 	if [[ $euid -ne 0 ]]; then

@@ -175,6 +175,32 @@ $ sudo runk state test
 $ sudo runk delete test
 ```
 
+## Using `runk` from `Docker`
+
+`runk` can run containers using [`Docker`](https://github.com/docker).
+
+First, install `Docker` from package by following the
+[`Docker` installation instructions](https://docs.docker.com/engine/install/).
+
+### Running a container with `Docker` command line
+
+Start the docker daemon:
+
+```bash
+$ sudo dockerd --experimental --add-runtime="runk=/usr/local/bin/runk"
+```
+
+> **Note:**
+> Before starting the `dockerd`, you need to stop the normal docker daemon
+> running on your environment (i.e., `systemctl stop docker`).
+
+Launch a container in a different terminal:
+
+```bash
+$ sudo docker run -it --rm --runtime runk busybox sh
+/ #
+```
+
 ## Using `runk` from `Podman`
 
 `runk` can run containers using [`Podman`](https://github.com/containers/podman).
@@ -192,7 +218,7 @@ $ sudo podman --runtime /usr/local/bin/runk run -it --rm busybox sh
 > **Note:**
 > `runk` does not support some commands except
 > [OCI standard operations](https://github.com/opencontainers/runtime-spec/blob/main/runtime.md#operations)
-> yet, so those commands do not work in `Podman`. Regarding commands currently
+> yet, so those commands do not work in `Docker/Podman`. Regarding commands currently
 > implemented in `runk`, see the [Status of `runk`](#status-of-runk) section.
 
 ## Using `runk` from `containerd`

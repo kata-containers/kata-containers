@@ -34,7 +34,11 @@ use kata_types::config::{hypervisor::HYPERVISOR_NAME_CH, CloudHypervisorConfig};
 use resource::ResourceManager;
 use sandbox::VIRTCONTAINER;
 use tokio::sync::mpsc::Sender;
+use tracing::instrument;
 
+unsafe impl Send for VirtContainer {}
+unsafe impl Sync for VirtContainer {}
+#[derive(Debug)]
 pub struct VirtContainer {}
 
 #[async_trait]
@@ -64,6 +68,7 @@ impl RuntimeHandler for VirtContainer {
         Arc::new(VirtContainer {})
     }
 
+    #[instrument]
     async fn new_instance(
         &self,
         sid: &str,

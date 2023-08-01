@@ -36,6 +36,7 @@ use crate::Sandbox;
 use crate::{ccw, device::get_virtio_blk_ccw_device_name};
 use anyhow::{anyhow, Context, Result};
 use slog::Logger;
+
 use tracing::instrument;
 
 pub const TYPE_ROOTFS: &str = "rootfs";
@@ -146,6 +147,11 @@ pub const STORAGE_HANDLER_LIST: &[&str] = &[
 ];
 
 #[instrument]
+pub fn get_mounts() -> Result<String, std::io::Error> {
+    fs::read_to_string("/proc/mounts")
+}
+
+#[instrument]
 pub fn baremount(
     source: &Path,
     destination: &Path,
@@ -166,6 +172,31 @@ pub fn baremount(
 
     if fs_type.is_empty() {
         return Err(anyhow!("need mount FS type"));
+    }
+
+    let destination_str = destination.to_string_lossy();
+    let mounts = get_mounts().unwrap_or_else(|_| String::new());
+    let already_mounted = mounts
+        .lines()
+        .map(|line| line.split_whitespace().collect::<Vec<&str>>())
+        .filter(|parts| parts.len() >= 3) // ensure we have at least [source}, destination, and fs_type
+        .any(|parts| {
+            // Check if source, destination and fs_type match any entry in /proc/mounts
+            // minimal check is for destination an fstype since source can have different names like:
+            // udev /dev devtmpfs
+            //  dev /dev devtmpfs
+            // depending on which entity is mounting the dev/fs/pseudo-fs
+            parts[1] == destination_str && parts[2] == fs_type
+        });
+
+    if already_mounted {
+        slog_info!(
+            logger,
+            "{:?} is already mounted at {:?}",
+            source,
+            destination
+        );
+        return Ok(());
     }
 
     info!(
@@ -725,6 +756,14 @@ pub fn recursive_ownership_change(
         mask |= EXEC_MASK;
         mask |= MODE_SETGID;
     }
+
+    // We do not want to change the permission of the underlying file
+    // using symlink. Hence we skip symlinks from recursive ownership
+    // and permission changes.
+    if path.is_symlink() {
+        return Ok(());
+    }
+
     nix::unistd::chown(path, uid, gid)?;
 
     if gid.is_some() {
@@ -1102,6 +1141,7 @@ fn parse_options(option_list: Vec<String>) -> HashMap<String, String> {
 mod tests {
     use super::*;
     use protocols::agent::FSGroup;
+    use slog::Drain;
     use std::fs::File;
     use std::fs::OpenOptions;
     use std::io::Write;
@@ -1111,6 +1151,31 @@ mod tests {
     use test_utils::{
         skip_if_not_root, skip_loop_by_user, skip_loop_if_not_root, skip_loop_if_root,
     };
+
+    #[test]
+    fn test_already_baremounted() {
+        let plain = slog_term::PlainSyncDecorator::new(std::io::stdout());
+        let logger = Logger::root(slog_term::FullFormat::new(plain).build().fuse(), o!());
+
+        let test_cases = [
+            ("dev", "/dev", "devtmpfs"),
+            ("udev", "/dev", "devtmpfs"),
+            ("proc", "/proc", "proc"),
+            ("sysfs", "/sys", "sysfs"),
+        ];
+
+        for &(source, destination, fs_type) in &test_cases {
+            let source = Path::new(source);
+            let destination = Path::new(destination);
+            let flags = MsFlags::MS_RDONLY;
+            let options = "mode=755";
+            println!(
+                "testing if already mounted baremount({:?} {:?} {:?})",
+                source, destination, fs_type
+            );
+            assert!(baremount(source, destination, fs_type, flags, options, &logger).is_ok());
+        }
+    }
 
     #[test]
     fn test_mount() {

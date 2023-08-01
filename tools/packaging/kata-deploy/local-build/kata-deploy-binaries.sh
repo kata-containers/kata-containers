@@ -223,68 +223,12 @@ install_cached_cc_shim_v2() {
 
 #Install cc capable guest image
 install_cc_image() {
-	export AA_KBC="${1:-offline_fs_kbc}"
-	image_type="${2:-image}"
-	image_initrd_suffix="${3:-""}"
-	root_hash_suffix="${4:-""}"
-	tee="${5:-""}"
+	export AA_KBC="${AA_KBC:-offline_fs_kbc}"
 	export KATA_BUILD_CC=yes
-	export MEASURED_ROOTFS=${MEASURED_ROOTFS}
+	export MEASURED_ROOTFS=yes
+	variant="${1:-}"
 
-	local jenkins="${jenkins_url}/job/kata-containers-2.0-rootfs-image-cc-$(uname -m)/${cached_artifacts_path}"
-	local component="rootfs-image"
-	local root_hash_vanilla="root_hash_vanilla.txt"
-	local root_hash_tdx=""
-	local initramfs_last_commit=""
-	if [ -n "${tee}" ]; then
-		if [ "${tee}" == "tdx" ]; then
-			jenkins="${jenkins_url}/job/kata-containers-2.0-rootfs-image-${tee}-cc-$(uname -m)/${cached_artifacts_path}"
-			component="${tee}-rootfs-image"
-			root_hash_vanilla=""
-			root_hash_tdx="root_hash_${tee}.txt"
-		fi
-		if [ "${tee}" == "sev" ]; then
-			jenkins="${jenkins_url}/job/kata-containers-2.0-rootfs-initrd-${tee}-cc-$(uname -m)/${cached_artifacts_path}"
-			component="${tee}-rootfs-initrd"
-			root_hash_vanilla=""
-			initramfs_last_commit="$(get_initramfs_image_name)"
-		fi
-	fi
-
-	local osbuilder_last_commit="$(echo $(get_last_modification "${repo_root_dir}/tools/osbuilder") | sed s/-dirty//)"
-	local guest_image_last_commit="$(get_last_modification "${repo_root_dir}/tools/packaging/guest-image")"
-	local agent_last_commit="$(get_last_modification "${repo_root_dir}/src/agent")"
-	local libs_last_commit="$(get_last_modification "${repo_root_dir}/src/libs")"
-	local attestation_agent_version="$(get_from_kata_deps "externals.attestation-agent.version")"
-	local gperf_version="$(get_from_kata_deps "externals.gperf.version")"
-	local libseccomp_version="$(get_from_kata_deps "externals.libseccomp.version")"
-	local pause_version="$(get_from_kata_deps "externals.pause.version")"
-	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
-
-	install_cached_tarball_component \
-		"${component}" \
-		"${jenkins}" \
-		"${osbuilder_last_commit}-${guest_image_last_commit}-${initramfs_last_commit}-${agent_last_commit}-${libs_last_commit}-${attestation_agent_version}-${gperf_version}-${libseccomp_version}-${pause_version}-${rust_version}-${image_type}-${AA_KBC}" \
-		"" \
-		"${final_tarball_name}" \
-		"${final_tarball_path}" \
-		"${root_hash_vanilla}" \
-		"${root_hash_tdx}" \
-		&& return 0
-
-	info "Create CC image configured with AA_KBC=${AA_KBC}"
-	"${rootfs_builder}" \
-		--imagetype="${image_type}" \
-		--prefix="${prefix}" \
-		--destdir="${destdir}" \
-		--image_initrd_suffix="${image_initrd_suffix}" \
-		--root_hash_suffix="${root_hash_suffix}"
-}
-
-install_cc_sev_image() {
-	AA_KBC="online_sev_kbc"
-	image_type="initrd"
-	install_cc_image "${AA_KBC}" "${image_type}" "sev" "" "sev"
+	install_image "${variant}"
 }
 
 install_cc_se_image() {
@@ -292,12 +236,11 @@ install_cc_se_image() {
 	"${se_image_builder}" --destdir="${destdir}"
 }
 
-install_cc_tdx_image() {
-	AA_KBC="cc_kbc_tdx"
-	image_type="image"
-	image_suffix="tdx"
-	root_hash_suffix="tdx"
-	install_cc_image "${AA_KBC}" "${image_type}" "${image_suffix}" "${root_hash_suffix}" "tdx"
+install_image_tdx() {
+	export AA_KBC="cc_kbc_tdx"
+
+	info "Install CC image configured with AA_KBC=${AA_KBC}"
+	install_cc_image "tdx"
 }
 
 #Install all components that are not assets
@@ -358,9 +301,14 @@ install_cc_tdx_td_shim() {
 
 #Install guest image
 install_image() {
-	local image_type="${1:-"image"}"
-	local initrd_suffix="${2:-""}"
-	local jenkins="${jenkins_url}/job/kata-containers-main-rootfs-${image_type}-$(uname -m)/${cached_artifacts_path}"
+	local variant="${1:-}"
+
+	image_type="image"
+	if [ -n "${variant}" ]; then
+		image_type+="-${variant}"
+	fi
+
+	local jenkins="${jenkins_url}/job/kata-containers-main-rootfs-${image_type}-${ARCH}/${cached_artifacts_path}"
 	local component="rootfs-${image_type}"
 
 	local osbuilder_last_commit="$(get_last_modification "${repo_root_dir}/tools/osbuilder")"
@@ -370,30 +318,58 @@ install_image() {
 	local gperf_version="$(get_from_kata_deps "externals.gperf.version")"
 	local libseccomp_version="$(get_from_kata_deps "externals.libseccomp.version")"
 	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
+	local attestation_agent_version="$(get_from_kata_deps "externals.attestation-agent.version")"
+	local pause_version="$(get_from_kata_deps "externals.pause.version")"
+	local root_hash_vanilla=""
+	local root_hash_tdx=""
+
+	local version_checker="${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${image_type}"
+	if [ -n "${variant}" ]; then
+		jenkins="${jenkins_url}/job/kata-containers-2.0-rootfs-image-${variant}-cc-$(uname -m)/${cached_artifacts_path}"
+		component="${variant}-rootfs-image"
+		root_hash_tdx="root_hash_${variant}.txt"
+		initramfs_last_commit=""
+		version=_checker="${osbuilder_last_commit}-${guest_image_last_commit}-${initramfs_last_commit}-${agent_last_commit}-${libs_last_commit}-${attestation_agent_version}-${gperf_version}-${libseccomp_version}-${pause_version}-${rust_version}-${image_type}-${AA_KBC}"
+	fi
+
 
 	install_cached_tarball_component \
 		"${component}" \
 		"${jenkins}" \
-		"${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-image" \
+		"${version_checker}" \
 		"" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
+		"${root_hash_vanilla}" \
+		"${root_hash_tdx}" \
 		&& return 0
 
 	info "Create image"
-	"${rootfs_builder}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${initrd_suffix}"
-}
 
-#Install guest image for tdx
-install_image_tdx() {
-	install_image "image-tdx" "tdx"
+	if [ -n "${variant}" ]; then
+		os_name="$(get_from_kata_deps "assets.image.architecture.${ARCH}.${variant}.name")"
+		os_version="$(get_from_kata_deps "assets.image.architecture.${ARCH}.${variant}.version")"
+	else
+		os_name="$(get_from_kata_deps "assets.image.architecture.${ARCH}.name")"
+		os_version="$(get_from_kata_deps "assets.image.architecture.${ARCH}.version")"
+	fi
+
+	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
 
 #Install guest initrd
 install_initrd() {
-	local initrd_type="${1:-"initrd"}"
-	local initrd_suffix="${2:-""}"
-	local jenkins="${jenkins_url}/job/kata-containers-main-rootfs-${initrd_type}-$(uname -m)/${cached_artifacts_path}"
+	local variant="${1:-}"
+
+	initrd_type="initrd"
+	if [ -n "${variant}" ]; then
+		initrd_type+="-${variant}"
+	fi
+
+	local jenkins="${jenkins_url}/job/kata-containers-main-rootfs-${initrd_type}-${ARCH}/${cached_artifacts_path}"
+	if [ -n "${variant}" ]; then
+		jenkins="${jenkins_url}/job/kata-containers-2.0-rootfs-initrd-${variant}-cc-$(uname -m)/${cached_artifacts_path}"
+	fi
 	local component="rootfs-${initrd_type}"
 
 	local osbuilder_last_commit="$(get_last_modification "${repo_root_dir}/tools/osbuilder")"
@@ -403,23 +379,56 @@ install_initrd() {
 	local gperf_version="$(get_from_kata_deps "externals.gperf.version")"
 	local libseccomp_version="$(get_from_kata_deps "externals.libseccomp.version")"
 	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
+	local attestation_agent_version="$(get_from_kata_deps "externals.attestation-agent.version")"
+	local pause_version="$(get_from_kata_deps "externals.pause.version")"
+	local root_hash_vanilla=""
+	local root_hash_tdx=""
+
+	[[ "${ARCH}" == "aarch64" && "${CROSS_BUILD}" == "true" ]] && echo "warning: Don't cross build initrd for aarch64 as it's too slow" && exit 0
+
+	local version_checker="${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${initrd_type}"
+	if [ -n "${variant}" ]; then
+		initramfs_last_commit="$(get_initramfs_image_name)"
+		version_checker="${osbuilder_last_commit}-${guest_image_last_commit}-${initramfs_last_commit}-${agent_last_commit}-${libs_last_commit}-${attestation_agent_version}-${gperf_version}-${libseccomp_version}-${pause_version}-${rust_version}-${initrd_type}-${AA_KBC}"
+	fi
 
 	install_cached_tarball_component \
 		"${component}" \
 		"${jenkins}" \
-		"${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${initrd_type}" \
+		"${version_checker}" \
 		"" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
+		"${root_hash_vanilla}" \
+		"${root_hash_tdx}" \
 		&& return 0
 
 	info "Create initrd"
-	"${rootfs_builder}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${initrd_suffix}"
+
+	if [ -n "${variant}" ]; then
+		os_name="$(get_from_kata_deps "assets.initrd.architecture.${ARCH}.${variant}.name")"
+		os_version="$(get_from_kata_deps "assets.initrd.architecture.${ARCH}.${variant}.version")"
+	else
+		os_name="$(get_from_kata_deps "assets.initrd.architecture.${ARCH}.name")"
+		os_version="$(get_from_kata_deps "assets.initrd.architecture.${ARCH}.version")"
+	fi
+
+	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
+}
+
+#Install Mariner guest initrd
+install_initrd_mariner() {
+	install_initrd "mariner"
 }
 
 #Install guest initrd for sev
 install_initrd_sev() {
-	install_initrd "initrd-sev" "sev"
+	export AA_KBC="online_sev_kbc"
+	export KATA_BUILD_CC="yes"
+	export MEASURED_ROOTFS="no"
+
+	info "Install CC initrd configured with AA_KBC=${AA_KBC}"
+	install_initrd "sev"
 }
 
 #Install kernel component helper
@@ -437,7 +446,7 @@ install_cached_kernel_tarball_component() {
 	install_cached_tarball_component \
 		"${kernel_name}" \
 		"${url}" \
-		"${kernel_version}-${kernel_kata_config_version}" \
+		"${kernel_version}-${kernel_kata_config_version}-$(get_last_modification $(dirname $kernel_builder))" \
 		"$(get_kernel_image_name)" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
@@ -451,7 +460,7 @@ install_cached_kernel_tarball_component() {
 	install_cached_tarball_component \
 		"${kernel_name}" \
 		"${jenkins_url}/job/kata-containers-main-${kernel_name}-$(uname -m)/${cached_artifacts_path}" \
-		"${kernel_version}-${kernel_kata_config_version}" \
+		"${kernel_version}-${kernel_kata_config_version}-$(get_last_modification $(dirname $kernel_builder))" \
 		"$(get_kernel_image_name)" \
 		"kata-static-kernel-sev-modules.tar.xz" \
 		"${workdir}/kata-static-kernel-sev-modules.tar.xz" \
@@ -468,7 +477,7 @@ install_cached_kernel_tarball_component() {
 install_cc_initrd() {
 	export AA_KBC="${AA_KBC:-offline_fs_kbc}"
 	info "Create CC initrd configured with AA_KBC=${AA_KBC}"
-	"${rootfs_builder}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}"
+	install_initrd
 }
 
 #Install kernel asset
@@ -542,14 +551,6 @@ install_kernel_nvidia_gpu_tdx_experimental() {
 		"assets.kernel-tdx-experimental.version" \
 		"kernel-nvidia-gpu-tdx-experimental" \
 		"-x tdx -g nvidia -u ${kernel_url} -H deb"
-}
-
-#Install experimental kernel asset
-install_kernel_experimental() {
-	install_kernel_helper \
-		"assets.kernel-experimental.version" \
-		"kernel-experimental" \
-		"-f -b experimental"
 }
 
 #Install experimental TDX kernel asset
@@ -862,18 +863,13 @@ handle_build() {
 	cc)
 		install_cc_image
 		install_cc_shimv2
-		install_cc_sev_image
 		;;
 
 	cc-rootfs-image) install_cc_image ;;
 
 	cc-rootfs-initrd) install_cc_initrd ;;
 
-	cc-sev-rootfs-initrd) install_cc_sev_image ;;
-
 	cc-se-image) install_cc_se_image ;;
-
-	cc-tdx-rootfs-image) install_cc_tdx_image ;;
 
 	cc-shim-v2) install_cc_shimv2 ;;
 
@@ -888,8 +884,6 @@ handle_build() {
 	kernel) install_kernel ;;
 
 	kernel-dragonball-experimental) install_kernel_dragonball_experimental ;;
-
-	kernel-experimental) install_kernel_experimental ;;
 
 	kernel-nvidia-gpu) install_kernel_nvidia_gpu ;;
 

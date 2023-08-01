@@ -13,7 +13,7 @@ spec:
         labels:
           name: kata-deploy
     spec:
-      serviceAccountName: kata-label-node
+      serviceAccountName: kata-deploy-sa
       containers:
       - name: kube-kata
         image: quay.io/kata-containers/kata-deploy-cc:v0
@@ -28,8 +28,16 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
-        - name: CONFIGURE_CC
-          value: "yes"
+        - name: DEBUG
+          value: "false"
+        - name: SHIMS
+          value: "clh dragonball fc qemu qemu-nvidia-gpu qemu-sev qemu-snp qemu-tdx"
+        - name: DEFAULT_SHIM
+          value: "qemu"
+        - name: CREATE_RUNTIMECLASSES
+          value: "false"
+        - name: CREATE_DEFAULT_RUNTIMECLASS
+          value: "false"
         securityContext:
           privileged: true
         volumeMounts:

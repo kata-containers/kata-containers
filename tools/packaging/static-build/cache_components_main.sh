@@ -33,6 +33,8 @@ cache_kernel_artifacts() {
 	local kernel_tarball_name="kata-static-${KERNEL_FLAVOUR}.tar.xz"
 	local current_kernel_image="$(get_kernel_image_name)"
 	local current_kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
+	# Changes to tools/packaging/kernel are covered by the kata_config_version check
+	local kernel_last_commit="$(get_last_modification ${repo_root_dir}/tools/packaging/static-build/kernel)"
 	local kernel_modules_tarball_path="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/kata-static-kernel-sev-modules.tar.xz"
 
 	# The ${vendor}-gpu kernels are based on an already existing entry, and does not require
@@ -59,13 +61,14 @@ cache_kernel_artifacts() {
 			;;
 	esac
 
-	create_cache_asset "${kernel_tarball_name}" "${current_kernel_version}-${current_kernel_kata_config_version}" "${current_kernel_image}"
+	local current_component_version="${current_kernel_version}-${current_kernel_kata_config_version}-${kernel_last_commit}"
+	create_cache_asset "${kernel_tarball_name}" "${current_component_version}" "${current_kernel_image}"
 	if [[ "${KERNEL_FLAVOUR}" == "kernel-sev" ]]; then
 		module_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/kernel-sev/builddir/kata-linux-${current_kernel_version#v}-${current_kernel_kata_config_version}/lib/modules/${current_kernel_version#v}"
 		if [ ! -f "${kernel_modules_tarball_path}" ]; then
 			tar cvfJ "${kernel_modules_tarball_path}" "${module_dir}/kernel/drivers/virt/coco/efi_secret/"
 		fi
-		create_cache_asset "kata-static-kernel-sev-modules.tar.xz" "${current_kernel_version}-${current_kernel_kata_config_version}" "${current_kernel_image}"
+		create_cache_asset "kata-static-kernel-sev-modules.tar.xz" "${current_component_version}" "${current_kernel_image}"
 	fi
 }
 

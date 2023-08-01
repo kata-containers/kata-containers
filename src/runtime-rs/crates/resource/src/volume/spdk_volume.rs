@@ -16,7 +16,7 @@ use crate::volume::utils::{
 };
 use hypervisor::{
     device::{
-        device_manager::{do_handle_device, DeviceManager},
+        device_manager::{do_handle_device, get_block_driver, DeviceManager},
         DeviceConfig, DeviceType,
     },
     VhostUserConfig, VhostUserType,
@@ -73,9 +73,12 @@ impl SPDKVolume {
             }
         }
 
+        let block_driver = get_block_driver(d).await;
+
         let mut vhu_blk_config = &mut VhostUserConfig {
             socket_path: device,
             device_type: VhostUserType::Blk("vhost-user-blk-pci".to_owned()),
+            driver_option: block_driver,
             ..Default::default()
         };
 

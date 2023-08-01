@@ -13,7 +13,7 @@ JSON_TX_ONELINE="${JSON_TX_ONELINE:-}"
 JSON_URL="${JSON_URL:-}"
 
 # Generate a timestamp in nanoseconds since 1st Jan 1970
-timestamp_ns() {
+function timestamp_ns() {
 	local t
 	local s
 	local n
@@ -22,18 +22,21 @@ timestamp_ns() {
 	t="$(date +%-s:%-N)"
 	s=$(echo $t | awk -F ':' '{print $1}')
 	n=$(echo $t | awk -F ':' '{print $2}')
-	ns=$(( (s * 1000000000) + n ))
+	ns=$(echo "$s * 1000000000 + $n" | bc)
 
 	echo $ns
 }
 
 # Generate a timestamp in milliseconds since 1st Jan 1970
-timestamp_ms() {
+function timestamp_ms() {
 	echo $(($(date +%s%N)/1000000))
 }
 
-# Intialise the json subsystem
-metrics_json_init() {
+# Initialise the json subsystem
+function metrics_json_init() {
+	#  collect kata-env data
+	common_init
+
 	# Clear out any previous results
 	json_result_array=()
 
@@ -45,18 +48,18 @@ metrics_json_init() {
 EOF
 )"
 
-	if [ "$CTR_RUNTIME" == "io.containerd.kata.v2" ]; then
+	if [ "${CTR_RUNTIME}" == "io.containerd.kata.v2" ]; then
 		metrics_json_add_fragment "$json"
 
 		local json="$(cat << EOF
 		"env" : {
-			"RuntimeVersion": "$RUNTIME_VERSION",
-			"RuntimeCommit": "$RUNTIME_COMMIT",
-			"RuntimeConfig": "$RUNTIME_CONFIG_PATH",
-			"Hypervisor": "$HYPERVISOR_PATH",
-			"HypervisorVersion": "$HYPERVISOR_VERSION",
-			"Shim": "$SHIM_PATH",
-			"ShimVersion": "$SHIM_VERSION",
+			"RuntimeVersion": "${RUNTIME_VERSION}",
+			"RuntimeCommit": "${RUNTIME_COMMIT}",
+			"RuntimeConfig": "${RUNTIME_CONFIG_PATH}",
+			"Hypervisor": "${HYPERVISOR_PATH}",
+			"HypervisorVersion": "${HYPERVISOR_VERSION}",
+			"Shim": "${SHIM_PATH}",
+			"ShimVersion": "${SHIM_VERSION}",
 			"machinename": "$(uname -n)"
 		}
 EOF
@@ -86,7 +89,7 @@ EOF
 		metrics_json_add_fragment "$json"
 
 		# Now add a runtime specific environment section if we can
-		local iskata=$(is_a_kata_runtime "$RUNTIME")
+		local iskata=$(is_a_kata_runtime "${RUNTIME}")
 		if [ "$iskata" == "1" ]; then
 			local rpath="$(command -v kata-runtime)"
 			local json="$(cat << EOF
@@ -97,7 +100,7 @@ EOF
 		fi
 	fi
 
-	if [ "$CTR_RUNTIME" == "io.containerd.runc.v2" ]; then
+	if [ "${CTR_RUNTIME}" == "io.containerd.runc.v2" ]; then
 		metrics_json_add_fragment "$json"
 		local output=$(runc -v)
 		local runcversion=$(grep version <<< "$output" | sed 's/runc version //')
@@ -106,8 +109,8 @@ EOF
 		"runc-env" :
 		{
 			"Version": {
-				"Semver": "$runcversion",
-				"Commit": "$runccommit"
+				"Semver": "${runcversion}",
+				"Commit": "${runccommit}"
 			}
 		}
 EOF
@@ -118,10 +121,10 @@ EOF
 }
 
 # Save out the final JSON file
-metrics_json_save() {
+function metrics_json_save() {
 
-	if [ ! -d ${RESULT_DIR} ];then
-		mkdir -p ${RESULT_DIR}
+	if [ ! -d "${RESULT_DIR}" ];then
+		mkdir -p "${RESULT_DIR}"
 	fi
 
 	local maxelem=$(( ${#json_result_array[@]} - 1 ))
@@ -163,12 +166,12 @@ EOF
 	fi
 }
 
-metrics_json_end_of_system() {
+function metrics_json_end_of_system() {
 	system_index=$(( ${#json_result_array[@]}))
 }
 
 # Add a top level (complete) JSON fragment to the data
-metrics_json_add_fragment() {
+function metrics_json_add_fragment() {
 	local data=$1
 
 	# Place on end of array
@@ -176,12 +179,12 @@ metrics_json_add_fragment() {
 }
 
 # Prepare to collect up array elements
-metrics_json_start_array() {
+function metrics_json_start_array() {
 	json_array_array=()
 }
 
 # Add a (complete) element to the current array
-metrics_json_add_array_element() {
+function metrics_json_add_array_element() {
 	local data=$1
 
 	# Place on end of array
@@ -189,7 +192,7 @@ metrics_json_add_array_element() {
 }
 
 # Add a fragment to the current array element
-metrics_json_add_array_fragment() {
+function metrics_json_add_array_fragment() {
 	local data=$1
 
 	# Place on end of array
@@ -197,7 +200,7 @@ metrics_json_add_array_fragment() {
 }
 
 # Turn the currently registered array fragments into an array element
-metrics_json_close_array_element() {
+function metrics_json_close_array_element() {
 
 	local maxelem=$(( ${#json_array_fragments[@]} - 1 ))
 	local json="$(cat << EOF
@@ -221,7 +224,7 @@ EOF
 }
 
 # Close the current array
-metrics_json_end_array() {
+function metrics_json_end_array() {
 	local name=$1
 
 	local maxelem=$(( ${#json_array_array[@]} - 1 ))

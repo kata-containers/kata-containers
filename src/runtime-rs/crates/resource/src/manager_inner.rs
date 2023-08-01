@@ -121,6 +121,11 @@ impl ResourceManagerInner {
                         .await
                         .context("failed to handle network")?;
                 }
+                ResourceConfig::VmRootfs(r) => {
+                    do_handle_device(&self.device_manager, &DeviceConfig::BlockCfg(r))
+                        .await
+                        .context("do handle device failed.")?;
+                }
             };
         }
 
@@ -141,15 +146,13 @@ impl ResourceManagerInner {
         //    but it is not in netns. So, the previous thread would still remain in the pod netns.
         // The solution is to block the future on the current thread, it is enabled by spawn an os thread, create a
         // tokio runtime, and block the task on it.
-        let hypervisor = self.hypervisor.clone();
         let device_manager = self.device_manager.clone();
         let network = thread::spawn(move || -> Result<Arc<dyn Network>> {
             let rt = runtime::Builder::new_current_thread().enable_io().build()?;
             let d = rt
                 .block_on(network::new(&network_config, device_manager))
                 .context("new network")?;
-            rt.block_on(d.setup(hypervisor.as_ref()))
-                .context("setup network")?;
+            rt.block_on(d.setup()).context("setup network")?;
             Ok(d)
         })
         .join()

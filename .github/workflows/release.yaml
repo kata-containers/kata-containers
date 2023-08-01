@@ -4,6 +4,10 @@ on:
     tags:
       - '[0-9]+.[0-9]+.[0-9]+*'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-push-assets-amd64:
     uses: ./.github/workflows/release-amd64.yaml
@@ -115,6 +119,21 @@ jobs:
           pushd $GITHUB_WORKSPACE
           echo "uploading asset '${tarball}' for tag: ${tag}"
           GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a "${tarball}" "${tag}"
+          popd
+
+  upload-versions-yaml:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: upload versions.yaml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GIT_UPLOAD_TOKEN }}
+        run: |
+          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
+          pushd $GITHUB_WORKSPACE
+          versions_file="kata-containers-$tag-versions.yaml"
+          cp versions.yaml ${versions_file}
+          hub release edit -m "" -a "${versions_file}" "${tag}"
           popd
 
   upload-cargo-vendored-tarball:

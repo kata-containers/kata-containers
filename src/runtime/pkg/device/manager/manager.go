@@ -120,7 +120,7 @@ func (dm *deviceManager) createDevice(devInfo config.DeviceInfo) (dev api.Device
 	if devInfo.ID, err = dm.newDeviceID(); err != nil {
 		return nil, err
 	}
-	if IsVFIO(devInfo.HostPath) {
+	if IsVFIODevice(devInfo.HostPath) {
 		return drivers.NewVFIODevice(&devInfo), nil
 	} else if IsVhostUserBlk(devInfo) {
 		if devInfo.DriverOptions == nil {
@@ -191,12 +191,12 @@ func (dm *deviceManager) AttachDevice(ctx context.Context, id string, dr api.Dev
 	dm.Lock()
 	defer dm.Unlock()
 
-	d, ok := dm.devices[id]
+	dev, ok := dm.devices[id]
 	if !ok {
 		return ErrDeviceNotExist
 	}
 
-	if err := d.Attach(ctx, dr); err != nil {
+	if err := dev.Attach(ctx, dr); err != nil {
 		return err
 	}
 	return nil

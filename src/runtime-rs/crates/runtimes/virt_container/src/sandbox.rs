@@ -17,7 +17,7 @@ use common::{
     Sandbox, SandboxNetworkEnv,
 };
 use containerd_shim_protos::events::task::TaskOOM;
-use hypervisor::{dragonball::Dragonball, Hypervisor, HYPERVISOR_DRAGONBALL};
+use hypervisor::{dragonball::Dragonball, BlockConfig, Hypervisor, HYPERVISOR_DRAGONBALL};
 use kata_sys_util::hooks::HookStates;
 use kata_types::config::TomlConfig;
 use resource::{
@@ -26,6 +26,7 @@ use resource::{
     ResourceConfig, ResourceManager,
 };
 use tokio::sync::{mpsc::Sender, Mutex, RwLock};
+use tracing::instrument;
 
 use crate::health_check::HealthCheck;
 use persist::{self, sandbox_persist::Persist};
@@ -67,6 +68,15 @@ pub struct VirtSandbox {
     monitor: Arc<HealthCheck>,
 }
 
+impl std::fmt::Debug for VirtSandbox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VirtSandbox")
+            .field("sid", &self.sid)
+            .field("msg_sender", &self.msg_sender)
+            .finish()
+    }
+}
+
 impl VirtSandbox {
     pub async fn new(
         sid: &str,
@@ -88,12 +98,15 @@ impl VirtSandbox {
         })
     }
 
-    async fn prepare_config_for_sandbox(
+    #[instrument]
+    async fn prepare_for_start_sandbox(
         &self,
         _id: &str,
         network_env: SandboxNetworkEnv,
     ) -> Result<Vec<ResourceConfig>> {
         let mut resource_configs = vec![];
+
+        // prepare network config
         if !network_env.network_created {
             if let Some(netns_path) = network_env.netns {
                 let network_config = ResourceConfig::Network(
@@ -103,9 +116,19 @@ impl VirtSandbox {
                 resource_configs.push(network_config);
             }
         }
-        let hypervisor_config = self.hypervisor.hypervisor_config().await;
-        let virtio_fs_config = ResourceConfig::ShareFs(hypervisor_config.shared_fs);
+
+        // prepare sharefs device config
+        let virtio_fs_config =
+            ResourceConfig::ShareFs(self.hypervisor.hypervisor_config().await.shared_fs);
         resource_configs.push(virtio_fs_config);
+
+        // prepare VM rootfs device config
+        let vm_rootfs = ResourceConfig::VmRootfs(
+            self.prepare_rootfs_config()
+                .await
+                .context("failed to prepare rootfs device config")?,
+        );
+        resource_configs.push(vm_rootfs);
 
         Ok(resource_configs)
     }
@@ -162,6 +185,30 @@ impl VirtSandbox {
         })
     }
 
+    async fn prepare_rootfs_config(&self) -> Result<BlockConfig> {
+        let boot_info = self.hypervisor.hypervisor_config().await.boot_info;
+
+        let image = {
+            let initrd_path = boot_info.initrd.clone();
+            let image_path = boot_info.image;
+            if !initrd_path.is_empty() {
+                Ok(initrd_path)
+            } else if !image_path.is_empty() {
+                Ok(image_path)
+            } else {
+                Err(anyhow!("failed to get image"))
+            }
+        }
+        .context("get image")?;
+
+        Ok(BlockConfig {
+            path_on_host: image,
+            is_readonly: true,
+            driver_option: boot_info.vm_rootfs_driver,
+            ..Default::default()
+        })
+    }
+
     fn has_prestart_hooks(
         &self,
         prestart_hooks: Vec<oci::Hook>,
@@ -173,6 +220,7 @@ impl VirtSandbox {
 
 #[async_trait]
 impl Sandbox for VirtSandbox {
+    #[instrument(name = "sb: start")]
     async fn start(
         &self,
         dns: Vec<String>,
@@ -198,8 +246,9 @@ impl Sandbox for VirtSandbox {
         // generate device and setup before start vm
         // should after hypervisor.prepare_vm
         let resources = self
-            .prepare_config_for_sandbox(id, network_env.clone())
+            .prepare_for_start_sandbox(id, network_env.clone())
             .await?;
+
         self.resource_manager
             .prepare_before_start_vm(resources)
             .await

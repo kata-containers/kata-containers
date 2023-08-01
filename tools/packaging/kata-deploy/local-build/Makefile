@@ -18,9 +18,9 @@ EXTRA_TARBALL=\
 	ovmf-tarball \
 	qemu-snp-experimental-tarball \
 	qemu-tdx-experimental-tarball \
-	cc-tdx-td-shim-tarball \
-	cc-sev-rootfs-initrd-tarball \
-	cc-tdx-rootfs-image-tarball
+	rootfs-initrd-sev-tarball \
+	rootfs-image-tdx-tarball \
+	cc-tdx-td-shim-tarball
 endif
 
 define BUILD
@@ -76,9 +76,6 @@ firecracker-tarball:
 	${MAKE} $@-build
 
 kernel-dragonball-experimental-tarball:
-	${MAKE} $@-build
-
-kernel-experimental-tarball:
 	${MAKE} $@-build
 
 kernel-nvidia-gpu-tarball:
@@ -142,7 +139,7 @@ virtiofsd-tarball:
 	${MAKE} $@-build
 
 merge-builds:
-	$(MK_DIR)/kata-deploy-merge-builds.sh build
+	$(MK_DIR)/kata-deploy-merge-builds.sh build "$(MK_DIR)/../../../../versions.yaml"
 
 install-tarball:
 	tar -xf ./kata-static.tar.xz -C /
@@ -168,13 +165,7 @@ cc-rootfs-image-tarball:
 cc-rootfs-initrd-tarball:
 	${MAKE} $@-build
 
-cc-sev-rootfs-initrd-tarball: kernel-sev-tarball
-	${MAKE} $@-build
-
 cc-se-image-tarball: kernel-tarball cc-rootfs-initrd-tarball
-	${MAKE} $@-build
-
-cc-tdx-rootfs-image-tarball:
 	${MAKE} $@-build
 
 cc-tdx-td-shim-tarball:

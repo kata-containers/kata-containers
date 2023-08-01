@@ -7,6 +7,9 @@
 # This file contains common functions that
 # are being used by our metrics and integration tests
 
+this_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export repo_root_dir="$(cd "${this_script_dir}/../" && pwd)"
+
 # Kata tests directory used for storing various test-related artifacts.
 KATA_TESTS_BASEDIR="${KATA_TESTS_BASEDIR:-/var/log/kata-tests}"
 
@@ -23,23 +26,23 @@ KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 
 RUNTIME="${RUNTIME:-containerd-shim-kata-v2}"
 
-die() {
+function die() {
 	local msg="$*"
 	echo -e "[$(basename $0):${BASH_LINENO[0]}] ERROR: $msg" >&2
 	exit 1
 }
 
-warn() {
+function warn() {
 	local msg="$*"
 	echo -e "[$(basename $0):${BASH_LINENO[0]}] WARNING: $msg"
 }
 
-info() {
+function info() {
 	local msg="$*"
 	echo -e "[$(basename $0):${BASH_LINENO[0]}] INFO: $msg"
 }
 
-handle_error() {
+function handle_error() {
 	local exit_code="${?}"
 	local line_number="${1:-}"
 	echo -e "[$(basename $0):$line_number] ERROR: $(eval echo "$BASH_COMMAND")"
@@ -47,7 +50,7 @@ handle_error() {
 }
 trap 'handle_error $LINENO' ERR
 
-waitForProcess() {
+function waitForProcess() {
 	wait_time="$1"
 	sleep_time="$2"
 	cmd="$3"
@@ -66,7 +69,7 @@ waitForProcess() {
 # Kata runtime. Of course, the end user can choose any name they
 # want in reality, but this function knows the names of the default
 # and recommended Kata docker runtime install names.
-is_a_kata_runtime() {
+function is_a_kata_runtime() {
 	if [ "$1" = "containerd-shim-kata-v2" ] || [ "$1" = "io.containerd.kata.v2" ]; then
 		echo "1"
 	else
@@ -76,7 +79,7 @@ is_a_kata_runtime() {
 
 # Gets versions and paths of all the components
 # list in kata-env
-extract_kata_env() {
+function extract_kata_env() {
 	RUNTIME_CONFIG_PATH=$(kata-runtime kata-env --json | jq -r .Runtime.Config.Path)
 	RUNTIME_VERSION=$(kata-runtime kata-env --json | jq -r .Runtime.Version | grep Semver | cut -d'"' -f4)
 	RUNTIME_COMMIT=$(kata-runtime kata-env --json | jq -r .Runtime.Version | grep Commit | cut -d'"' -f4)
@@ -97,7 +100,7 @@ extract_kata_env() {
 }
 
 # Checks that processes are not running
-check_processes() {
+function check_processes() {
 	extract_kata_env
 
 	# Only check the kata-env if we have managed to find the kata executable...
@@ -120,7 +123,7 @@ check_processes() {
 
 # Clean environment, this function will try to remove all
 # stopped/running containers.
-clean_env()
+function clean_env()
 {
 	# If the timeout has not been set, default it to 30s
 	# Docker has a built in 10s default timeout, so make ours
@@ -139,7 +142,7 @@ clean_env()
 	fi
 }
 
-clean_env_ctr()
+function clean_env_ctr()
 {
 	local count_running="$(sudo ctr c list -q | wc -l)"
 	local remaining_attempts=10
@@ -181,7 +184,32 @@ clean_env_ctr()
 	count_tasks="$(sudo ctr t list -q | wc -l)"
 
 	if (( count_tasks > 0 )); then
-		die "Can't remove running contaienrs."
+		die "Can't remove running containers."
+	fi
+
+	kill_kata_components
+}
+
+# Kills running shim and hypervisor components
+function kill_kata_components() {
+	local kata_bin_dir="/opt/kata/bin"
+	local shim_path="${kata_bin_dir}/containerd-shim-kata-v2"
+	local hypervisor_path="${kata_bin_dir}/qemu-system-x86_64"
+	local pid_shim_count="$(pgrep -fc ${shim_path} || exit 0)"
+
+	[ ${pid_shim_count} -gt "0" ] && sudo kill -SIGKILL "$(pgrep -f ${shim_path})" > /dev/null 2>&1
+
+        if [ "${KATA_HYPERVISOR}" = 'clh' ]; then
+		hypervisor_path="${kata_bin_dir}/cloud-hypervisor"
+	elif [ "${KATA_HYPERVISOR}" != 'qemu' ]; then
+                echo "Failed to stop the hypervisor: '${KATA_HYPERVISOR}' as it is not recognized"
+		return
+        fi
+
+	local pid_hypervisor_count="$(pgrep -fc ${hypervisor_path} || exit 0)"
+
+	if [ ${pid_hypervisor_count} -gt "0" ]; then
+		sudo kill -SIGKILL "$(pgrep -f ${hypervisor_path})" > /dev/null 2>&1
 	fi
 }
 
@@ -189,7 +217,7 @@ clean_env_ctr()
 # Outputs warnings to stdio if something has gone wrong.
 #
 # Returns 0 on success, 1 otherwise
-restart_systemd_service_with_no_burst_limit() {
+function restart_systemd_service_with_no_burst_limit() {
 	local service=$1
 	info "restart $service service"
 
@@ -224,7 +252,7 @@ restart_systemd_service_with_no_burst_limit() {
 	return 0
 }
 
-restart_containerd_service() {
+function restart_containerd_service() {
 	restart_systemd_service_with_no_burst_limit containerd || return 1
 
 	local retries=5
@@ -241,16 +269,147 @@ restart_containerd_service() {
 	return 0
 }
 
-# @path_results: path to the input metric-results folder
-# @tarball_fname: path and filename to the output tarball
-function compress_metrics_results_dir()
-{
-	local path_results="${1:-results}"
-	local tarball_fname="${2:-}"
+# Configures containerd
+function overwrite_containerd_config() {
+	containerd_config="/etc/containerd/config.toml"
+	sudo rm -f "${containerd_config}"
+	sudo tee "${containerd_config}" << EOF
+version = 2
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+  SystemdCgroup = true
 
-	[ -z "${tarball_fname}" ] && die "Missing the tarball filename or the path to save the tarball results is incorrect."
-	[ ! -d "${path_results}" ] && die "Missing path to the results folder."
+[plugins]
+  [plugins."io.containerd.grpc.v1.cri"]
+    [plugins."io.containerd.grpc.v1.cri".containerd]
+      default_runtime_name = "kata"
+      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata]
+          runtime_type = "io.containerd.kata.v2"
+EOF
+}
 
-	cd "${path_results}" && tar -czf "${tarball_fname}" *.json && cd -
-	info "tarball generated: ${tarball_fname}"
+function install_kata() {
+	local kata_tarball="kata-static.tar.xz"
+	declare -r katadir="/opt/kata"
+	declare -r destdir="/"
+	declare -r local_bin_dir="/usr/local/bin/"
+
+	# Removing previous kata installation
+	sudo rm -rf "${katadir}"
+
+	pushd "${kata_tarball_dir}"
+	sudo tar -xvf "${kata_tarball}" -C "${destdir}"
+	popd
+
+	# create symbolic links to kata components
+	for b in "${katadir}"/bin/* ; do
+		sudo ln -sf "${b}" "${local_bin_dir}/$(basename $b)"
+	done
+
+	if [[ ${KATA_HYPERVISOR} == "dragonball" ]]; then
+		sudo ln -sf "${katadir}/runtime-rs/bin/containerd-shim-kata-v2" "${local_bin_dir}/containerd-shim-kata-${KATA_HYPERVISOR}-v2"
+	else
+		sudo ln -sf "${katadir}/bin/containerd-shim-kata-v2" "${local_bin_dir}/containerd-shim-kata-${KATA_HYPERVISOR}-v2"
+	fi
+
+	sudo ln -sf ${katadir}/share/defaults/kata-containers/configuration-${KATA_HYPERVISOR}.toml ${katadir}/share/defaults/kata-containers/configuration.toml 
+
+	check_containerd_config_for_kata
+	restart_containerd_service
+}
+
+function check_containerd_config_for_kata() {
+	# check containerd config
+	declare -r line1="default_runtime_name = \"kata\""
+	declare -r line2="runtime_type = \"io.containerd.kata.v2\""
+	declare -r num_lines_containerd=2
+	declare -r containerd_path="/etc/containerd/config.toml"
+	local count_matches=$(grep -ic  "$line1\|$line2" "${containerd_path}")
+
+	if [ "${count_matches}" = "${num_lines_containerd}" ]; then
+		info "containerd ok"
+	else
+		info "overwriting containerd configuration w/ a valid one"
+		overwrite_containerd_config
+	fi
+}
+
+function ensure_yq() {
+    : "${GOPATH:=${GITHUB_WORKSPACE:-$HOME/go}}"
+    export GOPATH
+    export PATH="${GOPATH}/bin:${PATH}"
+    INSTALL_IN_GOPATH=true "${repo_root_dir}/ci/install_yq.sh"
+}
+
+# dependency: What we want to get the version from the versions.yaml file
+function get_from_kata_deps() {
+        local dependency="$1"
+        versions_file="${repo_root_dir}/versions.yaml"
+
+        command -v yq &>/dev/null || die 'yq command is not in your $PATH'
+        result=$("yq" read -X "$versions_file" "$dependency")
+        [ "$result" = "null" ] && result=""
+        echo "$result"
+}
+
+# project: org/repo format
+# base_version: ${major}.${minor}
+function get_latest_patch_release_from_a_github_project() {
+       project="${1}"
+       base_version="${2}"
+
+       curl --silent https://api.github.com/repos/${project}/releases | jq -r .[].tag_name | grep "^${base_version}.[0-9]*$" -m1
+}
+
+# base_version: The version to be intalled in the ${major}.${minor} format
+function clone_cri_containerd() {
+	base_version="${1}"
+
+	project="containerd/containerd"
+	version=$(get_latest_patch_release_from_a_github_project "${project}" "${base_version}")
+
+	rm -rf containerd
+	git clone -b ${version} https://github.com/${project}
+}
+
+# project: org/repo format
+# version: the version of the tarball that will be downloaded
+# tarball-name: the name of the tarball that will be downloaded
+function download_github_project_tarball() {
+	project="${1}" 
+	version="${2}"
+	tarball_name="${3}"
+
+	wget https://github.com/${project}/releases/download/${version}/${tarball_name}
+}
+
+# base_version: The version to be intalled in the ${major}.${minor} format
+function install_cri_containerd() {
+	base_version="${1}"
+
+	project="containerd/containerd"
+	version=$(get_latest_patch_release_from_a_github_project "${project}" "${base_version}")
+
+	tarball_name="cri-containerd-cni-${version//v}-linux-$(${repo_root_dir}/tests/kata-arch.sh -g).tar.gz"
+
+	download_github_project_tarball "${project}" "${version}" "${tarball_name}"
+	sudo tar -xvf "${tarball_name}" -C /
+	rm -f "${tarball_name}"
+
+	sudo mkdir -p /etc/containerd
+	containerd config default | sudo tee /etc/containerd/config.toml
+}
+
+# base_version: The version to be intalled in the ${major}.${minor} format
+function install_cri_tools() {
+	base_version="${1}"
+
+	project="kubernetes-sigs/cri-tools"
+	version=$(get_latest_patch_release_from_a_github_project "${project}" "${base_version}")
+
+	tarball_name="crictl-${version}-linux-$(${repo_root_dir}/tests/kata-arch.sh -g).tar.gz"
+
+	download_github_project_tarball "${project}" "${version}" "${tarball_name}"
+	sudo tar -xvf "${tarball_name}" -C /usr/local/bin
+	rm -f "${tarball_name}"
 }

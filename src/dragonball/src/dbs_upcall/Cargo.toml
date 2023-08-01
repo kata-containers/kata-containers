@@ -1,0 +1,20 @@
+[package]
+name = "dbs-upcall"
+version = "0.3.0"
+authors = ["Alibaba Dragonball Team"]
+license = "Apache-2.0"
+edition = "2018"
+description = "dbs-upcall is a direct communication tool between VMM and guest"
+homepage = "https://github.com/openanolis/dragonball-sandbox"
+repository = "https://github.com/openanolis/dragonball-sandbox/tree/main/crates/dbs-virtio-devices"
+keywords = ["dragonball", "secure-sandbox", "devices", "upcall", "virtio"]
+readme = "README.md"
+
+[dependencies]
+anyhow = "1"
+log = "0.4.14"
+thiserror = "1"
+timerfd = "1.2.0"
+
+dbs-utils = { path = "../dbs_utils" }
+dbs-virtio-devices = { path = "../dbs_virtio_devices", features = ["virtio-vsock"] }
