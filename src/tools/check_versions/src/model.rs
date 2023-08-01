@@ -21,3 +21,11 @@ pub struct Project {
     pub branch: Option<String>,
     pub architecture: Option<HashMap<String, Arch>>,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct CheckResult {
+    pub project_name: String,
+    pub current_version: String,
+    pub latest_version: String,
+    pub up_to_date: bool
+}

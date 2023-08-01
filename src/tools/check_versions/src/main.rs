@@ -31,12 +31,13 @@ fn main() {
         }
     };
 
-    match version_checker::check_versions_recursive("root", &versions, &args) {
-        Err(error) => {
-            println!("Unable to check versions in {}: {:?}", &args.versions_file.display(), error);
-            return;
-        },
-        _ => ()
+    let results: Vec<model::CheckResult> = version_checker::check_versions("root", &versions, &args);
+
+    for r in &results {
+        if (!r.up_to_date) {
+            println!("{}\n\tcurrent_version: {}\n\tlatest_version: {}",
+                r.project_name, r.current_version, r.latest_version);
+        }
     }
 }
 

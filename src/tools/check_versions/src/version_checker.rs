@@ -14,8 +14,99 @@ use anyhow::bail;
 use anyhow::Result;
 use serde_json::Value;
 
+pub fn check_versions(key: &str, version: &Value, args: &Args) -> Vec<CheckResult> {
+    let mut results: Vec<CheckResult> = Vec::new();
+    check_versions_recursive(key, version, args, &mut results);
+    return results;
+}
+
+pub fn check_versions_recursive(key: &str, versions: &Value, args: &Args, results: &mut Vec<CheckResult>) -> Result<()> {
+    match &versions {
+        Value::Null => {
+            // Nothing to do, this value doesn't contain anything useful
+            if args.verbose {
+                // println!("Value is Null");
+            }
+        },
+        Value::Bool(value) => {
+            // Nothing to do, this value doesn't contain anything useful
+            if args.verbose {
+                // println!("Value is Bool({})", value);
+            }
+        },
+        Value::Number(value) => {
+            // Nothing to do, this value doesn't contain anything useful
+            if args.verbose {
+                // println!("Value is Number({})", value);
+            }
+        },
+        Value::String(value) => {
+            // Nothing to do, this value doesn't contain anything useful
+            if args.verbose {
+                // println!("Value is String({})", value);
+            }
+        },
+        Value::Array(value) => {
+            // Recurse into array elements
+            if args.verbose {
+                // println!("Value is Array({:?})", value);
+            }
+
+            for item in value.iter() {
+                // Use the key from this level
+                check_versions_recursive(key, item, args, results)?;
+            }
+        },
+        Value::Object(value) => {
+            if args.verbose {
+                // println!("Value is Object({:?})", value);
+            }
+
+            let project = parse_project_from_value(versions);
+
+            match project {
+                Ok(project) => {
+                    // Found a versioned item "Project" - check its version
+                    if args.verbose {
+                        // println!("Value is Project({:?})", project);
+                    }
+
+                    let check_result = match check_project_version(&project, key, args) {
+                        Ok(cresult) => cresult,
+                        Err(err_str) => CheckResult {
+                            project_name: String::from(key),
+                            current_version: String::from("unknown"),
+                            latest_version: String::from("unknown"),
+                            up_to_date: false
+                        }
+                    };
+
+                    results.push(check_result);
+                }
+                Err(_) => {
+                    // Not a project - recurse into object elements
+                    if args.verbose {
+                        // println!("Value is not a Project");
+                    }
+
+                    for (subkey, value) in value.iter() {
+                        if args.verbose {
+                            // println!("Recursing into subkey={}", subkey);
+                        }
+
+                        check_versions_recursive(&format!("{}.{}", key, subkey), value, args, results);
+                    }
+                }
+            }
+        },
+    }
+
+    Ok(())
+}
+
 fn parse_project_from_value(value: &Value) -> Result<Project> {
     let project = serde_json::from_value::<Project>(value.clone());
+    
     match project {
         Ok(project) => {
             if project.url.is_none() && project.version.is_none() && project.tag.is_none() && project.branch.is_none() {
@@ -29,125 +120,62 @@ fn parse_project_from_value(value: &Value) -> Result<Project> {
         }
     }
 }
-pub fn check_versions_recursive(key: &str, versions: &Value, args: &Args) -> Result<()> {
-    match &versions {
-        Value::Null => {
-            // Nothing to do, this value doesn't contain anything useful
-            if args.verbose {
-                println!("Value is Null");
-            }
-        },
-        Value::Bool(value) => {
-            // Nothing to do, this value doesn't contain anything useful
-            if args.verbose {
-                println!("Value is Bool({})", value);
-            }
-        },
-        Value::Number(value) => {
-            // Nothing to do, this value doesn't contain anything useful
-            if args.verbose {
-                println!("Value is Number({})", value);
-            }
-        },
-        Value::String(value) => {
-            // Nothing to do, this value doesn't contain anything useful
-            if args.verbose {
-                println!("Value is String({})", value);
-            }
-        },
-        Value::Array(value) => {
-            // Recurse into array elements
-            if args.verbose {
-                println!("Value is Array({:?})", value);
-            }
-            for item in value.iter() {
-                // Use the key from this level
-                check_versions_recursive(key, item, args)?;
-            }
-        },
-        Value::Object(value) => {
-            if args.verbose {
-                println!("Value is Object({:?})", value);
-            }
-            let project = parse_project_from_value(versions);
-            match project {
-                Ok(project) => {
-                    // Found a versioned item "Project" - check its version
-                    if args.verbose {
-                        println!("Value is Project({:?})", project);
-                    }
-                    check_project_version(&project, key, args)?;
-                }
-                Err(_) => {
-                    // Not a project - recurse into object elements
-                    if args.verbose {
-                        println!("Value is not a Project");
-                    }
-                    for (subkey, value) in value.iter() {
-                        if args.verbose {
-                            println!("Recursing into subkey={}", subkey);
-                        }
-                        check_versions_recursive(&format!("{}.{}", key, subkey), value, args)?;
-                    }
-                }
-            }
-        },
-    }
-    Ok(())
-}
 
-fn check_project_version(project: &Project, name: &str, args: &Args) -> Result<()> {
+fn check_project_version(project: &Project, name: &str, args: &Args) -> Result<CheckResult, &'static str> {
     let current_version = match get_version_string(name, &project) {
         Ok(version) => version,
         Err(_e) => {
-            let message = format!("Warning! Failed to read version for {}\n", name);
-            write_output(message, &args)?;
             String::from("unknown")
         }
     };
 
     if let Some(architectures) = &project.architecture {
         for (arch_name, _arch_value) in architectures.iter() {
-            println!("project: {}.{}, Architectures not implemented yet\n", name, arch_name);
+            // println!("project: {}.{}, Architectures not implemented yet", name, arch_name);
         }
+        Err("Architectures not implemented")
     } else {
         match &project.url {
             Some(url) => {
                 if is_github_url(url.as_str()) {
-                   check_github_version(url.as_str(), current_version.as_str(), name, &args)?;
+                   check_github_version(url.as_str(), current_version.as_str(), name, &args)
                 } else {
                     match name {
-                        "virtiofsd" => check_virtiofsd_version(name, current_version.as_str(), &args)?,
-                        _ => ()
+                        "virtiofsd" => check_virtiofsd_version(name, current_version.as_str(), &args),
+                        _ => Err("Warning! Unknown url type")
                     }
                 }
             },
             None => {
                 // Assume project is a language if url is not present
-                check_language_version(name, current_version.as_str(), &args)?;
+                check_language_version(name, current_version.as_str(), &args)
             }
         }
     }
-
-    Ok(())
 }
 
 fn check_language_version(
     name: &str,
     current_version: &str,
-    args: &Args) -> Result<()> {
+    args: &Args) -> Result<CheckResult, &'static str> {
     match name {
         "golang" => {
             let url = "https://golang.org/VERSION?m=text";
             match get_latest_version(url) {
                 Ok(latest_version) => {
-                    let message = format!("project: {}, current_version: {}, latest_version: {}\n",
-                        name, current_version, latest_version);
-                    write_output(message, &args)?;
+                    let up_to_date = current_version.eq(&latest_version);
+                    let check_result = CheckResult {
+                        project_name: String::from(name),
+                        current_version: String::from(current_version),
+                        latest_version: String::from(latest_version),
+                        up_to_date: up_to_date
+                    };
+        
+                    Ok(check_result)
                 },
                 Err(_e) => {
-                    let message = format!("Warning! Failed to check version for {}\n", name);
-                    write_output(message, &args)?;
+                    let message = format!("Warning! Failed to check version for {}", name);
+                    Err("Failed to check version")
                 }
             }
         },
@@ -155,13 +183,19 @@ fn check_language_version(
             let url = "https://github.com/golangci/golangci-lint";
             match get_github_latest_version(url, &args) {
                 Ok(latest_version) => {
-                    let message = format!("project: {}, current_version: {}, latest_version: {}\n",
-                        name, current_version, latest_version);
-                    write_output(message, &args)?;
+                    let up_to_date = current_version.eq(&latest_version);
+                    let check_result = CheckResult {
+                        project_name: String::from(name),
+                        current_version: String::from(current_version),
+                        latest_version: String::from(latest_version),
+                        up_to_date: up_to_date
+                    };
+        
+                    Ok(check_result)
                 },
                 Err(_e) => {
-                    let message = format!("Warning! Failed to check version for {}\n", name);
-                    write_output(message, &args)?;
+                    let message = format!("Warning! Failed to check version for {}", name);
+                    Err("Failed to check version")
                 }
             }
         },
@@ -169,20 +203,24 @@ fn check_language_version(
             let url = "https://api.github.com/repos/rust-lang/rust/releases/latest";
             match get_rust_latest_version(url, &args) {
                 Ok(latest_version) => {
-                    let message = format!("project: {}, current_version: {}, latest_version: {}\n",
-                        name, current_version, latest_version);
-                    write_output(message, &args)?;
+                    let up_to_date = current_version.eq(&latest_version);
+                    let check_result = CheckResult {
+                        project_name: String::from(name),
+                        current_version: String::from(current_version),
+                        latest_version: String::from(latest_version),
+                        up_to_date: up_to_date
+                    };
+        
+                    Ok(check_result)
                 },
                 Err(_e) => {
-                    let message = format!("Warning! Failed to check version for {}\n", name);
-                    write_output(message, &args)?;
+                    let message = format!("Warning! Failed to check version for {}", name);
+                    Err("Failed to check version")
                 }
             }
         },
-        _ => ()
+        _ => Err("Failed to check version")
     }
-
-    Ok(())
 }
 
 fn get_version_string(key: &str, project: &Project) -> Result<String> {
@@ -227,40 +265,48 @@ fn check_github_version(
     url: &str,
     current_version: &str,
     name: &str,
-    args: &Args) -> Result<()> {
+    args: &Args) -> Result<CheckResult, &'static str> {
     match get_github_latest_version(url, &args) {
         Ok(latest_version) => {
-            let message = format!("project: {}, current_version: {}, latest_version: {}\n",
-                name, current_version, latest_version);
-            write_output(message, &args)?;
+            let up_to_date = current_version.eq(&latest_version);
+            let check_result = CheckResult {
+                project_name: String::from(name),
+                current_version: String::from(current_version),
+                latest_version: String::from(latest_version),
+                up_to_date: up_to_date
+            };
+
+            Ok(check_result)
         },
         Err(_e) => {
-            let message = format!("Warning! Failed to check version for {}\n", name);
-            write_output(message, &args)?;
+            let message = format!("Warning! Failed to check version for {}", name);
+           Err("Failed to check version")
         }
     }
-
-    Ok(())
 }
 
 fn check_virtiofsd_version(
     name: &str,
     current_version: &str,
-    args: &Args) -> Result<()> {
+    args: &Args) -> Result<CheckResult, &'static str> {
     let url = "https://gitlab.com/api/v4/projects/21523468/repository/tags";
     match get_virtiofsd_latest_version(url) {
         Ok(latest_version) => {
-            let message = format!("project: {}, current_version: {}, latest_version: {}\n",
-                name, current_version, latest_version);
-            write_output(message, &args)?;
+            let up_to_date = current_version.eq(&latest_version);
+            let check_result = CheckResult {
+                project_name: String::from(name),
+                current_version: String::from(current_version),
+                latest_version: String::from(latest_version),
+                up_to_date: up_to_date
+            };
+
+            Ok(check_result)
         },
         Err(_e) => {
-            let message = format!("Warning! Failed to check version for {}\n", name);
-            write_output(message, &args)?;
+            let message = format!("Warning! Failed to check version for {}", name);
+            Err("Failed to check version")
         }
     }
-
-    Ok(())
 }
 
 fn get_rust_latest_version(url: &str, args: &Args) -> Result<String> {
