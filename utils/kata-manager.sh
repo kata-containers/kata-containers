@@ -404,12 +404,33 @@ install_containerd()
 	info "$project installed\n"
 }
 
+
+set_proxy(){
+	local proxy_var="$1"
+    local proxy_value="$2"
+	local env_search="Environment=\"$proxy_var=.*\""
+    local env_proxy="Environment=\"$proxy_var=$proxy_value\""
+	info "Configuring $proxy_var proxy information for containerd service"
+    if grep -q "\[Service\]" "$dest"; then
+        if grep -q "$env_search" "$dest"; then
+            info "Replacing existing $proxy_var Proxy"
+            sudo sed -i "s@$env_search@$env_proxy@g" "$dest"
+        else
+            info "Setting new $proxy_var Proxy to containerd Environment"
+            sudo sed -i "/\[Service\]/a $env_proxy" "$dest"
+        fi
+    fi
+}
+
+
 configure_containerd()
 {
 	local enable_debug="${1:-}"
 	[ -z "$enable_debug" ] && die "no enable debug value"
 
 	local http_proxy="${2:-}"
+
+	local https_proxy="${3:-}"
 
 	local project="$containerd_project"
 
@@ -502,23 +523,16 @@ configure_containerd()
 		modified="true"
 	fi
 
-	if [ -n "$http_proxy" ]; 
+	if [ -n "$http_proxy" ];
 	then
-		info "Configuring proxy information for containerd service"
-		if grep -q "\[Service\]" "$dest"; then
-			line_number=$(grep -n "\[Service\]" "$dest" | cut -d ":" -f1)
-			env_search="Environment=\"HTTP_PROXY=.*\""
-			env_http_proxy="Environment=\"HTTP_PROXY=$http_proxy\""
-			if grep -q "$env_search" "$dest"; then
-				info "Replacing existing HTTP Proxy"
-				sudo sed -i "s@$env_search@$env_http_proxy@g" "$dest"
-			else
-				info "Setting new HTTP Proxy to containerd Environment"
-				sudo sed -i "/\[Service\]/a $env_http_proxy" "$dest"
-			fi
+		set_proxy "HTTP_PROXY" "$http_proxy"
 		modified="true"
-		fi
+	fi
 
+	if [ -n "$https_proxy" ];
+	then
+		set_proxy "HTTPS_PROXY" "$https_proxy"
+		modified="true"
 	fi
 
 	[ "$modified" = "true" ] && info "Modified $cfg"
@@ -647,6 +661,7 @@ handle_containerd()
 
 	#HTTP Proxy value is optional
 	local http_proxy="${4:-}"
+	local https_proxy="${5:-}"
 
 	local ret
 
@@ -664,7 +679,7 @@ handle_containerd()
 		fi
 	fi
 
-	configure_containerd "$enable_debug" "$http_proxy"
+	configure_containerd "$enable_debug" "$http_proxy" "$https_proxy"
 
 	containerd --version
 }
@@ -724,6 +739,7 @@ handle_installation()
 	local kata_version="${7:-}"
 	local containerd_version="${8:-}"
 	local http_proxy="${9:-}"
+	local https_proxy="${10:-}"
 	
 	[ "$only_run_test" = "true" ] && test_installation && return 0
 
@@ -736,7 +752,8 @@ handle_installation()
 		"$containerd_version" \
 		"$force" \
 		"$enable_debug" \
-		"$http_proxy"
+		"$http_proxy" \
+		"$https_proxy"
 
 	[ "$disable_test" = "false" ] && test_installation
 
@@ -758,12 +775,12 @@ handle_args()
 	local disable_test="false"
 	local only_run_test="false"
 	local enable_debug="false"
-
 	local opt
-
 	local kata_version=""
 	local containerd_version=""
 	local http_proxy=""
+	local https_proxy=""
+	local p_count=0
 
 	while getopts "c:dfhk:op:rtT" opt "$@"
 	do
@@ -774,12 +791,29 @@ handle_args()
 			h) usage; exit 0 ;;
 			k) kata_version="$OPTARG" ;;
 			o) skip_containerd="true" ;;
-			p) http_proxy="$OPTARG" ;;
+			p) 	
+				p_count=$((p_count + 1))
+				if [[ $p_count -eq 1 ]]; then
+					http_proxy="$OPTARG"
+				elif [[ $p_count -eq 2 ]]; then
+					https_proxy="$OPTARG"
+				else
+					echo "Only two proxy value are allowed"
+					exit 0
+				fi
+				;;
 			r) cleanup="false" ;;
 			t) disable_test="true" ;;
 			T) only_run_test="true" ;;
 		esac
 	done
+
+	# Check HTTP PROXY & HTTPS Proxy value in correct format
+	if [[ (! -z "$http_proxy" && $http_proxy != http://* && $http_proxy != https://*) ||
+		(! -z "$https_proxy" && $https_proxy != http://* && $https_proxy != https://*) ]]; then
+		echo "Invalid proxy URL format. Please use 'http://' or 'https://' prefix."
+		exit 1
+	fi
 
 	shift $[$OPTIND-1]
 
@@ -795,7 +829,8 @@ handle_args()
 		"$only_run_test" \
 		"$kata_version" \
 		"$containerd_version" \
-		"$http_proxy"
+		"$http_proxy" \
+		"$https_proxy"
 }
 
 main()
