@@ -14,9 +14,6 @@
 [hypervisor.clh]
 path = "@CLHSNPPATH@"
 igvm = "@IGVMPATH@"
-#kernel = "@KERNELPATH_CLH@"
-#image = "@IMAGEPATH@"
-#initrd = "@INITRDSEVPATH@"
 
 # rootfs filesystem type:
 #   - ext4 (default)
@@ -33,7 +30,7 @@ rootfs_type=@DEFROOTFSTYPE@
 #
 # Known limitations:
 # * Does not work by design:
-#   - CPU Hotplug 
+#   - CPU Hotplug
 #   - Memory Hotplug
 #   - NVDIMM devices
 #
@@ -43,7 +40,8 @@ rootfs_type=@DEFROOTFSTYPE@
 # Default false
 confidential_guest = true
 
-# enable SEV SNP VMs. This is not currently used by CLH
+# enable SEV SNP VMs.
+# This is not currently used by CLH
 sev_snp_guest = @DEFSNPGUEST@
 
 # SNP guest policy
@@ -222,9 +220,9 @@ block_device_driver = "virtio-blk"
 # and we strongly advise users to refer the Cloud Hypervisor official
 # documentation for a better understanding of its internals:
 # https://github.com/cloud-hypervisor/cloud-hypervisor/blob/main/docs/io_throttling.md
-# 
+#
 # Bandwidth rate limiter options
-# 
+#
 # net_rate_limiter_bw_max_rate controls network I/O bandwidth (size in bits/sec
 # for SB/VM).
 # The same value is used for inbound and outbound bandwidth.
@@ -258,9 +256,9 @@ block_device_driver = "virtio-blk"
 # and we strongly advise users to refer the Cloud Hypervisor official
 # documentation for a better understanding of its internals:
 # https://github.com/cloud-hypervisor/cloud-hypervisor/blob/main/docs/io_throttling.md
-# 
+#
 # Bandwidth rate limiter options
-# 
+#
 # disk_rate_limiter_bw_max_rate controls disk I/O bandwidth (size in bits/sec
 # for SB/VM).
 # The same value is used for inbound and outbound bandwidth.
