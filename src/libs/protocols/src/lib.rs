@@ -31,3 +31,10 @@ pub use serde_config::{
     deserialize_enum_or_unknown, deserialize_message_field, serialize_enum_or_unknown,
     serialize_message_field,
 };
+
+#[cfg(feature = "sealed-secret")]
+pub mod sealed_secret;
+#[cfg(feature = "sealed-secret")]
+pub mod sealed_secret_ttrpc;
+#[cfg(all(feature = "sealed-secret", feature = "async"))]
+pub mod sealed_secret_ttrpc_async;
