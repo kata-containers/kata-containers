@@ -46,7 +46,7 @@ impl ShimExecutor {
         self.args.validate(false).context("validate")?;
 
         let server_fd = get_server_fd().context("get server fd")?;
-        let mut service_manager = service::ServiceManager::new(
+        let service_manager = service::ServiceManager::new(
             &self.args.id,
             &self.args.publish_binary,
             &self.args.address,
