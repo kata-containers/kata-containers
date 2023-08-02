@@ -536,6 +536,10 @@ impl CloudHypervisorInner {
         caps.set(CapabilityBits::FsSharingSupport);
         Ok(caps)
     }
+
+    pub(crate) async fn get_hypervisor_metrics(&self) -> Result<String> {
+        todo!()
+    }
 }
 
 // Log all output from the CH process until a shutdown signal is received.
