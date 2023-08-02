@@ -25,6 +25,8 @@ use vmm_sys_util::terminal::Terminal;
 use crate::args::ExecArguments;
 use shim_interface::shim_mgmt::{client::MgmtClient, AGENT_URL};
 
+use crate::utils::TIMEOUT;
+
 const CMD_CONNECT: &str = "CONNECT";
 const CMD_OK: &str = "OK";
 const SCHEME_VSOCK: &str = "VSOCK";
@@ -32,7 +34,6 @@ const SCHEME_HYBRID_VSOCK: &str = "HVSOCK";
 
 const EPOLL_EVENTS_LEN: usize = 16;
 const KATA_AGENT_VSOCK_TIMEOUT: u64 = 5;
-const TIMEOUT: Duration = Duration::from_millis(2000);
 
 type Result<T> = std::result::Result<T, Error>;
 
