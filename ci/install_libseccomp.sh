@@ -87,7 +87,8 @@ build_and_install_libseccomp() {
     curl -sLO "${libseccomp_tarball_url}"
     tar -xf "${libseccomp_tarball}"
     pushd "libseccomp-${libseccomp_version}"
-    ./configure --prefix="${libseccomp_install_dir}" CFLAGS="${cflags}" --enable-static --host="${arch}"
+    [ "${arch}" == $(uname -m) ] && cc_name="" || cc_name="${arch}-linux-gnu-gcc"
+    CC=${cc_name} ./configure --prefix="${libseccomp_install_dir}" CFLAGS="${cflags}" --enable-static --host="${arch}"
     make
     make install
     popd
