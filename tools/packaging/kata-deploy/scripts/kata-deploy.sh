@@ -25,6 +25,10 @@ die() {
         exit 1
 }
 
+function host_systemctl() {
+	nsenter --target 1 --mount systemctl "${@}"
+}
+
 function print_usage() {
 	echo "Usage: $0 [install/cleanup/reset]"
 }
@@ -71,11 +75,11 @@ function get_container_runtime() {
                 die "invalid node name"
 	fi
 	if echo "$runtime" | grep -qE 'containerd.*-k3s'; then
-		if systemctl is-active --quiet rke2-agent; then
+		if host_systemctl is-active --quiet rke2-agent; then
 			echo "rke2-agent"
-		elif systemctl is-active --quiet rke2-server; then
+		elif host_systemctl is-active --quiet rke2-server; then
 			echo "rke2-server"
-		elif systemctl is-active --quiet k3s-agent; then
+		elif host_systemctl is-active --quiet k3s-agent; then
 			echo "k3s-agent"
 		else
 			echo "k3s"
@@ -136,8 +140,8 @@ function configure_cri_runtime() {
 		configure_containerd
 		;;
 	esac
-	systemctl daemon-reload
-	systemctl restart "$1"
+	host_systemctl daemon-reload
+	host_systemctl restart "$1"
 
 	wait_till_node_is_ready
 }
@@ -371,10 +375,10 @@ function cleanup_containerd() {
 
 function reset_runtime() {
 	kubectl label node "$NODE_NAME" katacontainers.io/kata-runtime-
-	systemctl daemon-reload
-	systemctl restart "$1"
+	host_systemctl daemon-reload
+	host_systemctl restart "$1"
 	if [ "$1" == "crio" ] || [ "$1" == "containerd" ]; then
-		systemctl restart kubelet
+		host_systemctl restart kubelet
 	fi
 
 	wait_till_node_is_ready
