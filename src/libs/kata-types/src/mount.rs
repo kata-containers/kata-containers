@@ -121,6 +121,99 @@ pub fn is_kata_host_dir_volume(ty: &str) -> bool {
     ty == KATA_HOST_DIR_VOLUME_TYPE
 }
 
+/// Configuration information for DmVerity device.
+#[derive(Debug, Deserialize, Serialize)]
+pub struct DmVerityOption {
+    /// Hash algorithm for dm-verity.
+    pub hashtype: String,
+    /// Root hash for device verification or activation.
+    pub hash: String,
+    /// Size of data device used in verification.
+    pub blocknum: u64,
+    /// Used block size for the data device.
+    pub blocksize: u64,
+    /// Used block size for the hash device.
+    pub hashsize: u64,
+    /// Offset of hash area/superblock on hash_device.
+    pub offset: u64,
+}
+
+/// Type of Kata specific mount option.
+#[derive(Debug, Serialize, Deserialize)]
+pub enum KataMountType {
+    /// The `Mount` is for native Linux container only, Kata/Coco should ignore/skip it.
+    KataMountIgnore = 1,
+    /// Prepare a whole image as a raw block disk image
+    KataMountRawImageBlock = 2,
+    /// Prepare an image layer as a raw block disk image
+    KataMountRawLayerBlock = 3,
+    /// Prepare a whole image as a nydus filesystem
+    KataMountNydusImageFs = 4,
+    /// Prepare an image layer as a nydus filesystem
+    KataMountNydusLayerFs = 5,
+    /// Prepare a whole image as a nydus block disk image
+    KataMountNydusImageBlock = 6,
+    /// Prepare an image layer as a nydus block disk image
+    KataMountNydusLayerBlock = 7,
+    /// Relay image pull information to container runtime/agent, they will take the responsibility
+    /// to pull image
+    KataMountAgentPull = 8,
+}
+
+/// Kata specific mount options, a superset of `NydusExtraOptions`.
+///
+/// It's very expensive to build direct communication channel for extra information between
+/// the snapshotter and kata-runtime/kata-agent/image-rs. So an extra mount option is used to
+/// pass information from snapshotter to those components through containerd.
+///
+/// The `type` field determines the way to interpret other fields as below:
+/// - type: ModeIgnore
+/// -- source: unused
+/// -- config: unused
+/// -- snapshot_dir: unused
+/// -- fs_version: unused
+/// -- verity: unused
+/// - type: KataMountRawImageBlock/KataMountRawLayerBlock
+/// -- source: path to the raw block image for the whole container image
+/// -- config: unused
+/// -- snapshot_dir: unused
+/// -- fs_version: unused
+/// -- verity: data verity information
+/// - type: KataMountNydusImageFs/KataMountNydusLayerFs
+/// -- source: path the image meta blob
+/// -- config: nydusd configuration information
+/// -- snapshot_dir: snapshot data directory
+/// -- fs_version: RAFS filesystem version
+/// -- verity: unused
+/// - type: KataMountNydusImageBlock/KataMountNydusLayerBlock
+/// -- source: path to the image meta blob
+/// -- config: nydusd configuration information
+/// -- snapshotdir: snapshot data directory
+/// -- fs_version: unused
+/// -- verity: data verity information
+/// - type: KataMountAgentPull
+/// -- source: unused
+/// -- config: labels associated with the images, containing all labels from containerd
+/// -- snapshot_dir: unused
+/// -- fs_version: unused
+/// -- verity: unused
+#[derive(Debug, Serialize, Deserialize)]
+pub struct KataMountOptions {
+    /// mount type
+    pub r#type: KataMountType,
+    /// source path
+    pub source: Option<String>,
+    /// nydus config
+    pub config: Option<String>,
+    /// snapshotter directory
+    #[serde(rename(deserialize = "snapshotdir"))]
+    pub snapshot_dir: Option<String>,
+    /// fs version
+    pub fs_version: Option<String>,
+    /// dm-verity configuration information
+    pub verity_option: Option<DmVerityOption>,
+}
+
 /// Nydus extra options
 #[derive(Debug, serde::Deserialize)]
 pub struct NydusExtraOptions {
