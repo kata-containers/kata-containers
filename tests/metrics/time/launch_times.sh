@@ -96,6 +96,7 @@ run_workload() {
 	# number of decimal digits after the decimal points
 	# for 'bc' performing math in kernel period estimation
 	L_CALC_SCALE=13
+	local CONTAINER_NAME="kata_launch_times_$(( $RANDOM % 1000 + 1))"
 	start_time=$($DATECMD)
 
 	# Check entropy level of the host
@@ -103,8 +104,7 @@ run_workload() {
 
 	# Run the image and command and capture the results into an array...
 	declare workload_result
-	readarray -n 0 workload_result < <(sudo -E "${CTR_EXE}" run --rm --runtime=${CTR_RUNTIME} ${IMAGE} test bash -c "$DATECMD $DMESGCMD")
-
+	readarray -n 0 workload_result < <(sudo -E "${CTR_EXE}" run --rm --runtime ${CTR_RUNTIME} ${IMAGE} ${CONTAINER_NAME} bash -c "$DATECMD $DMESGCMD")
 	end_time=$($DATECMD)
 
 	# Delay this calculation until after we have run - do not want
