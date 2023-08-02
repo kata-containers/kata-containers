@@ -14,6 +14,7 @@ Kata Containers design documents:
 - [`Inotify` support](inotify.md)
 - [`Hooks` support](hooks-handling.md)
 - [Metrics(Kata 2.0)](kata-2-0-metrics.md)
+- [Metrics in Rust Runtime(runtime-rs)](kata-metrics-in-runtime-rs.md)
 - [Design for Kata Containers `Lazyload` ability with `nydus`](kata-nydus-design.md)
 - [Design for direct-assigned volume](direct-blk-device-assignment.md)
 - [Design for core-scheduling](core-scheduling.md)

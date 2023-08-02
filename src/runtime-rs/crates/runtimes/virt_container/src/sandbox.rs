@@ -459,6 +459,18 @@ impl Sandbox for VirtSandbox {
             .context("sandbox: failed to get iptables")?;
         Ok(resp.data)
     }
+
+    async fn agent_metrics(&self) -> Result<String> {
+        self.agent
+            .get_metrics(agent::Empty::new())
+            .await
+            .map_err(|err| anyhow!("failed to get agent metrics {:?}", err))
+            .map(|resp| resp.metrics)
+    }
+
+    async fn hypervisor_metrics(&self) -> Result<String> {
+        self.hypervisor.get_hypervisor_metrics().await
+    }
 }
 
 #[async_trait]
