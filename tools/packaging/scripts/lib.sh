@@ -19,6 +19,16 @@ short_commit_length=10
 
 hub_bin="hub-bin"
 
+#for cross build
+CROSS_BUILD=${CROSS_BUILD-:}
+BUILDX=""
+PLATFORM=""
+TARGET_ARCH=${TARGET_ARCH:-$(uname -m)}
+ARCH=${ARCH:-$(uname -m)}
+[ "${TARGET_ARCH}" == "aarch64" ] && TARGET_ARCH=arm64
+TARGET_OS=${TARGET_OS:-linux}
+[ "${CROSS_BUILD}" == "true" ] && BUILDX=buildx && PLATFORM="--platform=${TARGET_OS}/${TARGET_ARCH}"
+
 clone_tests_repo() {
 	# KATA_CI_NO_NETWORK is (has to be) ignored if there is
 	# no existing clone.
@@ -189,7 +199,7 @@ get_ovmf_image_name() {
 }
 
 get_virtiofsd_image_name() {
-	ARCH=$(uname -m)
+	ARCH=${ARCH:-$(uname -m)}
 	case ${ARCH} in
 	        "aarch64")
 	                libc="musl"

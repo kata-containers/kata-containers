@@ -65,6 +65,8 @@ kernel_url=""
 #Linux headers for GPU guest fs module building
 linux_headers=""
 
+CROSS_BUILD_ARG=""
+
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
 
 packaging_scripts_dir="${script_dir}/../scripts"
@@ -436,7 +438,7 @@ setup_kernel() {
 
 	info "Copying config file from: ${kernel_config_path}"
 	cp "${kernel_config_path}" ./.config
-	make oldconfig
+	ARCH=${arch_target}  make oldconfig ${CROSS_BUILD_ARG}
 	)
 }
 
@@ -447,7 +449,7 @@ build_kernel() {
 	[ -n "${arch_target}" ] || arch_target="$(uname -m)"
 	arch_target=$(arch_to_kernel "${arch_target}")
 	pushd "${kernel_path}" >>/dev/null
-	make -j $(nproc ${CI:+--ignore 1}) ARCH="${arch_target}"
+	make -j $(nproc ${CI:+--ignore 1}) ARCH="${arch_target}" ${CROSS_BUILD_ARG}
 	if [ "${conf_guest}" == "sev" ]; then
 		make -j $(nproc ${CI:+--ignore 1}) INSTALL_MOD_STRIP=1 INSTALL_MOD_PATH=${kernel_path} modules_install
 	fi
@@ -657,6 +659,8 @@ main() {
 	fi
 
 	info "Kernel version: ${kernel_version}"
+
+	[ "${arch_target}" != "" -a "${arch_target}" != $(uname -m) ] && CROSS_BUILD_ARG="CROSS_COMPILE=${arch_target}-linux-gnu-"
 
 	case "${subcmd}" in
 		build)
