@@ -49,9 +49,12 @@ jobs:
       - name: run tensorflow test
         run:  bash tests/metrics/gha-run.sh run-test-tensorflow
 
+      - name: run fio test
+        run:  bash tests/metrics/gha-run.sh run-test-fio
+
       - name: make metrics tarball ${{ matrix.vmm }}
         run: bash tests/metrics/gha-run.sh make-tarball-results
-          
+
       - name: archive metrics results ${{ matrix.vmm }}
         uses: actions/upload-artifact@v3
         with:
