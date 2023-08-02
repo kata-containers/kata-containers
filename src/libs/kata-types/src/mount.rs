@@ -34,6 +34,23 @@ pub const SANDBOX_BIND_MOUNTS_RO: &str = ":ro";
 /// SANDBOX_BIND_MOUNTS_RO is for sandbox bindmounts with readwrite
 pub const SANDBOX_BIND_MOUNTS_RW: &str = ":rw";
 
+/// Directly assign a block volume to vm and mount it inside guest.
+pub const KATA_VIRTUAL_VOLUME_DIRECT_BLOCK: &str = "direct_block";
+/// Present a container image as a generic block device.
+pub const KATA_VIRTUAL_VOLUME_IMAGE_RAW_BLOCK: &str = "image_raw_block";
+/// Present each container image layer as a generic block device.
+pub const KATA_VIRTUAL_VOLUME_LAYER_RAW_BLOCK: &str = "layer_raw_block";
+/// Present a container image as a nydus block device.
+pub const KATA_VIRTUAL_VOLUME_IMAGE_NYDUS_BLOCK: &str = "image_nydus_block";
+/// Present each container image layer as a nydus block device.
+pub const KATA_VIRTUAL_VOLUME_LAYER_NYDUS_BLOCK: &str = "layer_nydus_block";
+/// Present a container image as a nydus filesystem.
+pub const KATA_VIRTUAL_VOLUME_IMAGE_NYDUS_FS: &str = "image_nydus_fs";
+/// Present each container image layer as a nydus filesystem.
+pub const KATA_VIRTUAL_VOLUME_LAYER_NYDUS_FS: &str = "layer_nydus_fs";
+/// Download and extra container image inside guest vm.
+pub const KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL: &str = "image_guest_pull";
+
 /// Information about a mount.
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct Mount {
@@ -66,7 +83,7 @@ impl Mount {
 
 /// DirectVolumeMountInfo contains the information needed by Kata
 /// to consume a host block device and mount it as a filesystem inside the guest VM.
-#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
 pub struct DirectVolumeMountInfo {
     /// The type of the volume (ie. block)
     pub volume_type: String,
@@ -80,8 +97,133 @@ pub struct DirectVolumeMountInfo {
     pub options: Vec<String>,
 }
 
-/// join_path joins user provided volumepath with kata direct-volume root path
-/// the volume_path is base64-encoded and then safely joined to the end of path prefix
+/// Configuration information for DmVerity device.
+#[derive(Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
+pub struct DmVerityInfo {
+    /// Hash algorithm for dm-verity.
+    pub hashtype: String,
+    /// Root hash for device verification or activation.
+    pub hash: String,
+    /// Size of data device used in verification.
+    pub blocknum: u64,
+    /// Used block size for the data device.
+    pub blocksize: u64,
+    /// Used block size for the hash device.
+    pub hashsize: u64,
+    /// Offset of hash area/superblock on hash_device.
+    pub offset: u64,
+}
+
+/// Information about directly assigned volume.
+#[derive(Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
+pub struct DirectAssignedVolume {
+    /// Meta information for directly assigned volume.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub metadata: HashMap<String, String>,
+}
+
+/// Information about pulling image inside guest.
+#[derive(Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
+pub struct ImagePullVolume {
+    /// Meta information for pulling image inside guest.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub metadata: HashMap<String, String>,
+}
+
+/// Information about nydus image volume.
+#[derive(Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
+pub struct NydusImageVolume {
+    /// Nydus configuration information.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub config: String,
+
+    /// Nydus snapshot directory
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub snapshot_dir: String,
+}
+
+/// Kata virtual volume to encapsulate information for extra mount options and direct volumes.
+///
+/// It's very expensive to build direct communication channels to pass information:
+/// - between snapshotters and kata-runtime/kata-agent/image-rs
+/// - between CSI drivers and kata-runtime/kata-agent
+///
+/// So `KataVirtualVolume` is introduced to encapsulate extra mount options and direct volume
+/// information, so we can build a common infrastructure to handle them.
+/// `KataVirtualVolume` is a superset of `NydusExtraOptions` and `DirectVolumeMountInfo`.
+///
+/// Value of `volume_type` determines how to interpret other fields in the structure.
+///
+/// - `KATA_VIRTUAL_VOLUME_IGNORE`
+/// -- all other fields should be ignored/unused.
+///
+/// - `KATA_VIRTUAL_VOLUME_DIRECT_BLOCK`
+/// -- `source`: the directly assigned block device
+/// -- `fs_type`: filesystem type
+/// -- `options`: mount options
+/// -- `direct_volume`: additional metadata to pass to the agent regarding this volume.
+///
+/// - `KATA_VIRTUAL_VOLUME_IMAGE_RAW_BLOCK` or `KATA_VIRTUAL_VOLUME_LAYER_RAW_BLOCK`
+/// -- `source`: path to the raw block image for the container image or layer.
+/// -- `fs_type`: filesystem type
+/// -- `options`: mount options
+/// -- `dm_verity`: disk dm-verity information
+///
+/// - `KATA_VIRTUAL_VOLUME_IMAGE_NYDUS_BLOCK` or `KATA_VIRTUAL_VOLUME_LAYER_NYDUS_BLOCK`
+/// -- `source`: path to nydus meta blob
+/// -- `fs_type`: filesystem type
+/// -- `nydus_image`: configuration information for nydus image.
+/// -- `dm_verity`: disk dm-verity information
+///
+/// - `KATA_VIRTUAL_VOLUME_IMAGE_NYDUS_FS` or `KATA_VIRTUAL_VOLUME_LAYER_NYDUS_FS`
+/// -- `source`: path to nydus meta blob
+/// -- `fs_type`: filesystem type
+/// -- `nydus_image`: configuration information for nydus image.
+///
+/// - `KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL`
+/// -- `source`: image reference
+/// -- `image_pull`: metadata for image pulling
+#[derive(Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
+pub struct KataVirtualVolume {
+    /// Type of virtual volume.
+    pub volume_type: String,
+    /// Source/device path for the virtual volume.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub source: String,
+    /// Filesystem type.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub fs_type: String,
+    /// Mount options.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub options: Vec<String>,
+
+    /// Information about directly assigned volume.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub direct_volume: Option<DirectAssignedVolume>,
+    /// Information about pulling image inside guest.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_pull: Option<ImagePullVolume>,
+    /// Information about nydus image volume.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nydus_image: Option<NydusImageVolume>,
+    /// DmVerity: configuration information
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dm_verity: Option<DmVerityInfo>,
+}
+
+impl KataVirtualVolume {
+    /// Create a new instance of `KataVirtualVolume` with specified type.
+    pub fn new(volume_type: String) -> Self {
+        Self {
+            volume_type,
+            ..Default::default()
+        }
+    }
+}
+
+/// Join user provided volume path with kata direct-volume root path.
+///
+/// The `volume_path` is base64-encoded and then safely joined to the `prefix`
 pub fn join_path(prefix: &str, volume_path: &str) -> Result<PathBuf> {
     if volume_path.is_empty() {
         return Err(anyhow!("volume path must not be empty"));
@@ -241,5 +383,37 @@ mod tests {
             "/var/lib/containerd/io.containerd.snapshotter.v1.nydus/snapshots/261"
         );
         assert_eq!(extra_option.fs_version, "v6");
+    }
+
+    #[test]
+    fn test_kata_virtual_volume() {
+        let mut volume = KataVirtualVolume::new(KATA_VIRTUAL_VOLUME_DIRECT_BLOCK.to_string());
+        assert_eq!(
+            volume.volume_type.as_str(),
+            KATA_VIRTUAL_VOLUME_DIRECT_BLOCK
+        );
+        assert!(volume.fs_type.is_empty());
+
+        let value = serde_json::to_string(&volume).unwrap();
+        assert_eq!(&value, "{\"volume_type\":\"direct_block\"}");
+
+        volume.source = "/tmp".to_string();
+        volume.fs_type = "ext4".to_string();
+        volume.options = vec!["rw".to_string()];
+        volume.nydus_image = Some(NydusImageVolume {
+            config: "test".to_string(),
+            snapshot_dir: "/var/lib/nydus.dir".to_string(),
+        });
+        let mut metadata = HashMap::new();
+        metadata.insert("mode".to_string(), "rw".to_string());
+        volume.direct_volume = Some(DirectAssignedVolume { metadata });
+
+        let value = serde_json::to_string(&volume).unwrap();
+        let volume2: KataVirtualVolume = serde_json::from_str(&value).unwrap();
+        assert_eq!(volume.volume_type, volume2.volume_type);
+        assert_eq!(volume.source, volume2.source);
+        assert_eq!(volume.fs_type, volume2.fs_type);
+        assert_eq!(volume.nydus_image, volume2.nydus_image);
+        assert_eq!(volume.direct_volume, volume2.direct_volume);
     }
 }
