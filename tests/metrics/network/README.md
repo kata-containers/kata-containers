@@ -10,6 +10,7 @@ bandwidth, jitter, latency and parallel bandwidth.
 ## Networking tests
 
 - `k8s-network-metrics-iperf3.sh` measures bandwidth which is the speed of the data transfer.
+- `latency-network.sh` measures network latency.
 
 ## Running the tests
 
