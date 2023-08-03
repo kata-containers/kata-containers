@@ -52,6 +52,9 @@ jobs:
       - name: run fio test
         run:  bash tests/metrics/gha-run.sh run-test-fio
 
+      - name: run iperf test
+        run:  bash tests/metrics/gha-run.sh run-test-iperf
+
       - name: make metrics tarball ${{ matrix.vmm }}
         run: bash tests/metrics/gha-run.sh make-tarball-results
 
