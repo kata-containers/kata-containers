@@ -415,3 +415,21 @@ func isWatchableMount(path string) bool {
 
 	return false
 }
+
+func HasOption(options []string, option string) bool {
+	for _, o := range options {
+		if o == option {
+			return true
+		}
+	}
+	return false
+}
+
+func HasOptionPrefix(options []string, prefix string) bool {
+	for _, o := range options {
+		if strings.HasPrefix(o, prefix) {
+			return true
+		}
+	}
+	return false
+}

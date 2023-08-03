@@ -84,7 +84,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::unix::fs::FileExt;
 use std::path::PathBuf;
 
-const CONTAINER_BASE: &str = "/run/kata-containers";
+pub const CONTAINER_BASE: &str = "/run/kata-containers";
 const MODPROBE_PATH: &str = "/sbin/modprobe";
 
 /// the iptables seriers binaries could appear either in /sbin
