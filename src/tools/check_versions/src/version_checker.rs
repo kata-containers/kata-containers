@@ -25,31 +25,31 @@ pub fn check_versions_recursive(key: &str, versions: &Value, args: &Args, result
         Value::Null => {
             // Nothing to do, this value doesn't contain anything useful
             if args.verbose {
-                // println!("Value is Null");
+                println!("Value is Null");
             }
         },
         Value::Bool(value) => {
             // Nothing to do, this value doesn't contain anything useful
             if args.verbose {
-                // println!("Value is Bool({})", value);
+                println!("Value is Bool({})", value);
             }
         },
         Value::Number(value) => {
             // Nothing to do, this value doesn't contain anything useful
             if args.verbose {
-                // println!("Value is Number({})", value);
+                println!("Value is Number({})", value);
             }
         },
         Value::String(value) => {
             // Nothing to do, this value doesn't contain anything useful
             if args.verbose {
-                // println!("Value is String({})", value);
+                println!("Value is String({})", value);
             }
         },
         Value::Array(value) => {
             // Recurse into array elements
             if args.verbose {
-                // println!("Value is Array({:?})", value);
+                println!("Value is Array({:?})", value);
             }
 
             for item in value.iter() {
@@ -59,7 +59,7 @@ pub fn check_versions_recursive(key: &str, versions: &Value, args: &Args, result
         },
         Value::Object(value) => {
             if args.verbose {
-                // println!("Value is Object({:?})", value);
+                println!("Value is Object({:?})", value);
             }
 
             let project = parse_project_from_value(versions);
@@ -68,7 +68,7 @@ pub fn check_versions_recursive(key: &str, versions: &Value, args: &Args, result
                 Ok(project) => {
                     // Found a versioned item "Project" - check its version
                     if args.verbose {
-                        // println!("Value is Project({:?})", project);
+                        println!("Value is Project({:?})", project);
                     }
 
                     let check_result = match check_project_version(&project, key, args) {
@@ -77,7 +77,9 @@ pub fn check_versions_recursive(key: &str, versions: &Value, args: &Args, result
                             project_name: String::from(key),
                             current_version: String::from("unknown"),
                             latest_version: String::from("unknown"),
-                            up_to_date: false
+                            up_to_date: false,
+                            success: false,
+                            message: Some(err_str.to_string())
                         }
                     };
 
@@ -86,12 +88,12 @@ pub fn check_versions_recursive(key: &str, versions: &Value, args: &Args, result
                 Err(_) => {
                     // Not a project - recurse into object elements
                     if args.verbose {
-                        // println!("Value is not a Project");
+                        println!("Value is not a Project");
                     }
 
                     for (subkey, value) in value.iter() {
                         if args.verbose {
-                            // println!("Recursing into subkey={}", subkey);
+                            println!("Recursing into subkey={}", subkey);
                         }
 
                         check_versions_recursive(&format!("{}.{}", key, subkey), value, args, results);
@@ -121,7 +123,7 @@ fn parse_project_from_value(value: &Value) -> Result<Project> {
     }
 }
 
-fn check_project_version(project: &Project, name: &str, args: &Args) -> Result<CheckResult, &'static str> {
+fn check_project_version(project: &Project, name: &str, args: &Args) -> Result<CheckResult> {
     let current_version = match get_version_string(name, &project) {
         Ok(version) => version,
         Err(_e) => {
@@ -131,9 +133,11 @@ fn check_project_version(project: &Project, name: &str, args: &Args) -> Result<C
 
     if let Some(architectures) = &project.architecture {
         for (arch_name, _arch_value) in architectures.iter() {
-            // println!("project: {}.{}, Architectures not implemented yet", name, arch_name);
+            if args.verbose {
+                println!("project: {}.{}, Architectures not implemented yet", name, arch_name);
+            }
         }
-        Err("Architectures not implemented")
+        bail!("Architectures are not supported, yet")
     } else {
         match &project.url {
             Some(url) => {
@@ -142,7 +146,7 @@ fn check_project_version(project: &Project, name: &str, args: &Args) -> Result<C
                 } else {
                     match name {
                         "virtiofsd" => check_virtiofsd_version(name, current_version.as_str(), &args),
-                        _ => Err("Warning! Unknown url type")
+                        _ => bail!(format!("unknown url format"))
                     }
                 }
             },
@@ -157,7 +161,7 @@ fn check_project_version(project: &Project, name: &str, args: &Args) -> Result<C
 fn check_language_version(
     name: &str,
     current_version: &str,
-    args: &Args) -> Result<CheckResult, &'static str> {
+    args: &Args) -> Result<CheckResult> {
     match name {
         "golang" => {
             let url = "https://golang.org/VERSION?m=text";
@@ -168,14 +172,15 @@ fn check_language_version(
                         project_name: String::from(name),
                         current_version: String::from(current_version),
                         latest_version: String::from(latest_version),
-                        up_to_date: up_to_date
+                        up_to_date: up_to_date,
+                        success: true,
+                        message: None
                     };
         
                     Ok(check_result)
                 },
                 Err(_e) => {
-                    let message = format!("Warning! Failed to check version for {}", name);
-                    Err("Failed to check version")
+                    bail!(format!("Warning! Failed to check version for {}", name))
                 }
             }
         },
@@ -188,14 +193,15 @@ fn check_language_version(
                         project_name: String::from(name),
                         current_version: String::from(current_version),
                         latest_version: String::from(latest_version),
-                        up_to_date: up_to_date
+                        up_to_date: up_to_date,
+                        success: true,
+                        message: None
                     };
         
                     Ok(check_result)
                 },
                 Err(_e) => {
-                    let message = format!("Warning! Failed to check version for {}", name);
-                    Err("Failed to check version")
+                    bail!(format!("Warning! Failed to check version for {}", name))
                 }
             }
         },
@@ -208,18 +214,19 @@ fn check_language_version(
                         project_name: String::from(name),
                         current_version: String::from(current_version),
                         latest_version: String::from(latest_version),
-                        up_to_date: up_to_date
+                        up_to_date: up_to_date,
+                        success: true,
+                        message: None
                     };
         
                     Ok(check_result)
                 },
                 Err(_e) => {
-                    let message = format!("Warning! Failed to check version for {}", name);
-                    Err("Failed to check version")
+                    bail!(format!("Warning! Failed to check version for {}", name))
                 }
             }
         },
-        _ => Err("Failed to check version")
+        _ => bail!("Failed to check version")
     }
 }
 
@@ -265,7 +272,7 @@ fn check_github_version(
     url: &str,
     current_version: &str,
     name: &str,
-    args: &Args) -> Result<CheckResult, &'static str> {
+    args: &Args) -> Result<CheckResult> {
     match get_github_latest_version(url, &args) {
         Ok(latest_version) => {
             let up_to_date = current_version.eq(&latest_version);
@@ -273,14 +280,15 @@ fn check_github_version(
                 project_name: String::from(name),
                 current_version: String::from(current_version),
                 latest_version: String::from(latest_version),
-                up_to_date: up_to_date
+                up_to_date: up_to_date,
+                success: true,
+                message: None
             };
 
             Ok(check_result)
         },
         Err(_e) => {
-            let message = format!("Warning! Failed to check version for {}", name);
-           Err("Failed to check version")
+            bail!(format!("Warning! Failed to check version for {}", name))
         }
     }
 }
@@ -288,7 +296,7 @@ fn check_github_version(
 fn check_virtiofsd_version(
     name: &str,
     current_version: &str,
-    args: &Args) -> Result<CheckResult, &'static str> {
+    args: &Args) -> Result<CheckResult> {
     let url = "https://gitlab.com/api/v4/projects/21523468/repository/tags";
     match get_virtiofsd_latest_version(url) {
         Ok(latest_version) => {
@@ -297,14 +305,15 @@ fn check_virtiofsd_version(
                 project_name: String::from(name),
                 current_version: String::from(current_version),
                 latest_version: String::from(latest_version),
-                up_to_date: up_to_date
+                up_to_date: up_to_date,
+                success: true,
+                message: None
             };
 
             Ok(check_result)
         },
         Err(_e) => {
-            let message = format!("Warning! Failed to check version for {}", name);
-            Err("Failed to check version")
+            bail!(format!("Warning! Failed to check version for {}", name))
         }
     }
 }
@@ -353,8 +362,6 @@ fn get_latest_version(url: &str) -> Result<String> {
 
     Ok(version_response.clone())
 }
-
-
 
 fn to_github_api_url(url: &str) -> String {
     match url {
