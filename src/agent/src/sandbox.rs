@@ -204,19 +204,17 @@ impl Sandbox {
     }
 
     #[instrument]
-    pub async fn setup_shared_namespaces(&mut self) -> Result<bool> {
+    pub fn setup_shared_namespaces(&mut self) -> Result<bool> {
         // Set up shared IPC namespace
         self.shared_ipcns = Namespace::new(&self.logger)
             .get_ipc()
             .setup()
-            .await
             .context("setup persistent IPC namespace")?;
 
         // // Set up shared UTS namespace
         self.shared_utsns = Namespace::new(&self.logger)
             .get_uts(self.hostname.as_str())
             .setup()
-            .await
             .context("setup persistent UTS namespace")?;
 
         Ok(true)

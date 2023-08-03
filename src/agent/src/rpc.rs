@@ -1188,7 +1188,7 @@ impl agent_ttrpc::AgentService for AgentService {
                 load_kernel_module(m).map_ttrpc_err(same)?;
             }
 
-            s.setup_shared_namespaces().await.map_ttrpc_err(same)?;
+            s.setup_shared_namespaces().map_ttrpc_err(same)?;
         }
 
         let m = add_storages(sl(), req.storages, &self.sandbox, None)

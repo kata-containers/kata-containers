@@ -79,7 +79,7 @@ impl Namespace {
     // Note, pid namespaces cannot be persisted.
     #[instrument]
     #[allow(clippy::question_mark)]
-    pub async fn setup(mut self) -> Result<Self> {
+    pub fn setup(mut self) -> Result<Self> {
         fs::create_dir_all(&self.persistent_ns_dir)?;
 
         let ns_path = PathBuf::from(&self.persistent_ns_dir);
@@ -185,8 +185,8 @@ mod tests {
     use tempfile::Builder;
     use test_utils::skip_if_not_root;
 
-    #[tokio::test]
-    async fn test_setup_persistent_ns() {
+    #[test]
+    fn test_setup_persistent_ns() {
         skip_if_not_root!();
         // Create dummy logger and temp folder.
         let logger = slog::Logger::root(slog::Discard, o!());
@@ -195,8 +195,7 @@ mod tests {
         let ns_ipc = Namespace::new(&logger)
             .get_ipc()
             .set_root_dir(tmpdir.path().to_str().unwrap())
-            .setup()
-            .await;
+            .setup();
 
         assert!(ns_ipc.is_ok());
         assert!(remove_mounts(&[ns_ipc.unwrap().path]).is_ok());
@@ -207,8 +206,7 @@ mod tests {
         let ns_uts = Namespace::new(&logger)
             .get_uts("test_hostname")
             .set_root_dir(tmpdir.path().to_str().unwrap())
-            .setup()
-            .await;
+            .setup();
 
         assert!(ns_uts.is_ok());
         assert!(remove_mounts(&[ns_uts.unwrap().path]).is_ok());
@@ -220,8 +218,7 @@ mod tests {
         let ns_pid = Namespace::new(&logger)
             .get_pid()
             .set_root_dir(tmpdir.path().to_str().unwrap())
-            .setup()
-            .await;
+            .setup();
 
         assert!(ns_pid.is_err());
     }
