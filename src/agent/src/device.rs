@@ -1467,6 +1467,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::redundant_clone)]
     async fn test_virtio_blk_matcher() {
         let root_bus = create_pci_root_bus_path();
         let devname = "vda";
@@ -1551,6 +1552,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::redundant_clone)]
     async fn test_scsi_block_matcher() {
         let root_bus = create_pci_root_bus_path();
         let devname = "sda";
@@ -1581,6 +1583,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::redundant_clone)]
     async fn test_vfio_matcher() {
         let grpa = IommuGroup(1);
         let grpb = IommuGroup(22);
@@ -1602,6 +1605,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::redundant_clone)]
     async fn test_mmio_block_matcher() {
         let devname_a = "vda";
         let devname_b = "vdb";
