@@ -18,7 +18,7 @@ use protocols::image;
 use tokio::sync::Mutex;
 use ttrpc::{self, error::get_rpc_status as ttrpc_error};
 
-use crate::rpc::{verify_cid, CONTAINER_BASE};
+use crate::rpc::CONTAINER_BASE;
 use crate::sandbox::Sandbox;
 use crate::AGENT_CONFIG;
 
@@ -149,7 +149,7 @@ impl ImageService {
         } else {
             return Err(anyhow!("Invalid image name. {}", req.image()));
         };
-        verify_cid(&cid)?;
+        kata_sys_util::validate::verify_id(&cid)?;
         Ok(cid)
     }
 

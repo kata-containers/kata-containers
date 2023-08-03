@@ -145,23 +145,6 @@ pub struct AgentService {
     init_mode: bool,
 }
 
-// A container ID must match this regex:
-//
-//     ^[a-zA-Z0-9][a-zA-Z0-9_.-]+$
-//
-pub fn verify_cid(id: &str) -> Result<()> {
-    let mut chars = id.chars();
-
-    let valid = matches!(chars.next(), Some(first) if first.is_alphanumeric()
-                && id.len() > 1
-                && chars.all(|c| c.is_alphanumeric() || ['.', '-', '_'].contains(&c)));
-
-    match valid {
-        true => Ok(()),
-        false => Err(anyhow!("invalid container ID: {:?}", id)),
-    }
-}
-
 // Partially merge an OCI process specification into another one.
 fn merge_oci_process(target: &mut oci::Process, source: &oci::Process) {
     if target.args.is_empty() && !source.args.is_empty() {
