@@ -199,12 +199,7 @@ impl Vm {
                 cpu_l3_cache_map[*id as usize] = *count;
             }
         }
-        FdtNumaInfo::new(
-            cpu_maps,
-            Some(memory_numa_id),
-            Some(cpu_numa_id),
-            Some(cpu_l3_cache_map),
-        )
+        FdtNumaInfo::new(cpu_maps, memory_numa_id, cpu_numa_id, cpu_l3_cache_map)
     }
 
     /// Generate fdt information about devices

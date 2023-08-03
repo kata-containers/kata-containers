@@ -133,6 +133,8 @@ fn create_cpu_nodes(
     } else {
         HashMap::new()
     };
+    let vcpu_l3_cache_map = fdt_numa_info.get_vcpu_l3_cache_map();
+    let mut non_l1_cache_node_count = 0u32;
 
     for (cpu_index, mpidr) in vcpu_mpidr.iter().enumerate().take(num_cpus) {
         let cpu_name = format!("cpu@{cpu_index:x}");
@@ -151,13 +153,12 @@ fn create_cpu_nodes(
         fdt.property_u64("reg", mpidr & 0x7FFFFF)?;
 
         // See https://github.com/torvalds/linux/blob/master/Documentation/devicetree/bindings/numa.txt
-        if let Some(cpu_numa_id_map) = fdt_numa_info.get_vcpu_numa_id_map() {
-            // Check index here because in cpu hotplug scenario, the length of vcpu_mpidr equals max_vcpu_count,
-            // while numa information is set at boot. To be compatible with this circumstance, add a check here
-            // to ensure the index won't overflow.
-            if cpu_index < cpu_numa_id_map.len() {
-                fdt.property_u32("numa-node-id", cpu_numa_id_map[cpu_index])?;
-            }
+        let cpu_numa_id_map = fdt_numa_info.get_vcpu_numa_id_map();
+        // Check index here because in cpu hotplug scenario, the length of vcpu_mpidr equals max_vcpu_count,
+        // while numa information is set at boot. To be compatible with this circumstance, add a check here
+        // to ensure the index won't overflow.
+        if cpu_index < cpu_numa_id_map.len() {
+            fdt.property_u32("numa-node-id", cpu_numa_id_map[cpu_index])?;
         }
 
         // Currently, dragonball only support binding vcpu on numa level, which means the cache information
@@ -166,12 +167,18 @@ fn create_cpu_nodes(
             // Append L1 cache information to each cpu node.
             append_l1_cache_property(fdt, cache_info.get(&cpu_index).unwrap().0.as_slice())?;
             // Append L2/L3 cache node into each cpu node.
+            let is_append_l3_cache = vcpu_l3_cache_map[cpu_index] == (cpu_index as u32);
             create_non_l1_cache_node(
                 fdt,
                 cache_info.get(&cpu_index).unwrap().1.as_slice(),
                 num_cpus,
                 cpu_index,
+                is_append_l3_cache,
+                non_l1_cache_node_count,
             )?;
+            if is_append_l3_cache {
+                non_l1_cache_node_count += 1;
+            }
         }
 
         fdt.end_node(cpu_node)?;
@@ -206,6 +213,8 @@ fn create_non_l1_cache_node(
     non_l1_caches: &[CacheEntry],
     num_cpus: usize,
     cpu_index: usize,
+    is_append_l3_cache: bool,
+    non_l1_cache_count: u32,
 ) -> Result<()> {
     // Some of the non-l1 caches can be shared amongst CPUs. You can see an example of a shared
     // scenario in https://github.com/devicetree-org/devicetree-specification/releases/download/v0.3/devicetree-specification-v0.3.pdf,
@@ -228,14 +237,11 @@ fn create_non_l1_cache_node(
         // in the list of shared cpus so it needs to be at least 1. Firecracker trusts the host.
         // The operation is safe since we already checked when creating cache attributes that
         // cpus_per_unit is not 0 (.e look for mask_str2bit_count function).
-        let cache_phandle = LAST_CACHE_PHANDLE
-            - (num_cpus * (cache.level - 2) as usize + cpu_index / cache.cpus_per_unit as usize)
-                as u32;
-
-        // In L2 cache, cpus_per_unit = 1, so it belongs to a specific cpu.
-        // In L3 cache, it is shared by all the cpus on the same numa node.
-        let is_append_l3_cache: bool =
-            cache.cpus_per_unit != 1 && (cpu_index % cache.cpus_per_unit as usize) == 0;
+        let cache_phandle = if cache.level == 2 {
+            LAST_CACHE_PHANDLE - cpu_index as u32
+        } else {
+            LAST_CACHE_PHANDLE - (num_cpus as u32 + non_l1_cache_count)
+        };
 
         // Add next-level-cache in the parent node.
         if prev_level != cache.level {
@@ -302,7 +308,7 @@ fn append_non_l1_cache_node(
 fn create_memory_node<M: GuestMemory>(
     fdt: &mut FdtWriter,
     guest_mem: &M,
-    memory_numa_id: Option<&Vec<u32>>,
+    memory_numa_id: &[u32],
 ) -> Result<()> {
     // See https://github.com/torvalds/linux/blob/v5.9/Documentation/devicetree/booting-without-of.rst
     for (index, region) in guest_mem.iter().enumerate() {
@@ -312,7 +318,8 @@ fn create_memory_node<M: GuestMemory>(
         fdt.property_string("device_type", "memory")?;
         fdt.property_array_u64("reg", mem_reg_prop)?;
         // See https://github.com/torvalds/linux/blob/master/Documentation/devicetree/bindings/numa.txt
-        if let Some(memory_numa_id_map) = memory_numa_id {
+        let memory_numa_id_map = memory_numa_id;
+        if index < memory_numa_id_map.len() {
             fdt.property_u32("numa-node-id", memory_numa_id_map[index])?;
         }
         fdt.end_node(memory_node)?;
@@ -807,7 +814,7 @@ mod tests {
                 None,
                 FdtVcpuInfo::new(vcpu_id, vec![1; 128], vpmu_feature, true),
             ),
-            FdtNumaInfo::new(cpu_maps, None, None),
+            FdtNumaInfo::new(cpu_maps, vec![], vec![], vec![0; 128]),
             FdtDeviceInfo::<MMIODeviceInfo>::new(None, gic.as_ref()),
         )
         .unwrap();
@@ -843,7 +850,7 @@ mod tests {
                 None,
                 FdtVcpuInfo::new(vec![0, 1], vec![1; 2], vpmu_feature, false),
             ),
-            FdtNumaInfo::new(None, Some(vec![1, 0]), Some(vec![1, 0])),
+            FdtNumaInfo::new(None, vec![1, 0], vec![1, 0], vec![]),
             FdtDeviceInfo::<MMIODeviceInfo>::new(None, gic.as_ref()),
         )
         .unwrap();

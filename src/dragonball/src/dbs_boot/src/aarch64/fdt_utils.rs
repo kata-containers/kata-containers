@@ -111,20 +111,20 @@ pub struct FdtNumaInfo {
     /// vcpu -> pcpu maps
     cpu_maps: Option<Vec<u8>>,
     /// numa id map vector for memory
-    memory_numa_id_map: Option<Vec<u32>>,
+    memory_numa_id_map: Vec<u32>,
     /// numa id map vector for vcpu
-    vcpu_numa_id_map: Option<Vec<u32>>,
+    vcpu_numa_id_map: Vec<u32>,
     /// vcpu id -> vcpu node id that should append l3 cache
-    vcpu_l3_cache_map: Option<Vec<u32>>,
+    vcpu_l3_cache_map: Vec<u32>,
 }
 
 impl FdtNumaInfo {
     /// Generate FdtNumaInfo.
     pub fn new(
         cpu_maps: Option<Vec<u8>>,
-        memory_numa_id_map: Option<Vec<u32>>,
-        vcpu_numa_id_map: Option<Vec<u32>>,
-        vcpu_l3_cache_map: Option<Vec<u32>>,
+        memory_numa_id_map: Vec<u32>,
+        vcpu_numa_id_map: Vec<u32>,
+        vcpu_l3_cache_map: Vec<u32>,
     ) -> Self {
         FdtNumaInfo {
             cpu_maps,
@@ -140,17 +140,17 @@ impl FdtNumaInfo {
     }
 
     /// Get memory_numa_id_map struct.
-    pub fn get_memory_numa_id_map(&self) -> Option<&Vec<u32>> {
+    pub fn get_memory_numa_id_map(&self) -> &[u32] {
         self.memory_numa_id_map.as_ref()
     }
 
     /// Get vcpu_numa_id_map struct.
-    pub fn get_vcpu_numa_id_map(&self) -> Option<&Vec<u32>> {
+    pub fn get_vcpu_numa_id_map(&self) -> &[u32] {
         self.vcpu_numa_id_map.as_ref()
     }
 
     /// Get vcpu_l3_cache_map struct.
-    pub fn get_vcpu_l3_cache_map(&self) -> Option<&Vec<u32>> {
+    pub fn get_vcpu_l3_cache_map(&self) -> &[u32] {
         self.vcpu_l3_cache_map.as_ref()
     }
 }
@@ -253,13 +253,15 @@ mod tests {
     const CPU_MAPS: [u8; 5] = [1, 2, 3, 4, 5];
     const MEMORY_VEC: [u32; 2] = [0, 1];
     const CPU_VEC: [u32; 5] = [0, 0, 0, 1, 1];
+    const CPU_L3_CACHE: [u32; 5] = [0, 0, 0, 3, 3];
 
     #[inline]
     fn helper_generate_fdt_numa_info() -> FdtNumaInfo {
         FdtNumaInfo::new(
             Some(CPU_MAPS.to_vec()),
-            Some(MEMORY_VEC.to_vec()),
-            Some(CPU_VEC.to_vec()),
+            MEMORY_VEC.to_vec(),
+            CPU_VEC.to_vec(),
+            CPU_L3_CACHE.to_vec(),
         )
     }
 
@@ -267,23 +269,20 @@ mod tests {
     fn test_fdtutils_fdt_numa_info() {
         // test default
         let numa_info = FdtNumaInfo::default();
+        let expected: Vec<u32> = vec![];
         assert_eq!(numa_info.get_cpu_maps(), None);
-        assert_eq!(numa_info.get_memory_numa_id_map(), None);
-        assert_eq!(numa_info.get_vcpu_numa_id_map(), None);
+        assert_eq!(numa_info.get_memory_numa_id_map(), expected.as_slice());
+        assert_eq!(numa_info.get_vcpu_numa_id_map(), expected.as_slice());
+        assert_eq!(numa_info.get_vcpu_l3_cache_map(), expected.as_slice());
 
         let numa_info = helper_generate_fdt_numa_info();
         assert_eq!(
             numa_info.get_cpu_maps().unwrap().as_slice(),
             CPU_MAPS.as_slice()
         );
-        assert_eq!(
-            numa_info.get_memory_numa_id_map().unwrap().as_slice(),
-            MEMORY_VEC.as_slice()
-        );
-        assert_eq!(
-            numa_info.get_vcpu_numa_id_map().unwrap().as_slice(),
-            CPU_VEC.as_slice()
-        );
+        assert_eq!(numa_info.get_memory_numa_id_map(), MEMORY_VEC.as_slice());
+        assert_eq!(numa_info.get_vcpu_numa_id_map(), CPU_VEC.as_slice());
+        assert_eq!(numa_info.get_vcpu_l3_cache_map(), CPU_L3_CACHE.as_slice());
     }
 
     use dbs_arch::gic::its::ItsType;
