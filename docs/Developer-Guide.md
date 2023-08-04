@@ -109,6 +109,22 @@ The runtime automatically will set `selinux=1` to the kernel parameters and `xat
 
 If you want to enable SELinux in Permissive mode, add `enforcing=0` to the kernel parameters.
 
+## Enable AppArmor on the guest
+
+> **Note:**
+>
+> - You MUST create a rootfs image for AppArmor in advance. See [Create a rootfs image](#create-a-rootfs-image).
+> - AppArmor on the guest is supported in only a rootfs image,
+>   so you cannot enable AppArmor with the agent init (`AGENT_INIT=yes`).
+
+Enable guest AppArmor as follows:
+
+```bash
+$ sudo sed -i '/^disable_guest_apparmor/ s/true/false/g' /etc/kata-containers/configuration.toml
+```
+
+The runtime automatically will set `apparmor=1` to the kernel parameters when `disable_guest_apparmor` is set to `false`.
+
 ## Enable full debug
 
 Enable full debug as follows:
@@ -304,6 +320,13 @@ If you want to enable SELinux on the guest, you MUST choose `centos` and run the
 
 ```
 $ script -fec 'sudo -E GOPATH=$GOPATH USE_DOCKER=true SELINUX=yes ./rootfs.sh centos'
+```
+
+If you want to enable AppArmor on the guest, you MUST choose `ubuntu` or `debian`
+and run the `rootfs.sh` script with `AppArmor=yes` as follows.
+
+```bash
+$ script -fec 'sudo -E GOPATH=$GOPATH USE_DOCKER=true APPARMOR=yes ./rootfs.sh ubuntu'
 ```
 
 > **Note:**
