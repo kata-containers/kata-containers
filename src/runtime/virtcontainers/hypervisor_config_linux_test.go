@@ -92,24 +92,26 @@ func TestHypervisorConfigValidTemplateConfig(t *testing.T) {
 func TestHypervisorConfigDefaults(t *testing.T) {
 	assert := assert.New(t)
 	hypervisorConfig := &HypervisorConfig{
-		KernelPath:          fmt.Sprintf("%s/%s", testDir, testKernel),
-		ImagePath:           fmt.Sprintf("%s/%s", testDir, testImage),
-		HypervisorPath:      "",
-		DisableGuestSeLinux: defaultDisableGuestSeLinux,
+		KernelPath:           fmt.Sprintf("%s/%s", testDir, testKernel),
+		ImagePath:            fmt.Sprintf("%s/%s", testDir, testImage),
+		HypervisorPath:       "",
+		DisableGuestSeLinux:  defaultDisableGuestSeLinux,
+		DisableGuestAppArmor: defaultDisableGuestAppArmor,
 	}
 	testHypervisorConfigValid(t, hypervisorConfig, true)
 
 	hypervisorConfigDefaultsExpected := &HypervisorConfig{
-		KernelPath:          fmt.Sprintf("%s/%s", testDir, testKernel),
-		ImagePath:           fmt.Sprintf("%s/%s", testDir, testImage),
-		HypervisorPath:      "",
-		NumVCPUs:            defaultVCPUs,
-		MemorySize:          defaultMemSzMiB,
-		DefaultBridges:      defaultBridges,
-		BlockDeviceDriver:   defaultBlockDriver,
-		DefaultMaxVCPUs:     defaultMaxVCPUs,
-		Msize9p:             defaultMsize9p,
-		DisableGuestSeLinux: defaultDisableGuestSeLinux,
+		KernelPath:           fmt.Sprintf("%s/%s", testDir, testKernel),
+		ImagePath:            fmt.Sprintf("%s/%s", testDir, testImage),
+		HypervisorPath:       "",
+		NumVCPUs:             defaultVCPUs,
+		MemorySize:           defaultMemSzMiB,
+		DefaultBridges:       defaultBridges,
+		BlockDeviceDriver:    defaultBlockDriver,
+		DefaultMaxVCPUs:      defaultMaxVCPUs,
+		Msize9p:              defaultMsize9p,
+		DisableGuestSeLinux:  defaultDisableGuestSeLinux,
+		DisableGuestAppArmor: defaultDisableGuestAppArmor,
 	}
 
 	assert.Exactly(hypervisorConfig, hypervisorConfigDefaultsExpected)

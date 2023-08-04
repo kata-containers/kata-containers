@@ -79,6 +79,8 @@ const (
 	defaultMsize9p = 8192
 
 	defaultDisableGuestSeLinux = true
+
+	defaultDisableGuestAppArmor = true
 )
 
 var (
@@ -637,6 +639,9 @@ type HypervisorConfig struct {
 
 	// Disable selinux from the container process
 	DisableGuestSeLinux bool
+
+	// Disable apparmor from the container process
+	DisableGuestAppArmor bool
 
 	// Use legacy serial for the guest console
 	LegacySerial bool

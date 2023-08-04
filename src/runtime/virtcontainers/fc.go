@@ -714,6 +714,15 @@ func (fc *firecracker) fcInitConfiguration(ctx context.Context) error {
 		}...)
 	}
 
+	// Set the AppArmor param in accordance with the runtime configuration, disable_guest_apparmor.
+	if fc.config.DisableGuestAppArmor {
+		fc.Logger().Info("Set apparmor=0 to kernel params because AppArmor on the guest is disabled")
+		fcKernelParams = append(fcKernelParams, Param{"apparmor", "0"})
+	} else {
+		fc.Logger().Info("Set apparmor=1 to kernel params because AppArmor on the guest is enabled")
+		fcKernelParams = append(fcKernelParams, Param{"apparmor", "1"}, Param{"security", "apparmor"})
+	}
+
 	kernelParams := append(fc.config.KernelParams, fcKernelParams...)
 	strParams := SerializeParams(kernelParams, "=")
 	formattedParams := strings.Join(strParams, " ")

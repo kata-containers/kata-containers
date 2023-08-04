@@ -75,16 +75,17 @@ type RuntimeConfigInfo struct {
 
 // RuntimeInfo stores runtime details.
 type RuntimeInfo struct {
-	Config              RuntimeConfigInfo
-	Path                string
-	GuestSeLinuxLabel   string
-	Experimental        []exp.Feature
-	Version             RuntimeVersionInfo
-	Debug               bool
-	Trace               bool
-	DisableGuestSeccomp bool
-	DisableNewNetNs     bool
-	SandboxCgroupOnly   bool
+	Config               RuntimeConfigInfo
+	Path                 string
+	GuestSeLinuxLabel    string
+	GuestAppArmorProfile string
+	Experimental         []exp.Feature
+	Version              RuntimeVersionInfo
+	Debug                bool
+	Trace                bool
+	DisableGuestSeccomp  bool
+	DisableNewNetNs      bool
+	SandboxCgroupOnly    bool
 }
 
 type VersionInfo struct {
@@ -179,16 +180,17 @@ func getRuntimeInfo(configFile string, config oci.RuntimeConfig) RuntimeInfo {
 	runtimePath, _ := os.Executable()
 
 	return RuntimeInfo{
-		Debug:               config.Debug,
-		Trace:               config.Trace,
-		Version:             runtimeVersion,
-		Config:              runtimeConfig,
-		Path:                runtimePath,
-		DisableNewNetNs:     config.DisableNewNetNs,
-		SandboxCgroupOnly:   config.SandboxCgroupOnly,
-		Experimental:        config.Experimental,
-		DisableGuestSeccomp: config.DisableGuestSeccomp,
-		GuestSeLinuxLabel:   config.GuestSeLinuxLabel,
+		Debug:                config.Debug,
+		Trace:                config.Trace,
+		Version:              runtimeVersion,
+		Config:               runtimeConfig,
+		Path:                 runtimePath,
+		DisableNewNetNs:      config.DisableNewNetNs,
+		SandboxCgroupOnly:    config.SandboxCgroupOnly,
+		Experimental:         config.Experimental,
+		DisableGuestSeccomp:  config.DisableGuestSeccomp,
+		GuestSeLinuxLabel:    config.GuestSeLinuxLabel,
+		GuestAppArmorProfile: config.GuestAppArmorProfile,
 	}
 }
 

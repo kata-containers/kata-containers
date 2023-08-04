@@ -230,6 +230,15 @@ valid_entropy_sources = @DEFVALIDENTROPYSOURCES@
 # disable applying SELinux on the VMM process (default false)
 disable_selinux=@DEFDISABLESELINUX@
 
+# disable applying AppArmor profile on the container process
+# If set to false, the kata-default profile is applied to the container process by default.
+# The kata-default profile is based on the containerd's default profile:
+# https://github.com/containerd/containerd/blob/v1.7.3/contrib/apparmor/template.go
+# Note: To enable guest apparmor, the guest rootfs must be Ubuntu or Debian that is
+# created with `APPARMOR=yes`.
+# (default: true)
+disable_guest_apparmor=@DEFDISABLEGUESTAPPARMOR@
+
 [factory]
 # VM templating support. Once enabled, new VMs are created from template
 # using vm cloning. They will share the same initial kernel, initramfs and
@@ -317,6 +326,12 @@ internetworking_model="@DEFNETWORKMODEL_FC@"
 # within the guest
 # (default: true)
 disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
+
+# Apply a custom AppArmor profile to the container process inside the VM.
+# This is used when you want to apply your custom profile rather than the default
+# profile, `kata-default`. You need to put the custom profile under `/etc/apparmor.d`
+# in the guest rootfs
+#guest_apparmor_profile="@DEFGUESTAPPARMORPROFILE@"
 
 # If enabled, the runtime will create opentracing.io traces and spans.
 # (See https://www.jaegertracing.io/docs/getting-started).

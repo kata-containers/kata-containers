@@ -133,6 +133,9 @@ type SandboxConfig struct {
 	// Custom SELinux security policy to the container process inside the VM
 	GuestSeLinuxLabel string
 
+	// Custom AppArmor profile to the container process inside the VM
+	GuestAppArmorProfile string
+
 	HypervisorType HypervisorType
 
 	ID string
