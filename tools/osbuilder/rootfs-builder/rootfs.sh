@@ -27,6 +27,7 @@ LIBC=${LIBC:-musl}
 # However, it is not enforced by default: you need to enable that in the main configuration file.
 SECCOMP=${SECCOMP:-"yes"}
 SELINUX=${SELINUX:-"no"}
+APPARMOR=${APPARMOR:-"no"}
 AGENT_POLICY=${AGENT_POLICY:-no}
 
 lib_file="${script_dir}/../scripts/lib.sh"
@@ -158,6 +159,9 @@ SECCOMP             When set to "no", the kata-agent is built without seccomp ca
 SELINUX             When set to "yes", build the rootfs with the required packages to
                     enable SELinux in the VM.
                     Make sure the guest kernel is compiled with SELinux enabled.
+                    Default value: "no"
+
+APPARMOR            When set to "yes", the kata-agent is built with apparmor capability.
                     Default value: "no"
 
 USE_DOCKER          If set, build the rootfs inside a container (requires
@@ -458,6 +462,7 @@ build_rootfs_distro()
 			--env INSIDE_CONTAINER=1 \
 			--env SECCOMP="${SECCOMP}" \
 			--env SELINUX="${SELINUX}" \
+			--env APPARMOR="${APPARMOR}" \
 			--env DEBUG="${DEBUG}" \
 			--env HOME="/root" \
 			--env AGENT_POLICY="${AGENT_POLICY}" \
@@ -692,6 +697,12 @@ EOF
 		install -D -o root -g root -m 0644 "${kata_opa_unit}" -T "${kata_opa_unit_path}"
 		mkdir -p "${kata_containers_wants}"
 		ln -sf "${kata_opa_unit_path}" "${kata_containers_wants}/${kata_opa_unit}"
+	fi
+
+	if [ "${APPARMOR}" == "yes" ]; then
+		info "Copy the AppArmor default profile to the guest rootfs"
+		mkdir -p "${ROOTFS_DIR}/etc/apparmor.d"
+		cp "${script_dir}/template/apparmor/kata-default" "${ROOTFS_DIR}/etc/apparmor.d"
 	fi
 
 	info "Check init is installed"

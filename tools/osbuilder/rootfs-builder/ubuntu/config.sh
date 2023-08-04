@@ -9,6 +9,7 @@ PACKAGES="chrony iptables dbus"
 [ "$AGENT_INIT" = no ] && PACKAGES+=" init"
 [ "$MEASURED_ROOTFS" = yes ] && PACKAGES+=" cryptsetup-bin e2fsprogs"
 [ "$SECCOMP" = yes ] && PACKAGES+=" libseccomp2"
+[ "$APPARMOR" = yes ] && PACKAGES+=" apparmor"
 REPO_URL=http://ports.ubuntu.com
 
 case "$ARCH" in
