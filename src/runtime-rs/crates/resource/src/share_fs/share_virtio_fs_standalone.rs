@@ -173,9 +173,16 @@ impl ShareFs for ShareVirtioFsStandalone {
     }
 
     async fn setup_device_before_start_vm(&self, h: &dyn Hypervisor) -> Result<()> {
-        prepare_virtiofs(h, VIRTIO_FS, &self.config.id, &h.get_jailer_root().await?)
-            .await
-            .context("prepare virtiofs")?;
+        prepare_virtiofs(
+            h,
+            VIRTIO_FS,
+            &self.config.id,
+            &h.get_jailer_root().await?,
+            vec![],
+            None,
+        )
+        .await
+        .context("prepare virtiofs")?;
         self.setup_virtiofsd(h).await.context("setup virtiofsd")?;
         Ok(())
     }

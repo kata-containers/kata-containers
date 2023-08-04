@@ -30,6 +30,7 @@ pub(crate) fn ensure_dir_exist(path: &Path) -> Result<()> {
     if !path.exists() {
         std::fs::create_dir_all(path).context(format!("failed to create directory {:?}", path))?;
     }
+
     Ok(())
 }
 
@@ -58,6 +59,7 @@ pub(crate) fn share_to_guest(
 
     Ok(do_get_guest_path(target, cid, is_volume, is_rafs))
 }
+
 // Shared path handling:
 // 1. create two directories for each sandbox:
 // -. /run/kata-containers/shared/sandboxes/$sbx_id/rw/, a host/guest shared directory which is rw
@@ -133,4 +135,96 @@ pub fn do_get_host_path(
         get_host_path(sid).join(dir).join(cid).join(target)
     };
     path.to_str().unwrap().to_string()
+}
+
+// default: /run/kata-containers/shared/sandboxes/<sid>/ro
+// virtiofs_device: /run/kata-containers/shared/sandboxes/<sid>/<virtiofs_device>/ro
+pub fn get_host_ro_shared_subpath(sid: &str, virtiofs_device: Option<&str>) -> PathBuf {
+    let host_ro_dest = if let Some(name) = virtiofs_device {
+        Path::new(KATA_HOST_SHARED_DIR)
+            .join(sid)
+            .join(name)
+            .join("ro")
+    } else {
+        get_host_ro_shared_path(sid)
+    };
+
+    host_ro_dest
+}
+
+// default: /run/kata-containers/shared/sandboxes/<sid>/rw
+// virtiofs_device: /run/kata-containers/shared/sandboxes/<sid>/<virtiofs_device>/rw
+pub fn get_host_rw_shared_subpath(sid: &str, virtiofs_device: Option<&str>) -> PathBuf {
+    let host_rw_dest = if let Some(name) = virtiofs_device {
+        Path::new(KATA_HOST_SHARED_DIR)
+            .join(sid)
+            .join(name)
+            .join("rw")
+    } else {
+        get_host_rw_shared_path(sid)
+    };
+
+    host_rw_dest
+}
+
+// /run/kata-containers/shared/sandboxes/<sid>/<virtiofs_device>/rw/passthrough/<target_dir>/
+pub fn get_host_shared_subpath(
+    sid: &str,
+    virtiofs_device: Option<&str>,
+    target_dir: &str,
+    read_only: bool,
+) -> PathBuf {
+    if let Some(virtiofs_dev) = virtiofs_device {
+        PathBuf::from(do_get_host_path(
+            target_dir,
+            sid,
+            virtiofs_dev,
+            true,
+            read_only,
+        ))
+    } else {
+        PathBuf::from(do_get_host_path(target_dir, sid, "", true, read_only))
+    }
+}
+
+pub fn parse_sharefs_special_volumes(
+    devices: HashSet<&str>,
+    special_volumes: Vec<String>,
+) -> Result<HashMap<String, MountedInfo>> {
+    let mut mount_info_map: HashMap<String, MountedInfo> = HashMap::new();
+    if devices.is_empty() || special_volumes.is_empty() {
+        return Ok(mount_info_map);
+    }
+
+    let mut volume_devices: HashMap<String, String> = HashMap::new();
+    for dev_vol in special_volumes {
+        let tokens: Vec<&str> = dev_vol.split(':').collect();
+        if tokens.len() != 2 {
+            return Err(anyhow!("dev_vol is invalid."));
+        }
+
+        let (device, volumes) = (tokens[0], tokens[1]);
+        if !devices.contains(device) {
+            return Err(anyhow!(
+                "special dev_vol with virtiofs device {:?} not exist.",
+                device
+            ));
+        }
+
+        for v in volumes.split(',').map(str::trim) {
+            volume_devices
+                .entry(String::from(v))
+                .or_insert(device.to_string());
+        }
+    }
+
+    mount_info_map.insert(
+        MULTI_VIRTIOFS.to_string(),
+        MountedInfo {
+            volume_devices: Some(volume_devices),
+            ..Default::default()
+        },
+    );
+
+    Ok(mount_info_map)
 }

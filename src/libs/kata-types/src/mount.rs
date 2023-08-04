@@ -3,9 +3,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 //
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+    path::PathBuf,
+};
 
 use anyhow::{anyhow, Context, Result};
-use std::{collections::HashMap, fs, path::PathBuf};
+
+use crate::config::default::DEFAULT_VIRTIOFS_DEVICE;
 
 /// Prefix to mark a volume as Kata special.
 pub const KATA_VOLUME_TYPE_PREFIX: &str = "kata:";
@@ -29,10 +35,10 @@ pub const KATA_DIRECT_VOLUME_ROOT_PATH: &str = "/run/kata-containers/shared/dire
 pub const SANDBOX_BIND_MOUNTS_DIR: &str = "sandbox-mounts";
 
 /// SANDBOX_BIND_MOUNTS_RO is for sandbox bindmounts with readonly
-pub const SANDBOX_BIND_MOUNTS_RO: &str = ":ro";
+pub const SANDBOX_BIND_MOUNTS_RO: &str = "@ro";
 
 /// SANDBOX_BIND_MOUNTS_RO is for sandbox bindmounts with readwrite
-pub const SANDBOX_BIND_MOUNTS_RW: &str = ":rw";
+pub const SANDBOX_BIND_MOUNTS_RW: &str = "@rw";
 
 /// Information about a mount.
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
@@ -159,25 +165,73 @@ impl NydusExtraOptions {
     }
 }
 
-/// sandbox bindmount format:  /path/to/dir, or /path/to/dir:ro[:rw]
-/// the real path is without suffix ":ro" or ":rw".
-pub fn split_bind_mounts(bindmount: &str) -> (&str, &str) {
-    let (real_path, mode) = if bindmount.ends_with(SANDBOX_BIND_MOUNTS_RO) {
+/// sandbox bindmount format: default:/path/to/dir, or virtiofs_dev:/path/to/dir@ro[@rw]
+/// the real path is without suffix "@ro" or "@rw".
+/// return (virtiofs_device, real path, read/write mode)
+pub fn split_bind_mounts(bindmount: &str) -> (&str, &str, &str) {
+    // ensure that only two element exist in fields
+    let fields: Vec<&str> = match bindmount.find(':') {
+        Some(index) => {
+            let (left, right) = bindmount.split_at(index);
+            vec![left, &right[1..]]
+        }
+        None => vec![DEFAULT_VIRTIOFS_DEVICE, bindmount],
+    };
+
+    let (real_path, mode) = if fields[1].ends_with(SANDBOX_BIND_MOUNTS_RO) {
         (
-            bindmount.trim_end_matches(SANDBOX_BIND_MOUNTS_RO),
+            fields[1].trim_end_matches(SANDBOX_BIND_MOUNTS_RO),
             SANDBOX_BIND_MOUNTS_RO,
         )
-    } else if bindmount.ends_with(SANDBOX_BIND_MOUNTS_RW) {
+    } else if fields[1].ends_with(SANDBOX_BIND_MOUNTS_RW) {
         (
-            bindmount.trim_end_matches(SANDBOX_BIND_MOUNTS_RW),
+            fields[1].trim_end_matches(SANDBOX_BIND_MOUNTS_RW),
             SANDBOX_BIND_MOUNTS_RW,
         )
     } else {
         // default bindmount format
-        (bindmount, "")
+        (fields[1], SANDBOX_BIND_MOUNTS_RO)
     };
 
-    (real_path, mode)
+    (fields[0], real_path, mode)
+}
+
+/// do parse sandbox bind mounts annotation: from String to Vector.
+/// return looks like [virtiofs_name01:path01, virtiofs_name022:path01@rw, default:path01]
+pub fn parse_sandbox_bind_mounts(bindmounts_anno: &str) -> Vec<String> {
+    let mut sandbox_bindmounts: Vec<String> = Vec::new();
+
+    let bind_mounts: Vec<&str> = bindmounts_anno
+        .trim()
+        .split(';')
+        .map(|v| v.trim())
+        .collect();
+
+    for bindmnt in bind_mounts.iter() {
+        if bindmnt.is_empty() {
+            continue;
+        }
+
+        // split the bindmounts string "virtiofs_name01:path01 path02 path03"
+        // into (virtiofs_name01, [path01 path02 path03]) or "path02 path03" into (default, [path02 path03])
+        let bindmount_fields: Vec<&str> = bindmnt.split(':').map(|v| v.trim()).collect();
+        let (virtiofs_name, host_paths) = match bindmount_fields.len() {
+            1 => (DEFAULT_VIRTIOFS_DEVICE, bindmount_fields[0]),
+            2 => (bindmount_fields[0], bindmount_fields[1]),
+            _ => return vec![],
+        };
+
+        // ensure the path without whitespace, and remove duplicated paths.
+        // [virtiofs_name01:path01, virtiofs_name01:path01@rw, virtiofs_name01:path01@ro]
+        let volumes: HashSet<String> = host_paths
+            .split_whitespace()
+            .map(|s| format!("{}:{}", virtiofs_name, s.trim()))
+            .collect();
+
+        sandbox_bindmounts.extend(volumes.into_iter());
+    }
+
+    sandbox_bindmounts
 }
 
 #[cfg(test)]
@@ -190,15 +244,64 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_sandbox_bind_mounts() {
+        let test01 = "dev01:/path01@ro /path02@ro;dev02:/path03@rw /path04@rw; /path05 /path06";
+        let test02 = "/path05@ro /path06@rw ";
+        let test03 = "/path05    /path06";
+        let test04 = "  /path05@ro ";
+        let test05 = "dev03: /path07@ro /path08;";
+
+        let mounts01 = parse_sandbox_bind_mounts(test01);
+        let mounts02 = parse_sandbox_bind_mounts(test02);
+        let mounts03 = parse_sandbox_bind_mounts(test03);
+        let mounts04 = parse_sandbox_bind_mounts(test04);
+        let mounts05 = parse_sandbox_bind_mounts(test05);
+        let result01: HashSet<&str> = mounts01.iter().map(|s| s.as_str()).collect();
+        let result02: HashSet<&str> = mounts02.iter().map(|s| s.as_str()).collect();
+        let result03: HashSet<&str> = mounts03.iter().map(|s| s.as_str()).collect();
+        let result04: HashSet<&str> = mounts04.iter().map(|s| s.as_str()).collect();
+        let result05: HashSet<&str> = mounts05.iter().map(|s| s.as_str()).collect();
+
+        let test01_parsed: HashSet<&str> = vec![
+            "dev01:/path01@ro",
+            "dev01:/path02@ro",
+            "dev02:/path03@rw",
+            "dev02:/path04@rw",
+            "default:/path05",
+            "default:/path06",
+        ]
+        .into_iter()
+        .collect();
+        let test02_parsed: HashSet<&str> = vec!["default:/path05@ro", "default:/path06@rw"]
+            .into_iter()
+            .collect();
+        let test03_parsed: HashSet<&str> = vec!["default:/path05", "default:/path06"]
+            .into_iter()
+            .collect();
+        let test04_parsed: HashSet<&str> = vec!["default:/path05@ro"].into_iter().collect();
+        let test05_parsed: HashSet<&str> = vec!["dev03:/path07@ro", "dev03:/path08"]
+            .into_iter()
+            .collect();
+
+        assert_eq!(result01, test01_parsed);
+        assert_eq!(result02, test02_parsed);
+        assert_eq!(result03, test03_parsed);
+        assert_eq!(result04, test04_parsed);
+        assert_eq!(result05, test05_parsed);
+    }
+
+    #[test]
     fn test_split_bind_mounts() {
-        let test01 = "xxx0:ro";
-        let test02 = "xxx2:rw";
-        let test03 = "xxx3:is";
-        let test04 = "xxx4";
-        assert_eq!(split_bind_mounts(test01), ("xxx0", ":ro"));
-        assert_eq!(split_bind_mounts(test02), ("xxx2", ":rw"));
-        assert_eq!(split_bind_mounts(test03), ("xxx3:is", ""));
-        assert_eq!(split_bind_mounts(test04), ("xxx4", ""));
+        let test01 = "dev0:xxx0@ro";
+        let test02 = "dev2:xxx2@rw";
+        let test03 = "default:xxx3:is";
+        let test04 = "default:xxx4";
+        let test05 = "xxx5";
+        assert_eq!(split_bind_mounts(test01), ("dev0", "xxx0", "@ro"));
+        assert_eq!(split_bind_mounts(test02), ("dev2", "xxx2", "@rw"));
+        assert_eq!(split_bind_mounts(test03), ("default", "xxx3:is", "@ro"));
+        assert_eq!(split_bind_mounts(test04), ("default", "xxx4", "@ro"));
+        assert_eq!(split_bind_mounts(test05), ("default", "xxx5", "@ro"));
     }
 
     #[test]

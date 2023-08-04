@@ -8,7 +8,7 @@ use std::path::Path;
 
 use super::default;
 use crate::config::{ConfigOps, TomlConfig};
-use crate::mount::split_bind_mounts;
+use crate::mount::{split_bind_mounts, SANDBOX_BIND_MOUNTS_RO, SANDBOX_BIND_MOUNTS_RW};
 use crate::{eother, validate_path};
 
 /// Type of runtime VirtContainer.
@@ -74,6 +74,12 @@ pub struct Runtime {
     /// guest services.
     #[serde(default)]
     pub sandbox_bind_mounts: Vec<String>,
+
+    /// The format of the special volumes is as below:
+    /// ["<virtiofs_dev01>:volume1,volume2,volume3", "<virtiofs_dev02>:volume4,volume5"]
+    /// The volumeX should use the container's path and
+    #[serde(default)]
+    pub sharefs_special_volumes: Vec<String>,
 
     /// If enabled, the runtime will add all the kata processes inside one dedicated cgroup.
     ///
@@ -148,11 +154,12 @@ impl ConfigOps for Runtime {
 
         for bind in conf.runtime.sandbox_bind_mounts.iter_mut() {
             // Split the bind mount, canonicalize the path and then append rw mode to it.
-            let (real_path, mode) = split_bind_mounts(bind);
+            let (virtiofs_device, real_path, mode) = split_bind_mounts(bind);
             match Path::new(real_path).canonicalize() {
                 Err(e) => return Err(eother!("sandbox bind mount `{}` is invalid: {}", bind, e)),
                 Ok(path) => {
-                    *bind = format!("{}{}", path.display(), mode);
+                    // [default:host_path01@ro, virtiofs_dev:host_path02@ro]
+                    *bind = format!("{}:{}{}", virtiofs_device, path.display(), mode);
                 }
             }
         }
@@ -183,13 +190,21 @@ impl ConfigOps for Runtime {
             ));
         }
 
+        let bindmnt_types = vec![SANDBOX_BIND_MOUNTS_RO, SANDBOX_BIND_MOUNTS_RW];
         for bind in conf.runtime.sandbox_bind_mounts.iter() {
             // Just validate the real_path.
-            let (real_path, _mode) = split_bind_mounts(bind);
+            let (_virtiofs_dev, real_path, mode) = split_bind_mounts(bind);
             validate_path!(
                 real_path.to_owned(),
                 "sandbox bind mount `{}` is invalid: {}"
             )?;
+
+            if !bindmnt_types.contains(&mode) {
+                return Err(eother!(
+                    "Invalid sandbox bind mode `{}` in configuration file",
+                    mode
+                ));
+            }
         }
 
         Ok(())

@@ -37,6 +37,9 @@ pub const DEFAULT_VHOST_USER_STORE_PATH: &str = "/var/run/vhost-user";
 pub const DEFAULT_BLOCK_NVDIMM_MEM_OFFSET: u64 = 0;
 
 pub const DEFAULT_SHARED_FS_TYPE: &str = "virtio-fs";
+
+pub const DEFAULT_VIRTIOFS_DEVICE: &str = "default";
+
 pub const DEFAULT_VIRTIO_FS_CACHE_MODE: &str = "never";
 pub const DEFAULT_VIRTIO_FS_DAX_SIZE_MB: u32 = 1024;
 pub const DEFAULT_SHARED_9PFS_SIZE_MB: u32 = 128 * 1024;

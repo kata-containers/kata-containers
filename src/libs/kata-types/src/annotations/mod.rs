@@ -4,21 +4,24 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::collections::HashMap;
-use std::fs::File;
-use std::io::{self, BufReader, Result};
-use std::result::{self};
-use std::u32;
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::{self, BufReader, Result},
+    result, u32,
+};
 
 use serde::Deserialize;
 
-use crate::config::default::DEFAULT_AGENT_TYPE_NAME;
-use crate::config::default::DEFAULT_HYPERVISOR;
-use crate::config::default::DEFAULT_RUNTIME_NAME;
-use crate::config::hypervisor::get_hypervisor_plugin;
-
-use crate::config::TomlConfig;
-use crate::sl;
+use crate::{
+    config::{
+        default::{DEFAULT_AGENT_TYPE_NAME, DEFAULT_HYPERVISOR, DEFAULT_RUNTIME_NAME},
+        hypervisor::get_hypervisor_plugin,
+        TomlConfig,
+    },
+    mount::parse_sandbox_bind_mounts,
+    sl,
+};
 
 use self::cri_containerd::{SANDBOX_CPU_PERIOD_KEY, SANDBOX_CPU_QUOTA_KEY, SANDBOX_MEM_KEY};
 
@@ -316,9 +319,22 @@ pub const KATA_ANNO_CFG_VFIO_MODE: &str = "io.katacontainers.config.runtime.vfio
 pub const KATA_ANNO_CFG_HYPERVISOR_PREFETCH_FILES_LIST: &str =
     "io.katacontainers.config.hypervisor.prefetch_files.list";
 
+/// The format of the extra virtiofs is as below:
+/// <virtiofs name>:[parameter parameter];<virtiofs name>:[parameter parameter]
+/// for example:
+/// "virtiofs_device_001: -o cache=none,xattr,writeback,trace,cache_symlinks;"
+pub const KATA_ANNO_CFG_HYPERVISOR_EXTRA_VIRTIOFS: &str =
+    "io.katacontainers.config.hypervisor.extra_virtiofs";
+
 /// A sandbox annotation for sandbox level volume sharing with host.
 pub const KATA_ANNO_CFG_SANDBOX_BIND_MOUNTS: &str =
     "io.katacontainers.config.runtime.sandbox_bind_mounts";
+
+/// The format of the special volumes is as below:
+/// <virtiofs name01>:volume1,volume2;<virtiofs name02>:volume4,volume5
+/// The volumeX is the container's path.
+pub const KATA_ANNO_CFG_SHAREFS_SPECIAL_VOLUMES: &str =
+    "io.katacontainers.config.runtime.special_volumes";
 
 /// A helper structure to query configuration information by check annotations.
 #[derive(Debug, Default, Deserialize)]
@@ -852,6 +868,13 @@ impl Annotation {
                             hv.shared_fs.virtio_fs_extra_args.push(arg.to_string());
                         }
                     }
+                    KATA_ANNO_CFG_HYPERVISOR_EXTRA_VIRTIOFS => {
+                        hv.shared_fs.extra_virtiofs = value
+                            .trim()
+                            .split(';')
+                            .map(|v| v.trim().to_string())
+                            .collect();
+                    }
                     KATA_ANNO_CFG_HYPERVISOR_MSIZE_9P => match self.get_value::<u32>(key) {
                         Ok(v) => {
                             hv.shared_fs.msize_9p = v.unwrap_or_default();
@@ -955,14 +978,12 @@ impl Annotation {
                         config.runtime.vfio_mode = value.to_string();
                     }
                     KATA_ANNO_CFG_SANDBOX_BIND_MOUNTS => {
-                        let args: Vec<String> = value
-                            .to_string()
-                            .split_ascii_whitespace()
-                            .map(str::to_string)
-                            .collect();
-                        for arg in args {
-                            config.runtime.sandbox_bind_mounts.push(arg.to_string());
-                        }
+                        config.runtime.sandbox_bind_mounts = parse_sandbox_bind_mounts(value);
+                    }
+                    KATA_ANNO_CFG_SHAREFS_SPECIAL_VOLUMES => {
+                        let special_volumes: Vec<String> =
+                            value.split(';').map(|v| String::from(v.trim())).collect();
+                        config.runtime.sharefs_special_volumes = special_volumes;
                     }
                     _ => {
                         warn!(sl!(), "Annotation {} not enabled", key);

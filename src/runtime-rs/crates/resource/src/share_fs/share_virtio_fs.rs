@@ -39,11 +39,13 @@ pub(crate) async fn prepare_virtiofs(
     fs_type: &str,
     id: &str,
     root: &str,
+    options: Vec<String>,
+    device: Option<&str>,
 ) -> Result<()> {
-    let host_ro_dest = utils::get_host_ro_shared_path(id);
+    let host_ro_dest = utils::get_host_ro_shared_subpath(id, device);
     utils::ensure_dir_exist(&host_ro_dest)?;
 
-    let host_rw_dest = utils::get_host_rw_shared_path(id);
+    let host_rw_dest = utils::get_host_rw_shared_subpath(id, device);
     utils::ensure_dir_exist(&host_rw_dest)?;
 
     mount::bind_mount_unchecked(&host_rw_dest, &host_ro_dest, true, MsFlags::MS_SLAVE)
@@ -57,25 +59,33 @@ pub(crate) async fn prepare_virtiofs(
             fs_type: fs_type.to_string(),
             queue_size: 0,
             queue_num: 0,
-            options: vec![],
+            options,
         },
     };
+
     h.add_device(DeviceType::ShareFs(share_fs_device))
         .await
         .context("add device")?;
+
     Ok(())
 }
 
-pub(crate) async fn setup_inline_virtiofs(id: &str, h: &dyn Hypervisor) -> Result<()> {
+pub(crate) async fn setup_inline_virtiofs(
+    id: &str,
+    device_name: Option<&str>,
+    h: &dyn Hypervisor,
+) -> Result<()> {
     // - source is the absolute path of PASSTHROUGH_FS_DIR on host, e.g.
     //   /run/kata-containers/shared/sandboxes/<sid>/passthrough
     // - mount point is the path relative to KATA_GUEST_SHARE_DIR in guest
     let mnt = format!("/{}", PASSTHROUGH_FS_DIR);
-
-    let rw_source = utils::get_host_rw_shared_path(id).join(PASSTHROUGH_FS_DIR);
+    // /run/kata-containers/shared/sandboxes/<sid>/rw/passthrough
+    // /run/kata-containers/shared/sandboxes/<sid>/<device_name>/rw/passthrough
+    let rw_source = utils::get_host_rw_shared_subpath(id, device_name).join(PASSTHROUGH_FS_DIR);
     utils::ensure_dir_exist(&rw_source).context("ensure directory exist")?;
 
-    let ro_source = utils::get_host_ro_shared_path(id).join(PASSTHROUGH_FS_DIR);
+    // /run/kata-containers/shared/sandboxes/<sid>/<device_name>/ro/passthrough
+    let ro_source = utils::get_host_ro_shared_subpath(id, device_name).join(PASSTHROUGH_FS_DIR);
     let source = String::from(ro_source.to_str().unwrap());
 
     let virtio_fs = ShareFsMountDevice {
@@ -89,6 +99,7 @@ pub(crate) async fn setup_inline_virtiofs(id: &str, h: &dyn Hypervisor) -> Resul
             prefetch_list_path: None,
         },
     };
+
     h.add_device(DeviceType::ShareFsMount(virtio_fs))
         .await
         .with_context(|| format!("fail to attach passthrough fs {:?}", source))

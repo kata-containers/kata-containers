@@ -10,23 +10,30 @@ mod share_virtio_fs_inline;
 use share_virtio_fs_inline::ShareVirtioFsInline;
 mod share_virtio_fs_standalone;
 use share_virtio_fs_standalone::ShareVirtioFsStandalone;
+
 mod utils;
-use tokio::sync::Mutex;
 pub use utils::{
     do_get_guest_path, do_get_guest_share_path, do_get_host_path, get_host_rw_shared_path,
+    get_host_shared_subpath,
 };
 mod virtio_fs_share_mount;
 use virtio_fs_share_mount::VirtiofsShareMount;
 pub use virtio_fs_share_mount::EPHEMERAL_PATH;
 pub mod sandbox_bind_mounts;
 
-use std::{collections::HashMap, fmt::Debug, path::PathBuf, sync::Arc};
-
-use agent::Storage;
 use anyhow::{anyhow, Context, Ok, Result};
 use async_trait::async_trait;
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    path::PathBuf,
+    sync::Arc,
+};
+use tokio::sync::Mutex;
+
+use agent::Storage;
 use hypervisor::Hypervisor;
-use kata_types::config::hypervisor::SharedFsInfo;
+use kata_types::config::{hypervisor::SharedFsInfo, TomlConfig};
 
 const VIRTIO_FS: &str = "virtio-fs";
 const _VIRTIO_FS_NYDUS: &str = "virtio-fs-nydus";
@@ -35,12 +42,15 @@ const INLINE_VIRTIO_FS: &str = "inline-virtio-fs";
 const KATA_HOST_SHARED_DIR: &str = "/run/kata-containers/shared/sandboxes/";
 
 /// share fs (for example virtio-fs) mount path in the guest
-const KATA_GUEST_SHARE_DIR: &str = "/run/kata-containers/shared/containers/";
+pub const KATA_GUEST_SHARED: &str = "/run/kata-containers/shared";
+pub const KATA_GUEST_SHARE_DIR: &str = "/run/kata-containers/shared/containers/";
 
 pub(crate) const DEFAULT_KATA_GUEST_SANDBOX_DIR: &str = "/run/kata-containers/sandbox/";
 
 pub const PASSTHROUGH_FS_DIR: &str = "passthrough";
 const RAFS_DIR: &str = "rafs";
+
+pub const MULTI_VIRTIOFS: &str = "Multi-VirtioFs";
 
 #[async_trait]
 pub trait ShareFs: Send + Sync {
@@ -78,7 +88,7 @@ pub struct ShareFsMountResult {
 }
 
 /// Save mounted info for sandbox-level shared files.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct MountedInfo {
     // Guest path
     pub guest_path: PathBuf,
@@ -86,6 +96,9 @@ pub struct MountedInfo {
     pub ro_ref_count: usize,
     // Ref count of containers that uses this volume with read write permission
     pub rw_ref_count: usize,
+
+    // A reversed map storing the <volume: virtiofs_device>
+    pub volume_devices: Option<HashMap<String, String>>,
 }
 
 impl MountedInfo {
@@ -94,6 +107,7 @@ impl MountedInfo {
             guest_path,
             ro_ref_count: readonly.into(),
             rw_ref_count: (!readonly).into(),
+            ..Default::default()
         }
     }
 
@@ -138,12 +152,18 @@ pub trait ShareFsMount: Send + Sync {
     async fn cleanup(&self, sid: &str) -> Result<()>;
 }
 
-pub fn new(id: &str, config: &SharedFsInfo) -> Result<Arc<dyn ShareFs>> {
+pub fn new(
+    id: &str,
+    config: &SharedFsInfo,
+    toml_config: &Arc<TomlConfig>,
+) -> Result<Arc<dyn ShareFs>> {
     let shared_fs = config.shared_fs.clone();
     let shared_fs = shared_fs.unwrap_or_default();
+    let special_volumes = toml_config.runtime.sharefs_special_volumes.clone();
     match shared_fs.as_str() {
         INLINE_VIRTIO_FS => Ok(Arc::new(
-            ShareVirtioFsInline::new(id, config).context("new inline virtio fs")?,
+            ShareVirtioFsInline::new(id, config, special_volumes)
+                .context("new inline virtio fs")?,
         )),
         VIRTIO_FS => Ok(Arc::new(
             ShareVirtioFsStandalone::new(id, config).context("new standalone virtio fs")?,

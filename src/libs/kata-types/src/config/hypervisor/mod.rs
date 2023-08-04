@@ -796,6 +796,13 @@ pub struct SharedFsInfo {
     #[serde(default)]
     pub virtio_fs_extra_args: Vec<String>,
 
+    /// The format of the extra virtiofs is as below:
+    /// <virtiofs name>:[parameter parameter];<virtiofs name>:[parameter parameter]
+    /// for example:
+    /// ["virtiofs1: -o xattr,no_open,writeback,trace,cache_symlinks --cache-mode=always", "virtiofs2: -o trace,cache_symlinks --thread-pool-size=1"]
+    #[serde(default)]
+    pub extra_virtiofs: Vec<String>,
+
     /// Cache mode:
     /// - never: Metadata, data, and pathname lookup are not cached in guest. They are always
     ///   fetched from host and any changes are immediately pushed to host.

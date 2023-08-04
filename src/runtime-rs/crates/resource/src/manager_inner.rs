@@ -100,7 +100,8 @@ impl ResourceManagerInner {
                         .await?
                         .is_fs_sharing_supported()
                     {
-                        let share_fs = share_fs::new(&self.sid, &c).context("new share fs")?;
+                        let share_fs =
+                            share_fs::new(&self.sid, &c, &self.config()).context("new share fs")?;
                         share_fs
                             .setup_device_before_start_vm(self.hypervisor.as_ref())
                             .await

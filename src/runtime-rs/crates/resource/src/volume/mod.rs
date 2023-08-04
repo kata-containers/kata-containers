@@ -8,6 +8,7 @@ mod block_volume;
 mod default_volume;
 pub mod hugepage;
 mod share_fs_volume;
+mod sharefs_special_volume;
 mod shm_volume;
 pub mod utils;
 
@@ -109,6 +110,12 @@ impl VolumeResource {
                     share_fs_volume::ShareFsVolume::new(share_fs, m, cid, read_only, agent.clone())
                         .await
                         .with_context(|| format!("new share fs volume {:?}", m))?,
+                )
+            } else if sharefs_special_volume::is_sharefs_special_volume(share_fs, m).await {
+                Arc::new(
+                    sharefs_special_volume::ShareFsSpecialVolume::new(m, sid, cid, read_only)
+                        .await
+                        .with_context(|| format!("new share fs special volume {:?}", m))?,
                 )
             } else if is_skip_volume(m) {
                 info!(sl!(), "skip volume {:?}", m);
