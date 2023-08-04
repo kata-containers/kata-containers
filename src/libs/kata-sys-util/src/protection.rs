@@ -3,8 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#[cfg(target_arch = "x86_64")]
-use anyhow::anyhow;
 #[cfg(any(target_arch = "s390x", target_arch = "x86_64", target_arch = "aarch64"))]
 use anyhow::Result;
 use std::fmt;
@@ -56,9 +54,7 @@ pub enum ProtectionError {
 }
 
 #[cfg(target_arch = "x86_64")]
-pub const TDX_SYS_FIRMWARE_DIR: &str = "/sys/firmware/tdx_seam/";
-#[cfg(target_arch = "x86_64")]
-pub const TDX_CPU_FLAG: &str = "tdx";
+pub const TDX_SYS_FIRMWARE_DIR: &str = "/sys/firmware/tdx/";
 #[cfg(target_arch = "x86_64")]
 pub const SEV_KVM_PARAMETER_PATH: &str = "/sys/module/kvm_amd/parameters/sev";
 #[cfg(target_arch = "x86_64")]
@@ -72,42 +68,20 @@ pub fn available_guest_protection() -> Result<GuestProtection, ProtectionError> 
 
     arch_guest_protection(
         TDX_SYS_FIRMWARE_DIR,
-        TDX_CPU_FLAG,
         SEV_KVM_PARAMETER_PATH,
         SNP_KVM_PARAMETER_PATH,
     )
 }
 
 #[cfg(target_arch = "x86_64")]
-fn retrieve_cpu_flags() -> Result<String> {
-    let cpu_info =
-        crate::cpu::get_single_cpu_info(crate::cpu::PROC_CPUINFO, crate::cpu::CPUINFO_DELIMITER)?;
-
-    let cpu_flags =
-        crate::cpu::get_cpu_flags(&cpu_info, crate::cpu::CPUINFO_FLAGS_TAG).map_err(|e| {
-            anyhow!(
-                "Error parsing CPU flags, file {:?}, {:?}",
-                crate::cpu::PROC_CPUINFO,
-                e
-            )
-        })?;
-
-    Ok(cpu_flags)
-}
-
-#[cfg(target_arch = "x86_64")]
 pub fn arch_guest_protection(
     tdx_path: &str,
-    tdx_flag: &str,
     sev_path: &str,
     snp_path: &str,
 ) -> Result<GuestProtection, ProtectionError> {
-    let flags =
-        retrieve_cpu_flags().map_err(|err| ProtectionError::CheckFailed(err.to_string()))?;
-
     let metadata = fs::metadata(tdx_path);
 
-    if metadata.is_ok() && metadata.unwrap().is_dir() && flags.contains(tdx_flag) {
+    if metadata.is_ok() && metadata.unwrap().is_dir() {
         return Ok(GuestProtection::Tdx);
     }
 
@@ -227,14 +201,12 @@ mod tests {
         let mut snp_file = fs::File::create(snp_file_path).unwrap();
         writeln!(snp_file, "Y").unwrap();
 
-        let actual =
-            arch_guest_protection("/xyz/tmp", TDX_CPU_FLAG, "/xyz/tmp", path.to_str().unwrap());
+        let actual = arch_guest_protection("/xyz/tmp", "/xyz/tmp", path.to_str().unwrap());
         assert!(actual.is_ok());
         assert_eq!(actual.unwrap(), GuestProtection::Snp);
 
         writeln!(snp_file, "N").unwrap();
-        let actual =
-            arch_guest_protection("/xyz/tmp", TDX_CPU_FLAG, "/xyz/tmp", path.to_str().unwrap());
+        let actual = arch_guest_protection("/xyz/tmp", "/xyz/tmp", path.to_str().unwrap());
         assert!(actual.is_ok());
         assert_eq!(actual.unwrap(), GuestProtection::NoProtection);
     }
@@ -248,23 +220,34 @@ mod tests {
         let mut sev_file = fs::File::create(sev_file_path).unwrap();
         writeln!(sev_file, "Y").unwrap();
 
-        let actual = arch_guest_protection(
-            "/xyz/tmp",
-            TDX_CPU_FLAG,
-            sev_path.to_str().unwrap(),
-            "/xyz/tmp",
-        );
+        let actual = arch_guest_protection("/xyz/tmp", sev_path.to_str().unwrap(), "/xyz/tmp");
         assert!(actual.is_ok());
         assert_eq!(actual.unwrap(), GuestProtection::Sev);
 
         writeln!(sev_file, "N").unwrap();
-        let actual = arch_guest_protection(
-            "/xyz/tmp",
-            TDX_CPU_FLAG,
-            sev_path.to_str().unwrap(),
-            "/xyz/tmp",
-        );
+        let actual = arch_guest_protection("/xyz/tmp", sev_path.to_str().unwrap(), "/xyz/tmp");
         assert!(actual.is_ok());
         assert_eq!(actual.unwrap(), GuestProtection::NoProtection);
+    }
+
+    #[test]
+    fn test_arch_guest_protection_tdx() {
+        let dir = tempdir().unwrap();
+
+        let invalid_dir = dir.path().join("enoent");
+        let invalid_dir = invalid_dir.to_str().unwrap();
+
+        let tdx_file_path = dir.path().join("tdx");
+        let tdx_path = tdx_file_path;
+
+        std::fs::create_dir_all(tdx_path.clone()).unwrap();
+
+        let actual = arch_guest_protection(invalid_dir, invalid_dir, invalid_dir);
+        assert!(actual.is_ok());
+        assert_eq!(actual.unwrap(), GuestProtection::NoProtection);
+
+        let actual = arch_guest_protection(tdx_path.to_str().unwrap(), invalid_dir, invalid_dir);
+        assert!(actual.is_ok());
+        assert_eq!(actual.unwrap(), GuestProtection::Tdx);
     }
 }
