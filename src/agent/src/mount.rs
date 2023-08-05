@@ -861,17 +861,16 @@ fn parse_mount_flags_and_options(options_vec: Vec<&str>) -> (MsFlags, String) {
 #[instrument]
 pub async fn add_storages(
     logger: Logger,
-    storages: Vec<Storage>,
+    storages: &[Storage],
     sandbox: &Arc<Mutex<Sandbox>>,
     cid: Option<String>,
 ) -> Result<Vec<String>> {
     let mut mount_list = Vec::new();
 
     for storage in storages {
-        let handler_name = storage.driver.clone();
-        let logger = logger.new(o!(
-            "subsystem" => "storage",
-            "storage-type" => handler_name.to_owned()));
+        let handler_name = &storage.driver;
+        let logger =
+            logger.new(o!( "subsystem" => "storage", "storage-type" => handler_name.to_string()));
 
         {
             let mut sb = sandbox.lock().await;
@@ -916,9 +915,9 @@ pub async fn add_storages(
                     "add_storages failed, storage: {:?}, error: {:?} ", storage, e
                 );
                 let mut sb = sandbox.lock().await;
-                sb.unset_sandbox_storage(&storage.mount_point)
-                    .map_err(|e| warn!(logger, "fail to unset sandbox storage {:?}", e))
-                    .ok();
+                if let Err(e) = sb.unset_sandbox_storage(&storage.mount_point) {
+                    warn!(logger, "fail to unset sandbox storage {:?}", e);
+                }
                 return Err(e);
             }
             Ok(m) => m,
