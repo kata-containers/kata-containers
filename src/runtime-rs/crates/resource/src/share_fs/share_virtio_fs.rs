@@ -18,6 +18,7 @@ use hypervisor::{
     Hypervisor, ShareFsDeviceConfig,
 };
 use kata_sys_util::mount;
+use nix::mount::MsFlags;
 
 use super::{utils, PASSTHROUGH_FS_DIR};
 
@@ -45,7 +46,7 @@ pub(crate) async fn prepare_virtiofs(
     let host_rw_dest = utils::get_host_rw_shared_path(id);
     utils::ensure_dir_exist(&host_rw_dest)?;
 
-    mount::bind_mount_unchecked(&host_rw_dest, &host_ro_dest, true)
+    mount::bind_mount_unchecked(&host_rw_dest, &host_ro_dest, true, MsFlags::MS_SLAVE)
         .context("bind mount shared_fs directory")?;
 
     let share_fs_device = ShareFsDevice {

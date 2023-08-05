@@ -23,6 +23,7 @@ use anyhow::{anyhow, Context, Result};
 use super::utils::{do_get_host_path, mkdir_with_permissions};
 use kata_sys_util::{fs::get_base_name, mount};
 use kata_types::mount::{SANDBOX_BIND_MOUNTS_DIR, SANDBOX_BIND_MOUNTS_RO, SANDBOX_BIND_MOUNTS_RW};
+use nix::mount::MsFlags;
 
 #[derive(Clone, Default, Debug)]
 pub struct SandboxBindMounts {
@@ -101,14 +102,15 @@ impl SandboxBindMounts {
 
             // mount -o bind,ro host_shared mount_dest
             // host_shared: ${bindmount}
-            mount::bind_mount_unchecked(Path::new(bindmount), &mount_dest, true).map_err(|e| {
-                for p in &mounted_list {
-                    nix::mount::umount(p).unwrap_or_else(|x| {
-                        format!("do umount failed: {:?}", x);
-                    });
-                }
-                e
-            })?;
+            mount::bind_mount_unchecked(Path::new(bindmount), &mount_dest, true, MsFlags::MS_SLAVE)
+                .map_err(|e| {
+                    for p in &mounted_list {
+                        nix::mount::umount(p).unwrap_or_else(|x| {
+                            format!("do umount failed: {:?}", x);
+                        });
+                    }
+                    e
+                })?;
 
             // default sandbox bind mounts mode is ro.
             if bindmount_mode == SANDBOX_BIND_MOUNTS_RO {

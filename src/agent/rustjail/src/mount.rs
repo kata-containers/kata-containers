@@ -1118,6 +1118,7 @@ mod tests {
     use std::fs::create_dir;
     use std::fs::create_dir_all;
     use std::fs::remove_dir_all;
+    use std::fs::remove_file;
     use std::io;
     use std::os::unix::fs;
     use std::os::unix::io::AsRawFd;
@@ -1333,14 +1334,9 @@ mod tests {
     fn test_mknod_dev() {
         skip_if_not_root!();
 
-        let tempdir = tempdir().unwrap();
-
-        let olddir = unistd::getcwd().unwrap();
-        defer!(let _ = unistd::chdir(&olddir););
-        let _ = unistd::chdir(tempdir.path());
-
+        let path = "/dev/fifo-test";
         let dev = oci::LinuxDevice {
-            path: "/fifo".to_string(),
+            path: path.to_string(),
             r#type: "c".to_string(),
             major: 0,
             minor: 0,
@@ -1348,13 +1344,16 @@ mod tests {
             uid: Some(unistd::getuid().as_raw()),
             gid: Some(unistd::getgid().as_raw()),
         };
-        let path = Path::new("fifo");
 
-        let ret = mknod_dev(&dev, path);
+        let ret = mknod_dev(&dev, Path::new(path));
         assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
 
         let ret = stat::stat(path);
         assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
+
+        // clear test device node
+        let ret = remove_file(path);
+        assert!(ret.is_ok(), "Should pass, Got: {:?}", ret);
     }
 
     #[test]

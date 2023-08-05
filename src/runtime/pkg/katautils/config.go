@@ -22,6 +22,7 @@ import (
 	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
@@ -157,7 +158,6 @@ type hypervisor struct {
 	DisableNestingChecks           bool            `toml:"disable_nesting_checks"`
 	EnableIOThreads                bool            `toml:"enable_iothreads"`
 	DisableImageNvdimm             bool            `toml:"disable_image_nvdimm"`
-	HotplugVFIOOnRootBus           bool            `toml:"hotplug_vfio_on_root_bus"`
 	HotPlugVFIO                    config.PCIePort `toml:"hot_plug_vfio"`
 	ColdPlugVFIO                   config.PCIePort `toml:"cold_plug_vfio"`
 	DisableVhostNet                bool            `toml:"disable_vhost_net"`
@@ -886,7 +886,6 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		EnableIOThreads:           h.EnableIOThreads,
 		Msize9p:                   h.msize9p(),
 		DisableImageNvdimm:        h.DisableImageNvdimm,
-		HotplugVFIOOnRootBus:      h.HotplugVFIOOnRootBus,
 		HotPlugVFIO:               h.hotPlugVFIO(),
 		ColdPlugVFIO:              h.coldPlugVFIO(),
 		DisableVhostNet:           h.DisableVhostNet,
@@ -1089,7 +1088,6 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		BlockDeviceCacheNoflush:        h.BlockDeviceCacheNoflush,
 		EnableIOThreads:                h.EnableIOThreads,
 		Msize9p:                        h.msize9p(),
-		HotplugVFIOOnRootBus:           h.HotplugVFIOOnRootBus,
 		ColdPlugVFIO:                   h.coldPlugVFIO(),
 		HotPlugVFIO:                    h.hotPlugVFIO(),
 		DisableVhostNet:                true,
@@ -1336,7 +1334,6 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		BlockDeviceCacheNoflush:   defaultBlockDeviceCacheNoflush,
 		EnableIOThreads:           defaultEnableIOThreads,
 		Msize9p:                   defaultMsize9p,
-		HotplugVFIOOnRootBus:      defaultHotplugVFIOOnRootBus,
 		ColdPlugVFIO:              defaultColdPlugVFIO,
 		HotPlugVFIO:               defaultHotPlugVFIO,
 		GuestHookPath:             defaultGuestHookPath,
@@ -1722,7 +1719,8 @@ func checkConfig(config oci.RuntimeConfig) error {
 	hotPlugVFIO := config.HypervisorConfig.HotPlugVFIO
 	coldPlugVFIO := config.HypervisorConfig.ColdPlugVFIO
 	machineType := config.HypervisorConfig.HypervisorMachineType
-	if err := checkPCIeConfig(coldPlugVFIO, hotPlugVFIO, machineType); err != nil {
+	hypervisorType := config.HypervisorType
+	if err := checkPCIeConfig(coldPlugVFIO, hotPlugVFIO, machineType, hypervisorType); err != nil {
 		return err
 	}
 
@@ -1732,10 +1730,9 @@ func checkConfig(config oci.RuntimeConfig) error {
 // checkPCIeConfig ensures the PCIe configuration is valid.
 // Only allow one of the following settings for cold-plug:
 // no-port, root-port, switch-port
-func checkPCIeConfig(coldPlug config.PCIePort, hotPlug config.PCIePort, machineType string) error {
-	// Currently only QEMU q35 supports advanced PCIe topologies
-	// firecracker, dragonball do not have right now any PCIe support
-	if machineType != "q35" {
+func checkPCIeConfig(coldPlug config.PCIePort, hotPlug config.PCIePort, machineType string, hypervisorType virtcontainers.HypervisorType) error {
+	if hypervisorType != virtcontainers.QemuHypervisor {
+		kataUtilsLogger.Warn("Advanced PCIe Topology only available for QEMU hypervisor, ignoring hot(cold)_vfio_port setting")
 		return nil
 	}
 
@@ -1745,6 +1742,12 @@ func checkPCIeConfig(coldPlug config.PCIePort, hotPlug config.PCIePort, machineT
 	if coldPlug == config.NoPort && hotPlug == config.NoPort {
 		return nil
 	}
+	// Currently only QEMU q35,virt support advanced PCIe topologies
+	// firecracker, dragonball do not have right now any PCIe support
+	if machineType != "q35" && machineType != "virt" {
+		return nil
+	}
+
 	var port config.PCIePort
 	if coldPlug != config.NoPort {
 		port = coldPlug
@@ -1752,10 +1755,13 @@ func checkPCIeConfig(coldPlug config.PCIePort, hotPlug config.PCIePort, machineT
 	if hotPlug != config.NoPort {
 		port = hotPlug
 	}
-	if port == config.NoPort || port == config.BridgePort || port == config.RootPort || port == config.SwitchPort {
+	if port == config.NoPort {
+		return fmt.Errorf("invalid vfio_port=%s setting, use on of %s, %s, %s",
+			port, config.BridgePort, config.RootPort, config.SwitchPort)
+	}
+	if port == config.BridgePort || port == config.RootPort || port == config.SwitchPort {
 		return nil
 	}
-
 	return fmt.Errorf("invalid vfio_port=%s setting, allowed values %s, %s, %s, %s",
 		coldPlug, config.NoPort, config.BridgePort, config.RootPort, config.SwitchPort)
 }

@@ -23,7 +23,7 @@ jobs:
           - ovmf
           - qemu-snp-experimental
           - qemu-tdx-experimental
-          - cc-sev-rootfs-initrd
+          - rootfs-initrd-sev
           - cc-tdx-td-shim
           - tdvf
         include:
@@ -34,7 +34,7 @@ jobs:
           - measured_rootfs: yes
             asset: cc-rootfs-image
           - measured_rootfs: yes
-            asset: cc-tdx-rootfs-image
+            asset: rootfs-image-tdx
     steps:
       - uses: actions/checkout@v3
       - name: Build ${{ matrix.asset }}

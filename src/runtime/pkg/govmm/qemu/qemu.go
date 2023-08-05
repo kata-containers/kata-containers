@@ -163,6 +163,9 @@ const (
 
 	// TransportMMIO is the MMIO transport for virtio devices.
 	TransportMMIO VirtioTransport = "mmio"
+
+	// TransportAP is the AP transport for virtio devices.
+	TransportAP VirtioTransport = "ap"
 )
 
 // defaultTransport returns the default transport for the current combination
@@ -197,6 +200,14 @@ func (transport VirtioTransport) isVirtioCCW(config *Config) bool {
 	}
 
 	return transport == TransportCCW
+}
+
+func (transport VirtioTransport) isVirtioAP(config *Config) bool {
+	if transport == "" {
+		transport = transport.defaultTransport(config)
+	}
+
+	return transport == TransportAP
 }
 
 // getName returns the name of the current transport.
@@ -1852,6 +1863,9 @@ type VFIODevice struct {
 
 	// Transport is the virtio transport for this device.
 	Transport VirtioTransport
+
+	// SysfsDev specifies the sysfs matrix entry for the AP device
+	SysfsDev string
 }
 
 // VFIODeviceTransport is a map of the vfio device name that corresponds to
@@ -1860,11 +1874,13 @@ var VFIODeviceTransport = map[VirtioTransport]string{
 	TransportPCI:  "vfio-pci",
 	TransportCCW:  "vfio-ccw",
 	TransportMMIO: "vfio-device",
+	TransportAP:   "vfio-ap",
 }
 
 // Valid returns true if the VFIODevice structure is valid and complete.
+// s390x architecture requires SysfsDev to be set.
 func (vfioDev VFIODevice) Valid() bool {
-	return vfioDev.BDF != ""
+	return vfioDev.BDF != "" || vfioDev.SysfsDev != ""
 }
 
 // QemuParams returns the qemu parameters built out of this vfio device.
@@ -1873,6 +1889,15 @@ func (vfioDev VFIODevice) QemuParams(config *Config) []string {
 	var deviceParams []string
 
 	driver := vfioDev.deviceName(config)
+
+	if vfioDev.Transport.isVirtioAP(config) {
+		deviceParams = append(deviceParams, fmt.Sprintf("%s,sysfsdev=%s", driver, vfioDev.SysfsDev))
+
+		qemuParams = append(qemuParams, "-device")
+		qemuParams = append(qemuParams, strings.Join(deviceParams, ","))
+
+		return qemuParams
+	}
 
 	deviceParams = append(deviceParams, fmt.Sprintf("%s,host=%s", driver, vfioDev.BDF))
 	if vfioDev.Transport.isVirtioPCI(config) {
@@ -2878,10 +2903,9 @@ func (config *Config) appendDevices(logger QMPLog) {
 
 	for _, d := range config.Devices {
 		if !d.Valid() {
-			logger.Errorf("vm device is not valid: %+v", config.Devices)
+			logger.Errorf("vm device is not valid: %+v", d)
 			continue
 		}
-
 		config.qemuParams = append(config.qemuParams, d.QemuParams(config)...)
 	}
 }

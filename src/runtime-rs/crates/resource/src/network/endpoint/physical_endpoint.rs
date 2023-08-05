@@ -99,7 +99,7 @@ impl Endpoint for PhysicalEndpoint {
         self.hard_addr.clone()
     }
 
-    async fn attach(&self, _hypervisor: &dyn Hypervisor) -> Result<()> {
+    async fn attach(&self) -> Result<()> {
         // bind physical interface from host driver and bind to vfio
         driver::bind_device_to_vfio(
             &self.bdf,

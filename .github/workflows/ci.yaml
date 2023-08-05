@@ -74,3 +74,24 @@ jobs:
     with:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
+
+  run-cri-containerd-tests:
+    needs: build-kata-static-tarball-amd64
+    uses: ./.github/workflows/run-cri-containerd-tests.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      commit-hash: ${{ inputs.commit-hash }}
+
+  run-nydus-tests:
+    needs: build-kata-static-tarball-amd64
+    uses: ./.github/workflows/run-nydus-tests.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      commit-hash: ${{ inputs.commit-hash }}
+
+  run-vfio-tests:
+    needs: build-kata-static-tarball-amd64
+    uses: ./.github/workflows/run-vfio-tests.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      commit-hash: ${{ inputs.commit-hash }}

@@ -18,7 +18,6 @@ DOCKER_EXE="${DOCKER_EXE:-docker}"
 CTR_RUNTIME="${CTR_RUNTIME:-io.containerd.kata.v2}"
 RUNTIME="${RUNTIME:-containerd-shim-kata-v2}"
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
-TEST_REPO="${TEST_REPO:-github.com/kata-containers/tests}"
 JSON_HOST="${JSON_HOST:-}"
 
 KSM_BASE="/sys/kernel/mm/ksm"
@@ -179,6 +178,7 @@ function init_env()
 	# This clean up is more aggressive, this is in order to
 	# decrease the factors that could affect the metrics results.
 	kill_processes_before_start
+	info "init environment complete"
 }
 
 # This function checks if there are containers or
@@ -220,11 +220,11 @@ function show_system_ctr_state()
 
 function common_init()
 {
-	if [ "$CTR_RUNTIME" == "io.containerd.kata.v2" ] || [ "$RUNTIME" == "containerd-shim-kata-v2" ]; then
+	if [ "${CTR_RUNTIME}" = "io.containerd.kata.v2" ] || [ "${RUNTIME}" = "containerd-shim-kata-v2" ]; then
 		extract_kata_env
 	else
 		# We know we have nothing to do for runc or shimv2
-		if [ "$CTR_RUNTIME" != "io.containerd.runc.v2" ] || [ "$RUNTIME" != "runc" ]; then
+		if [ "${CTR_RUNTIME}" != "io.containerd.runc.v2" ] && [ "${RUNTIME}" != "runc" ]; then
 			warn "Unrecognised runtime"
 		fi
 	fi
@@ -256,7 +256,7 @@ function set_ksm_aggressive()
 	fi
 }
 
-restore_virtio_fs(){
+function restore_virtio_fs(){
 	# Re-enable virtio-fs if it was enabled previously
 	[ -n "${was_virtio_fs}" ] && sudo -E PATH="$PATH" "${LIB_DIR}/../../.ci/set_kata_config.sh" shared_fs virtio-fs || \
 		info "Not restoring virtio-fs since it wasn't enabled previously"
@@ -359,5 +359,3 @@ function wait_ksm_settle()
 	done
 	info "Timed out after ${1}s waiting for KSM to settle"
 }
-
-common_init

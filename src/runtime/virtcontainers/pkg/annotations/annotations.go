@@ -139,10 +139,6 @@ const (
 	// DisableImageNvdimm is a sandbox annotation to specify use of nvdimm device for guest rootfs image.
 	DisableImageNvdimm = kataAnnotHypervisorPrefix + "disable_image_nvdimm"
 
-	// HotplugVFIOOnRootBus is a sandbox annotation used to indicate if devices need to be hotplugged on the
-	// root bus instead of a bridge.
-	HotplugVFIOOnRootBus = kataAnnotHypervisorPrefix + "hotplug_vfio_on_root_bus"
-
 	// ColdPlugVFIO is a sandbox annotation used to indicate if devices need to be coldplugged.
 	ColdPlugVFIO = kataAnnotHypervisorPrefix + "cold_plug_vfio"
 

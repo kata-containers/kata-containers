@@ -33,7 +33,7 @@ pub fn create_pci_root_bus_path() -> String {
 
     // check if there is pci bus path for acpi
     acpi_sysfs_dir.push_str(&acpi_root_bus_path);
-    if let Ok(_) = fs::metadata(&acpi_sysfs_dir) {
+    if fs::metadata(&acpi_sysfs_dir).is_ok() {
         return acpi_root_bus_path;
     }
 

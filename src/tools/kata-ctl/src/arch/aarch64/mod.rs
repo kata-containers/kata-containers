@@ -84,10 +84,4 @@ mod arch_specific {
         // TODO: Not implemented
         Ok(true)
     }
-
-    #[allow(dead_code)]
-    // Guest protection is not supported on ARM64.
-    pub fn available_guest_protection() -> Result<check::GuestProtection, check::ProtectionError> {
-        Ok(check::GuestProtection::NoProtection)
-    }
 }

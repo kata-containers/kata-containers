@@ -8,26 +8,33 @@ set -o nounset
 set -o pipefail
 
 kubernetes_dir=$(dirname "$(readlink -f "$0")")
+source "${kubernetes_dir}/../../common.bash"
+
+reset_workloads_work_dir() {
+    rm -rf ${kubernetes_dir}/runtimeclass_workloads_work
+    cp -R ${kubernetes_dir}/runtimeclass_workloads ${kubernetes_dir}/runtimeclass_workloads_work
+}
 
 set_runtime_class() {
-    sed -i -e "s|runtimeClassName: kata|runtimeClassName: kata-${KATA_HYPERVISOR}|" ${kubernetes_dir}/runtimeclass_workloads/*.yaml
+    sed -i -e "s|runtimeClassName: kata|runtimeClassName: kata-${KATA_HYPERVISOR}|" ${kubernetes_dir}/runtimeclass_workloads_work/*.yaml
 }
 
 set_kernel_path() {
     if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
         mariner_kernel_path="/usr/share/cloud-hypervisor/vmlinux.bin"
-        find ${kubernetes_dir}/runtimeclass_workloads/*.yaml -exec yq write -i {} 'metadata.annotations[io.katacontainers.config.hypervisor.kernel]' "${mariner_kernel_path}" \;
+        find ${kubernetes_dir}/runtimeclass_workloads_work/*.yaml -exec yq write -i {} 'metadata.annotations[io.katacontainers.config.hypervisor.kernel]' "${mariner_kernel_path}" \;
     fi
 }
 
 set_initrd_path() {
     if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
-        initrd_path="/opt/kata/share/kata-containers/kata-containers-initrd-cbl-mariner.img"
-        find ${kubernetes_dir}/runtimeclass_workloads/*.yaml -exec yq write -i {} 'metadata.annotations[io.katacontainers.config.hypervisor.initrd]' "${initrd_path}" \;
+        initrd_path="/opt/kata/share/kata-containers/kata-containers-initrd-mariner.img"
+        find ${kubernetes_dir}/runtimeclass_workloads_work/*.yaml -exec yq write -i {} 'metadata.annotations[io.katacontainers.config.hypervisor.initrd]' "${initrd_path}" \;
     fi
 }
 
 main() {
+    reset_workloads_work_dir
     set_runtime_class
     set_kernel_path
     set_initrd_path
