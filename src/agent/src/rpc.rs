@@ -180,7 +180,7 @@ impl AgentService {
         // list) to bind mount all of them inside the container.
         let m = add_storages(
             sl(),
-            req.storages,
+            &req.storages,
             &self.sandbox,
             Some(req.container_id.clone()),
         )
@@ -1217,7 +1217,7 @@ impl agent_ttrpc::AgentService for AgentService {
                 .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e))?;
         }
 
-        match add_storages(sl(), req.storages.to_vec(), &self.sandbox, None).await {
+        match add_storages(sl(), &req.storages, &self.sandbox, None).await {
             Ok(m) => {
                 self.sandbox.lock().await.mounts = m;
             }
