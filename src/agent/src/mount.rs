@@ -314,14 +314,14 @@ pub async fn update_ephemeral_mounts(
                     "mount-options" => options.as_str(),
                     );
 
-                    return baremount(
+                    baremount(
                         src_path,
                         mount_path,
                         storage.fstype.as_str(),
                         flags,
                         options.as_str(),
                         &logger,
-                    );
+                    )?;
                 }
             }
             _ => {
