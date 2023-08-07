@@ -4,7 +4,7 @@
 ##
 
 [package]
-name = "check_versions"
+name = "check-versions"
 version = "0.1.0"
 edition = "2021"
 

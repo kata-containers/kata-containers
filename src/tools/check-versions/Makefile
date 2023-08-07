@@ -7,7 +7,7 @@ include ../../../utils.mk
 
 PROJECT_NAME = Kata Containers
 PROJECT_URL = https://github.com/kata-containers
-PROJECT_COMPONENT = check_versions
+PROJECT_COMPONENT = check-versions
 
 TARGET = $(PROJECT_COMPONENT)
 
