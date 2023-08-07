@@ -13,23 +13,26 @@ use clap::Parser;
 /// version. Currently only some types of components can be automatically checked for updates - this is not an
 /// exhaustive list.
 pub struct Args {
-    #[arg(short, long, required = true)]
+    #[arg(short, long, default_value = "../../../versions.yaml")]
     /// The versions yaml file listing components to check for updates.
     /// Intended to be used with the versions.yaml file in the root of the kata-containers project.
     pub versions_file: PathBuf,
 
-    #[arg(short, long)]
-    /// If specified, output will also be written to the specified file
-    pub outfile: Option<PathBuf>,
-
-    #[arg(short, long, default_value_t = false)]
-    /// If specified, output will not be printed to the console. Useful with --outfile
-    pub quiet: bool,
-
-    // TODO: short, remove versions_file
     #[arg(long, default_value_t = false)]
     /// If specified, output will not be printed to the console. Useful with --outfile
     pub verbose: bool,
+
+    #[arg(long, default_value_t = false)]
+    /// If true, items which are up to date will not be output
+    pub suppress_uptodate: bool,
+
+    #[arg(long, default_value_t = false)]
+    /// If true, items which are out of date will not be output
+    pub suppress_outofdate: bool,
+
+    #[arg(long, default_value_t = false)]
+    /// If true, items which fail to validate will not be output
+    pub suppress_errors: bool,
 
     #[arg(short, long, env = "GITHUB_TOKEN")]
     /// GitHub authentication token to enable more API requests per hour.

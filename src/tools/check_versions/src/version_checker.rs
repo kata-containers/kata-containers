@@ -9,7 +9,6 @@ use reqwest;
 use crate::model::*;
 use crate::error::*;
 use crate::cli::Args;
-use crate::output::write_output;
 use anyhow::bail;
 use anyhow::Result;
 use serde_json::Value;
@@ -145,8 +144,8 @@ fn check_project_version(project: &Project, name: &str, args: &Args) -> Result<C
                    check_github_version(url.as_str(), current_version.as_str(), name, &args)
                 } else {
                     match name {
-                        "virtiofsd" => check_virtiofsd_version(name, current_version.as_str(), &args),
-                        _ => bail!(format!("unknown url format"))
+                        "root.externals.virtiofsd" => check_virtiofsd_version(name, current_version.as_str(), &args),
+                        _ => bail!("Unknown url format")
                     }
                 }
             },
@@ -163,7 +162,7 @@ fn check_language_version(
     current_version: &str,
     args: &Args) -> Result<CheckResult> {
     match name {
-        "golang" => {
+        "root.languages.golang" => {
             let url = "https://golang.org/VERSION?m=text";
             match get_latest_version(url) {
                 Ok(latest_version) => {
@@ -180,11 +179,11 @@ fn check_language_version(
                     Ok(check_result)
                 },
                 Err(_e) => {
-                    bail!(format!("Warning! Failed to check version for {}", name))
+                    bail!("Failed to check version")
                 }
             }
         },
-        "golangci-lint" => {
+        "root.languages.golangci-lint" => {
             let url = "https://github.com/golangci/golangci-lint";
             match get_github_latest_version(url, &args) {
                 Ok(latest_version) => {
@@ -201,11 +200,11 @@ fn check_language_version(
                     Ok(check_result)
                 },
                 Err(_e) => {
-                    bail!(format!("Warning! Failed to check version for {}", name))
+                    bail!("Failed to check version")
                 }
             }
         },
-        "rust" => {
+        "root.languages.rust" => {
             let url = "https://api.github.com/repos/rust-lang/rust/releases/latest";
             match get_rust_latest_version(url, &args) {
                 Ok(latest_version) => {
@@ -222,11 +221,11 @@ fn check_language_version(
                     Ok(check_result)
                 },
                 Err(_e) => {
-                    bail!(format!("Warning! Failed to check version for {}", name))
+                    bail!("Failed to check version")
                 }
             }
         },
-        _ => bail!("Failed to check version")
+        _ => bail!("Unknown Language. Failed to check version")
     }
 }
 
@@ -288,7 +287,7 @@ fn check_github_version(
             Ok(check_result)
         },
         Err(_e) => {
-            bail!(format!("Warning! Failed to check version for {}", name))
+            bail!("Failed to check version")
         }
     }
 }
@@ -313,7 +312,7 @@ fn check_virtiofsd_version(
             Ok(check_result)
         },
         Err(_e) => {
-            bail!(format!("Warning! Failed to check version for {}", name))
+            bail!("Failed to check version")
         }
     }
 }

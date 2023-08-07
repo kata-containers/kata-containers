@@ -8,22 +8,29 @@ use std::io::Write;
 use anyhow::Result;
 
 use crate::cli::Args;
+use crate::model::CheckResult;
 
-pub fn write_output(content: String, args: &Args) -> Result<()> {
-    match &args.outfile {
-        Some(outfile) => {
-            let mut file = OpenOptions::new()
-                .write(true)
-                .create(true)
-                .append(true)
-                .open(outfile.as_path())?;
-            file.write_all(content.as_bytes())?;
-        },
-        None => ()
-    };
+pub fn output_results(results: &Vec<CheckResult>, args: &Args) -> Result<()> {
+    for r in results {
+        if r.success && r.up_to_date {
+            if !args.suppress_uptodate {
+                println!("[Up to Date] {}\n\tversion: {}", r.project_name, r.current_version)
+            }
 
-    if !args.quiet {
-        println!("{}", content);
+        }
+        else if r.success && !r.up_to_date {
+            if !args.suppress_outofdate {
+                println!("[Out of Date] {}\n\tcurrent_version: {}\n\tlatest_version: {}",
+                    r.project_name, r.current_version, r.latest_version);
+            }
+        } else {
+            if !args.suppress_errors {
+                match &r.message {
+                    Some(msg) => println!("[Error] {}\n\tmessage: {}", r.project_name, msg),
+                    None => ()
+                }
+            }
+        }
     }
 
     Ok(())
