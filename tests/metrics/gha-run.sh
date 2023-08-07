@@ -94,7 +94,7 @@ function run_test_fio() {
 function run_test_iperf() {
 	info "Running Iperf test using ${KATA_HYPERVISOR} hypervisor"
 
-	bash network/iperf3_kubernetes/k8s-network-metrics-iperf3.sh
+	bash tests/metrics/network/iperf3_kubernetes/k8s-network-metrics-iperf3.sh -a
 }
 
 function main() {
