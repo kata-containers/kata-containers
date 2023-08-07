@@ -8,9 +8,11 @@
 use crate::arch::arch_specific;
 
 use anyhow::{anyhow, Context, Result};
-use std::fs;
+use std::{fs, time::Duration};
 
 const NON_PRIV_USER: &str = "nobody";
+
+pub const TIMEOUT: Duration = Duration::from_millis(2000);
 
 pub fn drop_privs() -> Result<()> {
     if nix::unistd::Uid::effective().is_root() {

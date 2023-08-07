@@ -157,10 +157,6 @@ endif
 
 
 EXTRA_RUSTFLAGS :=
-ifeq ($(ARCH), aarch64)
-    override EXTRA_RUSTFLAGS = -C link-arg=-lgcc
-    $(warning "WARNING: aarch64-musl needs extra symbols from libgcc")
-endif
 
 ifneq ($(HOST_ARCH),$(ARCH))
     ifeq ($(CC),)

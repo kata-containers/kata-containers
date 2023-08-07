@@ -56,6 +56,9 @@ pub enum Commands {
     /// Gather metrics associated with infrastructure used to run a sandbox
     Metrics(MetricsCommand),
 
+    /// Start a monitor to get metrics of Kata Containers
+    Monitor(MonitorArgument),
+
     /// Display version details
     Version,
 }
@@ -120,6 +123,12 @@ pub struct IptablesCommand {
 pub enum IpTablesArguments {
     /// Configure iptables
     Metrics,
+}
+
+#[derive(Debug, Args)]
+pub struct MonitorArgument {
+    /// The address to listen on for HTTP requests. (default "127.0.0.1:8090")
+    pub address: Option<String>,
 }
 
 #[derive(Debug, Args)]

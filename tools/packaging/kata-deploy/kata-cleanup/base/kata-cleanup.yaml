@@ -14,6 +14,7 @@ spec:
           name: kubelet-kata-cleanup
     spec:
       serviceAccountName: kata-deploy-sa
+      hostPID: true
       nodeSelector:
           katacontainers.io/kata-runtime: cleanup
       containers:
@@ -38,18 +39,6 @@ spec:
           value: "false"
         securityContext:
           privileged: true
-        volumeMounts:
-        - name: dbus
-          mountPath: /var/run/dbus/system_bus_socket
-        - name: systemd
-          mountPath: /run/systemd/system
-      volumes:
-        - name: dbus
-          hostPath:
-            path: /var/run/dbus/system_bus_socket
-        - name: systemd
-          hostPath:
-            path: /run/systemd/system
   updateStrategy:
     rollingUpdate:
       maxUnavailable: 1

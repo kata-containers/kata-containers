@@ -230,7 +230,7 @@ pub fn baremount(
 async fn ephemeral_storage_handler(
     logger: &Logger,
     storage: &Storage,
-    sandbox: Arc<Mutex<Sandbox>>,
+    sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
     // hugetlbfs
     if storage.fstype == FS_TYPE_HUGETLB {
@@ -278,7 +278,7 @@ async fn ephemeral_storage_handler(
 pub async fn update_ephemeral_mounts(
     logger: Logger,
     storages: Vec<Storage>,
-    sandbox: Arc<Mutex<Sandbox>>,
+    sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<()> {
     for (_, storage) in storages.iter().enumerate() {
         let handler_name = storage.driver.clone();
@@ -340,8 +340,33 @@ pub async fn update_ephemeral_mounts(
 async fn overlayfs_storage_handler(
     logger: &Logger,
     storage: &Storage,
-    _sandbox: Arc<Mutex<Sandbox>>,
+    cid: Option<&str>,
+    _sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
+    if storage
+        .options
+        .iter()
+        .any(|e| e == "io.katacontainers.fs-opt.overlay-rw")
+    {
+        let cid = cid.ok_or_else(|| anyhow!("No container id in rw overlay"))?;
+        let cpath = Path::new(crate::rpc::CONTAINER_BASE).join(cid);
+        let work = cpath.join("work");
+        let upper = cpath.join("upper");
+
+        fs::create_dir_all(&work).context("Creating overlay work directory")?;
+        fs::create_dir_all(&upper).context("Creating overlay upper directory")?;
+
+        let mut storage = storage.clone();
+        storage.fstype = "overlay".into();
+        storage
+            .options
+            .push(format!("upperdir={}", upper.to_string_lossy()));
+        storage
+            .options
+            .push(format!("workdir={}", work.to_string_lossy()));
+        return common_storage_handler(logger, &storage);
+    }
+
     common_storage_handler(logger, storage)
 }
 
@@ -349,7 +374,7 @@ async fn overlayfs_storage_handler(
 async fn local_storage_handler(
     _logger: &Logger,
     storage: &Storage,
-    sandbox: Arc<Mutex<Sandbox>>,
+    sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
     fs::create_dir_all(&storage.mount_point).context(format!(
         "failed to create dir all {:?}",
@@ -389,7 +414,7 @@ async fn local_storage_handler(
 async fn virtio9p_storage_handler(
     logger: &Logger,
     storage: &Storage,
-    _sandbox: Arc<Mutex<Sandbox>>,
+    _sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
     common_storage_handler(logger, storage)
 }
@@ -503,11 +528,11 @@ fn get_pagesize_and_size_from_option(options: &[String]) -> Result<(u64, u64)> {
 async fn virtiommio_blk_storage_handler(
     logger: &Logger,
     storage: &Storage,
-    sandbox: Arc<Mutex<Sandbox>>,
+    sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
     let storage = storage.clone();
     if !Path::new(&storage.source).exists() {
-        get_virtio_mmio_device_name(&sandbox, &storage.source)
+        get_virtio_mmio_device_name(sandbox, &storage.source)
             .await
             .context("failed to get mmio device name")?;
     }
@@ -520,7 +545,7 @@ async fn virtiommio_blk_storage_handler(
 async fn virtiofs_storage_handler(
     logger: &Logger,
     storage: &Storage,
-    _sandbox: Arc<Mutex<Sandbox>>,
+    _sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
     common_storage_handler(logger, storage)
 }
@@ -530,7 +555,7 @@ async fn virtiofs_storage_handler(
 async fn virtio_blk_storage_handler(
     logger: &Logger,
     storage: &Storage,
-    sandbox: Arc<Mutex<Sandbox>>,
+    sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
     let mut storage = storage.clone();
     // If hot-plugged, get the device node path based on the PCI path
@@ -545,7 +570,7 @@ async fn virtio_blk_storage_handler(
         }
     } else {
         let pcipath = pci::Path::from_str(&storage.source)?;
-        let dev_path = get_virtio_blk_pci_device_name(&sandbox, &pcipath).await?;
+        let dev_path = get_virtio_blk_pci_device_name(sandbox, &pcipath).await?;
         storage.source = dev_path;
     }
 
@@ -558,11 +583,11 @@ async fn virtio_blk_storage_handler(
 async fn virtio_blk_ccw_storage_handler(
     logger: &Logger,
     storage: &Storage,
-    sandbox: Arc<Mutex<Sandbox>>,
+    sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
     let mut storage = storage.clone();
     let ccw_device = ccw::Device::from_str(&storage.source)?;
-    let dev_path = get_virtio_blk_ccw_device_name(&sandbox, &ccw_device).await?;
+    let dev_path = get_virtio_blk_ccw_device_name(sandbox, &ccw_device).await?;
     storage.source = dev_path;
     common_storage_handler(logger, &storage)
 }
@@ -572,7 +597,7 @@ async fn virtio_blk_ccw_storage_handler(
 async fn virtio_blk_ccw_storage_handler(
     _: &Logger,
     _: &Storage,
-    _: Arc<Mutex<Sandbox>>,
+    _: &Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
     Err(anyhow!("CCW is only supported on s390x"))
 }
@@ -582,12 +607,12 @@ async fn virtio_blk_ccw_storage_handler(
 async fn virtio_scsi_storage_handler(
     logger: &Logger,
     storage: &Storage,
-    sandbox: Arc<Mutex<Sandbox>>,
+    sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
     let mut storage = storage.clone();
 
     // Retrieve the device path from SCSI address.
-    let dev_path = get_scsi_device_name(&sandbox, &storage.source).await?;
+    let dev_path = get_scsi_device_name(sandbox, &storage.source).await?;
     storage.source = dev_path;
 
     common_storage_handler(logger, &storage)
@@ -608,12 +633,12 @@ fn common_storage_handler(logger: &Logger, storage: &Storage) -> Result<String> 
 async fn nvdimm_storage_handler(
     logger: &Logger,
     storage: &Storage,
-    sandbox: Arc<Mutex<Sandbox>>,
+    sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
     let storage = storage.clone();
 
     // Retrieve the device path from NVDIMM address.
-    wait_for_pmem_device(&sandbox, &storage.source).await?;
+    wait_for_pmem_device(sandbox, &storage.source).await?;
 
     common_storage_handler(logger, &storage)
 }
@@ -621,7 +646,7 @@ async fn nvdimm_storage_handler(
 async fn bind_watcher_storage_handler(
     logger: &Logger,
     storage: &Storage,
-    sandbox: Arc<Mutex<Sandbox>>,
+    sandbox: &Arc<Mutex<Sandbox>>,
     cid: Option<String>,
 ) -> Result<()> {
     let mut locked = sandbox.lock().await;
@@ -813,10 +838,14 @@ fn parse_mount_flags_and_options(options_vec: Vec<&str>) -> (MsFlags, String) {
                     }
                 }
                 None => {
+                    if opt.starts_with("io.katacontainers.") {
+                        continue;
+                    }
+
                     if !options.is_empty() {
                         options.push_str(format!(",{}", opt).as_str());
                     } else {
-                        options.push_str(opt.to_string().as_str());
+                        options.push_str(opt);
                     }
                 }
             };
@@ -833,7 +862,7 @@ fn parse_mount_flags_and_options(options_vec: Vec<&str>) -> (MsFlags, String) {
 pub async fn add_storages(
     logger: Logger,
     storages: Vec<Storage>,
-    sandbox: Arc<Mutex<Sandbox>>,
+    sandbox: &Arc<Mutex<Sandbox>>,
     cid: Option<String>,
 ) -> Result<Vec<String>> {
     let mut mount_list = Vec::new();
@@ -853,31 +882,22 @@ pub async fn add_storages(
         }
 
         let res = match handler_name.as_str() {
-            DRIVER_BLK_TYPE => virtio_blk_storage_handler(&logger, &storage, sandbox.clone()).await,
-            DRIVER_BLK_CCW_TYPE => {
-                virtio_blk_ccw_storage_handler(&logger, &storage, sandbox.clone()).await
-            }
-            DRIVER_9P_TYPE => virtio9p_storage_handler(&logger, &storage, sandbox.clone()).await,
-            DRIVER_VIRTIOFS_TYPE => {
-                virtiofs_storage_handler(&logger, &storage, sandbox.clone()).await
-            }
-            DRIVER_EPHEMERAL_TYPE => {
-                ephemeral_storage_handler(&logger, &storage, sandbox.clone()).await
-            }
+            DRIVER_BLK_TYPE => virtio_blk_storage_handler(&logger, &storage, sandbox).await,
+            DRIVER_BLK_CCW_TYPE => virtio_blk_ccw_storage_handler(&logger, &storage, sandbox).await,
+            DRIVER_9P_TYPE => virtio9p_storage_handler(&logger, &storage, sandbox).await,
+            DRIVER_VIRTIOFS_TYPE => virtiofs_storage_handler(&logger, &storage, sandbox).await,
+            DRIVER_EPHEMERAL_TYPE => ephemeral_storage_handler(&logger, &storage, sandbox).await,
             DRIVER_OVERLAYFS_TYPE => {
-                overlayfs_storage_handler(&logger, &storage, sandbox.clone()).await
+                overlayfs_storage_handler(&logger, &storage, cid.as_deref(), sandbox).await
             }
             DRIVER_MMIO_BLK_TYPE => {
-                virtiommio_blk_storage_handler(&logger, &storage, sandbox.clone()).await
+                virtiommio_blk_storage_handler(&logger, &storage, sandbox).await
             }
-            DRIVER_LOCAL_TYPE => local_storage_handler(&logger, &storage, sandbox.clone()).await,
-            DRIVER_SCSI_TYPE => {
-                virtio_scsi_storage_handler(&logger, &storage, sandbox.clone()).await
-            }
-            DRIVER_NVDIMM_TYPE => nvdimm_storage_handler(&logger, &storage, sandbox.clone()).await,
+            DRIVER_LOCAL_TYPE => local_storage_handler(&logger, &storage, sandbox).await,
+            DRIVER_SCSI_TYPE => virtio_scsi_storage_handler(&logger, &storage, sandbox).await,
+            DRIVER_NVDIMM_TYPE => nvdimm_storage_handler(&logger, &storage, sandbox).await,
             DRIVER_WATCHABLE_BIND_TYPE => {
-                bind_watcher_storage_handler(&logger, &storage, sandbox.clone(), cid.clone())
-                    .await?;
+                bind_watcher_storage_handler(&logger, &storage, sandbox, cid.clone()).await?;
                 // Don't register watch mounts, they're handled separately by the watcher.
                 Ok(String::new())
             }

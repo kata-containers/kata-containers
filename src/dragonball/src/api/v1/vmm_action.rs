@@ -16,6 +16,8 @@ use crate::event_manager::EventManager;
 use crate::vm::{CpuTopology, KernelConfigInfo, VmConfigInfo};
 use crate::vmm::Vmm;
 
+use crate::hypervisor_metrics::get_hypervisor_metrics;
+
 use self::VmConfigError::*;
 use self::VmmActionError::MachineConfig;
 
@@ -57,6 +59,11 @@ pub enum VmmActionError {
     /// Failed to hotplug, due to Upcall not ready.
     #[error("Upcall not ready, can't hotplug device.")]
     UpcallServerNotReady,
+
+    /// Error when get prometheus metrics.
+    /// Currently does not distinguish between error types for metrics.
+    #[error("failed to get hypervisor metrics")]
+    GetHypervisorMetrics,
 
     /// The action `ConfigureBootSource` failed either because of bad user input or an internal
     /// error.
@@ -135,6 +142,9 @@ pub enum VmmAction {
     /// Get the configuration of the microVM.
     GetVmConfiguration,
 
+    /// Get Prometheus Metrics.
+    GetHypervisorMetrics,
+
     /// Set the microVM configuration (memory & vcpu) using `VmConfig` as input. This
     /// action can only be called before the microVM has booted.
     SetVmConfiguration(VmConfigInfo),
@@ -208,6 +218,8 @@ pub enum VmmData {
     Empty,
     /// The microVM configuration represented by `VmConfigInfo`.
     MachineConfiguration(Box<VmConfigInfo>),
+    /// Prometheus Metrics represented by String.
+    HypervisorMetrics(String),
 }
 
 /// Request data type used to communicate between the API and the VMM.
@@ -262,6 +274,7 @@ impl VmmService {
             VmmAction::GetVmConfiguration => Ok(VmmData::MachineConfiguration(Box::new(
                 self.machine_config.clone(),
             ))),
+            VmmAction::GetHypervisorMetrics => self.get_hypervisor_metrics(),
             VmmAction::SetVmConfiguration(machine_config) => {
                 self.set_vm_configuration(vmm, machine_config)
             }
@@ -379,6 +392,13 @@ impl VmmService {
         vmm.event_ctx.exit_evt_triggered = true;
 
         Ok(VmmData::Empty)
+    }
+
+    /// Get prometheus metrics.
+    fn get_hypervisor_metrics(&self) -> VmmRequestResult {
+        get_hypervisor_metrics()
+            .map_err(|_| VmmActionError::GetHypervisorMetrics)
+            .map(VmmData::HypervisorMetrics)
     }
 
     /// Set virtual machine configuration.

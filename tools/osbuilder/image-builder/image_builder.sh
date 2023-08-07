@@ -13,6 +13,16 @@ set -o pipefail
 DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
 
+#For cross build
+CROSS_BUILD=${CROSS_BUILD:-false}
+BUILDX=""
+PLATFORM=""
+TARGET_ARCH=${TARGET_ARCH:-$(uname -m)}
+ARCH=${ARCH:-$(uname -m)}
+[ "${TARGET_ARCH}" == "aarch64" ] && TARGET_ARCH=arm64
+TARGET_OS=${TARGET_OS:-linux}
+[ "${CROSS_BUILD}" == "true" ] && BUILDX=buildx && PLATFORM="--platform=${TARGET_OS}/${TARGET_ARCH}"
+
 readonly script_name="${0##*/}"
 readonly script_dir=$(dirname "$(readlink -f "$0")")
 readonly lib_file="${script_dir}/../scripts/lib.sh"
@@ -154,7 +164,7 @@ build_with_container() {
 		engine_build_args+=" --runtime ${DOCKER_RUNTIME}"
 	fi
 
-	"${container_engine}" build  \
+	"${container_engine}" ${BUILDX} build ${PLATFORM}  \
 		   ${engine_build_args} \
 		   --build-arg http_proxy="${http_proxy}" \
 		   --build-arg https_proxy="${https_proxy}" \
@@ -189,6 +199,8 @@ build_with_container() {
 		   --env MEASURED_ROOTFS="${MEASURED_ROOTFS}" \
 		   --env SELINUX="${SELINUX}" \
 		   --env DEBUG="${DEBUG}" \
+		   --env ARCH="${ARCH}" \
+		   --env TARGET_ARCH="${TARGET_ARCH}" \
 		   -v /dev:/dev \
 		   -v "${script_dir}":"/osbuilder" \
 		   -v "${script_dir}/../scripts":"/scripts" \

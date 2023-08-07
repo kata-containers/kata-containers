@@ -121,5 +121,6 @@ impl_agent!(
     set_ip_tables | crate::SetIPTablesRequest | crate::SetIPTablesResponse | None,
     get_volume_stats | crate::VolumeStatsRequest | crate::VolumeStatsResponse | None,
     resize_volume | crate::ResizeVolumeRequest | crate::Empty | None,
-    online_cpu_mem | crate::OnlineCPUMemRequest | crate::Empty | None
+    online_cpu_mem | crate::OnlineCPUMemRequest | crate::Empty | None,
+    get_metrics | crate::Empty | crate::MetricsResponse | None
 );

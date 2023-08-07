@@ -85,6 +85,14 @@ function run_test_tensorflow() {
 	check_metrics
 }
 
+function run_test_fio() {
+	info "Running FIO test using ${KATA_HYPERVISOR} hypervisor"
+        # ToDo: remove the exit once the metrics workflow is stable
+        exit 0
+
+	bash storage/fio-k8s/fio-test-ci.sh
+}
+
 function main() {
 	action="${1:-}"
 	case "${action}" in
@@ -95,6 +103,7 @@ function main() {
 		run-test-memory-usage-inside-container) run_test_memory_usage_inside_container ;;
 		run-test-blogbench) run_test_blogbench ;;
 		run-test-tensorflow) run_test_tensorflow ;;
+		run-test-fio) run_test_fio ;;
 		*) >&2 die "Invalid argument" ;;
 	esac
 }

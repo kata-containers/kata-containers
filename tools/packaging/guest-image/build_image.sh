@@ -21,7 +21,13 @@ readonly osbuilder_dir="$(cd "${repo_root_dir}/tools/osbuilder" && pwd)"
 
 export GOPATH=${GOPATH:-${HOME}/go}
 
-arch_target="$(uname -m)"
+ARCH=${ARCH:-$(uname -m)}
+if [ $(uname -m) == "${ARCH}" ]; then
+       arch_target="$(uname -m)"
+else
+       arch_target="${ARCH}"
+fi
+
 final_artifact_name="kata-containers"
 image_initrd_extension=".img"
 

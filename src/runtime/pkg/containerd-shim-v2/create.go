@@ -16,6 +16,7 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/container-orchestrated-devices/container-device-interface/pkg/cdi"
@@ -24,6 +25,8 @@ import (
 	taskAPI "github.com/containerd/containerd/runtime/v2/task"
 	"github.com/containerd/typeurl"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
@@ -105,6 +108,28 @@ func withCDI(annotations map[string]string, cdiSpecDirs []string, spec *specs.Sp
 	return spec, nil
 }
 
+func copyLayersToMounts(rootFs *vc.RootFs, spec *specs.Spec) error {
+	for _, o := range rootFs.Options {
+		if !strings.HasPrefix(o, annotations.FileSystemLayer) {
+			continue
+		}
+
+		fields := strings.Split(o[len(annotations.FileSystemLayer):], ",")
+		if len(fields) < 2 {
+			return fmt.Errorf("Missing fields in rootfs layer: %q", o)
+		}
+
+		spec.Mounts = append(spec.Mounts, specs.Mount{
+			Destination: "/run/kata-containers/sandbox/layers/" + filepath.Base(fields[0]),
+			Type:        fields[1],
+			Source:      fields[0],
+			Options:     fields[2:],
+		})
+	}
+
+	return nil
+}
+
 func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*container, error) {
 	rootFs := vc.RootFs{}
 	if len(r.Rootfs) == 1 {
@@ -120,6 +145,11 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 	if err != nil {
 		return nil, err
 	}
+
+	if err := copyLayersToMounts(&rootFs, ociSpec); err != nil {
+		return nil, err
+	}
+
 	containerType, err := oci.ContainerType(*ociSpec)
 	if err != nil {
 		return nil, err
@@ -340,6 +370,11 @@ func checkAndMount(s *service, r *taskAPI.CreateTaskRequest) (bool, error) {
 		if katautils.IsBlockDevice(m.Source) && !s.config.HypervisorConfig.DisableBlockDeviceUse {
 			return false, nil
 		}
+
+		if virtcontainers.HasOptionPrefix(m.Options, annotations.FileSystemLayer) {
+			return false, nil
+		}
+
 		if m.Type == vc.NydusRootFSType {
 			// if kata + nydus, do not mount
 			return false, nil

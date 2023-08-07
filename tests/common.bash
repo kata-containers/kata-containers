@@ -186,31 +186,20 @@ function clean_env_ctr()
 	if (( count_tasks > 0 )); then
 		die "Can't remove running containers."
 	fi
-
-	kill_kata_components
 }
 
 # Kills running shim and hypervisor components
+# by using the kata-component file name.
 function kill_kata_components() {
-	local kata_bin_dir="/opt/kata/bin"
-	local shim_path="${kata_bin_dir}/containerd-shim-kata-v2"
-	local hypervisor_path="${kata_bin_dir}/qemu-system-x86_64"
-	local pid_shim_count="$(pgrep -fc ${shim_path} || exit 0)"
+	local PID_NAMES=( "containerd-shim-kata-v2" "qemu-system-x86_64" "cloud-hypervisor" )
 
-	[ ${pid_shim_count} -gt "0" ] && sudo kill -SIGKILL "$(pgrep -f ${shim_path})" > /dev/null 2>&1
-
-        if [ "${KATA_HYPERVISOR}" = 'clh' ]; then
-		hypervisor_path="${kata_bin_dir}/cloud-hypervisor"
-	elif [ "${KATA_HYPERVISOR}" != 'qemu' ]; then
-                echo "Failed to stop the hypervisor: '${KATA_HYPERVISOR}' as it is not recognized"
-		return
-        fi
-
-	local pid_hypervisor_count="$(pgrep -fc ${hypervisor_path} || exit 0)"
-
-	if [ ${pid_hypervisor_count} -gt "0" ]; then
-		sudo kill -SIGKILL "$(pgrep -f ${hypervisor_path})" > /dev/null 2>&1
-	fi
+	sudo systemctl stop containerd
+	# Get the filenames of the kata components
+	# and kill the correspondingt processes
+	for PID_NAME in ${PID_NAMES} ; do
+		sudo killall ${PID_NAME} > /dev/null 2>&1 || true
+	done
+	sudo systemctl start containerd
 }
 
 # Restarts a systemd service while ensuring the start-limit-burst is set to 0.
