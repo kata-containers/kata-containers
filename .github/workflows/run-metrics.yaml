@@ -10,16 +10,11 @@ on:
         type: string
 
 jobs:
-  run-metrics:
-    strategy:
-      fail-fast: true
-      matrix:
-        vmm: ['clh', 'qemu']
-      max-parallel: 1
+  setup-kata:
+    name: Kata Setup
     runs-on: metrics
     env:
       GOPATH: ${{ github.workspace }}
-      KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
       - uses: actions/checkout@v3
         with:
@@ -33,6 +28,21 @@ jobs:
 
       - name: Install kata
         run: bash tests/metrics/gha-run.sh install-kata kata-artifacts
+
+  run-metrics:
+    needs: setup-kata
+    strategy:
+      fail-fast: true
+      matrix:
+        vmm: ['clh', 'qemu']
+      max-parallel: 1
+    runs-on: metrics
+    env:
+      GOPATH: ${{ github.workspace }}
+      KATA_HYPERVISOR: ${{ matrix.vmm }}
+    steps:
+      - name: enabling the hypervisor
+        run: bash tests/metrics/gha-run.sh enabling-hypervisor
 
       - name: run launch times test
         run: bash tests/metrics/gha-run.sh run-test-launchtimes

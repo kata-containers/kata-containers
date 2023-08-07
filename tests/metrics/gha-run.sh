@@ -105,6 +105,7 @@ function main() {
 	action="${1:-}"
 	case "${action}" in
 		install-kata) install_kata && install_checkmetrics ;;
+		enabling-hypervisor) enabling_hypervisor ;;
 		make-tarball-results) make_tarball_results ;;
 		run-test-launchtimes) run_test_launchtimes ;;
 		run-test-memory-usage) run_test_memory_usage ;;
