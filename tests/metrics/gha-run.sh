@@ -93,8 +93,6 @@ function run_test_fio() {
 
 function run_test_iperf() {
 	info "Running Iperf test using ${KATA_HYPERVISOR} hypervisor"
-	# ToDo: remove the exit once the metrics workflow is stable
-	exit 0
 
 	bash network/iperf3_kubernetes/k8s-network-metrics-iperf3.sh
 }
