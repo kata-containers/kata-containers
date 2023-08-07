@@ -12,7 +12,7 @@ only needs to run a container runtime and a container agent (called a
 Kata Containers represents a Kubelet pod as a VM.
 
 A Kubernetes cluster runs a control plane where a scheduler (typically
-running on a dedicated master node) calls into a compute Kubelet. This
+running on a dedicated control-plane node) calls into a compute Kubelet. This
 Kubelet instance is responsible for managing the lifecycle of pods
 within the nodes and eventually relies on a container runtime to
 handle execution. The Kubelet architecture decouples lifecycle
