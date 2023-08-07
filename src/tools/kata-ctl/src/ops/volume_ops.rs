@@ -14,7 +14,7 @@ use kata_types::mount::{
 use nix;
 use reqwest::StatusCode;
 use slog::{info, o};
-use std::{fs, time::Duration};
+use std::fs;
 use url;
 
 use agent::ResizeVolumeRequest;
@@ -23,7 +23,8 @@ use shim_interface::shim_mgmt::{
     DIRECT_VOLUME_PATH_KEY, DIRECT_VOLUME_RESIZE_URL, DIRECT_VOLUME_STATS_URL,
 };
 
-const TIMEOUT: Duration = Duration::from_millis(2000);
+use crate::utils::TIMEOUT;
+
 const CONTENT_TYPE_JSON: &str = "application/json";
 
 macro_rules! sl {

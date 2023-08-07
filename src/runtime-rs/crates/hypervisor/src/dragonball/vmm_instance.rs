@@ -267,6 +267,15 @@ impl VmmInstance {
         std::process::id()
     }
 
+    pub fn get_hypervisor_metrics(&self) -> Result<String> {
+        if let Ok(VmmData::HypervisorMetrics(metrics)) =
+            self.handle_request(Request::Sync(VmmAction::GetHypervisorMetrics))
+        {
+            return Ok(metrics);
+        }
+        Err(anyhow!("Failed to get hypervisor metrics"))
+    }
+
     pub fn stop(&mut self) -> Result<()> {
         self.handle_request(Request::Sync(VmmAction::ShutdownMicroVm))
             .map_err(|e| {

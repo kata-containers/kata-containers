@@ -8,7 +8,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-ARCH=$(uname -m)
+ARCH=${ARCH:-$(uname -m)}
 ARCH_LIBC=""
 LIBC=""
 

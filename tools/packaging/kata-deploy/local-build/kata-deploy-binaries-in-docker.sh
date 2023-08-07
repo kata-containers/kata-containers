@@ -19,6 +19,29 @@ gid=$(id -g ${USER})
 http_proxy="${http_proxy:-}"
 https_proxy="${https_proxy:-}"
 
+ARCH=${ARCH:-$(uname -m)}
+CROSS_BUILD=
+BUILDX=""
+PLATFORM=""
+TARGET_ARCH=${TARGET_ARCH:-$(uname -m)}
+[ "$(uname -m)" != "${TARGET_ARCH}" ] && CROSS_BUILD=true
+
+[ "${TARGET_ARCH}" == "aarch64" ] && TARGET_ARCH=arm64
+
+# used for cross build
+TARGET_OS=${TARGET_OS:-linux}
+TARGET_ARCH=${TARGET_ARCH:-$ARCH}
+
+[ "${CROSS_BUILD}" == "true" ] && BUILDX="buildx" && PLATFORM="--platform=${TARGET_OS}/${TARGET_ARCH}"
+if [ "${CROSS_BUILD}" == "true" ]; then
+       # check if the current docker support docker buildx
+       docker buildx ls > /dev/null 2>&1 || true
+       [ $? != 0 ] && echo "no docker buildx support, please upgrad your docker" && exit 1
+       # check if docker buildx support target_arch, if not install it
+       r=$(docker buildx ls | grep "${TARGET_ARCH}" || true)
+       [ -z "$r" ] && sudo docker run --privileged --rm tonistiigi/binfmt --install ${TARGET_ARCH}
+fi
+
 if [ "${script_dir}" != "${PWD}" ]; then
 	ln -sf "${script_dir}/build" "${PWD}/build"
 fi
@@ -72,6 +95,9 @@ docker run \
 	--env VIRTIOFSD_CONTAINER_BUILDER="${VIRTIOFSD_CONTAINER_BUILDER:-}" \
 	--env MEASURED_ROOTFS="${MEASURED_ROOTFS:-}" \
 	--env USE_CACHE="${USE_CACHE:-}" \
+	--env CROSS_BUILD="${CROSS_BUILD}" \
+	--env TARGET_ARCH="${TARGET_ARCH}" \
+	--env ARCH="${ARCH}" \
 	--rm \
 	-w ${script_dir} \
 	build-kata-deploy "${kata_deploy_create}" $@

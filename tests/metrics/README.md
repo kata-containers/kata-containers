@@ -66,6 +66,8 @@ Tests relating to networking. General items could include:
 - parallel bandwidth
 - write and read percentiles 
 
+For further details see the [network tests documentation](network).
+
 ### Storage
 
 Tests relating to the storage (graph, volume) drivers.

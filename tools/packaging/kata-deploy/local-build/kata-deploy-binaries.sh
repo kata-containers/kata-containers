@@ -42,7 +42,7 @@ source "${script_dir}/../../scripts/lib.sh"
 readonly jenkins_url="http://jenkins.katacontainers.io"
 readonly cached_artifacts_path="lastSuccessfulBuild/artifact/artifacts"
 
-ARCH=$(uname -m)
+ARCH=${ARCH:-$(uname -m)}
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
 USE_CACHE="${USE_CACHE:-"yes"}"
 
@@ -368,7 +368,7 @@ install_initrd() {
 
 	local jenkins="${jenkins_url}/job/kata-containers-main-rootfs-${initrd_type}-${ARCH}/${cached_artifacts_path}"
 	if [ -n "${variant}" ]; then
-		jenkins="${jenkins_url}/job/kata-containers-2.0-rootfs-initrd-${variant}-cc-$(uname -m)/${cached_artifacts_path}"
+		jenkins="${jenkins_url}/job/kata-containers-2.0-rootfs-initrd-${variant}-cc-${ARCH}/${cached_artifacts_path}"
 	fi
 	local component="rootfs-${initrd_type}"
 
@@ -391,6 +391,8 @@ install_initrd() {
 		initramfs_last_commit="$(get_initramfs_image_name)"
 		version_checker="${osbuilder_last_commit}-${guest_image_last_commit}-${initramfs_last_commit}-${agent_last_commit}-${libs_last_commit}-${attestation_agent_version}-${gperf_version}-${libseccomp_version}-${pause_version}-${rust_version}-${initrd_type}-${AA_KBC}"
 	fi
+
+	[[ "${ARCH}" == "aarch64" && "${CROSS_BUILD}" == "true" ]] && echo "warning: Don't cross build initrd for aarch64 as it's too slow" && exit 0
 
 	install_cached_tarball_component \
 		"${component}" \
@@ -438,9 +440,9 @@ install_cached_kernel_tarball_component() {
 
 	# This must only be done as part of the CCv0 branch, as TDX version of
 	# Kernel is not the same as the one used on main
-	local url="${jenkins_url}/job/kata-containers-main-${kernel_name}-$(uname -m)/${cached_artifacts_path}"
+	local url="${jenkins_url}/job/kata-containers-main-${kernel_name}-${ARCH}/${cached_artifacts_path}"
 	if [[ "${kernel_name}" == "kernel-tdx-experimental" ]]; then
-		url="${jenkins_url}/job/kata-containers-2.0-kernel-tdx-cc-$(uname -m)/${cached_artifacts_path}"
+		url="${jenkins_url}/job/kata-containers-2.0-kernel-tdx-cc-${ARCH}/${cached_artifacts_path}"
 	fi
 
 	install_cached_tarball_component \
@@ -588,9 +590,9 @@ install_qemu_helper() {
 
 	# This must only be done as part of the CCv0 branch, as TDX version of 
 	# QEMU is not the same as the one used on main
-	local url="${jenkins_url}/job/kata-containers-main-${qemu_name}-$(uname -m)/${cached_artifacts_path}"
+	local url="${jenkins_url}/job/kata-containers-main-${qemu_name}-${ARCH}/${cached_artifacts_path}"
 	if [[ "${qemu_name}" == "qemu-tdx-experimental" ]]; then
-		url="${jenkins_url}/job/kata-containers-2.0-qemu-tdx-cc-$(uname -m)/${cached_artifacts_path}"
+		url="${jenkins_url}/job/kata-containers-2.0-qemu-tdx-cc-${ARCH}/${cached_artifacts_path}"
 	fi
 
 	install_cached_tarball_component \
@@ -713,7 +715,7 @@ install_clh_glibc() {
 install_virtiofsd() {
 	install_cached_tarball_component \
 		"virtiofsd" \
-		"${jenkins_url}/job/kata-containers-main-virtiofsd-$(uname -m)/${cached_artifacts_path}" \
+		"${jenkins_url}/job/kata-containers-main-virtiofsd-${ARCH}/${cached_artifacts_path}" \
 		"$(get_from_kata_deps "externals.virtiofsd.version")-$(get_from_kata_deps "externals.virtiofsd.toolchain")" \
 		"$(get_virtiofsd_image_name)" \
 		"${final_tarball_name}" \
@@ -760,7 +762,7 @@ install_shimv2() {
 
 	install_cached_tarball_component \
 		"shim-v2" \
-		"${jenkins_url}/job/kata-containers-main-shim-v2-$(uname -m)/${cached_artifacts_path}" \
+		"${jenkins_url}/job/kata-containers-main-shim-v2-${ARCH}/${cached_artifacts_path}" \
 		"${shim_v2_version}" \
 		"$(get_shim_v2_image_name)" \
 		"${final_tarball_name}" \

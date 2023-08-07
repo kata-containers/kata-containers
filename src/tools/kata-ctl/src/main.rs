@@ -3,9 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+#[macro_use]
+extern crate lazy_static;
+
+#[macro_use]
+extern crate slog;
+
 mod arch;
 mod args;
 mod check;
+mod monitor;
 mod ops;
 mod types;
 mod utils;
@@ -18,7 +25,7 @@ use std::process::exit;
 use args::{Commands, KataCtlCli};
 
 use ops::check_ops::{
-    handle_check, handle_factory, handle_iptables, handle_metrics, handle_version,
+    handle_check, handle_factory, handle_iptables, handle_metrics, handle_monitor, handle_version,
 };
 use ops::env_ops::handle_env;
 use ops::exec_ops::handle_exec;
@@ -52,6 +59,7 @@ fn real_main() -> Result<()> {
         Commands::Factory => handle_factory(),
         Commands::Iptables(args) => handle_iptables(args),
         Commands::Metrics(args) => handle_metrics(args),
+        Commands::Monitor(args) => handle_monitor(args),
         Commands::Version => handle_version(),
     };
 

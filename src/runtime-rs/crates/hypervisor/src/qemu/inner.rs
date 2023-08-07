@@ -136,6 +136,10 @@ impl QemuInner {
         info!(sl!(), "QemuInner::hypervisor_config()");
         self.config.clone()
     }
+
+    pub(crate) async fn get_hypervisor_metrics(&self) -> Result<String> {
+        todo!()
+    }
 }
 
 use crate::device::DeviceType;

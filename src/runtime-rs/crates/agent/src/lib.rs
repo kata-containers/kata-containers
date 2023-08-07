@@ -18,13 +18,14 @@ pub use types::{
     CloseStdinRequest, ContainerID, ContainerProcessID, CopyFileRequest, CreateContainerRequest,
     CreateSandboxRequest, Empty, ExecProcessRequest, GetGuestDetailsRequest, GetIPTablesRequest,
     GetIPTablesResponse, GuestDetailsResponse, HealthCheckResponse, IPAddress, IPFamily, Interface,
-    Interfaces, ListProcessesRequest, MemHotplugByProbeRequest, OnlineCPUMemRequest,
-    OomEventResponse, ReadStreamRequest, ReadStreamResponse, RemoveContainerRequest,
-    ReseedRandomDevRequest, ResizeVolumeRequest, Route, Routes, SetGuestDateTimeRequest,
-    SetIPTablesRequest, SetIPTablesResponse, SignalProcessRequest, StatsContainerResponse, Storage,
-    TtyWinResizeRequest, UpdateContainerRequest, UpdateInterfaceRequest, UpdateRoutesRequest,
-    VersionCheckResponse, VolumeStatsRequest, VolumeStatsResponse, WaitProcessRequest,
-    WaitProcessResponse, WriteStreamRequest, WriteStreamResponse,
+    Interfaces, ListProcessesRequest, MemHotplugByProbeRequest, MetricsResponse,
+    OnlineCPUMemRequest, OomEventResponse, ReadStreamRequest, ReadStreamResponse,
+    RemoveContainerRequest, ReseedRandomDevRequest, ResizeVolumeRequest, Route, Routes,
+    SetGuestDateTimeRequest, SetIPTablesRequest, SetIPTablesResponse, SignalProcessRequest,
+    StatsContainerResponse, Storage, TtyWinResizeRequest, UpdateContainerRequest,
+    UpdateInterfaceRequest, UpdateRoutesRequest, VersionCheckResponse, VolumeStatsRequest,
+    VolumeStatsResponse, WaitProcessRequest, WaitProcessResponse, WriteStreamRequest,
+    WriteStreamResponse,
 };
 
 use anyhow::Result;
@@ -86,6 +87,7 @@ pub trait Agent: AgentManager + HealthService + Send + Sync {
 
     // utils
     async fn copy_file(&self, req: CopyFileRequest) -> Result<Empty>;
+    async fn get_metrics(&self, req: Empty) -> Result<MetricsResponse>;
     async fn get_oom_event(&self, req: Empty) -> Result<OomEventResponse>;
     async fn get_ip_tables(&self, req: GetIPTablesRequest) -> Result<GetIPTablesResponse>;
     async fn set_ip_tables(&self, req: SetIPTablesRequest) -> Result<SetIPTablesResponse>;

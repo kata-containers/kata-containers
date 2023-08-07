@@ -51,3 +51,8 @@ For more details see the [footprint test documentation](footprint_data.md).
 Measures the memory statistics *inside* the container. This allows evaluation of
 the overhead the VM kernel and rootfs are having on the memory that was requested
 by the container co-ordination system, and thus supplied to the VM.
+
+## `k8s-sysbench`
+
+`Sysbench`is an open-source and multi-purpose benchmark utility that evaluates parameters features tests for `CPU`, memory
+and I/O. Currently the `k8s-sysbench` test is measuring the `CPU` performance.

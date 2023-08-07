@@ -19,6 +19,7 @@ VMM_CONFIGS="qemu fc"
 
 GO_VERSION=${GO_VERSION}
 RUST_VERSION=${RUST_VERSION}
+CC=""
 
 DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}
@@ -28,8 +29,9 @@ EXTRA_OPTS="${EXTRA_OPTS:-""}"
 VMM_CONFIGS="qemu fc"
 REMOVE_VMM_CONFIGS="${REMOVE_VMM_CONFIGS:-""}"
 
+[ "${CROSS_BUILD}" == "true" ] && container_image_bk="${container_image}" && container_image="${container_image}-cross-build"
 sudo docker pull ${container_image} || \
-       	(sudo docker build  \
+	(sudo docker ${BUILDX} build ${PLATFORM}  \
 		--build-arg GO_VERSION="${GO_VERSION}" \
 		--build-arg RUST_VERSION="${RUST_VERSION}" \
 		-t "${container_image}" \
@@ -37,21 +39,34 @@ sudo docker pull ${container_image} || \
 	 # No-op unless PUSH_TO_REGISTRY is exported as "yes"
 	 push_to_registry "${container_image}")
 
-arch=$(uname -m)
+arch=${ARCH:-$(uname -m)}
+GCC_ARCH=${arch}
 if [ ${arch} = "ppc64le" ]; then
+	GCC_ARCH="powerpc64le"
 	arch="ppc64"
 fi
 
+#Build rust project using cross build musl image to speed up
+[[ "${CROSS_BUILD}" == "true" && ${ARCH} != "s390x" ]] && container_image="messense/rust-musl-cross:${GCC_ARCH}-musl" && CC=${GCC_ARCH}-unknown-linux-musl-gcc
+
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
+	--env CROSS_BUILD=${CROSS_BUILD} \
+	--env ARCH=${ARCH} \
+	--env CC="${CC}" \
 	-w "${repo_root_dir}/src/runtime-rs" \
 	"${container_image}" \
 	bash -c "git config --global --add safe.directory ${repo_root_dir} && make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch}"
 
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
+	--env CROSS_BUILD=${CROSS_BUILD} \
+        --env ARCH=${ARCH} \
+        --env CC="${CC}" \
 	-w "${repo_root_dir}/src/runtime-rs" \
 	"${container_image}" \
 	bash -c "git config --global --add safe.directory ${repo_root_dir} && make PREFIX="${PREFIX}" DESTDIR="${DESTDIR}" install"
-	
+
+[ "${CROSS_BUILD}" == "true" ] && container_image="${container_image_bk}-cross-build"
+
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${repo_root_dir}/src/runtime" \
 	"${container_image}" \

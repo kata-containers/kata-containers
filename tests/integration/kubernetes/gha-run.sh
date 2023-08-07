@@ -173,8 +173,8 @@ function delete_cluster() {
 }
 
 function get_nodes_and_pods_info() {
-    kubectl debug $(kubectl get nodes -o name) -it --image=quay.io/kata-containers/kata-debug:latest
-    kubectl get pods -o name | grep node-debugger | xargs kubectl delete
+    kubectl debug $(kubectl get nodes -o name) -it --image=quay.io/kata-containers/kata-debug:latest || true
+    kubectl get pods -o name | grep node-debugger | xargs kubectl delete || true
 }
 
 function main() {

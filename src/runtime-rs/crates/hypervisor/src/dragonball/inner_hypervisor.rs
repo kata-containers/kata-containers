@@ -92,6 +92,11 @@ impl DragonballInner {
         ))
     }
 
+    pub(crate) async fn get_hypervisor_metrics(&self) -> Result<String> {
+        info!(sl!(), "get hypervisor metrics");
+        self.vmm_instance.get_hypervisor_metrics()
+    }
+
     pub(crate) async fn disconnect(&mut self) {
         self.state = VmmState::NotReady;
     }
