@@ -18,6 +18,8 @@
 # case 2"
 #  container-server <----> host-client
 
+set -x
+
 set -o pipefail
 
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
