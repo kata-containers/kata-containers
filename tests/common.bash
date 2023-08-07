@@ -295,17 +295,28 @@ function install_kata() {
 		sudo ln -sf "${b}" "${local_bin_dir}/$(basename $b)"
 	done
 
-	if [[ ${KATA_HYPERVISOR} == "dragonball" ]]; then
-		sudo ln -sf "${katadir}/runtime-rs/bin/containerd-shim-kata-v2" "${local_bin_dir}/containerd-shim-kata-${KATA_HYPERVISOR}-v2"
-	else
-		sudo ln -sf "${katadir}/bin/containerd-shim-kata-v2" "${local_bin_dir}/containerd-shim-kata-${KATA_HYPERVISOR}-v2"
-	fi
-
-	sudo ln -sf ${katadir}/share/defaults/kata-containers/configuration-${KATA_HYPERVISOR}.toml ${katadir}/share/defaults/kata-containers/configuration.toml 
-
 	check_containerd_config_for_kata
 	restart_containerd_service
 }
+
+# creates a new kata configuration.toml hard link that
+# points to the hypervisor passed by KATA_HYPERVISOR env var.
+function enabling_hypervisor() {
+	declare -r KATA_DIR="/opt/kata"
+	declare -r CONFIG_DIR="${KATA_DIR}/share/defaults/kata-containers"
+	declare -r SRC_HYPERVISOR_CONFIG="${CONFIG_DIR}/configuration-${KATA_HYPERVISOR}.toml"
+	declare -r DEST_KATA_CONFIG="${CONFIG_DIR}/configuration.toml"
+	declare -r CONTAINERD_SHIM_KATA="/usr/local/bin/containerd-shim-kata-${KATA_HYPERVISOR}-v2"
+
+	if [[ ${KATA_HYPERVISOR} == "dragonball" ]]; then
+		sudo ln -sf "${KATA_DIR}/runtime-rs/bin/containerd-shim-kata-v2" "${CONTAINERD_SHIM_KATA}"
+	else
+		sudo ln -sf "${KATA_DIR}/bin/containerd-shim-kata-v2" "${CONTAINERD_SHIM_KATA}"
+	fi
+
+	sudo ln -sf "${SRC_HYPERVISOR_CONFIG}" "${DEST_KATA_CONFIG}"
+}
+
 
 function check_containerd_config_for_kata() {
 	# check containerd config
