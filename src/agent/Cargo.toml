@@ -23,6 +23,7 @@ regex = "1.10.4"
 serial_test = "0.5.1"
 oci-distribution = "0.10.0"
 url = "2.5.0"
+derivative = "2.2.0"
 kata-sys-util = { path = "../libs/kata-sys-util" }
 kata-types = { path = "../libs/kata-types" }
 safe-path = { path = "../libs/safe-path" }

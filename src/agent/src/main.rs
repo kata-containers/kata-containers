@@ -38,6 +38,7 @@ use std::process::Command;
 use std::sync::Arc;
 use tracing::{instrument, span};
 
+mod cdh;
 mod config;
 mod console;
 mod device;
@@ -104,6 +105,7 @@ const AA_ATTESTATION_URI: &str = concatcp!(UNIX_SOCKET_PREFIX, AA_ATTESTATION_SO
 
 const CDH_PATH: &str = "/usr/local/bin/confidential-data-hub";
 const CDH_SOCKET: &str = "/run/confidential-containers/cdh.sock";
+const CDH_SOCKET_URI: &str = concatcp!(UNIX_SOCKET_PREFIX, CDH_SOCKET);
 
 const API_SERVER_PATH: &str = "/usr/local/bin/api-server-rest";
 
@@ -403,6 +405,7 @@ async fn start_sandbox(
     let (tx, rx) = tokio::sync::oneshot::channel();
     sandbox.lock().await.sender = Some(tx);
 
+    let mut gc_enabled = None;
     let gc_procs = config.guest_components_procs;
     if gc_procs != GuestComponentsProcs::None {
         if !attestation_binaries_available(logger, &gc_procs) {
@@ -412,11 +415,19 @@ async fn start_sandbox(
             );
         } else {
             init_attestation_components(logger, config)?;
+            gc_enabled = Some(gc_procs);
         }
     }
 
     // vsock:///dev/vsock, port
-    let mut server = rpc::start(sandbox.clone(), config.server_addr.as_str(), init_mode).await?;
+    let mut server = rpc::start(
+        sandbox.clone(),
+        config.server_addr.as_str(),
+        init_mode,
+        gc_enabled,
+    )
+    .await?;
+
     server.start().await?;
 
     rx.await?;

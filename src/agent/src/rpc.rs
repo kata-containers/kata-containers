@@ -52,6 +52,7 @@ use nix::sys::{stat, statfs};
 use nix::unistd::{self, Pid};
 use rustjail::process::ProcessOperations;
 
+use crate::config::GuestComponentsProcs;
 use crate::device::{add_devices, get_virtio_blk_pci_device_name, update_env_pci};
 use crate::features::get_build_features;
 use crate::linux_abi::*;
@@ -75,6 +76,8 @@ use crate::policy::{do_set_policy, is_allowed};
 
 #[cfg(feature = "guest-pull")]
 use crate::image;
+
+use crate::cdh::CDHClient;
 
 use opentelemetry::global;
 use tracing::span;
@@ -171,6 +174,7 @@ impl<T> OptionToTtrpcResult<T> for Option<T> {
 pub struct AgentService {
     sandbox: Arc<Mutex<Sandbox>>,
     init_mode: bool,
+    cdh_client: Option<CDHClient>,
 }
 
 impl AgentService {
@@ -221,6 +225,22 @@ impl AgentService {
         // match real devices inside the VM. This step is necessary since we
         // cannot predict everything from the caller.
         add_devices(&req.devices, &mut oci, &self.sandbox).await?;
+
+        if let Some(cdh) = self.cdh_client.as_ref() {
+            let process = oci
+                .process
+                .as_mut()
+                .ok_or_else(|| anyhow!("Spec didn't contain process field"))?;
+
+            for env in process.env.iter_mut() {
+                match cdh.unseal_env(env).await {
+                    Ok(unsealed_env) => *env = unsealed_env.to_string(),
+                    Err(e) => {
+                        warn!(sl(), "Failed to unseal secret: {}", e)
+                    }
+                }
+            }
+        }
 
         // Both rootfs and volumes (invoked with --volume for instance) will
         // be processed the same way. The idea is to always mount any provided
@@ -1601,10 +1621,18 @@ pub async fn start(
     s: Arc<Mutex<Sandbox>>,
     server_address: &str,
     init_mode: bool,
+    gc_enabled: Option<GuestComponentsProcs>,
 ) -> Result<TtrpcServer> {
+    let cdh_client = match gc_enabled {
+        Some(GuestComponentsProcs::ConfidentialDataHub)
+        | Some(GuestComponentsProcs::ApiServerRest) => Some(CDHClient::new()?),
+        _ => None,
+    };
+
     let agent_service = Box::new(AgentService {
         sandbox: s,
         init_mode,
+        cdh_client,
     }) as Box<dyn agent_ttrpc::AgentService + Send + Sync>;
     let aservice = agent_ttrpc::create_agent_service(Arc::new(agent_service));
 
@@ -2148,6 +2176,7 @@ mod tests {
         let agent_service = Box::new(AgentService {
             sandbox: Arc::new(Mutex::new(sandbox)),
             init_mode: true,
+            cdh_client: None,
         });
 
         let req = protocols::agent::UpdateInterfaceRequest::default();
@@ -2162,10 +2191,10 @@ mod tests {
     async fn test_update_routes() {
         let logger = slog::Logger::root(slog::Discard, o!());
         let sandbox = Sandbox::new(&logger).unwrap();
-
         let agent_service = Box::new(AgentService {
             sandbox: Arc::new(Mutex::new(sandbox)),
             init_mode: true,
+            cdh_client: None,
         });
 
         let req = protocols::agent::UpdateRoutesRequest::default();
@@ -2180,10 +2209,10 @@ mod tests {
     async fn test_add_arp_neighbors() {
         let logger = slog::Logger::root(slog::Discard, o!());
         let sandbox = Sandbox::new(&logger).unwrap();
-
         let agent_service = Box::new(AgentService {
             sandbox: Arc::new(Mutex::new(sandbox)),
             init_mode: true,
+            cdh_client: None,
         });
 
         let req = protocols::agent::AddARPNeighborsRequest::default();
@@ -2322,6 +2351,7 @@ mod tests {
             let agent_service = Box::new(AgentService {
                 sandbox: Arc::new(Mutex::new(sandbox)),
                 init_mode: true,
+                cdh_client: None,
             });
 
             let result = agent_service
@@ -2811,6 +2841,7 @@ OtherField:other
         let agent_service = Box::new(AgentService {
             sandbox: Arc::new(Mutex::new(sandbox)),
             init_mode: true,
+            cdh_client: None,
         });
 
         let ctx = mk_ttrpc_context();
