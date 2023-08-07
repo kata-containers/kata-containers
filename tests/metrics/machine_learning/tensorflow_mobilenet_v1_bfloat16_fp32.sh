@@ -10,12 +10,12 @@ set -o pipefail
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 source "${SCRIPT_PATH}/../lib/common.bash"
 
-IMAGE="docker.io/library/tensorflowmobilenet:latest"
-DOCKERFILE="${SCRIPT_PATH}/tensorflow_mobilenet_dockerfile/Dockerfile"
+IMAGE="docker.io/library/mobilenet_v1_bfloat16_fp32:latest"
+DOCKERFILE="${SCRIPT_PATH}/mobilenet_v1_bfloat16_fp32_dockerfile/Dockerfile"
 tensorflow_file=$(mktemp tensorflowresults.XXXXXXXXXX)
 NUM_CONTAINERS="$1"
 TIMEOUT="$2"
-TEST_NAME="tensorflow-intelai"
+TEST_NAME="mobilenet_v1_bfloat16_fp32"
 PAYLOAD_ARGS="tail -f /dev/null"
 TESTDIR="${TESTDIR:-/testdir}"
 # Options to control the start of the workload using a trigger-file
@@ -62,7 +62,7 @@ EOF
 	chmod +x "${script}"
 }
 
-function mobilenet_test() {
+function mobilenet_v1_bfloat16_fp32_test() {
 	local CMD_EXPORT_VAR="export KMP_AFFINITY=granularity=fine,verbose,compact && export OMP_NUM_THREADS=16"
 
 	info "Export environment variables"
@@ -70,7 +70,7 @@ function mobilenet_test() {
 		sudo -E "${CTR_EXE}" t exec -d --exec-id "$(random_name)" "${i}" sh -c "${CMD_EXPORT_VAR}"
 	done
 
-	info "Running Mobilenet Tensorflow test"
+	info "Running Mobilenet V1 Bfloat16 FP32 Tensorflow test"
 	local pids=()
 	local j=0
 	for i in "${containers[@]}"; do
@@ -91,7 +91,7 @@ function mobilenet_test() {
 		check_file=$(sudo -E "${CTR_EXE}" t exec -d --exec-id "$(random_name)" "${i}" sh -c "${CMD_FILE}")
 		retries="30"
 		for j in $(seq 1 "${retries}"); do
-			[ "${check_file}" -eq "1" ] && break
+			[ "${check_file}" = 1 ] && break
 			sleep 1
 		done
 	done
@@ -104,7 +104,7 @@ function mobilenet_test() {
 	local average_mobilenet=$(echo "${mobilenet_results}" | sed 's/.$//' | sed "s/,/+/g;s/.*/(&)\/$NUM_CONTAINERS/g" | bc -l)
 	local json="$(cat << EOF
 	{
-		"Mobilenet": {
+		"Mobilenet_v1_bfloat16_fp32": {
 			"Result": "${mobilenet_results}",
 			"Average": "${average_mobilenet}",
 			"Units": "images/s"
@@ -179,7 +179,7 @@ function main() {
 	INITIAL_NUM_PIDS=$(sudo -E "${CTR_EXE}" t metrics "${containers[-1]}" | grep pids.current | grep pids.current | xargs | cut -d ' ' -f 2)
 	((INITIAL_NUM_PIDS++))
 
-	mobilenet_test
+	mobilenet_v1_bfloat16_fp32_test
 
 	metrics_json_save
 
