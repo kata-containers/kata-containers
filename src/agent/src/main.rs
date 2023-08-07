@@ -37,6 +37,8 @@ use std::process::Command;
 use std::sync::Arc;
 use tracing::{instrument, span};
 
+#[cfg(feature = "confidential-data-hub")]
+mod cdh;
 mod config;
 mod console;
 mod device;

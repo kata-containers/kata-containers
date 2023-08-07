@@ -71,6 +71,7 @@ use crate::AGENT_CONFIG;
 
 use crate::trace_rpc_call;
 use crate::tracer::extract_carrier_from_ttrpc;
+use derivative::Derivative;
 use opentelemetry::global;
 use tracing::span;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
@@ -88,6 +89,9 @@ use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::fs::FileExt;
 use std::path::PathBuf;
+
+#[cfg(feature = "sealed-secret")]
+use crate::cdh::CDHClient;
 
 pub const CONTAINER_BASE: &str = "/run/kata-containers";
 const MODPROBE_PATH: &str = "/sbin/modprobe";
@@ -139,10 +143,14 @@ fn is_allowed(req: &impl MessageDyn) -> ttrpc::Result<()> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Derivative)]
+#[derivative(Clone, Debug)]
 pub struct AgentService {
     sandbox: Arc<Mutex<Sandbox>>,
     init_mode: bool,
+    #[derivative(Debug = "ignore")]
+    #[cfg(feature = "sealed-secret")]
+    cdh_client: Option<CDHClient>,
 }
 
 // A container ID must match this regex:
@@ -200,6 +208,25 @@ impl AgentService {
         // match real devices inside the VM. This step is necessary since we
         // cannot predict everything from the caller.
         add_devices(&req.devices, &mut oci, &self.sandbox).await?;
+
+        if cfg!(feature = "sealed-secret") {
+            let process = oci
+                .process
+                .as_mut()
+                .ok_or_else(|| anyhow!("Spec didn't contain process field"))?;
+
+            for env in process.env.iter_mut() {
+                let client = self
+                    .cdh_client
+                    .as_ref()
+                    .ok_or(anyhow!("get cdh_client failed"))?;
+                let unsealed_env = client
+                    .unseal_env(env)
+                    .await
+                    .map_err(|e| anyhow!("unseal env failed: {:?}", e))?;
+                *env = unsealed_env.to_string();
+            }
+        }
 
         let linux = oci
             .linux
@@ -1697,6 +1724,8 @@ pub async fn start(
     let agent_service = Box::new(AgentService {
         sandbox: s.clone(),
         init_mode,
+        #[cfg(feature = "sealed-secret")]
+        cdh_client: Some(CDHClient::new()?),
     }) as Box<dyn agent_ttrpc::AgentService + Send + Sync>;
     let aservice = agent_ttrpc::create_agent_service(Arc::new(agent_service));
 
@@ -2226,7 +2255,6 @@ mod tests {
     async fn test_update_routes() {
         let logger = slog::Logger::root(slog::Discard, o!());
         let sandbox = Sandbox::new(&logger).unwrap();
-
         let agent_service = Box::new(AgentService {
             sandbox: Arc::new(Mutex::new(sandbox)),
             init_mode: true,
@@ -2244,7 +2272,6 @@ mod tests {
     async fn test_add_arp_neighbors() {
         let logger = slog::Logger::root(slog::Discard, o!());
         let sandbox = Sandbox::new(&logger).unwrap();
-
         let agent_service = Box::new(AgentService {
             sandbox: Arc::new(Mutex::new(sandbox)),
             init_mode: true,

@@ -25,6 +25,7 @@ kata-sys-util = { path = "../libs/kata-sys-util" }
 kata-types = { path = "../libs/kata-types" }
 const_format = "0.2.30"
 url = "2.2.2"
+derivative = "2.2.0"
 
 # Async helpers
 async-trait = "0.1.42"
