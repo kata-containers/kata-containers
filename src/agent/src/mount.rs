@@ -15,7 +15,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
-use kata_sys_util::mount::{create_mount_destination, get_linux_mount_info};
+use kata_sys_util::mount::{create_mount_destination, get_linux_mount_info, parse_mount_options};
 use kata_types::mount::{KATA_MOUNT_OPTION_FS_GID, KATA_SHAREDFS_GUEST_PREMOUNT_TAG};
 use nix::mount::MsFlags;
 use nix::unistd::{Gid, Uid};
@@ -48,47 +48,6 @@ const RW_MASK: u32 = 0o660;
 const RO_MASK: u32 = 0o440;
 const EXEC_MASK: u32 = 0o110;
 const MODE_SETGID: u32 = 0o2000;
-
-#[rustfmt::skip]
-lazy_static! {
-    pub static ref FLAGS: HashMap<&'static str, (bool, MsFlags)> = {
-        let mut m = HashMap::new();
-        m.insert("defaults",      (false, MsFlags::empty()));
-        m.insert("ro",            (false, MsFlags::MS_RDONLY));
-        m.insert("rw",            (true,  MsFlags::MS_RDONLY));
-        m.insert("suid",          (true,  MsFlags::MS_NOSUID));
-        m.insert("nosuid",        (false, MsFlags::MS_NOSUID));
-        m.insert("dev",           (true,  MsFlags::MS_NODEV));
-        m.insert("nodev",         (false, MsFlags::MS_NODEV));
-        m.insert("exec",          (true,  MsFlags::MS_NOEXEC));
-        m.insert("noexec",        (false, MsFlags::MS_NOEXEC));
-        m.insert("sync",          (false, MsFlags::MS_SYNCHRONOUS));
-        m.insert("async",         (true,  MsFlags::MS_SYNCHRONOUS));
-        m.insert("dirsync",       (false, MsFlags::MS_DIRSYNC));
-        m.insert("remount",       (false, MsFlags::MS_REMOUNT));
-        m.insert("mand",          (false, MsFlags::MS_MANDLOCK));
-        m.insert("nomand",        (true,  MsFlags::MS_MANDLOCK));
-        m.insert("atime",         (true,  MsFlags::MS_NOATIME));
-        m.insert("noatime",       (false, MsFlags::MS_NOATIME));
-        m.insert("diratime",      (true,  MsFlags::MS_NODIRATIME));
-        m.insert("nodiratime",    (false, MsFlags::MS_NODIRATIME));
-        m.insert("bind",          (false, MsFlags::MS_BIND));
-        m.insert("rbind",         (false, MsFlags::MS_BIND | MsFlags::MS_REC));
-        m.insert("unbindable",    (false, MsFlags::MS_UNBINDABLE));
-        m.insert("runbindable",   (false, MsFlags::MS_UNBINDABLE | MsFlags::MS_REC));
-        m.insert("private",       (false, MsFlags::MS_PRIVATE));
-        m.insert("rprivate",      (false, MsFlags::MS_PRIVATE | MsFlags::MS_REC));
-        m.insert("shared",        (false, MsFlags::MS_SHARED));
-        m.insert("rshared",       (false, MsFlags::MS_SHARED | MsFlags::MS_REC));
-        m.insert("slave",         (false, MsFlags::MS_SLAVE));
-        m.insert("rslave",        (false, MsFlags::MS_SLAVE | MsFlags::MS_REC));
-        m.insert("relatime",      (false, MsFlags::MS_RELATIME));
-        m.insert("norelatime",    (true,  MsFlags::MS_RELATIME));
-        m.insert("strictatime",   (false, MsFlags::MS_STRICTATIME));
-        m.insert("nostrictatime", (true,  MsFlags::MS_STRICTATIME));
-        m
-    };
-}
 
 #[derive(Debug, PartialEq)]
 pub struct InitMount<'a> {
@@ -168,15 +127,11 @@ pub fn baremount(
     }
 
     let destination_str = destination.to_string_lossy();
-    let mut already_mounted = false;
     if let Ok(m) = get_linux_mount_info(destination_str.deref()) {
         if m.fs_type == fs_type {
-            already_mounted = true;
+            slog_info!(logger, "{source:?} is already mounted at {destination:?}");
+            return Ok(());
         }
-    }
-    if already_mounted {
-        slog_info!(logger, "{source:?} is already mounted at {destination:?}");
-        return Ok(());
     }
 
     info!(
@@ -275,11 +230,12 @@ pub async fn update_ephemeral_mounts(
                     // assume that fsGid has already been set
                     let mount_path = Path::new(&storage.mount_point);
                     let src_path = Path::new(&storage.source);
-                    let opts = storage
+                    let opts: Vec<&String> = storage
                         .options
                         .iter()
-                        .filter(|&opt| !opt.starts_with(FS_GID_EQ));
-                    let (flags, options) = parse_mount_flags_and_options(opts);
+                        .filter(|&opt| !opt.starts_with(FS_GID_EQ))
+                        .collect();
+                    let (flags, options) = parse_mount_options(&opts)?;
 
                     info!(logger, "mounting storage";
                         "mount-source" => src_path.display(),
@@ -646,7 +602,7 @@ fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
         return Ok(());
     }
 
-    let (flags, options) = parse_mount_flags_and_options(&storage.options);
+    let (flags, options) = parse_mount_options(&storage.options)?;
     let mount_path = Path::new(&storage.mount_point);
     let src_path = Path::new(&storage.source);
     create_mount_destination(src_path, mount_path, "", &storage.fstype)
@@ -765,42 +721,6 @@ pub fn is_mounted(mount_point: &str) -> Result<bool> {
     Ok(found)
 }
 
-#[instrument]
-fn parse_mount_flags_and_options(
-    opts_iter: impl Iterator<Item = impl AsRef<str>> + Debug,
-) -> (MsFlags, String) {
-    let mut flags = MsFlags::empty();
-    let mut options: String = "".to_string();
-
-    for opt in opts_iter {
-        let opt = opt.as_ref();
-        if !opt.is_empty() {
-            match FLAGS.get(opt) {
-                Some(x) => {
-                    let (clear, f) = *x;
-                    if clear {
-                        flags &= !f;
-                    } else {
-                        flags |= f;
-                    }
-                }
-                None => {
-                    if opt.starts_with("io.katacontainers.") {
-                        continue;
-                    }
-
-                    if !options.is_empty() {
-                        options.push_str(format!(",{}", opt).as_str());
-                    } else {
-                        options.push_str(opt);
-                    }
-                }
-            };
-        }
-    }
-    (flags, options)
-}
-
 // add_storages takes a list of storages passed by the caller, and perform the
 // associated operations such as waiting for the device to show up, and mount
 // it to a specific location, according to the type of handler chosen, and for
@@ -878,27 +798,23 @@ pub async fn add_storages(
 
 #[instrument]
 fn mount_to_rootfs(logger: &Logger, m: &InitMount) -> Result<()> {
-    let (flags, options) = parse_mount_flags_and_options(m.options.iter());
-
     fs::create_dir_all(m.dest).context("could not create directory")?;
 
+    let (flags, options) = parse_mount_options(&m.options)?;
     let source = Path::new(m.src);
     let dest = Path::new(m.dest);
 
     baremount(source, dest, m.fstype, flags, &options, logger).or_else(|e| {
-        if m.src != "dev" {
-            return Err(e);
+        if m.src == "dev" {
+            error!(
+                logger,
+                "Could not mount filesystem from {} to {}", m.src, m.dest
+            );
+            Ok(())
+        } else {
+            Err(e)
         }
-
-        error!(
-            logger,
-            "Could not mount filesystem from {} to {}", m.src, m.dest
-        );
-
-        Ok(())
-    })?;
-
-    Ok(())
+    })
 }
 
 #[instrument]
@@ -932,13 +848,10 @@ pub fn get_mount_fs_type_from_file(mount_file: &str, mount_point: &str) -> Resul
 
     // Read the file line by line using the lines() iterator from std::io::BufRead.
     for (_index, line) in content.lines().enumerate() {
-        let capes = match re.captures(line) {
-            Some(c) => c,
-            None => continue,
-        };
-
-        if capes.len() > 1 {
-            return Ok(capes[1].to_string());
+        if let Some(capes) = re.captures(line) {
+            if capes.len() > 1 {
+                return Ok(capes[1].to_string());
+            }
         }
     }
 
@@ -1971,7 +1884,7 @@ mod tests {
         for (i, d) in tests.iter().enumerate() {
             let msg = format!("test[{}]: {:?}", i, d);
 
-            let result = parse_mount_flags_and_options(d.options_vec.iter());
+            let result = parse_mount_options(&d.options_vec)?;
 
             let msg = format!("{}: result: {:?}", msg, result);
 
