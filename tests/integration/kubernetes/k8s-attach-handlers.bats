@@ -7,6 +7,7 @@
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
+load "${BATS_TEST_DIRNAME}/lib.sh"
 
 setup() {
 	nginx_version="${docker_images_nginx_version}"
@@ -26,7 +27,7 @@ setup() {
 	kubectl create -f "${pod_config_dir}/test-lifecycle-events.yaml"
 
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name
+	wait_pod_to_be_ready "$pod_name"
 
 	# Check postStart message
 	display_message="cat /usr/share/message"

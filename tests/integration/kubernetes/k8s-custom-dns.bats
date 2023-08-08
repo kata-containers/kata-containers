@@ -7,6 +7,7 @@
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
+load "${BATS_TEST_DIRNAME}/lib.sh"
 
 setup() {
 	pod_name="custom-dns-test"
@@ -19,7 +20,7 @@ setup() {
 	kubectl create -f "${pod_config_dir}/pod-custom-dns.yaml"
 
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name
+	wait_pod_to_be_ready "$pod_name"
 
 	# Check dns config at /etc/resolv.conf
 	kubectl exec "$pod_name" -- cat "$file_name" | grep -q "nameserver 1.2.3.4"

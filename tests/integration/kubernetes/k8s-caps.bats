@@ -7,6 +7,7 @@
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
+load "${BATS_TEST_DIRNAME}/lib.sh"
 
 setup() {
         pod_name="pod-caps"
@@ -31,7 +32,7 @@ setup() {
         # Create pod
         kubectl create -f "${pod_config_dir}/pod-caps.yaml"
         # Check pod creation
-        kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+        wait_pod_to_be_ready "$pod_name"
 
         # Verify expected capabilities for the running container. Add retry to ensure
         # that the container had time to execute:

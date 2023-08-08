@@ -48,7 +48,7 @@ setup() {
 
 	# Check pod creation
 	for pod_name in ${launched_pods[@]}; do
-		cmd="kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name"
+		cmd="kubectl wait --for=condition=Ready --timeout=90s pod $pod_name"
 		waitForProcess "$wait_time" "$sleep_time" "$cmd"
 	done
 }

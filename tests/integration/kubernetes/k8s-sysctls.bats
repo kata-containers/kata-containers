@@ -7,6 +7,7 @@
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
+load "${BATS_TEST_DIRNAME}/lib.sh"
 
 setup() {
 	pod_name="sysctl-test"
@@ -18,7 +19,7 @@ setup() {
 	kubectl apply -f "${pod_config_dir}/pod-sysctl.yaml"
 
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name
+	wait_pod_to_be_ready "$pod_name"
 
 	# Check sysctl configuration
 	cmd="cat /proc/sys/kernel/shm_rmid_forced"

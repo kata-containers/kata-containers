@@ -7,6 +7,7 @@
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
+load "${BATS_TEST_DIRNAME}/lib.sh"
 
 assert_equal() {
 	local expected=$1
@@ -28,7 +29,7 @@ setup() {
 	kubectl create -f "${pod_config_dir}/pod-empty-dir.yaml"
 
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	wait_pod_to_be_ready "$pod_name"
 
 	# Check volume mounts
 	cmd="mount | grep cache"

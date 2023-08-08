@@ -7,6 +7,7 @@
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
+load "${BATS_TEST_DIRNAME}/lib.sh"
 
 setup() {
 	pod_name="footubuntu"
@@ -36,7 +37,7 @@ setup() {
 	kubectl create -f "${pod_config_dir}/pod-footloose.yaml"
 
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	wait_pod_to_be_ready "$pod_name"
 
 	# Get pod ip
 	pod_ip=$(kubectl get pod $pod_name --template={{.status.podIP}})

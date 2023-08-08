@@ -7,6 +7,7 @@
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
+load "${BATS_TEST_DIRNAME}/lib.sh"
 
 setup() {
 	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
@@ -31,7 +32,7 @@ setup() {
 	kubectl create -f "${pod_config_dir}/pod-secret.yaml"
 
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	wait_pod_to_be_ready "$pod_name"
 
 	# List the files
 	cmd="ls /tmp/secret-volume"
@@ -42,7 +43,7 @@ setup() {
 	kubectl create -f "${pod_config_dir}/pod-secret-env.yaml"
 
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod "$second_pod_name"
+	wait_pod_to_be_ready "$second_pod_name"
 
 	# Display environment variables
 	second_cmd="printenv"

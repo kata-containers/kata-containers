@@ -7,6 +7,7 @@
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
+load "${BATS_TEST_DIRNAME}/lib.sh"
 TEST_INITRD="${TEST_INITRD:-no}"
 
 setup() {
@@ -47,7 +48,7 @@ setup() {
 	kubectl create -f "${pod_config_dir}/pv-pod.yaml"
 
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	wait_pod_to_be_ready "$pod_name"
 
 	cmd="cat /mnt/index.html"
 	kubectl exec $pod_name -- sh -c "$cmd" | grep "$msg"

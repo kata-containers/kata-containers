@@ -7,6 +7,7 @@
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
+load "${BATS_TEST_DIRNAME}/lib.sh"
 TEST_INITRD="${TEST_INITRD:-no}"
 
 # Not working on ARM CI see https://github.com/kata-containers/tests/issues/4727  
@@ -21,7 +22,7 @@ setup() {
 	kubectl create -f "${pod_config_dir}/pod-guaranteed.yaml"
 
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	wait_pod_to_be_ready "$pod_name"
 
 	# Check pod class
 	kubectl get pod "$pod_name" --output=yaml | grep "qosClass: Guaranteed"
@@ -34,7 +35,7 @@ setup() {
 	kubectl create -f "${pod_config_dir}/pod-burstable.yaml"
 
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	wait_pod_to_be_ready "$pod_name"
 
 	# Check pod class
 	kubectl get pod "$pod_name" --output=yaml | grep "qosClass: Burstable"
@@ -47,7 +48,7 @@ setup() {
 	kubectl create -f "${pod_config_dir}/pod-besteffort.yaml"
 
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	wait_pod_to_be_ready "$pod_name"
 
 	# Check pod class
 	kubectl get pod "$pod_name" --output=yaml | grep "qosClass: BestEffort"

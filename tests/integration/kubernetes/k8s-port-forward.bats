@@ -6,6 +6,7 @@
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
+load "${BATS_TEST_DIRNAME}/lib.sh"
 source "/etc/os-release" || source "/usr/lib/os-release"
 
 issue="https://github.com/kata-containers/runtime/issues/1834"
@@ -23,12 +24,12 @@ setup() {
 	kubectl apply -f "${pod_config_dir}/redis-master-deployment.yaml"
 
 	# Check deployment
-	kubectl wait --for=condition=Available --timeout=$timeout deployment/"$deployment_name"
+	kubectl wait --for=condition=Available --timeout=90s deployment/"$deployment_name"
 	kubectl expose deployment/"$deployment_name"
 
 	# Get pod name
 	pod_name=$(kubectl get pods --output=jsonpath={.items..metadata.name})
-	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	wait_pod_to_be_ready "$pod_name"
 
 	# View replicaset
 	kubectl get rs

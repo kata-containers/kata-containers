@@ -7,6 +7,7 @@
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
+load "${BATS_TEST_DIRNAME}/lib.sh"
 TEST_INITRD="${TEST_INITRD:-no}"
 
 setup() {
@@ -32,7 +33,7 @@ setup() {
 	kubectl create -f "${pod_config_dir}/test-pod-file-volume.yaml"
 
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	wait_pod_to_be_ready "$pod_name"
 
 	# Validate file volume body inside the pod
 	file_in_container=$(kubectl exec $pod_name -- cat $mount_path)

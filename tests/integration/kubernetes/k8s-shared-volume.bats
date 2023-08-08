@@ -7,6 +7,7 @@
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
+load "${BATS_TEST_DIRNAME}/lib.sh"
 
 setup() {
 	get_pod_config_dir
@@ -21,7 +22,7 @@ setup() {
 	kubectl create -f "${pod_config_dir}/pod-shared-volume.yaml"
 
 	# Check pods
-	kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name
+	wait_pod_to_be_ready "$pod_name"
 
 	# Communicate containers
 	cmd="cat /tmp/pod-data"
@@ -37,7 +38,7 @@ setup() {
 	kubectl create -f "${pod_config_dir}/initContainer-shared-volume.yaml"
 
 	# Check pods
-	kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name
+	wait_pod_to_be_ready "$pod_name"
 
 	cmd='test $(cat /volume/initContainer) -lt $(cat /volume/container)'
 	kubectl exec "$pod_name" -c "$last_container" -- sh -c "$cmd"

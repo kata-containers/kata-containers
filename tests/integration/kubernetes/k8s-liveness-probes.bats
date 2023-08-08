@@ -7,6 +7,7 @@
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
+load "${BATS_TEST_DIRNAME}/lib.sh"
 
 setup() {
 	sleep_liveness=20
@@ -23,7 +24,7 @@ setup() {
 	kubectl create -f "${pod_config_dir}/pod-liveness.yaml"
 
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	wait_pod_to_be_ready "$pod_name"
 
 	# Check liveness probe returns a success code
 	kubectl describe pod "$pod_name" | grep -E "Liveness|#success=1"
@@ -42,7 +43,7 @@ setup() {
 		kubectl create -f -
 
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	wait_pod_to_be_ready "$pod_name"
 
 	# Check liveness probe returns a success code
 	kubectl describe pod "$pod_name" | grep -E "Liveness|#success=1"
@@ -62,7 +63,7 @@ setup() {
 		kubectl create -f -
 
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	wait_pod_to_be_ready "$pod_name"
 
 	# Check liveness probe returns a success code
 	kubectl describe pod "$pod_name" | grep -E "Liveness|#success=1"

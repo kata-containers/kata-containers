@@ -7,6 +7,7 @@
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
+load "${BATS_TEST_DIRNAME}/lib.sh"
 
 setup() {
 	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
@@ -21,7 +22,7 @@ setup() {
 
         # Create deployment that expects identity-certs
         kubectl apply -f "${pod_config_dir}"/inotify-configmap-pod.yaml
-        kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+        wait_pod_to_be_ready "$pod_name"
 
         # Update configmap
         kubectl apply -f "${pod_config_dir}"/inotify-updated-configmap.yaml

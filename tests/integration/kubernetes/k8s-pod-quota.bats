@@ -26,7 +26,7 @@ setup() {
 	kubectl create -f "${pod_config_dir}/pod-quota-deployment.yaml"
 
 	# View deployment
-	kubectl wait --for=condition=Available --timeout=$timeout \
+	kubectl wait --for=condition=Available --timeout=90s \
 		deployment/${deployment_name}
 }
 

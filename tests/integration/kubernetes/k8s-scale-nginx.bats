@@ -22,7 +22,7 @@ setup() {
 		"${pod_config_dir}/${deployment}.yaml" > "${pod_config_dir}/test-${deployment}.yaml"
 
 	kubectl create -f "${pod_config_dir}/test-${deployment}.yaml"
-	kubectl wait --for=condition=Available --timeout=$timeout deployment/${deployment}
+	kubectl wait --for=condition=Available --timeout=90s deployment/${deployment}
 	kubectl expose deployment/${deployment}
 	kubectl scale deployment/${deployment} --replicas=${replicas}
 	cmd="kubectl get deployment/${deployment} -o yaml | grep 'availableReplicas: ${replicas}'"

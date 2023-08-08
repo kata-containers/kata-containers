@@ -7,6 +7,7 @@
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
+load "${BATS_TEST_DIRNAME}/lib.sh"
 
 setup() {
 	get_pod_config_dir
@@ -27,7 +28,7 @@ setup() {
 	kubectl create -f "${pod_config}"
 
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name
+	wait_pod_to_be_ready "$pod_name"
 
 	# Create a file
 	echo "$content" > "$file_name"
@@ -52,7 +53,7 @@ setup() {
 	kubectl create -f "${pod_config}"
 
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name
+	wait_pod_to_be_ready "$pod_name"
 
 	kubectl logs "$pod_name" || true
 	kubectl describe pod "$pod_name" || true

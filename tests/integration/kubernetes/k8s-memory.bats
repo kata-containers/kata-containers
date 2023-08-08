@@ -7,6 +7,7 @@
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
+load "${BATS_TEST_DIRNAME}/lib.sh"
 
 setup() {
 	pod_name="memory-test"
@@ -44,7 +45,7 @@ setup_yaml() {
 	kubectl create -f "${pod_config_dir}/test_within_memory.yaml"
 
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
+	wait_pod_to_be_ready "$pod_name"
 
 	rm -f "${pod_config_dir}/test_within_memory.yaml"
 	kubectl delete pod "$pod_name"

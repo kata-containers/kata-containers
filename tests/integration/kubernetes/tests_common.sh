@@ -19,10 +19,6 @@ export container_images_agnhost_version="2.21"
 wait_time=90
 sleep_time=3
 
-# Timeout for use with `kubectl wait`, unless it needs to wait longer.
-# Note: try to keep timeout and wait_time equal.
-timeout=90s
-
 # issues that can't test yet.
 fc_limitations="https://github.com/kata-containers/documentation/issues/351"
 dragonball_limitations="https://github.com/kata-containers/kata-containers/issues/6621"

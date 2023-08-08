@@ -7,6 +7,7 @@
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
+load "${BATS_TEST_DIRNAME}/lib.sh"
 
 setup() {
 	pod_name="busybox"
@@ -20,7 +21,7 @@ setup() {
 	kubectl create -f "${pod_config_dir}/initcontainer-shareprocesspid.yaml"
 
 	# Check pod creation
-	kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name
+	wait_pod_to_be_ready "$pod_name"
 
 	# Check PID from first container
 	first_pid_container=$(kubectl exec $pod_name -c $first_container_name \
