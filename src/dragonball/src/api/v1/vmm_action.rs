@@ -358,7 +358,8 @@ impl VmmService {
             Some(ref path) => Some(File::open(path).map_err(|e| BootSource(InvalidInitrdPath(e)))?),
         };
 
-        let mut cmdline = linux_loader::cmdline::Cmdline::new(dbs_boot::layout::CMDLINE_MAX_SIZE);
+        let mut cmdline = linux_loader::cmdline::Cmdline::new(dbs_boot::layout::CMDLINE_MAX_SIZE)
+            .map_err(|err| BootSource(InvalidKernelCommandLine(err)))?;
         let boot_args = boot_source_config
             .boot_args
             .unwrap_or_else(|| String::from(DEFAULT_KERNEL_CMDLINE));
