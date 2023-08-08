@@ -41,6 +41,12 @@ pub struct NetworkConfig {
 
     /// Guest MAC address.
     pub guest_mac: Option<Address>,
+
+    /// Virtio queue size
+    pub queue_size: usize,
+
+    /// Virtio queue num
+    pub queue_num: usize,
 }
 
 #[derive(Clone, Debug, Default)]
