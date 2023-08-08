@@ -5,6 +5,7 @@
 //
 
 use anyhow::{anyhow, Context, Result};
+use std::fmt::Formatter;
 use std::{collections::HashMap, fs, path::PathBuf};
 
 /// Prefix to mark a volume as Kata special.
@@ -165,6 +166,43 @@ impl NydusExtraOptions {
     }
 }
 
+/// An implementation of generic storage device.
+pub struct StorageDeviceGeneric {
+    refcount: u32,
+}
+
+impl std::fmt::Debug for StorageDeviceGeneric {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StorageState")
+            .field("refcount", &self.refcount)
+            .finish()
+    }
+}
+
+impl StorageDeviceGeneric {
+    /// Create a new instance of `StorageStateCommon`.
+    pub fn new() -> Self {
+        StorageDeviceGeneric { refcount: 0 }
+    }
+
+    /// Get reference count.
+    pub fn ref_count(&self) -> u32 {
+        self.refcount
+    }
+
+    /// Decrease reference count and return true if it reaches zero.
+    pub fn inc_ref_count(&mut self) {
+        self.refcount += 1;
+    }
+
+    /// Decrease reference count and return true if it reaches zero.
+    pub fn dec_and_test_ref_count(&mut self) -> bool {
+        assert!(self.refcount > 0);
+        self.refcount -= 1;
+        self.refcount == 0
+    }
+}
+
 /// sandbox bindmount format:  /path/to/dir, or /path/to/dir:ro[:rw]
 /// the real path is without suffix ":ro" or ":rw".
 pub fn split_bind_mounts(bindmount: &str) -> (&str, &str) {
@@ -247,5 +285,19 @@ mod tests {
             "/var/lib/containerd/io.containerd.snapshotter.v1.nydus/snapshots/261"
         );
         assert_eq!(extra_option.fs_version, "v6");
+    }
+
+    #[test]
+    fn test_storage_state_common() {
+        let mut state = StorageDeviceGeneric::new();
+        assert_eq!(state.ref_count(), 0);
+        state.inc_ref_count();
+        assert_eq!(state.ref_count(), 1);
+        state.inc_ref_count();
+        assert_eq!(state.ref_count(), 2);
+        assert!(!state.dec_and_test_ref_count());
+        assert_eq!(state.ref_count(), 1);
+        assert!(state.dec_and_test_ref_count());
+        assert_eq!(state.ref_count(), 0);
     }
 }
