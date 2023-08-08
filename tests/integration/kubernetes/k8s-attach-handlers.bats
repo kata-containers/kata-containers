@@ -24,10 +24,7 @@ setup() {
 		"${pod_config_dir}/lifecycle-events.yaml" > "${pod_config_dir}/test-lifecycle-events.yaml"
 
 	# Create the pod with postStart and preStop handlers
-	kubectl create -f "${pod_config_dir}/test-lifecycle-events.yaml"
-
-	# Check pod creation
-	wait_pod_to_be_ready "$pod_name"
+	create_pod_and_wait "${pod_config_dir}/test-lifecycle-events.yaml" "$pod_name"
 
 	# Check postStart message
 	display_message="cat /usr/share/message"

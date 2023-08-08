@@ -24,10 +24,7 @@ setup() {
 	kubectl get configmaps $config_name -o yaml | grep -q "data-"
 
 	# Create a pod that consumes the ConfigMap
-	kubectl create -f "${pod_config_dir}/pod-configmap.yaml"
-
-	# Check pod creation
-	wait_pod_to_be_ready "$pod_name"
+	create_pod_and_wait "${pod_config_dir}/pod-configmap.yaml" "$pod_name"
 
 	# Check env
 	cmd="env"

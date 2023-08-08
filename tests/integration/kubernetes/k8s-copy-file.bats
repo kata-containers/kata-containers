@@ -50,10 +50,7 @@ setup() {
 	sed -i "s/POD_NAME/$pod_name/" "$pod_config"
 	sed -i "s/CTR_NAME/$ctr_name/" "$pod_config"
 
-	kubectl create -f "${pod_config}"
-
-	# Check pod creation
-	wait_pod_to_be_ready "$pod_name"
+	create_pod_and_wait "${pod_config}" "$pod_name"
 
 	kubectl logs "$pod_name" || true
 	kubectl describe pod "$pod_name" || true

@@ -16,10 +16,7 @@ setup() {
 
 @test "Test OOM events for pods" {
 	# Create pod
-	kubectl create -f "${pod_config_dir}/$pod_name.yaml"
-
-	# Check pod creation
-	wait_pod_to_be_ready "$pod_name"
+	create_pod_and_wait "${pod_config_dir}/$pod_name.yaml" "$pod_name"
 
 	# Check if OOMKilled
 	cmd="kubectl get pods "$pod_name" -o jsonpath='{.status.containerStatuses[0].state.terminated.reason}' | grep OOMKilled"

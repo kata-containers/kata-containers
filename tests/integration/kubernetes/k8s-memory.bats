@@ -42,10 +42,7 @@ setup_yaml() {
 	setup_yaml > "${pod_config_dir}/test_within_memory.yaml"
 
 	# Create the pod within memory constraints
-	kubectl create -f "${pod_config_dir}/test_within_memory.yaml"
-
-	# Check pod creation
-	wait_pod_to_be_ready "$pod_name"
+	create_pod_and_wait "${pod_config_dir}/test_within_memory.yaml" "$pod_name"
 
 	rm -f "${pod_config_dir}/test_within_memory.yaml"
 	kubectl delete pod "$pod_name"

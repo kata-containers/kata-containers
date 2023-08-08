@@ -30,10 +30,7 @@ setup() {
 	sed -i "s|MOUNT_PATH|$mount_path|" ${pod_config_dir}/test-pod-file-volume.yaml
 
 	# Create pod
-	kubectl create -f "${pod_config_dir}/test-pod-file-volume.yaml"
-
-	# Check pod creation
-	wait_pod_to_be_ready "$pod_name"
+	create_pod_and_wait "${pod_config_dir}/test-pod-file-volume.yaml" "$pod_name"
 
 	# Validate file volume body inside the pod
 	file_in_container=$(kubectl exec $pod_name -- cat $mount_path)

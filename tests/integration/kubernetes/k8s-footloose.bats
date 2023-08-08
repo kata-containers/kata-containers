@@ -34,10 +34,7 @@ setup() {
 	kubectl create -f "$configmap_yaml"
 
 	# Create pod
-	kubectl create -f "${pod_config_dir}/pod-footloose.yaml"
-
-	# Check pod creation
-	wait_pod_to_be_ready "$pod_name"
+	create_pod_and_wait "${pod_config_dir}/pod-footloose.yaml" "$pod_name"
 
 	# Get pod ip
 	pod_ip=$(kubectl get pod $pod_name --template={{.status.podIP}})

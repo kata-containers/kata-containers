@@ -16,10 +16,7 @@ setup() {
 
 @test "Environment variables" {
 	# Create pod
-	kubectl create -f "${pod_config_dir}/pod-env.yaml"
-
-	# Check pod creation
-	wait_pod_to_be_ready "$pod_name"
+	create_pod_and_wait "${pod_config_dir}/pod-env.yaml" "$pod_name"
 
 	# Print environment variables
 	cmd="printenv"

@@ -21,10 +21,7 @@ setup() {
 	pod_name="liveness-exec"
 
 	# Create pod
-	kubectl create -f "${pod_config_dir}/pod-liveness.yaml"
-
-	# Check pod creation
-	wait_pod_to_be_ready "$pod_name"
+	create_pod_and_wait "${pod_config_dir}/pod-liveness.yaml" "$pod_name"
 
 	# Check liveness probe returns a success code
 	kubectl describe pod "$pod_name" | grep -E "Liveness|#success=1"

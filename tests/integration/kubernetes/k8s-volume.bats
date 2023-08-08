@@ -45,10 +45,7 @@ setup() {
 	waitForProcess "$wait_time" "$sleep_time" "$cmd"
 
 	# Create pod
-	kubectl create -f "${pod_config_dir}/pv-pod.yaml"
-
-	# Check pod creation
-	wait_pod_to_be_ready "$pod_name"
+	create_pod_and_wait "${pod_config_dir}/pv-pod.yaml" "$pod_name"
 
 	cmd="cat /mnt/index.html"
 	kubectl exec $pod_name -- sh -c "$cmd" | grep "$msg"

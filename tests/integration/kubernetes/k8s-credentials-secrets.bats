@@ -29,10 +29,7 @@ setup() {
 	kubectl get secret "${secret_name}" -o yaml | grep "type: Opaque"
 
 	# Create a pod that has access to the secret through a volume
-	kubectl create -f "${pod_config_dir}/pod-secret.yaml"
-
-	# Check pod creation
-	wait_pod_to_be_ready "$pod_name"
+	create_pod_and_wait "${pod_config_dir}/pod-secret.yaml" "$pod_name"
 
 	# List the files
 	cmd="ls /tmp/secret-volume"
@@ -40,10 +37,7 @@ setup() {
 	kubectl exec $pod_name -- sh -c "$cmd" | grep -w "username"
 
 	# Create a pod that has access to the secret data through environment variables
-	kubectl create -f "${pod_config_dir}/pod-secret-env.yaml"
-
-	# Check pod creation
-	wait_pod_to_be_ready "$second_pod_name"
+	create_pod_and_wait "${pod_config_dir}/pod-secret-env.yaml" "$second_pod_name"
 
 	# Display environment variables
 	second_cmd="printenv"

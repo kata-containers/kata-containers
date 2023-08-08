@@ -26,10 +26,7 @@ setup() {
 
 @test "Empty dir volumes" {
 	# Create the pod
-	kubectl create -f "${pod_config_dir}/pod-empty-dir.yaml"
-
-	# Check pod creation
-	wait_pod_to_be_ready "$pod_name"
+	create_pod_and_wait "${pod_config_dir}/pod-empty-dir.yaml" "$pod_name"
 
 	# Check volume mounts
 	cmd="mount | grep cache"

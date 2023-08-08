@@ -16,10 +16,7 @@ setup() {
 
 @test "Setting sysctl" {
 	# Create pod
-	kubectl apply -f "${pod_config_dir}/pod-sysctl.yaml"
-
-	# Check pod creation
-	wait_pod_to_be_ready "$pod_name"
+	create_pod_and_wait "${pod_config_dir}/pod-sysctl.yaml" "$pod_name"
 
 	# Check sysctl configuration
 	cmd="cat /proc/sys/kernel/shm_rmid_forced"

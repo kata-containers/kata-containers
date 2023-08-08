@@ -21,8 +21,7 @@ setup() {
         kubectl apply -f "${pod_config_dir}"/inotify-configmap.yaml
 
         # Create deployment that expects identity-certs
-        kubectl apply -f "${pod_config_dir}"/inotify-configmap-pod.yaml
-        wait_pod_to_be_ready "$pod_name"
+        create_pod_and_wait "${pod_config_dir}"/inotify-configmap-pod.yaml "$pod_name"
 
         # Update configmap
         kubectl apply -f "${pod_config_dir}"/inotify-updated-configmap.yaml

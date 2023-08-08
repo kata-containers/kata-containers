@@ -21,10 +21,7 @@ setup() {
 	kubectl create secret generic "$secret_name"
 
 	# Create a pod that consumes the "empty-secret" and "optional-missing-secret" Secrets as volumes
-	kubectl create -f "${pod_config_dir}/pod-optional-empty-secret.yaml"
-
-	# Check pod creation
-	wait_pod_to_be_ready "$pod_name"
+	create_pod_and_wait "${pod_config_dir}/pod-optional-empty-secret.yaml" "$pod_name"
 
 	# Check secret folders exist
 	kubectl exec $pod_name -- sh -c ls /empty-secret

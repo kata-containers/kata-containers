@@ -19,3 +19,37 @@ wait_pod_to_be_ready() {
 
 	kubectl wait --timeout="${wait_time}s" --for=condition=ready "pods/$pod_name"
 }
+
+# Create a pod and wait it to be ready, otherwise fail.
+#
+# Parameters:
+#	$1 - the pod configuration file.
+#	$2 - the pod name (optional)
+#
+create_pod_and_wait() {
+	local config_file="$1"
+	local pod_name="${2:-}"
+
+	if [ ! -f "${config_file}" ]; then
+		echo "Pod config file '${config_file}' does not exist"
+		return 1
+	fi
+
+	if ! kubectl apply -f "${config_file}"; then
+		echo "Failed to create the pod"
+		return 1
+	fi
+
+	pod_name=${pod_name:-$(kubectl get pods -o jsonpath='{.items..metadata.name}')}
+	if [ -z "$pod_name" ]; then
+		echo "Unable to get the pod name"
+		return 1
+	fi
+
+	if ! wait_pod_to_be_ready "$pod_name"; then
+		# TODO: run this command for debugging. Maybe it should be
+		#       guarded by DEBUG=true?
+		kubectl get pods "$pod_name"
+		return 1
+	fi
+}

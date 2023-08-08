@@ -18,10 +18,7 @@ setup() {
 # Skip on aarch64 due to missing cpu hotplug related functionality.
 @test "Check number of cpus" {
 	# Create pod
-	kubectl create -f "${pod_config_dir}/pod-number-cpu.yaml"
-
-	# Check pod creation
-	wait_pod_to_be_ready "$pod_name"
+	create_pod_and_wait "${pod_config_dir}/pod-number-cpu.yaml" "$pod_name"
 
 	retries="10"
 	max_number_cpus="3"

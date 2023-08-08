@@ -30,9 +30,7 @@ setup() {
 
 @test "Check capabilities of pod" {
         # Create pod
-        kubectl create -f "${pod_config_dir}/pod-caps.yaml"
-        # Check pod creation
-        wait_pod_to_be_ready "$pod_name"
+        create_pod_and_wait "${pod_config_dir}/pod-caps.yaml" "$pod_name"
 
         # Verify expected capabilities for the running container. Add retry to ensure
         # that the container had time to execute:

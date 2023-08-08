@@ -19,10 +19,7 @@ setup() {
 
 @test "Check PID namespaces" {
 	# Create the pod
-	kubectl create -f "${pod_config_dir}/busybox-pod.yaml"
-
-	# Check pod creation
-	wait_pod_to_be_ready "$pod_name"
+	create_pod_and_wait "${pod_config_dir}/busybox-pod.yaml" "$pod_name"
 
 	# Check PID from first container
 	first_pid_container=$(kubectl exec $pod_name -c $first_container_name \

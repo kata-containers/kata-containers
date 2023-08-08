@@ -34,10 +34,7 @@ setup() {
 	kubectl create secret generic pass --from-file=$SECOND_TMP_FILE
 
 	# Create pod
-	kubectl create -f "${pod_config_dir}/pod-projected-volume.yaml"
-
-	# Check pod creation
-	wait_pod_to_be_ready "$pod_name"
+	create_pod_and_wait "${pod_config_dir}/pod-projected-volume.yaml" "$pod_name"
 
 	# Check that the projected sources exists
 	cmd="ls /projected-volume | grep username"

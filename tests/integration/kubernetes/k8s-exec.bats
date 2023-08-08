@@ -18,10 +18,7 @@ setup() {
 
 @test "Kubectl exec" {
 	# Create the pod
-	kubectl create -f "${pod_config_dir}/busybox-pod.yaml"
-
-	# Get pod specification
-	wait_pod_to_be_ready "$pod_name"
+	create_pod_and_wait "${pod_config_dir}/busybox-pod.yaml" "$pod_name"
 
 	# Run commands in Pod
 	## Cases for -it options

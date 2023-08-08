@@ -19,10 +19,7 @@ setup() {
 	pod_name="qos-test"
 
 	# Create pod
-	kubectl create -f "${pod_config_dir}/pod-guaranteed.yaml"
-
-	# Check pod creation
-	wait_pod_to_be_ready "$pod_name"
+	create_pod_and_wait "${pod_config_dir}/pod-guaranteed.yaml" "$pod_name"
 
 	# Check pod class
 	kubectl get pod "$pod_name" --output=yaml | grep "qosClass: Guaranteed"

@@ -19,10 +19,7 @@ setup() {
 	second_container_name="busybox-second-container"
 
 	# Create pod
-	kubectl create -f "${pod_config_dir}/pod-shared-volume.yaml"
-
-	# Check pods
-	wait_pod_to_be_ready "$pod_name"
+	create_pod_and_wait "${pod_config_dir}/pod-shared-volume.yaml" "$pod_name"
 
 	# Communicate containers
 	cmd="cat /tmp/pod-data"
@@ -35,10 +32,7 @@ setup() {
 	last_container="last"
 
 	# Create pod
-	kubectl create -f "${pod_config_dir}/initContainer-shared-volume.yaml"
-
-	# Check pods
-	wait_pod_to_be_ready "$pod_name"
+	create_pod_and_wait "${pod_config_dir}/initContainer-shared-volume.yaml" "$pod_name"
 
 	cmd='test $(cat /volume/initContainer) -lt $(cat /volume/container)'
 	kubectl exec "$pod_name" -c "$last_container" -- sh -c "$cmd"
