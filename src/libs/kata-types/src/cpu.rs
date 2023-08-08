@@ -26,7 +26,7 @@ pub enum Error {
 }
 
 /// Assigned CPU resources for a Linux container.
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct LinuxContainerCpuResources {
     shares: u64,
     period: u64,

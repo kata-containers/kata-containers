@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2021 Intel Corporation
+[global]
+name=seqread-libaio
+filename=fio-file
+rw=read
+ioengine=libaio
+
+[seqread-libaio]

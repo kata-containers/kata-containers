@@ -19,11 +19,13 @@ use std::{
 use anyhow::{anyhow, Context};
 use nix::sys::socket::{connect, socket, AddressFamily, SockFlag, SockType, VsockAddr};
 use reqwest::StatusCode;
-use slog::debug;
+use slog::{debug, error, o};
 use vmm_sys_util::terminal::Terminal;
 
 use crate::args::ExecArguments;
 use shim_interface::shim_mgmt::{client::MgmtClient, AGENT_URL};
+
+use crate::utils::TIMEOUT;
 
 const CMD_CONNECT: &str = "CONNECT";
 const CMD_OK: &str = "OK";
@@ -32,7 +34,6 @@ const SCHEME_HYBRID_VSOCK: &str = "HVSOCK";
 
 const EPOLL_EVENTS_LEN: usize = 16;
 const KATA_AGENT_VSOCK_TIMEOUT: u64 = 5;
-const TIMEOUT: Duration = Duration::from_millis(2000);
 
 type Result<T> = std::result::Result<T, Error>;
 
@@ -40,7 +41,7 @@ type Result<T> = std::result::Result<T, Error>;
 #[macro_export]
 macro_rules! sl {
     () => {
-        slog_scope::logger()
+        slog_scope::logger().new(o!("subsystem" => "exec_ops"))
     };
 }
 
@@ -142,7 +143,7 @@ impl EpollContext {
                                 return Ok(());
                             }
                             Err(e) => {
-                                println!("error with errno {:?} while reading stdin", e);
+                                error!(sl!(), "errno {:?} while reading stdin", e);
                                 return Ok(());
                             }
                             Ok(count) => {
@@ -159,7 +160,7 @@ impl EpollContext {
                                 return Ok(());
                             }
                             Err(e) => {
-                                println!("error with errno {:?} while reading server", e);
+                                error!(sl!(), "errno {:?} while reading server", e);
                                 return Ok(());
                             }
                             Ok(count) => {

@@ -5,7 +5,7 @@
 
 mod inner;
 
-use crate::device::Device;
+use crate::device::DeviceType;
 use crate::hypervisor_persist::HypervisorState;
 use crate::Hypervisor;
 use crate::{HypervisorConfig, VcpuThreadIds};
@@ -18,6 +18,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+#[derive(Debug)]
 pub struct Qemu {
     inner: Arc<RwLock<QemuInner>>,
 }
@@ -73,12 +74,12 @@ impl Hypervisor for Qemu {
         inner.save_vm().await
     }
 
-    async fn add_device(&self, device: Device) -> Result<()> {
+    async fn add_device(&self, device: DeviceType) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.add_device(device).await
     }
 
-    async fn remove_device(&self, device: Device) -> Result<()> {
+    async fn remove_device(&self, device: DeviceType) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.remove_device(device).await
     }
@@ -118,6 +119,11 @@ impl Hypervisor for Qemu {
         inner.cleanup().await
     }
 
+    async fn resize_vcpu(&self, old_vcpus: u32, new_vcpus: u32) -> Result<(u32, u32)> {
+        let inner = self.inner.read().await;
+        inner.resize_vcpu(old_vcpus, new_vcpus).await
+    }
+
     async fn get_pids(&self) -> Result<Vec<u32>> {
         let inner = self.inner.read().await;
         inner.get_pids().await
@@ -140,5 +146,10 @@ impl Hypervisor for Qemu {
     async fn capabilities(&self) -> Result<Capabilities> {
         let inner = self.inner.read().await;
         inner.capabilities().await
+    }
+
+    async fn get_hypervisor_metrics(&self) -> Result<String> {
+        let inner = self.inner.read().await;
+        inner.get_hypervisor_metrics().await
     }
 }

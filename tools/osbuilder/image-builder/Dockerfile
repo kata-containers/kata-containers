@@ -3,7 +3,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 ARG IMAGE_REGISTRY=registry.fedoraproject.org
-FROM ${IMAGE_REGISTRY}/fedora:34
+FROM ${IMAGE_REGISTRY}/fedora:38
 
 RUN ([ -n "$http_proxy" ] && \
     sed -i '$ a proxy='$http_proxy /etc/dnf/dnf.conf ; true) && \
@@ -14,5 +14,6 @@ RUN ([ -n "$http_proxy" ] && \
         gdisk \
         parted \
         qemu-img \
+        veritysetup \
         xfsprogs && \
     dnf clean all

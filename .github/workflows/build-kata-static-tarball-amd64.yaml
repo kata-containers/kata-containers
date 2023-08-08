@@ -2,6 +2,10 @@ name: CI | Build kata-static tarball for amd64
 on:
   workflow_call:
     inputs:
+      stage:
+        required: false
+        type: string
+        default: test
       tarball-suffix:
         required: false
         type: string
@@ -9,6 +13,9 @@ on:
         required: false
         type: string
         default: no
+      commit-hash:
+        required: false
+        type: string
 
 jobs:
   build-asset:
@@ -17,26 +24,48 @@ jobs:
       matrix:
         asset:
           - cloud-hypervisor
+          - cloud-hypervisor-glibc
           - firecracker
           - kernel
+          - kernel-sev
           - kernel-dragonball-experimental
           - kernel-tdx-experimental
-          - kernel-gpu
-          - kernel-gpu-snp
-          - kernel-gpu-tdx-experimental
+          - kernel-nvidia-gpu
+          - kernel-nvidia-gpu-snp
+          - kernel-nvidia-gpu-tdx-experimental
           - nydus
+          - ovmf
+          - ovmf-sev
           - qemu
+          - qemu-snp-experimental
           - qemu-tdx-experimental
           - rootfs-image
+          - rootfs-image-tdx
           - rootfs-initrd
+          - rootfs-initrd-mariner
+          - rootfs-initrd-sev
           - shim-v2
           - tdvf
           - virtiofsd
+        stage:
+          - ${{ inputs.stage }}
+        exclude:
+          - asset: cloud-hypervisor-glibc
+            stage: release
     steps:
+      - name: Login to Kata Containers quay.io
+        if: ${{ inputs.push-to-registry == 'yes' }}
+        uses: docker/login-action@v2
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
+          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
       - uses: actions/checkout@v3
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ inputs.commit-hash }}
           fetch-depth: 0 # This is needed in order to keep the commit ids history
+
       - name: Build ${{ matrix.asset }}
         run: |
           make "${KATA_ASSET}-tarball"
@@ -62,7 +91,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ inputs.commit-hash }}
       - name: get-artifacts
         uses: actions/download-artifact@v3
         with:
@@ -70,7 +99,7 @@ jobs:
           path: kata-artifacts
       - name: merge-artifacts
         run: |
-          ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-builds.sh kata-artifacts
+          ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-builds.sh kata-artifacts versions.yaml
       - name: store-artifacts
         uses: actions/upload-artifact@v3
         with:

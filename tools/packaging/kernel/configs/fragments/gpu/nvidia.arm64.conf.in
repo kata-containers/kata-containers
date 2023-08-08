@@ -1,0 +1,29 @@
+# Support for loading modules.
+# It is used to support loading GPU drivers.
+CONFIG_MODULES=y
+CONFIG_MODULE_UNLOAD=y
+
+# CRYPTO_FIPS requires this config when loading modules is enabled.
+CONFIG_MODULE_SIG=y
+
+# Linux kernel version suffix
+CONFIG_LOCALVERSION="-nvidia-gpu${CONF_GUEST_SUFFIX}"
+
+# Newer NVIDIA drivers need additional symbols
+CONFIG_ARCH_SUPPORTS_MEMORY_FAILURE=y
+CONFIG_MEMORY_FAILURE=y
+
+
+# VFIO/IOMMU setttings 
+CONFIG_MMU_NOTIFIER=y
+CONFIG_IOASID=y
+CONFIG_IOMMU_IO_PGTABLE=y
+CONFIG_IOMMU_IO_PGTABLE_LPAE=y
+CONFIG_IOMMU_SVA=y
+CONFIG_ARM_SMMU_V3=y
+CONFIG_ARM_SMMU_V3_SVA=y
+
+# CC related configs 
+CONFIG_CRYPTO_ECC=y
+CONFIG_CRYPTO_ECDH=y
+CONFIG_CRYPTO_ECDSA=y

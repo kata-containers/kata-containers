@@ -26,11 +26,17 @@ export VERSION_COMMIT := $(if $(COMMIT),$(VERSION)-$(COMMIT),$(VERSION))
 EXTRA_RUSTFEATURES :=
 
 ##VAR SECCOMP=yes|no define if agent enables seccomp feature
-SECCOMP := yes
+SECCOMP ?= yes
 
 # Enable seccomp feature of rust build
 ifeq ($(SECCOMP),yes)
     override EXTRA_RUSTFEATURES += seccomp
+endif
+
+include ../../utils.mk
+
+ifeq ($(ARCH), ppc64le)
+    override ARCH = powerpc64le
 endif
 
 ##VAR STANDARD_OCI_RUNTIME=yes|no define if agent enables standard oci runtime feature
@@ -44,8 +50,6 @@ endif
 ifneq ($(EXTRA_RUSTFEATURES),)
     override EXTRA_RUSTFEATURES := --features "$(EXTRA_RUSTFEATURES)"
 endif
-
-include ../../utils.mk
 
 TARGET_PATH = target/$(TRIPLE)/$(BUILD_TYPE)/$(TARGET)
 

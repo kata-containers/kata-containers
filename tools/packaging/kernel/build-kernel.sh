@@ -31,6 +31,7 @@ readonly default_kernel_config_dir="${script_dir}/configs"
 # Default path to search for kernel config fragments
 readonly default_config_frags_dir="${script_dir}/configs/fragments"
 readonly default_config_whitelist="${script_dir}/configs/fragments/whitelist.conf"
+readonly default_initramfs="${script_dir}/initramfs.cpio.gz"
 # GPU vendor
 readonly GV_INTEL="intel"
 readonly GV_NVIDIA="nvidia"
@@ -63,6 +64,10 @@ PREFIX="${PREFIX:-/usr}"
 kernel_url=""
 #Linux headers for GPU guest fs module building
 linux_headers=""
+
+CROSS_BUILD_ARG=""
+
+MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
 
 packaging_scripts_dir="${script_dir}/../scripts"
 source "${packaging_scripts_dir}/lib.sh"
@@ -129,7 +134,13 @@ get_tee_kernel() {
 
 	mkdir -p ${kernel_path}
 
-	[ -z "${kernel_url}" ] && kernel_url=$(get_from_kata_deps "assets.kernel.${tee}.url")
+	if [ -z "${kernel_url}" ]; then
+		if [[ "${conf_guest}" == "tdx" ]]; then
+			kernel_url=$(get_from_kata_deps "assets.kernel-tdx-experimental.url")
+		else
+			kernel_url=$(get_from_kata_deps "assets.kernel.${tee}.url")
+		fi
+	fi
 
 	local kernel_tarball="${version}.tar.gz"
 
@@ -242,24 +253,32 @@ get_kernel_frag_path() {
 
 	if [[ "${gpu_vendor}" != "" ]];then
 		info "Add kernel config for GPU due to '-g ${gpu_vendor}'"
-		local gpu_configs="$(ls ${gpu_path}/${gpu_vendor}.conf)"
-		all_configs="${all_configs} ${gpu_configs}"
 		# If conf_guest is set we need to update the CONFIG_LOCALVERSION
 		# to match the suffix created in install_kata
 		# -nvidia-gpu-{snp|tdx}, the linux headers will be named the very
 		# same if build with make deb-pkg for TDX or SNP.
+		local gpu_configs=$(mktemp).conf
+		local gpu_subst_configs="${gpu_path}/${gpu_vendor}.${arch_target}.conf.in"
 		if [[ "${conf_guest}" != "" ]];then
-			local gpu_cc_configs=$(mktemp).conf
-			local gpu_subst_configs="$(ls ${gpu_path}/${gpu_vendor}.conf.in)"
-
 			export CONF_GUEST_SUFFIX="-${conf_guest}"
-			envsubst <${gpu_subst_configs} >${gpu_cc_configs}
-			unset CONF_GUEST_SUFFIX
-
-			all_configs="${all_configs} ${gpu_cc_configs}"
 		else
-			local gpu_configs="$(ls ${gpu_path}/${gpu_vendor}.conf)"
-			all_configs="${all_configs} ${gpu_configs}"
+			export CONF_GUEST_SUFFIX=""
+		fi
+		envsubst <${gpu_subst_configs} >${gpu_configs}
+		unset CONF_GUEST_SUFFIX
+
+		all_configs="${all_configs} ${gpu_configs}"
+	fi
+
+	if [ "${MEASURED_ROOTFS}" == "yes" ]; then
+		info "Enabling config for confidential guest trust storage protection"
+		local cryptsetup_configs="$(ls ${common_path}/confidential_containers/cryptsetup.conf)"
+		all_configs="${all_configs} ${cryptsetup_configs}"
+
+		if [ -f "${default_initramfs}" ]; then
+			info "Enabling config for confidential guest measured boot"
+			local initramfs_configs="$(ls ${common_path}/confidential_containers/initramfs.conf)"
+			all_configs="${all_configs} ${initramfs_configs}"
 		fi
 	fi
 
@@ -412,9 +431,14 @@ setup_kernel() {
 	[ -n "${hypervisor_target}" ] || hypervisor_target="kvm"
 	[ -n "${kernel_config_path}" ] || kernel_config_path=$(get_default_kernel_config "${kernel_version}" "${hypervisor_target}" "${arch_target}" "${kernel_path}")
 
+	if [ "${MEASURED_ROOTFS}" == "yes" ] && [ -f "${default_initramfs}" ]; then
+		info "Copying initramfs from: ${default_initramfs}"
+		cp "${default_initramfs}" ./
+	fi
+
 	info "Copying config file from: ${kernel_config_path}"
 	cp "${kernel_config_path}" ./.config
-	make oldconfig
+	ARCH=${arch_target}  make oldconfig ${CROSS_BUILD_ARG}
 	)
 }
 
@@ -425,7 +449,7 @@ build_kernel() {
 	[ -n "${arch_target}" ] || arch_target="$(uname -m)"
 	arch_target=$(arch_to_kernel "${arch_target}")
 	pushd "${kernel_path}" >>/dev/null
-	make -j $(nproc ${CI:+--ignore 1}) ARCH="${arch_target}"
+	make -j $(nproc ${CI:+--ignore 1}) ARCH="${arch_target}" ${CROSS_BUILD_ARG}
 	if [ "${conf_guest}" == "sev" ]; then
 		make -j $(nproc ${CI:+--ignore 1}) INSTALL_MOD_STRIP=1 INSTALL_MOD_PATH=${kernel_path} modules_install
 	fi
@@ -504,7 +528,7 @@ install_kata() {
 		install --mode 0644 -D "vmlinux" "${install_path}/${vmlinux}"
 	fi
 
-	install --mode 0644 -D ./.config "${install_path}/config-${kernel_version}"
+	install --mode 0644 -D ./.config "${install_path}/config-${kernel_version}-${config_version}${suffix}"
 
 	ln -sf "${vmlinuz}" "${install_path}/vmlinuz${suffix}.container"
 	ln -sf "${vmlinux}" "${install_path}/vmlinux${suffix}.container"
@@ -611,8 +635,12 @@ main() {
 			kernel_version=$(get_from_kata_deps "assets.kernel-dragonball-experimental.version")
 		elif [[ "${conf_guest}" != "" ]]; then
 			#If specifying a tag for kernel_version, must be formatted version-like to avoid unintended parsing issues
-			kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.version" 2>/dev/null || true)
-			[ -n "${kernel_version}" ] || kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.tag")
+			if [[ "${conf_guest}" == "tdx" ]]; then
+				kernel_version=$(get_from_kata_deps "assets.kernel-tdx-experimental.version" 2>/dev/null || true)
+			else
+				kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.version" 2>/dev/null || true)
+				[ -n "${kernel_version}" ] || kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.tag")
+			fi
 		else
 			kernel_version=$(get_from_kata_deps "assets.kernel.version")
 		fi
@@ -631,6 +659,8 @@ main() {
 	fi
 
 	info "Kernel version: ${kernel_version}"
+
+	[ "${arch_target}" != "" -a "${arch_target}" != $(uname -m) ] && CROSS_BUILD_ARG="CROSS_COMPILE=${arch_target}-linux-gnu-"
 
 	case "${subcmd}" in
 		build)

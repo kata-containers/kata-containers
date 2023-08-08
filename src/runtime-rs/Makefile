@@ -17,6 +17,10 @@ CONTAINERD_RUNTIME_NAME = io.containerd.kata.v2
 
 include ../../utils.mk
 
+ifeq ($(ARCH), ppc64le)
+    override ARCH = powerpc64le
+endif
+
 ARCH_DIR = arch
 ARCH_FILE_SUFFIX = -options.mk
 ARCH_FILE = $(ARCH_DIR)/$(ARCH)$(ARCH_FILE_SUFFIX)
@@ -158,6 +162,7 @@ DEFVFIOMODE := guest-kernel
 DEFSANDBOXCGROUPONLY ?= false
 DEFSTATICRESOURCEMGMT_DB ?= false
 DEFBINDMOUNTS := []
+DEFDANCONF := /run/kata-containers/dans
 SED = sed
 CLI_DIR = cmd
 SHIMV2 = containerd-shim-kata-v2
@@ -198,8 +203,9 @@ ifneq (,$(DBCMD))
     SYSCONFIG_PATHS += $(SYSCONFIG_DB)
     CONFIGS += $(CONFIG_DB)
     # dragonball-specific options (all should be suffixed by "_DB")
+	VMROOTFSDRIVER_DB := virtio-blk-pci
     DEFMAXVCPUS_DB := 1
-    DEFBLOCKSTORAGEDRIVER_DB := virtio-blk
+    DEFBLOCKSTORAGEDRIVER_DB := virtio-blk-mmio
     DEFNETWORKMODEL_DB := tcfilter
     KERNELPARAMS = console=ttyS1 agent.log_vport=1025
 	KERNELTYPE_DB = uncompressed
@@ -231,6 +237,7 @@ USER_VARS += SYSCONFIG
 USER_VARS += IMAGENAME
 USER_VARS += IMAGEPATH
 USER_VARS += DEFROOTFSTYPE
+USER_VARS += VMROOTFSDRIVER_DB
 USER_VARS += MACHINETYPE
 USER_VARS += KERNELDIR
 USER_VARS += KERNELTYPE
@@ -302,6 +309,7 @@ USER_VARS += DBSHAREDFS
 USER_VARS += KATA_INSTALL_GROUP
 USER_VARS += KATA_INSTALL_OWNER
 USER_VARS += KATA_INSTALL_CFG_PERMS
+USER_VARS += DEFDANCONF
 
 SOURCES := \
   $(shell find . 2>&1 | grep -E '.*\.rs$$') \

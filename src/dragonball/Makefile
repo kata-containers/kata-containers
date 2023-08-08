@@ -39,11 +39,14 @@ clean:
 
 test:
 ifdef SUPPORT_VIRTUALIZATION
-	cargo test --all-features --target $(TRIPLE) -- --nocapture
+	RUST_BACKTRACE=1 cargo test --all-features --target $(TRIPLE) -- --nocapture --test-threads=1
 else
 	@echo "INFO: skip testing dragonball, it need virtualization support."
 	exit 0
 endif
+
+coverage:
+	RUST_BACKTRACE=1 cargo llvm-cov --all-features --target $(TRIPLE) -- --nocapture --test-threads=1
 
 endif # ifeq ($(ARCH), s390x)
 

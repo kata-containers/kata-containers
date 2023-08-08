@@ -8,6 +8,7 @@ FROM ${IMAGE_REGISTRY}/ubuntu:@OS_VERSION@
 
 # makedev tries to mknod from postinst
 RUN [ -x /usr/bin/systemd-detect-virt ] || ( echo "echo docker" >/usr/bin/systemd-detect-virt && chmod +x /usr/bin/systemd-detect-virt )
+# hadolint ignore=DL3009,SC2046
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive \
     apt-get --no-install-recommends -y install \
@@ -18,6 +19,7 @@ RUN apt-get update && \
          libc_arch="$gcc_arch" && \
          [ "$gcc_arch" = aarch64 ] && libc_arch=arm64; \
          [ "$gcc_arch" = ppc64le ] && gcc_arch=powerpc64le && libc_arch=ppc64el; \
+         [ "$gcc_arch" = s390x ] && gcc_arch=s390x && libc_arch=s390x; \
          [ "$gcc_arch" = x86_64 ] && gcc_arch=x86-64 && libc_arch=amd64; \
          echo "gcc-$gcc_arch-linux-gnu libc6-dev-$libc_arch-cross")) \
     git \

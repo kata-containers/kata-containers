@@ -6,27 +6,30 @@
 
 use super::vmm_instance::VmmInstance;
 use crate::{
-    device::Device, hypervisor_persist::HypervisorState, kernel_param::KernelParams, VmmState,
-    DEV_HUGEPAGES, HUGETLBFS, HYPERVISOR_DRAGONBALL, SHMEM, VM_ROOTFS_DRIVER_BLK,
+    device::DeviceType, hypervisor_persist::HypervisorState, kernel_param::KernelParams, VmmState,
+    DEV_HUGEPAGES, HUGETLBFS, HYPERVISOR_DRAGONBALL, SHMEM,
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use dragonball::{
-    api::v1::{BlockDeviceConfigInfo, BootSourceConfig},
+    api::v1::{BootSourceConfig, VcpuResizeInfo},
     vm::VmConfigInfo,
 };
+
 use kata_sys_util::mount;
 use kata_types::{
     capabilities::{Capabilities, CapabilityBits},
     config::hypervisor::Hypervisor as HypervisorConfig,
 };
+use nix::mount::MsFlags;
 use persist::sandbox_persist::Persist;
 use shim_interface::KATA_PATH;
-use std::{collections::HashSet, fs::create_dir_all, path::PathBuf};
+use std::{collections::HashSet, fs::create_dir_all};
 
 const DRAGONBALL_KERNEL: &str = "vmlinux";
 const DRAGONBALL_ROOT_FS: &str = "rootfs";
 
+#[derive(Debug)]
 pub struct DragonballInner {
     /// sandbox id
     pub(crate) id: String,
@@ -56,7 +59,7 @@ pub struct DragonballInner {
     pub(crate) run_dir: String,
 
     /// pending device
-    pub(crate) pending_devices: Vec<Device>,
+    pub(crate) pending_devices: Vec<DeviceType>,
 
     /// cached block device
     pub(crate) cached_block_devices: HashSet<String>,
@@ -117,22 +120,6 @@ impl DragonballInner {
                 .context("kernel params to string")?,
         )
         .context("set_boot_source")?;
-
-        // get vm rootfs
-        let image = {
-            let initrd_path = self.config.boot_info.initrd.clone();
-            let image_path = self.config.boot_info.image.clone();
-            if !initrd_path.is_empty() {
-                Ok(initrd_path)
-            } else if !image_path.is_empty() {
-                Ok(image_path)
-            } else {
-                Err(anyhow!("failed to get image"))
-            }
-        }
-        .context("get image")?;
-        self.set_vm_rootfs(&image, &rootfs_driver)
-            .context("set vm rootfs")?;
 
         // add pending devices
         while let Some(dev) = self.pending_devices.pop() {
@@ -230,7 +217,8 @@ impl DragonballInner {
         }
 
         let jailed_location = [self.jailer_root.as_str(), dst].join("/");
-        mount::bind_mount_unchecked(src, jailed_location.as_str(), false).context("bind_mount")?;
+        mount::bind_mount_unchecked(src, jailed_location.as_str(), false, MsFlags::MS_SLAVE)
+            .context("bind_mount")?;
 
         let mut abs_path = String::from("/");
         abs_path.push_str(dst);
@@ -257,37 +245,6 @@ impl DragonballInner {
         self.vmm_instance
             .put_boot_source(boot_cfg)
             .context("put boot source")
-    }
-
-    fn set_vm_rootfs(&mut self, path: &str, driver: &str) -> Result<()> {
-        info!(sl!(), "set vm rootfs {} {}", path, driver);
-        let jail_drive = self
-            .get_resource(path, DRAGONBALL_ROOT_FS)
-            .context("get resource")?;
-
-        if driver == VM_ROOTFS_DRIVER_BLK {
-            let blk_cfg = BlockDeviceConfigInfo {
-                path_on_host: PathBuf::from(jail_drive),
-                drive_id: DRAGONBALL_ROOT_FS.to_string(),
-                is_root_device: false,
-                // Add it as a regular block device
-                // This allows us to use a partitioned root block device
-                // is_read_only
-                is_read_only: true,
-                is_direct: false,
-                ..Default::default()
-            };
-
-            self.vmm_instance
-                .insert_block_device(blk_cfg)
-                .context("inert block device")
-        } else {
-            Err(anyhow!(
-                "Unknown vm_rootfs driver {} path {:?}",
-                driver,
-                path
-            ))
-        }
     }
 
     fn start_vmm_instance(&mut self) -> Result<()> {
@@ -324,6 +281,56 @@ impl DragonballInner {
                 }
             }
         }
+    }
+
+    // check if resizing info is valid
+    // the error in this function is not ok to be tolerated, the container boot will fail
+    fn precheck_resize_vcpus(&self, old_vcpus: u32, new_vcpus: u32) -> Result<(u32, u32)> {
+        // old_vcpus > 0, safe for conversion
+        let current_vcpus = old_vcpus;
+
+        // a non-zero positive is required
+        if new_vcpus == 0 {
+            return Err(anyhow!("resize vcpu error: 0 vcpu resizing is invalid"));
+        }
+
+        // cannot exceed maximum value
+        if new_vcpus > self.config.cpu_info.default_maxvcpus {
+            warn!(
+                sl!(),
+                "Cannot allocate more vcpus than the max allowed number of vcpus. The maximum allowed amount of vcpus will be used instead.");
+            return Ok((current_vcpus, self.config.cpu_info.default_maxvcpus));
+        }
+
+        Ok((current_vcpus, new_vcpus))
+    }
+
+    // do the check before resizing, returns Result<(old, new)>
+    pub(crate) async fn resize_vcpu(&self, old_vcpus: u32, new_vcpus: u32) -> Result<(u32, u32)> {
+        if old_vcpus == new_vcpus {
+            info!(
+                sl!(),
+                "resize_vcpu: no need to resize vcpus because old_vcpus is equal to new_vcpus"
+            );
+            return Ok((new_vcpus, new_vcpus));
+        }
+
+        let (old_vcpus, new_vcpus) = self.precheck_resize_vcpus(old_vcpus, new_vcpus)?;
+        info!(
+            sl!(),
+            "check_resize_vcpus passed, passing new_vcpus = {:?} to vmm", new_vcpus
+        );
+
+        let cpu_resize_info = VcpuResizeInfo {
+            vcpu_count: Some(new_vcpus as u8),
+        };
+        self.vmm_instance
+            .resize_vcpu(&cpu_resize_info)
+            .context(format!(
+                "failed to do_resize_vcpus on new_vcpus={:?}",
+                new_vcpus
+            ))?;
+        Ok((old_vcpus, new_vcpus))
     }
 
     pub fn set_hypervisor_config(&mut self, config: HypervisorConfig) {

@@ -802,7 +802,12 @@ func (q *QMP) blockdevAddBaseArgs(driver string, blockDevice *BlockDevice) map[s
 // used to name the device.  As this identifier will be passed directly to QMP,
 // it must obey QMP's naming rules, e,g., it must start with a letter.
 func (q *QMP) ExecuteBlockdevAdd(ctx context.Context, blockDevice *BlockDevice) error {
-	args := q.blockdevAddBaseArgs("host_device", blockDevice)
+	var args map[string]interface{}
+	if fi, err := os.Stat(blockDevice.File); err == nil && fi.Mode().IsRegular() {
+		args = q.blockdevAddBaseArgs("file", blockDevice)
+	} else {
+		args = q.blockdevAddBaseArgs("host_device", blockDevice)
+	}
 
 	return q.executeCommand(ctx, "blockdev-add", args, nil)
 }
@@ -1217,10 +1222,11 @@ func (q *QMP) ExecutePCIVFIOMediatedDeviceAdd(ctx context.Context, devID, sysfsd
 }
 
 // ExecuteAPVFIOMediatedDeviceAdd adds a VFIO mediated AP device to a QEMU instance using the device_add command.
-func (q *QMP) ExecuteAPVFIOMediatedDeviceAdd(ctx context.Context, sysfsdev string) error {
+func (q *QMP) ExecuteAPVFIOMediatedDeviceAdd(ctx context.Context, sysfsdev string, devID string) error {
 	args := map[string]interface{}{
 		"driver":   VfioAP,
 		"sysfsdev": sysfsdev,
+		"id":       devID,
 	}
 	return q.executeCommand(ctx, "device_add", args, nil)
 }

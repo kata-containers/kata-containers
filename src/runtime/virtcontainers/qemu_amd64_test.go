@@ -42,13 +42,14 @@ func TestQemuAmd64BadMachineType(t *testing.T) {
 
 func TestQemuAmd64Capabilities(t *testing.T) {
 	assert := assert.New(t)
+	config := HypervisorConfig{}
 
 	amd64 := newTestQemu(assert, QemuQ35)
-	caps := amd64.capabilities()
+	caps := amd64.capabilities(config)
 	assert.True(caps.IsBlockDeviceHotplugSupported())
 
 	amd64 = newTestQemu(assert, QemuMicrovm)
-	caps = amd64.capabilities()
+	caps = amd64.capabilities(config)
 	assert.False(caps.IsBlockDeviceHotplugSupported())
 }
 

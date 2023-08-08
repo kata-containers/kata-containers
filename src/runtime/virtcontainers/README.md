@@ -77,7 +77,7 @@ For further details, see the [API documentation](documentation/api/1.0/api.md).
 
 Typically the former is the Docker default networking model while the later is used on Kubernetes deployments.
 
-[cnm]: https://github.com/docker/libnetwork/blob/master/docs/design.md
+[cnm]: https://github.com/moby/libnetwork/blob/master/docs/design.md
 [cni]: https://github.com/containernetworking/cni/
 
 ## CNM

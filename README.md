@@ -1,4 +1,6 @@
-<img src="https://www.openstack.org/assets/kata/kata-vertical-on-white.png" width="150">
+<img src="https://object-storage-ca-ymq-1.vexxhost.net/swift/v1/6e4619c416ff4bd19e1c087f27a43eea/www-images-prod/openstack-logo/kata/SVG/kata-1.svg" width="900">
+
+[![CI | Publish Kata Containers payload](https://github.com/kata-containers/kata-containers/actions/workflows/payload-after-push.yaml/badge.svg)](https://github.com/kata-containers/kata-containers/actions/workflows/payload-after-push.yaml) [![Kata Containers Nightly CI](https://github.com/kata-containers/kata-containers/actions/workflows/ci-nightly.yaml/badge.svg)](https://github.com/kata-containers/kata-containers/actions/workflows/ci-nightly.yaml)
 
 # Kata Containers
 
@@ -132,8 +134,10 @@ The table below lists the remaining parts of the project:
 | [packaging](tools/packaging) | infrastructure | Scripts and metadata for producing packaged binaries<br/>(components, hypervisors, kernel and rootfs). |
 | [kernel](https://www.kernel.org) | kernel | Linux kernel used by the hypervisor to boot the guest image. Patches are stored [here](tools/packaging/kernel). |
 | [osbuilder](tools/osbuilder) | infrastructure | Tool to create "mini O/S" rootfs and initrd images and kernel for the hypervisor. |
+| [kata-debug](tools/packaging/kata-debug/README.md) | infrastructure | Utility tool to gather Kata Containers debug information from Kubernetes clusters. |
 | [`agent-ctl`](src/tools/agent-ctl) | utility | Tool that provides low-level access for testing the agent. |
 | [`kata-ctl`](src/tools/kata-ctl) | utility | Tool that provides advanced commands and debug facilities. |
+| [`log-parser-rs`](src/tools/log-parser-rs) | utility | Tool that aid in analyzing logs from the kata runtime. |
 | [`trace-forwarder`](src/tools/trace-forwarder) | utility | Agent tracing helper. |
 | [`runk`](src/tools/runk) | utility | Standard OCI container runtime based on the agent. |
 | [`ci`](https://github.com/kata-containers/ci) | CI | Continuous Integration configuration files and scripts. |
@@ -143,8 +147,10 @@ The table below lists the remaining parts of the project:
 
 Kata Containers is now
 [available natively for most distributions](docs/install/README.md#packaged-installation-methods).
-However, packaging scripts and metadata are still used to generate [snap](snap/local) and GitHub releases. See
-the [components](#components) section for further details.
+
+## Metrics tests
+
+See the [metrics documentation](tests/metrics/README.md).
 
 ## Glossary of Terms
 

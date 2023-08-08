@@ -1,0 +1,67 @@
+From 6e07ca77fe7b5c15e0e98d9e86294c7dd2553a5a Mon Sep 17 00:00:00 2001
+Message-Id: <6e07ca77fe7b5c15e0e98d9e86294c7dd2553a5a.1685428663.git.jiyunxue@linux.alibaba.com>
+In-Reply-To: <16e3b3da9fb8b79b006d8c9d1f68b2dec9980d72.1685428663.git.jiyunxue@linux.alibaba.com>
+References: <16e3b3da9fb8b79b006d8c9d1f68b2dec9980d72.1685428663.git.jiyunxue@linux.alibaba.com>
+From: xuejun-xj <jiyunxue@linux.alibaba.com>
+Date: Wed, 10 May 2023 14:51:40 +0800
+Subject: [PATCH 2/3] msi: control msi irq number activated
+
+When passthroughing pci device, kernel will initialize and activate
+(max_cpu_count+1) msi irq. However, in vcpu hotplugging situation,
+because of vgic, max_cpu_count may be greater than online_cpu_count.
+Those offline cpus will also be activated by kernel, which cause failure
+of passthroughing pci device.
+
+To solve this problem, this patch add a function
+"check_affinity_mask_online" to check if msi_desc->affinity contains
+online cpus. If current cpu is offline, it will continue the for loop to
+skip activating related irq.
+
+Signed-off-by: xuejun-xj <jiyunxue@linux.alibaba.com>
+Reviewed-by: Shuo Tan <shuo.tan@linux.alibaba.com>
+Reviewed-by: Baolin Wang <baolin.wang@linux.alibaba.com>
+---
+ kernel/irq/msi.c | 20 ++++++++++++++++++++
+ 1 file changed, 20 insertions(+)
+
+diff --git a/kernel/irq/msi.c b/kernel/irq/msi.c
+index d924676c8781..d60a3fc654e6 100644
+--- a/kernel/irq/msi.c
++++ b/kernel/irq/msi.c
+@@ -395,6 +395,23 @@ static bool msi_check_reservation_mode(struct irq_domain *domain,
+ 	return desc->msi_attrib.is_msix || desc->msi_attrib.maskbit;
+ }
+ 
++/* This function is used for check whether the cpu affinity belongs to the
++ * online cpus. When we passthrough the nvme devices, the kernel will allocate
++ * maxcpus+1 MSI irqs and then activate them. In vcpu hotplug situations, it
++ * may happen that kernel activates the offline cpus when bootcpus < maxcpus.
++ * To avoid this conflict, this function check the affinities.
++ */
++static inline bool check_affinity_mask_online(struct irq_affinity_desc *affinity)
++{
++	int cpu;
++
++	for_each_cpu(cpu, &affinity->mask)
++		if (cpu_online(cpu))
++			return true;
++
++	return false;
++}
++
+ int __msi_domain_alloc_irqs(struct irq_domain *domain, struct device *dev,
+ 			    int nvec)
+ {
+@@ -445,6 +462,9 @@ int __msi_domain_alloc_irqs(struct irq_domain *domain, struct device *dev,
+ 		goto skip_activate;
+ 
+ 	for_each_msi_vector(desc, i, dev) {
++		if (desc->affinity
++			&& !check_affinity_mask_online(desc->affinity))
++			continue;
+ 		if (desc->irq == i) {
+ 			virq = desc->irq;
+ 			dev_dbg(dev, "irq [%d-%d] for MSI\n",
+-- 
+2.28.0
+

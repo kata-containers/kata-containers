@@ -1,0 +1,26 @@
+[package]
+name = "dbs-arch"
+version = "0.2.3"
+authors = ["Alibaba Dragonball Team"]
+license = "Apache-2.0 AND BSD-3-Clause"
+edition = "2018"
+description = "A collection of CPU architecture specific constants and utilities."
+homepage = "https://github.com/openanolis/dragonball-sandbox"
+repository = "https://github.com/openanolis/dragonball-sandbox"
+keywords = ["dragonball", "secure-sandbox", "arch", "ARM64", "x86"]
+readme = "README.md"
+
+[dependencies]
+memoffset = "0.6"
+kvm-bindings = { version = "0.6.0", features = ["fam-wrappers"] }
+kvm-ioctls = "0.12.0"
+thiserror = "1"
+vm-memory = { version = "0.10" }
+vmm-sys-util = "0.11.0"
+libc = ">=0.2.39"
+
+[dev-dependencies]
+vm-memory = { version = "0.10", features = ["backend-mmap"] }
+
+[package.metadata.docs.rs]
+all-features = true

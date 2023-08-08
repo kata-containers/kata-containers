@@ -32,7 +32,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	deviceManager "github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
-	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	resCtrl "github.com/kata-containers/kata-containers/src/runtime/pkg/resourcecontrol"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
@@ -101,15 +100,10 @@ type HypervisorPidKey struct{}
 
 // SandboxStatus describes a sandbox status.
 type SandboxStatus struct {
-	ContainersStatus []ContainerStatus
-
-	// Annotations allow clients to store arbitrary values,
-	// for example to add additional status values required
-	// to support particular specifications.
-	Annotations map[string]string
-
+	Annotations      map[string]string
 	ID               string
 	Hypervisor       HypervisorType
+	ContainersStatus []ContainerStatus
 	State            types.SandboxState
 	HypervisorConfig HypervisorConfig
 }
@@ -176,10 +170,8 @@ type SandboxConfig struct {
 
 	// SharePidNs sets all containers to share the same sandbox level pid namespace.
 	SharePidNs bool
-
 	// SystemdCgroup enables systemd cgroup support
 	SystemdCgroup bool
-
 	// SandboxCgroupOnly enables cgroup only at podlevel in the host
 	SandboxCgroupOnly bool
 
@@ -621,23 +613,9 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return nil, err
 	}
 
-	// If we have a confidential guest we need to cold-plug the PCIe VFIO devices
-	// until we have TDISP/IDE PCIe support.
-	coldPlugVFIO := (sandboxConfig.HypervisorConfig.ColdPlugVFIO != hv.NoPort)
-	var devs []config.DeviceInfo
-	for cnt, containers := range sandboxConfig.Containers {
-		for dev, device := range containers.DeviceInfos {
-			if coldPlugVFIO && deviceManager.IsVFIO(device.ContainerPath) {
-				device.ColdPlug = true
-				devs = append(devs, device)
-				// We need to remove the devices marked for cold-plug
-				// otherwise at the container level the kata-agent
-				// will try to hot-plug them.
-				infos := sandboxConfig.Containers[cnt].DeviceInfos
-				infos = append(infos[:dev], infos[dev+1:]...)
-				sandboxConfig.Containers[cnt].DeviceInfos = infos
-			}
-		}
+	coldPlugVFIO, err := s.coldOrHotPlugVFIO(&sandboxConfig)
+	if err != nil {
+		return nil, err
 	}
 
 	// store doesn't require hypervisor to be stored immediately
@@ -653,7 +631,8 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return s, nil
 	}
 
-	for _, dev := range devs {
+	for _, dev := range sandboxConfig.HypervisorConfig.VFIODevices {
+		s.Logger().Info("cold-plug device: ", dev)
 		_, err := s.AddDevice(ctx, dev)
 		if err != nil {
 			s.Logger().WithError(err).Debug("Cannot cold-plug add device")
@@ -661,6 +640,64 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		}
 	}
 	return s, nil
+}
+
+func (s *Sandbox) coldOrHotPlugVFIO(sandboxConfig *SandboxConfig) (bool, error) {
+	// If we have a confidential guest we need to cold-plug the PCIe VFIO devices
+	// until we have TDISP/IDE PCIe support.
+	coldPlugVFIO := (sandboxConfig.HypervisorConfig.ColdPlugVFIO != config.NoPort)
+	// Aggregate all the containner devices for hot-plug and use them to dedcue
+	// the correct amount of ports to reserve for the hypervisor.
+	hotPlugVFIO := (sandboxConfig.HypervisorConfig.HotPlugVFIO != config.NoPort)
+
+	modeIsGK := (sandboxConfig.VfioMode == config.VFIOModeGuestKernel)
+	// modeIsVFIO is needed at the container level not the sandbox level.
+	// modeIsVFIO := (sandboxConfig.VfioMode == config.VFIOModeVFIO)
+
+	var vfioDevices []config.DeviceInfo
+	// vhost-user-block device is a PCIe device in Virt, keep track of it
+	// for correct number of PCIe root ports.
+	var vhostUserBlkDevices []config.DeviceInfo
+
+	for cnt, containers := range sandboxConfig.Containers {
+		for dev, device := range containers.DeviceInfos {
+
+			if deviceManager.IsVhostUserBlk(device) {
+				vhostUserBlkDevices = append(vhostUserBlkDevices, device)
+				continue
+			}
+			isVFIODevice := deviceManager.IsVFIODevice(device.ContainerPath)
+			if hotPlugVFIO && isVFIODevice {
+				device.ColdPlug = false
+				device.Port = sandboxConfig.HypervisorConfig.HotPlugVFIO
+				vfioDevices = append(vfioDevices, device)
+				sandboxConfig.Containers[cnt].DeviceInfos[dev].Port = sandboxConfig.HypervisorConfig.HotPlugVFIO
+			}
+			if coldPlugVFIO && isVFIODevice {
+				device.ColdPlug = true
+				device.Port = sandboxConfig.HypervisorConfig.ColdPlugVFIO
+				vfioDevices = append(vfioDevices, device)
+				// We need to remove the devices marked for cold-plug
+				// otherwise at the container level the kata-agent
+				// will try to hot-plug them.
+				if modeIsGK {
+					sandboxConfig.Containers[cnt].DeviceInfos[dev].ID = "remove-we-are-cold-plugging"
+				}
+			}
+		}
+		var filteredDevices []config.DeviceInfo
+		for _, device := range containers.DeviceInfos {
+			if device.ID != "remove-we-are-cold-plugging" {
+				filteredDevices = append(filteredDevices, device)
+			}
+		}
+		sandboxConfig.Containers[cnt].DeviceInfos = filteredDevices
+	}
+
+	sandboxConfig.HypervisorConfig.VFIODevices = vfioDevices
+	sandboxConfig.HypervisorConfig.VhostUserBlkDevices = vhostUserBlkDevices
+
+	return coldPlugVFIO, nil
 }
 
 func (s *Sandbox) createResourceController() error {
@@ -697,6 +734,7 @@ func (s *Sandbox) createResourceController() error {
 			// Determine if device /dev/null and /dev/urandom exist, and add if they don't
 			nullDeviceExist := false
 			urandomDeviceExist := false
+			ptmxDeviceExist := false
 			for _, device := range resources.Devices {
 				if device.Type == "c" && device.Major == intptr(1) && device.Minor == intptr(3) {
 					nullDeviceExist = true
@@ -704,6 +742,10 @@ func (s *Sandbox) createResourceController() error {
 
 				if device.Type == "c" && device.Major == intptr(1) && device.Minor == intptr(9) {
 					urandomDeviceExist = true
+				}
+
+				if device.Type == "c" && device.Major == intptr(5) && device.Minor == intptr(2) {
+					ptmxDeviceExist = true
 				}
 			}
 
@@ -718,6 +760,18 @@ func (s *Sandbox) createResourceController() error {
 				resources.Devices = append(resources.Devices, []specs.LinuxDeviceCgroup{
 					{Type: "c", Major: intptr(1), Minor: intptr(9), Access: rwm, Allow: true},
 				}...)
+			}
+
+			// If the hypervisor debug console is enabled and
+			// sandbox_cgroup_only are configured, then the vmm needs access to
+			// /dev/ptmx.  Add this to the device allowlist if it is not
+			// already present in the config.
+			if s.config.HypervisorConfig.Debug && s.config.SandboxCgroupOnly && !ptmxDeviceExist {
+				// "/dev/ptmx"
+				resources.Devices = append(resources.Devices, []specs.LinuxDeviceCgroup{
+					{Type: "c", Major: intptr(5), Minor: intptr(2), Access: rwm, Allow: true},
+				}...)
+
 			}
 
 			if spec.Linux.Resources.CPU != nil {
@@ -1692,7 +1746,6 @@ func (s *Sandbox) createContainers(ctx context.Context) error {
 	defer span.End()
 
 	for i := range s.config.Containers {
-
 		c, err := newContainer(ctx, s, &s.config.Containers[i])
 		if err != nil {
 			return err
@@ -1711,7 +1764,6 @@ func (s *Sandbox) createContainers(ctx context.Context) error {
 	if err := s.updateResources(ctx); err != nil {
 		return err
 	}
-
 	if err := s.resourceControllerUpdate(ctx); err != nil {
 		return err
 	}
@@ -1723,7 +1775,6 @@ func (s *Sandbox) createContainers(ctx context.Context) error {
 	if err := s.storeSandbox(ctx); err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -1887,15 +1938,11 @@ func (s *Sandbox) HotplugAddDevice(ctx context.Context, device api.Device, devTy
 		// adding a group of VFIO devices
 		for _, dev := range vfioDevices {
 			if _, err := s.hypervisor.HotplugAddDevice(ctx, dev, VfioDev); err != nil {
-				bdf := ""
-				if pciDevice, ok := (*dev).(config.VFIOPCIDev); ok {
-					bdf = pciDevice.BDF
-				}
 				s.Logger().
 					WithFields(logrus.Fields{
 						"sandbox":         s.id,
-						"vfio-device-ID":  (*dev).GetID(),
-						"vfio-device-BDF": bdf,
+						"vfio-device-ID":  dev.ID,
+						"vfio-device-BDF": dev.BDF,
 					}).WithError(err).Error("failed to hotplug VFIO device")
 				return err
 			}
@@ -1910,6 +1957,7 @@ func (s *Sandbox) HotplugAddDevice(ctx context.Context, device api.Device, devTy
 		return err
 	case config.VhostUserBlk:
 		vhostUserBlkDevice, ok := device.(*drivers.VhostUserBlkDevice)
+
 		if !ok {
 			return fmt.Errorf("device type mismatch, expect device type to be %s", devType)
 		}
@@ -1944,15 +1992,11 @@ func (s *Sandbox) HotplugRemoveDevice(ctx context.Context, device api.Device, de
 		// remove a group of VFIO devices
 		for _, dev := range vfioDevices {
 			if _, err := s.hypervisor.HotplugRemoveDevice(ctx, dev, VfioDev); err != nil {
-				bdf := ""
-				if pciDevice, ok := (*dev).(config.VFIOPCIDev); ok {
-					bdf = pciDevice.BDF
-				}
 				s.Logger().WithError(err).
 					WithFields(logrus.Fields{
 						"sandbox":         s.id,
-						"vfio-device-ID":  (*dev).GetID(),
-						"vfio-device-BDF": bdf,
+						"vfio-device-ID":  dev.ID,
+						"vfio-device-BDF": dev.BDF,
 					}).Error("failed to hot unplug VFIO device")
 				return err
 			}
@@ -2023,26 +2067,26 @@ func (s *Sandbox) AddDevice(ctx context.Context, info config.DeviceInfo) (api.De
 	}
 
 	var err error
-	b, err := s.devManager.NewDevice(info)
+	add, err := s.devManager.NewDevice(info)
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
 		if err != nil {
-			s.devManager.RemoveDevice(b.DeviceID())
+			s.devManager.RemoveDevice(add.DeviceID())
 		}
 	}()
 
-	if err = s.devManager.AttachDevice(ctx, b.DeviceID(), s); err != nil {
+	if err = s.devManager.AttachDevice(ctx, add.DeviceID(), s); err != nil {
 		return nil, err
 	}
 	defer func() {
 		if err != nil {
-			s.devManager.DetachDevice(ctx, b.DeviceID(), s)
+			s.devManager.DetachDevice(ctx, add.DeviceID(), s)
 		}
 	}()
 
-	return b, nil
+	return add, nil
 }
 
 // updateResources will:
@@ -2100,9 +2144,8 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 	s.Logger().Debugf("Request to hypervisor to update oldCPUs/newCPUs: %d/%d", oldCPUs, newCPUs)
 	// If the CPUs were increased, ask agent to online them
 	if oldCPUs < newCPUs {
-		vcpusAdded := newCPUs - oldCPUs
-		s.Logger().Debugf("Request to onlineCPUMem with %d CPUs", vcpusAdded)
-		if err := s.agent.onlineCPUMem(ctx, vcpusAdded, true); err != nil {
+		s.Logger().Debugf("Request to onlineCPUMem with %d CPUs", newCPUs)
+		if err := s.agent.onlineCPUMem(ctx, newCPUs, true); err != nil {
 			return err
 		}
 	}

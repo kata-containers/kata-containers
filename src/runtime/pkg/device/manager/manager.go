@@ -71,7 +71,11 @@ func NewDeviceManager(blockDriver string, vhostUserStoreEnabled bool, vhostUserS
 		dm.blockDriver = config.VirtioSCSI
 	}
 
-	drivers.AllPCIeDevs = make(map[string]bool)
+	config.PCIeDevices = make(map[config.PCIePort]config.PCIePortMapping)
+
+	config.PCIeDevices[config.RootPort] = make(map[string]bool)
+	config.PCIeDevices[config.SwitchPort] = make(map[string]bool)
+	config.PCIeDevices[config.BridgePort] = make(map[string]bool)
 
 	for _, dev := range devices {
 		dm.devices[dev.DeviceID()] = dev
@@ -79,10 +83,21 @@ func NewDeviceManager(blockDriver string, vhostUserStoreEnabled bool, vhostUserS
 	return dm
 }
 
-func (dm *deviceManager) findDeviceByMajorMinor(major, minor int64) api.Device {
+func (dm *deviceManager) findDevice(devInfo *config.DeviceInfo) api.Device {
+	// For devices with a major of -1, we use the host path to find existing instances.
+	if devInfo.Major == -1 {
+		for _, dev := range dm.devices {
+			dma, _ := dev.GetMajorMinor()
+			if dma == -1 && dev.GetHostPath() == devInfo.HostPath {
+				return dev
+			}
+		}
+		return nil
+	}
+
 	for _, dev := range dm.devices {
 		dma, dmi := dev.GetMajorMinor()
-		if dma == major && dmi == minor {
+		if dma == devInfo.Major && dmi == devInfo.Minor {
 			return dev
 		}
 	}
@@ -107,7 +122,7 @@ func (dm *deviceManager) createDevice(devInfo config.DeviceInfo) (dev api.Device
 		}
 	}()
 
-	if existingDev := dm.findDeviceByMajorMinor(devInfo.Major, devInfo.Minor); existingDev != nil {
+	if existingDev := dm.findDevice(&devInfo); existingDev != nil {
 		return existingDev, nil
 	}
 
@@ -116,9 +131,9 @@ func (dm *deviceManager) createDevice(devInfo config.DeviceInfo) (dev api.Device
 	if devInfo.ID, err = dm.newDeviceID(); err != nil {
 		return nil, err
 	}
-	if IsVFIO(devInfo.HostPath) {
+	if IsVFIODevice(devInfo.HostPath) {
 		return drivers.NewVFIODevice(&devInfo), nil
-	} else if isVhostUserBlk(devInfo) {
+	} else if IsVhostUserBlk(devInfo) {
 		if devInfo.DriverOptions == nil {
 			devInfo.DriverOptions = make(map[string]string)
 		}
@@ -187,12 +202,12 @@ func (dm *deviceManager) AttachDevice(ctx context.Context, id string, dr api.Dev
 	dm.Lock()
 	defer dm.Unlock()
 
-	d, ok := dm.devices[id]
+	dev, ok := dm.devices[id]
 	if !ok {
 		return ErrDeviceNotExist
 	}
 
-	if err := d.Attach(ctx, dr); err != nil {
+	if err := dev.Attach(ctx, dr); err != nil {
 		return err
 	}
 	return nil

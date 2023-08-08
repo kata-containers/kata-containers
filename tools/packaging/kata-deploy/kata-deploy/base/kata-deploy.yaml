@@ -13,14 +13,12 @@ spec:
         labels:
           name: kata-deploy
     spec:
-      serviceAccountName: kata-label-node
+      serviceAccountName: kata-deploy-sa
+      hostPID: true
       containers:
       - name: kube-kata
         image: quay.io/kata-containers/kata-deploy:latest
         imagePullPolicy: Always
-        readinessProbe:
-          exec:
-            command: [ "bash", "-c", "[ -f /opt/kata/kata-deployed ]", "&&", "bash", "-c", "[ $? == 0 ]" ]
         lifecycle:
           preStop:
             exec:
@@ -31,6 +29,16 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        - name: DEBUG
+          value: "false"
+        - name: SHIMS
+          value: "clh dragonball fc qemu qemu-nvidia-gpu qemu-sev qemu-snp qemu-tdx"
+        - name: DEFAULT_SHIM
+          value: "qemu"
+        - name: CREATE_RUNTIMECLASSES
+          value: "false"
+        - name: CREATE_DEFAULT_RUNTIMECLASS
+          value: "false"
         securityContext:
           privileged: true
         volumeMounts:
@@ -40,10 +48,6 @@ spec:
           mountPath: /etc/containerd/
         - name: kata-artifacts
           mountPath: /opt/kata/
-        - name: dbus
-          mountPath: /var/run/dbus/system_bus_socket
-        - name: systemd
-          mountPath: /run/systemd/system
         - name: local-bin
           mountPath: /usr/local/bin/
       volumes:
@@ -57,12 +61,6 @@ spec:
           hostPath:
             path: /opt/kata/
             type: DirectoryOrCreate
-        - name: dbus
-          hostPath:
-            path: /var/run/dbus/system_bus_socket
-        - name: systemd
-          hostPath:
-            path: /run/systemd/system
         - name: local-bin
           hostPath:
             path: /usr/local/bin/

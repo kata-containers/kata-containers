@@ -65,7 +65,7 @@ use tokio::{
     io::AsyncWrite,
     sync::{
         watch::{channel, Receiver},
-        Mutex, RwLock,
+        Mutex,
     },
     task::JoinHandle,
 };
@@ -83,12 +83,11 @@ cfg_if! {
 const NAME: &str = "kata-agent";
 
 lazy_static! {
-    static ref AGENT_CONFIG: Arc<RwLock<AgentConfig>> = Arc::new(RwLock::new(
+    static ref AGENT_CONFIG: AgentConfig =
         // Note: We can't do AgentOpts.parse() here to send through the processed arguments to AgentConfig
         // clap::Parser::parse() greedily process all command line input including cargo test parameters,
         // so should only be used inside main.
-        AgentConfig::from_cmdline("/proc/cmdline", env::args().collect()).unwrap()
-    ));
+        AgentConfig::from_cmdline("/proc/cmdline", env::args().collect()).unwrap();
 }
 
 #[derive(Parser)]
@@ -181,13 +180,13 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
         lazy_static::initialize(&AGENT_CONFIG);
 
-        init_agent_as_init(&logger, AGENT_CONFIG.read().await.unified_cgroup_hierarchy)?;
+        init_agent_as_init(&logger, AGENT_CONFIG.unified_cgroup_hierarchy)?;
         drop(logger_async_guard);
     } else {
         lazy_static::initialize(&AGENT_CONFIG);
     }
 
-    let config = AGENT_CONFIG.read().await;
+    let config = &AGENT_CONFIG;
     let log_vport = config.log_vport as u32;
 
     let log_handle = tokio::spawn(create_logger_task(rfd, log_vport, shutdown_rx.clone()));
@@ -200,7 +199,7 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let (logger, logger_async_guard) =
         logging::create_logger(NAME, "agent", config.log_level, writer);
 
-    announce(&logger, &config);
+    announce(&logger, config);
 
     // This variable is required as it enables the global (and crucially static) logger,
     // which is required to satisfy the the lifetime constraints of the auto-generated gRPC code.
@@ -228,7 +227,7 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let span_guard = root_span.enter();
 
     // Start the sandbox and wait for its ttRPC server to end
-    start_sandbox(&logger, &config, init_mode, &mut tasks, shutdown_rx.clone()).await?;
+    start_sandbox(&logger, config, init_mode, &mut tasks, shutdown_rx.clone()).await?;
 
     // Install a NOP logger for the remainder of the shutdown sequence
     // to ensure any log calls made by local crates using the scope logger

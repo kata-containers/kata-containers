@@ -4,23 +4,39 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::io::{self, Error};
+use std::{
+    io::{self, Error},
+    sync::Arc,
+};
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
+use tokio::sync::RwLock;
 
-use super::endpoint_persist::{EndpointState, VlanEndpointState};
-use super::Endpoint;
-use crate::network::network_model::TC_FILTER_NET_MODEL_STR;
-use crate::network::{utils, NetworkPair};
-use hypervisor::{device::NetworkConfig, Device, Hypervisor};
+use hypervisor::{
+    device::{
+        device_manager::{do_handle_device, DeviceManager},
+        driver::NetworkConfig,
+        DeviceConfig, DeviceType,
+    },
+    Hypervisor, NetworkDevice,
+};
+
+use super::{
+    endpoint_persist::{EndpointState, VlanEndpointState},
+    Endpoint,
+};
+use crate::network::{network_model::TC_FILTER_NET_MODEL_STR, utils, NetworkPair};
+
 #[derive(Debug)]
 pub struct VlanEndpoint {
     pub(crate) net_pair: NetworkPair,
+    pub(crate) d: Arc<RwLock<DeviceManager>>,
 }
 
 impl VlanEndpoint {
     pub async fn new(
+        d: &Arc<RwLock<DeviceManager>>,
         handle: &rtnetlink::Handle,
         name: &str,
         idx: u32,
@@ -28,8 +44,12 @@ impl VlanEndpoint {
     ) -> Result<Self> {
         let net_pair = NetworkPair::new(handle, idx, name, TC_FILTER_NET_MODEL_STR, queues)
             .await
-            .context("error creating networkInterfacePair")?;
-        Ok(VlanEndpoint { net_pair })
+            .context("new network interface pair failed.")?;
+
+        Ok(VlanEndpoint {
+            net_pair,
+            d: d.clone(),
+        })
     }
 
     fn get_network_config(&self) -> Result<NetworkConfig> {
@@ -40,10 +60,12 @@ impl VlanEndpoint {
                 format!("hard_addr {}", &iface.hard_addr),
             )
         })?;
+
         Ok(NetworkConfig {
-            id: self.net_pair.virt_iface.name.clone(),
             host_dev_name: iface.name.clone(),
+            virt_iface_name: self.net_pair.virt_iface.name.clone(),
             guest_mac: Some(guest_mac),
+            ..Default::default()
         })
     }
 }
@@ -58,15 +80,16 @@ impl Endpoint for VlanEndpoint {
         self.net_pair.tap.tap_iface.hard_addr.clone()
     }
 
-    async fn attach(&self, h: &dyn Hypervisor) -> Result<()> {
+    async fn attach(&self) -> Result<()> {
         self.net_pair
             .add_network_model()
             .await
-            .context("error adding network model")?;
+            .context("add network model failed.")?;
+
         let config = self.get_network_config().context("get network config")?;
-        h.add_device(Device::Network(config))
+        do_handle_device(&self.d, &DeviceConfig::NetworkCfg(config))
             .await
-            .context("error adding device by hypervisor")?;
+            .context("do handle network Vlan endpoint device failed.")?;
 
         Ok(())
     }
@@ -75,13 +98,17 @@ impl Endpoint for VlanEndpoint {
         self.net_pair
             .del_network_model()
             .await
-            .context("error deleting network model")?;
+            .context("delete network model failed.")?;
+
         let config = self
             .get_network_config()
-            .context("error getting network config")?;
-        h.remove_device(Device::Network(config))
-            .await
-            .context("error removing device by hypervisor")?;
+            .context("get network config failed.")?;
+        h.remove_device(DeviceType::Network(NetworkDevice {
+            config,
+            ..Default::default()
+        }))
+        .await
+        .context("remove Vlan endpoint device by hypervisor failed.")?;
 
         Ok(())
     }

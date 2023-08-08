@@ -78,4 +78,4 @@ with the containers is if the VM itself or the `containerd-shim-kata-v2` dies, i
 the containers are removed automatically.
 
 [1]: https://wiki.qemu.org/Features/VirtioVsock
-[2]: ./vcpu-handling.md#virtual-cpus-and-kubernetes-pods
+[2]: ./vcpu-handling-runtime-go.md#virtual-cpus-and-kubernetes-pods

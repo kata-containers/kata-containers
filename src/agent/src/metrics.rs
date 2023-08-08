@@ -15,11 +15,9 @@ use tracing::instrument;
 const NAMESPACE_KATA_AGENT: &str = "kata_agent";
 const NAMESPACE_KATA_GUEST: &str = "kata_guest";
 
-// Convenience macro to obtain the scope logger
-macro_rules! sl {
-    () => {
-        slog_scope::logger().new(o!("subsystem" => "metrics"))
-    };
+// Convenience function to obtain the scope logger.
+fn sl() -> slog::Logger {
+    slog_scope::logger().new(o!("subsystem" => "metrics"))
 }
 
 lazy_static! {
@@ -139,7 +137,7 @@ fn update_agent_metrics() -> Result<()> {
         Ok(p) => p,
         Err(e) => {
             // FIXME: return Ok for all errors?
-            warn!(sl!(), "failed to create process instance: {:?}", e);
+            warn!(sl(), "failed to create process instance: {:?}", e);
 
             return Ok(());
         }
@@ -160,7 +158,7 @@ fn update_agent_metrics() -> Result<()> {
     // io
     match me.io() {
         Err(err) => {
-            info!(sl!(), "failed to get process io stat: {:?}", err);
+            info!(sl(), "failed to get process io stat: {:?}", err);
         }
         Ok(io) => {
             set_gauge_vec_proc_io(&AGENT_IO_STAT, &io);
@@ -169,7 +167,7 @@ fn update_agent_metrics() -> Result<()> {
 
     match me.stat() {
         Err(err) => {
-            info!(sl!(), "failed to get process stat: {:?}", err);
+            info!(sl(), "failed to get process stat: {:?}", err);
         }
         Ok(stat) => {
             set_gauge_vec_proc_stat(&AGENT_PROC_STAT, &stat);
@@ -177,7 +175,7 @@ fn update_agent_metrics() -> Result<()> {
     }
 
     match me.status() {
-        Err(err) => error!(sl!(), "failed to get process status: {:?}", err),
+        Err(err) => error!(sl(), "failed to get process status: {:?}", err),
         Ok(status) => set_gauge_vec_proc_status(&AGENT_PROC_STATUS, &status),
     }
 
@@ -189,7 +187,7 @@ fn update_guest_metrics() {
     // try get load and task info
     match procfs::LoadAverage::new() {
         Err(err) => {
-            info!(sl!(), "failed to get guest LoadAverage: {:?}", err);
+            info!(sl(), "failed to get guest LoadAverage: {:?}", err);
         }
         Ok(load) => {
             GUEST_LOAD
@@ -209,7 +207,7 @@ fn update_guest_metrics() {
     // try to get disk stats
     match procfs::diskstats() {
         Err(err) => {
-            info!(sl!(), "failed to get guest diskstats: {:?}", err);
+            info!(sl(), "failed to get guest diskstats: {:?}", err);
         }
         Ok(diskstats) => {
             for diskstat in diskstats {
@@ -221,7 +219,7 @@ fn update_guest_metrics() {
     // try to get vm stats
     match procfs::vmstat() {
         Err(err) => {
-            info!(sl!(), "failed to get guest vmstat: {:?}", err);
+            info!(sl(), "failed to get guest vmstat: {:?}", err);
         }
         Ok(vmstat) => {
             for (k, v) in vmstat {
@@ -233,7 +231,7 @@ fn update_guest_metrics() {
     // cpu stat
     match procfs::KernelStats::new() {
         Err(err) => {
-            info!(sl!(), "failed to get guest KernelStats: {:?}", err);
+            info!(sl(), "failed to get guest KernelStats: {:?}", err);
         }
         Ok(kernel_stats) => {
             set_gauge_vec_cpu_time(&GUEST_CPU_TIME, "total", &kernel_stats.total);
@@ -246,7 +244,7 @@ fn update_guest_metrics() {
     // try to get net device stats
     match procfs::net::dev_status() {
         Err(err) => {
-            info!(sl!(), "failed to get guest net::dev_status: {:?}", err);
+            info!(sl(), "failed to get guest net::dev_status: {:?}", err);
         }
         Ok(devs) => {
             // netdev: map[string]procfs::net::DeviceStatus
@@ -259,7 +257,7 @@ fn update_guest_metrics() {
     // get statistics about memory from /proc/meminfo
     match procfs::Meminfo::new() {
         Err(err) => {
-            info!(sl!(), "failed to get guest Meminfo: {:?}", err);
+            info!(sl(), "failed to get guest Meminfo: {:?}", err);
         }
         Ok(meminfo) => {
             set_gauge_vec_meminfo(&GUEST_MEMINFO, &meminfo);

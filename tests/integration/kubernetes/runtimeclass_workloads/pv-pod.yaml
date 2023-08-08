@@ -1,0 +1,26 @@
+#
+# Copyright (c) 2018 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+kind: Pod
+apiVersion: v1
+metadata:
+  name: pv-pod
+spec:
+  terminationGracePeriodSeconds: 0
+  runtimeClassName: kata
+  volumes:
+    - name: pv-storage
+      persistentVolumeClaim:
+       claimName: pv-claim
+  containers:
+    - name: pv-container
+      image: quay.io/prometheus/busybox:latest
+      ports:
+      command:
+        - sleep
+        - "120"
+      volumeMounts:
+        - mountPath: "/mnt/"
+          name: pv-storage

@@ -12,10 +12,13 @@ mod share_virtio_fs_standalone;
 use share_virtio_fs_standalone::ShareVirtioFsStandalone;
 mod utils;
 use tokio::sync::Mutex;
-pub use utils::{do_get_guest_path, do_get_guest_share_path, get_host_rw_shared_path};
+pub use utils::{
+    do_get_guest_path, do_get_guest_share_path, do_get_host_path, get_host_rw_shared_path,
+};
 mod virtio_fs_share_mount;
 use virtio_fs_share_mount::VirtiofsShareMount;
 pub use virtio_fs_share_mount::EPHEMERAL_PATH;
+pub mod sandbox_bind_mounts;
 
 use std::{collections::HashMap, fmt::Debug, path::PathBuf, sync::Arc};
 

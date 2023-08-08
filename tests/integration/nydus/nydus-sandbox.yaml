@@ -1,0 +1,5 @@
+metadata:
+  attempt: 1
+  name: nydus-sandbox
+  namespace: default
+log_directory: /tmp

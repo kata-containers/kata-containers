@@ -24,31 +24,31 @@ impl TaskService {
     pub(crate) fn new(handler: Arc<RuntimeHandlerManager>) -> Self {
         Self { handler }
     }
-}
 
-async fn handler_message<TtrpcReq, TtrpcResp>(
-    s: &RuntimeHandlerManager,
-    ctx: &TtrpcContext,
-    req: TtrpcReq,
-) -> ttrpc::Result<TtrpcResp>
-where
-    Request: TryFrom<TtrpcReq>,
-    <Request as TryFrom<TtrpcReq>>::Error: std::fmt::Debug,
-    TtrpcResp: TryFrom<Response>,
-    <TtrpcResp as TryFrom<Response>>::Error: std::fmt::Debug,
-{
-    let r = req
-        .try_into()
-        .map_err(|err| ttrpc::Error::Others(format!("failed to translate from shim {:?}", err)))?;
-    let logger = sl!().new(o!("stream id" =>  ctx.mh.stream_id));
-    debug!(logger, "====> task service {:?}", &r);
-    let resp = s
-        .handler_message(r)
-        .await
-        .map_err(|err| ttrpc::Error::Others(format!("failed to handler message {:?}", err)))?;
-    debug!(logger, "<==== task service {:?}", &resp);
-    resp.try_into()
-        .map_err(|err| ttrpc::Error::Others(format!("failed to translate to shim {:?}", err)))
+    async fn handler_message<TtrpcReq, TtrpcResp>(
+        &self,
+        ctx: &TtrpcContext,
+        req: TtrpcReq,
+    ) -> ttrpc::Result<TtrpcResp>
+    where
+        Request: TryFrom<TtrpcReq>,
+        <Request as TryFrom<TtrpcReq>>::Error: std::fmt::Debug,
+        TtrpcResp: TryFrom<Response>,
+        <TtrpcResp as TryFrom<Response>>::Error: std::fmt::Debug,
+    {
+        let r = req.try_into().map_err(|err| {
+            ttrpc::Error::Others(format!("failed to translate from shim {:?}", err))
+        })?;
+        let logger = sl!().new(o!("stream id" =>  ctx.mh.stream_id));
+        debug!(logger, "====> task service {:?}", &r);
+        let resp =
+            self.handler.handler_message(r).await.map_err(|err| {
+                ttrpc::Error::Others(format!("failed to handler message {:?}", err))
+            })?;
+        debug!(logger, "<==== task service {:?}", &resp);
+        resp.try_into()
+            .map_err(|err| ttrpc::Error::Others(format!("failed to translate to shim {:?}", err)))
+    }
 }
 
 macro_rules! impl_service {
@@ -56,7 +56,7 @@ macro_rules! impl_service {
         #[async_trait]
         impl shim_async::Task for TaskService {
             $(async fn $name(&self, ctx: &TtrpcContext, req: $req) -> ttrpc::Result<$resp> {
-                handler_message(&self.handler, ctx, req).await
+                self.handler_message(ctx, req).await
             })*
         }
     };

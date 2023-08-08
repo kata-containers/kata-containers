@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Kata osbuilder 'works best' on Fedora
-FROM fedora:34
+FROM fedora:38
 
 # Version of the Dockerfile - update if you change this file to avoid 'stale'
 # images being pulled from the registry.

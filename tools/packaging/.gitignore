@@ -1,7 +1,6 @@
 *.img
 *.initrd
 *.sha256
-*.snap
 *.tar.gz
 *.tar.xz
 *.gz
@@ -13,7 +12,6 @@ debian.series
 parts/
 prime/
 sha256sums.asc
-snap/.snapcraft/
 stage/
 typescript
 kata-linux-*

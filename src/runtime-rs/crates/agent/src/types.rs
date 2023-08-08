@@ -201,7 +201,7 @@ pub struct ListProcessesRequest {
 #[derive(PartialEq, Clone, Default)]
 pub struct UpdateContainerRequest {
     pub container_id: String,
-    pub resources: oci::LinuxResources,
+    pub resources: Option<oci::LinuxResources>,
     pub mounts: Vec<oci::Mount>,
 }
 
@@ -554,6 +554,11 @@ pub struct HealthCheckResponse {
 pub struct VersionCheckResponse {
     pub grpc_version: String,
     pub agent_version: String,
+}
+
+#[derive(PartialEq, Clone, Default, Debug)]
+pub struct MetricsResponse {
+    pub metrics: String,
 }
 
 #[derive(PartialEq, Clone, Default, Debug)]

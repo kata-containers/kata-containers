@@ -27,6 +27,11 @@ $ make
 $ make install
 ```
 
+If you would like to install the tool to a specific directory, then you can provide it through the `INSTALL_PATH` variable.
+```bash
+$ make install INSTALL_PATH=/path/to/your/custom/install/directory
+```
+
 ## Run the tool
 
 ```bash

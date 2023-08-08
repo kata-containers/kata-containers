@@ -6,29 +6,25 @@
 
 use std::sync::Arc;
 
-use agent::{
-    self, kata::KataAgent, types::KernelModule, Agent, GetIPTablesRequest, SetIPTablesRequest,
-    VolumeStatsRequest,
-};
+use agent::kata::KataAgent;
+use agent::types::KernelModule;
+use agent::{self, Agent, GetIPTablesRequest, SetIPTablesRequest, VolumeStatsRequest};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use common::{
-    message::{Action, Message},
-    Sandbox, SandboxNetworkEnv,
-};
+use common::message::{Action, Message};
+use common::{Sandbox, SandboxNetworkEnv};
 use containerd_shim_protos::events::task::TaskOOM;
-use hypervisor::{dragonball::Dragonball, Hypervisor, HYPERVISOR_DRAGONBALL};
+use hypervisor::{dragonball::Dragonball, BlockConfig, Hypervisor, HYPERVISOR_DRAGONBALL};
 use kata_sys_util::hooks::HookStates;
 use kata_types::config::TomlConfig;
-use resource::{
-    manager::ManagerArgs,
-    network::{NetworkConfig, NetworkWithNetNsConfig},
-    ResourceConfig, ResourceManager,
-};
+use persist::{self, sandbox_persist::Persist};
+use resource::manager::ManagerArgs;
+use resource::network::{dan_config_path, DanNetworkConfig, NetworkConfig, NetworkWithNetNsConfig};
+use resource::{ResourceConfig, ResourceManager};
 use tokio::sync::{mpsc::Sender, Mutex, RwLock};
+use tracing::instrument;
 
 use crate::health_check::HealthCheck;
-use persist::{self, sandbox_persist::Persist};
 
 pub(crate) const VIRTCONTAINER: &str = "virt_container";
 pub struct SandboxRestoreArgs {
@@ -67,6 +63,15 @@ pub struct VirtSandbox {
     monitor: Arc<HealthCheck>,
 }
 
+impl std::fmt::Debug for VirtSandbox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VirtSandbox")
+            .field("sid", &self.sid)
+            .field("msg_sender", &self.msg_sender)
+            .finish()
+    }
+}
+
 impl VirtSandbox {
     pub async fn new(
         sid: &str,
@@ -88,26 +93,68 @@ impl VirtSandbox {
         })
     }
 
-    async fn prepare_config_for_sandbox(
+    #[instrument]
+    async fn prepare_for_start_sandbox(
         &self,
-        _id: &str,
+        id: &str,
         network_env: SandboxNetworkEnv,
     ) -> Result<Vec<ResourceConfig>> {
         let mut resource_configs = vec![];
+
+        // prepare network config
         if !network_env.network_created {
-            if let Some(netns_path) = network_env.netns {
-                let network_config = ResourceConfig::Network(
-                    self.prepare_network_config(netns_path, network_env.network_created)
-                        .await,
-                );
-                resource_configs.push(network_config);
+            if let Some(network_resource) = self.prepare_network_resource(&network_env).await {
+                resource_configs.push(network_resource);
             }
         }
-        let hypervisor_config = self.hypervisor.hypervisor_config().await;
-        let virtio_fs_config = ResourceConfig::ShareFs(hypervisor_config.shared_fs);
+
+        // prepare sharefs device config
+        let virtio_fs_config =
+            ResourceConfig::ShareFs(self.hypervisor.hypervisor_config().await.shared_fs);
         resource_configs.push(virtio_fs_config);
 
+        // prepare VM rootfs device config
+        let vm_rootfs = ResourceConfig::VmRootfs(
+            self.prepare_rootfs_config()
+                .await
+                .context("failed to prepare rootfs device config")?,
+        );
+        resource_configs.push(vm_rootfs);
+
         Ok(resource_configs)
+    }
+
+    async fn prepare_network_resource(
+        &self,
+        network_env: &SandboxNetworkEnv,
+    ) -> Option<ResourceConfig> {
+        let config = self.resource_manager.config().await;
+        let dan_path = dan_config_path(&config, &self.sid);
+
+        // Network priority: DAN > NetNS
+        if dan_path.exists() {
+            Some(ResourceConfig::Network(NetworkConfig::Dan(
+                DanNetworkConfig {
+                    dan_conf_path: dan_path,
+                },
+            )))
+        } else if let Some(netns_path) = network_env.netns.as_ref() {
+            Some(ResourceConfig::Network(NetworkConfig::NetNs(
+                NetworkWithNetNsConfig {
+                    network_model: config.runtime.internetworking_model.clone(),
+                    netns_path: netns_path.to_owned(),
+                    queues: self
+                        .hypervisor
+                        .hypervisor_config()
+                        .await
+                        .network_info
+                        .network_queues as usize,
+                    network_created: network_env.network_created,
+                },
+            )))
+        } else {
+            None
+        }
     }
 
     async fn execute_oci_hook_functions(
@@ -143,22 +190,27 @@ impl VirtSandbox {
         Ok(())
     }
 
-    async fn prepare_network_config(
-        &self,
-        netns_path: String,
-        network_created: bool,
-    ) -> NetworkConfig {
-        let config = self.resource_manager.config().await;
-        NetworkConfig::NetworkResourceWithNetNs(NetworkWithNetNsConfig {
-            network_model: config.runtime.internetworking_model.clone(),
-            netns_path,
-            queues: self
-                .hypervisor
-                .hypervisor_config()
-                .await
-                .network_info
-                .network_queues as usize,
-            network_created,
+    async fn prepare_rootfs_config(&self) -> Result<BlockConfig> {
+        let boot_info = self.hypervisor.hypervisor_config().await.boot_info;
+
+        let image = {
+            let initrd_path = boot_info.initrd.clone();
+            let image_path = boot_info.image;
+            if !initrd_path.is_empty() {
+                Ok(initrd_path)
+            } else if !image_path.is_empty() {
+                Ok(image_path)
+            } else {
+                Err(anyhow!("failed to get image"))
+            }
+        }
+        .context("get image")?;
+
+        Ok(BlockConfig {
+            path_on_host: image,
+            is_readonly: true,
+            driver_option: boot_info.vm_rootfs_driver,
+            ..Default::default()
         })
     }
 
@@ -173,6 +225,7 @@ impl VirtSandbox {
 
 #[async_trait]
 impl Sandbox for VirtSandbox {
+    #[instrument(name = "sb: start")]
     async fn start(
         &self,
         dns: Vec<String>,
@@ -198,8 +251,9 @@ impl Sandbox for VirtSandbox {
         // generate device and setup before start vm
         // should after hypervisor.prepare_vm
         let resources = self
-            .prepare_config_for_sandbox(id, network_env.clone())
+            .prepare_for_start_sandbox(id, network_env.clone())
             .await?;
+
         self.resource_manager
             .prepare_before_start_vm(resources)
             .await
@@ -221,18 +275,23 @@ impl Sandbox for VirtSandbox {
         //    We need to rescan the netns to handle the change.
         // 2. Do not scan the netns if we want no network for the VM.
         // TODO In case of vm factory, scan the netns to hotplug interfaces after the VM is started.
+        let config = self.resource_manager.config().await;
         if self.has_prestart_hooks(prestart_hooks, create_runtime_hooks)
-            && !self
-                .resource_manager
-                .config()
-                .await
-                .runtime
-                .disable_new_netns
+            && !config.runtime.disable_new_netns
+            && !dan_config_path(&config, &self.sid).exists()
         {
             if let Some(netns_path) = network_env.netns {
-                let network_resource = self
-                    .prepare_network_config(netns_path, network_env.network_created)
-                    .await;
+                let network_resource = NetworkConfig::NetNs(NetworkWithNetNsConfig {
+                    network_model: config.runtime.internetworking_model.clone(),
+                    netns_path: netns_path.to_owned(),
+                    queues: self
+                        .hypervisor
+                        .hypervisor_config()
+                        .await
+                        .network_info
+                        .network_queues as usize,
+                    network_created: network_env.network_created,
+                });
                 self.resource_manager
                     .handle_network(network_resource)
                     .await
@@ -361,7 +420,7 @@ impl Sandbox for VirtSandbox {
             .await
             .context("resource clean up")?;
 
-        // TODO: cleanup other snadbox resource
+        // TODO: cleanup other sandbox resource
         Ok(())
     }
 
@@ -409,6 +468,18 @@ impl Sandbox for VirtSandbox {
             .await
             .context("sandbox: failed to get iptables")?;
         Ok(resp.data)
+    }
+
+    async fn agent_metrics(&self) -> Result<String> {
+        self.agent
+            .get_metrics(agent::Empty::new())
+            .await
+            .map_err(|err| anyhow!("failed to get agent metrics {:?}", err))
+            .map(|resp| resp.metrics)
+    }
+
+    async fn hypervisor_metrics(&self) -> Result<String> {
+        self.hypervisor.get_hypervisor_metrics().await
     }
 }
 

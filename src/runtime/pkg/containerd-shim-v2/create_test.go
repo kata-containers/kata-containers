@@ -20,7 +20,7 @@ import (
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/stretchr/testify/assert"
 
-	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
@@ -308,8 +308,9 @@ func TestCreateContainerConfigFail(t *testing.T) {
 	assert.Error(err)
 }
 
-func createAllRuntimeConfigFiles(dir, hypervisor string) (config string, err error) {
-	var coldPlugVFIO hv.PCIePort
+func createAllRuntimeConfigFiles(dir, hypervisor string) (runtimeConfig string, err error) {
+	var hotPlugVFIO config.PCIePort
+	var coldPlugVFIO config.PCIePort
 	if dir == "" {
 		return "", fmt.Errorf("BUG: need directory")
 	}
@@ -329,31 +330,29 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (config string, err err
 	disableBlockDevice := true
 	blockDeviceDriver := "virtio-scsi"
 	enableIOThreads := true
-	hotplugVFIOOnRootBus := true
-	pcieRootPort := uint32(2)
 	disableNewNetNs := false
 	sharedFS := "virtio-9p"
 	virtioFSdaemon := path.Join(dir, "virtiofsd")
-	coldPlugVFIO = hv.RootPort
+	hotPlugVFIO = config.BridgePort
+	coldPlugVFIO = config.NoPort
 
 	configFileOptions := ktu.RuntimeConfigOptions{
-		Hypervisor:           "qemu",
-		HypervisorPath:       hypervisorPath,
-		KernelPath:           kernelPath,
-		ImagePath:            imagePath,
-		RootfsType:           rootfsType,
-		KernelParams:         kernelParams,
-		MachineType:          machineType,
-		LogPath:              logPath,
-		DisableBlock:         disableBlockDevice,
-		BlockDeviceDriver:    blockDeviceDriver,
-		EnableIOThreads:      enableIOThreads,
-		HotplugVFIOOnRootBus: hotplugVFIOOnRootBus,
-		PCIeRootPort:         pcieRootPort,
-		DisableNewNetNs:      disableNewNetNs,
-		SharedFS:             sharedFS,
-		VirtioFSDaemon:       virtioFSdaemon,
-		ColdPlugVFIO:         coldPlugVFIO,
+		Hypervisor:        "qemu",
+		HypervisorPath:    hypervisorPath,
+		KernelPath:        kernelPath,
+		ImagePath:         imagePath,
+		RootfsType:        rootfsType,
+		KernelParams:      kernelParams,
+		MachineType:       machineType,
+		LogPath:           logPath,
+		DisableBlock:      disableBlockDevice,
+		BlockDeviceDriver: blockDeviceDriver,
+		EnableIOThreads:   enableIOThreads,
+		DisableNewNetNs:   disableNewNetNs,
+		SharedFS:          sharedFS,
+		VirtioFSDaemon:    virtioFSdaemon,
+		HotPlugVFIO:       hotPlugVFIO,
+		ColdPlugVFIO:      coldPlugVFIO,
 	}
 
 	runtimeConfigFileData := ktu.MakeRuntimeConfigFileData(configFileOptions)

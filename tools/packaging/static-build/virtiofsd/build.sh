@@ -13,6 +13,7 @@ readonly virtiofsd_builder="${script_dir}/build-static-virtiofsd.sh"
 
 source "${script_dir}/../../scripts/lib.sh"
 
+ARCH=${ARCH:-$(uname -m)}
 DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}
 kata_version="${kata_version:-}"
@@ -32,7 +33,6 @@ package_output_dir="${package_output_dir:-}"
 [ -n "${virtiofsd_toolchain}" ] || die "Failed to get the rust toolchain to build virtiofsd"
 [ -n "${virtiofsd_zip}" ] || die "Failed to get virtiofsd binary URL"
 
-ARCH=$(uname -m)
 case ${ARCH} in
 	"aarch64")
 		libc="musl"
@@ -49,9 +49,10 @@ case ${ARCH} in
 esac
 
 container_image="${VIRTIOFSD_CONTAINER_BUILDER:-$(get_virtiofsd_image_name)}"
+[ "${CROSS_BUILD}" == "true" ] && container_image="${container_image}-cross-build"
 
 sudo docker pull ${container_image} || \
-	(sudo docker build \
+	(sudo docker $BUILDX build $PLATFORM \
 		--build-arg RUST_TOOLCHAIN="${virtiofsd_toolchain}" \
 		-t "${container_image}" "${script_dir}/${libc}" && \
 	 # No-op unless PUSH_TO_REGISTRY is exported as "yes"
@@ -64,5 +65,6 @@ sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	--env virtiofsd_repo="${virtiofsd_repo}" \
 	--env virtiofsd_version="${virtiofsd_version}" \
 	--env virtiofsd_zip="${virtiofsd_zip}" \
+	--env ARCH="${ARCH}" \
 	"${container_image}" \
 	bash -c "${virtiofsd_builder}"

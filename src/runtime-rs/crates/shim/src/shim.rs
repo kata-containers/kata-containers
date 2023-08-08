@@ -20,6 +20,7 @@ const SHIM_PID_FILE: &str = "shim.pid";
 pub(crate) const ENV_KATA_RUNTIME_BIND_FD: &str = "KATA_RUNTIME_BIND_FD";
 
 /// Command executor for shim.
+#[derive(Debug)]
 pub struct ShimExecutor {
     pub(crate) args: Args,
 }

@@ -4,13 +4,14 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{
-    convert::TryFrom,
-    net::{IpAddr, Ipv4Addr, Ipv6Addr},
-};
+use std::convert::TryFrom;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+use std::str::FromStr;
 
-use anyhow::{anyhow, Result};
-use netlink_packet_route::{nlas::address::Nla, AddressMessage, AF_INET, AF_INET6};
+use agent::IPFamily;
+use anyhow::{anyhow, Context, Result};
+use netlink_packet_route::nlas::address::Nla;
+use netlink_packet_route::{AddressMessage, AF_INET, AF_INET6};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Address {
@@ -84,6 +85,41 @@ pub(crate) fn parse_ip(ip: &[u8], family: u8) -> Result<IpAddr> {
     }
 }
 
+pub(crate) fn parse_ip_cidr(ip: &str) -> Result<(IpAddr, u8)> {
+    let items: Vec<&str> = ip.split('/').collect();
+    if items.len() != 2 {
+        return Err(anyhow!(format!(
+            "{} is a bad IP address in format of CIDR",
+            ip
+        )));
+    }
+    let ipaddr = IpAddr::from_str(items[0]).context("Parse IP address from string")?;
+    let mask = u8::from_str(items[1]).context("Parse mask")?;
+    if ipaddr.is_ipv4() && mask > 32 {
+        return Err(anyhow!(format!(
+            "The mask of IPv4 address should be less than or equal to 32, but we got {}.",
+            mask
+        )));
+    }
+    if mask > 128 {
+        return Err(anyhow!(format!(
+            "The mask should be less than or equal to 128, but we got {}.",
+            mask
+        )));
+    }
+    Ok((ipaddr, mask))
+}
+
+/// Retrieve IP Family defined at agent crate from IpAddr.
+#[inline]
+pub(crate) fn ip_family_from_ip_addr(ip_addr: &IpAddr) -> IPFamily {
+    if ip_addr.is_ipv4() {
+        IPFamily::V4
+    } else {
+        IPFamily::V6
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -108,5 +144,29 @@ mod tests {
 
         let fail_ipv6 = [1, 2, 3, 4, 5, 6, 7, 8, 2, 3];
         assert!(parse_ip(fail_ipv6.as_slice(), AF_INET6 as u8).is_err());
+    }
+
+    #[test]
+    fn test_parse_ip_cidr() {
+        let test_cases = vec![
+            ("127.0.0.1/32", ("127.0.0.1", 32u8)),
+            ("2001:4860:4860::8888/32", ("2001:4860:4860::8888", 32u8)),
+            ("2001:4860:4860::8888/128", ("2001:4860:4860::8888", 128u8)),
+        ];
+        for tc in test_cases.iter() {
+            let (ipaddr, mask) = parse_ip_cidr(tc.0).unwrap();
+            assert_eq!(ipaddr.to_string(), tc.1 .0);
+            assert_eq!(mask, tc.1 .1);
+        }
+        let test_cases = vec![
+            "127.0.0.1/33",
+            "2001:4860:4860::8888/129",
+            "2001:4860:4860::8888/300",
+            "127.0.0.1/33/1",
+            "127.0.0.1",
+        ];
+        for tc in test_cases.iter() {
+            assert!(parse_ip_cidr(tc).is_err());
+        }
     }
 }

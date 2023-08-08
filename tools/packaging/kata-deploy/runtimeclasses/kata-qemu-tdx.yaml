@@ -1,0 +1,13 @@
+---
+kind: RuntimeClass
+apiVersion: node.k8s.io/v1
+metadata:
+    name: kata-qemu-tdx
+handler: kata-qemu-tdx
+overhead:
+    podFixed:
+        memory: "2048Mi"
+        cpu: "1.0"
+scheduling:
+  nodeSelector:
+    katacontainers.io/kata-runtime: "true"

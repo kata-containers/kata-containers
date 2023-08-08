@@ -44,6 +44,19 @@ pub(crate) struct KataAgentInner {
     log_forwarder: LogForwarder,
 }
 
+impl std::fmt::Debug for KataAgentInner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("KataAgentInner")
+            .field("client_fd", &self.client_fd)
+            .field("socket_address", &self.socket_address)
+            .field("config", &self.config)
+            .finish()
+    }
+}
+
+unsafe impl Send for KataAgent {}
+unsafe impl Sync for KataAgent {}
+#[derive(Debug)]
 pub struct KataAgent {
     pub(crate) inner: Arc<RwLock<KataAgentInner>>,
 }

@@ -4,22 +4,39 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::io::{self, Error};
+use std::{
+    io::{self, Error},
+    sync::Arc,
+};
 
-use super::endpoint_persist::{EndpointState, MacvlanEndpointState};
-use super::Endpoint;
-use crate::network::{utils, NetworkPair};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use hypervisor::{device::NetworkConfig, Device, Hypervisor};
+use tokio::sync::RwLock;
+
+use hypervisor::{
+    device::{
+        device_manager::{do_handle_device, DeviceManager},
+        driver::NetworkConfig,
+        DeviceConfig, DeviceType,
+    },
+    Hypervisor, NetworkDevice,
+};
+
+use super::{
+    endpoint_persist::{EndpointState, MacvlanEndpointState},
+    Endpoint,
+};
+use crate::network::{utils, NetworkPair};
 
 #[derive(Debug)]
 pub struct MacVlanEndpoint {
     pub(crate) net_pair: NetworkPair,
+    pub(crate) d: Arc<RwLock<DeviceManager>>,
 }
 
 impl MacVlanEndpoint {
     pub async fn new(
+        d: &Arc<RwLock<DeviceManager>>,
         handle: &rtnetlink::Handle,
         name: &str,
         idx: u32,
@@ -29,7 +46,11 @@ impl MacVlanEndpoint {
         let net_pair = NetworkPair::new(handle, idx, name, model, queues)
             .await
             .context("error creating new networkInterfacePair")?;
-        Ok(MacVlanEndpoint { net_pair })
+
+        Ok(MacVlanEndpoint {
+            net_pair,
+            d: d.clone(),
+        })
     }
 
     fn get_network_config(&self) -> Result<NetworkConfig> {
@@ -40,10 +61,12 @@ impl MacVlanEndpoint {
                 format!("hard_addr {}", &iface.hard_addr),
             )
         })?;
+
         Ok(NetworkConfig {
-            id: self.net_pair.virt_iface.name.clone(),
             host_dev_name: iface.name.clone(),
+            virt_iface_name: self.net_pair.virt_iface.name.clone(),
             guest_mac: Some(guest_mac),
+            ..Default::default()
         })
     }
 }
@@ -58,15 +81,17 @@ impl Endpoint for MacVlanEndpoint {
         self.net_pair.tap.tap_iface.hard_addr.clone()
     }
 
-    async fn attach(&self, h: &dyn Hypervisor) -> Result<()> {
+    async fn attach(&self) -> Result<()> {
         self.net_pair
             .add_network_model()
             .await
             .context("add network model")?;
+
         let config = self.get_network_config().context("get network config")?;
-        h.add_device(Device::Network(config))
+        do_handle_device(&self.d, &DeviceConfig::NetworkCfg(config))
             .await
-            .context("Error add device")?;
+            .context("do handle network MacVlan endpoint device failed.")?;
+
         Ok(())
     }
 
@@ -75,10 +100,15 @@ impl Endpoint for MacVlanEndpoint {
             .del_network_model()
             .await
             .context("del network model")?;
+
         let config = self.get_network_config().context("get network config")?;
-        h.remove_device(Device::Network(config))
-            .await
-            .context("remove device")?;
+        h.remove_device(DeviceType::Network(NetworkDevice {
+            config,
+            ..Default::default()
+        }))
+        .await
+        .context("remove MacVlan endpoint device by hypervisor failed.")?;
+
         Ok(())
     }
 

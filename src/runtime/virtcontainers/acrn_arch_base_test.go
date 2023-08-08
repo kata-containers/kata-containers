@@ -83,8 +83,9 @@ func TestAcrnArchBaseKernelParameters(t *testing.T) {
 func TestAcrnArchBaseCapabilities(t *testing.T) {
 	assert := assert.New(t)
 	acrnArchBase := newAcrnArchBase()
+	config := HypervisorConfig{}
 
-	c := acrnArchBase.capabilities()
+	c := acrnArchBase.capabilities(config)
 	assert.True(c.IsBlockDeviceSupported())
 	assert.True(c.IsBlockDeviceHotplugSupported())
 	assert.False(c.IsFsSharingSupported())

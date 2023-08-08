@@ -8,6 +8,7 @@
 set -e
 
 kubernetes_dir=$(dirname "$(readlink -f "$0")")
+source "${kubernetes_dir}/../../common.bash"
 
 TARGET_ARCH="${TARGET_ARCH:-x86_64}"
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
@@ -27,6 +28,7 @@ else
 		"k8s-empty-dirs.bats" \
 		"k8s-env.bats" \
 		"k8s-exec.bats" \
+		"k8s-file-volume.bats" \
 		"k8s-inotify.bats" \
 		"k8s-job.bats" \
 		"k8s-kill-all-process-in-container.bats" \
@@ -50,16 +52,9 @@ else
 		"k8s-sysctls.bats" \
 		"k8s-security-context.bats" \
 		"k8s-shared-volume.bats" \
+		"k8s-volume.bats" \
 		"k8s-nginx-connectivity.bats" \
 	)
-fi
-
-if [ ${KATA_HYPERVISOR} == "qemu-sev" ]; then
-	exit 0
-fi
-
-if [ ${KATA_HYPERVISOR} == "qemu-snp" ]; then
-	exit 0
 fi
 
 # we may need to skip a few test cases when running on non-x86_64 arch

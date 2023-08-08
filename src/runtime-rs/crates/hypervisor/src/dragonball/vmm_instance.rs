@@ -16,8 +16,8 @@ use crossbeam_channel::{unbounded, Receiver, Sender};
 use dragonball::{
     api::v1::{
         BlockDeviceConfigInfo, BootSourceConfig, FsDeviceConfigInfo, FsMountConfigInfo,
-        InstanceInfo, InstanceState, VirtioNetDeviceConfigInfo, VmmAction, VmmActionError, VmmData,
-        VmmRequest, VmmResponse, VmmService, VsockDeviceConfigInfo,
+        InstanceInfo, InstanceState, VcpuResizeInfo, VirtioNetDeviceConfigInfo, VmmAction,
+        VmmActionError, VmmData, VmmRequest, VmmResponse, VmmService, VsockDeviceConfigInfo,
     },
     vm::VmConfigInfo,
     Vmm,
@@ -36,6 +36,7 @@ const DRAGONBALL_VERSION: &str = env!("CARGO_PKG_VERSION");
 const REQUEST_RETRY: u32 = 500;
 const KVM_DEVICE: &str = "/dev/kvm";
 
+#[derive(Debug)]
 pub struct VmmInstance {
     /// VMM instance info directly accessible from runtime
     vmm_shared_info: Arc<RwLock<InstanceInfo>>,
@@ -248,6 +249,12 @@ impl VmmInstance {
         Ok(())
     }
 
+    pub fn resize_vcpu(&self, cfg: &VcpuResizeInfo) -> Result<()> {
+        self.handle_request(Request::Sync(VmmAction::ResizeVcpu(cfg.clone())))
+            .with_context(|| format!("Failed to resize_vm(hotplug vcpu), cfg: {:?}", cfg))?;
+        Ok(())
+    }
+
     pub fn pause(&self) -> Result<()> {
         todo!()
     }
@@ -258,6 +265,15 @@ impl VmmInstance {
 
     pub fn pid(&self) -> u32 {
         std::process::id()
+    }
+
+    pub fn get_hypervisor_metrics(&self) -> Result<String> {
+        if let Ok(VmmData::HypervisorMetrics(metrics)) =
+            self.handle_request(Request::Sync(VmmAction::GetHypervisorMetrics))
+        {
+            return Ok(metrics);
+        }
+        Err(anyhow!("Failed to get hypervisor metrics"))
     }
 
     pub fn stop(&mut self) -> Result<()> {

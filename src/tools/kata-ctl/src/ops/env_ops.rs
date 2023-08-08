@@ -9,6 +9,7 @@ use crate::arch::arch_specific;
 use crate::args::EnvArgument;
 use crate::ops::version;
 use crate::utils;
+use kata_sys_util::protection;
 use kata_types::config::TomlConfig;
 
 use anyhow::{anyhow, Context, Result};
@@ -251,9 +252,15 @@ fn get_host_info() -> Result<HostInfo> {
     let memory_info = get_memory_info()?;
 
     let guest_protection =
-        arch_specific::available_guest_protection().map_err(|e| anyhow!(e.to_string()))?;
+        protection::available_guest_protection().map_err(|e| anyhow!(e.to_string()))?;
 
     let guest_protection = guest_protection.to_string();
+
+    let mut vm_container_capable = true;
+
+    if arch_specific::host_is_vmcontainer_capable().is_err() {
+        vm_container_capable = false;
+    }
 
     let support_vsocks = utils::supports_vsocks(utils::VHOST_VSOCK_DEVICE)?;
 
@@ -264,8 +271,7 @@ fn get_host_info() -> Result<HostInfo> {
         cpu: host_cpu,
         memory: memory_info,
         available_guest_protection: guest_protection,
-        // TODO: See https://github.com/kata-containers/kata-containers/issues/6727
-        vm_container_capable: true,
+        vm_container_capable,
         support_vsocks,
     })
 }

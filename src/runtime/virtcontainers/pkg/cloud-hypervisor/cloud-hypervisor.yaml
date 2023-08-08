@@ -438,8 +438,13 @@ components:
         - version
       type: object
       properties:
+        build_version:
+          type: string
         version:
           type: string
+        pid:
+          type: integer
+          format: int64
       description: Virtual Machine Monitor information
 
     VmInfo:

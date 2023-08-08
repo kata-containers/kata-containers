@@ -27,6 +27,7 @@ thiserror = "1.0"
 toml = "0.5.8"
 
 oci = { path = "../oci" }
+safe-path = { path = "../safe-path" }
 
 [dev-dependencies]
 tempfile = "3"

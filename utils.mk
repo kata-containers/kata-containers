@@ -130,7 +130,7 @@ endef
 
 
 ##VAR BUILD_TYPE=release|debug type of rust build
-BUILD_TYPE = release
+BUILD_TYPE ?= release
 
 ##VAR ARCH=arch target to build (format: uname -m)
 HOST_ARCH = $(shell uname -m)
@@ -146,7 +146,6 @@ ifneq ($(LIBC),musl)
 endif
 
 ifeq ($(ARCH), ppc64le)
-    override ARCH = powerpc64le
     override LIBC = gnu
     $(warning "WARNING: powerpc64le-unknown-linux-musl target is unavailable")
 endif
@@ -158,10 +157,6 @@ endif
 
 
 EXTRA_RUSTFLAGS :=
-ifeq ($(ARCH), aarch64)
-    override EXTRA_RUSTFLAGS = -C link-arg=-lgcc
-    $(warning "WARNING: aarch64-musl needs extra symbols from libgcc")
-endif
 
 ifneq ($(HOST_ARCH),$(ARCH))
     ifeq ($(CC),)

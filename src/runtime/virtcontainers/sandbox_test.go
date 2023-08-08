@@ -593,11 +593,11 @@ func TestSandboxAttachDevicesVFIO(t *testing.T) {
 	_, err = os.Create(deviceFile)
 	assert.Nil(t, err)
 
-	savedIOMMUPath := config.SysIOMMUPath
-	config.SysIOMMUPath = tmpDir
+	savedIOMMUPath := config.SysIOMMUGroupPath
+	config.SysIOMMUGroupPath = tmpDir
 
 	defer func() {
-		config.SysIOMMUPath = savedIOMMUPath
+		config.SysIOMMUGroupPath = savedIOMMUPath
 	}()
 
 	dm := manager.NewDeviceManager(config.VirtioSCSI, false, "", 0, nil)
@@ -606,6 +606,7 @@ func TestSandboxAttachDevicesVFIO(t *testing.T) {
 		HostPath:      path,
 		ContainerPath: path,
 		DevType:       "c",
+		Port:          config.RootPort,
 	}
 	dev, err := dm.NewDevice(deviceInfo)
 	assert.Nil(t, err, "deviceManager.NewDevice return error: %v", err)

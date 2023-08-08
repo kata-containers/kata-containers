@@ -26,7 +26,6 @@ architectures:
 |------------------------------------------------------|----------------------------------------------------------------------------------------------|-------------------|-----------------------------------------------------------------------------------------------|----------- |
 | [Using kata-deploy](#kata-deploy-installation)       | The preferred way to deploy the Kata Containers distributed binaries on a Kubernetes cluster | **No!**           | Best way to give it a try on kata-containers on an already up and running Kubernetes cluster. | Yes |
 | [Using official distro packages](#official-packages) | Kata packages provided by Linux distributions official repositories                          | yes               | Recommended for most users. | No |                                                                   
-| [Using snap](#snap-installation)                     | Easy to install                                                                              | yes               | Good alternative to official distro packages.                                                 | No |
 | [Automatic](#automatic-installation)                 | Run a single command to install a full system                                                | **No!**           | For those wanting the latest release quickly.                                                 | No |
 | [Manual](#manual-installation)                       | Follow a guide step-by-step to install a working system                                      | **No!**           | For those who want the latest release with more control.                                      | No |
 | [Build from source](#build-from-source-installation) | Build the software components manually                                                       | **No!**           | Power users and developers only.  | Yes |              
@@ -35,8 +34,6 @@ architectures:
 
 Follow the [`kata-deploy`](../../tools/packaging/kata-deploy/README.md).
 ### Official packages
-`ToDo`
-### Snap Installation
 `ToDo`
 ### Automatic Installation
 `ToDo`
@@ -49,14 +46,14 @@ Follow the [`kata-deploy`](../../tools/packaging/kata-deploy/README.md).
 
 * Download `Rustup` and install  `Rust`
     > **Notes:**
-    > For Rust version, please see [`versions.yaml`](../../versions.yaml)  file's rust section.
+    > For Rust version, please set `RUST_VERSION` to the value of `languages.rust.meta.newest-version key` in [`versions.yaml`](../../versions.yaml) or, if `yq` is available on your system, run `export RUST_VERSION=$(yq read versions.yaml languages.rust.meta.newest-version)`.
 
     Example for `x86_64`
     ```
     $ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
     $ source $HOME/.cargo/env
-    $ rustup install 1.62.0
-    $ rustup default 1.62.0-x86_64-unknown-linux-gnu
+    $ rustup install ${RUST_VERSION}
+    $ rustup default ${RUST_VERSION}-x86_64-unknown-linux-gnu
     ```
 
 * Musl support for fully static binary

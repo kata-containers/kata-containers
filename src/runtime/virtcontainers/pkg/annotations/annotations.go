@@ -122,13 +122,11 @@ const (
 	// DisableImageNvdimm is a sandbox annotation to specify use of nvdimm device for guest rootfs image.
 	DisableImageNvdimm = kataAnnotHypervisorPrefix + "disable_image_nvdimm"
 
-	// HotplugVFIOOnRootBus is a sandbox annotation used to indicate if devices need to be hotplugged on the
-	// root bus instead of a bridge.
-	HotplugVFIOOnRootBus = kataAnnotHypervisorPrefix + "hotplug_vfio_on_root_bus"
+	// ColdPlugVFIO is a sandbox annotation used to indicate if devices need to be coldplugged.
+	ColdPlugVFIO = kataAnnotHypervisorPrefix + "cold_plug_vfio"
 
-	// PCIeRootPort is used to indicate the number of PCIe Root Port devices
-	// The PCIe Root Port device is used to hot-plug the PCIe device
-	PCIeRootPort = kataAnnotHypervisorPrefix + "pcie_root_port"
+	// HotPlugVFIO is a sandbox annotation used to indicate if devices need to be hotplugged.
+	HotPlugVFIO = kataAnnotHypervisorPrefix + "hot_plug_vfio"
 
 	// EntropySource is a sandbox annotation to specify the path to a host source of
 	// entropy (/dev/random, /dev/urandom or real hardware RNG device)
@@ -310,6 +308,21 @@ const (
 
 	// ContainerResourcesSwapInBytes is a container annotation to specify the Resources.Memory.Swap
 	ContainerResourcesSwapInBytes = kataAnnotContainerResourcePrefix + "swap_in_bytes"
+)
+
+// Annotations related to file system options.
+const (
+	kataAnnotFsOptPrefix = kataAnnotationsPrefix + "fs-opt."
+
+	// FileSystemLayer describes a layer of an overlay filesystem.
+	FileSystemLayer = kataAnnotFsOptPrefix + "layer="
+
+	// IsFileSystemLayer indicates that the annotated filesystem is a layer of an overlay fs.
+	IsFileSystemLayer = kataAnnotFsOptPrefix + "is-layer"
+
+	// IsFileBlockDevice indicates that the annotated filesystem is mounted on a block device
+	// backed by a host file.
+	IsFileBlockDevice = kataAnnotFsOptPrefix + "block_device=file"
 )
 
 const (

@@ -673,7 +673,7 @@ func TestCloudHypervisorHotplugRemoveDevice(t *testing.T) {
 	_, err = clh.HotplugRemoveDevice(context.Background(), &config.BlockDrive{}, BlockDev)
 	assert.NoError(err, "Hotplug remove block device expected no error")
 
-	_, err = clh.HotplugRemoveDevice(context.Background(), &config.VFIOPCIDev{}, VfioDev)
+	_, err = clh.HotplugRemoveDevice(context.Background(), &config.VFIODev{}, VfioDev)
 	assert.NoError(err, "Hotplug remove vfio block device expected no error")
 
 	_, err = clh.HotplugRemoveDevice(context.Background(), nil, NetDev)
@@ -725,4 +725,31 @@ func TestClhSetConfig(t *testing.T) {
 	assert.NoError(err)
 
 	assert.Equal(clh.config, config)
+}
+
+func TestClhCapabilities(t *testing.T) {
+	assert := assert.New(t)
+
+	hConfig, err := newClhConfig()
+	assert.NoError(err)
+
+	clh := &cloudHypervisor{}
+	assert.Equal(clh.config, HypervisorConfig{})
+
+	hConfig.SharedFS = config.VirtioFS
+
+	err = clh.setConfig(&hConfig)
+	assert.NoError(err)
+
+	var ctx context.Context
+	c := clh.Capabilities(ctx)
+	assert.True(c.IsFsSharingSupported())
+
+	hConfig.SharedFS = config.NoSharedFS
+
+	err = clh.setConfig(&hConfig)
+	assert.NoError(err)
+
+	c = clh.Capabilities(ctx)
+	assert.False(c.IsFsSharingSupported())
 }

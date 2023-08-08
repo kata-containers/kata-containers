@@ -5,11 +5,17 @@
 
 // Contains checks that are not architecture-specific
 
+#[cfg(any(target_arch = "x86_64"))]
+use crate::types::KernelModule;
+
 use anyhow::{anyhow, Result};
+use nix::fcntl::{open, OFlag};
+use nix::sys::stat::Mode;
+use nix::unistd::close;
+use nix::{ioctl_write_int_bad, request_code_none};
 use reqwest::header::{CONTENT_TYPE, USER_AGENT};
 use serde::{Deserialize, Serialize};
-use std::fmt;
-use thiserror::Error;
+use slog::{info, o};
 
 #[cfg(any(target_arch = "x86_64"))]
 use std::process::{Command, Stdio};
@@ -47,55 +53,10 @@ pub const GENERIC_CPU_MODEL_FIELD: &str = "model name";
 #[allow(dead_code)]
 pub const PROC_CPUINFO: &str = "/proc/cpuinfo";
 
-fn read_file_contents(file_path: &str) -> Result<String> {
-    let contents = std::fs::read_to_string(file_path)?;
-    Ok(contents)
-}
-
-// get_single_cpu_info returns the contents of the first cpu from
-// the specified cpuinfo file by parsing based on a specified delimiter
-pub fn get_single_cpu_info(cpu_info_file: &str, substring: &str) -> Result<String> {
-    let contents = read_file_contents(cpu_info_file)?;
-
-    if contents.is_empty() {
-        return Err(anyhow!(ERR_NO_CPUINFO));
-    }
-
-    let subcontents: Vec<&str> = contents.split(substring).collect();
-    let result = subcontents
-        .first()
-        .ok_or("error splitting contents of cpuinfo")
-        .map_err(|e| anyhow!(e))?
-        .to_string();
-    Ok(result)
-}
-
-// get_cpu_flags returns a string of cpu flags from cpuinfo, passed in
-// as a string
-#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
-pub fn get_cpu_flags(cpu_info: &str, cpu_flags_tag: &str) -> Result<String> {
-    if cpu_info.is_empty() {
-        return Err(anyhow!(ERR_NO_CPUINFO));
-    }
-
-    if cpu_flags_tag.is_empty() {
-        return Err(anyhow!("cpu flags delimiter string is empty"))?;
-    }
-
-    let subcontents: Vec<&str> = cpu_info.split('\n').collect();
-    for line in subcontents {
-        if line.starts_with(cpu_flags_tag) {
-            let line_data: Vec<&str> = line.split(':').collect();
-            let flags = line_data
-                .last()
-                .ok_or("error splitting flags in cpuinfo")
-                .map_err(|e| anyhow!(e))?
-                .to_string();
-            return Ok(flags);
-        }
-    }
-
-    Ok("".to_string())
+macro_rules! sl {
+    () => {
+        slog_scope::logger().new(o!("subsystem" => "check"))
+    };
 }
 
 // get_missing_strings searches for required (strings) in data and returns
@@ -135,44 +96,66 @@ pub fn check_cpu_attribs(
     Ok(missing_attribs)
 }
 
-#[allow(dead_code)]
-#[derive(Debug, PartialEq)]
-pub enum GuestProtection {
-    NoProtection,
-    Tdx,
-    Sev,
-    Snp,
-    Pef,
-    Se,
-}
-
-impl fmt::Display for GuestProtection {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            GuestProtection::Tdx => write!(f, "tdx"),
-            GuestProtection::Sev => write!(f, "sev"),
-            GuestProtection::Snp => write!(f, "snp"),
-            GuestProtection::Pef => write!(f, "pef"),
-            GuestProtection::Se => write!(f, "se"),
-            GuestProtection::NoProtection => write!(f, "none"),
-        }
-    }
-}
-
-#[allow(dead_code)]
-#[derive(Error, Debug)]
-pub enum ProtectionError {
-    #[error("No permission to check guest protection")]
-    NoPerms,
-
-    #[error("Failed to check guest protection: {0}")]
-    CheckFailed(String),
-
-    #[error("Invalid guest protection value: {0}")]
-    InvalidValue(String),
-}
-
 pub fn run_network_checks() -> Result<()> {
+    Ok(())
+}
+
+// Set of basic checks for kvm. Architectures should implement more specific checks if needed
+#[allow(dead_code)]
+pub fn check_kvm_is_usable_generic() -> Result<()> {
+    // check for root user
+    if !nix::unistd::Uid::effective().is_root() {
+        return Err(anyhow!("Will not perform kvm checks as non root user"));
+    }
+
+    // we do not want to create syscalls to any device besides /dev/kvm
+    const KVM_DEVICE: &str = "/dev/kvm";
+
+    // constants specific to kvm ioctls found in kvm.h
+    const KVM_IOCTL_ID: u8 = 0xAE;
+    const KVM_CREATE_VM: u8 = 0x01;
+    const KVM_GET_API_VERSION: u8 = 0x00;
+    // per kvm api documentation, this number should always be 12
+    // https://www.kernel.org/doc/html/latest/virt/kvm/api.html#kvm-get-api-version
+    const API_VERSION: i32 = 12;
+
+    // open kvm device
+    // since file is not being created, mode argument is not relevant
+    let mode = Mode::empty();
+    let flags = OFlag::O_RDWR | OFlag::O_CLOEXEC;
+    let fd = open(KVM_DEVICE, flags, mode)?;
+
+    // check kvm api version
+    ioctl_write_int_bad!(
+        kvm_api_version,
+        request_code_none!(KVM_IOCTL_ID, KVM_GET_API_VERSION)
+    );
+    // 0 is not used but required to produce output
+    let v = unsafe { kvm_api_version(fd, 0)? };
+    if v != API_VERSION {
+        return Err(anyhow!("KVM API version is not correct"));
+    }
+
+    // check if you can create vm
+    ioctl_write_int_bad!(
+        kvm_create_vm,
+        request_code_none!(KVM_IOCTL_ID, KVM_CREATE_VM)
+    );
+    // 0 is default machine type
+    let vmfd = unsafe { kvm_create_vm(fd, 0) };
+    let _vmfd = match vmfd {
+        Ok(vm) => vm,
+        Err(ref error) if error.to_string() == "EBUSY: Device or resource busy" => {
+            return Err(anyhow!(
+                "Another hypervisor is running. KVM_CREATE_VM error: {:?}",
+                error
+            ))
+        }
+        Err(error) => return Err(anyhow!("Other KVM_CREATE_VM error: {:?}", error)),
+    };
+
+    let _ = close(fd);
+
     Ok(())
 }
 
@@ -213,14 +196,20 @@ pub fn check_all_releases() -> Result<()> {
 
     for release in releases {
         if !release.prerelease {
-            println!(
+            info!(
+                sl!(),
                 "Official  : Release {:15}; created {} ; {}",
-                release.tag_name, release.created_at, release.tarball_url
+                release.tag_name,
+                release.created_at,
+                release.tarball_url
             );
         } else {
-            println!(
+            info!(
+                sl!(),
                 "PreRelease: Release {:15}; created {} ; {}",
-                release.tag_name, release.created_at, release.tarball_url
+                release.tag_name,
+                release.created_at,
+                release.tarball_url
             );
         }
     }
@@ -231,12 +220,15 @@ pub fn check_official_releases() -> Result<()> {
     let releases: Vec<Release> =
         get_kata_all_releases_by_url(KATA_GITHUB_RELEASE_URL).map_err(handle_reqwest_error)?;
 
-    println!("Official Releases...");
+    info!(sl!(), "Official Releases...");
     for release in releases {
         if !release.prerelease {
-            println!(
+            info!(
+                sl!(),
                 "Release {:15}; created {} ; {}",
-                release.tag_name, release.created_at, release.tarball_url
+                release.tag_name,
+                release.created_at,
+                release.tarball_url
             );
         }
     }
@@ -245,17 +237,16 @@ pub fn check_official_releases() -> Result<()> {
 }
 
 #[cfg(any(target_arch = "x86_64"))]
-pub fn check_kernel_module_loaded(module: &str, parameter: &str) -> Result<String, String> {
+pub fn check_kernel_module_loaded(kernel_module: &KernelModule) -> Result<(), String> {
     const MODPROBE_PARAMETERS_DRY_RUN: &str = "--dry-run";
     const MODPROBE_PARAMETERS_FIRST_TIME: &str = "--first-time";
-    const MODULES_PATH: &str = "/sys/module";
 
     let status_modinfo_success;
 
     // Partial check w/ modinfo
     // verifies that the module exists
     match Command::new(MODINFO_PATH)
-        .arg(module)
+        .arg(kernel_module.name)
         .stdout(Stdio::piped())
         .output()
     {
@@ -282,7 +273,7 @@ pub fn check_kernel_module_loaded(module: &str, parameter: &str) -> Result<Strin
     match Command::new(MODPROBE_PATH)
         .arg(MODPROBE_PARAMETERS_DRY_RUN)
         .arg(MODPROBE_PARAMETERS_FIRST_TIME)
-        .arg(module)
+        .arg(kernel_module.name)
         .stdout(Stdio::piped())
         .output()
     {
@@ -292,8 +283,8 @@ pub fn check_kernel_module_loaded(module: &str, parameter: &str) -> Result<Strin
 
             if status_modprobe_success && status_modinfo_success {
                 // This condition is true in the case that the module exist, but is not already loaded
-                let msg = format!("The kernel module `{:}` exist but is not already loaded. Try reloading it using 'modprobe {:}=Y'",
-                        module, module
+                let msg = format!("The kernel module `{:}` exist but is not already loaded. Try reloading it using 'modprobe {:}'",
+                kernel_module.name, kernel_module.name
                     );
                 return Err(msg);
             }
@@ -307,31 +298,22 @@ pub fn check_kernel_module_loaded(module: &str, parameter: &str) -> Result<Strin
             return Err(msg);
         }
     }
-
-    let module_path = format!("{}/{}/parameters/{}", MODULES_PATH, module, parameter);
-
-    // Here the currently loaded kernel parameter value
-    // is retrieved and returned on success
-    match read_file_contents(&module_path) {
-        Ok(result) => Ok(result.replace('\n', "")),
-        Err(_e) => {
-            let msg = format!(
-                "'{:}' kernel module parameter `{:}` not found.",
-                module, parameter
-            );
-            Err(msg)
-        }
-    }
+    Ok(())
 }
 
 #[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(any(target_arch = "x86_64"))]
+    use crate::types::{KernelModule, KernelParam, KernelParamType};
+    use kata_sys_util::cpu::{get_cpu_flags, get_single_cpu_info};
     use semver::Version;
+    use slog::warn;
     use std::fs;
     use std::io::Write;
     use tempfile::tempdir;
+    use test_utils::skip_if_root;
 
     #[test]
     fn test_get_single_cpu_info() {
@@ -460,6 +442,16 @@ mod tests {
     }
 
     #[test]
+    fn test_check_kvm_is_usable_generic() {
+        skip_if_root!();
+        #[allow(dead_code)]
+        let result = check_kvm_is_usable_generic();
+        assert!(
+            result.err().unwrap().to_string() == "Will not perform kvm checks as non root user"
+        );
+    }
+
+    #[test]
     fn test_get_kata_all_releases_by_url() {
         #[derive(Debug)]
         struct TestData<'a> {
@@ -499,8 +491,9 @@ mod tests {
         // sometime in GitHub action accessing to github.com API may fail
         // we can skip this test to prevent the whole test fail.
         if releases.is_err() {
-            println!(
-                "WARNING!!!\nget kata version failed({:?}), this maybe a temporary error, just skip the test.",
+            warn!(
+                sl!(),
+                "get kata version failed({:?}), this maybe a temporary error, just skip the test.",
                 releases.unwrap_err()
             );
             return;
@@ -520,12 +513,13 @@ mod tests {
     #[test]
     fn check_module_loaded() {
         #[allow(dead_code)]
-        #[derive(Debug)]
+
         struct TestData<'a> {
             module_name: &'a str,
             param_name: &'a str,
+            kernel_module: &'a KernelModule<'a>,
             param_value: &'a str,
-            result: Result<String>,
+            result: Result<()>,
         }
 
         let tests = &[
@@ -533,45 +527,58 @@ mod tests {
             TestData {
                 module_name: "",
                 param_name: "",
+                kernel_module: &KernelModule {
+                    name: "",
+                    params: &[KernelParam {
+                        name: "",
+                        value: KernelParamType::Simple("Y"),
+                    }],
+                },
                 param_value: "",
                 result: Err(anyhow!("modinfo: ERROR: Module {} not found.", "")),
-            },
-            TestData {
-                module_name: "kvm",
-                param_name: "",
-                param_value: "",
-                result: Err(anyhow!(
-                    "'{:}' kernel module parameter `{:}` not found.",
-                    "kvm",
-                    ""
-                )),
             },
             // Success scenarios
             TestData {
                 module_name: "kvm",
+                param_name: "",
+                kernel_module: &KernelModule {
+                    name: "kvm",
+                    params: &[KernelParam {
+                        name: "nonexistantparam",
+                        value: KernelParamType::Simple("Y"),
+                    }],
+                },
+                param_value: "",
+                result: Ok(()),
+            },
+            TestData {
+                module_name: "kvm",
                 param_name: "kvmclock_periodic_sync",
+                kernel_module: &KernelModule {
+                    name: "kvm",
+                    params: &[KernelParam {
+                        name: "kvmclock_periodic_sync",
+                        value: KernelParamType::Simple("Y"),
+                    }],
+                },
                 param_value: "Y",
-                result: Ok("Y".to_string()),
+                result: Ok(()),
             },
         ];
 
         for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
-            let result = check_kernel_module_loaded(d.module_name, d.param_name);
+            let msg = format!("test[{}]", i);
+            let result = check_kernel_module_loaded(d.kernel_module);
             let msg = format!("{}, result: {:?}", msg, result);
 
             if d.result.is_ok() {
-                assert_eq!(
-                    result.as_ref().unwrap(),
-                    d.result.as_ref().unwrap(),
-                    "{}",
-                    msg
-                );
+                assert_eq!(result, Ok(()));
                 continue;
             }
 
             let expected_error = format!("{}", &d.result.as_ref().unwrap_err());
             let actual_error = result.unwrap_err().to_string();
+            println!("testing for {}", d.module_name);
             assert!(actual_error == expected_error, "{}", msg);
         }
     }

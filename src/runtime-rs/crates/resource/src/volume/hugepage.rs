@@ -15,9 +15,10 @@ use agent::Storage;
 use anyhow::{anyhow, Context, Ok, Result};
 use async_trait::async_trait;
 use byte_unit::Byte;
-use hypervisor::HUGETLBFS;
+use hypervisor::{device::device_manager::DeviceManager, HUGETLBFS};
 use kata_sys_util::{fs::get_base_name, mount::PROC_MOUNTS_FILE};
 use kata_types::mount::KATA_EPHEMERAL_VOLUME_TYPE;
+use tokio::sync::RwLock;
 
 use super::{Volume, BIND};
 
@@ -88,8 +89,12 @@ impl Volume for Hugepage {
         Ok(s)
     }
 
-    async fn cleanup(&self) -> Result<()> {
+    async fn cleanup(&self, _device_manager: &RwLock<DeviceManager>) -> Result<()> {
         Ok(())
+    }
+
+    fn get_device_id(&self) -> Result<Option<String>> {
+        Ok(None)
     }
 }
 

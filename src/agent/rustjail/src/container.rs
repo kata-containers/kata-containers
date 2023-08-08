@@ -1596,10 +1596,8 @@ mod tests {
     use tempfile::tempdir;
     use test_utils::skip_if_not_root;
 
-    macro_rules! sl {
-        () => {
-            slog_scope::logger()
-        };
+    fn sl() -> slog::Logger {
+        slog_scope::logger()
     }
 
     #[test]
@@ -1854,7 +1852,7 @@ mod tests {
         let _ = new_linux_container_and_then(|mut c: LinuxContainer| {
             c.processes.insert(
                 1,
-                Process::new(&sl!(), &oci::Process::default(), "123", true, 1).unwrap(),
+                Process::new(&sl(), &oci::Process::default(), "123", true, 1).unwrap(),
             );
             let p = c.get_process("123");
             assert!(p.is_ok(), "Expecting Ok, Got {:?}", p);
@@ -1881,7 +1879,7 @@ mod tests {
         let (c, _dir) = new_linux_container();
         let ret = c
             .unwrap()
-            .start(Process::new(&sl!(), &oci::Process::default(), "123", true, 1).unwrap())
+            .start(Process::new(&sl(), &oci::Process::default(), "123", true, 1).unwrap())
             .await;
         assert!(ret.is_err(), "Expecting Err, Got {:?}", ret);
     }
@@ -1891,7 +1889,7 @@ mod tests {
         let (c, _dir) = new_linux_container();
         let ret = c
             .unwrap()
-            .run(Process::new(&sl!(), &oci::Process::default(), "123", true, 1).unwrap())
+            .run(Process::new(&sl(), &oci::Process::default(), "123", true, 1).unwrap())
             .await;
         assert!(ret.is_err(), "Expecting Err, Got {:?}", ret);
     }

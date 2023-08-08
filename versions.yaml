@@ -75,7 +75,7 @@ assets:
       url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
       uscan-url: >-
         https://github.com/cloud-hypervisor/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
-      version: "v31.0"
+      version: "v33.0"
 
     firecracker:
       description: "Firecracker micro-VMM"
@@ -83,7 +83,7 @@ assets:
       uscan-url: >-
         https://github.com/firecracker-microvm/firecracker/tags
         .*/v?(\d\S+)\.tar\.gz
-      version: "v1.3.1"
+      version: "v1.3.3"
 
     qemu:
       description: "VMM that uses KVM"
@@ -98,11 +98,6 @@ assets:
       uscan-url: >-
         https://github.com/qemu/qemu/tags
         .*/v?(\d\S+)\.tar\.gz
-      snp:
-        description: "VMM that uses KVM and supports AMD SEV-SNP"
-        url: "https://github.com/AMDESE/qemu"
-        branch: "snp-v3"
-        commit: "ffa95097ee"
 
     qemu-experimental:
       description: "QEMU with virtiofs support"
@@ -115,6 +110,11 @@ assets:
       url: "https://github.com/kata-containers/qemu"
       tag: "ad4c7f529a279685da84297773b4ec8080153c2d-plus-TDX-v1.3"
 
+    qemu-snp-experimental:
+      description: "QEMU with experimental SNP support (no UPM)"
+      url: "https://github.com/AMDESE/qemu"
+      tag: "3b6a2b6b7466f6dea53243900b7516c3f29027b7"
+
   image:
     description: |
       Root filesystem disk image used to boot the guest virtual
@@ -122,17 +122,20 @@ assets:
     url: "https://github.com/kata-containers/kata-containers/tools/osbuilder"
     architecture:
       aarch64:
-        name: "ubuntu"
-        version: "latest"
-      ppc64le:
-        name: "ubuntu"
-        version: "latest"
-      s390x:
-        name: "ubuntu"
-        version: "latest"
-      x86_64:
         name: &default-image-name "ubuntu"
-        version: "latest"
+        version: &default-image-version "latest"
+      ppc64le:
+        name: *default-image-name
+        version: *default-image-version
+      s390x:
+        name: *default-image-name
+        version: *default-image-version
+      x86_64:
+        name: *default-image-name
+        version: *default-image-version
+        tdx:
+          name: *default-image-name
+          version: *default-image-version
     meta:
       image-type: *default-image-name
 
@@ -156,24 +159,25 @@ assets:
       x86_64:
         name: *default-initrd-name
         version: *default-initrd-version
+        mariner:
+          name: "cbl-mariner"
+          version: "2.0"
+        sev:
+          name: *glibc-initrd-name
+          version: *glibc-initrd-version
 
   kernel:
     description: "Linux kernel optimised for virtual machines"
-    url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
-    version: "v5.19.2"
+    url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
+    version: "v6.1.38"
     sev:
-      description: "Linux kernel that supports SEV"
+      description: "Linux kernel that supports SEV and SNP"
       url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
       version: "v5.19.2"
     snp:
       description: "Linux kernel that supports AMD SEV-SNP for VMs"
       url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
       version: "v5.19.2"
-
-  kernel-experimental:
-    description: "Linux kernel with virtio-fs support"
-    url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
-    tag: "v5.13.10"
 
   kernel-arm-experimental:
     description: "Linux kernel with cpu/mem hotplug support on arm64"
@@ -219,16 +223,31 @@ externals:
     # instead of abstract socket, thus kata wouldn's support the containerd's
     # version older than them.
     version: "v1.6.8"
+    lts: "v1.6"
+    active: "v1.7"
 
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"
     url: "https://github.com/kubernetes-sigs/cri-tools"
     version: "1.23.0"
+    # As we don't want to disrupt what we have on the `tests` repo, let's
+    # create a "latest" entry and use that for the GitHub actions tests.
+    latest: "v1.27"
+
+  cryptsetup:
+    description: "A utility used to setup disk encryption, integrity protection"
+    url: "https://gitlab.com/cryptsetup/cryptsetup"
+    version: "v2.5.0"
 
   gperf:
     description: "GNU gperf is a perfect hash function generator"
     url: "http://ftp.gnu.org/pub/gnu/gperf/"
     version: "3.1"
+
+  lvm2:
+    description: "LVM2 and device-mapper tools and libraries"
+    url: "https://github.com/lvmteam/lvm2"
+    version: "v2_03_16"
 
   kubernetes:
     description: "Kubernetes project container manager"
@@ -258,7 +277,7 @@ externals:
   nydus:
     description: "Nydus image acceleration service"
     url: "https://github.com/dragonflyoss/image-service"
-    version: "v2.2.0"
+    version: "v2.2.1"
 
   nydus-snapshotter:
     description: "Snapshotter for Nydus image acceleration service"
@@ -275,7 +294,7 @@ externals:
       package_output_dir: "OvmfX64"
     sev:
       description: "AmdSev build needed for SEV measured direct boot."
-      version: "edk2-stable202202"
+      version: "edk2-stable202302"
       package: "OvmfPkg/AmdSev/AmdSevX64.dsc"
       package_output_dir: "AmdSev"
     tdx:
@@ -294,14 +313,14 @@ externals:
   virtiofsd:
     description: "vhost-user virtio-fs device backend written in Rust"
     url: "https://gitlab.com/virtio-fs/virtiofsd"
-    version: "v1.3.0"
-    toolchain: "1.62.0"
+    version: "v1.6.1"
+    toolchain: "1.66.0"
     meta:
-      # From https://gitlab.com/virtio-fs/virtiofsd/-/releases/v1.3.0,
-      # this is the link labelled virtiofsd-v1.3.0.zip
+      # From https://gitlab.com/virtio-fs/virtiofsd/-/releases/v1.7.0,
+      # this is the link labelled virtiofsd-v1.7.0.zip
       #
       # yamllint disable-line rule:line-length
-      binary: "https://gitlab.com/virtio-fs/virtiofsd/uploads/9a4f2261fcb1701f1e709694b5c5d980/virtiofsd-v1.3.0.zip"
+      binary: "https://gitlab.com/virtio-fs/virtiofsd/uploads/dc56ecbf86ce1226bdc31f946cfded75/virtiofsd-v1.7.0.zip"
 
 languages:
   description: |
@@ -321,12 +340,12 @@ languages:
   rust:
     description: "Rust language"
     notes: "'version' is the default minimum version used by this project."
-    version: "1.68.0"
+    version: "1.69.0"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.68.0"
+      newest-version: "1.69.0"
 
   golangci-lint:
     description: "golangci-lint"

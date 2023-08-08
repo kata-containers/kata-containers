@@ -7,7 +7,7 @@
 use std::convert::Into;
 
 use protocols::{
-    agent::{self, OOMEvent},
+    agent::{self, Metrics, OOMEvent},
     csi, empty, health, types,
 };
 
@@ -19,13 +19,13 @@ use crate::{
         Empty, ExecProcessRequest, FSGroup, FSGroupChangePolicy, GetIPTablesRequest,
         GetIPTablesResponse, GuestDetailsResponse, HealthCheckResponse, HugetlbStats, IPAddress,
         IPFamily, Interface, Interfaces, KernelModule, MemHotplugByProbeRequest, MemoryData,
-        MemoryStats, NetworkStats, OnlineCPUMemRequest, PidsStats, ReadStreamRequest,
-        ReadStreamResponse, RemoveContainerRequest, ReseedRandomDevRequest, ResizeVolumeRequest,
-        Route, Routes, SetGuestDateTimeRequest, SetIPTablesRequest, SetIPTablesResponse,
-        SignalProcessRequest, StatsContainerResponse, Storage, StringUser, ThrottlingData,
-        TtyWinResizeRequest, UpdateContainerRequest, UpdateInterfaceRequest, UpdateRoutesRequest,
-        VersionCheckResponse, VolumeStatsRequest, VolumeStatsResponse, WaitProcessRequest,
-        WriteStreamRequest,
+        MemoryStats, MetricsResponse, NetworkStats, OnlineCPUMemRequest, PidsStats,
+        ReadStreamRequest, ReadStreamResponse, RemoveContainerRequest, ReseedRandomDevRequest,
+        ResizeVolumeRequest, Route, Routes, SetGuestDateTimeRequest, SetIPTablesRequest,
+        SetIPTablesResponse, SignalProcessRequest, StatsContainerResponse, Storage, StringUser,
+        ThrottlingData, TtyWinResizeRequest, UpdateContainerRequest, UpdateInterfaceRequest,
+        UpdateRoutesRequest, VersionCheckResponse, VolumeStatsRequest, VolumeStatsResponse,
+        WaitProcessRequest, WriteStreamRequest,
     },
     OomEventResponse, WaitProcessResponse, WriteStreamResponse,
 };
@@ -336,7 +336,7 @@ impl From<UpdateContainerRequest> for agent::UpdateContainerRequest {
     fn from(from: UpdateContainerRequest) -> Self {
         Self {
             container_id: from.container_id,
-            resources: from_option(Some(from.resources)),
+            resources: from_option(from.resources),
             ..Default::default()
         }
     }
@@ -755,6 +755,14 @@ impl From<agent::WaitProcessResponse> for WaitProcessResponse {
     }
 }
 
+impl From<Empty> for agent::GetMetricsRequest {
+    fn from(_: Empty) -> Self {
+        Self {
+            ..Default::default()
+        }
+    }
+}
+
 impl From<Empty> for agent::GetOOMEventRequest {
     fn from(_: Empty) -> Self {
         Self {
@@ -785,6 +793,14 @@ impl From<health::VersionCheckResponse> for VersionCheckResponse {
         Self {
             grpc_version: from.grpc_version,
             agent_version: from.agent_version,
+        }
+    }
+}
+
+impl From<agent::Metrics> for MetricsResponse {
+    fn from(from: Metrics) -> Self {
+        Self {
+            metrics: from.metrics,
         }
     }
 }

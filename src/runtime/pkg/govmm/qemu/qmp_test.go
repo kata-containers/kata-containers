@@ -1128,7 +1128,7 @@ func TestQMPAPVFIOMediatedDeviceAdd(t *testing.T) {
 	q := startQMPLoop(buf, cfg, connectedCh, disconnectedCh)
 	checkVersion(t, connectedCh)
 	sysfsDev := "/sys/devices/vfio_ap/matrix/a297db4a-f4c2-11e6-90f6-d3b88d6c9525"
-	err := q.ExecuteAPVFIOMediatedDeviceAdd(context.Background(), sysfsDev)
+	err := q.ExecuteAPVFIOMediatedDeviceAdd(context.Background(), sysfsDev, "test-id")
 	if err != nil {
 		t.Fatalf("Unexpected error %v", err)
 	}

@@ -115,11 +115,11 @@ $ sudo kubeadm init --ignore-preflight-errors=all --config kubeadm-config.yaml
 $ export KUBECONFIG=/etc/kubernetes/admin.conf
 ```
 
-### Allow pods to run in the master node
+### Allow pods to run in the control-plane node
 
-By default, the cluster will not schedule pods in the master node. To enable master node scheduling:
+By default, the cluster will not schedule pods in the control-plane node. To enable control-plane node scheduling:
 ```bash
-$ sudo -E kubectl taint nodes --all node-role.kubernetes.io/master-
+$ sudo -E kubectl taint nodes --all node-role.kubernetes.io/control-plane-
 ```
 
 ### Create runtime class for Kata Containers

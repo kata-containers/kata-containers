@@ -89,6 +89,27 @@ impl Handle {
                 .await?;
         }
 
+        // we need to update the link's interface name, thus we should rename the existed link whose name
+        // is the same with the link's request name, otherwise, it would update the link failed with the
+        // name conflicted.
+        let mut new_link = None;
+        if link.name() != iface.name {
+            if let Ok(link) = self.find_link(LinkFilter::Name(iface.name.as_str())).await {
+                // update the existing interface name with a temporary name, otherwise
+                // it would failed to udpate this interface with an existing name.
+                let mut request = self.handle.link().set(link.index());
+                request.message_mut().header = link.header.clone();
+
+                request
+                    .name(format!("{}_temp", link.name()))
+                    .up()
+                    .execute()
+                    .await?;
+
+                new_link = Some(link);
+            }
+        }
+
         // Update link
         let mut request = self.handle.link().set(link.index());
         request.message_mut().header = link.header.clone();
@@ -100,6 +121,14 @@ impl Handle {
             .up()
             .execute()
             .await?;
+
+        // swap the updated iface's name.
+        if let Some(nlink) = new_link {
+            let mut request = self.handle.link().set(nlink.index());
+            request.message_mut().header = nlink.header.clone();
+
+            request.name(link.name()).up().execute().await?;
+        }
 
         Ok(())
     }

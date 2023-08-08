@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/sirupsen/logrus"
@@ -97,7 +98,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 	return q, nil
 }
 
-func (q *qemuPPC64le) capabilities() types.Capabilities {
+func (q *qemuPPC64le) capabilities(hConfig HypervisorConfig) types.Capabilities {
 	var caps types.Capabilities
 
 	// pseries machine type supports hotplugging drives
@@ -106,7 +107,9 @@ func (q *qemuPPC64le) capabilities() types.Capabilities {
 	}
 
 	caps.SetMultiQueueSupport()
-	caps.SetFsSharingSupport()
+	if hConfig.SharedFS != config.NoSharedFS {
+		caps.SetFsSharingSupport()
+	}
 
 	return caps
 }

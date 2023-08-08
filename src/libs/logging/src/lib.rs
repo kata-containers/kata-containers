@@ -39,6 +39,28 @@ const LOG_LEVELS: &[(&str, slog::Level)] = &[
 
 const DEFAULT_SUBSYSTEM: &str = "root";
 
+// Creates a logger which prints output as human readable text to the terminal
+pub fn create_term_logger(level: slog::Level) -> (slog::Logger, slog_async::AsyncGuard) {
+    let term_drain = slog_term::term_compact().fuse();
+
+    // Ensure only a unique set of key/value fields is logged
+    let unique_drain = UniqueDrain::new(term_drain).fuse();
+
+    // Allow runtime filtering of records by log level
+    let filter_drain = RuntimeLevelFilter::new(unique_drain, level).fuse();
+
+    // Ensure the logger is thread-safe
+    let (async_drain, guard) = slog_async::Async::new(filter_drain)
+        .thread_name("slog-async-logger".into())
+        .build_with_guard();
+
+    // Add some "standard" fields
+    let logger = slog::Logger::root(async_drain.fuse(), o!("subsystem" => DEFAULT_SUBSYSTEM));
+
+    (logger, guard)
+}
+
+// Creates a logger which prints output as JSON
 // XXX: 'writer' param used to make testing possible.
 pub fn create_logger<W>(
     name: &str,

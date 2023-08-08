@@ -7,7 +7,6 @@
 // found in the THIRD-PARTY file.
 
 use std::convert::TryInto;
-use std::mem;
 use std::ops::Deref;
 
 use dbs_address_space::AddressSpace;
@@ -16,8 +15,9 @@ use dbs_utils::epoll_manager::EpollManager;
 use dbs_utils::time::TimestampUs;
 use kvm_bindings::{kvm_irqchip, kvm_pit_config, kvm_pit_state2, KVM_PIT_SPEAKER_DUMMY};
 use linux_loader::cmdline::Cmdline;
+use linux_loader::configurator::{linux::LinuxBootConfigurator, BootConfigurator, BootParams};
 use slog::info;
-use vm_memory::{Address, Bytes, GuestAddress, GuestAddressSpace, GuestMemory};
+use vm_memory::{Address, GuestAddress, GuestAddressSpace, GuestMemory};
 
 use crate::address_space_manager::{GuestAddressSpaceImpl, GuestMemoryImpl};
 use crate::error::{Error, Result, StartMicroVmError};
@@ -110,15 +110,11 @@ fn configure_system<M: GuestMemory>(
         }
     }
 
-    let zero_page_addr = GuestAddress(layout::ZERO_PAGE_START);
-    guest_mem
-        .checked_offset(zero_page_addr, mem::size_of::<bootparam::boot_params>())
-        .ok_or(Error::ZeroPagePastRamEnd)?;
-    guest_mem
-        .write_obj(params, zero_page_addr)
-        .map_err(|_| Error::ZeroPageSetup)?;
-
-    Ok(())
+    LinuxBootConfigurator::write_bootparams(
+        &BootParams::new(&params, GuestAddress(layout::ZERO_PAGE_START)),
+        guest_mem,
+    )
+    .map_err(|_| Error::ZeroPageSetup)
 }
 
 impl Vm {

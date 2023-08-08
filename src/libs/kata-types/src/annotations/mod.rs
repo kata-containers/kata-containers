@@ -316,6 +316,10 @@ pub const KATA_ANNO_CFG_VFIO_MODE: &str = "io.katacontainers.config.runtime.vfio
 pub const KATA_ANNO_CFG_HYPERVISOR_PREFETCH_FILES_LIST: &str =
     "io.katacontainers.config.hypervisor.prefetch_files.list";
 
+/// A sandbox annotation for sandbox level volume sharing with host.
+pub const KATA_ANNO_CFG_SANDBOX_BIND_MOUNTS: &str =
+    "io.katacontainers.config.runtime.sandbox_bind_mounts";
+
 /// A helper structure to query configuration information by check annotations.
 #[derive(Debug, Default, Deserialize)]
 pub struct Annotation {
@@ -470,8 +474,8 @@ impl Annotation {
         let u32_err = io::Error::new(io::ErrorKind::InvalidData, "parse u32 error".to_string());
         let u64_err = io::Error::new(io::ErrorKind::InvalidData, "parse u64 error".to_string());
         let i32_err = io::Error::new(io::ErrorKind::InvalidData, "parse i32 error".to_string());
-        let mut hv = config.hypervisor.get_mut(hypervisor_name).unwrap();
-        let mut ag = config.agent.get_mut(agent_name).unwrap();
+        let hv = config.hypervisor.get_mut(hypervisor_name).unwrap();
+        let ag = config.agent.get_mut(agent_name).unwrap();
         for (key, value) in &self.annotations {
             if hv.security_info.is_annotation_enabled(key) {
                 match key.as_str() {
@@ -949,6 +953,16 @@ impl Annotation {
                     },
                     KATA_ANNO_CFG_VFIO_MODE => {
                         config.runtime.vfio_mode = value.to_string();
+                    }
+                    KATA_ANNO_CFG_SANDBOX_BIND_MOUNTS => {
+                        let args: Vec<String> = value
+                            .to_string()
+                            .split_ascii_whitespace()
+                            .map(str::to_string)
+                            .collect();
+                        for arg in args {
+                            config.runtime.sandbox_bind_mounts.push(arg.to_string());
+                        }
                     }
                     _ => {
                         warn!(sl!(), "Annotation {} not enabled", key);

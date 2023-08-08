@@ -4,12 +4,15 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::sync::Arc;
+
 use agent::Storage;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
+use hypervisor::device::device_manager::DeviceManager;
 use kata_sys_util::mount::{umount_timeout, Mounter};
 use kata_types::mount::Mount;
-use std::sync::Arc;
+use tokio::sync::RwLock;
 
 use super::{Rootfs, ROOTFS};
 use crate::share_fs::{ShareFs, ShareFsRootfsConfig};
@@ -74,7 +77,11 @@ impl Rootfs for ShareFsRootfs {
         None
     }
 
-    async fn cleanup(&self) -> Result<()> {
+    async fn get_device_id(&self) -> Result<Option<String>> {
+        Ok(None)
+    }
+
+    async fn cleanup(&self, _device_manager: &RwLock<DeviceManager>) -> Result<()> {
         // Umount the mount point shared to guest
         let share_fs_mount = self.share_fs.get_share_fs_mount();
         share_fs_mount

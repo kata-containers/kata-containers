@@ -222,6 +222,7 @@ impl Vm {
             resource_manager.clone(),
             epoll_manager.clone(),
             &logger,
+            api_shared_info.clone(),
         );
 
         Ok(Vm {
@@ -385,6 +386,19 @@ impl Vm {
 
         (dragonball_version, instance_id)
     }
+
+    pub(crate) fn stop_prealloc(&mut self) -> std::result::Result<(), StartMicroVmError> {
+        if self.address_space.is_initialized() {
+            return self
+                .address_space
+                .wait_prealloc(true)
+                .map_err(StartMicroVmError::AddressManagerError);
+        }
+
+        Err(StartMicroVmError::AddressManagerError(
+            AddressManagerError::GuestMemoryNotInitialized,
+        ))
+    }
 }
 
 impl Vm {
@@ -453,7 +467,6 @@ impl Vm {
     ) -> std::result::Result<(), StartMicroVmError> {
         info!(self.logger, "VM: initializing devices ...");
 
-        let com1_sock_path = self.vm_config.serial_path.clone();
         let kernel_config = self
             .kernel_config
             .as_mut()
@@ -475,9 +488,9 @@ impl Vm {
             vm_as.clone(),
             epoll_manager,
             kernel_config,
-            com1_sock_path,
             self.dmesg_fifo.take(),
             self.address_space.address_space(),
+            &self.vm_config,
         )?;
 
         info!(self.logger, "VM: start devices");
@@ -860,6 +873,9 @@ impl Vm {
 
 #[cfg(test)]
 pub mod tests {
+    #[cfg(target_arch = "aarch64")]
+    use dbs_boot::layout::GUEST_MEM_START;
+    #[cfg(target_arch = "x86_64")]
     use kvm_ioctls::VcpuExit;
     use linux_loader::cmdline::Cmdline;
     use test_utils::skip_if_not_root;
@@ -922,7 +938,13 @@ pub mod tests {
         let vm_memory = vm.address_space.vm_memory().unwrap();
 
         assert_eq!(vm_memory.num_regions(), 1);
+        #[cfg(target_arch = "x86_64")]
         assert_eq!(vm_memory.last_addr(), GuestAddress(0xffffff));
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(
+            vm_memory.last_addr(),
+            GuestAddress(GUEST_MEM_START + 0xffffff)
+        );
 
         // Reconfigure an already configured vm will be ignored and just return OK.
         let vm_config = VmConfigInfo {
@@ -945,9 +967,18 @@ pub mod tests {
         assert!(vm.init_guest_memory().is_ok());
         let vm_memory = vm.address_space.vm_memory().unwrap();
         assert_eq!(vm_memory.num_regions(), 1);
+        #[cfg(target_arch = "x86_64")]
         assert_eq!(vm_memory.last_addr(), GuestAddress(0xffffff));
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(
+            vm_memory.last_addr(),
+            GuestAddress(GUEST_MEM_START + 0xffffff)
+        );
 
+        #[cfg(target_arch = "x86_64")]
         let obj_addr = GuestAddress(0xf0);
+        #[cfg(target_arch = "aarch64")]
+        let obj_addr = GuestAddress(GUEST_MEM_START + 0xf0);
         vm_memory.write_obj(67u8, obj_addr).unwrap();
         let read_val: u8 = vm_memory.read_obj(obj_addr).unwrap();
         assert_eq!(read_val, 67u8);
@@ -987,10 +1018,16 @@ pub mod tests {
 
         let vm_memory = vm.address_space.vm_memory().unwrap();
         assert_eq!(vm_memory.num_regions(), 1);
+        #[cfg(target_arch = "x86_64")]
         assert_eq!(vm_memory.last_addr(), GuestAddress(0xffffff));
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(
+            vm_memory.last_addr(),
+            GuestAddress(GUEST_MEM_START + 0xffffff)
+        );
 
         let kernel_file = TempFile::new().unwrap();
-        let cmd_line = Cmdline::new(64);
+        let cmd_line = Cmdline::new(64).unwrap();
 
         vm.set_kernel_config(KernelConfigInfo::new(
             kernel_file.into_file(),

@@ -55,6 +55,7 @@ impl DeviceVirtioRegionHandler {
             None,
             file_offset,
             region.flags(),
+            region.prot(),
             false,
         ));
 

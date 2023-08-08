@@ -18,6 +18,7 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
+	deviceManager "github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
 	volume "github.com/kata-containers/kata-containers/src/runtime/pkg/direct-volume"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
@@ -607,8 +608,9 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 			continue
 		}
 
-		if c.mounts[i].Type != "bind" {
-			// We only handle for bind-mounts
+		isBlockFile := HasOption(c.mounts[i].Options, vcAnnotations.IsFileBlockDevice)
+		if c.mounts[i].Type != "bind" && !isBlockFile {
+			// We only handle for bind and block device mounts.
 			continue
 		}
 
@@ -670,13 +672,22 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 
 		// Check if mount is a block device file. If it is, the block device will be attached to the host
 		// instead of passing this as a shared mount.
-		if stat.Mode&unix.S_IFBLK == unix.S_IFBLK {
+		if stat.Mode&unix.S_IFMT == unix.S_IFBLK {
 			di = &config.DeviceInfo{
 				HostPath:      c.mounts[i].Source,
 				ContainerPath: c.mounts[i].Destination,
 				DevType:       "b",
 				Major:         int64(unix.Major(uint64(stat.Rdev))),
 				Minor:         int64(unix.Minor(uint64(stat.Rdev))),
+				ReadOnly:      c.mounts[i].ReadOnly,
+			}
+		} else if isBlockFile && stat.Mode&unix.S_IFMT == unix.S_IFREG {
+			di = &config.DeviceInfo{
+				HostPath:      c.mounts[i].Source,
+				ContainerPath: c.mounts[i].Destination,
+				DevType:       "b",
+				Major:         -1,
+				Minor:         0,
 				ReadOnly:      c.mounts[i].ReadOnly,
 			}
 			// Check whether source can be used as a pmem device
@@ -850,6 +861,21 @@ func (c *Container) checkBlockDeviceSupport(ctx context.Context) bool {
 	return false
 }
 
+// Sort the devices starting with device #1 being the VFIO control group
+// device and the next the actuall device(s) e.g. /dev/vfio/<group>
+func sortContainerVFIODevices(devices []ContainerDevice) []ContainerDevice {
+	var vfioDevices []ContainerDevice
+
+	for _, device := range devices {
+		if deviceManager.IsVFIOControlDevice(device.ContainerPath) {
+			vfioDevices = append([]ContainerDevice{device}, vfioDevices...)
+			continue
+		}
+		vfioDevices = append(vfioDevices, device)
+	}
+	return vfioDevices
+}
+
 // create creates and starts a container inside a Sandbox. It has to be
 // called only when a new container, not known by the sandbox, has to be created.
 func (c *Container) create(ctx context.Context) (err error) {
@@ -867,6 +893,37 @@ func (c *Container) create(ctx context.Context) (err error) {
 		if err = c.hotplugDrive(ctx); err != nil {
 			return
 		}
+	}
+
+	// If cold-plug we've attached the devices already, do not try to
+	// attach them a second time.
+	coldPlugVFIO := (c.sandbox.config.HypervisorConfig.ColdPlugVFIO != config.NoPort)
+	modeVFIO := (c.sandbox.config.VfioMode == config.VFIOModeVFIO)
+
+	if coldPlugVFIO {
+		var cntDevices []ContainerDevice
+		for _, dev := range c.devices {
+			isVFIOControlDevice := deviceManager.IsVFIOControlDevice(dev.ContainerPath)
+			if isVFIOControlDevice && modeVFIO {
+				cntDevices = append(cntDevices, dev)
+			}
+
+			if strings.HasPrefix(dev.ContainerPath, vfioPath) {
+				c.Logger().WithFields(logrus.Fields{
+					"device": dev,
+				}).Info("Remvoing device since we're cold-plugging no Attach needed")
+				continue
+			}
+			cntDevices = append(cntDevices, dev)
+		}
+		c.devices = cntDevices
+	}
+	// If modeVFIO is enabled we need 1st to attach the VFIO control group
+	// device /dev/vfio/vfio an 2nd the actuall device(s) afterwards.
+	// Sort the devices starting with device #1 being the VFIO control group
+	// device and the next the actuall device(s) /dev/vfio/<group>
+	if modeVFIO {
+		c.devices = sortContainerVFIODevices(c.devices)
 	}
 
 	c.Logger().WithFields(logrus.Fields{

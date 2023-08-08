@@ -31,6 +31,7 @@ impl NetworkInfoFromLink {
     pub async fn new(
         handle: &rtnetlink::Handle,
         link: &dyn link::Link,
+        addrs: Vec<IPAddress>,
         hw_addr: &str,
     ) -> Result<Self> {
         let attrs = link.attrs();
@@ -40,9 +41,7 @@ impl NetworkInfoFromLink {
             interface: Interface {
                 device: name.clone(),
                 name: name.clone(),
-                ip_addresses: handle_addresses(handle, attrs)
-                    .await
-                    .context("handle addresses")?,
+                ip_addresses: addrs.clone(),
                 mtu: attrs.mtu as u64,
                 hw_addr: hw_addr.to_string(),
                 pci_addr: Default::default(),
@@ -59,7 +58,10 @@ impl NetworkInfoFromLink {
     }
 }
 
-async fn handle_addresses(handle: &rtnetlink::Handle, attrs: &LinkAttrs) -> Result<Vec<IPAddress>> {
+pub async fn handle_addresses(
+    handle: &rtnetlink::Handle,
+    attrs: &LinkAttrs,
+) -> Result<Vec<IPAddress>> {
     let mut addr_msg_list = handle
         .address()
         .get()

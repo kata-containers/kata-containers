@@ -12,7 +12,6 @@ use kata_types::k8s::is_watchable_mount;
 use kata_types::mount;
 use nix::sys::stat::stat;
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 const WATCHABLE_PATH_NAME: &str = "watchable";
@@ -21,7 +20,10 @@ pub const EPHEMERAL_PATH: &str = "/run/kata-containers/sandbox/ephemeral";
 
 use super::{
     get_host_rw_shared_path,
-    utils::{self, do_get_host_path, get_host_ro_shared_path, get_host_shared_path},
+    utils::{
+        self, do_get_host_path, get_host_ro_shared_path, get_host_shared_path,
+        mkdir_with_permissions,
+    },
     ShareFsMount, ShareFsMountResult, ShareFsRootfsConfig, ShareFsVolumeConfig,
     KATA_GUEST_SHARE_DIR, PASSTHROUGH_FS_DIR,
 };
@@ -79,12 +81,10 @@ impl ShareFsMount for VirtiofsShareMount {
                 .join(PASSTHROUGH_FS_DIR)
                 .join(WATCHABLE_PATH_NAME);
 
-            fs::create_dir_all(&watchable_host_path).context(format!(
-                "unable to create watchable path: {:?}",
-                &watchable_host_path,
+            mkdir_with_permissions(watchable_host_path.clone(), 0o750).context(format!(
+                "unable to create watchable path {:?}",
+                watchable_host_path
             ))?;
-
-            fs::set_permissions(watchable_host_path, fs::Permissions::from_mode(0o750))?;
 
             // path: /run/kata-containers/shared/containers/passthrough/watchable/config-map-name
             let file_name = Path::new(&guest_path)

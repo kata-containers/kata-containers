@@ -21,9 +21,9 @@ tdshim_version="${tdshim_version:-}"
 tdshim_toolchain="${tdshim_toolchain:-}"
 package_output_dir="${package_output_dir:-}"
 
-[ -n "${tdshim_repo}" ] || tdshim_repo=$(get_from_kata_deps "externals.td-shim.url" "${kata_version}")
-[ -n "${tdshim_version}" ] || tdshim_version=$(get_from_kata_deps "externals.td-shim.version" "${kata_version}")
-[ -n "${tdshim_toolchain}" ] || tdshim_toolchain=$(get_from_kata_deps "externals.td-shim.toolchain" "${kata_version}")
+[ -n "${tdshim_repo}" ] || tdshim_repo=$(get_from_kata_deps "externals.td-shim.url")
+[ -n "${tdshim_version}" ] || tdshim_version=$(get_from_kata_deps "externals.td-shim.version")
+[ -n "${tdshim_toolchain}" ] || tdshim_toolchain=$(get_from_kata_deps "externals.td-shim.toolchain")
 
 [ -n "${tdshim_repo}" ] || die "Failed to get TD-shim repo"
 [ -n "${tdshim_version}" ] || die "Failed to get TD-shim version or commit"

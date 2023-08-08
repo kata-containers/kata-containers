@@ -32,8 +32,6 @@ to work seamlessly with both Docker and Kubernetes respectively.
 
 ## Download and install
 
-[![Get it from the Snap Store](https://snapcraft.io/static/images/badges/en/snap-store-black.svg)](https://snapcraft.io/kata-containers)
-
 See the [installation guides](../../docs/install/README.md)
 available for various operating systems.
 

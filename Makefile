@@ -19,10 +19,15 @@ TOOLS += agent-ctl
 TOOLS += kata-ctl
 TOOLS += log-parser
 TOOLS += check-versions
+TOOLS += log-parser-rs
 TOOLS += runk
 TOOLS += trace-forwarder
 
 STANDARD_TARGETS = build check clean install static-checks-build test vendor
+
+# Variables for the build-and-publish-kata-debug target
+KATA_DEBUG_REGISTRY ?= ""
+KATA_DEBUG_TAG ?= ""
 
 default: all
 
@@ -43,6 +48,9 @@ static-checks: static-checks-build
 
 docs-url-alive-check:
 	bash ci/docs-url-alive-check.sh
+
+build-and-publish-kata-debug:
+	bash tools/packaging/kata-debug/kata-debug-build-and-upload-payload.sh ${KATA_DEBUG_REGISTRY} ${KATA_DEBUG_TAG} 
 
 .PHONY: \
 	all \

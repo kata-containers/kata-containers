@@ -14,30 +14,31 @@ source "${script_dir}/../../scripts/lib.sh"
 
 config_dir="${script_dir}/../../scripts/"
 
-firecracker_repo="${firecracker_repo:-}"
+firecracker_url="${firecracker_url:-}"
 firecracker_dir="firecracker"
 firecracker_version="${firecracker_version:-}"
 
 arch=$(uname -m)
 
-if [ -z "$firecracker_repo" ]; then
-	info "Get firecracker information from runtime versions.yaml"
-	firecracker_url=$(get_from_kata_deps "assets.hypervisor.firecracker.url")
-	[ -n "$firecracker_url" ] || die "failed to get firecracker url"
-	firecracker_repo="${firecracker_url}.git"
-fi
-[ -n "$firecracker_repo" ] || die "failed to get firecracker repo"
+[ -n "$firecracker_url" ] ||firecracker_url=$(get_from_kata_deps "assets.hypervisor.firecracker.url")
+[ -n "$firecracker_url" ] || die "failed to get firecracker url"
 
 [ -n "$firecracker_version" ] || firecracker_version=$(get_from_kata_deps "assets.hypervisor.firecracker.version")
 [ -n "$firecracker_version" ] || die "failed to get firecracker version"
 
-info "Build ${firecracker_repo} version: ${firecracker_version}"
+firecracker_tarball_url="${firecracker_url}/releases/download"
 
-[ -d "${firecracker_dir}" ] || git clone ${firecracker_repo}
-cd "${firecracker_dir}"
-git fetch
-git checkout ${firecracker_version}
-sudo ./tools/devtool --unattended build --release
+file_name="firecracker-${firecracker_version}-${arch}.tgz"
+download_url="${firecracker_tarball_url}/${firecracker_version}/${file_name}"
 
-ln -sf ./build/cargo_target/${arch}-unknown-linux-musl/release/firecracker ./firecracker-static
-ln -sf ./build/cargo_target/${arch}-unknown-linux-musl/release/jailer ./jailer-static
+info "Download firecracker version: ${firecracker_version} from ${download_url}"
+curl -o ${file_name} -L $download_url
+
+sha256sum="${file_name}.sha256.txt"
+sha256sum_url="${firecracker_tarball_url}/${firecracker_version}/${sha256sum}"
+
+info "Download firecracker ${sha256sum} from ${sha256sum_url}"
+curl -o ${sha256sum} -L $sha256sum_url
+
+sha256sum -c ${sha256sum}
+tar zxvf ${file_name}

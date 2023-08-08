@@ -10,6 +10,7 @@ PROJECT_URL = https://github.com/kata-containers
 PROJECT_COMPONENT = kata-ctl
 
 TARGET = $(PROJECT_COMPONENT)
+INSTALL_PATH = $(HOME)/.cargo
 
 VERSION_FILE := ./VERSION
 export VERSION := $(shell grep -v ^\# $(VERSION_FILE))
@@ -55,7 +56,7 @@ test:
 	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo test --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES) -- --nocapture
 
 install:
-	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo install --locked --target $(TRIPLE) --path .
+	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo install --locked --target $(TRIPLE) --path . --root $(INSTALL_PATH)
 
 check: standard_rust_check
 

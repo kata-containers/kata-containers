@@ -12,6 +12,25 @@ use thiserror::Error;
 pub struct KataCtlCli {
     #[clap(subcommand)]
     pub command: Commands,
+    #[clap(short, long, value_enum, value_parser = parse_log_level)]
+    /// Sets the minimum log level required for log messages to be displayed. Default is 'info'.
+    /// Valid values are: trace, debug, info, warning, error, critical
+    pub log_level: Option<slog::Level>,
+    #[clap(short, long, action)]
+    /// If enabled, log messages will be JSON formatted for easier machine parsing
+    pub json_logging: bool,
+}
+
+fn parse_log_level(arg: &str) -> Result<slog::Level, String> {
+    match arg {
+        "trace" => Ok(slog::Level::Trace),
+        "debug" => Ok(slog::Level::Debug),
+        "info" => Ok(slog::Level::Info),
+        "warning" => Ok(slog::Level::Warning),
+        "error" => Ok(slog::Level::Error),
+        "critical" => Ok(slog::Level::Critical),
+        _ => Err("Must be one of [trace, debug, info, warning, error, critical]".to_string()),
+    }
 }
 
 #[derive(Debug, Subcommand)]
@@ -36,6 +55,9 @@ pub enum Commands {
 
     /// Gather metrics associated with infrastructure used to run a sandbox
     Metrics(MetricsCommand),
+
+    /// Start a monitor to get metrics of Kata Containers
+    Monitor(MonitorArgument),
 
     /// Display version details
     Version,
@@ -101,6 +123,12 @@ pub struct IptablesCommand {
 pub enum IpTablesArguments {
     /// Configure iptables
     Metrics,
+}
+
+#[derive(Debug, Args)]
+pub struct MonitorArgument {
+    /// The address to listen on for HTTP requests. (default "127.0.0.1:8090")
+    pub address: Option<String>,
 }
 
 #[derive(Debug, Args)]

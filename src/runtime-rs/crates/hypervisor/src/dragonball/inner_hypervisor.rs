@@ -13,7 +13,9 @@ use anyhow::{Context, Ok, Result};
 use kata_types::capabilities::Capabilities;
 
 use super::inner::DragonballInner;
-use crate::{utils, VcpuThreadIds, VmmState};
+use crate::{
+    device::DeviceType, utils, HybridVsockConfig, HybridVsockDevice, VcpuThreadIds, VmmState,
+};
 use shim_interface::KATA_PATH;
 const DEFAULT_HYBRID_VSOCK_NAME: &str = "kata.hvsock";
 
@@ -32,10 +34,12 @@ impl DragonballInner {
 
         // prepare vsock
         let uds_path = [&self.jailer_root, DEFAULT_HYBRID_VSOCK_NAME].join("/");
-        let d = crate::device::Device::HybridVsock(crate::device::HybridVsockConfig {
+        let d = DeviceType::HybridVsock(HybridVsockDevice {
             id: format!("vsock-{}", &self.id),
-            guest_cid: 3,
-            uds_path,
+            config: HybridVsockConfig {
+                guest_cid: 3,
+                uds_path,
+            },
         });
 
         self.add_device(d).await.context("add device")?;
@@ -86,6 +90,11 @@ impl DragonballInner {
             HYBRID_VSOCK_SCHEME,
             get_vsock_path(&self.jailer_root),
         ))
+    }
+
+    pub(crate) async fn get_hypervisor_metrics(&self) -> Result<String> {
+        info!(sl!(), "get hypervisor metrics");
+        self.vmm_instance.get_hypervisor_metrics()
     }
 
     pub(crate) async fn disconnect(&mut self) {

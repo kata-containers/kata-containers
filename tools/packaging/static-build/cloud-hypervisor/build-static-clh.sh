@@ -44,6 +44,9 @@ pull_clh_released_binary() {
 	info "Download cloud-hypervisor version: ${cloud_hypervisor_version}"
 	cloud_hypervisor_binary="https://github.com/cloud-hypervisor/cloud-hypervisor/releases/download/${cloud_hypervisor_version}/cloud-hypervisor-static"
 
+	[ "${ARCH}" == "aarch64" ] && \
+		cloud_hypervisor_binary="${cloud_hypervisor_binary}-aarch64"
+
 	curl --fail -L ${cloud_hypervisor_binary} -o cloud-hypervisor-static || return 1
 	mkdir -p cloud-hypervisor
 	mv -f cloud-hypervisor-static cloud-hypervisor/cloud-hypervisor
@@ -73,19 +76,14 @@ build_clh_from_source() {
 
 	if [ -n "${features}" ]; then
 		info "Build cloud-hypervisor enabling the following features: ${features}"
-		./scripts/dev_cli.sh build --release --libc musl --features "${features}"
+		./scripts/dev_cli.sh build --release --libc "${libc}" --features "${features}"
 	else
-		./scripts/dev_cli.sh build --release --libc musl
+		./scripts/dev_cli.sh build --release --libc "${libc}"
 	fi
 	rm -f cloud-hypervisor
-	cp build/cargo_target/$(uname -m)-unknown-linux-musl/release/cloud-hypervisor .
+	cp build/cargo_target/$(uname -m)-unknown-linux-${libc}/release/cloud-hypervisor .
 	popd
 }
-
-if [ "${ARCH}" == "aarch64" ]; then
-	info "aarch64 binaries are not distributed as part of the Cloud Hypervisor releases, forcing to build from source"
-	force_build_from_source="true"
-fi
 
 if [ -n "${features}" ]; then
 	info "As an extra build argument has been passed to the script, forcing to build from source"

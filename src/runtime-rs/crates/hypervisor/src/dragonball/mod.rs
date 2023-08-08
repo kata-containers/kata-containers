@@ -19,11 +19,18 @@ use async_trait::async_trait;
 use kata_types::capabilities::Capabilities;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use tokio::sync::RwLock;
+use tracing::instrument;
 
-use crate::{device::Device, Hypervisor, VcpuThreadIds};
+use crate::{DeviceType, Hypervisor, VcpuThreadIds};
 
 pub struct Dragonball {
     inner: Arc<RwLock<DragonballInner>>,
+}
+
+impl std::fmt::Debug for Dragonball {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Dragonball").finish()
+    }
 }
 
 impl Default for Dragonball {
@@ -47,11 +54,13 @@ impl Dragonball {
 
 #[async_trait]
 impl Hypervisor for Dragonball {
+    #[instrument]
     async fn prepare_vm(&self, id: &str, netns: Option<String>) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.prepare_vm(id, netns).await
     }
 
+    #[instrument]
     async fn start_vm(&self, timeout: i32) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.start_vm(timeout).await
@@ -77,12 +86,18 @@ impl Hypervisor for Dragonball {
         inner.save_vm().await
     }
 
-    async fn add_device(&self, device: Device) -> Result<()> {
+    // returns Result<(old_vcpus, new_vcpus)>
+    async fn resize_vcpu(&self, old_vcpus: u32, new_vcpus: u32) -> Result<(u32, u32)> {
+        let inner = self.inner.read().await;
+        inner.resize_vcpu(old_vcpus, new_vcpus).await
+    }
+
+    async fn add_device(&self, device: DeviceType) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.add_device(device).await
     }
 
-    async fn remove_device(&self, device: Device) -> Result<()> {
+    async fn remove_device(&self, device: DeviceType) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.remove_device(device).await
     }
@@ -144,6 +159,11 @@ impl Hypervisor for Dragonball {
     async fn capabilities(&self) -> Result<Capabilities> {
         let inner = self.inner.read().await;
         inner.capabilities().await
+    }
+
+    async fn get_hypervisor_metrics(&self) -> Result<String> {
+        let inner = self.inner.read().await;
+        inner.get_hypervisor_metrics().await
     }
 }
 

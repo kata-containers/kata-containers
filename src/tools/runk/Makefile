@@ -8,6 +8,10 @@ LIBC ?= gnu
 
 include ../../../utils.mk
 
+ifeq ($(ARCH), ppc64le)
+     override ARCH = powerpc64le
+ endif
+
 TARGET = runk
 TARGET_PATH = target/$(TRIPLE)/$(BUILD_TYPE)/$(TARGET)
 AGENT_SOURCE_PATH = ../../agent

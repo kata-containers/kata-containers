@@ -374,11 +374,17 @@ impl VcpuManager {
         entry_addr: GuestAddress,
     ) -> Result<()> {
         info!("create boot vcpus");
-        self.create_vcpus(
-            self.vcpu_config.boot_vcpu_count,
-            Some(request_ts),
-            Some(entry_addr),
-        )?;
+        let boot_vcpu_count = if cfg!(target_arch = "aarch64") {
+            // On aarch64, kvm doesn't allow to call KVM_CREATE_VCPU ioctl after vm has been booted
+            // because of vgic check. To support vcpu hotplug/hotunplug feature, we should create
+            // all the vcpufd at booting procedure.
+            // SetVmConfiguration API will ensure max_vcpu_count >= boot_vcpu_count, so it is safe
+            // to directly use max_vcpu_count here.
+            self.vcpu_config.max_vcpu_count
+        } else {
+            self.vcpu_config.boot_vcpu_count
+        };
+        self.create_vcpus(boot_vcpu_count, Some(request_ts), Some(entry_addr))?;
 
         Ok(())
     }
@@ -1213,7 +1219,10 @@ mod tests {
         assert!(vcpu_manager
             .create_boot_vcpus(TimestampUs::default(), GuestAddress(0))
             .is_ok());
+        #[cfg(target_arch = "x86_64")]
         assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 1);
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 3);
 
         // test start boot vcpus
         assert!(vcpu_manager.start_boot_vcpus(BpfProgram::default()).is_ok());
@@ -1267,8 +1276,14 @@ mod tests {
         assert!(vcpu_manager
             .create_boot_vcpus(TimestampUs::default(), GuestAddress(0))
             .is_ok());
+        #[cfg(target_arch = "x86_64")]
         assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 1);
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 3);
+
         assert!(vcpu_manager.start_boot_vcpus(BpfProgram::default()).is_ok());
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 2);
 
         // invalid cpuid for pause
         let cpu_indexes = vec![2];
@@ -1304,9 +1319,14 @@ mod tests {
         assert!(vcpu_manager
             .create_boot_vcpus(TimestampUs::default(), GuestAddress(0))
             .is_ok());
+        #[cfg(target_arch = "x86_64")]
         assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 1);
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 3);
 
         assert!(vcpu_manager.start_boot_vcpus(BpfProgram::default()).is_ok());
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 2);
 
         // invalid cpuid for exit
         let cpu_indexes = vec![2];
@@ -1330,9 +1350,14 @@ mod tests {
         assert!(vcpu_manager
             .create_boot_vcpus(TimestampUs::default(), GuestAddress(0))
             .is_ok());
+        #[cfg(target_arch = "x86_64")]
         assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 1);
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 3);
 
         assert!(vcpu_manager.start_boot_vcpus(BpfProgram::default()).is_ok());
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 2);
 
         // exit all success
         assert!(vcpu_manager.exit_all_vcpus().is_ok());
@@ -1351,9 +1376,14 @@ mod tests {
         assert!(vcpu_manager
             .create_boot_vcpus(TimestampUs::default(), GuestAddress(0))
             .is_ok());
+        #[cfg(target_arch = "x86_64")]
         assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 1);
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 3);
 
         assert!(vcpu_manager.start_boot_vcpus(BpfProgram::default()).is_ok());
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 2);
 
         // invalid cpuid for exit
         let cpu_indexes = vec![2];
@@ -1377,9 +1407,14 @@ mod tests {
         assert!(vcpu_manager
             .create_boot_vcpus(TimestampUs::default(), GuestAddress(0))
             .is_ok());
+        #[cfg(target_arch = "x86_64")]
         assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 1);
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 3);
 
         assert!(vcpu_manager.start_boot_vcpus(BpfProgram::default()).is_ok());
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 2);
 
         // revalidate all success
         assert!(vcpu_manager.revalidate_all_vcpus_cache().is_ok());
@@ -1395,9 +1430,14 @@ mod tests {
         assert!(vcpu_manager
             .create_boot_vcpus(TimestampUs::default(), GuestAddress(0))
             .is_ok());
+        #[cfg(target_arch = "x86_64")]
         assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 1);
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 3);
 
         assert!(vcpu_manager.start_boot_vcpus(BpfProgram::default()).is_ok());
+        #[cfg(target_arch = "aarch64")]
+        assert_eq!(get_present_unstart_vcpus(&vcpu_manager), 2);
 
         // set vcpus in hotplug action
         let cpu_ids = vec![0];

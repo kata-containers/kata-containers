@@ -13,7 +13,7 @@ use crate::Error;
 ///
 /// The `U32Set` may be used to save CPUs parsed from a CPU list file or NUMA nodes parsed from
 /// a NUMA node list file.
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct U32Set(Vec<u32>);
 
 impl U32Set {

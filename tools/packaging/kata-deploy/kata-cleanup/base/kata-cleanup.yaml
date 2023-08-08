@@ -13,7 +13,8 @@ spec:
         labels:
           name: kubelet-kata-cleanup
     spec:
-      serviceAccountName: kata-label-node
+      serviceAccountName: kata-deploy-sa
+      hostPID: true
       nodeSelector:
           katacontainers.io/kata-runtime: cleanup
       containers:
@@ -21,28 +22,23 @@ spec:
         image: quay.io/kata-containers/kata-deploy:latest
         imagePullPolicy: Always
         command: [ "bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh reset" ]
-        readinessProbe:
-          exec:
-            command: [ "bash", "-c", "[ -f /opt/kata/kata-deployed ]", "&&", "bash", "-c", "[ $? == 1 ]" ]
         env:
         - name: NODE_NAME
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        - name: DEBUG
+          value: "false"
+        - name: SHIMS
+          value: "clh dragonball fc qemu-nvidia-gpu qemu-sev qemu-snp qemu-tdx qemu"
+        - name: DEFAULT_SHIM
+          value: "qemu"
+        - name: CREATE_RUNTIMECLASSES
+          value: "false"
+        - name: CREATE_DEFAULT_RUNTIMECLASS
+          value: "false"
         securityContext:
           privileged: true
-        volumeMounts:
-        - name: dbus
-          mountPath: /var/run/dbus/system_bus_socket
-        - name: systemd
-          mountPath: /run/systemd/system
-      volumes:
-        - name: dbus
-          hostPath:
-            path: /var/run/dbus/system_bus_socket
-        - name: systemd
-          hostPath:
-            path: /run/systemd/system
   updateStrategy:
     rollingUpdate:
       maxUnavailable: 1

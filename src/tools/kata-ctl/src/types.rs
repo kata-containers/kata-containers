@@ -15,6 +15,7 @@ pub enum CheckType {
     Cpu,
     Network,
     KernelModules,
+    KvmIsUsable,
 }
 
 // PermissionType is used to show whether a check needs to run with elevated (super-user)
@@ -68,5 +69,5 @@ pub struct KernelParam<'a> {
 #[allow(dead_code)]
 pub struct KernelModule<'a> {
     pub name: &'a str,
-    pub parameter: KernelParam<'a>,
+    pub params: &'a [KernelParam<'a>],
 }

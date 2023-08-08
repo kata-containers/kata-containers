@@ -4,7 +4,9 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
+**BuildVersion** | Pointer to **string** |  | [optional] 
 **Version** | **string** |  | 
+**Pid** | Pointer to **int64** |  | [optional] 
 
 ## Methods
 
@@ -25,6 +27,31 @@ NewVmmPingResponseWithDefaults instantiates a new VmmPingResponse object
 This constructor will only assign default values to properties that have it defined,
 but it doesn't guarantee that properties required by API are set
 
+### GetBuildVersion
+
+`func (o *VmmPingResponse) GetBuildVersion() string`
+
+GetBuildVersion returns the BuildVersion field if non-nil, zero value otherwise.
+
+### GetBuildVersionOk
+
+`func (o *VmmPingResponse) GetBuildVersionOk() (*string, bool)`
+
+GetBuildVersionOk returns a tuple with the BuildVersion field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetBuildVersion
+
+`func (o *VmmPingResponse) SetBuildVersion(v string)`
+
+SetBuildVersion sets BuildVersion field to given value.
+
+### HasBuildVersion
+
+`func (o *VmmPingResponse) HasBuildVersion() bool`
+
+HasBuildVersion returns a boolean if a field has been set.
+
 ### GetVersion
 
 `func (o *VmmPingResponse) GetVersion() string`
@@ -44,6 +71,31 @@ and a boolean to check if the value has been set.
 
 SetVersion sets Version field to given value.
 
+
+### GetPid
+
+`func (o *VmmPingResponse) GetPid() int64`
+
+GetPid returns the Pid field if non-nil, zero value otherwise.
+
+### GetPidOk
+
+`func (o *VmmPingResponse) GetPidOk() (*int64, bool)`
+
+GetPidOk returns a tuple with the Pid field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetPid
+
+`func (o *VmmPingResponse) SetPid(v int64)`
+
+SetPid sets Pid field to given value.
+
+### HasPid
+
+`func (o *VmmPingResponse) HasPid() bool`
+
+HasPid returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

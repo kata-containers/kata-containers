@@ -5,17 +5,26 @@
 //
 
 use std::{
+    fs::File,
+    io::Read,
+    os::unix::fs::MetadataExt,
     path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
 };
 
+use agent::Agent;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
+use hypervisor::device::device_manager::DeviceManager;
+use tokio::sync::RwLock;
 
 use super::Volume;
 use crate::share_fs::{MountedInfo, ShareFs, ShareFsVolumeConfig};
 use kata_types::mount;
+
+use crate::share_fs::DEFAULT_KATA_GUEST_SANDBOX_DIR;
+use crate::share_fs::PASSTHROUGH_FS_DIR;
 
 const SYS_MOUNT_PREFIX: [&str; 2] = ["/proc", "/sys"];
 
@@ -36,6 +45,8 @@ impl ShareFsVolume {
         share_fs: &Option<Arc<dyn ShareFs>>,
         m: &oci::Mount,
         cid: &str,
+        readonly: bool,
+        agent: Arc<dyn Agent>,
     ) -> Result<Self> {
         // The file_name is in the format of "sandbox-{uuid}-{file_name}"
         let file_name = Path::new(&m.source).file_name().unwrap().to_str().unwrap();
@@ -58,19 +69,73 @@ impl ShareFsVolume {
                     Ok(src) => src,
                 };
 
+                // If the mount source is a file, we can copy it to the sandbox
                 if src.is_file() {
-                    // TODO: copy file
-                    debug!(sl!(), "FIXME: copy file {}", &m.source);
-                } else {
+                    // This is where we set the value for the guest path
+                    let dest = [
+                        DEFAULT_KATA_GUEST_SANDBOX_DIR,
+                        PASSTHROUGH_FS_DIR,
+                        file_name.clone().as_str(),
+                    ]
+                    .join("/");
+
                     debug!(
+                        sl!(),
+                        "copy local file {:?} to guest {:?}",
+                        &m.source,
+                        dest.clone()
+                    );
+
+                    // Read file metadata
+                    let file_metadata = std::fs::metadata(src.clone())
+                        .with_context(|| format!("Failed to read metadata from file: {:?}", src))?;
+
+                    // Open file
+                    let mut file = File::open(&src)
+                        .with_context(|| format!("Failed to open file: {:?}", src))?;
+
+                    // Open read file contents to buffer
+                    let mut buffer = Vec::new();
+                    file.read_to_end(&mut buffer)
+                        .with_context(|| format!("Failed to read file: {:?}", src))?;
+
+                    // Create gRPC request
+                    let r = agent::CopyFileRequest {
+                        path: dest.clone(),
+                        file_size: file_metadata.len() as i64,
+                        uid: file_metadata.uid() as i32,
+                        gid: file_metadata.gid() as i32,
+                        file_mode: file_metadata.mode(),
+                        data: buffer,
+                        ..Default::default()
+                    };
+
+                    debug!(sl!(), "copy_file: {:?} to sandbox {:?}", &src, dest.clone());
+
+                    // Issue gRPC request to agent
+                    agent.copy_file(r).await.with_context(|| {
+                        format!(
+                            "copy file request failed: src: {:?}, dest: {:?}",
+                            file_name, dest
+                        )
+                    })?;
+
+                    // append oci::Mount structure to volume mounts
+                    volume.mounts.push(oci::Mount {
+                        destination: m.destination.clone(),
+                        r#type: "bind".to_string(),
+                        source: dest.clone(),
+                        options: m.options.clone(),
+                    })
+                } else {
+                    // If not, we can ignore it. Let's issue a warning so that the user knows.
+                    warn!(
                         sl!(),
                         "Ignoring non-regular file as FS sharing not supported. mount: {:?}", m
                     );
                 }
             }
             Some(share_fs) => {
-                let readonly = m.options.iter().any(|opt| opt == "ro");
-
                 let share_fs_mount = share_fs.get_share_fs_mount();
                 let mounted_info_set = share_fs.mounted_info_set();
                 let mut mounted_info_set = mounted_info_set.lock().await;
@@ -159,7 +224,7 @@ impl Volume for ShareFsVolume {
         Ok(self.storages.clone())
     }
 
-    async fn cleanup(&self) -> Result<()> {
+    async fn cleanup(&self, _device_manager: &RwLock<DeviceManager>) -> Result<()> {
         let share_fs = match self.share_fs.as_ref() {
             Some(fs) => fs,
             None => return Ok(()),
@@ -225,6 +290,10 @@ impl Volume for ShareFsVolume {
         }
 
         Ok(())
+    }
+
+    fn get_device_id(&self) -> Result<Option<String>> {
+        Ok(None)
     }
 }
 

@@ -21,6 +21,7 @@ import (
 	"github.com/docker/go-units"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	volume "github.com/kata-containers/kata-containers/src/runtime/pkg/direct-volume"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/uuid"
@@ -906,6 +907,8 @@ func (k *kataAgent) removeIgnoredOCIMount(spec *specs.Spec, ignoredMounts map[st
 	for _, m := range spec.Mounts {
 		if _, found := ignoredMounts[m.Source]; found {
 			k.Logger().WithField("removed-mount", m.Source).Debug("Removing OCI mount")
+		} else if HasOption(m.Options, vcAnnotations.IsFileSystemLayer) {
+			k.Logger().WithField("removed-mount", m.Source).Debug("Removing layer")
 		} else {
 			mounts = append(mounts, m)
 		}
@@ -1137,7 +1140,7 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 		ContainerPath: dev.ContainerPath,
 		Type:          kataVfioPciDevType,
 		Id:            groupNum,
-		Options:       nil,
+		Options:       make([]string, len(devList)),
 	}
 
 	// We always pass the device information to the agent, since
@@ -1147,16 +1150,16 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 	if c.sandbox.config.VfioMode == config.VFIOModeGuestKernel {
 		kataDevice.Type = kataVfioPciGuestKernelDevType
 	}
+	for i, dev := range devList {
+		if dev.Type == config.VFIOAPDeviceMediatedType {
+			kataDevice.Type = kataVfioApDevType
+			kataDevice.Options = dev.APDevices
+		} else {
 
-	if (*devList[0]).GetType() == config.VFIOAPDeviceMediatedType {
-		kataDevice.Type = kataVfioApDevType
-		kataDevice.Options = (*devList[0]).(config.VFIOAPDev).APDevices
-	} else {
-		kataDevice.Options = make([]string, len(devList))
-		for i, device := range devList {
-			pciDevice := (*device).(config.VFIOPCIDev)
-			kataDevice.Options[i] = fmt.Sprintf("0000:%s=%s", pciDevice.BDF, pciDevice.GuestPciPath)
+			devBDF := drivers.GetBDF(dev.BDF)
+			kataDevice.Options[i] = fmt.Sprintf("0000:%s=%s", devBDF, dev.GuestPciPath)
 		}
+
 	}
 
 	return kataDevice
@@ -1292,12 +1295,16 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 
 	// Block based volumes will require some adjustments in the OCI spec, and creation of
 	// storage objects to pass to the agent.
-	volumeStorages, err := k.handleBlkOCIMounts(c, ociSpec)
+	layerStorages, volumeStorages, err := k.handleBlkOCIMounts(c, ociSpec)
 	if err != nil {
 		return nil, err
 	}
 
 	ctrStorages = append(ctrStorages, volumeStorages...)
+
+	// Layer storage objects are prepended to the list so that they come _before_ the
+	// rootfs because the rootfs depends on them (it's an overlay of the layers).
+	ctrStorages = append(layerStorages, ctrStorages...)
 
 	grpcSpec, err := grpc.OCItoGRPC(ociSpec)
 	if err != nil {
@@ -1342,7 +1349,6 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	if _, err = k.sendReq(ctx, req); err != nil {
 		return nil, err
 	}
-
 	return buildProcessFromExecID(req.ExecId)
 }
 
@@ -1611,9 +1617,10 @@ func (k *kataAgent) createBlkStorageObject(c *Container, m Mount) (*grpc.Storage
 // handleBlkOCIMounts will create a unique destination mountpoint in the guest for each volume in the
 // given container and will update the OCI spec to utilize this mount point as the new source for the
 // container volume. The container mount structure is updated to store the guest destination mountpoint.
-func (k *kataAgent) handleBlkOCIMounts(c *Container, spec *specs.Spec) ([]*grpc.Storage, error) {
+func (k *kataAgent) handleBlkOCIMounts(c *Container, spec *specs.Spec) ([]*grpc.Storage, []*grpc.Storage, error) {
 
 	var volumeStorages []*grpc.Storage
+	var layerStorages []*grpc.Storage
 
 	for i, m := range c.mounts {
 		id := m.BlockDeviceID
@@ -1629,7 +1636,12 @@ func (k *kataAgent) handleBlkOCIMounts(c *Container, spec *specs.Spec) ([]*grpc.
 		// Create Storage structure
 		vol, err := k.createBlkStorageObject(c, m)
 		if vol == nil || err != nil {
-			return nil, err
+			return nil, nil, err
+		}
+
+		if HasOption(m.Options, vcAnnotations.IsFileSystemLayer) {
+			layerStorages = append(layerStorages, vol)
+			continue
 		}
 
 		// Each device will be mounted at a unique location within the VM only once. Mounting
@@ -1650,6 +1662,10 @@ func (k *kataAgent) handleBlkOCIMounts(c *Container, spec *specs.Spec) ([]*grpc.
 				"new-source":      path,
 			}).Debug("Replacing OCI mount source")
 			spec.Mounts[idx].Source = path
+			if HasOption(spec.Mounts[idx].Options, vcAnnotations.IsFileBlockDevice) {
+				// The device is already mounted, just bind to path in container.
+				spec.Mounts[idx].Options = []string{"bind"}
+			}
 			break
 		}
 
@@ -1660,7 +1676,7 @@ func (k *kataAgent) handleBlkOCIMounts(c *Container, spec *specs.Spec) ([]*grpc.
 		volumeStorages = append(volumeStorages, vol)
 	}
 
-	return volumeStorages, nil
+	return layerStorages, volumeStorages, nil
 }
 
 // handlePidNamespace checks if Pid namespace for a container needs to be shared with its sandbox

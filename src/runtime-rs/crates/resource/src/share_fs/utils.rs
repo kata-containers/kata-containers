@@ -4,12 +4,27 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::path::{Path, PathBuf};
+use std::{
+    os::unix::fs::PermissionsExt,
+    path::{Path, PathBuf},
+};
 
 use anyhow::Result;
 use kata_sys_util::mount;
+use nix::mount::MsFlags;
 
 use super::*;
+
+pub(crate) fn mkdir_with_permissions(path_target: PathBuf, mode: u32) -> Result<()> {
+    let new_path = &path_target;
+    std::fs::create_dir_all(new_path)
+        .context(format!("unable to create new path: {:?}", new_path))?;
+
+    // mode format: 0o750, ...
+    std::fs::set_permissions(new_path, std::fs::Permissions::from_mode(mode))?;
+
+    Ok(())
+}
 
 pub(crate) fn ensure_dir_exist(path: &Path) -> Result<()> {
     if !path.exists() {
@@ -31,7 +46,7 @@ pub(crate) fn share_to_guest(
     is_rafs: bool,
 ) -> Result<String> {
     let host_dest = do_get_host_path(target, sid, cid, is_volume, false);
-    mount::bind_mount_unchecked(source, &host_dest, readonly)
+    mount::bind_mount_unchecked(source, &host_dest, readonly, MsFlags::MS_SLAVE)
         .with_context(|| format!("failed to bind mount {} to {}", source, &host_dest))?;
 
     // bind mount remount event is not propagated to mount subtrees, so we have
@@ -97,7 +112,7 @@ pub fn do_get_guest_share_path(target: &str, cid: &str, is_rafs: bool) -> String
     do_get_guest_any_path(target, cid, false, is_rafs, true)
 }
 
-pub(crate) fn do_get_host_path(
+pub fn do_get_host_path(
     target: &str,
     sid: &str,
     cid: &str,

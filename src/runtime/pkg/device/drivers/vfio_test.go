@@ -20,7 +20,7 @@ func TestGetVFIODetails(t *testing.T) {
 	}
 
 	data := []testData{
-		{"0000:02:10.0", "02:10.0"},
+		{"0000:02:10.0", "0000:02:10.0"},
 		{"0000:0210.0", ""},
 		{"f79944e4-5a3d-11e8-99ce-", ""},
 		{"f79944e4-5a3d-11e8-99ce", ""},
@@ -29,7 +29,7 @@ func TestGetVFIODetails(t *testing.T) {
 	}
 
 	for _, d := range data {
-		deviceBDF, deviceSysfsDev, vfioDeviceType, err := getVFIODetails(d.deviceStr, "")
+		deviceBDF, deviceSysfsDev, vfioDeviceType, err := GetVFIODetails(d.deviceStr, "")
 
 		switch vfioDeviceType {
 		case config.VFIOPCIDeviceNormalType:

@@ -11,6 +11,10 @@ on:
       - opened
       - reopened
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   add-new-issues-to-backlog:
     runs-on: ubuntu-latest

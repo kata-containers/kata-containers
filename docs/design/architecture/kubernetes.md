@@ -3,16 +3,16 @@
 [Kubernetes](https://github.com/kubernetes/kubernetes/), or K8s, is a popular open source
 container orchestration engine. In Kubernetes, a set of containers sharing resources
 such as networking, storage, mount, PID, etc. is called a
-[pod](https://kubernetes.io/docs/user-guide/pods/).
+[pod](https://kubernetes.io/docs/concepts/workloads/pods/).
 
 A node can have multiple pods, but at a minimum, a node within a Kubernetes cluster
 only needs to run a container runtime and a container agent (called a
-[Kubelet](https://kubernetes.io/docs/admin/kubelet/)).
+[Kubelet](https://kubernetes.io/docs/concepts/overview/components/#kubelet)).
 
 Kata Containers represents a Kubelet pod as a VM.
 
 A Kubernetes cluster runs a control plane where a scheduler (typically
-running on a dedicated master node) calls into a compute Kubelet. This
+running on a dedicated control-plane node) calls into a compute Kubelet. This
 Kubelet instance is responsible for managing the lifecycle of pods
 within the nodes and eventually relies on a container runtime to
 handle execution. The Kubelet architecture decouples lifecycle

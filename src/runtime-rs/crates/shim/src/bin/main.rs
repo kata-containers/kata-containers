@@ -142,7 +142,7 @@ fn real_main() -> Result<()> {
         Action::Delete(args) => {
             let mut shim = ShimExecutor::new(args);
             let rt = get_tokio_runtime().context("get tokio runtime")?;
-            rt.block_on(shim.delete())?
+            rt.block_on(shim.delete())?;
         }
         Action::Run(args) => {
             // set mnt namespace
@@ -151,7 +151,7 @@ fn real_main() -> Result<()> {
 
             let mut shim = ShimExecutor::new(args);
             let rt = get_tokio_runtime().context("get tokio runtime")?;
-            rt.block_on(shim.run())?
+            rt.block_on(shim.run())?;
         }
         Action::Help => show_help(&args[0]),
         Action::Version => show_version(None),

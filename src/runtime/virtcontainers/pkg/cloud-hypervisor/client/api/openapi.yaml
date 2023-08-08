@@ -415,10 +415,17 @@ components:
     VmmPingResponse:
       description: Virtual Machine Monitor information
       example:
+        build_version: build_version
+        pid: 0
         version: version
       properties:
+        build_version:
+          type: string
         version:
           type: string
+        pid:
+          format: int64
+          type: integer
       required:
       - version
       type: object

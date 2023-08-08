@@ -5,22 +5,27 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::inner::CloudHypervisorInner;
-use crate::device::{Device, ShareFsDeviceConfig};
+use crate::device::DeviceType;
+use crate::BlockConfig;
 use crate::HybridVsockConfig;
+use crate::ShareFsDeviceConfig;
 use crate::VmmState;
 use anyhow::{anyhow, Context, Result};
-use ch_config::ch_api::cloud_hypervisor_vm_fs_add;
+use ch_config::ch_api::{cloud_hypervisor_vm_blockdev_add, cloud_hypervisor_vm_fs_add};
+use ch_config::DiskConfig;
 use ch_config::FsConfig;
 use safe_path::scoped_join;
 use std::convert::TryFrom;
 use std::path::PathBuf;
 
 const VIRTIO_FS: &str = "virtio-fs";
+const DEFAULT_DISK_QUEUES: usize = 1;
+const DEFAULT_DISK_QUEUE_SIZE: u16 = 1024;
 
 impl CloudHypervisorInner {
-    pub(crate) async fn add_device(&mut self, device: Device) -> Result<()> {
+    pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<()> {
         if self.state != VmmState::VmRunning {
-            let mut devices: Vec<Device> = if let Some(devices) = self.pending_devices.take() {
+            let mut devices: Vec<DeviceType> = if let Some(devices) = self.pending_devices.take() {
                 devices
             } else {
                 vec![]
@@ -38,10 +43,11 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
-    async fn handle_add_device(&mut self, device: Device) -> Result<()> {
+    async fn handle_add_device(&mut self, device: DeviceType) -> Result<()> {
         match device {
-            Device::ShareFsDevice(cfg) => self.handle_share_fs_device(cfg).await,
-            Device::HybridVsock(cfg) => self.handle_hvsock_device(&cfg).await,
+            DeviceType::ShareFs(sharefs) => self.handle_share_fs_device(sharefs.config).await,
+            DeviceType::HybridVsock(hvsock) => self.handle_hvsock_device(&hvsock.config).await,
+            DeviceType::Block(block) => self.handle_block_device(block.config).await,
             _ => Err(anyhow!("unhandled device: {:?}", device)),
         }
     }
@@ -66,7 +72,7 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
-    pub(crate) async fn remove_device(&mut self, _device: Device) -> Result<()> {
+    pub(crate) async fn remove_device(&mut self, _device: DeviceType) -> Result<()> {
         Ok(())
     }
 
@@ -124,6 +130,37 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
+    async fn handle_block_device(&mut self, cfg: BlockConfig) -> Result<()> {
+        let socket = self
+            .api_socket
+            .as_ref()
+            .ok_or("missing socket")
+            .map_err(|e| anyhow!(e))?;
+
+        let num_queues: usize = DEFAULT_DISK_QUEUES;
+        let queue_size: u16 = DEFAULT_DISK_QUEUE_SIZE;
+
+        let block_config = DiskConfig {
+            path: Some(cfg.path_on_host.as_str().into()),
+            readonly: cfg.is_readonly,
+            num_queues,
+            queue_size,
+            ..Default::default()
+        };
+
+        let response = cloud_hypervisor_vm_blockdev_add(
+            socket.try_clone().context("failed to clone socket")?,
+            block_config,
+        )
+        .await?;
+
+        if let Some(detail) = response {
+            debug!(sl!(), "blockdev add response: {:?}", detail);
+        }
+
+        Ok(())
+    }
+
     pub(crate) async fn get_shared_fs_devices(&mut self) -> Result<Option<Vec<FsConfig>>> {
         let pending_root_devices = self.pending_devices.take();
 
@@ -132,8 +169,8 @@ impl CloudHypervisorInner {
         if let Some(devices) = pending_root_devices {
             for dev in devices {
                 match dev {
-                    Device::ShareFsDevice(dev) => {
-                        let settings = ShareFsSettings::new(dev, self.vm_path.clone());
+                    DeviceType::ShareFs(dev) => {
+                        let settings = ShareFsSettings::new(dev.config, self.vm_path.clone());
 
                         let fs_cfg = FsConfig::try_from(settings)?;
 
@@ -172,13 +209,13 @@ impl TryFrom<ShareFsSettings> for FsConfig {
         let num_queues: usize = if cfg.queue_num > 0 {
             cfg.queue_num as usize
         } else {
-            1
+            DEFAULT_DISK_QUEUES
         };
 
         let queue_size: u16 = if cfg.queue_num > 0 {
             u16::try_from(cfg.queue_size)?
         } else {
-            1024
+            DEFAULT_DISK_QUEUE_SIZE
         };
 
         let socket_path = if cfg.sock_path.starts_with('/') {

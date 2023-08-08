@@ -1,0 +1,29 @@
+#
+# Copyright (c) 2021-2023 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: iperf3-clients
+  labels:
+    app: iperf3-client
+spec:
+  selector:
+    matchLabels:
+      app: iperf3-client
+  template:
+    metadata:
+      labels:
+        app: iperf3-client
+    spec:
+      tolerations:
+        - key: node-role.kubernetes.io/master
+          operator: Exists
+          effect: NoSchedule
+      containers:
+      - name: iperf3-client
+        image: networkstatic/iperf3
+        command: ['/bin/sh', '-c', 'sleep infinity']
+      terminationGracePeriodSeconds: 0

@@ -17,7 +17,7 @@ import (
 	"github.com/prometheus/procfs"
 	"github.com/urfave/cli"
 
-	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
@@ -103,20 +103,19 @@ type RuntimeVersionInfo struct {
 
 // HypervisorInfo stores hypervisor details
 type HypervisorInfo struct {
-	MachineType          string
-	Version              string
-	Path                 string
-	BlockDeviceDriver    string
-	EntropySource        string
-	SharedFS             string
-	VirtioFSDaemon       string
-	SocketPath           string
-	Msize9p              uint32
-	MemorySlots          uint32
-	PCIeRootPort         uint32
-	ColdPlugVFIO         hv.PCIePort
-	HotplugVFIOOnRootBus bool
-	Debug                bool
+	MachineType       string
+	Version           string
+	Path              string
+	BlockDeviceDriver string
+	EntropySource     string
+	SharedFS          string
+	VirtioFSDaemon    string
+	SocketPath        string
+	Msize9p           uint32
+	MemorySlots       uint32
+	HotPlugVFIO       config.PCIePort
+	ColdPlugVFIO      config.PCIePort
+	Debug             bool
 }
 
 // AgentInfo stores agent details
@@ -307,20 +306,19 @@ func getHypervisorInfo(config oci.RuntimeConfig) (HypervisorInfo, error) {
 	}
 
 	return HypervisorInfo{
-		Debug:                config.HypervisorConfig.Debug,
-		MachineType:          config.HypervisorConfig.HypervisorMachineType,
-		Version:              version,
-		Path:                 hypervisorPath,
-		BlockDeviceDriver:    config.HypervisorConfig.BlockDeviceDriver,
-		Msize9p:              config.HypervisorConfig.Msize9p,
-		MemorySlots:          config.HypervisorConfig.MemSlots,
-		EntropySource:        config.HypervisorConfig.EntropySource,
-		SharedFS:             config.HypervisorConfig.SharedFS,
-		VirtioFSDaemon:       config.HypervisorConfig.VirtioFSDaemon,
-		ColdPlugVFIO:         config.HypervisorConfig.ColdPlugVFIO,
-		HotplugVFIOOnRootBus: config.HypervisorConfig.HotplugVFIOOnRootBus,
-		PCIeRootPort:         config.HypervisorConfig.PCIeRootPort,
-		SocketPath:           socketPath,
+		Debug:             config.HypervisorConfig.Debug,
+		MachineType:       config.HypervisorConfig.HypervisorMachineType,
+		Version:           version,
+		Path:              hypervisorPath,
+		BlockDeviceDriver: config.HypervisorConfig.BlockDeviceDriver,
+		Msize9p:           config.HypervisorConfig.Msize9p,
+		MemorySlots:       config.HypervisorConfig.MemSlots,
+		EntropySource:     config.HypervisorConfig.EntropySource,
+		SharedFS:          config.HypervisorConfig.SharedFS,
+		VirtioFSDaemon:    config.HypervisorConfig.VirtioFSDaemon,
+		HotPlugVFIO:       config.HypervisorConfig.HotPlugVFIO,
+		ColdPlugVFIO:      config.HypervisorConfig.ColdPlugVFIO,
+		SocketPath:        socketPath,
 	}, nil
 }
 

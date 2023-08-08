@@ -26,15 +26,13 @@ use oci::{LinuxDeviceCgroup, LinuxResources, Spec};
 use protocols::agent::Device;
 use tracing::instrument;
 
-// Convenience macro to obtain the scope logger
-macro_rules! sl {
-    () => {
-        slog_scope::logger().new(o!("subsystem" => "device"))
-    };
+// Convenience function to obtain the scope logger.
+fn sl() -> slog::Logger {
+    slog_scope::logger().new(o!("subsystem" => "device"))
 }
 
 const VM_ROOTFS: &str = "/";
-
+const BLOCK: &str = "block";
 pub const DRIVER_9P_TYPE: &str = "9p";
 pub const DRIVER_VIRTIOFS_TYPE: &str = "virtio-fs";
 pub const DRIVER_BLK_TYPE: &str = "blk";
@@ -78,7 +76,7 @@ where
 {
     let syspci = Path::new(&syspci);
     let drv = drv.as_ref();
-    info!(sl!(), "rebind_pci_driver: {} => {:?}", dev, drv);
+    info!(sl(), "rebind_pci_driver: {} => {:?}", dev, drv);
 
     let devpath = syspci.join("devices").join(dev.to_string());
     let overridepath = &devpath.join("driver_override");
@@ -204,7 +202,7 @@ impl ScsiBlockMatcher {
 
 impl UeventMatcher for ScsiBlockMatcher {
     fn is_match(&self, uev: &Uevent) -> bool {
-        uev.subsystem == "block" && uev.devpath.contains(&self.search) && !uev.devname.is_empty()
+        uev.subsystem == BLOCK && uev.devpath.contains(&self.search) && !uev.devname.is_empty()
     }
 }
 
@@ -238,7 +236,7 @@ impl VirtioBlkPciMatcher {
 
 impl UeventMatcher for VirtioBlkPciMatcher {
     fn is_match(&self, uev: &Uevent) -> bool {
-        uev.subsystem == "block" && self.rex.is_match(&uev.devpath) && !uev.devname.is_empty()
+        uev.subsystem == BLOCK && self.rex.is_match(&uev.devpath) && !uev.devname.is_empty()
     }
 }
 
@@ -311,7 +309,7 @@ impl PmemBlockMatcher {
 
 impl UeventMatcher for PmemBlockMatcher {
     fn is_match(&self, uev: &Uevent) -> bool {
-        uev.subsystem == "block"
+        uev.subsystem == BLOCK
             && uev.devpath.starts_with(ACPI_DEV_PATH)
             && uev.devpath.ends_with(&self.suffix)
             && !uev.devname.is_empty()
@@ -441,6 +439,48 @@ async fn wait_for_ap_device(sandbox: &Arc<Mutex<Sandbox>>, address: ap::Address)
     Ok(())
 }
 
+#[derive(Debug)]
+struct MmioBlockMatcher {
+    suffix: String,
+}
+
+impl MmioBlockMatcher {
+    fn new(devname: &str) -> MmioBlockMatcher {
+        MmioBlockMatcher {
+            suffix: format!(r"/block/{}", devname),
+        }
+    }
+}
+
+impl UeventMatcher for MmioBlockMatcher {
+    fn is_match(&self, uev: &Uevent) -> bool {
+        uev.subsystem == BLOCK && uev.devpath.ends_with(&self.suffix) && !uev.devname.is_empty()
+    }
+}
+
+#[instrument]
+pub async fn get_virtio_mmio_device_name(
+    sandbox: &Arc<Mutex<Sandbox>>,
+    devpath: &str,
+) -> Result<()> {
+    let devname = devpath
+        .strip_prefix("/dev/")
+        .ok_or_else(|| anyhow!("Storage source '{}' must start with /dev/", devpath))?;
+
+    let matcher = MmioBlockMatcher::new(devname);
+    let uev = wait_for_uevent(sandbox, matcher)
+        .await
+        .context("failed to wait for uevent")?;
+    if uev.devname != devname {
+        return Err(anyhow!(
+            "Unexpected device name {} for mmio device (expected {})",
+            uev.devname,
+            devname
+        ));
+    }
+    Ok(())
+}
+
 /// Scan SCSI bus for the given SCSI address(SCSI-Id and LUN)
 #[instrument]
 fn scan_scsi_bus(scsi_addr: &str) -> Result<()> {
@@ -564,7 +604,7 @@ fn update_spec_devices(spec: &mut Spec, mut updates: HashMap<&str, DevUpdate>) -
             let host_minor = specdev.minor;
 
             info!(
-                sl!(),
+                sl(),
                 "update_spec_devices() updating device";
                 "container_path" => &specdev.path,
                 "type" => &specdev.r#type,
@@ -615,7 +655,7 @@ fn update_spec_devices(spec: &mut Spec, mut updates: HashMap<&str, DevUpdate>) -
                 if let Some(update) = res_updates.get(&(r.r#type.as_str(), host_major, host_minor))
                 {
                     info!(
-                        sl!(),
+                        sl(),
                         "update_spec_devices() updating resource";
                         "type" => &r.r#type,
                         "host_major" => host_major,
@@ -676,10 +716,16 @@ pub fn update_env_pci(
 #[instrument]
 async fn virtiommio_blk_device_handler(
     device: &Device,
-    _sandbox: &Arc<Mutex<Sandbox>>,
+    sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<SpecUpdate> {
     if device.vm_path.is_empty() {
         return Err(anyhow!("Invalid path for virtio mmio blk device"));
+    }
+
+    if !Path::new(&device.vm_path).exists() {
+        get_virtio_mmio_device_name(sandbox, &device.vm_path.to_string())
+            .await
+            .context("failed to get mmio device name")?;
     }
 
     Ok(DevNumUpdate::from_vm_path(&device.vm_path)?.into())
@@ -873,7 +919,7 @@ pub async fn add_devices(
 #[instrument]
 async fn add_device(device: &Device, sandbox: &Arc<Mutex<Sandbox>>) -> Result<SpecUpdate> {
     // log before validation to help with debugging gRPC protocol version differences.
-    info!(sl!(), "device-id: {}, device-type: {}, device-vm-path: {}, device-container-path: {}, device-options: {:?}",
+    info!(sl(), "device-id: {}, device-type: {}, device-vm-path: {}, device-container-path: {}, device-options: {:?}",
           device.id, device.type_, device.vm_path, device.container_path, device.options);
 
     if device.type_.is_empty() {
@@ -1394,7 +1440,7 @@ mod tests {
 
         let mut uev = crate::uevent::Uevent::default();
         uev.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
-        uev.subsystem = "block".to_string();
+        uev.subsystem = BLOCK.to_string();
         uev.devpath = devpath.clone();
         uev.devname = devname.to_string();
 
@@ -1428,7 +1474,7 @@ mod tests {
         let mut uev_a = crate::uevent::Uevent::default();
         let relpath_a = "/0000:00:0a.0";
         uev_a.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
-        uev_a.subsystem = "block".to_string();
+        uev_a.subsystem = BLOCK.to_string();
         uev_a.devname = devname.to_string();
         uev_a.devpath = format!("{}{}/virtio4/block/{}", root_bus, relpath_a, devname);
         let matcher_a = VirtioBlkPciMatcher::new(relpath_a);
@@ -1512,7 +1558,7 @@ mod tests {
         let mut uev_a = crate::uevent::Uevent::default();
         let addr_a = "0:0";
         uev_a.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
-        uev_a.subsystem = "block".to_string();
+        uev_a.subsystem = BLOCK.to_string();
         uev_a.devname = devname.to_string();
         uev_a.devpath = format!(
             "{}/0000:00:00.0/virtio0/host0/target0:0:0/0:0:{}/block/sda",
@@ -1548,6 +1594,33 @@ mod tests {
         let mut uev_b = uev_a.clone();
         uev_b.devpath = format!("/devices/virtual/vfio/{}", grpb);
         let matcher_b = VfioMatcher::new(grpb);
+
+        assert!(matcher_a.is_match(&uev_a));
+        assert!(matcher_b.is_match(&uev_b));
+        assert!(!matcher_b.is_match(&uev_a));
+        assert!(!matcher_a.is_match(&uev_b));
+    }
+
+    #[tokio::test]
+    async fn test_mmio_block_matcher() {
+        let devname_a = "vda";
+        let devname_b = "vdb";
+        let mut uev_a = crate::uevent::Uevent::default();
+        uev_a.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
+        uev_a.subsystem = BLOCK.to_string();
+        uev_a.devname = devname_a.to_string();
+        uev_a.devpath = format!(
+            "/sys/devices/virtio-mmio-cmdline/virtio-mmio.0/virtio0/block/{}",
+            devname_a
+        );
+        let matcher_a = MmioBlockMatcher::new(devname_a);
+
+        let mut uev_b = uev_a.clone();
+        uev_b.devpath = format!(
+            "/sys/devices/virtio-mmio-cmdline/virtio-mmio.4/virtio4/block/{}",
+            devname_b
+        );
+        let matcher_b = MmioBlockMatcher::new(devname_b);
 
         assert!(matcher_a.is_match(&uev_a));
         assert!(matcher_b.is_match(&uev_b));

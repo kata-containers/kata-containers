@@ -23,6 +23,11 @@ image = "@IMAGEPATH@"
 #   - erofs
 rootfs_type=@DEFROOTFSTYPE@
 
+ 
+# Block storage driver to be used for the VM rootfs is backed
+# by a block device. This is virtio-blk-pci, virtio-blk-mmio or nvdimm
+vm_rootfs_driver = "@VMROOTFSDRIVER_DB@"
+
 # List of valid annotation names for the hypervisor
 # Each member of the list is a regular expression, which is the base name
 # of the annotation, e.g. "path" for io.katacontainers.config.hypervisor.path"
@@ -309,3 +314,21 @@ experimental=@DEFAULTEXPFEATURES@
 # - When running single containers using a tool like ctr, container sizing information will be available.
 static_sandbox_resource_mgmt=@DEFSTATICRESOURCEMGMT_DB@
 
+# If specified, sandbox_bind_mounts identifieds host paths to be mounted(ro, rw) into the sandboxes shared path.
+# This is only valid if filesystem sharing is utilized. The provided path(s) will be bindmounted into the shared fs directory.
+# If defaults are utilized, these mounts should be available in the guest at `/run/kata-containers/shared/containers/sandbox-mounts`
+# These will not be exposed to the container workloads, and are only provided for potential guest services.
+# Now it supports three kinds of bind mount format:
+# - "/path/to", default readonly mode.
+# - "/path/to:ro", readonly mode.
+# - "/path/to:rw", readwrite mode.
+sandbox_bind_mounts=@DEFBINDMOUNTS@
+
+# Base directory of directly attachable network config.
+# Network devices for VM-based containers are allowed to be placed in the
+# host netns to eliminate as many hops as possible, which is what we
+# called a "Directly Attachable Network". The config, set by special CNI
+# plugins, is used to tell the Kata containers what devices are attached
+# to the hypervisor.
+# (default: /run/kata-containers/dans)
+dan_conf = "@DEFDANCONF@"

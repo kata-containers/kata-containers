@@ -3,52 +3,29 @@ on:
   pull_request_target:
     branches:
       - 'main'
+      - 'stable-*'
+    types:
+      # Adding 'labeled' to the list of activity types that trigger this event
+      # (default: opened, synchronize, reopened) so that we can run this
+      # workflow when the 'ok-to-test' label is added.
+      # Reference: https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#pull_request_target
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+    paths-ignore:
+      - 'docs/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-kata-static-tarball-amd64:
-    uses: ./.github/workflows/build-kata-static-tarball-amd64.yaml
+  kata-containers-ci-on-push:
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
+    uses: ./.github/workflows/ci.yaml
     with:
-      tarball-suffix: -${{ github.event.pull_request.number}}-${{ github.event.pull_request.head.sha }}
-
-  publish-kata-deploy-payload-amd64:
-    needs: build-kata-static-tarball-amd64
-    uses: ./.github/workflows/publish-kata-deploy-payload-amd64.yaml
-    with:
-      tarball-suffix: -${{ github.event.pull_request.number}}-${{ github.event.pull_request.head.sha }}
-      registry: ghcr.io
-      repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-amd64
+      commit-hash: ${{ github.event.pull_request.head.sha }}
+      pr-number: ${{ github.event.pull_request.number }}
+      tag: ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
     secrets: inherit
-
-  run-k8s-tests-on-aks:
-    needs: publish-kata-deploy-payload-amd64
-    uses: ./.github/workflows/run-k8s-tests-on-aks.yaml
-    with:
-      registry: ghcr.io
-      repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-amd64
-    secrets: inherit
-
-  run-k8s-tests-on-sev:
-    needs: publish-kata-deploy-payload-amd64
-    uses: ./.github/workflows/run-k8s-tests-on-sev.yaml
-    with:
-      registry: ghcr.io
-      repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-amd64
-
-  run-k8s-tests-on-snp:
-    needs: publish-kata-deploy-payload-amd64
-    uses: ./.github/workflows/run-k8s-tests-on-snp.yaml
-    with:
-      registry: ghcr.io
-      repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-amd64
-
-  run-k8s-tests-on-tdx:
-    needs: publish-kata-deploy-payload-amd64
-    uses: ./.github/workflows/run-k8s-tests-on-tdx.yaml
-    with:
-      registry: ghcr.io
-      repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}-amd64

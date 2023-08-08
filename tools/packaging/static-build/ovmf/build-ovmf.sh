@@ -82,7 +82,11 @@ if [ "${ovmf_build}" == "tdx" ]; then
 fi
 
 mkdir -p "${install_dir}"
-install $build_root/$ovmf_dir/"${build_path_fv}"/OVMF.fd "${install_dir}"
+if [ "${ovmf_build}" == "sev" ]; then
+	install $build_root/$ovmf_dir/"${build_path_fv}"/OVMF.fd "${install_dir}/AMDSEV.fd"
+else
+	install $build_root/$ovmf_dir/"${build_path_fv}"/OVMF.fd "${install_dir}"
+fi
 if [ "${ovmf_build}" == "tdx" ]; then
 	install $build_root/$ovmf_dir/"${build_path_fv}"/OVMF_CODE.fd ${install_dir}
 	install $build_root/$ovmf_dir/"${build_path_fv}"/OVMF_VARS.fd ${install_dir}

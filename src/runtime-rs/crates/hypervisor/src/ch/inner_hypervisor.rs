@@ -6,9 +6,9 @@
 use super::inner::CloudHypervisorInner;
 use crate::ch::utils::get_api_socket_path;
 use crate::ch::utils::{get_jailer_root, get_sandbox_path, get_vsock_path};
+use crate::device::DeviceType;
 use crate::kernel_param::KernelParams;
-use crate::Device;
-use crate::VsockConfig;
+use crate::VsockDevice;
 use crate::VM_ROOTFS_DRIVER_PMEM;
 use crate::{VcpuThreadIds, VmmState};
 use anyhow::{anyhow, Context, Result};
@@ -417,10 +417,11 @@ impl CloudHypervisorInner {
 
         self.netns = netns;
 
-        let vsock_cfg = VsockConfig::new(self.id.clone()).await?;
+        let vsock_dev = VsockDevice::new(self.id.clone()).await?;
 
-        let dev = Device::Vsock(vsock_cfg);
-        self.add_device(dev).await.context("add vsock device")?;
+        self.add_device(DeviceType::Vsock(vsock_dev))
+            .await
+            .context("add vsock device")?;
 
         self.start_hypervisor(self.timeout_secs).await?;
 
@@ -493,6 +494,10 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
+    pub(crate) async fn resize_vcpu(&self, old_vcpu: u32, new_vcpu: u32) -> Result<(u32, u32)> {
+        Ok((old_vcpu, new_vcpu))
+    }
+
     pub(crate) async fn get_pids(&self) -> Result<Vec<u32>> {
         Ok(Vec::<u32>::new())
     }
@@ -530,6 +535,10 @@ impl CloudHypervisorInner {
         let mut caps = Capabilities::default();
         caps.set(CapabilityBits::FsSharingSupport);
         Ok(caps)
+    }
+
+    pub(crate) async fn get_hypervisor_metrics(&self) -> Result<String> {
+        todo!()
     }
 }
 

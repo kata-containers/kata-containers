@@ -14,7 +14,6 @@ items:
   kind: ResourceQuota
   metadata:
     name: pod-quota
-    namespace: test-quota-ns
   spec:
     hard:
       pods: "2"

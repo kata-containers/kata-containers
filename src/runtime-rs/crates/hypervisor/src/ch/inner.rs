@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::HypervisorState;
-use crate::device::Device;
+use crate::device::DeviceType;
 use crate::VmmState;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -44,7 +44,7 @@ pub struct CloudHypervisorInner {
     pub(crate) jailer_root: String,
 
     /// List of devices that will be added to the VM once it boots
-    pub(crate) pending_devices: Option<Vec<Device>>,
+    pub(crate) pending_devices: Option<Vec<DeviceType>>,
 
     pub(crate) _capabilities: Capabilities,
 
