@@ -3,8 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::fs::OpenOptions;
-use std::io::Write;
 use anyhow::Result;
 
 use crate::cli::Args;

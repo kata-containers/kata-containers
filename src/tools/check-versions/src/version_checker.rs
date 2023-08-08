@@ -13,10 +13,10 @@ use anyhow::bail;
 use anyhow::Result;
 use serde_json::Value;
 
-pub fn check_versions(key: &str, version: &Value, args: &Args) -> Vec<CheckResult> {
+pub fn check_versions(key: &str, version: &Value, args: &Args) -> Result<Vec<CheckResult>> {
     let mut results: Vec<CheckResult> = Vec::new();
-    check_versions_recursive(key, version, args, &mut results);
-    return results;
+    check_versions_recursive(key, version, args, &mut results)?;
+    Ok(results)
 }
 
 pub fn check_versions_recursive(key: &str, versions: &Value, args: &Args, results: &mut Vec<CheckResult>) -> Result<()> {
@@ -95,7 +95,7 @@ pub fn check_versions_recursive(key: &str, versions: &Value, args: &Args, result
                             println!("Recursing into subkey={}", subkey);
                         }
 
-                        check_versions_recursive(&format!("{}.{}", key, subkey), value, args, results);
+                        check_versions_recursive(&format!("{}.{}", key, subkey), value, args, results)?;
                     }
                 }
             }
@@ -144,7 +144,7 @@ fn check_project_version(project: &Project, name: &str, args: &Args) -> Result<C
                    check_github_version(url.as_str(), current_version.as_str(), name, &args)
                 } else {
                     match name {
-                        "root.externals.virtiofsd" => check_virtiofsd_version(name, current_version.as_str(), &args),
+                        "root.externals.virtiofsd" => check_virtiofsd_version(name, current_version.as_str()),
                         _ => bail!("Unknown url format")
                     }
                 }
@@ -164,7 +164,7 @@ fn check_language_version(
     match name {
         "root.languages.golang" => {
             let url = "https://golang.org/VERSION?m=text";
-            match get_latest_version(url) {
+            match get_go_latest_version(url) {
                 Ok(latest_version) => {
                     let up_to_date = current_version.eq(&latest_version);
                     let check_result = CheckResult {
@@ -294,8 +294,7 @@ fn check_github_version(
 
 fn check_virtiofsd_version(
     name: &str,
-    current_version: &str,
-    args: &Args) -> Result<CheckResult> {
+    current_version: &str) -> Result<CheckResult> {
     let url = "https://gitlab.com/api/v4/projects/21523468/repository/tags";
     match get_virtiofsd_latest_version(url) {
         Ok(latest_version) => {
@@ -355,11 +354,16 @@ fn get_virtiofsd_latest_version(url: &str) -> Result<String> {
 }
 
 
-fn get_latest_version(url: &str) -> Result<String> {
+fn get_go_latest_version(url: &str) -> Result<String> {
     let version_response = reqwest::blocking::Client::new()
                             .get(url).send()?.text()?;
 
-    Ok(version_response.clone())
+    let version = match version_response.split_once('\n') {
+        Some(version_tuple) => String::from(version_tuple.0),
+        None => String::from("unknown")
+    };
+
+    Ok(version)
 }
 
 fn to_github_api_url(url: &str) -> String {

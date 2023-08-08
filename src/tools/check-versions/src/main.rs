@@ -24,9 +24,9 @@ fn real_main() -> Result<()> {
     let versions: serde_json::Value = serde_yaml::from_str(contents.as_str())
         .context(format!("Unable to parse {}", &args.versions_file.display()))?;
 
-    let results: Vec<model::CheckResult> = version_checker::check_versions("root", &versions, &args);
+    let results: Vec<model::CheckResult> = version_checker::check_versions("root", &versions, &args)?;
 
-    output::output_results(&results, &args);
+    output::output_results(&results, &args)?;
 
     Ok(())
 }
