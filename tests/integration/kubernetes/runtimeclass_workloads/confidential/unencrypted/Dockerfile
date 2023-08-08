@@ -1,0 +1,33 @@
+# Copyright (c) 2023 Intel Corporatiion
+#
+# SPDX-License-Identifier: Apache-2.0
+
+FROM ubuntu:22.04
+
+RUN apt-get -y update && \
+    apt-get -y install --no-install-recommends ca-certificates curl openssh-server && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Download and install `cpuid`, which will be used to detect
+# whether we're the container is running on a TEE guest
+RUN /bin/bash -c \
+    'ARCH=$(uname -m) && \
+    [[ "${ARCH}" == "x86_64" ]] && \
+    curl -LO https://github.com/klauspost/cpuid/releases/download/v2.2.5/cpuid-Linux_x86_64_2.2.5.tar.gz && \
+    tar -xvzf cpuid-Linux_x86_64_2.2.5.tar.gz  -C /usr/bin && \
+    rm -rf cpuid-Linux_x86_64_2.2.5.tar.gz && \
+    rm -f /usr/bin/LICENSE'
+
+# This is done just to avoid the following error starting sshd
+# `sshd: no hostkeys available -- exiting.`
+RUN ssh-keygen -t ed25519 -f /etc/ssh/ssh_host_ed25519_key -P ""
+
+# A password needs to be set for login to work. An empty password is
+# unproblematic as password-based login to root is not allowed.
+RUN passwd -d root
+
+# Generated with `ssh-keygen -t ed25519 -f unencrypted -P "" -C ""`
+COPY ssh/unencrypted.pub /root/.ssh/authorized_keys
+
+ENTRYPOINT /usr/sbin/sshd -D
