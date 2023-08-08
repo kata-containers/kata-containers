@@ -154,7 +154,7 @@ impl RefCountedObject<ObjectKind> {
     pub fn dec_ref(&mut self) -> Result<()> {
         self.ref_count -= 1;
         let name =  &self.name;
-        if self.is_zero() {
+        if self.get_count() == 0 {
             match self.ref_type {
                 ObjectKind::MountPoint => {
                     let mounts = vec![name.to_owned()];
@@ -170,10 +170,6 @@ impl RefCountedObject<ObjectKind> {
             }
         }
         Ok(())
-    }
-    #[inline]
-    pub fn is_zero(&self) -> bool {
-        self.ref_count == 0
     }
     #[inline]
     pub fn get_count(&self) -> u32 {
@@ -923,7 +919,7 @@ pub async fn add_storages(
 
         {
             let mut sb = sandbox.lock().await;
-            let new_storage = sb.set_sandbox_storage(&storage.mount_point);
+            let new_storage = sb.set_sandbox_storage(&storage.mount_point, ObjectKind::MountPoint);
             if !new_storage {
                 continue;
             }

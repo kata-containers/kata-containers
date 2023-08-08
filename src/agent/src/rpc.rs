@@ -1914,10 +1914,10 @@ fn remove_container_resources(sandbox: &mut Sandbox, cid: &str) -> Result<()> {
     }
 
     for m in cmounts.iter() {
-        if let Err(err) = sandbox.unset_and_remove_sandbox_storage(m) {
+        if let Err(err) = sandbox.unset_sandbox_storage(m) {
             error!(
                 sl(),
-                "failed to unset_and_remove_sandbox_storage for container {}, error: {:?}",
+                "failed to unset_sandbox_storage for container {}, error: {:?}",
                 cid,
                 err
             );
