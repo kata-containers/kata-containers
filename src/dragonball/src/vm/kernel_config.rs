@@ -62,7 +62,7 @@ mod tests {
     fn test_kernel_config_info() {
         let kernel = TempFile::new().unwrap();
         let initrd = TempFile::new().unwrap();
-        let mut cmdline = linux_loader::cmdline::Cmdline::new(1024);
+        let mut cmdline = linux_loader::cmdline::Cmdline::new(1024).unwrap();
         cmdline.insert_str("ro").unwrap();
         let mut info = KernelConfigInfo::new(kernel.into_file(), Some(initrd.into_file()), cmdline);
 
