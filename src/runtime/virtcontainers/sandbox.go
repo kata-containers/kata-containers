@@ -25,6 +25,8 @@ import (
 
 	v1 "github.com/containerd/cgroups/stats/v1"
 	v2 "github.com/containerd/cgroups/v2/stats"
+	cri "github.com/containerd/containerd/pkg/cri/annotations"
+	crio "github.com/containers/podman/v4/pkg/annotations"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -609,6 +611,8 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return nil, err
 	}
 
+	setHypervisorConfigAnnotations(&sandboxConfig)
+
 	coldPlugVFIO, err := s.coldOrHotPlugVFIO(&sandboxConfig)
 	if err != nil {
 		return nil, err
@@ -636,6 +640,23 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		}
 	}
 	return s, nil
+}
+
+func setHypervisorConfigAnnotations(sandboxConfig *SandboxConfig) {
+	if len(sandboxConfig.Containers) > 0 {
+		// These values are required by remote hypervisor
+		for _, a := range []string{cri.SandboxName, crio.SandboxName} {
+			if value, ok := sandboxConfig.Containers[0].Annotations[a]; ok {
+				sandboxConfig.HypervisorConfig.SandboxName = value
+			}
+		}
+
+		for _, a := range []string{cri.SandboxNamespace, crio.Namespace} {
+			if value, ok := sandboxConfig.Containers[0].Annotations[a]; ok {
+				sandboxConfig.HypervisorConfig.SandboxNamespace = value
+			}
+		}
+	}
 }
 
 func (s *Sandbox) coldOrHotPlugVFIO(sandboxConfig *SandboxConfig) (bool, error) {
