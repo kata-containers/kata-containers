@@ -289,44 +289,37 @@ impl AgentService {
 
         if req.timeout == 0 {
             let mut sandbox = self.sandbox.lock().await;
-
             sandbox.bind_watcher.remove_container(&cid).await;
-
             sandbox
                 .get_container(&cid)
                 .ok_or_else(|| anyhow!("Invalid container id"))?
                 .destroy()
                 .await?;
-
             remove_container_resources(&mut sandbox, &cid)?;
-
             return Ok(());
         }
 
         // timeout != 0
         let s = self.sandbox.clone();
         let cid2 = cid.clone();
-        let (tx, rx) = tokio::sync::oneshot::channel::<i32>();
-
         let handle = tokio::spawn(async move {
             let mut sandbox = s.lock().await;
-            if let Some(ctr) = sandbox.get_container(&cid2) {
-                ctr.destroy().await.unwrap();
-                sandbox.bind_watcher.remove_container(&cid2).await;
-                tx.send(1).unwrap();
-            };
+            sandbox.bind_watcher.remove_container(&cid2).await;
+            match sandbox.get_container(&cid2) {
+                Some(ctr) => ctr.destroy().await,
+                None => Err(anyhow!("Invalid container id")),
+            }
         });
 
-        if tokio::time::timeout(Duration::from_secs(req.timeout.into()), rx)
-            .await
-            .is_err()
-        {
-            return Err(anyhow!(nix::Error::ETIME));
+        let to = Duration::from_secs(req.timeout.into());
+        match tokio::time::timeout(to, handle).await {
+            Ok(res) => {
+                res??;
+                let mut sandbox = self.sandbox.lock().await;
+                remove_container_resources(&mut sandbox, &cid)
+            }
+            Err(_e) => Err(anyhow!(nix::Error::ETIME)),
         }
-        handle.await?;
-
-        let mut sandbox = self.sandbox.lock().await;
-        remove_container_resources(&mut sandbox, &cid)
     }
 
     #[instrument]
