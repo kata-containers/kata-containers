@@ -17,4 +17,4 @@ nix = "0.23.1"
 lazy_static = "1"
 thiserror = "1"
 vmm-sys-util = "0.11.0"
-vm-memory = { version = "0.9", features = ["backend-mmap", "backend-atomic"] }
+vm-memory = { version = "0.10", features = ["backend-mmap", "backend-atomic"] }
