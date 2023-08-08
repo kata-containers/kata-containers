@@ -133,6 +133,54 @@ lazy_static! {
     ];
 }
 
+#[derive(Debug)]
+pub struct RefCountedObject<T> {
+    pub name: String,
+    pub ref_count: u32,
+    pub ref_type: T,
+}
+#[derive(Debug, Copy, Clone)]
+// Define an enum to represent the MountPoint and VerityDevice variants
+pub enum ObjectKind {
+    MountPoint,
+    VerityDevice,
+}
+// Implement the RefCounted trait for the generic struct
+impl RefCountedObject<ObjectKind> {
+    #[inline]
+    pub fn inc_ref(&mut self) {
+        self.ref_count += 1;
+    }
+    pub fn dec_ref(&mut self) -> Result<()> {
+        self.ref_count -= 1;
+        let name =  &self.name;
+        if self.is_zero() {
+            match self.ref_type {
+                ObjectKind::MountPoint => {
+                    let mounts = vec![name.to_owned()];
+                    remove_mounts(&mounts)?;
+                    // "remove_dir" will fail if the mount point is backed by a read-only filesystem.
+                    // This is the case with the device mapper snapshotter, where we mount the block device directly
+                    // at the underlying sandbox path which was provided from the base RO kataShared path from the host.
+                    fs::remove_dir(name.to_owned())?;
+                }
+                ObjectKind::VerityDevice => {
+                    image_rs::verity::destroy_verity_device(self.name.clone())?;
+                }
+            }
+        }
+        Ok(())
+    }
+    #[inline]
+    pub fn is_zero(&self) -> bool {
+        self.ref_count == 0
+    }
+    #[inline]
+    pub fn get_count(&self) -> u32 {
+        self.ref_count
+    }
+}
+
 pub const STORAGE_HANDLER_LIST: &[&str] = &[
     DRIVER_BLK_TYPE,
     DRIVER_9P_TYPE,
