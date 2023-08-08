@@ -96,7 +96,7 @@ function tensorflow_test() {
 		check_file=$(sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${i}" sh -c "${RESNET_CMD_FILE}")
 		retries="300"
 		for j in $(seq 1 "${retries}"); do
-			[ "${check_file}" -eq "1" ] && break
+			[ "${check_file}" = 1 ] && break
 			sleep 1
 		done
 	done
