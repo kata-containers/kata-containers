@@ -56,7 +56,7 @@ jobs:
         with:
           tags: ghcr.io/kata-containers/test-images:unencrypted-${{ inputs.pr-number }}
           push: true
-          context: .
+          context: tests/integration/kubernetes/runtimeclass_workloads/confidential/unencrypted/
           platforms: linux/amd64, linux/s390x
           file: tests/integration/kubernetes/runtimeclass_workloads/confidential/unencrypted/Dockerfile
 
