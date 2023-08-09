@@ -202,6 +202,7 @@ function main() {
         install-azure-cli) install_azure_cli ;;
         login-azure) login_azure ;;
         create-cluster) create_cluster ;;
+        create-cluster-kcli) create_cluster_kcli ;;
         configure-snapshotter) configure_snapshotter ;;
         setup-crio) setup_crio ;;
         deploy-k8s) deploy_k8s ;;
@@ -219,6 +220,7 @@ function main() {
         cleanup-tdx) cleanup "tdx" ;;
         cleanup-garm) cleanup "garm" ;;
         delete-cluster) cleanup "aks" ;;
+        delete-cluster-kcli) delete_cluster_kcli ;;
         *) >&2 echo "Invalid argument"; exit 2 ;;
     esac
 }
