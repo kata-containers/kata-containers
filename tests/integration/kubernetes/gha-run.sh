@@ -12,6 +12,10 @@ kubernetes_dir="$(dirname "$(readlink -f "$0")")"
 source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
 tools_dir="${repo_root_dir}/tools"
 
+DOCKER_REGISTRY=${DOCKER_REGISTRY:-quay.io}
+DOCKER_REPO=${DOCKER_REPO:-kata-containers/kata-deploy-ci}
+DOCKER_TAG=${DOCKER_TAG:-kata-containers-latest}
+
 function configure_devmapper() {
 	sudo mkdir -p /var/lib/containerd/devmapper
 	sudo truncate --size 10G /var/lib/containerd/devmapper/data-disk.img
