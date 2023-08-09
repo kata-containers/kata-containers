@@ -94,7 +94,9 @@ members = ["rustjail"]
 lto = true
 
 [features]
+confidential-data-hub = []
 seccomp = ["rustjail/seccomp"]
+sealed-secret = ["protocols/sealed-secret", "confidential-data-hub"]
 standard-oci-runtime = ["rustjail/standard-oci-runtime"]
 
 [[bin]]
