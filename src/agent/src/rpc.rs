@@ -1686,7 +1686,7 @@ async fn remove_container_resources(sandbox: &mut Sandbox, cid: &str) -> Result<
     let mounts = sandbox.container_mounts.get(cid);
     if let Some(mounts) = mounts {
         for m in mounts.iter() {
-            if sandbox.storages.get(m).is_some() {
+            if sandbox.storages.contains_key(m) {
                 cmounts.push(m.to_string());
             }
         }
