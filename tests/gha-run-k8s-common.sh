@@ -107,6 +107,11 @@ function delete_cluster() {
         --yes
 }
 
+function delete_cluster_kcli() {
+	CLUSTER_NAME="${CLUSTER_NAME:-kata-k8s}"
+	kcli delete -y kube "$CLUSTER_NAME"
+}
+
 function get_nodes_and_pods_info() {
     kubectl debug $(kubectl get nodes -o name) -it --image=quay.io/kata-containers/kata-debug:latest || true
     kubectl get pods -o name | grep node-debugger | xargs kubectl delete || true
@@ -163,6 +168,44 @@ function deploy_k3s() {
 
 	mkdir -p ~/.kube
 	cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
+}
+
+function create_cluster_kcli() {
+	CLUSTER_NAME="${CLUSTER_NAME:-kata-k8s}"
+
+	delete_cluster_kcli || true
+
+	kcli create kube "${KUBE_TYPE:-generic}" \
+		-P domain="kata.com" \
+		-P pool="${LIBVIRT_POOL:-default}" \
+		-P ctlplanes="${CLUSTER_CONTROL_NODES:-1}" \
+		-P workers="${CLUSTER_WORKERS:-1}" \
+		-P network="${LIBVIRT_NETWORK:-default}" \
+		-P image="${CLUSTER_IMAGE:-ubuntu2004}" \
+		-P sdn=flannel \
+		-P nfs=false \
+		-P disk_size="${CLUSTER_DISK_SIZE:-20}" \
+		"${CLUSTER_NAME}"
+
+	export KUBECONFIG="$HOME/.kcli/clusters/$CLUSTER_NAME/auth/kubeconfig"
+
+	local cmd="kubectl get nodes | grep '.*worker.*\<Ready\>'"
+	echo "Wait at least one worker be Ready"
+	if ! waitForProcess "330" "30" "$cmd"; then
+		echo "ERROR: worker nodes not ready."
+		kubectl get nodes
+		return 1
+	fi
+
+	# Ensure that system pods are running or completed.
+	cmd="[ \$(kubectl get pods -A --no-headers | grep -v 'Running\|Completed' | wc -l) -eq 0 ]"
+	echo "Wait system pods be running or completed"
+	if ! waitForProcess "90" "30" "$cmd"; then
+		echo "ERROR: not all pods are Running or Completed."
+		kubectl get pods -A
+		kubectl get pods -A
+		return 1
+	fi
 }
 
 function deploy_rke2() {
