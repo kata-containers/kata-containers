@@ -31,11 +31,16 @@ CMD_RESNET="$dst_dir/$resnet_start_script"
 CMD_ALEXNET="$dst_dir/$alexnet_start_script"
 timeout=600
 INITIAL_NUM_PIDS=1
-CMD_FILE="cat alexnet_results | grep 'total images' | wc -l"
-RESNET_CMD_FILE="cat resnet_results | grep 'total images' | wc -l"
+ALEXNET_FILE="alexnet_results"
+ALEXNET_CHECK_FILE_CMD="cat /${ALEXNET_FILE} | grep 'total images' | wc -l"
+RESNET_FILE="resnet_results"
+RESNET_CHECK_FILE_CMD="cat /${RESNET_FILE} | grep 'total images' | wc -l"
+MAX_RETRIES=300
 
 function remove_tmp_file() {
 	rm -rf "${resnet_tensorflow_file}" "${alexnet_tensorflow_file}"
+	rm -rf "${src_dir}"
+	clean_env_ctr
 }
 
 trap remove_tmp_file EXIT
@@ -59,7 +64,8 @@ function create_resnet_start_script() {
 
 cat <<EOF >>"${script}"
 #!/bin/bash
-python benchmarks/scripts/tf_cnn_benchmarks/tf_cnn_benchmarks.py -data_format=NHWC --device cpu --batch_size=${BATCH_SIZE} --num_batches=${NUM_BATCHES} > resnet_results
+pushd "benchmarks/scripts/tf_cnn_benchmarks"
+python tf_cnn_benchmarks.py -data_format=NHWC --device cpu --batch_size=${BATCH_SIZE} --num_batches=${NUM_BATCHES} > "/${RESNET_FILE}"
 EOF
 	chmod +x "${script}"
 }
@@ -70,78 +76,82 @@ function create_alexnet_start_script() {
 
 cat <<EOF >>"${script}"
 #!/bin/bash
-python benchmarks/scripts/tf_cnn_benchmarks/tf_cnn_benchmarks.py --num_batches=${NUM_BATCHES} --device=cpu --batch_size=${BATCH_SIZE} --forward_only=true --model=alexnet --data_format=NHWC > alexnet_results
+pushd "benchmarks/scripts/tf_cnn_benchmarks"
+python tf_cnn_benchmarks.py --num_batches=${NUM_BATCHES} --device=cpu --batch_size=${BATCH_SIZE} --forward_only=true --model=alexnet --data_format=NHWC > "/${ALEXNET_FILE}"
 EOF
 	chmod +x "${script}"
 }
 
+function launch_workload() {
+	WORKLOAD=${1}
+	[[ -z ${WORKLOAD} ]] && die "Container workload is missing"
+
+	local pids=()
+	local j=0
+	for i in "${containers[@]}"; do
+		$(sudo -E "${CTR_EXE}" t exec -d --exec-id "$(random_name)" "${i}" sh -c "${WORKLOAD}")&
+		pids["${j}"]=$!
+		((j++))
+	done
+
+	# wait for all pids
+	for pid in ${pids[*]}; do
+		wait "${pid}"
+	done
+}
+
+function collect_results() {
+	WORKLOAD=${1}
+	[[ -z ${WORKLOAD} ]] && die "Container workload is missing"
+
+	local tasks_running=("${containers[@]}")
+	local retries=${MAX_RETRIES}
+
+	while [ "${#tasks_running[@]}" -gt 0 ] && [ "${retries}" -gt 0 ]; do
+		for i in "${!tasks_running[@]}"; do
+			check_file=$(sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${tasks_running[i]}" sh -c "${WORKLOAD}")
+
+			# if the current task is done, remove the corresponding container from the active list
+			[ "${check_file}" -eq "1" ] && unset 'tasks_running[i]'
+		done
+		((retries--))
+		sleep 3
+		echo -n "."
+	done
+	echo -e "\n"
+}
+
 function tensorflow_test() {
-	info "Copy Resnet Tensorflow test"
-	local pids=()
-	local j=0
+	# Resnet section
+	info "Running TF-Resnet test"
+	launch_workload "${CMD_RESNET}"
+	collect_results "${RESNET_CHECK_FILE_CMD}"
+
+	# Alexnet section
+	info "Running TF-Alexnet test"
+	launch_workload "${CMD_ALEXNET}"
+	collect_results "${ALEXNET_CHECK_FILE_CMD}"
+
+	info "Tensorflow workload completed"
+	# Retrieving results
 	for i in "${containers[@]}"; do
-		$(sudo -E "${CTR_EXE}" t exec -d --exec-id "$(random_name)" "${i}" sh -c "${CMD_RESNET}")&
-		pids["${j}"]=$!
-		((j++))
+		sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${i}" sh -c "cat /${RESNET_FILE}"  >> "${resnet_tensorflow_file}"
+		sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${i}" sh -c "cat /${ALEXNET_FILE}"  >> "${alexnet_tensorflow_file}"
 	done
 
-	# wait for all pids
-	for pid in ${pids[*]}; do
-		wait "${pid}"
-	done
+	# Parsing resnet results
+	local resnet_results=$(cat "${resnet_tensorflow_file}" | grep "total images/sec" | cut -d ":" -f2 | sed -e 's/^[ \t]*//' | tr '\n' ',' | sed 's/.$//')
+	local res_sum="$(sed -e 's/,/\n/g' <<< ${resnet_results} | awk 'BEGIN {total=0} {total += $1} END {print total}')"
+	local num_elements="$(awk '{print NF}' FS=',' <<<${resnet_results})"
+	local average_resnet="$(echo "scale=2 ; ${res_sum} / ${num_elements}" | bc)"
 
-	info "All containers are running the workload..."
+	# Parsing alexnet results
+	local alexnet_results=$(cat "${alexnet_tensorflow_file}" | grep "total images/sec" | cut -d ":" -f2 | sed -e 's/^[ \t]*//' | tr '\n' ',' | sed 's/.$//')
+	local alex_sum="$(sed -e 's/,/\n/g' <<< ${alexnet_results} | awk 'BEGIN {total=0} {total += $1} END {print total}')"
+	num_elements="$(awk '{print NF}' FS=',' <<< ${alexnet_results})"
+	local average_alexnet="$(echo " scale=2 ; ${alex_sum} / ${num_elements}" | bc)"
 
-	for i in "${containers[@]}"; do
-		check_file=$(sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${i}" sh -c "${RESNET_CMD_FILE}")
-		retries="300"
-		for j in $(seq 1 "${retries}"); do
-			[ "${check_file}" -eq "1" ] && break
-			sleep 1
-		done
-	done
-
-	info "Copy Alexnet Tensorflow test"
-	local pids=()
-	local j=0
-	for i in "${containers[@]}"; do
-		$(sudo -E "${CTR_EXE}" t exec -d --exec-id "$(random_name)" "${i}" sh -c "${CMD_ALEXNET}")&
-		pids["${j}"]=$!
-		((j++))
-	done
-
-	# wait for all pids
-	for pid in ${pids[*]}; do
-		wait "${pid}"
-	done
-
-	for i in "${containers[@]}"; do
-		check_file=$(sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${i}" sh -c "${CMD_FILE}")
-		retries="300"
-		for j in $(seq 1 "${retries}"); do
-			[ "${check_file}" -eq "1" ] && break
-			sleep 1
-		done
-	done
-
-	for i in "${containers[@]}"; do
-		sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${i}" sh -c "cat resnet_results"  >> "${resnet_tensorflow_file}"
-	done
-
-	local res_results=$(cat "${resnet_tensorflow_file}" | grep "total images/sec" | cut -d ":" -f2 | sed -e 's/^[ \t]*//' | tr '\n' ',' | sed 's/.$//')
-	local resnet_results=$(printf "%.0f\n" "${res_results}")
-	local res_average=$(echo "${resnet_results}" | sed "s/,/+/g;s/.*/(&)\/${NUM_CONTAINERS}/g" | bc -l)
-	local average_resnet=$(printf "%.0f\n" "${res_average}")
-
-	for i in "${containers[@]}"; do
-		sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${i}" sh -c "cat alexnet_results"  >> "${alexnet_tensorflow_file}"
-	done
-
-	local alex_results=$(cat "${alexnet_tensorflow_file}" | grep "total images/sec" | cut -d ":" -f2 | sed -e 's/^[ \t]*//' | tr '\n' ',' | sed 's/.$//')
-	local alexnet_results=$(printf "%.0f\n" "${alex_results}")
-	local alex_average=$(echo "${alexnet_results}" | sed "s/,/+/g;s/.*/(&)\/${NUM_CONTAINERS}/g" | bc -l)
-	local average_alexnet=$(printf "%.0f\n" "${alex_average}")
-
+	# writing json results file
 	local json="$(cat << EOF
 	{
 		"resnet": {
@@ -174,7 +184,7 @@ function check_containers_are_up() {
 
 function main() {
 	# Verify enough arguments
-	if [ $# != 2 ]; then
+	if [ "$#" -lt 2 ]; then
 		echo >&2 "error: Not enough arguments [$@]"
 		help
 		exit 1
@@ -224,13 +234,8 @@ function main() {
 	# Get the initial number of pids in a single container before the workload starts
 	INITIAL_NUM_PIDS=$(sudo -E "${CTR_EXE}" t metrics "${containers[-1]}" | grep pids.current | grep pids.current | xargs | cut -d ' ' -f 2)
 	((INITIAL_NUM_PIDS++))
-
 	tensorflow_test
-
 	metrics_json_save
-
-	rm -rf "${src_dir}"
-
-	clean_env_ctr
 }
+
 main "$@"
