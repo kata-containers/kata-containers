@@ -73,6 +73,7 @@ jobs:
       repo: ${{ github.repository_owner }}/kata-deploy-ci
       tag: ${{ inputs.tag }}-amd64
       commit-hash: ${{ inputs.commit-hash }}
+      pr-number: ${{ inputs.pr-number }}
 
   run-k8s-tests-on-snp:
     needs: [publish-kata-deploy-payload-amd64, build-and-publish-tee-confidential-unencrypted-image]
@@ -82,6 +83,7 @@ jobs:
       repo: ${{ github.repository_owner }}/kata-deploy-ci
       tag: ${{ inputs.tag }}-amd64
       commit-hash: ${{ inputs.commit-hash }}
+      pr-number: ${{ inputs.pr-number }}
 
   run-k8s-tests-on-tdx:
     needs: [publish-kata-deploy-payload-amd64, build-and-publish-tee-confidential-unencrypted-image]
@@ -91,6 +93,7 @@ jobs:
       repo: ${{ github.repository_owner }}/kata-deploy-ci
       tag: ${{ inputs.tag }}-amd64
       commit-hash: ${{ inputs.commit-hash }}
+      pr-number: ${{ inputs.pr-number }}
 
   run-metrics-tests:
     needs: build-kata-static-tarball-amd64
