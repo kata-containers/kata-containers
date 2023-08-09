@@ -148,13 +148,13 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 
 	// 4. Check agent aliveness
 	// VMs booted from template are paused, do not Check
-	if !config.HypervisorConfig.BootFromTemplate {
-		virtLog.WithField("vm", id).Info("Check agent status")
-		err = agent.check(ctx)
-		if err != nil {
-			return nil, err
-		}
-	}
+	// if !config.HypervisorConfig.BootFromTemplate {
+	// 	virtLog.WithField("vm", id).Info("Check agent status")
+	// 	err = agent.check(ctx)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// }
 
 	return &VM{
 		id:         id,

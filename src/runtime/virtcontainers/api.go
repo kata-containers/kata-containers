@@ -14,7 +14,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	resCtrl "github.com/kata-containers/kata-containers/src/runtime/pkg/resourcecontrol"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
-	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/sirupsen/logrus"
 )
 
@@ -54,61 +53,70 @@ func CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 }
 
 func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, factory Factory, prestartHookFunc func(context.Context) error) (_ *Sandbox, err error) {
+	logrus.WithField("func", "createSandboxFromConfig").Info("create() trace")
 	span, ctx := katatrace.Trace(ctx, virtLog, "createSandboxFromConfig", apiTracingTags)
 	defer span.End()
 
 	// Create the sandbox.
 	s, err := createSandbox(ctx, sandboxConfig, factory)
 	if err != nil {
+		logrus.WithError(err).Info("create() trace")
 		return nil, err
 	}
 
 	// Cleanup sandbox resources in case of any failure
 	defer func() {
 		if err != nil {
+			logrus.WithError(err).Info("create() trace")
 			s.Delete(ctx)
 		}
 	}()
 
 	// Create the sandbox network
 	if err = s.createNetwork(ctx); err != nil {
+		logrus.WithError(err).Info("create() trace")
 		return nil, err
 	}
 
 	// network rollback
 	defer func() {
 		if err != nil {
+			logrus.WithError(err).Info("create() trace")
 			s.removeNetwork(ctx)
 		}
 	}()
 
 	// Set the sandbox host cgroups.
 	if err := s.setupResourceController(); err != nil {
+		logrus.WithError(err).Info("create() trace")
 		return nil, err
 	}
 
 	// Start the VM
 	if err = s.startVM(ctx, prestartHookFunc); err != nil {
+		logrus.WithError(err).Info("create() trace")
 		return nil, err
 	}
 
 	// rollback to stop VM if error occurs
-	defer func() {
-		if err != nil {
-			s.stopVM(ctx)
-		}
-	}()
+	// defer func() {
+	// 	if err != nil {
+	// 		s.stopVM(ctx)
+	// 	}
+	// }()
 
-	s.postCreatedNetwork(ctx)
+	// s.postCreatedNetwork(ctx)
 
-	if err = s.getAndStoreGuestDetails(ctx); err != nil {
-		return nil, err
-	}
+	// if err = s.getAndStoreGuestDetails(ctx); err != nil {
+	// 	return nil, err
+	// }
 
-	// Create Containers
-	if err = s.createContainers(ctx); err != nil {
-		return nil, err
-	}
+	// // Create Containers
+	// if err = s.createContainers(ctx); err != nil {
+	// 	return nil, err
+	// }
+
+	s.Logger().Info("created standbox from config !!!")
 
 	return s, nil
 }
@@ -117,48 +125,55 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 // in the sandbox left, do stop the sandbox and delete it. Those serial operations will be done exclusively by
 // locking the sandbox.
 func CleanupContainer(ctx context.Context, sandboxID, containerID string, force bool) error {
+	logrus.Info("Entering CleanupContainer")
 	span, ctx := katatrace.Trace(ctx, virtLog, "CleanupContainer", apiTracingTags)
 	defer span.End()
 
-	if sandboxID == "" {
-		return vcTypes.ErrNeedSandboxID
-	}
+	// debugging in process, was trying to figure out which return was causing an error
 
-	if containerID == "" {
-		return vcTypes.ErrNeedContainerID
-	}
+	// if sandboxID == "" {
+	// 	return vcTypes.ErrNeedSandboxID
+	// }
+
+	// if containerID == "" {
+	// 	return vcTypes.ErrNeedContainerID
+	// }
 
 	unlock, err := rwLockSandbox(sandboxID)
 	if err != nil {
+		logrus.WithError(err).Info("failing at rwLock")
 		return err
 	}
 	defer unlock()
 
 	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
+		logrus.WithError(err).Info("failing at fetch Sandbox")
 		return err
 	}
 	defer s.Release(ctx)
 
-	_, err = s.StopContainer(ctx, containerID, force)
-	if err != nil && !force {
-		return err
-	}
+	// _, err = s.StopContainer(ctx, containerID, force)
+	// if err != nil && !force {
+	// 	return err
+	// }
 
-	_, err = s.DeleteContainer(ctx, containerID)
-	if err != nil && !force {
-		return err
-	}
+	// _, err = s.DeleteContainer(ctx, containerID)
+	// if err != nil && !force {
+	// 	return err
+	// }
 
-	if len(s.GetAllContainers()) > 0 {
-		return nil
-	}
+	// if len(s.GetAllContainers()) > 0 {
+	// 	return nil
+	// }
 
 	if err = s.Stop(ctx, force); err != nil && !force {
+		logrus.Info("failing at stop")
 		return err
 	}
 
 	if err = s.Delete(ctx); err != nil {
+		logrus.Info("failing at delete")
 		return err
 	}
 

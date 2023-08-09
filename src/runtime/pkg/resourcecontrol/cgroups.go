@@ -67,8 +67,10 @@ func sandboxDevices() []specs.LinuxDeviceCgroup {
 	// In order to run Virtual Machines and create virtqueues, hypervisors
 	// need access to certain character devices in the host, like kvm and vhost-net.
 	hypervisorDevices := []string{
-		"/dev/kvm",         // To run virtual machines with KVM
-		"/dev/mshv",        // To run virtual machines with Hyper-V
+		"/dev/kvm", // To run virtual machines with KVM
+		// mshv not a supported hypervisor for upstream Kata,
+		// this was commented out when building the kata-cc shim and replacing that kata shim with this one
+		// "/dev/mshv",        // To run virtual machines with Hyper-V
 		"/dev/vhost-net",   // To create virtqueues
 		"/dev/vfio/vfio",   // To access VFIO devices
 		"/dev/vhost-vsock", // To interact with vsock if

@@ -188,12 +188,14 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 	kataUtilsLogger = kataUtilsLogger.WithField("sandbox", sid)
 	katatrace.AddTags(span, "sandbox_id", sid)
 
-	containers := sandbox.GetAllContainers()
-	if len(containers) != 1 {
-		return nil, vc.Process{}, fmt.Errorf("BUG: Container list from sandbox is wrong, expecting only one container, found %d containers", len(containers))
-	}
+	// container removed, no container will be found
 
-	return sandbox, containers[0].Process(), nil
+	// containers := sandbox.GetAllContainers()
+	// if len(containers) != 1 {
+	// 	return nil, vc.Process{}, fmt.Errorf("BUG: Container list from sandbox is wrong, expecting only one container, found %d containers", len(containers))
+	// }
+
+	return sandbox, vc.Process{}, nil // containers[0].Process()
 }
 
 var procFIPS = "/proc/sys/crypto/fips_enabled"

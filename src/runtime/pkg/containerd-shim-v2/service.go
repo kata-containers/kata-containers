@@ -7,11 +7,13 @@ package containerdshim
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	sysexec "os/exec"
 	goruntime "runtime"
+	"runtime/debug"
 	"sync"
 	"syscall"
 	"time"
@@ -23,9 +25,7 @@ import (
 	cdruntime "github.com/containerd/containerd/runtime"
 	cdshim "github.com/containerd/containerd/runtime/v2/shim"
 	taskAPI "github.com/containerd/containerd/runtime/v2/task"
-	"github.com/containerd/typeurl"
 	ptypes "github.com/gogo/protobuf/types"
-	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	otelTrace "go.opentelemetry.io/otel/trace"
@@ -35,6 +35,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
@@ -194,6 +195,7 @@ func newCommand(ctx context.Context, id, containerdBinary, containerdAddress str
 // StartShim is a binary call that starts a kata shimv2 service which will
 // implement the ShimV2 APIs such as create/start/update etc containers.
 func (s *service) StartShim(ctx context.Context, opts cdshim.StartOpts) (_ string, retErr error) {
+	logrus.WithFields(logrus.Fields{"func": "StartShim"}).Info("Service Call")
 	bundlePath, err := os.Getwd()
 	if err != nil {
 		return "", err
@@ -321,8 +323,12 @@ func getTopic(e interface{}) string {
 
 // Cleanup is a binary call that cleans up resources used by the shim
 func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err error) {
+	logrus.WithFields(logrus.Fields{"func": "Cleanup"}).Info("Service Call")
 	span, spanCtx := katatrace.Trace(s.rootCtx, shimLog, "Cleanup", shimTracingTags)
 	defer span.End()
+	logrus.Info("at Cleanup")
+
+	debug.PrintStack()
 
 	//Since the binary cleanup will return the DeleteResponse from stdout to
 	//containerd, thus we must make sure there is no any outputs in stdout except
@@ -335,16 +341,19 @@ func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err e
 	}()
 
 	if s.id == "" {
+		logrus.Info("id empty")
 		return nil, errdefs.ToGRPCf(errdefs.ErrInvalidArgument, "the container id is empty, please specify the container id")
 	}
 
 	path, err := os.Getwd()
 	if err != nil {
+		logrus.Info("Getwd")
 		return nil, err
 	}
-
+	logrus.Info("calling parse")
 	ociSpec, err := compatoci.ParseConfigJSON(path)
 	if err != nil {
+		logrus.Info("error parsing")
 		return nil, err
 	}
 
@@ -355,6 +364,7 @@ func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err e
 
 	switch containerType {
 	case vc.PodSandbox, vc.SingleContainer:
+		logrus.Info("Clean up 1")
 		err = cleanupContainer(spanCtx, s.id, s.id, path)
 		if err != nil {
 			return nil, err
@@ -364,7 +374,7 @@ func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err e
 		if err != nil {
 			return nil, err
 		}
-
+		logrus.Info("Clean up 2")
 		err = cleanupContainer(spanCtx, sandboxID, s.id, path)
 		if err != nil {
 			return nil, err
@@ -379,6 +389,7 @@ func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err e
 
 // Create a new sandbox or container with the underlying OCI runtime
 func (s *service) Create(ctx context.Context, r *taskAPI.CreateTaskRequest) (_ *taskAPI.CreateTaskResponse, err error) {
+	logrus.WithFields(logrus.Fields{"func": "Create", "ID": r.ID}).Info("Service Call")
 	shimLog.WithField("container", r.ID).Debug("Create() start")
 	defer shimLog.WithField("container", r.ID).Debug("Create() end")
 	start := time.Now()
@@ -391,6 +402,7 @@ func (s *service) Create(ctx context.Context, r *taskAPI.CreateTaskRequest) (_ *
 	defer s.mu.Unlock()
 
 	if err := katautils.VerifyContainerID(r.ID); err != nil {
+		logrus.Info("Create 1")
 		return nil, err
 	}
 
@@ -400,18 +412,22 @@ func (s *service) Create(ctx context.Context, r *taskAPI.CreateTaskRequest) (_ *
 	}
 	ch := make(chan Result, 1)
 	go func() {
-		container, err := create(ctx, s, r)
+		container, err := create(ctx, s, r) // succeeds for podSandbox but fails for podContainer
 		ch <- Result{container, err}
 	}()
 
 	select {
 	case <-ctx.Done():
+		logrus.Info("Create 2")
 		return nil, errors.Errorf("create container timeout: %v", r.ID)
 	case res := <-ch:
-		if res.err != nil {
-			return nil, res.err
-		}
 		container := res.container
+		if res.err != nil {
+			logrus.WithError(res.err).Info("Create 3")
+			container, _ = newContainer(nil, r, virtcontainers.PodContainer, nil, true) // res.container   !! only create a fake container when create function fails
+			// return nil, res.err
+		}
+
 		container.status = task.StatusCreated
 
 		s.containers[r.ID] = container
@@ -430,6 +446,7 @@ func (s *service) Create(ctx context.Context, r *taskAPI.CreateTaskRequest) (_ *
 			Pid:        s.hpid,
 		})
 
+		logrus.Info("Create 4")
 		return &taskAPI.CreateTaskResponse{
 			Pid: s.hpid,
 		}, nil
@@ -438,6 +455,7 @@ func (s *service) Create(ctx context.Context, r *taskAPI.CreateTaskRequest) (_ *
 
 // Start a process
 func (s *service) Start(ctx context.Context, r *taskAPI.StartRequest) (_ *taskAPI.StartResponse, err error) {
+	logrus.WithFields(logrus.Fields{"func": "Start", "ID": r.ID}).Info("Service Call")
 	shimLog.WithField("container", r.ID).Debug("Start() start")
 	defer shimLog.WithField("container", r.ID).Debug("Start() end")
 	span, spanCtx := katatrace.Trace(s.rootCtx, shimLog, "Start", shimTracingTags)
@@ -452,37 +470,52 @@ func (s *service) Start(ctx context.Context, r *taskAPI.StartRequest) (_ *taskAP
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// temp
+	_ = spanCtx
+
 	c, err := s.getContainer(r.ID)
+
 	if err != nil {
 		return nil, err
 	}
+
+	// pretend the container is actually running
+	c.status = task.StatusRunning
 
 	// hold the send lock so that the start events are sent before any exit events in the error case
 	s.eventSendMu.Lock()
 	defer s.eventSendMu.Unlock()
 
-	//start a container
-	if r.ExecID == "" {
-		err = startContainer(spanCtx, s, c)
-		if err != nil {
-			return nil, errdefs.ToGRPC(err)
-		}
-		s.send(&eventstypes.TaskStart{
-			ContainerID: c.id,
-			Pid:         s.hpid,
-		})
-	} else {
-		//start an exec
-		_, err = startExec(spanCtx, s, r.ID, r.ExecID)
-		if err != nil {
-			return nil, errdefs.ToGRPC(err)
-		}
-		s.send(&eventstypes.TaskExecStarted{
-			ContainerID: c.id,
-			ExecID:      r.ExecID,
-			Pid:         s.hpid,
-		})
-	}
+	// do no want to start container inside of vm
+
+	// start a container
+	// if r.ExecID == "" {
+	// 	err = startContainer(spanCtx, s, c)
+	// 	if err != nil {
+	// 		return nil, errdefs.ToGRPC(err)
+	// 	}
+	// 	s.send(&eventstypes.TaskStart{
+	// 		ContainerID: c.id,
+	// 		Pid:         s.hpid,
+	// 	})
+	// } else {
+	// 	//start an exec
+	// 	_, err = startExec(spanCtx, s, r.ID, r.ExecID)
+	// 	if err != nil {
+	// 		return nil, errdefs.ToGRPC(err)
+	// 	}
+	// 	s.send(&eventstypes.TaskExecStarted{
+	// 		ContainerID: c.id,
+	// 		ExecID:      r.ExecID,
+	// 		Pid:         s.hpid,
+	// 	})
+	// }
+
+	// moved from inside the above if statement
+	s.send(&eventstypes.TaskStart{
+		ContainerID: c.id,
+		Pid:         s.hpid,
+	})
 
 	return &taskAPI.StartResponse{
 		Pid: s.hpid,
@@ -491,6 +524,7 @@ func (s *service) Start(ctx context.Context, r *taskAPI.StartRequest) (_ *taskAP
 
 // Delete the initial process and container
 func (s *service) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (_ *taskAPI.DeleteResponse, err error) {
+	logrus.WithFields(logrus.Fields{"func": "Delete", "ID": r.ID}).Info("Service Call")
 	shimLog.WithField("container", r.ID).Debug("Delete() start")
 	defer shimLog.WithField("container", r.ID).Debug("Delete() end")
 	span, spanCtx := katatrace.Trace(s.rootCtx, shimLog, "Delete", shimTracingTags)
@@ -504,6 +538,9 @@ func (s *service) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (_ *task
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	// temp
+	_ = spanCtx
 
 	c, err := s.getContainer(r.ID)
 	if err != nil {
@@ -522,29 +559,30 @@ func (s *service) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (_ *task
 			ExitedAt:    c.exitTime,
 		})
 
-		return &taskAPI.DeleteResponse{
-			ExitStatus: c.exit,
-			ExitedAt:   c.exitTime,
-			Pid:        s.hpid,
-		}, nil
-	}
-	//deal with the exec case
-	execs, err := c.getExec(r.ExecID)
-	if err != nil {
-		return nil, err
+		// 	return &taskAPI.DeleteResponse{
+		// 		ExitStatus: c.exit,
+		// 		ExitedAt:   c.exitTime,
+		// 		Pid:        s.hpid,
+		// 	}, nil
+		// }
+		// //deal with the exec case
+		// execs, err := c.getExec(r.ExecID)
+		// if err != nil {
+		// 	return nil, err
 	}
 
 	delete(c.execs, r.ExecID)
 
 	return &taskAPI.DeleteResponse{
-		ExitStatus: uint32(execs.exitCode),
-		ExitedAt:   execs.exitTime,
+		ExitStatus: 0,          // uint32(execs.exitCode),
+		ExitedAt:   time.Now(), // execs.exitTime,
 		Pid:        s.hpid,
 	}, nil
 }
 
 // Exec an additional process inside the container
 func (s *service) Exec(ctx context.Context, r *taskAPI.ExecProcessRequest) (_ *ptypes.Empty, err error) {
+	logrus.WithFields(logrus.Fields{"func": "Exec", "ID": r.ID}).Info("Service Call")
 	shimLog.WithField("container", r.ID).Debug("Exec() start")
 	defer shimLog.WithField("container", r.ID).Debug("Exec() end")
 	span, _ := katatrace.Trace(s.rootCtx, shimLog, "Exec", shimTracingTags)
@@ -559,6 +597,7 @@ func (s *service) Exec(ctx context.Context, r *taskAPI.ExecProcessRequest) (_ *p
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// TODO trace getContainer callers
 	c, err := s.getContainer(r.ID)
 	if err != nil {
 		return nil, err
@@ -585,6 +624,7 @@ func (s *service) Exec(ctx context.Context, r *taskAPI.ExecProcessRequest) (_ *p
 
 // ResizePty of a process
 func (s *service) ResizePty(ctx context.Context, r *taskAPI.ResizePtyRequest) (_ *ptypes.Empty, err error) {
+	logrus.WithFields(logrus.Fields{"func": "ResizePty", "ID": r.ID}).Info("Service Call")
 	shimLog.WithField("container", r.ID).Debug("ResizePty() start")
 	defer shimLog.WithField("container", r.ID).Debug("ResizePty() end")
 	span, spanCtx := katatrace.Trace(s.rootCtx, shimLog, "ResizePty", shimTracingTags)
@@ -626,6 +666,7 @@ func (s *service) ResizePty(ctx context.Context, r *taskAPI.ResizePtyRequest) (_
 
 // State returns runtime state information for a process
 func (s *service) State(ctx context.Context, r *taskAPI.StateRequest) (_ *taskAPI.StateResponse, err error) {
+	logrus.WithFields(logrus.Fields{"func": "State", "ID": r.ID}).Info("Service Call")
 	shimLog.WithField("container", r.ID).Debug("State() start")
 	defer shimLog.WithField("container", r.ID).Debug("State() end")
 	span, _ := katatrace.Trace(s.rootCtx, shimLog, "State", shimTracingTags)
@@ -640,12 +681,29 @@ func (s *service) State(ctx context.Context, r *taskAPI.StateRequest) (_ *taskAP
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// remove getConatiner?
+	// c, err := s.getContainer(r.ID)
+
+	logrus.WithField("ExecID", r.ExecID).Info("State ExecID")
+
+	// if err != nil {
+	// 	logrus.WithError(err).Info("first return !!!")
+	// 	return nil, err
+	// }
+
 	c, err := s.getContainer(r.ID)
+	// logrus.WithField("Status", r.ExecID).Info("State ExecID")
 	if err != nil {
-		return nil, err
+		// return nil, err
+		return &taskAPI.StateResponse{
+			ID:     r.ID,
+			Pid:    s.hpid,
+			Status: task.StatusCreated,
+		}, nil
 	}
 
 	if r.ExecID == "" {
+		logrus.WithError(err).Info("second return !!!")
 		return &taskAPI.StateResponse{
 			ID:         c.id,
 			Bundle:     c.bundle,
@@ -666,6 +724,8 @@ func (s *service) State(ctx context.Context, r *taskAPI.StateRequest) (_ *taskAP
 		return nil, err
 	}
 
+	logrus.Info("third return !!!")
+
 	return &taskAPI.StateResponse{
 		ID:         execs.id,
 		Bundle:     c.bundle,
@@ -682,6 +742,7 @@ func (s *service) State(ctx context.Context, r *taskAPI.StateRequest) (_ *taskAP
 
 // Pause the container
 func (s *service) Pause(ctx context.Context, r *taskAPI.PauseRequest) (_ *ptypes.Empty, err error) {
+	logrus.WithFields(logrus.Fields{"func": "Pause", "ID": r.ID}).Info("Service Call")
 	shimLog.WithField("container", r.ID).Debug("Pause() start")
 	defer shimLog.WithField("container", r.ID).Debug("Pause() end")
 	span, spanCtx := katatrace.Trace(s.rootCtx, shimLog, "Pause", shimTracingTags)
@@ -723,6 +784,7 @@ func (s *service) Pause(ctx context.Context, r *taskAPI.PauseRequest) (_ *ptypes
 
 // Resume the container
 func (s *service) Resume(ctx context.Context, r *taskAPI.ResumeRequest) (_ *ptypes.Empty, err error) {
+	logrus.WithFields(logrus.Fields{"func": "Resume", "ID": r.ID}).Info("Service Call")
 	shimLog.WithField("container", r.ID).Debug("Resume() start")
 	defer shimLog.WithField("container", r.ID).Debug("Resume() end")
 	span, spanCtx := katatrace.Trace(s.rootCtx, shimLog, "Resume", shimTracingTags)
@@ -762,6 +824,7 @@ func (s *service) Resume(ctx context.Context, r *taskAPI.ResumeRequest) (_ *ptyp
 
 // Kill a process with the provided signal
 func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.Empty, err error) {
+	logrus.WithFields(logrus.Fields{"func": "Kill", "ID": r.ID}).Info("Service Call")
 	shimLog.WithField("container", r.ID).Debug("Kill() start")
 	defer shimLog.WithField("container", r.ID).Debug("Kill() end")
 	span, spanCtx := katatrace.Trace(s.rootCtx, shimLog, "Kill", shimTracingTags)
@@ -782,6 +845,22 @@ func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.E
 	if err != nil {
 		return nil, err
 	}
+
+	// trying to call cleanup from kill ourselves and stop function early
+
+	s.sendL(&eventstypes.TaskExit{
+		ContainerID: c.id,
+		ID:          c.id,
+		Pid:         0,
+		ExitStatus:  0,
+		ExitedAt:    time.Now(),
+	})
+
+	_, err = s.Cleanup(ctx)
+	logrus.WithField("Exit code", err).Info("exiting with")
+
+	c.status = task.StatusStopped
+	return empty, nil
 
 	processStatus := c.status
 	processID := c.id
@@ -827,6 +906,7 @@ func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.E
 // Since for kata, it cannot get the process's pid from VM,
 // thus only return the hypervisor's pid directly.
 func (s *service) Pids(ctx context.Context, r *taskAPI.PidsRequest) (_ *taskAPI.PidsResponse, err error) {
+	logrus.WithFields(logrus.Fields{"func": "Pids", "ID": r.ID}).Info("Service Call")
 	shimLog.WithField("container", r.ID).Debug("Pids() start")
 	defer shimLog.WithField("container", r.ID).Debug("Pids() end")
 	span, _ := katatrace.Trace(s.rootCtx, shimLog, "Pids", shimTracingTags)
@@ -852,6 +932,7 @@ func (s *service) Pids(ctx context.Context, r *taskAPI.PidsRequest) (_ *taskAPI.
 
 // CloseIO of a process
 func (s *service) CloseIO(ctx context.Context, r *taskAPI.CloseIORequest) (_ *ptypes.Empty, err error) {
+	logrus.WithFields(logrus.Fields{"func": "CloseIO", "ID": r.ID}).Info("Service Call")
 	shimLog.WithField("container", r.ID).Debug("CloseIO() start")
 	defer shimLog.WithField("container", r.ID).Debug("CloseIO() end")
 	span, _ := katatrace.Trace(s.rootCtx, shimLog, "CloseIO", shimTracingTags)
@@ -895,6 +976,7 @@ func (s *service) CloseIO(ctx context.Context, r *taskAPI.CloseIORequest) (_ *pt
 
 // Checkpoint the container
 func (s *service) Checkpoint(ctx context.Context, r *taskAPI.CheckpointTaskRequest) (_ *ptypes.Empty, err error) {
+	logrus.WithFields(logrus.Fields{"func": "Checkpoint", "ID": r.ID}).Info("Service Call")
 	shimLog.WithField("container", r.ID).Debug("Checkpoint() start")
 	defer shimLog.WithField("container", r.ID).Debug("Checkpoint() end")
 	span, _ := katatrace.Trace(s.rootCtx, shimLog, "Checkpoint", shimTracingTags)
@@ -911,6 +993,7 @@ func (s *service) Checkpoint(ctx context.Context, r *taskAPI.CheckpointTaskReque
 
 // Connect returns shim information such as the shim's pid
 func (s *service) Connect(ctx context.Context, r *taskAPI.ConnectRequest) (_ *taskAPI.ConnectResponse, err error) {
+	logrus.WithFields(logrus.Fields{"func": "Connect", "ID": r.ID}).Info("Service Call")
 	shimLog.WithField("container", r.ID).Debug("Connect() start")
 	defer shimLog.WithField("container", r.ID).Debug("Connect() end")
 	span, _ := katatrace.Trace(s.rootCtx, shimLog, "Connect", shimTracingTags)
@@ -933,6 +1016,7 @@ func (s *service) Connect(ctx context.Context, r *taskAPI.ConnectRequest) (_ *ta
 }
 
 func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (_ *ptypes.Empty, err error) {
+	logrus.WithFields(logrus.Fields{"func": "Shutdown", "ID": r.ID}).Info("Service Call")
 	shimLog.WithField("container", r.ID).Debug("Shutdown() start")
 	defer shimLog.WithField("container", r.ID).Debug("Shutdown() end")
 	span, _ := katatrace.Trace(s.rootCtx, shimLog, "Shutdown", shimTracingTags)
@@ -979,6 +1063,7 @@ func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (_ *
 }
 
 func (s *service) Stats(ctx context.Context, r *taskAPI.StatsRequest) (_ *taskAPI.StatsResponse, err error) {
+	logrus.WithFields(logrus.Fields{"func": "Stats", "ID": r.ID}).Info("Service Call")
 	shimLog.WithField("container", r.ID).Debug("Stats() start")
 	defer shimLog.WithField("container", r.ID).Debug("Stats() end")
 	span, spanCtx := katatrace.Trace(s.rootCtx, shimLog, "Stats", shimTracingTags)
@@ -1010,6 +1095,7 @@ func (s *service) Stats(ctx context.Context, r *taskAPI.StatsRequest) (_ *taskAP
 
 // Update a running container
 func (s *service) Update(ctx context.Context, r *taskAPI.UpdateTaskRequest) (_ *ptypes.Empty, err error) {
+	logrus.WithFields(logrus.Fields{"func": "Update", "ID": r.ID}).Info("Service Call")
 	shimLog.WithField("container", r.ID).Debug("Update() start")
 	defer shimLog.WithField("container", r.ID).Debug("Update() end")
 	span, spanCtx := katatrace.Trace(s.rootCtx, shimLog, "Update", shimTracingTags)
@@ -1024,26 +1110,32 @@ func (s *service) Update(ctx context.Context, r *taskAPI.UpdateTaskRequest) (_ *
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	var resources *specs.LinuxResources
-	v, err := typeurl.UnmarshalAny(r.Resources)
-	if err != nil {
-		return nil, err
-	}
-	resources, ok := v.(*specs.LinuxResources)
-	if !ok {
-		return nil, errdefs.ToGRPCf(errdefs.ErrInvalidArgument, "Invalid resources type for %s", s.id)
-	}
+	// container not actually running, commented out to avoid errors
 
-	err = s.sandbox.UpdateContainer(spanCtx, r.ID, *resources)
-	if err != nil {
-		return nil, errdefs.ToGRPC(err)
-	}
+	_ = spanCtx
+
+	// var resources *specs.LinuxResources
+	// v, err := typeurl.UnmarshalAny(r.Resources)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// resources, ok := v.(*specs.LinuxResources)
+	// if !ok {
+	// 	return nil, errdefs.ToGRPCf(errdefs.ErrInvalidArgument, "Invalid resources type for %s", s.id)
+	// }
+
+	// err = s.sandbox.UpdateContainer(spanCtx, r.ID, *resources)
+	// if err != nil {
+	// 	return nil, errdefs.ToGRPC(err)
+	// }
 
 	return empty, nil
 }
 
 // Wait for a process to exit
 func (s *service) Wait(ctx context.Context, r *taskAPI.WaitRequest) (_ *taskAPI.WaitResponse, err error) {
+	logrus.WithFields(logrus.Fields{"func": "Wait", "ID": r.ID}).Info("Service Call")
+	defer logrus.WithField("func", "Wait").Info("Service Call Exit")
 	shimLog.WithField("container", r.ID).Debug("Wait() start")
 	defer shimLog.WithField("container", r.ID).Debug("Wait() end")
 	span, _ := katatrace.Trace(s.rootCtx, shimLog, "Wait", shimTracingTags)
@@ -1062,6 +1154,7 @@ func (s *service) Wait(ctx context.Context, r *taskAPI.WaitRequest) (_ *taskAPI.
 	s.mu.Unlock()
 
 	if err != nil {
+		logrus.WithFields(logrus.Fields{"func": "Wait", "return": 1}).WithError(err).Info("Service Call Exit")
 		return nil, err
 	}
 
@@ -1075,6 +1168,7 @@ func (s *service) Wait(ctx context.Context, r *taskAPI.WaitRequest) (_ *taskAPI.
 	} else { //wait for exec
 		execs, err := c.getExec(r.ExecID)
 		if err != nil {
+			logrus.WithFields(logrus.Fields{"func": "Wait", "return": 2}).WithError(err).Info("Service Call Exit")
 			return nil, err
 		}
 		ret = <-execs.exitCh
@@ -1083,6 +1177,8 @@ func (s *service) Wait(ctx context.Context, r *taskAPI.WaitRequest) (_ *taskAPI.
 		// there were other waits on this process.
 		execs.exitCh <- ret
 	}
+
+	logrus.WithFields(logrus.Fields{"func": "Wait", "return": 3}).Info("Service Call Exit")
 
 	return &taskAPI.WaitResponse{
 		ExitStatus: ret,
@@ -1115,7 +1211,19 @@ func (s *service) checkProcesses(e exit) {
 }
 
 func (s *service) getContainer(id string) (*container, error) {
+
+	data, err := json.Marshal(s.containers)
+	logrus.WithFields(logrus.Fields{
+		"container":  id,
+		"containers": string(data),
+	}).WithError(err).Info("getContainer Debug")
+
 	c := s.containers[id]
+
+	// TODO trace callers to figure out where the failure is coming from
+
+	// os.WriteFile("/tmp/callstack.txt", debug.Stack(), 0644)
+	// logrus.Infof(string(debug.Stack()))
 
 	if c == nil {
 		return nil, errdefs.ToGRPCf(errdefs.ErrNotFound, "container does not exist %s", id)
