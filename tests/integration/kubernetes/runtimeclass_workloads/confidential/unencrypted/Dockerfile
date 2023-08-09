@@ -19,7 +19,7 @@ RUN /bin/sh -c \
     curl -LO https://github.com/klauspost/cpuid/releases/download/v2.2.5/cpuid-Linux_x86_64_2.2.5.tar.gz && \
     tar -xvzf cpuid-Linux_x86_64_2.2.5.tar.gz  -C /usr/bin && \
     rm -rf cpuid-Linux_x86_64_2.2.5.tar.gz && \
-    rm -f /usr/bin/LICENSE'
+    rm -f /usr/bin/LICENSE' || true
 
 # This is done just to avoid the following error starting sshd
 # `sshd: no hostkeys available -- exiting.`
