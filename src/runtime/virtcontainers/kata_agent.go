@@ -911,6 +911,10 @@ func (k *kataAgent) replaceOCIMountSource(spec *specs.Spec, guestMounts map[stri
 	for index, m := range ociMounts {
 		if guestMount, ok := guestMounts[m.Destination]; ok {
 			k.Logger().Debugf("Replacing OCI mount (%s) source %s with %s", m.Destination, m.Source, guestMount.Source)
+                        if strings.Contains(m.Source, "kubernetes.io~secret") {
+                           ociMounts[index].Destination = "/sealed" + m.Destination
+                           k.Logger().Debugf("Replacing OCI mount (%s) with new destination %s", m.Destination, ociMounts[index].Destination)
+                        }
 			ociMounts[index].Source = guestMount.Source
 		}
 	}
