@@ -103,7 +103,11 @@ impl Container {
                     "container {} can't be killed because it is {:?}",
                     self.status.id,
                     self.state
-                ));
+                )
+                // This error message mustn't be chagned because the containerd integration tests
+                // expect that OCI container runtimes return the message.
+                // Ref. https://github.com/containerd/containerd/blob/release/1.7/pkg/process/utils.go#L135
+                .context("container not running"));
             }
 
             let pid = Pid::from_raw(self.status.pid);
