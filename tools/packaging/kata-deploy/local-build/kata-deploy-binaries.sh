@@ -38,6 +38,7 @@ readonly tools_builder="${static_build_dir}/tools/build.sh"
 
 ARCH=${ARCH:-$(uname -m)}
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
+DM_VERITY=${DM_VERITY:-no}
 USE_CACHE="${USE_CACHE:-"yes"}"
 ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY:-ghcr.io}"
 ARTEFACT_REGISTRY_USERNAME="${ARTEFACT_REGISTRY_USERNAME:-}"

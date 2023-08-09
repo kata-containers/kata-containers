@@ -17,6 +17,7 @@ RUST_VERSION="null"
 AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
+DM_VERITY=${DM_VERITY:-no}
 KERNEL_MODULES_DIR=${KERNEL_MODULES_DIR:-""}
 OSBUILDER_VERSION="unknown"
 DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
@@ -448,6 +449,7 @@ build_rootfs_distro()
 			--env ARCH="${ARCH}" \
 			--env CI="${CI}" \
 			--env MEASURED_ROOTFS="${MEASURED_ROOTFS}" \
+			--env DM_VERITY="${DM_VERITY}" \
 			--env KERNEL_MODULES_DIR="${KERNEL_MODULES_DIR}" \
 			--env LIBC="${LIBC}" \
 			--env EXTRA_PKGS="${EXTRA_PKGS}" \
