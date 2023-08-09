@@ -11,6 +11,9 @@ on:
       tag:
         required: true
         type: string
+      pr-number:
+        required: true
+        type: string
       commit-hash:
         required: false
         type: string
@@ -27,6 +30,7 @@ jobs:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
       DOCKER_TAG: ${{ inputs.tag }}
+      PR_NUMBER: ${{ inputs.pr-number }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
       USING_NFD: "true"
     steps:
