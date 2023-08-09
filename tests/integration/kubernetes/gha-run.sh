@@ -95,7 +95,10 @@ function deploy_kata() {
     platform="${1}"
     ensure_yq
 
-    # Emsure we're in the default namespace
+    [ "$platform" = "kcli" ] && \
+        export KUBECONFIG="$HOME/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
+
+    # Ensure we're in the default namespace
     kubectl config set-context --current --namespace=default
 
     sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
@@ -229,6 +232,7 @@ function main() {
         install-kubectl) install_kubectl ;;
         get-cluster-credentials) get_cluster_credentials ;;
         deploy-kata-aks) deploy_kata "aks" ;;
+        deploy-kata-kcli) deploy_kata "kcli" ;;
         deploy-kata-sev) deploy_kata "sev" ;;
         deploy-kata-snp) deploy_kata "snp" ;;
         deploy-kata-tdx) deploy_kata "tdx" ;;
