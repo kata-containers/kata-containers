@@ -44,6 +44,7 @@ readonly cached_artifacts_path="lastSuccessfulBuild/artifact/artifacts"
 
 ARCH=${ARCH:-$(uname -m)}
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
+DM_VERITY=${DM_VERITY:-no}
 USE_CACHE="${USE_CACHE:-"yes"}"
 
 workdir="${WORKDIR:-$PWD}"
@@ -226,6 +227,7 @@ install_cc_image() {
 	export AA_KBC="${AA_KBC:-offline_fs_kbc}"
 	export KATA_BUILD_CC=yes
 	export MEASURED_ROOTFS=yes
+	export DM_VERITY=yes
 	variant="${1:-}"
 
 	install_image "${variant}"

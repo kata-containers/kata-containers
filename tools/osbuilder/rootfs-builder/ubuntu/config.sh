@@ -9,6 +9,7 @@ PACKAGES="chrony iptables dbus kmod"
 [ "$AGENT_INIT" = no ] && PACKAGES+=" init"
 [ "$MEASURED_ROOTFS" = yes ] && PACKAGES+=" cryptsetup-bin e2fsprogs"
 [ "$SECCOMP" = yes ] && PACKAGES+=" libseccomp2"
+[ "$DM_VERITY" = yes ] && PACKAGES+=" udev dmsetup"
 REPO_URL=http://ports.ubuntu.com
 
 case "$ARCH" in
