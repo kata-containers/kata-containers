@@ -142,7 +142,7 @@ impl CDHClient {
             }
         }
 
-        if sealed_source_path.len() > 0 {
+        if !sealed_source_path.is_empty() {
             let sealed_mounts = Mount {
                 destination: SECRETS_DIR.to_string(),
                 r#type: "bind".to_string(),
@@ -161,9 +161,14 @@ impl CDHClient {
 mod tests {
     use crate::cdh::CDHClient;
     use crate::cdh::CDH_ADDR;
+    use crate::cdh::SECRETS_DIR;
     use anyhow::anyhow;
     use async_trait::async_trait;
     use protocols::{sealed_secret, sealed_secret_ttrpc_async};
+    use std::fs;
+    use std::fs::File;
+    use std::io::{Read, Write};
+    use std::path::Path;
     use std::sync::Arc;
     use tokio::signal::unix::{signal, SignalKind};
 
@@ -227,13 +232,56 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_secs(2));
 
         let cc = Some(CDHClient::new().unwrap());
-        let cdh_client = cc.as_ref().ok_or(anyhow!("get cdh_client failed")).unwrap();
+        let cdh_client = cc
+            .as_ref()
+            .ok_or(anyhow!("get confidential-data-hub client failed"))
+            .unwrap();
         let sealed_env = String::from("key=sealed.testdata");
         let unsealed_env = cdh_client.unseal_env(&sealed_env).await.unwrap();
         assert_eq!(unsealed_env, String::from("key=unsealed"));
         let normal_env = String::from("key=testdata");
         let unchanged_env = cdh_client.unseal_env(&normal_env).await.unwrap();
         assert_eq!(unchanged_env, String::from("key=testdata"));
+
+        rt.shutdown_background();
+        std::thread::sleep(std::time::Duration::from_secs(2));
+    }
+
+    #[tokio::test]
+    async fn test_unseal_file() {
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let _guard = rt.enter();
+        start_ttrpc_server();
+        std::thread::sleep(std::time::Duration::from_secs(2));
+
+        let cc = Some(CDHClient::new().unwrap());
+        let cdh_client = cc
+            .as_ref()
+            .ok_or(anyhow!("get confidential-data-hub client failed"))
+            .unwrap();
+
+        fs::create_dir_all(SECRETS_DIR).unwrap();
+
+        let sealed_filename = "passwd";
+        let mut sealed_file = File::create(sealed_filename).unwrap();
+        let dir = String::from(".");
+        sealed_file.write_all(b"sealed.passwd").unwrap();
+        cdh_client.unseal_file(&dir).await.unwrap();
+        let unsealed_filename = SECRETS_DIR.to_string() + "/passwd";
+        let mut unsealed_file = fs::File::open(unsealed_filename.clone()).unwrap();
+        let mut contents = String::new();
+        unsealed_file.read_to_string(&mut contents).unwrap();
+        assert_eq!(contents, String::from("unsealed"));
+        fs::remove_file(sealed_filename).unwrap();
+        fs::remove_file(unsealed_filename).unwrap();
+
+        let normal_filename = "passwd";
+        let mut normal_file = File::create(normal_filename).unwrap();
+        normal_file.write_all(b"passwd").unwrap();
+        cdh_client.unseal_file(&dir).await.unwrap();
+        let filename = SECRETS_DIR.to_string() + "/passwd";
+        assert!(!Path::new(&filename).exists());
+        fs::remove_file(normal_filename).unwrap();
 
         rt.shutdown_background();
         std::thread::sleep(std::time::Duration::from_secs(2));
