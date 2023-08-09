@@ -166,6 +166,9 @@ function cleanup() {
     test_type="${2:-k8s}"
     ensure_yq
 
+    [ "$platform" = "kcli" ] && \
+        export KUBECONFIG="$HOME/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
+
     echo "Gather information about the nodes and pods before cleaning up the node"
     get_nodes_and_pods_info
 
@@ -231,6 +234,7 @@ function main() {
         deploy-kata-tdx) deploy_kata "tdx" ;;
         deploy-kata-garm) deploy_kata "garm" ;;
         run-tests) run_tests ;;
+        cleanup-kcli) cleanup "kcli" ;;
         cleanup-sev) cleanup "sev" ;;
         cleanup-snp) cleanup "snp" ;;
         cleanup-tdx) cleanup "tdx" ;;
