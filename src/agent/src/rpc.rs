@@ -305,21 +305,19 @@ impl AgentService {
         let handle = tokio::spawn(async move {
             let mut sandbox = s.lock().await;
             sandbox.bind_watcher.remove_container(&cid2).await;
-            match sandbox.get_container(&cid2) {
-                Some(ctr) => ctr.destroy().await,
-                None => Err(anyhow!("Invalid container id")),
-            }
+            sandbox
+                .get_container(&cid2)
+                .ok_or_else(|| anyhow!("Invalid container id"))?
+                .destroy()
+                .await
         });
 
         let to = Duration::from_secs(req.timeout.into());
-        match tokio::time::timeout(to, handle).await {
-            Ok(res) => {
-                res??;
-                let mut sandbox = self.sandbox.lock().await;
-                remove_container_resources(&mut sandbox, &cid)
-            }
-            Err(_e) => Err(anyhow!(nix::Error::ETIME)),
-        }
+        tokio::time::timeout(to, handle)
+            .await
+            .map_err(|_| anyhow!(nix::Error::ETIME))???;
+
+        remove_container_resources(&mut *self.sandbox.lock().await, &cid)
     }
 
     #[instrument]
@@ -964,7 +962,7 @@ impl agent_ttrpc::AgentService for AgentService {
         trace_rpc_call!(ctx, "update_mounts", req);
         is_allowed(&req)?;
 
-        match update_ephemeral_mounts(sl(), req.storages.to_vec(), &self.sandbox).await {
+        match update_ephemeral_mounts(sl(), &req.storages, &self.sandbox).await {
             Ok(_) => Ok(Empty::new()),
             Err(e) => Err(ttrpc_error(
                 ttrpc::Code::INTERNAL,
@@ -1224,14 +1222,12 @@ impl agent_ttrpc::AgentService for AgentService {
             Err(e) => return Err(ttrpc_error(ttrpc::Code::INTERNAL, e)),
         };
 
-        match setup_guest_dns(sl(), req.dns.to_vec()) {
+        match setup_guest_dns(sl(), &req.dns) {
             Ok(_) => {
                 let mut s = self.sandbox.lock().await;
-                let _dns = req
-                    .dns
-                    .to_vec()
-                    .iter()
-                    .map(|dns| s.network.set_dns(dns.to_string()));
+                for dns in req.dns {
+                    s.network.set_dns(dns);
+                }
             }
             Err(e) => return Err(ttrpc_error(ttrpc::Code::INTERNAL, e)),
         };
@@ -1626,11 +1622,7 @@ fn get_agent_details() -> AgentDetails {
     detail.init_daemon = unistd::getpid() == Pid::from_raw(1);
 
     detail.device_handlers = Vec::new();
-    detail.storage_handlers = STORAGE_HANDLER_LIST
-        .to_vec()
-        .iter()
-        .map(|x| x.to_string())
-        .collect();
+    detail.storage_handlers = STORAGE_HANDLER_LIST.iter().map(|x| x.to_string()).collect();
 
     detail
 }
@@ -1978,10 +1970,10 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
         "load_kernel_module {}: {:?}", module.name, module.parameters
     );
 
-    let mut args = vec!["-v".to_string(), module.name.clone()];
+    let mut args = vec!["-v", &module.name];
 
     if !module.parameters.is_empty() {
-        args.extend(module.parameters.to_vec())
+        args.extend(module.parameters.iter().map(String::as_str));
     }
 
     let output = Command::new(MODPROBE_PATH)
