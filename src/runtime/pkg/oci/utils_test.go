@@ -811,6 +811,7 @@ func TestAddRuntimeAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.DisableNewNetNs] = "true"
 	ocispec.Annotations[vcAnnotations.InterNetworkModel] = "macvtap"
 	ocispec.Annotations[vcAnnotations.ImageRequestTimeout] = "100"
+	ocispec.Annotations[vcAnnotations.SealedSecretEnabled] = "true"
 
 	addAnnotations(ocispec, &config, runtimeConfig)
 	assert.Equal(config.DisableGuestSeccomp, true)
@@ -818,6 +819,7 @@ func TestAddRuntimeAnnotations(t *testing.T) {
 	assert.Equal(config.NetworkConfig.DisableNewNetwork, true)
 	assert.Equal(config.NetworkConfig.InterworkingModel, vc.NetXConnectMacVtapModel)
 	assert.Equal(config.ImageRequestTimeout, uint64(100))
+	assert.Equal(config.SealedSecretEnabled, true)
 
 }
 

@@ -191,6 +191,7 @@ type runtime struct {
 	StaticSandboxResourceMgmt bool     `toml:"static_sandbox_resource_mgmt"`
 	EnablePprof               bool     `toml:"enable_pprof"`
 	DisableGuestEmptyDir      bool     `toml:"disable_guest_empty_dir"`
+	SealedSecretEnabled       bool     `toml:"sealed_secret_enabled"`
 }
 
 type agent struct {
@@ -1453,6 +1454,7 @@ func LoadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 	config.JaegerEndpoint = tomlConf.Runtime.JaegerEndpoint
 	config.JaegerUser = tomlConf.Runtime.JaegerUser
 	config.JaegerPassword = tomlConf.Runtime.JaegerPassword
+	config.SealedSecretEnabled = tomlConf.Runtime.SealedSecretEnabled
 	config.ServiceOffload = tomlConf.Image.ServiceOffload
 	config.ImageRequestTimeout = tomlConf.Image.ImageRequestTimeout
 	for _, f := range tomlConf.Runtime.Experimental {
