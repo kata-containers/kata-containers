@@ -397,3 +397,21 @@ function check_containers_are_up() {
 		[ "${i}" == "${TIMEOUT}" ] && return 1
 	done
 }
+
+function check_containers_are_running() {
+	local NUM_CONTAINERS="$1"
+	[[ -z "${NUM_CONTAINERS}" ]] && die "Number of containers is missing"
+
+	# Check that the requested number of containers are running
+	local timeout_launch="10"
+	check_containers_are_up "${NUM_CONTAINERS}" & pid=$!
+	(sleep "${timeout_launch}" && kill -HUP "${pid}") 2>/dev/null & pid_tout=$!
+
+	if wait "${pid}" 2>/dev/null; then
+		pkill -HUP -P "${pid_tout}"
+		wait "${pid_tout}"
+	else
+		warn "Time out exceeded"
+		return 1
+	fi
+}
