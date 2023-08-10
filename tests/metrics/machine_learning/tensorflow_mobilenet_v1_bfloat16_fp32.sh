@@ -87,14 +87,7 @@ function mobilenet_v1_bfloat16_fp32_test() {
 	touch "${host_trigger_file}"
 	info "All containers are running the workload..."
 
-	for i in "${containers[@]}"; do
-		check_file=$(sudo -E "${CTR_EXE}" t exec -d --exec-id "$(random_name)" "${i}" sh -c "${CMD_FILE}")
-		retries="30"
-		for j in $(seq 1 "${retries}"); do
-			[ "${check_file}" = 1 ] && break
-			sleep 1
-		done
-	done
+	collect_results "${CMD_FILE}"
 
 	for i in "${containers[@]}"; do
 		sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${i}" sh -c "${CMD_RESULTS}"  >> "${tensorflow_file}"
