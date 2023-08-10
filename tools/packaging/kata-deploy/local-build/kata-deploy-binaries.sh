@@ -228,6 +228,7 @@ install_cc_image() {
 	export KATA_BUILD_CC=yes
 	export MEASURED_ROOTFS=yes
 	export DM_VERITY=yes
+	export SEALED_SECRET=yes
 	variant="${1:-}"
 
 	install_image "${variant}"

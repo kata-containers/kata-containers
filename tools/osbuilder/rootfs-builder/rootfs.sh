@@ -28,6 +28,8 @@ LIBC=${LIBC:-musl}
 # The kata agent enables seccomp feature.
 # However, it is not enforced by default: you need to enable that in the main configuration file.
 SECCOMP=${SECCOMP:-"yes"}
+# The kata agent enables sealed-secret feature.
+SEALED_SECRET=${SEALED_SECRET:-"no"}
 SELINUX=${SELINUX:-"no"}
 
 lib_file="${script_dir}/../scripts/lib.sh"
@@ -155,6 +157,10 @@ ROOTFS_DIR          Path to the directory that is populated with the rootfs.
 
 SECCOMP             When set to "no", the kata-agent is built without seccomp capability.
                     Default value: "yes"
+
+SEALED_SECRET       When set to "yes", the kata-agent is built with sealed-secret
+                    capability.
+                    Default value: "no"
 
 SELINUX             When set to "yes", build the rootfs with the required packages to
                     enable SELinux in the VM.
@@ -469,6 +475,7 @@ build_rootfs_distro()
 			--env INSIDE_CONTAINER=1 \
 			--env AA_KBC="${AA_KBC}" \
 			--env SECCOMP="${SECCOMP}" \
+			--env SEALED_SECRET="${SEALED_SECRET}" \
 			--env SELINUX="${SELINUX}" \
 			--env DEBUG="${DEBUG}" \
 			--env HOME="/root" \
@@ -630,7 +637,7 @@ EOF
 			git checkout "${AGENT_VERSION}" && OK "git checkout successful" || die "checkout agent ${AGENT_VERSION} failed!"
 		fi
 		make clean
-		make LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP}
+		make LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP} SEALED_SECRET=${SEALED_SECRET}
 		make install DESTDIR="${ROOTFS_DIR}" LIBC=${LIBC} INIT=${AGENT_INIT}
 		if [ "${SECCOMP}" == "yes" ]; then
 			rm -rf "${libseccomp_install_dir}" "${gperf_install_dir}"
