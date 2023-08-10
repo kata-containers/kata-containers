@@ -887,7 +887,7 @@ mod tests {
         let container = LinuxContainer::new(
             "some_id",
             dir.path().join("rootfs").to_str().unwrap(),
-            Arc::new(RwLock::new(DevicesCgroupInfo::default())),
+            None,
             create_dummy_opts(),
             &slog_scope::logger(),
         )

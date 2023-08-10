@@ -277,7 +277,7 @@ impl AgentService {
         let mut ctr: LinuxContainer = LinuxContainer::new(
             cid.as_str(),
             CONTAINER_BASE,
-            s.devcg_info.clone(),
+            Some(s.devcg_info.clone()),
             opts,
             &sl(),
         )?;
@@ -1988,7 +1988,6 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::RwLock;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::*;
@@ -1996,7 +1995,6 @@ mod tests {
     use nix::mount;
     use nix::sched::{unshare, CloneFlags};
     use oci::{Hook, Hooks, Linux, LinuxDeviceCgroup, LinuxNamespace, LinuxResources};
-    use rustjail::cgroups::DevicesCgroupInfo;
     use tempfile::{tempdir, TempDir};
     use test_utils::{assert_result, skip_if_not_root};
     use ttrpc::{r#async::TtrpcContext, MessageHeader};
@@ -2074,7 +2072,7 @@ mod tests {
             LinuxContainer::new(
                 "some_id",
                 dir.path().join("rootfs").to_str().unwrap(),
-                Arc::new(RwLock::new(DevicesCgroupInfo::default())),
+                None,
                 create_dummy_opts(),
                 &slog_scope::logger(),
             )
