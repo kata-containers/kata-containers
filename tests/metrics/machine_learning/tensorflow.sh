@@ -100,27 +100,6 @@ function launch_workload() {
 	done
 }
 
-function collect_results() {
-	WORKLOAD=${1}
-	[[ -z ${WORKLOAD} ]] && die "Container workload is missing"
-
-	local tasks_running=("${containers[@]}")
-	local retries=${MAX_RETRIES}
-
-	while [ "${#tasks_running[@]}" -gt 0 ] && [ "${retries}" -gt 0 ]; do
-		for i in "${!tasks_running[@]}"; do
-			check_file=$(sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${tasks_running[i]}" sh -c "${WORKLOAD}")
-
-			# if the current task is done, remove the corresponding container from the active list
-			[ "${check_file}" -eq "1" ] && unset 'tasks_running[i]'
-		done
-		((retries--))
-		sleep 3
-		echo -n "."
-	done
-	echo -e "\n"
-}
-
 function tensorflow_test() {
 	# Resnet section
 	info "Running TF-Resnet test"
