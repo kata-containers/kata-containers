@@ -150,17 +150,6 @@ EOF
 	metrics_json_end_array "Results"
 }
 
-function check_containers_are_up() {
-	local containers_launched=0
-	for i in $(seq "${TIMEOUT}") ; do
-		info "Verify that the containers are running"
-		containers_launched="$(sudo ${CTR_EXE} t list | grep -c "RUNNING")"
-		[ "${containers_launched}" -eq "${NUM_CONTAINERS}" ] && break
-		sleep 1
-		[ "${i}" == "${TIMEOUT}" ] && return 1
-	done
-}
-
 function main() {
 	# Verify enough arguments
 	if [ "$#" -lt 2 ]; then
@@ -195,11 +184,11 @@ function main() {
 	metrics_json_start_array
 
 	# Check that the requested number of containers are running
-	check_containers_are_up
+	check_containers_are_up "${NUM_CONTAINERS}"
 
 	# Check that the requested number of containers are running
 	local timeout_launch="10"
-	check_containers_are_up & pid=$!
+	check_containers_are_up "${NUM_CONTAINERS}" & pid=$!
 	(sleep "${timeout_launch}" && kill -HUP "${pid}") 2>/dev/null & pid_tout=$!
 
 	if wait "${pid}" 2>/dev/null; then
