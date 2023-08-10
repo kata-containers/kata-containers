@@ -54,10 +54,12 @@ func NewPutMetricsParamsWithHTTPClient(client *http.Client) *PutMetricsParams {
 	}
 }
 
-/* PutMetricsParams contains all the parameters to send to the API endpoint
-   for the put metrics operation.
+/*
+PutMetricsParams contains all the parameters to send to the API endpoint
 
-   Typically these are written to a http.Request.
+	for the put metrics operation.
+
+	Typically these are written to a http.Request.
 */
 type PutMetricsParams struct {
 

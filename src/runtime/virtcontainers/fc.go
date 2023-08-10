@@ -306,8 +306,7 @@ func (fc *firecracker) parseVersion(data string) (string, error) {
 	var version string
 	fields := strings.Split(lines[0], " ")
 	if len(fields) > 1 {
-		// The output format of `Firecracker --version` is as follows
-		// Firecracker v0.23.1
+		// The output format of `Firecracker --version` is as follows.
 		version = strings.TrimPrefix(strings.TrimSpace(fields[1]), "v")
 		return version, nil
 	}
