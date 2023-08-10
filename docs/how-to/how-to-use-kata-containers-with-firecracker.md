@@ -19,12 +19,14 @@ This document requires the presence of Kata Containers on your system. Install u
 
 ## Install AWS Firecracker
 
-Kata Containers only support AWS Firecracker v0.23.4 ([yet](https://github.com/kata-containers/kata-containers/pull/1519)).
+For information about the supported version of Firecracker, see the Kata Containers
+[`versions.yaml`](../../versions.yaml).
+
 To install Firecracker we need to get the `firecracker` and `jailer` binaries:
 
 ```bash
 $ release_url="https://github.com/firecracker-microvm/firecracker/releases"
-$ version="v0.23.1"
+$ version=$(yq read <kata-repository>/versions.yaml assets.hypervisor.firecracker.version)
 $ arch=`uname -m`
 $ curl ${release_url}/download/${version}/firecracker-${version}-${arch} -o firecracker
 $ curl ${release_url}/download/${version}/jailer-${version}-${arch} -o jailer
