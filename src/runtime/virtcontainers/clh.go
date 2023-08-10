@@ -73,7 +73,7 @@ const (
 	// Values based on:
 	clhTimeout                     = 10
 	clhAPITimeout                  = 1
-	clhAPITimeoutConfidentialGuest = 40
+	clhAPITimeoutConfidentialGuest = 60
 	// Timeout for hot-plug - hotplug devices can take more time, than usual API calls
 	// Use longer time timeout for it.
 	clhHotPlugAPITimeout                   = 5
@@ -406,9 +406,21 @@ func (clh *cloudHypervisor) nydusdAPISocketPath(id string) (string, error) {
 }
 
 func (clh *cloudHypervisor) enableProtection() error {
-	protection, err := availableGuestProtection()
-	if err != nil {
-		return err
+
+	protection := noneProtection
+
+	// SNP protection explicitly requested by config
+	if clh.config.SevSnpGuest {
+		clh.Logger().WithField("function", "enableProtection").Info("SEVSNPGUEST")
+		protection = snpProtection
+	} else {
+		clh.Logger().WithField("function", "enableProtection").Info("NOSEVSNPGUEST")
+		// protection method not explicitly requested, using available method
+		availableProtection, err := availableGuestProtection()
+		if err != nil {
+			return err
+		}
+		protection = availableProtection
 	}
 
 	switch protection {
@@ -431,6 +443,9 @@ func (clh *cloudHypervisor) enableProtection() error {
 
 		return nil
 
+	case sevProtection:
+		return errors.New("SEV protection is not supported by Cloud Hypervisor")
+
 	case snpProtection:
 		if clh.vmconfig.Platform == nil {
 			clh.vmconfig.Platform = chclient.NewPlatformConfig()
@@ -440,9 +455,6 @@ func (clh *cloudHypervisor) enableProtection() error {
 		clh.vmconfig.Payload.SetHostData(snpHostDataDummy)
 
 		return nil
-
-	case sevProtection:
-		return errors.New("SEV protection is not supported by Cloud Hypervisor")
 
 	default:
 		return nil

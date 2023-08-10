@@ -84,8 +84,8 @@ enable_annotations = @DEFENABLEANNOTATIONS@
 # List of valid annotations values for the hypervisor
 # Each member of the list is a path pattern as described by glob(3).
 # The default if not set is empty (all annotations rejected.)
-# Your distribution recommends: @CLHVALIDHYPERVISORPATHS@
-valid_hypervisor_paths = @CLHVALIDHYPERVISORPATHS@
+# Your distribution recommends: @CLHSNPVALIDHYPERVISORPATHS@
+valid_hypervisor_paths = @CLHSNPVALIDHYPERVISORPATHS@
 
 # Optional space-separated list of options to pass to the guest kernel.
 # For example, use `kernel_params = "vsyscall=emulate"` if you are having
@@ -190,7 +190,8 @@ block_device_driver = "virtio-blk"
 #enable_hugepages = true
 
 # Disable the 'seccomp' feature from Cloud Hypervisor, default false
-# disable_seccomp = true
+# TODO - to be re-enabled with next CH-SNP release. This is fixed but the fix is not yet released
+disable_seccomp = true
 
 # This option changes the default hypervisor and kernel parameters
 # to enable debug output where available.
