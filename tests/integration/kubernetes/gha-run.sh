@@ -17,6 +17,7 @@ DOCKER_REGISTRY=${DOCKER_REGISTRY:-quay.io}
 DOCKER_REPO=${DOCKER_REPO:-kata-containers/kata-deploy-ci}
 DOCKER_TAG=${DOCKER_TAG:-kata-containers-latest}
 KATA_DEPLOY_WAIT_TIMEOUT=${KATA_DEPLOY_WAIT_TIMEOUT:-10m}
+KATA_HYPERVISOR=${KATA_HYPERVISOR:-qemu}
 
 function configure_devmapper() {
 	sudo mkdir -p /var/lib/containerd/devmapper
