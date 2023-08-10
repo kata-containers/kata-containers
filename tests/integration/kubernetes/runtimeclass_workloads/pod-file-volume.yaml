@@ -11,6 +11,7 @@ spec:
   terminationGracePeriodSeconds: 0
   runtimeClassName: kata
   restartPolicy: Never
+  nodeName: NODE
   volumes:
   - name: shared-file
     hostPath:
