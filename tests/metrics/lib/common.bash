@@ -363,18 +363,18 @@ function wait_ksm_settle()
 }
 
 function collect_results() {
-	WORKLOAD=${1}
-	[[ -z ${WORKLOAD} ]] && die "Container workload is missing"
+	local WORKLOAD="$1"
+	[[ -z "${WORKLOAD}" ]] && die "Container workload is missing"
 
 	local tasks_running=("${containers[@]}")
 	local retries=100
 
 	while [ "${#tasks_running[@]}" -gt 0 ] && [ "${retries}" -gt 0 ]; do
 		for i in "${!tasks_running[@]}"; do
-			check_file=$(sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${tasks_running[i]}" sh >
+			check_file=$(sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${tasks_running[i]}" sh -c "${WORKLOAD}")
 
 			# if the current task is done, remove the corresponding container from the active list
-			[ "${check_file}" -eq "1" ] && unset 'tasks_running[i]'
+			[ "${check_file}" = 1 ] && unset 'tasks_running[i]'
 		done
 		((retries--))
 		sleep 3
@@ -385,7 +385,7 @@ function collect_results() {
 
 function check_containers_are_up() {
 	local NUM_CONTAINERS="$1"
-	[[ -z ${NUM_CONTAINERS} ]] && die "Number of containers is missing"
+	[[ -z "${NUM_CONTAINERS}" ]] && die "Number of containers is missing"
 
 	local TIMEOUT=60
 	local containers_launched=0
