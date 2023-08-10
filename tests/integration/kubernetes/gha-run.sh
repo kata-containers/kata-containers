@@ -16,6 +16,7 @@ tools_dir="${repo_root_dir}/tools"
 DOCKER_REGISTRY=${DOCKER_REGISTRY:-quay.io}
 DOCKER_REPO=${DOCKER_REPO:-kata-containers/kata-deploy-ci}
 DOCKER_TAG=${DOCKER_TAG:-kata-containers-latest}
+KATA_DEPLOY_WAIT_TIMEOUT=${KATA_DEPLOY_WAIT_TIMEOUT:-10m}
 
 function configure_devmapper() {
 	sudo mkdir -p /var/lib/containerd/devmapper
@@ -125,7 +126,7 @@ function deploy_kata() {
     else
         kubectl apply -f "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
     fi
-    kubectl -n kube-system wait --timeout=10m --for=condition=Ready -l name=kata-deploy pod
+    kubectl -n kube-system wait --timeout="${KATA_DEPLOY_WAIT_TIMEOUT}" --for=condition=Ready -l name=kata-deploy pod
 
     # This is needed as the kata-deploy pod will be set to "Ready" when it starts running,
     # which may cause issues like not having the node properly labeled or the artefacts
