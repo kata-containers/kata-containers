@@ -38,6 +38,14 @@ get_pod_config_dir() {
 	info "k8s configured to use runtimeclass"
 }
 
+# Return the first worker found that is kata-runtime labeled.
+get_one_kata_node() {
+	local resource_name
+	resource_name="$(kubectl get node -l katacontainers.io/kata-runtime=true -o name | head -1)"
+	# Remove leading "/node"
+	echo "${resource_name/"node/"}"
+}
+
 # Runs a command in the host filesystem.
 exec_host() {
 	node="$(kubectl get node -o name)"
