@@ -54,10 +54,12 @@ func NewPutGuestDriveByIDParamsWithHTTPClient(client *http.Client) *PutGuestDriv
 	}
 }
 
-/* PutGuestDriveByIDParams contains all the parameters to send to the API endpoint
-   for the put guest drive by ID operation.
+/*
+PutGuestDriveByIDParams contains all the parameters to send to the API endpoint
 
-   Typically these are written to a http.Request.
+	for the put guest drive by ID operation.
+
+	Typically these are written to a http.Request.
 */
 type PutGuestDriveByIDParams struct {
 

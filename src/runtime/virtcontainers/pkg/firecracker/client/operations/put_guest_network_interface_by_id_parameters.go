@@ -54,10 +54,12 @@ func NewPutGuestNetworkInterfaceByIDParamsWithHTTPClient(client *http.Client) *P
 	}
 }
 
-/* PutGuestNetworkInterfaceByIDParams contains all the parameters to send to the API endpoint
-   for the put guest network interface by ID operation.
+/*
+PutGuestNetworkInterfaceByIDParams contains all the parameters to send to the API endpoint
 
-   Typically these are written to a http.Request.
+	for the put guest network interface by ID operation.
+
+	Typically these are written to a http.Request.
 */
 type PutGuestNetworkInterfaceByIDParams struct {
 

@@ -54,10 +54,12 @@ func NewPatchMachineConfigurationParamsWithHTTPClient(client *http.Client) *Patc
 	}
 }
 
-/* PatchMachineConfigurationParams contains all the parameters to send to the API endpoint
-   for the patch machine configuration operation.
+/*
+PatchMachineConfigurationParams contains all the parameters to send to the API endpoint
 
-   Typically these are written to a http.Request.
+	for the patch machine configuration operation.
+
+	Typically these are written to a http.Request.
 */
 type PatchMachineConfigurationParams struct {
 

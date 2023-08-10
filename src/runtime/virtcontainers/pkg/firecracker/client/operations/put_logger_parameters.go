@@ -54,10 +54,12 @@ func NewPutLoggerParamsWithHTTPClient(client *http.Client) *PutLoggerParams {
 	}
 }
 
-/* PutLoggerParams contains all the parameters to send to the API endpoint
-   for the put logger operation.
+/*
+PutLoggerParams contains all the parameters to send to the API endpoint
 
-   Typically these are written to a http.Request.
+	for the put logger operation.
+
+	Typically these are written to a http.Request.
 */
 type PutLoggerParams struct {
 
