@@ -41,6 +41,7 @@ pub const MOUNT_GUEST_TAG: &str = "kataShared";
 
 // Allocating an FSGroup that owns the pod's volumes
 const FS_GID: &str = "fsgid";
+const FS_GID_EQ: &str = "fsgid=";
 const SYS_FS_HUGEPAGES_PREFIX: &str = "/sys/kernel/mm/hugepages";
 
 const RW_MASK: u32 = 0o660;
@@ -272,10 +273,10 @@ async fn ephemeral_storage_handler(
 #[instrument]
 pub async fn update_ephemeral_mounts(
     logger: Logger,
-    storages: Vec<Storage>,
+    storages: &[Storage],
     _sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<()> {
-    for (_, storage) in storages.iter().enumerate() {
+    for storage in storages {
         let handler_name = &storage.driver;
         let logger = logger.new(o!(
             "msg" => "updating tmpfs storage",
@@ -290,18 +291,13 @@ pub async fn update_ephemeral_mounts(
                     continue;
                 } else {
                     // assume that fsGid has already been set
-                    let mut opts = Vec::new();
-                    for (_, opt) in storage.options.iter().enumerate() {
-                        let fields: Vec<&str> = opt.split('=').collect();
-                        if fields.len() == 2 && fields[0] == FS_GID {
-                            continue;
-                        }
-                        opts.push(opt.as_str())
-                    }
-                    let (flags, options) = parse_mount_flags_and_options(&opts);
-
                     let mount_path = Path::new(&storage.mount_point);
                     let src_path = Path::new(&storage.source);
+                    let opts = storage
+                        .options
+                        .iter()
+                        .filter(|&opt| !opt.starts_with(FS_GID_EQ));
+                    let (flags, options) = parse_mount_flags_and_options(opts);
 
                     info!(logger, "mounting storage";
                         "mount-source" => src_path.display(),
@@ -420,7 +416,7 @@ async fn handle_hugetlbfs_storage(logger: &Logger, storage: &Storage) -> Result<
     // /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
     // /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
     // options eg "pagesize=2097152,size=524288000"(2M, 500M)
-    allocate_hugepages(logger, &storage.options.to_vec()).context("allocate hugepages")?;
+    allocate_hugepages(logger, &storage.options).context("allocate hugepages")?;
 
     common_storage_handler(logger, storage)?;
 
@@ -675,7 +671,7 @@ fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
             .map_err(anyhow::Error::from)
             .context("Could not create mountpoint")?;
     }
-    let (flags, options) = parse_mount_flags_and_options(&storage.options);
+    let (flags, options) = parse_mount_flags_and_options(storage.options.iter());
 
     info!(logger, "mounting storage";
         "mount-source" => src_path.display(),
@@ -802,11 +798,13 @@ pub fn is_mounted(mount_point: &str) -> Result<bool> {
 }
 
 #[instrument]
-fn parse_mount_flags_and_options<S: AsRef<str> + Debug>(options_vec: &[S]) -> (MsFlags, String) {
+fn parse_mount_flags_and_options(
+    opts_iter: impl Iterator<Item = impl AsRef<str>> + Debug,
+) -> (MsFlags, String) {
     let mut flags = MsFlags::empty();
     let mut options: String = "".to_string();
 
-    for opt in options_vec {
+    for opt in opts_iter {
         let opt = opt.as_ref();
         if !opt.is_empty() {
             match FLAGS.get(opt) {
@@ -912,7 +910,7 @@ pub async fn add_storages(
 
 #[instrument]
 fn mount_to_rootfs(logger: &Logger, m: &InitMount) -> Result<()> {
-    let (flags, options) = parse_mount_flags_and_options(&m.options);
+    let (flags, options) = parse_mount_flags_and_options(m.options.iter());
 
     fs::create_dir_all(m.dest).context("could not create directory")?;
 
@@ -1121,7 +1119,7 @@ fn ensure_destination_file_exists(path: &Path) -> Result<()> {
 #[instrument]
 fn parse_options(option_list: &[String]) -> HashMap<String, String> {
     let mut options = HashMap::new();
-    for opt in option_list.iter() {
+    for opt in option_list {
         let fields: Vec<&str> = opt.split('=').collect();
         if fields.len() == 2 {
             options.insert(fields[0].to_string(), fields[1].to_string());
@@ -2043,7 +2041,7 @@ mod tests {
         for (i, d) in tests.iter().enumerate() {
             let msg = format!("test[{}]: {:?}", i, d);
 
-            let result = parse_mount_flags_and_options(&d.options_vec);
+            let result = parse_mount_flags_and_options(d.options_vec.iter());
 
             let msg = format!("{}: result: {:?}", msg, result);
 
