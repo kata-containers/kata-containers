@@ -145,6 +145,11 @@ function deploy_kata() {
 }
 
 function run_tests() {
+    platform="${1:-}"
+
+    [ "$platform" = "kcli" ] && \
+        export KUBECONFIG="$HOME/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
+
     # Delete any spurious tests namespace that was left behind
     kubectl delete namespace kata-containers-k8s-tests &> /dev/null || true
 
@@ -226,6 +231,7 @@ function main() {
         deploy-kata-tdx) deploy_kata "tdx" ;;
         deploy-kata-garm) deploy_kata "garm" ;;
         run-tests) run_tests ;;
+        run-tests-kcli) run_tests "kcli" ;;
         cleanup-kcli) cleanup "kcli" ;;
         cleanup-sev) cleanup "sev" ;;
         cleanup-snp) cleanup "snp" ;;
