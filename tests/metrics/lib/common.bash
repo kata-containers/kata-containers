@@ -383,3 +383,17 @@ function collect_results() {
 	echo -e "\n"
 }
 
+function check_containers_are_up() {
+	local NUM_CONTAINERS="$1"
+	[[ -z ${NUM_CONTAINERS} ]] && die "Number of containers is missing"
+
+	local TIMEOUT=60
+	local containers_launched=0
+	for i in $(seq "${TIMEOUT}") ; do
+		info "Verify that the containers are running"
+		containers_launched="$(sudo ${CTR_EXE} t list | grep -c "RUNNING")"
+		[ "${containers_launched}" -eq "${NUM_CONTAINERS}" ] && break
+		sleep 1
+		[ "${i}" == "${TIMEOUT}" ] && return 1
+	done
+}
