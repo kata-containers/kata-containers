@@ -10,6 +10,7 @@ set -o pipefail
 
 kubernetes_dir="$(dirname "$(readlink -f "$0")")"
 source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
+# shellcheck disable=2154
 tools_dir="${repo_root_dir}/tools"
 
 DOCKER_REGISTRY=${DOCKER_REGISTRY:-quay.io}
@@ -121,7 +122,7 @@ function deploy_kata() {
 
     echo "::group::Final kata-deploy.yaml that is used in the test"
     cat "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-    cat "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" | grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" || die "Failed to setup the tests image"
+    grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" || die "Failed to setup the tests image"
     echo "::endgroup::"
 
     kubectl apply -f "${tools_dir}/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
@@ -160,7 +161,7 @@ function run_tests() {
     kubectl delete namespace kata-containers-k8s-tests &> /dev/null || true
 
     # Create a new namespace for the tests and switch to it
-    kubectl apply -f ${kubernetes_dir}/runtimeclass_workloads/tests-namespace.yaml
+    kubectl apply -f "${kubernetes_dir}/runtimeclass_workloads/tests-namespace.yaml"
     kubectl config set-context --current --namespace=kata-containers-k8s-tests
 
     pushd "${kubernetes_dir}"
@@ -197,6 +198,7 @@ function cleanup() {
         cleanup_spec="-f "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml""
     fi
 
+    # shellcheck disable=2086
     kubectl delete ${deploy_spec}
     kubectl -n kube-system wait --timeout=10m --for=delete -l name=kata-deploy pod
 
@@ -211,10 +213,12 @@ function cleanup() {
 
     sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
     cat "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
-    cat "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" | grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" || die "Failed to setup the tests image"
+    grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" || die "Failed to setup the tests image"
+    # shellcheck disable=2086
     kubectl apply ${cleanup_spec}
     sleep 180s
 
+    # shellcheck disable=2086
     kubectl delete ${cleanup_spec}
     kubectl delete -f "${tools_dir}/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
 }
