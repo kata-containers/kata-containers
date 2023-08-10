@@ -1494,7 +1494,7 @@ impl LinuxContainer {
     pub fn new<T: Into<String> + Display + Clone>(
         id: T,
         base: T,
-        devcg_info: Arc<RwLock<DevicesCgroupInfo>>,
+        devcg_info: Option<Arc<RwLock<DevicesCgroupInfo>>>,
         config: Config,
         logger: &Logger,
     ) -> Result<Self> {
@@ -1775,7 +1775,7 @@ mod tests {
             LinuxContainer::new(
                 "some_id",
                 &dir.path().join("rootfs").to_str().unwrap(),
-                Arc::new(RwLock::new(DevicesCgroupInfo::default())),
+                None,
                 create_dummy_opts(),
                 &slog_scope::logger(),
             ),
@@ -1805,14 +1805,10 @@ mod tests {
     #[test]
     fn test_linuxcontainer_pause() {
         let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
-            c.cgroup_manager = Box::new(
-                FsManager::new(
-                    "",
-                    &Spec::default(),
-                    Arc::new(RwLock::new(DevicesCgroupInfo::default())),
-                )
-                .map_err(|e| anyhow!(format!("fail to create cgroup manager with path: {:}", e)))?,
-            );
+            c.cgroup_manager =
+                Box::new(FsManager::new("", &Spec::default(), None).map_err(|e| {
+                    anyhow!(format!("fail to create cgroup manager with path: {:}", e))
+                })?);
             c.pause().map_err(|e| anyhow!(e))
         });
 
@@ -1834,14 +1830,10 @@ mod tests {
     #[test]
     fn test_linuxcontainer_resume() {
         let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
-            c.cgroup_manager = Box::new(
-                FsManager::new(
-                    "",
-                    &Spec::default(),
-                    Arc::new(RwLock::new(DevicesCgroupInfo::default())),
-                )
-                .map_err(|e| anyhow!(format!("fail to create cgroup manager with path: {:}", e)))?,
-            );
+            c.cgroup_manager =
+                Box::new(FsManager::new("", &Spec::default(), None).map_err(|e| {
+                    anyhow!(format!("fail to create cgroup manager with path: {:}", e))
+                })?);
             // Change status to paused, this way we can resume it
             c.status.transition(ContainerState::Paused);
             c.resume().map_err(|e| anyhow!(e))

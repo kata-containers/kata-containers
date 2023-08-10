@@ -65,7 +65,7 @@ pub struct Manager {
     #[serde(skip)]
     cgroup: cgroups::Cgroup,
     #[serde(skip)]
-    pod_cgroup: cgroups::Cgroup,
+    pod_cgroup: Option<cgroups::Cgroup>,
     #[serde(skip)]
     devcg_whitelist: bool,
 }
@@ -135,7 +135,9 @@ impl CgroupManager for Manager {
         );
 
         // apply resources
-        self.pod_cgroup.apply(pod_res)?;
+        if let Some(pod_cg) = self.pod_cgroup.as_ref() {
+            pod_cg.apply(pod_res)?;
+        }
         self.cgroup.apply(res)?;
 
         Ok(())
@@ -1034,64 +1036,70 @@ impl Manager {
     pub fn new(
         cpath: &str,
         spec: &Spec,
-        devcg_info: Arc<RwLock<DevicesCgroupInfo>>,
+        devcg_info: Option<Arc<RwLock<DevicesCgroupInfo>>>,
     ) -> Result<Self> {
         let (paths, mounts) = Self::get_paths_and_mounts(cpath)?;
 
         // Do not expect poisoning lock
-        let mut devices_group_info = devcg_info.write().unwrap();
+        let mut devices_group_info = devcg_info.as_ref().map(|i| i.write().unwrap());
+        let pod_cgroup: Option<Cgroup>;
 
-        // Cgroup path of parent of container
-        let pod_cpath = PathBuf::from(cpath)
-            .parent()
-            .context("Get parent of cgroup path")?
-            .display()
-            .to_string();
+        if let Some(devices_group_info) = devices_group_info.as_mut() {
+            // Cgroup path of parent of container
+            let pod_cpath = PathBuf::from(cpath)
+                .parent()
+                .context("Get parent of cgroup path")?
+                .display()
+                .to_string();
 
-        // Create a cgroup for the pod if not exists.
-        // Note that this step MUST be done before the pause container's
-        // cgroup created, since children inherit upper nodes' rules, which
-        // have excessive permission. You'll feel painful to shrink upper
-        // nodes' permission.
-        let pod_cg = load_cgroup(cgroups::hierarchies::auto(), &pod_cpath);
+            // Create a cgroup for the pod if not exists.
+            // Note that this step MUST be done before the pause container's
+            // cgroup created, since children inherit upper nodes' rules, which
+            // have excessive permission. You'll feel painful to shrink upper
+            // nodes' permission.
+            pod_cgroup = Some(load_cgroup(cgroups::hierarchies::auto(), &pod_cpath));
+            let pod_cg = pod_cgroup.as_ref().unwrap();
 
-        // The default is blacklist mode.
-        let is_whitelist_mode = Self::devcg_whitelist_rule(spec).unwrap_or(false);
-        if devices_group_info.inited {
-            // Do nothing for whitelist except for updating whitelist
-            // field of devices_group_info.
-            debug!(sl(), "Devices cgroup has been initialzied.");
+            // The default is blacklist mode.
+            let is_whitelist_mode = Self::devcg_whitelist_rule(spec).unwrap_or(false);
+            if devices_group_info.inited {
+                // Do nothing for whitelist except for updating whitelist
+                // field of devices_group_info.
+                debug!(sl(), "Devices cgroup has been initialzied.");
 
-            // Set allowed all devices to pod cgroup
-            if !devices_group_info.whitelist && is_whitelist_mode {
-                info!(
+                // Set allowed all devices to pod cgroup
+                if !devices_group_info.whitelist && is_whitelist_mode {
+                    info!(
                     sl(),
                     "Pod devices cgroup is changed to whitelist mode, devices_group_info = {:?}",
                     devices_group_info
                 );
-                Self::setup_whitelist_mode(&pod_cg)
-                    .with_context(|| format!("Setup whitelist mode for {}", pod_cpath))?;
-                devices_group_info.whitelist = true;
+                    Self::setup_whitelist_mode(pod_cg)
+                        .with_context(|| format!("Setup whitelist mode for {}", pod_cpath))?;
+                    devices_group_info.whitelist = true;
+                }
+            } else {
+                // This is the first container (aka pause container)
+                debug!(sl(), "Started to init devices cgroup");
+
+                pod_cg.create().context("Create pod cgroup")?;
+
+                // Setup blacklist for pod cgroup
+                if !is_whitelist_mode {
+                    // Setup blacklist rule and allowed default devices for
+                    // blacklist.
+                    Self::setup_blacklist_mode(pod_cg)
+                        .with_context(|| format!("Setup blacklist mode for {}", pod_cpath))?;
+                } else {
+                    Self::setup_whitelist_mode(pod_cg)
+                        .with_context(|| format!("Setup whitelist mode for {}", pod_cpath))?;
+                    devices_group_info.whitelist = true;
+                }
+
+                devices_group_info.inited = true
             }
         } else {
-            // This is the first container (aka pause container)
-            debug!(sl(), "Started to init devices cgroup");
-
-            pod_cg.create().context("Create pod cgroup")?;
-
-            // Setup blacklist for pod cgroup
-            if !is_whitelist_mode {
-                // Setup blacklist rule and allowed default devices for
-                // blacklist.
-                Self::setup_blacklist_mode(&pod_cg)
-                    .with_context(|| format!("Setup blacklist mode for {}", pod_cpath))?;
-            } else {
-                Self::setup_whitelist_mode(&pod_cg)
-                    .with_context(|| format!("Setup whitelist mode for {}", pod_cpath))?;
-                devices_group_info.whitelist = true;
-            }
-
-            devices_group_info.inited = true
+            pod_cgroup = None;
         }
 
         // Create a cgroup for the container.
@@ -1099,9 +1107,11 @@ impl Manager {
         // The rules of container cgroup are copied from its parent, which
         // contains some permissions that the container doesn't need.
         // Therefore, resetting the container's devices cgroup is required.
-        if !devices_group_info.whitelist {
-            Self::setup_blacklist_mode(&cg)
-                .with_context(|| format!("Setup blacklist mode for {}", cpath))?;
+        if let Some(devices_group_info) = devices_group_info.as_ref() {
+            if !devices_group_info.whitelist {
+                Self::setup_blacklist_mode(&cg)
+                    .with_context(|| format!("Setup blacklist mode for {}", cpath))?;
+            }
         }
 
         Ok(Self {
@@ -1110,8 +1120,10 @@ impl Manager {
             // rels: paths,
             cpath: cpath.to_string(),
             cgroup: cg,
-            pod_cgroup: pod_cg,
-            devcg_whitelist: devices_group_info.whitelist,
+            pod_cgroup,
+            devcg_whitelist: devices_group_info
+                .map(|info| info.whitelist)
+                .unwrap_or(false),
         })
     }
 
@@ -1123,21 +1135,13 @@ impl Manager {
     pub fn new_read_only(cpath: &str) -> Result<Self> {
         let (paths, mounts) = Self::get_paths_and_mounts(cpath)?;
 
-        // Cgroup path of parent of container
-        let pod_cpath = PathBuf::from(cpath)
-            .parent()
-            .context("Get parent of cgroup path")?
-            .display()
-            .to_string();
-
-        let pod_cg = load_cgroup(cgroups::hierarchies::auto(), &pod_cpath);
         let cg = load_cgroup(cgroups::hierarchies::auto(), cpath);
 
         Ok(Self {
             paths,
             mounts,
             cpath: cpath.to_string(),
-            pod_cgroup: pod_cg,
+            pod_cgroup: None,
             cgroup: cg,
             devcg_whitelist: false,
         })
@@ -1489,8 +1493,9 @@ mod tests {
                     }),
                     ..Default::default()
                 };
-                managers
-                    .push(Manager::new(&tc.cpath[cid], &spec, sandbox.devcg_info.clone()).unwrap());
+                managers.push(
+                    Manager::new(&tc.cpath[cid], &spec, Some(sandbox.devcg_info.clone())).unwrap(),
+                );
 
                 let devcg_info = sandbox.devcg_info.read().unwrap();
                 assert!(devcg_info.inited);
@@ -1501,7 +1506,6 @@ mod tests {
                 );
                 drop(devcg_info);
 
-                // TODO: Assertions go here
                 let pod_devices_list = Command::new("cat")
                     .arg("/sys/fs/cgroup/devices/kata-agent-fs-manager-test/devices.list")
                     .output()
@@ -1526,7 +1530,8 @@ mod tests {
             managers
                 .iter()
                 .for_each(|manager| manager.cgroup.delete().unwrap());
-            managers[0].pod_cgroup.delete().unwrap();
+            // The pod_cgroup must not be None
+            managers[0].pod_cgroup.as_ref().unwrap().delete().unwrap();
         }
     }
 }

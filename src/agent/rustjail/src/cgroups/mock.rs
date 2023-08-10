@@ -78,7 +78,7 @@ impl Manager {
     pub fn new(
         cpath: &str,
         _spec: &Spec,
-        _devcg_info: Arc<RwLock<DevicesCgroupInfo>>,
+        _devcg_info: Option<Arc<RwLock<DevicesCgroupInfo>>>,
     ) -> Result<Self> {
         Ok(Self {
             paths: HashMap::new(),
