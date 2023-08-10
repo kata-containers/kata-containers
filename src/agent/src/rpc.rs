@@ -59,7 +59,7 @@ use crate::device::{
 use crate::image_rpc;
 use crate::linux_abi::*;
 use crate::metrics::get_metrics;
-use crate::mount::{add_storages, baremount, update_ephemeral_mounts, STORAGE_HANDLER_LIST};
+use crate::mount::{add_storages, baremount, update_ephemeral_mounts, STORAGE_HANDLERS};
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
 use crate::network::setup_guest_dns;
 use crate::pci;
@@ -1669,7 +1669,7 @@ fn get_agent_details() -> AgentDetails {
     detail.init_daemon = unistd::getpid() == Pid::from_raw(1);
 
     detail.device_handlers = Vec::new();
-    detail.storage_handlers = STORAGE_HANDLER_LIST.iter().map(|x| x.to_string()).collect();
+    detail.storage_handlers = STORAGE_HANDLERS.get_handlers();
 
     detail
 }

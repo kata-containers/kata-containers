@@ -3,8 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#![allow(dead_code)]
-
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fs::{self, File, OpenOptions};
@@ -133,19 +131,6 @@ lazy_static! {
     };
 }
 
-pub const STORAGE_HANDLER_LIST: &[&str] = &[
-    //DRIVER_BLK_TYPE,
-    //DRIVER_9P_TYPE,
-    //DRIVER_VIRTIOFS_TYPE,
-    //DRIVER_EPHEMERAL_TYPE,
-    //DRIVER_OVERLAYFS_TYPE,
-    //DRIVER_MMIO_BLK_TYPE,
-    //DRIVER_LOCAL_TYPE,
-    //DRIVER_SCSI_TYPE,
-    //DRIVER_NVDIMM_TYPE,
-    //DRIVER_WATCHABLE_BIND_TYPE,
-];
-
 #[instrument]
 pub fn baremount(
     source: &Path,
@@ -222,7 +207,7 @@ impl StorageHandler for EphemeralHandler {
             // /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
             // /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
             // options eg "pagesize=2097152,size=524288000"(2M, 500M)
-            allocate_hugepages(ctx.logger, &storage.options.to_vec())
+            Self::allocate_hugepages(ctx.logger, &storage.options.to_vec())
                 .context("allocate hugepages")?;
             common_storage_handler(ctx.logger, &storage)?;
         } else if !storage.options.is_empty() {
@@ -251,6 +236,96 @@ impl StorageHandler for EphemeralHandler {
         }
 
         new_device("".to_string())
+    }
+}
+
+impl EphemeralHandler {
+    // Allocate hugepages by writing to sysfs
+    fn allocate_hugepages(logger: &Logger, options: &[String]) -> Result<()> {
+        info!(logger, "mounting hugePages storage options: {:?}", options);
+
+        let (pagesize, size) = Self::get_pagesize_and_size_from_option(options)
+            .context(format!("parse mount options: {:?}", &options))?;
+
+        info!(
+            logger,
+            "allocate hugepages. pageSize: {}, size: {}", pagesize, size
+        );
+
+        // sysfs entry is always of the form hugepages-${pagesize}kB
+        // Ref: https://www.kernel.org/doc/Documentation/vm/hugetlbpage.txt
+        let path = Path::new(SYS_FS_HUGEPAGES_PREFIX)
+            .join(format!("hugepages-{}kB", pagesize / 1024))
+            .join("nr_hugepages");
+
+        // write numpages to nr_hugepages file.
+        let numpages = format!("{}", size / pagesize);
+        info!(logger, "write {} pages to {:?}", &numpages, &path);
+
+        let mut file = OpenOptions::new()
+            .write(true)
+            .open(&path)
+            .context(format!("open nr_hugepages directory {:?}", &path))?;
+
+        file.write_all(numpages.as_bytes())
+            .context(format!("write nr_hugepages failed: {:?}", &path))?;
+
+        // Even if the write succeeds, the kernel isn't guaranteed to be
+        // able to allocate all the pages we requested.  Verify that it
+        // did.
+        let verify = fs::read_to_string(&path).context(format!("reading {:?}", &path))?;
+        let allocated = verify
+            .trim_end()
+            .parse::<u64>()
+            .map_err(|_| anyhow!("Unexpected text {:?} in {:?}", &verify, &path))?;
+        if allocated != size / pagesize {
+            return Err(anyhow!(
+                "Only allocated {} of {} hugepages of size {}",
+                allocated,
+                numpages,
+                pagesize
+            ));
+        }
+
+        Ok(())
+    }
+
+    // Parse filesystem options string to retrieve hugepage details
+    // options eg "pagesize=2048,size=107374182"
+    fn get_pagesize_and_size_from_option(options: &[String]) -> Result<(u64, u64)> {
+        let mut pagesize_str: Option<&str> = None;
+        let mut size_str: Option<&str> = None;
+
+        for option in options {
+            let vars: Vec<&str> = option.trim().split(',').collect();
+
+            for var in vars {
+                if let Some(stripped) = var.strip_prefix("pagesize=") {
+                    pagesize_str = Some(stripped);
+                } else if let Some(stripped) = var.strip_prefix("size=") {
+                    size_str = Some(stripped);
+                }
+
+                if pagesize_str.is_some() && size_str.is_some() {
+                    break;
+                }
+            }
+        }
+
+        if pagesize_str.is_none() || size_str.is_none() {
+            return Err(anyhow!("no pagesize/size options found"));
+        }
+
+        let pagesize = pagesize_str
+            .unwrap()
+            .parse::<u64>()
+            .context(format!("parse pagesize: {:?}", &pagesize_str))?;
+        let size = size_str
+            .unwrap()
+            .parse::<u64>()
+            .context(format!("parse size: {:?}", &pagesize_str))?;
+
+        Ok((pagesize, size))
     }
 }
 
@@ -414,94 +489,6 @@ impl StorageHandler for Virtio9pHandler {
         let path = common_storage_handler(ctx.logger, &storage)?;
         new_device(path)
     }
-}
-
-// Allocate hugepages by writing to sysfs
-fn allocate_hugepages(logger: &Logger, options: &[String]) -> Result<()> {
-    info!(logger, "mounting hugePages storage options: {:?}", options);
-
-    let (pagesize, size) = get_pagesize_and_size_from_option(options)
-        .context(format!("parse mount options: {:?}", &options))?;
-
-    info!(
-        logger,
-        "allocate hugepages. pageSize: {}, size: {}", pagesize, size
-    );
-
-    // sysfs entry is always of the form hugepages-${pagesize}kB
-    // Ref: https://www.kernel.org/doc/Documentation/vm/hugetlbpage.txt
-    let path = Path::new(SYS_FS_HUGEPAGES_PREFIX)
-        .join(format!("hugepages-{}kB", pagesize / 1024))
-        .join("nr_hugepages");
-
-    // write numpages to nr_hugepages file.
-    let numpages = format!("{}", size / pagesize);
-    info!(logger, "write {} pages to {:?}", &numpages, &path);
-
-    let mut file = OpenOptions::new()
-        .write(true)
-        .open(&path)
-        .context(format!("open nr_hugepages directory {:?}", &path))?;
-
-    file.write_all(numpages.as_bytes())
-        .context(format!("write nr_hugepages failed: {:?}", &path))?;
-
-    // Even if the write succeeds, the kernel isn't guaranteed to be
-    // able to allocate all the pages we requested.  Verify that it
-    // did.
-    let verify = fs::read_to_string(&path).context(format!("reading {:?}", &path))?;
-    let allocated = verify
-        .trim_end()
-        .parse::<u64>()
-        .map_err(|_| anyhow!("Unexpected text {:?} in {:?}", &verify, &path))?;
-    if allocated != size / pagesize {
-        return Err(anyhow!(
-            "Only allocated {} of {} hugepages of size {}",
-            allocated,
-            numpages,
-            pagesize
-        ));
-    }
-
-    Ok(())
-}
-
-// Parse filesystem options string to retrieve hugepage details
-// options eg "pagesize=2048,size=107374182"
-fn get_pagesize_and_size_from_option(options: &[String]) -> Result<(u64, u64)> {
-    let mut pagesize_str: Option<&str> = None;
-    let mut size_str: Option<&str> = None;
-
-    for option in options {
-        let vars: Vec<&str> = option.trim().split(',').collect();
-
-        for var in vars {
-            if let Some(stripped) = var.strip_prefix("pagesize=") {
-                pagesize_str = Some(stripped);
-            } else if let Some(stripped) = var.strip_prefix("size=") {
-                size_str = Some(stripped);
-            }
-
-            if pagesize_str.is_some() && size_str.is_some() {
-                break;
-            }
-        }
-    }
-
-    if pagesize_str.is_none() || size_str.is_none() {
-        return Err(anyhow!("no pagesize/size options found"));
-    }
-
-    let pagesize = pagesize_str
-        .unwrap()
-        .parse::<u64>()
-        .context(format!("parse pagesize: {:?}", &pagesize_str))?;
-    let size = size_str
-        .unwrap()
-        .parse::<u64>()
-        .context(format!("parse size: {:?}", &pagesize_str))?;
-
-    Ok((pagesize, size))
 }
 
 #[derive(Debug)]
@@ -1918,7 +1905,7 @@ mod tests {
 
         for case in data {
             let input = case.0;
-            let r = get_pagesize_and_size_from_option(&[input.to_string()]);
+            let r = EphemeralHandler::get_pagesize_and_size_from_option(&[input.to_string()]);
 
             let is_ok = case.2;
             if is_ok {
