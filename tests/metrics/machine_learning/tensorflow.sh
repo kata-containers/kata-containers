@@ -35,7 +35,6 @@ ALEXNET_FILE="alexnet_results"
 ALEXNET_CHECK_FILE_CMD="cat /${ALEXNET_FILE} | grep 'total images' | wc -l"
 RESNET_FILE="resnet_results"
 RESNET_CHECK_FILE_CMD="cat /${RESNET_FILE} | grep 'total images' | wc -l"
-MAX_RETRIES=300
 
 function remove_tmp_file() {
 	rm -rf "${resnet_tensorflow_file}" "${alexnet_tensorflow_file}"
