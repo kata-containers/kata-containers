@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: block-loop-pv
+spec:
+  capacity:
+    storage: CAPACITY
+  volumeMode: Block
+  accessModes:
+  - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: block-local-storage
+  local:
+    path: LOOP_DEVICE
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+          - key: kubernetes.io/hostname
+            operator: In
+            values:
+            - HOSTNAME
