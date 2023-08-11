@@ -1,0 +1,29 @@
+#
+# Copyright (c) 2023 Microsoft Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+[Unit]
+Description=Open Policy Agent for Kata Containers
+Documentation=https://github.com/kata-containers
+ConditionPathExists=@SETTINGSDIR@/default-policy.rego
+
+# kata-agent connects to OPA while starting up.
+Before=kata-agent.service
+
+[Service]
+Type=simple
+ExecStart=@BINDIR@/opa run --server --disable-telemetry --addr 127.0.0.1:8181 --log-level info
+DynamicUser=yes
+RuntimeDirectory=kata-opa
+LimitNOFILE=1048576
+
+# Don't restart because there may be an active policy that would be lost.
+Restart=no
+
+# Send log output to tty to allow capturing debug logs from a VM vsock port.
+StandardError=tty
+
+# Discourage OOM-killer from touching the policy service.
+OOMScoreAdjust=-997
