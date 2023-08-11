@@ -46,7 +46,8 @@ func NewGetFirecrackerVersionOK() *GetFirecrackerVersionOK {
 	return &GetFirecrackerVersionOK{}
 }
 
-/* GetFirecrackerVersionOK describes a response with status code 200, with default header values.
+/*
+GetFirecrackerVersionOK describes a response with status code 200, with default header values.
 
 OK
 */
@@ -54,9 +55,39 @@ type GetFirecrackerVersionOK struct {
 	Payload *models.FirecrackerVersion
 }
 
+// IsSuccess returns true when this get firecracker version o k response has a 2xx status code
+func (o *GetFirecrackerVersionOK) IsSuccess() bool {
+	return true
+}
+
+// IsRedirect returns true when this get firecracker version o k response has a 3xx status code
+func (o *GetFirecrackerVersionOK) IsRedirect() bool {
+	return false
+}
+
+// IsClientError returns true when this get firecracker version o k response has a 4xx status code
+func (o *GetFirecrackerVersionOK) IsClientError() bool {
+	return false
+}
+
+// IsServerError returns true when this get firecracker version o k response has a 5xx status code
+func (o *GetFirecrackerVersionOK) IsServerError() bool {
+	return false
+}
+
+// IsCode returns true when this get firecracker version o k response a status code equal to that given
+func (o *GetFirecrackerVersionOK) IsCode(code int) bool {
+	return code == 200
+}
+
 func (o *GetFirecrackerVersionOK) Error() string {
 	return fmt.Sprintf("[GET /version][%d] getFirecrackerVersionOK  %+v", 200, o.Payload)
 }
+
+func (o *GetFirecrackerVersionOK) String() string {
+	return fmt.Sprintf("[GET /version][%d] getFirecrackerVersionOK  %+v", 200, o.Payload)
+}
+
 func (o *GetFirecrackerVersionOK) GetPayload() *models.FirecrackerVersion {
 	return o.Payload
 }
@@ -80,7 +111,8 @@ func NewGetFirecrackerVersionDefault(code int) *GetFirecrackerVersionDefault {
 	}
 }
 
-/* GetFirecrackerVersionDefault describes a response with status code -1, with default header values.
+/*
+GetFirecrackerVersionDefault describes a response with status code -1, with default header values.
 
 Internal server error
 */
@@ -95,9 +127,39 @@ func (o *GetFirecrackerVersionDefault) Code() int {
 	return o._statusCode
 }
 
+// IsSuccess returns true when this get firecracker version default response has a 2xx status code
+func (o *GetFirecrackerVersionDefault) IsSuccess() bool {
+	return o._statusCode/100 == 2
+}
+
+// IsRedirect returns true when this get firecracker version default response has a 3xx status code
+func (o *GetFirecrackerVersionDefault) IsRedirect() bool {
+	return o._statusCode/100 == 3
+}
+
+// IsClientError returns true when this get firecracker version default response has a 4xx status code
+func (o *GetFirecrackerVersionDefault) IsClientError() bool {
+	return o._statusCode/100 == 4
+}
+
+// IsServerError returns true when this get firecracker version default response has a 5xx status code
+func (o *GetFirecrackerVersionDefault) IsServerError() bool {
+	return o._statusCode/100 == 5
+}
+
+// IsCode returns true when this get firecracker version default response a status code equal to that given
+func (o *GetFirecrackerVersionDefault) IsCode(code int) bool {
+	return o._statusCode == code
+}
+
 func (o *GetFirecrackerVersionDefault) Error() string {
 	return fmt.Sprintf("[GET /version][%d] getFirecrackerVersion default  %+v", o._statusCode, o.Payload)
 }
+
+func (o *GetFirecrackerVersionDefault) String() string {
+	return fmt.Sprintf("[GET /version][%d] getFirecrackerVersion default  %+v", o._statusCode, o.Payload)
+}
+
 func (o *GetFirecrackerVersionDefault) GetPayload() *models.Error {
 	return o.Payload
 }
