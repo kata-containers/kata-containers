@@ -9,7 +9,6 @@ set -o pipefail
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 
 source "${SCRIPT_PATH}/../../lib/common.bash"
-test_repo="${test_repo:-github.com/kata-containers/tests}"
 TEST_NAME="${TEST_NAME:-cassandra}"
 cassandra_file=$(mktemp cassandraresults.XXXXXXXXXX)
 cassandra_read_file=$(mktemp cassandrareadresults.XXXXXXXXXX)
