@@ -8,7 +8,7 @@ license = "Apache-2.0"
 [dependencies]
 oci = { path = "../libs/oci" }
 rustjail = { path = "rustjail" }
-protocols = { path = "../libs/protocols", features = ["async"] }
+protocols = { path = "../libs/protocols", features = ["async", "with-serde"] }
 lazy_static = "1.3.0"
 ttrpc = { version = "0.7.1", features = ["async"], default-features = false }
 protobuf = "3.2.0"
@@ -67,6 +67,12 @@ serde = { version = "1.0.129", features = ["derive"] }
 toml = "0.5.8"
 clap = { version = "3.0.1", features = ["derive"] }
 
+# Communication with the OPA service
+http = { version = "0.2.8", optional = true }
+reqwest = { version = "0.11.14", optional = true }
+# The "vendored" feature for openssl is required for musl build
+openssl = { version = "0.10.54", features = ["vendored"], optional = true }
+
 [dev-dependencies]
 tempfile = "3.1.0"
 test-utils = { path = "../libs/test-utils" }
@@ -83,6 +89,7 @@ lto = true
 [features]
 seccomp = ["rustjail/seccomp"]
 standard-oci-runtime = ["rustjail/standard-oci-runtime"]
+agent-policy = ["http", "openssl", "reqwest"]
 
 [[bin]]
 name = "kata-agent"

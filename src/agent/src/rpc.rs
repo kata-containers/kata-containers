@@ -66,6 +66,10 @@ use crate::AGENT_CONFIG;
 
 use crate::trace_rpc_call;
 use crate::tracer::extract_carrier_from_ttrpc;
+
+#[cfg(feature = "agent-policy")]
+use crate::AGENT_POLICY;
+
 use opentelemetry::global;
 use tracing::span;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
@@ -120,7 +124,7 @@ fn ttrpc_error(code: ttrpc::Code, err: impl std::fmt::Debug) -> ttrpc::Error {
     get_rpc_status(code, format!("{:?}", err))
 }
 
-fn is_allowed(req: &impl MessageDyn) -> ttrpc::Result<()> {
+fn config_allows(req: &impl MessageDyn) -> ttrpc::Result<()> {
     if !AGENT_CONFIG.is_allowed_endpoint(req.descriptor_dyn().name()) {
         Err(ttrpc_error(
             ttrpc::Code::UNIMPLEMENTED,
@@ -129,6 +133,35 @@ fn is_allowed(req: &impl MessageDyn) -> ttrpc::Result<()> {
     } else {
         Ok(())
     }
+}
+
+#[cfg(feature = "agent-policy")]
+async fn policy_allows(req: &(impl MessageDyn + serde::Serialize)) -> ttrpc::Result<()> {
+    let request = serde_json::to_string(req).unwrap();
+    let mut policy = AGENT_POLICY.lock().await;
+    if !policy
+        .is_allowed_endpoint(req.descriptor_dyn().name(), &request)
+        .await
+    {
+        warn!(sl(), "{} is blocked by policy", req.descriptor_dyn().name());
+        Err(ttrpc_error(
+            ttrpc::Code::PERMISSION_DENIED,
+            format!("{} is blocked by policy", req.descriptor_dyn().name()),
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+async fn is_allowed(req: &(impl MessageDyn + serde::Serialize)) -> ttrpc::Result<()> {
+    let res = config_allows(req);
+
+    #[cfg(feature = "agent-policy")]
+    if res.is_ok() {
+        return policy_allows(req).await;
+    }
+
+    res
 }
 
 #[derive(Clone, Debug)]
@@ -607,7 +640,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::CreateContainerRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "create_container", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
         match self.do_create_container(req).await {
             Err(e) => Err(ttrpc_error(ttrpc::Code::INTERNAL, e)),
             Ok(_) => Ok(Empty::new()),
@@ -620,7 +653,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::StartContainerRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "start_container", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
         match self.do_start_container(req).await {
             Err(e) => Err(ttrpc_error(ttrpc::Code::INTERNAL, e)),
             Ok(_) => Ok(Empty::new()),
@@ -633,7 +666,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::RemoveContainerRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "remove_container", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
         match self.do_remove_container(req).await {
             Err(e) => Err(ttrpc_error(ttrpc::Code::INTERNAL, e)),
             Ok(_) => Ok(Empty::new()),
@@ -646,7 +679,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::ExecProcessRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "exec_process", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
         match self.do_exec_process(req).await {
             Err(e) => Err(ttrpc_error(ttrpc::Code::INTERNAL, e)),
             Ok(_) => Ok(Empty::new()),
@@ -659,7 +692,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::SignalProcessRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "signal_process", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
         match self.do_signal_process(req).await {
             Err(e) => Err(ttrpc_error(ttrpc::Code::INTERNAL, e)),
             Ok(_) => Ok(Empty::new()),
@@ -672,7 +705,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::WaitProcessRequest,
     ) -> ttrpc::Result<WaitProcessResponse> {
         trace_rpc_call!(ctx, "wait_process", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
         self.do_wait_process(req)
             .await
             .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e))
@@ -684,7 +717,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::UpdateContainerRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "update_container", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
 
         let mut sandbox = self.sandbox.lock().await;
         let ctr = sandbox.get_container(&req.container_id).ok_or_else(|| {
@@ -710,7 +743,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::StatsContainerRequest,
     ) -> ttrpc::Result<StatsContainerResponse> {
         trace_rpc_call!(ctx, "stats_container", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
 
         let mut sandbox = self.sandbox.lock().await;
         let ctr = sandbox.get_container(&req.container_id).ok_or_else(|| {
@@ -730,7 +763,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::PauseContainerRequest,
     ) -> ttrpc::Result<protocols::empty::Empty> {
         trace_rpc_call!(ctx, "pause_container", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
 
         let mut sandbox = self.sandbox.lock().await;
         let ctr = sandbox.get_container(req.container_id()).ok_or_else(|| {
@@ -752,7 +785,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::ResumeContainerRequest,
     ) -> ttrpc::Result<protocols::empty::Empty> {
         trace_rpc_call!(ctx, "resume_container", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
 
         let mut sandbox = self.sandbox.lock().await;
         let ctr = sandbox.get_container(req.container_id()).ok_or_else(|| {
@@ -774,7 +807,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::RemoveStaleVirtiofsShareMountsRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "remove_stale_virtiofs_share_mounts", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
         let mount_infos = parse_mount_table("/proc/self/mountinfo")
             .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e))?;
         for m in &mount_infos {
@@ -796,7 +829,7 @@ impl agent_ttrpc::AgentService for AgentService {
         _ctx: &TtrpcContext,
         req: protocols::agent::WriteStreamRequest,
     ) -> ttrpc::Result<WriteStreamResponse> {
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
         self.do_write_stream(req)
             .await
             .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e))
@@ -807,7 +840,7 @@ impl agent_ttrpc::AgentService for AgentService {
         _ctx: &TtrpcContext,
         req: protocols::agent::ReadStreamRequest,
     ) -> ttrpc::Result<ReadStreamResponse> {
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
         self.do_read_stream(req, true)
             .await
             .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e))
@@ -818,7 +851,7 @@ impl agent_ttrpc::AgentService for AgentService {
         _ctx: &TtrpcContext,
         req: protocols::agent::ReadStreamRequest,
     ) -> ttrpc::Result<ReadStreamResponse> {
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
         self.do_read_stream(req, false)
             .await
             .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e))
@@ -830,7 +863,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::CloseStdinRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "close_stdin", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
 
         let cid = req.container_id;
         let eid = req.exec_id;
@@ -856,7 +889,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::TtyWinResizeRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "tty_win_resize", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
 
         let mut sandbox = self.sandbox.lock().await;
         let p = sandbox
@@ -895,7 +928,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::UpdateInterfaceRequest,
     ) -> ttrpc::Result<Interface> {
         trace_rpc_call!(ctx, "update_interface", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
 
         let interface = req.interface.into_option().ok_or_else(|| {
             ttrpc_error(
@@ -923,7 +956,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::UpdateRoutesRequest,
     ) -> ttrpc::Result<Routes> {
         trace_rpc_call!(ctx, "update_routes", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
 
         let new_routes = req.routes.into_option().map(|r| r.Routes).ok_or_else(|| {
             ttrpc_error(
@@ -960,7 +993,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::UpdateEphemeralMountsRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "update_mounts", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
 
         match update_ephemeral_mounts(sl(), &req.storages, &self.sandbox).await {
             Ok(_) => Ok(Empty::new()),
@@ -977,7 +1010,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: GetIPTablesRequest,
     ) -> ttrpc::Result<GetIPTablesResponse> {
         trace_rpc_call!(ctx, "get_iptables", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
 
         info!(sl(), "get_ip_tables: request received");
 
@@ -1016,7 +1049,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: SetIPTablesRequest,
     ) -> ttrpc::Result<SetIPTablesResponse> {
         trace_rpc_call!(ctx, "set_iptables", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
 
         info!(sl(), "set_ip_tables request received");
 
@@ -1131,7 +1164,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::ListInterfacesRequest,
     ) -> ttrpc::Result<Interfaces> {
         trace_rpc_call!(ctx, "list_interfaces", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
 
         let list = self
             .sandbox
@@ -1159,7 +1192,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::ListRoutesRequest,
     ) -> ttrpc::Result<Routes> {
         trace_rpc_call!(ctx, "list_routes", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
 
         let list = self
             .sandbox
@@ -1182,7 +1215,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::CreateSandboxRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "create_sandbox", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
 
         {
             let mut s = self.sandbox.lock().await;
@@ -1241,7 +1274,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::DestroySandboxRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "destroy_sandbox", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
 
         let mut sandbox = self.sandbox.lock().await;
         // destroy all containers, clean up, notify agent to exit etc.
@@ -1274,7 +1307,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::AddARPNeighborsRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "add_arp_neighbors", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
 
         let neighs = req
             .neighbors
@@ -1309,7 +1342,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::OnlineCPUMemRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "online_cpu_mem", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
         let sandbox = self.sandbox.lock().await;
 
         sandbox
@@ -1325,7 +1358,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::ReseedRandomDevRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "reseed_random_dev", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
 
         random::reseed_rng(req.data.as_slice())
             .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e))?;
@@ -1339,7 +1372,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::GuestDetailsRequest,
     ) -> ttrpc::Result<GuestDetailsResponse> {
         trace_rpc_call!(ctx, "get_guest_details", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
 
         info!(sl(), "get guest details!");
         let mut resp = GuestDetailsResponse::new();
@@ -1373,7 +1406,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::MemHotplugByProbeRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "mem_hotplug_by_probe", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
 
         do_mem_hotplug_by_probe(&req.memHotplugProbeAddr)
             .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e))?;
@@ -1387,7 +1420,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::SetGuestDateTimeRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "set_guest_date_time", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
 
         do_set_guest_date_time(req.Sec, req.Usec)
             .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e))?;
@@ -1401,7 +1434,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::CopyFileRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "copy_file", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
 
         do_copy_file(&req).map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e))?;
 
@@ -1414,7 +1447,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::GetMetricsRequest,
     ) -> ttrpc::Result<Metrics> {
         trace_rpc_call!(ctx, "get_metrics", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
 
         match get_metrics(&req) {
             Err(e) => Err(ttrpc_error(ttrpc::Code::INTERNAL, e)),
@@ -1431,7 +1464,7 @@ impl agent_ttrpc::AgentService for AgentService {
         _ctx: &TtrpcContext,
         req: protocols::agent::GetOOMEventRequest,
     ) -> ttrpc::Result<OOMEvent> {
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
         let s = self.sandbox.lock().await;
         let event_rx = &s.event_rx.clone();
         let mut event_rx = event_rx.lock().await;
@@ -1455,7 +1488,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: VolumeStatsRequest,
     ) -> ttrpc::Result<VolumeStatsResponse> {
         trace_rpc_call!(ctx, "get_volume_stats", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
 
         info!(sl(), "get volume stats!");
         let mut resp = VolumeStatsResponse::new();
@@ -1495,9 +1528,28 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::AddSwapRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "add_swap", req);
-        is_allowed(&req)?;
+        is_allowed(&req).await?;
 
         do_add_swap(&self.sandbox, &req)
+            .await
+            .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e))?;
+
+        Ok(Empty::new())
+    }
+
+    #[cfg(feature = "agent-policy")]
+    async fn set_policy(
+        &self,
+        ctx: &TtrpcContext,
+        req: protocols::agent::SetPolicyRequest,
+    ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "set_policy", req);
+        is_allowed(&req).await?;
+
+        AGENT_POLICY
+            .lock()
+            .await
+            .set_policy(&req.policy)
             .await
             .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e))?;
 
