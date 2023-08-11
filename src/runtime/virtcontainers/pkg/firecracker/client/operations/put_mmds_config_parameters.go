@@ -54,10 +54,12 @@ func NewPutMmdsConfigParamsWithHTTPClient(client *http.Client) *PutMmdsConfigPar
 	}
 }
 
-/* PutMmdsConfigParams contains all the parameters to send to the API endpoint
-   for the put mmds config operation.
+/*
+PutMmdsConfigParams contains all the parameters to send to the API endpoint
 
-   Typically these are written to a http.Request.
+	for the put mmds config operation.
+
+	Typically these are written to a http.Request.
 */
 type PutMmdsConfigParams struct {
 

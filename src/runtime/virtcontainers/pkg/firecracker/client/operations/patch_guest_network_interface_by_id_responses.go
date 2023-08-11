@@ -52,14 +52,44 @@ func NewPatchGuestNetworkInterfaceByIDNoContent() *PatchGuestNetworkInterfaceByI
 	return &PatchGuestNetworkInterfaceByIDNoContent{}
 }
 
-/* PatchGuestNetworkInterfaceByIDNoContent describes a response with status code 204, with default header values.
+/*
+PatchGuestNetworkInterfaceByIDNoContent describes a response with status code 204, with default header values.
 
 Network interface updated
 */
 type PatchGuestNetworkInterfaceByIDNoContent struct {
 }
 
+// IsSuccess returns true when this patch guest network interface by Id no content response has a 2xx status code
+func (o *PatchGuestNetworkInterfaceByIDNoContent) IsSuccess() bool {
+	return true
+}
+
+// IsRedirect returns true when this patch guest network interface by Id no content response has a 3xx status code
+func (o *PatchGuestNetworkInterfaceByIDNoContent) IsRedirect() bool {
+	return false
+}
+
+// IsClientError returns true when this patch guest network interface by Id no content response has a 4xx status code
+func (o *PatchGuestNetworkInterfaceByIDNoContent) IsClientError() bool {
+	return false
+}
+
+// IsServerError returns true when this patch guest network interface by Id no content response has a 5xx status code
+func (o *PatchGuestNetworkInterfaceByIDNoContent) IsServerError() bool {
+	return false
+}
+
+// IsCode returns true when this patch guest network interface by Id no content response a status code equal to that given
+func (o *PatchGuestNetworkInterfaceByIDNoContent) IsCode(code int) bool {
+	return code == 204
+}
+
 func (o *PatchGuestNetworkInterfaceByIDNoContent) Error() string {
+	return fmt.Sprintf("[PATCH /network-interfaces/{iface_id}][%d] patchGuestNetworkInterfaceByIdNoContent ", 204)
+}
+
+func (o *PatchGuestNetworkInterfaceByIDNoContent) String() string {
 	return fmt.Sprintf("[PATCH /network-interfaces/{iface_id}][%d] patchGuestNetworkInterfaceByIdNoContent ", 204)
 }
 
@@ -73,7 +103,8 @@ func NewPatchGuestNetworkInterfaceByIDBadRequest() *PatchGuestNetworkInterfaceBy
 	return &PatchGuestNetworkInterfaceByIDBadRequest{}
 }
 
-/* PatchGuestNetworkInterfaceByIDBadRequest describes a response with status code 400, with default header values.
+/*
+PatchGuestNetworkInterfaceByIDBadRequest describes a response with status code 400, with default header values.
 
 Network interface cannot be updated due to bad input
 */
@@ -81,9 +112,39 @@ type PatchGuestNetworkInterfaceByIDBadRequest struct {
 	Payload *models.Error
 }
 
+// IsSuccess returns true when this patch guest network interface by Id bad request response has a 2xx status code
+func (o *PatchGuestNetworkInterfaceByIDBadRequest) IsSuccess() bool {
+	return false
+}
+
+// IsRedirect returns true when this patch guest network interface by Id bad request response has a 3xx status code
+func (o *PatchGuestNetworkInterfaceByIDBadRequest) IsRedirect() bool {
+	return false
+}
+
+// IsClientError returns true when this patch guest network interface by Id bad request response has a 4xx status code
+func (o *PatchGuestNetworkInterfaceByIDBadRequest) IsClientError() bool {
+	return true
+}
+
+// IsServerError returns true when this patch guest network interface by Id bad request response has a 5xx status code
+func (o *PatchGuestNetworkInterfaceByIDBadRequest) IsServerError() bool {
+	return false
+}
+
+// IsCode returns true when this patch guest network interface by Id bad request response a status code equal to that given
+func (o *PatchGuestNetworkInterfaceByIDBadRequest) IsCode(code int) bool {
+	return code == 400
+}
+
 func (o *PatchGuestNetworkInterfaceByIDBadRequest) Error() string {
 	return fmt.Sprintf("[PATCH /network-interfaces/{iface_id}][%d] patchGuestNetworkInterfaceByIdBadRequest  %+v", 400, o.Payload)
 }
+
+func (o *PatchGuestNetworkInterfaceByIDBadRequest) String() string {
+	return fmt.Sprintf("[PATCH /network-interfaces/{iface_id}][%d] patchGuestNetworkInterfaceByIdBadRequest  %+v", 400, o.Payload)
+}
+
 func (o *PatchGuestNetworkInterfaceByIDBadRequest) GetPayload() *models.Error {
 	return o.Payload
 }
@@ -107,7 +168,8 @@ func NewPatchGuestNetworkInterfaceByIDDefault(code int) *PatchGuestNetworkInterf
 	}
 }
 
-/* PatchGuestNetworkInterfaceByIDDefault describes a response with status code -1, with default header values.
+/*
+PatchGuestNetworkInterfaceByIDDefault describes a response with status code -1, with default header values.
 
 Internal server error
 */
@@ -122,9 +184,39 @@ func (o *PatchGuestNetworkInterfaceByIDDefault) Code() int {
 	return o._statusCode
 }
 
+// IsSuccess returns true when this patch guest network interface by ID default response has a 2xx status code
+func (o *PatchGuestNetworkInterfaceByIDDefault) IsSuccess() bool {
+	return o._statusCode/100 == 2
+}
+
+// IsRedirect returns true when this patch guest network interface by ID default response has a 3xx status code
+func (o *PatchGuestNetworkInterfaceByIDDefault) IsRedirect() bool {
+	return o._statusCode/100 == 3
+}
+
+// IsClientError returns true when this patch guest network interface by ID default response has a 4xx status code
+func (o *PatchGuestNetworkInterfaceByIDDefault) IsClientError() bool {
+	return o._statusCode/100 == 4
+}
+
+// IsServerError returns true when this patch guest network interface by ID default response has a 5xx status code
+func (o *PatchGuestNetworkInterfaceByIDDefault) IsServerError() bool {
+	return o._statusCode/100 == 5
+}
+
+// IsCode returns true when this patch guest network interface by ID default response a status code equal to that given
+func (o *PatchGuestNetworkInterfaceByIDDefault) IsCode(code int) bool {
+	return o._statusCode == code
+}
+
 func (o *PatchGuestNetworkInterfaceByIDDefault) Error() string {
 	return fmt.Sprintf("[PATCH /network-interfaces/{iface_id}][%d] patchGuestNetworkInterfaceByID default  %+v", o._statusCode, o.Payload)
 }
+
+func (o *PatchGuestNetworkInterfaceByIDDefault) String() string {
+	return fmt.Sprintf("[PATCH /network-interfaces/{iface_id}][%d] patchGuestNetworkInterfaceByID default  %+v", o._statusCode, o.Payload)
+}
+
 func (o *PatchGuestNetworkInterfaceByIDDefault) GetPayload() *models.Error {
 	return o.Payload
 }

@@ -54,10 +54,12 @@ func NewPatchBalloonStatsIntervalParamsWithHTTPClient(client *http.Client) *Patc
 	}
 }
 
-/* PatchBalloonStatsIntervalParams contains all the parameters to send to the API endpoint
-   for the patch balloon stats interval operation.
+/*
+PatchBalloonStatsIntervalParams contains all the parameters to send to the API endpoint
 
-   Typically these are written to a http.Request.
+	for the patch balloon stats interval operation.
+
+	Typically these are written to a http.Request.
 */
 type PatchBalloonStatsIntervalParams struct {
 
