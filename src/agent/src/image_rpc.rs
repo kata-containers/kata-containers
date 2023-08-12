@@ -14,6 +14,7 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use image_rs::image::ImageClient;
 use protocols::image;
 use tokio::sync::Mutex;
 use ttrpc::{self, error::get_rpc_status as ttrpc_error};
@@ -21,9 +22,6 @@ use ttrpc::{self, error::get_rpc_status as ttrpc_error};
 use crate::rpc::{verify_cid, CONTAINER_BASE};
 use crate::sandbox::Sandbox;
 use crate::AGENT_CONFIG;
-
-use image_rs::image::ImageClient;
-use std::io::Write;
 
 const AA_PATH: &str = "/usr/local/bin/attestation-agent";
 
@@ -51,23 +49,20 @@ pub struct ImageService {
 }
 
 impl ImageService {
-    pub async fn new(sandbox: Arc<Mutex<Sandbox>>) -> Self {
+    pub fn new(sandbox: Arc<Mutex<Sandbox>>) -> Self {
         env::set_var("CC_IMAGE_WORK_DIR", KATA_CC_IMAGE_WORK_DIR);
+
         let mut image_client = ImageClient::default();
-
-        let image_policy_file = &AGENT_CONFIG.image_policy_file;
-        if !image_policy_file.is_empty() {
-            image_client.config.file_paths.sigstore_config = image_policy_file.clone();
+        if !AGENT_CONFIG.image_policy_file.is_empty() {
+            image_client.config.file_paths.sigstore_config = AGENT_CONFIG.image_policy_file.clone();
         }
-
-        let simple_signing_sigstore_config = &AGENT_CONFIG.simple_signing_sigstore_config;
-        if !simple_signing_sigstore_config.is_empty() {
-            image_client.config.file_paths.sigstore_config = simple_signing_sigstore_config.clone();
+        if !AGENT_CONFIG.simple_signing_sigstore_config.is_empty() {
+            image_client.config.file_paths.sigstore_config =
+                AGENT_CONFIG.simple_signing_sigstore_config.clone();
         }
-
-        let image_registry_auth_file = &AGENT_CONFIG.image_registry_auth_file;
-        if !image_registry_auth_file.is_empty() {
-            image_client.config.file_paths.auth_file = image_registry_auth_file.clone();
+        if !AGENT_CONFIG.image_registry_auth_file.is_empty() {
+            image_client.config.file_paths.auth_file =
+                AGENT_CONFIG.image_registry_auth_file.clone();
         }
 
         Self {
@@ -119,8 +114,9 @@ impl ImageService {
             }
         });
 
-        let mut config_file = fs::File::create(config_path)?;
-        config_file.write_all(ocicrypt_config.to_string().as_bytes())?;
+        fs::write(config_path, ocicrypt_config.to_string().as_bytes())?;
+
+        env::set_var("OCICRYPT_KEYPROVIDER_CONFIG", config_path);
 
         // The Attestation Agent will run for the duration of the guest.
         Command::new(AA_PATH)
@@ -129,6 +125,7 @@ impl ImageService {
             .arg("--getresource_sock")
             .arg(AA_GETRESOURCE_URI)
             .spawn()?;
+
         Ok(())
     }
 
@@ -154,8 +151,6 @@ impl ImageService {
     }
 
     async fn pull_image(&self, req: &image::PullImageRequest) -> Result<String> {
-        env::set_var("OCICRYPT_KEYPROVIDER_CONFIG", OCICRYPT_CONFIG_PATH);
-
         let https_proxy = &AGENT_CONFIG.https_proxy;
         if !https_proxy.is_empty() {
             env::set_var("HTTPS_PROXY", https_proxy);
@@ -195,6 +190,7 @@ impl ImageService {
             !aa_kbc_params.is_empty()
         );
         self.image_client.lock().await.config.auth = !aa_kbc_params.is_empty();
+        let decrypt_config = format!("provider:attestation-agent:{}", aa_kbc_params);
 
         // Read enable signature verification from the agent config and set it in the image_client
         let enable_signature_verification = &AGENT_CONFIG.enable_signature_verification;
@@ -208,8 +204,6 @@ impl ImageService {
 
         let bundle_path = Path::new(CONTAINER_BASE).join(&cid);
         fs::create_dir_all(&bundle_path)?;
-
-        let decrypt_config = format!("provider:attestation-agent:{}", aa_kbc_params);
 
         info!(sl(), "pull image {:?}, bundle path {:?}", cid, bundle_path);
         // Image layers will store at KATA_CC_IMAGE_WORK_DIR, generated bundles

@@ -1826,8 +1826,8 @@ pub async fn start(
     let health_service = Box::new(HealthService {}) as Box<dyn health_ttrpc::Health + Send + Sync>;
     let health_worker = Arc::new(health_service);
 
-    let image_service = Box::new(image_rpc::ImageService::new(s).await)
-        as Box<dyn image_ttrpc::Image + Send + Sync>;
+    let image_service =
+        Box::new(image_rpc::ImageService::new(s)) as Box<dyn image_ttrpc::Image + Send + Sync>;
 
     let aservice = agent_ttrpc::create_agent_service(agent_worker);
 
