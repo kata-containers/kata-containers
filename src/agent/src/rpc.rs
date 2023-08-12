@@ -1773,8 +1773,8 @@ pub async fn start(
     let health_service = Box::new(HealthService {}) as Box<dyn health_ttrpc::Health + Send + Sync>;
     let hservice = health_ttrpc::create_health(Arc::new(health_service));
 
-    let image_service = Box::new(image_rpc::ImageService::new(s).await)
-        as Box<dyn image_ttrpc::Image + Send + Sync>;
+    let image_service =
+        Box::new(image_rpc::ImageService::new(s)) as Box<dyn image_ttrpc::Image + Send + Sync>;
     let iservice = image_ttrpc::create_image(Arc::new(image_service));
 
     let server = TtrpcServer::new()
