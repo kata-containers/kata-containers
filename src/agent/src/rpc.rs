@@ -191,7 +191,7 @@ impl AgentService {
         // In case of pulling image inside guest, we need to merge the image bundle OCI spec
         // into the container creation request OCI spec.
         let image_service = image_rpc::ImageService::singleton().await?;
-        image_service.merge_bundle_oci(&mut oci).await?;
+        image_service.merge_bundle_oci(&mut oci, &cid).await?;
 
         // Some devices need some extra processing (the ones invoked with
         // --device for instance), and that's what this call is doing. It

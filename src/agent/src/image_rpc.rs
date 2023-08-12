@@ -255,52 +255,58 @@ impl ImageService {
     }
 
     async fn add_image(&self, image: String, cid: String) {
-        self.images.lock().await.insert(image, cid);
+        self.images.lock().await.insert(cid, image);
     }
 
     // When being passed an image name through a container annotation, merge its
     // corresponding bundle OCI specification into the passed container creation one.
-    pub async fn merge_bundle_oci(&self, container_oci: &mut oci::Spec) -> Result<()> {
-        if let Some(image_name) = container_oci
-            .annotations
-            .get(&ANNO_K8S_IMAGE_NAME.to_string())
-        {
-            let images = self.images.lock().await;
-            if let Some(container_id) = images.get(image_name) {
-                let image_oci_config_path = Path::new(CONTAINER_BASE)
-                    .join(container_id)
-                    .join(CONFIG_JSON);
-                debug!(
-                    sl(),
-                    "Image bundle config path: {:?}", image_oci_config_path
-                );
+    pub async fn merge_bundle_oci(&self, container_oci: &mut oci::Spec, cid: &str) -> Result<()> {
+        // Check marker for merging OCI spec inside guest.
+        let image_name = match container_oci.annotations.get(ANNO_K8S_IMAGE_NAME) {
+            Some(v) => v,
+            None => return Ok(()),
+        };
 
-                let image_oci =
-                    oci::Spec::load(image_oci_config_path.to_str().ok_or_else(|| {
-                        anyhow!(
-                            "Invalid container image OCI config path {:?}",
-                            image_oci_config_path
-                        )
-                    })?)
-                    .context("load image bundle")?;
+        let images = self.images.lock().await;
+        let image = match images.get(cid) {
+            Some(v) => v,
+            None => return Ok(()),
+            //None => return Err(anyhow!("no image available for container {}", cid)),
+        };
 
-                if let Some(container_root) = container_oci.root.as_mut() {
-                    if let Some(image_root) = image_oci.root.as_ref() {
-                        let root_path = Path::new(CONTAINER_BASE)
-                            .join(container_id)
-                            .join(image_root.path.clone());
-                        container_root.path =
-                            String::from(root_path.to_str().ok_or_else(|| {
-                                anyhow!("Invalid container image root path {:?}", root_path)
-                            })?);
-                    }
-                }
+        if image_name != image {
+            panic!("image name {} deosn't match expected {}", image_name, image);
+        }
 
-                if let Some(container_process) = container_oci.process.as_mut() {
-                    if let Some(image_process) = image_oci.process.as_ref() {
-                        self.merge_oci_process(container_process, image_process);
-                    }
-                }
+        let image_oci_config_path = Path::new(CONTAINER_BASE).join(cid).join(CONFIG_JSON);
+        debug!(
+            sl(),
+            "Image bundle config path: {:?}", image_oci_config_path
+        );
+
+        let image_oci = oci::Spec::load(image_oci_config_path.to_str().ok_or_else(|| {
+            anyhow!(
+                "Invalid container image OCI config path {:?}",
+                image_oci_config_path
+            )
+        })?)
+        .context("load image bundle")?;
+
+        if let Some(container_root) = container_oci.root.as_mut() {
+            if let Some(image_root) = image_oci.root.as_ref() {
+                let root_path = Path::new(CONTAINER_BASE)
+                    .join(cid)
+                    .join(image_root.path.clone());
+                container_root.path =
+                    String::from(root_path.to_str().ok_or_else(|| {
+                        anyhow!("Invalid container image root path {:?}", root_path)
+                    })?);
+            }
+        }
+
+        if let Some(container_process) = container_oci.process.as_mut() {
+            if let Some(image_process) = image_oci.process.as_ref() {
+                self.merge_oci_process(container_process, image_process);
             }
         }
 
