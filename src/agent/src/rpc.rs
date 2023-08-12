@@ -207,7 +207,8 @@ impl AgentService {
             "receive createcontainer, storages: {:?}", &req.storages
         );
 
-        // Merge the image bundle OCI spec into the container creation request OCI spec.
+        // In case of pulling image inside guest, we need to merge the image bundle OCI spec
+        // into the container creation request OCI spec.
         self.merge_bundle_oci(&mut oci).await?;
 
         // Some devices need some extra processing (the ones invoked with
@@ -1773,9 +1774,11 @@ pub async fn start(
     let health_service = Box::new(HealthService {}) as Box<dyn health_ttrpc::Health + Send + Sync>;
     let hservice = health_ttrpc::create_health(Arc::new(health_service));
 
+    let image_service = image_rpc::ImageService::new(s);
+    *image_rpc::IMAGE_SERVICE.lock().await = Some(image_service.clone());
     let image_service =
-        Box::new(image_rpc::ImageService::new(s)) as Box<dyn image_ttrpc::Image + Send + Sync>;
-    let iservice = image_ttrpc::create_image(Arc::new(image_service));
+        Arc::new(Box::new(image_service) as Box<dyn image_ttrpc::Image + Send + Sync>);
+    let iservice = image_ttrpc::create_image(image_service);
 
     let server = TtrpcServer::new()
         .bind(server_address)?

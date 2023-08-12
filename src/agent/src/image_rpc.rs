@@ -36,14 +36,20 @@ const KATA_CC_IMAGE_WORK_DIR: &str = "/run/image/";
 const KATA_CC_PAUSE_BUNDLE: &str = "/pause_bundle";
 const CONFIG_JSON: &str = "config.json";
 
+#[rustfmt::skip]
+lazy_static! {
+    pub static ref IMAGE_SERVICE: Mutex<Option<ImageService>> = Mutex::new(None);
+}
+
 // Convenience function to obtain the scope logger.
 fn sl() -> slog::Logger {
     slog_scope::logger().new(o!("subsystem" => "cgroups"))
 }
 
+#[derive(Clone)]
 pub struct ImageService {
     sandbox: Arc<Mutex<Sandbox>>,
-    attestation_agent_started: AtomicBool,
+    attestation_agent_started: Arc<AtomicBool>,
     image_client: Arc<Mutex<ImageClient>>,
     container_count: Arc<AtomicU16>,
 }
@@ -67,7 +73,7 @@ impl ImageService {
 
         Self {
             sandbox,
-            attestation_agent_started: AtomicBool::new(false),
+            attestation_agent_started: Arc::new(AtomicBool::new(false)),
             image_client: Arc::new(Mutex::new(image_client)),
             container_count: Arc::new(AtomicU16::new(0)),
         }
