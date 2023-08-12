@@ -90,7 +90,6 @@ use std::path::PathBuf;
 
 pub const CONTAINER_BASE: &str = "/run/kata-containers";
 const MODPROBE_PATH: &str = "/sbin/modprobe";
-const ANNO_K8S_IMAGE_NAME: &str = "io.kubernetes.cri.image-name";
 const CONFIG_JSON: &str = "config.json";
 const INIT_TRUSTED_STORAGE: &str = "/usr/bin/kata-init-trusted-storage";
 const TRUSTED_STORAGE_DEVICE: &str = "/dev/trusted_store";
@@ -162,24 +161,6 @@ pub fn verify_cid(id: &str) -> Result<()> {
     }
 }
 
-// Partially merge an OCI process specification into another one.
-fn merge_oci_process(target: &mut oci::Process, source: &oci::Process) {
-    if target.args.is_empty() && !source.args.is_empty() {
-        target.args.append(&mut source.args.clone());
-    }
-
-    if target.cwd == "/" && source.cwd != "/" {
-        target.cwd = String::from(&source.cwd);
-    }
-
-    for source_env in &source.env {
-        let variable_name: Vec<&str> = source_env.split('=').collect();
-        if !target.env.iter().any(|i| i.contains(variable_name[0])) {
-            target.env.push(source_env.to_string());
-        }
-    }
-}
-
 impl AgentService {
     #[instrument]
     async fn do_create_container(
@@ -209,7 +190,8 @@ impl AgentService {
 
         // In case of pulling image inside guest, we need to merge the image bundle OCI spec
         // into the container creation request OCI spec.
-        self.merge_bundle_oci(&mut oci).await?;
+        let image_service = image_rpc::ImageService::singleton().await?;
+        image_service.merge_bundle_oci(&mut oci).await?;
 
         // Some devices need some extra processing (the ones invoked with
         // --device for instance), and that's what this call is doing. It
@@ -696,54 +678,6 @@ impl AgentService {
                 Err(anyhow!("eof"))
             }
         }
-    }
-
-    // When being passed an image name through a container annotation, merge its
-    // corresponding bundle OCI specification into the passed container creation one.
-    async fn merge_bundle_oci(&self, container_oci: &mut oci::Spec) -> Result<()> {
-        if let Some(image_name) = container_oci
-            .annotations
-            .get(&ANNO_K8S_IMAGE_NAME.to_string())
-        {
-            if let Some(container_id) = self.sandbox.clone().lock().await.images.get(image_name) {
-                let image_oci_config_path = Path::new(CONTAINER_BASE)
-                    .join(container_id)
-                    .join(CONFIG_JSON);
-                debug!(
-                    sl(),
-                    "Image bundle config path: {:?}", image_oci_config_path
-                );
-
-                let image_oci =
-                    oci::Spec::load(image_oci_config_path.to_str().ok_or_else(|| {
-                        anyhow!(
-                            "Invalid container image OCI config path {:?}",
-                            image_oci_config_path
-                        )
-                    })?)
-                    .context("load image bundle")?;
-
-                if let Some(container_root) = container_oci.root.as_mut() {
-                    if let Some(image_root) = image_oci.root.as_ref() {
-                        let root_path = Path::new(CONTAINER_BASE)
-                            .join(container_id)
-                            .join(image_root.path.clone());
-                        container_root.path =
-                            String::from(root_path.to_str().ok_or_else(|| {
-                                anyhow!("Invalid container image root path {:?}", root_path)
-                            })?);
-                    }
-                }
-
-                if let Some(container_process) = container_oci.process.as_mut() {
-                    if let Some(image_process) = image_oci.process.as_ref() {
-                        merge_oci_process(container_process, image_process);
-                    }
-                }
-            }
-        }
-
-        Ok(())
     }
 }
 
@@ -1827,7 +1761,7 @@ pub async fn start(
     let health_service = Box::new(HealthService {}) as Box<dyn health_ttrpc::Health + Send + Sync>;
     let health_worker = Arc::new(health_service);
 
-    let image_service = image_rpc::ImageService::new(s);
+    let image_service = image_rpc::ImageService::new();
     *image_rpc::IMAGE_SERVICE.lock().await = Some(image_service.clone());
     let image_service =
         Arc::new(Box::new(image_service) as Box<dyn image_ttrpc::Image + Send + Sync>);
