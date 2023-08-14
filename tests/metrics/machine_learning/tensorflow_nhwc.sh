@@ -10,15 +10,15 @@ set -o pipefail
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 source "${SCRIPT_PATH}/../lib/common.bash"
 
-IMAGE="docker.io/library/tensorflow:latest"
-DOCKERFILE="${SCRIPT_PATH}/tensorflow_dockerfile/Dockerfile"
+IMAGE="docker.io/library/tensorflow_nhwc:latest"
+DOCKERFILE="${SCRIPT_PATH}/tensorflow_nhwc_dockerfile/Dockerfile"
 BATCH_SIZE="100"
 NUM_BATCHES="100"
 resnet_tensorflow_file=$(mktemp resnettensorflowresults.XXXXXXXXXX)
 alexnet_tensorflow_file=$(mktemp alexnettensorflowresults.XXXXXXXXXX)
 NUM_CONTAINERS="$1"
 TIMEOUT="$2"
-TEST_NAME="tensorflow"
+TEST_NAME="tensorflow_nhwc"
 PAYLOAD_ARGS="tail -f /dev/null"
 # Options to control the start of the workload using a trigger-file
 dst_dir="/host"
@@ -99,7 +99,7 @@ function launch_workload() {
 	done
 }
 
-function tensorflow_test() {
+function tensorflow_nhwc_test() {
 	# Resnet section
 	info "Running TF-Resnet test"
 	launch_workload "${CMD_RESNET}"
@@ -191,7 +191,7 @@ function main() {
 	# Get the initial number of pids in a single container before the workload starts
 	INITIAL_NUM_PIDS=$(sudo -E "${CTR_EXE}" t metrics "${containers[-1]}" | grep pids.current | grep pids.current | xargs | cut -d ' ' -f 2)
 	((INITIAL_NUM_PIDS++))
-	tensorflow_test
+	tensorflow_nhwc_test
 	metrics_json_save
 }
 
