@@ -243,13 +243,7 @@ impl AgentService {
         // After all those storages have been processed, no matter the order
         // here, the agent will rely on rustjail (using the oci.Mounts
         // list) to bind mount all of them inside the container.
-        let m = add_storages(
-            sl(),
-            &req.storages,
-            &self.sandbox,
-            Some(req.container_id.clone()),
-        )
-        .await?;
+        let m = add_storages(sl(), req.storages, &self.sandbox, Some(req.container_id)).await?;
 
         let mut s = self.sandbox.lock().await;
         s.container_mounts.insert(cid.clone(), m);
@@ -1196,7 +1190,7 @@ impl agent_ttrpc::AgentService for AgentService {
             s.setup_shared_namespaces().await.map_ttrpc_err(same)?;
         }
 
-        let m = add_storages(sl(), &req.storages, &self.sandbox, None)
+        let m = add_storages(sl(), req.storages, &self.sandbox, None)
             .await
             .map_ttrpc_err(same)?;
         self.sandbox.lock().await.mounts = m;
