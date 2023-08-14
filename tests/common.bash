@@ -189,17 +189,16 @@ function clean_env_ctr()
 }
 
 # Kills running shim and hypervisor components
-# by using the kata-component file name.
 function kill_kata_components() {
+	local TIMEOUT="30s"
 	local PID_NAMES=( "containerd-shim-kata-v2" "qemu-system-x86_64" "cloud-hypervisor" )
 
 	sudo systemctl stop containerd
-	# Get the filenames of the kata components
-	# and kill the correspondingt processes
-	for PID_NAME in ${PID_NAMES} ; do
-		sudo killall ${PID_NAME} > /dev/null 2>&1 || true
+	# iterate over the list of kata components and stop them
+	for PID_NAME in "${PID_NAMES[@]}"; do
+		[[ ! -z "$(pidof ${PID_NAME})" ]] && sudo killall "${PID_NAME}" > /dev/null 2>&1 || true
 	done
-	sudo systemctl start containerd
+	sudo timeout -s SIGKILL "${TIMEOUT}" systemctl start containerd
 }
 
 # Restarts a systemd service while ensuring the start-limit-burst is set to 0.
