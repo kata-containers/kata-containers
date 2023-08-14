@@ -361,3 +361,57 @@ function wait_ksm_settle()
 	done
 	info "Timed out after ${1}s waiting for KSM to settle"
 }
+
+function collect_results() {
+	local WORKLOAD="$1"
+	[[ -z "${WORKLOAD}" ]] && die "Container workload is missing"
+
+	local tasks_running=("${containers[@]}")
+	local retries=100
+
+	while [ "${#tasks_running[@]}" -gt 0 ] && [ "${retries}" -gt 0 ]; do
+		for i in "${!tasks_running[@]}"; do
+			check_file=$(sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${tasks_running[i]}" sh -c "${WORKLOAD}")
+
+			# if the current task is done, remove the corresponding container from the active list
+			[ "${check_file}" = 1 ] && unset 'tasks_running[i]'
+		done
+		((retries--))
+		sleep 3
+		echo -n "."
+	done
+	echo -e "\n"
+}
+
+function check_containers_are_up() {
+	local NUM_CONTAINERS="$1"
+	[[ -z "${NUM_CONTAINERS}" ]] && die "Number of containers is missing"
+
+	local TIMEOUT=60
+	local containers_launched=0
+	for i in $(seq "${TIMEOUT}") ; do
+		info "Verify that the containers are running"
+		containers_launched="$(sudo ${CTR_EXE} t list | grep -c "RUNNING")"
+		[ "${containers_launched}" -eq "${NUM_CONTAINERS}" ] && break
+		sleep 1
+		[ "${i}" == "${TIMEOUT}" ] && return 1
+	done
+}
+
+function check_containers_are_running() {
+	local NUM_CONTAINERS="$1"
+	[[ -z "${NUM_CONTAINERS}" ]] && die "Number of containers is missing"
+
+	# Check that the requested number of containers are running
+	local timeout_launch="10"
+	check_containers_are_up "${NUM_CONTAINERS}" & pid=$!
+	(sleep "${timeout_launch}" && kill -HUP "${pid}") 2>/dev/null & pid_tout=$!
+
+	if wait "${pid}" 2>/dev/null; then
+		pkill -HUP -P "${pid_tout}"
+		wait "${pid_tout}"
+	else
+		warn "Time out exceeded"
+		return 1
+	fi
+}

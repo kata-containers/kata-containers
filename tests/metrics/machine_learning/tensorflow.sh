@@ -35,7 +35,6 @@ ALEXNET_FILE="alexnet_results"
 ALEXNET_CHECK_FILE_CMD="cat /${ALEXNET_FILE} | grep 'total images' | wc -l"
 RESNET_FILE="resnet_results"
 RESNET_CHECK_FILE_CMD="cat /${RESNET_FILE} | grep 'total images' | wc -l"
-MAX_RETRIES=300
 
 function remove_tmp_file() {
 	rm -rf "${resnet_tensorflow_file}" "${alexnet_tensorflow_file}"
@@ -100,27 +99,6 @@ function launch_workload() {
 	done
 }
 
-function collect_results() {
-	WORKLOAD=${1}
-	[[ -z ${WORKLOAD} ]] && die "Container workload is missing"
-
-	local tasks_running=("${containers[@]}")
-	local retries=${MAX_RETRIES}
-
-	while [ "${#tasks_running[@]}" -gt 0 ] && [ "${retries}" -gt 0 ]; do
-		for i in "${!tasks_running[@]}"; do
-			check_file=$(sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${tasks_running[i]}" sh -c "${WORKLOAD}")
-
-			# if the current task is done, remove the corresponding container from the active list
-			[ "${check_file}" -eq "1" ] && unset 'tasks_running[i]'
-		done
-		((retries--))
-		sleep 3
-		echo -n "."
-	done
-	echo -e "\n"
-}
-
 function tensorflow_test() {
 	# Resnet section
 	info "Running TF-Resnet test"
@@ -171,17 +149,6 @@ EOF
 	metrics_json_end_array "Results"
 }
 
-function check_containers_are_up() {
-	local containers_launched=0
-	for i in $(seq "${TIMEOUT}") ; do
-		info "Verify that the containers are running"
-		containers_launched="$(sudo ${CTR_EXE} t list | grep -c "RUNNING")"
-		[ "${containers_launched}" -eq "${NUM_CONTAINERS}" ] && break
-		sleep 1
-		[ "${i}" == "${TIMEOUT}" ] && return 1
-	done
-}
-
 function main() {
 	# Verify enough arguments
 	if [ "$#" -lt 2 ]; then
@@ -216,20 +183,10 @@ function main() {
 	metrics_json_start_array
 
 	# Check that the requested number of containers are running
-	check_containers_are_up
+	check_containers_are_up "${NUM_CONTAINERS}"
 
 	# Check that the requested number of containers are running
-	local timeout_launch="10"
-	check_containers_are_up & pid=$!
-	(sleep "${timeout_launch}" && kill -HUP "${pid}") 2>/dev/null & pid_tout=$!
-
-	if wait "${pid}" 2>/dev/null; then
-		pkill -HUP -P "${pid_tout}"
-		wait "${pid_tout}"
-	else
-		warn "Time out exceeded"
-		return 1
-	fi
+	check_containers_are_running "${NUM_CONTAINERS}"
 
 	# Get the initial number of pids in a single container before the workload starts
 	INITIAL_NUM_PIDS=$(sudo -E "${CTR_EXE}" t metrics "${containers[-1]}" | grep pids.current | grep pids.current | xargs | cut -d ' ' -f 2)
