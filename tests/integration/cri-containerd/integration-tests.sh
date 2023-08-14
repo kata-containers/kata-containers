@@ -130,10 +130,11 @@ trap cleanup EXIT
 function err_report() {
 	local log_file="${REPORT_DIR}/containerd.log"
 	if [ -f "$log_file" ]; then
-		echo "ERROR: containerd log :"
+		echo "::group::ERROR: containerd log :"
 		echo "-------------------------------------"
 		cat "${log_file}"
 		echo "-------------------------------------"
+		echo "::endgroup::"
 	fi
 }
 
