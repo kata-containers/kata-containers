@@ -59,7 +59,8 @@ function install_dependencies() {
 function run() {
 	info "Running cri-containerd tests using ${KATA_HYPERVISOR} hypervisor"
 
-	return 0
+	enabling_hypervisor
+	bash -c ${cri_containerd_dir}/integration-tests.sh
 }
 
 function main() {
