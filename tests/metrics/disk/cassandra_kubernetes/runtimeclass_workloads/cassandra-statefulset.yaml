@@ -1,0 +1,56 @@
+#
+# Copyright (c) 2022-2023 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: "apps/v1"
+kind: StatefulSet
+metadata:
+  name: cassandra
+spec:
+  serviceName: cassandra
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cassandra
+  template:
+    metadata:
+      labels:
+        app: cassandra
+    spec:
+      runtimeClassName: kata
+      containers:
+        - name: cassandra
+          image: gcr.io/google-samples/cassandra:v13
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 7000
+              name: intra-node
+            - containerPort: 7001
+              name: tls-intra-node
+            - containerPort: 7199
+              name: jmx
+            - containerPort: 9042
+              name: cql
+          env:
+            - name: CASSANDRA_SEEDS
+              value: cassandra-0.cassandra.default.svc.cluster.local
+            - name: MAX_HEAP_SIZE
+              value: 256M
+            - name: HEAP_NEWSIZE
+              value: 100M
+            - name: CASSANDRA_CLUSTER_NAME
+              value: "Cassandra"
+            - name: CASSANDRA_DC
+              value: "DC1"
+            - name: CASSANDRA_RACK
+              value: "Rack1"
+            - name: CASSANDRA_ENDPOINT_SNITCH
+              value: GossipingPropertyFileSnitch
+          volumeDevices:
+            - devicePath: DEVICE_PATH
+              name: my-volume
+      volumes:
+        - name: my-volume
+          persistentVolumeClaim:
+            claimName: block-loop-pvc
