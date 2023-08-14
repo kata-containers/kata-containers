@@ -203,6 +203,8 @@ EOF
 }
 
 function testContainerStop() {
+	info "show pod $podid"
+	sudo crictl pods --id $podid
 	info "stop pod $podid"
 	sudo crictl stopp $podid
 	info "remove pod $podid"
