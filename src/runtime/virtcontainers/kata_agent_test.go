@@ -993,6 +993,49 @@ func TestKataCopyFile(t *testing.T) {
 	assert.NoError(err)
 }
 
+func TestKataCopyFileWithSymlink(t *testing.T) {
+	assert := assert.New(t)
+
+	url, err := mock.GenerateKataMockHybridVSock()
+	assert.NoError(err)
+	defer mock.RemoveKataMockHybridVSock(url)
+
+	hybridVSockTTRPCMock := mock.HybridVSockTTRPCMock{}
+	err = hybridVSockTTRPCMock.Start(url)
+	assert.NoError(err)
+	defer hybridVSockTTRPCMock.Stop()
+
+	k := &kataAgent{
+		ctx: context.Background(),
+		state: KataAgentState{
+			URL: url,
+		},
+	}
+
+	tempDir := t.TempDir()
+
+	target := filepath.Join(tempDir, "target")
+	err = os.WriteFile(target, []byte("abcdefghi123456789"), 0666)
+	assert.NoError(err)
+
+	symlink := filepath.Join(tempDir, "symlink")
+	os.Symlink(target, symlink)
+
+	dst, err := os.CreateTemp("", "dst")
+	assert.NoError(err)
+	assert.NoError(dst.Close())
+	defer os.Remove(dst.Name())
+
+	orgGrpcMaxDataSize := grpcMaxDataSize
+	grpcMaxDataSize = 1
+	defer func() {
+		grpcMaxDataSize = orgGrpcMaxDataSize
+	}()
+
+	err = k.copyFile(context.Background(), symlink, dst.Name())
+	assert.NoError(err)
+}
+
 func TestKataCleanupSandbox(t *testing.T) {
 	assert := assert.New(t)
 
