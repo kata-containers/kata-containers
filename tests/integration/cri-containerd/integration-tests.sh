@@ -136,6 +136,11 @@ function err_report() {
 		echo "-------------------------------------"
 		echo "::endgroup::"
 	fi
+	echo "::group::ERROR: Kata Containers logs : "
+	echo "-------------------------------------"
+	sudo journalctl -xe -t kata
+	echo "-------------------------------------"
+	echo "::endgroup::"
 }
 
 
