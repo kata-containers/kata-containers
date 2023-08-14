@@ -21,7 +21,10 @@ use kata_types::{
 use linux_container::LinuxContainer;
 use netns_rs::NetNs;
 use persist::sandbox_persist::Persist;
-use resource::{cpu_mem::initial_size::InitialSizeManager, network::generate_netns_name};
+use resource::{
+    cpu_mem::initial_size::InitialSizeManager,
+    network::{dan_config_path, generate_netns_name},
+};
 use shim_interface::shim_mgmt::ERR_NO_SHIM_SERVER;
 use tokio::fs;
 use tokio::sync::{mpsc::Sender, Mutex, RwLock};
@@ -146,9 +149,13 @@ impl RuntimeHandlerManagerInner {
 
         let config = load_config(spec, options).context("load config")?;
 
+        let dan_path = dan_config_path(&config, &self.id);
         let mut network_created = false;
         // set netns to None if we want no network for the VM
         let netns = if config.runtime.disable_new_netns {
+            None
+        } else if dan_path.exists() {
+            info!(sl!(), "Do not create a netns due to DAN");
             None
         } else {
             let mut netns_path = None;

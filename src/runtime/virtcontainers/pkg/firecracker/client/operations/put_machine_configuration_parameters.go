@@ -54,10 +54,12 @@ func NewPutMachineConfigurationParamsWithHTTPClient(client *http.Client) *PutMac
 	}
 }
 
-/* PutMachineConfigurationParams contains all the parameters to send to the API endpoint
-   for the put machine configuration operation.
+/*
+PutMachineConfigurationParams contains all the parameters to send to the API endpoint
 
-   Typically these are written to a http.Request.
+	for the put machine configuration operation.
+
+	Typically these are written to a http.Request.
 */
 type PutMachineConfigurationParams struct {
 

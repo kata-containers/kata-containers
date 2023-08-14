@@ -93,10 +93,19 @@ function run_test_fio() {
 	bash storage/fio-k8s/fio-test-ci.sh
 }
 
+function run_test_iperf() {
+	info "Running Iperf test using ${KATA_HYPERVISOR} hypervisor"
+	# ToDo: remove the exit once the metrics workflow is stable
+	exit 0
+
+	bash network/iperf3_kubernetes/k8s-network-metrics-iperf3.sh
+}
+
 function main() {
 	action="${1:-}"
 	case "${action}" in
 		install-kata) install_kata && install_checkmetrics ;;
+		enabling-hypervisor) enabling_hypervisor ;;
 		make-tarball-results) make_tarball_results ;;
 		run-test-launchtimes) run_test_launchtimes ;;
 		run-test-memory-usage) run_test_memory_usage ;;
@@ -104,6 +113,7 @@ function main() {
 		run-test-blogbench) run_test_blogbench ;;
 		run-test-tensorflow) run_test_tensorflow ;;
 		run-test-fio) run_test_fio ;;
+		run-test-iperf) run_test_iperf ;;
 		*) >&2 die "Invalid argument" ;;
 	esac
 }

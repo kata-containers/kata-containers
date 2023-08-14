@@ -323,3 +323,12 @@ static_sandbox_resource_mgmt=@DEFSTATICRESOURCEMGMT_DB@
 # - "/path/to:ro", readonly mode.
 # - "/path/to:rw", readwrite mode.
 sandbox_bind_mounts=@DEFBINDMOUNTS@
+
+# Base directory of directly attachable network config.
+# Network devices for VM-based containers are allowed to be placed in the
+# host netns to eliminate as many hops as possible, which is what we
+# called a "Directly Attachable Network". The config, set by special CNI
+# plugins, is used to tell the Kata containers what devices are attached
+# to the hypervisor.
+# (default: /run/kata-containers/dans)
+dan_conf = "@DEFDANCONF@"

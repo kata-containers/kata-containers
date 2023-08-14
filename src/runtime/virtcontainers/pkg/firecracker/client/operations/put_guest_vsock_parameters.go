@@ -54,10 +54,12 @@ func NewPutGuestVsockParamsWithHTTPClient(client *http.Client) *PutGuestVsockPar
 	}
 }
 
-/* PutGuestVsockParams contains all the parameters to send to the API endpoint
-   for the put guest vsock operation.
+/*
+PutGuestVsockParams contains all the parameters to send to the API endpoint
 
-   Typically these are written to a http.Request.
+	for the put guest vsock operation.
+
+	Typically these are written to a http.Request.
 */
 type PutGuestVsockParams struct {
 

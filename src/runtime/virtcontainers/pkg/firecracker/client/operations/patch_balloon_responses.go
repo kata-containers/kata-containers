@@ -52,14 +52,44 @@ func NewPatchBalloonNoContent() *PatchBalloonNoContent {
 	return &PatchBalloonNoContent{}
 }
 
-/* PatchBalloonNoContent describes a response with status code 204, with default header values.
+/*
+PatchBalloonNoContent describes a response with status code 204, with default header values.
 
 Balloon device updated
 */
 type PatchBalloonNoContent struct {
 }
 
+// IsSuccess returns true when this patch balloon no content response has a 2xx status code
+func (o *PatchBalloonNoContent) IsSuccess() bool {
+	return true
+}
+
+// IsRedirect returns true when this patch balloon no content response has a 3xx status code
+func (o *PatchBalloonNoContent) IsRedirect() bool {
+	return false
+}
+
+// IsClientError returns true when this patch balloon no content response has a 4xx status code
+func (o *PatchBalloonNoContent) IsClientError() bool {
+	return false
+}
+
+// IsServerError returns true when this patch balloon no content response has a 5xx status code
+func (o *PatchBalloonNoContent) IsServerError() bool {
+	return false
+}
+
+// IsCode returns true when this patch balloon no content response a status code equal to that given
+func (o *PatchBalloonNoContent) IsCode(code int) bool {
+	return code == 204
+}
+
 func (o *PatchBalloonNoContent) Error() string {
+	return fmt.Sprintf("[PATCH /balloon][%d] patchBalloonNoContent ", 204)
+}
+
+func (o *PatchBalloonNoContent) String() string {
 	return fmt.Sprintf("[PATCH /balloon][%d] patchBalloonNoContent ", 204)
 }
 
@@ -73,7 +103,8 @@ func NewPatchBalloonBadRequest() *PatchBalloonBadRequest {
 	return &PatchBalloonBadRequest{}
 }
 
-/* PatchBalloonBadRequest describes a response with status code 400, with default header values.
+/*
+PatchBalloonBadRequest describes a response with status code 400, with default header values.
 
 Balloon device cannot be updated due to bad input
 */
@@ -81,9 +112,39 @@ type PatchBalloonBadRequest struct {
 	Payload *models.Error
 }
 
+// IsSuccess returns true when this patch balloon bad request response has a 2xx status code
+func (o *PatchBalloonBadRequest) IsSuccess() bool {
+	return false
+}
+
+// IsRedirect returns true when this patch balloon bad request response has a 3xx status code
+func (o *PatchBalloonBadRequest) IsRedirect() bool {
+	return false
+}
+
+// IsClientError returns true when this patch balloon bad request response has a 4xx status code
+func (o *PatchBalloonBadRequest) IsClientError() bool {
+	return true
+}
+
+// IsServerError returns true when this patch balloon bad request response has a 5xx status code
+func (o *PatchBalloonBadRequest) IsServerError() bool {
+	return false
+}
+
+// IsCode returns true when this patch balloon bad request response a status code equal to that given
+func (o *PatchBalloonBadRequest) IsCode(code int) bool {
+	return code == 400
+}
+
 func (o *PatchBalloonBadRequest) Error() string {
 	return fmt.Sprintf("[PATCH /balloon][%d] patchBalloonBadRequest  %+v", 400, o.Payload)
 }
+
+func (o *PatchBalloonBadRequest) String() string {
+	return fmt.Sprintf("[PATCH /balloon][%d] patchBalloonBadRequest  %+v", 400, o.Payload)
+}
+
 func (o *PatchBalloonBadRequest) GetPayload() *models.Error {
 	return o.Payload
 }
@@ -107,7 +168,8 @@ func NewPatchBalloonDefault(code int) *PatchBalloonDefault {
 	}
 }
 
-/* PatchBalloonDefault describes a response with status code -1, with default header values.
+/*
+PatchBalloonDefault describes a response with status code -1, with default header values.
 
 Internal server error
 */
@@ -122,9 +184,39 @@ func (o *PatchBalloonDefault) Code() int {
 	return o._statusCode
 }
 
+// IsSuccess returns true when this patch balloon default response has a 2xx status code
+func (o *PatchBalloonDefault) IsSuccess() bool {
+	return o._statusCode/100 == 2
+}
+
+// IsRedirect returns true when this patch balloon default response has a 3xx status code
+func (o *PatchBalloonDefault) IsRedirect() bool {
+	return o._statusCode/100 == 3
+}
+
+// IsClientError returns true when this patch balloon default response has a 4xx status code
+func (o *PatchBalloonDefault) IsClientError() bool {
+	return o._statusCode/100 == 4
+}
+
+// IsServerError returns true when this patch balloon default response has a 5xx status code
+func (o *PatchBalloonDefault) IsServerError() bool {
+	return o._statusCode/100 == 5
+}
+
+// IsCode returns true when this patch balloon default response a status code equal to that given
+func (o *PatchBalloonDefault) IsCode(code int) bool {
+	return o._statusCode == code
+}
+
 func (o *PatchBalloonDefault) Error() string {
 	return fmt.Sprintf("[PATCH /balloon][%d] patchBalloon default  %+v", o._statusCode, o.Payload)
 }
+
+func (o *PatchBalloonDefault) String() string {
+	return fmt.Sprintf("[PATCH /balloon][%d] patchBalloon default  %+v", o._statusCode, o.Payload)
+}
+
 func (o *PatchBalloonDefault) GetPayload() *models.Error {
 	return o.Payload
 }

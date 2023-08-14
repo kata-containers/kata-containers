@@ -54,10 +54,12 @@ func NewPatchBalloonParamsWithHTTPClient(client *http.Client) *PatchBalloonParam
 	}
 }
 
-/* PatchBalloonParams contains all the parameters to send to the API endpoint
-   for the patch balloon operation.
+/*
+PatchBalloonParams contains all the parameters to send to the API endpoint
 
-   Typically these are written to a http.Request.
+	for the patch balloon operation.
+
+	Typically these are written to a http.Request.
 */
 type PatchBalloonParams struct {
 

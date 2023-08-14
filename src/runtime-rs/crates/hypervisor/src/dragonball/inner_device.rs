@@ -214,6 +214,8 @@ impl DragonballInner {
                 Some(mac) => MacAddr::from_bytes(&mac.0).ok(),
                 None => None,
             },
+            num_queues: config.queue_num,
+            queue_size: config.queue_size as u16,
             ..Default::default()
         };
 
@@ -311,7 +313,7 @@ impl DragonballInner {
             sock_path: config.sock_path.clone(),
             tag: config.mount_tag.clone(),
             num_queues: if config.queue_num > 0 {
-                config.queue_size as usize
+                config.queue_num as usize
             } else {
                 DEFAULT_VIRTIO_FS_NUM_QUEUES as usize
             },

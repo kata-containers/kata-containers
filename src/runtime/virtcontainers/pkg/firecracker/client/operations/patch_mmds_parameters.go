@@ -54,10 +54,12 @@ func NewPatchMmdsParamsWithHTTPClient(client *http.Client) *PatchMmdsParams {
 	}
 }
 
-/* PatchMmdsParams contains all the parameters to send to the API endpoint
-   for the patch mmds operation.
+/*
+PatchMmdsParams contains all the parameters to send to the API endpoint
 
-   Typically these are written to a http.Request.
+	for the patch mmds operation.
+
+	Typically these are written to a http.Request.
 */
 type PatchMmdsParams struct {
 

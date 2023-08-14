@@ -54,10 +54,12 @@ func NewLoadSnapshotParamsWithHTTPClient(client *http.Client) *LoadSnapshotParam
 	}
 }
 
-/* LoadSnapshotParams contains all the parameters to send to the API endpoint
-   for the load snapshot operation.
+/*
+LoadSnapshotParams contains all the parameters to send to the API endpoint
 
-   Typically these are written to a http.Request.
+	for the load snapshot operation.
+
+	Typically these are written to a http.Request.
 */
 type LoadSnapshotParams struct {
 
