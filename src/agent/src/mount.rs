@@ -4,8 +4,8 @@
 //
 
 use std::collections::HashMap;
-use std::fs;
-use std::fs::{File, OpenOptions};
+use std::fmt::Debug;
+use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::iter;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
@@ -13,12 +13,13 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use tokio::sync::Mutex;
-
+use anyhow::{anyhow, Context, Result};
 use nix::mount::MsFlags;
 use nix::unistd::{Gid, Uid};
-
 use regex::Regex;
+use slog::Logger;
+use tokio::sync::Mutex;
+use tracing::instrument;
 
 use crate::device::{
     get_scsi_device_name, get_virtio_blk_pci_device_name, get_virtio_mmio_device_name,
@@ -34,17 +35,14 @@ use crate::protocols::types::FSGroupChangePolicy;
 use crate::Sandbox;
 #[cfg(target_arch = "s390x")]
 use crate::{ccw, device::get_virtio_blk_ccw_device_name};
-use anyhow::{anyhow, Context, Result};
-use slog::Logger;
-
-use tracing::instrument;
 
 pub const TYPE_ROOTFS: &str = "rootfs";
-const SYS_FS_HUGEPAGES_PREFIX: &str = "/sys/kernel/mm/hugepages";
 pub const MOUNT_GUEST_TAG: &str = "kataShared";
 
 // Allocating an FSGroup that owns the pod's volumes
 const FS_GID: &str = "fsgid";
+const FS_GID_EQ: &str = "fsgid=";
+const SYS_FS_HUGEPAGES_PREFIX: &str = "/sys/kernel/mm/hugepages";
 
 const RW_MASK: u32 = 0o660;
 const RO_MASK: u32 = 0o440;
@@ -218,9 +216,9 @@ pub fn baremount(
     )
     .map_err(|e| {
         anyhow!(
-            "failed to mount {:?} to {:?}, with error: {}",
-            source,
-            destination,
+            "failed to mount {} to {}, with error: {}",
+            source.display(),
+            destination.display(),
             e
         )
     })
@@ -230,7 +228,7 @@ pub fn baremount(
 async fn ephemeral_storage_handler(
     logger: &Logger,
     storage: &Storage,
-    sandbox: &Arc<Mutex<Sandbox>>,
+    _sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
     // hugetlbfs
     if storage.fstype == FS_TYPE_HUGETLB {
@@ -238,21 +236,19 @@ async fn ephemeral_storage_handler(
     }
 
     // normal ephemeral storage
-    fs::create_dir_all(Path::new(&storage.mount_point))?;
+    fs::create_dir_all(&storage.mount_point)?;
 
-    // By now we only support one option field: "fsGroup" which
-    // isn't an valid mount option, thus we should remove it when
-    // do mount.
     if !storage.options.is_empty() {
-        // ephemeral_storage didn't support mount options except fsGroup.
+        // By now we only support one option field: "fsGroup" which
+        // isn't an valid mount option, thus we should remove it when
+        // do mount.
         let mut new_storage = storage.clone();
         new_storage.options = Default::default();
         common_storage_handler(logger, &new_storage)?;
 
-        let opts_vec: Vec<String> = storage.options.to_vec();
+        let opts = parse_options(&storage.options);
 
-        let opts = parse_options(opts_vec);
-
+        // ephemeral_storage didn't support mount options except fsGroup.
         if let Some(fsgid) = opts.get(FS_GID) {
             let gid = fsgid.parse::<u32>()?;
 
@@ -277,57 +273,53 @@ async fn ephemeral_storage_handler(
 #[instrument]
 pub async fn update_ephemeral_mounts(
     logger: Logger,
-    storages: Vec<Storage>,
-    sandbox: &Arc<Mutex<Sandbox>>,
+    storages: &[Storage],
+    _sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<()> {
-    for (_, storage) in storages.iter().enumerate() {
-        let handler_name = storage.driver.clone();
+    for storage in storages {
+        let handler_name = &storage.driver;
         let logger = logger.new(o!(
-	    "msg" => "updating tmpfs storage",
+            "msg" => "updating tmpfs storage",
             "subsystem" => "storage",
             "storage-type" => handler_name.to_owned()));
 
         match handler_name.as_str() {
             DRIVER_EPHEMERAL_TYPE => {
-                fs::create_dir_all(Path::new(&storage.mount_point))?;
+                fs::create_dir_all(&storage.mount_point)?;
 
                 if storage.options.is_empty() {
                     continue;
                 } else {
                     // assume that fsGid has already been set
-                    let mut opts = Vec::<&str>::new();
-                    for (_, opt) in storage.options.iter().enumerate() {
-                        if opt.starts_with(FS_GID) {
-                            continue;
-                        }
-                        opts.push(opt)
-                    }
                     let mount_path = Path::new(&storage.mount_point);
                     let src_path = Path::new(&storage.source);
-
+                    let opts = storage
+                        .options
+                        .iter()
+                        .filter(|&opt| !opt.starts_with(FS_GID_EQ));
                     let (flags, options) = parse_mount_flags_and_options(opts);
 
                     info!(logger, "mounting storage";
-                    "mount-source" => src_path.display(),
-                    "mount-destination" => mount_path.display(),
-                    "mount-fstype"  => storage.fstype.as_str(),
-                    "mount-options" => options.as_str(),
+                        "mount-source" => src_path.display(),
+                        "mount-destination" => mount_path.display(),
+                        "mount-fstype"  => storage.fstype.as_str(),
+                        "mount-options" => options.as_str(),
                     );
 
-                    return baremount(
+                    baremount(
                         src_path,
                         mount_path,
                         storage.fstype.as_str(),
                         flags,
                         options.as_str(),
                         &logger,
-                    );
+                    )?;
                 }
             }
             _ => {
                 return Err(anyhow!(
                     "Unsupported storage type for syncing mounts {}. Only ephemeral storage update is supported",
-                    storage.driver.to_owned()
+                    storage.driver
                 ));
             }
         };
@@ -374,16 +366,14 @@ async fn overlayfs_storage_handler(
 async fn local_storage_handler(
     _logger: &Logger,
     storage: &Storage,
-    sandbox: &Arc<Mutex<Sandbox>>,
+    _sandbox: &Arc<Mutex<Sandbox>>,
 ) -> Result<String> {
     fs::create_dir_all(&storage.mount_point).context(format!(
         "failed to create dir all {:?}",
         &storage.mount_point
     ))?;
 
-    let opts_vec: Vec<String> = storage.options.to_vec();
-
-    let opts = parse_options(opts_vec);
+    let opts = parse_options(&storage.options);
 
     let mut need_set_fsgid = false;
     if let Some(fsgid) = opts.get(FS_GID) {
@@ -426,7 +416,7 @@ async fn handle_hugetlbfs_storage(logger: &Logger, storage: &Storage) -> Result<
     // /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
     // /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
     // options eg "pagesize=2097152,size=524288000"(2M, 500M)
-    allocate_hugepages(logger, &storage.options.to_vec()).context("allocate hugepages")?;
+    allocate_hugepages(logger, &storage.options).context("allocate hugepages")?;
 
     common_storage_handler(logger, storage)?;
 
@@ -563,7 +553,6 @@ async fn virtio_blk_storage_handler(
     if storage.source.starts_with("/dev") {
         let metadata = fs::metadata(&storage.source)
             .context(format!("get metadata on file {:?}", &storage.source))?;
-
         let mode = metadata.permissions().mode();
         if mode & libc::S_IFBLK == 0 {
             return Err(anyhow!("Invalid device {}", &storage.source));
@@ -620,12 +609,9 @@ async fn virtio_scsi_storage_handler(
 
 #[instrument]
 fn common_storage_handler(logger: &Logger, storage: &Storage) -> Result<String> {
-    // Mount the storage device.
-    let mount_point = storage.mount_point.to_string();
-
     mount_storage(logger, storage)?;
     set_ownership(logger, storage)?;
-    Ok(mount_point)
+    Ok(storage.mount_point.clone())
 }
 
 // nvdimm_storage_handler handles the storage for NVDIMM driver.
@@ -666,9 +652,8 @@ async fn bind_watcher_storage_handler(
 fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
     let logger = logger.new(o!("subsystem" => "mount"));
 
-    // Check share before attempting to mount to see if the destination is already a mount point.
-    // If so, skip doing the mount. This facilitates mounting the sharedfs automatically
-    // in the guest before the agent service starts.
+    // There's a special mechanism to create mountpoint from a `sharedfs` instance before
+    // starting the kata-agent. Check for such cases.
     if storage.source == MOUNT_GUEST_TAG && is_mounted(&storage.mount_point)? {
         warn!(
             logger,
@@ -680,27 +665,23 @@ fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
     let mount_path = Path::new(&storage.mount_point);
     let src_path = Path::new(&storage.source);
     if storage.fstype == "bind" && !src_path.is_dir() {
-        ensure_destination_file_exists(mount_path)
+        ensure_destination_file_exists(mount_path).context("Could not create mountpoint file")?;
     } else {
-        fs::create_dir_all(mount_path).map_err(anyhow::Error::from)
+        fs::create_dir_all(mount_path)
+            .map_err(anyhow::Error::from)
+            .context("Could not create mountpoint")?;
     }
-    .context("Could not create mountpoint")?;
-
-    let options_vec = storage.options.to_vec();
-    let options_vec = options_vec.iter().map(String::as_str).collect();
-    let (flags, options) = parse_mount_flags_and_options(options_vec);
-
-    let source = Path::new(&storage.source);
+    let (flags, options) = parse_mount_flags_and_options(storage.options.iter());
 
     info!(logger, "mounting storage";
-    "mount-source" => source.display(),
-    "mount-destination" => mount_path.display(),
-    "mount-fstype"  => storage.fstype.as_str(),
-    "mount-options" => options.as_str(),
+        "mount-source" => src_path.display(),
+        "mount-destination" => mount_path.display(),
+        "mount-fstype"  => storage.fstype.as_str(),
+        "mount-options" => options.as_str(),
     );
 
     baremount(
-        source,
+        src_path,
         mount_path,
         storage.fstype.as_str(),
         flags,
@@ -717,14 +698,9 @@ pub fn set_ownership(logger: &Logger, storage: &Storage) -> Result<()> {
     if storage.fs_group.is_none() {
         return Ok(());
     }
+
     let fs_group = storage.fs_group();
-
-    let mut read_only = false;
-    let opts_vec: Vec<String> = storage.options.to_vec();
-    if opts_vec.contains(&String::from("ro")) {
-        read_only = true;
-    }
-
+    let read_only = storage.options.contains(&String::from("ro"));
     let mount_path = Path::new(&storage.mount_point);
     let metadata = mount_path.metadata().map_err(|err| {
         error!(logger, "failed to obtain metadata for mount path";
@@ -809,24 +785,27 @@ pub fn is_mounted(mount_point: &str) -> Result<bool> {
     let found = fs::metadata(mount_point).is_ok()
         // Looks through /proc/mounts and check if the mount exists
         && fs::read_to_string("/proc/mounts")?
-            .lines()
-            .any(|line| {
-                // The 2nd column reveals the mount point.
-                line.split_whitespace()
-                    .nth(1)
-                    .map(|target| mount_point.eq(target))
-                    .unwrap_or(false)
-            });
+        .lines()
+        .any(|line| {
+            // The 2nd column reveals the mount point.
+            line.split_whitespace()
+                .nth(1)
+                .map(|target| mount_point.eq(target))
+                .unwrap_or(false)
+        });
 
     Ok(found)
 }
 
 #[instrument]
-fn parse_mount_flags_and_options(options_vec: Vec<&str>) -> (MsFlags, String) {
+fn parse_mount_flags_and_options(
+    opts_iter: impl Iterator<Item = impl AsRef<str>> + Debug,
+) -> (MsFlags, String) {
     let mut flags = MsFlags::empty();
     let mut options: String = "".to_string();
 
-    for opt in options_vec {
+    for opt in opts_iter {
+        let opt = opt.as_ref();
         if !opt.is_empty() {
             match FLAGS.get(opt) {
                 Some(x) => {
@@ -861,17 +840,16 @@ fn parse_mount_flags_and_options(options_vec: Vec<&str>) -> (MsFlags, String) {
 #[instrument]
 pub async fn add_storages(
     logger: Logger,
-    storages: Vec<Storage>,
+    storages: &[Storage],
     sandbox: &Arc<Mutex<Sandbox>>,
     cid: Option<String>,
 ) -> Result<Vec<String>> {
     let mut mount_list = Vec::new();
 
     for storage in storages {
-        let handler_name = storage.driver.clone();
-        let logger = logger.new(o!(
-            "subsystem" => "storage",
-            "storage-type" => handler_name.to_owned()));
+        let handler_name = &storage.driver;
+        let logger =
+            logger.new(o!( "subsystem" => "storage", "storage-type" => handler_name.to_string()));
 
         {
             let mut sb = sandbox.lock().await;
@@ -882,22 +860,20 @@ pub async fn add_storages(
         }
 
         let res = match handler_name.as_str() {
-            DRIVER_BLK_TYPE => virtio_blk_storage_handler(&logger, &storage, sandbox).await,
-            DRIVER_BLK_CCW_TYPE => virtio_blk_ccw_storage_handler(&logger, &storage, sandbox).await,
-            DRIVER_9P_TYPE => virtio9p_storage_handler(&logger, &storage, sandbox).await,
-            DRIVER_VIRTIOFS_TYPE => virtiofs_storage_handler(&logger, &storage, sandbox).await,
-            DRIVER_EPHEMERAL_TYPE => ephemeral_storage_handler(&logger, &storage, sandbox).await,
+            DRIVER_BLK_TYPE => virtio_blk_storage_handler(&logger, storage, sandbox).await,
+            DRIVER_BLK_CCW_TYPE => virtio_blk_ccw_storage_handler(&logger, storage, sandbox).await,
+            DRIVER_9P_TYPE => virtio9p_storage_handler(&logger, storage, sandbox).await,
+            DRIVER_VIRTIOFS_TYPE => virtiofs_storage_handler(&logger, storage, sandbox).await,
+            DRIVER_EPHEMERAL_TYPE => ephemeral_storage_handler(&logger, storage, sandbox).await,
             DRIVER_OVERLAYFS_TYPE => {
-                overlayfs_storage_handler(&logger, &storage, cid.as_deref(), sandbox).await
+                overlayfs_storage_handler(&logger, storage, cid.as_deref(), sandbox).await
             }
-            DRIVER_MMIO_BLK_TYPE => {
-                virtiommio_blk_storage_handler(&logger, &storage, sandbox).await
-            }
-            DRIVER_LOCAL_TYPE => local_storage_handler(&logger, &storage, sandbox).await,
-            DRIVER_SCSI_TYPE => virtio_scsi_storage_handler(&logger, &storage, sandbox).await,
-            DRIVER_NVDIMM_TYPE => nvdimm_storage_handler(&logger, &storage, sandbox).await,
+            DRIVER_MMIO_BLK_TYPE => virtiommio_blk_storage_handler(&logger, storage, sandbox).await,
+            DRIVER_LOCAL_TYPE => local_storage_handler(&logger, storage, sandbox).await,
+            DRIVER_SCSI_TYPE => virtio_scsi_storage_handler(&logger, storage, sandbox).await,
+            DRIVER_NVDIMM_TYPE => nvdimm_storage_handler(&logger, storage, sandbox).await,
             DRIVER_WATCHABLE_BIND_TYPE => {
-                bind_watcher_storage_handler(&logger, &storage, sandbox, cid.clone()).await?;
+                bind_watcher_storage_handler(&logger, storage, sandbox, cid.clone()).await?;
                 // Don't register watch mounts, they're handled separately by the watcher.
                 Ok(String::new())
             }
@@ -916,9 +892,9 @@ pub async fn add_storages(
                     "add_storages failed, storage: {:?}, error: {:?} ", storage, e
                 );
                 let mut sb = sandbox.lock().await;
-                sb.unset_sandbox_storage(&storage.mount_point)
-                    .map_err(|e| warn!(logger, "fail to unset sandbox storage {:?}", e))
-                    .ok();
+                if let Err(e) = sb.unset_sandbox_storage(&storage.mount_point) {
+                    warn!(logger, "fail to unset sandbox storage {:?}", e);
+                }
                 return Err(e);
             }
             Ok(m) => m,
@@ -934,11 +910,9 @@ pub async fn add_storages(
 
 #[instrument]
 fn mount_to_rootfs(logger: &Logger, m: &InitMount) -> Result<()> {
-    let options_vec: Vec<&str> = m.options.clone();
+    let (flags, options) = parse_mount_flags_and_options(m.options.iter());
 
-    let (flags, options) = parse_mount_flags_and_options(options_vec);
-
-    fs::create_dir_all(Path::new(m.dest)).context("could not create directory")?;
+    fs::create_dir_all(m.dest).context("could not create directory")?;
 
     let source = Path::new(m.src);
     let dest = Path::new(m.dest);
@@ -1143,17 +1117,14 @@ fn ensure_destination_file_exists(path: &Path) -> Result<()> {
 }
 
 #[instrument]
-fn parse_options(option_list: Vec<String>) -> HashMap<String, String> {
+fn parse_options(option_list: &[String]) -> HashMap<String, String> {
     let mut options = HashMap::new();
-    for opt in option_list.iter() {
+    for opt in option_list {
         let fields: Vec<&str> = opt.split('=').collect();
-        if fields.len() != 2 {
-            continue;
+        if fields.len() == 2 {
+            options.insert(fields[0].to_string(), fields[1].to_string());
         }
-
-        options.insert(fields[0].to_string(), fields[1].to_string());
     }
-
     options
 }
 
@@ -2070,7 +2041,7 @@ mod tests {
         for (i, d) in tests.iter().enumerate() {
             let msg = format!("test[{}]: {:?}", i, d);
 
-            let result = parse_mount_flags_and_options(d.options_vec.clone());
+            let result = parse_mount_flags_and_options(d.options_vec.iter());
 
             let msg = format!("{}: result: {:?}", msg, result);
 

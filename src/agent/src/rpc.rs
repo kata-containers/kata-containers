@@ -215,7 +215,7 @@ impl AgentService {
         // updates the devices listed in the OCI spec, so that they actually
         // match real devices inside the VM. This step is necessary since we
         // cannot predict everything from the caller.
-        add_devices(&req.devices.to_vec(), &mut oci, &self.sandbox).await?;
+        add_devices(&req.devices, &mut oci, &self.sandbox).await?;
 
         let linux = oci
             .linux
@@ -250,7 +250,7 @@ impl AgentService {
         // list) to bind mount all of them inside the container.
         let m = add_storages(
             sl(),
-            req.storages.to_vec(),
+            &req.storages,
             &self.sandbox,
             Some(req.container_id.clone()),
         )
@@ -328,15 +328,13 @@ impl AgentService {
 
     #[instrument]
     async fn do_start_container(&self, req: protocols::agent::StartContainerRequest) -> Result<()> {
-        let cid = req.container_id;
-
         let mut s = self.sandbox.lock().await;
         let sid = s.id.clone();
+        let cid = req.container_id;
 
         let ctr = s
             .get_container(&cid)
             .ok_or_else(|| anyhow!("Invalid container id"))?;
-
         ctr.exec().await?;
 
         if sid == cid {
@@ -344,13 +342,9 @@ impl AgentService {
         }
 
         // start oom event loop
-
-        let cg_path = ctr.cgroup_manager.as_ref().get_cgroup_path("memory");
-
-        if let Ok(cg_path) = cg_path {
+        if let Ok(cg_path) = ctr.cgroup_manager.as_ref().get_cgroup_path("memory") {
             let rx = notifier::notify_oom(cid.as_str(), cg_path.to_string()).await?;
-
-            s.run_oom_event_monitor(rx, cid.clone()).await;
+            s.run_oom_event_monitor(rx, cid).await;
         }
 
         Ok(())
@@ -361,64 +355,49 @@ impl AgentService {
         &self,
         req: protocols::agent::RemoveContainerRequest,
     ) -> Result<()> {
-        let cid = req.container_id.clone();
+        let cid = req.container_id;
 
         if req.timeout == 0 {
             let mut sandbox = self.sandbox.lock().await;
-
             sandbox.bind_watcher.remove_container(&cid).await;
-
             sandbox
                 .get_container(&cid)
                 .ok_or_else(|| anyhow!("Invalid container id"))?
                 .destroy()
                 .await?;
-
             remove_container_resources(&mut sandbox, &cid)?;
-
             return Ok(());
         }
 
         // timeout != 0
         let s = self.sandbox.clone();
         let cid2 = cid.clone();
-        let (tx, rx) = tokio::sync::oneshot::channel::<i32>();
-
         let handle = tokio::spawn(async move {
             let mut sandbox = s.lock().await;
-            if let Some(ctr) = sandbox.get_container(&cid2) {
-                ctr.destroy().await.unwrap();
-                sandbox.bind_watcher.remove_container(&cid2).await;
-                tx.send(1).unwrap();
-            };
+            sandbox.bind_watcher.remove_container(&cid2).await;
+            sandbox
+                .get_container(&cid2)
+                .ok_or_else(|| anyhow!("Invalid container id"))?
+                .destroy()
+                .await
         });
 
-        if tokio::time::timeout(Duration::from_secs(req.timeout.into()), rx)
+        let to = Duration::from_secs(req.timeout.into());
+        tokio::time::timeout(to, handle)
             .await
-            .is_err()
-        {
-            return Err(anyhow!(nix::Error::ETIME));
-        }
+            .map_err(|_| anyhow!(nix::Error::ETIME))???;
 
-        if handle.await.is_err() {
-            return Err(anyhow!(nix::Error::UnknownErrno));
-        }
-
-        let mut sandbox = self.sandbox.lock().await;
-        remove_container_resources(&mut sandbox, &cid)?;
-
-        Ok(())
+        remove_container_resources(&mut *self.sandbox.lock().await, &cid)
     }
 
     #[instrument]
     async fn do_exec_process(&self, req: protocols::agent::ExecProcessRequest) -> Result<()> {
-        let cid = req.container_id.clone();
-        let exec_id = req.exec_id.clone();
+        let cid = req.container_id;
+        let exec_id = req.exec_id;
 
         info!(sl(), "do_exec_process cid: {} eid: {}", cid, exec_id);
 
         let mut sandbox = self.sandbox.lock().await;
-
         let mut process = req
             .process
             .into_option()
@@ -435,21 +414,19 @@ impl AgentService {
             .get_container(&cid)
             .ok_or_else(|| anyhow!("Invalid container id"))?;
 
-        ctr.run(p).await?;
-
-        Ok(())
+        ctr.run(p).await
     }
 
     #[instrument]
     async fn do_signal_process(&self, req: protocols::agent::SignalProcessRequest) -> Result<()> {
-        let cid = req.container_id.clone();
-        let eid = req.exec_id.clone();
+        let cid = req.container_id;
+        let eid = req.exec_id;
 
         info!(
             sl(),
             "signal process";
-            "container-id" => cid.clone(),
-            "exec-id" => eid.clone(),
+            "container-id" => &cid,
+            "exec-id" => &eid,
             "signal" => req.signal,
         );
 
@@ -470,8 +447,8 @@ impl AgentService {
                     info!(
                         sl(),
                         "signal encounter ESRCH, continue";
-                        "container-id" => cid.clone(),
-                        "exec-id" => eid.clone(),
+                        "container-id" => &cid,
+                        "exec-id" => &eid,
                         "pid" => p.pid,
                         "signal" => sig,
                     );
@@ -486,16 +463,16 @@ impl AgentService {
             info!(
                 sl(),
                 "signal all the remaining processes";
-                "container-id" => cid.clone(),
-                "exec-id" => eid.clone(),
+                "container-id" => &cid,
+                "exec-id" => &eid,
             );
 
             if let Err(err) = self.freeze_cgroup(&cid, FreezerState::Frozen).await {
                 warn!(
                     sl(),
                     "freeze cgroup failed";
-                    "container-id" => cid.clone(),
-                    "exec-id" => eid.clone(),
+                    "container-id" => &cid,
+                    "exec-id" => &eid,
                     "error" => format!("{:?}", err),
                 );
             }
@@ -507,8 +484,8 @@ impl AgentService {
                     warn!(
                         sl(),
                         "signal failed";
-                        "container-id" => cid.clone(),
-                        "exec-id" => eid.clone(),
+                        "container-id" => &cid,
+                        "exec-id" => &eid,
                         "pid" => pid,
                         "error" => format!("{:?}", err),
                     );
@@ -518,12 +495,13 @@ impl AgentService {
                 warn!(
                     sl(),
                     "unfreeze cgroup failed";
-                    "container-id" => cid.clone(),
-                    "exec-id" => eid.clone(),
+                    "container-id" => &cid,
+                    "exec-id" => &eid,
                     "error" => format!("{:?}", err),
                 );
             }
         }
+
         Ok(())
     }
 
@@ -532,8 +510,7 @@ impl AgentService {
         let ctr = sandbox
             .get_container(cid)
             .ok_or_else(|| anyhow!("Invalid container id {}", cid))?;
-        ctr.cgroup_manager.as_ref().freeze(state)?;
-        Ok(())
+        ctr.cgroup_manager.as_ref().freeze(state)
     }
 
     async fn get_pids(&self, cid: &str) -> Result<Vec<i32>> {
@@ -541,8 +518,7 @@ impl AgentService {
         let ctr = sandbox
             .get_container(cid)
             .ok_or_else(|| anyhow!("Invalid container id {}", cid))?;
-        let pids = ctr.cgroup_manager.as_ref().get_pids()?;
-        Ok(pids)
+        ctr.cgroup_manager.as_ref().get_pids()
     }
 
     #[instrument]
@@ -550,20 +526,19 @@ impl AgentService {
         &self,
         req: protocols::agent::WaitProcessRequest,
     ) -> Result<protocols::agent::WaitProcessResponse> {
-        let cid = req.container_id.clone();
+        let cid = req.container_id;
         let eid = req.exec_id;
         let mut resp = WaitProcessResponse::new();
-        let pid: pid_t;
-
-        let (exit_send, mut exit_recv) = tokio::sync::mpsc::channel(100);
 
         info!(
             sl(),
             "wait process";
-            "container-id" => cid.clone(),
-            "exec-id" => eid.clone()
+            "container-id" => &cid,
+            "exec-id" => &eid
         );
 
+        let pid: pid_t;
+        let (exit_send, mut exit_recv) = tokio::sync::mpsc::channel(100);
         let exit_rx = {
             let mut sandbox = self.sandbox.lock().await;
             let p = sandbox.find_container_process(cid.as_str(), eid.as_str())?;
@@ -618,8 +593,8 @@ impl AgentService {
         &self,
         req: protocols::agent::WriteStreamRequest,
     ) -> Result<protocols::agent::WriteStreamResponse> {
-        let cid = req.container_id.clone();
-        let eid = req.exec_id.clone();
+        let cid = req.container_id;
+        let eid = req.exec_id;
 
         let writer = {
             let mut sandbox = self.sandbox.lock().await;
@@ -670,10 +645,6 @@ impl AgentService {
                 p.get_reader(StreamType::ParentStderr)
             }
         };
-
-        if reader.is_none() {
-            return Err(anyhow!("Unable to determine stream reader, is None"));
-        }
 
         let reader = reader.ok_or_else(|| anyhow!("cannot get stream reader"))?;
 
@@ -781,7 +752,6 @@ impl agent_ttrpc::AgentService for AgentService {
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "remove_container", req);
         is_allowed(&req)?;
-
         match self.do_remove_container(req).await {
             Err(e) => Err(ttrpc_error(ttrpc::Code::INTERNAL, e)),
             Ok(_) => Ok(Empty::new()),
@@ -833,32 +803,23 @@ impl agent_ttrpc::AgentService for AgentService {
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "update_container", req);
         is_allowed(&req)?;
-        let cid = req.container_id.clone();
-        let res = req.resources;
 
         let mut sandbox = self.sandbox.lock().await;
-
-        let ctr = sandbox.get_container(&cid).ok_or_else(|| {
+        let ctr = sandbox.get_container(&req.container_id).ok_or_else(|| {
             ttrpc_error(
                 ttrpc::Code::INVALID_ARGUMENT,
                 "invalid container id".to_string(),
             )
         })?;
 
-        let resp = Empty::new();
-
-        if let Some(res) = res.as_ref() {
+        if let Some(res) = req.resources.as_ref() {
             let oci_res = rustjail::resources_grpc_to_oci(res);
-            match ctr.set(oci_res) {
-                Err(e) => {
-                    return Err(ttrpc_error(ttrpc::Code::INTERNAL, e));
-                }
-
-                Ok(_) => return Ok(resp),
+            if let Err(e) = ctr.set(oci_res) {
+                return Err(ttrpc_error(ttrpc::Code::INTERNAL, e));
             }
         }
 
-        Ok(resp)
+        Ok(Empty::new())
     }
 
     async fn stats_container(
@@ -868,10 +829,9 @@ impl agent_ttrpc::AgentService for AgentService {
     ) -> ttrpc::Result<StatsContainerResponse> {
         trace_rpc_call!(ctx, "stats_container", req);
         is_allowed(&req)?;
-        let cid = req.container_id;
-        let mut sandbox = self.sandbox.lock().await;
 
-        let ctr = sandbox.get_container(&cid).ok_or_else(|| {
+        let mut sandbox = self.sandbox.lock().await;
+        let ctr = sandbox.get_container(&req.container_id).ok_or_else(|| {
             ttrpc_error(
                 ttrpc::Code::INVALID_ARGUMENT,
                 "invalid container id".to_string(),
@@ -889,10 +849,9 @@ impl agent_ttrpc::AgentService for AgentService {
     ) -> ttrpc::Result<protocols::empty::Empty> {
         trace_rpc_call!(ctx, "pause_container", req);
         is_allowed(&req)?;
-        let cid = req.container_id();
-        let mut sandbox = self.sandbox.lock().await;
 
-        let ctr = sandbox.get_container(cid).ok_or_else(|| {
+        let mut sandbox = self.sandbox.lock().await;
+        let ctr = sandbox.get_container(req.container_id()).ok_or_else(|| {
             ttrpc_error(
                 ttrpc::Code::INVALID_ARGUMENT,
                 "invalid container id".to_string(),
@@ -912,10 +871,9 @@ impl agent_ttrpc::AgentService for AgentService {
     ) -> ttrpc::Result<protocols::empty::Empty> {
         trace_rpc_call!(ctx, "resume_container", req);
         is_allowed(&req)?;
-        let cid = req.container_id();
-        let mut sandbox = self.sandbox.lock().await;
 
-        let ctr = sandbox.get_container(cid).ok_or_else(|| {
+        let mut sandbox = self.sandbox.lock().await;
+        let ctr = sandbox.get_container(req.container_id()).ok_or_else(|| {
             ttrpc_error(
                 ttrpc::Code::INVALID_ARGUMENT,
                 "invalid container id".to_string(),
@@ -992,7 +950,7 @@ impl agent_ttrpc::AgentService for AgentService {
         trace_rpc_call!(ctx, "close_stdin", req);
         is_allowed(&req)?;
 
-        let cid = req.container_id.clone();
+        let cid = req.container_id;
         let eid = req.exec_id;
         let mut sandbox = self.sandbox.lock().await;
 
@@ -1018,11 +976,9 @@ impl agent_ttrpc::AgentService for AgentService {
         trace_rpc_call!(ctx, "tty_win_resize", req);
         is_allowed(&req)?;
 
-        let cid = req.container_id.clone();
-        let eid = req.exec_id.clone();
         let mut sandbox = self.sandbox.lock().await;
         let p = sandbox
-            .find_container_process(cid.as_str(), eid.as_str())
+            .find_container_process(req.container_id(), req.exec_id())
             .map_err(|e| {
                 ttrpc_error(
                     ttrpc::Code::UNAVAILABLE,
@@ -1124,7 +1080,7 @@ impl agent_ttrpc::AgentService for AgentService {
         trace_rpc_call!(ctx, "update_mounts", req);
         is_allowed(&req)?;
 
-        match update_ephemeral_mounts(sl(), req.storages.to_vec(), &self.sandbox).await {
+        match update_ephemeral_mounts(sl(), &req.storages, &self.sandbox).await {
             Ok(_) => Ok(Empty::new()),
             Err(e) => Err(ttrpc_error(
                 ttrpc::Code::INTERNAL,
@@ -1377,21 +1333,19 @@ impl agent_ttrpc::AgentService for AgentService {
                 .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e))?;
         }
 
-        match add_storages(sl(), req.storages.to_vec(), &self.sandbox, None).await {
+        match add_storages(sl(), &req.storages, &self.sandbox, None).await {
             Ok(m) => {
                 self.sandbox.lock().await.mounts = m;
             }
             Err(e) => return Err(ttrpc_error(ttrpc::Code::INTERNAL, e)),
         };
 
-        match setup_guest_dns(sl(), req.dns.to_vec()) {
+        match setup_guest_dns(sl(), &req.dns) {
             Ok(_) => {
                 let mut s = self.sandbox.lock().await;
-                let _dns = req
-                    .dns
-                    .to_vec()
-                    .iter()
-                    .map(|dns| s.network.set_dns(dns.to_string()));
+                for dns in req.dns {
+                    s.network.set_dns(dns);
+                }
             }
             Err(e) => return Err(ttrpc_error(ttrpc::Code::INTERNAL, e)),
         };
@@ -1408,15 +1362,14 @@ impl agent_ttrpc::AgentService for AgentService {
         is_allowed(&req)?;
 
         let mut sandbox = self.sandbox.lock().await;
-        // destroy all containers, clean up, notify agent to exit
-        // etc.
+        // destroy all containers, clean up, notify agent to exit etc.
         sandbox
             .destroy()
             .await
             .map_err(|e| ttrpc_error(ttrpc::Code::INTERNAL, e))?;
         // Close get_oom_event connection,
         // otherwise it will block the shutdown of ttrpc.
-        sandbox.event_tx.take();
+        drop(sandbox.event_tx.take());
 
         sandbox
             .sender
@@ -1473,9 +1426,9 @@ impl agent_ttrpc::AgentService for AgentService {
         ctx: &TtrpcContext,
         req: protocols::agent::OnlineCPUMemRequest,
     ) -> ttrpc::Result<Empty> {
+        trace_rpc_call!(ctx, "online_cpu_mem", req);
         is_allowed(&req)?;
         let sandbox = self.sandbox.lock().await;
-        trace_rpc_call!(ctx, "online_cpu_mem", req);
 
         sandbox
             .online_cpu_memory(&req)
@@ -1624,7 +1577,6 @@ impl agent_ttrpc::AgentService for AgentService {
 
         info!(sl(), "get volume stats!");
         let mut resp = VolumeStatsResponse::new();
-
         let mut condition = VolumeCondition::new();
 
         match File::open(&req.volume_guest_path) {
@@ -1788,11 +1740,7 @@ fn get_agent_details() -> AgentDetails {
     detail.init_daemon = unistd::getpid() == Pid::from_raw(1);
 
     detail.device_handlers = Vec::new();
-    detail.storage_handlers = STORAGE_HANDLER_LIST
-        .to_vec()
-        .iter()
-        .map(|x| x.to_string())
-        .collect();
+    detail.storage_handlers = STORAGE_HANDLER_LIST.iter().map(|x| x.to_string()).collect();
 
     detail
 }
@@ -1820,19 +1768,13 @@ pub async fn start(
         sandbox: s.clone(),
         init_mode,
     }) as Box<dyn agent_ttrpc::AgentService + Send + Sync>;
-
-    let agent_worker = Arc::new(agent_service);
+    let aservice = agent_ttrpc::create_agent_service(Arc::new(agent_service));
 
     let health_service = Box::new(HealthService {}) as Box<dyn health_ttrpc::Health + Send + Sync>;
-    let health_worker = Arc::new(health_service);
+    let hservice = health_ttrpc::create_health(Arc::new(health_service));
 
     let image_service = Box::new(image_rpc::ImageService::new(s).await)
         as Box<dyn image_ttrpc::Image + Send + Sync>;
-
-    let aservice = agent_ttrpc::create_agent_service(agent_worker);
-
-    let hservice = health_ttrpc::create_health(health_worker);
-
     let iservice = image_ttrpc::create_image(Arc::new(image_service));
 
     let server = TtrpcServer::new()
@@ -1878,6 +1820,7 @@ fn update_container_namespaces(
             continue;
         }
     }
+
     // update pid namespace
     let mut pid_ns = LinuxNamespace {
         r#type: NSTYPEPID.to_string(),
@@ -2194,10 +2137,10 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
         "load_kernel_module {}: {:?}", module.name, module.parameters
     );
 
-    let mut args = vec!["-v".to_string(), module.name.clone()];
+    let mut args = vec!["-v", &module.name];
 
     if !module.parameters.is_empty() {
-        args.extend(module.parameters.to_vec())
+        args.extend(module.parameters.iter().map(String::as_str));
     }
 
     let output = Command::new(MODPROBE_PATH)
