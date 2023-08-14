@@ -17,13 +17,6 @@ To build `virtcontainers`, at the top level directory run:
 
 Before testing `virtcontainers`, ensure you have met the [prerequisites](#prerequisites).
 
-Before testing you need to install virtcontainers. The following command will install
-`virtcontainers` into its own area (`/usr/bin/virtcontainers/bin/` by default).
-
-```
-# sudo -E PATH=$PATH make install
-```
-
 To test `virtcontainers`, at the top level run:
 
 ```
