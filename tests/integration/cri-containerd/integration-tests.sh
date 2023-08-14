@@ -21,9 +21,9 @@ export PATH="$PATH:/usr/local/sbin"
 export PATH="$PATH:/usr/local/go/bin"
 
 # Runtime to be used for testing
-RUNTIME=${RUNTIME:-containerd-shim-kata-v2}
-FACTORY_TEST=${FACTORY_TEST:-""}
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
+RUNTIME=${RUNTIME:-containerd-shim-kata-${KATA_HYPERVISOR}-v2}
+FACTORY_TEST=${FACTORY_TEST:-""}
 USE_DEVMAPPER="${USE_DEVMAPPER:-false}"
 ARCH=$(uname -m)
 
