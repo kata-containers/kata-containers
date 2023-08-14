@@ -87,14 +87,7 @@ function mobilenet_v1_bfloat16_fp32_test() {
 	touch "${host_trigger_file}"
 	info "All containers are running the workload..."
 
-	for i in "${containers[@]}"; do
-		check_file=$(sudo -E "${CTR_EXE}" t exec -d --exec-id "$(random_name)" "${i}" sh -c "${CMD_FILE}")
-		retries="30"
-		for j in $(seq 1 "${retries}"); do
-			[ "${check_file}" = 1 ] && break
-			sleep 1
-		done
-	done
+	collect_results "${CMD_FILE}"
 
 	for i in "${containers[@]}"; do
 		sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${i}" sh -c "${CMD_RESULTS}"  >> "${tensorflow_file}"
@@ -114,17 +107,6 @@ EOF
 )"
 	metrics_json_add_array_element "$json"
 	metrics_json_end_array "Results"
-}
-
-function check_containers_are_up() {
-	local containers_launched=0
-	for i in $(seq "${TIMEOUT}") ; do
-		info "Verify that the containers are running"
-		containers_launched="$(sudo ${CTR_EXE} t list | grep -c "RUNNING")"
-		[ "${containers_launched}" -eq "${NUM_CONTAINERS}" ] && break
-		sleep 1
-		[ "${i}" == "${TIMEOUT}" ] && return 1
-	done
 }
 
 function main() {
@@ -160,20 +142,10 @@ function main() {
 	metrics_json_start_array
 
 	# Check that the requested number of containers are running
-	check_containers_are_up
+	check_containers_are_up "${NUM_CONTAINERS}"
 
 	# Check that the requested number of containers are running
-	local timeout_launch="10"
-	check_containers_are_up & pid=$!
-	(sleep "${timeout_launch}" && kill -HUP "${pid}") 2>/dev/null & pid_tout=$!
-
-	if wait "${pid}" 2>/dev/null; then
-		pkill -HUP -P "${pid_tout}"
-		wait "${pid_tout}"
-	else
-		warn "Time out exceeded"
-		return 1
-	fi
+	check_containers_are_running "${NUM_CONTAINERS}"
 
 	# Get the initial number of pids in a single container before the workload starts
 	INITIAL_NUM_PIDS=$(sudo -E "${CTR_EXE}" t metrics "${containers[-1]}" | grep pids.current | grep pids.current | xargs | cut -d ' ' -f 2)
