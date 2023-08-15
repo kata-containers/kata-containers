@@ -860,10 +860,11 @@ func (q *qemu) stopVirtiofsDaemon(ctx context.Context) (err error) {
 	return nil
 }
 
-func (q *qemu) getMemArgs() (bool, string, string, error) {
+func (q *qemu) getMemArgs() (bool, string, string, uint64, error) {
 	share := false
 	target := ""
 	memoryBack := "memory-backend-ram"
+	pageSize := uint64(os.Getpagesize())
 
 	if q.qemuConfig.Knobs.HugePages {
 		// we are setting all the bits that govmm sets when hugepages are enabled.
@@ -871,11 +872,16 @@ func (q *qemu) getMemArgs() (bool, string, string, error) {
 		target = "/dev/hugepages"
 		memoryBack = "memory-backend-file"
 		share = true
+		stat := syscall.Statfs_t{}
+		err := syscall.Statfs("/dev/hugepages", &stat)
+		if err == nil {
+			pageSize = uint64(stat.Bsize)
+		}
 	} else {
 		if q.config.EnableVhostUserStore {
 			// Vhost-user-blk/scsi process which can improve performance, like SPDK,
 			// requires shared-on hugepage to work with Qemu.
-			return share, target, "", fmt.Errorf("Vhost-user-blk/scsi requires hugepage memory")
+			return share, target, "", pageSize, fmt.Errorf("Vhost-user-blk/scsi requires hugepage memory")
 		}
 
 		if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioFSNydus ||
@@ -889,17 +895,89 @@ func (q *qemu) getMemArgs() (bool, string, string, error) {
 		share = true
 	}
 
-	return share, target, memoryBack, nil
+	return share, target, memoryBack, pageSize, nil
+}
+
+// Return virtio-mem block size in MB.
+// virtio-mem block size may vary with the host page size.
+// pseudo-code:
+// cmp (hostPageSize, memoryBackendPageSize)
+// if eq
+//
+//	; get THP from /sys/kernel/mm/transparent_hugepage/hpage_pmd_size
+//	return max(memoryBackendPageSize, THP)
+//
+// else
+//
+//	; VIRTIO_MEM_MIN_BLOCK_SIZE is 1M
+//	return max(memoryBackendPageSize, VIRTIO_MEM_MIN_BLOCK_SIZE)
+//
+// endif
+// see https://github.com/qemu/qemu/blob/408af44d04476c633065bfb1eca6865ea93f2984/hw/virtio/virtio-mem.c#L119
+func getVirtioMemBlkSize(backendPageSize uint64) (uint64, error) {
+	defaultSize := uint64(1)
+	hostPageSize := uint64(os.Getpagesize())
+
+	if hostPageSize != backendPageSize {
+		if backendPageSize > (defaultSize << 20) {
+			return backendPageSize >> 20, nil
+		}
+		return defaultSize, nil
+	}
+
+	thpPath := "/sys/kernel/mm/transparent_hugepage/hpage_pmd_size"
+
+	file, err := os.Open(thpPath)
+	if err != nil {
+		return defaultSize, err
+	}
+
+	defer file.Close()
+
+	content := make([]byte, 20)
+	n, err := file.Read(content)
+	if err != nil {
+		return defaultSize, err
+	}
+
+	if content[n-1] == '\n' {
+		content = content[:n-1]
+	}
+	strCon := string(content)
+	thp, err := strconv.Atoi(strCon)
+	if err != nil {
+		return defaultSize, err
+	}
+
+	// test if thp is power of 2
+	if thp < 0 || (thp&(thp-1)) != 0 {
+		return defaultSize, fmt.Errorf("THP is not power of 2")
+	}
+
+	if backendPageSize > uint64(thp) {
+		return uint64(backendPageSize >> 20), nil
+	}
+
+	thp = thp >> 20
+	return uint64(thp), nil
+}
+
+func alignDown(num, alignSize uint64) uint64 {
+	return num &^ (alignSize - 1)
 }
 
 func (q *qemu) setupVirtioMem(ctx context.Context) error {
-	// backend memory size must be multiple of 4Mib
-	sizeMB := (int(q.config.DefaultMaxMemorySize) - int(q.config.MemorySize)) >> 2 << 2
-
-	share, target, memoryBack, err := q.getMemArgs()
+	share, target, memoryBack, pageSize, err := q.getMemArgs()
 	if err != nil {
 		return err
 	}
+
+	sizeMB := int(q.config.DefaultMaxMemorySize) - int(q.config.MemorySize)
+	alignSize, err := getVirtioMemBlkSize(pageSize)
+	if err != nil {
+		return err
+	}
+	sizeMB = int(alignDown(uint64(sizeMB), uint64(alignSize)))
 
 	if err = q.qmpSetup(); err != nil {
 		return err
@@ -2145,7 +2223,7 @@ func (q *qemu) hotplugAddMemory(memDev *MemoryDevice) (int, error) {
 		memDev.Slot = maxSlot + 1
 	}
 
-	share, target, memoryBack, err := q.getMemArgs()
+	share, target, memoryBack, _, err := q.getMemArgs()
 	if err != nil {
 		return 0, err
 	}
