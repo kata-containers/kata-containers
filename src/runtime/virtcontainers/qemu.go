@@ -1896,6 +1896,7 @@ func (q *qemu) hotplugNetDevice(ctx context.Context, endpoint Endpoint, op Opera
 	}
 
 	devID := "virtio-" + tap.ID
+	machineType := q.HypervisorConfig().HypervisorMachineType
 	if op == AddDevice {
 		if err = q.hotAddNetDevice(tap.Name, endpoint.HardwareAddr(), tap.VMFds, tap.VhostFds); err != nil {
 			return err
@@ -1906,6 +1907,14 @@ func (q *qemu) hotplugNetDevice(ctx context.Context, endpoint Endpoint, op Opera
 				q.qmpMonitorCh.qmp.ExecuteNetdevDel(q.qmpMonitorCh.ctx, tap.Name)
 			}
 		}()
+
+		// Hotplug net dev to pcie root port for QemuVirt
+		if machineType == QemuVirt {
+			addr := "00"
+			bridgeID := fmt.Sprintf("%s%d", config.PCIeRootPortPrefix, len(config.PCIeDevices[config.RootPort]))
+			config.PCIeDevices[config.RootPort][devID] = true
+			return q.qmpMonitorCh.qmp.ExecuteNetPCIDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), addr, bridgeID, romFile, int(q.config.NumVCPUs), defaultDisableModern)
+		}
 
 		addr, bridge, err := q.arch.addDeviceToBridge(ctx, tap.ID, types.PCI)
 		if err != nil {
@@ -1939,7 +1948,6 @@ func (q *qemu) hotplugNetDevice(ctx context.Context, endpoint Endpoint, op Opera
 			return q.qmpMonitorCh.qmp.ExecuteNetCCWDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), devNoHotplug, int(q.config.NumVCPUs))
 		}
 		return q.qmpMonitorCh.qmp.ExecuteNetPCIDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), addr, bridge.ID, romFile, int(q.config.NumVCPUs), defaultDisableModern)
-
 	}
 
 	if err := q.arch.removeDeviceFromBridge(tap.ID); err != nil {
