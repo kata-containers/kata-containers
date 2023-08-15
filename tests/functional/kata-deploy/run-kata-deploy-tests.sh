@@ -14,11 +14,12 @@ if [ -n "${KATA_DEPLOY_TEST_UNION:-}" ]; then
 	KATA_DEPLOY_TEST_UNION=($KATA_DEPLOY_TEST_UNION)
 else
 	KATA_DEPLOY_TEST_UNION=( \
+		"kata-deploy.bats" \
 	)
 fi
 
 info "Run tests"
 for KATA_DEPLOY_TEST_ENTRY in ${KATA_DEPLOY_TEST_UNION[@]}
 do
-	#bats "${KATA_DEPLOY_TEST_ENTRY}"
+	bats "${KATA_DEPLOY_TEST_ENTRY}"
 done
