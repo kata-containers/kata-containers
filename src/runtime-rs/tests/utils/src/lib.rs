@@ -43,6 +43,7 @@ pub fn load_test_config(hypervisor_name: String) -> Result<TomlConfig> {
             let qemu = QemuConfig::new();
             qemu.register();
         }
+        // TODO add other hypervisor test config
         _ => {
             return Err(anyhow!("invalid hypervisor {}", hypervisor_name));
         }

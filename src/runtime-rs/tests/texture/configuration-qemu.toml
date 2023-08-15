@@ -33,7 +33,7 @@ valid_virtio_fs_daemon_paths = ["/usr/local/bin/virtiofsd*","./virtio_fs"]
 virtio_fs_cache_size = 512
 virtio_fs_extra_args = ["-o", "arg1=xxx,arg2", "-o", "hello world", "--arg3=yyy"]
 virtio_fs_cache = "always"
-block_device_driver = "virtio-blk"
+block_device_driver = "virtio-blk-pci"
 block_device_cache_set = true
 block_device_cache_direct = true
 block_device_cache_noflush = true

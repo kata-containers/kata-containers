@@ -28,9 +28,6 @@ mod tests {
 
     async fn get_device_manager() -> Result<Arc<RwLock<DeviceManager>>> {
         let hypervisor_name: &str = "qemu";
-        if let Err(e) = load_test_config(hypervisor_name.to_owned()) {
-            println!("Test failed with error: {}", e);
-        }
         let toml_config = load_test_config(hypervisor_name.to_owned())?;
         let hypervisor_config = toml_config
             .hypervisor
