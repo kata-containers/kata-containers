@@ -42,7 +42,8 @@ jobs:
         sudo apt-get install -y --no-install-recommends \
           build-essential \
           haveged \
-          libdevmapper-dev
+          libdevmapper-dev \
+          clang
     - name: Install Go
       uses: actions/setup-go@v3
       with:
