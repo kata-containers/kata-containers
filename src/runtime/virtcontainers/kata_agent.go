@@ -150,6 +150,7 @@ const (
 	grpcResizeVolumeRequest                   = "grpc.ResizeVolumeRequest"
 	grpcGetIPTablesRequest                    = "grpc.GetIPTablesRequest"
 	grpcSetIPTablesRequest                    = "grpc.SetIPTablesRequest"
+	grpcSetPolicyRequest                      = "grpc.SetPolicyRequest"
 )
 
 // newKataAgent returns an agent from an agent type.
@@ -275,6 +276,7 @@ type KataAgentConfig struct {
 	Debug              bool
 	Trace              bool
 	EnableDebugConsole bool
+	Policy             string
 }
 
 // KataAgentState is the structure describing the data stored from this
@@ -745,6 +747,13 @@ func (k *kataAgent) startSandbox(ctx context.Context, sandbox *Sandbox) error {
 	// Check grpc server is serving
 	if err = k.check(ctx); err != nil {
 		return err
+	}
+
+	// If a Policy has been specified, send it to the agent.
+	if len(sandbox.config.AgentConfig.Policy) > 0 {
+		if err := sandbox.agent.setPolicy(ctx, sandbox.config.AgentConfig.Policy); err != nil {
+			return err
+		}
 	}
 
 	// Setup network interfaces and routes
@@ -2081,6 +2090,9 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	k.reqHandlers[grpcRemoveStaleVirtiofsShareMountsRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
 		return k.client.AgentServiceClient.RemoveStaleVirtiofsShareMounts(ctx, req.(*grpc.RemoveStaleVirtiofsShareMountsRequest))
 	}
+	k.reqHandlers[grpcSetPolicyRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.SetPolicy(ctx, req.(*grpc.SetPolicyRequest))
+	}
 }
 
 func (k *kataAgent) getReqContext(ctx context.Context, reqName string) (newCtx context.Context, cancel context.CancelFunc) {
@@ -2354,5 +2366,10 @@ func (k *kataAgent) getGuestVolumeStats(ctx context.Context, volumeGuestPath str
 
 func (k *kataAgent) resizeGuestVolume(ctx context.Context, volumeGuestPath string, size uint64) error {
 	_, err := k.sendReq(ctx, &grpc.ResizeVolumeRequest{VolumeGuestPath: volumeGuestPath, Size_: size})
+	return err
+}
+
+func (k *kataAgent) setPolicy(ctx context.Context, policy string) error {
+	_, err := k.sendReq(ctx, &grpc.SetPolicyRequest{Policy: policy})
 	return err
 }
