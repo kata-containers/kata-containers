@@ -113,6 +113,10 @@ pub struct Runtime {
     #[serde(default)]
     pub disable_guest_seccomp: bool,
 
+    /// A custom AppArmor profile applied to the container process inside the VM.
+    #[serde(default)]
+    pub guest_apparmor_profile: String,
+
     /// Determines how VFIO devices should be be presented to the container.
     ///
     /// Options:

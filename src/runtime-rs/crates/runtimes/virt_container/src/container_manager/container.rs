@@ -17,6 +17,8 @@ use common::{
     },
 };
 use kata_sys_util::k8s::update_ephemeral_storage_type;
+use kata_sys_util::spec::get_container_type;
+use kata_types::container::ContainerType;
 
 use oci::{LinuxResources, Process as OCIProcess};
 use resource::{ResourceManager, ResourceUpdateOp};
@@ -27,6 +29,8 @@ use super::{
     ContainerInner,
 };
 use crate::container_manager::logger_with_process;
+
+const DEFAULT_APPARMOR_CONTAINER_PROFILE: &str = "kata-default";
 
 pub struct Exec {
     pub(crate) process: Process,
@@ -92,7 +96,33 @@ impl Container {
         let toml_config = self.resource_manager.config().await;
         let config = &self.config;
         let sandbox_pidns = is_pid_namespace_enabled(&spec);
-        amend_spec(&mut spec, toml_config.runtime.disable_guest_seccomp).context("amend spec")?;
+        let mut disable_guest_apparmor = if let Some(h) = toml_config
+            .hypervisor
+            .get(&toml_config.runtime.hypervisor_name)
+        {
+            h.disable_guest_apparmor
+        } else {
+            true
+        };
+
+        if disable_guest_apparmor && !&toml_config.runtime.guest_apparmor_profile.is_empty() {
+            return Err(anyhow!(
+                "custom ApppArmor profiles are provided, but guest AppArmor is disabled"
+            ));
+        }
+        // If the container type is PodSandbox which means a pause container in K8s,
+        // the AppArmor profiles shouldn't be applied to the container.
+        if let Ok(ContainerType::PodSandbox) = get_container_type(&spec) {
+            disable_guest_apparmor = true;
+        }
+
+        amend_spec(
+            &mut spec,
+            toml_config.runtime.disable_guest_seccomp,
+            disable_guest_apparmor,
+            &toml_config.runtime.guest_apparmor_profile,
+        )
+        .context("amend spec")?;
 
         // get mutable root from oci spec
         let root = match spec.root.as_mut() {
@@ -452,7 +482,12 @@ impl Container {
     }
 }
 
-fn amend_spec(spec: &mut oci::Spec, disable_guest_seccomp: bool) -> Result<()> {
+fn amend_spec(
+    spec: &mut oci::Spec,
+    disable_guest_seccomp: bool,
+    disable_guest_apparmor: bool,
+    guest_apparmor_profile: &str,
+) -> Result<()> {
     // Only the StartContainer hook needs to be reserved for execution in the guest
     let start_container_hooks = match spec.hooks.as_ref() {
         Some(hooks) => hooks.start_container.clone(),
@@ -470,6 +505,21 @@ fn amend_spec(spec: &mut oci::Spec, disable_guest_seccomp: bool) -> Result<()> {
 
     // special process K8s ephemeral volumes.
     update_ephemeral_storage_type(spec);
+
+    if let Some(process) = spec.process.as_mut() {
+        if disable_guest_apparmor {
+            // Set apparmor_profile to empty because high-leve container runtimes
+            // such as containerd try to set the default AppArmor profile automatically
+            // when the AppArmor is enabled on the host. Whether the AppArmor is enabled
+            // on the host doesn't matter from the perspective of containers inside the guest.
+            // Ref. https://github.com/kubernetes/kubernetes/issues/51746
+            process.apparmor_profile.clear();
+        } else if guest_apparmor_profile.is_empty() {
+            process.apparmor_profile = DEFAULT_APPARMOR_CONTAINER_PROFILE.to_string();
+        } else {
+            process.apparmor_profile = guest_apparmor_profile.to_string();
+        }
+    }
 
     if let Some(linux) = spec.linux.as_mut() {
         if disable_guest_seccomp {
@@ -521,6 +571,7 @@ fn is_pid_namespace_enabled(spec: &oci::Spec) -> bool {
 mod tests {
     use super::amend_spec;
     use super::is_pid_namespace_enabled;
+    use super::DEFAULT_APPARMOR_CONTAINER_PROFILE;
     #[test]
     fn test_amend_spec_disable_guest_seccomp() {
         let mut spec = oci::Spec {
@@ -534,12 +585,45 @@ mod tests {
         assert!(spec.linux.as_ref().unwrap().seccomp.is_some());
 
         // disable_guest_seccomp = false
-        amend_spec(&mut spec, false).unwrap();
+        amend_spec(&mut spec, false, true, "").unwrap();
         assert!(spec.linux.as_ref().unwrap().seccomp.is_some());
 
         // disable_guest_seccomp = true
-        amend_spec(&mut spec, true).unwrap();
+        amend_spec(&mut spec, true, true, "").unwrap();
         assert!(spec.linux.as_ref().unwrap().seccomp.is_none());
+    }
+
+    #[test]
+    fn test_amend_spec_guest_apparmor() {
+        let test_profile = "test_apparmor_profile";
+
+        let mut spec = oci::Spec {
+            process: Some(oci::Process {
+                apparmor_profile: String::new(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+
+        assert!(spec.process.as_ref().unwrap().apparmor_profile.is_empty());
+
+        // disable_guest_apparmor = false and guest_apparmor_profile = ""
+        amend_spec(&mut spec, false, false, "").unwrap();
+        assert_eq!(
+            spec.process.as_ref().unwrap().apparmor_profile,
+            DEFAULT_APPARMOR_CONTAINER_PROFILE
+        );
+
+        // disable_guest_apparmor = false and guest_apparmor_proflie = "test_profile"
+        amend_spec(&mut spec, true, false, test_profile).unwrap();
+        assert_eq!(
+            spec.process.as_ref().unwrap().apparmor_profile,
+            test_profile
+        );
+
+        // disable_guest_apparmor = true
+        amend_spec(&mut spec, true, true, "").unwrap();
+        assert!(spec.process.as_ref().unwrap().apparmor_profile.is_empty());
     }
 
     #[test]

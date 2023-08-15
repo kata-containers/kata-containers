@@ -1013,6 +1013,10 @@ pub struct Hypervisor {
     /// Vendor customized runtime configuration.
     #[serde(default, flatten)]
     pub vendor: HypervisorVendor,
+
+    /// Disable applying AppArmor profile on the container process
+    #[serde(default)]
+    pub disable_guest_apparmor: bool,
 }
 
 impl Hypervisor {

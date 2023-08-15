@@ -7,9 +7,11 @@ mod tests {
     use kata_types::annotations::{
         Annotation, KATA_ANNO_CFG_AGENT_CONTAINER_PIPE_SIZE, KATA_ANNO_CFG_AGENT_TRACE,
         KATA_ANNO_CFG_DISABLE_GUEST_SECCOMP, KATA_ANNO_CFG_ENABLE_PPROF,
-        KATA_ANNO_CFG_EXPERIMENTAL, KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_CACHE_NOFLUSH,
+        KATA_ANNO_CFG_EXPERIMENTAL, KATA_ANNO_CFG_GUEST_APPARMOR_PROFILE,
+        KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_CACHE_NOFLUSH,
         KATA_ANNO_CFG_HYPERVISOR_BLOCK_DEV_DRIVER, KATA_ANNO_CFG_HYPERVISOR_CTLPATH,
         KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY, KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS,
+        KATA_ANNO_CFG_HYPERVISOR_DISABLE_GUEST_APPARMOR,
         KATA_ANNO_CFG_HYPERVISOR_ENABLE_GUEST_SWAP, KATA_ANNO_CFG_HYPERVISOR_ENABLE_IO_THREADS,
         KATA_ANNO_CFG_HYPERVISOR_ENABLE_SWAP, KATA_ANNO_CFG_HYPERVISOR_FILE_BACKED_MEM_ROOT_DIR,
         KATA_ANNO_CFG_HYPERVISOR_GUEST_HOOK_PATH, KATA_ANNO_CFG_HYPERVISOR_HUGE_PAGES,
@@ -94,6 +96,14 @@ mod tests {
         );
         anno_hash.insert(
             KATA_ANNO_CFG_DISABLE_GUEST_SECCOMP.to_string(),
+            "true".to_string(),
+        );
+        anno_hash.insert(
+            KATA_ANNO_CFG_GUEST_APPARMOR_PROFILE.to_string(),
+            "test_apparmor_profile".to_string(),
+        );
+        anno_hash.insert(
+            KATA_ANNO_CFG_HYPERVISOR_DISABLE_GUEST_APPARMOR.to_string(),
             "true".to_string(),
         );
         anno_hash.insert(
@@ -190,6 +200,7 @@ mod tests {
             assert!(!hv.blockdev_info.block_device_cache_noflush);
             assert!(hv.blockdev_info.block_device_cache_set);
             assert_eq!(hv.blockdev_info.vhost_user_store_path, "./store_path");
+            assert!(hv.disable_guest_apparmor);
             assert_eq!(
                 hv.security_info.guest_hook_path,
                 "./test_hypervisor_hook_path"
@@ -222,6 +233,14 @@ mod tests {
                 .get_config()
                 .runtime
                 .disable_guest_seccomp
+        );
+
+        assert_eq!(
+            KataConfig::get_active_config()
+                .get_config()
+                .runtime
+                .guest_apparmor_profile,
+            "test_apparmor_profile"
         );
 
         assert!(
@@ -319,6 +338,30 @@ mod tests {
         if let Some(hv) = KataConfig::get_default_config().get_hypervisor() {
             assert!(hv.memory_info.enable_guest_swap)
         }
+    }
+
+    #[test]
+    fn test_fail_to_change_disable_guest_apparmor_because_not_enabled() {
+        let content = include_str!("texture/configuration-anno-1.toml");
+
+        let qemu = QemuConfig::new();
+        qemu.register();
+
+        let config = TomlConfig::load(content).unwrap();
+        KataConfig::set_active_config(Some(config), "qemu", "agent0");
+
+        let mut anno_hash = HashMap::new();
+        anno_hash.insert(
+            KATA_ANNO_CFG_HYPERVISOR_DISABLE_GUEST_APPARMOR.to_string(),
+            "false".to_string(),
+        );
+        let anno = Annotation::new(anno_hash);
+        let mut config = TomlConfig::load(content).unwrap();
+
+        assert!(anno.update_config_by_annotation(&mut config).is_ok());
+        let hypervisor_name = &config.runtime.hypervisor_name;
+        let hv = config.hypervisor.get_mut(hypervisor_name).unwrap();
+        assert!(hv.disable_guest_apparmor);
     }
 
     #[test]
