@@ -10,15 +10,22 @@ set -o nounset
 set -o pipefail
 
 kata_deploy_dir="$(dirname "$(readlink -f "$0")")"
-source "$kata_deploy_dir}/../../gha-run-k8s-common.sh"
-tools_dir="${repo_root_dir}/tools"
+source "${kata_deploy_dir}/../../gha-run-k8s-common.sh"
 
 function run_tests() {
-	return 0
+	pushd "${kata_deploy_dir}"
+	bash run-kata-deploy-tests.sh
+	popd
 }
 
 function main() {
     export KATA_HOST_OS="${KATA_HOST_OS:-}"
+
+    platform="aks"
+    if [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
+	    platform="tdx"
+    fi
+    export platform
 
     action="${1:-}"
 
