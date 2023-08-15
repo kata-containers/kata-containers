@@ -11,6 +11,7 @@ tempfile = "3.2.0"
 
 [dependencies]
 anyhow = "^1.0"
+actix-rt = "2.7.0"
 async-trait = "0.1.48"
 bitflags = "1.2.1"
 byte-unit = "4.0.14"
@@ -40,7 +41,7 @@ kata-types = { path = "../../../libs/kata-types" }
 kata-sys-util = { path = "../../../libs/kata-sys-util" }
 logging = { path = "../../../libs/logging" }
 oci = { path = "../../../libs/oci" }
-actix-rt = "2.7.0"
 persist = { path = "../persist"}
+tests_utils = { path = "../../tests/utils" }
 
 [features]
