@@ -470,3 +470,66 @@ pub async fn do_handle_device(
 pub async fn get_block_driver(d: &RwLock<DeviceManager>) -> String {
     d.read().await.get_block_driver().await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::DeviceManager;
+    use crate::{
+        device::{device_manager::get_block_driver, DeviceConfig, DeviceType},
+        qemu::Qemu,
+        BlockConfig, KATA_BLK_DEV_TYPE,
+    };
+    use anyhow::{anyhow, Context, Result};
+    use std::sync::Arc;
+    use tests_utils::load_test_config;
+    use tokio::sync::RwLock;
+
+    async fn new_device_manager() -> Result<Arc<RwLock<DeviceManager>>> {
+        let hypervisor_name: &str = "qemu";
+        let toml_config = load_test_config(hypervisor_name.to_owned())?;
+        let hypervisor_config = toml_config
+            .hypervisor
+            .get(hypervisor_name)
+            .ok_or_else(|| anyhow!("failed to get hypervisor for {}", &hypervisor_name))?;
+
+        let mut hypervisor = Qemu::new();
+        hypervisor
+            .set_hypervisor_config(hypervisor_config.clone())
+            .await;
+
+        let dm = Arc::new(RwLock::new(
+            DeviceManager::new(Arc::new(hypervisor))
+                .await
+                .context("device manager")?,
+        ));
+
+        Ok(dm)
+    }
+
+    #[actix_rt::test]
+    async fn test_new_block_device() {
+        let dm = new_device_manager().await;
+        assert!(dm.is_ok());
+
+        let d = dm.unwrap();
+        let block_driver = get_block_driver(&d).await;
+        let dev_info = DeviceConfig::BlockCfg(BlockConfig {
+            path_on_host: "/dev/dddzzz".to_string(),
+            driver_option: block_driver,
+            ..Default::default()
+        });
+        let new_device_result = d.write().await.new_device(&dev_info).await;
+        assert!(new_device_result.is_ok());
+
+        let device_id = new_device_result.unwrap();
+        let devices_info_result = d.read().await.get_device_info(&device_id).await;
+        assert!(devices_info_result.is_ok());
+
+        let device_info = devices_info_result.unwrap();
+        if let DeviceType::Block(device) = device_info {
+            assert_eq!(device.config.driver_option, KATA_BLK_DEV_TYPE);
+        } else {
+            assert_eq!(1, 0)
+        }
+    }
+}

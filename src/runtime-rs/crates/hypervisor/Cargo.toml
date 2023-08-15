@@ -38,6 +38,7 @@ shim-interface = { path = "../../../libs/shim-interface" }
 dragonball = { path = "../../../dragonball", features = ["atomic-guest-memory", "virtio-vsock", "hotplug", "virtio-blk", "virtio-net", "virtio-fs", "dbs-upcall"] }
 
 ch-config = { path = "ch-config", optional = true }
+tests_utils = { path = "../../tests/utils" }
 
 futures = "0.3.25"
 safe-path = "0.1.0"
