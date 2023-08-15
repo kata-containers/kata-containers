@@ -163,17 +163,18 @@ func (endpoint *VethEndpoint) HotDetach(ctx context.Context, s *Sandbox, netNsCr
 	span, ctx := vethTrace(ctx, "HotDetach", endpoint)
 	defer span.End()
 
+	h := s.hypervisor
+	if _, err := h.HotplugRemoveDevice(ctx, endpoint, NetDev); err != nil {
+		networkLogger().WithError(err).Error("Error detach virtual ep")
+		return err
+	}
+
 	if err := doNetNS(netNsPath, func(_ ns.NetNS) error {
 		return xDisconnectVMNetwork(ctx, endpoint)
 	}); err != nil {
 		networkLogger().WithError(err).Warn("Error un-bridging virtual ep")
 	}
 
-	h := s.hypervisor
-	if _, err := h.HotplugRemoveDevice(ctx, endpoint, NetDev); err != nil {
-		networkLogger().WithError(err).Error("Error detach virtual ep")
-		return err
-	}
 	return nil
 }
 
