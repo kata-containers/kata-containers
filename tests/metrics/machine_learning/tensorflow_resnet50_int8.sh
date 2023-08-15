@@ -11,7 +11,7 @@ SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 source "${SCRIPT_PATH}/../lib/common.bash"
 
 IMAGE="docker.io/library/resnet50int8:latest"
-DOCKERFILE="${SCRIPT_PATH}/resnet50_int8/Dockerfile"
+DOCKERFILE="${SCRIPT_PATH}/resnet50_int8_dockerfile/Dockerfile"
 tensorflow_file=$(mktemp tensorflowresults.XXXXXXXXXX)
 NUM_CONTAINERS="$1"
 TIMEOUT="$2"
@@ -22,7 +22,7 @@ TESTDIR="${TESTDIR:-/testdir}"
 dst_dir="/host"
 src_dir=$(mktemp --tmpdir -d tensorflowresnet50int8.XXXXXXXXXX)
 MOUNT_OPTIONS="type=bind,src=$src_dir,dst=$dst_dir,options=rbind:ro"
-start_script="resnet50_start.sh"
+start_script="resnet50int8_start.sh"
 # CMD points to the script that starts the workload
 # export DNNL_MAX_CPU_ISA=AVX512_CORE_AMX
 CMD="export KMP_AFFINITY=granularity=fine,verbose,compact && export OMP_NUM_THREADS=16 && $dst_dir/$start_script"
