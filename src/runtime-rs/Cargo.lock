@@ -2762,6 +2762,7 @@ dependencies = [
  "slog-scope",
  "tempfile",
  "test-utils",
+ "tests_utils",
  "tokio",
  "tracing",
  "uuid",
@@ -3325,6 +3326,8 @@ dependencies = [
 name = "tests_utils"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "kata-types",
  "rand 0.8.5",
 ]
 
