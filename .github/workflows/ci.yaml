@@ -60,6 +60,27 @@ jobs:
           platforms: linux/amd64, linux/s390x
           file: tests/integration/kubernetes/runtimeclass_workloads/confidential/unencrypted/Dockerfile
 
+  run-kata-deploy-tests-on-aks:
+    needs: publish-kata-deploy-payload-amd64
+    uses: ./.github/workflows/run-kata-deploy-tests-on-aks.yaml
+    with:
+      registry: ghcr.io
+      repo: ${{ github.repository_owner }}/kata-deploy-ci
+      tag: ${{ inputs.tag }}-amd64
+      commit-hash: ${{ inputs.commit-hash }}
+      pr-number: ${{ inputs.pr-number }}
+    secrets: inherit
+
+  run-kata-deploy-tests-on-tdx:
+    needs: [publish-kata-deploy-payload-amd64, build-and-publish-tee-confidential-unencrypted-image]
+    uses: ./.github/workflows/run-kata-deploy-tests-on-tdx.yaml
+    with:
+      registry: ghcr.io
+      repo: ${{ github.repository_owner }}/kata-deploy-ci
+      tag: ${{ inputs.tag }}-amd64
+      commit-hash: ${{ inputs.commit-hash }}
+      pr-number: ${{ inputs.pr-number }}
+
   run-k8s-tests-on-aks:
     needs: publish-kata-deploy-payload-amd64
     uses: ./.github/workflows/run-k8s-tests-on-aks.yaml
