@@ -204,11 +204,11 @@ EOF
 
 function testContainerStop() {
 	info "show pod $podid"
-	sudo crictl pods --id $podid
+	sudo crictl --timeout=20s pods --id $podid
 	info "stop pod $podid"
-	sudo crictl stopp $podid
+	sudo crictl --timeout=20s stopp $podid
 	info "remove pod $podid"
-	sudo crictl rmp $podid
+	sudo crictl --timeout=20s rmp $podid
 
 	sudo cp "$default_containerd_config_backup" "$default_containerd_config"
 	restart_containerd_service
