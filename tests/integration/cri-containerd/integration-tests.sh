@@ -21,9 +21,9 @@ export PATH="$PATH:/usr/local/sbin"
 export PATH="$PATH:/usr/local/go/bin"
 
 # Runtime to be used for testing
-RUNTIME=${RUNTIME:-containerd-shim-kata-v2}
-FACTORY_TEST=${FACTORY_TEST:-""}
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
+RUNTIME=${RUNTIME:-containerd-shim-kata-${KATA_HYPERVISOR}-v2}
+FACTORY_TEST=${FACTORY_TEST:-""}
 USE_DEVMAPPER="${USE_DEVMAPPER:-false}"
 ARCH=$(uname -m)
 
@@ -130,11 +130,17 @@ trap cleanup EXIT
 function err_report() {
 	local log_file="${REPORT_DIR}/containerd.log"
 	if [ -f "$log_file" ]; then
-		echo "ERROR: containerd log :"
+		echo "::group::ERROR: containerd log :"
 		echo "-------------------------------------"
 		cat "${log_file}"
 		echo "-------------------------------------"
+		echo "::endgroup::"
 	fi
+	echo "::group::ERROR: Kata Containers logs : "
+	echo "-------------------------------------"
+	sudo journalctl -xe -t kata
+	echo "-------------------------------------"
+	echo "::endgroup::"
 }
 
 
@@ -197,10 +203,12 @@ EOF
 }
 
 function testContainerStop() {
+	info "show pod $podid"
+	sudo crictl --timeout=20s pods --id $podid
 	info "stop pod $podid"
-	sudo crictl stopp $podid
+	sudo crictl --timeout=20s stopp $podid
 	info "remove pod $podid"
-	sudo crictl rmp $podid
+	sudo crictl --timeout=20s rmp $podid
 
 	sudo cp "$default_containerd_config_backup" "$default_containerd_config"
 	restart_containerd_service
