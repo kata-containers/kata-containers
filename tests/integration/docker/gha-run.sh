@@ -30,6 +30,42 @@ function run() {
 
 	info "Running docker with Kata Containers (${KATA_HYPERVISOR})"
 	sudo docker run --rm --runtime io.containerd.kata-${KATA_HYPERVISOR}.v2 --entrypoint nping "${image}" --tcp-connect -c 2 -p 80 www.github.com
+
+	# Test the network monitor
+	info "Running docker with Kata Containers (${KATA_HYPERVISOR})"
+	container_id=$(sudo docker run -d --runtime io.containerd.kata-${KATA_HYPERVISOR}.v2 busybox)
+	if [ -z "$container_id" ]; then
+		die "Failed to create docker"
+	fi
+	info "Create a docker network named 'my-net'"
+	docker network create my-net
+
+	info "Connect the container to the 'my-net' network"
+	docker network connect my-net $container_id
+	sleep 3
+	mac_address=$(docker network inspect my-net | grep -A5 $container_id | grep '"MacAddress"' | awk -F'"' '{print $4}')
+	if [ -z "$mac_address" ]; then
+		die "Failed to get MacAddress"
+	fi
+	if docker exec -i $container_id ip a | grep "$mac_address"; then
+		info "Disconnect the container from the 'my-net' network"
+		docker network disconnect my-net $container_id
+		sleep 3
+		if docker exec -i $container_id ip a | grep "$mac_address"; then
+			die "Failed to disconnect to "my-net""
+		fi
+	else
+		die "Failed to connect to "my-net""
+	fi
+
+	info "Stop the container"
+	docker stop $container_id
+
+	info "Delete the container"
+	sudo docker rm $container_id
+
+	info "Delete the network "
+	sudo docker network rm my-net
 }
 
 function main() {
