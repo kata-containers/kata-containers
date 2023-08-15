@@ -937,7 +937,17 @@ func (q *qemu) setupVirtioMem(ctx context.Context) error {
 		}
 	}()
 
-	err = q.qmpMonitorCh.qmp.ExecMemdevAdd(q.qmpMonitorCh.ctx, memoryBack, "virtiomem", target, sizeMB, share, "virtio-mem-pci", "virtiomem0", addr, bridge.ID)
+	bridgeID := bridge.ID
+
+	// Hot add virtioMem dev to pcie-root-port for QemuVirt
+	machineType := q.HypervisorConfig().HypervisorMachineType
+	if machineType == QemuVirt {
+		addr = "00"
+		bridgeID = fmt.Sprintf("%s%d", config.PCIeRootPortPrefix, len(config.PCIeDevices[config.RootPort]))
+		config.PCIeDevices[config.RootPort]["virtiomem"] = true
+	}
+
+	err = q.qmpMonitorCh.qmp.ExecMemdevAdd(q.qmpMonitorCh.ctx, memoryBack, "virtiomem", target, sizeMB, share, "virtio-mem-pci", "virtiomem0", addr, bridgeID)
 	if err == nil {
 		q.Logger().Infof("Setup %dMB virtio-mem-pci success", sizeMB)
 	} else {
