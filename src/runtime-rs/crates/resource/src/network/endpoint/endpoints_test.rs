@@ -6,11 +6,12 @@
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, path::Path, sync::Arc};
+    use std::sync::Arc;
 
     use anyhow::{anyhow, Context, Result};
     use netlink_packet_route::MACVLAN_MODE_PRIVATE;
     use scopeguard::defer;
+    use tests_utils::load_test_config;
     use tokio::sync::RwLock;
 
     use crate::network::{
@@ -24,22 +25,13 @@ mod tests {
         utils::link::net_test_utils::delete_link,
     };
     use hypervisor::{device::device_manager::DeviceManager, qemu::Qemu};
-    use kata_types::config::{QemuConfig, TomlConfig};
 
     async fn get_device_manager() -> Result<Arc<RwLock<DeviceManager>>> {
-        let path = env!("CARGO_MANIFEST_DIR");
-        let path = Path::new(path)
-            .join("../../../libs/kata-types/tests/texture/configuration-anno-0.toml");
-
-        let content = fs::read_to_string(path).context("read configuration failed")?;
-        // just for test, use x/kata-types/tests/texture/configuration-anno-0.toml as
-        // the test configuration.toml which is for qemu.
         let hypervisor_name: &str = "qemu";
-
-        let qemu = QemuConfig::new();
-        qemu.register();
-
-        let toml_config = TomlConfig::load(&content).context("load toml config failed")?;
+        if let Err(e) = load_test_config(hypervisor_name.to_owned()) {
+            println!("Test failed with error: {}", e);
+        }
+        let toml_config = load_test_config(hypervisor_name.to_owned())?;
         let hypervisor_config = toml_config
             .hypervisor
             .get(hypervisor_name)
