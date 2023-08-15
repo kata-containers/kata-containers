@@ -47,3 +47,16 @@ $ cd metrics/machine_learning
 $ ./tensorflow_mobilenet_benchmark.sh 25 60
 ```
 
+# Kata Containers TensorFlow `ResNet50` Metrics
+
+`ResNet50` is an image classification model pre-trained on the `ImageNet` dataset.
+Kata Containers provides a test for running `ResNet50` inference using Intel optimized
+`TensorFlow`.
+
+## Running the `TensorFlow` `ResNet50` test
+Individual test can be run by hand, for example:
+
+```
+$ cd metrics/machine_learning
+$ ./tensorflow_resnet50_int8.sh 25 60
+```
