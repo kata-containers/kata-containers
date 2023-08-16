@@ -34,36 +34,7 @@ if [ "$KATA_HYPERVISOR" != "qemu" ] && [ "$KATA_HYPERVISOR" != "clh" ] && [ "$KA
 	exit 0
 fi
 
-arch="$(uname -m)"
-if [ "$arch" != "x86_64" ]; then
-	echo "Skip nydus test for $arch, it only works for x86_64 now. See https://github.com/kata-containers/tests/issues/4445"
-	exit 0
-fi
-
-function install_from_tarball() {
-	local package_name="$1"
-	local binary_name="$2"
-	[ -n "$package_name" ] || die "need package_name"
-	[ -n "$binary_name" ] || die "need package release binary_name"
-
-	local url=$(get_version "externals.${package_name}.url")
-	local version=$(get_version "externals.${package_name}.version")
-	local tarball_url="${url}/releases/download/${version}/${binary_name}-${version}-$arch.tgz"
-	if [ "${package_name}" == "nydus" ]; then
-		local goarch="$(${dir_path}/../../.ci/kata-arch.sh --golang)"
-		tarball_url="${url}/releases/download/${version}/${binary_name}-${version}-linux-$goarch.tgz"
-	fi
-	echo "Download tarball from ${tarball_url}"
-	curl -Ls "$tarball_url" | sudo tar xfz - -C /usr/local/bin --strip-components=1
-}
-
 function setup_nydus() {
-	# install nydus
-	install_from_tarball "nydus" "nydus-static"
-
-	# install nydus-snapshotter
-	install_from_tarball "nydus-snapshotter" "nydus-snapshotter"
-
 	# Config nydus snapshotter
 	sudo -E cp "$dir_path/nydusd-config.json" /etc/
 
