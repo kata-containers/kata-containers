@@ -315,9 +315,7 @@ check_env_variables()
 	GOPATH_LOCAL="${GOPATH%%:*}"
 
 	[ "$AGENT_INIT" == "yes" -o "$AGENT_INIT" == "no" ] || die "AGENT_INIT($AGENT_INIT) is invalid (must be yes or no)"
-
 	[ "$AGENT_POLICY" == "yes" -o "$AGENT_POLICY" == "no" ] || die "AGENT_POLICY($AGENT_POLICY) is invalid (must be yes or no)"
-	[ "$AGENT_POLICY" == "no" -o "$AGENT_INIT" == "no" ] || die "AGENT_POLICY($AGENT_POLICY) and AGENT_INIT($AGENT_INIT) is an invalid combination (at least one must be no)"
 
 	[ -n "${KERNEL_MODULES_DIR}" ] && [ ! -d "${KERNEL_MODULES_DIR}" ] && die "KERNEL_MODULES_DIR defined but is not an existing directory"
 
@@ -678,20 +676,24 @@ EOF
 		install -D -o root -g root -m 0644 "${kata_opa_in_dir}/${policy_file}" -T "${policy_dir}/${policy_file}"
 		ln -sf "${policy_file}" "${policy_dir}/default-policy.rego"
 
-		# Install the unit file for the kata-opa service.
-		local kata_opa_unit="kata-opa.service"
-		local kata_opa_unit_path="${ROOTFS_DIR}/usr/lib/systemd/system/${kata_opa_unit}"
-		local kata_containers_wants="${ROOTFS_DIR}/etc/systemd/system/kata-containers.target.wants"
+		if [ "${AGENT_INIT}" == "yes" ]; then
+			info "OPA will be started by the kata agent"
+		else
+			# Install the unit file for the kata-opa service.
+			local kata_opa_unit="kata-opa.service"
+			local kata_opa_unit_path="${ROOTFS_DIR}/usr/lib/systemd/system/${kata_opa_unit}"
+			local kata_containers_wants="${ROOTFS_DIR}/etc/systemd/system/kata-containers.target.wants"
 
-		opa_settings_dir="${opa_settings_dir//\//\\/}"
-		sed -e "s/@SETTINGSDIR@/${opa_settings_dir}/g" "${kata_opa_in_dir}/${kata_opa_unit}.in" > "${kata_opa_unit}"
+			opa_settings_dir="${opa_settings_dir//\//\\/}"
+			sed -e "s/@SETTINGSDIR@/${opa_settings_dir}/g" "${kata_opa_in_dir}/${kata_opa_unit}.in" > "${kata_opa_unit}"
 
-		opa_bin_dir="${opa_bin_dir//\//\\/}"
-		sed -i -e "s/@BINDIR@/${opa_bin_dir}/g" "${kata_opa_unit}"
+			opa_bin_dir="${opa_bin_dir//\//\\/}"
+			sed -i -e "s/@BINDIR@/${opa_bin_dir}/g" "${kata_opa_unit}"
 
-		install -D -o root -g root -m 0644 "${kata_opa_unit}" -T "${kata_opa_unit_path}"
-		mkdir -p "${kata_containers_wants}"
-		ln -sf "${kata_opa_unit_path}" "${kata_containers_wants}/${kata_opa_unit}"
+			install -D -o root -g root -m 0644 "${kata_opa_unit}" -T "${kata_opa_unit_path}"
+			mkdir -p "${kata_containers_wants}"
+			ln -sf "${kata_opa_unit_path}" "${kata_containers_wants}/${kata_opa_unit}"
+		fi
 	fi
 
 	info "Check init is installed"
