@@ -1372,6 +1372,12 @@ type VhostUserDevice struct {
 	Transport VirtioTransport
 }
 
+// VirtioGPUDevice represents a qemu virtio-gpu device
+type VirtioGPUDevice struct {
+	VirtioGPU string // specifies Virtio GPU device
+	Display   string // specifies opengl support device using drm render nodes
+}
+
 // VhostUserNetTransport is a map of the virtio-net device name that
 // corresponds to each transport.
 var VhostUserNetTransport = map[VirtioTransport]string{
@@ -1430,6 +1436,21 @@ func (vhostuserDev VhostUserDevice) Valid() bool {
 	}
 
 	return true
+}
+func (virtiogpuDev VirtioGPUDevice) Valid() bool {
+	return virtiogpuDev.VirtioGPU != "" && virtiogpuDev.Display != ""
+}
+
+func (virtiogpuDev VirtioGPUDevice) QemuParams(config *Config) []string {
+	var qemuParams []string
+
+	qemuParams = append(qemuParams, "-display")
+	qemuParams = append(qemuParams, virtiogpuDev.Display)
+
+	qemuParams = append(qemuParams, "-device")
+	qemuParams = append(qemuParams, virtiogpuDev.VirtioGPU)
+
+	return qemuParams
 }
 
 // QemuNetParams builds QEMU netdev and device parameters for a VhostUserNet device

@@ -45,6 +45,9 @@ const (
 )
 
 const (
+	// VirtIOGPU means use a paravirtualized 3d accelerated graphics driver
+	VirtIOGPU = "virtio-gpu-gl-pci"
+
 	// VirtioMmio means use virtio-mmio for mmio based drives
 	VirtioMmio = "virtio-mmio"
 

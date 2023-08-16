@@ -99,6 +99,8 @@ const defaultDisableSeccomp = false
 const defaultDisableGuestSeLinux = true
 const defaultVfioMode = "guest-kernel"
 const defaultLegacySerial = false
+const defaultDisplay = ""
+const defaultVirtioGPU = ""
 
 var defaultSGXEPCSize = int64(0)
 

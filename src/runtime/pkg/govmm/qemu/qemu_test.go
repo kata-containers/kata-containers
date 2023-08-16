@@ -184,6 +184,15 @@ func TestAppendDeviceNetwork(t *testing.T) {
 	testAppend(netdev, deviceNetworkString, t)
 }
 
+func TestAppendDeviceVirtioGPU(t *testing.T) {
+	gpudev := VirtioGPUDevice{
+		Display:   "egl-headless",
+		VirtioGPU: "virtio-gpu-gl-pci",
+	}
+
+	testAppend(gpudev, deviceGPUString, t)
+}
+
 func TestAppendDeviceNetworkMq(t *testing.T) {
 	foo, _ := os.CreateTemp(os.TempDir(), "govmm-qemu-test")
 	bar, _ := os.CreateTemp(os.TempDir(), "govmm-qemu-test")

@@ -93,6 +93,8 @@ type hypervisor struct {
 	MachineType                    string                    `toml:"machine_type"`
 	BlockDeviceDriver              string                    `toml:"block_device_driver"`
 	EntropySource                  string                    `toml:"entropy_source"`
+	VirtioGPU                      string                    `toml:"virtio_gpu"`
+	Display                        string                    `toml:"display"`
 	SharedFS                       string                    `toml:"shared_fs"`
 	VirtioFSDaemon                 string                    `toml:"virtio_fs_daemon"`
 	VirtioFSCache                  string                    `toml:"virtio_fs_cache"`
@@ -895,6 +897,8 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		EnableVhostUserStore:    h.EnableVhostUserStore,
 		VhostUserStorePath:      h.vhostUserStorePath(),
 		VhostUserStorePathList:  h.VhostUserStorePathList,
+		VirtioGPU:               h.VirtioGPU,
+		Display:                 h.Display,
 		SeccompSandbox:          h.SeccompSandbox,
 		GuestHookPath:           h.guestHookPath(),
 		RxRateLimiterMaxRate:    rxRateLimiterMaxRate,
@@ -1318,6 +1322,8 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		ColdPlugVFIO:             defaultColdPlugVFIO,
 		HotPlugVFIO:              defaultHotPlugVFIO,
 		GuestHookPath:            defaultGuestHookPath,
+		VirtioGPU:                defaultVirtioGPU,
+		Display:                  defaultDisplay,
 		VhostUserStorePath:       defaultVhostUserStorePath,
 		VhostUserDeviceReconnect: defaultVhostUserDeviceReconnect,
 		VirtioFSCache:            defaultVirtioFSCacheMode,

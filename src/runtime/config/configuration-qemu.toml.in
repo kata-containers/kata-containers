@@ -225,6 +225,18 @@ virtio_fs_cache = "@DEFVIRTIOFSCACHE@"
 # or nvdimm.
 block_device_driver = "@DEFBLOCKSTORAGEDRIVER_QEMU@"
 
+# Enable virtio-gpu device, the default value is not specified.
+# allows the guest operating system to use the capabilities of the host GPU to accelerate 3D rendering.
+# virtio_gpu = "virtio-gpu-gl-pci"
+
+# Provides opengl support using drm render nodes, the default value is not specified
+# It will copy back the bits rendered by the guest using virgl back
+# so spice and vnc and screendump can pick it up
+# It utilizes Direct Rendering Manager (DRM) render nodes for handling graphics operations.
+# https://www.kraxel.org/blog/2021/05/virtio-gpu-qemu-graphics-update/
+# egl-headless depend on mesa libraries and drivers
+# display = "egl-headless"
+
 # aio is the I/O mechanism used by qemu
 # Options:
 #

@@ -438,7 +438,9 @@ func (q *qemu) buildDevices(ctx context.Context, kernelPath string) ([]govmmQemu
 		// there should have no errors for pvpanic device
 		devices, _ = q.arch.appendPVPanicDevice(devices)
 	}
-
+	if q.config.VirtioGPU == config.VirtIOGPU {
+		devices, _ = q.arch.appendVirtGPUDevice(devices, q.config)
+	}
 	var ioThread *govmmQemu.IOThread
 	if q.config.BlockDeviceDriver == config.VirtioSCSI {
 		devices, ioThread, err = q.arch.appendSCSIController(ctx, devices, q.config.EnableIOThreads)
@@ -556,11 +558,16 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 	if err != nil {
 		return err
 	}
-
+	var nographic bool
+	if q.config.VirtioGPU == "" {
+		nographic = true
+	} else {
+		nographic = false
+	}
 	knobs := govmmQemu.Knobs{
 		NoUserConfig:  true,
 		NoDefaults:    true,
-		NoGraphic:     true,
+		NoGraphic:     nographic,
 		NoReboot:      true,
 		Daemonize:     false,
 		MemPrealloc:   q.config.MemPrealloc,
@@ -697,7 +704,6 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		PFlash:         pflash,
 		PidFile:        filepath.Join(q.config.VMStorePath, q.id, "pid"),
 	}
-
 	qemuConfig.Devices, qemuConfig.Bios, err = q.arch.appendProtectionDevice(qemuConfig.Devices, firmwarePath, firmwareVolumePath)
 	if err != nil {
 		return err
@@ -2212,7 +2218,6 @@ func (q *qemu) AddDevice(ctx context.Context, devInfo interface{}, devType Devic
 	span, _ := katatrace.Trace(ctx, q.Logger(), "AddDevice", qemuTracingTags)
 	katatrace.AddTags(span, "sandbox_id", q.id, "device", devInfo)
 	defer span.End()
-
 	switch v := devInfo.(type) {
 	case types.Volume:
 		if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioFSNydus {
