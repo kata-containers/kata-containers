@@ -44,7 +44,7 @@ function create_runtimeclasses() {
 	if [[ "${CREATE_DEFAULT_RUNTIMECLASS}" == "true" ]]; then
 		echo "Creating the kata runtime class for the default shim (an alias for kata-${default_shim})"
 		cp /opt/kata-artifacts/runtimeclasses/kata-${default_shim}.yaml /tmp/kata.yaml
-		sed -i -e 's/kata-'${default_shim}'/kata/g' /tmp/kata.yaml
+		sed -i -e 's/name: kata-'${default_shim}'/name: kata/g' /tmp/kata.yaml
 		kubectl apply -f /tmp/kata.yaml
 		rm -f /tmp/kata.yaml
 	fi
@@ -62,7 +62,7 @@ function delete_runtimeclasses() {
 	if [[ "${CREATE_DEFAULT_RUNTIMECLASS}" == "true" ]]; then
 		echo "Deleting the kata runtime class for the default shim (an alias for kata-${default_shim})"
 		cp /opt/kata-artifacts/runtimeclasses/kata-${default_shim}.yaml /tmp/kata.yaml
-		sed -i -e 's/kata-'${default_shim}'/kata/g' /tmp/kata.yaml
+		sed -i -e 's/name: kata-'${default_shim}'/name: kata/g' /tmp/kata.yaml
 		kubectl delete -f /tmp/kata.yaml
 		rm -f /tmp/kata.yaml
 	fi
