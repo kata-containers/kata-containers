@@ -5,6 +5,7 @@
 
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
+use slog::Drain;
 use tokio::io::AsyncWriteExt;
 use tokio::time::{sleep, Duration};
 
@@ -62,12 +63,12 @@ impl AgentPolicy {
     /// Wait for OPA to start and connect to it.
     pub async fn initialize(
         &mut self,
-        debug_enabled: bool,
-        opa_uri: &str,
+        launch_opa: bool,
+        opa_addr: &str,
         policy_name: &str,
         default_policy: &str,
     ) -> Result<()> {
-        if debug_enabled {
+        if sl!().is_enabled(slog::Level::Debug) {
             self.log_file = Some(
                 tokio::fs::OpenOptions::new()
                     .write(true)
@@ -79,6 +80,11 @@ impl AgentPolicy {
             debug!(sl!(), "policy: log file: {}", POLICY_LOG_FILE);
         }
 
+        if launch_opa {
+            start_opa(opa_addr)?;
+        }
+
+        let opa_uri = format!("http://{opa_addr}/v1");
         self.query_path = format!("{opa_uri}{OPA_DATA_PATH}{policy_name}/");
         self.policy_path = format!("{opa_uri}{OPA_POLICIES_PATH}{policy_name}");
         let opa_client = reqwest::Client::builder().http1_only().build()?;
@@ -102,21 +108,18 @@ impl AgentPolicy {
                 .await
                 .is_ok()
             {
+                self.opa_client = Some(opa_client);
+
                 // Check if requests causing policy errors should actually
                 // be allowed. That is an insecure configuration but is
                 // useful for allowing insecure pods to start, then connect to
                 // them and inspect Guest logs for the root cause of a failure.
-                if let Ok(allow_failures) = self
+                //
+                // Note that post_query returns Ok(false) in case
+                // AllowRequestsFailingPolicy was not defined in the policy.
+                self.allow_failures = self
                     .post_query("AllowRequestsFailingPolicy", EMPTY_JSON_INPUT)
-                    .await
-                {
-                    self.allow_failures = allow_failures;
-                } else {
-                    // post_query failed so the the default, secure, value
-                    // allow_failures: false will be used.
-                }
-
-                self.opa_client = Some(opa_client);
+                    .await?;
                 return Ok(());
             }
         }
@@ -156,6 +159,9 @@ impl AgentPolicy {
             // That is an insecure configuration but is useful for allowing insecure
             // pods to start, then connect to them and inspect Guest logs for the
             // root cause of a failure.
+            //
+            // Note that post_query returns Ok(false) in case
+            // AllowRequestsFailingPolicy was not defined in the policy.
             self.allow_failures = self
                 .post_query("AllowRequestsFailingPolicy", EMPTY_JSON_INPUT)
                 .await?;
@@ -237,4 +243,25 @@ impl AgentPolicy {
             }
         }
     }
+}
+
+fn start_opa(opa_addr: &str) -> Result<()> {
+    let bin_dirs = vec!["/bin", "/usr/bin", "/usr/local/bin"];
+    for bin_dir in &bin_dirs {
+        let opa_path = bin_dir.to_string() + "/opa";
+        if std::fs::metadata(&opa_path).is_ok() {
+            // args copied from kata-opa.service.in.
+            std::process::Command::new(&opa_path)
+                .arg("run")
+                .arg("--server")
+                .arg("--disable-telemetry")
+                .arg("--addr")
+                .arg(opa_addr)
+                .arg("--log-level")
+                .arg("info")
+                .spawn()?;
+            return Ok(());
+        }
+    }
+    bail!("OPA binary not found in {:?}", &bin_dirs);
 }
