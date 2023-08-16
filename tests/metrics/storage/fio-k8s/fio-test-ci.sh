@@ -18,11 +18,12 @@ function main() {
 	check_processes
 	init_env
 
-	export KUBECONFIG="$HOME/.kube/config"
-
 	pushd "${FIO_PATH}"
-		echo "INFO: Running K8S FIO test"
-		make test-ci
+		[ -z "${KATA_HYPERVISOR}" ] && die "Hypervisor ID is missing."
+		[ "${KATA_HYPERVISOR}" != "qemu" ] && [ "${KATA_HYPERVISOR}" != "clh" ] && die "Hypervisor not recognized: ${KATA_HYPERVISOR}"
+
+		echo "INFO: Running K8S FIO test using ${KATA_HYPERVISOR} hypervisor"
+		make "test-${KATA_HYPERVISOR}"
 	popd
 
 	test_result_file="${FIO_PATH}/cmd/fiotest/test-results/kata/randrw-sync.job/output.json"
@@ -30,7 +31,7 @@ function main() {
 	metrics_json_init
 	local read_io=$(cat $test_result_file | grep io_bytes | head -1 | sed 's/[[:blank:]]//g' | cut -f2 -d ':' | cut -f1 -d ',')
 	local read_bw=$(cat $test_result_file | grep bw_bytes | head -1 | sed 's/[[:blank:]]//g' | cut -f2 -d ':' | cut -f1 -d ',')
- 	local read_90_percentile=$(cat $test_result_file | grep 90.000000 | head -1 | sed 's/[[:blank:]]//g' | cut -f2 -d ':' | cut -f1 -d ',')
+	local read_90_percentile=$(cat $test_result_file | grep 90.000000 | head -1 | sed 's/[[:blank:]]//g' | cut -f2 -d ':' | cut -f1 -d ',')
 	local read_95_percentile=$(cat $test_result_file | grep 95.000000 | head -1 | sed 's/[[:blank:]]//g' | cut -f2 -d ':' | cut -f1 -d ',')
 	local write_io=$(cat $test_result_file | grep io_bytes | head -2 | tail -1 | sed 's/[[:blank:]]//g' | cut -f2 -d ':' | cut -f1 -d ',')
 	local write_bw=$(cat $test_result_file | grep bw_bytes | head -2 | tail -1 | sed 's/[[:blank:]]//g' | cut -f2 -d ':' | cut -f1 -d ',')

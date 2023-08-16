@@ -87,10 +87,8 @@ function run_test_tensorflow() {
 
 function run_test_fio() {
 	info "Running FIO test using ${KATA_HYPERVISOR} hypervisor"
-        # ToDo: remove the exit once the metrics workflow is stable
-        exit 0
 
-	bash storage/fio-k8s/fio-test-ci.sh
+	bash tests/metrics/storage/fio-k8s/fio-test-ci.sh
 }
 
 function run_test_iperf() {
