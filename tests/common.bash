@@ -424,3 +424,14 @@ function install_nydus() {
 	sudo tar xfz "${tarball_name}" -C /usr/local/bin --strip-components=1
 	rm -f "${tarball_name}"
 }
+
+function install_nydus_snapshotter() {
+	version="${1}"
+
+	project="containerd/nydus-snapshotter"
+	tarball_name="nydus-snapshotter-${version}-$(${repo_root_dir}/tests/kata-arch.sh).tgz"
+
+	download_github_project_tarball "${project}" "${version}" "${tarball_name}"
+	sudo tar xfz "${tarball_name}" -C /usr/local/bin --strip-components=1
+	rm -f "${tarball_name}"
+}
