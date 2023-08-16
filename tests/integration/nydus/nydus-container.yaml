@@ -1,5 +1,7 @@
 metadata:
   name: nydus-container
+  namespace: default
+  uid: nydus-containerd-uid
 image:
   image: ghcr.io/dragonflyoss/image-service/alpine:nydus-latest
 command:
