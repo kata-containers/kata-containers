@@ -151,24 +151,24 @@ function setup() {
 }
 
 function run_test() {
-	sudo -E crictl pull "${IMAGE}"
-	pod=$(sudo -E crictl runp -r kata $dir_path/nydus-sandbox.yaml)
+	sudo -E crictl --timeout=20s pull "${IMAGE}"
+	pod=$(sudo -E crictl --timeout=20s runp -r kata $dir_path/nydus-sandbox.yaml)
 	echo "Pod $pod created"
-	cnt=$(sudo -E crictl create $pod $dir_path/nydus-container.yaml $dir_path/nydus-sandbox.yaml)
+	cnt=$(sudo -E crictl --timeout=20s create $pod $dir_path/nydus-container.yaml $dir_path/nydus-sandbox.yaml)
 	echo "Container $cnt created"
-	sudo -E crictl start $cnt
+	sudo -E crictl --timeout=20s start $cnt
 	echo "Container $cnt started"
 
 	# ensure container is running
-	state=$(sudo -E crictl inspect $cnt | jq .status.state | tr -d '"')
+	state=$(sudo -E crictl --timeout=20s inspect $cnt | jq .status.state | tr -d '"')
 	[ $state == "CONTAINER_RUNNING" ] || die "Container is not running($state)"
 	# run a command in container
-	sudo -E crictl exec $cnt ls
+	sudo -E crictl --timeout=20s exec $cnt ls
 
 	# cleanup containers
-	sudo -E crictl stop $cnt
-	sudo -E crictl stopp $pod
-	sudo -E crictl rmp $pod
+	sudo -E crictl --timeout=20s stop $cnt
+	sudo -E crictl --timeout=20s stopp $pod
+	sudo -E crictl --timeout=20s rmp $pod
 }
 
 function teardown() {
