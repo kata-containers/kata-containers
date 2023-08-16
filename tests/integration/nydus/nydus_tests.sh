@@ -68,7 +68,7 @@ function setup_nydus() {
 	sudo -E cp "$dir_path/nydusd-config.json" /etc/
 
 	# start nydus-snapshotter
-	nohup /usr/local/bin/containerd-nydus-grpc \
+	sudo nohup /usr/local/bin/containerd-nydus-grpc \
 		--config-path /etc/nydusd-config.json \
 		--shared-daemon \
 		--log-level debug \
@@ -163,7 +163,7 @@ function run_test() {
 	state=$(sudo -E crictl inspect $cnt | jq .status.state | tr -d '"')
 	[ $state == "CONTAINER_RUNNING" ] || die "Container is not running($state)"
 	# run a command in container
-	crictl exec $cnt ls
+	sudo -E crictl exec $cnt ls
 
 	# cleanup containers
 	sudo -E crictl stop $cnt
@@ -176,11 +176,11 @@ function teardown() {
 
 	# kill nydus-snapshotter
 	bin=containerd-nydus-grpc
-	kill -9 $(pidof $bin) || true
+	sudo -E kill -9 $(pidof $bin) || true
 	[ "$(pidof $bin)" == "" ] || die "$bin is running"
 
 	bin=nydusd
-	kill -9 $(pidof $bin) || true
+	sudo -E kill -9 $(pidof $bin) || true
 	[ "$(pidof $bin)" == "" ] || die "$bin is running"
 
 	# restore kata configuratiom.toml if needed
