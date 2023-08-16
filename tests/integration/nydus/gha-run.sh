@@ -29,7 +29,7 @@ function main() {
 	action="${1:-}"
 	case "${action}" in
 		install-dependencies) install_dependencies ;;
-		install-kata) return 0 ;;
+		install-kata) install_kata ;;
 		run) run ;;
 		*) >&2 die "Invalid argument" ;;
 	esac
