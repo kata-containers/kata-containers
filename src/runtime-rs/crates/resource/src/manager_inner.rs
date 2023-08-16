@@ -11,7 +11,7 @@ use anyhow::{anyhow, Context, Ok, Result};
 use async_trait::async_trait;
 use hypervisor::{
     device::{
-        device_manager::{do_handle_device, DeviceManager},
+        device_manager::{do_handle_device, get_block_driver, DeviceManager},
         util::{get_host_path, DEVICE_TYPE_CHAR},
         DeviceConfig, DeviceType,
     },
@@ -277,13 +277,15 @@ impl ResourceManagerInner {
         for d in linux.devices.iter() {
             match d.r#type.as_str() {
                 "b" => {
+                    let block_driver = get_block_driver(&self.device_manager).await;
                     let dev_info = DeviceConfig::BlockCfg(BlockConfig {
                         major: d.major,
                         minor: d.minor,
+                        driver_option: block_driver,
                         ..Default::default()
                     });
 
-                    let device_info = do_handle_device(&self.device_manager.clone(), &dev_info)
+                    let device_info = do_handle_device(&self.device_manager, &dev_info)
                         .await
                         .context("do handle device")?;
 
