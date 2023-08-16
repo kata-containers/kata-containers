@@ -414,6 +414,17 @@ function install_cri_tools() {
 	rm -f "${tarball_name}"
 }
 
+function install_nydus() {
+	version="${1}"
+
+	project="dragonflyoss/image-service"
+	tarball_name="nydus-static-${version}-linux-$(${repo_root_dir}/tests/kata-arch.sh -g).tgz"
+
+	download_github_project_tarball "${project}" "${version}" "${tarball_name}"
+	sudo tar xfz "${tarball_name}" -C /usr/local/bin --strip-components=1
+	rm -f "${tarball_name}"
+}
+
 # Convert architecture to the name used by golang
 function arch_to_golang() {
 	local arch="$(uname -m)"
