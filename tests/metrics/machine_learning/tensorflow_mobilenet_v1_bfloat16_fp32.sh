@@ -43,7 +43,7 @@ cat << EOF
 Usage: $0 <count> <timeout>
 	Description:
 		This script launches n number of containers
-		to run the tf cnn benchmarks using a Tensorflow
+		to run the MobileNet model using a Tensorflow
 		container.
 	Options:
 		<count> : Number of containers to run.
