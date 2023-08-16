@@ -49,7 +49,8 @@ function install_dependencies() {
 function run() {
 	info "Running nydus tests using ${KATA_HYPERVISOR} hypervisor"
 
-	return 0
+	enabling_hypervisor
+	bash -c "${nydus_dir}/nydus_tests.sh"
 }
 
 function main() {
