@@ -30,7 +30,7 @@ containerd_config_backup="/tmp/containerd.config.toml"
 # test image for container
 IMAGE="${IMAGE:-ghcr.io/dragonflyoss/image-service/alpine:nydus-latest}"
 
-if [ "$KATA_HYPERVISOR" != "qemu" ] && [ "$KATA_HYPERVISOR" != "cloud-hypervisor" ] && [ "$KATA_HYPERVISOR" != "dragonball" ]; then
+if [ "$KATA_HYPERVISOR" != "qemu" ] && [ "$KATA_HYPERVISOR" != "clh" ] && [ "$KATA_HYPERVISOR" != "dragonball" ]; then
 	echo "Skip nydus test for $KATA_HYPERVISOR, it only works for QEMU/CLH/DB now."
 	exit 0
 fi
