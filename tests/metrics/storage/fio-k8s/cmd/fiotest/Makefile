@@ -20,5 +20,8 @@ gomod:
 	 go mod edit -replace=github.com/kata-containers/kata-containers/tests/metrics/env=../../pkg/env
 	 go mod tidy
 
-runci: build
-	$(MKFILE_DIR)/fio-k8s --debug --fio.size 10M --output-dir test-results --test-name kata $(MKFILE_DIR)/../../configs/example-config/
+run-qemu: build
+	$(MKFILE_DIR)/fio-k8s --debug --fio.size 10M --output-dir test-results --test-name kata --container-runtime kata-qemu $(MKFILE_DIR)/../../configs/example-config/
+
+run-clh: build
+	$(MKFILE_DIR)/fio-k8s --debug --fio.size 10M --output-dir test-results --test-name kata --container-runtime kata-clh $(MKFILE_DIR)/../../configs/example-config/
