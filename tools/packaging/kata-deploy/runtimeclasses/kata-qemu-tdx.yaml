@@ -8,6 +8,7 @@ overhead:
     podFixed:
         memory: "2048Mi"
         cpu: "1.0"
+        #tdx.intel.io/keys: "1"
 scheduling:
   nodeSelector:
     katacontainers.io/kata-runtime: "true"

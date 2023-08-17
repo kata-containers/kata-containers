@@ -13,12 +13,14 @@ source "${kubernetes_dir}/../../common.bash"
 TARGET_ARCH="${TARGET_ARCH:-x86_64}"
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 K8S_TEST_DEBUG="${K8S_TEST_DEBUG:-false}"
+USING_NFD="${USING_NFD:-"false"}"
 
 if [ -n "${K8S_TEST_UNION:-}" ]; then
 	K8S_TEST_UNION=($K8S_TEST_UNION)
 else
 	K8S_TEST_UNION=( \
 		"kata-deploy-ensure-runtimec-classes-created.bats" \
+		"kata-deploy-test-usig-nfd.bats"
 		"k8s-attach-handlers.bats" \
 		"k8s-caps.bats" \
 		"k8s-configmap.bats" \

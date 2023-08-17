@@ -38,6 +38,29 @@ get_pod_config_dir() {
 	info "k8s configured to use runtimeclass"
 }
 
+get_tee() {
+	tees[qemu-tdx]="tdx"
+
+	tee=${tees[${KATA_HYPERVISOR}]}
+}
+
+get_tee_key_resource() {
+	tees_key_resource[qemu-tdx]="tdx.intel.io/keys"
+
+	tee_key_resource=${tees_key_resource[${KATA_HYPERVISOR}]}
+}
+
+get_tee_key_label_jsonpath() {
+	# Sadly we need to declare the whole `-o jsonpath={...}`, as I couldn't find a reliable
+	# way to just set the TEE specific capacity string in a way I could pass it as an env
+	# var to the -o jsonpath option.
+	#
+	# We need to escape the dots in order to make jsonpath happy
+	tees_key_label_jsonpath[qemu-tdx]="-o jsonpath='{.status.capacity.tdx\.intel\.io/keys}'"
+
+	tee_key_label_jsonpath=${tees_key_label_jsonpath[${KATA_HYPERVISOR}]}
+}
+
 # Runs a command in the host filesystem.
 exec_host() {
 	node="$(kubectl get node -o name)"

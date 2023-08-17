@@ -29,3 +29,4 @@ rm -f ${WORKDIR}/${KATA_ARTIFACTS}
 
 COPY scripts ${DESTINATION}/scripts
 COPY runtimeclasses ${DESTINATION}/runtimeclasses
+COPY nodefeaturerules ${DESTINATION}/nodefeaturerules
