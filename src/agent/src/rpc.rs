@@ -52,10 +52,7 @@ use nix::sys::{stat, statfs};
 use nix::unistd::{self, Pid};
 use rustjail::process::ProcessOperations;
 
-use crate::device::{
-    add_devices, get_virtio_blk_pci_device_name, insert_devices_cgroup_rule, update_env_pci,
-    DeviceInfo, VM_ROOTFS,
-};
+use crate::device::{add_devices, get_virtio_blk_pci_device_name, update_env_pci};
 use crate::linux_abi::*;
 use crate::metrics::get_metrics;
 use crate::mount::baremount;
@@ -238,10 +235,6 @@ impl AgentService {
         s.container_mounts.insert(cid.clone(), m);
 
         update_container_namespaces(&s, &mut oci, use_sandbox_pidns)?;
-
-        // Add the root partition to the device cgroup to prevent access
-        let dev_info = DeviceInfo::new(VM_ROOTFS, false)?;
-        insert_devices_cgroup_rule(&mut oci, &dev_info, false, "rw")?;
 
         // Append guest hooks
         append_guest_hooks(&s, &mut oci)?;
