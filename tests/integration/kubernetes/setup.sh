@@ -18,18 +18,20 @@ reset_workloads_work_dir() {
 set_kernel_path() {
     if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
         mariner_kernel_path="/usr/share/cloud-hypervisor/vmlinux.bin"
-        find ${kubernetes_dir}/runtimeclass_workloads_work/*.yaml -exec yq write -i {} 'metadata.annotations[io.katacontainers.config.hypervisor.kernel]' "${mariner_kernel_path}" \;
+        # Not using find -exec as that still returns 0 on failure.
+        find ${kubernetes_dir}/runtimeclass_workloads_work/*.yaml -print0 | xargs -0 -I% yq write -i % 'metadata.annotations[io.katacontainers.config.hypervisor.kernel]' "${mariner_kernel_path}"
     fi
 }
 
 set_initrd_path() {
     if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
         initrd_path="/opt/kata/share/kata-containers/kata-containers-initrd-mariner.img"
-        find ${kubernetes_dir}/runtimeclass_workloads_work/*.yaml -exec yq write -i {} 'metadata.annotations[io.katacontainers.config.hypervisor.initrd]' "${initrd_path}" \;
+        find ${kubernetes_dir}/runtimeclass_workloads_work/*.yaml -print0 | xargs -0 -I% yq write -i % 'metadata.annotations[io.katacontainers.config.hypervisor.initrd]' "${initrd_path}"
     fi
 }
 
 main() {
+    ensure_yq
     reset_workloads_work_dir
     set_kernel_path
     set_initrd_path
