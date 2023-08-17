@@ -67,6 +67,9 @@ kernel-dragonball-experimental-tarball:
 kernel-nvidia-gpu-tarball:
 	${MAKE} $@-build
 
+kernel-virtio-gpu-tarball:
+	${MAKE} $@-build
+
 kernel-nvidia-gpu-snp-tarball:
 	${MAKE} $@-build
 

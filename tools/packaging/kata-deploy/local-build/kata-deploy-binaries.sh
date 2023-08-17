@@ -90,6 +90,7 @@ options:
 	kernel-nvidia-gpu
 	kernel-nvidia-gpu-snp
 	kernel-nvidia-gpu-tdx-experimental
+	kernel-virtio-gpu
 	kernel-sev-tarball
 	kernel-tdx-experimental
 	nydus
@@ -337,6 +338,14 @@ install_kernel_nvidia_gpu() {
 		"assets.kernel.version" \
 		"kernel-nvidia-gpu" \
 		"-g nvidia -u ${kernel_url} -H deb"
+}
+
+#Install VIRTIO-GPU enabled kernel asset
+install_kernel_virtio_gpu() {
+	install_kernel_helper \
+		"assets.kernel.version" \
+		"kernel" \
+		"-g virtio-gpu"
 }
 
 #Install GPU and SNP enabled kernel asset
@@ -672,6 +681,8 @@ handle_build() {
 	kernel-dragonball-experimental) install_kernel_dragonball_experimental ;;
 
 	kernel-nvidia-gpu) install_kernel_nvidia_gpu ;;
+
+	kernel-virtio-gpu) install_kernel_virtio_gpu ;;
 
 	kernel-nvidia-gpu-snp) install_kernel_nvidia_gpu_snp;;
 

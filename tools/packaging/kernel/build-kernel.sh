@@ -35,6 +35,7 @@ readonly default_initramfs="${script_dir}/initramfs.cpio.gz"
 # GPU vendor
 readonly GV_INTEL="intel"
 readonly GV_NVIDIA="nvidia"
+readonly GV_VIRTGPU="virtio-gpu"
 
 #Path to kernel directory
 kernel_path=""
@@ -250,7 +251,6 @@ get_kernel_frag_path() {
 	if [[ ${build_type} != "" ]]; then
 		all_configs="${all_configs} ${extra_configs}"
 	fi
-
 	if [[ "${gpu_vendor}" != "" ]];then
 		info "Add kernel config for GPU due to '-g ${gpu_vendor}'"
 		# If conf_guest is set we need to update the CONFIG_LOCALVERSION
@@ -564,7 +564,7 @@ main() {
 				;;
 			g)
 				gpu_vendor="${OPTARG}"
-				[[ "${gpu_vendor}" == "${GV_INTEL}" || "${gpu_vendor}" == "${GV_NVIDIA}" ]] || die "GPU vendor only support intel and nvidia"
+				[[ "${gpu_vendor}" == "${GV_INTEL}" || "${gpu_vendor}" == "${GV_NVIDIA}" ]] || [[ "${gpu_vendor}" == "${GV_VIRTGPU}" ]] || die "GPU vendor only support intel and nvidia"
 				;;
 			h)
 				usage 0
