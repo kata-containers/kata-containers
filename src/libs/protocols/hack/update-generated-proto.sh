@@ -29,12 +29,12 @@ show_succeed_msg() {
 show_usage() {
     echo "===================================================================="
     echo ""
-    echo "       USAGE: make PROTO_FILE=<xyz.proto> generate-protocols"
+    echo "       USAGE: generate-protocols <FILE|all>"
     echo ""
-    echo "       Where PROTO_FILE may be:"
+    echo "       Where the first argument could be:"
     echo "         all: will compile all protocol buffer files"
     echo ""
-    echo "       Or compile individually by using the exact proto file:"
+    echo "         Or compile individually by using the exact proto file:"
 
     # iterate over proto files
     for file in "$@"
