@@ -25,12 +25,12 @@ function main() {
     case "${action}" in
         install-azure-cli) install_azure_cli ;;
         login-azure) login_azure ;;
-        create-cluster) create_cluster ;;
+        create-cluster) create_cluster "kata-deploy" ;;
         install-bats) install_bats ;;
         install-kubectl) install_kubectl ;;
-        get-cluster-credentials) get_cluster_credentials ;;
+        get-cluster-credentials) get_cluster_credentials "kata-deploy" ;;
         run-tests) run_tests ;;
-        delete-cluster) cleanup "aks" ;;
+        delete-cluster) cleanup "aks" "kata-deploy" ;;
         *) >&2 echo "Invalid argument"; exit 2 ;;
     esac
 }
