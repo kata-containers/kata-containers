@@ -73,26 +73,26 @@ minpercent = 20.0
 maxpercent = 20.0
 
 [[metric]]
-name = "tensorflow"
+name = "tensorflow_nhwc"
 type = "json"
 description = "tensorflow resnet model"
 # Min and Max values to set a 'range' that
 # the median of the CSV Results data must fall
 # within (inclusive)
-checkvar = ".\"tensorflow\".Results | .[] | .resnet.Result"
+checkvar = ".\"tensorflow_nhwc\".Results | .[] | .resnet.Result"
 checktype = "mean"
 midval = 3546.0
 minpercent = 20.0
 maxpercent = 20.0
 
 [[metric]]
-name = "tensorflow"
+name = "tensorflow_nhwc"
 type = "json"
 description = "tensorflow alexnet model"
 # Min and Max values to set a 'range' that
 # the median of the CSV Results data must fall
 # within (inclusive)
-checkvar = ".\"tensorflow\".Results | .[] | .alexnet.Result"
+checkvar = ".\"tensorflow_nhwc\".Results | .[] | .alexnet.Result"
 checktype = "mean"
 midval = 98.0
 minpercent = 20.0
