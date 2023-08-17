@@ -47,7 +47,7 @@ show_usage() {
 }
 
 generate_go_sources() {
-    local cmd="protoc -I$GOPATH/src:$GOPATH/src/github.com/kata-containers/kata-containers/src/libs/protocols/protos \
+    local cmd="protoc -I$GOPATH/src:$(realpath ../)/libs/protocols/protos \
 --gogottrpc_out=plugins=ttrpc+fieldpath,\
 import_path=github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc,\
 Mgithub.com/kata-containers/kata-containers/src/libs/protocols/protos/csi.proto=github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc,\
@@ -63,7 +63,7 @@ Mgoogle/protobuf/timestamp.proto=github.com/gogo/protobuf/types,\
 Mgoogle/protobuf/wrappers.proto=github.com/gogo/protobuf/types,\
 Mgoogle/rpc/status.proto=github.com/gogo/googleapis/google/rpc\
 :$GOPATH/src \
-$GOPATH/src/github.com/kata-containers/kata-containers/src/libs/protocols/protos/$1"
+$(realpath ../)/libs/protocols/protos/$1"
 
     echo $cmd
     $cmd
