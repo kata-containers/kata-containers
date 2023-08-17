@@ -13,9 +13,32 @@ kata_deploy_dir="$(dirname "$(readlink -f "$0")")"
 source "${kata_deploy_dir}/../../gha-run-k8s-common.sh"
 
 function run_tests() {
+	cleanup_runtimeclasses || true
+
 	pushd "${kata_deploy_dir}"
 	bash run-kata-deploy-tests.sh
 	popd
+}
+
+function cleanup_runtimeclasses() {
+	# Cleanup any runtime class that was left behind in the cluster, in
+	# case of a test failure, apart from the default one that comes from
+	# AKS
+	for rc in `kubectl get runtimeclass -o name | grep -v "kata-mshv-vm-isolation" | sed 's|runtimeclass.node.k8s.io/||'`
+	do
+		kubectl delete runtimeclass $rc;
+	done
+}
+
+function cleanup() {
+	platform="${1}"
+	test_type="${2:-k8s}"
+
+	cleanup_runtimeclasses || true
+
+	if [ "${platform}" = "aks" ]; then
+		delete_cluster ${test_type}
+	fi
 }
 
 function main() {
