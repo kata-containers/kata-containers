@@ -32,7 +32,6 @@ fn sl() -> slog::Logger {
     slog_scope::logger().new(o!("subsystem" => "device"))
 }
 
-pub const VM_ROOTFS: &str = "/";
 const BLOCK: &str = "block";
 pub const DRIVER_9P_TYPE: &str = "9p";
 pub const DRIVER_VIRTIOFS_TYPE: &str = "virtio-fs";
@@ -1034,6 +1033,8 @@ mod tests {
     use oci::Linux;
     use std::iter::FromIterator;
     use tempfile::tempdir;
+
+    const VM_ROOTFS: &str = "/";
 
     #[test]
     fn test_update_device_cgroup() {
