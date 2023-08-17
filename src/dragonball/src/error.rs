@@ -193,6 +193,11 @@ pub enum StartMicroVmError {
     /// Virtio-balloon errors.
     #[error("virtio-balloon errors: {0}")]
     BalloonDeviceError(#[source] device_manager::balloon_dev_mgr::BalloonDeviceError),
+
+    /// Vhost-net device errors.
+    #[cfg(feature = "vhost-net")]
+    #[error("vhost-net errors: {0}")]
+    VhostNetDeviceError(#[source] device_manager::vhost_net_dev_mgr::VhostNetDeviceError),
 }
 
 /// Errors associated with starting the instance.
