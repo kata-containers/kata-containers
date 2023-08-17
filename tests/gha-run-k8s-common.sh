@@ -14,8 +14,10 @@ source "${tests_dir}/common.bash"
 AZ_RG="${AZ_RG:-kataCI}"
 
 function _print_cluster_name() {
+    test_type="${1:-k8s}"
+
     short_sha="$(git rev-parse --short=12 HEAD)"
-    echo "${GH_PR_NUMBER}-${short_sha}-${KATA_HYPERVISOR}-${KATA_HOST_OS}-amd64"
+    echo "${test_type}-${GH_PR_NUMBER}-${short_sha}-${KATA_HYPERVISOR}-${KATA_HOST_OS}-amd64"
 }
 
 function install_azure_cli() {
@@ -33,12 +35,14 @@ function login_azure() {
 }
 
 function create_cluster() {
+    test_type="${1:-k8s}"
+
     # First, ensure that the cluster didn't fail to get cleaned up from a previous run.
-    delete_cluster || true
+    delete_cluster "${test_type}" || true
 
     az aks create \
         -g "${AZ_RG}" \
-        -n "$(_print_cluster_name)" \
+        -n "$(_print_cluster_name ${test_type})" \
         -s "Standard_D4s_v5" \
         --node-count 1 \
         --generate-ssh-keys \
@@ -61,15 +65,19 @@ function install_kubectl() {
 }
 
 function get_cluster_credentials() {
+    test_type="${1:-k8s}"
+
     az aks get-credentials \
         -g "${AZ_RG}" \
-        -n "$(_print_cluster_name)"
+        -n "$(_print_cluster_name ${test_type})"
 }
 
 function delete_cluster() {
+    test_type="${1:-k8s}"
+
     az aks delete \
         -g "${AZ_RG}" \
-        -n "$(_print_cluster_name)" \
+        -n "$(_print_cluster_name ${test_type})" \
         --yes
 }
 

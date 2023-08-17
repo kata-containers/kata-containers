@@ -78,13 +78,14 @@ function run_tests() {
 
 function cleanup() {
     platform="${1}"
+    test_type="${2:-k8s}"
     ensure_yq
 
     echo "Gather information about the nodes and pods before cleaning up the node"
     get_nodes_and_pods_info
 
     if [ "${platform}" = "aks" ]; then
-        delete_cluster
+        delete_cluster ${test_type}
         return
     fi
 
