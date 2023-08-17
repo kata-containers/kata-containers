@@ -41,6 +41,9 @@ pub mod mem;
 #[cfg(feature = "virtio-balloon")]
 pub mod balloon;
 
+#[cfg(feature = "vhost")]
+pub mod vhost;
+
 use std::io::Error as IOError;
 
 use virtio_queue::Error as VqError;
@@ -201,14 +204,19 @@ pub enum Error {
     #[error("virtio-vsock error: {0}")]
     VirtioVsockError(#[from] self::vsock::VsockError),
 
-    #[cfg(feature = "virtio-net")]
-    #[error("Virtio-net error: {0}")]
-    VirtioNetError(#[from] crate::net::NetError),
-
     #[cfg(feature = "virtio-fs")]
     /// Error from Virtio fs.
     #[error("virtio-fs error: {0}")]
     VirtioFs(fs::Error),
+
+    #[cfg(feature = "vhost")]
+    #[error("vhost error: {0}")]
+    /// Error from vhost-net.
+    VhostNet(#[from] vhost_rs::Error),
+
+    #[cfg(feature = "virtio-net")]
+    #[error("tap device operation error: {0}")]
+    TapDeviceError(#[source] TapError),
 
     #[cfg(feature = "virtio-mem")]
     #[error("Virtio-mem error: {0}")]
@@ -217,6 +225,26 @@ pub enum Error {
     #[cfg(feature = "virtio-balloon")]
     #[error("Virtio-balloon error: {0}")]
     VirtioBalloonError(#[from] balloon::BalloonError),
+}
+
+// Error for tap devices
+#[cfg(feature = "virtio-net")]
+#[derive(Debug, thiserror::Error)]
+pub enum TapError {
+    #[error("missing {0} flags")]
+    MissingFlags(String),
+
+    #[error("failed to set offload: {0}")]
+    SetOffload(#[source] dbs_utils::net::TapError),
+
+    #[error("failed to set vnet_hdr_size: {0}")]
+    SetVnetHdrSize(#[source] dbs_utils::net::TapError),
+    
+    #[error("failed to open a tap device: {0}")]
+    Open(#[source] dbs_utils::net::TapError),
+
+    #[error("failed to enable a tap device: {0}")]
+    Enable(#[source] dbs_utils::net::TapError),
 }
 
 /// Specialized std::result::Result for Virtio device operations.

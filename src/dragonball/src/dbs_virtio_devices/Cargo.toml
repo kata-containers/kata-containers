@@ -37,6 +37,7 @@ virtio-queue = "0.7.0"
 vmm-sys-util = "0.11.0"
 vm-memory = { version = "0.10.0", features = [ "backend-mmap" ] }
 sendfd = "0.4.3"
+vhost-rs = { version = "0.6.1", package = "vhost", optional = true }
 
 [dev-dependencies]
 vm-memory = { version = "0.10.0", features = [ "backend-mmap", "backend-atomic" ] }
@@ -50,3 +51,5 @@ virtio-fs = ["virtio-mmio", "fuse-backend-rs/virtiofs", "nydus-rafs/virtio-fs"]
 virtio-fs-pro = ["virtio-fs", "nydus-storage/backend-registry", "nydus-storage/backend-oss"]
 virtio-mem = ["virtio-mmio"]
 virtio-balloon = ["virtio-mmio"]
+vhost = ["virtio-mmio", "vhost-rs/vhost-user-master", "vhost-rs/vhost-kern"]
+vhost-net = ["virtio-net", "vhost", "vhost-rs/vhost-net"]
