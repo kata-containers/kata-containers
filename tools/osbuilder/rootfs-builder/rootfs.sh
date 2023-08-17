@@ -30,6 +30,7 @@ LIBC=${LIBC:-musl}
 SECCOMP=${SECCOMP:-"yes"}
 # The kata agent enables sealed-secret feature.
 SEALED_SECRET=${SEALED_SECRET:-"no"}
+CDH_RESOURCE_PROVIDER=${CDH_RESOURCE_PROVIDER:-"kbs"}
 SELINUX=${SELINUX:-"no"}
 
 lib_file="${script_dir}/../scripts/lib.sh"
@@ -697,6 +698,10 @@ EOF
 		git checkout FETCH_HEAD
 		( [ "${AA_KBC}" == "eaa_kbc" ] || [ "${AA_KBC}" == "cc_kbc_tdx" ] ) && [ "${ARCH}" == "x86_64" ] && LIBC="gnu"
 		make KBC=${AA_KBC} ttrpc=true && make install DESTDIR="${ROOTFS_DIR}/usr/local/bin/"
+		popd
+
+		pushd guest-components/confidential-data-hub
+		make RESOURCE_PROVIDER=${CDH_RESOURCE_PROVIDER} && make install DESTDIR="${ROOTFS_DIR}/usr/local/bin/"
 		popd
 	fi
 
