@@ -11,12 +11,6 @@ setup() {
 	repo_root_dir="${BATS_TEST_DIRNAME}/../../../"
 	ensure_yq
 
-	# Cleanup any runtimeclass already present in the cluster
-	# apart from the default one that comes from AKS
-	for rc in `kubectl get runtimeclass -o name | grep -v "kata-mshv-vm-isolation" | sed 's|runtimeclass.node.k8s.io/||'`; do
-		 kubectl delete runtimeclass $rc;
-	done
-	
 	# We expect 2 runtime classes because:
 	# * `kata` is the default runtimeclass created, basically an alias for `kata-${KATA_HYPERVISOR}`.
 	# * `kata-${KATA_HYPERVISOR}` is the other one
@@ -109,11 +103,4 @@ teardown() {
 	
 	kubectl delete ${cleanup_spec}
 	kubectl delete -f "${repo_root_dir}/tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
-
-	# Cleanup any runtime class that was left behind in the cluster, in
-	# case of a test failure, apart from the default one that comes from
-	# AKS
-	for rc in `kubectl get runtimeclass -o name | grep -v "kata-mshv-vm-isolation" | sed 's|runtimeclass.node.k8s.io/||'`; do
-		 kubectl delete runtimeclass $rc;
-	done
 }
