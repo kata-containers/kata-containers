@@ -80,7 +80,7 @@ function run_test_blogbench() {
 function run_test_tensorflow() {
 	info "Running TensorFlow test using ${KATA_HYPERVISOR} hypervisor"
 
-	bash tests/metrics/machine_learning/tensorflow.sh 1 20
+	bash tests/metrics/machine_learning/tensorflow_nhwc.sh 1 20
 
 	check_metrics
 }
