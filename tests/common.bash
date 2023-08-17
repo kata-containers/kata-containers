@@ -338,6 +338,7 @@ function ensure_yq() {
     export GOPATH
     export PATH="${GOPATH}/bin:${PATH}"
     INSTALL_IN_GOPATH=true "${repo_root_dir}/ci/install_yq.sh"
+    hash -d yq # yq is preinstalled on GHA Ubuntu 22.04 runners so we clear Bash's PATH cache.
 }
 
 # dependency: What we want to get the version from the versions.yaml file
