@@ -480,6 +480,8 @@ type extraOption struct {
 	Source      string `json:"source"`
 	Config      string `json:"config"`
 	Snapshotdir string `json:"snapshotdir"`
+	Version     string `json:"fs_version,omitempty"`
+	Verity      string `json:"verity,omitempty"`
 }
 
 const extraOptionKey = "extraoption="
@@ -495,7 +497,11 @@ func parseExtraOption(options []string) (*extraOption, error) {
 		return nil, errors.New("no extraoption found")
 	}
 
-	opt, err := base64.StdEncoding.DecodeString(extraOpt)
+	return decodeExtraOption(extraOpt)
+}
+func decodeExtraOption(extraoption string) (*extraOption, error) {
+
+	opt, err := base64.StdEncoding.DecodeString(extraoption)
 	if err != nil {
 		return nil, errors.Wrap(err, "base64 decoding err")
 	}

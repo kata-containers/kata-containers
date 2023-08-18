@@ -160,8 +160,18 @@ func TestParseExtraOption(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name:    "valid option",
+			name:    "valid option without version and verity",
 			option:  "extraoption=" + base64.StdEncoding.EncodeToString([]byte("{\"source\":\"/path/to/bootstrap\",\"config\":\"config content\",\"snapshotdir\":\"/path/to/snapshotdir\"}")),
+			wantErr: false,
+		},
+		{
+			name:    "valid option with version without verity",
+			option:  "extraoption=" + base64.StdEncoding.EncodeToString([]byte("{\"source\":\"/path/to/bootstrap\",\"config\":\"config content\",\"snapshotdir\":\"/path/to/snapshotdir\",\"version\":\"v5\"}")),
+			wantErr: false,
+		},
+		{
+			name:    "valid option with verity without version",
+			option:  "extraoption=" + base64.StdEncoding.EncodeToString([]byte("{\"source\":\"/path/to/bootstrap\",\"config\":\"config content\",\"snapshotdir\":\"/path/to/snapshotdir\",\"verity\":\"3865,1982464,sha256:f07fa2ae9f9177d17414ce4ca3348b51c0609b9cc0a24b8ef062d73143dc3193\"}")),
 			wantErr: false,
 		},
 		{
