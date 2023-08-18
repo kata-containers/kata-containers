@@ -26,6 +26,7 @@ readonly clh_builder="${static_build_dir}/cloud-hypervisor/build-static-clh.sh"
 readonly firecracker_builder="${static_build_dir}/firecracker/build-static-firecracker.sh"
 readonly initramfs_builder="${static_build_dir}/initramfs/build.sh"
 readonly kernel_builder="${static_build_dir}/kernel/build.sh"
+readonly opa_builder="${static_build_dir}/opa/build.sh"
 readonly ovmf_builder="${static_build_dir}/ovmf/build.sh"
 readonly qemu_builder="${static_build_dir}/qemu/build-static-qemu.sh"
 readonly qemu_experimental_builder="${static_build_dir}/qemu/build-static-qemu-experimental.sh"
@@ -91,6 +92,7 @@ options:
 	kernel-sev-tarball
 	kernel-tdx-experimental
 	nydus
+	opa
 	ovmf
 	ovmf-sev
 	qemu
@@ -568,6 +570,24 @@ install_shimv2() {
 	fi
 }
 
+install_opa() {
+	install_cached_tarball_component \
+		"opa" \
+		"${jenkins_url}/job/kata-containers-main-opa-${ARCH}/${cached_artifacts_path}" \
+		"$(get_from_kata_deps "externals.open-policy-agent.version")" \
+		"$(get_opa_image_name)" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
+	info "build static opa"
+	"${opa_builder}"
+	info "Install static opa DESTDIR=${destdir} PREFIX=${prefix}"
+
+	# TODO
+	exit 1
+}
+
 install_ovmf() {
 	ovmf_type="${1:-x86_64}"
 	tarball_name="${2:-edk2-x86_64.tar.gz}"
@@ -625,6 +645,7 @@ handle_build() {
 		install_kernel_dragonball_experimental
 		install_kernel_tdx_experimental
 		install_nydus
+		install_opa
 		install_ovmf
 		install_ovmf_sev
 		install_qemu
@@ -656,6 +677,8 @@ handle_build() {
 	kernel-sev) install_kernel_sev ;;
 
 	nydus) install_nydus ;;
+
+	opa) install_opa ;;
 
 	ovmf) install_ovmf ;;
 
@@ -716,6 +739,7 @@ main() {
 		kernel
 		kernel-experimental
 		nydus
+		opa
 		qemu
 		rootfs-image
 		rootfs-initrd

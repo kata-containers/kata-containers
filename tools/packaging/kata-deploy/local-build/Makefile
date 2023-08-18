@@ -30,6 +30,7 @@ all: serial-targets \
 	kernel-tarball \
 	kernel-tdx-experimental-tarball \
 	nydus-tarball \
+	opa-tarball \
 	ovmf-sev-tarball \
 	ovmf-tarball \
 	qemu-snp-experimental-tarball \
@@ -83,6 +84,9 @@ kernel-sev-tarball:
 	${MAKE} $@-build
 
 nydus-tarball:
+	${MAKE} $@-build
+
+opa-tarball:
 	${MAKE} $@-build
 
 ovmf-sev-tarball:

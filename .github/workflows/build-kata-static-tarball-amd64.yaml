@@ -34,6 +34,7 @@ jobs:
           - kernel-nvidia-gpu-snp
           - kernel-nvidia-gpu-tdx-experimental
           - nydus
+          - opa
           - ovmf
           - ovmf-sev
           - qemu

@@ -654,7 +654,7 @@ EOF
 			#   	OPA should be built from the cached source code instead of downloading
 			#   	this binary.
 			#
-			opa_bin_url="$(get_package_version_from_kata_yaml externals.open-policy-agent.meta.binary)"
+			opa_bin_url="$(get_package_version_from_kata_yaml externals.open-policy-agent.architecture.${ARCH}.binary)"
 			info "Downloading OPA binary from ${opa_bin_url}"
 			curl --fail -L "${opa_bin_url}" -o opa || die "Failed to download OPA"
 

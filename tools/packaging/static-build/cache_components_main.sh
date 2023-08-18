@@ -78,6 +78,13 @@ cache_nydus_artifacts() {
 	create_cache_asset "${nydus_tarball_name}" "${current_nydus_version}" ""
 }
 
+cache_opa_artifacts() {
+	local opa_tarball_name="kata-static-opa.tar.xz"
+	local current_opa_version="$(get_from_kata_deps "externals.open-policy-agent.version")"
+	local current_opa_image="$(get_opa_image_name)"
+	create_cache_asset "${opa_tarball_name}" "${current_opa_version}" "${current_opa_image}"
+}
+
 cache_ovmf_artifacts() {
 	local current_ovmf_version="$(get_from_kata_deps "externals.ovmf.${OVMF_FLAVOUR}.version")"
 	case ${OVMF_FLAVOUR} in
@@ -164,6 +171,8 @@ Usage: $0 "[options]"
 			* Export KERNEL_FLAVOUR="kernel | kernel-nvidia-gpu | kernel-experimental | kernel-arm-experimental | kernel-dragonball-experimental | kernel-tdx-experimental | kernel-nvidia-gpu-tdx-experimental | kernel-nvidia-gpu-snp" for a specific build
 			  The default KERNEL_FLAVOUR value is "kernel"
 		-n	Nydus cache
+		-O	OPA cache
+		-o	OVMF cache
 		-q 	QEMU cache
 			* Export QEMU_FLAVOUR="qemu | qemu-tdx-experimental | qemu-snp-experimental" for a specific build
 			  The default QEMU_FLAVOUR value is "qemu"
@@ -182,13 +191,14 @@ main() {
 	local firecracker_component="${firecracker_component:-}"
 	local kernel_component="${kernel_component:-}"
 	local nydus_component="${nydus_component:-}"
+	local opa_component="${opa_component:-}"
 	local ovmf_component="${ovmf_component:-}"
 	local qemu_component="${qemu_component:-}"
 	local rootfs_component="${rootfs_component:-}"
 	local shim_v2_component="${shim_v2_component:-}"
 	local virtiofsd_component="${virtiofsd_component:-}"
 	local OPTIND
-	while getopts ":cFknoqrsvh:" opt
+	while getopts ":cFknOoqrsvh:" opt
 	do
 		case "$opt" in
 		c)
@@ -202,6 +212,9 @@ main() {
 			;;
 		n)
 			nydus_component="1"
+			;;
+		O)
+			opa_component="1"
 			;;
 		o)
 			ovmf_component="1"
@@ -235,6 +248,7 @@ main() {
 	[[ -z "${firecracker_component}" ]] && \
 	[[ -z "${kernel_component}" ]] && \
 	[[ -z "${nydus_component}" ]] && \
+	[[ -z "${opa_component}" ]] && \
 	[[ -z "${ovmf_component}" ]] && \
 	[[ -z "${qemu_component}" ]] && \
 	[[ -z "${rootfs_component}" ]] && \
@@ -250,6 +264,7 @@ main() {
 	[ "${firecracker_component}" == "1" ] && cache_firecracker_artifacts
 	[ "${kernel_component}" == "1" ] && cache_kernel_artifacts
 	[ "${nydus_component}" == "1" ] && cache_nydus_artifacts
+	[ "${opa_component}" == "1" ] && cache_opa_artifacts
 	[ "${ovmf_component}" == "1" ] && cache_ovmf_artifacts
 	[ "${qemu_component}" == "1" ] && cache_qemu_artifacts
 	[ "${rootfs_component}" == "1" ] && cache_rootfs_artifacts

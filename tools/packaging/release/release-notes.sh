@@ -141,6 +141,7 @@ build reproducibility we publish those container images, and when those are used
 of the projects listed as part of the "versions.yaml" file, users can get as close to the environment we
 used to build the release artefacts.
 * Kernel (on all its different flavours): $(get_kernel_image_name)
+* OPA (on all its different flavours): $(get_opa_image_name)
 * OVMF (on all its different flavours): $(get_ovmf_image_name)
 * QEMU (on all its different flavurs): $(get_qemu_image_name)
 * shim-v2: $(get_shim_v2_image_name)
