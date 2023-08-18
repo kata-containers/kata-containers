@@ -57,6 +57,15 @@ RUN apt-get update && apt-get upgrade -y && \
 	    pkg-config${DPKG_ARCH} \
 	    libseccomp-dev${DPKG_ARCH} \
 	    libseccomp2${DPKG_ARCH} \
+	    libepoxy-dev${DPKG_ARCH}  \
+	    libvirglrenderer-dev${DPKG_ARCH}  \
+	    python3-venv${DPKG_ARCH}  \
+	    libgdm-dev${DPKG_ARCH}  \
+	    libgtk-3-dev${DPKG_ARCH}  \
+	    libsdl2-dev${DPKG_ARCH}   \
+	    librbd-dev${DPKG_ARCH}   \
+	    librados-dev${DPKG_ARCH}   \
+	    libgbm-dev${DPKG_ARCH}   \
 	    patch \
 	    python \
 	    python-dev \
