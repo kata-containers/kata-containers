@@ -14,7 +14,7 @@ Individual tests can be run by hand, for example:
 
 ```
 $ cd metrics/machine_learning
-$ ./tensorflow.sh 25 60
+$ ./tensorflow_nhwc.sh 25 60
 ```
 # Kata Containers Pytorch Metrics
 
@@ -28,7 +28,7 @@ Individual tests can be run by hand, for example:
 
 ```
 $ cd metrics/machine_learning
-$ ./tensorflow.sh 40 100
+$ ./pytorch.sh 40 100
 ```
 # Kata Containers TensorFlow `MobileNet` Metrics
 
