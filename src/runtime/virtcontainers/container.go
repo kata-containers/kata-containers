@@ -861,21 +861,6 @@ func (c *Container) checkBlockDeviceSupport(ctx context.Context) bool {
 	return false
 }
 
-// Sort the devices starting with device #1 being the VFIO control group
-// device and the next the actuall device(s) e.g. /dev/vfio/<group>
-func sortContainerVFIODevices(devices []ContainerDevice) []ContainerDevice {
-	var vfioDevices []ContainerDevice
-
-	for _, device := range devices {
-		if deviceManager.IsVFIOControlDevice(device.ContainerPath) {
-			vfioDevices = append([]ContainerDevice{device}, vfioDevices...)
-			continue
-		}
-		vfioDevices = append(vfioDevices, device)
-	}
-	return vfioDevices
-}
-
 // create creates and starts a container inside a Sandbox. It has to be
 // called only when a new container, not known by the sandbox, has to be created.
 func (c *Container) create(ctx context.Context) (err error) {
@@ -917,13 +902,6 @@ func (c *Container) create(ctx context.Context) (err error) {
 			cntDevices = append(cntDevices, dev)
 		}
 		c.devices = cntDevices
-	}
-	// If modeVFIO is enabled we need 1st to attach the VFIO control group
-	// device /dev/vfio/vfio an 2nd the actuall device(s) afterwards.
-	// Sort the devices starting with device #1 being the VFIO control group
-	// device and the next the actuall device(s) /dev/vfio/<group>
-	if modeVFIO {
-		c.devices = sortContainerVFIODevices(c.devices)
 	}
 
 	c.Logger().WithFields(logrus.Fields{

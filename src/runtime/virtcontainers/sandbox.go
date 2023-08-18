@@ -673,8 +673,7 @@ func (s *Sandbox) coldOrHotPlugVFIO(sandboxConfig *SandboxConfig) (bool, error) 
 	hotPlugVFIO := (sandboxConfig.HypervisorConfig.HotPlugVFIO != config.NoPort)
 
 	modeIsGK := (sandboxConfig.VfioMode == config.VFIOModeGuestKernel)
-	// modeIsVFIO is needed at the container level not the sandbox level.
-	// modeIsVFIO := (sandboxConfig.VfioMode == config.VFIOModeVFIO)
+	modeIsVFIO := (sandboxConfig.VfioMode == config.VFIOModeVFIO)
 
 	var vfioDevices []config.DeviceInfo
 	// vhost-user-block device is a PCIe device in Virt, keep track of it
@@ -689,6 +688,13 @@ func (s *Sandbox) coldOrHotPlugVFIO(sandboxConfig *SandboxConfig) (bool, error) 
 				continue
 			}
 			isVFIODevice := deviceManager.IsVFIODevice(device.ContainerPath)
+			isVFIOControlDevice := deviceManager.IsVFIOControlDevice(device.ContainerPath)
+			// vfio_mode=vfio needs the VFIO control device add it to the list
+			// of devices to be added to the VM.
+			if modeIsVFIO && isVFIOControlDevice && !hotPlugVFIO {
+				vfioDevices = append(vfioDevices, device)
+			}
+
 			if hotPlugVFIO && isVFIODevice {
 				device.ColdPlug = false
 				device.Port = sandboxConfig.HypervisorConfig.HotPlugVFIO
