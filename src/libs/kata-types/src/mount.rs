@@ -340,6 +340,32 @@ impl KataVirtualVolume {
 
         Ok(())
     }
+
+    /// Serialize the virtual volume object to json.
+    pub fn to_json(&self) -> Result<String> {
+        Ok(serde_json::to_string(self)?)
+    }
+
+    /// Deserialize a virtual volume object from json string.
+    pub fn from_json(value: &str) -> Result<Self> {
+        let volume: KataVirtualVolume = serde_json::from_str(value)?;
+        volume.validate()?;
+        Ok(volume)
+    }
+
+    /// Serialize the virtual volume object to json and encode the string with base64.
+    pub fn to_base64(&self) -> Result<String> {
+        let json = self.to_json()?;
+        Ok(base64::encode(json))
+    }
+
+    /// Decode and deserialize a virtual volume object from base64 encoded json string.
+    pub fn from_base64(value: &str) -> Result<Self> {
+        let json = base64::decode(value)?;
+        let volume: KataVirtualVolume = serde_json::from_slice(&json)?;
+        volume.validate()?;
+        Ok(volume)
+    }
 }
 
 impl TryFrom<&DirectVolumeMountInfo> for KataVirtualVolume {
@@ -546,6 +572,29 @@ mod tests {
 
         let value = serde_json::to_string(&volume).unwrap();
         let volume2: KataVirtualVolume = serde_json::from_str(&value).unwrap();
+        assert_eq!(volume.volume_type, volume2.volume_type);
+        assert_eq!(volume.source, volume2.source);
+        assert_eq!(volume.fs_type, volume2.fs_type);
+        assert_eq!(volume.nydus_image, volume2.nydus_image);
+        assert_eq!(volume.direct_volume, volume2.direct_volume);
+    }
+
+    #[test]
+    fn test_kata_virtual_volume_serde() {
+        let mut volume = KataVirtualVolume::new(KATA_VIRTUAL_VOLUME_DIRECT_BLOCK.to_string());
+        volume.source = "/tmp".to_string();
+        volume.fs_type = "ext4".to_string();
+        volume.options = vec!["rw".to_string()];
+        volume.nydus_image = Some(NydusImageVolume {
+            config: "test".to_string(),
+            snapshot_dir: "/var/lib/nydus.dir".to_string(),
+        });
+        let mut metadata = HashMap::new();
+        metadata.insert("mode".to_string(), "rw".to_string());
+        volume.direct_volume = Some(DirectAssignedVolume { metadata });
+
+        let value = volume.to_base64().unwrap();
+        let volume2: KataVirtualVolume = KataVirtualVolume::from_base64(value.as_str()).unwrap();
         assert_eq!(volume.volume_type, volume2.volume_type);
         assert_eq!(volume.source, volume2.source);
         assert_eq!(volume.fs_type, volume2.fs_type);
