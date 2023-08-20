@@ -258,6 +258,88 @@ impl KataVirtualVolume {
             ..Default::default()
         }
     }
+
+    /// Validate virtual volume object.
+    pub fn validate(&self) -> Result<()> {
+        match self.volume_type.as_str() {
+            KATA_VIRTUAL_VOLUME_DIRECT_BLOCK => {
+                if self.source.is_empty() {
+                    return Err(anyhow!(
+                        "missing source device for directly assigned block volume"
+                    ));
+                } else if self.fs_type.is_empty() {
+                    return Err(anyhow!(
+                        "missing filesystem for directly assigned block volume"
+                    ));
+                }
+            }
+            KATA_VIRTUAL_VOLUME_IMAGE_RAW_BLOCK | KATA_VIRTUAL_VOLUME_LAYER_RAW_BLOCK => {
+                if self.source.is_empty() {
+                    return Err(anyhow!("missing source device for raw block volume"));
+                } else if self.fs_type.is_empty() {
+                    return Err(anyhow!("missing filesystem for raw block volume"));
+                }
+            }
+            KATA_VIRTUAL_VOLUME_IMAGE_NYDUS_BLOCK | KATA_VIRTUAL_VOLUME_LAYER_NYDUS_BLOCK => {
+                if self.source.is_empty() {
+                    return Err(anyhow!("missing meta blob for nydus block volume"));
+                } else if self.fs_type.as_str() != "rafsv6" {
+                    return Err(anyhow!("invalid filesystem for nydus block volume"));
+                }
+                match self.nydus_image.as_ref() {
+                    None => {
+                        return Err(anyhow!(
+                            "missing nydus configuration info for nydus block volume"
+                        ))
+                    }
+                    Some(nydus) => {
+                        if nydus.config.is_empty() {
+                            return Err(anyhow!(
+                                "missing configuration info for nydus block volume"
+                            ));
+                        } else if nydus.snapshot_dir.is_empty() {
+                            return Err(anyhow!(
+                                "missing snapshot directory for nydus block volume"
+                            ));
+                        }
+                    }
+                }
+            }
+            KATA_VIRTUAL_VOLUME_IMAGE_NYDUS_FS | KATA_VIRTUAL_VOLUME_LAYER_NYDUS_FS => {
+                if self.source.is_empty() {
+                    return Err(anyhow!("missing meta blob for nydus fs volume"));
+                } else if self.fs_type.as_str() != "rafsv6" && self.fs_type.as_str() != "rafsv5" {
+                    return Err(anyhow!("invalid filesystem for nydus fs volume"));
+                }
+                match self.nydus_image.as_ref() {
+                    None => {
+                        return Err(anyhow!(
+                            "missing nydus configuration info for nydus block volume"
+                        ))
+                    }
+                    Some(nydus) => {
+                        if nydus.config.is_empty() {
+                            return Err(anyhow!(
+                                "missing configuration info for nydus block volume"
+                            ));
+                        } else if nydus.snapshot_dir.is_empty() {
+                            return Err(anyhow!(
+                                "missing snapshot directory for nydus block volume"
+                            ));
+                        }
+                    }
+                }
+            }
+            KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL => {
+                if self.source.is_empty() {
+                    return Err(anyhow!("missing image reference for guest pulling volume"));
+                }
+            }
+            _ => {}
+        }
+
+        Ok(())
+    }
 }
 
 impl TryFrom<&DirectVolumeMountInfo> for KataVirtualVolume {
