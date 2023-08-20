@@ -4,7 +4,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Context, Error, Result};
+use std::convert::TryFrom;
 use std::{collections::HashMap, fs, path::PathBuf};
 
 /// Prefix to mark a volume as Kata special.
@@ -95,6 +96,44 @@ pub struct DirectVolumeMountInfo {
     pub metadata: HashMap<String, String>,
     /// Additional mount options.
     pub options: Vec<String>,
+}
+
+/// Nydus extra options
+#[derive(Debug, serde::Deserialize)]
+pub struct NydusExtraOptions {
+    /// source path
+    pub source: String,
+    /// nydus config
+    pub config: String,
+    /// snapshotter directory
+    #[serde(rename(deserialize = "snapshotdir"))]
+    pub snapshot_dir: String,
+    /// fs version
+    pub fs_version: String,
+}
+
+impl NydusExtraOptions {
+    /// Create Nydus extra options
+    pub fn new(mount: &Mount) -> Result<Self> {
+        let options: Vec<&str> = mount
+            .options
+            .iter()
+            .filter(|x| x.starts_with("extraoption="))
+            .map(|x| x.as_ref())
+            .collect();
+
+        if options.len() != 1 {
+            return Err(anyhow!(
+                "get_nydus_extra_options: Invalid nydus options: {:?}",
+                &mount.options
+            ));
+        }
+        let config_raw_data = options[0].trim_start_matches("extraoption=");
+        let extra_options_buf =
+            base64::decode(config_raw_data).context("decode the nydus's base64 extraoption")?;
+
+        serde_json::from_slice(&extra_options_buf).context("deserialize nydus's extraoption")
+    }
 }
 
 /// Configuration information for DmVerity device.
@@ -221,6 +260,59 @@ impl KataVirtualVolume {
     }
 }
 
+impl TryFrom<&DirectVolumeMountInfo> for KataVirtualVolume {
+    type Error = Error;
+
+    fn try_from(value: &DirectVolumeMountInfo) -> std::result::Result<Self, Self::Error> {
+        let volume_type = match value.volume_type.as_str() {
+            "block" => KATA_VIRTUAL_VOLUME_DIRECT_BLOCK.to_string(),
+            _ => {
+                return Err(anyhow!(
+                    "unknown directly assigned volume type: {}",
+                    value.volume_type
+                ))
+            }
+        };
+
+        Ok(KataVirtualVolume {
+            volume_type,
+            source: value.device.clone(),
+            fs_type: value.fs_type.clone(),
+            options: value.options.clone(),
+            direct_volume: Some(DirectAssignedVolume {
+                metadata: value.metadata.clone(),
+            }),
+            ..Default::default()
+        })
+    }
+}
+
+impl TryFrom<&NydusExtraOptions> for KataVirtualVolume {
+    type Error = Error;
+
+    fn try_from(value: &NydusExtraOptions) -> std::result::Result<Self, Self::Error> {
+        let fs_type = match value.fs_version.as_str() {
+            "v6" => "rafsv6".to_string(),
+            "rafsv6" => "rafsv6".to_string(),
+            "v5" => "rafsv5".to_string(),
+            "rafsv5" => "rafsv5".to_string(),
+            _ => return Err(anyhow!("unknown RAFS version: {}", value.fs_version)),
+        };
+
+        Ok(KataVirtualVolume {
+            volume_type: KATA_VIRTUAL_VOLUME_IMAGE_NYDUS_FS.to_string(),
+            source: value.source.clone(),
+            fs_type,
+            options: vec![],
+            nydus_image: Some(NydusImageVolume {
+                config: value.config.clone(),
+                snapshot_dir: value.snapshot_dir.clone(),
+            }),
+            ..Default::default()
+        })
+    }
+}
+
 /// Join user provided volume path with kata direct-volume root path.
 ///
 /// The `volume_path` is base64-encoded and then safely joined to the `prefix`
@@ -235,8 +327,8 @@ pub fn join_path(prefix: &str, volume_path: &str) -> Result<PathBuf> {
 
 /// get DirectVolume mountInfo from mountinfo.json.
 pub fn get_volume_mount_info(volume_path: &str) -> Result<DirectVolumeMountInfo> {
-    let mount_info_file_path =
-        join_path(KATA_DIRECT_VOLUME_ROOT_PATH, volume_path)?.join(KATA_MOUNT_INFO_FILE_NAME);
+    let volume_path = join_path(KATA_DIRECT_VOLUME_ROOT_PATH, volume_path)?;
+    let mount_info_file_path = volume_path.join(KATA_MOUNT_INFO_FILE_NAME);
     let mount_info_file = fs::read_to_string(mount_info_file_path)?;
     let mount_info: DirectVolumeMountInfo = serde_json::from_str(&mount_info_file)?;
 
@@ -261,44 +353,6 @@ pub fn is_kata_ephemeral_volume(ty: &str) -> bool {
 /// Check whether a mount type is a marker for Kata hostdir volume.
 pub fn is_kata_host_dir_volume(ty: &str) -> bool {
     ty == KATA_HOST_DIR_VOLUME_TYPE
-}
-
-/// Nydus extra options
-#[derive(Debug, serde::Deserialize)]
-pub struct NydusExtraOptions {
-    /// source path
-    pub source: String,
-    /// nydus config
-    pub config: String,
-    /// snapshotter directory
-    #[serde(rename(deserialize = "snapshotdir"))]
-    pub snapshot_dir: String,
-    /// fs version
-    pub fs_version: String,
-}
-
-impl NydusExtraOptions {
-    /// Create Nydus extra options
-    pub fn new(mount: &Mount) -> Result<Self> {
-        let options: Vec<&str> = mount
-            .options
-            .iter()
-            .filter(|x| x.starts_with("extraoption="))
-            .map(|x| x.as_ref())
-            .collect();
-
-        if options.len() != 1 {
-            return Err(anyhow!(
-                "get_nydus_extra_options: Invalid nydus options: {:?}",
-                &mount.options
-            ));
-        }
-        let config_raw_data = options[0].trim_start_matches("extraoption=");
-        let extra_options_buf =
-            base64::decode(config_raw_data).context("decode the nydus's base64 extraoption")?;
-
-        serde_json::from_slice(&extra_options_buf).context("deserialize nydus's extraoption")
-    }
 }
 
 /// sandbox bindmount format:  /path/to/dir, or /path/to/dir:ro[:rw]
@@ -415,5 +469,57 @@ mod tests {
         assert_eq!(volume.fs_type, volume2.fs_type);
         assert_eq!(volume.nydus_image, volume2.nydus_image);
         assert_eq!(volume.direct_volume, volume2.direct_volume);
+    }
+
+    #[test]
+    fn test_try_from_direct_volume() {
+        let mut metadata = HashMap::new();
+        metadata.insert("mode".to_string(), "rw".to_string());
+        let mut direct = DirectVolumeMountInfo {
+            volume_type: "unknown".to_string(),
+            device: "/dev/vda".to_string(),
+            fs_type: "ext4".to_string(),
+            metadata,
+            options: vec!["ro".to_string()],
+        };
+        KataVirtualVolume::try_from(&direct).unwrap_err();
+
+        direct.volume_type = "block".to_string();
+        let volume = KataVirtualVolume::try_from(&direct).unwrap();
+        assert_eq!(
+            volume.volume_type.as_str(),
+            KATA_VIRTUAL_VOLUME_DIRECT_BLOCK
+        );
+        assert_eq!(volume.source, direct.device);
+        assert_eq!(volume.fs_type, direct.fs_type);
+        assert_eq!(
+            volume.direct_volume.as_ref().unwrap().metadata,
+            direct.metadata
+        );
+        assert_eq!(volume.options, direct.options);
+    }
+
+    #[test]
+    fn test_try_from_nydus_extra_options() {
+        let mut nydus = NydusExtraOptions {
+            source: "/test/nydus".to_string(),
+            config: "test".to_string(),
+            snapshot_dir: "/var/lib/nydus".to_string(),
+            fs_version: "rafsvx".to_string(),
+        };
+        KataVirtualVolume::try_from(&nydus).unwrap_err();
+
+        nydus.fs_version = "v6".to_string();
+        let volume = KataVirtualVolume::try_from(&nydus).unwrap();
+        assert_eq!(
+            volume.volume_type.as_str(),
+            KATA_VIRTUAL_VOLUME_IMAGE_NYDUS_FS
+        );
+        assert_eq!(volume.nydus_image.as_ref().unwrap().config, nydus.config);
+        assert_eq!(
+            volume.nydus_image.as_ref().unwrap().snapshot_dir,
+            nydus.snapshot_dir
+        );
+        assert_eq!(volume.fs_type.as_str(), "rafsv6")
     }
 }
