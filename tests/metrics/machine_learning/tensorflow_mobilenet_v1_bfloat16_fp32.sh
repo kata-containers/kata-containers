@@ -27,7 +27,6 @@ start_script="mobilenet_start.sh"
 CMD="$dst_dir/$start_script"
 guest_trigger_file="$dst_dir/$trigger_file"
 host_trigger_file="$src_dir/$trigger_file"
-timeout=600
 INITIAL_NUM_PIDS=1
 CMD_FILE="cat results | grep 'Average Throughput' | wc -l"
 CMD_RESULTS="cat results | grep 'Average Throughput' | cut -d':' -f2 | cut -d' ' -f2 | tr '\n' ','"
