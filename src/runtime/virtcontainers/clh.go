@@ -1210,6 +1210,7 @@ func (clh *cloudHypervisor) Capabilities(ctx context.Context) types.Capabilities
 		caps.SetFsSharingSupport()
 	}
 	caps.SetBlockDeviceHotplugSupport()
+	caps.SetNetworkDeviceHotplugSupported()
 	return caps
 }
 

@@ -89,6 +89,7 @@ func TestAcrnArchBaseCapabilities(t *testing.T) {
 	assert.True(c.IsBlockDeviceSupported())
 	assert.True(c.IsBlockDeviceHotplugSupported())
 	assert.False(c.IsFsSharingSupported())
+	assert.True(c.IsNetworkDeviceHotplugSupported())
 }
 
 func TestAcrnArchBaseMemoryTopology(t *testing.T) {
