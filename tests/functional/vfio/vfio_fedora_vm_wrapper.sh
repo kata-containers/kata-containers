@@ -14,13 +14,14 @@ set -o nounset
 set -o pipefail
 set -o errtrace
 
-cidir=$(dirname "$0")
+cidir=$(readlink -f $(dirname "$0"))
 
 source /etc/os-release || source /usr/lib/os-release
 # <CHANGES HERE>
-#source "${cidir}/lib.sh"
-export WORKSPACE="${WORKSPACE:-${cidir}/../../..}"
+source "${cidir}/../../common.bash"
+export WORKSPACE="${WORKSPACE:-${HOME}}"
 export GIT_URL="https://github.com/kata-containers/kata-containers.git"
+export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 # </CHANGES>
 
 http_proxy=${http_proxy:-}
@@ -102,6 +103,16 @@ users:
   uid: "1000"
 write_files:
 - content: |
+    [main]
+    fastestmirror=True
+    gpgcheck=1
+    max_parallel_downloads=10
+    installonly_limit=2
+    clean_requirements_on_remove=True
+    keepcache=True
+    ip_resolve=4
+  path: /etc/dnf/dnf.conf
+- content: |
 ${environment}
   path: /etc/environment
 - content: |
@@ -135,31 +146,35 @@ ${environment}
         sleep 5;
     done
 
-    export FORCE_JENKINS_JOB_BUILD=1
     export DEBUG=true
-    export CI_JOB="VFIO"
     export GOPATH=\${WORKSPACE}/go
     export PATH=\${GOPATH}/bin:/usr/local/go/bin:/usr/sbin:\${PATH}
     export GOROOT="/usr/local/go"
-    export KUBERNETES="no"
-    export USE_DOCKER="true"
-    export ghprbPullId
-    export ghprbTargetBranch
 
     # Make sure the packages were installed
     # Sometimes cloud-init is unable to install them
-    sudo dnf makecache
-    sudo dnf install -y git make pciutils driverctl
+    sudo dnf install -y git wget pciutils driverctl
 
     git config --global user.email "foo@bar"
     git config --global user.name "Foo Bar"
 
-    tests_repo="github.com/kata-containers/tests"
-    tests_repo_dir="\${GOPATH}/src/\${tests_repo}"
+    sudo mkdir -p /workspace
+    sudo mount -t 9p -o access=any,trans=virtio,version=9p2000.L workspace /workspace
     trap "cd \${tests_repo_dir}; sudo -E PATH=\$PATH .ci/teardown.sh ${artifacts_dir} || true; sudo chown -R \${USER} ${artifacts_dir}" EXIT
 
-    curl -OL https://raw.githubusercontent.com/kata-containers/tests/\${ghprbTargetBranch}/.ci/ci_entry_point.sh
-    bash -x ci_entry_point.sh "${GIT_URL}"
+    pushd /workspace
+    source tests/common.bash
+    ensure_yq
+    cri_containerd=\$(get_from_kata_deps "externals.containerd.lts")
+    cri_tools=\$(get_from_kata_deps "externals.critools.latest")
+    install_cri_containerd \${cri_containerd}
+    install_cri_tools \${cri_tools}
+
+    kata_tarball_dir="kata-artifacts"
+    install_kata
+
+    sudo /workspace/tests/functional/vfio/run.sh -s false -p \${KATA_HYPERVISOR} -m q35 -i image
+    sudo /workspace/tests/functional/vfio/run.sh -s true -p \${KATA_HYPERVISOR} -m q35 -i image
 
   path: /home/${USER}/run.sh
   permissions: '0755'
@@ -207,10 +222,10 @@ pull_fedora_cloud_image() {
 	sudo mount "${loop}p2" /mnt
 
 	# add intel_iommu=on to the guest kernel command line
-	kernelopts="intel_iommu=on iommu=pt selinux=0"
+	kernelopts="intel_iommu=on iommu=pt selinux=0 mitigations=off idle=poll kvm.tdp_mmu=0"
 	entries=$(sudo ls /mnt/loader/entries/)
 	for entry in ${entries}; do
-		sudo sed -i '/^options /  s/$/ intel_iommu=on iommu=pt selinux=0 /g' /mnt/loader/entries/"${entry}"
+		sudo sed -i '/^options /  s/$/ '"${kernelopts}"' /g' /mnt/loader/entries/"${entry}"
 	done
 	sudo sed -i 's|kernelopts="|kernelopts="'"${kernelopts}"'|g' /mnt/grub2/grub.cfg
 	sudo sed -i 's|kernelopts=|kernelopts='"${kernelopts}"'|g' /mnt/grub2/grubenv
@@ -227,11 +242,11 @@ run_vm() {
 	config_iso="$2"
 	disable_modern="off"
 	hostname="$(hostname)"
-	memory="16384M"
-	cpus=$(nproc)
+	memory="8192M"
+	cpus=2
 	machine_type="q35"
 
-	/usr/bin/qemu-system-${arch} -m "${memory}" -smp cpus="${cpus}" \
+	sudo /usr/bin/qemu-system-${arch} -m "${memory}" -smp cpus="${cpus}" \
 	   -cpu host,host-phys-bits \
 	   -machine ${machine_type},accel=kvm,kernel_irqchip=split \
 	   -device intel-iommu,intremap=on,caching-mode=on,device-iotlb=on \
@@ -241,7 +256,10 @@ run_vm() {
 	   -netdev user,hostfwd=tcp:${vm_ip}:${vm_port}-:22,hostname="${hostname}",id=net0 \
 	   -device virtio-net-pci,netdev=net0,disable-legacy=on,disable-modern="${disable_modern}",iommu_platform=on,ats=on \
 	   -netdev user,id=net1 \
-	   -device virtio-net-pci,netdev=net1,disable-legacy=on,disable-modern="${disable_modern}",iommu_platform=on,ats=on
+	   -device virtio-net-pci,netdev=net1,disable-legacy=on,disable-modern="${disable_modern}",iommu_platform=on,ats=on \
+	   -fsdev local,path=${repo_root_dir},security_model=passthrough,id=fs0 \
+	   -device virtio-9p-pci,fsdev=fs0,mount_tag=workspace
+
 }
 
 ssh_vm() {
