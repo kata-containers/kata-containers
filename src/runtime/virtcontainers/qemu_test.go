@@ -475,6 +475,7 @@ func TestQemuCapabilities(t *testing.T) {
 
 	caps := q.Capabilities(q.ctx)
 	assert.True(caps.IsBlockDeviceHotplugSupported())
+	assert.True(caps.IsNetworkDeviceHotplugSupported())
 }
 
 func TestQemuQemuPath(t *testing.T) {
