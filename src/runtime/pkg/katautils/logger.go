@@ -8,6 +8,7 @@ package katautils
 
 import (
 	"context"
+	"fmt"
 	"log/syslog"
 	"time"
 
@@ -31,6 +32,14 @@ func SetLogger(ctx context.Context, logger *logrus.Entry, level logrus.Level) {
 
 	originalLoggerLevel = level
 	kataUtilsLogger = logger.WithFields(fields)
+}
+
+func parseLogLevel(level string) (*logrus.Level, error) {
+	logLevel, err := logrus.ParseLevel(level)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse the log level, err: %+v", err)
+	}
+	return &logLevel, err
 }
 
 // sysLogHook wraps a syslog logrus hook and a formatter to be used for all
