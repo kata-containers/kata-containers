@@ -120,6 +120,10 @@ function install_artifacts() {
 		sed -i -E 's|(enable_annotations) = .+|\1 = ["enable_iommu", "initrd", "kernel"]|' "${config_path}"
 		sed -i -E "s|(valid_hypervisor_paths) = .+|\1 = [\"${clh_path}\"]|" "${config_path}"
 		sed -i -E "s|(path) = \".+/cloud-hypervisor\"|\1 = \"${clh_path}\"|" "${config_path}"
+
+		# TODO: remove this debugging hack.
+		local incorrect_image="/opt/kata/share/kata-containers/kata-containers.img"
+		[ -f "${incorrect_image}" ] && echo "kata-deploy.sh hack: deleting ${incorrect_image}" && rm "${incorrect_image}"
 	fi
 
 	if [[ "${CREATE_RUNTIMECLASSES}" == "true" ]]; then
