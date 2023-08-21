@@ -60,7 +60,7 @@ function deploy_kata() {
     fi
 
     echo "::group::kata-deploy logs"
-    kubectl -n kube-system logs -l name=kata-deploy
+    kubectl -n kube-system logs --tail=100 -l name=kata-deploy
     echo "::endgroup::"
 
     echo "::group::Runtime classes"
