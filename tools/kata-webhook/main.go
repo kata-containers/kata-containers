@@ -10,12 +10,14 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	"github.com/sirupsen/logrus"
 	kwhhttp "github.com/slok/kubewebhook/v2/pkg/http"
 	kwhlogrus "github.com/slok/kubewebhook/v2/pkg/log/logrus"
@@ -44,25 +46,6 @@ func annotatePodMutator(_ context.Context, ar *kwhmodel.AdmissionReview, obj met
 	if whPolicy.nsBlacklist[ar.Namespace] {
 		fmt.Println("blacklisted namespace: ", ar.Namespace)
 		return &kwhmutating.MutatorResult{}, nil
-	}
-
-	if getEnvValue("MANAGE_RESOURCES", "true") == "true" {
-		fmt.Println("setting default limits and request values: ", pod.GetNamespace(), pod.GetName())
-
-		cpuLimit := getEnvValue("CPU_LIMIT", "1")
-		memoryLimit := getEnvValue("MEMORY_LIMIT", "1Gi")
-		for i := range pod.Spec.Containers {
-			// clear resource requests, takes value of limits when not specified
-			pod.Spec.Containers[i].Resources.Requests = corev1.ResourceList{}
-
-			// set limits if not set already
-			if pod.Spec.Containers[i].Resources.Limits == nil {
-				pod.Spec.Containers[i].Resources.Limits = corev1.ResourceList{
-					"cpu":    resource.MustParse(cpuLimit),
-					"memory": resource.MustParse(memoryLimit),
-				}
-			}
-		}
 	}
 
 	// We cannot support --net=host in Kata
@@ -97,6 +80,26 @@ func annotatePodMutator(_ context.Context, ar *kwhmodel.AdmissionReview, obj met
 	runtimeClassEnvKey := "RUNTIME_CLASS"
 	kataRuntimeClassName := getEnvValue(runtimeClassEnvKey, "kata")
 	pod.Spec.RuntimeClassName = &kataRuntimeClassName
+
+	if getEnvValue("MANAGE_RESOURCES", "true") == "true" {
+		fmt.Println("setting default limits and request values: ", pod.GetNamespace(), pod.GetName())
+
+		hypConfig := katautils.GetDefaultHypervisorConfig()
+		cpuLimit := getEnvValue("CPU_LIMIT", strconv.FormatUint(uint64(hypConfig.DefaultMaxVCPUs), 10))
+		memoryLimit := getEnvValue("MEMORY_LIMIT", strconv.FormatUint(hypConfig.DefaultMaxMemorySize, 10))
+		for i := range pod.Spec.Containers {
+			// clear resource requests, takes value of limits when not specified
+			pod.Spec.Containers[i].Resources.Requests = corev1.ResourceList{}
+
+			// set limits if not set already
+			if pod.Spec.Containers[i].Resources.Limits == nil {
+				pod.Spec.Containers[i].Resources.Limits = corev1.ResourceList{
+					"cpu":    resource.MustParse(cpuLimit),
+					"memory": resource.MustParse(memoryLimit),
+				}
+			}
+		}
+	}
 
 	return &kwhmutating.MutatorResult{
 		MutatedObject: pod,
