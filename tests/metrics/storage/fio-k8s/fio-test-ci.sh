@@ -9,7 +9,7 @@ set -e
 # General env
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 source "${SCRIPT_PATH}/../../lib/common.bash"
-FIO_PATH="${GOPATH}/src/github.com/kata-containers/kata-containers/tests/metrics/storage/fio-k8s"
+FIO_PATH="${GOPATH}/tests/metrics/storage/fio-k8s"
 TEST_NAME="${TEST_NAME:-fio}"
 
 function main() {
