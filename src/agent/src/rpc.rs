@@ -90,7 +90,6 @@ use std::path::PathBuf;
 
 pub const CONTAINER_BASE: &str = "/run/kata-containers";
 const MODPROBE_PATH: &str = "/sbin/modprobe";
-const ANNO_K8S_IMAGE_NAME: &str = "io.kubernetes.cri.image-name";
 const CONFIG_JSON: &str = "config.json";
 const INIT_TRUSTED_STORAGE: &str = "/usr/bin/kata-init-trusted-storage";
 const TRUSTED_STORAGE_DEVICE: &str = "/dev/trusted_store";
@@ -162,24 +161,6 @@ pub fn verify_cid(id: &str) -> Result<()> {
     }
 }
 
-// Partially merge an OCI process specification into another one.
-fn merge_oci_process(target: &mut oci::Process, source: &oci::Process) {
-    if target.args.is_empty() && !source.args.is_empty() {
-        target.args.append(&mut source.args.clone());
-    }
-
-    if target.cwd == "/" && source.cwd != "/" {
-        target.cwd = String::from(&source.cwd);
-    }
-
-    for source_env in &source.env {
-        let variable_name: Vec<&str> = source_env.split('=').collect();
-        if !target.env.iter().any(|i| i.contains(variable_name[0])) {
-            target.env.push(source_env.to_string());
-        }
-    }
-}
-
 impl AgentService {
     #[instrument]
     async fn do_create_container(
@@ -207,8 +188,10 @@ impl AgentService {
             "receive createcontainer, storages: {:?}", &req.storages
         );
 
-        // Merge the image bundle OCI spec into the container creation request OCI spec.
-        self.merge_bundle_oci(&mut oci).await?;
+        // In case of pulling image inside guest, we need to merge the image bundle OCI spec
+        // into the container creation request OCI spec.
+        let image_service = image_rpc::ImageService::singleton().await?;
+        image_service.merge_bundle_oci(&mut oci).await?;
 
         // Some devices need some extra processing (the ones invoked with
         // --device for instance), and that's what this call is doing. It
@@ -666,54 +649,6 @@ impl AgentService {
                 Err(anyhow!("eof"))
             }
         }
-    }
-
-    // When being passed an image name through a container annotation, merge its
-    // corresponding bundle OCI specification into the passed container creation one.
-    async fn merge_bundle_oci(&self, container_oci: &mut oci::Spec) -> Result<()> {
-        if let Some(image_name) = container_oci
-            .annotations
-            .get(&ANNO_K8S_IMAGE_NAME.to_string())
-        {
-            if let Some(container_id) = self.sandbox.clone().lock().await.images.get(image_name) {
-                let image_oci_config_path = Path::new(CONTAINER_BASE)
-                    .join(container_id)
-                    .join(CONFIG_JSON);
-                debug!(
-                    sl(),
-                    "Image bundle config path: {:?}", image_oci_config_path
-                );
-
-                let image_oci =
-                    oci::Spec::load(image_oci_config_path.to_str().ok_or_else(|| {
-                        anyhow!(
-                            "Invalid container image OCI config path {:?}",
-                            image_oci_config_path
-                        )
-                    })?)
-                    .context("load image bundle")?;
-
-                if let Some(container_root) = container_oci.root.as_mut() {
-                    if let Some(image_root) = image_oci.root.as_ref() {
-                        let root_path = Path::new(CONTAINER_BASE)
-                            .join(container_id)
-                            .join(image_root.path.clone());
-                        container_root.path =
-                            String::from(root_path.to_str().ok_or_else(|| {
-                                anyhow!("Invalid container image root path {:?}", root_path)
-                            })?);
-                    }
-                }
-
-                if let Some(container_process) = container_oci.process.as_mut() {
-                    if let Some(image_process) = image_oci.process.as_ref() {
-                        merge_oci_process(container_process, image_process);
-                    }
-                }
-            }
-        }
-
-        Ok(())
     }
 }
 
@@ -1773,9 +1708,11 @@ pub async fn start(
     let health_service = Box::new(HealthService {}) as Box<dyn health_ttrpc::Health + Send + Sync>;
     let hservice = health_ttrpc::create_health(Arc::new(health_service));
 
-    let image_service = Box::new(image_rpc::ImageService::new(s).await)
-        as Box<dyn image_ttrpc::Image + Send + Sync>;
-    let iservice = image_ttrpc::create_image(Arc::new(image_service));
+    let image_service = image_rpc::ImageService::new();
+    *image_rpc::IMAGE_SERVICE.lock().await = Some(image_service.clone());
+    let image_service =
+        Arc::new(Box::new(image_service) as Box<dyn image_ttrpc::Image + Send + Sync>);
+    let iservice = image_ttrpc::create_image(image_service);
 
     let server = TtrpcServer::new()
         .bind(server_address)?
@@ -3079,136 +3016,5 @@ COMMIT
                 .contains("INPUT -s 2001:db8:100::1/128 -i sit+ -p tcp -m tcp --sport 512:65535"),
             "We should see the resulting rule"
         );
-    }
-
-    #[tokio::test]
-    async fn test_merge_cwd() {
-        #[derive(Debug)]
-        struct TestData<'a> {
-            container_process_cwd: &'a str,
-            image_process_cwd: &'a str,
-            expected: &'a str,
-        }
-
-        let tests = &[
-            // Image cwd should override blank container cwd
-            // TODO - how can we tell the user didn't specifically set it to `/` vs not setting at all? Is that scenario valid?
-            TestData {
-                container_process_cwd: "/",
-                image_process_cwd: "/imageDir",
-                expected: "/imageDir",
-            },
-            // Container cwd should override image cwd
-            TestData {
-                container_process_cwd: "/containerDir",
-                image_process_cwd: "/imageDir",
-                expected: "/containerDir",
-            },
-            // Container cwd should override blank image cwd
-            TestData {
-                container_process_cwd: "/containerDir",
-                image_process_cwd: "/",
-                expected: "/containerDir",
-            },
-        ];
-
-        for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
-
-            let mut container_process = oci::Process {
-                cwd: d.container_process_cwd.to_string(),
-                ..Default::default()
-            };
-
-            let image_process = oci::Process {
-                cwd: d.image_process_cwd.to_string(),
-                ..Default::default()
-            };
-
-            merge_oci_process(&mut container_process, &image_process);
-
-            assert_eq!(d.expected, container_process.cwd, "{}", msg);
-        }
-    }
-
-    #[tokio::test]
-    async fn test_merge_env() {
-        #[derive(Debug)]
-        struct TestData {
-            container_process_env: Vec<String>,
-            image_process_env: Vec<String>,
-            expected: Vec<String>,
-        }
-
-        let tests = &[
-            // Test that the pods environment overrides the images
-            TestData {
-                container_process_env: vec!["ISPRODUCTION=true".to_string()],
-                image_process_env: vec!["ISPRODUCTION=false".to_string()],
-                expected: vec!["ISPRODUCTION=true".to_string()],
-            },
-            // Test that multiple environment variables can be overrided
-            TestData {
-                container_process_env: vec![
-                    "ISPRODUCTION=true".to_string(),
-                    "ISDEVELOPMENT=false".to_string(),
-                ],
-                image_process_env: vec![
-                    "ISPRODUCTION=false".to_string(),
-                    "ISDEVELOPMENT=true".to_string(),
-                ],
-                expected: vec![
-                    "ISPRODUCTION=true".to_string(),
-                    "ISDEVELOPMENT=false".to_string(),
-                ],
-            },
-            // Test that when none of the variables match do not override them
-            TestData {
-                container_process_env: vec!["ANOTHERENV=TEST".to_string()],
-                image_process_env: vec![
-                    "ISPRODUCTION=false".to_string(),
-                    "ISDEVELOPMENT=true".to_string(),
-                ],
-                expected: vec![
-                    "ANOTHERENV=TEST".to_string(),
-                    "ISPRODUCTION=false".to_string(),
-                    "ISDEVELOPMENT=true".to_string(),
-                ],
-            },
-            // Test a mix of both overriding and not
-            TestData {
-                container_process_env: vec![
-                    "ANOTHERENV=TEST".to_string(),
-                    "ISPRODUCTION=true".to_string(),
-                ],
-                image_process_env: vec![
-                    "ISPRODUCTION=false".to_string(),
-                    "ISDEVELOPMENT=true".to_string(),
-                ],
-                expected: vec![
-                    "ANOTHERENV=TEST".to_string(),
-                    "ISPRODUCTION=true".to_string(),
-                    "ISDEVELOPMENT=true".to_string(),
-                ],
-            },
-        ];
-
-        for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
-
-            let mut container_process = oci::Process {
-                env: d.container_process_env.clone(),
-                ..Default::default()
-            };
-
-            let image_process = oci::Process {
-                env: d.image_process_env.clone(),
-                ..Default::default()
-            };
-
-            merge_oci_process(&mut container_process, &image_process);
-
-            assert_eq!(d.expected, container_process.env, "{}", msg);
-        }
     }
 }
