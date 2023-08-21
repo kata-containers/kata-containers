@@ -222,7 +222,7 @@ setup_configuration_file() {
 	# enable debug
 	sed -i -e 's/^#\(enable_debug\).*=.*$/\1 = true/g' \
 	       -e 's/^#\(debug_console_enabled\).*=.*$/\1 = true/g' \
-	       -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug"/g' \
+	       -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 mitigations=off agent.log=debug"/g' \
 	       "${kata_config_file}"
 
 	# enable VFIO relevant hypervisor annotations
