@@ -104,6 +104,7 @@ func (q *qemuPPC64le) capabilities(hConfig HypervisorConfig) types.Capabilities 
 	// pseries machine type supports hotplugging drives
 	if q.qemuMachine.Type == QemuPseries {
 		caps.SetBlockDeviceHotplugSupport()
+		caps.SetNetworkDeviceHotplugSupported()
 	}
 
 	caps.SetMultiQueueSupport()

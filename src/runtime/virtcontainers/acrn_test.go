@@ -82,6 +82,7 @@ func TestAcrnCapabilities(t *testing.T) {
 	caps := a.Capabilities(a.ctx)
 	assert.True(caps.IsBlockDeviceSupported())
 	assert.True(caps.IsBlockDeviceHotplugSupported())
+	assert.True(caps.IsNetworkDeviceHotplugSupported())
 }
 
 func testAcrnAddDevice(t *testing.T, devInfo interface{}, devType DeviceType, expected []Device) {
