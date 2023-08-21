@@ -705,6 +705,20 @@ func (conf *HypervisorConfig) assetPath(t types.AssetType) (string, error) {
 		return a.Path(), nil
 	}
 
+	if t == types.ImageAsset {
+		_, ok = conf.customAssets[types.InitrdAsset]
+		if ok {
+			// Use the initrd custom asset instead of the configured image.
+			return "", nil
+		}
+	} else if t == types.InitrdAsset {
+		_, ok = conf.customAssets[types.ImageAsset]
+		if ok {
+			// Use the image custom asset instead of the configured initrd.
+			return "", nil
+		}
+	}
+
 	// We could not find a custom asset for the given type, let's
 	// fall back to the configured ones.
 	switch t {
