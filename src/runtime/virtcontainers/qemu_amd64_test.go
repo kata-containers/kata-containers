@@ -47,10 +47,12 @@ func TestQemuAmd64Capabilities(t *testing.T) {
 	amd64 := newTestQemu(assert, QemuQ35)
 	caps := amd64.capabilities(config)
 	assert.True(caps.IsBlockDeviceHotplugSupported())
+	assert.True(caps.IsNetworkDeviceHotplugSupported())
 
 	amd64 = newTestQemu(assert, QemuMicrovm)
 	caps = amd64.capabilities(config)
 	assert.False(caps.IsBlockDeviceHotplugSupported())
+	assert.False(caps.IsNetworkDeviceHotplugSupported())
 }
 
 func TestQemuAmd64Bridges(t *testing.T) {

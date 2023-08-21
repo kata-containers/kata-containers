@@ -300,6 +300,7 @@ func (q *qemuArchBase) capabilities(hConfig HypervisorConfig) types.Capabilities
 	var caps types.Capabilities
 	caps.SetBlockDeviceHotplugSupport()
 	caps.SetMultiQueueSupport()
+	caps.SetNetworkDeviceHotplugSupported()
 	if hConfig.SharedFS != config.NoSharedFS {
 		caps.SetFsSharingSupport()
 	}
