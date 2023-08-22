@@ -78,6 +78,8 @@ For further details see the [storage tests documentation](storage).
 
 Test relating to measure reading and writing against clusters.
 
+For further details see the [disk tests documentation](disk).
+
 ### Machine Learning
 
 Tests relating with TensorFlow and Pytorch implementations of several popular
