@@ -347,22 +347,6 @@ func (q *qemu) getQemuMachine() (govmmQemu.Machine, error) {
 	return machine, nil
 }
 
-func (q *qemu) appendImage(ctx context.Context, devices []govmmQemu.Device) ([]govmmQemu.Device, error) {
-	imagePath, err := q.config.ImageAssetPath()
-	if err != nil {
-		return nil, err
-	}
-
-	if imagePath != "" {
-		devices, err = q.arch.appendImage(ctx, devices, imagePath)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return devices, nil
-}
-
 func (q *qemu) createQmpSocket() ([]govmmQemu.QMPSocket, error) {
 	monitorSockPath, err := q.qmpSocketPath(q.id)
 	if err != nil {
@@ -400,12 +384,16 @@ func (q *qemu) createQmpSocket() ([]govmmQemu.QMPSocket, error) {
 	return sockets, nil
 }
 
-func (q *qemu) buildDevices(ctx context.Context, initrdPath string) ([]govmmQemu.Device, *govmmQemu.IOThread, error) {
+func (q *qemu) buildDevices(ctx context.Context, kernelPath string) ([]govmmQemu.Device, *govmmQemu.IOThread, *govmmQemu.Kernel, error) {
 	var devices []govmmQemu.Device
+
+	kernel := &govmmQemu.Kernel{
+		Path: kernelPath,
+	}
 
 	_, console, err := q.GetVMConsole(ctx, q.id)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Add bridges before any other devices. This way we make sure that
@@ -414,20 +402,28 @@ func (q *qemu) buildDevices(ctx context.Context, initrdPath string) ([]govmmQemu
 
 	devices, err = q.arch.appendConsole(ctx, devices, console)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	if initrdPath == "" {
-		devices, err = q.appendImage(ctx, devices)
+	assetPath, assetType, err := q.config.ImageOrInitrdAssetPath()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	if assetType == types.ImageAsset {
+		devices, err = q.arch.appendImage(ctx, devices, assetPath)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
+	} else {
+		// InitrdAsset, need to set kernel initrd path
+		kernel.InitrdPath = assetPath
 	}
 
 	if q.config.IOMMU {
 		devices, err = q.arch.appendIOMMU(devices)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 	}
 
@@ -438,10 +434,13 @@ func (q *qemu) buildDevices(ctx context.Context, initrdPath string) ([]govmmQemu
 
 	var ioThread *govmmQemu.IOThread
 	if q.config.BlockDeviceDriver == config.VirtioSCSI {
-		return q.arch.appendSCSIController(ctx, devices, q.config.EnableIOThreads)
+		devices, ioThread, err = q.arch.appendSCSIController(ctx, devices, q.config.EnableIOThreads)
+		if err != nil {
+			return nil, nil, nil, err
+		}
 	}
 
-	return devices, ioThread, nil
+	return devices, ioThread, kernel, nil
 }
 
 func (q *qemu) setupTemplate(knobs *govmmQemu.Knobs, memory *govmmQemu.Memory) govmmQemu.Incoming {
@@ -562,16 +561,6 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		IOMMUPlatform: q.config.IOMMUPlatform,
 	}
 
-	kernelPath, err := q.config.KernelAssetPath()
-	if err != nil {
-		return err
-	}
-
-	initrdPath, err := q.config.InitrdAssetPath()
-	if err != nil {
-		return err
-	}
-
 	incoming := q.setupTemplate(&knobs, &memory)
 
 	// With the current implementations, VM templating will not work with file
@@ -615,7 +604,12 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		return err
 	}
 
-	devices, ioThread, err := q.buildDevices(ctx, initrdPath)
+	kernelPath, err := q.config.KernelAssetPath()
+	if err != nil {
+		return err
+	}
+
+	devices, ioThread, kernel, err := q.buildDevices(ctx, kernelPath)
 	if err != nil {
 		return err
 	}
@@ -643,13 +637,8 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		return err
 	}
 
-	// Breaks hypervisor abstraction has Kata Specific logic
-	kernel := govmmQemu.Kernel{
-		Path:       kernelPath,
-		InitrdPath: initrdPath,
-		// some devices configuration may also change kernel params, make sure this is called afterwards
-		Params: q.kernelParameters(),
-	}
+	// some devices configuration may also change kernel params, make sure this is called afterwards
+	kernel.Params = q.kernelParameters()
 	q.checkBpfEnabled()
 
 	qemuConfig := govmmQemu.Config{
@@ -666,7 +655,7 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		Devices:        devices,
 		CPUModel:       cpuModel,
 		SeccompSandbox: q.config.SeccompSandbox,
-		Kernel:         kernel,
+		Kernel:         *kernel,
 		RTC:            rtc,
 		QMPSockets:     qmpSockets,
 		Knobs:          knobs,
