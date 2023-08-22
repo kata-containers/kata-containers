@@ -184,7 +184,6 @@ pub enum ProcessStatus {
     Stopped = 3,
     Paused = 4,
     Pausing = 5,
-    Exited = 6,
 }
 
 #[derive(Debug, Clone)]

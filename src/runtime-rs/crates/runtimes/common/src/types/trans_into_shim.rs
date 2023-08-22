@@ -56,7 +56,6 @@ impl From<ProcessStatus> for api::Status {
             ProcessStatus::Stopped => api::Status::STOPPED,
             ProcessStatus::Paused => api::Status::PAUSED,
             ProcessStatus::Pausing => api::Status::PAUSING,
-            ProcessStatus::Exited => api::Status::STOPPED,
         }
     }
 }
