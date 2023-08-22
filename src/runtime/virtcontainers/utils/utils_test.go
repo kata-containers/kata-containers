@@ -16,6 +16,7 @@ import (
 	"syscall"
 	"testing"
 
+	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
@@ -579,4 +580,26 @@ func TestRevertBytes(t *testing.T) {
 
 	num := RevertBytes(testNum)
 	assert.Equal(expectedNum, num)
+}
+
+func TestIsDockerContainer(t *testing.T) {
+	assert := assert.New(t)
+
+	ociSpec := &specs.Spec{
+		Hooks: &specs.Hooks{
+			Prestart: []specs.Hook{
+				{
+					Args: []string{
+						"haha",
+					},
+				},
+			},
+		},
+	}
+	assert.False(IsDockerContainer(ociSpec))
+
+	ociSpec.Hooks.Prestart = append(ociSpec.Hooks.Prestart, specs.Hook{
+		Args: []string{"libnetwork-xxx"},
+	})
+	assert.True(IsDockerContainer(ociSpec))
 }
