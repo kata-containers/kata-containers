@@ -12,8 +12,8 @@ use tokio::sync::{Mutex, RwLock};
 
 use crate::{
     vhost_user_blk::VhostUserBlkDevice, BlockConfig, BlockDevice, HybridVsockDevice, Hypervisor,
-    NetworkDevice, VfioDevice, VhostUserConfig, KATA_BLK_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE,
-    KATA_NVDIMM_DEV_TYPE, VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
+    NetworkBackend, NetworkDevice, VfioDevice, VhostUserConfig, KATA_BLK_DEV_TYPE,
+    KATA_MMIO_BLK_DEV_TYPE, KATA_NVDIMM_DEV_TYPE, VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
 };
 
 use super::{
@@ -221,11 +221,18 @@ impl DeviceManager {
                         return Some(device_id.to_string());
                     }
                 }
-                DeviceType::Network(device) => {
-                    if device.config.host_dev_name == host_path {
-                        return Some(device_id.to_string());
+                DeviceType::Network(device) => match device.config.backend {
+                    NetworkBackend::Virtio(config) => {
+                        if config.host_dev_name == host_path {
+                            return Some(device_id.to_string());
+                        }
                     }
-                }
+                    NetworkBackend::Vhost(config) => {
+                        if config.host_dev_name == host_path {
+                            return Some(device_id.to_string());
+                        }
+                    }
+                },
                 _ => {
                     // TODO: support find other device type
                     continue;
@@ -307,11 +314,15 @@ impl DeviceManager {
             }
             DeviceConfig::NetworkCfg(config) => {
                 // try to find the device, found and just return id.
-                if let Some(dev_id_matched) = self.find_device(config.host_dev_name.clone()).await {
+                let host_path = match &config.backend {
+                    NetworkBackend::Virtio(config) => &config.host_dev_name,
+                    NetworkBackend::Vhost(config) => &config.host_dev_name,
+                };
+                if let Some(dev_id_matched) = self.find_device(host_path.to_owned()).await {
                     info!(
                         sl!(),
                         "network device with path:{:?} found. return network device id: {:?}",
-                        config.host_dev_name.clone(),
+                        host_path,
                         dev_id_matched
                     );
 

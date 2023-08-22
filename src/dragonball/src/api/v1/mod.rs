@@ -20,4 +20,4 @@ pub use self::machine_config::{VmConfigError, MAX_SUPPORTED_VCPUS};
 
 /// Wrapper for configuring the virtio networking
 mod virtio_net;
-pub use virtio_net::{Backend, NetworkInterfaceConfig, NetworkInterfaceUpdateConfig};
+pub use virtio_net::{Backend, NetworkInterfaceConfig, NetworkInterfaceUpdateConfig, VirtioConfig};

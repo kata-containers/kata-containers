@@ -7,14 +7,10 @@
 use std::path::PathBuf;
 
 use anyhow::{anyhow, Context, Result};
-use dbs_utils::net::MacAddr;
-use dragonball::{
-    api::v1::{
-        BlockDeviceConfigInfo, FsDeviceConfigInfo, FsMountConfigInfo, VirtioNetDeviceConfigInfo,
-        VsockDeviceConfigInfo,
-    },
-    device_manager::blk_dev_mgr::BlockDeviceType,
+use dragonball::api::v1::{
+    BlockDeviceConfigInfo, FsDeviceConfigInfo, FsMountConfigInfo, VsockDeviceConfigInfo,
 };
+use dragonball::device_manager::blk_dev_mgr::BlockDeviceType;
 
 use super::DragonballInner;
 use crate::{
@@ -85,7 +81,7 @@ impl DragonballInner {
                 // Dragonball doesn't support remove network device, just print message.
                 info!(
                     sl!(),
-                    "dragonball remove network device: {:?}.", network.config.virt_iface_name
+                    "dragonball remove network device: {:?}.", network.config
                 );
 
                 Ok(())
@@ -204,25 +200,8 @@ impl DragonballInner {
     }
 
     fn add_net_device(&mut self, config: &NetworkConfig) -> Result<()> {
-        let iface_cfg = VirtioNetDeviceConfigInfo {
-            iface_id: config.virt_iface_name.clone(),
-            host_dev_name: config.host_dev_name.clone(),
-            guest_mac: match &config.guest_mac {
-                Some(mac) => MacAddr::from_bytes(&mac.0).ok(),
-                None => None,
-            },
-            num_queues: config.queue_num,
-            queue_size: config.queue_size as u16,
-            ..Default::default()
-        };
-
-        info!(
-            sl!(),
-            "add {} endpoint to {}", iface_cfg.host_dev_name, iface_cfg.iface_id
-        );
-
         self.vmm_instance
-            .insert_network_device(iface_cfg)
+            .insert_network_device(config.into())
             .context("insert network device")
     }
 
