@@ -41,6 +41,8 @@ const (
 	FirmwareAsset AssetType = "firmware"
 
 	FirmwareVolumeAsset AssetType = "firmware_volume"
+
+	UnkownAsset AssetType = "unknown"
 )
 
 // AssetTypes returns a list of all known asset types.
