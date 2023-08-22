@@ -955,6 +955,17 @@ func (s *Sandbox) createNetwork(ctx context.Context) error {
 		return nil
 	}
 
+	// docker container needs the hypervisor process ID to find out the container netns,
+	// which means that the hypervisor has to support network device hotplug so that docker
+	// can use the prestart hooks to set up container netns.
+	caps := s.hypervisor.Capabilities(ctx)
+	if !caps.IsNetworkDeviceHotplugSupported() {
+		spec := s.GetPatchedOCISpec()
+		if utils.IsDockerContainer(spec) {
+			return errors.New("docker container needs network device hotplug but the configured hypervisor does not support it")
+		}
+	}
+
 	span, ctx := katatrace.Trace(ctx, s.Logger(), "createNetwork", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 	katatrace.AddTags(span, "network", s.network, "NetworkConfig", s.config.NetworkConfig)
