@@ -12,9 +12,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
+	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 
@@ -493,4 +495,22 @@ func RevertBytes(num uint64) uint64 {
 		return num
 	}
 	return 1024*RevertBytes(a) + b
+}
+
+// IsDockerContainer returns if the container is managed by docker
+// This is done by checking the prestart hook for `libnetwork` arguments.
+func IsDockerContainer(spec *specs.Spec) bool {
+	if spec == nil || spec.Hooks == nil {
+		return false
+	}
+
+	for _, hook := range spec.Hooks.Prestart {
+		for _, arg := range hook.Args {
+			if strings.HasPrefix(arg, "libnetwork") {
+				return true
+			}
+		}
+	}
+
+	return false
 }
