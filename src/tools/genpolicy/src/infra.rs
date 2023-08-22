@@ -12,7 +12,6 @@ use crate::volume;
 
 use anyhow::Result;
 use log::debug;
-use oci;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::ffi::OsString;
@@ -51,8 +50,8 @@ const OTHER_CONTAINERS_ANNOTATIONS: [(&'static str, &'static str); 4] = [
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InfraPolicy {
-    pub pause_container: policy::OciSpec,
-    pub other_container: policy::OciSpec,
+    pub pause_container: policy::KataSpec,
+    pub other_container: policy::KataSpec,
     pub volumes: Volumes,
     shared_files: SharedFiles,
     kata_config: KataConfig,
@@ -119,28 +118,28 @@ impl InfraPolicy {
 }
 
 // Change process fields based on K8s infrastructure rules.
-pub fn get_process(process: &mut policy::OciProcess, infra_policy: &policy::OciSpec) {
-    if let Some(infra_process) = &infra_policy.process {
-        if process.user.uid == 0 {
-            process.user.uid = infra_process.user.uid;
+pub fn get_process(process: &mut policy::KataProcess, infra_policy: &policy::KataSpec) {
+    if let Some(infra_process) = &infra_policy.Process {
+        if process.User.UID == 0 {
+            process.User.UID = infra_process.User.UID;
         }
-        if process.user.gid == 0 {
-            process.user.gid = infra_process.user.gid;
+        if process.User.GID == 0 {
+            process.User.GID = infra_process.User.GID;
         }
 
-        process.user.additional_gids = infra_process.user.additional_gids.to_vec();
-        process.user.username = String::from(&infra_process.user.username);
-        add_missing_strings(&infra_process.args, &mut process.args);
+        process.User.AdditionalGids = infra_process.User.AdditionalGids.to_vec();
+        process.User.Username = String::from(&infra_process.User.Username);
+        add_missing_strings(&infra_process.Args, &mut process.Args);
 
-        add_missing_strings(&infra_process.env, &mut process.env);
+        add_missing_strings(&infra_process.Env, &mut process.Env);
     }
 }
 
 impl InfraPolicy {
     pub fn get_policy_mounts(
         &self,
-        policy_mounts: &mut Vec<oci::Mount>,
-        infra_mounts: &Vec<oci::Mount>,
+        policy_mounts: &mut Vec<policy::KataMount>,
+        infra_mounts: &Vec<policy::KataMount>,
         yaml_container: &pod::Container,
         is_pause_container: bool,
     ) {
@@ -153,7 +152,7 @@ impl InfraPolicy {
             if keep_infra_mount(&infra_mount, &yaml_container.volumeMounts) {
                 let mut mount = infra_mount.clone();
 
-                if mount.source.is_empty() && mount.r#type.eq("bind") {
+                if mount.source.is_empty() && mount.type_.eq("bind") {
                     if let Some(file_name) = Path::new(&mount.destination).file_name() {
                         if let Some(file_name) = file_name.to_str() {
                             mount.source += &self.shared_files.source_path;
@@ -168,7 +167,7 @@ impl InfraPolicy {
                     .find(|m| m.destination.eq(&infra_mount.destination))
                 {
                     // Update an already existing mount.
-                    policy_mount.r#type = String::from(&mount.r#type);
+                    policy_mount.type_ = String::from(&mount.type_);
                     policy_mount.source = String::from(&mount.source);
                     policy_mount.options = mount.options.iter().map(String::from).collect();
                 } else {
@@ -188,7 +187,7 @@ impl InfraPolicy {
     }
 }
 
-fn keep_infra_mount(infra_mount: &oci::Mount, yaml_mounts: &Option<Vec<pod::VolumeMount>>) -> bool {
+fn keep_infra_mount(infra_mount: &policy::KataMount, yaml_mounts: &Option<Vec<pod::VolumeMount>>) -> bool {
     if INFRA_MOUNT_DESTINATIONS
         .iter()
         .any(|&i| i == infra_mount.destination)
@@ -207,8 +206,8 @@ fn keep_infra_mount(infra_mount: &oci::Mount, yaml_mounts: &Option<Vec<pod::Volu
     false
 }
 
-pub fn add_annotations(annotations: &mut BTreeMap<String, String>, infra_policy: &policy::OciSpec) {
-    if let Some(infra_annotations) = &infra_policy.annotations {
+pub fn add_annotations(annotations: &mut BTreeMap<String, String>, infra_policy: &policy::KataSpec) {
+    if let Some(infra_annotations) = &infra_policy.Annotations {
         for annotation in infra_annotations {
             annotations
                 .entry(annotation.0.to_string())
@@ -217,13 +216,13 @@ pub fn add_annotations(annotations: &mut BTreeMap<String, String>, infra_policy:
     }
 }
 
-pub fn get_linux(linux: &mut oci::Linux, infra_linux: &Option<oci::Linux>) {
+pub fn get_linux(linux: &mut policy::KataLinux, infra_linux: &Option<policy::KataLinux>) {
     if let Some(infra) = infra_linux {
-        if !infra.masked_paths.is_empty() {
-            linux.masked_paths = infra.masked_paths.clone();
+        if !infra.MaskedPaths.is_empty() {
+            linux.MaskedPaths = infra.MaskedPaths.clone();
         }
-        if !infra.readonly_paths.is_empty() {
-            linux.readonly_paths = infra.readonly_paths.clone();
+        if !infra.ReadonlyPaths.is_empty() {
+            linux.ReadonlyPaths = infra.ReadonlyPaths.clone();
         }
     }
 }
@@ -237,28 +236,28 @@ fn add_missing_strings(src: &Vec<String>, dest: &mut Vec<String>) {
     debug!("src = {:?}, dest = {:?}", src, dest)
 }
 
-fn add_pause_container_data(oci: &mut policy::OciSpec) {
-    if let Some(process) = &mut oci.process {
-        process.args = vec!["/pause".to_string()];
+fn add_pause_container_data(oci: &mut policy::KataSpec) {
+    if let Some(process) = &mut oci.Process {
+        process.Args = vec!["/pause".to_string()];
     }
 
     for annotation in PAUSE_CONTAINER_ANNOTATIONS {
-        if let Some(annotations) = &mut oci.annotations {
+        if let Some(annotations) = &mut oci.Annotations {
             annotations
                 .entry(annotation.0.to_string())
                 .or_insert(annotation.1.to_string());
         } else {
             let mut annotations = BTreeMap::new();
             annotations.insert(annotation.0.to_string(), annotation.1.to_string());
-            oci.annotations = Some(annotations);
+            oci.Annotations = Some(annotations);
         }
     }
 
-    if oci.linux.is_none() {
-        oci.linux = Some(Default::default());
+    if oci.Linux.is_none() {
+        oci.Linux = Some(Default::default());
     }
-    if let Some(linux) = &mut oci.linux {
-        linux.masked_paths = vec![
+    if let Some(linux) = &mut oci.Linux {
+        linux.MaskedPaths = vec![
             "/proc/acpi".to_string(),
             "/proc/asound".to_string(),
             "/proc/kcore".to_string(),
@@ -270,7 +269,7 @@ fn add_pause_container_data(oci: &mut policy::OciSpec) {
             "/sys/firmware".to_string(),
             "/proc/scsi".to_string(),
         ];
-        linux.readonly_paths = vec![
+        linux.ReadonlyPaths = vec![
             "/proc/bus".to_string(),
             "/proc/fs".to_string(),
             "/proc/irq".to_string(),
@@ -280,16 +279,16 @@ fn add_pause_container_data(oci: &mut policy::OciSpec) {
     }
 }
 
-fn add_other_container_data(oci: &mut policy::OciSpec) {
+fn add_other_container_data(oci: &mut policy::KataSpec) {
     for annotation in OTHER_CONTAINERS_ANNOTATIONS {
-        if let Some(annotations) = &mut oci.annotations {
+        if let Some(annotations) = &mut oci.Annotations {
             annotations
                 .entry(annotation.0.to_string())
                 .or_insert(annotation.1.to_string());
         } else {
             let mut annotations = BTreeMap::new();
             annotations.insert(annotation.0.to_string(), annotation.1.to_string());
-            oci.annotations = Some(annotations);
+            oci.Annotations = Some(annotations);
         }
     }
 }
@@ -297,7 +296,7 @@ fn add_other_container_data(oci: &mut policy::OciSpec) {
 impl InfraPolicy {
     pub fn get_mount_and_storage(
         &self,
-        policy_mounts: &mut Vec<oci::Mount>,
+        policy_mounts: &mut Vec<policy::KataMount>,
         storages: &mut Vec<policy::SerializedStorage>,
         yaml_volume: &volume::Volume,
         yaml_mount: &pod::VolumeMount,
@@ -327,7 +326,7 @@ impl InfraPolicy {
 
     fn empty_dir_mount_and_storage(
         infra_volumes: &Volumes,
-        policy_mounts: &mut Vec<oci::Mount>,
+        policy_mounts: &mut Vec<policy::KataMount>,
         storages: &mut Vec<policy::SerializedStorage>,
         yaml_mount: &pod::VolumeMount,
     ) {
@@ -354,15 +353,15 @@ impl InfraPolicy {
             infra_empty_dir.mount_source.to_string() + &yaml_mount.name + "$"
         };
 
-        let r#type = if yaml_mount.subPathExpr.is_some() {
+        let type_ = if yaml_mount.subPathExpr.is_some() {
             "bind".to_string()
         } else {
             infra_empty_dir.mount_type.clone()
         };
 
-        policy_mounts.push(oci::Mount {
+        policy_mounts.push(policy::KataMount {
             destination: yaml_mount.mountPath.to_string(),
-            r#type,
+            type_,
             source,
             options: vec![
                 "rbind".to_string(),
@@ -375,7 +374,7 @@ impl InfraPolicy {
     fn shared_bind_mount(
         &self,
         yaml_mount: &pod::VolumeMount,
-        policy_mounts: &mut Vec<oci::Mount>,
+        policy_mounts: &mut Vec<policy::KataMount>,
         propagation: &str,
         access: &str,
     ) {
@@ -388,7 +387,7 @@ impl InfraPolicy {
         source += "$";
 
         let destination = yaml_mount.mountPath.to_string();
-        let r#type = "bind".to_string();
+        let type_ = "bind".to_string();
         let options = vec![
             "rbind".to_string(),
             propagation.to_string(),
@@ -403,7 +402,7 @@ impl InfraPolicy {
                 "shared_bind_mount: updating destination = {}, source = {}",
                 &destination, &source
             );
-            policy_mount.r#type = r#type;
+            policy_mount.type_ = type_;
             policy_mount.source = source;
             policy_mount.options = options;
         } else {
@@ -411,9 +410,9 @@ impl InfraPolicy {
                 "shared_bind_mount: adding destination = {}, source = {}",
                 &destination, &source
             );
-            policy_mounts.push(oci::Mount {
+            policy_mounts.push(policy::KataMount {
                 destination,
-                r#type,
+                type_,
                 source,
                 options,
             });
@@ -424,7 +423,7 @@ impl InfraPolicy {
         &self,
         yaml_mount: &pod::VolumeMount,
         yaml_volume: &volume::Volume,
-        policy_mounts: &mut Vec<oci::Mount>,
+        policy_mounts: &mut Vec<policy::KataMount>,
     ) {
         let host_path = yaml_volume.hostPath.as_ref().unwrap().path.clone();
         let path = Path::new(&host_path);
@@ -451,7 +450,7 @@ impl InfraPolicy {
             self.shared_bind_mount(yaml_mount, policy_mounts, propagation, "rw");
         } else {
             let dest = yaml_mount.mountPath.to_string();
-            let r#type = "bind".to_string();
+            let type_ = "bind".to_string();
             let mount_option = if biderectional { "rshared" } else { "rprivate" };
             let options = vec![
                 "rbind".to_string(),
@@ -464,7 +463,7 @@ impl InfraPolicy {
                     "host_path_mount: updating destination = {}, source = {}",
                     &dest, &host_path
                 );
-                policy_mount.r#type = r#type;
+                policy_mount.type_ = type_;
                 policy_mount.source = host_path;
                 policy_mount.options = options;
             } else {
@@ -472,9 +471,9 @@ impl InfraPolicy {
                     "host_path_mount: adding destination = {}, source = {}",
                     &dest, &host_path
                 );
-                policy_mounts.push(oci::Mount {
+                policy_mounts.push(policy::KataMount {
                     destination: dest,
-                    r#type,
+                    type_,
                     source: host_path,
                     options,
                 });
@@ -484,7 +483,7 @@ impl InfraPolicy {
 
     fn config_map_mount_and_storage(
         infra_volumes: &Volumes,
-        policy_mounts: &mut Vec<oci::Mount>,
+        policy_mounts: &mut Vec<policy::KataMount>,
         storages: &mut Vec<policy::SerializedStorage>,
         yaml_mount: &pod::VolumeMount,
         confidential_guest: bool,
@@ -517,9 +516,9 @@ impl InfraPolicy {
 
         let file_name = Path::new(&yaml_mount.mountPath).file_name().unwrap();
         let name = OsString::from(file_name).into_string().unwrap();
-        policy_mounts.push(oci::Mount {
+        policy_mounts.push(policy::KataMount {
             destination: yaml_mount.mountPath.to_string(),
-            r#type: infra_config_map.mount_type.to_string(),
+            type_: infra_config_map.mount_type.to_string(),
             source: infra_config_map.mount_point.clone() + &name + "$",
             options: infra_config_map.options.clone(),
         });
@@ -528,7 +527,7 @@ impl InfraPolicy {
     fn downward_api_mount(
         &self,
         yaml_mount: &pod::VolumeMount,
-        policy_mounts: &mut Vec<oci::Mount>,
+        policy_mounts: &mut Vec<policy::KataMount>,
     ) {
         let mut source = self.shared_files.source_path.clone();
         if let Some(byte_index) = str::rfind(&yaml_mount.mountPath, '/') {
@@ -539,7 +538,7 @@ impl InfraPolicy {
         source += "$";
 
         let destination = yaml_mount.mountPath.to_string();
-        let r#type = "bind".to_string();
+        let type_ = "bind".to_string();
         let mount_option = "rprivate".to_string();
         let options = vec!["rbind".to_string(), mount_option, "ro".to_string()];
 
@@ -551,7 +550,7 @@ impl InfraPolicy {
                 "downward_api_mount: updating destination = {}, source = {}",
                 &destination, &source
             );
-            policy_mount.r#type = r#type;
+            policy_mount.type_ = type_;
             policy_mount.source = source;
             policy_mount.options = options;
         } else {
@@ -559,9 +558,9 @@ impl InfraPolicy {
                 "downward_api_mount: adding destination = {}, source = {}",
                 &destination, &source
             );
-            policy_mounts.push(oci::Mount {
+            policy_mounts.push(policy::KataMount {
                 destination,
-                r#type,
+                type_,
                 source,
                 options,
             });

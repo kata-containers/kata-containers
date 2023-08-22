@@ -113,7 +113,7 @@ impl Container {
     // Convert Docker image config to policy data.
     pub fn get_process(
         &self,
-        process: &mut policy::OciProcess,
+        process: &mut policy::KataProcess,
         yaml_has_command: bool,
         yaml_has_args: bool,
     ) {
@@ -127,36 +127,36 @@ impl Container {
                 if !user.is_empty() {
                     debug!("Parsing uid from user[0] = {}", &user[0]);
                     match user[0].parse() {
-                        Ok(id) => process.user.uid = id,
+                        Ok(id) => process.User.UID = id,
                         Err(e) => {
                             // "image: prom/prometheus" has user = "nobody", but
-                            // process.user.uid is an u32 value.
+                            // process.User.UID is an u32 value.
                             warn!(
                                 "Failed to parse {} as u32, using uid = 0 - error {:?}",
                                 &user[0], &e
                             );
-                            process.user.uid = 0;
+                            process.User.UID = 0;
                         }
                     }
                 }
                 if user.len() > 1 {
                     debug!("Parsing gid from user[1] = {:?}", user[1]);
-                    process.user.gid = user[1].parse().unwrap();
+                    process.User.GID = user[1].parse().unwrap();
                 }
             }
         }
 
         if let Some(terminal) = docker_config.Tty {
-            process.terminal = terminal;
+            process.Terminal = terminal;
         } else {
-            process.terminal = false;
+            process.Terminal = false;
         }
 
         for env in &docker_config.Env {
-            process.env.push(env.clone());
+            process.Env.push(env.clone());
         }
 
-        let policy_args = &mut process.args;
+        let policy_args = &mut process.Args;
         debug!("Already existing policy args: {:?}", policy_args);
 
         if let Some(entry_points) = &docker_config.Entrypoint {
@@ -197,7 +197,7 @@ impl Container {
 
         if let Some(working_dir) = &docker_config.WorkingDir {
             if !working_dir.is_empty() {
-                process.cwd = working_dir.clone();
+                process.Cwd = working_dir.clone();
             }
         }
 

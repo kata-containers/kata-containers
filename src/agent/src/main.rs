@@ -74,7 +74,7 @@ mod image_rpc;
 mod rpc;
 mod tracer;
 
-#[cfg(feature = "security-policy")]
+#[cfg(feature = "agent-policy")]
 mod policy;
 
 cfg_if! {
@@ -95,11 +95,9 @@ lazy_static! {
     ));
 }
 
-#[cfg(feature = "security-policy")]
+#[cfg(feature = "agent-policy")]
 lazy_static! {
-    static ref AGENT_POLICY: Arc<Mutex<AgentPolicy>> = Arc::new(Mutex::new(
-        AgentPolicy::new("http://localhost:8181/v1", "/coco_policy").unwrap()
-    ));
+    static ref AGENT_POLICY: Mutex<policy::AgentPolicy> = Mutex::new(AgentPolicy::new());
 }
 
 #[derive(Parser)]
@@ -233,9 +231,6 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     let root_span = span!(tracing::Level::TRACE, "root-span");
 
-    #[cfg(feature = "security-policy")]
-    AGENT_POLICY.lock().await.initialize().await?;
-
     // XXX: Start the root trace transaction.
     //
     // XXX: Note that *ALL* spans needs to start after this point!!
@@ -341,6 +336,19 @@ async fn start_sandbox(
         s.rtnl.handle_localhost().await?;
     }
 
+    // - When init_mode is true, enabling the localhost link during the
+    //   handle_localhost call above is required before starting OPA with the
+    //   initialize_policy call below.
+    // - When init_mode is false, the Policy could be initialized earlier,
+    //   because initialize_policy doesn't start OPA. OPA is started by
+    //   systemd after localhost has been enabled.
+    #[cfg(feature = "agent-policy")]
+    if let Err(e) = initialize_policy(init_mode).await {
+        error!(logger, "Failed to initialize agent policy: {:?}", e);
+        // Continuing execution without a security policy could be dangerous.
+        std::process::abort();
+    }
+
     let sandbox = Arc::new(Mutex::new(s));
 
     let signal_handler_task = tokio::spawn(setup_signal_handler(
@@ -402,6 +410,18 @@ fn init_agent_as_init(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result
     Ok(())
 }
 
+#[cfg(feature = "agent-policy")]
+async fn initialize_policy(init_mode: bool) -> Result<()> {
+    let opa_addr = "localhost:8181";
+    let agent_policy_path = "/agent_policy";
+    let default_agent_policy = "/etc/kata-opa/default-policy.rego";
+    AGENT_POLICY
+        .lock()
+        .await
+        .initialize(init_mode, opa_addr, agent_policy_path, default_agent_policy)
+        .await
+}
+
 // The Rust standard library had suppressed the default SIGPIPE behavior,
 // see https://github.com/rust-lang/rust/pull/13158.
 // Since the parent's signal handler would be inherited by it's child process,
@@ -415,7 +435,7 @@ fn reset_sigpipe() {
 
 use crate::config::AgentConfig;
 
-#[cfg(feature = "security-policy")]
+#[cfg(feature = "agent-policy")]
 use crate::policy::AgentPolicy;
 
 use std::os::unix::io::{FromRawFd, RawFd};

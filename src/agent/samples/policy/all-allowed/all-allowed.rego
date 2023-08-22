@@ -1,4 +1,4 @@
-package coco_policy
+package agent_policy
 
 default AddARPNeighborsRequest := true
 default AddSwapRequest := true

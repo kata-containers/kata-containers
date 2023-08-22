@@ -72,7 +72,7 @@ impl yaml::K8sResource for StatefulSet {
 
     fn get_container_mounts_and_storages(
         &self,
-        policy_mounts: &mut Vec<oci::Mount>,
+        policy_mounts: &mut Vec<policy::KataMount>,
         storages: &mut Vec<policy::SerializedStorage>,
         container: &pod::Container,
         agent_policy: &policy::AgentPolicy,
@@ -143,7 +143,7 @@ impl yaml::K8sResource for StatefulSet {
 
 impl StatefulSet {
     fn get_mounts_and_storages(
-        policy_mounts: &mut Vec<oci::Mount>,
+        policy_mounts: &mut Vec<policy::KataMount>,
         volume_mounts: &Vec<pod::VolumeMount>,
         claims: &Vec<persistent_volume_claim::PersistentVolumeClaim>,
     ) {
@@ -159,9 +159,9 @@ impl StatefulSet {
                         // TODO:
                         // - Get the source path below from the infra module.
                         // - Generate proper options value.
-                        policy_mounts.push(oci::Mount {
+                        policy_mounts.push(policy::KataMount {
                             destination: mount.mountPath.clone(),
-                            r#type: "bind".to_string(),
+                            type_: "bind".to_string(),
                             source:
                                 "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-"
                                     .to_string()

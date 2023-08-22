@@ -53,7 +53,7 @@ pub trait K8sResource {
 
     fn get_container_mounts_and_storages(
         &self,
-        policy_mounts: &mut Vec<oci::Mount>,
+        policy_mounts: &mut Vec<policy::KataMount>,
         storages: &mut Vec<policy::SerializedStorage>,
         container: &pod::Container,
         agent_policy: &policy::AgentPolicy,
@@ -227,7 +227,7 @@ pub async fn k8s_resource_init(spec: &mut pod::PodSpec, use_cache: bool) {
 }
 
 pub fn get_container_mounts_and_storages(
-    policy_mounts: &mut Vec<oci::Mount>,
+    policy_mounts: &mut Vec<policy::KataMount>,
     storages: &mut Vec<policy::SerializedStorage>,
     container: &pod::Container,
     agent_policy: &policy::AgentPolicy,

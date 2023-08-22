@@ -74,11 +74,10 @@ serde = { version = "1.0.129", features = ["derive"] }
 toml = "0.5.8"
 clap = { version = "3.0.1", features = ["derive"] }
 
-
-# OPA requests
+# Communication with the OPA service
 http = { version = "0.2.8", optional = true }
 reqwest = { version = "0.11.14", optional = true }
-# "vendored" feature for openssl is required by musl build
+# The "vendored" feature for openssl is required for musl build
 openssl = { version = "0.10.54", features = ["vendored"], optional = true }
 
 # Image pull/decrypt
@@ -110,7 +109,7 @@ lto = true
 default = []
 seccomp = ["rustjail/seccomp"]
 standard-oci-runtime = ["rustjail/standard-oci-runtime"]
-security-policy = ["hex", "http", "openssl", "reqwest", "sev", "sha2"]
+agent-policy = ["hex", "http", "openssl", "reqwest", "sev", "sha2"]
 
 [[bin]]
 name = "kata-agent"

@@ -65,7 +65,7 @@ impl yaml::K8sResource for ReplicationController {
 
     fn get_container_mounts_and_storages(
         &self,
-        policy_mounts: &mut Vec<oci::Mount>,
+        policy_mounts: &mut Vec<policy::KataMount>,
         storages: &mut Vec<policy::SerializedStorage>,
         container: &pod::Container,
         agent_policy: &policy::AgentPolicy,

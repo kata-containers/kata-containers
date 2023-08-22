@@ -38,7 +38,7 @@ SECURITY_POLICY := no
 
 # Enable security policy feature of rust build
 ifeq ($(SECURITY_POLICY),yes)
-    override EXTRA_RUSTFEATURES += security-policy
+    override EXTRA_RUSTFEATURES += agent-policy
 endif
 
 include ../../utils.mk

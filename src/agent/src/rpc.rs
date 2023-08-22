@@ -69,7 +69,7 @@ use crate::sandbox::Sandbox;
 use crate::version::{AGENT_VERSION, API_VERSION};
 use crate::AGENT_CONFIG;
 
-#[cfg(feature = "security-policy")]
+#[cfg(feature = "agent-policy")]
 use crate::AGENT_POLICY;
 
 use crate::trace_rpc_call;
@@ -151,7 +151,7 @@ macro_rules! config_allows {
     };
 }
 
-#[cfg(feature = "security-policy")]
+#[cfg(feature = "agent-policy")]
 macro_rules! policy_allows {
     ($req:ident, $serialized_req:ident) => {
         let mut policy = AGENT_POLICY.lock().await;
@@ -175,23 +175,9 @@ macro_rules! policy_allows {
 macro_rules! is_allowed {
     ($req:ident) => {
         config_allows!($req);
-        #[cfg(feature = "security-policy")]
+        #[cfg(feature = "agent-policy")]
         {
             let request = serde_json::to_string(&$req).unwrap();
-            policy_allows!($req, request);
-        }
-    };
-}
-macro_rules! is_allowed_create_container {
-    ($req:ident) => {
-        config_allows!($req);
-        #[cfg(feature = "security-policy")]
-        {
-            let opa_input = CreateContainerRequestData {
-                oci: rustjail::grpc_to_oci(&$req.OCI),
-                storages: $req.storages.clone(),
-            };
-            let request = serde_json::to_string(&opa_input).unwrap();
             policy_allows!($req, request);
         }
     };
@@ -829,7 +815,7 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::CreateContainerRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "create_container", req);
-        is_allowed_create_container!(req);
+        is_allowed!(req);
         match self.do_create_container(req).await {
             Err(e) => Err(ttrpc_error!(ttrpc::Code::INTERNAL, e)),
             Ok(_) => Ok(Empty::new()),
@@ -1759,7 +1745,7 @@ impl agent_ttrpc::AgentService for AgentService {
         Ok(Empty::new())
     }
 
-    #[cfg(feature = "security-policy")]
+    #[cfg(feature = "agent-policy")]
     async fn set_policy(
         &self,
         ctx: &TtrpcContext,

@@ -22,7 +22,7 @@ use crate::rpc::{verify_cid, CONTAINER_BASE};
 use crate::sandbox::Sandbox;
 use crate::AGENT_CONFIG;
 
-#[cfg(feature = "security-policy")]
+#[cfg(feature = "agent-policy")]
 use crate::AGENT_POLICY;
 
 use image_rs::image::ImageClient;
@@ -48,7 +48,7 @@ macro_rules! sl {
     };
 }
 
-#[cfg(feature = "security-policy")]
+#[cfg(feature = "agent-policy")]
 macro_rules! is_allowed_pull_image {
     ($req:ident) => {
         let request = serde_json::to_string(&$req).unwrap();
@@ -157,7 +157,7 @@ impl ImageService {
     }
 
     async fn pull_image(&self, req: &image::PullImageRequest) -> Result<String> {
-        #[cfg(feature = "security-policy")]
+        #[cfg(feature = "agent-policy")]
         is_allowed_pull_image!(req);
 
         env::set_var("OCICRYPT_KEYPROVIDER_CONFIG", OCICRYPT_CONFIG_PATH);

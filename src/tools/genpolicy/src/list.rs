@@ -64,7 +64,7 @@ impl yaml::K8sResource for List {
 
     fn get_container_mounts_and_storages(
         &self,
-        _policy_mounts: &mut Vec<oci::Mount>,
+        _policy_mounts: &mut Vec<policy::KataMount>,
         _storages: &mut Vec<policy::SerializedStorage>,
         _container: &pod::Container,
         _agent_policy: &policy::AgentPolicy,

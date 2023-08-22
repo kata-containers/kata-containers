@@ -8,6 +8,6 @@ Documentation=https://github.com/confidential-containers
 StandardOutput=tty
 StandardError=tty
 Type=simple
-ExecStart=/usr/local/bin/opa run --server --disable-telemetry --addr 127.0.0.1:8181 --log-level info /coco_policy /coco_policy_data
+ExecStart=/usr/local/bin/opa run --server --disable-telemetry --addr 127.0.0.1:8181 --log-level info /agent_policy
 DynamicUser=yes
 RuntimeDirectory=coco-opa

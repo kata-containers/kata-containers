@@ -758,6 +758,7 @@ func (k *kataAgent) startSandbox(ctx context.Context, sandbox *Sandbox) error {
 			return err
 		}
 
+		// If a Policy has been specified, send it to the agent.
 		if len(sandbox.config.AgentConfig.Policy) > 0 {
 			if err := sandbox.agent.setPolicy(ctx, sandbox.config.AgentConfig.Policy); err != nil {
 				return err

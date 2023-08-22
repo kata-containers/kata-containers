@@ -21,7 +21,6 @@ use crate::yaml;
 use anyhow::Result;
 use base64::{engine::general_purpose, Engine as _};
 use log::debug;
-use oci::*;
 use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
 use sha2::{Digest, Sha256};
@@ -54,52 +53,176 @@ pub struct PolicyData {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct OciSpec {
+pub struct KataSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub ociVersion: Option<String>,
+    pub Version: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub process: Option<OciProcess>,
+    pub Process: Option<KataProcess>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub root: Option<Root>,
+    pub Root: Option<KataRoot>,
 
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub mounts: Vec<Mount>,
+    pub Mounts: Vec<KataMount>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub hooks: Option<Hooks>,
+    pub Hooks: Option<oci::Hooks>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub annotations: Option<BTreeMap<String, String>>,
+    pub Annotations: Option<BTreeMap<String, String>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub linux: Option<Linux>,
+    pub Linux: Option<KataLinux>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct OciProcess {
-    pub terminal: bool,
-    pub user: User,
+pub struct KataProcess {
+    pub Terminal: bool,
+    pub User: KataUser,
 
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub args: Vec<String>,
+    pub Args: Vec<String>,
 
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub env: Vec<String>,
+    pub Env: Vec<String>,
 
     #[serde(skip_serializing_if = "String::is_empty")]
-    pub cwd: String,
+    pub Cwd: String,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub capabilities: Option<LinuxCapabilities>,
+    pub Capabilities: Option<KataLinuxCapabilities>,
 
-    pub noNewPrivileges: bool,
+    pub NoNewPrivileges: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
+pub struct KataUser {
+    /// UID is the user id.
+    pub UID: u32,
+
+    /// GID is the group id.
+    pub GID: u32,
+
+    /// AdditionalGids are additional group ids set for the container's process.
+    pub AdditionalGids: Vec<u32>,
+
+    /// Username is the user name.
+    pub Username: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct KataRoot {
+    /// Path is the absolute path to the container's root filesystem.
+    pub Path: String,
+
+    /// Readonly makes the root filesystem for the container readonly before the process is executed.
+    #[serde(default)]
+    pub Readonly: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
+pub struct KataLinux {
+    // UIDMapping specifies user mappings for supporting user namespaces.
+    // UIDMappings: Vec<KataLinuxIDMapping>,
+
+    // GIDMapping specifies group mappings for supporting user namespaces.
+    // GIDMappings: Vec<KataLinuxIDMapping>,
+
+    // Sysctl are a set of key value pairs that are set for the container on start
+    // Sysctl: BTreeMap<String, String>,
+
+    // Resources contain cgroup information for handling resource constraints
+    // for the container
+    // LinuxResources Resources = 4;
+    // CgroupsPath specifies the path to cgroups that are created and/or joined by the container.
+    // The path is expected to be relative to the cgroups mountpoint.
+    // If resources are specified, the cgroups at CgroupsPath will be updated based on resources.
+    // CgroupsPath: String,
+
+    /// Namespaces contains the namespaces that are created and/or joined by the container
+    pub Namespaces: Vec<KataLinuxNamespace>,
+
+    // Devices are a list of device nodes that are created for the container
+    // repeated LinuxDevice Devices = 7  [(gogoproto.nullable) = false];
+
+    // Seccomp specifies the seccomp security settings for the container.
+    // LinuxSeccomp Seccomp = 8;
+
+    // RootfsPropagation is the rootfs mount propagation mode for the container.
+    // string RootfsPropagation = 9;
+    /// MaskedPaths masks over the provided paths inside the container.
+    pub MaskedPaths: Vec<String>,
+
+    /// ReadonlyPaths sets the provided paths as RO inside the container.
+    pub ReadonlyPaths: Vec<String>,
+    // MountLabel specifies the selinux context for the mounts in the container.
+    // string MountLabel = 12;
+
+    // IntelRdt contains Intel Resource Director Technology (RDT) information
+    // for handling resource constraints (e.g., L3 cache) for the container
+    // LinuxIntelRdt IntelRdt = 13;
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct KataLinuxIDMapping {
+    /// HostID is the starting UID/GID on the host to be mapped to 'ContainerID'
+    HostID: u32,
+
+    /// ContainerID is the starting UID/GID in the container
+    ContainerID: u32,
+
+    /// Size is the number of IDs to be mapped
+    Size: u32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct KataLinuxNamespace {
+    /// Type is the type of namespace
+    pub Type: String,
+
+    /// Path is a path to an existing namespace persisted on disk that can be joined
+    /// and is of the same type
+    pub Path: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct KataLinuxCapabilities {
+	// Ambient is the ambient set of capabilities that are kept.
+	pub Ambient: Vec<String>,
+
+    /// Bounding is the set of capabilities checked by the kernel.
+	pub Bounding: Vec<String>,
+
+	/// Effective is the set of capabilities checked by the kernel.
+	pub Effective: Vec<String>,
+
+	/// Inheritable is the capabilities preserved across execve.
+	pub Inheritable: Vec<String>,
+
+	/// Permitted is the limiting superset for effective capabilities.
+	pub Permitted: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct KataMount {
+	/// destination is the path inside the container expect when it starts with "tmp:/"
+	pub destination: String,
+
+	/// source is the path inside the container expect when it starts with "vm:/dev/" or "tmp:/"
+	/// the path which starts with "vm:/dev/" refers the guest vm's "/dev",
+	/// especially, "vm:/dev/hostfs/" refers to the shared filesystem.
+	/// "tmp:/" is a temporary directory which is used for temporary mounts.
+    #[serde(default)]
+	pub source: String,
+
+    pub type_: String,
+	pub options: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ContainerPolicy {
-    pub oci: OciSpec,
+    pub OCI: KataSpec,
     storages: Vec<SerializedStorage>,
     exec_commands: Vec<String>,
 }
@@ -281,10 +404,10 @@ impl AgentPolicy {
             &self.infra_policy.other_container
         };
 
-        let mut root: Option<Root> = None;
-        if let Some(infra_root) = &infra_container.root {
+        let mut root: Option<KataRoot> = None;
+        if let Some(infra_root) = &infra_container.Root {
             let mut policy_root = infra_root.clone();
-            policy_root.readonly = yaml_container.read_only_root_filesystem();
+            policy_root.Readonly = yaml_container.read_only_root_filesystem();
             root = Some(policy_root);
         }
 
@@ -339,24 +462,24 @@ impl AgentPolicy {
         let is_privileged = yaml_container.is_privileged();
         let mut process = containerd::get_process(is_privileged);
 
-        if let Some(capabilities) = &mut process.capabilities {
+        if let Some(capabilities) = &mut process.Capabilities {
             yaml_container.apply_capabilities(capabilities);
         }
 
-        let (yaml_has_command, yaml_has_args) = yaml_container.get_process_args(&mut process.args);
+        let (yaml_has_command, yaml_has_args) = yaml_container.get_process_args(&mut process.Args);
         yaml_container
             .registry
             .get_process(&mut process, yaml_has_command, yaml_has_args);
 
         if let Some(tty) = yaml_container.tty {
-            process.terminal = tty;
+            process.Terminal = tty;
             if tty && !is_pause_container {
-                process.env.push("TERM=".to_string() + "xterm");
+                process.Env.push("TERM=".to_string() + "xterm");
             }
         }
 
         if !is_pause_container {
-            process.env.push("HOSTNAME=".to_string() + "$(host-name)");
+            process.Env.push("HOSTNAME=".to_string() + "$(host-name)");
         }
 
         let service_account_name = if let Some(s) = &yaml_container.serviceAccountName {
@@ -366,7 +489,7 @@ impl AgentPolicy {
         };
 
         yaml_container.get_env_variables(
-            &mut process.env,
+            &mut process.Env,
             &self.config_maps,
             &self.secrets,
             &namespace,
@@ -374,16 +497,16 @@ impl AgentPolicy {
             &service_account_name,
         );
 
-        substitute_env_variables(&mut process.env);
-        substitute_args_env_variables(&mut process.args, &process.env);
+        substitute_env_variables(&mut process.Env);
+        substitute_args_env_variables(&mut process.Args, &process.Env);
 
         infra::get_process(&mut process, &infra_container);
-        process.noNewPrivileges = !yaml_container.allow_privilege_escalation();
+        process.NoNewPrivileges = !yaml_container.allow_privilege_escalation();
 
         let mut mounts = containerd::get_mounts(is_pause_container, is_privileged);
         self.infra_policy.get_policy_mounts(
             &mut mounts,
-            &infra_container.mounts,
+            &infra_container.Mounts,
             yaml_container,
             is_pause_container,
         );
@@ -399,20 +522,20 @@ impl AgentPolicy {
         );
 
         let mut linux = containerd::get_linux(is_privileged);
-        linux.namespaces = kata::get_namespaces(is_pause_container, use_host_network);
-        infra::get_linux(&mut linux, &infra_container.linux);
+        linux.Namespaces = kata::get_namespaces(is_pause_container, use_host_network);
+        infra::get_linux(&mut linux, &infra_container.Linux);
 
         let exec_commands = yaml_container.get_exec_commands();
 
         ContainerPolicy {
-            oci: OciSpec {
-                ociVersion: Some("1.1.0-rc.1".to_string()),
-                process: Some(process),
-                root,
-                mounts,
-                hooks: None,
-                annotations: Some(annotations),
-                linux: Some(linux),
+            OCI: KataSpec {
+                Version: Some("1.1.0-rc.1".to_string()),
+                Process: Some(process),
+                Root: root,
+                Mounts: mounts,
+                Hooks: None,
+                Annotations: Some(annotations),
+                Linux: Some(linux),
             },
             storages,
             exec_commands,
@@ -421,7 +544,7 @@ impl AgentPolicy {
 
     pub fn get_container_mounts_and_storages(
         &self,
-        policy_mounts: &mut Vec<oci::Mount>,
+        policy_mounts: &mut Vec<policy::KataMount>,
         storages: &mut Vec<SerializedStorage>,
         container: &pod::Container,
         volume: &volume::Volume,
@@ -444,7 +567,7 @@ impl AgentPolicy {
 fn get_image_layer_storages(
     storages: &mut Vec<SerializedStorage>,
     image_layers: &Vec<registry::ImageLayer>,
-    root: &Option<Root>,
+    root: &Option<KataRoot>,
 ) {
     if let Some(root_mount) = root {
         let mut new_storages: Vec<SerializedStorage> = Vec::new();
@@ -455,7 +578,7 @@ fn get_image_layer_storages(
             source: String::new(), // TODO
             fstype: "tar-overlay".to_string(),
             options: Vec::new(),
-            mount_point: root_mount.path.clone(),
+            mount_point: root_mount.Path.clone(),
             fs_group: None,
         };
 
@@ -538,9 +661,7 @@ fn name_to_hash(name: &str) -> String {
 }
 
 pub fn base64_out(policy: &str) {
-    std::io::stdout()
-        .write_all(policy.as_bytes())
-        .unwrap();
+    std::io::stdout().write_all(policy.as_bytes()).unwrap();
 }
 
 fn substitute_env_variables(env: &mut Vec<String>) {

@@ -657,10 +657,8 @@ EOF
 
 		# TODO: clean-up OPA installation
 		samples_dir="${script_dir}/../../../src/agent/samples/policy/all-allowed"
-		cp "${samples_dir}/all-allowed.rego" "${ROOTFS_DIR}/coco_policy"
-		chmod 644 "${ROOTFS_DIR}/coco_policy"
-		cp "${samples_dir}/all-allowed-data.json" "${ROOTFS_DIR}/coco_policy_data"
-		chmod 644 "${ROOTFS_DIR}/coco_policy_data"
+		cp "${samples_dir}/all-allowed.rego" "${ROOTFS_DIR}/agent_policy"
+		chmod 644 "${ROOTFS_DIR}/agent_policy"
 	fi
 
 	info "Check init is installed"

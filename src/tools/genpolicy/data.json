@@ -3,14 +3,14 @@
         "source_path": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-"
     },
     "pause_container": {
-        "root": {
-            "path": "/run/kata-containers/shared/containers/$(bundle-id)",
-            "readonly": true
+        "Root": {
+            "Path": "/run/kata-containers/shared/containers/$(bundle-id)",
+            "Readonly": true
         },
-        "mounts": [
+        "Mounts": [
             {
                 "destination": "/dev/shm",
-                "type": "bind",
+                "type_": "bind",
                 "source": "/run/kata-containers/sandbox/shm",
                 "options": [
                     "rbind"
@@ -18,7 +18,7 @@
             },
             {
                 "destination": "/etc/resolv.conf",
-                "type": "bind",
+                "type_": "bind",
                 "options": [
                     "rbind",
                     "ro",
@@ -30,13 +30,13 @@
         ]
     },
     "other_container": {
-        "root": {
-            "path": "/run/kata-containers/shared/containers/$(bundle-id)"
+        "Root": {
+            "Path": "/run/kata-containers/shared/containers/$(bundle-id)"
         },
-        "mounts": [
+        "Mounts": [
             {
                 "destination": "/etc/hosts",
-                "type": "bind",
+                "type_": "bind",
                 "options": [
                     "rbind",
                     "rprivate",
@@ -45,7 +45,7 @@
             },
             {
                 "destination": "/dev/termination-log",
-                "type": "bind",
+                "type_": "bind",
                 "options": [
                     "rbind",
                     "rprivate",
@@ -54,7 +54,7 @@
             },
             {
                 "destination": "/etc/hostname",
-                "type": "bind",
+                "type_": "bind",
                 "options": [
                     "rbind",
                     "rprivate"
@@ -62,7 +62,7 @@
             },
             {
                 "destination": "/etc/resolv.conf",
-                "type": "bind",
+                "type_": "bind",
                 "options": [
                     "rbind",
                     "rprivate"
@@ -70,7 +70,7 @@
             },
             {
                 "destination": "/dev/shm",
-                "type": "bind",
+                "type_": "bind",
                 "source": "/run/kata-containers/sandbox/shm",
                 "options": [
                     "rbind"
@@ -78,7 +78,7 @@
             },
             {
                 "destination": "/var/run/secrets/kubernetes.io/serviceaccount",
-                "type": "bind",
+                "type_": "bind",
                 "options": [
                     "rbind",
                     "rprivate",

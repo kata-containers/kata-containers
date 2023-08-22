@@ -3,10 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::{anyhow, bail, Result};
-use reqwest::Client;
+use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use slog::Drain;
 use tokio::io::AsyncWriteExt;
 use tokio::time::{sleep, Duration};
 
@@ -14,6 +14,8 @@ static EMPTY_JSON_INPUT: &str = "{\"input\":{}}";
 
 static OPA_DATA_PATH: &str = "/data";
 static OPA_POLICIES_PATH: &str = "/policies";
+
+static POLICY_LOG_FILE: &str = "/tmp/policy.txt";
 
 /// Convenience macro to obtain the scope logger
 macro_rules! sl {
@@ -29,7 +31,7 @@ struct AllowResponse {
 }
 
 /// Singleton policy object.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct AgentPolicy {
     /// When true policy errors are ignored, for debug purposes.
     allow_failures: bool,
@@ -44,7 +46,7 @@ pub struct AgentPolicy {
 
     /// Client used to connect a single time to the OPA service and reused
     /// for all the future communication with OPA.
-    opa_client: Client,
+    opa_client: Option<reqwest::Client>,
 
     /// "/tmp/policy.txt" log file for policy activity.
     log_file: Option<tokio::fs::File>,
@@ -52,28 +54,55 @@ pub struct AgentPolicy {
 
 impl AgentPolicy {
     /// Create AgentPolicy object.
-    pub fn new(opa_uri: &str, coco_policy: &str) -> Result<Self> {
-        Ok(AgentPolicy {
+    pub fn new() -> Self {
+        Self {
             allow_failures: false,
-            query_path: opa_uri.to_string() + OPA_DATA_PATH + coco_policy + "/",
-            policy_path: opa_uri.to_string() + OPA_POLICIES_PATH + coco_policy,
-            opa_client: Client::builder().http1_only().build().unwrap(),
-            log_file: None,
-        })
+            ..Default::default()
+        }
     }
 
     /// Wait for OPA to start and connect to it.
-    pub async fn initialize(&mut self) -> Result<()> {
-        let log_file = tokio::fs::OpenOptions::new()
-            .write(true)
-            .truncate(true)
-            .create(true)
-            .open("/tmp/policy.txt")
-            .await
-            .unwrap();
-        self.log_file = Some(log_file);
+    pub async fn initialize(
+        &mut self,
+        _launch_opa: bool,
+        opa_addr: &str,
+        policy_name: &str,
+        _default_policy: &str,
+    ) -> Result<()> {
+        if sl!().is_enabled(slog::Level::Debug) {
+            self.log_file = Some(
+                tokio::fs::OpenOptions::new()
+                    .write(true)
+                    .truncate(true)
+                    .create(true)
+                    .open(POLICY_LOG_FILE)
+                    .await?,
+            );
+            debug!(sl!(), "policy: log file: {}", POLICY_LOG_FILE);
+        }
 
+        // TODO: update from the upstream code repository.
+        // if launch_opa {
+        //    start_opa(opa_addr)?;
+        // }
+
+        let opa_uri = format!("http://{opa_addr}/v1");
+        self.query_path = format!("{opa_uri}{OPA_DATA_PATH}{policy_name}/");
+        self.policy_path = format!("{opa_uri}{OPA_POLICIES_PATH}{policy_name}");
+        let opa_client = reqwest::Client::builder().http1_only().build()?;
+
+        // TODO: update from the upstream code repository.
+        // let policy = tokio::fs::read_to_string(default_policy).await?;
+        self.opa_client = Some(opa_client);
+
+        // This loop is necessary to get the opa_client connected to the
+        // OPA service while that service is starting. Future requests to
+        // OPA are expected to work without retrying, after connecting
+        // successfully for the first time.
         for i in 0..50 {
+            // Set-up the default policy.
+            // TODO: update from the upstream code repository.
+
             if i > 0 {
                 sleep(Duration::from_millis(100)).await;
                 println!("policy initialize: POST failed, retrying");
@@ -95,104 +124,124 @@ impl AgentPolicy {
                 return Ok(());
             }
         }
-        Err(anyhow!("failed to connect to OPA"))
+        bail!("Failed to connect to OPA")
     }
 
-    /// Post query to OPA for endpoints that don't require OPA input data.
+    /// Ask OPA to check if an API call should be allowed or not.
     pub async fn is_allowed_endpoint(&mut self, ep: &str, request: &str) -> bool {
-        let post_input = "{\"input\":".to_string() + request + "}";
+        let post_input = format!("{{\"input\":{request}}}");
         self.log_opa_input(ep, &post_input).await;
-        self.post_query(ep, &post_input).await.unwrap_or(false)
+        match self.post_query(ep, &post_input).await {
+            Err(e) => {
+                debug!(
+                    sl!(),
+                    "policy: failed to query endpoint {}: {:?}. Returning false.", ep, e
+                );
+                false
+            }
+            Ok(allowed) => allowed,
+        }
     }
 
     /// Replace the Policy in OPA.
     pub async fn set_policy(&mut self, policy: &str) -> Result<()> {
         check_policy_hash(policy)?;
 
-        // Delete the old rules.
-        self.opa_client
-            .delete(&self.policy_path)
-            .send()
-            .await
-            .map_err(|e| anyhow!(e))?;
+        if let Some(opa_client) = &mut self.opa_client {
+            // Delete the old rules.
+            opa_client.delete(&self.policy_path).send().await?;
 
-        // Put the new rules.
-        self.opa_client
-            .put(&self.policy_path)
-            .body(policy.to_string())
-            .send()
-            .await
-            .map_err(|e| anyhow!(e))?;
+            // Put the new rules.
+            opa_client
+                .put(&self.policy_path)
+                .body(policy.to_string())
+                .send()
+                .await?;
 
-        // Check if requests causing policy errors should actually be allowed.
-        // That is an insecure configuration but is useful for allowing insecure
-        // pods to start, then connect to them and inspect Guest logs for the
-        // root cause of a failure.
-        self.allow_failures = self
-            .post_query("AllowRequestsFailingPolicy", EMPTY_JSON_INPUT)
-            .await?;
-        Ok(())
+            // Check if requests causing policy errors should actually be allowed.
+            // That is an insecure configuration but is useful for allowing insecure
+            // pods to start, then connect to them and inspect Guest logs for the
+            // root cause of a failure.
+            //
+            // Note that post_query returns Ok(false) in case
+            // AllowRequestsFailingPolicy was not defined in the policy.
+            self.allow_failures = self
+                .post_query("AllowRequestsFailingPolicy", EMPTY_JSON_INPUT)
+                .await?;
+
+            Ok(())
+        } else {
+            bail!("Agent Policy is not initialized")
+        }
     }
 
     // Post query to OPA.
     async fn post_query(&mut self, ep: &str, post_input: &str) -> Result<bool> {
-        info!(sl!(), "policy check: {}", ep);
+        debug!(sl!(), "policy check: {ep}");
 
-        let uri = self.query_path.clone() + ep;
-        let response = self
-            .opa_client
-            .post(uri)
-            .body(post_input.to_string())
-            .send()
-            .await
-            .map_err(|e| anyhow!(e))?;
+        if let Some(opa_client) = &mut self.opa_client {
+            let uri = format!("{}{ep}", &self.query_path);
+            let response = opa_client
+                .post(uri)
+                .body(post_input.to_string())
+                .send()
+                .await?;
 
-        if response.status() != http::StatusCode::OK {
-            return Err(anyhow!(
-                "policy: post_query: POST response status {}",
-                response.status()
-            ));
-        }
+            if response.status() != http::StatusCode::OK {
+                bail!("policy: POST {} response status {}", ep, response.status());
+            }
 
-        let http_response = response.text().await.unwrap();
-        let opa_response: serde_json::Result<AllowResponse> = serde_json::from_str(&http_response);
+            let http_response = response.text().await?;
+            let opa_response: serde_json::Result<AllowResponse> =
+                serde_json::from_str(&http_response);
 
-        match opa_response {
-            Ok(resp) => {
-                if !resp.result {
-                    if self.allow_failures {
-                        warn!(
-                            sl!(),
-                            "policy: post_query: response <{}>. Ignoring error!", http_response
-                        );
-                        return Ok(true);
-                    } else {
-                        error!(sl!(), "policy: post_query: response <{}>", http_response);
+            match opa_response {
+                Ok(resp) => {
+                    if !resp.result {
+                        if self.allow_failures {
+                            warn!(
+                                sl!(),
+                                "policy: POST {} response <{}>. Ignoring error!", ep, http_response
+                            );
+                            return Ok(true);
+                        } else {
+                            error!(sl!(), "policy: POST {} response <{}>", ep, http_response);
+                        }
                     }
+                    Ok(resp.result)
                 }
-                Ok(resp.result)
+                Err(_) => {
+                    warn!(
+                        sl!(),
+                        "policy: endpoint {} not found in policy. Returning false.", ep,
+                    );
+                    Ok(false)
+                }
             }
-            Err(_) => {
-                warn!(
-                    sl!(),
-                    "policy: post_query: {} not found in policy. Returning false.", ep,
-                );
-                Ok(false)
-            }
+        } else {
+            bail!("Agent Policy is not initialized")
         }
     }
 
-    async fn log_opa_input(&mut self, ep: &str, opa_input: &str) {
-        // TODO: disable this log by default and allow it to be enabled
-        // through Policy.
-
+    async fn log_opa_input(&mut self, ep: &str, input: &str) {
         if let Some(log_file) = &mut self.log_file {
             match ep {
-                "StatsContainerRequest" | "ReadStreamRequest" | "SetPolicyRequest" => {}
+                "StatsContainerRequest" | "ReadStreamRequest" | "SetPolicyRequest" => {
+                    // - StatsContainerRequest and ReadStreamRequest are called
+                    //   relatively often, so we're not logging them, to avoid
+                    //   growing this log file too much.
+                    // - Confidential Containers Policy documents are relatively
+                    //   large, so we're not logging them here, for SetPolicyRequest.
+                    //   The Policy text can be obtained directly from the pod YAML.
+                }
                 _ => {
-                    let log_entry = "# ".to_string() + ep + "\n\n" + opa_input + "\n\n";
-                    log_file.write_all(log_entry.as_bytes()).await.unwrap();
-                    log_file.flush().await.unwrap();
+                    let log_entry = format!("[\"ep\":\"{ep}\",{input}],\n\n");
+
+                    if let Err(e) = log_file.write_all(log_entry.as_bytes()).await {
+                        warn!(sl!(), "policy: log_opa_input: write_all failed: {}", e);
+                    } else if let Err(e) = log_file.flush().await {
+                        warn!(sl!(), "policy: log_opa_input: flush failed: {}", e);
+                    }
                 }
             }
         }
@@ -219,3 +268,26 @@ pub fn check_policy_hash(policy: &str) -> Result<()> {
 
     Ok(())
 }
+
+/*
+fn start_opa(opa_addr: &str) -> Result<()> {
+    let bin_dirs = vec!["/bin", "/usr/bin", "/usr/local/bin"];
+    for bin_dir in &bin_dirs {
+        let opa_path = bin_dir.to_string() + "/opa";
+        if std::fs::metadata(&opa_path).is_ok() {
+            // args copied from kata-opa.service.in.
+            std::process::Command::new(&opa_path)
+                .arg("run")
+                .arg("--server")
+                .arg("--disable-telemetry")
+                .arg("--addr")
+                .arg(opa_addr)
+                .arg("--log-level")
+                .arg("info")
+                .spawn()?;
+            return Ok(());
+        }
+    }
+    bail!("OPA binary not found in {:?}", &bin_dirs);
+}
+*/

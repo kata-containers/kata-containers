@@ -642,7 +642,7 @@ impl yaml::K8sResource for Pod {
 
     fn get_container_mounts_and_storages(
         &self,
-        policy_mounts: &mut Vec<oci::Mount>,
+        policy_mounts: &mut Vec<policy::KataMount>,
         storages: &mut Vec<policy::SerializedStorage>,
         container: &Container,
         agent_policy: &policy::AgentPolicy,
@@ -687,21 +687,21 @@ impl yaml::K8sResource for Pod {
 }
 
 impl Container {
-    pub fn apply_capabilities(&self, capabilities: &mut oci::LinuxCapabilities) {
+    pub fn apply_capabilities(&self, capabilities: &mut policy::KataLinuxCapabilities) {
         if let Some(securityContext) = &self.securityContext {
             if let Some(yaml_capabilities) = &securityContext.capabilities {
                 if let Some(drop) = &yaml_capabilities.drop {
                     for c in drop {
                         if c == "ALL" {
-                            capabilities.bounding.clear();
-                            capabilities.permitted.clear();
-                            capabilities.effective.clear();
+                            capabilities.Bounding.clear();
+                            capabilities.Permitted.clear();
+                            capabilities.Effective.clear();
                         } else {
                             let cap = "CAP_".to_string() + &c;
 
-                            capabilities.bounding.retain(|x| !x.eq(&cap));
-                            capabilities.permitted.retain(|x| !x.eq(&cap));
-                            capabilities.effective.retain(|x| !x.eq(&cap));
+                            capabilities.Bounding.retain(|x| !x.eq(&cap));
+                            capabilities.Permitted.retain(|x| !x.eq(&cap));
+                            capabilities.Effective.retain(|x| !x.eq(&cap));
                         }
                     }
                 }
@@ -709,14 +709,14 @@ impl Container {
                     for c in add {
                         let cap = "CAP_".to_string() + &c;
 
-                        if !capabilities.bounding.contains(&cap) {
-                            capabilities.bounding.push(cap.clone());
+                        if !capabilities.Bounding.contains(&cap) {
+                            capabilities.Bounding.push(cap.clone());
                         }
-                        if !capabilities.permitted.contains(&cap) {
-                            capabilities.permitted.push(cap.clone());
+                        if !capabilities.Permitted.contains(&cap) {
+                            capabilities.Permitted.push(cap.clone());
                         }
-                        if !capabilities.effective.contains(&cap) {
-                            capabilities.effective.push(cap.clone());
+                        if !capabilities.Effective.contains(&cap) {
+                            capabilities.Effective.push(cap.clone());
                         }
                     }
                 }
