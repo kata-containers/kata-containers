@@ -722,19 +722,12 @@ func (fc *firecracker) fcInitConfiguration(ctx context.Context) error {
 		return err
 	}
 
-	image, err := fc.config.InitrdAssetPath()
+	assetPath, _, err := fc.config.ImageOrInitrdAssetPath()
 	if err != nil {
 		return err
 	}
 
-	if image == "" {
-		image, err = fc.config.ImageAssetPath()
-		if err != nil {
-			return err
-		}
-	}
-
-	if err := fc.fcSetVMRootfs(ctx, image); err != nil {
+	if err := fc.fcSetVMRootfs(ctx, assetPath); err != nil {
 		return err
 	}
 
