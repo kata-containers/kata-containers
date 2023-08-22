@@ -19,7 +19,7 @@ use hypervisor::{
         driver::NetworkConfig,
         DeviceConfig, DeviceType,
     },
-    Hypervisor, NetworkDevice,
+    Hypervisor, NetworkBackend, NetworkDevice, VirtioConfig,
 };
 
 use super::{
@@ -62,8 +62,11 @@ impl VlanEndpoint {
         })?;
 
         Ok(NetworkConfig {
-            host_dev_name: iface.name.clone(),
-            virt_iface_name: self.net_pair.virt_iface.name.clone(),
+            backend: NetworkBackend::Virtio(VirtioConfig {
+                host_dev_name: iface.name.clone(),
+                virt_iface_name: self.net_pair.virt_iface.name.clone(),
+                ..Default::default()
+            }),
             guest_mac: Some(guest_mac),
             ..Default::default()
         })

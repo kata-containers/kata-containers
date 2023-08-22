@@ -320,13 +320,15 @@ impl VmmService {
             }
             #[cfg(feature = "virtio-net")]
             VmmAction::InsertNetworkDevice(config) => match config.backend {
-                Backend::Virtio(_) =>
-                {
+                Backend::Virtio(_) => {
+                    #[cfg(not(feature = "virtio-net"))]
+                    panic!("virtio-net feature is not enabled");
                     #[cfg(feature = "virtio-net")]
                     self.add_virtio_net_device(vmm, event_mgr, config.into())
                 }
-                Backend::Vhost(_) =>
-                {
+                Backend::Vhost(_) => {
+                    #[cfg(not(feature = "vhost-net"))]
+                    panic!("vhost-net feature is not enabled");
                     #[cfg(feature = "vhost-net")]
                     self.add_vhost_net_device(vmm, event_mgr, config.into())
                 }

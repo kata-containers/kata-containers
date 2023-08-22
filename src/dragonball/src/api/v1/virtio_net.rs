@@ -32,6 +32,7 @@ impl Default for Backend {
     }
 }
 
+/// Virtio network config, working for virtio-net and vhost-net.
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
 pub struct VirtioConfig {
     /// ID of the guest network interface.
