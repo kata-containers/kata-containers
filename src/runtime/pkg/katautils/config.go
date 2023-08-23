@@ -52,6 +52,7 @@ const (
 	qemuHypervisorTableType        = "qemu"
 	acrnHypervisorTableType        = "acrn"
 	dragonballHypervisorTableType  = "dragonball"
+	stratovirtHypervisorTableType  = "stratovirt"
 
 	// the maximum amount of PCI bridges that can be cold plugged in a VM
 	maxPCIBridges uint32 = 5
@@ -1141,6 +1142,106 @@ func newDragonballHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	}, nil
 }
 
+func newStratovirtHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
+	hypervisor, err := h.path()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	kernel, err := h.kernel()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	initrd, err := h.initrd()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	image, err := h.image()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	if image != "" && initrd != "" {
+		return vc.HypervisorConfig{},
+			errors.New("having both an image and an initrd defined in the configuration file is not supported")
+	}
+
+	if image == "" && initrd == "" {
+		return vc.HypervisorConfig{},
+			errors.New("image or initrd must be defined in the configuration file")
+	}
+
+	rootfsType, err := h.rootfsType()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	kernelParams := h.kernelParams()
+	machineType := h.machineType()
+
+	blockDriver, err := h.blockDeviceDriver()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	if vSock, err := utils.SupportsVsocks(); !vSock {
+		return vc.HypervisorConfig{}, err
+	}
+
+	sharedFS, err := h.sharedFS()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
+	if sharedFS != config.VirtioFS && sharedFS != config.VirtioFSNydus && sharedFS != config.NoSharedFS {
+		return vc.HypervisorConfig{},
+			fmt.Errorf("Stratovirt Hypervisor does not support %s shared filesystem option", sharedFS)
+	}
+
+	if (sharedFS == config.VirtioFS || sharedFS == config.VirtioFSNydus) && h.VirtioFSDaemon == "" {
+		return vc.HypervisorConfig{},
+			fmt.Errorf("cannot enable %s without daemon path in configuration file", sharedFS)
+	}
+
+	return vc.HypervisorConfig{
+		HypervisorPath:        hypervisor,
+		HypervisorPathList:    h.HypervisorPathList,
+		KernelPath:            kernel,
+		InitrdPath:            initrd,
+		ImagePath:             image,
+		RootfsType:            rootfsType,
+		KernelParams:          vc.DeserializeParams(strings.Fields(kernelParams)),
+		HypervisorMachineType: machineType,
+		NumVCPUsF:             h.defaultVCPUs(),
+		DefaultMaxVCPUs:       h.defaultMaxVCPUs(),
+		MemorySize:            h.defaultMemSz(),
+		MemSlots:              h.defaultMemSlots(),
+		MemOffset:             h.defaultMemOffset(),
+		DefaultMaxMemorySize:  h.defaultMaxMemSz(),
+		EntropySource:         h.GetEntropySource(),
+		DefaultBridges:        h.defaultBridges(),
+		DisableBlockDeviceUse: h.DisableBlockDeviceUse,
+		SharedFS:              sharedFS,
+		VirtioFSDaemon:        h.VirtioFSDaemon,
+		VirtioFSDaemonList:    h.VirtioFSDaemonList,
+		VirtioFSCacheSize:     h.VirtioFSCacheSize,
+		VirtioFSCache:         h.defaultVirtioFSCache(),
+		VirtioFSExtraArgs:     h.VirtioFSExtraArgs,
+		HugePages:             h.HugePages,
+		Debug:                 h.Debug,
+		DisableNestingChecks:  h.DisableNestingChecks,
+		BlockDeviceDriver:     blockDriver,
+		DisableVhostNet:       true,
+		GuestHookPath:         h.guestHookPath(),
+		EnableAnnotations:     h.EnableAnnotations,
+		DisableSeccomp:        h.DisableSeccomp,
+		DisableSeLinux:        h.DisableSeLinux,
+		DisableGuestSeLinux:   h.DisableGuestSeLinux,
+	}, nil
+}
+
 func newFactoryConfig(f factory) (oci.FactoryConfig, error) {
 	if f.TemplatePath == "" {
 		f.TemplatePath = defaultTemplatePath
@@ -1177,6 +1278,9 @@ func updateRuntimeConfigHypervisor(configPath string, tomlConf tomlConfig, confi
 		case dragonballHypervisorTableType:
 			config.HypervisorType = vc.DragonballHypervisor
 			hConfig, err = newDragonballHypervisorConfig(hypervisor)
+		case stratovirtHypervisorTableType:
+			config.HypervisorType = vc.StratovirtHypervisor
+			hConfig, err = newStratovirtHypervisorConfig(hypervisor)
 		default:
 			err = fmt.Errorf("%s: %+q", errInvalidHypervisorPrefix, k)
 		}
