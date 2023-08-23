@@ -28,3 +28,6 @@ ACRNCTLCMD := acrnctl
 CLHCMD := cloud-hypervisor
 
 DEFSTATICRESOURCEMGMT_CLH := false
+
+# stratovirt binary name
+STRATOVIRTCMD := stratovirt
