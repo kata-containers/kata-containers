@@ -22,6 +22,7 @@ extern crate slog;
 use anyhow::{anyhow, Context, Result};
 use cfg_if::cfg_if;
 use clap::{AppSettings, Parser};
+use const_format::concatcp;
 use nix::fcntl::OFlag;
 use nix::sys::socket::{self, AddressFamily, SockFlag, SockType, VsockAddr};
 use nix::unistd::{self, dup, Pid};
@@ -32,6 +33,7 @@ use std::os::unix::fs as unixfs;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
 use std::process::exit;
+use std::process::Command;
 use std::sync::Arc;
 use tracing::{instrument, span};
 
@@ -82,6 +84,24 @@ cfg_if! {
 }
 
 const NAME: &str = "kata-agent";
+
+const OCICRYPT_CONFIG_PATH: &str = "/tmp/ocicrypt_config.json";
+const AA_PATH: &str = "/usr/local/bin/attestation-agent";
+const AA_UNIX_SOCKET_DIR: &str = "/run/confidential-containers/attestation-agent/";
+const UNIX_SOCKET_PREFIX: &str = "unix://";
+const AA_KEYPROVIDER_URI: &str =
+    concatcp!(UNIX_SOCKET_PREFIX, AA_UNIX_SOCKET_DIR, "keyprovider.sock");
+const AA_GETRESOURCE_URI: &str =
+    concatcp!(UNIX_SOCKET_PREFIX, AA_UNIX_SOCKET_DIR, "getresource.sock");
+const AA_ATTESTATION_SOCKET: &str = concatcp!(AA_UNIX_SOCKET_DIR, "attestation-agent.sock");
+const AA_ATTESTATION_URI: &str = concatcp!(UNIX_SOCKET_PREFIX, AA_ATTESTATION_SOCKET);
+
+cfg_if! {
+    if #[cfg(feature = "confidential-data-hub")] {
+        const CDH_PATH: &str = "/usr/local/bin/confidential-data-hub";
+        const CDH_SOCKET: &str = "/run/confidential-containers/cdh.sock";
+    }
+}
 
 lazy_static! {
     static ref AGENT_CONFIG: AgentConfig =
@@ -344,6 +364,10 @@ async fn start_sandbox(
     let (tx, rx) = tokio::sync::oneshot::channel();
     sandbox.lock().await.sender = Some(tx);
 
+    if !config.aa_kbc_params.is_empty() {
+        init_attestation_agent(&logger)?;
+    }
+
     // vsock:///dev/vsock, port
     let mut server = rpc::start(sandbox.clone(), config.server_addr.as_str(), init_mode).await?;
     server.start().await?;
@@ -352,6 +376,73 @@ async fn start_sandbox(
     server.shutdown().await?;
 
     Ok(())
+}
+
+// If we fail to start the AA, ocicrypt won't be able to unwrap keys
+// and container decryption will fail.
+fn init_attestation_agent(logger: &Logger) -> Result<()> {
+    let config_path = OCICRYPT_CONFIG_PATH;
+
+    // The image will need to be encrypted using a keyprovider
+    // that has the same name (at least according to the config).
+    let ocicrypt_config = serde_json::json!({
+        "key-providers": {
+            "attestation-agent":{
+                "ttrpc":AA_KEYPROVIDER_URI
+            }
+        }
+    });
+
+    fs::write(config_path, ocicrypt_config.to_string().as_bytes())?;
+
+    env::set_var("OCICRYPT_KEYPROVIDER_CONFIG", config_path);
+
+    if Path::new(AA_ATTESTATION_SOCKET).exists() {
+        fs::remove_file(AA_ATTESTATION_SOCKET)?;
+    }
+
+    // The Attestation Agent will run for the duration of the guest.
+    Command::new(AA_PATH)
+        .arg("--keyprovider_sock")
+        .arg(AA_KEYPROVIDER_URI)
+        .arg("--getresource_sock")
+        .arg(AA_GETRESOURCE_URI)
+        .arg("--attestation_sock")
+        .arg(AA_ATTESTATION_URI)
+        .spawn()?;
+
+    // wait attestation-agent boot
+    wait_path_to_exist(&logger, AA_ATTESTATION_SOCKET, 20)?;
+
+    #[cfg(feature = "confidential-data-hub")]
+    {
+        // launch CDH
+        if Path::new(CDH_SOCKET).exists() {
+            fs::remove_file(CDH_SOCKET)?;
+        }
+        Command::new(CDH_PATH).spawn()?;
+        wait_path_to_exist(&logger, CDH_SOCKET, 20)?;
+    }
+
+    Ok(())
+}
+
+fn wait_path_to_exist(logger: &Logger, path: &str, timeout_secs: i32) -> Result<()> {
+    let p = Path::new(path);
+    let mut attempts = 0;
+    loop {
+        if p.exists() {
+            return Ok(());
+        }
+        if attempts >= timeout_secs {
+            break;
+        }
+        info!(logger, "waiting for {} to exist ...", path);
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        attempts += 1;
+    }
+
+    Err(anyhow!("wait for {} to exist timeout.", path))
 }
 
 // init_agent_as_init will do the initializations such as setting up the rootfs

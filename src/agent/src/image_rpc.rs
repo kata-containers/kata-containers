@@ -9,8 +9,7 @@ use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::path::Path;
-use std::process::Command;
-use std::sync::atomic::{AtomicBool, AtomicU16, Ordering};
+use std::sync::atomic::{AtomicU16, Ordering};
 use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
@@ -26,14 +25,6 @@ use crate::AGENT_CONFIG;
 // A marker to merge container spec for images pulled inside guest.
 const ANNO_K8S_IMAGE_NAME: &str = "io.kubernetes.cri.image-name";
 
-const AA_PATH: &str = "/usr/local/bin/attestation-agent";
-
-const AA_KEYPROVIDER_URI: &str =
-    "unix:///run/confidential-containers/attestation-agent/keyprovider.sock";
-const AA_GETRESOURCE_URI: &str =
-    "unix:///run/confidential-containers/attestation-agent/getresource.sock";
-
-const OCICRYPT_CONFIG_PATH: &str = "/tmp/ocicrypt_config.json";
 // kata rootfs is readonly, use tmpfs before CC storage is implemented.
 const KATA_CC_IMAGE_WORK_DIR: &str = "/run/image/";
 const KATA_CC_PAUSE_BUNDLE: &str = "/pause_bundle";
@@ -51,7 +42,6 @@ fn sl() -> slog::Logger {
 
 #[derive(Clone)]
 pub struct ImageService {
-    attestation_agent_started: Arc<AtomicBool>,
     image_client: Arc<Mutex<ImageClient>>,
     images: Arc<Mutex<HashMap<String, String>>>,
     container_count: Arc<AtomicU16>,
@@ -75,7 +65,6 @@ impl ImageService {
         }
 
         Self {
-            attestation_agent_started: Arc::new(AtomicBool::new(false)),
             image_client: Arc::new(Mutex::new(image_client)),
             images: Arc::new(Mutex::new(HashMap::new())),
             container_count: Arc::new(AtomicU16::new(0)),
@@ -113,36 +102,6 @@ impl ImageService {
         if !pause_binary.exists() {
             fs::copy(cc_pause_bundle.join("rootfs").join("pause"), pause_binary)?;
         }
-
-        Ok(())
-    }
-
-    // If we fail to start the AA, ocicrypt won't be able to unwrap keys
-    // and container decryption will fail.
-    fn init_attestation_agent() -> Result<()> {
-        let config_path = OCICRYPT_CONFIG_PATH;
-
-        // The image will need to be encrypted using a keyprovider
-        // that has the same name (at least according to the config).
-        let ocicrypt_config = serde_json::json!({
-            "key-providers": {
-                "attestation-agent":{
-                    "ttrpc":AA_KEYPROVIDER_URI
-                }
-            }
-        });
-
-        fs::write(config_path, ocicrypt_config.to_string().as_bytes())?;
-
-        env::set_var("OCICRYPT_KEYPROVIDER_CONFIG", config_path);
-
-        // The Attestation Agent will run for the duration of the guest.
-        Command::new(AA_PATH)
-            .arg("--keyprovider_sock")
-            .arg(AA_KEYPROVIDER_URI)
-            .arg("--getresource_sock")
-            .arg(AA_GETRESOURCE_URI)
-            .spawn()?;
 
         Ok(())
     }
@@ -188,17 +147,6 @@ impl ImageService {
         }
 
         let aa_kbc_params = &AGENT_CONFIG.aa_kbc_params;
-        if !aa_kbc_params.is_empty() {
-            match self.attestation_agent_started.compare_exchange_weak(
-                false,
-                true,
-                Ordering::SeqCst,
-                Ordering::SeqCst,
-            ) {
-                Ok(_) => Self::init_attestation_agent()?,
-                Err(_) => info!(sl(), "Attestation Agent already running"),
-            }
-        }
         // If the attestation-agent is being used, then enable the authenticated credentials support
         info!(
             sl(),
