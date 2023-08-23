@@ -155,7 +155,7 @@ function backup_shim() {
 		if [ ! -f "${shim_backup}" ]; then
 			mv "${shim_file}" "${shim_backup}"
 		else
-			rm "${shim_file}"
+			rm -f "${shim_file}"
 		fi
 	fi
 }
@@ -210,12 +210,12 @@ function cleanup_different_shims_base() {
 		local shim_binary="containerd-shim-kata-${shim}-v2"
 		local shim_file="/usr/local/bin/${shim_binary}"
 
-		rm "${shim_file}" || true
+		rm  -f "${shim_file}"
 
 		restore_shim "${shim_file}"
 	done
 
-	rm "${default_shim_file}" || true
+	rm  -f "${default_shim_file}"
 	restore_shim "${default_shim_file}"
 
 	if [[ "${CREATE_RUNTIMECLASSES}" == "true" ]]; then
@@ -360,9 +360,9 @@ function cleanup_cri_runtime() {
 }
 
 function cleanup_crio() {
-	rm $crio_drop_in_conf_file
+	rm -f $crio_drop_in_conf_file
 	if [[ "${DEBUG}" == "true" ]]; then
-		rm $crio_drop_in_conf_file_debug
+		rm -f $crio_drop_in_conf_file_debug
 	fi
 }
 
