@@ -50,7 +50,7 @@ else
 default: runtime show-header
 ##TARGET test: run cargo tests
 test:
-	@cargo test --all --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture
+	@cargo test --workspace --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture
 install: install-runtime install-configs
 endif
 

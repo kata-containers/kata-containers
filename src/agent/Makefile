@@ -149,7 +149,7 @@ vendor:
 
 #TARGET test: run cargo tests
 test:
-	@cargo test --all --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture
+	@cargo test --workspace --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture
 
 ##TARGET check: run test
 check: $(GENERATED_FILES) standard_rust_check

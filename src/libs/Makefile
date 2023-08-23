@@ -38,8 +38,8 @@ clean:
 # See the `test_logger_levels()` test for further information.
 test:
 	@echo "INFO: testing libraries for development build"
-	cargo test --all $(EXTRA_RUSTFEATURES) -- --nocapture $(EXTRA_TEST_FLAGS)
+	cargo test --workspace $(EXTRA_RUSTFEATURES) -- --nocapture $(EXTRA_TEST_FLAGS)
 	@echo "INFO: testing libraries for release build"
-	cargo test --release --all $(EXTRA_RUSTFEATURES) -- --nocapture $(EXTRA_TEST_FLAGS)
+	cargo test --release --workspace $(EXTRA_RUSTFEATURES) -- --nocapture $(EXTRA_TEST_FLAGS)
 
 .PHONY: install vendor

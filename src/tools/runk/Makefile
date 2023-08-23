@@ -53,7 +53,7 @@ vendor:
 test: test-runk test-agent
 
 test-runk:
-	cargo test --all --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture
+	cargo test --workspace --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture
 
 test-agent:
 	make test -C $(AGENT_SOURCE_PATH) STANDARD_OCI_RUNTIME=yes

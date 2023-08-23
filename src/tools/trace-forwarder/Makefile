@@ -25,7 +25,7 @@ vendor:
 	cargo vendor
 
 test:
-	@cargo test --all -- --nocapture
+	@cargo test --workspace -- --nocapture
 
 install:
 
