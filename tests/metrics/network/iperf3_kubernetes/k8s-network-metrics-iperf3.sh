@@ -18,8 +18,6 @@
 # case 2"
 #  container-server <----> host-client
 
-set -x
-
 set -o pipefail
 
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
@@ -178,6 +176,8 @@ EOF
 function iperf3_start_deployment() {
 	cmds=("bc" "jq")
 	check_cmds "${cmds[@]}"
+
+	init_env
 
 	# Check no processes are left behind
 	check_processes
