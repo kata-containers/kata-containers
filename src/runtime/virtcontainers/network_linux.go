@@ -211,12 +211,17 @@ func (n *LinuxNetwork) addSingleEndpoint(ctx context.Context, s *Sandbox, netInf
 	return endpoint, nil
 }
 
-func (n *LinuxNetwork) removeSingleEndpoint(ctx context.Context, s *Sandbox, idx int, hotplug bool) error {
-	if idx > len(n.eps)-1 {
-		return fmt.Errorf("Endpoint index overflow")
+func (n *LinuxNetwork) removeSingleEndpoint(ctx context.Context, s *Sandbox, endpoint Endpoint, hotplug bool) error {
+	var idx int = len(n.eps)
+	for i, val := range n.eps {
+		if val.HardwareAddr() == endpoint.HardwareAddr() {
+			idx = i
+			break
+		}
 	}
-
-	endpoint := n.eps[idx]
+	if idx == len(n.eps) {
+		return fmt.Errorf("Endpoint not found")
+	}
 
 	if endpoint.GetRxRateLimiter() {
 		networkLogger().WithField("endpoint-type", endpoint.Type()).Info("Deleting rx rate limiter")
@@ -384,7 +389,7 @@ func (n *LinuxNetwork) RemoveEndpoints(ctx context.Context, s *Sandbox, endpoint
 		eps = endpoints
 	}
 
-	for idx, ep := range eps {
+	for _, ep := range eps {
 		if endpoints != nil {
 			new_ep, _ := findEndpoint(ep, n.eps)
 			if new_ep == nil {
@@ -392,7 +397,7 @@ func (n *LinuxNetwork) RemoveEndpoints(ctx context.Context, s *Sandbox, endpoint
 			}
 		}
 
-		if err := n.removeSingleEndpoint(ctx, s, idx, hotplug); err != nil {
+		if err := n.removeSingleEndpoint(ctx, s, ep, hotplug); err != nil {
 			return err
 		}
 	}
