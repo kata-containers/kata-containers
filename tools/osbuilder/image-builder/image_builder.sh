@@ -12,6 +12,7 @@ set -o pipefail
 
 DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
+DM_VERITY=${DM_VERITY:-no}
 
 #For cross build
 CROSS_BUILD=${CROSS_BUILD:-false}
@@ -51,6 +52,13 @@ readonly dax_header_sz=2
 readonly dax_alignment=2
 
 # The list of systemd units and files that are not needed in Kata Containers
+readonly -a udev_systemd_units=(
+	"systemd-udevd"
+	"systemd-udevd-control"
+	"systemd-udevd-kernel"
+	"systemd-udev-trigger"
+)
+
 readonly -a systemd_units=(
 	"systemd-coredump@"
 	"systemd-journald"
@@ -59,10 +67,6 @@ readonly -a systemd_units=(
 	"systemd-random-seed"
 	"systemd-timesyncd"
 	"systemd-tmpfiles-setup"
-	"systemd-udevd"
-	"systemd-udevd-control"
-	"systemd-udevd-kernel"
-	"systemd-udev-trigger"
 	"systemd-update-utmp"
 )
 
@@ -455,6 +459,14 @@ setup_selinux() {
 
 setup_systemd() {
 		local mount_dir="$1"
+		if [ "${DM_VERITY}" == "no" ]; then
+			for u in "${udev_systemd_units[@]}"; do
+				find "${mount_dir}" -type f \( \
+					-name "${u}.service" -o \
+					-name "${u}.socket" \) \
+					-exec rm -f {} \;
+			done
+		fi
 
 		info "Removing unneeded systemd services and sockets"
 		for u in "${systemd_units[@]}"; do
