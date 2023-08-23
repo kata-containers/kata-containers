@@ -244,30 +244,6 @@ run_vm() {
 	   -device virtio-net-pci,netdev=net1,disable-legacy=on,disable-modern="${disable_modern}",iommu_platform=on,ats=on
 }
 
-install_dependencies() {
-	case "${ID}" in
-		ubuntu)
-			# cloud image dependencies
-			deps=(xorriso curl qemu-utils openssh-client)
-
-			sudo apt-get update
-			sudo apt-get install -y ${deps[@]}
-			sudo apt-get install --reinstall -y qemu-system-x86
-			;;
-		fedora)
-			# cloud image dependencies
-			deps=(xorriso curl qemu-img openssh)
-
-			sudo dnf install -y ${deps[@]} qemu-system-x86-core
-			sudo dnf reinstall -y qemu-system-x86-core
-			;;
-
-		"*")
-			die "Unsupported distro: ${ID}"
-			;;
-	esac
-}
-
 ssh_vm() {
 	cmd=$@
 	ssh -q -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o IdentitiesOnly=yes -i "${ssh_key_file}" -p "${vm_port}" "${USER}@${vm_ip}" "${cmd}"
@@ -297,8 +273,6 @@ main() {
 	fedora_img="${data_dir}/image.img"
 
 	mkdir -p "${data_dir}"
-
-	install_dependencies
 
 	create_ssh_key
 
