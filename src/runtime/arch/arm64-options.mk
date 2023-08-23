@@ -21,3 +21,6 @@ FCJAILERCMD := jailer
 CLHCMD := cloud-hypervisor
 
 DEFSTATICRESOURCEMGMT_CLH := true
+
+# stratovirt binary name
+STRATOVIRTCMD := stratovirt
