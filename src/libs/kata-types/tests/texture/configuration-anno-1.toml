@@ -72,7 +72,7 @@ container_pipe_size = 2
 [runtime]
 enable_debug = true
 internetworking_model="macvtap"
-pdisable_guest_seccomp=true
+disable_guest_seccomp=true
 enable_tracing = true
 jaeger_endpoint = "localhost:1234"
 jaeger_user = "user"
