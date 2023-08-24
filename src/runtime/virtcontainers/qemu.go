@@ -604,6 +604,23 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		return err
 	}
 
+	if q.config.ConfidentialGuest {
+		// At this point we're safe to just check for the protection field
+		// on the hypervisor specific code, as availableGuestProtection()
+		// has been called earlier and we know we have the value stored.
+		if q.arch.getProtection() == tdxProtection {
+			knobs.MemFDPrivate = true
+
+			// In case Nydus or VirtioFS is used, which may become a reality
+			// in the future, whenever we get those hardened for TDX, those
+			// knobs below would be automatically set.  Let's make sure we
+			// pre-emptively disable them, and with that we can avoid some
+			// headaches in the future.
+			knobs.FileBackedMem = false
+			knobs.MemShared = false
+		}
+	}
+
 	kernelPath, err := q.config.KernelAssetPath()
 	if err != nil {
 		return err
