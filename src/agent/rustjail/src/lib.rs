@@ -423,12 +423,18 @@ fn linux_grpc_to_oci(l: &grpc::Linux) -> oci::Linux {
         let mut r = Vec::new();
 
         for d in l.Devices.iter() {
+            // if the filemode for the device is 0 (unset), use a default value as runc does
+            let filemode = if d.FileMode != 0 {
+                Some(d.FileMode)
+            } else {
+                Some(0o666)
+            };
             r.push(oci::LinuxDevice {
                 path: d.Path.clone(),
                 r#type: d.Type.clone(),
                 major: d.Major,
                 minor: d.Minor,
-                file_mode: Some(d.FileMode),
+                file_mode: filemode,
                 uid: Some(d.UID),
                 gid: Some(d.GID),
             });
