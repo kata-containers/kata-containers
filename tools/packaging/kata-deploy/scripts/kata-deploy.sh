@@ -342,7 +342,7 @@ function configure_containerd() {
 
 function remove_artifacts() {
 	echo "deleting kata artifacts"
-	rm -rf /opt/kata/
+	rm -rf /opt/kata/*
 }
 
 function cleanup_cri_runtime() {
