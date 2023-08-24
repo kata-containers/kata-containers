@@ -43,6 +43,14 @@ cleanup() {
 	sudo chown -R ${USER} ${artifacts_dir}
 	scp_vm ${artifacts_dir}/* ${artifacts_dir} || true
 	kill_vms
+
+	echo "::group::L2 journal"
+	cat "${artifacts_dir}/journal.log"
+	echo "::endgroup::"
+
+	echo "::group::L1 dmesg"
+	sudo dmesg
+	echo "::endgroup::"
 }
 
 create_ssh_key() {
@@ -238,6 +246,14 @@ pull_fedora_cloud_image() {
 	qemu-img resize -f raw "${fedora_img}" +20G
 }
 
+reload_kvm() {
+	# TDP_MMU is buggy on Hyper-V until v6.3/v6.4
+	sudo rmmod kvm-intel kvm-amd kvm || true
+	sudo modprobe kvm tdp_mmu=0
+	sudo modprobe kvm-intel || true
+	sudo modprobe kvm-amd || true
+}
+
 run_vm() {
 	image="$1"
 	config_iso="$2"
@@ -246,6 +262,8 @@ run_vm() {
 	memory="8192M"
 	cpus=2
 	machine_type="q35"
+
+	reload_kvm
 
 	sudo /usr/bin/qemu-system-${arch} -m "${memory}" -smp cpus="${cpus}" \
 	   -cpu host,host-phys-bits \
