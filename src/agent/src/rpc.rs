@@ -57,12 +57,13 @@ use crate::device::{
 };
 use crate::linux_abi::*;
 use crate::metrics::get_metrics;
-use crate::mount::{add_storages, baremount, update_ephemeral_mounts, STORAGE_HANDLERS};
+use crate::mount::baremount;
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
 use crate::network::setup_guest_dns;
 use crate::pci;
 use crate::random;
 use crate::sandbox::Sandbox;
+use crate::storage::{add_storages, update_ephemeral_mounts, STORAGE_HANDLERS};
 use crate::version::{AGENT_VERSION, API_VERSION};
 use crate::AGENT_CONFIG;
 
