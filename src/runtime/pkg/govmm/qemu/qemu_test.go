@@ -632,6 +632,29 @@ func TestAppendMemoryFileBackedMemPrealloc(t *testing.T) {
 	testConfigAppend(conf, knobs, memString+" "+knobsString, t)
 }
 
+func TestAppendMemoryBackedMemFdPrivate(t *testing.T) {
+	conf := &Config{
+		Memory: Memory{
+			Size:  "1G",
+			Slots: 8,
+		},
+	}
+	memString := "-m 1G,slots=8"
+	testConfigAppend(conf, conf.Memory, memString, t)
+
+	knobs := Knobs{
+		MemFDPrivate: true,
+		MemShared:    false,
+	}
+	objMemString := "-object memory-backend-memfd-private,id=dimm1,size=1G"
+	memBackendString := "-machine memory-backend=dimm1"
+
+	knobsString := objMemString + " "
+	knobsString += memBackendString
+
+	testConfigAppend(conf, knobs, memString+" "+knobsString, t)
+}
+
 func TestNoRebootKnob(t *testing.T) {
 	conf := &Config{}
 

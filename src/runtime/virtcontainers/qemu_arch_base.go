@@ -71,6 +71,9 @@ type qemuArch interface {
 	// memoryTopology returns the memory topology using the given amount of memoryMb and hostMemoryMb
 	memoryTopology(memoryMb, hostMemoryMb uint64, slots uint8) govmmQemu.Memory
 
+	// protection returns platform protection
+	getProtection() guestProtection
+
 	// appendConsole appends a console to devices
 	appendConsole(ctx context.Context, devices []govmmQemu.Device, path string) ([]govmmQemu.Device, error)
 
@@ -278,6 +281,10 @@ func (q *qemuArchBase) disableVhostNet() {
 
 func (q *qemuArchBase) machine() govmmQemu.Machine {
 	return q.qemuMachine
+}
+
+func (q *qemuArchBase) getProtection() guestProtection {
+	return q.protection
 }
 
 func (q *qemuArchBase) qemuPath() string {
