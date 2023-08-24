@@ -4,31 +4,35 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+mod block_rootfs;
 mod nydus_rootfs;
 mod share_fs_rootfs;
+
+use std::{sync::Arc, vec::Vec};
+
 use agent::Storage;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use kata_types::mount::Mount;
-mod block_rootfs;
 use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
-use std::{sync::Arc, vec::Vec};
+use kata_sys_util::rand::RandomBytes;
+use kata_types::mount::Mount;
 use tokio::sync::RwLock;
 
-use crate::share_fs::ShareFs;
-
 use self::{block_rootfs::is_block_rootfs, nydus_rootfs::NYDUS_ROOTFS_TYPE};
+use crate::share_fs::ShareFs;
 
 const ROOTFS: &str = "rootfs";
 const HYBRID_ROOTFS_LOWER_DIR: &str = "rootfs_lower";
 const TYPE_OVERLAY_FS: &str = "overlay";
 #[async_trait]
 pub trait Rootfs: Send + Sync {
+    fn id(&self) -> String;
+
     async fn get_guest_rootfs_path(&self) -> Result<String>;
     async fn get_rootfs_mount(&self) -> Result<Vec<oci::Mount>>;
     async fn get_storage(&self) -> Option<Storage>;
-    async fn cleanup(&self, device_manager: &RwLock<DeviceManager>) -> Result<()>;
     async fn get_device_id(&self) -> Result<Option<String>>;
+    async fn cleanup(&self, device_manager: &RwLock<DeviceManager>) -> Result<()>;
 }
 
 #[derive(Default)]
@@ -133,6 +137,35 @@ impl RootFsResource {
         }
     }
 
+    pub async fn remove(
+        &self,
+        device_manager: &RwLock<DeviceManager>,
+        cid: String,
+        rootfs: Vec<Arc<dyn Rootfs>>,
+    ) -> Result<Vec<Arc<dyn Rootfs>>> {
+        let mut handled = Vec::new();
+        let mut unhandled = Vec::new();
+        for rootfs in rootfs.iter() {
+            if let Err(err) = rootfs.cleanup(device_manager).await {
+                warn!(
+                    sl!(),
+                    "Failed to umount rootfs, cid = {:?}, error = {:?}", cid, err
+                );
+                unhandled.push(Arc::clone(rootfs));
+                continue;
+            }
+            handled.push(Arc::clone(rootfs));
+        }
+
+        let removed_ids: Vec<String> = handled.iter().map(|x| x.id()).collect();
+
+        // clear the cleaned up rootfs in the vector
+        let mut inner = self.inner.write().await;
+        inner.rootfs.retain(|x| !removed_ids.contains(&x.id()));
+
+        Ok(unhandled)
+    }
+
     pub async fn dump(&self) {
         let inner = self.inner.read().await;
         for r in &inner.rootfs {
@@ -148,4 +181,9 @@ impl RootFsResource {
 
 fn is_single_layer_rootfs(rootfs_mounts: &[Mount]) -> bool {
     rootfs_mounts.len() == 1
+}
+
+pub(crate) fn generate_rootfs_id() -> String {
+    let random_bytes = RandomBytes::new(8);
+    format!("rootfs-{:x}", random_bytes)
 }

@@ -17,7 +17,6 @@ use common::{
     },
 };
 use kata_sys_util::k8s::update_ephemeral_storage_type;
-
 use oci::{LinuxResources, Process as OCIProcess};
 use resource::{ResourceManager, ResourceUpdateOp};
 use tokio::sync::RwLock;
@@ -191,8 +190,7 @@ impl Container {
         match process.process_type {
             ProcessType::Container => {
                 if let Err(err) = inner.start_container(&process.container_id).await {
-                    let device_manager = self.resource_manager.get_device_manager().await;
-                    let _ = inner.stop_process(process, true, &device_manager).await;
+                    let _ = self.stop_process(process).await;
                     return Err(err);
                 }
 
@@ -204,8 +202,7 @@ impl Container {
             }
             ProcessType::Exec => {
                 if let Err(e) = inner.start_exec_process(process).await {
-                    let device_manager = self.resource_manager.get_device_manager().await;
-                    let _ = inner.stop_process(process, true, &device_manager).await;
+                    let _ = self.stop_process(process).await;
                     return Err(e).context("enter process");
                 }
 
@@ -287,10 +284,7 @@ impl Container {
         all: bool,
     ) -> Result<()> {
         let mut inner = self.inner.write().await;
-        let device_manager = self.resource_manager.get_device_manager().await;
-        inner
-            .signal_process(container_process, signal, all, &device_manager)
-            .await
+        inner.signal_process(container_process, signal, all).await
     }
 
     pub async fn exec_process(
@@ -327,22 +321,77 @@ impl Container {
 
     pub async fn stop_process(&self, container_process: &ContainerProcess) -> Result<()> {
         let mut inner = self.inner.write().await;
-        let device_manager = self.resource_manager.get_device_manager().await;
+
+        // ignore the stop when container status has already been stopped.
+        let status = inner.init_process.get_status().await;
+        if status == ProcessStatus::Stopped {
+            return Ok(());
+        }
+
         inner
-            .stop_process(container_process, true, &device_manager)
+            .stop_process(container_process)
             .await
             .context("stop process")?;
 
-        // update vcpus, mems and host cgroups
         if container_process.process_type == ProcessType::Container {
-            self.resource_manager
-                .update_linux_resource(
-                    &self.config.container_id,
-                    inner.linux_resources.as_ref(),
-                    ResourceUpdateOp::Del,
-                )
-                .await?;
+            // delete the container when container process is stopped
+            self.delete_container(container_process, true)
+                .await
+                .context("delete container")?;
         }
+        Ok(())
+    }
+
+    async fn delete_container(
+        &self,
+        container_process: &ContainerProcess,
+        force: bool,
+    ) -> Result<()> {
+        // remove container
+        let remove_request = agent::RemoveContainerRequest {
+            container_id: container_process.container_id.container_id.to_string(),
+            ..Default::default()
+        };
+
+        self.agent
+            .remove_container(remove_request)
+            .await
+            .context("remove container")
+            .or_else(|e| {
+                if force {
+                    warn!(
+                        self.logger,
+                        "stop container: agent remove container failed: {}", e
+                    );
+                    Ok(agent::Empty::new())
+                } else {
+                    Err(e)
+                }
+            })?;
+
+        let mut inner = self.inner.write().await;
+
+        // update vcpus, mems and host cgroups
+        self.resource_manager
+            .update_linux_resource(
+                &self.config.container_id,
+                inner.linux_resources.as_ref(),
+                ResourceUpdateOp::Del,
+            )
+            .await?;
+
+        // cleanup rootfs and volumes
+        let (unremoved_rootfs, unremoved_volumes) = self
+            .resource_manager
+            .remove_container_resources(
+                container_process.container_id(),
+                inner.rootfs.clone(),
+                inner.volumes.clone(),
+            )
+            .await
+            .context("remove container resources(rootfs&volumes)")?;
+        inner.rootfs = unremoved_rootfs;
+        inner.volumes = unremoved_volumes;
 
         Ok(())
     }

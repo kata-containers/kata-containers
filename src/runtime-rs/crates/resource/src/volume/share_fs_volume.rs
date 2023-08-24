@@ -17,14 +17,13 @@ use agent::Agent;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::device::device_manager::DeviceManager;
+use kata_types::mount;
 use tokio::sync::RwLock;
 
-use super::Volume;
-use crate::share_fs::{MountedInfo, ShareFs, ShareFsVolumeConfig};
-use kata_types::mount;
-
+use super::{generate_volume_id, Volume};
 use crate::share_fs::DEFAULT_KATA_GUEST_SANDBOX_DIR;
 use crate::share_fs::PASSTHROUGH_FS_DIR;
+use crate::share_fs::{MountedInfo, ShareFs, ShareFsVolumeConfig};
 
 const SYS_MOUNT_PREFIX: [&str; 2] = ["/proc", "/sys"];
 
@@ -35,6 +34,7 @@ const SYS_MOUNT_PREFIX: [&str; 2] = ["/proc", "/sys"];
 // device nodes to the guest.
 // skip the volumes whose source had already set to guest share dir.
 pub(crate) struct ShareFsVolume {
+    id: String,
     share_fs: Option<Arc<dyn ShareFs>>,
     mounts: Vec<oci::Mount>,
     storages: Vec<agent::Storage>,
@@ -48,11 +48,14 @@ impl ShareFsVolume {
         readonly: bool,
         agent: Arc<dyn Agent>,
     ) -> Result<Self> {
+        let id = generate_volume_id();
+
         // The file_name is in the format of "sandbox-{uuid}-{file_name}"
         let file_name = Path::new(&m.source).file_name().unwrap().to_str().unwrap();
         let file_name = generate_mount_path("sandbox", file_name);
 
         let mut volume = Self {
+            id,
             share_fs: share_fs.as_ref().map(Arc::clone),
             mounts: vec![],
             storages: vec![],
@@ -216,6 +219,10 @@ impl ShareFsVolume {
 
 #[async_trait]
 impl Volume for ShareFsVolume {
+    fn id(&self) -> String {
+        self.id.clone()
+    }
+
     fn get_volume_mount(&self) -> anyhow::Result<Vec<oci::Mount>> {
         Ok(self.mounts.clone())
     }

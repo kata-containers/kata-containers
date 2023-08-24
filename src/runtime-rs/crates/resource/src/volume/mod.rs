@@ -19,19 +19,21 @@ use spdk_volume::is_spdk_volume;
 
 use std::{sync::Arc, vec::Vec};
 
+use agent::Agent;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
+use hypervisor::device::device_manager::DeviceManager;
+use kata_sys_util::rand::RandomBytes;
 use tokio::sync::RwLock;
 
 use self::hugepage::{get_huge_page_limits_map, get_huge_page_option};
 use crate::{share_fs::ShareFs, volume::block_volume::is_block_volume};
-use agent::Agent;
-use hypervisor::device::device_manager::DeviceManager;
 
 const BIND: &str = "bind";
 
 #[async_trait]
 pub trait Volume: Send + Sync {
+    fn id(&self) -> String;
     fn get_volume_mount(&self) -> Result<Vec<oci::Mount>>;
     fn get_storage(&self) -> Result<Vec<agent::Storage>>;
     fn get_device_id(&self) -> Result<Option<String>>;
@@ -128,6 +130,38 @@ impl VolumeResource {
         Ok(volumes)
     }
 
+    pub async fn remove(
+        &self,
+        device_manager: &RwLock<DeviceManager>,
+        cid: String,
+        volumes: Vec<Arc<dyn Volume>>,
+    ) -> Result<Vec<Arc<dyn Volume>>> {
+        let mut handled = Vec::new();
+        let mut unhandled = Vec::new();
+        for volume in volumes.iter() {
+            if let Err(err) = volume.cleanup(device_manager).await {
+                warn!(
+                    sl!(),
+                    "Failed to cleanup the cid = {}, volume = {:?}, error = {:?}",
+                    cid,
+                    volume.get_volume_mount(),
+                    err
+                );
+                unhandled.push(Arc::clone(volume));
+                continue;
+            };
+            handled.push(Arc::clone(volume));
+        }
+
+        let removed_ids: Vec<String> = handled.iter().map(|x| x.id()).collect();
+
+        // the volumes is cleaned in cleanup_container, so we just remove them from the vectors
+        let mut inner = self.inner.write().await;
+        inner.volumes.retain(|x| !removed_ids.contains(&x.id()));
+
+        Ok(unhandled)
+    }
+
     pub async fn dump(&self) {
         let inner = self.inner.read().await;
         for v in &inner.volumes {
@@ -144,4 +178,9 @@ impl VolumeResource {
 fn is_skip_volume(_m: &oci::Mount) -> bool {
     // TODO: support volume check
     false
+}
+
+pub(crate) fn generate_volume_id() -> String {
+    let random_bytes = RandomBytes::new(8);
+    format!("volume-{:x}", random_bytes)
 }

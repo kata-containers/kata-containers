@@ -3,22 +3,24 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 //
+
 use std::{fs, path::Path, sync::Arc};
 
-use super::{Rootfs, TYPE_OVERLAY_FS};
-use crate::{
-    rootfs::{HYBRID_ROOTFS_LOWER_DIR, ROOTFS},
-    share_fs::{
-        do_get_guest_path, do_get_guest_share_path, get_host_rw_shared_path, rafs_mount, ShareFs,
-        ShareFsRootfsConfig, PASSTHROUGH_FS_DIR,
-    },
-};
 use agent::Storage;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
 use kata_types::mount::{Mount, NydusExtraOptions};
 use tokio::sync::RwLock;
+
+use super::{Rootfs, TYPE_OVERLAY_FS};
+use crate::{
+    rootfs::{generate_rootfs_id, HYBRID_ROOTFS_LOWER_DIR, ROOTFS},
+    share_fs::{
+        do_get_guest_path, do_get_guest_share_path, get_host_rw_shared_path, rafs_mount, ShareFs,
+        ShareFsRootfsConfig, PASSTHROUGH_FS_DIR,
+    },
+};
 
 // Used for nydus rootfs
 pub(crate) const NYDUS_ROOTFS_TYPE: &str = "fuse.nydus-overlayfs";
@@ -33,6 +35,7 @@ const KATA_OVERLAY_DEV_TYPE: &str = "overlayfs";
 const NYDUS_PREFETCH_FILE_LIST: &str = "prefetch_file.list";
 
 pub(crate) struct NydusRootfs {
+    id: String,
     guest_path: String,
     rootfs: Storage,
 }
@@ -45,6 +48,8 @@ impl NydusRootfs {
         cid: &str,
         rootfs: &Mount,
     ) -> Result<Self> {
+        let id = generate_rootfs_id();
+
         let prefetch_list_path =
             get_nydus_prefetch_files(h.hypervisor_config().await.prefetch_list_path).await;
 
@@ -131,6 +136,7 @@ impl NydusRootfs {
             }
         }?;
         Ok(NydusRootfs {
+            id,
             guest_path: rootfs_guest_path,
             rootfs: rootfs_storage,
         })
@@ -139,6 +145,10 @@ impl NydusRootfs {
 
 #[async_trait]
 impl Rootfs for NydusRootfs {
+    fn id(&self) -> String {
+        self.id.clone()
+    }
+
     async fn get_guest_rootfs_path(&self) -> Result<String> {
         Ok(self.guest_path.clone())
     }

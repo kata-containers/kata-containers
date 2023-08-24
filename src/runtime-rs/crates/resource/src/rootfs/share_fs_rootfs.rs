@@ -14,10 +14,11 @@ use kata_sys_util::mount::{umount_timeout, Mounter};
 use kata_types::mount::Mount;
 use tokio::sync::RwLock;
 
-use super::{Rootfs, ROOTFS};
+use super::{generate_rootfs_id, Rootfs, ROOTFS};
 use crate::share_fs::{ShareFs, ShareFsRootfsConfig};
 
 pub(crate) struct ShareFsRootfs {
+    id: String,
     guest_path: String,
     share_fs: Arc<dyn ShareFs>,
     config: ShareFsRootfsConfig,
@@ -30,6 +31,8 @@ impl ShareFsRootfs {
         bundle_path: &str,
         rootfs: Option<&Mount>,
     ) -> Result<Self> {
+        let id = generate_rootfs_id();
+
         let bundle_rootfs = if let Some(rootfs) = rootfs {
             let bundle_rootfs = format!("{}/{}", bundle_path, ROOTFS);
             rootfs.mount(&bundle_rootfs).context(format!(
@@ -56,6 +59,7 @@ impl ShareFsRootfs {
             .context("share rootfs")?;
 
         Ok(ShareFsRootfs {
+            id,
             guest_path: mount_result.guest_path,
             share_fs: Arc::clone(share_fs),
             config,
@@ -65,6 +69,10 @@ impl ShareFsRootfs {
 
 #[async_trait]
 impl Rootfs for ShareFsRootfs {
+    fn id(&self) -> String {
+        self.id.clone()
+    }
+
     async fn get_guest_rootfs_path(&self) -> Result<String> {
         Ok(self.guest_path.clone())
     }
