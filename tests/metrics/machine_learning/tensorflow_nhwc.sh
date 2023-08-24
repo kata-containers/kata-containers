@@ -29,7 +29,6 @@ alexnet_start_script="alexnet_start.sh"
 resnet_start_script="resnet_start.sh"
 CMD_RESNET="$dst_dir/$resnet_start_script"
 CMD_ALEXNET="$dst_dir/$alexnet_start_script"
-timeout=600
 INITIAL_NUM_PIDS=1
 ALEXNET_FILE="alexnet_results"
 ALEXNET_CHECK_FILE_CMD="cat /${ALEXNET_FILE} | grep 'total images' | wc -l"
