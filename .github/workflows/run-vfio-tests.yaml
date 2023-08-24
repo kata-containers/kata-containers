@@ -15,7 +15,7 @@ jobs:
       fail-fast: false
       matrix:
         vmm: ['clh', 'qemu']
-    runs-on: garm-ubuntu-2204
+    runs-on: garm-ubuntu-2304
     env:
       GOPATH: ${{ github.workspace }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
