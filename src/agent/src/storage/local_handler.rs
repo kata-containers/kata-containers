@@ -6,14 +6,14 @@
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use kata_types::mount::KATA_MOUNT_OPTION_FS_GID;
+use kata_types::mount::{StorageDevice, KATA_MOUNT_OPTION_FS_GID};
 use nix::unistd::Gid;
 use protocols::agent::Storage;
 use tracing::instrument;
 
-use crate::sandbox::StorageDeviceObject;
 use crate::storage::{new_device, parse_options, StorageContext, StorageHandler, MODE_SETGID};
 
 #[derive(Debug)]
@@ -26,7 +26,7 @@ impl StorageHandler for LocalHandler {
         &self,
         storage: Storage,
         _ctx: &mut StorageContext,
-    ) -> Result<StorageDeviceObject> {
+    ) -> Result<Arc<dyn StorageDevice>> {
         fs::create_dir_all(&storage.mount_point).context(format!(
             "failed to create dir all {:?}",
             &storage.mount_point

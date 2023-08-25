@@ -13,7 +13,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::mount::{create_mount_destination, parse_mount_options};
 use kata_types::mount::{
-    StorageDeviceGeneric, StorageHandlerManager, KATA_SHAREDFS_GUEST_PREMOUNT_TAG,
+    StorageDevice, StorageDeviceGeneric, StorageHandlerManager, KATA_SHAREDFS_GUEST_PREMOUNT_TAG,
 };
 use nix::unistd::{Gid, Uid};
 use protocols::agent::Storage;
@@ -33,7 +33,7 @@ use crate::device::{
     DRIVER_VIRTIOFS_TYPE, DRIVER_WATCHABLE_BIND_TYPE,
 };
 use crate::mount::{baremount, is_mounted};
-use crate::sandbox::{Sandbox, StorageDeviceObject};
+use crate::sandbox::Sandbox;
 
 pub use self::ephemeral_handler::update_ephemeral_mounts;
 
@@ -63,7 +63,7 @@ pub trait StorageHandler: Send + Sync {
         &self,
         storage: Storage,
         ctx: &mut StorageContext,
-    ) -> Result<StorageDeviceObject>;
+    ) -> Result<Arc<dyn StorageDevice>>;
 }
 
 #[rustfmt::skip]
@@ -124,7 +124,7 @@ pub async fn add_storages(
                         .update_sandbox_storage(&path, device.clone())
                     {
                         Ok(d) => {
-                            let path = device.lock().await.path().to_string();
+                            let path = device.path().to_string();
                             if !path.is_empty() {
                                 mount_list.push(path.clone());
                             }
@@ -136,7 +136,7 @@ pub async fn add_storages(
                             {
                                 warn!(logger, "failed to remove dummy sandbox storage {:?}", e);
                             }
-                            device.lock().await.cleanup();
+                            device.cleanup();
                             return Err(anyhow!("failed to update device for storage"));
                         }
                     }
@@ -160,9 +160,9 @@ pub async fn add_storages(
     Ok(mount_list)
 }
 
-pub(crate) fn new_device(path: String) -> Result<StorageDeviceObject> {
+pub(crate) fn new_device(path: String) -> Result<Arc<dyn StorageDevice>> {
     let device = StorageDeviceGeneric::new(path);
-    Ok(Arc::new(Mutex::new(device)))
+    Ok(Arc::new(device))
 }
 
 #[instrument]
