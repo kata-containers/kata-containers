@@ -12,7 +12,10 @@ on:
 jobs:
   run-nydus:
     strategy:
-      fail-fast: true
+      # We can set this to true whenever we're 100% sure that
+      # the all the tests are not flaky, otherwise we'll fail
+      # all the tests due to a single flaky instance.
+      fail-fast: false
       matrix:
         containerd_version: ['lts', 'active']
         vmm: ['clh', 'qemu', 'dragonball']
