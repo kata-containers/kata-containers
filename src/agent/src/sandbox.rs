@@ -10,6 +10,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::{thread, time};
 
@@ -43,11 +44,10 @@ pub const ERR_INVALID_CONTAINER_ID: &str = "Invalid container id";
 
 type UeventWatcher = (Box<dyn UeventMatcher>, oneshot::Sender<Uevent>);
 
-pub type StorageDeviceObject = Arc<Mutex<dyn StorageDevice>>;
-
 #[derive(Clone)]
 pub struct StorageState {
-    inner: StorageDeviceObject,
+    count: Arc<AtomicU32>,
+    device: Arc<dyn StorageDevice>,
 }
 
 impl Debug for StorageState {
@@ -59,24 +59,28 @@ impl Debug for StorageState {
 impl StorageState {
     fn new() -> Self {
         StorageState {
-            inner: Arc::new(Mutex::new(StorageDeviceGeneric::new("".to_string()))),
+            count: Arc::new(AtomicU32::new(1)),
+            device: Arc::new(StorageDeviceGeneric::new("".to_string())),
         }
     }
 
-    pub fn from_device(device: StorageDeviceObject) -> Self {
-        Self { inner: device }
+    pub fn from_device(device: Arc<dyn StorageDevice>) -> Self {
+        Self {
+            count: Arc::new(AtomicU32::new(1)),
+            device,
+        }
     }
 
     pub async fn ref_count(&self) -> u32 {
-        self.inner.lock().await.ref_count()
+        self.count.load(Ordering::Relaxed)
     }
 
     async fn inc_ref_count(&self) {
-        self.inner.lock().await.inc_ref_count()
+        self.count.fetch_add(1, Ordering::Acquire);
     }
 
     async fn dec_and_test_ref_count(&self) -> bool {
-        self.inner.lock().await.dec_and_test_ref_count()
+        self.count.fetch_sub(1, Ordering::AcqRel) == 1
     }
 }
 
@@ -162,8 +166,8 @@ impl Sandbox {
     pub fn update_sandbox_storage(
         &mut self,
         path: &str,
-        device: StorageDeviceObject,
-    ) -> std::result::Result<StorageDeviceObject, StorageDeviceObject> {
+        device: Arc<dyn StorageDevice>,
+    ) -> std::result::Result<Arc<dyn StorageDevice>, Arc<dyn StorageDevice>> {
         if !self.storages.contains_key(path) {
             return Err(device);
         }
@@ -171,7 +175,7 @@ impl Sandbox {
         let state = StorageState::from_device(device);
         // Safe to unwrap() because we have just ensured existence of entry.
         let state = self.storages.insert(path.to_string(), state).unwrap();
-        Ok(state.inner)
+        Ok(state.device)
     }
 
     // Clean mount and directory of a mountpoint.

@@ -5,11 +5,12 @@
 //
 
 use anyhow::Result;
+use kata_types::mount::StorageDevice;
 use protocols::agent::Storage;
 use std::iter;
+use std::sync::Arc;
 use tracing::instrument;
 
-use crate::sandbox::StorageDeviceObject;
 use crate::storage::{new_device, StorageContext, StorageHandler};
 
 #[derive(Debug)]
@@ -22,7 +23,7 @@ impl StorageHandler for BindWatcherHandler {
         &self,
         storage: Storage,
         ctx: &mut StorageContext,
-    ) -> Result<StorageDeviceObject> {
+    ) -> Result<Arc<dyn StorageDevice>> {
         if let Some(cid) = ctx.cid {
             ctx.sandbox
                 .lock()
