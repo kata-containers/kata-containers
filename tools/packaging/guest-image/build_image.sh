@@ -41,7 +41,8 @@ build_initrd() {
 		OS_VERSION="${os_version}" \
 		ROOTFS_BUILD_DEST="${builddir}/initrd-image" \
 		USE_DOCKER=1 \
-		AGENT_INIT="yes"
+		AGENT_INIT="yes" \
+		AGENT_POLICY="${AGENT_POLICY:-}"
 	mv "kata-containers-initrd.img" "${install_dir}/${artifact_name}"
 	(
 		cd "${install_dir}"
@@ -58,7 +59,8 @@ build_image() {
 		DEBUG="${DEBUG:-}" \
 		USE_DOCKER="1" \
 		IMG_OS_VERSION="${os_version}" \
-		ROOTFS_BUILD_DEST="${builddir}/rootfs-image"
+		ROOTFS_BUILD_DEST="${builddir}/rootfs-image" \
+		AGENT_POLICY="${AGENT_POLICY:-}"
 	mv -f "kata-containers.img" "${install_dir}/${artifact_name}"
 	if [ -e "root_hash.txt" ]; then
 	    cp root_hash.txt "${install_dir}/"
