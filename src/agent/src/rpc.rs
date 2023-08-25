@@ -57,12 +57,13 @@ use crate::device::{
 };
 use crate::linux_abi::*;
 use crate::metrics::get_metrics;
-use crate::mount::{add_storages, baremount, update_ephemeral_mounts, STORAGE_HANDLER_LIST};
+use crate::mount::baremount;
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
 use crate::network::setup_guest_dns;
 use crate::pci;
 use crate::random;
 use crate::sandbox::Sandbox;
+use crate::storage::{add_storages, update_ephemeral_mounts, STORAGE_HANDLERS};
 use crate::version::{AGENT_VERSION, API_VERSION};
 use crate::AGENT_CONFIG;
 
@@ -243,13 +244,7 @@ impl AgentService {
         // After all those storages have been processed, no matter the order
         // here, the agent will rely on rustjail (using the oci.Mounts
         // list) to bind mount all of them inside the container.
-        let m = add_storages(
-            sl(),
-            &req.storages,
-            &self.sandbox,
-            Some(req.container_id.clone()),
-        )
-        .await?;
+        let m = add_storages(sl(), req.storages, &self.sandbox, Some(req.container_id)).await?;
 
         let mut s = self.sandbox.lock().await;
         s.container_mounts.insert(cid.clone(), m);
@@ -308,7 +303,7 @@ impl AgentService {
             if let Err(e) = ctr.destroy().await {
                 error!(sl(), "failed to destroy container: {:?}", e);
             }
-            if let Err(e) = remove_container_resources(&mut s, &cid) {
+            if let Err(e) = remove_container_resources(&mut s, &cid).await {
                 error!(sl(), "failed to remove container resources: {:?}", e);
             }
             return Err(err);
@@ -360,7 +355,7 @@ impl AgentService {
                 .ok_or_else(|| anyhow!("Invalid container id"))?
                 .destroy()
                 .await?;
-            remove_container_resources(&mut sandbox, &cid)?;
+            remove_container_resources(&mut sandbox, &cid).await?;
             return Ok(());
         }
 
@@ -382,7 +377,7 @@ impl AgentService {
             .await
             .map_err(|_| anyhow!(nix::Error::ETIME))???;
 
-        remove_container_resources(&mut *self.sandbox.lock().await, &cid)
+        remove_container_resources(&mut *self.sandbox.lock().await, &cid).await
     }
 
     #[instrument]
@@ -1196,7 +1191,7 @@ impl agent_ttrpc::AgentService for AgentService {
             s.setup_shared_namespaces().await.map_ttrpc_err(same)?;
         }
 
-        let m = add_storages(sl(), &req.storages, &self.sandbox, None)
+        let m = add_storages(sl(), req.storages, &self.sandbox, None)
             .await
             .map_ttrpc_err(same)?;
         self.sandbox.lock().await.mounts = m;
@@ -1585,7 +1580,7 @@ fn get_agent_details() -> AgentDetails {
     detail.init_daemon = unistd::getpid() == Pid::from_raw(1);
 
     detail.device_handlers = Vec::new();
-    detail.storage_handlers = STORAGE_HANDLER_LIST.iter().map(|x| x.to_string()).collect();
+    detail.storage_handlers = STORAGE_HANDLERS.get_handlers();
 
     detail
 }
@@ -1679,21 +1674,21 @@ fn update_container_namespaces(
     Ok(())
 }
 
-fn remove_container_resources(sandbox: &mut Sandbox, cid: &str) -> Result<()> {
+async fn remove_container_resources(sandbox: &mut Sandbox, cid: &str) -> Result<()> {
     let mut cmounts: Vec<String> = vec![];
 
     // Find the sandbox storage used by this container
     let mounts = sandbox.container_mounts.get(cid);
     if let Some(mounts) = mounts {
         for m in mounts.iter() {
-            if sandbox.storages.get(m).is_some() {
+            if sandbox.storages.contains_key(m) {
                 cmounts.push(m.to_string());
             }
         }
     }
 
     for m in cmounts.iter() {
-        if let Err(err) = sandbox.unset_and_remove_sandbox_storage(m) {
+        if let Err(err) = sandbox.remove_sandbox_storage(m).await {
             error!(
                 sl(),
                 "failed to unset_and_remove_sandbox_storage for container {}, error: {:?}",

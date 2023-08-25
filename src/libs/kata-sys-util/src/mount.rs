@@ -58,7 +58,8 @@ use crate::fs::is_symlink;
 use crate::sl;
 
 /// Default permission for directories created for mountpoint.
-const MOUNT_PERM: u32 = 0o755;
+const MOUNT_DIR_PERM: u32 = 0o755;
+const MOUNT_FILE_PERM: u32 = 0o644;
 
 pub const PROC_MOUNTS_FILE: &str = "/proc/mounts";
 const PROC_FIELDS_PER_LINE: usize = 6;
@@ -187,13 +188,16 @@ pub fn create_mount_destination<S: AsRef<Path>, D: AsRef<Path>, R: AsRef<Path>>(
         .parent()
         .ok_or_else(|| Error::InvalidPath(dst.to_path_buf()))?;
     let mut builder = fs::DirBuilder::new();
-    builder.mode(MOUNT_PERM).recursive(true).create(parent)?;
+    builder
+        .mode(MOUNT_DIR_PERM)
+        .recursive(true)
+        .create(parent)?;
 
     if fs_type == "bind" {
         // The source and destination for bind mounting must be the same type: file or directory.
         if !src.as_ref().is_dir() {
             fs::OpenOptions::new()
-                .mode(MOUNT_PERM)
+                .mode(MOUNT_FILE_PERM)
                 .write(true)
                 .create(true)
                 .open(dst)?;
@@ -390,19 +394,17 @@ fn do_rebind_mount<P: AsRef<Path>>(path: P, readonly: bool, flags: MsFlags) -> R
 }
 
 /// Take fstab style mount options and parses them for use with a standard mount() syscall.
-fn parse_mount_options(options: &[String]) -> Result<(MsFlags, String)> {
+pub fn parse_mount_options<T: AsRef<str>>(options: &[T]) -> Result<(MsFlags, String)> {
     let mut flags: MsFlags = MsFlags::empty();
     let mut data: Vec<String> = Vec::new();
 
     for opt in options.iter() {
-        if opt == "defaults" {
-            continue;
-        } else if opt == "loop" {
+        if opt.as_ref() == "loop" {
             return Err(Error::InvalidMountOption("loop".to_string()));
-        } else if let Some(v) = parse_mount_flags(flags, opt) {
+        } else if let Some(v) = parse_mount_flags(flags, opt.as_ref()) {
             flags = v;
         } else {
-            data.push(opt.clone());
+            data.push(opt.as_ref().to_string());
         }
     }
 
@@ -441,6 +443,7 @@ fn parse_mount_flags(mut flags: MsFlags, flag_str: &str) -> Option<MsFlags> {
     //   overridden by subsequent options, as in the option line users,exec,dev,suid).
     match flag_str {
         // Clear flags
+        "defaults" => {}
         "async" => flags &= !MsFlags::MS_SYNCHRONOUS,
         "atime" => flags &= !MsFlags::MS_NOATIME,
         "dev" => flags &= !MsFlags::MS_NODEV,
@@ -464,6 +467,14 @@ fn parse_mount_flags(mut flags: MsFlags, flag_str: &str) -> Option<MsFlags> {
         "noexec" => flags |= MsFlags::MS_NOEXEC,
         "nosuid" => flags |= MsFlags::MS_NOSUID,
         "rbind" => flags |= MsFlags::MS_BIND | MsFlags::MS_REC,
+        "unbindable" => flags |= MsFlags::MS_UNBINDABLE,
+        "runbindable" => flags |= MsFlags::MS_UNBINDABLE | MsFlags::MS_REC,
+        "private" => flags |= MsFlags::MS_PRIVATE,
+        "rprivate" => flags |= MsFlags::MS_PRIVATE | MsFlags::MS_REC,
+        "shared" => flags |= MsFlags::MS_SHARED,
+        "rshared" => flags |= MsFlags::MS_SHARED | MsFlags::MS_REC,
+        "slave" => flags |= MsFlags::MS_SLAVE,
+        "rslave" => flags |= MsFlags::MS_SLAVE | MsFlags::MS_REC,
         "relatime" => flags |= MsFlags::MS_RELATIME,
         "remount" => flags |= MsFlags::MS_REMOUNT,
         "ro" => flags |= MsFlags::MS_RDONLY,
@@ -1030,7 +1041,7 @@ mod tests {
 
     #[test]
     fn test_parse_mount_options() {
-        let options = vec![];
+        let options: Vec<&str> = vec![];
         let (flags, data) = parse_mount_options(&options).unwrap();
         assert!(flags.is_empty());
         assert!(data.is_empty());

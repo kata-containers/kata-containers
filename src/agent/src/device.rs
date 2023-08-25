@@ -35,9 +35,9 @@ const VM_ROOTFS: &str = "/";
 const BLOCK: &str = "block";
 pub const DRIVER_9P_TYPE: &str = "9p";
 pub const DRIVER_VIRTIOFS_TYPE: &str = "virtio-fs";
-pub const DRIVER_BLK_TYPE: &str = "blk";
+pub const DRIVER_BLK_PCI_TYPE: &str = "blk";
 pub const DRIVER_BLK_CCW_TYPE: &str = "blk-ccw";
-pub const DRIVER_MMIO_BLK_TYPE: &str = "mmioblk";
+pub const DRIVER_BLK_MMIO_TYPE: &str = "mmioblk";
 pub const DRIVER_SCSI_TYPE: &str = "scsi";
 pub const DRIVER_NVDIMM_TYPE: &str = "nvdimm";
 pub const DRIVER_EPHEMERAL_TYPE: &str = "ephemeral";
@@ -935,9 +935,9 @@ async fn add_device(device: &Device, sandbox: &Arc<Mutex<Sandbox>>) -> Result<Sp
     }
 
     match device.type_.as_str() {
-        DRIVER_BLK_TYPE => virtio_blk_device_handler(device, sandbox).await,
+        DRIVER_BLK_PCI_TYPE => virtio_blk_device_handler(device, sandbox).await,
         DRIVER_BLK_CCW_TYPE => virtio_blk_ccw_device_handler(device, sandbox).await,
-        DRIVER_MMIO_BLK_TYPE => virtiommio_blk_device_handler(device, sandbox).await,
+        DRIVER_BLK_MMIO_TYPE => virtiommio_blk_device_handler(device, sandbox).await,
         DRIVER_NVDIMM_TYPE => virtio_nvdimm_device_handler(device, sandbox).await,
         DRIVER_SCSI_TYPE => virtio_scsi_device_handler(device, sandbox).await,
         DRIVER_VFIO_PCI_GK_TYPE | DRIVER_VFIO_PCI_TYPE => {
