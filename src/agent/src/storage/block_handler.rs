@@ -8,8 +8,10 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
+use kata_types::mount::StorageDevice;
 use protocols::agent::Storage;
 use tracing::instrument;
 
@@ -18,7 +20,6 @@ use crate::device::{
     wait_for_pmem_device,
 };
 use crate::pci;
-use crate::sandbox::StorageDeviceObject;
 use crate::storage::{common_storage_handler, new_device, StorageContext, StorageHandler};
 #[cfg(target_arch = "s390x")]
 use crate::{ccw, device::get_virtio_blk_ccw_device_name};
@@ -33,7 +34,7 @@ impl StorageHandler for VirtioBlkMmioHandler {
         &self,
         storage: Storage,
         ctx: &mut StorageContext,
-    ) -> Result<StorageDeviceObject> {
+    ) -> Result<Arc<dyn StorageDevice>> {
         if !Path::new(&storage.source).exists() {
             get_virtio_mmio_device_name(ctx.sandbox, &storage.source)
                 .await
@@ -54,7 +55,7 @@ impl StorageHandler for VirtioBlkPciHandler {
         &self,
         mut storage: Storage,
         ctx: &mut StorageContext,
-    ) -> Result<StorageDeviceObject> {
+    ) -> Result<Arc<dyn StorageDevice>> {
         // If hot-plugged, get the device node path based on the PCI path
         // otherwise use the virt path provided in Storage Source
         if storage.source.starts_with("/dev") {
@@ -86,7 +87,7 @@ impl StorageHandler for VirtioBlkCcwHandler {
         &self,
         mut storage: Storage,
         ctx: &mut StorageContext,
-    ) -> Result<StorageDeviceObject> {
+    ) -> Result<Arc<dyn StorageDevice>> {
         let ccw_device = ccw::Device::from_str(&storage.source)?;
         let dev_path = get_virtio_blk_ccw_device_name(ctx.sandbox, &ccw_device).await?;
         storage.source = dev_path;
@@ -100,7 +101,7 @@ impl StorageHandler for VirtioBlkCcwHandler {
         &self,
         _storage: Storage,
         _ctx: &mut StorageContext,
-    ) -> Result<StorageDeviceObject> {
+    ) -> Result<Arc<dyn StorageDevice>> {
         Err(anyhow!("CCW is only supported on s390x"))
     }
 }
@@ -115,7 +116,7 @@ impl StorageHandler for ScsiHandler {
         &self,
         mut storage: Storage,
         ctx: &mut StorageContext,
-    ) -> Result<StorageDeviceObject> {
+    ) -> Result<Arc<dyn StorageDevice>> {
         // Retrieve the device path from SCSI address.
         let dev_path = get_scsi_device_name(ctx.sandbox, &storage.source).await?;
         storage.source = dev_path;
@@ -135,7 +136,7 @@ impl StorageHandler for PmemHandler {
         &self,
         storage: Storage,
         ctx: &mut StorageContext,
-    ) -> Result<StorageDeviceObject> {
+    ) -> Result<Arc<dyn StorageDevice>> {
         // Retrieve the device for pmem storage
         wait_for_pmem_device(ctx.sandbox, &storage.source).await?;
 

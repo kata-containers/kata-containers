@@ -6,12 +6,13 @@
 
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
+use kata_types::mount::StorageDevice;
 use protocols::agent::Storage;
 use tracing::instrument;
 
-use crate::sandbox::StorageDeviceObject;
 use crate::storage::{common_storage_handler, new_device, StorageContext, StorageHandler};
 
 #[derive(Debug)]
@@ -24,7 +25,7 @@ impl StorageHandler for OverlayfsHandler {
         &self,
         mut storage: Storage,
         ctx: &mut StorageContext,
-    ) -> Result<StorageDeviceObject> {
+    ) -> Result<Arc<dyn StorageDevice>> {
         if storage
             .options
             .iter()
@@ -65,7 +66,7 @@ impl StorageHandler for Virtio9pHandler {
         &self,
         storage: Storage,
         ctx: &mut StorageContext,
-    ) -> Result<StorageDeviceObject> {
+    ) -> Result<Arc<dyn StorageDevice>> {
         let path = common_storage_handler(ctx.logger, &storage)?;
         new_device(path)
     }
@@ -81,7 +82,7 @@ impl StorageHandler for VirtioFsHandler {
         &self,
         storage: Storage,
         ctx: &mut StorageContext,
-    ) -> Result<StorageDeviceObject> {
+    ) -> Result<Arc<dyn StorageDevice>> {
         let path = common_storage_handler(ctx.logger, &storage)?;
         new_device(path)
     }
