@@ -5,90 +5,22 @@
 
 use std::collections::HashMap;
 use std::fmt::Debug;
-use std::fs::{self, File, OpenOptions};
-use std::io::{BufRead, BufReader, Write};
-use std::iter;
-use std::os::unix::fs::{MetadataExt, PermissionsExt};
+use std::fs::{self, File};
+use std::io::{BufRead, BufReader};
+use std::ops::Deref;
 use std::path::Path;
-use std::str::FromStr;
-use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
+use kata_sys_util::mount::{get_linux_mount_info, parse_mount_options};
 use nix::mount::MsFlags;
-use nix::unistd::{Gid, Uid};
 use regex::Regex;
 use slog::Logger;
-use tokio::sync::Mutex;
 use tracing::instrument;
 
-use crate::device::{
-    get_scsi_device_name, get_virtio_blk_pci_device_name, get_virtio_mmio_device_name,
-    online_device, wait_for_pmem_device, DRIVER_9P_TYPE, DRIVER_BLK_CCW_TYPE, DRIVER_BLK_TYPE,
-    DRIVER_EPHEMERAL_TYPE, DRIVER_LOCAL_TYPE, DRIVER_MMIO_BLK_TYPE, DRIVER_NVDIMM_TYPE,
-    DRIVER_OVERLAYFS_TYPE, DRIVER_SCSI_TYPE, DRIVER_VIRTIOFS_TYPE, DRIVER_WATCHABLE_BIND_TYPE,
-    FS_TYPE_HUGETLB,
-};
+use crate::device::online_device;
 use crate::linux_abi::*;
-use crate::pci;
-use crate::protocols::agent::Storage;
-use crate::protocols::types::FSGroupChangePolicy;
-use crate::Sandbox;
-#[cfg(target_arch = "s390x")]
-use crate::{ccw, device::get_virtio_blk_ccw_device_name};
 
 pub const TYPE_ROOTFS: &str = "rootfs";
-pub const MOUNT_GUEST_TAG: &str = "kataShared";
-
-// Allocating an FSGroup that owns the pod's volumes
-const FS_GID: &str = "fsgid";
-const FS_GID_EQ: &str = "fsgid=";
-const SYS_FS_HUGEPAGES_PREFIX: &str = "/sys/kernel/mm/hugepages";
-
-const RW_MASK: u32 = 0o660;
-const RO_MASK: u32 = 0o440;
-const EXEC_MASK: u32 = 0o110;
-const MODE_SETGID: u32 = 0o2000;
-
-#[rustfmt::skip]
-lazy_static! {
-    pub static ref FLAGS: HashMap<&'static str, (bool, MsFlags)> = {
-        let mut m = HashMap::new();
-        m.insert("defaults",      (false, MsFlags::empty()));
-        m.insert("ro",            (false, MsFlags::MS_RDONLY));
-        m.insert("rw",            (true,  MsFlags::MS_RDONLY));
-        m.insert("suid",          (true,  MsFlags::MS_NOSUID));
-        m.insert("nosuid",        (false, MsFlags::MS_NOSUID));
-        m.insert("dev",           (true,  MsFlags::MS_NODEV));
-        m.insert("nodev",         (false, MsFlags::MS_NODEV));
-        m.insert("exec",          (true,  MsFlags::MS_NOEXEC));
-        m.insert("noexec",        (false, MsFlags::MS_NOEXEC));
-        m.insert("sync",          (false, MsFlags::MS_SYNCHRONOUS));
-        m.insert("async",         (true,  MsFlags::MS_SYNCHRONOUS));
-        m.insert("dirsync",       (false, MsFlags::MS_DIRSYNC));
-        m.insert("remount",       (false, MsFlags::MS_REMOUNT));
-        m.insert("mand",          (false, MsFlags::MS_MANDLOCK));
-        m.insert("nomand",        (true,  MsFlags::MS_MANDLOCK));
-        m.insert("atime",         (true,  MsFlags::MS_NOATIME));
-        m.insert("noatime",       (false, MsFlags::MS_NOATIME));
-        m.insert("diratime",      (true,  MsFlags::MS_NODIRATIME));
-        m.insert("nodiratime",    (false, MsFlags::MS_NODIRATIME));
-        m.insert("bind",          (false, MsFlags::MS_BIND));
-        m.insert("rbind",         (false, MsFlags::MS_BIND | MsFlags::MS_REC));
-        m.insert("unbindable",    (false, MsFlags::MS_UNBINDABLE));
-        m.insert("runbindable",   (false, MsFlags::MS_UNBINDABLE | MsFlags::MS_REC));
-        m.insert("private",       (false, MsFlags::MS_PRIVATE));
-        m.insert("rprivate",      (false, MsFlags::MS_PRIVATE | MsFlags::MS_REC));
-        m.insert("shared",        (false, MsFlags::MS_SHARED));
-        m.insert("rshared",       (false, MsFlags::MS_SHARED | MsFlags::MS_REC));
-        m.insert("slave",         (false, MsFlags::MS_SLAVE));
-        m.insert("rslave",        (false, MsFlags::MS_SLAVE | MsFlags::MS_REC));
-        m.insert("relatime",      (false, MsFlags::MS_RELATIME));
-        m.insert("norelatime",    (true,  MsFlags::MS_RELATIME));
-        m.insert("strictatime",   (false, MsFlags::MS_STRICTATIME));
-        m.insert("nostrictatime", (true,  MsFlags::MS_STRICTATIME));
-        m
-    };
-}
 
 #[derive(Debug, PartialEq)]
 pub struct InitMount<'a> {
@@ -131,24 +63,6 @@ lazy_static! {
     ];
 }
 
-pub const STORAGE_HANDLER_LIST: &[&str] = &[
-    DRIVER_BLK_TYPE,
-    DRIVER_9P_TYPE,
-    DRIVER_VIRTIOFS_TYPE,
-    DRIVER_EPHEMERAL_TYPE,
-    DRIVER_OVERLAYFS_TYPE,
-    DRIVER_MMIO_BLK_TYPE,
-    DRIVER_LOCAL_TYPE,
-    DRIVER_SCSI_TYPE,
-    DRIVER_NVDIMM_TYPE,
-    DRIVER_WATCHABLE_BIND_TYPE,
-];
-
-#[instrument]
-pub fn get_mounts() -> Result<String, std::io::Error> {
-    fs::read_to_string("/proc/mounts")
-}
-
 #[instrument]
 pub fn baremount(
     source: &Path,
@@ -173,28 +87,11 @@ pub fn baremount(
     }
 
     let destination_str = destination.to_string_lossy();
-    let mounts = get_mounts().unwrap_or_else(|_| String::new());
-    let already_mounted = mounts
-        .lines()
-        .map(|line| line.split_whitespace().collect::<Vec<&str>>())
-        .filter(|parts| parts.len() >= 3) // ensure we have at least [source}, destination, and fs_type
-        .any(|parts| {
-            // Check if source, destination and fs_type match any entry in /proc/mounts
-            // minimal check is for destination an fstype since source can have different names like:
-            // udev /dev devtmpfs
-            //  dev /dev devtmpfs
-            // depending on which entity is mounting the dev/fs/pseudo-fs
-            parts[1] == destination_str && parts[2] == fs_type
-        });
-
-    if already_mounted {
-        slog_info!(
-            logger,
-            "{:?} is already mounted at {:?}",
-            source,
-            destination
-        );
-        return Ok(());
+    if let Ok(m) = get_linux_mount_info(destination_str.deref()) {
+        if m.fs_type == fs_type {
+            slog_info!(logger, "{source:?} is already mounted at {destination:?}");
+            return Ok(());
+        }
     }
 
     info!(
@@ -224,713 +121,33 @@ pub fn baremount(
     })
 }
 
-#[instrument]
-async fn ephemeral_storage_handler(
-    logger: &Logger,
-    storage: &Storage,
-    _sandbox: &Arc<Mutex<Sandbox>>,
-) -> Result<String> {
-    // hugetlbfs
-    if storage.fstype == FS_TYPE_HUGETLB {
-        return handle_hugetlbfs_storage(logger, storage).await;
-    }
-
-    // normal ephemeral storage
-    fs::create_dir_all(&storage.mount_point)?;
-
-    if !storage.options.is_empty() {
-        // By now we only support one option field: "fsGroup" which
-        // isn't an valid mount option, thus we should remove it when
-        // do mount.
-        let mut new_storage = storage.clone();
-        new_storage.options = Default::default();
-        common_storage_handler(logger, &new_storage)?;
-
-        let opts = parse_options(&storage.options);
-
-        // ephemeral_storage didn't support mount options except fsGroup.
-        if let Some(fsgid) = opts.get(FS_GID) {
-            let gid = fsgid.parse::<u32>()?;
-
-            nix::unistd::chown(storage.mount_point.as_str(), None, Some(Gid::from_raw(gid)))?;
-
-            let meta = fs::metadata(&storage.mount_point)?;
-            let mut permission = meta.permissions();
-
-            let o_mode = meta.mode() | MODE_SETGID;
-            permission.set_mode(o_mode);
-            fs::set_permissions(&storage.mount_point, permission)?;
-        }
-    } else {
-        common_storage_handler(logger, storage)?;
-    }
-
-    Ok("".to_string())
-}
-
-// update_ephemeral_mounts takes a list of ephemeral mounts and remounts them
-// with mount options passed by the caller
-#[instrument]
-pub async fn update_ephemeral_mounts(
-    logger: Logger,
-    storages: &[Storage],
-    _sandbox: &Arc<Mutex<Sandbox>>,
-) -> Result<()> {
-    for storage in storages {
-        let handler_name = &storage.driver;
-        let logger = logger.new(o!(
-            "msg" => "updating tmpfs storage",
-            "subsystem" => "storage",
-            "storage-type" => handler_name.to_owned()));
-
-        match handler_name.as_str() {
-            DRIVER_EPHEMERAL_TYPE => {
-                fs::create_dir_all(&storage.mount_point)?;
-
-                if storage.options.is_empty() {
-                    continue;
-                } else {
-                    // assume that fsGid has already been set
-                    let mount_path = Path::new(&storage.mount_point);
-                    let src_path = Path::new(&storage.source);
-                    let opts = storage
-                        .options
-                        .iter()
-                        .filter(|&opt| !opt.starts_with(FS_GID_EQ));
-                    let (flags, options) = parse_mount_flags_and_options(opts);
-
-                    info!(logger, "mounting storage";
-                        "mount-source" => src_path.display(),
-                        "mount-destination" => mount_path.display(),
-                        "mount-fstype"  => storage.fstype.as_str(),
-                        "mount-options" => options.as_str(),
-                    );
-
-                    baremount(
-                        src_path,
-                        mount_path,
-                        storage.fstype.as_str(),
-                        flags,
-                        options.as_str(),
-                        &logger,
-                    )?;
-                }
-            }
-            _ => {
-                return Err(anyhow!(
-                    "Unsupported storage type for syncing mounts {}. Only ephemeral storage update is supported",
-                    storage.driver
-                ));
-            }
-        };
-    }
-
-    Ok(())
-}
-
-#[instrument]
-async fn overlayfs_storage_handler(
-    logger: &Logger,
-    storage: &Storage,
-    cid: Option<&str>,
-    _sandbox: &Arc<Mutex<Sandbox>>,
-) -> Result<String> {
-    if storage
-        .options
-        .iter()
-        .any(|e| e == "io.katacontainers.fs-opt.overlay-rw")
-    {
-        let cid = cid.ok_or_else(|| anyhow!("No container id in rw overlay"))?;
-        let cpath = Path::new(crate::rpc::CONTAINER_BASE).join(cid);
-        let work = cpath.join("work");
-        let upper = cpath.join("upper");
-
-        fs::create_dir_all(&work).context("Creating overlay work directory")?;
-        fs::create_dir_all(&upper).context("Creating overlay upper directory")?;
-
-        let mut storage = storage.clone();
-        storage.fstype = "overlay".into();
-        storage
-            .options
-            .push(format!("upperdir={}", upper.to_string_lossy()));
-        storage
-            .options
-            .push(format!("workdir={}", work.to_string_lossy()));
-        return common_storage_handler(logger, &storage);
-    }
-
-    common_storage_handler(logger, storage)
-}
-
-#[instrument]
-async fn local_storage_handler(
-    _logger: &Logger,
-    storage: &Storage,
-    _sandbox: &Arc<Mutex<Sandbox>>,
-) -> Result<String> {
-    fs::create_dir_all(&storage.mount_point).context(format!(
-        "failed to create dir all {:?}",
-        &storage.mount_point
-    ))?;
-
-    let opts = parse_options(&storage.options);
-
-    let mut need_set_fsgid = false;
-    if let Some(fsgid) = opts.get(FS_GID) {
-        let gid = fsgid.parse::<u32>()?;
-
-        nix::unistd::chown(storage.mount_point.as_str(), None, Some(Gid::from_raw(gid)))?;
-        need_set_fsgid = true;
-    }
-
-    if let Some(mode) = opts.get("mode") {
-        let mut permission = fs::metadata(&storage.mount_point)?.permissions();
-
-        let mut o_mode = u32::from_str_radix(mode, 8)?;
-
-        if need_set_fsgid {
-            // set SetGid mode mask.
-            o_mode |= MODE_SETGID;
-        }
-        permission.set_mode(o_mode);
-
-        fs::set_permissions(&storage.mount_point, permission)?;
-    }
-
-    Ok("".to_string())
-}
-
-#[instrument]
-async fn virtio9p_storage_handler(
-    logger: &Logger,
-    storage: &Storage,
-    _sandbox: &Arc<Mutex<Sandbox>>,
-) -> Result<String> {
-    common_storage_handler(logger, storage)
-}
-
-#[instrument]
-async fn handle_hugetlbfs_storage(logger: &Logger, storage: &Storage) -> Result<String> {
-    info!(logger, "handle hugetlbfs storage");
-    // Allocate hugepages before mount
-    // /sys/kernel/mm/hugepages/hugepages-1048576kB/nr_hugepages
-    // /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
-    // options eg "pagesize=2097152,size=524288000"(2M, 500M)
-    allocate_hugepages(logger, &storage.options).context("allocate hugepages")?;
-
-    common_storage_handler(logger, storage)?;
-
-    // hugetlbfs return empty string as ephemeral_storage_handler do.
-    // this is a sandbox level storage, but not a container-level mount.
-    Ok("".to_string())
-}
-
-// Allocate hugepages by writing to sysfs
-fn allocate_hugepages(logger: &Logger, options: &[String]) -> Result<()> {
-    info!(logger, "mounting hugePages storage options: {:?}", options);
-
-    let (pagesize, size) = get_pagesize_and_size_from_option(options)
-        .context(format!("parse mount options: {:?}", &options))?;
-
-    info!(
-        logger,
-        "allocate hugepages. pageSize: {}, size: {}", pagesize, size
-    );
-
-    // sysfs entry is always of the form hugepages-${pagesize}kB
-    // Ref: https://www.kernel.org/doc/Documentation/vm/hugetlbpage.txt
-    let path = Path::new(SYS_FS_HUGEPAGES_PREFIX)
-        .join(format!("hugepages-{}kB", pagesize / 1024))
-        .join("nr_hugepages");
-
-    // write numpages to nr_hugepages file.
-    let numpages = format!("{}", size / pagesize);
-    info!(logger, "write {} pages to {:?}", &numpages, &path);
-
-    let mut file = OpenOptions::new()
-        .write(true)
-        .open(&path)
-        .context(format!("open nr_hugepages directory {:?}", &path))?;
-
-    file.write_all(numpages.as_bytes())
-        .context(format!("write nr_hugepages failed: {:?}", &path))?;
-
-    // Even if the write succeeds, the kernel isn't guaranteed to be
-    // able to allocate all the pages we requested.  Verify that it
-    // did.
-    let verify = fs::read_to_string(&path).context(format!("reading {:?}", &path))?;
-    let allocated = verify
-        .trim_end()
-        .parse::<u64>()
-        .map_err(|_| anyhow!("Unexpected text {:?} in {:?}", &verify, &path))?;
-    if allocated != size / pagesize {
-        return Err(anyhow!(
-            "Only allocated {} of {} hugepages of size {}",
-            allocated,
-            numpages,
-            pagesize
-        ));
-    }
-
-    Ok(())
-}
-
-// Parse filesystem options string to retrieve hugepage details
-// options eg "pagesize=2048,size=107374182"
-fn get_pagesize_and_size_from_option(options: &[String]) -> Result<(u64, u64)> {
-    let mut pagesize_str: Option<&str> = None;
-    let mut size_str: Option<&str> = None;
-
-    for option in options {
-        let vars: Vec<&str> = option.trim().split(',').collect();
-
-        for var in vars {
-            if let Some(stripped) = var.strip_prefix("pagesize=") {
-                pagesize_str = Some(stripped);
-            } else if let Some(stripped) = var.strip_prefix("size=") {
-                size_str = Some(stripped);
-            }
-
-            if pagesize_str.is_some() && size_str.is_some() {
-                break;
-            }
-        }
-    }
-
-    if pagesize_str.is_none() || size_str.is_none() {
-        return Err(anyhow!("no pagesize/size options found"));
-    }
-
-    let pagesize = pagesize_str
-        .unwrap()
-        .parse::<u64>()
-        .context(format!("parse pagesize: {:?}", &pagesize_str))?;
-    let size = size_str
-        .unwrap()
-        .parse::<u64>()
-        .context(format!("parse size: {:?}", &pagesize_str))?;
-
-    Ok((pagesize, size))
-}
-
-// virtiommio_blk_storage_handler handles the storage for mmio blk driver.
-#[instrument]
-async fn virtiommio_blk_storage_handler(
-    logger: &Logger,
-    storage: &Storage,
-    sandbox: &Arc<Mutex<Sandbox>>,
-) -> Result<String> {
-    let storage = storage.clone();
-    if !Path::new(&storage.source).exists() {
-        get_virtio_mmio_device_name(sandbox, &storage.source)
-            .await
-            .context("failed to get mmio device name")?;
-    }
-    //The source path is VmPath
-    common_storage_handler(logger, &storage)
-}
-
-// virtiofs_storage_handler handles the storage for virtio-fs.
-#[instrument]
-async fn virtiofs_storage_handler(
-    logger: &Logger,
-    storage: &Storage,
-    _sandbox: &Arc<Mutex<Sandbox>>,
-) -> Result<String> {
-    common_storage_handler(logger, storage)
-}
-
-// virtio_blk_storage_handler handles the storage for blk driver.
-#[instrument]
-async fn virtio_blk_storage_handler(
-    logger: &Logger,
-    storage: &Storage,
-    sandbox: &Arc<Mutex<Sandbox>>,
-) -> Result<String> {
-    let mut storage = storage.clone();
-    // If hot-plugged, get the device node path based on the PCI path
-    // otherwise use the virt path provided in Storage Source
-    if storage.source.starts_with("/dev") {
-        let metadata = fs::metadata(&storage.source)
-            .context(format!("get metadata on file {:?}", &storage.source))?;
-        let mode = metadata.permissions().mode();
-        if mode & libc::S_IFBLK == 0 {
-            return Err(anyhow!("Invalid device {}", &storage.source));
-        }
-    } else {
-        let pcipath = pci::Path::from_str(&storage.source)?;
-        let dev_path = get_virtio_blk_pci_device_name(sandbox, &pcipath).await?;
-        storage.source = dev_path;
-    }
-
-    common_storage_handler(logger, &storage)
-}
-
-// virtio_blk_ccw_storage_handler handles storage for the blk-ccw driver (s390x)
-#[cfg(target_arch = "s390x")]
-#[instrument]
-async fn virtio_blk_ccw_storage_handler(
-    logger: &Logger,
-    storage: &Storage,
-    sandbox: &Arc<Mutex<Sandbox>>,
-) -> Result<String> {
-    let mut storage = storage.clone();
-    let ccw_device = ccw::Device::from_str(&storage.source)?;
-    let dev_path = get_virtio_blk_ccw_device_name(sandbox, &ccw_device).await?;
-    storage.source = dev_path;
-    common_storage_handler(logger, &storage)
-}
-
-#[cfg(not(target_arch = "s390x"))]
-#[instrument]
-async fn virtio_blk_ccw_storage_handler(
-    _: &Logger,
-    _: &Storage,
-    _: &Arc<Mutex<Sandbox>>,
-) -> Result<String> {
-    Err(anyhow!("CCW is only supported on s390x"))
-}
-
-// virtio_scsi_storage_handler handles the  storage for scsi driver.
-#[instrument]
-async fn virtio_scsi_storage_handler(
-    logger: &Logger,
-    storage: &Storage,
-    sandbox: &Arc<Mutex<Sandbox>>,
-) -> Result<String> {
-    let mut storage = storage.clone();
-
-    // Retrieve the device path from SCSI address.
-    let dev_path = get_scsi_device_name(sandbox, &storage.source).await?;
-    storage.source = dev_path;
-
-    common_storage_handler(logger, &storage)
-}
-
-#[instrument]
-fn common_storage_handler(logger: &Logger, storage: &Storage) -> Result<String> {
-    mount_storage(logger, storage)?;
-    set_ownership(logger, storage)?;
-    Ok(storage.mount_point.clone())
-}
-
-// nvdimm_storage_handler handles the storage for NVDIMM driver.
-#[instrument]
-async fn nvdimm_storage_handler(
-    logger: &Logger,
-    storage: &Storage,
-    sandbox: &Arc<Mutex<Sandbox>>,
-) -> Result<String> {
-    let storage = storage.clone();
-
-    // Retrieve the device path from NVDIMM address.
-    wait_for_pmem_device(sandbox, &storage.source).await?;
-
-    common_storage_handler(logger, &storage)
-}
-
-async fn bind_watcher_storage_handler(
-    logger: &Logger,
-    storage: &Storage,
-    sandbox: &Arc<Mutex<Sandbox>>,
-    cid: Option<String>,
-) -> Result<()> {
-    let mut locked = sandbox.lock().await;
-
-    if let Some(cid) = cid {
-        locked
-            .bind_watcher
-            .add_container(cid, iter::once(storage.clone()), logger)
-            .await
-    } else {
-        Ok(())
-    }
-}
-
-// mount_storage performs the mount described by the storage structure.
-#[instrument]
-fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
-    let logger = logger.new(o!("subsystem" => "mount"));
-
-    // There's a special mechanism to create mountpoint from a `sharedfs` instance before
-    // starting the kata-agent. Check for such cases.
-    if storage.source == MOUNT_GUEST_TAG && is_mounted(&storage.mount_point)? {
-        warn!(
-            logger,
-            "{} already mounted on {}, ignoring...", MOUNT_GUEST_TAG, &storage.mount_point
-        );
-        return Ok(());
-    }
-
-    let mount_path = Path::new(&storage.mount_point);
-    let src_path = Path::new(&storage.source);
-    if storage.fstype == "bind" && !src_path.is_dir() {
-        ensure_destination_file_exists(mount_path).context("Could not create mountpoint file")?;
-    } else {
-        fs::create_dir_all(mount_path)
-            .map_err(anyhow::Error::from)
-            .context("Could not create mountpoint")?;
-    }
-    let (flags, options) = parse_mount_flags_and_options(storage.options.iter());
-
-    info!(logger, "mounting storage";
-        "mount-source" => src_path.display(),
-        "mount-destination" => mount_path.display(),
-        "mount-fstype"  => storage.fstype.as_str(),
-        "mount-options" => options.as_str(),
-    );
-
-    baremount(
-        src_path,
-        mount_path,
-        storage.fstype.as_str(),
-        flags,
-        options.as_str(),
-        &logger,
-    )
-}
-
-#[instrument]
-pub fn set_ownership(logger: &Logger, storage: &Storage) -> Result<()> {
-    let logger = logger.new(o!("subsystem" => "mount", "fn" => "set_ownership"));
-
-    // If fsGroup is not set, skip performing ownership change
-    if storage.fs_group.is_none() {
-        return Ok(());
-    }
-
-    let fs_group = storage.fs_group();
-    let read_only = storage.options.contains(&String::from("ro"));
-    let mount_path = Path::new(&storage.mount_point);
-    let metadata = mount_path.metadata().map_err(|err| {
-        error!(logger, "failed to obtain metadata for mount path";
-            "mount-path" => mount_path.to_str(),
-            "error" => err.to_string(),
-        );
-        err
-    })?;
-
-    if fs_group.group_change_policy == FSGroupChangePolicy::OnRootMismatch.into()
-        && metadata.gid() == fs_group.group_id
-    {
-        let mut mask = if read_only { RO_MASK } else { RW_MASK };
-        mask |= EXEC_MASK;
-
-        // With fsGroup change policy to OnRootMismatch, if the current
-        // gid of the mount path root directory matches the desired gid
-        // and the current permission of mount path root directory is correct,
-        // then ownership change will be skipped.
-        let current_mode = metadata.permissions().mode();
-        if (mask & current_mode == mask) && (current_mode & MODE_SETGID != 0) {
-            info!(logger, "skipping ownership change for volume";
-                "mount-path" => mount_path.to_str(),
-                "fs-group" => fs_group.group_id.to_string(),
-            );
-            return Ok(());
-        }
-    }
-
-    info!(logger, "performing recursive ownership change";
-        "mount-path" => mount_path.to_str(),
-        "fs-group" => fs_group.group_id.to_string(),
-    );
-    recursive_ownership_change(
-        mount_path,
-        None,
-        Some(Gid::from_raw(fs_group.group_id)),
-        read_only,
-    )
-}
-
-#[instrument]
-pub fn recursive_ownership_change(
-    path: &Path,
-    uid: Option<Uid>,
-    gid: Option<Gid>,
-    read_only: bool,
-) -> Result<()> {
-    let mut mask = if read_only { RO_MASK } else { RW_MASK };
-    if path.is_dir() {
-        for entry in fs::read_dir(path)? {
-            recursive_ownership_change(entry?.path().as_path(), uid, gid, read_only)?;
-        }
-        mask |= EXEC_MASK;
-        mask |= MODE_SETGID;
-    }
-
-    // We do not want to change the permission of the underlying file
-    // using symlink. Hence we skip symlinks from recursive ownership
-    // and permission changes.
-    if path.is_symlink() {
-        return Ok(());
-    }
-
-    nix::unistd::chown(path, uid, gid)?;
-
-    if gid.is_some() {
-        let metadata = path.metadata()?;
-        let mut permission = metadata.permissions();
-        let target_mode = metadata.mode() | mask;
-        permission.set_mode(target_mode);
-        fs::set_permissions(path, permission)?;
-    }
-
-    Ok(())
-}
-
 /// Looks for `mount_point` entry in the /proc/mounts.
 #[instrument]
 pub fn is_mounted(mount_point: &str) -> Result<bool> {
     let mount_point = mount_point.trim_end_matches('/');
-    let found = fs::metadata(mount_point).is_ok()
-        // Looks through /proc/mounts and check if the mount exists
-        && fs::read_to_string("/proc/mounts")?
-        .lines()
-        .any(|line| {
-            // The 2nd column reveals the mount point.
-            line.split_whitespace()
-                .nth(1)
-                .map(|target| mount_point.eq(target))
-                .unwrap_or(false)
-        });
-
+    let found = fs::metadata(mount_point).is_ok() && get_linux_mount_info(mount_point).is_ok();
     Ok(found)
 }
 
 #[instrument]
-fn parse_mount_flags_and_options(
-    opts_iter: impl Iterator<Item = impl AsRef<str>> + Debug,
-) -> (MsFlags, String) {
-    let mut flags = MsFlags::empty();
-    let mut options: String = "".to_string();
-
-    for opt in opts_iter {
-        let opt = opt.as_ref();
-        if !opt.is_empty() {
-            match FLAGS.get(opt) {
-                Some(x) => {
-                    let (clear, f) = *x;
-                    if clear {
-                        flags &= !f;
-                    } else {
-                        flags |= f;
-                    }
-                }
-                None => {
-                    if opt.starts_with("io.katacontainers.") {
-                        continue;
-                    }
-
-                    if !options.is_empty() {
-                        options.push_str(format!(",{}", opt).as_str());
-                    } else {
-                        options.push_str(opt);
-                    }
-                }
-            };
-        }
-    }
-    (flags, options)
-}
-
-// add_storages takes a list of storages passed by the caller, and perform the
-// associated operations such as waiting for the device to show up, and mount
-// it to a specific location, according to the type of handler chosen, and for
-// each storage.
-#[instrument]
-pub async fn add_storages(
-    logger: Logger,
-    storages: &[Storage],
-    sandbox: &Arc<Mutex<Sandbox>>,
-    cid: Option<String>,
-) -> Result<Vec<String>> {
-    let mut mount_list = Vec::new();
-
-    for storage in storages {
-        let handler_name = &storage.driver;
-        let logger =
-            logger.new(o!( "subsystem" => "storage", "storage-type" => handler_name.to_string()));
-
-        {
-            let mut sb = sandbox.lock().await;
-            let new_storage = sb.set_sandbox_storage(&storage.mount_point);
-            if !new_storage {
-                continue;
-            }
-        }
-
-        let res = match handler_name.as_str() {
-            DRIVER_BLK_TYPE => virtio_blk_storage_handler(&logger, storage, sandbox).await,
-            DRIVER_BLK_CCW_TYPE => virtio_blk_ccw_storage_handler(&logger, storage, sandbox).await,
-            DRIVER_9P_TYPE => virtio9p_storage_handler(&logger, storage, sandbox).await,
-            DRIVER_VIRTIOFS_TYPE => virtiofs_storage_handler(&logger, storage, sandbox).await,
-            DRIVER_EPHEMERAL_TYPE => ephemeral_storage_handler(&logger, storage, sandbox).await,
-            DRIVER_OVERLAYFS_TYPE => {
-                overlayfs_storage_handler(&logger, storage, cid.as_deref(), sandbox).await
-            }
-            DRIVER_MMIO_BLK_TYPE => virtiommio_blk_storage_handler(&logger, storage, sandbox).await,
-            DRIVER_LOCAL_TYPE => local_storage_handler(&logger, storage, sandbox).await,
-            DRIVER_SCSI_TYPE => virtio_scsi_storage_handler(&logger, storage, sandbox).await,
-            DRIVER_NVDIMM_TYPE => nvdimm_storage_handler(&logger, storage, sandbox).await,
-            DRIVER_WATCHABLE_BIND_TYPE => {
-                bind_watcher_storage_handler(&logger, storage, sandbox, cid.clone()).await?;
-                // Don't register watch mounts, they're handled separately by the watcher.
-                Ok(String::new())
-            }
-            _ => {
-                return Err(anyhow!(
-                    "Failed to find the storage handler {}",
-                    storage.driver.to_owned()
-                ));
-            }
-        };
-
-        let mount_point = match res {
-            Err(e) => {
-                error!(
-                    logger,
-                    "add_storages failed, storage: {:?}, error: {:?} ", storage, e
-                );
-                let mut sb = sandbox.lock().await;
-                if let Err(e) = sb.unset_sandbox_storage(&storage.mount_point) {
-                    warn!(logger, "fail to unset sandbox storage {:?}", e);
-                }
-                return Err(e);
-            }
-            Ok(m) => m,
-        };
-
-        if !mount_point.is_empty() {
-            mount_list.push(mount_point);
-        }
-    }
-
-    Ok(mount_list)
-}
-
-#[instrument]
 fn mount_to_rootfs(logger: &Logger, m: &InitMount) -> Result<()> {
-    let (flags, options) = parse_mount_flags_and_options(m.options.iter());
-
     fs::create_dir_all(m.dest).context("could not create directory")?;
 
+    let (flags, options) = parse_mount_options(&m.options)?;
     let source = Path::new(m.src);
     let dest = Path::new(m.dest);
 
     baremount(source, dest, m.fstype, flags, &options, logger).or_else(|e| {
-        if m.src != "dev" {
-            return Err(e);
+        if m.src == "dev" {
+            error!(
+                logger,
+                "Could not mount filesystem from {} to {}", m.src, m.dest
+            );
+            Ok(())
+        } else {
+            Err(e)
         }
-
-        error!(
-            logger,
-            "Could not mount filesystem from {} to {}", m.src, m.dest
-        );
-
-        Ok(())
-    })?;
-
-    Ok(())
+    })
 }
 
 #[instrument]
@@ -950,7 +167,7 @@ pub fn get_mount_fs_type(mount_point: &str) -> Result<String> {
 }
 
 // get_mount_fs_type_from_file returns the FS type corresponding to the passed mount point and
-// any error ecountered.
+// any error encountered.
 #[instrument]
 pub fn get_mount_fs_type_from_file(mount_file: &str, mount_point: &str) -> Result<String> {
     if mount_point.is_empty() {
@@ -964,13 +181,10 @@ pub fn get_mount_fs_type_from_file(mount_file: &str, mount_point: &str) -> Resul
 
     // Read the file line by line using the lines() iterator from std::io::BufRead.
     for (_index, line) in content.lines().enumerate() {
-        let capes = match re.captures(line) {
-            Some(c) => c,
-            None => continue,
-        };
-
-        if capes.len() > 1 {
-            return Ok(capes[1].to_string());
+        if let Some(capes) = re.captures(line) {
+            if capes.len() > 1 {
+                return Ok(capes[1].to_string());
+            }
         }
     }
 
@@ -1085,57 +299,25 @@ pub fn cgroups_mount(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result<
 
     // Enable memory hierarchical account.
     // For more information see https://www.kernel.org/doc/Documentation/cgroup-v1/memory.txt
-    online_device("/sys/fs/cgroup/memory/memory.use_hierarchy")?;
-    Ok(())
+    online_device("/sys/fs/cgroup/memory/memory.use_hierarchy")
 }
 
 #[instrument]
-pub fn remove_mounts(mounts: &[String]) -> Result<()> {
+pub fn remove_mounts<P: AsRef<str> + std::fmt::Debug>(mounts: &[P]) -> Result<()> {
     for m in mounts.iter() {
-        nix::mount::umount(m.as_str()).context(format!("failed to umount {:?}", m))?;
+        nix::mount::umount(m.as_ref()).context(format!("failed to umount {:?}", m.as_ref()))?;
     }
     Ok(())
-}
-
-#[instrument]
-fn ensure_destination_file_exists(path: &Path) -> Result<()> {
-    if path.is_file() {
-        return Ok(());
-    } else if path.exists() {
-        return Err(anyhow!("{:?} exists but is not a regular file", path));
-    }
-
-    let dir = path
-        .parent()
-        .ok_or_else(|| anyhow!("failed to find parent path for {:?}", path))?;
-
-    fs::create_dir_all(dir).context(format!("create_dir_all {:?}", dir))?;
-
-    fs::File::create(path).context(format!("create empty file {:?}", path))?;
-
-    Ok(())
-}
-
-#[instrument]
-fn parse_options(option_list: &[String]) -> HashMap<String, String> {
-    let mut options = HashMap::new();
-    for opt in option_list {
-        let fields: Vec<&str> = opt.split('=').collect();
-        if fields.len() == 2 {
-            options.insert(fields[0].to_string(), fields[1].to_string());
-        }
-    }
-    options
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use protocols::agent::FSGroup;
     use slog::Drain;
     use std::fs::File;
     use std::fs::OpenOptions;
     use std::io::Write;
+    use std::os::unix::fs::PermissionsExt;
     use std::path::PathBuf;
     use tempfile::tempdir;
     use test_utils::TestUserType;
@@ -1706,145 +888,6 @@ mod tests {
     }
 
     #[test]
-    fn test_ensure_destination_file_exists() {
-        let dir = tempdir().expect("failed to create tmpdir");
-
-        let mut testfile = dir.into_path();
-        testfile.push("testfile");
-
-        let result = ensure_destination_file_exists(&testfile);
-
-        assert!(result.is_ok());
-        assert!(testfile.exists());
-
-        let result = ensure_destination_file_exists(&testfile);
-        assert!(result.is_ok());
-
-        assert!(testfile.is_file());
-    }
-
-    #[test]
-    fn test_mount_storage() {
-        #[derive(Debug)]
-        struct TestData<'a> {
-            test_user: TestUserType,
-            storage: Storage,
-            error_contains: &'a str,
-
-            make_source_dir: bool,
-            make_mount_dir: bool,
-            deny_mount_permission: bool,
-        }
-
-        impl Default for TestData<'_> {
-            fn default() -> Self {
-                TestData {
-                    test_user: TestUserType::Any,
-                    storage: Storage {
-                        mount_point: "mnt".to_string(),
-                        source: "src".to_string(),
-                        fstype: "tmpfs".to_string(),
-                        ..Default::default()
-                    },
-                    make_source_dir: true,
-                    make_mount_dir: false,
-                    deny_mount_permission: false,
-                    error_contains: "",
-                }
-            }
-        }
-
-        let tests = &[
-            TestData {
-                test_user: TestUserType::NonRootOnly,
-                error_contains: "EPERM: Operation not permitted",
-                ..Default::default()
-            },
-            TestData {
-                test_user: TestUserType::RootOnly,
-                ..Default::default()
-            },
-            TestData {
-                storage: Storage {
-                    mount_point: "mnt".to_string(),
-                    source: "src".to_string(),
-                    fstype: "bind".to_string(),
-                    ..Default::default()
-                },
-                make_source_dir: false,
-                make_mount_dir: true,
-                error_contains: "Could not create mountpoint",
-                ..Default::default()
-            },
-            TestData {
-                test_user: TestUserType::NonRootOnly,
-                deny_mount_permission: true,
-                error_contains: "Could not create mountpoint",
-                ..Default::default()
-            },
-        ];
-
-        for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
-
-            skip_loop_by_user!(msg, d.test_user);
-
-            let drain = slog::Discard;
-            let logger = slog::Logger::root(drain, o!());
-
-            let tempdir = tempdir().unwrap();
-
-            let source = tempdir.path().join(&d.storage.source);
-            let mount_point = tempdir.path().join(&d.storage.mount_point);
-
-            let storage = Storage {
-                source: source.to_str().unwrap().to_string(),
-                mount_point: mount_point.to_str().unwrap().to_string(),
-                ..d.storage.clone()
-            };
-
-            if d.make_source_dir {
-                fs::create_dir_all(&storage.source).unwrap();
-            }
-            if d.make_mount_dir {
-                fs::create_dir_all(&storage.mount_point).unwrap();
-            }
-
-            if d.deny_mount_permission {
-                fs::set_permissions(
-                    mount_point.parent().unwrap(),
-                    fs::Permissions::from_mode(0o000),
-                )
-                .unwrap();
-            }
-
-            let result = mount_storage(&logger, &storage);
-
-            // restore permissions so tempdir can be cleaned up
-            if d.deny_mount_permission {
-                fs::set_permissions(
-                    mount_point.parent().unwrap(),
-                    fs::Permissions::from_mode(0o755),
-                )
-                .unwrap();
-            }
-
-            if result.is_ok() {
-                nix::mount::umount(&mount_point).unwrap();
-            }
-
-            let msg = format!("{}: result: {:?}", msg, result);
-            if d.error_contains.is_empty() {
-                assert!(result.is_ok(), "{}", msg);
-            } else {
-                assert!(result.is_err(), "{}", msg);
-                let error_msg = format!("{}", result.unwrap_err());
-                assert!(error_msg.contains(d.error_contains), "{}", msg);
-            }
-        }
-    }
-
-    #[test]
     fn test_mount_to_rootfs() {
         #[derive(Debug)]
         struct TestData<'a> {
@@ -1944,62 +987,6 @@ mod tests {
     }
 
     #[test]
-    fn test_get_pagesize_and_size_from_option() {
-        let expected_pagesize = 2048;
-        let expected_size = 107374182;
-        let expected = (expected_pagesize, expected_size);
-
-        let data = vec![
-            // (input, expected, is_ok)
-            ("size-1=107374182,pagesize-1=2048", expected, false),
-            ("size-1=107374182,pagesize=2048", expected, false),
-            ("size=107374182,pagesize-1=2048", expected, false),
-            ("size=107374182,pagesize=abc", expected, false),
-            ("size=abc,pagesize=2048", expected, false),
-            ("size=,pagesize=2048", expected, false),
-            ("size=107374182,pagesize=", expected, false),
-            ("size=107374182,pagesize=2048", expected, true),
-            ("pagesize=2048,size=107374182", expected, true),
-            ("foo=bar,pagesize=2048,size=107374182", expected, true),
-            (
-                "foo=bar,pagesize=2048,foo1=bar1,size=107374182",
-                expected,
-                true,
-            ),
-            (
-                "pagesize=2048,foo1=bar1,foo=bar,size=107374182",
-                expected,
-                true,
-            ),
-            (
-                "foo=bar,pagesize=2048,foo1=bar1,size=107374182,foo2=bar2",
-                expected,
-                true,
-            ),
-            (
-                "foo=bar,size=107374182,foo1=bar1,pagesize=2048",
-                expected,
-                true,
-            ),
-        ];
-
-        for case in data {
-            let input = case.0;
-            let r = get_pagesize_and_size_from_option(&[input.to_string()]);
-
-            let is_ok = case.2;
-            if is_ok {
-                let expected = case.1;
-                let (pagesize, size) = r.unwrap();
-                assert_eq!(expected.0, pagesize);
-                assert_eq!(expected.1, size);
-            } else {
-                assert!(r.is_err());
-            }
-        }
-    }
-
-    #[test]
     fn test_parse_mount_flags_and_options() {
         #[derive(Debug)]
         struct TestData<'a> {
@@ -2041,215 +1028,12 @@ mod tests {
         for (i, d) in tests.iter().enumerate() {
             let msg = format!("test[{}]: {:?}", i, d);
 
-            let result = parse_mount_flags_and_options(d.options_vec.iter());
+            let result = parse_mount_options(&d.options_vec).unwrap();
 
             let msg = format!("{}: result: {:?}", msg, result);
 
             let expected_result = (d.result.0, d.result.1.to_owned());
             assert_eq!(expected_result, result, "{}", msg);
-        }
-    }
-
-    #[test]
-    fn test_set_ownership() {
-        skip_if_not_root!();
-
-        let logger = slog::Logger::root(slog::Discard, o!());
-
-        #[derive(Debug)]
-        struct TestData<'a> {
-            mount_path: &'a str,
-            fs_group: Option<FSGroup>,
-            read_only: bool,
-            expected_group_id: u32,
-            expected_permission: u32,
-        }
-
-        let tests = &[
-            TestData {
-                mount_path: "foo",
-                fs_group: None,
-                read_only: false,
-                expected_group_id: 0,
-                expected_permission: 0,
-            },
-            TestData {
-                mount_path: "rw_mount",
-                fs_group: Some(FSGroup {
-                    group_id: 3000,
-                    group_change_policy: FSGroupChangePolicy::Always.into(),
-                    ..Default::default()
-                }),
-                read_only: false,
-                expected_group_id: 3000,
-                expected_permission: RW_MASK | EXEC_MASK | MODE_SETGID,
-            },
-            TestData {
-                mount_path: "ro_mount",
-                fs_group: Some(FSGroup {
-                    group_id: 3000,
-                    group_change_policy: FSGroupChangePolicy::OnRootMismatch.into(),
-                    ..Default::default()
-                }),
-                read_only: true,
-                expected_group_id: 3000,
-                expected_permission: RO_MASK | EXEC_MASK | MODE_SETGID,
-            },
-        ];
-
-        let tempdir = tempdir().expect("failed to create tmpdir");
-
-        for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
-
-            let mount_dir = tempdir.path().join(d.mount_path);
-            fs::create_dir(&mount_dir)
-                .unwrap_or_else(|_| panic!("{}: failed to create root directory", msg));
-
-            let directory_mode = mount_dir.as_path().metadata().unwrap().permissions().mode();
-            let mut storage_data = Storage::new();
-            if d.read_only {
-                storage_data.set_options(vec!["foo".to_string(), "ro".to_string()]);
-            }
-            if let Some(fs_group) = d.fs_group.clone() {
-                storage_data.set_fs_group(fs_group);
-            }
-            storage_data.mount_point = mount_dir.clone().into_os_string().into_string().unwrap();
-
-            let result = set_ownership(&logger, &storage_data);
-            assert!(result.is_ok());
-
-            assert_eq!(
-                mount_dir.as_path().metadata().unwrap().gid(),
-                d.expected_group_id
-            );
-            assert_eq!(
-                mount_dir.as_path().metadata().unwrap().permissions().mode(),
-                (directory_mode | d.expected_permission)
-            );
-        }
-    }
-
-    #[test]
-    fn test_recursive_ownership_change() {
-        skip_if_not_root!();
-
-        const COUNT: usize = 5;
-
-        #[derive(Debug)]
-        struct TestData<'a> {
-            // Directory where the recursive ownership change should be performed on
-            path: &'a str,
-
-            // User ID for ownership change
-            uid: u32,
-
-            // Group ID for ownership change
-            gid: u32,
-
-            // Set when the permission should be read-only
-            read_only: bool,
-
-            // The expected permission of all directories after ownership change
-            expected_permission_directory: u32,
-
-            // The expected permission of all files after ownership change
-            expected_permission_file: u32,
-        }
-
-        let tests = &[
-            TestData {
-                path: "no_gid_change",
-                uid: 0,
-                gid: 0,
-                read_only: false,
-                expected_permission_directory: 0,
-                expected_permission_file: 0,
-            },
-            TestData {
-                path: "rw_gid_change",
-                uid: 0,
-                gid: 3000,
-                read_only: false,
-                expected_permission_directory: RW_MASK | EXEC_MASK | MODE_SETGID,
-                expected_permission_file: RW_MASK,
-            },
-            TestData {
-                path: "ro_gid_change",
-                uid: 0,
-                gid: 3000,
-                read_only: true,
-                expected_permission_directory: RO_MASK | EXEC_MASK | MODE_SETGID,
-                expected_permission_file: RO_MASK,
-            },
-        ];
-
-        let tempdir = tempdir().expect("failed to create tmpdir");
-
-        for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
-
-            let mount_dir = tempdir.path().join(d.path);
-            fs::create_dir(&mount_dir)
-                .unwrap_or_else(|_| panic!("{}: failed to create root directory", msg));
-
-            let directory_mode = mount_dir.as_path().metadata().unwrap().permissions().mode();
-            let mut file_mode: u32 = 0;
-
-            // create testing directories and files
-            for n in 1..COUNT {
-                let nest_dir = mount_dir.join(format!("nested{}", n));
-                fs::create_dir(&nest_dir)
-                    .unwrap_or_else(|_| panic!("{}: failed to create nest directory", msg));
-
-                for f in 1..COUNT {
-                    let filename = nest_dir.join(format!("file{}", f));
-                    File::create(&filename)
-                        .unwrap_or_else(|_| panic!("{}: failed to create file", msg));
-                    file_mode = filename.as_path().metadata().unwrap().permissions().mode();
-                }
-            }
-
-            let uid = if d.uid > 0 {
-                Some(Uid::from_raw(d.uid))
-            } else {
-                None
-            };
-            let gid = if d.gid > 0 {
-                Some(Gid::from_raw(d.gid))
-            } else {
-                None
-            };
-            let result = recursive_ownership_change(&mount_dir, uid, gid, d.read_only);
-
-            assert!(result.is_ok());
-
-            assert_eq!(mount_dir.as_path().metadata().unwrap().gid(), d.gid);
-            assert_eq!(
-                mount_dir.as_path().metadata().unwrap().permissions().mode(),
-                (directory_mode | d.expected_permission_directory)
-            );
-
-            for n in 1..COUNT {
-                let nest_dir = mount_dir.join(format!("nested{}", n));
-                for f in 1..COUNT {
-                    let filename = nest_dir.join(format!("file{}", f));
-                    let file = Path::new(&filename);
-
-                    assert_eq!(file.metadata().unwrap().gid(), d.gid);
-                    assert_eq!(
-                        file.metadata().unwrap().permissions().mode(),
-                        (file_mode | d.expected_permission_file)
-                    );
-                }
-
-                let dir = Path::new(&nest_dir);
-                assert_eq!(dir.metadata().unwrap().gid(), d.gid);
-                assert_eq!(
-                    dir.metadata().unwrap().permissions().mode(),
-                    (directory_mode | d.expected_permission_directory)
-                );
-            }
         }
     }
 }
