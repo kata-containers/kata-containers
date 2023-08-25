@@ -32,7 +32,10 @@ jobs:
   run-metrics:
     needs: setup-kata
     strategy:
-      fail-fast: true
+      # We can set this to true whenever we're 100% sure that
+      # the all the tests are not flaky, otherwise we'll fail
+      # all the tests due to a single flaky instance.
+      fail-fast: false
       matrix:
         vmm: ['clh', 'qemu']
       max-parallel: 1
