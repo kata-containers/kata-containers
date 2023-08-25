@@ -113,7 +113,7 @@ options:
 	cc-rootfs-initrd
 	cc-sev-rootfs-initrd
 	cc-se-image
-	cc-shimv2
+	cc-shim-v2
 EOF
 
 	exit "${return_code}"
@@ -173,8 +173,8 @@ install_cached_cc_shim_v2() {
 	local root_hash_vanilla="${repo_root_dir}/tools/osbuilder/root_hash_vanilla.txt"
 	local root_hash_tdx="${repo_root_dir}/tools/osbuilder/root_hash_tdx.txt"
 
-	local rootfs_image_cached_root_hash="${jenkins_url}/job/kata-containers-2.0-rootfs-image-cc-$(uname -m)/${cached_artifacts_path}/root_hash_vanilla.txt"
-	local tdx_rootfs_image_cached_root_hash="${jenkins_url}/job/kata-containers-2.0-rootfs-image-tdx-cc-$(uname -m)/${cached_artifacts_path}/root_hash_tdx.txt"
+	local rootfs_image_cached_root_hash="${jenkins_url}/job/kata-containers-2.0-rootfs-image-cc-${ARCH}/${cached_artifacts_path}/root_hash_vanilla.txt"
+	local tdx_rootfs_image_cached_root_hash="${jenkins_url}/job/kata-containers-2.0-rootfs-image-tdx-cc-${ARCH}/${cached_artifacts_path}/root_hash_tdx.txt"
 
 
 	wget "${rootfs_image_cached_root_hash}" -O "rootfs_root_hash_vanilla.txt" || return 1
@@ -256,7 +256,7 @@ install_cc_shimv2() {
 
 	install_cached_cc_shim_v2 \
 		"shim-v2" \
-		"${jenkins_url}/job/kata-containers-2.0-shim-v2-cc-$(uname -m)/${cached_artifacts_path}" \
+		"${jenkins_url}/job/kata-containers-2.0-shim-v2-cc-${ARCH}/${cached_artifacts_path}" \
 		"${shim_v2_version}" \
 		"$(get_shim_v2_image_name)" \
 		"${final_tarball_name}" \
