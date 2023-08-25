@@ -31,5 +31,6 @@ setup() {
 }
 
 teardown() {
+	kubectl delete -f "${pod_config_dir}/pod-quota-deployment.yaml"
 	kubectl delete -f "${pod_config_dir}/resource-quota.yaml"
 }
