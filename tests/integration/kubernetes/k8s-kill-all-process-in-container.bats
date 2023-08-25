@@ -15,7 +15,7 @@ setup() {
 	get_pod_config_dir
 }
 
-@test "Check PID namespaces" {
+@test "Kill all processes in container" {
 	# Create the pod
 	kubectl create -f "${pod_config_dir}/initcontainer-shareprocesspid.yaml"
 
