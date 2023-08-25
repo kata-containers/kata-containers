@@ -126,11 +126,11 @@ func ioCopy(shimLog *logrus.Entry, exitch, stdinCloser chan struct{}, tty *ttyIO
 			p := bufPool.Get().(*[]byte)
 			defer bufPool.Put(p)
 			io.CopyBuffer(tty.io.Stdout(), stdoutPipe, *p)
-			wg.Done()
 			if tty.io.Stdin() != nil {
 				// close stdin to make the other routine stop
 				tty.io.Stdin().Close()
 			}
+			wg.Done()
 			shimLog.Debug("stdout io stream copy exited")
 		}()
 	}
