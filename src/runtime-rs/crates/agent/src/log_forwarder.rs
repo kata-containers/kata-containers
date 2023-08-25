@@ -64,16 +64,14 @@ impl LogForwarder {
                     Ok(stream) => {
                         let stream = BufReader::new(stream);
                         let mut lines = stream.lines();
-                        while let Ok(line) = lines.next_line().await {
-                            if let Some(l) = line {
-                                match parse_agent_log_level(&l) {
-                                    LOG_LEVEL_TRACE => trace!(sl!(), "{}", l),
-                                    LOG_LEVEL_DEBUG => debug!(sl!(), "{}", l),
-                                    LOG_LEVEL_WARNING => warn!(sl!(), "{}", l),
-                                    LOG_LEVEL_ERROR => error!(sl!(), "{}", l),
-                                    LOG_LEVEL_CRITICAL => crit!(sl!(), "{}", l),
-                                    _ => info!(sl!(), "{}", l),
-                                }
+                        while let Ok(Some(l)) = lines.next_line().await {
+                            match parse_agent_log_level(&l) {
+                                LOG_LEVEL_TRACE => trace!(sl!(), "{}", l),
+                                LOG_LEVEL_DEBUG => debug!(sl!(), "{}", l),
+                                LOG_LEVEL_WARNING => warn!(sl!(), "{}", l),
+                                LOG_LEVEL_ERROR => error!(sl!(), "{}", l),
+                                LOG_LEVEL_CRITICAL => crit!(sl!(), "{}", l),
+                                _ => info!(sl!(), "{}", l),
                             }
                         }
                     }
