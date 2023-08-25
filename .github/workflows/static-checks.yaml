@@ -15,6 +15,10 @@ jobs:
   static-checks:
     runs-on: garm-ubuntu-2004
     strategy:
+      # We can set this to true whenever we're 100% sure that
+      # the all the tests are not flaky, otherwise we'll fail
+      # all the tests due to a single flaky instance.
+      fail-fast: false
       matrix:
         cmd:
           - "make vendor"
