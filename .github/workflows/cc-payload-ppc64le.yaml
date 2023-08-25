@@ -1,0 +1,74 @@
+name: Publish Kata Containers payload for Confidential Containers (ppc64le)
+on:
+  workflow_call:
+    inputs:
+      target-arch:
+        required: true
+        type: string
+
+jobs:
+  build-asset-cc-shim-v2:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build cc-shim-v2
+        run: |
+          make CROSS_BUILD=true ARCH=${{ inputs.target-arch }} TARGET_ARCH=${{ inputs.target-arch }} cc-shim-v2-tarball
+          build_dir=$(readlink -f build)
+          # store-artifact does not work with symlink
+          sudo cp -r "${build_dir}" "kata-build"
+
+      - name: store-artifact cc-shim-v2
+        uses: actions/upload-artifact@v3
+        with:
+          name: kata-artifacts-ppc64le
+          path: kata-build/kata-static-cc-shim-v2.tar.xz
+          retention-days: 1
+          if-no-files-found: error
+
+  create-kata-tarball:
+    runs-on: ubuntu-latest
+    needs: build-asset-cc-shim-v2
+    steps:
+      - uses: actions/checkout@v3
+      - name: get-artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: kata-artifacts-ppc64le
+          path: kata-artifacts
+      - name: merge-artifacts
+        run: |
+          ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-builds.sh kata-artifacts
+      - name: store-artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: kata-static-tarball-ppc64le
+          path: kata-static.tar.xz
+          retention-days: 1
+          if-no-files-found: error
+
+  kata-payload:
+    needs: create-kata-tarball
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to quay.io
+        uses: docker/login-action@v2
+        with:
+          registry: quay.io
+          username: ${{ secrets.COCO_QUAY_DEPLOYER_USERNAME }}
+          password: ${{ secrets.COCO_QUAY_DEPLOYER_PASSWORD }}
+
+      - uses: actions/checkout@v3
+      - name: get-kata-tarball
+        uses: actions/download-artifact@v3
+        with:
+          name: kata-static-tarball-ppc64le
+
+      - name: build-and-push-kata-payload
+        id: build-and-push-kata-payload
+        run: |
+          ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
+          $(pwd)/kata-static.tar.xz \
+          "quay.io/confidential-containers/runtime-payload" \
+          "kata-containers-${{ inputs.target-arch }}" \
+          cross-build ${{ inputs.target-arch }}

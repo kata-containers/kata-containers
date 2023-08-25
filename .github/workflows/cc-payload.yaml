@@ -16,10 +16,16 @@ jobs:
     with:
       target-arch: s390x
     secrets: inherit
+    
+  build-assets-ppc64le:
+    uses: ./.github/workflows/cc-payload-ppc64le.yaml
+    with:
+      target-arch: ppc64le
+    secrets: inherit
 
   publish:
     runs-on: ubuntu-latest
-    needs: [build-assets-amd64, build-assets-s390x]
+    needs: [build-assets-amd64, build-assets-s390x, build-assets-ppc64le]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -35,12 +41,14 @@ jobs:
         run: |
           docker manifest create quay.io/confidential-containers/runtime-payload:kata-containers-${GITHUB_SHA} \
           --amend quay.io/confidential-containers/runtime-payload:kata-containers-${GITHUB_SHA}-amd64 \
-          --amend quay.io/confidential-containers/runtime-payload:kata-containers-${GITHUB_SHA}-s390x
+          --amend quay.io/confidential-containers/runtime-payload:kata-containers-${GITHUB_SHA}-s390x \
+          --amend quay.io/confidential-containers/runtime-payload:kata-containers-${GITHUB_SHA}-ppc64le
           docker manifest push quay.io/confidential-containers/runtime-payload:kata-containers-${GITHUB_SHA}
 
       - name: Push latest multi-arch manifest
         run: |
           docker manifest create quay.io/confidential-containers/runtime-payload:kata-containers-latest \
           --amend quay.io/confidential-containers/runtime-payload:kata-containers-amd64 \
-          --amend quay.io/confidential-containers/runtime-payload:kata-containers-s390x
+          --amend quay.io/confidential-containers/runtime-payload:kata-containers-s390x \
+          --amend quay.io/confidential-containers/runtime-payload:kata-containers-ppc64le
           docker manifest push quay.io/confidential-containers/runtime-payload:kata-containers-latest
