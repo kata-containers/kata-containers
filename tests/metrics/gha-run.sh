@@ -81,14 +81,14 @@ function run_test_tensorflow() {
 	info "Running TensorFlow test using ${KATA_HYPERVISOR} hypervisor"
 
 	bash tests/metrics/machine_learning/tensorflow_nhwc.sh 1 20
-
-	check_metrics
 }
 
 function run_test_fio() {
 	info "Running FIO test using ${KATA_HYPERVISOR} hypervisor"
 
 	bash tests/metrics/storage/fio-k8s/fio-test-ci.sh
+
+	check_metrics
 }
 
 function run_test_iperf() {
