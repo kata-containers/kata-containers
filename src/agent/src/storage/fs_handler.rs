@@ -13,7 +13,10 @@ use kata_types::mount::StorageDevice;
 use protocols::agent::Storage;
 use tracing::instrument;
 
-use crate::storage::{common_storage_handler, new_device, StorageContext, StorageHandler};
+use crate::{
+    mount::{VERITY_DEVICE_MOUNT_OPTION, VERITY_DEVICE_MOUNT_PATH},
+    storage::{common_storage_handler, new_device, StorageContext, StorageHandler},
+};
 
 #[derive(Debug)]
 pub struct OverlayfsHandler {}
@@ -26,15 +29,15 @@ impl StorageHandler for OverlayfsHandler {
         mut storage: Storage,
         ctx: &mut StorageContext,
     ) -> Result<Arc<dyn StorageDevice>> {
+        let cid = ctx
+            .cid
+            .clone()
+            .ok_or_else(|| anyhow!("No container id in rw overlay"))?;
         if storage
             .options
             .iter()
             .any(|e| e == "io.katacontainers.fs-opt.overlay-rw")
         {
-            let cid = ctx
-                .cid
-                .clone()
-                .ok_or_else(|| anyhow!("No container id in rw overlay"))?;
             let cpath = Path::new(crate::rpc::CONTAINER_BASE).join(cid);
             let work = cpath.join("work");
             let upper = cpath.join("upper");
@@ -49,6 +52,18 @@ impl StorageHandler for OverlayfsHandler {
             storage
                 .options
                 .push(format!("workdir={}", work.to_string_lossy()));
+        } else if storage
+            .options
+            .iter()
+            .any(|e| e == VERITY_DEVICE_MOUNT_OPTION)
+        {
+            let container_path = Path::new(VERITY_DEVICE_MOUNT_PATH);
+            fs::create_dir_all(container_path.join(&cid).join("snapshotdir").join("fs"))
+                .map_err(anyhow::Error::from)
+                .context("Could not create upperdir")?;
+            fs::create_dir_all(container_path.join(&cid).join("snapshotdir").join("work"))
+                .map_err(anyhow::Error::from)
+                .context("Could not create workdir")?;
         }
 
         let path = common_storage_handler(ctx.logger, &storage)?;

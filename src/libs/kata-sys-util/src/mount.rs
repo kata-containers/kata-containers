@@ -424,6 +424,8 @@ pub fn parse_mount_options<T: AsRef<str>>(options: &[T]) -> Result<(MsFlags, Str
             return Err(Error::InvalidMountOption("loop".to_string()));
         } else if let Some(v) = parse_mount_flags(flags, opt.as_ref()) {
             flags = v;
+        } else if opt.as_ref().starts_with("io.katacontainers.") {
+            continue;
         } else {
             data.push(opt.as_ref().to_string());
         }

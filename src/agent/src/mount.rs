@@ -22,6 +22,7 @@ use crate::linux_abi::*;
 
 pub const TYPE_ROOTFS: &str = "rootfs";
 pub const VERITY_DEVICE_MOUNT_PATH: &str = "/run/kata-containers/verity";
+pub const VERITY_DEVICE_MOUNT_OPTION: &str = "io.katacontainers.fs-opt.dm-verity";
 
 #[derive(Debug, PartialEq)]
 pub struct InitMount<'a> {
