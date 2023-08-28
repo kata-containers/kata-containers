@@ -97,3 +97,16 @@ checktype = "mean"
 midval = 98.0
 minpercent = 20.0
 maxpercent = 20.0
+
+[[metric]]
+name = "fio"
+type = "json"
+description = "measure write 90 percentile using fio"
+# Min and Max values to set a 'range' that
+# the median of the CSV Results data must fall
+# within (inclusive)
+checkvar = ".\"fio\".Results | .[] | .write90percentile.Result"
+checktype = "mean"
+midval = 38656.0
+minpercent = 20.0
+maxpercent = 20.0
