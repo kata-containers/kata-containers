@@ -32,6 +32,11 @@ TARGET_ARCH=${TARGET_ARCH:-$(uname -m)}
 TARGET_OS=${TARGET_OS:-linux}
 TARGET_ARCH=${TARGET_ARCH:-$ARCH}
 
+# We've seen issues related to the /home/runner/.docker/buildx/activity/default file
+# constantly being with the wrong permissions.
+# Let's just remove the file before we build.
+rm -f $HOME/.docker/buildx/activity/default
+
 [ "${CROSS_BUILD}" == "true" ] && BUILDX="buildx" && PLATFORM="--platform=${TARGET_OS}/${TARGET_ARCH}"
 if [ "${CROSS_BUILD}" == "true" ]; then
        # check if the current docker support docker buildx
