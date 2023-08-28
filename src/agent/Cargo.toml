@@ -72,7 +72,7 @@ clap = { version = "3.0.1", features = ["derive"] }
 openssl = { version = "0.10.38", features = ["vendored"] }
 
 # Image pull/decrypt
-image-rs = { git = "https://github.com/confidential-containers/guest-components", rev = "3d8192f8d3efab041916ea4d60e32248ac6ec43d", default-features = false, features = ["kata-cc-native-tls"] }
+image-rs = { git = "https://github.com/confidential-containers/guest-components", rev = "5df1101", default-features = false, features = ["kata-cc-native-tls","verity"] }
 
 [patch.crates-io]
 oci-distribution = { git = "https://github.com/krustlet/oci-distribution.git", rev = "f44124c" }

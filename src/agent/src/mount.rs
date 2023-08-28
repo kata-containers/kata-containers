@@ -21,6 +21,7 @@ use crate::device::online_device;
 use crate::linux_abi::*;
 
 pub const TYPE_ROOTFS: &str = "rootfs";
+pub const VERITY_DEVICE_MOUNT_PATH: &str = "/run/kata-containers/verity";
 
 #[derive(Debug, PartialEq)]
 pub struct InitMount<'a> {
@@ -127,6 +128,15 @@ pub fn is_mounted(mount_point: &str) -> Result<bool> {
     let mount_point = mount_point.trim_end_matches('/');
     let found = fs::metadata(mount_point).is_ok() && get_linux_mount_info(mount_point).is_ok();
     Ok(found)
+}
+
+/// get device path of a mount point in the /proc/mounts.
+#[instrument]
+pub fn get_device_path_from_mount_point(mount_point: &str) -> Result<String> {
+    let mount_point = mount_point.trim_end_matches('/');
+    let mount_info = get_linux_mount_info(mount_point)
+        .map_err(|e| anyhow!("can not get mount info {}: {}", mount_point, e))?;
+    Ok(mount_info.device)
 }
 
 #[instrument]

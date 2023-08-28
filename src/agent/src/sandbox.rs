@@ -15,6 +15,7 @@ use std::sync::Arc;
 use std::{thread, time};
 
 use anyhow::{anyhow, Context, Result};
+use kata_sys_util::mount::get_device_mounted_count;
 use kata_types::cpu::CpuSet;
 use kata_types::mount::{StorageDevice, StorageDeviceGeneric};
 use libc::pid_t;
@@ -32,7 +33,10 @@ use tokio::sync::Mutex;
 use tracing::instrument;
 
 use crate::linux_abi::*;
-use crate::mount::{get_mount_fs_type, is_mounted, remove_mounts, TYPE_ROOTFS};
+use crate::mount::{
+    get_device_path_from_mount_point, get_mount_fs_type, is_mounted, remove_mounts, TYPE_ROOTFS,
+    VERITY_DEVICE_MOUNT_PATH,
+};
 use crate::namespace::Namespace;
 use crate::netlink::Handle;
 use crate::network::Network;
@@ -191,6 +195,19 @@ impl Sandbox {
         if matches!(is_mounted(path), Ok(true)) {
             let mounts = vec![path.to_string()];
             remove_mounts(&mounts)?;
+            if path.starts_with(VERITY_DEVICE_MOUNT_PATH) {
+                let verity_device_path =
+                    get_device_path_from_mount_point(path).map_err(|e| anyhow!("{}", e))?;
+                let count = get_device_mounted_count(verity_device_path.as_str())?;
+                if count <= 1 {
+                    let verity_device_name = Path::new(&verity_device_path)
+                        .file_name()
+                        .ok_or_else(|| anyhow::anyhow!("No filename"))?
+                        .to_str()
+                        .ok_or_else(|| anyhow::anyhow!("Invalid filename"))?;
+                    image_rs::verity::cleanup_verity_device(verity_device_name.to_string())?;
+                }
+            }
         }
 
         // "remove_dir" will fail if the mount point is backed by a read-only filesystem.

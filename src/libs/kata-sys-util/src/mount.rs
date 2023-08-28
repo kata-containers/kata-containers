@@ -159,6 +159,27 @@ pub fn get_linux_mount_info(mount_point: &str) -> Result<LinuxMountInfo> {
     Err(Error::NoMountEntry(mount_point.to_owned()))
 }
 
+pub fn get_device_mounted_count(device_path: &str) -> Result<u32> {
+    let mount_file = fs::File::open(PROC_MOUNTS_FILE)?;
+    let lines = std::io::BufReader::new(mount_file).lines();
+    let mut count = 0;
+    for mount in lines.flatten() {
+        let fields: Vec<&str> = mount.split(' ').collect();
+
+        if fields.len() != PROC_FIELDS_PER_LINE {
+            return Err(Error::InvalidMountEntry(
+                PROC_FIELDS_PER_LINE,
+                fields.len(),
+                mount,
+            ));
+        }
+        if device_path == fields[PROC_PATH_INDEX] {
+            count += 1;
+        }
+    }
+    Ok(count)
+}
+
 /// Recursively create destination for a mount.
 ///
 /// For a normal mount, the destination will always be a directory. For bind mount, the destination
