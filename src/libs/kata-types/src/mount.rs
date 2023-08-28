@@ -5,7 +5,9 @@
 //
 
 use anyhow::{anyhow, Context, Error, Result};
+use std::collections::hash_map::Entry;
 use std::convert::TryFrom;
+use std::fmt::Formatter;
 use std::{collections::HashMap, fs, path::PathBuf};
 
 /// Prefix to mark a volume as Kata special.
@@ -13,6 +15,9 @@ pub const KATA_VOLUME_TYPE_PREFIX: &str = "kata:";
 
 /// The Mount should be ignored by the host and handled by the guest.
 pub const KATA_GUEST_MOUNT_PREFIX: &str = "kata:guest-mount:";
+
+/// The sharedfs volume is mounted by guest OS before starting the kata-agent.
+pub const KATA_SHAREDFS_GUEST_PREMOUNT_TAG: &str = "kataShared";
 
 /// KATA_EPHEMERAL_DEV_TYPE creates a tmpfs backed volume for sharing files between containers.
 pub const KATA_EPHEMERAL_VOLUME_TYPE: &str = "ephemeral";
@@ -22,6 +27,9 @@ pub const KATA_HOST_DIR_VOLUME_TYPE: &str = "kata:hostdir";
 
 /// KATA_MOUNT_INFO_FILE_NAME is used for the file that holds direct-volume mount info
 pub const KATA_MOUNT_INFO_FILE_NAME: &str = "mountInfo.json";
+
+/// Specify `fsgid` for a volume or mount, `fsgid=1`.
+pub const KATA_MOUNT_OPTION_FS_GID: &str = "fsgid";
 
 /// KATA_DIRECT_VOLUME_ROOT_PATH is the root path used for concatenating with the direct-volume mount info file path
 pub const KATA_DIRECT_VOLUME_ROOT_PATH: &str = "/run/kata-containers/shared/direct-volumes";
@@ -418,6 +426,84 @@ impl TryFrom<&NydusExtraOptions> for KataVirtualVolume {
             }),
             ..Default::default()
         })
+    }
+}
+
+/// An implementation of generic storage device.
+pub struct StorageDeviceGeneric {
+    path: String,
+}
+
+impl std::fmt::Debug for StorageDeviceGeneric {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StorageState")
+            .field("path", &self.path)
+            .finish()
+    }
+}
+
+impl StorageDeviceGeneric {
+    /// Create a new instance of `StorageStateCommon`.
+    pub fn new(path: String) -> Self {
+        StorageDeviceGeneric { path }
+    }
+}
+
+impl StorageDevice for StorageDeviceGeneric {
+    fn path(&self) -> &str {
+        &self.path
+    }
+
+    fn cleanup(&self) {}
+}
+
+/// Trait object for storage device.
+pub trait StorageDevice: Send + Sync {
+    /// Path
+    fn path(&self) -> &str;
+
+    /// Clean up resources related to the storage device.
+    fn cleanup(&self);
+}
+
+/// Manager to manage registered storage device handlers.
+pub struct StorageHandlerManager<H> {
+    handlers: HashMap<String, H>,
+}
+
+impl<H> Default for StorageHandlerManager<H> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<H> StorageHandlerManager<H> {
+    /// Create a new instance of `StorageHandlerManager`.
+    pub fn new() -> Self {
+        Self {
+            handlers: HashMap::new(),
+        }
+    }
+
+    /// Register a storage device handler.
+    pub fn add_handler(&mut self, id: &str, handler: H) -> Result<()> {
+        match self.handlers.entry(id.to_string()) {
+            Entry::Occupied(_) => Err(anyhow!("storage handler for {} already exists", id)),
+            Entry::Vacant(entry) => {
+                entry.insert(handler);
+                Ok(())
+            }
+        }
+    }
+
+    /// Get storage handler with specified `id`.
+    pub fn handler(&self, id: &str) -> Option<&H> {
+        self.handlers.get(id)
+    }
+
+    /// Get names of registered handlers.
+    pub fn get_handlers(&self) -> Vec<String> {
+        self.handlers.keys().map(|v| v.to_string()).collect()
     }
 }
 
