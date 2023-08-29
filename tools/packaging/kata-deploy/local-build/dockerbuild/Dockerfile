@@ -28,6 +28,9 @@ ARG GID=1000
 # gid of the docker group on the host, required for running docker in docker builds.
 ARG HOST_DOCKER_GID
 
+# Delete the docker group that docker install script creates so it doesn't collide
+# with the new groups added
+RUN groupdel docker || true
 RUN if [ ${IMG_USER} != "root" ]; then sed -i -e "/:${GID}:/d" /etc/group; groupadd --gid=${GID} ${IMG_USER};fi
 RUN if [ ${IMG_USER} != "root" ]; then adduser ${IMG_USER} --uid=${UID} --gid=${GID};fi
 RUN if [ ${IMG_USER} != "root" ] && [ ! -z ${HOST_DOCKER_GID} ]; then groupadd --gid=${HOST_DOCKER_GID} docker_on_host;fi
