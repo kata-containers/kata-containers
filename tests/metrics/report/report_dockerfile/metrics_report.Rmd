@@ -27,3 +27,15 @@ source('footprint-density.R')
 rm(test_name_extra)
 ```
 \pagebreak
+
+# Memory used inside container
+This [test](https://github.com/kata-containers/kata-containers/blob/main/metrics/density/memory_usage_inside_container.sh)
+measures the memory inside a container taken by the container runtime. It shows the difference between the amount of memory requested for the container, and the amount the container can actually 'see'.
+
+The *% Consumed* is the key row in the table, which compares the *Requested* against *Total* values.
+
+
+```{r mem-in-cont, echo=FALSE, fig.cap="System Memory density"}
+source('mem-in-cont.R')
+```
+\pagebreak
