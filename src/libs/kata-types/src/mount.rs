@@ -524,11 +524,6 @@ impl<H> StorageHandlerManager<H> {
     pub fn handler(&self, id: &str) -> Option<&H> {
         self.handlers.get(id)
     }
-
-    /// Get names of registered handlers.
-    pub fn get_handlers(&self) -> Vec<String> {
-        self.handlers.keys().map(|v| v.to_string()).collect()
-    }
 }
 
 /// Join user provided volume path with kata direct-volume root path.
