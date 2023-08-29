@@ -1,0 +1,15 @@
+---
+# Copyright (c) 2018-2023 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+---
+\pagebreak
+
+# Introduction
+This report compares the metrics between multiple sets of data generated from
+the [Kata Containers report generation scripts](https://github.com/kata-containers/tests/tree/main/metrics/report/README.md).
+
+This report was generated using the data from the **`r resultdirs`** results directories.
+
+\pagebreak
+
