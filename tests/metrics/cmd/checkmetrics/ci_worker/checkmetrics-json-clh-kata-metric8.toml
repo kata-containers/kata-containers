@@ -29,7 +29,7 @@ description = "measure memory usage"
 # within (inclusive)
 checkvar = ".\"memory-footprint\".Results | .[] | .average.Result"
 checktype = "mean"
-midval = 2518364.00
+midval = 127220.25
 minpercent = 20.0
 maxpercent = 20.0
 
