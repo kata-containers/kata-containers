@@ -19,7 +19,7 @@ source "${SCRIPT_PATH}/../lib/common.bash"
 # Busybox image: Choose a small workload image, this is
 # in order to measure the runtime footprint, not the workload
 # footprint.
-IMAGE='quay.io/prometheus/busybox:latest'
+IMAGE="quay.io/prometheus/busybox:latest"
 
 CMD='tail -f /dev/null'
 NUM_CONTAINERS="$1"
@@ -30,6 +30,11 @@ SMEM_BIN="smem"
 KSM_ENABLE_FILE="/sys/kernel/mm/ksm/run"
 MEM_TMP_FILE=$(mktemp meminfo.XXXXXXXXXX)
 PS_TMP_FILE=$(mktemp psinfo.XXXXXXXXXX)
+
+# Variables used to collect memory footprint
+global_hypervisor_mem=0
+global_virtiofsd_mem=0
+global_shim_mem=0
 
 function remove_tmp_file() {
 	rm -rf "${MEM_TMP_FILE}" "${PS_TMP_FILE}"
@@ -85,14 +90,14 @@ EOF
 # This function measures the PSS average
 # memory of a process.
 function get_pss_memory(){
-	ps="$1"
-	mem_amount=0
-	count=0
-	avg=0
+	local ps="${1}"
+	local shim_result_on="${2:-0}"
+	local mem_amount=0
+	local count=0
+	local avg=0
 
-	if [ -z "${ps}" ]; then
-		die "No argument to get_pss_memory()"
-	fi
+	[ -z "${ps}" ] && die "No argument to get_pss_memory()"
+	ps="$(readlink -f ${ps})"
 
 	# Save all the processes names
 	# This will be help us to retrieve raw information
@@ -104,19 +109,23 @@ function get_pss_memory(){
 	# This will help us to retrieve raw information
 	echo "${data}" >> "${MEM_TMP_FILE}"
 
-	gral_data=$(echo "${data// /+}" | bc)
-	for i in "${gral_data}"; do
-		if (( $i > 0 ));then
-			mem_amount=$(( i + mem_amount ))
-			(( count++ ))
+	for i in ${data[*]}; do
+		if [ ${i} -gt 0 ]; then
+			let "mem_amount+=i"
+			let "count+=1"
+			[ $count -eq $NUM_CONTAINERS ] && break
 		fi
 	done
 
-	if (( "${count}" > 0 ));then
-		avg=$(bc -l <<< "scale=2; ${mem_amount} / ${count}")
-	fi
+	[ ${count}  -eq 0 ] && die "No pss memory was measured for PID: ${ps}"
 
-	echo "${avg}"
+	avg=$(bc -l <<< "scale=2; ${mem_amount} / ${count}")
+
+	if [ "${shim_result_on}" -eq "1" ]; then
+		global_shim_mem="${avg}"
+	else
+		global_hypervisor_mem="${avg}"
+	fi
 }
 
 function ppid() {
@@ -137,12 +146,9 @@ function get_pss_memory_virtiofsd() {
 	avg=0
 
 	virtiofsd_path=${1:-}
-	if [ -z "${virtiofsd_path}" ]; then
-		die "virtiofsd_path not provided"
-	fi
+	[ -z "${virtiofsd_path}" ] && die "virtiofsd_path not provided"
 
 	echo "${virtiofsd_path}" >> "${PS_TMP_FILE}"
-
 	virtiofsd_pids=$(ps aux | grep [v]irtiofsd | awk '{print $2}' | head -1)
 	data=$(sudo smem --no-header -P "^${virtiofsd_path}" -c pid -c "pid pss")
 
@@ -164,15 +170,13 @@ function get_pss_memory_virtiofsd() {
 
 			if ((pss_process > 0)); then
 				mem_amount=$((pss_process + mem_amount))
-				((count++))
+				let "count+=1"
 			fi
 		fi
 	done
 
-	if (( "${count}" > 0 ));then
-		avg=$(bc -l <<< "scale=2; ${mem_amount} / ${count}")
-	fi
-	echo "${avg}"
+	[ "${count}" -gt 0 ] && global_virtiofsd_mem=$(bc -l <<< "scale=2; ${mem_amount} / ${count}")
+
 }
 
 function get_individual_memory(){
@@ -278,22 +282,25 @@ EOF
 		# Now if you do not have enough rights
 		#  the smem failure to read the stats will also be trapped.
 
-		hypervisor_mem="$(get_pss_memory ${HYPERVISOR_PATH})"
-		if [ "${hypervisor_mem}" == "0" ]; then
+		get_pss_memory ${HYPERVISOR_PATH}
+
+		if [ "${global_hypervisor_mem}" == "0" ]; then
 			die "Failed to find PSS for ${HYPERVISOR_PATH}"
 		fi
 
-		virtiofsd_mem="$(get_pss_memory_virtiofsd ${VIRTIOFSD_PATH})"
-		if [ "${virtiofsd_mem}" == "0" ]; then
+		get_pss_memory_virtiofsd ${VIRTIOFSD_PATH}
+
+		if [ "${global_virtiofsd_mem}" == "0" ]; then
 			echo >&2 "WARNING: Failed to find PSS for ${VIRTIOFSD_PATH}"
 		fi
-		shim_mem="$(get_pss_memory ${SHIM_PATH})"
-		if [ "${shim_mem}" == "0" ]; then
+
+		get_pss_memory ${SHIM_PATH} 1
+
+		if [ "${global_shim_mem}" == "0" ]; then
 			die "Failed to find PSS for ${SHIM_PATH}"
 		fi
 
-		mem_usage="$(bc -l <<< "scale=2; ${hypervisor_mem} +${virtiofsd_mem} + ${shim_mem}")"
-		memory_usage="${mem_usage}"
+		mem_usage="$(bc -l <<< "scale=2; ${global_hypervisor_mem} + ${global_virtiofsd_mem} + ${global_shim_mem}")"
 
 	local json="$(cat << EOF
 	{
@@ -302,15 +309,15 @@ EOF
 			"Units" : "KB"
 		},
 		"qemus": {
-			"Result": ${hypervisor_mem},
+			"Result": ${global_hypervisor_mem},
 			"Units" : "KB"
 		},
 		"virtiofsds": {
-			"Result": ${virtiofsd_mem},
+			"Result": ${global_virtiofsd_mem},
 			"Units" : "KB"
 		},
 		"shims": {
-			"Result": ${shim_mem},
+			"Result": ${global_shim_mem},
 			"Units" : "KB"
 		}
 	}
@@ -354,9 +361,7 @@ function main(){
 
 	#Check for KSM before reporting test name, as it can modify it
 	check_for_ksm
-
-	init_env
-
+#	init_env
 	check_cmds "${SMEM_BIN}" bc
 	check_images "${IMAGE}"
 
@@ -378,6 +383,7 @@ function main(){
 		get_individual_memory
 	fi
 
+	info "memory usage test completed"
 	metrics_json_save
 	clean_env_ctr
 }
