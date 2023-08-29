@@ -52,3 +52,12 @@ To decode the stats table, the prefixes are 'to(`2`)' and '`i`n'. The suffixes a
 source('lifecycle-time.R')
 ```
 \pagebreak
+
+# Test setup details
+
+This table describes the test system details, as derived from the information contained
+in the test results files.
+
+
+```{r dut, echo=FALSE, fig.cap="System configuration details"}
+source('dut-details.R')
