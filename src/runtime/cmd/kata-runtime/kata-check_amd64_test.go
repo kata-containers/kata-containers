@@ -51,6 +51,7 @@ func TestCCCheckCLIFunction(t *testing.T) {
 	var cpuData []testCPUData
 	var moduleData []testModuleData
 
+	cpuType = getCPUtype()
 	if cpuType == cpuTypeIntel {
 		cpuData = []testCPUData{
 			{archGenuineIntel, "lm vmx sse4_1", false},
