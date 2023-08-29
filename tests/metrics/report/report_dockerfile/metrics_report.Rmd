@@ -39,3 +39,16 @@ The *% Consumed* is the key row in the table, which compares the *Requested* aga
 source('mem-in-cont.R')
 ```
 \pagebreak
+
+# Container boot lifecycle times
+This [test](https://github.com/kata-containers/kata-containers/blob/main/metrics/time/launch_times.sh)
+uses the `date` command on the host and in the container, as well as data from the container
+kernel `dmesg`, to ascertain how long different phases of the create/boot/run/delete
+Docker container lifecycle take for the first launched container.
+
+To decode the stats table, the prefixes are 'to(`2`)' and '`i`n'. The suffixes are '`k`ernel', '`w`orkload' and '`q`uit'. 'tot' is the total time for a complete container start-to-finished cycle.
+
+```{r lifecycle-time, echo=FALSE, fig.cap="Execution lifecycle times"}
+source('lifecycle-time.R')
+```
+\pagebreak
