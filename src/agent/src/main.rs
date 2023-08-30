@@ -105,6 +105,7 @@ cfg_if! {
     if #[cfg(feature = "confidential-data-hub")] {
         const CDH_PATH: &str = "/usr/local/bin/confidential-data-hub";
         const CDH_SOCKET: &str = "/run/confidential-containers/cdh.sock";
+        const API_SERVER_PATH: &str = "/usr/local/bin/api-server-rest";
     }
 }
 
@@ -370,7 +371,7 @@ async fn start_sandbox(
     sandbox.lock().await.sender = Some(tx);
 
     if !config.aa_kbc_params.is_empty() {
-        init_attestation_agent(logger)?;
+        init_attestation_agent(logger, config)?;
     }
 
     // vsock:///dev/vsock, port
@@ -385,7 +386,7 @@ async fn start_sandbox(
 
 // If we fail to start the AA, ocicrypt won't be able to unwrap keys
 // and container decryption will fail.
-fn init_attestation_agent(logger: &Logger) -> Result<()> {
+fn init_attestation_agent(logger: &Logger, _config: &AgentConfig) -> Result<()> {
     let config_path = OCICRYPT_CONFIG_PATH;
 
     // The image will need to be encrypted using a keyprovider
@@ -429,6 +430,16 @@ fn init_attestation_agent(logger: &Logger) -> Result<()> {
             DEFAULT_LAUNCH_PROCESS_TIMEOUT,
         ) {
             error!(logger, "launch_process {} failed: {:?}", CDH_PATH, e);
+        } else if !_config.rest_api.is_empty() {
+            if let Err(e) = launch_process(
+                logger,
+                API_SERVER_PATH,
+                &vec!["--features", &_config.rest_api],
+                "",
+                0,
+            ) {
+                error!(logger, "launch_process {} failed: {:?}", API_SERVER_PATH, e);
+            }
         }
     }
 
