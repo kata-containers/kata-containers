@@ -705,6 +705,11 @@ EOF
 		make RESOURCE_PROVIDER=${CDH_RESOURCE_PROVIDER}
 		make install DESTDIR="${ROOTFS_DIR}/usr/local/bin/"
 		popd
+
+		pushd guest-components/api-server-rest
+		cargo build --release --target-dir ./target
+		install -D -m0755 ./target/release/api-server-rest ${ROOTFS_DIR}/usr/local/bin/
+		popd
 	fi
 
 	if [ "${KATA_BUILD_CC}" == "yes" ]; then
