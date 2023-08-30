@@ -190,6 +190,10 @@ block_device_driver = "virtio-blk"
 # Default false
 #enable_debug = true
 
+# Enable hot-plugging of VFIO devices to a root-port.
+# The default setting is  "no-port"
+#hot_plug_vfio = "root-port"
+
 # Path to OCI hook binaries in the *guest rootfs*.
 # This does not affect host-side hooks which must instead be added to
 # the OCI spec passed to the runtime.
