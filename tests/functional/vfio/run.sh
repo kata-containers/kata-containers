@@ -188,11 +188,16 @@ setup_configuration_file() {
 	if [ -n "$MACHINE_TYPE" ]; then
 		if [ "$HYPERVISOR" = "qemu" ]; then
 			sed -i 's|^machine_type.*|machine_type = "'${MACHINE_TYPE}'"|g' "${kata_config_file}"
-			# Make sure we have set hot_plug_vfio to a reasonable value
-			sudo sed -i -e 's|^#hot_plug_vfio =.*$|hot_plug_vfio = "bridge-port"|' -e 's|^hot_plug_vfio = .*$|hot_plug_vfio = "bridge-port"|' "${kata_config_file}"
 		else
 			warn "Variable machine_type only applies to qemu. It will be ignored"
 		fi
+	fi
+
+	# Make sure we have set hot_plug_vfio to a reasonable value
+	if [ "$HYPERVISOR" = "qemu" ]; then
+		sed -i -e 's|^#*.*hot_plug_vfio.*|hot_plug_vfio = "bridge-port"|' "${kata_config_file}"
+	elif [ "$HYPERVISOR" = "clh" ]; then
+		sed -i -e 's|^#*.*hot_plug_vfio.*|hot_plug_vfio = "root-port"|' "${kata_config_file}"
 	fi
 
 	if [ -n "${SANDBOX_CGROUP_ONLY}" ]; then
