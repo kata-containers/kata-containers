@@ -1322,13 +1322,12 @@ func (s *Sandbox) cleanSwap(ctx context.Context) {
 }
 
 func (s *Sandbox) runPrestartHooks(ctx context.Context, prestartHookFunc func(context.Context) error) error {
-	hid, err := s.GetHypervisorPid()
-	if err != nil {
-		s.Logger().Errorf("fail to get hypervisor pid for sandbox %s", s.id)
-		return err
+	hid, _ := s.GetHypervisorPid()
+	// Ignore errors here as hypervisor might not have been started yet, likely in FC case.
+	if hid > 0 {
+		s.Logger().Infof("sandbox %s hypervisor pid is %v", s.id, hid)
+		ctx = context.WithValue(ctx, HypervisorPidKey{}, hid)
 	}
-	s.Logger().Infof("sandbox %s hypervisor pid is %v", s.id, hid)
-	ctx = context.WithValue(ctx, HypervisorPidKey{}, hid)
 
 	if err := prestartHookFunc(ctx); err != nil {
 		s.Logger().Errorf("fail to run prestartHook for sandbox %s: %s", s.id, err)
