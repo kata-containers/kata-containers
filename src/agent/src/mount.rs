@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::mount::get_linux_mount_info;
-use kata_types::mount::{KATA_MOUNT_OPTION_FS_GID, KATA_SHAREDFS_GUEST_PREMOUNT_TAG};
 use nix::mount::MsFlags;
 use nix::unistd::{Gid, Uid};
 use regex::Regex;
@@ -40,7 +39,10 @@ use crate::Sandbox;
 use crate::{ccw, device::get_virtio_blk_ccw_device_name};
 
 pub const TYPE_ROOTFS: &str = "rootfs";
+pub const MOUNT_GUEST_TAG: &str = "kataShared";
 
+// Allocating an FSGroup that owns the pod's volumes
+const FS_GID: &str = "fsgid";
 const FS_GID_EQ: &str = "fsgid=";
 const SYS_FS_HUGEPAGES_PREFIX: &str = "/sys/kernel/mm/hugepages";
 
@@ -231,7 +233,7 @@ async fn ephemeral_storage_handler(
         let opts = parse_options(&storage.options);
 
         // ephemeral_storage didn't support mount options except fsGroup.
-        if let Some(fsgid) = opts.get(KATA_MOUNT_OPTION_FS_GID) {
+        if let Some(fsgid) = opts.get(FS_GID) {
             let gid = fsgid.parse::<u32>()?;
 
             nix::unistd::chown(storage.mount_point.as_str(), None, Some(Gid::from_raw(gid)))?;
@@ -358,7 +360,7 @@ async fn local_storage_handler(
     let opts = parse_options(&storage.options);
 
     let mut need_set_fsgid = false;
-    if let Some(fsgid) = opts.get(KATA_MOUNT_OPTION_FS_GID) {
+    if let Some(fsgid) = opts.get(FS_GID) {
         let gid = fsgid.parse::<u32>()?;
 
         nix::unistd::chown(storage.mount_point.as_str(), None, Some(Gid::from_raw(gid)))?;
@@ -636,12 +638,10 @@ fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
 
     // There's a special mechanism to create mountpoint from a `sharedfs` instance before
     // starting the kata-agent. Check for such cases.
-    if storage.source == KATA_SHAREDFS_GUEST_PREMOUNT_TAG && is_mounted(&storage.mount_point)? {
+    if storage.source == MOUNT_GUEST_TAG && is_mounted(&storage.mount_point)? {
         warn!(
             logger,
-            "{} already mounted on {}, ignoring...",
-            KATA_SHAREDFS_GUEST_PREMOUNT_TAG,
-            &storage.mount_point
+            "{} already mounted on {}, ignoring...", MOUNT_GUEST_TAG, &storage.mount_point
         );
         return Ok(());
     }
