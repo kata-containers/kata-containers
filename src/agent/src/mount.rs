@@ -741,8 +741,8 @@ pub async fn add_storages(
 
         {
             let mut sb = sandbox.lock().await;
-            let state = sb.add_sandbox_storage(&storage.mount_point).await;
-            if state.ref_count().await > 1 {
+            let new_storage = sb.set_sandbox_storage(&storage.mount_point);
+            if !new_storage {
                 continue;
             }
         }
@@ -780,7 +780,7 @@ pub async fn add_storages(
                     "add_storages failed, storage: {:?}, error: {:?} ", storage, e
                 );
                 let mut sb = sandbox.lock().await;
-                if let Err(e) = sb.remove_sandbox_storage(&storage.mount_point).await {
+                if let Err(e) = sb.unset_sandbox_storage(&storage.mount_point) {
                     warn!(logger, "fail to unset sandbox storage {:?}", e);
                 }
                 return Err(e);
@@ -1884,7 +1884,7 @@ mod tests {
         for (i, d) in tests.iter().enumerate() {
             let msg = format!("test[{}]: {:?}", i, d);
 
-            let result = parse_mount_options(&d.options_vec).unwrap();
+            let result = parse_mount_options(&d.options_vec)?;
 
             let msg = format!("{}: result: {:?}", msg, result);
 

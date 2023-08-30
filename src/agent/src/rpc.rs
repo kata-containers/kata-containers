@@ -296,7 +296,7 @@ impl AgentService {
             if let Err(e) = ctr.destroy().await {
                 error!(sl(), "failed to destroy container: {:?}", e);
             }
-            if let Err(e) = remove_container_resources(&mut s, &cid).await {
+            if let Err(e) = remove_container_resources(&mut s, &cid) {
                 error!(sl(), "failed to remove container resources: {:?}", e);
             }
             return Err(err);
@@ -348,7 +348,7 @@ impl AgentService {
                 .ok_or_else(|| anyhow!("Invalid container id"))?
                 .destroy()
                 .await?;
-            remove_container_resources(&mut sandbox, &cid).await?;
+            remove_container_resources(&mut sandbox, &cid)?;
             return Ok(());
         }
 
@@ -370,7 +370,7 @@ impl AgentService {
             .await
             .map_err(|_| anyhow!(nix::Error::ETIME))???;
 
-        remove_container_resources(&mut *self.sandbox.lock().await, &cid).await
+        remove_container_resources(&mut *self.sandbox.lock().await, &cid)
     }
 
     #[instrument]
@@ -1780,7 +1780,7 @@ fn update_container_namespaces(
     Ok(())
 }
 
-async fn remove_container_resources(sandbox: &mut Sandbox, cid: &str) -> Result<()> {
+fn remove_container_resources(sandbox: &mut Sandbox, cid: &str) -> Result<()> {
     let mut cmounts: Vec<String> = vec![];
 
     // Find the sandbox storage used by this container
@@ -1794,7 +1794,7 @@ async fn remove_container_resources(sandbox: &mut Sandbox, cid: &str) -> Result<
     }
 
     for m in cmounts.iter() {
-        if let Err(err) = sandbox.remove_sandbox_storage(m).await {
+        if let Err(err) = sandbox.unset_and_remove_sandbox_storage(m) {
             error!(
                 sl(),
                 "failed to unset_and_remove_sandbox_storage for container {}, error: {:?}",
