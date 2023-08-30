@@ -8,14 +8,12 @@ use std::fmt::Debug;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::iter;
-use std::ops::Deref;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
-use kata_sys_util::mount::get_linux_mount_info;
 use nix::mount::MsFlags;
 use nix::unistd::{Gid, Uid};
 use regex::Regex;
@@ -147,6 +145,11 @@ pub const STORAGE_HANDLER_LIST: &[&str] = &[
 ];
 
 #[instrument]
+pub fn get_mounts() -> Result<String, std::io::Error> {
+    fs::read_to_string("/proc/mounts")
+}
+
+#[instrument]
 pub fn baremount(
     source: &Path,
     destination: &Path,
@@ -170,14 +173,27 @@ pub fn baremount(
     }
 
     let destination_str = destination.to_string_lossy();
-    let mut already_mounted = false;
-    if let Ok(m) = get_linux_mount_info(destination_str.deref()) {
-        if m.fs_type == fs_type {
-            already_mounted = true;
-        }
-    }
+    let mounts = get_mounts().unwrap_or_else(|_| String::new());
+    let already_mounted = mounts
+        .lines()
+        .map(|line| line.split_whitespace().collect::<Vec<&str>>())
+        .filter(|parts| parts.len() >= 3) // ensure we have at least [source}, destination, and fs_type
+        .any(|parts| {
+            // Check if source, destination and fs_type match any entry in /proc/mounts
+            // minimal check is for destination an fstype since source can have different names like:
+            // udev /dev devtmpfs
+            //  dev /dev devtmpfs
+            // depending on which entity is mounting the dev/fs/pseudo-fs
+            parts[1] == destination_str && parts[2] == fs_type
+        });
+
     if already_mounted {
-        slog_info!(logger, "{source:?} is already mounted at {destination:?}");
+        slog_info!(
+            logger,
+            "{:?} is already mounted at {:?}",
+            source,
+            destination
+        );
         return Ok(());
     }
 
@@ -766,7 +782,18 @@ pub fn recursive_ownership_change(
 #[instrument]
 pub fn is_mounted(mount_point: &str) -> Result<bool> {
     let mount_point = mount_point.trim_end_matches('/');
-    let found = fs::metadata(mount_point).is_ok() && get_linux_mount_info(mount_point).is_ok();
+    let found = fs::metadata(mount_point).is_ok()
+        // Looks through /proc/mounts and check if the mount exists
+        && fs::read_to_string("/proc/mounts")?
+        .lines()
+        .any(|line| {
+            // The 2nd column reveals the mount point.
+            line.split_whitespace()
+                .nth(1)
+                .map(|target| mount_point.eq(target))
+                .unwrap_or(false)
+        });
+
     Ok(found)
 }
 
