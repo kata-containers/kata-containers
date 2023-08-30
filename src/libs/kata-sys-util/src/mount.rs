@@ -58,8 +58,7 @@ use crate::fs::is_symlink;
 use crate::sl;
 
 /// Default permission for directories created for mountpoint.
-const MOUNT_DIR_PERM: u32 = 0o755;
-const MOUNT_FILE_PERM: u32 = 0o644;
+const MOUNT_PERM: u32 = 0o755;
 
 pub const PROC_MOUNTS_FILE: &str = "/proc/mounts";
 const PROC_FIELDS_PER_LINE: usize = 6;
@@ -188,16 +187,13 @@ pub fn create_mount_destination<S: AsRef<Path>, D: AsRef<Path>, R: AsRef<Path>>(
         .parent()
         .ok_or_else(|| Error::InvalidPath(dst.to_path_buf()))?;
     let mut builder = fs::DirBuilder::new();
-    builder
-        .mode(MOUNT_DIR_PERM)
-        .recursive(true)
-        .create(parent)?;
+    builder.mode(MOUNT_PERM).recursive(true).create(parent)?;
 
     if fs_type == "bind" {
         // The source and destination for bind mounting must be the same type: file or directory.
         if !src.as_ref().is_dir() {
             fs::OpenOptions::new()
-                .mode(MOUNT_FILE_PERM)
+                .mode(MOUNT_PERM)
                 .write(true)
                 .create(true)
                 .open(dst)?;

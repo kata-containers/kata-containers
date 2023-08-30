@@ -63,6 +63,7 @@ impl StorageState {
         }
     }
 
+    #[allow(dead_code)]
     pub fn from_device(device: StorageDeviceObject) -> Self {
         Self { inner: device }
     }
@@ -159,6 +160,7 @@ impl Sandbox {
     }
 
     /// Update the storage device associated with a path.
+    #[allow(dead_code)]
     pub fn update_sandbox_storage(
         &mut self,
         path: &str,
