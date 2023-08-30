@@ -7,14 +7,14 @@ use anyhow::{anyhow, Result};
 use nix::mount::MsFlags;
 use nix::sched::{unshare, CloneFlags};
 use nix::unistd::{getpid, gettid};
-use slog::Logger;
 use std::fmt;
 use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use tracing::instrument;
 
-use crate::mount::baremount;
+use crate::mount::{baremount, FLAGS};
+use slog::Logger;
 
 const PERSISTENT_NS_DIR: &str = "/var/run/sandbox-ns";
 pub const NSTYPEIPC: &str = "ipc";
@@ -116,7 +116,15 @@ impl Namespace {
                 // Bind mount the new namespace from the current thread onto the mount point to persist it.
 
                 let mut flags = MsFlags::empty();
-                flags |= MsFlags::MS_BIND | MsFlags::MS_REC;
+
+                if let Some(x) = FLAGS.get("rbind") {
+                    let (clear, f) = *x;
+                    if clear {
+                        flags &= !f;
+                    } else {
+                        flags |= f;
+                    }
+                };
 
                 baremount(source, destination, "none", flags, "", &logger).map_err(|e| {
                     anyhow!(
