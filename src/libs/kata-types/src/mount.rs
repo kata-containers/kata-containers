@@ -5,7 +5,6 @@
 //
 
 use anyhow::{anyhow, Context, Error, Result};
-use std::collections::hash_map::Entry;
 use std::convert::TryFrom;
 use std::fmt::Formatter;
 use std::{collections::HashMap, fs, path::PathBuf};
@@ -432,7 +431,6 @@ impl TryFrom<&NydusExtraOptions> for KataVirtualVolume {
 /// An implementation of generic storage device.
 pub struct StorageDeviceGeneric {
     refcount: u32,
-    path: String,
 }
 
 impl std::fmt::Debug for StorageDeviceGeneric {
@@ -445,84 +443,25 @@ impl std::fmt::Debug for StorageDeviceGeneric {
 
 impl StorageDeviceGeneric {
     /// Create a new instance of `StorageStateCommon`.
-    pub fn new(path: String) -> Self {
-        StorageDeviceGeneric { refcount: 1, path }
-    }
-}
-
-impl StorageDevice for StorageDeviceGeneric {
-    fn path(&self) -> &str {
-        &self.path
+    pub fn new() -> Self {
+        StorageDeviceGeneric { refcount: 0 }
     }
 
-    fn ref_count(&self) -> u32 {
+    /// Get reference count.
+    pub fn ref_count(&self) -> u32 {
         self.refcount
     }
 
-    fn inc_ref_count(&mut self) {
+    /// Decrease reference count and return true if it reaches zero.
+    pub fn inc_ref_count(&mut self) {
         self.refcount += 1;
     }
 
-    fn dec_and_test_ref_count(&mut self) -> bool {
+    /// Decrease reference count and return true if it reaches zero.
+    pub fn dec_and_test_ref_count(&mut self) -> bool {
         assert!(self.refcount > 0);
         self.refcount -= 1;
         self.refcount == 0
-    }
-
-    fn cleanup(&self) {}
-}
-
-/// Trait object for storage device.
-pub trait StorageDevice: Send + Sync {
-    /// Path
-    fn path(&self) -> &str;
-
-    /// Get reference count.
-    fn ref_count(&self) -> u32;
-
-    /// Increase reference count.
-    fn inc_ref_count(&mut self);
-
-    /// Decrease reference count and return true if it reaches zero.
-    fn dec_and_test_ref_count(&mut self) -> bool;
-
-    /// Clean up resources related to the storage device.
-    fn cleanup(&self);
-}
-
-/// Manager to manage registered storage device handlers.
-pub struct StorageHandlerManager<H> {
-    handlers: HashMap<String, H>,
-}
-
-impl<H> Default for StorageHandlerManager<H> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<H> StorageHandlerManager<H> {
-    /// Create a new instance of `StorageHandlerManager`.
-    pub fn new() -> Self {
-        Self {
-            handlers: HashMap::new(),
-        }
-    }
-
-    /// Register a storage device handler.
-    pub fn add_handler(&mut self, id: &str, handler: H) -> Result<()> {
-        match self.handlers.entry(id.to_string()) {
-            Entry::Occupied(_) => Err(anyhow!("storage handler for {} already exists", id)),
-            Entry::Vacant(entry) => {
-                entry.insert(handler);
-                Ok(())
-            }
-        }
-    }
-
-    /// Get storage handler with specified `id`.
-    pub fn handler(&self, id: &str) -> Option<&H> {
-        self.handlers.get(id)
     }
 }
 
@@ -761,13 +700,11 @@ mod tests {
 
     #[test]
     fn test_storage_state_common() {
-        let mut state = StorageDeviceGeneric::new("".to_string());
+        let mut state = StorageDeviceGeneric::new();
+        assert_eq!(state.ref_count(), 0);
+        state.inc_ref_count();
         assert_eq!(state.ref_count(), 1);
         state.inc_ref_count();
-        assert_eq!(state.ref_count(), 2);
-        state.inc_ref_count();
-        assert_eq!(state.ref_count(), 3);
-        assert!(!state.dec_and_test_ref_count());
         assert_eq!(state.ref_count(), 2);
         assert!(!state.dec_and_test_ref_count());
         assert_eq!(state.ref_count(), 1);

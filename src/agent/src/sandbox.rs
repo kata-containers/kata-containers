@@ -5,7 +5,6 @@
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::fmt::{Debug, Formatter};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -15,7 +14,7 @@ use std::{thread, time};
 
 use anyhow::{anyhow, Context, Result};
 use kata_types::cpu::CpuSet;
-use kata_types::mount::{StorageDevice, StorageDeviceGeneric};
+use kata_types::mount::StorageDeviceGeneric;
 use libc::pid_t;
 use oci::{Hook, Hooks};
 use protocols::agent::OnlineCPUMemRequest;
@@ -43,29 +42,16 @@ pub const ERR_INVALID_CONTAINER_ID: &str = "Invalid container id";
 
 type UeventWatcher = (Box<dyn UeventMatcher>, oneshot::Sender<Uevent>);
 
-pub type StorageDeviceObject = Arc<Mutex<dyn StorageDevice>>;
-
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct StorageState {
-    inner: StorageDeviceObject,
-}
-
-impl Debug for StorageState {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("StorageState").finish()
-    }
+    inner: Arc<Mutex<StorageDeviceGeneric>>,
 }
 
 impl StorageState {
     fn new() -> Self {
         StorageState {
-            inner: Arc::new(Mutex::new(StorageDeviceGeneric::new("".to_string()))),
+            inner: Arc::new(Mutex::new(StorageDeviceGeneric::new())),
         }
-    }
-
-    #[allow(dead_code)]
-    pub fn from_device(device: StorageDeviceObject) -> Self {
-        Self { inner: device }
     }
 
     pub async fn ref_count(&self) -> u32 {
@@ -159,25 +145,7 @@ impl Sandbox {
         }
     }
 
-    /// Update the storage device associated with a path.
-    #[allow(dead_code)]
-    pub fn update_sandbox_storage(
-        &mut self,
-        path: &str,
-        device: StorageDeviceObject,
-    ) -> std::result::Result<StorageDeviceObject, StorageDeviceObject> {
-        if !self.storages.contains_key(path) {
-            return Err(device);
-        }
-
-        let state = StorageState::from_device(device);
-        // Safe to unwrap() because we have just ensured existence of entry.
-        let state = self.storages.insert(path.to_string(), state).unwrap();
-        Ok(state.inner)
-    }
-
     // Clean mount and directory of a mountpoint.
-    // This is actually StorageDeviceGeneric::cleanup(), kept here due to dependency chain.
     #[instrument]
     fn cleanup_sandbox_storage(&mut self, path: &str) -> Result<()> {
         if path.is_empty() {
