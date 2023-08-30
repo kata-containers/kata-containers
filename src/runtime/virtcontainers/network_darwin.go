@@ -92,6 +92,10 @@ func (n *DarwinNetwork) SetEndpoints(endpoints []Endpoint) {
 	n.eps = endpoints
 }
 
+func (n *DarwinNetwork) GetEndpointsNum() (int, error) {
+	return 0, nil
+}
+
 func validGuestRoute(route netlink.Route) bool {
 	return true
 }
