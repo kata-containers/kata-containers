@@ -13,7 +13,7 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::mount::parse_mount_options;
-use kata_types::mount::{StorageDevice, KATA_MOUNT_OPTION_FS_GID};
+use kata_types::mount::KATA_MOUNT_OPTION_FS_GID;
 use nix::unistd::Gid;
 use protocols::agent::Storage;
 use slog::Logger;
@@ -22,7 +22,7 @@ use tracing::instrument;
 
 use crate::device::{DRIVER_EPHEMERAL_TYPE, FS_TYPE_HUGETLB};
 use crate::mount::baremount;
-use crate::sandbox::Sandbox;
+use crate::sandbox::{Sandbox, StorageDeviceObject};
 use crate::storage::{
     common_storage_handler, new_device, parse_options, StorageContext, StorageHandler, MODE_SETGID,
 };
@@ -40,7 +40,7 @@ impl StorageHandler for EphemeralHandler {
         &self,
         mut storage: Storage,
         ctx: &mut StorageContext,
-    ) -> Result<Arc<dyn StorageDevice>> {
+    ) -> Result<StorageDeviceObject> {
         // hugetlbfs
         if storage.fstype == FS_TYPE_HUGETLB {
             info!(ctx.logger, "handle hugetlbfs storage");

@@ -431,13 +431,14 @@ impl TryFrom<&NydusExtraOptions> for KataVirtualVolume {
 
 /// An implementation of generic storage device.
 pub struct StorageDeviceGeneric {
+    refcount: u32,
     path: String,
 }
 
 impl std::fmt::Debug for StorageDeviceGeneric {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("StorageState")
-            .field("path", &self.path)
+            .field("refcount", &self.refcount)
             .finish()
     }
 }
@@ -445,13 +446,27 @@ impl std::fmt::Debug for StorageDeviceGeneric {
 impl StorageDeviceGeneric {
     /// Create a new instance of `StorageStateCommon`.
     pub fn new(path: String) -> Self {
-        StorageDeviceGeneric { path }
+        StorageDeviceGeneric { refcount: 1, path }
     }
 }
 
 impl StorageDevice for StorageDeviceGeneric {
     fn path(&self) -> &str {
         &self.path
+    }
+
+    fn ref_count(&self) -> u32 {
+        self.refcount
+    }
+
+    fn inc_ref_count(&mut self) {
+        self.refcount += 1;
+    }
+
+    fn dec_and_test_ref_count(&mut self) -> bool {
+        assert!(self.refcount > 0);
+        self.refcount -= 1;
+        self.refcount == 0
     }
 
     fn cleanup(&self) {}
@@ -461,6 +476,15 @@ impl StorageDevice for StorageDeviceGeneric {
 pub trait StorageDevice: Send + Sync {
     /// Path
     fn path(&self) -> &str;
+
+    /// Get reference count.
+    fn ref_count(&self) -> u32;
+
+    /// Increase reference count.
+    fn inc_ref_count(&mut self);
+
+    /// Decrease reference count and return true if it reaches zero.
+    fn dec_and_test_ref_count(&mut self) -> bool;
 
     /// Clean up resources related to the storage device.
     fn cleanup(&self);
@@ -738,5 +762,21 @@ mod tests {
             nydus.snapshot_dir
         );
         assert_eq!(volume.fs_type.as_str(), "rafsv6")
+    }
+
+    #[test]
+    fn test_storage_state_common() {
+        let mut state = StorageDeviceGeneric::new("".to_string());
+        assert_eq!(state.ref_count(), 1);
+        state.inc_ref_count();
+        assert_eq!(state.ref_count(), 2);
+        state.inc_ref_count();
+        assert_eq!(state.ref_count(), 3);
+        assert!(!state.dec_and_test_ref_count());
+        assert_eq!(state.ref_count(), 2);
+        assert!(!state.dec_and_test_ref_count());
+        assert_eq!(state.ref_count(), 1);
+        assert!(state.dec_and_test_ref_count());
+        assert_eq!(state.ref_count(), 0);
     }
 }
