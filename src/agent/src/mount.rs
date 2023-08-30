@@ -15,7 +15,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
-use kata_sys_util::mount::{create_mount_destination, get_linux_mount_info};
+use kata_sys_util::mount::get_linux_mount_info;
 use kata_types::mount::{KATA_MOUNT_OPTION_FS_GID, KATA_SHAREDFS_GUEST_PREMOUNT_TAG};
 use nix::mount::MsFlags;
 use nix::unistd::{Gid, Uid};
@@ -646,11 +646,16 @@ fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
         return Ok(());
     }
 
-    let (flags, options) = parse_mount_flags_and_options(&storage.options);
     let mount_path = Path::new(&storage.mount_point);
     let src_path = Path::new(&storage.source);
-    create_mount_destination(src_path, mount_path, "", &storage.fstype)
-        .context("Could not create mountpoint")?;
+    if storage.fstype == "bind" && !src_path.is_dir() {
+        ensure_destination_file_exists(mount_path).context("Could not create mountpoint file")?;
+    } else {
+        fs::create_dir_all(mount_path)
+            .map_err(anyhow::Error::from)
+            .context("Could not create mountpoint")?;
+    }
+    let (flags, options) = parse_mount_flags_and_options(storage.options.iter());
 
     info!(logger, "mounting storage";
         "mount-source" => src_path.display(),
@@ -918,7 +923,7 @@ pub fn get_mount_fs_type(mount_point: &str) -> Result<String> {
 }
 
 // get_mount_fs_type_from_file returns the FS type corresponding to the passed mount point and
-// any error encountered.
+// any error ecountered.
 #[instrument]
 pub fn get_mount_fs_type_from_file(mount_file: &str, mount_point: &str) -> Result<String> {
     if mount_point.is_empty() {
@@ -1053,14 +1058,34 @@ pub fn cgroups_mount(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result<
 
     // Enable memory hierarchical account.
     // For more information see https://www.kernel.org/doc/Documentation/cgroup-v1/memory.txt
-    online_device("/sys/fs/cgroup/memory/memory.use_hierarchy")
+    online_device("/sys/fs/cgroup/memory/memory.use_hierarchy")?;
+    Ok(())
 }
 
 #[instrument]
-pub fn remove_mounts<P: AsRef<str> + std::fmt::Debug>(mounts: &[P]) -> Result<()> {
+pub fn remove_mounts(mounts: &[String]) -> Result<()> {
     for m in mounts.iter() {
-        nix::mount::umount(m.as_ref()).context(format!("failed to umount {:?}", m.as_ref()))?;
+        nix::mount::umount(m.as_str()).context(format!("failed to umount {:?}", m))?;
     }
+    Ok(())
+}
+
+#[instrument]
+fn ensure_destination_file_exists(path: &Path) -> Result<()> {
+    if path.is_file() {
+        return Ok(());
+    } else if path.exists() {
+        return Err(anyhow!("{:?} exists but is not a regular file", path));
+    }
+
+    let dir = path
+        .parent()
+        .ok_or_else(|| anyhow!("failed to find parent path for {:?}", path))?;
+
+    fs::create_dir_all(dir).context(format!("create_dir_all {:?}", dir))?;
+
+    fs::File::create(path).context(format!("create empty file {:?}", path))?;
+
     Ok(())
 }
 
@@ -1651,6 +1676,24 @@ mod tests {
             // Devices cgroup
             assert!(mounts[1].eq(&cg_devices_mount), "{}", msg);
         }
+    }
+
+    #[test]
+    fn test_ensure_destination_file_exists() {
+        let dir = tempdir().expect("failed to create tmpdir");
+
+        let mut testfile = dir.into_path();
+        testfile.push("testfile");
+
+        let result = ensure_destination_file_exists(&testfile);
+
+        assert!(result.is_ok());
+        assert!(testfile.exists());
+
+        let result = ensure_destination_file_exists(&testfile);
+        assert!(result.is_ok());
+
+        assert!(testfile.is_file());
     }
 
     #[test]
