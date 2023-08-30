@@ -490,6 +490,13 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	}
 	clh.vmconfig.Payload.SetKernel(kernelPath)
 
+	clh.vmconfig.Platform = chclient.NewPlatformConfig()
+	platform := clh.vmconfig.Platform
+	platform.SetNumPciSegments(2)
+	if clh.config.IOMMU {
+		platform.SetIommuSegments([]int32{0})
+	}
+
 	if clh.config.ConfidentialGuest {
 		if err := clh.enableProtection(); err != nil {
 			return err
@@ -528,6 +535,9 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 		// start the guest kernel with 'quiet' in non-debug mode
 		params = append(params, Param{"quiet", ""})
 	}
+	if clh.config.IOMMU {
+		params = append(params, Param{"iommu", "pt"})
+	}
 
 	// Followed by extra kernel parameters defined in the configuration file
 	params = append(params, clh.config.KernelParams...)
@@ -536,6 +546,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 
 	// set random device generator to hypervisor
 	clh.vmconfig.Rng = chclient.NewRngConfig(clh.config.EntropySource)
+	clh.vmconfig.Rng.SetIommu(clh.config.IOMMU)
 
 	// set the initial root/boot disk of hypervisor
 	assetPath, assetType, err := clh.config.ImageOrInitrdAssetPath()
@@ -561,6 +572,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 		} else {
 			pmem := chclient.NewPmemConfig(assetPath)
 			*pmem.DiscardWrites = true
+			pmem.SetIommu(clh.config.IOMMU)
 
 			if clh.vmconfig.Pmem != nil {
 				*clh.vmconfig.Pmem = append(*clh.vmconfig.Pmem, *pmem)
@@ -594,6 +606,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 
 		clh.vmconfig.Console = chclient.NewConsoleConfig(cctOFF)
 	}
+	clh.vmconfig.Console.SetIommu(clh.config.IOMMU)
 
 	cpu_topology := chclient.NewCpuTopology()
 	cpu_topology.ThreadsPerCore = func(i int32) *int32 { return &i }(1)
@@ -836,6 +849,7 @@ func (clh *cloudHypervisor) hotplugAddBlockDevice(drive *config.BlockDrive) erro
 	queueSize := int32(1024)
 	clhDisk.NumQueues = &queues
 	clhDisk.QueueSize = &queueSize
+	clhDisk.SetIommu(clh.config.IOMMU)
 
 	diskRateLimiterConfig := clh.getDiskRateLimiterConfig()
 	if diskRateLimiterConfig != nil {
@@ -861,6 +875,7 @@ func (clh *cloudHypervisor) hotPlugVFIODevice(device *config.VFIODev) error {
 
 	// Create the clh device config via the constructor to ensure default values are properly assigned
 	clhDevice := *chclient.NewDeviceConfig(device.SysfsDev)
+	clhDevice.SetIommu(clh.config.IOMMU)
 	pciInfo, _, err := cl.VmAddDevicePut(ctx, clhDevice)
 	if err != nil {
 		return fmt.Errorf("Failed to hotplug device %+v %s", device, openAPIClientError(err))
@@ -1535,6 +1550,7 @@ func (clh *cloudHypervisor) addVSock(cid int64, path string) {
 	}).Info("Adding HybridVSock")
 
 	clh.vmconfig.Vsock = chclient.NewVsockConfig(cid, path)
+	clh.vmconfig.Vsock.SetIommu(clh.config.IOMMU)
 }
 
 func (clh *cloudHypervisor) getRateLimiterConfig(bwSize, bwOneTimeBurst, opsSize, opsOneTimeBurst int64) *chclient.RateLimiterConfig {
@@ -1604,6 +1620,7 @@ func (clh *cloudHypervisor) addNet(e Endpoint) error {
 	if netRateLimiterConfig != nil {
 		net.SetRateLimiterConfig(*netRateLimiterConfig)
 	}
+	net.SetIommu(clh.config.IOMMU)
 
 	if clh.netDevices != nil {
 		*clh.netDevices = append(*clh.netDevices, *net)
@@ -1636,6 +1653,7 @@ func (clh *cloudHypervisor) addVolume(volume types.Volume) error {
 	}
 
 	fs := chclient.NewFsConfig(volume.MountTag, vfsdSockPath, numQueues, queueSize)
+	fs.SetPciSegment(1)
 	clh.vmconfig.Fs = &[]chclient.FsConfig{*fs}
 
 	clh.Logger().Debug("Adding share volume to hypervisor: ", volume.MountTag)
