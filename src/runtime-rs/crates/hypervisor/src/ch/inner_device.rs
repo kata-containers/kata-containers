@@ -18,11 +18,11 @@ use anyhow::{anyhow, Context, Result};
 use ch_config::ch_api::cloud_hypervisor_vm_device_add;
 use ch_config::ch_api::{
     cloud_hypervisor_vm_blockdev_add, cloud_hypervisor_vm_device_remove,
-    cloud_hypervisor_vm_fs_add, PciDeviceInfo, VmRemoveDeviceData,
+    cloud_hypervisor_vm_fs_add, cloud_hypervisor_vm_vsock_add, PciDeviceInfo, VmRemoveDeviceData,
 };
 use ch_config::convert::{DEFAULT_DISK_QUEUES, DEFAULT_DISK_QUEUE_SIZE, DEFAULT_NUM_PCI_SEGMENTS};
 use ch_config::DiskConfig;
-use ch_config::{net_util::MacAddr, DeviceConfig, FsConfig, NetConfig};
+use ch_config::{net_util::MacAddr, DeviceConfig, FsConfig, NetConfig, VsockConfig};
 use safe_path::scoped_join;
 use std::convert::TryFrom;
 use std::path::PathBuf;
@@ -168,10 +168,6 @@ impl CloudHypervisorInner {
         Ok(DeviceType::ShareFs(sharefs))
     }
 
-    async fn handle_hvsock_device(&mut self, device: HybridVsockDevice) -> Result<DeviceType> {
-        Ok(DeviceType::HybridVsock(device))
-    }
-
     async fn handle_vfio_device(&mut self, device: VfioDevice) -> Result<DeviceType> {
         let mut vfio_device: VfioDevice = device.clone();
 
@@ -279,6 +275,33 @@ impl CloudHypervisorInner {
         }
 
         PciPath::convert_from_string(toks[0])
+    }
+
+    async fn handle_hvsock_device(&mut self, device: HybridVsockDevice) -> Result<DeviceType> {
+        let hvsock_config = device.config.clone();
+        let socket = self
+            .api_socket
+            .as_ref()
+            .ok_or("missing socket")
+            .map_err(|e| anyhow!(e))?;
+
+        let vsock_config = VsockConfig {
+            cid: hvsock_config.guest_cid.into(),
+            socket: hvsock_config.uds_path.into(),
+            ..Default::default()
+        };
+
+        let response = cloud_hypervisor_vm_vsock_add(
+            socket.try_clone().context("failed to clone socket")?,
+            vsock_config,
+        )
+        .await?;
+
+        if let Some(detail) = response {
+            debug!(sl!(), "hvsock add response: {:?}", detail);
+        }
+
+        Ok(DeviceType::HybridVsock(device))
     }
 
     async fn handle_block_device(&mut self, device: BlockDevice) -> Result<DeviceType> {
