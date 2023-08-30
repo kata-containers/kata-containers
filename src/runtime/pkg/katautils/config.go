@@ -1082,7 +1082,6 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		BlockDeviceDriver:              blockDriver,
 		BlockDeviceCacheSet:            h.BlockDeviceCacheSet,
 		BlockDeviceCacheDirect:         h.BlockDeviceCacheDirect,
-		BlockDeviceCacheNoflush:        h.BlockDeviceCacheNoflush,
 		EnableIOThreads:                h.EnableIOThreads,
 		Msize9p:                        h.msize9p(),
 		ColdPlugVFIO:                   h.coldPlugVFIO(),
