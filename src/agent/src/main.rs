@@ -48,7 +48,6 @@ mod pci;
 pub mod random;
 mod sandbox;
 mod signal;
-mod storage;
 mod uevent;
 mod util;
 mod version;
