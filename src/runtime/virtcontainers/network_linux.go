@@ -291,6 +291,27 @@ func (n *LinuxNetwork) endpointAlreadyAdded(netInfo *NetworkInfo) bool {
 	return false
 }
 
+func (n *LinuxNetwork) GetEndpointsNum() (int, error) {
+	netnsHandle, err := netns.GetFromPath(n.netNSPath)
+	if err != nil {
+		return 0, err
+	}
+	defer netnsHandle.Close()
+
+	netlinkHandle, err := netlink.NewHandleAt(netnsHandle)
+	if err != nil {
+		return 0, err
+	}
+	defer netlinkHandle.Close()
+
+	linkList, err := netlinkHandle.LinkList()
+	if err != nil {
+		return 0, err
+	}
+
+	return len(linkList), nil
+}
+
 // Scan the networking namespace through netlink and then:
 // 1. Create the endpoints for the relevant interfaces found there.
 // 2. Attach them to the VM.
