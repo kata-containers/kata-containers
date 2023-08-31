@@ -27,19 +27,29 @@ use crate::{ccw, device::get_virtio_blk_ccw_device_name};
 #[derive(Debug)]
 pub struct VirtioBlkMmioHandler {}
 
-#[async_trait::async_trait]
-impl StorageHandler for VirtioBlkMmioHandler {
-    #[instrument]
-    async fn create_device(
-        &self,
-        storage: Storage,
-        ctx: &mut StorageContext,
-    ) -> Result<Arc<dyn StorageDevice>> {
+impl VirtioBlkMmioHandler {
+    pub async fn update_device_path(
+        storage: &mut Storage,
+        ctx: &mut StorageContext<'_>,
+    ) -> Result<()> {
         if !Path::new(&storage.source).exists() {
             get_virtio_mmio_device_name(ctx.sandbox, &storage.source)
                 .await
                 .context("failed to get mmio device name")?;
         }
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl StorageHandler for VirtioBlkMmioHandler {
+    #[instrument]
+    async fn create_device(
+        &self,
+        mut storage: Storage,
+        ctx: &mut StorageContext,
+    ) -> Result<Arc<dyn StorageDevice>> {
+        Self::update_device_path(&mut storage, ctx).await?;
         let path = common_storage_handler(ctx.logger, &storage)?;
         new_device(path)
     }
@@ -48,14 +58,11 @@ impl StorageHandler for VirtioBlkMmioHandler {
 #[derive(Debug)]
 pub struct VirtioBlkPciHandler {}
 
-#[async_trait::async_trait]
-impl StorageHandler for VirtioBlkPciHandler {
-    #[instrument]
-    async fn create_device(
-        &self,
-        mut storage: Storage,
-        ctx: &mut StorageContext,
-    ) -> Result<Arc<dyn StorageDevice>> {
+impl VirtioBlkPciHandler {
+    pub async fn update_device_path(
+        storage: &mut Storage,
+        ctx: &mut StorageContext<'_>,
+    ) -> Result<()> {
         // If hot-plugged, get the device node path based on the PCI path
         // otherwise use the virt path provided in Storage Source
         if storage.source.starts_with("/dev") {
@@ -71,6 +78,19 @@ impl StorageHandler for VirtioBlkPciHandler {
             storage.source = dev_path;
         }
 
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl StorageHandler for VirtioBlkPciHandler {
+    #[instrument]
+    async fn create_device(
+        &self,
+        mut storage: Storage,
+        ctx: &mut StorageContext,
+    ) -> Result<Arc<dyn StorageDevice>> {
+        Self::update_device_path(&mut storage, ctx).await?;
         let path = common_storage_handler(ctx.logger, &storage)?;
         new_device(path)
     }
@@ -78,6 +98,21 @@ impl StorageHandler for VirtioBlkPciHandler {
 
 #[derive(Debug)]
 pub struct VirtioBlkCcwHandler {}
+
+impl VirtioBlkCcwHandler {
+    pub async fn update_device_path(
+        _storage: &mut Storage,
+        _ctx: &mut StorageContext<'_>,
+    ) -> Result<()> {
+        #[cfg(target_arch = "s390x")]
+        {
+            let ccw_device = ccw::Device::from_str(&_storage.source)?;
+            let dev_path = get_virtio_blk_ccw_device_name(_ctx.sandbox, &ccw_device).await?;
+            _storage.source = dev_path;
+        }
+        Ok(())
+    }
+}
 
 #[async_trait::async_trait]
 impl StorageHandler for VirtioBlkCcwHandler {
@@ -88,9 +123,7 @@ impl StorageHandler for VirtioBlkCcwHandler {
         mut storage: Storage,
         ctx: &mut StorageContext,
     ) -> Result<Arc<dyn StorageDevice>> {
-        let ccw_device = ccw::Device::from_str(&storage.source)?;
-        let dev_path = get_virtio_blk_ccw_device_name(ctx.sandbox, &ccw_device).await?;
-        storage.source = dev_path;
+        Self::update_device_path(&mut storage, ctx).await?;
         let path = common_storage_handler(ctx.logger, &storage)?;
         new_device(path)
     }
@@ -109,6 +142,18 @@ impl StorageHandler for VirtioBlkCcwHandler {
 #[derive(Debug)]
 pub struct ScsiHandler {}
 
+impl ScsiHandler {
+    pub async fn update_device_path(
+        storage: &mut Storage,
+        ctx: &mut StorageContext<'_>,
+    ) -> Result<()> {
+        // Retrieve the device path from SCSI address.
+        let dev_path = get_scsi_device_name(ctx.sandbox, &storage.source).await?;
+        storage.source = dev_path;
+        Ok(())
+    }
+}
+
 #[async_trait::async_trait]
 impl StorageHandler for ScsiHandler {
     #[instrument]
@@ -117,10 +162,7 @@ impl StorageHandler for ScsiHandler {
         mut storage: Storage,
         ctx: &mut StorageContext,
     ) -> Result<Arc<dyn StorageDevice>> {
-        // Retrieve the device path from SCSI address.
-        let dev_path = get_scsi_device_name(ctx.sandbox, &storage.source).await?;
-        storage.source = dev_path;
-
+        Self::update_device_path(&mut storage, ctx).await?;
         let path = common_storage_handler(ctx.logger, &storage)?;
         new_device(path)
     }
@@ -129,17 +171,26 @@ impl StorageHandler for ScsiHandler {
 #[derive(Debug)]
 pub struct PmemHandler {}
 
+impl PmemHandler {
+    pub async fn update_device_path(
+        storage: &mut Storage,
+        ctx: &mut StorageContext<'_>,
+    ) -> Result<()> {
+        // Retrieve the device for pmem storage
+        wait_for_pmem_device(ctx.sandbox, &storage.source).await?;
+        Ok(())
+    }
+}
+
 #[async_trait::async_trait]
 impl StorageHandler for PmemHandler {
     #[instrument]
     async fn create_device(
         &self,
-        storage: Storage,
+        mut storage: Storage,
         ctx: &mut StorageContext,
     ) -> Result<Arc<dyn StorageDevice>> {
-        // Retrieve the device for pmem storage
-        wait_for_pmem_device(ctx.sandbox, &storage.source).await?;
-
+        Self::update_device_path(&mut storage, ctx).await?;
         let path = common_storage_handler(ctx.logger, &storage)?;
         new_device(path)
     }

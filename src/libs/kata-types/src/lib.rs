@@ -29,6 +29,9 @@ pub mod k8s;
 /// Constants and data types related to mount point.
 pub mod mount;
 
+/// Constants and data types related to data volumes.
+pub mod volume;
+
 pub(crate) mod utils;
 
 /// hypervisor capabilities
