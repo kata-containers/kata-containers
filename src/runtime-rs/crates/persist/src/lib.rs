@@ -6,8 +6,8 @@
 
 pub mod sandbox_persist;
 use anyhow::{anyhow, Context, Ok, Result};
+use kata_types::config::KATA_PATH;
 use serde::de;
-use shim_interface::KATA_PATH;
 use std::{fs::File, io::BufReader};
 
 pub const PERSIST_FILE: &str = "state.json";
