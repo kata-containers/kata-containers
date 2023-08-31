@@ -51,6 +51,7 @@ func TestCCCheckCLIFunction(t *testing.T) {
 	var cpuData []testCPUData
 	var moduleData []testModuleData
 
+	cpuType = getCPUtype()
 	if cpuType == cpuTypeIntel {
 		cpuData = []testCPUData{
 			{archGenuineIntel, "lm vmx sse4_1", false},
@@ -466,7 +467,12 @@ func TestSetCPUtype(t *testing.T) {
 	assert.NotEmpty(archRequiredCPUAttribs)
 	assert.NotEmpty(archRequiredKernelModules)
 
-	assert.Equal(archRequiredCPUFlags["vmx"], "Virtualization support")
+	cpuType = getCPUtype()
+	if cpuType == cpuTypeIntel {
+		assert.Equal(archRequiredCPUFlags["vmx"], "Virtualization support")
+	} else if cpuType == cpuTypeAMD {
+		assert.Equal(archRequiredCPUFlags["svm"], "Virtualization support")
+	}
 
 	_, ok := archRequiredKernelModules["kvm"]
 	assert.True(ok)
