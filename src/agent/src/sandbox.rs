@@ -16,7 +16,7 @@ use std::{thread, time};
 
 use anyhow::{anyhow, Context, Result};
 use kata_types::cpu::CpuSet;
-use kata_types::mount::{StorageDevice, StorageDeviceGeneric};
+use kata_types::mount::StorageDevice;
 use libc::pid_t;
 use oci::{Hook, Hooks};
 use protocols::agent::OnlineCPUMemRequest;
@@ -37,6 +37,7 @@ use crate::namespace::Namespace;
 use crate::netlink::Handle;
 use crate::network::Network;
 use crate::pci;
+use crate::storage::StorageDeviceGeneric;
 use crate::uevent::{Uevent, UeventMatcher};
 use crate::watcher::BindWatcher;
 

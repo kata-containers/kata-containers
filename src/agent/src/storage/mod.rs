@@ -5,6 +5,7 @@
 //
 
 use std::collections::HashMap;
+use std::fmt::Formatter;
 use std::fs;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
@@ -12,9 +13,7 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::mount::{create_mount_destination, parse_mount_options};
-use kata_types::mount::{
-    StorageDevice, StorageDeviceGeneric, StorageHandlerManager, KATA_SHAREDFS_GUEST_PREMOUNT_TAG,
-};
+use kata_types::mount::{StorageDevice, StorageHandlerManager, KATA_SHAREDFS_GUEST_PREMOUNT_TAG};
 use nix::unistd::{Gid, Uid};
 use protocols::agent::Storage;
 use protocols::types::FSGroupChangePolicy;
@@ -53,6 +52,34 @@ pub struct StorageContext<'a> {
     cid: &'a Option<String>,
     logger: &'a Logger,
     sandbox: &'a Arc<Mutex<Sandbox>>,
+}
+
+/// An implementation of generic storage device.
+pub struct StorageDeviceGeneric {
+    path: String,
+}
+
+impl std::fmt::Debug for StorageDeviceGeneric {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StorageDeviceGeneric")
+            .field("path", &self.path)
+            .finish()
+    }
+}
+
+impl StorageDeviceGeneric {
+    /// Create a new instance of `StorageStateCommon`.
+    pub fn new(path: String) -> Self {
+        StorageDeviceGeneric { path }
+    }
+}
+
+impl StorageDevice for StorageDeviceGeneric {
+    fn path(&self) -> &str {
+        &self.path
+    }
+
+    fn cleanup(&self) {}
 }
 
 /// Trait object to handle storage device.
