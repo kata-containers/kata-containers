@@ -40,7 +40,15 @@ jobs:
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Rebase atop of the latest target branch
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ github.event.pull_request.base.ref }}
 
       - name: Move issue to "In progress"
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
