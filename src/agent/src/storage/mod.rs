@@ -5,7 +5,6 @@
 //
 
 use std::collections::HashMap;
-use std::fmt::Formatter;
 use std::fs;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::Path;
@@ -55,31 +54,26 @@ pub struct StorageContext<'a> {
 }
 
 /// An implementation of generic storage device.
+#[derive(Default, Debug)]
 pub struct StorageDeviceGeneric {
-    path: String,
-}
-
-impl std::fmt::Debug for StorageDeviceGeneric {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("StorageDeviceGeneric")
-            .field("path", &self.path)
-            .finish()
-    }
+    path: Option<String>,
 }
 
 impl StorageDeviceGeneric {
     /// Create a new instance of `StorageStateCommon`.
     pub fn new(path: String) -> Self {
-        StorageDeviceGeneric { path }
+        StorageDeviceGeneric { path: Some(path) }
     }
 }
 
 impl StorageDevice for StorageDeviceGeneric {
-    fn path(&self) -> &str {
-        &self.path
+    fn path(&self) -> Option<&str> {
+        self.path.as_ref().map(|v| v.as_str())
     }
 
-    fn cleanup(&self) {}
+    fn cleanup(&self) -> Result<()> {
+        Ok(())
+    }
 }
 
 /// Trait object to handle storage device.
@@ -130,9 +124,10 @@ pub async fn add_storages(
         let path = storage.mount_point.clone();
         let state = sandbox.lock().await.add_sandbox_storage(&path).await;
         if state.ref_count().await > 1 {
-            let path = state.path();
-            if !path.is_empty() {
-                mount_list.push(path.to_string());
+            if let Some(path) = state.path() {
+                if !path.is_empty() {
+                    mount_list.push(path.to_string());
+                }
             }
             // The device already exists.
             continue;
@@ -155,9 +150,10 @@ pub async fn add_storages(
                         .update_sandbox_storage(&path, device.clone())
                     {
                         Ok(d) => {
-                            let path = device.path().to_string();
-                            if !path.is_empty() {
-                                mount_list.push(path.clone());
+                            if let Some(path) = device.path() {
+                                if !path.is_empty() {
+                                    mount_list.push(path.to_string());
+                                }
                             }
                             drop(d);
                         }
@@ -167,7 +163,12 @@ pub async fn add_storages(
                             {
                                 warn!(logger, "failed to remove dummy sandbox storage {:?}", e);
                             }
-                            device.cleanup();
+                            if let Err(e) = device.cleanup() {
+                                error!(
+                                    logger,
+                                    "failed to clean state for storage device {}, {}", path, e
+                                );
+                            }
                             return Err(anyhow!("failed to update device for storage"));
                         }
                     }
