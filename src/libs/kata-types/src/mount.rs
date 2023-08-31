@@ -431,10 +431,10 @@ impl TryFrom<&NydusExtraOptions> for KataVirtualVolume {
 /// Trait object for storage device.
 pub trait StorageDevice: Send + Sync {
     /// Path
-    fn path(&self) -> &str;
+    fn path(&self) -> Option<&str>;
 
     /// Clean up resources related to the storage device.
-    fn cleanup(&self);
+    fn cleanup(&self) -> Result<()>;
 }
 
 /// Manager to manage registered storage device handlers.
