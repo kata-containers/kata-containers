@@ -30,7 +30,7 @@ use crate::device::{
     DRIVER_LOCAL_TYPE, DRIVER_NVDIMM_TYPE, DRIVER_OVERLAYFS_TYPE, DRIVER_SCSI_TYPE,
     DRIVER_VIRTIOFS_TYPE, DRIVER_WATCHABLE_BIND_TYPE,
 };
-use crate::mount::{baremount, is_mounted};
+use crate::mount::{baremount, is_mounted, remove_mounts};
 use crate::sandbox::Sandbox;
 
 pub use self::ephemeral_handler::update_ephemeral_mounts;
@@ -72,6 +72,34 @@ impl StorageDevice for StorageDeviceGeneric {
     }
 
     fn cleanup(&self) -> Result<()> {
+        let path = match self.path() {
+            None => return Ok(()),
+            Some(v) => {
+                if v.is_empty() {
+                    // TODO: Bind watch, local, ephemeral volume has empty path, which will get leaked.
+                    return Ok(());
+                } else {
+                    v
+                }
+            }
+        };
+        if !Path::new(path).exists() {
+            return Ok(());
+        }
+
+        if matches!(is_mounted(path), Ok(true)) {
+            let mounts = vec![path.to_string()];
+            remove_mounts(&mounts)?;
+        }
+
+        // "remove_dir" will fail if the mount point is backed by a read-only filesystem.
+        // This is the case with the device mapper snapshotter, where we mount the block device
+        // directly at the underlying sandbox path which was provided from the base RO kataShared
+        // path from the host.
+        if let Err(err) = fs::remove_dir(path) {
+            //warn!(self.logger, "failed to remove dir {}, {:?}", path, err);
+        }
+
         Ok(())
     }
 }
@@ -347,9 +375,11 @@ pub fn recursive_ownership_change(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::Error;
+    use nix::mount::MsFlags;
     use protocols::agent::FSGroup;
     use std::fs::File;
-    use tempfile::tempdir;
+    use tempfile::{tempdir, Builder};
     use test_utils::{
         skip_if_not_root, skip_loop_by_user, skip_loop_if_not_root, skip_loop_if_root, TestUserType,
     };
@@ -676,5 +706,63 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn cleanup_storage() {
+        skip_if_not_root!();
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+
+        let tmpdir = Builder::new().tempdir().unwrap();
+        let tmpdir_path = tmpdir.path().to_str().unwrap();
+
+        let srcdir = Builder::new()
+            .prefix("src")
+            .tempdir_in(tmpdir_path)
+            .unwrap();
+        let srcdir_path = srcdir.path().to_str().unwrap();
+
+        let destdir = Builder::new()
+            .prefix("dest")
+            .tempdir_in(tmpdir_path)
+            .unwrap();
+        let destdir_path = destdir.path().to_str().unwrap();
+
+        let emptydir = Builder::new()
+            .prefix("empty")
+            .tempdir_in(tmpdir_path)
+            .unwrap();
+
+        let s = StorageDeviceGeneric::default();
+        assert!(s.cleanup().is_ok());
+
+        let s = StorageDeviceGeneric::new("".to_string());
+        assert!(s.cleanup().is_ok());
+
+        let invalid_dir = emptydir
+            .path()
+            .join("invalid")
+            .to_str()
+            .unwrap()
+            .to_string();
+        let s = StorageDeviceGeneric::new(invalid_dir);
+        assert!(s.cleanup().is_ok());
+
+        assert!(bind_mount(srcdir_path, destdir_path, &logger).is_ok());
+
+        let s = StorageDeviceGeneric::new(destdir_path.to_string());
+        assert!(s.cleanup().is_ok());
+
+        // remove a directory without umount
+        s.cleanup().unwrap();
+    }
+
+    fn bind_mount(src: &str, dst: &str, logger: &Logger) -> Result<(), Error> {
+        let src_path = Path::new(src);
+        let dst_path = Path::new(dst);
+
+        baremount(src_path, dst_path, "bind", MsFlags::MS_BIND, "", logger)
     }
 }
