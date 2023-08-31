@@ -73,6 +73,11 @@ reqwest = { version = "0.11.14", optional = true }
 # The "vendored" feature for openssl is required for musl build
 openssl = { version = "0.10.54", features = ["vendored"], optional = true }
 
+# Image pull/decrypt, we need to enable `verity` feature in image-rs 
+# image-rs = { git = "https://github.com/confidential-containers/guest-components", rev = "e9944577d1f61060c51d48890359a5467d519a29", default-features = false, features = [
+#    "kata-cc-native-tls", "verity",
+# ] }
+
 [dev-dependencies]
 tempfile = "3.1.0"
 test-utils = { path = "../libs/test-utils" }
