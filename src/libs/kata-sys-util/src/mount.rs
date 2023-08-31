@@ -399,12 +399,15 @@ pub fn parse_mount_options<T: AsRef<str>>(options: &[T]) -> Result<(MsFlags, Str
     let mut data: Vec<String> = Vec::new();
 
     for opt in options.iter() {
-        if opt.as_ref() == "loop" {
+        let opt_str = opt.as_ref();
+        if matches!(opt_str, "loop") {
             return Err(Error::InvalidMountOption("loop".to_string()));
-        } else if let Some(v) = parse_mount_flags(flags, opt.as_ref()) {
+        } else if let Some(v) = parse_mount_flags(flags, opt_str) {
             flags = v;
+        } else if opt_str.starts_with("io.katacontainers.") {
+            continue;
         } else {
-            data.push(opt.as_ref().to_string());
+            data.push(opt_str.to_string());
         }
     }
 
