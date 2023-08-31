@@ -5,10 +5,9 @@
 
 use super::inner::CloudHypervisorInner;
 use crate::ch::utils::get_api_socket_path;
-use crate::ch::utils::{get_jailer_root, get_sandbox_path, get_vsock_path};
-use crate::device::DeviceType;
+use crate::ch::utils::get_vsock_path;
 use crate::kernel_param::KernelParams;
-use crate::VsockDevice;
+use crate::utils::{get_jailer_root, get_sandbox_path};
 use crate::VM_ROOTFS_DRIVER_PMEM;
 use crate::{VcpuThreadIds, VmmState};
 use anyhow::{anyhow, Context, Result};
@@ -116,7 +115,7 @@ impl CloudHypervisorInner {
             .ok_or("missing socket")
             .map_err(|e| anyhow!(e))?;
 
-        let sandbox_path = get_sandbox_path(&self.id)?;
+        let sandbox_path = get_sandbox_path(&self.id);
 
         std::fs::create_dir_all(sandbox_path.clone()).context("failed to create sandbox path")?;
 
@@ -417,20 +416,12 @@ impl CloudHypervisorInner {
 
         self.netns = netns;
 
-        let vsock_dev = VsockDevice::new(self.id.clone()).await?;
-
-        self.add_device(DeviceType::Vsock(vsock_dev))
-            .await
-            .context("add vsock device")?;
-
-        self.start_hypervisor(self.timeout_secs).await?;
-
         Ok(())
     }
 
     async fn setup_environment(&mut self) -> Result<()> {
         // run_dir and vm_path are the same (shared)
-        self.run_dir = get_sandbox_path(&self.id)?;
+        self.run_dir = get_sandbox_path(&self.id);
         self.vm_path = self.run_dir.to_string();
 
         create_dir_all(&self.run_dir)
@@ -445,9 +436,8 @@ impl CloudHypervisorInner {
     }
 
     pub(crate) async fn start_vm(&mut self, timeout_secs: i32) -> Result<()> {
-        self.setup_environment().await?;
-
         self.timeout_secs = timeout_secs;
+        self.start_hypervisor(self.timeout_secs).await?;
 
         self.boot_vm().await?;
 
@@ -524,7 +514,7 @@ impl CloudHypervisorInner {
     }
 
     pub(crate) async fn get_jailer_root(&self) -> Result<String> {
-        let root_path = get_jailer_root(&self.id)?;
+        let root_path = get_jailer_root(&self.id);
 
         std::fs::create_dir_all(&root_path)?;
 

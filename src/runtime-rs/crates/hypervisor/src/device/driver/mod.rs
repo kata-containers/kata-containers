@@ -24,7 +24,9 @@ pub use virtio_fs::{
     ShareFsOperation,
 };
 pub use virtio_net::{Address, NetworkConfig, NetworkDevice};
-pub use virtio_vsock::{HybridVsockConfig, HybridVsockDevice, VsockConfig, VsockDevice};
+pub use virtio_vsock::{
+    HybridVsockConfig, HybridVsockDevice, VsockConfig, VsockDevice, DEFAULT_GUEST_VSOCK_CID,
+};
 
 pub mod vhost_user_blk;
 pub use vhost_user::{VhostUserConfig, VhostUserDevice, VhostUserType};

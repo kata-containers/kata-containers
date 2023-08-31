@@ -3000,10 +3000,10 @@ dependencies = [
  "async-trait",
  "common",
  "containerd-shim-protos",
+ "kata-types",
  "logging",
  "persist",
  "runtimes",
- "shim-interface",
  "slog",
  "slog-scope",
  "tokio",
@@ -3107,6 +3107,7 @@ dependencies = [
  "anyhow",
  "hyper",
  "hyperlocal",
+ "kata-types",
  "tokio",
 ]
 
