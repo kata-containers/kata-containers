@@ -73,7 +73,13 @@ const (
 	// Values based on:
 	clhTimeout                     = 10
 	clhAPITimeout                  = 1
-	clhAPITimeoutConfidentialGuest = 60
+
+	// TODO: reduce the SEV-SNP Guest boot time.
+	//
+	// This larger timeout allows a few pods to start in parallel
+	// successfully, on a single Host.
+	clhAPITimeoutConfidentialGuest = 300
+
 	// Timeout for hot-plug - hotplug devices can take more time, than usual API calls
 	// Use longer time timeout for it.
 	clhHotPlugAPITimeout                   = 5
