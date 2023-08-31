@@ -13,6 +13,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::mount::{create_mount_destination, parse_mount_options};
 use kata_types::mount::{StorageDevice, StorageHandlerManager, KATA_SHAREDFS_GUEST_PREMOUNT_TAG};
+use kata_types::volume::KATA_VOLUME_TYPE_DMVERITY;
 use nix::unistd::{Gid, Uid};
 use protocols::agent::Storage;
 use protocols::types::FSGroupChangePolicy;
@@ -22,6 +23,7 @@ use tracing::instrument;
 
 use self::bind_watcher_handler::BindWatcherHandler;
 use self::block_handler::{PmemHandler, ScsiHandler, VirtioBlkMmioHandler, VirtioBlkPciHandler};
+use self::dm_verity::DmVerityHandler;
 use self::ephemeral_handler::EphemeralHandler;
 use self::fs_handler::{OverlayfsHandler, Virtio9pHandler, VirtioFsHandler};
 use self::local_handler::LocalHandler;
@@ -37,6 +39,7 @@ pub use self::ephemeral_handler::update_ephemeral_mounts;
 
 mod bind_watcher_handler;
 mod block_handler;
+mod dm_verity;
 mod ephemeral_handler;
 mod fs_handler;
 mod local_handler;
@@ -145,6 +148,7 @@ lazy_static! {
         manager.add_handler(DRIVER_SCSI_TYPE, Arc::new(ScsiHandler{})).unwrap();
         manager.add_handler(DRIVER_VIRTIOFS_TYPE, Arc::new(VirtioFsHandler{})).unwrap();
         manager.add_handler(DRIVER_WATCHABLE_BIND_TYPE, Arc::new(BindWatcherHandler{})).unwrap();
+        manager.add_handler(KATA_VOLUME_TYPE_DMVERITY, Arc::new(DmVerityHandler{})).unwrap();
         manager
     };
 }
