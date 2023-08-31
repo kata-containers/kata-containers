@@ -20,3 +20,7 @@ pub const KATA_VOLUME_DMVERITY_SOURCE_TYPE_VIRTIO_CCW: &str = "virtio_ccw";
 pub const KATA_VOLUME_DMVERITY_SOURCE_TYPE_SCSI: &str = "scsi";
 /// Source device of dmverity volume is a pmem disk.
 pub const KATA_VOLUME_DMVERITY_SOURCE_TYPE_PMEM: &str = "pmem";
+
+/// Key to indentify directory creation in `Storage.driver_options`.
+pub const KATA_VOLUME_OVERLAYFS_CREATE_DIR: &str =
+    "io.katacontainers.volume.overlayfs.create_directory";
