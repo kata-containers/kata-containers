@@ -22,6 +22,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -269,6 +270,10 @@ var clhKernelParams = []Param{
 
 var clhDebugKernelParams = []Param{
 	{"console", "ttyS0,115200n8"}, // enable serial console
+}
+
+var clhArmDebugKernelParams = []Param{
+	{"console", "ttyAMA0,115200n8"}, // enable serial console
 }
 
 var clhDebugConfidentialGuestKernelParams = []Param{
@@ -527,6 +532,8 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	if clh.config.Debug {
 		if clh.config.ConfidentialGuest {
 			params = append(params, clhDebugConfidentialGuestKernelParams...)
+		} else if runtime.GOARCH == "arm64" {
+			params = append(params, clhArmDebugKernelParams...)
 		} else {
 			params = append(params, clhDebugKernelParams...)
 		}
