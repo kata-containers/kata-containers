@@ -36,7 +36,9 @@ jobs:
 
       - name: Checkout code to allow hub to communicate with the project
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
 
       - name: Install porting checker script
         run: |
