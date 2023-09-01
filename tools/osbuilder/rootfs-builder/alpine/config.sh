@@ -5,13 +5,13 @@
 
 OS_NAME="Alpine"
 
-OS_VERSION=${OS_VERSION:-3.15}
+OS_VERSION=${OS_VERSION:-3.18}
 
 BASE_PACKAGES="alpine-base"
 
 # Alpine mirror to use
 # See a list of mirrors at http://nl.alpinelinux.org/alpine/MIRRORS.txt
-MIRROR=https://dl-5.alpinelinux.org/alpine
+MIRROR=https://mirror.math.princeton.edu/pub/alpinelinux/
 
 PACKAGES="iptables ip6tables"
 

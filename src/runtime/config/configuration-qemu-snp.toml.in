@@ -16,7 +16,7 @@
 path = "@QEMUSNPPATH@"
 kernel = "@KERNELSNPPATH@"
 #image = "@IMAGEPATH@"
-initrd = "@INITRDPATH@"
+initrd = "@INITRDSEVPATH@"
 machine_type = "@MACHINETYPE@"
 
 # rootfs filesystem type:

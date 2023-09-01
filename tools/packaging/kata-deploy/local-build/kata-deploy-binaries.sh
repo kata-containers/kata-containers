@@ -185,6 +185,7 @@ install_image() {
 
 #Install guest image for tdx
 install_image_tdx() {
+	export AGENT_POLICY=yes
 	install_image "tdx"
 }
 
@@ -234,11 +235,13 @@ install_initrd() {
 
 #Install Mariner guest initrd
 install_initrd_mariner() {
+	export AGENT_POLICY=yes
 	install_initrd "mariner"
 }
 
 #Install guest initrd for sev
 install_initrd_sev() {
+	export AGENT_POLICY=yes
 	install_initrd "sev"
 }
 
