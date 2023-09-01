@@ -68,7 +68,7 @@ impl StorageDeviceGeneric {
 
 impl StorageDevice for StorageDeviceGeneric {
     fn path(&self) -> Option<&str> {
-        self.path.as_ref().map(|v| v.as_str())
+        self.path.as_deref()
     }
 
     fn cleanup(&self) -> Result<()> {
@@ -91,13 +91,27 @@ impl StorageDevice for StorageDeviceGeneric {
             let mounts = vec![path.to_string()];
             remove_mounts(&mounts)?;
         }
+        if matches!(is_mounted(path), Ok(true)) {
+            return Err(anyhow!("failed to umount mountpoint {}", path));
+        }
 
-        // "remove_dir" will fail if the mount point is backed by a read-only filesystem.
-        // This is the case with the device mapper snapshotter, where we mount the block device
-        // directly at the underlying sandbox path which was provided from the base RO kataShared
-        // path from the host.
-        if let Err(err) = fs::remove_dir(path) {
-            //warn!(self.logger, "failed to remove dir {}, {:?}", path, err);
+        let p = Path::new(path);
+        if p.is_dir() {
+            let is_empty = p.read_dir()?.next().is_none();
+            if !is_empty {
+                return Err(anyhow!("directory is not empty when clean up storage"));
+            }
+            // "remove_dir" will fail if the mount point is backed by a read-only filesystem.
+            // This is the case with the device mapper snapshotter, where we mount the block device
+            // directly at the underlying sandbox path which was provided from the base RO kataShared
+            // path from the host.
+            let _ = fs::remove_dir(p);
+        } else if !p.is_file() {
+            // TODO: should we remove the file for bind mount?
+            return Err(anyhow!(
+                "storage path {} is neither directory nor file",
+                path
+            ));
         }
 
         Ok(())
@@ -723,6 +737,8 @@ mod tests {
             .tempdir_in(tmpdir_path)
             .unwrap();
         let srcdir_path = srcdir.path().to_str().unwrap();
+        let empty_file = Path::new(srcdir_path).join("emptyfile");
+        fs::write(&empty_file, "test").unwrap();
 
         let destdir = Builder::new()
             .prefix("dest")
@@ -755,7 +771,12 @@ mod tests {
         let s = StorageDeviceGeneric::new(destdir_path.to_string());
         assert!(s.cleanup().is_ok());
 
+        // fail to remove non-empty directory
+        let s = StorageDeviceGeneric::new(srcdir_path.to_string());
+        s.cleanup().unwrap_err();
+
         // remove a directory without umount
+        fs::remove_file(&empty_file).unwrap();
         s.cleanup().unwrap();
     }
 
