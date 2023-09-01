@@ -198,10 +198,16 @@ impl ImageService {
         Ok(())
     }
 
-    /// Pull image when creating container and return the bunld path with rootfs.
-    pub async fn pull_image_for_container(&self, image: &str, cid: &str) -> Result<String> {
+    /// Pull image when creating container and return the bundle path with rootfs.
+    pub async fn pull_image_for_container(
+        &self,
+        image: &str,
+        cid: &str,
+        image_metadata: &HashMap<String, String>,
+    ) -> Result<String> {
+        info!(sl(), "image metadata: {:?}", image_metadata);
         Self::set_proxy_env_vars();
-        if image.starts_with("pause") {
+        if image_metadata["io.kubernetes.cri.container-type"] == "sandbox" {
             let mount_path = Self::unpack_pause_image(cid, "pause")?;
             self.add_image(String::from(image), String::from(cid)).await;
             return Ok(mount_path);
