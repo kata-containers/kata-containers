@@ -34,6 +34,11 @@ setup() {
 }
 
 teardown() {
+	# Debugging information
+	kubectl describe pod "$pod_name"
+	kubectl describe jobs/"$job_name"
+
+	# Clean-up
 	kubectl delete pod "$pod_name"
 	# Verify that pod is not running
 	run kubectl get pods

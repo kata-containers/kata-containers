@@ -7,7 +7,6 @@ default CopyFileRequest := true
 default CreateContainerRequest := true
 default CreateSandboxRequest := true
 default DestroySandboxRequest := true
-default ExecProcessRequest := true
 default GetMetricsRequest := true
 default GetOOMEventRequest := true
 default GuestDetailsRequest := true
@@ -36,3 +35,5 @@ default UpdateInterfaceRequest := true
 default UpdateRoutesRequest := true
 default WaitProcessRequest := true
 default WriteStreamRequest := true
+
+default ExecProcessRequest := false
