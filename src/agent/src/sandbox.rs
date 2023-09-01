@@ -71,6 +71,10 @@ impl StorageState {
         }
     }
 
+    pub fn path(&self) -> &str {
+        self.device.path()
+    }
+
     pub async fn ref_count(&self) -> u32 {
         self.count.load(Ordering::Relaxed)
     }
