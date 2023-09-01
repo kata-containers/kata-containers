@@ -56,7 +56,6 @@ generate_go_sources() {
     local root_path=$(realpath ../)/libs/protocols/protos
     local cmd="protoc -I$GOPATH/src:${root_path} \
 --gogottrpc_out=plugins=ttrpc+fieldpath,paths=source_relative,\
-import_path=github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc,\
 Mgogoproto/gogo.proto=github.com/gogo/protobuf/gogoproto,\
 Mgoogle/protobuf/any.proto=github.com/gogo/protobuf/types,\
 Mgoogle/protobuf/descriptor.proto=github.com/gogo/protobuf/protoc-gen-gogo/descriptor,\
