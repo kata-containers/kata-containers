@@ -835,6 +835,17 @@ func (fc *firecracker) createDiskPool(ctx context.Context) error {
 			PathOnHost:   &jailedDrive,
 		}
 
+		if fc.config.BlockDeviceCacheSet {
+			var cacheOption string
+			if fc.config.BlockDeviceCacheNoflush {
+				cacheOption = models.DriveCacheTypeUnsafe
+			} else {
+				cacheOption = models.DriveCacheTypeWriteback
+			}
+
+			drive.CacheType = &cacheOption
+		}
+
 		fc.fcConfig.Drives = append(fc.fcConfig.Drives, drive)
 	}
 
