@@ -35,6 +35,7 @@ all: serial-targets \
 	qemu-snp-experimental-tarball \
 	qemu-tarball \
 	qemu-tdx-experimental-tarball \
+	stratovirt-tarball \
 	shim-v2-tarball \
 	tdvf-tarball \
 	virtiofsd-tarball
@@ -113,6 +114,9 @@ qemu-tarball:
 	${MAKE} $@-build
 
 qemu-tdx-experimental-tarball:
+	${MAKE} $@-build
+
+stratovirt-tarball:
 	${MAKE} $@-build
 
 rootfs-image-tarball:
