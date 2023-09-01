@@ -89,6 +89,8 @@ which protoc
 which protoc-gen-gogottrpc
 [ $? -eq 0 ] || die "Please install protoc-gen-gogottrpc from https://github.com/containerd/ttrpc"
 
+[[ -n "$GOPATH" ]] || die "GOPATH is not set. Please set it."
+
 # do generate work
 target=$1
 
