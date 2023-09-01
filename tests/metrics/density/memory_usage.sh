@@ -361,7 +361,7 @@ function main(){
 
 	#Check for KSM before reporting test name, as it can modify it
 	check_for_ksm
-#	init_env
+	init_env
 	check_cmds "${SMEM_BIN}" bc
 	check_images "${IMAGE}"
 
