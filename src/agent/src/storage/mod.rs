@@ -103,6 +103,10 @@ pub async fn add_storages(
         let path = storage.mount_point.clone();
         let state = sandbox.lock().await.add_sandbox_storage(&path).await;
         if state.ref_count().await > 1 {
+            let path = state.path();
+            if !path.is_empty() {
+                mount_list.push(path.to_string());
+            }
             // The device already exists.
             continue;
         }
