@@ -1,8 +1,9 @@
 # Copyright (c) 2018 Yash Jain, 2022 IBM Corp.
+# Copyright (c) 2023 Sony Group Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 
-OS_NAME=ubuntu
+OS_NAME=${OS_NAME:-"ubuntu"}
 # This should be Ubuntu's code name, e.g. "focal" (Focal Fossa) for 20.04
 OS_VERSION=${OS_VERSION:-focal}
 PACKAGES="chrony iptables dbus"
@@ -10,6 +11,7 @@ PACKAGES="chrony iptables dbus"
 [ "$MEASURED_ROOTFS" = yes ] && PACKAGES+=" cryptsetup-bin e2fsprogs"
 [ "$SECCOMP" = yes ] && PACKAGES+=" libseccomp2"
 REPO_URL=http://ports.ubuntu.com
+KEYRING="ubuntu-keyring"
 
 case "$ARCH" in
 	aarch64) DEB_ARCH=arm64;;

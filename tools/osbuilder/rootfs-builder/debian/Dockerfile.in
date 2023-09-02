@@ -1,5 +1,5 @@
-#
 # Copyright (c) 2018 SUSE
+# Copyright (c) 2023 Sony Group Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -7,34 +7,27 @@ ARG IMAGE_REGISTRY=docker.io
 # NOTE: OS_VERSION is set according to config.sh
 FROM ${IMAGE_REGISTRY}/debian:@OS_VERSION@
 
-# RUN commands
-RUN apt-get update && apt-get --no-install-recommends install -y \
-    apt-utils \
-    autoconf \
-    automake \
-    binutils \
-    build-essential \
+# makedev tries to mknod from postinst
+RUN [ -x /usr/bin/systemd-detect-virt ] || ( echo "echo docker" >/usr/bin/systemd-detect-virt && chmod +x /usr/bin/systemd-detect-virt )
+# hadolint ignore=DL3009,SC2046
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive \
+    apt-get --no-install-recommends -y install \
     ca-certificates \
-    chrony \
-    coreutils \
     curl \
-    debianutils \
-    debootstrap \
     g++ \
-    gcc \
+    $(gcc_arch="@ARCH@" && [ "$(uname -m)" != "$gcc_arch" ] && ( \
+         libc_arch="$gcc_arch" && \
+         [ "$gcc_arch" = aarch64 ] && libc_arch=arm64; \
+         [ "$gcc_arch" = ppc64le ] && gcc_arch=powerpc64le && libc_arch=ppc64el; \
+         [ "$gcc_arch" = s390x ] && gcc_arch=s390x && libc_arch=s390x; \
+         [ "$gcc_arch" = x86_64 ] && gcc_arch=x86-64 && libc_arch=amd64; \
+         echo "gcc-$gcc_arch-linux-gnu libc6-dev-$libc_arch-cross")) \
     git \
-    libc-dev \
-    libstdc++-8-dev \
-    m4 \
     make \
+    makedev \
+    multistrap \
     musl-tools \
-    sed \
-    systemd \
-    tar \
-    vim \
-    wget
-# aarch64 requires this name -- link for all
-RUN ln -s /usr/bin/musl-gcc "/usr/bin/$(uname -m)-linux-musl-gcc"
+    protobuf-compiler
 
-# This will install the proper packages to build Kata components
 @INSTALL_RUST@

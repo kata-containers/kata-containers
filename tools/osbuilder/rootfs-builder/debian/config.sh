@@ -1,20 +1,14 @@
-#
 # Copyright (c) 2018 SUSE
+# Copyright (c) 2023 Sony Group Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 
-OS_VERSION=${OS_VERSION:-10.11}
-
-# Set OS_NAME to the desired debian "codename"
-OS_NAME=${OS_NAME:-"stretch"}
-
-PACKAGES="systemd coreutils init iptables chrony kmod"
+OS_NAME=${OS_NAME:-"debian"}
+# This should be Debian's code name, e.g. "bookworm" for Debian 12.x
+OS_VERSION=${OS_VERSION:-bookworm}
 
 # NOTE: Re-using ubuntu rootfs configuration, see 'ubuntu' folder for full content.
 source $script_dir/ubuntu/$CONFIG_SH
 
-# Init process must be one of {systemd,kata-agent}
-INIT_PROCESS=systemd
-# List of zero or more architectures to exclude from build,
-# as reported by  `uname -m`
-ARCH_EXCLUDE_LIST=()
+REPO_URL="http://deb.debian.org/debian"
+KEYRING="debian-archive-keyring"

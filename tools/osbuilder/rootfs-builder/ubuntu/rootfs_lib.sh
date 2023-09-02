@@ -1,4 +1,5 @@
 # Copyright (c) 2018 Yash Jain, 2022 IBM Corp.
+# Copyright (c) 2023 Sony Group Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -16,13 +17,13 @@ build_rootfs() {
 	cat > "$multistrap_conf" << EOF
 [General]
 cleanup=true
-aptsources=Ubuntu
-bootstrap=Ubuntu
+aptsources=${OS_NAME^}
+bootstrap=${OS_NAME^}
 
-[Ubuntu]
+[${OS_NAME^}]
 source=$REPO_URL
-keyring=ubuntu-keyring
-suite=focal
+keyring=$KEYRING
+suite=$OS_VERSION
 packages=$PACKAGES $EXTRA_PKGS
 EOF
 	if ! multistrap -a "$DEB_ARCH" -d "$rootfs_dir" -f "$multistrap_conf"; then
