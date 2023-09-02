@@ -21,9 +21,14 @@ use kata_types::{
     capabilities::{Capabilities, CapabilityBits},
     config::hypervisor::Hypervisor as HypervisorConfig,
 };
+use logging::{
+    AGENT_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, SERVICE_LOGGER, SHIM_LOGGER,
+    VIRT_CONTAINER_LOGGER, VMM_DRAGONBALL_LOGGER, VMM_LOGGER,
+};
 use nix::mount::MsFlags;
 use persist::sandbox_persist::Persist;
 use shim_interface::KATA_PATH;
+use slog::Logger;
 use std::{collections::HashSet, fs::create_dir_all};
 
 const DRAGONBALL_KERNEL: &str = "vmlinux";
@@ -93,7 +98,7 @@ impl DragonballInner {
     }
 
     pub(crate) async fn cold_start_vm(&mut self, timeout: i32) -> Result<()> {
-        info!(sl!(), "start sandbox cold");
+        info!(dl!(), "start sandbox cold");
 
         self.set_vm_base_config().context("set vm base config")?;
 
@@ -109,7 +114,7 @@ impl DragonballInner {
         kernel_params.append(&mut KernelParams::from_string(
             &self.config.boot_info.kernel_params,
         ));
-        info!(sl!(), "prepared kernel_params={:?}", kernel_params);
+        info!(dl!(), "prepared kernel_params={:?}", kernel_params);
 
         // set boot source
         let kernel_path = self.config.boot_info.kernel.clone();
@@ -167,7 +172,7 @@ impl DragonballInner {
 
         std::fs::remove_dir_all(&self.vm_path)
             .map_err(|err| {
-                error!(sl!(), "failed to remove dir all for {}", &self.vm_path);
+                error!(dl!(), "failed to remove dir all for {}", &self.vm_path);
                 err
             })
             .ok();
@@ -189,7 +194,7 @@ impl DragonballInner {
             mem_file_path,
             ..Default::default()
         };
-        info!(sl!(), "vm config: {:?}", vm_config);
+        info!(dl!(), "vm config: {:?}", vm_config);
 
         self.vmm_instance
             .set_vm_configuration(vm_config)
@@ -211,7 +216,7 @@ impl DragonballInner {
     }
 
     fn jail_resource(&self, src: &str, dst: &str) -> Result<String> {
-        info!(sl!(), "jail resource: src {} dst {}", src, dst);
+        info!(dl!(), "jail resource: src {} dst {}", src, dst);
         if src.is_empty() || dst.is_empty() {
             return Err(anyhow!("invalid param src {} dst {}", src, dst));
         }
@@ -227,7 +232,7 @@ impl DragonballInner {
 
     fn set_boot_source(&mut self, kernel_path: &str, kernel_params: &str) -> Result<()> {
         info!(
-            sl!(),
+            dl!(),
             "kernel path {} kernel params {}", kernel_path, kernel_params
         );
 
@@ -248,7 +253,7 @@ impl DragonballInner {
     }
 
     fn start_vmm_instance(&mut self) -> Result<()> {
-        info!(sl!(), "Starting VM");
+        info!(dl!(), "Starting VM");
         self.vmm_instance
             .instance_start()
             .context("Failed to start vmm")?;
@@ -297,7 +302,7 @@ impl DragonballInner {
         // cannot exceed maximum value
         if new_vcpus > self.config.cpu_info.default_maxvcpus {
             warn!(
-                sl!(),
+                dl!(),
                 "Cannot allocate more vcpus than the max allowed number of vcpus. The maximum allowed amount of vcpus will be used instead.");
             return Ok((current_vcpus, self.config.cpu_info.default_maxvcpus));
         }
@@ -309,7 +314,7 @@ impl DragonballInner {
     pub(crate) async fn resize_vcpu(&self, old_vcpus: u32, new_vcpus: u32) -> Result<(u32, u32)> {
         if old_vcpus == new_vcpus {
             info!(
-                sl!(),
+                dl!(),
                 "resize_vcpu: no need to resize vcpus because old_vcpus is equal to new_vcpus"
             );
             return Ok((new_vcpus, new_vcpus));
@@ -317,7 +322,7 @@ impl DragonballInner {
 
         let (old_vcpus, new_vcpus) = self.precheck_resize_vcpus(old_vcpus, new_vcpus)?;
         info!(
-            sl!(),
+            dl!(),
             "check_resize_vcpus passed, passing new_vcpus = {:?} to vmm", new_vcpus
         );
 

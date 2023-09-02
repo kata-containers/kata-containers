@@ -15,9 +15,13 @@ use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
 use std::{sync::Arc, vec::Vec};
 use tokio::sync::RwLock;
 
-use crate::share_fs::ShareFs;
-
 use self::{block_rootfs::is_block_rootfs, nydus_rootfs::NYDUS_ROOTFS_TYPE};
+use crate::share_fs::ShareFs;
+use logging::{
+    AGENT_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, SERVICE_LOGGER, SHIM_LOGGER,
+    VIRT_CONTAINER_LOGGER, VMM_DRAGONBALL_LOGGER, VMM_LOGGER,
+};
+use slog::Logger;
 
 const ROOTFS: &str = "rootfs";
 const HYBRID_ROOTFS_LOWER_DIR: &str = "rootfs_lower";

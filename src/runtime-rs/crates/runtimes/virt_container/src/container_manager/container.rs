@@ -17,9 +17,13 @@ use common::{
     },
 };
 use kata_sys_util::k8s::update_ephemeral_storage_type;
-
+use logging::{
+    AGENT_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, SERVICE_LOGGER, SHIM_LOGGER,
+    VIRT_CONTAINER_LOGGER, VMM_DRAGONBALL_LOGGER, VMM_LOGGER,
+};
 use oci::{LinuxResources, Process as OCIProcess};
 use resource::{ResourceManager, ResourceUpdateOp};
+use slog::Logger;
 use tokio::sync::RwLock;
 
 use super::{

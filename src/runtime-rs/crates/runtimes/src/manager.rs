@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{path::PathBuf, str::from_utf8, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, str::from_utf8, sync::Arc};
 
 use anyhow::{anyhow, Context, Result};
 use common::{
@@ -19,6 +19,10 @@ use kata_types::{
 };
 #[cfg(feature = "linux")]
 use linux_container::LinuxContainer;
+use logging::{
+    AGENT_LOGGER, FILTER_RULE, RESOURCE_LOGGER, RUNTIMES_LOGGER, SERVICE_LOGGER, SHIM_LOGGER,
+    VIRT_CONTAINER_LOGGER, VMM_DRAGONBALL_LOGGER, VMM_LOGGER,
+};
 use netns_rs::NetNs;
 use persist::sandbox_persist::Persist;
 use resource::{
@@ -26,6 +30,7 @@ use resource::{
     network::{dan_config_path, generate_netns_name},
 };
 use shim_interface::shim_mgmt::ERR_NO_SHIM_SERVER;
+use slog::Logger;
 use tokio::fs;
 use tokio::sync::{mpsc::Sender, Mutex, RwLock};
 use tracing::instrument;
@@ -148,6 +153,26 @@ impl RuntimeHandlerManagerInner {
         }
 
         let config = load_config(spec, options).context("load config")?;
+
+        let agent_level = config.agent.get("kata").unwrap().slog_level.clone();
+        let hypervisor_level = config
+            .hypervisor
+            .get("dragonball")
+            .unwrap()
+            .debug_info
+            .slog_level
+            .clone();
+        let runtime_level = config.runtime.slog_level.clone();
+        if runtime_level == "WARN" && agent_level == "WARN" && hypervisor_level == "WARN" {
+            FILTER_RULE.rcu(|inner| {
+                let mut updated_inner = HashMap::new();
+                updated_inner.clone_from(inner);
+                updated_inner.insert("runtimes".to_string(), slog::Level::Warning);
+                updated_inner.insert("agent".to_string(), slog::Level::Warning);
+                updated_inner.insert("vmm-dragonball".to_string(), slog::Level::Warning);
+                updated_inner
+            });
+        }
 
         let dan_path = dan_config_path(&config, &self.id);
         let mut network_created = false;
@@ -469,7 +494,9 @@ fn load_config(spec: &oci::Spec, option: &Option<Vec<u8>>) -> Result<TomlConfig>
     } else {
         String::from("")
     };
-    info!(sl!(), "get config path {:?}", &config_path);
+    let logger = slog_scope::logger().new(slog::o!("marker" => "temp"));
+
+    info!(logger, "get config path {:?}", &config_path);
     let (mut toml_config, _) =
         TomlConfig::load_from_file(&config_path).context("load toml config")?;
     annotation.update_config_by_annotation(&mut toml_config)?;
@@ -492,7 +519,7 @@ fn load_config(spec: &oci::Spec, option: &Option<Vec<u8>>) -> Result<TomlConfig>
         .setup_config(&mut toml_config)
         .context("failed to setup static resource mgmt config")?;
 
-    info!(sl!(), "get config content {:?}", &toml_config);
+    info!(logger, "get config content {:?}", &toml_config);
     Ok(toml_config)
 }
 

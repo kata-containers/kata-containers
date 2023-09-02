@@ -13,9 +13,14 @@ use common::{
     types::{ContainerID, ContainerProcess, ProcessExitStatus, ProcessStatus, ProcessType},
 };
 use hypervisor::device::device_manager::DeviceManager;
+use logging::{
+    AGENT_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, SERVICE_LOGGER, SHIM_LOGGER,
+    VIRT_CONTAINER_LOGGER, VMM_DRAGONBALL_LOGGER, VMM_LOGGER,
+};
 use nix::sys::signal::Signal;
 use oci::LinuxResources;
 use resource::{rootfs::Rootfs, volume::Volume};
+use slog::Logger;
 use tokio::sync::RwLock;
 
 use crate::container_manager::logger_with_process;

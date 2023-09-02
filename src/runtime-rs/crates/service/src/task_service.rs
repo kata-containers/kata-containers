@@ -14,7 +14,12 @@ use common::types::{Request, Response};
 use containerd_shim_protos::{api, shim_async};
 use ttrpc::{self, r#async::TtrpcContext};
 
+use logging::{
+    AGENT_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, SERVICE_LOGGER, SHIM_LOGGER,
+    VIRT_CONTAINER_LOGGER, VMM_DRAGONBALL_LOGGER, VMM_LOGGER,
+};
 use runtimes::RuntimeHandlerManager;
+use slog::Logger;
 
 pub(crate) struct TaskService {
     handler: Arc<RuntimeHandlerManager>,

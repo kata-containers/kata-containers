@@ -22,8 +22,13 @@ use dragonball::{
     vm::VmConfigInfo,
     Vmm,
 };
+use logging::{
+    AGENT_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, SERVICE_LOGGER, SHIM_LOGGER,
+    VIRT_CONTAINER_LOGGER, VMM_DRAGONBALL_LOGGER, VMM_LOGGER,
+};
 use nix::sched::{setns, CloneFlags};
 use seccompiler::BpfProgram;
+use slog::Logger;
 use vmm_sys_util::eventfd::EventFd;
 
 use crate::ShareFsOperation;
@@ -124,12 +129,12 @@ impl VmmInstance {
                 .name("vmm_master".to_owned())
                 .spawn(move || {
                     || -> Result<i32> {
-                        debug!(sl!(), "run vmm thread start");
+                        debug!(dl!(), "run vmm thread start");
                         let cur_tid = nix::unistd::gettid().as_raw() as u32;
                         vmm_shared_info.write().unwrap().master_tid = cur_tid;
 
                         if let Some(netns_path) = netns {
-                            info!(sl!(), "set netns for vmm master {}", &netns_path);
+                            info!(dl!(), "set netns for vmm master {}", &netns_path);
                             let netns_fd = File::open(&netns_path)
                                 .with_context(|| format!("open netns path {}", &netns_path))?;
                             setns(netns_fd.as_raw_fd(), CloneFlags::CLONE_NEWNET)
@@ -137,11 +142,11 @@ impl VmmInstance {
                         }
                         let exit_code =
                             Vmm::run_vmm_event_loop(Arc::new(Mutex::new(vmm)), vmm_service);
-                        debug!(sl!(), "run vmm thread exited: {}", exit_code);
+                        debug!(dl!(), "run vmm thread exited: {}", exit_code);
                         Ok(exit_code)
                     }()
                     .map_err(|e| {
-                        error!(sl!(), "run vmm thread err. {:?}", e);
+                        error!(dl!(), "run vmm thread err. {:?}", e);
                         e
                     })
                 })
@@ -202,7 +207,7 @@ impl VmmInstance {
     }
 
     pub fn remove_block_device(&self, id: &str) -> Result<()> {
-        info!(sl!(), "remove block device {}", id);
+        info!(dl!(), "remove block device {}", id);
         self.handle_request(Request::Sync(VmmAction::RemoveBlockDevice(id.to_string())))
             .with_context(|| format!("Failed to remove block device {:?}", id))?;
         Ok(())
@@ -279,21 +284,21 @@ impl VmmInstance {
     pub fn stop(&mut self) -> Result<()> {
         self.handle_request(Request::Sync(VmmAction::ShutdownMicroVm))
             .map_err(|e| {
-                warn!(sl!(), "Failed to shutdown MicroVM. {}", e);
+                warn!(dl!(), "Failed to shutdown MicroVM. {}", e);
                 e
             })
             .ok();
         // vmm is not running, join thread will be hang.
         if self.is_uninitialized() || self.vmm_thread.is_none() {
-            debug!(sl!(), "vmm-master thread is uninitialized or has exited.");
+            debug!(dl!(), "vmm-master thread is uninitialized or has exited.");
             return Ok(());
         }
-        debug!(sl!(), "join vmm-master thread exit.");
+        debug!(dl!(), "join vmm-master thread exit.");
 
         // vmm_thread must be exited, otherwise there will be other sync issues.
         // unwrap is safe, if vmm_thread is None, impossible run to here.
         self.vmm_thread.take().unwrap().join().ok();
-        info!(sl!(), "vmm-master thread join succeed.");
+        info!(dl!(), "vmm-master thread join succeed.");
         Ok(())
     }
 
@@ -339,7 +344,7 @@ impl VmmInstance {
                 Ok(vmm_outcome) => match *vmm_outcome {
                     Ok(vmm_data) => {
                         info!(
-                            sl!(),
+                            dl!(),
                             "success to send {:?} after retry {}", &vmm_action, count
                         );
                         return Ok(vmm_data);

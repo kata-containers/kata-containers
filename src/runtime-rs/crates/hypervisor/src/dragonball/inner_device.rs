@@ -21,7 +21,11 @@ use crate::{
     device::DeviceType, HybridVsockConfig, NetworkConfig, ShareFsDeviceConfig, ShareFsMountConfig,
     ShareFsMountType, ShareFsOperation, VfioBusMode, VfioDevice, VmmState,
 };
-
+use logging::{
+    AGENT_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, SERVICE_LOGGER, SHIM_LOGGER,
+    VIRT_CONTAINER_LOGGER, VMM_DRAGONBALL_LOGGER, VMM_LOGGER,
+};
+use slog::Logger;
 const MB_TO_B: u32 = 1024 * 1024;
 const DEFAULT_VIRTIO_FS_NUM_QUEUES: i32 = 1;
 const DEFAULT_VIRTIO_FS_QUEUE_SIZE: i32 = 1024;
@@ -36,7 +40,7 @@ pub(crate) fn drive_index_to_id(index: u64) -> String {
 impl DragonballInner {
     pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<()> {
         if self.state == VmmState::NotReady {
-            info!(sl!(), "VMM not ready, queueing device {}", device);
+            info!(dl!(), "VMM not ready, queueing device {}", device);
 
             // add the pending device by reverse order, thus the
             // start_vm would pop the devices in an right order
@@ -45,7 +49,7 @@ impl DragonballInner {
             return Ok(());
         }
 
-        info!(sl!(), "dragonball add device {:?}", &device);
+        info!(dl!(), "dragonball add device {:?}", &device);
         match device {
             DeviceType::Network(network) => self
                 .add_net_device(&network.config)
@@ -81,13 +85,13 @@ impl DragonballInner {
     }
 
     pub(crate) async fn remove_device(&mut self, device: DeviceType) -> Result<()> {
-        info!(sl!(), "remove device {} ", device);
+        info!(dl!(), "remove device {} ", device);
 
         match device {
             DeviceType::Network(network) => {
                 // Dragonball doesn't support remove network device, just print message.
                 info!(
-                    sl!(),
+                    dl!(),
                     "dragonball remove network device: {:?}.", network.config.virt_iface_name
                 );
 
@@ -134,9 +138,9 @@ impl DragonballInner {
 
         let bus_mode = VfioBusMode::to_string(vfio_device.bus_mode);
 
-        info!(sl!(), "Mock for dragonball insert host device.");
+        info!(dl!(), "Mock for dragonball insert host device.");
         info!(
-            sl!(),
+            dl!(),
             " Mock for dragonball insert host device. 
             host device id: {:?}, 
             bus_slot_func: {:?}, 
@@ -159,7 +163,7 @@ impl DragonballInner {
 
     fn remove_vfio_device(&mut self, hostdev_id: String) -> Result<()> {
         info!(
-            sl!(),
+            dl!(),
             "Mock for dragonball remove host_device with hostdev id {:?}", hostdev_id
         );
         // FIXME:
@@ -220,7 +224,7 @@ impl DragonballInner {
         };
 
         info!(
-            sl!(),
+            dl!(),
             "add {} endpoint to {}", iface_cfg.host_dev_name, iface_cfg.iface_id
         );
 
@@ -255,7 +259,7 @@ impl DragonballInner {
         fs_cfg.fuse_killpriv_v2 = true;
 
         info!(
-            sl!(),
+            dl!(),
             "args: {:?}", &self.config.shared_fs.virtio_fs_extra_args
         );
         let mut args = self.config.shared_fs.virtio_fs_extra_args.clone();
@@ -272,7 +276,7 @@ impl DragonballInner {
 
         if debug {
             warn!(
-                sl!(),
+                dl!(),
                 "Inline virtiofs \"-d\" option not implemented, ignore"
             );
         }
@@ -296,15 +300,15 @@ impl DragonballInner {
                     "cache_symlinks" => {} // inline virtiofs always cache symlinks
                     "no_readdir" => fs_cfg.no_readdir = true,
                     "trace" => warn!(
-                        sl!(),
+                        dl!(),
                         "Inline virtiofs \"-o trace\" option not supported yet, ignored."
                     ),
-                    _ => warn!(sl!(), "Inline virtiofs unsupported option: {}", arg),
+                    _ => warn!(dl!(), "Inline virtiofs unsupported option: {}", arg),
                 }
             }
         }
 
-        debug!(sl!(), "Inline virtiofs config {:?}", fs_cfg);
+        debug!(dl!(), "Inline virtiofs config {:?}", fs_cfg);
         Ok(())
     }
 

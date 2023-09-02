@@ -41,10 +41,21 @@ macro_rules! sl {
 fn real_main() -> Result<()> {
     let args = KataCtlCli::parse();
 
-    let log_level = args.log_level.unwrap_or(slog::Level::Info);
+    let _log_level = args.log_level.unwrap_or(slog::Level::Info);
+
+    let subsystem_level_config: HashMap<String, slog::Level> = HashMap::from([
+        ("agent".to_string(), slog::Level::Info)
+        ("runtimes".to_string(), slog::Level::Info)
+        ("resource".to_string(), slog::Level::Info)
+        ("virt-container".to_string(), slog::Level::Info)
+        ("service".to_string(), slog::Level::Info)
+        ("shim".to_string(), slog::Level::Info)
+        ("hypervisor".to_string(), slog::Level::Info)
+        ("vmm-dragonball".to_string(), slog::Level::Info)
+    ]);
 
     let (logger, _guard) = if args.json_logging {
-        logging::create_logger(crate_name!(), crate_name!(), log_level, io::stdout())
+        logging::create_logger(crate_name!(), crate_name!(), subsystem_level_config, io::stdout())
     } else {
         logging::create_term_logger(log_level)
     };

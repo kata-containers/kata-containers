@@ -24,6 +24,10 @@ pub struct Agent {
     #[serde(default, rename = "enable_debug")]
     pub debug: bool,
 
+    /// The slog log level will be applied to agent.
+    #[serde(default)]
+    pub slog_level: String,
+
     /// Enable agent tracing.
     ///
     /// If enabled, the agent will generate OpenTelemetry trace spans.
@@ -88,6 +92,7 @@ impl std::default::Default for Agent {
     fn default() -> Self {
         Self {
             debug: true,
+            slog_level: "INFO".to_string(),
             enable_tracing: false,
             debug_console_enabled: false,
             server_port: DEFAULT_AGENT_VSOCK_PORT,

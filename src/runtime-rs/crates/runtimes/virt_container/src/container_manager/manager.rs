@@ -29,7 +29,11 @@ use tracing::instrument;
 use kata_sys_util::hooks::HookStates;
 
 use super::{logger_with_process, Container};
-
+use logging::{
+    AGENT_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, SERVICE_LOGGER, SHIM_LOGGER,
+    VIRT_CONTAINER_LOGGER, VMM_DRAGONBALL_LOGGER, VMM_LOGGER,
+};
+use slog::Logger;
 pub struct VirtContainerManager {
     sid: String,
     pid: u32,

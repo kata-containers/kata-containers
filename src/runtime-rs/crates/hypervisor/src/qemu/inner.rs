@@ -7,7 +7,11 @@ use anyhow::Result;
 
 use crate::{HypervisorConfig, VcpuThreadIds};
 use kata_types::capabilities::{Capabilities, CapabilityBits};
-
+use logging::{
+    AGENT_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, SERVICE_LOGGER, SHIM_LOGGER,
+    VIRT_CONTAINER_LOGGER, VMM_DRAGONBALL_LOGGER, VMM_LOGGER,
+};
+use slog::Logger;
 const VSOCK_SCHEME: &str = "vsock";
 const VSOCK_AGENT_CID: u32 = 3;
 const VSOCK_AGENT_PORT: u32 = 1024;

@@ -19,7 +19,11 @@ use crate::network::utils::{
     address::{parse_ip, Address},
     link::{self, LinkAttrs},
 };
-
+use logging::{
+    AGENT_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, SERVICE_LOGGER, SHIM_LOGGER,
+    VIRT_CONTAINER_LOGGER, VMM_DRAGONBALL_LOGGER, VMM_LOGGER,
+};
+use slog::Logger;
 #[derive(Debug)]
 pub(crate) struct NetworkInfoFromLink {
     interface: Interface,

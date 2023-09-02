@@ -36,7 +36,11 @@ use super::{EndpointState, NetnsGuard, Network};
 use crate::network::endpoint::TapEndpoint;
 use crate::network::network_info::network_info_from_dan::NetworkInfoFromDan;
 use crate::network::utils::generate_private_mac_addr;
-
+use logging::{
+    AGENT_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, SERVICE_LOGGER, SHIM_LOGGER,
+    VIRT_CONTAINER_LOGGER, VMM_DRAGONBALL_LOGGER, VMM_LOGGER,
+};
+use slog::Logger;
 /// Directly attachable network
 pub struct Dan {
     inner: Arc<RwLock<DanInner>>,

@@ -7,9 +7,14 @@
 use std::{fs::File, os::unix::io::AsRawFd};
 
 use anyhow::{Context, Result};
+use logging::{
+    AGENT_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, SERVICE_LOGGER, SHIM_LOGGER,
+    VIRT_CONTAINER_LOGGER, VMM_DRAGONBALL_LOGGER, VMM_LOGGER,
+};
 use nix::sched::{setns, CloneFlags};
 use nix::unistd::{getpid, gettid};
 use rand::Rng;
+use slog::Logger;
 
 pub struct NetnsGuard {
     old_netns: Option<File>,

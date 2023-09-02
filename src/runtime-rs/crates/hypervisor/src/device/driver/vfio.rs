@@ -25,7 +25,11 @@ use crate::{
     PciPath, PciSlot,
 };
 use kata_sys_util::fs::get_base_name;
-
+use logging::{
+    AGENT_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, SERVICE_LOGGER, SHIM_LOGGER,
+    VIRT_CONTAINER_LOGGER, VMM_DRAGONBALL_LOGGER, VMM_LOGGER,
+};
+use slog::Logger;
 pub const SYS_BUS_PCI_DRIVER_PROBE: &str = "/sys/bus/pci/drivers_probe";
 pub const SYS_BUS_PCI_DEVICES: &str = "/sys/bus/pci/devices";
 pub const SYS_KERN_IOMMU_GROUPS: &str = "/sys/kernel/iommu_groups";

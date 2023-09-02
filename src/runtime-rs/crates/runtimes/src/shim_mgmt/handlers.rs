@@ -12,13 +12,17 @@ use agent::ResizeVolumeRequest;
 use anyhow::{anyhow, Context, Result};
 use common::Sandbox;
 use hyper::{Body, Method, Request, Response, StatusCode};
-use std::sync::Arc;
-use url::Url;
-
+use logging::{
+    AGENT_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, SERVICE_LOGGER, SHIM_LOGGER,
+    VIRT_CONTAINER_LOGGER, VMM_DRAGONBALL_LOGGER, VMM_LOGGER,
+};
 use shim_interface::shim_mgmt::{
     AGENT_URL, DIRECT_VOLUME_PATH_KEY, DIRECT_VOLUME_RESIZE_URL, DIRECT_VOLUME_STATS_URL,
     IP6_TABLE_URL, IP_TABLE_URL, METRICS_URL,
 };
+use slog::Logger;
+use std::sync::Arc;
+use url::Url;
 
 // main router for response, this works as a multiplexer on
 // http arrival which invokes the corresponding handler function

@@ -14,7 +14,11 @@ use tokio::{
 };
 
 use super::{ConnectConfig, Sock, Stream};
-
+use logging::{
+    AGENT_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, SERVICE_LOGGER, SHIM_LOGGER,
+    VIRT_CONTAINER_LOGGER, VMM_DRAGONBALL_LOGGER, VMM_LOGGER,
+};
+use slog::Logger;
 #[derive(Debug, PartialEq)]
 pub struct HybridVsock {
     uds: String,

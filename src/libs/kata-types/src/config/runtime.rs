@@ -33,6 +33,9 @@ pub struct Runtime {
     #[serde(default, rename = "enable_debug")]
     pub debug: bool,
 
+    /// The slog level will be applied to runtimes.
+    #[serde(default)]
+    pub slog_level: String,
     /// Enabled experimental feature list, format: ["a", "b"].
     ///
     /// Experimental features are features not stable enough for production, they may break

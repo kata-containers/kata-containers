@@ -14,15 +14,20 @@ use crate::{
     shim::{ShimExecutor, ENV_KATA_RUNTIME_BIND_FD},
     Error,
 };
-
+use logging::{
+    AGENT_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, SERVICE_LOGGER, SHIM_LOGGER,
+    VIRT_CONTAINER_LOGGER, VMM_DRAGONBALL_LOGGER, VMM_LOGGER,
+};
+use slog::Logger;
 impl ShimExecutor {
     pub async fn run(&mut self) -> Result<()> {
         crate::panic_hook::set_panic_hook();
         let sid = self.args.id.clone();
         let bundle_path = get_bundle_path().context("get bundle")?;
         let path = bundle_path.join("log");
-        let _logger_guard =
-            logger::set_logger(path.to_str().unwrap(), &sid, self.args.debug).context("set logger");
+        let _logger_guard = logger::set_logger(path.to_str().unwrap(), &sid, self.args.debug)
+            .context("set logger")
+            .unwrap();
         if try_core_sched().is_err() {
             warn!(
                 sl!(),

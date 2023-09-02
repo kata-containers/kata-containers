@@ -28,6 +28,11 @@ use tokio::{
 };
 use url::Url;
 
+use logging::{
+    AGENT_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, SERVICE_LOGGER, SHIM_LOGGER,
+    VIRT_CONTAINER_LOGGER, VMM_DRAGONBALL_LOGGER, VMM_LOGGER,
+};
+use slog::Logger;
 fn open_fifo(path: &str) -> Result<AsyncUnixStream> {
     let fd = fcntl::open(path, OFlag::O_RDWR, Mode::from_bits(0).unwrap())?;
 

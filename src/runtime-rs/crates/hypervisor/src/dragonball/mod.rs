@@ -21,6 +21,13 @@ use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use tokio::sync::RwLock;
 use tracing::instrument;
 
+#[macro_export]
+macro_rules! sl {
+    () => {
+        Logger::clone(&VMM_DRAGONBALL_LOGGER.load())
+    };
+}
+
 use crate::{DeviceType, Hypervisor, VcpuThreadIds};
 
 pub struct Dragonball {

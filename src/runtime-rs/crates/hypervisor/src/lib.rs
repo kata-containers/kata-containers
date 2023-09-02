@@ -8,6 +8,8 @@
 extern crate slog;
 
 logging::logger_with_subsystem!(sl, "hypervisor");
+// Inside crate dragonball, the `dl!` macro should be used instead of `sl!`
+logging::logger_with_subsystem!(dl, "vmm-dragonball");
 
 pub mod device;
 pub mod hypervisor_persist;

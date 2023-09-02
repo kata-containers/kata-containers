@@ -5,10 +5,14 @@
 //
 
 use std::os::unix::fs::OpenOptionsExt;
-
-use anyhow::{Context, Result};
+use std::sync::Arc;
 
 use crate::Error;
+use anyhow::{Context, Result};
+use logging::{
+    AGENT_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, SERVICE_LOGGER, SHIM_LOGGER,
+    VIRT_CONTAINER_LOGGER, VMM_DRAGONBALL_LOGGER, VMM_LOGGER,
+};
 
 pub(crate) fn set_logger(path: &str, sid: &str, is_debug: bool) -> Result<slog_async::AsyncGuard> {
     let fifo = std::fs::OpenOptions::new()
@@ -36,6 +40,32 @@ pub(crate) fn set_logger(path: &str, sid: &str, is_debug: bool) -> Result<slog_a
         log::Level::Info
     };
     slog_stdlog::init_with_level(level).context(format!("init with level {}", level))?;
+
+    VMM_LOGGER.store(Arc::new(
+        slog_scope::logger().new(slog::o!("subsystem" => "hypervisor")),
+    ));
+    VMM_DRAGONBALL_LOGGER.store(Arc::new(
+        slog_scope::logger().new(slog::o!("subsystem" => "vmm-dragonball")),
+    ));
+
+    AGENT_LOGGER.store(Arc::new(
+        slog_scope::logger().new(slog::o!("subsystem" => "agent")),
+    ));
+    RESOURCE_LOGGER.store(Arc::new(
+        slog_scope::logger().new(slog::o!("subsystem" => "resource")),
+    ));
+    RUNTIMES_LOGGER.store(Arc::new(
+        slog_scope::logger().new(slog::o!("subsystem" => "runtimes")),
+    ));
+    VIRT_CONTAINER_LOGGER.store(Arc::new(
+        slog_scope::logger().new(slog::o!("subsystem" => "virt-container")),
+    ));
+    SERVICE_LOGGER.store(Arc::new(
+        slog_scope::logger().new(slog::o!("subsystem" => "service")),
+    ));
+    SHIM_LOGGER.store(Arc::new(
+        slog_scope::logger().new(slog::o!("subsystem" => "shim")),
+    ));
 
     Ok(async_guard)
 }

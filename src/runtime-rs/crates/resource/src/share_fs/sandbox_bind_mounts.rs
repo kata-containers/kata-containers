@@ -23,7 +23,12 @@ use anyhow::{anyhow, Context, Result};
 use super::utils::{do_get_host_path, mkdir_with_permissions};
 use kata_sys_util::{fs::get_base_name, mount};
 use kata_types::mount::{SANDBOX_BIND_MOUNTS_DIR, SANDBOX_BIND_MOUNTS_RO, SANDBOX_BIND_MOUNTS_RW};
+use logging::{
+    AGENT_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, SERVICE_LOGGER, SHIM_LOGGER,
+    VIRT_CONTAINER_LOGGER, VMM_DRAGONBALL_LOGGER, VMM_LOGGER,
+};
 use nix::mount::MsFlags;
+use slog::Logger;
 
 #[derive(Clone, Default, Debug)]
 pub struct SandboxBindMounts {

@@ -16,7 +16,12 @@ use super::inner::DragonballInner;
 use crate::{
     device::DeviceType, utils, HybridVsockConfig, HybridVsockDevice, VcpuThreadIds, VmmState,
 };
+use logging::{
+    AGENT_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, SERVICE_LOGGER, SHIM_LOGGER,
+    VIRT_CONTAINER_LOGGER, VMM_DRAGONBALL_LOGGER, VMM_LOGGER,
+};
 use shim_interface::KATA_PATH;
+use slog::Logger;
 const DEFAULT_HYBRID_VSOCK_NAME: &str = "kata.hvsock";
 
 fn get_vsock_path(root: &str) -> String {
@@ -51,9 +56,9 @@ impl DragonballInner {
     pub(crate) async fn start_vm(&mut self, timeout: i32) -> Result<()> {
         self.run_vmm_server().context("start vmm server")?;
         self.cold_start_vm(timeout).await.map_err(|error| {
-            error!(sl!(), "start micro vm error {:?}", error);
+            error!(dl!(), "start micro vm error {:?}", error);
             if let Err(err) = self.stop_vm() {
-                error!(sl!(), "failed to call end err : {:?}", err);
+                error!(dl!(), "failed to call end err : {:?}", err);
             }
             error
         })?;
@@ -62,19 +67,19 @@ impl DragonballInner {
     }
 
     pub(crate) fn stop_vm(&mut self) -> Result<()> {
-        info!(sl!(), "Stopping dragonball VM");
+        info!(dl!(), "Stopping dragonball VM");
         self.vmm_instance.stop().context("stop")?;
         Ok(())
     }
 
     pub(crate) fn pause_vm(&self) -> Result<()> {
-        info!(sl!(), "do pause vm");
+        info!(dl!(), "do pause vm");
         self.vmm_instance.pause().context("pause vm")?;
         Ok(())
     }
 
     pub(crate) fn resume_vm(&self) -> Result<()> {
-        info!(sl!(), "do resume vm");
+        info!(dl!(), "do resume vm");
         self.vmm_instance.resume().context("resume vm")?;
         Ok(())
     }
@@ -93,7 +98,7 @@ impl DragonballInner {
     }
 
     pub(crate) async fn get_hypervisor_metrics(&self) -> Result<String> {
-        info!(sl!(), "get hypervisor metrics");
+        info!(dl!(), "get hypervisor metrics");
         self.vmm_instance.get_hypervisor_metrics()
     }
 
@@ -109,7 +114,7 @@ impl DragonballInner {
         for tid in self.vmm_instance.get_vcpu_tids() {
             vcpu_thread_ids.vcpus.insert(tid.0 as u32, tid.1);
         }
-        info!(sl!(), "get thread ids {:?}", vcpu_thread_ids);
+        info!(dl!(), "get thread ids {:?}", vcpu_thread_ids);
         Ok(vcpu_thread_ids)
     }
 
@@ -132,7 +137,7 @@ impl DragonballInner {
             pids.remove(&tid.1);
         }
 
-        info!(sl!(), "get pids {:?}", pids);
+        info!(dl!(), "get pids {:?}", pids);
         Ok(Vec::from_iter(pids.into_iter()))
     }
 

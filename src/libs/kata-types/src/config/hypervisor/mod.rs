@@ -374,6 +374,10 @@ pub struct DebugInfo {
     #[serde(default)]
     pub enable_debug: bool,
 
+    /// The slog log level will be applied to hypervisor.
+    #[serde(default)]
+    pub slog_level: String,
+
     /// Enable dumping information about guest page structures if true.
     #[serde(default)]
     pub guest_memory_dump_paging: bool,
