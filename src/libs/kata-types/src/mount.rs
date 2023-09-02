@@ -7,7 +7,6 @@
 use anyhow::{anyhow, Context, Error, Result};
 use std::collections::hash_map::Entry;
 use std::convert::TryFrom;
-use std::fmt::Formatter;
 use std::{collections::HashMap, fs, path::PathBuf};
 
 /// Prefix to mark a volume as Kata special.
@@ -429,41 +428,13 @@ impl TryFrom<&NydusExtraOptions> for KataVirtualVolume {
     }
 }
 
-/// An implementation of generic storage device.
-pub struct StorageDeviceGeneric {
-    path: String,
-}
-
-impl std::fmt::Debug for StorageDeviceGeneric {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("StorageState")
-            .field("path", &self.path)
-            .finish()
-    }
-}
-
-impl StorageDeviceGeneric {
-    /// Create a new instance of `StorageStateCommon`.
-    pub fn new(path: String) -> Self {
-        StorageDeviceGeneric { path }
-    }
-}
-
-impl StorageDevice for StorageDeviceGeneric {
-    fn path(&self) -> &str {
-        &self.path
-    }
-
-    fn cleanup(&self) {}
-}
-
 /// Trait object for storage device.
 pub trait StorageDevice: Send + Sync {
     /// Path
-    fn path(&self) -> &str;
+    fn path(&self) -> Option<&str>;
 
     /// Clean up resources related to the storage device.
-    fn cleanup(&self);
+    fn cleanup(&self) -> Result<()>;
 }
 
 /// Manager to manage registered storage device handlers.

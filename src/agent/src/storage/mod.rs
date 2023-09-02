@@ -12,9 +12,7 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::mount::{create_mount_destination, parse_mount_options};
-use kata_types::mount::{
-    StorageDevice, StorageDeviceGeneric, StorageHandlerManager, KATA_SHAREDFS_GUEST_PREMOUNT_TAG,
-};
+use kata_types::mount::{StorageDevice, StorageHandlerManager, KATA_SHAREDFS_GUEST_PREMOUNT_TAG};
 use nix::unistd::{Gid, Uid};
 use protocols::agent::Storage;
 use protocols::types::FSGroupChangePolicy;
@@ -32,7 +30,7 @@ use crate::device::{
     DRIVER_LOCAL_TYPE, DRIVER_NVDIMM_TYPE, DRIVER_OVERLAYFS_TYPE, DRIVER_SCSI_TYPE,
     DRIVER_VIRTIOFS_TYPE, DRIVER_WATCHABLE_BIND_TYPE,
 };
-use crate::mount::{baremount, is_mounted};
+use crate::mount::{baremount, is_mounted, remove_mounts};
 use crate::sandbox::Sandbox;
 
 pub use self::ephemeral_handler::update_ephemeral_mounts;
@@ -53,6 +51,71 @@ pub struct StorageContext<'a> {
     cid: &'a Option<String>,
     logger: &'a Logger,
     sandbox: &'a Arc<Mutex<Sandbox>>,
+}
+
+/// An implementation of generic storage device.
+#[derive(Default, Debug)]
+pub struct StorageDeviceGeneric {
+    path: Option<String>,
+}
+
+impl StorageDeviceGeneric {
+    /// Create a new instance of `StorageStateCommon`.
+    pub fn new(path: String) -> Self {
+        StorageDeviceGeneric { path: Some(path) }
+    }
+}
+
+impl StorageDevice for StorageDeviceGeneric {
+    fn path(&self) -> Option<&str> {
+        self.path.as_deref()
+    }
+
+    fn cleanup(&self) -> Result<()> {
+        let path = match self.path() {
+            None => return Ok(()),
+            Some(v) => {
+                if v.is_empty() {
+                    // TODO: Bind watch, local, ephemeral volume has empty path, which will get leaked.
+                    return Ok(());
+                } else {
+                    v
+                }
+            }
+        };
+        if !Path::new(path).exists() {
+            return Ok(());
+        }
+
+        if matches!(is_mounted(path), Ok(true)) {
+            let mounts = vec![path.to_string()];
+            remove_mounts(&mounts)?;
+        }
+        if matches!(is_mounted(path), Ok(true)) {
+            return Err(anyhow!("failed to umount mountpoint {}", path));
+        }
+
+        let p = Path::new(path);
+        if p.is_dir() {
+            let is_empty = p.read_dir()?.next().is_none();
+            if !is_empty {
+                return Err(anyhow!("directory is not empty when clean up storage"));
+            }
+            // "remove_dir" will fail if the mount point is backed by a read-only filesystem.
+            // This is the case with the device mapper snapshotter, where we mount the block device
+            // directly at the underlying sandbox path which was provided from the base RO kataShared
+            // path from the host.
+            let _ = fs::remove_dir(p);
+        } else if !p.is_file() {
+            // TODO: should we remove the file for bind mount?
+            return Err(anyhow!(
+                "storage path {} is neither directory nor file",
+                path
+            ));
+        }
+
+        Ok(())
+    }
 }
 
 /// Trait object to handle storage device.
@@ -103,6 +166,11 @@ pub async fn add_storages(
         let path = storage.mount_point.clone();
         let state = sandbox.lock().await.add_sandbox_storage(&path).await;
         if state.ref_count().await > 1 {
+            if let Some(path) = state.path() {
+                if !path.is_empty() {
+                    mount_list.push(path.to_string());
+                }
+            }
             // The device already exists.
             continue;
         }
@@ -124,9 +192,10 @@ pub async fn add_storages(
                         .update_sandbox_storage(&path, device.clone())
                     {
                         Ok(d) => {
-                            let path = device.path().to_string();
-                            if !path.is_empty() {
-                                mount_list.push(path.clone());
+                            if let Some(path) = device.path() {
+                                if !path.is_empty() {
+                                    mount_list.push(path.to_string());
+                                }
                             }
                             drop(d);
                         }
@@ -136,7 +205,12 @@ pub async fn add_storages(
                             {
                                 warn!(logger, "failed to remove dummy sandbox storage {:?}", e);
                             }
-                            device.cleanup();
+                            if let Err(e) = device.cleanup() {
+                                error!(
+                                    logger,
+                                    "failed to clean state for storage device {}, {}", path, e
+                                );
+                            }
                             return Err(anyhow!("failed to update device for storage"));
                         }
                     }
@@ -315,9 +389,11 @@ pub fn recursive_ownership_change(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::Error;
+    use nix::mount::MsFlags;
     use protocols::agent::FSGroup;
     use std::fs::File;
-    use tempfile::tempdir;
+    use tempfile::{tempdir, Builder};
     use test_utils::{
         skip_if_not_root, skip_loop_by_user, skip_loop_if_not_root, skip_loop_if_root, TestUserType,
     };
@@ -644,5 +720,70 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn cleanup_storage() {
+        skip_if_not_root!();
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+
+        let tmpdir = Builder::new().tempdir().unwrap();
+        let tmpdir_path = tmpdir.path().to_str().unwrap();
+
+        let srcdir = Builder::new()
+            .prefix("src")
+            .tempdir_in(tmpdir_path)
+            .unwrap();
+        let srcdir_path = srcdir.path().to_str().unwrap();
+        let empty_file = Path::new(srcdir_path).join("emptyfile");
+        fs::write(&empty_file, "test").unwrap();
+
+        let destdir = Builder::new()
+            .prefix("dest")
+            .tempdir_in(tmpdir_path)
+            .unwrap();
+        let destdir_path = destdir.path().to_str().unwrap();
+
+        let emptydir = Builder::new()
+            .prefix("empty")
+            .tempdir_in(tmpdir_path)
+            .unwrap();
+
+        let s = StorageDeviceGeneric::default();
+        assert!(s.cleanup().is_ok());
+
+        let s = StorageDeviceGeneric::new("".to_string());
+        assert!(s.cleanup().is_ok());
+
+        let invalid_dir = emptydir
+            .path()
+            .join("invalid")
+            .to_str()
+            .unwrap()
+            .to_string();
+        let s = StorageDeviceGeneric::new(invalid_dir);
+        assert!(s.cleanup().is_ok());
+
+        assert!(bind_mount(srcdir_path, destdir_path, &logger).is_ok());
+
+        let s = StorageDeviceGeneric::new(destdir_path.to_string());
+        assert!(s.cleanup().is_ok());
+
+        // fail to remove non-empty directory
+        let s = StorageDeviceGeneric::new(srcdir_path.to_string());
+        s.cleanup().unwrap_err();
+
+        // remove a directory without umount
+        fs::remove_file(&empty_file).unwrap();
+        s.cleanup().unwrap();
+    }
+
+    fn bind_mount(src: &str, dst: &str, logger: &Logger) -> Result<(), Error> {
+        let src_path = Path::new(src);
+        let dst_path = Path::new(dst);
+
+        baremount(src_path, dst_path, "bind", MsFlags::MS_BIND, "", logger)
     }
 }

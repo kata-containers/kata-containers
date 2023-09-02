@@ -16,7 +16,7 @@ use std::{thread, time};
 
 use anyhow::{anyhow, Context, Result};
 use kata_types::cpu::CpuSet;
-use kata_types::mount::{StorageDevice, StorageDeviceGeneric};
+use kata_types::mount::StorageDevice;
 use libc::pid_t;
 use oci::{Hook, Hooks};
 use protocols::agent::OnlineCPUMemRequest;
@@ -32,11 +32,12 @@ use tokio::sync::Mutex;
 use tracing::instrument;
 
 use crate::linux_abi::*;
-use crate::mount::{get_mount_fs_type, is_mounted, remove_mounts, TYPE_ROOTFS};
+use crate::mount::{get_mount_fs_type, TYPE_ROOTFS};
 use crate::namespace::Namespace;
 use crate::netlink::Handle;
 use crate::network::Network;
 use crate::pci;
+use crate::storage::StorageDeviceGeneric;
 use crate::uevent::{Uevent, UeventMatcher};
 use crate::watcher::BindWatcher;
 
@@ -60,7 +61,7 @@ impl StorageState {
     fn new() -> Self {
         StorageState {
             count: Arc::new(AtomicU32::new(1)),
-            device: Arc::new(StorageDeviceGeneric::new("".to_string())),
+            device: Arc::new(StorageDeviceGeneric::default()),
         }
     }
 
@@ -69,6 +70,10 @@ impl StorageState {
             count: Arc::new(AtomicU32::new(1)),
             device,
         }
+    }
+
+    pub fn path(&self) -> Option<&str> {
+        self.device.path()
     }
 
     pub async fn ref_count(&self) -> u32 {
@@ -178,30 +183,6 @@ impl Sandbox {
         Ok(state.device)
     }
 
-    // Clean mount and directory of a mountpoint.
-    // This is actually StorageDeviceGeneric::cleanup(), kept here due to dependency chain.
-    #[instrument]
-    fn cleanup_sandbox_storage(&mut self, path: &str) -> Result<()> {
-        if path.is_empty() {
-            return Err(anyhow!("mountpoint path is empty"));
-        } else if !Path::new(path).exists() {
-            return Ok(());
-        }
-
-        if matches!(is_mounted(path), Ok(true)) {
-            let mounts = vec![path.to_string()];
-            remove_mounts(&mounts)?;
-        }
-
-        // "remove_dir" will fail if the mount point is backed by a read-only filesystem.
-        // This is the case with the device mapper snapshotter, where we mount the block device directly
-        // at the underlying sandbox path which was provided from the base RO kataShared path from the host.
-        if let Err(err) = fs::remove_dir(path) {
-            warn!(self.logger, "failed to remove dir {}, {:?}", path, err);
-        }
-        Ok(())
-    }
-
     /// Decrease reference count and destroy the storage object if reference count reaches zero.
     /// Returns `Ok(true)` if the reference count has reached zero and the storage object has been
     /// removed.
@@ -211,8 +192,9 @@ impl Sandbox {
             None => Err(anyhow!("Sandbox storage with path {} not found", path)),
             Some(state) => {
                 if state.dec_and_test_ref_count().await {
-                    self.storages.remove(path);
-                    self.cleanup_sandbox_storage(path)?;
+                    if let Some(storage) = self.storages.remove(path) {
+                        storage.device.cleanup()?;
+                    }
                     Ok(true)
                 } else {
                     Ok(false)
@@ -572,50 +554,6 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    async fn remove_sandbox_storage() {
-        skip_if_not_root!();
-
-        let logger = slog::Logger::root(slog::Discard, o!());
-        let mut s = Sandbox::new(&logger).unwrap();
-
-        let tmpdir = Builder::new().tempdir().unwrap();
-        let tmpdir_path = tmpdir.path().to_str().unwrap();
-
-        let srcdir = Builder::new()
-            .prefix("src")
-            .tempdir_in(tmpdir_path)
-            .unwrap();
-        let srcdir_path = srcdir.path().to_str().unwrap();
-
-        let destdir = Builder::new()
-            .prefix("dest")
-            .tempdir_in(tmpdir_path)
-            .unwrap();
-        let destdir_path = destdir.path().to_str().unwrap();
-
-        let emptydir = Builder::new()
-            .prefix("empty")
-            .tempdir_in(tmpdir_path)
-            .unwrap();
-
-        assert!(s.cleanup_sandbox_storage("").is_err());
-
-        let invalid_dir = emptydir.path().join("invalid");
-
-        assert!(s
-            .cleanup_sandbox_storage(invalid_dir.to_str().unwrap())
-            .is_ok());
-
-        assert!(bind_mount(srcdir_path, destdir_path, &logger).is_ok());
-
-        assert!(s.cleanup_sandbox_storage(destdir_path).is_ok());
-
-        // remove a directory without umount
-        s.cleanup_sandbox_storage(srcdir_path).unwrap();
-    }
-
-    #[tokio::test]
-    #[serial]
     async fn unset_and_remove_sandbox_storage() {
         skip_if_not_root!();
 
@@ -645,6 +583,10 @@ mod tests {
         assert!(bind_mount(srcdir_path, destdir_path, &logger).is_ok());
 
         s.add_sandbox_storage(destdir_path).await;
+        let storage = StorageDeviceGeneric::new(destdir_path.to_string());
+        assert!(s
+            .update_sandbox_storage(destdir_path, Arc::new(storage))
+            .is_ok());
         assert!(s.remove_sandbox_storage(destdir_path).await.is_ok());
 
         let other_dir_str;
@@ -659,6 +601,10 @@ mod tests {
             other_dir_str = other_dir_path.to_string();
 
             s.add_sandbox_storage(other_dir_path).await;
+            let storage = StorageDeviceGeneric::new(other_dir_path.to_string());
+            assert!(s
+                .update_sandbox_storage(other_dir_path, Arc::new(storage))
+                .is_ok());
         }
 
         assert!(s.remove_sandbox_storage(&other_dir_str).await.is_ok());
