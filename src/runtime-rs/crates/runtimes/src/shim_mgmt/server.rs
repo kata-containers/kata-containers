@@ -20,7 +20,8 @@ use shim_interface::{mgmt_socket_addr, shim_mgmt::ERR_NO_SHIM_SERVER};
 use tokio::net::UnixListener;
 
 use super::handlers::handler_mux;
-
+use logging::{VMM_DRAGONBALL_LOGGER, AGENT_LOGGER, HYPERVISOR_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, VIRT_CONTAINER_LOGGER, SERVICE_LOGGER, SHIM_LOGGER};
+use slog::Logger;
 /// The shim management server instance
 pub struct MgmtServer {
     /// socket address(with prefix like hvsock://)

@@ -19,7 +19,8 @@ use kata_types::{
 };
 #[cfg(feature = "linux")]
 use linux_container::LinuxContainer;
-use netns_rs::NetNs;
+use logging::{VMM_DRAGONBALL_LOGGER, AGENT_LOGGER, HYPERVISOR_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, VIRT_CONTAINER_LOGGER, SERVICE_LOGGER, SHIM_LOGGER};
+use slog::Logger;use netns_rs::NetNs;
 use persist::sandbox_persist::Persist;
 use resource::{
     cpu_mem::initial_size::InitialSizeManager,

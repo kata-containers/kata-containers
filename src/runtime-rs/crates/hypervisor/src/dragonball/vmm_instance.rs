@@ -22,7 +22,8 @@ use dragonball::{
     vm::VmConfigInfo,
     Vmm,
 };
-use nix::sched::{setns, CloneFlags};
+use logging::{VMM_DRAGONBALL_LOGGER, AGENT_LOGGER, HYPERVISOR_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, VIRT_CONTAINER_LOGGER, SERVICE_LOGGER, SHIM_LOGGER};
+use slog::Logger;use nix::sched::{setns, CloneFlags};
 use seccompiler::BpfProgram;
 use vmm_sys_util::eventfd::EventFd;
 

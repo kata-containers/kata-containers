@@ -7,7 +7,8 @@
 mod hybrid_vsock;
 pub use hybrid_vsock::HybridVsock;
 mod vsock;
-pub use vsock::Vsock;
+use logging::{VMM_DRAGONBALL_LOGGER, AGENT_LOGGER, HYPERVISOR_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, VIRT_CONTAINER_LOGGER, SERVICE_LOGGER, SHIM_LOGGER};
+use slog::Logger;pub use vsock::Vsock;
 
 use std::{
     pin::Pin,

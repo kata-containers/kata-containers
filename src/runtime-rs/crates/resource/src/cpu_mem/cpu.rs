@@ -19,7 +19,8 @@ use oci::LinuxCpu;
 use tokio::sync::RwLock;
 
 use crate::ResourceUpdateOp;
-
+use logging::{VMM_DRAGONBALL_LOGGER, AGENT_LOGGER, HYPERVISOR_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, VIRT_CONTAINER_LOGGER, SERVICE_LOGGER, SHIM_LOGGER};
+use slog::Logger;
 #[derive(Default, Debug, Clone)]
 pub struct CpuResource {
     /// Current number of vCPUs

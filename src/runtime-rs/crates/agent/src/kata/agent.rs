@@ -12,7 +12,8 @@ use ttrpc::context as ttrpc_ctx;
 use kata_types::config::Agent as AgentConfig;
 
 use crate::{kata::KataAgent, Agent, AgentManager, HealthService};
-
+use logging::{VMM_DRAGONBALL_LOGGER, AGENT_LOGGER, HYPERVISOR_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, VIRT_CONTAINER_LOGGER, SERVICE_LOGGER, SHIM_LOGGER};
+use slog::Logger;
 /// millisecond to nanosecond
 const MILLISECOND_TO_NANOSECOND: i64 = 1_000_000;
 

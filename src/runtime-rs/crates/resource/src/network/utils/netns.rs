@@ -7,7 +7,8 @@
 use std::{fs::File, os::unix::io::AsRawFd};
 
 use anyhow::{Context, Result};
-use nix::sched::{setns, CloneFlags};
+use logging::{VMM_DRAGONBALL_LOGGER, AGENT_LOGGER, HYPERVISOR_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, VIRT_CONTAINER_LOGGER, SERVICE_LOGGER, SHIM_LOGGER};
+use slog::Logger;use nix::sched::{setns, CloneFlags};
 use nix::unistd::{getpid, gettid};
 use rand::Rng;
 

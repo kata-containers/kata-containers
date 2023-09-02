@@ -19,7 +19,8 @@ use tokio::sync::RwLock;
 use ttrpc::asynchronous::Client;
 
 use crate::{log_forwarder::LogForwarder, sock};
-
+use logging::{VMM_DRAGONBALL_LOGGER, AGENT_LOGGER, HYPERVISOR_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, VIRT_CONTAINER_LOGGER, SERVICE_LOGGER, SHIM_LOGGER};
+use slog::Logger;
 // https://github.com/firecracker-microvm/firecracker/blob/master/docs/vsock.md
 #[derive(Debug, Default)]
 pub struct Vsock {

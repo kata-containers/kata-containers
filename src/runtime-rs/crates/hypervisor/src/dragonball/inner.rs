@@ -21,7 +21,8 @@ use kata_types::{
     capabilities::{Capabilities, CapabilityBits},
     config::hypervisor::Hypervisor as HypervisorConfig,
 };
-use nix::mount::MsFlags;
+use logging::{VMM_DRAGONBALL_LOGGER, AGENT_LOGGER, HYPERVISOR_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, VIRT_CONTAINER_LOGGER, SERVICE_LOGGER, SHIM_LOGGER};
+use slog::Logger;use nix::mount::MsFlags;
 use persist::sandbox_persist::Persist;
 use shim_interface::KATA_PATH;
 use std::{collections::HashSet, fs::create_dir_all};

@@ -27,7 +27,8 @@ use tokio::{
 use ttrpc::asynchronous::Server;
 
 use crate::task_service::TaskService;
-
+use logging::{VMM_DRAGONBALL_LOGGER, AGENT_LOGGER, HYPERVISOR_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, VIRT_CONTAINER_LOGGER, SERVICE_LOGGER, SHIM_LOGGER};
+use slog::Logger;
 /// message buffer size
 const MESSAGE_BUFFER_SIZE: usize = 8;
 
