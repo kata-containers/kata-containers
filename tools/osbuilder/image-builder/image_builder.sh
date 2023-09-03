@@ -440,11 +440,6 @@ setup_selinux() {
 				chroot "${mount_dir}" command -v restorecon > /dev/null; then
 				mount -t selinuxfs selinuxfs "$selinuxfs_path"
 				chroot "${mount_dir}" restorecon -RF -e ${SELINUXFS} /
-				# TODO: This operation will be removed after the updated container-selinux that
-				# includes the following commit is released.
-				# https://github.com/containers/container-selinux/commit/39f83cc74d50bd10ab6be4d0bdd98bc04857469f
-				# We use chcon as an interim solution until then.
-				chroot "${mount_dir}" chcon -t container_runtime_exec_t "/usr/bin/${agent_bin}"
 				umount "${selinuxfs_path}"
 			else
 				die "Could not label the rootfs. Make sure that SELinux is enabled on the host \
