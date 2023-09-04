@@ -472,6 +472,11 @@ func handleVirtualVolume(c *Container) ([]*grpc.Storage, string, error) {
 						break
 					}
 				}
+			} else if virtVolume.VolumeType == types.KataVirtualVolumeImageGuestPullType {
+				vol, err = handleVirtualVolumeStorageObject(c, "", virtVolume)
+				if err != nil {
+					return nil, "", err
+				}
 			}
 			if vol != nil {
 				volumes = append(volumes, vol)
@@ -521,7 +526,7 @@ func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container)
 
 	// In the confidential computing, there is no Image information on the host,
 	// so there is no Rootfs.Target.
-	if f.sandbox.config.ServiceOffload && c.rootFs.Target == "" {
+	if f.sandbox.config.ServiceOffload && c.rootFs.Target == "" && !HasOptionPrefix(c.rootFs.Options, VirtualVolumePrefix) {
 		return &SharedFile{
 			containerStorages: nil,
 			guestPath:         rootfsGuestPath,
