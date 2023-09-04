@@ -83,41 +83,42 @@ const (
 type customRequestTimeoutKeyType struct{}
 
 var (
-	checkRequestTimeout           = 30 * time.Second
-	defaultRequestTimeout         = 60 * time.Second
-	remoteRequestTimeout          = 300 * time.Second
-	customRequestTimeoutKey       = customRequestTimeoutKeyType(struct{}{})
-	errorMissingOCISpec           = errors.New("Missing OCI specification")
-	defaultKataHostSharedDir      = "/run/kata-containers/shared/sandboxes/"
-	defaultKataGuestSharedDir     = "/run/kata-containers/shared/containers/"
-	defaultKataGuestNydusRootDir  = "/run/kata-containers/shared/"
-	mountGuestTag                 = "kataShared"
-	defaultKataGuestSandboxDir    = "/run/kata-containers/sandbox/"
-	type9pFs                      = "9p"
-	typeVirtioFS                  = "virtiofs"
-	typeOverlayFS                 = "overlay"
-	kata9pDevType                 = "9p"
-	kataMmioBlkDevType            = "mmioblk"
-	kataBlkDevType                = "blk"
-	kataBlkCCWDevType             = "blk-ccw"
-	kataSCSIDevType               = "scsi"
-	kataNvdimmDevType             = "nvdimm"
-	kataVirtioFSDevType           = "virtio-fs"
-	kataOverlayDevType            = "overlayfs"
-	kataWatchableBindDevType      = "watchable-bind"
-	kataVfioPciDevType            = "vfio-pci"    // VFIO PCI device to used as VFIO in the container
-	kataVfioPciGuestKernelDevType = "vfio-pci-gk" // VFIO PCI device for consumption by the guest kernel
-	kataVfioApDevType             = "vfio-ap"
-	sharedDir9pOptions            = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
-	sharedDirVirtioFSOptions      = []string{}
-	sharedDirVirtioFSDaxOptions   = "dax"
-	shmDir                        = "shm"
-	kataEphemeralDevType          = "ephemeral"
-	defaultEphemeralPath          = filepath.Join(defaultKataGuestSandboxDir, kataEphemeralDevType)
-	grpcMaxDataSize               = int64(1024 * 1024)
-	localDirOptions               = []string{"mode=0777"}
-	maxHostnameLen                = 64
-	GuestDNSFile                  = "/etc/resolv.conf"
+	checkRequestTimeout              = 30 * time.Second
+	defaultRequestTimeout            = 60 * time.Second
+	remoteRequestTimeout             = 300 * time.Second
+	customRequestTimeoutKey          = customRequestTimeoutKeyType(struct{}{})
+	errorMissingOCISpec              = errors.New("Missing OCI specification")
+	defaultKataHostSharedDir         = "/run/kata-containers/shared/sandboxes/"
+	defaultKataGuestSharedDir        = "/run/kata-containers/shared/containers/"
+	defaultKataGuestNydusRootDir     = "/run/kata-containers/shared/"
+	defaultKataGuestVirtualVolumedir = "/run/kata-containers/virtual-volumes/"
+	mountGuestTag                    = "kataShared"
+	defaultKataGuestSandboxDir       = "/run/kata-containers/sandbox/"
+	type9pFs                         = "9p"
+	typeVirtioFS                     = "virtiofs"
+	typeOverlayFS                    = "overlay"
+	kata9pDevType                    = "9p"
+	kataMmioBlkDevType               = "mmioblk"
+	kataBlkDevType                   = "blk"
+	kataBlkCCWDevType                = "blk-ccw"
+	kataSCSIDevType                  = "scsi"
+	kataNvdimmDevType                = "nvdimm"
+	kataVirtioFSDevType              = "virtio-fs"
+	kataOverlayDevType               = "overlayfs"
+	kataWatchableBindDevType         = "watchable-bind"
+	kataVfioPciDevType               = "vfio-pci"    // VFIO PCI device to used as VFIO in the container
+	kataVfioPciGuestKernelDevType    = "vfio-pci-gk" // VFIO PCI device for consumption by the guest kernel
+	kataVfioApDevType                = "vfio-ap"
+	sharedDir9pOptions               = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
+	sharedDirVirtioFSOptions         = []string{}
+	sharedDirVirtioFSDaxOptions      = "dax"
+	shmDir                           = "shm"
+	kataEphemeralDevType             = "ephemeral"
+	defaultEphemeralPath             = filepath.Join(defaultKataGuestSandboxDir, kataEphemeralDevType)
+	grpcMaxDataSize                  = int64(1024 * 1024)
+	localDirOptions                  = []string{"mode=0777"}
+	maxHostnameLen                   = 64
+	GuestDNSFile                     = "/etc/resolv.conf"
 )
 
 const (
@@ -1198,6 +1199,10 @@ func (k *kataAgent) appendDevices(deviceList []*grpc.Device, c *Container) []*gr
 		if device == nil {
 			k.Logger().WithField("device", dev.ID).Error("failed to find device by id")
 			return nil
+		}
+
+		if strings.HasPrefix(dev.ContainerPath, defaultKataGuestVirtualVolumedir) {
+			continue
 		}
 
 		switch device.DeviceType() {

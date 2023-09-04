@@ -130,7 +130,7 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 	}
 
 	if !rootFs.Mounted && len(sandboxConfig.Containers) == 1 {
-		if rootFs.Source != "" {
+		if rootFs.Source != "" && !vc.HasOptionPrefix(rootFs.Options, vc.VirtualVolumePrefix) {
 			realPath, err := ResolvePath(rootFs.Source)
 			if err != nil {
 				return nil, vc.Process{}, err
