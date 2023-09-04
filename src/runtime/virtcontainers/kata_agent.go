@@ -1543,14 +1543,11 @@ func (k *kataAgent) handleLocalStorage(mounts []specs.Mount, sandboxID string, r
 	return localStorages, nil
 }
 
-// handleDeviceBlockVolume handles volume that is block device file
-// and DeviceBlock type.
-func (k *kataAgent) handleDeviceBlockVolume(c *Container, m Mount, device api.Device) (*grpc.Storage, error) {
+func handleBlockVolume(c *Container, device api.Device) (*grpc.Storage, error) {
 	vol := &grpc.Storage{}
 
 	blockDrive, ok := device.GetDeviceInfo().(*config.BlockDrive)
 	if !ok || blockDrive == nil {
-		k.Logger().Error("malformed block drive")
 		return nil, fmt.Errorf("malformed block drive")
 	}
 	switch {
@@ -1574,6 +1571,22 @@ func (k *kataAgent) handleDeviceBlockVolume(c *Container, m Mount, device api.De
 		vol.Source = blockDrive.SCSIAddr
 	default:
 		return nil, fmt.Errorf("Unknown block device driver: %s", c.sandbox.config.HypervisorConfig.BlockDeviceDriver)
+	}
+	return vol, nil
+}
+
+// handleVirtualVolumeStorageObject handles KataVirtualVolume that is block device file.
+func handleVirtualVolumeStorageObject(c *Container, blockDeviceId string, virtVolume *types.KataVirtualVolume) (*grpc.Storage, error) {
+	var vol *grpc.Storage = &grpc.Storage{}
+	return vol, nil
+}
+
+// handleDeviceBlockVolume handles volume that is block device file
+// and DeviceBlock type.
+func (k *kataAgent) handleDeviceBlockVolume(c *Container, m Mount, device api.Device) (*grpc.Storage, error) {
+	vol, err := handleBlockVolume(c, device)
+	if err != nil {
+		return nil, err
 	}
 
 	vol.MountPoint = m.Destination
