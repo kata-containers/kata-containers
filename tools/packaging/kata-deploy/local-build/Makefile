@@ -13,6 +13,10 @@ define BUILD
 	$(MK_DIR)/kata-deploy-binaries-in-docker.sh $(if $(V),,-s) --build=$1
 endef
 
+define CACHE
+	$(MK_DIR)/cache-kata-deploy-binaries.sh --cache=$1
+endef
+
 kata-tarball: | all-parallel merge-builds
 
 $(MK_DIR)/dockerbuild/install_yq.sh:
@@ -129,3 +133,80 @@ merge-builds:
 
 install-tarball:
 	tar -xf ./kata-static.tar.xz -C /
+
+%-tarball-cache: $(MK_DIR)/dockerbuild/install_yq.sh
+	$(call CACHE,$*)
+
+cache-cloud-hypervisor-tarball:
+	${MAKE} $@-cache
+
+cache-cloud-hypervisor-glibc-tarball:
+	${MAKE} $@-cache
+
+cache-firecracker-tarball:
+	${MAKE} $@-cache
+
+cache-kernel-dragonball-experimental-tarball:
+	${MAKE} $@-cache
+
+cache-kernel-nvidia-gpu-tarball:
+	${MAKE} $@-cache
+
+cache-kernel-nvidia-gpu-snp-tarball:
+	${MAKE} $@-cache
+
+cache-kernel-nvidia-gpu-tdx-experimental-tarball:
+	${MAKE} $@-cache	
+
+cache-kernel-tarball:
+	${MAKE} $@-cache
+
+cache-kernel-tdx-experimental-tarball:
+	${MAKE} $@-cache
+
+cache-kernel-sev-tarball:
+	${MAKE} $@-cache
+
+cache-nydus-tarball:
+	${MAKE} $@-cache
+
+cache-ovmf-sev-tarball:
+	${MAKE} $@-cache
+
+cache-ovmf-tarball:
+	${MAKE} $@-cache
+
+cache-qemu-snp-experimental-tarball:
+	${MAKE} $@-cache
+
+cache-qemu-tarball:
+	${MAKE} $@-cache
+
+cache-qemu-tdx-experimental-tarball:
+	${MAKE} $@-cache
+
+cache-rootfs-image-tarball:
+	${MAKE} $@-cache
+
+cache-rootfs-image-tdx-tarball: cache-kernel-tdx-experimental-tarball
+	${MAKE} $@-cache
+
+cache-rootfs-initrd-mariner-tarball:
+	${MAKE} $@-cache
+
+cache-rootfs-initrd-sev-tarball: cache-kernel-sev-tarball
+	${MAKE} $@-cache
+
+cache-rootfs-initrd-tarball:
+	${MAKE} $@-cache
+
+cache-shim-v2-tarball:
+	${MAKE} $@-cache
+
+cache-tdvf-tarball:
+	${MAKE} $@-cache
+
+cache-virtiofsd-tarball:
+	${MAKE} $@-cache
+
+

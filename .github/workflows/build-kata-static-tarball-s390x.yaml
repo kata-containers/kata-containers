@@ -44,6 +44,14 @@ jobs:
           username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
           password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
+      - name: Login to Kata Containers ghcr.io
+        if: ${{ inputs.push-to-registry == 'yes' }}
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - uses: actions/checkout@v3
         with:
           ref: ${{ inputs.commit-hash }}
@@ -67,6 +75,13 @@ jobs:
           path: kata-build/kata-static-${{ matrix.asset }}.tar.xz
           retention-days: 1
           if-no-files-found: error
+
+      - name: Push ${{ matrix.asset }} to cache
+        if: ${{ inputs.push-to-registry == 'yes' }}
+        run: |
+          make "cache-${KATA_ASSET}-tarball"
+        env:
+          BRANCH: $GITHUB_REF_NAME
 
   create-kata-tarball:
     runs-on: s390x
