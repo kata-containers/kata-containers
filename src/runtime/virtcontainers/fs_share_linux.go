@@ -26,6 +26,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
@@ -460,8 +461,83 @@ func (f *FilesystemShare) shareRootFilesystemWithNydus(ctx context.Context, c *C
 	}, nil
 }
 
+// handleVirtualVolume processes each `extraoption` in rootFs.Options,
+// creating storage, and then aggregates all storages  into an array.
+func handleVirtualVolume(c *Container) ([]*grpc.Storage, string, error) {
+	var volumes []*grpc.Storage
+	var volumeType string
+
+	for _, o := range c.rootFs.Options {
+		if strings.HasPrefix(o, VirtualVolumePrefix) {
+			virtVolume, err := types.ParseKataVirtualVolume(strings.TrimPrefix(o, VirtualVolumePrefix))
+			if err != nil {
+				return nil, "", err
+			}
+
+			volumeType = virtVolume.VolumeType
+			var vol *grpc.Storage
+			if virtVolume.VolumeType == types.KataVirtualVolumeImageRawBlockType || virtVolume.VolumeType == types.KataVirtualVolumeLayerRawBlockType {
+				for i, d := range c.devices {
+					if d.ContainerPath == virtVolume.Source {
+						vol, err = handleVirtualVolumeStorageObject(c, d.ID, virtVolume)
+						if err != nil {
+							return nil, "", err
+						}
+						c.devices[i].ContainerPath = vol.MountPoint
+						vol.Fstype = virtVolume.FSType
+						vol.Options = append(vol.Options, virtVolume.Options...)
+						break
+					}
+				}
+			}
+			if vol != nil {
+				volumes = append(volumes, vol)
+			}
+		}
+	}
+
+	return volumes, volumeType, nil
+}
+
+func (f *FilesystemShare) shareRootFilesystemWithVirtualVolume(ctx context.Context, c *Container) (*SharedFile, error) {
+	kataGuestDir := filepath.Join(defaultKataGuestVirtualVolumedir, "containers")
+	guestPath := filepath.Join("/run/kata-containers/", c.id, c.rootfsSuffix)
+	rootFsStorages, volumeType, err := handleVirtualVolume(c)
+	if err != nil {
+		return nil, err
+	}
+
+	if volumeType == types.KataVirtualVolumeImageRawBlockType || volumeType == types.KataVirtualVolumeLayerRawBlockType {
+		rootfs := &grpc.Storage{}
+		rootfs.MountPoint = guestPath
+		overlayDirDriverOption := "io.katacontainers.volume.overlayfs.create_directory"
+		rootfs.Source = typeOverlayFS
+		rootfs.Fstype = typeOverlayFS
+		rootfs.Driver = kataOverlayDevType
+		for _, v := range rootFsStorages {
+			rootfs.Options = append(rootfs.Options, fmt.Sprintf("%s=%s", lowerDir, v.MountPoint))
+		}
+		rootfsUpperDir := filepath.Join(kataGuestDir, c.id, "fs")
+		rootfsWorkDir := filepath.Join(kataGuestDir, c.id, "work")
+		rootfs.DriverOptions = append(rootfs.DriverOptions, fmt.Sprintf("%s=%s", overlayDirDriverOption, rootfsUpperDir))
+		rootfs.DriverOptions = append(rootfs.DriverOptions, fmt.Sprintf("%s=%s", overlayDirDriverOption, rootfsWorkDir))
+		rootfs.Options = append(rootfs.Options, fmt.Sprintf("%s=%s", upperDir, rootfsUpperDir))
+		rootfs.Options = append(rootfs.Options, fmt.Sprintf("%s=%s", workDir, rootfsWorkDir))
+		rootFsStorages = append(rootFsStorages, rootfs)
+		f.Logger().Infof("verity rootfs info: %#v\n", rootfs)
+	}
+	return &SharedFile{
+		containerStorages: rootFsStorages,
+		guestPath:         guestPath,
+	}, nil
+}
+
 // func (c *Container) shareRootfs(ctx context.Context) (*grpc.Storage, string, error) {
 func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container) (*SharedFile, error) {
+
+	if HasOptionPrefix(c.rootFs.Options, VirtualVolumePrefix) {
+		return f.shareRootFilesystemWithVirtualVolume(ctx, c)
+	}
 
 	if c.rootFs.Type == NydusRootFSType {
 		return f.shareRootFilesystemWithNydus(ctx, c)
