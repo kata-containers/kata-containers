@@ -438,8 +438,8 @@ func (f *FilesystemShare) shareRootFilesystemWithNydus(ctx context.Context, c *C
 	f.Logger().Infof("Nydus rootfs info: %#v\n", rootfs)
 
 	return &SharedFile{
-		storage:   rootfs,
-		guestPath: rootfsGuestPath,
+		containerStorages: []*grpc.Storage{rootfs},
+		guestPath:         rootfsGuestPath,
 	}, nil
 }
 
@@ -451,8 +451,8 @@ func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container)
 	// so there is no Rootfs.Target.
 	if f.sandbox.config.ServiceOffload && c.rootFs.Target == "" {
 		return &SharedFile{
-			storage:   nil,
-			guestPath: rootfsGuestPath,
+			containerStorages: nil,
+			guestPath:         rootfsGuestPath,
 		}, nil
 	}
 
@@ -463,13 +463,13 @@ func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container)
 	if HasOptionPrefix(c.rootFs.Options, annotations.FileSystemLayer) {
 		path := filepath.Join("/run/kata-containers", c.id, "rootfs")
 		return &SharedFile{
-			storage: &grpc.Storage{
+			containerStorages: []*grpc.Storage{{
 				MountPoint: path,
 				Source:     "none",
 				Fstype:     c.rootFs.Type,
 				Driver:     kataOverlayDevType,
 				Options:    c.rootFs.Options,
-			},
+			}},
 			guestPath: path,
 		}, nil
 	}
@@ -534,8 +534,8 @@ func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container)
 		}
 
 		return &SharedFile{
-			storage:   rootfsStorage,
-			guestPath: rootfsGuestPath,
+			containerStorages: []*grpc.Storage{rootfsStorage},
+			guestPath:         rootfsGuestPath,
 		}, nil
 	}
 
@@ -549,8 +549,8 @@ func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container)
 	}
 
 	return &SharedFile{
-		storage:   nil,
-		guestPath: rootfsGuestPath,
+		containerStorages: nil,
+		guestPath:         rootfsGuestPath,
 	}, nil
 }
 
