@@ -68,6 +68,8 @@ const (
 
 	NydusRootFSType = "fuse.nydus-overlayfs"
 
+	VirtualVolumePrefix = "io.katacontainers.volume="
+
 	// enable debug console
 	kernelParamDebugConsole           = "agent.debug_console"
 	kernelParamDebugConsoleVPort      = "agent.debug_console_vport"
