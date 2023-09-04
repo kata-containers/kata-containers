@@ -1202,6 +1202,10 @@ func (k *kataAgent) appendDevices(deviceList []*grpc.Device, c *Container) []*gr
 			return nil
 		}
 
+		if strings.HasPrefix(dev.ContainerPath, defaultKataGuestVirtualVolumedir) {
+			continue
+		}
+
 		switch device.DeviceType() {
 		case config.DeviceBlock:
 			kataDevice = k.appendBlockDevice(dev, device, c)
