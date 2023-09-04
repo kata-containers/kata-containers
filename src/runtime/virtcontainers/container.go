@@ -815,9 +815,6 @@ func (c *Container) createVirtualVolumeDevices() ([]config.DeviceInfo, error) {
 					return nil, err
 				}
 				deviceInfos = append(deviceInfos, *di)
-			} else if virtVolume.VolumeType == types.KataVirtualVolumeImageGuestPullType {
-				///TODO implement the logic with pulling image in the guest.
-				continue
 			}
 		}
 	}

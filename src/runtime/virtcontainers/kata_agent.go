@@ -1560,6 +1560,34 @@ func handleDmVerityBlockVolume(driverType, source string, verityInfo *types.DmVe
 	return vol, nil
 }
 
+func handleImageGuestPullBlockVolume(c *Container, virtualVolumeInfo *types.KataVirtualVolume, vol *grpc.Storage) (*grpc.Storage, error) {
+	container_annotations := c.GetAnnotations()
+	container_type := container_annotations["io.kubernetes.cri.container-type"]
+	if virtualVolumeInfo.Source == "" {
+		var image_ref string
+		if container_type == "sandbox" {
+			image_ref = "pause"
+		} else {
+			image_ref = container_annotations["io.kubernetes.cri.image-name"]
+			if image_ref == "" {
+				return nil, fmt.Errorf("Failed to get image name from annotations")
+			}
+		}
+		virtualVolumeInfo.Source = image_ref
+		virtualVolumeInfo.ImagePull.Metadata = container_annotations
+	}
+
+	no, err := json.Marshal(virtualVolumeInfo.ImagePull)
+	if err != nil {
+		return nil, err
+	}
+	vol.Driver = types.KataVirtualVolumeImageGuestPullType
+	vol.DriverOptions = append(vol.DriverOptions, types.KataVirtualVolumeImageGuestPullType+"="+string(no))
+	vol.Source = virtualVolumeInfo.Source
+	vol.Fstype = typeOverlayFS
+	return vol, nil
+}
+
 func handleBlockVolume(c *Container, device api.Device) (*grpc.Storage, error) {
 	vol := &grpc.Storage{}
 
@@ -1616,8 +1644,13 @@ func handleVirtualVolumeStorageObject(c *Container, blockDeviceId string, virtVo
 			}
 		}
 	} else if virtVolume.VolumeType == types.KataVirtualVolumeImageGuestPullType {
-		///TODO implement the logic with pulling image in the guest.
-		return nil, nil
+		var err error
+		vol = &grpc.Storage{}
+		vol, err = handleImageGuestPullBlockVolume(c, virtVolume, vol)
+		vol.MountPoint = filepath.Join("/run/kata-containers/", c.id, c.rootfsSuffix)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return vol, nil
