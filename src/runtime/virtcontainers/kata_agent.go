@@ -1258,12 +1258,17 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 		return nil, err
 	}
 
-	if sharedRootfs.storage != nil {
+	if sharedRootfs.containerStorages != nil {
 		// Add rootfs to the list of container storage.
-		// We only need to do this for block based rootfs, as we
+		ctrStorages = append(ctrStorages, sharedRootfs.containerStorages...)
+	}
+
+	if sharedRootfs.volumeStorages != nil {
+		// Add volumeStorages to the list of container storage.
+		// We only need to do this for KataVirtualVolume based rootfs, as we
 		// want the agent to mount it into the right location
-		// (kataGuestSharedDir/ctrID/
-		ctrStorages = append(ctrStorages, sharedRootfs.storage)
+
+		ctrStorages = append(ctrStorages, sharedRootfs.volumeStorages...)
 	}
 
 	ociSpec := c.GetPatchedOCISpec()

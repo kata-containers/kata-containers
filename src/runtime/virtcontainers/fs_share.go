@@ -21,8 +21,9 @@ var fsShareTracingTags = map[string]string{
 // SharedFile represents the outcome of a host filesystem sharing
 // operation.
 type SharedFile struct {
-	storage   *grpc.Storage
-	guestPath string
+	containerStorages []*grpc.Storage
+	volumeStorages    []*grpc.Storage
+	guestPath         string
 }
 
 type FilesystemSharer interface {
