@@ -195,6 +195,7 @@ impl FromStr for AgentConfig {
 
 impl AgentConfig {
     #[instrument]
+    #[allow(clippy::redundant_closure_call)]
     pub fn from_cmdline(file: &str, args: Vec<String>) -> Result<AgentConfig> {
         // If config file specified in the args, generate our config from it
         let config_position = args.iter().position(|a| a == "--config" || a == "-c");
