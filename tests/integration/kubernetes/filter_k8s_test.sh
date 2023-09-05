@@ -8,14 +8,11 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root_dir="$(cd "${script_dir}/../../.." && pwd)"
+
 GOPATH_LOCAL="${GOPATH%%:*}"
-KATA_DIR="${GOPATH_LOCAL}/src/github.com/kata-containers"
-TEST_DIR="${KATA_DIR}/tests"
-CI_DIR="${TEST_DIR}/.ci"
-
 K8S_FILTER_FLAG="kubernetes"
-
-source "${CI_DIR}/lib.sh"
 
 main()
 {
@@ -25,8 +22,9 @@ main()
 
 	mapfile -d " " -t _K8S_TEST_UNION <<< "${K8S_TEST_UNION}"
 
-	# install yq if not exist
-        ${CI_DIR}/install_yq.sh > /dev/null
+	if [ ! -f ${GOPATH_LOCAL}/bin/yq ]; then
+		${repo_root_dir}/ci/install_yq.sh > /dev/null
+	fi
 
         local K8S_SKIP_UNION=$("${GOPATH_LOCAL}/bin/yq" read "${K8S_CONFIG_FILE}" "${K8S_FILTER_FLAG}")
         [ "${K8S_SKIP_UNION}" == "null" ] && return

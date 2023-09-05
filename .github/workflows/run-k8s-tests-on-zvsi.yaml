@@ -1,0 +1,83 @@
+name: CI | Run kubernetes tests on IBM Cloud Z virtual server instance (zVSI)
+on:
+  workflow_call:
+    inputs:
+      registry:
+        required: true
+        type: string
+      repo:
+        required: true
+        type: string
+      tag:
+        required: true
+        type: string
+      pr-number:
+        required: true
+        type: string
+      commit-hash:
+        required: false
+        type: string
+      target-branch:
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  run-k8s-tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        vmm:
+          - qemu
+        snapshotter:
+          - devmapper
+        k8s:
+          - k3s
+    runs-on: s390x
+    env:
+      DOCKER_REGISTRY: ${{ inputs.registry }}
+      DOCKER_REPO: ${{ inputs.repo }}
+      DOCKER_TAG: ${{ inputs.tag }}
+      PR_NUMBER: ${{ inputs.pr-number }}
+      KATA_HYPERVISOR: ${{ matrix.vmm }}
+      KUBERNETES: "k3s"
+      SNAPSHOTTER: ${{ matrix.snapshotter }}
+      USING_NFD: "true"
+      TARGET_ARCH: "s390x"
+    steps:
+      - name: Adjust a permission for repo
+        run: sudo chown -R $USER:$USER $GITHUB_WORKSPACE
+
+      - name: Take a pre-action for self-hosted runner
+        run: ${HOME}/script/pre_action.sh ubuntu-2204
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: Deploy ${{ matrix.k8s }}
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-k8s
+
+      - name: Configure the ${{ matrix.snapshotter }} snapshotter
+        run: bash tests/integration/kubernetes/gha-run.sh configure-snapshotter
+
+      - name: Deploy Kata
+        timeout-minutes: 10
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-zvsi
+
+      - name: Run tests
+        timeout-minutes: 30
+        run: bash tests/integration/kubernetes/gha-run.sh run-tests
+
+      - name: Take a post-action
+        if: always()
+        run: |
+          bash tests/integration/kubernetes/gha-run.sh cleanup-zvsi || true
+          ${HOME}/script/post_action.sh ubuntu-2204
