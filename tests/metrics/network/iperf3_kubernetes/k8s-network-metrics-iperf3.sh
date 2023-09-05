@@ -177,6 +177,8 @@ function iperf3_start_deployment() {
 	cmds=("bc" "jq")
 	check_cmds "${cmds[@]}"
 
+	init_env
+
 	# Check no processes are left behind
 	check_processes
 
