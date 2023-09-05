@@ -34,6 +34,9 @@ pub(crate) mod utils;
 /// hypervisor capabilities
 pub mod capabilities;
 
+/// Constants and data types related to dm-verity device
+pub mod dmverity;
+
 /// Common error codes.
 #[derive(thiserror::Error, Debug)]
 pub enum Error {

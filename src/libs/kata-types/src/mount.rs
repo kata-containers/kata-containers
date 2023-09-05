@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use crate::dmverity::DmVerityInfo;
 use anyhow::{anyhow, Context, Error, Result};
 use std::collections::hash_map::Entry;
 use std::convert::TryFrom;
@@ -145,23 +146,6 @@ impl NydusExtraOptions {
 
         serde_json::from_slice(&extra_options_buf).context("deserialize nydus's extraoption")
     }
-}
-
-/// Configuration information for DmVerity device.
-#[derive(Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
-pub struct DmVerityInfo {
-    /// Hash algorithm for dm-verity.
-    pub hashtype: String,
-    /// Root hash for device verification or activation.
-    pub hash: String,
-    /// Size of data device used in verification.
-    pub blocknum: u64,
-    /// Used block size for the data device.
-    pub blocksize: u64,
-    /// Used block size for the hash device.
-    pub hashsize: u64,
-    /// Offset of hash area/superblock on hash_device.
-    pub offset: u64,
 }
 
 /// Information about directly assigned volume.
