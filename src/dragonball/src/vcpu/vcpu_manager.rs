@@ -832,7 +832,7 @@ mod hotplug {
 
     #[cfg(all(target_arch = "x86_64", feature = "dbs-upcall"))]
     use dbs_boot::mptable::APIC_VERSION;
-    #[cfg(all(target_arch = "aarch64"))]
+    #[cfg(target_arch = "aarch64")]
     const APIC_VERSION: u8 = 0;
 
     #[cfg(feature = "dbs-upcall")]
