@@ -219,11 +219,9 @@ pull_fedora_cloud_image() {
 	if [ ! -f "${fedora_img_cache}" ]; then
 		curl -sL ${fedora_img_url} -o "${fedora_img_cache}.xz"
 		xz -f -d "${fedora_img_cache}.xz"
-		sync
 	fi
 
 	cp -a "${fedora_img_cache}" "${fedora_img}"
-	sync
 
 	# setup cloud image
 	sudo losetup -D
