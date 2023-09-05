@@ -14,7 +14,7 @@ concurrency:
 name: Static checks dragonball
 jobs:
   test-dragonball:
-    runs-on: dragonball
+    runs-on: garm-ubuntu-2004
     env:
       RUST_BACKTRACE: "1"
     steps:
@@ -23,6 +23,10 @@ jobs:
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
         run: |
           echo "GOPATH=${{ github.workspace }}" >> $GITHUB_ENV
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential haveged
       - name: Install Rust
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
         run: |
