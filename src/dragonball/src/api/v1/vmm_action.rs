@@ -37,9 +37,9 @@ pub use crate::device_manager::fs_dev_mgr::{
 #[cfg(feature = "virtio-mem")]
 pub use crate::device_manager::mem_dev_mgr::{MemDeviceConfigInfo, MemDeviceError};
 #[cfg(feature = "vhost-net")]
-use crate::device_manager::vhost_net_dev_mgr::VhostNetDeviceError;
-#[cfg(feature = "vhost-net")]
-pub use crate::device_manager::vhost_net_dev_mgr::{VhostNetDeviceConfigInfo, VhostNetDeviceMgr};
+pub use crate::device_manager::vhost_net_dev_mgr::{
+    VhostNetDeviceConfigInfo, VhostNetDeviceError, VhostNetDeviceMgr,
+};
 #[cfg(feature = "virtio-net")]
 pub use crate::device_manager::virtio_net_dev_mgr::{
     VirtioNetDeviceConfigInfo, VirtioNetDeviceConfigUpdateInfo, VirtioNetDeviceError,
@@ -706,14 +706,12 @@ impl VmmService {
         let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
         let ctx = vm
             .create_device_op_context(Some(event_mgr.epoll_manager()))
-            .map_err(|err| {
-                if let StartMicroVmError::MicroVMAlreadyRunning = err {
+            .map_err(|err| match err {
+                StartMicroVmError::MicroVMAlreadyRunning => {
                     VmmActionError::VhostNet(VhostNetDeviceError::UpdateNotAllowedPostBoot)
-                } else if let StartMicroVmError::UpcallServerNotReady = err {
-                    VmmActionError::UpcallServerNotReady
-                } else {
-                    VmmActionError::StartMicroVm(err)
                 }
+                StartMicroVmError::UpcallServerNotReady => VmmActionError::UpcallServerNotReady,
+                _ => VmmActionError::StartMicroVm(err),
             })?;
         VhostNetDeviceMgr::insert_device(vm.device_manager_mut(), ctx, config)
             .map(|_| VmmData::Empty)
