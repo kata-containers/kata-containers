@@ -62,6 +62,24 @@ function deploy_kata() {
     echo "::endgroup::"
 }
 
+function deploy_k3s() {
+	curl -sfL https://get.k3s.io | sh -
+
+	# This is an arbitrary value that came up from local tests
+	wait 240s
+}
+
+function deploy_k8s() {
+	echo "::group::Deploying ${KUBERNETES}"
+
+	case ${KUBERNETES} in
+		k3s) deploy_k3s ;;
+		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
+	esac
+
+	echo "::endgroup::"
+}
+
 function run_tests() {
     # Delete any spurious tests namespace that was left behind
     kubectl delete namespace kata-containers-k8s-tests &> /dev/null || true
@@ -126,6 +144,7 @@ function main() {
         install-azure-cli) install_azure_cli ;;
         login-azure) login_azure ;;
         create-cluster) create_cluster ;;
+        deploy-k8s) deploy_k8s ;;
         install-bats) install_bats ;;
         install-kubectl) install_kubectl ;;
         get-cluster-credentials) get_cluster_credentials ;;
