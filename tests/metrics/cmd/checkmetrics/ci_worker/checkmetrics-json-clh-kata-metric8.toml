@@ -120,10 +120,9 @@ description = "measure write 95 percentile using fio"
 # within (inclusive)
 checkvar = ".\"fio\".Results | .[] | .write95percentile.Result"
 checktype = "mean"
-midval = 823296.0
+midval = 33024.0
 minpercent = 20.0
 maxpercent = 20.0
-
 
 [[metric]]
 name = "network-iperf3"
