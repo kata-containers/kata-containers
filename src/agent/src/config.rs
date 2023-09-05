@@ -1696,7 +1696,7 @@ Caused by:
         assert_eq!(config.server_addr, "vsock://8:2048");
         assert_eq!(
             config.endpoints.allowed,
-            vec!["CreateContainer".to_string(), "StartContainer".to_string()]
+            ["CreateContainer".to_string(), "StartContainer".to_string()]
                 .iter()
                 .cloned()
                 .collect()
@@ -1744,7 +1744,7 @@ Caused by:
         // Should be from agent config
         assert_eq!(
             config.endpoints.allowed,
-            vec!["CreateContainer".to_string(), "StartContainer".to_string()]
+            ["CreateContainer".to_string(), "StartContainer".to_string()]
                 .iter()
                 .cloned()
                 .collect()
