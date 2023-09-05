@@ -245,7 +245,7 @@ mod tests {
     fn test_scoped_resolve_invalid() {
         scoped_resolve("./root_is_not_absolute_path", ".").unwrap_err();
         scoped_resolve("C:", ".").unwrap_err();
-        scoped_resolve(r#"\\server\test"#, ".").unwrap_err();
+        scoped_resolve(r"\\server\test", ".").unwrap_err();
         scoped_resolve(r#"http://localhost/test"#, ".").unwrap_err();
         // Chinese Unicode characters
         scoped_resolve(r#"您好"#, ".").unwrap_err();
