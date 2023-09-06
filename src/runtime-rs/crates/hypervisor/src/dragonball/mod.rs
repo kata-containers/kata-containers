@@ -18,7 +18,7 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use dbs_utils::net::MacAddr as DragonballMacAddr;
 use dragonball::api::v1::{
-    Backend as DragonballNetworkBackend, NetworkInterfaceConfig as DragonballNetworkConfig,
+    Backend as DragonballBackend, NetworkInterfaceConfig as DragonballNetworkConfig,
     VirtioConfig as DragonballVirtioConfig,
 };
 use kata_types::capabilities::Capabilities;
@@ -26,7 +26,7 @@ use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use tokio::sync::RwLock;
 use tracing::instrument;
 
-use crate::{DeviceType, Hypervisor, NetworkBackend, NetworkConfig, VcpuThreadIds};
+use crate::{Backend, DeviceType, Hypervisor, NetworkConfig, VcpuThreadIds};
 
 pub struct Dragonball {
     inner: Arc<RwLock<DragonballInner>>,
@@ -196,27 +196,6 @@ impl Persist for Dragonball {
     }
 }
 
-impl From<NetworkBackend> for DragonballNetworkBackend {
-    fn from(value: NetworkBackend) -> Self {
-        match value {
-            NetworkBackend::Virtio(config) => Self::Virtio(DragonballVirtioConfig {
-                iface_id: config.virt_iface_name.clone(),
-                host_dev_name: config.host_dev_name.clone(),
-                rx_rate_limiter: None,
-                tx_rate_limiter: None,
-                allow_duplicate_mac: config.allow_duplicate_mac,
-            }),
-            NetworkBackend::Vhost(config) => Self::Vhost(DragonballVirtioConfig {
-                iface_id: config.virt_iface_name.clone(),
-                host_dev_name: config.host_dev_name.clone(),
-                rx_rate_limiter: None,
-                tx_rate_limiter: None,
-                allow_duplicate_mac: config.allow_duplicate_mac,
-            }),
-        }
-    }
-}
-
 impl From<NetworkConfig> for DragonballNetworkConfig {
     fn from(value: NetworkConfig) -> Self {
         let r = &value;
@@ -226,10 +205,24 @@ impl From<NetworkConfig> for DragonballNetworkConfig {
 
 impl From<&NetworkConfig> for DragonballNetworkConfig {
     fn from(value: &NetworkConfig) -> Self {
+        let virtio_config = DragonballVirtioConfig {
+            iface_id: value.virt_iface_name.clone(),
+            host_dev_name: value.host_dev_name.clone(),
+            // TODO(justxuewei): rx_rate_limiter is not supported.
+            rx_rate_limiter: None,
+            // TODO(justxuewei): tx_rate_limiter is not supported.
+            tx_rate_limiter: None,
+            allow_duplicate_mac: value.allow_duplicate_mac,
+        };
+        let backend = match value.backend {
+            Backend::Virtio => DragonballBackend::Virtio(virtio_config),
+            Backend::Vhost => DragonballBackend::Vhost(virtio_config),
+        };
+
         Self {
             num_queues: Some(value.queue_num),
             queue_size: Some(value.queue_size as u16),
-            backend: value.backend.clone().into(),
+            backend,
             guest_mac: value.guest_mac.clone().map(|mac| {
                 // We are safety since mac address is checked by endpoints.
                 DragonballMacAddr::from_bytes(&mac.0).unwrap()

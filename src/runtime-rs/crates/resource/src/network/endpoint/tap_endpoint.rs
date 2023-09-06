@@ -10,7 +10,7 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use hypervisor::device::device_manager::{do_handle_device, DeviceManager};
 use hypervisor::device::{DeviceConfig, DeviceType};
-use hypervisor::{Hypervisor, NetworkBackend, NetworkConfig, NetworkDevice, VirtioConfig};
+use hypervisor::{Backend, Hypervisor, NetworkConfig, NetworkDevice};
 use tokio::sync::RwLock;
 
 use super::endpoint_persist::TapEndpointState;
@@ -74,11 +74,9 @@ impl TapEndpoint {
     fn get_network_config(&self) -> Result<NetworkConfig> {
         let guest_mac = utils::parse_mac(&self.guest_mac).context("Parse mac address")?;
         Ok(NetworkConfig {
-            backend: NetworkBackend::Virtio(VirtioConfig {
-                host_dev_name: self.tap_iface.name.clone(),
-                virt_iface_name: self.name.clone(),
-                ..Default::default()
-            }),
+            host_dev_name: self.tap_iface.name.clone(),
+            virt_iface_name: self.name.clone(),
+            backend: Backend::Virtio,
             guest_mac: Some(guest_mac),
             queue_num: self.queue_num,
             queue_size: self.queue_size,
