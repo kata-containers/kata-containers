@@ -8,16 +8,9 @@ use std::fmt;
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use dbs_utils::net::MacAddr as DragonballMacAddr;
-use dragonball::api::v1::{
-    Backend as DragonballNetworkBackend, NetworkInterfaceConfig as DragonballNetworkConfig,
-    VirtioConfig as DragonballVirtioConfig,
-};
 
-use crate::{
-    device::{Device, DeviceType},
-    Hypervisor as hypervisor,
-};
+use crate::device::{Device, DeviceType};
+use crate::Hypervisor as hypervisor;
 
 #[derive(Clone)]
 pub struct Address(pub [u8; 6]);
@@ -42,27 +35,6 @@ pub enum NetworkBackend {
 impl Default for NetworkBackend {
     fn default() -> Self {
         Self::Virtio(VirtioConfig::default())
-    }
-}
-
-impl From<NetworkBackend> for DragonballNetworkBackend {
-    fn from(value: NetworkBackend) -> Self {
-        match value {
-            NetworkBackend::Virtio(config) => Self::Virtio(DragonballVirtioConfig {
-                iface_id: config.virt_iface_name.clone(),
-                host_dev_name: config.host_dev_name.clone(),
-                rx_rate_limiter: None,
-                tx_rate_limiter: None,
-                allow_duplicate_mac: config.allow_duplicate_mac,
-            }),
-            NetworkBackend::Vhost(config) => Self::Vhost(DragonballVirtioConfig {
-                iface_id: config.virt_iface_name.clone(),
-                host_dev_name: config.host_dev_name.clone(),
-                rx_rate_limiter: None,
-                tx_rate_limiter: None,
-                allow_duplicate_mac: config.allow_duplicate_mac,
-            }),
-        }
     }
 }
 
@@ -94,29 +66,6 @@ pub struct NetworkConfig {
     pub use_shared_irq: Option<bool>,
     /// Use generic irq
     pub use_generic_irq: Option<bool>,
-}
-
-impl From<NetworkConfig> for DragonballNetworkConfig {
-    fn from(value: NetworkConfig) -> Self {
-        let r = &value;
-        r.into()
-    }
-}
-
-impl From<&NetworkConfig> for DragonballNetworkConfig {
-    fn from(value: &NetworkConfig) -> Self {
-        Self {
-            num_queues: Some(value.queue_num),
-            queue_size: Some(value.queue_size as u16),
-            backend: value.backend.clone().into(),
-            guest_mac: value.guest_mac.clone().map(|mac| {
-                // We are safety since mac address is checked by endpoints.
-                DragonballMacAddr::from_bytes(&mac.0).unwrap()
-            }),
-            use_shared_irq: value.use_shared_irq,
-            use_generic_irq: value.use_generic_irq,
-        }
-    }
 }
 
 #[derive(Clone, Debug, Default)]
