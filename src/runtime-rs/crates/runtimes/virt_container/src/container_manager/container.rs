@@ -186,7 +186,11 @@ impl Container {
         Ok(())
     }
 
-    pub async fn start(&self, process: &ContainerProcess) -> Result<()> {
+    pub async fn start(
+        &self,
+        containers: Arc<RwLock<HashMap<String, Container>>>,
+        process: &ContainerProcess,
+    ) -> Result<()> {
         let mut inner = self.inner.write().await;
         match process.process_type {
             ProcessType::Container => {
@@ -199,7 +203,7 @@ impl Container {
                 let container_io = inner.new_container_io(process).await?;
                 inner
                     .init_process
-                    .start_io_and_wait(self.agent.clone(), container_io)
+                    .start_io_and_wait(containers, self.agent.clone(), container_io)
                     .await?;
             }
             ProcessType::Exec => {
@@ -232,7 +236,7 @@ impl Container {
                         .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
 
                     exec.process
-                        .start_io_and_wait(self.agent.clone(), container_io)
+                        .start_io_and_wait(containers, self.agent.clone(), container_io)
                         .await
                         .context("start io and wait")?;
                 }
@@ -287,10 +291,7 @@ impl Container {
         all: bool,
     ) -> Result<()> {
         let mut inner = self.inner.write().await;
-        let device_manager = self.resource_manager.get_device_manager().await;
-        inner
-            .signal_process(container_process, signal, all, &device_manager)
-            .await
+        inner.signal_process(container_process, signal, all).await
     }
 
     pub async fn exec_process(

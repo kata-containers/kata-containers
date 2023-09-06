@@ -241,13 +241,6 @@ impl ContainerManager for VirtContainerManager {
 
         info!(logger, "wait process exit status {:?}", status);
 
-        // stop process
-        let containers = self.containers.read().await;
-        let container_id = &process.container_id.container_id;
-        let c = containers
-            .get(container_id)
-            .ok_or_else(|| Error::ContainerNotFound(container_id.clone()))?;
-        c.stop_process(process).await.context("stop container")?;
         Ok(status.clone())
     }
 
@@ -258,7 +251,9 @@ impl ContainerManager for VirtContainerManager {
         let c = containers
             .get(container_id)
             .ok_or_else(|| Error::ContainerNotFound(container_id.clone()))?;
-        c.start(process).await.context("start")?;
+        c.start(self.containers.clone(), process)
+            .await
+            .context("start")?;
 
         // Poststart Hooks:
         // * should be run in runtime namespace
