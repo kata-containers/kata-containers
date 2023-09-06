@@ -76,15 +76,15 @@ func TestVirtiofsdArgs(t *testing.T) {
 	v := &virtiofsd{
 		path:       "/usr/bin/virtiofsd",
 		sourcePath: "/run/kata-shared/foo",
-		cache:      "none",
+		cache:      "never",
 	}
 
-	expected := "--syslog --cache=none --shared-dir=/run/kata-shared/foo --fd=123"
+	expected := "--syslog --cache=never --shared-dir=/run/kata-shared/foo --fd=123"
 	args, err := v.args(123)
 	assert.NoError(err)
 	assert.Equal(expected, strings.Join(args, " "))
 
-	expected = "--syslog --cache=none --shared-dir=/run/kata-shared/foo --fd=456"
+	expected = "--syslog --cache=never --shared-dir=/run/kata-shared/foo --fd=456"
 	args, err = v.args(456)
 	assert.NoError(err)
 	assert.Equal(expected, strings.Join(args, " "))
@@ -130,12 +130,7 @@ func TestValid(t *testing.T) {
 		{"source is not available", func(v *virtiofsd) {
 			v.sourcePath = "/foo/bar"
 		}, errVirtiofsdSourceNotAvailable, nil},
-		{"replace cache mode none by never", func(v *virtiofsd) {
-			v.cache = "none"
-		}, nil, func(name string, a *assert.Assertions, v *virtiofsd) {
-			a.Equal("never", v.cache, "test case %+s, cache mode none should be replaced by never", name)
-		}},
-		{"invald cache mode: replace none by never", func(v *virtiofsd) {
+		{"invalid cache mode", func(v *virtiofsd) {
 			v.cache = "foo"
 		}, errVirtiofsdInvalidVirtiofsCacheMode("foo"), nil},
 	}
