@@ -19,7 +19,8 @@ RUN apt-get update && \
     apt-get clean && rm -rf /var/lib/apt/lists/ && \
     install_yq.sh && \
     curl -fsSL https://get.docker.com -o get-docker.sh && \
-    if uname -m | grep -Eq 's390x|ppc64le'; then export VERSION="v20.10"; fi && \
+    if uname -m | grep -Eq 's390x|ppc64le'; then export VERSION="v20.10" && \
+    sed -i 's/\<docker-compose-plugin\>//g' get-docker.sh; fi && \
     sh get-docker.sh
 
 ARG IMG_USER=kata-builder
