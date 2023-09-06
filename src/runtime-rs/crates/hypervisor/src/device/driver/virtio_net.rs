@@ -26,27 +26,11 @@ impl fmt::Debug for Address {
     }
 }
 
-#[derive(Clone, Debug)]
-pub enum NetworkBackend {
-    Virtio(VirtioConfig),
-    Vhost(VirtioConfig),
-}
-
-impl Default for NetworkBackend {
-    fn default() -> Self {
-        Self::Virtio(VirtioConfig::default())
-    }
-}
-
-/// Virtio network backend config
 #[derive(Clone, Debug, Default)]
-pub struct VirtioConfig {
-    /// Host level path for the guest network interface.
-    pub host_dev_name: String,
-    /// Guest iface name for the guest network interface.
-    pub virt_iface_name: String,
-    /// Allow duplicate mac
-    pub allow_duplicate_mac: bool,
+pub enum Backend {
+    #[default]
+    Virtio,
+    Vhost,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -55,7 +39,11 @@ pub struct NetworkConfig {
     pub index: u64,
 
     /// Network device backend
-    pub backend: NetworkBackend,
+    pub backend: Backend,
+    /// Host level path for the guest network interface.
+    pub host_dev_name: String,
+    /// Guest iface name for the guest network interface.
+    pub virt_iface_name: String,
     /// Guest MAC address.
     pub guest_mac: Option<Address>,
     /// Virtio queue size
@@ -66,6 +54,8 @@ pub struct NetworkConfig {
     pub use_shared_irq: Option<bool>,
     /// Use generic irq
     pub use_generic_irq: Option<bool>,
+    /// Allow duplicate mac
+    pub allow_duplicate_mac: bool,
 }
 
 #[derive(Clone, Debug, Default)]
