@@ -166,7 +166,12 @@ impl ContainerInner {
         }
     }
 
-    async fn cleanup_container(&mut self, cid: &str, force: bool) -> Result<()> {
+    async fn cleanup_container(
+        &mut self,
+        cid: &str,
+        force: bool,
+        device_manager: &RwLock<DeviceManager>,
+    ) -> Result<()> {
         // wait until the container process
         // terminated and the status write lock released.
         info!(self.logger, "wait on container terminated");
@@ -195,6 +200,14 @@ impl ContainerInner {
         // close the exit channel to wakeup wait service
         // send to notify watchers who are waiting for the process exit
         self.init_process.stop().await;
+
+        self.clean_volumes(device_manager)
+            .await
+            .context("clean volumes")?;
+        self.clean_rootfs(device_manager)
+            .await
+            .context("clean rootfs")?;
+
         Ok(())
     }
 
@@ -213,26 +226,24 @@ impl ContainerInner {
             return Ok(());
         }
 
-        self.check_state(vec![ProcessStatus::Running, ProcessStatus::Exited])
+        self.check_state(vec![ProcessStatus::Running])
             .await
             .context("check state")?;
 
-        if state == ProcessStatus::Running {
-            // if use force mode to stop container, stop always successful
-            // send kill signal to container
-            // ignore the error of sending signal, since the process would
-            // have been killed and exited yet.
-            self.signal_process(process, Signal::SIGKILL as u32, false, device_manager)
-                .await
-                .map_err(|e| {
-                    warn!(logger, "failed to signal kill. {:?}", e);
-                })
-                .ok();
-        }
+        // if use force mode to stop container, stop always successful
+        // send kill signal to container
+        // ignore the error of sending signal, since the process would
+        // have been killed and exited yet.
+        self.signal_process(process, Signal::SIGKILL as u32, false)
+            .await
+            .map_err(|e| {
+                warn!(logger, "failed to signal kill. {:?}", e);
+            })
+            .ok();
 
         match process.process_type {
             ProcessType::Container => self
-                .cleanup_container(&process.container_id.container_id, force)
+                .cleanup_container(&process.container_id.container_id, force, device_manager)
                 .await
                 .context("stop container")?,
             ProcessType::Exec => {
@@ -252,7 +263,6 @@ impl ContainerInner {
         process: &ContainerProcess,
         signal: u32,
         all: bool,
-        device_manager: &RwLock<DeviceManager>,
     ) -> Result<()> {
         let mut process_id: agent::ContainerProcessID = process.clone().into();
         if all {
@@ -263,13 +273,6 @@ impl ContainerInner {
         self.agent
             .signal_process(agent::SignalProcessRequest { process_id, signal })
             .await?;
-
-        self.clean_volumes(device_manager)
-            .await
-            .context("clean volumes")?;
-        self.clean_rootfs(device_manager)
-            .await
-            .context("clean rootfs")?;
 
         Ok(())
     }

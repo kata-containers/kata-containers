@@ -4,21 +4,19 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use agent::Agent;
 use anyhow::{Context, Result};
 use awaitgroup::{WaitGroup, Worker as WaitGroupWorker};
 use common::types::{ContainerProcess, ProcessExitStatus, ProcessStateInfo, ProcessStatus, PID};
-use tokio::{
-    io::{AsyncRead, AsyncWrite},
-    sync::{watch, RwLock},
-};
+use tokio::io::{AsyncRead, AsyncWrite};
+use tokio::sync::{watch, RwLock};
 
-use super::{
-    io::{ContainerIo, ShimIo},
-    logger_with_process,
-};
+use super::container::Container;
+use super::io::{ContainerIo, ShimIo};
+use super::logger_with_process;
 
 pub type ProcessWatcher = (
     Option<watch::Receiver<bool>>,
@@ -83,6 +81,7 @@ impl Process {
 
     pub async fn start_io_and_wait(
         &mut self,
+        containers: Arc<RwLock<HashMap<String, Container>>>,
         agent: Arc<dyn Agent>,
         container_io: ContainerIo,
     ) -> Result<()> {
@@ -118,7 +117,9 @@ impl Process {
             }
         }
 
-        self.run_io_wait(agent, wg).await.context("run io thread")?;
+        self.run_io_wait(containers, agent, wg)
+            .await
+            .context("run io thread")?;
         Ok(())
     }
 
@@ -148,7 +149,15 @@ impl Process {
         Ok(())
     }
 
-    async fn run_io_wait(&mut self, agent: Arc<dyn Agent>, mut wg: WaitGroup) -> Result<()> {
+    /// A container is considered exited once its IO ended.
+    /// This function waits for IO to end. And then, do some cleanup
+    /// things.
+    async fn run_io_wait(
+        &mut self,
+        containers: Arc<RwLock<HashMap<String, Container>>>,
+        agent: Arc<dyn Agent>,
+        mut wg: WaitGroup,
+    ) -> Result<()> {
         let logger = self.logger.clone();
         info!(logger, "start run io wait");
         let process = self.process.clone();
@@ -177,12 +186,32 @@ impl Process {
 
             info!(logger, "end wait process exit code {}", resp.status);
 
+            let containers = containers.read().await;
+            let container_id = &process.container_id.container_id;
+            let c = match containers.get(container_id) {
+                Some(c) => c,
+                None => {
+                    error!(
+                        logger,
+                        "Failed to stop process, since container {} not found", container_id
+                    );
+                    return;
+                }
+            };
+
+            if let Err(err) = c.stop_process(&process).await {
+                error!(
+                    logger,
+                    "Failed to stop process, process = {:?}, err = {:?}", process, err
+                );
+            }
+
             let mut exit_status = exit_status.write().await;
             exit_status.update_exit_code(resp.status);
             drop(exit_status);
 
             let mut status = status.write().await;
-            *status = ProcessStatus::Exited;
+            *status = ProcessStatus::Stopped;
             drop(status);
 
             drop(exit_notifier);
