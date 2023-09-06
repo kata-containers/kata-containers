@@ -133,7 +133,7 @@ description = "measure read 95 percentile using fio"
 # within (inclusive)
 checkvar = ".\"fio\".Results | .[] | .read95percentile.Result"
 checktype = "mean"
-midval = 67072.0
+midval = 41216.0
 minpercent = 20.0
 maxpercent = 20.0
 
