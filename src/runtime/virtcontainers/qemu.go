@@ -513,7 +513,7 @@ func (q *qemu) createVirtiofsDaemon(sharedPath string) (VirtiofsDaemon, error) {
 	// in virtiofs if SELinux on the guest side is enabled.
 	if !q.config.DisableGuestSeLinux {
 		q.Logger().Info("Set the xattr option for virtiofsd")
-		q.config.VirtioFSExtraArgs = append(q.config.VirtioFSExtraArgs, "-o", "xattr")
+		q.config.VirtioFSExtraArgs = append(q.config.VirtioFSExtraArgs, "--xattr")
 	}
 
 	// default use virtiofsd
