@@ -669,6 +669,11 @@ experimental=@DEFAULTEXPFEATURES@
 # (default: false)
 # enable_pprof = true
 
+# Sealed secret feature configuration.
+# If true, sealed secret feature will be enabled.
+# (default: false)
+sealed_secret_enabled = @DEFSEALEDSECRETENABLED@
+
 # WARNING: All the options in the following section have not been implemented yet.
 # This section was added as a placeholder. DO NOT USE IT!
 [image]

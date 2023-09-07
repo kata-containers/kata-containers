@@ -905,12 +905,18 @@ func (k *kataAgent) stopSandbox(ctx context.Context, sandbox *Sandbox) error {
 	return nil
 }
 
-func (k *kataAgent) replaceOCIMountSource(spec *specs.Spec, guestMounts map[string]Mount) error {
+func (k *kataAgent) replaceOCIMountSource(spec *specs.Spec, guestMounts map[string]Mount, sealedSecretEnabled bool) error {
 	ociMounts := spec.Mounts
 
 	for index, m := range ociMounts {
 		if guestMount, ok := guestMounts[m.Destination]; ok {
 			k.Logger().Debugf("Replacing OCI mount (%s) source %s with %s", m.Destination, m.Source, guestMount.Source)
+			if sealedSecretEnabled {
+				if strings.Contains(m.Source, "kubernetes.io~secret") {
+					ociMounts[index].Destination = "/sealed" + m.Destination
+					k.Logger().Debugf("Replacing OCI mount (%s) with new destination %s", m.Destination, ociMounts[index].Destination)
+				}
+			}
 			ociMounts[index].Source = guestMount.Source
 		}
 	}
@@ -1299,7 +1305,7 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 
 	// We replace all OCI mount sources that match our container mount
 	// with the right source path (The guest one).
-	if err = k.replaceOCIMountSource(ociSpec, sharedDirMounts); err != nil {
+	if err = k.replaceOCIMountSource(ociSpec, sharedDirMounts, sandbox.config.SealedSecretEnabled); err != nil {
 		return nil, err
 	}
 

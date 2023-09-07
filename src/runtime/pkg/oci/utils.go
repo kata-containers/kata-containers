@@ -161,6 +161,9 @@ type RuntimeConfig struct {
 	// Image request timeout which, if provided, indicates the image request timeout
 	// in the guest needed for the workload(s)
 	ImageRequestTimeout uint64
+
+	// Sealed secret enabled configuration
+	SealedSecretEnabled bool
 }
 
 // AddKernelParam allows the addition of new kernel parameters to an existing
@@ -918,6 +921,12 @@ func addRuntimeConfigOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, r
 	}); err != nil {
 		return err
 	}
+
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.SealedSecretEnabled).setBool(func(SealedSecretEnabled bool) {
+		sbConfig.SealedSecretEnabled = SealedSecretEnabled
+	}); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1033,6 +1042,8 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid st
 		ServiceOffload: runtime.ServiceOffload,
 
 		ImageRequestTimeout: runtime.ImageRequestTimeout,
+
+		SealedSecretEnabled: runtime.SealedSecretEnabled,
 	}
 
 	if err := addAnnotations(ocispec, &sandboxConfig, runtime); err != nil {

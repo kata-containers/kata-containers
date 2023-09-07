@@ -291,6 +291,9 @@ const (
 
 	// ImageRequestTimeout is a sandbox annotaion that sets the image pull timeout in the guest.
 	ImageRequestTimeout = kataAnnotRuntimePrefix + "image_request_timeout"
+
+	// SealedSecretEnabled is a sandbox annotaion that enables the sealed secret feature.
+	SealedSecretEnabled = kataAnnotRuntimePrefix + "sealed_secret_enabled"
 )
 
 // Agent related annotations

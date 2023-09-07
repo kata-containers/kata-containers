@@ -22,6 +22,7 @@ extern crate slog;
 use anyhow::{anyhow, Context, Result};
 use cfg_if::cfg_if;
 use clap::{AppSettings, Parser};
+use const_format::concatcp;
 use nix::fcntl::OFlag;
 use nix::sys::socket::{self, AddressFamily, SockFlag, SockType, VsockAddr};
 use nix::unistd::{self, dup, Pid};
@@ -32,9 +33,12 @@ use std::os::unix::fs as unixfs;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
 use std::process::exit;
+use std::process::Command;
 use std::sync::Arc;
 use tracing::{instrument, span};
 
+#[cfg(feature = "confidential-data-hub")]
+mod cdh;
 mod config;
 mod console;
 mod device;
@@ -83,6 +87,27 @@ cfg_if! {
 }
 
 const NAME: &str = "kata-agent";
+
+const OCICRYPT_CONFIG_PATH: &str = "/tmp/ocicrypt_config.json";
+const AA_PATH: &str = "/usr/local/bin/attestation-agent";
+const AA_UNIX_SOCKET_DIR: &str = "/run/confidential-containers/attestation-agent/";
+const UNIX_SOCKET_PREFIX: &str = "unix://";
+const AA_KEYPROVIDER_URI: &str =
+    concatcp!(UNIX_SOCKET_PREFIX, AA_UNIX_SOCKET_DIR, "keyprovider.sock");
+const AA_GETRESOURCE_URI: &str =
+    concatcp!(UNIX_SOCKET_PREFIX, AA_UNIX_SOCKET_DIR, "getresource.sock");
+const AA_ATTESTATION_SOCKET: &str = concatcp!(AA_UNIX_SOCKET_DIR, "attestation-agent.sock");
+const AA_ATTESTATION_URI: &str = concatcp!(UNIX_SOCKET_PREFIX, AA_ATTESTATION_SOCKET);
+
+const DEFAULT_LAUNCH_PROCESS_TIMEOUT: i32 = 6;
+
+cfg_if! {
+    if #[cfg(feature = "confidential-data-hub")] {
+        const CDH_PATH: &str = "/usr/local/bin/confidential-data-hub";
+        const CDH_SOCKET: &str = "/run/confidential-containers/cdh.sock";
+        const API_SERVER_PATH: &str = "/usr/local/bin/api-server-rest";
+    }
+}
 
 lazy_static! {
     static ref AGENT_CONFIG: AgentConfig =
@@ -345,12 +370,120 @@ async fn start_sandbox(
     let (tx, rx) = tokio::sync::oneshot::channel();
     sandbox.lock().await.sender = Some(tx);
 
+    if !config.aa_kbc_params.is_empty() {
+        init_attestation_agent(logger, config)?;
+    }
+
     // vsock:///dev/vsock, port
     let mut server = rpc::start(sandbox.clone(), config.server_addr.as_str(), init_mode).await?;
     server.start().await?;
 
     rx.await?;
     server.shutdown().await?;
+
+    Ok(())
+}
+
+// If we fail to start the AA, ocicrypt won't be able to unwrap keys
+// and container decryption will fail.
+fn init_attestation_agent(logger: &Logger, _config: &AgentConfig) -> Result<()> {
+    let config_path = OCICRYPT_CONFIG_PATH;
+
+    // The image will need to be encrypted using a keyprovider
+    // that has the same name (at least according to the config).
+    let ocicrypt_config = serde_json::json!({
+        "key-providers": {
+            "attestation-agent":{
+                "ttrpc":AA_KEYPROVIDER_URI
+            }
+        }
+    });
+
+    fs::write(config_path, ocicrypt_config.to_string().as_bytes())?;
+
+    env::set_var("OCICRYPT_KEYPROVIDER_CONFIG", config_path);
+
+    // The Attestation Agent will run for the duration of the guest.
+    launch_process(
+        logger,
+        AA_PATH,
+        &vec![
+            "--keyprovider_sock",
+            AA_KEYPROVIDER_URI,
+            "--getresource_sock",
+            AA_GETRESOURCE_URI,
+            "--attestation_sock",
+            AA_ATTESTATION_URI,
+        ],
+        AA_ATTESTATION_SOCKET,
+        DEFAULT_LAUNCH_PROCESS_TIMEOUT,
+    )
+    .map_err(|e| anyhow!("launch_process {} failed: {:?}", AA_PATH, e))?;
+
+    #[cfg(feature = "confidential-data-hub")]
+    {
+        if let Err(e) = launch_process(
+            logger,
+            CDH_PATH,
+            &vec![],
+            CDH_SOCKET,
+            DEFAULT_LAUNCH_PROCESS_TIMEOUT,
+        ) {
+            error!(logger, "launch_process {} failed: {:?}", CDH_PATH, e);
+        } else if !_config.rest_api.is_empty() {
+            if let Err(e) = launch_process(
+                logger,
+                API_SERVER_PATH,
+                &vec!["--features", &_config.rest_api],
+                "",
+                0,
+            ) {
+                error!(logger, "launch_process {} failed: {:?}", API_SERVER_PATH, e);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn wait_for_path_to_exist(logger: &Logger, path: &str, timeout_secs: i32) -> Result<()> {
+    let p = Path::new(path);
+    let mut attempts = 0;
+    loop {
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        if p.exists() {
+            return Ok(());
+        }
+        if attempts >= timeout_secs {
+            break;
+        }
+        attempts += 1;
+        info!(
+            logger,
+            "waiting for {} to exist (attempts={})", path, attempts
+        );
+    }
+
+    Err(anyhow!("wait for {} to exist timeout.", path))
+}
+
+fn launch_process(
+    logger: &Logger,
+    path: &str,
+    args: &Vec<&str>,
+    unix_socket_path: &str,
+    timeout_secs: i32,
+) -> Result<()> {
+    if !Path::new(path).exists() {
+        return Err(anyhow!("path {} does not exist.", path));
+    }
+    if !unix_socket_path.is_empty() && Path::new(unix_socket_path).exists() {
+        fs::remove_file(unix_socket_path)?;
+    }
+    Command::new(path).args(args).spawn()?;
+    if !unix_socket_path.is_empty() && timeout_secs > 0 {
+        wait_for_path_to_exist(logger, unix_socket_path, timeout_secs)?;
+    }
 
     Ok(())
 }

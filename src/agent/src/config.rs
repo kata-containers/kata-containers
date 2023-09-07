@@ -27,6 +27,7 @@ const CONTAINER_PIPE_SIZE_OPTION: &str = "agent.container_pipe_size";
 const UNIFIED_CGROUP_HIERARCHY_OPTION: &str = "agent.unified_cgroup_hierarchy";
 const CONFIG_FILE: &str = "agent.config_file";
 const AA_KBC_PARAMS: &str = "agent.aa_kbc_params";
+const REST_API_OPTION: &str = "agent.rest_api";
 const HTTPS_PROXY: &str = "agent.https_proxy";
 const NO_PROXY: &str = "agent.no_proxy";
 const ENABLE_DATA_INTEGRITY: &str = "agent.data_integrity";
@@ -88,6 +89,7 @@ pub struct AgentConfig {
     pub supports_seccomp: bool,
     pub container_policy_path: String,
     pub aa_kbc_params: String,
+    pub rest_api: String,
     pub https_proxy: String,
     pub no_proxy: String,
     pub data_integrity: bool,
@@ -112,6 +114,7 @@ pub struct AgentConfigBuilder {
     pub endpoints: Option<EndpointsConfig>,
     pub container_policy_path: Option<String>,
     pub aa_kbc_params: Option<String>,
+    pub rest_api: Option<String>,
     pub https_proxy: Option<String>,
     pub no_proxy: Option<String>,
     pub data_integrity: Option<bool>,
@@ -182,6 +185,7 @@ impl Default for AgentConfig {
             supports_seccomp: rpc::have_seccomp(),
             container_policy_path: String::from(""),
             aa_kbc_params: String::from(""),
+            rest_api: String::from(""),
             https_proxy: String::from(""),
             no_proxy: String::from(""),
             data_integrity: false,
@@ -219,6 +223,7 @@ impl FromStr for AgentConfig {
         config_override!(agent_config_builder, agent_config, tracing);
         config_override!(agent_config_builder, agent_config, container_policy_path);
         config_override!(agent_config_builder, agent_config, aa_kbc_params);
+        config_override!(agent_config_builder, agent_config, rest_api);
         config_override!(agent_config_builder, agent_config, https_proxy);
         config_override!(agent_config_builder, agent_config, no_proxy);
         config_override!(agent_config_builder, agent_config, data_integrity);
@@ -343,6 +348,7 @@ impl AgentConfig {
             );
 
             parse_cmdline_param!(param, AA_KBC_PARAMS, config.aa_kbc_params, get_string_value);
+            parse_cmdline_param!(param, REST_API_OPTION, config.rest_api, get_string_value);
             parse_cmdline_param!(param, HTTPS_PROXY, config.https_proxy, get_url_value);
             parse_cmdline_param!(param, NO_PROXY, config.no_proxy, get_string_value);
             parse_cmdline_param!(
@@ -588,6 +594,7 @@ mod tests {
             tracing: bool,
             container_policy_path: &'a str,
             aa_kbc_params: &'a str,
+            rest_api: &'a str,
             https_proxy: &'a str,
             no_proxy: &'a str,
             data_integrity: bool,
@@ -612,6 +619,7 @@ mod tests {
                     tracing: false,
                     container_policy_path: "",
                     aa_kbc_params: "",
+                    rest_api: "",
                     https_proxy: "",
                     no_proxy: "",
                     data_integrity: false,
@@ -999,6 +1007,21 @@ mod tests {
                 ..Default::default()
             },
             TestData {
+                contents: "agent.rest_api=attestation",
+                rest_api: "attestation",
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.rest_api=resource",
+                rest_api: "resource",
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.rest_api=all",
+                rest_api: "all",
+                ..Default::default()
+            },
+            TestData {
                 contents: "agent.https_proxy=http://proxy.url.com:81/",
                 https_proxy: "http://proxy.url.com:81/",
                 ..Default::default()
@@ -1161,6 +1184,7 @@ mod tests {
                 msg
             );
             assert_eq!(d.aa_kbc_params, config.aa_kbc_params, "{}", msg);
+            assert_eq!(d.rest_api, config.rest_api, "{}", msg);
             assert_eq!(d.https_proxy, config.https_proxy, "{}", msg);
             assert_eq!(d.no_proxy, config.no_proxy, "{}", msg);
             assert_eq!(d.data_integrity, config.data_integrity, "{}", msg);

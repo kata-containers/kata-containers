@@ -164,6 +164,8 @@ type SandboxConfig struct {
 	// Image request timeout which, if provided, indicates the image request timeout
 	// in the guest needed for the workload(s)
 	ImageRequestTimeout uint64
+	// enable sealed secret feature
+	SealedSecretEnabled bool
 	// SharePidNs sets all containers to share the same sandbox level pid namespace.
 	SharePidNs bool
 	// SystemdCgroup enables systemd cgroup support

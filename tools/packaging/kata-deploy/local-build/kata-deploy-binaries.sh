@@ -228,6 +228,7 @@ install_cc_image() {
 	export KATA_BUILD_CC=yes
 	export MEASURED_ROOTFS=yes
 	export DM_VERITY=yes
+	export SEALED_SECRET=yes
 	variant="${1:-}"
 
 	install_image "${variant}"
@@ -269,7 +270,7 @@ install_cc_shimv2() {
 	export RUST_VERSION
 	export REMOVE_VMM_CONFIGS="acrn fc"
 
-	extra_opts="DEFSERVICEOFFLOAD=true"
+	extra_opts="DEFSERVICEOFFLOAD=true DEFSEALEDSECRETENABLED=true"
 	if [ "${MEASURED_ROOTFS}" == "yes" ]; then
 		if [ -f "${repo_root_dir}/tools/osbuilder/root_hash_vanilla.txt" ]; then
 			root_hash=$(sudo sed -e 's/Root hash:\s*//g;t;d' "${repo_root_dir}/tools/osbuilder/root_hash_vanilla.txt")

@@ -33,6 +33,13 @@ ifeq ($(SECCOMP),yes)
     override EXTRA_RUSTFEATURES += seccomp
 endif
 
+SEALED_SECRET ?= no
+
+# Enable sealed-secret feature of rust build
+ifeq ($(SEALED_SECRET),yes)
+    override EXTRA_RUSTFEATURES += sealed-secret
+endif
+
 include ../../utils.mk
 
 ifeq ($(ARCH), ppc64le)
