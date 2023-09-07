@@ -1280,7 +1280,7 @@ func (s *Sandbox) addSwap(ctx context.Context, swapID string, size int64) (*conf
 
 	blockDevice := &config.BlockDrive{
 		File:   swapFile,
-		Format: "raw",
+		Format: config.FormatRaw,
 		ID:     swapID,
 		Swap:   true,
 	}

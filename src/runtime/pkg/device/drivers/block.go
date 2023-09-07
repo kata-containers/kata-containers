@@ -68,7 +68,7 @@ func (device *BlockDevice) Attach(ctx context.Context, devReceiver api.DeviceRec
 
 	drive := &config.BlockDrive{
 		File:     device.DeviceInfo.HostPath,
-		Format:   "raw",
+		Format:   config.FormatRaw,
 		ID:       utils.MakeNameID("drive", device.DeviceInfo.ID, maxDevIDSize),
 		Index:    index,
 		Pmem:     device.DeviceInfo.Pmem,
