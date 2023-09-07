@@ -15,8 +15,8 @@ TEST_NAME="${TEST_NAME:-fio}"
 function main() {
 	cmds=("bc" "jq")
 	check_cmds "${cmds[@]}"
-	check_processes
 	init_env
+	check_processes
 
 	pushd "${FIO_PATH}"
 		[ -z "${KATA_HYPERVISOR}" ] && die "Hypervisor ID is missing."
