@@ -135,7 +135,7 @@ function deploy_kata() {
 }
 
 function deploy_k3s() {
-	curl -sfL https://get.k3s.io | sh -
+	curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644
 
 	# This is an arbitrary value that came up from local tests
 	sleep 240s
