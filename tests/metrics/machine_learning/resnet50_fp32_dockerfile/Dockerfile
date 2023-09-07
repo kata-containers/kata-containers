@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Usage: FROM [image name]
-FROM ubuntu:20.04
+FROM intel/intel-optimized-tensorflow:2.9.1
 
 ENV DEBIAN_FRONTEND=noninteractive
 
