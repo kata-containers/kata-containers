@@ -13,6 +13,7 @@ import (
 
 	merr "github.com/hashicorp/go-multierror"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
+	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	"github.com/pkg/errors"
 	otelLabel "go.opentelemetry.io/otel/attribute"
 )
@@ -192,4 +193,17 @@ func bindUnmountAllRootfs(ctx context.Context, sharedDir string, sandbox *Sandbo
 		}
 	}
 	return errors.ErrorOrNil()
+}
+
+func isLoopMount(options []string) bool {
+	// a loop device can be associated with a regular file
+	// or another block device, this means a file
+	// block device annotation is a subset of the more general
+	// concept covered by the loop option
+	for _, o := range options {
+		if o == vcAnnotations.IsFileBlockDevice || o == "loop" {
+			return true
+		}
+	}
+	return false
 }

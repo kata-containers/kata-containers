@@ -608,63 +608,67 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 			continue
 		}
 
-		isBlockFile := HasOption(c.mounts[i].Options, vcAnnotations.IsFileBlockDevice)
-		if c.mounts[i].Type != "bind" && !isBlockFile {
-			// We only handle for bind and block device mounts.
-			continue
-		}
+		isLoopDev := isLoopMount(c.mounts[i].Options)
 
-		// Handle directly assigned volume. Update the mount info based on the mount info json.
-		mntInfo, e := volume.VolumeMountInfo(c.mounts[i].Source)
-		if e != nil && !os.IsNotExist(e) {
-			c.Logger().WithError(e).WithField("mount-source", c.mounts[i].Source).
-				Error("failed to parse the mount info file for a direct assigned volume")
-			continue
-		}
-
-		if mntInfo != nil {
-			// Write out sandbox info file on the mount source to allow CSI to communicate with the runtime
-			if err := volume.RecordSandboxId(c.sandboxID, c.mounts[i].Source); err != nil {
-				c.Logger().WithError(err).Error("error writing sandbox info")
+		// We only handle for bind and block/loop device mounts.
+		if isLoopDev {
+		} else if c.mounts[i].Type == "bind" {
+			// Handle directly assigned volume. Update the mount info based on the mount info json.
+			mntInfo, e := volume.VolumeMountInfo(c.mounts[i].Source)
+			if e != nil && !os.IsNotExist(e) {
+				c.Logger().WithError(e).WithField("mount-source", c.mounts[i].Source).
+					Error("failed to parse the mount info file for a direct assigned volume")
+				continue
 			}
 
-			readonly := false
-			for _, flag := range mntInfo.Options {
-				if flag == "ro" {
-					readonly = true
-					break
+			if mntInfo != nil {
+				// Write out sandbox info file on the mount source to allow CSI to communicate with the runtime
+				if err := volume.RecordSandboxId(c.sandboxID, c.mounts[i].Source); err != nil {
+					c.Logger().WithError(err).Error("error writing sandbox info")
+				}
+
+				readonly := false
+				for _, flag := range mntInfo.Options {
+					if flag == "ro" {
+						readonly = true
+						break
+					}
+				}
+
+				c.mounts[i].Source = mntInfo.Device
+				c.mounts[i].Type = mntInfo.FsType
+				c.mounts[i].Options = mntInfo.Options
+				c.mounts[i].ReadOnly = readonly
+
+				isLoopDev = isLoopMount(c.mounts[i].Options)
+
+				for key, value := range mntInfo.Metadata {
+					switch key {
+					case volume.FSGroupMetadataKey:
+						gid, err := strconv.Atoi(value)
+						if err != nil {
+							c.Logger().WithError(err).Errorf("invalid group id value %s provided for key %s", value, volume.FSGroupMetadataKey)
+							continue
+						}
+						c.mounts[i].FSGroup = &gid
+					case volume.FSGroupChangePolicyMetadataKey:
+						if _, exists := mntInfo.Metadata[volume.FSGroupMetadataKey]; !exists {
+							c.Logger().Errorf("%s specified without provding the group id with key %s", volume.FSGroupChangePolicyMetadataKey, volume.FSGroupMetadataKey)
+							continue
+						}
+						c.mounts[i].FSGroupChangePolicy = volume.FSGroupChangePolicy(value)
+					default:
+						c.Logger().Warnf("Ignoring unsupported direct-assignd volume metadata key: %s, value: %s", key, value)
+					}
 				}
 			}
-
-			c.mounts[i].Source = mntInfo.Device
-			c.mounts[i].Type = mntInfo.FsType
-			c.mounts[i].Options = mntInfo.Options
-			c.mounts[i].ReadOnly = readonly
-
-			for key, value := range mntInfo.Metadata {
-				switch key {
-				case volume.FSGroupMetadataKey:
-					gid, err := strconv.Atoi(value)
-					if err != nil {
-						c.Logger().WithError(err).Errorf("invalid group id value %s provided for key %s", value, volume.FSGroupMetadataKey)
-						continue
-					}
-					c.mounts[i].FSGroup = &gid
-				case volume.FSGroupChangePolicyMetadataKey:
-					if _, exists := mntInfo.Metadata[volume.FSGroupMetadataKey]; !exists {
-						c.Logger().Errorf("%s specified without provding the group id with key %s", volume.FSGroupChangePolicyMetadataKey, volume.FSGroupMetadataKey)
-						continue
-					}
-					c.mounts[i].FSGroupChangePolicy = volume.FSGroupChangePolicy(value)
-				default:
-					c.Logger().Warnf("Ignoring unsupported direct-assignd volume metadata key: %s, value: %s", key, value)
-				}
-			}
+		} else {
+			continue
 		}
 
 		// Check if mount is a block device file. If it is, the block device will be attached to the host
 		// instead of passing this as a shared mount.
-		di, err := c.createDeviceInfo(&c.mounts[i], isBlockFile)
+		di, err := c.createDeviceInfo(&c.mounts[i], isLoopDev)
 
 		if err == nil && di != nil {
 			b, err := c.sandbox.devManager.NewDevice(*di)
@@ -678,6 +682,20 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 			}
 
 			c.mounts[i].BlockDeviceID = b.DeviceID()
+			if isLoopDev {
+				// drop the loop option, the agent can't use it
+				options := []string{}
+
+				for _, opt := range c.mounts[i].Options {
+					if opt == "loop" {
+						continue
+					}
+
+					options = append(options, opt)
+				}
+
+				c.mounts[i].Options = options
+			}
 		}
 	}
 
@@ -765,7 +783,7 @@ func newContainer(ctx context.Context, sandbox *Sandbox, contConfig *ContainerCo
 }
 
 // Create Device Information about the block device
-func (c *Container) createDeviceInfo(mount *Mount, isBlockFile bool) (*config.DeviceInfo, error) {
+func (c *Container) createDeviceInfo(mount *Mount, isLoopDev bool) (*config.DeviceInfo, error) {
 
 	var stat unix.Stat_t
 	if err := unix.Stat(mount.Source, &stat); err != nil {
@@ -784,14 +802,19 @@ func (c *Container) createDeviceInfo(mount *Mount, isBlockFile bool) (*config.De
 			Minor:         int64(unix.Minor(uint64(stat.Rdev))),
 			ReadOnly:      mount.ReadOnly,
 		}
-	} else if isBlockFile && stat.Mode&unix.S_IFMT == unix.S_IFREG {
+	} else if isLoopDev && stat.Mode&unix.S_IFMT == unix.S_IFREG {
 		di = &config.DeviceInfo{
 			HostPath:      mount.Source,
 			ContainerPath: mount.Destination,
 			DevType:       "b",
-			Major:         -1,
+			Major:         config.HostFileMajor,
 			Minor:         0,
 			ReadOnly:      mount.ReadOnly,
+			DriverOptions: map[string]string{},
+		}
+
+		if format, ok := GetOptionPrefix(mount.Options, vcAnnotations.DriveFormat); ok {
+			di.DriverOptions[config.FormatOpt] = format
 		}
 		// Check whether source can be used as a pmem device
 	} else {

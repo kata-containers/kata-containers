@@ -1171,6 +1171,8 @@ const (
 const (
 	// QCOW2 is the Qemu Copy On Write v2 image format.
 	QCOW2 BlockDeviceFormat = "qcow2"
+
+	RAW BlockDeviceFormat = "raw"
 )
 
 // BlockDevice represents a qemu block device.

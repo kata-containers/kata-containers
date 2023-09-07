@@ -1487,45 +1487,63 @@ func (q *qemu) qmpShutdown() {
 	}
 }
 
+func (q *qemu) hotplugNvdimmDevice(ctx context.Context, drive *config.BlockDrive, op Operation, devID string) error {
+	var blocksize int64
+	file, err := os.Open(drive.File)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	st, err := file.Stat()
+	if err != nil {
+		return fmt.Errorf("failed to get information from nvdimm device %v: %v", drive.File, err)
+	}
+
+	// regular files do not support syscall BLKGETSIZE64
+	if st.Mode().IsRegular() {
+		blocksize = st.Size()
+	} else if _, _, err := syscall.Syscall(syscall.SYS_IOCTL, file.Fd(), unix.BLKGETSIZE64, uintptr(unsafe.Pointer(&blocksize))); err != 0 {
+		return err
+	}
+
+	if err = q.qmpMonitorCh.qmp.ExecuteNVDIMMDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, drive.File, blocksize, &drive.Pmem); err != nil {
+		q.Logger().WithError(err).Errorf("Failed to add NVDIMM device %s", drive.File)
+		return err
+	}
+	drive.NvdimmID = strconv.Itoa(q.nvdimmCount)
+	q.nvdimmCount++
+	return nil
+}
+
 func (q *qemu) hotplugAddBlockDevice(ctx context.Context, drive *config.BlockDrive, op Operation, devID string) (err error) {
 	// drive can be a pmem device, in which case it's used as backing file for a nvdimm device
 	if q.config.BlockDeviceDriver == config.Nvdimm || drive.Pmem {
-		var blocksize int64
-		file, err := os.Open(drive.File)
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-
-		st, err := file.Stat()
-		if err != nil {
-			return fmt.Errorf("failed to get information from nvdimm device %v: %v", drive.File, err)
-		}
-
-		// regular files do not support syscall BLKGETSIZE64
-		if st.Mode().IsRegular() {
-			blocksize = st.Size()
-		} else if _, _, err := syscall.Syscall(syscall.SYS_IOCTL, file.Fd(), unix.BLKGETSIZE64, uintptr(unsafe.Pointer(&blocksize))); err != 0 {
-			return err
-		}
-
-		if err = q.qmpMonitorCh.qmp.ExecuteNVDIMMDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, drive.File, blocksize, &drive.Pmem); err != nil {
-			q.Logger().WithError(err).Errorf("Failed to add NVDIMM device %s", drive.File)
-			return err
-		}
-		drive.NvdimmID = strconv.Itoa(q.nvdimmCount)
-		q.nvdimmCount++
-		return nil
+		return q.hotplugNvdimmDevice(ctx, drive, op, devID)
 	}
 
 	qblkDevice := govmmQemu.BlockDevice{
 		ID:       drive.ID,
 		File:     drive.File,
+		Format:   govmmQemu.RAW,
 		ReadOnly: drive.ReadOnly,
 		AIO:      govmmQemu.BlockDeviceAIO(q.config.BlockDeviceAIO),
 	}
 
-	if drive.Swap {
+	if drive.RegularFile {
+		direct := false
+		noflush := false
+
+		if q.config.BlockDeviceCacheSet {
+			direct = q.config.BlockDeviceCacheDirect
+			noflush = q.config.BlockDeviceCacheNoflush
+		}
+
+		if qblkDevice.Format, err = formatToQemuFormat(drive.Format); err != nil {
+			return err
+		}
+		err = q.qmpMonitorCh.qmp.ExecuteBlockdevAddWithDriverCache(q.qmpMonitorCh.ctx, "file", &qblkDevice, direct, noflush)
+	} else if drive.Swap {
 		err = q.qmpMonitorCh.qmp.ExecuteBlockdevAddWithDriverCache(q.qmpMonitorCh.ctx, "file", &qblkDevice, false, false)
 	} else if q.config.BlockDeviceCacheSet {
 		err = q.qmpMonitorCh.qmp.ExecuteBlockdevAddWithCache(q.qmpMonitorCh.ctx, &qblkDevice, q.config.BlockDeviceCacheDirect, q.config.BlockDeviceCacheNoflush)
@@ -2874,4 +2892,14 @@ func (q *qemu) GenerateSocket(id string) (interface{}, error) {
 
 func (q *qemu) IsRateLimiterBuiltin() bool {
 	return false
+}
+
+func formatToQemuFormat(format string) (govmmQemu.BlockDeviceFormat, error) {
+	if format == config.FormatQcow2 {
+		return govmmQemu.QCOW2, nil
+	} else if format == config.FormatRaw {
+		return govmmQemu.RAW, nil
+	} else {
+		return "", fmt.Errorf("Unsupported file format for qemu: %v", format)
+	}
 }

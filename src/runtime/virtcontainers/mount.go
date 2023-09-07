@@ -425,11 +425,17 @@ func HasOption(options []string, option string) bool {
 	return false
 }
 
-func HasOptionPrefix(options []string, prefix string) bool {
+func GetOptionPrefix(options []string, prefix string) (string, bool) {
 	for _, o := range options {
 		if strings.HasPrefix(o, prefix) {
-			return true
+			return strings.TrimPrefix(o, prefix), true
 		}
 	}
-	return false
+	return "", false
+}
+
+func HasOptionPrefix(options []string, prefix string) bool {
+	_, found := GetOptionPrefix(options, prefix)
+
+	return found
 }

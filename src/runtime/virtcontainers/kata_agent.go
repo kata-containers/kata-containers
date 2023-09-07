@@ -1778,9 +1778,18 @@ func (k *kataAgent) handleBlkOCIMounts(c *Container, spec *specs.Spec) ([]*grpc.
 				"new-source":      path,
 			}).Debug("Replacing OCI mount source")
 			spec.Mounts[idx].Source = path
-			if HasOption(spec.Mounts[idx].Options, vcAnnotations.IsFileBlockDevice) {
-				// The device is already mounted, just bind to path in container.
-				spec.Mounts[idx].Options = []string{"bind"}
+
+			if isLoopMount(spec.Mounts[idx].Options) {
+				mountOptions := []string{"bind"}
+
+				for _, opt := range spec.Mounts[idx].Options {
+					if opt == "ro" {
+						mountOptions = append(mountOptions, "ro")
+					}
+				}
+
+				spec.Mounts[idx].Options = mountOptions
+				spec.Mounts[idx].Type = "bind"
 			}
 			break
 		}
