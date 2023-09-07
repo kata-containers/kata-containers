@@ -144,7 +144,7 @@ function deploy_k3s() {
 	curl -sfL https://get.k3s.io | sh -
 
 	# This is an arbitrary value that came up from local tests
-	wait 240s
+	sleep 240s
 }
 
 function deploy_k8s() {
