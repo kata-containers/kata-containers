@@ -85,10 +85,10 @@ func NewDeviceManager(blockDriver string, vhostUserStoreEnabled bool, vhostUserS
 
 func (dm *deviceManager) findDevice(devInfo *config.DeviceInfo) api.Device {
 	// For devices with a major of -1, we use the host path to find existing instances.
-	if devInfo.Major == -1 {
+	if devInfo.Major == config.HostFileMajor {
 		for _, dev := range dm.devices {
 			dma, _ := dev.GetMajorMinor()
-			if dma == -1 && dev.GetHostPath() == devInfo.HostPath {
+			if dma == config.HostFileMajor && dev.GetHostPath() == devInfo.HostPath {
 				return dev
 			}
 		}

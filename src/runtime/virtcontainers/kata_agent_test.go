@@ -245,7 +245,7 @@ func TestHandleDeviceBlockVolume(t *testing.T) {
 				BlockDrive: &config.BlockDrive{
 					Pmem:     true,
 					NvdimmID: testNvdimmID,
-					Format:   "raw",
+					Format:   config.FormatRaw,
 				},
 			},
 			inputMount: Mount{
