@@ -145,6 +145,27 @@ function deploy_k3s() {
 
 	# This is an arbitrary value that came up from local tests
 	sleep 240s
+
+	# Download the kubectl binary into /usr/bin and remove /usr/local/bin/kubectl
+	#
+	# We need to do this to avoid hitting issues like:
+	# ```sh
+	# error: open /etc/rancher/k3s/k3s.yaml.lock: permission denied
+	# ```
+	# Which happens basically because k3s links `/usr/local/bin/kubectl`
+	# to `/usr/local/bin/k3s`, and that does extra stuff that vanilla
+	# `kubectl` doesn't do.
+	ARCH=$(uname -m)
+	if [ "${ARCH}" = "x86_64" ]; then
+		ARCH=amd64
+	fi
+	kubectl_version=$(/usr/local/bin/k3s kubectl version --short 2>/dev/null | grep "Client Version" | sed -e 's/Client Version: //' -e 's/\+k3s1//')
+	sudo curl -fL --progress-bar -o /usr/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/${kubectl_version}/bin/linux/${ARCH}/kubectl
+	sudo chmod +x /usr/bin/kubectl
+	sudo rm -rf /usr/local/bin/kubectl
+
+	mkdir -p ~/.kube
+	cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
 }
 
 function deploy_k8s() {
