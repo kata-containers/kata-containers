@@ -75,10 +75,6 @@ func (device *BlockDevice) Attach(ctx context.Context, devReceiver api.DeviceRec
 		ReadOnly: device.DeviceInfo.ReadOnly,
 	}
 
-	if fs, ok := device.DeviceInfo.DriverOptions[config.FsTypeOpt]; ok {
-		drive.Format = fs
-	}
-
 	customOptions := device.DeviceInfo.DriverOptions
 	if customOptions == nil ||
 		customOptions[config.BlockDriverOpt] == config.VirtioSCSI {

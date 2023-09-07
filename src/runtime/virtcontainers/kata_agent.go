@@ -1568,7 +1568,6 @@ func handleBlockVolume(c *Container, device api.Device) (*grpc.Storage, error) {
 	case blockDrive.Pmem:
 		vol.Driver = kataNvdimmDevType
 		vol.Source = fmt.Sprintf("/dev/pmem%s", blockDrive.NvdimmID)
-		vol.Fstype = blockDrive.Format
 		vol.Options = []string{"dax"}
 	case c.sandbox.config.HypervisorConfig.BlockDeviceDriver == config.VirtioBlockCCW:
 		vol.Driver = kataBlkCCWDevType
@@ -1667,11 +1666,8 @@ func (k *kataAgent) handleDeviceBlockVolume(c *Container, m Mount, device api.De
 	}
 
 	vol.MountPoint = m.Destination
+	vol.Fstype = m.Type
 
-	// If no explicit FS Type or Options are being set, then let's use what is provided for the particular mount:
-	if vol.Fstype == "" {
-		vol.Fstype = m.Type
-	}
 	if len(vol.Options) == 0 {
 		vol.Options = m.Options
 	}

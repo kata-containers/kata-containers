@@ -664,7 +664,8 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 
 		// Check if mount is a block device file. If it is, the block device will be attached to the host
 		// instead of passing this as a shared mount.
-		di, err := c.createDeviceInfo(c.mounts[i].Source, c.mounts[i].Destination, c.mounts[i].ReadOnly, isBlockFile)
+		di, err := c.createDeviceInfo(&c.mounts[i], isBlockFile)
+
 		if err == nil && di != nil {
 			b, err := c.sandbox.devManager.NewDevice(*di)
 			if err != nil {
@@ -764,10 +765,11 @@ func newContainer(ctx context.Context, sandbox *Sandbox, contConfig *ContainerCo
 }
 
 // Create Device Information about the block device
-func (c *Container) createDeviceInfo(source, destination string, readonly, isBlockFile bool) (*config.DeviceInfo, error) {
+func (c *Container) createDeviceInfo(mount *Mount, isBlockFile bool) (*config.DeviceInfo, error) {
+
 	var stat unix.Stat_t
-	if err := unix.Stat(source, &stat); err != nil {
-		return nil, fmt.Errorf("stat %q failed: %v", source, err)
+	if err := unix.Stat(mount.Source, &stat); err != nil {
+		return nil, fmt.Errorf("stat %q failed: %v", mount.Source, err)
 	}
 
 	var di *config.DeviceInfo
@@ -775,28 +777,34 @@ func (c *Container) createDeviceInfo(source, destination string, readonly, isBlo
 
 	if stat.Mode&unix.S_IFMT == unix.S_IFBLK {
 		di = &config.DeviceInfo{
-			HostPath:      source,
-			ContainerPath: destination,
+			HostPath:      mount.Source,
+			ContainerPath: mount.Destination,
 			DevType:       "b",
 			Major:         int64(unix.Major(uint64(stat.Rdev))),
 			Minor:         int64(unix.Minor(uint64(stat.Rdev))),
-			ReadOnly:      readonly,
+			ReadOnly:      mount.ReadOnly,
 		}
 	} else if isBlockFile && stat.Mode&unix.S_IFMT == unix.S_IFREG {
 		di = &config.DeviceInfo{
-			HostPath:      source,
-			ContainerPath: destination,
+			HostPath:      mount.Source,
+			ContainerPath: mount.Destination,
 			DevType:       "b",
 			Major:         -1,
 			Minor:         0,
-			ReadOnly:      readonly,
+			ReadOnly:      mount.ReadOnly,
 		}
 		// Check whether source can be used as a pmem device
-	} else if di, err = config.PmemDeviceInfo(source, destination); err != nil {
-		c.Logger().WithError(err).
-			WithField("mount-source", source).
-			Debug("no loop device")
+	} else {
+		var fstype string
+		if di, fstype, err = config.PmemDeviceInfo(mount.Source, mount.Destination); err != nil {
+			c.Logger().WithError(err).
+				WithField("mount-source", mount.Source).
+				Debug("no loop device")
+		} else {
+			mount.Type = fstype
+		}
 	}
+
 	return di, err
 }
 
