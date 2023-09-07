@@ -237,6 +237,9 @@ const (
 
 	// EnableRootlessHypervisor is a sandbox annotation to enable rootless hypervisor (only supported in QEMU currently).
 	EnableRootlessHypervisor = kataAnnotHypervisorPrefix + "rootless"
+
+	// DisableGuestAppArmor is a sandbox annotation that determines if AppArmor profiles should be applied inside guest.
+	DisableGuestAppArmor = kataAnnotHypervisorPrefix + "disable_guest_apparmor"
 )
 
 // Runtime related annotations
@@ -248,6 +251,9 @@ const (
 
 	// GuestSeLinuxLabel is a SELinux security policy that is applied to a container process inside guest.
 	GuestSeLinuxLabel = kataAnnotRuntimePrefix + "guest_selinux_label"
+
+	// GuestAppArmorProfile is an AppArmor profile that is applied to a container process inside guest.
+	GuestAppArmorProfile = kataAnnotRuntimePrefix + "guest_apparmor_profile"
 
 	// SandboxCgroupOnly is a sandbox annotation that determines if kata processes are managed only in sandbox cgroup.
 	SandboxCgroupOnly = kataAnnotRuntimePrefix + "sandbox_cgroup_only"

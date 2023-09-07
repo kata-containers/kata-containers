@@ -529,6 +529,15 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 		params = append(params, Param{"quiet", ""})
 	}
 
+	// Set the AppArmor param in accordance with the runtime configuration, disable_guest_apparmor.
+	if clh.config.DisableGuestAppArmor {
+		clh.Logger().Info("Set apparmor=0 to kernel params because AppArmor on the guest is disabled")
+		params = append(params, Param{"apparmor", "0"})
+	} else {
+		clh.Logger().Info("Set apparmor=1 to kernel params because AppArmor on the guest is enabled")
+		params = append(params, Param{"apparmor", "1"}, Param{"security", "apparmor"})
+	}
+
 	// Followed by extra kernel parameters defined in the configuration file
 	params = append(params, clh.config.KernelParams...)
 

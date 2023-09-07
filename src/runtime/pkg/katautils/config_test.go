@@ -566,6 +566,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		VirtioFSCache:         defaultVirtioFSCacheMode,
 		BlockDeviceAIO:        defaultBlockDeviceAIO,
 		DisableGuestSeLinux:   defaultDisableGuestSeLinux,
+		DisableGuestAppArmor:  defaultDisableGuestAppArmor,
 		HotPlugVFIO:           defaultHotPlugVFIO,
 		ColdPlugVFIO:          defaultColdPlugVFIO,
 	}

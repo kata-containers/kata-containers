@@ -258,6 +258,9 @@ pub const KATA_ANNO_CFG_HYPERVISOR_GUEST_HOOK_PATH: &str =
 /// A sandbox annotation to enable rootless hypervisor (only supported in QEMU currently).
 pub const KATA_ANNO_CFG_HYPERVISOR_ENABLE_ROOTLESS_HYPERVISOR: &str =
     "io.katacontainers.config.hypervisor.rootless";
+/// A sandbox annotation to determine if AppArmor profiles should be applied inside guest.
+pub const KATA_ANNO_CFG_HYPERVISOR_DISABLE_GUEST_APPARMOR: &str =
+    "io.katacontainers.config.hypervisor.disable_guest_apparmor";
 
 // Hypervisor Shared File System related annotations
 /// A sandbox annotation to specify the shared file system type, either inline-virtio-fs (default), virtio-9p, virtio-fs or virtio-fs-nydus.
@@ -291,6 +294,9 @@ pub const KATA_ANNO_CFG_RUNTIME_AGENT: &str = "io.katacontainers.config.runtime.
 /// A sandbox annotation that determines if seccomp should be applied inside guest.
 pub const KATA_ANNO_CFG_DISABLE_GUEST_SECCOMP: &str =
     "io.katacontainers.config.runtime.disable_guest_seccomp";
+/// A custom AppArmor profile that is applied to a container process inside guest.
+pub const KATA_ANNO_CFG_GUEST_APPARMOR_PROFILE: &str =
+    "io.katacontainers.config.runtime.guest_apparmor_profile";
 /// A sandbox annotation that determines if pprof enabled.
 pub const KATA_ANNO_CFG_ENABLE_PPROF: &str = "io.katacontainers.config.runtime.enable_pprof";
 /// A sandbox annotation that determines if experimental features enabled.
@@ -822,6 +828,16 @@ impl Annotation {
                             }
                         }
                     }
+                    KATA_ANNO_CFG_HYPERVISOR_DISABLE_GUEST_APPARMOR => {
+                        match self.get_value::<bool>(key) {
+                            Ok(r) => {
+                                hv.disable_guest_apparmor = r.unwrap_or_default();
+                            }
+                            Err(_e) => {
+                                return Err(bool_err);
+                            }
+                        }
+                    }
                     // Hypervisor Shared File System related annotations
                     KATA_ANNO_CFG_HYPERVISOR_SHARED_FS => {
                         hv.shared_fs.shared_fs = self.get(key);
@@ -917,6 +933,11 @@ impl Annotation {
                             return Err(bool_err);
                         }
                     },
+                    KATA_ANNO_CFG_GUEST_APPARMOR_PROFILE => {
+                        if !value.is_empty() {
+                            config.runtime.guest_apparmor_profile = value.to_string();
+                        }
+                    }
                     KATA_ANNO_CFG_ENABLE_PPROF => match self.get_value::<bool>(key) {
                         Ok(r) => {
                             config.runtime.enable_pprof = r.unwrap_or_default();

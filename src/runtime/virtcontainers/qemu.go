@@ -195,6 +195,15 @@ func (q *qemu) kernelParameters() string {
 		params = append(params, Param{"selinux", "1"})
 	}
 
+	// set the AppArmor param in accordance with the runtime configuration, disable_guest_apparmor.
+	if q.config.DisableGuestAppArmor {
+		q.Logger().Info("Set apparmor=0 to kernel params because AppArmor on the guest is disabled")
+		params = append(params, Param{"apparmor", "0"})
+	} else {
+		q.Logger().Info("Set apparmor=1 to kernel params because AppArmor on the guest is enabled")
+		params = append(params, Param{"apparmor", "1"}, Param{"security", "apparmor"})
+	}
+
 	// add the params specified by the provided config. As the kernel
 	// honours the last parameter value set and since the config-provided
 	// params are added here, they will take priority over the defaults.

@@ -28,6 +28,7 @@ extern crate oci;
 extern crate path_absolutize;
 extern crate regex;
 
+pub mod apparmor;
 pub mod capabilities;
 pub mod cgroups;
 #[cfg(feature = "standard-oci-runtime")]

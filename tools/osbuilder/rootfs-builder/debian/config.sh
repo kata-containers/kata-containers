@@ -9,6 +9,7 @@ OS_VERSION=${OS_VERSION:-10.11}
 OS_NAME=${OS_NAME:-"stretch"}
 
 PACKAGES="systemd coreutils init iptables chrony kmod"
+[ "$APPARMOR" = yes ] && PACKAGES+=" apparmor"
 
 # NOTE: Re-using ubuntu rootfs configuration, see 'ubuntu' folder for full content.
 source $script_dir/ubuntu/$CONFIG_SH

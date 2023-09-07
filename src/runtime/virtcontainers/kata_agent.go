@@ -75,6 +75,9 @@ const (
 
 	// Default SELinux type applied to the container process inside guest
 	defaultSeLinuxContainerType = "container_t"
+
+	// Default AppArmor profile applied to the cotnainer process inside guest
+	defaultAppArmorContainerProfile = "kata-default"
 )
 
 var (
@@ -929,7 +932,8 @@ func (k *kataAgent) removeIgnoredOCIMount(spec *specs.Spec, ignoredMounts map[st
 	return nil
 }
 
-func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, disableGuestSeLinux bool, guestSeLinuxLabel string, stripVfio bool) error {
+func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, disableGuestSeLinux bool, guestSeLinuxLabel string,
+	disableGuestAppArmor bool, guestAppArmorProfile string, stripVfio bool) error {
 	// Disable Hooks since they have been handled on the host and there is
 	// no reason to send them to the agent. It would make no sense to try
 	// to apply them on the guest.
@@ -969,6 +973,23 @@ func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, dis
 			grpcSpec.Process.SelinuxLabel = ""
 			grpcSpec.Linux.MountLabel = ""
 		}
+	}
+
+	// Pass AppArmor profiles for the container process to the agent.
+	if !disableGuestAppArmor {
+		k.Logger().Info("AppArmor profile will be applied to the container process inside guest")
+		if guestAppArmorProfile == "" {
+			grpcSpec.Process.ApparmorProfile = defaultAppArmorContainerProfile
+		} else {
+			grpcSpec.Process.ApparmorProfile = guestAppArmorProfile
+		}
+	} else {
+		// Set apparmor_profile to empty because high-leve container runtimes
+		// such as containerd try to set the default AppArmor profile automatically
+		// when the AppArmor is enabled on the host. Whether the AppArmor is enabled
+		// on the host doesn't matter from the perspective of containers inside the guest.
+		// Ref. https://github.com/kubernetes/kubernetes/issues/51746
+		grpcSpec.Process.ApparmorProfile = ""
 	}
 
 	// By now only CPU constraints are supported
@@ -1339,9 +1360,22 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 		return nil, fmt.Errorf("Custom SELinux security policy is provided, but guest SELinux is disabled")
 	}
 
+	if sandbox.config.HypervisorConfig.DisableGuestAppArmor && sandbox.config.GuestAppArmorProfile != "" {
+		return nil, fmt.Errorf("Custom AppArmor profiles are provided, but guest AppArmor is disabled")
+	}
+
+	disableGuestAppArmor := sandbox.config.HypervisorConfig.DisableGuestAppArmor
+	// If the container type is PodSandbox which means a pause container in K8s,
+	// the AppArmor profiles shouldn't be applied to the container.
+	if c.config.Annotations[vcAnnotations.ContainerTypeKey] == string(PodSandbox) {
+		disableGuestAppArmor = true
+	}
+
 	// We need to constrain the spec to make sure we're not
 	// passing irrelevant information to the agent.
-	err = k.constrainGRPCSpec(grpcSpec, passSeccomp, sandbox.config.HypervisorConfig.DisableGuestSeLinux, sandbox.config.GuestSeLinuxLabel, sandbox.config.VfioMode == config.VFIOModeGuestKernel)
+	err = k.constrainGRPCSpec(grpcSpec, passSeccomp, sandbox.config.HypervisorConfig.DisableGuestSeLinux,
+		sandbox.config.GuestSeLinuxLabel, disableGuestAppArmor,
+		sandbox.config.GuestAppArmorProfile, sandbox.config.VfioMode == config.VFIOModeGuestKernel)
 	if err != nil {
 		return nil, err
 	}

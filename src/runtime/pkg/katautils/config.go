@@ -158,6 +158,7 @@ type hypervisor struct {
 	DisableSeccomp                 bool            `toml:"disable_seccomp"`
 	DisableSeLinux                 bool            `toml:"disable_selinux"`
 	DisableGuestSeLinux            bool            `toml:"disable_guest_selinux"`
+	DisableGuestAppArmor           bool            `toml:"disable_guest_apparmor"`
 	LegacySerial                   bool            `toml:"use_legacy_serial"`
 }
 
@@ -168,6 +169,7 @@ type runtime struct {
 	JaegerPassword            string   `toml:"jaeger_password"`
 	VfioMode                  string   `toml:"vfio_mode"`
 	GuestSeLinuxLabel         string   `toml:"guest_selinux_label"`
+	GuestAppArmorProfile      string   `toml:"guest_apparmor_profile"`
 	SandboxBindMounts         []string `toml:"sandbox_bind_mounts"`
 	Experimental              []string `toml:"experimental"`
 	Tracing                   bool     `toml:"enable_tracing"`
@@ -725,6 +727,7 @@ func newFirecrackerHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		EnableAnnotations:     h.EnableAnnotations,
 		DisableSeLinux:        h.DisableSeLinux,
 		DisableGuestSeLinux:   true, // Guest SELinux is not supported in Firecracker
+		DisableGuestAppArmor:  h.DisableGuestAppArmor,
 	}, nil
 }
 
@@ -887,6 +890,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		LegacySerial:            h.LegacySerial,
 		DisableSeLinux:          h.DisableSeLinux,
 		DisableGuestSeLinux:     h.DisableGuestSeLinux,
+		DisableGuestAppArmor:    h.DisableGuestAppArmor,
 	}, nil
 }
 
@@ -960,6 +964,7 @@ func newAcrnHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DisableSeLinux:        h.DisableSeLinux,
 		EnableAnnotations:     h.EnableAnnotations,
 		DisableGuestSeLinux:   true, // Guest SELinux is not supported in ACRN
+		DisableGuestAppArmor:  true, // Guest AppArmor is not supported in ACRN
 	}, nil
 }
 
@@ -1074,6 +1079,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		Rootless:                       h.Rootless,
 		DisableSeLinux:                 h.DisableSeLinux,
 		DisableGuestSeLinux:            h.DisableGuestSeLinux,
+		DisableGuestAppArmor:           h.DisableGuestAppArmor,
 		NetRateLimiterBwMaxRate:        h.getNetRateLimiterBwMaxRate(),
 		NetRateLimiterBwOneTimeBurst:   h.getNetRateLimiterBwOneTimeBurst(),
 		NetRateLimiterOpsMaxRate:       h.getNetRateLimiterOpsMaxRate(),
@@ -1308,6 +1314,7 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		Rootless:                 defaultRootlessHypervisor,
 		DisableSeccomp:           defaultDisableSeccomp,
 		DisableGuestSeLinux:      defaultDisableGuestSeLinux,
+		DisableGuestAppArmor:     defaultDisableGuestAppArmor,
 		LegacySerial:             defaultLegacySerial,
 	}
 }
@@ -1397,6 +1404,7 @@ func LoadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 	config.DisableGuestSeccomp = tomlConf.Runtime.DisableGuestSeccomp
 	config.EnableVCPUsPinning = tomlConf.Runtime.EnableVCPUsPinning
 	config.GuestSeLinuxLabel = tomlConf.Runtime.GuestSeLinuxLabel
+	config.GuestAppArmorProfile = tomlConf.Runtime.GuestAppArmorProfile
 	config.StaticSandboxResourceMgmt = tomlConf.Runtime.StaticSandboxResourceMgmt
 	config.SandboxCgroupOnly = tomlConf.Runtime.SandboxCgroupOnly
 	config.DisableNewNetNs = tomlConf.Runtime.DisableNewNetNs

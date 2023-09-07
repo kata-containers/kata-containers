@@ -87,6 +87,9 @@ type SandboxConfig struct {
 	SandboxCgroupOnly bool
 
 	DisableGuestSeccomp bool
+
+	// Custom AppArmor profile to the container process inside the VM
+	GuestAppArmorProfile string
 }
 ```
 
@@ -352,6 +355,9 @@ type HypervisorConfig struct {
 	// Enables SEV-SNP guests in case both AMD SEV and SNP are supported.
 	// SEV is default.
 	SevSnpGuest bool
+
+	// Disable apparmor from the container process
+	DisableGuestAppArmor bool
 }
 ```
 

@@ -62,6 +62,7 @@ tx_rate_limiter_max_rate = 10000
 guest_memory_dump_path="/var/crash/kata"
 guest_memory_dump_paging = true
 enable_guest_swap = true
+disable_guest_apparmor = true
 
 [agent.agent0]
 enable_tracing = true
@@ -86,5 +87,4 @@ experimental=["a", "b"]
 enable_pprof = true
 hypervisor_name = "qemu"
 agent_name = "agent0"
-
-
+guest_apparmor_profile = "test_apparmor_profile"

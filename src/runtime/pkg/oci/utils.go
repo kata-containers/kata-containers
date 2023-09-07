@@ -135,6 +135,9 @@ type RuntimeConfig struct {
 	//SELinux security context applied to the container process inside guest.
 	GuestSeLinuxLabel string
 
+	// AppArmor profile applied to the container process inside guest.
+	GuestAppArmorProfile string
+
 	// Sandbox sizing information which, if provided, indicates the size of
 	// the sandbox needed for the workload(s)
 	SandboxCPUs  uint32
@@ -530,6 +533,12 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		config.HypervisorConfig.SGXEPCSize = size
 	}
 
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.DisableGuestAppArmor).setBool(func(disableGuestAppArmor bool) {
+		config.HypervisorConfig.DisableGuestAppArmor = disableGuestAppArmor
+	}); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -869,6 +878,12 @@ func addRuntimeConfigOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, r
 		return err
 	}
 
+	if value, ok := ocispec.Annotations[vcAnnotations.GuestAppArmorProfile]; ok {
+		if value != "" {
+			sbConfig.GuestAppArmorProfile = value
+		}
+	}
+
 	if value, ok := ocispec.Annotations[vcAnnotations.Experimental]; ok {
 		features := strings.Split(value, " ")
 		sbConfig.Experimental = []exp.Feature{}
@@ -1004,6 +1019,8 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid st
 		EnableVCPUsPinning: runtime.EnableVCPUsPinning,
 
 		GuestSeLinuxLabel: runtime.GuestSeLinuxLabel,
+
+		GuestAppArmorProfile: runtime.GuestAppArmorProfile,
 
 		Experimental: runtime.Experimental,
 	}

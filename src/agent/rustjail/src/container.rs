@@ -17,6 +17,7 @@ use std::time::SystemTime;
 
 use cgroups::freezer::FreezerState;
 
+use crate::apparmor;
 use crate::capabilities;
 #[cfg(not(test))]
 use crate::cgroups::fs::Manager as FsManager;
@@ -552,6 +553,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     }
 
     let selinux_enabled = selinux::is_enabled()?;
+    let apparmor_enabled: bool = apparmor::is_enabled();
 
     sched::unshare(to_new & !CloneFlags::CLONE_NEWUSER)?;
 
@@ -688,6 +690,18 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     if oci_process.capabilities.is_some() {
         let c = oci_process.capabilities.as_ref().unwrap();
         capabilities::drop_privileges(cfd_log, c)?;
+    }
+
+    // Apply AppArmor profile
+    if !oci_process.apparmor_profile.is_empty() {
+        if !apparmor_enabled {
+            return Err(anyhow!(
+                "AppArmor profile is provided but AppArmor is not enabled on the running kernel"
+            ));
+        }
+
+        log_child!(cfd_log, "Apply AppArmor profile to the container process");
+        apparmor::apply_apparmor(&oci_process.apparmor_profile)?;
     }
 
     let args = oci_process.args.to_vec();
@@ -953,6 +967,13 @@ impl BaseContainer for LinuxContainer {
                     .ok_or_else(|| anyhow!("missing process capabilities"))?,
             );
         }
+
+        // Inherit AppArmor profiles from container process for the exec command
+        let process = spec
+            .process
+            .as_ref()
+            .ok_or_else(|| anyhow!("no process config"))?;
+        p.oci.apparmor_profile = process.apparmor_profile.clone();
 
         let (pfd_log, cfd_log) = unistd::pipe().context("failed to create pipe")?;
 

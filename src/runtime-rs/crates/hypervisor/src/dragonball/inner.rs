@@ -109,6 +109,14 @@ impl DragonballInner {
         kernel_params.append(&mut KernelParams::from_string(
             &self.config.boot_info.kernel_params,
         ));
+        // set kernel params for AppArmor
+        if self.config.disable_guest_apparmor {
+            kernel_params.append(&mut KernelParams::from_string("apparmor=0"));
+        } else {
+            kernel_params.append(&mut KernelParams::from_string(
+                "apparmor=1 security=apparmor",
+            ));
+        }
         info!(sl!(), "prepared kernel_params={:?}", kernel_params);
 
         // set boot source

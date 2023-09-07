@@ -183,6 +183,15 @@ virtio_fs_cache = "@DEFVIRTIOFSCACHE@"
 # result in memory pre allocation
 #enable_hugepages = true
 
+# disable applying AppArmor profile on the container process
+# If set to false, the kata-default profile is applied to the container process by default.
+# The kata-default profile is based on the containerd's default profile:
+# https://github.com/containerd/containerd/blob/v1.7.3/contrib/apparmor/template.go
+# Note: To enable guest apparmor, the guest rootfs must be Ubuntu or Debian that is
+# created with `APPARMOR=yes`.
+# (default: true)
+disable_guest_apparmor=@DEFDISABLEGUESTAPPARMOR@
+
 [agent.@PROJECT_TYPE@]
 container_pipe_size=@PIPESIZE@
 # If enabled, make the agent display debug-level messages.
@@ -262,6 +271,12 @@ agent_name="@PROJECT_TYPE@"
 # within the guest
 # (default: true)
 disable_guest_seccomp=@DEFDISABLEGUESTSECCOMP@
+
+# Apply a custom AppArmor profile to the container process inside the VM.
+# This is used when you want to apply your custom profile rather than the default
+# profile, `kata-default`. You need to put the custom profile under `/etc/apparmor.d`
+# in the guest rootfs
+#guest_apparmor_profile="@DEFGUESTAPPARMORPROFILE@"
 
 # If enabled, the runtime will create opentracing.io traces and spans.
 # (See https://www.jaegertracing.io/docs/getting-started).
