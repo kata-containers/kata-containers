@@ -955,6 +955,17 @@ func (s *Sandbox) createNetwork(ctx context.Context) error {
 		return nil
 	}
 
+	// docker container needs the hypervisor process ID to find out the container netns,
+	// which means that the hypervisor has to support network device hotplug so that docker
+	// can use the prestart hooks to set up container netns.
+	caps := s.hypervisor.Capabilities(ctx)
+	if !caps.IsNetworkDeviceHotplugSupported() {
+		spec := s.GetPatchedOCISpec()
+		if utils.IsDockerContainer(spec) {
+			return errors.New("docker container needs network device hotplug but the configured hypervisor does not support it")
+		}
+	}
+
 	span, ctx := katatrace.Trace(ctx, s.Logger(), "createNetwork", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 	katatrace.AddTags(span, "network", s.network, "NetworkConfig", s.config.NetworkConfig)
@@ -1310,6 +1321,22 @@ func (s *Sandbox) cleanSwap(ctx context.Context) {
 	}
 }
 
+func (s *Sandbox) runPrestartHooks(ctx context.Context, prestartHookFunc func(context.Context) error) error {
+	hid, _ := s.GetHypervisorPid()
+	// Ignore errors here as hypervisor might not have been started yet, likely in FC case.
+	if hid > 0 {
+		s.Logger().Infof("sandbox %s hypervisor pid is %v", s.id, hid)
+		ctx = context.WithValue(ctx, HypervisorPidKey{}, hid)
+	}
+
+	if err := prestartHookFunc(ctx); err != nil {
+		s.Logger().Errorf("fail to run prestartHook for sandbox %s: %s", s.id, err)
+		return err
+	}
+
+	return nil
+}
+
 // startVM starts the VM.
 func (s *Sandbox) startVM(ctx context.Context, prestartHookFunc func(context.Context) error) (err error) {
 	span, ctx := katatrace.Trace(ctx, s.Logger(), "startVM", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
@@ -1332,6 +1359,17 @@ func (s *Sandbox) startVM(ctx context.Context, prestartHookFunc func(context.Con
 		}
 	}()
 
+	caps := s.hypervisor.Capabilities(ctx)
+	// If the hypervisor does not support device hotplug, run prestart hooks
+	// before spawning the VM so that it is possible to let the hooks set up
+	// netns and thus network devices are set up statically.
+	if !caps.IsNetworkDeviceHotplugSupported() && prestartHookFunc != nil {
+		err = s.runPrestartHooks(ctx, prestartHookFunc)
+		if err != nil {
+			return err
+		}
+	}
+
 	if err := s.network.Run(ctx, func() error {
 		if s.factory != nil {
 			vm, err := s.factory.GetVM(ctx, VMConfig{
@@ -1351,24 +1389,22 @@ func (s *Sandbox) startVM(ctx context.Context, prestartHookFunc func(context.Con
 		return err
 	}
 
-	if prestartHookFunc != nil {
-		hid, err := s.GetHypervisorPid()
+	if caps.IsNetworkDeviceHotplugSupported() && prestartHookFunc != nil {
+		err = s.runPrestartHooks(ctx, prestartHookFunc)
 		if err != nil {
-			return err
-		}
-		s.Logger().Infof("hypervisor pid is %v", hid)
-		ctx = context.WithValue(ctx, HypervisorPidKey{}, hid)
-
-		if err := prestartHookFunc(ctx); err != nil {
 			return err
 		}
 	}
 
-	// 1. Do not scan the netns if we want no network for the vmm.
-	// 2. In case of vm factory, scan the netns to hotplug interfaces after vm is started.
-	// 3. In case of prestartHookFunc, network config might have been changed. We need to
+	// 1. Do not scan the netns if we want no network for the vmm
+	// 2. Do not scan the netns if the vmm does not support device hotplug, in which case
+	//    the network is already set up statically
+	// 3. In case of vm factory, scan the netns to hotplug interfaces after vm is started.
+	// 4. In case of prestartHookFunc, network config might have been changed. We need to
 	//    rescan and handle the change.
-	if !s.config.NetworkConfig.DisableNewNetwork && (s.factory != nil || prestartHookFunc != nil) {
+	if !s.config.NetworkConfig.DisableNewNetwork &&
+		caps.IsNetworkDeviceHotplugSupported() &&
+		(s.factory != nil || prestartHookFunc != nil) {
 		if _, err := s.network.AddEndpoints(ctx, s, nil, true); err != nil {
 			return err
 		}

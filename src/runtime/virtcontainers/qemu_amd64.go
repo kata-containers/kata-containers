@@ -162,6 +162,7 @@ func (q *qemuAmd64) capabilities(hConfig HypervisorConfig) types.Capabilities {
 	if q.qemuMachine.Type == QemuQ35 ||
 		q.qemuMachine.Type == QemuVirt {
 		caps.SetBlockDeviceHotplugSupport()
+		caps.SetNetworkDeviceHotplugSupported()
 	}
 
 	caps.SetMultiQueueSupport()

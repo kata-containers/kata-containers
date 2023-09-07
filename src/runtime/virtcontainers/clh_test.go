@@ -752,4 +752,7 @@ func TestClhCapabilities(t *testing.T) {
 
 	c = clh.Capabilities(ctx)
 	assert.False(c.IsFsSharingSupported())
+
+	assert.True(c.IsNetworkDeviceHotplugSupported())
+	assert.True(c.IsBlockDeviceHotplugSupported())
 }
