@@ -12,6 +12,78 @@ kubernetes_dir="$(dirname "$(readlink -f "$0")")"
 source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
 tools_dir="${repo_root_dir}/tools"
 
+function configure_devmapper() {
+	sudo mkdir -p /var/lib/containerd/devmapper
+	sudo truncate --size 10G /var/lib/containerd/devmapper/data-disk.img
+	sudo truncate --size 10G /var/lib/containerd/devmapper/meta-disk.img
+
+	cat<<EOF | sudo tee /etc/systemd/system/containerd-devmapper.service
+[Unit]
+Description=Setup containerd devmapper device
+DefaultDependencies=no
+After=systemd-udev-settle.service
+Before=lvm2-activation-early.service
+Wants=systemd-udev-settle.service
+[Service]
+Type=oneshot
+RemainAfterExit=true
+ExecStart=-/sbin/losetup /dev/loop20 /var/lib/containerd/devmapper/data-disk.img
+ExecStart=-/sbin/losetup /dev/loop21 /var/lib/containerd/devmapper/meta-disk.img
+[Install]
+WantedBy=local-fs.target
+EOF
+
+	sudo systemctl daemon-reload
+	sudo systemctl enable --now containerd-devmapper
+
+	# Time to setup the thin pool for consumption.
+	# The table arguments are such.
+	# start block in the virtual device
+	# length of the segment (block device size in bytes / Sector size (512)
+	# metadata device
+	# block data device
+	# data_block_size Currently set it 512 (128KB)
+	# low_water_mark. Copied this from containerd snapshotter test setup
+	# no. of feature arguments
+	# Skip zeroing blocks for new volumes.
+	sudo dmsetup create contd-thin-pool \
+	        --table "0 20971520 thin-pool /dev/loop21 /dev/loop20 512 32768 1 skip_block_zeroing"
+	
+	case "${KUBERNETES}" in
+		k3s)
+			containerd_config_file="/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl"
+			sudo cp /var/lib/rancher/k3s/agent/etc/containerd/config.toml ${containerd_config_file}
+			;;
+		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
+	esac
+
+	# We're not using this with baremetal machines, so we're fine on cutting
+	# corners here and just append this to the configuration file.
+	cat<<EOF | sudo tee ${containerd_config_file}
+[plugins."io.containerd.snapshotter.v1.devmapper"]
+  pool_name = "contd-thin-pool"
+  base_image_size = "4096MB"
+EOF
+
+	case "${KUBERNETES}" in
+		k3s)
+			sudo sed -i -e 's/snapshotter = "overlayfs"/snapshotter = "devmapper"/g' ${containerd_config_file}
+			sudo systemctl restart k3s ;;
+		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
+	esac
+}
+
+function configure_snapshotter() {
+	echo "::group::Configuring ${SNAPSHOTTER}"
+
+	case ${SNAPSHOTTER} in
+		devmapper) configure_devmapper ;;
+		*) >&2 echo "${SNAPSHOTTER} flavour is not supported"; exit 2 ;;
+	esac
+
+	echo "::endgroup::"
+}
+
 function deploy_kata() {
     platform="${1}"
     ensure_yq
@@ -66,6 +138,24 @@ function deploy_kata() {
     echo "::group::Runtime classes"
     kubectl get runtimeclass
     echo "::endgroup::"
+}
+
+function deploy_k3s() {
+	curl -sfL https://get.k3s.io | sh -
+
+	# This is an arbitrary value that came up from local tests
+	wait 240s
+}
+
+function deploy_k8s() {
+	echo "::group::Deploying ${KUBERNETES}"
+
+	case ${KUBERNETES} in
+		k3s) deploy_k3s ;;
+		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
+	esac
+
+	echo "::endgroup::"
 }
 
 function run_tests() {
@@ -138,6 +228,8 @@ function main() {
         install-azure-cli) install_azure_cli ;;
         login-azure) login_azure ;;
         create-cluster) create_cluster ;;
+        configure-snapshotter) configure_snapshotter ;;
+        deploy-k8s) deploy_k8s ;;
         install-bats) install_bats ;;
         install-kubectl) install_kubectl ;;
         get-cluster-credentials) get_cluster_credentials ;;
