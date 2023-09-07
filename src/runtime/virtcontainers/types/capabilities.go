@@ -10,6 +10,7 @@ const (
 	blockDeviceHotplugSupport
 	multiQueueSupport
 	fsSharingSupported
+	networkDeviceHotplugSupport
 )
 
 // Capabilities describe a virtcontainers hypervisor capabilities
@@ -56,4 +57,14 @@ func (caps *Capabilities) IsFsSharingSupported() bool {
 // SetFsSharingSupport sets the host filesystem sharing capability to true.
 func (caps *Capabilities) SetFsSharingSupport() {
 	caps.flags |= fsSharingSupported
+}
+
+// IsDeviceHotplugSupported tells if an hypervisor supports device hotplug.
+func (caps *Capabilities) IsNetworkDeviceHotplugSupported() bool {
+	return caps.flags&networkDeviceHotplugSupport != 0
+}
+
+// SetDeviceHotplugSupported sets the host filesystem sharing capability to true.
+func (caps *Capabilities) SetNetworkDeviceHotplugSupported() {
+	caps.flags |= networkDeviceHotplugSupport
 }

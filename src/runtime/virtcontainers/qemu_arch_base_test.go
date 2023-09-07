@@ -123,6 +123,7 @@ func TestQemuArchBaseCapabilities(t *testing.T) {
 	c := qemuArchBase.capabilities(hConfig)
 	assert.True(c.IsBlockDeviceHotplugSupported())
 	assert.True(c.IsFsSharingSupported())
+	assert.True(c.IsNetworkDeviceHotplugSupported())
 
 	hConfig.SharedFS = config.NoSharedFS
 	c = qemuArchBase.capabilities(hConfig)
