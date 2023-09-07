@@ -11,6 +11,7 @@ package katautils
 
 import (
 	config "github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
+	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
 )
 
 // name is the name of the runtime
@@ -79,6 +80,7 @@ const defaultEnableIOMMU bool = false
 const defaultEnableIOMMUPlatform bool = false
 const defaultFileBackedMemRootDir string = ""
 const defaultEnableDebug bool = false
+const defaultExtraMonitorSocket govmmQemu.MonitorProtocol = ""
 const defaultDisableNestingChecks bool = false
 const defaultMsize9p uint32 = 8192
 const defaultEntropySource = "/dev/urandom"

@@ -2471,14 +2471,28 @@ const (
 	Unix QMPSocketType = "unix"
 )
 
-// QMPSocket represents a qemu QMP socket configuration.
+// MonitorProtocol tells what protocol is used on a QMPSocket
+type MonitorProtocol string
+
+const (
+	// Socket using a human-friendly text-based protocol.
+	Hmp MonitorProtocol = "hmp"
+
+	// Socket using a richer json-based protocol.
+	Qmp MonitorProtocol = "qmp"
+
+	// Same as Qmp with pretty json formatting.
+	QmpPretty MonitorProtocol = "qmp-pretty"
+)
+
+// QMPSocket represents a qemu QMP or HMP socket configuration.
 // nolint: govet
 type QMPSocket struct {
 	// Type is the socket type (e.g. "unix").
 	Type QMPSocketType
 
-	// Human Monitor Interface (HMP) (true for HMP, false for QMP, default false)
-	IsHmp bool
+	// Protocol is the protocol to be used on the socket.
+	Protocol MonitorProtocol
 
 	// QMP listener file descriptor to be passed to qemu
 	FD *os.File
@@ -2501,6 +2515,10 @@ func (qmp QMPSocket) Valid() bool {
 	}
 
 	if qmp.Type != Unix {
+		return false
+	}
+
+	if qmp.Protocol != Hmp && qmp.Protocol != Qmp && qmp.Protocol != QmpPretty {
 		return false
 	}
 
@@ -2855,10 +2873,11 @@ func (config *Config) appendQMPSockets() {
 			}
 		}
 
-		if q.IsHmp {
+		switch q.Protocol {
+		case Hmp:
 			config.qemuParams = append(config.qemuParams, "-monitor")
-		} else {
-			config.qemuParams = append(config.qemuParams, "-qmp")
+		default:
+			config.qemuParams = append(config.qemuParams, fmt.Sprintf("-%s", q.Protocol))
 		}
 
 		config.qemuParams = append(config.qemuParams, strings.Join(qmpParams, ","))
