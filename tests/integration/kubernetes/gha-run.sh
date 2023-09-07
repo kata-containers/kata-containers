@@ -59,7 +59,7 @@ EOF
 
 	# We're not using this with baremetal machines, so we're fine on cutting
 	# corners here and just append this to the configuration file.
-	cat<<EOF | sudo tee ${containerd_config_file}
+	cat<<EOF | sudo tee -a ${containerd_config_file}
 [plugins."io.containerd.snapshotter.v1.devmapper"]
   pool_name = "contd-thin-pool"
   base_image_size = "4096MB"
@@ -71,6 +71,8 @@ EOF
 			sudo systemctl restart k3s ;;
 		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
 	esac
+
+	sudo cat ${containerd_config_file}
 }
 
 function configure_snapshotter() {
