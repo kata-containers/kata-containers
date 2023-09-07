@@ -113,8 +113,12 @@ check_vfio() {
 	# There should be two devices in the IOMMU group: the ethernet
 	# device we care about, plus the PCIe to PCI bridge device
 	devs="$(get_ctr_cmd_output "${cid}" ls /sys/kernel/iommu_groups/"${group}"/devices)"
-	if [ $(echo "${devs}" | wc -w) != "2" ] ; then
+	num_devices=$(echo "${devs}" | wc -w)
+	if [ "${HYPERVISOR}" = "qemu" ] && [ "${num_devices}" != "2" ] ; then
 	    die "Expected exactly two devices got: ${devs}"
+	fi
+	if [ "${HYPERVISOR}" = "clh" ] && [ "${num_devices}" != "1" ] ; then
+	    die "Expected exactly one device got: ${devs}"
 	fi
 
 	# The bridge device will always sort first, because it is on
