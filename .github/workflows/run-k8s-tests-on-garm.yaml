@@ -47,10 +47,10 @@ jobs:
           ref: ${{ inputs.commit-hash }}
 
       - name: Deploy ${{ matrix.k8s }}
-        run: bash tests/integrations/kubernetes/gha-run.sh deploy-k8s
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-k8s
 
       - name: Configure the ${{ matrix.snapshotter }} snapshotter
-        run: bash tests/integrtion/kubernetes/gha-run.sh configure-snapshotter
+        run: bash tests/integration/kubernetes/gha-run.sh configure-snapshotter
 
       - name: Deploy Kata
         timeout-minutes: 10
