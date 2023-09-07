@@ -326,6 +326,8 @@ const (
 	// IsFileBlockDevice indicates that the annotated filesystem is mounted on a block device
 	// backed by a host file.
 	IsFileBlockDevice = kataAnnotFsOptPrefix + "block_device=file"
+
+	DriveFormat = kataAnnotFsOptPrefix + "format="
 )
 
 const (

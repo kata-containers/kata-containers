@@ -467,7 +467,7 @@ func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container)
 	}
 	rootfsGuestPath := filepath.Join(kataGuestSharedDir(), c.id, c.rootfsSuffix)
 
-	if HasOptionPrefix(c.rootFs.Options, annotations.FileSystemLayer) {
+	if _, found := GetOptionPrefix(c.rootFs.Options, annotations.FileSystemLayer); found {
 		path := filepath.Join("/run/kata-containers", c.id, "rootfs")
 		return &SharedFile{
 			storage: &grpc.Storage{
