@@ -209,12 +209,12 @@ create_config_iso() {
 
 pull_fedora_cloud_image() {
 	fedora_img="$1"
-	fedora_version=37
+	fedora_version=38
 	# Add a version to the image cache, otherwise the tests are going to 
 	# use always the same image without rebuilding it, regardless the version
 	# set in fedora_version
 	fedora_img_cache="${fedora_img}.cache.${fedora_version}"
-	fedora_img_url="https://download.fedoraproject.org/pub/fedora/linux/releases/${fedora_version}/Cloud/${arch}/images/Fedora-Cloud-Base-${fedora_version}-1.7.${arch}.raw.xz"
+	fedora_img_url="https://download.fedoraproject.org/pub/fedora/linux/releases/${fedora_version}/Cloud/${arch}/images/Fedora-Cloud-Base-${fedora_version}-1.6.${arch}.raw.xz"
 
 	if [ ! -f "${fedora_img_cache}" ]; then
 		curl -sL ${fedora_img_url} -o "${fedora_img_cache}.xz"
