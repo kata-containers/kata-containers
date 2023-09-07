@@ -17,6 +17,7 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/govmm"
+	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
 	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 
@@ -574,7 +575,7 @@ type HypervisorConfig struct {
 	EnableIOThreads bool
 
 	// Debug changes the default hypervisor and kernel parameters to
-	// enable debug output where available. And Debug also enable the hmp socket.
+	// enable debug output where available.
 	Debug bool
 
 	// MemPrealloc specifies if the memory should be pre-allocated
@@ -640,6 +641,9 @@ type HypervisorConfig struct {
 
 	// Use legacy serial for the guest console
 	LegacySerial bool
+
+	// ExtraMonitorSocket allows to add an extra HMP or QMP socket when the VMM is Qemu
+	ExtraMonitorSocket govmmQemu.MonitorProtocol
 }
 
 // vcpu mapping from vcpu number to thread number

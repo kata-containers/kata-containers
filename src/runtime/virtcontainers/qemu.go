@@ -119,11 +119,11 @@ type qemu struct {
 }
 
 const (
-	consoleSocket = "console.sock"
-	qmpSocket     = "qmp.sock"
-	hmpSocket     = "hmp.sock"
-	vhostFSSocket = "vhost-fs.sock"
-	nydusdAPISock = "nydusd-api.sock"
+	consoleSocket      = "console.sock"
+	qmpSocket          = "qmp.sock"
+	extraMonitorSocket = "extra-monitor.sock"
+	vhostFSSocket      = "vhost-fs.sock"
+	nydusdAPISock      = "nydusd-api.sock"
 
 	// memory dump format will be set to elf
 	memoryDumpFormat = "elf"
@@ -329,8 +329,8 @@ func (q *qemu) qmpSocketPath(id string) (string, error) {
 	return utils.BuildSocketPath(q.config.VMStorePath, id, qmpSocket)
 }
 
-func (q *qemu) hmpSocketPath(id string) (string, error) {
-	return utils.BuildSocketPath(q.config.VMStorePath, id, hmpSocket)
+func (q *qemu) extraMonitorSocketPath(id string) (string, error) {
+	return utils.BuildSocketPath(q.config.VMStorePath, id, extraMonitorSocket)
 }
 
 func (q *qemu) getQemuMachine() (govmmQemu.Machine, error) {
@@ -377,24 +377,31 @@ func (q *qemu) createQmpSocket() ([]govmmQemu.QMPSocket, error) {
 	var sockets []govmmQemu.QMPSocket
 
 	sockets = append(sockets, govmmQemu.QMPSocket{
-		Type:   "unix",
-		Server: true,
-		NoWait: true,
+		Type:     "unix",
+		Protocol: govmmQemu.Qmp,
+		Server:   true,
+		NoWait:   true,
 	})
 
-	if q.HypervisorConfig().Debug {
-		humanMonitorSockPath, err := q.hmpSocketPath(q.id)
+	// The extra monitor socket allows an external user to take full
+	// control on Qemu and silently break the VM in all possible ways.
+	// It should only ever be used for debugging purposes, hence the
+	// check on Debug.
+	if q.HypervisorConfig().Debug && q.config.ExtraMonitorSocket != "" {
+		extraMonitorSockPath, err := q.extraMonitorSocketPath(q.id)
 		if err != nil {
 			return nil, err
 		}
 
 		sockets = append(sockets, govmmQemu.QMPSocket{
-			Type:   "unix",
-			IsHmp:  true,
-			Name:   humanMonitorSockPath,
-			Server: true,
-			NoWait: true,
+			Type:     "unix",
+			Protocol: q.config.ExtraMonitorSocket,
+			Name:     extraMonitorSockPath,
+			Server:   true,
+			NoWait:   true,
 		})
+
+		q.Logger().Warn("QEMU configured to start with an untrusted monitor")
 	}
 
 	return sockets, nil
