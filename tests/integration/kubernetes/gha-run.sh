@@ -72,6 +72,7 @@ EOF
 		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
 	esac
 
+	sleep 60s
 	sudo cat ${containerd_config_file}
 }
 
