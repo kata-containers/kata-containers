@@ -96,7 +96,6 @@ const (
 
 const (
 	// Define the string key for DriverOptions in DeviceInfo struct
-	FsTypeOpt      = "fstype"
 	BlockDriverOpt = "block-driver"
 
 	VhostUserReconnectTimeOutOpt = "vhost-user-reconnect-timeout"

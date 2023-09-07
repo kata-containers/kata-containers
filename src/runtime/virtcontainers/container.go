@@ -691,10 +691,15 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 				ReadOnly:      c.mounts[i].ReadOnly,
 			}
 			// Check whether source can be used as a pmem device
-		} else if di, err = config.PmemDeviceInfo(c.mounts[i].Source, c.mounts[i].Destination); err != nil {
+		} else {
+			var fstype string
+			if di, fstype, err = config.PmemDeviceInfo(c.mounts[i].Source, c.mounts[i].Destination); err != nil {
 			c.Logger().WithError(err).
 				WithField("mount-source", c.mounts[i].Source).
 				Debug("no loop device")
+			} else {
+				c.mounts[i].Type = fstype
+			}
 		}
 
 		if err == nil && di != nil {
