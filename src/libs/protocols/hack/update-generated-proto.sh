@@ -47,8 +47,15 @@ show_usage() {
 }
 
 generate_go_sources() {
-    local cmd="protoc -I$GOPATH/src:$GOPATH/src/github.com/kata-containers/kata-containers/src/libs/protocols/protos \
---gogottrpc_out=plugins=ttrpc+fieldpath,\
+    local proto_file="$1"
+    local dir_path="${proto_file%/*}"
+    local file_name="${proto_file##*/}"
+
+    [ "$dir_path" == "$proto_file" ] && dir_path="."
+
+    local root_path=$(realpath ../)/libs/protocols/protos
+    local cmd="protoc -I$GOPATH/src:${root_path} \
+--gogottrpc_out=plugins=ttrpc+fieldpath,paths=source_relative,\
 import_path=github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc,\
 Mgogoproto/gogo.proto=github.com/gogo/protobuf/gogoproto,\
 Mgoogle/protobuf/any.proto=github.com/gogo/protobuf/types,\
@@ -59,8 +66,8 @@ Mgoogle/protobuf/field_mask.proto=github.com/gogo/protobuf/types,\
 Mgoogle/protobuf/timestamp.proto=github.com/gogo/protobuf/types,\
 Mgoogle/protobuf/wrappers.proto=github.com/gogo/protobuf/types,\
 Mgoogle/rpc/status.proto=github.com/gogo/googleapis/google/rpc\
-:$GOPATH/src \
-$GOPATH/src/github.com/kata-containers/kata-containers/src/libs/protocols/protos/$1"
+:$(realpath ../)/runtime/virtcontainers/pkg/agent/protocols/$dir_path \
+${root_path}/$file_name"
 
     echo $cmd
     $cmd
@@ -72,7 +79,7 @@ if [ "$(basename $(pwd))" != "agent" ]; then
 fi
 
 # Protocol buffer files required to generate golang/rust bindings.
-proto_files_list=(agent.proto csi.proto health.proto oci.proto types.proto)
+proto_files_list=(grpc/agent.proto grpc/csi.proto grpc/health.proto grpc/oci.proto types.proto)
 
 if [ "$1" = "" ]; then
     show_usage "${proto_files_list[@]}"
