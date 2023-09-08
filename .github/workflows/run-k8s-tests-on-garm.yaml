@@ -55,6 +55,9 @@ jobs:
       - name: Deploy Kata
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-tdx
+
+      - name: Install `bats`
+        run: bash tests/integration/kubernetes/gha-run.sh install-bats
   
       - name: Run tests
         timeout-minutes: 30
