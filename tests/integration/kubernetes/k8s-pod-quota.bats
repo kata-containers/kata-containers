@@ -8,6 +8,8 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
+	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: https://github.com/kata-containers/kata-containers/issues/7873"
+
 	get_pod_config_dir
 }
 
@@ -31,6 +33,12 @@ setup() {
 }
 
 teardown() {
+	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: https://github.com/kata-containers/kata-containers/issues/7873"
+
+	# Debugging information
+	kubectl describe deployment ${deployment_name}
+
+	# Clean-up
 	kubectl delete -f "${pod_config_dir}/pod-quota-deployment.yaml"
 	kubectl delete -f "${pod_config_dir}/resource-quota.yaml"
 }
