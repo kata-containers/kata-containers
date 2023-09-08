@@ -54,7 +54,7 @@ jobs:
 
       - name: Deploy Kata
         timeout-minutes: 10
-        run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-tdx
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-garm
 
       - name: Install `bats`
         run: bash tests/integration/kubernetes/gha-run.sh install-bats
@@ -65,4 +65,4 @@ jobs:
   
       - name: Delete kata-deploy
         if: always()
-        run: bash tests/integration/kubernetes/gha-run.sh cleanup-tdx
+        run: bash tests/integration/kubernetes/gha-run.sh cleanup-garm
