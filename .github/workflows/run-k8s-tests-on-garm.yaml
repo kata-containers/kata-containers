@@ -31,7 +31,7 @@ jobs:
           - devmapper
         k8s:
           - k3s
-    runs-on: garm-ubuntu-2204
+    runs-on: garm-ubuntu-2004
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
@@ -54,7 +54,10 @@ jobs:
 
       - name: Deploy Kata
         timeout-minutes: 10
-        run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-tdx
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-garm
+
+      - name: Install `bats`
+        run: bash tests/integration/kubernetes/gha-run.sh install-bats
   
       - name: Run tests
         timeout-minutes: 30
@@ -62,4 +65,4 @@ jobs:
   
       - name: Delete kata-deploy
         if: always()
-        run: bash tests/integration/kubernetes/gha-run.sh cleanup-tdx
+        run: bash tests/integration/kubernetes/gha-run.sh cleanup-garm

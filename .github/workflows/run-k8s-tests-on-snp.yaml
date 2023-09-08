@@ -33,6 +33,7 @@ jobs:
       PR_NUMBER: ${{ inputs.pr-number }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
       KUBECONFIG: /home/kata/.kube/config
+      KUBERNETES: "vanilla"
       USING_NFD: "false"
     steps:
       - uses: actions/checkout@v3

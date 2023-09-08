@@ -59,7 +59,7 @@ EOF
 
 	# We're not using this with baremetal machines, so we're fine on cutting
 	# corners here and just append this to the configuration file.
-	cat<<EOF | sudo tee ${containerd_config_file}
+	cat<<EOF | sudo tee -a ${containerd_config_file}
 [plugins."io.containerd.snapshotter.v1.devmapper"]
   pool_name = "contd-thin-pool"
   base_image_size = "4096MB"
@@ -71,6 +71,9 @@ EOF
 			sudo systemctl restart k3s ;;
 		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
 	esac
+
+	sleep 60s
+	sudo cat ${containerd_config_file}
 }
 
 function configure_snapshotter() {
@@ -115,7 +118,7 @@ function deploy_kata() {
     echo "::endgroup::"
 
     kubectl apply -f "${tools_dir}/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
-    if [ "${platform}" = "tdx" ]; then
+    if [ "${KUBERNETES}" = "k3s" ]; then
         kubectl apply -k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k3s"
     else
         kubectl apply -f "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
@@ -141,10 +144,31 @@ function deploy_kata() {
 }
 
 function deploy_k3s() {
-	curl -sfL https://get.k3s.io | sh -
+	curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644
 
 	# This is an arbitrary value that came up from local tests
-	wait 240s
+	sleep 120s
+
+	# Download the kubectl binary into /usr/bin and remove /usr/local/bin/kubectl
+	#
+	# We need to do this to avoid hitting issues like:
+	# ```sh
+	# error: open /etc/rancher/k3s/k3s.yaml.lock: permission denied
+	# ```
+	# Which happens basically because k3s links `/usr/local/bin/kubectl`
+	# to `/usr/local/bin/k3s`, and that does extra stuff that vanilla
+	# `kubectl` doesn't do.
+	ARCH=$(uname -m)
+	if [ "${ARCH}" = "x86_64" ]; then
+		ARCH=amd64
+	fi
+	kubectl_version=$(/usr/local/bin/k3s kubectl version --short 2>/dev/null | grep "Client Version" | sed -e 's/Client Version: //' -e 's/\+k3s1//')
+	sudo curl -fL --progress-bar -o /usr/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/${kubectl_version}/bin/linux/${ARCH}/kubectl
+	sudo chmod +x /usr/bin/kubectl
+	sudo rm -rf /usr/local/bin/kubectl
+
+	mkdir -p ~/.kube
+	cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
 }
 
 function deploy_k8s() {
@@ -189,7 +213,7 @@ function cleanup() {
     kubectl config set-context --current --namespace=default
     kubectl delete namespace kata-containers-k8s-tests
 
-    if [ "${platform}" = "tdx" ]; then
+    if [ "${KUBERNETES}" = "k3s" ]; then
         deploy_spec="-k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k3s""
         cleanup_spec="-k "${tools_dir}/packaging/kata-deploy/kata-cleanup/overlays/k3s""
     else
@@ -237,6 +261,7 @@ function main() {
         deploy-kata-sev) deploy_kata "sev" ;;
         deploy-kata-snp) deploy_kata "snp" ;;
         deploy-kata-tdx) deploy_kata "tdx" ;;
+        deploy-kata-garm) deploy_kata "garm" ;;
         run-tests) run_tests ;;
         cleanup-sev) cleanup "sev" ;;
         cleanup-snp) cleanup "snp" ;;
