@@ -16,8 +16,6 @@ setup() {
 }
 
 @test "Credentials using secrets" {
-	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
-
 	secret_name="test-secret"
 	pod_name="secret-test-pod"
 	second_pod_name="secret-envars-test-pod"
