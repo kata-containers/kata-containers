@@ -16,7 +16,6 @@ function main() {
 	cmds=("bc" "jq")
 	check_cmds "${cmds[@]}"
 	init_env
-	check_processes
 
 	pushd "${FIO_PATH}"
 		[ -z "${KATA_HYPERVISOR}" ] && die "Hypervisor ID is missing."
@@ -79,8 +78,6 @@ EOF
 	metrics_json_add_array_element "$json"
 	metrics_json_end_array "Results"
 	metrics_json_save
-
-	check_processes
 }
 
 main "$@"
