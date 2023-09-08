@@ -16,8 +16,6 @@ setup() {
 }
 
 @test "Projected volume" {
-	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
-
 	password="1f2d1e2e67df"
 	username="admin"
 	pod_name="test-projected-volume"

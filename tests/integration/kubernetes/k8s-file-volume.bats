@@ -21,7 +21,6 @@ setup() {
 }
 
 @test "Test readonly volume for pods" {
-	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
 	# Write test body to temp file
 	exec_host "echo "$file_body" > $tmp_file"
 
