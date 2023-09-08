@@ -515,7 +515,7 @@ func cmdToKataProcess(cmd types.Cmd) (process *grpc.Process, err error) {
 
 	process = &grpc.Process{
 		Terminal: cmd.Interactive,
-		User: grpc.User{
+		User: &grpc.User{
 			UID:            uid,
 			GID:            gid,
 			AdditionalGids: extraGids,
@@ -1003,7 +1003,7 @@ func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, dis
 	// Every other namespaces's paths have to be emptied. This way, there
 	// is no confusion from the agent, trying to find an existing namespace
 	// on the guest.
-	var tmpNamespaces []grpc.LinuxNamespace
+	var tmpNamespaces []*grpc.LinuxNamespace
 	for _, ns := range grpcSpec.Linux.Namespaces {
 		switch ns.Type {
 		case string(specs.CgroupNamespace):
@@ -1020,7 +1020,7 @@ func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, dis
 		// (because the VM device driver will do something
 		// with it rather than just presenting it to the
 		// container unmodified)
-		var linuxDevices []grpc.LinuxDevice
+		var linuxDevices []*grpc.LinuxDevice
 		for _, dev := range grpcSpec.Linux.Devices {
 			if dev.Type == "c" && strings.HasPrefix(dev.Path, vfioPath) {
 				k.Logger().WithField("vfio-dev", dev.Path).Debug("removing vfio device from grpcSpec")
