@@ -40,6 +40,7 @@ jobs:
       GH_PR_NUMBER: ${{ inputs.pr-number }}
       KATA_HOST_OS: ${{ matrix.host_os }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
+      KUBERNETES: "vanilla"
       USING_NFD: "false"
     steps:
       - uses: actions/checkout@v3
