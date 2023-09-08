@@ -261,6 +261,7 @@ function main() {
         deploy-kata-sev) deploy_kata "sev" ;;
         deploy-kata-snp) deploy_kata "snp" ;;
         deploy-kata-tdx) deploy_kata "tdx" ;;
+        deploy-kata-garm) deploy_kata "garm" ;;
         run-tests) run_tests ;;
         cleanup-sev) cleanup "sev" ;;
         cleanup-snp) cleanup "snp" ;;
