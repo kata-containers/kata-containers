@@ -11,6 +11,7 @@ TEST_INITRD="${TEST_INITRD:-no}"
 
 setup() {
 	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
+	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 	pod_name="test-file-volume"
 	container_name="busybox-file-volume-container"
 	tmp_file=$(exec_host mktemp /tmp/file-volume-test-foo.XXXXX)
@@ -41,6 +42,7 @@ setup() {
 
 teardown() {
 	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
+	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 	kubectl delete pod "$pod_name"
 	exec_host rm -f $tmp_file
 	rm -f ${pod_config_dir}/test-pod-file-volume.yaml.yaml
