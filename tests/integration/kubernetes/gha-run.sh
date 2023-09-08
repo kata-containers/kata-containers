@@ -118,7 +118,7 @@ function deploy_kata() {
     echo "::endgroup::"
 
     kubectl apply -f "${tools_dir}/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
-    if [ "${platform}" = "tdx" ]; then
+    if [ "${KUBERNETES}" = "k3s" ]; then
         kubectl apply -k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k3s"
     else
         kubectl apply -f "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
@@ -213,7 +213,7 @@ function cleanup() {
     kubectl config set-context --current --namespace=default
     kubectl delete namespace kata-containers-k8s-tests
 
-    if [ "${platform}" = "tdx" ]; then
+    if [ "${KUBERNETES}" = "k3s" ]; then
         deploy_spec="-k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k3s""
         cleanup_spec="-k "${tools_dir}/packaging/kata-deploy/kata-cleanup/overlays/k3s""
     else
