@@ -1712,10 +1712,6 @@ func checkPCIeConfig(coldPlug config.PCIePort, hotPlug config.PCIePort, machineT
 	if hotPlug != config.NoPort {
 		port = hotPlug
 	}
-	if port == config.NoPort {
-		return fmt.Errorf("invalid vfio_port=%s setting, use on of %s, %s, %s",
-			port, config.BridgePort, config.RootPort, config.SwitchPort)
-	}
 	if port == config.BridgePort || port == config.RootPort || port == config.SwitchPort {
 		return nil
 	}
