@@ -1668,7 +1668,7 @@ func (k *kataAgent) handleBlkOCIMounts(c *Container, spec *specs.Spec) ([]*grpc.
 			}).Debug("Replacing OCI mount source")
 			spec.Mounts[idx].Source = path
 
-			if isLoopMount(spec.Mounts[idx].Options) {
+			if IsLoopMount(spec.Mounts[idx].Options) {
 				mountOptions := []string{"bind"}
 
 				for _, opt := range spec.Mounts[idx].Options {

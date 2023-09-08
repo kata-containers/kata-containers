@@ -295,8 +295,14 @@ func checkAndMount(s *service, r *taskAPI.CreateTaskRequest) (bool, error) {
 		m := r.Rootfs[0]
 
 		// Plug the block backed rootfs directly instead of mounting it.
-		if katautils.IsBlockDevice(m.Source) && !s.config.HypervisorConfig.DisableBlockDeviceUse {
-			return false, nil
+		if !s.config.HypervisorConfig.DisableBlockDeviceUse {
+			if katautils.IsBlockDevice(m.Source) {
+				return false, nil
+			}
+
+			if virtcontainers.IsLoopMount(m.Options) {
+				return false, nil
+			}
 		}
 
 		if _, found := virtcontainers.GetOptionPrefix(m.Options, annotations.FileSystemLayer); found {

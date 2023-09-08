@@ -60,6 +60,7 @@ func sandboxDevices() []specs.LinuxDeviceCgroup {
 		"/dev/zero",
 		"/dev/urandom",
 		"/dev/console",
+		"/dev/loop-control",
 	}
 
 	// Processes running in a device-cgroup are constrained, they have acccess
@@ -88,6 +89,7 @@ func sandboxDevices() []specs.LinuxDeviceCgroup {
 	wildcardMajor := int64(-1)
 	wildcardMinor := int64(-1)
 	ptsMajor := int64(136)
+	loopMajor := int64(7)
 	tunMajor := int64(10)
 	tunMinor := int64(200)
 
@@ -122,6 +124,14 @@ func sandboxDevices() []specs.LinuxDeviceCgroup {
 			Major:  &tunMajor,
 			Minor:  &tunMinor,
 			Access: "rwm",
+		},
+		// loop devices
+		{
+			Allow:  true,
+			Type:   "b",
+			Major:  &loopMajor,
+			Minor:  &wildcardMinor,
+			Access: "rw",
 		},
 	}
 

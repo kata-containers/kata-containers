@@ -195,7 +195,7 @@ func bindUnmountAllRootfs(ctx context.Context, sharedDir string, sandbox *Sandbo
 	return errors.ErrorOrNil()
 }
 
-func isLoopMount(options []string) bool {
+func IsLoopMount(options []string) bool {
 	// a loop device can be associated with a regular file
 	// or another block device, this means a file
 	// block device annotation is a subset of the more general

@@ -528,8 +528,23 @@ func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container)
 		rootfsStorage.MountPoint = filepath.Join(kataGuestSharedDir(), c.id)
 		rootfsStorage.Fstype = c.state.Fstype
 
-		if c.state.Fstype == "xfs" {
-			rootfsStorage.Options = []string{"nouuid"}
+		rootfsStorage.Options = []string{}
+		needNoUuid := c.state.Fstype == "xfs"
+
+		for _, opt := range c.rootFs.Options {
+			if opt == "loop" {
+				continue
+			}
+
+			if needNoUuid && opt == "nouuid" {
+				needNoUuid = false
+			}
+
+			rootfsStorage.Options = append(rootfsStorage.Options, opt)
+		}
+
+		if needNoUuid {
+			rootfsStorage.Options = append(rootfsStorage.Options, "nouuid")
 		}
 
 		// Ensure container mount destination exists
@@ -566,7 +581,7 @@ func (f *FilesystemShare) UnshareRootFilesystem(ctx context.Context, c *Containe
 		if err2 := nydusContainerCleanup(ctx, getMountPath(c.sandbox.id), c); err2 != nil {
 			f.Logger().WithError(err2).Error("rollback failed nydusContainerCleanup")
 		}
-	} else {
+	} else if c.state.Fstype == "" || c.state.BlockDeviceID == "" {
 		if err := bindUnmountContainerRootfs(ctx, getMountPath(f.sandbox.ID()), c.id); err != nil {
 			return err
 		}
