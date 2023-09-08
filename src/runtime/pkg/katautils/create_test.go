@@ -18,8 +18,10 @@ import (
 	"syscall"
 	"testing"
 
+	config "github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/vcmock"
@@ -418,4 +420,33 @@ func TestCreateContainer(t *testing.T) {
 		_, err = CreateContainer(context.Background(), mockSandbox, spec, rootFs, testContainerID, bundlePath, disableOutput, false)
 		assert.NoError(err)
 	}
+}
+
+func TestVfioChecksClh(t *testing.T) {
+	assert := assert.New(t)
+
+	// Check valid CLH vfio configs
+	f := func(coldPlug, hotPlug config.PCIePort) error {
+		return checkPCIeConfig(coldPlug, hotPlug, defaultMachineType, virtcontainers.ClhHypervisor)
+	}
+	assert.NoError(f(config.NoPort, config.NoPort))
+	assert.NoError(f(config.NoPort, config.RootPort))
+	assert.Error(f(config.RootPort, config.RootPort))
+	assert.Error(f(config.RootPort, config.NoPort))
+	assert.Error(f(config.NoPort, config.SwitchPort))
+}
+
+func TestVfioCheckQemu(t *testing.T) {
+	assert := assert.New(t)
+
+	// Check valid Qemu vfio configs
+	f := func(coldPlug, hotPlug config.PCIePort) error {
+		return checkPCIeConfig(coldPlug, hotPlug, defaultMachineType, virtcontainers.QemuHypervisor)
+	}
+
+	assert.NoError(f(config.NoPort, config.NoPort))
+	assert.NoError(f(config.RootPort, config.NoPort))
+	assert.NoError(f(config.NoPort, config.RootPort))
+	assert.Error(f(config.RootPort, config.RootPort))
+	assert.Error(f(config.SwitchPort, config.RootPort))
 }
