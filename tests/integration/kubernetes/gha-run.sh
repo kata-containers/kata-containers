@@ -254,6 +254,7 @@ function main() {
         cleanup-sev) cleanup "sev" ;;
         cleanup-snp) cleanup "snp" ;;
         cleanup-tdx) cleanup "tdx" ;;
+        cleanup-garm) cleanup "garm" ;;
         delete-cluster) cleanup "aks" ;;
         *) >&2 echo "Invalid argument"; exit 2 ;;
     esac
