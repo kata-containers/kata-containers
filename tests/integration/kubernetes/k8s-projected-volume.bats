@@ -10,13 +10,12 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
 	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
+	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 
 	get_pod_config_dir
 }
 
 @test "Projected volume" {
-	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
-
 	password="1f2d1e2e67df"
 	username="admin"
 	pod_name="test-projected-volume"
@@ -53,6 +52,7 @@ setup() {
 
 teardown() {
 	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
+	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 
 	# Debugging information
 	kubectl describe "pod/$pod_name"
