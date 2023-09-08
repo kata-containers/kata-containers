@@ -11,6 +11,7 @@ TEST_INITRD="${TEST_INITRD:-no}"
 
 setup() {
 	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
+	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 
 	get_pod_config_dir
 
@@ -55,6 +56,7 @@ setup() {
 
 teardown() {
 	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
+	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 
 	# Debugging information
 	kubectl describe "pod/$pod_name"
