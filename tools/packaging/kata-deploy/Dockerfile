@@ -19,7 +19,8 @@ RUN \
 	chmod +x /usr/bin/kubectl && \
 	mkdir -p ${DESTINATION} && \
 	tar xvf ${WORKDIR}/${KATA_ARTIFACTS} -C ${DESTINATION} && \
-	rm -f ${WORKDIR}/${KATA_ARTIFACTS}
+	rm -f ${WORKDIR}/${KATA_ARTIFACTS} && \
+	apk del curl
 
 COPY scripts ${DESTINATION}/scripts
 COPY runtimeclasses ${DESTINATION}/runtimeclasses
