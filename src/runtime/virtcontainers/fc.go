@@ -699,7 +699,7 @@ func (fc *firecracker) fcInitConfiguration(ctx context.Context) error {
 		return err
 	}
 
-	params, err := GetKernelRootParams(fc.config.RootfsType, true, false)
+	params, err := GetKernelRootParams(fc.config.RootfsType, true, false, fc.config.KernelParams)
 	if err != nil {
 		return err
 	}
@@ -714,7 +714,7 @@ func (fc *firecracker) fcInitConfiguration(ctx context.Context) error {
 		}...)
 	}
 
-	kernelParams := append(fc.config.KernelParams, fcKernelParams...)
+	kernelParams := appendConfigFileParams(fcKernelParams, fc.config.KernelParams)
 	strParams := SerializeParams(kernelParams, "=")
 	formattedParams := strings.Join(strParams, " ")
 	if err := fc.fcSetBootSource(ctx, kernelPath, formattedParams); err != nil {

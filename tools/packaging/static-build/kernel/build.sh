@@ -22,11 +22,18 @@ DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}
 container_image="${KERNEL_CONTAINER_BUILDER:-$(get_kernel_image_name)}"
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
+DM_VERITY_FORMAT=${DM_VERITY_FORMAT:-veritysetup}
 kernel_builder_args="-a ${ARCH} $*"
 
 if [ "${MEASURED_ROOTFS}" == "yes" ]; then
-	info "build initramfs for cc kernel"
-	"${initramfs_builder}"
+	if [ "${DM_VERITY_FORMAT}" == "veritysetup" ]; then
+		info "build initramfs for cc kernel"
+		"${initramfs_builder}"
+		kernel_builder_args+=" -V veritysetup"
+	else
+		kernel_builder_args+=" -V kernelinit"
+	fi
+
 	# Turn on the flag to build the kernel with support to
 	# measured rootfs.
 	kernel_builder_args+=" -m"

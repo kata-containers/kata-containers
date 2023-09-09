@@ -39,6 +39,7 @@ readonly se_image_builder="${repo_root_dir}/tools/packaging/guest-image/build_se
 
 ARCH=${ARCH:-$(uname -m)}
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
+DM_VERITY_FORMAT=${DM_VERITY_FORMAT:-veritysetup}
 USE_CACHE="${USE_CACHE:-"yes"}"
 ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY:-ghcr.io}"
 ARTEFACT_REGISTRY_USERNAME="${ARTEFACT_REGISTRY_USERNAME:-}"
@@ -199,6 +200,8 @@ install_image() {
 #Install guest image for tdx
 install_image_tdx() {
 	export AGENT_POLICY=yes
+	export DM_VERITY_FORMAT="${DM_VERITY_FORMAT}"
+
 	install_image "tdx"
 }
 
@@ -374,6 +377,7 @@ install_kernel_tdx_experimental() {
 	local kernel_url="$(get_from_kata_deps assets.kernel-tdx-experimental.url)"
 
 	export MEASURED_ROOTFS=yes
+	export DM_VERITY_FORMAT="${DM_VERITY_FORMAT}"
 
 	install_kernel_helper \
 		"assets.kernel-tdx-experimental.version" \

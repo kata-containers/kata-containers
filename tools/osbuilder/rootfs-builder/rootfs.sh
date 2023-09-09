@@ -17,6 +17,7 @@ RUST_VERSION="null"
 AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
+DM_VERITY_FORMAT=${DM_VERITY_FORMAT:-veritysetup}
 KERNEL_MODULES_DIR=${KERNEL_MODULES_DIR:-""}
 OSBUILDER_VERSION="unknown"
 DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
@@ -330,6 +331,8 @@ check_env_variables()
 	[ -n "${KERNEL_MODULES_DIR}" ] && [ ! -d "${KERNEL_MODULES_DIR}" ] && die "KERNEL_MODULES_DIR defined but is not an existing directory"
 
 	[ -n "${OSBUILDER_VERSION}" ] || die "need osbuilder version"
+
+	[ "$DM_VERITY_FORMAT" == "veritysetup" -o "$DM_VERITY_FORMAT" == "kernelinit" ] || die "DM_VERITY_FORMAT($DM_VERITY_FORMAT) is invalid (must be veritysetup or kernelinit)"
 }
 
 # Builds a rootfs based on the distro name provided as argument
@@ -458,6 +461,7 @@ build_rootfs_distro()
 			--env ARCH="${ARCH}" \
 			--env CI="${CI}" \
 			--env MEASURED_ROOTFS="${MEASURED_ROOTFS}" \
+			--env DM_VERITY_FORMAT="${DM_VERITY_FORMAT}" \
 			--env KERNEL_MODULES_DIR="${KERNEL_MODULES_DIR}" \
 			--env LIBC="${LIBC}" \
 			--env EXTRA_PKGS="${EXTRA_PKGS}" \

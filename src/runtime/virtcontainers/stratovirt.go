@@ -337,7 +337,7 @@ func (s *stratovirt) getKernelParams(machineType string, initrdPath string) (str
 	var kernelParams []Param
 
 	if initrdPath == "" {
-		params, err := GetKernelRootParams(s.config.RootfsType, true, false)
+		params, err := GetKernelRootParams(s.config.RootfsType, true, false, s.config.KernelParams)
 		if err != nil {
 			return "", err
 		}
