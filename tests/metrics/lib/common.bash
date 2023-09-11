@@ -168,6 +168,8 @@ function init_env()
 
 	cmd=("docker" "ctr")
 
+	sudo systemctl restart docker
+
 	# check dependencies
 	check_cmds "${cmd[@]}"
 
