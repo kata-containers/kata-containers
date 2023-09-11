@@ -239,7 +239,7 @@ mod tests {
         assert!(res.is_ok());
     }
 
-    #[cfg(any(target_arch = "x86_64"))]
+    #[cfg(target_arch = "x86_64")]
     #[test]
     fn get_generic_cpu_details_system() {
         let res = get_generic_cpu_details(crate::check::PROC_CPUINFO);
