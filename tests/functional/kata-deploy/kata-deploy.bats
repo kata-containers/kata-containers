@@ -48,7 +48,7 @@ setup() {
 	echo "::endgroup::"
 	
 	kubectl apply -f "${repo_root_dir}/tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
-	if [ "${platform}" = "tdx" ]; then
+	if [ "${KUBERNETES}" = "k3s" ]; then
 		kubectl apply -k "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/overlays/k3s"
 	else
 		kubectl apply -f "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
@@ -74,7 +74,7 @@ setup() {
 teardown() {
 	kubectl get runtimeclasses -o name | grep -v "kata-mshv-vm-isolation"
 
-	if [ "${platform}" = "tdx" ]; then
+	if [ "${KUBERNETES}" = "k3s" ]; then
 		deploy_spec="-k "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/overlays/k3s""
 		cleanup_spec="-k "${repo_root_dir}/tools/packaging/kata-deploy/kata-cleanup/overlays/k3s""
 	else
