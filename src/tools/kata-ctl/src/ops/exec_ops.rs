@@ -123,7 +123,7 @@ impl EpollContext {
     }
 
     fn do_process_handler(&mut self) -> Result<()> {
-        let mut events = vec![epoll::Event::new(epoll::Events::empty(), 0); EPOLL_EVENTS_LEN];
+        let mut events = [epoll::Event::new(epoll::Events::empty(), 0); EPOLL_EVENTS_LEN];
 
         let epoll_raw_fd = self.epoll_raw_fd;
         let debug_console_sock = self.debug_console_sock.as_mut().unwrap();
