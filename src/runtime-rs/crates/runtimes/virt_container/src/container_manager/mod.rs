@@ -14,7 +14,8 @@ pub use manager::VirtContainerManager;
 mod process;
 
 use common::types::ContainerProcess;
-
+use logging::{VMM_DRAGONBALL_LOGGER, AGENT_LOGGER, HYPERVISOR_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, VIRT_CONTAINER_LOGGER, SERVICE_LOGGER, SHIM_LOGGER};
+use slog::Logger;
 fn logger_with_process(container_process: &ContainerProcess) -> slog::Logger {
     sl!().new(o!("container_id" => container_process.container_id.container_id.clone(), "exec_id" => container_process.exec_id.clone()))
 }

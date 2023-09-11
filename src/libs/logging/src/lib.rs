@@ -3,13 +3,17 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+#[macro_use]
+extern crate lazy_static;
+use arc_swap::ArcSwap;
 use slog::{o, record_static, BorrowedKV, Drain, Key, OwnedKV, OwnedKVList, Record, KV};
+
 use std::collections::HashMap;
 use std::io;
 use std::io::Write;
 use std::process;
 use std::result;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 mod file_rotate;
 mod log_writer;
@@ -17,12 +21,49 @@ mod log_writer;
 pub use file_rotate::FileRotator;
 pub use log_writer::LogWriter;
 
+lazy_static! {
+    pub static ref AGENT_LOGGER: ArcSwap<slog::Logger> =
+        ArcSwap::from(Arc::new(slog::Logger::root(slog::Discard, o!())));
+    pub static ref HYPERVISOR_LOGGER: ArcSwap<slog::Logger> =
+        ArcSwap::from(Arc::new(slog::Logger::root(slog::Discard, o!())));
+    pub static ref RESOURCE_LOGGER: ArcSwap<slog::Logger> =
+        ArcSwap::from(Arc::new(slog::Logger::root(slog::Discard, o!())));
+    pub static ref RUNTIMES_LOGGER: ArcSwap<slog::Logger> =
+        ArcSwap::from(Arc::new(slog::Logger::root(slog::Discard, o!())));
+    pub static ref VIRT_CONTAINER_LOGGER: ArcSwap<slog::Logger> =
+        ArcSwap::from(Arc::new(slog::Logger::root(slog::Discard, o!())));
+    pub static ref SERVICE_LOGGER: ArcSwap<slog::Logger> =
+        ArcSwap::from(Arc::new(slog::Logger::root(slog::Discard, o!())));
+    pub static ref SHIM_LOGGER: ArcSwap<slog::Logger> =
+        ArcSwap::from(Arc::new(slog::Logger::root(slog::Discard, o!())));
+    
+    pub static ref VMM_LOGGER: ArcSwap<slog::Logger> =
+        ArcSwap::from(Arc::new(slog::Logger::root(slog::Discard, o!())));
+    pub static ref VMM_DRAGONBALL_LOGGER: ArcSwap<slog::Logger> =
+        ArcSwap::from(Arc::new(slog::Logger::root(slog::Discard, o!())));
+}
+
 #[macro_export]
 macro_rules! logger_with_subsystem {
     ($name: ident, $subsystem: expr) => {
         macro_rules! $name {
                             () => {
-                                    slog_scope::logger().new(slog::o!("subsystem" => $subsystem))
+                                match $subsystem {
+                                    // Loggers new()ed from slog_scope GLOBAL_LOGGER.
+                                    "agent" => Logger::clone(&AGENT_LOGGER.load()),
+                                    "hypervisor" => Logger::clone(&HYPERVISOR_LOGGER.load()),
+                                    "resource" => Logger::clone(&RESOURCE_LOGGER.load()),
+                                    "runtimes" => Logger::clone(&RUNTIMES_LOGGER.load()),
+                                    "virt-container" => Logger::clone(&VIRT_CONTAINER_LOGGER.load()),
+                                    "service" => Logger::clone(&SERVICE_LOGGER.load()),
+                                    "shim" => Logger::clone(&SHIM_LOGGER.load()),
+
+                                    // Loggers with their own root logger, different from slog_scope GLOBAL_LOGGER.
+                                    // Dragonball
+                                    "vmm-dragonball" => Logger::clone(&VMM_DRAGONBALL_LOGGER.load()),
+
+                                    _ => slog_scope::logger().new(slog::o!("subsystem" => $subsystem)),
+                                }
                             };
                         }
     };

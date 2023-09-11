@@ -15,7 +15,8 @@ use anyhow::{Context, Result};
 use nix::ioctl_write_ptr;
 
 use super::macros::{get_name, set_name};
-
+use logging::{VMM_DRAGONBALL_LOGGER, AGENT_LOGGER, HYPERVISOR_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, VIRT_CONTAINER_LOGGER, SERVICE_LOGGER, SHIM_LOGGER};
+use slog::Logger;
 type IfName = [u8; libc::IFNAMSIZ];
 
 #[derive(Copy, Clone, Debug)]

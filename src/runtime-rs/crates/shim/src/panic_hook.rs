@@ -7,7 +7,8 @@
 use std::{boxed::Box, fs::OpenOptions, io::Write, ops::Deref};
 
 use backtrace::Backtrace;
-
+use logging::{VMM_DRAGONBALL_LOGGER, AGENT_LOGGER, HYPERVISOR_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, VIRT_CONTAINER_LOGGER, SERVICE_LOGGER, SHIM_LOGGER};
+use slog::Logger;
 const KMESG_DEVICE: &str = "/dev/kmsg";
 
 // TODO: the Kata 1.x runtime had a SIGUSR1 handler that would log a formatted backtrace on

@@ -16,7 +16,8 @@ use std::{sync::Arc, vec::Vec};
 use tokio::sync::RwLock;
 
 use crate::share_fs::ShareFs;
-
+use logging::{VMM_DRAGONBALL_LOGGER, AGENT_LOGGER, HYPERVISOR_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, VIRT_CONTAINER_LOGGER, SERVICE_LOGGER, SHIM_LOGGER};
+use slog::Logger;
 use self::{block_rootfs::is_block_rootfs, nydus_rootfs::NYDUS_ROOTFS_TYPE};
 
 const ROOTFS: &str = "rootfs";

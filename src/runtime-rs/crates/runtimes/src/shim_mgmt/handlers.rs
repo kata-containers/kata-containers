@@ -15,7 +15,8 @@ use hyper::{Body, Method, Request, Response, StatusCode};
 use std::sync::Arc;
 use url::Url;
 
-use shim_interface::shim_mgmt::{
+use logging::{VMM_DRAGONBALL_LOGGER, AGENT_LOGGER, HYPERVISOR_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, VIRT_CONTAINER_LOGGER, SERVICE_LOGGER, SHIM_LOGGER};
+use slog::Logger;use shim_interface::shim_mgmt::{
     AGENT_URL, DIRECT_VOLUME_PATH_KEY, DIRECT_VOLUME_RESIZE_URL, DIRECT_VOLUME_STATS_URL,
     IP6_TABLE_URL, IP_TABLE_URL, METRICS_URL,
 };

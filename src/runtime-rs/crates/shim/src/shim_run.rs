@@ -14,7 +14,8 @@ use crate::{
     shim::{ShimExecutor, ENV_KATA_RUNTIME_BIND_FD},
     Error,
 };
-
+use logging::{VMM_DRAGONBALL_LOGGER, AGENT_LOGGER, HYPERVISOR_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, VIRT_CONTAINER_LOGGER, SERVICE_LOGGER, SHIM_LOGGER};
+use slog::Logger;
 impl ShimExecutor {
     pub async fn run(&mut self) -> Result<()> {
         crate::panic_hook::set_panic_hook();

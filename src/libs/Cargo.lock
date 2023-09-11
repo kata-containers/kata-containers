@@ -587,6 +587,8 @@ dependencies = [
 name = "logging"
 version = "0.1.0"
 dependencies = [
+ "arc-swap",
+ "lazy_static",
  "serde_json",
  "slog",
  "slog-async",

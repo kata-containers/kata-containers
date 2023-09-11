@@ -16,7 +16,8 @@ use super::inner::DragonballInner;
 use crate::{
     device::DeviceType, utils, HybridVsockConfig, HybridVsockDevice, VcpuThreadIds, VmmState,
 };
-use shim_interface::KATA_PATH;
+use logging::{VMM_DRAGONBALL_LOGGER, AGENT_LOGGER, HYPERVISOR_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, VIRT_CONTAINER_LOGGER, SERVICE_LOGGER, SHIM_LOGGER};
+use slog::Logger;use shim_interface::KATA_PATH;
 const DEFAULT_HYBRID_VSOCK_NAME: &str = "kata.hvsock";
 
 fn get_vsock_path(root: &str) -> String {

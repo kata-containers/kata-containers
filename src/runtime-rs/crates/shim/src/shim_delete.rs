@@ -13,7 +13,8 @@ use protobuf::Message;
 use std::{fs, path::Path};
 
 use crate::{shim::ShimExecutor, Error};
-
+use logging::{VMM_DRAGONBALL_LOGGER, AGENT_LOGGER, HYPERVISOR_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, VIRT_CONTAINER_LOGGER, SERVICE_LOGGER, SHIM_LOGGER};
+use slog::Logger;
 impl ShimExecutor {
     pub async fn delete(&mut self) -> Result<()> {
         self.args.validate(true).context("validate")?;

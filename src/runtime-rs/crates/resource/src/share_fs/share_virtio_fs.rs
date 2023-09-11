@@ -21,7 +21,8 @@ use kata_sys_util::mount;
 use nix::mount::MsFlags;
 
 use super::{utils, PASSTHROUGH_FS_DIR};
-
+use logging::{VMM_DRAGONBALL_LOGGER, AGENT_LOGGER, HYPERVISOR_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, VIRT_CONTAINER_LOGGER, SERVICE_LOGGER, SHIM_LOGGER};
+use slog::Logger;
 pub(crate) const MOUNT_GUEST_TAG: &str = "kataShared";
 
 pub(crate) const FS_TYPE_VIRTIO_FS: &str = "virtiofs";

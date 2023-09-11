@@ -25,7 +25,8 @@ use tokio::sync::{mpsc::Sender, Mutex, RwLock};
 use tracing::instrument;
 
 use crate::health_check::HealthCheck;
-
+use logging::{VMM_DRAGONBALL_LOGGER, AGENT_LOGGER, HYPERVISOR_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, VIRT_CONTAINER_LOGGER, SERVICE_LOGGER, SHIM_LOGGER};
+use slog::Logger;
 pub(crate) const VIRTCONTAINER: &str = "virt_container";
 pub struct SandboxRestoreArgs {
     pub sid: String,

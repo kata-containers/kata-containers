@@ -9,7 +9,8 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use lazy_static::lazy_static;
-use opentelemetry::global;
+use logging::{VMM_DRAGONBALL_LOGGER, AGENT_LOGGER, HYPERVISOR_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, VIRT_CONTAINER_LOGGER, SERVICE_LOGGER, SHIM_LOGGER};
+use slog::Logger;use opentelemetry::global;
 use opentelemetry::runtime::Tokio;
 use tracing::{span, subscriber::NoSubscriber, Span, Subscriber};
 use tracing_subscriber::prelude::*;

@@ -34,7 +34,8 @@ use crate::{
     volume::{Volume, VolumeResource},
     ResourceConfig, ResourceUpdateOp,
 };
-
+use logging::{VMM_DRAGONBALL_LOGGER, AGENT_LOGGER, HYPERVISOR_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, VIRT_CONTAINER_LOGGER, SERVICE_LOGGER, SHIM_LOGGER};
+use slog::Logger;
 pub(crate) struct ResourceManagerInner {
     sid: String,
     toml_config: Arc<TomlConfig>,

@@ -13,7 +13,8 @@ use tokio::sync::RwLock;
 
 use super::Volume;
 use crate::share_fs::DEFAULT_KATA_GUEST_SANDBOX_DIR;
-
+use logging::{VMM_DRAGONBALL_LOGGER, AGENT_LOGGER, HYPERVISOR_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, VIRT_CONTAINER_LOGGER, SERVICE_LOGGER, SHIM_LOGGER};
+use slog::Logger;
 pub const SHM_DIR: &str = "shm";
 // DEFAULT_SHM_SIZE is the default shm size to be used in case host
 // IPC is used.

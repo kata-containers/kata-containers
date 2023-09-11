@@ -12,7 +12,8 @@ use kata_types::{
     annotations::Annotation, config::TomlConfig, container::ContainerType,
     cpu::LinuxContainerCpuResources, k8s::container_type,
 };
-
+use logging::{VMM_DRAGONBALL_LOGGER, AGENT_LOGGER, HYPERVISOR_LOGGER, RESOURCE_LOGGER, RUNTIMES_LOGGER, VIRT_CONTAINER_LOGGER, SERVICE_LOGGER, SHIM_LOGGER};
+use slog::Logger;
 // initial resource that InitialSizeManager needs, this is the spec for the
 // sandbox/container's workload
 #[derive(Clone, Copy, Debug)]
