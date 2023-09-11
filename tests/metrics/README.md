@@ -1,7 +1,5 @@
 # Kata Containers metrics
 
-> **_Warning:_** Migration of metrics tests is WIP and you may not find all tests available here, but you can take a look at the [tests repo](https://github.com/kata-containers/tests/tree/main/metrics).
-
 This directory contains the metrics tests for Kata Containers.
 
 The tests within this directory have a number of potential use cases:
