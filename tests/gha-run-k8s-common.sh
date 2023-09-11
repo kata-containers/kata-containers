@@ -165,12 +165,29 @@ function deploy_k3s() {
 	cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
 }
 
+function deploy_rke2() {
+	curl -sfL https://get.rke2.io | sudo sh -
+
+	systemctl enable --now rke2-server.service
+
+	# This is an arbitrary value that came up from local tests
+	sleep 120s
+
+	# Link the kubectl binary into /usr/bin
+	sudo ln -sf /var/lib/rancher/rke2/bin/kubectl /usr/local/bin/kubectl
+
+	mkdir -p ~/.kube
+	sudo cp /etc/rancher/rke2/rke2.yaml ~/.kube/config
+	sudo chown ${USER}:${USER} ~/.kube/config
+}
+
 function deploy_k8s() {
 	echo "::group::Deploying ${KUBERNETES}"
 
 	case ${KUBERNETES} in
 		k0s) deploy_k0s ;;
 		k3s) deploy_k3s ;;
+		rke2) deploy_rke2 ;;
 		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
 	esac
 
