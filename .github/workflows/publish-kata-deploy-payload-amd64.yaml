@@ -17,6 +17,10 @@ on:
       commit-hash:
         required: false
         type: string
+      target-branch:
+        required: false
+        type: string
+        default: ""
 
 jobs:
   kata-payload:
