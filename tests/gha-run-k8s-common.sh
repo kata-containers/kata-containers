@@ -97,6 +97,31 @@ function get_nodes_and_pods_info() {
     kubectl get pods -o name | grep node-debugger | xargs kubectl delete || true
 }
 
+function deploy_k0s() {
+	curl -sSLf https://get.k0s.sh | sudo sh
+
+	sudo k0s install controller --single
+
+	sudo k0s start
+
+	# This is an arbitrary value that came up from local tests
+	sleep 120s
+
+	# Download the kubectl binary into /usr/bin so we can avoid depending
+	# on `k0s kubectl` command
+	ARCH=$(uname -m)
+	if [ "${ARCH}" = "x86_64" ]; then
+		ARCH=amd64
+	fi
+	kubectl_version=$(sudo k0s kubectl version --short 2>/dev/null | grep "Client Version" | sed -e 's/Client Version: //')
+	sudo curl -fL --progress-bar -o /usr/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/${kubectl_version}/bin/linux/${ARCH}/kubectl
+	sudo chmod +x /usr/bin/kubectl
+
+	mkdir -p ~/.kube
+	sudo cp /var/lib/k0s/pki/admin.conf ~/.kube/config
+	sudo chown ${USER}:${USER} ~/.kube/config
+}
+
 function deploy_k3s() {
 	curl -sfL https://get.k3s.io | sh -s - --write-kubeconfig-mode 644
 
@@ -129,6 +154,7 @@ function deploy_k8s() {
 	echo "::group::Deploying ${KUBERNETES}"
 
 	case ${KUBERNETES} in
+		k0s) deploy_k0s ;;
 		k3s) deploy_k3s ;;
 		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
 	esac
