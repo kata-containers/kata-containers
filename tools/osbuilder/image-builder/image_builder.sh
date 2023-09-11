@@ -205,6 +205,7 @@ build_with_container() {
 		   --env DEBUG="${DEBUG}" \
 		   --env ARCH="${ARCH}" \
 		   --env TARGET_ARCH="${TARGET_ARCH}" \
+		   --env DM_VERITY="${DM_VERITY}" \
 		   -v /dev:/dev \
 		   -v "${script_dir}":"/osbuilder" \
 		   -v "${script_dir}/../scripts":"/scripts" \
