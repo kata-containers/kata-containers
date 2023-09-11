@@ -56,6 +56,7 @@ function main() {
         install-azure-cli) install_azure_cli ;;
         login-azure) login_azure ;;
         create-cluster) create_cluster "kata-deploy" ;;
+        deploy-k8s) deploy_k8s ;;
         install-bats) install_bats ;;
         install-kubectl) install_kubectl ;;
         get-cluster-credentials) get_cluster_credentials "kata-deploy" ;;
