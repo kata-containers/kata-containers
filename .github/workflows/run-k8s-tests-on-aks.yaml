@@ -17,6 +17,10 @@ on:
       commit-hash:
         required: false
         type: string
+      target-branch:
+        required: false
+        type: string
+        default: ""
 
 jobs:
   run-k8s-tests:
@@ -46,6 +50,13 @@ jobs:
       - uses: actions/checkout@v3
         with:
           ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Download Azure CLI
         run: bash tests/integration/kubernetes/gha-run.sh install-azure-cli
