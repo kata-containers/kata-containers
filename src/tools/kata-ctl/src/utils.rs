@@ -60,7 +60,7 @@ fn get_field_fn(line: &str, delimiter: &str, file_name: &str) -> Result<String> 
 }
 // Ref: https://www.freedesktop.org/software/systemd/man/os-release.html
 pub fn get_distro_details(os_release: &str, os_release_clr: &str) -> Result<(String, String)> {
-    let files = vec![os_release, os_release_clr];
+    let files = [os_release, os_release_clr];
     let mut name = String::new();
     let mut version = String::new();
 
