@@ -36,7 +36,7 @@ pub fn create_dir_with_mode<P: AsRef<Path>>(path: P, mode: Mode, recursive: bool
 
 /// If root in spec is a relative path, make it absolute.
 pub fn canonicalize_spec_root(spec: &mut Spec, bundle_canon: &Path) -> Result<()> {
-    let mut spec_root = spec
+    let spec_root = spec
         .root
         .as_mut()
         .ok_or_else(|| anyhow!("root config was not present in the spec file"))?;
