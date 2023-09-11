@@ -15,5 +15,5 @@ jobs:
       commit-hash: ${{ github.sha }}
       pr-number: "nightly"
       tag: ${{ github.sha }}-nightly
-      target-branch: $GITHUB_REF_NAME
+      target-branch: ${{ github.ref_name }}
     secrets: inherit
