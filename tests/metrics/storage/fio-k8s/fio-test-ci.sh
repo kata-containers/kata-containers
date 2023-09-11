@@ -15,6 +15,7 @@ TEST_NAME="${TEST_NAME:-fio}"
 function main() {
 	cmds=("bc" "jq")
 	check_cmds "${cmds[@]}"
+	sudo modprobe vhost_iotlb
 	init_env
 
 	pushd "${FIO_PATH}"
