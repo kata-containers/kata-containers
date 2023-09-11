@@ -148,7 +148,7 @@ mod tests {
 
     #[test]
     fn test_parse_ip_cidr() {
-        let test_cases = vec![
+        let test_cases = [
             ("127.0.0.1/32", ("127.0.0.1", 32u8)),
             ("2001:4860:4860::8888/32", ("2001:4860:4860::8888", 32u8)),
             ("2001:4860:4860::8888/128", ("2001:4860:4860::8888", 128u8)),
@@ -158,7 +158,7 @@ mod tests {
             assert_eq!(ipaddr.to_string(), tc.1 .0);
             assert_eq!(mask, tc.1 .1);
         }
-        let test_cases = vec![
+        let test_cases = [
             "127.0.0.1/33",
             "2001:4860:4860::8888/129",
             "2001:4860:4860::8888/300",

@@ -183,7 +183,7 @@ impl Volume for SPDKVolume {
 
 pub(crate) fn is_spdk_volume(m: &oci::Mount) -> bool {
     // spdkvol or spoolvol will share the same implementation
-    let vol_types = vec![KATA_SPDK_VOLUME_TYPE, KATA_SPOOL_VOLUME_TYPE];
+    let vol_types = [KATA_SPDK_VOLUME_TYPE, KATA_SPOOL_VOLUME_TYPE];
     if vol_types.contains(&m.r#type.as_str()) {
         return true;
     }
