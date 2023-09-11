@@ -101,6 +101,18 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
     secrets: inherit
 
+  run-kata-deploy-tests-on-garm:
+    needs: publish-kata-deploy-payload-amd64
+    uses: ./.github/workflows/run-kata-deploy-tests-on-garm.yaml
+    with:
+      registry: ghcr.io
+      repo: ${{ github.repository_owner }}/kata-deploy-ci
+      tag: ${{ inputs.tag }}-amd64
+      commit-hash: ${{ inputs.commit-hash }}
+      pr-number: ${{ inputs.pr-number }}
+      target-branch: ${{ inputs.target-branch }}
+    secrets: inherit
+
   run-kata-deploy-tests-on-tdx:
     needs: [publish-kata-deploy-payload-amd64, build-and-publish-tee-confidential-unencrypted-image]
     uses: ./.github/workflows/run-kata-deploy-tests-on-tdx.yaml
