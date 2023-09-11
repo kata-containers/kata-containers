@@ -181,7 +181,7 @@ impl Volume for BlockVolume {
 }
 
 pub(crate) fn is_block_volume(m: &oci::Mount) -> Result<bool> {
-    let vol_types = vec![KATA_MOUNT_BIND_TYPE, KATA_DIRECT_VOLUME_TYPE];
+    let vol_types = [KATA_MOUNT_BIND_TYPE, KATA_DIRECT_VOLUME_TYPE];
     if !vol_types.contains(&m.r#type.as_str()) {
         return Ok(false);
     }
