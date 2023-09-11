@@ -68,7 +68,7 @@ impl ShmVolume {
                 r#type: "tmpfs".to_string(),
                 destination: m.destination.clone(),
                 source: "shm".to_string(),
-                options: vec![
+                options: [
                     "noexec",
                     "nosuid",
                     "nodev",
