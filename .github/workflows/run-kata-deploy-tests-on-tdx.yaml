@@ -36,6 +36,7 @@ jobs:
       DOCKER_TAG: ${{ inputs.tag }}
       PR_NUMBER: ${{ inputs.pr-number }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
+      KUBERNETES: "k3s"
       USING_NFD: "true"
     steps:
       - uses: actions/checkout@v3
