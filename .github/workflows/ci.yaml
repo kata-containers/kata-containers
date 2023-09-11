@@ -11,6 +11,10 @@ on:
       tag:
         required: true
         type: string
+      target-branch:
+        required: false
+        type: string
+        default: ""
 
 jobs:
   build-kata-static-tarball-amd64:
@@ -28,6 +32,7 @@ jobs:
       repo: ${{ github.repository_owner }}/kata-deploy-ci
       tag: ${{ inputs.tag }}-amd64
       commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
     secrets: inherit
 
   build-and-publish-tee-confidential-unencrypted-image:
@@ -37,6 +42,13 @@ jobs:
         uses: actions/checkout@v3
         with:
           ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
@@ -69,6 +81,7 @@ jobs:
       tag: ${{ inputs.tag }}-amd64
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
+      target-branch: ${{ inputs.target-branch }}
     secrets: inherit
 
   run-kata-deploy-tests-on-tdx:
@@ -80,6 +93,7 @@ jobs:
       tag: ${{ inputs.tag }}-amd64
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
+      target-branch: ${{ inputs.target-branch }}
 
   run-k8s-tests-on-aks:
     needs: publish-kata-deploy-payload-amd64
@@ -90,6 +104,7 @@ jobs:
       tag: ${{ inputs.tag }}-amd64
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
+      target-branch: ${{ inputs.target-branch }}
     secrets: inherit
 
   run-k8s-tests-on-garm:
@@ -112,6 +127,7 @@ jobs:
       tag: ${{ inputs.tag }}-amd64
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
+      target-branch: ${{ inputs.target-branch }}
 
   run-k8s-tests-on-snp:
     needs: [publish-kata-deploy-payload-amd64, build-and-publish-tee-confidential-unencrypted-image]
@@ -122,6 +138,7 @@ jobs:
       tag: ${{ inputs.tag }}-amd64
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
+      target-branch: ${{ inputs.target-branch }}
 
   run-k8s-tests-on-tdx:
     needs: [publish-kata-deploy-payload-amd64, build-and-publish-tee-confidential-unencrypted-image]
@@ -132,6 +149,7 @@ jobs:
       tag: ${{ inputs.tag }}-amd64
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
+      target-branch: ${{ inputs.target-branch }}
 
   run-metrics-tests:
     needs: build-kata-static-tarball-amd64
@@ -139,6 +157,7 @@ jobs:
     with:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
 
   run-cri-containerd-tests:
     needs: build-kata-static-tarball-amd64
@@ -146,6 +165,7 @@ jobs:
     with:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
 
   run-nydus-tests:
     needs: build-kata-static-tarball-amd64
@@ -153,6 +173,7 @@ jobs:
     with:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
 
   run-vfio-tests:
     needs: build-kata-static-tarball-amd64
@@ -160,3 +181,4 @@ jobs:
     with:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
