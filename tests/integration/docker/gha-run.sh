@@ -38,6 +38,10 @@ function run() {
 
 	enabling_hypervisor
 
+	info "Running docker with runc"
+	sudo docker run --rm alpine ping -c 2 www.github.com
+
+	info "Running docker with Kata Containers (${KATA_HYPERVISOR})"
 	sudo docker run --rm --runtime io.containerd.kata.v2 alpine ping -c 2 www.github.com
 }
 
