@@ -82,14 +82,10 @@ add_policy_to_yaml() {
 		;;
 
 	Deployment|Job|ReplicationController)
-		if [ "${KATA_HOST_OS}" == "cbl-mariner" ]; then
-			echo "Issue #7764: using policy for ${resource_kind} from ${yaml_file} is blocked on ${KATA_HOST_OS}"
-		else
-			echo "Adding policy to ${resource_kind} from ${yaml_file}"
-			ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY}" yq write -i "${K8S_TEST_YAML}" \
-				'spec.template.metadata.annotations."io.katacontainers.config.agent.policy"' \
-				"${ALLOW_ALL_POLICY}"
-		fi
+		echo "Adding policy to ${resource_kind} from ${yaml_file}"
+		ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY}" yq write -i "${K8S_TEST_YAML}" \
+			'spec.template.metadata.annotations."io.katacontainers.config.agent.policy"' \
+			"${ALLOW_ALL_POLICY}"
 		;;
 
 	List)
