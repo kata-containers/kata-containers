@@ -81,6 +81,14 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
 
+  run-nerdctl-tests-on-garm:
+    needs: build-kata-static-tarball-amd64
+    uses: ./.github/workflows/run-nerdctl-tests-on-garm.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
+
   run-kata-deploy-tests-on-aks:
     needs: publish-kata-deploy-payload-amd64
     uses: ./.github/workflows/run-kata-deploy-tests-on-aks.yaml
