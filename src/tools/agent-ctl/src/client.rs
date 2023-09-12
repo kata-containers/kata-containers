@@ -1199,6 +1199,7 @@ fn agent_cmd_container_start(
     Ok(())
 }
 
+#[allow(clippy::redundant_closure_call)]
 fn agent_cmd_sandbox_get_guest_details(
     ctx: &Context,
     client: &AgentServiceClient,
@@ -2015,6 +2016,7 @@ fn agent_cmd_sandbox_update_container(
     Ok(())
 }
 
+#[allow(clippy::redundant_closure_call)]
 fn agent_cmd_sandbox_mem_hotplug_by_probe(
     ctx: &Context,
     client: &AgentServiceClient,

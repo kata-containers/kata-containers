@@ -10,6 +10,7 @@
 #![allow(non_snake_case)]
 #![allow(missing_docs)]
 #![allow(deref_nullptr)]
+#![allow(ambiguous_glob_reexports)]
 
 // generated with bindgen /usr/include/linux/if.h --no-unstable-rust
 // --constified-enum '*' --with-derive-default -- -D __UAPI_DEF_IF_IFNAMSIZ -D
