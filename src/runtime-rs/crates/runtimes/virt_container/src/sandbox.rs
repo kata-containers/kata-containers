@@ -15,6 +15,7 @@ use common::message::{Action, Message};
 use common::{Sandbox, SandboxNetworkEnv};
 use containerd_shim_protos::events::task::TaskOOM;
 use hypervisor::{dragonball::Dragonball, BlockConfig, Hypervisor, HYPERVISOR_DRAGONBALL};
+use hypervisor::{utils::get_hvsock_path, HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID};
 use kata_sys_util::hooks::HookStates;
 use kata_types::config::TomlConfig;
 use persist::{self, sandbox_persist::Persist};
@@ -100,6 +101,14 @@ impl VirtSandbox {
         network_env: SandboxNetworkEnv,
     ) -> Result<Vec<ResourceConfig>> {
         let mut resource_configs = vec![];
+
+        // Prepare VM hybrid vsock device config and add the hybrid vsock device first.
+        info!(sl!(), "prepare hybrid vsock resource for sandbox.");
+        let vm_hvsock = ResourceConfig::HybridVsock(HybridVsockConfig {
+            guest_cid: DEFAULT_GUEST_VSOCK_CID,
+            uds_path: get_hvsock_path(id),
+        });
+        resource_configs.push(vm_hvsock);
 
         // prepare network config
         if !network_env.network_created {

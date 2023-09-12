@@ -17,7 +17,7 @@ pub mod dragonball;
 mod kernel_param;
 pub mod qemu;
 pub use kernel_param::Param;
-mod utils;
+pub mod utils;
 use std::collections::HashMap;
 
 #[cfg(feature = "cloud-hypervisor")]
@@ -55,6 +55,9 @@ const SHMEM: &str = "shmem";
 
 pub const HYPERVISOR_DRAGONBALL: &str = "dragonball";
 pub const HYPERVISOR_QEMU: &str = "qemu";
+
+pub const DEFAULT_HYBRID_VSOCK_NAME: &str = "kata.hvsock";
+pub const JAILER_ROOT: &str = "root";
 
 #[derive(PartialEq, Debug, Clone)]
 pub(crate) enum VmmState {

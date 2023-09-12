@@ -126,6 +126,11 @@ impl ResourceManagerInner {
                         .await
                         .context("do handle device failed.")?;
                 }
+                ResourceConfig::HybridVsock(hv) => {
+                    do_handle_device(&self.device_manager, &DeviceConfig::HybridVsockCfg(hv))
+                        .await
+                        .context("do handle hybrid-vsock device failed.")?;
+                }
             };
         }
 

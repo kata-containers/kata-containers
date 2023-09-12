@@ -34,6 +34,9 @@ pub use self::runtime::{Runtime, RuntimeVendor, RUNTIME_NAME_VIRTCONTAINER};
 
 pub use self::agent::AGENT_NAME_KATA;
 
+/// kata run dir
+pub const KATA_PATH: &str = "/run/kata";
+
 // TODO: let agent use the constants here for consistency
 /// Debug console enabled flag for agent
 pub const DEBUG_CONSOLE_FLAG: &str = "agent.debug_console";

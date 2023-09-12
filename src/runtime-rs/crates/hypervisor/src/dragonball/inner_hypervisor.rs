@@ -14,35 +14,19 @@ use kata_types::capabilities::Capabilities;
 
 use super::inner::DragonballInner;
 use crate::{
-    device::DeviceType, utils, HybridVsockConfig, HybridVsockDevice, VcpuThreadIds, VmmState,
+    utils::{self, get_hvsock_path, get_jailer_root, get_sandbox_path},
+    VcpuThreadIds, VmmState,
 };
-use shim_interface::KATA_PATH;
-const DEFAULT_HYBRID_VSOCK_NAME: &str = "kata.hvsock";
-
-fn get_vsock_path(root: &str) -> String {
-    [root, DEFAULT_HYBRID_VSOCK_NAME].join("/")
-}
 
 impl DragonballInner {
     pub(crate) async fn prepare_vm(&mut self, id: &str, netns: Option<String>) -> Result<()> {
         self.id = id.to_string();
         self.state = VmmState::NotReady;
 
-        self.vm_path = [KATA_PATH, id].join("/");
-        self.jailer_root = [self.vm_path.as_str(), "root"].join("/");
+        self.vm_path = get_sandbox_path(id);
+        self.jailer_root = get_jailer_root(id);
         self.netns = netns;
 
-        // prepare vsock
-        let uds_path = [&self.jailer_root, DEFAULT_HYBRID_VSOCK_NAME].join("/");
-        let d = DeviceType::HybridVsock(HybridVsockDevice {
-            id: format!("vsock-{}", &self.id),
-            config: HybridVsockConfig {
-                guest_cid: 3,
-                uds_path,
-            },
-        });
-
-        self.add_device(d).await.context("add device")?;
         Ok(())
     }
 
@@ -88,7 +72,7 @@ impl DragonballInner {
         Ok(format!(
             "{}://{}",
             HYBRID_VSOCK_SCHEME,
-            get_vsock_path(&self.jailer_root),
+            get_hvsock_path(&self.id),
         ))
     }
 

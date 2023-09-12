@@ -19,11 +19,10 @@ use dragonball::{
 use kata_sys_util::mount;
 use kata_types::{
     capabilities::{Capabilities, CapabilityBits},
-    config::hypervisor::Hypervisor as HypervisorConfig,
+    config::{hypervisor::Hypervisor as HypervisorConfig, KATA_PATH},
 };
 use nix::mount::MsFlags;
 use persist::sandbox_persist::Persist;
-use shim_interface::KATA_PATH;
 use std::{collections::HashSet, fs::create_dir_all};
 
 const DRAGONBALL_KERNEL: &str = "vmlinux";

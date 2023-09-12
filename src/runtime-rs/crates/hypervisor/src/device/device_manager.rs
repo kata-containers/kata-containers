@@ -11,9 +11,9 @@ use kata_sys_util::rand::RandomBytes;
 use tokio::sync::{Mutex, RwLock};
 
 use crate::{
-    vhost_user_blk::VhostUserBlkDevice, BlockConfig, BlockDevice, Hypervisor, NetworkDevice,
-    VfioDevice, VhostUserConfig, KATA_BLK_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE, KATA_NVDIMM_DEV_TYPE,
-    VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
+    vhost_user_blk::VhostUserBlkDevice, BlockConfig, BlockDevice, HybridVsockDevice, Hypervisor,
+    NetworkDevice, VfioDevice, VhostUserConfig, KATA_BLK_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE,
+    KATA_NVDIMM_DEV_TYPE, VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
 };
 
 use super::{
@@ -319,6 +319,10 @@ impl DeviceManager {
                 }
 
                 Arc::new(Mutex::new(NetworkDevice::new(device_id.clone(), config)))
+            }
+            DeviceConfig::HybridVsockCfg(hvconfig) => {
+                // No need to do find device for hybrid vsock device.
+                Arc::new(Mutex::new(HybridVsockDevice::new(&device_id, hvconfig)))
             }
             _ => {
                 return Err(anyhow!("invliad device type"));
