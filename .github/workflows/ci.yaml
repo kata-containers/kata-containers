@@ -74,7 +74,7 @@ jobs:
           file: tests/integration/kubernetes/runtimeclass_workloads/confidential/unencrypted/Dockerfile
 
   run-docker-tests-on-garm:
-    needs: publish-kata-deploy-payload-amd64
+    needs: build-kata-static-tarball-amd64
     uses: ./.github/workflows/run-docker-tests-on-garm.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
