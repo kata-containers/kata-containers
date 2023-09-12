@@ -56,8 +56,6 @@ impl KernelParams {
         // default kernel params
         let mut params = vec![
             Param::new("reboot", "k"),
-            Param::new("earlyprintk", "ttyS0"),
-            Param::new("initcall_debug", ""),
             Param::new("panic", "1"),
             Param::new("systemd.unit", "kata-containers.target"),
             Param::new("systemd.mask", "systemd-networkd.service"),

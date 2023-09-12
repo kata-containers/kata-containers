@@ -593,7 +593,7 @@ configure_kata()
 
 	sudo sed -i \
 		-e 's/^# *\(enable_debug\).*=.*$/\1 = true/g' \
-		-e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug initcall_debug"/g' \
+		-e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug"/g' \
 		"$cfg_to"
 
 	info "Configured $kata_project for full debug (delete $cfg_to to use pristine $kata_project configuration)"
