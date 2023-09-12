@@ -253,6 +253,7 @@ impl FromStr for AgentConfig {
 
 impl AgentConfig {
     #[instrument]
+    #[allow(clippy::redundant_closure_call)]
     pub fn from_cmdline(file: &str, args: Vec<String>) -> Result<AgentConfig> {
         // If config file specified in the args, generate our config from it
         let config_position = args.iter().position(|a| a == "--config" || a == "-c");
@@ -1696,7 +1697,7 @@ Caused by:
         assert_eq!(config.server_addr, "vsock://8:2048");
         assert_eq!(
             config.endpoints.allowed,
-            vec!["CreateContainer".to_string(), "StartContainer".to_string()]
+            ["CreateContainer".to_string(), "StartContainer".to_string()]
                 .iter()
                 .cloned()
                 .collect()
@@ -1744,7 +1745,7 @@ Caused by:
         // Should be from agent config
         assert_eq!(
             config.endpoints.allowed,
-            vec!["CreateContainer".to_string(), "StartContainer".to_string()]
+            ["CreateContainer".to_string(), "StartContainer".to_string()]
                 .iter()
                 .cloned()
                 .collect()

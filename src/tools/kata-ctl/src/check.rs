@@ -5,7 +5,7 @@
 
 // Contains checks that are not architecture-specific
 
-#[cfg(any(target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 use crate::types::KernelModule;
 
 use anyhow::{anyhow, Result};
@@ -17,7 +17,7 @@ use reqwest::header::{CONTENT_TYPE, USER_AGENT};
 use serde::{Deserialize, Serialize};
 use slog::{info, o};
 
-#[cfg(any(target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 use std::process::{Command, Stdio};
 
 #[derive(Debug, Deserialize, Serialize, PartialEq)]
@@ -84,7 +84,7 @@ pub fn check_cpu_flags(
     Ok(missing_flags)
 }
 
-#[cfg(any(target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 pub fn check_cpu_attribs(
     cpu_info: &str,
     required_attribs: &'static [&'static str],
@@ -236,7 +236,7 @@ pub fn check_official_releases() -> Result<()> {
     Ok(())
 }
 
-#[cfg(any(target_arch = "x86_64"))]
+#[cfg(target_arch = "x86_64")]
 pub fn check_kernel_module_loaded(kernel_module: &KernelModule) -> Result<(), String> {
     const MODPROBE_PARAMETERS_DRY_RUN: &str = "--dry-run";
     const MODPROBE_PARAMETERS_FIRST_TIME: &str = "--first-time";
@@ -305,7 +305,7 @@ pub fn check_kernel_module_loaded(kernel_module: &KernelModule) -> Result<(), St
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(any(target_arch = "x86_64"))]
+    #[cfg(target_arch = "x86_64")]
     use crate::types::{KernelModule, KernelParam, KernelParamType};
     use kata_sys_util::cpu::{get_cpu_flags, get_single_cpu_info};
     use semver::Version;
@@ -509,7 +509,7 @@ mod tests {
         assert!(!v.patch.to_string().is_empty());
     }
 
-    #[cfg(any(target_arch = "x86_64"))]
+    #[cfg(target_arch = "x86_64")]
     #[test]
     fn check_module_loaded() {
         #[allow(dead_code)]

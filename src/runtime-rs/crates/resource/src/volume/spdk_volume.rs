@@ -75,7 +75,7 @@ impl SPDKVolume {
 
         let block_driver = get_block_driver(d).await;
 
-        let mut vhu_blk_config = &mut VhostUserConfig {
+        let vhu_blk_config = &mut VhostUserConfig {
             socket_path: device,
             device_type: VhostUserType::Blk("vhost-user-blk-pci".to_owned()),
             driver_option: block_driver,
@@ -183,7 +183,7 @@ impl Volume for SPDKVolume {
 
 pub(crate) fn is_spdk_volume(m: &oci::Mount) -> bool {
     // spdkvol or spoolvol will share the same implementation
-    let vol_types = vec![KATA_SPDK_VOLUME_TYPE, KATA_SPOOL_VOLUME_TYPE];
+    let vol_types = [KATA_SPDK_VOLUME_TYPE, KATA_SPOOL_VOLUME_TYPE];
     if vol_types.contains(&m.r#type.as_str()) {
         return true;
     }
