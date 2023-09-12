@@ -17,8 +17,8 @@ use containerd_shim_protos::{
     protobuf::{well_known_types::any::Any, Message as ProtobufMessage},
     shim_async,
 };
+use kata_types::config::KATA_PATH;
 use runtimes::RuntimeHandlerManager;
-use shim_interface::KATA_PATH;
 use tokio::{
     io::AsyncWriteExt,
     process::Command,

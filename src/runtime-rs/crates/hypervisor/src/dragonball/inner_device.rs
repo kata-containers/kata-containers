@@ -19,7 +19,7 @@ use dragonball::{
 use super::DragonballInner;
 use crate::{
     device::DeviceType, HybridVsockConfig, NetworkConfig, ShareFsDeviceConfig, ShareFsMountConfig,
-    ShareFsMountType, ShareFsOperation, VfioBusMode, VfioDevice, VmmState,
+    ShareFsMountType, ShareFsOperation, VfioBusMode, VfioDevice, VmmState, JAILER_ROOT,
 };
 
 const MB_TO_B: u32 = 1024 * 1024;
@@ -231,11 +231,12 @@ impl DragonballInner {
 
     fn add_hvsock(&mut self, config: &HybridVsockConfig) -> Result<()> {
         let vsock_cfg = VsockDeviceConfigInfo {
-            id: String::from("root"),
+            id: String::from(JAILER_ROOT),
             guest_cid: config.guest_cid,
             uds_path: Some(config.uds_path.clone()),
             ..Default::default()
         };
+        debug!(sl!(), "HybridVsock configure: {:?}", &vsock_cfg);
 
         self.vmm_instance
             .insert_vsock(vsock_cfg)

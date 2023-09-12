@@ -21,7 +21,8 @@ use anyhow::{anyhow, Result};
 
 pub mod shim_mgmt;
 
-pub const KATA_PATH: &str = "/run/kata";
+use kata_types::config::KATA_PATH;
+
 pub const SHIM_MGMT_SOCK_NAME: &str = "shim-monitor.sock";
 
 // return sandbox's storage path
