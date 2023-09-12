@@ -107,7 +107,7 @@ description = "measure container bandwidth using iperf3"
 # within (inclusive)
 checkvar = ".\"network-iperf3\".Results | .[] | .bandwidth.Result"
 checktype = "mean"
-midval = 55302925246.02
+midval = 61176889941.19
 minpercent = 20.0
 maxpercent = 20.0
 
