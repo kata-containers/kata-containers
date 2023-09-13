@@ -51,6 +51,11 @@ function install_dependencies() {
 	# Start containerd service
 	sudo systemctl daemon-reload
 	sudo systemctl start containerd
+
+	# Create the default containerd configuration
+	sudo mkdir -p /etc/containerd
+	containerd config default > sudo tee /etc/containerd/config.toml
+	sudo systemctl restart containerd
 }
 
 function run() {
