@@ -18,6 +18,8 @@ uid=$(id -u ${USER})
 gid=$(id -g ${USER})
 http_proxy="${http_proxy:-}"
 https_proxy="${https_proxy:-}"
+RUSTUP_UPDATE_ROOT="${RUSTUP_UPDATE_ROOT:-}"
+RUSTUP_DIST_SERVER="${RUSTUP_DIST_SERVER:-}"
 
 ARCH=${ARCH:-$(uname -m)}
 CROSS_BUILD=
@@ -99,6 +101,8 @@ docker run \
 	--env CROSS_BUILD="${CROSS_BUILD}" \
 	--env TARGET_ARCH="${TARGET_ARCH}" \
 	--env ARCH="${ARCH}" \
+	--env RUSTUP_UPDATE_ROOT="${RUSTUP_UPDATE_ROOT}" \
+	--env RUSTUP_DIST_SERVER="${RUSTUP_DIST_SERVER}" \
 	--rm \
 	-w ${script_dir} \
 	build-kata-deploy "${kata_deploy_create}" $@

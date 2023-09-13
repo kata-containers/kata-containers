@@ -20,6 +20,8 @@ VMM_CONFIGS="qemu fc"
 GO_VERSION=${GO_VERSION}
 RUST_VERSION=${RUST_VERSION}
 CC=""
+RUSTUP_UPDATE_ROOT="${RUSTUP_UPDATE_ROOT:-}"
+RUSTUP_DIST_SERVER="${RUSTUP_DIST_SERVER:-}"
 
 DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}
@@ -53,6 +55,8 @@ sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	--env CROSS_BUILD=${CROSS_BUILD} \
 	--env ARCH=${ARCH} \
 	--env CC="${CC}" \
+        --env RUSTUP_UPDATE_ROOT="${RUSTUP_UPDATE_ROOT}" \
+        --env RUSTUP_DIST_SERVER="${RUSTUP_DIST_SERVER}" \
 	-w "${repo_root_dir}/src/runtime-rs" \
 	"${container_image}" \
 	bash -c "git config --global --add safe.directory ${repo_root_dir} && make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch}"
@@ -61,6 +65,8 @@ sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	--env CROSS_BUILD=${CROSS_BUILD} \
         --env ARCH=${ARCH} \
         --env CC="${CC}" \
+        --env RUSTUP_UPDATE_ROOT="${RUSTUP_UPDATE_ROOT}" \
+        --env RUSTUP_DIST_SERVER="${RUSTUP_DIST_SERVER}" \
 	-w "${repo_root_dir}/src/runtime-rs" \
 	"${container_image}" \
 	bash -c "git config --global --add safe.directory ${repo_root_dir} && make PREFIX="${PREFIX}" DESTDIR="${DESTDIR}" install"

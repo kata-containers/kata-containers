@@ -9,6 +9,9 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+RUSTUP_UPDATE_ROOT="${RUSTUP_UPDATE_ROOT:-}"
+RUSTUP_DIST_SERVER="${RUSTUP_DIST_SERVER:-}"
+
 tmp_dir=$(mktemp -d -t install-go-tmp.XXXXXXXXXX)
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 script_name="$(basename "${BASH_SOURCE[0]}")"
@@ -81,6 +84,14 @@ case "${ARCH}" in
 		exit 1
 		;;
 esac
+
+if [ -n "${RUSTUP_UPDATE_ROOT}" ]; then
+	export RUSTUP_UPDATE_ROOT=${RUSTUP_UPDATE_ROOT}
+fi
+
+if [ -n "${RUSTUP_DIST_SERVER}" ]; then
+	export RUSTUP_DIST_SERVER=${RUSTUP_DIST_SERVER}
+fi
 
 curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSLf | sh -s -- -y --default-toolchain ${rust_version} -t ${ARCH}-unknown-linux-${LIBC}
 source /root/.cargo/env
