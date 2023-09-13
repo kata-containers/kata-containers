@@ -107,7 +107,7 @@ description = "measure container cpu utilization using iperf3"
 # within (inclusive)
 checkvar = ".\"network-iperf3\".Results | .[] | .cpu.Result"
 checktype = "mean"
-midval = 99.0
+midval = 85.60
 minpercent = 20.0
 maxpercent = 20.0
 
