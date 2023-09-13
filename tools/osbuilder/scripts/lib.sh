@@ -236,6 +236,9 @@ generate_dockerfile()
 	readonly install_rust="
 ENV http_proxy=${http_proxy:-}
 ENV https_proxy=${http_proxy:-}
+ENV RUSTUP_UPDATE_ROOT="${RUSTUP_UPDATE_ROOT:-}"
+ENV RUSTUP_DIST_SERVER="${RUSTUP_DIST_SERVER:-}"
+
 RUN curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSLf | \
     sh -s -- -y --default-toolchain ${RUST_VERSION} -t ${rustarch}-unknown-linux-${LIBC}
 RUN . /root/.cargo/env; cargo install cargo-when
