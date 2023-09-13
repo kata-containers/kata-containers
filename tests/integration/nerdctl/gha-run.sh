@@ -67,7 +67,7 @@ function run() {
 	sudo nerdctl run --rm --entrypoint nping instrumentisto/nmap --tcp-connect -c 2 -p 80 www.github.com
 
 	info "Running nerdctl with Kata Containers (${KATA_HYPERVISOR})"
-	sudo nerdctl run --rm --runtime io.containerd.kata.v2 --entrypoint nping instrumentisto/nmap --tcp-connect -c 2 -p 80 www.github.com
+	sudo nerdctl run --rm --runtime io.containerd.kata-${KATA_HYPERVISOR}.v2 --entrypoint nping instrumentisto/nmap --tcp-connect -c 2 -p 80 www.github.com
 }
 
 function main() {
