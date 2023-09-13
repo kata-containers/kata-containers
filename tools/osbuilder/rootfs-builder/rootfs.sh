@@ -606,7 +606,7 @@ EOF
 	AGENT_DIR="${ROOTFS_DIR}/usr/bin"
 	AGENT_DEST="${AGENT_DIR}/${AGENT_BIN}"
 
-	if [ -z "${AGENT_SOURCE_BIN}" ] ; then
+	if [ -z "${AGENT_SOURCE_BIN}" ] || [ -n "${AA_KBC}" ]; then
 		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
 		# rust agent needs ${arch}-unknown-linux-${LIBC}
 		if ! (rustup show | grep -v linux-${LIBC} > /dev/null); then
@@ -617,7 +617,9 @@ EOF
 			bash ${script_dir}/../../../ci/install_rust.sh ${RUST_VERSION}
 		fi
 		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
+	fi
 
+	if [ -z "${AGENT_SOURCE_BIN}" ]; then
 		agent_dir="${script_dir}/../../../src/agent/"
 
 		if [ "${SECCOMP}" == "yes" ]; then
