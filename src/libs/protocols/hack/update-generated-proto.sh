@@ -29,12 +29,12 @@ show_succeed_msg() {
 show_usage() {
     echo "===================================================================="
     echo ""
-    echo "       USAGE: make PROTO_FILE=<xyz.proto> generate-protocols"
+    echo "       USAGE: generate-protocols <FILE|all>"
     echo ""
-    echo "       Where PROTO_FILE may be:"
+    echo "       Where the first argument could be:"
     echo "         all: will compile all protocol buffer files"
     echo ""
-    echo "       Or compile individually by using the exact proto file:"
+    echo "         Or compile individually by using the exact proto file:"
 
     # iterate over proto files
     for file in "$@"
@@ -47,19 +47,26 @@ show_usage() {
 }
 
 generate_go_sources() {
-    local cmd="protoc -I$GOPATH/src:$GOPATH/src/github.com/kata-containers/kata-containers/src/libs/protocols/protos \
---gogottrpc_out=plugins=ttrpc+fieldpath,\
-import_path=github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc,\
-\
-Mgithub.com/kata-containers/kata-containers/src/libs/protocols/protos/csi.proto=github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc,\
-\
-Mgithub.com/kata-containers/kata-containers/src/libs/protocols/protos/types.proto=github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols,\
-\
-Mgithub.com/kata-containers/kata-containers/src/libs/protocols/protos/oci.proto=github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc,\
-\
-Mgogoproto/gogo.proto=github.com/gogo/protobuf/gogoproto,Mgoogle/protobuf/any.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/descriptor.proto=github.com/gogo/protobuf/protoc-gen-gogo/descriptor,Mgoogle/protobuf/duration.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/empty.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/field_mask.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/timestamp.proto=github.com/gogo/protobuf/types,Mgoogle/protobuf/wrappers.proto=github.com/gogo/protobuf/types,Mgoogle/rpc/status.proto=github.com/gogo/googleapis/google/rpc\
-:$GOPATH/src \
-$GOPATH/src/github.com/kata-containers/kata-containers/src/libs/protocols/protos/$1"
+    local proto_file="$1"
+    local dir_path="${proto_file%/*}"
+    local file_name="${proto_file##*/}"
+
+    [ "$dir_path" == "$proto_file" ] && dir_path="."
+
+    local root_path=$(realpath ../)/libs/protocols/protos
+    local cmd="protoc -I$GOPATH/src:${root_path} \
+--gogottrpc_out=plugins=ttrpc+fieldpath,paths=source_relative,\
+Mgogoproto/gogo.proto=github.com/gogo/protobuf/gogoproto,\
+Mgoogle/protobuf/any.proto=github.com/gogo/protobuf/types,\
+Mgoogle/protobuf/descriptor.proto=github.com/gogo/protobuf/protoc-gen-gogo/descriptor,\
+Mgoogle/protobuf/duration.proto=github.com/gogo/protobuf/types,\
+Mgoogle/protobuf/empty.proto=github.com/gogo/protobuf/types,\
+Mgoogle/protobuf/field_mask.proto=github.com/gogo/protobuf/types,\
+Mgoogle/protobuf/timestamp.proto=github.com/gogo/protobuf/types,\
+Mgoogle/protobuf/wrappers.proto=github.com/gogo/protobuf/types,\
+Mgoogle/rpc/status.proto=github.com/gogo/googleapis/google/rpc\
+:$(realpath ../)/runtime/virtcontainers/pkg/agent/protocols/$dir_path \
+${root_path}/$file_name"
 
     echo $cmd
     $cmd
@@ -71,7 +78,7 @@ if [ "$(basename $(pwd))" != "agent" ]; then
 fi
 
 # Protocol buffer files required to generate golang/rust bindings.
-proto_files_list=(agent.proto csi.proto health.proto oci.proto types.proto)
+proto_files_list=(grpc/agent.proto grpc/csi.proto grpc/health.proto grpc/oci.proto types.proto)
 
 if [ "$1" = "" ]; then
     show_usage "${proto_files_list[@]}"
@@ -84,6 +91,8 @@ which protoc
 
 which protoc-gen-gogottrpc
 [ $? -eq 0 ] || die "Please install protoc-gen-gogottrpc from https://github.com/containerd/ttrpc"
+
+[[ -n "$GOPATH" ]] || die "GOPATH is not set. Please set it."
 
 # do generate work
 target=$1
