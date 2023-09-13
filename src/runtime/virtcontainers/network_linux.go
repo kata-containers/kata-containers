@@ -12,8 +12,10 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/containernetworking/plugins/pkg/ns"
@@ -128,6 +130,22 @@ func (n *LinuxNetwork) addSingleEndpoint(ctx context.Context, s *Sandbox, netInf
 		var socketPath string
 		idx := len(n.eps)
 
+		// Avoid endpoint naming conflicts
+		// When creating a new endpoint, we check existing endpoint names and automatically adjust the naming of the new endpoint to ensure uniqueness.
+		lastIdx := -1
+		if len(n.eps) > 0 {
+			lastEndpoint := n.eps[len(n.eps)-1]
+			re := regexp.MustCompile("[0-9]+")
+			matchStr := re.FindString(lastEndpoint.Name())
+			n, err := strconv.ParseInt(matchStr, 10, 64)
+			if err != nil {
+				return nil, err
+			}
+			lastIdx = int(n)
+		}
+		if idx <= lastIdx {
+			idx = lastIdx + 1
+		}
 		// Check if this is a dummy interface which has a vhost-user socket associated with it
 		socketPath, err = vhostUserSocketPath(netInfo)
 		if err != nil {
