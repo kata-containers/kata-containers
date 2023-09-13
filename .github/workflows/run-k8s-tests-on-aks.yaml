@@ -33,6 +33,7 @@ jobs:
           - clh
           - dragonball
           - qemu
+          - stratovirt
         instance-type:
           - small
           - normal
