@@ -30,7 +30,7 @@ message Spec {
 	string Hostname = 4;
 
 	// Mounts configures additional mounts (on top of Root).
-	repeated Mount Mounts = 5 [(gogoproto.nullable) = false];
+	repeated Mount Mounts = 5;
 
 	// Hooks configures callbacks for container lifecycle events.
 	Hooks Hooks = 6;
@@ -55,7 +55,7 @@ message Process {
 	Box ConsoleSize = 2;
 
 	// User specifies user information for the process.
-	User User = 3 [(gogoproto.nullable) = false];
+	User User = 3;
 
 	// Args specifies the binary and arguments for the application to execute.
 	repeated string Args = 4;
@@ -71,7 +71,7 @@ message Process {
 	LinuxCapabilities Capabilities = 7;
 
 	// Rlimits specifies rlimit options to apply to the process.
-	repeated POSIXRlimit Rlimits = 8 [(gogoproto.nullable) = false];
+	repeated POSIXRlimit Rlimits = 8;
 
 	// NoNewPrivileges controls whether additional privileges could be gained by processes in the container.	
 	bool NoNewPrivileges = 9;
@@ -159,22 +159,22 @@ message Root {
 
 message Hooks {
 	// Prestart is a list of hooks to be run before the container process is executed.
-	repeated Hook Prestart = 1  [(gogoproto.nullable) = false];
+	repeated Hook Prestart = 1;
 
 	// Poststart is a list of hooks to be run after the container process is started.
-	repeated Hook Poststart = 2  [(gogoproto.nullable) = false];
+	repeated Hook Poststart = 2;
 
 	// Poststop is a list of hooks to be run after the container process exits.
-	repeated Hook Poststop = 3  [(gogoproto.nullable) = false];
+	repeated Hook Poststop = 3;
 
 	// Createruntime is a list of hooks to be run during the creation of runtime(sandbox).
-	repeated Hook CreateRuntime = 4  [(gogoproto.nullable) = false];
+	repeated Hook CreateRuntime = 4;
 
 	// CreateContainer is a list of hooks to be run after VM is started, and before container is created.
-	repeated Hook CreateContainer = 5  [(gogoproto.nullable) = false];
+	repeated Hook CreateContainer = 5;
 
 	// StartContainer is a list of hooks to be run after container is created, but before it is started.
-	repeated Hook StartContainer = 6  [(gogoproto.nullable) = false];
+	repeated Hook StartContainer = 6;
 }
 
 message Hook {
@@ -186,10 +186,10 @@ message Hook {
 
 message Linux {
 	// UIDMapping specifies user mappings for supporting user namespaces.
-	repeated LinuxIDMapping UIDMappings = 1  [(gogoproto.nullable) = false];
+	repeated LinuxIDMapping UIDMappings = 1;
 
 	// GIDMapping specifies group mappings for supporting user namespaces.
-	repeated LinuxIDMapping GIDMappings = 2  [(gogoproto.nullable) = false];
+	repeated LinuxIDMapping GIDMappings = 2;
 
 	// Sysctl are a set of key value pairs that are set for the container on start
 	map<string, string> Sysctl = 3;
@@ -204,10 +204,10 @@ message Linux {
 	string CgroupsPath = 5;
 
 	// Namespaces contains the namespaces that are created and/or joined by the container
-	repeated LinuxNamespace Namespaces = 6  [(gogoproto.nullable) = false];
+	repeated LinuxNamespace Namespaces = 6;
 
 	// Devices are a list of device nodes that are created for the container
-	repeated LinuxDevice Devices = 7  [(gogoproto.nullable) = false];
+	repeated LinuxDevice Devices = 7;
 
 	// Seccomp specifies the seccomp security settings for the container.
 	LinuxSeccomp Seccomp = 8;
@@ -284,7 +284,7 @@ message LinuxDevice {
 
 message LinuxResources {
 	// Devices configures the device whitelist.
-	repeated LinuxDeviceCgroup Devices = 1  [(gogoproto.nullable) = false];
+	repeated LinuxDeviceCgroup Devices = 1;
 
 	// Memory restriction configuration
 	LinuxMemory Memory = 2;
@@ -299,7 +299,7 @@ message LinuxResources {
 	LinuxBlockIO BlockIO = 5;
 
 	// Hugetlb limit (in bytes)
-	repeated LinuxHugepageLimit HugepageLimits = 6  [(gogoproto.nullable) = false];
+	repeated LinuxHugepageLimit HugepageLimits = 6;
 
 	// Network restriction configuration
 	LinuxNetwork Network = 7;
@@ -384,19 +384,19 @@ message LinuxBlockIO {
 	uint32 LeafWeight = 2;
 
 	// Weight per cgroup per device, can override BlkioWeight
-	repeated LinuxWeightDevice WeightDevice = 3  [(gogoproto.nullable) = false];
+	repeated LinuxWeightDevice WeightDevice = 3;
 
 	// IO read rate limit per cgroup per device, bytes per second
-	repeated LinuxThrottleDevice ThrottleReadBpsDevice = 4  [(gogoproto.nullable) = false];
+	repeated LinuxThrottleDevice ThrottleReadBpsDevice = 4;
 
 	// IO write rate limit per cgroup per device, bytes per second
-	repeated LinuxThrottleDevice ThrottleWriteBpsDevice = 5  [(gogoproto.nullable) = false];
+	repeated LinuxThrottleDevice ThrottleWriteBpsDevice = 5;
 
 	// IO read rate limit per cgroup per device, IO per second
-	repeated LinuxThrottleDevice ThrottleReadIOPSDevice = 6  [(gogoproto.nullable) = false];
+	repeated LinuxThrottleDevice ThrottleReadIOPSDevice = 6;
 
 	// IO write rate limit per cgroup per device, IO per second
-	repeated LinuxThrottleDevice ThrottleWriteIOPSDevice = 7  [(gogoproto.nullable) = false];
+	repeated LinuxThrottleDevice ThrottleWriteIOPSDevice = 7;
 }
 
 message LinuxPids {
@@ -426,7 +426,7 @@ message LinuxNetwork {
 	uint32 ClassID = 1;
 
 	// Set priority of network traffic for container
-	repeated LinuxInterfacePriority Priorities = 2  [(gogoproto.nullable) = false];
+	repeated LinuxInterfacePriority Priorities = 2;
 }
 
 message LinuxHugepageLimit {
@@ -449,7 +449,7 @@ message LinuxSeccomp {
 	string DefaultAction = 1;
 	repeated string Architectures = 2;
 	repeated string Flags = 3;
-	repeated LinuxSyscall Syscalls = 4  [(gogoproto.nullable) = false];
+	repeated LinuxSyscall Syscalls = 4;
 }
 
 message LinuxSeccompArg {
@@ -465,7 +465,7 @@ message LinuxSyscall {
 	oneof ErrnoRet {
 		uint32 errnoret = 3;
 	}
-	repeated LinuxSeccompArg Args = 4  [(gogoproto.nullable) = false];
+	repeated LinuxSeccompArg Args = 4;
 }
 
 message LinuxIntelRdt {

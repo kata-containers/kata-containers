@@ -576,12 +576,12 @@ func TestConstrainGRPCSpec(t *testing.T) {
 
 	g := &pb.Spec{
 		Hooks: &pb.Hooks{},
-		Mounts: []pb.Mount{
+		Mounts: []*pb.Mount{
 			{Destination: "/dev/shm"},
 		},
 		Linux: &pb.Linux{
 			Seccomp: &pb.LinuxSeccomp{},
-			Namespaces: []pb.LinuxNamespace{
+			Namespaces: []*pb.LinuxNamespace{
 				{
 					Type: string(specs.NetworkNamespace),
 					Path: "/abc/123",
@@ -592,16 +592,16 @@ func TestConstrainGRPCSpec(t *testing.T) {
 				},
 			},
 			Resources: &pb.LinuxResources{
-				Devices:        []pb.LinuxDeviceCgroup{},
+				Devices:        []*pb.LinuxDeviceCgroup{},
 				Memory:         &pb.LinuxMemory{},
 				CPU:            &pb.LinuxCPU{},
 				Pids:           &pb.LinuxPids{},
 				BlockIO:        &pb.LinuxBlockIO{},
-				HugepageLimits: []pb.LinuxHugepageLimit{},
+				HugepageLimits: []*pb.LinuxHugepageLimit{},
 				Network:        &pb.LinuxNetwork{},
 			},
 			CgroupsPath: "system.slice:foo:bar",
-			Devices: []pb.LinuxDevice{
+			Devices: []*pb.LinuxDevice{
 				{
 					Path: "/dev/vfio/1",
 					Type: "c",
@@ -716,7 +716,7 @@ func TestHandlePidNamespace(t *testing.T) {
 
 	g := &pb.Spec{
 		Linux: &pb.Linux{
-			Namespaces: []pb.LinuxNamespace{
+			Namespaces: []*pb.LinuxNamespace{
 				{
 					Type: string(specs.NetworkNamespace),
 					Path: "/abc/123",
@@ -747,8 +747,8 @@ func TestHandlePidNamespace(t *testing.T) {
 		Path: "",
 	}
 
-	g.Linux.Namespaces = append(g.Linux.Namespaces, pidNs)
-	g.Linux.Namespaces = append(g.Linux.Namespaces, utsNs)
+	g.Linux.Namespaces = append(g.Linux.Namespaces, &pidNs)
+	g.Linux.Namespaces = append(g.Linux.Namespaces, &utsNs)
 
 	sharedPid = k.handlePidNamespace(g, sandbox)
 	assert.False(sharedPid)
@@ -758,7 +758,7 @@ func TestHandlePidNamespace(t *testing.T) {
 		Type: string(specs.PIDNamespace),
 		Path: "/proc/112/ns/pid",
 	}
-	g.Linux.Namespaces = append(g.Linux.Namespaces, pidNs)
+	g.Linux.Namespaces = append(g.Linux.Namespaces, &pidNs)
 
 	sharedPid = k.handlePidNamespace(g, sandbox)
 	assert.True(sharedPid)
