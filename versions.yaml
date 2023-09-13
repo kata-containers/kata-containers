@@ -300,12 +300,12 @@ externals:
   nydus:
     description: "Nydus image acceleration service"
     url: "https://github.com/dragonflyoss/image-service"
-    version: "v2.2.1"
+    version: "v2.2.3"
 
   nydus-snapshotter:
     description: "Snapshotter for Nydus image acceleration service"
     url: "https://github.com/containerd/nydus-snapshotter"
-    version: "v0.3.3"
+    version: "v0.12.0"
 
   ovmf:
     description: "Firmware, implementation of UEFI for virtual machines."
