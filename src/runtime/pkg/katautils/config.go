@@ -1680,8 +1680,8 @@ func checkConfig(config oci.RuntimeConfig) error {
 // Only allow one of the following settings for cold-plug:
 // no-port, root-port, switch-port
 func checkPCIeConfig(coldPlug config.PCIePort, hotPlug config.PCIePort, machineType string, hypervisorType virtcontainers.HypervisorType) error {
-	if hypervisorType != virtcontainers.QemuHypervisor {
-		kataUtilsLogger.Warn("Advanced PCIe Topology only available for QEMU hypervisor, ignoring hot(cold)_vfio_port setting")
+	if hypervisorType != virtcontainers.QemuHypervisor && hypervisorType != virtcontainers.ClhHypervisor {
+		kataUtilsLogger.Warn("Advanced PCIe Topology only available for QEMU/CLH hypervisor, ignoring hot(cold)_vfio_port setting")
 		return nil
 	}
 
@@ -1696,6 +1696,14 @@ func checkPCIeConfig(coldPlug config.PCIePort, hotPlug config.PCIePort, machineT
 	if machineType != "q35" && machineType != "virt" {
 		return nil
 	}
+	if hypervisorType == virtcontainers.ClhHypervisor {
+		if coldPlug != config.NoPort {
+			return fmt.Errorf("cold-plug not supported on CLH")
+		}
+		if hotPlug != config.RootPort {
+			return fmt.Errorf("only hot-plug=%s supported on CLH", config.RootPort)
+		}
+	}
 
 	var port config.PCIePort
 	if coldPlug != config.NoPort {
@@ -1703,10 +1711,6 @@ func checkPCIeConfig(coldPlug config.PCIePort, hotPlug config.PCIePort, machineT
 	}
 	if hotPlug != config.NoPort {
 		port = hotPlug
-	}
-	if port == config.NoPort {
-		return fmt.Errorf("invalid vfio_port=%s setting, use on of %s, %s, %s",
-			port, config.BridgePort, config.RootPort, config.SwitchPort)
 	}
 	if port == config.BridgePort || port == config.RootPort || port == config.SwitchPort {
 		return nil
