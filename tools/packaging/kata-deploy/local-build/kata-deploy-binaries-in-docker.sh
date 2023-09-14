@@ -77,13 +77,22 @@ docker build -q -t build-kata-deploy \
 	--build-arg HOST_DOCKER_GID=${docker_gid} \
 	"${script_dir}/dockerbuild/"
 
+ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY:-}"
+ARTEFACT_REGISTRY_USERNAME="${ARTEFACT_REGISTRY_USERNAME:-}"
+ARTEFACT_REGISTRY_PASSWORD="${ARTEFACT_REGISTRY_PASSWORD:-}"
+TARGET_BRANCH="${TARGET_BRANCH:-}"
+
 docker run \
 	-v $HOME/.docker:/root/.docker \
 	-v /var/run/docker.sock:/var/run/docker.sock \
 	-v "${kata_dir}:${kata_dir}" \
 	--env CI="${CI:-}" \
 	--env USER=${USER} \
-	--env BUILDER_REGISTRY="${BUILDER_REGISTRY:-}" \
+	--env ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY}" \
+	--env ARTEFACT_REGISTRY_USERNAME="${ARTEFACT_REGISTRY_USERNAME}" \
+	--env ARTEFACT_REGISTRY_PASSWORD="${ARTEFACT_REGISTRY_PASSWORD}" \
+	--env TARGET_BRANCH="${TARGET_BRANCH}" \
+	--env BUILDER_REGISTRY="${BUILDER_REGISTRY}" \
 	--env PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-"no"}" \
 	--env INITRAMFS_CONTAINER_BUILDER="${INITRAMFS_CONTAINER_BUILDER:-}" \
 	--env KERNEL_CONTAINER_BUILDER="${KERNEL_CONTAINER_BUILDER:-}" \
