@@ -205,7 +205,7 @@ fn real_main() -> Result<(), std::io::Error> {
                 "protos/health.proto",
                 "protos/image.proto",
                 #[cfg(feature = "sealed-secret")]
-                "protos/sealed_secret.proto",
+                "protos/confidential_data_hub.proto",
             ],
             true,
         )?;
@@ -215,8 +215,8 @@ fn real_main() -> Result<(), std::io::Error> {
         fs::rename("src/image_ttrpc.rs", "src/image_ttrpc_async.rs")?;
         #[cfg(feature = "sealed-secret")]
         fs::rename(
-            "src/sealed_secret_ttrpc.rs",
-            "src/sealed_secret_ttrpc_async.rs",
+            "src/confidential_data_hub_ttrpc.rs",
+            "src/confidential_data_hub_ttrpc_async.rs",
         )?;
     }
 
@@ -227,7 +227,7 @@ fn real_main() -> Result<(), std::io::Error> {
             "protos/health.proto",
             "protos/image.proto",
             #[cfg(feature = "sealed-secret")]
-            "protos/sealed_secret.proto",
+            "protos/confidential_data_hub.proto",
         ],
         false,
     )?;

@@ -10,7 +10,9 @@
 use anyhow::{anyhow, Result};
 use oci::{Mount, Spec};
 use protocols::{
-    sealed_secret, sealed_secret_ttrpc_async, sealed_secret_ttrpc_async::SealedSecretServiceClient,
+    confidential_data_hub, confidential_data_hub_ttrpc_async,
+    confidential_data_hub_ttrpc_async::SealedSecretServiceClient,
+    confidential_data_hub_ttrpc_async::SecureMountServiceClient,
 };
 use std::fs;
 use std::os::unix::fs::symlink;
@@ -27,6 +29,7 @@ fn sl() -> slog::Logger {
 #[derive(Clone)]
 pub struct CDHClient {
     sealed_secret_client: Option<SealedSecretServiceClient>,
+    secure_mount_client: Option<SecureMountServiceClient>,
 }
 
 impl CDHClient {
@@ -34,25 +37,54 @@ impl CDHClient {
         let c = ttrpc::asynchronous::Client::connect(CDH_ADDR);
         match c {
             Ok(v) => {
-                let ssclient = sealed_secret_ttrpc_async::SealedSecretServiceClient::new(v);
+                let ssclient =
+                    confidential_data_hub_ttrpc_async::SealedSecretServiceClient::new(v.clone());
+                let smclient = confidential_data_hub_ttrpc_async::SecureMountServiceClient::new(v);
                 Ok(CDHClient {
                     sealed_secret_client: Some(ssclient),
+                    secure_mount_client: Some(smclient),
                 })
             }
             Err(_) => Ok(CDHClient {
                 sealed_secret_client: None,
+                secure_mount_client: None,
             }),
         }
+    }
+
+    pub async fn secure_mount_async(
+        &self,
+        driver: String,
+        driver_options: Vec<String>,
+        source: String,
+        fstype: String,
+        options: Vec<String>,
+        mount_point: String,
+    ) -> Result<confidential_data_hub::SecureMountResponse> {
+        let mut req = confidential_data_hub::SecureMountRequest::new();
+        req.set_driver(driver);
+        req.set_driver_options(driver_options);
+        req.set_source(source);
+        req.set_fstype(fstype);
+        req.set_options(options);
+        req.set_mount_point(mount_point);
+        let mount_path = self
+            .secure_mount_client
+            .as_ref()
+            .ok_or(anyhow!("unwrap secure_mount_client failed"))?
+            .secure_mount(ttrpc::context::with_timeout(SEALED_SECRET_TIMEOUT), &req)
+            .await?;
+        Ok(mount_path)
     }
 
     pub async fn unseal_secret_async(
         &self,
         sealed: &str,
-    ) -> Result<sealed_secret::UnsealSecretOutput> {
+    ) -> Result<confidential_data_hub::UnsealSecretOutput> {
         let secret = sealed
             .strip_prefix("sealed.")
             .ok_or(anyhow!("strip_prefix \"sealed.\" failed"))?;
-        let mut input = sealed_secret::UnsealSecretInput::new();
+        let mut input = confidential_data_hub::UnsealSecretInput::new();
         input.set_secret(secret.into());
         let unseal = self
             .sealed_secret_client
@@ -164,7 +196,7 @@ mod tests {
     use crate::cdh::SECRETS_DIR;
     use anyhow::anyhow;
     use async_trait::async_trait;
-    use protocols::{sealed_secret, sealed_secret_ttrpc_async};
+    use protocols::{confidential_data_hub, confidential_data_hub_ttrpc_async};
     use std::fs;
     use std::fs::File;
     use std::io::{Read, Write};
@@ -175,13 +207,13 @@ mod tests {
     struct TestService;
 
     #[async_trait]
-    impl sealed_secret_ttrpc_async::SealedSecretService for TestService {
+    impl confidential_data_hub_ttrpc_async::SealedSecretService for TestService {
         async fn unseal_secret(
             &self,
             _ctx: &::ttrpc::asynchronous::TtrpcContext,
-            _req: sealed_secret::UnsealSecretInput,
-        ) -> ttrpc::error::Result<sealed_secret::UnsealSecretOutput> {
-            let mut output = sealed_secret::UnsealSecretOutput::new();
+            _req: confidential_data_hub::UnsealSecretInput,
+        ) -> ttrpc::error::Result<confidential_data_hub::UnsealSecretOutput> {
+            let mut output = confidential_data_hub::UnsealSecretOutput::new();
             output.set_plaintext("unsealed".into());
             Ok(output)
         }
@@ -202,9 +234,9 @@ mod tests {
     fn start_ttrpc_server() {
         tokio::spawn(async move {
             let ss = Box::new(TestService {})
-                as Box<dyn sealed_secret_ttrpc_async::SealedSecretService + Send + Sync>;
+                as Box<dyn confidential_data_hub_ttrpc_async::SealedSecretService + Send + Sync>;
             let ss = Arc::new(ss);
-            let ss_service = sealed_secret_ttrpc_async::create_sealed_secret_service(ss);
+            let ss_service = confidential_data_hub_ttrpc_async::create_sealed_secret_service(ss);
 
             remove_if_sock_exist(CDH_ADDR).unwrap();
 
