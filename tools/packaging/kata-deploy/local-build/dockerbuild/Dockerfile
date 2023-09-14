@@ -7,10 +7,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV INSTALL_IN_GOPATH=false
 
 COPY install_yq.sh /usr/bin/install_yq.sh
+COPY install_oras.sh /usr/bin/install_oras.sh
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# Install yq and docker
+# Install yq, oras, and docker
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
@@ -18,6 +19,7 @@ RUN apt-get update && \
         sudo && \
     apt-get clean && rm -rf /var/lib/apt/lists/ && \
     install_yq.sh && \
+    install_oras.sh && \
     curl -fsSL https://get.docker.com -o get-docker.sh && \
     if uname -m | grep -Eq 's390x|ppc64le'; then export VERSION="v20.10" && \
     sed -i 's/\<docker-compose-plugin\>//g' get-docker.sh; fi && \
