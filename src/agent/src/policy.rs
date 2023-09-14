@@ -3,9 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use tokio::io::AsyncWriteExt;
 use tokio::time::{sleep, Duration};
 
@@ -106,6 +107,8 @@ impl AgentPolicy {
 
     /// Replace the Policy in OPA.
     pub async fn set_policy(&mut self, policy: &str) -> Result<()> {
+        check_policy_hash(policy)?;
+
         // Delete the old rules.
         self.opa_client
             .delete(&self.policy_path)
@@ -194,4 +197,25 @@ impl AgentPolicy {
             }
         }
     }
+}
+
+pub fn check_policy_hash(policy: &str) -> Result<()> {
+    let mut hasher = Sha256::new();
+    hasher.update(policy.as_bytes());
+    let digest = hasher.finalize();
+    debug!(sl!(), "policy: calculated hash ({:?})", digest.as_slice());
+
+    let mut firmware = sev::firmware::guest::Firmware::open()?;
+    let report_data: [u8; 64] = [0; 64];
+    let report = firmware.get_report(None, Some(report_data), Some(0))?;
+
+    if report.host_data != digest.as_slice() {
+        bail!(
+            "Unexpected policy hash ({:?}), expected ({:?})",
+            digest.as_slice(),
+            report.host_data
+        );
+    }
+
+    Ok(())
 }

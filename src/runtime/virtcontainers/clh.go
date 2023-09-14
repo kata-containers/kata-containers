@@ -89,7 +89,7 @@ const (
 	clhAPISocket                           = "clh-api.sock"
 	virtioFsSocket                         = "virtiofsd.sock"
 	defaultClhPath                         = "/usr/local/bin/cloud-hypervisor"
-	snpHostDataDummy                       = "0123456789012345678901234567890123456789012345678901234567890123"
+	snpZeroHostData                        = "0000000000000000000000000000000000000000000000000000000000000000"
 )
 
 // Interface that hides the implementation of openAPI client
@@ -458,7 +458,11 @@ func (clh *cloudHypervisor) enableProtection() error {
 		}
 		clh.vmconfig.Platform.SetSnp(true)
 
-		clh.vmconfig.Payload.SetHostData(snpHostDataDummy)
+		if len(clh.config.PolicyHash) > 0 {
+			clh.vmconfig.Payload.SetHostData(clh.config.PolicyHash)
+		} else {
+			clh.vmconfig.Payload.SetHostData(snpZeroHostData)
+		}
 
 		return nil
 

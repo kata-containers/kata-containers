@@ -422,6 +422,7 @@ type HypervisorConfig struct {
 	DisableGuestSeLinux            bool
 	LegacySerial                   bool
 	ColdPlugVFIO                   hv.PCIePort
+	PolicyHash                     string
 }
 
 // vcpu mapping from vcpu number to thread number
