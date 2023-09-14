@@ -25,7 +25,7 @@ jobs:
           - clh
           - dragonball
           - qemu
-    runs-on: garm-ubuntu-2304
+    runs-on: garm-ubuntu-2304-smaller
     env:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
