@@ -24,7 +24,6 @@ build_rootfs()
 
 	# Reduce the image size, for faster TEE memory measurement.
 	local MARINER_REMOVED_PACKAGES=( \
-		"bash" \
 		"bc" \
 		"bridge-utils" \
 		"bzip2" \
@@ -42,7 +41,6 @@ build_rootfs()
 		"gmp" \
 		"gnupg2" \
 		"gpgme" \
-		"grep" \
 		"gzip" \
 		"iana-etc" \
 		"iproute" \
@@ -72,7 +70,6 @@ build_rootfs()
 		"pinentry" \
 		"pcre" \
 		"procps-ng" \
-		"readline" \
 		"rpm" \
 		"rpm-libs" \
 		"sed" \
