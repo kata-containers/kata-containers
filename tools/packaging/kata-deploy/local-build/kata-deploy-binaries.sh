@@ -161,11 +161,14 @@ install_image() {
 	local libseccomp_version="$(get_from_kata_deps "externals.libseccomp.version")"
 	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
 
+	latest_artefact="${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${image_type}"
+	latest_builder_image=""
+
 	install_cached_tarball_component \
 		"${component}" \
 		"${jenkins}" \
-		"${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${image_type}" \
-		"" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
 		&& return 0
@@ -208,13 +211,16 @@ install_initrd() {
 	local libseccomp_version="$(get_from_kata_deps "externals.libseccomp.version")"
 	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
 
+	latest_artefact="${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${initrd_type}"
+	latest_builder_image=""
+
 	[[ "${ARCH}" == "aarch64" && "${CROSS_BUILD}" == "true" ]] && echo "warning: Don't cross build initrd for aarch64 as it's too slow" && exit 0
 
 	install_cached_tarball_component \
 		"${component}" \
 		"${jenkins}" \
-		"${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${initrd_type}" \
-		"" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
 		&& return 0
@@ -247,11 +253,14 @@ install_cached_kernel_tarball_component() {
 	local kernel_name=${1}
 	local module_dir=${2:-""}
 
+	latest_artefact="${kernel_version}-${kernel_kata_config_version}-$(get_last_modification $(dirname $kernel_builder))"
+	latest_builder_image="$(get_kernel_image_name)"
+
 	install_cached_tarball_component \
 		"${kernel_name}" \
 		"${jenkins_url}/job/kata-containers-main-${kernel_name}-${ARCH}/${cached_artifacts_path}" \
-		"${kernel_version}-${kernel_kata_config_version}-$(get_last_modification $(dirname $kernel_builder))" \
-		"$(get_kernel_image_name)" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
 		|| return 1
@@ -264,8 +273,8 @@ install_cached_kernel_tarball_component() {
 	install_cached_tarball_component \
 		"${kernel_name}" \
 		"${jenkins_url}/job/kata-containers-main-${kernel_name}-$(uname -m)/${cached_artifacts_path}" \
-		"${kernel_version}-${kernel_kata_config_version}-$(get_last_modification $(dirname $kernel_builder))" \
-		"$(get_kernel_image_name)" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
 		"kata-static-kernel-sev-modules.tar.xz" \
 		"${workdir}/kata-static-kernel-sev-modules.tar.xz" \
 		|| return 1
@@ -384,11 +393,14 @@ install_qemu_helper() {
 	export qemu_repo="$(get_from_kata_deps ${qemu_repo_yaml_path})"
 	export qemu_version="$(get_from_kata_deps ${qemu_version_yaml_path})"
 
+	latest_artefact="${qemu_version}-$(calc_qemu_files_sha256sum)"
+	latest_builder_image="$(get_qemu_image_name)"
+
 	install_cached_tarball_component \
 		"${qemu_name}" \
 		"${jenkins_url}/job/kata-containers-main-${qemu_name}-${ARCH}/${cached_artifacts_path}" \
-		"${qemu_version}-$(calc_qemu_files_sha256sum)" \
-		"$(get_qemu_image_name)" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
 		&& return 0
@@ -433,11 +445,14 @@ install_qemu_snp_experimental() {
 install_firecracker() {
 	local firecracker_version=$(get_from_kata_deps "assets.hypervisor.firecracker.version")
 
+	latest_artefact="${firecracker_version}"
+	latest_builder_image=""
+
 	install_cached_tarball_component \
 		"firecracker" \
 		"${jenkins_url}/job/kata-containers-main-firecracker-$(uname -m)/${cached_artifacts_path}" \
-		"${firecracker_version}" \
-		"" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
 		&& return 0
@@ -455,11 +470,14 @@ install_clh_helper() {
 	features="${2}"
 	suffix="${3:-""}"
 
+	latest_artefact="$(get_from_kata_deps "assets.hypervisor.cloud_hypervisor.version")"
+	latest_builder_image=""
+
 	install_cached_tarball_component \
 		"cloud-hypervisor${suffix}" \
 		"${jenkins_url}/job/kata-containers-main-clh-$(uname -m)${suffix}/${cached_artifacts_path}" \
-		"$(get_from_kata_deps "assets.hypervisor.cloud_hypervisor.version")" \
-		"" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
 		&& return 0
@@ -495,11 +513,14 @@ install_clh_glibc() {
 
 # Install static virtiofsd asset
 install_virtiofsd() {
+	latest_artefact="$(get_from_kata_deps "externals.virtiofsd.version")-$(get_from_kata_deps "externals.virtiofsd.toolchain")"
+	latest_builder_image="$(get_virtiofsd_image_name)"
+
 	install_cached_tarball_component \
 		"virtiofsd" \
 		"${jenkins_url}/job/kata-containers-main-virtiofsd-${ARCH}/${cached_artifacts_path}" \
-		"$(get_from_kata_deps "externals.virtiofsd.version")-$(get_from_kata_deps "externals.virtiofsd.toolchain")" \
-		"$(get_virtiofsd_image_name)" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
 		&& return 0
@@ -515,11 +536,14 @@ install_virtiofsd() {
 install_nydus() {
 	[ "${ARCH}" == "aarch64" ] && ARCH=arm64
 
+	latest_artefact="$(get_from_kata_deps "externals.nydus.version")"
+	latest_builder_image=""
+
 	install_cached_tarball_component \
 		"nydus" \
 		"${jenkins_url}/job/kata-containers-main-nydus-$(uname -m)/${cached_artifacts_path}" \
-		"$(get_from_kata_deps "externals.nydus.version")" \
-		"" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
 		&& return 0
@@ -540,13 +564,15 @@ install_shimv2() {
 	local protocols_last_commit="$(get_last_modification "${repo_root_dir}/src/libs/protocols")"
 	local GO_VERSION="$(get_from_kata_deps "languages.golang.meta.newest-version")"
 	local RUST_VERSION="$(get_from_kata_deps "languages.rust.meta.newest-version")"
-	local shim_v2_version="${shim_v2_last_commit}-${protocols_last_commit}-${runtime_rs_last_commit}-${GO_VERSION}-${RUST_VERSION}"
+	
+	latest_artefact="${shim_v2_last_commit}-${protocols_last_commit}-${runtime_rs_last_commit}-${GO_VERSION}-${RUST_VERSION}"
+	latest_builder_image="$(get_shim_v2_image_name)"
 
 	install_cached_tarball_component \
 		"shim-v2" \
 		"${jenkins_url}/job/kata-containers-main-shim-v2-${ARCH}/${cached_artifacts_path}" \
-		"${shim_v2_version}" \
-		"$(get_shim_v2_image_name)" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
 		&& return 0
@@ -573,13 +599,16 @@ install_ovmf() {
 	tarball_name="${2:-edk2-x86_64.tar.gz}"
 
 	local component_name="ovmf"
-	local component_version="$(get_from_kata_deps "externals.ovmf.${ovmf_type}.version")"
 	[ "${ovmf_type}" == "tdx" ] && component_name="tdvf"
+
+	latest_artefact="$(get_from_kata_deps "externals.ovmf.${ovmf_type}.version")"
+	latest_builder_image="$(get_ovmf_image_name)"
+
 	install_cached_tarball_component \
 		"${component_name}" \
 		"${jenkins_url}/job/kata-containers-main-ovmf-${ovmf_type}-$(uname -m)/${cached_artifacts_path}" \
-		"${component_version}" \
-		"$(get_ovmf_image_name)" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
 		&& return 0
@@ -606,6 +635,10 @@ get_kata_version() {
 
 handle_build() {
 	info "DESTDIR ${destdir}"
+
+	latest_artefact=""
+	latest_builder_image=""
+
 	local build_target
 	build_target="$1"
 
@@ -693,6 +726,9 @@ handle_build() {
 		sudo tar cvfJ "${final_tarball_path}" "."
 	fi
 	tar tvf "${final_tarball_path}"
+
+	echo "${latest_artefact}" > ${workdir}/${build_target}-version
+	echo "${latest_builder_image}" > ${workdir}/${build_target}-builder-image-version
 }
 
 silent_mode_error_trap() {
