@@ -68,7 +68,6 @@ build_rootfs()
 		"openssl" \
 		"pinentry" \
 		"pcre" \
-		"procps-ng" \
 		"rpm" \
 		"rpm-libs" \
 		"sed" \
