@@ -43,7 +43,7 @@ function create_cluster() {
     az aks create \
         -g "${AZ_RG}" \
         -n "$(_print_cluster_name ${test_type})" \
-        -s "Standard_D4s_v5" \
+        -s "Standard_D2s_v5" \
         --node-count 1 \
         --generate-ssh-keys \
         $([ "${KATA_HOST_OS}" = "cbl-mariner" ] && echo "--os-sku AzureLinux --workload-runtime KataMshvVmIsolation")
