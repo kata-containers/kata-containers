@@ -41,6 +41,11 @@ readonly cached_artifacts_path="lastSuccessfulBuild/artifact/artifacts"
 ARCH=${ARCH:-$(uname -m)}
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
 USE_CACHE="${USE_CACHE:-"yes"}"
+ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY:-}"
+ARTEFACT_REGISTRY_USERNAME="${ARTEFACT_REGISTRY_USERNAME:-}"
+ARTEFACT_REGISTRY_PASSWORD="${ARTEFACT_REGISTRY_PASSWORD:-}"
+TARGET_BRANCH="${TARGET_BRANCH:=}"
+PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-}"
 
 workdir="${WORKDIR:-$PWD}"
 
@@ -729,6 +734,22 @@ handle_build() {
 
 	echo "${latest_artefact}" > ${workdir}/${build_target}-version
 	echo "${latest_builder_image}" > ${workdir}/${build_target}-builder-image-version
+
+	if [ "${PUSH_TO_REGISTRY}" = "yes" ]; then
+		if [ -z "${ARTEFACT_REGISTRY}" ] ||
+			[ -z "${ARTEFACT_REGISTRY_USERNAME}" ] ||
+			[ -z "${ARTEFACT_REGISTRY_PASSWORD}" ] ||
+		      	[ -z "${TARGET_BRANCH}" ]; then
+			die "ARTEFACT_REGISTRY, ARTEFACT_REGISTRY_USERNAME, ARTEFACT_REGISTRY_PASSWORD and TARGET_BRANCH must be passed to the script when pushing the artefacts to the registry!"
+		fi
+
+		pushd ${workdir}
+			echo "${ARTEFACT_REGISTRY_PASSWORD}" | oras login "${ARTEFACT_REGISTRY}" -u "${ARTEFACT_REGISTRY_USERNAME}" --password-stdin
+
+			oras push ${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) ${final_tarball_name} ${build_target}-version ${build_target}-builder-image-version
+			oras logout "${ARTEFACT_REGISTRY}"
+		popd
+	fi
 }
 
 silent_mode_error_trap() {
