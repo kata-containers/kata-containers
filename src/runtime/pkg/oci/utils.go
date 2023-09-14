@@ -472,6 +472,8 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		return err
 	}
 
+	addHypervisorVolumeNameOverrides(ocispec, config)
+
 	if value, ok := ocispec.Annotations[vcAnnotations.MachineType]; ok {
 		if value != "" {
 			config.HypervisorConfig.HypervisorMachineType = value
@@ -612,6 +614,14 @@ func addHypervisorHotColdPlugVfioOverrides(ocispec specs.Spec, sbConfig *vc.Sand
 		sbConfig.HypervisorConfig.HotPlugVFIO = config.NoPort
 	}
 	return nil
+}
+
+func addHypervisorVolumeNameOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) {
+	if value, ok := ocispec.Annotations[vcAnnotations.VolumeName]; ok {
+		if value != "" {
+			sbConfig.HypervisorConfig.VolumeName = value
+		}
+	}
 }
 
 func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, runtime RuntimeConfig) error {

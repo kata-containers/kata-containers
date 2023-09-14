@@ -20,6 +20,7 @@ import (
 	vf "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/factory"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/sirupsen/logrus"
 )
 
 // createTracingTags defines tags for the trace span
@@ -122,6 +123,9 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 		return nil, vc.Process{}, err
 	}
 
+	logrus.Debugf("Create.go Sharath SandboxConfig HypervisorConfig - %+v", sandboxConfig.HypervisorConfig)
+	logrus.Debugf("Create.go Sharath RuntimeConfig HypervisorConfig - %+v", runtimeConfig.HypervisorConfig)
+	logrus.Debugf("Create.go Sharath ociSpec Annotations - %+v", ociSpec.Annotations)
 	// setup shared path in hypervisor config:
 	sandboxConfig.HypervisorConfig.SharedPath = vc.GetSharePath(containerID)
 
@@ -167,6 +171,8 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 	delete(ociSpec.Annotations, vcAnnotations.Policy)
 	delete(sandboxConfig.Annotations, vcAnnotations.Policy)
 
+	// kataUtilsLogger.Debugf("Sharath SandboxConfig Annotations - %+v", sandboxConfig.Annotations)
+	// kataUtilsLogger.Debugf("Sharath SandboxConfig HypervisorConfig - %+v", sandboxConfig.HypervisorConfig)
 	sandbox, err := vci.CreateSandbox(ctx, sandboxConfig, func(ctx context.Context) error {
 		// Run pre-start OCI hooks, in the runtime namespace.
 		if err := PreStartHooks(ctx, ociSpec, containerID, bundlePath); err != nil {
@@ -183,10 +189,10 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 	if err != nil {
 		return nil, vc.Process{}, err
 	}
-
 	sid := sandbox.ID()
 	kataUtilsLogger = kataUtilsLogger.WithField("sandbox", sid)
 	katatrace.AddTags(span, "sandbox_id", sid)
+	kataUtilsLogger.Debugf("Sharath Sandbox - %+v", sandbox)
 
 	// container removed, no container will be found
 

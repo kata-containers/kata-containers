@@ -19,6 +19,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
+	"github.com/sirupsen/logrus"
 )
 
 func cReap(s *service, status int, id, execid string, exitat time.Time) {
@@ -40,6 +41,7 @@ func cleanupContainer(ctx context.Context, sandboxID, cid, bundlePath string) er
 		return err
 	}
 
+	logrus.Debug("cleanupContainer() trace from utils.go - Finished vci.CleanupContainer()")
 	rootfs := filepath.Join(bundlePath, "rootfs")
 
 	if err := mount.UnmountAll(rootfs, 0); err != nil {
@@ -47,6 +49,7 @@ func cleanupContainer(ctx context.Context, sandboxID, cid, bundlePath string) er
 		return err
 	}
 
+	logrus.Debug("cleanupContainer() trace from utils.go")
 	return nil
 }
 

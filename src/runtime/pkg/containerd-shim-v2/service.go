@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	sysexec "os/exec"
+	"runtime"
 	goruntime "runtime"
 	"runtime/debug"
 	"sync"
@@ -326,7 +327,7 @@ func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err e
 	logrus.WithFields(logrus.Fields{"func": "Cleanup"}).Info("Service Call")
 	span, spanCtx := katatrace.Trace(s.rootCtx, shimLog, "Cleanup", shimTracingTags)
 	defer span.End()
-	logrus.Info("at Cleanup")
+	logrus.Debug("at Cleanup")
 
 	debug.PrintStack()
 
@@ -370,17 +371,20 @@ func (s *service) Cleanup(ctx context.Context) (_ *taskAPI.DeleteResponse, err e
 			return nil, err
 		}
 	case vc.PodContainer:
-		sandboxID, err := oci.SandboxID(ociSpec)
+		logrus.Debug("Clean up 2")
+		// Sharath: Technically this does nothing now. But just keeping it to see if SandboxID exists in ociSpec.
+		_, err := oci.SandboxID(ociSpec)
 		if err != nil {
 			return nil, err
 		}
-		logrus.Info("Clean up 2")
-		err = cleanupContainer(spanCtx, sandboxID, s.id, path)
-		if err != nil {
-			return nil, err
-		}
+		// Sharath: Commenting since there is no container to cleanup
+		// err = cleanupContainer(spanCtx, sandboxID, s.id, path)
+		// if err != nil {
+		// 	return nil, err
+		// }
 	}
 
+	logrus.Debug("CleanUp at service.go")
 	return &taskAPI.DeleteResponse{
 		ExitedAt:   time.Now(),
 		ExitStatus: 128 + uint32(unix.SIGKILL),
@@ -668,6 +672,10 @@ func (s *service) ResizePty(ctx context.Context, r *taskAPI.ResizePtyRequest) (_
 func (s *service) State(ctx context.Context, r *taskAPI.StateRequest) (_ *taskAPI.StateResponse, err error) {
 	logrus.WithFields(logrus.Fields{"func": "State", "ID": r.ID}).Info("Service Call")
 	shimLog.WithField("container", r.ID).Debug("State() start")
+	_, file, no, ok := runtime.Caller(1)
+	if ok {
+		logrus.Debug("called from ", "file", file, "number", no)
+	}
 	defer shimLog.WithField("container", r.ID).Debug("State() end")
 	span, _ := katatrace.Trace(s.rootCtx, shimLog, "State", shimTracingTags)
 	defer span.End()
@@ -723,8 +731,6 @@ func (s *service) State(ctx context.Context, r *taskAPI.StateRequest) (_ *taskAP
 	if err != nil {
 		return nil, err
 	}
-
-	logrus.Info("third return !!!")
 
 	return &taskAPI.StateResponse{
 		ID:         execs.id,
@@ -859,18 +865,23 @@ func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.E
 	_, err = s.Cleanup(ctx)
 	logrus.WithField("Exit code", err).Info("exiting with")
 
+	logrus.Debug("Setting Task Status to stopped - service.go")
 	c.status = task.StatusStopped
-	return empty, nil
+	// return empty, nil
 
 	processStatus := c.status
 	processID := c.id
+	logrus.Debug("Kill - 1")
 	if r.ExecID != "" {
+		logrus.Debug("Kill - 2")
 		execs, err := c.getExec(r.ExecID)
 		if err != nil {
+			logrus.Debug("Kill - 3 - Shouldn't come here")
 			return nil, err
 		}
 		processID = execs.id
 		if processID == "" {
+			logrus.Debug("Kill - 4 - Shouldn't come here")
 			shimLog.WithFields(logrus.Fields{
 				"sandbox":   s.sandbox.ID(),
 				"container": c.id,
@@ -878,8 +889,10 @@ func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.E
 			}).Debug("Id of exec process to be signalled is empty")
 			return empty, errors.New("The exec process does not exist")
 		}
+		logrus.Debug("Kill - 5")
 		processStatus = execs.status
 	} else {
+		logrus.Debug("Kill - 6")
 		r.All = true
 	}
 
@@ -896,9 +909,11 @@ func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.E
 			"container": c.id,
 			"exec-id":   r.ExecID,
 		}).Debug("process has already stopped")
+		logrus.Debug("Kill - 7")
 		return empty, nil
 	}
 
+	logrus.Debug("Kill - 8")
 	return empty, s.sandbox.SignalProcess(spanCtx, c.id, processID, signum, r.All)
 }
 

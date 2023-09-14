@@ -15,6 +15,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -199,6 +200,7 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 		ss.Config.Experimental = append(ss.Config.Experimental, e.Name)
 	}
 
+	logrus.Debugf("dumpConfig Kernel Path - %s", sconfig.HypervisorConfig.KernelPath)
 	ss.Config.HypervisorConfig = persistapi.HypervisorConfig{
 		NumVCPUs:                sconfig.HypervisorConfig.NumVCPUs,
 		DefaultMaxVCPUs:         sconfig.HypervisorConfig.DefaultMaxVCPUs,
@@ -438,6 +440,7 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 		sconfig.Experimental = append(sconfig.Experimental, *exp.Get(name))
 	}
 
+	logrus.Debugf("loadSandboxConfig Kernel Path - %s", savedConf.HypervisorConfig.KernelPath)
 	hconf := savedConf.HypervisorConfig
 	sconfig.HypervisorConfig = HypervisorConfig{
 		NumVCPUs:                hconf.NumVCPUs,

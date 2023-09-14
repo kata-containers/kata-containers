@@ -1294,15 +1294,17 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	sharedDirMounts := make(map[string]Mount)
 	ignoredMounts := make(map[string]Mount)
 
-	k.Logger().Info("mounting shared dir mounts")
-	shareStorages, err := c.mountSharedDirMounts(ctx, sharedDirMounts, ignoredMounts)
-	if err != nil {
-		return nil, err
-	}
-	ctrStorages = append(ctrStorages, shareStorages...)
+	// Sharath: We don't need to mount shared dir mounts for now
+	// k.Logger().Debug("mounting shared dir mounts")
+	// shareStorages, err := c.mountSharedDirMounts(ctx, sharedDirMounts, ignoredMounts)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// ctrStorages = append(ctrStorages, shareStorages...)
 
-	k.handleShm(ociSpec.Mounts, sandbox)
+	// k.handleShm(ociSpec.Mounts, sandbox)
 
+	k.Logger().Debug("Coming here - Handle Ephemeral Storage")
 	epheStorages, err := k.handleEphemeralStorage(ociSpec.Mounts)
 	if err != nil {
 		return nil, err
@@ -1317,6 +1319,7 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	}
 	ctrStorages = append(ctrStorages, hugepages...)
 
+	k.Logger().Debug("Coming here - Handle Local Storage")
 	localStorages, err := k.handleLocalStorage(ociSpec.Mounts, sandbox.id, c.rootfsSuffix)
 	if err != nil {
 		return nil, err
@@ -1326,11 +1329,13 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 
 	// We replace all OCI mount sources that match our container mount
 	// with the right source path (The guest one).
+	k.Logger().Debug("Coming here - Replace OCI Mount Source")
 	if err = k.replaceOCIMountSource(ociSpec, sharedDirMounts, sandbox.config.SealedSecretEnabled); err != nil {
 		return nil, err
 	}
 
 	// Remove all mounts that should be ignored from the spec
+	k.Logger().Debug("Coming here - Ignore OCI Mount")
 	if err = k.removeIgnoredOCIMount(ociSpec, ignoredMounts); err != nil {
 		return nil, err
 	}
@@ -1340,6 +1345,7 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 
 	// Block based volumes will require some adjustments in the OCI spec, and creation of
 	// storage objects to pass to the agent.
+	k.Logger().Debug("Coming here - Handle Blk OCI Mounts")
 	layerStorages, volumeStorages, err := k.handleBlkOCIMounts(c, ociSpec)
 	if err != nil {
 		return nil, err
@@ -1391,9 +1397,11 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 		SandboxPidns: sharedPidNs,
 	}
 
-	if _, err = k.sendReq(ctx, req); err != nil {
-		return nil, err
-	}
+	k.Logger().Info("Coming here - 11")
+	// if _, err = k.sendReq(ctx, req); err != nil {
+	// 	return nil, err
+	// }
+	k.Logger().Info("Coming here - 12")
 	return buildProcessFromExecID(req.ExecId)
 }
 
@@ -2040,13 +2048,15 @@ func (k *kataAgent) disconnect(ctx context.Context) error {
 	k.Lock()
 	defer k.Unlock()
 
-	if k.client == nil {
-		return nil
-	}
+	// Commenting here since there is nothing to disconnect since agent is not running in the first place
+	// logrus.Debug("Coming here for Kata Agent Disconnect")
+	// if k.client == nil {
+	// 	return nil
+	// }
 
-	if err := k.client.Close(); err != nil && grpcStatus.Convert(err).Code() != codes.Canceled {
-		return err
-	}
+	// if err := k.client.Close(); err != nil && grpcStatus.Convert(err).Code() != codes.Canceled {
+	// 	return err
+	// }
 
 	k.client = nil
 	k.reqHandlers = nil
@@ -2417,7 +2427,7 @@ func (k *kataAgent) copyFile(ctx context.Context, src, dst string) error {
 		cpReq.Offset = offset
 
 		if _, err = k.sendReq(ctx, cpReq); err != nil {
-			return fmt.Errorf("Could not send CopyFile request: %v", err)
+			return fmt.Errorf("Could not send CopyFile request: %v, CopyFileRequest: %v", err, cpReq)
 		}
 
 		b = b[bytesToCopy:]

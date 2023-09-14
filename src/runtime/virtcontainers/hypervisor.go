@@ -557,6 +557,9 @@ type HypervisorConfig struct {
 	// Size of virtqueues
 	VirtioFSQueueSize uint32
 
+	// Name of Volume
+	VolumeName string
+
 	// User ID.
 	Uid uint32
 
@@ -656,6 +659,7 @@ type HypervisorConfig struct {
 
 	RemoteHypervisorSocket  string
 	RemoteHypervisorTimeout uint32
+	SandboxID               string
 	SandboxName             string
 	SandboxNamespace        string
 
@@ -1029,6 +1033,8 @@ type Hypervisor interface {
 
 	// If wait is set, don't actively stop the sandbox:
 	// just perform cleanup.
+	// StopVM(ctx context.Context, waitOnly bool) error
+	// Sharath: new code
 	StopVM(ctx context.Context, waitOnly bool) error
 	PauseVM(ctx context.Context) error
 	SaveVM() error

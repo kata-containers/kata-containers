@@ -408,10 +408,13 @@ func (c *Container) setContainerState(state types.StateString) error {
 		return types.ErrNeedState
 	}
 
-	c.Logger().Debugf("Setting container state from %v to %v", c.state.State, state)
+	c.Logger().Infof("setContainerState Setting container state from %v to %v", c.state.State, state)
 	// update in-memory state
 	c.state.State = state
 
+	c.Logger().Info("setContainerState Kernel Path - ", c.sandbox.config.HypervisorConfig.KernelPath)
+	c.Logger().Info("setContainerState Image Path - ", c.sandbox.config.HypervisorConfig.ImagePath)
+	c.Logger().Info("setContainerState Initrd Path - ", c.sandbox.config.HypervisorConfig.InitrdPath)
 	// flush data to storage
 	if err := c.sandbox.Save(); err != nil {
 		return err
@@ -919,6 +922,7 @@ func sortContainerVFIODevices(devices []ContainerDevice) []ContainerDevice {
 func (c *Container) create(ctx context.Context) (err error) {
 	// In case the container creation fails, the following takes care
 	// of rolling back all the actions previously performed.
+	logrus.Info("create function, virtcontainers/container.go")
 	defer func() {
 		if err != nil {
 			c.Logger().WithError(err).Error("container create failed")
@@ -975,12 +979,14 @@ func (c *Container) create(ctx context.Context) (err error) {
 	// inside the VM
 	c.getSystemMountInfo()
 
-	process, err := c.sandbox.agent.createContainer(ctx, c.sandbox, c)
-	if err != nil {
-		return err
-	}
-	c.process = *process
+	// Sharath: Commenting code for debugging
+	// process, err := c.sandbox.agent.createContainer(ctx, c.sandbox, c)
+	// if err != nil {
+	// 	return err
+	// }
+	// c.process = *process
 
+	logrus.Info("create Function - Setting Container State")
 	if err = c.setContainerState(types.StateReady); err != nil {
 		return
 	}
@@ -1092,6 +1098,9 @@ func (c *Container) stop(ctx context.Context, force bool) error {
 	defer func() {
 		// Save device and drive data.
 		// TODO: can we merge this saving with setContainerState()?
+		c.Logger().Info("Defer Func Kernel Path - ", c.sandbox.config.HypervisorConfig.KernelPath)
+		c.Logger().Info("Defer Func Image Path - ", c.sandbox.config.HypervisorConfig.ImagePath)
+		c.Logger().Info("Defer Func Initrd Path - ", c.sandbox.config.HypervisorConfig.InitrdPath)
 		if err := c.sandbox.Save(); err != nil {
 			c.Logger().WithError(err).Info("Save container state failed")
 		}

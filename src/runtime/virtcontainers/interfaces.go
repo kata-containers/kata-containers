@@ -26,6 +26,8 @@ type VC interface {
 
 	CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig, hookFunc func(context.Context) error) (VCSandbox, error)
 	CleanupContainer(ctx context.Context, sandboxID, containerID string, force bool) error
+	// Sharath: My implementation of CleanupContainer
+	// CleanupContainer(ctx context.Context, sandbox *VCSandbox, force bool) error
 }
 
 // VCSandbox is the Sandbox interface
@@ -48,6 +50,7 @@ type VCSandbox interface {
 	Delete(ctx context.Context) error
 	Status() SandboxStatus
 	CreateContainer(ctx context.Context, contConfig ContainerConfig) (VCContainer, error)
+	StoreSandbox(ctx context.Context) error
 	DeleteContainer(ctx context.Context, containerID string) (VCContainer, error)
 	StartContainer(ctx context.Context, containerID string) (VCContainer, error)
 	StopContainer(ctx context.Context, containerID string, force bool) (VCContainer, error)

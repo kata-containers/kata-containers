@@ -54,6 +54,9 @@ const (
 	// ImagePath is a sandbox annotation for passing a per container path pointing at the guest image that will run in the container VM.
 	ImagePath = kataAnnotHypervisorPrefix + "image"
 
+	// VolumeName is a sandbox annotation for passing a per container name pointing at the guest volume that will attach to the container VM.
+	VolumeName = kataAnnotHypervisorPrefix + "volume_name"
+
 	// InitrdPath is a sandbox annotation for passing a per container path pointing at the guest initrd image that will run in the container VM.
 	InitrdPath = kataAnnotHypervisorPrefix + "initrd"
 

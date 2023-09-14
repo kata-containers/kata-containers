@@ -141,6 +141,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 
 	detach := !r.Terminal
 	ociSpec, bundlePath, err := loadSpec(r)
+	logrus.Debugf("Sharath containerdshim create() ociSpec - %+v", ociSpec)
 
 	if err != nil {
 		return nil, err
@@ -159,6 +160,8 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 	disableOutput := noNeedForOutput(detach, ociSpec.Process.Terminal)
 	rootfs := filepath.Join(r.Bundle, "rootfs")
 
+	logrus.Debugf("Sharath containerdshim create() ociSpec VM- %+v", ociSpec.VM)
+	logrus.Debugf("Sharath containerdshim create() ociSpec Annotations - %+v", ociSpec.Annotations)
 	runtimeConfig, err := loadRuntimeConfig(s, r, ociSpec.Annotations)
 	if err != nil {
 		return nil, err
@@ -250,6 +253,7 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		// ctx will be canceled after this rpc service call, but the sandbox will live
 		// across multiple rpc service calls.
 		//
+		logrus.Debugf("WILL NOT HAVE - Sharath containerdshim sandboxConfig Hypervisorconfig - %+v", s.config.HypervisorConfig)
 		sandbox, _, err := katautils.CreateSandbox(s.ctx, vci, *ociSpec, *s.config, rootFs, r.ID, bundlePath, disableOutput, false)
 		if err != nil {
 			logrus.WithError(err).Info("*failure in create()")
@@ -270,7 +274,8 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 
 	case vc.PodContainer:
 		logrus.Info("podcontainer case")
-		span, ctx := katatrace.Trace(s.ctx, shimLog, "create", shimTracingTags)
+		// Sharath: Removing ctx, since it is not being used due to commenting CreateContainer code
+		span, _ := katatrace.Trace(s.ctx, shimLog, "create", shimTracingTags)
 		defer span.End()
 
 		if s.sandbox == nil {
@@ -291,9 +296,14 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 			}
 		}()
 
-		_, err = katautils.CreateContainer(ctx, s.sandbox, *ociSpec, rootFs, r.ID, bundlePath, disableOutput, runtimeConfig.DisableGuestEmptyDir)
-		if err != nil {
-			logrus.WithField("return", 10).Info("create exit")
+		// Sharath: Commenting since we don't want to create new Container inside PodSandbox.
+		// _, err = katautils.CreateContainer(ctx, s.sandbox, *ociSpec, rootFs, r.ID, bundlePath, disableOutput, runtimeConfig.DisableGuestEmptyDir)
+		// if err != nil {
+		// 	logrus.WithField("return", 10).Info("create exit")
+		// 	return nil, err
+		// }
+		// Sharath: New Code
+		if err = s.sandbox.StoreSandbox(ctx); err != nil {
 			return nil, err
 		}
 	}

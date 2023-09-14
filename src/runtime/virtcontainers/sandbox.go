@@ -47,7 +47,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cpuset"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 
@@ -330,6 +329,9 @@ func (s *Sandbox) Release(ctx context.Context) error {
 		s.monitor.stop()
 	}
 	s.fsShare.StopFileEventWatcher(ctx)
+	// if s.config.HypervisorType != "remote" {
+	// 	s.hypervisor.Disconnect(ctx)
+	// }
 	s.hypervisor.Disconnect(ctx)
 	return s.agent.disconnect(ctx)
 }
@@ -480,6 +482,110 @@ func (s *Sandbox) getAndStoreGuestDetails(ctx context.Context) error {
 	return nil
 }
 
+// Sharath: New Code
+// getcreatedSandbox gets a sandbox from a sandbox description, the containers list, the hypervisor
+// and the agent passed through the Config structure.
+// It will create and store the sandbox structure, and then ask the hypervisor
+// to physically create that sandbox i.e. starts a VM for that sandbox to eventually
+// be started.
+func getCreatedSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (*Sandbox, error) {
+	span, ctx := katatrace.Trace(ctx, nil, "getCreatedSandbox", sandboxTracingTags, map[string]string{"sandbox_id": sandboxConfig.ID})
+	defer span.End()
+
+	logrus.Debug("getCreatedSandbox() trace - 1")
+	if err := createAssets(ctx, &sandboxConfig); err != nil {
+		return nil, err
+	}
+
+	s, err := getSandbox(ctx, &sandboxConfig, factory)
+	if err != nil {
+		return nil, err
+	}
+
+	logrus.Debug("getCreatedSandbox Coming here - 2")
+	if s.store, err = persist.GetDriver(); err != nil || s.store == nil {
+		return nil, fmt.Errorf("failed to get fs persist driver: %v", err)
+	}
+
+	sandboxConfig.HypervisorConfig.VMStorePath = s.store.RunVMStoragePath()
+	sandboxConfig.HypervisorConfig.RunStorePath = s.store.RunStoragePath()
+
+	logrus.Debug("getCreatedSandbox Coming here - 3")
+	spec := s.GetPatchedOCISpec()
+	if spec != nil && spec.Process.SelinuxLabel != "" {
+		sandboxConfig.HypervisorConfig.SELinuxProcessLabel = spec.Process.SelinuxLabel
+	}
+
+	logrus.Debug("getCreatedSandbox Coming here - 4")
+	s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver,
+		sandboxConfig.HypervisorConfig.EnableVhostUserStore,
+		sandboxConfig.HypervisorConfig.VhostUserStorePath, sandboxConfig.HypervisorConfig.VhostUserDeviceReconnect, nil)
+
+	// Create the sandbox resource controllers.
+	logrus.Debug("getCreatedSandbox Coming here - 5")
+	if err := s.createResourceController(); err != nil {
+		return nil, err
+	}
+
+	logrus.Debug("getCreatedSandbox Coming here - 6")
+	// Ignore the error. Restore can fail for a new sandbox
+	if err := s.Restore(); err != nil {
+		s.Logger().WithError(err).Debug("restore sandbox failed")
+	}
+
+	logrus.Debug("getCreatedSandbox Coming here - 7")
+	logrus.Debug("getCreatedSandbox Coming here - HypervisorConfig ", sandboxConfig.HypervisorConfig)
+	logrus.Debug("getCreatedSandbox Coming here - HypervisorConfig InitrdPath ", sandboxConfig.HypervisorConfig.InitrdPath)
+	logrus.Debug("getCreatedSandbox Coming here - HypervisorConfig ImagePath", sandboxConfig.HypervisorConfig.ImagePath)
+	logrus.Debug("getCreatedSandbox Coming here - HypervisorConfig RemoteHypervisorsocket", sandboxConfig.HypervisorConfig.RemoteHypervisorSocket)
+	if err := validateHypervisorConfig(&sandboxConfig.HypervisorConfig); err != nil {
+		return nil, err
+	}
+
+	setHypervisorConfigAnnotations(&sandboxConfig)
+
+	_, err = s.coldOrHotPlugVFIO(&sandboxConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	logrus.Debug("getCreatedSandbox Create Coming here - 11")
+	if len(s.config.Experimental) != 0 {
+		s.Logger().WithField("features", s.config.Experimental).Infof("Enable experimental features")
+	}
+
+	if err := s.hypervisor.setConfig(&sandboxConfig.HypervisorConfig); err != nil {
+		return nil, err
+	}
+
+	logrus.Debugf("Sharath getCreatedSandbox Sandbox Hypervisorconfig - %+v", s.hypervisor)
+
+	// Sandbox state has been loaded from storage.
+	// If the Stae is not empty, this is a re-creation, i.e.
+	// we don't need to talk to the guest's agent, but only
+	// want to create the sandbox and its containers in memory.
+	logrus.Debug("getCreatedSandbox Create Coming here - 12")
+	logrus.Debugf("getCreatedSandbox Create Coming here - State %s", s.state.State)
+	if s.state.State != "" {
+		return s, nil
+	}
+
+	// The code below only gets called when initially creating a sandbox, not when restoring or
+	// re-creating it. The above check for the sandbox state enforces that.
+	logrus.Debug("getCreatedSandbox Create Coming here - 13")
+	if err := s.fsShare.Prepare(ctx); err != nil {
+		return nil, err
+	}
+
+	// Set sandbox state
+	logrus.Debug("getCreatedSandbox Create Coming here - 14")
+	if err := s.setSandboxState(types.StateReady); err != nil {
+		return nil, err
+	}
+
+	return s, nil
+}
+
 // createSandbox creates a sandbox from a sandbox description, the containers list, the hypervisor
 // and the agent passed through the Config structure.
 // It will create and store the sandbox structure, and then ask the hypervisor
@@ -489,48 +595,65 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 	span, ctx := katatrace.Trace(ctx, nil, "createSandbox", sandboxTracingTags, map[string]string{"sandbox_id": sandboxConfig.ID})
 	defer span.End()
 
+	logrus.Debug("createSandbox() trace - 1")
 	if err := createAssets(ctx, &sandboxConfig); err != nil {
 		return nil, err
 	}
 
+	logrus.Debugf("Create Coming here - 2")
+	logrus.Debugf("Create Coming here - 2 - %+v", sandboxConfig.HypervisorConfig)
+	// logrus.Debugf("Create Coming here - KernelPath", "kernelpath", sandboxConfig.HypervisorConfig.KernelPath)
+	// logrus.Debugf("Create Coming here - ImagePath", "imagepath", sandboxConfig.HypervisorConfig.ImagePath)
+	// logrus.Debugf("Create Coming here - Initrdpath", "initrdpath", sandboxConfig.HypervisorConfig.InitrdPath)
+	// logrus.Debugf("Create Coming here - HypervisorSocket", "hypervisorsocket", sandboxConfig.HypervisorConfig.RemoteHypervisorSocket)
 	s, err := newSandbox(ctx, sandboxConfig, factory)
 	if err != nil {
 		return nil, err
 	}
+	logrus.Debugf("Sharath Create Coming here - 2 - Sandbox Hypervisor %+v", s.hypervisor)
 
+	logrus.Debug("Create Coming here - 3")
 	if len(s.config.Experimental) != 0 {
 		s.Logger().WithField("features", s.config.Experimental).Infof("Enable experimental features")
 	}
+	logrus.Debugf("Sharath Create Coming here - 3 - Sandbox Hypervisor %+v", s.hypervisor)
 
 	// Sandbox state has been loaded from storage.
 	// If the Stae is not empty, this is a re-creation, i.e.
 	// we don't need to talk to the guest's agent, but only
 	// want to create the sandbox and its containers in memory.
+	logrus.Debug("Create Coming here - 4")
 	if s.state.State != "" {
 		return s, nil
 	}
+	logrus.Debugf("Sharath Create Coming here - 4 - Sandbox Hypervisor %+v", s.hypervisor)
 
 	// The code below only gets called when initially creating a sandbox, not when restoring or
 	// re-creating it. The above check for the sandbox state enforces that.
-
+	logrus.Debug("Create Coming here - 5")
 	if err := s.fsShare.Prepare(ctx); err != nil {
 		return nil, err
 	}
+	logrus.Debugf("Sharath Create Coming here - 5 - Sandbox Hypervisor %+v", s.hypervisor)
 
+	logrus.Debug("Create Coming here - 6")
 	if err := s.agent.createSandbox(ctx, s); err != nil {
 		return nil, err
 	}
+	logrus.Debugf("Sharath Create Coming here - 6 - Sandbox Hypervisor %+v", s.hypervisor)
 
 	// Set sandbox state
+	logrus.Debug("Create Coming here - 7")
 	if err := s.setSandboxState(types.StateReady); err != nil {
 		return nil, err
 	}
+	logrus.Debugf("Sharath Create Coming here - 7 - Sandbox Hypervisor %+v", s.hypervisor)
 
 	return s, nil
 }
 
-//nolint:gocyclo
-func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (sb *Sandbox, retErr error) {
+// Sharath: New Code
+func getSandbox(ctx context.Context, sandboxConfig *SandboxConfig, factory Factory) (sb *Sandbox, retErr error) {
 	span, ctx := katatrace.Trace(ctx, nil, "newSandbox", sandboxTracingTags, map[string]string{"sandbox_id": sandboxConfig.ID})
 	defer span.End()
 
@@ -538,14 +661,18 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return nil, fmt.Errorf("Invalid sandbox configuration")
 	}
 
+	logrus.Debug("getSandbox Coming here - 1")
 	// create agent instance
 	agent := getNewAgentFunc(ctx)()
 
+	logrus.Debug("getSandbox Coming here - 2")
+	logrus.Debug("Sharath getSandbox Coming here - %+v", sandboxConfig.HypervisorType)
 	hypervisor, err := NewHypervisor(sandboxConfig.HypervisorType)
 	if err != nil {
 		return nil, err
 	}
 
+	logrus.Debug("getSandbox Coming here - 3")
 	network, err := NewNetwork(&sandboxConfig.NetworkConfig)
 	if err != nil {
 		return nil, err
@@ -556,7 +683,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		factory:         factory,
 		hypervisor:      hypervisor,
 		agent:           agent,
-		config:          &sandboxConfig,
+		config:          sandboxConfig,
 		volumes:         sandboxConfig.Volumes,
 		containers:      map[string]*Container{},
 		state:           types.SandboxState{BlockIndexMap: make(map[int]struct{})},
@@ -571,15 +698,32 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		swapDevices:     []*config.BlockDrive{},
 	}
 
+	logrus.Debug("getSandbox Coming here - 4")
 	fsShare, err := NewFilesystemShare(s)
 	if err != nil {
 		return nil, err
 	}
 	s.fsShare = fsShare
 
+	logrus.Debugf("Sharath getSandbox Coming here - Hypervisor %+v", s.hypervisor)
+	return s, nil
+}
+
+//nolint:gocyclo
+func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factory) (sb *Sandbox, retErr error) {
+	span, ctx := katatrace.Trace(ctx, nil, "newSandbox", sandboxTracingTags, map[string]string{"sandbox_id": sandboxConfig.ID})
+	defer span.End()
+
+	s, err := getSandbox(ctx, &sandboxConfig, factory)
+	if err != nil {
+		return nil, err
+	}
+
+	logrus.Debug("newSandbox Coming here - 5")
 	if s.store, err = persist.GetDriver(); err != nil || s.store == nil {
 		return nil, fmt.Errorf("failed to get fs persist driver: %v", err)
 	}
+
 	defer func() {
 		if retErr != nil {
 			s.Logger().WithError(retErr).Error("Create new sandbox failed")
@@ -590,41 +734,69 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	sandboxConfig.HypervisorConfig.VMStorePath = s.store.RunVMStoragePath()
 	sandboxConfig.HypervisorConfig.RunStorePath = s.store.RunStoragePath()
 
+	logrus.Debug("newSandbox Coming here - 6")
 	spec := s.GetPatchedOCISpec()
 	if spec != nil && spec.Process.SelinuxLabel != "" {
 		sandboxConfig.HypervisorConfig.SELinuxProcessLabel = spec.Process.SelinuxLabel
 	}
 
+	logrus.Debug("newSandbox Coming here - 7")
 	s.devManager = deviceManager.NewDeviceManager(sandboxConfig.HypervisorConfig.BlockDeviceDriver,
 		sandboxConfig.HypervisorConfig.EnableVhostUserStore,
 		sandboxConfig.HypervisorConfig.VhostUserStorePath, sandboxConfig.HypervisorConfig.VhostUserDeviceReconnect, nil)
 
 	// Create the sandbox resource controllers.
+	logrus.Debug("newSandbox Coming here - 8")
 	if err := s.createResourceController(); err != nil {
 		return nil, err
 	}
 
+	logrus.Debug("newSandbox Coming here - 9")
 	// Ignore the error. Restore can fail for a new sandbox
 	if err := s.Restore(); err != nil {
 		s.Logger().WithError(err).Debug("restore sandbox failed")
 	}
 
+	logrus.Debug("newSandbox Coming here - 10")
+	logrus.Debug("newSandbox Sharath Coming here - HypervisorConfig ", sandboxConfig.HypervisorConfig)
+	logrus.Debug("newSandbox Coming here - HypervisorConfig InitrdPath ", sandboxConfig.HypervisorConfig.InitrdPath)
+	logrus.Debug("newSandbox Coming here - HypervisorConfig ImagePath", sandboxConfig.HypervisorConfig.ImagePath)
+	logrus.Debug("newSandbox Coming here - HypervisorConfig RemoteHypervisorsocket", sandboxConfig.HypervisorConfig.RemoteHypervisorSocket)
 	if err := validateHypervisorConfig(&sandboxConfig.HypervisorConfig); err != nil {
 		return nil, err
 	}
 
-	setHypervisorConfigAnnotations(&sandboxConfig)
+	logrus.Debug("newSandbox Coming here - 11")
+	if len(sandboxConfig.Containers) > 0 {
+		// These values are required by remote hypervisor
+		for _, a := range []string{cri.SandboxName, crio.SandboxName} {
+			if value, ok := sandboxConfig.Containers[0].Annotations[a]; ok {
+				sandboxConfig.HypervisorConfig.SandboxName = value
+			}
+		}
+		logrus.Debug("newSandbox Coming here - 12")
+		for _, a := range []string{cri.SandboxNamespace, crio.Namespace} {
+			if value, ok := sandboxConfig.Containers[0].Annotations[a]; ok {
+				sandboxConfig.HypervisorConfig.SandboxNamespace = value
+			}
+		}
+		logrus.Debug("newSandbox Coming here - 13")
+	}
 
 	coldPlugVFIO, err := s.coldOrHotPlugVFIO(&sandboxConfig)
 	if err != nil {
 		return nil, err
 	}
 
+	logrus.Debugf("14 - newSandbox Sharath Coming here - Hypervisor %+v", s.hypervisor)
+	logrus.Debug("newSandbox Sharath Coming here - HypervisorConfig ", sandboxConfig.HypervisorConfig)
+	logrus.Debug("newSandbox Coming here - 14")
 	// store doesn't require hypervisor to be stored immediately
 	if err = s.hypervisor.CreateVM(ctx, s.id, s.network, &sandboxConfig.HypervisorConfig); err != nil {
 		return nil, err
 	}
-
+	logrus.Debugf("15 - newSandbox Sharath Coming here - Hypervisor %+v", s.hypervisor)
+	logrus.Debug("newSandbox Coming here - 15")
 	if s.disableVMShutdown, err = s.agent.init(ctx, s, sandboxConfig.AgentConfig); err != nil {
 		return nil, err
 	}
@@ -633,6 +805,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		return s, nil
 	}
 
+	logrus.Debug("newSandbox Coming here - 16")
 	for _, dev := range sandboxConfig.HypervisorConfig.VFIODevices {
 		s.Logger().Info("cold-plug device: ", dev)
 		_, err := s.AddDevice(ctx, dev)
@@ -645,6 +818,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 }
 
 func setHypervisorConfigAnnotations(sandboxConfig *SandboxConfig) {
+	logrus.Debug("getCreatedSandbox Coming here - 8")
 	if len(sandboxConfig.Containers) > 0 {
 		// These values are required by remote hypervisor
 		for _, a := range []string{cri.SandboxName, crio.SandboxName} {
@@ -652,7 +826,7 @@ func setHypervisorConfigAnnotations(sandboxConfig *SandboxConfig) {
 				sandboxConfig.HypervisorConfig.SandboxName = value
 			}
 		}
-
+		logrus.Info("getCreatedSandbox Coming here - 9")
 		for _, a := range []string{cri.SandboxNamespace, crio.Namespace} {
 			if value, ok := sandboxConfig.Containers[0].Annotations[a]; ok {
 				sandboxConfig.HypervisorConfig.SandboxNamespace = value
@@ -662,6 +836,7 @@ func setHypervisorConfigAnnotations(sandboxConfig *SandboxConfig) {
 }
 
 func (s *Sandbox) coldOrHotPlugVFIO(sandboxConfig *SandboxConfig) (bool, error) {
+
 	// If we have a confidential guest we need to cold-plug the PCIe VFIO devices
 	// until we have TDISP/IDE PCIe support.
 	coldPlugVFIO := (sandboxConfig.HypervisorConfig.ColdPlugVFIO != config.NoPort)
@@ -849,6 +1024,11 @@ func (s *Sandbox) createResourceController() error {
 	return nil
 }
 
+// Sharath: New Code
+func (s *Sandbox) StoreSandbox(ctx context.Context) error {
+	return s.storeSandbox(ctx)
+}
+
 // storeSandbox stores a sandbox config.
 func (s *Sandbox) storeSandbox(ctx context.Context) error {
 	span, _ := katatrace.Trace(ctx, s.Logger(), "storeSandbox", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
@@ -913,36 +1093,44 @@ func (s *Sandbox) removeContainer(containerID string) error {
 // Delete deletes an already created sandbox.
 // The VM in which the sandbox is running will be shut down.
 func (s *Sandbox) Delete(ctx context.Context) error {
+	logrus.Debug("Deleting Container ID - ")
+	logrus.Debug("Delete sandbox - 0")
 	if s.state.State != types.StateReady &&
 		s.state.State != types.StatePaused &&
 		s.state.State != types.StateStopped {
 		return fmt.Errorf("Sandbox not ready, paused or stopped, impossible to delete")
 	}
 
+	logrus.Debug("Delete sandbox - 1")
 	for _, c := range s.containers {
 		if err := c.delete(ctx); err != nil {
 			s.Logger().WithError(err).WithField("container`", c.id).Debug("failed to delete container")
 		}
 	}
 
-	if !rootless.IsRootless() {
-		if err := s.resourceControllerDelete(); err != nil {
-			s.Logger().WithError(err).Errorf("failed to cleanup the %s resource controllers", s.sandboxController)
-		}
-	}
+	// logrus.Info("Delete sandbox - 2")
+	// if !rootless.IsRootless() {
+	// 	if err := s.resourceControllerDelete(); err != nil {
+	// 		s.Logger().WithError(err).Errorf("failed to cleanup the %s resource controllers", s.sandboxController)
+	// 	}
+	// }
 
+	logrus.Debug("Delete sandbox - 3")
 	if s.monitor != nil {
 		s.monitor.stop()
 	}
 
+	logrus.Debug("Delete sandbox - 4")
 	if err := s.hypervisor.Cleanup(ctx); err != nil {
 		s.Logger().WithError(err).Error("failed to Cleanup hypervisor")
 	}
 
+	logrus.Debug("Delete sandbox - 5")
 	if err := s.fsShare.Cleanup(ctx); err != nil {
 		s.Logger().WithError(err).Error("failed to cleanup share files")
 	}
 
+	logrus.Debug("Delete sandbox - 6")
 	return s.store.Destroy(s.id)
 }
 
@@ -1345,6 +1533,8 @@ func (s *Sandbox) startVM(ctx context.Context, prestartHookFunc func(context.Con
 			return vm.assignSandbox(s)
 		}
 
+		s.Logger().Debugf("Sharath Starting factory - %+v", s.factory)
+		s.Logger().Debugf("Sharath Starting Hypervisor - %+v", s.hypervisor)
 		return s.hypervisor.StartVM(ctx, VmStartTimeout)
 	}); err != nil {
 		s.Logger().Infof("Network error 2 %s", err)
@@ -1421,12 +1611,22 @@ func (s *Sandbox) stopVM(ctx context.Context) error {
 	span, ctx := katatrace.Trace(ctx, s.Logger(), "stopVM", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
-	s.Logger().Info("Stopping sandbox in the VM")
-	if err := s.agent.stopSandbox(ctx, s); err != nil {
-		s.Logger().WithError(err).WithField("sandboxid", s.id).Warning("Agent did not stop sandbox")
-	}
+	// Sharath: Commenting since there is no Agent in the VM
+	// s.Logger().Debug("Stopping sandbox in the VM")
+	// if err := s.agent.stopSandbox(ctx, s); err != nil {
+	// 	s.Logger().WithError(err).WithField("sandboxid", s.id).Warning("Agent did not stop sandbox")
+	// }
 
 	s.Logger().Info("Stopping VM")
+
+	if s.config.HypervisorConfig.Debug {
+		// create console watcher
+		consoleWatcher, err := newConsoleWatcher(ctx, s)
+		if err != nil {
+			return err
+		}
+		s.cw = consoleWatcher
+	}
 
 	return s.hypervisor.StopVM(ctx, s.disableVMShutdown)
 }
@@ -1852,49 +2052,60 @@ func (s *Sandbox) Stop(ctx context.Context, force bool) error {
 	span, ctx := katatrace.Trace(ctx, s.Logger(), "Stop", sandboxTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()
 
+	logrus.Debug("Stopping sandbox - 0")
 	if s.state.State == types.StateStopped {
 		s.Logger().Info("sandbox already stopped")
 		return nil
 	}
 
+	logrus.Debug("Stopping sandbox - 1")
 	if err := s.state.ValidTransition(s.state.State, types.StateStopped); err != nil {
 		return err
 	}
 
+	logrus.Debug("Stopping sandbox - 2")
 	for _, c := range s.containers {
+		logrus.Debug("Stopping sandbox - Container ID %v", c.id)
 		if err := c.stop(ctx, force); err != nil {
 			return err
 		}
 	}
 
+	logrus.Debug("Stopping sandbox - 3")
 	if err := s.stopVM(ctx); err != nil && !force {
 		return err
 	}
 
+	logrus.Debug("Stopping sandbox - 4")
 	// shutdown console watcher if exists
 	if s.cw != nil {
 		s.Logger().Debug("stop the console watcher")
 		s.cw.stop()
 	}
 
+	logrus.Debug("Stopping sandbox - 5")
 	if err := s.setSandboxState(types.StateStopped); err != nil {
 		return err
 	}
 
+	logrus.Debug("Stopping sandbox - 6")
 	// Remove the network.
 	if err := s.removeNetwork(ctx); err != nil && !force {
 		return err
 	}
 
+	logrus.Debug("Stopping sandbox - 7")
 	if err := s.storeSandbox(ctx); err != nil {
 		return err
 	}
 
+	logrus.Debug("Stopping sandbox - 8")
 	// Stop communicating with the agent.
 	if err := s.agent.disconnect(ctx); err != nil && !force {
 		return err
 	}
 
+	logrus.Debug("Stopping sandbox - 9")
 	s.cleanSwap(ctx)
 
 	return nil
@@ -2624,7 +2835,7 @@ func (s *Sandbox) getSandboxCPUSet() (string, string, error) {
 
 // fetchSandbox fetches a sandbox config from a sandbox ID and returns a sandbox.
 func fetchSandbox(ctx context.Context, sandboxID string) (sandbox *Sandbox, err error) {
-	virtLog.Info("fetch sandbox")
+	virtLog.Debug("fetch sandbox for ID - ", sandboxID)
 	if sandboxID == "" {
 		return nil, types.ErrNeedSandboxID
 	}
@@ -2640,18 +2851,33 @@ func fetchSandbox(ctx context.Context, sandboxID string) (sandbox *Sandbox, err 
 
 	config = *c
 
+	// Sharath: New Code
+	config.HypervisorConfig.SandboxID = sandboxID
+	config.VfioMode = 1
+	config.StaticResourceMgmt = true
+	config.ServiceOffload = true
+	config.HypervisorConfig.SharedPath = filepath.Join(kataHostSharedDir(), sandboxID, "shared")
+	config.HypervisorConfig.DisableGuestSeLinux = true
+	config.HypervisorConfig.RemoteHypervisorSocket = "/run/peerpod/hypervisor.sock"
+	config.HypervisorConfig.RemoteHypervisorTimeout = 600
+
 	// fetchSandbox is not suppose to create new sandbox VM.
-	sandbox, err = createSandbox(ctx, config, nil)
+	sandbox, err = getCreatedSandbox(ctx, config, nil)
+	logrus.Debugf("2 - Sharath Sandbox ID - %v", sandboxID)
+	logrus.Debugf("2 - Sharath Sandbox ID from Config - %v", config.ID)
+	// Sharath: Commented since we don't need to create a new sandbox everytime since we are already fetching createdSandbox.
+	// sandbox, err = newSandbox(ctx, config, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create sandbox with config %+v: %v", config, err)
+		return nil, fmt.Errorf("failed to get sandbox with config %+v: %v", config, err)
 	}
 
-	// This sandbox already exists, we don't need to recreate the containers in the guest.
-	// We only need to fetch the containers from storage and create the container structs.
-	if err := sandbox.fetchContainers(ctx); err != nil {
-		return nil, err
-	}
-
+	// Sharath: Commenting since there is no containers inside the sandbox.
+	// // This sandbox already exists, we don't need to recreate the containers in the guest.
+	// // We only need to fetch the containers from storage and create the container structs.
+	// if err := sandbox.fetchContainers(ctx); err != nil {
+	// 	return nil, err
+	// }
+	logrus.Debugf("Sharath fetchSandbox Sandbox Hypervisorconfig - %+v", sandbox.hypervisor)
 	return sandbox, nil
 }
 
