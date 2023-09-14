@@ -3,17 +3,13 @@
     "backend": {
       "type": "registry",
       "config": {
-        "scheme": "https",
         "timeout": 5,
         "connect_timeout": 5,
         "retry_limit": 2
       }
     },
     "cache": {
-      "type": "blobcache",
-      "config": {
-        "work_dir": "/var/lib/nydus/cache"
-      }
+      "type": "blobcache"
     }
   },
   "mode": "direct",
@@ -22,6 +18,8 @@
   "enable_xattr": true,
   "fs_prefetch": {
     "enable": true,
-    "threads_count": 2
+    "threads_count": 8,
+    "merging_size": 1048576,
+    "prefetch_all": true
   }
 }
