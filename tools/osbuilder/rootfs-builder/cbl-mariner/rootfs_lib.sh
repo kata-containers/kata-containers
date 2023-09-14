@@ -28,7 +28,6 @@ build_rootfs()
 		"bridge-utils" \
 		"bzip2" \
 		"chkconfig" \
-		"coreutils" \
 		"cracklib-dicts" \
 		"curl" \
 		"curl-libs" \
