@@ -16,10 +16,8 @@ spec:
     args: ["-c", "inotifywait --timeout 120 -r /config/ && [[ -L /config/config.toml ]] && echo success" ]
     resources:
       requests:
-        cpu: 1
         memory: 50Mi
       limits:
-        cpu: 1
         memory: 1024Mi
     volumeMounts:
       - name: config
