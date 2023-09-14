@@ -227,7 +227,8 @@ block_device_driver = "@DEFBLOCKSTORAGEDRIVER_QEMU@"
 
 # Enable virtio-gpu device, the default value is not specified.
 # allows the guest operating system to use the capabilities of the host GPU to accelerate 3D rendering.
-# virtio_gpu = "virtio-gpu-gl-pci"
+# It includes "virtio-gpu-gl-pci" "virtio-vga-gl" and "vhost-user-gpu-pci" options
+# eg. virtio_gpu = "virtio-gpu-gl-pci"
 
 # Provides opengl support using drm render nodes, the default value is not specified
 # It will copy back the bits rendered by the guest using virgl back

@@ -823,6 +823,10 @@ func (conf *HypervisorConfig) IfPVPanicEnabled() bool {
 	return conf.GuestMemoryDumpPath != ""
 }
 
+func (conf *HypervisorConfig) IfPVirtioGPUEnabled() bool {
+	return conf.VirtioGPU != ""
+}
+
 // HypervisorCtlAssetPath returns the VM hypervisor ctl path
 func (conf *HypervisorConfig) HypervisorCtlAssetPath() (string, error) {
 	return conf.assetPath(types.HypervisorCtlAsset)

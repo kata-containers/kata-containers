@@ -43,11 +43,18 @@ const (
 	//VhostUserFS represents a virtio-fs vhostuser device type
 	VhostUserFS = "vhost-user-fs-pci"
 )
-
 const (
-	// VirtIOGPU means use a paravirtualized 3d accelerated graphics driver
+	// VirtIOGPU means Display device, which use paravirtualized 3d accelerated graphics driver in ARM Architecture
 	VirtIOGPU = "virtio-gpu-gl-pci"
 
+	// VirtIOVgaGL means Display device, which use paravirtualized 3d accelerated graphics driver
+	VirtIOvgaGL = "virtio-vga-gl"
+
+	// VhostGPUpci means Display device, which use vhost-user protocol
+	VhostGPUpci = "vhost-user-gpu-pci"
+)
+
+const (
 	// VirtioMmio means use virtio-mmio for mmio based drives
 	VirtioMmio = "virtio-mmio"
 

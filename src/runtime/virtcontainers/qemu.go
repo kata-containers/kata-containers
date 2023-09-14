@@ -438,7 +438,7 @@ func (q *qemu) buildDevices(ctx context.Context, kernelPath string) ([]govmmQemu
 		// there should have no errors for pvpanic device
 		devices, _ = q.arch.appendPVPanicDevice(devices)
 	}
-	if q.config.VirtioGPU == config.VirtIOGPU {
+	if q.config.IfPVirtioGPUEnabled() {
 		devices, _ = q.arch.appendVirtGPUDevice(devices, q.config)
 	}
 	var ioThread *govmmQemu.IOThread

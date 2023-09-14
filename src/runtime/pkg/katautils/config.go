@@ -551,6 +551,35 @@ func (h hypervisor) sharedFS() (string, error) {
 	return "", fmt.Errorf("Invalid hypervisor shared file system %v specified (supported file systems: %v)", h.SharedFS, supportedSharedFS)
 }
 
+func (h hypervisor) virtioGPUCheck() (string, error) {
+	supportedvirtioGPUdevs := []string{config.VirtIOGPU, config.VirtIOvgaGL, config.VhostGPUpci}
+
+	if h.VirtioGPU == "" {
+		return h.VirtioGPU, nil
+	}
+	for _, gpudev := range supportedvirtioGPUdevs {
+		if gpudev == h.VirtioGPU {
+			switch goruntime.GOARCH {
+			case "arm64":
+				if gpudev != config.VirtIOGPU {
+					msg := fmt.Sprintf("Please notice that specified %v has not been verified", h.VirtioGPU)
+					kataUtilsLogger.Warn(msg)
+				}
+				return h.VirtioGPU, nil
+			case "amd64", "386":
+				if gpudev != config.VirtIOvgaGL {
+					msg := fmt.Sprintf("Please notice that specified %v has not been verified", h.VirtioGPU)
+					kataUtilsLogger.Warn(msg)
+				}
+				return h.VirtioGPU, nil
+			default:
+				return h.VirtioGPU, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("Invalid hypervisor virtio-gpu device %v specified (supported devicess: %v)", h.VirtioGPU, supportedvirtioGPUdevs)
+}
+
 func (h hypervisor) msize9p() uint32 {
 	if h.Msize9p == 0 {
 		return defaultMsize9p
@@ -831,6 +860,11 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 			fmt.Errorf("cannot enable %s without daemon path in configuration file", sharedFS)
 	}
 
+	virtioGPU, err := h.virtioGPUCheck()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
 	if vSock, err := utils.SupportsVsocks(); !vSock {
 		return vc.HypervisorConfig{}, err
 	}
@@ -897,7 +931,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		EnableVhostUserStore:    h.EnableVhostUserStore,
 		VhostUserStorePath:      h.vhostUserStorePath(),
 		VhostUserStorePathList:  h.VhostUserStorePathList,
-		VirtioGPU:               h.VirtioGPU,
+		VirtioGPU:               virtioGPU,
 		Display:                 h.Display,
 		SeccompSandbox:          h.SeccompSandbox,
 		GuestHookPath:           h.guestHookPath(),
