@@ -16,7 +16,6 @@ jobs:
         asset:
           - qemu
           - cc-rootfs-initrd
-          - cc-se-image
           - virtiofsd
         include:
           - measured_rootfs: yes
@@ -39,13 +38,6 @@ jobs:
         with:
           fetch-depth: 0 # This is needed in order to keep the commit ids history
 
-      - name: Place a host key document
-        run: |
-          mkdir -p "host-key-document"
-          cp "${CI_HKD_PATH}" "host-key-document"
-        env:
-          CI_HKD_PATH: ${{ secrets.CI_HKD_PATH }}
-
       - name: Build ${{ matrix.asset }}
         run: |
           make "${KATA_ASSET}-tarball"
@@ -58,7 +50,6 @@ jobs:
           TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
           PUSH_TO_REGISTRY: yes
           MEASURED_ROOTFS: ${{ matrix.measured_rootfs }}
-          HKD_PATH: "host-key-document"
 
       - name: store-artifact ${{ matrix.asset }}
         uses: actions/upload-artifact@v3
@@ -117,9 +108,54 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+  build-asset-cc-se-image:
+    runs-on: s390x
+    needs: build-asset
+    steps:
+      - name: Adjust a permission for repo
+        run: |
+          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
+
+      - uses: actions/checkout@v3
+
+      - name: get-artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: kata-artifacts-s390x
+          path: kata-artifacts
+
+      - name: Place a host key document
+        run: |
+          mkdir -p "host-key-document"
+          cp "${CI_HKD_PATH}" "host-key-document"
+        env:
+          CI_HKD_PATH: ${{ secrets.CI_HKD_PATH }}
+
+      - name: Build cc-se-image
+        run: |
+          base_dir=tools/packaging/kata-deploy/local-build/
+          cp -r kata-artifacts ${base_dir}/build
+          # Skip building dependant artifacts of cc-se-image-tarball
+          # because we already have them from the previous build
+          sed -i 's/\(^cc-se-image-tarball:\).*/\1/g' ${base_dir}/Makefile
+          make cc-se-image-tarball
+          build_dir=$(readlink -f build)
+          sudo cp -r "${build_dir}" "kata-build"
+          sudo chown -R $(id -u):$(id -g) "kata-build"
+        env:
+          HKD_PATH: "host-key-document"
+
+      - name: store-artifact cc-se-image
+        uses: actions/upload-artifact@v3
+        with:
+          name: kata-artifacts-s390x
+          path: kata-build/kata-static-cc-se-image.tar.xz
+          retention-days: 1
+          if-no-files-found: error
+
   create-kata-tarball:
     runs-on: s390x
-    needs: [build-asset, build-asset-cc-shim-v2]
+    needs: [build-asset, build-asset-cc-shim-v2, build-asset-cc-se-image]
     steps:
       - name: Adjust a permission for repo
         run: |
