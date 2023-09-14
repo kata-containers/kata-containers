@@ -63,6 +63,10 @@ jobs:
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
+      - name: Install ORAS
+        run: |
+          ./tests/install_oras.sh
+
       - name: Build ${{ matrix.asset }}
         run: |
           make "${KATA_ASSET}-tarball"

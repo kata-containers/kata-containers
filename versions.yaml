@@ -300,6 +300,12 @@ externals:
       # yamllint disable-line rule:line-length
       binary: "https://github.com/open-policy-agent/opa/releases/download/v0.55.0/opa_linux_amd64_static"
 
+  oras:
+    # yamllint disable-line rule:line-length
+    description: "Tools and libraries to enable leveraging OCI registries for arbitrary artifacts"
+    url: "https://github.com/oras-project/oras"
+    version: "v1.1.0"
+
   ovmf:
     description: "Firmware, implementation of UEFI for virtual machines."
     url: "https://github.com/tianocore/edk2"
