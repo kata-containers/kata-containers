@@ -55,6 +55,9 @@ impl ConfigPlugin for QemuConfig {
                 qemu.path = default::DEFAULT_QEMU_BINARY_PATH.to_string();
             }
             resolve_path!(qemu.path, "Qemu binary path `{}` is invalid: {}")?;
+            if qemu.boot_info.rootfs_type.is_empty() {
+                qemu.boot_info.rootfs_type = default::DEFAULT_QEMU_ROOTFS_TYPE.to_string();
+            }
             if qemu.ctlpath.is_empty() {
                 qemu.ctlpath = default::DEFAULT_QEMU_CONTROL_PATH.to_string();
             }
