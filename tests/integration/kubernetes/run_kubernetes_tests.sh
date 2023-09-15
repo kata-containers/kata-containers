@@ -13,11 +13,12 @@ source "${kubernetes_dir}/../../common.bash"
 TARGET_ARCH="${TARGET_ARCH:-x86_64}"
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 K8S_TEST_DEBUG="${K8S_TEST_DEBUG:-false}"
+K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-small}"
 
 if [ -n "${K8S_TEST_UNION:-}" ]; then
 	K8S_TEST_UNION=($K8S_TEST_UNION)
 else
-	K8S_TEST_UNION=( \
+	K8S_TEST_SMALL_HOST_UNION=( \
 		"k8s-confidential.bats" \
 		"k8s-attach-handlers.bats" \
 		"k8s-caps.bats" \
@@ -53,6 +54,29 @@ else
 		"k8s-volume.bats" \
 		"k8s-nginx-connectivity.bats" \
 	)
+
+	K8S_TEST_NORMAL_HOST_UNION=( \
+		"k8s-number-cpus.bats" \
+		"k8s-parallel.bats" \
+		"k8s-scale-nginx.bats" \
+	)
+
+	case ${K8S_TEST_HOST_TYPE} in
+		small)
+			K8S_TEST_UNION=($K8S_TEST_SMALL_HOST_UNION)
+			;;
+		normal)
+			K8S_TEST_UNION=($K8S_TEST_NORMAL_HOST_UNION)
+			;;
+		baremetal)
+			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_UNION[@]} ${K8S_TEST_NORMAL_HOST_UNION[@]})
+
+			;;
+		*)
+			echo "${K8S_TEST_HOST_TYPE} is an invalid K8S_TEST_HOST_TYPE option. Valid options are: small | normal | baremetal"
+			return 1
+			;;
+	esac
 fi
 
 # we may need to skip a few test cases when running on non-x86_64 arch

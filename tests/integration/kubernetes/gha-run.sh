@@ -233,6 +233,7 @@ function cleanup() {
 
 function main() {
     export KATA_HOST_OS="${KATA_HOST_OS:-}"
+    export K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-}"
 
     action="${1:-}"
 
