@@ -52,6 +52,7 @@ jobs:
         command:
           - "make vendor"
           - "make check"
+          - "make test"
         include:
           - component: agent
             component-path: src/agent
@@ -71,6 +72,11 @@ jobs:
             component-path: src/tools/runk
           - component: trace-forwarder
             component-path: src/tools/trace-forwarder
+          - install-libseccomp: no
+          - component: agent
+            install-libseccomp: yes
+          - component: runk
+            install-libseccomp: yes
     steps:
       - name: Checkout the code
         uses: actions/checkout@v4
@@ -91,6 +97,23 @@ jobs:
         run: |
           ./tests/install_rust.sh
           echo "${HOME}/.cargo/bin" >> $GITHUB_PATH
+      - name: Install musl-tools
+        if: ${{ matrix.component != 'runtime' }}
+        run: sudo apt-get -y install musl-tools
+      - name: Install libseccomp
+        if: ${{ matrix.command != 'make vendor'  &&  matrix.command != 'make check' &&  matrix.install-libseccomp == 'yes' }}
+        run: |
+          libseccomp_install_dir=$(mktemp -d -t libseccomp.XXXXXXXXXX)
+          gperf_install_dir=$(mktemp -d -t gperf.XXXXXXXXXX)
+          ./ci/install_libseccomp.sh "${libseccomp_install_dir}" "${gperf_install_dir}"
+          echo "Set environment variables for the libseccomp crate to link the libseccomp library statically"
+          echo "LIBSECCOMP_LINK_TYPE=static" >> $GITHUB_ENV
+          echo "LIBSECCOMP_LIB_PATH=${libseccomp_install_dir}/lib" >> $GITHUB_ENV
+      - name: Setup XDG_RUNTIME_DIR for the `runtime` tests
+        if: ${{ matrix.command != 'make vendor' && matrix.command != 'make check' && matrix.component == 'runtime' }}
+        run: |
+          XDG_RUNTIME_DIR=$(mktemp -d /tmp/kata-tests-$USER.XXX | tee >(xargs chmod 0700))
+          echo "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}" >> $GITHUB_ENV
       - name: Running `${{ matrix.command }}` for ${{ matrix.component }}
         run: |
           cd ${{ matrix.component-path }}
@@ -108,7 +131,6 @@ jobs:
       matrix:
         cmd:
           - "make static-checks"
-          - "make test"
           - "sudo -E PATH=\"$PATH\" make test"
     env:
       RUST_BACKTRACE: "1"
