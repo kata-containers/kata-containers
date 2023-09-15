@@ -140,7 +140,7 @@ vendor:
 
 
 #TARGET test: run cargo tests
-test:
+test: $(GENERATED_FILES)
 	@cargo test --all --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture
 
 ##TARGET check: run test
