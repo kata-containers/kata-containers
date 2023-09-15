@@ -35,16 +35,13 @@ readonly nydus_builder="${static_build_dir}/nydus/build.sh"
 
 readonly rootfs_builder="${repo_root_dir}/tools/packaging/guest-image/build_image.sh"
 
-readonly jenkins_url="http://jenkins.katacontainers.io"
-readonly cached_artifacts_path="lastSuccessfulBuild/artifact/artifacts"
-
 ARCH=${ARCH:-$(uname -m)}
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
 USE_CACHE="${USE_CACHE:-"yes"}"
-ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY:-}"
+ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY:-ghcr.io}"
 ARTEFACT_REGISTRY_USERNAME="${ARTEFACT_REGISTRY_USERNAME:-}"
 ARTEFACT_REGISTRY_PASSWORD="${ARTEFACT_REGISTRY_PASSWORD:-}"
-TARGET_BRANCH="${TARGET_BRANCH:=}"
+TARGET_BRANCH="${TARGET_BRANCH:-main}"
 PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-}"
 
 workdir="${WORKDIR:-$PWD}"
@@ -114,35 +111,29 @@ EOF
 	exit "${return_code}"
 }
 
-
-cleanup_and_fail() {
-	rm -f "${component_tarball_path}"
-	return 1
-}
-
 install_cached_tarball_component() {
 	if [ "${USE_CACHE}" != "yes" ]; then
 		return 1
 	fi
 
 	local component="${1}"
-	local jenkins_build_url="${2}"
-	local current_version="${3}"
-	local current_image_version="${4}"
-	local component_tarball_name="${5}"
-	local component_tarball_path="${6}"
+	local current_version="${2}"
+	local current_image_version="${3}"
+	local component_tarball_name="${4}"
+	local component_tarball_path="${5}"
 
-	local cached_version=$(curl -sfL "${jenkins_build_url}/latest" | awk '{print $1}') || cached_version="none"
-	local cached_image_version=$(curl -sfL "${jenkins_build_url}/latest_image" | awk '{print $1}') || cached_image_version="none"
+	oras pull ${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m)
+
+	cached_version="$(cat ${component}-version)"
+	cached_image_version="$(cat ${component}-builder-image-version)"
+
+	rm -f ${component}-version
+	rm -f ${component}-builder-image-version
 
 	[ "${cached_image_version}" != "${current_image_version}" ] && return 1
 	[ "${cached_version}" != "${current_version}" ] && return 1
 
 	info "Using cached tarball of ${component}"
-	echo "Downloading tarball from: ${jenkins_build_url}/${component_tarball_name}"
-	wget "${jenkins_build_url}/${component_tarball_name}" || return $(cleanup_and_fail)
-	wget "${jenkins_build_url}/sha256sum-${component_tarball_name}" || return $(cleanup_and_fail)
-	sha256sum -c "sha256sum-${component_tarball_name}" || return $(cleanup_and_fail)
 	mv "${component_tarball_name}" "${component_tarball_path}"
 }
 
@@ -155,7 +146,6 @@ install_image() {
 		image_type+="-${variant}"
 	fi
 
-	local jenkins="${jenkins_url}/job/kata-containers-main-rootfs-${image_type}-${ARCH}/${cached_artifacts_path}"
 	local component="rootfs-${image_type}"
 
 	local osbuilder_last_commit="$(get_last_modification "${repo_root_dir}/tools/osbuilder")"
@@ -171,7 +161,6 @@ install_image() {
 
 	install_cached_tarball_component \
 		"${component}" \
-		"${jenkins}" \
 		"${latest_artefact}" \
 		"${latest_builder_image}" \
 		"${final_tarball_name}" \
@@ -205,7 +194,6 @@ install_initrd() {
 		initrd_type+="-${variant}"
 	fi
 
-	local jenkins="${jenkins_url}/job/kata-containers-main-rootfs-${initrd_type}-${ARCH}/${cached_artifacts_path}"
 	local component="rootfs-${initrd_type}"
 
 	local osbuilder_last_commit="$(get_last_modification "${repo_root_dir}/tools/osbuilder")"
@@ -223,7 +211,6 @@ install_initrd() {
 
 	install_cached_tarball_component \
 		"${component}" \
-		"${jenkins}" \
 		"${latest_artefact}" \
 		"${latest_builder_image}" \
 		"${final_tarball_name}" \
@@ -263,7 +250,6 @@ install_cached_kernel_tarball_component() {
 
 	install_cached_tarball_component \
 		"${kernel_name}" \
-		"${jenkins_url}/job/kata-containers-main-${kernel_name}-${ARCH}/${cached_artifacts_path}" \
 		"${latest_artefact}" \
 		"${latest_builder_image}" \
 		"${final_tarball_name}" \
@@ -277,7 +263,6 @@ install_cached_kernel_tarball_component() {
 	# SEV specific code path
 	install_cached_tarball_component \
 		"${kernel_name}" \
-		"${jenkins_url}/job/kata-containers-main-${kernel_name}-$(uname -m)/${cached_artifacts_path}" \
 		"${latest_artefact}" \
 		"${latest_builder_image}" \
 		"kata-static-kernel-sev-modules.tar.xz" \
@@ -403,7 +388,6 @@ install_qemu_helper() {
 
 	install_cached_tarball_component \
 		"${qemu_name}" \
-		"${jenkins_url}/job/kata-containers-main-${qemu_name}-${ARCH}/${cached_artifacts_path}" \
 		"${latest_artefact}" \
 		"${latest_builder_image}" \
 		"${final_tarball_name}" \
@@ -455,7 +439,6 @@ install_firecracker() {
 
 	install_cached_tarball_component \
 		"firecracker" \
-		"${jenkins_url}/job/kata-containers-main-firecracker-$(uname -m)/${cached_artifacts_path}" \
 		"${latest_artefact}" \
 		"${latest_builder_image}" \
 		"${final_tarball_name}" \
@@ -480,7 +463,6 @@ install_clh_helper() {
 
 	install_cached_tarball_component \
 		"cloud-hypervisor${suffix}" \
-		"${jenkins_url}/job/kata-containers-main-clh-$(uname -m)${suffix}/${cached_artifacts_path}" \
 		"${latest_artefact}" \
 		"${latest_builder_image}" \
 		"${final_tarball_name}" \
@@ -523,7 +505,6 @@ install_virtiofsd() {
 
 	install_cached_tarball_component \
 		"virtiofsd" \
-		"${jenkins_url}/job/kata-containers-main-virtiofsd-${ARCH}/${cached_artifacts_path}" \
 		"${latest_artefact}" \
 		"${latest_builder_image}" \
 		"${final_tarball_name}" \
@@ -546,7 +527,6 @@ install_nydus() {
 
 	install_cached_tarball_component \
 		"nydus" \
-		"${jenkins_url}/job/kata-containers-main-nydus-$(uname -m)/${cached_artifacts_path}" \
 		"${latest_artefact}" \
 		"${latest_builder_image}" \
 		"${final_tarball_name}" \
@@ -575,7 +555,6 @@ install_shimv2() {
 
 	install_cached_tarball_component \
 		"shim-v2" \
-		"${jenkins_url}/job/kata-containers-main-shim-v2-${ARCH}/${cached_artifacts_path}" \
 		"${latest_artefact}" \
 		"${latest_builder_image}" \
 		"${final_tarball_name}" \
@@ -611,7 +590,6 @@ install_ovmf() {
 
 	install_cached_tarball_component \
 		"${component_name}" \
-		"${jenkins_url}/job/kata-containers-main-ovmf-${ovmf_type}-$(uname -m)/${cached_artifacts_path}" \
 		"${latest_artefact}" \
 		"${latest_builder_image}" \
 		"${final_tarball_name}" \
