@@ -23,7 +23,7 @@ jobs:
       matrix:
         containerd_version: ['lts', 'active']
         vmm: ['clh', 'qemu']
-    runs-on: garm-ubuntu-2204
+    runs-on: garm-ubuntu-2204-smaller
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
       GOPATH: ${{ github.workspace }}
