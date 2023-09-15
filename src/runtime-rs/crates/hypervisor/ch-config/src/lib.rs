@@ -492,4 +492,5 @@ pub struct NamedHypervisorConfig {
     pub tdx_enabled: bool,
 
     pub shared_fs_devices: Option<Vec<FsConfig>>,
+    pub network_devices: Option<Vec<NetConfig>>,
 }
