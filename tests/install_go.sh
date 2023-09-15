@@ -87,7 +87,7 @@ if command -v go; then
 	fi
 fi
 
-goarch=$("${repo_root_dir}/tests/kata-arch.sh" --golang)
+goarch=$(arch_to_golang)
 
 info "Download go version ${go_version}"
 kernel_name=$(uname -s)
