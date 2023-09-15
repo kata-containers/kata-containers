@@ -413,3 +413,42 @@ function install_cri_tools() {
 	sudo tar -xvf "${tarball_name}" -C /usr/local/bin
 	rm -f "${tarball_name}"
 }
+
+# Convert architecture to the name used by golang
+function arch_to_golang() {
+	local arch="$(uname -m)"
+
+	case "${arch}" in
+		aarch64) echo "arm64";;
+		ppc64le) echo "${arch}";;
+		x86_64) echo "amd64";;
+		s390x) echo "s390x";;
+		*) die "unsupported architecture: ${arch}";;
+	esac
+}
+
+# Convert architecture to the name used by rust
+function arch_to_rust() {
+	local -r arch="$(uname -m)"
+
+	case "${arch}" in
+		aarch64) echo "${arch}";;
+		ppc64le) echo "powerpc64le";;
+		x86_64) echo "${arch}";;
+		s390x) echo "${arch}";;
+		*) die "unsupported architecture: ${arch}";;
+	esac
+}
+
+# Convert architecture to the name used by the Linux kernel build system
+function arch_to_kernel() {
+	local -r arch="$(uname -m)"
+
+	case "${arch}" in
+		aarch64) echo "arm64";;
+		ppc64le) echo "powerpc";;
+		x86_64) echo "${arch}";;
+		s390x) echo "s390x";;
+		*) die "unsupported architecture: ${arch}";;
+	esac
+}
