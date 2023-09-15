@@ -35,7 +35,7 @@ jobs:
           - devmapper
         k8s:
           - k3s
-    runs-on: garm-ubuntu-2004
+    runs-on: garm-ubuntu-2004-smaller
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
