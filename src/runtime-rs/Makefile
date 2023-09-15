@@ -49,7 +49,7 @@ else
 ##TARGET default: build code
 default: runtime show-header
 ##TARGET test: run cargo tests
-test:
+test: static-checks-build
 	@cargo test --all --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture
 install: install-runtime install-configs
 endif
