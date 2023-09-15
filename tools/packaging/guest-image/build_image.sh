@@ -45,7 +45,7 @@ build_initrd() {
 		module_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/kernel-sev/builddir/kata-linux-${kernel_version}-${config_version}/lib/modules/${kernel_version}"
 		sudo -E PATH="$PATH" make rootfs AGENT_INIT=yes USE_DOCKER=1 ROOTFS_BUILD_DEST="${builddir}/initrd-image" KERNEL_MODULES_DIR="${module_dir}"
 	else
-		sudo -E PATH="$PATH" make rootfs AGENT_INIT=yes USE_DOCKER=1 ROOTFS_BUILD_DEST="${builddir}/intrd-image"
+		sudo -E PATH="$PATH" make rootfs AGENT_INIT=yes USE_DOCKER=1 ROOTFS_BUILD_DEST="${builddir}/initrd-image"
 	fi
 
 	if [ -n "${INCLUDE_ROOTFS:-}" ]; then
