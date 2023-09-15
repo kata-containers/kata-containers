@@ -34,6 +34,67 @@ jobs:
             echo "Check passed"
           fi
 
+  check-vendor:
+    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+      matrix:
+        component:
+          - agent
+          - dragonball
+          - runtime
+          - runtime-rs
+          - agent-ctl
+          - kata-ctl
+          - log-parser-rs
+          - runk
+          - trace-forwarder
+        include:
+          - component: agent
+            component-path: src/agent
+          - component: dragonball
+            component-path: src/dragonball
+          - component: runtime
+            component-path: src/runtime
+          - component: runtime-rs
+            component-path: src/runtime-rs
+          - component: agent-ctl
+            component-path: src/tools/agent-ctl
+          - component: kata-ctl
+            component-path: src/tools/kata-ctl
+          - component: log-parser-rs
+            component-path: src/tools/log-parser-rs
+          - component: runk
+            component-path: src/tools/runk
+          - component: trace-forwarder
+            component-path: src/tools/trace-forwarder
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install yq
+        run: |
+          ./ci/install_yq.sh
+        env:
+          INSTALL_IN_GOPATH: false
+      - name: Install golang
+        if: ${{ matrix.component == 'runtime' }}
+        run: |
+          ./tests/install_go.sh -f -p
+          echo "/usr/local/go/bin" >> $GITHUB_PATH
+      - name: Install rust
+        if: ${{ matrix.component != 'runtime' }}
+        run: |
+          ./tests/install_rust.sh
+          echo "${HOME}/.cargo/bin" >> $GITHUB_PATH
+      - name: Check ${{ matrix.component }} vendored code
+        run: |
+          cd ${{ matrix.component-path }}
+          make vendor
+        env:
+          RUST_BACKTRACE: "1"
+
   static-checks:
     runs-on: garm-ubuntu-2004
     strategy:
@@ -43,7 +104,6 @@ jobs:
       fail-fast: false
       matrix:
         cmd:
-          - "make vendor"
           - "make static-checks"
           - "make check"
           - "make test"
