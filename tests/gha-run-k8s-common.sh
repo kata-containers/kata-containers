@@ -12,6 +12,7 @@ tests_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${tests_dir}/common.bash"
 
 AZ_RG="${AZ_RG:-kataCI}"
+K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-small}"
 
 function _print_cluster_name() {
     test_type="${1:-k8s}"
@@ -40,10 +41,20 @@ function create_cluster() {
     # First, ensure that the cluster didn't fail to get cleaned up from a previous run.
     delete_cluster "${test_type}" || true
 
+    local instance_type=""
+    case ${K8S_TEST_HOST_TYPE} in
+	    small)
+		    instance_type="Standard_D2s_v5"
+		    ;;
+	    normal)
+		    instance_type="Standard_D4s_v5"
+		    ;;
+    esac
+
     az aks create \
         -g "${AZ_RG}" \
         -n "$(_print_cluster_name ${test_type})" \
-        -s "Standard_D2s_v5" \
+        -s "${instance_type}" \
         --node-count 1 \
         --generate-ssh-keys \
         $([ "${KATA_HOST_OS}" = "cbl-mariner" ] && echo "--os-sku AzureLinux --workload-runtime KataMshvVmIsolation")
