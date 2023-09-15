@@ -111,6 +111,11 @@ EOF
 	exit "${return_code}"
 }
 
+cleanup_and_fail() {
+       rm -f "${component_tarball_name}"
+       return 1
+}
+
 install_cached_tarball_component() {
 	if [ "${USE_CACHE}" != "yes" ]; then
 		return 1
@@ -132,6 +137,7 @@ install_cached_tarball_component() {
 
 	[ "${cached_image_version}" != "${current_image_version}" ] && return 1
 	[ "${cached_version}" != "${current_version}" ] && return 1
+	sha256sum -c "${component}-sha256sum" || return $(cleanup_and_fail)
 
 	info "Using cached tarball of ${component}"
 	mv "${component_tarball_name}" "${component_tarball_path}"
@@ -586,6 +592,7 @@ install_ovmf() {
 	tarball_name="${2:-edk2-x86_64.tar.gz}"
 
 	local component_name="ovmf"
+	[ "${ovmf_type}" == "sev" ] && component_name="ovmf-sev"
 	[ "${ovmf_type}" == "tdx" ] && component_name="tdvf"
 
 	latest_artefact="$(get_from_kata_deps "externals.ovmf.${ovmf_type}.version")"
