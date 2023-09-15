@@ -58,7 +58,7 @@ test:
 install:
 	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo install --locked --target $(TRIPLE) --path . --root $(INSTALL_PATH)
 
-check: standard_rust_check
+check: $(GENERATED_CODE) standard_rust_check
 
 .PHONY: \
 	build \
