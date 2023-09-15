@@ -177,7 +177,6 @@ ${environment}
     cri_containerd=\$(get_from_kata_deps "externals.containerd.lts")
     cri_tools=\$(get_from_kata_deps "externals.critools.latest")
     install_cri_containerd \${cri_containerd}
-    install_cri_tools \${cri_tools}
 
     kata_tarball_dir="kata-artifacts"
     install_kata
