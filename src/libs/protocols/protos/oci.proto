@@ -9,12 +9,6 @@ syntax = "proto3";
 option go_package = "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc";
 
 package grpc;
-import "gogo/protobuf/gogoproto/gogo.proto";
-
-option (gogoproto.equal_all) = true;
-option (gogoproto.populate_all) = true;
-option (gogoproto.testgen_all) = true;
-option (gogoproto.benchgen_all) = true;
 
 message Spec {
 	// Version of the Open Container Initiative Runtime Specification with which the bundle complies.
