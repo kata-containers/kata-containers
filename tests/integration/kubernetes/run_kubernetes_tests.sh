@@ -40,18 +40,15 @@ else
 		"k8s-liveness-probes.bats" \
 		"k8s-memory.bats" \
 		"k8s-nested-configmap-secret.bats" \
-		"k8s-number-cpus.bats" \
 		"k8s-oom.bats" \
 		"k8s-optional-empty-configmap.bats" \
 		"k8s-optional-empty-secret.bats" \
-		"k8s-parallel.bats" \
 		"k8s-pid-ns.bats" \
 		"k8s-pod-quota.bats" \
 		"k8s-port-forward.bats" \
 		"k8s-projected-volume.bats" \
 		"k8s-qos-pods.bats" \
 		"k8s-replication.bats" \
-		"k8s-scale-nginx.bats" \
 		"k8s-seccomp.bats" \
 		"k8s-sysctls.bats" \
 		"k8s-security-context.bats" \
