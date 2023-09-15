@@ -160,64 +160,35 @@ jobs:
           RUST_BACKTRACE: "1"
 
   static-checks:
-    runs-on: garm-ubuntu-2004
+    runs-on: ubuntu-20.04
     strategy:
-      # We can set this to true whenever we're 100% sure that
-      # the all the tests are not flaky, otherwise we'll fail
-      # all the tests due to a single flaky instance.
       fail-fast: false
       matrix:
         cmd:
           - "make static-checks"
     env:
-      RUST_BACKTRACE: "1"
-      target_branch: ${{ github.base_ref }}
       GOPATH: ${{ github.workspace }}
     steps:
-    - name: Free disk space
-      run: |
-        sudo rm -rf /usr/share/dotnet
-        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-    - name: Checkout code
-      uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-        path: ./src/github.com/${{ github.repository }}
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y --no-install-recommends build-essential haveged
-    - name: Install Go
-      uses: actions/setup-go@v3
-      with:
-        go-version: 1.19.3
-    - name: Set PATH
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
-      run: |
-        echo "${{ github.workspace }}/bin" >> $GITHUB_PATH
-    - name: Setup
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
-      run: |
-        cd ${GOPATH}/src/github.com/${{ github.repository }} && ./ci/setup.sh
-    - name: Installing rust
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
-      run: |
-        cd ${GOPATH}/src/github.com/${{ github.repository }} && ./ci/install_rust.sh
-        PATH=$PATH:"$HOME/.cargo/bin"
-        rustup target add x86_64-unknown-linux-musl
-        rustup component add rustfmt clippy
-    - name: Setup seccomp
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
-      run: |
-        libseccomp_install_dir=$(mktemp -d -t libseccomp.XXXXXXXXXX)
-        gperf_install_dir=$(mktemp -d -t gperf.XXXXXXXXXX)
-        cd ${GOPATH}/src/github.com/${{ github.repository }} && ./ci/install_libseccomp.sh "${libseccomp_install_dir}" "${gperf_install_dir}"
-        echo "Set environment variables for the libseccomp crate to link the libseccomp library statically"
-        echo "LIBSECCOMP_LINK_TYPE=static" >> $GITHUB_ENV
-        echo "LIBSECCOMP_LIB_PATH=${libseccomp_install_dir}/lib" >> $GITHUB_ENV
-    - name: Run check
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
-      run: |
-        export PATH=$PATH:"$HOME/.cargo/bin"
-        export XDG_RUNTIME_DIR=$(mktemp -d /tmp/kata-tests-$USER.XXX | tee >(xargs chmod 0700))
-        cd ${GOPATH}/src/github.com/${{ github.repository }} && ${{ matrix.cmd }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: ./src/github.com/${{ github.repository }}
+      - name: Install yq
+        run: |
+          cd ${GOPATH}/src/github.com/${{ github.repository }}
+          ./ci/install_yq.sh
+        env:
+          INSTALL_IN_GOPATH: false
+      - name: Install golang
+        run: |
+          cd ${GOPATH}/src/github.com/${{ github.repository }}
+          ./tests/install_go.sh -f -p
+          echo "/usr/local/go/bin" >> $GITHUB_PATH
+      - name: Install system dependencies
+        run: |
+          sudo apt-get -y install moreutils
+      - name: Run check
+        run: |
+          export PATH=${PATH}:${GOPATH}/bin
+          cd ${GOPATH}/src/github.com/${{ github.repository }} && ${{ matrix.cmd }}
