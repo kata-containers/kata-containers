@@ -1946,6 +1946,7 @@ dependencies = [
  "anyhow",
  "hyper",
  "hyperlocal",
+ "kata-types",
  "tokio",
 ]
 
