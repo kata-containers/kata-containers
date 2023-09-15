@@ -53,6 +53,7 @@ jobs:
           - "make vendor"
           - "make check"
           - "make test"
+          - "sudo -E PATH=\"$PATH\" make test"
         include:
           - component: agent
             component-path: src/agent
@@ -131,7 +132,6 @@ jobs:
       matrix:
         cmd:
           - "make static-checks"
-          - "sudo -E PATH=\"$PATH\" make test"
     env:
       RUST_BACKTRACE: "1"
       target_branch: ${{ github.base_ref }}
