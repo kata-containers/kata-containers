@@ -7,12 +7,10 @@
 
 set -o errexit
 
-cidir=$(dirname "$0")
-source "${cidir}/lib.sh"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+script_name="$(basename "${BASH_SOURCE[0]}")"
 
-clone_tests_repo
-
-source "${tests_repo_dir}/.ci/lib.sh"
+source "${script_dir}/../tests/common.bash"
 
 # The following variables if set on the environment will change the behavior
 # of gperf and libseccomp configure scripts, that may lead this script to
@@ -25,11 +23,11 @@ workdir="$(mktemp -d --tmpdir build-libseccomp.XXXXX)"
 # Variables for libseccomp
 libseccomp_version="${LIBSECCOMP_VERSION:-""}"
 if [ -z "${libseccomp_version}" ]; then
-    libseccomp_version=$(get_version "externals.libseccomp.version")
+    libseccomp_version=$(get_from_kata_deps "externals.libseccomp.version")
 fi
 libseccomp_url="${LIBSECCOMP_URL:-""}"
 if [ -z "${libseccomp_url}" ]; then
-    libseccomp_url=$(get_version "externals.libseccomp.url")
+    libseccomp_url=$(get_from_kata_deps "externals.libseccomp.url")
 fi
 libseccomp_tarball="libseccomp-${libseccomp_version}.tar.gz"
 libseccomp_tarball_url="${libseccomp_url}/releases/download/v${libseccomp_version}/${libseccomp_tarball}"
@@ -38,11 +36,11 @@ cflags="-O2"
 # Variables for gperf
 gperf_version="${GPERF_VERSION:-""}"
 if [ -z "${gperf_version}" ]; then
-    gperf_version=$(get_version "externals.gperf.version")
+    gperf_version=$(get_from_kata_deps "externals.gperf.version")
 fi
 gperf_url="${GPERF_URL:-""}"
 if [ -z "${gperf_url}" ]; then
-    gperf_url=$(get_version "externals.gperf.url")
+    gperf_url=$(get_from_kata_deps "externals.gperf.url")
 fi
 gperf_tarball="gperf-${gperf_version}.tar.gz"
 gperf_tarball_url="${gperf_url}/${gperf_tarball}"
