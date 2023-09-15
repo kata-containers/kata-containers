@@ -42,3 +42,4 @@ else
 	$([ "$(whoami)" != "root" ] && echo sudo) ln -sf /usr/bin/g++ /bin/musl-g++
 fi
 rustup component add rustfmt
+rustup component add clippy
