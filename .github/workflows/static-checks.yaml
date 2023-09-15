@@ -122,6 +122,43 @@ jobs:
         env:
           RUST_BACKTRACE: "1"
 
+  build-checks-depending-on-kvm:
+    runs-on: garm-ubuntu-2004-smaller
+    strategy:
+      fail-fast: false
+      matrix:
+        component:
+          - runtime-rs
+        include:
+          - component: runtime-rs
+            command: "sudo -E env PATH=$PATH LIBC=gnu SUPPORT_VIRTUALIZATION=true make test"
+          - component: runtime-rs
+            component-path: src/dragonball
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install system deps
+        run: |
+          sudo apt-get install -y build-essential musl-tools
+      - name: Install yq
+        run: |
+          sudo -E ./ci/install_yq.sh
+        env:
+          INSTALL_IN_GOPATH: false
+      - name: Install rust
+        run: |
+          export PATH="$PATH:/usr/local/bin"
+          ./tests/install_rust.sh
+      - name: Running `${{ matrix.command }}` for ${{ matrix.component }}
+        run: |
+          export PATH="$PATH:${HOME}/.cargo/bin"
+          cd ${{ matrix.component-path }}
+          ${{ matrix.command }}
+        env:
+          RUST_BACKTRACE: "1"
+
   static-checks:
     runs-on: garm-ubuntu-2004
     strategy:
