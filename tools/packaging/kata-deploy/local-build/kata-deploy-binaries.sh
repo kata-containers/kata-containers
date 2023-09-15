@@ -592,6 +592,7 @@ install_ovmf() {
 	tarball_name="${2:-edk2-x86_64.tar.gz}"
 
 	local component_name="ovmf"
+	[ "${ovmf_type}" == "sev" ] && component_name="ovmf-sev"
 	[ "${ovmf_type}" == "tdx" ] && component_name="tdvf"
 
 	latest_artefact="$(get_from_kata_deps "externals.ovmf.${ovmf_type}.version")"
