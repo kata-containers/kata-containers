@@ -12,6 +12,28 @@ concurrency:
 
 name: Static checks
 jobs:
+  check-kernel-config-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Ensure the kernel config version has been updated
+        run: |
+          kernel_dir="tools/packaging/kernel/"
+          kernel_version_file="${kernel_dir}kata_config_version"
+          modified_files=$(git diff --name-only origin/$GITHUB_BASE_REF..HEAD)
+          if git diff --name-only origin/$GITHUB_BASE_REF..HEAD "${kernel_dir}" | grep "${kernel_dir}"; then
+            echo "Kernel directory has changed, checking if $kernel_version_file has been updated"
+            if echo "$modified_files" | grep -v "README.md" | grep "${kernel_dir}" >>"/dev/null"; then
+              echo "$modified_files" | grep "$kernel_version_file" >>/dev/null || ( echo "Please bump version in $kernel_version_file" && exit 1)
+            else
+              echo "Readme file changed, no need for kernel config version update."
+            fi
+            echo "Check passed"
+          fi
+
   static-checks:
     runs-on: garm-ubuntu-2004
     strategy:
@@ -48,21 +70,6 @@ jobs:
       uses: actions/setup-go@v3
       with:
         go-version: 1.19.3
-    - name: Check kernel config version
-      run: |
-        cd "${{ github.workspace }}/src/github.com/${{ github.repository }}"
-        kernel_dir="tools/packaging/kernel/"
-        kernel_version_file="${kernel_dir}kata_config_version"
-        modified_files=$(git diff --name-only origin/main..HEAD)
-        if git diff --name-only origin/main..HEAD "${kernel_dir}" | grep "${kernel_dir}"; then
-          echo "Kernel directory has changed, checking if $kernel_version_file has been updated"
-          if echo "$modified_files" | grep -v "README.md" | grep "${kernel_dir}" >>"/dev/null"; then
-            echo "$modified_files" | grep "$kernel_version_file" >>/dev/null || ( echo "Please bump version in $kernel_version_file" && exit 1)
-          else
-            echo "Readme file changed, no need for kernel config version update."
-          fi
-          echo "Check passed"
-        fi
     - name: Set PATH
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       run: |
