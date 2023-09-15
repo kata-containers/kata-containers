@@ -52,7 +52,7 @@ clean:
 vendor:
 	cargo vendor
 
-test:
+test: $(GENERATED_CODE)
 	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo test --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES) -- --nocapture
 
 install:
