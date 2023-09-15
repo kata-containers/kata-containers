@@ -710,8 +710,10 @@ handle_build() {
 	fi
 	tar tvf "${final_tarball_path}"
 
-	echo "${latest_artefact}" > ${workdir}/${build_target}-version
-	echo "${latest_builder_image}" > ${workdir}/${build_target}-builder-image-version
+	pushd ${workdir}
+	echo "${latest_artefact}" > ${build_target}-version
+	echo "${latest_builder_image}" > ${build_target}-builder-image-version
+	sha256sum "${final_tarball_name}" > ${build_target}-sha256sum
 
 	if [ "${PUSH_TO_REGISTRY}" = "yes" ]; then
 		if [ -z "${ARTEFACT_REGISTRY}" ] ||
@@ -721,13 +723,13 @@ handle_build() {
 			die "ARTEFACT_REGISTRY, ARTEFACT_REGISTRY_USERNAME, ARTEFACT_REGISTRY_PASSWORD and TARGET_BRANCH must be passed to the script when pushing the artefacts to the registry!"
 		fi
 
-		pushd ${workdir}
-			echo "${ARTEFACT_REGISTRY_PASSWORD}" | oras login "${ARTEFACT_REGISTRY}" -u "${ARTEFACT_REGISTRY_USERNAME}" --password-stdin
+		echo "${ARTEFACT_REGISTRY_PASSWORD}" | oras login "${ARTEFACT_REGISTRY}" -u "${ARTEFACT_REGISTRY_USERNAME}" --password-stdin
 
-			oras push ${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) ${final_tarball_name} ${build_target}-version ${build_target}-builder-image-version
-			oras logout "${ARTEFACT_REGISTRY}"
-		popd
+		oras push ${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) ${final_tarball_name} ${build_target}-version ${build_target}-builder-image-version ${build_target}-sha256sum
+		oras logout "${ARTEFACT_REGISTRY}"
 	fi
+
+	popd
 }
 
 silent_mode_error_trap() {
