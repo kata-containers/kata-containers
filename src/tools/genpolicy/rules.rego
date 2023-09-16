@@ -1017,27 +1017,29 @@ CopyFileRequest {
 }
 
 ExecProcessRequest {
-    input_command = concat(" ", input.Process.Args)
-    print("ExecProcessRequest: input_command =", input_command)
+    print("ExecProcessRequest 1: input =", input)
+
+    input_command = concat(" ", input.process.Args)
 
     some policy_command in policy_data.request_defaults.ExecProcessRequest
     policy_command == input_command
 
-    print("ExecProcessRequest: success")
+    print("ExecProcessRequest 1: success")
 }
 ExecProcessRequest {
+    print("ExecProcessRequest 2: input =", input)
+
     # TODO: match input container ID with its corresponding container.exec_commands.
-    input_command = concat(" ", input.Process.Args)
-    print("ExecProcessRequest: input_command =", input_command)
+    input_command = concat(" ", input.process.Args)
 
     some container in policy_data.containers
     some policy_command in container.exec_commands
-    print("ExecProcessRequest: policy_command =", policy_command)
+    print("ExecProcessRequest 2: policy_command =", policy_command)
 
     # TODO: should other input data fields be validated as well?
     policy_command == input_command
 
-    print("ExecProcessRequest: success")
+    print("ExecProcessRequest 2: success")
 }
 
 ReadStreamRequest {
