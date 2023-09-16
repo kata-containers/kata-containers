@@ -247,3 +247,44 @@ impl TryFrom<ShareFsSettings> for FsConfig {
         Ok(fs_cfg)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Address;
+
+    #[test]
+    fn test_networkconfig_to_netconfig() {
+        let mut cfg = NetworkConfig {
+            host_dev_name: String::from("tap0"),
+            virt_iface_name: String::from("eth0"),
+            queue_size: 256,
+            queue_num: 2,
+            guest_mac: None,
+            index: 1,
+        };
+
+        let net = NetConfig::try_from(cfg.clone());
+        assert_eq!(
+            net.unwrap_err().to_string(),
+            "Missing mac address for network device"
+        );
+
+        let v: [u8; 6] = [10, 11, 128, 3, 4, 5];
+        let mac_address = Address(v);
+        cfg.guest_mac = Some(mac_address.clone());
+
+        let expected = NetConfig {
+            tap: Some(cfg.host_dev_name.clone()),
+            id: Some(cfg.virt_iface_name.clone()),
+            num_queues: cfg.queue_num,
+            queue_size: cfg.queue_size as u16,
+            mac: MacAddr { bytes: v },
+            ..Default::default()
+        };
+
+        let net = NetConfig::try_from(cfg);
+        assert!(net.is_ok());
+        assert_eq!(net.unwrap(), expected);
+    }
+}
