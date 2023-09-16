@@ -539,10 +539,10 @@ mod tests {
             },
             // Success scenarios
             TestData {
-                module_name: "kvm",
+                module_name: "loop",
                 param_name: "",
                 kernel_module: &KernelModule {
-                    name: "kvm",
+                    name: "loop",
                     params: &[KernelParam {
                         name: "nonexistantparam",
                         value: KernelParamType::Simple("Y"),
@@ -552,16 +552,16 @@ mod tests {
                 result: Ok(()),
             },
             TestData {
-                module_name: "kvm",
-                param_name: "kvmclock_periodic_sync",
+                module_name: "loop",
+                param_name: "hw_queue_depth",
                 kernel_module: &KernelModule {
-                    name: "kvm",
+                    name: "loop",
                     params: &[KernelParam {
-                        name: "kvmclock_periodic_sync",
-                        value: KernelParamType::Simple("Y"),
+                        name: "hw_queue_depth",
+                        value: KernelParamType::Simple("128"),
                     }],
                 },
-                param_value: "Y",
+                param_value: "128",
                 result: Ok(()),
             },
         ];
