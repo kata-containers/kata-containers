@@ -12,7 +12,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 source "${script_dir}/../../scripts/lib.sh"
 
-ARCH=${ARCH:-$(arch_to_golang "$(uname -m)")}
+arch="$(uname -m)"
 
 nydus_url="${nydus_url:-}"
 nydus_version="${nydus_version:-}"
@@ -25,7 +25,7 @@ info "Get nydus information from runtime versions.yaml"
 
 nydus_tarball_url="${nydus_url}/releases/download"
 
-file_name="nydus-static-${nydus_version}-linux-${ARCH}.tgz"
+file_name="nydus-static-${nydus_version}-linux-$(arch_to_golang $arch).tgz"
 download_url="${nydus_tarball_url}/${nydus_version}/${file_name}"
 
 info "Download nydus version: ${nydus_version} from ${download_url}"
