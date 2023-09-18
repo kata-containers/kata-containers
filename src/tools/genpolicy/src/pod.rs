@@ -526,6 +526,11 @@ impl Container {
         }
 
         if let Some(lifecycle) = &self.lifecycle {
+            if let Some(postStart) = &lifecycle.postStart {
+                if let Some(exec) = &postStart.exec {
+                    commands.push(exec.command.join(" "));
+                }
+            }
             if let Some(preStop) = &lifecycle.preStop {
                 if let Some(exec) = &preStop.exec {
                     commands.push(exec.command.join(" "));
