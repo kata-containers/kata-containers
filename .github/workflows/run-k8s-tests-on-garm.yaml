@@ -35,7 +35,15 @@ jobs:
           - devmapper
         k8s:
           - k3s
-    runs-on: garm-ubuntu-2004-smaller
+        instance:
+          - garm-ubuntu-2004
+          - garm-ubuntu-2004-smaller
+        include:
+          - instance: garm-ubuntu-2004
+            instance-type: normal
+          - instance: garm-ubuntu-2004-smaller
+            instance-type: small
+    runs-on: ${{ matrix.instance }}
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
@@ -45,6 +53,7 @@ jobs:
       KUBERNETES: ${{ matrix.k8s }}
       SNAPSHOTTER: ${{ matrix.snapshotter }}
       USING_NFD: "false"
+      K8S_TEST_HOST_TYPE: ${{ matrix.instance-type }}
     steps:
       - uses: actions/checkout@v3
         with:

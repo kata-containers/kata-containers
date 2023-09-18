@@ -39,6 +39,7 @@ jobs:
       KUBECONFIG: /home/kata/.kube/config
       KUBERNETES: "vanilla"
       USING_NFD: "false"
+      K8S_TEST_HOST_TYPE: "baremetal"
     steps:
       - uses: actions/checkout@v3
         with:

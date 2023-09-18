@@ -33,6 +33,9 @@ jobs:
           - clh
           - dragonball
           - qemu
+        instance-type:
+          - small
+          - normal
         include:
           - host_os: cbl-mariner
             vmm: clh
@@ -46,6 +49,7 @@ jobs:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
       KUBERNETES: "vanilla"
       USING_NFD: "false"
+      K8S_TEST_HOST_TYPE: ${{ matrix.instance-type }}
     steps:
       - uses: actions/checkout@v3
         with:
