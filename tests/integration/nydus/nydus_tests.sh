@@ -99,8 +99,8 @@ function config_containerd() {
          [plugins.cri.containerd.runtimes.runc.options]
            BinaryName = "${runc_path}"
            Root = ""
-      [plugins.cri.containerd.runtimes.kata]
-         runtime_type = "io.containerd.kata.v2"
+      [plugins.cri.containerd.runtimes.kata-${KATA_HYPERVISOR}]
+         runtime_type = "io.containerd.kata-${KATA_HYPERVISOR}.v2"
          privileged_without_host_devices = true
 EOF
 }
@@ -127,7 +127,7 @@ function setup() {
 
 function run_test() {
 	sudo -E crictl --timeout=20s pull "${IMAGE}"
-	pod=$(sudo -E crictl --timeout=20s runp -r kata $dir_path/nydus-sandbox.yaml)
+	pod=$(sudo -E crictl --timeout=20s runp -r kata-${KATA_HYPERVISOR} $dir_path/nydus-sandbox.yaml)
 	echo "Pod $pod created"
 	cnt=$(sudo -E crictl --timeout=20s create $pod $dir_path/nydus-container.yaml $dir_path/nydus-sandbox.yaml)
 	echo "Container $cnt created"
