@@ -678,8 +678,18 @@ main() {
 		create_rootfs_image "${rootfs}" "${image}" "${rootfs_img_size}" \
 						"${fs_type}" "${block_size}" "${agent_bin}"
 	fi
+
+	# Skip the insertion of the DAX header due to
+	# https://github.com/kata-containers/kata-containers/issues/7993
+
+	#info "Partition information before set_dax_header:"
+	#fdisk -lu "${image}"
+
 	# insert at the beginning of the image the MBR + DAX header
-	set_dax_header "${image}" "${img_size}" "${fs_type}" "${nsdax_bin}"
+	#set_dax_header "${image}" "${img_size}" "${fs_type}" "${nsdax_bin}"
+
+	#info "Partition information after set_dax_header:"
+	#fdisk -lu "${image}"
 }
 
 main "$@"
