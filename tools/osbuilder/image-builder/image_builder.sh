@@ -501,9 +501,27 @@ create_rootfs_image() {
 	fi
 
 	if [ "${KATA_BUILD_CC}" == "yes" ] && [ -b "${device}p2" ]; then
-		info "veritysetup format rootfs device: ${device}p1, hash device: ${device}p2"
+		setup_cmd="veritysetup format ${device}p1 ${device}p2"
+
+		case "${DM_VERITY_FORMAT}" in
+			veritysetup)
+				# Partition format compatible with "veritysetup open" but not with kernel's
+				# "dm-mod.create" command line parameter.
+				;;
+			kernelinit)
+				# Partition format compatible with kernel's "dm-mod.create" command line
+				# parameter but not with "veritysetup open".
+				setup_cmd+=" --no-superblock"
+				;;
+			*)
+				error "DM_VERITY_FORMAT(${DM_VERITY_FORMAT}) is incorrect (must be veritysetup or kernelinit)"
+				return 1
+				;;
+		esac
+
+		info "${setup_cmd}"
 		local image_dir=$(dirname "${image}")
-		veritysetup format "${device}p1" "${device}p2" > "${image_dir}"/root_hash.txt 2>&1
+		eval "${setup_cmd}" > "${image_dir}"/root_hash.txt 2>&1
 	fi
 
 	losetup -d "${device}"

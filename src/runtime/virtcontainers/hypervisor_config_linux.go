@@ -30,8 +30,8 @@ func validateHypervisorConfig(conf *HypervisorConfig) error {
 		return fmt.Errorf("Missing image, initrd, and igvm path")
 	} else if conf.ImagePath != "" && conf.InitrdPath != "" {
 		return fmt.Errorf("Image and initrd path cannot be both set")
-	} else if conf.IgvmPath != "" && (conf.ImagePath != "" || conf.InitrdPath != "") {
-		return fmt.Errorf("Igvm and image or initrd path cannot be both set")
+	} else if conf.IgvmPath != "" && conf.InitrdPath != "" {
+		return fmt.Errorf("Igvm and initrd path cannot be both set")
 	}
 
 	if err := conf.CheckTemplateConfig(); err != nil {

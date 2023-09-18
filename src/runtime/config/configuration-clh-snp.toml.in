@@ -14,6 +14,7 @@
 [hypervisor.clh]
 path = "@CLHSNPPATH@"
 igvm = "@IGVMPATH@"
+image = "@IMAGEPATH@"
 
 # rootfs filesystem type:
 #   - ext4 (default)
