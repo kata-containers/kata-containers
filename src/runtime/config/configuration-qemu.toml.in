@@ -323,10 +323,25 @@ valid_file_mem_backends = @DEFVALIDFILEMEMBACKENDS@
 pflashes = []
 
 # This option changes the default hypervisor and kernel parameters
-# to enable debug output where available. And Debug also enable the hmp socket.
+# to enable debug output where available.
 #
 # Default false
 #enable_debug = true
+
+# This option allows to add an extra HMP or QMP socket when `enable_debug = true`
+#
+# WARNING: Anyone with access to the extra socket can take full control of
+# Qemu. This is for debugging purpose only and must *NEVER* be used in
+# production.
+#
+# Valid values are :
+# - "hmp"
+# - "qmp"
+# - "qmp-pretty" (same as "qmp" with pretty json formatting)
+#
+# If set to the empty string "", no extra monitor socket is added. This is
+# the default.
+#extra_monitor_socket = hmp
 
 # Disable the customizations done in the runtime when it detects
 # that it is running on top a VMM. This will result in the runtime
