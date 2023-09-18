@@ -1,0 +1,128 @@
+version = 1
+# Snapshotter's own home directory where it stores and creates necessary resources
+root = "/var/lib/containerd-nydus"
+# The snapshotter's GRPC server socket, containerd will connect to plugin on this socket
+address = "/run/containerd-nydus/containerd-nydus-grpc.sock"
+daemon_mode = "dedicated"
+# Whether snapshotter should try to clean up resources when it is closed
+cleanup_on_close = false
+
+[system]
+# Snapshotter's debug and trace HTTP server interface
+enable = true
+# Unix domain socket path where system controller is listening on
+address = "/run/containerd-nydus/system.sock"
+
+[system.debug]
+# Snapshotter can profile the CPU utilization of each nydusd daemon when it is being started.
+# This option specifies the profile duration when nydusd is downloading and uncomproessing data.
+daemon_cpu_profile_duration_secs = 5
+# Enable by assigning an address, empty indicates pprof server is disabled
+pprof_address = ""
+
+[daemon]
+# Specify a configuration file for nydusd
+nydusd_config = "/etc/nydusd-config.json"
+nydusd_path = "/usr/local/bin/nydusd"
+nydusimage_path = "/usr/local/bin/nydus-image"
+# fusedev or fscache
+fs_driver = "fusedev"
+# How to process when daemon dies: "none", "restart" or "failover"
+recover_policy = "restart"
+# Nydusd worker thread number to handle FUSE or fscache requests, [0-1024].
+# Setting to 0 will use the default configuration of nydusd.
+threads_number = 4
+# Log rotation size for nydusd, in unit MB(megabytes)
+log_rotation_size = 100
+
+
+[cgroup]
+# Whether to use separate cgroup for nydusd.
+enable = true
+# The memory limit for nydusd cgroup, which contains all nydusd processes.
+# Percentage is supported as well, please ensure it is end with "%".
+# The default unit is bytes. Acceptable values include "209715200", "200MiB", "200Mi" and "10%".
+memory_limit = ""
+
+[log]
+# Print logs to stdout rather than logging files
+log_to_stdout = false
+# Snapshotter's log level
+level = "info"
+log_rotation_compress = true
+log_rotation_local_time = true
+# Max number of days to retain logs
+log_rotation_max_age = 7
+log_rotation_max_backups = 5
+# In unit MB(megabytes)
+log_rotation_max_size = 100
+
+[metrics]
+# Enable by assigning an address, empty indicates metrics server is disabled
+address = ":9110"
+
+[remote]
+convert_vpc_registry = false
+
+[remote.mirrors_config]
+# Snapshotter will overwrite daemon's mirrors configuration
+# if the values loaded from this driectory are not null before starting a daemon.
+# Set to "" or an empty directory to disable it.
+#dir = "/etc/nydus/certs.d"
+
+[remote.auth]
+# Fetch the private registry auth by listening to K8s API server
+enable_kubeconfig_keychain = false
+# synchronize `kubernetes.io/dockerconfigjson` secret from kubernetes API server with specified kubeconfig (default `$KUBECONFIG` or `~/.kube/config`)
+kubeconfig_path = ""
+# Fetch the private registry auth as CRI image service proxy
+enable_cri_keychain = false
+# the target image service when using image proxy
+#image_service_address = "/run/containerd/containerd.sock"
+
+[snapshot]
+# Let containerd use nydus-overlayfs mount helper
+enable_nydus_overlayfs = true
+# Insert Kata Virtual Volume option to `Mount.Options`
+enable_kata_volume = false
+# Whether to remove resources when a snapshot is removed
+sync_remove = false
+
+[cache_manager]
+disable = false
+gc_period = "24h"
+# Directory to host cached files
+cache_dir = ""
+
+[image]
+public_key_file = ""
+validate_signature = false
+
+# The configuraions for features that are not production ready
+[experimental]
+# Whether to enable stargz support
+enable_stargz = false
+# Whether to enable referrers support
+# The option enables trying to fetch the Nydus image associated with the OCI image and run it.
+# Also see https://github.com/opencontainers/distribution-spec/blob/main/spec.md#listing-referrers
+enable_referrer_detect = false
+[experimental.tarfs]
+# Whether to enable nydus tarfs mode. Tarfs is supported by:
+# - The EROFS filesystem driver since Linux 6.4
+# - Nydus Image Service release v2.3
+enable_tarfs = false
+# Mount rafs on host by loopdev and EROFS
+mount_tarfs_on_host = false
+# Only enable nydus tarfs mode for images with `tarfs hint` label when true
+tarfs_hint = false
+# Maximum of concurrence to converting OCIv1 images to tarfs, 0 means default
+max_concurrent_proc = 0
+# Mode to export tarfs images:
+# - "none" or "": do not export tarfs
+# - "layer_verity_only": only generate disk verity information for a layer blob
+# - "image_verity_only": only generate disk verity information for all blobs of an image
+# - "layer_block": generate a raw block disk image with tarfs for a layer
+# - "image_block": generate a raw block disk image with tarfs for an image
+# - "layer_block_with_verity": generate a raw block disk image with tarfs for a layer with dm-verity info
+# - "image_block_with_verity": generate a raw block disk image with tarfs for an image with dm-verity info
+export_mode = ""

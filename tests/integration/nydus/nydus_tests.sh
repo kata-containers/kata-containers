@@ -12,8 +12,7 @@ set -o pipefail
 set -o errtrace
 
 dir_path=$(dirname "$0")
-source "${dir_path}/../../lib/common.bash"
-source "${dir_path}/../../.ci/lib.sh"
+source "${dir_path}/../../common.bash"
 source "/etc/os-release" || source "/usr/lib/os-release"
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 
@@ -30,56 +29,20 @@ containerd_config_backup="/tmp/containerd.config.toml"
 # test image for container
 IMAGE="${IMAGE:-ghcr.io/dragonflyoss/image-service/alpine:nydus-latest}"
 
-if [ "$KATA_HYPERVISOR" != "qemu" ] && [ "$KATA_HYPERVISOR" != "cloud-hypervisor" ] && [ "$KATA_HYPERVISOR" != "dragonball" ]; then
-	echo "Skip nydus test for $KATA_HYPERVISOR, it only works for QEMU/CLH/DB now."
+if [ "$KATA_HYPERVISOR" != "qemu" ] && [ "$KATA_HYPERVISOR" != "clh" ]; then
+	echo "Skip nydus test for $KATA_HYPERVISOR, it only works for QEMU/CLH now."
 	exit 0
 fi
-
-arch="$(uname -m)"
-if [ "$arch" != "x86_64" ]; then
-	echo "Skip nydus test for $arch, it only works for x86_64 now. See https://github.com/kata-containers/tests/issues/4445"
-	exit 0
-fi
-
-function install_from_tarball() {
-	local package_name="$1"
-	local binary_name="$2"
-	[ -n "$package_name" ] || die "need package_name"
-	[ -n "$binary_name" ] || die "need package release binary_name"
-
-	local url=$(get_version "externals.${package_name}.url")
-	local version=$(get_version "externals.${package_name}.version")
-	local tarball_url="${url}/releases/download/${version}/${binary_name}-${version}-$arch.tgz"
-	if [ "${package_name}" == "nydus" ]; then
-		local goarch="$(${dir_path}/../../.ci/kata-arch.sh --golang)"
-		tarball_url="${url}/releases/download/${version}/${binary_name}-${version}-linux-$goarch.tgz"
-	fi
-	echo "Download tarball from ${tarball_url}"
-	curl -Ls "$tarball_url" | sudo tar xfz - -C /usr/local/bin --strip-components=1
-}
 
 function setup_nydus() {
-	# install nydus
-	install_from_tarball "nydus" "nydus-static"
-
-	# install nydus-snapshotter
-	install_from_tarball "nydus-snapshotter" "nydus-snapshotter"
-
 	# Config nydus snapshotter
 	sudo -E cp "$dir_path/nydusd-config.json" /etc/
+	sudo -E cp "$dir_path/snapshotter-config.toml" /etc/
 
 	# start nydus-snapshotter
-	nohup /usr/local/bin/containerd-nydus-grpc \
-		--config-path /etc/nydusd-config.json \
-		--shared-daemon \
-		--log-level debug \
-		--root /var/lib/containerd/io.containerd.snapshotter.v1.nydus \
-		--cache-dir /var/lib/nydus/cache \
-		--nydusd-path /usr/local/bin/nydusd \
-		--nydusimg-path /usr/local/bin/nydus-image \
-		--disable-cache-manager true \
-		--enable-nydus-overlayfs true \
-		--log-to-stdout >/dev/null 2>&1 &
+	sudo nohup /usr/local/bin/containerd-nydus-grpc \
+		--config /etc/snapshotter-config.toml \
+		--nydusd-config /etc/nydusd-config.json &
 }
 
 function config_kata() {
@@ -136,10 +99,20 @@ function config_containerd() {
          [plugins.cri.containerd.runtimes.runc.options]
            BinaryName = "${runc_path}"
            Root = ""
-      [plugins.cri.containerd.runtimes.kata]
-         runtime_type = "io.containerd.kata.v2"
+      [plugins.cri.containerd.runtimes.kata-${KATA_HYPERVISOR}]
+         runtime_type = "io.containerd.kata-${KATA_HYPERVISOR}.v2"
          privileged_without_host_devices = true
 EOF
+}
+
+function check_nydus_snapshotter_exist() {
+	echo "check_nydus_snapshotter_exist"
+	bin="containerd-nydus-grpc"
+	if pgrep -f "$bin" >/dev/null; then
+		echo "nydus-snapshotter is running"
+	else
+		die "nydus-snapshotter is not running"
+	fi
 }
 
 function setup() {
@@ -148,28 +121,29 @@ function setup() {
 	config_containerd
 	restart_containerd_service
 	check_processes
+	check_nydus_snapshotter_exist
 	extract_kata_env
 }
 
 function run_test() {
-	sudo -E crictl pull "${IMAGE}"
-	pod=$(sudo -E crictl runp -r kata $dir_path/nydus-sandbox.yaml)
+	sudo -E crictl --timeout=20s pull "${IMAGE}"
+	pod=$(sudo -E crictl --timeout=20s runp -r kata-${KATA_HYPERVISOR} $dir_path/nydus-sandbox.yaml)
 	echo "Pod $pod created"
-	cnt=$(sudo -E crictl create $pod $dir_path/nydus-container.yaml $dir_path/nydus-sandbox.yaml)
+	cnt=$(sudo -E crictl --timeout=20s create $pod $dir_path/nydus-container.yaml $dir_path/nydus-sandbox.yaml)
 	echo "Container $cnt created"
-	sudo -E crictl start $cnt
+	sudo -E crictl --timeout=20s start $cnt
 	echo "Container $cnt started"
 
 	# ensure container is running
-	state=$(sudo -E crictl inspect $cnt | jq .status.state | tr -d '"')
+	state=$(sudo -E crictl --timeout=20s inspect $cnt | jq .status.state | tr -d '"')
 	[ $state == "CONTAINER_RUNNING" ] || die "Container is not running($state)"
 	# run a command in container
-	crictl exec $cnt ls
+	sudo -E crictl --timeout=20s exec $cnt ls
 
 	# cleanup containers
-	sudo -E crictl stop $cnt
-	sudo -E crictl stopp $pod
-	sudo -E crictl rmp $pod
+	sudo -E crictl --timeout=20s stop $cnt
+	sudo -E crictl --timeout=20s stopp $pod
+	sudo -E crictl --timeout=20s rmp $pod
 }
 
 function teardown() {
@@ -177,11 +151,11 @@ function teardown() {
 
 	# kill nydus-snapshotter
 	bin=containerd-nydus-grpc
-	kill -9 $(pidof $bin) || true
+	sudo -E kill -9 $(pidof $bin) || true
 	[ "$(pidof $bin)" == "" ] || die "$bin is running"
 
 	bin=nydusd
-	kill -9 $(pidof $bin) || true
+	sudo -E kill -9 $(pidof $bin) || true
 	[ "$(pidof $bin)" == "" ] || die "$bin is running"
 
 	# restore kata configuratiom.toml if needed
