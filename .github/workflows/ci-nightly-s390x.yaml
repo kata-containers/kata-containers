@@ -1,0 +1,47 @@
+on:
+  schedule:
+    - cron: '0 2 * * *'
+
+name: Nightly CI for s390x
+jobs:
+  check-internal-test-result:
+    runs-on: s390x
+    strategy:
+      fail-fast: false
+      matrix:
+        test_title:
+          - kata-vfio-ap-e2e-tests
+    steps:
+    - name: Fetch a test result for {{ matrix.test_title }}
+      run: |
+        file_name="${TEST_TITLE}-$(date +%Y-%m-%d).log"
+        /home/${USER}/script/handle_test_log.sh download $file_name
+      env:
+        TEST_TITLE: ${{ matrix.test_title }}
+
+  k8s-cri-containerd-rhel9-e2e-tests:
+    runs-on: s390x-rhel9
+    steps:
+    - name: Delete the existing files
+      run: |
+        sudo chown -R $USER:$USER $GITHUB_WORKSPACE
+        sudo rm -rf $GITHUB_WORKSPACE/*
+
+    - name: Take a pre-action for self-hosted runner
+      run: |
+        ${HOME}/script/pre_action.sh rhel9-nightly
+
+    - name: Run k8s/cri-containerd e2e tests on RHEL9
+      run: |
+        export WORKSPACE=$GITHUB_WORKSPACE
+        export GITHUB_ACTION=""
+        bash ci_crio_entry_point.sh
+      env:
+        BAREMETAL: "true"
+        REPO_OWNER: "cri-o"
+        REPO_NAME: "cri-o"
+    
+    - name: Take a post-action for self-hosted runner
+      if: always()
+      run: |
+        ${HOME}/script/post_action.sh rhel9-nightly
