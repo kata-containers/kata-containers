@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+mod cmdline_generator;
 mod inner;
 
 use crate::device::DeviceType;
