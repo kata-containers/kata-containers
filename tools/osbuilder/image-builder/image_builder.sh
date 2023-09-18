@@ -671,8 +671,15 @@ main() {
 		create_rootfs_image "${rootfs}" "${image}" "${rootfs_img_size}" \
 						"${fs_type}" "${block_size}" "${agent_bin}"
 	fi
+
+	info "Partition information before set_dax_header:"
+	fdisk -lu "${image}"
+
 	# insert at the beginning of the image the MBR + DAX header
 	set_dax_header "${image}" "${img_size}" "${fs_type}" "${nsdax_bin}"
+
+	info "Partition information after set_dax_header:"
+	fdisk -lu "${image}"
 }
 
 main "$@"
