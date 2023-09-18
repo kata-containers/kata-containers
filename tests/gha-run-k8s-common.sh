@@ -11,7 +11,6 @@ set -o pipefail
 tests_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${tests_dir}/common.bash"
 
-AZ_RG="${AZ_RG:-kataCI}"
 K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-small}"
 
 function _print_cluster_name() {
@@ -19,6 +18,12 @@ function _print_cluster_name() {
 
     short_sha="$(git rev-parse --short=12 HEAD)"
     echo "${test_type}-${GH_PR_NUMBER}-${short_sha}-${KATA_HYPERVISOR}-${KATA_HOST_OS}-amd64"
+}
+
+function _print_rg_name() {
+    test_type="${1:-k8s}"
+
+    echo "${AZ_RG:-"kataCI-$(_print_cluster_name ${test_type})"}"
 }
 
 function install_azure_cli() {
@@ -38,8 +43,14 @@ function login_azure() {
 function create_cluster() {
     test_type="${1:-k8s}"
 
-    # First, ensure that the cluster didn't fail to get cleaned up from a previous run.
+    # First ensure it didn't fail to get cleaned up from a previous run.
     delete_cluster "${test_type}" || true
+
+    local rg="$(_print_rg_name ${test_type})"
+
+    az group create \
+        -l eastus2 \
+        -n "${rg}"
 
     local instance_type=""
     case ${K8S_TEST_HOST_TYPE} in
@@ -52,7 +63,8 @@ function create_cluster() {
     esac
 
     az aks create \
-        -g "${AZ_RG}" \
+        -g "${rg}" \
+	--node-resource-group "node-${rg}" \
         -n "$(_print_cluster_name ${test_type})" \
         -s "${instance_type}" \
         --node-count 1 \
@@ -79,16 +91,15 @@ function get_cluster_credentials() {
     test_type="${1:-k8s}"
 
     az aks get-credentials \
-        -g "${AZ_RG}" \
+        -g "$(_print_rg_name ${test_type})" \
         -n "$(_print_cluster_name ${test_type})"
 }
 
 function delete_cluster() {
     test_type="${1:-k8s}"
 
-    az aks delete \
-        -g "${AZ_RG}" \
-        -n "$(_print_cluster_name ${test_type})" \
+    az group delete \
+        -g "$(_print_rg_name ${test_type})" \
         --yes
 }
 
