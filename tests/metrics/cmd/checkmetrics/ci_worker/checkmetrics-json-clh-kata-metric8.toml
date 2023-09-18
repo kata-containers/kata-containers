@@ -127,6 +127,19 @@ maxpercent = 20.0
 [[metric]]
 name = "network-iperf3"
 type = "json"
+description = "measure container parallel bandwidth using iperf3"
+# Min and Max values to set a 'range' that
+# the median of the CSV Results data must fall
+# within (inclusive)
+checkvar = ".\"network-iperf3\".Results | .[] | .parallel.Result"
+checktype = "mean"
+midval = 61176889941.0
+minpercent = 20.0
+maxpercent = 20.0
+
+[[metric]]
+name = "network-iperf3"
+type = "json"
 description = "iperf"
 # Min and Max values to set a 'range' that
 # the median of the CSV Results data must fall
