@@ -159,7 +159,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (testConfig testRuntime
 		KernelPath:            kernelPath,
 		ImagePath:             imagePath,
 		RootfsType:            rootfsType,
-		KernelParams:          vc.DeserializeParams(strings.Fields(kernelParams)),
+		KernelParams:          vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
 		HypervisorMachineType: machineType,
 		NumVCPUs:              defaultVCPUCount,
 		DefaultMaxVCPUs:       getCurrentCpuNum(),
