@@ -48,8 +48,12 @@ setup() {
 	echo "::endgroup::"
 	
 	kubectl apply -f "${repo_root_dir}/tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
-	if [ "${platform}" = "tdx" ]; then
+	if [ "${KUBERNETES}" = "k0s" ]; then
+		kubectl apply -k "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/overlays/k0s"
+	elif [ "${KUBERNETES}" = "k3s" ]; then
 		kubectl apply -k "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/overlays/k3s"
+	elif [ "${KUBERNETES}" = "rke2" ]; then
+		kubectl apply -k "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/overlays/rke2"
 	else
 		kubectl apply -f "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 	fi
@@ -74,12 +78,18 @@ setup() {
 teardown() {
 	kubectl get runtimeclasses -o name | grep -v "kata-mshv-vm-isolation"
 
-	if [ "${platform}" = "tdx" ]; then
-		deploy_spec="-k "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/overlays/k3s""
-		cleanup_spec="-k "${repo_root_dir}/tools/packaging/kata-deploy/kata-cleanup/overlays/k3s""
+	if [ "${KUBERNETES}" = "k0s" ]; then
+		deploy_spec="-k \"${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/overlays/k0s\""
+		cleanup_spec="-k \"${repo_root_dir}/tools/packaging/kata-deploy/kata-cleanup/overlays/k0s\""
+	elif [ "${KUBERNETES}" = "k3s" ]; then
+		deploy_spec="-k \"${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/overlays/k3s\""
+		cleanup_spec="-k \"${repo_root_dir}/tools/packaging/kata-deploy/kata-cleanup/overlays/k3s\""
+	elif [ "${KUBERNETES}" = "rke2" ]; then
+		deploy_spec="-k \"${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/overlays/rke2\""
+		cleanup_spec="-k \"${repo_root_dir}/tools/packaging/kata-deploy/kata-cleanup/overlays/rke2\""
 	else
-		deploy_spec="-f "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml""
-		cleanup_spec="-f "${repo_root_dir}/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml""
+		deploy_spec="-f \"${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml\""
+		cleanup_spec="-f \"${repo_root_dir}/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml\""
 	fi
 
 	kubectl delete ${deploy_spec}

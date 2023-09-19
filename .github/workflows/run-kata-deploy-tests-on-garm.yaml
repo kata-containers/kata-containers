@@ -1,4 +1,4 @@
-name: CI | Run kata-deploy tests on TDX
+name: CI | Run kata-deploy tests on GARM
 on:
   workflow_call:
     inputs:
@@ -28,18 +28,23 @@ jobs:
       fail-fast: false
       matrix:
         vmm:
-          - qemu-tdx
-    runs-on: tdx
+          - clh
+          - qemu
+        k8s:
+          - k0s
+          - k3s
+          - rke2
+    runs-on: garm-ubuntu-2004-small
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
       DOCKER_TAG: ${{ inputs.tag }}
       PR_NUMBER: ${{ inputs.pr-number }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
-      KUBERNETES: "k3s"
-      USING_NFD: "true"
+      KUBERNETES: ${{ matrix.k8s }}
+      USING_NFD: "false"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
@@ -49,6 +54,12 @@ jobs:
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: Deploy ${{ matrix.k8s }}
+        run:  bash tests/functional/kata-deploy/gha-run.sh deploy-k8s
+
+      - name: Install `bats`
+        run: bash tests/functional/kata-deploy/gha-run.sh install-bats
 
       - name: Run tests
         run: bash tests/functional/kata-deploy/gha-run.sh run-tests
