@@ -919,7 +919,7 @@ func CheckCmdline(kernelCmdlinePath, searchParam string, searchValues []string) 
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
-		for _, field := range strings.Fields(scanner.Text()) {
+		for _, field := range KernelParamFields(scanner.Text()) {
 			if check(field, searchParam, searchValues) {
 				return true, nil
 			}
@@ -941,7 +941,7 @@ func CPUFlags(cpuInfoPath string) (map[string]bool, error) {
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		// Expected format: ["flags", ":", ...] or ["flags:", ...]
-		fields := strings.Fields(scanner.Text())
+		fields := KernelParamFields(scanner.Text())
 		if len(fields) < 2 {
 			continue
 		}
@@ -1084,4 +1084,36 @@ type Hypervisor interface {
 
 	// check if hypervisor supports built-in rate limiter.
 	IsRateLimiterBuiltin() bool
+}
+
+// KernelParamFields is similar to strings.Fields(), but doesn't split
+// based on space characters that are part of a quoted substring. Example
+// of quoted kernel command line parameter value:
+// dm-mod.create="dm-verity,,,ro,0 736328 verity 1
+// /dev/vda1 /dev/vda2 4096 4096 92041 0 sha256
+// f211b9f1921ef726d57a72bf82be23a510076639fa8549ade10f85e214e0ddb4
+// 065c13dfb5b4e0af034685aa5442bddda47b17c182ee44ba55a373835d18a038"
+func KernelParamFields(s string) []string {
+	var params []string
+
+	start := 0
+	inQuote := false
+	for current, c := range s {
+		if c == '"' {
+			inQuote = !inQuote
+		} else if c == ' ' && !inQuote {
+			newParam := strings.TrimSpace(s[start:current])
+			if newParam != "" {
+				params = append(params, newParam)
+			}
+			start = current + 1
+		}
+	}
+
+	newParam := strings.TrimSpace(s[start:])
+	if newParam != "" {
+		params = append(params, newParam)
+	}
+
+	return params
 }
