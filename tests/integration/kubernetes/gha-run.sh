@@ -215,6 +215,7 @@ function main() {
         login-azure) login_azure ;;
         create-cluster) create_cluster ;;
         configure-snapshotter) configure_snapshotter ;;
+        setup-crio) setup_crio ;;
         deploy-k8s) deploy_k8s ;;
         install-bats) install_bats ;;
         install-kubectl) install_kubectl ;;
