@@ -115,7 +115,7 @@ function get_nodes_and_pods_info() {
 function deploy_k0s() {
 	curl -sSLf https://get.k0s.sh | sudo sh
 
-	sudo k0s install controller --single
+	sudo k0s install controller --single ${KUBERNETES_EXTRA_PARAMS:-}
 
 	sudo k0s start
 
