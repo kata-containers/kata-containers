@@ -506,7 +506,10 @@ allow_args(policy_process, input_process, sandbox_name) {
 
 allow_arg(i, input_arg, policy_process, sandbox_name) {
     print("allow_arg 1: i =", i, "input_arg =", input_arg, "policy_arg =", policy_process.Args[i])
-    input_arg == policy_process.Args[i]
+
+    policy_arg := replace(policy_process.Args[i], "$$", "$")
+    input_arg == policy_arg
+
     print("allow_arg 1: success")
 }
 allow_arg(i, input_arg, policy_process, sandbox_name) {
@@ -520,7 +523,8 @@ allow_arg(i, input_arg, policy_process, sandbox_name) {
 allow_arg(i, input_arg, policy_process, sandbox_name) {
     print("allow_arg 3: i =", i, "input_arg =", input_arg, "policy_arg =", policy_process.Args[i])
 
-    expanded_arg = replace(policy_process.Args[i], "$(sandbox-name)", sandbox_name)
+    policy_arg := replace(policy_process.Args[i], "$$", "$")
+    expanded_arg = replace(policy_arg, "$(sandbox-name)", sandbox_name)
     print("allow_arg 3: expanded policy_arg =", expanded_arg)
     expanded_arg == input_arg
 
