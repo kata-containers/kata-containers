@@ -696,6 +696,9 @@ EOF
 		fi
 	fi
 
+	# TODO: remove this test file
+	dd if=/dev/random of="${ROOTFS_DIR}/large_file.bin" bs=128M count=1
+
 	info "Check init is installed"
 	[ -x "${init}" ] || [ -L "${init}" ] || die "/sbin/init is not installed in ${ROOTFS_DIR}"
 	OK "init is installed"
