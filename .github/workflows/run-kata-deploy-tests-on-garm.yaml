@@ -34,7 +34,7 @@ jobs:
           - k0s
           - k3s
           - rke2
-    runs-on: garm-ubuntu-2004-small
+    runs-on: garm-ubuntu-2004-smaller
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
