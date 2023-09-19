@@ -673,13 +673,13 @@ main() {
 	fi
 
 	info "Partition information before set_dax_header:"
-	fdisk -lu "${image}"
+	gdisk -l "${image}"
 
 	# insert at the beginning of the image the MBR + DAX header
 	set_dax_header "${image}" "${img_size}" "${fs_type}" "${nsdax_bin}"
 
 	info "Partition information after set_dax_header:"
-	fdisk -lu "${image}"
+	gdisk -l "${image}"
 }
 
 main "$@"
