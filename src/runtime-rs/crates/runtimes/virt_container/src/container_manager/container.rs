@@ -349,28 +349,42 @@ impl Container {
     }
 
     pub async fn pause(&self) -> Result<()> {
-        let inner = self.inner.read().await;
-        if inner.init_process.get_status().await == ProcessStatus::Paused {
-            warn!(self.logger, "container is paused no need to pause");
+        let mut inner = self.inner.write().await;
+        let status = inner.init_process.get_status().await;
+        if status != ProcessStatus::Running {
+            warn!(
+                self.logger,
+                "container is in {:?} state, will not pause", status
+            );
             return Ok(());
         }
+
         self.agent
             .pause_container(self.container_id.clone().into())
             .await
             .context("agent pause container")?;
+        inner.set_state(ProcessStatus::Paused).await;
+
         Ok(())
     }
 
     pub async fn resume(&self) -> Result<()> {
-        let inner = self.inner.read().await;
-        if inner.init_process.get_status().await == ProcessStatus::Running {
-            warn!(self.logger, "container is running no need to resume");
+        let mut inner = self.inner.write().await;
+        let status = inner.init_process.get_status().await;
+        if status != ProcessStatus::Paused {
+            warn!(
+                self.logger,
+                "container is in {:?} state, will not resume", status
+            );
             return Ok(());
         }
+
         self.agent
             .resume_container(self.container_id.clone().into())
             .await
             .context("agent pause container")?;
+        inner.set_state(ProcessStatus::Running).await;
+
         Ok(())
     }
 
