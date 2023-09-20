@@ -12,7 +12,10 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::mount::{create_mount_destination, parse_mount_options};
-use kata_types::mount::{StorageDevice, StorageHandlerManager, KATA_SHAREDFS_GUEST_PREMOUNT_TAG};
+use kata_types::mount::{
+    StorageDevice, StorageHandlerManager, KATA_SHAREDFS_GUEST_PREMOUNT_TAG,
+    KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL,
+};
 use kata_types::volume::KATA_VOLUME_TYPE_DMVERITY;
 use nix::unistd::{Gid, Uid};
 use protocols::agent::Storage;
@@ -26,7 +29,9 @@ use self::block_handler::{PmemHandler, ScsiHandler, VirtioBlkMmioHandler, Virtio
 use self::dm_verity::DmVerityHandler;
 use self::ephemeral_handler::EphemeralHandler;
 use self::fs_handler::{OverlayfsHandler, Virtio9pHandler, VirtioFsHandler};
+use self::image_pull_handler::ImagePullHandler;
 use self::local_handler::LocalHandler;
+
 use crate::device::{
     DRIVER_9P_TYPE, DRIVER_BLK_MMIO_TYPE, DRIVER_BLK_PCI_TYPE, DRIVER_EPHEMERAL_TYPE,
     DRIVER_LOCAL_TYPE, DRIVER_NVDIMM_TYPE, DRIVER_OVERLAYFS_TYPE, DRIVER_SCSI_TYPE,
@@ -42,6 +47,7 @@ mod block_handler;
 mod dm_verity;
 mod ephemeral_handler;
 mod fs_handler;
+mod image_pull_handler;
 mod local_handler;
 
 const RW_MASK: u32 = 0o660;
@@ -149,6 +155,7 @@ lazy_static! {
         manager.add_handler(DRIVER_VIRTIOFS_TYPE, Arc::new(VirtioFsHandler{})).unwrap();
         manager.add_handler(DRIVER_WATCHABLE_BIND_TYPE, Arc::new(BindWatcherHandler{})).unwrap();
         manager.add_handler(KATA_VOLUME_TYPE_DMVERITY, Arc::new(DmVerityHandler{})).unwrap();
+        manager.add_handler(KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL, Arc::new(ImagePullHandler{})).unwrap();
         manager
     };
 }

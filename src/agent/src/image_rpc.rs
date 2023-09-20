@@ -81,14 +81,14 @@ impl ImageService {
     }
 
     // pause image is packaged in rootfs for CC
-    fn unpack_pause_image(cid: &str) -> Result<()> {
+    fn unpack_pause_image(cid: &str, target_subpath: &str) -> Result<String> {
         let cc_pause_bundle = Path::new(KATA_CC_PAUSE_BUNDLE);
         if !cc_pause_bundle.exists() {
             return Err(anyhow!("Pause image not present in rootfs"));
         }
 
         info!(sl(), "use guest pause image cid {:?}", cid);
-        let pause_bundle = Path::new(CONTAINER_BASE).join(cid);
+        let pause_bundle = Path::new(CONTAINER_BASE).join(cid).join(target_subpath);
         let pause_rootfs = pause_bundle.join("rootfs");
         let pause_config = pause_bundle.join(CONFIG_JSON);
         let pause_binary = pause_rootfs.join("pause");
@@ -103,7 +103,7 @@ impl ImageService {
             fs::copy(cc_pause_bundle.join("rootfs").join("pause"), pause_binary)?;
         }
 
-        Ok(())
+        Ok(pause_rootfs.display().to_string())
     }
 
     /// Determines the container id (cid) to use for a given request.
@@ -127,25 +127,20 @@ impl ImageService {
         Ok(cid)
     }
 
-    async fn pull_image(&self, req: &image::PullImageRequest) -> Result<String> {
+    /// Set proxy environment from AGENT_CONFIG
+    fn set_proxy_env_vars() {
         let https_proxy = &AGENT_CONFIG.https_proxy;
         if !https_proxy.is_empty() {
             env::set_var("HTTPS_PROXY", https_proxy);
         }
-
         let no_proxy = &AGENT_CONFIG.no_proxy;
         if !no_proxy.is_empty() {
             env::set_var("NO_PROXY", no_proxy);
         }
+    }
 
-        let cid = self.cid_from_request(req)?;
-        let image = req.image();
-        if cid.starts_with("pause") {
-            Self::unpack_pause_image(&cid)?;
-            self.add_image(String::from(image), cid).await;
-            return Ok(image.to_owned());
-        }
-
+    /// init atestation agent and read config from AGENT_CONFIG
+    async fn get_security_config(&self) -> Result<String> {
         let aa_kbc_params = &AGENT_CONFIG.aa_kbc_params;
         // If the attestation-agent is being used, then enable the authenticated credentials support
         info!(
@@ -163,22 +158,24 @@ impl ImageService {
             "enable_signature_verification set to: {}", enable_signature_verification
         );
         self.image_client.lock().await.config.security_validate = *enable_signature_verification;
+        Ok(decrypt_config)
+    }
 
-        let source_creds = (!req.source_creds().is_empty()).then(|| req.source_creds());
-
-        let bundle_path = Path::new(CONTAINER_BASE).join(&cid);
-        fs::create_dir_all(&bundle_path)?;
-
-        info!(sl(), "pull image {:?}, bundle path {:?}", cid, bundle_path);
-        // Image layers will store at KATA_CC_IMAGE_WORK_DIR, generated bundles
-        // with rootfs and config.json will store under CONTAINER_BASE/cid.
+    /// Call image-rs to pull and unpack image.
+    async fn common_image_pull(
+        &self,
+        image: &str,
+        bundle_path: &Path,
+        decrypt_config: &str,
+        source_creds: Option<&str>,
+        cid: &str,
+    ) -> Result<()> {
         let res = self
             .image_client
             .lock()
             .await
-            .pull_image(image, &bundle_path, &source_creds, &Some(&decrypt_config))
+            .pull_image(image, bundle_path, &source_creds, &Some(decrypt_config))
             .await;
-
         match res {
             Ok(image) => {
                 info!(
@@ -197,8 +194,64 @@ impl ImageService {
                 return Err(e);
             }
         };
+        self.add_image(String::from(image), String::from(cid)).await;
+        Ok(())
+    }
 
-        self.add_image(String::from(image), cid).await;
+    /// Pull image when creating container and return the bundle path with rootfs.
+    pub async fn pull_image_for_container(
+        &self,
+        image: &str,
+        cid: &str,
+        image_metadata: &HashMap<String, String>,
+    ) -> Result<String> {
+        info!(sl(), "image metadata: {:?}", image_metadata);
+        Self::set_proxy_env_vars();
+        if image_metadata["io.kubernetes.cri.container-type"] == "sandbox" {
+            let mount_path = Self::unpack_pause_image(cid, "pause")?;
+            self.add_image(String::from(image), String::from(cid)).await;
+            return Ok(mount_path);
+        }
+        let bundle_path = Path::new(CONTAINER_BASE).join(cid).join("images");
+        fs::create_dir_all(&bundle_path)?;
+        info!(sl(), "pull image {:?}, bundle path {:?}", cid, bundle_path);
+
+        let decrypt_config = self.get_security_config().await?;
+
+        let source_creds = None; // You need to determine how to obtain this.
+
+        self.common_image_pull(image, &bundle_path, &decrypt_config, source_creds, cid)
+            .await?;
+        Ok(format! {"{}/rootfs",bundle_path.display()})
+    }
+
+    /// Pull image when recieving the PullImageRequest and return the image digest.
+    async fn pull_image(&self, req: &image::PullImageRequest) -> Result<String> {
+        Self::set_proxy_env_vars();
+        let cid = self.cid_from_request(req)?;
+        let image = req.image();
+        if cid.starts_with("pause") {
+            Self::unpack_pause_image(&cid, "")?;
+            self.add_image(String::from(image), cid).await;
+            return Ok(image.to_owned());
+        }
+
+        // Image layers will store at KATA_CC_IMAGE_WORK_DIR, generated bundles
+        // with rootfs and config.json will store under CONTAINER_BASE/cid.
+        let bundle_path = Path::new(CONTAINER_BASE).join(&cid);
+        fs::create_dir_all(&bundle_path)?;
+
+        let decrypt_config = self.get_security_config().await?;
+        let source_creds = (!req.source_creds().is_empty()).then(|| req.source_creds());
+
+        self.common_image_pull(
+            image,
+            &bundle_path,
+            &decrypt_config,
+            source_creds,
+            cid.clone().as_str(),
+        )
+        .await?;
         Ok(image.to_owned())
     }
 
