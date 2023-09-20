@@ -168,7 +168,7 @@ function deploy_k3s() {
 function deploy_rke2() {
 	curl -sfL https://get.rke2.io | sudo sh -
 
-	systemctl enable --now rke2-server.service
+	sudo systemctl enable --now rke2-server.service
 
 	# This is an arbitrary value that came up from local tests
 	sleep 120s
