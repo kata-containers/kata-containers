@@ -475,7 +475,7 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
         let (mut rafs, rafs_cfg) = match config.as_ref() {
             Some(cfg) => {
                 let rafs_conf: Arc<ConfigV2> = Arc::new(
-                    serde_json::from_str(cfg).map_err(|e| FsError::BackendFs(e.to_string()))?,
+                    ConfigV2::from_str(cfg).map_err(|e| FsError::BackendFs(e.to_string()))?,
                 );
 
                 (
