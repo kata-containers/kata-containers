@@ -2015,7 +2015,7 @@ dependencies = [
 [[package]]
 name = "image-rs"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/guest-components?rev=e9944577d1f61060c51d48890359a5467d519a29#e9944577d1f61060c51d48890359a5467d519a29"
+source = "git+https://github.com/confidential-containers/guest-components?rev=b01062b8a9eef0a5e7cc83eeb36f818991826fb4#b01062b8a9eef0a5e7cc83eeb36f818991826fb4"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -2920,7 +2920,7 @@ dependencies = [
 [[package]]
 name = "ocicrypt-rs"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/guest-components?rev=e9944577d1f61060c51d48890359a5467d519a29#e9944577d1f61060c51d48890359a5467d519a29"
+source = "git+https://github.com/confidential-containers/guest-components?rev=b01062b8a9eef0a5e7cc83eeb36f818991826fb4#b01062b8a9eef0a5e7cc83eeb36f818991826fb4"
 dependencies = [
  "aes 0.8.3",
  "anyhow",
