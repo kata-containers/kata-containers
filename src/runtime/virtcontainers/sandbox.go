@@ -1742,12 +1742,14 @@ func (s *Sandbox) Stats(ctx context.Context) (SandboxStats, error) {
 
 	// TODO Do we want to aggregate the overhead cgroup stats to the sandbox ones?
 	switch mt := metrics.(type) {
-	case v1.Metrics:
+	case *v1.Metrics:
 		stats.CgroupStats.CPUStats.CPUUsage.TotalUsage = mt.CPU.Usage.Total
 		stats.CgroupStats.MemoryStats.Usage.Usage = mt.Memory.Usage.Usage
-	case v2.Metrics:
+	case *v2.Metrics:
 		stats.CgroupStats.CPUStats.CPUUsage.TotalUsage = mt.CPU.UsageUsec
 		stats.CgroupStats.MemoryStats.Usage.Usage = mt.Memory.Usage
+	default:
+		return SandboxStats{}, fmt.Errorf("unknown metrics type %T", mt)
 	}
 
 	tids, err := s.hypervisor.GetThreadIDs(ctx)
