@@ -221,14 +221,23 @@ externals:
   containerd:
     description: |
       Containerd for Kubernetes Container Runtime Interface.
-    # CCv0 is using our fork of containerd as the changes can't be merged yet
-    # DO NOT TOUCH DURING MERGES FROM MAIN TO CCv0
-    url: "github.com/confidential-containers/containerd"
-    # yamllint disable-line rule:line-length
-    tarball_url: "https://github.com/confidential-containers/containerd/releases/download"
-    version: "v1.6.8.2"
-    # CCv0 needs to know about the specific branch for the integration tests
-    branch: "CC-main"
+    forked:
+      # CCv0 is using our fork of containerd as the changes can't be merged yet
+      # DO NOT TOUCH DURING MERGES FROM MAIN TO CCv0
+      url: "github.com/confidential-containers/containerd"
+      # yamllint disable-line rule:line-length
+      tarball_url: "https://github.com/confidential-containers/containerd/releases/download"
+      version: "v1.6.8.2"
+      # CCv0 needs to know about the specific branch for the integration tests
+      branch: "CC-main"
+    upstream:
+      # DO NOT TOUCH DURING MERGES FROM MAIN TO CCv0
+      url: "github.com/containerd/containerd"
+      # yamllint disable-line rule:line-length
+      tarball_url: "https://github.com/containerd/containerd/releases/download"
+      version: "v1.6.8"
+      # CCv0 needs to know about the specific branch for the integration tests
+      branch: "release/1.6"
 
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"
@@ -291,12 +300,12 @@ externals:
   nydus:
     description: "Nydus image acceleration service"
     url: "https://github.com/dragonflyoss/image-service"
-    version: "v2.2.1"
+    version: "v2.2.3"
 
   nydus-snapshotter:
     description: "Snapshotter for Nydus image acceleration service"
     url: "https://github.com/containerd/nydus-snapshotter"
-    version: "v0.3.3"
+    version: "v0.12.0"
 
   ovmf:
     description: "Firmware, implementation of UEFI for virtual machines."
