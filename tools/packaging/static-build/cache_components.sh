@@ -110,7 +110,7 @@ cache_rootfs_artifacts() {
 	local root_hash_tdx=""
 	if [ -n "${TEE}" ]; then
 		if [ "${TEE}" == "tdx" ]; then
-			rootfs_tarball_name="kata-static-cc-tdx-rootfs-image.tar.xz"
+			rootfs_tarball_name="kata-static-rootfs-image-tdx.tar.xz"
 			aa_kbc="cc_kbc_tdx"
 			image_type="image"
 			root_hash_vanilla=""
@@ -118,7 +118,7 @@ cache_rootfs_artifacts() {
 		fi
 		if [ "${TEE}" == "sev" ]; then
 			root_hash_vanilla=""
-			rootfs_tarball_name="kata-static-cc-sev-rootfs-initrd.tar.xz"
+			rootfs_tarball_name="kata-static-rootfs-initrd-sev.tar.xz"
 			aa_kbc="online_sev_kbc"
 			image_type="initrd"
 			initramfs_last_commit="$(get_initramfs_image_name)"
