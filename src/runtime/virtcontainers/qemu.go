@@ -2652,9 +2652,21 @@ func (q *qemu) GetThreadIDs(ctx context.Context) (VcpuThreadIDs, error) {
 	}
 
 	tid.vcpus = make(map[int]int, len(cpuInfos))
+
+	defaultVCPUs := q.config.NumVCPUs
+	var step = 0
+	// means some hotplug vcpus
+	if len(cpuInfos) > int(defaultVCPUs) {
+		step = cpuInfos[defaultVCPUs].CPUIndex
+	}
+
 	for _, i := range cpuInfos {
 		if i.ThreadID > 0 {
-			tid.vcpus[i.CPUIndex] = i.ThreadID
+			if i.CPUIndex < int(defaultVCPUs) {
+				tid.vcpus[i.CPUIndex] = i.ThreadID
+			} else {
+				tid.vcpus[int(math.Abs(float64(step-i.CPUIndex)))+int(defaultVCPUs)] = i.ThreadID
+			}
 		}
 	}
 	return tid, nil
