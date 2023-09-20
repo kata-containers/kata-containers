@@ -17,12 +17,13 @@ pub const SYSFS_DIR: &str = "/sys";
     target_arch = "x86_64",
     target_arch = "x86"
 ))]
-pub fn create_pci_root_bus_path() -> String {
-    String::from("/devices/pci0000:00")
+pub fn create_pci_root_bus_pattern() -> String {
+    // Support up to 10 PCI segments.
+    String::from("/devices/pci000[0-9]:00")
 }
 
 #[cfg(target_arch = "aarch64")]
-pub fn create_pci_root_bus_path() -> String {
+pub fn create_pci_root_bus_pattern() -> String {
     let ret = String::from("/devices/platform/4010000000.pcie/pci0000:00");
 
     let acpi_root_bus_path = String::from("/devices/pci0000:00");

@@ -149,7 +149,9 @@ where
 // provided.
 #[instrument]
 pub fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<String> {
-    let mut bus = "0000:00".to_string();
+    // Support up to 10 PCI segments.
+    let mut bus = "000[0-9]:00".to_string();
+    
     let mut relpath = String::new();
 
     for i in 0..pcipath.len() {
@@ -227,7 +229,7 @@ struct VirtioBlkPciMatcher {
 
 impl VirtioBlkPciMatcher {
     fn new(relpath: &str) -> VirtioBlkPciMatcher {
-        let root_bus = create_pci_root_bus_path();
+        let root_bus = create_pci_root_bus_pattern();
         let re = format!(r"^{}{}/virtio[0-9]+/block/", root_bus, relpath);
 
         VirtioBlkPciMatcher {
@@ -247,7 +249,7 @@ pub async fn get_virtio_blk_pci_device_name(
     sandbox: &Arc<Mutex<Sandbox>>,
     pcipath: &pci::Path,
 ) -> Result<String> {
-    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path());
+    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_pattern());
     let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?;
     let matcher = VirtioBlkPciMatcher::new(&sysfs_rel_path);
 
@@ -349,7 +351,7 @@ struct PciMatcher {
 
 impl PciMatcher {
     fn new(relpath: &str) -> Result<PciMatcher> {
-        let root_bus = create_pci_root_bus_path();
+        let root_bus = create_pci_root_bus_pattern();
         Ok(PciMatcher {
             devpath: format!("{}{}", root_bus, relpath),
         })
@@ -366,7 +368,7 @@ pub async fn wait_for_pci_device(
     sandbox: &Arc<Mutex<Sandbox>>,
     pcipath: &pci::Path,
 ) -> Result<pci::Address> {
-    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path());
+    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_pattern());
     let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?;
     let matcher = PciMatcher::new(&sysfs_rel_path)?;
 
@@ -1438,7 +1440,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_device_name() {
         let devname = "vda";
-        let root_bus = create_pci_root_bus_path();
+        let root_bus = create_pci_root_bus_pattern();
         let relpath = "/0000:00:0a.0/0000:03:0b.0";
         let devpath = format!("{}{}/virtio4/block/{}", root_bus, relpath, devname);
 
@@ -1472,7 +1474,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_virtio_blk_matcher() {
-        let root_bus = create_pci_root_bus_path();
+        let root_bus = create_pci_root_bus_pattern();
         let devname = "vda";
 
         let mut uev_a = crate::uevent::Uevent::default();
@@ -1556,7 +1558,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_scsi_block_matcher() {
-        let root_bus = create_pci_root_bus_path();
+        let root_bus = create_pci_root_bus_pattern();
         let devname = "sda";
 
         let mut uev_a = crate::uevent::Uevent::default();
