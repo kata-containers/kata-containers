@@ -38,6 +38,7 @@ pub const DRIVER_VIRTIOFS_TYPE: &str = "virtio-fs";
 pub const DRIVER_BLK_PCI_TYPE: &str = "blk";
 pub const DRIVER_BLK_CCW_TYPE: &str = "blk-ccw";
 pub const DRIVER_BLK_MMIO_TYPE: &str = "mmioblk";
+pub const DRIVER_CDH_TYPE: &str = "confidential-data-hub";
 pub const DRIVER_SCSI_TYPE: &str = "scsi";
 pub const DRIVER_NVDIMM_TYPE: &str = "nvdimm";
 pub const DRIVER_EPHEMERAL_TYPE: &str = "ephemeral";
