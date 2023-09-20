@@ -115,7 +115,7 @@ function get_nodes_and_pods_info() {
 function deploy_k0s() {
 	curl -sSLf https://get.k0s.sh | sudo sh
 
-	sudo k0s install controller --single
+	sudo k0s install controller --single ${KUBERNETES_EXTRA_PARAMS:-}
 
 	sudo k0s start
 
@@ -168,7 +168,7 @@ function deploy_k3s() {
 function deploy_rke2() {
 	curl -sfL https://get.rke2.io | sudo sh -
 
-	systemctl enable --now rke2-server.service
+	sudo systemctl enable --now rke2-server.service
 
 	# This is an arbitrary value that came up from local tests
 	sleep 120s
@@ -179,6 +179,53 @@ function deploy_rke2() {
 	mkdir -p ~/.kube
 	sudo cp /etc/rancher/rke2/rke2.yaml ~/.kube/config
 	sudo chown ${USER}:${USER} ~/.kube/config
+}
+
+function _get_k0s_kubernetes_version_for_crio() {
+	# k0s version will look like:
+	# v1.27.5+k0s.0
+	#
+	# The CRI-O repo for such version of Kubernetes expects something like:
+	# 1.27
+	k0s_version=$(curl -sSLf "https://docs.k0sproject.io/stable.txt")
+
+	# Remove everything after the second '.'
+	crio_version=${k0s_version%\.*+*}
+	# Remove the 'v'
+	crio_version=${crio_version#v}
+
+	echo ${crio_version}
+}
+
+function _get_os_for_crio() {
+	source /etc/os-release
+
+	if [ "${NAME}" != "Ubuntu" ]; then
+		echo "Only Ubuntu is supported for now"
+		exit 2
+	fi
+
+	echo "x${NAME}_${VERSION_ID}"
+}
+
+function setup_crio() {
+	# Get the CRI-O version to be installed depending on the version of the
+	# "k8s distro" that we are using
+	case ${KUBERNETES} in
+		k0s) crio_version=$(_get_k0s_kubernetes_version_for_crio) ;;
+		*) >&2 echo "${KUBERNETES} flavour is not supported with CRI-O"; exit 2 ;;
+
+	esac
+
+	os=$(_get_os_for_crio)
+
+	echo "deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/${os}/ /"|sudo tee /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list
+	echo "deb http://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/${crio_version}/${os}/ /"|sudo tee /etc/apt/sources.list.d/devel:kubic:libcontainers:stable:cri-o:${crio_version}.list
+	curl -L https://download.opensuse.org/repositories/devel:kubic:libcontainers:stable:cri-o:${crio_version}/${os}/Release.key | sudo apt-key add -
+	curl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/${os}/Release.key | sudo apt-key add -
+	sudo apt update
+	sudo apt install cri-o cri-o-runc
+	sudo systemctl enable --now crio
 }
 
 function deploy_k8s() {
