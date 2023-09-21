@@ -94,6 +94,8 @@ VIRTIOFSD_CONTAINER_BUILDER="${VIRTIOFSD_CONTAINER_BUILDER:-}"
 MEASURED_ROOTFS="${MEASURED_ROOTFS:-}"
 USE_CACHE="${USE_CACHE:-}"
 
+sudo chown -R ${USER}:${USER} ${HOME}/.docker
+
 docker run \
 	-v $HOME/.docker:/root/.docker \
 	-v /var/run/docker.sock:/var/run/docker.sock \
