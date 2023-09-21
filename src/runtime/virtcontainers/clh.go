@@ -851,6 +851,9 @@ func (clh *cloudHypervisor) hotplugAddBlockDevice(drive *config.BlockDrive) erro
 	clhDisk := *chclient.NewDiskConfig(drive.File)
 	clhDisk.Readonly = &drive.ReadOnly
 	clhDisk.VhostUser = func(b bool) *bool { return &b }(false)
+	if clh.config.BlockDeviceCacheSet {
+		clhDisk.Direct = &clh.config.BlockDeviceCacheDirect
+	}
 
 	queues := int32(clh.config.NumVCPUs)
 	queueSize := int32(1024)
