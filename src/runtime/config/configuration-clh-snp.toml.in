@@ -191,7 +191,6 @@ block_device_driver = "virtio-blk"
 #enable_hugepages = true
 
 # Disable the 'seccomp' feature from Cloud Hypervisor, default false
-# TODO - to be re-enabled with next CH-SNP release. This is fixed but the fix is not yet released
 # disable_seccomp = true
 
 # This option changes the default hypervisor and kernel parameters
