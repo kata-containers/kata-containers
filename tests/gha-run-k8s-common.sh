@@ -224,7 +224,7 @@ function setup_crio() {
 	curl -L https://download.opensuse.org/repositories/devel:kubic:libcontainers:stable:cri-o:${crio_version}/${os}/Release.key | sudo apt-key add -
 	curl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/${os}/Release.key | sudo apt-key add -
 	sudo apt update
-	sudo apt install cri-o cri-o-runc
+	sudo apt install -y cri-o cri-o-runc
 	sudo systemctl enable --now crio
 }
 
