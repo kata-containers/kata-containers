@@ -84,6 +84,16 @@
                     "rprivate",
                     "ro"
                 ]
+            },
+            {
+                "destination": "/var/run/secrets/azure/tokens",
+                "source": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-tokens$",
+                "type_": "bind",
+                "options": [
+                  "rbind",
+                  "rprivate",
+                  "ro"
+                ]
             }
         ]
     },
@@ -128,6 +138,14 @@
         "confidential_guest": true
     },
     "request_defaults": {
+        "CreateContainerRequest": {
+            "allow_env_regex": [
+                "^AZURE_CLIENT_ID=[A-Fa-f0-9-]+$",
+                "^AZURE_TENANT_ID=[A-Fa-f0-9-]+$",
+                "^AZURE_FEDERATED_TOKEN_FILE=/var/run/secrets/azure/tokens/azure-identity-token$",
+                "^AZURE_AUTHORITY_HOST=https://login\\.microsoftonline\\.com/$"
+            ]
+        },
         "CopyFileRequest": [
             "^/run/kata-containers/shared/containers/"
         ],

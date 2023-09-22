@@ -19,7 +19,7 @@ use std::fs::File;
 use std::path::Path;
 use std::str;
 
-const INFRA_MOUNT_DESTINATIONS: [&'static str; 7] = [
+const INFRA_MOUNT_DESTINATIONS: [&'static str; 8] = [
     "/sys/fs/cgroup",
     "/etc/hosts",
     "/dev/termination-log",
@@ -27,6 +27,7 @@ const INFRA_MOUNT_DESTINATIONS: [&'static str; 7] = [
     "/etc/resolv.conf",
     "/dev/shm",
     "/var/run/secrets/kubernetes.io/serviceaccount",
+    "/var/run/secrets/azure/tokens",
 ];
 
 const PAUSE_CONTAINER_ANNOTATIONS: [(&'static str, &'static str); 6] = [

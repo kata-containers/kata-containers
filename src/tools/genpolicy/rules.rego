@@ -545,6 +545,16 @@ allow_env(policy_process, input_process, sandbox_name) {
     print("allow_env: success")
 }
 
+# Allow input env variables that match with request_defaults.
+allow_env_var(policy_process, input_process, env_var, sandbox_name) {
+    print("allow_env_var regex 1: some allow_env_regex match env_var")
+
+    some policy_var_regex in policy_data.request_defaults.CreateContainerRequest.allow_env_regex
+    regex.match(policy_var_regex, env_var)
+
+    print("allow_env_var regex 1: success")
+}
+
 # Allow input env variables that are present in the policy data too.
 allow_env_var(policy_process, input_process, env_var, sandbox_name) {
     print("allow_env_var 1: some policy_env_var == env_var")

@@ -270,7 +270,15 @@ pub struct PersistentVolumeClaimVolume {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CreateContainerRequestDefaults {
+    /// Allow env variables that match any of these regexes.
+    allow_env_regex: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestDefaults {
+    pub CreateContainerRequest: CreateContainerRequestDefaults,
+
     /// Guest file paths matching these regular expressions can be copied by the Host.
     pub CopyFileRequest: Vec<String>,
 
