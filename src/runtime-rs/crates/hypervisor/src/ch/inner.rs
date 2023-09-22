@@ -8,6 +8,7 @@ use crate::device::DeviceType;
 use crate::VmmState;
 use anyhow::Result;
 use async_trait::async_trait;
+use kata_sys_util::protection::GuestProtection;
 use kata_types::capabilities::{Capabilities, CapabilityBits};
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
@@ -51,6 +52,13 @@ pub struct CloudHypervisorInner {
     pub(crate) shutdown_tx: Option<Sender<bool>>,
     pub(crate) shutdown_rx: Option<Receiver<bool>>,
     pub(crate) tasks: Option<Vec<JoinHandle<Result<()>>>>,
+
+    // Set if the hardware supports creating a protected guest *AND* if the
+    // user has requested creating a protected guest.
+    //
+    // For example, on Intel TDX capable systems with `confidential_guest=true`,
+    // this will be set to "tdx".
+    pub(crate) guest_protection_to_use: GuestProtection,
 }
 
 const CH_DEFAULT_TIMEOUT_SECS: u32 = 10;
@@ -86,6 +94,7 @@ impl CloudHypervisorInner {
             shutdown_tx: Some(tx),
             shutdown_rx: Some(rx),
             tasks: None,
+            guest_protection_to_use: GuestProtection::NoProtection,
         }
     }
 
