@@ -8,12 +8,13 @@ use super::inner::CloudHypervisorInner;
 use crate::device::DeviceType;
 use crate::BlockConfig;
 use crate::HybridVsockConfig;
+use crate::NetworkConfig;
 use crate::ShareFsDeviceConfig;
 use crate::VmmState;
 use anyhow::{anyhow, Context, Result};
 use ch_config::ch_api::{cloud_hypervisor_vm_blockdev_add, cloud_hypervisor_vm_fs_add};
 use ch_config::DiskConfig;
-use ch_config::FsConfig;
+use ch_config::{net_util::MacAddr, FsConfig, NetConfig};
 use safe_path::scoped_join;
 use std::convert::TryFrom;
 use std::path::PathBuf;
@@ -25,15 +26,7 @@ const DEFAULT_DISK_QUEUE_SIZE: u16 = 1024;
 impl CloudHypervisorInner {
     pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<()> {
         if self.state != VmmState::VmRunning {
-            let mut devices: Vec<DeviceType> = if let Some(devices) = self.pending_devices.take() {
-                devices
-            } else {
-                vec![]
-            };
-
-            devices.insert(0, device);
-
-            self.pending_devices = Some(devices);
+            self.pending_devices.insert(0, device);
 
             return Ok(());
         }
@@ -63,10 +56,8 @@ impl CloudHypervisorInner {
             ));
         }
 
-        if let Some(mut devices) = self.pending_devices.take() {
-            while let Some(dev) = devices.pop() {
-                self.add_device(dev).await.context("add_device")?;
-            }
+        while let Some(dev) = self.pending_devices.pop() {
+            self.add_device(dev).await.context("add_device")?;
         }
 
         Ok(())
@@ -161,32 +152,53 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
-    pub(crate) async fn get_shared_fs_devices(&mut self) -> Result<Option<Vec<FsConfig>>> {
-        let pending_root_devices = self.pending_devices.take();
+    pub(crate) async fn get_shared_devices(
+        &mut self,
+    ) -> Result<(Option<Vec<FsConfig>>, Option<Vec<NetConfig>>)> {
+        let mut shared_fs_devices = Vec::<FsConfig>::new();
+        let mut network_devices = Vec::<NetConfig>::new();
 
-        let mut root_devices = Vec::<FsConfig>::new();
+        while let Some(dev) = self.pending_devices.pop() {
+            match dev {
+                DeviceType::ShareFs(dev) => {
+                    let settings = ShareFsSettings::new(dev.config, self.vm_path.clone());
 
-        if let Some(devices) = pending_root_devices {
-            for dev in devices {
-                match dev {
-                    DeviceType::ShareFs(dev) => {
-                        let settings = ShareFsSettings::new(dev.config, self.vm_path.clone());
+                    let fs_cfg = FsConfig::try_from(settings)?;
 
-                        let fs_cfg = FsConfig::try_from(settings)?;
-
-                        root_devices.push(fs_cfg);
-                    }
-                    _ => continue,
-                };
+                    shared_fs_devices.push(fs_cfg);
+                }
+                DeviceType::Network(net_device) => {
+                    let net_config = NetConfig::try_from(net_device.config)?;
+                    network_devices.push(net_config);
+                }
+                _ => continue,
             }
-
-            Ok(Some(root_devices))
-        } else {
-            Ok(None)
         }
+
+        Ok((Some(shared_fs_devices), Some(network_devices)))
     }
 }
 
+impl TryFrom<NetworkConfig> for NetConfig {
+    type Error = anyhow::Error;
+
+    fn try_from(cfg: NetworkConfig) -> Result<Self, Self::Error> {
+        if let Some(mac) = cfg.guest_mac {
+            let net_config = NetConfig {
+                tap: Some(cfg.host_dev_name.clone()),
+                id: Some(cfg.virt_iface_name.clone()),
+                num_queues: cfg.queue_num,
+                queue_size: cfg.queue_size as u16,
+                mac: MacAddr { bytes: mac.0 },
+                ..Default::default()
+            };
+
+            return Ok(net_config);
+        }
+
+        Err(anyhow!("Missing mac address for network device"))
+    }
+}
 #[derive(Debug)]
 pub struct ShareFsSettings {
     cfg: ShareFsDeviceConfig,
@@ -233,5 +245,46 @@ impl TryFrom<ShareFsSettings> for FsConfig {
         };
 
         Ok(fs_cfg)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Address;
+
+    #[test]
+    fn test_networkconfig_to_netconfig() {
+        let mut cfg = NetworkConfig {
+            host_dev_name: String::from("tap0"),
+            virt_iface_name: String::from("eth0"),
+            queue_size: 256,
+            queue_num: 2,
+            guest_mac: None,
+            index: 1,
+        };
+
+        let net = NetConfig::try_from(cfg.clone());
+        assert_eq!(
+            net.unwrap_err().to_string(),
+            "Missing mac address for network device"
+        );
+
+        let v: [u8; 6] = [10, 11, 128, 3, 4, 5];
+        let mac_address = Address(v);
+        cfg.guest_mac = Some(mac_address.clone());
+
+        let expected = NetConfig {
+            tap: Some(cfg.host_dev_name.clone()),
+            id: Some(cfg.virt_iface_name.clone()),
+            num_queues: cfg.queue_num,
+            queue_size: cfg.queue_size as u16,
+            mac: MacAddr { bytes: v },
+            ..Default::default()
+        };
+
+        let net = NetConfig::try_from(cfg);
+        assert!(net.is_ok());
+        assert_eq!(net.unwrap(), expected);
     }
 }

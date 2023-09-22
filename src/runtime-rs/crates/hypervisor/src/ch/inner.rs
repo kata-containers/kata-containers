@@ -44,7 +44,7 @@ pub struct CloudHypervisorInner {
     pub(crate) jailer_root: String,
 
     /// List of devices that will be added to the VM once it boots
-    pub(crate) pending_devices: Option<Vec<DeviceType>>,
+    pub(crate) pending_devices: Vec<DeviceType>,
 
     pub(crate) _capabilities: Capabilities,
 
@@ -81,7 +81,7 @@ impl CloudHypervisorInner {
             vm_path: String::default(),
             run_dir: String::default(),
             netns: None,
-            pending_devices: None,
+            pending_devices: vec![],
             _capabilities: capabilities,
             shutdown_tx: Some(tx),
             shutdown_rx: Some(rx),
