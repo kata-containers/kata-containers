@@ -13,6 +13,7 @@ use crate::ShareFsDeviceConfig;
 use crate::VmmState;
 use anyhow::{anyhow, Context, Result};
 use ch_config::ch_api::{cloud_hypervisor_vm_blockdev_add, cloud_hypervisor_vm_fs_add};
+use ch_config::convert::{DEFAULT_DISK_QUEUES, DEFAULT_DISK_QUEUE_SIZE, DEFAULT_NUM_PCI_SEGMENTS};
 use ch_config::DiskConfig;
 use ch_config::{net_util::MacAddr, FsConfig, NetConfig};
 use safe_path::scoped_join;
@@ -20,8 +21,9 @@ use std::convert::TryFrom;
 use std::path::PathBuf;
 
 const VIRTIO_FS: &str = "virtio-fs";
-const DEFAULT_DISK_QUEUES: usize = 1;
-const DEFAULT_DISK_QUEUE_SIZE: u16 = 1024;
+
+pub const DEFAULT_FS_QUEUES: usize = 1;
+const DEFAULT_FS_QUEUE_SIZE: u16 = 1024;
 
 impl CloudHypervisorInner {
     pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<()> {
@@ -93,13 +95,13 @@ impl CloudHypervisorInner {
         let num_queues: usize = if cfg.queue_num > 0 {
             cfg.queue_num as usize
         } else {
-            1
+            DEFAULT_FS_QUEUES
         };
 
         let queue_size: u16 = if cfg.queue_num > 0 {
             u16::try_from(cfg.queue_size)?
         } else {
-            1024
+            DEFAULT_FS_QUEUE_SIZE
         };
 
         let socket_path = if cfg.sock_path.starts_with('/') {
@@ -113,6 +115,8 @@ impl CloudHypervisorInner {
             socket: socket_path,
             num_queues,
             queue_size,
+            pci_segment: DEFAULT_NUM_PCI_SEGMENTS,
+
             ..Default::default()
         };
 
@@ -233,13 +237,13 @@ impl TryFrom<ShareFsSettings> for FsConfig {
         let num_queues: usize = if cfg.queue_num > 0 {
             cfg.queue_num as usize
         } else {
-            DEFAULT_DISK_QUEUES
+            DEFAULT_FS_QUEUES
         };
 
         let queue_size: u16 = if cfg.queue_num > 0 {
             u16::try_from(cfg.queue_size)?
         } else {
-            DEFAULT_DISK_QUEUE_SIZE
+            DEFAULT_FS_QUEUE_SIZE
         };
 
         let socket_path = if cfg.sock_path.starts_with('/') {

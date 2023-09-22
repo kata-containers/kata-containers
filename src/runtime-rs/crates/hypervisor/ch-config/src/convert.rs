@@ -28,6 +28,11 @@ const DEFAULT_CH_MAX_PHYS_BITS: u8 = 46;
 
 const DEFAULT_VSOCK_CID: u64 = 3;
 
+pub const DEFAULT_NUM_PCI_SEGMENTS: u16 = 1;
+
+pub const DEFAULT_DISK_QUEUES: usize = 1;
+pub const DEFAULT_DISK_QUEUE_SIZE: u16 = 128;
+
 impl TryFrom<NamedHypervisorConfig> for VmConfig {
     type Error = VmConfigError;
 
@@ -355,6 +360,8 @@ impl TryFrom<BootInfo> for DiskConfig {
         let disk = DiskConfig {
             path: Some(path),
             readonly: true,
+            num_queues: DEFAULT_DISK_QUEUES,
+            queue_size: DEFAULT_DISK_QUEUE_SIZE,
 
             ..Default::default()
         };
@@ -438,6 +445,7 @@ fn get_platform_cfg(tdx_enabled: bool) -> Option<PlatformConfig> {
     if tdx_enabled {
         let platform = PlatformConfig {
             tdx: true,
+            num_pci_segments: DEFAULT_NUM_PCI_SEGMENTS,
 
             ..Default::default()
         };
@@ -584,6 +592,8 @@ mod tests {
         let disk_config = DiskConfig {
             path: Some(PathBuf::from(path)),
             readonly: true,
+            num_queues: DEFAULT_DISK_QUEUES,
+            queue_size: DEFAULT_DISK_QUEUE_SIZE,
 
             ..Default::default()
         };
@@ -788,6 +798,7 @@ mod tests {
                 tdx_enabled: true,
                 result: Some(PlatformConfig {
                     tdx: true,
+                    num_pci_segments: DEFAULT_NUM_PCI_SEGMENTS,
 
                     ..Default::default()
                 }),
