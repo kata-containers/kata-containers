@@ -79,6 +79,9 @@ jobs:
       - name: run iperf test
         run:  bash tests/metrics/gha-run.sh run-test-iperf
 
+      - name: run latency test
+        run:  bash tests/metrics/gha-run.sh run-test-latency
+
       - name: make metrics tarball ${{ matrix.vmm }}
         run: bash tests/metrics/gha-run.sh make-tarball-results
 
