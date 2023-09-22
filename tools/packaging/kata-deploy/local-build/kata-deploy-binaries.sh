@@ -127,7 +127,7 @@ install_cached_tarball_component() {
 	local component_tarball_name="${4}"
 	local component_tarball_path="${5}"
 
-	oras pull ${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m)
+	sudo oras pull ${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m)
 
 	cached_version="$(cat ${component}-version)"
 	cached_image_version="$(cat ${component}-builder-image-version)"
@@ -733,10 +733,10 @@ handle_build() {
 			die "ARTEFACT_REGISTRY, ARTEFACT_REGISTRY_USERNAME, ARTEFACT_REGISTRY_PASSWORD and TARGET_BRANCH must be passed to the script when pushing the artefacts to the registry!"
 		fi
 
-		echo "${ARTEFACT_REGISTRY_PASSWORD}" | oras login "${ARTEFACT_REGISTRY}" -u "${ARTEFACT_REGISTRY_USERNAME}" --password-stdin
+		echo "${ARTEFACT_REGISTRY_PASSWORD}" | sudo oras login "${ARTEFACT_REGISTRY}" -u "${ARTEFACT_REGISTRY_USERNAME}" --password-stdin
 
-		oras push ${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) ${final_tarball_name} ${build_target}-version ${build_target}-builder-image-version ${build_target}-sha256sum
-		oras logout "${ARTEFACT_REGISTRY}"
+		sudo oras push ${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) ${final_tarball_name} ${build_target}-version ${build_target}-builder-image-version ${build_target}-sha256sum
+		sudo oras logout "${ARTEFACT_REGISTRY}"
 	fi
 
 	popd
