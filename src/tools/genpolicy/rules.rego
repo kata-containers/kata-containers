@@ -965,16 +965,40 @@ allow_input_storage(i, input_storage, policy_storages, count, bundle_id, sandbox
 }
 
 storages_match(policy_storage, input_storage, bundle_id, sandbox_id) {
+    print("storages_match: policy_storage.driver =", policy_storage.driver, "input_storage.driver =", input_storage.driver)
+
     policy_storage.driver           == input_storage.driver
     policy_storage.driver_options   == input_storage.driver_options
-    policy_storage.options          == input_storage.options
     policy_storage.fs_group         == input_storage.fs_group
+
+    count(policy_storage.options)   == count(input_storage.options)
+    every i, policy_option in policy_storage.options {
+        allow_storage_option(policy_option, input_storage.options[i])
+    }
 
     allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id)
 
     # TODO: validate the source field too.
 
     print("storages_match: success")
+}
+
+allow_storage_option(policy_option, input_option) {
+    policy_option == input_option
+    print("allow_storage_option 1: success")
+}
+allow_storage_option(policy_option, input_option) {
+    layer_prefix := "io.katacontainers.fs-opt.layer="
+
+    startswith(policy_option, layer_prefix)
+    startswith(input_option , layer_prefix)
+
+    policy_value := replace(policy_option, layer_prefix, "")
+    input_value  := replace(input_option, layer_prefix, "")
+
+    print("allow_storage_option 2: decoding input")
+    policy_value == base64.decode(input_value)
+    print("allow_storage_option 2: success")
 }
 
 allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id) {
