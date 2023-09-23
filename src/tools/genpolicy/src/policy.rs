@@ -629,15 +629,11 @@ fn get_image_layer_storages(
                 fs_group: None,
             });
 
-            let mut layer_info = format!(
-                "{layer_name},tar,ro,io.katacontainers.fs-opt.block_device=file,\
-                io.katacontainers.fs-opt.is-layer,io.katacontainers.fs-opt.root-hash="
-            );
-            layer_info += &layer.verity_hash;
-            let encoded_info = general_purpose::STANDARD.encode(layer_info.as_bytes());
-            overlay_storage
-                .options
-                .push(format!("io.katacontainers.fs-opt.layer={encoded_info}"));
+            let mut fs_opt_layer = "io.katacontainers.fs-opt.layer=".to_string();
+            fs_opt_layer += &layer_name;
+            fs_opt_layer += ",tar,ro,io.katacontainers.fs-opt.block_device=file,io.katacontainers.fs-opt.is-layer,io.katacontainers.fs-opt.root-hash=";
+            fs_opt_layer += &layer.verity_hash;
+            overlay_storage.options.push(fs_opt_layer);
 
             lowerdirs.push(layer_name);
         }
