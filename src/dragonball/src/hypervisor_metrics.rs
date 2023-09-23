@@ -5,10 +5,13 @@
 
 extern crate procfs;
 
-use crate::metric::{IncMetric, METRICS};
-use anyhow::{anyhow, Result};
-use prometheus::{Encoder, IntCounter, IntGaugeVec, Opts, Registry, TextEncoder};
 use std::sync::Mutex;
+
+use anyhow::{anyhow, Result};
+use dbs_utils::metric::IncMetric;
+use prometheus::{Encoder, IntCounter, IntGaugeVec, Opts, Registry, TextEncoder};
+
+use crate::metric::METRICS;
 
 const NAMESPACE_KATA_HYPERVISOR: &str = "kata_hypervisor";
 
@@ -23,7 +26,7 @@ lazy_static! {
     IntCounter::new(format!("{}_{}",NAMESPACE_KATA_HYPERVISOR,"scrape_count"), "Hypervisor metrics scrape count.").unwrap();
 
     static ref HYPERVISOR_VCPU: IntGaugeVec =
-    IntGaugeVec::new(Opts::new(format!("{}_{}",NAMESPACE_KATA_HYPERVISOR,"vcpu"), "Hypervisor metrics specific to VCPUs' mode of functioning."), &["item"]).unwrap();
+    IntGaugeVec::new(Opts::new(format!("{}_{}",NAMESPACE_KATA_HYPERVISOR,"vcpu"), "Hypervisor metrics specific to VCPUs' mode of functioning."), &["cpu_id", "item"]).unwrap();
 
     static ref HYPERVISOR_SECCOMP: IntGaugeVec =
     IntGaugeVec::new(Opts::new(format!("{}_{}",NAMESPACE_KATA_HYPERVISOR,"seccomp"), "Hypervisor metrics for the seccomp filtering."), &["item"]).unwrap();
@@ -75,30 +78,33 @@ fn update_hypervisor_metrics() -> Result<()> {
 }
 
 fn set_intgauge_vec_vcpu(icv: &prometheus::IntGaugeVec) {
-    icv.with_label_values(&["exit_io_in"])
-        .set(METRICS.vcpu.exit_io_in.count() as i64);
-    icv.with_label_values(&["exit_io_out"])
-        .set(METRICS.vcpu.exit_io_out.count() as i64);
-    icv.with_label_values(&["exit_mmio_read"])
-        .set(METRICS.vcpu.exit_mmio_read.count() as i64);
-    icv.with_label_values(&["exit_mmio_write"])
-        .set(METRICS.vcpu.exit_mmio_write.count() as i64);
-    icv.with_label_values(&["failures"])
-        .set(METRICS.vcpu.failures.count() as i64);
-    icv.with_label_values(&["filter_cpuid"])
-        .set(METRICS.vcpu.filter_cpuid.count() as i64);
+    let metric_guard = METRICS.read().unwrap();
+    for (cpu_id, metrics) in metric_guard.vcpu.iter() {
+        icv.with_label_values(&[cpu_id.to_string().as_str(), "exit_io_in"])
+            .set(metrics.exit_io_in.count() as i64);
+        icv.with_label_values(&[cpu_id.to_string().as_str(), "exit_io_out"])
+            .set(metrics.exit_io_out.count() as i64);
+        icv.with_label_values(&[cpu_id.to_string().as_str(), "exit_mmio_read"])
+            .set(metrics.exit_mmio_read.count() as i64);
+        icv.with_label_values(&[cpu_id.to_string().as_str(), "exit_mmio_write"])
+            .set(metrics.exit_mmio_write.count() as i64);
+        icv.with_label_values(&[cpu_id.to_string().as_str(), "failures"])
+            .set(metrics.failures.count() as i64);
+        icv.with_label_values(&[cpu_id.to_string().as_str(), "filter_cpuid"])
+            .set(metrics.filter_cpuid.count() as i64);
+    }
 }
 
 fn set_intgauge_vec_seccomp(icv: &prometheus::IntGaugeVec) {
-    let metric_gurad = METRICS.read().unwrap();
+    let metric_guard = METRICS.read().unwrap();
     icv.with_label_values(&["num_faults"])
-        .set(metric_gurad.seccomp.num_faults.count() as i64);
+        .set(metric_guard.seccomp.num_faults.count() as i64);
 }
 
 fn set_intgauge_vec_signals(icv: &prometheus::IntGaugeVec) {
-    let metric_gurad = METRICS.read().unwrap();
+    let metric_guard = METRICS.read().unwrap();
     icv.with_label_values(&["sigbus"])
-        .set(metric_gurad.signals.sigbus.count() as i64);
+        .set(metric_guard.signals.sigbus.count() as i64);
     icv.with_label_values(&["sigsegv"])
-        .set(metric_gurad.signals.sigsegv.count() as i64);
+        .set(metric_guard.signals.sigsegv.count() as i64);
 }
