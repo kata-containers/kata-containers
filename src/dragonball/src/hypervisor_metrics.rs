@@ -90,13 +90,15 @@ fn set_intgauge_vec_vcpu(icv: &prometheus::IntGaugeVec) {
 }
 
 fn set_intgauge_vec_seccomp(icv: &prometheus::IntGaugeVec) {
+    let metric_gurad = METRICS.read().unwrap();
     icv.with_label_values(&["num_faults"])
-        .set(METRICS.seccomp.num_faults.count() as i64);
+        .set(metric_gurad.seccomp.num_faults.count() as i64);
 }
 
 fn set_intgauge_vec_signals(icv: &prometheus::IntGaugeVec) {
+    let metric_gurad = METRICS.read().unwrap();
     icv.with_label_values(&["sigbus"])
-        .set(METRICS.signals.sigbus.count() as i64);
+        .set(metric_gurad.signals.sigbus.count() as i64);
     icv.with_label_values(&["sigsegv"])
-        .set(METRICS.signals.sigsegv.count() as i64);
+        .set(metric_gurad.signals.sigsegv.count() as i64);
 }
