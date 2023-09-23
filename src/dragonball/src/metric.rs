@@ -2,15 +2,15 @@
 // Copyright 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-use dbs_utils::metric::SharedIncMetric;
+use std::sync::{Arc, RwLock};
+
+use dbs_utils::metric::{IncMetric, SharedIncMetric};
 use lazy_static::lazy_static;
 use serde::Serialize;
 
-pub use dbs_utils::metric::IncMetric;
-
 lazy_static! {
     /// Static instance used for handling metrics.
-    pub static ref METRICS: DragonballMetrics = DragonballMetrics::default();
+    pub static ref METRICS: RwLock<DragonballMetrics> = RwLock::new(DragonballMetrics::default());
 }
 
 /// Metrics specific to VCPUs' mode of functioning.
