@@ -1011,8 +1011,8 @@ allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id) {
     print("allow_mount_point 1: success")
 }
 allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id) {
-    print("allow_mount_point 2: fstype == tar-overlay")
-    policy_storage.fstype == "tar-overlay"
+    print("allow_mount_point 2: fstype == fuse3.kata-overlay")
+    policy_storage.fstype == "fuse3.kata-overlay"
 
     policy_mount_point := replace(policy_storage.mount_point, "$(bundle-id)", bundle_id)
     print("allow_mount_point 2: policy_mount_point =", policy_mount_point)

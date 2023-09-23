@@ -584,7 +584,7 @@ fn get_image_layer_storages(
             driver: "overlayfs".to_string(),
             driver_options: Vec::new(),
             source: String::new(), // TODO
-            fstype: "tar-overlay".to_string(),
+            fstype: "fuse3.kata-overlay".to_string(),
             options: Vec::new(),
             mount_point: root_mount.Path.clone(),
             fs_group: None,
