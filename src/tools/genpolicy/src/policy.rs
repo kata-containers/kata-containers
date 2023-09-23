@@ -139,7 +139,6 @@ pub struct KataLinux {
     // The path is expected to be relative to the cgroups mountpoint.
     // If resources are specified, the cgroups at CgroupsPath will be updated based on resources.
     // CgroupsPath: String,
-
     /// Namespaces contains the namespaces that are created and/or joined by the container
     pub Namespaces: Vec<KataLinuxNamespace>,
 
@@ -188,36 +187,36 @@ pub struct KataLinuxNamespace {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct KataLinuxCapabilities {
-	// Ambient is the ambient set of capabilities that are kept.
-	pub Ambient: Vec<String>,
+    // Ambient is the ambient set of capabilities that are kept.
+    pub Ambient: Vec<String>,
 
     /// Bounding is the set of capabilities checked by the kernel.
-	pub Bounding: Vec<String>,
+    pub Bounding: Vec<String>,
 
-	/// Effective is the set of capabilities checked by the kernel.
-	pub Effective: Vec<String>,
+    /// Effective is the set of capabilities checked by the kernel.
+    pub Effective: Vec<String>,
 
-	/// Inheritable is the capabilities preserved across execve.
-	pub Inheritable: Vec<String>,
+    /// Inheritable is the capabilities preserved across execve.
+    pub Inheritable: Vec<String>,
 
-	/// Permitted is the limiting superset for effective capabilities.
-	pub Permitted: Vec<String>,
+    /// Permitted is the limiting superset for effective capabilities.
+    pub Permitted: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct KataMount {
-	/// destination is the path inside the container expect when it starts with "tmp:/"
-	pub destination: String,
+    /// destination is the path inside the container expect when it starts with "tmp:/"
+    pub destination: String,
 
-	/// source is the path inside the container expect when it starts with "vm:/dev/" or "tmp:/"
-	/// the path which starts with "vm:/dev/" refers the guest vm's "/dev",
-	/// especially, "vm:/dev/hostfs/" refers to the shared filesystem.
-	/// "tmp:/" is a temporary directory which is used for temporary mounts.
+    /// source is the path inside the container expect when it starts with "vm:/dev/" or "tmp:/"
+    /// the path which starts with "vm:/dev/" refers the guest vm's "/dev",
+    /// especially, "vm:/dev/hostfs/" refers to the shared filesystem.
+    /// "tmp:/" is a temporary directory which is used for temporary mounts.
     #[serde(default)]
-	pub source: String,
+    pub source: String,
 
     pub type_: String,
-	pub options: Vec<String>,
+    pub options: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -580,20 +579,10 @@ fn get_image_layer_storages(
     if let Some(root_mount) = root {
         let mut new_storages: Vec<SerializedStorage> = Vec::new();
 
-        let mut overlay_storage = SerializedStorage {
-            driver: "overlayfs".to_string(),
-            driver_options: Vec::new(),
-            source: String::new(), // TODO
-            fstype: "fuse3.kata-overlay".to_string(),
-            options: Vec::new(),
-            mount_point: root_mount.Path.clone(),
-            fs_group: None,
-        };
-
         // TODO: load this path from data.json.
         let layers_path = "/run/kata-containers/sandbox/layers/".to_string();
-
-        let mut lowerdirs: Vec<String> = Vec::new();
+        let mut layer_names: Vec<String> = Vec::new();
+        let mut layer_hashes: Vec<String> = Vec::new();
         let mut previous_chain_id = String::new();
 
         for layer in image_layers {
@@ -629,13 +618,8 @@ fn get_image_layer_storages(
                 fs_group: None,
             });
 
-            let mut fs_opt_layer = "io.katacontainers.fs-opt.layer=".to_string();
-            fs_opt_layer += &layer_name;
-            fs_opt_layer += ",tar,ro,io.katacontainers.fs-opt.block_device=file,io.katacontainers.fs-opt.is-layer,io.katacontainers.fs-opt.root-hash=";
-            fs_opt_layer += &layer.verity_hash;
-            overlay_storage.options.push(fs_opt_layer);
-
-            lowerdirs.push(layer_name);
+            layer_names.push(layer_name);
+            layer_hashes.push(layer.verity_hash.to_string());
         }
 
         new_storages.reverse();
@@ -643,18 +627,18 @@ fn get_image_layer_storages(
             storages.push(storage);
         }
 
-        overlay_storage.options.reverse();
-        overlay_storage.options.insert(0,
-            "io.katacontainers.fs-opt.layer-src-prefix=/var/lib/containerd/io.containerd.snapshotter.v1.tardev/layers".to_string()
-        );
-        overlay_storage
-            .options
-            .push("io.katacontainers.fs-opt.overlay-rw".to_string());
+        layer_names.reverse();
+        layer_hashes.reverse();
 
-        lowerdirs.reverse();
-        overlay_storage
-            .options
-            .push("lowerdir=".to_string() + &lowerdirs.join(":"));
+        let overlay_storage = SerializedStorage {
+            driver: "overlayfs".to_string(),
+            driver_options: Vec::new(),
+            source: String::new(), // TODO
+            fstype: "fuse3.kata-overlay".to_string(),
+            options: vec![layer_names.join(":"), layer_hashes.join(":")],
+            mount_point: root_mount.Path.clone(),
+            fs_group: None,
+        };
 
         storages.push(overlay_storage);
     }
