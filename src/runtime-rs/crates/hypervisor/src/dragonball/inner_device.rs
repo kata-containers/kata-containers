@@ -400,9 +400,12 @@ mod tests {
 
     use crate::dragonball::DragonballInner;
 
+    use tokio::sync::mpsc;
+
     #[test]
     fn test_parse_inline_virtiofs_args() {
-        let mut dragonball = DragonballInner::new();
+        let (tx, _) = mpsc::channel(1);
+        let mut dragonball = DragonballInner::new(tx);
         let mut fs_cfg = FsDeviceConfigInfo::default();
 
         // no_open and writeback_cache is the default, so test open and no_writeback_cache. "-d"

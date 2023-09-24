@@ -13,10 +13,14 @@ slog-scope = "4.4.0"
 tokio = { version = "1.28.1", features = ["rt-multi-thread"] }
 tracing = "0.1.36"
 ttrpc = { version = "0.7.1" }
+protobuf = "3.2.0"
 
 common = { path = "../runtimes/common" }
-containerd-shim-protos = { version = "0.3.0", features = ["async"]}
-logging = { path = "../../../libs/logging"}
+containerd-shim-protos = { git = "https://github.com/containerd/rust-extensions.git", features = [
+	"async",
+	"sandbox",
+] }
+logging = { path = "../../../libs/logging" }
 kata-types = { path = "../../../libs/kata-types" }
 runtimes = { path = "../runtimes" }
 persist = { path = "../persist" }

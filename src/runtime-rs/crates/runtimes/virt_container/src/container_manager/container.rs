@@ -91,7 +91,7 @@ impl Container {
         let mut inner = self.inner.write().await;
         let toml_config = self.resource_manager.config().await;
         let config = &self.config;
-        let sandbox_pidns = is_pid_namespace_enabled(&spec);
+        let sandbox_pidns = false;
         amend_spec(&mut spec, toml_config.runtime.disable_guest_seccomp).context("amend spec")?;
 
         // get mutable root from oci spec
@@ -506,6 +506,7 @@ fn amend_spec(spec: &mut oci::Spec, disable_guest_seccomp: bool) -> Result<()> {
 
 // is_pid_namespace_enabled checks if Pid namespace for a container needs to be shared with its sandbox
 // pid namespace.
+#[allow(dead_code)]
 fn is_pid_namespace_enabled(spec: &oci::Spec) -> bool {
     if let Some(linux) = spec.linux.as_ref() {
         for n in linux.namespaces.iter() {

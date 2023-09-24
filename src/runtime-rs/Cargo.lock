@@ -501,6 +501,7 @@ dependencies = [
  "oci",
  "persist",
  "protobuf 3.2.0",
+ "protobuf-codegen 3.2.0",
  "serde_json",
  "slog",
  "slog-scope",
@@ -534,8 +535,7 @@ checksum = "f7144d30dcf0fafbce74250a3963025d8d52177934239851c917d29f1df280c2"
 [[package]]
 name = "containerd-shim-protos"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef45f1c71aa587d8f657c546d8da38ea04f113dd05da0ef993c4515fa25fbdd1"
+source = "git+https://github.com/containerd/rust-extensions.git#35a97f17d55753bb1ef04c28cd7c3203993932b0"
 dependencies = [
  "async-trait",
  "protobuf 3.2.0",
@@ -3074,6 +3074,7 @@ dependencies = [
  "kata-types",
  "logging",
  "persist",
+ "protobuf 3.2.0",
  "runtimes",
  "slog",
  "slog-scope",
@@ -3857,6 +3858,7 @@ dependencies = [
  "serde_json",
  "slog",
  "slog-scope",
+ "strum",
  "tokio",
  "toml 0.4.10",
  "tracing",

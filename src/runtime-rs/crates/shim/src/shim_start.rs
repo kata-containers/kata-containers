@@ -34,28 +34,46 @@ impl ShimExecutor {
 
     fn do_start(&mut self) -> Result<PathBuf> {
         let bundle_path = get_bundle_path().context("get bundle path")?;
-        let spec = self.load_oci_spec(&bundle_path)?;
-        let (container_type, id) = k8s::container_type_with_id(&spec);
+        let spec_file = bundle_path.join(oci::OCI_SPEC_CONFIG_FILE_NAME);
 
-        match container_type {
-            ContainerType::PodSandbox | ContainerType::SingleContainer => {
-                let address = self.socket_address(&self.args.id)?;
-                let socket = new_listener(&address)?;
-                let child_pid = self.create_shim_process(socket)?;
-                self.write_pid_file(&bundle_path, child_pid)?;
-                self.write_address(&bundle_path, &address)?;
-                Ok(address)
-            }
-            ContainerType::PodContainer => {
-                let sid = id
-                    .ok_or(Error::InvalidArgument)
-                    .context("get sid for container")?;
-                let (address, pid) = self.get_shim_info_from_sandbox(&sid)?;
-                self.write_pid_file(&bundle_path, pid)?;
-                self.write_address(&bundle_path, &address)?;
-                Ok(address)
+        // If containerd started with sandboxed environment,
+        // there is no OCI_SPEC_CONFIG_FILE when a PodSandbox is created.
+        // In this case we can only regard current container type as PodSandbox
+        // instead of inferring from OCI_SPEC_CONFIG_FILE.
+        if spec_file.exists() {
+            let spec =
+                oci::Spec::load(spec_file.to_str().unwrap_or_default()).context("load spec")?;
+            let (container_type, id) = k8s::container_type_with_id(&spec);
+            match container_type {
+                ContainerType::SingleContainer | ContainerType::PodSandbox => {
+                    self.create_address(&bundle_path)
+                }
+                ContainerType::PodContainer => self.retrive_address(&bundle_path, id),
             }
         }
+        // treat as running PodSandbox in a sandboxed environment
+        else {
+            self.create_address(&bundle_path)
+        }
+    }
+
+    fn create_address(&self, bundle_path: &Path) -> Result<PathBuf> {
+        let address = self.socket_address(&self.args.id)?;
+        let socket = new_listener(&address)?;
+        let child_pid = self.create_shim_process(socket)?;
+        self.write_pid_file(bundle_path, child_pid)?;
+        self.write_address(bundle_path, &address)?;
+        Ok(address)
+    }
+
+    fn retrive_address(&self, bundle_path: &Path, id: Option<String>) -> Result<PathBuf> {
+        let sid = id
+            .ok_or(Error::InvalidArgument)
+            .context("get sid for container")?;
+        let (address, pid) = self.get_shim_info_from_sandbox(&sid)?;
+        self.write_pid_file(bundle_path, pid)?;
+        self.write_address(bundle_path, &address)?;
+        Ok(address)
     }
 
     fn new_command(&self) -> Result<std::process::Command> {

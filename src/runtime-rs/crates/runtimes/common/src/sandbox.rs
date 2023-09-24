@@ -7,6 +7,8 @@
 use anyhow::Result;
 use async_trait::async_trait;
 
+use crate::types::{SandboxConfig, SandboxExitInfo};
+
 #[derive(Clone)]
 pub struct SandboxNetworkEnv {
     pub netns: Option<String>,
@@ -22,15 +24,22 @@ impl std::fmt::Debug for SandboxNetworkEnv {
     }
 }
 
+#[derive(Default, Clone, Debug)]
+pub struct SandboxStatus {
+    pub sandbox_id: String,
+    pub pid: u32,
+    pub state: String,
+    pub info: std::collections::HashMap<String, String>,
+    pub create_at: std::time::Duration,
+    pub exited_at: std::time::Duration,
+}
+
 #[async_trait]
 pub trait Sandbox: Send + Sync {
-    async fn start(
-        &self,
-        dns: Vec<String>,
-        spec: &oci::Spec,
-        state: &oci::State,
-        network_env: SandboxNetworkEnv,
-    ) -> Result<()>;
+    async fn create(&self, sandbox_config: SandboxConfig) -> Result<()>;
+    async fn start(&self) -> Result<()>;
+    async fn status(&self) -> Result<SandboxStatus>;
+    async fn wait(&self) -> Result<SandboxExitInfo>;
     async fn stop(&self) -> Result<()>;
     async fn cleanup(&self) -> Result<()>;
     async fn shutdown(&self) -> Result<()>;

@@ -9,17 +9,104 @@ mod trans_from_shim;
 mod trans_into_agent;
 mod trans_into_shim;
 
-use std::fmt;
+use crate::SandboxNetworkEnv;
 
 use anyhow::{Context, Result};
 use kata_sys_util::validate;
 use kata_types::mount::Mount;
+use std::{
+    collections::{hash_map::RandomState, HashMap},
+    fmt,
+};
 use strum::Display;
 
-/// Request: request from shim
+/// Request: sandbox request from shim
 /// Request and Response messages need to be paired
 #[derive(Debug, Clone, Display)]
-pub enum Request {
+pub enum SandboxRequest {
+    CreateSandbox(Box<SandboxConfig>),
+    StartSandbox(SandboxID),
+    Platform(SandboxID),
+    StopSandbox(StopSandboxRequeset),
+    WaitSandbox(SandboxID),
+    SandboxStatus(SandboxStatusRequeset),
+    Ping(SandboxID),
+    ShutdownSandbox(SandboxID),
+}
+
+/// Response: sandbox response to shim
+/// Request and Response messages need to be paired
+#[derive(Debug, Clone, Display)]
+pub enum SandboxResponse {
+    CreateSandbox,
+    StartSandbox(StartSandboxInfo),
+    Platform(PlatformInfo),
+    StopSandbox,
+    WaitSandbox(SandboxExitInfo),
+    SandboxStatus(SandboxStatusInfo),
+    Ping,
+    ShutdownSandbox,
+}
+
+#[derive(Clone, Debug)]
+pub struct SandboxConfig {
+    pub sandbox_id: String,
+    pub hostname: String,
+    pub dns: Vec<String>,
+    pub network_env: SandboxNetworkEnv,
+    pub annotations: HashMap<String, String, RandomState>,
+    pub hooks: Option<oci::Hooks>,
+    pub state: oci::State,
+}
+
+#[derive(Clone, Debug)]
+pub struct SandboxID {
+    pub sandbox_id: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct StartSandboxInfo {
+    pub pid: u32,
+    pub create_time: Option<std::time::SystemTime>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PlatformInfo {
+    pub os: String,
+    pub architecture: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct StopSandboxRequeset {
+    pub sandbox_id: String,
+    pub timeout_secs: u32,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct SandboxExitInfo {
+    pub exit_status: u32,
+    pub exited_at: Option<std::time::SystemTime>,
+}
+
+#[derive(Clone, Debug)]
+pub struct SandboxStatusRequeset {
+    pub sandbox_id: String,
+    pub verbose: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct SandboxStatusInfo {
+    pub sandbox_id: String,
+    pub pid: u32,
+    pub state: String,
+    pub created_at: Option<std::time::SystemTime>,
+    pub exited_at: Option<std::time::SystemTime>,
+}
+
+/// Request: task request from shim
+/// Request and Response messages need to be paired
+#[derive(Debug, Clone, Display)]
+pub enum TaskRequest {
     CreateContainer(ContainerConfig),
     CloseProcessIO(ContainerProcess),
     DeleteProcess(ContainerProcess),
@@ -38,10 +125,10 @@ pub enum Request {
     ConnectContainer(ContainerID),
 }
 
-/// Response: response to shim
+/// Response: task response to shim
 /// Request and Response messages need to be paired
 #[derive(Debug, Clone, Display)]
-pub enum Response {
+pub enum TaskResponse {
     CreateContainer(PID),
     CloseProcessIO,
     DeleteProcess(ProcessStateInfo),

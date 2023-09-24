@@ -36,15 +36,15 @@ Not all the features have been implemented yet, for details please check the [ro
 
 The `runtime-rs` directory contains some crates in the crates directory that compose the `containerd-shim-kata-v2`.
 
-| Crate | Description |
-|-|-|
-| [`shim`](crates/shim)| containerd shimv2 implementation |
-| [`service`](crates/service)| services for containers, includes task service |
-| [`runtimes`](crates/runtimes)| container runtimes |
-| [`resource`](crates/resource)| sandbox and container resources |
-| [`hypervisor`](crates/hypervisor)| hypervisor that act as a sandbox |
-| [`agent`](crates/agent)| library used to communicate with agent in the guest OS |
-| [`persist`](crates/persist)| persist container state to disk |
+| Crate                             | Description                                            |
+| --------------------------------- | ------------------------------------------------------ |
+| [`shim`](crates/shim)             | containerd shimv2 implementation                       |
+| [`service`](crates/service)       | services for containers, includes task service         |
+| [`runtimes`](crates/runtimes)     | container runtimes                                     |
+| [`resource`](crates/resource)     | sandbox and container resources                        |
+| [`hypervisor`](crates/hypervisor) | hypervisor that act as a sandbox                       |
+| [`agent`](crates/agent)           | library used to communicate with agent in the guest OS |
+| [`persist`](crates/persist)       | persist container state to disk                        |
 
 ### shim
 
@@ -60,9 +60,12 @@ containerd will launch a shim process and the shim process will serve as a ttRPC
 
 The `runtime-rs` has an extensible framework, includes extension of services, runtimes, and hypervisors.
 
-Currently, only containerd compatible `TaskService` is implemented.
+Currently, we implement `SandboxService` and `TaskService` that are compatible with containerd.
 
-`TaskService` has implemented the [containerd shim protocol](https://docs.rs/containerd-shim-protos/0.2.0/containerd_shim_protos/),
+`SandboxService` has implemented the [containerd **sandbox** protocol](https://github.com/containerd/rust-extensions/blob/main/crates/shim-protos/src/sandbox.rs),
+and interacts with runtimes through messages when containerd is started with `ENABLE_CRI_SANDBOXES=sandboxed`.
+
+`TaskService` has implemented the [containerd **shim** protocol](https://docs.rs/containerd-shim-protos/0.2.0/containerd_shim_protos/),
 and interacts with runtimes through messages.
 
 ### runtimes

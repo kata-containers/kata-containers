@@ -20,7 +20,7 @@ use async_trait::async_trait;
 use cgroup_persist::CgroupState;
 use cgroups_rs::{cgroup_builder::CgroupBuilder, Cgroup, CgroupPid, CpuResources, Resources};
 use hypervisor::Hypervisor;
-use kata_sys_util::spec::load_oci_spec;
+use kata_sys_util::spec::get_bundle_path;
 use kata_types::config::TomlConfig;
 use oci::LinuxResources;
 use persist::sandbox_persist::Persist;
@@ -28,6 +28,7 @@ use tokio::sync::RwLock;
 
 use crate::ResourceUpdateOp;
 
+const SANDBOXED_CGROUP_PATH: &str = "kata_sandboxed_pod";
 const OS_ERROR_NO_SUCH_PROCESS: i32 = 3;
 
 pub struct CgroupArgs {
@@ -43,13 +44,19 @@ pub struct CgroupConfig {
 
 impl CgroupConfig {
     fn new(sid: &str, toml_config: &TomlConfig) -> Result<Self> {
+        let bundle_path = get_bundle_path()?;
+        let spec_file = bundle_path.join("config.json");
+        let path = if spec_file.exists() {
+            let spec = oci::Spec::load(spec_file.to_str().unwrap_or_default())?;
+            spec.linux
+                // The trim of '/' is important, because cgroup_path is a relative path.
+                .map(|linux| linux.cgroups_path.trim_start_matches('/').to_string())
+                .unwrap_or_default()
+        } else {
+            format!("{}/{}", SANDBOXED_CGROUP_PATH, sid)
+        };
+
         let overhead_path = utils::gen_overhead_path(sid);
-        let spec = load_oci_spec()?;
-        let path = spec
-            .linux
-            // The trim of '/' is important, because cgroup_path is a relative path.
-            .map(|linux| linux.cgroups_path.trim_start_matches('/').to_string())
-            .unwrap_or_default();
 
         Ok(Self {
             path,

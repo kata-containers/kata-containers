@@ -4,12 +4,15 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{path::PathBuf, str::from_utf8, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, str::from_utf8, sync::Arc};
 
 use anyhow::{anyhow, Context, Result};
 use common::{
     message::Message,
-    types::{Request, Response},
+    types::{
+        PlatformInfo, SandboxConfig, SandboxRequest, SandboxResponse, SandboxStatusInfo,
+        StartSandboxInfo, TaskRequest, TaskResponse,
+    },
     RuntimeHandler, RuntimeInstance, Sandbox, SandboxNetworkEnv,
 };
 use hypervisor::Param;
@@ -21,11 +24,9 @@ use kata_types::{
 use linux_container::LinuxContainer;
 use netns_rs::NetNs;
 use persist::sandbox_persist::Persist;
-use resource::{
-    cpu_mem::initial_size::InitialSizeManager,
-    network::{dan_config_path, generate_netns_name},
-};
+use resource::{cpu_mem::initial_size::InitialSizeManager, network::generate_netns_name};
 use shim_interface::shim_mgmt::ERR_NO_SHIM_SERVER;
+use std::time::SystemTime;
 use tokio::fs;
 use tokio::sync::{mpsc::Sender, Mutex, RwLock};
 use tracing::instrument;
@@ -73,14 +74,11 @@ impl RuntimeHandlerManagerInner {
     #[instrument]
     async fn init_runtime_handler(
         &mut self,
-        spec: &oci::Spec,
-        state: &oci::State,
-        network_env: SandboxNetworkEnv,
-        dns: Vec<String>,
-        config: Arc<TomlConfig>,
+        sandbox_config: SandboxConfig,
+        toml_config: Arc<TomlConfig>,
     ) -> Result<()> {
-        info!(sl!(), "new runtime handler {}", &config.runtime.name);
-        let runtime_handler = match config.runtime.name.as_str() {
+        info!(sl!(), "new runtime handler {}", &toml_config.runtime.name);
+        let runtime_handler = match toml_config.runtime.name.as_str() {
             #[cfg(feature = "linux")]
             name if name == LinuxContainer::name() => LinuxContainer::new_handler(),
             #[cfg(feature = "wasm")]
@@ -89,106 +87,49 @@ impl RuntimeHandlerManagerInner {
             name if name == VirtContainer::name() || name.is_empty() => {
                 VirtContainer::new_handler()
             }
-            _ => return Err(anyhow!("Unsupported runtime: {}", &config.runtime.name)),
+            _ => {
+                return Err(anyhow!(
+                    "Unsupported runtime: {}",
+                    &toml_config.runtime.name
+                ))
+            }
         };
         let runtime_instance = runtime_handler
-            .new_instance(&self.id, self.msg_sender.clone(), config.clone())
+            .new_instance(&self.id, self.msg_sender.clone(), toml_config.clone())
             .await
             .context("new runtime instance")?;
 
         // initilize the trace subscriber
-        if config.runtime.enable_tracing {
+        if toml_config.runtime.enable_tracing {
             let mut tracer = self.kata_tracer.lock().await;
             if let Err(e) = tracer.trace_setup(
                 &self.id,
-                &config.runtime.jaeger_endpoint,
-                &config.runtime.jaeger_user,
-                &config.runtime.jaeger_password,
+                &toml_config.runtime.jaeger_endpoint,
+                &toml_config.runtime.jaeger_user,
+                &toml_config.runtime.jaeger_password,
             ) {
                 warn!(sl!(), "failed to setup tracing, {:?}", e);
             }
         }
 
-        // start sandbox
+        // create sandbox
         runtime_instance
             .sandbox
-            .start(dns, spec, state, network_env)
+            .clone()
+            .create(sandbox_config)
             .await
-            .context("start sandbox")?;
+            .context("create sandbox")?;
+
         self.runtime_instance = Some(Arc::new(runtime_instance));
         Ok(())
     }
 
-    #[instrument]
-    async fn try_init(
+    async fn init_runtime_instance(
         &mut self,
-        spec: &oci::Spec,
-        state: &oci::State,
-        options: &Option<Vec<u8>>,
+        sandbox_config: SandboxConfig,
+        toml_config: TomlConfig,
     ) -> Result<()> {
-        // return if runtime instance has init
-        if self.runtime_instance.is_some() {
-            return Ok(());
-        }
-
-        let mut dns: Vec<String> = vec![];
-
-        #[cfg(feature = "linux")]
-        LinuxContainer::init().context("init linux container")?;
-        #[cfg(feature = "wasm")]
-        WasmContainer::init().context("init wasm container")?;
-        #[cfg(feature = "virt")]
-        VirtContainer::init().context("init virt container")?;
-
-        for m in &spec.mounts {
-            if m.destination == DEFAULT_GUEST_DNS_FILE {
-                let contents = fs::read_to_string(&m.source).await?;
-                dns = contents.split('\n').map(|e| e.to_string()).collect();
-            }
-        }
-
-        let config = load_config(spec, options).context("load config")?;
-
-        let dan_path = dan_config_path(&config, &self.id);
-        let mut network_created = false;
-        // set netns to None if we want no network for the VM
-        let netns = if config.runtime.disable_new_netns {
-            None
-        } else if dan_path.exists() {
-            info!(sl!(), "Do not create a netns due to DAN");
-            None
-        } else {
-            let mut netns_path = None;
-            if let Some(linux) = &spec.linux {
-                for ns in &linux.namespaces {
-                    if ns.r#type.as_str() != oci::NETWORKNAMESPACE {
-                        continue;
-                    }
-                    // get netns path from oci spec
-                    if !ns.path.is_empty() {
-                        netns_path = Some(ns.path.clone());
-                    }
-                    // if we get empty netns from oci spec, we need to create netns for the VM
-                    else {
-                        let ns_name = generate_netns_name();
-                        let netns = NetNs::new(ns_name)?;
-                        let path = PathBuf::from(netns.path()).to_str().map(|s| s.to_string());
-                        info!(sl!(), "the netns path is {:?}", path);
-                        netns_path = path;
-                        network_created = true;
-                    }
-                    break;
-                }
-            }
-            netns_path
-        };
-
-        let network_env = SandboxNetworkEnv {
-            netns,
-            network_created,
-        };
-
-        self.init_runtime_handler(spec, state, network_env, dns, Arc::new(config))
+        self.init_runtime_handler(sandbox_config, Arc::new(toml_config))
             .await
             .context("init runtime handler")?;
 
@@ -242,15 +183,15 @@ impl RuntimeHandlerManager {
         let sandbox_state = persist::from_disk::<SandboxState>(&inner.id)
             .context("failed to load the sandbox state")?;
 
-        let config = if let Ok(spec) = load_oci_spec() {
-            load_config(&spec, &None).context("load config")?
+        let toml_config = if let Ok(spec) = load_oci_spec() {
+            load_toml_config(Some(&spec), None).context("load config")?
         } else {
             TomlConfig::default()
         };
 
         let sandbox_args = SandboxRestoreArgs {
             sid: inner.id.clone(),
-            toml_config: config,
+            toml_config,
             sender,
         };
         match sandbox_state.sandbox_type.clone() {
@@ -299,19 +240,114 @@ impl RuntimeHandlerManager {
     }
 
     #[instrument]
-    async fn try_init_runtime_instance(
+    async fn try_init_sandboxed_runtime(&self, sandbox_config: SandboxConfig) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        if inner.runtime_instance.is_some() {
+            return Ok(());
+        }
+
+        init_runtime_config()?;
+
+        let toml_config = load_toml_config(None, None).context("load toml config")?;
+
+        inner
+            .init_runtime_instance(sandbox_config, toml_config)
+            .await
+    }
+
+    async fn try_init_normal_runtime(
         &self,
-        spec: &oci::Spec,
-        state: &oci::State,
-        options: &Option<Vec<u8>>,
+        spec: oci::Spec,
+        state: oci::State,
+        options: Option<Vec<u8>>,
     ) -> Result<()> {
         let mut inner = self.inner.write().await;
-        inner.try_init(spec, state, options).await
+        if inner.runtime_instance.is_some() {
+            return Ok(());
+        }
+
+        init_runtime_config()?;
+
+        let toml_config = load_toml_config(Some(&spec), options).context("load toml config")?;
+
+        let sandbox_config = {
+            let mut dns: Vec<String> = vec![];
+            for m in &spec.mounts {
+                if m.destination == DEFAULT_GUEST_DNS_FILE {
+                    let contents = fs::read_to_string(&m.source).await?;
+                    dns = contents.split('\n').map(|e| e.to_string()).collect();
+                }
+            }
+
+            let mut network_created = false;
+            // set netns to None if we want no network for the VM
+            let netns = if toml_config.runtime.disable_new_netns {
+                None
+            } else {
+                let mut netns_path = None;
+                if let Some(linux) = &spec.linux {
+                    for ns in &linux.namespaces {
+                        if ns.r#type.as_str() != oci::NETWORKNAMESPACE {
+                            continue;
+                        }
+                        // get netns path from oci spec
+                        if !ns.path.is_empty() {
+                            netns_path = Some(ns.path.clone());
+                        }
+                        // if we get empty netns from oci spec, we need to create netns for the VM
+                        else {
+                            let ns_name = generate_netns_name();
+                            let netns = NetNs::new(ns_name)?;
+                            let path = PathBuf::from(netns.path()).to_str().map(|s| s.to_string());
+                            info!(sl!(), "the netns path is {:?}", path);
+                            netns_path = path;
+                            network_created = true;
+                        }
+                        break;
+                    }
+                }
+                netns_path
+            };
+
+            let network_env = SandboxNetworkEnv {
+                netns,
+                network_created,
+            };
+
+            SandboxConfig {
+                sandbox_id: String::new(),
+                hostname: spec.hostname.clone(),
+                dns,
+                network_env,
+                annotations: spec.annotations.clone(),
+                hooks: spec.hooks.clone(),
+                state,
+            }
+        };
+
+        inner
+            .init_runtime_instance(sandbox_config, toml_config)
+            .await
     }
 
     #[instrument(parent = &*(ROOTSPAN))]
-    pub async fn handler_message(&self, req: Request) -> Result<Response> {
-        if let Request::CreateContainer(container_config) = req {
+    pub async fn handler_sandbox_message(&self, req: SandboxRequest) -> Result<SandboxResponse> {
+        if let SandboxRequest::CreateSandbox(sandbox_config) = req {
+            self.try_init_sandboxed_runtime(*sandbox_config)
+                .await
+                .context("try init sandboxed runtime")?;
+
+            Ok(SandboxResponse::CreateSandbox)
+        } else {
+            self.handler_sandbox_request(req)
+                .await
+                .context("handler request")
+        }
+    }
+
+    #[instrument(parent = &*(ROOTSPAN))]
+    pub async fn handler_task_message(&self, req: TaskRequest) -> Result<TaskResponse> {
+        if let TaskRequest::CreateContainer(container_config) = req {
             // get oci spec
             let bundler_path = format!(
                 "{}/{}",
@@ -328,13 +364,22 @@ impl RuntimeHandlerManager {
                 annotations: spec.annotations.clone(),
             };
 
-            self.try_init_runtime_instance(&spec, &state, &container_config.options)
+            self.try_init_normal_runtime(spec.clone(), state, container_config.options.clone())
                 .await
-                .context("try init runtime instance")?;
+                .context("try init normal runtime")?;
+
             let instance = self
                 .get_runtime_instance()
                 .await
                 .context("get runtime instance")?;
+
+            // start sandbox in order to create container later
+            instance
+                .sandbox
+                .clone()
+                .start()
+                .await
+                .context("start sandbox")?;
 
             let shim_pid = instance
                 .container_manager
@@ -342,14 +387,67 @@ impl RuntimeHandlerManager {
                 .await
                 .context("create container")?;
 
-            Ok(Response::CreateContainer(shim_pid))
+            Ok(TaskResponse::CreateContainer(shim_pid))
         } else {
-            self.handler_request(req).await.context("handler request")
+            self.handler_task_request(req)
+                .await
+                .context("handler request")
+        }
+    }
+
+    pub async fn handler_sandbox_request(&self, req: SandboxRequest) -> Result<SandboxResponse> {
+        let instance = self
+            .get_runtime_instance()
+            .await
+            .context("get runtime instance")?;
+        let sandbox = instance.sandbox.clone();
+
+        match req {
+            SandboxRequest::CreateSandbox(req) => Err(anyhow!("Unreachable request {:?}", req)),
+            SandboxRequest::StartSandbox(_) => {
+                sandbox.start().await.context("start sandbox")?;
+
+                Ok(SandboxResponse::StartSandbox(StartSandboxInfo {
+                    pid: std::process::id(),
+                    create_time: Some(SystemTime::now()),
+                }))
+            }
+            SandboxRequest::Platform(_) => Ok(SandboxResponse::Platform(PlatformInfo {
+                os: std::env::consts::OS.to_string(),
+                architecture: std::env::consts::ARCH.to_string(),
+            })),
+            SandboxRequest::StopSandbox(_) => {
+                sandbox.stop().await.context("stop sandbox")?;
+
+                Ok(SandboxResponse::StopSandbox)
+            }
+            SandboxRequest::WaitSandbox(_) => {
+                let exit_info = sandbox.wait().await.context("wait sandbox")?;
+
+                Ok(SandboxResponse::WaitSandbox(exit_info))
+            }
+            SandboxRequest::SandboxStatus(_) => {
+                let status = sandbox.status().await?;
+
+                Ok(SandboxResponse::SandboxStatus(SandboxStatusInfo {
+                    sandbox_id: status.sandbox_id,
+                    pid: status.pid,
+                    state: status.state,
+                    created_at: SystemTime::UNIX_EPOCH.checked_add(status.create_at),
+                    exited_at: SystemTime::UNIX_EPOCH.checked_add(status.exited_at),
+                }))
+            }
+            SandboxRequest::Ping(_) => Ok(SandboxResponse::Ping),
+            SandboxRequest::ShutdownSandbox(_) => {
+                sandbox.shutdown().await.context("shutdown sandbox")?;
+
+                Ok(SandboxResponse::ShutdownSandbox)
+            }
         }
     }
 
     #[instrument(parent = &(*ROOTSPAN))]
-    pub async fn handler_request(&self, req: Request) -> Result<Response> {
+    pub async fn handler_task_request(&self, req: TaskRequest) -> Result<TaskResponse> {
         let instance = self
             .get_runtime_instance()
             .await
@@ -358,24 +456,24 @@ impl RuntimeHandlerManager {
         let cm = instance.container_manager.clone();
 
         match req {
-            Request::CreateContainer(req) => Err(anyhow!("Unreachable request {:?}", req)),
-            Request::CloseProcessIO(process_id) => {
+            TaskRequest::CreateContainer(req) => Err(anyhow!("Unreachable request {:?}", req)),
+            TaskRequest::CloseProcessIO(process_id) => {
                 cm.close_process_io(&process_id).await.context("close io")?;
-                Ok(Response::CloseProcessIO)
+                Ok(TaskResponse::CloseProcessIO)
             }
-            Request::DeleteProcess(process_id) => {
+            TaskRequest::DeleteProcess(process_id) => {
                 let resp = cm.delete_process(&process_id).await.context("do delete")?;
-                Ok(Response::DeleteProcess(resp))
+                Ok(TaskResponse::DeleteProcess(resp))
             }
-            Request::ExecProcess(req) => {
+            TaskRequest::ExecProcess(req) => {
                 cm.exec_process(req).await.context("exec")?;
-                Ok(Response::ExecProcess)
+                Ok(TaskResponse::ExecProcess)
             }
-            Request::KillProcess(req) => {
+            TaskRequest::KillProcess(req) => {
                 cm.kill_process(&req).await.context("kill process")?;
-                Ok(Response::KillProcess)
+                Ok(TaskResponse::KillProcess)
             }
-            Request::ShutdownContainer(req) => {
+            TaskRequest::ShutdownContainer(req) => {
                 if cm.need_shutdown_sandbox(&req).await {
                     sandbox.shutdown().await.context("do shutdown")?;
 
@@ -384,59 +482,59 @@ impl RuntimeHandlerManager {
                     let tracer = kata_tracer.lock().await;
                     tracer.trace_end();
                 }
-                Ok(Response::ShutdownContainer)
+                Ok(TaskResponse::ShutdownContainer)
             }
-            Request::WaitProcess(process_id) => {
+            TaskRequest::WaitProcess(process_id) => {
                 let exit_status = cm.wait_process(&process_id).await.context("wait process")?;
                 if cm.is_sandbox_container(&process_id).await {
                     sandbox.stop().await.context("stop sandbox")?;
                 }
-                Ok(Response::WaitProcess(exit_status))
+                Ok(TaskResponse::WaitProcess(exit_status))
             }
-            Request::StartProcess(process_id) => {
+            TaskRequest::StartProcess(process_id) => {
                 let shim_pid = cm
                     .start_process(&process_id)
                     .await
                     .context("start process")?;
-                Ok(Response::StartProcess(shim_pid))
+                Ok(TaskResponse::StartProcess(shim_pid))
             }
 
-            Request::StateProcess(process_id) => {
+            TaskRequest::StateProcess(process_id) => {
                 let state = cm
                     .state_process(&process_id)
                     .await
                     .context("state process")?;
-                Ok(Response::StateProcess(state))
+                Ok(TaskResponse::StateProcess(state))
             }
-            Request::PauseContainer(container_id) => {
+            TaskRequest::PauseContainer(container_id) => {
                 cm.pause_container(&container_id)
                     .await
                     .context("pause container")?;
-                Ok(Response::PauseContainer)
+                Ok(TaskResponse::PauseContainer)
             }
-            Request::ResumeContainer(container_id) => {
+            TaskRequest::ResumeContainer(container_id) => {
                 cm.resume_container(&container_id)
                     .await
                     .context("resume container")?;
-                Ok(Response::ResumeContainer)
+                Ok(TaskResponse::ResumeContainer)
             }
-            Request::ResizeProcessPTY(req) => {
+            TaskRequest::ResizeProcessPTY(req) => {
                 cm.resize_process_pty(&req).await.context("resize pty")?;
-                Ok(Response::ResizeProcessPTY)
+                Ok(TaskResponse::ResizeProcessPTY)
             }
-            Request::StatsContainer(container_id) => {
+            TaskRequest::StatsContainer(container_id) => {
                 let stats = cm
                     .stats_container(&container_id)
                     .await
                     .context("stats container")?;
-                Ok(Response::StatsContainer(stats))
+                Ok(TaskResponse::StatsContainer(stats))
             }
-            Request::UpdateContainer(req) => {
+            TaskRequest::UpdateContainer(req) => {
                 cm.update_container(req).await.context("update container")?;
-                Ok(Response::UpdateContainer)
+                Ok(TaskResponse::UpdateContainer)
             }
-            Request::Pid => Ok(Response::Pid(cm.pid().await.context("pid")?)),
-            Request::ConnectContainer(container_id) => Ok(Response::ConnectContainer(
+            TaskRequest::Pid => Ok(TaskResponse::Pid(cm.pid().await.context("pid")?)),
+            TaskRequest::ConnectContainer(container_id) => Ok(TaskResponse::ConnectContainer(
                 cm.connect_container(&container_id)
                     .await
                     .context("connect")?,
@@ -445,16 +543,29 @@ impl RuntimeHandlerManager {
     }
 }
 
+fn init_runtime_config() -> Result<()> {
+    info!(sl!(), "init runtime config");
+
+    #[cfg(feature = "linux")]
+    LinuxContainer::init().context("init linux container")?;
+    #[cfg(feature = "wasm")]
+    WasmContainer::init().context("init wasm container")?;
+    #[cfg(feature = "virt")]
+    VirtContainer::init().context("init virt container")?;
+
+    Ok(())
+}
+
 /// Config override ordering(high to low):
 /// 1. podsandbox annotation
 /// 2. environment variable
 /// 3. shimv2 create task option
 /// 4. If above three are not set, then get default path from DEFAULT_RUNTIME_CONFIGURATIONS
 /// in kata-containers/src/libs/kata-types/src/config/default.rs, in array order.
-#[instrument]
-fn load_config(spec: &oci::Spec, option: &Option<Vec<u8>>) -> Result<TomlConfig> {
+fn load_toml_config(spec: Option<&oci::Spec>, option: Option<Vec<u8>>) -> Result<TomlConfig> {
     const KATA_CONF_FILE: &str = "KATA_CONF_FILE";
-    let annotation = Annotation::new(spec.annotations.clone());
+    let annotation =
+        Annotation::new(spec.map_or_else(HashMap::new, |spec| spec.annotations.clone()));
     let config_path = if let Some(path) = annotation.get_sandbox_config_path() {
         path
     } else if let Ok(path) = std::env::var(KATA_CONF_FILE) {
@@ -471,7 +582,7 @@ fn load_config(spec: &oci::Spec, option: &Option<Vec<u8>>) -> Result<TomlConfig>
     };
     info!(sl!(), "get config path {:?}", &config_path);
     let (mut toml_config, _) =
-        TomlConfig::load_from_file(&config_path).context("load toml config")?;
+        TomlConfig::load_from_file(&config_path).context("load toml config from file")?;
     annotation.update_config_by_annotation(&mut toml_config)?;
     update_agent_kernel_params(&mut toml_config)?;
 
@@ -486,11 +597,13 @@ fn load_config(spec: &oci::Spec, option: &Option<Vec<u8>>) -> Result<TomlConfig>
     //   2. If this is not a sandbox infrastructure container, but instead a standalone single container (analogous to "docker run..."),
     //	then the container spec itself will contain appropriate sizing information for the entire sandbox (since it is
     //	a single container.
-    let initial_size_manager =
-        InitialSizeManager::new(spec).context("failed to construct static resource manager")?;
-    initial_size_manager
-        .setup_config(&mut toml_config)
-        .context("failed to setup static resource mgmt config")?;
+    if let Some(spec) = spec {
+        let initial_size_manager =
+            InitialSizeManager::new(spec).context("failed to construct static resource manager")?;
+        initial_size_manager
+            .setup_config(&mut toml_config)
+            .context("failed to setup static resource mgmt config")?;
+    };
 
     info!(sl!(), "get config content {:?}", &toml_config);
     Ok(toml_config)

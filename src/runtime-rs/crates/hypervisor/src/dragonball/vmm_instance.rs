@@ -24,6 +24,7 @@ use dragonball::{
 };
 use nix::sched::{setns, CloneFlags};
 use seccompiler::BpfProgram;
+use tokio::sync::mpsc;
 use vmm_sys_util::eventfd::EventFd;
 
 use crate::ShareFsOperation;
@@ -45,10 +46,11 @@ pub struct VmmInstance {
     to_vmm_fd: EventFd,
     seccomp: BpfProgram,
     vmm_thread: Option<thread::JoinHandle<Result<i32>>>,
+    tx: Option<mpsc::Sender<i32>>,
 }
 
 impl VmmInstance {
-    pub fn new(id: &str) -> Self {
+    pub fn new(id: &str, tx: mpsc::Sender<i32>) -> Self {
         let vmm_shared_info = Arc::new(RwLock::new(InstanceInfo::new(
             String::from(id),
             DRAGONBALL_VERSION.to_string(),
@@ -64,6 +66,7 @@ impl VmmInstance {
             to_vmm_fd,
             seccomp: vec![],
             vmm_thread: None,
+            tx: Some(tx),
         }
     }
 
@@ -119,6 +122,8 @@ impl VmmInstance {
         .expect("Failed to start vmm");
         let vmm_shared_info = self.get_shared_info();
 
+        let tx = self.tx.take().unwrap();
+
         self.vmm_thread = Some(
             thread::Builder::new()
                 .name("vmm_master".to_owned())
@@ -138,6 +143,13 @@ impl VmmInstance {
                         let exit_code =
                             Vmm::run_vmm_event_loop(Arc::new(Mutex::new(vmm)), vmm_service);
                         debug!(sl!(), "run vmm thread exited: {}", exit_code);
+
+                        tx.blocking_send(exit_code)
+                            .map_err(|e| {
+                                error!(sl!(), "vmm-master thread fail to send. {:?}", e);
+                            })
+                            .ok();
+
                         Ok(exit_code)
                     }()
                     .map_err(|e| {
