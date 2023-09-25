@@ -308,7 +308,6 @@ function configure_containerd_runtime() {
 		cat <<EOF | tee -a "$containerd_conf_file"
 [$runtime_table]
   runtime_type = "${runtime_type}"
-  cri_handler = "cc"
   snapshotter = "${SNAPSHOTTER}"
   privileged_without_host_devices = true
   pod_annotations = ["io.katacontainers.*"]
