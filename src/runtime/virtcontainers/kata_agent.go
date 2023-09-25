@@ -1574,7 +1574,11 @@ func handleImageGuestPullBlockVolume(c *Container, virtualVolumeInfo *types.Kata
 			}
 		}
 		virtualVolumeInfo.Source = image_ref
-		virtualVolumeInfo.ImagePull.Metadata = container_annotations
+
+		//merge virtualVolumeInfo.ImagePull.Metadata and container_annotations
+		for k, v := range container_annotations {
+			virtualVolumeInfo.ImagePull.Metadata[k] = v
+		}
 	}
 
 	no, err := json.Marshal(virtualVolumeInfo.ImagePull)
