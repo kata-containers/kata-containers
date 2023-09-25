@@ -946,22 +946,21 @@ allow_storages(policy_storages, input_storages, bundle_id, sandbox_id) {
     print("allow_storages: policy_count =", policy_count, "input_count =", input_count)
     policy_count == input_count
 
-    some i, input_storage in input_storages
-    allow_input_storage(i, input_storage, policy_storages, policy_count, bundle_id, sandbox_id)
+    every i, input_storage in input_storages {
+        allow_input_storage(i, input_storage, policy_storages, bundle_id, sandbox_id)
+    }
 
     print("allow_storages: success")
 }
 
-allow_input_storage(i, input_storage, policy_storages, count, bundle_id, sandbox_id) {
+allow_input_storage(i, input_storage, policy_storages, bundle_id, sandbox_id) {
     print("allow_input_storage: i =", i, "input_storage =", input_storage)
 
     policy_storage := policy_storages[i]
     print("allow_input_storage: i =", i, "policy_storage =", policy_storage)
-
     storages_match(policy_storage, input_storage, bundle_id, sandbox_id)
 
-    # Stop when reaching the last element of the storages array.
-    i == count - 1
+    print("allow_input_storage: i =", i, "success")
 }
 
 storages_match(policy_storage, input_storage, bundle_id, sandbox_id) {
@@ -1018,6 +1017,8 @@ allow_storage_options(policy_options, input_options, driver) {
     every i, policy_id in policy_ids {
         allow_overlay_layer(i, policy_id, policy_hashes[i], input_options[i + 1])
     }
+
+    print("allow_storage_options 2: success")
 }
 
 allow_overlay_layer(i, policy_id, policy_hash, input_option) {
