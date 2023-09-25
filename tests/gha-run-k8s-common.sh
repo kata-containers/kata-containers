@@ -225,6 +225,26 @@ function setup_crio() {
 	curl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/${os}/Release.key | sudo apt-key add -
 	sudo apt update
 	sudo apt install -y cri-o cri-o-runc
+
+	# We need to set the default capabilities to ensure our tests will pass
+	# See: https://github.com/kata-containers/kata-containers/issues/8034
+	sudo mkdir -p /etc/crio/crio.conf.d/
+	cat <<EOF | sudo tee /etc/crio/crio.conf.d/00-default-capabilities
+[crio.runtime]
+default_capabilities = [
+       "CHOWN",
+       "DAC_OVERRIDE",
+       "FSETID",
+       "FOWNER",
+       "SETGID",
+       "SETUID",
+       "SETPCAP",
+       "NET_BIND_SERVICE",
+       "KILL",
+       "SYS_CHROOT",
+]
+EOF
+
 	sudo systemctl enable --now crio
 }
 
