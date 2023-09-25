@@ -23,6 +23,8 @@ function main() {
 	cmds=("bc" "jq")
 	check_cmds "${cmds[@]}"
 
+	init_env
+
 	# Check no processes are left behind
 	check_processes
 
@@ -80,6 +82,7 @@ EOF
 	metrics_json_save
 
 	kubectl delete pod "$client_pod_name" "$server_pod_name"
+	kubectl get pods -A
 	check_processes
 }
 main "$@"
