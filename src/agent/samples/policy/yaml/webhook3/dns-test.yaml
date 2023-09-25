@@ -68,7 +68,6 @@ spec:
   dnsPolicy: ClusterFirst
   enableServiceLinks: true
   hostname: dns-querier-1
-  nodeName: aks-nodepool1-34589256-vmss000000
   nodeSelector:
     katacontainers.io/kata-runtime: "true"
   overhead:
