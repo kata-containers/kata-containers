@@ -485,6 +485,7 @@ components:
             iommu: false
             queue_size: 5
             vhost_socket: vhost_socket
+            serial: serial
             vhost_user: false
             direct: false
             rate_limiter_config:
@@ -504,6 +505,7 @@ components:
             iommu: false
             queue_size: 5
             vhost_socket: vhost_socket
+            serial: serial
             vhost_user: false
             direct: false
             rate_limiter_config:
@@ -847,6 +849,7 @@ components:
           iommu: false
           queue_size: 5
           vhost_socket: vhost_socket
+          serial: serial
           vhost_user: false
           direct: false
           rate_limiter_config:
@@ -866,6 +869,7 @@ components:
           iommu: false
           queue_size: 5
           vhost_socket: vhost_socket
+          serial: serial
           vhost_user: false
           direct: false
           rate_limiter_config:
@@ -1429,6 +1433,7 @@ components:
         iommu: false
         queue_size: 5
         vhost_socket: vhost_socket
+        serial: serial
         vhost_user: false
         direct: false
         rate_limiter_config:
@@ -1470,6 +1475,8 @@ components:
           format: int16
           type: integer
         id:
+          type: string
+        serial:
           type: string
       required:
       - path
