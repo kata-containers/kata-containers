@@ -438,12 +438,10 @@ allow_process(policy_oci, input_oci, sandbox_name) {
     print("allow_process: input cwd =", input_process.Cwd, "policy cwd =", policy_process.Cwd)
     policy_process.Cwd              == input_process.Cwd
 
-    print("allow_process: input capabilities =", input_process.Capabilities)
-    print("allow_process: policy capabilities =", policy_process.Capabilities)
-    policy_process.Capabilities     == input_process.Capabilities
-
     print("allow_process: input noNewPrivileges =", input_process.NoNewPrivileges, "policy noNewPrivileges =", policy_process.NoNewPrivileges)
     policy_process.NoNewPrivileges  == input_process.NoNewPrivileges
+
+    allow_caps(policy_process.Capabilities, input_process.Capabilities)
 
     print("allow_process: allow_user")
     allow_user(policy_process, input_process)
@@ -1137,6 +1135,54 @@ allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id, layer_id
     regex.match(mount2, input_storage.mount_point)
 
     print("allow_mount_point 4: success")
+}
+
+allow_caps(policy_caps, input_caps) {
+    print("allow_caps: policy Ambient =", policy_caps.Ambient)
+    print("allow_caps: input Ambient =", input_caps.Ambient)
+    match_caps(policy_caps.Ambient, input_caps.Ambient)
+
+    print("allow_caps: policy Bounding =", policy_caps.Bounding)
+    print("allow_caps: input Bounding =", input_caps.Bounding)
+    match_caps(policy_caps.Bounding, input_caps.Bounding)
+
+    print("allow_caps: policy Inheritable =", policy_caps.Inheritable)
+    print("allow_caps: input Inheritable =", input_caps.Inheritable)
+    match_caps(policy_caps.Inheritable, input_caps.Inheritable)
+
+    print("allow_caps: policy Permitted =", policy_caps.Permitted)
+    print("allow_caps: input Permitted =", input_caps.Permitted)
+    match_caps(policy_caps.Permitted, input_caps.Permitted)
+}
+
+match_caps(policy_caps, input_caps) {
+    print("match_caps 1: start")
+
+    policy_caps == input_caps
+
+    print("match_caps 1: success")
+}
+match_caps(policy_caps, input_caps) {
+    print("match_caps 2: start")
+
+    count(policy_caps) == 1
+    policy_caps[0] == "$(default_caps)"
+
+    print("match_caps 2: default_caps =", policy_data.common.default_caps)
+    policy_data.common.default_caps == input_caps
+
+    print("match_caps 2: success")
+}
+match_caps(policy_caps, input_caps) {
+    print("match_caps 3: start")
+
+    count(policy_caps) == 1
+    policy_caps[0] == "$(privileged_caps)"
+
+    print("match_caps 3: privileged_caps =", policy_data.common.privileged_caps)
+    policy_data.common.privileged_caps == input_caps
+
+    print("match_caps 3: success")
 }
 
 ######################################################################

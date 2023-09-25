@@ -292,6 +292,7 @@ pub struct RequestDefaults {
     pub WriteStreamRequest: bool,
 }
 
+/// Struct used to read data from data.json and transfer that data into the policy.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CommonData {
     /// Path to the shared container files - e.g., "/run/kata-containers/shared/containers".
@@ -299,6 +300,12 @@ pub struct CommonData {
 
     /// Regex prefix for shared file paths - e.g., "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-".
     pub sfprefix: String,
+
+    /// Default capabilities for a non-privileged container.
+    pub default_caps: Vec<String>,
+
+    /// Default capabilities for a privileged container.
+    pub privileged_caps: Vec<String>,
 }
 
 impl AgentPolicy {
@@ -478,10 +485,10 @@ impl AgentPolicy {
         // Start with the Default Unix Spec from
         // https://github.com/containerd/containerd/blob/release/1.6/oci/spec.go#L132
         let is_privileged = yaml_container.is_privileged();
-        let mut process = containerd::get_process(is_privileged);
+        let mut process = containerd::get_process(is_privileged, &self.infra_policy.common);
 
         if let Some(capabilities) = &mut process.Capabilities {
-            yaml_container.apply_capabilities(capabilities);
+            yaml_container.apply_capabilities(capabilities, &self.infra_policy.common);
         }
 
         let (yaml_has_command, yaml_has_args) = yaml_container.get_process_args(&mut process.Args);

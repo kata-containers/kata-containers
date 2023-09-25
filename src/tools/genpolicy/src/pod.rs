@@ -692,7 +692,11 @@ impl yaml::K8sResource for Pod {
 }
 
 impl Container {
-    pub fn apply_capabilities(&self, capabilities: &mut policy::KataLinuxCapabilities) {
+    pub fn apply_capabilities(
+        &self,
+        capabilities: &mut policy::KataLinuxCapabilities,
+        defaults: &policy::CommonData,
+    ) {
         if let Some(securityContext) = &self.securityContext {
             if let Some(yaml_capabilities) = &securityContext.capabilities {
                 if let Some(drop) = &yaml_capabilities.drop {
@@ -727,5 +731,30 @@ impl Container {
                 }
             }
         }
+        compress_default_capabilities(capabilities, defaults);
+    }
+}
+
+fn compress_default_capabilities(
+    capabilities: &mut policy::KataLinuxCapabilities,
+    defaults: &policy::CommonData,
+) {
+    compress_capabilities(&mut capabilities.Bounding, defaults);
+    compress_capabilities(&mut capabilities.Permitted, defaults);
+    compress_capabilities(&mut capabilities.Effective, defaults);
+}
+
+fn compress_capabilities(capabilities: &mut Vec<String>, defaults: &policy::CommonData) {
+    let default_caps = if capabilities == &defaults.default_caps {
+        "$(default_caps)"
+    } else if capabilities == &defaults.privileged_caps {
+        "$(privileged_caps)"
+    } else {
+        ""
+    };
+
+    if default_caps.len() != 0 {
+        capabilities.clear();
+        capabilities.push(default_caps.to_string());
     }
 }
