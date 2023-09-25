@@ -946,14 +946,22 @@ allow_storages(policy_storages, input_storages, bundle_id, sandbox_id) {
     print("allow_storages: policy_count =", policy_count, "input_count =", input_count)
     policy_count == input_count
 
+    # Get the container image layer IDs, from the "overlayfs" storage.
+    some overlay_storage in policy_storages
+    overlay_storage.driver == "overlayfs"
+    print("allow_storages: overlay_storage =", overlay_storage)
+    count(overlay_storage.options) == 2
+    layer_ids := split(overlay_storage.options[0], ":")
+    print("allow_storages: layer_ids =", layer_ids)
+
     every i, input_storage in input_storages {
-        allow_storage(policy_storages[i], input_storage, bundle_id, sandbox_id)
+        allow_storage(policy_storages[i], input_storage, bundle_id, sandbox_id, layer_ids)
     }
 
     print("allow_storages: success")
 }
 
-allow_storage(policy_storage, input_storage, bundle_id, sandbox_id) {
+allow_storage(policy_storage, input_storage, bundle_id, sandbox_id, layer_ids) {
     print("allow_storage: policy_storage =", policy_storage)
     print("allow_storage: input_storage =", input_storage)
 
@@ -961,27 +969,28 @@ allow_storage(policy_storage, input_storage, bundle_id, sandbox_id) {
     policy_storage.driver_options   == input_storage.driver_options
     policy_storage.fs_group         == input_storage.fs_group
 
-    allow_storage_options(policy_storage.options, input_storage.options, policy_storage.driver)
-    allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id)
+    allow_storage_options(policy_storage, input_storage, layer_ids)
+    allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id, layer_ids)
 
     # TODO: validate the source field too.
 
     print("allow_storage: success")
 }
 
-allow_storage_options(policy_options, input_options, driver) {
-    policy_options == input_options
+allow_storage_options(policy_storage, input_storage, layer_ids) {
+    policy_storage.options == input_storage.options
     print("allow_storage_options 1: success")
 }
-allow_storage_options(policy_options, input_options, driver) {
-    print("allow_storage_options 2: driver =", driver)
-    driver == "overlayfs"
-    count(policy_options) == 2
+allow_storage_options(policy_storage, input_storage, layer_ids) {
+    print("allow_storage_options 2: driver =", policy_storage.driver)
+    policy_storage.driver == "overlayfs"
+    count(policy_storage.options) == 2
 
-    policy_ids := split(policy_options[0], ":")
+    policy_ids := split(policy_storage.options[0], ":")
     print("allow_storage_options 2: policy_ids =", policy_ids)
+    policy_ids == layer_ids
 
-    policy_hashes := split(policy_options[1], ":")
+    policy_hashes := split(policy_storage.options[1], ":")
     print("allow_storage_options 2: policy_hashes =", policy_hashes)
 
     policy_count := count(policy_ids)
@@ -989,69 +998,82 @@ allow_storage_options(policy_options, input_options, driver) {
     policy_count >= 1
     policy_count == count(policy_hashes)
 
-    input_count := count(input_options)
+    input_count := count(input_storage.options)
     print("allow_storage_options 2: input_count =", input_count)
     input_count == policy_count + 3
 
-    print("allow_storage_options 2: input_options[0] =", input_options[0])
-    input_options[0] == "io.katacontainers.fs-opt.layer-src-prefix=/var/lib/containerd/io.containerd.snapshotter.v1.tardev/layers"
+    print("allow_storage_options 2: input_storage.options[0] =", input_storage.options[0])
+    input_storage.options[0] == "io.katacontainers.fs-opt.layer-src-prefix=/var/lib/containerd/io.containerd.snapshotter.v1.tardev/layers"
 
-    print("allow_storage_options 2: input_options[input_count - 2] =", input_options[input_count - 2])
-    input_options[input_count - 2] == "io.katacontainers.fs-opt.overlay-rw"
+    print("allow_storage_options 2: input_storage.options[input_count - 2] =", input_storage.options[input_count - 2])
+    input_storage.options[input_count - 2] == "io.katacontainers.fs-opt.overlay-rw"
 
-    lowerdir := concat("=", ["lowerdir", policy_options[0]])
+    lowerdir := concat("=", ["lowerdir", policy_storage.options[0]])
     print("allow_storage_options 2: lowerdir =", lowerdir)
 
-    input_options[input_count - 1] == lowerdir
-    print("allow_storage_options 2: input_options[input_count - 1] =", input_options[input_count - 1])
+    input_storage.options[input_count - 1] == lowerdir
+    print("allow_storage_options 2: input_storage.options[input_count - 1] =", input_storage.options[input_count - 1])
 
     every i, policy_id in policy_ids {
-        allow_overlay_layer(i, policy_id, policy_hashes[i], input_options[i + 1])
+        allow_overlay_layer(policy_id, policy_hashes[i], input_storage.options[i + 1])
     }
 
     print("allow_storage_options 2: success")
 }
 
-allow_overlay_layer(i, policy_id, policy_hash, input_option) {
-    print("allow_overlay_layer: i =", i, "policy_id =", policy_id, "policy_hash =", policy_hash)
-    print("allow_overlay_layer: i =", i, "input_option =", input_option)
+allow_overlay_layer(policy_id, policy_hash, input_option) {
+    print("allow_overlay_layer: policy_id =", policy_id, "policy_hash =", policy_hash)
+    print("allow_overlay_layer: input_option =", input_option)
 
     startswith(input_option, "io.katacontainers.fs-opt.layer=")
     input_value := replace(input_option, "io.katacontainers.fs-opt.layer=", "")
     input_value_decoded := base64.decode(input_value)
-    print("allow_overlay_layer: i =", i, "input_value_decoded =", input_value_decoded)
+    print("allow_overlay_layer: input_value_decoded =", input_value_decoded)
 
     policy_suffix := concat("=", ["tar,ro,io.katacontainers.fs-opt.block_device=file,io.katacontainers.fs-opt.is-layer,io.katacontainers.fs-opt.root-hash", policy_hash])
     policy_value := concat(",", [policy_id, policy_suffix])
-    print("allow_overlay_layer: i =", i, "policy_value =", policy_value)
+    print("allow_overlay_layer: policy_value =", policy_value)
 
     policy_value == input_value_decoded
 
-    print("allow_overlay_layer: i =", i, "success")
+    print("allow_overlay_layer: success")
 }
 
-allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id) {
-    print("allow_mount_point 1: fstype == tar")
+allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id, layer_ids) {
+    print("allow_mount_point 1: input_storage.mount_point =", input_storage.mount_point)
     policy_storage.fstype == "tar"
 
-    print("allow_mount_point 1: policy_storage.mount_point == input_storage.mount_point")
-    policy_storage.mount_point == input_storage.mount_point
+    startswith(policy_storage.mount_point, "$(layer")
+    mount_suffix := trim_left(policy_storage.mount_point, "$(layer")
+
+    endswith(mount_suffix, ")")
+    layer_index := trim_right(mount_suffix, ")")
+    i := to_number(layer_index)
+    print("allow_mount_point 1: i =", i)
+
+    layer_id := layer_ids[i]
+    print("allow_mount_point 1: layer_id =", layer_id)
+
+    policy_mount := concat("/", ["/run/kata-containers/sandbox/layers", layer_id])
+    print("allow_mount_point 1: policy_mount =", policy_mount)
+
+    policy_mount == input_storage.mount_point
 
     print("allow_mount_point 1: success")
 }
-allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id) {
-    print("allow_mount_point 2: fstype == fuse3.kata-overlay")
+allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id, layer_ids) {
+    print("allow_mount_point 2: input_storage.mount_point =", input_storage.mount_point)
     policy_storage.fstype == "fuse3.kata-overlay"
 
-    policy_mount_point := replace(policy_storage.mount_point, "$(bundle-id)", bundle_id)
-    print("allow_mount_point 2: policy_mount_point =", policy_mount_point)
+    policy_mount := replace(policy_storage.mount_point, "$(bundle-id)", bundle_id)
+    print("allow_mount_point 2: policy_mount =", policy_mount)
 
-    policy_mount_point == input_storage.mount_point
+    policy_mount == input_storage.mount_point
 
     print("allow_mount_point 2: success")
 }
-allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id) {
-    print("allow_mount_point 3: fstype == local")
+allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id, layer_ids) {
+    print("allow_mount_point 3: input_storage.mount_point =", input_storage.mount_point)
     policy_storage.fstype == "local"
 
     mount_point_regex := replace(policy_storage.mount_point, "$(sandbox-id)", sandbox_id)
@@ -1061,8 +1083,8 @@ allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id) {
 
     print("allow_mount_point 3: success")
 }
-allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id) {
-    print("allow_mount_point 4: fstype == bind")
+allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id, layer_ids) {
+    print("allow_mount_point 4: input_storage.mount_point =", input_storage.mount_point)
     policy_storage.fstype == "bind"
 
     mount_point_regex := replace(policy_storage.mount_point, "$(bundle-id)", bundle_id)

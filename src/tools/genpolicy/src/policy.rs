@@ -580,10 +580,11 @@ fn get_image_layer_storages(
         let mut new_storages: Vec<SerializedStorage> = Vec::new();
 
         // TODO: load this path from data.json.
-        let layers_path = "/run/kata-containers/sandbox/layers/".to_string();
         let mut layer_names: Vec<String> = Vec::new();
         let mut layer_hashes: Vec<String> = Vec::new();
         let mut previous_chain_id = String::new();
+        let mut layer_index = 0;
+        let layers_count = image_layers.len();
 
         for layer in image_layers {
             // See https://github.com/opencontainers/image-spec/blob/main/config.md#layer-chainid
@@ -614,12 +615,13 @@ fn get_image_layer_storages(
                 source: String::new(), // TODO
                 fstype: "tar".to_string(),
                 options,
-                mount_point: layers_path.clone() + &layer_name,
+                mount_point: format!("$(layer{})", layers_count - 1 - layer_index),
                 fs_group: None,
             });
 
             layer_names.push(layer_name);
             layer_hashes.push(layer.verity_hash.to_string());
+            layer_index += 1;
         }
 
         new_storages.reverse();
