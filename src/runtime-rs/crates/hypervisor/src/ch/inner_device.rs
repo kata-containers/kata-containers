@@ -26,7 +26,37 @@ const DEFAULT_DISK_QUEUE_SIZE: u16 = 1024;
 impl CloudHypervisorInner {
     pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<()> {
         if self.state != VmmState::VmRunning {
-            self.pending_devices.insert(0, device);
+            // If the VM is not running, add the device to the pending list to
+            // be handled later.
+            //
+            // Note that the only device types considered are DeviceType::ShareFs
+            // and DeviceType::Network since:
+            //
+            // - ShareFs (virtiofsd) is only needed in an non-DM and non-TDX scenario
+            //   for the container rootfs.
+            //
+            // - For all other scenarios, the container rootfs is handled by a
+            //   DeviceType::Block and this method is called *after* the VM
+            //   has started so the device does not need to be added to the
+            //   pending list.
+            //
+            // - The VM rootfs is handled without waiting for calls to this
+            //   method as the file in question (image= or initrd=) is available
+            //   from HypervisorConfig.BootInfo.{image,initrd}
+            //   (see 'convert.rs').
+            //
+            // - Network details need to be saved for later application.
+            //
+            match device {
+                DeviceType::ShareFs(_) => self.pending_devices.insert(0, device),
+                DeviceType::Network(_) => self.pending_devices.insert(0, device),
+                _ => {
+                    debug!(
+                        sl!(),
+                        "ignoring early add device request for device: {:?}", device
+                    );
+                }
+            }
 
             return Ok(());
         }
