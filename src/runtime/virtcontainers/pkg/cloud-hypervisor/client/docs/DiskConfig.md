@@ -15,6 +15,7 @@ Name | Type | Description | Notes
 **RateLimiterConfig** | Pointer to [**RateLimiterConfig**](RateLimiterConfig.md) |  | [optional] 
 **PciSegment** | Pointer to **int32** |  | [optional] 
 **Id** | Pointer to **string** |  | [optional] 
+**Serial** | Pointer to **string** |  | [optional] 
 
 ## Methods
 
@@ -304,6 +305,31 @@ SetId sets Id field to given value.
 `func (o *DiskConfig) HasId() bool`
 
 HasId returns a boolean if a field has been set.
+
+### GetSerial
+
+`func (o *DiskConfig) GetSerial() string`
+
+GetSerial returns the Serial field if non-nil, zero value otherwise.
+
+### GetSerialOk
+
+`func (o *DiskConfig) GetSerialOk() (*string, bool)`
+
+GetSerialOk returns a tuple with the Serial field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetSerial
+
+`func (o *DiskConfig) SetSerial(v string)`
+
+SetSerial sets Serial field to given value.
+
+### HasSerial
+
+`func (o *DiskConfig) HasSerial() bool`
+
+HasSerial returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
