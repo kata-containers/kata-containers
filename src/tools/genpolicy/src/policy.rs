@@ -583,8 +583,8 @@ fn get_image_layer_storages(
         let mut layer_names: Vec<String> = Vec::new();
         let mut layer_hashes: Vec<String> = Vec::new();
         let mut previous_chain_id = String::new();
-        let mut layer_index = 0;
         let layers_count = image_layers.len();
+        let mut layer_index = layers_count;
 
         for layer in image_layers {
             // See https://github.com/opencontainers/image-spec/blob/main/config.md#layer-chainid
@@ -601,27 +601,19 @@ fn get_image_layer_storages(
             );
             previous_chain_id = chain_id.clone();
 
-            let options = vec![
-                "ro".to_string(),
-                "io.katacontainers.fs-opt.block_device=file".to_string(),
-                "io.katacontainers.fs-opt.is-layer".to_string(),
-                "io.katacontainers.fs-opt.root-hash=".to_string() + &layer.verity_hash,
-            ];
-            let layer_name = name_to_hash(&chain_id);
+            layer_names.push(name_to_hash(&chain_id));
+            layer_hashes.push(layer.verity_hash.to_string());
+            layer_index -= 1;
 
             new_storages.push(SerializedStorage {
                 driver: "blk".to_string(),
                 driver_options: Vec::new(),
                 source: String::new(), // TODO
                 fstype: "tar".to_string(),
-                options,
-                mount_point: format!("$(layer{})", layers_count - 1 - layer_index),
+                options: vec![format!("$(hash{layer_index})")],
+                mount_point: format!("$(layer{layer_index})"),
                 fs_group: None,
             });
-
-            layer_names.push(layer_name);
-            layer_hashes.push(layer.verity_hash.to_string());
-            layer_index += 1;
         }
 
         new_storages.reverse();

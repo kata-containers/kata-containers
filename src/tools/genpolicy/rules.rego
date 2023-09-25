@@ -946,22 +946,26 @@ allow_storages(policy_storages, input_storages, bundle_id, sandbox_id) {
     print("allow_storages: policy_count =", policy_count, "input_count =", input_count)
     policy_count == input_count
 
-    # Get the container image layer IDs, from the "overlayfs" storage.
+    # Get the container image layer IDs and verity root hashes, from the "overlayfs" storage.
     some overlay_storage in policy_storages
     overlay_storage.driver == "overlayfs"
     print("allow_storages: overlay_storage =", overlay_storage)
     count(overlay_storage.options) == 2
+
     layer_ids := split(overlay_storage.options[0], ":")
     print("allow_storages: layer_ids =", layer_ids)
 
+    root_hashes := split(overlay_storage.options[1], ":")
+    print("allow_storages: root_hashes =", root_hashes)
+
     every i, input_storage in input_storages {
-        allow_storage(policy_storages[i], input_storage, bundle_id, sandbox_id, layer_ids)
+        allow_storage(policy_storages[i], input_storage, bundle_id, sandbox_id, layer_ids, root_hashes)
     }
 
     print("allow_storages: success")
 }
 
-allow_storage(policy_storage, input_storage, bundle_id, sandbox_id, layer_ids) {
+allow_storage(policy_storage, input_storage, bundle_id, sandbox_id, layer_ids, root_hashes) {
     print("allow_storage: policy_storage =", policy_storage)
     print("allow_storage: input_storage =", input_storage)
 
@@ -969,7 +973,7 @@ allow_storage(policy_storage, input_storage, bundle_id, sandbox_id, layer_ids) {
     policy_storage.driver_options   == input_storage.driver_options
     policy_storage.fs_group         == input_storage.fs_group
 
-    allow_storage_options(policy_storage, input_storage, layer_ids)
+    allow_storage_options(policy_storage, input_storage, layer_ids, root_hashes)
     allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id, layer_ids)
 
     # TODO: validate the source field too.
@@ -977,12 +981,18 @@ allow_storage(policy_storage, input_storage, bundle_id, sandbox_id, layer_ids) {
     print("allow_storage: success")
 }
 
-allow_storage_options(policy_storage, input_storage, layer_ids) {
+allow_storage_options(policy_storage, input_storage, layer_ids, root_hashes) {
+    print("allow_storage_options 1: starting")
+
+    policy_storage.driver != "blk"
+    policy_storage.driver != "overlayfs"
     policy_storage.options == input_storage.options
+
     print("allow_storage_options 1: success")
 }
-allow_storage_options(policy_storage, input_storage, layer_ids) {
-    print("allow_storage_options 2: driver =", policy_storage.driver)
+allow_storage_options(policy_storage, input_storage, layer_ids, root_hashes) {
+    print("allow_storage_options 2: starting")
+
     policy_storage.driver == "overlayfs"
     count(policy_storage.options) == 2
 
@@ -1019,6 +1029,31 @@ allow_storage_options(policy_storage, input_storage, layer_ids) {
     }
 
     print("allow_storage_options 2: success")
+}
+allow_storage_options(policy_storage, input_storage, layer_ids, root_hashes) {
+    print("allow_storage_options 3: starting")
+
+    policy_storage.driver == "blk"
+    count(policy_storage.options) == 1
+
+    startswith(policy_storage.options[0], "$(hash")
+    hash_suffix := trim_left(policy_storage.options[0], "$(hash")
+
+    endswith(hash_suffix, ")")
+    hash_index := trim_right(hash_suffix, ")")
+    i := to_number(hash_index)
+    print("allow_storage_options 3: i =", i)
+
+    hash_option := concat("=", ["io.katacontainers.fs-opt.root-hash", root_hashes[i]])
+    print("allow_storage_options 3: hash_option =", hash_option)
+
+    count(input_storage.options) == 4
+    input_storage.options[0] == "ro"
+    input_storage.options[1] == "io.katacontainers.fs-opt.block_device=file"
+    input_storage.options[2] == "io.katacontainers.fs-opt.is-layer"
+    input_storage.options[3] == hash_option
+
+    print("allow_storage_options 3: success")
 }
 
 allow_overlay_layer(policy_id, policy_hash, input_option) {
