@@ -1,10 +1,10 @@
 {
     "shared_files": {
-        "source_path": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-"
+        "source_path": "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-"
     },
     "pause_container": {
         "Root": {
-            "Path": "/run/kata-containers/shared/containers/$(bundle-id)",
+            "Path": "$(cpath)/$(bundle-id)",
             "Readonly": true
         },
         "Mounts": [
@@ -31,7 +31,7 @@
     },
     "other_container": {
         "Root": {
-            "Path": "/run/kata-containers/shared/containers/$(bundle-id)"
+            "Path": "$(cpath)/$(bundle-id)"
         },
         "Mounts": [
             {
@@ -87,7 +87,7 @@
             },
             {
                 "destination": "/var/run/secrets/azure/tokens",
-                "source": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-tokens$",
+                "source": "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-tokens$",
                 "type_": "bind",
                 "options": [
                   "rbind",
@@ -100,8 +100,8 @@
     "volumes": {
         "emptyDir": {
             "mount_type": "local",
-            "mount_source": "^/run/kata-containers/shared/containers/$(sandbox-id)/local/",
-            "mount_point": "^/run/kata-containers/shared/containers/$(sandbox-id)/local/",
+            "mount_source": "^$(cpath)/$(sandbox-id)/local/",
+            "mount_point": "^$(cpath)/$(sandbox-id)/local/",
             "driver": "local",
             "source": "local",
             "fstype": "local",
@@ -111,8 +111,8 @@
         },
         "configMap": {
             "mount_type": "bind",
-            "mount_source": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-",
-            "mount_point": "^/run/kata-containers/shared/containers/watchable/$(bundle-id)-[a-z0-9]{16}-",
+            "mount_source": "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-",
+            "mount_point": "^$(cpath)/watchable/$(bundle-id)-[a-z0-9]{16}-",
             "driver": "watchable-bind",
             "fstype": "bind",
             "options": [
@@ -123,8 +123,8 @@
         },
         "confidential_configMap": {
             "mount_type": "bind",
-            "mount_source": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-",
-            "mount_point": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-",
+            "mount_source": "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-",
+            "mount_point": "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-",
             "driver": "local",
             "fstype": "bind",
             "options": [
@@ -133,6 +133,9 @@
                 "ro"
             ]
         }
+    },
+    "common": {
+        "cpath": "/run/kata-containers/shared/containers"
     },
     "kata_config": {
         "confidential_guest": true
@@ -147,7 +150,7 @@
             ]
         },
         "CopyFileRequest": [
-            "^/run/kata-containers/shared/containers/"
+            "^$(cpath)/"
         ],
         "ExecProcessRequest": [],
         "ReadStreamRequest": false,

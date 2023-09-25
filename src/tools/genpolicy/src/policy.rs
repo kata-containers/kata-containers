@@ -49,6 +49,7 @@ pub struct AgentPolicy {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PolicyData {
     pub containers: Vec<ContainerPolicy>,
+    pub common: CommonData,
     pub request_defaults: RequestDefaults,
 }
 
@@ -291,6 +292,12 @@ pub struct RequestDefaults {
     pub WriteStreamRequest: bool,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CommonData {
+    /// Path to the shared container files - e.g., "/run/kata-containers/shared/containers".
+    pub cpath: String,
+}
+
 impl AgentPolicy {
     pub async fn from_files(config: &utils::Config) -> Result<AgentPolicy> {
         let mut config_maps = Vec::new();
@@ -388,6 +395,7 @@ impl AgentPolicy {
         let policy_data = policy::PolicyData {
             containers: policy_containers,
             request_defaults: self.infra_policy.request_defaults.clone(),
+            common: self.infra_policy.common.clone(),
         };
 
         let json_data = serde_json::to_string_pretty(&policy_data).unwrap();

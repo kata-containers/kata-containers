@@ -57,6 +57,7 @@ pub struct InfraPolicy {
     shared_files: SharedFiles,
     kata_config: KataConfig,
     pub request_defaults: policy::RequestDefaults,
+    pub common: policy::CommonData,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

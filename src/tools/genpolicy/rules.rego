@@ -875,8 +875,9 @@ is_tcp_uri(value) {
 # OCI root.Path
 
 allow_root_path(policy_oci, input_oci, bundle_id) {
-    policy_path := replace(policy_oci.Root.Path, "$(bundle-id)", bundle_id)
-    policy_path == input_oci.Root.Path
+    policy_path1 := replace(policy_oci.Root.Path, "$(cpath)", policy_data.common.cpath)
+    policy_path2 := replace(policy_path1, "$(bundle-id)", bundle_id)
+    policy_path2 == input_oci.Root.Path
 }
 
 ######################################################################
@@ -918,21 +919,24 @@ policy_mount_allows(policy_mount, input_mount, bundle_id, sandbox_id) {
 }
 
 policy_mount_source_allows(policy_mount, input_mount, bundle_id, sandbox_id) {
-    # E.g., "source": "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-resolv.conf$",
-    policy_source_regex := replace(policy_mount.source, "$(bundle-id)", bundle_id)
-    print("policy_mount_source_allows 1: policy_source_regex =", policy_source_regex)
-
     print("policy_mount_source_allows 1: input_mount.source=", input_mount.source)
-    regex.match(policy_source_regex, input_mount.source)
+
+    regex1 := replace(policy_mount.source, "$(cpath)", policy_data.common.cpath)
+    regex2 := replace(regex1, "$(bundle-id)", bundle_id)
+    print("policy_mount_source_allows 1: regex2 =", regex2)
+
+    regex.match(regex2, input_mount.source)
 
     print("policy_mount_source_allows 1: success")
 }
 policy_mount_source_allows(policy_mount, input_mount, bundle_id, sandbox_id) {
-    # E.g., "source": "^/run/kata-containers/shared/containers/$(sandbox-id)/rootfs/local/data$",
-    policy_source_regex := replace(policy_mount.source, "$(sandbox-id)", sandbox_id)
+    print("policy_mount_source_allows 2: input_mount.source=", input_mount.source)
 
-    print("policy_mount_source_allows 2: policy_source_regex =", policy_source_regex, "input_mount.source=", input_mount.source)
-    regex.match(policy_source_regex, input_mount.source)
+    regex1 := replace(policy_mount.source, "$(cpath)", policy_data.common.cpath)
+    regex2 := replace(regex1, "$(sandbox-id)", sandbox_id)
+    print("policy_mount_source_allows 2: regex2 =", regex2)
+
+    regex.match(regex2, input_mount.source)
 
     print("policy_mount_source_allows 2: success")
 }
@@ -1100,10 +1104,11 @@ allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id, layer_id
     print("allow_mount_point 2: input_storage.mount_point =", input_storage.mount_point)
     policy_storage.fstype == "fuse3.kata-overlay"
 
-    policy_mount := replace(policy_storage.mount_point, "$(bundle-id)", bundle_id)
-    print("allow_mount_point 2: policy_mount =", policy_mount)
+    mount1 := replace(policy_storage.mount_point, "$(cpath)", policy_data.common.cpath)
+    mount2 := replace(mount1, "$(bundle-id)", bundle_id)
+    print("allow_mount_point 2: mount2 =", mount2)
 
-    policy_mount == input_storage.mount_point
+    mount2 == input_storage.mount_point
 
     print("allow_mount_point 2: success")
 }
@@ -1111,10 +1116,11 @@ allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id, layer_id
     print("allow_mount_point 3: input_storage.mount_point =", input_storage.mount_point)
     policy_storage.fstype == "local"
 
-    mount_point_regex := replace(policy_storage.mount_point, "$(sandbox-id)", sandbox_id)
-    print("allow_mount_point 3: mount_point_regex =", mount_point_regex)
+    mount1 := replace(policy_storage.mount_point, "$(cpath)", policy_data.common.cpath)
+    mount2 := replace(mount1, "$(sandbox-id)", sandbox_id)
+    print("allow_mount_point 3: mount2 =", mount2)
 
-    regex.match(mount_point_regex, input_storage.mount_point)
+    regex.match(mount2, input_storage.mount_point)
 
     print("allow_mount_point 3: success")
 }
@@ -1122,10 +1128,11 @@ allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id, layer_id
     print("allow_mount_point 4: input_storage.mount_point =", input_storage.mount_point)
     policy_storage.fstype == "bind"
 
-    mount_point_regex := replace(policy_storage.mount_point, "$(bundle-id)", bundle_id)
-    print("allow_mount_point 4: mount_point_regex =", mount_point_regex)
+    mount1 := replace(policy_storage.mount_point, "$(cpath)", policy_data.common.cpath)
+    mount2 := replace(mount1, "$(bundle-id)", bundle_id)
+    print("allow_mount_point 4: mount2 =", mount2)
 
-    regex.match(mount_point_regex, input_storage.mount_point)
+    regex.match(mount2, input_storage.mount_point)
 
     print("allow_mount_point 4: success")
 }
@@ -1134,8 +1141,9 @@ allow_mount_point(policy_storage, input_storage, bundle_id, sandbox_id, layer_id
 CopyFileRequest {
     print("CopyFileRequest: input.path =", input.path)
 
-    some policy_regex in policy_data.request_defaults.CopyFileRequest
-    regex.match(policy_regex, input.path)
+    some regex1 in policy_data.request_defaults.CopyFileRequest
+    regex2 := replace(regex1, "$(cpath)", policy_data.common.cpath)
+    regex.match(regex2, input.path)
 
     print("CopyFileRequest: success")
 }
