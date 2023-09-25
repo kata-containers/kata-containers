@@ -921,22 +921,24 @@ policy_mount_allows(policy_mount, input_mount, bundle_id, sandbox_id) {
 policy_mount_source_allows(policy_mount, input_mount, bundle_id, sandbox_id) {
     print("policy_mount_source_allows 1: input_mount.source=", input_mount.source)
 
-    regex1 := replace(policy_mount.source, "$(cpath)", policy_data.common.cpath)
-    regex2 := replace(regex1, "$(bundle-id)", bundle_id)
-    print("policy_mount_source_allows 1: regex2 =", regex2)
+    regex1 := replace(policy_mount.source, "$(sfprefix)", policy_data.common.sfprefix)
+    regex2 := replace(regex1, "$(cpath)", policy_data.common.cpath)
+    regex3 := replace(regex2, "$(bundle-id)", bundle_id)
+    print("policy_mount_source_allows 1: regex3 =", regex3)
 
-    regex.match(regex2, input_mount.source)
+    regex.match(regex3, input_mount.source)
 
     print("policy_mount_source_allows 1: success")
 }
 policy_mount_source_allows(policy_mount, input_mount, bundle_id, sandbox_id) {
     print("policy_mount_source_allows 2: input_mount.source=", input_mount.source)
 
-    regex1 := replace(policy_mount.source, "$(cpath)", policy_data.common.cpath)
-    regex2 := replace(regex1, "$(sandbox-id)", sandbox_id)
-    print("policy_mount_source_allows 2: regex2 =", regex2)
+    regex1 := replace(policy_mount.source, "$(sfprefix)", policy_data.common.sfprefix)
+    regex2 := replace(regex1, "$(cpath)", policy_data.common.cpath)
+    regex3 := replace(regex2, "$(sandbox-id)", sandbox_id)
+    print("policy_mount_source_allows 2: regex3 =", regex3)
 
-    regex.match(regex2, input_mount.source)
+    regex.match(regex3, input_mount.source)
 
     print("policy_mount_source_allows 2: success")
 }

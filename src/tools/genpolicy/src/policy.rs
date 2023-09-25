@@ -296,6 +296,9 @@ pub struct RequestDefaults {
 pub struct CommonData {
     /// Path to the shared container files - e.g., "/run/kata-containers/shared/containers".
     pub cpath: String,
+
+    /// Regex prefix for shared file paths - e.g., "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-".
+    pub sfprefix: String,
 }
 
 impl AgentPolicy {

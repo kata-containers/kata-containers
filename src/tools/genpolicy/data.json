@@ -1,7 +1,4 @@
 {
-    "shared_files": {
-        "source_path": "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-"
-    },
     "pause_container": {
         "Root": {
             "Path": "$(cpath)/$(bundle-id)",
@@ -87,7 +84,7 @@
             },
             {
                 "destination": "/var/run/secrets/azure/tokens",
-                "source": "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-tokens$",
+                "source": "$(sfprefix)tokens$",
                 "type_": "bind",
                 "options": [
                   "rbind",
@@ -111,7 +108,7 @@
         },
         "configMap": {
             "mount_type": "bind",
-            "mount_source": "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-",
+            "mount_source": "$(sfprefix)",
             "mount_point": "^$(cpath)/watchable/$(bundle-id)-[a-z0-9]{16}-",
             "driver": "watchable-bind",
             "fstype": "bind",
@@ -123,8 +120,8 @@
         },
         "confidential_configMap": {
             "mount_type": "bind",
-            "mount_source": "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-",
-            "mount_point": "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-",
+            "mount_source": "$(sfprefix)",
+            "mount_point": "$(sfprefix)",
             "driver": "local",
             "fstype": "bind",
             "options": [
@@ -135,7 +132,8 @@
         }
     },
     "common": {
-        "cpath": "/run/kata-containers/shared/containers"
+        "cpath": "/run/kata-containers/shared/containers",
+        "sfprefix": "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-"
     },
     "kata_config": {
         "confidential_guest": true

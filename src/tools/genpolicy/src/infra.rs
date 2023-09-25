@@ -54,7 +54,6 @@ pub struct InfraPolicy {
     pub pause_container: policy::KataSpec,
     pub other_container: policy::KataSpec,
     pub volumes: Volumes,
-    shared_files: SharedFiles,
     kata_config: KataConfig,
     pub request_defaults: policy::RequestDefaults,
     pub common: policy::CommonData,
@@ -87,11 +86,6 @@ pub struct ConfigMapVolume {
     pub driver: String,
     pub fstype: String,
     pub options: Vec<String>,
-}
-
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
-struct SharedFiles {
-    source_path: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -157,7 +151,7 @@ impl InfraPolicy {
                 if mount.source.is_empty() && mount.type_.eq("bind") {
                     if let Some(file_name) = Path::new(&mount.destination).file_name() {
                         if let Some(file_name) = file_name.to_str() {
-                            mount.source += &self.shared_files.source_path;
+                            mount.source = "$(sfprefix)".to_string();
                             mount.source += file_name;
                             mount.source += "$";
                         }
@@ -189,7 +183,10 @@ impl InfraPolicy {
     }
 }
 
-fn keep_infra_mount(infra_mount: &policy::KataMount, yaml_mounts: &Option<Vec<pod::VolumeMount>>) -> bool {
+fn keep_infra_mount(
+    infra_mount: &policy::KataMount,
+    yaml_mounts: &Option<Vec<pod::VolumeMount>>,
+) -> bool {
     if INFRA_MOUNT_DESTINATIONS
         .iter()
         .any(|&i| i == infra_mount.destination)
@@ -208,7 +205,10 @@ fn keep_infra_mount(infra_mount: &policy::KataMount, yaml_mounts: &Option<Vec<po
     false
 }
 
-pub fn add_annotations(annotations: &mut BTreeMap<String, String>, infra_policy: &policy::KataSpec) {
+pub fn add_annotations(
+    annotations: &mut BTreeMap<String, String>,
+    infra_policy: &policy::KataSpec,
+) {
     if let Some(infra_annotations) = &infra_policy.Annotations {
         for annotation in infra_annotations {
             annotations
@@ -380,7 +380,7 @@ impl InfraPolicy {
         propagation: &str,
         access: &str,
     ) {
-        let mut source = self.shared_files.source_path.clone();
+        let mut source = "$(sfprefix)".to_string();
         if let Some(byte_index) = str::rfind(&yaml_mount.mountPath, '/') {
             source += str::from_utf8(&yaml_mount.mountPath.as_bytes()[byte_index + 1..]).unwrap();
         } else {
@@ -531,7 +531,7 @@ impl InfraPolicy {
         yaml_mount: &pod::VolumeMount,
         policy_mounts: &mut Vec<policy::KataMount>,
     ) {
-        let mut source = self.shared_files.source_path.clone();
+        let mut source = "$(sfprefix)".to_string();
         if let Some(byte_index) = str::rfind(&yaml_mount.mountPath, '/') {
             source += str::from_utf8(&yaml_mount.mountPath.as_bytes()[byte_index + 1..]).unwrap();
         } else {
