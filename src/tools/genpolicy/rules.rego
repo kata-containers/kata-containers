@@ -947,24 +947,15 @@ allow_storages(policy_storages, input_storages, bundle_id, sandbox_id) {
     policy_count == input_count
 
     every i, input_storage in input_storages {
-        allow_input_storage(i, input_storage, policy_storages, bundle_id, sandbox_id)
+        allow_storage(policy_storages[i], input_storage, bundle_id, sandbox_id)
     }
 
     print("allow_storages: success")
 }
 
-allow_input_storage(i, input_storage, policy_storages, bundle_id, sandbox_id) {
-    print("allow_input_storage: i =", i, "input_storage =", input_storage)
-
-    policy_storage := policy_storages[i]
-    print("allow_input_storage: i =", i, "policy_storage =", policy_storage)
-    storages_match(policy_storage, input_storage, bundle_id, sandbox_id)
-
-    print("allow_input_storage: i =", i, "success")
-}
-
-storages_match(policy_storage, input_storage, bundle_id, sandbox_id) {
-    print("storages_match: policy driver =", policy_storage.driver, "input driver =", input_storage.driver)
+allow_storage(policy_storage, input_storage, bundle_id, sandbox_id) {
+    print("allow_storage: policy_storage =", policy_storage)
+    print("allow_storage: input_storage =", input_storage)
 
     policy_storage.driver           == input_storage.driver
     policy_storage.driver_options   == input_storage.driver_options
@@ -975,7 +966,7 @@ storages_match(policy_storage, input_storage, bundle_id, sandbox_id) {
 
     # TODO: validate the source field too.
 
-    print("storages_match: success")
+    print("allow_storage: success")
 }
 
 allow_storage_options(policy_options, input_options, driver) {
