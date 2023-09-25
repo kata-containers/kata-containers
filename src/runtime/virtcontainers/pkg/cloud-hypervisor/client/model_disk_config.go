@@ -27,6 +27,7 @@ type DiskConfig struct {
 	RateLimiterConfig *RateLimiterConfig `json:"rate_limiter_config,omitempty"`
 	PciSegment        *int32             `json:"pci_segment,omitempty"`
 	Id                *string            `json:"id,omitempty"`
+	Serial            *string            `json:"serial,omitempty"`
 }
 
 // NewDiskConfig instantiates a new DiskConfig object
@@ -415,6 +416,38 @@ func (o *DiskConfig) SetId(v string) {
 	o.Id = &v
 }
 
+// GetSerial returns the Serial field value if set, zero value otherwise.
+func (o *DiskConfig) GetSerial() string {
+	if o == nil || o.Serial == nil {
+		var ret string
+		return ret
+	}
+	return *o.Serial
+}
+
+// GetSerialOk returns a tuple with the Serial field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *DiskConfig) GetSerialOk() (*string, bool) {
+	if o == nil || o.Serial == nil {
+		return nil, false
+	}
+	return o.Serial, true
+}
+
+// HasSerial returns a boolean if a field has been set.
+func (o *DiskConfig) HasSerial() bool {
+	if o != nil && o.Serial != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetSerial gets a reference to the given string and assigns it to the Serial field.
+func (o *DiskConfig) SetSerial(v string) {
+	o.Serial = &v
+}
+
 func (o DiskConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if true {
@@ -449,6 +482,9 @@ func (o DiskConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.Id != nil {
 		toSerialize["id"] = o.Id
+	}
+	if o.Serial != nil {
+		toSerialize["serial"] = o.Serial
 	}
 	return json.Marshal(toSerialize)
 }
