@@ -75,24 +75,6 @@ impl CloudHypervisorInner {
         }
     }
 
-    /// Add the device that were requested to be added before the VMM was
-    /// started.
-    #[allow(dead_code)]
-    pub(crate) async fn handle_pending_devices_after_boot(&mut self) -> Result<()> {
-        if self.state != VmmState::VmRunning {
-            return Err(anyhow!(
-                "cannot handle pending devices with VMM state {:?}",
-                self.state
-            ));
-        }
-
-        while let Some(dev) = self.pending_devices.pop() {
-            self.add_device(dev).await.context("add_device")?;
-        }
-
-        Ok(())
-    }
-
     pub(crate) async fn remove_device(&mut self, _device: DeviceType) -> Result<()> {
         Ok(())
     }
