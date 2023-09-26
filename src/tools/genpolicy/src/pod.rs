@@ -697,6 +697,9 @@ impl Container {
         capabilities: &mut policy::KataLinuxCapabilities,
         defaults: &policy::CommonData,
     ) {
+        assert!(capabilities.Ambient.is_empty());
+        assert!(capabilities.Inheritable.is_empty());
+
         if let Some(securityContext) = &self.securityContext {
             if let Some(yaml_capabilities) = &securityContext.capabilities {
                 if let Some(drop) = &yaml_capabilities.drop {
@@ -739,6 +742,9 @@ fn compress_default_capabilities(
     capabilities: &mut policy::KataLinuxCapabilities,
     defaults: &policy::CommonData,
 ) {
+    assert!(capabilities.Ambient.is_empty());
+    assert!(capabilities.Inheritable.is_empty());
+
     compress_capabilities(&mut capabilities.Bounding, defaults);
     compress_capabilities(&mut capabilities.Permitted, defaults);
     compress_capabilities(&mut capabilities.Effective, defaults);

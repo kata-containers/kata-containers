@@ -1133,6 +1133,10 @@ allow_caps(policy_caps, input_caps) {
     print("allow_caps: input Bounding =", input_caps.Bounding)
     match_caps(policy_caps.Bounding, input_caps.Bounding)
 
+    print("allow_caps: policy Effective =", policy_caps.Effective)
+    print("allow_caps: input Effective =", input_caps.Effective)
+    match_caps(policy_caps.Effective, input_caps.Effective)
+
     print("allow_caps: policy Inheritable =", policy_caps.Inheritable)
     print("allow_caps: input Inheritable =", input_caps.Inheritable)
     match_caps(policy_caps.Inheritable, input_caps.Inheritable)
