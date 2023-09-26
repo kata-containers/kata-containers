@@ -220,7 +220,7 @@ containers that he wants to run with Kata. The goal is to make such things as
 transparent as possible, so we also introduced
 [CDI](https://github.com/container-orchestrated-devices/container-device-interface)
 (Container Device Interface) to Kata. CDI is a[
-specification](https://github.com/container-orchestrated-devices/container-device-interface/blob/master/SPEC.md)
+specification](https://github.com/container-orchestrated-devices/container-device-interface/blob/main/SPEC.md)
 for container runtimes to support third-party devices.
 
 As written before, we can provide a clique ID for the devices that belong
