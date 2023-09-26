@@ -44,8 +44,12 @@ pub use self::qemu::{QemuConfig, HYPERVISOR_NAME_QEMU};
 mod ch;
 pub use self::ch::{CloudHypervisorConfig, HYPERVISOR_NAME_CH};
 
-const VIRTIO_BLK_PCI: &str = "virtio-blk-pci";
-const VIRTIO_BLK_MMIO: &str = "virtio-blk-mmio";
+/// Virtual PCI block device driver.
+pub const VIRTIO_BLK_PCI: &str = "virtio-blk-pci";
+
+/// Virtual MMIO block device driver.
+pub const VIRTIO_BLK_MMIO: &str = "virtio-blk-mmio";
+
 const VIRTIO_BLK_CCW: &str = "virtio-blk-ccw";
 const VIRTIO_SCSI: &str = "virtio-scsi";
 const VIRTIO_PMEM: &str = "virtio-pmem";
