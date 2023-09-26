@@ -23,6 +23,8 @@ function main() {
 	cmds=("bc" "jq")
 	check_cmds "${cmds[@]}"
 
+	init_env
+
 	# Check no processes are left behind
 	check_processes
 
@@ -30,7 +32,7 @@ function main() {
 	sleep_time=2
 
 	# Create server
-	kubectl create -f "${SCRIPT_PATH}/runtimeclass_workloads/latency-server.yaml"
+	kubectl create -f "${SCRIPT_PATH}/latency-server.yaml"
 
 	# Get the names of the server pod
 	export server_pod_name="latency-server"
@@ -40,7 +42,7 @@ function main() {
 	waitForProcess "$wait_time" "$sleep_time" "$cmd"
 
 	# Create client
-	kubectl create -f "${SCRIPT_PATH}/runtimeclass_workloads/latency-client.yaml"
+	kubectl create -f "${SCRIPT_PATH}/latency-client.yaml"
 
 	# Get the names of the client pod
 	export client_pod_name="latency-client"
@@ -80,6 +82,7 @@ EOF
 	metrics_json_save
 
 	kubectl delete pod "$client_pod_name" "$server_pod_name"
+	kubectl get pods -A
 	check_processes
 }
 main "$@"
