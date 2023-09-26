@@ -5,5 +5,6 @@ This is a test of C-Ray which is a simple raytracer designed to test the floatin
 Individual test can be run by hand, for example: 
 
 ``` 
-$ cd metrics/disk/c-ray $ ./cray.sh
+$ cd metrics/cpu/c-ray 
+$ ./cray.sh
 ```
