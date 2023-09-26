@@ -308,7 +308,7 @@ function configure_containerd_runtime() {
 		cat <<EOF | tee -a "$containerd_conf_file"
 [$runtime_table]
   runtime_type = "${runtime_type}"
-  cri_handler = "cc"
+  snapshotter = "${SNAPSHOTTER}"
   privileged_without_host_devices = true
   pod_annotations = ["io.katacontainers.*"]
 EOF
@@ -414,6 +414,7 @@ function main() {
 	echo "* DEFAULT_SHIM: ${DEFAULT_SHIM}"
 	echo "* CREATE_RUNTIMECLASSES: ${CREATE_RUNTIMECLASSES}"
 	echo "* CREATE_DEFAULT_RUNTIMECLASS: ${CREATE_DEFAULT_RUNTIMECLASS}"
+	echo "* SNAPSHOTTER: ${SNAPSHOTTER}"
 
 	# script requires that user is root
 	euid=$(id -u)
