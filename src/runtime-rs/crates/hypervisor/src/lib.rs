@@ -15,6 +15,8 @@ pub use device::driver::*;
 use device::DeviceType;
 #[cfg(not(target_arch = "s390x"))]
 pub mod dragonball;
+#[cfg(not(target_arch = "s390x"))]
+pub mod firecracker;
 mod kernel_param;
 pub mod qemu;
 pub use kernel_param::Param;
@@ -61,6 +63,7 @@ const HUGE_SHMEM: &str = "hugeshmem";
 
 pub const HYPERVISOR_DRAGONBALL: &str = "dragonball";
 pub const HYPERVISOR_QEMU: &str = "qemu";
+pub const HYPERVISOR_FIRECRACKER: &str = "firecracker";
 
 pub const DEFAULT_HYBRID_VSOCK_NAME: &str = "kata.hvsock";
 pub const JAILER_ROOT: &str = "root";
