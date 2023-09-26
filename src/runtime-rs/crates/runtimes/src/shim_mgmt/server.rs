@@ -32,9 +32,9 @@ pub struct MgmtServer {
 
 impl MgmtServer {
     /// construct a new management server
-    pub fn new(sid: &str, sandbox: Arc<dyn Sandbox>) -> Result<Self> {
+    pub fn new(sid: &str, sandbox: Arc<dyn Sandbox>, jailed_path: &str) -> Result<Self> {
         Ok(Self {
-            s_addr: mgmt_socket_addr(sid).context(ERR_NO_SHIM_SERVER)?,
+            s_addr: mgmt_socket_addr(sid, jailed_path).context(ERR_NO_SHIM_SERVER)?,
             sandbox,
         })
     }

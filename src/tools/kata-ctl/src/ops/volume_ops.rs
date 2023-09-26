@@ -63,7 +63,7 @@ async fn resize(volume_path: &str, size: u64) -> Result<Option<String>> {
         volume_guest_path: mount_info.device,
     };
     let encoded = serde_json::to_string(&resize_req)?;
-    let shim_client = MgmtClient::new(&sandbox_id, Some(TIMEOUT))?;
+    let shim_client = MgmtClient::new(&sandbox_id, Some(TIMEOUT), "")?;
 
     let url = DIRECT_VOLUME_RESIZE_URL;
     let response = shim_client
@@ -90,7 +90,7 @@ async fn stats(volume_path: &str) -> Result<Option<String>> {
         .append_pair(DIRECT_VOLUME_PATH_KEY, &mount_info.device)
         .finish();
 
-    let shim_client = MgmtClient::new(&sandbox_id, Some(TIMEOUT))?;
+    let shim_client = MgmtClient::new(&sandbox_id, Some(TIMEOUT), "")?;
     let response = shim_client.get(&req_url).await?;
     // turn body into string
     let body = format!("{:?}", response.into_body());

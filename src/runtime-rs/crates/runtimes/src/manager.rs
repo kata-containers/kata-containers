@@ -222,6 +222,9 @@ impl RuntimeHandlerManagerInner {
             netns,
             network_created,
         };
+
+        let jailed_path = determine_jailed(&config);
+
         self.init_runtime_handler(
             spec,
             state,
@@ -239,6 +242,7 @@ impl RuntimeHandlerManagerInner {
         let shim_mgmt_svr = MgmtServer::new(
             &self.id,
             self.runtime_instance.as_ref().unwrap().sandbox.clone(),
+            jailed_path.unwrap().as_str(),
         )
         .context(ERR_NO_SHIM_SERVER)?;
 
@@ -596,4 +600,19 @@ fn update_component_log_level(config: &TomlConfig) {
         );
         updated_inner
     });
+}
+
+fn determine_jailed(config: &TomlConfig) -> Result<String> {
+    let Some(hypervisor_config) = config.hypervisor.get(&config.runtime.hypervisor_name) else {
+        todo!()
+    };
+
+    if config.runtime.hypervisor_name == "firecracker" && !hypervisor_config.jailer_path.is_empty()
+    {
+        debug!(sl!(), "Jailed true");
+        let jailed_path = "/run/kata/firecracker";
+        return Ok(jailed_path.to_string());
+    }
+
+    Ok("".to_string())
 }
