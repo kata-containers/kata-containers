@@ -1,0 +1,46 @@
+name: CI
+on:
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  metadata:
+    runs-on: ubuntu-latest
+    outputs:
+      has_test_command: ${{ steps.test-command.outputs.is_present }}
+    steps:
+      - name: Check for /test
+        id: test-command
+        run: |
+          comment_body=$(
+          cat <<'END_COMMENT'
+          ${{ github.event.review.body }}
+          END_COMMENT
+          )
+          if echo "$comment_body" | sed 's/\r$//' | grep -xq '^/test$'; then
+            echo "is_present=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Debug
+        run: |
+          echo "Is member/owner: ${{ contains(fromJSON('["MEMBER", "OWNER"]'), github.event.review.author_association) }}"
+          echo "${{ github.event.review.author_association }}"
+          echo "Is against main/stable-*: ${{ github.event.pull_request.base.ref == 'main' || startsWith(github.event.pull_request.base.ref, 'stable-') }}"
+          echo "${{ github.event.pull_request.base.ref }}"
+          echo "Has /test: ${{ steps.test-command.outputs.is_present == 'true' }}"
+
+  on-review:
+    needs: metadata
+    # TODO: Figure out why GH returns CONTRIBUTOR for me.
+    # contains(fromJSON('["MEMBER", "OWNER"]'), github.event.review.author_association) &&
+    if: |
+      (github.event.pull_request.base.ref == 'main' ||
+        startsWith(github.event.pull_request.base.ref, 'stable-')) &&
+      needs.metadata.outputs.has_test_command == 'true'
+    uses: ./.github/workflows/ci.yaml
+    with:
+      caller-workflow: ${{ github.workflow }}
+      commit-hash: ${{ github.sha }}
+      pr-number: ${{ github.event.pull_request.number }}
+      tag: ${{ github.event.pull_request.number }}-${{ github.sha }}
+    secrets: inherit
