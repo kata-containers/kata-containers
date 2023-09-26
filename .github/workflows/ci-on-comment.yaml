@@ -1,0 +1,124 @@
+name: CI
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  kata-containers-ci-on-comment:
+    if: github.event.issue.pull_request
+    permissions:
+      actions: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for /test-gha
+        id: test-command
+        run: |
+          comment_body=$(
+          cat <<'END_COMMENT'
+          ${{ github.event.comment.body }}
+          END_COMMENT
+          )
+          if echo "$comment_body" | sed 's/\r$//' | grep -xq '^/test-gha$'; then
+            echo "is_present=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Fetch PR info
+        id: pr-info
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          pr_data="$(gh api repos/$GITHUB_REPOSITORY/pulls/${{ github.event.issue.number }})"
+          echo "base_ref=$(jq -r '.base.ref' <<< "$pr_data")" >> $GITHUB_OUTPUT
+          echo "head_ref=$(jq -r '.head.ref' <<< "$pr_data")" >> $GITHUB_OUTPUT
+          echo "head_sha=$(jq -r '.head.sha' <<< "$pr_data")" >> $GITHUB_OUTPUT
+
+      - name: Debug
+        run: |
+          echo "Is member/owner: ${{ contains(fromJSON('["MEMBER", "OWNER"]'), github.event.comment.author_association) }}"
+          echo "${{ github.event.comment.author_association }}"
+          echo "Is against main/stable-*: ${{ steps.pr-info.outputs.base_ref == 'main' || startsWith(steps.pr-info.outputs.base_ref, 'stable-') }}"
+          echo "${{ steps.pr-info.outputs.base_ref }}"
+          echo "Head commit: ${{ steps.pr-info.outputs.head_sha }}"
+          echo "Has /test-gha: ${{ steps.test-command.outputs.is_present == 'true' }}"
+
+      - name: Start CI
+        id: ci
+        if: |
+          contains(fromJSON('["MEMBER", "OWNER"]'), github.event.issue.author_association) &&
+          (steps.pr-info.outputs.base_ref == 'main' ||
+            startsWith(steps.pr-info.outputs.base_ref, 'stable-')) &&
+          steps.test-command.outputs.is_present == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "started-at=$(date +"%Y-%m-%dT%H:%M:%S%z")" >> $GITHUB_OUTPUT
+
+          gh workflow run ci.yaml \
+            -R "$GITHUB_REPOSITORY" \
+            -r ${{ steps.pr-info.outputs.head_ref }} \
+            -f commit-hash=${{ steps.pr-info.outputs.head_sha }} \
+            -f pr-number=${{ github.event.issue.number }} \
+            -f tag=${{ github.event.issue.number }}-${{ steps.pr-info.outputs.head_sha }} \
+            -f target-branch=${{ steps.pr-info.outputs.base_ref }}
+
+      # NOTE: There's a potential race condition here if another run was started
+      # right after the previous step. In any case, the concurrency directive of
+      # ci.yaml ensures that only one run prevails.
+      - name: Fetch CI run ID
+        id: ci-run
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        timeout-minutes: 1
+        run: |
+          get_run_id() {
+            created_query="$(printf %s '>=${{ steps.ci.outputs.started-at }}' | jq -Rr @uri)"
+            run_id="$( \
+              gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yaml/runs?created=$created_query&head_sha=${{ steps.pr-info.outputs.head_sha }}" \
+                --jq '.workflow_runs[0].id' \
+            )"
+          }
+
+          get_run_id
+          while [ -z "$run_id" ]; do
+            sleep 5
+            get_run_id
+          done
+
+          echo "id=$run_id" >> $GITHUB_OUTPUT
+
+      - name: Set initial PR status
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Possible commit statuses: error, failure, pending, success
+          gh api \
+            --method POST \
+            repos/$GITHUB_REPOSITORY/statuses/${{ steps.pr-info.outputs.head_sha }} \
+            -f state="pending" \
+            -f target_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/${{ steps.ci-run.outputs.id }}" \
+            -f context="Kata Containers CI"
+
+      - name: Wait for CI completion
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh run watch --interval 15 "${{ steps.ci-run.outputs.id }}"
+
+      - name: Set final PR status
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Possible commit statuses: error, failure, pending, success
+          # Possible run statuses: queued, in_progress, completed
+          # Possible run conclusions (if completed, otherwise null): success, failure, neutral, cancelled, skipped, timed_out, action_required
+          run_conclusion="$(gh api repos/$GITHUB_REPOSITORY/actions/runs/${{ steps.ci-run.outputs.id }} --jq '.conclusion')"
+          [[ "$run_conclusion" = "success" ]] && commit_status="success" || commit_status="error"
+
+          gh api \
+            --method POST \
+            repos/$GITHUB_REPOSITORY/statuses/${{ steps.pr-info.outputs.head_sha }} \
+            -f state="$commit_status" \
+            -f target_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/${{ steps.ci-run.outputs.id }}" \
+            -f context="Kata Containers CI" \
+            -f description="$run_conclusion"

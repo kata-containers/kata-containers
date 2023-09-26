@@ -15,6 +15,21 @@ on:
         required: false
         type: string
         default: ""
+  workflow_dispatch:
+    inputs:
+      commit-hash:
+        required: true
+        type: string
+      pr-number:
+        required: true
+        type: string
+      tag:
+        required: true
+        type: string
+      target-branch:
+        required: false
+        type: string
+        default: ""
 
 jobs:
   build-kata-static-tarball-amd64:
