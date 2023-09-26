@@ -53,4 +53,4 @@ build_agent_from_source() {
 	DESTDIR=${DESTDIR} AGENT_POLICY=${AGENT_POLICY} make install
 }
 
-build_agent_from_source $@
+build_agent_from_source "$@"

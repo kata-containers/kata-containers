@@ -661,6 +661,8 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	ocispec.Annotations[vcAnnotations.DisableImageNvdimm] = "true"
 	ocispec.Annotations[vcAnnotations.ColdPlugVFIO] = config.BridgePort
 	ocispec.Annotations[vcAnnotations.HotPlugVFIO] = config.NoPort
+	ocispec.Annotations[vcAnnotations.PCIeRootPort] = "1"
+	ocispec.Annotations[vcAnnotations.PCIeSwitchPort] = "1"
 	ocispec.Annotations[vcAnnotations.IOMMUPlatform] = "true"
 	ocispec.Annotations[vcAnnotations.SGXEPC] = "64Mi"
 	ocispec.Annotations[vcAnnotations.UseLegacySerial] = "true"
@@ -701,6 +703,8 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	assert.Equal(sbConfig.HypervisorConfig.DisableImageNvdimm, true)
 	assert.Equal(string(sbConfig.HypervisorConfig.ColdPlugVFIO), string(config.BridgePort))
 	assert.Equal(string(sbConfig.HypervisorConfig.HotPlugVFIO), string(config.NoPort))
+	assert.Equal(sbConfig.HypervisorConfig.PCIeRootPort, uint32(1))
+	assert.Equal(sbConfig.HypervisorConfig.PCIeSwitchPort, uint32(1))
 	assert.Equal(sbConfig.HypervisorConfig.IOMMUPlatform, true)
 	assert.Equal(sbConfig.HypervisorConfig.SGXEPCSize, int64(67108864))
 	assert.Equal(sbConfig.HypervisorConfig.LegacySerial, true)

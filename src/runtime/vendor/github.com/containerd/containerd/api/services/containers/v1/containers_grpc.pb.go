@@ -12,6 +12,7 @@ import (
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
+	"github.com/sirupsen/logrus"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -90,6 +91,9 @@ func (x *containersListStreamClient) Recv() (*ListContainerMessage, error) {
 }
 
 func (c *containersClient) Create(ctx context.Context, in *CreateContainerRequest, opts ...grpc.CallOption) (*CreateContainerResponse, error) {
+
+	logrus.Infof("################ Create %+v", ctx)
+
 	out := new(CreateContainerResponse)
 	err := c.cc.Invoke(ctx, "/containerd.services.containers.v1.Containers/Create", in, out, opts...)
 	if err != nil {

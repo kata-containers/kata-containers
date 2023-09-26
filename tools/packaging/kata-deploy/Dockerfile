@@ -35,6 +35,8 @@ RUN \
 	apk del curl && \
 	apk --no-cache add py3-pip && \
 	pip install --no-cache-dir yq==3.2.3
+	# `tomlq` is a tool that comes from https://github.com/kislyuk/yq, and
+    	# that depends on `jq` to do the toml parsing / editing.
 
 COPY scripts ${DESTINATION}/scripts
 COPY runtimeclasses ${DESTINATION}/runtimeclasses

@@ -546,6 +546,12 @@ type HypervisorConfig struct {
 	// root port, switch or no port
 	ColdPlugVFIO config.PCIePort
 
+	// PCIeRootPort is the number of root-port to create for the VM
+	PCIeRootPort uint32
+
+	// PCIeSwitchPort is the number of switch-port to create for the VM
+	PCIeSwitchPort uint32
+
 	// NumVCPUs specifies default number of vCPUs for the VM.
 	NumVCPUsF float32
 

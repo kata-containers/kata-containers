@@ -86,6 +86,8 @@ func (s *Server) Serve(ctx context.Context, l net.Listener) error {
 		handshaker = handshakerFunc(noopHandshake)
 	}
 
+	logrus.Info("################### SHIM1 CTX %+v", ctx)
+
 	for {
 		conn, err := l.Accept()
 		if err != nil {

@@ -89,6 +89,8 @@ func makeRuntimeConfig(prefixDir string) (configFile string, ociConfig oci.Runti
 	enableIOThreads := true
 	hotPlugVFIO = config.BridgePort
 	coldPlugVFIO = config.NoPort
+	pcieRootPort := uint32(0)
+	pcieSwitchPort := uint32(0)
 	disableNewNetNs := false
 	sharedFS := "virtio-9p"
 	virtioFSdaemon := filepath.Join(prefixDir, "virtiofsd")
@@ -133,6 +135,8 @@ func makeRuntimeConfig(prefixDir string) (configFile string, ociConfig oci.Runti
 		EnableIOThreads:      enableIOThreads,
 		HotPlugVFIO:          hotPlugVFIO,
 		ColdPlugVFIO:         coldPlugVFIO,
+		PCIeRootPort:         pcieRootPort,
+		PCIeSwitchPort:       pcieSwitchPort,
 		DisableNewNetNs:      disableNewNetNs,
 		DefaultVCPUCount:     hypConfig.NumVCPUs(),
 		DefaultMaxVCPUCount:  hypConfig.DefaultMaxVCPUs,
@@ -276,6 +280,8 @@ func getExpectedHypervisor(config oci.RuntimeConfig) HypervisorInfo {
 		VirtioFSDaemon:    config.HypervisorConfig.VirtioFSDaemon,
 		HotPlugVFIO:       config.HypervisorConfig.HotPlugVFIO,
 		ColdPlugVFIO:      config.HypervisorConfig.ColdPlugVFIO,
+		PCIeRootPort:      config.HypervisorConfig.PCIeRootPort,
+		PCIeSwitchPort:    config.HypervisorConfig.PCIeSwitchPort,
 	}
 
 	if os.Geteuid() == 0 {

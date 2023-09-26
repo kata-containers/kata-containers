@@ -73,6 +73,8 @@ reqwest = { version = "0.11.14", optional = true }
 # The "vendored" feature for openssl is required for musl build
 openssl = { version = "0.10.54", features = ["vendored"], optional = true }
 
+which = "6.0.0"
+
 [dev-dependencies]
 tempfile = "3.1.0"
 test-utils = { path = "../libs/test-utils" }

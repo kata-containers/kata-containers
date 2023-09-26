@@ -19,34 +19,15 @@ endif
 
 ifeq ($(ARCH), x86_64)
 BASE_TARBALLS = serial-targets \
-	firecracker-tarball \
-	kernel-confidential-tarball \
-	kernel-dragonball-experimental-tarball \
-	kernel-nvidia-gpu-tarball \
-	kernel-nvidia-gpu-confidential-tarball \
-	kernel-nvidia-gpu-snp-tarball \
-	kernel-nvidia-gpu-tdx-experimental-tarball \
-	kernel-tarball \
-	kernel-tdx-experimental-tarball \
 	nydus-tarball \
-	ovmf-sev-tarball \
 	ovmf-tarball \
-	qemu-snp-experimental-tarball \
 	qemu-tarball \
-	qemu-tdx-experimental-tarball \
-	stratovirt-tarball \
 	shim-v2-tarball \
-	tdvf-tarball \
-	virtiofsd-tarball
-BASE_SERIAL_TARBALLS = rootfs-image-tarball \
-	rootfs-image-confidential-tarball \
-	rootfs-image-tdx-tarball \
-	rootfs-initrd-confidential-tarball \
-	rootfs-initrd-mariner-tarball \
-	rootfs-initrd-sev-tarball \
-	rootfs-initrd-tarball \
-	cloud-hypervisor-tarball \
-	cloud-hypervisor-glibc-tarball
+	virtiofsd-tarball 
+BASE_SERIAL_TARBALLS = kata-agent-opa-tarball \
+	kernel-nvidia-gpu-tarball \
+	kernel-headers-nvidia-gpu-tarball \
+	rootfs-nvidia-gpu-initrd-tarball 
 else ifeq ($(ARCH), s390x)
 BASE_TARBALLS = serial-targets \
 	kernel-tarball \
@@ -117,6 +98,12 @@ kernel-nvidia-gpu-tarball:
 kernel-nvidia-gpu-confidential-tarball:
 	${MAKE} $@-build
 
+kernel-headers-nvidia-gpu-tarball: kernel-nvidia-gpu-tarball
+	${MAKE} $@-build
+
+kernel-headers-nvidia-gpu-confidential-tarball: kernel-nvidia-gpu-confidential-tarball
+	${MAKE} $@-build
+
 kernel-nvidia-gpu-snp-tarball:
 	${MAKE} $@-build
 
@@ -180,6 +167,21 @@ rootfs-initrd-sev-tarball: agent-opa-tarball kernel-confidential-tarball
 rootfs-initrd-tarball: agent-tarball
 	${MAKE} $@-build
 
+rootfs-nvidia-gpu-image-tarball: #kernel-headers-nvidia-gpu-tarball
+	${MAKE} $@-build
+
+rootfs-nvidia-gpu-initrd-tarball: #kernel-headers-nvidia-gpu-tarball
+	${MAKE} $@-build
+
+rootfs-nvidia-gpu-confidential-image-tarball: #kernel-headers-nvidia-gpu-confidential-tarball
+	${MAKE} $@-build
+
+rootfs-nvidia-gpu-confidential-initrd-tarball: #kernel-headers-nvidia-gpu-confidential-tarball
+	${MAKE} $@-build
+
+rootfs-initrd-tarball:
+	${MAKE} $@-build
+
 runk-tarball:
 	${MAKE} $@-build
 
@@ -196,7 +198,7 @@ virtiofsd-tarball:
 	${MAKE} $@-build
 
 merge-builds:
-	$(MK_DIR)/kata-deploy-merge-builds.sh build "$(MK_DIR)/../../../../versions.yaml"
+	$(MK_DIR)/kata-deploy-merge-builds.sh build "./versions.yaml"
 
 install-tarball:
 	tar -xf ./kata-static.tar.xz -C /

@@ -23,7 +23,7 @@ RUN apt-get update && \
 		perl \
 		protobuf-compiler && \
 	apt-get clean && rm -rf /var/lib/apt/lists/ && \
-    	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_TOOLCHAIN}
+	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_TOOLCHAIN}
 
 # aarch64 requires this name -- link for all
 RUN ln -s /usr/bin/musl-gcc "/usr/bin/$(uname -m)-linux-musl-gcc"
