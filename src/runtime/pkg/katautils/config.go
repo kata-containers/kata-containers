@@ -1154,6 +1154,8 @@ func newRemoteHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		// No valid value so avoid to append block device to list in kata_agent.appendDevices
 		BlockDeviceDriver: "dummy",
 		EnableAnnotations: h.EnableAnnotations,
+		// Add GuestHookPath
+		GuestHookPath: h.guestHookPath(),
 	}, nil
 }
 
