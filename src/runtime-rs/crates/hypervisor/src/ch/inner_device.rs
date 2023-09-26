@@ -13,6 +13,7 @@ use crate::ShareFsDeviceConfig;
 use crate::VmmState;
 use anyhow::{anyhow, Context, Result};
 use ch_config::ch_api::{cloud_hypervisor_vm_blockdev_add, cloud_hypervisor_vm_fs_add};
+use ch_config::convert::{DEFAULT_DISK_QUEUES, DEFAULT_DISK_QUEUE_SIZE, DEFAULT_NUM_PCI_SEGMENTS};
 use ch_config::DiskConfig;
 use ch_config::{net_util::MacAddr, FsConfig, NetConfig};
 use safe_path::scoped_join;
@@ -20,13 +21,44 @@ use std::convert::TryFrom;
 use std::path::PathBuf;
 
 const VIRTIO_FS: &str = "virtio-fs";
-const DEFAULT_DISK_QUEUES: usize = 1;
-const DEFAULT_DISK_QUEUE_SIZE: u16 = 1024;
+
+pub const DEFAULT_FS_QUEUES: usize = 1;
+const DEFAULT_FS_QUEUE_SIZE: u16 = 1024;
 
 impl CloudHypervisorInner {
     pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<()> {
         if self.state != VmmState::VmRunning {
-            self.pending_devices.insert(0, device);
+            // If the VM is not running, add the device to the pending list to
+            // be handled later.
+            //
+            // Note that the only device types considered are DeviceType::ShareFs
+            // and DeviceType::Network since:
+            //
+            // - ShareFs (virtiofsd) is only needed in an non-DM and non-TDX scenario
+            //   for the container rootfs.
+            //
+            // - For all other scenarios, the container rootfs is handled by a
+            //   DeviceType::Block and this method is called *after* the VM
+            //   has started so the device does not need to be added to the
+            //   pending list.
+            //
+            // - The VM rootfs is handled without waiting for calls to this
+            //   method as the file in question (image= or initrd=) is available
+            //   from HypervisorConfig.BootInfo.{image,initrd}
+            //   (see 'convert.rs').
+            //
+            // - Network details need to be saved for later application.
+            //
+            match device {
+                DeviceType::ShareFs(_) => self.pending_devices.insert(0, device),
+                DeviceType::Network(_) => self.pending_devices.insert(0, device),
+                _ => {
+                    debug!(
+                        sl!(),
+                        "ignoring early add device request for device: {:?}", device
+                    );
+                }
+            }
 
             return Ok(());
         }
@@ -43,24 +75,6 @@ impl CloudHypervisorInner {
             DeviceType::Block(block) => self.handle_block_device(block.config).await,
             _ => Err(anyhow!("unhandled device: {:?}", device)),
         }
-    }
-
-    /// Add the device that were requested to be added before the VMM was
-    /// started.
-    #[allow(dead_code)]
-    pub(crate) async fn handle_pending_devices_after_boot(&mut self) -> Result<()> {
-        if self.state != VmmState::VmRunning {
-            return Err(anyhow!(
-                "cannot handle pending devices with VMM state {:?}",
-                self.state
-            ));
-        }
-
-        while let Some(dev) = self.pending_devices.pop() {
-            self.add_device(dev).await.context("add_device")?;
-        }
-
-        Ok(())
     }
 
     pub(crate) async fn remove_device(&mut self, _device: DeviceType) -> Result<()> {
@@ -81,13 +95,13 @@ impl CloudHypervisorInner {
         let num_queues: usize = if cfg.queue_num > 0 {
             cfg.queue_num as usize
         } else {
-            1
+            DEFAULT_FS_QUEUES
         };
 
         let queue_size: u16 = if cfg.queue_num > 0 {
             u16::try_from(cfg.queue_size)?
         } else {
-            1024
+            DEFAULT_FS_QUEUE_SIZE
         };
 
         let socket_path = if cfg.sock_path.starts_with('/') {
@@ -101,6 +115,8 @@ impl CloudHypervisorInner {
             socket: socket_path,
             num_queues,
             queue_size,
+            pci_segment: DEFAULT_NUM_PCI_SEGMENTS,
+
             ..Default::default()
         };
 
@@ -221,13 +237,13 @@ impl TryFrom<ShareFsSettings> for FsConfig {
         let num_queues: usize = if cfg.queue_num > 0 {
             cfg.queue_num as usize
         } else {
-            DEFAULT_DISK_QUEUES
+            DEFAULT_FS_QUEUES
         };
 
         let queue_size: u16 = if cfg.queue_num > 0 {
             u16::try_from(cfg.queue_size)?
         } else {
-            DEFAULT_DISK_QUEUE_SIZE
+            DEFAULT_FS_QUEUE_SIZE
         };
 
         let socket_path = if cfg.sock_path.starts_with('/') {

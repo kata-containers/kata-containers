@@ -17,8 +17,9 @@ use nix::unistd::Uid;
 use std::fs;
 
 #[allow(dead_code)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum GuestProtection {
+    #[default]
     NoProtection,
     Tdx,
     Sev,
