@@ -197,17 +197,6 @@ function _get_k0s_kubernetes_version_for_crio() {
 	echo ${crio_version}
 }
 
-function _get_os_for_crio() {
-	source /etc/os-release
-
-	if [ "${NAME}" != "Ubuntu" ]; then
-		echo "Only Ubuntu is supported for now"
-		exit 2
-	fi
-
-	echo "x${NAME}_${VERSION_ID}"
-}
-
 function setup_crio() {
 	# Get the CRI-O version to be installed depending on the version of the
 	# "k8s distro" that we are using
@@ -217,35 +206,7 @@ function setup_crio() {
 
 	esac
 
-	os=$(_get_os_for_crio)
-
-	echo "deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/${os}/ /"|sudo tee /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list
-	echo "deb http://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/${crio_version}/${os}/ /"|sudo tee /etc/apt/sources.list.d/devel:kubic:libcontainers:stable:cri-o:${crio_version}.list
-	curl -L https://download.opensuse.org/repositories/devel:kubic:libcontainers:stable:cri-o:${crio_version}/${os}/Release.key | sudo apt-key add -
-	curl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/${os}/Release.key | sudo apt-key add -
-	sudo apt update
-	sudo apt install -y cri-o cri-o-runc
-
-	# We need to set the default capabilities to ensure our tests will pass
-	# See: https://github.com/kata-containers/kata-containers/issues/8034
-	sudo mkdir -p /etc/crio/crio.conf.d/
-	cat <<EOF | sudo tee /etc/crio/crio.conf.d/00-default-capabilities
-[crio.runtime]
-default_capabilities = [
-       "CHOWN",
-       "DAC_OVERRIDE",
-       "FSETID",
-       "FOWNER",
-       "SETGID",
-       "SETUID",
-       "SETPCAP",
-       "NET_BIND_SERVICE",
-       "KILL",
-       "SYS_CHROOT",
-]
-EOF
-
-	sudo systemctl enable --now crio
+	install_crio ${crio_version}
 }
 
 function deploy_k8s() {
