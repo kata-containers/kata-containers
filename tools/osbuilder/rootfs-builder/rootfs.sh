@@ -10,6 +10,8 @@ set -o errtrace
 
 [ -n "$DEBUG" ] && set -x
 
+set -x
+
 script_name="${0##*/}"
 script_dir="$(dirname $(readlink -f $0))"
 AGENT_VERSION=${AGENT_VERSION:-}
@@ -58,6 +60,8 @@ if [ "${CROSS_BUILD}" == "true" ]; then
 	fi
 fi
 
+
+readonly BUILDDIR="/kata-containers/tools/packaging/kata-deploy/local-build/build/"
 
 handle_error() {
 	local exit_code="${?}"
@@ -427,7 +431,7 @@ build_rootfs_distro()
 		if [ -n "${IMAGE_REGISTRY}" ]; then
 			engine_build_args+=" --build-arg IMAGE_REGISTRY=${IMAGE_REGISTRY}"
 		fi
-
+		export DOCKER_BUILDKIT=1
 		# setup to install rust here
 		generate_dockerfile "${distro_config_dir}"
 		"$container_engine" build  \
@@ -508,6 +512,7 @@ build_rootfs_distro()
 			--env EXTRA_PKGS="${EXTRA_PKGS}" \
 			--env OSBUILDER_VERSION="${OSBUILDER_VERSION}" \
 			--env OS_VERSION="${OS_VERSION}" \
+			--env VARIANT="${VARIANT}" \
 			--env INSIDE_CONTAINER=1 \
 			--env SECCOMP="${SECCOMP}" \
 			--env SELINUX="${SELINUX}" \
@@ -579,6 +584,54 @@ build_opa_from_source()
 	rm -rf opa
 	popd &>/dev/null
 	return 0
+}
+
+build_agent_from_source()
+{
+	if [ -z "${AGENT_SOURCE_BIN}" ] ; then
+		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
+		# rust agent needs ${arch}-unknown-linux-${LIBC}
+		if ! (rustup show | grep -v linux-${LIBC} > /dev/null); then
+			if [ "$RUST_VERSION" == "null" ]; then
+				detect_rust_version || \
+					die "Could not detect the required rust version for AGENT_VERSION='${AGENT_VERSION:-main}'."
+			fi
+			bash ${script_dir}/../../../ci/install_rust.sh ${RUST_VERSION}
+		fi
+		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
+
+		agent_dir="${script_dir}/../../../src/agent/"
+
+		if [ "${SECCOMP}" == "yes" ]; then
+			info "Set up libseccomp"
+			detect_libseccomp_info || \
+				die "Could not detect the required libseccomp version and url"
+			export libseccomp_install_dir=$(mktemp -d -t libseccomp.XXXXXXXXXX)
+			export gperf_install_dir=$(mktemp -d -t gperf.XXXXXXXXXX)
+			${script_dir}/../../../ci/install_libseccomp.sh "${libseccomp_install_dir}" "${gperf_install_dir}"
+			echo "Set environment variables for the libseccomp crate to link the libseccomp library statically"
+			export LIBSECCOMP_LINK_TYPE=static
+			export LIBSECCOMP_LIB_PATH="${libseccomp_install_dir}/lib"
+		fi
+
+		info "Build agent"
+		pushd "${agent_dir}"
+		if [ -n "${AGENT_VERSION}" ]; then
+			git checkout "${AGENT_VERSION}" && OK "git checkout successful" || die "checkout agent ${AGENT_VERSION} failed!"
+		fi
+		make clean
+		make -j $(nproc) LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP} AGENT_POLICY=${AGENT_POLICY}
+		make install DESTDIR="${ROOTFS_DIR}" LIBC=${LIBC} INIT=${AGENT_INIT}
+		strip ${ROOTFS_DIR}/usr/bin/kata-agent
+		if [ "${SECCOMP}" == "yes" ]; then
+			rm -rf "${libseccomp_install_dir}" "${gperf_install_dir}"
+		fi
+		popd
+	else
+		mkdir -p ${AGENT_DIR}
+		cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}
+		OK "cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}"
+	fi
 }
 
 # Setup an existing rootfs directory, based on the OPTIONAL distro name
@@ -767,6 +820,10 @@ EOF
 				curl --fail -L "${opa_bin_url}" -o opa || die "Failed to download OPA"
 			fi
 
+#			opa_bin_url="$(get_package_version_from_kata_yaml externals.open-policy-agent.architecture.${ARCH}.binary)"
+#			info "Downloading OPA binary from ${opa_bin_url}"
+#			curl --fail -L "${opa_bin_url}" -o opa || die "Failed to download OPA"
+
 			# Install the OPA binary.
 			opa_bin_dir="/usr/local/bin"
 			local opa_bin="${ROOTFS_DIR}${opa_bin_dir}/opa"
@@ -851,6 +908,105 @@ get_opa_bin_dir()
 	done
 }
 
+
+
+setup_nvidia_gpu_rootfs()
+{
+	set -x
+
+	local rootfs_type=${1:-""}
+
+	info "nvidia: rootfs_type: $rootfs_type"
+
+
+	local nvidia_gpu_rootfs_chroot="${script_dir}/nvidia/nvidia_chroot.sh"
+	local nvidia_gpu_init_functions="${script_dir}/nvidia/nvidia_init_functions"
+	local nvidia_gpu_init="${script_dir}/nvidia/nvidia_init"
+
+	#if [ "$rootfs_type" == "confidential" ]; then
+	#	local nvidia_gpu_attest_remote="${script_dir}/nvidia/remote_attestation.py"
+	#	local nvidia_gpu_attest_local="${script_dir}/nvidia/local_attestation.py"
+		#local nvidia_gpu_nvtrust="${BUILDDIR}/nvtrust.tar.xz"
+	#fi
+
+
+	[ -f "${nvidia_gpu_rootfs_chroot}" ] || die "nvidia_gpu_rootfs_chroot file not found"
+	[ -f "${nvidia_gpu_init_functions}" ] || die "nvidia_gpu_init_functions file not found"
+	[ -f "${nvidia_gpu_init}" ] || die "nvidia_gpu_init file not found"
+
+	#if [ "$rootfs_type" == "confidential" ]; then
+	#	[ -f "${nvidia_gpu_attest_remote}" ] || die "nvidia_gpu_attest_remote file not found"
+	#	[ -f "${nvidia_gpu_attest_local}" ] || die "nvidia_gpu_attest_local file not found"
+		#[ -f "${nvidia_gpu_nvtrust}" ] || die "nvidia_gpu_nvtrust file not found"
+	#fi
+
+	info "nvidia: Setup GPU rootfs type=$rootfs_type"
+	pushd "${ROOTFS_DIR}" >> /dev/null
+
+	cp "${nvidia_gpu_rootfs_chroot}"  ./root/nvidia_chroot.sh
+	cp "${nvidia_gpu_init_functions}" ./nvidia_init_functions
+	cp "${nvidia_gpu_init}"           ./nvidia_init
+
+	#if [ "$rootfs_type" == "confidential" ]; then
+	#	mkdir -p ./gpu-attestation/bin
+	#	cp "${nvidia_gpu_attest_remote}"  ./gpu-attestation/bin/remote_attestation.py
+	#	cp "${nvidia_gpu_attest_local}"   ./gpu-attestation/bin/local_attestation.py
+		#cp "${nvidia_gpu_nvtrust}"	  ./gpu-attestation/nvtrust.tar.xz
+	#fi
+
+	chmod +x ./root/nvidia_chroot.sh
+	chmod +x ./nvidia_init_functions
+	chmod +x ./nvidia_init
+
+	local appendix=""
+	if [ "$rootfs_type" == "confidential" ]; then
+		appendix="-${rootfs_type}"
+	fi
+
+	# We need the kernel packages for building the drivers cleanly will be
+	# deinstalled and removed from the roofs once the build finishes.
+	tar -C ./root -xvf ${BUILDDIR}/kata-static-kernel-nvidia-gpu"${appendix}"-headers.tar.xz
+
+
+	# If we find a local downloaded run file build the kernel modules
+	# with it, otherwise use the distribution packages. Run files may have
+	# more recent drivers available then the distribution packages.
+	local run_file_name="nvidia-driver.run"
+	if [ -f ${BUILDDIR}/${run_file_name} ]; then
+		cp -L ${BUILDDIR}/${run_file_name} ./root/${run_file_name}
+	fi
+	local run_fm_file_name="nvidia-fabricmanager.run"
+	if [ -f ${BUILDDIR}/${run_fm_file_name} ]; then
+		cp -L ${BUILDDIR}/${run_fm_file_name} ./root/${run_fm_file_name}
+	fi
+
+	mount --rbind /dev ./dev
+	mount --make-rslave ./dev
+	mount -t proc /proc ./proc
+
+	local uname_r=$(uname -r)
+        chroot . /bin/bash -c "/root/nvidia_chroot.sh ${uname_r} ${run_file_name} ${run_fm_file_name} ${ARCH} ${rootfs_type}"
+	chroot . /bin/bash -c "dpkg-query -l | grep ^ii" > ${BUILDDIR}/dpkg.sbom.list
+
+	umount -R ./dev
+	umount ./proc
+
+	# Remove artifacts needed for building the rootfs
+	rm -rf ./root/
+
+
+	# TODO REMOVE THIS SECTION START
+	cp ${script_dir}/nvidia/artifacts/cdi ./usr/bin/cdi
+	chmod +x ./usr/bin/cdi
+
+	cp -r ${script_dir}/nvidia/artifacts/nvidia_gpu_tools ./opt/nvidia_gpu_tool
+	# TODO REMOVE THIS SECTION END
+
+
+	
+	popd  >> /dev/null
+}
+
 parse_arguments()
 {
 	[ "$#" -eq 0 ] && usage && return 0
@@ -908,6 +1064,17 @@ main()
 
 	init="${ROOTFS_DIR}/sbin/init"
 	setup_rootfs
+
+	if [ "${VARIANT}" = "nvidia-gpu" ]; then
+		setup_nvidia_gpu_rootfs
+		return $?
+	fi
+
+	if [ "${VARIANT}" = "nvidia-gpu-confidential" ]; then
+		setup_nvidia_gpu_rootfs "confidential"
+		return $?
+	fi
+
 }
 
 main $*

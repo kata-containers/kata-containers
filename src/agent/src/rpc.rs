@@ -19,7 +19,7 @@ use ttrpc::{
     error::get_rpc_status,
     r#async::{Server as TtrpcServer, TtrpcContext},
 };
-
+use crate::features::get_build_features;
 use anyhow::{anyhow, Context, Result};
 use cgroups::freezer::FreezerState;
 use oci::{LinuxNamespace, Root, Spec};
@@ -52,8 +52,7 @@ use nix::sys::{stat, statfs};
 use nix::unistd::{self, Pid};
 use rustjail::process::ProcessOperations;
 
-use crate::device::{add_devices, get_virtio_blk_pci_device_name, update_env_pci};
-use crate::features::get_build_features;
+use crate::device::{add_devices, get_virtio_blk_pci_device_name, update_env_pci, handle_cdi_devices};
 use crate::linux_abi::*;
 use crate::metrics::get_metrics;
 use crate::mount::baremount;
@@ -214,6 +213,14 @@ impl AgentService {
         // cannot predict everything from the caller.
         add_devices(&req.devices, &mut oci, &self.sandbox).await?;
 
+        // In guest-kernel mode some devices need extra handling. Taking the
+        // GPU as an example the shim will inject CDI annotations that will
+        // be used by the kata-agent to do containerEdits according to the 
+        // CDI spec coming from a registry that is created on the fly by UDEV
+        // rules for a specifc device.
+        handle_cdi_devices(&req.devices, &mut oci, &self.sandbox).await?;
+        info!(sl(), "modified CDI container spec: {:?}", &oci);
+
         // Both rootfs and volumes (invoked with --volume for instance) will
         // be processed the same way. The idea is to always mount any provided
         // storage to the specified MountPoint, so that it will match what's
@@ -258,7 +265,6 @@ impl AgentService {
             rootless_cgroup: false,
             container_name,
         };
-
         let mut ctr: LinuxContainer = LinuxContainer::new(
             cid.as_str(),
             CONTAINER_BASE,
@@ -1471,7 +1477,7 @@ impl health_ttrpc::Health for HealthService {
     ) -> ttrpc::Result<HealthCheckResponse> {
         let mut resp = HealthCheckResponse::new();
         resp.set_status(HealthCheckResponse_ServingStatus::SERVING);
-
+        warn!(sl(), "############# health check #############");
         Ok(resp)
     }
 

@@ -1238,9 +1238,9 @@ dependencies = [
 
 [[package]]
 name = "either"
-version = "1.6.1"
+version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
+checksum = "11157ac094ffbdde99aa67b23417ebdd801842852b500e395a45a9c0aac03e4a"
 
 [[package]]
 name = "elliptic-curve"
@@ -1878,8 +1878,8 @@ dependencies = [
  "serde_json",
  "sha2",
  "sigstore",
- "strum",
- "strum_macros",
+ "strum 0.25.0",
+ "strum_macros 0.25.3",
  "tar",
  "tokio",
  "tokio-util 0.7.10",
@@ -2138,6 +2138,8 @@ dependencies = [
  "slog-scope",
  "slog-stdlog",
  "slog-term",
+ "strum 0.26.2",
+ "strum_macros 0.26.2",
  "tempfile",
  "test-utils",
  "thiserror",
@@ -2150,7 +2152,8 @@ dependencies = [
  "ttrpc",
  "url",
  "vsock-exporter",
- "which",
+ "which 4.3.0",
+ "which 6.0.0",
 ]
 
 [[package]]
@@ -3353,7 +3356,7 @@ dependencies = [
  "prost 0.8.0",
  "prost-types 0.8.0",
  "tempfile",
- "which",
+ "which 4.3.0",
 ]
 
 [[package]]
@@ -3375,7 +3378,7 @@ dependencies = [
  "regex",
  "syn 1.0.109",
  "tempfile",
- "which",
+ "which 4.3.0",
 ]
 
 [[package]]
@@ -3477,7 +3480,7 @@ dependencies = [
  "protobuf-support",
  "tempfile",
  "thiserror",
- "which",
+ "which 4.3.0",
 ]
 
 [[package]]
@@ -3907,9 +3910,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.38.28"
+version = "0.38.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72e572a5e8ca657d7366229cdde4bd14c4eb5499a9573d4d366fe1b599daa316"
+checksum = "6ea3e1a662af26cd7a3ba09c0297a31af215563ecf42817c98df621387f4e949"
 dependencies = [
  "bitflags 2.4.2",
  "errno 0.3.8",
@@ -4599,14 +4602,33 @@ version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "290d54ea6f91c969195bdbcd7442c8c2a2ba87da8bf60a7ee86a235d4bc1e125"
 dependencies = [
- "strum_macros",
+ "strum_macros 0.25.3",
 ]
+
+[[package]]
+name = "strum"
+version = "0.26.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d8cec3501a5194c432b2b7976db6b7d10ec95c253208b45f83f7136aa985e29"
 
 [[package]]
 name = "strum_macros"
 version = "0.25.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23dc1fa9ac9c169a78ba62f0b841814b7abae11bdd047b9c58f893439e309ea0"
+dependencies = [
+ "heck 0.4.1",
+ "proc-macro2",
+ "quote",
+ "rustversion",
+ "syn 2.0.52",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.26.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c6cf59daf282c0a494ba14fd21610a0325f9f90ec9d1231dea26bcb1d696c946"
 dependencies = [
  "heck 0.4.1",
  "proc-macro2",
@@ -5534,6 +5556,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "which"
+version = "6.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7fa5e0c10bf77f44aac573e498d1a82d5fbd5e91f6fc0a99e7be4b38e85e101c"
+dependencies = [
+ "either",
+ "home",
+ "once_cell",
+ "rustix 0.38.31",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
 name = "winapi"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5873,7 +5908,7 @@ checksum = "914566e6413e7fa959cc394fb30e563ba80f3541fbd40816d4c05a0fc3f2a0f1"
 dependencies = [
  "libc",
  "linux-raw-sys 0.4.13",
- "rustix 0.38.28",
+ "rustix 0.38.31",
 ]
 
 [[package]]

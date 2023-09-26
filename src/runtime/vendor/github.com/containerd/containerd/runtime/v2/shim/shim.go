@@ -466,6 +466,8 @@ func run(ctx context.Context, manager Manager, initFunc Init, name string, confi
 		}
 	}
 
+	logrus.Info("################### SHIM0 CTX %+v", ctx)
+
 	if err := serve(ctx, server, signals, sd.Shutdown); err != nil {
 		if err != shutdown.ErrShutdown {
 			return err
@@ -507,6 +509,9 @@ func serve(ctx context.Context, server *ttrpc.Server, signals chan os.Signal, sh
 			log.G(ctx).WithError(err).Fatal("containerd-shim: ttrpc server failure")
 		}
 	}()
+
+	logrus.Info("################### SHIM0.0 CTX %+v", ctx)
+
 	logger := log.G(ctx).WithFields(log.Fields{
 		"pid":       os.Getpid(),
 		"path":      path,

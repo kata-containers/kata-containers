@@ -27,6 +27,8 @@ RUN apt-get update && \
     make \
     makedev \
     multistrap \
+    musl \
+    musl-dev \
     musl-tools \
     protobuf-compiler \
     xz-utils

@@ -78,10 +78,14 @@ func (device *VFIODevice) Attach(ctx context.Context, devReceiver api.DeviceRece
 		}
 
 		if vfio.IsPCIe {
-			busIndex := len(config.PCIeDevices[vfio.Port])
+			busIndex := len(config.PCIeDevicesPerPort[vfio.Port])
 			vfio.Bus = fmt.Sprintf("%s%d", config.PCIePortPrefixMapping[vfio.Port], busIndex)
-			config.PCIeDevices[vfio.Port][vfio.BDF] = true
+			// We need to keep track the number of devices per port to deduce
+			// the corectu bus number, additionally we can use the VFIO device
+			// info to act upon different Vendor IDs and Device IDs.
+			config.PCIeDevicesPerPort[vfio.Port] = append(config.PCIeDevicesPerPort[vfio.Port], *vfio)
 		}
+		deviceLogger().Infof("#### VFIO Device: %v, Port: %v, Bus: %v, BDF: %v, SysfsDev: %v, Type: %v, IsPCIe: %v, VendorID: %v, DeviceID: %v", vfio.ID, vfio.Port, vfio.Bus, vfio.BDF, vfio.SysfsDev, vfio.Type, vfio.IsPCIe, vfio.VendorID, vfio.DeviceID)
 	}
 
 	coldPlug := device.DeviceInfo.ColdPlug

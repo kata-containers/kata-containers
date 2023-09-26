@@ -56,7 +56,7 @@ fi
 info "Building ovmf"
 build_cmd="build -b ${build_target} -t ${toolchain} -a ${architecture} -p ${ovmf_package}"
 if [ "${ovmf_build}" == "tdx" ]; then
-	build_cmd+=" -D SECURE_BOOT_ENABLE=TRUE"
+	build_cmd+=" -D DEBUG_ON_SERIAL_PORT=FALSE -D TDX_MEM_PARTIAL_ACCEPT=512 -D TDX_EMULATION_ENABLE=FALSE -D SECURE_BOOT_ENABLE=TRUE -D TDX_ACCEPT_PAGE_SIZE=2M"
 fi
 
 eval "${build_cmd}"

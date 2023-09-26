@@ -1,0 +1,468 @@
+#!/bin/bash -x
+
+export PATH='/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/sbin'
+export confidential_compute="off"
+export supported_gpu_devids="/supported-gpu.devids"
+export logging_directory="/tmp/"
+export assert_log_file="/tmp/.assert.log"
+export cpu_vendor=""
+
+declare -i ERR_NOT_SUPPORTED=1
+declare -i DEBUG_ENABLED=1
+declare -i DEBUG_DISABLED=0
+
+declare -i UVM_PERISTENCE_MODE_ENABLED=1
+declare -i UVM_PERISTENCE_MODE_DISABLED=0
+
+nvlog_preamble() {
+	printf "nvidia: %30s" "$1"
+}
+
+nvlog_ok() {
+	# No additional parametear just print [OK]
+	if [ -z "${1}" ]; then
+		printf "%10s\n" "[OK]"
+		return
+	fi
+	# If we have a var to print, transform to uppper case
+	printf "%10s\n" "[${!1^^}]"
+}
+
+nvlog_failed() {
+	printf "%10s\n" "[FAILED]"
+}
+
+nvlog_debug() {
+	if [ ! -e ${assert_log_file} ]; then
+		return
+	fi
+	while IFS= read -r line; do
+		if [ -z "$line" ]; then
+			continue
+		fi
+		printf "        %s\n" "$line"
+	done <<<"$(cat ${assert_log_file})"
+}
+
+debug_enabled() {
+	if [ -e /proc/cmdline ]; then
+		if grep -q "nvidia.rd.debug=1" /proc/cmdline; then
+			echo ${DEBUG_ENABLED}
+			return 0
+		fi
+
+		if grep -q "nvidia.rd.debug=0" /proc/cmdline; then
+			echo ${DEBUG_DISABLED}
+			return 0
+		fi
+
+		echo ${DEBUG_DISABLED}
+		return 0
+	fi
+}
+
+assert_ok() {
+	local assert_function=$1
+	local assert_result=$2
+	nvlog_preamble "${assert_function}"
+	if $assert_function >${assert_log_file} 2>&1; then
+		nvlog_ok "${assert_result}"
+		[ "${debug}" = "${DEBUG_ENABLED}" ] && nvlog_debug
+		return 0
+	else
+		nvlog_failed
+		nvlog_debug
+		return 1
+	fi
+}
+
+export debug=
+
+is_mounted() {
+	local mount_point=$1
+	if [ -e /proc/mounts ]; then
+		if grep -q "${mount_point}" /proc/mounts; then
+			return 0
+		fi
+	fi
+	return 1
+}
+
+not_mounted() {
+	local mount_point=$1
+	if [ -e /proc/mounts ]; then
+		if grep -q "${mount_point}" /proc/mounts; then
+			return 1
+		fi
+	fi
+	return 0
+}
+
+mount_setup() {
+	is_mounted " /proc " || mount -t proc proc /proc -o nosuid,noexec,nodev
+	is_mounted " /dev " || mount -t devtmpfs dev /dev -o mode=0755,nosuid
+	is_mounted " /sys " || mount -t sysfs sysfs /sys -o nosuid,noexec,nodev
+	is_mounted " /run " || mount -t tmpfs run /run -o nosuid,nodev,mode=0755
+	is_mounted " /tmp " || mount -t tmpfs tmpfs /tmp -o nosuid,noexec,nodev
+	is_mounted " /sys/kernel/security " || mount -t securityfs security /sys/kernel/security -o nosuid,nodev,noexec,relatime
+	not_mounted " /sys/firmware/efi/efivars " && [ -e /sys/firmware/efi/efivars ] &&
+		mount -t efivarfs efivarfs /sys/firmware/efi/efivars -o nosuid,nodev,noexec
+
+	mount -o remount,ro /
+
+	if [ -e /sys/firmware/efi ]; then
+		mount -t efivarfs efivarfs /sys/firmware/efi/efivars -o nosuid,nodev,noexec
+	fi
+
+	# Setup /dev symlinks
+	if [ -e /proc/kcore ]; then
+		ln -sfT /proc/kcore /dev/core
+	fi
+	ln -sfT /proc/self/fd /dev/fd
+	ln -sfT /proc/self/fd/0 /dev/stdin
+	ln -sfT /proc/self/fd/1 /dev/stdout
+	ln -sfT /proc/self/fd/2 /dev/stderr
+
+	# setub dev/null zero raandom urandom if not exist create
+	if [ ! -e /dev/null ]; then
+		mknod -m 666 /dev/null c 1 3
+	fi
+	if [ ! -e /dev/zero ]; then
+		mknod -m 666 /dev/zero c 1 5
+	fi
+	if [ ! -e /dev/random ]; then
+		mknod -m 666 /dev/random c 1 8
+	fi
+	if [ ! -e /dev/urandom ]; then
+		mknod -m 666 /dev/urandom c 1 9
+	fi
+
+	debug=$(debug_enabled)
+
+	if [ "${debug}" = DEBUG_ENABLED ]; then
+		mkdir /tmp/shared
+		mount -t 9p -o trans=virtio shared /tmp/shared || true
+	fi
+
+	nvlog_preamble "mount_setup"
+	nvlog_ok
+}
+
+nvidia_udev_setup() {
+	/etc/init.d/udev start
+}
+
+# We need to know if we're running on AMD or Intel CPUs, rename it to amd or intel
+nvidia_query_cpu_vendor() {
+	local cpu_vendor_file="/proc/cpuinfo"
+	if [ -e "${cpu_vendor_file}" ]; then
+		if grep -q "AuthenticAMD" "${cpu_vendor_file}"; then
+			cpu_vendor="amd"
+			return 0
+		fi
+
+		if grep -q "GenuineIntel" "${cpu_vendor_file}"; then
+			cpu_vendor="intel"
+			return 0
+		fi
+
+		if grep "CPU implementer" "${cpu_vendor_file}" | grep -q "0x41"; then
+			cpu_vendor="arm"
+			return 0
+		fi
+	fi
+	return 1
+}
+
+nvidia_gpu_query_cc_mode() {
+	for BDF in "${gpu_bdfs[@]}"; do
+		if /opt/nvidia_gpu_tools/nvidia_gpu_tools --mmio-access-type=sysfs --query-cc-mode --gpu-bdf="${BDF}" 2>&1 | grep "CC mode is on"; then
+			confidential_compute="on"
+		fi
+	done
+}
+
+#uvm_persistence_mode() {
+#	if [ -e /proc/cmdline ]; then
+#		if grep -q "nvidia.uvm.persistence.mode=1" /proc/cmdline; then
+#			echo ${UVM_PERISTENCE_MODE_ENABLED}
+#			return 0
+#		fi
+
+#		if grep -q "nvidia.uvm.persistence.mode=0" /proc/cmdline; then
+#			echo ${UVM_PERISTENCE_MODE_DISABLED}
+#			return 0
+#		fi
+
+#		echo ${UVM_PERISTENCE_MODE_NA}
+#		return 0
+#	fi
+#}
+
+#uvm_modprobe_options() {
+#	if [ -e /proc/cmdline ]; then
+#		if grep -q "nvidia.uvm.modprobe.options=" /proc/cmdline; then
+#			echo ${UVM_PERISTENCE_MODE_ENABLED}
+#			return 0
+#		fi
+#	fi
+#}
+
+nvidia_persistenced() {	
+
+	cmdline=$(cat /proc/cmdline)
+
+	# If CC=off and Intel cpu we need to set nvidia kernel parameter
+	if [ "${confidential_compute}" == "off" ] && [ "${cpu_vendor}" == "intel" ]; then
+		echo "nvidia: modprobe nvidia NVreg_RegistryDwords=\"RmNvswitchGpioDetect=2\""
+		modprobe nvidia NVreg_RegistryDwords="RmNvswitchGpioDetect=2"
+	fi
+
+	nvidia_process_kernel_params "$cmdline" "nvidia.uvm.modprobe.options"
+	if [ -n "${uvm_modprobe_options}" ]; then
+		echo "nvidia: modprobe nvidia-uvm ${uvm_modprobe_options}"
+		# shellcheck disable=SC2086 # if quoted this will brake modprobe's parsing of parameters
+		modprobe nvidia-uvm ${uvm_modprobe_options}
+	fi
+
+	nvidia_process_kernel_params "$cmdline" "nvidia.uvm.persistence.mode"
+	if [ -n "${uvm_persistence_mode}" ]; then
+		echo "nvidia: uvm persistence mode: ${uvm_persistence_mode}"
+	fi
+
+	#TODO: Does CC need root privs for persistenced?
+	#mkdir /var/run/nvidia-persistenced
+	#chown nobody:nogroup /var/run/nvidia-persistenced
+	#nvidia-persistenced -u nobody -g nogroup
+
+	if [ "${uvm_persistence_mode}" == "${UVM_PERISTENCE_MODE_ENABLED}" ]; then
+		echo "nvidia: enabling uvm persistence mode"
+		nvidia-persistenced --uvm-persistence-mode
+		return 0
+	elif [ "${uvm_persistence_mode}" == "${UVM_PERISTENCE_MODE_DISABLED}" ]; then
+		echo "nvidia: disabling uvm persistence mode"
+		nvidia-persistenced --no-uvm-persistence-mode
+		return 0
+	fi
+
+	nvidia-persistenced --uvm-persistence-mode
+
+}
+
+nvidia_container_toolkit() {
+	nvidia-ctk system create-device-nodes --control-devices --load-kernel-modules
+	nvidia-ctk cdi generate --output=/var/run/cdi/nvidia.json
+	nvidia-ctk cdi generate --mode=management --vendor=management.nvidia.com --output=/var/run/cdi/management.nvidia.yaml
+}
+
+OBSOLETE_nvidia_verifier_hook() {
+	nvidia_attestation_mode=$1
+
+	# dynamic check for confidential compute
+	local conf_compute
+	conf_compute=$(nvidia-smi conf-compute -f | awk -F ' ' '{print $3}')
+
+	if [ "$conf_compute" == "ON" ]; then
+		nvidia-smi conf-compute -grs
+		# TODO: Until Remote Attestion Works
+		echo "TODO: NVIDIA GPU Overriding Remote Attestation"
+		nvidia-smi conf-compute -srs 1
+		# shellcheck source=/dev/null
+		source /gpu-attestation/bin/activate
+
+		if [ "${nvidia_attestation_mode}" == "remote" ]; then
+			echo "NVIDIA GPU Remote Attestation"
+
+			if python3 /gpu-attestation/bin/remote_attestation.py; then
+				echo "NVIDIA GPU Remote Attestation passed"
+				#nvidia-smi conf-compute -srs 1
+			else
+				echo "NVIDIA GPU Remote Attestation failed"
+				#nvidia-smi conf-compute -srs 0
+			fi
+		else
+			echo "NVIDIA GPU Local Attestation"
+			if python3 /gpu-attestation/bin/local_attestation.py; then
+				echo "NVIDIA GPU Local Attestation passed"
+				#nvidia-smi conf-compute -srs 1
+			else
+				echo "NVIDIA GPU Local Attestation failed"
+				#nvidia-smi conf-compute -srs 0
+			fi
+		fi
+	fi
+}
+
+export gpu_device_ids=()
+export gpu_bdfs=()
+
+nvidia_gpu_get_devices() {
+
+	while IFS= read -r device_id; do
+		gpu_device_ids+=("$device_id")
+	done < <(lspci -d 10de: -n | awk -F ' ' '{print $3}' | cut -d: -f2)
+
+	while IFS= read -r bdf; do
+		gpu_bdfs+=("$bdf")
+	done < <(lspci -d 10de: -n | awk -F ' ' '{print $1}')
+
+	for bdf in "${!gpu_bdfs[@]}"; do
+		echo "nvidia: GPU=${bdf} 0000:${gpu_bdfs[bdf]}"
+	done
+}
+
+nvidia_reset_gpus() {
+	echo "nvidia: resetting ALL NVIDIA GPUs"
+	for bdf in "${gpu_bdfs[@]}"; do
+		echo "nvidia: resetting BDF $bdf"
+		if echo 1 >"/sys/bus/pci/devices/0000:${bdf}/reset"; then
+			echo "nvidia: reset BDF $bdf succeeded"
+			return 0
+		fi
+		echo "nvidia: reset BDF $bdf failed"
+		return 1
+	done
+}
+
+nvidia_check_if_supported() {
+
+	if [ ! -e "${supported_gpu_devids}" ]; then
+		echo "nvidia: ${supported_gpu_devids} file not found, skipping check"
+		return
+	fi
+
+	for devid in "${gpu_device_ids[@]}"; do
+		if ! grep -q "${devid}" "${supported_gpu_devids}"; then
+			echo "GPU $devid is not supported, returning"
+			return ${ERR_NOT_SUPPORTED}
+		fi
+	done
+}
+
+nvidia_unload_reload_driver() {
+
+	kill "$(pidof nvidia-persistenced)"
+	rmmod nvidia-uvm
+	rmmod nvidia-modeset
+	rmmod nvidia
+
+	assert_ok nvidia_reset_gpus
+	assert_ok nvidia_persistenced
+}
+
+nvidia_smi_lgc() {
+
+	local value=$1
+	IFS=':' read -r -a parts <<<"$value"
+	echo "nvidia: locking gpu clocks on GPU${parts[0]} to ${parts[1]} MHz"
+	nvidia-smi -i "${parts[0]}" -lgc "${parts[1]}"
+}
+
+nvidia_smi_lmcd() {
+
+	local value=$1
+	IFS=':' read -r -a parts <<<"$value"
+	echo "nvidia: locking memory clocks on GPU${parts[0]} to ${parts[1]} MHz"
+	nvidia-smi -i "${parts[0]}" -lmcd "${parts[1]}"
+	nvidia_unload_reload_driver
+}
+
+nvidia_smi_pl() {
+
+	local value=$1
+	IFS=':' read -r -a parts <<<"$value"
+	echo "nvidia: setting power limit on GPU${parts[0]} to ${parts[1]} Watt"
+	nvidia-smi -i "${parts[0]}" -pl "${parts[1]}"
+}
+
+export attestation_mode="remote"
+
+nvidia_attestation_mode() {
+	mode=$1
+	if [ "${mode}" = "remote" ]; then
+		attestation_mode=${mode}
+		return 0
+	fi
+
+	if [ "${mode}" = "local" ]; then
+		attestation_mode=${mode}
+		return 0
+	fi
+
+	echo "nvidia: invalid attestation mode: ${mode}"
+	return 1
+}
+
+export uvm_modprobe_options=""
+export uvm_persistence_mode=""
+
+nvidia_process_kernel_params() {
+	kernel_params=$1
+	echo "nvidia: kernel_params: $kernel_params"
+
+	# Use readarray and xargs to correctly parse and handle parameters, including quoted strings
+	readarray -t parsed_params < <(xargs -n1 <<<"$kernel_params")
+
+	# First pass: handle specific parameters based on which_param
+	which_param=$2
+	if [[ -n $which_param ]]; then
+		param_prefix="${which_param}="
+		for param in "${parsed_params[@]}"; do
+			if [[ $param == $param_prefix* ]]; then
+				value=${param#$param_prefix}
+				value=${value#\"} # Remove leading quote if present
+				value=${value%\"} # Remove trailing quote if present
+				echo "nvidia: value of kernel param $which_param: $value"
+
+				case $which_param in
+				nvidia.attestation.mode)
+					if ! nvidia_attestation_mode "$value"; then
+						return 1
+					fi
+					;;
+				nvidia.uvm.modprobe.options)
+					uvm_modprobe_options="$value"
+					;;
+				*)
+					# If it's a specific parameter we're looking for, do nothing more here
+					;;
+				esac
+			fi
+		done
+	else
+		# Second pass: handle all other parameters without specific filtering
+		for param in "${parsed_params[@]}"; do
+			case $param in
+			
+			nvidia.smi.lgc=*)
+				value=${param#nvidia.smi.lgc=}
+				echo "nvidia: value of kernel param nvidia.smi.lgc: $value"
+				if ! nvidia_smi_lgc "$value"; then
+					return 1
+				fi
+				;;
+			nvidia.smi.lmcd=*)
+				value=${param#nvidia.smi.lmcd=}
+				echo "nvidia: value of kernel param nvidia.smi.lmcd: $value"
+				if ! nvidia_smi_lmcd "$value"; then
+					return 1
+				fi
+				;;
+			nvidia.smi.pl=*)
+				value=${param#nvidia.smi.pl=}
+				echo "nvidia: value of kernel param nvidia.smi.pl: $value"
+				if ! nvidia_smi_pl "$value"; then
+					return 1
+				fi
+				;;
+			# Handle other parameters as needed
+			*)
+				# Ignore or log unknown parameters
+				;;
+			esac
+		done
+	fi
+}
+
+# The very first step so we can capture all the logs
+mkdir -p "${logging_directory}"

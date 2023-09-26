@@ -47,7 +47,7 @@ jobs:
         run: bash tests/integration/cri-containerd/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v3
         with:
           name: kata-static-tarball-s390x${{ inputs.tarball-suffix }}
           path: kata-artifacts

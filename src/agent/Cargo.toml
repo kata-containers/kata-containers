@@ -78,6 +78,7 @@ http = { version = "0.2.8", optional = true }
 reqwest = { version = "0.11.14", optional = true }
 # The "vendored" feature for openssl is required for musl build
 openssl = { version = "0.10.54", features = ["vendored"], optional = true }
+which = "6.0.0"
 
 # Image pull/decrypt
 image-rs = { git = "https://github.com/confidential-containers/guest-components", rev = "ca6b438", default-features = true, optional = true }
