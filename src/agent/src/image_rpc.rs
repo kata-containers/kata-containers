@@ -53,7 +53,7 @@ impl ImageService {
 
         let mut image_client = ImageClient::default();
         if !AGENT_CONFIG.image_policy_file.is_empty() {
-            image_client.config.file_paths.sigstore_config = AGENT_CONFIG.image_policy_file.clone();
+            image_client.config.file_paths.policy_path = AGENT_CONFIG.image_policy_file.clone();
         }
         if !AGENT_CONFIG.simple_signing_sigstore_config.is_empty() {
             image_client.config.file_paths.sigstore_config =
