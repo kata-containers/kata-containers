@@ -72,8 +72,9 @@ OK "init is installed"
 	use AGENT_BIN env variable to change the expected agent binary name"
 OK "Agent is installed"
 
-# initramfs expects /init
-ln -sf /sbin/init "${ROOTFS}/init"
+# initramfs expects /init, create symlink only if ${ROOTFS}/init does not exist
+# Init may be provided by other packages, e.g. systemd or GPU initrd/rootfs
+[ -e "${ROOTFS}/init" ] || ln -sf /sbin/init  "${ROOTFS}/init"
 
 info "Creating ${IMAGE_DIR}/${IMAGE_NAME} based on rootfs at ${ROOTFS}"
-( cd "${ROOTFS}" && find . | cpio -H newc -o | gzip -9 ) > "${IMAGE_DIR}"/"${IMAGE_NAME}"
+( cd "${ROOTFS}" && find . | cpio -H newc -o | pigz -9 ) > "${IMAGE_DIR}"/"${IMAGE_NAME}"

@@ -3,12 +3,15 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #
-
+set -x
 [ -z "${DEBUG}" ] || set -x
 set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+
+# Use mulit-threaded XZ compression
+export XZ_OPT="-T0"
 
 readonly project="kata-containers"
 
@@ -262,6 +265,43 @@ install_initrd() {
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
 
+#Instal NVIDIA GPU image
+install_image_nvidia_gpu() {
+	export AGENT_POLICY="yes"
+	export AGENT_INIT="yes"
+	export EXTRA_PKGS="apt"
+	export GOPATH="/root/go"
+	install_image "nvidia-gpu"
+}
+
+#Install NVIDIA GPU initrd
+install_initrd_nvidia_gpu() {
+	export AGENT_POLICY="yes"
+	export AGENT_INIT="yes"
+	export EXTRA_PKGS="apt"
+	export GOPATH="/root/go"
+	install_initrd "nvidia-gpu"
+}
+
+#Instal NVIDIA GPU confidential image
+install_image_nvidia_gpu_confidential() {
+	export AGENT_POLICY="yes"
+	export AGENT_INIT="yes"
+	export EXTRA_PKGS="apt"
+	export GOPATH="/root/go"
+	install_image "nvidia-gpu-confidential"
+}
+
+#Install NVIDIA GPU confidential initrd
+install_initrd_nvidia_gpu_confidential() {
+	export AGENT_POLICY="yes"
+	export AGENT_INIT="yes"
+	export EXTRA_PKGS="apt"
+	export GOPATH="/root/go"
+	install_initrd "nvidia-gpu-confidential"
+}
+
+
 #Install Mariner guest initrd
 install_initrd_mariner() {
 	export AGENT_POLICY=yes
@@ -336,7 +376,7 @@ install_kernel_helper() {
 		module_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/kernel-confidential/builddir/kata-linux-${kernel_version#v}-${kernel_kata_config_version}/lib/modules/${kernel_version#v}"
 	fi
 
-	install_cached_kernel_tarball_component ${kernel_name} ${module_dir} && return 0
+#	install_cached_kernel_tarball_component ${kernel_name} ${module_dir} && return 0
 
 	info "build ${kernel_name}"
 	info "Kernel version ${kernel_version}"
@@ -385,6 +425,37 @@ install_kernel_nvidia_gpu_confidential() {
 		"assets.kernel.confidential.version" \
 		"kernel-nvidia-gpu-confidential" \
 		"-x confidential -g nvidia -u ${kernel_url} -H deb"
+}
+
+#Install kernel-headers for the specified kernel-name
+install_kernel_headers_helper() {
+	local kernel_name="${1}"
+	local pkg_type="${2}"
+
+	local pkg_header_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/${kernel_name}/builddir/"
+
+	# If the kernel is built without -H deb or -H rpm then we may miss the
+	# needed packages, make sure it was built correctly or bail out.
+	if find "${pkg_header_dir}" -type f -name "*.${pkg_type}" -print -quit | grep -q .; then
+		cp ${pkg_header_dir}/*.${pkg_type} ${destdir}
+	else
+		echo "No kernel .${pkg_type} files found in ${pkg_header_dir}. Exiting."
+		exit 1
+	fi
+}
+
+#Install nvidia-gpu kernel-headers assset
+install_kernel_headers_nvidia_gpu() {
+	install_kernel_headers_helper \
+		"kernel-nvidia-gpu" \
+		"deb"
+}
+
+#Install nvidia-gpu-confidential kernel-headers assset
+install_kernel_headers_nvidia_gpu_confidential() {
+	install_kernel_headers_helper \
+		"kernel-nvidia-gpu-confidential" \
+		"deb"
 }
 
 #Install GPU and SNP enabled kernel asset
@@ -793,6 +864,8 @@ handle_build() {
 		install_clh
 		install_firecracker
 		install_image
+		install_nvidia_gpu_image
+		install_nvidia_gpu_initrd
 		install_initrd
 		install_initrd_mariner
 		install_initrd_sev
@@ -802,6 +875,8 @@ handle_build() {
 		install_kernel_dragonball_experimental
 		install_kernel_tdx_experimental
 		install_log_parser_rs
+		install_kernel_nvidia_gpu_snp
+		install_kernel_nvidia_gpu_tdx_experimental
 		install_nydus
 		install_ovmf
 		install_ovmf_sev
@@ -844,6 +919,10 @@ handle_build() {
 
 	kernel-nvidia-gpu-confidential) install_kernel_nvidia_gpu_confidential ;;
 
+	kernel-headers-nvidia-gpu) install_kernel_headers_nvidia_gpu ;;
+
+	kernel-headers-nvidia-gpu-confidential) install_kernel_headers_nvidia_gpu_confidential ;;
+
 	kernel-nvidia-gpu-snp) install_kernel_nvidia_gpu_snp;;
 
 	kernel-nvidia-gpu-tdx-experimental) install_kernel_nvidia_gpu_tdx_experimental;;
@@ -870,6 +949,14 @@ handle_build() {
 
 	rootfs-image-tdx) install_image_tdx ;;
 
+	rootfs-nvidia-gpu-image) install_image_nvidia_gpu ;;
+
+	rootfs-nvidia-gpu-initrd) install_initrd_nvidia_gpu ;;
+
+	rootfs-nvidia-gpu-confidential-image) install_image_nvidia_gpu_confidential ;;
+
+	rootfs-nvidia-gpu-confidential-initrd) install_initrd_nvidia_gpu_confidential ;;
+
 	rootfs-initrd) install_initrd ;;
 
 	rootfs-initrd-mariner) install_initrd_mariner ;;
@@ -893,7 +980,8 @@ handle_build() {
 
 	if [ ! -f "${final_tarball_path}" ]; then
 		cd "${destdir}"
-		sudo tar cvfJ "${final_tarball_path}" "."
+		#sudo tar cvfJ "${final_tarball_path}" "."
+		sudo tar cf - "." | pixz > "${final_tarball_path}"
 	fi
 	tar tvf "${final_tarball_path}"
 

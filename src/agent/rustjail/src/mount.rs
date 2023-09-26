@@ -265,6 +265,16 @@ pub fn init_rootfs(
         }
     }
 
+    
+    // Mount /tmp as tmpfs with MS_NODEV and MS_STRICTATIME
+    mount(
+        Some("tmpfs"),
+        format!("{}/tmp", rootfs).as_str(),
+        Some("tmpfs"),
+        MsFlags::MS_NODEV | MsFlags::MS_STRICTATIME,
+        None::<&str>,
+    )?;
+    
     let olddir = unistd::getcwd()?;
     unistd::chdir(rootfs)?;
 

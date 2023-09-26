@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV INSTALL_IN_GOPATH=false
 # Required for libxml2-dev
@@ -15,6 +15,10 @@ COPY install_oras.sh /usr/bin/install_oras.sh
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 # Install yq, oras, and docker
+# Multithreaded XZ compression
+ENV XZ_DEFAULTS="-T 0"
+
+# Install yq and docker
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
@@ -37,10 +41,13 @@ ARG GID=1000
 # gid of the docker group on the host, required for running docker in docker builds.
 ARG HOST_DOCKER_GID
 
+RUN echo "IMG_USER=${IMG_USER} UID=${UID} GID=${GID} HOST_DOCKER_GID=${HOST_DOCKER_GID}"
+RUN cat /etc/group
+
 RUN if [ ${IMG_USER} != "root" ]; then sed -i -e "/:${GID}:/d" /etc/group; groupadd --gid=${GID} ${IMG_USER};fi
 RUN if [ ${IMG_USER} != "root" ]; then adduser ${IMG_USER} --uid=${UID} --gid=${GID};fi
-RUN if [ ${IMG_USER} != "root" ] && [ ! -z ${HOST_DOCKER_GID} ]; then groupadd --gid=${HOST_DOCKER_GID} docker_on_host;fi
-RUN if [ ${IMG_USER} != "root" ] && [ ! -z ${HOST_DOCKER_GID} ]; then usermod -a -G docker_on_host ${IMG_USER};fi
+RUN if [ ${IMG_USER} != "root" ] && [ ! -z ${HOST_DOCKER_GID} ]; then getent group ${HOST_DOCKER_GID}|| groupadd --gid=${HOST_DOCKER_GID} docker_on_host;fi
+RUN if [ ${IMG_USER} != "root" ] && [ ! -z ${HOST_DOCKER_GID} ]; then usermod -a -G ${HOST_DOCKER_GID} ${IMG_USER};fi
 RUN sh -c "echo '${IMG_USER} ALL=NOPASSWD: ALL' >> /etc/sudoers"
 
 RUN if [ "${ARCH}" != "$(uname -m)" ] && [ "${ARCH}" == "s390x" ]; then sed -i 's/^deb/deb [arch=amd64]/g' /etc/apt/sources.list && \
@@ -57,6 +64,10 @@ RUN apt-get update && \
     cpio \
     gcc \
     unzip \
+    git \
+    make \
+    wget \
+    pixz \
     xz-utils && \
     if [ "${ARCH}" != "$(uname -m)" ] && [ "${ARCH}" == "s390x" ]; then \
         apt-get install -y --no-install-recommends \

@@ -4,7 +4,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #
-
+set -x
 [ -z "${DEBUG}" ] || set -x
 set -o errexit
 set -o nounset
