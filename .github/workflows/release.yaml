@@ -6,10 +6,15 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Get the new release version
+        run: |
+          release_version=$(./tools/packaging/release/release.sh release-version)
+          echo "RELEASE_VERSION=$release_version" >> "$GITHUB_ENV"
 
       - name: Create a new release
         run: |
@@ -53,13 +58,13 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Login to Kata Containers docker.io
-        uses: docker/login-action@v3
+        uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Login to Kata Containers quay.io
-        uses: docker/login-action@v3
+        uses: docker/login-action@v2
         with:
           registry: quay.io
           username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
@@ -70,7 +75,7 @@ jobs:
           release_version=$(./tools/packaging/release/release.sh release-version)
           echo "KATA_DEPLOY_IMAGE_TAGS=$release_version latest" >> "$GITHUB_ENV"
 
-      - name: Publish multi-arch manifest on docker.io and quay.io
+      - name: Push multi-arch manifest
         run: |
           ./tools/packaging/release/release.sh publish-multiarch-manifest
         env:
@@ -80,56 +85,51 @@ jobs:
     needs: [build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le]
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set KATA_STATIC_TARBALL env var
         run: |
           tarball=$(pwd)/kata-static.tar.xz
           echo "KATA_STATIC_TARBALL=${tarball}" >> "$GITHUB_ENV"
 
-      - name: Download amd64 artifacts
-        uses: actions/download-artifact@v4
+      - name: download-artifacts-amd64
+        uses: actions/download-artifact@v3
         with:
           name: kata-static-tarball-amd64
-
-      - name: Upload amd64 static tarball to GitHub
+      - name: push amd64 static tarball to github
         run: |
           ./tools/packaging/release/release.sh upload-kata-static-tarball
         env:
           GH_TOKEN: ${{ github.token }}
           ARCHITECTURE: amd64
 
-      - name: Download arm64 artifacts
-        uses: actions/download-artifact@v4
+      - name: download-artifacts-arm64
+        uses: actions/download-artifact@v3
         with:
           name: kata-static-tarball-arm64
-
-      - name: Upload arm64 static tarball to GitHub
+      - name: push arm64 static tarball to github
         run: |
           ./tools/packaging/release/release.sh upload-kata-static-tarball
         env:
           GH_TOKEN: ${{ github.token }}
           ARCHITECTURE: arm64
 
-      - name: Download s390x artifacts
-        uses: actions/download-artifact@v4
+      - name: download-artifacts-s390x
+        uses: actions/download-artifact@v3
         with:
           name: kata-static-tarball-s390x
-
-      - name: Upload s390x static tarball to GitHub
+      - name: push s390x static tarball to github
         run: |
           ./tools/packaging/release/release.sh upload-kata-static-tarball
         env:
           GH_TOKEN: ${{ github.token }}
           ARCHITECTURE: s390x
 
-      - name: Download ppc64le artifacts
-        uses: actions/download-artifact@v4
+      - name: download-artifacts-ppc64le
+        uses: actions/download-artifact@v3
         with:
           name: kata-static-tarball-ppc64le
-
-      - name: Upload ppc64le static tarball to GitHub
+      - name: push ppc64le static tarball to github
         run: |
           ./tools/packaging/release/release.sh upload-kata-static-tarball
         env:
@@ -140,10 +140,8 @@ jobs:
     needs: release
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Upload versions.yaml to GitHub
+      - uses: actions/checkout@v4
+      - name: upload versions.yaml
         run: |
           ./tools/packaging/release/release.sh upload-versions-yaml-file
         env:
@@ -153,10 +151,8 @@ jobs:
     needs: release
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Generate and upload vendored code tarball
+      - uses: actions/checkout@v4
+      - name: generate-and-upload-tarball
         run: |
           ./tools/packaging/release/release.sh upload-vendored-code-tarball
         env:
@@ -166,24 +162,9 @@ jobs:
     needs: release
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Download libseccomp tarball and upload it to GitHub
+      - uses: actions/checkout@v4
+      - name: download-and-upload-tarball
         run: |
           ./tools/packaging/release/release.sh upload-libseccomp-tarball
-        env:
-          GH_TOKEN: ${{ github.token }}
-
-  publish-release:
-    needs: [ build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le, publish-multi-arch-images, upload-multi-arch-static-tarball, upload-versions-yaml, upload-cargo-vendored-tarball, upload-libseccomp-tarball ]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Publish a release
-        run: |
-          ./tools/packaging/release/release.sh publish-release
         env:
           GH_TOKEN: ${{ github.token }}

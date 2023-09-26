@@ -99,6 +99,9 @@ GENERATED_VARS = \
 		CONFIG_ACRN_IN \
 		CONFIG_QEMU_IN \
 		CONFIG_QEMU_NVIDIA_GPU_IN \
+        CONFIG_QEMU_NVIDIA_GPU_NVCF_IN \
+        CONFIG_QEMU_NVIDIA_GPU_SNP_IN \
+        CONFIG_QEMU_NVIDIA_GPU_TDX_IN \
 		CONFIG_QEMU_SEV_IN \
 		CONFIG_QEMU_TDX_IN \
 		CONFIG_QEMU_SNP_IN \
@@ -327,6 +330,8 @@ ifneq (,$(QEMUCMD))
 
     CONFIGS += $(CONFIG_QEMU_SEV)
 
+#################################################################################
+
     CONFIG_FILE_QEMU_SNP = configuration-qemu-snp.toml
     CONFIG_QEMU_SNP = config/$(CONFIG_FILE_QEMU_SNP)
     CONFIG_QEMU_SNP_IN = $(CONFIG_QEMU_SNP).in
@@ -339,11 +344,61 @@ ifneq (,$(QEMUCMD))
 
     CONFIGS += $(CONFIG_QEMU_SNP)
 
+#################################################################################
+
+    CONFIG_FILE_QEMU_NVIDIA_GPU_SNP = configuration-qemu-nvidia-gpu-snp.toml
+    CONFIG_QEMU_NVIDIA_GPU_SNP = config/$(CONFIG_FILE_QEMU_NVIDIA_GPU_SNP)
+    CONFIG_QEMU_NVIDIA_GPU_SNP_IN = $(CONFIG_QEMU_NVIDIA_GPU_SNP).in
+
+    CONFIG_PATH_QEMU_NVIDIA_GPU_SNP = $(abspath $(CONFDIR)/$(CONFIG_FILE_QEMU_NVIDIA_GPU_SNP))
+    CONFIG_PATHS += $(CONFIG_PATH_QEMU_NVIDIA_GPU_SNP)
+
+    SYSCONFIG_QEMU_NVIDIA_GPU_SNP = $(abspath $(SYSCONFDIR)/$(CONFIG_FILE_QEMU_NVIDIA_GPU_SNP))
+    SYSCONFIG_PATHS_SNP += $(SYSCONFIG_QEMU_NVIDIA_GPU_SNP)
+
+    CONFIGS += $(CONFIG_QEMU_NVIDIA_GPU_SNP)
+
+
+#################################################################################
+
+
     CONFIG_FILE_QEMU_NVIDIA_GPU = configuration-qemu-nvidia-gpu.toml
     CONFIG_QEMU_NVIDIA_GPU = config/$(CONFIG_FILE_QEMU_NVIDIA_GPU)
     CONFIG_QEMU_NVIDIA_GPU_IN = $(CONFIG_QEMU_NVIDIA_GPU).in
 
+    CONFIG_PATH_QEMU_NVIDIA_GPU = $(abspath $(CONFDIR)/$(CONFIG_FILE_QEMU_NVIDIA_GPU))
+    CONFIG_PATHS += $(CONFIG_PATH_QEMU_NVIDIA_GPU)
+
+    SYSCONFIG_QEMU_NVIDIA_GPU = $(abspath $(SYSCONFDIR)/$(CONFIG_FILE_QEMU_NVIDIA_GPU))
+    SYSCONFIG_PATHS += $(SYSCONFIG_QEMU_NVIDIA_GPU)
+
     CONFIGS += $(CONFIG_QEMU_NVIDIA_GPU)
+
+#################################################################################
+
+
+#    CONFIG_FILE_QEMU_NVIDIA_GPU_NVCF = configuration-qemu-nvidia-gpu-nvcf.toml
+#    CONFIG_QEMU_NVIDIA_GPU_NVCF = config/$(CONFIG_FILE_QEMU_NVIDIA_GPU_NVCF)
+#    CONFIG_QEMU_NVIDIA_GPU_NVCF_IN = $(CONFIG_QEMU_NVIDIA_GPU_NVCF).in
+
+#    CONFIGS += $(CONFIG_QEMU_NVIDIA_GPU_NVCF)
+
+    CONFIG_FILE_QEMU_NVIDIA_GPU_TDX = configuration-qemu-nvidia-gpu-tdx.toml
+    CONFIG_QEMU_NVIDIA_GPU_TDX = config/$(CONFIG_FILE_QEMU_NVIDIA_GPU_TDX)
+    CONFIG_QEMU_NVIDIA_GPU_TDX_IN = $(CONFIG_QEMU_NVIDIA_GPU_TDX).in
+
+    CONFIG_PATH_QEMU_NVIDIA_GPU_TDX = $(abspath $(CONFDIR)/$(CONFIG_FILE_QEMU_NVIDIA_GPU_TDX))
+    CONFIG_PATHS += $(CONFIG_PATH_QEMU_NVIDIA_GPU_TDX)
+
+    SYSCONFIG_QEMU_NVIDIA_GPU_TDX = $(abspath $(SYSCONFDIR)/$(CONFIG_FILE_QEMU_NVIDIA_GPU_TDX))
+    SYSCONFIG_PATHS += $(SYSCONFIG_QEMU_NVIDIA_GPU_TDX)
+
+    CONFIGS += $(CONFIG_QEMU_NVIDIA_GPU_TDX)
+
+
+#################################################################################
+    
+
 
     CONFIG_FILE_REMOTE = configuration-remote.toml
     CONFIG_REMOTE = config/$(CONFIG_FILE_REMOTE)

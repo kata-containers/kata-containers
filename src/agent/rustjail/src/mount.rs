@@ -182,6 +182,9 @@ pub fn init_rootfs(
         None => flags |= MsFlags::MS_SLAVE,
     }
 
+
+
+
     let label = &linux.mount_label;
 
     let root = spec
@@ -196,10 +199,11 @@ pub fn init_rootfs(
         .to_str()
         .ok_or_else(|| anyhow!("Could not convert rootfs path to string"))?;
 
+
     mount(None::<&str>, "/", None::<&str>, flags, None::<&str>)?;
-
+    
     rootfs_parent_mount_private(rootfs)?;
-
+    
     mount(
         Some(rootfs),
         rootfs,
@@ -207,6 +211,7 @@ pub fn init_rootfs(
         MsFlags::MS_BIND | MsFlags::MS_REC,
         None::<&str>,
     )?;
+        
 
     let mut bind_mount_dev = false;
     for m in &spec.mounts {
@@ -217,6 +222,16 @@ pub fn init_rootfs(
                 m.destination
             ));
         }
+        // From https://github.com/opencontainers/runtime-spec/blob/main/config.md#mounts
+        // type (string, OPTIONAL) The type of the filesystem to be mounted. 
+        // bind may be only specified in the oci spec options -> flags update r#type 
+        let mut mbind = m.clone();
+        let m = if m.r#type.is_empty() && flags & MsFlags::MS_BIND == MsFlags::MS_BIND {
+            mbind.r#type = "bind".into();
+            &mbind
+        } else {
+            m
+        };
 
         // From https://github.com/opencontainers/runtime-spec/blob/main/config.md#mounts
         // type (string, OPTIONAL) The type of the filesystem to be mounted.
@@ -230,7 +245,7 @@ pub fn init_rootfs(
         };
 
         if m.r#type == "cgroup" {
-            mount_cgroups(cfd_log, m, rootfs, flags, &data, cpath, mounts)?;
+            mount_cgroups(cfd_log, &m, rootfs, flags, &data, cpath, mounts)?;
         } else {
             if m.destination == "/dev" {
                 if m.r#type == "bind" {
@@ -239,9 +254,11 @@ pub fn init_rootfs(
                 flags &= !MsFlags::MS_RDONLY;
             }
 
+
             if m.r#type == "bind" {
-                check_proc_mount(m)?;
+                check_proc_mount(&m)?;
             }
+
 
             // If the destination already exists and is not a directory, we bail
             // out This is to avoid mounting through a symlink or similar -- which
@@ -258,7 +275,7 @@ pub fn init_rootfs(
                 }
             }
 
-            mount_from(cfd_log, m, rootfs, flags, &data, label)?;
+            mount_from(cfd_log, &m, rootfs, flags, &data, label)?;
             // bind mount won't change mount options, we need remount to make mount options
             // effective.
             // first check that we have non-default options required before attempting a
@@ -274,8 +291,34 @@ pub fn init_rootfs(
                 )?;
             }
         }
+
     }
 
+
+
+    spec.annotations.iter().for_each(|(k, v)| {
+        if k == "io.katacontainers.pkg.oci.container_type" && v != "pod_sandbox" {
+            let err = mount(
+                Some("tmpfs"),
+                format!("{}/tmp", rootfs).as_str(),
+                Some("tmpfs"),
+                MsFlags::MS_NODEV | MsFlags::MS_STRICTATIME,
+                None::<&str>,
+            );        
+            match err {
+                Ok(_) => (),
+                Err(e) => {
+                    log_child!(cfd_log, "mount /tmp tmpfs error: {}", e.to_string());
+                }
+            }
+        }
+    });
+    
+    /*
+    // Mount /tmp as tmpfs with MS_NODEV and MS_STRICTATIME
+    */
+    
+    
     let olddir = unistd::getcwd()?;
     unistd::chdir(rootfs)?;
 
@@ -399,6 +442,7 @@ fn mount_cgroups(
     };
 
     let cflags = MsFlags::MS_NOEXEC | MsFlags::MS_NOSUID | MsFlags::MS_NODEV;
+    log_child!(cfd_log, "### mount_cgroups");
     mount_from(cfd_log, &ctm, rootfs, cflags, "", "")?;
     let olddir = unistd::getcwd()?;
 
@@ -448,6 +492,7 @@ fn mount_cgroups(
         if key.contains("systemd") {
             mount_flags &= !MsFlags::MS_RDONLY;
         }
+        log_child!(cfd_log, "mount_cgroups");
         mount_from(cfd_log, &bm, rootfs, mount_flags, "", "")?;
 
         if key != base {
@@ -802,7 +847,7 @@ fn mount_from(
             );
             e
         })?;
-
+        log_child!(cfd_log, "mount_from bind  11111111111111111111111111111111111111111111111");     
         // make sure file exists so we can bind over it
         if !src.is_dir() {
             let _ = OpenOptions::new()
@@ -821,6 +866,7 @@ fn mount_from(
         }
         src.to_str().unwrap().to_string()
     } else {
+        log_child!(cfd_log, "mount_from else  22222222222222222222222222222222222222222222222222");     
         let _ = fs::create_dir_all(&dest);
         if m.r#type.as_str() == "cgroup2" {
             "cgroup2".to_string()
@@ -834,7 +880,7 @@ fn mount_from(
         log_child!(cfd_log, "dest stat error. {}: {:?}", dest.as_str(), e);
         e
     })?;
-
+    log_child!(cfd_log, "mount_from stat  333333333333333333333333333333333333333333333333");     
     // Set the SELinux context for the mounts
     let mut use_xattr = false;
     if !label.is_empty() {
@@ -865,6 +911,7 @@ fn mount_from(
             );
         }
     }
+    log_child!(cfd_log, "mount_from mount  4444444444444444444444444444444444444444444444");     
 
     mount(
         Some(src.as_str()),
@@ -904,6 +951,7 @@ fn mount_from(
             e
         })?;
     }
+    log_child!(cfd_log, "mount_from end  4444444444444444444444444444444444444444444444");     
     Ok(())
 }
 

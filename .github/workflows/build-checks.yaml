@@ -55,7 +55,7 @@ jobs:
       - name: Adjust a permission for repo
         run: |
           sudo chown -R $USER:$USER $GITHUB_WORKSPACE $HOME
-          sudo rm -rf $GITHUB_WORKSPACE/* && echo "GITHUB_WORKSPACE removed" || { sleep 10 && sudo rm -rf $GITHUB_WORKSPACE/*; }
+          sudo rm -rf $GITHUB_WORKSPACE/*
           sudo rm -f /tmp/kata_hybrid*  # Sometime we got leftover from test_setup_hvsock_failed()
         if: ${{ inputs.instance != 'ubuntu-20.04' }}
 
@@ -95,7 +95,7 @@ jobs:
           echo "LIBSECCOMP_LINK_TYPE=static" >> $GITHUB_ENV
           echo "LIBSECCOMP_LIB_PATH=${libseccomp_install_dir}/lib" >> $GITHUB_ENV
       - name: Install protobuf-compiler
-        if: ${{ matrix.command != 'make vendor' && (matrix.component == 'agent' || matrix.component == 'runk' || matrix.component == 'genpolicy') }}
+        if: ${{ matrix.command != 'make vendor' && (matrix.component == 'agent' || matrix.component == 'runk') }}
         run: sudo apt-get -y install protobuf-compiler
       - name: Install clang
         if: ${{ matrix.command == 'make check' && matrix.component == 'agent' }}

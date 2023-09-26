@@ -3,12 +3,15 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #
-
+set -x
 [ -z "${DEBUG}" ] || set -x
 set -o errexit
 set -o nounset
 set -o pipefail
 set -o errtrace
+
+# Use mulit-threaded XZ compression
+export XZ_OPT="-T0"
 
 readonly project="kata-containers"
 
@@ -46,8 +49,10 @@ USE_CACHE="${USE_CACHE:-"yes"}"
 ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY:-ghcr.io}"
 ARTEFACT_REGISTRY_USERNAME="${ARTEFACT_REGISTRY_USERNAME:-}"
 ARTEFACT_REGISTRY_PASSWORD="${ARTEFACT_REGISTRY_PASSWORD:-}"
+ARTEFACT_REPOSITORY="${ARTEFACT_REPOSITORY:-}"
 TARGET_BRANCH="${TARGET_BRANCH:-main}"
 PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-}"
+KERNEL_HEADERS_PKG_TYPE="${KERNEL_HEADERS_PKG_TYPE:-deb}"
 
 workdir="${WORKDIR:-$PWD}"
 
@@ -128,6 +133,15 @@ EOF
 	exit "${return_code}"
 }
 
+get_kernel_headers_dir() {
+	local kernel_name"=${1:-}"
+	[ -z "${kernel_name}" ] && die "kernel name is a required argument"
+
+	local kernel_headers_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/${kernel_name}/builddir"
+
+	echo "${kernel_headers_dir}"
+}
+
 get_kernel_modules_dir() {
 	local kernel_version="${1:-}"
 	local kernel_kata_config_version="${2:-}"
@@ -140,7 +154,7 @@ get_kernel_modules_dir() {
 	local numeric_final_version=${version}
 
 	# Every first release of a kernel is x.y, while the resulting folder would be x.y.0
-	local dots=$(echo ${version} | grep -o '\.' | wc -l)
+	local dots=$(echo "${version}" | grep -o '\.' | wc -l)
 	[ "${dots}" == "1" ] && numeric_final_version="${version}.0"
 
 	local kernel_modules_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/${kernel_name}/builddir/kata-linux-${version}-${kernel_kata_config_version}/lib/modules/${numeric_final_version}"
@@ -152,7 +166,7 @@ get_kernel_modules_dir() {
 			;;
 	esac
 
-	echo ${kernel_modules_dir}
+	echo "${kernel_modules_dir}"
 }
 
 cleanup_and_fail() {
@@ -187,7 +201,7 @@ install_cached_tarball_component() {
 	# "tarball1_name:tarball1_path tarball2_name:tarball2_path ... tarballN_name:tarballN_path"
 	local extra_tarballs="${6:-}"
 
-	sudo oras pull ${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) || return 1
+	sudo oras pull ${ARTEFACT_REPOSITORY}/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) || return 1
 
 	cached_version="$(cat ${component}-version)"
 	cached_image_version="$(cat ${component}-builder-image-version)"
@@ -355,7 +369,7 @@ install_initrd() {
 		"$(get_last_modification "${repo_root_dir}/tools/packaging/static-build/agent")")
 
 	latest_artefact="${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${initrd_type}"
-	if [ "${variant}" == "confidential" ]; then
+	if [ "${variant}" == "*-confidential" ]; then
 		# For the confidential initrd we depend on the kernel built in order to ensure that
 		# measured boot is used
 		latest_artefacts+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
@@ -381,7 +395,7 @@ install_initrd() {
 		os_name="$(get_from_kata_deps "assets.initrd.architecture.${ARCH}.${variant}.name")"
 		os_version="$(get_from_kata_deps "assets.initrd.architecture.${ARCH}.${variant}.version")"
 
-		if [ "${variant}" == "confidential" ]; then
+		if [[ "${variant}" == *-confidential ]]; then
 			export COCO_GUEST_COMPONENTS_TARBALL="$(get_coco_guest_components_tarball_path)"
 			export PAUSE_IMAGE_TARBALL="$(get_pause_image_tarball_path)"
 		fi
@@ -391,6 +405,7 @@ install_initrd() {
 	fi
 
 	export AGENT_TARBALL=$(get_agent_tarball_path)
+
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
 
@@ -401,6 +416,39 @@ install_initrd_confidential() {
 	export PULL_TYPE=default
 	install_initrd "confidential"
 }
+
+#Instal NVIDIA GPU image
+install_image_nvidia_gpu() {
+	export AGENT_POLICY="yes"
+	export AGENT_INIT="yes"
+	export EXTRA_PKGS="apt udev"
+	install_image "nvidia-gpu"
+}
+
+#Install NVIDIA GPU initrd
+install_initrd_nvidia_gpu() {
+	export AGENT_POLICY="yes"
+	export AGENT_INIT="yes"
+	export EXTRA_PKGS="apt udev"
+	install_initrd "nvidia-gpu"
+}
+
+#Instal NVIDIA GPU confidential image
+install_image_nvidia_gpu_confidential() {
+	export AGENT_POLICY="yes"
+	export AGENT_INIT="yes"
+	export EXTRA_PKGS="apt"
+	install_image "nvidia-gpu-confidential"
+}
+
+#Install NVIDIA GPU confidential initrd
+install_initrd_nvidia_gpu_confidential() {
+	export AGENT_POLICY="yes"
+	export AGENT_INIT="yes"
+	export EXTRA_PKGS="apt"
+	install_initrd "nvidia-gpu-confidential"
+}
+
 
 #Install Mariner guest initrd
 install_initrd_mariner() {
@@ -461,9 +509,16 @@ install_kernel_helper() {
 		extra_tarballs="${kernel_modules_tarball_name}:${kernel_modules_tarball_path}"
 	fi
 
+	if [[ "${kernel_name}" == "kernel-nvidia-gpu*" ]]; then
+		local kernel_headers_tarball_name="kata-static-${kernel_name}-headers.tar.xz"
+		local kernel_headers_tarball_path="${workdir}/${kernel_headers_tarball_name}"
+		extra_tarballs+=" ${kernel_headers_tarball_name}:${kernel_headers_tarball_path}"
+	fi
+
 	default_patches_dir="${repo_root_dir}/tools/packaging/kernel/patches"
 
 	install_cached_kernel_tarball_component ${kernel_name} ${extra_tarballs} && return 0
+#	install_cached_kernel_tarball_component ${kernel_name} ${module_dir} && return 0
 
 	info "build ${kernel_name}"
 	info "Kernel version ${kernel_version}"
@@ -513,7 +568,31 @@ install_kernel_nvidia_gpu_confidential() {
 	install_kernel_helper \
 		"assets.kernel.confidential.version" \
 		"kernel-nvidia-gpu-confidential" \
-		"-x -g nvidia -u ${kernel_url} -H deb"
+		"-g nvidia -x -u ${kernel_url} -H deb"
+}
+
+
+#Install experimental TDX kernel asset
+install_kernel_tdx_experimental() {
+	local kernel_url="$(get_from_kata_deps assets.kernel-tdx-experimental.url)"
+
+	export MEASURED_ROOTFS=yes
+
+	install_kernel_helper \
+		"assets.kernel-tdx-experimental.version" \
+		"kernel-tdx-experimental" \
+		"-x tdx -u ${kernel_url}"
+}
+
+#Install sev kernel asset
+install_kernel_sev() {
+	info "build sev kernel"
+	local kernel_url="$(get_from_kata_deps assets.kernel.sev.url)"
+
+	install_kernel_helper \
+		"assets.kernel.sev.version" \
+		"kernel-sev" \
+		"-x sev -u ${kernel_url}"
 }
 
 install_qemu_helper() {
@@ -964,6 +1043,8 @@ handle_build() {
 		install_firecracker
 		install_image
 		install_image_confidential
+		install_nvidia_gpu_image
+		install_nvidia_gpu_initrd
 		install_initrd
 		install_initrd_confidential
 		install_initrd_mariner
@@ -973,6 +1054,8 @@ handle_build() {
 		install_kernel_confidential
 		install_kernel_dragonball_experimental
 		install_log_parser_rs
+		install_kernel_nvidia_gpu_snp
+		install_kernel_nvidia_gpu_tdx_experimental
 		install_nydus
 		install_ovmf
 		install_ovmf_sev
@@ -1019,6 +1102,10 @@ handle_build() {
 
 	kernel-nvidia-gpu-confidential) install_kernel_nvidia_gpu_confidential ;;
 
+	kernel-tdx-experimental) install_kernel_tdx_experimental ;;
+
+	kernel-sev) install_kernel_sev ;;
+
 	nydus) install_nydus ;;
 
 	ovmf) install_ovmf ;;
@@ -1039,9 +1126,16 @@ handle_build() {
 
 	rootfs-image-confidential) install_image_confidential ;;
 
+	rootfs-image-tdx) install_image_tdx ;;
+
+	rootfs-nvidia-gpu-initrd) install_initrd_nvidia_gpu ;;
+
+	rootfs-nvidia-gpu-confidential-image) install_image_nvidia_gpu_confidential ;;
+
+	rootfs-nvidia-gpu-confidential-initrd) install_initrd_nvidia_gpu_confidential ;;
+
 	rootfs-initrd) install_initrd ;;
 
-	rootfs-initrd-confidential) install_initrd_confidential ;;
 
 	rootfs-initrd-mariner) install_initrd_mariner ;;
 
@@ -1062,11 +1156,27 @@ handle_build() {
 
 	if [ ! -f "${final_tarball_path}" ]; then
 		cd "${destdir}"
-		sudo tar cvfJ "${final_tarball_path}" "."
+		#sudo tar cvfJ "${final_tarball_path}" "."
+		sudo tar cf - "." | pixz > "${final_tarball_path}"
 	fi
 	tar tvf "${final_tarball_path}"
 
+	echo "BUILD TARGET: ${build_target}"
+
 	case ${build_target} in
+		kernel-nvidia-gpu*)
+			local kernel_headers_final_tarball_path="${workdir}/kata-static-${build_target}-headers.tar.xz"
+			if [ ! -f "${kernel_headers_final_tarball_path}" ]; then
+				local kernel_headers_dir 
+				kernel_headers_dir=$(get_kernel_headers_dir "${build_target}")
+				
+				pushd "${kernel_headers_dir}"
+				find . -type f -name "*.${KERNEL_HEADERS_PKG_TYPE}" -exec sudo tar cvfJ "${kernel_headers_final_tarball_path}" {} +
+				popd
+			fi
+			tar tvf "${kernel_headers_final_tarball_path}"
+			;;& # fallthrough in the confidential case we need the modules.tar.xz and for every kernel-nvidia-gpu we need the headers
+
 		kernel*-confidential)
 			local modules_final_tarball_path="${workdir}/kata-static-${build_target}-modules.tar.xz"
 			if [ ! -f "${modules_final_tarball_path}" ]; then
@@ -1097,9 +1207,19 @@ handle_build() {
 		echo "${ARTEFACT_REGISTRY_PASSWORD}" | sudo oras login "${ARTEFACT_REGISTRY}" -u "${ARTEFACT_REGISTRY_USERNAME}" --password-stdin
 
 		case ${build_target} in
+			kernel-nvidia-gpu*)
+				sudo oras push \
+					${ARTEFACT_REPOSITORY}/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
+					${final_tarball_name} \
+					"kata-static-${build_target}-modules.tar.xz" \
+					"kata-static-${build_target}-headers.tar.xz" \
+					${build_target}-version \
+					${build_target}-builder-image-version \
+					${build_target}-sha256sum
+				;;
 			kernel*-confidential)
 				sudo oras push \
-					${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
+					${ARTEFACT_REPOSITORY}/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
 					${final_tarball_name} \
 					"kata-static-${build_target}-modules.tar.xz" \
 					${build_target}-version \
@@ -1108,7 +1228,7 @@ handle_build() {
 				;;
 			*)
 				sudo oras push \
-					${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
+					${ARTEFACT_REPOSITORY}/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
 					${final_tarball_name} \
 					${build_target}-version \
 					${build_target}-builder-image-version \
@@ -1150,6 +1270,7 @@ main() {
 		kata-manager
 		kernel
 		kernel-experimental
+		kernel-nvidia-gpu
 		nydus
 		pause-image
 		qemu
@@ -1157,6 +1278,7 @@ main() {
 		rootfs-image
 		rootfs-image-confidential
 		rootfs-initrd
+		rootfs-nvidia-gpu-initrd
 		rootfs-initrd-confidential
 		rootfs-initrd-mariner
 		runk

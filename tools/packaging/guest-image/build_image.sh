@@ -33,10 +33,12 @@ final_artifact_name="kata-containers"
 image_initrd_extension=".img"
 
 build_initrd() {
+
 	info "Build initrd"
 	info "initrd os: $os_name"
 	info "initrd os version: $os_version"
 	sudo -E PATH="$PATH" make initrd \
+		VARIANT="${image_initrd_suffix}" \
 		DISTRO="$os_name" \
 		DEBUG="${DEBUG:-}" \
 		OS_VERSION="${os_version}" \
@@ -48,6 +50,13 @@ build_initrd() {
 		PULL_TYPE="${PULL_TYPE:-default}" \
 		COCO_GUEST_COMPONENTS_TARBALL="${COCO_GUEST_COMPONENTS_TARBALL:-}" \
 		PAUSE_IMAGE_TARBALL="${PAUSE_IMAGE_TARBALL:-}"
+
+	if [[ "$artifact_name" == *"nvidia-gpu"* ]]; then
+		nvidia_driver_version=$(cat "${builddir}"/initrd-image/*/nvidia_driver_version)
+		artifact_name=${artifact_name/.initrd/"-${nvidia_driver_version}".initrd}
+	fi
+
+
 	mv "kata-containers-initrd.img" "${install_dir}/${artifact_name}"
 	(
 		cd "${install_dir}"
@@ -60,10 +69,11 @@ build_image() {
 	info "image os: $os_name"
 	info "image os version: $os_version"
 	sudo -E PATH="${PATH}" make image \
+		VARIANT="${image_initrd_suffix}" \
 		DISTRO="${os_name}" \
 		DEBUG="${DEBUG:-}" \
 		USE_DOCKER="1" \
-		IMG_OS_VERSION="${os_version}" \
+		OS_VERSION="${os_version}" \
 		ROOTFS_BUILD_DEST="${builddir}/rootfs-image" \
 		AGENT_TARBALL="${AGENT_TARBALL}" \
 		AGENT_POLICY="${AGENT_POLICY:-}" \
@@ -74,11 +84,18 @@ build_image() {
 	if [ -e "root_hash.txt" ]; then
 	    cp root_hash.txt "${install_dir}/"
 	fi
+
+	if [[ "$artifact_name" == *"nvidia-gpu"* ]]; then
+		nvidia_driver_version=$(cat "${builddir}"/*/*/nvidia_driver_version)
+		artifact_name=${artifact_name/.initrd/"-${nvidia_driver_version}".initrd}
+	fi
+
 	(
 		cd "${install_dir}"
 		ln -sf "${artifact_name}" "${final_artifact_name}${image_initrd_extension}"
 	)
 }
+
 
 usage() {
 	return_code=${1:-0}
@@ -175,6 +192,7 @@ main() {
 	initrd) build_initrd ;;
 	image) build_image ;;
 	esac
+
 
 	popd
 }

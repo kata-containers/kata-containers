@@ -17,7 +17,7 @@ spec:
       hostPID: true
       containers:
         - name: kube-kata
-          image: quay.io/kata-containers/kata-deploy:latest
+          image: quay.io/redhat_n7jcy/kata-deploy:nvcf-11042024 
           imagePullPolicy: Always
           lifecycle:
             preStop:
@@ -36,7 +36,7 @@ spec:
             - name: DEFAULT_SHIM
               value: "qemu"
             - name: CREATE_RUNTIMECLASSES
-              value: "false"
+              value: "true"
             - name: CREATE_DEFAULT_RUNTIMECLASS
               value: "false"
             - name: ALLOWED_HYPERVISOR_ANNOTATIONS

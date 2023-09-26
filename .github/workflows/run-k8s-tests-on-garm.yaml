@@ -89,9 +89,9 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh collect-artifacts
 
       - name: Archive artifacts ${{ matrix.vmm }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
-          name: k8s-tests-garm-${{ matrix.vmm }}-${{ matrix.snapshotter }}-${{ matrix.k8s }}-${{ matrix.instance }}-${{ inputs.tag }}
+          name: k8s-tests-garm-${{ matrix.vmm }}
           path: /tmp/artifacts
           retention-days: 1
 

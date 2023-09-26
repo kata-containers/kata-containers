@@ -1,0 +1,34 @@
+#!/bin/bash 
+# shellcheck source=/dev/null
+. /nvidia_init_functions
+
+# We need first to setup the environment before attempting to 
+# write to the filesystem and inspect /dev, /proc etc
+mount_setup               
+
+assert_ok nvidia_query_cpu_vendor cpu_vendor
+assert_ok nvidia_gpu_get_devices 
+assert_ok nvidia_gpu_query_cc_mode confidential_compute 
+
+# If the GPU is not supported do not do any GPU handling
+#assert_ok nvidia_check_if_supported 
+if assert_ok nvidia_check_if_supported; then 
+        # Only if we're cold-plugging we would detect GPUs in this phase, 
+        # skip any GPU related setup if we don't have any GPUs
+        if [ -n "${gpu_device_ids}" ]; then
+                #assert_ok nvidia_reset_gpus
+                assert_ok nvidia_persistenced
+                assert_ok nvidia_container_toolkit
+                assert_ok nvidia_process_kernel_params 
+        # If we do not have any GPUs at this stage we are hot-plugging
+        # setup udev to handle initialization of GPUs
+        else 
+                assert_ok nvidia_udev_setup
+        fi
+fi 
+
+# TODO setting the GPU in ready mode till KBS has GPU suport
+nvidia-smi conf-compute -srs 1
+
+# Setting AGENT_INIT to yes will make the agent the init process
+exec /sbin/init

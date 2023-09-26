@@ -44,7 +44,7 @@ jobs:
         run: bash tests/integration/cri-containerd/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v3
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
@@ -83,7 +83,7 @@ jobs:
         run: bash tests/stability/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v3
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
@@ -125,7 +125,7 @@ jobs:
         run: bash tests/integration/nydus/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v3
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
@@ -157,7 +157,7 @@ jobs:
         run: bash tests/integration/runk/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v3
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
@@ -195,7 +195,7 @@ jobs:
         run: bash tests/functional/tracing/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v3
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
@@ -232,7 +232,7 @@ jobs:
         run: bash tests/functional/vfio/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v3
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
@@ -270,7 +270,7 @@ jobs:
         run: bash tests/integration/docker/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v3
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
@@ -313,7 +313,7 @@ jobs:
         run: bash tests/integration/nerdctl/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v3
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
@@ -329,7 +329,7 @@ jobs:
         run: bash tests/integration/nerdctl/gha-run.sh collect-artifacts
 
       - name: Archive artifacts ${{ matrix.vmm }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: nerdctl-tests-garm-${{ matrix.vmm }}
           path: /tmp/artifacts

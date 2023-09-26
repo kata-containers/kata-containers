@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use which::which;
 
 use crate::linux_abi::*;
 use crate::pci;
@@ -911,6 +912,76 @@ async fn vfio_ap_device_handler(_: &Device, _: &Arc<Mutex<Sandbox>>) -> Result<S
     Err(anyhow!("AP is only supported on s390x"))
 }
 
+
+#[instrument]
+pub async fn handle_cdi_devices(
+    devices: &[Device],
+    spec: &mut Spec,
+    sandbox: &Arc<Mutex<Sandbox>>,
+) -> Result<()> {
+        // If we have a sandbox container we do not inject any devices, the 
+        // CDI devices are used to create the proper PCIe topology and in case
+        // of cold-plug to direct-attach them to the VM.
+        if "pod_sandbox" == spec.annotations["io.katacontainers.pkg.oci.container_type"] {
+            return Ok(());
+        }
+        
+        let raw_oci_config = Path::new("/tmp/raw-oci-config.json");
+        let cdi_oci_config = Path::new("/tmp/cdi-oci-config.json");
+
+        spec.save(raw_oci_config.to_str().unwrap())?;         
+ 
+        if !which("/usr/bin/cdi").is_ok() {
+            error!(sl(), "### cdi not found in path");
+            return Ok(());
+        }
+
+        match  tokio::process::Command::new("/usr/bin/cdi")
+        .arg(raw_oci_config.to_str().unwrap())
+        .arg(cdi_oci_config.to_str().unwrap())
+        .output().await {
+            Ok(output) => {
+                let out = String::from_utf8(output.stdout).expect("Invalid UTF-8 sequence");
+                let err = String::from_utf8(output.stderr).expect("Invalid UTF-8 sequence");
+
+                match output.status.code() {
+                    Some(0) => info!(sl(), "/usr/bin/cdi out: {:?}", out),
+                    Some(1) => error!(sl(), "/usr/bin/cdi err: {:?} out: {:?}", err, out),
+                    _ => error!(sl(), "cdi oci spec unknown error: {:?}", err),
+                }
+            }
+            Err(e) => {
+                error!(sl(), "failed to execute cdi oci spec: {:?}", e);
+            }
+        }
+
+        // pod_sandbox has no CDI devices only load if we have a modified 
+        // oci spec
+        if cdi_oci_config.exists() {
+            let cdi = oci::Spec::load(cdi_oci_config.to_str().unwrap());
+            match cdi {
+                Ok(cdi) => {
+                    *spec = cdi;
+                }
+                Err(e) => {
+                    error!(sl(), "failed to load cdi oci spec: {:?}", e);
+                }
+            }
+
+        }
+        
+        if raw_oci_config.exists() {
+            fs::remove_file(raw_oci_config)?;
+        }
+
+        if cdi_oci_config.exists() {
+            fs::remove_file(cdi_oci_config)?;
+        }
+
+
+        Ok(())
+}
+
 #[instrument]
 pub async fn add_devices(
     devices: &[Device],
@@ -1025,6 +1096,8 @@ pub fn insert_devices_cgroup_rule(
 
     Ok(())
 }
+
+
 
 #[cfg(test)]
 mod tests {

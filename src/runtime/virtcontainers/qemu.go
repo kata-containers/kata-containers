@@ -83,6 +83,8 @@ type QemuState struct {
 	VirtiofsDaemonPid int
 	HotplugVFIO       config.PCIePort
 	ColdPlugVFIO      config.PCIePort
+	PCIeRootPort      uint32
+	PCIeSwitchPort    uint32
 }
 
 // qemu is an Hypervisor interface implementation for the Linux qemu hypervisor.
@@ -283,7 +285,8 @@ func (q *qemu) setup(ctx context.Context, id string, hypervisorConfig *Hyperviso
 		q.state.UUID = uuid.Generate().String()
 		q.state.HotPlugVFIO = q.config.HotPlugVFIO
 		q.state.ColdPlugVFIO = q.config.ColdPlugVFIO
-		q.state.HotPlugVFIO = q.config.HotPlugVFIO
+		q.state.PCIeRootPort = q.config.PCIeRootPort
+		q.state.PCIeSwitchPort = q.config.PCIeSwitchPort
 
 		// The path might already exist, but in case of VM templating,
 		// we have to create it since the sandbox has not created it yet.
@@ -621,8 +624,20 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		// has been called earlier and we know we have the value stored.
 		if q.arch.getProtection() == tdxProtection {
 
-			// TDX relies on ",private=on" passed to the memory object.
-			knobs.Private = true
+			// In case Nydus or VirtioFS is used, which may become a reality
+			// in the future, whenever we get those hardened for TDX, those
+			// knobs below would be automatically set.  Let's make sure we
+			// pre-emptively disable them, and with that we can avoid some
+			// headaches in the future.
+			knobs.FileBackedMem = false
+			knobs.MemShared = false
+
+			// SMP is currently broken with TDX 1.5, and
+			// we must ensure we use something like:
+			// `...,sockets=1,cores=numvcpus,threads=1,...`
+			smp.Sockets = 1
+			smp.Cores = q.config.NumVCPUs()
+			smp.Threads = 1
 		}
 	}
 
@@ -687,7 +702,6 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		Bios:           firmwarePath,
 		PFlash:         pflash,
 		PidFile:        filepath.Join(q.config.VMStorePath, q.id, "pid"),
-		Debug:          hypervisorConfig.Debug,
 	}
 
 	qemuConfig.Devices, qemuConfig.Bios, err = q.arch.appendProtectionDevice(qemuConfig.Devices, firmwarePath, firmwareVolumePath)
@@ -814,11 +828,19 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 	vfioOnRootPort := (q.state.HotPlugVFIO == config.RootPort || q.state.ColdPlugVFIO == config.RootPort)
 	vfioOnSwitchPort := (q.state.HotPlugVFIO == config.SwitchPort || q.state.ColdPlugVFIO == config.SwitchPort)
 
+	// If the devices are not advertised via CRI or cold-plugged we need to
+	// get the number of pluggable root/switch ports from the config
+	numPCIeRootPorts := hypervisorConfig.PCIeRootPort
+	numPCIeSwitchPorts := hypervisorConfig.PCIeSwitchPort
+
 	// If number of PCIe root ports > 16 then bail out otherwise we may
 	// use up all slots or IO memory on the root bus and vfio-XXX-pci devices
 	// cannot be added which are crucial for Kata max slots on root bus is 32
 	// max slots on the complete pci(e) topology is 256 in QEMU
 	if vfioOnRootPort {
+		if numOfPluggablePorts < numPCIeRootPorts {
+			numOfPluggablePorts = numPCIeRootPorts
+		}
 		if numOfPluggablePorts > maxPCIeRootPort {
 			return fmt.Errorf("Number of PCIe Root Ports exceeed allowed max of %d", maxPCIeRootPort)
 		}
@@ -826,6 +848,9 @@ func (q *qemu) createPCIeTopology(qemuConfig *govmmQemu.Config, hypervisorConfig
 		return nil
 	}
 	if vfioOnSwitchPort {
+		if numOfPluggablePorts < numPCIeSwitchPorts {
+			numOfPluggablePorts = numPCIeSwitchPorts
+		}
 		if numOfPluggablePorts > maxPCIeSwitchPort {
 			return fmt.Errorf("Number of PCIe Switch Ports exceeed allowed max of %d", maxPCIeSwitchPort)
 		}
@@ -935,8 +960,9 @@ func (q *qemu) setupVirtioMem(ctx context.Context) error {
 	machineType := q.HypervisorConfig().HypervisorMachineType
 	if machineType == QemuVirt {
 		addr = "00"
-		bridgeID = fmt.Sprintf("%s%d", config.PCIeRootPortPrefix, len(config.PCIeDevices[config.RootPort]))
-		config.PCIeDevices[config.RootPort]["virtiomem"] = true
+		bridgeID = fmt.Sprintf("%s%d", config.PCIeRootPortPrefix, len(config.PCIeDevicesPerPort[config.RootPort]))
+		dev := config.VFIODev{ID: "virtiomem"}
+		config.PCIeDevicesPerPort[config.RootPort] = append(config.PCIeDevicesPerPort[config.RootPort], dev)
 	}
 
 	err = q.qmpMonitorCh.qmp.ExecMemdevAdd(q.qmpMonitorCh.ctx, memoryBack, "virtiomem", target, sizeMB, share, "virtio-mem-pci", "virtiomem0", addr, bridgeID)
@@ -1651,8 +1677,9 @@ func (q *qemu) hotplugAddVhostUserBlkDevice(ctx context.Context, vAttr *config.V
 		//Since the dev is the first and only one on this bus(root port), it should be 0.
 		addr := "00"
 
-		bridgeID := fmt.Sprintf("%s%d", config.PCIeRootPortPrefix, len(config.PCIeDevices[config.RootPort]))
-		config.PCIeDevices[config.RootPort][devID] = true
+		bridgeID := fmt.Sprintf("%s%d", config.PCIeRootPortPrefix, len(config.PCIeDevicesPerPort[config.RootPort]))
+		dev := config.VFIODev{ID: devID}
+		config.PCIeDevicesPerPort[config.RootPort] = append(config.PCIeDevicesPerPort[config.RootPort], dev)
 
 		bridgeQomPath := fmt.Sprintf("%s%s", qomPathPrefix, bridgeID)
 		bridgeSlot, err := q.arch.qomGetSlot(bridgeQomPath, &q.qmpMonitorCh)
@@ -1912,8 +1939,10 @@ func (q *qemu) hotplugNetDevice(ctx context.Context, endpoint Endpoint, op Opera
 		// Hotplug net dev to pcie root port for QemuVirt
 		if machineType == QemuVirt {
 			addr := "00"
-			bridgeID := fmt.Sprintf("%s%d", config.PCIeRootPortPrefix, len(config.PCIeDevices[config.RootPort]))
-			config.PCIeDevices[config.RootPort][devID] = true
+			bridgeID := fmt.Sprintf("%s%d", config.PCIeRootPortPrefix, len(config.PCIeDevicesPerPort[config.RootPort]))
+			dev := config.VFIODev{ID: devID}
+			config.PCIeDevicesPerPort[config.RootPort] = append(config.PCIeDevicesPerPort[config.RootPort], dev)
+
 			return q.qmpMonitorCh.qmp.ExecuteNetPCIDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), addr, bridgeID, romFile, int(q.config.NumVCPUs()), defaultDisableModern)
 		}
 

@@ -72,7 +72,7 @@ build_and_install_gperf() {
     pushd "gperf-${gperf_version}"
     # Unset $CC for configure, we will always use native for gperf
     CC= ./configure --prefix="${gperf_install_dir}"
-    make
+    make -j "$(nproc)"
     make install
     export PATH=$PATH:"${gperf_install_dir}"/bin
     popd
@@ -87,7 +87,7 @@ build_and_install_libseccomp() {
     pushd "libseccomp-${libseccomp_version}"
     [ "${arch}" == $(uname -m) ] && cc_name="" || cc_name="${arch}-linux-gnu-gcc"
     CC=${cc_name} ./configure --prefix="${libseccomp_install_dir}" CFLAGS="${cflags}" --enable-static --host="${arch}"
-    make
+    make -j "$(nproc)"
     make install
     popd
     echo "Libseccomp installed successfully"

@@ -25,7 +25,6 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
@@ -104,6 +103,9 @@ func (c *Client) send(sid uint32, mt messageType, flags uint8, b []byte) error {
 
 // Call makes a unary request and returns with response
 func (c *Client) Call(ctx context.Context, service, method string, req, resp interface{}) error {
+
+	logrus.Infof("######## CALL service %+v method %+v ctx %+v", service, method, ctx)
+
 	payload, err := c.codec.Marshal(req)
 	if err != nil {
 		return err
@@ -122,10 +124,6 @@ func (c *Client) Call(ctx context.Context, service, method string, req, resp int
 
 	if metadata, ok := GetMetadata(ctx); ok {
 		metadata.setRequest(creq)
-	}
-
-	if dl, ok := ctx.Deadline(); ok {
-		creq.TimeoutNano = time.Until(dl).Nanoseconds()
 	}
 
 	info := &UnaryClientInfo{

@@ -128,6 +128,12 @@ const (
 	// HotPlugVFIO is a sandbox annotation used to indicate if devices need to be hotplugged.
 	HotPlugVFIO = kataAnnotHypervisorPrefix + "hot_plug_vfio"
 
+	// PCIeRootPort is the number of PCIe root ports to create for the VM.
+	PCIeRootPort = kataAnnotHypervisorPrefix + "pcie_root_port"
+
+	// PCIeSwitchPort is the number of PCIe switch ports to create for the VM.
+	PCIeSwitchPort = kataAnnotHypervisorPrefix + "pcie_switch_port"
+
 	// EntropySource is a sandbox annotation to specify the path to a host source of
 	// entropy (/dev/random, /dev/urandom or real hardware RNG device)
 	EntropySource = kataAnnotHypervisorPrefix + "entropy_source"
