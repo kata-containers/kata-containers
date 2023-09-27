@@ -286,6 +286,25 @@ fn mount_storage(logger: &Logger, storage: &Storage) -> Result<()> {
         "mount-fstype"  => storage.fstype.as_str(),
         "mount-options" => options.as_str(),
     );
+    if std::path::Path::new(&src_path).exists() {
+        info!(logger, "src_path is exist";
+            "mount-source" => src_path.display(),
+        );
+    }else{
+        info!(logger, "src_path is not exist";
+        "mount-source" => src_path.display(),
+    );
+    }
+    if !std::path::Path::new(&mount_path).exists() {
+        info!(logger, "mount_path is exist";
+            "mount-destination" => mount_path.display(),
+        );
+    }else{
+        info!(logger, "mount_path is not exist";
+            "mount-destination" => mount_path.display(),
+        );
+        fs::create_dir_all(&mount_path)?;
+    }
 
     baremount(
         src_path,
