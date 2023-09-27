@@ -1,9 +1,0 @@
-# SPDX-License-Identifier: Apache-2.0
-# Copyright (c) 2021 Intel Corporation
-[global]
-name=seqread-mmap
-rw=read
-ioengine=mmap
-
-[seqread-mmap]
-filename=fio-file
