@@ -72,3 +72,12 @@ spec:
           requests:
             storage: 1Gi
   minReadySeconds: 1
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 20%
+      partition: 1
+  revisionHistoryLimit: 9
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Delete
+    whenScaled: Retain

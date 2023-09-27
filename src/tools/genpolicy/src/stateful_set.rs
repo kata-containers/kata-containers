@@ -46,11 +46,49 @@ pub struct StatefulSetSpec {
     volumeClaimTemplates: Option<Vec<persistent_volume_claim::PersistentVolumeClaim>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    updateStrategy: Option<StatefulSetUpdateStrategy>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    revisionHistoryLimit: Option<i32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     minReadySeconds: Option<i32>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     podManagementPolicy: Option<String>,
-    // TODO: additional fields.
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    persistentVolumeClaimRetentionPolicy: Option<StatefulSetPersistentVolumeClaimRetentionPolicy>,
+}
+
+/// See Reference / Kubernetes API / Workload Resources / StatefulSet.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct StatefulSetPersistentVolumeClaimRetentionPolicy {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    whenDeleted: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    whenScaled: Option<String>,
+}
+
+/// See Reference / Kubernetes API / Workload Resources / StatefulSet.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct StatefulSetUpdateStrategy {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    r#type: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    rollingUpdate: Option<RollingUpdateStatefulSetStrategy>,
+}
+
+/// See Reference / Kubernetes API / Workload Resources / StatefulSet.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RollingUpdateStatefulSetStrategy {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    maxUnavailable: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    partition: Option<i32>,
 }
 
 #[async_trait]
