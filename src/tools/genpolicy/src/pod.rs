@@ -409,8 +409,19 @@ pub struct ResourceRequirements {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Toleration {
     #[serde(skip_serializing_if = "Option::is_none")]
+    key: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     operator: Option<String>,
-    // TODO: additional fields.
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    value: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    effect: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tolerationSeconds: Option<i64>,
 }
 
 /// See Reference / Kubernetes API / Common Definitions / LocalObjectReference.
