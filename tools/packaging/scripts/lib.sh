@@ -218,3 +218,11 @@ get_virtiofsd_image_name() {
 	virtiofsd_script_dir="${repo_root_dir}/tools/packaging/static-build/virtiofsd"
 	echo "${BUILDER_REGISTRY}:virtiofsd-$(get_from_kata_deps "externals.virtiofsd.toolchain")-${libc}-$(get_last_modification ${virtiofsd_script_dir})-$(uname -m)"
 }
+
+get_tools_image_name() {
+	tools_dir="${repo_root_dir}/src/tools"
+	libs_dir="${repo_root_dir}/src/libs"
+	agent_dir="${repo_root_dir}/src/agent"
+
+	echo "${BUILDER_REGISTRY}:tools-$(get_last_modification ${tools_dir})-$(get_last_modification ${libs_dir})-$(get_last_modification ${agent_dir})"
+}
