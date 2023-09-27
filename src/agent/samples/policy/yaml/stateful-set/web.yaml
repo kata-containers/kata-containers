@@ -71,3 +71,4 @@ spec:
         resources:
           requests:
             storage: 1Gi
+  minReadySeconds: 1
