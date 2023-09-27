@@ -1242,8 +1242,9 @@ ExecProcessRequest {
     print("ExecProcessRequest 1: input =", input)
 
     i_command = concat(" ", input.process.Args)
+    print("ExecProcessRequest 3: i_command =", i_command)
 
-    some p_command in policy_data.request_defaults.ExecProcessRequest
+    some p_command in policy_data.request_defaults.ExecProcessRequest.commands
     p_command == i_command
 
     print("ExecProcessRequest 1: true")
@@ -1253,6 +1254,7 @@ ExecProcessRequest {
 
     # TODO: match input container ID with its corresponding container.exec_commands.
     i_command = concat(" ", input.process.Args)
+    print("ExecProcessRequest 3: i_command =", i_command)
 
     some container in policy_data.containers
     some p_command in container.exec_commands
@@ -1262,6 +1264,19 @@ ExecProcessRequest {
     p_command == i_command
 
     print("ExecProcessRequest 2: true")
+}
+ExecProcessRequest {
+    print("ExecProcessRequest 3: input =", input)
+
+    i_command = concat(" ", input.process.Args)
+    print("ExecProcessRequest 3: i_command =", i_command)
+
+    some p_regex in policy_data.request_defaults.ExecProcessRequest.regex
+    print("ExecProcessRequest 3: p_regex =", p_regex)
+
+    regex.match(p_regex, i_command)
+
+    print("ExecProcessRequest 3: true")
 }
 
 ReadStreamRequest {

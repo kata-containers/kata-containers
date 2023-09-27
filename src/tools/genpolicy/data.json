@@ -87,9 +87,9 @@
                 "source": "$(sfprefix)tokens$",
                 "type_": "bind",
                 "options": [
-                  "rbind",
-                  "rprivate",
-                  "ro"
+                    "rbind",
+                    "rprivate",
+                    "ro"
                 ]
             }
         ]
@@ -218,7 +218,10 @@
         "CopyFileRequest": [
             "^$(cpath)/"
         ],
-        "ExecProcessRequest": [],
+        "ExecProcessRequest": {
+            "commands": [],
+            "regex": []
+        },
         "ReadStreamRequest": false,
         "WriteStreamRequest": false
     }

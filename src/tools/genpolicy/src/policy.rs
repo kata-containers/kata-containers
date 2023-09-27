@@ -276,14 +276,20 @@ pub struct CreateContainerRequestDefaults {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ExecProcessRequestDefaults {
+    commands: Vec<String>,
+    regex: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct RequestDefaults {
     pub CreateContainerRequest: CreateContainerRequestDefaults,
 
     /// Guest file paths matching these regular expressions can be copied by the Host.
     pub CopyFileRequest: Vec<String>,
 
-    /// Array of commands allowed to be executed by the Host in all Guest containers.
-    pub ExecProcessRequest: Vec<String>,
+    /// Commands allowed to be executed by the Host in all Guest containers.
+    pub ExecProcessRequest: ExecProcessRequestDefaults,
 
     /// Allow Host reading from Guest containers stdout and stderr.
     pub ReadStreamRequest: bool,
