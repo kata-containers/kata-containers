@@ -93,14 +93,14 @@ function run_test_iperf() {
 	info "Running Iperf test using ${KATA_HYPERVISOR} hypervisor"
 
 	bash tests/metrics/network/iperf3_kubernetes/k8s-network-metrics-iperf3.sh -a
-
-	check_metrics
 }
 
 function run_test_latency() {
 	info "Running Latency test using ${KATA_HYPERVISOR} hypervisor"
 
 	bash tests/metrics/network/latency_kubernetes/latency-network.sh
+
+	check_metrics
 }
 
 function main() {
