@@ -403,6 +403,19 @@ function download_github_project_tarball() {
 	wget https://github.com/${project}/releases/download/${version}/${tarball_name}
 }
 
+# version: The version to be intalled
+function install_cni_plugins() {
+	version="${1}"
+
+	project="containernetworking/plugins"
+	tarball_name="cni-plugins-linux-$(${repo_root_dir}/tests/kata-arch.sh -g)-${version}.tgz"
+
+	download_github_project_tarball "${project}" "${version}" "${tarball_name}"
+	sudo mkdir -p /opt/cni/bin
+	sudo tar -xvf "${tarball_name}" -C /opt/cni/bin
+	rm -f "${tarball_name}"
+}
+
 # base_version: The version to be intalled in the ${major}.${minor} format
 function install_cri_containerd() {
 	base_version="${1}"
