@@ -257,6 +257,10 @@ function restart_containerd_service() {
 	return 0
 }
 
+function restart_crio_service() {
+	sudo systemctl restart crio
+}
+
 # Configures containerd
 function overwrite_containerd_config() {
 	containerd_config="/etc/containerd/config.toml"
@@ -296,6 +300,28 @@ version = 2
 EOF
 }
 
+# Configures CRI-O
+function overwrite_crio_config() {
+	crio_conf_d="/etc/crio/crio.conf.d"
+	sudo mkdir -p ${crio_conf_d}
+
+	kata_config="${crio_conf_d}/99-kata-containers"
+	sudo tee "${kata_config}" << EOF
+[crio.runtime.runtimes.kata]
+runtime_path = "/usr/local/bin/containerd-shim-kata-v2"
+runtime_type = "vm"
+runtime_root = "/run/vc"
+runtime_config_path = "/opt/kata/share/defaults/kata-containers/configuration.toml"
+privileged_without_host_devices = true
+EOF
+
+	debug_config="${crio_conf_d}/100-debug"
+	sudo tee "${debug_config}" << EOF
+[crio]
+log_level = "debug"
+EOF
+}
+
 function install_kata() {
 	local kata_tarball="kata-static.tar.xz"
 	declare -r katadir="/opt/kata"
@@ -314,8 +340,14 @@ function install_kata() {
 		sudo ln -sf "${b}" "${local_bin_dir}/$(basename $b)"
 	done
 
-	check_containerd_config_for_kata
-	restart_containerd_service
+	if [ "${CONTAINER_ENGINE:=containerd}" = "containerd" ]; then
+		check_containerd_config_for_kata
+		restart_containerd_service
+	else
+		overwrite_crio_config
+		restart_crio_service
+	fi
+
 }
 
 # creates a new kata configuration.toml hard link that
