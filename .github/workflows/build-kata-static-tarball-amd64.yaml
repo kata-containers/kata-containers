@@ -27,9 +27,11 @@ jobs:
     strategy:
       matrix:
         asset:
+          - agent-ctl
           - cloud-hypervisor
           - cloud-hypervisor-glibc
           - firecracker
+          - kata-ctl
           - kernel
           - kernel-sev
           - kernel-dragonball-experimental
@@ -37,6 +39,7 @@ jobs:
           - kernel-nvidia-gpu
           - kernel-nvidia-gpu-snp
           - kernel-nvidia-gpu-tdx-experimental
+          - log-parser-rs
           - nydus
           - ovmf
           - ovmf-sev
@@ -48,8 +51,10 @@ jobs:
           - rootfs-initrd
           - rootfs-initrd-mariner
           - rootfs-initrd-sev
+          - runk
           - shim-v2
           - tdvf
+          - trace-forwarder
           - virtiofsd
         stage:
           - ${{ inputs.stage }}
