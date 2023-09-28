@@ -1,0 +1,75 @@
+name: Kata Containers CI
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: /test-gha check
+        if: always()
+        id: match-test-gha
+        run: |
+          comment_body=$(
+          cat <<'END_COMMENT'
+          ${{ github.event.comment.body }}
+          END_COMMENT
+          )
+          echo "$comment_body"
+          # Bash regexes can't match on '\n' so use grep.
+          if grep -qE '(^|\n)/test-gha($|\n)' <<< "$comment_body"; then
+            echo "has_command=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check is PR
+        if: always()
+        run: |
+          echo '${{ github.event.issue.pull_request }}'
+
+      - name: Check ok-to-test
+        if: always()
+        run: |
+          echo '${{ contains(github.event.issue.pull_request.labels.*.name, 'ok-to-test') }}'
+
+      - name: Check /test-gha
+        if: always()
+        run: |
+          echo '${{ steps.match-test-gha.outputs.has_command == 'true' }}'
+      
+      - name: Check is member
+        if: always()
+        run: |
+          echo '${{ github.event.comment.author_association }}'
+          echo '${{ github.event.comment.author_association == 'MEMBER' }}'
+          echo '${{ github.event.comment.author_association == 'OWNER' }}'
+          echo '${{ contains(fromJSON('["MEMBER", "OWNER"]'), github.event.comment.author_association) }}'
+      
+      - name: Check target branch
+        if: always()
+        run: |
+          echo '${{ github.event.issue.pull_request.headRefName }}'
+          echo '${{ github.event.issue.pull_request.headRefName == 'main' || startsWith(github.event.issue.pull_request.headRefName, 'stable-') }}'
+
+      # NOTE: Check that we're not retesting the same commit.
+
+      - name: Dummy CI
+        if: always()
+        run: |
+          echo '${{
+            github.event.issue.pull_request &&
+            contains(github.event.issue.pull_request.labels.*.name, 'ok-to-test') &&
+            steps.match-test-gha.outputs.has_command == 'true' &&
+            contains(fromJSON('["MEMBER", "OWNER"]'), github.event.comment.author_association) &&
+            (github.event.issue.pull_request.headRefName == 'main' || startsWith(github.event.issue.pull_request.headRefName, 'stable-'))
+          }}'
+
+      - name: Dummy check
+        if: |
+            github.event.issue.pull_request &&
+            contains(github.event.issue.pull_request.labels.*.name, 'ok-to-test') &&
+            steps.match-test-gha.outputs.has_command == 'true' &&
+            contains(fromJSON('["MEMBER", "OWNER"]'), github.event.comment.author_association) &&
+            (github.event.issue.pull_request.headRefName == 'main' || startsWith(github.event.issue.pull_request.headRefName, 'stable-'))
+        run: |
+          echo 'Passed'

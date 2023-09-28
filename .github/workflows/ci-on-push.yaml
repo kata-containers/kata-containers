@@ -16,15 +16,12 @@ on:
     paths-ignore:
       - 'docs/**'
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
 jobs:
   kata-containers-ci-on-push:
     if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
     uses: ./.github/workflows/ci.yaml
     with:
+      caller-workflow: ${{ github.workflow }}
       commit-hash: ${{ github.event.pull_request.head.sha }}
       pr-number: ${{ github.event.pull_request.number }}
       tag: ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}

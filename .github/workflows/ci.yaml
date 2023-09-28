@@ -2,6 +2,9 @@ name: Run the Kata Containers CI
 on:
   workflow_call:
     inputs:
+      caller-workflow:
+        required: true
+        type: string
       commit-hash:
         required: true
         type: string
@@ -11,6 +14,10 @@ on:
       tag:
         required: true
         type: string
+
+concurrency:
+  group: ${{ inputs.caller-workflow }}-${{ inputs.pr-number }}
+  cancel-in-progress: true
 
 jobs:
   build-kata-static-tarball-amd64:
