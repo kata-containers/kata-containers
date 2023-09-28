@@ -62,6 +62,7 @@ pub struct InfraPolicy {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Volumes {
     pub emptyDir: EmptyDirVolume,
+    pub emptyDir_memory: EmptyDirVolume,
     pub configMap: ConfigMapVolume,
     pub confidential_configMap: ConfigMapVolume,
 }
@@ -303,8 +304,13 @@ impl InfraPolicy {
         yaml_volume: &volume::Volume,
         yaml_mount: &pod::VolumeMount,
     ) {
-        if yaml_volume.emptyDir.is_some() {
-            Self::empty_dir_mount_and_storage(&self.volumes, policy_mounts, storages, yaml_mount);
+        if let Some(emptyDir) = &yaml_volume.emptyDir {
+            let memory_medium = if let Some(medium) = &emptyDir.medium {
+                medium == "Memory"
+            } else {
+                false
+            };
+            Self::empty_dir_mount_and_storage(&self.volumes, policy_mounts, storages, yaml_mount, memory_medium);
         } else if yaml_volume.persistentVolumeClaim.is_some() || yaml_volume.azureFile.is_some() {
             self.shared_bind_mount(yaml_mount, policy_mounts, "rprivate", "rw");
         } else if yaml_volume.hostPath.is_some() {
@@ -331,8 +337,13 @@ impl InfraPolicy {
         policy_mounts: &mut Vec<policy::KataMount>,
         storages: &mut Vec<policy::SerializedStorage>,
         yaml_mount: &pod::VolumeMount,
+        memory_medium: bool,
     ) {
-        let infra_empty_dir = &infra_volumes.emptyDir;
+        let infra_empty_dir = if memory_medium {
+            &infra_volumes.emptyDir_memory
+        } else {
+            &infra_volumes.emptyDir
+        };
         debug!("Infra emptyDir: {:?}", infra_empty_dir);
 
         if yaml_mount.subPathExpr.is_none() {

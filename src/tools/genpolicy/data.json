@@ -106,6 +106,15 @@
                 "mode=0777"
             ]
         },
+        "emptyDir_memory": {
+            "mount_type": "bind",
+            "mount_source": "^/run/kata-containers/sandbox/ephemeral/",
+            "mount_point": "^/run/kata-containers/sandbox/ephemeral/",
+            "driver": "ephemeral",
+            "source": "tmpfs",
+            "fstype": "tmpfs",
+            "options": []
+        },
         "configMap": {
             "mount_type": "bind",
             "mount_source": "$(sfprefix)",

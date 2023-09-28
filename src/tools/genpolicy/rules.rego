@@ -976,14 +976,16 @@ allow_storages(p_storages, i_storages, bundle_id, sandbox_id) {
     root_hashes := split(overlay_storage.options[1], ":")
     print("allow_storages: root_hashes =", root_hashes)
 
-    every i, i_storage in i_storages {
-        allow_storage(p_storages[i], i_storage, bundle_id, sandbox_id, layer_ids, root_hashes)
+    every i_storage in i_storages {
+        allow_storage(p_storages, i_storage, bundle_id, sandbox_id, layer_ids, root_hashes)
     }
 
     print("allow_storages: true")
 }
 
-allow_storage(p_storage, i_storage, bundle_id, sandbox_id, layer_ids, root_hashes) {
+allow_storage(p_storages, i_storage, bundle_id, sandbox_id, layer_ids, root_hashes) {
+    some p_storage in p_storages
+
     print("allow_storage: p_storage =", p_storage)
     print("allow_storage: i_storage =", i_storage)
 
@@ -1159,6 +1161,17 @@ allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids) {
     regex.match(mount3, i_storage.mount_point)
 
     print("allow_mount_point 4: true")
+}
+allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids) {
+    print("allow_mount_point 5: i_storage.mount_point =", i_storage.mount_point)
+    p_storage.fstype == "tmpfs"
+
+    mount1 := p_storage.mount_point
+    print("allow_mount_point 5: mount1 =", mount1)
+
+    regex.match(mount1, i_storage.mount_point)
+
+    print("allow_mount_point 5: true")
 }
 
 # process.Capabilities
