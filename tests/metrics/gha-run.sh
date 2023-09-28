@@ -93,6 +93,12 @@ function run_test_iperf() {
 	info "Running Iperf test using ${KATA_HYPERVISOR} hypervisor"
 
 	bash tests/metrics/network/iperf3_kubernetes/k8s-network-metrics-iperf3.sh -a
+}
+
+function run_test_latency() {
+	info "Running Latency test using ${KATA_HYPERVISOR} hypervisor"
+
+	bash tests/metrics/network/latency_kubernetes/latency-network.sh
 
 	check_metrics
 }
@@ -110,6 +116,7 @@ function main() {
 		run-test-tensorflow) run_test_tensorflow ;;
 		run-test-fio) run_test_fio ;;
 		run-test-iperf) run_test_iperf ;;
+		run-test-latency) run_test_latency ;;
 		*) >&2 die "Invalid argument" ;;
 	esac
 }

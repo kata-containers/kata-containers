@@ -29,6 +29,7 @@ use std::sync::{Arc, Mutex};
 
 use lazy_static::lazy_static;
 use regex::RegexSet;
+use serde_enum_str::{Deserialize_enum_str, Serialize_enum_str};
 
 use super::{default, ConfigOps, ConfigPlugin, TomlConfig};
 use crate::annotations::KATA_ANNO_CFG_HYPERVISOR_PREFIX;
@@ -43,8 +44,12 @@ pub use self::qemu::{QemuConfig, HYPERVISOR_NAME_QEMU};
 mod ch;
 pub use self::ch::{CloudHypervisorConfig, HYPERVISOR_NAME_CH};
 
-const VIRTIO_BLK_PCI: &str = "virtio-blk-pci";
-const VIRTIO_BLK_MMIO: &str = "virtio-blk-mmio";
+/// Virtual PCI block device driver.
+pub const VIRTIO_BLK_PCI: &str = "virtio-blk-pci";
+
+/// Virtual MMIO block device driver.
+pub const VIRTIO_BLK_MMIO: &str = "virtio-blk-mmio";
+
 const VIRTIO_BLK_CCW: &str = "virtio-blk-ccw";
 const VIRTIO_SCSI: &str = "virtio-scsi";
 const VIRTIO_PMEM: &str = "virtio-pmem";
@@ -540,6 +545,25 @@ impl MachineInfo {
     }
 }
 
+/// Huge page type for VM RAM backend
+#[derive(Clone, Debug, Deserialize_enum_str, Serialize_enum_str, PartialEq, Eq)]
+pub enum HugePageType {
+    /// This will result in the VM memory being allocated using hugetlbfs backend. This is useful
+    /// when you want to use vhost-user network stacks within the container. This will automatically
+    /// result in memory pre allocation.
+    #[serde(rename = "hugetlbfs")]
+    Hugetlbfs,
+    /// This will result in the VM memory being allocated using transparant huge page backend.
+    #[serde(rename = "thp")]
+    THP,
+}
+
+impl Default for HugePageType {
+    fn default() -> Self {
+        Self::Hugetlbfs
+    }
+}
+
 /// Virtual machine memory configuration information.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct MemoryInfo {
@@ -577,11 +601,17 @@ pub struct MemoryInfo {
 
     /// Enable huge pages for VM RAM, default false
     ///
-    /// Enabling this will result in the VM memory being allocated using huge pages. This is useful
-    /// when you want to use vhost-user network stacks within the container. This will automatically
-    /// result in memory pre allocation.
+    /// Enabling this will result in the VM memory being allocated using huge pages.
+    /// Its backend type is specified by item "hugepage_type"
     #[serde(default)]
     pub enable_hugepages: bool,
+
+    /// Select huge page type, default "hugetlbfs"
+    /// Following huge types are supported:
+    /// - hugetlbfs
+    /// - thp
+    #[serde(default)]
+    pub hugepage_type: HugePageType,
 
     /// Specifies virtio-mem will be enabled or not.
     ///

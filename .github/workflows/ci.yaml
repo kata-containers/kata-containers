@@ -124,6 +124,14 @@ jobs:
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
 
+  run-kata-monitor-tests:
+    needs: build-kata-static-tarball-amd64
+    uses: ./.github/workflows/run-kata-monitor-tests.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
+
   run-k8s-tests-on-aks:
     needs: publish-kata-deploy-payload-amd64
     uses: ./.github/workflows/run-k8s-tests-on-aks.yaml

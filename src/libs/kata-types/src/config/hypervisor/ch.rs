@@ -13,7 +13,6 @@ use super::{default, register_hypervisor_plugin};
 use crate::config::default::MAX_CH_VCPUS;
 use crate::config::default::MIN_CH_MEMORY_SIZE_MB;
 
-use crate::config::hypervisor::VIRTIO_BLK_MMIO;
 use crate::config::{ConfigPlugin, TomlConfig};
 use crate::{eother, resolve_path, validate_path};
 
@@ -101,12 +100,6 @@ impl ConfigPlugin for CloudHypervisorConfig {
             }
             if !ch.valid_jailer_paths.is_empty() {
                 return Err(eother!("Valid CH jailer path list should be empty"));
-            }
-
-            if !ch.blockdev_info.disable_block_device_use
-                && ch.blockdev_info.block_device_driver == VIRTIO_BLK_MMIO
-            {
-                return Err(eother!("CH doesn't support virtio-blk-mmio"));
             }
 
             if ch.boot_info.kernel.is_empty() {

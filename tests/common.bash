@@ -257,22 +257,68 @@ function restart_containerd_service() {
 	return 0
 }
 
+function restart_crio_service() {
+	sudo systemctl restart crio
+}
+
 # Configures containerd
 function overwrite_containerd_config() {
 	containerd_config="/etc/containerd/config.toml"
 	sudo rm -f "${containerd_config}"
 	sudo tee "${containerd_config}" << EOF
 version = 2
-[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
-  SystemdCgroup = true
 
 [plugins]
   [plugins."io.containerd.grpc.v1.cri"]
     [plugins."io.containerd.grpc.v1.cri".containerd]
-      default_runtime_name = "kata"
       [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
+          base_runtime_spec = ""
+          cni_conf_dir = ""
+          cni_max_conf_num = 0
+          container_annotations = []
+          pod_annotations = []
+          privileged_without_host_devices = false
+          runtime_engine = ""
+          runtime_path = ""
+          runtime_root = ""
+          runtime_type = "io.containerd.runc.v2"
+          [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+            BinaryName = ""
+            CriuImagePath = ""
+            CriuPath = ""
+            CriuWorkPath = ""
+            IoGid = 0
+            IoUid = 0
+            NoNewKeyring = false
+            NoPivotRoot = false
+            Root = ""
+            ShimCgroup = ""
+            SystemdCgroup = false
         [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata]
           runtime_type = "io.containerd.kata.v2"
+EOF
+}
+
+# Configures CRI-O
+function overwrite_crio_config() {
+	crio_conf_d="/etc/crio/crio.conf.d"
+	sudo mkdir -p ${crio_conf_d}
+
+	kata_config="${crio_conf_d}/99-kata-containers"
+	sudo tee "${kata_config}" << EOF
+[crio.runtime.runtimes.kata]
+runtime_path = "/usr/local/bin/containerd-shim-kata-v2"
+runtime_type = "vm"
+runtime_root = "/run/vc"
+runtime_config_path = "/opt/kata/share/defaults/kata-containers/configuration.toml"
+privileged_without_host_devices = true
+EOF
+
+	debug_config="${crio_conf_d}/100-debug"
+	sudo tee "${debug_config}" << EOF
+[crio]
+log_level = "debug"
 EOF
 }
 
@@ -294,8 +340,14 @@ function install_kata() {
 		sudo ln -sf "${b}" "${local_bin_dir}/$(basename $b)"
 	done
 
-	check_containerd_config_for_kata
-	restart_containerd_service
+	if [ "${CONTAINER_ENGINE:=containerd}" = "containerd" ]; then
+		check_containerd_config_for_kata
+		restart_containerd_service
+	else
+		overwrite_crio_config
+		restart_crio_service
+	fi
+
 }
 
 # creates a new kata configuration.toml hard link that
@@ -383,6 +435,19 @@ function download_github_project_tarball() {
 	wget https://github.com/${project}/releases/download/${version}/${tarball_name}
 }
 
+# version: The version to be intalled
+function install_cni_plugins() {
+	version="${1}"
+
+	project="containernetworking/plugins"
+	tarball_name="cni-plugins-linux-$(${repo_root_dir}/tests/kata-arch.sh -g)-${version}.tgz"
+
+	download_github_project_tarball "${project}" "${version}" "${tarball_name}"
+	sudo mkdir -p /opt/cni/bin
+	sudo tar -xvf "${tarball_name}" -C /opt/cni/bin
+	rm -f "${tarball_name}"
+}
+
 # base_version: The version to be intalled in the ${major}.${minor} format
 function install_cri_containerd() {
 	base_version="${1}"
@@ -434,6 +499,52 @@ function install_nydus_snapshotter() {
 	download_github_project_tarball "${project}" "${version}" "${tarball_name}"
 	sudo tar xfz "${tarball_name}" -C /usr/local/bin --strip-components=1
 	rm -f "${tarball_name}"
+}
+
+function _get_os_for_crio() {
+	source /etc/os-release
+
+	if [ "${NAME}" != "Ubuntu" ]; then
+		echo "Only Ubuntu is supported for now"
+		exit 2
+	fi
+
+	echo "x${NAME}_${VERSION_ID}"
+}
+
+# version: the CRI-O version to be installe
+function install_crio() {
+	local version=${1}
+
+	os=$(_get_os_for_crio)
+
+	echo "deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/${os}/ /"|sudo tee /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list
+	echo "deb http://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/${version}/${os}/ /"|sudo tee /etc/apt/sources.list.d/devel:kubic:libcontainers:stable:cri-o:${version}.list
+	curl -L https://download.opensuse.org/repositories/devel:kubic:libcontainers:stable:cri-o:${version}/${os}/Release.key | sudo apt-key add -
+	curl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/${os}/Release.key | sudo apt-key add -
+	sudo apt update
+	sudo apt install -y cri-o cri-o-runc
+
+	# We need to set the default capabilities to ensure our tests will pass
+	# See: https://github.com/kata-containers/kata-containers/issues/8034
+	sudo mkdir -p /etc/crio/crio.conf.d/
+	cat <<EOF | sudo tee /etc/crio/crio.conf.d/00-default-capabilities
+[crio.runtime]
+default_capabilities = [
+       "CHOWN",
+       "DAC_OVERRIDE",
+       "FSETID",
+       "FOWNER",
+       "SETGID",
+       "SETUID",
+       "SETPCAP",
+       "NET_BIND_SERVICE",
+       "KILL",
+       "SYS_CHROOT",
+]
+EOF
+
+	sudo systemctl enable --now crio
 }
 
 # Convert architecture to the name used by golang

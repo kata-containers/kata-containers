@@ -32,8 +32,8 @@ readonly qemu_experimental_builder="${static_build_dir}/qemu/build-static-qemu-e
 readonly shimv2_builder="${static_build_dir}/shim-v2/build.sh"
 readonly virtiofsd_builder="${static_build_dir}/virtiofsd/build.sh"
 readonly nydus_builder="${static_build_dir}/nydus/build.sh"
-
 readonly rootfs_builder="${repo_root_dir}/tools/packaging/guest-image/build_image.sh"
+readonly tools_builder="${static_build_dir}/tools/build.sh"
 
 ARCH=${ARCH:-$(uname -m)}
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
@@ -81,9 +81,11 @@ options:
 -s             	      : Silent mode (produce output in case of failure only)
 --build=<asset>       :
 	all
+	agent-ctl
 	cloud-hypervisor
 	cloud-hypervisor-glibc
 	firecracker
+	kata-ctl
 	kernel
 	kernel-dragonball-experimental
 	kernel-experimental
@@ -92,6 +94,7 @@ options:
 	kernel-nvidia-gpu-tdx-experimental
 	kernel-sev-tarball
 	kernel-tdx-experimental
+	log-parser-rs
 	nydus
 	ovmf
 	ovmf-sev
@@ -103,8 +106,10 @@ options:
 	rootfs-initrd
 	rootfs-initrd-mariner
 	rootfs-initrd-sev
+	runk
 	shim-v2
 	tdvf
+	trace-forwarder
 	virtiofsd
 EOF
 
@@ -127,7 +132,7 @@ install_cached_tarball_component() {
 	local component_tarball_name="${4}"
 	local component_tarball_path="${5}"
 
-	oras pull ${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m)
+	sudo oras pull ${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m)
 
 	cached_version="$(cat ${component}-version)"
 	cached_image_version="$(cat ${component}-builder-image-version)"
@@ -620,6 +625,55 @@ install_ovmf_sev() {
 	install_ovmf "sev" "edk2-sev.tar.gz"
 }
 
+install_tools_helper() {
+	tool=${1}
+
+	latest_artefact="$(git log -1 --pretty=format:"%h" ${repo_root_dir}/src/tools/${tool})"
+	latest_builder_image="$(get_tools_image_name)"
+
+	install_cached_tarball_component \
+		"${tool}" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
+
+	info "build static ${tool}"
+	${tools_builder} ${tool}
+
+	tool_binary=${tool}
+	[ ${tool} = "agent-ctl" ] && tool_binary="kata-agent-ctl"
+	[ ${tool} = "log-parser-rs" ] && tool_binary="log-parser"
+	[ ${tool} = "trace-forwarder" ] && tool_binary="kata-trace-forwarder"
+	binary=$(find ${repo_root_dir}/src/tools/${tool}/ -type f -name ${tool_binary})
+
+	info "Install static ${tool_binary}"
+	mkdir -p "${destdir}/opt/kata/bin/"
+	sudo install -D --owner root --group root --mode 0744 ${binary} "${destdir}/opt/kata/bin/${tool_binary}"
+}
+
+install_agent_ctl() {
+	install_tools_helper "agent-ctl"
+}
+
+install_kata_ctl() {
+	install_tools_helper "kata-ctl"
+}
+
+install_log_parser_rs() {
+	install_tools_helper "log-parser-rs"
+}
+
+install_runk() {
+	install_tools_helper "runk"
+}
+
+install_trace_forwarder() {
+	install_tools_helper "trace-forwarder"
+}
+
 get_kata_version() {
 	local v
 	v=$(cat "${version_file}")
@@ -641,31 +695,40 @@ handle_build() {
 
 	case "${build_target}" in
 	all)
+		install_agent_ctl
 		install_clh
 		install_firecracker
 		install_image
 		install_initrd
 		install_initrd_mariner
 		install_initrd_sev
+		install_kata_ctl
 		install_kernel
 		install_kernel_dragonball_experimental
 		install_kernel_tdx_experimental
+		install_log_parser_rs
 		install_nydus
 		install_ovmf
 		install_ovmf_sev
 		install_qemu
 		install_qemu_snp_experimental
 		install_qemu_tdx_experimental
+		install_runk
 		install_shimv2
 		install_tdvf
+		install_trace_forwarder
 		install_virtiofsd
 		;;
+
+	agent-ctl) install_agent_ctl ;;
 
 	cloud-hypervisor) install_clh ;;
 
 	cloud-hypervisor-glibc) install_clh_glibc ;;
 
 	firecracker) install_firecracker ;;
+
+	kata-ctl) install_kata_ctl ;;
 
 	kernel) install_kernel ;;
 
@@ -680,6 +743,8 @@ handle_build() {
 	kernel-tdx-experimental) install_kernel_tdx_experimental ;;
 
 	kernel-sev) install_kernel_sev ;;
+
+	log-parser-rs) install_log_parser_rs ;;
 
 	nydus) install_nydus ;;
 
@@ -702,10 +767,14 @@ handle_build() {
 	rootfs-initrd-mariner) install_initrd_mariner ;;
 
 	rootfs-initrd-sev) install_initrd_sev ;;
+
+	runk) install_runk ;;
 	
 	shim-v2) install_shimv2 ;;
 
 	tdvf) install_tdvf ;;
+
+	trace-forwarder) install_trace_forwarder ;;
 
 	virtiofsd) install_virtiofsd ;;
 
@@ -733,10 +802,10 @@ handle_build() {
 			die "ARTEFACT_REGISTRY, ARTEFACT_REGISTRY_USERNAME, ARTEFACT_REGISTRY_PASSWORD and TARGET_BRANCH must be passed to the script when pushing the artefacts to the registry!"
 		fi
 
-		echo "${ARTEFACT_REGISTRY_PASSWORD}" | oras login "${ARTEFACT_REGISTRY}" -u "${ARTEFACT_REGISTRY_USERNAME}" --password-stdin
+		echo "${ARTEFACT_REGISTRY_PASSWORD}" | sudo oras login "${ARTEFACT_REGISTRY}" -u "${ARTEFACT_REGISTRY_USERNAME}" --password-stdin
 
-		oras push ${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) ${final_tarball_name} ${build_target}-version ${build_target}-builder-image-version ${build_target}-sha256sum
-		oras logout "${ARTEFACT_REGISTRY}"
+		sudo oras push ${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) ${final_tarball_name} ${build_target}-version ${build_target}-builder-image-version ${build_target}-sha256sum
+		sudo oras logout "${ARTEFACT_REGISTRY}"
 	fi
 
 	popd
@@ -758,16 +827,21 @@ main() {
 	local build_targets
 	local silent
 	build_targets=(
+		agent-ctl
 		cloud-hypervisor
 		firecracker
+		kata-ctl
 		kernel
 		kernel-experimental
+		log-parser-rs
 		nydus
 		qemu
 		rootfs-image
 		rootfs-initrd
 		rootfs-initrd-mariner
+		runk
 		shim-v2
+		trace-forwarder
 		virtiofsd
 	)
 	silent=false

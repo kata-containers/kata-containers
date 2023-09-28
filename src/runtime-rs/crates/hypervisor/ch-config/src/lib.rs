@@ -12,6 +12,7 @@ pub mod net_util;
 mod virtio_devices;
 
 use crate::virtio_devices::RateLimiterConfig;
+use kata_sys_util::protection::GuestProtection;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 pub use net_util::MacAddr;
 
@@ -489,7 +490,78 @@ pub struct NamedHypervisorConfig {
     pub sandbox_path: String,
     pub vsock_socket_path: String,
     pub cfg: HypervisorConfig,
-    pub tdx_enabled: bool,
 
     pub shared_fs_devices: Option<Vec<FsConfig>>,
+    pub network_devices: Option<Vec<NetConfig>>,
+
+    // Set to the available guest protection *iff* BOTH of the following
+    // conditions are true:
+    //
+    // - The hardware supports guest protection.
+    // - The user has requested that guest protection be used.
+    pub guest_protection_to_use: GuestProtection,
+}
+
+// Returns true if the enabled guest protection is Intel TDX.
+pub fn guest_protection_is_tdx(guest_protection_to_use: GuestProtection) -> bool {
+    matches!(guest_protection_to_use, GuestProtection::Tdx)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_guest_protection_is_tdx() {
+        #[derive(Debug)]
+        struct TestData {
+            protection: GuestProtection,
+            result: bool,
+        }
+
+        let tests = &[
+            TestData {
+                protection: GuestProtection::NoProtection,
+                result: false,
+            },
+            TestData {
+                protection: GuestProtection::Pef,
+                result: false,
+            },
+            TestData {
+                protection: GuestProtection::Se,
+                result: false,
+            },
+            TestData {
+                protection: GuestProtection::Sev,
+                result: false,
+            },
+            TestData {
+                protection: GuestProtection::Snp,
+                result: false,
+            },
+            TestData {
+                protection: GuestProtection::Tdx,
+                result: true,
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            let result = guest_protection_is_tdx(d.protection.clone());
+
+            let msg = format!("{}: actual result: {:?}", msg, result);
+
+            if std::env::var("DEBUG").is_ok() {
+                eprintln!("DEBUG: {}", msg);
+            }
+
+            if d.result {
+                assert!(result, "{}", msg);
+            } else {
+                assert!(!result, "{}", msg);
+            }
+        }
+    }
 }

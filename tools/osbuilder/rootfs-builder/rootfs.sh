@@ -619,6 +619,7 @@ EOF
 		make clean
 		make LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP} AGENT_POLICY=${AGENT_POLICY}
 		make install DESTDIR="${ROOTFS_DIR}" LIBC=${LIBC} INIT=${AGENT_INIT}
+		strip ${ROOTFS_DIR}/usr/bin/kata-agent
 		if [ "${SECCOMP}" == "yes" ]; then
 			rm -rf "${libseccomp_install_dir}" "${gperf_install_dir}"
 		fi
@@ -663,6 +664,7 @@ EOF
 			local opa_bin="${ROOTFS_DIR}${opa_bin_dir}/opa"
 			info "Installing OPA binary to ${opa_bin}"
 			install -D -o root -g root -m 0755 opa -T "${opa_bin}"
+			strip ${ROOTFS_DIR}${opa_bin_dir}/opa
 		else
 			info "OPA binary already exists in ${opa_bin_dir}"
 		fi
