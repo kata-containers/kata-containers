@@ -25,6 +25,7 @@ macro_rules! sl {
 mod inner;
 mod inner_device;
 mod inner_hypervisor;
+mod console_watcher;
 mod utils;
 
 use inner::CloudHypervisorInner;
