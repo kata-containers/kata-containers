@@ -121,7 +121,7 @@ lazy_static! {
 // The default clap version info doesn't match our form, so we need to override it
 #[clap(global_setting(AppSettings::DisableVersionFlag))]
 struct AgentOpts {
-    /// Print the version information
+/// Print the version information
     #[clap(short, long)]
     version: bool,
     #[clap(subcommand)]
@@ -480,7 +480,7 @@ fn launch_process(
     if !unix_socket_path.is_empty() && Path::new(unix_socket_path).exists() {
         fs::remove_file(unix_socket_path)?;
     }
-    Command::new(path).args(args).spawn()?;
+    Command::new(path).env("RUST_LOG", "debug").args(args).spawn()?;
     if !unix_socket_path.is_empty() && timeout_secs > 0 {
         wait_for_path_to_exist(logger, unix_socket_path, timeout_secs)?;
     }
