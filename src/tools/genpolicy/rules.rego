@@ -485,7 +485,6 @@ allow_args(p_process, i_process, s_name) {
 
     print("allow_args 2: true")
 }
-
 allow_arg(i, i_arg, p_process, s_name) {
     p_arg := p_process.Args[i]
     print("allow_arg 1: i =", i, "i_arg =", i_arg, "p_arg =", p_arg)
@@ -519,9 +518,9 @@ allow_arg(i, i_arg, p_process, s_name) {
 # OCI process.Env field
 allow_env(p_process, i_process, s_name) {
     print("allow_env: p env =", p_process.Env)
+    print("allow_env: i env =", i_process.Env)
 
     every i_var in i_process.Env {
-        print("allow_env: i_var =", i_var)
         allow_var(p_process, i_process, i_var, s_name)
     }
 
@@ -530,7 +529,7 @@ allow_env(p_process, i_process, s_name) {
 
 # Allow input env variables that are present in the policy data too.
 allow_var(p_process, i_process, i_var, s_name) {
-    print("allow_var 1: start")
+    print("allow_var 1: i_var =", i_var)
 
     some p_var in p_process.Env
     p_var == i_var
@@ -540,7 +539,7 @@ allow_var(p_process, i_process, i_var, s_name) {
 
 # Match input with one of the policy variables, after substituting $(sandbox-name).
 allow_var(p_process, i_process, i_var, s_name) {
-    print("allow_var 2: start")
+    print("allow_var 2: i_var =", i_var)
 
     some p_var in p_process.Env
     p_var2 := replace(p_var, "$(sandbox-name)", s_name)
@@ -551,177 +550,34 @@ allow_var(p_process, i_process, i_var, s_name) {
     print("allow_var 2: true")
 }
 
-# Allow service-related env variables:
-
-# "KUBERNETES_PORT_443_TCP_PROTO=tcp"
+# Allow input env variables that match with a request_defaults regex.
 allow_var(p_process, i_process, i_var, s_name) {
     print("allow_var 3: start")
 
-    name_value := split(i_var, "=")
-    count(name_value) == 2
+    some p_regex1 in policy_data.request_defaults.CreateContainerRequest.allow_env_regex
+    print("allow_var 3: p_regex1 =", p_regex1)
 
-    name_value[1] == "tcp"
+    p_regex2 := replace(p_regex1, "$(ipv4_a)", policy_data.common.ipv4_a)
+    print("allow_var 3: p_regex2 =", p_regex2)
 
-    components = split(name_value[0], "_")
-    count1 := count(components)
-    count1 >= 5
+    p_regex3 := replace(p_regex2, "$(ip_p)", policy_data.common.ip_p)
+    print("allow_var 3: p_regex3 =", p_regex3)
 
-    components[count1 - 1] == "PROTO"
-    components[count1 - 2] == "TCP"
-    components[count1 - 4] == "PORT"
-    port := components[count1 - 3]
-    is_port(port)
+    p_regex4 := replace(p_regex3, "$(svc_name)", policy_data.common.svc_name)
+    print("allow_var 3: p_regex4 =", p_regex4)
+
+    p_regex5 := replace(p_regex4, "$(dns_label)", policy_data.common.dns_label)
+    print("allow_var 3: p_regex5 =", p_regex5)
+
+    print("allow_var 3: i_var =", i_var)
+    regex.match(p_regex5, i_var)
 
     print("allow_var 3: true")
 }
 
-# "KUBERNETES_PORT_443_TCP_PORT=443"
-allow_var(p_process, i_process, i_var, s_name) {
-    print("allow_var 4: start")
-
-    name_value := split(i_var, "=")
-    count(name_value) == 2
-
-    port = name_value[1]
-    is_port(port)
-
-    components = split(name_value[0], "_")
-    count1 := count(components)
-    count1 >= 5
-
-    components[count1 - 1] == "PORT"
-    components[count1 - 2] == "TCP"
-    components[count1 - 3] == port
-    components[count1 - 4] == "PORT"
-
-    print("allow_var 4: true")
-}
-
-# "KUBERNETES_PORT_443_TCP_ADDR=10.0.0.1"
-allow_var(p_process, i_process, i_var, s_name) {
-    print("allow_var 5: start")
-
-    name_value := split(i_var, "=")
-    count(name_value) == 2
-
-    is_ip(name_value[1])
-
-    components = split(name_value[0], "_")
-    count1 := count(components)
-    count1 >= 5
-
-    components[count1 - 1] == "ADDR"
-    components[count1 - 2] == "TCP"
-    components[count1 - 4] == "PORT"
-    port := components[count1 - 3]
-    is_port(port)
-
-    print("allow_var 5: true")
-}
-
-# "KUBERNETES_SERVICE_HOST=10.0.0.1",
-allow_var(p_process, i_process, i_var, s_name) {
-    print("allow_var 6: start")
-
-    name_value := split(i_var, "=")
-    count(name_value) == 2
-
-    is_ip(name_value[1])
-
-    components = split(name_value[0], "_")
-    count1 := count(components)
-    count1 >= 3
-
-    components[count1 - 1] == "HOST"
-    components[count1 - 2] == "SERVICE"
-
-    print("allow_var 6: true")
-}
-
-# "KUBERNETES_SERVICE_PORT=443",
-allow_var(p_process, i_process, i_var, s_name) {
-    print("allow_var 7: start")
-
-    name_value := split(i_var, "=")
-    count(name_value) == 2
-
-    is_port(name_value[1])
-
-    components = split(name_value[0], "_")
-    count1 := count(components)
-    count1 >= 3
-
-    components[count1 - 1] == "PORT"
-    components[count1 - 2] == "SERVICE"
-
-    print("allow_var 7: true")
-}
-
-# "KUBERNETES_SERVICE_PORT_HTTPS=443",
-allow_var(p_process, i_process, i_var, s_name) {
-    print("allow_var 8: start")
-
-    name_value := split(i_var, "=")
-    count(name_value) == 2
-
-    is_port(name_value[1])
-
-    components = split(name_value[0], "_")
-    count1 := count(components)
-    count1 >= 4
-
-    components[count1 - 1] == "HTTPS"
-    components[count1 - 2] == "PORT"
-    components[count1 - 3] == "SERVICE"
-
-    print("allow_var 8: true")
-}
-
-# "KUBERNETES_PORT=tcp://10.0.0.1:443",
-allow_var(p_process, i_process, i_var, s_name) {
-    print("allow_var 9: start")
-
-    name_value := split(i_var, "=")
-    count(name_value) == 2
-
-    is_tcp_uri(name_value[1])
-
-    components = split(name_value[0], "_")
-    count1 := count(components)
-    count1 >= 2
-
-    components[count1 - 1] == "PORT"
-
-    print("allow_var 9: true")
-}
-
-# "KUBERNETES_PORT_443_TCP=tcp://10.0.0.1:443",
-allow_var(p_process, i_process, i_var, s_name) {
-    print("allow_var 10: start")
-
-    name_value := split(i_var, "=")
-    count(name_value) == 2
-
-    components = split(name_value[0], "_")
-    count1 := count(components)
-    count1 >= 4
-
-    components[count1 - 1] == "TCP"
-    components[count1 - 3] == "PORT"
-    port := components[count1 - 2]
-    is_port(port)
-    is_tcp_uri(name_value[1])
-
-    value_components = split(name_value[1], ":")
-    count(value_components) == 3
-    value_components[2] == port
-
-    print("allow_var 10: true")
-}
-
 # Allow fieldRef "fieldPath: status.podIP" values.
 allow_var(p_process, i_process, i_var, s_name) {
-    print("allow_var 11: start")
+    print("allow_var 4: i_var =", i_var)
 
     name_value := split(i_var, "=")
     count(name_value) == 2
@@ -730,12 +586,12 @@ allow_var(p_process, i_process, i_var, s_name) {
     some p_var in p_process.Env
     allow_pod_ip_var(name_value[0], p_var)
 
-    print("allow_var 11: true")
+    print("allow_var 4: true")
 }
 
 # Allow common fieldRef variables.
 allow_var(p_process, i_process, i_var, s_name) {
-    print("allow_var 12: start")
+    print("allow_var 5: i_var =", i_var)
 
     name_value := split(i_var, "=")
     count(name_value) == 2
@@ -751,12 +607,12 @@ allow_var(p_process, i_process, i_var, s_name) {
     some allowed in always_allowed
     contains(p_name_value[1], allowed)
 
-    print("allow_var 12: true")
+    print("allow_var 5: true")
 }
 
 # Allow fieldRef "fieldPath: status.hostIP" values.
 allow_var(p_process, i_process, i_var, s_name) {
-    print("allow_var 13: start")
+    print("allow_var 6: i_var =", i_var)
 
     name_value := split(i_var, "=")
     count(name_value) == 2
@@ -765,12 +621,12 @@ allow_var(p_process, i_process, i_var, s_name) {
     some p_var in p_process.Env
     allow_host_ip_var(name_value[0], p_var)
 
-    print("allow_var 13: true")
+    print("allow_var 6: true")
 }
 
 # Allow resourceFieldRef values (e.g., "limits.cpu").
 allow_var(p_process, i_process, i_var, s_name) {
-    print("allow_var 14: start")
+    print("allow_var 7: i_var =", i_var)
 
     name_value := split(i_var, "=")
     count(name_value) == 2
@@ -786,17 +642,7 @@ allow_var(p_process, i_process, i_var, s_name) {
     some allowed in always_allowed
     contains(p_name_value[1], allowed)
 
-    print("allow_var 14: true")
-}
-
-# Allow input env variables that match with request_defaults.
-allow_var(p_process, i_process, i_var, s_name) {
-    print("allow_var 15: start")
-
-    some p_regex in policy_data.request_defaults.CreateContainerRequest.allow_env_regex
-    regex.match(p_regex, i_var)
-
-    print("allow_var 15: true")
+    print("allow_var 7: true")
 }
 
 allow_pod_ip_var(var_name, p_var) {
@@ -842,25 +688,6 @@ is_ip_other_byte(component) {
     number >= 0
     number <= 255
 }
-
-is_port(value) {
-    number = to_number(value)
-    number >= 1
-    number <= 65635
-}
-
-# E.g., "tcp://10.0.0.1:443"
-is_tcp_uri(value) {
-    components = split(value, "//")
-    count(components) == 2
-    components[0] == "tcp:"
-
-    ip_and_port = split(components[1], ":")
-    count(ip_and_port) == 2
-    is_ip(ip_and_port[0])
-    is_port(ip_and_port[1])
-}
-
 
 # OCI root.Path
 allow_root_path(p_oci, i_oci, bundle_id) {

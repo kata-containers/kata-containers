@@ -143,6 +143,10 @@
     "common": {
         "cpath": "/run/kata-containers/shared/containers",
         "sfprefix": "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-",
+        "ip_p": "[0-9]{1,5}",
+        "ipv4_a": "(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])",
+        "svc_name": "[A-Z_\\.\\-]+",
+        "dns_label": "[a-zA-Z_\\.\\-]+",
         "default_caps": [
             "CAP_CHOWN",
             "CAP_DAC_OVERRIDE",
@@ -209,6 +213,15 @@
     "request_defaults": {
         "CreateContainerRequest": {
             "allow_env_regex": [
+                "^HOSTNAME=$(dns_label)$",
+                "^$(svc_name)_PORT_$(ip_p)_TCP=tcp://$(ipv4_a):$(ip_p)$",
+                "^$(svc_name)_PORT_$(ip_p)_TCP_PROTO=tcp$",
+                "^$(svc_name)_PORT_$(ip_p)_TCP_PORT=$(ip_p)$",
+                "^$(svc_name)_PORT_$(ip_p)_TCP_ADDR=$(ipv4_a)$",
+                "^$(svc_name)_SERVICE_HOST=$(ipv4_a)$",
+                "^$(svc_name)_SERVICE_PORT=$(ip_p)$",
+                "^$(svc_name)_SERVICE_PORT_$(dns_label)=$(ip_p)$",
+                "^$(svc_name)_PORT=tcp://$(ipv4_a):$(ip_p)$",
                 "^AZURE_CLIENT_ID=[A-Fa-f0-9-]+$",
                 "^AZURE_TENANT_ID=[A-Fa-f0-9-]+$",
                 "^AZURE_FEDERATED_TOKEN_FILE=/var/run/secrets/azure/tokens/azure-identity-token$",

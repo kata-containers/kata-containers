@@ -307,6 +307,18 @@ pub struct CommonData {
     /// Regex prefix for shared file paths - e.g., "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-".
     pub sfprefix: String,
 
+    /// Regex for an IPv4 address.
+    pub ipv4_a: String,
+
+    /// Regex for an IP port number.
+    pub ip_p: String,
+
+    /// Regex for a K8s service name.
+    pub svc_name: String,
+
+    // Regex for a DNS label (e.g., host name).
+    pub dns_label: String,
+
     /// Default capabilities for a non-privileged container.
     pub default_caps: Vec<String>,
 
