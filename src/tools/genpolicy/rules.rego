@@ -5,13 +5,17 @@ import future.keywords.every
 
 import input
 
-# Requests that are always allowed.
+# Default values, returned by OPA when rules cannot be evaluated to true.
+default CopyFileRequest := false
+default CreateContainerRequest := false
 default CreateSandboxRequest := true
 default DestroySandboxRequest := true
+default ExecProcessRequest := false
 default GetOOMEventRequest := true
 default GuestDetailsRequest := true
 default OnlineCPUMemRequest := true
 default PullImageRequest := true
+default ReadStreamRequest := false
 default RemoveContainerRequest := true
 default RemoveStaleVirtiofsShareMountsRequest := true
 default SignalProcessRequest := true
@@ -22,12 +26,13 @@ default UpdateEphemeralMountsRequest := true
 default UpdateInterfaceRequest := true
 default UpdateRoutesRequest := true
 default WaitProcessRequest := true
+default WriteStreamRequest := false
 
 # AllowRequestsFailingPolicy := true configures the Agent to *allow any
 # requests causing a policy failure*. This is an unsecure configuration
 # but is useful for allowing unsecure pods to start, then connect to
 # them and inspect OPA logs for the root cause of a failure.
-# default AllowRequestsFailingPolicy := true
+default AllowRequestsFailingPolicy := false
 
 CreateContainerRequest {
     i_oci := input.OCI
