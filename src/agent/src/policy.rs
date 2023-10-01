@@ -211,10 +211,20 @@ impl AgentPolicy {
                     Ok(resp.result)
                 }
                 Err(_) => {
-                    warn!(
-                        sl!(),
-                        "policy: endpoint {} not found in policy. Returning false.", ep,
-                    );
+                    if self.allow_failures {
+                        warn!(
+                            sl!(),
+                            "policy: POST {} undefined response <{}>. Ignoring error!",
+                            ep,
+                            http_response
+                        );
+                        return Ok(true);
+                    } else {
+                        warn!(
+                            sl!(),
+                            "policy: POST {} undefined response <{}>.", ep, http_response
+                        );
+                    }
                     Ok(false)
                 }
             }
