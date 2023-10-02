@@ -34,8 +34,9 @@ function setup {
 }
 
 function exec_loop {
-	cmd="sudo ctr t exec --exec-id 1 $CONTAINER_NAME sh -c"
+	cmd="sudo ctr t exec --exec-id $(random_name) $CONTAINER_NAME sh -c"
 	$cmd "echo 'hello world' > file"
+	$cmd "ls /file"
 	$cmd "rm -rf /file"
 	$cmd "touch /tmp/execWorks"
 	$cmd "ls /tmp | grep execWorks"
@@ -51,10 +52,10 @@ function teardown {
 }
 trap teardown EXIT
 
-echo "Starting stability test"
+info "Starting stability test"
 setup
 
-echo "Running stability test"
+info "Running stability test"
 while [[ $end_time > $(date +%s) ]]; do
 	exec_loop
 done
