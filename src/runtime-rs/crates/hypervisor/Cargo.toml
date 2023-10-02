@@ -51,6 +51,10 @@ default = []
 # See https://github.com/kata-containers/kata-containers/issues/6264.
 cloud-hypervisor = ["ch-config"]
 
+# Feature is not yet ready for general use, so not enabled by default.
+# See https://github.com/kata-containers/kata-containers/issues/8112
+cloud-hypervisor-tdx = []
+
 [dev-dependencies]
 # Force the CH tests to run, even when the feature is not enabled for
 # a normal build.

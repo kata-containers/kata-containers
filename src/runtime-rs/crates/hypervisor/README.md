@@ -7,6 +7,16 @@ External hypervisor support is currently being developed.
 See [the main tracking issue](https://github.com/kata-containers/kata-containers/issues/4634)
 for further details.
 
+### Cloud Hypervisor with Intel TDX
+
+The Cloud Hypervisor driver provides Intel TDX functionality. However,
+this feature is currently disabled by default. To enable it, you need to enable
+[the `cloud-hypervisor-tdx` build feature](https://github.com/kata-containers/kata-containers/issues/8112).
+
+See https://github.com/kata-containers/kata-containers/issues/8113 and the
+[Cloud Hypervisor tracking issue](https://github.com/kata-containers/kata-containers/issues/6263)
+for further details.
+
 Some key points for supporting multi-vmm in rust runtime.
 ## 1. Hypervisor Config
 

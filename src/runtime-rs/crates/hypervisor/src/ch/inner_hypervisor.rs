@@ -55,6 +55,10 @@ pub enum GuestProtectionError {
     // "true".
     #[error("TDX guest protection available and must be used with Cloud Hypervisor (set 'confidential_guest=true')")]
     TDXProtectionMustBeUsedWithCH,
+
+    #[cfg(not(feature = "cloud-hypervisor-tdx"))]
+    #[error("TDX guest protection available and requested but Kata TDX feature not enabled")]
+    KataTDXFeatureDisabled,
 }
 
 impl CloudHypervisorInner {
@@ -489,6 +493,11 @@ impl CloudHypervisorInner {
                 debug!(sl!(), "no guest protection available");
             }
         } else if confidential_guest {
+            #[cfg(not(feature = "cloud-hypervisor-tdx"))]
+            if protection == GuestProtection::Tdx {
+                return Err(anyhow!(GuestProtectionError::KataTDXFeatureDisabled));
+            }
+
             self.guest_protection_to_use = protection.clone();
 
             info!(sl!(), "guest protection available and requested"; "guest-protection" => protection.to_string());
@@ -888,8 +897,11 @@ mod tests {
             TestData {
                 confidential_guest: true,
                 available_protection: Some(GuestProtection::Tdx),
+                #[cfg(feature = "cloud-hypervisor-tdx")]
                 result: Ok(()),
-                guest_protection_to_use: GuestProtection::Tdx,
+                #[cfg(not(feature = "cloud-hypervisor-tdx"))]
+                result: Err(anyhow!(GuestProtectionError::KataTDXFeatureDisabled)),
+                guest_protection_to_use: GuestProtection::NoProtection,
             },
         ];
 
