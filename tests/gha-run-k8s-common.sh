@@ -128,7 +128,7 @@ function deploy_k0s() {
 	if [ "${ARCH}" = "x86_64" ]; then
 		ARCH=amd64
 	fi
-	kubectl_version=$(sudo k0s kubectl version --short 2>/dev/null | grep "Client Version" | sed -e 's/Client Version: //')
+	kubectl_version=$(sudo k0s kubectl version 2>/dev/null | grep "Client Version" | sed -e 's/Client Version: //')
 	sudo curl -fL --progress-bar -o /usr/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/${kubectl_version}/bin/linux/${ARCH}/kubectl
 	sudo chmod +x /usr/bin/kubectl
 
