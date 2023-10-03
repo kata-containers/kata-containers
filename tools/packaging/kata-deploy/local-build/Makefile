@@ -52,6 +52,12 @@ serial-targets:
 %-tarball-build: $(MK_DIR)/dockerbuild/install_yq.sh
 	$(call BUILD,$*)
 
+agent-tarball:
+	${MAKE} $@-build
+
+agent-opa-tarball:
+	${MAKE} $@-build
+
 agent-ctl-tarball:
 	${MAKE} $@-build
 
