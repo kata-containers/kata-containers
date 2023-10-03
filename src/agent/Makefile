@@ -34,7 +34,7 @@ ifeq ($(SECCOMP),yes)
 endif
 
 ##VAR AGENT_POLICY=yes|no define if agent enables the policy feature
-AGENT_POLICY := no
+AGENT_POLICY ?= no
 
 # Enable the policy feature of rust build
 ifeq ($(AGENT_POLICY),yes)
@@ -62,7 +62,7 @@ endif
 TARGET_PATH = target/$(TRIPLE)/$(BUILD_TYPE)/$(TARGET)
 
 ##VAR DESTDIR=<path> is a directory prepended to each installed target file
-DESTDIR :=
+DESTDIR ?=
 ##VAR BINDIR=<path> is a directory for installing executable programs
 BINDIR := /usr/bin
 
