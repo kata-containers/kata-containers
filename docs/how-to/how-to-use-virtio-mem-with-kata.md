@@ -29,7 +29,7 @@ Then you can build and install the guest kernel image as shown [here](../../tool
 
 ## Run a Kata Container utilizing `virtio-mem`
 
-Use following command to enable memory overcommitment of a Linux kernel.  Because QEMU `virtio-mem` device need to allocate a lot of memory.
+Use following command to enable memory over-commitment of a Linux kernel.  Because QEMU `virtio-mem` device need to allocate a lot of memory.
 ```
 $ echo 1 | sudo tee /proc/sys/vm/overcommit_memory
 ```
