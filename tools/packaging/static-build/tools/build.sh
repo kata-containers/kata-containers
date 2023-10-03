@@ -15,7 +15,7 @@ source "${script_dir}/../../scripts/lib.sh"
 
 tool="${1}"
 
-container_image="${VIRTIOFSD_CONTAINER_BUILDER:-$(get_tools_image_name)}"
+container_image="${TOOLS_CONTAINER_BUILDER:-$(get_tools_image_name)}"
 [ "${CROSS_BUILD}" == "true" ] && container_image="${container_image}-cross-build"
 
 sudo docker pull ${container_image} || \
