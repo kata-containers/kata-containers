@@ -23,7 +23,6 @@ init_env() {
 }
 
 build_tool_from_source() {
-	set -x
 	tool=${1}
 
 	echo "build ${tool} from source"
