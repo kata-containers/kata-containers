@@ -22,6 +22,7 @@ readonly static_build_dir="${repo_root_dir}/tools/packaging/static-build"
 readonly version_file="${repo_root_dir}/VERSION"
 readonly versions_yaml="${repo_root_dir}/versions.yaml"
 
+readonly agent_builder="${static_build_dir}/agent/build.sh"
 readonly clh_builder="${static_build_dir}/cloud-hypervisor/build-static-clh.sh"
 readonly firecracker_builder="${static_build_dir}/firecracker/build-static-firecracker.sh"
 readonly initramfs_builder="${static_build_dir}/initramfs/build.sh"
@@ -81,6 +82,8 @@ options:
 -s             	      : Silent mode (produce output in case of failure only)
 --build=<asset>       :
 	all
+	agent
+	agent-opa
 	agent-ctl
 	cloud-hypervisor
 	cloud-hypervisor-glibc
@@ -622,6 +625,32 @@ install_ovmf_sev() {
 	install_ovmf "sev" "edk2-sev.tar.gz"
 }
 
+install_agent_helper() {
+	agent_policy="${1:-no}"
+
+	latest_artefact="$(git log -1 --pretty=format:"%h" ${repo_root_dir}/src/agent)"
+	latest_builder_image="$(get_agent_image_name)"
+
+	install_cached_tarball_component \
+		"${build_target}" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
+	info "build static agent"
+	DESTDIR="${destdir}" AGENT_POLICY=${agent_policy} "${agent_builder}"
+}
+
+install_agent() {
+	install_agent_helper
+}
+
+install_agent_opa() {
+	install_agent_helper "yes"
+}
+
 install_tools_helper() {
 	tool=${1}
 
@@ -716,6 +745,10 @@ handle_build() {
 		install_trace_forwarder
 		install_virtiofsd
 		;;
+
+	agent) install_agent ;;
+
+	agent-opa) install_agent_opa ;;
 
 	agent-ctl) install_agent_ctl ;;
 
@@ -824,6 +857,8 @@ main() {
 	local build_targets
 	local silent
 	build_targets=(
+		agent
+		agent-opa
 		agent-ctl
 		cloud-hypervisor
 		firecracker
