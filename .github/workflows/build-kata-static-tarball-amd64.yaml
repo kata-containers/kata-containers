@@ -127,10 +127,10 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: kata-artifacts-amd64${{ inputs.tarball-suffix }}
-          path: kata-artifacts
+          path: build
       - name: merge-artifacts
         run: |
-          ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-builds.sh kata-artifacts versions.yaml
+          make merge-builds
       - name: store-artifacts
         uses: actions/upload-artifact@v3
         with:
