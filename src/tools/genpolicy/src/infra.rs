@@ -149,6 +149,8 @@ impl InfraPolicy {
             if keep_infra_mount(&infra_mount, &yaml_container.volumeMounts) {
                 let mut mount = infra_mount.clone();
 
+                adjust_termination_path(&mut mount, &yaml_container);
+
                 if mount.source.is_empty() && mount.type_.eq("bind") {
                     if let Some(file_name) = Path::new(&mount.destination).file_name() {
                         if let Some(file_name) = file_name.to_str() {
@@ -310,7 +312,13 @@ impl InfraPolicy {
             } else {
                 false
             };
-            Self::empty_dir_mount_and_storage(&self.volumes, policy_mounts, storages, yaml_mount, memory_medium);
+            Self::empty_dir_mount_and_storage(
+                &self.volumes,
+                policy_mounts,
+                storages,
+                yaml_mount,
+                memory_medium,
+            );
         } else if yaml_volume.persistentVolumeClaim.is_some() || yaml_volume.azureFile.is_some() {
             self.shared_bind_mount(yaml_mount, policy_mounts, "rprivate", "rw");
         } else if yaml_volume.hostPath.is_some() {
@@ -577,6 +585,14 @@ impl InfraPolicy {
                 source,
                 options,
             });
+        }
+    }
+}
+
+fn adjust_termination_path(mount: &mut policy::KataMount, yaml_container: &pod::Container) {
+    if mount.destination == "/dev/termination-log" {
+        if let Some(path) = &yaml_container.terminationMessagePath {
+            mount.destination = path.clone();
         }
     }
 }

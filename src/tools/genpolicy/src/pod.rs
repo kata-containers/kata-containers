@@ -130,6 +130,9 @@ pub struct Container {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tty: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub terminationMessagePath: Option<String>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
