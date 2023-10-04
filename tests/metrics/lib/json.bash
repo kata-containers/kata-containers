@@ -147,7 +147,7 @@ done)
 EOF
 )"
 
-	echo "$json" > $json_filename
+	echo "${json}" | jq . > "${json_filename}"
 
 	# If we have a JSON URL or host/socket pair set up, post the results there as well.
 	# Optionally compress into a single line.
