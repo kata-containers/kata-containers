@@ -13,6 +13,7 @@ use kata_types::capabilities::{Capabilities, CapabilityBits};
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
 use persist::sandbox_persist::Persist;
+use std::collections::HashMap;
 use std::os::unix::net::UnixStream;
 use tokio::process::Child;
 use tokio::sync::watch::{channel, Receiver, Sender};
@@ -59,6 +60,13 @@ pub struct CloudHypervisorInner {
     // For example, on Intel TDX capable systems with `confidential_guest=true`,
     // this will be set to "tdx".
     pub(crate) guest_protection_to_use: GuestProtection,
+
+    // Store mapping between device-ids created by runtime-rs device manager
+    // and device-ids returned by cloud-hypervisor when the device is added to the VM.
+    //
+    // The cloud-hypervisor device-id is later looked up and used while
+    // removing the device.
+    pub(crate) device_ids: HashMap<String, String>,
 }
 
 const CH_DEFAULT_TIMEOUT_SECS: u32 = 10;
@@ -90,6 +98,7 @@ impl CloudHypervisorInner {
             run_dir: String::default(),
             netns: None,
             pending_devices: vec![],
+            device_ids: HashMap::<String, String>::new(),
             _capabilities: capabilities,
             shutdown_tx: Some(tx),
             shutdown_rx: Some(rx),
