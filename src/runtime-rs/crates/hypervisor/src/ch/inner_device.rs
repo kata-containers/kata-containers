@@ -6,16 +6,21 @@
 
 use super::inner::CloudHypervisorInner;
 use crate::device::DeviceType;
-use crate::BlockConfig;
+use crate::BlockDevice;
 use crate::HybridVsockConfig;
 use crate::NetworkConfig;
 use crate::ShareFsDeviceConfig;
+use crate::VfioDevice;
 use crate::VmmState;
 use anyhow::{anyhow, Context, Result};
-use ch_config::ch_api::{cloud_hypervisor_vm_blockdev_add, cloud_hypervisor_vm_fs_add};
+use ch_config::ch_api::{
+    cloud_hypervisor_vm_blockdev_add, cloud_hypervisor_vm_device_add,
+    cloud_hypervisor_vm_device_remove, cloud_hypervisor_vm_fs_add, PciDeviceInfo,
+    VmRemoveDeviceData,
+};
 use ch_config::convert::{DEFAULT_DISK_QUEUES, DEFAULT_DISK_QUEUE_SIZE, DEFAULT_NUM_PCI_SEGMENTS};
 use ch_config::DiskConfig;
-use ch_config::{net_util::MacAddr, FsConfig, NetConfig};
+use ch_config::{net_util::MacAddr, DeviceConfig, FsConfig, NetConfig};
 use safe_path::scoped_join;
 use std::convert::TryFrom;
 use std::path::PathBuf;
@@ -72,13 +77,35 @@ impl CloudHypervisorInner {
         match device {
             DeviceType::ShareFs(sharefs) => self.handle_share_fs_device(sharefs.config).await,
             DeviceType::HybridVsock(hvsock) => self.handle_hvsock_device(&hvsock.config).await,
-            DeviceType::Block(block) => self.handle_block_device(block.config).await,
+            DeviceType::Block(block) => self.handle_block_device(block).await,
+            DeviceType::Vfio(vfiodev) => self.handle_vfio_device(&vfiodev).await,
             _ => Err(anyhow!("unhandled device: {:?}", device)),
         }
     }
 
-    pub(crate) async fn remove_device(&mut self, _device: DeviceType) -> Result<()> {
+    /// Add the device that were requested to be added before the VMM was
+    /// started.
+    #[allow(dead_code)]
+    pub(crate) async fn handle_pending_devices_after_boot(&mut self) -> Result<()> {
+        if self.state != VmmState::VmRunning {
+            return Err(anyhow!(
+                "cannot handle pending devices with VMM state {:?}",
+                self.state
+            ));
+        }
+
+        while let Some(dev) = self.pending_devices.pop() {
+            self.add_device(dev).await.context("add_device")?;
+        }
+
         Ok(())
+    }
+
+    pub(crate) async fn remove_device(&mut self, device: DeviceType) -> Result<()> {
+        match device {
+            DeviceType::Vfio(vfiodev) => self.remove_vfio_device(&vfiodev).await,
+            _ => Ok(()),
+        }
     }
 
     async fn handle_share_fs_device(&mut self, cfg: ShareFsDeviceConfig) -> Result<()> {
@@ -137,7 +164,85 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
-    async fn handle_block_device(&mut self, cfg: BlockConfig) -> Result<()> {
+    async fn handle_vfio_device(&mut self, device: &VfioDevice) -> Result<()> {
+        // A device with multi-funtions, or a IOMMU group with one more
+        // devices, the Primary device is selected to be passed to VM.
+        // And the the first one is Primary device.
+        // safe here, devices is not empty.
+        let primary_device = device.devices.first().ok_or(anyhow!(
+            "Primary device list empty for vfio device {:?}",
+            device
+        ))?;
+
+        let primary_device = primary_device.clone();
+
+        let sysfsdev = primary_device.sysfs_path.clone();
+
+        let socket = self
+            .api_socket
+            .as_ref()
+            .ok_or("missing socket")
+            .map_err(|e| anyhow!(e))?;
+
+        let device_config = DeviceConfig {
+            path: PathBuf::from(sysfsdev),
+            iommu: false,
+            ..Default::default()
+        };
+
+        let response = cloud_hypervisor_vm_device_add(
+            socket.try_clone().context("failed to clone socket")?,
+            device_config,
+        )
+        .await?;
+
+        if let Some(detail) = response {
+            debug!(sl!(), "VFIO add response: {:?}", detail);
+
+            // Store the cloud-hypervisor device id to be used later for remving the device
+            let dev_info: PciDeviceInfo =
+                serde_json::from_str(detail.as_str()).map_err(|e| anyhow!(e))?;
+            self.device_ids
+                .insert(device.device_id.clone(), dev_info.id);
+        }
+
+        Ok(())
+    }
+
+    async fn remove_vfio_device(&mut self, device: &VfioDevice) -> Result<()> {
+        let clh_device_id = self.device_ids.get(&device.device_id);
+
+        if clh_device_id.is_none() {
+            return Err(anyhow!(
+                "Device id for cloud-hypervisor not found while removing device"
+            ));
+        }
+
+        let socket = self
+            .api_socket
+            .as_ref()
+            .ok_or("missing socket")
+            .map_err(|e| anyhow!(e))?;
+
+        let clh_device_id = clh_device_id.unwrap();
+        let rm_data = VmRemoveDeviceData {
+            id: clh_device_id.clone(),
+        };
+
+        let response = cloud_hypervisor_vm_device_remove(
+            socket.try_clone().context("failed to clone socket")?,
+            rm_data,
+        )
+        .await?;
+
+        if let Some(detail) = response {
+            debug!(sl!(), "vfio remove response: {:?}", detail);
+        }
+
+        Ok(())
+    }
+
+    async fn handle_block_device(&mut self, device: BlockDevice) -> Result<()> {
         let socket = self
             .api_socket
             .as_ref()
@@ -148,8 +253,8 @@ impl CloudHypervisorInner {
         let queue_size: u16 = DEFAULT_DISK_QUEUE_SIZE;
 
         let block_config = DiskConfig {
-            path: Some(cfg.path_on_host.as_str().into()),
-            readonly: cfg.is_readonly,
+            path: Some(device.config.path_on_host.as_str().into()),
+            readonly: device.config.is_readonly,
             num_queues,
             queue_size,
             ..Default::default()
@@ -163,6 +268,10 @@ impl CloudHypervisorInner {
 
         if let Some(detail) = response {
             debug!(sl!(), "blockdev add response: {:?}", detail);
+
+            let dev_info: PciDeviceInfo =
+                serde_json::from_str(detail.as_str()).map_err(|e| anyhow!(e))?;
+            self.device_ids.insert(device.device_id, dev_info.id);
         }
 
         Ok(())
