@@ -19,17 +19,19 @@ init_env() {
 	export LIBSECCOMP_LINK_TYPE=static
 	export LIBSECCOMP_LIB_PATH=/usr/lib
 
-	extra_rust_flags=" -C link-self-contained=yes"
+	# This is needed to workaround
+	# https://github.com/sfackler/rust-openssl/issues/1624
+	export OPENSSL_NO_VENDOR=Y
 }
 
-build_tool_from_source() {
-	tool=${1}
+build_agent_from_source() {
+	echo "build agent from source"
 
-	echo "build ${tool} from source"
 	init_env
 
-	cd src/tools/${tool}
-	make
+	cd src/agent
+	DESTDIR=${DESTDIR} AGENT_POLICY=${AGENT_POLICY} make
+	DESTDIR=${DESTDIR} AGENT_POLICY=${AGENT_POLICY} make install
 }
 
-build_tool_from_source $@
+build_agent_from_source $@
