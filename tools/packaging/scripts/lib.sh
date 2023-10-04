@@ -226,3 +226,10 @@ get_tools_image_name() {
 
 	echo "${BUILDER_REGISTRY}:tools-$(get_last_modification ${tools_dir})-$(get_last_modification ${libs_dir})-$(get_last_modification ${agent_dir})"
 }
+
+get_agent_image_name() {
+	libs_dir="${repo_root_dir}/src/libs"
+	agent_dir="${repo_root_dir}/src/agent"
+
+	echo "${BUILDER_REGISTRY}:agent-$(get_last_modification ${libs_dir})-$(get_last_modification ${agent_dir})"
+}

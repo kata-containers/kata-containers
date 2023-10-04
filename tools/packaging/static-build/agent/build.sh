@@ -9,13 +9,11 @@ set -o nounset
 set -o pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly tools_builder="${script_dir}/build-static-tools.sh"
+readonly agent_builder="${script_dir}/build-static-agent.sh"
 
 source "${script_dir}/../../scripts/lib.sh"
 
-tool="${1}"
-
-container_image="${TOOLS_CONTAINER_BUILDER:-$(get_tools_image_name)}"
+container_image="${AGENT_CONTAINER_BUILDER:-$(get_agent_image_name)}"
 [ "${CROSS_BUILD}" == "true" ] && container_image="${container_image}-cross-build"
 
 sudo docker pull ${container_image} || \
@@ -26,6 +24,8 @@ sudo docker pull ${container_image} || \
 	 push_to_registry "${container_image}")
 
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
+	--env DESTDIR=${DESTDIR} \
+	--env AGENT_POLICY=${AGENT_POLICY:-no} \
 	-w "${repo_root_dir}" \
 	"${container_image}" \
-	bash -c "${tools_builder} ${tool}"
+	bash -c "${agent_builder}"
