@@ -23,7 +23,7 @@ on:
 
 jobs:
   build-asset:
-    runs-on: arm64
+    runs-on: arm64-builder
     strategy:
       matrix:
         asset:
@@ -87,7 +87,7 @@ jobs:
           if-no-files-found: error
 
   create-kata-tarball:
-    runs-on: arm64
+    runs-on: arm64-builder
     needs: build-asset
     steps:
       - name: Adjust a permission for repo
