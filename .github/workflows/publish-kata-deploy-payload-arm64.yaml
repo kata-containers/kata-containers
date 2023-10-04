@@ -24,7 +24,7 @@ on:
 
 jobs:
   kata-payload:
-    runs-on: arm64
+    runs-on: arm64-builder
     steps:
       - name: Adjust a permission for repo
         run: |
