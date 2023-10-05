@@ -217,6 +217,14 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
 
+  run-containerd-stability-tests:
+    needs: build-kata-static-tarball-amd64
+    uses: ./.github/workflows/run-containerd-stability-tests.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
+
   run-nydus-tests:
     needs: build-kata-static-tarball-amd64
     uses: ./.github/workflows/run-nydus-tests.yaml
