@@ -492,7 +492,7 @@ impl CloudHypervisorInner {
             self.guest_protection_to_use = protection.clone();
 
             info!(sl!(), "guest protection available and requested"; "guest-protection" => protection.to_string());
-        } else if protection == GuestProtection::Tdx {
+        } else if let GuestProtection::Tdx(_) = protection {
             return Err(anyhow!(GuestProtectionError::TDXProtectionMustBeUsedWithCH));
         } else {
             info!(sl!(), "guest protection available but not requested"; "guest-protection" => protection.to_string());
@@ -724,6 +724,7 @@ fn get_guest_protection() -> Result<GuestProtection> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use kata_sys_util::protection::TDXDetails;
 
     #[cfg(target_arch = "x86_64")]
     use kata_sys_util::protection::TDX_SYS_FIRMWARE_DIR;
@@ -747,6 +748,11 @@ mod tests {
     async fn test_get_guest_protection() {
         // available_guest_protection() requires super user privs.
         skip_if_not_root!();
+
+        let tdx_details = TDXDetails {
+            major_version: 1,
+            minor_version: 0,
+        };
 
         #[derive(Debug)]
         struct TestData {
@@ -776,8 +782,8 @@ mod tests {
                 result: Ok(GuestProtection::Snp),
             },
             TestData {
-                value: Some(GuestProtection::Tdx),
-                result: Ok(GuestProtection::Tdx),
+                value: Some(GuestProtection::Tdx(tdx_details.clone())),
+                result: Ok(GuestProtection::Tdx(tdx_details.clone())),
             },
         ];
 
@@ -811,6 +817,11 @@ mod tests {
         // available_guest_protection() requires super user privs.
         skip_if_not_root!();
 
+        let tdx_details = TDXDetails {
+            major_version: 1,
+            minor_version: 0,
+        };
+
         // Use the hosts protection, not a fake one.
         set_fake_guest_protection(None);
 
@@ -843,7 +854,7 @@ mod tests {
         }
 
         if have_tdx {
-            assert_eq!(protection, GuestProtection::Tdx);
+            assert_eq!(protection, GuestProtection::Tdx(tdx_details));
         } else {
             assert_eq!(protection, GuestProtection::NoProtection);
         }
@@ -866,6 +877,11 @@ mod tests {
             guest_protection_to_use: GuestProtection,
         }
 
+        let tdx_details = TDXDetails {
+            major_version: 1,
+            minor_version: 0,
+        };
+
         let tests = &[
             TestData {
                 confidential_guest: false,
@@ -881,15 +897,15 @@ mod tests {
             },
             TestData {
                 confidential_guest: false,
-                available_protection: Some(GuestProtection::Tdx),
+                available_protection: Some(GuestProtection::Tdx(tdx_details.clone())),
                 result: Err(anyhow!(GuestProtectionError::TDXProtectionMustBeUsedWithCH)),
                 guest_protection_to_use: GuestProtection::NoProtection,
             },
             TestData {
                 confidential_guest: true,
-                available_protection: Some(GuestProtection::Tdx),
+                available_protection: Some(GuestProtection::Tdx(tdx_details.clone())),
                 result: Ok(()),
-                guest_protection_to_use: GuestProtection::Tdx,
+                guest_protection_to_use: GuestProtection::Tdx(tdx_details.clone()),
             },
         ];
 
