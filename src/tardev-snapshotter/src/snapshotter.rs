@@ -1,15 +1,17 @@
 use base64::prelude::{Engine, BASE64_STANDARD};
+use containerd_client::{services::v1::ReadContentRequest, tonic::Request, with_namespace, Client};
 use containerd_snapshots::{api, Info, Kind, Snapshotter, Usage};
 use log::{debug, trace};
-use oci_distribution::{secrets::RegistryAuth, Client, Reference, RegistryOperation};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::{collections::HashMap, fs, fs::OpenOptions, io, io::Seek};
+use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 use tokio::sync::RwLock;
 use tonic::Status;
 
 const ROOT_HASH_LABEL: &str = "io.katacontainers.dm-verity.root-hash";
 const TARGET_LAYER_DIGEST_LABEL: &str = "containerd.io/snapshot/cri.layer-digest";
+const SNAPSHOT_REF_LABEL: &str = "containerd.io/snapshot.ref";
 
 struct Store {
     root: PathBuf,
@@ -18,6 +20,20 @@ struct Store {
 impl Store {
     fn new(root: &Path) -> Self {
         Self { root: root.into() }
+    }
+
+    /// Creates the name of the directory that containerd can use to extract a layer into.
+    fn extract_dir(&self, name: &str) -> PathBuf {
+        self.root.join("staging").join(name_to_hash(name))
+    }
+
+    /// Creates a directory that containerd can use to extract a layer into.
+    ///
+    /// It's a temporary directory that will be thrown away by the snapshotter.
+    fn extract_dir_to_write(&self, name: &str) -> io::Result<PathBuf> {
+        let path = self.extract_dir(name);
+        fs::create_dir_all(&path)?;
+        Ok(path)
     }
 
     /// Creates a temporary staging directory for layers.
@@ -156,16 +172,62 @@ impl Store {
 /// The snapshotter that creates tar devices.
 pub(crate) struct TarDevSnapshotter {
     store: RwLock<Store>,
+    containerd_client: Client,
 }
 
 impl TarDevSnapshotter {
     /// Creates a new instance of the snapshotter.
     ///
     /// `root` is the root directory where the snapshotter state is to be stored.
-    pub(crate) fn new(root: &Path) -> Self {
+    pub(crate) fn new(root: &Path, containerd_client: Client) -> Self {
         Self {
+            containerd_client,
             store: RwLock::new(Store::new(root)),
         }
+    }
+
+    async fn prepare_unpack_dir(
+        &self,
+        key: String,
+        parent: String,
+        labels: HashMap<String, String>,
+    ) -> Result<Vec<api::types::Mount>, Status> {
+        let extract_dir;
+        {
+            let mut store = self.store.write().await;
+            extract_dir = store.extract_dir_to_write(&key)?;
+            store.write_snapshot(Kind::Active, key, parent, labels)?;
+        }
+        Ok(vec![api::types::Mount {
+            r#type: "bind".into(),
+            source: extract_dir.to_string_lossy().into(),
+            target: String::new(),
+            options: vec!["bind".into()],
+        }])
+    }
+
+    async fn get_layer_image(&self, fname: &PathBuf, digest: &str) -> Result<(), Status> {
+        let mut file = tokio::fs::File::create(fname).await?;
+        let req = ReadContentRequest {
+            digest: digest.to_string(),
+            offset: 0,
+            size: 0,
+        };
+        let req = with_namespace!(req, "k8s.io");
+
+        let mut c = self.containerd_client.content();
+        let resp = c.read(req).await?;
+        let mut stream = resp.into_inner();
+        while let Some(chunk) = stream.message().await? {
+            if chunk.offset < 0 {
+                debug!("Containerd reported a negative offset: {}", chunk.offset);
+                return Err(Status::invalid_argument("negative offset"));
+            }
+            file.seek(io::SeekFrom::Start(chunk.offset as u64)).await?;
+            file.write_all(&chunk.data).await?;
+        }
+
+        Ok(())
     }
 
     /// Creates a new snapshot for an image layer.
@@ -177,53 +239,22 @@ impl TarDevSnapshotter {
         key: String,
         parent: String,
         mut labels: HashMap<String, String>,
-    ) -> Result<Vec<api::types::Mount>, Status> {
+    ) -> Result<(), Status> {
         const TARGET_REF_LABEL: &str = "containerd.io/snapshot/cri.image-ref";
-
-        let reference: Reference = {
-            let image_ref = if let Some(r) = labels.get(TARGET_REF_LABEL) {
-                r
-            } else {
-                return Err(Status::invalid_argument("missing target ref label"));
-            };
-            image_ref
-                .parse()
-                .map_err(|_| Status::invalid_argument("bad target ref"))?
-        };
-
         let dir = self.store.read().await.staging_dir()?;
 
         {
-            let digest_str = if let Some(d) = labels.get(TARGET_LAYER_DIGEST_LABEL) {
-                d
-            } else {
+            let Some(digest_str) = labels.get(TARGET_LAYER_DIGEST_LABEL) else {
                 return Err(Status::invalid_argument(
                     "missing target layer digest label",
                 ));
             };
 
-            let mut client = Client::new(Default::default());
-
-            client
-                .auth(
-                    &reference,
-                    &RegistryAuth::Anonymous,
-                    RegistryOperation::Pull,
-                )
-                .await
-                .map_err(|_| Status::internal("unable to authenticate"))?;
-
-            let name = dir.path().join(&key);
+            let name = dir.path().join(name_to_hash(&key));
             let mut gzname = name.clone();
             gzname.set_extension("gz");
-            trace!("Downloading to {:?}", &gzname);
-            {
-                let mut file = tokio::fs::File::create(&gzname).await?;
-                if let Err(err) = client.pull_blob(&reference, digest_str, &mut file).await {
-                    debug!("Download failed: {:?}", err);
-                    return Err(Status::unknown("unable to pull blob"));
-                }
-            }
+            trace!("Fetching layer image to {:?}", &gzname);
+            self.get_layer_image(&gzname, digest_str).await?;
 
             // TODO: Decompress in stream instead of reopening.
             // Decompress data.
@@ -258,7 +289,7 @@ impl TarDevSnapshotter {
 
         // Move file to its final location and write the snapshot.
         {
-            let from = dir.path().join(&key);
+            let from = dir.path().join(name_to_hash(&key));
             let mut store = self.store.write().await;
             let to = store.layer_path_to_write(&key)?;
             trace!("Renaming from {:?} to {:?}", &from, &to);
@@ -267,7 +298,7 @@ impl TarDevSnapshotter {
         }
 
         trace!("Layer prepared");
-        Err(Status::already_exists(""))
+        Ok(())
     }
 }
 
@@ -299,8 +330,8 @@ impl Snapshotter for TarDevSnapshotter {
             return Ok(Usage { inodes: 0, size: 0 });
         }
 
-        let mut file = fs::File::open(store.layer_path(&key))?;
-        let len = file.seek(io::SeekFrom::End(0))?;
+        let mut file = tokio::fs::File::open(store.layer_path(&key)).await?;
+        let len = file.seek(io::SeekFrom::End(0)).await?;
         Ok(Usage {
             // TODO: Read the index "header" to determine the inode count.
             inodes: 1,
@@ -312,13 +343,24 @@ impl Snapshotter for TarDevSnapshotter {
         trace!("mounts({})", key);
         let store = self.store.read().await;
         let info = store.read_snapshot(&key)?;
+
         if info.kind != Kind::View && info.kind != Kind::Active {
             return Err(Status::failed_precondition(
-                "parent snapshot is not active nor a view",
+                "snapshot is not active nor a view",
             ));
         }
 
-        store.mounts_from_snapshot(&info.parent)
+        if info.labels.get(SNAPSHOT_REF_LABEL).is_some() {
+            let extract_dir = store.extract_dir(&key);
+            Ok(vec![api::types::Mount {
+                r#type: "bind".into(),
+                source: extract_dir.to_string_lossy().into(),
+                target: String::new(),
+                options: Vec::new(),
+            }])
+        } else {
+            store.mounts_from_snapshot(&info.parent)
+        }
     }
 
     async fn prepare(
@@ -327,15 +369,12 @@ impl Snapshotter for TarDevSnapshotter {
         parent: String,
         labels: HashMap<String, String>,
     ) -> Result<Vec<api::types::Mount>, Status> {
-        const SNAPSHOT_REF_LABEL: &str = "containerd.io/snapshot.ref";
-
         trace!("prepare({}, {}, {:?})", key, parent, labels);
 
         // There are two reasons for preparing a snapshot: to build an image and to actually use it
         // as a container image. We determine the reason by the presence of the snapshot-ref label.
-        if let Some(snapshot) = labels.get(SNAPSHOT_REF_LABEL) {
-            self.prepare_image_layer(snapshot.to_string(), parent, labels)
-                .await
+        if labels.get(SNAPSHOT_REF_LABEL).is_some() {
+            self.prepare_unpack_dir(key, parent, labels).await
         } else {
             self.store
                 .write()
@@ -364,7 +403,23 @@ impl Snapshotter for TarDevSnapshotter {
         labels: HashMap<String, String>,
     ) -> Result<(), Self::Error> {
         trace!("commit({}, {}, {:?})", name, key, labels);
-        Err(Status::unimplemented("no support for commiting snapshots"))
+
+        let info;
+        {
+            let store = self.store.write().await;
+            info = store.read_snapshot(&key)?;
+            if info.kind != Kind::Active {
+                return Err(Status::failed_precondition("snapshot is not active"));
+            }
+        }
+
+        if info.labels.get(SNAPSHOT_REF_LABEL).is_some() {
+            self.prepare_image_layer(name, info.parent, labels).await
+        } else {
+            Err(Status::unimplemented(
+                "no support for commiting arbitrary snapshots",
+            ))
+        }
     }
 
     async fn remove(&self, key: String) -> Result<(), Self::Error> {
@@ -373,15 +428,25 @@ impl Snapshotter for TarDevSnapshotter {
 
         // TODO: Move this to store.
         if let Ok(info) = store.read_snapshot(&key) {
-            if info.kind == Kind::Committed {
-                if let Some(_digest) = info.labels.get(TARGET_LAYER_DIGEST_LABEL) {
-                    // Try to delete a layer. It's ok if it's not found.
-                    if let Err(e) = fs::remove_file(store.layer_path(&key)) {
+            match info.kind {
+                Kind::Committed => {
+                    if let Some(_digest) = info.labels.get(TARGET_LAYER_DIGEST_LABEL) {
+                        // Try to delete a layer. It's ok if it's not found.
+                        if let Err(e) = fs::remove_file(store.layer_path(&key)) {
+                            if e.kind() != io::ErrorKind::NotFound {
+                                return Err(e.into());
+                            }
+                        }
+                    }
+                }
+                Kind::Active => {
+                    if let Err(e) = tokio::fs::remove_dir_all(store.extract_dir(&key)).await {
                         if e.kind() != io::ErrorKind::NotFound {
                             return Err(e.into());
                         }
                     }
                 }
+                _ => {}
             }
         }
 
@@ -392,7 +457,7 @@ impl Snapshotter for TarDevSnapshotter {
     }
 
     type InfoStream = impl tokio_stream::Stream<Item = Result<Info, Self::Error>> + Send + 'static;
-    async fn list(&self) -> Result<Self::InfoStream, Self::Error> {
+    async fn list(&self, _: String, _: Vec<String>) -> Result<Self::InfoStream, Self::Error> {
         trace!("walk()");
         let store = self.store.read().await;
         let snapshots_dir = store.root.join("snapshots");

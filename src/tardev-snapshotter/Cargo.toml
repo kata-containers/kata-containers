@@ -7,18 +7,16 @@ edition = "2021"
 async-stream = "0.3.2"
 futures = "0.3.17"
 serde_json = "1.0"
-tonic = "0.8"
-oci-distribution = "0.9.4"
+tonic = "0.9.2"
 tokio = {version = "1.26", features = ["full"]}
 tokio-stream = "0.1.8"
-containerd-snapshots = "0.2.0"
+containerd-snapshots = "0.3.0"
 sha2 = "0.10.6"
 tarindex = { path = "./tarindex" }
 verity = { path = "./verity" }
 log = "0.4.17"
 env_logger = "0.10.0"
 tempfile = "3.3.0"
-openssl = "0.10.54"
-h2 = "0.3.17"
 flate2 = { version = "1.0.26", features = ["zlib-ng"], default-features = false }
 base64 = "0.21.2"
+containerd-client = "0.4.0"
