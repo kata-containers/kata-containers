@@ -12,6 +12,7 @@ set -o pipefail
 kata_tarball_dir="${2:-kata-artifacts}"
 script_dir="$(dirname "$(readlink -f "$0")")" 
 source "${script_dir}/../../common.bash"
+source "${script_dir}/../../gha-run-k8s-common.sh"
 
 function install_dependencies() {
 	info "Installing the dependencies needed for running the cri-containerd tests"
@@ -45,6 +46,8 @@ function install_dependencies() {
 		IFS=":" read -r -a dep <<< "${github_dep}"
 		install_${dep[0]} "${dep[1]}"
 	done
+
+	install_bats
 
 	# Clone containerd as we'll need to build it in order to run the tests
 	# base_version: The version to be intalled in the ${major}.${minor} format
