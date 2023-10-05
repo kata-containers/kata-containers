@@ -558,6 +558,7 @@ dependencies = [
  "oci",
  "once_cell",
  "rand",
+ "safe-path",
  "serde_json",
  "serial_test",
  "slog",

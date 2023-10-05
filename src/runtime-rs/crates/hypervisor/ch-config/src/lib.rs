@@ -504,15 +504,21 @@ pub struct NamedHypervisorConfig {
 
 // Returns true if the enabled guest protection is Intel TDX.
 pub fn guest_protection_is_tdx(guest_protection_to_use: GuestProtection) -> bool {
-    matches!(guest_protection_to_use, GuestProtection::Tdx)
+    matches!(guest_protection_to_use, GuestProtection::Tdx(_))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use kata_sys_util::protection::TDXDetails;
 
     #[test]
     fn test_guest_protection_is_tdx() {
+        let tdx_details = TDXDetails {
+            major_version: 1,
+            minor_version: 0,
+        };
+
         #[derive(Debug)]
         struct TestData {
             protection: GuestProtection,
@@ -541,7 +547,7 @@ mod tests {
                 result: false,
             },
             TestData {
-                protection: GuestProtection::Tdx,
+                protection: GuestProtection::Tdx(tdx_details),
                 result: true,
             },
         ];

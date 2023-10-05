@@ -4,10 +4,11 @@
 //
 
 #[cfg(any(target_arch = "s390x", target_arch = "x86_64", target_arch = "aarch64"))]
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::fmt;
 #[cfg(target_arch = "x86_64")]
 use std::path::Path;
+use std::path::PathBuf;
 use thiserror::Error;
 
 #[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
@@ -16,12 +17,18 @@ use nix::unistd::Uid;
 #[cfg(target_arch = "x86_64")]
 use std::fs;
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct TDXDetails {
+    pub major_version: u32,
+    pub minor_version: u32,
+}
+
 #[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum GuestProtection {
     #[default]
     NoProtection,
-    Tdx,
+    Tdx(TDXDetails),
     Sev,
     Snp,
     Pef,
@@ -31,7 +38,11 @@ pub enum GuestProtection {
 impl fmt::Display for GuestProtection {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            GuestProtection::Tdx => write!(f, "tdx"),
+            GuestProtection::Tdx(details) => write!(
+                f,
+                "tdx (major_version: {}, minor_version: {}",
+                details.major_version, details.minor_version
+            ),
             GuestProtection::Sev => write!(f, "sev"),
             GuestProtection::Snp => write!(f, "snp"),
             GuestProtection::Pef => write!(f, "pef"),
@@ -52,6 +63,15 @@ pub enum ProtectionError {
 
     #[error("Invalid guest protection value: {0}")]
     InvalidValue(String),
+
+    #[error("Cannot resolve path {0} below {1}: {2}")]
+    CannotResolvePath(String, PathBuf, anyhow::Error),
+
+    #[error("Expected file {0} not found: {1}")]
+    FileMissing(String, std::io::Error),
+
+    #[error("File {0} contains unexpected content: {1}")]
+    FileInvalid(PathBuf, anyhow::Error),
 }
 
 #[cfg(target_arch = "x86_64")]
@@ -60,6 +80,18 @@ pub const TDX_SYS_FIRMWARE_DIR: &str = "/sys/firmware/tdx/";
 pub const SEV_KVM_PARAMETER_PATH: &str = "/sys/module/kvm_amd/parameters/sev";
 #[cfg(target_arch = "x86_64")]
 pub const SNP_KVM_PARAMETER_PATH: &str = "/sys/module/kvm_amd/parameters/sev_snp";
+
+// Module directory below TDX_SYS_FIRMWARE_DIR.
+#[cfg(target_arch = "x86_64")]
+const TDX_FW_MODULE_DIR: &str = "tdx_module";
+
+// File in TDX_FW_MODULE_DIR that specifies TDX major version number.
+#[cfg(target_arch = "x86_64")]
+const TDX_MAJOR_FILE: &str = "major_version";
+
+// File in TDX_FW_MODULE_DIR that specifies TDX minor version number.
+#[cfg(target_arch = "x86_64")]
+const TDX_MINOR_FILE: &str = "minor_version";
 
 #[cfg(target_arch = "x86_64")]
 pub fn available_guest_protection() -> Result<GuestProtection, ProtectionError> {
@@ -83,7 +115,59 @@ pub fn arch_guest_protection(
     let metadata = fs::metadata(tdx_path);
 
     if metadata.is_ok() && metadata.unwrap().is_dir() {
-        return Ok(GuestProtection::Tdx);
+        let module_dir = safe_path::scoped_join(tdx_path, TDX_FW_MODULE_DIR).map_err(|e| {
+            ProtectionError::CannotResolvePath(
+                TDX_FW_MODULE_DIR.to_string(),
+                PathBuf::from(tdx_path),
+                anyhow!(e),
+            )
+        })?;
+
+        let major_file =
+            safe_path::scoped_join(module_dir.clone(), TDX_MAJOR_FILE).map_err(|e| {
+                ProtectionError::CannotResolvePath(
+                    TDX_MAJOR_FILE.to_string(),
+                    module_dir.clone(),
+                    anyhow!(e),
+                )
+            })?;
+
+        let minor_file =
+            safe_path::scoped_join(module_dir.clone(), TDX_MINOR_FILE).map_err(|e| {
+                ProtectionError::CannotResolvePath(
+                    TDX_MINOR_FILE.to_string(),
+                    module_dir,
+                    anyhow!(e),
+                )
+            })?;
+
+        const HEX_BASE: u32 = 16;
+        const HEX_PREFIX: &str = "0x";
+
+        let major_version_str = std::fs::read_to_string(major_file.clone()).map_err(|e| {
+            ProtectionError::FileMissing(major_file.clone().to_string_lossy().into(), e)
+        })?;
+
+        let major_version_str = major_version_str.trim_start_matches(HEX_PREFIX);
+
+        let major_version = u32::from_str_radix(&major_version_str, HEX_BASE)
+            .map_err(|e| ProtectionError::FileInvalid(major_file, anyhow!(e)))?;
+
+        let minor_version_str = std::fs::read_to_string(minor_file.clone()).map_err(|e| {
+            ProtectionError::FileMissing(minor_file.clone().to_string_lossy().into(), e)
+        })?;
+
+        let minor_version_str = minor_version_str.trim_start_matches(HEX_PREFIX);
+
+        let minor_version = u32::from_str_radix(&minor_version_str, HEX_BASE)
+            .map_err(|e| ProtectionError::FileInvalid(minor_file, anyhow!(e)))?;
+
+        let details = TDXDetails {
+            major_version,
+            minor_version,
+        };
+
+        return Ok(GuestProtection::Tdx(details));
     }
 
     let check_contents = |file_name: &str| -> Result<bool, ProtectionError> {
@@ -248,7 +332,41 @@ mod tests {
         assert_eq!(actual.unwrap(), GuestProtection::NoProtection);
 
         let actual = arch_guest_protection(tdx_path.to_str().unwrap(), invalid_dir, invalid_dir);
-        assert!(actual.is_ok());
-        assert_eq!(actual.unwrap(), GuestProtection::Tdx);
+        assert!(actual.is_err());
+
+        let tdx_module = tdx_path.join(TDX_FW_MODULE_DIR);
+        std::fs::create_dir_all(tdx_module.clone()).unwrap();
+
+        let major_file = tdx_module.join(TDX_MAJOR_FILE);
+        std::fs::File::create(&major_file).unwrap();
+
+        let minor_file = tdx_module.join(TDX_MINOR_FILE);
+        std::fs::File::create(&minor_file).unwrap();
+
+        let result = arch_guest_protection(tdx_path.to_str().unwrap(), invalid_dir, invalid_dir);
+        assert!(result.is_err());
+
+        std::fs::write(&major_file, b"invalid").unwrap();
+        std::fs::write(&minor_file, b"invalid").unwrap();
+
+        let result = arch_guest_protection(tdx_path.to_str().unwrap(), invalid_dir, invalid_dir);
+        assert!(result.is_err());
+
+        // Fake a TDX 1.0 environment
+        std::fs::write(&major_file, b"0x00000001").unwrap();
+        std::fs::write(&minor_file, b"0x00000000").unwrap();
+
+        let result = arch_guest_protection(tdx_path.to_str().unwrap(), invalid_dir, invalid_dir);
+        assert!(result.is_ok());
+
+        let result = result.unwrap();
+
+        let details = match result {
+            GuestProtection::Tdx(details) => details,
+            _ => panic!(),
+        };
+
+        assert_eq!(details.major_version, 1);
+        assert_eq!(details.minor_version, 0);
     }
 }

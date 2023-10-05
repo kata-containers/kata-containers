@@ -1574,6 +1574,7 @@ dependencies = [
  "oci",
  "once_cell",
  "rand 0.8.5",
+ "safe-path 0.1.0",
  "serde_json",
  "slog",
  "slog-scope",
