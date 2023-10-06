@@ -30,6 +30,10 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
+
+// Regex for the temp directory with timestamp that is used to handle the updates by K8s
+var timestampedDir = regexp.MustCompile(`(?m)\s*[0-9]{4}_[0-9]{2}_[0-9]{2}_[0-9]{2}_[0-9]{2}_[0-9]{2}.[0-9]+$`)
+
 func unmountNoFollow(path string) error {
 	return syscall.Unmount(path, syscall.MNT_DETACH|UmountNoFollow)
 }
@@ -292,14 +296,16 @@ func (f *FilesystemShare) ShareFile(ctx context.Context, c *Container, m *Mount)
 
 			// Add fsNotify watcher for volume mounts
 			if strings.Contains(srcPath, "kubernetes.io~configmap") ||
-				strings.Contains(srcPath, "kubernetes.io~secrets") ||
+				strings.Contains(srcPath, "kubernetes.io~secret") ||
 				strings.Contains(srcPath, "kubernetes.io~projected") ||
 				strings.Contains(srcPath, "kubernetes.io~downward-api") {
 
 				// fsNotify doesn't add watcher recursively.
 				// So we need to add the watcher for directories under kubernetes.io~configmap, kubernetes.io~secrets,
 				// kubernetes.io~downward-api and kubernetes.io~projected
-				if info.Mode().IsDir() {
+				// Add watcher only to the timestamped directory containing secrets to prevent
+				// multiple events received from also watching the parent directory.
+				if info.Mode().IsDir() && timestampedDir.FindString(srcPath) != "" {
 					// The cm dir is of the form /var/lib/kubelet/pods/<uid>/volumes/kubernetes.io~configmap/foo/{..data, key1, key2,...}
 					// The secrets dir is of the form /var/lib/kubelet/pods/<uid>/volumes/kubernetes.io~secrets/foo/{..data, key1, key2,...}
 					// The projected dir is of the form /var/lib/kubelet/pods/<uid>/volumes/kubernetes.io~projected/foo/{..data, key1, key2,...}
@@ -621,8 +627,6 @@ func (f *FilesystemShare) StartFileEventWatcher(ctx context.Context) error {
 		f.Logger().Info("StartFileEventWatcher: No watches found, returning")
 		return nil
 	}
-	// Regex for the temp directory with timestamp that is used to handle the updates by K8s
-	var re = regexp.MustCompile(`(?m)\s*[0-9]{4}_[0-9]{2}_[0-9]{2}_[0-9]{2}_[0-9]{2}_[0-9]{2}.[0-9]{10}$`)
 
 	f.Logger().Debugf("StartFileEventWatcher: srcDstMap dump %v", f.srcDstMap)
 
@@ -681,7 +685,7 @@ func (f *FilesystemShare) StartFileEventWatcher(ctx context.Context) error {
 
 				source := event.Name
 				f.Logger().Infof("StartFileEventWatcher: source for the event: %s", source)
-				if re.FindString(source) != "" {
+				if timestampedDir.FindString(source) != "" {
 					// This block will be entered when the timestamped directory is removed.
 					// This also indicates that foo/..data contains the updated info
 
@@ -695,7 +699,7 @@ func (f *FilesystemShare) StartFileEventWatcher(ctx context.Context) error {
 
 					destination := f.srcDstMap[dataDir]
 					f.Logger().Infof("StartFileEventWatcher: Copy file from src (%s) to dst (%s)", dataDir, destination)
-					err := f.copyFilesFromDataDir(dataDir, destination)
+					err := f.copyUpdatedFiles(dataDir, destination, source)
 					if err != nil {
 						f.Logger().Infof("StartFileEventWatcher: got an error (%v) when copying file from src (%s) to dst (%s)", err, dataDir, destination)
 						return err
@@ -716,71 +720,103 @@ func (f *FilesystemShare) StartFileEventWatcher(ctx context.Context) error {
 	}
 }
 
-func (f *FilesystemShare) copyFilesFromDataDir(src, dst string) error {
+func (f *FilesystemShare) copyUpdatedFiles(src, dst, oldtsDir string) error {
+	f.Logger().Infof("copyUpdatedFiles: Copy src:%s to dst:%s from old src:%s", src, dst, oldtsDir)
 
-	// The src is a symlink and is of the following form:
-	// /var/lib/kubelet/pods/<uid>/volumes/<k8s-special-dir>/foo/..data
-	// eg, for configmap, src = /var/lib/kubelet/pods/b44e3261-7cf0-48d3-83b4-6094bba95dc8/volumes/kubernetes.io~configmap/foo/..data
-	// The dst is of the following form:
-	// /run/kata-containers/shared/containers/<cid>-<volume>/..data
-	// eg. dst = /run/kata-containers/shared/containers/e70739a6cc38daf15de916b4d22aad035d42bc977024f2c8cae6b0b607251d44-39407b03e4b448f1-config-volume/..data
-
+	// 1. Read the symlink and get the actual data directory
 	// Get the symlink target
 	// eg. srcdir = ..2023_02_09_06_40_51.2326009790
-	srcdir, err := os.Readlink(src)
+	srcnewtsdir, err := os.Readlink(src)
 	if err != nil {
-		f.Logger().Infof("copyFilesFromDataDir: Reading data symlink returned error (%v)", err)
+		f.Logger().WithError(err).Errorf("copyUpdatedFiles: Reading data symlink %s returned error", src)
 		return err
 	}
 
-	// Get the base directory path of src
-	volumeDir := filepath.Dir(src)
-	// eg. volumeDir = /var/lib/kubelet/pods/b44e3261-7cf0-48d3-83b4-6094bba95dc8/volumes/kubernetes.io~configmap/foo
+	// 2. Construct the path to new timestamped directory in host
+	srcBasePath := filepath.Dir(src)
+	srcNewTsPath := filepath.Join(srcBasePath, srcnewtsdir)
 
-	dataDir := filepath.Join(volumeDir, srcdir)
-	// eg. dataDir = /var/lib/kubelet/pods/b44e3261-7cf0-48d3-83b4-6094bba95dc8/volumes/kubernetes.io~configmap/foo/..2023_02_09_06_40_51.2326009790
+	// 3. Construct the path to copy new timestamped directory in guest
+	dstBasePath := filepath.Dir(dst)
+	dstNewTsPath := filepath.Join(dstBasePath, srcnewtsdir)
 
-	f.Logger().Infof("copyFilesFromDataDir: full path to data symlink (%s)", dataDir)
+	// 4. Create a hashmap to add newly added secrets (not present in the old ts directory)
+	// for creating user visible symlinks
+	newSecrets := make(map[string]string)
 
-	// Using WalkDir is more efficient than Walk
-	err = filepath.WalkDir(dataDir,
-		func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				f.Logger().Infof("copyFilesFromDataDir: Error in file walk %v", err)
-				return err
+	f.Logger().Infof("copyUpdatedFiles: new src dir: %s && new dst dir:%s", srcNewTsPath, dstNewTsPath)
+
+	// 5. Copy all the files from the new timestamped directory to the guest
+	walk := func(srcPath string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		dstPath := dstNewTsPath
+		if !info.Mode().IsDir() {
+			// Construct the path for the files to be copied to.
+			dstPath = filepath.Join(dstPath, filepath.Base(srcPath))
+
+			// Determine if this secret was present in the old timestamped directory.
+			// If not, add it to the newSecrets map to create user visible symlinks.
+			oldSecret := filepath.Join(oldtsDir, filepath.Base(srcPath))
+			if _,ok := f.srcDstMap[oldSecret]; !ok {
+				// these are symlinks to '..data' inside the k8's volume
+				symlinkSrc := filepath.Join(filepath.Dir(srcNewTsPath), filepath.Base(srcPath))
+				symlinkDst := filepath.Join(filepath.Dir(dstNewTsPath), filepath.Base(srcPath))
+				newSecrets[symlinkSrc] = symlinkDst
 			}
+		}
 
-			// eg. path = /var/lib/kubelet/pods/b44e3261-7cf0-48d3-83b4-6094bba95dc8/volumes/kubernetes.io~configmap/foo/..2023_02_09_06_40_51.2326009790/{key1, key2, ...}
-			f.Logger().Infof("copyFilesFromDataDir: path (%s)", path)
-			if !d.IsDir() {
-				// Using filePath.Rel to handle these cases
-				// /var/lib/kubelet/pods/2481b69e-9ac8-475a-9e11-88af1daca60e/volumes/kubernetes.io~projected/all-in-one/..2023_02_13_12_35_49.1380323032/config-dir1/config.file1
-				// /var/lib/kubelet/pods/2481b69e-9ac8-475a-9e11-88af1daca60e/volumes/kubernetes.io~projected/all-in-one/..2023_02_13_12_35_49.1380323032/config.file2
-				rel, err := filepath.Rel(dataDir, path)
-				if err != nil {
-					f.Logger().Infof("copyFilesFromDataDir: Unable to get relative path")
-					return err
-				}
-				f.Logger().Debugf("copyFilesFromDataDir: dataDir(%s), path(%s), rel(%s)", dataDir, path, rel)
-				// Form the destination path in the guest
-				dstFile := filepath.Join(dst, rel)
-				f.Logger().Infof("copyFilesFromDataDir: Copying file %s to dst %s", path, dstFile)
-				err = f.sandbox.agent.copyFile(context.Background(), path, dstFile)
-				if err != nil {
-					f.Logger().Infof("copyFilesFromDataDir: Error in copying file %v", err)
-					return err
-				}
-				f.Logger().Infof("copyFilesFromDataDir: Successfully copied file (%s)", path)
-			}
-			return nil
-		})
+		err = f.sandbox.agent.copyFile(context.Background(), srcPath, dstPath)
+		if err != nil {
+			f.Logger().WithError(err).Error("Failed to copy file")
+			return err
+		}
 
-	if err != nil {
-		f.Logger().Infof("copyFilesFromDataDir: Error in filepath.WalkDir (%v)", err)
+		// Create a new entry in the globalMap to be used in the event loop
+		f.Logger().Infof("ShareFile: Adding srcPath(%s) dstPath(%s) to srcDstMap", srcPath, dstPath)
+		f.srcDstMap[srcPath] = dstPath
+		return nil
+	}
+
+	if err := filepath.WalkDir(srcNewTsPath, walk); err != nil {
+		f.Logger().WithError(err).Error("copyUpdatedFiles: failed to copy files.")
 		return err
 	}
 
-	f.Logger().Infof("copyFilesFromDataDir: Done")
+	// 6. Add watcher to the new timestamped directory in host
+	err = f.watchDir(srcNewTsPath)
+	if err != nil {
+		f.Logger().WithError(err).Error("copyUpdatedFiles: Failed to add watcher on new ts source.")
+		return err
+	}
+
+	// 7. Update the '..data' symlink to fix user visible files
+	srcDataPath := filepath.Join(filepath.Dir(srcNewTsPath), "..data")
+	dstDataPath := filepath.Join(filepath.Dir(dstNewTsPath), "..data")
+	err = f.sandbox.agent.copyFile(context.Background(), srcDataPath, dstDataPath)
+	if err != nil {
+		f.Logger().WithError(err).Errorf("copyUpdatedFiles: Failed to update data symlink")
+		return err
+	}
+
+	// 8. Create user visible symlinks for any newly created secrets
+	// For existing secrets, the update to '..data' symlink above will fix the user visible files.
+	// TO-DO: For deleted secrets, the existing symlink will point to non-existing entity after
+	// update to '..data' symlink. Since there is NO DELETE-API in agent, the symlinks will exist
+	for k,v := range newSecrets {
+		err = f.sandbox.agent.copyFile(context.Background(), k, v)
+		if err != nil {
+			f.Logger().WithError(err).Error("copyUpdatedFiles: Failed to copy newly created secret")
+			return err
+		}
+	}
+
 	return nil
 }
 

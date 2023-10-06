@@ -2155,8 +2155,15 @@ fn do_copy_file(req: &CopyFileRequest) -> Result<()> {
     }
 
     if sflag.contains(stat::SFlag::S_IFLNK) {
-        let src = PathBuf::from(String::from_utf8(req.data.clone()).unwrap());
+        // After kubernetes secret's volume update, the '..data' symlink should point to
+        // the new timestamped directory.
+        // TO-DO: The old timestamped dir still exists due to missing delete api.
+        // First Unlink existing symlink.
+        if path.is_symlink() && path.exists() {
+            unistd::unlink(&path)?;
+        }
 
+        let src = PathBuf::from(String::from_utf8(req.data.clone()).unwrap());
         unistd::symlinkat(&src, None, &path)?;
         let path_str = CString::new(path.to_str().unwrap())?;
         let ret = unsafe { libc::lchown(path_str.as_ptr(), req.uid as u32, req.gid as u32) };
