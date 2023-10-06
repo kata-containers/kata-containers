@@ -33,13 +33,13 @@ mod yaml;
 
 #[derive(Debug, Parser)]
 struct CommandLineOptions {
-    #[clap(short, long, help = "Input Kubernetes YAML file path")]
+    #[clap(short, long, help = "Kubernetes YAML input file path")]
     yaml_file: Option<String>,
 
     #[clap(
         short,
         long,
-        help = "Optional input Kubernetes config map YAML file path"
+        help = "Optional Kubernetes config map YAML input file path"
     )]
     config_map_file: Option<String>,
 
@@ -47,7 +47,7 @@ struct CommandLineOptions {
         short = 'j',
         long,
         default_value_t = String::from("genpolicy-settings.json"),
-        help = "Settings file name"
+        help = "genpolicy settings file name"
     )]
     settings_file_name: String,
 
@@ -69,13 +69,6 @@ struct CommandLineOptions {
     #[clap(
         short,
         long,
-        help = "Ignore unsupported input Kubernetes YAML fields. This is not recommeded unless you understand exactly how genpolicy works!"
-    )]
-    silent_unsupported_fields: bool,
-
-    #[clap(
-        short,
-        long,
         help = "Print the output Rego policy text to standard output"
     )]
     raw_out: bool,
@@ -86,6 +79,13 @@ struct CommandLineOptions {
         help = "Print the base64 encoded output Rego policy to standard output"
     )]
     base64_out: bool,
+
+    #[clap(
+        short,
+        long,
+        help = "Ignore unsupported input Kubernetes YAML fields. This is not recommeded unless you understand exactly how genpolicy works!"
+    )]
+    silent_unsupported_fields: bool,
 }
 
 #[tokio::main]
