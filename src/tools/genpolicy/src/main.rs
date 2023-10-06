@@ -44,10 +44,18 @@ struct CommandLineOptions {
     config_map_file: Option<String>,
 
     #[clap(
+        short = 'j',
+        long,
+        default_value_t = String::from("genpolicy-settings.json"),
+        help = "Settings file name"
+    )]
+    settings_file_name: String,
+
+    #[clap(
         short,
         long,
         default_value_t = String::from("."),
-        help = "Path to the input rules.rego and genpolicy-settings.json files"
+        help = "Path to the rules.rego and settings input files"
     )]
     input_files_path: String,
 
@@ -95,13 +103,14 @@ async fn main() {
         args.use_cached_files,
         args.yaml_file,
         &args.input_files_path,
+        &args.settings_file_name,
         &config_map_files,
         args.silent_unsupported_fields,
         args.raw_out,
         args.base64_out,
     );
 
-    debug!("Creating policy from yaml, infra data and rules files...");
+    debug!("Creating policy from yaml, settings, and rules.rego files...");
     let mut policy = policy::AgentPolicy::from_files(&config).await.unwrap();
 
     debug!("Exporting policy to yaml file...");

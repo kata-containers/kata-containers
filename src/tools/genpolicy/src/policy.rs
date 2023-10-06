@@ -358,7 +358,7 @@ impl AgentPolicy {
             }
         }
 
-        let infra_policy = infra::InfraPolicy::new(&config.infra_data_file)?;
+        let infra_policy = infra::InfraPolicy::new(&config.settings_file)?;
 
         if let Some(config_map_files) = &config.config_map_files {
             for file in config_map_files {
