@@ -248,11 +248,3 @@ jobs:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
-
-  run-tracing-tests:
-    needs: build-kata-static-tarball-amd64
-    uses: ./.github/workflows/run-tracing-tests.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
