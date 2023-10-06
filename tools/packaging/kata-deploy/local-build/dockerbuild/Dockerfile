@@ -11,6 +11,19 @@ COPY install_oras.sh /usr/bin/install_oras.sh
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
+#FIXME: gcc is required as agent is build out of a container build.
+RUN apt-get update && \
+  apt-get install --no-install-recommends -y \
+  build-essential \
+  cpio \
+  gcc \
+  git \
+  make \
+  unzip \
+  wget \
+  xz-utils && \
+  apt-get clean && rm -rf /var/lib/apt/lists
+
 # Install yq, oras, and docker
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
@@ -37,18 +50,6 @@ RUN if [ ${IMG_USER} != "root" ] && [ ! -z ${HOST_DOCKER_GID} ]; then groupadd -
 RUN if [ ${IMG_USER} != "root" ] && [ ! -z ${HOST_DOCKER_GID} ]; then usermod -a -G docker_on_host ${IMG_USER};fi
 RUN sh -c "echo '${IMG_USER} ALL=NOPASSWD: ALL' >> /etc/sudoers"
 
-#FIXME: gcc is required as agent is build out of a container build.
-RUN apt-get update && \
-  apt-get install --no-install-recommends -y \
-  build-essential \
-  cpio \
-  gcc \
-  git \
-  make \
-  unzip \
-  wget \
-  xz-utils && \
-  apt-get clean && rm -rf /var/lib/apt/lists
 
 ENV USER ${IMG_USER}
 USER ${IMG_USER}

@@ -6,7 +6,7 @@
 #
 
 export GOPATH=${GOPATH:-${HOME}/go}
-export BUILDER_REGISTRY="${BUILDER_REGISTRY:-quay.io/kata-containers/builders}"
+export BUILDER_REGISTRY="${BUILDER_REGISTRY:-quay.io/ameka/builders}"
 export PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-"no"}"
 
 this_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

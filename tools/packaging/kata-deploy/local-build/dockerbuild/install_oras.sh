@@ -29,7 +29,17 @@ fi
 
 arch=$(uname -m)
 if [ "${arch}" = "ppc64le" ]; then
-	echo "An ORAS release for ppc64le is not available yet."
+	echo "Using oras from native builds"
+	#install go first
+	wget https://go.dev/dl/go1.21.1.linux-ppc64le.tar.gz
+	rm -rf /usr/local/go && tar -C /usr/local -xzf go1.21.1.linux-ppc64le.tar.gz
+	export PATH=$PATH:/usr/local/go/bin
+	go version
+	
+	git clone https://github.com/oras-project/oras.git
+	cd oras && make build-linux-ppc64le
+	cp bin/linux/ppc64le/oras ${install_dest}
+	make 
 	exit 0
 fi
 if [ "${arch}" = "x86_64" ]; then

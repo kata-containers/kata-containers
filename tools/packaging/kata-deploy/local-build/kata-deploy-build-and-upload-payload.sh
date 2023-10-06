@@ -13,7 +13,7 @@ set -o errtrace
 
 KATA_DEPLOY_DIR="`dirname ${0}`/../../kata-deploy"
 KATA_DEPLOY_ARTIFACT="${1:-"kata-static.tar.xz"}"
-REGISTRY="${2:-"quay.io/kata-containers/kata-deploy"}"
+REGISTRY="quay.io/ameka/kata-deploy"
 TAG="${3:-}"
 
 echo "Copying ${KATA_DEPLOY_ARTIFACT} to ${KATA_DEPLOY_DIR}"
