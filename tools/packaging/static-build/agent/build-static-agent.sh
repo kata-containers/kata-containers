@@ -30,8 +30,8 @@ build_agent_from_source() {
 	init_env
 
 	cd src/agent
-	DESTDIR=${DESTDIR} AGENT_POLICY=${AGENT_POLICY} make
-	DESTDIR=${DESTDIR} AGENT_POLICY=${AGENT_POLICY} make install
+	DESTDIR=${DESTDIR} make
+	DESTDIR=${DESTDIR} make install
 }
 
 build_agent_from_source $@

@@ -83,7 +83,6 @@ options:
 --build=<asset>       :
 	all
 	agent
-	agent-opa
 	agent-ctl
 	cloud-hypervisor
 	cloud-hypervisor-glibc
@@ -647,10 +646,6 @@ install_agent() {
 	install_agent_helper
 }
 
-install_agent_opa() {
-	install_agent_helper "yes"
-}
-
 install_tools_helper() {
 	tool=${1}
 
@@ -747,8 +742,6 @@ handle_build() {
 		;;
 
 	agent) install_agent ;;
-
-	agent-opa) install_agent_opa ;;
 
 	agent-ctl) install_agent_ctl ;;
 
@@ -858,7 +851,6 @@ main() {
 	local silent
 	build_targets=(
 		agent
-		agent-opa
 		agent-ctl
 		cloud-hypervisor
 		firecracker

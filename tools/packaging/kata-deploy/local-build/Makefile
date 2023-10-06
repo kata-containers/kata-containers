@@ -55,9 +55,6 @@ serial-targets:
 agent-tarball:
 	${MAKE} $@-build
 
-agent-opa-tarball:
-	${MAKE} $@-build
-
 agent-ctl-tarball:
 	${MAKE} $@-build
 

@@ -25,7 +25,6 @@ sudo docker pull ${container_image} || \
 
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	--env DESTDIR=${DESTDIR} \
-	--env AGENT_POLICY=${AGENT_POLICY:-no} \
 	-w "${repo_root_dir}" \
 	"${container_image}" \
 	bash -c "${agent_builder}"
