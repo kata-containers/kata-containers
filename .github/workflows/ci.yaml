@@ -233,6 +233,14 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
 
+  run-runk-tests:
+    needs: build-kata-static-tarball-amd64
+    uses: ./.github/workflows/run-runk-tests.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
+
   run-vfio-tests:
     needs: build-kata-static-tarball-amd64
     uses: ./.github/workflows/run-vfio-tests.yaml
