@@ -26,6 +26,8 @@ source "${SCRIPT_PATH}/../../lib/common.bash"
 iperf_file=$(mktemp iperfresults.XXXXXXXXXX)
 TEST_NAME="${TEST_NAME:-network-iperf3}"
 COLLECT_ALL="${COLLECT_ALL:-false}"
+IPERF_DEPLOYMENT="${SCRIPT_PATH}/runtimeclass_workloads/iperf3-deployment.yaml"
+IPERF_DAEMONSET="${SCRIPT_PATH}/runtimeclass_workloads/iperf3-daemonset.yaml"
 
 function remove_tmp_file() {
 	rm -rf "${iperf_file}"
@@ -177,55 +179,54 @@ function iperf3_start_deployment() {
 	cmds=("bc" "jq")
 	check_cmds "${cmds[@]}"
 
-	init_env
-
 	# Check no processes are left behind
 	check_processes
-
-	export service="iperf3-server"
-	export deployment="iperf3-server-deployment"
 
 	wait_time=20
 	sleep_time=2
 
 	# Create deployment
-	kubectl create -f "${SCRIPT_PATH}/runtimeclass_workloads/iperf3-deployment.yaml"
+	kubectl create -f "${IPERF_DEPLOYMENT}"
 
 	# Check deployment creation
-	local cmd="kubectl wait --for=condition=Available deployment/${deployment}"
-	waitForProcess "$wait_time" "$sleep_time" "$cmd"
+	local cmd="kubectl wait --for=condition=Available deployment/iperf3-server-deployment"
+	waitForProcess "${wait_time}" "${sleep_time}" "${cmd}"
 
 	# Create DaemonSet
-	kubectl create -f "${SCRIPT_PATH}/runtimeclass_workloads/iperf3-daemonset.yaml"
-
-	# Expose deployment
-	kubectl expose deployment/"${deployment}"
+	kubectl create -f "${IPERF_DAEMONSET}"
 
 	# Get the names of the server pod
 	export server_pod_name=$(kubectl get pods -o name | grep server | cut -d '/' -f2)
 
 	# Verify the server pod is working
-	local cmd="kubectl get pod $server_pod_name -o yaml | grep 'phase: Running'"
-	waitForProcess "$wait_time" "$sleep_time" "$cmd"
+	local cmd="kubectl get pod ${server_pod_name} -o yaml | grep 'phase: Running'"
+	waitForProcess "${wait_time}" "${sleep_time}" "${cmd}"
 
 	# Get the names of client pod
 	export client_pod_name=$(kubectl get pods -o name | grep client | cut -d '/' -f2)
 
 	# Verify the client pod is working
-	local cmd="kubectl get pod $client_pod_name -o yaml | grep 'phase: Running'"
-	waitForProcess "$wait_time" "$sleep_time" "$cmd"
+	local cmd="kubectl get pod ${client_pod_name} -o yaml | grep 'phase: Running'"
+	waitForProcess "${wait_time}" "${sleep_time}" "${cmd}"
 
 	# Get the ip address of the server pod
-	export server_ip_add=$(kubectl get pod "$server_pod_name" -o jsonpath='{.status.podIP}')
+	export server_ip_add=$(kubectl get pod "${server_pod_name}" -o jsonpath='{.status.podIP}')
 }
 
 function iperf3_deployment_cleanup() {
-	kubectl delete pod "$server_pod_name" "$client_pod_name"
-	kubectl delete ds iperf3-clients
-	kubectl delete deployment "$deployment"
-	kubectl delete service "$deployment"
+	info "iperf: deleting deployments and services"
+	kubectl delete pod "${server_pod_name}" "${client_pod_name}"
+	kubectl delete -f "${IPERF_DAEMONSET}"
+	kubectl delete -f "${IPERF_DEPLOYMENT}"
+	kill_kata_components && sleep 1
+	kill_kata_components
 	check_processes
+	info "End of iperf3 test"
 }
+
+# The deployment must be removed in
+# any case the script terminates.
+trap iperf3_deployment_cleanup EXIT
 
 function help() {
 echo "$(cat << EOF
@@ -309,8 +310,8 @@ function main() {
 		export COLLECT_ALL=true && iperf3_bandwidth && iperf3_jitter && iperf3_cpu && iperf3_parallel
 	fi
 
+	info "iperf3: saving test results"
 	metrics_json_save
-	iperf3_deployment_cleanup
 }
 
 main "$@"
