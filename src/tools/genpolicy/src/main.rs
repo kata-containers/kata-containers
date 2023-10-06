@@ -33,25 +33,50 @@ mod yaml;
 
 #[derive(Debug, Parser)]
 struct CommandLineOptions {
-    #[clap(short, long)]
+    #[clap(short, long, help = "Input Kubernetes YAML file path")]
     yaml_file: Option<String>,
 
-    #[clap(short, long)]
-    input_files_path: Option<String>,
-
-    #[clap(short, long)]
+    #[clap(
+        short,
+        long,
+        help = "Optional input Kubernetes config map YAML file path"
+    )]
     config_map_file: Option<String>,
 
-    #[clap(short, long)]
+    #[clap(
+        short,
+        long,
+        default_value_t = String::from("."),
+        help = "Path to the input rules.rego and genpolicy-settings.json files"
+    )]
+    input_files_path: String,
+
+    #[clap(
+        short,
+        long,
+        help = "Create and use a cache of container image layer contents and dm-verity information (in ./layers_cache/)"
+    )]
     use_cached_files: bool,
 
-    #[clap(short, long)]
+    #[clap(
+        short,
+        long,
+        help = "Ignore unsupported input Kubernetes YAML fields. This is not recommeded unless you understand exactly how genpolicy works!"
+    )]
     silent_unsupported_fields: bool,
 
-    #[clap(short, long)]
+    #[clap(
+        short,
+        long,
+        help = "Print the output Rego policy text to standard output"
+    )]
     raw_out: bool,
 
-    #[clap(short, long)]
+    #[clap(
+        short,
+        long,
+        help = "Print the base64 encoded output Rego policy to standard output"
+    )]
     base64_out: bool,
 }
 
@@ -69,7 +94,7 @@ async fn main() {
     let config = utils::Config::new(
         args.use_cached_files,
         args.yaml_file,
-        args.input_files_path,
+        &args.input_files_path,
         &config_map_files,
         args.silent_unsupported_fields,
         args.raw_out,
@@ -77,9 +102,7 @@ async fn main() {
     );
 
     debug!("Creating policy from yaml, infra data and rules files...");
-    let mut policy = policy::AgentPolicy::from_files(&config)
-        .await
-        .unwrap();
+    let mut policy = policy::AgentPolicy::from_files(&config).await.unwrap();
 
     debug!("Exporting policy to yaml file...");
     policy.export_policy();

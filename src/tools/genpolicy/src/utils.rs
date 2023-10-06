@@ -23,20 +23,17 @@ impl Config {
     pub fn new(
         use_cache: bool,
         yaml_file: Option<String>,
-        input_files_path: Option<String>,
+        input_files_path: &str,
         config_map_files: &Vec<String>,
         silent_unsupported_fields: bool,
         raw_out: bool,
         base64_out: bool,
     ) -> Self {
-        let mut input_path = ".".to_string();
-        if let Some(path) = input_files_path {
-            input_path = path.clone();
-        }
-        let rules_file = input_path.to_owned() + "/rules.rego";
+        let input_path = input_files_path.to_string();
+        let rules_file = input_path.clone() + "/rules.rego";
         debug!("Rules file: {:?}", &rules_file);
 
-        let infra_data_file = input_path.to_owned() + "/genpolicy-settings.json";
+        let infra_data_file = input_path + "/genpolicy-settings.json";
         debug!("Infra data file: {:?}", &infra_data_file);
 
         let cm_files = if !config_map_files.is_empty() {
