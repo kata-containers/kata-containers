@@ -8,6 +8,7 @@
 set -o errexit
 set -o nounset
 set -o pipefail
+set -x
 
 kata_tarball_dir="${2:-kata-artifacts}"
 stability_dir="$(dirname "$(readlink -f "$0")")"
@@ -16,8 +17,8 @@ source "${stability_dir}/../common.bash"
 function run() {
 	info "Running soak parallel stability tests using ${KATA_HYPERVISOR} hypervisor"
 
-	# export ITERATIONS=2 MAX_CONTAINERS=20
-	# bash "${stability_dir}/soak_parallel_rm.sh"
+	export ITERATIONS=2 MAX_CONTAINERS=20
+	bash "${stability_dir}/soak_parallel_rm.sh"
 }
 
 function main() {
