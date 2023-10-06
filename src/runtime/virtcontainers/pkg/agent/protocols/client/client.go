@@ -345,7 +345,7 @@ func commonDialer(timeout time.Duration, dialFunc func() (net.Conn, error), time
 			return nil, timeoutErrMsg
 		}
 	case <-t.C:
-		cancel <- true
+		close(cancel)
 		return nil, timeoutErrMsg
 	}
 
