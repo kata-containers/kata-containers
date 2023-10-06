@@ -14,7 +14,7 @@ use log::debug;
 pub async fn add_pause_container(containers: &mut Vec<pod::Container>, use_cache: bool) {
     debug!("Adding pause container...");
     let mut pause_container = pod::Container {
-        // TODO: load this path from data.json.
+        // TODO: load this path from the settings file.
         image: "mcr.microsoft.com/oss/kubernetes/pause:3.6".to_string(),
 
         name: String::new(),

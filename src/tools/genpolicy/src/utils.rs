@@ -36,7 +36,7 @@ impl Config {
         let rules_file = input_path.to_owned() + "/rules.rego";
         debug!("Rules file: {:?}", &rules_file);
 
-        let infra_data_file = input_path.to_owned() + "/data.json";
+        let infra_data_file = input_path.to_owned() + "/genpolicy-settings.json";
         debug!("Infra data file: {:?}", &infra_data_file);
 
         let cm_files = if !config_map_files.is_empty() {

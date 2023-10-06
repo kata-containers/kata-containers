@@ -298,7 +298,7 @@ pub struct RequestDefaults {
     pub WriteStreamRequest: bool,
 }
 
-/// Struct used to read data from data.json and transfer that data into the policy.
+/// Struct used to read data from the settings file and copy that data into the policy.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CommonData {
     /// Path to the shared container files - e.g., "/run/kata-containers/shared/containers".
@@ -614,8 +614,6 @@ fn get_image_layer_storages(
 ) {
     if let Some(root_mount) = root {
         let mut new_storages: Vec<SerializedStorage> = Vec::new();
-
-        // TODO: load this path from data.json.
         let mut layer_names: Vec<String> = Vec::new();
         let mut layer_hashes: Vec<String> = Vec::new();
         let mut previous_chain_id = String::new();
