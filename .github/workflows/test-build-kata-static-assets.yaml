@@ -1,0 +1,42 @@
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+name: Fidencio's tests
+jobs:
+  test-build-kata-static-assets-action:
+    environment: ci
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - arm64-builder
+          - s390x
+        asset:
+          - kernel
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Login to Kata Containers quay.io
+        uses: docker/login-action@v3
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
+          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+            #
+            #      - name: Build the Kata Containers assets
+            #        uses: ./.github/actions/build-kata-static-assets
+            #        with:
+            #          tarball-suffix: ${{ github.event.pull_request.number }}
+            #          commit-hash: ${{ github.event.pull_request.head.sha }}
+            #          target-branch: ${{ github.event.pull_request.base.ref }}
+            #          asset: ${{ matrix.asset }}
+            #          push-to-registry: yes
