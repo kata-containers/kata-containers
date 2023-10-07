@@ -992,13 +992,18 @@ impl BaseContainer for LinuxContainer {
             child_stderr = unsafe { std::process::Stdio::from_raw_fd(pseudo.slave) };
 
             if let Some(proc_io) = &mut p.proc_io {
+                // A reference count used to clean up the term master fd.
+                let term_closer = Arc::from(unsafe { File::from_raw_fd(pseudo.master) });
+
                 if let Some(mut stdin_stream) = proc_io.stdin.take() {
                     let mut term_master = unsafe { File::from_raw_fd(pseudo.master) };
                     let logger = logger.clone();
+                    let term_closer = term_closer.clone();
                     tokio::spawn(async move {
                         let res = tokio::io::copy(&mut stdin_stream, &mut term_master).await;
                         debug!(logger, "copy from stdin to term_master end: {:?}", res);
                         std::mem::forget(term_master); // Avoid auto closing of term_master
+                        drop(term_closer);
                     });
                 }
 
@@ -1006,11 +1011,13 @@ impl BaseContainer for LinuxContainer {
                     let wgw_output = proc_io.wg_output.worker();
                     let mut term_master = unsafe { File::from_raw_fd(pseudo.master) };
                     let logger = logger.clone();
+                    let term_closer = term_closer.clone();
                     tokio::spawn(async move {
                         let res = tokio::io::copy(&mut term_master, &mut stdout_stream).await;
                         debug!(logger, "copy from term_master to stdout end: {:?}", res);
                         wgw_output.done();
                         std::mem::forget(term_master); // Avoid auto closing of term_master
+                        drop(term_closer);
                     });
                 }
             }

@@ -379,7 +379,7 @@ impl AgentService {
         let pipe_size = AGENT_CONFIG.container_pipe_size;
         let ocip = rustjail::process_grpc_to_oci(&process);
 
-        // signal_port != 0 indicates passfd io mode
+        // passfd_listener_port != 0 indicates passfd io mode
         let proc_io = if AGENT_CONFIG.passfd_listener_port != 0 {
             Some(passfd_io::take_io_streams(req.stdin_port, req.stdout_port, req.stderr_port).await)
         } else {
