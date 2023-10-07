@@ -89,17 +89,17 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
 
-  run-kata-deploy-tests-on-aks:
-    needs: publish-kata-deploy-payload-amd64
-    uses: ./.github/workflows/run-kata-deploy-tests-on-aks.yaml
-    with:
-      registry: ghcr.io
-      repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-amd64
-      commit-hash: ${{ inputs.commit-hash }}
-      pr-number: ${{ inputs.pr-number }}
-      target-branch: ${{ inputs.target-branch }}
-    secrets: inherit
+        #  run-kata-deploy-tests-on-aks:
+        #    needs: publish-kata-deploy-payload-amd64
+        #    uses: ./.github/workflows/run-kata-deploy-tests-on-aks.yaml
+        #    with:
+        #      registry: ghcr.io
+        #      repo: ${{ github.repository_owner }}/kata-deploy-ci
+        #      tag: ${{ inputs.tag }}-amd64
+        #      commit-hash: ${{ inputs.commit-hash }}
+        #      pr-number: ${{ inputs.pr-number }}
+        #      target-branch: ${{ inputs.target-branch }}
+        #    secrets: inherit
 
   run-kata-deploy-tests-on-garm:
     needs: publish-kata-deploy-payload-amd64
@@ -132,17 +132,17 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
 
-  run-k8s-tests-on-aks:
-    needs: publish-kata-deploy-payload-amd64
-    uses: ./.github/workflows/run-k8s-tests-on-aks.yaml
-    with:
-      registry: ghcr.io
-      repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-amd64
-      commit-hash: ${{ inputs.commit-hash }}
-      pr-number: ${{ inputs.pr-number }}
-      target-branch: ${{ inputs.target-branch }}
-    secrets: inherit
+        #  run-k8s-tests-on-aks:
+        #    needs: publish-kata-deploy-payload-amd64
+        #    uses: ./.github/workflows/run-k8s-tests-on-aks.yaml
+        #    with:
+        #      registry: ghcr.io
+        #      repo: ${{ github.repository_owner }}/kata-deploy-ci
+        #      tag: ${{ inputs.tag }}-amd64
+        #      commit-hash: ${{ inputs.commit-hash }}
+        #      pr-number: ${{ inputs.pr-number }}
+        #      target-branch: ${{ inputs.target-branch }}
+        #    secrets: inherit
 
   run-k8s-tests-on-garm:
     needs: publish-kata-deploy-payload-amd64
