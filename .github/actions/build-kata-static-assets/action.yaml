@@ -1,0 +1,54 @@
+name: CI | Build kata-static tarball
+description: Build kata-static tarball
+
+inputs:
+  stage:
+    description: ""
+    default: test
+  arch:
+    description: ""
+    default: "amd64"
+  tarball-suffix:
+    description: ""
+  push-to-registry:
+    description: ""
+    default: "mo"
+  target-branch:
+    description: ""
+  asset:
+    description: ""
+    required: true
+  commit-hash:
+    description: ""
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.commit-hash }}
+        fetch-depth: 0 # This is needed in order to keep the commit ids history
+
+    - name: Build ${{ matrix.asset }}
+      shell: bash
+      run: |
+        make "${KATA_ASSET}-tarball"
+        build_dir=$(readlink -f build)
+        # store-artifact does not work with symlink
+        sudo cp -r "${build_dir}" "kata-build"
+      env:
+        KATA_ASSET: ${{ matrix.asset }}
+        TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
+        PUSH_TO_REGISTRY: ${{ inputs.push-to-registry }}
+        ARTEFACT_REGISTRY: ghcr.io
+        ARTEFACT_REGISTRY_USERNAME: ${{ github.actor }}
+        ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+        TARGET_BRANCH: ${{ inputs.target-branch }}
+
+    - name: store-artifact ${{ matrix.asset }}
+      uses: actions/upload-artifact@v3
+      with:
+        name: kata-artifacts-${{ inputs.arch }}-${{ inputs.tarball-suffix }}
+        path: kata-build/kata-static-${{ matrix.asset }}.tar.xz
+        retention-days: 15
+        if-no-files-found: error
