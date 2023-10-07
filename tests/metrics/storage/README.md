@@ -21,7 +21,3 @@ to perform measurements upon a single test file.
 
 The test configuration used by the script can be modified by setting a number of
 environment variables to change or over-ride the test defaults.
-
-## DAX `virtio-fs` `fio` Kubernetes tests
-
-[Test](fio-k8s/README.md) to compare the use of DAX option in `virtio-fs`.
