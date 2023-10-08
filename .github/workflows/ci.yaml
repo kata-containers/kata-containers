@@ -209,41 +209,9 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
 
-  run-cri-containerd-tests:
+  run-basic-amd64-tests:
     needs: build-kata-static-tarball-amd64
-    uses: ./.github/workflows/run-cri-containerd-tests.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
-
-  run-containerd-stability-tests:
-    needs: build-kata-static-tarball-amd64
-    uses: ./.github/workflows/run-containerd-stability-tests.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
-
-  run-nydus-tests:
-    needs: build-kata-static-tarball-amd64
-    uses: ./.github/workflows/run-nydus-tests.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
-
-  run-runk-tests:
-    needs: build-kata-static-tarball-amd64
-    uses: ./.github/workflows/run-runk-tests.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
-
-  run-vfio-tests:
-    needs: build-kata-static-tarball-amd64
-    uses: ./.github/workflows/run-vfio-tests.yaml
+    uses: ./.github/workflows/basic-ci-amd64.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
