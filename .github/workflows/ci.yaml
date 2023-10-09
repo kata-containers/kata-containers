@@ -113,17 +113,6 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
     secrets: inherit
 
-  run-kata-deploy-tests-on-tdx:
-    needs: [publish-kata-deploy-payload-amd64, build-and-publish-tee-confidential-unencrypted-image]
-    uses: ./.github/workflows/run-kata-deploy-tests-on-tdx.yaml
-    with:
-      registry: ghcr.io
-      repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-amd64
-      commit-hash: ${{ inputs.commit-hash }}
-      pr-number: ${{ inputs.pr-number }}
-      target-branch: ${{ inputs.target-branch }}
-
   run-kata-monitor-tests:
     needs: build-kata-static-tarball-amd64
     uses: ./.github/workflows/run-kata-monitor-tests.yaml
@@ -168,31 +157,9 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
     secrets: inherit
 
-  run-k8s-tests-on-sev:
+  run-kata-coco-tests:
     needs: [publish-kata-deploy-payload-amd64, build-and-publish-tee-confidential-unencrypted-image]
-    uses: ./.github/workflows/run-k8s-tests-on-sev.yaml
-    with:
-      registry: ghcr.io
-      repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-amd64
-      commit-hash: ${{ inputs.commit-hash }}
-      pr-number: ${{ inputs.pr-number }}
-      target-branch: ${{ inputs.target-branch }}
-
-  run-k8s-tests-on-snp:
-    needs: [publish-kata-deploy-payload-amd64, build-and-publish-tee-confidential-unencrypted-image]
-    uses: ./.github/workflows/run-k8s-tests-on-snp.yaml
-    with:
-      registry: ghcr.io
-      repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-amd64
-      commit-hash: ${{ inputs.commit-hash }}
-      pr-number: ${{ inputs.pr-number }}
-      target-branch: ${{ inputs.target-branch }}
-
-  run-k8s-tests-on-tdx:
-    needs: [publish-kata-deploy-payload-amd64, build-and-publish-tee-confidential-unencrypted-image]
-    uses: ./.github/workflows/run-k8s-tests-on-tdx.yaml
+    uses: ./.github/workflows/run-kata-coco-tests.yaml
     with:
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
@@ -209,41 +176,9 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
 
-  run-cri-containerd-tests:
+  run-basic-amd64-tests:
     needs: build-kata-static-tarball-amd64
-    uses: ./.github/workflows/run-cri-containerd-tests.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
-
-  run-containerd-stability-tests:
-    needs: build-kata-static-tarball-amd64
-    uses: ./.github/workflows/run-containerd-stability-tests.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
-
-  run-nydus-tests:
-    needs: build-kata-static-tarball-amd64
-    uses: ./.github/workflows/run-nydus-tests.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
-
-  run-runk-tests:
-    needs: build-kata-static-tarball-amd64
-    uses: ./.github/workflows/run-runk-tests.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
-
-  run-vfio-tests:
-    needs: build-kata-static-tarball-amd64
-    uses: ./.github/workflows/run-vfio-tests.yaml
+    uses: ./.github/workflows/basic-ci-amd64.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
