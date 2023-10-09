@@ -165,6 +165,43 @@ jobs:
       - name: Run tracing tests
         run: bash tests/integration/runk/gha-run.sh run
 
+  run-tracing:
+    strategy:
+      fail-fast: false
+      matrix:
+        vmm:
+          - clh # cloud-hypervisor
+          - qemu
+    runs-on: garm-ubuntu-2204-smaller
+    env:
+      KATA_HYPERVISOR: ${{ matrix.vmm }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: Install dependencies
+        run: bash tests/functional/tracing/gha-run.sh install-dependencies
+
+      - name: get-kata-tarball
+        uses: actions/download-artifact@v3
+        with:
+          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
+          path: kata-artifacts
+
+      - name: Install kata
+        run: bash tests/functional/tracing/gha-run.sh install-kata kata-artifacts
+
+      - name: Run tracing tests
+        run: bash tests/functional/tracing/gha-run.sh run
+
   run-vfio:
     strategy:
       fail-fast: false
