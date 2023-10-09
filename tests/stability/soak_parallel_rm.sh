@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright (c) 2017-2018, 2020 Intel Corporation
+# Copyright (c) 2017-2023 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -42,7 +42,7 @@ MAX_CONTAINERS="${MAX_CONTAINERS:-110}"
 
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 
-check_vsock_active() {
+function check_vsock_active() {
 	vsock_configured=$($RUNTIME_PATH kata-env | awk '/UseVSock/ {print $3}')
 	vsock_supported=$($RUNTIME_PATH kata-env | awk '/SupportVSock/ {print $3}')
 	if [ "$vsock_configured" == true ] && [ "$vsock_supported" == true ]; then
@@ -52,20 +52,20 @@ check_vsock_active() {
 	fi
 }
 
-count_containers() {
+function count_containers() {
 	sudo ctr c list -q | wc -l
 }
 
-check_all_running() {
+function check_all_running() {
 	local goterror=0
 
-	echo "Checking ${how_many} containers have all relevant components"
+	info "Checking ${how_many} containers have all relevant components"
 
 	# check what docker thinks
 	how_many_running=$(count_containers)
 
 	if (( ${how_many_running} != ${how_many} )); then
-		echo "Wrong number of containers running (${how_many_running} != ${how_many}) - stopping"
+		info "Wrong number of containers running (${how_many_running} != ${how_many}) - stopping"
 		((goterror++))
 	fi
 
@@ -76,7 +76,7 @@ check_all_running() {
 		how_many_shims=$(pgrep -a -f ${SHIM_PATH} | grep containerd.sock | wc -l)
 		# one shim process per container...
 		if (( ${how_many_running} != ${how_many_shims} )); then
-			echo "Wrong number of shims running (${how_many_running} != ${how_many_shims}) - stopping"
+			info "Wrong number of shims running (${how_many_running} != ${how_many_shims}) - stopping"
 			((goterror++))
 		fi
 
@@ -84,7 +84,7 @@ check_all_running() {
 		if [[ "$KATA_HYPERVISOR" != "dragonball" ]]; then
 			how_many_vms=$(pgrep -a $(basename ${HYPERVISOR_PATH} | cut -d '-' -f1) | wc -l)
 			if (( ${how_many_running} != ${how_many_vms} )); then
-				echo "Wrong number of $KATA_HYPERVISOR running (${how_many_running} != ${how_many_vms}) - stopping"
+				info "Wrong number of $KATA_HYPERVISOR running (${how_many_running} != ${how_many_vms}) - stopping"
 				((goterror++))
 			fi
 		fi
@@ -95,7 +95,7 @@ check_all_running() {
 				num_vc_pods=$(sudo ls -1 ${VC_POD_DIR} | wc -l)
 
 				if (( ${how_many_running} != ${num_vc_pods} )); then
-					echo "Wrong number of pods in $VC_POD_DIR (${how_many_running} != ${num_vc_pods}) - stopping)"
+					info "Wrong number of pods in $VC_POD_DIR (${how_many_running} != ${num_vc_pods}) - stopping)"
 					((goterror++))
 				fi
 			fi
@@ -109,12 +109,12 @@ check_all_running() {
 }
 
 # reported system 'available' memory
-get_system_avail() {
+function get_system_avail() {
 	echo $(free -b | head -2 | tail -1 | awk '{print $7}')
 }
 
-go() {
-	echo "Running..."
+function go() {
+	info "Running..."
 
 	how_many=0
 
@@ -129,32 +129,32 @@ go() {
 		done
 
 		if (( ${how_many} >= ${MAX_CONTAINERS} )); then
-			echo "And we have hit the max ${how_many} containers"
+			info "And we have hit the max ${how_many} containers"
 			return
 		fi
 
 		how_much=$(get_system_avail)
 		if (( ${how_much} < ${MEM_CUTOFF} )); then
-			echo "And we are out of memory on container ${how_many} (${how_much} < ${MEM_CUTOFF})"
+			info "And we are out of memory on container ${how_many} (${how_much} < ${MEM_CUTOFF})"
 			return
 		fi
 	}
 	done
 }
 
-count_mounts() {
+function count_mounts() {
 	echo $(mount | wc -l)
 }
 
-check_mounts() {
+function check_mounts() {
 	final_mount_count=$(count_mounts)
 
 	if [[ $final_mount_count < $initial_mount_count ]]; then
-		echo "Final mount count does not match initial count (${final_mount_count} != ${initial_mount_count})"
+		info "Final mount count does not match initial count (${final_mount_count} != ${initial_mount_count})"
 	fi
 }
 
-init() {
+function init() {
 	restart_containerd_service
 	extract_kata_env
 	clean_env_ctr
@@ -165,10 +165,10 @@ init() {
 
 	# Only check Kata items if we are using a Kata runtime
 	if [[ "$RUNTIME" == "containerd-shim-kata-v2" ]]; then
-		echo "Checking Kata runtime"
+		info "Checking Kata runtime"
 		check_kata_components=1
 	else
-		echo "Not a Kata runtime, not checking for Kata components"
+		info "Not a Kata runtime, not checking for Kata components"
 		check_kata_components=0
 	fi
 
@@ -183,10 +183,10 @@ init() {
 	fi
 }
 
-spin() {
+function spin() {
 	local i
 	for ((i=1; i<= ITERATIONS; i++)); do {
-		echo "Start iteration $i of $ITERATIONS"
+		info "Start iteration $i of $ITERATIONS"
 		#spin them up
 		go
 		#check we are in a sane state
