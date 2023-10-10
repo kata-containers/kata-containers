@@ -172,7 +172,7 @@ function init() {
 		check_kata_components=0
 	fi
 
-	versions_file="${cidir}/../versions.yaml"
+	versions_file="${cidir}/../../versions.yaml"
 	nginx_version=$("${GOPATH}/bin/yq" read "$versions_file" "docker_images.nginx.version")
 	nginx_image="docker.io/library/nginx:$nginx_version"
 
