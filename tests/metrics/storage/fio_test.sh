@@ -18,6 +18,7 @@ IMAGE="docker.io/library/fio-bench:latest"
 DOCKERFILE="${SCRIPT_PATH}/fio-dockerfile/Dockerfile"
 PAYLOAD_ARGS="${PAYLOAD_ARGS:-tail -f /dev/null}"
 TEST_NAME="fio"
+REQUIRED_CMDS=("jq" "script")
 
 # Fio default number of jobs
 nj=4
@@ -34,7 +35,7 @@ trap release_resources EXIT
 function setup() {
 	info "setup fio test"
 	clean_env_ctr
-	check_cmds "${cmds[@]}"
+	check_cmds "${REQUIRED_CMDS[@]}"
 	check_ctr_images "$IMAGE" "$DOCKERFILE"
 	init_env
 
@@ -135,21 +136,21 @@ function main() {
 	# Collect bs=4K, num_jobs=4, io-direct, io-depth=2
 	info "Processing sequential type workload"
 	sudo -E "${CTR_EXE}" t exec --exec-id "${RANDOM}" ${CONTAINER_ID} sh -c "./fio_bench.sh run-read-4k ${nj}" >/dev/null 2>&1
-	local results_read_4K="$(sudo -E "${CTR_EXE}" t exec -t --exec-id "${RANDOM}" ${CONTAINER_ID} sh -c "./fio_bench.sh print-latest-results")"
+	local results_read_4K="$(script -qc "sudo -E ${CTR_EXE} t exec -t --exec-id ${RANDOM} ${CONTAINER_ID} sh -c './fio_bench.sh print-latest-results'")"
 
 	sleep 0.5
 	sudo -E "${CTR_EXE}" t exec --exec-id "${RANDOM}" ${CONTAINER_ID} sh -c "./fio_bench.sh run-write-4k ${nj}" >/dev/null 2>&1
-	local results_write_4K="$(sudo -E "${CTR_EXE}" t exec -t --exec-id "${RANDOM}" ${CONTAINER_ID} sh -c "./fio_bench.sh print-latest-results")"
+	local results_write_4K="$(script -qc "sudo -E ${CTR_EXE} t exec -t --exec-id ${RANDOM} ${CONTAINER_ID} sh -c './fio_bench.sh print-latest-results'")"
 
 	# Collect bs=64K, num_jobs=4, io-direct, io-depth=2
 	info "Processing random type workload"
 	sleep 0.5
 	sudo -E "${CTR_EXE}" t exec --exec-id "${RANDOM}" ${CONTAINER_ID} sh -c "./fio_bench.sh run-randread-64k ${nj}" >/dev/null 2>&1
-	local results_rand_read_64K="$(sudo -E "${CTR_EXE}" t exec -t --exec-id "${RANDOM}" ${CONTAINER_ID} sh -c "./fio_bench.sh print-latest-results")"
+	local results_rand_read_64K="$(script -qc "sudo -E ${CTR_EXE} t exec -t --exec-id ${RANDOM} ${CONTAINER_ID} sh -c './fio_bench.sh print-latest-results'")"
 
 	sleep 0.5
 	sudo -E "${CTR_EXE}" t exec --exec-id "${RANDOM}" ${CONTAINER_ID} sh -c "./fio_bench.sh run-randwrite-64k ${nj}" >/dev/null 2>&1
-	local results_rand_write_64K="$(sudo -E "${CTR_EXE}" t exec -t --exec-id "${RANDOM}" ${CONTAINER_ID} sh -c "./fio_bench.sh print-latest-results")"
+	local results_rand_write_64K="$(script -qc "sudo -E ${CTR_EXE} t exec -t --exec-id ${RANDOM} ${CONTAINER_ID} sh -c './fio_bench.sh print-latest-results'")"
 
 	# parse results
 	metrics_json_init
