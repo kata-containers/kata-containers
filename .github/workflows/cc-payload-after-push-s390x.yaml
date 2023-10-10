@@ -40,7 +40,7 @@ jobs:
 
       - name: Build ${{ matrix.asset }}
         run: |
-          make "${KATA_ASSET}-tarball"
+          USE_CACHE="no" make "${KATA_ASSET}-tarball"
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
           sudo cp -r "${build_dir}" "kata-build"
@@ -92,7 +92,7 @@ jobs:
 
       - name: Build cc-shim-v2
         run: |
-          make cc-shim-v2-tarball
+          USE_CACHE="no" make cc-shim-v2-tarball
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
           sudo cp -r "${build_dir}" "kata-build"
@@ -138,7 +138,7 @@ jobs:
           # Skip building dependant artifacts of cc-se-image-tarball
           # because we already have them from the previous build
           sed -i 's/\(^cc-se-image-tarball:\).*/\1/g' ${base_dir}/Makefile
-          make cc-se-image-tarball
+          USE_CACHE="no" make cc-se-image-tarball
           build_dir=$(readlink -f build)
           sudo cp -r "${build_dir}" "kata-build"
           sudo chown -R $(id -u):$(id -g) "kata-build"

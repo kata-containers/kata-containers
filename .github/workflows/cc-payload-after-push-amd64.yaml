@@ -47,7 +47,7 @@ jobs:
           fetch-depth: 0 # This is needed in order to keep the commit ids history
       - name: Build ${{ matrix.asset }}
         run: |
-          make "${KATA_ASSET}-tarball"
+          USE_CACHE="no" make "${KATA_ASSET}-tarball"
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
           sudo cp -r "${build_dir}" "kata-build"
@@ -108,7 +108,7 @@ jobs:
 
       - name: Build cc-shim-v2
         run: |
-          make cc-shim-v2-tarball
+          USE_CACHE="no" make cc-shim-v2-tarball
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
           sudo cp -r "${build_dir}" "kata-build"
