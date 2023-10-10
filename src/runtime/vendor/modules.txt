@@ -556,7 +556,7 @@ gopkg.in/inf.v0
 # gopkg.in/yaml.v2 v2.4.0
 ## explicit; go 1.15
 gopkg.in/yaml.v2
-# gopkg.in/yaml.v3 v3.0.1
+# gopkg.in/yaml.v3 v3.0.1 => gopkg.in/yaml.v3 v3.0.1
 ## explicit
 gopkg.in/yaml.v3
 # k8s.io/apimachinery v0.22.5
@@ -576,3 +576,4 @@ sigs.k8s.io/yaml
 # golang.org/x/text => golang.org/x/text v0.7.0
 # google.golang.org/genproto => google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
 # google.golang.org/grpc => google.golang.org/grpc v1.47.0
+# gopkg.in/yaml.v3 => gopkg.in/yaml.v3 v3.0.1
