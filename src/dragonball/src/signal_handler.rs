@@ -1,11 +1,12 @@
 // Copyright 2018 Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+use dbs_utils::metric::IncMetric;
 use libc::{_exit, c_int, c_void, siginfo_t, SIGBUS, SIGSEGV, SIGSYS};
 use log::error;
 use vmm_sys_util::signal::register_signal_handler;
 
-use crate::metric::{IncMetric, METRICS};
+use crate::metric::METRICS;
 
 // The offset of `si_syscall` (offending syscall identifier) within the siginfo structure
 // expressed as an `(u)int*`.
@@ -51,7 +52,7 @@ extern "C" fn sigsys_handler(num: c_int, info: *mut siginfo_t, _unused: *mut c_v
     let syscall = unsafe { *(info as *const i32).offset(SI_OFF_SYSCALL) as usize };
     // SIGSYS is triggered when bad syscalls are detected. num_faults is only added when SIGSYS is detected
     // so it actually only collects the count for bad syscalls.
-    METRICS.seccomp.num_faults.inc();
+    METRICS.read().unwrap().seccomp.num_faults.inc();
     error!(
         "Shutting down VM after intercepting a bad syscall ({}).",
         syscall
@@ -82,8 +83,8 @@ extern "C" fn sigbus_sigsegv_handler(num: c_int, info: *mut siginfo_t, _unused: 
     // Other signals which might do async unsafe things incompatible with the rest of this
     // function are blocked due to the sa_mask used when registering the signal handler.
     match si_signo {
-        SIGBUS => METRICS.signals.sigbus.inc(),
-        SIGSEGV => METRICS.signals.sigsegv.inc(),
+        SIGBUS => METRICS.read().unwrap().signals.sigbus.inc(),
+        SIGSEGV => METRICS.read().unwrap().signals.sigsegv.inc(),
         _ => (),
     }
 
@@ -182,19 +183,19 @@ mod tests {
             .unwrap();
 
             assert!(apply_filter(&TryInto::<BpfProgram>::try_into(filter).unwrap()).is_ok());
-            assert_eq!(METRICS.seccomp.num_faults.count(), 0);
+            assert_eq!(METRICS.read().unwrap().seccomp.num_faults.count(), 0);
 
             // Call the blacklisted `SYS_mkdirat`.
             unsafe { syscall(libc::SYS_mkdirat, "/foo/bar\0") };
 
             // Call SIGBUS signal handler.
-            assert_eq!(METRICS.signals.sigbus.count(), 0);
+            assert_eq!(METRICS.read().unwrap().signals.sigbus.count(), 0);
             unsafe {
                 syscall(libc::SYS_kill, process::id(), SIGBUS);
             }
 
             // Call SIGSEGV signal handler.
-            assert_eq!(METRICS.signals.sigsegv.count(), 0);
+            assert_eq!(METRICS.read().unwrap().signals.sigsegv.count(), 0);
             unsafe {
                 syscall(libc::SYS_kill, process::id(), SIGSEGV);
             }
@@ -211,9 +212,9 @@ mod tests {
         // tests, so we use this as an heuristic to decide if we check the assertion.
         if cpu_count() > 1 {
             // The signal handler should let the program continue during unit tests.
-            assert!(METRICS.seccomp.num_faults.count() >= 1);
+            assert!(METRICS.read().unwrap().seccomp.num_faults.count() >= 1);
         }
-        assert!(METRICS.signals.sigbus.count() >= 1);
-        assert!(METRICS.signals.sigsegv.count() >= 1);
+        assert!(METRICS.read().unwrap().signals.sigbus.count() >= 1);
+        assert!(METRICS.read().unwrap().signals.sigsegv.count() >= 1);
     }
 }

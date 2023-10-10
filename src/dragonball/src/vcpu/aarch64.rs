@@ -10,7 +10,6 @@ use std::ops::Deref;
 use std::sync::mpsc::{channel, Sender};
 use std::sync::Arc;
 
-use crate::IoManagerCached;
 use dbs_arch::{regs, VpmuFeatureLevel};
 use dbs_boot::get_fdt_addr;
 use dbs_utils::time::TimestampUs;
@@ -19,8 +18,10 @@ use vm_memory::{Address, GuestAddress, GuestAddressSpace};
 use vmm_sys_util::eventfd::EventFd;
 
 use crate::address_space_manager::GuestAddressSpaceImpl;
+use crate::metric::VcpuMetrics;
 use crate::vcpu::vcpu_impl::{Result, Vcpu, VcpuError, VcpuStateEvent};
 use crate::vcpu::VcpuConfig;
+use crate::IoManagerCached;
 
 #[allow(unused)]
 impl Vcpu {
@@ -67,6 +68,7 @@ impl Vcpu {
             support_immediate_exit,
             mpidr: 0,
             exit_evt,
+            metrics: Arc::new(VcpuMetrics::default()),
         })
     }
 

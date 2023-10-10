@@ -29,6 +29,7 @@ use vmm_sys_util::eventfd::EventFd;
 use crate::address_space_manager::GuestAddressSpaceImpl;
 use crate::api::v1::InstanceInfo;
 use crate::kvm_context::KvmContext;
+use crate::metric::METRICS;
 use crate::vcpu::vcpu_impl::{
     Vcpu, VcpuError, VcpuEvent, VcpuHandle, VcpuResizeResult, VcpuResponse, VcpuStateEvent,
 };
@@ -555,6 +556,11 @@ impl VcpuManager {
         };
 
         let mut vcpu = self.create_vcpu_arch(cpu_index, kvm_vcpu, request_ts)?;
+        METRICS
+            .write()
+            .unwrap()
+            .vcpu
+            .insert(cpu_index as u32, vcpu.metrics());
         self.configure_single_vcpu(entry_addr, &mut vcpu)
             .map_err(VcpuManagerError::Vcpu)?;
         self.vcpu_infos[cpu_index as usize].vcpu = Some(vcpu);
