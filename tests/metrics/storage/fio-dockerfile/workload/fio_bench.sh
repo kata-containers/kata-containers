@@ -16,13 +16,13 @@ set -o pipefail
 # read, write, randread, randwrite, randrw, readwrite
 io_type="read"
 block_size="4k"
-num_jobs="2"
+num_jobs="4"
 
 # FIO default settings
 readonly ioengine="libaio"
 readonly rate_process="linear"
 readonly disable_buffered="1"
-readonly iodepth="2"
+readonly iodepth="8"
 readonly runtime="10s"
 # ramp time
 readonly rt="10s"
