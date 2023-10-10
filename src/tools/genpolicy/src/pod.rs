@@ -394,6 +394,9 @@ pub struct VolumeMount {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subPathExpr: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub readOnly: Option<bool>,
     // TODO: additional fields.
 }
 
