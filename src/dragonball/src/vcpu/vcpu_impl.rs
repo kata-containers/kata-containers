@@ -15,6 +15,7 @@ use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 use std::sync::{Arc, Barrier};
 use std::thread;
 
+use dbs_utils::metric::IncMetric;
 use dbs_utils::time::TimestampUs;
 use kvm_bindings::{KVM_SYSTEM_EVENT_RESET, KVM_SYSTEM_EVENT_SHUTDOWN};
 use kvm_ioctls::{VcpuExit, VcpuFd};
@@ -25,7 +26,7 @@ use vmm_sys_util::eventfd::EventFd;
 use vmm_sys_util::signal::{register_signal_handler, Killable};
 
 use super::sm::StateMachine;
-use crate::metric::{IncMetric, METRICS};
+use crate::metric::{VcpuMetrics, METRICS};
 use crate::signal_handler::sigrtmin;
 use crate::IoManagerCached;
 
@@ -303,6 +304,9 @@ pub struct Vcpu {
     // Whether kvm used supports immediate_exit flag.
     support_immediate_exit: bool,
 
+    // metrics for a vCPU.
+    metrics: Arc<VcpuMetrics>,
+
     // CPUID information for the x86_64 CPU
     #[cfg(target_arch = "x86_64")]
     cpuid: kvm_bindings::CpuId,
@@ -446,7 +450,7 @@ impl Vcpu {
                     #[cfg(target_arch = "x86_64")]
                     VcpuExit::IoIn(addr, data) => {
                         let _ = self.io_mgr.pio_read(addr, data);
-                        METRICS.vcpu.exit_io_in.inc();
+                        self.metrics.exit_io_in.inc();
                         Ok(VcpuEmulation::Handled)
                     }
                     #[cfg(target_arch = "x86_64")]
@@ -454,17 +458,17 @@ impl Vcpu {
                         if !self.check_io_port_info(addr, data)? {
                             let _ = self.io_mgr.pio_write(addr, data);
                         }
-                        METRICS.vcpu.exit_io_out.inc();
+                        self.metrics.exit_io_out.inc();
                         Ok(VcpuEmulation::Handled)
                     }
                     VcpuExit::MmioRead(addr, data) => {
                         let _ = self.io_mgr.mmio_read(addr, data);
-                        METRICS.vcpu.exit_mmio_read.inc();
+                        self.metrics.exit_mmio_read.inc();
                         Ok(VcpuEmulation::Handled)
                     }
                     VcpuExit::MmioWrite(addr, data) => {
                         let _ = self.io_mgr.mmio_write(addr, data);
-                        METRICS.vcpu.exit_mmio_write.inc();
+                        self.metrics.exit_mmio_write.inc();
                         Ok(VcpuEmulation::Handled)
                     }
                     VcpuExit::Hlt => {
@@ -477,12 +481,12 @@ impl Vcpu {
                     }
                     // Documentation specifies that below kvm exits are considered errors.
                     VcpuExit::FailEntry(reason, cpu) => {
-                        METRICS.vcpu.failures.inc();
+                        self.metrics.failures.inc();
                         error!("Received KVM_EXIT_FAIL_ENTRY signal, reason {reason}, cpu number {cpu}");
                         Err(VcpuError::VcpuUnhandledKvmExit)
                     }
                     VcpuExit::InternalError => {
-                        METRICS.vcpu.failures.inc();
+                        self.metrics.failures.inc();
                         error!("Received KVM_EXIT_INTERNAL_ERROR signal");
                         Err(VcpuError::VcpuUnhandledKvmExit)
                     }
@@ -495,7 +499,7 @@ impl Vcpu {
                             Ok(VcpuEmulation::Stopped)
                         }
                         _ => {
-                            METRICS.vcpu.failures.inc();
+                            self.metrics.failures.inc();
                             error!(
                                 "Received KVM_SYSTEM_EVENT signal type: {}, flag: {}",
                                 event_type, event_flags
@@ -504,7 +508,7 @@ impl Vcpu {
                         }
                     },
                     r => {
-                        METRICS.vcpu.failures.inc();
+                        self.metrics.failures.inc();
                         // TODO: Are we sure we want to finish running a vcpu upon
                         // receiving a vm exit that is not necessarily an error?
                         error!("Unexpected exit reason on vcpu run: {:?}", r);
@@ -523,7 +527,7 @@ impl Vcpu {
                         Ok(VcpuEmulation::Interrupted)
                     }
                     _ => {
-                        METRICS.vcpu.failures.inc();
+                        self.metrics.failures.inc();
                         error!("Failure during vcpu run: {}", e);
                         #[cfg(target_arch = "x86_64")]
                         {
@@ -731,7 +735,7 @@ impl Vcpu {
     fn waiting_exit(&mut self) -> StateMachine<Self> {
         // trigger vmm to stop machine
         if let Err(e) = self.exit_evt.write(1) {
-            METRICS.vcpu.failures.inc();
+            self.metrics.failures.inc();
             error!("Failed signaling vcpu exit event: {}", e);
         }
 
@@ -765,11 +769,17 @@ impl Vcpu {
     pub fn vcpu_fd(&self) -> &VcpuFd {
         self.fd.as_ref()
     }
+
+    pub fn metrics(&self) -> Arc<VcpuMetrics> {
+        self.metrics.clone()
+    }
 }
 
 impl Drop for Vcpu {
     fn drop(&mut self) {
         let _ = self.reset_thread_local_data();
+        let id: u32 = self.id as u32;
+        METRICS.write().unwrap().vcpu.remove(&id);
     }
 }
 

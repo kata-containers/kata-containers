@@ -11,6 +11,7 @@ use std::sync::Arc;
 
 use dbs_arch::cpuid::{process_cpuid, VmSpec};
 use dbs_arch::gdt::gdt_entry;
+use dbs_utils::metric::IncMetric;
 use dbs_utils::time::TimestampUs;
 use kvm_bindings::CpuId;
 use kvm_ioctls::{VcpuFd, VmFd};
@@ -19,7 +20,7 @@ use vm_memory::{Address, GuestAddress, GuestAddressSpace};
 use vmm_sys_util::eventfd::EventFd;
 
 use crate::address_space_manager::GuestAddressSpaceImpl;
-use crate::metric::{IncMetric, METRICS};
+use crate::metric::VcpuMetrics;
 use crate::vcpu::vcpu_impl::{Result, Vcpu, VcpuError, VcpuStateEvent};
 use crate::vcpu::VcpuConfig;
 use crate::IoManagerCached;
@@ -69,6 +70,7 @@ impl Vcpu {
             vcpu_state_sender,
             exit_evt,
             support_immediate_exit,
+            metrics: Arc::new(VcpuMetrics::default()),
             cpuid,
         })
     }
@@ -137,7 +139,7 @@ impl Vcpu {
         )
         .map_err(VcpuError::CpuId)?;
         process_cpuid(&mut self.cpuid, &cpuid_vm_spec).map_err(|e| {
-            METRICS.vcpu.filter_cpuid.inc();
+            self.metrics.filter_cpuid.inc();
             error!("Failure in configuring CPUID for vcpu {}: {:?}", self.id, e);
             VcpuError::CpuId(e)
         })?;
