@@ -78,6 +78,9 @@ jobs:
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
+      - name: Install dependencies
+        run: bash tests/integration/cri-containerd/gha-run.sh install-dependencies
+
       - name: get-kata-tarball
         uses: actions/download-artifact@v3
         with:
