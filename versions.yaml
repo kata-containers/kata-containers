@@ -332,8 +332,8 @@ externals:
     # yamllint disable-line rule:line-length
     description: "Confidential Containers Shim Firmware -- DO NOT TOUCH on main -> CCv0 merges"
     url: "https://github.com/confidential-containers/td-shim"
-    version: "35c8ec33311877f0711412fd34cee929ae57e80e"
-    toolchain: "nightly-2022-11-15"
+    version: "4da7dfcdd9faabd1bf9a7dc144c0206939b6d383"
+    toolchain: "nightly-2023-08-28"
 
   virtiofsd:
     description: "vhost-user virtio-fs device backend written in Rust"
