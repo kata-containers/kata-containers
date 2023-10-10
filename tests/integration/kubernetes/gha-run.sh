@@ -10,7 +10,15 @@ set -o pipefail
 
 kubernetes_dir="$(dirname "$(readlink -f "$0")")"
 source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
+# shellcheck disable=2154
 tools_dir="${repo_root_dir}/tools"
+
+DOCKER_REGISTRY=${DOCKER_REGISTRY:-quay.io}
+DOCKER_REPO=${DOCKER_REPO:-kata-containers/kata-deploy-ci}
+DOCKER_TAG=${DOCKER_TAG:-kata-containers-latest}
+KATA_DEPLOY_WAIT_TIMEOUT=${KATA_DEPLOY_WAIT_TIMEOUT:-10m}
+KATA_HYPERVISOR=${KATA_HYPERVISOR:-qemu}
+KUBERNETES="${KUBERNETES:-}"
 
 function configure_devmapper() {
 	sudo mkdir -p /var/lib/containerd/devmapper
@@ -91,7 +99,10 @@ function deploy_kata() {
     platform="${1}"
     ensure_yq
 
-    # Emsure we're in the default namespace
+    [ "$platform" = "kcli" ] && \
+        export KUBECONFIG="$HOME/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
+
+    # Ensure we're in the default namespace
     kubectl config set-context --current --namespace=default
 
     sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
@@ -114,7 +125,7 @@ function deploy_kata() {
 
     echo "::group::Final kata-deploy.yaml that is used in the test"
     cat "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-    cat "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" | grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" || die "Failed to setup the tests image"
+    grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" || die "Failed to setup the tests image"
     echo "::endgroup::"
 
     kubectl apply -f "${tools_dir}/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
@@ -123,7 +134,7 @@ function deploy_kata() {
     else
         kubectl apply -f "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
     fi
-    kubectl -n kube-system wait --timeout=10m --for=condition=Ready -l name=kata-deploy pod
+    kubectl -n kube-system wait --timeout="${KATA_DEPLOY_WAIT_TIMEOUT}" --for=condition=Ready -l name=kata-deploy pod
 
     # This is needed as the kata-deploy pod will be set to "Ready" when it starts running,
     # which may cause issues like not having the node properly labeled or the artefacts
@@ -144,11 +155,16 @@ function deploy_kata() {
 }
 
 function run_tests() {
+    platform="${1:-}"
+
+    [ "$platform" = "kcli" ] && \
+        export KUBECONFIG="$HOME/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
+
     # Delete any spurious tests namespace that was left behind
     kubectl delete namespace kata-containers-k8s-tests &> /dev/null || true
 
     # Create a new namespace for the tests and switch to it
-    kubectl apply -f ${kubernetes_dir}/runtimeclass_workloads/tests-namespace.yaml
+    kubectl apply -f "${kubernetes_dir}/runtimeclass_workloads/tests-namespace.yaml"
     kubectl config set-context --current --namespace=kata-containers-k8s-tests
 
     pushd "${kubernetes_dir}"
@@ -161,6 +177,9 @@ function cleanup() {
     platform="${1}"
     test_type="${2:-k8s}"
     ensure_yq
+
+    [ "$platform" = "kcli" ] && \
+        export KUBECONFIG="$HOME/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
 
     echo "Gather information about the nodes and pods before cleaning up the node"
     get_nodes_and_pods_info
@@ -182,6 +201,7 @@ function cleanup() {
         cleanup_spec="-f "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml""
     fi
 
+    # shellcheck disable=2086
     kubectl delete ${deploy_spec}
     kubectl -n kube-system wait --timeout=10m --for=delete -l name=kata-deploy pod
 
@@ -196,10 +216,12 @@ function cleanup() {
 
     sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
     cat "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
-    cat "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" | grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" || die "Failed to setup the tests image"
+    grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" || die "Failed to setup the tests image"
+    # shellcheck disable=2086
     kubectl apply ${cleanup_spec}
     sleep 180s
 
+    # shellcheck disable=2086
     kubectl delete ${cleanup_spec}
     kubectl delete -f "${tools_dir}/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
 }
@@ -214,6 +236,7 @@ function main() {
         install-azure-cli) install_azure_cli ;;
         login-azure) login_azure ;;
         create-cluster) create_cluster ;;
+        create-cluster-kcli) create_cluster_kcli ;;
         configure-snapshotter) configure_snapshotter ;;
         setup-crio) setup_crio ;;
         deploy-k8s) deploy_k8s ;;
@@ -221,16 +244,20 @@ function main() {
         install-kubectl) install_kubectl ;;
         get-cluster-credentials) get_cluster_credentials ;;
         deploy-kata-aks) deploy_kata "aks" ;;
+        deploy-kata-kcli) deploy_kata "kcli" ;;
         deploy-kata-sev) deploy_kata "sev" ;;
         deploy-kata-snp) deploy_kata "snp" ;;
         deploy-kata-tdx) deploy_kata "tdx" ;;
         deploy-kata-garm) deploy_kata "garm" ;;
         run-tests) run_tests ;;
+        run-tests-kcli) run_tests "kcli" ;;
+        cleanup-kcli) cleanup "kcli" ;;
         cleanup-sev) cleanup "sev" ;;
         cleanup-snp) cleanup "snp" ;;
         cleanup-tdx) cleanup "tdx" ;;
         cleanup-garm) cleanup "garm" ;;
         delete-cluster) cleanup "aks" ;;
+        delete-cluster-kcli) delete_cluster_kcli ;;
         *) >&2 echo "Invalid argument"; exit 2 ;;
     esac
 }
