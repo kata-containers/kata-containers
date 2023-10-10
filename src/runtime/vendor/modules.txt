@@ -287,8 +287,8 @@ github.com/opencontainers/go-digest
 ## explicit
 github.com/opencontainers/image-spec/specs-go
 github.com/opencontainers/image-spec/specs-go/v1
-# github.com/opencontainers/runc v1.1.3 => github.com/opencontainers/runc v1.1.3
-## explicit; go 1.16
+# github.com/opencontainers/runc v1.1.9 => github.com/opencontainers/runc v1.1.9
+## explicit; go 1.17
 github.com/opencontainers/runc/libcontainer/cgroups
 github.com/opencontainers/runc/libcontainer/cgroups/devices
 github.com/opencontainers/runc/libcontainer/cgroups/ebpf
@@ -422,7 +422,7 @@ go.opentelemetry.io/otel/trace
 # golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4
 ## explicit; go 1.17
 golang.org/x/mod/semver
-# golang.org/x/net v0.7.0
+# golang.org/x/net v0.8.0
 ## explicit; go 1.17
 golang.org/x/net/bpf
 golang.org/x/net/context
@@ -440,14 +440,14 @@ golang.org/x/oauth2/internal
 # golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
 ## explicit
 golang.org/x/sync/errgroup
-# golang.org/x/sys v0.5.0
+# golang.org/x/sys v0.6.0
 ## explicit; go 1.17
 golang.org/x/sys/execabs
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 golang.org/x/sys/windows/registry
-# golang.org/x/text v0.7.0 => golang.org/x/text v0.7.0
+# golang.org/x/text v0.8.0 => golang.org/x/text v0.7.0
 ## explicit; go 1.17
 golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
@@ -569,7 +569,7 @@ k8s.io/cri-api/pkg/apis/runtime/v1alpha2
 ## explicit; go 1.12
 sigs.k8s.io/yaml
 # github.com/opencontainers/image-spec => github.com/opencontainers/image-spec v1.0.2
-# github.com/opencontainers/runc => github.com/opencontainers/runc v1.1.3
+# github.com/opencontainers/runc => github.com/opencontainers/runc v1.1.9
 # github.com/uber-go/atomic => go.uber.org/atomic v1.5.1
 # golang.org/x/text => golang.org/x/text v0.7.0
 # google.golang.org/genproto => google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
