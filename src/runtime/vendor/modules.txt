@@ -215,7 +215,7 @@ github.com/go-openapi/spec
 # github.com/go-openapi/strfmt v0.21.1
 ## explicit; go 1.13
 github.com/go-openapi/strfmt
-# github.com/go-openapi/swag v0.21.1
+# github.com/go-openapi/swag v0.21.1 => github.com/go-openapi/swag v0.21.1
 ## explicit; go 1.11
 github.com/go-openapi/swag
 # github.com/go-openapi/validate v0.22.0
@@ -354,7 +354,7 @@ github.com/safchain/ethtool
 ## explicit; go 1.13
 github.com/sirupsen/logrus
 github.com/sirupsen/logrus/hooks/syslog
-# github.com/stretchr/testify v1.8.0
+# github.com/stretchr/testify v1.8.0 => github.com/stretchr/testify v1.8.0
 ## explicit; go 1.13
 github.com/stretchr/testify/assert
 # github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635
@@ -568,8 +568,10 @@ k8s.io/cri-api/pkg/apis/runtime/v1alpha2
 # sigs.k8s.io/yaml v1.3.0
 ## explicit; go 1.12
 sigs.k8s.io/yaml
+# github.com/go-openapi/swag => github.com/go-openapi/swag v0.21.1
 # github.com/opencontainers/image-spec => github.com/opencontainers/image-spec v1.0.2
 # github.com/opencontainers/runc => github.com/opencontainers/runc v1.1.9
+# github.com/stretchr/testify => github.com/stretchr/testify v1.8.0
 # github.com/uber-go/atomic => go.uber.org/atomic v1.5.1
 # golang.org/x/text => golang.org/x/text v0.7.0
 # google.golang.org/genproto => google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8

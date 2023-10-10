@@ -115,8 +115,10 @@ require (
 )
 
 replace (
+	github.com/go-openapi/swag => github.com/go-openapi/swag v0.21.1
 	github.com/opencontainers/image-spec => github.com/opencontainers/image-spec v1.0.2
 	github.com/opencontainers/runc => github.com/opencontainers/runc v1.1.9
+	github.com/stretchr/testify => github.com/stretchr/testify v1.8.0
 	github.com/uber-go/atomic => go.uber.org/atomic v1.5.1
 	golang.org/x/text => golang.org/x/text v0.7.0
 	google.golang.org/genproto => google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
