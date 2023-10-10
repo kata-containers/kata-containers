@@ -10,6 +10,7 @@ metadata:
 spec:
   terminationGracePeriodSeconds: 0
   runtimeClassName: kata
+  nodeName: NODE
   volumes:
     - name: pv-storage
       persistentVolumeClaim:
