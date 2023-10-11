@@ -83,7 +83,7 @@ impl NydusRootfs {
                         cid: cid.to_string(),
                         source: extra_options.snapshot_dir.clone(),
                         target: SNAPSHOT_DIR.to_string(),
-                        readonly: true,
+                        readonly: false,
                         is_rafs: false,
                     })
                     .await
