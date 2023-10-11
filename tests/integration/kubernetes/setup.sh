@@ -7,12 +7,31 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+if [ -n "${K8S_TEST_POLICY_FILES:-}" ]; then
+    K8S_TEST_POLICY_FILES=($K8S_TEST_POLICY_FILES)
+else
+    K8S_TEST_POLICY_FILES=( \
+        "allow-all.rego" \
+        "allow-all-except-exec-process.rego" \
+    )
+fi
+
 kubernetes_dir=$(dirname "$(readlink -f "$0")")
 source "${kubernetes_dir}/../../common.bash"
 
 reset_workloads_work_dir() {
     rm -rf ${kubernetes_dir}/runtimeclass_workloads_work
     cp -R ${kubernetes_dir}/runtimeclass_workloads ${kubernetes_dir}/runtimeclass_workloads_work
+    copy_test_policy_files
+}
+
+copy_test_policy_files() {
+    local kata_opa_dir="${kubernetes_dir}/../../../src/kata-opa"
+
+    for policy_file in ${K8S_TEST_POLICY_FILES[@]}
+    do
+        cp "${kata_opa_dir}/${policy_file}" ${kubernetes_dir}/runtimeclass_workloads_work/
+    done
 }
 
 add_kernel_initrd_annotations_to_yaml() {
