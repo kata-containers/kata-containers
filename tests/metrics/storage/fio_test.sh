@@ -19,24 +19,31 @@ DOCKERFILE="${SCRIPT_PATH}/fio-dockerfile/Dockerfile"
 PAYLOAD_ARGS="${PAYLOAD_ARGS:-tail -f /dev/null}"
 TEST_NAME="fio"
 REQUIRED_CMDS=("jq" "script")
+TMP_DIR=$(mktemp --tmpdir -d fio.XXXXXXXXXX)
+results_file="${TMP_DIR}/fio_results.json"
+results_read=""
+results_write=""
 
 # Fio default number of jobs
 nj=4
 
 function release_resources() {
-	sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" ${CONTAINER_ID} sh -c "./fio_bench.sh delete-workload"
+	sudo -E "${CTR_EXE}" t exec --exec-id "$(random_name)" "${CONTAINER_ID}" sh -c "./fio_bench.sh delete-workload"
+	sudo -E "${CTR_EXE}" t kill -a -s SIGKILL "${CONTAINER_ID}"
+	sudo -E "${CTR_EXE}" c rm "${CONTAINER_ID}"
+	rm -rf "${TMP_DIR}"
 	sleep 0.5
 	clean_env_ctr
-	info "fio test end"
+	info "removing containers done"
 }
 
 trap release_resources EXIT
 
 function setup() {
 	info "setup fio test"
-	clean_env_ctr
 	check_cmds "${REQUIRED_CMDS[@]}"
 	check_ctr_images "$IMAGE" "$DOCKERFILE"
+	clean_env_ctr
 	init_env
 
 	# drop caches
@@ -108,7 +115,7 @@ function convert_results_to_json() {
 		"bw_stddev" : "${bw_stddev}",
 		"iops" : "${iops}",
 		"iops_stddev" : "${iops_stddev}",
-		"units" : "Kb"
+		"units" : "KB/s"
 		}
 	}
 EOF
@@ -117,46 +124,52 @@ EOF
 }
 
 function store_results() {
-	local data_r="${1}"
-	local data_w="${2}"
-	local title="${3}"
+	local title="${1}"
 
-	[ -z "${data_r}" ] || [ -z "${data_w}" ] || [ -z "${title}" ] && die "Missing data and/or title when trying storing results."
+	[ -z "${results_read}" ] || [ -z "${results_write}" ] || [ -z "${title}" ] && die "Missing data and/or title when trying storing results."
 
 	metrics_json_start_array
-	extract_test_params "${data_r}"
-	parse_results "${data_r}"
-	parse_results "${data_w}"
+	extract_test_params "${results_read}"
+	parse_results "${results_read}"
+	parse_results "${results_write}"
 	metrics_json_end_array "${title}"
 }
 
 function main() {
 	setup
 
-	# Collect bs=4K, num_jobs=4, io-direct, io-depth=2
+	# Collect bs=4K, num_jobs=4, io-direct, io-depth=8
 	info "Processing sequential type workload"
 	sudo -E "${CTR_EXE}" t exec --exec-id "${RANDOM}" ${CONTAINER_ID} sh -c "./fio_bench.sh run-read-4k ${nj}" >/dev/null 2>&1
-	local results_read_4K="$(script -qc "sudo -E ${CTR_EXE} t exec -t --exec-id ${RANDOM} ${CONTAINER_ID} sh -c './fio_bench.sh print-latest-results'")"
+	sudo -E ${CTR_EXE} t exec --exec-id "${RANDOM}" ${CONTAINER_ID} sh -c "./fio_bench.sh print-latest-results" >"${results_file}"
+	results_read=$(<"${results_file}")
 
 	sleep 0.5
 	sudo -E "${CTR_EXE}" t exec --exec-id "${RANDOM}" ${CONTAINER_ID} sh -c "./fio_bench.sh run-write-4k ${nj}" >/dev/null 2>&1
-	local results_write_4K="$(script -qc "sudo -E ${CTR_EXE} t exec -t --exec-id ${RANDOM} ${CONTAINER_ID} sh -c './fio_bench.sh print-latest-results'")"
+	sudo -E ${CTR_EXE} t exec --exec-id "${RANDOM}" ${CONTAINER_ID} sh -c "./fio_bench.sh print-latest-results" >"${results_file}"
+	results_write=$(<"${results_file}")
 
-	# Collect bs=64K, num_jobs=4, io-direct, io-depth=2
+	# parse results sequential
+	metrics_json_init
+	store_results "Results sequential"
+
+	# Collect bs=64K, num_jobs=4, io-direct, io-depth=8
 	info "Processing random type workload"
 	sleep 0.5
 	sudo -E "${CTR_EXE}" t exec --exec-id "${RANDOM}" ${CONTAINER_ID} sh -c "./fio_bench.sh run-randread-64k ${nj}" >/dev/null 2>&1
-	local results_rand_read_64K="$(script -qc "sudo -E ${CTR_EXE} t exec -t --exec-id ${RANDOM} ${CONTAINER_ID} sh -c './fio_bench.sh print-latest-results'")"
+	sudo -E ${CTR_EXE} t exec --exec-id "${RANDOM}" ${CONTAINER_ID} sh -c "./fio_bench.sh print-latest-results" >"${results_file}"
+	results_read=$(<"${results_file}")
 
 	sleep 0.5
 	sudo -E "${CTR_EXE}" t exec --exec-id "${RANDOM}" ${CONTAINER_ID} sh -c "./fio_bench.sh run-randwrite-64k ${nj}" >/dev/null 2>&1
-	local results_rand_write_64K="$(script -qc "sudo -E ${CTR_EXE} t exec -t --exec-id ${RANDOM} ${CONTAINER_ID} sh -c './fio_bench.sh print-latest-results'")"
+	sudo -E ${CTR_EXE} t exec --exec-id "${RANDOM}" ${CONTAINER_ID} sh -c "./fio_bench.sh print-latest-results" >"${results_file}"
+	results_write=$(<"${results_file}")
 
-	# parse results
-	metrics_json_init
-	store_results "${results_read_4K}" "${results_write_4K}" "Results sequential"
-	store_results "${results_rand_read_64K}" "${results_rand_write_64K}" "Results random"
+	# parse results random
+	store_results "Results random"
 	metrics_json_save
 }
 
 main "$@"
+info "fio test end"
+

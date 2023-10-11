@@ -71,7 +71,7 @@ function launch_workload() {
 	local test_name="${io_type}_${block_size}_nj-${num_jobs}_${rate_process}_iodepth-${iodepth}_io-direct-${disable_buffered}"
 
 	setup_workload
-	rm -f "${summary_file_local}" > /dev/null 2>&1
+	rm -f "${summary_file_local}" >/dev/null 2>&1
         fio \
 	--name="${test_name}" \
 	--output-format="json" \
@@ -88,12 +88,12 @@ function launch_workload() {
 	--iodepth="${iodepth}" \
 	--gtod_reduce="1" \
 	--randrepeat="1" \
-	| tee -a ${summary_file_local} > /dev/null 2>&1
+	--output "${summary_file_local}" >/dev/null 2>&1
 }
 
 function print_latest_results() {
 	[ ! -f "${summary_file_local}" ] && echo "Error: no results to display; you must run a test before requesting results display" && exit 1
-	echo "$(cat ${summary_file_local})"
+	cat "${summary_file_local}"
 }
 
 function delete_workload() {

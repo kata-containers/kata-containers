@@ -99,6 +99,58 @@ minpercent = 20.0
 maxpercent = 20.0
 
 [[metric]]
+name = "fio"
+type = "json"
+description = "measure sequential read throughput using fio"
+# Min and Max values to set a 'range' that
+# the median of the CSV Results data must fall
+# within (inclusive)
+checkvar = "[.\"fio\".\"Results sequential\"] | .[] | .[] | .read.bw | select( . != null )"
+checktype = "mean"
+midval = 312776
+minpercent = 20.0
+maxpercent = 20.0
+
+[[metric]]
+name = "fio"
+type = "json"
+description = "measure sequential write throughput using fio"
+# Min and Max values to set a 'range' that
+# the median of the CSV Results data must fall
+# within (inclusive)
+checkvar = "[.\"fio\".\"Results sequential\"] | .[] | .[] | .write.bw | select( . != null )"
+checktype = "mean"
+midval = 307948
+minpercent = 20.0
+maxpercent = 20.0
+
+[[metric]]
+name = "fio"
+type = "json"
+description = "measure random read throughput using fio"
+# Min and Max values to set a 'range' that
+# the median of the CSV Results data must fall
+# within (inclusive)
+checkvar = "[.\"fio\".\"Results random\"] | .[] | .[] | .randread.bw | select( . != null )"
+checktype = "mean"
+midval = 1351339
+minpercent = 20.0
+maxpercent = 20.0
+
+[[metric]]
+name = "fio"
+type = "json"
+description = "measure random write throughput using fio"
+# Min and Max values to set a 'range' that
+# the median of the CSV Results data must fall
+# within (inclusive)
+checkvar = "[.\"fio\".\"Results random\"] | .[] | .[] | .randwrite.bw | select( . != null )"
+checktype = "mean"
+midval = 1440540.7
+minpercent = 20.0
+maxpercent = 20.0
+
+[[metric]]
 name = "latency"
 type = "json"
 description = "measure container latency"
