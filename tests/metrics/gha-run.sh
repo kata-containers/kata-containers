@@ -84,9 +84,9 @@ function run_test_tensorflow() {
 }
 
 function run_test_fio() {
-	info "Skipping FIO test temporarily using ${KATA_HYPERVISOR} hypervisor"
+	info "Running FIO test using ${KATA_HYPERVISOR} hypervisor"
 
-	# bash tests/metrics/storage/fio-k8s/fio-test-ci.sh
+	bash tests/metrics/storage/fio_test.sh
 }
 
 function run_test_iperf() {
