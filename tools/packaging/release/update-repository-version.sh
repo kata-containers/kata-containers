@@ -295,7 +295,6 @@ EOF
 
 repos=(
 	"kata-containers"
-	"tests"
 )
 
 main(){
