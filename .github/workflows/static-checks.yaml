@@ -12,74 +12,183 @@ concurrency:
 
 name: Static checks
 jobs:
-  static-checks:
+  check-kernel-config-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Ensure the kernel config version has been updated
+        run: |
+          kernel_dir="tools/packaging/kernel/"
+          kernel_version_file="${kernel_dir}kata_config_version"
+          modified_files=$(git diff --name-only origin/$GITHUB_BASE_REF..HEAD)
+          if git diff --name-only origin/$GITHUB_BASE_REF..HEAD "${kernel_dir}" | grep "${kernel_dir}"; then
+            echo "Kernel directory has changed, checking if $kernel_version_file has been updated"
+            if echo "$modified_files" | grep -v "README.md" | grep "${kernel_dir}" >>"/dev/null"; then
+              echo "$modified_files" | grep "$kernel_version_file" >>/dev/null || ( echo "Please bump version in $kernel_version_file" && exit 1)
+            else
+              echo "Readme file changed, no need for kernel config version update."
+            fi
+            echo "Check passed"
+          fi
+
+  build-checks:
     runs-on: ubuntu-20.04
     strategy:
+      fail-fast: false
       matrix:
-        cmd:
+        component:
+          - agent
+          - dragonball
+          - runtime
+          - runtime-rs
+          - agent-ctl
+          - kata-ctl
+          - log-parser-rs
+          - runk
+          - trace-forwarder
+        command:
           - "make vendor"
-          - "make static-checks"
           - "make check"
           - "make test"
           - "sudo -E PATH=\"$PATH\" make test"
+        include:
+          - component: agent
+            component-path: src/agent
+          - component: dragonball
+            component-path: src/dragonball
+          - component: runtime
+            component-path: src/runtime
+          - component: runtime-rs
+            component-path: src/runtime-rs
+          - component: agent-ctl
+            component-path: src/tools/agent-ctl
+          - component: kata-ctl
+            component-path: src/tools/kata-ctl
+          - component: log-parser-rs
+            component-path: src/tools/log-parser-rs
+          - component: runk
+            component-path: src/tools/runk
+          - component: trace-forwarder
+            component-path: src/tools/trace-forwarder
+          - install-libseccomp: no
+          - component: agent
+            install-libseccomp: yes
+          - component: runk
+            install-libseccomp: yes
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install yq
+        run: |
+          ./ci/install_yq.sh
+        env:
+          INSTALL_IN_GOPATH: false
+      - name: Install golang
+        if: ${{ matrix.component == 'runtime' }}
+        run: |
+          ./tests/install_go.sh -f -p
+          echo "/usr/local/go/bin" >> $GITHUB_PATH
+      - name: Install rust
+        if: ${{ matrix.component != 'runtime' }}
+        run: |
+          ./tests/install_rust.sh
+          echo "${HOME}/.cargo/bin" >> $GITHUB_PATH
+      - name: Install musl-tools
+        if: ${{ matrix.component != 'runtime' }}
+        run: sudo apt-get -y install musl-tools
+      - name: Install libseccomp
+        if: ${{ matrix.command != 'make vendor'  &&  matrix.command != 'make check' &&  matrix.install-libseccomp == 'yes' }}
+        run: |
+          libseccomp_install_dir=$(mktemp -d -t libseccomp.XXXXXXXXXX)
+          gperf_install_dir=$(mktemp -d -t gperf.XXXXXXXXXX)
+          ./ci/install_libseccomp.sh "${libseccomp_install_dir}" "${gperf_install_dir}"
+          echo "Set environment variables for the libseccomp crate to link the libseccomp library statically"
+          echo "LIBSECCOMP_LINK_TYPE=static" >> $GITHUB_ENV
+          echo "LIBSECCOMP_LIB_PATH=${libseccomp_install_dir}/lib" >> $GITHUB_ENV
+      - name: Setup XDG_RUNTIME_DIR for the `runtime` tests
+        if: ${{ matrix.command != 'make vendor' && matrix.command != 'make check' && matrix.component == 'runtime' }}
+        run: |
+          XDG_RUNTIME_DIR=$(mktemp -d /tmp/kata-tests-$USER.XXX | tee >(xargs chmod 0700))
+          echo "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}" >> $GITHUB_ENV
+      - name: Running `${{ matrix.command }}` for ${{ matrix.component }}
+        run: |
+          cd ${{ matrix.component-path }}
+          ${{ matrix.command }}
+        env:
+          RUST_BACKTRACE: "1"
+
+  build-checks-depending-on-kvm:
+    runs-on: garm-ubuntu-2004-smaller
+    strategy:
+      fail-fast: false
+      matrix:
+        component:
+          - runtime-rs
+        include:
+          - component: runtime-rs
+            command: "sudo -E env PATH=$PATH LIBC=gnu SUPPORT_VIRTUALIZATION=true make test"
+          - component: runtime-rs
+            component-path: src/dragonball
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install system deps
+        run: |
+          sudo apt-get install -y build-essential musl-tools
+      - name: Install yq
+        run: |
+          sudo -E ./ci/install_yq.sh
+        env:
+          INSTALL_IN_GOPATH: false
+      - name: Install rust
+        run: |
+          export PATH="$PATH:/usr/local/bin"
+          ./tests/install_rust.sh
+      - name: Running `${{ matrix.command }}` for ${{ matrix.component }}
+        run: |
+          export PATH="$PATH:${HOME}/.cargo/bin"
+          cd ${{ matrix.component-path }}
+          ${{ matrix.command }}
+        env:
+          RUST_BACKTRACE: "1"
+
+  static-checks:
+    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+      matrix:
+        cmd:
+          - "make static-checks"
     env:
-      RUST_BACKTRACE: "1"
-      target_branch: ${{ github.base_ref }}
       GOPATH: ${{ github.workspace }}
     steps:
-    - name: Free disk space
-      run: |
-        sudo rm -rf /usr/share/dotnet
-        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-    - name: Checkout code
-      uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-        path: ./src/github.com/${{ github.repository }}
-    - name: Install Go
-      uses: actions/setup-go@v3
-      with:
-        go-version: 1.19.3
-    - name: Check kernel config version
-      run: |
-        cd "${{ github.workspace }}/src/github.com/${{ github.repository }}"
-        kernel_dir="tools/packaging/kernel/"
-        kernel_version_file="${kernel_dir}kata_config_version"
-        modified_files=$(git diff --name-only origin/main..HEAD)
-        if git diff --name-only origin/main..HEAD "${kernel_dir}" | grep "${kernel_dir}"; then
-          echo "Kernel directory has changed, checking if $kernel_version_file has been updated"
-          if echo "$modified_files" | grep -v "README.md" | grep "${kernel_dir}" >>"/dev/null"; then
-            echo "$modified_files" | grep "$kernel_version_file" >>/dev/null || ( echo "Please bump version in $kernel_version_file" && exit 1)
-          else
-            echo "Readme file changed, no need for kernel config version update."
-          fi
-          echo "Check passed"
-        fi
-    - name: Set PATH
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
-      run: |
-        echo "${{ github.workspace }}/bin" >> $GITHUB_PATH
-    - name: Setup
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
-      run: |
-        cd ${GOPATH}/src/github.com/${{ github.repository }} && ./ci/setup.sh
-    - name: Installing rust
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
-      run: |
-        cd ${GOPATH}/src/github.com/${{ github.repository }} && ./ci/install_rust.sh
-        PATH=$PATH:"$HOME/.cargo/bin"
-        rustup target add x86_64-unknown-linux-musl
-        rustup component add rustfmt clippy
-    - name: Setup seccomp
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
-      run: |
-        libseccomp_install_dir=$(mktemp -d -t libseccomp.XXXXXXXXXX)
-        gperf_install_dir=$(mktemp -d -t gperf.XXXXXXXXXX)
-        cd ${GOPATH}/src/github.com/${{ github.repository }} && ./ci/install_libseccomp.sh "${libseccomp_install_dir}" "${gperf_install_dir}"
-        echo "Set environment variables for the libseccomp crate to link the libseccomp library statically"
-        echo "LIBSECCOMP_LINK_TYPE=static" >> $GITHUB_ENV
-        echo "LIBSECCOMP_LIB_PATH=${libseccomp_install_dir}/lib" >> $GITHUB_ENV
-    - name: Run check
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
-      run: |
-        cd ${GOPATH}/src/github.com/${{ github.repository }} && ${{ matrix.cmd }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: ./src/github.com/${{ github.repository }}
+      - name: Install yq
+        run: |
+          cd ${GOPATH}/src/github.com/${{ github.repository }}
+          ./ci/install_yq.sh
+        env:
+          INSTALL_IN_GOPATH: false
+      - name: Install golang
+        run: |
+          cd ${GOPATH}/src/github.com/${{ github.repository }}
+          ./tests/install_go.sh -f -p
+          echo "/usr/local/go/bin" >> $GITHUB_PATH
+      - name: Install system dependencies
+        run: |
+          sudo apt-get -y install moreutils hunspell pandoc
+      - name: Run check
+        run: |
+          export PATH=${PATH}:${GOPATH}/bin
+          cd ${GOPATH}/src/github.com/${{ github.repository }} && ${{ matrix.cmd }}

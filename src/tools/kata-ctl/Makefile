@@ -52,13 +52,13 @@ clean:
 vendor:
 	cargo vendor
 
-test:
+test: $(GENERATED_CODE)
 	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo test --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES) -- --nocapture
 
 install:
 	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo install --locked --target $(TRIPLE) --path . --root $(INSTALL_PATH)
 
-check: standard_rust_check
+check: $(GENERATED_CODE) standard_rust_check
 
 .PHONY: \
 	build \

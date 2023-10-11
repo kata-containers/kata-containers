@@ -2,30 +2,25 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-# Specify alternative base image, e.g. clefos for s390x
-ARG BASE_IMAGE_NAME=ubuntu
-ARG BASE_IMAGE_TAG=20.04
+ARG BASE_IMAGE_NAME=alpine
+ARG BASE_IMAGE_TAG=3.18
 FROM $BASE_IMAGE_NAME:$BASE_IMAGE_TAG
-ENV DEBIAN_FRONTEND=noninteractive
 ARG KATA_ARTIFACTS=./kata-static.tar.xz
 ARG DESTINATION=/opt/kata-artifacts
 
 COPY ${KATA_ARTIFACTS} ${WORKDIR}
 
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-
 RUN \
-apt-get update && \
-apt-get install -y --no-install-recommends apt-transport-https ca-certificates curl gpg xz-utils systemd && \
-mkdir -p /etc/apt/keyrings/ && \
-curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /etc/apt/keyrings/kubernetes-archive-keyring.gpg && \
-echo "deb [signed-by=/etc/apt/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | tee /etc/apt/sources.list.d/kubernetes.list && \
-apt-get update && \
-apt-get install -y --no-install-recommends kubectl && \
-apt-get clean && rm -rf /var/lib/apt/lists/ && \
-mkdir -p ${DESTINATION} && \
-tar xvf ${WORKDIR}/${KATA_ARTIFACTS} -C ${DESTINATION} && \
-rm -f ${WORKDIR}/${KATA_ARTIFACTS}
+	apk --no-cache add bash curl && \
+	ARCH=$(uname -m) && \
+	if [ "${ARCH}" = "x86_64" ]; then ARCH=amd64; fi && \
+	if [ "${ARCH}" = "aarch64" ]; then ARCH=arm64; fi && \
+	curl -fL --progress-bar -o /usr/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/${ARCH}/kubectl && \
+	chmod +x /usr/bin/kubectl && \
+	mkdir -p ${DESTINATION} && \
+	tar xvf ${WORKDIR}/${KATA_ARTIFACTS} -C ${DESTINATION} && \
+	rm -f ${WORKDIR}/${KATA_ARTIFACTS} && \
+	apk del curl
 
 COPY scripts ${DESTINATION}/scripts
 COPY runtimeclasses ${DESTINATION}/runtimeclasses

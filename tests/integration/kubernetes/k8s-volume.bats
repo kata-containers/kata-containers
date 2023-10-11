@@ -11,16 +11,21 @@ TEST_INITRD="${TEST_INITRD:-no}"
 
 setup() {
 	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
+	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 
 	get_pod_config_dir
 
-	tmp_file=$(exec_host mktemp -d /tmp/data.XXXX)
+	node=$(get_one_kata_node)
+	tmp_file=$(exec_host "$node" mktemp -d /tmp/data.XXXX)
+	pv_yaml=$(mktemp --tmpdir pv_config.XXXXXX.yaml)
 	pod_yaml=$(mktemp --tmpdir pod_config.XXXXXX.yaml)
 	msg="Hello from Kubernetes"
-	exec_host "echo $msg > $tmp_file/index.html"
+	exec_host "$node" "echo $msg > $tmp_file/index.html"
 	pod_name="pv-pod"
 	# Define temporary file at yaml
-	sed -e "s|tmp_data|${tmp_file}|g" ${pod_config_dir}/pv-volume.yaml > "$pod_yaml"
+	sed -e "s|tmp_data|${tmp_file}|g" ${pod_config_dir}/pv-volume.yaml > "$pv_yaml"
+	sed -e "s|NODE|${node}|g" "${pod_config_dir}/pv-pod.yaml" > "$pod_yaml"
+
 }
 
 @test "Create Persistent Volume" {
@@ -30,7 +35,7 @@ setup() {
 	volume_claim="pv-claim"
 
 	# Create the persistent volume
-	kubectl create -f "$pod_yaml"
+	kubectl create -f "$pv_yaml"
 
 	# Check the persistent volume is Available
 	cmd="kubectl get pv $volume_name | grep Available"
@@ -44,7 +49,7 @@ setup() {
 	waitForProcess "$wait_time" "$sleep_time" "$cmd"
 
 	# Create pod
-	kubectl create -f "${pod_config_dir}/pv-pod.yaml"
+	kubectl create -f "$pod_yaml"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
@@ -55,13 +60,15 @@ setup() {
 
 teardown() {
 	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
+	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 
 	# Debugging information
 	kubectl describe "pod/$pod_name"
 
 	kubectl delete pod "$pod_name"
+	rm -f "$pod_yaml"
 	kubectl delete pvc "$volume_claim"
 	kubectl delete pv "$volume_name"
-	rm -f "$pod_yaml"
-	exec_host rm -rf "$tmp_file"
+	rm -f "$pv_yaml"
+	exec_host "$node" rm -rf "$tmp_file"
 }

@@ -43,7 +43,7 @@ and perform DMA transactions _anywhere_.
 
 The second feature is ACS (Access Control Services), which controls which
 devices are allowed to communicate with one another and thus avoids improper
-routing of packets irrespectively of whether IOMMU is enabled or not.
+routing of packets `irrespectively` of whether IOMMU is enabled or not.
 
 When IOMMU is enabled, ACS is normally configured to force all PCI Express DMA
 to go through the root complex so IOMMU can translate it, impacting performance
@@ -126,7 +126,7 @@ efficient P2P communication.
 ## PCI Express Virtual P2P Approval Capability
 
 Most of the time, the PCI Express topology is flattened and obfuscated to ensure
-easy migration of the VM image between different physical hardware topologies.
+easy migration of the VM image between different physical hardware `topologies`.
 In Kata, we can configure the hypervisor to use PCI Express root ports to
 hotplug the VFIO  devices one is passing through. A user can select how many PCI
 Express root ports to allocate depending on how many devices are passed through.
@@ -220,7 +220,7 @@ containers that he wants to run with Kata. The goal is to make such things as
 transparent as possible, so we also introduced
 [CDI](https://github.com/container-orchestrated-devices/container-device-interface)
 (Container Device Interface) to Kata. CDI is a[
-specification](https://github.com/container-orchestrated-devices/container-device-interface/blob/master/SPEC.md)
+specification](https://github.com/container-orchestrated-devices/container-device-interface/blob/main/SPEC.md)
 for container runtimes to support third-party devices.
 
 As written before, we can provide a clique ID for the devices that belong
@@ -300,7 +300,7 @@ pcie_switch_port = 8
 ```
 
 Each device that is passed through is attached to a PCI Express downstream port
-as illustrated below. We can even replicate the host’s two DPUs topologies with
+as illustrated below. We can even replicate the host’s two DPUs `topologies` with
 added metadata through the CDI. Most of the time, a container only needs one
 pair of GPU and NIC for GPUDirect RDMA. This is more of a showcase of what we
 can do with the power of Kata and CDI. One could even think of adding groups of
@@ -328,7 +328,7 @@ $ lspci -tv
 ```
 
 The configuration of using either the root port or switch port can be applied on
-a per Container or Pod basis, meaning we can switch PCI Express topologies on
+a per Container or Pod basis, meaning we can switch PCI Express `topologies` on
 each run of an application.
 
 ## Hypervisor Resource Limits

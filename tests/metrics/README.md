@@ -1,7 +1,5 @@
 # Kata Containers metrics
 
-> **_Warning:_** Migration of metrics tests is WIP and you may not find all tests available here, but you can take a look at the [tests repo](https://github.com/kata-containers/tests/tree/main/metrics).
-
 This directory contains the metrics tests for Kata Containers.
 
 The tests within this directory have a number of potential use cases:
@@ -35,7 +33,7 @@ regression checking, we try to define and stick to some "quality measures" for o
 
 ## Categories
 
-Kata Container metrics tend to fall into a set of categories, and we organise the tests
+Kata Container metrics tend to fall into a set of categories, and we organize the tests
 within this folder as such.
 
 Each sub-folder contains its own `README` detailing its own tests.
@@ -62,9 +60,8 @@ For further details see the [density tests documentation](density).
 Tests relating to networking. General items could include:
 - bandwidth
 - latency
-- jitter
+- `jitter`
 - parallel bandwidth
-- write and read percentiles 
 
 For further details see the [network tests documentation](network).
 
@@ -78,10 +75,12 @@ For further details see the [storage tests documentation](storage).
 
 Test relating to measure reading and writing against clusters.
 
+For further details see the [disk tests documentation](disk).
+
 ### Machine Learning
 
 Tests relating with TensorFlow and Pytorch implementations of several popular
-convolutional models.
+`convolutional` models.
 
 For further details see the [machine learning tests documentation](machine_learning).
 
@@ -114,7 +113,7 @@ to do some JSON handling themselves before injecting their JSON into the API.
 
 #### `metrics_json_init()`
 
-Initialise the API. Must be called before all other JSON API calls.
+Initialize the API. Must be called before all other JSON API calls.
 Should be matched by a final call to `metrics_json_save`.
 
 Relies upon the `TEST_NAME` variable to derive the file name the final JSON
@@ -148,7 +147,7 @@ Add a JSON formatted fragment at the top level.
 
 #### `metrics_json_start_array()`
 
-Initialise the JSON array API subsystem, ready to accept JSON fragments via
+Initialize the JSON array API subsystem, ready to accept JSON fragments via
 `metrics_json_add_array_element`.
 
 This JSON array API subset allows accumulation of multiple entries into a
@@ -210,3 +209,7 @@ set if necessary.
 ## `checkmetrics`
 
 `checkmetrics` is a CLI tool to check a metrics CI results file. For further reference see the [`checkmetrics`](cmd/checkmetrics).
+
+## Report generator
+
+See the [report generator](report) documentation.

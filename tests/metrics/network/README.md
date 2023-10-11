@@ -10,6 +10,8 @@ bandwidth, jitter, latency and parallel bandwidth.
 ## Networking tests
 
 - `k8s-network-metrics-iperf3.sh` measures bandwidth which is the speed of the data transfer.
+- `latency-network.sh` measures network latency.
+- `nginx-network.sh` is a benchmark of the lightweight Nginx HTTPS web-server and measures the HTTP requests over a fixed period of time with a configurable number of concurrent clients/connections.
 
 ## Running the tests
 

@@ -140,18 +140,22 @@ The majority of the components of the project were built using containers.  In o
 build reproducibility we publish those container images, and when those are used combined with the version
 of the projects listed as part of the "versions.yaml" file, users can get as close to the environment we
 used to build the release artefacts.
+* agent (on all its different flavours): $(get_agent_image_name)
 * Kernel (on all its different flavours): $(get_kernel_image_name)
 * OVMF (on all its different flavours): $(get_ovmf_image_name)
 * QEMU (on all its different flavurs): $(get_qemu_image_name)
 * shim-v2: $(get_shim_v2_image_name)
+* tools: $(get_tools_image_name)
 * virtiofsd: $(get_virtiofsd_image_name)
 
 The users who want to rebuild the tarballs using exactly the same images can simply use the following environment
 variables:
+* \`AGENT_CONTAINER_BUILDER\`
 * \`KERNEL_CONTAINER_BUILDER\`
 * \`OVMF_CONTAINER_BUILDER\`
 * \`QEMU_CONTAINER_BUILDER\`
 * \`SHIM_V2_CONTAINER_BUILDER\`
+* \`TOOLS_CONTAINER_BUILDER\`
 * \`VIRTIOFSD_CONTAINER_BUILDER\`
 
 ## Kata Linux Containers Kernel

@@ -43,6 +43,36 @@ $ kubectl apply -f kata-rbac/base/kata-rbac.yaml
 $ kubectl apply -k kata-deploy/overlays/rke2
 ```
 
+#### [k0s] cluster
+
+For your [k0s](https://k0sproject.io/) cluster, run:
+
+```sh
+$ git clone https://github.com/kata-containers/kata-containers.git
+```
+
+Check and switch to "main", and then run:
+
+```bash
+$ cd kata-containers/tools/packaging/kata-deploy
+$ kubectl apply -f kata-rbac/base/kata-rbac.yaml
+$ kubectl apply -k kata-deploy/overlays/k0s
+```
+
+##### Note
+
+The supported version of k0s is **v1.27.1+k0s** and above, since the k0s support leverages a special dynamic containerd configuration mode:
+
+> From 1.27.1 onwards k0s enables dynamic configuration on containerd CRI runtimes. This works by k0s creating a special directory in /etc/k0s/containerd.d/ where user can drop-in partial containerd configuration snippets.
+> 
+> k0s will automatically pick up these files and adds these in containerd configuration imports list. If k0s sees the configuration drop-ins are CRI related configurations k0s will automatically collect all these into a single file and adds that as a single import file. This is to overcome some hard limitation on containerd 1.X versions. Read more at containerd#8056
+
+However, this would also require a magic string set in the beginning of the line for `/etc/k0s/containerd.toml`:
+
+```
+# k0s_managed=true
+```
+
 #### Vanilla Kubernetes cluster
 
 ##### Installing the latest image

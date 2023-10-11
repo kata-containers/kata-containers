@@ -29,7 +29,7 @@ description = "measure memory usage"
 # within (inclusive)
 checkvar = ".\"memory-footprint\".Results | .[] | .average.Result"
 checktype = "mean"
-midval = 2435844.00
+midval = 122832.40
 minpercent = 20.0
 maxpercent = 20.0
 
@@ -73,27 +73,92 @@ minpercent = 20.0
 maxpercent = 20.0
 
 [[metric]]
-name = "tensorflow"
+name = "tensorflow_nhwc"
 type = "json"
 description = "tensorflow resnet model"
 # Min and Max values to set a 'range' that
 # the median of the CSV Results data must fall
 # within (inclusive)
-checkvar = ".\"tensorflow\".Results | .[] | .resnet.Result"
+checkvar = ".\"tensorflow_nhwc\".Results | .[] | .resnet.Result"
 checktype = "mean"
 midval = 3546.0
 minpercent = 20.0
 maxpercent = 20.0
 
 [[metric]]
-name = "tensorflow"
+name = "tensorflow_nhwc"
 type = "json"
 description = "tensorflow alexnet model"
 # Min and Max values to set a 'range' that
 # the median of the CSV Results data must fall
 # within (inclusive)
-checkvar = ".\"tensorflow\".Results | .[] | .alexnet.Result"
+checkvar = ".\"tensorflow_nhwc\".Results | .[] | .alexnet.Result"
 checktype = "mean"
 midval = 98.0
 minpercent = 20.0
 maxpercent = 20.0
+
+[[metric]]
+name = "latency"
+type = "json"
+description = "measure container latency"
+# Min and Max values to set a 'range' that
+# the median of the CSV Results data must fall
+# within (inclusive)
+checkvar = ".\"latency\".Results | .[] | .latency.Result"
+checktype = "mean"
+midval = 0.70
+minpercent = 20.0
+maxpercent = 20.0
+
+[[metric]]
+name = "network-iperf3"
+type = "json"
+description = "measure container cpu utilization using iperf3"
+# Min and Max values to set a 'range' that
+# the median of the CSV Results data must fall
+# within (inclusive)
+checkvar = ".\"network-iperf3\".Results | .[] | .cpu.Result"
+checktype = "mean"
+midval = 99.86
+minpercent = 20.0
+maxpercent = 20.0
+
+[[metric]]
+name = "network-iperf3"
+type = "json"
+description = "measure container bandwidth using iperf3"
+# Min and Max values to set a 'range' that
+# the median of the CSV Results data must fall
+# within (inclusive)
+checkvar = ".\"network-iperf3\".Results | .[] | .bandwidth.Result"
+checktype = "mean"
+midval = 55344417086.81
+minpercent = 20.0
+maxpercent = 20.0
+
+[[metric]]
+name = "network-iperf3"
+type = "json"
+description = "measure container parallel bandwidth using iperf3"
+# Min and Max values to set a 'range' that
+# the median of the CSV Results data must fall
+# within (inclusive)
+checkvar = ".\"network-iperf3\".Results | .[] | .parallel.Result"
+checktype = "mean"
+midval = 52644229340.0
+minpercent = 20.0
+maxpercent = 20.0
+
+[[metric]]
+name = "network-iperf3"
+type = "json"
+description = "iperf"
+# Min and Max values to set a 'range' that
+# the median of the CSV Results data must fall
+# within (inclusive)
+checkvar = ".\"network-iperf3\".Results | .[] | .jitter.Result"
+checktype = "mean"
+midval = 0.041
+minpercent = 50.0
+maxpercent = 50.0

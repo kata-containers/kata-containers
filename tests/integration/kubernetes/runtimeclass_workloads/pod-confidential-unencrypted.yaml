@@ -1,0 +1,33 @@
+# Copyright (c) 2023 Advanced Micro Devices, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+kind: Service
+apiVersion: v1
+metadata:
+  name: "confidential-unencrypted"
+spec:
+  selector:
+    app: "confidential-unencrypted"
+  ports:
+  - port: 22
+---
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: "confidential-unencrypted"
+spec:
+  selector:
+    matchLabels:
+      app: "confidential-unencrypted"
+  template:
+    metadata:
+      labels:
+        app: "confidential-unencrypted"
+    spec:
+      runtimeClassName: kata
+      containers:
+      - name: "confidential-unencrypted"
+        image: ghcr.io/kata-containers/test-images:unencrypted-nightly
+        imagePullPolicy: Always
+

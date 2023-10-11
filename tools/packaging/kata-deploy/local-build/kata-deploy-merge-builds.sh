@@ -37,5 +37,5 @@ pushd ${tarball_content_dir}
 popd
 
 echo "create ${tar_path}"
-(cd "${tarball_content_dir}"; tar cvfJ "${tar_path}" .)
+(cd "${tarball_content_dir}"; tar cvfJ "${tar_path}" --owner=0 --group=0 .)
 popd

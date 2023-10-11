@@ -277,12 +277,12 @@ externals:
   nydus:
     description: "Nydus image acceleration service"
     url: "https://github.com/dragonflyoss/image-service"
-    version: "v2.2.1"
+    version: "v2.2.3"
 
   nydus-snapshotter:
     description: "Snapshotter for Nydus image acceleration service"
     url: "https://github.com/containerd/nydus-snapshotter"
-    version: "v0.3.3"
+    version: "v0.12.0"
 
   ovmf:
     description: "Firmware, implementation of UEFI for virtual machines."
@@ -379,3 +379,11 @@ plugins:
       available on a Kubernetes host.
     url: "https://github.com/k8snetworkplumbingwg/sriov-network-device-plugin"
     version: "b7f6d3e0679796e907ecca88cfab0e32e326850d"
+
+docker_images:
+  description: "Docker hub images used for testing"
+
+  nginx:
+    description: "Proxy server for HTTP, HTTPS, SMTP, POP3 and IMAP protocols"
+    url: "https://hub.docker.com/_/nginx/"
+    version: "1.15-alpine"

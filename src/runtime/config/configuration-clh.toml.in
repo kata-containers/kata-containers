@@ -188,11 +188,21 @@ block_device_driver = "virtio-blk"
 # Disable the 'seccomp' feature from Cloud Hypervisor, default false
 # disable_seccomp = true
 
+# Enable vIOMMU, default false
+# Enabling this will result in the VM having a vIOMMU device
+# This will also add the following options to the kernel's
+# command line: iommu=pt
+#enable_iommu = true
+
 # This option changes the default hypervisor and kernel parameters
 # to enable debug output where available.
 #
 # Default false
 #enable_debug = true
+
+# Enable hot-plugging of VFIO devices to a root-port.
+# The default setting is  "no-port"
+#hot_plug_vfio = "root-port"
 
 # Path to OCI hook binaries in the *guest rootfs*.
 # This does not affect host-side hooks which must instead be added to

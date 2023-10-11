@@ -17,6 +17,10 @@ on:
       commit-hash:
         required: false
         type: string
+      target-branch:
+        required: false
+        type: string
+        default: ""
 
 jobs:
   run-k8s-tests:
@@ -29,6 +33,9 @@ jobs:
           - clh
           - dragonball
           - qemu
+        instance-type:
+          - small
+          - normal
         include:
           - host_os: cbl-mariner
             vmm: clh
@@ -40,11 +47,20 @@ jobs:
       GH_PR_NUMBER: ${{ inputs.pr-number }}
       KATA_HOST_OS: ${{ matrix.host_os }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
+      KUBERNETES: "vanilla"
       USING_NFD: "false"
+      K8S_TEST_HOST_TYPE: ${{ matrix.instance-type }}
     steps:
       - uses: actions/checkout@v3
         with:
           ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Download Azure CLI
         run: bash tests/integration/kubernetes/gha-run.sh install-azure-cli

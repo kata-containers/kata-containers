@@ -80,23 +80,34 @@ function run_test_blogbench() {
 function run_test_tensorflow() {
 	info "Running TensorFlow test using ${KATA_HYPERVISOR} hypervisor"
 
-	bash tests/metrics/machine_learning/tensorflow.sh 1 20
-
-	check_metrics
+	bash tests/metrics/machine_learning/tensorflow_nhwc.sh 1 20
 }
 
 function run_test_fio() {
-	info "Running FIO test using ${KATA_HYPERVISOR} hypervisor"
-        # ToDo: remove the exit once the metrics workflow is stable
-        exit 0
+	info "Skipping FIO test temporarily using ${KATA_HYPERVISOR} hypervisor"
 
-	bash storage/fio-k8s/fio-test-ci.sh
+	# bash tests/metrics/storage/fio-k8s/fio-test-ci.sh
+}
+
+function run_test_iperf() {
+	info "Running Iperf test using ${KATA_HYPERVISOR} hypervisor"
+
+	bash tests/metrics/network/iperf3_kubernetes/k8s-network-metrics-iperf3.sh -a
+}
+
+function run_test_latency() {
+	info "Running Latency test using ${KATA_HYPERVISOR} hypervisor"
+
+	bash tests/metrics/network/latency_kubernetes/latency-network.sh
+
+	check_metrics
 }
 
 function main() {
 	action="${1:-}"
 	case "${action}" in
 		install-kata) install_kata && install_checkmetrics ;;
+		enabling-hypervisor) enabling_hypervisor ;;
 		make-tarball-results) make_tarball_results ;;
 		run-test-launchtimes) run_test_launchtimes ;;
 		run-test-memory-usage) run_test_memory_usage ;;
@@ -104,6 +115,8 @@ function main() {
 		run-test-blogbench) run_test_blogbench ;;
 		run-test-tensorflow) run_test_tensorflow ;;
 		run-test-fio) run_test_fio ;;
+		run-test-iperf) run_test_iperf ;;
+		run-test-latency) run_test_latency ;;
 		*) >&2 die "Invalid argument" ;;
 	esac
 }

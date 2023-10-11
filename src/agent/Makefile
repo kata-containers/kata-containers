@@ -54,7 +54,7 @@ endif
 TARGET_PATH = target/$(TRIPLE)/$(BUILD_TYPE)/$(TARGET)
 
 ##VAR DESTDIR=<path> is a directory prepended to each installed target file
-DESTDIR :=
+DESTDIR ?=
 ##VAR BINDIR=<path> is a directory for installing executable programs
 BINDIR := /usr/bin
 
@@ -140,7 +140,7 @@ vendor:
 
 
 #TARGET test: run cargo tests
-test:
+test: $(GENERATED_FILES)
 	@cargo test --all --target $(TRIPLE) $(EXTRA_RUSTFEATURES) -- --nocapture
 
 ##TARGET check: run test

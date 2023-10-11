@@ -38,13 +38,34 @@ get_pod_config_dir() {
 	info "k8s configured to use runtimeclass"
 }
 
+# Return the first worker found that is kata-runtime labeled.
+get_one_kata_node() {
+	local resource_name
+	resource_name="$(kubectl get node -l katacontainers.io/kata-runtime=true -o name | head -1)"
+	# Remove leading "/node"
+	echo "${resource_name/"node/"}"
+}
+
 # Runs a command in the host filesystem.
+#
+# Parameters:
+#	$1 - the node name
+#
 exec_host() {
-	node="$(kubectl get node -o name)"
+	node="$1"
 	# `kubectl debug` always returns 0, so we hack it to return the right exit code.
-	command="$@"
+	command="${@:2}"
 	command+='; echo -en \\n$?'
-	output="$(kubectl debug -qit "${node}" --image=alpine:latest -- chroot /host bash -c "${command}")"
+	# We're trailing the `\r` here due to: https://github.com/kata-containers/kata-containers/issues/8051
+	# tl;dr: When testing with CRI-O we're facing the foillowing error:
+	# ```
+	# (from function `exec_host' in file tests_common.sh, line 51,
+	# in test file k8s-file-volume.bats, line 25)
+	# `exec_host "echo "$file_body" > $tmp_file"' failed with status 127
+	# [bats-exec-test:38] INFO: k8s configured to use runtimeclass
+	# bash: line 1: $'\r': command not found
+	# ```
+	output="$(kubectl debug -qit "node/${node}" --image=alpine:latest -- chroot /host bash -c "${command}" | tr -d '\r')"
 	kubectl get pods -o name | grep node-debugger | xargs kubectl delete > /dev/null
 	exit_code="$(echo "${output}" | tail -1)"
 	echo "$(echo "${output}" | head -n -1)"

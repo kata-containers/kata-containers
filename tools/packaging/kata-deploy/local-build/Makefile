@@ -52,6 +52,12 @@ serial-targets:
 %-tarball-build: $(MK_DIR)/dockerbuild/install_yq.sh
 	$(call BUILD,$*)
 
+agent-tarball:
+	${MAKE} $@-build
+
+agent-ctl-tarball:
+	${MAKE} $@-build
+
 cloud-hypervisor-tarball:
 	${MAKE} $@-build
 
@@ -59,6 +65,9 @@ cloud-hypervisor-glibc-tarball:
 	${MAKE} $@-build
 
 firecracker-tarball:
+	${MAKE} $@-build
+
+kata-ctl-tarball:
 	${MAKE} $@-build
 
 kernel-dragonball-experimental-tarball:
@@ -80,6 +89,9 @@ kernel-tdx-experimental-tarball:
 	${MAKE} $@-build
 
 kernel-sev-tarball:
+	${MAKE} $@-build
+
+log-parser-rs-tarball:
 	${MAKE} $@-build
 
 nydus-tarball:
@@ -115,10 +127,16 @@ rootfs-initrd-sev-tarball: kernel-sev-tarball
 rootfs-initrd-tarball:
 	${MAKE} $@-build
 
+runk-tarball:
+	${MAKE} $@-build
+
 shim-v2-tarball:
 	${MAKE} $@-build
 
 tdvf-tarball:
+	${MAKE} $@-build
+
+trace-forwarder-tarball:
 	${MAKE} $@-build
 
 virtiofsd-tarball:

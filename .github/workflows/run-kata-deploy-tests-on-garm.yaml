@@ -1,0 +1,65 @@
+name: CI | Run kata-deploy tests on GARM
+on:
+  workflow_call:
+    inputs:
+      registry:
+        required: true
+        type: string
+      repo:
+        required: true
+        type: string
+      tag:
+        required: true
+        type: string
+      pr-number:
+        required: true
+        type: string
+      commit-hash:
+        required: false
+        type: string
+      target-branch:
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  run-kata-deploy-tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        vmm:
+          - clh
+          - qemu
+        k8s:
+          - k0s
+          - k3s
+          - rke2
+    runs-on: garm-ubuntu-2004-smaller
+    env:
+      DOCKER_REGISTRY: ${{ inputs.registry }}
+      DOCKER_REPO: ${{ inputs.repo }}
+      DOCKER_TAG: ${{ inputs.tag }}
+      PR_NUMBER: ${{ inputs.pr-number }}
+      KATA_HYPERVISOR: ${{ matrix.vmm }}
+      KUBERNETES: ${{ matrix.k8s }}
+      USING_NFD: "false"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: Deploy ${{ matrix.k8s }}
+        run:  bash tests/functional/kata-deploy/gha-run.sh deploy-k8s
+
+      - name: Install `bats`
+        run: bash tests/functional/kata-deploy/gha-run.sh install-bats
+
+      - name: Run tests
+        run: bash tests/functional/kata-deploy/gha-run.sh run-tests

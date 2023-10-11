@@ -22,6 +22,7 @@ readonly static_build_dir="${repo_root_dir}/tools/packaging/static-build"
 readonly version_file="${repo_root_dir}/VERSION"
 readonly versions_yaml="${repo_root_dir}/versions.yaml"
 
+readonly agent_builder="${static_build_dir}/agent/build.sh"
 readonly clh_builder="${static_build_dir}/cloud-hypervisor/build-static-clh.sh"
 readonly firecracker_builder="${static_build_dir}/firecracker/build-static-firecracker.sh"
 readonly initramfs_builder="${static_build_dir}/initramfs/build.sh"
@@ -32,15 +33,17 @@ readonly qemu_experimental_builder="${static_build_dir}/qemu/build-static-qemu-e
 readonly shimv2_builder="${static_build_dir}/shim-v2/build.sh"
 readonly virtiofsd_builder="${static_build_dir}/virtiofsd/build.sh"
 readonly nydus_builder="${static_build_dir}/nydus/build.sh"
-
 readonly rootfs_builder="${repo_root_dir}/tools/packaging/guest-image/build_image.sh"
-
-readonly jenkins_url="http://jenkins.katacontainers.io"
-readonly cached_artifacts_path="lastSuccessfulBuild/artifact/artifacts"
+readonly tools_builder="${static_build_dir}/tools/build.sh"
 
 ARCH=${ARCH:-$(uname -m)}
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
 USE_CACHE="${USE_CACHE:-"yes"}"
+ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY:-ghcr.io}"
+ARTEFACT_REGISTRY_USERNAME="${ARTEFACT_REGISTRY_USERNAME:-}"
+ARTEFACT_REGISTRY_PASSWORD="${ARTEFACT_REGISTRY_PASSWORD:-}"
+TARGET_BRANCH="${TARGET_BRANCH:-main}"
+PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-}"
 
 workdir="${WORKDIR:-$PWD}"
 
@@ -79,9 +82,12 @@ options:
 -s             	      : Silent mode (produce output in case of failure only)
 --build=<asset>       :
 	all
+	agent
+	agent-ctl
 	cloud-hypervisor
 	cloud-hypervisor-glibc
 	firecracker
+	kata-ctl
 	kernel
 	kernel-dragonball-experimental
 	kernel-experimental
@@ -90,6 +96,7 @@ options:
 	kernel-nvidia-gpu-tdx-experimental
 	kernel-sev-tarball
 	kernel-tdx-experimental
+	log-parser-rs
 	nydus
 	ovmf
 	ovmf-sev
@@ -101,18 +108,19 @@ options:
 	rootfs-initrd
 	rootfs-initrd-mariner
 	rootfs-initrd-sev
+	runk
 	shim-v2
 	tdvf
+	trace-forwarder
 	virtiofsd
 EOF
 
 	exit "${return_code}"
 }
 
-
 cleanup_and_fail() {
-	rm -f "${component_tarball_path}"
-	return 1
+       rm -f "${component_tarball_name}"
+       return 1
 }
 
 install_cached_tarball_component() {
@@ -121,23 +129,24 @@ install_cached_tarball_component() {
 	fi
 
 	local component="${1}"
-	local jenkins_build_url="${2}"
-	local current_version="${3}"
-	local current_image_version="${4}"
-	local component_tarball_name="${5}"
-	local component_tarball_path="${6}"
+	local current_version="${2}"
+	local current_image_version="${3}"
+	local component_tarball_name="${4}"
+	local component_tarball_path="${5}"
 
-	local cached_version=$(curl -sfL "${jenkins_build_url}/latest" | awk '{print $1}') || cached_version="none"
-	local cached_image_version=$(curl -sfL "${jenkins_build_url}/latest_image" | awk '{print $1}') || cached_image_version="none"
+	oras pull ${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m)
+
+	cached_version="$(cat ${component}-version)"
+	cached_image_version="$(cat ${component}-builder-image-version)"
+
+	rm -f ${component}-version
+	rm -f ${component}-builder-image-version
 
 	[ "${cached_image_version}" != "${current_image_version}" ] && return 1
 	[ "${cached_version}" != "${current_version}" ] && return 1
+	sha256sum -c "${component}-sha256sum" || return $(cleanup_and_fail)
 
 	info "Using cached tarball of ${component}"
-	echo "Downloading tarball from: ${jenkins_build_url}/${component_tarball_name}"
-	wget "${jenkins_build_url}/${component_tarball_name}" || return $(cleanup_and_fail)
-	wget "${jenkins_build_url}/sha256sum-${component_tarball_name}" || return $(cleanup_and_fail)
-	sha256sum -c "sha256sum-${component_tarball_name}" || return $(cleanup_and_fail)
 	mv "${component_tarball_name}" "${component_tarball_path}"
 }
 
@@ -150,7 +159,6 @@ install_image() {
 		image_type+="-${variant}"
 	fi
 
-	local jenkins="${jenkins_url}/job/kata-containers-main-rootfs-${image_type}-${ARCH}/${cached_artifacts_path}"
 	local component="rootfs-${image_type}"
 
 	local osbuilder_last_commit="$(get_last_modification "${repo_root_dir}/tools/osbuilder")"
@@ -161,11 +169,13 @@ install_image() {
 	local libseccomp_version="$(get_from_kata_deps "externals.libseccomp.version")"
 	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
 
+	latest_artefact="${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${image_type}"
+	latest_builder_image=""
+
 	install_cached_tarball_component \
 		"${component}" \
-		"${jenkins}" \
-		"${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${image_type}" \
-		"" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
 		&& return 0
@@ -197,7 +207,6 @@ install_initrd() {
 		initrd_type+="-${variant}"
 	fi
 
-	local jenkins="${jenkins_url}/job/kata-containers-main-rootfs-${initrd_type}-${ARCH}/${cached_artifacts_path}"
 	local component="rootfs-${initrd_type}"
 
 	local osbuilder_last_commit="$(get_last_modification "${repo_root_dir}/tools/osbuilder")"
@@ -208,13 +217,15 @@ install_initrd() {
 	local libseccomp_version="$(get_from_kata_deps "externals.libseccomp.version")"
 	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
 
+	latest_artefact="${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${initrd_type}"
+	latest_builder_image=""
+
 	[[ "${ARCH}" == "aarch64" && "${CROSS_BUILD}" == "true" ]] && echo "warning: Don't cross build initrd for aarch64 as it's too slow" && exit 0
 
 	install_cached_tarball_component \
 		"${component}" \
-		"${jenkins}" \
-		"${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${initrd_type}" \
-		"" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
 		&& return 0
@@ -247,11 +258,13 @@ install_cached_kernel_tarball_component() {
 	local kernel_name=${1}
 	local module_dir=${2:-""}
 
+	latest_artefact="${kernel_version}-${kernel_kata_config_version}-$(get_last_modification $(dirname $kernel_builder))"
+	latest_builder_image="$(get_kernel_image_name)"
+
 	install_cached_tarball_component \
 		"${kernel_name}" \
-		"${jenkins_url}/job/kata-containers-main-${kernel_name}-${ARCH}/${cached_artifacts_path}" \
-		"${kernel_version}-${kernel_kata_config_version}-$(get_last_modification $(dirname $kernel_builder))" \
-		"$(get_kernel_image_name)" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
 		|| return 1
@@ -263,9 +276,8 @@ install_cached_kernel_tarball_component() {
 	# SEV specific code path
 	install_cached_tarball_component \
 		"${kernel_name}" \
-		"${jenkins_url}/job/kata-containers-main-${kernel_name}-$(uname -m)/${cached_artifacts_path}" \
-		"${kernel_version}-${kernel_kata_config_version}-$(get_last_modification $(dirname $kernel_builder))" \
-		"$(get_kernel_image_name)" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
 		"kata-static-kernel-sev-modules.tar.xz" \
 		"${workdir}/kata-static-kernel-sev-modules.tar.xz" \
 		|| return 1
@@ -384,11 +396,13 @@ install_qemu_helper() {
 	export qemu_repo="$(get_from_kata_deps ${qemu_repo_yaml_path})"
 	export qemu_version="$(get_from_kata_deps ${qemu_version_yaml_path})"
 
+	latest_artefact="${qemu_version}-$(calc_qemu_files_sha256sum)"
+	latest_builder_image="$(get_qemu_image_name)"
+
 	install_cached_tarball_component \
 		"${qemu_name}" \
-		"${jenkins_url}/job/kata-containers-main-${qemu_name}-${ARCH}/${cached_artifacts_path}" \
-		"${qemu_version}-$(calc_qemu_files_sha256sum)" \
-		"$(get_qemu_image_name)" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
 		&& return 0
@@ -433,11 +447,13 @@ install_qemu_snp_experimental() {
 install_firecracker() {
 	local firecracker_version=$(get_from_kata_deps "assets.hypervisor.firecracker.version")
 
+	latest_artefact="${firecracker_version}"
+	latest_builder_image=""
+
 	install_cached_tarball_component \
 		"firecracker" \
-		"${jenkins_url}/job/kata-containers-main-firecracker-$(uname -m)/${cached_artifacts_path}" \
-		"${firecracker_version}" \
-		"" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
 		&& return 0
@@ -455,11 +471,13 @@ install_clh_helper() {
 	features="${2}"
 	suffix="${3:-""}"
 
+	latest_artefact="$(get_from_kata_deps "assets.hypervisor.cloud_hypervisor.version")"
+	latest_builder_image=""
+
 	install_cached_tarball_component \
 		"cloud-hypervisor${suffix}" \
-		"${jenkins_url}/job/kata-containers-main-clh-$(uname -m)${suffix}/${cached_artifacts_path}" \
-		"$(get_from_kata_deps "assets.hypervisor.cloud_hypervisor.version")" \
-		"" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
 		&& return 0
@@ -495,11 +513,13 @@ install_clh_glibc() {
 
 # Install static virtiofsd asset
 install_virtiofsd() {
+	latest_artefact="$(get_from_kata_deps "externals.virtiofsd.version")-$(get_from_kata_deps "externals.virtiofsd.toolchain")"
+	latest_builder_image="$(get_virtiofsd_image_name)"
+
 	install_cached_tarball_component \
 		"virtiofsd" \
-		"${jenkins_url}/job/kata-containers-main-virtiofsd-${ARCH}/${cached_artifacts_path}" \
-		"$(get_from_kata_deps "externals.virtiofsd.version")-$(get_from_kata_deps "externals.virtiofsd.toolchain")" \
-		"$(get_virtiofsd_image_name)" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
 		&& return 0
@@ -515,11 +535,13 @@ install_virtiofsd() {
 install_nydus() {
 	[ "${ARCH}" == "aarch64" ] && ARCH=arm64
 
+	latest_artefact="$(get_from_kata_deps "externals.nydus.version")"
+	latest_builder_image=""
+
 	install_cached_tarball_component \
 		"nydus" \
-		"${jenkins_url}/job/kata-containers-main-nydus-$(uname -m)/${cached_artifacts_path}" \
-		"$(get_from_kata_deps "externals.nydus.version")" \
-		"" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
 		&& return 0
@@ -540,13 +562,14 @@ install_shimv2() {
 	local protocols_last_commit="$(get_last_modification "${repo_root_dir}/src/libs/protocols")"
 	local GO_VERSION="$(get_from_kata_deps "languages.golang.meta.newest-version")"
 	local RUST_VERSION="$(get_from_kata_deps "languages.rust.meta.newest-version")"
-	local shim_v2_version="${shim_v2_last_commit}-${protocols_last_commit}-${runtime_rs_last_commit}-${GO_VERSION}-${RUST_VERSION}"
+	
+	latest_artefact="${shim_v2_last_commit}-${protocols_last_commit}-${runtime_rs_last_commit}-${GO_VERSION}-${RUST_VERSION}"
+	latest_builder_image="$(get_shim_v2_image_name)"
 
 	install_cached_tarball_component \
 		"shim-v2" \
-		"${jenkins_url}/job/kata-containers-main-shim-v2-${ARCH}/${cached_artifacts_path}" \
-		"${shim_v2_version}" \
-		"$(get_shim_v2_image_name)" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
 		&& return 0
@@ -573,13 +596,16 @@ install_ovmf() {
 	tarball_name="${2:-edk2-x86_64.tar.gz}"
 
 	local component_name="ovmf"
-	local component_version="$(get_from_kata_deps "externals.ovmf.${ovmf_type}.version")"
+	[ "${ovmf_type}" == "sev" ] && component_name="ovmf-sev"
 	[ "${ovmf_type}" == "tdx" ] && component_name="tdvf"
+
+	latest_artefact="$(get_from_kata_deps "externals.ovmf.${ovmf_type}.version")"
+	latest_builder_image="$(get_ovmf_image_name)"
+
 	install_cached_tarball_component \
 		"${component_name}" \
-		"${jenkins_url}/job/kata-containers-main-ovmf-${ovmf_type}-$(uname -m)/${cached_artifacts_path}" \
-		"${component_version}" \
-		"$(get_ovmf_image_name)" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
 		&& return 0
@@ -598,6 +624,77 @@ install_ovmf_sev() {
 	install_ovmf "sev" "edk2-sev.tar.gz"
 }
 
+install_agent_helper() {
+	agent_policy="${1:-no}"
+
+	latest_artefact="$(git log -1 --pretty=format:"%h" ${repo_root_dir}/src/agent)"
+	latest_builder_image="$(get_agent_image_name)"
+
+	install_cached_tarball_component \
+		"${build_target}" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
+	info "build static agent"
+	DESTDIR="${destdir}" AGENT_POLICY=${agent_policy} "${agent_builder}"
+}
+
+install_agent() {
+	install_agent_helper
+}
+
+install_tools_helper() {
+	tool=${1}
+
+	latest_artefact="$(git log -1 --pretty=format:"%h" ${repo_root_dir}/src/tools/${tool})"
+	latest_builder_image="$(get_tools_image_name)"
+
+	install_cached_tarball_component \
+		"${tool}" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
+
+	info "build static ${tool}"
+	${tools_builder} ${tool}
+
+	tool_binary=${tool}
+	[ ${tool} = "agent-ctl" ] && tool_binary="kata-agent-ctl"
+	[ ${tool} = "log-parser-rs" ] && tool_binary="log-parser"
+	[ ${tool} = "trace-forwarder" ] && tool_binary="kata-trace-forwarder"
+	binary=$(find ${repo_root_dir}/src/tools/${tool}/ -type f -name ${tool_binary})
+
+	info "Install static ${tool_binary}"
+	mkdir -p "${destdir}/opt/kata/bin/"
+	sudo install -D --owner root --group root --mode 0744 ${binary} "${destdir}/opt/kata/bin/${tool_binary}"
+}
+
+install_agent_ctl() {
+	install_tools_helper "agent-ctl"
+}
+
+install_kata_ctl() {
+	install_tools_helper "kata-ctl"
+}
+
+install_log_parser_rs() {
+	install_tools_helper "log-parser-rs"
+}
+
+install_runk() {
+	install_tools_helper "runk"
+}
+
+install_trace_forwarder() {
+	install_tools_helper "trace-forwarder"
+}
+
 get_kata_version() {
 	local v
 	v=$(cat "${version_file}")
@@ -606,6 +703,10 @@ get_kata_version() {
 
 handle_build() {
 	info "DESTDIR ${destdir}"
+
+	latest_artefact=""
+	latest_builder_image=""
+
 	local build_target
 	build_target="$1"
 
@@ -615,31 +716,42 @@ handle_build() {
 
 	case "${build_target}" in
 	all)
+		install_agent_ctl
 		install_clh
 		install_firecracker
 		install_image
 		install_initrd
 		install_initrd_mariner
 		install_initrd_sev
+		install_kata_ctl
 		install_kernel
 		install_kernel_dragonball_experimental
 		install_kernel_tdx_experimental
+		install_log_parser_rs
 		install_nydus
 		install_ovmf
 		install_ovmf_sev
 		install_qemu
 		install_qemu_snp_experimental
 		install_qemu_tdx_experimental
+		install_runk
 		install_shimv2
 		install_tdvf
+		install_trace_forwarder
 		install_virtiofsd
 		;;
+
+	agent) install_agent ;;
+
+	agent-ctl) install_agent_ctl ;;
 
 	cloud-hypervisor) install_clh ;;
 
 	cloud-hypervisor-glibc) install_clh_glibc ;;
 
 	firecracker) install_firecracker ;;
+
+	kata-ctl) install_kata_ctl ;;
 
 	kernel) install_kernel ;;
 
@@ -654,6 +766,8 @@ handle_build() {
 	kernel-tdx-experimental) install_kernel_tdx_experimental ;;
 
 	kernel-sev) install_kernel_sev ;;
+
+	log-parser-rs) install_log_parser_rs ;;
 
 	nydus) install_nydus ;;
 
@@ -676,10 +790,14 @@ handle_build() {
 	rootfs-initrd-mariner) install_initrd_mariner ;;
 
 	rootfs-initrd-sev) install_initrd_sev ;;
+
+	runk) install_runk ;;
 	
 	shim-v2) install_shimv2 ;;
 
 	tdvf) install_tdvf ;;
+
+	trace-forwarder) install_trace_forwarder ;;
 
 	virtiofsd) install_virtiofsd ;;
 
@@ -693,6 +811,27 @@ handle_build() {
 		sudo tar cvfJ "${final_tarball_path}" "."
 	fi
 	tar tvf "${final_tarball_path}"
+
+	pushd ${workdir}
+	echo "${latest_artefact}" > ${build_target}-version
+	echo "${latest_builder_image}" > ${build_target}-builder-image-version
+	sha256sum "${final_tarball_name}" > ${build_target}-sha256sum
+
+	if [ "${PUSH_TO_REGISTRY}" = "yes" ]; then
+		if [ -z "${ARTEFACT_REGISTRY}" ] ||
+			[ -z "${ARTEFACT_REGISTRY_USERNAME}" ] ||
+			[ -z "${ARTEFACT_REGISTRY_PASSWORD}" ] ||
+		      	[ -z "${TARGET_BRANCH}" ]; then
+			die "ARTEFACT_REGISTRY, ARTEFACT_REGISTRY_USERNAME, ARTEFACT_REGISTRY_PASSWORD and TARGET_BRANCH must be passed to the script when pushing the artefacts to the registry!"
+		fi
+
+		echo "${ARTEFACT_REGISTRY_PASSWORD}" | oras login "${ARTEFACT_REGISTRY}" -u "${ARTEFACT_REGISTRY_USERNAME}" --password-stdin
+
+		oras push ${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) ${final_tarball_name} ${build_target}-version ${build_target}-builder-image-version ${build_target}-sha256sum
+		oras logout "${ARTEFACT_REGISTRY}"
+	fi
+
+	popd
 }
 
 silent_mode_error_trap() {
@@ -711,16 +850,22 @@ main() {
 	local build_targets
 	local silent
 	build_targets=(
+		agent
+		agent-ctl
 		cloud-hypervisor
 		firecracker
+		kata-ctl
 		kernel
 		kernel-experimental
+		log-parser-rs
 		nydus
 		qemu
 		rootfs-image
 		rootfs-initrd
 		rootfs-initrd-mariner
+		runk
 		shim-v2
+		trace-forwarder
 		virtiofsd
 	)
 	silent=false

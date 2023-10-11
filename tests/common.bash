@@ -158,7 +158,7 @@ function clean_env_ctr()
 	info "Wait until the containers gets removed"
 
 	for task_id in "${running_tasks[@]}"; do
-		sudo ctr t kill -a -s SIGTERM ${task_id} >/dev/null 2>&1
+		sudo timeout -s SIGKILL 30s ctr t kill -a -s SIGTERM ${task_id} >/dev/null 2>&1 || true
 		sleep 0.5
 	done
 
@@ -186,31 +186,19 @@ function clean_env_ctr()
 	if (( count_tasks > 0 )); then
 		die "Can't remove running containers."
 	fi
-
-	kill_kata_components
 }
 
 # Kills running shim and hypervisor components
 function kill_kata_components() {
-	local kata_bin_dir="/opt/kata/bin"
-	local shim_path="${kata_bin_dir}/containerd-shim-kata-v2"
-	local hypervisor_path="${kata_bin_dir}/qemu-system-x86_64"
-	local pid_shim_count="$(pgrep -fc ${shim_path} || exit 0)"
+	local TIMEOUT="30s"
+	local PID_NAMES=( "containerd-shim-kata-v2" "qemu-system-x86_64" "cloud-hypervisor" )
 
-	[ ${pid_shim_count} -gt "0" ] && sudo kill -SIGKILL "$(pgrep -f ${shim_path})" > /dev/null 2>&1
-
-        if [ "${KATA_HYPERVISOR}" = 'clh' ]; then
-		hypervisor_path="${kata_bin_dir}/cloud-hypervisor"
-	elif [ "${KATA_HYPERVISOR}" != 'qemu' ]; then
-                echo "Failed to stop the hypervisor: '${KATA_HYPERVISOR}' as it is not recognized"
-		return
-        fi
-
-	local pid_hypervisor_count="$(pgrep -fc ${hypervisor_path} || exit 0)"
-
-	if [ ${pid_hypervisor_count} -gt "0" ]; then
-		sudo kill -SIGKILL "$(pgrep -f ${hypervisor_path})" > /dev/null 2>&1
-	fi
+	sudo systemctl stop containerd
+	# iterate over the list of kata components and stop them
+	for PID_NAME in "${PID_NAMES[@]}"; do
+		[[ ! -z "$(pidof ${PID_NAME})" ]] && sudo killall "${PID_NAME}" > /dev/null 2>&1 || true
+	done
+	sudo timeout -s SIGKILL "${TIMEOUT}" systemctl start containerd
 }
 
 # Restarts a systemd service while ensuring the start-limit-burst is set to 0.
@@ -269,22 +257,68 @@ function restart_containerd_service() {
 	return 0
 }
 
+function restart_crio_service() {
+	sudo systemctl restart crio
+}
+
 # Configures containerd
 function overwrite_containerd_config() {
 	containerd_config="/etc/containerd/config.toml"
 	sudo rm -f "${containerd_config}"
 	sudo tee "${containerd_config}" << EOF
 version = 2
-[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
-  SystemdCgroup = true
 
 [plugins]
   [plugins."io.containerd.grpc.v1.cri"]
     [plugins."io.containerd.grpc.v1.cri".containerd]
-      default_runtime_name = "kata"
       [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
+          base_runtime_spec = ""
+          cni_conf_dir = ""
+          cni_max_conf_num = 0
+          container_annotations = []
+          pod_annotations = []
+          privileged_without_host_devices = false
+          runtime_engine = ""
+          runtime_path = ""
+          runtime_root = ""
+          runtime_type = "io.containerd.runc.v2"
+          [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc.options]
+            BinaryName = ""
+            CriuImagePath = ""
+            CriuPath = ""
+            CriuWorkPath = ""
+            IoGid = 0
+            IoUid = 0
+            NoNewKeyring = false
+            NoPivotRoot = false
+            Root = ""
+            ShimCgroup = ""
+            SystemdCgroup = false
         [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata]
           runtime_type = "io.containerd.kata.v2"
+EOF
+}
+
+# Configures CRI-O
+function overwrite_crio_config() {
+	crio_conf_d="/etc/crio/crio.conf.d"
+	sudo mkdir -p ${crio_conf_d}
+
+	kata_config="${crio_conf_d}/99-kata-containers"
+	sudo tee "${kata_config}" << EOF
+[crio.runtime.runtimes.kata]
+runtime_path = "/usr/local/bin/containerd-shim-kata-v2"
+runtime_type = "vm"
+runtime_root = "/run/vc"
+runtime_config_path = "/opt/kata/share/defaults/kata-containers/configuration.toml"
+privileged_without_host_devices = true
+EOF
+
+	debug_config="${crio_conf_d}/100-debug"
+	sudo tee "${debug_config}" << EOF
+[crio]
+log_level = "debug"
 EOF
 }
 
@@ -306,17 +340,34 @@ function install_kata() {
 		sudo ln -sf "${b}" "${local_bin_dir}/$(basename $b)"
 	done
 
-	if [[ ${KATA_HYPERVISOR} == "dragonball" ]]; then
-		sudo ln -sf "${katadir}/runtime-rs/bin/containerd-shim-kata-v2" "${local_bin_dir}/containerd-shim-kata-${KATA_HYPERVISOR}-v2"
+	if [ "${CONTAINER_ENGINE:=containerd}" = "containerd" ]; then
+		check_containerd_config_for_kata
+		restart_containerd_service
 	else
-		sudo ln -sf "${katadir}/bin/containerd-shim-kata-v2" "${local_bin_dir}/containerd-shim-kata-${KATA_HYPERVISOR}-v2"
+		overwrite_crio_config
+		restart_crio_service
 	fi
 
-	sudo ln -sf ${katadir}/share/defaults/kata-containers/configuration-${KATA_HYPERVISOR}.toml ${katadir}/share/defaults/kata-containers/configuration.toml 
-
-	check_containerd_config_for_kata
-	restart_containerd_service
 }
+
+# creates a new kata configuration.toml hard link that
+# points to the hypervisor passed by KATA_HYPERVISOR env var.
+function enabling_hypervisor() {
+	declare -r KATA_DIR="/opt/kata"
+	declare -r CONFIG_DIR="${KATA_DIR}/share/defaults/kata-containers"
+	declare -r SRC_HYPERVISOR_CONFIG="${CONFIG_DIR}/configuration-${KATA_HYPERVISOR}.toml"
+	declare -r DEST_KATA_CONFIG="${CONFIG_DIR}/configuration.toml"
+	declare -r CONTAINERD_SHIM_KATA="/usr/local/bin/containerd-shim-kata-${KATA_HYPERVISOR}-v2"
+
+	if [[ ${KATA_HYPERVISOR} == "dragonball" ]]; then
+		sudo ln -sf "${KATA_DIR}/runtime-rs/bin/containerd-shim-kata-v2" "${CONTAINERD_SHIM_KATA}"
+	else
+		sudo ln -sf "${KATA_DIR}/bin/containerd-shim-kata-v2" "${CONTAINERD_SHIM_KATA}"
+	fi
+
+	sudo ln -sf "${SRC_HYPERVISOR_CONFIG}" "${DEST_KATA_CONFIG}"
+}
+
 
 function check_containerd_config_for_kata() {
 	# check containerd config
@@ -339,6 +390,7 @@ function ensure_yq() {
     export GOPATH
     export PATH="${GOPATH}/bin:${PATH}"
     INSTALL_IN_GOPATH=true "${repo_root_dir}/ci/install_yq.sh"
+    hash -d yq 2> /dev/null || true # yq is preinstalled on GHA Ubuntu 22.04 runners so we clear Bash's PATH cache.
 }
 
 # dependency: What we want to get the version from the versions.yaml file
@@ -383,6 +435,19 @@ function download_github_project_tarball() {
 	wget https://github.com/${project}/releases/download/${version}/${tarball_name}
 }
 
+# version: The version to be intalled
+function install_cni_plugins() {
+	version="${1}"
+
+	project="containernetworking/plugins"
+	tarball_name="cni-plugins-linux-$(${repo_root_dir}/tests/kata-arch.sh -g)-${version}.tgz"
+
+	download_github_project_tarball "${project}" "${version}" "${tarball_name}"
+	sudo mkdir -p /opt/cni/bin
+	sudo tar -xvf "${tarball_name}" -C /opt/cni/bin
+	rm -f "${tarball_name}"
+}
+
 # base_version: The version to be intalled in the ${major}.${minor} format
 function install_cri_containerd() {
 	base_version="${1}"
@@ -412,4 +477,111 @@ function install_cri_tools() {
 	download_github_project_tarball "${project}" "${version}" "${tarball_name}"
 	sudo tar -xvf "${tarball_name}" -C /usr/local/bin
 	rm -f "${tarball_name}"
+}
+
+function install_nydus() {
+	version="${1}"
+
+	project="dragonflyoss/image-service"
+	tarball_name="nydus-static-${version}-linux-$(${repo_root_dir}/tests/kata-arch.sh -g).tgz"
+
+	download_github_project_tarball "${project}" "${version}" "${tarball_name}"
+	sudo tar xfz "${tarball_name}" -C /usr/local/bin --strip-components=1
+	rm -f "${tarball_name}"
+}
+
+function install_nydus_snapshotter() {
+	version="${1}"
+
+	project="containerd/nydus-snapshotter"
+	tarball_name="nydus-snapshotter-${version}-$(${repo_root_dir}/tests/kata-arch.sh).tgz"
+
+	download_github_project_tarball "${project}" "${version}" "${tarball_name}"
+	sudo tar xfz "${tarball_name}" -C /usr/local/bin --strip-components=1
+	rm -f "${tarball_name}"
+}
+
+function _get_os_for_crio() {
+	source /etc/os-release
+
+	if [ "${NAME}" != "Ubuntu" ]; then
+		echo "Only Ubuntu is supported for now"
+		exit 2
+	fi
+
+	echo "x${NAME}_${VERSION_ID}"
+}
+
+# version: the CRI-O version to be installe
+function install_crio() {
+	local version=${1}
+
+	os=$(_get_os_for_crio)
+
+	echo "deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/${os}/ /"|sudo tee /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list
+	echo "deb http://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/${version}/${os}/ /"|sudo tee /etc/apt/sources.list.d/devel:kubic:libcontainers:stable:cri-o:${version}.list
+	curl -L https://download.opensuse.org/repositories/devel:kubic:libcontainers:stable:cri-o:${version}/${os}/Release.key | sudo apt-key add -
+	curl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/${os}/Release.key | sudo apt-key add -
+	sudo apt update
+	sudo apt install -y cri-o cri-o-runc
+
+	# We need to set the default capabilities to ensure our tests will pass
+	# See: https://github.com/kata-containers/kata-containers/issues/8034
+	sudo mkdir -p /etc/crio/crio.conf.d/
+	cat <<EOF | sudo tee /etc/crio/crio.conf.d/00-default-capabilities
+[crio.runtime]
+default_capabilities = [
+       "CHOWN",
+       "DAC_OVERRIDE",
+       "FSETID",
+       "FOWNER",
+       "SETGID",
+       "SETUID",
+       "SETPCAP",
+       "NET_BIND_SERVICE",
+       "KILL",
+       "SYS_CHROOT",
+]
+EOF
+
+	sudo systemctl enable --now crio
+}
+
+# Convert architecture to the name used by golang
+function arch_to_golang() {
+	local arch="$(uname -m)"
+
+	case "${arch}" in
+		aarch64) echo "arm64";;
+		ppc64le) echo "${arch}";;
+		x86_64) echo "amd64";;
+		s390x) echo "s390x";;
+		*) die "unsupported architecture: ${arch}";;
+	esac
+}
+
+# Convert architecture to the name used by rust
+function arch_to_rust() {
+	local -r arch="$(uname -m)"
+
+	case "${arch}" in
+		aarch64) echo "${arch}";;
+		ppc64le) echo "powerpc64le";;
+		x86_64) echo "${arch}";;
+		s390x) echo "${arch}";;
+		*) die "unsupported architecture: ${arch}";;
+	esac
+}
+
+# Convert architecture to the name used by the Linux kernel build system
+function arch_to_kernel() {
+	local -r arch="$(uname -m)"
+
+	case "${arch}" in
+		aarch64) echo "arm64";;
+		ppc64le) echo "powerpc";;
+		x86_64) echo "${arch}";;
+		s390x) echo "s390x";;
+		*) die "unsupported architecture: ${arch}";;
+	esac
 }

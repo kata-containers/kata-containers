@@ -4,6 +4,7 @@ on:
     branches:
       - main
       - stable-*
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -15,6 +16,7 @@ jobs:
     with:
       commit-hash: ${{ github.sha }}
       push-to-registry: yes
+      target-branch: ${{ github.ref_name }}
     secrets: inherit
 
   build-assets-arm64:
@@ -22,6 +24,7 @@ jobs:
     with:
       commit-hash: ${{ github.sha }}
       push-to-registry: yes
+      target-branch: ${{ github.ref_name }}
     secrets: inherit
 
   build-assets-s390x:
@@ -29,6 +32,7 @@ jobs:
     with:
       commit-hash: ${{ github.sha }}
       push-to-registry: yes
+      target-branch: ${{ github.ref_name }}
     secrets: inherit
 
   publish-kata-deploy-payload-amd64:
@@ -39,6 +43,7 @@ jobs:
       registry: quay.io
       repo: kata-containers/kata-deploy-ci
       tag: kata-containers-amd64
+      target-branch: ${{ github.ref_name }}
     secrets: inherit
 
   publish-kata-deploy-payload-arm64:
@@ -49,6 +54,7 @@ jobs:
       registry: quay.io
       repo: kata-containers/kata-deploy-ci
       tag: kata-containers-arm64
+      target-branch: ${{ github.ref_name }}
     secrets: inherit
 
   publish-kata-deploy-payload-s390x:
@@ -59,6 +65,7 @@ jobs:
       registry: quay.io
       repo: kata-containers/kata-deploy-ci
       tag: kata-containers-s390x
+      target-branch: ${{ github.ref_name }}
     secrets: inherit
 
   publish-manifest:

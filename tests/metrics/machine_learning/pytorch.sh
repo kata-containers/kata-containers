@@ -29,17 +29,6 @@ function remove_tmp_file() {
 
 trap remove_tmp_file EXIT
 
-function check_containers_are_up() {
-	local containers_launched=0
-	for i in $(seq "${TIMEOUT}") ; do
-		info "Verify that the containers are running"
-		containers_launched="$(sudo ${CTR_EXE} t list | grep -c "RUNNING")"
-		[ "${containers_launched}" -eq "${NUM_CONTAINERS}" ] && break
-		sleep 1
-		[ "${i}" == "${TIMEOUT}" ] && return 1
-	done
-}
-
 function equation_of_state_pytorch_test() {
 	info "Running Equation of State Pytorch test"
 	for i in "${containers[@]}"; do
@@ -146,7 +135,7 @@ function main() {
 
 
 	# Check that the requested number of containers are running
-	check_containers_are_up
+	check_containers_are_up "${NUM_CONTAINERS}"
 
 	equation_of_state_pytorch_test
 
