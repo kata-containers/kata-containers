@@ -58,6 +58,6 @@ virtio-vsock = ["dbs-virtio-devices/virtio-vsock", "virtio-queue"]
 virtio-blk = ["dbs-virtio-devices/virtio-blk", "virtio-queue"]
 virtio-net = ["dbs-virtio-devices/virtio-net", "virtio-queue"]
 # virtio-fs only work on atomic-guest-memory
-virtio-fs = ["dbs-virtio-devices/virtio-fs", "virtio-queue", "atomic-guest-memory"]
+virtio-fs = ["dbs-virtio-devices/virtio-fs-pro", "virtio-queue", "atomic-guest-memory"]
 virtio-mem = ["dbs-virtio-devices/virtio-mem", "virtio-queue", "atomic-guest-memory"]
 virtio-balloon = ["dbs-virtio-devices/virtio-balloon", "virtio-queue"]
