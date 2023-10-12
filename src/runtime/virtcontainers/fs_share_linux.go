@@ -293,7 +293,7 @@ func (f *FilesystemShare) ShareFile(ctx context.Context, c *Container, m *Mount)
 
 			// Add fsNotify watcher for volume mounts
 			if strings.Contains(srcPath, "kubernetes.io~configmap") ||
-				strings.Contains(srcPath, "kubernetes.io~secrets") ||
+				strings.Contains(srcPath, "kubernetes.io~secret") ||
 				strings.Contains(srcPath, "kubernetes.io~projected") ||
 				strings.Contains(srcPath, "kubernetes.io~downward-api") {
 
