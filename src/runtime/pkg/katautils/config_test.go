@@ -1735,3 +1735,59 @@ vfio_mode="vfio"
 	assert.Equal(t, config.Runtime.InterNetworkModel, "macvtap")
 	assert.Equal(t, config.Runtime.VfioMode, "vfio")
 }
+
+func TestUpdateRuntimeConfigHypervisor(t *testing.T) {
+	assert := assert.New(t)
+
+	type tableTypeEntry struct {
+		name  string
+		valid bool
+	}
+
+	configFile := "/some/where/configuration.toml"
+
+	// Note: We cannot test acrnHypervisorTableType since
+	// newAcrnHypervisorConfig() expects ACRN binaries to be
+	// installed.
+	var entries = []tableTypeEntry{
+		{clhHypervisorTableType, true},
+		{dragonballHypervisorTableType, true},
+		{firecrackerHypervisorTableType, true},
+		{qemuHypervisorTableType, true},
+		{"foo", false},
+		{"bar", false},
+		{clhHypervisorTableType + "baz", false},
+	}
+
+	for i, h := range entries {
+		config := oci.RuntimeConfig{}
+
+		tomlConf := tomlConfig{
+			Hypervisor: map[string]hypervisor{
+				h.name: {
+					NumVCPUs:       int32(2),
+					MemorySize:     uint32(2048),
+					Path:           "/",
+					Kernel:         "/",
+					Image:          "/",
+					Firmware:       "/",
+					FirmwareVolume: "/",
+					SharedFS:       "virtio-fs",
+					VirtioFSDaemon: "/usr/libexec/kata-qemu/virtiofsd",
+				},
+			},
+		}
+
+		err := updateRuntimeConfigHypervisor(configFile, tomlConf, &config)
+
+		if h.valid {
+			assert.NoError(err, "test %d (%+v)", i, h)
+		} else {
+			assert.Error(err, "test %d (%+v)", i, h)
+
+			expectedErr := fmt.Errorf("%v: %v: %+q", configFile, errInvalidHypervisorPrefix, h.name)
+
+			assert.Equal(err, expectedErr, "test %d (%+v)", i, h)
+		}
+	}
+}
