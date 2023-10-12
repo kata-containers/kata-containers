@@ -55,6 +55,8 @@ const (
 
 	// the maximum amount of PCI bridges that can be cold plugged in a VM
 	maxPCIBridges uint32 = 5
+
+	errInvalidHypervisorPrefix = "configuration file contains invalid hypervisor section"
 )
 
 type tomlConfig struct {
@@ -1175,6 +1177,8 @@ func updateRuntimeConfigHypervisor(configPath string, tomlConf tomlConfig, confi
 		case dragonballHypervisorTableType:
 			config.HypervisorType = vc.DragonballHypervisor
 			hConfig, err = newDragonballHypervisorConfig(hypervisor)
+		default:
+			err = fmt.Errorf("%s: %+q", errInvalidHypervisorPrefix, k)
 		}
 
 		if err != nil {
