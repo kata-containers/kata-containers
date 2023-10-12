@@ -23,6 +23,8 @@ use kata_sys_util::protection::{available_guest_protection, GuestProtection};
 use kata_types::capabilities::{Capabilities, CapabilityBits};
 use kata_types::config::default::DEFAULT_CH_ROOTFS_TYPE;
 use lazy_static::lazy_static;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::convert::TryFrom;
 use std::fs::create_dir_all;
 use std::os::unix::net::UnixStream;
@@ -41,6 +43,20 @@ const CH_NAME: &str = "cloud-hypervisor";
 
 /// Number of milliseconds to wait before retrying a CH operation.
 const CH_POLL_TIME_MS: u64 = 50;
+
+// The name of the CH JSON key for the build-time features list.
+const CH_FEATURES_KEY: &str = "features";
+
+// The name of the CH build-time feature for Intel TDX.
+const CH_FEATURE_TDX: &str = "tdx";
+
+#[derive(Clone, Deserialize, Serialize)]
+pub struct VmmPingResponse {
+    pub build_version: String,
+    pub version: String,
+    pub pid: i64,
+    pub features: Vec<String>,
+}
 
 #[derive(thiserror::Error, Debug, PartialEq)]
 pub enum GuestProtectionError {
@@ -74,6 +90,14 @@ impl CloudHypervisorInner {
         self.cloud_hypervisor_check_running()
             .await
             .context("hypervisor running check failed")?;
+
+        if guest_protection_is_tdx(self.guest_protection_to_use.clone()) {
+            if let Some(features) = &self.ch_features {
+                if !features.contains(&CH_FEATURE_TDX.to_string()) {
+                    return Err(anyhow!("Cloud Hypervisor is not built with TDX support"));
+                }
+            }
+        }
 
         self.state = VmmState::VmmServerReady;
 
@@ -424,6 +448,33 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
+    // Check the specified ping API response to see if it contains CH's
+    // build-time features list. If so, save them.
+    async fn handle_ch_build_features(&mut self, ping_response: &str) -> Result<()> {
+        let v: Value = serde_json::from_str(ping_response)?;
+
+        let got = &v[CH_FEATURES_KEY];
+
+        if got.is_null() {
+            return Ok(());
+        }
+
+        let features_list = got
+            .as_array()
+            .ok_or("expected CH to return array of features")
+            .map_err(|e| anyhow!(e))?;
+
+        let features: Vec<String> = features_list
+            .iter()
+            .map(Value::to_string)
+            .map(|s| s.trim_start_matches('"').trim_end_matches('"').to_string())
+            .collect();
+
+        self.ch_features = Some(features);
+
+        Ok(())
+    }
+
     async fn cloud_hypervisor_ping_until_ready(&mut self, _poll_time_ms: u64) -> Result<()> {
         let socket = self
             .api_socket
@@ -439,7 +490,11 @@ impl CloudHypervisorInner {
 
             if let Ok(response) = response {
                 if let Some(detail) = response {
+                    // Check for a list of built-in features, returned by this
+                    // API call in newer versions of CH.
                     debug!(sl!(), "ping response: {:?}", detail);
+
+                    self.handle_ch_build_features(&detail).await?;
                 }
                 break;
             }
