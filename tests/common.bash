@@ -606,7 +606,7 @@ cp_to_guest_img() {
 	rootfs_dir="$(mktemp -d)"
 
 	# Open the original initrd/image, inject the agent file
-	local image_path="$(sudo kata-runtime kata-env --json | jq -r .Image.Path)"
+	local image_path="$(kata-runtime kata-env --json | jq -r .Image.Path)"
 	if [ -f "$image_path" ]; then
 		if ! sudo mount -o loop,offset=$((512*6144)) "$image_path" \
 			"$rootfs_dir"; then
