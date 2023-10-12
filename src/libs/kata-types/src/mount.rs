@@ -480,14 +480,14 @@ impl<H> StorageHandlerManager<H> {
 
 /// Join user provided volume path with kata direct-volume root path.
 ///
-/// The `volume_path` is base64-encoded and then safely joined to the `prefix`
+/// The `volume_path` is base64-url-encoded and then safely joined to the `prefix`
 pub fn join_path(prefix: &str, volume_path: &str) -> Result<PathBuf> {
     if volume_path.is_empty() {
         return Err(anyhow!("volume path must not be empty"));
     }
-    let b64_encoded_path = base64::encode(volume_path.as_bytes());
+    let b64_url_encoded_path = base64::encode_config(volume_path.as_bytes(), base64::URL_SAFE);
 
-    Ok(safe_path::scoped_join(prefix, b64_encoded_path)?)
+    Ok(safe_path::scoped_join(prefix, b64_url_encoded_path)?)
 }
 
 /// get DirectVolume mountInfo from mountinfo.json.
