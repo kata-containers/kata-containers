@@ -17,6 +17,7 @@ use common::{
     },
 };
 use kata_sys_util::k8s::update_ephemeral_storage_type;
+use kata_types::k8s;
 
 use oci::{LinuxResources, Process as OCIProcess};
 use resource::{ResourceManager, ResourceUpdateOp};
@@ -168,6 +169,21 @@ impl Container {
             linux.resources = resources;
         }
 
+        let container_name = k8s::container_name(&spec);
+        let mut shared_mounts = Vec::new();
+        for shared_mount in &toml_config.runtime.shared_mounts {
+            if shared_mount.dst_ctr == container_name {
+                let m = agent::types::SharedMount {
+                    name: shared_mount.name.clone(),
+                    src_ctr: shared_mount.src_ctr.clone(),
+                    src_path: shared_mount.src_path.clone(),
+                    dst_ctr: shared_mount.dst_ctr.clone(),
+                    dst_path: shared_mount.dst_path.clone(),
+                };
+                shared_mounts.push(m);
+            }
+        }
+
         // create container
         let r = agent::CreateContainerRequest {
             process_id: agent::ContainerProcessID::new(&config.container_id, ""),
@@ -175,6 +191,7 @@ impl Container {
             oci: Some(spec),
             sandbox_pidns,
             devices: devices_agent,
+            shared_mounts,
             ..Default::default()
         };
 

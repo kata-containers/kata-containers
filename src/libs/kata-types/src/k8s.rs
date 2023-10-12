@@ -72,6 +72,22 @@ pub fn container_type(spec: &oci::Spec) -> ContainerType {
     ContainerType::SingleContainer
 }
 
+/// Get K8S container name from OCI annotations.
+pub fn container_name(spec: &oci::Spec) -> String {
+    for k in [
+        annotations::cri_containerd::CONTAINER_NAME_LABEL_KEY,
+        annotations::crio::CONTAINER_NAME_LABEL_KEY,
+    ]
+    .iter()
+    {
+        if let Some(v) = spec.annotations.get(k.to_owned()) {
+            return v.clone();
+        }
+    }
+
+    String::new()
+}
+
 /// Determine the k8s sandbox ID from OCI annotations.
 ///
 /// This function is expected to be called only when the container type is "PodContainer".
