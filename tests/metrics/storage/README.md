@@ -16,12 +16,16 @@ $ bash storage/blogbench.sh
 ```
 ## `fio` test
 
-The `fio` test utilises the [fio tool](https://github.com/axboe/fio), configured
-to perform measurements upon a single test file.
+The `fio` test utilizes the [fio tool](https://github.com/axboe/fio), configured to perform measurements upon a single test file.
 
-The test configuration used by the script can be modified by setting a number of
-environment variables to change or over-ride the test defaults.
+The test spawns 8 jobs that exercise the I/O types `sequential read`, `random read`, `sequential write` and `random write`, while collecting
+data using a block size of 4 Kb, an I/O depth of 2, and uses the `libaio` engine on a workload with a size of 10 gigabytes for a period of
+10 seconds on each I/O type.
 
-## DAX `virtio-fs` `fio` Kubernetes tests
+The results show the average bandwidth and average number of IOPS per I/O type in JSON format.
 
-[Test](fio-k8s/README.md) to compare the use of DAX option in `virtio-fs`.
+The `fio` test can be run by hand, for example:
+```
+$ cd metrics
+$ bash storage/fio_test.sh
+```
