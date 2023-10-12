@@ -38,6 +38,7 @@ global_shim_mem=0
 
 function remove_tmp_file() {
 	rm -rf "${MEM_TMP_FILE}" "${PS_TMP_FILE}"
+	clean_env_ctr
 }
 
 trap remove_tmp_file EXIT
@@ -97,19 +98,22 @@ function get_pss_memory(){
 	local avg=0
 
 	[ -z "${ps}" ] && die "No argument to get_pss_memory()"
+
 	ps="$(readlink -f ${ps})"
 
 	# Save all the processes names
 	# This will be help us to retrieve raw information
 	echo "${ps}" >> "${PS_TMP_FILE}"
 
-	data=$(sudo "${SMEM_BIN}" --no-header -P "^${ps}" -c "pss" | sed 's/[[:space:]]//g' | tr '\n' ' ' | sed 's/[[:blank:]]*$//')
+	data="$(sudo "${SMEM_BIN}" --no-header -P "^${ps}" -c "pss" | sed 's/[[:space:]]//g' | tr '\n' ' ' | sed 's/[[:blank:]]*$//')"
 
 	# Save all the smem results
 	# This will help us to retrieve raw information
 	echo "${data}" >> "${MEM_TMP_FILE}"
 
-	for i in ${data[*]}; do
+	arrData=($data)
+
+	for i in "${arrData[@]}"; do
 		if [ ${i} -gt 0 ]; then
 			let "mem_amount+=i"
 			let "count+=1"
@@ -124,7 +128,7 @@ function get_pss_memory(){
 	if [ "${shim_result_on}" -eq "1" ]; then
 		global_shim_mem="${avg}"
 	else
-		global_hypervisor_mem="${avg}"
+		global_hypervisor_mem="${avg}" 
 	fi
 }
 
@@ -144,13 +148,15 @@ function get_pss_memory_virtiofsd() {
 	mem_amount=0
 	count=0
 	avg=0
-
 	virtiofsd_path=${1:-}
+
 	[ -z "${virtiofsd_path}" ] && die "virtiofsd_path not provided"
 
 	echo "${virtiofsd_path}" >> "${PS_TMP_FILE}"
-	virtiofsd_pids=$(ps aux | grep [v]irtiofsd | awk '{print $2}' | head -1)
-	data=$(sudo smem --no-header -P "^${virtiofsd_path}" -c pid -c "pid pss")
+
+	virtiofsd_pids="$(ps aux | grep '[v]irtiofsd' | awk '{print $2}' | head -1)"
+
+	data="$(sudo smem --no-header -P "^${virtiofsd_path}" -c "pid pss")"
 
 	for p in "${virtiofsd_pids}"; do
 		parent_pid=$(ppid "${p}")
@@ -176,7 +182,6 @@ function get_pss_memory_virtiofsd() {
 	done
 
 	[ "${count}" -gt 0 ] && global_virtiofsd_mem=$(bc -l <<< "scale=2; ${mem_amount} / ${count}")
-
 }
 
 function get_individual_memory(){
@@ -194,32 +199,45 @@ function get_individual_memory(){
 	read -r -a second_values <<< "${second_process_result}"
 	read -r -a third_values <<< "${third_process_result}"
 
+	declare -a fv_array
+	declare -a sv_array
+	declare -a tv_array
+
+	# remove null values from arrays of results
+	for ((i=0;i<"${NUM_CONTAINERS}";++i)); do
+		[ -n "${first_values[i]}" ] && fv_array+=( "${first_values[i]}" )
+		[ -n "${second_values[i]}" ] && sv_array+=( "${second_values[i]}" )
+		[ -n "${third_values[i]}" ] && tv_array+=( "${third_values[i]}" )
+	done
+
+	# remove trailing commas
+	fv_array[-1]="$(sed -r 's/,*$//g' <<< "${fv_array[-1]}")"
+	sv_array[-1]="$(sed -r 's/,*$//g' <<< "${sv_array[-1]}")"
+	tv_array[-1]="$(sed -r 's/,*$//g' <<< "${tv_array[-1]}")"
+
 	metrics_json_start_array
 
 	local json="$(cat << EOF
 	{
 		"${first_process_name} memory": [
-			$(for ((i=0;i<"${NUM_CONTAINERS[@]}";++i)); do
-				[ -n "${first_values[i]}" ] &&
-				printf '%s\n\t\t\t' "${first_values[i]}"
+			$(for i in "${fv_array[@]}"; do
+				printf '\n\t\t\t%s' "${i}"
 			done)
 		],
 		"${second_process_name} memory": [
-			$(for ((i=0;i<"${NUM_CONTAINERS[@]}";++i)); do
-				[ -n "${second_values[i]}" ] &&
-				printf '%s\n\t\t\t' "${second_values[i]}"
+			$(for i in "${sv_array[@]}"; do
+				printf '\n\t\t\t%s' "${i}"
 			done)
 		],
 		"${third_process_name} memory": [
-			$(for ((i=0;i<"${NUM_CONTAINERS[@]}";++i)); do
-				[ -n "${third_values[i]}" ] &&
-				printf '%s\n\t\t\t' "${third_values[i]}"
+			$(for i in "${tv_array[@]}"; do
+				printf '\n\t\t\t%s' "${i}"
 			done)
 		]
 	}
 EOF
 )"
-	metrics_json_add_array_element "$json"
+	metrics_json_add_array_element "${json}"
 	metrics_json_end_array "Raw results"
 }
 
@@ -272,7 +290,6 @@ function get_memory_usage(){
 	}
 EOF
 )"
-
 	else [ "$RUNTIME" == "kata-runtime" ] || [ "$RUNTIME" == "kata-qemu" ]
 		# Get PSS memory of VM runtime components.
 		# And check that the smem search has found the process - we get a "0"
@@ -281,7 +298,6 @@ EOF
 		# As an added bonus - this script must be run as root.
 		# Now if you do not have enough rights
 		#  the smem failure to read the stats will also be trapped.
-
 		get_pss_memory ${HYPERVISOR_PATH}
 
 		if [ "${global_hypervisor_mem}" == "0" ]; then
@@ -293,13 +309,11 @@ EOF
 		if [ "${global_virtiofsd_mem}" == "0" ]; then
 			echo >&2 "WARNING: Failed to find PSS for ${VIRTIOFSD_PATH}"
 		fi
-
 		get_pss_memory ${SHIM_PATH} 1
 
 		if [ "${global_shim_mem}" == "0" ]; then
 			die "Failed to find PSS for ${SHIM_PATH}"
 		fi
-
 		mem_usage="$(bc -l <<< "scale=2; ${global_hypervisor_mem} + ${global_virtiofsd_mem} + ${global_shim_mem}")"
 
 	local json="$(cat << EOF
@@ -361,10 +375,10 @@ function main(){
 
 	#Check for KSM before reporting test name, as it can modify it
 	check_for_ksm
-	init_env
 	check_cmds "${SMEM_BIN}" bc
+	clean_env_ctr
+	init_env
 	check_images "${IMAGE}"
-
 	if [ "${CTR_RUNTIME}" == "io.containerd.kata.v2" ]; then
 		export RUNTIME="kata-runtime"
         elif [ "${CTR_RUNTIME}" == "io.containerd.runc.v2" ]; then
@@ -372,7 +386,6 @@ function main(){
         else
 		die "Unknown runtime ${CTR_RUNTIME}"
 	fi
-
 	metrics_json_init
 	save_config
 	get_memory_usage
@@ -385,7 +398,6 @@ function main(){
 
 	info "memory usage test completed"
 	metrics_json_save
-	clean_env_ctr
 }
 
 main "$@"
