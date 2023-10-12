@@ -22,10 +22,10 @@ use crate::{
         MemoryStats, MetricsResponse, NetworkStats, OnlineCPUMemRequest, PidsStats,
         ReadStreamRequest, ReadStreamResponse, RemoveContainerRequest, ReseedRandomDevRequest,
         ResizeVolumeRequest, Route, Routes, SetGuestDateTimeRequest, SetIPTablesRequest,
-        SetIPTablesResponse, SignalProcessRequest, StatsContainerResponse, Storage, StringUser,
-        ThrottlingData, TtyWinResizeRequest, UpdateContainerRequest, UpdateInterfaceRequest,
-        UpdateRoutesRequest, VersionCheckResponse, VolumeStatsRequest, VolumeStatsResponse,
-        WaitProcessRequest, WriteStreamRequest,
+        SetIPTablesResponse, SharedMount, SignalProcessRequest, StatsContainerResponse, Storage,
+        StringUser, ThrottlingData, TtyWinResizeRequest, UpdateContainerRequest,
+        UpdateInterfaceRequest, UpdateRoutesRequest, VersionCheckResponse, VolumeStatsRequest,
+        VolumeStatsResponse, WaitProcessRequest, WriteStreamRequest,
     },
     OomEventResponse, WaitProcessResponse, WriteStreamResponse,
 };
@@ -112,6 +112,19 @@ impl From<Storage> for agent::Storage {
             fs_group: from_option(from.fs_group),
             options: trans_vec(from.options),
             mount_point: from.mount_point,
+            ..Default::default()
+        }
+    }
+}
+
+impl From<SharedMount> for agent::SharedMount {
+    fn from(from: SharedMount) -> Self {
+        Self {
+            name: from.name,
+            src_ctr: from.src_ctr,
+            src_path: from.src_path,
+            dst_ctr: from.dst_ctr,
+            dst_path: from.dst_path,
             ..Default::default()
         }
     }
@@ -260,6 +273,7 @@ impl From<CreateContainerRequest> for agent::CreateContainerRequest {
             storages: trans_vec(from.storages),
             OCI: from_option(from.oci),
             sandbox_pidns: from.sandbox_pidns,
+            shared_mounts: trans_vec(from.shared_mounts),
             ..Default::default()
         }
     }

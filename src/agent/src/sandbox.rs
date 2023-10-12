@@ -7,19 +7,24 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::fs;
+use std::os::fd::FromRawFd;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use std::{thread, time};
 
 use anyhow::{anyhow, Context, Result};
 use kata_types::cpu::CpuSet;
 use kata_types::mount::StorageDevice;
-use libc::pid_t;
+use libc::{pid_t, syscall};
+use nix::fcntl::{self, OFlag};
+use nix::sched::{setns, unshare, CloneFlags};
+use nix::sys::stat::Mode;
 use oci::{Hook, Hooks};
-use protocols::agent::OnlineCPUMemRequest;
+use protocols::agent::{OnlineCPUMemRequest, SharedMount};
 use regex::Regex;
 use rustjail::cgroups as rustjail_cgroups;
 use rustjail::container::BaseContainer;
@@ -254,6 +259,12 @@ impl Sandbox {
         self.containers.get_mut(id)
     }
 
+    pub fn find_container_by_name(&self, name: &str) -> Option<&LinuxContainer> {
+        self.containers
+            .values()
+            .find(|&c| c.config.container_name == name)
+    }
+
     pub fn find_process(&mut self, pid: pid_t) -> Option<&mut Process> {
         for (_, c) in self.containers.iter_mut() {
             if let Some(p) = c.processes.get_mut(&pid) {
@@ -402,6 +413,155 @@ impl Sandbox {
                 }
             }
         });
+    }
+
+    #[instrument]
+    pub fn setup_shared_mounts(&self, c: &LinuxContainer, mounts: &Vec<SharedMount>) -> Result<()> {
+        let mut src_ctrs: HashMap<String, i32> = HashMap::new();
+        for shared_mount in mounts {
+            match src_ctrs.get(&shared_mount.src_ctr) {
+                None => {
+                    if let Some(c) = self.find_container_by_name(&shared_mount.src_ctr) {
+                        src_ctrs.insert(shared_mount.src_ctr.clone(), c.init_process_pid);
+                    }
+                }
+                Some(_) => {}
+            }
+        }
+
+        // If there are no shared mounts to be set up, return directly.
+        if src_ctrs.is_empty() {
+            return Ok(());
+        }
+
+        let mounts = mounts.clone();
+        let init_mntns = fcntl::open(
+            "/proc/self/ns/mnt",
+            OFlag::O_RDONLY | OFlag::O_CLOEXEC,
+            Mode::empty(),
+        )
+        .map_err(|e| anyhow!("failed to open /proc/self/ns/mnt: {}", e))?;
+        // safe because the fd are opened by fcntl::open and used directly.
+        let _init_mntns_f = unsafe { fs::File::from_raw_fd(init_mntns) };
+        let dst_mntns_path = format!("/proc/{}/ns/mnt", c.init_process_pid);
+        let dst_mntns = fcntl::open(
+            dst_mntns_path.as_str(),
+            OFlag::O_RDONLY | OFlag::O_CLOEXEC,
+            Mode::empty(),
+        )
+        .map_err(|e| anyhow!("failed to open {}: {}", dst_mntns_path.as_str(), e))?;
+        // safe because the fd are opened by fcntl::open and used directly.
+        let _dst_mntns_f = unsafe { fs::File::from_raw_fd(dst_mntns) };
+        let new_thread = std::thread::spawn(move || {
+            || -> Result<()> {
+                // A process can't join a new mount namespace if it is sharing
+                // filesystem-related attributes (using CLONE_FS flag) with another process.
+                // Ref: https://man7.org/linux/man-pages/man2/setns.2.html
+                //
+                // The implementation of the Rust standard library's std::thread relies on
+                // the CLONE_FS parameter at the low level.
+                // Therefore, it is not possible to switch directly to the mount namespace using setns.
+                // Instead, it is necessary to first switch to a new mount namespace using unshare.
+                unshare(CloneFlags::CLONE_NEWNS)
+                    .map_err(|e| anyhow!("failed to create new mount namespace: {}", e))?;
+                for m in mounts {
+                    if let Some(src_init_pid) = src_ctrs.get(m.src_ctr()) {
+                        // Shared mount points are created by application process within the source container,
+                        // so we need to ensure they are already prepared.
+                        setns(init_mntns, CloneFlags::CLONE_NEWNS).map_err(|e| {
+                            anyhow!("switch to initial mount namespace failed: {}", e)
+                        })?;
+                        let mut is_ready = false;
+                        let start_time = Instant::now();
+                        let time_out = Duration::from_millis(10_000);
+                        loop {
+                            let proc_mounts_path = format!("/proc/{}/mounts", *src_init_pid);
+                            let proc_mounts = fs::read_to_string(proc_mounts_path.as_str())?;
+                            let lines: Vec<&str> = proc_mounts.split('\n').collect();
+                            for line in lines {
+                                let parts: Vec<&str> = line.split_whitespace().collect();
+                                if parts.len() >= 2 && parts[1] == m.src_path() {
+                                    is_ready = true;
+                                    break;
+                                }
+                            }
+
+                            if is_ready {
+                                break;
+                            }
+
+                            if start_time.elapsed() >= time_out {
+                                break;
+                            }
+
+                            thread::sleep(Duration::from_millis(100));
+                        }
+                        if !is_ready {
+                            continue;
+                        }
+
+                        // Switch to the src container to obtain shared mount points.
+                        let src_mntns_path = format!("/proc/{}/ns/mnt", *src_init_pid);
+                        let src_mntns = fcntl::open(
+                            src_mntns_path.as_str(),
+                            OFlag::O_RDONLY | OFlag::O_CLOEXEC,
+                            Mode::empty(),
+                        )
+                        .map_err(|e| {
+                            anyhow!("failed to open {}: {}", src_mntns_path.as_str(), e)
+                        })?;
+                        // safe because the fd are opened by fcntl::open and used directly.
+                        let _src_mntns_f = unsafe { fs::File::from_raw_fd(src_mntns) };
+                        setns(src_mntns, CloneFlags::CLONE_NEWNS).map_err(|e| {
+                            anyhow!("switch to source mount namespace failed: {}", e)
+                        })?;
+                        let src = std::ffi::CString::new(m.src_path())?;
+                        let mount_fd = unsafe {
+                            syscall(
+                                libc::SYS_open_tree,
+                                libc::AT_FDCWD,
+                                src.as_ptr(),
+                                0x1 | 0x8000 | libc::O_CLOEXEC, // OPEN_TREE_CLONE | AT_RECURSIVE | OPEN_TREE_CLOEXEC
+                            ) as i32
+                        };
+                        if mount_fd < 0 {
+                            return Err(anyhow!(
+                                "failed to clone mounted subtree on {}",
+                                m.src_path()
+                            ));
+                        }
+                        // safe because we have checked whether mount_fd is valid
+                        let _mount_f = unsafe { fs::File::from_raw_fd(mount_fd) };
+
+                        // Switch to the dst container and mount them.
+                        setns(dst_mntns, CloneFlags::CLONE_NEWNS).map_err(|e| {
+                            anyhow!("switch to destination mount namespace failed: {}", e)
+                        })?;
+                        fs::create_dir_all(m.dst_path())?;
+                        let dst = std::ffi::CString::new(m.dst_path())?;
+                        let empty = std::ffi::CString::new("")?;
+                        unsafe {
+                            syscall(
+                                libc::SYS_move_mount,
+                                mount_fd,
+                                empty.as_ptr(),
+                                libc::AT_FDCWD,
+                                dst.as_ptr(),
+                                4, // MOVE_MOUNT_F_EMPTY_PATH
+                            )
+                        };
+                    }
+                }
+
+                Ok(())
+            }()
+        });
+
+        new_thread
+            .join()
+            .map_err(|e| anyhow!("Failed to join thread {:?}!", e))??;
+
+        Ok(())
     }
 }
 
@@ -683,6 +843,7 @@ mod tests {
             spec: Some(spec),
             rootless_euid: false,
             rootless_cgroup: false,
+            container_name: "".to_string(),
         }
     }
 

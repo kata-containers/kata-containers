@@ -563,6 +563,7 @@ mod tests {
             rootless_euid: false,
             rootless_cgroup: false,
             spec: Some(spec),
+            container_name: "container1".to_owned(),
         };
 
         validate(&config).unwrap_err();
