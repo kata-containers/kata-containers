@@ -55,6 +55,10 @@ pub enum GuestProtectionError {
     // "true".
     #[error("TDX guest protection available and must be used with Cloud Hypervisor (set 'confidential_guest=true')")]
     TDXProtectionMustBeUsedWithCH,
+
+    // TDX is the only tested CH protection currently.
+    #[error("Expected TDX protection, found {0}")]
+    ExpectedTDXProtection(GuestProtection),
 }
 
 impl CloudHypervisorInner {
@@ -482,17 +486,25 @@ impl CloudHypervisorInner {
             task::spawn_blocking(|| -> Result<GuestProtection> { get_guest_protection() })
                 .await??;
 
-        if protection == GuestProtection::NoProtection {
-            if confidential_guest {
-                return Err(anyhow!(GuestProtectionError::NoProtectionAvailable));
-            } else {
-                debug!(sl!(), "no guest protection available");
-            }
-        } else if confidential_guest {
-            self.guest_protection_to_use = protection.clone();
+        self.guest_protection_to_use = protection.clone();
 
-            info!(sl!(), "guest protection available and requested"; "guest-protection" => protection.to_string());
+        info!(sl!(), "guest protection {:?}", protection.to_string());
+
+        if confidential_guest {
+            if protection == GuestProtection::NoProtection {
+                // User wants protection, but none available.
+                return Err(anyhow!(GuestProtectionError::NoProtectionAvailable));
+            } else if let GuestProtection::Tdx(_) = protection {
+                info!(sl!(), "guest protection available and requested"; "guest-protection" => protection.to_string());
+            } else {
+                return Err(anyhow!(GuestProtectionError::ExpectedTDXProtection(
+                    protection
+                )));
+            }
+        } else if protection == GuestProtection::NoProtection {
+            debug!(sl!(), "no guest protection available");
         } else if let GuestProtection::Tdx(_) = protection {
+            // CH requires TDX protection to be used.
             return Err(anyhow!(GuestProtectionError::TDXProtectionMustBeUsedWithCH));
         } else {
             info!(sl!(), "guest protection available but not requested"; "guest-protection" => protection.to_string());
@@ -899,13 +911,27 @@ mod tests {
                 confidential_guest: false,
                 available_protection: Some(GuestProtection::Tdx(tdx_details.clone())),
                 result: Err(anyhow!(GuestProtectionError::TDXProtectionMustBeUsedWithCH)),
-                guest_protection_to_use: GuestProtection::NoProtection,
+                guest_protection_to_use: GuestProtection::Tdx(tdx_details.clone()),
             },
             TestData {
                 confidential_guest: true,
                 available_protection: Some(GuestProtection::Tdx(tdx_details.clone())),
                 result: Ok(()),
-                guest_protection_to_use: GuestProtection::Tdx(tdx_details.clone()),
+                guest_protection_to_use: GuestProtection::Tdx(tdx_details),
+            },
+            TestData {
+                confidential_guest: false,
+                available_protection: Some(GuestProtection::Pef),
+                result: Ok(()),
+                guest_protection_to_use: GuestProtection::NoProtection,
+            },
+            TestData {
+                confidential_guest: true,
+                available_protection: Some(GuestProtection::Pef),
+                result: Err(anyhow!(GuestProtectionError::ExpectedTDXProtection(
+                    GuestProtection::Pef
+                ))),
+                guest_protection_to_use: GuestProtection::Pef,
             },
         ];
 
