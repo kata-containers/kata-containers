@@ -207,11 +207,13 @@ mod tests {
         let root_fs_str = root_fs.to_str().unwrap();
 
         let relative_secret_path = "../../etc/passwd";
-        let b64_relative_secret_path = base64::encode(relative_secret_path);
+        let b64_relative_secret_path =
+            base64::encode_config(relative_secret_path, base64::URL_SAFE);
 
-        // this byte array b64encodes to "/abcdddd"
-        let b64_abs_path = vec![253, 166, 220, 117, 215, 93];
-        let converted_relative_path = "abcdddd";
+        // byte array of "abcdddd"
+        let b64_abs_path = vec![97, 98, 99, 100, 100, 100, 100];
+        // b64urlencoded string of "abcdddd"
+        let b64urlencodes_relative_path = "YWJjZGRkZA==";
 
         let tests = &[
             TestData {
@@ -227,14 +229,15 @@ mod tests {
             TestData {
                 rootfs: root_fs_str,
                 volume_path: unsafe { std::str::from_utf8_unchecked(&b64_abs_path) },
-                result: Ok(root_fs.join(converted_relative_path)),
+                result: Ok(root_fs.join(b64urlencodes_relative_path)),
             },
         ];
+
         for (i, d) in tests.iter().enumerate() {
             let msg = format!("test[{}]: {:?}", i, d);
             let result = join_path(d.rootfs, d.volume_path);
             let msg = format!("{}, result: {:?}", msg, result);
-            if d.result.is_ok() {
+            if result.is_ok() {
                 assert!(
                     result.as_ref().unwrap() == d.result.as_ref().unwrap(),
                     "{}",
