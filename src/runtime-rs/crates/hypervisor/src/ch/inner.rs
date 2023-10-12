@@ -67,6 +67,12 @@ pub struct CloudHypervisorInner {
     // The cloud-hypervisor device-id is later looked up and used while
     // removing the device.
     pub(crate) device_ids: HashMap<String, String>,
+
+    // List of Cloud Hypervisor features enabled at Cloud Hypervisor build-time.
+    //
+    // If the version of CH does not provide these details, the value will be
+    // None.
+    pub(crate) ch_features: Option<Vec<String>>,
 }
 
 const CH_DEFAULT_TIMEOUT_SECS: u32 = 10;
@@ -104,6 +110,7 @@ impl CloudHypervisorInner {
             shutdown_rx: Some(rx),
             tasks: None,
             guest_protection_to_use: GuestProtection::NoProtection,
+            ch_features: None,
         }
     }
 
