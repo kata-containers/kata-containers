@@ -596,43 +596,64 @@ cp_to_guest_img() {
 	local dest_dir="$1"
 	shift # remaining arguments are the list of files.
 	local src_files=($@)
+	local rootfs_dir=""
 
 	if [ "${#src_files[@]}" -eq 0 ]; then
 		echo "Expected a list of files"
 		return 1
 	fi
 
+	rootfs_dir="$(mktemp -d)"
+
 	# Open the original initrd/image, inject the agent file
 	local image_path="$(kata-runtime kata-env --json | jq -r .Image.Path)"
 	if [ -f "$image_path" ]; then
-		local tmp_mnt="$(mktemp -d)"
 		if ! sudo mount -o loop,offset=$((512*6144)) "$image_path" \
-			"$tmp_mnt"; then
+			"$rootfs_dir"; then
 			echo "Failed to mount the image file: $image_path"
-			rm -rf "$tmp_mnt"
+			rm -rf "$rootfs_dir"
 			return 1
 		fi
-
-		mkdir -p "${tmp_mnt}/${dest_dir}"
-		for file in ${src_files[@]}; do
-			if [ ! -f "$file" ]; then
-				echo "File not found, not copying: $file"
-				continue
-			fi
-			sudo cp -f "${file}" "${tmp_mnt}/${dest_dir}"
-		done
-
-		sudo umount "$tmp_mnt"
-		rm -rf ${tmp_mnt}
 	else
 		local initrd_path="$(kata-runtime kata-env --json | \
 			jq -r .Initrd.Path)"
 		if [ ! -f "$initrd_path" ]; then
 			echo "Guest initrd and image not found"
+			rm -rf "$rootfs_dir"
 			return 1
 		fi
-		# TODO: implement me.
+		if ! cat "${initrd_path}" | cpio --extract --preserve-modification-time \
+			--make-directories --directory="${rootfs_dir}"; then
+			echo "Failed to uncompress the image file: $initrd_path"
+			rm -rf "$rootfs_dir"
+			return 1
+		fi
 	fi
+	mkdir -p "${rootfs_dir}/${dest_dir}"
+	for file in ${src_files[@]}; do
+		if [ ! -f "$file" ]; then
+			echo "File not found, not copying: $file"
+			continue
+		fi
+		cp -af "${file}" "${rootfs_dir}/${dest_dir}"
+	done
+
+	if [ -f "$image_path" ]; then
+		if ! sudo umount "$rootfs_dir"; then
+			echo "Failed to umount the directory: $rootfs_dir"
+			rm -rf "$rootfs_dir"
+			return 1
+		fi
+	else
+		if ! sudo bash -c "cd "${rootfs_dir}" && find . | \
+			cpio -H newc -o | gzip -9 > ${initrd_path}"; then
+			echo "Failed to compress the image file"
+			rm -rf "$rootfs_dir"
+			return 1
+		fi
+	fi
+
+	rm -rf "$rootfs_dir"
 }
 
 # Find the path to the current guest image file.
