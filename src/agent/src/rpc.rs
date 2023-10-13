@@ -127,19 +127,13 @@ fn ttrpc_error(code: ttrpc::Code, err: impl Debug) -> ttrpc::Error {
     get_rpc_status(code, format!("{:?}", err))
 }
 
-fn config_allows(req: &impl MessageDyn) -> ttrpc::Result<()> {
-    if !AGENT_CONFIG.is_allowed_endpoint(req.descriptor_dyn().name()) {
-        Err(ttrpc_error(
-            ttrpc::Code::UNIMPLEMENTED,
-            format!("{} is blocked", req.descriptor_dyn().name()),
-        ))
-    } else {
-        Ok(())
-    }
+#[cfg(not(feature = "agent-policy"))]
+async fn is_allowed(_req: &(impl MessageDyn + serde::Serialize)) -> ttrpc::Result<()> {
+    Ok(())
 }
 
 #[cfg(feature = "agent-policy")]
-async fn policy_allows(req: &(impl MessageDyn + serde::Serialize)) -> ttrpc::Result<()> {
+async fn is_allowed(req: &(impl MessageDyn + serde::Serialize)) -> ttrpc::Result<()> {
     let request = serde_json::to_string(req).unwrap();
     let mut policy = AGENT_POLICY.lock().await;
     if !policy
@@ -154,17 +148,6 @@ async fn policy_allows(req: &(impl MessageDyn + serde::Serialize)) -> ttrpc::Res
     } else {
         Ok(())
     }
-}
-
-async fn is_allowed(req: &(impl MessageDyn + serde::Serialize)) -> ttrpc::Result<()> {
-    let res = config_allows(req);
-
-    #[cfg(feature = "agent-policy")]
-    if res.is_ok() {
-        return policy_allows(req).await;
-    }
-
-    res
 }
 
 fn same<E>(e: E) -> E {
