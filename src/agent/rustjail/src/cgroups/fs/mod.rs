@@ -1104,15 +1104,13 @@ impl Manager {
         })
     }
 
-    /// Create a cgroupfs manager without creating any cgroups.
-    /// A typical case is for systemd cgroup: Systemd manager retains a
-    /// cgroupfs manager to read cgroup information only. Writing cgroup
-    /// rules is done by the systemd. That is, the cgroupfs manager runs in
-    /// read-only mode.
-    pub fn new_read_only(cpath: &str) -> Result<Self> {
+    /// Create a cgroupfs manager for systemd cgroup.
+    /// The device cgroup is disabled in systemd cgroup, given that it is
+    /// implemented by eBPF.
+    pub fn new_systemd(cpath: &str) -> Result<Self> {
         let (paths, mounts) = Self::get_paths_and_mounts(cpath).context("Get paths and mounts")?;
 
-        let cg = load_cgroup(cgroups::hierarchies::auto(), cpath);
+        let cg = new_cgroup(cgroups::hierarchies::auto(), cpath)?;
 
         Ok(Self {
             paths,
