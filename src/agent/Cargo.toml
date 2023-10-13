@@ -74,9 +74,10 @@ clap = { version = "3.0.1", features = ["derive"] }
 openssl = { version = "0.10.38", features = ["vendored"] }
 
 # Image pull/decrypt
-image-rs = { git = "https://github.com/confidential-containers/guest-components", rev = "b01062b8a9eef0a5e7cc83eeb36f818991826fb4", default-features = false, features = [
+image-rs = { git = "https://github.com/confidential-containers/guest-components", rev = "917d5cff1cf57e2555426b6dd8bf59dc3b7f0901", default-features = false, features = [
     "kata-cc-native-tls",
     "verity",
+    "signature-simple-xrss",
 ] }
 
 [patch.crates-io]

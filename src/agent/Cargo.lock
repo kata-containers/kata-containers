@@ -2015,7 +2015,7 @@ dependencies = [
 [[package]]
 name = "image-rs"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/guest-components?rev=b01062b8a9eef0a5e7cc83eeb36f818991826fb4#b01062b8a9eef0a5e7cc83eeb36f818991826fb4"
+source = "git+https://github.com/confidential-containers/guest-components?rev=917d5cff1cf57e2555426b6dd8bf59dc3b7f0901#917d5cff1cf57e2555426b6dd8bf59dc3b7f0901"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -2036,6 +2036,7 @@ dependencies = [
  "oci-spec",
  "ocicrypt-rs",
  "protobuf 3.2.0",
+ "reqwest",
  "sequoia-openpgp",
  "serde",
  "serde_json",
@@ -2920,7 +2921,7 @@ dependencies = [
 [[package]]
 name = "ocicrypt-rs"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/guest-components?rev=b01062b8a9eef0a5e7cc83eeb36f818991826fb4#b01062b8a9eef0a5e7cc83eeb36f818991826fb4"
+source = "git+https://github.com/confidential-containers/guest-components?rev=917d5cff1cf57e2555426b6dd8bf59dc3b7f0901#917d5cff1cf57e2555426b6dd8bf59dc3b7f0901"
 dependencies = [
  "aes 0.8.3",
  "anyhow",
@@ -3884,9 +3885,9 @@ checksum = "a5996294f19bd3aae0453a862ad728f60e6600695733dd5df01da90c54363a3c"
 
 [[package]]
 name = "reqwest"
-version = "0.11.16"
+version = "0.11.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27b71749df584b7f4cac2c426c127a7c785a5106cc98f7a8feb044115f0fa254"
+checksum = "046cd98826c46c2ac8ddecae268eb5c2e58628688a5fc7a2643704a73faba95b"
 dependencies = [
  "base64 0.21.2",
  "bytes 1.4.0",
@@ -3909,6 +3910,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded",
+ "system-configuration",
  "tokio",
  "tokio-native-tls",
  "tokio-util 0.7.8",
@@ -4795,6 +4797,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "system-configuration"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba3a3adc5c275d719af8cb4272ea1c4a6d668a777f37e115f6d11ddbc1c8e0e7"
+dependencies = [
+ "bitflags",
+ "core-foundation",
+ "system-configuration-sys",
+]
+
+[[package]]
+name = "system-configuration-sys"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a75fb188eb626b924683e3b95e3a48e63551fcfb51949de2f06a9d91dbee93c9"
+dependencies = [
+ "core-foundation-sys",
+ "libc",
+]
+
+[[package]]
 name = "take_mut"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5525,9 +5548,9 @@ checksum = "0046fef7e28c3804e5e38bfa31ea2a0f73905319b677e57ebe37e49358989b5d"
 
 [[package]]
 name = "wasm-streams"
-version = "0.2.3"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6bbae3363c08332cadccd13b67db371814cd214c2524020932f0804b8cf7c078"
+checksum = "b4609d447824375f43e1ffbc051b50ad8f4b3ae8219680c94452ea05eb240ac7"
 dependencies = [
  "futures-util",
  "js-sys",
@@ -5772,11 +5795,12 @@ dependencies = [
 
 [[package]]
 name = "winreg"
-version = "0.10.1"
+version = "0.50.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80d0f4e272c85def139476380b12f9ac60926689dd2e01d4923222f40580869d"
+checksum = "524e57b2c537c0f9b1e69f1965311ec12182b4122e45035b1508cd24d2adadb1"
 dependencies = [
- "winapi",
+ "cfg-if 1.0.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
