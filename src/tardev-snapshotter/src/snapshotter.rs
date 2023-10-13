@@ -11,7 +11,6 @@ use tonic::Status;
 
 const ROOT_HASH_LABEL: &str = "io.katacontainers.dm-verity.root-hash";
 const TARGET_LAYER_DIGEST_LABEL: &str = "containerd.io/snapshot/cri.layer-digest";
-const SNAPSHOT_REF_LABEL: &str = "containerd.io/snapshot.ref";
 
 struct Store {
     root: PathBuf,
@@ -240,7 +239,6 @@ impl TarDevSnapshotter {
         parent: String,
         mut labels: HashMap<String, String>,
     ) -> Result<(), Status> {
-        const TARGET_REF_LABEL: &str = "containerd.io/snapshot/cri.image-ref";
         let dir = self.store.read().await.staging_dir()?;
 
         {
@@ -350,7 +348,7 @@ impl Snapshotter for TarDevSnapshotter {
             ));
         }
 
-        if info.labels.get(SNAPSHOT_REF_LABEL).is_some() {
+        if info.labels.get(TARGET_LAYER_DIGEST_LABEL).is_some() {
             let extract_dir = store.extract_dir(&key);
             Ok(vec![api::types::Mount {
                 r#type: "bind".into(),
@@ -373,7 +371,7 @@ impl Snapshotter for TarDevSnapshotter {
 
         // There are two reasons for preparing a snapshot: to build an image and to actually use it
         // as a container image. We determine the reason by the presence of the snapshot-ref label.
-        if labels.get(SNAPSHOT_REF_LABEL).is_some() {
+        if labels.get(TARGET_LAYER_DIGEST_LABEL).is_some() {
             self.prepare_unpack_dir(key, parent, labels).await
         } else {
             self.store
@@ -413,7 +411,7 @@ impl Snapshotter for TarDevSnapshotter {
             }
         }
 
-        if info.labels.get(SNAPSHOT_REF_LABEL).is_some() {
+        if info.labels.get(TARGET_LAYER_DIGEST_LABEL).is_some() {
             self.prepare_image_layer(name, info.parent, labels).await
         } else {
             Err(Status::unimplemented(
@@ -430,7 +428,7 @@ impl Snapshotter for TarDevSnapshotter {
         if let Ok(info) = store.read_snapshot(&key) {
             match info.kind {
                 Kind::Committed => {
-                    if let Some(_digest) = info.labels.get(TARGET_LAYER_DIGEST_LABEL) {
+                    if info.labels.get(TARGET_LAYER_DIGEST_LABEL).is_some() {
                         // Try to delete a layer. It's ok if it's not found.
                         if let Err(e) = fs::remove_file(store.layer_path(&key)) {
                             if e.kind() != io::ErrorKind::NotFound {
