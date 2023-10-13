@@ -481,6 +481,7 @@ install_cached_kernel_tarball_component() {
 
 install_cc_initrd() {
 	export AA_KBC="${AA_KBC:-offline_fs_kbc}"
+	export SEALED_SECRET=yes
 	info "Create CC initrd configured with AA_KBC=${AA_KBC}"
 	install_initrd
 }
