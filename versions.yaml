@@ -235,9 +235,9 @@ externals:
       url: "github.com/containerd/containerd"
       # yamllint disable-line rule:line-length
       tarball_url: "https://github.com/containerd/containerd/releases/download"
-      version: "v1.6.8"
+      version: "v1.7.7"
       # CCv0 needs to know about the specific branch for the integration tests
-      branch: "release/1.6"
+      branch: "release/1.7"
 
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"
