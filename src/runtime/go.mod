@@ -31,7 +31,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/intel-go/cpuid v0.0.0-20210602155658-5747e5cec0d9
 	github.com/mdlayher/vsock v1.1.0
-	github.com/opencontainers/runc v1.1.3
+	github.com/opencontainers/runc v1.1.9
 	github.com/opencontainers/runtime-spec v1.1.0-rc.1
 	github.com/opencontainers/selinux v1.10.1
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58
@@ -52,7 +52,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.3.0
 	go.opentelemetry.io/otel/trace v1.3.0
 	golang.org/x/oauth2 v0.0.0-20220622183110-fd043fe589d2
-	golang.org/x/sys v0.1.0
+	golang.org/x/sys v0.6.0
 	google.golang.org/grpc v1.47.0
 	k8s.io/apimachinery v0.22.5
 	k8s.io/cri-api v0.23.1
@@ -101,10 +101,10 @@ require (
 	github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635 // indirect
 	go.mongodb.org/mongo-driver v1.7.5 // indirect
 	go.opencensus.io v0.23.0 // indirect
-	golang.org/x/mod v0.6.0-dev.0.20220106191415-9b9b3d81d5e3 // indirect
-	golang.org/x/net v0.0.0-20220722155237-a158d28d115b // indirect
-	golang.org/x/sync v0.0.0-20220601150217-0de741cfad7f // indirect
-	golang.org/x/text v0.3.7 // indirect
+	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
+	golang.org/x/net v0.8.0 // indirect
+	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4 // indirect
+	golang.org/x/text v0.8.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20220624142145-8cd45d7dbd1f // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
@@ -115,8 +115,13 @@ require (
 )
 
 replace (
+	github.com/go-openapi/swag => github.com/go-openapi/swag v0.21.1
 	github.com/opencontainers/image-spec => github.com/opencontainers/image-spec v1.0.2
-	github.com/opencontainers/runc => github.com/opencontainers/runc v1.1.3
+	github.com/opencontainers/runc => github.com/opencontainers/runc v1.1.9
+	github.com/stretchr/testify => github.com/stretchr/testify v1.8.0
 	github.com/uber-go/atomic => go.uber.org/atomic v1.5.1
+	golang.org/x/text => golang.org/x/text v0.7.0
 	google.golang.org/genproto => google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
+	google.golang.org/grpc => google.golang.org/grpc v1.47.0
+	gopkg.in/yaml.v3 => gopkg.in/yaml.v3 v3.0.1
 )

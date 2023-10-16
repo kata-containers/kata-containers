@@ -215,7 +215,7 @@ github.com/go-openapi/spec
 # github.com/go-openapi/strfmt v0.21.1
 ## explicit; go 1.13
 github.com/go-openapi/strfmt
-# github.com/go-openapi/swag v0.21.1
+# github.com/go-openapi/swag v0.21.1 => github.com/go-openapi/swag v0.21.1
 ## explicit; go 1.11
 github.com/go-openapi/swag
 # github.com/go-openapi/validate v0.22.0
@@ -287,8 +287,8 @@ github.com/opencontainers/go-digest
 ## explicit
 github.com/opencontainers/image-spec/specs-go
 github.com/opencontainers/image-spec/specs-go/v1
-# github.com/opencontainers/runc v1.1.3 => github.com/opencontainers/runc v1.1.3
-## explicit; go 1.16
+# github.com/opencontainers/runc v1.1.9 => github.com/opencontainers/runc v1.1.9
+## explicit; go 1.17
 github.com/opencontainers/runc/libcontainer/cgroups
 github.com/opencontainers/runc/libcontainer/cgroups/devices
 github.com/opencontainers/runc/libcontainer/cgroups/ebpf
@@ -354,7 +354,7 @@ github.com/safchain/ethtool
 ## explicit; go 1.13
 github.com/sirupsen/logrus
 github.com/sirupsen/logrus/hooks/syslog
-# github.com/stretchr/testify v1.8.0
+# github.com/stretchr/testify v1.8.0 => github.com/stretchr/testify v1.8.0
 ## explicit; go 1.13
 github.com/stretchr/testify/assert
 # github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635
@@ -419,10 +419,10 @@ go.opentelemetry.io/otel/sdk/trace
 # go.opentelemetry.io/otel/trace v1.3.0
 ## explicit; go 1.16
 go.opentelemetry.io/otel/trace
-# golang.org/x/mod v0.6.0-dev.0.20220106191415-9b9b3d81d5e3
+# golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4
 ## explicit; go 1.17
 golang.org/x/mod/semver
-# golang.org/x/net v0.0.0-20220722155237-a158d28d115b
+# golang.org/x/net v0.8.0
 ## explicit; go 1.17
 golang.org/x/net/bpf
 golang.org/x/net/context
@@ -437,17 +437,17 @@ golang.org/x/net/trace
 ## explicit; go 1.15
 golang.org/x/oauth2
 golang.org/x/oauth2/internal
-# golang.org/x/sync v0.0.0-20220601150217-0de741cfad7f
+# golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4
 ## explicit
 golang.org/x/sync/errgroup
-# golang.org/x/sys v0.1.0
+# golang.org/x/sys v0.6.0
 ## explicit; go 1.17
 golang.org/x/sys/execabs
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 golang.org/x/sys/windows/registry
-# golang.org/x/text v0.3.7
+# golang.org/x/text v0.8.0 => golang.org/x/text v0.7.0
 ## explicit; go 1.17
 golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
@@ -466,7 +466,7 @@ google.golang.org/appengine/urlfetch
 # google.golang.org/genproto v0.0.0-20220624142145-8cd45d7dbd1f => google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
 ## explicit
 google.golang.org/genproto/googleapis/rpc/status
-# google.golang.org/grpc v1.47.0
+# google.golang.org/grpc v1.47.0 => google.golang.org/grpc v1.47.0
 ## explicit; go 1.14
 google.golang.org/grpc
 google.golang.org/grpc/attributes
@@ -556,7 +556,7 @@ gopkg.in/inf.v0
 # gopkg.in/yaml.v2 v2.4.0
 ## explicit; go 1.15
 gopkg.in/yaml.v2
-# gopkg.in/yaml.v3 v3.0.1
+# gopkg.in/yaml.v3 v3.0.1 => gopkg.in/yaml.v3 v3.0.1
 ## explicit
 gopkg.in/yaml.v3
 # k8s.io/apimachinery v0.22.5
@@ -568,7 +568,12 @@ k8s.io/cri-api/pkg/apis/runtime/v1alpha2
 # sigs.k8s.io/yaml v1.3.0
 ## explicit; go 1.12
 sigs.k8s.io/yaml
+# github.com/go-openapi/swag => github.com/go-openapi/swag v0.21.1
 # github.com/opencontainers/image-spec => github.com/opencontainers/image-spec v1.0.2
-# github.com/opencontainers/runc => github.com/opencontainers/runc v1.1.3
+# github.com/opencontainers/runc => github.com/opencontainers/runc v1.1.9
+# github.com/stretchr/testify => github.com/stretchr/testify v1.8.0
 # github.com/uber-go/atomic => go.uber.org/atomic v1.5.1
+# golang.org/x/text => golang.org/x/text v0.7.0
 # google.golang.org/genproto => google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
+# google.golang.org/grpc => google.golang.org/grpc v1.47.0
+# gopkg.in/yaml.v3 => gopkg.in/yaml.v3 v3.0.1
