@@ -82,6 +82,8 @@ pub const KATA_ANNO_CFG_AGENT_CONTAINER_PIPE_SIZE: &str =
     "io.katacontainers.config.agent.container_pipe_size";
 /// An annotation key to specify the size of the pipes created for containers.
 pub const CONTAINER_PIPE_SIZE_KERNEL_PARAM: &str = "agent.container_pipe_size";
+/// A sandbox annotation to enable shared userns.
+pub const KATA_ANNO_CFG_AGENT_GUEST_USERNS: &str = "io.katacontainers.config.agent.guest_userns";
 
 // Hypervisor related annotations
 /// Prefix for Hypervisor configurations.
@@ -910,6 +912,17 @@ impl Annotation {
                         }
                         Err(_e) => {
                             return Err(u32_err);
+                        }
+                    },
+                    KATA_ANNO_CFG_AGENT_GUEST_USERNS => match self.get_value::<bool>(key) {
+                        Ok(v) => {
+                            ag.guest_userns = v.unwrap_or_default();
+                            if ag.guest_userns {
+                                hv.shared_fs.virtio_fs_id_mapping = (0, 1, 65536);
+                            }
+                        }
+                        Err(_e) => {
+                            return Err(bool_err);
                         }
                     },
                     // update runtime config

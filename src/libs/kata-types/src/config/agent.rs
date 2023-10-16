@@ -82,6 +82,10 @@ pub struct Agent {
     /// container pipe size
     #[serde(default)]
     pub container_pipe_size: u32,
+
+    /// If enabled, the agent will creates a rootless shared userns for the containers to use.
+    #[serde(default)]
+    pub guest_userns: bool,
 }
 
 impl std::default::Default for Agent {
@@ -98,6 +102,7 @@ impl std::default::Default for Agent {
             health_check_request_timeout_ms: 90_000,
             kernel_modules: Default::default(),
             container_pipe_size: 0,
+            guest_userns: false,
         }
     }
 }

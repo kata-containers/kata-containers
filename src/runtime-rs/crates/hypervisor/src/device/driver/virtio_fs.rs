@@ -70,6 +70,9 @@ pub struct ShareFsDeviceConfig {
 
     /// options: virtiofs device's config options.
     pub options: Vec<String>,
+
+    /// declaration of the uid/gid mapping rules
+    pub id_mapping: (u32, u32, u32),
 }
 
 #[derive(Debug, Clone)]

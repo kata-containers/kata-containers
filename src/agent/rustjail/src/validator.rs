@@ -134,6 +134,13 @@ fn usernamespace(oci: &Spec) -> Result<()> {
         if !user_ns.exists() {
             return Err(anyhow!("user namespace not supported!"));
         }
+        // If the user namespace has already been persisted,
+        // there is no need to check the idmappings.
+        for ns in &linux.namespaces {
+            if ns.r#type.as_str() == "user" && !ns.path.is_empty() {
+                return Ok(());
+            }
+        }
         // check if idmappings is correct, at least I saw idmaps
         // with zero size was passed to agent
         idmapping(&linux.uid_mappings).context("idmapping uid")?;

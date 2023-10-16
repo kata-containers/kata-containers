@@ -3,30 +3,39 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use nix::mount::MsFlags;
 use nix::sched::{unshare, CloneFlags};
-use nix::unistd::{getpid, gettid};
+use nix::sys::wait::wait;
+use nix::unistd::{self, fork, getpid, gettid, ForkResult, Gid, Pid, Uid};
 use slog::Logger;
 use std::fmt;
 use std::fs;
 use std::fs::File;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use tracing::instrument;
 
 use crate::mount::baremount;
+use rustjail::sync::{read_sync, write_sync, SYNC_SUCCESS};
 
 const PERSISTENT_NS_DIR: &str = "/var/run/sandbox-ns";
 pub const NSTYPEIPC: &str = "ipc";
 pub const NSTYPEUTS: &str = "uts";
 pub const NSTYPEPID: &str = "pid";
+pub const NSTYPEUSER: &str = "user";
 
 #[instrument]
 pub fn get_current_thread_ns_path(ns_type: &str) -> String {
     format!("/proc/{}/task/{}/ns/{}", getpid(), gettid(), ns_type)
 }
 
-#[derive(Debug)]
+#[instrument]
+pub fn get_proc_ns_path(pid: i32, ns_type: &str) -> String {
+    format!("/proc/{}/ns/{}", pid, ns_type)
+}
+
+#[derive(Clone, Debug)]
 pub struct Namespace {
     logger: Logger,
     pub path: String,
@@ -66,6 +75,12 @@ impl Namespace {
     #[instrument]
     pub fn get_pid(mut self) -> Self {
         self.ns_type = NamespaceType::Pid;
+        self
+    }
+
+    #[instrument]
+    pub fn get_user(mut self) -> Self {
+        self.ns_type = NamespaceType::User;
         self
     }
 
@@ -143,12 +158,169 @@ impl Namespace {
     }
 }
 
+/// setup persistent namespace in a non-root user namespace without switching to it.
+/// Note, pid namespaces cannot be persisted.
+///
+/// CLONE_NEWUSER requires that the calling process is not threaded,
+/// so use a child process to execute unshare() or setns().
+/// Ref: https://man7.org/linux/man-pages/man2/unshare.2.html
+#[instrument]
+#[allow(clippy::question_mark)]
+pub async fn setup_in_userns(
+    logger: &Logger,
+    userns: &mut Namespace,
+    nses: Vec<&mut Namespace>,
+) -> Result<()> {
+    let (prfd, cwfd) = unistd::pipe().context("failed to create pipe")?;
+    let (crfd, pwfd) = unistd::pipe().context("failed to create pipe")?;
+
+    match unsafe { fork() } {
+        Ok(ForkResult::Parent { child, .. }) => {
+            unistd::close(crfd)?;
+            unistd::close(cwfd)?;
+
+            let mut mounts = Vec::new();
+            let logger = logger.clone();
+
+            // create mount path of namespaces
+            fs::create_dir_all(&userns.persistent_ns_dir)?;
+            let ns_path = PathBuf::from(&userns.persistent_ns_dir);
+            let new_ns_path = ns_path.join(userns.ns_type.get());
+            File::create(new_ns_path.as_path())?;
+            userns.path = new_ns_path.clone().into_os_string().into_string().unwrap();
+            let origin_ns_path = get_proc_ns_path(child.as_raw(), userns.ns_type.get());
+            mounts.push((origin_ns_path, new_ns_path));
+
+            for ns in nses {
+                let ns_type = ns.ns_type;
+                if ns_type == NamespaceType::Pid {
+                    return Err(anyhow!("Cannot persist namespace of PID type"));
+                }
+
+                fs::create_dir_all(&ns.persistent_ns_dir)?;
+
+                let ns_path = PathBuf::from(&ns.persistent_ns_dir);
+                let new_ns_path = ns_path.join(ns_type.get());
+                File::create(new_ns_path.as_path())?;
+                ns.path = new_ns_path.clone().into_os_string().into_string().unwrap();
+
+                let origin_ns_path = get_proc_ns_path(child.as_raw(), ns_type.get());
+
+                mounts.push((origin_ns_path, new_ns_path));
+            }
+
+            // wait child to setup user namespace
+            read_sync(prfd)?;
+
+            // after creating the userns, remap ids (temporarily remap 0~65535 to 1~65536).
+            id_remap(&child, 1)?;
+
+            // notify child to continue
+            write_sync(pwfd, SYNC_SUCCESS, "")?;
+
+            // wait child to setup other namespaces
+            read_sync(prfd)?;
+
+            // Bind mount the new namespaces onto the mount point to persist it.
+            for (origin_ns_path, new_ns_path) in mounts {
+                let source = Path::new(&origin_ns_path);
+                let destination = new_ns_path.as_path();
+
+                File::open(source)?;
+
+                let mut flags = MsFlags::empty();
+                flags |= MsFlags::MS_BIND | MsFlags::MS_REC;
+
+                baremount(source, destination, "none", flags, "", &logger).map_err(|e| {
+                    anyhow!(
+                        "Failed to mount {:?} to {:?} with err:{:?}",
+                        source,
+                        destination,
+                        e
+                    )
+                })?;
+            }
+
+            // notify child to exit
+            write_sync(pwfd, SYNC_SUCCESS, "")?;
+
+            unistd::close(prfd)?;
+            unistd::close(pwfd)?;
+            wait()?;
+        }
+        Ok(ForkResult::Child) => {
+            unistd::close(prfd)?;
+            unistd::close(pwfd)?;
+
+            let cf = userns.ns_type.get_flags();
+            unshare(cf)?;
+
+            // notify parent user namespace creation is complete
+            write_sync(cwfd, SYNC_SUCCESS, "")?;
+
+            // wait parent to remap ids
+            read_sync(crfd)?;
+
+            setid(Uid::from_raw(0), Gid::from_raw(0))?;
+
+            for ns in nses {
+                let cf = ns.ns_type.get_flags();
+                unshare(cf)?;
+
+                let hostname = ns.hostname.clone();
+                if ns.ns_type == NamespaceType::Uts && hostname.is_some() {
+                    nix::unistd::sethostname(hostname.unwrap())?;
+                }
+            }
+
+            // notify parent to persist namespace
+            write_sync(cwfd, SYNC_SUCCESS, "")?;
+
+            // wait parent to persist namespace
+            read_sync(crfd)?;
+
+            std::process::exit(0);
+        }
+        Err(e) => {
+            return Err(anyhow!(format!(
+                "failed to fork namespace setup process: {:?}",
+                e
+            )));
+        }
+    };
+
+    Ok(())
+}
+
+/// remap the root inside the userns to a non-root user on the guest
+#[instrument]
+fn id_remap(pid: &Pid, id: u32) -> Result<()> {
+    // The first field represents the start of the internal ID range in the user namespace,
+    // the second field represents the start of the initial user namespace ID range,
+    // and the third field represents the length of the id mapping range.
+    File::create(format!("/proc/{}/uid_map", pid.as_raw()))?
+        .write_all(format!("0 {} 65536", id).as_bytes())?;
+    File::create(format!("/proc/{}/gid_map", pid.as_raw()))?
+        .write_all(format!("0 {} 65536", id).as_bytes())?;
+
+    Ok(())
+}
+
+#[instrument]
+fn setid(uid: Uid, gid: Gid) -> Result<()> {
+    unistd::setresuid(uid, uid, uid)?;
+    unistd::setresgid(gid, gid, gid)?;
+
+    Ok(())
+}
+
 /// Represents the Namespace type.
 #[derive(Clone, Copy, PartialEq)]
 enum NamespaceType {
     Ipc,
     Uts,
     Pid,
+    User,
 }
 
 impl NamespaceType {
@@ -158,6 +330,7 @@ impl NamespaceType {
             Self::Ipc => "ipc",
             Self::Uts => "uts",
             Self::Pid => "pid",
+            Self::User => "user",
         }
     }
 
@@ -167,6 +340,7 @@ impl NamespaceType {
             Self::Ipc => CloneFlags::CLONE_NEWIPC,
             Self::Uts => CloneFlags::CLONE_NEWUTS,
             Self::Pid => CloneFlags::CLONE_NEWPID,
+            Self::User => CloneFlags::CLONE_NEWUSER,
         }
     }
 }
@@ -239,6 +413,10 @@ mod tests {
         let pid = NamespaceType::Pid;
         assert_eq!("pid", pid.get());
         assert_eq!(CloneFlags::CLONE_NEWPID, pid.get_flags());
+
+        let user = NamespaceType::User;
+        assert_eq!("user", user.get());
+        assert_eq!(CloneFlags::CLONE_NEWUSER, user.get_flags());
     }
 
     #[test]
@@ -291,6 +469,15 @@ mod tests {
     }
 
     #[test]
+    fn test_get_user() {
+        // Create dummy logger and temp folder.
+        let logger = slog::Logger::root(slog::Discard, o!());
+
+        let ns_user = Namespace::new(&logger).get_user();
+        assert_eq!(NamespaceType::User, ns_user.ns_type);
+    }
+
+    #[test]
     fn test_set_root_dir() {
         // Create dummy logger and temp folder.
         let logger = slog::Logger::root(slog::Discard, o!());
@@ -322,6 +509,10 @@ mod tests {
                 ns_type: NamespaceType::Pid,
                 str: "pid",
             },
+            TestData {
+                ns_type: NamespaceType::User,
+                str: "user",
+            },
         ];
 
         // Run the tests
@@ -352,6 +543,10 @@ mod tests {
             TestData {
                 ns_type: NamespaceType::Pid,
                 ns_flag: CloneFlags::CLONE_NEWPID,
+            },
+            TestData {
+                ns_type: NamespaceType::User,
+                ns_flag: CloneFlags::CLONE_NEWUSER,
             },
         ];
 

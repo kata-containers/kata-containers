@@ -298,6 +298,8 @@ message CreateSandboxRequest {
 	string guest_hook_path = 6;
 	// This field is the list of kernel modules to be loaded in the guest kernel.
 	repeated KernelModule kernel_modules = 7;
+	// Indicates the need to create a rootless shared userns for containers to use.
+	bool guest_userns = 8;
 }
 
 message DestroySandboxRequest {

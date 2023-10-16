@@ -850,6 +850,12 @@ pub struct SharedFsInfo {
     /// This is the msize used for 9p shares. It is the number of bytes used for 9p packet payload.
     #[serde(default)]
     pub msize_9p: u32,
+
+    /// Declaration of ID mapping, in the format (internal ID, external ID, range).
+    /// For example, (0, 1, 65536) represents mapping the external UID/GID range of `1~65536`
+    /// to the range of `0~65535` within the virtio-fs.
+    #[serde(default)]
+    pub virtio_fs_id_mapping: (u32, u32, u32),
 }
 
 impl SharedFsInfo {

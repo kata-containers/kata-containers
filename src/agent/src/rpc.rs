@@ -58,7 +58,7 @@ use crate::device::{
 use crate::linux_abi::*;
 use crate::metrics::get_metrics;
 use crate::mount::baremount;
-use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
+use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUSER, NSTYPEUTS};
 use crate::network::setup_guest_dns;
 use crate::pci;
 use crate::random;
@@ -1188,7 +1188,13 @@ impl agent_ttrpc::AgentService for AgentService {
                 load_kernel_module(m).map_ttrpc_err(same)?;
             }
 
-            s.setup_shared_namespaces().await.map_ttrpc_err(same)?;
+            if req.guest_userns {
+                s.setup_shared_namespaces_in_userns()
+                    .await
+                    .map_ttrpc_err(same)?;
+            } else {
+                s.setup_shared_namespaces().await.map_ttrpc_err(same)?;
+            }
         }
 
         let m = add_storages(sl(), req.storages, &self.sandbox, None)
@@ -1671,6 +1677,15 @@ fn update_container_namespaces(
     }
 
     linux.namespaces.push(pid_ns);
+
+    // Use shared user ns if guest_userns has been enabled
+    if let Some(userns) = &sandbox.shared_userns {
+        let user_ns = LinuxNamespace {
+            r#type: NSTYPEUSER.to_string(),
+            path: userns.path.clone(),
+        };
+        linux.namespaces.push(user_ns);
+    }
     Ok(())
 }
 

@@ -657,6 +657,7 @@ impl From<CreateSandboxRequest> for agent::CreateSandboxRequest {
             sandbox_id: from.sandbox_id,
             guest_hook_path: from.guest_hook_path,
             kernel_modules: trans_vec(from.kernel_modules),
+            guest_userns: from.guest_userns,
             ..Default::default()
         }
     }

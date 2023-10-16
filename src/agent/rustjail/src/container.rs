@@ -44,7 +44,7 @@ use nix::pty;
 use nix::sched::{self, CloneFlags};
 use nix::sys::signal::{self, Signal};
 use nix::sys::stat::{self, Mode};
-use nix::unistd::{self, fork, ForkResult, Gid, Pid, Uid, User};
+use nix::unistd::{self, chown, fork, ForkResult, Gid, Pid, Uid, User};
 use std::os::unix::fs::MetadataExt;
 use std::os::unix::io::AsRawFd;
 
@@ -82,6 +82,7 @@ const HOME_ENV_KEY: &str = "HOME";
 const PIDNS_FD: &str = "PIDNS_FD";
 const PIDNS_ENABLED: &str = "PIDNS_ENABLED";
 const CONSOLE_SOCKET_FD: &str = "CONSOLE_SOCKET_FD";
+const KATA_GUEST_SHARE_DIR: &str = "/run/kata-containers/shared/containers/";
 
 #[derive(Debug)]
 pub struct ContainerStatus {
@@ -430,6 +431,7 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
     let nses = get_namespaces(linux);
 
     let mut userns = false;
+    let mut guest_userns = false;
     let mut to_new = CloneFlags::empty();
     let mut to_join = Vec::new();
 
@@ -461,6 +463,10 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
             if *s != CloneFlags::CLONE_NEWPID {
                 to_join.push((*s, fd));
             }
+
+            if *s == CloneFlags::CLONE_NEWUSER {
+                guest_userns = true;
+            }
         }
     }
 
@@ -484,6 +490,20 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
             Rlim::from_raw(rl.soft),
             Rlim::from_raw(rl.hard),
         )?;
+    }
+
+    if guest_userns {
+        for m in &spec.mounts {
+            // If a bind mount source path is not within the shared directory,
+            // transfer ownership to the non-root user.
+            if m.r#type == "bind" && !m.source.starts_with(KATA_GUEST_SHARE_DIR) {
+                chown(
+                    m.source.as_str(),
+                    Some(Uid::from_raw(1)),
+                    Some(Gid::from_raw(1)),
+                )?;
+            }
+        }
     }
 
     //
@@ -625,7 +645,8 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     // only change stdio devices owner when user
     // isn't root.
-    if !uid.is_root() {
+    // if in the guest user namespace, skip.
+    if !uid.is_root() && !guest_userns {
         set_stdio_permissions(uid)?;
     }
 
@@ -819,6 +840,30 @@ fn set_stdio_permissions(uid: Uid) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// To check if the current process is in a user namespace,
+/// assume that a process is in the init user namespace if and only if
+/// the contents of the uid_map file are `0 0 4294967295`.
+///
+/// Ref: https://github.com/opencontainers/runc/blob/main/libcontainer/userns/userns_linux.go
+pub fn run_in_userns() -> bool {
+    if let Ok(uid_mappings) = fs::read_to_string("/proc/self/uid_map") {
+        let lines: Vec<&str> = uid_mappings.split('\n').collect();
+
+        if lines.len() != 1 {
+            return true;
+        }
+
+        let parts: Vec<&str> = lines[0].split_whitespace().collect();
+        if parts.len() == 3 && parts[0] == "0" && parts[1] == "0" && parts[2] == "4294967295" {
+            return false;
+        }
+        return true;
+    }
+
+    // If the uid_map file doesn't exist, it means the kernel doesn't support user namespace.
+    false
 }
 
 #[async_trait]

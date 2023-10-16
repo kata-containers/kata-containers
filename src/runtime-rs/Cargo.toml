@@ -4,3 +4,6 @@ members = [
     "crates/shim-ctl",
 ]
 
+[patch.crates-io]
+fuse-backend-rs = { path = "/root/repo/fuse-backend-rs" }
+

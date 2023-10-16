@@ -33,7 +33,7 @@ use tracing::instrument;
 
 use crate::linux_abi::*;
 use crate::mount::{get_mount_fs_type, TYPE_ROOTFS};
-use crate::namespace::Namespace;
+use crate::namespace::{setup_in_userns, Namespace};
 use crate::netlink::Handle;
 use crate::network::Network;
 use crate::pci;
@@ -102,6 +102,7 @@ pub struct Sandbox {
     pub uevent_watchers: Vec<Option<UeventWatcher>>,
     pub shared_utsns: Namespace,
     pub shared_ipcns: Namespace,
+    pub shared_userns: Option<Namespace>,
     pub sandbox_pidns: Option<Namespace>,
     pub storages: HashMap<String, StorageState>,
     pub running: bool,
@@ -135,6 +136,7 @@ impl Sandbox {
             uevent_watchers: Vec::new(),
             shared_utsns: Namespace::new(&logger),
             shared_ipcns: Namespace::new(&logger),
+            shared_userns: None,
             sandbox_pidns: None,
             storages: HashMap::new(),
             running: false,
@@ -218,6 +220,25 @@ impl Sandbox {
             .setup()
             .await
             .context("setup persistent UTS namespace")?;
+
+        Ok(true)
+    }
+
+    #[instrument]
+    pub async fn setup_shared_namespaces_in_userns(&mut self) -> Result<bool> {
+        if self.shared_userns.is_none() {
+            let shared_userns = Namespace::new(&self.logger).get_user();
+            self.shared_userns = Some(shared_userns);
+        }
+
+        self.shared_ipcns = Namespace::new(&self.logger).get_ipc();
+        self.shared_utsns = Namespace::new(&self.logger).get_uts(self.hostname.as_str());
+
+        let userns = self.shared_userns.as_mut();
+        let nses = vec![&mut self.shared_ipcns, &mut self.shared_utsns];
+        setup_in_userns(&self.logger, userns.unwrap(), nses)
+            .await
+            .context("Setup namespaces in userns")?;
 
         Ok(true)
     }

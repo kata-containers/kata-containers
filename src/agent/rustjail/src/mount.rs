@@ -10,6 +10,7 @@ use nix::fcntl::{self, OFlag};
 use nix::mount;
 use nix::mount::{MntFlags, MsFlags};
 use nix::sys::stat::{self, Mode, SFlag};
+use nix::sys::statvfs::{statvfs, FsFlags};
 use nix::unistd::{self, Gid, Uid};
 use nix::NixPath;
 use oci::{LinuxDevice, Mount, Process, Spec};
@@ -24,7 +25,7 @@ use path_absolutize::*;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
-use crate::container::DEFAULT_DEVICES;
+use crate::container::{run_in_userns, DEFAULT_DEVICES};
 use crate::selinux;
 use crate::sync::write_count;
 use std::string::ToString;
@@ -862,6 +863,35 @@ fn mount_from(
         flags,
         Some(d.as_str()),
     )
+    .or_else(|e| {
+        // If in user namespace, direct mounting of the proc and sysfs file systems is not possible;
+        // instead, bind mount /proc and /sys.
+        // Ref: https://man7.org/linux/man-pages/man7/user_namespaces.7.html
+        if src == "proc" && run_in_userns() {
+            mount(
+                Some("/proc"),
+                dest.as_str(),
+                None::<&str>,
+                MsFlags::MS_BIND | MsFlags::MS_REC,
+                None::<&str>,
+            )
+            .map_err(|e| anyhow!("bind mount /proc failed: {:?}", e))?;
+            return Ok(());
+        }
+        if src == "sysfs" && run_in_userns() {
+            mount(
+                Some("/sys"),
+                dest.as_str(),
+                None::<&str>,
+                MsFlags::MS_BIND | MsFlags::MS_REC,
+                None::<&str>,
+            )
+            .map_err(|e| anyhow!("bind mount /sys failed: {:?}", e))?;
+            return Ok(());
+        }
+
+        Err(anyhow!("mount {} to {} failed: {:?}", src.as_str(), dest.as_str(), e))
+    })
     .map_err(|e| {
         log_child!(cfd_log, "mount error: {:?}", e);
         e
@@ -888,8 +918,38 @@ fn mount_from(
             flags | MsFlags::MS_REMOUNT,
             None::<&str>,
         )
+        .or_else(|e| {
+            // bind mount from another user namespace cannot change attributes
+            // such as ro, nodev, nosuid, noexec.
+            if run_in_userns() {
+                let fsflags = statvfs(src.as_str())?.flags();
+                let mut flags = flags.clone();
+                if fsflags.contains(FsFlags::ST_RDONLY) {
+                    flags.insert(MsFlags::MS_RDONLY);
+                }
+                if fsflags.contains(FsFlags::ST_NODEV) {
+                    flags.insert(MsFlags::MS_NODEV);
+                }
+                if fsflags.contains(FsFlags::ST_NOSUID) {
+                    flags.insert(MsFlags::MS_NOSUID);
+                }
+                if fsflags.contains(FsFlags::ST_NOEXEC) {
+                    flags.insert(MsFlags::MS_NOEXEC);
+                }
+                mount(
+                    Some(dest.as_str()),
+                    dest.as_str(),
+                    None::<&str>,
+                    flags | MsFlags::MS_REMOUNT,
+                    None::<&str>,
+                )?;
+                return Ok(());
+            }
+
+            Err(e)
+        })
         .map_err(|e| {
-            log_child!(cfd_log, "remout {}: {:?}", dest.as_str(), e);
+            log_child!(cfd_log, "remount {}: {:?}", dest.as_str(), e);
             e
         })?;
     }
@@ -1026,7 +1086,7 @@ pub fn finish_rootfs(cfd_log: RawFd, spec: &Spec, process: &Process) -> Result<(
         }
 
         for path in linux.readonly_paths.iter() {
-            readonly_path(path)?;
+            readonly_path(path).map_err(|e| anyhow!("set {} readonly failed: {:?}", path, e))?;
         }
     }
 
@@ -1096,7 +1156,38 @@ fn readonly_path(path: &str) -> Result<()> {
         None::<&str>,
         MsFlags::MS_BIND | MsFlags::MS_REC | MsFlags::MS_RDONLY | MsFlags::MS_REMOUNT,
         None::<&str>,
-    )?;
+    )
+    .or_else(|e| {
+        // bind mount from another user namespace cannot change attributes
+        // such as ro, nodev, nosuid, noexec.
+        if run_in_userns() {
+            let fsflags = statvfs(&path[1..])?.flags();
+            let mut flags =
+                MsFlags::MS_BIND | MsFlags::MS_REC | MsFlags::MS_RDONLY | MsFlags::MS_REMOUNT;
+            if fsflags.contains(FsFlags::ST_RDONLY) {
+                flags.insert(MsFlags::MS_RDONLY);
+            }
+            if fsflags.contains(FsFlags::ST_NODEV) {
+                flags.insert(MsFlags::MS_NODEV);
+            }
+            if fsflags.contains(FsFlags::ST_NOSUID) {
+                flags.insert(MsFlags::MS_NOSUID);
+            }
+            if fsflags.contains(FsFlags::ST_NOEXEC) {
+                flags.insert(MsFlags::MS_NOEXEC);
+            }
+            mount(
+                Some(&path[1..]),
+                &path[1..],
+                None::<&str>,
+                flags,
+                None::<&str>,
+            )?;
+            return Ok(());
+        }
+
+        Err(e)
+    })?;
 
     Ok(())
 }
