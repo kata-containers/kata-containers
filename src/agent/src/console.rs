@@ -12,7 +12,7 @@ use nix::pty::{openpty, OpenptyResult};
 use nix::sys::socket::{self, AddressFamily, SockFlag, SockType, VsockAddr};
 use nix::sys::stat::Mode;
 use nix::sys::wait;
-use nix::unistd::{self, close, dup2, fork, setsid, ForkResult, Pid};
+use nix::unistd::{self, close, dup, dup2, fork, setsid, ForkResult, Pid};
 use rustjail::pipestream::PipeStream;
 use slog::Logger;
 use std::ffi::CString;
@@ -108,6 +108,7 @@ pub async fn debug_console_handler(
         flags.insert(OFlag::O_CLOEXEC);
 
         let fd = fcntl::open(CONSOLE_PATH, flags, Mode::empty())?;
+        defer!(unistd::close(fd).unwrap());
 
         select! {
             _ = shutdown.changed() => {
@@ -217,9 +218,9 @@ async fn run_debug_console_serial(shell: String, fd: RawFd) -> Result<()> {
     let mut child = match tokio::process::Command::new(shell)
         .arg("-i")
         .kill_on_drop(true)
-        .stdin(unsafe { Stdio::from_raw_fd(fd) })
-        .stdout(unsafe { Stdio::from_raw_fd(fd) })
-        .stderr(unsafe { Stdio::from_raw_fd(fd) })
+        .stdin(unsafe { Stdio::from_raw_fd(dup(fd).unwrap()) })
+        .stdout(unsafe { Stdio::from_raw_fd(dup(fd).unwrap()) })
+        .stderr(unsafe { Stdio::from_raw_fd(dup(fd).unwrap()) })
         .spawn()
     {
         Ok(c) => c,
