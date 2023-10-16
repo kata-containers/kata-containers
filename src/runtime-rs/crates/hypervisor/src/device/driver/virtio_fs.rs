@@ -15,6 +15,7 @@ pub enum ShareFsOperation {
 pub enum ShareFsMountType {
     PASSTHROUGH,
     RAFS,
+    BLOBFS,
 }
 
 /// ShareFsMountConfig: share fs mount config
@@ -40,6 +41,9 @@ pub struct ShareFsMountConfig {
 
     /// prefetch_list_path: path to file that contains file lists that should be prefetched by rafs
     pub prefetch_list_path: Option<String>,
+
+    /// What size file supports dax
+    pub dax_threshold_size_kb: Option<u64>,
 }
 
 #[derive(Debug, Clone)]

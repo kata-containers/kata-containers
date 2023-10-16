@@ -12,8 +12,9 @@ use super::{Rootfs, TYPE_OVERLAY_FS};
 use crate::{
     rootfs::{HYBRID_ROOTFS_LOWER_DIR, ROOTFS},
     share_fs::{
-        do_get_guest_path, do_get_guest_share_path, get_host_rw_shared_path, rafs_mount, ShareFs,
-        ShareFsRootfsConfig, PASSTHROUGH_FS_DIR,
+        blobfs_mount, do_get_guest_path, do_get_guest_share_path, get_host_rw_shared_path,
+        passthrough_mount, rafs_mount, ShareFs, ShareFsRootfsConfig, BLOB_CACHE_DIR,
+        BLOB_CACHE_DIR, PASSTHROUGH_FS_DIR,
     },
 };
 use agent::Storage;
@@ -29,6 +30,8 @@ pub(crate) const NYDUS_ROOTFS_TYPE: &str = "fuse.nydus-overlayfs";
 const NYDUS_ROOTFS_V5: &str = "v5";
 // Used for Nydus v6 rootfs version
 const NYDUS_ROOTFS_V6: &str = "v6";
+
+const KATA_EROFS_DEV_TYPE: &str = "erofs";
 
 const SNAPSHOT_DIR: &str = "snapshotdir";
 const KATA_OVERLAY_DEV_TYPE: &str = "overlayfs";
@@ -60,7 +63,7 @@ impl NydusRootfs {
             // both nydus v5 and v6 can be handled by the builtin nydus in dragonball by using the rafs mode.
             // nydus v6 could also be handled by the guest kernel as well, but some kernel patch is not support in the upstream community. We will add an option to let runtime-rs handle nydus v6 in the guest kernel optionally once the patch is ready
             // see this issue (https://github.com/kata-containers/kata-containers/issues/5143)
-            NYDUS_ROOTFS_V5 | NYDUS_ROOTFS_V6 => {
+            NYDUS_ROOTFS_V5 => {
                 // rafs mount the metadata of nydus rootfs
                 let rafs_mnt = do_get_guest_share_path(HYBRID_ROOTFS_LOWER_DIR, cid, true);
                 rafs_mount(
@@ -120,6 +123,70 @@ impl NydusRootfs {
                         driver: KATA_OVERLAY_DEV_TYPE.to_string(),
                         source: TYPE_OVERLAY_FS.to_string(),
                         fs_type: TYPE_OVERLAY_FS.to_string(),
+                        options,
+                        mount_point: rootfs_guest_path.clone(),
+                        ..Default::default()
+                    },
+                    rootfs_guest_path,
+                ))
+            }
+            NYDUS_ROOTFS_V6 => {
+                // enable dax flag for bootstrap and blobfiles.
+                let dax_threshold_size_kb: u64 = 0;
+                let blobfs_mnt = do_get_guest_path(BLOB_CACHE_DIR, cid, false, true);
+                blobfs_mount(
+                    h,
+                    extra_options.source.clone(),
+                    blobfs_mnt.clone(),
+                    &extra_options.config,
+                    Some(dax_threshold_size_kb),
+                )
+                .with_context(|| "failed to mount blob cache dir".to_string())?;
+
+                let bootstrap_dir = {
+                    let dir: &Path = extra_options.source.as_str().as_ref();
+                    dir.parent().unwrap().to_str().unwrap().to_string()
+                };
+                let passthroughfs_mnt = do_get_guest_path(BOOTSTRAP_DIR, cid, false, true);
+                passthrough_mount(
+                    h,
+                    bootstrap_dir,
+                    passthroughfs_mnt.clone(),
+                    Some(dax_threshold_size_kb),
+                )
+                .with_context(|| "failed to mount bootstrap dir".to_string())?;
+
+                // create rootfs under the share directory
+                let container_share_dir = get_host_rw_shared_path(sid)
+                    .join(PASSTHROUGH_FS_DIR)
+                    .join(cid);
+                let rootfs_dir = container_share_dir.join(ROOTFS);
+                fs::create_dir_all(rootfs_dir).context("failed to create directory")?;
+                // mount point inside the guest
+                let rootfs_guest_path = do_get_guest_path(ROOTFS, cid, false, false);
+                // bind mount the snapshot dir under the share directory
+                share_fs_mount
+                    .share_rootfs(&ShareFsRootfsConfig {
+                        cid: cid.to_string(),
+                        source: extra_options.snapshot_dir.clone(),
+                        target: SNAPSHOT_DIR.to_string(),
+                        readonly: true,
+                        is_rafs: false,
+                    })
+                    .await
+                    .context("share nydus rootfs")?;
+
+                let mut options: Vec<String> = Vec::new();
+
+                options.push("bootstrap_path=".to_string() + bootstrap_dir.as_str());
+                options.push("blob_dir_path=".to_string() + blobfs_mnt.as_str());
+                options.push("user_xattr".to_string());
+                options.push("index=off".to_string());
+                Ok((
+                    Storage {
+                        driver: KATA_EROFS_DEV_TYPE.to_string(),
+                        source: "nodev".to_string(),
+                        fs_type: "erofs".to_string(),
                         options,
                         mount_point: rootfs_guest_path.clone(),
                         ..Default::default()

@@ -87,6 +87,7 @@ pub(crate) async fn setup_inline_virtiofs(id: &str, h: &dyn Hypervisor) -> Resul
             tag: String::from(MOUNT_GUEST_TAG),
             op: ShareFsOperation::Mount,
             prefetch_list_path: None,
+            dax_threshold_size_kb: None,
         },
     };
     h.add_device(DeviceType::ShareFsMount(virtio_fs))
@@ -114,10 +115,76 @@ pub async fn rafs_mount(
             tag: String::from(MOUNT_GUEST_TAG),
             op: ShareFsOperation::Mount,
             prefetch_list_path,
+            dax_threshold_size_kb: None,
         },
     };
     h.add_device(DeviceType::ShareFsMount(virtio_fs))
         .await
         .with_context(|| format!("fail to attach rafs {:?}", rafs_meta))?;
+    Ok(())
+}
+
+pub async fn blobfs_mount(
+    h: &dyn Hypervisor,
+    source: String,
+    mnt: String,
+    config: String,
+    dax_threshold_size_kb: Option<u64>,
+) -> Result<()> {
+    info!(
+        sl!(),
+        "Attaching dir {} to virtio-fs device, blobfs mount point {}, dax_threshold_size_kb {:?}",
+        source,
+        mnt,
+        dax_threshold_size_kb,
+    );
+
+    let virtio_fs = ShareFsMountDevice {
+        config: ShareFsMountConfig {
+            source: source.clone(),
+            fstype: ShareFsMountType::BLOBFS,
+            mount_point: mnt,
+            config: Some(config),
+            tag: String::from(MOUNT_GUEST_TAG),
+            op: ShareFsOperation::Mount,
+            prefetch_list_path: None,
+            dax_threshold_size_kb,
+        },
+    };
+    h.add_device(DeviceType::ShareFsMount(virtio_fs))
+        .await
+        .with_context(|| format!("fail to attach blobfs {:?}", source))?;
+    Ok(())
+}
+
+pub async fn passthrough_mount(
+    h: &dyn Hypervisor,
+    source: String,
+    mnt: String,
+    dax_threshold_size_kb: Option<u64>,
+) -> Result<()> {
+    info!(
+        sl!(),
+        "Attaching dir {} to virtio-fs device, passthroughfs mount point {}, dax_threshold_size_kb {:?}",
+        source,
+        mnt,
+        dax_threshold_size_kb,
+    );
+
+    let virtio_fs = ShareFsMountDevice {
+        config: ShareFsMountConfig {
+            source: source.clone(),
+            fstype: ShareFsMountType::PASSTHROUGH,
+            mount_point: mnt,
+            config: None,
+            tag: String::from(MOUNT_GUEST_TAG),
+            op: ShareFsOperation::Mount,
+            prefetch_list_path: None,
+            dax_threshold_size_kb,
+        },
+    };
+    h.add_device(DeviceType::ShareFsMount(virtio_fs))
+        .await
+        .with_context(|| format!("fail to attach passthroughfs {:?}", source))?;
     Ok(())
 }

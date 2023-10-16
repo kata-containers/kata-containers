@@ -5,6 +5,8 @@
 //
 
 mod share_virtio_fs;
+pub use share_virtio_fs::blobfs_mount;
+pub use share_virtio_fs::passthrough_mount;
 pub use share_virtio_fs::rafs_mount;
 mod share_virtio_fs_inline;
 use share_virtio_fs_inline::ShareVirtioFsInline;
@@ -40,6 +42,8 @@ const KATA_GUEST_SHARE_DIR: &str = "/run/kata-containers/shared/containers/";
 pub(crate) const DEFAULT_KATA_GUEST_SANDBOX_DIR: &str = "/run/kata-containers/sandbox/";
 
 pub const PASSTHROUGH_FS_DIR: &str = "passthrough";
+pub const BLOB_CACHE_DIR: &str = "blob_cache_dir";
+pub const BOOTSTRAP_DIR: &str = "bootstrap";
 const RAFS_DIR: &str = "rafs";
 
 #[async_trait]
