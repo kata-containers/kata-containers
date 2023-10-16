@@ -53,94 +53,30 @@ jobs:
       - name: Run tests
         run: bash tests/functional/kata-deploy/gha-run.sh run-tests
 
-  run-k8s-tests-on-tdx:
-    strategy:
-      fail-fast: false
-      matrix:
-        vmm:
-          - qemu-tdx
-    runs-on: tdx
-    env:
-      DOCKER_REGISTRY: ${{ inputs.registry }}
-      DOCKER_REPO: ${{ inputs.repo }}
-      DOCKER_TAG: ${{ inputs.tag }}
-      PR_NUMBER: ${{ inputs.pr-number }}
-      KATA_HYPERVISOR: ${{ matrix.vmm }}
-      KUBERNETES: "k3s"
-      USING_NFD: "true"
-      K8S_TEST_HOST_TYPE: "baremetal"
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: ${{ inputs.commit-hash }}
-          fetch-depth: 0
-
-      - name: Rebase atop of the latest target branch
-        run: |
-          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
-        env:
-          TARGET_BRANCH: ${{ inputs.target-branch }}
-
-      - name: Deploy Kata
-        timeout-minutes: 10
-        run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-tdx
-
-      - name: Run tests
-        timeout-minutes: 30
-        run: bash tests/integration/kubernetes/gha-run.sh run-tests
-
-      - name: Delete kata-deploy
-        if: always()
-        run: bash tests/integration/kubernetes/gha-run.sh cleanup-tdx
-
-  run-k8s-tests-on-sev:
+  run-k8s-tests-on-coco-bm:
     strategy:
       fail-fast: false
       matrix:
         vmm:
           - qemu-sev
-    runs-on: sev
-    env:
-      DOCKER_REGISTRY: ${{ inputs.registry }}
-      DOCKER_REPO: ${{ inputs.repo }}
-      DOCKER_TAG: ${{ inputs.tag }}
-      PR_NUMBER: ${{ inputs.pr-number }}
-      KATA_HYPERVISOR: ${{ matrix.vmm }}
-      KUBECONFIG: /home/kata/.kube/config
-      KUBERNETES: "vanilla"
-      USING_NFD: "false"
-      K8S_TEST_HOST_TYPE: "baremetal"
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          ref: ${{ inputs.commit-hash }}
-          fetch-depth: 0
-
-      - name: Rebase atop of the latest target branch
-        run: |
-          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
-        env:
-          TARGET_BRANCH: ${{ inputs.target-branch }}
-
-      - name: Deploy Kata
-        timeout-minutes: 10
-        run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-sev
-
-      - name: Run tests
-        timeout-minutes: 30
-        run: bash tests/integration/kubernetes/gha-run.sh run-tests
-
-      - name: Delete kata-deploy
-        if: always()
-        run: bash tests/integration/kubernetes/gha-run.sh cleanup-sev
-
-  run-k8s-tests-sev-snp:
-    strategy:
-      fail-fast: false
-      matrix:
-        vmm:
           - qemu-snp
-    runs-on: sev-snp
+          - qemu-tdx
+        k8s:
+          - vanilla
+        nfd:
+          - false
+        include:
+          - vmm: qemu-sev
+            machine: sev
+          - vmm: qemu-snp
+            machine: snp
+          - vmm: qemu-tdx
+            machine: tdx
+          - vmm: qemu-tdx
+            kubernetes: k3s
+          - vmm: qemu-tdx
+            nfd: true
+    runs-on: $ {{ matrix.machine }}
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
@@ -148,8 +84,8 @@ jobs:
       PR_NUMBER: ${{ inputs.pr-number }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
       KUBECONFIG: /home/kata/.kube/config
-      KUBERNETES: "vanilla"
-      USING_NFD: "false"
+      KUBERNETES: ${{ matrix.k8s }}
+      USING_NFD: ${{ matrix.nfd }}
       K8S_TEST_HOST_TYPE: "baremetal"
     steps:
       - uses: actions/checkout@v3
@@ -165,7 +101,7 @@ jobs:
 
       - name: Deploy Kata
         timeout-minutes: 10
-        run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-snp
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-${{ matrx.machine }}
 
       - name: Run tests
         timeout-minutes: 30
@@ -173,4 +109,4 @@ jobs:
 
       - name: Delete kata-deploy
         if: always()
-        run: bash tests/integration/kubernetes/gha-run.sh cleanup-snp
+        run: bash tests/integration/kubernetes/gha-run.sh cleanup-${{ matrix.machine }}
