@@ -160,6 +160,8 @@ function deploy_k3s() {
 	ARCH=$(uname -m)
 	if [ "${ARCH}" = "x86_64" ]; then
 		ARCH=amd64
+	elif [ "${ARCH}" = "aarch64" ]; then
+		ARCH=arm64
 	fi
 	kubectl_version=$(/usr/local/bin/k3s kubectl version --short 2>/dev/null | grep "Client Version" | sed -e 's/Client Version: //' -e 's/\+k3s1//')
 	sudo curl -fL --progress-bar -o /usr/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/${kubectl_version}/bin/linux/${ARCH}/kubectl
