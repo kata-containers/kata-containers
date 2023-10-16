@@ -1,4 +1,4 @@
-name: CI | Run kata coco tests
+name: CI | Run kata k8s tests on BM
 on:
   workflow_call:
     inputs:
