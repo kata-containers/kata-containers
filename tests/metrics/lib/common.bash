@@ -175,7 +175,7 @@ function init_env()
 	clean_env_ctr
 
 	# restart docker only if it is not masked by systemd
-	docker_masked="$(systemctl list-unit-files --state=masked | grep -c docker)"
+	docker_masked="$(systemctl list-unit-files --state=masked | grep -c docker)" || true
 	if [ "${docker_masked}" -eq 0 ]; then
 		sudo systemctl restart docker
 	fi
@@ -191,7 +191,7 @@ function init_env()
 # killed to start test with clean environment.
 function kill_processes_before_start()
 {
-	docker_masked="$(systemctl list-unit-files --state=masked | grep -c "${DOCKER_EXE}")"
+	docker_masked="$(systemctl list-unit-files --state=masked | grep -c "${DOCKER_EXE}")" || true
 
 	if [ "${docker_masked}" -eq 0 ]; then
 		DOCKER_PROCS=$(sudo "${DOCKER_EXE}" ps -q)
