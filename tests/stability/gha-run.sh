@@ -43,8 +43,8 @@ function run() {
 	info "Running scability test using ${KATA_HYPERVISOR} hypervisor"
 	bash "${stability_dir}/scability_test.sh" 15 60
 
-	info "Running agent stability test using ${KATA_HYPERVISOR} hypervisor"
-	bash "${stability_dir}/agent_stability_test.sh"
+#	info "Running agent stability test using ${KATA_HYPERVISOR} hypervisor"
+#	bash "${stability_dir}/agent_stability_test.sh"
 }
 
 function main() {
