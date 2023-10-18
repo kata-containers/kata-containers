@@ -21,6 +21,7 @@ mod pod;
 mod pod_template;
 mod policy;
 mod registry;
+mod replica_set;
 mod secret;
 mod settings;
 mod utils;
