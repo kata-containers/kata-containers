@@ -17,6 +17,8 @@ use dbs_legacy_devices::RTCDevice;
 use dbs_legacy_devices::SerialDevice;
 use vmm_sys_util::eventfd::EventFd;
 
+use crate::metric::METRICS;
+
 // The I8042 Data Port (IO Port 0x60) is used for reading data that was received from a I8042 device or from the I8042 controller itself and writing data to a I8042 device or to the I8042 controller itself.
 const I8042_DATA_PORT: u16 = 0x60;
 
@@ -71,11 +73,13 @@ pub(crate) mod x86_64 {
     use super::*;
     use dbs_device::device_manager::IoManager;
     use dbs_device::resources::Resource;
-    use dbs_legacy_devices::{EventFdTrigger, I8042Device, I8042DeviceMetrics};
+    use dbs_legacy_devices::{EventFdTrigger, I8042Device};
     use kvm_ioctls::VmFd;
 
+    pub(crate) const COM1_NAME: &str = "com1";
     pub(crate) const COM1_IRQ: u32 = 4;
     pub(crate) const COM1_PORT1: u16 = 0x3f8;
+    pub(crate) const COM2_NAME: &str = "com2";
     pub(crate) const COM2_IRQ: u32 = 3;
     pub(crate) const COM2_PORT1: u16 = 0x2f8;
 
@@ -86,14 +90,22 @@ pub(crate) mod x86_64 {
         pub fn create_manager(bus: &mut IoManager, vm_fd: Option<Arc<VmFd>>) -> Result<Self> {
             let (com1_device, com1_eventfd) =
                 Self::create_com_device(bus, vm_fd.as_ref(), COM1_IRQ, COM1_PORT1)?;
+            METRICS.write().unwrap().serial.insert(
+                String::from(COM1_NAME),
+                com1_device.lock().unwrap().metrics(),
+            );
             let (com2_device, com2_eventfd) =
                 Self::create_com_device(bus, vm_fd.as_ref(), COM2_IRQ, COM2_PORT1)?;
+            METRICS.write().unwrap().serial.insert(
+                String::from(COM2_NAME),
+                com2_device.lock().unwrap().metrics(),
+            );
 
             let exit_evt = EventFd::new(libc::EFD_NONBLOCK).map_err(Error::EventFd)?;
-            let i8042_device = Arc::new(Mutex::new(I8042Device::new(
-                EventFdTrigger::new(exit_evt.try_clone().map_err(Error::EventFd)?),
-                Arc::new(I8042DeviceMetrics::default()),
-            )));
+            let i8042_device = Arc::new(Mutex::new(I8042Device::new(EventFdTrigger::new(
+                exit_evt.try_clone().map_err(Error::EventFd)?,
+            ))));
+            METRICS.write().unwrap().i8042 = i8042_device.lock().unwrap().metrics();
             let resources = [Resource::PioAddressRange {
                 // 0x60 and 0x64 are the io ports that i8042 devices used.
                 // We register pio address range from 0x60 - 0x64 with base I8042_DATA_PORT for i8042 to use.
@@ -157,11 +169,11 @@ pub(crate) mod aarch64 {
     type Result<T> = ::std::result::Result<T, Error>;
 
     /// LegacyDeviceType: com1
-    pub const COM1: &str = "com1";
+    pub const COM1_NAME: &str = "com1";
     /// LegacyDeviceType: com2
-    pub const COM2: &str = "com2";
+    pub const COM2_NAME: &str = "com2";
     /// LegacyDeviceType: rtc
-    pub const RTC: &str = "rtc";
+    pub const RTC_NAME: &str = "rtc";
 
     impl LegacyDeviceManager {
         /// Create a LegacyDeviceManager instance handling legacy devices.
@@ -171,11 +183,20 @@ pub(crate) mod aarch64 {
             resources: &HashMap<String, DeviceResources>,
         ) -> Result<Self> {
             let (com1_device, com1_eventfd) =
-                Self::create_com_device(bus, vm_fd.as_ref(), resources.get(COM1).unwrap())?;
+                Self::create_com_device(bus, vm_fd.as_ref(), resources.get(COM1_NAME).unwrap())?;
+            METRICS.write().unwrap().serial.insert(
+                String::from(COM1_NAME),
+                com1_device.lock().unwrap().metrics(),
+            );
             let (com2_device, com2_eventfd) =
-                Self::create_com_device(bus, vm_fd.as_ref(), resources.get(COM2).unwrap())?;
+                Self::create_com_device(bus, vm_fd.as_ref(), resources.get(COM2_NAME).unwrap())?;
+            METRICS.write().unwrap().serial.insert(
+                String::from(COM2_NAME),
+                com2_device.lock().unwrap().metrics(),
+            );
             let (rtc_device, rtc_eventfd) =
-                Self::create_rtc_device(bus, vm_fd.as_ref(), resources.get(RTC).unwrap())?;
+                Self::create_rtc_device(bus, vm_fd.as_ref(), resources.get(RTC_NAME).unwrap())?;
+            METRICS.write().unwrap().rtc = rtc_device.lock().unwrap().metrics();
 
             Ok(LegacyDeviceManager {
                 _rtc_device: rtc_device,
