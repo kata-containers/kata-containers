@@ -25,6 +25,7 @@ mod replica_set;
 mod replication_controller;
 mod secret;
 mod settings;
+mod stateful_set;
 mod utils;
 mod verity;
 mod volume;
