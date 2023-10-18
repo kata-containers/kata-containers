@@ -1,0 +1,291 @@
+{
+    "pause_container": {
+        "Root": {
+            "Path": "$(cpath)/$(bundle-id)",
+            "Readonly": true
+        },
+        "Mounts": [
+            {
+                "destination": "/dev/shm",
+                "type_": "bind",
+                "source": "/run/kata-containers/sandbox/shm",
+                "options": [
+                    "rbind"
+                ]
+            },
+            {
+                "destination": "/etc/resolv.conf",
+                "type_": "bind",
+                "options": [
+                    "rbind",
+                    "ro",
+                    "nosuid",
+                    "nodev",
+                    "noexec"
+                ]
+            }
+        ],
+        "Annotations": {
+            "io.kubernetes.cri.container-type": "sandbox",
+            "io.kubernetes.cri.sandbox-id": "^[a-z0-9]{64}$",
+            "io.kubernetes.cri.sandbox-log-directory": "^/var/log/pods/$(sandbox-namespace)_$(sandbox-name)_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "io.katacontainers.pkg.oci.container_type": "pod_sandbox",
+            "io.kubernetes.cri.sandbox-namespace": "default",
+            "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/$(bundle-id)"
+        },
+        "Process": {
+            "Args": [
+                "/pause"
+            ]
+        },
+        "Linux": {
+            "MaskedPaths": [
+                "/proc/acpi",
+                "/proc/asound",
+                "/proc/kcore",
+                "/proc/keys",
+                "/proc/latency_stats",
+                "/proc/timer_list",
+                "/proc/timer_stats",
+                "/proc/sched_debug",
+                "/sys/firmware",
+                "/proc/scsi"
+            ],
+            "ReadonlyPaths": [
+                "/proc/bus",
+                "/proc/fs",
+                "/proc/irq",
+                "/proc/sys",
+                "/proc/sysrq-trigger"
+            ]
+        }
+    },
+    "other_container": {
+        "Root": {
+            "Path": "$(cpath)/$(bundle-id)"
+        },
+        "Mounts": [
+            {
+                "destination": "/etc/hosts",
+                "type_": "bind",
+                "options": [
+                    "rbind",
+                    "rprivate",
+                    "rw"
+                ]
+            },
+            {
+                "destination": "/dev/termination-log",
+                "type_": "bind",
+                "options": [
+                    "rbind",
+                    "rprivate",
+                    "rw"
+                ]
+            },
+            {
+                "destination": "/etc/hostname",
+                "type_": "bind",
+                "options": [
+                    "rbind",
+                    "rprivate"
+                ]
+            },
+            {
+                "destination": "/etc/resolv.conf",
+                "type_": "bind",
+                "options": [
+                    "rbind",
+                    "rprivate"
+                ]
+            },
+            {
+                "destination": "/dev/shm",
+                "type_": "bind",
+                "source": "/run/kata-containers/sandbox/shm",
+                "options": [
+                    "rbind"
+                ]
+            },
+            {
+                "destination": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "type_": "bind",
+                "options": [
+                    "rbind",
+                    "rprivate",
+                    "ro"
+                ]
+            },
+            {
+                "destination": "/var/run/secrets/azure/tokens",
+                "source": "$(sfprefix)tokens$",
+                "type_": "bind",
+                "options": [
+                    "rbind",
+                    "rprivate",
+                    "ro"
+                ]
+            }
+        ],
+        "Annotations": {
+            "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/$(bundle-id)",
+            "io.kubernetes.cri.sandbox-id": "^[a-z0-9]{64}$",
+            "io.katacontainers.pkg.oci.container_type": "pod_container",
+            "io.kubernetes.cri.container-type": "container"
+        }
+    },
+    "volumes": {
+        "emptyDir": {
+            "mount_type": "local",
+            "mount_source": "^$(cpath)/$(sandbox-id)/local/",
+            "mount_point": "^$(cpath)/$(sandbox-id)/local/",
+            "driver": "local",
+            "source": "local",
+            "fstype": "local",
+            "options": [
+                "mode=0777"
+            ]
+        },
+        "emptyDir_memory": {
+            "mount_type": "bind",
+            "mount_source": "^/run/kata-containers/sandbox/ephemeral/",
+            "mount_point": "^/run/kata-containers/sandbox/ephemeral/",
+            "driver": "ephemeral",
+            "source": "tmpfs",
+            "fstype": "tmpfs",
+            "options": []
+        },
+        "configMap": {
+            "mount_type": "bind",
+            "mount_source": "$(sfprefix)",
+            "mount_point": "^$(cpath)/watchable/$(bundle-id)-[a-z0-9]{16}-",
+            "driver": "watchable-bind",
+            "fstype": "bind",
+            "options": [
+                "rbind",
+                "rprivate",
+                "ro"
+            ]
+        },
+        "confidential_configMap": {
+            "mount_type": "bind",
+            "mount_source": "$(sfprefix)",
+            "mount_point": "$(sfprefix)",
+            "driver": "local",
+            "fstype": "bind",
+            "options": [
+                "rbind",
+                "rprivate",
+                "ro"
+            ]
+        }
+    },
+    "mount_destinations": [
+        "/sys/fs/cgroup",
+        "/etc/hosts",
+        "/dev/termination-log",
+        "/etc/hostname",
+        "/etc/resolv.conf",
+        "/dev/shm",
+        "/var/run/secrets/kubernetes.io/serviceaccount",
+        "/var/run/secrets/azure/tokens"
+    ],
+    "common": {
+        "cpath": "/run/kata-containers/shared/containers",
+        "sfprefix": "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-",
+        "ip_p": "[0-9]{1,5}",
+        "ipv4_a": "(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])",
+        "svc_name": "[A-Z_\\.\\-]+",
+        "dns_label": "[a-zA-Z0-9_\\.\\-]+",
+        "default_caps": [
+            "CAP_CHOWN",
+            "CAP_DAC_OVERRIDE",
+            "CAP_FSETID",
+            "CAP_FOWNER",
+            "CAP_MKNOD",
+            "CAP_NET_RAW",
+            "CAP_SETGID",
+            "CAP_SETUID",
+            "CAP_SETFCAP",
+            "CAP_SETPCAP",
+            "CAP_NET_BIND_SERVICE",
+            "CAP_SYS_CHROOT",
+            "CAP_KILL",
+            "CAP_AUDIT_WRITE"
+        ],
+        "privileged_caps": [
+            "CAP_CHOWN",
+            "CAP_DAC_OVERRIDE",
+            "CAP_DAC_READ_SEARCH",
+            "CAP_FOWNER",
+            "CAP_FSETID",
+            "CAP_KILL",
+            "CAP_SETGID",
+            "CAP_SETUID",
+            "CAP_SETPCAP",
+            "CAP_LINUX_IMMUTABLE",
+            "CAP_NET_BIND_SERVICE",
+            "CAP_NET_BROADCAST",
+            "CAP_NET_ADMIN",
+            "CAP_NET_RAW",
+            "CAP_IPC_LOCK",
+            "CAP_IPC_OWNER",
+            "CAP_SYS_MODULE",
+            "CAP_SYS_RAWIO",
+            "CAP_SYS_CHROOT",
+            "CAP_SYS_PTRACE",
+            "CAP_SYS_PACCT",
+            "CAP_SYS_ADMIN",
+            "CAP_SYS_BOOT",
+            "CAP_SYS_NICE",
+            "CAP_SYS_RESOURCE",
+            "CAP_SYS_TIME",
+            "CAP_SYS_TTY_CONFIG",
+            "CAP_MKNOD",
+            "CAP_LEASE",
+            "CAP_AUDIT_WRITE",
+            "CAP_AUDIT_CONTROL",
+            "CAP_SETFCAP",
+            "CAP_MAC_OVERRIDE",
+            "CAP_MAC_ADMIN",
+            "CAP_SYSLOG",
+            "CAP_WAKE_ALARM",
+            "CAP_BLOCK_SUSPEND",
+            "CAP_AUDIT_READ",
+            "CAP_PERFMON",
+            "CAP_BPF",
+            "CAP_CHECKPOINT_RESTORE"
+        ]
+    },
+    "kata_config": {
+        "confidential_guest": true
+    },
+    "request_defaults": {
+        "CreateContainerRequest": {
+            "allow_env_regex": [
+                "^HOSTNAME=$(dns_label)$",
+                "^$(svc_name)_PORT_$(ip_p)_TCP=tcp://$(ipv4_a):$(ip_p)$",
+                "^$(svc_name)_PORT_$(ip_p)_TCP_PROTO=tcp$",
+                "^$(svc_name)_PORT_$(ip_p)_TCP_PORT=$(ip_p)$",
+                "^$(svc_name)_PORT_$(ip_p)_TCP_ADDR=$(ipv4_a)$",
+                "^$(svc_name)_SERVICE_HOST=$(ipv4_a)$",
+                "^$(svc_name)_SERVICE_PORT=$(ip_p)$",
+                "^$(svc_name)_SERVICE_PORT_$(dns_label)=$(ip_p)$",
+                "^$(svc_name)_PORT=tcp://$(ipv4_a):$(ip_p)$",
+                "^AZURE_CLIENT_ID=[A-Fa-f0-9-]+$",
+                "^AZURE_TENANT_ID=[A-Fa-f0-9-]+$",
+                "^AZURE_FEDERATED_TOKEN_FILE=/var/run/secrets/azure/tokens/azure-identity-token$",
+                "^AZURE_AUTHORITY_HOST=https://login\\.microsoftonline\\.com/$"
+            ]
+        },
+        "CopyFileRequest": [
+            "^$(cpath)/"
+        ],
+        "ExecProcessRequest": {
+            "commands": [],
+            "regex": []
+        },
+        "ReadStreamRequest": false,
+        "WriteStreamRequest": false
+    }
+}
