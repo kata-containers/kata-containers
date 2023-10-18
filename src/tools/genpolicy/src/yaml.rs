@@ -15,6 +15,7 @@ use crate::mount_and_storage;
 use crate::no_policy;
 use crate::pod;
 use crate::policy;
+use crate::replica_set;
 use crate::secret;
 use crate::settings;
 use crate::volume;
@@ -142,6 +143,14 @@ pub fn new_k8s_resource(
             .unwrap();
             debug!("{:#?}", &pod);
             Ok((boxed::Box::new(pod), header.kind))
+        }
+        "ReplicaSet" => {
+            let set: replica_set::ReplicaSet = serde_ignored::deserialize(d, |path| {
+                handle_unused_field(&path.to_string(), silent_unsupported_fields);
+            })
+            .unwrap();
+            debug!("{:#?}", &set);
+            Ok((boxed::Box::new(set), header.kind))
         }
         "Secret" => {
             let secret: secret::Secret = serde_ignored::deserialize(d, |path| {
