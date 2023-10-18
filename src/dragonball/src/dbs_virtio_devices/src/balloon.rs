@@ -31,7 +31,9 @@ use dbs_interrupt::{InterruptNotifier, NoopNotifier};
 use dbs_utils::epoll_manager::{
     EpollManager, EventOps, EventSet, Events, MutEventSubscriber, SubscriberId,
 };
+use dbs_utils::metric::{IncMetric, SharedIncMetric, SharedStoreMetric, StoreMetric};
 use log::{debug, error, info, trace};
+use serde::Serialize;
 use virtio_bindings::bindings::virtio_blk::VIRTIO_F_VERSION_1;
 use virtio_queue::{QueueOwnedT, QueueSync, QueueT};
 use vm_memory::{
@@ -88,6 +90,25 @@ const PAGE_REPORTING_CAPACITY: u16 = 128;
 #[derive(Debug, thiserror::Error)]
 pub enum BalloonError {}
 
+/// Balloon Device associated metrics.
+#[derive(Default, Serialize)]
+pub struct BalloonDeviceMetrics {
+    /// Number of times when handling events on a balloon device.
+    pub event_count: SharedIncMetric,
+    /// Number of times when activate failed on a balloon device.
+    pub activate_fails: SharedIncMetric,
+    /// Number of balloon device inflations.
+    pub inflate_count: SharedIncMetric,
+    /// Number of balloon device deflations.
+    pub deflate_count: SharedIncMetric,
+    /// Memory size(mb) of balloon device.
+    pub balloon_size_mb: SharedStoreMetric,
+    /// Number of balloon device reportions
+    pub reporting_count: SharedIncMetric,
+    /// Number of times when handling events on a balloon device failed.
+    pub event_fails: SharedIncMetric,
+}
+
 pub type BalloonResult<T> = std::result::Result<T, BalloonError>;
 
 // Got from include/uapi/linux/virtio_balloon.h
@@ -113,12 +134,14 @@ pub struct BalloonEpollHandler<
     pub(crate) deflate: VirtioQueueConfig<Q>,
     pub(crate) reporting: Option<VirtioQueueConfig<Q>>,
     balloon_config: Arc<Mutex<VirtioBalloonConfig>>,
+    metrics: Arc<BalloonDeviceMetrics>,
 }
 
 impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion>
     BalloonEpollHandler<AS, Q, R>
 {
     fn process_reporting_queue(&mut self) -> bool {
+        self.metrics.reporting_count.inc();
         if let Some(queue) = &mut self.reporting {
             if let Err(e) = queue.consume_event() {
                 error!("Failed to get reporting queue event: {:?}", e);
@@ -234,7 +257,11 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT + Send, R: GuestMemoryRegion>
 
     fn process_queue(&mut self, idx: u32) -> bool {
         let conf = &mut self.config;
-
+        match idx {
+            INFLATE_QUEUE_AVAIL_EVENT => self.metrics.inflate_count.inc(),
+            DEFLATE_QUEUE_AVAIL_EVENT => self.metrics.deflate_count.inc(),
+            _ => {}
+        }
         let queue = match idx {
             INFLATE_QUEUE_AVAIL_EVENT => &mut self.inflate,
             DEFLATE_QUEUE_AVAIL_EVENT => &mut self.deflate,
@@ -481,14 +508,17 @@ where
             BALLOON_DRIVER_NAME,
             idx
         );
+        self.metrics.event_count.inc();
         match idx {
             INFLATE_QUEUE_AVAIL_EVENT | DEFLATE_QUEUE_AVAIL_EVENT => {
                 if !self.process_queue(idx) {
+                    self.metrics.event_fails.inc();
                     error!("{}: Failed to handle {} queue", BALLOON_DRIVER_NAME, idx);
                 }
             }
             REPORTING_QUEUE_AVAIL_EVENT => {
                 if !self.process_reporting_queue() {
+                    self.metrics.event_fails.inc();
                     error!("Failed to handle reporting queue");
                 }
             }
@@ -518,6 +548,7 @@ pub struct Balloon<AS: GuestAddressSpace> {
     pub(crate) device_change_notifier: Arc<dyn InterruptNotifier>,
     pub(crate) subscriber_id: Option<SubscriberId>,
     pub(crate) phantom: PhantomData<AS>,
+    metrics: Arc<BalloonDeviceMetrics>,
 }
 
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
@@ -556,10 +587,12 @@ impl<AS: GuestAddressSpace> Balloon<AS> {
             device_change_notifier: Arc::new(NoopNotifier::new()),
             subscriber_id: None,
             phantom: PhantomData,
+            metrics: Arc::new(BalloonDeviceMetrics::default()),
         })
     }
 
     pub fn set_size(&self, size_mb: u64) -> Result<()> {
+        self.metrics.balloon_size_mb.store(size_mb as usize);
         let num_pages = mib_to_page_number(size_mb);
 
         let balloon_config = &mut self.config.lock().unwrap();
@@ -573,6 +606,10 @@ impl<AS: GuestAddressSpace> Balloon<AS> {
         }
 
         Ok(())
+    }
+
+    pub fn metrics(&self) -> Arc<BalloonDeviceMetrics> {
+        self.metrics.clone()
     }
 }
 
@@ -649,7 +686,12 @@ where
     }
 
     fn activate(&mut self, mut config: VirtioDeviceConfig<AS, Q, R>) -> ActivateResult {
-        self.device_info.check_queue_sizes(&config.queues)?;
+        self.device_info
+            .check_queue_sizes(&config.queues)
+            .map_err(|e| {
+                self.metrics.activate_fails.inc();
+                e
+            })?;
         self.device_change_notifier = config.device_change_notifier.clone();
 
         trace!(
@@ -671,6 +713,7 @@ where
             deflate,
             reporting,
             balloon_config: self.config.clone(),
+            metrics: self.metrics.clone(),
         });
 
         self.subscriber_id = Some(self.device_info.register_event_handler(handler));
@@ -731,13 +774,14 @@ pub(crate) mod tests {
         let deflate = VirtioQueueConfig::create(128, 0).unwrap();
         let reporting = Some(VirtioQueueConfig::create(128, 0).unwrap());
         let balloon_config = Arc::new(Mutex::new(VirtioBalloonConfig::default()));
-
+        let metrics = Arc::new(BalloonDeviceMetrics::default());
         BalloonEpollHandler {
             config,
             inflate,
             deflate,
             reporting,
             balloon_config,
+            metrics,
         }
     }
 
