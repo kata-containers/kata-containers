@@ -7,6 +7,7 @@
 #![allow(non_snake_case)]
 
 use crate::config_map;
+use crate::daemon_set;
 use crate::mount_and_storage;
 use crate::no_policy;
 use crate::pod;
@@ -98,6 +99,14 @@ pub fn new_k8s_resource(
             .unwrap();
             debug!("{:#?}", &config_map);
             Ok((boxed::Box::new(config_map), header.kind))
+        }
+        "DaemonSet" => {
+            let daemon: daemon_set::DaemonSet = serde_ignored::deserialize(d, |path| {
+                handle_unused_field(&path.to_string(), silent_unsupported_fields);
+            })
+            .unwrap();
+            debug!("{:#?}", &daemon);
+            Ok((boxed::Box::new(daemon), header.kind))
         }
         "Pod" => {
             let pod: pod::Pod = serde_ignored::deserialize(d, |path| {
