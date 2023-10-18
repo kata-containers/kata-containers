@@ -60,7 +60,7 @@ mod legacy;
 pub use self::legacy::{Error as LegacyDeviceError, LegacyDeviceManager};
 
 #[cfg(target_arch = "aarch64")]
-pub use self::legacy::aarch64::{COM1, COM2, RTC};
+pub use self::legacy::aarch64::{COM1_NAME, COM2_NAME, RTC_NAME};
 
 #[cfg(feature = "virtio-vsock")]
 /// Device manager for user-space vsock devices.
@@ -823,9 +823,9 @@ impl DeviceManager {
     ) -> std::result::Result<HashMap<String, DeviceResources>, StartMicroVmError> {
         let mut resources = HashMap::new();
         let legacy_devices = vec![
-            (DeviceType::Serial, String::from(COM1)),
-            (DeviceType::Serial, String::from(COM2)),
-            (DeviceType::RTC, String::from(RTC)),
+            (DeviceType::Serial, String::from(COM1_NAME)),
+            (DeviceType::Serial, String::from(COM2_NAME)),
+            (DeviceType::RTC, String::from(RTC_NAME)),
         ];
 
         for (device_type, device_id) in legacy_devices {
