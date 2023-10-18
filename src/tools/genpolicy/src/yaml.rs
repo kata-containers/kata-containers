@@ -16,6 +16,7 @@ use crate::no_policy;
 use crate::pod;
 use crate::policy;
 use crate::replica_set;
+use crate::replication_controller;
 use crate::secret;
 use crate::settings;
 use crate::volume;
@@ -151,6 +152,15 @@ pub fn new_k8s_resource(
             .unwrap();
             debug!("{:#?}", &set);
             Ok((boxed::Box::new(set), header.kind))
+        }
+        "ReplicationController" => {
+            let controller: replication_controller::ReplicationController =
+                serde_ignored::deserialize(d, |path| {
+                    handle_unused_field(&path.to_string(), silent_unsupported_fields);
+                })
+                .unwrap();
+            debug!("{:#?}", &controller);
+            Ok((boxed::Box::new(controller), header.kind))
         }
         "Secret" => {
             let secret: secret::Secret = serde_ignored::deserialize(d, |path| {
