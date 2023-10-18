@@ -8,6 +8,7 @@
 
 use crate::config_map;
 use crate::daemon_set;
+use crate::deployment;
 use crate::mount_and_storage;
 use crate::no_policy;
 use crate::pod;
@@ -107,6 +108,14 @@ pub fn new_k8s_resource(
             .unwrap();
             debug!("{:#?}", &daemon);
             Ok((boxed::Box::new(daemon), header.kind))
+        }
+        "Deployment" => {
+            let deployment: deployment::Deployment = serde_ignored::deserialize(d, |path| {
+                handle_unused_field(&path.to_string(), silent_unsupported_fields);
+            })
+            .unwrap();
+            debug!("{:#?}", &deployment);
+            Ok((boxed::Box::new(deployment), header.kind))
         }
         "Pod" => {
             let pod: pod::Pod = serde_ignored::deserialize(d, |path| {
