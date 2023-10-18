@@ -57,7 +57,7 @@ pub trait IncMetric {
 // counters on each metric.
 // 1st member - current value being updated
 // 2nd member - old value that gets the current value whenever metrics is flushed to disk
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct SharedIncMetric(AtomicUsize, AtomicUsize);
 
 impl IncMetric for SharedIncMetric {
@@ -100,7 +100,7 @@ pub trait StoreMetric {
 
 /// Representation of a metric that is expected to hold a value that can be accessed
 /// from more than one thread, so more synchronization is necessary.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct SharedStoreMetric(AtomicUsize);
 
 impl StoreMetric for SharedStoreMetric {

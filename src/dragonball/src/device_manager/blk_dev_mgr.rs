@@ -24,6 +24,7 @@ use crate::config_manager::{ConfigItem, DeviceConfigInfo, RateLimiterConfigInfo}
 use crate::device_manager::blk_dev_mgr::BlockDeviceError::InvalidDeviceId;
 use crate::device_manager::{DeviceManager, DeviceMgrError, DeviceOpContext};
 use crate::get_bucket_update;
+use crate::metric::METRICS;
 use crate::vm::KernelConfigInfo;
 
 use super::DbsMmioV2Device;
@@ -382,6 +383,11 @@ impl BlockDeviceMgr {
                     BlockDeviceType::RawBlock => {
                         let device = Self::create_blk_device(&config, &mut ctx)
                             .map_err(BlockDeviceError::Virtio)?;
+                        METRICS
+                            .write()
+                            .unwrap()
+                            .block
+                            .insert(config.drive_id.clone(), device.metrics());
                         let dev = DeviceManager::create_mmio_virtio_device(
                             device,
                             &mut ctx,
@@ -430,6 +436,11 @@ impl BlockDeviceMgr {
                     );
                     let device = Self::create_blk_device(&info.config, ctx)
                         .map_err(BlockDeviceError::Virtio)?;
+                    METRICS
+                        .write()
+                        .unwrap()
+                        .block
+                        .insert(info.config.drive_id.clone(), device.metrics());
                     let device = DeviceManager::create_mmio_virtio_device(
                         device,
                         ctx,
@@ -454,6 +465,7 @@ impl BlockDeviceMgr {
     pub fn remove_devices(&mut self, ctx: &mut DeviceOpContext) -> Result<(), DeviceMgrError> {
         while let Some(mut info) = self.info_list.pop_back() {
             info!(ctx.logger(), "remove drive {}", info.config.drive_id);
+            METRICS.write().unwrap().block.remove(&info.config.drive_id);
             if let Some(device) = info.device.take() {
                 DeviceManager::destroy_mmio_virtio_device(device, ctx)?;
             }
@@ -482,6 +494,7 @@ impl BlockDeviceMgr {
         match self.remove(drive_id) {
             Some(mut info) => {
                 info!(ctx.logger(), "remove drive {}", info.config.drive_id);
+                METRICS.write().unwrap().block.remove(&info.config.drive_id);
                 if let Some(device) = info.device.take() {
                     DeviceManager::destroy_mmio_virtio_device(device, &mut ctx)
                         .map_err(BlockDeviceError::DeviceManager)?;

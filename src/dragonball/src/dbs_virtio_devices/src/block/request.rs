@@ -5,14 +5,16 @@
 use std::io::{self, Seek, SeekFrom, Write};
 use std::ops::Deref;
 use std::result;
+use std::sync::Arc;
 
+use dbs_utils::metric::IncMetric;
 use log::error;
 use virtio_bindings::bindings::virtio_blk::*;
 use virtio_queue::{Descriptor, DescriptorChain};
 use vm_memory::{ByteValued, Bytes, GuestAddress, GuestMemory, GuestMemoryError};
 
 use crate::{
-    block::{ufile::Ufile, SECTOR_SHIFT, SECTOR_SIZE},
+    block::{device::BlockDeviceMetrics, ufile::Ufile, SECTOR_SHIFT, SECTOR_SIZE},
     Error, Result,
 };
 
@@ -106,6 +108,7 @@ pub struct Request {
     pub(crate) sector: u64,
     pub(crate) status_addr: GuestAddress,
     pub(crate) request_index: u16,
+    pub(crate) metrics: Arc<BlockDeviceMetrics>,
 }
 
 impl Request {
@@ -114,6 +117,7 @@ impl Request {
         desc_chain: &mut DescriptorChain<M>,
         data_descs: &mut Vec<IoDataDesc>,
         max_size: u32,
+        metrics: Arc<BlockDeviceMetrics>,
     ) -> Result<Self>
     where
         M: Deref,
@@ -131,6 +135,7 @@ impl Request {
             sector: request_header.sector,
             status_addr: GuestAddress(0),
             request_index: desc_chain.head_index(),
+            metrics,
         };
         let status_desc;
         let mut desc = desc_chain
@@ -245,15 +250,22 @@ impl Request {
                     mem.read_from(GuestAddress(io.data_addr), disk, io.data_len)
                         .map_err(ExecuteError::Read)?;
                     len += io.data_len;
+                    self.metrics.read_bytes.add(io.data_len);
+                    self.metrics.read_count.inc();
                 }
                 RequestType::Out => {
                     mem.write_to(GuestAddress(io.data_addr), disk, io.data_len)
                         .map_err(ExecuteError::Write)?;
+                    self.metrics.write_bytes.add(io.data_len);
+                    self.metrics.write_count.inc();
                 }
-                RequestType::Flush => match disk.flush() {
-                    Ok(_) => {}
-                    Err(e) => return Err(ExecuteError::Flush(e)),
-                },
+                RequestType::Flush => {
+                    self.metrics.flush_count.inc();
+                    match disk.flush() {
+                        Ok(_) => {}
+                        Err(e) => return Err(ExecuteError::Flush(e)),
+                    }
+                }
                 RequestType::GetDeviceID => {
                     if io.data_len < disk_id.len() {
                         return Err(ExecuteError::BadRequest(Error::InvalidOffset));
@@ -280,8 +292,12 @@ impl Request {
 
             top = top
                 .checked_add(self.sector << SECTOR_SHIFT)
-                .ok_or(ExecuteError::BadRequest(Error::InvalidOffset))?;
+                .ok_or_else(|| {
+                    self.metrics.no_avail_buffer.inc();
+                    ExecuteError::BadRequest(Error::InvalidOffset)
+                })?;
             if top > disk.get_capacity() {
+                self.metrics.no_avail_buffer.inc();
                 return Err(ExecuteError::BadRequest(Error::InvalidOffset));
             }
         }

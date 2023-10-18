@@ -13,6 +13,8 @@ use dbs_legacy_devices::SerialDeviceMetrics;
 use dbs_utils::metric::SharedIncMetric;
 #[cfg(feature = "virtio-balloon")]
 use dbs_virtio_devices::balloon::BalloonDeviceMetrics;
+#[cfg(feature = "virtio-blk")]
+use dbs_virtio_devices::block::BlockDeviceMetrics;
 #[cfg(feature = "virtio-vsock")]
 use dbs_virtio_devices::vsock::VsockDeviceMetrics;
 use lazy_static::lazy_static;
@@ -82,6 +84,9 @@ pub struct DragonballMetrics {
     #[cfg(feature = "virtio-vsock")]
     /// Metrics related to vsock devices.
     pub vsock: HashMap<String, Arc<VsockDeviceMetrics>>,
+    #[cfg(feature = "virtio-blk")]
+    /// Metrics related to block devices.
+    pub block: HashMap<String, Arc<BlockDeviceMetrics>>,
     #[cfg(feature = "virtio-balloon")]
     /// Metrics related to balloon device.
     pub balloon: HashMap<String, Arc<BalloonDeviceMetrics>>,

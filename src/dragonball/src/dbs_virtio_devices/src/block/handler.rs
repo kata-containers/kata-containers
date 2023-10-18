@@ -9,9 +9,11 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::os::unix::io::AsRawFd;
 use std::sync::mpsc::{Receiver, Sender};
+use std::sync::Arc;
 
 use dbs_utils::{
     epoll_manager::{EventOps, Events, MutEventSubscriber},
+    metric::IncMetric,
     rate_limiter::{BucketUpdate, RateLimiter, TokenType},
 };
 use log::{debug, error, info, warn};
@@ -21,6 +23,7 @@ use vm_memory::{Bytes, GuestAddress, GuestMemory, GuestMemoryRegion, GuestRegion
 use vmm_sys_util::eventfd::EventFd;
 
 use crate::{
+    block::device::BlockDeviceMetrics,
     epoll_helper::{EpollHelper, EpollHelperError, EpollHelperHandler},
     DbsGuestAddressSpace, Error, Result, VirtioDeviceConfig, VirtioQueueConfig,
 };
@@ -48,6 +51,7 @@ pub(crate) struct InnerBlockEpollHandler<AS: DbsGuestAddressSpace, Q: QueueT> {
 
     pub(crate) vm_as: AS,
     pub(crate) queue: VirtioQueueConfig<Q>,
+    pub(crate) metrics: Arc<BlockDeviceMetrics>,
 }
 
 impl<AS: DbsGuestAddressSpace, Q: QueueT> InnerBlockEpollHandler<AS, Q> {
@@ -75,11 +79,18 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT> InnerBlockEpollHandler<AS, Q> {
             let iovecs = &mut self.iovecs_vec[index as usize];
             data_descs.clear();
             iovecs.clear();
-            match Request::parse(&mut desc_chain, data_descs, self.disk_image.get_max_size()) {
+            match Request::parse(
+                &mut desc_chain,
+                data_descs,
+                self.disk_image.get_max_size(),
+                self.metrics.clone(),
+            ) {
                 Err(e) => {
                     // It's caused by invalid request from guest, simple...
                     debug!("Failed to parse available descriptor chain: {:?}", e);
                     used_desc_vec.push((index, 0));
+                    self.metrics.invalid_reqs_count.inc();
+                    self.metrics.execute_fails.inc();
                 }
                 Ok(req) => {
                     if Self::trigger_rate_limit(&mut self.rate_limiter, &req, data_descs) {
@@ -106,6 +117,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT> InnerBlockEpollHandler<AS, Q> {
                         Err(_e) => {
                             req.update_status(mem.deref(), VIRTIO_BLK_S_IOERR);
                             used_desc_vec.push((index, 0));
+                            self.metrics.execute_fails.inc();
                             continue 'next_desc;
                         }
                     }
@@ -124,7 +136,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT> InnerBlockEpollHandler<AS, Q> {
                             used_desc_vec.push((index, num_bytes_to_mem));
                         }
                         Err(_e) => {
-                            //METRICS.block.execute_fails.inc();
+                            self.metrics.execute_fails.inc();
                             used_desc_vec.push((index, 0));
                         }
                     }
@@ -134,7 +146,8 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT> InnerBlockEpollHandler<AS, Q> {
         if rate_limited {
             // If rate limiting kicked in, queue had advanced one element that we aborted
             // processing; go back one element so it can be processed next time.
-            // TODO: log rate limit message or METRIC
+            warn!("rate limiting kicked in");
+            self.metrics.rate_limiter_throttled_events.inc();
             iter.go_to_previous_position();
         }
         drop(queue);
@@ -189,6 +202,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT> InnerBlockEpollHandler<AS, Q> {
                 let err_code = match &e {
                     ExecuteError::BadRequest(e) => {
                         // It's caused by invalid request from guest, simple...
+                        req.metrics.invalid_reqs_count.inc();
                         debug!("Failed to execute GetDeviceID request: {:?}", e);
                         VIRTIO_BLK_S_IOERR
                     }
@@ -211,6 +225,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT> InnerBlockEpollHandler<AS, Q> {
                     }
                     ExecuteError::Seek(e) => {
                         // It's caused by invalid request from guest, simple...
+                        req.metrics.invalid_reqs_count.inc();
                         warn!(
                             "virtio-blk: Failed to execute out-of-boundary request: {:?}",
                             e
@@ -219,11 +234,13 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT> InnerBlockEpollHandler<AS, Q> {
                     }
                     ExecuteError::GetDeviceID(e) => {
                         // It's caused by invalid request from guest, simple...
+                        req.metrics.invalid_reqs_count.inc();
                         warn!("virtio-blk: Failed to execute GetDeviceID request: {:?}", e);
                         VIRTIO_BLK_S_IOERR
                     }
                     ExecuteError::Unsupported(e) => {
                         // It's caused by invalid request from guest, simple...
+                        req.metrics.invalid_reqs_count.inc();
                         warn!("virtio-blk: Failed to execute request: {:?}", e);
                         VIRTIO_BLK_S_UNSUPP
                     }
@@ -250,6 +267,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT> InnerBlockEpollHandler<AS, Q> {
 
         req.check_capacity(disk_image, data_descs).map_err(|e| {
             // It's caused by invalid request from guest, simple...
+            req.metrics.invalid_reqs_count.inc();
             debug!("Failed to get buffer address for request");
             e
         })?;
@@ -263,6 +281,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT> InnerBlockEpollHandler<AS, Q> {
                         "virtio-blk: Failed to get buffer guest address {:?} for request {:?}",
                         io.data_addr, req
                     );
+                    req.metrics.invalid_reqs_count.inc();
                     ExecuteError::BadRequest(Error::GuestMemory(e))
                 })?;
             iovecs.push(IoDataDesc {
@@ -375,14 +394,18 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT> InnerBlockEpollHandler<AS, Q> {
 
 impl<AS: DbsGuestAddressSpace, Q: QueueT> EpollHelperHandler for InnerBlockEpollHandler<AS, Q> {
     fn handle_event(&mut self, _helper: &mut EpollHelper, event: &epoll::Event) -> bool {
+        self.metrics.event_count.inc();
         let slot = event.data as u32;
         match slot {
             QUEUE_AVAIL_EVENT => {
+                self.metrics.queue_event_count.inc();
                 if let Err(e) = self.queue.consume_event() {
                     error!("virtio-blk: failed to get queue event: {:?}", e);
+                    self.metrics.event_fails.inc();
                     return true;
                 } else if self.rate_limiter.is_blocked() {
                     // While limiter is blocked, don't process any more requests.
+                    self.metrics.rate_limiter_throttled_events.inc();
                 } else if self.process_queue() {
                     self.queue
                         .notify()
@@ -390,6 +413,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT> EpollHelperHandler for InnerBlockEpoll
                 }
             }
             END_IO_EVENT => {
+                self.metrics.end_io_event_count.inc();
                 // NOTE: Here we should drain io event fd, but different Ufile implementations
                 // may use different Events, and complete may depend on the count of reads from
                 // within io event. so leave it to IoEngine::complete to drain event fd.
@@ -400,6 +424,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT> EpollHelperHandler for InnerBlockEpoll
             RATE_LIMITER_EVENT => {
                 // Upon rate limiter event, call the rate limiter handler
                 // and restart processing the queue.
+                self.metrics.rate_limiter_event_count.inc();
                 if self.rate_limiter.event_handler().is_ok() && self.process_queue() {
                     self.queue
                         .notify()
@@ -409,6 +434,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT> EpollHelperHandler for InnerBlockEpoll
             KILL_EVENT => {
                 let _ = self.kill_evt.read();
                 while let Ok(evt) = self.evt_receiver.try_recv() {
+                    self.metrics.kill_event_count.inc();
                     match evt {
                         KillEvent::Kill => {
                             info!("virtio-blk: KILL_EVENT received, stopping inner epoll handler loop");
