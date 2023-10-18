@@ -19,6 +19,7 @@ use crate::replica_set;
 use crate::replication_controller;
 use crate::secret;
 use crate::settings;
+use crate::stateful_set;
 use crate::volume;
 
 use async_trait::async_trait;
@@ -169,6 +170,14 @@ pub fn new_k8s_resource(
             .unwrap();
             debug!("{:#?}", &secret);
             Ok((boxed::Box::new(secret), header.kind))
+        }
+        "StatefulSet" => {
+            let set: stateful_set::StatefulSet = serde_ignored::deserialize(d, |path| {
+                handle_unused_field(&path.to_string(), silent_unsupported_fields);
+            })
+            .unwrap();
+            debug!("{:#?}", &set);
+            Ok((boxed::Box::new(set), header.kind))
         }
         "ClusterRole"
         | "ClusterRoleBinding"
