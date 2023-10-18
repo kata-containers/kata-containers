@@ -10,6 +10,7 @@ use log::{debug, info};
 mod config_map;
 mod containerd;
 mod daemon_set;
+mod deployment;
 mod mount_and_storage;
 mod no_policy;
 mod obj_meta;
