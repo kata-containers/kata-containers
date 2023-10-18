@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 use dbs_utils::metric::SharedIncMetric;
+use dbs_virtio_devices::balloon::BalloonDeviceMetrics;
 use lazy_static::lazy_static;
 use serde::Serialize;
 
@@ -52,6 +53,8 @@ pub struct SignalMetrics {
 }
 
 /// Structure storing all metrics while enforcing serialization support on them.
+/// The type of the device metrics is HashMap<DeviceId, Arc<DeviceMetrics>> and the type of
+/// non-device metrics is XXMetrics.
 #[derive(Default, Serialize)]
 pub struct DragonballMetrics {
     /// Metrics related to a vcpu's functioning.
@@ -60,6 +63,8 @@ pub struct DragonballMetrics {
     pub seccomp: SeccompMetrics,
     /// Metrics related to signals.
     pub signals: SignalMetrics,
+    /// Metrics related to balloon device.
+    pub balloon: HashMap<String, Arc<BalloonDeviceMetrics>>,
 }
 
 #[cfg(test)]
