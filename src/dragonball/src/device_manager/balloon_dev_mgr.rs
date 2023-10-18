@@ -11,6 +11,7 @@ use crate::address_space_manager::GuestAddressSpaceImpl;
 use crate::config_manager::{ConfigItem, DeviceConfigInfo, DeviceConfigInfos};
 use crate::device_manager::DbsMmioV2Device;
 use crate::device_manager::{DeviceManager, DeviceMgrError, DeviceOpContext};
+use crate::metric::METRICS;
 
 // The flag of whether to use the shared irq.
 const USE_SHARED_IRQ: bool = true;
@@ -175,6 +176,11 @@ impl BalloonDeviceMgr {
                 )
                 .map_err(BalloonDeviceError::CreateBalloonDevice)?,
             );
+            METRICS
+                .write()
+                .unwrap()
+                .balloon
+                .insert(balloon_cfg.balloon_id.clone(), device.metrics());
 
             let mmio_dev =
                 DeviceManager::create_mmio_virtio_device_with_device_change_notification(
@@ -220,6 +226,11 @@ impl BalloonDeviceMgr {
                 },
             )
             .map_err(BalloonDeviceError::CreateBalloonDevice)?;
+            METRICS
+                .write()
+                .unwrap()
+                .balloon
+                .insert(info.config.balloon_id.clone(), device.metrics());
             let mmio_dev =
                 DeviceManager::create_mmio_virtio_device_with_device_change_notification(
                     Box::new(device),
@@ -272,6 +283,13 @@ impl Default for BalloonDeviceMgr {
             info_list: DeviceConfigInfos::new(),
             use_shared_irq: USE_SHARED_IRQ,
         }
+    }
+}
+
+impl Drop for BalloonDeviceMgr {
+    // todo: move METIRCS oprations to remove_device. issue #8207.
+    fn drop(&mut self) {
+        METRICS.write().unwrap().balloon.clear();
     }
 }
 
