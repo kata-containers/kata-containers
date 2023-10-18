@@ -6,8 +6,6 @@
 #
 
 export GOPATH=${GOPATH:-${HOME}/go}
-export tests_repo="${tests_repo:-github.com/kata-containers/tests}"
-export tests_repo_dir="$GOPATH/src/$tests_repo"
 export BUILDER_REGISTRY="${BUILDER_REGISTRY:-quay.io/kata-containers/builders}"
 export PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-"no"}"
 
@@ -29,19 +27,8 @@ ARCH=${ARCH:-$(uname -m)}
 TARGET_OS=${TARGET_OS:-linux}
 [ "${CROSS_BUILD}" == "true" ] && BUILDX=buildx && PLATFORM="--platform=${TARGET_OS}/${TARGET_ARCH}"
 
-clone_tests_repo() {
-	# KATA_CI_NO_NETWORK is (has to be) ignored if there is
-	# no existing clone.
-	if [ -d "${tests_repo_dir}" ] && [ -n "${KATA_CI_NO_NETWORK:-}" ]; then
-		return
-	fi
-
-	go get -d -u "$tests_repo" || true
-}
-
 install_yq() {
-	clone_tests_repo
-	pushd "$tests_repo_dir"
+	pushd "${repo_root_dir}"
 	.ci/install_yq.sh
 	popd
 }
