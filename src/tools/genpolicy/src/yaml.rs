@@ -10,6 +10,7 @@ use crate::config_map;
 use crate::daemon_set;
 use crate::deployment;
 use crate::job;
+use crate::list;
 use crate::mount_and_storage;
 use crate::no_policy;
 use crate::pod;
@@ -125,6 +126,14 @@ pub fn new_k8s_resource(
             .unwrap();
             debug!("{:#?}", &job);
             Ok((boxed::Box::new(job), header.kind))
+        }
+        "List" => {
+            let list: list::List = serde_ignored::deserialize(d, |path| {
+                handle_unused_field(&path.to_string(), silent_unsupported_fields);
+            })
+            .unwrap();
+            debug!("{:#?}", &list);
+            Ok((boxed::Box::new(list), header.kind))
         }
         "Pod" => {
             let pod: pod::Pod = serde_ignored::deserialize(d, |path| {
