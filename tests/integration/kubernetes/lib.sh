@@ -99,3 +99,34 @@ new_pod_config() {
 	IMAGE="$image" RUNTIMECLASS="$runtimeclass" envsubst < "$base_config" > "$new_config"
 	echo "$new_config"
 }
+
+# Set an annotation on configuration metadata.
+#
+# Usually you will pass a pod configuration file where the 'metadata'
+# is relative to the 'root' path. Other configuration files like deployments,
+# the annotation should be set on 'spec.template.metadata', so use the 4th
+# parameter of this function to pass the base metadata path (for deployments
+# cases, it will be 'spec.template' for example).
+#
+# Parameters:
+#	$1 - the yaml file
+#	$2 - the annotation key
+#	$3 - the annotation value
+#	$4 - (optional) base metadata path
+set_metadata_annotation() {
+	local yaml="${1}"
+	local key="${2}"
+	local value="${3}"
+	local metadata_path="${4:-}"
+	local annotation_key=""
+
+	[ -n "$metadata_path" ] && annotation_key+="${metadata_path}."
+
+	# yaml annotation key name.
+	annotation_key+="metadata.annotations.\"${key}\""
+
+	echo "$annotation_key"
+	# yq set annotations in yaml. Quoting the key because it can have
+	# dots.
+	yq w -i --style=double "${yaml}" "${annotation_key}" "${value}"
+}
