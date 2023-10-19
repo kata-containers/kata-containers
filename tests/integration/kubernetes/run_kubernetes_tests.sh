@@ -38,6 +38,7 @@ else
 		"k8s-kill-all-process-in-container.bats" \
 		"k8s-limit-range.bats" \
 		"k8s-liveness-probes.bats" \
+		"k8s-measured-rootfs.bats" \
 		"k8s-memory.bats" \
 		"k8s-nested-configmap-secret.bats" \
 		"k8s-oom.bats" \
