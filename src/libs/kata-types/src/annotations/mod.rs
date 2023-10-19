@@ -470,8 +470,8 @@ impl Annotation {
         let u32_err = io::Error::new(io::ErrorKind::InvalidData, "parse u32 error".to_string());
         let u64_err = io::Error::new(io::ErrorKind::InvalidData, "parse u64 error".to_string());
         let i32_err = io::Error::new(io::ErrorKind::InvalidData, "parse i32 error".to_string());
-        let mut hv = config.hypervisor.get_mut(hypervisor_name).unwrap();
-        let mut ag = config.agent.get_mut(agent_name).unwrap();
+        let hv = config.hypervisor.get_mut(hypervisor_name).unwrap();
+        let ag = config.agent.get_mut(agent_name).unwrap();
         for (key, value) in &self.annotations {
             if hv.security_info.is_annotation_enabled(key) {
                 match key.as_str() {
