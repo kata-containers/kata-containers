@@ -1,7 +1,7 @@
 use base64::prelude::{Engine, BASE64_STANDARD};
 use containerd_client::{services::v1::ReadContentRequest, tonic::Request, with_namespace, Client};
 use containerd_snapshots::{api, Info, Kind, Snapshotter, Usage};
-use log::{debug, trace};
+use log::{debug, info, trace};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::{collections::HashMap, fs, fs::OpenOptions, io, io::Seek};
@@ -171,17 +171,19 @@ impl Store {
 /// The snapshotter that creates tar devices.
 pub(crate) struct TarDevSnapshotter {
     store: RwLock<Store>,
-    containerd_client: Client,
+    containerd_path: String,
+    containerd_client: RwLock<Option<Client>>,
 }
 
 impl TarDevSnapshotter {
     /// Creates a new instance of the snapshotter.
     ///
     /// `root` is the root directory where the snapshotter state is to be stored.
-    pub(crate) fn new(root: &Path, containerd_client: Client) -> Self {
+    pub(crate) fn new(root: &Path, containerd_path: String) -> Self {
         Self {
-            containerd_client,
+            containerd_path,
             store: RwLock::new(Store::new(root)),
+            containerd_client: RwLock::new(None),
         }
     }
 
@@ -214,19 +216,31 @@ impl TarDevSnapshotter {
         };
         let req = with_namespace!(req, "k8s.io");
 
-        let mut c = self.containerd_client.content();
-        let resp = c.read(req).await?;
-        let mut stream = resp.into_inner();
-        while let Some(chunk) = stream.message().await? {
-            if chunk.offset < 0 {
-                debug!("Containerd reported a negative offset: {}", chunk.offset);
-                return Err(Status::invalid_argument("negative offset"));
+        loop {
+            let guard = self.containerd_client.read().await;
+            let Some(client) = &*guard else {
+                drop(guard);
+                info!("Connecting to containerd at {}", self.containerd_path);
+                let c = Client::from_path(&self.containerd_path)
+                    .await
+                    .map_err(|_| Status::unknown("unable to connect to containerd"))?;
+                *self.containerd_client.write().await = Some(c);
+                continue;
+            };
+            let mut c = client.content();
+            let resp = c.read(req).await?;
+            let mut stream = resp.into_inner();
+            while let Some(chunk) = stream.message().await? {
+                if chunk.offset < 0 {
+                    debug!("Containerd reported a negative offset: {}", chunk.offset);
+                    return Err(Status::invalid_argument("negative offset"));
+                }
+                file.seek(io::SeekFrom::Start(chunk.offset as u64)).await?;
+                file.write_all(&chunk.data).await?;
             }
-            file.seek(io::SeekFrom::Start(chunk.offset as u64)).await?;
-            file.write_all(&chunk.data).await?;
-        }
 
-        Ok(())
+            return Ok(());
+        }
     }
 
     /// Creates a new snapshot for an image layer.

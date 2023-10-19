@@ -1,6 +1,6 @@
+#![feature(impl_trait_in_assoc_type)]
 #![feature(type_alias_impl_trait)]
 
-use containerd_client::Client;
 use containerd_snapshots::server;
 use log::{error, info, warn};
 use snapshotter::TarDevSnapshotter;
@@ -29,15 +29,6 @@ pub async fn main() {
         "/var/run/containerd/containerd.sock"
     };
 
-    info!("Connecting to containerd at {containerd_socket}");
-    let client = match Client::from_path(containerd_socket).await {
-        Ok(c) => c,
-        Err(e) => {
-            error!("Failed to connect to containerd: {e:?}");
-            process::exit(1);
-        }
-    };
-
     // TODO: Check that the directory is accessible.
 
     let incoming = {
@@ -61,7 +52,7 @@ pub async fn main() {
     if let Err(e) = Server::builder()
         .add_service(server(Arc::new(TarDevSnapshotter::new(
             Path::new(&argv[1]),
-            client,
+            containerd_socket.to_string(),
         ))))
         .serve_with_incoming(incoming)
         .await
