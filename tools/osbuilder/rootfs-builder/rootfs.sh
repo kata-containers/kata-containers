@@ -667,6 +667,20 @@ EOF
 		chmod g+rx,o+x "${ROOTFS_DIR}"
 	fi
 
+	# Restricting access to agent endpoints using agent-config.toml is expected to
+	# be deprecated in the main branch. Therefore, in preparation of merging this
+	# script with its main branch version, install default settings for main branch's
+	# kata-opa service. coco-default.rego blocks access to the same kata agent
+	# endpoints that are blocked by agent-config.toml. For additional information,
+	# search for "default-policy.rego" in main branch's rootfs.sh.
+	local kata_opa_in_dir="${script_dir}/../../../src/kata-opa"
+	local opa_settings_dir="/etc/kata-opa"
+	local policy_file="coco-default.rego"
+	local policy_dir="${ROOTFS_DIR}/${opa_settings_dir}"
+	mkdir -p "${policy_dir}"
+	install -D -o root -g root -m 0644 "${kata_opa_in_dir}/${policy_file}" -T "${policy_dir}/${policy_file}"
+	ln -sf "${policy_file}" "${policy_dir}/default-policy.rego"
+
 	info "Check init is installed"
 	[ -x "${init}" ] || [ -L "${init}" ] || die "/sbin/init is not installed in ${ROOTFS_DIR}"
 	OK "init is installed"
