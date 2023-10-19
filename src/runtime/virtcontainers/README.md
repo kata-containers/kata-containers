@@ -14,12 +14,12 @@ Ideally, VM-based container runtime implementations would become translation
 layers from the runtime specification they implement (e.g. the [OCI runtime-spec][oci]
 or the [Kubernetes CRI][cri]) to the `virtcontainers` API.
 
-`virtcontainers` was used as a foundational package for the [Clear Containers][cc] [runtime][cc-runtime] implementation.
+`virtcontainers` was used as a foundational package for the [Kata Containers][kata-containers] [runtime][kata-containers-runtime] implementation, formerly the Clear Containers runtime implementation.
 
 [oci]: https://github.com/opencontainers/runtime-spec
 [cri]: https://github.com/kubernetes/community/blob/master/contributors/devel/sig-node/container-runtime-interface.md
-[cc]: https://github.com/clearcontainers/
-[cc-runtime]: https://github.com/clearcontainers/runtime/
+[kata-containers]: https://github.com/kata-containers/
+[kata-containers-runtime]: https://github.com/kata-containers/runtime/
 
 # Out of scope
 
@@ -232,7 +232,7 @@ is also supported in Kata. Pass-through happens separated by adapter and
 domain, i.e. a passable VFIO device has one or multiple adapter-domain
 combinations.
 
-1. You must follow the [kernel documentation for preparing VFIO-AP passthrough](https://www.kernel.org/doc/html/latest/s390/vfio-ap.html).
+1. You must follow the [kernel documentation for preparing VFIO-AP passthrough](https://www.kernel.org/doc/Documentation/s390/vfio-ap.txt).
 In short, your host kernel should have the following enabled or available as
 module (in case of modules, load the modules accordingly, e.g. through
 `modprobe`). If one is missing, you will have to update your kernel
