@@ -15,6 +15,8 @@ k8s_delete_all_pods_if_any_exists() {
 		kubectl delete --all pods
 }
 
+FIXTURES_DIR="${BATS_TEST_DIRNAME}/runtimeclass_workloads"
+
 # Wait until the pod is not 'Ready'. Fail if it hits the timeout.
 #
 # Parameters:
@@ -71,4 +73,29 @@ assert_pod_fail() {
 
 	echo "Attempt to create the container but it should fail"
 	! k8s_create_pod "$container_config" || /bin/false
+}
+
+# Create a pod configuration out of a template file.
+#
+# Parameters:
+#	$1 - the container image.
+#	$2 - the runtimeclass
+#
+# Return:
+# 	the path to the configuration file. The caller should not care about
+# 	its removal afterwards as it is created under the bats temporary
+# 	directory.
+#
+new_pod_config() {
+	local base_config="${FIXTURES_DIR}/pod-config.yaml.in"
+	local image="$1"
+	local runtimeclass="$2"
+	local new_config
+
+	# The runtimeclass is not optional.
+	[ -n "$runtimeclass" ] || return 1
+
+	new_config=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${base_config}").XXX")
+	IMAGE="$image" RUNTIMECLASS="$runtimeclass" envsubst < "$base_config" > "$new_config"
+	echo "$new_config"
 }
