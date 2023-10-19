@@ -170,7 +170,7 @@ jobs:
       fail-fast: false
       matrix:
         vmm: ['clh', 'qemu']
-    runs-on: garm-ubuntu-2304
+    runs-on: nvidia-gpu-ubuntu-2204
     env:
       GOPATH: ${{ github.workspace }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
