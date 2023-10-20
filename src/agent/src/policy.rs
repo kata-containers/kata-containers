@@ -29,6 +29,12 @@ struct AllowResponse {
     result: bool,
 }
 
+/// Example of HTTP response from OPA: {"result":"foo""}
+#[derive(Debug, Serialize, Deserialize)]
+struct StringResponse {
+    result: String,
+}
+
 /// Singleton policy object.
 #[derive(Debug, Default)]
 pub struct AgentPolicy {
@@ -241,6 +247,70 @@ impl AgentPolicy {
                     }
                 }
             }
+        }
+    }
+
+    pub async fn get_data(&mut self, path: &str) -> Result<String> {
+        debug!(sl!(), "policy read: {path}");
+        self.log_opa_input(path, EMPTY_JSON_INPUT).await;
+
+        if let Some(opa_client) = &mut self.opa_client {
+            let uri = format!("{}{path}", &self.query_path);
+            let response = opa_client
+                .post(uri.clone())
+                .body(EMPTY_JSON_INPUT.to_string())
+                .send()
+                .await?;
+
+            if response.status() != http::StatusCode::OK {
+                bail!(
+                    "policy read: POST {uri} response status {}",
+                    response.status()
+                );
+            }
+
+            let http_response = response.text().await?;
+            let trimmed_response = http_response.trim();
+
+            if trimmed_response == "{}" {
+                let error = format!("policy read: <{uri}> not found in policy");
+                debug!(sl!(), "{error}");
+                bail!(error)
+            } else {
+                let opa_response: serde_json::Result<StringResponse> =
+                    serde_json::from_str(&http_response);
+                match opa_response {
+                    Ok(resp) => {
+                        debug!(sl!(), "policy read: {path} -> <{}>", &resp.result);
+                        Ok(resp.result)
+                    }
+                    Err(e) => bail!("policy read: POST {uri} serde error {e}"),
+                }
+            }
+        } else {
+            bail!("Agent Policy is not initialized")
+        }
+    }
+
+    async fn get_string_value(&mut self, key: &str) -> Result<String> {
+        Ok(self.get_data(key).await?)
+    }
+
+    // TODO: remove this test
+    pub async fn test_query_policy_data(&mut self) {
+        // See kata-containers/tests/integration/kubernetes/runtimeclass_workloads/k8s-policy-set-keys.rego
+        // for an example of how to add this data into your policy.
+        let key = "my_test_data/default/key/ssh-demo";
+
+        match self.get_string_value(&key).await {
+            Ok(value) => debug!(
+                sl!(),
+                "policy: test_query_policy_data: <{key}> -> <{value}>"
+            ),
+            Err(e) => debug!(
+                sl!(),
+                "policy: test_query_policy_data: <{key}> -> error <{e}>"
+            ),
         }
     }
 }

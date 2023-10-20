@@ -142,6 +142,10 @@ fn config_allows(req: &impl MessageDyn) -> ttrpc::Result<()> {
 async fn policy_allows(req: &(impl MessageDyn + serde::Serialize)) -> ttrpc::Result<()> {
     let request = serde_json::to_string(req).unwrap();
     let mut policy = AGENT_POLICY.lock().await;
+
+    // TODO: remove this test
+    policy.test_query_policy_data().await;
+
     if !policy
         .is_allowed_endpoint(req.descriptor_dyn().name(), &request)
         .await
