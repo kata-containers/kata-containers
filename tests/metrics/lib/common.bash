@@ -168,14 +168,17 @@ function init_env()
 
 	cmd=("docker" "ctr")
 
-	sudo systemctl restart docker
-
 	# check dependencies
 	check_cmds "${cmd[@]}"
 
 	# Remove all stopped containers
-	clean_env
 	clean_env_ctr
+
+	# restart docker only if it is not masked by systemd
+	docker_masked="$(systemctl list-unit-files --state=masked | grep -c docker)" || true
+	if [ "${docker_masked}" -eq 0 ]; then
+		sudo systemctl restart docker
+	fi
 
 	# This clean up is more aggressive, this is in order to
 	# decrease the factors that could affect the metrics results.
@@ -188,8 +191,12 @@ function init_env()
 # killed to start test with clean environment.
 function kill_processes_before_start()
 {
-	DOCKER_PROCS=$(sudo "${DOCKER_EXE}" ps -q)
-	[[ -n "${DOCKER_PROCS}" ]] && clean_env
+	docker_masked="$(systemctl list-unit-files --state=masked | grep -c "${DOCKER_EXE}")" || true
+
+	if [ "${docker_masked}" -eq 0 ]; then
+		DOCKER_PROCS=$(sudo "${DOCKER_EXE}" ps -q)
+		[[ -n "${DOCKER_PROCS}" ]] && clean_env
+	fi
 
 	CTR_PROCS=$(sudo "${CTR_EXE}" t list -q)
 	[[ -n "${CTR_PROCS}" ]] && clean_env_ctr

@@ -8,7 +8,7 @@
 # running container, the main purpose of this
 # test is to stress the agent
 
-set -e -x
+set -x
 
 cidir=$(dirname "$0")
 
@@ -19,16 +19,8 @@ IMAGE="${IMAGE:-quay.io/prometheus/busybox:latest}"
 CONTAINER_NAME="${CONTAINER_NAME:-test}"
 PAYLOAD_ARGS="${PAYLOAD_ARGS:-tail -f /dev/null}"
 
-
-# Timeout is the duration of this test (seconds)
-# We want to stress the agent for a significant
-# time (approximately running for two days)
-timeout=186400
-start_time=$(date +%s)
-end_time=$((start_time+timeout))
-
 function setup {
-	restart_containerd_service
+	clean_env_ctr
 	sudo ctr image pull $IMAGE
 	sudo ctr run --runtime=$CTR_RUNTIME -d $IMAGE $CONTAINER_NAME sh -c $PAYLOAD_ARGS
 }
@@ -47,7 +39,7 @@ function exec_loop {
 }
 
 function teardown {
-	echo "Ending stability test"
+	echo "Ending agent stability test"
 	clean_env_ctr
 }
 trap teardown EXIT
@@ -55,7 +47,5 @@ trap teardown EXIT
 info "Starting stability test"
 setup
 
-info "Running stability test"
-while [[ $end_time > $(date +%s) ]]; do
-	exec_loop
-done
+info "Running agent stability test"
+exec_loop

@@ -17,7 +17,7 @@ pub mod tests {
         let epoll_manager = EpollManager::default();
         let mut vm = Vm::new(None, instance_info, epoll_manager).unwrap();
         let kernel_file = TempFile::new().unwrap();
-        let cmd_line = Cmdline::new(64);
+        let cmd_line = Cmdline::new(64).unwrap();
         vm.set_kernel_config(KernelConfigInfo::new(
             kernel_file.into_file(),
             None,

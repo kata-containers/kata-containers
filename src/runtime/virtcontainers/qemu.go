@@ -119,11 +119,11 @@ type qemu struct {
 }
 
 const (
-	consoleSocket = "console.sock"
-	qmpSocket     = "qmp.sock"
-	hmpSocket     = "hmp.sock"
-	vhostFSSocket = "vhost-fs.sock"
-	nydusdAPISock = "nydusd-api.sock"
+	consoleSocket      = "console.sock"
+	qmpSocket          = "qmp.sock"
+	extraMonitorSocket = "extra-monitor.sock"
+	vhostFSSocket      = "vhost-fs.sock"
+	nydusdAPISock      = "nydusd-api.sock"
 
 	// memory dump format will be set to elf
 	memoryDumpFormat = "elf"
@@ -329,8 +329,8 @@ func (q *qemu) qmpSocketPath(id string) (string, error) {
 	return utils.BuildSocketPath(q.config.VMStorePath, id, qmpSocket)
 }
 
-func (q *qemu) hmpSocketPath(id string) (string, error) {
-	return utils.BuildSocketPath(q.config.VMStorePath, id, hmpSocket)
+func (q *qemu) extraMonitorSocketPath(id string) (string, error) {
+	return utils.BuildSocketPath(q.config.VMStorePath, id, extraMonitorSocket)
 }
 
 func (q *qemu) getQemuMachine() (govmmQemu.Machine, error) {
@@ -347,22 +347,6 @@ func (q *qemu) getQemuMachine() (govmmQemu.Machine, error) {
 	return machine, nil
 }
 
-func (q *qemu) appendImage(ctx context.Context, devices []govmmQemu.Device) ([]govmmQemu.Device, error) {
-	imagePath, err := q.config.ImageAssetPath()
-	if err != nil {
-		return nil, err
-	}
-
-	if imagePath != "" {
-		devices, err = q.arch.appendImage(ctx, devices, imagePath)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	return devices, nil
-}
-
 func (q *qemu) createQmpSocket() ([]govmmQemu.QMPSocket, error) {
 	monitorSockPath, err := q.qmpSocketPath(q.id)
 	if err != nil {
@@ -377,35 +361,46 @@ func (q *qemu) createQmpSocket() ([]govmmQemu.QMPSocket, error) {
 	var sockets []govmmQemu.QMPSocket
 
 	sockets = append(sockets, govmmQemu.QMPSocket{
-		Type:   "unix",
-		Server: true,
-		NoWait: true,
+		Type:     "unix",
+		Protocol: govmmQemu.Qmp,
+		Server:   true,
+		NoWait:   true,
 	})
 
-	if q.HypervisorConfig().Debug {
-		humanMonitorSockPath, err := q.hmpSocketPath(q.id)
+	// The extra monitor socket allows an external user to take full
+	// control on Qemu and silently break the VM in all possible ways.
+	// It should only ever be used for debugging purposes, hence the
+	// check on Debug.
+	if q.HypervisorConfig().Debug && q.config.ExtraMonitorSocket != "" {
+		extraMonitorSockPath, err := q.extraMonitorSocketPath(q.id)
 		if err != nil {
 			return nil, err
 		}
 
 		sockets = append(sockets, govmmQemu.QMPSocket{
-			Type:   "unix",
-			IsHmp:  true,
-			Name:   humanMonitorSockPath,
-			Server: true,
-			NoWait: true,
+			Type:     "unix",
+			Protocol: q.config.ExtraMonitorSocket,
+			Name:     extraMonitorSockPath,
+			Server:   true,
+			NoWait:   true,
 		})
+
+		q.Logger().Warn("QEMU configured to start with an untrusted monitor")
 	}
 
 	return sockets, nil
 }
 
-func (q *qemu) buildDevices(ctx context.Context, initrdPath string) ([]govmmQemu.Device, *govmmQemu.IOThread, error) {
+func (q *qemu) buildDevices(ctx context.Context, kernelPath string) ([]govmmQemu.Device, *govmmQemu.IOThread, *govmmQemu.Kernel, error) {
 	var devices []govmmQemu.Device
+
+	kernel := &govmmQemu.Kernel{
+		Path: kernelPath,
+	}
 
 	_, console, err := q.GetVMConsole(ctx, q.id)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Add bridges before any other devices. This way we make sure that
@@ -414,20 +409,28 @@ func (q *qemu) buildDevices(ctx context.Context, initrdPath string) ([]govmmQemu
 
 	devices, err = q.arch.appendConsole(ctx, devices, console)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	if initrdPath == "" {
-		devices, err = q.appendImage(ctx, devices)
+	assetPath, assetType, err := q.config.ImageOrInitrdAssetPath()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	if assetType == types.ImageAsset {
+		devices, err = q.arch.appendImage(ctx, devices, assetPath)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
+	} else {
+		// InitrdAsset, need to set kernel initrd path
+		kernel.InitrdPath = assetPath
 	}
 
 	if q.config.IOMMU {
 		devices, err = q.arch.appendIOMMU(devices)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 	}
 
@@ -438,10 +441,13 @@ func (q *qemu) buildDevices(ctx context.Context, initrdPath string) ([]govmmQemu
 
 	var ioThread *govmmQemu.IOThread
 	if q.config.BlockDeviceDriver == config.VirtioSCSI {
-		return q.arch.appendSCSIController(ctx, devices, q.config.EnableIOThreads)
+		devices, ioThread, err = q.arch.appendSCSIController(ctx, devices, q.config.EnableIOThreads)
+		if err != nil {
+			return nil, nil, nil, err
+		}
 	}
 
-	return devices, ioThread, nil
+	return devices, ioThread, kernel, nil
 }
 
 func (q *qemu) setupTemplate(knobs *govmmQemu.Knobs, memory *govmmQemu.Memory) govmmQemu.Incoming {
@@ -514,7 +520,7 @@ func (q *qemu) createVirtiofsDaemon(sharedPath string) (VirtiofsDaemon, error) {
 	// in virtiofs if SELinux on the guest side is enabled.
 	if !q.config.DisableGuestSeLinux {
 		q.Logger().Info("Set the xattr option for virtiofsd")
-		q.config.VirtioFSExtraArgs = append(q.config.VirtioFSExtraArgs, "-o", "xattr")
+		q.config.VirtioFSExtraArgs = append(q.config.VirtioFSExtraArgs, "--xattr")
 	}
 
 	// default use virtiofsd
@@ -562,16 +568,6 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		IOMMUPlatform: q.config.IOMMUPlatform,
 	}
 
-	kernelPath, err := q.config.KernelAssetPath()
-	if err != nil {
-		return err
-	}
-
-	initrdPath, err := q.config.InitrdAssetPath()
-	if err != nil {
-		return err
-	}
-
 	incoming := q.setupTemplate(&knobs, &memory)
 
 	// With the current implementations, VM templating will not work with file
@@ -615,7 +611,36 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		return err
 	}
 
-	devices, ioThread, err := q.buildDevices(ctx, initrdPath)
+	if q.config.ConfidentialGuest {
+		// At this point we're safe to just check for the protection field
+		// on the hypervisor specific code, as availableGuestProtection()
+		// has been called earlier and we know we have the value stored.
+		if q.arch.getProtection() == tdxProtection {
+			knobs.MemFDPrivate = true
+
+			// In case Nydus or VirtioFS is used, which may become a reality
+			// in the future, whenever we get those hardened for TDX, those
+			// knobs below would be automatically set.  Let's make sure we
+			// pre-emptively disable them, and with that we can avoid some
+			// headaches in the future.
+			knobs.FileBackedMem = false
+			knobs.MemShared = false
+
+			// SMP is currently broken with TDX 1.5, and
+			// we must ensure we use something like:
+			// `...,sockets=1,cores=numvcpus,threads=1,...`
+			smp.Sockets = 1
+			smp.Cores = q.config.NumVCPUs
+			smp.Threads = 1
+		}
+	}
+
+	kernelPath, err := q.config.KernelAssetPath()
+	if err != nil {
+		return err
+	}
+
+	devices, ioThread, kernel, err := q.buildDevices(ctx, kernelPath)
 	if err != nil {
 		return err
 	}
@@ -643,13 +668,8 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		return err
 	}
 
-	// Breaks hypervisor abstraction has Kata Specific logic
-	kernel := govmmQemu.Kernel{
-		Path:       kernelPath,
-		InitrdPath: initrdPath,
-		// some devices configuration may also change kernel params, make sure this is called afterwards
-		Params: q.kernelParameters(),
-	}
+	// some devices configuration may also change kernel params, make sure this is called afterwards
+	kernel.Params = q.kernelParameters()
 	q.checkBpfEnabled()
 
 	qemuConfig := govmmQemu.Config{
@@ -666,7 +686,7 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		Devices:        devices,
 		CPUModel:       cpuModel,
 		SeccompSandbox: q.config.SeccompSandbox,
-		Kernel:         kernel,
+		Kernel:         *kernel,
 		RTC:            rtc,
 		QMPSockets:     qmpSockets,
 		Knobs:          knobs,

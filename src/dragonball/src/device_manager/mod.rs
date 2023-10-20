@@ -1195,7 +1195,7 @@ mod tests {
         let mut cmdline = crate::vm::KernelConfigInfo::new(
             kernel_file,
             None,
-            linux_loader::cmdline::Cmdline::new(0x1000),
+            linux_loader::cmdline::Cmdline::new(0x1000).unwrap(),
         );
 
         let address_space = vm.vm_address_space().cloned();

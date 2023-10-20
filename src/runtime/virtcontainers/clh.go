@@ -549,14 +549,14 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	clh.vmconfig.Rng.SetIommu(clh.config.IOMMU)
 
 	// set the initial root/boot disk of hypervisor
-	imagePath, err := clh.config.ImageAssetPath()
+	assetPath, assetType, err := clh.config.ImageOrInitrdAssetPath()
 	if err != nil {
 		return err
 	}
 
-	if imagePath != "" {
+	if assetType == types.ImageAsset {
 		if clh.config.ConfidentialGuest {
-			disk := chclient.NewDiskConfig(imagePath)
+			disk := chclient.NewDiskConfig(assetPath)
 			disk.SetReadonly(true)
 
 			diskRateLimiterConfig := clh.getDiskRateLimiterConfig()
@@ -570,7 +570,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 				clh.vmconfig.Disks = &[]chclient.DiskConfig{*disk}
 			}
 		} else {
-			pmem := chclient.NewPmemConfig(imagePath)
+			pmem := chclient.NewPmemConfig(assetPath)
 			*pmem.DiscardWrites = true
 			pmem.SetIommu(clh.config.IOMMU)
 
@@ -581,12 +581,8 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 			}
 		}
 	} else {
-		initrdPath, err := clh.config.InitrdAssetPath()
-		if err != nil {
-			return err
-		}
-
-		clh.vmconfig.Payload.SetInitramfs(initrdPath)
+		// assetType == types.InitrdAsset
+		clh.vmconfig.Payload.SetInitramfs(assetPath)
 	}
 
 	if clh.config.ConfidentialGuest {
@@ -1225,6 +1221,7 @@ func (clh *cloudHypervisor) Capabilities(ctx context.Context) types.Capabilities
 		caps.SetFsSharingSupport()
 	}
 	caps.SetBlockDeviceHotplugSupport()
+	caps.SetNetworkDeviceHotplugSupported()
 	return caps
 }
 

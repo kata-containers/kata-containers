@@ -141,9 +141,16 @@ const (
 func isDimmSupported(config *Config) bool {
 	switch runtime.GOARCH {
 	case "amd64", "386", "ppc64le", "arm64":
-		if config != nil && config.Machine.Type == MachineTypeMicrovm {
-			// microvm does not support NUMA
-			return false
+		if config != nil {
+			if config.Machine.Type == MachineTypeMicrovm {
+				// microvm does not support NUMA
+				return false
+			}
+			if config.Knobs.MemFDPrivate {
+				// TDX guests rely on MemFD Private, which
+				// does not have NUMA support yet
+				return false
+			}
 		}
 		return true
 	default:
@@ -2464,14 +2471,28 @@ const (
 	Unix QMPSocketType = "unix"
 )
 
-// QMPSocket represents a qemu QMP socket configuration.
+// MonitorProtocol tells what protocol is used on a QMPSocket
+type MonitorProtocol string
+
+const (
+	// Socket using a human-friendly text-based protocol.
+	Hmp MonitorProtocol = "hmp"
+
+	// Socket using a richer json-based protocol.
+	Qmp MonitorProtocol = "qmp"
+
+	// Same as Qmp with pretty json formatting.
+	QmpPretty MonitorProtocol = "qmp-pretty"
+)
+
+// QMPSocket represents a qemu QMP or HMP socket configuration.
 // nolint: govet
 type QMPSocket struct {
 	// Type is the socket type (e.g. "unix").
 	Type QMPSocketType
 
-	// Human Monitor Interface (HMP) (true for HMP, false for QMP, default false)
-	IsHmp bool
+	// Protocol is the protocol to be used on the socket.
+	Protocol MonitorProtocol
 
 	// QMP listener file descriptor to be passed to qemu
 	FD *os.File
@@ -2494,6 +2515,10 @@ func (qmp QMPSocket) Valid() bool {
 	}
 
 	if qmp.Type != Unix {
+		return false
+	}
+
+	if qmp.Protocol != Hmp && qmp.Protocol != Qmp && qmp.Protocol != QmpPretty {
 		return false
 	}
 
@@ -2627,6 +2652,9 @@ type Knobs struct {
 
 	// MemPrealloc will allocate all the RAM upfront
 	MemPrealloc bool
+
+	// Private Memory FD meant for private memory map/unmap.
+	MemFDPrivate bool
 
 	// FileBackedMem requires Memory.Size and Memory.Path of the VM to
 	// be set.
@@ -2845,10 +2873,11 @@ func (config *Config) appendQMPSockets() {
 			}
 		}
 
-		if q.IsHmp {
+		switch q.Protocol {
+		case Hmp:
 			config.qemuParams = append(config.qemuParams, "-monitor")
-		} else {
-			config.qemuParams = append(config.qemuParams, "-qmp")
+		default:
+			config.qemuParams = append(config.qemuParams, fmt.Sprintf("-%s", q.Protocol))
 		}
 
 		config.qemuParams = append(config.qemuParams, strings.Join(qmpParams, ","))
@@ -2992,10 +3021,13 @@ func (config *Config) appendMemoryKnobs() {
 		return
 	}
 	var objMemParam, numaMemParam string
+
 	dimmName := "dimm1"
 	if config.Knobs.HugePages {
 		objMemParam = "memory-backend-file,id=" + dimmName + ",size=" + config.Memory.Size + ",mem-path=/dev/hugepages"
 		numaMemParam = "node,memdev=" + dimmName
+	} else if config.Knobs.MemFDPrivate {
+		objMemParam = "memory-backend-memfd-private,id=" + dimmName + ",size=" + config.Memory.Size
 	} else if config.Knobs.FileBackedMem && config.Memory.Path != "" {
 		objMemParam = "memory-backend-file,id=" + dimmName + ",size=" + config.Memory.Size + ",mem-path=" + config.Memory.Path
 		numaMemParam = "node,memdev=" + dimmName

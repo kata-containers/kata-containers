@@ -17,6 +17,7 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/govmm"
+	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
 	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 
@@ -84,6 +85,7 @@ const (
 var (
 	hvLogger                   = logrus.WithField("source", "virtcontainers/hypervisor")
 	noGuestMemHotplugErr error = errors.New("guest memory hotplug not supported")
+	conflictingAssets    error = errors.New("cannot set both image and initrd at the same time")
 )
 
 // In some architectures the maximum number of vCPUs depends on the number of physical cores.
@@ -574,7 +576,7 @@ type HypervisorConfig struct {
 	EnableIOThreads bool
 
 	// Debug changes the default hypervisor and kernel parameters to
-	// enable debug output where available. And Debug also enable the hmp socket.
+	// enable debug output where available.
 	Debug bool
 
 	// MemPrealloc specifies if the memory should be pre-allocated
@@ -640,6 +642,9 @@ type HypervisorConfig struct {
 
 	// Use legacy serial for the guest console
 	LegacySerial bool
+
+	// ExtraMonitorSocket allows to add an extra HMP or QMP socket when the VMM is Qemu
+	ExtraMonitorSocket govmmQemu.MonitorProtocol
 }
 
 // vcpu mapping from vcpu number to thread number
@@ -696,6 +701,46 @@ func (conf *HypervisorConfig) AddCustomAsset(a *types.Asset) error {
 	conf.customAssets[a.Type()] = a
 
 	return nil
+}
+
+// ImageOrInitrdAssetPath returns an image or an initrd path, along with the corresponding asset type
+// Annotation path is preferred to config path.
+func (conf *HypervisorConfig) ImageOrInitrdAssetPath() (string, types.AssetType, error) {
+	var image, initrd string
+
+	checkAndReturn := func(image string, initrd string) (string, types.AssetType, error) {
+		if image != "" && initrd != "" {
+			return "", types.UnkownAsset, conflictingAssets
+		}
+
+		if image != "" {
+			return image, types.ImageAsset, nil
+		}
+
+		if initrd != "" {
+			return initrd, types.InitrdAsset, nil
+		}
+
+		return "", types.UnkownAsset, fmt.Errorf("one of image and initrd must be set")
+	}
+
+	if a, ok := conf.customAssets[types.ImageAsset]; ok {
+		image = a.Path()
+	}
+
+	if a, ok := conf.customAssets[types.InitrdAsset]; ok {
+		initrd = a.Path()
+	}
+
+	path, assetType, err := checkAndReturn(image, initrd)
+	if assetType != types.UnkownAsset {
+		return path, assetType, nil
+	}
+	if err == conflictingAssets {
+		return "", types.UnkownAsset, errors.Wrapf(err, "conflicting annotations")
+	}
+
+	return checkAndReturn(conf.ImagePath, conf.InitrdPath)
 }
 
 func (conf *HypervisorConfig) assetPath(t types.AssetType) (string, error) {

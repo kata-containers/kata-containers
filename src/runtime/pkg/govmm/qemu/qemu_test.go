@@ -632,6 +632,29 @@ func TestAppendMemoryFileBackedMemPrealloc(t *testing.T) {
 	testConfigAppend(conf, knobs, memString+" "+knobsString, t)
 }
 
+func TestAppendMemoryBackedMemFdPrivate(t *testing.T) {
+	conf := &Config{
+		Memory: Memory{
+			Size:  "1G",
+			Slots: 8,
+		},
+	}
+	memString := "-m 1G,slots=8"
+	testConfigAppend(conf, conf.Memory, memString, t)
+
+	knobs := Knobs{
+		MemFDPrivate: true,
+		MemShared:    false,
+	}
+	objMemString := "-object memory-backend-memfd-private,id=dimm1,size=1G"
+	memBackendString := "-machine memory-backend=dimm1"
+
+	knobsString := objMemString + " "
+	knobsString += memBackendString
+
+	testConfigAppend(conf, knobs, memString+" "+knobsString, t)
+}
+
 func TestNoRebootKnob(t *testing.T) {
 	conf := &Config{}
 
@@ -703,10 +726,11 @@ var qmpSingleSocketString = "-qmp unix:path=cc-qmp"
 
 func TestAppendSingleQMPSocketServer(t *testing.T) {
 	qmp := QMPSocket{
-		Type:   "unix",
-		Name:   "cc-qmp",
-		Server: true,
-		NoWait: true,
+		Type:     "unix",
+		Name:     "cc-qmp",
+		Server:   true,
+		NoWait:   true,
+		Protocol: Qmp,
 	}
 
 	testAppend(qmp, qmpSingleSocketServerString, t)
@@ -714,9 +738,10 @@ func TestAppendSingleQMPSocketServer(t *testing.T) {
 
 func TestAppendSingleQMPSocket(t *testing.T) {
 	qmp := QMPSocket{
-		Type:   Unix,
-		Name:   "cc-qmp",
-		Server: false,
+		Type:     Unix,
+		Name:     "cc-qmp",
+		Server:   false,
+		Protocol: Qmp,
 	}
 
 	testAppend(qmp, qmpSingleSocketString, t)
@@ -733,10 +758,11 @@ func TestAppendQMPSocketServerFd(t *testing.T) {
 	}()
 
 	qmp := QMPSocket{
-		Type:   "unix",
-		FD:     foo,
-		Server: true,
-		NoWait: true,
+		Type:     "unix",
+		FD:       foo,
+		Server:   true,
+		NoWait:   true,
+		Protocol: Qmp,
 	}
 
 	testAppend(qmp, qmpSocketServerFdString, t)
@@ -747,16 +773,18 @@ var qmpSocketServerString = "-qmp unix:path=cc-qmp-1,server=on,wait=off -qmp uni
 func TestAppendQMPSocketServer(t *testing.T) {
 	qmp := []QMPSocket{
 		{
-			Type:   "unix",
-			Name:   "cc-qmp-1",
-			Server: true,
-			NoWait: true,
+			Type:     "unix",
+			Name:     "cc-qmp-1",
+			Server:   true,
+			NoWait:   true,
+			Protocol: Qmp,
 		},
 		{
-			Type:   "unix",
-			Name:   "cc-qmp-2",
-			Server: true,
-			NoWait: true,
+			Type:     "unix",
+			Name:     "cc-qmp-2",
+			Server:   true,
+			NoWait:   true,
+			Protocol: Qmp,
 		},
 	}
 

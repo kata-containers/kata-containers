@@ -366,6 +366,7 @@ func (a *acrnArchBase) capabilities(config HypervisorConfig) types.Capabilities 
 
 	caps.SetBlockDeviceSupport()
 	caps.SetBlockDeviceHotplugSupport()
+	caps.SetNetworkDeviceHotplugSupported()
 
 	return caps
 }

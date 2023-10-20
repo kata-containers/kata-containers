@@ -39,8 +39,7 @@ function main() {
 	local containers=()
 	local not_started_count="${NUM_CONTAINERS}"
 
-	init_env
-	check_cmds "${cmds[@]}"
+	clean_env_ctr
 	sudo -E ctr i pull "${IMAGE}"
 
 	info "Creating ${NUM_CONTAINERS} containers"
@@ -53,16 +52,10 @@ function main() {
 	done
 
 	# Check that the requested number of containers are running
-	check_containers_are_up & pid=$!
-	(sleep "${TIMEOUT_LAUNCH}" && kill -HUP "${pid}") 2>/dev/null & pid_tout=$!
+	check_containers_are_up "${NUM_CONTAINERS}"
 
-	if wait "${pid}" 2>/dev/null; then
-		pkill -HUP -P "${pid_tout}"
-		wait "${pid_tout}"
-	else
-		warn "Time out exceeded"
-		return 1
-	fi
+	# Check that the requested number of containers are running
+	check_containers_are_running "${NUM_CONTAINERS}"
 
 	clean_env_ctr
 }
