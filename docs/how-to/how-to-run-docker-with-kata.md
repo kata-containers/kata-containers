@@ -2,8 +2,6 @@
 
 This document describes the why and how behind running Docker in a Kata Container.
 
-> **Note:** While in other environments this might be described as "Docker in Docker", the new architecture of Kata 2.x means [Docker can no longer be used to create containers using a Kata Containers runtime](https://github.com/kata-containers/kata-containers/issues/722).
-
 ## Requirements
 
 - A working Kata Containers installation
