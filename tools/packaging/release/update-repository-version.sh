@@ -125,6 +125,12 @@ bump_repo() {
 	local kata_deploy_stable_yaml="${kata_deploy_base}/kata-deploy-stable.yaml"
 	local kata_cleanup_stable_yaml="${kata_cleanup_base}/kata-cleanup-stable.yaml"
 
+	local tests_dir="tests"
+	local kubernetes_tests_dir="${tests_dir}/integration/kubernetes"
+	local kubernetes_tests_runner="${kubernetes_tests_dir}/gha-run.sh"
+	local kata_deploy_tests_dir="${tests_dir}/functional/kata-deploy"
+	local kata_deploy_tests_runner="${kata_deploy_tests_dir}/kata-deploy.bats"
+
 	branch="${new_version}-branch-bump"
 	git fetch origin "${target_branch}"
 	git checkout "origin/${target_branch}" -b "${branch}"
@@ -201,10 +207,15 @@ bump_repo() {
 			sed -i "s#${registry}:${version_to_replace}#${registry}:${replacement}#g" "${kata_deploy_yaml}"
 			sed -i "s#${registry}:${version_to_replace}#${registry}:${replacement}#g" "${kata_cleanup_yaml}"
 
+			sed -i "s#${registry}:${version_to_replace}#${registry}:${replacement}#g" "${kubernetes_tests_runner}"
+			sed -i "s#${registry}:${version_to_replace}#${registry}:${replacement}#g" "${kata_deploy_tests_runner}"
+
 			git diff
 
 			git add "${kata_deploy_yaml}"
 			git add "${kata_cleanup_yaml}"
+			git add "${kubernetes_tests_runner}"
+			git add "${kata_deploy_tests_runner}"
 
 			need_commit=true
 		fi
