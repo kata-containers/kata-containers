@@ -6,6 +6,7 @@
 #
 # This test measures the following UDP network essentials:
 # - bandwith simplex
+# - parallel bandwidth
 #
 # These metrics/results will be got from the interconnection between
 # a client and a server using iperf3 tool.
@@ -42,6 +43,10 @@ function iperf3_udp_all_collect_results() {
 		"bandwidth": {
 			"Result" : $bandwidth_result,
 			"Units" : "$bandwidth_units"
+		},
+		"parallel": {
+			"Result" : $parallel_result,
+			"Units" : "$parallel_units"
 		}
 	}
 EOF
@@ -69,6 +74,34 @@ function iperf3_udp_bandwidth() {
 			"bandwidth": {
 				"Result" : $bandwidth_result,
 				"Units" : "$bandwidth_units"
+			}
+		}
+EOF
+)"
+		metrics_json_add_array_element "$json"
+		metrics_json_end_array "Results"
+	fi
+}
+
+function iperf3_udp_parallel() {
+	# Start server
+	local transmit_timeout="120"
+
+	kubectl exec -i "$client_pod_name" -- sh -c "iperf3 -c ${server_ip_add} -u -J -P 4" | jq '.end.sum.bits_per_second' > "${iperf_file}"
+	export parallel_result=$(cat "${iperf_file}")
+	export parallel_units="bits/sec"
+
+	if [ "$COLLECT_ALL" == "true" ]; then
+		iperf3_udp_all_collect_results
+	else
+		metrics_json_init
+		metrics_json_start_array
+
+		local json="$(cat << EOF
+		{
+			"parallel": {
+				"Result" : $parallel_result,
+				"Units" : "$parallel_units"
 			}
 		}
 EOF
@@ -141,6 +174,7 @@ Usage: $0 "[options]"
 	Options:
 		-a      Run all tests
 		-b      Run bandwidth tests
+		-p	Run parallel tests
 		-h      Help
 EOF
 )"
@@ -151,7 +185,7 @@ function main() {
 	iperf3_udp_start_deployment
 
 	local OPTIND
-	while getopts ":abh:" opt
+	while getopts ":abph:" opt
 	do
 		case "$opt" in
 		a)      # all tests
@@ -159,6 +193,9 @@ function main() {
 			;;
 		b)      # bandwith test
 			test_bandwith="1"
+			;;
+		p)	# parallel test
+			test_parallel="1"
 			;;
 		h)
 			help
@@ -174,6 +211,7 @@ function main() {
 	shift $((OPTIND-1))
 
 	[[ -z "$test_bandwith" ]] && \
+	[[ -z "$test_parallel" ]] && \
 	[[ -z "$test_all" ]] && \
 		help && die "Must choose at least one test"
 
@@ -181,8 +219,12 @@ function main() {
 		iperf3_udp_bandwidth
 	fi
 
+	if [ "$test_parallel" == "1" ]; then
+		iperf3_udp_parallel
+	fi
+
 	if [ "$test_all" == "1" ]; then
-		export COLLECT_ALL=true && iperf3_udp_bandwidth
+		export COLLECT_ALL=true && iperf3_udp_bandwidth && iperf3_udp_parallel
 	fi
 
 	info "iperf3: saving test results"
