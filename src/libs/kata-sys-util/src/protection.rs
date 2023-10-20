@@ -42,7 +42,7 @@ impl fmt::Display for GuestProtection {
         match self {
             GuestProtection::Tdx(details) => write!(
                 f,
-                "tdx (major_version: {}, minor_version: {}",
+                "tdx (major_version: {}, minor_version: {})",
                 details.major_version, details.minor_version
             ),
             GuestProtection::Sev => write!(f, "sev"),
@@ -363,12 +363,15 @@ mod tests {
 
         let result = result.unwrap();
 
-        let details = match result {
+        let details = match &result {
             GuestProtection::Tdx(details) => details,
             _ => panic!(),
         };
 
         assert_eq!(details.major_version, 1);
         assert_eq!(details.minor_version, 0);
+
+        let displayed_value = result.to_string();
+        assert_eq!(displayed_value, "tdx (major_version: 1, minor_version: 0)");
     }
 }
