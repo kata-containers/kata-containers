@@ -8,8 +8,8 @@ to remotely connect to your virtual machine (SSH).
 
 ## Create a new virtual machine with nesting support
 
-All regions support nested virtualization using the V2 flavors (those prefixed
-with v2).  The recommended machine type for container workloads is `v2-highcpu` range.
+All regions support nested virtualization.  The recommended machine type for
+container workloads is `v3-standard` range.
 
 ## Set up with distribution specific quick start
 
