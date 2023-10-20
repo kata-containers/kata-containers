@@ -5,7 +5,6 @@
 use crate::rpc;
 use anyhow::{bail, ensure, Context, Result};
 use serde::Deserialize;
-use std::collections::HashSet;
 use std::env;
 use std::fs;
 use std::str::FromStr;
@@ -52,17 +51,6 @@ const ERR_INVALID_CONTAINER_PIPE_SIZE_PARAM: &str = "unable to parse container p
 const ERR_INVALID_CONTAINER_PIPE_SIZE_KEY: &str = "invalid container pipe size key name";
 const ERR_INVALID_CONTAINER_PIPE_NEGATIVE: &str = "container pipe size should not be negative";
 
-#[derive(Debug, Default, Deserialize)]
-pub struct EndpointsConfig {
-    pub allowed: Vec<String>,
-}
-
-#[derive(Debug, Default)]
-pub struct AgentEndpoints {
-    pub allowed: HashSet<String>,
-    pub all_allowed: bool,
-}
-
 #[derive(Debug)]
 pub struct AgentConfig {
     pub debug_console: bool,
@@ -75,7 +63,6 @@ pub struct AgentConfig {
     pub server_addr: String,
     pub unified_cgroup_hierarchy: bool,
     pub tracing: bool,
-    pub endpoints: AgentEndpoints,
     pub supports_seccomp: bool,
 }
 
@@ -91,7 +78,6 @@ pub struct AgentConfigBuilder {
     pub server_addr: Option<String>,
     pub unified_cgroup_hierarchy: Option<bool>,
     pub tracing: Option<bool>,
-    pub endpoints: Option<EndpointsConfig>,
 }
 
 macro_rules! config_override {
@@ -151,7 +137,6 @@ impl Default for AgentConfig {
             server_addr: format!("{}:{}", VSOCK_ADDR, DEFAULT_AGENT_VSOCK_PORT),
             unified_cgroup_hierarchy: false,
             tracing: false,
-            endpoints: Default::default(),
             supports_seccomp: rpc::have_seccomp(),
         }
     }
@@ -181,13 +166,6 @@ impl FromStr for AgentConfig {
         config_override!(agent_config_builder, agent_config, server_addr);
         config_override!(agent_config_builder, agent_config, unified_cgroup_hierarchy);
         config_override!(agent_config_builder, agent_config, tracing);
-
-        // Populate the allowed endpoints hash set, if we got any from the config file.
-        if let Some(endpoints) = agent_config_builder.endpoints {
-            for ep in endpoints.allowed {
-                agent_config.endpoints.allowed.insert(ep);
-            }
-        }
 
         Ok(agent_config)
     }
@@ -298,9 +276,6 @@ impl AgentConfig {
             config.tracing = get_bool_value(&name_value)?;
         }
 
-        // We did not get a configuration file: allow all endpoints.
-        config.endpoints.all_allowed = true;
-
         Ok(config)
     }
 
@@ -309,10 +284,6 @@ impl AgentConfig {
         let config = fs::read_to_string(file)
             .with_context(|| format!("Failed to read config file {}", file))?;
         AgentConfig::from_str(&config)
-    }
-
-    pub fn is_allowed_endpoint(&self, ep: &str) -> bool {
-        self.endpoints.all_allowed || self.endpoints.allowed.contains(ep)
     }
 }
 
@@ -1378,26 +1349,13 @@ Caused by:
             r#"
                dev_mode = true
                server_addr = 'vsock://8:2048'
-
-               [endpoints]
-               allowed = ["CreateContainer", "StartContainer"]
               "#,
         )
         .unwrap();
 
-        // Verify that the all_allowed flag is false
-        assert!(!config.endpoints.all_allowed);
-
         // Verify that the override worked
         assert!(config.dev_mode);
         assert_eq!(config.server_addr, "vsock://8:2048");
-        assert_eq!(
-            config.endpoints.allowed,
-            ["CreateContainer".to_string(), "StartContainer".to_string()]
-                .iter()
-                .cloned()
-                .collect()
-        );
 
         // Verify that the default values are valid
         assert_eq!(config.hotplug_timeout, DEFAULT_HOTPLUG_TIMEOUT);
