@@ -34,6 +34,12 @@ readonly kata_install_dir="${kata_install_dir:-/opt/kata}"
 readonly kata_runtime_name="kata"
 readonly kata_runtime_type="io.containerd.${kata_runtime_name}.v2"
 readonly kata_shim_v2="containerd-shim-${kata_runtime_name}-v2"
+readonly kata_configuration="configuration"
+
+readonly kata_clh_runtime_name="kata-clh"
+readonly kata_clh_runtime_type="io.containerd.${kata_clh_runtime_name}.v2"
+readonly kata_clh_shim_v2="containerd-shim-${kata_clh_runtime_name}-v2"
+readonly kata_clh_configuration="configuration-clh"
 
 # Systemd unit name for containerd daemon
 readonly containerd_service_name="containerd.service"
@@ -477,6 +483,14 @@ configure_containerd()
 		      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
 		        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.${kata_runtime_name}]
 		          runtime_type = "${kata_runtime_type}"
+			  privileged_without_host_devices = true
+			  [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.${kata_runtime_name}.options]
+			    ConfigPath = "/opt/kata/share/defaults/kata-containers/${kata_configuration}.toml"
+		        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.${kata_clh_runtime_name}]
+		          runtime_type = "${kata_clh_runtime_type}"
+			  privileged_without_host_devices = true
+			  [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.${kata_clh_runtime_name}.options]
+			    ConfigPath = "/opt/kata/share/defaults/kata-containers/${kata_clh_configuration}.toml"
 		EOF
 
 		modified="true"
