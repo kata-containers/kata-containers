@@ -169,7 +169,7 @@ impl CloudHypervisorInner {
     }
 
     async fn handle_vfio_device(&mut self, device: VfioDevice) -> Result<DeviceType> {
-        let vfio_device: VfioDevice = device.clone();
+        let mut vfio_device: VfioDevice = device.clone();
 
         // A device with multi-funtions, or a IOMMU group with one more
         // devices, the Primary device is selected to be passed to VM.
@@ -210,6 +210,12 @@ impl CloudHypervisorInner {
                 serde_json::from_str(detail.as_str()).map_err(|e| anyhow!(e))?;
             self.device_ids
                 .insert(device.device_id.clone(), dev_info.id);
+
+            // Update PCI path for the vfio host device. It is safe to directly access the slice element
+            // here as we have already checked if it exists.
+            // Todo: Handle vfio-ap mediated devices - return error for them.
+            vfio_device.devices[0].guest_pci_path =
+                Some(Self::clh_pci_info_to_path(&dev_info.bdf)?);
         }
 
         Ok(DeviceType::Vfio(vfio_device))
