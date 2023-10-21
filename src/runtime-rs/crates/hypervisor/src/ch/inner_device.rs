@@ -7,16 +7,18 @@
 use super::inner::CloudHypervisorInner;
 use crate::device::DeviceType;
 use crate::BlockDevice;
-use crate::HybridVsockConfig;
+use crate::HybridVsockDevice;
 use crate::NetworkConfig;
+use crate::PciPath;
+use crate::ShareFsDevice;
 use crate::ShareFsDeviceConfig;
 use crate::VfioDevice;
 use crate::VmmState;
 use anyhow::{anyhow, Context, Result};
+use ch_config::ch_api::cloud_hypervisor_vm_device_add;
 use ch_config::ch_api::{
-    cloud_hypervisor_vm_blockdev_add, cloud_hypervisor_vm_device_add,
-    cloud_hypervisor_vm_device_remove, cloud_hypervisor_vm_fs_add, PciDeviceInfo,
-    VmRemoveDeviceData,
+    cloud_hypervisor_vm_blockdev_add, cloud_hypervisor_vm_device_remove,
+    cloud_hypervisor_vm_fs_add, PciDeviceInfo, VmRemoveDeviceData,
 };
 use ch_config::convert::{DEFAULT_DISK_QUEUES, DEFAULT_DISK_QUEUE_SIZE, DEFAULT_NUM_PCI_SEGMENTS};
 use ch_config::DiskConfig;
@@ -31,7 +33,7 @@ pub const DEFAULT_FS_QUEUES: usize = 1;
 const DEFAULT_FS_QUEUE_SIZE: u16 = 1024;
 
 impl CloudHypervisorInner {
-    pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<()> {
+    pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<DeviceType> {
         if self.state != VmmState::VmRunning {
             // If the VM is not running, add the device to the pending list to
             // be handled later.
@@ -55,8 +57,8 @@ impl CloudHypervisorInner {
             // - Network details need to be saved for later application.
             //
             match device {
-                DeviceType::ShareFs(_) => self.pending_devices.insert(0, device),
-                DeviceType::Network(_) => self.pending_devices.insert(0, device),
+                DeviceType::ShareFs(_) => self.pending_devices.insert(0, device.clone()),
+                DeviceType::Network(_) => self.pending_devices.insert(0, device.clone()),
                 _ => {
                     debug!(
                         sl!(),
@@ -65,20 +67,18 @@ impl CloudHypervisorInner {
                 }
             }
 
-            return Ok(());
+            return Ok(device);
         }
 
-        self.handle_add_device(device).await?;
-
-        Ok(())
+        self.handle_add_device(device).await
     }
 
-    async fn handle_add_device(&mut self, device: DeviceType) -> Result<()> {
+    async fn handle_add_device(&mut self, device: DeviceType) -> Result<DeviceType> {
         match device {
-            DeviceType::ShareFs(sharefs) => self.handle_share_fs_device(sharefs.config).await,
-            DeviceType::HybridVsock(hvsock) => self.handle_hvsock_device(&hvsock.config).await,
+            DeviceType::ShareFs(sharefs) => self.handle_share_fs_device(sharefs).await,
+            DeviceType::HybridVsock(hvsock) => self.handle_hvsock_device(hvsock).await,
             DeviceType::Block(block) => self.handle_block_device(block).await,
-            DeviceType::Vfio(vfiodev) => self.handle_vfio_device(&vfiodev).await,
+            DeviceType::Vfio(vfiodev) => self.handle_vfio_device(vfiodev).await,
             _ => Err(anyhow!("unhandled device: {:?}", device)),
         }
     }
@@ -108,9 +108,13 @@ impl CloudHypervisorInner {
         }
     }
 
-    async fn handle_share_fs_device(&mut self, cfg: ShareFsDeviceConfig) -> Result<()> {
-        if cfg.fs_type != VIRTIO_FS {
-            return Err(anyhow!("cannot handle share fs type: {:?}", cfg.fs_type));
+    async fn handle_share_fs_device(&mut self, sharefs: ShareFsDevice) -> Result<DeviceType> {
+        let device: ShareFsDevice = sharefs.clone();
+        if device.config.fs_type != VIRTIO_FS {
+            return Err(anyhow!(
+                "cannot handle share fs type: {:?}",
+                device.config.fs_type
+            ));
         }
 
         let socket = self
@@ -119,26 +123,26 @@ impl CloudHypervisorInner {
             .ok_or("missing socket")
             .map_err(|e| anyhow!(e))?;
 
-        let num_queues: usize = if cfg.queue_num > 0 {
-            cfg.queue_num as usize
+        let num_queues: usize = if device.config.queue_num > 0 {
+            device.config.queue_num as usize
         } else {
             DEFAULT_FS_QUEUES
         };
 
-        let queue_size: u16 = if cfg.queue_num > 0 {
-            u16::try_from(cfg.queue_size)?
+        let queue_size: u16 = if device.config.queue_num > 0 {
+            u16::try_from(device.config.queue_size)?
         } else {
             DEFAULT_FS_QUEUE_SIZE
         };
 
-        let socket_path = if cfg.sock_path.starts_with('/') {
-            PathBuf::from(cfg.sock_path)
+        let socket_path = if device.config.sock_path.starts_with('/') {
+            PathBuf::from(device.config.sock_path)
         } else {
-            scoped_join(&self.vm_path, cfg.sock_path)?
+            scoped_join(&self.vm_path, device.config.sock_path)?
         };
 
         let fs_config = FsConfig {
-            tag: cfg.mount_tag,
+            tag: device.config.mount_tag,
             socket: socket_path,
             num_queues,
             queue_size,
@@ -157,14 +161,16 @@ impl CloudHypervisorInner {
             debug!(sl!(), "fs add response: {:?}", detail);
         }
 
-        Ok(())
+        Ok(DeviceType::ShareFs(sharefs))
     }
 
-    async fn handle_hvsock_device(&mut self, _cfg: &HybridVsockConfig) -> Result<()> {
-        Ok(())
+    async fn handle_hvsock_device(&mut self, device: HybridVsockDevice) -> Result<DeviceType> {
+        Ok(DeviceType::HybridVsock(device))
     }
 
-    async fn handle_vfio_device(&mut self, device: &VfioDevice) -> Result<()> {
+    async fn handle_vfio_device(&mut self, device: VfioDevice) -> Result<DeviceType> {
+        let vfio_device: VfioDevice = device.clone();
+
         // A device with multi-funtions, or a IOMMU group with one more
         // devices, the Primary device is selected to be passed to VM.
         // And the the first one is Primary device.
@@ -206,7 +212,7 @@ impl CloudHypervisorInner {
                 .insert(device.device_id.clone(), dev_info.id);
         }
 
-        Ok(())
+        Ok(DeviceType::Vfio(vfio_device))
     }
 
     async fn remove_vfio_device(&mut self, device: &VfioDevice) -> Result<()> {
@@ -242,7 +248,31 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
-    async fn handle_block_device(&mut self, device: BlockDevice) -> Result<()> {
+    // Various cloud-hypervisor APIs report a PCI address in "BB:DD.F"
+    // form within the PciDeviceInfo struct.
+    // eg "0000:00:DD.F"
+    fn clh_pci_info_to_path(bdf: &str) -> Result<PciPath> {
+        let tokens: Vec<&str> = bdf.split(':').collect();
+        if tokens.len() != 3 || tokens[0] != "0000" || tokens[1] != "00" {
+            return Err(anyhow!(
+                "Unexpected PCI address {:?} for clh device add",
+                bdf
+            ));
+        }
+
+        let toks: Vec<&str> = tokens[2].split('.').collect();
+        if toks.len() != 2 || toks[1] != "0" || toks[0].len() != 2 {
+            return Err(anyhow!(
+                "Unexpected PCI address {:?} for clh device add",
+                bdf
+            ));
+        }
+
+        PciPath::convert_from_string(toks[0])
+    }
+
+    async fn handle_block_device(&mut self, device: BlockDevice) -> Result<DeviceType> {
+        let mut block_dev = device.clone();
         let socket = self
             .api_socket
             .as_ref()
@@ -272,9 +302,10 @@ impl CloudHypervisorInner {
             let dev_info: PciDeviceInfo =
                 serde_json::from_str(detail.as_str()).map_err(|e| anyhow!(e))?;
             self.device_ids.insert(device.device_id, dev_info.id);
+            block_dev.config.pci_path = Some(Self::clh_pci_info_to_path(dev_info.bdf.as_str())?);
         }
 
-        Ok(())
+        Ok(DeviceType::Block(block_dev))
     }
 
     pub(crate) async fn get_shared_devices(
