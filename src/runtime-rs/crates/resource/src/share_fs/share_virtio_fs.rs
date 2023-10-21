@@ -89,9 +89,16 @@ pub(crate) async fn setup_inline_virtiofs(id: &str, h: &dyn Hypervisor) -> Resul
             prefetch_list_path: None,
         },
     };
-    h.add_device(DeviceType::ShareFsMount(virtio_fs))
+
+    let result = h
+        .add_device(DeviceType::ShareFsMount(virtio_fs))
         .await
-        .with_context(|| format!("fail to attach passthrough fs {:?}", source))
+        .with_context(|| format!("fail to attach passthrough fs {:?}", source));
+
+    match result {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e),
+    }
 }
 
 pub async fn rafs_mount(

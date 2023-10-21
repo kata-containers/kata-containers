@@ -7,6 +7,7 @@
 use crate::device::Device;
 use crate::device::DeviceType;
 use crate::Hypervisor as hypervisor;
+use crate::PciPath;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 
@@ -38,6 +39,9 @@ pub struct BlockConfig {
 
     /// device path in guest
     pub virt_path: String,
+
+    /// pci path is the slot at which the drive is attached
+    pub pci_path: Option<PciPath>,
 
     /// device attach count
     pub attach_count: u64,
@@ -78,11 +82,20 @@ impl Device for BlockDevice {
         {
             return Ok(());
         }
-        if let Err(e) = h.add_device(DeviceType::Block(self.clone())).await {
-            self.decrease_attach_count().await?;
-            return Err(e);
+
+        match h.add_device(DeviceType::Block(self.clone())).await {
+            Ok(dev) => {
+                // Update device info with the one received from device attach
+                if let DeviceType::Block(blk) = dev {
+                    self.config = blk.config;
+                }
+                Ok(())
+            }
+            Err(e) => {
+                self.decrease_attach_count().await?;
+                return Err(e);
+            }
         }
-        return Ok(());
     }
 
     async fn detach(&mut self, h: &dyn hypervisor) -> Result<Option<u64>> {

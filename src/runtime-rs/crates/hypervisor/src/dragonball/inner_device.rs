@@ -74,9 +74,6 @@ impl DragonballInner {
             DeviceType::ShareFsMount(sharefs_mount) => self
                 .add_share_fs_mount(&sharefs_mount.config)
                 .context("add share fs mount"),
-            DeviceType::Vsock(_) => {
-                todo!()
-            }
         }
     }
 

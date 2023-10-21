@@ -79,7 +79,7 @@ impl Hypervisor for CloudHypervisor {
         inner.save_vm().await
     }
 
-    async fn add_device(&self, device: DeviceType) -> Result<()> {
+    async fn add_device(&self, device: DeviceType) -> Result<DeviceType> {
         let mut inner = self.inner.write().await;
         inner.add_device(device).await
     }

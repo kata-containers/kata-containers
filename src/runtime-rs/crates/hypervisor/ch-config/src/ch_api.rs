@@ -70,7 +70,7 @@ pub async fn cloud_hypervisor_vm_stop(mut socket: UnixStream) -> Result<Option<S
     .await?
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct PciDeviceInfo {
     pub id: String,
     pub bdf: String,
