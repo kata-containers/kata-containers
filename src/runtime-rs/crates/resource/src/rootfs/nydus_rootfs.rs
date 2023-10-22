@@ -13,8 +13,8 @@ use crate::{
     rootfs::{HYBRID_ROOTFS_LOWER_DIR, ROOTFS},
     share_fs::{
         blobfs_mount, do_get_guest_path, do_get_guest_share_path, get_host_rw_shared_path,
-        passthrough_mount, rafs_mount, ShareFs, ShareFsRootfsConfig, BLOB_CACHE_DIR,
-        BLOB_CACHE_DIR, PASSTHROUGH_FS_DIR,
+        passthrough_mount, rafs_mount, ShareFs, ShareFsRootfsConfig, BLOB_CACHE_DIR, BOOTSTRAP_DIR,
+        PASSTHROUGH_FS_DIR,
     },
 };
 use agent::Storage;
