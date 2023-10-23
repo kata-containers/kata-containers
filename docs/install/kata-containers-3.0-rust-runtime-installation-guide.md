@@ -73,7 +73,6 @@ Follow the [`kata-deploy`](../../tools/packaging/kata-deploy/README.md).
     $ make && sudo make install
     ```
 
-
 ### Install Kata 3.0 Rust Runtime Shim
 
 ```
@@ -84,7 +83,7 @@ $ make && sudo make install
 After running the command above, the default config file `configuration.toml` will be installed under `/usr/share/defaults/kata-containers/`,  the binary file `containerd-shim-kata-v2` will be installed under `/usr/local/bin/` .
 
 ### Build Kata Containers Kernel
-Follow the [Kernel installation guide](/tools/packaging/kernel/README.md).
+Follow the [Kernel installation guide](../../tools/packaging/kernel/README.md).
 
 ### Build Kata Rootfs
 Follow the [Rootfs installation guide](../../tools/osbuilder/rootfs-builder/README.md).
@@ -95,5 +94,3 @@ Follow the [Image installation guide](../../tools/osbuilder/image-builder/README
 ### Install Containerd
 
 Follow the [Containerd installation guide](container-manager/containerd/containerd-install.md).
-
-
