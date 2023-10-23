@@ -43,11 +43,13 @@ jobs:
           tag=$(echo $GITHUB_REF | cut -d/ -f3-)
           tags=($tag)
           tags+=($([[ "$tag" =~ "alpha"|"rc" ]] && echo "latest" || echo "stable"))
+          export KATA_TARBALL="$(pwd)/kata-static.tar.xz"
           for tag in ${tags[@]}; do
-              ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
-                  $(pwd)/kata-static.tar.xz "docker.io/katadocker/kata-deploy" \
-                  "${tag}-${{ inputs.target-arch }}"
-              ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
-                  $(pwd)/kata-static.tar.xz "quay.io/kata-containers/kata-deploy" \
-                  "${tag}-${{ inputs.target-arch }}"
+              for img in "docker.io/katadocker/kata-deploy" \
+                         "quay.io/kata-containers/kata-deploy"; do
+                  export KATA_PAYLOAD="${img}"
+                  export KATA_PAYLOAD_TAG="${tag}-${{ inputs.target-arch }}"
+
+                  make build-and-push-kata-payload
+              done
           done
