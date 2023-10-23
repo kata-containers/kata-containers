@@ -73,6 +73,8 @@ jobs:
     needs: publish-multi-arch-images
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - name: download-artifacts-amd64
         uses: actions/download-artifact@v3
         with:
