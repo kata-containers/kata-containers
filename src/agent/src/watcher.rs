@@ -1291,7 +1291,7 @@ mod tests {
 
     #[tokio::test]
     #[serial]
-    #[cfg(not(target_arch = "aarch64"))]
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "s390x")))]
     async fn create_tmpfs() {
         skip_if_not_root!();
 
