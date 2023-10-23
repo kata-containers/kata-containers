@@ -33,7 +33,7 @@ pub fn get_single_cpu_info(cpu_info_file: &str, substring: &str) -> Result<Strin
     let contents = read_file_contents(cpu_info_file)?;
 
     if contents.is_empty() {
-        return Err(anyhow!(ERR_NO_CPUINFO));
+        Err(anyhow!(ERR_NO_CPUINFO))?;
     }
 
     let subcontents: Vec<&str> = contents.split(substring).collect();
@@ -50,11 +50,11 @@ pub fn get_single_cpu_info(cpu_info_file: &str, substring: &str) -> Result<Strin
 #[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 pub fn get_cpu_flags(cpu_info: &str, cpu_flags_tag: &str) -> Result<String> {
     if cpu_info.is_empty() {
-        return Err(anyhow!(ERR_NO_CPUINFO));
+        Err(anyhow!(ERR_NO_CPUINFO))?;
     }
 
     if cpu_flags_tag.is_empty() {
-        return Err(anyhow!("cpu flags delimiter string is empty"))?;
+        Err(anyhow!("cpu flags delimiter string is empty"))?;
     }
 
     get_cpu_flags_from_file(cpu_info, cpu_flags_tag)
@@ -67,11 +67,11 @@ pub fn get_cpu_flags(cpu_info: &str, cpu_flags_tag: &str) -> Result<String> {
 #[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 pub fn get_cpu_flags_vec(cpu_info: &str, cpu_flags_tag: &str) -> Result<Vec<String>> {
     if cpu_info.is_empty() {
-        return Err(anyhow!(ERR_NO_CPUINFO));
+        Err(anyhow!(ERR_NO_CPUINFO))?;
     }
 
     if cpu_flags_tag.is_empty() {
-        return Err(anyhow!("cpu flags delimiter string is empty"))?;
+        Err(anyhow!("cpu flags delimiter string is empty"))?;
     }
 
     let flags = get_cpu_flags_from_file(cpu_info, cpu_flags_tag)?;
@@ -93,7 +93,7 @@ pub fn get_cpu_flags_vec(cpu_info: &str, cpu_flags_tag: &str) -> Result<Vec<Stri
 #[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
 pub fn contains_cpu_flag(flags_vec: &[String], flag: &str) -> Result<bool> {
     if flag.is_empty() {
-        return Err(anyhow!("parameter specifying flag to look for is empty"))?;
+        Err(anyhow!("parameter specifying flag to look for is empty"))?;
     }
 
     Ok(flags_vec.iter().any(|f| f == flag))

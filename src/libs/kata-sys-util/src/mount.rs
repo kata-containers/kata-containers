@@ -615,7 +615,6 @@ fn compact_lowerdir_option(opts: &[String]) -> (Option<PathBuf>, Vec<String>) {
         }
     };
 
-    let idx = idx;
     let common_dir = match get_longest_common_prefix(&lower_opts) {
         None => return (None, n_opts),
         Some(v) => {
