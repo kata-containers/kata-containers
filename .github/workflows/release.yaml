@@ -73,12 +73,6 @@ jobs:
     needs: publish-multi-arch-images
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: install hub
-        run: |
-          wget -q -O- https://github.com/mislav/hub/releases/download/v2.14.2/hub-linux-amd64-2.14.2.tgz | \
-          tar xz --strip-components=2 --wildcards '*/bin/hub' && sudo mv hub /usr/local/bin/hub
-
       - name: download-artifacts-amd64
         uses: actions/download-artifact@v3
         with:
@@ -90,7 +84,7 @@ jobs:
           mv kata-static.tar.xz "$GITHUB_WORKSPACE/${tarball}"
           pushd $GITHUB_WORKSPACE
           echo "uploading asset '${tarball}' for tag: ${tag}"
-          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a "${tarball}" "${tag}"
+          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} gh release upload "${tag}" "${tarball}"
           popd
 
       - name: download-artifacts-arm64
@@ -104,7 +98,7 @@ jobs:
           mv kata-static.tar.xz "$GITHUB_WORKSPACE/${tarball}"
           pushd $GITHUB_WORKSPACE
           echo "uploading asset '${tarball}' for tag: ${tag}"
-          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a "${tarball}" "${tag}"
+          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} gh release upload "${tag}" "${tarball}"
           popd
 
       - name: download-artifacts-s390x
@@ -118,7 +112,7 @@ jobs:
           mv kata-static.tar.xz "$GITHUB_WORKSPACE/${tarball}"
           pushd $GITHUB_WORKSPACE
           echo "uploading asset '${tarball}' for tag: ${tag}"
-          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a "${tarball}" "${tag}"
+          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} gh release upload "${tag}" "${tarball}"
           popd
 
   upload-versions-yaml:
@@ -133,7 +127,7 @@ jobs:
           pushd $GITHUB_WORKSPACE
           versions_file="kata-containers-$tag-versions.yaml"
           cp versions.yaml ${versions_file}
-          hub release edit -m "" -a "${versions_file}" "${tag}"
+          gh release upload "${tag}" "${versions_file}"
           popd
 
   upload-cargo-vendored-tarball:
@@ -147,7 +141,7 @@ jobs:
           tarball="kata-containers-$tag-vendor.tar.gz"
           pushd $GITHUB_WORKSPACE
           bash -c "tools/packaging/release/generate_vendor.sh ${tarball}"
-          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a "${tarball}" "${tag}" 
+          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} gh release upload "${tag}" "${tarball}"
           popd
 
   upload-libseccomp-tarball:
@@ -174,6 +168,6 @@ jobs:
           # "-m" option should be empty to re-use the existing release title
           # without opening a text editor.
           # For the details, check https://hub.github.com/hub-release.1.html.
-          hub release edit -m "" -a "${tarball}" "${tag}"
-          hub release edit -m "" -a "${asc}" "${tag}"
+          gh release upload "${tag}" "${tarball}"
+          gh release upload "${tag}" "${asc}"
           popd
