@@ -144,7 +144,7 @@ impl KvmIrqManagerObj {
                 self.vmfd.clone(),
                 self.routes.clone(),
             )?)),
-            _ => return Err(Error::from(ErrorKind::InvalidInput)),
+            _ => Err(Error::from(ErrorKind::InvalidInput))?,
         };
 
         self.groups.insert(base, group.clone());

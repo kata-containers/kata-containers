@@ -647,7 +647,7 @@ impl AddressSpaceMgr {
         let node = self
             .numa_nodes
             .entry(guest_numa_node_id)
-            .or_insert_with(NumaNode::new);
+            .or_default();
         node.add_info(&NumaNodeInfo {
             base: region.start_addr(),
             size: region.len(),
