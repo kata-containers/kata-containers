@@ -51,7 +51,7 @@ jobs:
       USING_NFD: "false"
       K8S_TEST_HOST_TYPE: ${{ matrix.instance-type }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0

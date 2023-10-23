@@ -19,7 +19,7 @@ jobs:
     steps:
       - name: Checkout Code
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Generate Action
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
         run: bash cargo-deny-generator.sh
