@@ -27,7 +27,6 @@ jobs:
     strategy:
       matrix:
         asset:
-          - boot-image-se
           - kernel
           - qemu
           - rootfs-image
@@ -60,13 +59,6 @@ jobs:
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
-      - name: Place a host key document
-        run: |
-          mkdir -p "host-key-document"
-          cp "${CI_HKD_PATH}" "host-key-document"
-        env:
-          CI_HKD_PATH: ${{ secrets.CI_HKD_PATH }}
-
       - name: Build ${{ matrix.asset }}
         run: |
           make "${KATA_ASSET}-tarball"
@@ -82,7 +74,6 @@ jobs:
           ARTEFACT_REGISTRY_USERNAME: ${{ github.actor }}
           ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           TARGET_BRANCH: ${{ inputs.target-branch }}
-          HKD_PATH: "host-key-document"
 
       - name: store-artifact ${{ matrix.asset }}
         uses: actions/upload-artifact@v3
@@ -92,9 +83,53 @@ jobs:
           retention-days: 15
           if-no-files-found: error
 
-  create-kata-tarball:
+  build-asset-boot-image-se:
     runs-on: s390x
     needs: build-asset
+    steps:
+      - name: Adjust a permission for repo
+        run: |
+          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
+      - uses: actions/checkout@v3
+
+      - name: get-artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: kata-artifacts-s390x${{ inputs.tarball-suffix }}
+          path: kata-artifacts
+
+      - name: Place a host key document
+        run: |
+          mkdir -p "host-key-document"
+          cp "${CI_HKD_PATH}" "host-key-document"
+        env:
+          CI_HKD_PATH: ${{ secrets.CI_HKD_PATH }}
+
+      - name: Build boot-image-se
+        run: |
+          base_dir=tools/packaging/kata-deploy/local-build/
+          cp -r kata-artifacts ${base_dir}/build
+          # Skip building dependant artifacts of boot-image-se-tarball
+          # because we already have them from the previous build
+          sed -i 's/\(^boot-image-se-tarball:\).*/\1/g' ${base_dir}/Makefile
+          make boot-image-se-tarball
+          build_dir=$(readlink -f build)
+          sudo cp -r "${build_dir}" "kata-build"
+          sudo chown -R $(id -u):$(id -g) "kata-build"
+        env:
+          HKD_PATH: "host-key-document"
+
+      - name: store-artifact boot-image-se
+        uses: actions/upload-artifact@v3
+        with:
+          name: kata-artifacts-s390x${{ inputs.tarball-suffix }}
+          path: kata-build/kata-static-boot-image-se.tar.xz
+          retention-days: 1
+          if-no-files-found: error
+
+  create-kata-tarball:
+    runs-on: s390x
+    needs: [build-asset, build-asset-boot-image-se]
     steps:
       - name: Adjust a permission for repo
         run: |
