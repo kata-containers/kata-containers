@@ -28,7 +28,7 @@ jobs:
     env:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0

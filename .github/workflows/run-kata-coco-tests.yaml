@@ -39,7 +39,7 @@ jobs:
       KUBERNETES: "k3s"
       USING_NFD: "true"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
@@ -70,7 +70,7 @@ jobs:
       USING_NFD: "true"
       K8S_TEST_HOST_TYPE: "baremetal"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
@@ -111,7 +111,7 @@ jobs:
       USING_NFD: "false"
       K8S_TEST_HOST_TYPE: "baremetal"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
@@ -152,7 +152,7 @@ jobs:
       USING_NFD: "false"
       K8S_TEST_HOST_TYPE: "baremetal"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0

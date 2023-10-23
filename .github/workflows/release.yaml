@@ -32,7 +32,7 @@ jobs:
     needs: [build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Login to Kata Containers docker.io
         uses: docker/login-action@v2
@@ -73,11 +73,7 @@ jobs:
     needs: publish-multi-arch-images
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: install hub
-        run: |
-          wget -q -O- https://github.com/mislav/hub/releases/download/v2.14.2/hub-linux-amd64-2.14.2.tgz | \
-          tar xz --strip-components=2 --wildcards '*/bin/hub' && sudo mv hub /usr/local/bin/hub
+      - uses: actions/checkout@v4
 
       - name: download-artifacts-amd64
         uses: actions/download-artifact@v3
@@ -90,7 +86,7 @@ jobs:
           mv kata-static.tar.xz "$GITHUB_WORKSPACE/${tarball}"
           pushd $GITHUB_WORKSPACE
           echo "uploading asset '${tarball}' for tag: ${tag}"
-          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a "${tarball}" "${tag}"
+          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} gh release upload "${tag}" "${tarball}"
           popd
 
       - name: download-artifacts-arm64
@@ -104,7 +100,7 @@ jobs:
           mv kata-static.tar.xz "$GITHUB_WORKSPACE/${tarball}"
           pushd $GITHUB_WORKSPACE
           echo "uploading asset '${tarball}' for tag: ${tag}"
-          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a "${tarball}" "${tag}"
+          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} gh release upload "${tag}" "${tarball}"
           popd
 
       - name: download-artifacts-s390x
@@ -118,13 +114,13 @@ jobs:
           mv kata-static.tar.xz "$GITHUB_WORKSPACE/${tarball}"
           pushd $GITHUB_WORKSPACE
           echo "uploading asset '${tarball}' for tag: ${tag}"
-          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a "${tarball}" "${tag}"
+          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} gh release upload "${tag}" "${tarball}"
           popd
 
   upload-versions-yaml:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: upload versions.yaml
         env:
           GITHUB_TOKEN: ${{ secrets.GIT_UPLOAD_TOKEN }}
@@ -133,28 +129,28 @@ jobs:
           pushd $GITHUB_WORKSPACE
           versions_file="kata-containers-$tag-versions.yaml"
           cp versions.yaml ${versions_file}
-          hub release edit -m "" -a "${versions_file}" "${tag}"
+          gh release upload "${tag}" "${versions_file}"
           popd
 
   upload-cargo-vendored-tarball:
     needs: upload-multi-arch-static-tarball
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: generate-and-upload-tarball
         run: |
           tag=$(echo $GITHUB_REF | cut -d/ -f3-)
           tarball="kata-containers-$tag-vendor.tar.gz"
           pushd $GITHUB_WORKSPACE
           bash -c "tools/packaging/release/generate_vendor.sh ${tarball}"
-          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a "${tarball}" "${tag}" 
+          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} gh release upload "${tag}" "${tarball}"
           popd
 
   upload-libseccomp-tarball:
     needs: upload-cargo-vendored-tarball
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: download-and-upload-tarball
         env:
           GITHUB_TOKEN: ${{ secrets.GIT_UPLOAD_TOKEN }}
@@ -174,6 +170,6 @@ jobs:
           # "-m" option should be empty to re-use the existing release title
           # without opening a text editor.
           # For the details, check https://hub.github.com/hub-release.1.html.
-          hub release edit -m "" -a "${tarball}" "${tag}"
-          hub release edit -m "" -a "${asc}" "${tag}"
+          gh release upload "${tag}" "${tarball}"
+          gh release upload "${tag}" "${asc}"
           popd
