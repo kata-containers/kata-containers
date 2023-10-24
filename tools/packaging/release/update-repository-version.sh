@@ -109,7 +109,8 @@ bump_repo() {
 	[ -n "${repo}" ] || die "repository not provided"
 	[ -n "${new_version}" ] || die "no new version"
 	[ -n "${target_branch}" ] || die "no target branch"
-	local remote_github="https://github.com/${organization}/${repo}.git"
+	local remote_repo="${organization}/${repo}"
+	local remote_github="https://github.com/${remote_repo}.git"
 	info "Update $repo to version $new_version"
 
 	info "remote: ${remote_github}"
@@ -230,13 +231,13 @@ bump_repo() {
 	fi
 
 	info "Creating PR message"
-	notes_file=notes.md
+	local pr_title="# Kata Containers ${new_version}"
+	local notes_file="${tmp_dir}/notes.md"
 	cat <<EOF >"${notes_file}"
-# Kata Containers ${new_version}
-
 $(get_changes "$current_version")
 
 EOF
+	printf "%s\n\n" "${pr_title}"
 	cat "${notes_file}"
 
 	if (echo "${current_version}" | grep "alpha") && (echo "${new_version}" | grep -v "alpha");then
@@ -253,14 +254,16 @@ EOF
 	git commit -s -m "${commit_msg}"
 
 	if [[ ${PUSH} == "true" ]]; then
-		build_hub
+		get_gh
+		gh_id=$(${gh_cli} auth status --hostname github.com | awk 'match($0, /Logged in to github.com as ([^ ]+)/, line) { print substr($0, line[1, "start"], line[1, "length"]) }')
 		info "Forking remote"
-		${hub_bin} fork --remote-name=fork
+		${gh_cli} repo set-default "${remote_repo}"
+		${gh_cli} repo fork --remote --remote-name=fork
 		info "Push to fork"
-		${hub_bin} push fork -f "${branch}"
+		git push fork -f "${branch}"
 		info "Create PR"
 		out=""
-		out=$(LC_ALL=C LANG=C "${hub_bin}" pull-request -b "${target_branch}" -F "${notes_file}" 2>&1) || echo "$out" | grep "A pull request already exists"
+		out=$(LC_ALL=C LANG=C "${gh_cli}" pr create --base "${target_branch}" --title "${pr_title}" --body-file "${notes_file}" --head "${gh_id}:${branch}" 2>&1) || echo "$out" | grep "already exists"
 	fi
 
 	if [ "${repo}" == "kata-containers" ] && [ "${target_branch}" == "main" ] && [[ "${new_version}" =~ "rc" ]]; then
@@ -272,16 +275,17 @@ EOF
 		info "Creating the commit message reverting the kata-deploy changes"
 		git commit --amend -s -m "${commit_msg}"
 
-		echo "${commit_msg}" >"${notes_file}"
+		pr_title=$(echo "${commit_msg}" | head -1)
+		echo "${commit_msg}" | tail -n +3 >"${notes_file}"
 		echo "" >>"${notes_file}"
 		echo "Only merge this commit after ${new_version} release is successfully tagged!" >>"${notes_file}"
 
 		if [[ ${PUSH} == "true" ]]; then
 			info "Push \"${reverting_kata_deploy_changes_branch}\" to fork"
-			${hub_bin} push fork -f "${reverting_kata_deploy_changes_branch}"
+			git push fork -f "${reverting_kata_deploy_changes_branch}"
 			info "Create \"${reverting_kata_deploy_changes_branch}\" PR"
 			out=""
-			out=$(LC_ALL=C LANG=C "${hub_bin}" pull-request -b "${target_branch}" -F "${notes_file}" 2>&1) || echo "$out" | grep "A pull request already exists"
+			out=$(LC_ALL=C LANG=C "${gh_cli}" pr create --base "${target_branch}" --title "${pr_title}" --body-file "${notes_file}" --head "${gh_id}:${reverting_kata_deploy_changes_branch}" 2>&1) || echo "$out" | grep "already exists"
 		fi
 	fi
 
