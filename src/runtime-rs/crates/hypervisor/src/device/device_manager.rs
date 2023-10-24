@@ -453,7 +453,7 @@ pub async fn do_handle_device(
         .await
         .new_device(dev_info)
         .await
-        .context("failed to create deviec")?;
+        .context("failed to create device")?;
 
     d.write()
         .await
