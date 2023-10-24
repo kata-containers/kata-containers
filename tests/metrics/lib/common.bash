@@ -201,8 +201,8 @@ function kill_processes_before_start()
 	CTR_PROCS=$(sudo "${CTR_EXE}" t list -q)
 	[[ -n "${CTR_PROCS}" ]] && clean_env_ctr
 
+	kill_kata_components && sleep 1
 	kill_kata_components
-
 	check_processes
 }
 
