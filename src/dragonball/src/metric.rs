@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 use dbs_utils::metric::SharedIncMetric;
+#[cfg(feature = "virtio-balloon")]
 use dbs_virtio_devices::balloon::BalloonDeviceMetrics;
 use lazy_static::lazy_static;
 use serde::Serialize;
@@ -63,6 +64,7 @@ pub struct DragonballMetrics {
     pub seccomp: SeccompMetrics,
     /// Metrics related to signals.
     pub signals: SignalMetrics,
+    #[cfg(feature = "virtio-balloon")]
     /// Metrics related to balloon device.
     pub balloon: HashMap<String, Arc<BalloonDeviceMetrics>>,
 }
