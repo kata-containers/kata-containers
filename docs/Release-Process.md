@@ -3,15 +3,15 @@
 
 ## Requirements
 
-- [hub](https://github.com/github/hub)
-  * Using an [application token](https://github.com/settings/tokens) is required for hub (set to a GITHUB_TOKEN environment variable).
+- [gh](https://cli.github.com)
+  * Install and configure the GitHub CLI (gh) as detailed at https://docs.github.com/en/github-cli/github-cli/quickstart#prerequisites .
 
 - GitHub permissions to push tags and create releases in Kata repositories.
 
 - GPG configured to sign git tags. https://docs.github.com/en/authentication/managing-commit-signature-verification/generating-a-new-gpg-key
 
-- You should configure your GitHub to use your ssh keys (to push to branches). See https://help.github.com/articles/adding-a-new-ssh-key-to-your-github-account/.
-    * As an alternative, configure hub to push and fork with HTTPS, `git config --global hub.protocol https` (Not tested yet) *
+- `gh auth login` should have configured `git push` and `git pull` to use HTTPS along with your GitHub credentials,
+  * As an alternative, you can still rely on SSH keys to push branches. See https://help.github.com/articles/adding-a-new-ssh-key-to-your-github-account .
 
 ## Release Process
 
@@ -81,7 +81,7 @@
   $ ./release-notes.sh ${OLD_VERSION} ${NEW_VERSION} > notes.md
   # Edit the `notes.md` file to review and make any changes to the release notes.
   # Add the release notes in the project's GitHub.
-  $ hub release edit -F notes.md "${NEW_VERSION}"
+  $ gh release edit "${NEW_VERSION}" -F notes.md
   ```
 
 ### Announce the release
