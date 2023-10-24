@@ -62,7 +62,8 @@ sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	--env CC="${CC}" \
 	-w "${repo_root_dir}/src/runtime-rs" \
 	"${container_image}" \
-	bash -c "git config --global --add safe.directory ${repo_root_dir} && make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch}"
+	bash -c "git config --global --add safe.directory ${repo_root_dir} && \
+		make clean-generated-files && make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch}"
 
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	--env CROSS_BUILD=${CROSS_BUILD} \
@@ -77,7 +78,8 @@ sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${repo_root_dir}/src/runtime" \
 	"${container_image}" \
-	bash -c "git config --global --add safe.directory ${repo_root_dir} && make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch} ${EXTRA_OPTS}"
+	bash -c "git config --global --add safe.directory ${repo_root_dir} && \
+		make clean-generated-files && make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch} ${EXTRA_OPTS}"
 
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${repo_root_dir}/src/runtime" \
