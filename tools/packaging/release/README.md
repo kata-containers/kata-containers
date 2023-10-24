@@ -14,7 +14,7 @@ See [the release documentation](../../../docs/Release-Process.md).
 ### `update-repository-version.sh`
 
 This script creates a GitHub pull request (a.k.a PR) to change the version in
-all the Kata repositories.
+the Kata repository.
 
 For more information on using the script, run the following:
 
