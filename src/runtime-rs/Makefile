@@ -178,6 +178,7 @@ MONITOR_OUTPUT = $(CURDIR)/$(MONITOR)
 MONITOR_DIR = $(CLI_DIR)/kata-monitor
 SOURCES := $(shell find . 2>&1 | grep -E '.*\.(c|h|go)$$')
 VERSION := ${shell cat ./VERSION}
+KERNELPARAMS := ""
 
 # List of configuration files to build and install
 CONFIGS =
@@ -212,7 +213,7 @@ ifneq (,$(DBCMD))
     DEFMAXVCPUS_DB := 1
     DEFBLOCKSTORAGEDRIVER_DB := virtio-blk-mmio
     DEFNETWORKMODEL_DB := tcfilter
-    KERNELPARAMS = console=ttyS1 agent.log_vport=1025
+    KERNELPARAMS_DB = console=ttyS1 agent.log_vport=1025
 	KERNELTYPE_DB = uncompressed
     KERNEL_NAME_DB = $(call MAKE_KERNEL_NAME_DB,$(KERNELTYPE_DB))
     KERNELPATH_DB = $(KERNELDIR)/$(KERNEL_NAME_DB)
@@ -284,6 +285,7 @@ USER_VARS += MACHINEACCELERATORS
 USER_VARS += CPUFEATURES
 USER_VARS += DEFMACHINETYPE_CLH
 USER_VARS += KERNELPARAMS
+USER_VARS += KERNELPARAMS_DB
 USER_VARS += LIBEXECDIR
 USER_VARS += LOCALSTATEDIR
 USER_VARS += PKGDATADIR
