@@ -30,8 +30,24 @@ rootfs_hash=$(get_option rootfs_verity.hash)
 root_device=$(get_option root)
 hash_device=${root_device%?}2
 
-if [ -e ${root_device} ] && [ -e ${hash_device} ] && [ "${rootfs_verifier}" = "dm-verity" ]
+# The root device should exist to be either verified then mounted or
+# just mounted when verification is disabled.
+if [ ! -e "${root_device}" ]
 then
+	echo "No root device ${root_device} found"
+	exit 1
+fi
+
+if [ "${rootfs_verifier}" = "dm-verity" ]
+then
+	echo "Verify the root device with ${rootfs_verifier}"
+
+	if [ ! -e "${hash_device}" ]
+	then
+		echo "No hash device ${hash_device} found. Cannot verify the root device"
+		exit 1
+	fi
+
 	veritysetup open "${root_device}" root "${hash_device}" "${rootfs_hash}"
 	mount /dev/mapper/root /mnt
 else
