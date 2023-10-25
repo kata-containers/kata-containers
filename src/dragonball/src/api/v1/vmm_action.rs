@@ -7,12 +7,15 @@
 // found in the THIRD-PARTY file.
 
 use std::fs::File;
+use std::sync::{Arc, Mutex};
 
 use crossbeam_channel::{Receiver, Sender, TryRecvError};
 use log::{debug, error, info, warn};
+use tracing::instrument;
 
 use crate::error::{Result, StartMicroVmError, StopMicrovmError};
 use crate::event_manager::EventManager;
+use crate::tracer::{DragonballTracer, TraceError, TraceInfo};
 use crate::vm::{CpuTopology, KernelConfigInfo, VmConfigInfo};
 use crate::vmm::Vmm;
 
@@ -121,6 +124,12 @@ pub enum VmmActionError {
     /// Balloon device related errors.
     #[error("virtio-balloon device error: {0}")]
     Balloon(#[source] BalloonDeviceError),
+    /// Setup tracing Failed.
+    #[error("Setup tracing failed: {0}")]
+    SetupTracingFailed(#[source] TraceError),
+    /// End tracing Failed.
+    #[error("End tracing failed: {0}")]
+    EndTracingFailed(#[source] TraceError),
 }
 
 /// This enum represents the public interface of the VMM. Each action contains various
@@ -148,6 +157,10 @@ pub enum VmmAction {
     /// Set the microVM configuration (memory & vcpu) using `VmConfig` as input. This
     /// action can only be called before the microVM has booted.
     SetVmConfiguration(VmConfigInfo),
+    /// Set the VMM tracing.
+    SetHypervisorTracing(TraceInfo),
+    /// End VMM tracing.
+    EndHypervisorTracing,
 
     #[cfg(feature = "virtio-vsock")]
     /// Add a new vsock device or update one that already exists using the
@@ -239,6 +252,7 @@ pub struct VmmService {
     from_api: Receiver<VmmRequest>,
     to_api: Sender<VmmResponse>,
     machine_config: VmConfigInfo,
+    tracer: Arc<Mutex<DragonballTracer>>,
 }
 
 impl VmmService {
@@ -248,6 +262,7 @@ impl VmmService {
             from_api,
             to_api,
             machine_config: VmConfigInfo::default(),
+            tracer: Arc::new(Mutex::new(DragonballTracer::new())),
         }
     }
 
@@ -278,6 +293,8 @@ impl VmmService {
             VmmAction::SetVmConfiguration(machine_config) => {
                 self.set_vm_configuration(vmm, machine_config)
             }
+            VmmAction::SetHypervisorTracing(trace_info) => self.setup_tracing(trace_info),
+            VmmAction::EndHypervisorTracing => self.end_tracing(),
             #[cfg(feature = "virtio-vsock")]
             VmmAction::InsertVsockDevice(vsock_cfg) => self.add_vsock_device(vmm, vsock_cfg),
             #[cfg(feature = "virtio-blk")]
@@ -334,6 +351,7 @@ impl VmmService {
         Ok(())
     }
 
+    #[instrument(skip(self))]
     fn configure_boot_source(
         &self,
         vmm: &mut Vmm,
@@ -373,6 +391,7 @@ impl VmmService {
         Ok(VmmData::Empty)
     }
 
+    #[instrument(skip(self, event_mgr))]
     fn start_microvm(&mut self, vmm: &mut Vmm, event_mgr: &mut EventManager) -> VmmRequestResult {
         use self::StartMicroVmError::MicroVMAlreadyRunning;
         use self::VmmActionError::StartMicroVm;
@@ -389,6 +408,7 @@ impl VmmService {
             .map_err(StartMicroVm)
     }
 
+    #[instrument(skip(self))]
     fn shutdown_microvm(&mut self, vmm: &mut Vmm) -> VmmRequestResult {
         vmm.event_ctx.exit_evt_triggered = true;
 
@@ -396,6 +416,7 @@ impl VmmService {
     }
 
     /// Get prometheus metrics.
+    #[instrument(skip(self))]
     fn get_hypervisor_metrics(&self) -> VmmRequestResult {
         get_hypervisor_metrics()
             .map_err(|_| VmmActionError::GetHypervisorMetrics)
@@ -403,6 +424,7 @@ impl VmmService {
     }
 
     /// Set virtual machine configuration.
+    #[instrument(skip(self))]
     pub fn set_vm_configuration(
         &mut self,
         vmm: &mut Vmm,
@@ -488,7 +510,32 @@ impl VmmService {
         Ok(VmmData::Empty)
     }
 
+    /// Setup dragonball tracing.
+    fn setup_tracing(&self, trace_info: TraceInfo) -> VmmRequestResult {
+        let mut tracer = self.tracer.lock().unwrap();
+        tracer
+            .setup_tracing(trace_info)
+            .map(|_| VmmData::Empty)
+            .map_err(VmmActionError::SetupTracingFailed)
+    }
+
+    /// Get dragonball tracer.
+    pub fn tracer(&self) -> Arc<Mutex<DragonballTracer>> {
+        self.tracer.clone()
+    }
+
+    /// end dragonball tracing.
+    #[instrument(skip(self))]
+    fn end_tracing(&self) -> VmmRequestResult {
+        let mut tracer = self.tracer.lock().unwrap();
+        tracer
+            .end_tracing()
+            .map(|_| VmmData::Empty)
+            .map_err(VmmActionError::EndTracingFailed)
+    }
+
     #[cfg(feature = "virtio-vsock")]
+    #[instrument(skip(self))]
     fn add_vsock_device(&self, vmm: &mut Vmm, config: VsockDeviceConfigInfo) -> VmmRequestResult {
         let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
         if vm.is_vm_initialized() {
@@ -523,6 +570,7 @@ impl VmmService {
     #[cfg(feature = "virtio-blk")]
     // Only call this function as part of the API.
     // If the drive_id does not exist, a new Block Device Config is added to the list.
+    #[instrument(skip(self, event_mgr))]
     fn add_block_device(
         &mut self,
         vmm: &mut Vmm,
@@ -548,6 +596,7 @@ impl VmmService {
 
     #[cfg(feature = "virtio-blk")]
     /// Updates configuration for an emulated net device as described in `config`.
+    #[instrument(skip(self))]
     fn update_blk_rate_limiters(
         &mut self,
         vmm: &mut Vmm,
@@ -564,6 +613,7 @@ impl VmmService {
 
     #[cfg(feature = "virtio-blk")]
     // Remove the device
+    #[instrument(skip(self, event_mgr))]
     fn remove_block_device(
         &mut self,
         vmm: &mut Vmm,
@@ -583,6 +633,7 @@ impl VmmService {
     }
 
     #[cfg(feature = "virtio-net")]
+    #[instrument(skip(self, event_mgr))]
     fn add_virtio_net_device(
         &mut self,
         vmm: &mut Vmm,
@@ -610,6 +661,7 @@ impl VmmService {
     }
 
     #[cfg(feature = "virtio-net")]
+    #[instrument(skip(self))]
     fn update_net_rate_limiters(
         &mut self,
         vmm: &mut Vmm,
@@ -625,6 +677,7 @@ impl VmmService {
     }
 
     #[cfg(feature = "virtio-fs")]
+    #[instrument(skip(self))]
     fn add_fs_device(&mut self, vmm: &mut Vmm, config: FsDeviceConfigInfo) -> VmmRequestResult {
         let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
         let hotplug = vm.is_vm_initialized();
@@ -644,6 +697,7 @@ impl VmmService {
     }
 
     #[cfg(feature = "virtio-fs")]
+    #[instrument(skip(self))]
     fn manipulate_fs_backend_fs(
         &self,
         vmm: &mut Vmm,
@@ -661,6 +715,7 @@ impl VmmService {
     }
 
     #[cfg(feature = "virtio-fs")]
+    #[instrument(skip(self))]
     fn update_fs_rate_limiters(
         &self,
         vmm: &mut Vmm,
@@ -678,6 +733,7 @@ impl VmmService {
     }
 
     #[cfg(feature = "hotplug")]
+    #[instrument(skip(self))]
     fn resize_vcpu(&mut self, vmm: &mut Vmm, config: VcpuResizeInfo) -> VmmRequestResult {
         if !cfg!(feature = "dbs-upcall") {
             warn!("We only support cpu resize through upcall server in the guest kernel now, please enable dbs-upcall feature.");
@@ -704,6 +760,7 @@ impl VmmService {
     }
 
     #[cfg(feature = "virtio-mem")]
+    #[instrument(skip(self, event_mgr))]
     fn add_mem_device(
         &mut self,
         vmm: &mut Vmm,
@@ -730,6 +787,7 @@ impl VmmService {
     }
 
     #[cfg(feature = "virtio-balloon")]
+    #[instrument(skip(self, event_mgr))]
     fn add_balloon_device(
         &mut self,
         vmm: &mut Vmm,
