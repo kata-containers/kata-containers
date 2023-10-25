@@ -1,0 +1,249 @@
+From 18bc7bf7bacfe082787befb7e841f16878902156 Mon Sep 17 00:00:00 2001
+From: Leospard <694963063@qq.com>
+Date: Wed, 6 Sep 2023 21:51:43 +0800
+Subject: [PATCH 2/3] support blobfile over virtiofs
+
+---
+ fs/erofs/inode.c | 109 +++++++++++++++++++++++++++++++----------------
+ 1 file changed, 73 insertions(+), 36 deletions(-)
+
+diff --git a/fs/erofs/inode.c b/fs/erofs/inode.c
+index 524000b45..045642b2d 100644
+--- a/fs/erofs/inode.c
++++ b/fs/erofs/inode.c
+@@ -324,13 +324,18 @@ static int erofs_fill_inode(struct inode *inode, int isdir)
+ 			err = -EOPNOTSUPP;
+ 		goto out_unlock;
+ 	}
+-	if (sbi->bootstrap && !S_ISREG(inode->i_mode)) {
++	if (sbi->bootstrap && !S_ISREG(inode->i_mode))
++	{
+ 		inode_nohighmem(inode);
+ 		inode->i_mapping->a_ops = &rafs_v6_aops;
+-	} else if (inode->i_sb->s_bdev) {
++	}
++	else if (inode->i_sb->s_bdev)
++	{
+ 		inode->i_mapping->a_ops = &erofs_raw_access_aops;
+ #ifdef CONFIG_EROFS_FS_ONDEMAND
+-	} else if (erofs_is_fscache_mode(inode->i_sb)) {
++	}
++	else if (erofs_is_fscache_mode(inode->i_sb))
++	{
+ 		inode->i_mapping->a_ops = &erofs_fscache_access_aops;
+ #endif
+ 	}
+@@ -435,13 +440,25 @@ const struct inode_operations erofs_fast_symlink_iops = {
+ };
+ 
+ static ssize_t rafs_v6_read_chunk(struct super_block *sb,
+-				  struct iov_iter *to, u64 off, u64 size,
+-				  unsigned int device_id)
++								  struct iov_iter *to, u64 off, u64 size,
++								  unsigned int device_id)
+ {
+ 	struct iov_iter titer;
+ 	ssize_t read = 0;
+ 
+-	do {
++	struct erofs_map_dev mdev = {
++		.m_deviceid = device_id,
++		.m_pa = off,
++	};
++	int err;
++
++	err = erofs_map_dev(sb, &mdev);
++	if (err)
++		return err;
++	off = mdev.m_pa;
++
++	do
++	{
+ 		struct iovec iovec = iov_iter_iovec(to);
+ 		ssize_t ret;
+ 
+@@ -449,15 +466,18 @@ static ssize_t rafs_v6_read_chunk(struct super_block *sb,
+ 			iovec.iov_len = size;
+ 
+ 		pr_debug("%s: off %llu size %llu blob_index %u\n", __func__, off,
+-			 size, device_id);
++				 size, device_id);
+ 
+ 		/* TODO async */
+ 		iov_iter_init(&titer, READ, &iovec, 1, iovec.iov_len);
+-		ret = vfs_iter_read(EROFS_SB(sb)->bootstrap, &titer, &off, 0);
+-		if (ret < 0) {
++		ret = vfs_iter_read(mdev.m_fp, &titer, &off, 0);
++		if (ret < 0)
++		{
+ 			pr_err("%s: failed to read blob ret %ld\n", __func__, ret);
+ 			return ret;
+-		} else if (ret < iovec.iov_len) {
++		}
++		else if (ret < iovec.iov_len)
++		{
+ 			return read;
+ 		}
+ 		iov_iter_advance(to, ret);
+@@ -470,17 +490,19 @@ static ssize_t rafs_v6_read_chunk(struct super_block *sb,
+ static ssize_t rafs_v6_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
+ {
+ 	struct inode *inode = file_inode(iocb->ki_filp);
+-	struct erofs_map_blocks map = { 0 };
++	struct erofs_map_blocks map = {0};
+ 	ssize_t bytes = 0;
+ 	u64 total = min_t(u64, iov_iter_count(to),
+-			  inode->i_size - iocb->ki_pos);
++					  inode->i_size - iocb->ki_pos);
+ 
+-	while (total) {
++	while (total)
++	{
+ 		erofs_off_t pos = iocb->ki_pos;
+ 		u64 delta, size;
+ 		ssize_t read;
+ 
+-		if (map.m_la < pos || map.m_la + map.m_llen >= pos) {
++		if (map.m_la < pos || map.m_la + map.m_llen >= pos)
++		{
+ 			int err;
+ 
+ 			map.m_la = pos;
+@@ -493,11 +515,12 @@ static ssize_t rafs_v6_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
+ 		delta = pos - map.m_la;
+ 		size = min_t(u64, map.m_llen - delta, total);
+ 		read = rafs_v6_read_chunk(inode->i_sb, to, map.m_pa + delta,
+-					  size, map.m_deviceid);
+-		if (read < size) {
++								  size, map.m_deviceid);
++		if (read < size)
++		{
+ 			erofs_err(inode->i_sb,
+-				  "short read %ld pos %llu size %llu @ nid %llu",
+-				  read, pos, size, EROFS_I(inode)->nid);
++					  "short read %ld pos %llu size %llu @ nid %llu",
++					  read, pos, size, EROFS_I(inode)->nid);
+ 			return -EIO;
+ 		}
+ 		iocb->ki_pos += read;
+@@ -514,6 +537,7 @@ static vm_fault_t rafs_v6_filemap_fault(struct vm_fault *vmf)
+ 	pgoff_t npages, orig_pgoff = vmf->pgoff;
+ 	erofs_off_t pos;
+ 	struct erofs_map_blocks map = {0};
++	struct erofs_map_dev mdev;
+ 	struct vm_area_struct lower_vma;
+ 	int err;
+ 	vm_fault_t ret;
+@@ -531,8 +555,17 @@ static vm_fault_t rafs_v6_filemap_fault(struct vm_fault *vmf)
+ 	if (err)
+ 		return vmf_error(err);
+ 
+-	lower_vma.vm_file = EROFS_I_SB(inode)->bootstrap;
+-	vmf->pgoff = (map.m_pa + (pos - map.m_la)) >> PAGE_SHIFT;
++	mdev = (struct erofs_map_dev){
++		.m_deviceid = map.m_deviceid,
++		.m_pa = map.m_pa,
++	};
++	err = erofs_map_dev(inode->i_sb, &mdev);
++	if (err)
++		return vmf_error(err);
++
++	lower_vma.vm_file = mdev.m_fp;
++	vmf->pgoff = (mdev.m_pa + (pos - map.m_la)) >> PAGE_SHIFT;
++
+ 	vmf->vma = &lower_vma; /* override vma temporarily */
+ 	ret = EROFS_I(inode)->lower_vm_ops->fault(vmf);
+ 	vmf->vma = vma;
+@@ -541,7 +574,7 @@ static vm_fault_t rafs_v6_filemap_fault(struct vm_fault *vmf)
+ }
+ 
+ static const struct vm_operations_struct rafs_v6_vm_ops = {
+-	.fault	= rafs_v6_filemap_fault,
++	.fault = rafs_v6_filemap_fault,
+ };
+ 
+ static int rafs_v6_file_mmap(struct file *file, struct vm_area_struct *vma)
+@@ -552,7 +585,8 @@ static int rafs_v6_file_mmap(struct file *file, struct vm_area_struct *vma)
+ 	int ret;
+ 
+ 	ret = call_mmap(EROFS_I_SB(inode)->bootstrap, vma);
+-	if (ret) {
++	if (ret)
++	{
+ 		pr_err("%s: call_mmap failed ret %d\n", __func__, ret);
+ 		return ret;
+ 	}
+@@ -560,37 +594,40 @@ static int rafs_v6_file_mmap(struct file *file, struct vm_area_struct *vma)
+ 	/* set fs's vm_ops which is used in fault(). */
+ 	lower_vm_ops = vma->vm_ops;
+ 
+-	if (vi->lower_vm_ops && vi->lower_vm_ops != lower_vm_ops) {
++	if (vi->lower_vm_ops && vi->lower_vm_ops != lower_vm_ops)
++	{
+ 		WARN_ON_ONCE(1);
+ 		return -EOPNOTSUPP;
+ 	}
+ 	/* fault() must exist in order to proceed. */
+-	if (!lower_vm_ops || !lower_vm_ops->fault) {
++	if (!lower_vm_ops || !lower_vm_ops->fault)
++	{
+ 		WARN_ON_ONCE(1);
+ 		return -EOPNOTSUPP;
+ 	}
+ 	vi->lower_vm_ops = lower_vm_ops;
+-	vma->vm_flags &= ~VM_HUGEPAGE;	/* dont use huge page */
++	vma->vm_flags &= ~VM_HUGEPAGE; /* dont use huge page */
+ 	vma->vm_ops = &rafs_v6_vm_ops;
+ 	return 0;
+ }
+ 
+ const struct file_operations rafs_v6_file_ro_fops = {
+-	.llseek		= generic_file_llseek,
+-	.read_iter	= rafs_v6_file_read_iter,
+-	.mmap		= rafs_v6_file_mmap,
+-//	.mmap		= generic_file_readonly_mmap,
+-	.splice_read	= generic_file_splice_read,
++	.llseek = generic_file_llseek,
++	.read_iter = rafs_v6_file_read_iter,
++	.mmap = rafs_v6_file_mmap,
++	//	.mmap		= generic_file_readonly_mmap,
++	.splice_read = generic_file_splice_read,
+ };
+ 
+-static int rafs_v6_readpage(struct file *file, struct page *page) {
++static int rafs_v6_readpage(struct file *file, struct page *page)
++{
+ 	struct kvec iov = {
+-		.iov_base	= page_address(page),
++		.iov_base = page_address(page),
+ 	};
+ 	struct inode *inode = page->mapping->host;
+ 	struct super_block *sb = inode->i_sb;
+ 	erofs_off_t pos = page->index << PAGE_SHIFT;
+-	struct erofs_map_blocks map = { .m_la = pos };
++	struct erofs_map_blocks map = {.m_la = pos};
+ 	struct kiocb kiocb;
+ 	struct iov_iter iter;
+ 	int err;
+@@ -602,15 +639,15 @@ static int rafs_v6_readpage(struct file *file, struct page *page) {
+ 	iov.iov_len = min_t(u64, PAGE_SIZE, map.m_plen - (pos - map.m_la));
+ 	init_sync_kiocb(&kiocb, EROFS_SB(sb)->bootstrap);
+ 	kiocb.ki_pos = map.m_pa + (pos - map.m_la);
+-//	if (!(kiocb.ki_pos & ~PAGE_MASK) && iov.iov_len == PAGE_SIZE)
+-//		kiocb.ki_flags |= IOCB_DIRECT;
++	//	if (!(kiocb.ki_pos & ~PAGE_MASK) && iov.iov_len == PAGE_SIZE)
++	//		kiocb.ki_flags |= IOCB_DIRECT;
+ 	iov_iter_kvec(&iter, READ, &iov, 1, iov.iov_len);
+ 	err = kiocb.ki_filp->f_op->read_iter(&kiocb, &iter);
+ 	if (err < iov.iov_len)
+ 		goto err_out;
+ 	if (iov.iov_len < PAGE_SIZE)
+ 		memset(iov.iov_base + iov.iov_len, 0,
+-		       PAGE_SIZE - iov.iov_len);
++			   PAGE_SIZE - iov.iov_len);
+ 	SetPageUptodate(page);
+ 	unlock_page(page);
+ 	return 0;
+-- 
+2.21.1 (Apple Git-122.3)
+
