@@ -33,6 +33,23 @@ dragonball_limitations="https://github.com/kata-containers/kata-containers/issue
 # overwrite it.
 export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
 
+# Common setup for tests.
+#
+# Global variables exported:
+#	$node	             - random picked node that has kata installed
+#	$node_start_date     - start date/time at the $node for the sake of
+#                          fetching logs
+#
+setup_common() {
+	node=$(get_one_kata_node)
+	[ -n "$node" ]
+	node_start_time=$(exec_host "$node" date +\"%Y-%m-%d %H:%M:%S\")
+	[ -n "$node_start_time" ]
+	export node node_start_time
+
+	k8s_delete_all_pods_if_any_exists || true
+}
+
 get_pod_config_dir() {
 	pod_config_dir="${BATS_TEST_DIRNAME}/runtimeclass_workloads_work"
 	info "k8s configured to use runtimeclass"
