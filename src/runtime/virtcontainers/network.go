@@ -226,6 +226,9 @@ type Network interface {
 
 	// SetEndpoints sets a sandbox's network endpoints.
 	SetEndpoints([]Endpoint)
+
+	// GetEndpoints number of sandbox's network endpoints.
+	GetEndpointsNum() (int, error)
 }
 
 func generateVCNetworkStructures(ctx context.Context, network Network) ([]*pbTypes.Interface, []*pbTypes.Route, []*pbTypes.ARPNeighbor, error) {
