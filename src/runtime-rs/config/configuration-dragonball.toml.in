@@ -111,6 +111,17 @@ block_device_driver = "@DEFBLOCKSTORAGEDRIVER_DB@"
 # Default false
 #enable_debug = true
 
+# The log level will be applied to hypervisor.
+# Possible values are:
+# - trace
+# - debug
+# - info
+# - warn
+# - error
+# - critical
+# Default: info
+#log_level = info
+
 # Disable the customizations done in the runtime when it detects
 # that it is running on top a VMM. This will result in the runtime
 # behaving as it would when running on bare metal.
@@ -189,6 +200,17 @@ container_pipe_size=@PIPESIZE@
 # (default: disabled)
 #enable_debug = true
 
+# The log level will be applied to agent.
+# Possible values are:
+# - trace
+# - debug
+# - info
+# - warn
+# - error
+# - critical
+# (default: info)
+#log_level = info
+
 # Enable agent tracing.
 #
 # If enabled, the agent will generate OpenTelemetry trace spans.
@@ -219,6 +241,17 @@ dial_timeout = 45
 # system log
 # (default: disabled)
 #enable_debug = true
+
+# The log level will be applied to runtimes.
+# Possible values are:
+# - trace
+# - debug
+# - info
+# - warn
+# - error
+# - critical
+# (default: info)
+#log_level = info
 
 # If enabled, enabled, it means that 1) if the runtime exits abnormally,
 # the cleanup process will be skipped, and 2) the runtime will not exit

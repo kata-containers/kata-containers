@@ -23,6 +23,7 @@ use kata_sys_util::protection::{available_guest_protection, GuestProtection};
 use kata_types::capabilities::{Capabilities, CapabilityBits};
 use kata_types::config::default::DEFAULT_CH_ROOTFS_TYPE;
 use lazy_static::lazy_static;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::convert::TryFrom;
@@ -49,6 +50,12 @@ const CH_FEATURES_KEY: &str = "features";
 
 // The name of the CH build-time feature for Intel TDX.
 const CH_FEATURE_TDX: &str = "tdx";
+
+const LOG_LEVEL_TRACE: &str = "TRCE";
+const LOG_LEVEL_DEBUG: &str = "DEBG";
+const LOG_LEVEL_INFO: &str = "INFO";
+const LOG_LEVEL_WARNING: &str = "WARN";
+const LOG_LEVEL_ERROR: &str = "ERRO";
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct VmmPingResponse {
@@ -723,15 +730,25 @@ async fn cloud_hypervisor_log_output(mut child: Child, mut shutdown: Receiver<bo
             stderr_line = poll_fn(|cx| Pin::new(&mut stderr_lines).poll_next_line(cx)) => {
                 if let Ok(line) = stderr_line {
                     let line = line.ok_or("missing stderr line").map_err(|e| anyhow!(e))?;
-
-                    info!(sl!(), "{:?}", line; "stream" => "stderr");
+                    match parse_ch_log_level(&line) {
+                        LOG_LEVEL_TRACE => trace!(sl!(), "{:?}", line; "stream" => "stderr"),
+                        LOG_LEVEL_DEBUG => debug!(sl!(), "{:?}", line; "stream" => "stderr"),
+                        LOG_LEVEL_WARNING => warn!(sl!(), "{:?}", line; "stream" => "stderr"),
+                        LOG_LEVEL_ERROR => error!(sl!(), "{:?}", line; "stream" => "stderr"),
+                        _ => info!(sl!(), "{:?}", line; "stream" => "stderr"),
+                    }
                 }
             },
             stdout_line = poll_fn(|cx| Pin::new(&mut stdout_lines).poll_next_line(cx)) => {
                 if let Ok(line) = stdout_line {
                     let line = line.ok_or("missing stdout line").map_err(|e| anyhow!(e))?;
-
-                    info!(sl!(), "{:?}", line; "stream" => "stdout");
+                    match parse_ch_log_level(&line) {
+                        LOG_LEVEL_TRACE => trace!(sl!(), "{:?}", line; "stream" => "stdout"),
+                        LOG_LEVEL_DEBUG => debug!(sl!(), "{:?}", line; "stream" => "stdout"),
+                        LOG_LEVEL_WARNING => warn!(sl!(), "{:?}", line; "stream" => "stdout"),
+                        LOG_LEVEL_ERROR => error!(sl!(), "{:?}", line; "stream" => "stdout"),
+                        _ => info!(sl!(), "{:?}", line; "stream" => "stdout"),
+                    }
                 }
             },
         };
@@ -741,6 +758,23 @@ async fn cloud_hypervisor_log_output(mut child: Child, mut shutdown: Receiver<bo
     child.kill().await?;
 
     Ok(())
+}
+
+pub fn parse_ch_log_level(line: &str) -> &str {
+    let re = Regex::new(r"cloud-hypervisor: [0-9]*[.][0-9]+ms: <\w+> (?<level>\w+)").unwrap();
+    let level = re
+        .captures(line)
+        .expect("There should be a match for level")
+        .name("level")
+        .expect("Level should be found in record")
+        .as_str();
+    match level {
+        "TRACE" => LOG_LEVEL_TRACE,
+        "DEBUG" => LOG_LEVEL_DEBUG,
+        "WARN" => LOG_LEVEL_WARNING,
+        "ERROR" => LOG_LEVEL_ERROR,
+        _ => LOG_LEVEL_INFO, // info or other values will return info,
+    }
 }
 
 lazy_static! {

@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{path::PathBuf, str::from_utf8, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, str::from_utf8, sync::Arc};
 
 use anyhow::{anyhow, Context, Result};
 use common::{
@@ -19,6 +19,7 @@ use kata_types::{
 };
 #[cfg(feature = "linux")]
 use linux_container::LinuxContainer;
+use logging::FILTER_RULE;
 use netns_rs::NetNs;
 use persist::sandbox_persist::Persist;
 use resource::{
@@ -42,6 +43,18 @@ use crate::{
     shim_mgmt::server::MgmtServer,
     tracer::{KataTracer, ROOTSPAN},
 };
+
+fn convert_string_to_slog_level(string_level: &str) -> slog::Level {
+    match string_level {
+        "trace" => slog::Level::Trace,
+        "debug" => slog::Level::Debug,
+        "info" => slog::Level::Info,
+        "warn" => slog::Level::Warning,
+        "error" => slog::Level::Error,
+        "critical" => slog::Level::Critical,
+        _ => slog::Level::Info,
+    }
+}
 
 struct RuntimeHandlerManagerInner {
     id: String,
@@ -148,6 +161,8 @@ impl RuntimeHandlerManagerInner {
         }
 
         let config = load_config(spec, options).context("load config")?;
+
+        update_component_log_level(&config);
 
         let dan_path = dan_config_path(&config, &self.id);
         let mut network_created = false;
@@ -469,7 +484,11 @@ fn load_config(spec: &oci::Spec, option: &Option<Vec<u8>>) -> Result<TomlConfig>
     } else {
         String::from("")
     };
-    info!(sl!(), "get config path {:?}", &config_path);
+
+    // Clone a logger from global logger to ensure the logs in this function get flushed when drop
+    let logger = slog::Logger::clone(&slog_scope::logger());
+
+    info!(logger, "get config path {:?}", &config_path);
     let (mut toml_config, _) =
         TomlConfig::load_from_file(&config_path).context("load toml config")?;
     annotation.update_config_by_annotation(&mut toml_config)?;
@@ -492,7 +511,7 @@ fn load_config(spec: &oci::Spec, option: &Option<Vec<u8>>) -> Result<TomlConfig>
         .setup_config(&mut toml_config)
         .context("failed to setup static resource mgmt config")?;
 
-    info!(sl!(), "get config content {:?}", &toml_config);
+    info!(logger, "get config content {:?}", &toml_config);
     Ok(toml_config)
 }
 
@@ -511,4 +530,42 @@ fn update_agent_kernel_params(config: &mut TomlConfig) -> Result<()> {
         }
     }
     Ok(())
+}
+
+// this update the log_level of three component: agent, hypervisor, runtime
+// according to the settings read from configuration file
+fn update_component_log_level(config: &TomlConfig) {
+    // Retrieve the log-levels set in configuration file, modify the FILTER_RULE accordingly
+    let default_level = String::from("info");
+    let agent_level = if let Some(agent_config) = config.agent.get(&config.runtime.agent_name) {
+        agent_config.log_level.clone()
+    } else {
+        default_level.clone()
+    };
+    let hypervisor_level =
+        if let Some(hypervisor_config) = config.hypervisor.get(&config.runtime.hypervisor_name) {
+            hypervisor_config.debug_info.log_level.clone()
+        } else {
+            default_level.clone()
+        };
+    let runtime_level = config.runtime.log_level.clone();
+
+    // Update FILTER_RULE to apply changes
+    FILTER_RULE.rcu(|inner| {
+        let mut updated_inner = HashMap::new();
+        updated_inner.clone_from(inner);
+        updated_inner.insert(
+            "runtimes".to_string(),
+            convert_string_to_slog_level(&runtime_level),
+        );
+        updated_inner.insert(
+            "agent".to_string(),
+            convert_string_to_slog_level(&agent_level),
+        );
+        updated_inner.insert(
+            "hypervisor".to_string(),
+            convert_string_to_slog_level(&hypervisor_level),
+        );
+        updated_inner
+    });
 }

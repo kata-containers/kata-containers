@@ -48,6 +48,9 @@ impl ResourceManager {
         hypervisor: Arc<dyn Hypervisor>,
         toml_config: Arc<TomlConfig>,
     ) -> Result<Self> {
+        // Regist resource logger for later use.
+        logging::register_subsystem_logger("runtimes", "resource");
+
         Ok(Self {
             inner: Arc::new(RwLock::new(
                 ResourceManagerInner::new(sid, agent, hypervisor, toml_config).await?,
