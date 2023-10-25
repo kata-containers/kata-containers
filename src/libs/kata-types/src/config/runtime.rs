@@ -37,6 +37,17 @@ pub struct Runtime {
     #[serde(default, rename = "enable_debug")]
     pub debug: bool,
 
+    /// The log level will be applied to runtime.
+    /// Possible values are:
+    /// - trace
+    /// - debug
+    /// - info
+    /// - warn
+    /// - error
+    /// - critical
+    #[serde(default = "default_runtime_log_level")]
+    pub log_level: String,
+
     /// Enabled experimental feature list, format: ["a", "b"].
     ///
     /// Experimental features are features not stable enough for production, they may break
@@ -224,6 +235,10 @@ impl Runtime {
     pub fn is_experiment_enabled(&self, feature: &str) -> bool {
         self.experimental.contains(&feature.to_string())
     }
+}
+
+fn default_runtime_log_level() -> String {
+    String::from("info")
 }
 
 #[cfg(not(feature = "enable-vendor"))]
