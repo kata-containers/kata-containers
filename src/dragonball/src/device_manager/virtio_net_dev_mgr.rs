@@ -22,6 +22,7 @@ use crate::config_manager::{
 };
 use crate::device_manager::{DeviceManager, DeviceMgrError, DeviceOpContext};
 use crate::get_bucket_update;
+use crate::metric::METRICS;
 
 use super::DbsMmioV2Device;
 
@@ -368,6 +369,11 @@ impl VirtioNetDeviceMgr {
             rx_rate_limiter,
             tx_rate_limiter,
         )?;
+        METRICS
+            .write()
+            .unwrap()
+            .net
+            .insert(cfg.host_dev_name.clone(), net_device.metrics());
 
         Ok(Box::new(net_device))
     }
@@ -380,6 +386,11 @@ impl VirtioNetDeviceMgr {
                 "remove virtio-net device: {}",
                 info.config.iface_id
             );
+            METRICS
+                .write()
+                .unwrap()
+                .net
+                .remove(info.config.host_dev_name.as_str());
             if let Some(device) = info.device.take() {
                 DeviceManager::destroy_mmio_virtio_device(device, ctx)?;
             }
