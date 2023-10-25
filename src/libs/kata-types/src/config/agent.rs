@@ -24,6 +24,17 @@ pub struct Agent {
     #[serde(default, rename = "enable_debug")]
     pub debug: bool,
 
+    /// The log log level will be applied to agent.
+    /// Possible values are:
+    /// - trace
+    /// - debug
+    /// - info
+    /// - warn
+    /// - error
+    /// - critical
+    #[serde(default = "default_agent_log_level")]
+    pub log_level: String,
+
     /// Enable agent tracing.
     ///
     /// If enabled, the agent will generate OpenTelemetry trace spans.
@@ -88,6 +99,7 @@ impl std::default::Default for Agent {
     fn default() -> Self {
         Self {
             debug: true,
+            log_level: "info".to_string(),
             enable_tracing: false,
             debug_console_enabled: false,
             server_port: DEFAULT_AGENT_VSOCK_PORT,
@@ -100,6 +112,10 @@ impl std::default::Default for Agent {
             container_pipe_size: 0,
         }
     }
+}
+
+fn default_agent_log_level() -> String {
+    String::from("info")
 }
 
 fn default_server_port() -> u32 {
