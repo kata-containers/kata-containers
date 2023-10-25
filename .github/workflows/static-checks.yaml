@@ -187,7 +187,7 @@ jobs:
           echo "/usr/local/go/bin" >> $GITHUB_PATH
       - name: Install system dependencies
         run: |
-          sudo apt-get -y install moreutils hunspell pandoc
+          sudo apt-get -y install moreutils hunspell hunspell-en-gb hunspell-en-us pandoc
       - name: Run check
         run: |
           export PATH=${PATH}:${GOPATH}/bin
