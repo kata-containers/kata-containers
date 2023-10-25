@@ -138,10 +138,11 @@ impl NydusRootfs {
                     h,
                     extra_options.source.clone(),
                     blobfs_mnt.clone(),
-                    &extra_options.config,
+                    extra_options.config,
                     Some(dax_threshold_size_kb),
                 )
-                .with_context(|| "failed to mount blob cache dir".to_string())?;
+                .await
+                .context("failed to mount blob cache dir")?;
 
                 let bootstrap_dir = {
                     let dir: &Path = extra_options.source.as_str().as_ref();
@@ -154,7 +155,8 @@ impl NydusRootfs {
                     passthroughfs_mnt.clone(),
                     Some(dax_threshold_size_kb),
                 )
-                .with_context(|| "failed to mount bootstrap dir".to_string())?;
+                .await
+                .context("failed to mount bootstrap dir")?;
 
                 // create rootfs under the share directory
                 let container_share_dir = get_host_rw_shared_path(sid)
