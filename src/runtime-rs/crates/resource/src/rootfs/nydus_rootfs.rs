@@ -151,7 +151,7 @@ impl NydusRootfs {
                 let passthroughfs_mnt = do_get_guest_path(BOOTSTRAP_DIR, cid, false, true);
                 passthrough_mount(
                     h,
-                    bootstrap_dir,
+                    bootstrap_dir.clone(),
                     passthroughfs_mnt.clone(),
                     Some(dax_threshold_size_kb),
                 )
