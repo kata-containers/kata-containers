@@ -58,6 +58,25 @@ k8s_create_pod() {
 	fi
 }
 
+# Check the logged messages on host have a given message.
+#
+# Parameters:
+#	$1 - the k8s worker node name
+#	$2 - the syslog identifier as in journalctl's -t option
+#	$3 - only logs since date/time (%Y-%m-%d %H:%M:%S)
+#	$4 - the message
+#
+assert_logs_contain() {
+	local node="$1"
+	local log_id="$2"
+	local datetime="$3"
+	local message="$4"
+
+	# Note: with image-rs we get more than the default 1000 lines of logs
+	print_node_journal "$node" "$log_id" --since "$datetime" -n 100000 \
+		grep "$message"
+}
+
 # Create a pod then assert it fails to run. Use in tests that you expect the
 # pod creation to fail.
 #
@@ -129,4 +148,24 @@ set_metadata_annotation() {
 	# yq set annotations in yaml. Quoting the key because it can have
 	# dots.
 	yq w -i --style=double "${yaml}" "${annotation_key}" "${value}"
+}
+
+# Get the systemd's journal from a worker node
+#
+# Parameters:
+#	$1 - the k8s worker node name
+#	$2 - the syslog identifier as in journalctl's -t option
+#	$N - (optional) any extra parameters to journalctl
+#
+print_node_journal() {
+	local node="$1"
+	local id="$2"
+	shift 2
+	local img="quay.io/prometheus/busybox"
+
+	kubectl debug --image "$img" -q -it "node/${node}" \
+		-- chroot /host journalctl -x -t "$id" --no-pager "$@"
+	# Delete the debugger pod
+	kubectl get pods -o name | grep "node-debugger-${node}" | \
+		xargs kubectl delete > /dev/null
 }
