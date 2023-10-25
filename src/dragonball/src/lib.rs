@@ -32,6 +32,8 @@ pub mod metric;
 pub mod resource_manager;
 /// Signal handler for virtual machines.
 pub mod signal_handler;
+/// Dragonball Tracer.
+pub mod tracer;
 /// Virtual CPU manager for virtual machines.
 pub mod vcpu;
 /// Virtual machine manager for virtual machines.
