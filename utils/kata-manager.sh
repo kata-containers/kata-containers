@@ -143,6 +143,10 @@ github_get_release_file_url()
 	local url="${1:-}"
 	local version="${2:-}"
 
+	# The version, less any leading 'v'
+	local version_number
+	version_number=${version#v}
+
 	local arch
 	arch=$(uname -m)
 	[ "$arch" = "x86_64" ] && arch="amd64"
@@ -151,11 +155,11 @@ github_get_release_file_url()
 
 	case "$url" in
 		*kata*)
-			regex="kata-static-.*-${arch}.tar.xz"
+			regex="kata-static-${version}-${arch}.tar.xz"
 			;;
 
 		*containerd*)
-			regex="containerd-.*-linux-${arch}.tar.gz"
+			regex="containerd-${version_number}-linux-${arch}.tar.gz"
 			;;
 
 		*) die "invalid url: '$url'" ;;
@@ -165,8 +169,10 @@ github_get_release_file_url()
 
 	download_url=$(curl -sL "$url" |\
 		jq --arg version "$version" \
-		-r '.[] | select(.tag_name == $version) | .assets[].browser_download_url' |\
-		grep "/${regex}$")
+		-r '.[] |
+			select( (.tag_name == $version) or (.tag_name == "v" + $version) ) |
+			.assets[].browser_download_url' |\
+			grep "/${regex}$")
 
 	download_url=$(echo "$download_url" | awk '{print $1}')
 
