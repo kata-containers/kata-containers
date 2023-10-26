@@ -13,3 +13,6 @@ QEMUCMD := qemu-system-x86_64
 
 # dragonball binary name
 DBCMD := dragonball
+
+# cloud-hypervisor binary name
+CLHCMD := cloud-hypervisor
