@@ -3,6 +3,7 @@ use sendfd::SendWithFd;
 use std::{
     fs::OpenOptions,
     os::fd::{AsRawFd, OwnedFd},
+    os::unix::fs::OpenOptionsExt,
 };
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
@@ -71,9 +72,17 @@ impl PassfdIo {
         passfd_port: u32,
         terminal: bool,
     ) -> Result<()> {
+        // In linux, when a FIFO is opened and there are no writers, the reader
+        // will continuously receive the HUP event. This can be problematic
+        // when creating containers in detached mode, as the stdin FIFO writer
+        // is closed after the container is created, resulting in this situation.
+        //
+        // See: https://stackoverflow.com/questions/15055065/o-rdwr-on-named-pipes-with-poll
         if let Some(stdin) = &self.stdin {
             let fin = OpenOptions::new()
                 .read(true)
+                .write(true)
+                .custom_flags(libc::O_NONBLOCK)
                 .open(&stdin)
                 .context("open stdin")?;
 
