@@ -820,6 +820,8 @@ components:
           format: int16
         id:
           type: string
+        serial:
+          type: string
 
     NetConfig:
       type: object
