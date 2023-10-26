@@ -43,7 +43,4 @@ After Kata Containers repository is updated with a new version, it needs to be
 tagged.
 
 The `tag_repos.sh` script is used to create tags for the Kata Containers repository.
-The script creates an **annotated tag** for the new release version for the
-following repositories:
-
-- kata-containers
+The script creates an **annotated tag** for the new release version.
