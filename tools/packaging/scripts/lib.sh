@@ -16,6 +16,7 @@ export repo_root_dir="$(cd "${this_script_dir}/../../../" && pwd)"
 short_commit_length=10
 
 hub_bin="hub-bin"
+gh_cli="gh-cli"
 
 #for cross build
 CROSS_BUILD=${CROSS_BUILD-:}
@@ -91,6 +92,22 @@ arch_to_golang()
 		s390x) echo "s390x";;
 		*) die "unsupported architecture: $arch";;
 	esac
+}
+
+get_gh() {
+	info "Get gh"
+
+	if cmd=$(command -v gh); then
+		gh_cli="${cmd}"
+		return
+	else
+		gh_cli="${tmp_dir:-/tmp}/gh-cli"
+	fi
+
+	local goarch=$(arch_to_golang $(uname -m))
+	curl -sSL https://github.com/cli/cli/releases/download/v2.37.0/gh_2.37.0_linux_${goarch}.tar.gz | tar -xz
+	mv gh_2.37.0_linux_${goarch}/bin/gh "${gh_cli}"
+	rm -rf gh_2.37.0_linux_amd64
 }
 
 get_kata_hash() {
