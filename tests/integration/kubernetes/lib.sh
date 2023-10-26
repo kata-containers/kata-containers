@@ -150,6 +150,20 @@ set_metadata_annotation() {
 	yq w -i --style=double "${yaml}" "${annotation_key}" "${value}"
 }
 
+# Set the node name on configuration spec.
+#
+# Parameters:
+#	$1 - the yaml file
+#	$2 - the node name
+#
+set_node() {
+	local yaml="$1"
+	local node="$2"
+	[ -n "$node" ] || return 1
+
+	yq w -i "${yaml}" "spec.nodeName" "$node"
+}
+
 # Get the systemd's journal from a worker node
 #
 # Parameters:
