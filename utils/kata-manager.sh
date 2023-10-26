@@ -145,6 +145,7 @@ github_get_release_file_url()
 
 	local arch
 	arch=$(uname -m)
+	[ "$arch" = "x86_64" ] && arch="amd64"
 
 	local regex=""
 
@@ -154,7 +155,6 @@ github_get_release_file_url()
 			;;
 
 		*containerd*)
-			[ "$arch" = "x86_64" ] && arch="amd64"
 			regex="containerd-.*-linux-${arch}.tar.gz"
 			;;
 
