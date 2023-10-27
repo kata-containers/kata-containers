@@ -176,13 +176,12 @@ function init_env()
 
 	# restart docker only if it is not masked by systemd
 	docker_masked="$(systemctl list-unit-files --state=masked | grep -c docker)" || true
-	if [ "${docker_masked}" -eq 0 ]; then
-		sudo systemctl restart docker
-	fi
+	[ "${docker_masked}" -eq 0 ] && sudo systemctl restart docker
 
 	# This clean up is more aggressive, this is in order to
 	# decrease the factors that could affect the metrics results.
 	kill_processes_before_start
+	check_processes
 	info "init environment complete"
 }
 
@@ -201,9 +200,11 @@ function kill_processes_before_start()
 	CTR_PROCS=$(sudo "${CTR_EXE}" t list -q)
 	[[ -n "${CTR_PROCS}" ]] && clean_env_ctr
 
-	kill_kata_components && sleep 1
+	restart_containerd_service
+
+	# Remove all running containers
+	# and kills all the kata components
 	kill_kata_components
-	check_processes
 }
 
 # Generate a random name - generally used when creating containers, but can
