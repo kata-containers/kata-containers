@@ -15,7 +15,6 @@ export repo_root_dir="$(cd "${this_script_dir}/../../../" && pwd)"
 
 short_commit_length=10
 
-hub_bin="hub-bin"
 gh_cli="gh-cli"
 
 #for cross build
@@ -58,26 +57,6 @@ get_repo_hash() {
 	[ -d "${repo_dir}" ] || die "${repo_dir} is not a directory"
 	pushd "${repo_dir}" >>/dev/null
 	git rev-parse --verify HEAD
-	popd >>/dev/null
-}
-
-build_hub() {
-	info "Get hub"
-
-	if cmd=$(command -v hub); then
-		hub_bin="${cmd}"
-		return
-	else
-		hub_bin="${tmp_dir:-/tmp}/hub-bin"
-	fi
-
-	local hub_repo="github.com/github/hub"
-	local hub_repo_dir="${GOPATH}/src/${hub_repo}"
-	[ -d "${hub_repo_dir}" ] || git clone --quiet --depth 1 "https://${hub_repo}.git" "${hub_repo_dir}"
-	pushd "${hub_repo_dir}" >>/dev/null
-	git checkout master
-	git pull
-	./script/build -o "${hub_bin}"
 	popd >>/dev/null
 }
 
