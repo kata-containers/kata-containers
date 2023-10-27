@@ -123,6 +123,7 @@ impl VirtioNetDeviceConfigUpdateInfo {
 }
 
 /// Configuration information for virtio net devices.
+/// TODO: https://github.com/kata-containers/kata-containers/issues/8382.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Default)]
 pub struct VirtioNetDeviceConfigInfo {
     /// ID of the guest network interface.

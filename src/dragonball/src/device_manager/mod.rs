@@ -545,7 +545,7 @@ pub struct DeviceManager {
     pub(crate) balloon_manager: BalloonDeviceMgr,
 
     #[cfg(feature = "vhost-net")]
-    pub(crate) vhost_net_manager: VhostNetDeviceMgr,
+    vhost_net_manager: VhostNetDeviceMgr,
 }
 
 impl DeviceManager {

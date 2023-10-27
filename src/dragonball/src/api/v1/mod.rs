@@ -19,5 +19,7 @@ mod machine_config;
 pub use self::machine_config::{VmConfigError, MAX_SUPPORTED_VCPUS};
 
 /// Wrapper for configuring the virtio networking
+#[cfg(any(feature = "virtio-net", feature = "vhost-net"))]
 mod virtio_net;
+#[cfg(any(feature = "virtio-net", feature = "vhost-net"))]
 pub use virtio_net::{Backend, NetworkInterfaceConfig, NetworkInterfaceUpdateConfig, VirtioConfig};
