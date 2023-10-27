@@ -208,9 +208,11 @@ impl From<&NetworkConfig> for DragonballNetworkConfig {
         let virtio_config = DragonballVirtioConfig {
             iface_id: value.virt_iface_name.clone(),
             host_dev_name: value.host_dev_name.clone(),
-            // TODO(justxuewei): rx_rate_limiter is not supported.
+            // TODO(justxuewei): rx_rate_limiter is not supported, see:
+            // https://github.com/kata-containers/kata-containers/issues/8327.
             rx_rate_limiter: None,
-            // TODO(justxuewei): tx_rate_limiter is not supported.
+            // TODO(justxuewei): tx_rate_limiter is not supported, see:
+            // https://github.com/kata-containers/kata-containers/issues/8327.
             tx_rate_limiter: None,
             allow_duplicate_mac: value.allow_duplicate_mac,
         };

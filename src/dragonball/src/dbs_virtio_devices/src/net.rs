@@ -31,8 +31,8 @@ use vmm_sys_util::eventfd::EventFd;
 
 use crate::device::{VirtioDeviceConfig, VirtioDeviceInfo};
 use crate::{
-    ActivateError, ActivateResult, ConfigResult, DbsGuestAddressSpace, Error, Result, VirtioDevice,
-    VirtioQueueConfig, TYPE_NET,
+    ActivateError, ActivateResult, ConfigResult, DbsGuestAddressSpace, Error, Result, TapError,
+    VirtioDevice, VirtioQueueConfig, TYPE_NET,
 };
 
 const NET_DRIVER_NAME: &str = "virtio-net";
@@ -56,6 +56,13 @@ const TX_RATE_LIMITER_EVENT: u32 = 4;
 const PATCH_RATE_LIMITER_EVENT: u32 = 5;
 // Number of DeviceEventT events supported by this implementation.
 pub const NET_EVENTS_COUNT: u32 = 6;
+
+/// Error for virtio-net devices to handle requests from guests.
+#[derive(Debug, thiserror::Error)]
+pub enum NetError {
+    #[error("tap device operation error: {0:?}")]
+    TapError(#[source] TapError),
+}
 
 /// Metrics specific to the net device.
 #[derive(Default, Serialize)]
@@ -651,11 +658,11 @@ impl<AS: GuestAddressSpace> Net<AS> {
         tap.set_offload(
             net_gen::TUN_F_CSUM | net_gen::TUN_F_UFO | net_gen::TUN_F_TSO4 | net_gen::TUN_F_TSO6,
         )
-        .map_err(|err| Error::TapDeviceError(crate::TapError::SetOffload(err)))?;
+        .map_err(|err| Error::VirtioNet(NetError::TapError(TapError::SetOffload(err))))?;
 
         let vnet_hdr_size = vnet_hdr_len() as i32;
         tap.set_vnet_hdr_size(vnet_hdr_size)
-            .map_err(|err| Error::TapDeviceError(crate::TapError::SetVnetHdrSize(err)))?;
+            .map_err(|err| Error::VirtioNet(NetError::TapError(TapError::SetVnetHdrSize(err))))?;
         info!("net tap set finished");
 
         let mut avail_features = 1u64 << VIRTIO_NET_F_GUEST_CSUM
@@ -709,7 +716,7 @@ impl<AS: GuestAddressSpace> Net<AS> {
     ) -> Result<Self> {
         info!("open net tap {}", host_dev_name);
         let tap = Tap::open_named(host_dev_name.as_str(), false)
-            .map_err(|err| Error::TapDeviceError(crate::TapError::Open(err)))?;
+            .map_err(|err| Error::VirtioNet(NetError::TapError(TapError::Open(err))))?;
         info!("net tap opened");
 
         Self::new_with_tap(

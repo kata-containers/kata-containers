@@ -106,7 +106,7 @@ pub enum VmmActionError {
     VirtioNet(#[source] VirtioNetDeviceError),
 
     #[cfg(feature = "vhost-net")]
-    #[error("vhost-net device error: {0}")]
+    #[error("vhost-net device error: {0:?}")]
     /// Vhost-net device relared errors.
     VhostNet(#[source] VhostNetDeviceError),
 
@@ -318,7 +318,7 @@ impl VmmService {
             VmmAction::RemoveBlockDevice(drive_id) => {
                 self.remove_block_device(vmm, event_mgr, &drive_id)
             }
-            #[cfg(feature = "virtio-net")]
+            #[cfg(any(feature = "virtio-net", feature = "vhost-net"))]
             VmmAction::InsertNetworkDevice(config) => match config.backend {
                 Backend::Virtio(_) => {
                     #[cfg(not(feature = "virtio-net"))]

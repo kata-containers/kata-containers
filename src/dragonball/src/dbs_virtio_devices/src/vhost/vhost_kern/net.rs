@@ -31,7 +31,7 @@ use virtio_bindings::bindings::virtio_ring::*;
 use virtio_queue::{Descriptor, DescriptorChain, QueueT};
 use vm_memory::{Address, Bytes, GuestMemory, GuestMemoryRegion, MemoryRegionAddress};
 
-use crate::net::{NetDeviceMetrics, vnet_hdr_len};
+use crate::net::{vnet_hdr_len, NetDeviceMetrics};
 #[cfg(test)]
 use crate::vhost::vhost_kern::test_utils::{
     MockVhostBackend as VhostBackend, MockVhostNet as VhostNet,
@@ -46,6 +46,15 @@ const NET_DRIVER_NAME: &str = "vhost-net";
 const CTRL_SLOT: u32 = 0;
 // Control queue size
 const CTRL_QUEUE_SIZE: u16 = 64;
+
+/// Error for vhost-net devices to handle requests from guests.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("tap device operation error: {0:?}")]
+    TapError(#[source] TapError),
+    #[error("vhost error: {0}")]
+    VhostError(#[source] vhost_rs::Error),
+}
 
 /// Vhost-net device implementation
 pub struct Net<AS, Q, R>
@@ -97,12 +106,14 @@ fn validate_and_configure_tap(tap: &Tap, vq_pairs: usize) -> VirtioResult<()> {
         )
         .collect::<Vec<_>>();
     if !missing_flags.is_empty() {
-        return Err(VirtioError::TapDeviceError(TapError::MissingFlags(
-            missing_flags
-                .into_iter()
-                .map(|flag| *flag)
-                .collect::<Vec<&str>>()
-                .join(", "),
+        return Err(VirtioError::VhostNet(Error::TapError(
+            TapError::MissingFlags(
+                missing_flags
+                    .into_iter()
+                    .map(|flag| *flag)
+                    .collect::<Vec<&str>>()
+                    .join(", "),
+            ),
         )));
     }
 
@@ -110,11 +121,11 @@ fn validate_and_configure_tap(tap: &Tap, vq_pairs: usize) -> VirtioResult<()> {
     tap.set_offload(
         net_gen::TUN_F_CSUM | net_gen::TUN_F_UFO | net_gen::TUN_F_TSO4 | net_gen::TUN_F_TSO6,
     )
-    .map_err(|err| VirtioError::TapDeviceError(TapError::SetOffload(err)))?;
+    .map_err(|err| VirtioError::VhostNet(Error::TapError(TapError::SetOffload(err))))?;
 
     let vnet_hdr_size = vnet_hdr_len() as i32;
     tap.set_vnet_hdr_size(vnet_hdr_size)
-        .map_err(|err| VirtioError::TapDeviceError(TapError::SetVnetHdrSize(err)))?;
+        .map_err(|err| VirtioError::VhostNet(Error::TapError(TapError::SetVnetHdrSize(err))))?;
 
     Ok(())
 }
@@ -137,7 +148,7 @@ where
 
         let taps = tap
             .into_mq_taps(vq_pairs)
-            .map_err(|err| VirtioError::TapDeviceError(TapError::Open(err)))?;
+            .map_err(|err| VirtioError::VhostNet(Error::TapError(TapError::Open(err))))?;
         for tap in taps.iter() {
             validate_and_configure_tap(tap, vq_pairs)?;
         }
@@ -234,9 +245,9 @@ where
     ) -> VirtioResult<Self> {
         // Open a TAP interface
         let tap = Tap::open_named(&host_dev_name, vq_pairs > 1)
-            .map_err(|err| VirtioError::TapDeviceError(TapError::Open(err)))?;
+            .map_err(|err| VirtioError::VhostNet(Error::TapError(TapError::Open(err))))?;
         tap.enable()
-            .map_err(|err| VirtioError::TapDeviceError(TapError::Enable(err)))?;
+            .map_err(|err| VirtioError::VhostNet(Error::TapError(TapError::Enable(err))))?;
 
         Self::new_with_tap(tap, vq_pairs, guest_mac, queue_sizes, event_mgr)
     }
@@ -255,8 +266,10 @@ where
 
         if self.handles.is_empty() {
             for _ in 0..vq_pairs {
-                self.handles
-                    .push(VhostNet::<AS>::new(config.vm_as.clone()).map_err(VirtioError::VhostNet)?);
+                self.handles.push(
+                    VhostNet::<AS>::new(config.vm_as.clone())
+                        .map_err(|err| VirtioError::VhostNet(Error::VhostError(err)))?,
+                );
             }
         }
 
@@ -317,11 +330,17 @@ where
         trace!(target: "vhost-net", "{}: Net::init_vhost_dev(pair_index: {})", NET_DRIVER_NAME, pair_index);
 
         let handle = &mut self.handles[pair_index];
-        handle.set_owner().map_err(VirtioError::VhostNet)?;
+        handle
+            .set_owner()
+            .map_err(|err| VirtioError::VhostNet(Error::VhostError(err)))?;
 
-        let avail_features = handle.get_features().map_err(VirtioError::VhostNet)?;
+        let avail_features = handle
+            .get_features()
+            .map_err(|err| VirtioError::VhostNet(Error::VhostError(err)))?;
         let features = self.device_info.acked_features() & avail_features;
-        handle.set_features(features).map_err(VirtioError::VhostNet)?;
+        handle
+            .set_features(features)
+            .map_err(|err| VirtioError::VhostNet(Error::VhostError(err)))?;
 
         let mut regions = Vec::new();
         for region in mem.iter() {
@@ -335,12 +354,14 @@ where
                 guest_phys_addr: guest_phys_addr.raw_value(),
                 memory_size: region.len(),
                 userspace_addr: userspace_addr as *const u8 as u64,
-                mmap_offset: 0u64,
-                mmap_handle: -1i32,
+                mmap_offset: 0,
+                mmap_handle: -1,
             });
         }
 
-        handle.set_mem_table(&regions).map_err(VirtioError::VhostNet)?;
+        handle
+            .set_mem_table(&regions)
+            .map_err(|err| VirtioError::VhostNet(Error::VhostError(err)))?;
 
         self.init_vhost_queues(pair_index, config)?;
 
@@ -376,7 +397,7 @@ where
 
             handle
                 .set_vring_num(vq_index, queue_cfg.queue.size())
-                .map_err(VirtioError::VhostNet)?;
+                .map_err(|err| VirtioError::VhostNet(Error::VhostError(err)))?;
 
             if let Some(vring_base) = &self.kernel_vring_bases {
                 let base = if vq_index == 0 {
@@ -386,11 +407,11 @@ where
                 };
                 handle
                     .set_vring_base(vq_index, base as u16)
-                    .map_err(VirtioError::VhostNet)?;
+                    .map_err(|err| VirtioError::VhostNet(Error::VhostError(err)))?;
             } else {
                 handle
                     .set_vring_base(vq_index, 0)
-                    .map_err(VirtioError::VhostNet)?;
+                    .map_err(|err| VirtioError::VhostNet(Error::VhostError(err)))?;
             }
 
             let config_data = &VringConfigData {
@@ -405,19 +426,19 @@ where
 
             handle
                 .set_vring_addr(vq_index, config_data)
-                .map_err(VirtioError::VhostNet)?;
+                .map_err(|err| VirtioError::VhostNet(Error::VhostError(err)))?;
 
             handle
                 .set_vring_call(vq_index, intr_evts[queue_index])
-                .map_err(VirtioError::VhostNet)?;
+                .map_err(|err| VirtioError::VhostNet(Error::VhostError(err)))?;
 
             handle
                 .set_vring_kick(vq_index, &queue_cfg.eventfd)
-                .map_err(VirtioError::VhostNet)?;
+                .map_err(|err| VirtioError::VhostNet(Error::VhostError(err)))?;
 
             handle
                 .set_backend(vq_index, Some(&tap.tap_file))
-                .map_err(VirtioError::VhostNet)?;
+                .map_err(|err| VirtioError::VhostNet(Error::VhostError(err)))?;
         }
 
         Ok(())

@@ -3,18 +3,18 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use std::result::Result;
+use std::sync::Arc;
+
 use dbs_utils::net::MacAddr;
-use dbs_virtio_devices::{vhost::vhost_kern::net::Net, Error as VirtioError};
+use dbs_virtio_devices::vhost::vhost_kern::net::Net;
+use dbs_virtio_devices::Error as VirtioError;
 use serde::{Deserialize, Serialize};
-use std::{result::Result, sync::Arc};
 use virtio_queue::QueueSync;
 
-use crate::{
-    address_space_manager::{GuestAddressSpaceImpl, GuestRegionImpl},
-    config_manager::{ConfigItem, DeviceConfigInfos},
-};
-
 use super::{DeviceManager, DeviceMgrError, DeviceOpContext};
+use crate::address_space_manager::{GuestAddressSpaceImpl, GuestRegionImpl};
+use crate::config_manager::{ConfigItem, DeviceConfigInfos};
 
 /// Default number of virtio queues, one rx/tx pair.
 pub const NUM_QUEUES: usize = 2;
@@ -44,10 +44,10 @@ pub enum VhostNetDeviceError {
     #[error("invalid queue number {0} for vhost-net device")]
     InvalidQueueNum(usize),
     /// Failure from device manager.
-    #[error("failure in device manager operations: {0}")]
+    #[error("failure in device manager operations: {0:?}")]
     DeviceManager(#[source] DeviceMgrError),
     /// Failure from virtio subsystem.
-    #[error(transparent)]
+    #[error("virtio error: {0:?}")]
     Virtio(VirtioError),
     /// Split this at some point.
     /// Internal errors are due to resource exhaustion.
@@ -60,6 +60,7 @@ pub enum VhostNetDeviceError {
 }
 
 /// Configuration information for vhost net devices.
+/// TODO: https://github.com/kata-containers/kata-containers/issues/8382.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct VhostNetDeviceConfigInfo {
     /// Id of the guest network interface.
@@ -138,8 +139,8 @@ impl ConfigItem for VhostNetDeviceConfigInfo {
 
 /// Device manager to manage all vhost net devices.
 pub struct VhostNetDeviceMgr {
-    pub(crate) info_list: DeviceConfigInfos<VhostNetDeviceConfigInfo>,
-    pub(crate) use_shared_irq: bool,
+    info_list: DeviceConfigInfos<VhostNetDeviceConfigInfo>,
+    use_shared_irq: bool,
 }
 
 impl VhostNetDeviceMgr {
