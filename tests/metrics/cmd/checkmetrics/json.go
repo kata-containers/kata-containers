@@ -29,7 +29,7 @@ func (c *jsonRecord) load(filepath string, metric *metrics) error {
 
 	log.Debugf(" Run jq '%v' %s", metric.CheckVar, filepath)
 
-	out, err := exec.Command("jq", metric.CheckVar, filepath).Output()
+	out, err := exec.Command("jq", "-r", metric.CheckVar, filepath).Output()
 	if err != nil {
 		log.Warnf("Failed to run [jq %v %v][%v]", metric.CheckVar, filepath, err)
 		return err
