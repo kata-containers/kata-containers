@@ -19,6 +19,8 @@ function add_kata_bot_info() {
 function rebase_atop_of_the_latest_target_branch() {
 	if [ -n "${TARGET_BRANCH}" ]; then
 		echo "Rebasing atop of the latest ${TARGET_BRANCH}"
+		# Recover from any previous rebase left halfway
+		git rebase --abort 2> /dev/null || true
 		git rebase origin/${TARGET_BRANCH}
 	fi
 }
