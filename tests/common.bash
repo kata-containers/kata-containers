@@ -158,7 +158,7 @@ function clean_env_ctr()
 	info "Wait until the containers gets removed"
 
 	for task_id in "${running_tasks[@]}"; do
-		sudo timeout -s SIGKILL 30s ctr t kill -a -s SIGTERM ${task_id} >/dev/null 2>&1 || true
+		sudo timeout -s SIGKILL 30s ctr t kill -a -s SIGKILL ${task_id} >/dev/null 2>&1 || true
 		sleep 0.5
 	done
 
@@ -179,6 +179,7 @@ function clean_env_ctr()
 		[ "$count_running" -eq 0 ] && break
 
 		remaining_attempts=$((remaining_attempts-1))
+		sleep 0.5
 	done
 
 	count_tasks="$(sudo ctr t list -q | wc -l)"
