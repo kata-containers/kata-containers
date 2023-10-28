@@ -30,16 +30,20 @@ pub struct I8042DeviceMetrics {
 pub type I8042Device = I8042Wrapper<EventFdTrigger>;
 
 pub struct I8042Wrapper<T: Trigger> {
-    pub device: I8042Dev<T>,
-    pub metrics: Arc<I8042DeviceMetrics>,
+    device: I8042Dev<T>,
+    metrics: Arc<I8042DeviceMetrics>,
 }
 
 impl I8042Device {
-    pub fn new(event: EventFdTrigger, metrics: Arc<I8042DeviceMetrics>) -> Self {
+    pub fn new(event: EventFdTrigger) -> Self {
         Self {
             device: I8042Dev::new(event),
-            metrics,
+            metrics: Arc::new(I8042DeviceMetrics::default()),
         }
+    }
+
+    pub fn metrics(&self) -> Arc<I8042DeviceMetrics> {
+        self.metrics.clone()
     }
 }
 

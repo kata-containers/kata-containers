@@ -96,6 +96,10 @@ impl SerialDevice {
             out,
         }
     }
+
+    pub fn metrics(&mut self) -> Arc<SerialDeviceMetrics> {
+        self.serial.events().metrics.clone()
+    }
 }
 
 pub struct SerialWrapper<T: Trigger, EV: SerialEvents> {

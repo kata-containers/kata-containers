@@ -5,6 +5,11 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
+#[cfg(target_arch = "x86_64")]
+use dbs_legacy_devices::I8042DeviceMetrics;
+#[cfg(target_arch = "aarch64")]
+use dbs_legacy_devices::RTCDeviceMetrics;
+use dbs_legacy_devices::SerialDeviceMetrics;
 use dbs_utils::metric::SharedIncMetric;
 #[cfg(feature = "virtio-balloon")]
 use dbs_virtio_devices::balloon::BalloonDeviceMetrics;
@@ -64,6 +69,14 @@ pub struct DragonballMetrics {
     pub seccomp: SeccompMetrics,
     /// Metrics related to signals.
     pub signals: SignalMetrics,
+    /// Metrics related to i8032 device.
+    #[cfg(target_arch = "x86_64")]
+    pub i8042: Arc<I8042DeviceMetrics>,
+    /// Metrics related to rtc device.
+    #[cfg(target_arch = "aarch64")]
+    pub rtc: Arc<RTCDeviceMetrics>,
+    /// Metrics related to serial device.
+    pub serial: HashMap<String, Arc<SerialDeviceMetrics>>,
     #[cfg(feature = "virtio-balloon")]
     /// Metrics related to balloon device.
     pub balloon: HashMap<String, Arc<BalloonDeviceMetrics>>,
