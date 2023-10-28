@@ -60,6 +60,15 @@ pub struct Storage {
     pub mount_point: String,
 }
 
+#[derive(PartialEq, Clone, Default)]
+pub struct SharedMount {
+    pub name: String,
+    pub src_ctr: String,
+    pub src_path: String,
+    pub dst_ctr: String,
+    pub dst_path: String,
+}
+
 #[derive(Deserialize, Default, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum IPFamily {
     #[default]
@@ -118,6 +127,7 @@ pub struct CreateContainerRequest {
     pub oci: Option<oci::Spec>,
     pub sandbox_pidns: bool,
     pub rootfs_mounts: Vec<oci::Mount>,
+    pub shared_mounts: Vec<SharedMount>,
 }
 
 #[derive(PartialEq, Clone, Default)]

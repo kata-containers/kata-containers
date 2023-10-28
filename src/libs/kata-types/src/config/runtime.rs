@@ -11,6 +11,10 @@ use crate::config::{ConfigOps, TomlConfig};
 use crate::mount::split_bind_mounts;
 use crate::{eother, validate_path};
 
+#[path = "shared_mount.rs"]
+pub mod shared_mount;
+pub use shared_mount::SharedMount;
+
 /// Type of runtime VirtContainer.
 pub const RUNTIME_NAME_VIRTCONTAINER: &str = "virt_container";
 
@@ -148,6 +152,10 @@ pub struct Runtime {
     /// to the hypervisor.
     #[serde(default)]
     pub dan_conf: String,
+
+    /// shared_mount declarations
+    #[serde(default)]
+    pub shared_mounts: Vec<SharedMount>,
 }
 
 impl ConfigOps for Runtime {
@@ -192,6 +200,10 @@ impl ConfigOps for Runtime {
                 "Invalid vfio_mode `{}` in configuration file",
                 vfio_mode
             ));
+        }
+
+        for shared_mount in &conf.runtime.shared_mounts {
+            shared_mount.validate()?;
         }
 
         for bind in conf.runtime.sandbox_bind_mounts.iter() {

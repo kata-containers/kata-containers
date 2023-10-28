@@ -89,6 +89,10 @@ message CreateContainerRequest {
 	// The agent would receive an OCI spec with PID namespace cleared
 	// out altogether and not just the pid ns path.
 	bool sandbox_pidns = 7;
+
+	// This field is used to declare a set of shared mount points
+	// that support cross-container sharing of mount objects.
+	repeated SharedMount shared_mounts = 8;
 }
 
 message StartContainerRequest {
@@ -442,6 +446,23 @@ message FSGroup {
 	// GroupChangePolicy specifies the policy for applying group id
 	// ownership change on a mounted volume.
 	types.FSGroupChangePolicy group_change_policy = 3;
+}
+
+// SharedMount declares a set of shared mount points that support
+// cross-container sharing of mount objects.
+message SharedMount {
+	// Name is used to identify a pair of shared mount points.
+	string name = 1;
+	// Src_ctr is used to specify the name of the source container.
+	string src_ctr = 2;
+	// Src_path is used to specify the path of the mount point. If the path doesn't
+	// exist in the rootfs, it will be created.
+	string src_path = 3;
+	// Dst_ctr is used to specify the name of the destination container.
+	string dst_ctr = 4;
+	// Dst_path is used to specify the path of the mount point. If the path doesn't
+	// exist in the rootfs, it will be created.
+	string dst_path = 5;
 }
 
 // Storage represents both the rootfs of the container, and any volume that

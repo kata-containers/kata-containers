@@ -310,6 +310,8 @@ pub const KATA_ANNO_CFG_DISABLE_NEW_NETNS: &str =
     "io.katacontainers.config.runtime.disable_new_netns";
 /// A sandbox annotation to specify how attached VFIO devices should be treated.
 pub const KATA_ANNO_CFG_VFIO_MODE: &str = "io.katacontainers.config.runtime.vfio_mode";
+/// An annotation to declare shared mount points, which is a set of mount points that directly share mounted objects between containers.
+pub const KATA_ANNO_CFG_SHARED_MOUNTS: &str = "io.katacontainers.config.runtime.shared_mounts";
 
 /// A sandbox annotation used to specify prefetch_files.list host path container image
 /// being used,
@@ -971,6 +973,9 @@ impl Annotation {
                     },
                     KATA_ANNO_CFG_VFIO_MODE => {
                         config.runtime.vfio_mode = value.to_string();
+                    }
+                    KATA_ANNO_CFG_SHARED_MOUNTS => {
+                        config.runtime.shared_mounts = serde_json::from_str(value.as_str())?;
                     }
                     KATA_ANNO_CFG_SANDBOX_BIND_MOUNTS => {
                         let args: Vec<String> = value
