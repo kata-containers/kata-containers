@@ -1733,6 +1733,7 @@ mod tests {
             spec: Some(spec),
             rootless_euid: false,
             rootless_cgroup: false,
+            container_name: "".to_string(),
         }
     }
 

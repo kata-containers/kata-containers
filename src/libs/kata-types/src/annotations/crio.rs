@@ -6,7 +6,8 @@
 
 #![allow(missing_docs)]
 
-pub const CONTAINER_TYPE_LABEL_KEY: &str = "io.kubernetes.cri.container-type";
+pub const CONTAINER_TYPE_LABEL_KEY: &str = "io.kubernetes.cri-o.ContainerType";
+pub const CONTAINER_NAME_LABEL_KEY: &str = "io.kubernetes.cri-o.ContainerName";
 pub const SANDBOX: &str = "sandbox";
 pub const CONTAINER: &str = "container";
 

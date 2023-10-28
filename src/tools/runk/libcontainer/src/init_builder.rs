@@ -69,6 +69,7 @@ impl InitContainer {
             spec: Some(spec),
             rootless_euid: false,
             rootless_cgroup: false,
+            container_name: "".to_string(),
         };
         debug!(logger, "create LinuxContainer with config: {:?}", config);
         let container =
