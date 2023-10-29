@@ -487,31 +487,6 @@ impl VsockEpollListener for VsockConnection {
                 self.pending_rx.insert(PendingRx::CreditUpdate);
             }
         }
-
-        if evset.contains(epoll::Events::EPOLLHUP)
-            && !evset.contains(epoll::Events::EPOLLIN)
-            && !evset.contains(epoll::Events::EPOLLOUT)
-        {
-            // The host stream has been hung up. We'll kill this connection.
-            warn!(
-                "vsock: connection received EPOLLHUP event: lp={}, pp={}",
-                self.local_port, self.peer_port
-            );
-            self.kill();
-        }
-
-        if evset.contains(epoll::Events::EPOLLERR)
-            && !evset.contains(epoll::Events::EPOLLIN)
-            && !evset.contains(epoll::Events::EPOLLOUT)
-        {
-            // The host stream has encountered an error. We'll kill this
-            // connection.
-            warn!(
-                "vsock: connection received EPOLLERR event: lp={}, pp={}",
-                self.local_port, self.peer_port
-            );
-            self.kill();
-        }
     }
 }
 

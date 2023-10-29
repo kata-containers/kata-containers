@@ -995,13 +995,25 @@ impl BaseContainer for LinuxContainer {
                 // A reference count used to clean up the term master fd.
                 let term_closer = Arc::from(unsafe { File::from_raw_fd(pseudo.master) });
 
+                // Copy from stdin to term_master
                 if let Some(mut stdin_stream) = proc_io.stdin.take() {
                     let mut term_master = unsafe { File::from_raw_fd(pseudo.master) };
+                    let mut close_stdin_rx = proc_io.close_stdin_rx.clone();
+                    let wgw_input = proc_io.wg_input.worker();
                     let logger = logger.clone();
                     let term_closer = term_closer.clone();
                     tokio::spawn(async move {
-                        let res = tokio::io::copy(&mut stdin_stream, &mut term_master).await;
-                        debug!(logger, "copy from stdin to term_master end: {:?}", res);
+                        // As the stdin fifo is opened in RW mode in the shim, which will never
+                        // read EOF, we close the stdin fifo here when explicit requested.
+                        tokio::select! {
+                            res = tokio::io::copy(&mut stdin_stream, &mut term_master) => {
+                                debug!(logger, "copy from stdin to term_master end: {:?}", res);
+                            }
+                            _ = close_stdin_rx.changed() => {
+                                debug!(logger, "copy ends as requested");
+                            }
+                        }
+                        wgw_input.done();
                         std::mem::forget(term_master); // Avoid auto closing of term_master
                         drop(term_closer);
                     });
@@ -1022,22 +1034,35 @@ impl BaseContainer for LinuxContainer {
                 }
             }
         } else {
-            // Allow null io in passfd io mode when vsock streams are not provided
-            child_stdin = if let Some(stdin) = p.stdin {
-                unsafe { std::process::Stdio::from_raw_fd(stdin) }
-            } else {
-                std::process::Stdio::null()
-            };
-            child_stdout = if let Some(stdout) = p.stdout {
-                unsafe { std::process::Stdio::from_raw_fd(stdout) }
-            } else {
-                std::process::Stdio::null()
-            };
-            child_stderr = if let Some(stderr) = p.stderr {
-                unsafe { std::process::Stdio::from_raw_fd(stderr) }
-            } else {
-                std::process::Stdio::null()
-            };
+            let stdin = p.stdin.unwrap();
+            let stdout = p.stdout.unwrap();
+            let stderr = p.stderr.unwrap();
+            child_stdin = unsafe { std::process::Stdio::from_raw_fd(stdin) };
+            child_stdout = unsafe { std::process::Stdio::from_raw_fd(stdout) };
+            child_stderr = unsafe { std::process::Stdio::from_raw_fd(stderr) };
+
+            if let Some(proc_io) = &mut p.proc_io {
+                // Copy from stdin to parent_stdin
+                if let Some(mut stdin_stream) = proc_io.stdin.take() {
+                    let mut parent_stdin = unsafe { File::from_raw_fd(p.parent_stdin.unwrap()) };
+                    let mut close_stdin_rx = proc_io.close_stdin_rx.clone();
+                    let wgw_input = proc_io.wg_input.worker();
+                    let logger = logger.clone();
+                    tokio::spawn(async move {
+                        // As the stdin fifo is opened in RW mode in the shim, which will never
+                        // read EOF, we close the stdin stream when containerd explicit requested.
+                        tokio::select! {
+                            res = tokio::io::copy(&mut stdin_stream, &mut parent_stdin) => {
+                                debug!(logger, "copy from stdin to parent_stdin end: {:?}", res);
+                            }
+                            _ = close_stdin_rx.changed() => {
+                                debug!(logger, "copy ends as requested");
+                            }
+                        }
+                        wgw_input.done();
+                    });
+                }
+            }
         }
 
         let pidns = get_pid_namespace(&self.logger, linux)?;
