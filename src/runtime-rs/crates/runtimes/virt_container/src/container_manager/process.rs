@@ -337,14 +337,11 @@ impl Process {
 
     /// Close the stdin of the process in container.
     pub async fn close_io(&mut self, agent: Arc<dyn Agent>) {
-        if self.passfd_io.is_some() {
-            // In passfd io mode, if containerd closes stdin stream, the
-            // agent can get the close event from the vsock connection.
-            // so we just return here.
-            return;
+        // In passfd io mode, the stdin close and sync logic is handled
+        // in the agent side.
+        if self.passfd_io.is_none() {
+            self.wg_stdin.wait().await;
         }
-
-        self.wg_stdin.wait().await;
 
         let req = agent::CloseStdinRequest {
             process_id: self.process.clone().into(),
