@@ -19,6 +19,7 @@ pub mod qemu;
 pub use kernel_param::Param;
 pub mod utils;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 #[cfg(feature = "cloud-hypervisor")]
 pub mod ch;
@@ -30,6 +31,7 @@ use kata_types::capabilities::Capabilities;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 
 pub use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
+use tracing::Subscriber;
 
 // Config which driver to use as vm root dev
 const VM_ROOTFS_DRIVER_BLK: &str = "virtio-blk-pci";
@@ -77,7 +79,11 @@ pub struct VcpuThreadIds {
 pub trait Hypervisor: std::fmt::Debug + Send + Sync {
     // vm manager
     async fn prepare_vm(&self, id: &str, netns: Option<String>) -> Result<()>;
-    async fn start_vm(&self, timeout: i32) -> Result<()>;
+    async fn start_vm(
+        &self,
+        timeout: i32,
+        trace_subscriber: Option<Arc<dyn Subscriber + Send + Sync>>,
+    ) -> Result<()>;
     async fn stop_vm(&self) -> Result<()>;
     async fn pause_vm(&self) -> Result<()>;
     async fn save_vm(&self) -> Result<()>;

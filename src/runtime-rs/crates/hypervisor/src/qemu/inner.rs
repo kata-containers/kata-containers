@@ -4,9 +4,11 @@
 //
 
 use anyhow::Result;
+use std::sync::Arc;
 
 use crate::{HypervisorConfig, VcpuThreadIds};
 use kata_types::capabilities::{Capabilities, CapabilityBits};
+use tracing::Subscriber;
 
 const VSOCK_SCHEME: &str = "vsock";
 const VSOCK_AGENT_CID: u32 = 3;
@@ -28,7 +30,11 @@ impl QemuInner {
         Ok(())
     }
 
-    pub(crate) async fn start_vm(&mut self, _timeout: i32) -> Result<()> {
+    pub(crate) async fn start_vm(
+        &mut self,
+        _timeout: i32,
+        _trace_subscriber: Option<Arc<dyn Subscriber + Send + Sync>>,
+    ) -> Result<()> {
         info!(sl!(), "Starting QEMU VM");
 
         let mut command = std::process::Command::new(&self.config.path);

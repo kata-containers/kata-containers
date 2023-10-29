@@ -19,7 +19,7 @@ use async_trait::async_trait;
 use kata_types::capabilities::Capabilities;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use tokio::sync::RwLock;
-use tracing::instrument;
+use tracing::{instrument, Subscriber};
 
 use crate::{DeviceType, Hypervisor, VcpuThreadIds};
 
@@ -60,10 +60,14 @@ impl Hypervisor for Dragonball {
         inner.prepare_vm(id, netns).await
     }
 
-    #[instrument]
-    async fn start_vm(&self, timeout: i32) -> Result<()> {
+    #[instrument(skip(trace_subscriber))]
+    async fn start_vm(
+        &self,
+        timeout: i32,
+        trace_subscriber: Option<Arc<dyn Subscriber + Send + Sync>>,
+    ) -> Result<()> {
         let mut inner = self.inner.write().await;
-        inner.start_vm(timeout).await
+        inner.start_vm(timeout, trace_subscriber).await
     }
 
     async fn stop_vm(&self) -> Result<()> {

@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::sync::Arc;
 use std::{
     collections::{HashMap, HashSet},
     iter::FromIterator,
@@ -11,6 +12,7 @@ use std::{
 
 use anyhow::{Context, Ok, Result};
 use kata_types::capabilities::Capabilities;
+use tracing::Subscriber;
 
 use super::inner::DragonballInner;
 use crate::{
@@ -32,8 +34,17 @@ impl DragonballInner {
 
     // start_vm will start the hypervisor for the given sandbox.
     // In the context of dragonball, this will start the hypervisor
-    pub(crate) async fn start_vm(&mut self, timeout: i32) -> Result<()> {
+    pub(crate) async fn start_vm(
+        &mut self,
+        timeout: i32,
+        mut trace_subscriber: Option<Arc<dyn Subscriber + Send + Sync>>,
+    ) -> Result<()> {
         self.run_vmm_server().context("start vmm server")?;
+
+        // setup tracing after running the vmm server.
+        if let Some(sub) = trace_subscriber.take() {
+            self.setup_tracing(sub).await?;
+        }
         self.cold_start_vm(timeout).await.map_err(|error| {
             error!(sl!(), "start micro vm error {:?}", error);
             if let Err(err) = self.stop_vm() {
@@ -65,6 +76,16 @@ impl DragonballInner {
 
     pub(crate) async fn save_vm(&self) -> Result<()> {
         todo!()
+    }
+
+    pub(crate) async fn setup_tracing(
+        &mut self,
+        trace_subscriber: Arc<dyn Subscriber + Send + Sync>,
+    ) -> Result<()> {
+        self.vmm_instance
+            .setup_tracing(trace_subscriber, &self.id)
+            .context("setup tracing")?;
+        Ok(())
     }
 
     pub(crate) async fn get_agent_socket(&self) -> Result<String> {

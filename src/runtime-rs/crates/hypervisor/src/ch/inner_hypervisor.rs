@@ -38,6 +38,7 @@ use tokio::sync::watch::Receiver;
 use tokio::task;
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
+use tracing::Subscriber;
 
 const CH_NAME: &str = "cloud-hypervisor";
 
@@ -584,7 +585,13 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
-    pub(crate) async fn start_vm(&mut self, timeout_secs: i32) -> Result<()> {
+    pub(crate) async fn start_vm(
+        &mut self,
+        timeout_secs: i32,
+        _trace_subscriber: Option<Arc<dyn Subscriber + Send + Sync>>,
+    ) -> Result<()> {
+        self.setup_environment().await?;
+
         self.timeout_secs = timeout_secs;
         self.start_hypervisor(self.timeout_secs).await?;
 

@@ -13,6 +13,7 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use crossbeam_channel::{unbounded, Receiver, Sender};
+use dragonball::tracer::TraceInfo;
 use dragonball::{
     api::v1::{
         BlockDeviceConfigInfo, BootSourceConfig, FsDeviceConfigInfo, FsMountConfigInfo,
@@ -24,6 +25,7 @@ use dragonball::{
 };
 use nix::sched::{setns, CloneFlags};
 use seccompiler::BpfProgram;
+use tracing::Subscriber;
 use vmm_sys_util::eventfd::EventFd;
 
 use crate::ShareFsOperation;
@@ -294,6 +296,21 @@ impl VmmInstance {
         // unwrap is safe, if vmm_thread is None, impossible run to here.
         self.vmm_thread.take().unwrap().join().ok();
         info!(sl!(), "vmm-master thread join succeed.");
+        Ok(())
+    }
+
+    pub fn setup_tracing(
+        &mut self,
+        trace_subscriber: Arc<dyn Subscriber + Send + Sync>,
+        sid: &str,
+    ) -> Result<()> {
+        info!(sl!(), "setup tracing {}", sid);
+        let trace_info = TraceInfo {
+            subscriber: trace_subscriber,
+            sid: sid.to_string(),
+        };
+        self.handle_request(Request::Sync(VmmAction::SetHypervisorTracing(trace_info)))
+            .context("Failed to setup tracing")?;
         Ok(())
     }
 

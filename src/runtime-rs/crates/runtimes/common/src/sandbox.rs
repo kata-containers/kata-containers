@@ -4,8 +4,11 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::sync::Arc;
+
 use anyhow::Result;
 use async_trait::async_trait;
+use tracing::Subscriber;
 
 #[derive(Clone)]
 pub struct SandboxNetworkEnv {
@@ -30,6 +33,7 @@ pub trait Sandbox: Send + Sync {
         spec: &oci::Spec,
         state: &oci::State,
         network_env: SandboxNetworkEnv,
+        trace_subscriber: Option<Arc<dyn Subscriber + Send + Sync>>,
     ) -> Result<()>;
     async fn stop(&self) -> Result<()>;
     async fn cleanup(&self) -> Result<()>;

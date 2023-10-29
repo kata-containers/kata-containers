@@ -96,6 +96,7 @@ impl RuntimeHandlerManagerInner {
             .await
             .context("new runtime instance")?;
 
+        let mut trace_subscriber = None;
         // initilize the trace subscriber
         if config.runtime.enable_tracing {
             let mut tracer = self.kata_tracer.lock().await;
@@ -107,12 +108,14 @@ impl RuntimeHandlerManagerInner {
             ) {
                 warn!(sl!(), "failed to setup tracing, {:?}", e);
             }
+            // tracing subscriber can share with hypervisor.
+            trace_subscriber = Some(tracer.subscriber());
         }
 
         // start sandbox
         runtime_instance
             .sandbox
-            .start(dns, spec, state, network_env)
+            .start(dns, spec, state, network_env, trace_subscriber)
             .await
             .context("start sandbox")?;
         self.runtime_instance = Some(Arc::new(runtime_instance));

@@ -20,6 +20,7 @@ slog-scope = "4.4.0"
 strum = { version = "0.24.0", features = ["derive"] }
 thiserror = "^1.0"
 tokio = { version = "1.28.1", features = ["rt-multi-thread", "process", "fs"] }
+tracing = "0.1.37"
 ttrpc = { version = "0.7.1" }
 persist = {path = "../../persist"}
 agent = { path = "../../agent" }

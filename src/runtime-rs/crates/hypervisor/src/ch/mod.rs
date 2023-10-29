@@ -13,6 +13,7 @@ use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use persist::sandbox_persist::Persist;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tracing::Subscriber;
 
 // Convenience macro to obtain the scope logger
 #[macro_export]
@@ -54,9 +55,13 @@ impl Hypervisor for CloudHypervisor {
         inner.prepare_vm(id, netns).await
     }
 
-    async fn start_vm(&self, timeout: i32) -> Result<()> {
+    async fn start_vm(
+        &self,
+        timeout: i32,
+        trace_subscriber: Option<Arc<dyn Subscriber + Send + Sync>>,
+    ) -> Result<()> {
         let mut inner = self.inner.write().await;
-        inner.start_vm(timeout).await
+        inner.start_vm(timeout, trace_subscriber).await
     }
 
     async fn stop_vm(&self) -> Result<()> {

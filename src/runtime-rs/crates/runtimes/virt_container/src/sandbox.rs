@@ -23,7 +23,7 @@ use resource::manager::ManagerArgs;
 use resource::network::{dan_config_path, DanNetworkConfig, NetworkConfig, NetworkWithNetNsConfig};
 use resource::{ResourceConfig, ResourceManager};
 use tokio::sync::{mpsc::Sender, Mutex, RwLock};
-use tracing::instrument;
+use tracing::{instrument, Subscriber};
 
 use crate::health_check::HealthCheck;
 
@@ -234,13 +234,14 @@ impl VirtSandbox {
 
 #[async_trait]
 impl Sandbox for VirtSandbox {
-    #[instrument(name = "sb: start")]
+    #[instrument(name = "sb: start", skip(trace_subscriber))]
     async fn start(
         &self,
         dns: Vec<String>,
         spec: &oci::Spec,
         state: &oci::State,
         network_env: SandboxNetworkEnv,
+        trace_subscriber: Option<Arc<dyn Subscriber + Send + Sync>>,
     ) -> Result<()> {
         let id = &self.sid;
 
@@ -269,7 +270,10 @@ impl Sandbox for VirtSandbox {
             .context("set up device before start vm")?;
 
         // start vm
-        self.hypervisor.start_vm(10_000).await.context("start vm")?;
+        self.hypervisor
+            .start_vm(10_000, trace_subscriber)
+            .await
+            .context("start vm")?;
         info!(sl!(), "start vm");
 
         // execute pre-start hook functions, including Prestart Hooks and CreateRuntime Hooks
