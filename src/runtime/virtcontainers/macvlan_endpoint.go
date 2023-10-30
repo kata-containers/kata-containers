@@ -122,14 +122,42 @@ func (endpoint *MacvlanEndpoint) Detach(ctx context.Context, netNsCreated bool, 
 	})
 }
 
-// HotAttach for bridged macvlan endpoint not supported yet
 func (endpoint *MacvlanEndpoint) HotAttach(ctx context.Context, h Hypervisor) error {
-	return fmt.Errorf("MacvlanEndpoint does not support Hot attach")
+	span, ctx := macvlanTrace(ctx, "HotAttach", endpoint)
+	defer span.End()
+
+	if err := xConnectVMNetwork(ctx, endpoint, h); err != nil {
+		networkLogger().WithError(err).Error("Error bridging macvlan ep")
+		return err
+	}
+
+	if _, err := h.HotplugAddDevice(ctx, endpoint, NetDev); err != nil {
+		networkLogger().WithError(err).Error("Error hotplugging macvlan ep")
+		return err
+	}
+
+	return nil
 }
 
-// HotDetach for bridged macvlan endpoint not supported yet
 func (endpoint *MacvlanEndpoint) HotDetach(ctx context.Context, h Hypervisor, netNsCreated bool, netNsPath string) error {
-	return fmt.Errorf("MacvlanEndpoint does not support Hot detach")
+	if !netNsCreated {
+		return nil
+	}
+
+	span, ctx := macvlanTrace(ctx, "HotDetach", endpoint)
+	defer span.End()
+
+	if err := doNetNS(netNsPath, func(_ ns.NetNS) error {
+		return xDisconnectVMNetwork(ctx, endpoint)
+	}); err != nil {
+		networkLogger().WithError(err).Warn("Error un-bridging macvlan ep")
+	}
+
+	if _, err := h.HotplugRemoveDevice(ctx, endpoint, NetDev); err != nil {
+		networkLogger().WithError(err).Error("Error detach macvlan ep")
+		return err
+	}
+	return nil
 }
 
 func (endpoint *MacvlanEndpoint) save() persistapi.NetworkEndpoint {
