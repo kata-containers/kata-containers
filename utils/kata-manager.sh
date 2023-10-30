@@ -102,7 +102,8 @@ github_get_latest_release()
 	# - The sort(1) call; none of the standard utilities support semver
 	#   so attempt to perform a semver sort manually.
 	# - Pre-releases are excluded via the select() call.
-	local latest=$(curl -sL "$url" |\
+	local latest
+	latest=$(curl -sL "$url" |\
 		jq -r '.[].tag_name | select(contains("-") | not)' |\
 		sort -t "." -k1,1n -k2,2n -k3,3n |\
 		tail -1 || true)
@@ -142,18 +143,23 @@ github_get_release_file_url()
 	local url="${1:-}"
 	local version="${2:-}"
 
-	local arch=$(uname -m)
+	# The version, less any leading 'v'
+	local version_number
+	version_number=${version#v}
+
+	local arch
+	arch=$(uname -m)
+	[ "$arch" = "x86_64" ] && arch="amd64"
 
 	local regex=""
 
 	case "$url" in
 		*kata*)
-			regex="kata-static-.*-${arch}.tar.xz"
+			regex="kata-static-${version}-${arch}.tar.xz"
 			;;
 
 		*containerd*)
-			[ "$arch" = "x86_64" ] && arch="amd64"
-			regex="containerd-.*-linux-${arch}.tar.gz"
+			regex="containerd-${version_number}-linux-${arch}.tar.gz"
 			;;
 
 		*) die "invalid url: '$url'" ;;
@@ -163,10 +169,12 @@ github_get_release_file_url()
 
 	download_url=$(curl -sL "$url" |\
 		jq --arg version "$version" \
-		-r '.[] | select(.tag_name == $version) | .assets[].browser_download_url' |\
-		grep "/${regex}$")
+		-r '.[] |
+			select( (.tag_name == $version) or (.tag_name == "v" + $version) ) |
+			.assets[].browser_download_url' |\
+			grep "/${regex}$")
 
-        download_url=$(echo $download_url | awk '{print $1}')
+	download_url=$(echo "$download_url" | awk '{print $1}')
 
 	[ -z "$download_url" ] && die "Cannot determine download URL for version $version ($url)"
 
@@ -187,7 +195,8 @@ github_download_release()
 
 	pushd "$tmpdir" >/dev/null
 
-	local download_url=$(github_get_release_file_url \
+	local download_url
+	download_url=$(github_get_release_file_url \
 		"$url" \
 		"$version" || true)
 
@@ -198,7 +207,8 @@ github_download_release()
 	# progress.
 	curl -LO "$download_url"
 
-	local filename=$(echo "$download_url" | awk -F'/' '{print $NF}')
+	local filename
+	filename=$(echo "$download_url" | awk -F'/' '{print $NF}')
 
 	ls -d "${PWD}/${filename}"
 
@@ -252,7 +262,7 @@ containerd_installed()
 	command -v containerd &>/dev/null && return 0
 
 	systemctl list-unit-files --type service |\
-		egrep -q "^${containerd_service_name}\>" \
+		grep -Eq "^${containerd_service_name}\>" \
 		&& return 0
 
 	return 1
@@ -297,8 +307,11 @@ check_deps()
 
 	for elem in "${elems[@]}"
 	do
-		local cmd=$(echo "$elem"|cut -d: -f1)
-		local pkg=$(echo "$elem"|cut -d: -f2-)
+		local cmd
+		cmd=$(echo "$elem"|cut -d: -f1)
+
+		local pkg
+		pkg=$(echo "$elem"|cut -d: -f2-)
 
 		command -v "$cmd" &>/dev/null && continue
 
@@ -307,7 +320,8 @@ check_deps()
 
 	[ "${#pkgs_to_install[@]}" -eq 0 ] && return 0
 
-	local packages="${pkgs_to_install[@]}"
+	local packages
+	packages="${pkgs_to_install[@]}"
 
 	info "Installing packages '$packages'"
 
@@ -358,13 +372,15 @@ github_download_package()
 	[ -z "$releases_url" ] && die "need releases URL"
 	[ -z "$project" ] && die "need project URL"
 
-	local version=$(github_resolve_version_to_download \
+	local version
+	version=$(github_resolve_version_to_download \
 		"$releases_url" \
 		"$requested_version" || true)
 
 	[ -z "$version" ] && die "Unable to determine $project version to download"
 
-	local file=$(github_download_release \
+	local file
+	file=$(github_download_release \
 		"$releases_url" \
 		"$version")
 
@@ -382,15 +398,19 @@ install_containerd()
 
 	info "Downloading $project release ($version_desc)"
 
-	local results=$(github_download_package \
+	local results
+	results=$(github_download_package \
 		"$containerd_releases_url" \
 		"$requested_version" \
 		"$project")
 
 	[ -z "$results" ] && die "Cannot download $project release file"
 
-	local version=$(echo "$results"|cut -d: -f1)
-	local file=$(echo "$results"|cut -d: -f2-)
+	local version
+	version=$(echo "$results"|cut -d: -f1)
+
+	local file
+	file=$(echo "$results"|cut -d: -f2-)
 
 	[ -z "$version" ] && die "Cannot determine $project resolved version"
 	[ -z "$file" ] && die "Cannot determine $project release file"
@@ -429,7 +449,8 @@ configure_containerd()
 	then
 		pushd "$tmpdir" >/dev/null
 
-		local service_url=$(printf "%s/%s/%s/%s" \
+		local service_url
+		service_url=$(printf "%s/%s/%s/%s" \
 			"https://raw.githubusercontent.com" \
 			"${containerd_slug}" \
 			"main" \
@@ -457,7 +478,8 @@ configure_containerd()
 		info "Created $cfg"
 	}
 
-	local original="${cfg}-pre-kata-$(date -I)"
+	local original
+	original="${cfg}-pre-kata-$(date -I)"
 
 	sudo grep -q "$kata_runtime_type" "$cfg" || {
 		sudo cp "$cfg" "${original}"
@@ -534,15 +556,19 @@ install_kata()
 
 	info "Downloading $project release ($version_desc)"
 
-	local results=$(github_download_package \
+	local results
+	results=$(github_download_package \
 		"$kata_releases_url" \
 		"$requested_version" \
 		"$project")
 
 	[ -z "$results" ] && die "Cannot download $project release file"
 
-	local version=$(echo "$results"|cut -d: -f1)
-	local file=$(echo "$results"|cut -d: -f2-)
+	local version
+	version=$(echo "$results"|cut -d: -f1)
+
+	local file
+	file=$(echo "$results"|cut -d: -f2-)
 
 	[ -z "$version" ] && die "Cannot determine $project resolved version"
 	[ -z "$file" ] && die "Cannot determine $project release file"
@@ -555,12 +581,14 @@ install_kata()
 	create_links_for+=("kata-collect-data.sh")
 	create_links_for+=("kata-runtime")
 
-	local from_dir=$(printf "%s/bin" "$kata_install_dir")
+	local from_dir
+	from_dir=$(printf "%s/bin" "$kata_install_dir")
 
 	# Since we're unpacking to the root directory, perform a sanity check
 	# on the archive first.
-	local unexpected=$(tar -tf "${file}" |\
-		egrep -v "^(\./$|\./opt/$|\.${kata_install_dir}/)" || true)
+	local unexpected
+	unexpected=$(tar -tf "${file}" |\
+		grep -Ev "^(\./$|\./opt/$|\.${kata_install_dir}/)" || true)
 
 	[ -n "$unexpected" ] && die "File '$file' contains unexpected paths: '$unexpected'"
 
@@ -572,7 +600,8 @@ install_kata()
 
 	for file in "${create_links_for[@]}"
 	do
-		local from_path=$(printf "%s/%s" "$from_dir" "$file")
+		local from_path
+		from_path=$(printf "%s/%s" "$from_dir" "$file")
 		[ -e "$from_path" ] || die "File $from_path not found"
 
 		sudo ln -sf "$from_path" "$link_dir"
@@ -671,7 +700,8 @@ test_installation()
 
 	# Used to prove that the kernel in the container
 	# is different to the host kernel.
-	local container_kernel=$(sudo ctr run \
+	local container_kernel
+	container_kernel=$(sudo ctr run \
 		--runtime "$kata_runtime_type" \
 		--rm \
 		"$image" \
@@ -680,7 +710,8 @@ test_installation()
 
 	[ -z "$container_kernel" ] && die "Failed to test $kata_project"
 
-	local host_kernel=$(uname -r)
+	local host_kernel
+	host_kernel=$(uname -r)
 
 	info "Test successful:\n"
 
@@ -763,6 +794,8 @@ handle_args()
 			r) cleanup="false" ;;
 			t) disable_test="true" ;;
 			T) only_run_test="true" ;;
+
+			*) die "invalid option: '$opt'" ;;
 		esac
 	done
 
