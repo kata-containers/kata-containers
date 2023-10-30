@@ -30,7 +30,7 @@ import (
 //
 // XXX: Increment for every change to the output format
 // (meaning any change to the EnvInfo type).
-const formatVersion = "1.0.26"
+const formatVersion = "1.0.27"
 
 // MetaInfo stores information on the format of the output itself
 type MetaInfo struct {
@@ -101,6 +101,14 @@ type RuntimeVersionInfo struct {
 	Version VersionInfo
 }
 
+type SecurityInfo struct {
+	Rootless          bool
+	DisableSeccomp    bool
+	GuestHookPath     string
+	EnableAnnotations []string
+	ConfidentialGuest bool
+}
+
 // HypervisorInfo stores hypervisor details
 type HypervisorInfo struct {
 	MachineType       string
@@ -116,6 +124,7 @@ type HypervisorInfo struct {
 	HotPlugVFIO       config.PCIePort
 	ColdPlugVFIO      config.PCIePort
 	Debug             bool
+	SecurityInfo      SecurityInfo
 }
 
 // AgentInfo stores agent details
@@ -284,6 +293,16 @@ func getAgentInfo(config oci.RuntimeConfig) (AgentInfo, error) {
 	return agent, nil
 }
 
+func getSecurityInfo(config vc.HypervisorConfig) SecurityInfo {
+	return SecurityInfo{
+		Rootless:          config.Rootless,
+		DisableSeccomp:    config.DisableSeccomp,
+		GuestHookPath:     config.GuestHookPath,
+		EnableAnnotations: config.EnableAnnotations,
+		ConfidentialGuest: config.ConfidentialGuest,
+	}
+}
+
 func getHypervisorInfo(config oci.RuntimeConfig) (HypervisorInfo, error) {
 	hypervisorPath := config.HypervisorConfig.HypervisorPath
 
@@ -305,6 +324,8 @@ func getHypervisorInfo(config oci.RuntimeConfig) (HypervisorInfo, error) {
 		}
 	}
 
+	securityInfo := getSecurityInfo(config.HypervisorConfig)
+
 	return HypervisorInfo{
 		Debug:             config.HypervisorConfig.Debug,
 		MachineType:       config.HypervisorConfig.HypervisorMachineType,
@@ -319,6 +340,7 @@ func getHypervisorInfo(config oci.RuntimeConfig) (HypervisorInfo, error) {
 		HotPlugVFIO:       config.HypervisorConfig.HotPlugVFIO,
 		ColdPlugVFIO:      config.HypervisorConfig.ColdPlugVFIO,
 		SocketPath:        socketPath,
+		SecurityInfo:      securityInfo,
 	}, nil
 }
 
