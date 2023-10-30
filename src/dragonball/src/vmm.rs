@@ -6,12 +6,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the THIRD-PARTY file.
 
+use std::fmt::Formatter;
 use std::os::unix::io::RawFd;
 use std::sync::{Arc, Mutex, RwLock};
 
 use dbs_utils::epoll_manager::EpollManager;
 use log::{error, info, warn};
 use seccompiler::BpfProgram;
+use tracing::instrument;
 use vmm_sys_util::eventfd::EventFd;
 
 use crate::api::v1::{InstanceInfo, VmmService};
@@ -137,7 +139,11 @@ impl Vmm {
                     }
                     if v.event_ctx.exit_evt_triggered {
                         info!("Gracefully terminated VMM control loop");
-                        return v.stop(EXIT_CODE_OK as i32);
+                        let ret = v.stop(EXIT_CODE_OK as i32);
+                        let tracer = service.tracer();
+                        let mut tracer_guard = tracer.lock().unwrap();
+                        tracer_guard.end_tracing().expect("End tracing err");
+                        return ret;
                     }
                 }
                 Err(e) => {
@@ -154,6 +160,7 @@ impl Vmm {
     }
 
     /// Waits for all vCPUs to exit and terminates the Dragonball process.
+    #[instrument(name = "stop vmm")]
     fn stop(&mut self, exit_code: i32) -> i32 {
         info!("Vmm is stopping.");
         if let Some(vm) = self.get_vm_mut() {
@@ -191,6 +198,17 @@ impl Vmm {
         }
 
         exit_code
+    }
+}
+
+impl std::fmt::Debug for Vmm {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Vmm")
+            .field("event_ctx", &self.event_ctx)
+            .field("vm", &self.vm.shared_info())
+            .field("vcpu_seccomp_filter", &self.vcpu_seccomp_filter)
+            .field("vmm_seccomp_filter", &self.vmm_seccomp_filter)
+            .finish()
     }
 }
 
