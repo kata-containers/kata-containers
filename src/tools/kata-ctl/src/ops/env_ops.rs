@@ -150,6 +150,21 @@ pub struct ImageInfo {
     path: String,
 }
 
+// SecurityInfo stores the hypervisor security details
+#[derive(Debug, Default, Deserialize, Serialize)]
+pub struct SecurityInfo {
+    #[serde(default)]
+    rootless: bool,
+    #[serde(default)]
+    disable_seccomp: bool,
+    #[serde(default)]
+    guest_hook_path: String,
+    #[serde(default)]
+    enable_annotations: Vec<String>,
+    #[serde(default)]
+    confidential_guest: bool,
+}
+
 // HypervisorInfo stores hypervisor details
 #[derive(Debug, Default, Deserialize, Serialize)]
 pub struct HypervisorInfo {
@@ -187,6 +202,8 @@ pub struct HypervisorInfo {
     default_vcpus: i32,
     #[serde(default)]
     cpu_features: String,
+    #[serde(default)]
+    security_info: SecurityInfo,
 }
 
 // EnvInfo collects all information that will be displayed by the
@@ -374,6 +391,14 @@ pub fn get_hypervisor_info(
     let version =
         get_command_version(&hypervisor_config.path).context("error getting hypervisor version")?;
 
+    let security_info = SecurityInfo {
+        rootless: hypervisor_config.security_info.rootless,
+        disable_seccomp: hypervisor_config.security_info.disable_seccomp,
+        guest_hook_path: hypervisor_config.security_info.guest_hook_path.clone(),
+        enable_annotations: hypervisor_config.security_info.enable_annotations.clone(),
+        confidential_guest: hypervisor_config.security_info.confidential_guest,
+    };
+
     let hypervisor_info = HypervisorInfo {
         machine_type: hypervisor_config.machine_info.machine_type.to_string(),
         machine_accelerators: hypervisor_config
@@ -402,6 +427,7 @@ pub fn get_hypervisor_info(
         enable_iommu_platform: hypervisor_config.device_info.enable_iommu_platform,
         default_vcpus: hypervisor_config.cpu_info.default_vcpus,
         cpu_features: hypervisor_config.cpu_info.cpu_features.to_string(),
+        security_info,
     };
 
     let image_info = ImageInfo {
