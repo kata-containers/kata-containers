@@ -25,6 +25,7 @@ pub(crate) const EPOLL_EVENT_EXIT: u32 = 0;
 pub(crate) const EPOLL_EVENT_API_REQUEST: u32 = 1;
 
 /// Shared information between vmm::vmm_thread_event_loop() and VmmEpollHandler.
+#[derive(Debug)]
 pub(crate) struct EventContext {
     pub api_event_fd: EventFd,
     pub api_event_triggered: bool,

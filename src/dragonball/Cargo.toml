@@ -23,6 +23,7 @@ dbs-legacy-devices = { path = "./src/dbs_legacy_devices" }
 dbs-upcall = { path = "./src/dbs_upcall" , optional = true }
 dbs-utils = { path = "./src/dbs_utils" }
 dbs-virtio-devices = { path = "./src/dbs_virtio_devices", optional = true, features = ["virtio-mmio"] }
+derivative = "2.2.0"
 kvm-bindings = "0.6.0"
 kvm-ioctls = "0.12.0"
 lazy_static = "1.2"
@@ -39,6 +40,7 @@ serde_json = "1.0.9"
 slog = "2.5.2"
 slog-scope = "4.4.0"
 thiserror = "1"
+tracing = "0.1.37"
 vmm-sys-util = "0.11.0"
 virtio-queue = { version = "0.7.0", optional = true }
 vm-memory = { version = "0.10.0", features = ["backend-mmap"] }
