@@ -4,7 +4,7 @@ use containerd_snapshots::{api, Info, Kind, Snapshotter, Usage};
 use log::{debug, info, trace};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
-use std::{collections::HashMap, fs, fs::OpenOptions, io, io::Seek};
+use std::{collections::HashMap, fs, fs::OpenOptions, io, io::Seek, os::unix::ffi::OsStrExt};
 use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 use tokio::sync::RwLock;
 use tonic::Status;
@@ -488,7 +488,11 @@ impl Snapshotter for TarDevSnapshotter {
 
 /// Converts the given name to a string representation of its sha256 hash.
 fn name_to_hash(name: &str) -> String {
+    let path = Path::new(name);
     let mut hasher = Sha256::new();
-    hasher.update(name);
+    match path.file_name() {
+        Some(n) => hasher.update(n.as_bytes()),
+        None => hasher.update(name),
+    }
     format!("{:x}", hasher.finalize())
 }
