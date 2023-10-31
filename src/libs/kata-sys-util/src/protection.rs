@@ -152,7 +152,7 @@ pub fn arch_guest_protection(
 
         let major_version_str = major_version_str.trim_start_matches(HEX_PREFIX);
 
-        let major_version = u32::from_str_radix(&major_version_str, HEX_BASE)
+        let major_version = u32::from_str_radix(major_version_str, HEX_BASE)
             .map_err(|e| ProtectionError::FileInvalid(major_file, anyhow!(e)))?;
 
         let minor_version_str = std::fs::read_to_string(minor_file.clone()).map_err(|e| {
@@ -161,7 +161,7 @@ pub fn arch_guest_protection(
 
         let minor_version_str = minor_version_str.trim_start_matches(HEX_PREFIX);
 
-        let minor_version = u32::from_str_radix(&minor_version_str, HEX_BASE)
+        let minor_version = u32::from_str_radix(minor_version_str, HEX_BASE)
             .map_err(|e| ProtectionError::FileInvalid(minor_file, anyhow!(e)))?;
 
         let details = TDXDetails {
