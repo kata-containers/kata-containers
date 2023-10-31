@@ -27,6 +27,7 @@ use kata_types::{
 use nix::mount::MsFlags;
 use persist::sandbox_persist::Persist;
 use std::{collections::HashSet, fs::create_dir_all};
+use tokio::sync::mpsc;
 
 const DRAGONBALL_KERNEL: &str = "vmlinux";
 const DRAGONBALL_ROOT_FS: &str = "rootfs";
@@ -71,7 +72,7 @@ pub struct DragonballInner {
 }
 
 impl DragonballInner {
-    pub fn new() -> DragonballInner {
+    pub fn new(tx: mpsc::Sender<i32>) -> DragonballInner {
         let mut capabilities = Capabilities::new();
         capabilities.set(
             CapabilityBits::BlockDeviceSupport
@@ -87,7 +88,7 @@ impl DragonballInner {
             pending_devices: vec![],
             state: VmmState::NotReady,
             jailed: false,
-            vmm_instance: VmmInstance::new(""),
+            vmm_instance: VmmInstance::new("", tx),
             run_dir: "".to_string(),
             cached_block_devices: Default::default(),
             capabilities,
@@ -350,7 +351,7 @@ impl DragonballInner {
 #[async_trait]
 impl Persist for DragonballInner {
     type State = HypervisorState;
-    type ConstructorArgs = ();
+    type ConstructorArgs = mpsc::Sender<i32>;
 
     /// Save a state of hypervisor
     async fn save(&self) -> Result<Self::State> {
@@ -370,7 +371,7 @@ impl Persist for DragonballInner {
 
     /// Restore hypervisor
     async fn restore(
-        _hypervisor_args: Self::ConstructorArgs,
+        hypervisor_args: Self::ConstructorArgs,
         hypervisor_state: Self::State,
     ) -> Result<Self> {
         Ok(DragonballInner {
@@ -381,7 +382,7 @@ impl Persist for DragonballInner {
             netns: hypervisor_state.netns,
             config: hypervisor_state.config,
             state: VmmState::NotReady,
-            vmm_instance: VmmInstance::new(""),
+            vmm_instance: VmmInstance::new("", hypervisor_args),
             run_dir: hypervisor_state.run_dir,
             pending_devices: vec![],
             cached_block_devices: hypervisor_state.cached_block_devices,

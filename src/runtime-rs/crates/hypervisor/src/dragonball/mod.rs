@@ -14,17 +14,18 @@ pub mod vmm_instance;
 
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_types::capabilities::Capabilities;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
-use tokio::sync::RwLock;
+use tokio::sync::{mpsc, Mutex, RwLock};
 use tracing::instrument;
 
 use crate::{DeviceType, Hypervisor, VcpuThreadIds};
 
 pub struct Dragonball {
     inner: Arc<RwLock<DragonballInner>>,
+    waiter: Mutex<mpsc::Receiver<i32>>,
 }
 
 impl std::fmt::Debug for Dragonball {
@@ -41,8 +42,10 @@ impl Default for Dragonball {
 
 impl Dragonball {
     pub fn new() -> Self {
+        let (tx, rx) = mpsc::channel(1);
         Self {
-            inner: Arc::new(RwLock::new(DragonballInner::new())),
+            inner: Arc::new(RwLock::new(DragonballInner::new(tx))),
+            waiter: Mutex::new(rx),
         }
     }
 
@@ -58,6 +61,16 @@ impl Hypervisor for Dragonball {
     async fn prepare_vm(&self, id: &str, netns: Option<String>) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.prepare_vm(id, netns).await
+    }
+
+    async fn wait_vm(&self) -> Result<i32> {
+        let mut rx = self.waiter.lock().await;
+        let exit_code = rx
+            .recv()
+            .await
+            .ok_or("no exit_code config for CH")
+            .map_err(|e| anyhow!(e))?;
+        Ok(exit_code)
     }
 
     #[instrument]
@@ -178,12 +191,14 @@ impl Persist for Dragonball {
     }
     /// Restore a component from a specified state.
     async fn restore(
-        hypervisor_args: Self::ConstructorArgs,
+        _hypervisor_args: Self::ConstructorArgs,
         hypervisor_state: Self::State,
     ) -> Result<Self> {
-        let inner = DragonballInner::restore(hypervisor_args, hypervisor_state).await?;
+        let (tx, rx) = mpsc::channel::<i32>(1);
+        let inner = DragonballInner::restore(tx, hypervisor_state).await?;
         Ok(Self {
             inner: Arc::new(RwLock::new(inner)),
+            waiter: Mutex::new(rx),
         })
     }
 }

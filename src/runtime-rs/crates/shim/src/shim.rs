@@ -31,11 +31,6 @@ impl ShimExecutor {
         ShimExecutor { args }
     }
 
-    pub(crate) fn load_oci_spec(&self, path: &Path) -> Result<oci::Spec> {
-        let spec_file = path.join(oci::OCI_SPEC_CONFIG_FILE_NAME);
-        oci::Spec::load(spec_file.to_str().unwrap_or_default()).context("load spec")
-    }
-
     pub(crate) fn write_address(&self, path: &Path, address: &Path) -> Result<()> {
         let file_path = &path.join("address");
         std::fs::write(file_path, address.as_os_str().as_bytes())

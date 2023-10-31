@@ -11,17 +11,23 @@ use agent::types::KernelModule;
 use agent::{self, Agent, GetIPTablesRequest, SetIPTablesRequest, VolumeStatsRequest};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use common::message::{Action, Message};
-use common::{Sandbox, SandboxNetworkEnv};
+use common::{
+    message::{Action, Message},
+    types::{SandboxConfig, SandboxExitInfo},
+    Sandbox, SandboxNetworkEnv, SandboxStatus,
+};
 use containerd_shim_protos::events::task::TaskOOM;
 use hypervisor::{dragonball::Dragonball, BlockConfig, Hypervisor, HYPERVISOR_DRAGONBALL};
 use hypervisor::{utils::get_hvsock_path, HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID};
 use kata_sys_util::hooks::HookStates;
 use kata_types::config::TomlConfig;
 use persist::{self, sandbox_persist::Persist};
-use resource::manager::ManagerArgs;
-use resource::network::{dan_config_path, DanNetworkConfig, NetworkConfig, NetworkWithNetNsConfig};
-use resource::{ResourceConfig, ResourceManager};
+use resource::{
+    manager::ManagerArgs,
+    network::{dan_config_path, DanNetworkConfig, NetworkConfig, NetworkWithNetNsConfig},
+    ResourceConfig, ResourceManager,
+};
+use strum::Display;
 use tokio::sync::{mpsc::Sender, Mutex, RwLock};
 use tracing::instrument;
 
@@ -34,9 +40,10 @@ pub struct SandboxRestoreArgs {
     pub sender: Sender<Message>,
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug, Display)]
 pub enum SandboxState {
     Init,
+    Created,
     Running,
     Stopped,
 }
@@ -235,32 +242,26 @@ impl VirtSandbox {
 #[async_trait]
 impl Sandbox for VirtSandbox {
     #[instrument(name = "sb: start")]
-    async fn start(
-        &self,
-        dns: Vec<String>,
-        spec: &oci::Spec,
-        state: &oci::State,
-        network_env: SandboxNetworkEnv,
-    ) -> Result<()> {
+    async fn create(&self, sandbox_config: SandboxConfig) -> Result<()> {
         let id = &self.sid;
 
-        // if sandbox running, return
-        // if sandbox not running try to start sandbox
+        // if sandbox is not in SandboxState::Init then return,
+        // otherwise try to create sandbox
         let mut inner = self.inner.write().await;
-        if inner.state == SandboxState::Running {
-            warn!(sl!(), "sandbox is running, no need to start");
+        if inner.state != SandboxState::Init {
+            warn!(sl!(), "sandbox is created");
             return Ok(());
         }
 
         self.hypervisor
-            .prepare_vm(id, network_env.netns.clone())
+            .prepare_vm(id, sandbox_config.network_env.netns.clone())
             .await
             .context("prepare vm")?;
 
         // generate device and setup before start vm
         // should after hypervisor.prepare_vm
         let resources = self
-            .prepare_for_start_sandbox(id, network_env.clone())
+            .prepare_for_start_sandbox(id, sandbox_config.network_env.clone())
             .await?;
 
         self.resource_manager
@@ -273,12 +274,16 @@ impl Sandbox for VirtSandbox {
         info!(sl!(), "start vm");
 
         // execute pre-start hook functions, including Prestart Hooks and CreateRuntime Hooks
-        let (prestart_hooks, create_runtime_hooks) = match spec.hooks.as_ref() {
+        let (prestart_hooks, create_runtime_hooks) = match sandbox_config.hooks.as_ref() {
             Some(hooks) => (hooks.prestart.clone(), hooks.create_runtime.clone()),
             None => (Vec::new(), Vec::new()),
         };
-        self.execute_oci_hook_functions(&prestart_hooks, &create_runtime_hooks, state)
-            .await?;
+        self.execute_oci_hook_functions(
+            &prestart_hooks,
+            &create_runtime_hooks,
+            &sandbox_config.state,
+        )
+        .await?;
 
         // 1. if there are pre-start hook functions, network config might have been changed.
         //    We need to rescan the netns to handle the change.
@@ -289,7 +294,7 @@ impl Sandbox for VirtSandbox {
             && !config.runtime.disable_new_netns
             && !dan_config_path(&config, &self.sid).exists()
         {
-            if let Some(netns_path) = network_env.netns {
+            if let Some(netns_path) = &sandbox_config.network_env.netns {
                 let network_resource = NetworkConfig::NetNs(NetworkWithNetNsConfig {
                     network_model: config.runtime.internetworking_model.clone(),
                     netns_path: netns_path.to_owned(),
@@ -299,7 +304,7 @@ impl Sandbox for VirtSandbox {
                         .await
                         .network_info
                         .network_queues as usize,
-                    network_created: network_env.network_created,
+                    network_created: sandbox_config.network_env.network_created,
                 });
                 self.resource_manager
                     .handle_network(network_resource)
@@ -325,16 +330,17 @@ impl Sandbox for VirtSandbox {
         // create sandbox in vm
         let agent_config = self.agent.agent_config().await;
         let kernel_modules = KernelModule::set_kernel_modules(agent_config.kernel_modules)?;
+
         let req = agent::CreateSandboxRequest {
-            hostname: spec.hostname.clone(),
-            dns,
+            hostname: sandbox_config.hostname,
+            dns: sandbox_config.dns,
             storages: self
                 .resource_manager
                 .get_storage_for_sandbox()
                 .await
                 .context("get storages for sandbox")?,
             sandbox_pidns: false,
-            sandbox_id: id.to_string(),
+            sandbox_id: self.sid.clone(),
             guest_hook_path: self
                 .hypervisor
                 .hypervisor_config()
@@ -349,7 +355,22 @@ impl Sandbox for VirtSandbox {
             .await
             .context("create sandbox")?;
 
-        inner.state = SandboxState::Running;
+        inner.state = SandboxState::Created;
+
+        Ok(())
+    }
+
+    async fn start(&self) -> Result<()> {
+        let id = &self.sid;
+
+        // if sandbox running, return
+        // otherwise try to create sandbox
+        let mut inner = self.inner.write().await;
+        if inner.state != SandboxState::Created {
+            warn!(sl!(), "sandbox is started, no need to start");
+            return Ok(());
+        }
+
         let agent = self.agent.clone();
         let sender = self.msg_sender.clone();
         info!(sl!(), "oom watcher start");
@@ -384,8 +405,33 @@ impl Sandbox for VirtSandbox {
             }
         });
         self.monitor.start(id, self.agent.clone());
+        inner.state = SandboxState::Running;
+
         self.save().await.context("save state")?;
+
         Ok(())
+    }
+
+    async fn status(&self) -> Result<SandboxStatus> {
+        info!(sl!(), "get sandbox status");
+        let inner = self.inner.read().await;
+        let state = inner.state.to_string();
+
+        Ok(SandboxStatus {
+            sandbox_id: self.sid.clone(),
+            pid: std::process::id(),
+            state,
+            ..Default::default()
+        })
+    }
+
+    async fn wait(&self) -> Result<SandboxExitInfo> {
+        info!(sl!(), "wait sandbox");
+        let exit_code = self.hypervisor.wait_vm().await.context("wait vm")?;
+        Ok(SandboxExitInfo {
+            exit_status: exit_code as u32,
+            exited_at: Some(std::time::SystemTime::now()),
+        })
     }
 
     async fn stop(&self) -> Result<()> {
