@@ -44,6 +44,9 @@ pub struct VirtContainer {}
 #[async_trait]
 impl RuntimeHandler for VirtContainer {
     fn init() -> Result<()> {
+        // Before start logging with virt-container, regist it
+        logging::register_subsystem_logger("runtimes", "virt-container");
+
         // register
         let dragonball_config = Arc::new(DragonballConfig::new());
         register_hypervisor_plugin("dragonball", dragonball_config);

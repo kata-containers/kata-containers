@@ -23,6 +23,9 @@ impl ShimExecutor {
         let path = bundle_path.join("log");
         let _logger_guard =
             logger::set_logger(path.to_str().unwrap(), &sid, self.args.debug).context("set logger");
+        // Regist shim logger for later use.
+        logging::register_subsystem_logger("runtimes", "shim");
+
         if try_core_sched().is_err() {
             warn!(
                 sl!(),

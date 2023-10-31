@@ -62,6 +62,9 @@ impl ServiceManager {
         namespace: &str,
         task_server_fd: RawFd,
     ) -> Result<Self> {
+        // Regist service logger for later use.
+        logging::register_subsystem_logger("runtimes", "service");
+
         let (sender, receiver) = channel::<Message>(MESSAGE_BUFFER_SIZE);
         let rt_mgr = RuntimeHandlerManager::new(id, sender).context("new runtime handler")?;
         let handler = Arc::new(rt_mgr);

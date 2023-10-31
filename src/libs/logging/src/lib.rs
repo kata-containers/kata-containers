@@ -3,13 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+#[macro_use]
+extern crate lazy_static;
+use arc_swap::ArcSwap;
 use slog::{o, record_static, BorrowedKV, Drain, Key, OwnedKV, OwnedKVList, Record, KV};
 use std::collections::HashMap;
 use std::io;
 use std::io::Write;
 use std::process;
 use std::result;
-use std::sync::Mutex;
+use std::sync::Arc;
 
 mod file_rotate;
 mod log_writer;
@@ -17,12 +20,19 @@ mod log_writer;
 pub use file_rotate::FileRotator;
 pub use log_writer::LogWriter;
 
+lazy_static! {
+    pub static ref FILTER_RULE: ArcSwap<HashMap<String, slog::Level>> =
+        ArcSwap::from(Arc::new(HashMap::new()));
+    pub static ref LOGGERS: ArcSwap<HashMap<String, slog::Logger>> =
+        ArcSwap::from(Arc::new(HashMap::new()));
+}
+
 #[macro_export]
 macro_rules! logger_with_subsystem {
     ($name: ident, $subsystem: expr) => {
         macro_rules! $name {
                             () => {
-                                    slog_scope::logger().new(slog::o!("subsystem" => $subsystem))
+                                    slog::Logger::clone(logging::LOGGERS.load().get($subsystem).unwrap_or(&slog_scope::logger().new(slog::o!("subsystem" => $subsystem))))
                             };
                         }
     };
@@ -46,8 +56,19 @@ pub fn create_term_logger(level: slog::Level) -> (slog::Logger, slog_async::Asyn
     // Ensure only a unique set of key/value fields is logged
     let unique_drain = UniqueDrain::new(term_drain).fuse();
 
+    // Adjust the level which will be applied to the log-system
+    // Info is the default level, but if Debug flag is set, the overall log level will be changed to Debug here
+    FILTER_RULE.rcu(|inner| {
+        let mut updated_inner = HashMap::new();
+        updated_inner.clone_from(inner);
+        for v in updated_inner.values_mut() {
+            *v = level;
+        }
+        updated_inner
+    });
+
     // Allow runtime filtering of records by log level
-    let filter_drain = RuntimeLevelFilter::new(unique_drain, level).fuse();
+    let filter_drain = RuntimeComponentLevelFilter::new(unique_drain).fuse();
 
     // Ensure the logger is thread-safe
     let (async_drain, guard) = slog_async::Async::new(filter_drain)
@@ -79,8 +100,19 @@ where
     // Ensure only a unique set of key/value fields is logged
     let unique_drain = UniqueDrain::new(json_drain).fuse();
 
+    // Adjust the level which will be applied to the log-system
+    // Info is the default level, but if Debug flag is set, the overall log level will be changed to Debug here
+    FILTER_RULE.rcu(|inner| {
+        let mut updated_inner = HashMap::new();
+        updated_inner.clone_from(inner);
+        for v in updated_inner.values_mut() {
+            *v = level;
+        }
+        updated_inner
+    });
+
     // Allow runtime filtering of records by log level
-    let filter_drain = RuntimeLevelFilter::new(unique_drain, level).fuse();
+    let filter_drain = RuntimeComponentLevelFilter::new(unique_drain).fuse();
 
     // Ensure the logger is thread-safe
     let (async_drain, guard) = slog_async::Async::new(filter_drain)
@@ -124,6 +156,37 @@ pub fn slog_level_to_level_name(level: slog::Level) -> Result<&'static str, &'st
     }
 
     Err("invalid slog level")
+}
+
+pub fn register_component_logger(component_name: &str) {
+    let component = String::from(component_name);
+    LOGGERS.rcu(|inner| {
+        let mut updated_inner = HashMap::new();
+        updated_inner.clone_from(inner);
+        updated_inner.insert(
+            component_name.to_string(),
+            slog_scope::logger()
+                .new(slog::o!("component" => component.clone(), "subsystem" => component.clone())),
+        );
+        updated_inner
+    });
+}
+
+pub fn register_subsystem_logger(component_name: &str, subsystem_name: &str) {
+    let subsystem = String::from(subsystem_name);
+    LOGGERS.rcu(|inner| {
+        let mut updated_inner = HashMap::new();
+        updated_inner.clone_from(inner);
+        updated_inner.insert(
+            subsystem_name.to_string(),
+            // This will update the original `subsystem` field.
+            inner
+                .get(component_name)
+                .unwrap_or(&slog_scope::logger())
+                .new(slog::o!("subsystem" => subsystem.clone())),
+        );
+        updated_inner
+    });
 }
 
 // Used to convert an slog::OwnedKVList into a hash map.
@@ -216,23 +279,19 @@ where
     }
 }
 
-// A RuntimeLevelFilter will discard all log records whose log level is less than the level
-// specified in the struct.
-struct RuntimeLevelFilter<D> {
+// A RuntimeComponentLevelFilter will discard all log records whose log level is less than the level
+// specified in the struct according to the component it belongs to.
+struct RuntimeComponentLevelFilter<D> {
     drain: D,
-    level: Mutex<slog::Level>,
 }
 
-impl<D> RuntimeLevelFilter<D> {
-    fn new(drain: D, level: slog::Level) -> Self {
-        RuntimeLevelFilter {
-            drain,
-            level: Mutex::new(level),
-        }
+impl<D> RuntimeComponentLevelFilter<D> {
+    fn new(drain: D) -> Self {
+        RuntimeComponentLevelFilter { drain }
     }
 }
 
-impl<D> Drain for RuntimeLevelFilter<D>
+impl<D> Drain for RuntimeComponentLevelFilter<D>
 where
     D: Drain,
 {
@@ -244,9 +303,34 @@ where
         record: &slog::Record,
         values: &slog::OwnedKVList,
     ) -> result::Result<Self::Ok, Self::Err> {
-        let log_level = self.level.lock().unwrap();
+        let component_level_config = FILTER_RULE.load();
 
-        if record.level().is_at_least(*log_level) {
+        let mut logger_serializer = HashSerializer::new();
+        values
+            .serialize(record, &mut logger_serializer)
+            .expect("log values serialization failed");
+
+        let mut record_serializer = HashSerializer::new();
+        record
+            .kv()
+            .serialize(record, &mut record_serializer)
+            .expect("log record serialization failed");
+
+        let mut component = None;
+        for (k, v) in record_serializer
+            .fields
+            .iter()
+            .chain(logger_serializer.fields.iter())
+        {
+            if k == "component" {
+                component = Some(v.to_string());
+                break;
+            }
+        }
+        let according_level = component_level_config
+            .get(&component.unwrap_or(DEFAULT_SUBSYSTEM.to_string()))
+            .unwrap_or(&slog::Level::Info);
+        if record.level().is_at_least(*according_level) {
             self.drain.log(record, values)?;
         }
 
