@@ -55,7 +55,7 @@ generate_go_sources() {
 
     local root_path=$(realpath ../)/libs/protocols/protos
     local cmd="protoc -I$GOPATH/src:${root_path} \
---gogottrpc_out=plugins=ttrpc+fieldpath,paths=source_relative,\
+--gogottrpc_out=plugins=ttrpc,paths=source_relative,\
 Mgoogle/protobuf/empty.proto=github.com/gogo/protobuf/types\
 :$(realpath ../)/runtime/virtcontainers/pkg/agent/protocols/$dir_path \
 ${root_path}/$file_name"
