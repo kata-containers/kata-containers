@@ -6,7 +6,7 @@
 use super::super::common::{CgroupHierarchy, Properties};
 use super::transformer::Transformer;
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use oci::{LinuxCpu, LinuxResources};
 use zbus::zvariant::Value;
 
@@ -14,6 +14,7 @@ const BASIC_SYSTEMD_VERSION: &str = "242";
 const DEFAULT_CPUQUOTAPERIOD: u64 = 100 * 1000;
 const SEC2MICROSEC: u64 = 1000 * 1000;
 const BASIC_INTERVAL: u64 = 10 * 1000;
+const CGROUP_CPU_SHARES_MAX: u64 = 262144;
 
 pub struct Cpu {}
 
@@ -50,6 +51,12 @@ impl Cpu {
         systemd_version: &str,
     ) -> Result<()> {
         if let Some(shares) = cpu_resources.shares {
+            // Minimum value of CPUShares should be 2, see https://github.com/systemd/systemd/blob/d19434fbf81db04d03c8cffa87821f754a86635b/src/basic/cgroup-util.h#L122
+            let shares = match shares {
+                0 => 1024,
+                2..=CGROUP_CPU_SHARES_MAX => shares,
+                _ => bail!("Invalid CpuShares"),
+            };
             properties.push(("CPUShares", Value::U64(shares)));
         }
 
@@ -80,7 +87,7 @@ impl Cpu {
         systemd_version: &str,
     ) -> Result<()> {
         if let Some(shares) = cpu_resources.shares {
-            let weight = shares_to_weight(shares);
+            let weight = shares_to_weight(shares).unwrap();
             properties.push(("CPUWeight", Value::U64(weight)));
         }
 
@@ -104,12 +111,14 @@ impl Cpu {
 
 // ref: https://github.com/containers/crun/blob/main/crun.1.md#cgroup-v2
 // [2-262144] to [1-10000]
-fn shares_to_weight(shares: u64) -> u64 {
-    if shares == 0 {
-        return 100;
-    }
+fn shares_to_weight(shares: u64) -> Result<u64> {
+    let weight = match shares {
+        0 => 100,
+        1..=CGROUP_CPU_SHARES_MAX => 1 + ((shares - 2) * 9999) / 262142,
+        _ => bail!("Can't convert CpuShares to CpuWeight: invalid CpuShares"),
+    };
 
-    1 + ((shares - 2) * 9999) / 262142
+    Ok(weight)
 }
 
 fn resolve_cpuquota(quota: i64, period: u64) -> u64 {
