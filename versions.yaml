@@ -200,7 +200,7 @@ externals:
   attestation-agent:
     description: "Provide attested key unwrapping for image decryption"
     url: "https://github.com/confidential-containers/guest-components/"
-    version: "917d5cff1cf57e2555426b6dd8bf59dc3b7f0901"
+    version: "615a46ff16ee8670014946d14e44e85cede82f01"
 
   cni-plugins:
     description: "CNI network plugins"
@@ -332,7 +332,7 @@ externals:
     # yamllint disable-line rule:line-length
     description: "Confidential Containers Shim Firmware -- DO NOT TOUCH on main -> CCv0 merges"
     url: "https://github.com/confidential-containers/td-shim"
-    version: "4da7dfcdd9faabd1bf9a7dc144c0206939b6d383"
+    version: "3f18d9f3f51c9428c034cf01b45ab94bcd0d1622"
     toolchain: "nightly-2023-08-28"
 
   virtiofsd:
