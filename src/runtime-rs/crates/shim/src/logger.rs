@@ -37,5 +37,10 @@ pub(crate) fn set_logger(path: &str, sid: &str, is_debug: bool) -> Result<slog_a
     };
     slog_stdlog::init_with_level(level).context(format!("init with level {}", level))?;
 
+    // Regist component loggers for later use, there loggers are set directly by configuration
+    logging::register_component_logger("agent");
+    logging::register_component_logger("runtimes");
+    logging::register_component_logger("hypervisor");
+
     Ok(async_guard)
 }

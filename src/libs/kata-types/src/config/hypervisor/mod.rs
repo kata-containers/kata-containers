@@ -379,6 +379,17 @@ pub struct DebugInfo {
     #[serde(default)]
     pub enable_debug: bool,
 
+    /// The log log level will be applied to hypervisor.
+    /// Possible values are:
+    /// - trace
+    /// - debug
+    /// - info
+    /// - warn
+    /// - error
+    /// - critical
+    #[serde(default = "default_hypervisor_log_level")]
+    pub log_level: String,
+
     /// Enable dumping information about guest page structures if true.
     #[serde(default)]
     pub guest_memory_dump_paging: bool,
@@ -406,6 +417,10 @@ impl DebugInfo {
     pub fn validate(&self) -> Result<()> {
         Ok(())
     }
+}
+
+fn default_hypervisor_log_level() -> String {
+    String::from("info")
 }
 
 /// Virtual machine device configuration information.
