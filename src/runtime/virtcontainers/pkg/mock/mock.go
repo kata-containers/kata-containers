@@ -16,7 +16,7 @@ import (
 	"strings"
 
 	"github.com/containerd/ttrpc"
-	gpb "github.com/gogo/protobuf/types"
+	gpb "google.golang.org/protobuf/types/known/emptypb"
 	aTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	pb "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
 )
