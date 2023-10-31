@@ -54,11 +54,12 @@ generate_go_sources() {
     [ "$dir_path" == "$proto_file" ] && dir_path="."
 
     local root_path=$(realpath ../)/libs/protocols/protos
+    local output_path=$(realpath ../)/runtime/virtcontainers/pkg/agent/protocols/$dir_path
+    local mapping="Mgoogle/protobuf/empty.proto=google.golang.org/protobuf/types/known/emptypb"
     local cmd="protoc -I$GOPATH/src:${root_path} \
---gogottrpc_out=plugins=ttrpc,paths=source_relative,\
-Mgoogle/protobuf/empty.proto=github.com/gogo/protobuf/types\
-:$(realpath ../)/runtime/virtcontainers/pkg/agent/protocols/$dir_path \
-${root_path}/$file_name"
+    --go_out=paths=source_relative,$mapping:$output_path \
+    --go-ttrpc_out=paths=source_relative,$mapping:$output_path \
+    ${root_path}/$file_name"
 
     echo $cmd
     $cmd
@@ -81,8 +82,8 @@ fi;
 which protoc
 [ $? -eq 0 ] || die "Please install protoc from github.com/protocolbuffers/protobuf"
 
-which protoc-gen-gogottrpc
-[ $? -eq 0 ] || die "Please install protoc-gen-gogottrpc from https://github.com/containerd/ttrpc"
+which protoc-gen-go-ttrpc
+[ $? -eq 0 ] || die "Please install protoc-gen-go-ttrpc from https://github.com/containerd/ttrpc"
 
 [[ -n "$GOPATH" ]] || die "GOPATH is not set. Please set it."
 
