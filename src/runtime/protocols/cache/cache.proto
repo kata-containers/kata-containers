@@ -8,6 +8,8 @@ syntax = "proto3";
 
 package cache;
 
+option go_package = "./";
+
 import "google/protobuf/empty.proto";
 
 service CacheService {

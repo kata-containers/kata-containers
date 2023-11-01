@@ -15,7 +15,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gogo/protobuf/types"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/oci"
 	pb "github.com/kata-containers/kata-containers/src/runtime/protocols/cache"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
@@ -25,6 +24,7 @@ import (
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 var factorySubCmds = []cli.Command{
@@ -51,7 +51,7 @@ type cacheServer struct {
 var jsonVMConfig *pb.GrpcVMConfig
 
 // Config requests base factory config and convert it to gRPC protocol.
-func (s *cacheServer) Config(ctx context.Context, empty *types.Empty) (*pb.GrpcVMConfig, error) {
+func (s *cacheServer) Config(ctx context.Context, empty *emptypb.Empty) (*pb.GrpcVMConfig, error) {
 	if jsonVMConfig == nil {
 		config := s.factory.Config()
 
@@ -66,7 +66,7 @@ func (s *cacheServer) Config(ctx context.Context, empty *types.Empty) (*pb.GrpcV
 }
 
 // GetBaseVM requests a paused VM and convert it to gRPC protocol.
-func (s *cacheServer) GetBaseVM(ctx context.Context, empty *types.Empty) (*pb.GrpcVM, error) {
+func (s *cacheServer) GetBaseVM(ctx context.Context, empty *emptypb.Empty) (*pb.GrpcVM, error) {
 	config := s.factory.Config()
 
 	vm, err := s.factory.GetBaseVM(ctx, config)
@@ -83,16 +83,16 @@ func (s *cacheServer) quit() {
 }
 
 // Quit will stop VMCache server after 1 second.
-func (s *cacheServer) Quit(ctx context.Context, empty *types.Empty) (*types.Empty, error) {
+func (s *cacheServer) Quit(ctx context.Context, empty *emptypb.Empty) (*emptypb.Empty, error) {
 	go func() {
 		kataLog.Info("VM cache server will stop after 1 second")
 		time.Sleep(time.Second)
 		s.quit()
 	}()
-	return &types.Empty{}, nil
+	return &emptypb.Empty{}, nil
 }
 
-func (s *cacheServer) Status(ctx context.Context, empty *types.Empty) (*pb.GrpcStatus, error) {
+func (s *cacheServer) Status(ctx context.Context, empty *emptypb.Empty) (*pb.GrpcStatus, error) {
 	stat := pb.GrpcStatus{
 		Pid:      int64(os.Getpid()),
 		Vmstatus: s.factory.GetVMStatus(),
@@ -241,7 +241,7 @@ var destroyFactoryCommand = cli.Command{
 				return errors.Wrapf(err, "failed to connect %q", runtimeConfig.FactoryConfig.VMCacheEndpoint)
 			}
 			defer conn.Close()
-			_, err = pb.NewCacheServiceClient(conn).Quit(ctx, &types.Empty{})
+			_, err = pb.NewCacheServiceClient(conn).Quit(ctx, &emptypb.Empty{})
 			if err != nil {
 				return errors.Wrapf(err, "failed to call gRPC Quit")
 			}
@@ -291,7 +291,7 @@ var statusFactoryCommand = cli.Command{
 				fmt.Fprintln(defaultOutputFile, errors.Wrapf(err, "failed to connect %q", runtimeConfig.FactoryConfig.VMCacheEndpoint))
 			} else {
 				defer conn.Close()
-				status, err := pb.NewCacheServiceClient(conn).Status(ctx, &types.Empty{})
+				status, err := pb.NewCacheServiceClient(conn).Status(ctx, &emptypb.Empty{})
 				if err != nil {
 					fmt.Fprintln(defaultOutputFile, errors.Wrapf(err, "failed to call gRPC Status\n"))
 				} else {

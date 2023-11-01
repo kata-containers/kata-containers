@@ -24,12 +24,12 @@ import (
 	cdshim "github.com/containerd/containerd/runtime/v2/shim"
 	taskAPI "github.com/containerd/containerd/runtime/v2/task"
 	"github.com/containerd/typeurl"
-	ptypes "github.com/gogo/protobuf/types"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	otelTrace "go.opentelemetry.io/otel/trace"
 	"golang.org/x/sys/unix"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
@@ -57,7 +57,7 @@ const (
 )
 
 var (
-	empty                     = &ptypes.Empty{}
+	empty                     = &emptypb.Empty{}
 	_     taskAPI.TaskService = (taskAPI.TaskService)(&service{})
 )
 
@@ -544,7 +544,7 @@ func (s *service) Delete(ctx context.Context, r *taskAPI.DeleteRequest) (_ *task
 }
 
 // Exec an additional process inside the container
-func (s *service) Exec(ctx context.Context, r *taskAPI.ExecProcessRequest) (_ *ptypes.Empty, err error) {
+func (s *service) Exec(ctx context.Context, r *taskAPI.ExecProcessRequest) (_ *emptypb.Empty, err error) {
 	shimLog.WithField("container", r.ID).Debug("Exec() start")
 	defer shimLog.WithField("container", r.ID).Debug("Exec() end")
 	span, _ := katatrace.Trace(s.rootCtx, shimLog, "Exec", shimTracingTags)
@@ -584,7 +584,7 @@ func (s *service) Exec(ctx context.Context, r *taskAPI.ExecProcessRequest) (_ *p
 }
 
 // ResizePty of a process
-func (s *service) ResizePty(ctx context.Context, r *taskAPI.ResizePtyRequest) (_ *ptypes.Empty, err error) {
+func (s *service) ResizePty(ctx context.Context, r *taskAPI.ResizePtyRequest) (_ *emptypb.Empty, err error) {
 	shimLog.WithField("container", r.ID).Debug("ResizePty() start")
 	defer shimLog.WithField("container", r.ID).Debug("ResizePty() end")
 	span, spanCtx := katatrace.Trace(s.rootCtx, shimLog, "ResizePty", shimTracingTags)
@@ -681,7 +681,7 @@ func (s *service) State(ctx context.Context, r *taskAPI.StateRequest) (_ *taskAP
 }
 
 // Pause the container
-func (s *service) Pause(ctx context.Context, r *taskAPI.PauseRequest) (_ *ptypes.Empty, err error) {
+func (s *service) Pause(ctx context.Context, r *taskAPI.PauseRequest) (_ *emptypb.Empty, err error) {
 	shimLog.WithField("container", r.ID).Debug("Pause() start")
 	defer shimLog.WithField("container", r.ID).Debug("Pause() end")
 	span, spanCtx := katatrace.Trace(s.rootCtx, shimLog, "Pause", shimTracingTags)
@@ -722,7 +722,7 @@ func (s *service) Pause(ctx context.Context, r *taskAPI.PauseRequest) (_ *ptypes
 }
 
 // Resume the container
-func (s *service) Resume(ctx context.Context, r *taskAPI.ResumeRequest) (_ *ptypes.Empty, err error) {
+func (s *service) Resume(ctx context.Context, r *taskAPI.ResumeRequest) (_ *emptypb.Empty, err error) {
 	shimLog.WithField("container", r.ID).Debug("Resume() start")
 	defer shimLog.WithField("container", r.ID).Debug("Resume() end")
 	span, spanCtx := katatrace.Trace(s.rootCtx, shimLog, "Resume", shimTracingTags)
@@ -761,7 +761,7 @@ func (s *service) Resume(ctx context.Context, r *taskAPI.ResumeRequest) (_ *ptyp
 }
 
 // Kill a process with the provided signal
-func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *ptypes.Empty, err error) {
+func (s *service) Kill(ctx context.Context, r *taskAPI.KillRequest) (_ *emptypb.Empty, err error) {
 	shimLog.WithField("container", r.ID).Debug("Kill() start")
 	defer shimLog.WithField("container", r.ID).Debug("Kill() end")
 	span, spanCtx := katatrace.Trace(s.rootCtx, shimLog, "Kill", shimTracingTags)
@@ -851,7 +851,7 @@ func (s *service) Pids(ctx context.Context, r *taskAPI.PidsRequest) (_ *taskAPI.
 }
 
 // CloseIO of a process
-func (s *service) CloseIO(ctx context.Context, r *taskAPI.CloseIORequest) (_ *ptypes.Empty, err error) {
+func (s *service) CloseIO(ctx context.Context, r *taskAPI.CloseIORequest) (_ *emptypb.Empty, err error) {
 	shimLog.WithField("container", r.ID).Debug("CloseIO() start")
 	defer shimLog.WithField("container", r.ID).Debug("CloseIO() end")
 	span, _ := katatrace.Trace(s.rootCtx, shimLog, "CloseIO", shimTracingTags)
@@ -894,7 +894,7 @@ func (s *service) CloseIO(ctx context.Context, r *taskAPI.CloseIORequest) (_ *pt
 }
 
 // Checkpoint the container
-func (s *service) Checkpoint(ctx context.Context, r *taskAPI.CheckpointTaskRequest) (_ *ptypes.Empty, err error) {
+func (s *service) Checkpoint(ctx context.Context, r *taskAPI.CheckpointTaskRequest) (_ *emptypb.Empty, err error) {
 	shimLog.WithField("container", r.ID).Debug("Checkpoint() start")
 	defer shimLog.WithField("container", r.ID).Debug("Checkpoint() end")
 	span, _ := katatrace.Trace(s.rootCtx, shimLog, "Checkpoint", shimTracingTags)
@@ -932,7 +932,7 @@ func (s *service) Connect(ctx context.Context, r *taskAPI.ConnectRequest) (_ *ta
 	}, nil
 }
 
-func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (_ *ptypes.Empty, err error) {
+func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (_ *emptypb.Empty, err error) {
 	shimLog.WithField("container", r.ID).Debug("Shutdown() start")
 	defer shimLog.WithField("container", r.ID).Debug("Shutdown() end")
 	span, _ := katatrace.Trace(s.rootCtx, shimLog, "Shutdown", shimTracingTags)
@@ -1009,7 +1009,7 @@ func (s *service) Stats(ctx context.Context, r *taskAPI.StatsRequest) (_ *taskAP
 }
 
 // Update a running container
-func (s *service) Update(ctx context.Context, r *taskAPI.UpdateTaskRequest) (_ *ptypes.Empty, err error) {
+func (s *service) Update(ctx context.Context, r *taskAPI.UpdateTaskRequest) (_ *emptypb.Empty, err error) {
 	shimLog.WithField("container", r.ID).Debug("Update() start")
 	defer shimLog.WithField("container", r.ID).Debug("Update() end")
 	span, spanCtx := katatrace.Trace(s.rootCtx, shimLog, "Update", shimTracingTags)
