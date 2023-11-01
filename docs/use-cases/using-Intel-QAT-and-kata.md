@@ -20,7 +20,7 @@ kernel and custom Kata Containers rootfs.
 
 ## Helpful Links before starting
 
-[Intel® QuickAssist Technology at `01.org`](https://01.org/intel-quickassist-technology)
+[Intel® QuickAssist Technology at `01.org`](https://www.intel.com/content/www/us/en/developer/topic-technology/open/quick-assist-technology/overview.html)
 
 [Intel® QuickAssist Technology Engine for OpenSSL](https://github.com/intel/QAT_Engine)
 
@@ -42,7 +42,7 @@ needed to point to updated drivers or different install locations.
 
 ### Set environment variables (Every Reboot)
 
-Make sure to check [`01.org`](https://01.org/intel-quickassist-technology) for 
+Make sure to check [`01.org`](https://www.intel.com/content/www/us/en/developer/topic-technology/open/quick-assist-technology/overview.html) for
 the latest driver.
 
 ```bash
@@ -89,7 +89,7 @@ $ sudo reboot
 
 ### Download Intel® QAT drivers
 
-This will download the [Intel® QAT drivers](https://01.org/intel-quickassist-technology). 
+This will download the [Intel® QAT drivers](https://www.intel.com/content/www/us/en/developer/topic-technology/open/quick-assist-technology/overview.html). 
 Make sure to check the website for the latest version.
 
 ```bash
@@ -107,7 +107,7 @@ This section starts from a base config file and changes the `SSL` section to
 `SHIM` to support the OpenSSL engine. There are more tweaks that you can make
 depending on the use case and how many Intel® QAT engines should be run. You
 can find more information about how to customize in the 
-[Intel® QuickAssist Technology Software for Linux* - Programmer's Guide.](https://01.org/sites/default/files/downloads/336210qatswprogrammersguiderev006.pdf) 
+[Intel® QuickAssist Technology Software for Linux* - Programmer's Guide.](https://www.intel.com/content/www/us/en/content-details/709196/intel-quickassist-technology-api-programmer-s-guide.html)
 
 > **Note: This section assumes that a Intel® QAT `c6xx` platform is used.**
 
