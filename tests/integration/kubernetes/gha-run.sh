@@ -10,6 +10,7 @@ set -o pipefail
 
 kubernetes_dir="$(dirname "$(readlink -f "$0")")"
 source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
+source "${kubernetes_dir}/../../functional/kata-deploy/lib.sh"
 # shellcheck disable=2154
 tools_dir="${repo_root_dir}/tools"
 
@@ -134,7 +135,12 @@ function deploy_kata() {
     else
         kubectl apply -f "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
     fi
-    kubectl -n kube-system wait --timeout="${KATA_DEPLOY_WAIT_TIMEOUT}" --for=condition=Ready -l name=kata-deploy pod
+    kubectl -n kube-system wait --timeout="${KATA_DEPLOY_WAIT_TIMEOUT}" \
+        --for=condition=Ready -l name=kata-deploy pod || {
+            echo "kata-deploy is not ready after ${KATA_DEPLOY_WAIT_TIMEOUT}. Debugging...";
+            debug_kata_deploy;
+            return 1;
+        }
 
     # This is needed as the kata-deploy pod will be set to "Ready" when it starts running,
     # which may cause issues like not having the node properly labeled or the artefacts

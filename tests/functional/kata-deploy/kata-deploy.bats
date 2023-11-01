@@ -6,6 +6,7 @@
 #
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
+load "${BATS_TEST_DIRNAME}/lib.sh"
 
 setup() {
 	repo_root_dir="${BATS_TEST_DIRNAME}/../../../"
@@ -76,7 +77,7 @@ setup() {
 }
 
 teardown() {
-	kubectl get runtimeclasses -o name | grep -v "kata-mshv-vm-isolation"
+	debug_kata_deploy
 
 	if [ "${KUBERNETES}" = "k0s" ]; then
 		deploy_spec="-k \"${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/overlays/k0s\""
