@@ -10,7 +10,7 @@ import (
 	"context"
 	"fmt"
 
-	types "github.com/gogo/protobuf/types"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 	pb "github.com/kata-containers/kata-containers/src/runtime/protocols/cache"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/factory/base"
@@ -31,7 +31,7 @@ func New(ctx context.Context, endpoint string) (base.FactoryBase, error) {
 		return nil, errors.Wrapf(err, "failed to connect %q", endpoint)
 	}
 
-	jConfig, err := pb.NewCacheServiceClient(conn).Config(ctx, &types.Empty{})
+	jConfig, err := pb.NewCacheServiceClient(conn).Config(ctx, &emptypb.Empty{})
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to Config")
 	}
@@ -52,7 +52,7 @@ func (g *grpccache) Config() vc.VMConfig {
 // GetBaseVM create a new VM directly.
 func (g *grpccache) GetBaseVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error) {
 	defer g.conn.Close()
-	gVM, err := pb.NewCacheServiceClient(g.conn).GetBaseVM(ctx, &types.Empty{})
+	gVM, err := pb.NewCacheServiceClient(g.conn).GetBaseVM(ctx, &emptypb.Empty{})
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to GetBaseVM")
 	}
