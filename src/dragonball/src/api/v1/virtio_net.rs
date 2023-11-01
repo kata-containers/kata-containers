@@ -19,9 +19,11 @@ use crate::device_manager::virtio_net_dev_mgr;
 /// An enum to specify a backend of Virtio network
 pub enum Backend {
     #[serde(rename = "virtio")]
+    #[cfg(feature = "virtio-net")]
     /// Virtio-net
     Virtio(VirtioConfig),
     #[serde(rename = "vhost")]
+    #[cfg(feature = "vhost-net")]
     /// Vhost-net
     Vhost(VirtioConfig),
 }
@@ -79,7 +81,9 @@ impl From<NetworkInterfaceConfig> for VirtioNetDeviceConfigInfo {
 #[cfg(feature = "virtio-net")]
 impl From<&NetworkInterfaceConfig> for VirtioNetDeviceConfigInfo {
     fn from(value: &NetworkInterfaceConfig) -> Self {
-        let queue_size = value.queue_size.unwrap_or(virtio_net_dev_mgr::QUEUE_SIZE);
+        let queue_size = value
+            .queue_size
+            .unwrap_or(virtio_net_dev_mgr::DEFAULT_QUEUE_SIZE);
 
         // It is safe because we tested the type of config before.
         let config = match &value.backend {
@@ -90,7 +94,7 @@ impl From<&NetworkInterfaceConfig> for VirtioNetDeviceConfigInfo {
         Self {
             iface_id: config.iface_id.clone(),
             host_dev_name: config.host_dev_name.clone(),
-            num_queues: virtio_net_dev_mgr::NUM_QUEUES,
+            num_queues: virtio_net_dev_mgr::DEFAULT_NUM_QUEUES,
             queue_size,
             guest_mac: value.guest_mac,
             rx_rate_limiter: config.rx_rate_limiter.clone(),
@@ -113,8 +117,12 @@ impl From<NetworkInterfaceConfig> for VhostNetDeviceConfigInfo {
 #[cfg(feature = "vhost-net")]
 impl From<&NetworkInterfaceConfig> for VhostNetDeviceConfigInfo {
     fn from(value: &NetworkInterfaceConfig) -> Self {
-        let num_queues = value.num_queues.unwrap_or(vhost_net_dev_mgr::NUM_QUEUES);
-        let queue_size = value.queue_size.unwrap_or(vhost_net_dev_mgr::QUEUE_SIZE);
+        let num_queues = value
+            .num_queues
+            .unwrap_or(vhost_net_dev_mgr::DEFAULT_NUM_QUEUES);
+        let queue_size = value
+            .queue_size
+            .unwrap_or(vhost_net_dev_mgr::DEFAULT_QUEUE_SIZE);
 
         // It is safe because we tested the type of config before.
         let config = match &value.backend {
