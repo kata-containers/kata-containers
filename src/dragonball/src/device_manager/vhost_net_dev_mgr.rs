@@ -17,9 +17,9 @@ use crate::address_space_manager::{GuestAddressSpaceImpl, GuestRegionImpl};
 use crate::config_manager::{ConfigItem, DeviceConfigInfos};
 
 /// Default number of virtio queues, one rx/tx pair.
-pub const NUM_QUEUES: usize = 2;
+pub const DEFAULT_NUM_QUEUES: usize = 2;
 /// Default size of virtio queues.
-pub const QUEUE_SIZE: u16 = 256;
+pub const DEFAULT_QUEUE_SIZE: u16 = 256;
 // The flag of whether to use the shared irq.
 const USE_SHARED_IRQ: bool = true;
 // The flag of whether to use the generic irq.
@@ -96,12 +96,12 @@ impl VhostNetDeviceConfigInfo {
         let queue_size = if self.queue_size > 0 {
             self.queue_size
         } else {
-            QUEUE_SIZE
+            DEFAULT_QUEUE_SIZE
         };
         let num_queues = if self.num_queues > 0 {
             self.num_queues
         } else {
-            NUM_QUEUES
+            DEFAULT_NUM_QUEUES
         };
 
         (0..num_queues).map(|_| queue_size).collect()
