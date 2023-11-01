@@ -85,7 +85,7 @@ The `virtio-fs` client, running in the guest, will generate requests to access f
 to `mmap` it into the guest. When DAX is utilized, the guest will access the host's page cache, avoiding the need for copy and duplication. DAX is still an experimental feature,
 and is not enabled by default.
 
-From the `virtiofsd` [documentation](https://qemu-project.gitlab.io/qemu/tools/virtiofsd.html): 
+From the `virtiofsd` [documentation](https://gitlab.com/virtio-fs/virtiofsd/-/blob/main/README.md):
 ```This program must be run as the root user. Upon startup the program will switch into a new file system namespace with the shared directory tree as its root. This prevents “file system escapes” due to symlinks and other file system objects that might lead to files outside the shared directory. The program also sandboxes itself using seccomp(2) to prevent ptrace(2) and other vectors that could allow an attacker to compromise the system after gaining control of the virtiofsd process.```
 
 DAX-less support for `virtio-fs` is available as of the 5.4 Linux kernel. QEMU VMM supports virtio-fs as of v4.2. Cloud Hypervisor

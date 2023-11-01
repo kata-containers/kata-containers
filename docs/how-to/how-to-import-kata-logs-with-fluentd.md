@@ -115,7 +115,7 @@ Fluentd [systemd plugin](https://github.com/fluent-plugin-systemd/fluent-plugin-
 
 We modify the Fluentd config file with the following fragment. For reference, the Minikube
 YAML can be found
-[on GitHub](https://github.com/kubernetes/minikube/blob/master/deploy/addons/efk/fluentd-es-configmap.yaml.tmpl):
+[on GitHub](https://github.com/kubernetes/minikube/blob/master/deploy/addons/efk/fluentd-es-configmap.yaml):
 
 > **Note:** The below Fluentd config fragment is in the "older style" to match  the Minikube version of
 > Fluentd. If using a more up to date version of Fluentd, you may need to update some parameters, such as
