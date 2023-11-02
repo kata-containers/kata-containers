@@ -10,13 +10,13 @@ import (
 	"context"
 	"fmt"
 
-	emptypb "google.golang.org/protobuf/types/known/emptypb"
 	pb "github.com/kata-containers/kata-containers/src/runtime/protocols/cache"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/factory/base"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 type grpccache struct {

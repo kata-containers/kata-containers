@@ -13,10 +13,10 @@ import (
 
 	"github.com/containerd/containerd/api/types/task"
 	"github.com/containerd/containerd/errdefs"
-	"github.com/containerd/typeurl"
+	"github.com/containerd/typeurl/v2"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
-	anypb "google.golang.org/protobuf/types/known/anypb"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
+	anypb "google.golang.org/protobuf/types/known/anypb"
 )
 
 type exec struct {
@@ -126,7 +126,7 @@ func newExec(c *container, stdin, stdout, stderr string, terminal bool, jspec *a
 		exitIOch:    make(chan struct{}),
 		stdinCloser: make(chan struct{}),
 		exitCh:      make(chan uint32, 1),
-		status:      task.StatusCreated,
+		status:      task.Status_CREATED,
 	}
 
 	return exec, nil
