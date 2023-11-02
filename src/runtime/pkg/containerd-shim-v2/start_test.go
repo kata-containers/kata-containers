@@ -10,8 +10,8 @@ import (
 	"context"
 	"testing"
 
+	taskAPI "github.com/containerd/containerd/api/runtime/task/v2"
 	"github.com/containerd/containerd/namespaces"
-	taskAPI "github.com/containerd/containerd/runtime/v2/task"
 
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	vcAnnotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"

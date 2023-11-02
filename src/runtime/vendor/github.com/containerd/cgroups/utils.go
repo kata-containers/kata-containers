@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -200,7 +199,7 @@ func hugePageSizes() ([]string, error) {
 		pageSizes []string
 		sizeList  = []string{"B", "KB", "MB", "GB", "TB", "PB"}
 	)
-	files, err := ioutil.ReadDir("/sys/kernel/mm/hugepages")
+	files, err := os.ReadDir("/sys/kernel/mm/hugepages")
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +215,7 @@ func hugePageSizes() ([]string, error) {
 }
 
 func readUint(path string) (uint64, error) {
-	v, err := ioutil.ReadFile(path)
+	v, err := os.ReadFile(path)
 	if err != nil {
 		return 0, err
 	}
@@ -382,7 +381,7 @@ func retryingWriteFile(path string, data []byte, mode os.FileMode) error {
 	// Retry writes on EINTR; see:
 	//    https://github.com/golang/go/issues/38033
 	for {
-		err := ioutil.WriteFile(path, data, mode)
+		err := os.WriteFile(path, data, mode)
 		if err == nil {
 			return nil
 		} else if !errors.Is(err, syscall.EINTR) {

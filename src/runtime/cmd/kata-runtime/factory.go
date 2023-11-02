@@ -46,6 +46,7 @@ type cacheServer struct {
 	rpc     *grpc.Server
 	factory vc.Factory
 	done    chan struct{}
+	pb.UnimplementedCacheServiceServer
 }
 
 var jsonVMConfig *pb.GrpcVMConfig

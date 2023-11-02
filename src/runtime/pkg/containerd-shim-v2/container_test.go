@@ -8,7 +8,7 @@ package containerdshim
 import (
 	"testing"
 
-	taskAPI "github.com/containerd/containerd/runtime/v2/task"
+	taskAPI "github.com/containerd/containerd/api/runtime/task/v2"
 	"github.com/stretchr/testify/assert"
 )
 

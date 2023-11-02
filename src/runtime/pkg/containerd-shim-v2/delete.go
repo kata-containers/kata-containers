@@ -16,7 +16,7 @@ import (
 
 func deleteContainer(ctx context.Context, s *service, c *container) error {
 	if !c.cType.IsSandbox() {
-		if c.status != task.StatusStopped {
+		if c.status != task.Status_STOPPED {
 			if _, err := s.sandbox.StopContainer(ctx, c.id, false); err != nil && !isNotFound(err) {
 				return err
 			}
