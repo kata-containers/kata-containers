@@ -15,7 +15,7 @@ export repo_root_dir="$(cd "${this_script_dir}/../../../" && pwd)"
 
 short_commit_length=10
 
-hub_bin="hub-bin"
+gh_cli="gh-cli"
 
 #for cross build
 CROSS_BUILD=${CROSS_BUILD-:}
@@ -60,26 +60,6 @@ get_repo_hash() {
 	popd >>/dev/null
 }
 
-build_hub() {
-	info "Get hub"
-
-	if cmd=$(command -v hub); then
-		hub_bin="${cmd}"
-		return
-	else
-		hub_bin="${tmp_dir:-/tmp}/hub-bin"
-	fi
-
-	local hub_repo="github.com/github/hub"
-	local hub_repo_dir="${GOPATH}/src/${hub_repo}"
-	[ -d "${hub_repo_dir}" ] || git clone --quiet --depth 1 "https://${hub_repo}.git" "${hub_repo_dir}"
-	pushd "${hub_repo_dir}" >>/dev/null
-	git checkout master
-	git pull
-	./script/build -o "${hub_bin}"
-	popd >>/dev/null
-}
-
 arch_to_golang()
 {
 	local -r arch="$1"
@@ -91,6 +71,22 @@ arch_to_golang()
 		s390x) echo "s390x";;
 		*) die "unsupported architecture: $arch";;
 	esac
+}
+
+get_gh() {
+	info "Get gh"
+
+	if cmd=$(command -v gh); then
+		gh_cli="${cmd}"
+		return
+	else
+		gh_cli="${tmp_dir:-/tmp}/gh-cli"
+	fi
+
+	local goarch=$(arch_to_golang $(uname -m))
+	curl -sSL https://github.com/cli/cli/releases/download/v2.37.0/gh_2.37.0_linux_${goarch}.tar.gz | tar -xz
+	mv gh_2.37.0_linux_${goarch}/bin/gh "${gh_cli}"
+	rm -rf gh_2.37.0_linux_amd64
 }
 
 get_kata_hash() {

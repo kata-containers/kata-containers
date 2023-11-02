@@ -115,7 +115,6 @@ tag_repos() {
 	for repo in "${repos[@]}"; do
 		git clone --quiet "https://github.com/${OWNER}/${repo}.git"
 		pushd "${repo}" >>/dev/null
-		git remote set-url --push origin "git@github.com:${OWNER}/${repo}.git"
 		git fetch origin
 		git checkout "${branch}"
 		version_from_file=$(cat ./VERSION)
@@ -150,9 +149,13 @@ tag_repos() {
 
 push_tags() {
 	info "Pushing tags to repos"
-	build_hub
+	get_gh
 	for repo in "${repos[@]}"; do
 		pushd "${repo}" >>/dev/null
+		${gh_cli} repo set-default "${OWNER}/${repo}"
+		if [ $(${gh_cli} config get git_protocol) = ssh ]; then
+			git remote set-url --push origin "git@github.com:${OWNER}/${repo}.git"
+		fi
 		tag="$kata_version"
 		if [[ "packaging" == "${repo}" ]];then
 			ktag="${tag}-kernel-config"
@@ -175,13 +178,15 @@ create_github_release() {
 	tag=${2:-}
 	[ -d "${repo_dir}" ] || die "No repository directory"
 	[ -n "${tag}" ] || die "No tag specified"
-	if ! "${hub_bin}" release show "${tag}"; then
+	if ! "${gh_cli}" release view "${tag}"; then
 		info "Creating Github release"
 		if [[ "$tag" =~ "-rc" ]]; then
 			rc_args="-p"
 		fi
 		rc_args=${rc_args:-}
-		"${hub_bin}" -C "${repo_dir}" release create ${rc_args} -m "${PROJECT} ${tag}" "${tag}"
+		pushd "${repo_dir}"
+		"${gh_cli}" release create ${rc_args} --title "${PROJECT} ${tag}" "${tag}" --notes ""
+		popd
 	else
 		info "Github release already created"
 	fi

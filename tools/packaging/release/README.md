@@ -14,7 +14,7 @@ See [the release documentation](../../../docs/Release-Process.md).
 ### `update-repository-version.sh`
 
 This script creates a GitHub pull request (a.k.a PR) to change the version in
-all the Kata repositories.
+the Kata repository.
 
 For more information on using the script, run the following:
 
@@ -43,7 +43,4 @@ After Kata Containers repository is updated with a new version, it needs to be
 tagged.
 
 The `tag_repos.sh` script is used to create tags for the Kata Containers repository.
-The script creates an **annotated tag** for the new release version for the
-following repositories:
-
-- kata-containers
+The script creates an **annotated tag** for the new release version.
