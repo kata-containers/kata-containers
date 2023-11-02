@@ -291,6 +291,34 @@ impl VsockChannel for VsockMuxer {
         // Alright, everything looks in order - forward this packet to its
         // owning connection.
         let mut res: VsockResult<()> = Ok(());
+
+        // For the hybrid connection, if it want to keep the connection
+        // when the pipe peer closed, here it needs to update the epoll
+        // listner to catch the events.
+        let mut listener = None;
+        let conn = self.conn_map.get_mut(&conn_key).unwrap();
+        let pre_state = conn.state();
+        let nfd: RawFd = conn.as_raw_fd();
+
+        if pre_state == ConnState::LocalClosed && conn.keep() {
+            conn.state = ConnState::Established;
+            listener = Some(EpollListener::Connection {
+                key: conn_key,
+                evset: conn.get_polled_evset(),
+                backend: conn.stream.backend_type(),
+            });
+        }
+
+        if let Some(nlistener) = listener {
+            self.add_listener(nfd, nlistener).unwrap_or_else(|err| {
+                self.kill_connection(conn_key);
+                warn!(
+                    "vsock: error updating epoll listener for (lp={}, pp={}): {:?}",
+                    conn_key.local_port, conn_key.peer_port, err
+                );
+            });
+        }
+
         self.apply_conn_mutation(conn_key, |conn| {
             res = conn.send_pkt(pkt);
         });
@@ -396,6 +424,23 @@ impl VsockMuxer {
             // listening for it.
             Some(EpollListener::Connection { key, evset: _, .. }) => {
                 let key_copy = *key;
+
+                // If the hybrid connection's local peer closed, then the epoll handler wouldn't
+                // get the epollout event even when it's reopened again, thus it should be notified
+                // when the guest send any data to try to active the epoll handler to generate the
+                // epollout event for this connection.
+
+                let mut need_rm = false;
+                if let Some(conn) = self.conn_map.get_mut(&key_copy) {
+                    if event_set.contains(epoll::Events::EPOLLERR) && conn.keep() {
+                        conn.state = ConnState::LocalClosed;
+                        need_rm = true;
+                    }
+                }
+                if need_rm {
+                    self.remove_listener(fd);
+                }
+
                 // The handling of this event will most probably mutate the
                 // state of the receiving connection. We'll need to check for new
                 // pending RX, event set mutation, and all that, so we're
@@ -459,6 +504,7 @@ impl VsockMuxer {
                                         self.cid,
                                         local_port,
                                         peer_port,
+                                        false,
                                     ),
                                 )
                             }
@@ -476,8 +522,10 @@ impl VsockMuxer {
             Some(EpollListener::PassFdStream(_)) => {
                 if let Some(EpollListener::PassFdStream(mut stream)) = self.remove_listener(fd) {
                     Self::passfd_read_port_and_fd(&mut stream)
-                        .map(|(nfd, peer_port)| (nfd, self.allocate_local_port(), peer_port))
-                        .and_then(|(nfd, local_port, peer_port)| {
+                        .map(|(nfd, peer_port, keep)| {
+                            (nfd, self.allocate_local_port(), peer_port, keep)
+                        })
+                        .and_then(|(nfd, local_port, peer_port, keep)| {
                             // Here we should make sure the nfd the sole owner to convert it
                             // into an UnixStream object, otherwise, it could cause memory unsafety.
                             let nstream = unsafe { File::from_raw_fd(nfd) };
@@ -502,6 +550,7 @@ impl VsockMuxer {
                                     self.cid,
                                     local_port,
                                     peer_port,
+                                    keep,
                                 ),
                             )
                         })
@@ -587,7 +636,7 @@ impl VsockMuxer {
             .map_err(|_| Error::InvalidPortRequest)
     }
 
-    fn passfd_read_port_and_fd(stream: &mut Box<dyn VsockStream>) -> Result<(RawFd, u32)> {
+    fn passfd_read_port_and_fd(stream: &mut Box<dyn VsockStream>) -> Result<(RawFd, u32, bool)> {
         let mut buf = [0u8; 32];
         let mut fds = [0, 1];
         let (data_len, fd_len) = stream
@@ -607,7 +656,9 @@ impl VsockMuxer {
             .ok_or(Error::InvalidPortRequest)
             .and_then(|word| word.parse::<u32>().map_err(|_| Error::InvalidPortRequest))?;
 
-        Ok((fds[0], port))
+        let keep = port_iter.next().is_some_and(|kp| kp == "keep");
+
+        Ok((fds[0], port, keep))
     }
 
     /// Add a new connection to the active connection pool.
@@ -775,6 +826,7 @@ impl VsockMuxer {
                             pkt.dst_port(),
                             pkt.src_port(),
                             pkt.buf_alloc(),
+                            false,
                         ),
                     )
                 })
@@ -876,7 +928,7 @@ impl VsockMuxer {
                         );
                     });
                 }
-            } else {
+            } else if conn.state() != ConnState::LocalClosed {
                 // The connection had previously asked to be removed from the
                 // listener map (by returning an empty event set via
                 // `get_polled_fd()`), but now wants back in.
