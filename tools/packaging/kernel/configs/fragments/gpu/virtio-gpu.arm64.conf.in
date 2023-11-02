@@ -1,0 +1,6 @@
+CONFIG_DRM=y
+CONFIG_DRM_VIRTIO_GPU=y
+
+# Linux kernel version suffix
+CONFIG_LOCALVERSION="-virtio-gpu"
+

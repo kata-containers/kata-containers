@@ -116,6 +116,8 @@ type qemuArch interface {
 	// appendRNGDevice appends a RNG device to devices
 	appendRNGDevice(ctx context.Context, devices []govmmQemu.Device, rngDevice config.RNGDev) ([]govmmQemu.Device, error)
 
+	appendVirtGPUDevice(devices []govmmQemu.Device, config HypervisorConfig) ([]govmmQemu.Device, error)
+
 	// addDeviceToBridge adds devices to the bus
 	addDeviceToBridge(ctx context.Context, ID string, t types.Type) (string, types.Bridge, error)
 
@@ -726,6 +728,16 @@ func (q *qemuArchBase) appendRNGDevice(_ context.Context, devices []govmmQemu.De
 		},
 	)
 
+	return devices, nil
+}
+
+func (q *qemuArchBase) appendVirtGPUDevice(devices []govmmQemu.Device, config HypervisorConfig) ([]govmmQemu.Device, error) {
+	devices = append(devices,
+		govmmQemu.VirtioGPUDevice{
+			VirtioGPU: config.VirtioGPU,
+			Display:   config.Display,
+		},
+	)
 	return devices, nil
 }
 

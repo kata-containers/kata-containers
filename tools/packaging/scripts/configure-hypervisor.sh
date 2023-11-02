@@ -205,7 +205,6 @@ show_array() {
 
 	[ "$one_line" = yes ] && echo
 }
-
 generate_qemu_options() {
 	#---------------------------------------------------------------------
 	#check if cross-compile is needed
@@ -230,24 +229,34 @@ generate_qemu_options() {
 
 	# Don't build documentation
 	qemu_options+=(minimal:--disable-docs)
-
-	# Disable GUI (graphics)
-	qemu_options+=(size:--disable-curses)
-	qemu_options+=(size:--disable-gtk)
-	qemu_options+=(size:--disable-opengl)
-	qemu_options+=(size:--disable-sdl)
-	qemu_options+=(size:--disable-spice)
-	qemu_options+=(size:--disable-vte)
-
-	# Disable graphical network access
-	qemu_options+=(size:--disable-vnc)
-	qemu_options+=(size:--disable-vnc-jpeg)
-	if ! gt_eq "${qemu_version}" "7.0.50" ; then
-		qemu_options+=(size:--disable-vnc-png)
+	qemu_options+=(minimal:--disable-alsa)
+	qemu_options+=(minimal:--disable-pa)
+	qemu_options+=(size:--disable-xkbcommon)
+	if [ "${virgl}" == "true" ] ; then
+		qemu_options+=(size:--enable-gtk)
+		qemu_options+=(size:--enable-opengl)
+		qemu_options+=(size:--enable-sdl)
+		qemu_options+=(size:--enable-virglrenderer)
 	else
-		qemu_options+=(size:--disable-png)
-	fi
+	# Disable GUI (graphics)
+		qemu_options+=(size:--disable-curses)
+		qemu_options+=(size:--disable-gtk)
+		qemu_options+=(size:--disable-opengl)
+		qemu_options+=(size:--disable-sdl)
+		qemu_options+=(size:--disable-spice)
+		qemu_options+=(size:--disable-vte)
 
+		# Disable graphical network access
+		qemu_options+=(size:--disable-vnc)
+		qemu_options+=(size:--disable-vnc-jpeg)
+		if ! gt_eq "${qemu_version}" "7.0.50" ; then
+			qemu_options+=(size:--disable-vnc-png)
+		else
+			qemu_options+=(size:--disable-png)
+		fi
+		# Disable graphics
+		qemu_options+=(size:--disable-virglrenderer)
+	fi
 	qemu_options+=(size:--disable-vnc-sasl)
 
 	# Disable PAM authentication: it's a feature used together with VNC access
@@ -378,8 +387,7 @@ generate_qemu_options() {
 	# Disable Capstone
 	qemu_options+=(size:--disable-capstone)
 
-	# Disable graphics
-	qemu_options+=(size:--disable-virglrenderer)
+
 
 	# Disable block replication
 	qemu_options+=(size:--disable-replication)
@@ -515,7 +523,7 @@ generate_qemu_options() {
 main() {
 	action=""
 
-	while getopts "dhms" opt; do
+	while getopts "dhmsg" opt; do
 		case "$opt" in
 		d)
 			action="dump"
@@ -531,6 +539,9 @@ main() {
 			;;
 		s)
 			static="true"
+			;;
+		g)
+			virgl="true"
 			;;
 		esac
 	done

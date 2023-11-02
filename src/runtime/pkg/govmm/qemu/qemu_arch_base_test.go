@@ -12,6 +12,7 @@ import "testing"
 var (
 	deviceFSString                 = "-device virtio-9p-pci,disable-modern=true,fsdev=workload9p,mount_tag=rootfs,romfile=efi-virtio.rom -fsdev local,id=workload9p,path=/var/lib/docker/devicemapper/mnt/e31ebda2,security_model=none,multidevs=remap"
 	deviceNetworkString            = "-netdev tap,id=tap0,vhost=on,ifname=ceth0,downscript=no,script=no -device driver=virtio-net-pci,netdev=tap0,mac=01:02:de:ad:be:ef,bus=/pci-bus/pcie.0,addr=ff,disable-modern=true,romfile=efi-virtio.rom"
+	deviceGPUString                = "-display egl-headless -device virtio-gpu-gl-pci"
 	deviceNetworkStringMq          = "-netdev tap,id=tap0,vhost=on,fds=3:4 -device driver=virtio-net-pci,netdev=tap0,mac=01:02:de:ad:be:ef,bus=/pci-bus/pcie.0,addr=ff,disable-modern=true,mq=on,vectors=6,romfile=efi-virtio.rom"
 	deviceSerialString             = "-device virtio-serial-pci,disable-modern=true,id=serial0,romfile=efi-virtio.rom,max_ports=2"
 	deviceVhostUserNetString       = "-chardev socket,id=char1,path=/tmp/nonexistentsocket.socket -netdev type=vhost-user,id=net1,chardev=char1,vhostforce -device virtio-net-pci,netdev=net1,mac=00:11:22:33:44:55,romfile=efi-virtio.rom"

@@ -390,6 +390,11 @@ type HypervisorConfig struct {
 	// related folders, sockets and device nodes should be.
 	VhostUserStorePath string
 
+	// VirtioGPU is Virtio GPU device
+	VirtioGPU string
+	// Display is opengl support device using drm render nodes
+	Display string
+
 	// VhostUserDeviceReconnect is the timeout for reconnecting on non-server spdk sockets
 	// when the remote end goes away. Zero disables reconnecting.
 	VhostUserDeviceReconnect uint32
@@ -816,6 +821,10 @@ func (conf *HypervisorConfig) HypervisorAssetPath() (string, error) {
 
 func (conf *HypervisorConfig) IfPVPanicEnabled() bool {
 	return conf.GuestMemoryDumpPath != ""
+}
+
+func (conf *HypervisorConfig) IfPVirtioGPUEnabled() bool {
+	return conf.VirtioGPU != ""
 }
 
 // HypervisorCtlAssetPath returns the VM hypervisor ctl path
