@@ -147,21 +147,35 @@ github_get_release_file_url()
 	local version_number
 	version_number=${version#v}
 
-	local arch
-	arch=$(uname -m)
-	[ "$arch" = "x86_64" ] && arch="amd64"
+	# Create an array to store architecture names
+	local arches=()
+	local arch=$(uname -m)
 
+	arches+=("$arch")
+
+	case "${arch}" in
+		x86_64*)
+                        arches+=("amd64") ;;
+		aarch64*)
+                        arches+=("arm64") ;;
+		s390x*)
+                        arches+=("s390x") ;;
+		ppc64le*)
+                        arches+=("ppc64le") ;;
+		*)
+			die "Unsupported arch. Must be x86_64, arm64, s390x, or ppc64le." ;;
+	esac
+
+	# Create a regular expression for matching
 	local regex=""
+	local arch_regex=$(IFS='|'; echo "${arches[*]}")
+	arch_regex=$(printf "(%s)" "$arch_regex")
 
 	case "$url" in
 		*kata*)
-			regex="kata-static-${version}-${arch}.tar.xz"
-			;;
-
+			regex="kata-static-${version}-${arch_regex}.tar.xz" ;;
 		*containerd*)
-			regex="containerd-${version_number}-linux-${arch}.tar.gz"
-			;;
-
+			regex="containerd-${version_number}-linux-${arch_regex}.tar.gz" ;;
 		*) die "invalid url: '$url'" ;;
 	esac
 
@@ -172,7 +186,7 @@ github_get_release_file_url()
 		-r '.[] |
 			select( (.tag_name == $version) or (.tag_name == "v" + $version) ) |
 			.assets[].browser_download_url' |\
-			grep "/${regex}$")
+			grep -E "/${regex}$")
 
 	download_url=$(echo "$download_url" | awk '{print $1}')
 
@@ -383,7 +397,6 @@ github_download_package()
 	file=$(github_download_release \
 		"$releases_url" \
 		"$version")
-
 	echo "${version}:${file}"
 }
 
