@@ -62,4 +62,4 @@ For further details, see the [Virtualization in Kata Containers](design/virtuali
 [Firecracker]: https://github.com/firecracker-microvm/firecracker
 [KVM]: https://en.wikipedia.org/wiki/Kernel-based_Virtual_Machine
 [QEMU]: http://www.qemu-project.org
-[`Dragonball`]: https://github.com/openanolis/dragonball-sandbox
+[`Dragonball`]: https://github.com/kata-containers/kata-containers/blob/main/src/dragonball
