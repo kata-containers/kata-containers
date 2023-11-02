@@ -16,7 +16,9 @@ async fn passfd_connect(uds: &str, port: u32, fd: OwnedFd) -> Result<u32> {
     let mut stream = UnixStream::connect(&uds).await.context("connect")?;
     stream.write_all(b"passfd\n").await.context("write all")?;
 
-    let buf = format!("{}", port);
+    // We want the io connection keep connected when the containerd closed the io pipe,
+    // thus it can be attached on the io stream.
+    let buf = format!("{} keep", port);
     stream
         .send_with_fd(buf.as_bytes(), &[fd.as_raw_fd()])
         .context("send port and fd")?;
