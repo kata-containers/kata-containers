@@ -167,9 +167,6 @@ jobs:
           asc="${tarball}.asc"
           curl -sSLO "${download_url}/${tarball}"
           curl -sSLO "${download_url}/${asc}"
-          # "-m" option should be empty to re-use the existing release title
-          # without opening a text editor.
-          # For the details, check https://hub.github.com/hub-release.1.html.
           gh release upload "${tag}" "${tarball}"
           gh release upload "${tag}" "${asc}"
           popd
