@@ -341,7 +341,7 @@ check_deps()
 
 	case "$ID" in
 		centos|rhel) sudo yum -y install $packages ;;
-		debian|ubuntu) sudo apt-get -y install $packages ;;
+		debian|ubuntu) sudo apt-get update && sudo apt-get -y install $packages ;;
 		fedora) sudo dnf -y install $packages ;;
 		opensuse*|sles) sudo zypper install -y $packages ;;
 		*) die "Cannot automatically install packages on $ID, install $packages manually and re-run"
