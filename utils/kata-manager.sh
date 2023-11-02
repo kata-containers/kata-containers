@@ -244,6 +244,7 @@ Options:
                 Find more details on LTS and Active versions of containerd on
                 https://containerd.io/releases/#support-horizon
  -d           : Enable debug for all components.
+ -D           : Install Docker server and CLI tooling (takes priority over '-c').
  -f           : Force installation (use with care).
  -h           : Show this help statement.
  -k <version> : Specify Kata Containers version.
@@ -720,10 +721,41 @@ handle_containerd()
 	containerd --version
 }
 
+handle_docker()
+{
+	{ containerd_installed; ret=$?; } || true
+	if [ "$ret" -eq 0 ]
+	then
+		info "Backing up previous $containerd_project configuration"
+		local cfg="/etc/containerd/config.toml"
+
+		[ -e "$cfg" ] && sudo mv $cfg $cfg.system-$(date -Iseconds)
+	fi
+
+	containerd_installed
+
+	local filename='get-docker.sh'
+
+	local file
+	file="$tmpdir/$filename"
+
+	curl -fsSL https://get.docker.com -o "$file"
+	sudo sh "$file"
+
+	rm -rf "$file"
+
+	sudo systemctl enable --now docker
+
+	configure_containerd "$enable_debug"
+
+	containerd --version
+	docker --version
+}
+
 test_installation()
 {
 	local tool="${1:-}"
-	[ -z "$tool" ] && die "The tool to test $kata_project with was not informed"
+	[ -z "$tool" ] && die "The tool to test $kata_project with was not specified"
 
 	info "Testing $kata_project\n"
 
@@ -736,13 +768,24 @@ test_installation()
 
 	# Used to prove that the kernel in the container
 	# is different to the host kernel.
-	local container_kernel
-	container_kernel=$(sudo $tool run \
-		--runtime "$kata_runtime_type" \
-		--rm \
-		"$image" \
-		"$container_name" \
-		uname -r || true)
+	cmd="sudo $tool run --runtime "$kata_runtime_type" --rm"
+	case "$tool" in
+		docker)
+			# docker takes the container name as `--name
+			# $container_name`, passed to the run option.
+		       	cmd+=" --name $container_name" ;;
+	esac
+	cmd+=" $image"
+	case "$tool" in
+		ctr)
+			# ctr takes the container name as a mandatory
+			# argument after the image name
+			cmd+=" $container_name" ;;
+	esac
+	cmd+=" uname -r"
+
+	info "Running \"$cmd\""
+	container_kernel=$(eval "$cmd" || true)
 
 	[ -z "$container_kernel" ] && die "Failed to test $kata_project"
 
@@ -780,8 +823,23 @@ handle_installation()
 	local kata_version="${7:-}"
 	local containerd_flavour="${8:-}"
 
+	local install_docker="${9:-}"
+	[ -z "$install_docker" ] && die "no install docker value"
+
 	# The tool to be testing the installation with
 	local tool="ctr"
+
+	if [ "$install_docker" = "true" ]
+	then
+		if [ "$skip_containerd" = "false" ]
+		then
+			# The script provided by docker already takes care
+			# of properly installing containerd
+			skip_containerd="true"
+			info "Containerd will be installed during the Docker installation ('-c' option ignored)"
+		fi
+		tool="docker"
+	fi
 
 	[ "$only_run_test" = "true" ] && test_installation "$tool"  && return 0
 
@@ -795,13 +853,17 @@ handle_installation()
 		"$force" \
 		"$enable_debug"
 
+	[ "$install_docker" = "true" ] && handle_docker
+
 	[ "$disable_test" = "false" ] && test_installation "$tool"
 
-	if [ "$skip_containerd" = "true" ]
+	if [ "$skip_containerd" = "true" ] && [ "$install_docker" = "false" ]
 	then
 		info "$kata_project is now installed"
 	else
-		info "$kata_project and $containerd_project are now installed"
+		local extra_projects="containerd"
+		[ "$install_docker" = "true" ] && extra_projects+=" and docker"
+		info "$kata_project and $extra_projects are now installed"
 	fi
 
 	echo -e "\n${warnings}\n"
@@ -823,17 +885,19 @@ handle_args()
 	local disable_test="false"
 	local only_run_test="false"
 	local enable_debug="false"
+	local install_docker="false"
 
 	local opt
 
 	local kata_version=""
 	local containerd_flavour="lts"
 
-	while getopts "c:dfhk:ortT" opt "$@"
+	while getopts "c:dDfhk:ortT" opt "$@"
 	do
 		case "$opt" in
 			c) containerd_flavour="$OPTARG" ;;
 			d) enable_debug="true" ;;
+			D) install_docker="true" ;;
 			f) force="true" ;;
 			h) usage; exit 0 ;;
 			k) kata_version="$OPTARG" ;;
@@ -861,7 +925,8 @@ handle_args()
 		"$disable_test" \
 		"$only_run_test" \
 		"$kata_version" \
-		"$containerd_flavour"
+		"$containerd_flavour" \
+		"$install_docker"
 }
 
 main()
