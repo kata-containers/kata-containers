@@ -196,6 +196,15 @@ github_get_release_file_url()
 
 	[ -z "$download_url" ] && die "Cannot determine download URL for version $version ($url)"
 
+	# Check to ensure there is only a single matching URL
+	local expected_count=1
+
+	local count
+	count=$(echo "$download_url" | wc -l)
+
+	[ "$count" -eq "$expected_count" ] || \
+		die "expected $expected_count download URL but found $download_url"
+
 	echo "$download_url"
 }
 
