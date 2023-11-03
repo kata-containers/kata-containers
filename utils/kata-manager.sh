@@ -722,19 +722,22 @@ handle_containerd()
 
 test_installation()
 {
+	local tool="${1:-}"
+	[ -z "$tool" ] && die "The tool to test $kata_project with was not informed"
+
 	info "Testing $kata_project\n"
 
 	sudo kata-runtime check -v
 
 	local image="docker.io/library/busybox:latest"
-	sudo ctr image pull "$image"
+	sudo $tool image pull "$image"
 
 	local container_name="test-kata"
 
 	# Used to prove that the kernel in the container
 	# is different to the host kernel.
 	local container_kernel
-	container_kernel=$(sudo ctr run \
+	container_kernel=$(sudo $tool run \
 		--runtime "$kata_runtime_type" \
 		--rm \
 		"$image" \
@@ -777,7 +780,10 @@ handle_installation()
 	local kata_version="${7:-}"
 	local containerd_flavour="${8:-}"
 
-	[ "$only_run_test" = "true" ] && test_installation && return 0
+	# The tool to be testing the installation with
+	local tool="ctr"
+
+	[ "$only_run_test" = "true" ] && test_installation "$tool"  && return 0
 
 	setup "$cleanup" "$force" "$skip_containerd"
 
@@ -789,7 +795,7 @@ handle_installation()
 		"$force" \
 		"$enable_debug"
 
-	[ "$disable_test" = "false" ] && test_installation
+	[ "$disable_test" = "false" ] && test_installation "$tool"
 
 	if [ "$skip_containerd" = "true" ]
 	then
