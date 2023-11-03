@@ -22,7 +22,7 @@ pub struct DevicesCgroupInfo {
     inited: bool,
     /// Indicate if pod's devices cgroup is in whitelist mode. Returns true
     /// once one container requires `a *:* rwm` permission.
-    whitelist: bool,
+    allowed_all: bool,
 }
 
 pub trait Manager {
@@ -71,15 +71,15 @@ impl Debug for dyn Manager + Send + Sync {
     }
 }
 
-/// Check if device cgroup is an all rule from OCI spec.
+/// Check if device cgroup is a rule for all devices from OCI spec.
 ///
 /// The formats representing all devices between OCI spec and cgroups-rs
 /// are different.
-/// - OCI spec: major: 0, minor: 0, type: "" (All devices), access: "rwm";
+/// - OCI spec: major: 0, minor: 0, type: "", access: "rwm";
 /// - Cgroups-rs: major: -1, minor: -1, type: "a", access: "rwm";
 /// - Linux: a *:* rwm
 #[inline]
-fn is_all_devices_rule(dev_cgroup: &LinuxDeviceCgroup) -> bool {
+fn rule_for_all_devices(dev_cgroup: &LinuxDeviceCgroup) -> bool {
     dev_cgroup.major.unwrap_or(0) == 0
         && dev_cgroup.minor.unwrap_or(0) == 0
         && (dev_cgroup.r#type.as_str() == "" || dev_cgroup.r#type.as_str() == "a")
