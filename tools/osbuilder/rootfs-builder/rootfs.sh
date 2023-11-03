@@ -700,12 +700,20 @@ EOF
 			#   	OPA should be built from the cached source code instead of downloading
 			#   	this binary.
 			#
+			local opa_repo_url="$(get_package_version_from_kata_yaml externals.open-policy-agent.url)"
+			local opa_version="$(get_package_version_from_kata_yaml externals.open-policy-agent.version)"
 			if [ "$ARCH" == "ppc64le" ] || [ "$ARCH" == "s390x" ]; then
-				opa_repo_url="$(get_package_version_from_kata_yaml externals.open-policy-agent.url)"
 				info "Building OPA binary from source at ${opa_repo_url}"
 				build_opa_from_source "${opa_repo_url}" || die "Failed to build OPA"
 			else
-				opa_bin_url="$(get_package_version_from_kata_yaml externals.open-policy-agent.meta.binary)"
+				local opa_binary_arch
+				case ${ARCH} in
+					x86_64) opa_binary_arch="amd64" ;;
+					aarch64) opa_binary_arch="arm64" ;;
+					*) die "Unsupported architecture for the OPA binary" ;;
+				esac
+
+				local opa_bin_url="${opa_repo_url}/releases/download/${opa_version}/opa_linux_${opa_binary_arch}_static"
 				info "Downloading OPA binary from ${opa_bin_url}"
 				curl --fail -L "${opa_bin_url}" -o opa || die "Failed to download OPA"
 			fi
