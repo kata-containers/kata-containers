@@ -21,6 +21,7 @@ type NumaConfig struct {
 	Distances      *[]NumaDistance `json:"distances,omitempty"`
 	MemoryZones    *[]string       `json:"memory_zones,omitempty"`
 	SgxEpcSections *[]string       `json:"sgx_epc_sections,omitempty"`
+	PciSegments    *[]int32        `json:"pci_segments,omitempty"`
 }
 
 // NewNumaConfig instantiates a new NumaConfig object
@@ -193,6 +194,38 @@ func (o *NumaConfig) SetSgxEpcSections(v []string) {
 	o.SgxEpcSections = &v
 }
 
+// GetPciSegments returns the PciSegments field value if set, zero value otherwise.
+func (o *NumaConfig) GetPciSegments() []int32 {
+	if o == nil || o.PciSegments == nil {
+		var ret []int32
+		return ret
+	}
+	return *o.PciSegments
+}
+
+// GetPciSegmentsOk returns a tuple with the PciSegments field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *NumaConfig) GetPciSegmentsOk() (*[]int32, bool) {
+	if o == nil || o.PciSegments == nil {
+		return nil, false
+	}
+	return o.PciSegments, true
+}
+
+// HasPciSegments returns a boolean if a field has been set.
+func (o *NumaConfig) HasPciSegments() bool {
+	if o != nil && o.PciSegments != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPciSegments gets a reference to the given []int32 and assigns it to the PciSegments field.
+func (o *NumaConfig) SetPciSegments(v []int32) {
+	o.PciSegments = &v
+}
+
 func (o NumaConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if true {
@@ -209,6 +242,9 @@ func (o NumaConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.SgxEpcSections != nil {
 		toSerialize["sgx_epc_sections"] = o.SgxEpcSections
+	}
+	if o.PciSegments != nil {
+		toSerialize["pci_segments"] = o.PciSegments
 	}
 	return json.Marshal(toSerialize)
 }

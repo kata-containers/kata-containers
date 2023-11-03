@@ -5,6 +5,7 @@
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **File** | Pointer to **string** |  | [optional] 
+**Socket** | Pointer to **string** |  | [optional] 
 **Mode** | **string** |  | 
 **Iommu** | Pointer to **bool** |  | [optional] [default to false]
 
@@ -51,6 +52,31 @@ SetFile sets File field to given value.
 `func (o *ConsoleConfig) HasFile() bool`
 
 HasFile returns a boolean if a field has been set.
+
+### GetSocket
+
+`func (o *ConsoleConfig) GetSocket() string`
+
+GetSocket returns the Socket field if non-nil, zero value otherwise.
+
+### GetSocketOk
+
+`func (o *ConsoleConfig) GetSocketOk() (*string, bool)`
+
+GetSocketOk returns a tuple with the Socket field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetSocket
+
+`func (o *ConsoleConfig) SetSocket(v string)`
+
+SetSocket sets Socket field to given value.
+
+### HasSocket
+
+`func (o *ConsoleConfig) HasSocket() bool`
+
+HasSocket returns a boolean if a field has been set.
 
 ### GetMode
 
