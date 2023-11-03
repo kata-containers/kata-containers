@@ -145,6 +145,9 @@ fn update_agent_metrics() -> Result<()> {
 
     let tps = procfs::ticks_per_second()?;
 
+    // process agent threads number
+    AGENT_THREADS.set(me.stat.num_threads as f64);
+
     // process total time
     AGENT_TOTAL_TIME.set((me.stat.utime + me.stat.stime) as f64 / (tps as f64));
 
