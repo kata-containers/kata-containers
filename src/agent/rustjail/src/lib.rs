@@ -63,9 +63,16 @@ pub fn process_grpc_to_oci(p: &grpc::Process) -> oci::Process {
 
     let user = if p.User.is_some() {
         let u = p.User.as_ref().unwrap();
+        let umask = if u.Umask > 0 {
+            Some(u.Umask)
+        } else {
+            None
+        };
+
         oci::User {
             uid: u.UID,
             gid: u.GID,
+            umask,
             additional_gids: u.AdditionalGids.clone(),
             username: u.Username.clone(),
         }
@@ -73,6 +80,7 @@ pub fn process_grpc_to_oci(p: &grpc::Process) -> oci::Process {
         oci::User {
             uid: 0,
             gid: 0,
+            umask: None,
             additional_gids: vec![],
             username: String::from(""),
         }
@@ -104,19 +112,47 @@ pub fn process_grpc_to_oci(p: &grpc::Process) -> oci::Process {
         r
     };
 
+    let scheduler = if p.Scheduler.is_some() {
+        let sched = p.Scheduler.as_ref().unwrap();
+        Some(oci::Scheduler {
+            policy: sched.Policy.clone(),
+            nice: sched.Nice,
+            priority: sched.Priority,
+            flags: sched.Flags.clone(),
+            runtime: sched.Runtime,
+            deadline: sched.Deadline,
+            period: sched.Period,
+        })
+    } else {
+        None
+    };
+
+    let io_priority = if p.IOPriority.is_some() {
+        let iop = p.IOPriority.as_ref().unwrap();
+        Some(oci::LinuxIOPriority {
+            class: iop.Class.clone(),
+            priority: iop.Priority,
+        })
+    } else {
+        None
+    };
+
     oci::Process {
         terminal: p.Terminal,
         console_size,
         user,
         args: p.Args.clone(),
+        command_line: p.CommandLine.clone(),
         env: p.Env.clone(),
         cwd: p.Cwd.clone(),
         capabilities,
         rlimits,
         no_new_privileges: p.NoNewPrivileges,
         apparmor_profile: p.ApparmorProfile.clone(),
-        oom_score_adj: Some(p.OOMScoreAdj as i32),
+        oom_score_adj: Some(p.OOMScoreAdj),
+        scheduler,
         selinux_label: p.SelinuxLabel.clone(),
+        io_priority,
     }
 }
 
@@ -128,11 +164,33 @@ fn root_grpc_to_oci(root: &grpc::Root) -> oci::Root {
 }
 
 fn mount_grpc_to_oci(m: &grpc::Mount) -> oci::Mount {
+    let uid_mappings = m
+        .UIDMappings
+        .iter()
+        .map(|uidmapping| oci::LinuxIdMapping {
+            container_id: uidmapping.ContainerID,
+            host_id: uidmapping.HostID,
+            size: uidmapping.Size,
+        })
+        .collect();
+
+    let gid_mappings = m
+        .GIDMappings
+        .iter()
+        .map(|gidmapping| oci::LinuxIdMapping {
+            container_id: gidmapping.ContainerID,
+            host_id: gidmapping.HostID,
+            size: gidmapping.Size,
+        })
+        .collect();
+
     oci::Mount {
-        destination: m.destination.clone(),
-        r#type: m.type_.clone(),
-        source: m.source.clone(),
-        options: m.options.clone(),
+        destination: m.Destination.clone(),
+        r#type: m.Type.clone(),
+        source: m.Source.clone(),
+        options: m.Options.clone(),
+        uid_mappings,
+        gid_mappings,
     }
 }
 
@@ -145,7 +203,7 @@ fn hook_grpc_to_oci(h: &[grpcHook]) -> Vec<oci::Hook> {
             path: e.Path.clone(),
             args: e.Args.clone(),
             env: e.Env.clone(),
-            timeout: Some(e.Timeout as i32),
+            timeout: Some(e.Timeout),
         });
     }
     r
@@ -273,6 +331,8 @@ pub fn resources_grpc_to_oci(res: &grpc::LinuxResources) -> oci::LinuxResources 
             kernel_tcp: Some(mem.KernelTCP),
             swappiness: Some(mem.Swappiness),
             disable_oom_killer: Some(mem.DisableOOMKiller),
+            use_hierarchy: Some(mem.UseHierarchy),
+            check_before_update: Some(mem.CheckBeforeUpdate),
         })
     } else {
         None
@@ -283,11 +343,13 @@ pub fn resources_grpc_to_oci(res: &grpc::LinuxResources) -> oci::LinuxResources 
         Some(oci::LinuxCpu {
             shares: Some(c.Shares),
             quota: Some(c.Quota),
+            burst: Some(c.Burst),
             period: Some(c.Period),
             realtime_runtime: Some(c.RealtimeRuntime),
             realtime_period: Some(c.RealtimePeriod),
             cpus: c.Cpus.clone(),
             mems: c.Mems.clone(),
+            idle: Some(c.Idle),
         })
     } else {
         None
@@ -348,6 +410,7 @@ pub fn resources_grpc_to_oci(res: &grpc::LinuxResources) -> oci::LinuxResources 
         hugepage_limits,
         network,
         rdma: HashMap::new(),
+        unified: HashMap::new(),
     }
 }
 
@@ -366,7 +429,7 @@ fn seccomp_grpc_to_oci(sec: &grpc::LinuxSeccomp) -> oci::LinuxSeccomp {
 
             for arg in sys.Args.iter() {
                 args.push(oci::LinuxSeccompArg {
-                    index: arg.Index as u32,
+                    index: arg.Index,
                     value: arg.Value,
                     value_two: arg.ValueTwo,
                     op: arg.Op.clone(),
@@ -385,8 +448,11 @@ fn seccomp_grpc_to_oci(sec: &grpc::LinuxSeccomp) -> oci::LinuxSeccomp {
 
     oci::LinuxSeccomp {
         default_action: sec.DefaultAction.clone(),
+        default_errno_ret: None,
         architectures: sec.Architectures.clone(),
         flags: sec.Flags.clone(),
+        listener_path: sec.ListenerPath.clone(),
+        listener_metadata: sec.ListenerMetadata.clone(),
         syscalls,
     }
 }
@@ -446,11 +512,39 @@ fn linux_grpc_to_oci(l: &grpc::Linux) -> oci::Linux {
         let rdt = l.IntelRdt.as_ref().unwrap();
 
         Some(oci::LinuxIntelRdt {
+            clos_id: rdt.ClosID.clone(),
             l3_cache_schema: rdt.L3CacheSchema.clone(),
+            mem_bw_schema: rdt.MemBwSchema.clone(),
+            enable_cmt: rdt.EnableCMT,
+            enable_mbm: rdt.EnableMBM,
         })
     } else {
         None
     };
+
+    let personality = if l.Personality.is_some() {
+        let person = l.Personality.as_ref().unwrap();
+        Some(oci::LinuxPersonality {
+            domain: person.Domain.clone(),
+            flags: person.Flags.clone(),
+        })
+    } else {
+        None
+    };
+
+    let time_offsets = l
+        .TimeOffsets
+        .iter()
+        .map(|(k, v)| {
+            (
+                k.clone(),
+                oci::LinuxTimeOffset {
+                    secs: v.Secs,
+                    nanosecs: v.Nanosecs,
+                },
+            )
+        })
+        .collect();
 
     oci::Linux {
         uid_mappings,
@@ -466,6 +560,8 @@ fn linux_grpc_to_oci(l: &grpc::Linux) -> oci::Linux {
         readonly_paths: l.ReadonlyPaths.clone(),
         mount_label: l.MountLabel.clone(),
         intel_rdt,
+        personality,
+        time_offsets,
     }
 }
 
@@ -512,6 +608,7 @@ pub fn grpc_to_oci(grpc: &grpc::Spec) -> oci::Spec {
         process,
         root,
         hostname: grpc.Hostname.clone(),
+        domainname: grpc.Domainname.clone(),
         mounts,
         hooks,
         annotations: grpc.Annotations.clone(),
@@ -519,6 +616,7 @@ pub fn grpc_to_oci(grpc: &grpc::Spec) -> oci::Spec {
         solaris: None,
         windows: None,
         vm: None,
+        zos: None,
     }
 }
 
@@ -616,10 +714,12 @@ mod tests {
                     user: oci::User {
                         uid: 1234,
                         gid: 5678,
+                        umask: None,
                         additional_gids: Vec::from([910, 1112]),
                         username: String::from("username"),
                     },
                     args: Vec::from([String::from("arg1"), String::from("arg2")]),
+                    command_line: String::from("cmd"),
                     env: Vec::from([String::from("env")]),
                     cwd: String::from("cwd"),
                     capabilities: Some(oci::LinuxCapabilities {
@@ -644,7 +744,9 @@ mod tests {
                     no_new_privileges: true,
                     apparmor_profile: String::from("apparmor profile"),
                     oom_score_adj: Some(123456),
+                    scheduler: None,
                     selinux_label: String::from("Selinux Label"),
+                    io_priority: None,
                 },
             },
             TestData {
@@ -671,6 +773,7 @@ mod tests {
                     user: oci::User {
                         uid: 0,
                         gid: 0,
+                        umask: None,
                         additional_gids: vec![],
                         username: String::from(""),
                     },
@@ -990,10 +1093,12 @@ mod tests {
             },
             TestData {
                 grpcmount: grpc::Mount {
-                    destination: String::from("destination"),
-                    source: String::from("source"),
-                    type_: String::from("fieldtype"),
-                    options: Vec::from([String::from("option1"), String::from("option2")]),
+                    Destination: String::from("destination"),
+                    Source: String::from("source"),
+                    Type: String::from("fieldtype"),
+                    Options: Vec::from([String::from("option1"), String::from("option2")]),
+                    UIDMappings: Vec::new(),
+                    GIDMappings: Vec::new(),
                     ..Default::default()
                 },
                 result: oci::Mount {
@@ -1001,14 +1106,18 @@ mod tests {
                     source: String::from("source"),
                     r#type: String::from("fieldtype"),
                     options: Vec::from([String::from("option1"), String::from("option2")]),
+                    uid_mappings: Vec::new(),
+                    gid_mappings: Vec::new(),
                 },
             },
             TestData {
                 grpcmount: grpc::Mount {
-                    destination: String::from("destination"),
-                    source: String::from("source"),
-                    type_: String::from("fieldtype"),
-                    options: Vec::new(),
+                    Destination: String::from("destination"),
+                    Source: String::from("source"),
+                    Type: String::from("fieldtype"),
+                    Options: Vec::new(),
+                    UIDMappings: Vec::new(),
+                    GIDMappings: Vec::new(),
                     ..Default::default()
                 },
                 result: oci::Mount {
@@ -1016,14 +1125,18 @@ mod tests {
                     source: String::from("source"),
                     r#type: String::from("fieldtype"),
                     options: Vec::new(),
+                    uid_mappings: Vec::new(),
+                    gid_mappings: Vec::new(),
                 },
             },
             TestData {
                 grpcmount: grpc::Mount {
-                    destination: String::new(),
-                    source: String::from("source"),
-                    type_: String::from("fieldtype"),
-                    options: Vec::from([String::from("option1")]),
+                    Destination: String::new(),
+                    Source: String::from("source"),
+                    Type: String::from("fieldtype"),
+                    Options: Vec::from([String::from("option1")]),
+                    UIDMappings: Vec::new(),
+                    GIDMappings: Vec::new(),
                     ..Default::default()
                 },
                 result: oci::Mount {
@@ -1031,14 +1144,18 @@ mod tests {
                     source: String::from("source"),
                     r#type: String::from("fieldtype"),
                     options: Vec::from([String::from("option1")]),
+                    uid_mappings: Vec::new(),
+                    gid_mappings: Vec::new(),
                 },
             },
             TestData {
                 grpcmount: grpc::Mount {
-                    destination: String::from("destination"),
-                    source: String::from("source"),
-                    type_: String::new(),
-                    options: Vec::from([String::from("option1")]),
+                    Destination: String::from("destination"),
+                    Source: String::from("source"),
+                    Type: String::new(),
+                    Options: Vec::from([String::from("option1")]),
+                    UIDMappings: Vec::new(),
+                    GIDMappings: Vec::new(),
                     ..Default::default()
                 },
                 result: oci::Mount {
@@ -1046,6 +1163,161 @@ mod tests {
                     source: String::from("source"),
                     r#type: String::new(),
                     options: Vec::from([String::from("option1")]),
+                    uid_mappings: Vec::new(),
+                    gid_mappings: Vec::new(),
+                },
+            },
+            TestData {
+                grpcmount: grpc::Mount {
+                    Destination: String::from("destination"),
+                    Source: String::from("source"),
+                    Type: String::from("fieldtype"),
+                    Options: Vec::from([String::from("option1"), String::from("option2")]),
+                    UIDMappings: Vec::from([
+                        grpc::LinuxIDMapping {
+                            ContainerID: 0,
+                            HostID: 1,
+                            Size: 1,
+                            ..Default::default()
+                        },
+                        grpc::LinuxIDMapping {
+                            ContainerID: 1,
+                            HostID: 2,
+                            Size: 1,
+                            ..Default::default()
+                        },
+                    ]),
+                    GIDMappings: Vec::from([
+                        grpc::LinuxIDMapping {
+                            ContainerID: 0,
+                            HostID: 1,
+                            Size: 1,
+                            ..Default::default()
+                        },
+                        grpc::LinuxIDMapping {
+                            ContainerID: 1,
+                            HostID: 2,
+                            Size: 1,
+                            ..Default::default()
+                        },
+                    ]),
+                    ..Default::default()
+                },
+                result: oci::Mount {
+                    destination: String::from("destination"),
+                    source: String::from("source"),
+                    r#type: String::from("fieldtype"),
+                    options: Vec::from([String::from("option1"), String::from("option2")]),
+                    uid_mappings: Vec::from([
+                        oci::LinuxIdMapping {
+                            container_id: 0,
+                            host_id: 1,
+                            size: 1,
+                        },
+                        oci::LinuxIdMapping {
+                            container_id: 1,
+                            host_id: 2,
+                            size: 1,
+                        },
+                    ]),
+                    gid_mappings: Vec::from([
+                        oci::LinuxIdMapping {
+                            container_id: 0,
+                            host_id: 1,
+                            size: 1,
+                        },
+                        oci::LinuxIdMapping {
+                            container_id: 1,
+                            host_id: 2,
+                            size: 1,
+                        },
+                    ]),
+                },
+            },
+            TestData {
+                grpcmount: grpc::Mount {
+                    Destination: String::from("destination"),
+                    Source: String::from("source"),
+                    Type: String::from("fieldtype"),
+                    Options: Vec::from([String::from("option1"), String::from("option2")]),
+                    UIDMappings: Vec::new(),
+                    GIDMappings: Vec::from([
+                        grpc::LinuxIDMapping {
+                            ContainerID: 0,
+                            HostID: 1,
+                            Size: 1,
+                            ..Default::default()
+                        },
+                        grpc::LinuxIDMapping {
+                            ContainerID: 1,
+                            HostID: 2,
+                            Size: 1,
+                            ..Default::default()
+                        },
+                    ]),
+                    ..Default::default()
+                },
+                result: oci::Mount {
+                    destination: String::from("destination"),
+                    source: String::from("source"),
+                    r#type: String::from("fieldtype"),
+                    options: Vec::from([String::from("option1"), String::from("option2")]),
+                    uid_mappings: Vec::new(),
+                    gid_mappings: Vec::from([
+                        oci::LinuxIdMapping {
+                            container_id: 0,
+                            host_id: 1,
+                            size: 1,
+                        },
+                        oci::LinuxIdMapping {
+                            container_id: 1,
+                            host_id: 2,
+                            size: 1,
+                        },
+                    ]),
+                },
+            },
+            TestData {
+                grpcmount: grpc::Mount {
+                    Destination: String::from("destination"),
+                    Source: String::from("source"),
+                    Type: String::from("fieldtype"),
+                    Options: Vec::from([String::from("option1"), String::from("option2")]),
+                    UIDMappings: Vec::from([
+                        grpc::LinuxIDMapping {
+                            ContainerID: 0,
+                            HostID: 1,
+                            Size: 1,
+                            ..Default::default()
+                        },
+                        grpc::LinuxIDMapping {
+                            ContainerID: 1,
+                            HostID: 2,
+                            Size: 1,
+                            ..Default::default()
+                        },
+                    ]),
+                    GIDMappings: Vec::new(),
+                    ..Default::default()
+                },
+                result: oci::Mount {
+                    destination: String::from("destination"),
+                    source: String::from("source"),
+                    r#type: String::from("fieldtype"),
+                    options: Vec::from([String::from("option1"), String::from("option2")]),
+                    uid_mappings: Vec::from([
+                        oci::LinuxIdMapping {
+                            container_id: 0,
+                            host_id: 1,
+                            size: 1,
+                        },
+                        oci::LinuxIdMapping {
+                            container_id: 1,
+                            host_id: 2,
+                            size: 1,
+                        },
+                    ]),
+                    gid_mappings: Vec::new(),
                 },
             },
         ];

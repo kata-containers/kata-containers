@@ -142,6 +142,8 @@ impl SPDKVolume {
             r#type: storage.fs_type.clone(),
             source: guest_path,
             options: m.options.clone(),
+            uid_mappings: vec![],
+            gid_mappings: vec![],
         };
 
         Ok(Self {

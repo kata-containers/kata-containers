@@ -345,6 +345,8 @@ fn mount_cgroups_v2(cfd_log: RawFd, m: &Mount, rootfs: &str, flags: MsFlags) -> 
         r#type: "cgroup2".to_string(),
         destination: m.destination.clone(),
         options: Vec::new(),
+        uid_mappings: Vec::new(),
+        gid_mappings: Vec::new(),
     };
 
     let mount_flags: MsFlags = flags;
@@ -385,6 +387,8 @@ fn mount_cgroups(
         r#type: "tmpfs".to_string(),
         destination: m.destination.clone(),
         options: Vec::new(),
+        uid_mappings: Vec::new(),
+        gid_mappings: Vec::new(),
     };
 
     let cflags = MsFlags::MS_NOEXEC | MsFlags::MS_NOSUID | MsFlags::MS_NODEV;
@@ -431,6 +435,8 @@ fn mount_cgroups(
             r#type: "bind".to_string(),
             destination: destination.clone(),
             options: Vec::new(),
+            uid_mappings: Vec::new(),
+            gid_mappings: Vec::new(),
         };
 
         let mut mount_flags: MsFlags = flags | MsFlags::MS_REC | MsFlags::MS_BIND;
@@ -1171,6 +1177,8 @@ mod tests {
             r#type: "bind".into(),
             source: "error".into(),
             options: vec!["shared".into(), "rw".into(), "dev".into()],
+            uid_mappings: vec![],
+            gid_mappings: vec![],
         });
 
         // destination doesn't start with /, should fail
@@ -1190,6 +1198,8 @@ mod tests {
             r#type: "cgroup".into(),
             source: "/cgroup".into(),
             options: vec!["shared".into()],
+            uid_mappings: vec![],
+            gid_mappings: vec![],
         });
 
         let ret = init_rootfs(stdout_fd, &spec, &cpath, &mounts, true);
@@ -1204,6 +1214,8 @@ mod tests {
             r#type: "bind".into(),
             source: "/dev".into(),
             options: vec!["shared".into()],
+            uid_mappings: vec![],
+            gid_mappings: vec![],
         });
 
         let ret = init_rootfs(stdout_fd, &spec, &cpath, &mounts, true);
@@ -1219,6 +1231,8 @@ mod tests {
             r#type: "cgroup".to_string(),
             source: "/cgroups".to_string(),
             options: vec!["shared".to_string()],
+            uid_mappings: vec![],
+            gid_mappings: vec![],
         };
         let tempdir = tempdir().unwrap();
         let rootfs = tempdir.path().to_str().unwrap().to_string();
@@ -1311,6 +1325,8 @@ mod tests {
             r#type: "bind".to_string(),
             source: "/dev".to_string(),
             options: vec!["ro".to_string(), "shared".to_string()],
+            uid_mappings: vec![],
+            gid_mappings: vec![],
         }];
 
         let ret = finish_rootfs(stdout_fd, &spec, &oci::Process::default());
@@ -1438,6 +1454,8 @@ mod tests {
                 destination: d.destination.to_string(),
                 r#type: d.r#type.to_string(),
                 options: vec![],
+                uid_mappings: vec![],
+                gid_mappings: vec![],
             };
 
             let result = mount_from(
@@ -1518,6 +1536,8 @@ mod tests {
             r#type: "bind".to_string(),
             source: "/test".to_string(),
             options: vec!["shared".to_string()],
+            uid_mappings: vec![],
+            gid_mappings: vec![],
         };
 
         assert!(check_proc_mount(&mount).is_err());
@@ -1527,6 +1547,8 @@ mod tests {
             r#type: "bind".to_string(),
             source: "/test".to_string(),
             options: vec!["shared".to_string()],
+            uid_mappings: vec![],
+            gid_mappings: vec![],
         };
 
         assert!(check_proc_mount(&mount).is_ok());
@@ -1536,6 +1558,8 @@ mod tests {
             r#type: "bind".to_string(),
             source: "/test".to_string(),
             options: vec!["shared".to_string()],
+            uid_mappings: vec![],
+            gid_mappings: vec![],
         };
 
         assert!(check_proc_mount(&mount).is_err());

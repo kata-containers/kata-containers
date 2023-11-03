@@ -173,11 +173,13 @@ mod tests {
         let oci = oci::LinuxCpu {
             shares: Some(2048),
             quota: Some(1001),
+            burst: None,
             period: Some(100),
             realtime_runtime: None,
             realtime_period: None,
             cpus: "1,2,3".to_string(),
             mems: "1".to_string(),
+            idle: None,
         };
         let resources = LinuxContainerCpuResources::try_from(&oci).unwrap();
         assert_eq!(resources.shares(), 2048);
@@ -192,10 +194,12 @@ mod tests {
             shares: Some(2048),
             quota: None,
             period: None,
+            burst: None,
             realtime_runtime: None,
             realtime_period: None,
             cpus: "1".to_string(),
             mems: "1-2".to_string(),
+            idle: None,
         };
         let resources = LinuxContainerCpuResources::try_from(&oci).unwrap();
         assert_eq!(resources.shares(), 2048);
@@ -221,10 +225,12 @@ mod tests {
             shares: Some(2048),
             quota: Some(1001),
             period: Some(100),
+            burst: None,
             realtime_runtime: None,
             realtime_period: None,
             cpus: "1,2,3".to_string(),
             mems: "1".to_string(),
+            idle: None,
         };
         let resources = LinuxContainerCpuResources::try_from(&oci).unwrap();
         sandbox.merge(&resources);
@@ -238,10 +244,12 @@ mod tests {
             shares: Some(2048),
             quota: None,
             period: None,
+            burst: None,
             realtime_runtime: None,
             realtime_period: None,
             cpus: "1,4".to_string(),
             mems: "1-2".to_string(),
+            idle: None,
         };
         let resources = LinuxContainerCpuResources::try_from(&oci).unwrap();
         sandbox.merge(&resources);

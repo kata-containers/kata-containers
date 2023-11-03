@@ -608,9 +608,6 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         // setup sysctl
         set_sysctls(&linux.sysctl)?;
         unistd::chdir("/")?;
-    }
-
-    if to_new.contains(CloneFlags::CLONE_NEWNS) {
         mount::finish_rootfs(cfd_log, &spec, &oci_process)?;
     }
 
@@ -1556,8 +1553,8 @@ impl LinuxContainer {
             root,
             cgroup_manager,
             status: ContainerStatus::new(),
-            uid_map_path: String::from(""),
-            gid_map_path: "".to_string(),
+            uid_map_path: "".to_owned(),
+            gid_map_path: "".to_owned(),
             config,
             processes: HashMap::new(),
             created: SystemTime::now(),
