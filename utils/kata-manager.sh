@@ -25,6 +25,7 @@ readonly containerd_project_url="https://github.com/${containerd_slug}"
 
 readonly kata_releases_url="https://api.github.com/repos/${kata_slug}/releases"
 readonly containerd_releases_url="https://api.github.com/repos/${containerd_slug}/releases"
+readonly containerd_io_releases_url="https://raw.githubusercontent.com/containerd/containerd.io/main/content/releases.md"
 
 # Directory created when unpacking a binary release archive downloaded from
 # $kata_releases_url.
@@ -239,7 +240,9 @@ Description: Install $kata_project [1] (and optionally $containerd_project [2])
 
 Options:
 
- -c <version> : Specify containerd version.
+ -c <flavour> : Specify containerd flavour ("lts" | "active" - default: "lts").
+                Find more details on LTS and Active versions of containerd on
+                https://containerd.io/releases/#support-horizon
  -d           : Enable debug for all components.
  -f           : Force installation (use with care).
  -h           : Show this help statement.
@@ -341,7 +344,7 @@ check_deps()
 
 	case "$ID" in
 		centos|rhel) sudo yum -y install $packages ;;
-		debian|ubuntu) sudo apt-get -y install $packages ;;
+		debian|ubuntu) sudo apt-get update && sudo apt-get -y install $packages ;;
 		fedora) sudo dnf -y install $packages ;;
 		opensuse*|sles) sudo zypper install -y $packages ;;
 		*) die "Cannot automatically install packages on $ID, install $packages manually and re-run"
@@ -669,9 +672,25 @@ handle_kata()
 	kata-runtime --version
 }
 
+containerd_version_number()
+{
+	local flavour="${1:-}"
+	[ -z "$flavour" ] && die "need containerd flavour"
+
+	base_version="$(curl -fsSL $containerd_io_releases_url | \
+		grep -iE "\[d+.d+\].*| $flavour" | \
+		grep -oE "\[[0-9]+.[0-9]+\]" | \
+		grep -oE "[0-9]+.[0-9]+")"
+
+	curl --silent ${containerd_releases_url} | \
+		jq -r .[].tag_name | \
+		grep "^v${base_version}.[0-9]*$" -m1
+}
+
 handle_containerd()
 {
-	local version="${1:-}"
+	local flavour="${1:-}"
+	[ -z "$flavour" ] && die "need containerd flavour"
 
 	local force="${2:-}"
 	[ -z "$force" ] && die "need force value"
@@ -679,6 +698,7 @@ handle_containerd()
 	local enable_debug="${3:-}"
 	[ -z "$enable_debug" ] && die "no enable debug value"
 
+	local version="$(containerd_version_number "$flavour")"
 	local ret
 
 	if [ "$force" = "true" ]
@@ -755,7 +775,7 @@ handle_installation()
 
 	# These params can be blank
 	local kata_version="${7:-}"
-	local containerd_version="${8:-}"
+	local containerd_flavour="${8:-}"
 
 	[ "$only_run_test" = "true" ] && test_installation && return 0
 
@@ -765,7 +785,7 @@ handle_installation()
 
 	[ "$skip_containerd" = "false" ] && \
 		handle_containerd \
-		"$containerd_version" \
+		"$containerd_flavour" \
 		"$force" \
 		"$enable_debug"
 
@@ -781,6 +801,14 @@ handle_installation()
 	echo -e "\n${warnings}\n"
 }
 
+validate_containerd_flavour()
+{
+	local flavour="${1:-}"
+	local flavours_regex='lts|active'
+
+	grep -qE "$flavours_regex" <<< "$flavour" || die "expected flavour to match '$flavours_regex', found '$flavour'"
+}
+
 handle_args()
 {
 	local cleanup="true"
@@ -793,12 +821,12 @@ handle_args()
 	local opt
 
 	local kata_version=""
-	local containerd_version=""
+	local containerd_flavour="lts"
 
 	while getopts "c:dfhk:ortT" opt "$@"
 	do
 		case "$opt" in
-			c) containerd_version="$OPTARG" ;;
+			c) containerd_flavour="$OPTARG" ;;
 			d) enable_debug="true" ;;
 			f) force="true" ;;
 			h) usage; exit 0 ;;
@@ -815,7 +843,9 @@ handle_args()
 	shift $[$OPTIND-1]
 
 	[ -z "$kata_version" ] && kata_version="${1:-}" || true
-	[ -z "$containerd_version" ] && containerd_version="${2:-}" || true
+	[ -z "$containerd_flavour" ] && containerd_flavour="${2:-}" || true
+
+	validate_containerd_flavour "$containerd_flavour"
 
 	handle_installation \
 		"$cleanup" \
@@ -825,7 +855,7 @@ handle_args()
 		"$disable_test" \
 		"$only_run_test" \
 		"$kata_version" \
-		"$containerd_version"
+		"$containerd_flavour"
 }
 
 main()
