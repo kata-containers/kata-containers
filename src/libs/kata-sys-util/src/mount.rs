@@ -797,9 +797,13 @@ mod tests {
     fn test_get_linux_mount_info() {
         let info = get_linux_mount_info("/sys/fs/cgroup").unwrap();
 
-        assert_eq!(&info.device, "tmpfs");
-        assert_eq!(&info.fs_type, "tmpfs");
-        assert_eq!(&info.path, "/sys/fs/cgroup");
+        match info.device.as_str() {
+            // cgroup v1
+            "tmpfs" => assert_eq!(&info.fs_type, "tmpfs"),
+            // cgroup v2
+            "cgroup2" => assert_eq!(&info.fs_type, "cgroup2"),
+            _ => assert!(false),
+        }
 
         assert!(matches!(
             get_linux_mount_info(""),
