@@ -5,7 +5,7 @@
 
 use anyhow::{anyhow, Context, Result};
 use libc::pid_t;
-use oci::{ContainerState, LinuxDevice, LinuxIdMapping};
+use oci::{ContainerState, LinuxDevice, LinuxIDMapping};
 use oci::{Linux, LinuxNamespace, LinuxResources, Spec};
 use std::clone::Clone;
 use std::ffi::CString;
@@ -1445,7 +1445,7 @@ async fn join_namespaces(
     Ok(())
 }
 
-fn write_mappings(logger: &Logger, path: &str, maps: &[LinuxIdMapping]) -> Result<()> {
+fn write_mappings(logger: &Logger, path: &str, maps: &[LinuxIDMapping]) -> Result<()> {
     let data = maps
         .iter()
         .filter(|m| m.size != 0)

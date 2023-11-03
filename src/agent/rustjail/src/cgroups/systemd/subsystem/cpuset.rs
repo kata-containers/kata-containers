@@ -9,7 +9,7 @@ use super::transformer::Transformer;
 
 use anyhow::{bail, Result};
 use bit_vec::BitVec;
-use oci::{LinuxCpu, LinuxResources};
+use oci::{LinuxCPU, LinuxResources};
 use std::convert::{TryFrom, TryInto};
 use zbus::zvariant::Value;
 
@@ -37,7 +37,7 @@ impl Transformer for CpuSet {
 // cpuset.mems <-> AllowedMemoryNodes (v244)
 impl CpuSet {
     fn apply(
-        cpuset_resources: &LinuxCpu,
+        cpuset_resources: &LinuxCPU,
         properties: &mut Properties,
         systemd_version: &str,
     ) -> Result<()> {

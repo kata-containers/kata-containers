@@ -5,7 +5,7 @@
 
 use crate::container::Config;
 use anyhow::{anyhow, Context, Result};
-use oci::{Linux, LinuxIdMapping, LinuxNamespace, Spec};
+use oci::{Linux, LinuxIDMapping, LinuxNamespace, Spec};
 use regex::Regex;
 use std::collections::HashMap;
 use std::path::{Component, PathBuf};
@@ -116,7 +116,7 @@ fn security(oci: &Spec) -> Result<()> {
     Ok(())
 }
 
-fn idmapping(maps: &[LinuxIdMapping]) -> Result<()> {
+fn idmapping(maps: &[LinuxIDMapping]) -> Result<()> {
     for map in maps {
         if map.size > 0 {
             return Ok(());
@@ -223,7 +223,7 @@ fn rootless_euid_mapping(oci: &Spec) -> Result<()> {
     Ok(())
 }
 
-fn has_idmapping(maps: &[LinuxIdMapping], id: u32) -> bool {
+fn has_idmapping(maps: &[LinuxIDMapping], id: u32) -> bool {
     for map in maps {
         if id >= map.container_id && id < map.container_id + map.size {
             return true;
@@ -439,7 +439,7 @@ mod tests {
         usernamespace(&spec).unwrap();
 
         let mut linux = Linux::default();
-        linux.uid_mappings = vec![LinuxIdMapping {
+        linux.uid_mappings = vec![LinuxIDMapping {
             container_id: 0,
             host_id: 1000,
             size: 0,
@@ -448,7 +448,7 @@ mod tests {
         usernamespace(&spec).unwrap_err();
 
         let mut linux = Linux::default();
-        linux.uid_mappings = vec![LinuxIdMapping {
+        linux.uid_mappings = vec![LinuxIDMapping {
             container_id: 0,
             host_id: 1000,
             size: 100,
@@ -495,12 +495,12 @@ mod tests {
                 path: "/sys/cgroups/user".to_owned(),
             },
         ];
-        linux.uid_mappings = vec![LinuxIdMapping {
+        linux.uid_mappings = vec![LinuxIDMapping {
             container_id: 0,
             host_id: 1000,
             size: 1000,
         }];
-        linux.gid_mappings = vec![LinuxIdMapping {
+        linux.gid_mappings = vec![LinuxIDMapping {
             container_id: 0,
             host_id: 1000,
             size: 1000,

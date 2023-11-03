@@ -8,10 +8,10 @@ use std::collections::HashMap;
 use std::convert::From;
 
 use oci::{
-    Hook, Hooks, Linux, LinuxBlockIo, LinuxCpu, LinuxCapabilities, LinuxDevice, LinuxHugepageLimit,
-    LinuxIdMapping, LinuxIntelRdt, LinuxInterfacePriority, LinuxMemory, LinuxNamespace,
+    Hook, Hooks, Linux, LinuxBlockIO, LinuxCPU, LinuxCapabilities, LinuxDevice, LinuxHugepageLimit,
+    LinuxIDMapping, LinuxIntelRdt, LinuxInterfacePriority, LinuxMemory, LinuxNamespace,
     LinuxNetwork, LinuxPids, LinuxResources, LinuxSeccomp, LinuxSeccompArg, LinuxSyscall,
-    LinuxThrottleDevice, LinuxWeightDevice, Mount, PosixRlimit, Process, Root, Spec, User,
+    LinuxThrottleDevice, LinuxWeightDevice, Mount, POSIXRlimit, Process, Root, Spec, User,
 };
 
 // translate from interface to ttprc tools
@@ -65,8 +65,8 @@ impl From<oci::LinuxCapabilities> for crate::oci::LinuxCapabilities {
     }
 }
 
-impl From<oci::PosixRlimit> for crate::oci::POSIXRlimit {
-    fn from(from: PosixRlimit) -> Self {
+impl From<oci::POSIXRlimit> for crate::oci::POSIXRlimit {
+    fn from(from: POSIXRlimit) -> Self {
         crate::oci::POSIXRlimit {
             Type: from.r#type,
             Hard: from.hard,
@@ -161,8 +161,8 @@ impl From<oci::LinuxMemory> for crate::oci::LinuxMemory {
     }
 }
 
-impl From<oci::LinuxCpu> for crate::oci::LinuxCPU {
-    fn from(from: LinuxCpu) -> Self {
+impl From<oci::LinuxCPU> for crate::oci::LinuxCPU {
+    fn from(from: LinuxCPU) -> Self {
         crate::oci::LinuxCPU {
             Shares: from.shares.unwrap_or_default(),
             Quota: from.quota.unwrap_or_default(),
@@ -212,8 +212,8 @@ impl From<oci::LinuxThrottleDevice> for crate::oci::LinuxThrottleDevice {
     }
 }
 
-impl From<oci::LinuxBlockIo> for crate::oci::LinuxBlockIO {
-    fn from(from: LinuxBlockIo) -> Self {
+impl From<oci::LinuxBlockIO> for crate::oci::LinuxBlockIO {
+    fn from(from: LinuxBlockIO) -> Self {
         crate::oci::LinuxBlockIO {
             Weight: from.weight.map_or(0, |t| t as u32),
             LeafWeight: from.leaf_weight.map_or(0, |t| t as u32),
@@ -322,8 +322,8 @@ impl From<oci::Hooks> for crate::oci::Hooks {
     }
 }
 
-impl From<oci::LinuxIdMapping> for crate::oci::LinuxIDMapping {
-    fn from(from: LinuxIdMapping) -> Self {
+impl From<oci::LinuxIDMapping> for crate::oci::LinuxIDMapping {
+    fn from(from: LinuxIDMapping) -> Self {
         crate::oci::LinuxIDMapping {
             HostID: from.host_id,
             ContainerID: from.container_id,
@@ -489,9 +489,9 @@ impl From<crate::oci::Mount> for oci::Mount {
     }
 }
 
-impl From<crate::oci::LinuxIDMapping> for oci::LinuxIdMapping {
+impl From<crate::oci::LinuxIDMapping> for oci::LinuxIDMapping {
     fn from(from: crate::oci::LinuxIDMapping) -> Self {
-        LinuxIdMapping {
+        LinuxIDMapping {
             container_id: from.ContainerID(),
             host_id: from.HostID(),
             size: from.Size(),
@@ -575,7 +575,7 @@ impl From<crate::oci::LinuxMemory> for oci::LinuxMemory {
     }
 }
 
-impl From<crate::oci::LinuxCPU> for oci::LinuxCpu {
+impl From<crate::oci::LinuxCPU> for oci::LinuxCPU {
     fn from(mut from: crate::oci::LinuxCPU) -> Self {
         let shares = if from.Shares() > 0 {
             Some(from.Shares())
@@ -619,7 +619,7 @@ impl From<crate::oci::LinuxCPU> for oci::LinuxCpu {
             None
         };
 
-        oci::LinuxCpu {
+        oci::LinuxCPU {
             shares,
             quota,
             burst,
@@ -641,7 +641,7 @@ impl From<crate::oci::LinuxPids> for oci::LinuxPids {
     }
 }
 
-impl From<crate::oci::LinuxBlockIO> for oci::LinuxBlockIo {
+impl From<crate::oci::LinuxBlockIO> for oci::LinuxBlockIO {
     fn from(mut from: crate::oci::LinuxBlockIO) -> Self {
         let weight = if from.Weight() > 0 {
             Some(from.Weight() as u16)
@@ -655,7 +655,7 @@ impl From<crate::oci::LinuxBlockIO> for oci::LinuxBlockIo {
             None
         };
 
-        oci::LinuxBlockIo {
+        oci::LinuxBlockIO {
             weight,
             leaf_weight,
             weight_device: from_vec(from.take_WeightDevice()),
@@ -670,7 +670,7 @@ impl From<crate::oci::LinuxBlockIO> for oci::LinuxBlockIo {
 impl From<crate::oci::LinuxThrottleDevice> for oci::LinuxThrottleDevice {
     fn from(from: crate::oci::LinuxThrottleDevice) -> Self {
         oci::LinuxThrottleDevice {
-            blk: oci::LinuxBlockIoDevice {
+            blk: oci::LinuxBlockIODevice {
                 major: from.Major(),
                 minor: from.Minor(),
             },
@@ -682,7 +682,7 @@ impl From<crate::oci::LinuxThrottleDevice> for oci::LinuxThrottleDevice {
 impl From<crate::oci::LinuxWeightDevice> for oci::LinuxWeightDevice {
     fn from(from: crate::oci::LinuxWeightDevice) -> Self {
         oci::LinuxWeightDevice {
-            blk: oci::LinuxBlockIoDevice {
+            blk: oci::LinuxBlockIODevice {
                 major: from.Major(),
                 minor: from.Minor(),
             },
@@ -891,9 +891,9 @@ impl From<crate::oci::Linux> for oci::Linux {
     }
 }
 
-impl From<crate::oci::POSIXRlimit> for oci::PosixRlimit {
+impl From<crate::oci::POSIXRlimit> for oci::POSIXRlimit {
     fn from(mut from: crate::oci::POSIXRlimit) -> Self {
-        oci::PosixRlimit {
+        oci::POSIXRlimit {
             r#type: from.take_Type(),
             hard: from.Hard(),
             soft: from.Soft(),

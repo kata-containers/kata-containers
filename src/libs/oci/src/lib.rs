@@ -62,7 +62,7 @@ pub struct Spec {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub windows: Option<Windows<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub vm: Option<Vm>,
+    pub vm: Option<VM>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub zos: Option<ZOS>,
 }
@@ -77,7 +77,7 @@ impl Spec {
     }
 }
 
-pub type LinuxRlimit = PosixRlimit;
+pub type LinuxRlimit = POSIXRlimit;
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct Scheduler {
@@ -123,7 +123,7 @@ pub struct Process {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub capabilities: Option<LinuxCapabilities>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub rlimits: Vec<PosixRlimit>,
+    pub rlimits: Vec<POSIXRlimit>,
     #[serde(default, rename = "noNewPrivileges")]
     pub no_new_privileges: bool,
     #[serde(
@@ -231,13 +231,13 @@ pub struct Mount {
         rename = "uidMappings",
         skip_serializing_if = "Vec::is_empty"
     )]
-    pub uid_mappings: Vec<LinuxIdMapping>,
+    pub uid_mappings: Vec<LinuxIDMapping>,
     #[serde(
         default,
         rename = "gidMappings",
         skip_serializing_if = "Vec::is_empty"
     )]
-    pub gid_mappings: Vec<LinuxIdMapping>,
+    pub gid_mappings: Vec<LinuxIDMapping>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
@@ -287,13 +287,13 @@ pub struct Linux {
         rename = "uidMappings",
         skip_serializing_if = "Vec::is_empty"
     )]
-    pub uid_mappings: Vec<LinuxIdMapping>,
+    pub uid_mappings: Vec<LinuxIDMapping>,
     #[serde(
         default,
         rename = "gidMappings",
         skip_serializing_if = "Vec::is_empty"
     )]
-    pub gid_mappings: Vec<LinuxIdMapping>,
+    pub gid_mappings: Vec<LinuxIDMapping>,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub sysctl: HashMap<String, String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -374,7 +374,7 @@ pub const CGROUPNAMESPACE: &str = "cgroup";
 pub const TIMENAMESPACE: &str = "time";
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
-pub struct LinuxIdMapping {
+pub struct LinuxIDMapping {
     #[serde(default, rename = "containerID")]
     pub container_id: u32,
     #[serde(default, rename = "hostID")]
@@ -392,7 +392,7 @@ pub struct LinuxTimeOffset {
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
-pub struct PosixRlimit {
+pub struct POSIXRlimit {
     #[serde(default)]
     pub r#type: String,
     #[serde(default)]
@@ -422,7 +422,7 @@ pub struct LinuxInterfacePriority {
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
-pub struct LinuxBlockIoDevice {
+pub struct LinuxBlockIODevice {
     #[serde(default)]
     pub major: i64,
     #[serde(default)]
@@ -432,7 +432,7 @@ pub struct LinuxBlockIoDevice {
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct LinuxWeightDevice {
     #[serde(flatten)]
-    pub blk: LinuxBlockIoDevice,
+    pub blk: LinuxBlockIODevice,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub weight: Option<u16>,
     #[serde(
@@ -446,13 +446,13 @@ pub struct LinuxWeightDevice {
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct LinuxThrottleDevice {
     #[serde(flatten)]
-    pub blk: LinuxBlockIoDevice,
+    pub blk: LinuxBlockIODevice,
     #[serde(default)]
     pub rate: u64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
-pub struct LinuxBlockIo {
+pub struct LinuxBlockIO {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub weight: Option<u16>,
     #[serde(
@@ -532,7 +532,7 @@ pub struct LinuxMemory {
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
-pub struct LinuxCpu {
+pub struct LinuxCPU {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shares: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -598,11 +598,11 @@ pub struct LinuxResources {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub memory: Option<LinuxMemory>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cpu: Option<LinuxCpu>,
+    pub cpu: Option<LinuxCPU>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pids: Option<LinuxPids>,
     #[serde(rename = "blockIO", skip_serializing_if = "Option::is_none")]
-    pub block_io: Option<LinuxBlockIo>,
+    pub block_io: Option<LinuxBlockIO>,
     #[serde(
         default,
         rename = "hugepageLimits",
@@ -682,7 +682,7 @@ pub struct Solaris {
         rename = "cappedCPU",
         skip_serializing_if = "Option::is_none"
     )]
-    pub capped_cpu: Option<SolarisCappedCpu>,
+    pub capped_cpu: Option<SolarisCappedCPU>,
     #[serde(
         default,
         rename = "cappedMemory",
@@ -692,7 +692,7 @@ pub struct Solaris {
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
-pub struct SolarisCappedCpu {
+pub struct SolarisCappedCPU {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub ncpus: String,
 }
@@ -784,7 +784,7 @@ pub struct WindowsResources {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub memory: Option<WindowsMemoryResources>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cpu: Option<WindowsCpuResources>,
+    pub cpu: Option<WindowsCPUResources>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub storage: Option<WindowsStorageResources>,
 }
@@ -796,7 +796,7 @@ pub struct WindowsMemoryResources {
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
-pub struct WindowsCpuResources {
+pub struct WindowsCPUResources {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub count: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -860,14 +860,14 @@ pub struct WindowsHyperV {
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
-pub struct Vm {
-    pub hypervisor: VmHypervisor,
-    pub kernel: VmKernel,
-    pub image: VmImage,
+pub struct VM {
+    pub hypervisor: VMHypervisor,
+    pub kernel: VMKernel,
+    pub image: VMImage,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
-pub struct VmHypervisor {
+pub struct VMHypervisor {
     #[serde(default)]
     pub path: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -875,7 +875,7 @@ pub struct VmHypervisor {
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
-pub struct VmKernel {
+pub struct VMKernel {
     #[serde(default)]
     pub path: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -885,7 +885,7 @@ pub struct VmKernel {
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
-pub struct VmImage {
+pub struct VMImage {
     #[serde(default)]
     pub path: String,
     #[serde(default)]
@@ -1552,12 +1552,12 @@ mod tests {
                     ambient: vec!["CAP_NET_BIND_SERVICE".to_string()],
                 }),
                 rlimits: vec![
-                    crate::PosixRlimit {
+                    crate::POSIXRlimit {
                         r#type: "RLIMIT_CORE".to_string(),
                         hard: 1024,
                         soft: 1024,
                     },
-                    crate::PosixRlimit {
+                    crate::POSIXRlimit {
                         r#type: "RLIMIT_NOFILE".to_string(),
                         hard: 1024,
                         soft: 1024,
@@ -1713,12 +1713,12 @@ mod tests {
             .cloned()
             .collect(),
             linux: Some(crate::Linux {
-                uid_mappings: vec![crate::LinuxIdMapping {
+                uid_mappings: vec![crate::LinuxIDMapping {
                     container_id: 0,
                     host_id: 1000,
                     size: 32000,
                 }],
-                gid_mappings: vec![crate::LinuxIdMapping {
+                gid_mappings: vec![crate::LinuxIDMapping {
                     container_id: 0,
                     host_id: 1000,
                     size: 32000,
@@ -1765,7 +1765,7 @@ mod tests {
                         use_hierarchy: None,
                         check_before_update: None,
                     }),
-                    cpu: Some(crate::LinuxCpu {
+                    cpu: Some(crate::LinuxCPU {
                         shares: Some(1024),
                         quota: Some(1000000),
                         burst: None,
@@ -1777,17 +1777,17 @@ mod tests {
                         idle: None,
                     }),
                     pids: Some(crate::LinuxPids { limit: 32771 }),
-                    block_io: Some(crate::LinuxBlockIo {
+                    block_io: Some(crate::LinuxBlockIO {
                         weight: Some(10),
                         leaf_weight: Some(10),
                         weight_device: vec![
                             crate::LinuxWeightDevice {
-                                blk: crate::LinuxBlockIoDevice { major: 8, minor: 0 },
+                                blk: crate::LinuxBlockIODevice { major: 8, minor: 0 },
                                 weight: Some(500),
                                 leaf_weight: Some(300),
                             },
                             crate::LinuxWeightDevice {
-                                blk: crate::LinuxBlockIoDevice {
+                                blk: crate::LinuxBlockIODevice {
                                     major: 8,
                                     minor: 16,
                                 },
@@ -1796,13 +1796,13 @@ mod tests {
                             },
                         ],
                         throttle_read_bps_device: vec![crate::LinuxThrottleDevice {
-                            blk: crate::LinuxBlockIoDevice { major: 8, minor: 0 },
+                            blk: crate::LinuxBlockIODevice { major: 8, minor: 0 },
                             rate: 600,
                         }],
                         throttle_write_bps_device: vec![],
                         throttle_read_iops_device: vec![],
                         throttle_write_iops_device: vec![crate::LinuxThrottleDevice {
-                            blk: crate::LinuxBlockIoDevice {
+                            blk: crate::LinuxBlockIODevice {
                                 major: 8,
                                 minor: 16,
                             },

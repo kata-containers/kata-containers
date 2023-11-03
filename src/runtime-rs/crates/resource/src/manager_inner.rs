@@ -19,7 +19,7 @@ use hypervisor::{
 };
 use kata_types::config::TomlConfig;
 use kata_types::mount::Mount;
-use oci::{Linux, LinuxCpu, LinuxResources};
+use oci::{Linux, LinuxCPU, LinuxResources};
 use persist::sandbox_persist::Persist;
 use tokio::{runtime, sync::RwLock};
 
@@ -406,7 +406,7 @@ impl ResourceManagerInner {
         linux_resources: Option<&LinuxResources>,
         op: ResourceUpdateOp,
     ) -> Result<Option<LinuxResources>> {
-        let linux_cpus = || -> Option<&LinuxCpu> { linux_resources.as_ref()?.cpu.as_ref() }();
+        let linux_cpus = || -> Option<&LinuxCPU> { linux_resources.as_ref()?.cpu.as_ref() }();
 
         // if static_sandbox_resource_mgmt, we will not have to update sandbox's cpu or mem resource
         if !self.toml_config.runtime.static_sandbox_resource_mgmt {

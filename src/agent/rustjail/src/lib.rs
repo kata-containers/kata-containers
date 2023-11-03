@@ -103,7 +103,7 @@ pub fn process_grpc_to_oci(p: &grpc::Process) -> oci::Process {
     let rlimits = {
         let mut r = Vec::new();
         for lm in p.Rlimits.iter() {
-            r.push(oci::PosixRlimit {
+            r.push(oci::POSIXRlimit {
                 r#type: lm.Type.clone(),
                 hard: lm.Hard,
                 soft: lm.Soft,
@@ -167,7 +167,7 @@ fn mount_grpc_to_oci(m: &grpc::Mount) -> oci::Mount {
     let uid_mappings = m
         .UIDMappings
         .iter()
-        .map(|uidmapping| oci::LinuxIdMapping {
+        .map(|uidmapping| oci::LinuxIDMapping {
             container_id: uidmapping.ContainerID,
             host_id: uidmapping.HostID,
             size: uidmapping.Size,
@@ -177,7 +177,7 @@ fn mount_grpc_to_oci(m: &grpc::Mount) -> oci::Mount {
     let gid_mappings = m
         .GIDMappings
         .iter()
-        .map(|gidmapping| oci::LinuxIdMapping {
+        .map(|gidmapping| oci::LinuxIDMapping {
             container_id: gidmapping.ContainerID,
             host_id: gidmapping.HostID,
             size: gidmapping.Size,
@@ -227,15 +227,15 @@ fn hooks_grpc_to_oci(h: &grpc::Hooks) -> oci::Hooks {
     }
 }
 
-fn idmap_grpc_to_oci(im: &grpc::LinuxIDMapping) -> oci::LinuxIdMapping {
-    oci::LinuxIdMapping {
+fn idmap_grpc_to_oci(im: &grpc::LinuxIDMapping) -> oci::LinuxIDMapping {
+    oci::LinuxIDMapping {
         container_id: im.ContainerID,
         host_id: im.HostID,
         size: im.Size,
     }
 }
 
-fn idmaps_grpc_to_oci(ims: &[grpc::LinuxIDMapping]) -> Vec<oci::LinuxIdMapping> {
+fn idmaps_grpc_to_oci(ims: &[grpc::LinuxIDMapping]) -> Vec<oci::LinuxIDMapping> {
     let mut r = Vec::new();
     for im in ims.iter() {
         r.push(idmap_grpc_to_oci(im));
@@ -249,7 +249,7 @@ fn throttle_devices_grpc_to_oci(
     let mut r = Vec::new();
     for td in tds.iter() {
         r.push(oci::LinuxThrottleDevice {
-            blk: oci::LinuxBlockIoDevice {
+            blk: oci::LinuxBlockIODevice {
                 major: td.Major,
                 minor: td.Minor,
             },
@@ -263,7 +263,7 @@ fn weight_devices_grpc_to_oci(wds: &[grpc::LinuxWeightDevice]) -> Vec<oci::Linux
     let mut r = Vec::new();
     for wd in wds.iter() {
         r.push(oci::LinuxWeightDevice {
-            blk: oci::LinuxBlockIoDevice {
+            blk: oci::LinuxBlockIODevice {
                 major: wd.Major,
                 minor: wd.Minor,
             },
@@ -274,7 +274,7 @@ fn weight_devices_grpc_to_oci(wds: &[grpc::LinuxWeightDevice]) -> Vec<oci::Linux
     r
 }
 
-fn blockio_grpc_to_oci(blk: &grpc::LinuxBlockIO) -> oci::LinuxBlockIo {
+fn blockio_grpc_to_oci(blk: &grpc::LinuxBlockIO) -> oci::LinuxBlockIO {
     let weight_device = weight_devices_grpc_to_oci(blk.WeightDevice.as_ref());
     let throttle_read_bps_device = throttle_devices_grpc_to_oci(blk.ThrottleReadBpsDevice.as_ref());
     let throttle_write_bps_device =
@@ -284,7 +284,7 @@ fn blockio_grpc_to_oci(blk: &grpc::LinuxBlockIO) -> oci::LinuxBlockIo {
     let throttle_write_iops_device =
         throttle_devices_grpc_to_oci(blk.ThrottleWriteIOPSDevice.as_ref());
 
-    oci::LinuxBlockIo {
+    oci::LinuxBlockIO {
         weight: Some(blk.Weight as u16),
         leaf_weight: Some(blk.LeafWeight as u16),
         weight_device,
@@ -340,7 +340,7 @@ pub fn resources_grpc_to_oci(res: &grpc::LinuxResources) -> oci::LinuxResources 
 
     let cpu = if res.CPU.is_some() {
         let c = res.CPU.as_ref().unwrap();
-        Some(oci::LinuxCpu {
+        Some(oci::LinuxCPU {
             shares: Some(c.Shares),
             quota: Some(c.Quota),
             burst: Some(c.Burst),
@@ -730,12 +730,12 @@ mod tests {
                         ambient: Vec::from([String::from("amb")]),
                     }),
                     rlimits: Vec::from([
-                        oci::PosixRlimit {
+                        oci::POSIXRlimit {
                             r#type: String::from("r#type"),
                             hard: 123,
                             soft: 456,
                         },
-                        oci::PosixRlimit {
+                        oci::POSIXRlimit {
                             r#type: String::from("r#type2"),
                             hard: 789,
                             soft: 1011,
@@ -1209,24 +1209,24 @@ mod tests {
                     r#type: String::from("fieldtype"),
                     options: Vec::from([String::from("option1"), String::from("option2")]),
                     uid_mappings: Vec::from([
-                        oci::LinuxIdMapping {
+                        oci::LinuxIDMapping {
                             container_id: 0,
                             host_id: 1,
                             size: 1,
                         },
-                        oci::LinuxIdMapping {
+                        oci::LinuxIDMapping {
                             container_id: 1,
                             host_id: 2,
                             size: 1,
                         },
                     ]),
                     gid_mappings: Vec::from([
-                        oci::LinuxIdMapping {
+                        oci::LinuxIDMapping {
                             container_id: 0,
                             host_id: 1,
                             size: 1,
                         },
-                        oci::LinuxIdMapping {
+                        oci::LinuxIDMapping {
                             container_id: 1,
                             host_id: 2,
                             size: 1,
@@ -1264,12 +1264,12 @@ mod tests {
                     options: Vec::from([String::from("option1"), String::from("option2")]),
                     uid_mappings: Vec::new(),
                     gid_mappings: Vec::from([
-                        oci::LinuxIdMapping {
+                        oci::LinuxIDMapping {
                             container_id: 0,
                             host_id: 1,
                             size: 1,
                         },
-                        oci::LinuxIdMapping {
+                        oci::LinuxIDMapping {
                             container_id: 1,
                             host_id: 2,
                             size: 1,
@@ -1306,12 +1306,12 @@ mod tests {
                     r#type: String::from("fieldtype"),
                     options: Vec::from([String::from("option1"), String::from("option2")]),
                     uid_mappings: Vec::from([
-                        oci::LinuxIdMapping {
+                        oci::LinuxIDMapping {
                             container_id: 0,
                             host_id: 1,
                             size: 1,
                         },
-                        oci::LinuxIdMapping {
+                        oci::LinuxIDMapping {
                             container_id: 1,
                             host_id: 2,
                             size: 1,

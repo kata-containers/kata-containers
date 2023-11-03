@@ -351,7 +351,7 @@ fn mount_oci_to_ttrpc(m: &ociMount) -> ttrpcMount {
     }
 }
 
-fn idmaps_oci_to_ttrpc(res: &[oci::LinuxIdMapping]) -> Vec<ttrpcLinuxIDMapping> {
+fn idmaps_oci_to_ttrpc(res: &[oci::LinuxIDMapping]) -> Vec<ttrpcLinuxIDMapping> {
     let mut ttrpc_idmaps = Vec::new();
     for m in res.iter() {
         let mut idmapping = ttrpcLinuxIDMapping::default();
@@ -396,7 +396,7 @@ fn memory_oci_to_ttrpc(res: &Option<oci::LinuxMemory>) -> protobuf::MessageField
     memory
 }
 
-fn cpu_oci_to_ttrpc(res: &Option<oci::LinuxCpu>) -> protobuf::MessageField<ttrpcLinuxCPU> {
+fn cpu_oci_to_ttrpc(res: &Option<oci::LinuxCPU>) -> protobuf::MessageField<ttrpcLinuxCPU> {
     match &res {
         Some(s) => {
             let mut cpu = ttrpcLinuxCPU::default();
@@ -489,7 +489,7 @@ fn throttle_devices_oci_to_ttrpc(
 }
 
 fn block_io_oci_to_ttrpc(
-    res: &Option<oci::LinuxBlockIo>,
+    res: &Option<oci::LinuxBlockIO>,
 ) -> protobuf::MessageField<ttrpcLinuxBlockIO> {
     match &res {
         Some(s) => {
