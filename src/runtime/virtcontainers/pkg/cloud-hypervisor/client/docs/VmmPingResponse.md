@@ -7,6 +7,7 @@ Name | Type | Description | Notes
 **BuildVersion** | Pointer to **string** |  | [optional] 
 **Version** | **string** |  | 
 **Pid** | Pointer to **int64** |  | [optional] 
+**Features** | Pointer to **[]string** |  | [optional] 
 
 ## Methods
 
@@ -96,6 +97,31 @@ SetPid sets Pid field to given value.
 `func (o *VmmPingResponse) HasPid() bool`
 
 HasPid returns a boolean if a field has been set.
+
+### GetFeatures
+
+`func (o *VmmPingResponse) GetFeatures() []string`
+
+GetFeatures returns the Features field if non-nil, zero value otherwise.
+
+### GetFeaturesOk
+
+`func (o *VmmPingResponse) GetFeaturesOk() (*[]string, bool)`
+
+GetFeaturesOk returns a tuple with the Features field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetFeatures
+
+`func (o *VmmPingResponse) SetFeatures(v []string)`
+
+SetFeatures sets Features field to given value.
+
+### HasFeatures
+
+`func (o *VmmPingResponse) HasFeatures() bool`
+
+HasFeatures returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

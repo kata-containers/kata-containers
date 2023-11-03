@@ -16,9 +16,10 @@ import (
 
 // ConsoleConfig struct for ConsoleConfig
 type ConsoleConfig struct {
-	File  *string `json:"file,omitempty"`
-	Mode  string  `json:"mode"`
-	Iommu *bool   `json:"iommu,omitempty"`
+	File   *string `json:"file,omitempty"`
+	Socket *string `json:"socket,omitempty"`
+	Mode   string  `json:"mode"`
+	Iommu  *bool   `json:"iommu,omitempty"`
 }
 
 // NewConsoleConfig instantiates a new ConsoleConfig object
@@ -73,6 +74,38 @@ func (o *ConsoleConfig) HasFile() bool {
 // SetFile gets a reference to the given string and assigns it to the File field.
 func (o *ConsoleConfig) SetFile(v string) {
 	o.File = &v
+}
+
+// GetSocket returns the Socket field value if set, zero value otherwise.
+func (o *ConsoleConfig) GetSocket() string {
+	if o == nil || o.Socket == nil {
+		var ret string
+		return ret
+	}
+	return *o.Socket
+}
+
+// GetSocketOk returns a tuple with the Socket field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *ConsoleConfig) GetSocketOk() (*string, bool) {
+	if o == nil || o.Socket == nil {
+		return nil, false
+	}
+	return o.Socket, true
+}
+
+// HasSocket returns a boolean if a field has been set.
+func (o *ConsoleConfig) HasSocket() bool {
+	if o != nil && o.Socket != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetSocket gets a reference to the given string and assigns it to the Socket field.
+func (o *ConsoleConfig) SetSocket(v string) {
+	o.Socket = &v
 }
 
 // GetMode returns the Mode field value
@@ -135,6 +168,9 @@ func (o ConsoleConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.File != nil {
 		toSerialize["file"] = o.File
+	}
+	if o.Socket != nil {
+		toSerialize["socket"] = o.Socket
 	}
 	if true {
 		toSerialize["mode"] = o.Mode
