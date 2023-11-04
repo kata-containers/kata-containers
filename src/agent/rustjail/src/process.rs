@@ -5,7 +5,7 @@
 
 use libc::pid_t;
 use std::fs::File;
-use std::os::unix::io::{AsRawFd, RawFd};
+use std::os::unix::io::{AsRawFd, RawFd, IntoRawFd};
 use tokio::sync::mpsc::Sender;
 use tokio_vsock::VsockStream;
 
@@ -137,6 +137,13 @@ impl ProcessOperations for Process {
     }
 }
 
+fn set_blocking(fd: RawFd) -> Result<()> {
+    let flags = fcntl(fd, FcntlArg::F_GETFL)?;
+    let new_flags = !OFlag::O_NONBLOCK & OFlag::from_bits_truncate(flags);
+    fcntl(fd, FcntlArg::F_SETFL(new_flags))?;
+    Ok(())
+}
+
 impl Process {
     pub fn new(
         logger: &Logger,
@@ -189,8 +196,11 @@ impl Process {
                 p.stdin = Some(stdin);
 
                 if let Some(stdout) = p.proc_io.as_mut().map(|io| io.stdout.take()).flatten() {
-                    p.stdout = Some(stdout.as_raw_fd());
-                    std::mem::forget(stdout);
+                    let fd = stdout.into_raw_fd();
+                    // The stdout/stderr of the process should be blocking, otherwise
+                    // the process may encounter EAGAIN error when writing to stdout/stderr.
+                    set_blocking(fd)?;
+                    p.stdout = Some(fd);
                 } else {
                     let (pstdout, stdout) = create_extended_pipe(OFlag::O_CLOEXEC, pipe_size)?;
                     p.parent_stdout = Some(pstdout);
@@ -198,8 +208,9 @@ impl Process {
                 }
 
                 if let Some(stderr) = p.proc_io.as_mut().map(|io| io.stderr.take()).flatten() {
-                    p.stderr = Some(stderr.as_raw_fd());
-                    std::mem::forget(stderr);
+                    let fd = stderr.into_raw_fd();
+                    set_blocking(fd)?;
+                    p.stderr = Some(fd);
                 } else {
                     let (pstderr, stderr) = create_extended_pipe(OFlag::O_CLOEXEC, pipe_size)?;
                     p.parent_stderr = Some(pstderr);
