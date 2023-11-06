@@ -109,7 +109,7 @@ github_get_latest_release()
 	local latest
 	latest=$(curl -sL "$url" |\
 		jq -r '.[].tag_name | select(contains("-") | not)' |\
-		sort -t "." -k1,1n -k2,2n -k3,3n |\
+		sort -t '.' -V |\
 		tail -1 || true)
 
 	[ -z "$latest" ] && die "Cannot determine latest release from $url"
