@@ -146,9 +146,9 @@ use crate::device::DeviceType;
 
 // device manager part of Hypervisor
 impl QemuInner {
-    pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<()> {
+    pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<DeviceType> {
         info!(sl!(), "QemuInner::add_device() {}", device);
-        todo!()
+        Ok(device)
     }
 
     pub(crate) async fn remove_device(&mut self, device: DeviceType) -> Result<()> {
