@@ -251,6 +251,7 @@ Options:
  -f           : Force installation (use with care).
  -h           : Show this help statement.
  -k <version> : Specify Kata Containers version.
+ -l           : List installed and available versions only, then exit (uses network).
  -o           : Only install Kata Containers.
  -r           : Don't cleanup on failure (retain files).
  -t           : Disable self test (don't try to create a container after install).
@@ -273,6 +274,7 @@ Advice:
 - You can check the latest version of Kata Containers by running
   one of the following:
 
+  $ $script_name -l
   $ kata-runtime check --only-list-releases
   $ kata-ctl check only-list-releases
 
@@ -878,6 +880,41 @@ validate_containerd_flavour()
 	grep -qE "$flavours_regex" <<< "$flavour" || die "expected flavour to match '$flavours_regex', found '$flavour'"
 }
 
+list_versions()
+{
+	local -r not_installed='<not installed>'
+
+	# The latest available checks will hit the network so inform the
+	# user what we are doing in case of network delays.
+	info "Getting version details"
+
+	local installed_kata
+	installed_kata=$("$kata_shim_v2" --version 2>/dev/null ||\
+		echo "$not_installed")
+
+	local installed_containerd
+	installed_containerd=$(containerd --version 2>/dev/null ||\
+		echo "$not_installed")
+
+	local latest_kata
+	latest_kata=$(github_get_latest_release "$kata_releases_url" || true)
+	[ -z "$latest_kata" ] && \
+		die "cannot determine latest version of $project"
+
+	local latest_containerd
+	latest_containerd=$(github_get_latest_release "$containerd_releases_url" || true)
+	[ -z "$latest_containerd" ] && \
+		die "cannot determine latest version of $containerd_project"
+
+	info "$kata_project: installed version: $installed_kata"
+	info "$kata_project: latest version: $latest_kata"
+
+	echo
+
+	info "$containerd_project: installed version: $installed_containerd"
+	info "$containerd_project: latest version: $latest_containerd"
+}
+
 handle_args()
 {
 	local cleanup="true"
@@ -887,13 +924,14 @@ handle_args()
 	local only_run_test="false"
 	local enable_debug="false"
 	local install_docker="false"
+	local list_versions='false'
 
 	local opt
 
 	local kata_version=""
 	local containerd_flavour="lts"
 
-	while getopts "c:dDfhk:ortT" opt "$@"
+	while getopts "c:dDfhk:lortT" opt "$@"
 	do
 		case "$opt" in
 			c) containerd_flavour="$OPTARG" ;;
@@ -902,6 +940,7 @@ handle_args()
 			f) force="true" ;;
 			h) usage; exit 0 ;;
 			k) kata_version="$OPTARG" ;;
+			l) list_versions='true' ;;
 			o) skip_containerd="true" ;;
 			r) cleanup="false" ;;
 			t) disable_test="true" ;;
@@ -912,6 +951,8 @@ handle_args()
 	done
 
 	shift $[$OPTIND-1]
+
+	[ "$list_versions" = 'true' ] && list_versions && exit 0
 
 	[ -z "$kata_version" ] && kata_version="${1:-}" || true
 	[ -z "$containerd_flavour" ] && containerd_flavour="${2:-}" || true
