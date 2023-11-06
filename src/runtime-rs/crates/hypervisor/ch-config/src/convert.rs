@@ -99,11 +99,7 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
 
         check_tdx_rootfs_settings(&cfg, &guest_protection_to_use)?;
 
-        let vsock_socket_path = if n.vsock_socket_path.is_empty() {
-            return Err(VmConfigError::EmptyVsockSocketPath);
-        } else {
-            n.vsock_socket_path
-        };
+        let vsock_socket_path = n.vsock_socket_path;
 
         let sandbox_path = if n.sandbox_path.is_empty() {
             return Err(VmConfigError::EmptySandboxPath);
@@ -1941,7 +1937,7 @@ mod tests {
         let tests = &[
             TestData {
                 cfg: NamedHypervisorConfig::default(),
-                result: Err(VmConfigError::EmptyVsockSocketPath),
+                result: Err(VmConfigError::EmptySandboxPath),
             },
             TestData {
                 cfg: NamedHypervisorConfig {
@@ -1957,7 +1953,7 @@ mod tests {
 
                     ..Default::default()
                 },
-                result: Err(VmConfigError::EmptyVsockSocketPath),
+                result: Err(VmConfigError::CPUError(CpusConfigError::BootVCPUsTooSmall)),
             },
             TestData {
                 cfg: NamedHypervisorConfig {
@@ -2018,7 +2014,9 @@ mod tests {
             },
             TestData {
                 cfg: named_hypervisor_cfg_with_image_and_kernel_bad_vsock,
-                result: Err(VmConfigError::EmptyVsockSocketPath),
+                result: Err(VmConfigError::VsockError(
+                    VsockConfigError::NoVsockSocketPath,
+                )),
             },
             TestData {
                 cfg: named_hypervisor_cfg_with_image_and_kernel,
