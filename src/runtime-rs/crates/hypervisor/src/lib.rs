@@ -85,7 +85,7 @@ pub trait Hypervisor: std::fmt::Debug + Send + Sync {
     async fn resize_vcpu(&self, old_vcpus: u32, new_vcpus: u32) -> Result<(u32, u32)>; // returns (old_vcpus, new_vcpus)
 
     // device manager
-    async fn add_device(&self, device: DeviceType) -> Result<()>;
+    async fn add_device(&self, device: DeviceType) -> Result<DeviceType>;
     async fn remove_device(&self, device: DeviceType) -> Result<()>;
 
     // utils

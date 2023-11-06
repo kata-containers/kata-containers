@@ -92,9 +92,12 @@ impl Hypervisor for Dragonball {
         inner.resize_vcpu(old_vcpus, new_vcpus).await
     }
 
-    async fn add_device(&self, device: DeviceType) -> Result<()> {
+    async fn add_device(&self, device: DeviceType) -> Result<DeviceType> {
         let mut inner = self.inner.write().await;
-        inner.add_device(device).await
+        match inner.add_device(device.clone()).await {
+            Ok(_) => Ok(device),
+            Err(err) => Err(err),
+        }
     }
 
     async fn remove_device(&self, device: DeviceType) -> Result<()> {

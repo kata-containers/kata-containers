@@ -389,25 +389,13 @@ impl VfioDevice {
             .get_vfio_device_vendor(&dev_bdf)
             .context("get property device and vendor failed")?;
 
-        let mut vfio_dev = HostDevice {
+        let vfio_dev = HostDevice {
             bus_slot_func: dev_bdf.clone(),
             device_vendor: Some(dev_vendor),
             sysfs_path: vfio_dev_details.1,
             vfio_type: vfio_dev_details.2,
             ..Default::default()
         };
-
-        // when vfio pci, kata-agent handles with device_options, and its
-        // format: "DDDD:BB:DD.F=<pcipath>"
-        // DDDD:BB:DD.F is the device's PCI address on host
-        // <pcipath> is the device's PCI path in the guest
-        if self.bus_mode == VfioBusMode::PCI {
-            let pci_path =
-                generate_guest_pci_path(dev_bdf.clone()).context("generate pci path failed")?;
-            vfio_dev.guest_pci_path = Some(pci_path.clone());
-            self.device_options
-                .push(format!("0000:{}={}", dev_bdf, pci_path.convert_to_string()));
-        }
 
         Ok(vfio_dev)
     }
@@ -493,13 +481,42 @@ impl Device for VfioDevice {
         }
 
         // do add device for vfio deivce
-        if let Err(e) = h.add_device(DeviceType::Vfio(self.clone())).await {
-            self.decrease_attach_count().await?;
+        match h.add_device(DeviceType::Vfio(self.clone())).await {
+            Ok(dev) => {
+                // Update device info with the one received from device attach
+                if let DeviceType::Vfio(vfio) = dev {
+                    self.config = vfio.config;
+                    self.devices = vfio.devices;
+                }
 
-            return Err(e);
+                if self.bus_mode == VfioBusMode::PCI {
+                    for hostdev in self.devices.iter_mut() {
+                        if hostdev.guest_pci_path.is_none() {
+                            // guest_pci_path may be empty for certain hypervisors such as
+                            // dragonball
+                            hostdev.guest_pci_path = Some(
+                                generate_guest_pci_path(hostdev.bus_slot_func.clone())
+                                    .map_err(|e| anyhow!("generate pci path failed: {:?}", e))?,
+                            );
+                        }
+
+                        // Safe to call unwrap here because of previous assignment.
+                        let pci_path = hostdev.guest_pci_path.clone().unwrap();
+                        self.device_options.push(format!(
+                            "0000:{}={}",
+                            hostdev.bus_slot_func.clone(),
+                            pci_path.convert_to_string()
+                        ));
+                    }
+                }
+
+                Ok(())
+            }
+            Err(e) => {
+                self.decrease_attach_count().await?;
+                return Err(e);
+            }
         }
-
-        Ok(())
     }
 
     async fn detach(&mut self, h: &dyn hypervisor) -> Result<Option<u64>> {
