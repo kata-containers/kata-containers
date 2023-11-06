@@ -10,9 +10,6 @@ pub enum VmConfigError {
     #[error("empty sandbox path")]
     EmptySandboxPath,
 
-    #[error("empty VSOCK socket path")]
-    EmptyVsockSocketPath,
-
     #[error("cannot specify image and initrd")]
     MultipleBootFiles,
 
