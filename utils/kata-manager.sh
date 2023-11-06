@@ -270,9 +270,11 @@ $warnings
 
 Advice:
 
-- You can check the latest version of Kata Containers by running:
+- You can check the latest version of Kata Containers by running
+  one of the following:
 
   $ kata-runtime check --only-list-releases
+  $ kata-ctl check only-list-releases
 
 EOF
 }
