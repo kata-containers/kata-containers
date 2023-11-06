@@ -27,6 +27,10 @@ readonly kata_releases_url="https://api.github.com/repos/${kata_slug}/releases"
 readonly containerd_releases_url="https://api.github.com/repos/${containerd_slug}/releases"
 readonly containerd_io_releases_url="https://raw.githubusercontent.com/containerd/containerd.io/main/content/releases.md"
 
+readonly docker_slug="moby/moby"
+readonly docker_project="Docker (moby)"
+readonly docker_releases_url="https://api.github.com/repos/${docker_slug}/releases"
+
 # Directory created when unpacking a binary release archive downloaded from
 # $kata_releases_url.
 readonly kata_install_dir="${kata_install_dir:-/opt/kata}"
@@ -896,6 +900,10 @@ list_versions()
 	installed_containerd=$(containerd --version 2>/dev/null ||\
 		echo "$not_installed")
 
+	local installed_docker
+	installed_docker=$(docker --version 2>/dev/null ||\
+		echo "$not_installed")
+
 	local latest_kata
 	latest_kata=$(github_get_latest_release "$kata_releases_url" || true)
 	[ -z "$latest_kata" ] && \
@@ -906,6 +914,11 @@ list_versions()
 	[ -z "$latest_containerd" ] && \
 		die "cannot determine latest version of $containerd_project"
 
+	local latest_docker
+	latest_docker=$(github_get_latest_release "$docker_releases_url" || true)
+	[ -z "$latest_docker" ] && \
+		die "cannot determine latest version of $docker_project"
+
 	info "$kata_project: installed version: $installed_kata"
 	info "$kata_project: latest version: $latest_kata"
 
@@ -913,6 +926,11 @@ list_versions()
 
 	info "$containerd_project: installed version: $installed_containerd"
 	info "$containerd_project: latest version: $latest_containerd"
+
+	echo
+
+	info "$docker_project: installed version: $installed_docker"
+	info "$docker_project: latest version: $latest_docker"
 }
 
 handle_args()
