@@ -873,8 +873,8 @@ allow_storage_options(p_storage, i_storage, layer_ids, root_hashes) {
     lowerdir := concat("=", ["lowerdir", p_storage.options[0]])
     print("allow_storage_options 2: lowerdir =", lowerdir)
 
-    i_storage.options[i_count - 1] == lowerdir
     print("allow_storage_options 2: i_storage.options[i_count - 1] =", i_storage.options[i_count - 1])
+    i_storage.options[i_count - 1] == lowerdir
 
     every i, policy_id in policy_ids {
         allow_overlay_layer(policy_id, policy_hashes[i], i_storage.options[i + 1])
