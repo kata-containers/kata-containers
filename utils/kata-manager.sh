@@ -45,6 +45,9 @@ readonly kata_clh_configuration="configuration-clh"
 # Systemd unit name for containerd daemon
 readonly containerd_service_name="containerd.service"
 
+# Containerd configuration file
+readonly containerd_config="/etc/containerd/config.toml"
+
 # Directory in which to create symbolic links
 readonly link_dir=${link_dir:-/usr/bin}
 
@@ -455,8 +458,6 @@ configure_containerd()
 
 	info "Configuring $project"
 
-	local cfg="/etc/containerd/config.toml"
-
 	local systemd_unit_dir="/etc/systemd/system"
 	sudo mkdir -p "$systemd_unit_dir"
 
@@ -488,19 +489,19 @@ configure_containerd()
 	fi
 
 	# Backup the original containerd configuration:
-	sudo mkdir -p "$(dirname $cfg)"
+	sudo mkdir -p "$(dirname $containerd_config)"
 
-	sudo test -e "$cfg" || {
-		sudo touch "$cfg"
-		info "Created $cfg"
+	sudo test -e "$containerd_config" || {
+		sudo touch "$containerd_config"
+		info "Created $containerd_config"
 	}
 
 	local original
-	original="${cfg}-pre-kata-$(date -I)"
+	original="${containerd_config}-pre-kata-$(date -I)"
 
-	sudo grep -q "$kata_runtime_type" "$cfg" || {
-		sudo cp "$cfg" "${original}"
-		info "Backed up $cfg to $original"
+	sudo grep -q "$kata_runtime_type" "$containerd_config" || {
+		sudo cp "$containerd_config" "${original}"
+		info "Backed up $containerd_config to $original"
 	}
 
 	local modified="false"
@@ -512,8 +513,8 @@ configure_containerd()
 		"$(date -Iseconds)" \
 		"$script_name")
 
-	sudo grep -q "$kata_runtime_type" "$cfg" || {
-		cat <<-EOF | sudo tee -a "$cfg"
+	sudo grep -q "$kata_runtime_type" "$containerd_config" || {
+		cat <<-EOF | sudo tee -a "$containerd_config"
 		# $comment_text
 		[plugins]
 		  [plugins."io.containerd.grpc.v1.cri"]
@@ -538,11 +539,11 @@ configure_containerd()
 	if [ "$enable_debug" = "true" ]
 	then
 		local debug_enabled
-		debug_enabled=$(awk -v RS='' '/\[debug\]/' "$cfg" |\
+		debug_enabled=$(awk -v RS='' '/\[debug\]/' "$containerd_config" |\
 			grep -E "^\s*\<level\>\s*=\s*.*\<debug\>" || true)
 
 		[ -n "$debug_enabled" ] || {
-			cat <<-EOF | sudo tee -a "$cfg"
+			cat <<-EOF | sudo tee -a "$containerd_config"
 			# $comment_text
 			[debug]
 				level = "debug"
@@ -552,7 +553,7 @@ configure_containerd()
 		modified="true"
 	fi
 
-	[ "$modified" = "true" ] && info "Modified $cfg"
+	[ "$modified" = "true" ] && info "Modified $containerd_config"
 	sudo systemctl enable containerd
 	sudo systemctl start containerd
 
@@ -727,9 +728,7 @@ handle_docker()
 	if [ "$ret" -eq 0 ]
 	then
 		info "Backing up previous $containerd_project configuration"
-		local cfg="/etc/containerd/config.toml"
-
-		[ -e "$cfg" ] && sudo mv $cfg $cfg.system-$(date -Iseconds)
+		[ -e "$containerd_config" ] && sudo mv $containerd_config $containerd_config.system-$(date -Iseconds)
 	fi
 
 	containerd_installed
