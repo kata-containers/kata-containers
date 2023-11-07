@@ -1884,9 +1884,8 @@ func (q *qemu) hotplugNetDevice(ctx context.Context, endpoint Endpoint, op Opera
 	var tap TapInterface
 
 	switch endpoint.Type() {
-	case VethEndpointType:
-		drive := endpoint.(*VethEndpoint)
-		tap = drive.NetPair.TapInterface
+	case VethEndpointType, IPVlanEndpointType, MacvlanEndpointType, TuntapEndpointType:
+		tap = endpoint.NetworkPair().TapInterface
 	case TapEndpointType:
 		drive := endpoint.(*TapEndpoint)
 		tap = drive.TapInterface
