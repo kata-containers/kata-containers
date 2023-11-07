@@ -12,9 +12,9 @@ use std::sync::Arc;
 
 use dbs_device::resources::ResourceConstraint;
 use dbs_utils::epoll_manager::{EpollManager, SubscriberId};
-use log::debug;
-use log::trace;
-use log::warn;
+use dbs_utils::metric::{IncMetric, SharedIncMetric};
+use log::{debug, trace, warn};
+use serde::Serialize;
 use virtio_queue::QueueT;
 use vm_memory::GuestAddressSpace;
 use vm_memory::GuestMemoryRegion;
@@ -31,6 +31,57 @@ const VSOCK_DRIVER_NAME: &str = "virtio-vsock";
 const VSOCK_CONFIG_SPACE_SIZE: usize = 8;
 const VSOCK_AVAIL_FEATURES: u64 =
     1u64 << uapi::VIRTIO_F_VERSION_1 | 1u64 << uapi::VIRTIO_F_IN_ORDER;
+
+/// Vsock-related metrics.
+#[derive(Default, Serialize)]
+pub struct VsockDeviceMetrics {
+    /// Number of times when handling events on a vsock device.
+    pub event_count: SharedIncMetric,
+    /// Number of times when activate failed on a vsock device.
+    pub activate_fails: SharedIncMetric,
+    /// Number of times when interacting with the space config of a vsock device failed.
+    pub cfg_fails: SharedIncMetric,
+    /// Number of times when handling RX queue events on a vsock device failed.
+    pub rx_queue_event_fails: SharedIncMetric,
+    /// Number of times when handling TX queue events on a vsock device failed.
+    pub tx_queue_event_fails: SharedIncMetric,
+    /// Number of times when handling event queue events on a vsock device failed.
+    pub ev_queue_event_fails: SharedIncMetric,
+    /// Number of times when handling muxer events on a vsock device failed.
+    pub muxer_event_fails: SharedIncMetric,
+    /// Number of times when handling connection events on a vsock device failed.
+    pub conn_event_fails: SharedIncMetric,
+    /// Number of events associated with the receiving queue.
+    pub rx_queue_event_count: SharedIncMetric,
+    /// Number of events associated with the transmitting queue.
+    pub tx_queue_event_count: SharedIncMetric,
+    /// Number of events associated with the event queue.
+    pub ev_queue_event_count: SharedIncMetric,
+    /// Number of events associated with the backend.
+    pub backend_event_count: SharedIncMetric,
+    /// Number of bytes received.
+    pub rx_bytes_count: SharedIncMetric,
+    /// Number of transmitted bytes.
+    pub tx_bytes_count: SharedIncMetric,
+    /// Number of packets received.
+    pub rx_packets_count: SharedIncMetric,
+    /// Number of transmitted packets.
+    pub tx_packets_count: SharedIncMetric,
+    /// Number of added connections.
+    pub conns_added: SharedIncMetric,
+    /// Number of killed connections.
+    pub conns_killed: SharedIncMetric,
+    /// Number of removed connections.
+    pub conns_removed: SharedIncMetric,
+    /// How many times the killq has been resynced.
+    pub killq_resync: SharedIncMetric,
+    /// How many flush fails have been seen.
+    pub tx_flush_fails: SharedIncMetric,
+    /// How many write fails have been seen.
+    pub tx_write_fails: SharedIncMetric,
+    /// Number of times read() has failed.
+    pub rx_read_fails: SharedIncMetric,
+}
 
 /// This is the `VirtioDevice` implementation for our vsock device. It handles
 /// the virtio-level device logic: feature negociation, device configuration,
@@ -55,6 +106,7 @@ pub struct Vsock<AS: GuestAddressSpace, M: VsockGenericMuxer = VsockMuxer> {
     subscriber_id: Option<SubscriberId>,
     muxer: Option<M>,
     phantom: PhantomData<AS>,
+    metrics: Arc<VsockDeviceMetrics>,
 }
 
 // Default muxer implementation of Vsock
@@ -63,7 +115,8 @@ impl<AS: GuestAddressSpace> Vsock<AS> {
     /// backend.
     pub fn new(cid: u64, queue_sizes: Arc<Vec<u16>>, epoll_mgr: EpollManager) -> Result<Self> {
         let muxer = VsockMuxer::new(cid).map_err(VsockError::Muxer)?;
-        Self::new_with_muxer(cid, queue_sizes, epoll_mgr, muxer)
+        let metrics = muxer.metrics();
+        Self::new_with_muxer(cid, queue_sizes, epoll_mgr, muxer, metrics)
     }
 }
 
@@ -73,6 +126,7 @@ impl<AS: GuestAddressSpace, M: VsockGenericMuxer> Vsock<AS, M> {
         queue_sizes: Arc<Vec<u16>>,
         epoll_mgr: EpollManager,
         muxer: M,
+        metrics: Arc<VsockDeviceMetrics>,
     ) -> Result<Self> {
         let mut config_space = Vec::with_capacity(VSOCK_CONFIG_SPACE_SIZE);
         for i in 0..VSOCK_CONFIG_SPACE_SIZE {
@@ -92,6 +146,7 @@ impl<AS: GuestAddressSpace, M: VsockGenericMuxer> Vsock<AS, M> {
             subscriber_id: None,
             muxer: Some(muxer),
             phantom: PhantomData,
+            metrics,
         })
     }
 
@@ -109,6 +164,10 @@ impl<AS: GuestAddressSpace, M: VsockGenericMuxer> Vsock<AS, M> {
         } else {
             Err(VsockError::Muxer(MuxerError::BackendAddAfterActivated))
         }
+    }
+
+    pub fn metrics(&self) -> Arc<VsockDeviceMetrics> {
+        self.metrics.clone()
     }
 }
 
@@ -141,25 +200,37 @@ where
     fn read_config(&mut self, offset: u64, data: &mut [u8]) -> ConfigResult {
         trace!(target: "virtio-vsock", "{}: VirtioDevice::read_config(0x{:x}, {:?})",
             self.id(), offset, data);
-        self.device_info.read_config(offset, data)
+        self.device_info.read_config(offset, data).map_err(|e| {
+            self.metrics.cfg_fails.inc();
+            e
+        })
     }
 
     fn write_config(&mut self, offset: u64, data: &[u8]) -> ConfigResult {
         trace!(target: "virtio-vsock", "{}: VirtioDevice::write_config(0x{:x}, {:?})",
         self.id(), offset, data);
-        self.device_info.write_config(offset, data)
+        self.device_info.write_config(offset, data).map_err(|e| {
+            self.metrics.cfg_fails.inc();
+            e
+        })
     }
 
     fn activate(&mut self, config: VirtioDeviceConfig<AS, Q, R>) -> ActivateResult {
         trace!(target: "virtio-vsock", "{}: VirtioDevice::activate()", self.id());
 
-        self.device_info.check_queue_sizes(&config.queues[..])?;
+        self.device_info
+            .check_queue_sizes(&config.queues[..])
+            .map_err(|e| {
+                self.metrics.activate_fails.inc();
+                e
+            })?;
         let handler: VsockEpollHandler<AS, Q, R, M> = VsockEpollHandler::new(
             config,
             self.id().to_owned(),
             self.cid,
             // safe to unwrap, because we create muxer using New()
             self.muxer.take().unwrap(),
+            self.metrics.clone(),
         );
 
         self.subscriber_id = Some(self.device_info.register_event_handler(Box::new(handler)));
@@ -234,6 +305,7 @@ mod tests {
                     self.cid,
                     // safe to unwrap, because we create muxer using New()
                     self.muxer.take().unwrap(),
+                    self.metrics.clone(),
                 );
 
             Ok(handler)

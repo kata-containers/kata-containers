@@ -87,8 +87,10 @@
 use std::io::{ErrorKind, Read, Write};
 use std::num::Wrapping;
 use std::os::unix::io::{AsRawFd, RawFd};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use dbs_utils::metric::IncMetric;
 use log::{debug, error, info, warn};
 
 use super::super::backend::VsockStream;
@@ -98,6 +100,7 @@ use super::super::{Result as VsockResult, VsockChannel, VsockEpollListener, Vsoc
 use super::defs;
 use super::txbuf::TxBuf;
 use super::{ConnState, Error, PendingRx, PendingRxSet, Result};
+use crate::vsock::device::VsockDeviceMetrics;
 
 /// A self-managing connection object, that handles communication between a
 /// guest-side AF_VSOCK socket and a host-side `Read + Write + AsRawFd` stream.
@@ -137,6 +140,8 @@ pub struct VsockConnection {
     /// Instant when this connection should be scheduled for immediate
     /// termination, due to some timeout condition having been fulfilled.
     expiry: Option<Instant>,
+    /// metrics for the vsock device
+    metrics: Arc<VsockDeviceMetrics>,
 }
 
 impl VsockChannel for VsockConnection {
@@ -162,6 +167,7 @@ impl VsockChannel for VsockConnection {
         // Perform some generic initialization that is the same for any packet
         // operation (e.g. source, destination, credit, etc).
         self.init_pkt(pkt);
+        self.metrics.rx_packets_count.inc();
 
         // If forceful termination is pending, there's no point in checking for
         // anything else. It's dead, Jim.
@@ -237,6 +243,7 @@ impl VsockChannel for VsockConnection {
                         // On a successful data read, we fill in the packet with
                         // the RW op, and length of the read data.
                         pkt.set_op(uapi::VSOCK_OP_RW).set_len(read_cnt as u32);
+                        self.metrics.rx_bytes_count.add(read_cnt);
                     }
                     self.rx_cnt += Wrapping(pkt.len());
                     self.last_fwd_cnt_to_peer = self.fwd_cnt;
@@ -256,6 +263,7 @@ impl VsockChannel for VsockConnection {
                     // We are not expecting any other errors when reading from
                     // the underlying stream. If any show up, we'll immediately
                     // kill this connection.
+                    self.metrics.rx_read_fails.inc();
                     error!(
                         "vsock: error reading from backing stream: lp={}, pp={}, err={:?}",
                         self.local_port, self.peer_port, err
@@ -291,6 +299,7 @@ impl VsockChannel for VsockConnection {
         // Update the peer credit information.
         self.peer_buf_alloc = pkt.buf_alloc();
         self.peer_fwd_cnt = Wrapping(pkt.fwd_cnt());
+        self.metrics.tx_packets_count.inc();
 
         match self.state {
             // Most frequent case: this is an established connection that needs
@@ -456,12 +465,14 @@ impl VsockEpollListener for VsockConnection {
             // buffer.
             if self.tx_buf.is_empty() {
                 info!("vsock: connection received unexpected EPOLLOUT event");
+                self.metrics.conn_event_fails.inc();
                 return;
             }
             let flushed = self
                 .tx_buf
                 .flush_to(&mut self.stream)
                 .unwrap_or_else(|err| {
+                    self.metrics.tx_flush_fails.inc();
                     warn!(
                         "vsock: error flushing TX buf for (lp={}, pp={}): {:?}",
                         self.local_port, self.peer_port, err
@@ -476,6 +487,7 @@ impl VsockEpollListener for VsockConnection {
                     0
                 });
             self.fwd_cnt += Wrapping(flushed as u32);
+            self.metrics.tx_bytes_count.add(flushed);
 
             // If this connection was shutting down, but is waiting to drain the
             // TX buffer before forceful termination, the wait might be over.
@@ -499,6 +511,7 @@ impl VsockConnection {
         local_port: u32,
         peer_port: u32,
         peer_buf_alloc: u32,
+        metrics: Arc<VsockDeviceMetrics>,
     ) -> Self {
         Self {
             local_cid,
@@ -515,6 +528,7 @@ impl VsockConnection {
             last_fwd_cnt_to_peer: Wrapping(0),
             pending_rx: PendingRxSet::from(PendingRx::Response),
             expiry: None,
+            metrics,
         }
     }
 
@@ -525,6 +539,7 @@ impl VsockConnection {
         peer_cid: u64,
         local_port: u32,
         peer_port: u32,
+        metrics: Arc<VsockDeviceMetrics>,
     ) -> Self {
         Self {
             local_cid,
@@ -541,6 +556,7 @@ impl VsockConnection {
             last_fwd_cnt_to_peer: Wrapping(0),
             pending_rx: PendingRxSet::from(PendingRx::Request),
             expiry: None,
+            metrics,
         }
     }
 
@@ -616,6 +632,7 @@ impl VsockConnection {
                 } else {
                     // We don't know how to handle any other write error, so
                     // we'll send it up the call chain.
+                    self.metrics.tx_write_fails.inc();
                     return Err(Error::StreamWrite(e));
                 }
             }
@@ -623,6 +640,7 @@ impl VsockConnection {
         // Move the "forwarded bytes" counter ahead by how much we were able to
         // send out.
         self.fwd_cnt += Wrapping(written as u32);
+        self.metrics.tx_bytes_count.add(written);
 
         // If we couldn't write the whole slice, we'll need to push the
         // remaining data to our buffer.
@@ -843,6 +861,7 @@ pub(crate) mod tests {
                     LOCAL_PORT,
                     PEER_PORT,
                     PEER_BUF_ALLOC,
+                    vsock_test_ctx.device.metrics(),
                 ),
                 ConnState::LocalInit => VsockConnection::new_local_init(
                     Box::new(stream),
@@ -850,6 +869,7 @@ pub(crate) mod tests {
                     PEER_CID,
                     LOCAL_PORT,
                     PEER_PORT,
+                    vsock_test_ctx.device.metrics(),
                 ),
                 ConnState::Established => {
                     let mut conn = VsockConnection::new_peer_init(
@@ -859,6 +879,7 @@ pub(crate) mod tests {
                         LOCAL_PORT,
                         PEER_PORT,
                         PEER_BUF_ALLOC,
+                        vsock_test_ctx.device.metrics(),
                     );
                     assert!(conn.has_pending_rx());
                     conn.recv_pkt(&mut pkt).unwrap();
