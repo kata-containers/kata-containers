@@ -126,6 +126,8 @@ impl ShareFsVolume {
                         r#type: "bind".to_string(),
                         source: dest.clone(),
                         options: m.options.clone(),
+                        uid_mappings: vec![],
+                        gid_mappings: vec![],
                     })
                 } else {
                     // If not, we can ignore it. Let's issue a warning so that the user knows.
@@ -175,6 +177,8 @@ impl ShareFsVolume {
                         r#type: "bind".to_string(),
                         source: guest_path,
                         options: m.options.clone(),
+                        uid_mappings: vec![],
+                        gid_mappings: vec![],
                     })
                 } else {
                     // Not mounted ever
@@ -206,6 +210,8 @@ impl ShareFsVolume {
                         r#type: "bind".to_string(),
                         source: mount_result.guest_path,
                         options: m.options.clone(),
+                        uid_mappings: vec![],
+                        gid_mappings: vec![],
                     });
                 }
             }

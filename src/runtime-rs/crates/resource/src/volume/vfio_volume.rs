@@ -93,6 +93,8 @@ impl VfioVolume {
             r#type: v.fs_type,
             source: guest_path,
             options: m.options.clone(),
+            uid_mappings: vec![],
+            gid_mappings: vec![],
         };
 
         Ok(Self {

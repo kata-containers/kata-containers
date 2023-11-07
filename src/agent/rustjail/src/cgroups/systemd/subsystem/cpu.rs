@@ -7,7 +7,7 @@ use super::super::common::{CgroupHierarchy, Properties};
 use super::transformer::Transformer;
 
 use anyhow::Result;
-use oci::{LinuxCpu, LinuxResources};
+use oci::{LinuxCPU, LinuxResources};
 use zbus::zvariant::Value;
 
 const BASIC_SYSTEMD_VERSION: &str = "242";
@@ -45,7 +45,7 @@ impl Cpu {
     // cpu.period <-> CPUQuotaPeriodUSec
     // cpu.period & cpu.quota <-> CPUQuotaPerSecUSec
     fn legacy_apply(
-        cpu_resources: &LinuxCpu,
+        cpu_resources: &LinuxCPU,
         properties: &mut Properties,
         systemd_version: &str,
     ) -> Result<()> {
@@ -75,7 +75,7 @@ impl Cpu {
     // cpu.period <-> CPUQuotaPeriodUSec
     // cpu.period & cpu.quota <-> CPUQuotaPerSecUSec
     fn unified_apply(
-        cpu_resources: &LinuxCpu,
+        cpu_resources: &LinuxCPU,
         properties: &mut Properties,
         systemd_version: &str,
     ) -> Result<()> {

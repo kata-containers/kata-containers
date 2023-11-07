@@ -6,7 +6,7 @@
 use std::convert::TryFrom;
 use std::str::FromStr;
 
-use oci::LinuxCpu;
+use oci::LinuxCPU;
 
 /// A set of CPU ids.
 pub type CpuSet = crate::utils::u32_set::U32Set;
@@ -69,11 +69,11 @@ impl LinuxContainerCpuResources {
     }
 }
 
-impl TryFrom<&LinuxCpu> for LinuxContainerCpuResources {
+impl TryFrom<&LinuxCPU> for LinuxContainerCpuResources {
     type Error = Error;
 
     // Unhandled fields: realtime_runtime, realtime_period, mems
-    fn try_from(value: &LinuxCpu) -> Result<Self, Self::Error> {
+    fn try_from(value: &LinuxCPU) -> Result<Self, Self::Error> {
         let period = value.period.unwrap_or(0);
         let quota = value.quota.unwrap_or(-1);
         let cpuset = CpuSet::from_str(&value.cpus).map_err(Error::InvalidCpuSet)?;
@@ -170,14 +170,16 @@ mod tests {
         assert!(resources.nodeset.is_empty());
         assert!(resources.calculated_vcpu_time_ms.is_none());
 
-        let oci = oci::LinuxCpu {
+        let oci = oci::LinuxCPU {
             shares: Some(2048),
             quota: Some(1001),
+            burst: None,
             period: Some(100),
             realtime_runtime: None,
             realtime_period: None,
             cpus: "1,2,3".to_string(),
             mems: "1".to_string(),
+            idle: None,
         };
         let resources = LinuxContainerCpuResources::try_from(&oci).unwrap();
         assert_eq!(resources.shares(), 2048);
@@ -188,14 +190,16 @@ mod tests {
         assert_eq!(resources.cpuset().len(), 3);
         assert_eq!(resources.nodeset().len(), 1);
 
-        let oci = oci::LinuxCpu {
+        let oci = oci::LinuxCPU {
             shares: Some(2048),
             quota: None,
             period: None,
+            burst: None,
             realtime_runtime: None,
             realtime_period: None,
             cpus: "1".to_string(),
             mems: "1-2".to_string(),
+            idle: None,
         };
         let resources = LinuxContainerCpuResources::try_from(&oci).unwrap();
         assert_eq!(resources.shares(), 2048);
@@ -217,14 +221,16 @@ mod tests {
         assert!(sandbox.cpuset().is_empty());
         assert!(sandbox.nodeset().is_empty());
 
-        let oci = oci::LinuxCpu {
+        let oci = oci::LinuxCPU {
             shares: Some(2048),
             quota: Some(1001),
             period: Some(100),
+            burst: None,
             realtime_runtime: None,
             realtime_period: None,
             cpus: "1,2,3".to_string(),
             mems: "1".to_string(),
+            idle: None,
         };
         let resources = LinuxContainerCpuResources::try_from(&oci).unwrap();
         sandbox.merge(&resources);
@@ -234,14 +240,16 @@ mod tests {
         assert_eq!(sandbox.cpuset().len(), 3);
         assert_eq!(sandbox.nodeset().len(), 1);
 
-        let oci = oci::LinuxCpu {
+        let oci = oci::LinuxCPU {
             shares: Some(2048),
             quota: None,
             period: None,
+            burst: None,
             realtime_runtime: None,
             realtime_period: None,
             cpus: "1,4".to_string(),
             mems: "1-2".to_string(),
+            idle: None,
         };
         let resources = LinuxContainerCpuResources::try_from(&oci).unwrap();
         sandbox.merge(&resources);

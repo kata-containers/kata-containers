@@ -15,7 +15,7 @@ use agent::{Agent, OnlineCPUMemRequest};
 use anyhow::{Context, Ok, Result};
 use hypervisor::Hypervisor;
 use kata_types::{config::TomlConfig, cpu::LinuxContainerCpuResources};
-use oci::LinuxCpu;
+use oci::LinuxCPU;
 use tokio::sync::RwLock;
 
 use crate::ResourceUpdateOp;
@@ -49,7 +49,7 @@ impl CpuResource {
     pub(crate) async fn update_cpu_resources(
         &self,
         cid: &str,
-        linux_cpus: Option<&LinuxCpu>,
+        linux_cpus: Option<&LinuxCPU>,
         op: ResourceUpdateOp,
         hypervisor: &dyn Hypervisor,
         agent: &dyn Agent,
@@ -87,7 +87,7 @@ impl CpuResource {
     async fn update_container_cpu_resources(
         &self,
         cid: &str,
-        linux_cpus: Option<&LinuxCpu>,
+        linux_cpus: Option<&LinuxCPU>,
         op: ResourceUpdateOp,
     ) -> Result<()> {
         if let Some(cpu) = linux_cpus {

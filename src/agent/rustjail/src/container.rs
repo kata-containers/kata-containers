@@ -5,7 +5,7 @@
 
 use anyhow::{anyhow, Context, Result};
 use libc::pid_t;
-use oci::{ContainerState, LinuxDevice, LinuxIdMapping};
+use oci::{ContainerState, LinuxDevice, LinuxIDMapping};
 use oci::{Linux, LinuxNamespace, LinuxResources, Spec};
 use std::clone::Clone;
 use std::ffi::CString;
@@ -608,9 +608,6 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         // setup sysctl
         set_sysctls(&linux.sysctl)?;
         unistd::chdir("/")?;
-    }
-
-    if to_new.contains(CloneFlags::CLONE_NEWNS) {
         mount::finish_rootfs(cfd_log, &spec, &oci_process)?;
     }
 
@@ -1448,7 +1445,7 @@ async fn join_namespaces(
     Ok(())
 }
 
-fn write_mappings(logger: &Logger, path: &str, maps: &[LinuxIdMapping]) -> Result<()> {
+fn write_mappings(logger: &Logger, path: &str, maps: &[LinuxIDMapping]) -> Result<()> {
     let data = maps
         .iter()
         .filter(|m| m.size != 0)
@@ -1556,8 +1553,8 @@ impl LinuxContainer {
             root,
             cgroup_manager,
             status: ContainerStatus::new(),
-            uid_map_path: String::from(""),
-            gid_map_path: "".to_string(),
+            uid_map_path: "".to_owned(),
+            gid_map_path: "".to_owned(),
             config,
             processes: HashMap::new(),
             created: SystemTime::now(),

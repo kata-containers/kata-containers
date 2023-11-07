@@ -33,7 +33,7 @@ impl TryFrom<&oci::Spec> for InitialSize {
                 let annotation = Annotation::new(spec.annotations.clone());
                 let (period, quota, memory) =
                     get_sizing_info(annotation).context("failed to get sizing info")?;
-                let cpu = oci::LinuxCpu {
+                let cpu = oci::LinuxCPU {
                     period: Some(period),
                     quota: Some(quota),
                     ..Default::default()
@@ -255,7 +255,7 @@ mod tests {
                 )]),
                 linux: Some(oci::Linux {
                     resources: Some(oci::LinuxResources {
-                        cpu: Some(oci::LinuxCpu {
+                        cpu: Some(oci::LinuxCPU {
                             period: d.input.period,
                             quota: d.input.quota,
                             ..Default::default()

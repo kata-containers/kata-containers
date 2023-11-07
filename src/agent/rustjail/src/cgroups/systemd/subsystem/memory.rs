@@ -104,6 +104,8 @@ mod tests {
             kernel_tcp: Some(0),
             swappiness: Some(0),
             disable_oom_killer: Some(false),
+            use_hierarchy: None,
+            check_before_update: None,
         };
         let mut properties: Properties = vec![];
 

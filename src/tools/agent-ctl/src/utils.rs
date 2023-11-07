@@ -329,28 +329,29 @@ fn process_oci_to_ttrpc(p: &ociProcess) -> ttrpcProcess {
         Rlimits: rlimits,
         NoNewPrivileges: p.no_new_privileges,
         ApparmorProfile: p.apparmor_profile.clone(),
-        OOMScoreAdj: oom_score_adj,
+        OOMScoreAdj: oom_score_adj as i32,
         SelinuxLabel: p.selinux_label.clone(),
         ..Default::default()
     }
 }
 
 fn mount_oci_to_ttrpc(m: &ociMount) -> ttrpcMount {
-    let mut ttrpc_options = Vec::new();
-    for op in &m.options {
-        ttrpc_options.push(op.to_string());
-    }
+    let ttrpc_options = m.options.iter().map(|op| op.to_string()).collect();
+    let uid_mappings = m.uid_mappings.iter().map(|m| m.clone().into()).collect();
+    let gid_mappings = m.gid_mappings.iter().map(|m| m.clone().into()).collect();
 
     ttrpcMount {
-        destination: m.destination.clone(),
-        source: m.source.clone(),
-        type_: m.r#type.clone(),
-        options: ttrpc_options,
+        Destination: m.destination.clone(),
+        Source: m.source.clone(),
+        Type: m.r#type.clone(),
+        Options: ttrpc_options,
+        UIDMappings: uid_mappings,
+        GIDMappings: gid_mappings,
         ..Default::default()
     }
 }
 
-fn idmaps_oci_to_ttrpc(res: &[oci::LinuxIdMapping]) -> Vec<ttrpcLinuxIDMapping> {
+fn idmaps_oci_to_ttrpc(res: &[oci::LinuxIDMapping]) -> Vec<ttrpcLinuxIDMapping> {
     let mut ttrpc_idmaps = Vec::new();
     for m in res.iter() {
         let mut idmapping = ttrpcLinuxIDMapping::default();
@@ -395,7 +396,7 @@ fn memory_oci_to_ttrpc(res: &Option<oci::LinuxMemory>) -> protobuf::MessageField
     memory
 }
 
-fn cpu_oci_to_ttrpc(res: &Option<oci::LinuxCpu>) -> protobuf::MessageField<ttrpcLinuxCPU> {
+fn cpu_oci_to_ttrpc(res: &Option<oci::LinuxCPU>) -> protobuf::MessageField<ttrpcLinuxCPU> {
     match &res {
         Some(s) => {
             let mut cpu = ttrpcLinuxCPU::default();
@@ -488,7 +489,7 @@ fn throttle_devices_oci_to_ttrpc(
 }
 
 fn block_io_oci_to_ttrpc(
-    res: &Option<oci::LinuxBlockIo>,
+    res: &Option<oci::LinuxBlockIO>,
 ) -> protobuf::MessageField<ttrpcLinuxBlockIO> {
     match &res {
         Some(s) => {
@@ -589,7 +590,7 @@ fn seccomp_oci_to_ttrpc(sec: &oci::LinuxSeccomp) -> ttrpcLinuxSeccomp {
         let mut ttrpc_args = Vec::new();
         for arg in &sys.args {
             let mut a = ttrpcLinuxSeccompArg::default();
-            a.set_Index(arg.index as u64);
+            a.set_Index(arg.index);
             a.set_Op(arg.op.clone());
             a.set_Value(arg.value);
             a.set_ValueTwo(arg.value_two);

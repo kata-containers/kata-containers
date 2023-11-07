@@ -94,7 +94,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT> InnerBlockEpollHandler<AS, Q> {
                         data_descs,
                         iovecs,
                         &mut self.disk_image,
-                        mem.deref(),
+                        mem,
                     ) {
                         Ok(submited) => {
                             if submited {
@@ -104,7 +104,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT> InnerBlockEpollHandler<AS, Q> {
                             // Else not Submited, fallback to synchronous processing
                         }
                         Err(_e) => {
-                            req.update_status(mem.deref(), VIRTIO_BLK_S_IOERR);
+                            req.update_status(mem, VIRTIO_BLK_S_IOERR);
                             used_desc_vec.push((index, 0));
                             continue 'next_desc;
                         }
@@ -118,7 +118,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT> InnerBlockEpollHandler<AS, Q> {
                         &data_descs[..],
                         &mut self.disk_image,
                         &self.disk_image_id,
-                        mem.deref(),
+                        mem,
                     ) {
                         Ok(num_bytes_to_mem) => {
                             used_desc_vec.push((index, num_bytes_to_mem));
@@ -180,9 +180,9 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT> InnerBlockEpollHandler<AS, Q> {
         disk_image_id: &[u8],
         mem: &M,
     ) -> std::result::Result<u32, ExecuteError> {
-        match req.execute(disk_image, mem.deref(), data_descs, disk_image_id) {
+        match req.execute(disk_image, mem, data_descs, disk_image_id) {
             Ok(l) => {
-                req.update_status(mem.deref(), VIRTIO_BLK_S_OK);
+                req.update_status(mem, VIRTIO_BLK_S_OK);
                 Ok(l)
             }
             Err(e) => {
@@ -229,7 +229,7 @@ impl<AS: DbsGuestAddressSpace, Q: QueueT> InnerBlockEpollHandler<AS, Q> {
                     }
                 };
 
-                req.update_status(mem.deref(), err_code);
+                req.update_status(mem, err_code);
                 Err(e)
             }
         }

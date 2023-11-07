@@ -37,7 +37,7 @@ following commands:
 ```bash
 $ arch=$(uname -m)
 $ rustup target add "${arch}-unknown-linux-musl"
-$ sudo ln -s /usr/bin/g++ /bin/musl-g++
+$ sudo ln -s /bin/musl-gcc /usr/bin/gcc
 ```
 
 > **Note:**

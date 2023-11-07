@@ -256,7 +256,7 @@ impl CgroupsResource {
     }
 
     fn calc_cpu_resources(&self, linux_resources: Option<&LinuxResources>) -> CpuResources {
-        let cpu = || -> Option<oci::LinuxCpu> { linux_resources.as_ref()?.cpu.clone() }();
+        let cpu = || -> Option<oci::LinuxCPU> { linux_resources.as_ref()?.cpu.clone() }();
 
         CpuResources {
             cpus: cpu.clone().map(|cpu| cpu.cpus),
