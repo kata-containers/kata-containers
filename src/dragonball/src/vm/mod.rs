@@ -38,12 +38,14 @@ use crate::device_manager::{DeviceManager, DeviceMgrError, DeviceOpContext};
 use crate::error::{LoadInitrdError, Result, StartMicroVmError, StopMicrovmError};
 use crate::event_manager::EventManager;
 use crate::kvm_context::KvmContext;
+use crate::metric::METRICS;
 use crate::resource_manager::ResourceManager;
 use crate::vcpu::{VcpuManager, VcpuManagerError};
 #[cfg(feature = "hotplug")]
 use crate::vcpu::{VcpuResizeError, VcpuResizeInfo};
 #[cfg(target_arch = "aarch64")]
 use dbs_arch::gic::Error as GICError;
+use dbs_upcall::UpcallClientMetrics;
 
 mod kernel_config;
 pub use self::kernel_config::KernelConfigInfo;
@@ -521,6 +523,7 @@ impl Vm {
     #[cfg(feature = "dbs-upcall")]
     pub fn remove_upcall(&mut self) -> std::result::Result<(), StopMicrovmError> {
         self.upcall_client = None;
+        METRICS.write().unwrap().upcall = Arc::new(UpcallClientMetrics::default());
         Ok(())
     }
 
@@ -775,6 +778,7 @@ impl Vm {
             DevMgrService::default(),
         )
         .map_err(StartMicroVmError::UpcallInitError)?;
+        METRICS.write().unwrap().upcall = upcall_client.metrics();
 
         upcall_client
             .connect()
