@@ -444,7 +444,7 @@ function main() {
 	pushd "containerd"
 
 	# Make sure the right artifacts are going to be built
-	make clean
+	sudo make clean
 
 	check_daemon_setup
 
