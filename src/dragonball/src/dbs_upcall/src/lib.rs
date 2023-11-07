@@ -18,8 +18,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use dbs_utils::epoll_manager::{EpollManager, EventOps, EventSet, Events, MutEventSubscriber};
+use dbs_utils::metric::{IncMetric, SharedIncMetric};
 use dbs_virtio_devices::vsock::backend::{VsockInnerConnector, VsockStream};
 use log::{debug, error, info, trace, warn};
+use serde::Serialize;
 use timerfd::{SetTimeFlags, TimerFd, TimerState};
 
 pub use crate::dev_mgr_service::{
@@ -104,6 +106,21 @@ pub enum UpcallClientResponse {
     #[cfg(test)]
     /// Fake service's response
     FakeResponse,
+}
+
+/// Upcall client metrics.
+#[derive(Default, Serialize)]
+pub struct UpcallClientMetrics {
+    /// Number of times when handing stream events.
+    pub stream_event_count: SharedIncMetric,
+    /// Number of times when handing reconnect events.
+    pub reconnect_event_count: SharedIncMetric,
+    /// Number of times when start connection fails.
+    pub connect_start_fails: SharedIncMetric,
+    /// Number of times when exceeding reconnect max time.
+    pub reconnect_max_time_exceed: SharedIncMetric,
+    /// Number of times when handling responses.
+    pub handle_response_count: SharedIncMetric,
 }
 
 /// Shared info between upcall client and upcall epoll handler.
@@ -191,6 +208,7 @@ impl<S: UpcallClientService + Send> UpcallClientInfo<S> {
 pub struct UpcallClient<S: UpcallClientService + Send> {
     epoll_manager: EpollManager,
     info: Arc<Mutex<UpcallClientInfo<S>>>,
+    metrics: Arc<UpcallClientMetrics>,
 }
 
 impl<S: UpcallClientService + Send + 'static> UpcallClient<S> {
@@ -200,6 +218,7 @@ impl<S: UpcallClientService + Send + 'static> UpcallClient<S> {
         epoll_manager: EpollManager,
         service: S,
     ) -> Result<Self> {
+        let metrics = Arc::new(UpcallClientMetrics::default());
         let info = UpcallClientInfo {
             connector,
             stream: None,
@@ -210,12 +229,16 @@ impl<S: UpcallClientService + Send + 'static> UpcallClient<S> {
         Ok(UpcallClient {
             epoll_manager,
             info: Arc::new(Mutex::new(info)),
+            metrics: metrics,
         })
     }
 
     /// Connect upcall client to upcall server.
     pub fn connect(&mut self) -> Result<()> {
-        let handler = Box::new(UpcallEpollHandler::new(self.info.clone())?);
+        let handler = Box::new(UpcallEpollHandler::new(
+            self.info.clone(),
+            self.metrics.clone(),
+        )?);
         self.epoll_manager.add_subscriber(handler);
 
         Ok(())
@@ -267,6 +290,11 @@ impl<S: UpcallClientService + Send + 'static> UpcallClient<S> {
     pub fn is_ready(&self) -> bool {
         self.get_state() == UpcallClientState::ServiceConnected
     }
+
+    /// Get the metrics of upcall client.
+    pub fn metrics(&self) -> Arc<UpcallClientMetrics> {
+        self.metrics.clone()
+    }
 }
 
 /// Event handler of upcall client.
@@ -275,18 +303,29 @@ pub struct UpcallEpollHandler<S: UpcallClientService + Send> {
     reconnect_timer: TimerFd,
     reconnect_time: u32,
     in_reconnect: bool,
+    metrics: Arc<UpcallClientMetrics>,
 }
 
 impl<S: UpcallClientService + Send> UpcallEpollHandler<S> {
-    fn new(info: Arc<Mutex<UpcallClientInfo<S>>>) -> Result<Self> {
+    fn new(
+        info: Arc<Mutex<UpcallClientInfo<S>>>,
+        metrics: Arc<UpcallClientMetrics>,
+    ) -> Result<Self> {
         let handler = UpcallEpollHandler {
             info,
             reconnect_timer: TimerFd::new().map_err(UpcallClientError::TimerFd)?,
             reconnect_time: 0,
             in_reconnect: false,
+            metrics: metrics.clone(),
         };
         let info = handler.info.clone();
-        info.lock().unwrap().server_connection_start()?;
+        info.lock()
+            .unwrap()
+            .server_connection_start()
+            .map_err(|e| {
+                metrics.connect_start_fails.inc();
+                e
+            })?;
 
         Ok(handler)
     }
@@ -303,6 +342,7 @@ impl<S: UpcallClientService + Send> UpcallEpollHandler<S> {
 
         if self.reconnect_time > SERVER_MAX_RECONNECT_TIME {
             error!("upcall server's max reconnect time exceed");
+            self.metrics.reconnect_max_time_exceed.inc();
             return Ok(());
         }
 
@@ -316,6 +356,7 @@ impl<S: UpcallClientService + Send> UpcallEpollHandler<S> {
     }
 
     fn handle_stream_event(&mut self, ops: &mut EventOps) {
+        self.metrics.stream_event_count.inc();
         let info = self.info.clone();
         let mut info = info.lock().unwrap();
         match info.state {
@@ -356,21 +397,24 @@ impl<S: UpcallClientService + Send> UpcallEpollHandler<S> {
                     info.set_state(UpcallClientState::ServiceConnected);
                 }
             }
-            UpcallClientState::ServiceBusy => match info.handle_response() {
-                Ok(response) => {
-                    trace!("upcall handle response success");
-                    info.set_state(UpcallClientState::ServiceConnected);
-                    info.consume_callback(response);
-                }
-                Err(e) => {
-                    warn!("upcall response failed {}", e);
-                    info.set_state(UpcallClientState::WaitingServer);
-                    if let Err(e) = self.set_reconnect() {
-                        error!("set reconnect error: {}", e);
-                        info.set_state(UpcallClientState::ReconnectError);
+            UpcallClientState::ServiceBusy => {
+                match info.handle_response() {
+                    Ok(response) => {
+                        trace!("upcall handle response success");
+                        info.set_state(UpcallClientState::ServiceConnected);
+                        info.consume_callback(response);
+                    }
+                    Err(e) => {
+                        warn!("upcall response failed {}", e);
+                        info.set_state(UpcallClientState::WaitingServer);
+                        if let Err(e) = self.set_reconnect() {
+                            error!("set reconnect error: {}", e);
+                            info.set_state(UpcallClientState::ReconnectError);
+                        }
                     }
                 }
-            },
+                self.metrics.handle_response_count.inc();
+            }
             UpcallClientState::ServiceConnected | UpcallClientState::ReconnectError => {
                 error!("we should get message from event handler when connection state is `ServiceConnected`");
             }
@@ -390,6 +434,7 @@ impl<S: UpcallClientService + Send> UpcallEpollHandler<S> {
     }
 
     fn handle_reconnect_event(&mut self, ops: &mut EventOps) {
+        self.metrics.reconnect_event_count.inc();
         // we should clear the reconnect timer and flag first
         self.in_reconnect = false;
         self.reconnect_timer
@@ -796,7 +841,11 @@ mod tests {
 
     fn get_upcall_epoll_handler() -> (VsockInnerBackend, UpcallEpollHandler<FakeService>) {
         let (inner_backend, info) = get_upcall_client_info();
-        let epoll_handler = UpcallEpollHandler::new(Arc::new(Mutex::new(info))).unwrap();
+        let epoll_handler = UpcallEpollHandler::new(
+            Arc::new(Mutex::new(info)),
+            Arc::new(UpcallClientMetrics::default()),
+        )
+        .unwrap();
 
         (inner_backend, epoll_handler)
     }
