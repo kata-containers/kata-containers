@@ -207,7 +207,16 @@ impl ImageService {
     ) -> Result<String> {
         info!(sl(), "image metadata: {:?}", image_metadata);
         Self::set_proxy_env_vars();
-        if image_metadata["io.kubernetes.cri.container-type"] == "sandbox" {
+        let is_sandbox = if let Some(value) = image_metadata.get("io.kubernetes.cri.container-type")
+        {
+            value == "sandbox"
+        } else if let Some(value) = image_metadata.get("io.kubernetes.cri-o.ContainerType") {
+            value == "sandbox"
+        } else {
+            false
+        };
+
+        if is_sandbox {
             let mount_path = Self::unpack_pause_image(cid, "pause")?;
             self.add_image(String::from(image), String::from(cid)).await;
             return Ok(mount_path);
