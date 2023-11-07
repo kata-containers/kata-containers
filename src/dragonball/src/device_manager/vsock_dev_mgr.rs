@@ -21,6 +21,7 @@ use super::{DeviceMgrError, StartMicroVmError};
 use crate::config_manager::{ConfigItem, DeviceConfigInfo, DeviceConfigInfos};
 use crate::device_manager::{DeviceManager, DeviceOpContext};
 
+use crate::metric::METRICS;
 pub use dbs_virtio_devices::vsock::QUEUE_SIZES;
 
 const SUBSYSTEM: &str = "vsock_dev_mgr";
@@ -225,6 +226,11 @@ impl VsockDeviceMgr {
                 .map_err(VirtioError::VirtioVsockError)
                 .map_err(StartMicroVmError::CreateVsockDevice)?,
             );
+            METRICS
+                .write()
+                .unwrap()
+                .vsock
+                .insert(info.config.id.clone(), device.metrics());
             if let Some(uds_path) = info.config.uds_path.as_ref() {
                 let unix_backend = VsockUnixStreamBackend::new(uds_path.clone())
                     .map_err(VirtioError::VirtioVsockError)

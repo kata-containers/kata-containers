@@ -13,6 +13,8 @@ use dbs_legacy_devices::SerialDeviceMetrics;
 use dbs_utils::metric::SharedIncMetric;
 #[cfg(feature = "virtio-balloon")]
 use dbs_virtio_devices::balloon::BalloonDeviceMetrics;
+#[cfg(feature = "virtio-vsock")]
+use dbs_virtio_devices::vsock::VsockDeviceMetrics;
 use lazy_static::lazy_static;
 use serde::Serialize;
 
@@ -77,6 +79,9 @@ pub struct DragonballMetrics {
     pub rtc: Arc<RTCDeviceMetrics>,
     /// Metrics related to serial device.
     pub serial: HashMap<String, Arc<SerialDeviceMetrics>>,
+    #[cfg(feature = "virtio-vsock")]
+    /// Metrics related to vsock devices.
+    pub vsock: HashMap<String, Arc<VsockDeviceMetrics>>,
     #[cfg(feature = "virtio-balloon")]
     /// Metrics related to balloon device.
     pub balloon: HashMap<String, Arc<BalloonDeviceMetrics>>,
