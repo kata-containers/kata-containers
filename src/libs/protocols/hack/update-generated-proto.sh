@@ -54,19 +54,13 @@ generate_go_sources() {
     [ "$dir_path" == "$proto_file" ] && dir_path="."
 
     local root_path=$(realpath ../)/libs/protocols/protos
+    local output_path=$(realpath ../)/runtime/virtcontainers/pkg/agent/protocols/$dir_path
+    local mapping="Mgoogle/protobuf/empty.proto=google.golang.org/protobuf/types/known/emptypb"
+
     local cmd="protoc -I$GOPATH/src:${root_path} \
---gogottrpc_out=plugins=ttrpc+fieldpath,paths=source_relative,\
-Mgogoproto/gogo.proto=github.com/gogo/protobuf/gogoproto,\
-Mgoogle/protobuf/any.proto=github.com/gogo/protobuf/types,\
-Mgoogle/protobuf/descriptor.proto=github.com/gogo/protobuf/protoc-gen-gogo/descriptor,\
-Mgoogle/protobuf/duration.proto=github.com/gogo/protobuf/types,\
-Mgoogle/protobuf/empty.proto=github.com/gogo/protobuf/types,\
-Mgoogle/protobuf/field_mask.proto=github.com/gogo/protobuf/types,\
-Mgoogle/protobuf/timestamp.proto=github.com/gogo/protobuf/types,\
-Mgoogle/protobuf/wrappers.proto=github.com/gogo/protobuf/types,\
-Mgoogle/rpc/status.proto=github.com/gogo/googleapis/google/rpc\
-:$(realpath ../)/runtime/virtcontainers/pkg/agent/protocols/$dir_path \
-${root_path}/$file_name"
+    --go_out=paths=source_relative,$mapping:$output_path \
+    --go-ttrpc_out=paths=source_relative,$mapping:$output_path \
+    ${root_path}/$file_name"
 
     echo $cmd
     $cmd

@@ -126,9 +126,9 @@ func copyStructSkipField(to, from reflect.Value) bool {
 	var ociWindows specs.Windows
 
 	toType := to.Type()
-	grpcSolarisType := reflect.TypeOf(grpcSolaris)
+	grpcSolarisType := reflect.TypeOf(&grpcSolaris)
 	ociSolarisType := reflect.TypeOf(ociSolaris)
-	grpcWindowsType := reflect.TypeOf(grpcWindows)
+	grpcWindowsType := reflect.TypeOf(&grpcWindows)
 	ociWindowsType := reflect.TypeOf(ociWindows)
 
 	// We skip all Windows and Solaris types

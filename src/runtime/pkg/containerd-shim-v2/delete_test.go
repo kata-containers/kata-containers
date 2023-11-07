@@ -9,7 +9,7 @@ package containerdshim
 import (
 	"testing"
 
-	taskAPI "github.com/containerd/containerd/runtime/v2/task"
+	taskAPI "github.com/containerd/containerd/api/runtime/task/v2"
 	"github.com/stretchr/testify/assert"
 
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"

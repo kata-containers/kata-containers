@@ -234,13 +234,22 @@ type Ethtool struct {
 	fd int
 }
 
+// Convert zero-terminated array of chars (string in C) to a Go string.
+func goString(s []byte) string {
+	strEnd := bytes.IndexByte(s, 0)
+	if strEnd == -1 {
+		return string(s[:])
+	}
+	return string(s[:strEnd])
+}
+
 // DriverName returns the driver name of the given interface name.
 func (e *Ethtool) DriverName(intf string) (string, error) {
 	info, err := e.getDriverInfo(intf)
 	if err != nil {
 		return "", err
 	}
-	return string(bytes.Trim(info.driver[:], "\x00")), nil
+	return goString(info.driver[:]), nil
 }
 
 // BusInfo returns the bus information of the given interface name.
@@ -249,7 +258,7 @@ func (e *Ethtool) BusInfo(intf string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(bytes.Trim(info.bus_info[:], "\x00")), nil
+	return goString(info.bus_info[:]), nil
 }
 
 // ModuleEeprom returns Eeprom information of the given interface name.
@@ -281,12 +290,12 @@ func (e *Ethtool) DriverInfo(intf string) (DrvInfo, error) {
 
 	drvInfo := DrvInfo{
 		Cmd:         i.cmd,
-		Driver:      string(bytes.Trim(i.driver[:], "\x00")),
-		Version:     string(bytes.Trim(i.version[:], "\x00")),
-		FwVersion:   string(bytes.Trim(i.fw_version[:], "\x00")),
-		BusInfo:     string(bytes.Trim(i.bus_info[:], "\x00")),
-		EromVersion: string(bytes.Trim(i.erom_version[:], "\x00")),
-		Reserved2:   string(bytes.Trim(i.reserved2[:], "\x00")),
+		Driver:      goString(i.driver[:]),
+		Version:     goString(i.version[:]),
+		FwVersion:   goString(i.fw_version[:]),
+		BusInfo:     goString(i.bus_info[:]),
+		EromVersion: goString(i.erom_version[:]),
+		Reserved2:   goString(i.reserved2[:]),
 		NPrivFlags:  i.n_priv_flags,
 		NStats:      i.n_stats,
 		TestInfoLen: i.testinfo_len,
@@ -500,7 +509,7 @@ func (e *Ethtool) FeatureNames(intf string) (map[string]uint, error) {
 	var result = make(map[string]uint)
 	for i := 0; i != int(length); i++ {
 		b := gstrings.data[i*ETH_GSTRING_LEN : i*ETH_GSTRING_LEN+ETH_GSTRING_LEN]
-		key := string(bytes.Trim(b, "\x00"))
+		key := goString(b)
 		if key != "" {
 			result[key] = uint(i)
 		}

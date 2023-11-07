@@ -16,6 +16,12 @@
 
 package annotations
 
+import (
+	"github.com/containerd/containerd/oci"
+	customopts "github.com/containerd/containerd/pkg/cri/opts"
+	runtime "k8s.io/cri-api/pkg/apis/runtime/v1"
+)
+
 // ContainerType values
 // Following OCI annotations are used by katacontainers now.
 // We'll switch to standard secure pod API after it is defined in CRI.
@@ -58,6 +64,11 @@ const (
 	// SandboxNamespace is the name of the namespace of the sandbox (pod)
 	SandboxNamespace = "io.kubernetes.cri.sandbox-namespace"
 
+	// SandboxUID is the uid of the sandbox (pod) passed to CRI via RunPodSanbox,
+	// this field is useful for linking the uid created by the CRI client (e.g. kubelet)
+	// to the internal Sandbox.ID created by the containerd sandbox service
+	SandboxUID = "io.kubernetes.cri.sandbox-uid"
+
 	// SandboxName is the name of the sandbox (pod)
 	SandboxName = "io.kubernetes.cri.sandbox-name"
 
@@ -70,6 +81,45 @@ const (
 	// PodAnnotations are the annotations of the pod
 	PodAnnotations = "io.kubernetes.cri.pod-annotations"
 
+	// RuntimeHandler an experimental annotation key for getting runtime handler from pod annotations.
+	// See https://github.com/containerd/containerd/issues/6657 and https://github.com/containerd/containerd/pull/6899 for details.
+	// The value of this annotation should be the runtime for sandboxes.
+	// e.g. for [plugins.cri.containerd.runtimes.runc] runtime config, this value should be runc
+	// TODO: we should deprecate this annotation as soon as kubelet supports passing RuntimeHandler from PullImageRequest
+	RuntimeHandler = "io.containerd.cri.runtime-handler"
+
 	// WindowsHostProcess is used by hcsshim to identify windows pods that are running HostProcesses
 	WindowsHostProcess = "microsoft.com/hostprocess-container"
 )
+
+// DefaultCRIAnnotations are the default set of CRI annotations to
+// pass to sandboxes and containers.
+func DefaultCRIAnnotations(
+	sandboxID string,
+	containerName string,
+	imageName string,
+	config *runtime.PodSandboxConfig,
+	sandbox bool,
+) []oci.SpecOpts {
+	opts := []oci.SpecOpts{
+		customopts.WithAnnotation(SandboxID, sandboxID),
+		customopts.WithAnnotation(SandboxNamespace, config.GetMetadata().GetNamespace()),
+		customopts.WithAnnotation(SandboxUID, config.GetMetadata().GetUid()),
+		customopts.WithAnnotation(SandboxName, config.GetMetadata().GetName()),
+	}
+	ctrType := ContainerTypeContainer
+	if sandbox {
+		ctrType = ContainerTypeSandbox
+		// Sandbox log dir only gets passed for sandboxes, the other metadata always
+		// gets sent however.
+		opts = append(opts, customopts.WithAnnotation(SandboxLogDir, config.GetLogDirectory()))
+	} else {
+		// Image name and container name only get passed for containers.s
+		opts = append(
+			opts,
+			customopts.WithAnnotation(ContainerName, containerName),
+			customopts.WithAnnotation(ImageName, imageName),
+		)
+	}
+	return append(opts, customopts.WithAnnotation(ContainerType, ctrType))
+}

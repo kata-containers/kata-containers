@@ -15,7 +15,7 @@
 package testutils
 
 import (
-	"io/ioutil"
+	"io"
 	"os"
 
 	"github.com/containernetworking/cni/pkg/skel"
@@ -52,7 +52,7 @@ func CmdAdd(cniNetns, cniContainerID, cniIfname string, conf []byte, f func() er
 
 	var out []byte
 	if err == nil {
-		out, err = ioutil.ReadAll(r)
+		out, err = io.ReadAll(r)
 	}
 	os.Stdout = oldStdout
 
