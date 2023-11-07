@@ -15,6 +15,8 @@ use dbs_utils::metric::SharedIncMetric;
 use dbs_virtio_devices::balloon::BalloonDeviceMetrics;
 #[cfg(feature = "virtio-blk")]
 use dbs_virtio_devices::block::BlockDeviceMetrics;
+#[cfg(feature = "virtio-fs")]
+use dbs_virtio_devices::fs::FsDeviceMetrics;
 #[cfg(feature = "virtio-net")]
 use dbs_virtio_devices::net::NetDeviceMetrics;
 #[cfg(feature = "virtio-vsock")]
@@ -92,6 +94,9 @@ pub struct DragonballMetrics {
     #[cfg(feature = "virtio-blk")]
     /// Metrics related to block devices.
     pub block: HashMap<String, Arc<BlockDeviceMetrics>>,
+    #[cfg(feature = "virtio-fs")]
+    /// Metrics related to virtio-fs devices.
+    pub fs: HashMap<String, Arc<FsDeviceMetrics>>,
     #[cfg(feature = "virtio-balloon")]
     /// Metrics related to balloon device.
     pub balloon: HashMap<String, Arc<BalloonDeviceMetrics>>,
