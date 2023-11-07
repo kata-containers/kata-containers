@@ -15,6 +15,7 @@ import (
 	"os/user"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -24,6 +25,7 @@ import (
 	"github.com/containerd/containerd/mount"
 	taskAPI "github.com/containerd/containerd/runtime/v2/task"
 	"github.com/containerd/typeurl"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/netmon"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
@@ -288,6 +290,23 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 	container, err := newContainer(s, r, containerType, ociSpec, rootFs.Mounted)
 	if err != nil {
 		return nil, err
+	}
+
+	// start network monitor
+	re := regexp.MustCompile("moby")
+	if re.MatchString(container.bundle) {
+		errCh := make(chan error, 1)
+		go func() {
+			err := netmon.StartNetMon(s.ctx, s.sandbox)
+			errCh <- err
+		}()
+		go func() {
+			defer close(errCh)
+			if err := <-errCh; err != nil {
+				s.sandbox.StopContainer(ctx, container.id, false)
+				shimLog.WithField("container-id", container.id).WithError(err).Warn("failed to start network monitor container")
+			}
+		}()
 	}
 
 	return container, nil
