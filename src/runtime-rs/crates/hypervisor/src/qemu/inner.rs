@@ -5,8 +5,13 @@
 
 use anyhow::Result;
 
-use crate::{HypervisorConfig, MemoryConfig, VcpuThreadIds};
+use crate::{
+    hypervisor_persist::HypervisorState, HypervisorConfig, MemoryConfig,
+    VcpuThreadIds, VsockDevice, HYPERVISOR_QEMU,
+};
 use kata_types::capabilities::{Capabilities, CapabilityBits};
+use async_trait::async_trait;
+use persist::sandbox_persist::Persist;
 
 const VSOCK_SCHEME: &str = "vsock";
 const VSOCK_AGENT_CID: u32 = 3;
@@ -176,5 +181,34 @@ impl QemuInner {
         info!(sl!(), "QemuInner::update_device() {:?}", &device);
 
         Ok(())
+    }
+}
+
+#[async_trait]
+impl Persist for QemuInner {
+    type State = HypervisorState;
+    type ConstructorArgs = ();
+
+    /// Save a state of hypervisor
+    async fn save(&self) -> Result<Self::State> {
+        Ok(HypervisorState {
+            hypervisor_type: HYPERVISOR_QEMU.to_string(),
+            id: self.id.clone(),
+            config: self.hypervisor_config(),
+            ..Default::default()
+        })
+    }
+
+    /// Restore hypervisor
+    async fn restore(
+        _hypervisor_args: Self::ConstructorArgs,
+        hypervisor_state: Self::State,
+    ) -> Result<Self> {
+        Ok(QemuInner {
+            id: hypervisor_state.id,
+            qemu_process: None,
+            config: hypervisor_state.config,
+            devices: Vec::new(),
+        })
     }
 }
