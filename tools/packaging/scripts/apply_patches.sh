@@ -46,5 +46,4 @@ if [ -d "$patches_dir" ]; then
 else
 	echo "INFO: Patches directory does not exist: ${patches_dir}"
 	echo "INFO: Create a ${patches_dir}/no_patches.txt file if the current version has no patches"
-	exit 1;
 fi
