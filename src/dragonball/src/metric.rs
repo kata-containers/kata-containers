@@ -17,6 +17,7 @@ use dbs_virtio_devices::balloon::BalloonDeviceMetrics;
 use dbs_virtio_devices::block::BlockDeviceMetrics;
 #[cfg(feature = "virtio-fs")]
 use dbs_virtio_devices::fs::FsDeviceMetrics;
+use dbs_virtio_devices::mmio::MMIODeviceMetrics;
 #[cfg(feature = "virtio-net")]
 use dbs_virtio_devices::net::NetDeviceMetrics;
 #[cfg(feature = "virtio-vsock")]
@@ -85,6 +86,8 @@ pub struct DragonballMetrics {
     pub rtc: Arc<RTCDeviceMetrics>,
     /// Metrics related to serial device.
     pub serial: HashMap<String, Arc<SerialDeviceMetrics>>,
+    /// Metrics related to a MMIO transport.
+    pub mmio: HashMap<String, Arc<MMIODeviceMetrics>>,
     #[cfg(feature = "virtio-vsock")]
     /// Metrics related to vsock devices.
     pub vsock: HashMap<String, Arc<VsockDeviceMetrics>>,

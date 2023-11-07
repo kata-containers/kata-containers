@@ -24,6 +24,7 @@ use crate::address_space_manager::GuestAddressSpaceImpl;
 use crate::config_manager::{ConfigItem, DeviceConfigInfo, DeviceConfigInfos};
 use crate::device_manager::DbsMmioV2Device;
 use crate::device_manager::{DeviceManager, DeviceMgrError, DeviceOpContext};
+use crate::metric::METRICS;
 use crate::vm::VmConfigInfo;
 
 // The flag of whether to use the shared irq.
@@ -202,6 +203,11 @@ impl MemDeviceMgr {
                     mem_cfg.use_generic_irq.unwrap_or(USE_GENERIC_IRQ),
                 )
                 .map_err(MemDeviceError::CreateMmioDevice)?;
+            METRICS
+                .write()
+                .unwrap()
+                .mmio
+                .insert(mem_cfg.mem_id.clone(), mmio_device.metrics());
 
             #[cfg(not(test))]
             ctx.insert_hotplug_mmio_device(&mmio_device, None)
@@ -255,7 +261,11 @@ impl MemDeviceMgr {
                     config.use_generic_irq.unwrap_or(USE_GENERIC_IRQ),
                 )
                 .map_err(MemDeviceError::RegisterMemDevice)?;
-
+            METRICS
+                .write()
+                .unwrap()
+                .mmio
+                .insert(config.mem_id.clone(), mmio_device.metrics());
             info.set_device(mmio_device);
         }
 
@@ -311,6 +321,11 @@ impl MemDeviceMgr {
         for info in self.info_list.iter() {
             if let Some(device) = &info.device {
                 DeviceManager::destroy_mmio_virtio_device(device.clone(), ctx)?;
+                METRICS
+                    .write()
+                    .unwrap()
+                    .mmio
+                    .remove(info.config.mem_id.as_str());
             }
         }
 

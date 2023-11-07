@@ -263,6 +263,11 @@ impl VirtioNetDeviceMgr {
                         config.use_generic_irq.unwrap_or(USE_GENERIC_IRQ),
                     )
                     .map_err(VirtioNetDeviceError::DeviceManager)?;
+                    METRICS
+                        .write()
+                        .unwrap()
+                        .mmio
+                        .insert(config.iface_id.clone(), dev.metrics());
                     ctx.insert_hotplug_mmio_device(&dev, None)
                         .map_err(VirtioNetDeviceError::DeviceManager)?;
                     // live-upgrade need save/restore device from info.device.
@@ -341,6 +346,11 @@ impl VirtioNetDeviceMgr {
                 info.config.use_generic_irq.unwrap_or(USE_GENERIC_IRQ),
             )
             .map_err(VirtioNetDeviceError::RegisterNetDevice)?;
+            METRICS
+                .write()
+                .unwrap()
+                .mmio
+                .insert(info.config.iface_id.clone(), device.metrics());
             info.set_device(device);
         }
 
@@ -393,6 +403,11 @@ impl VirtioNetDeviceMgr {
                 .remove(info.config.host_dev_name.as_str());
             if let Some(device) = info.device.take() {
                 DeviceManager::destroy_mmio_virtio_device(device, ctx)?;
+                METRICS
+                    .write()
+                    .unwrap()
+                    .mmio
+                    .remove(info.config.iface_id.as_str());
             }
         }
         Ok(())

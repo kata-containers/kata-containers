@@ -347,7 +347,11 @@ impl FsDeviceMgr {
                 info.config.use_generic_irq.unwrap_or(USE_GENERIC_IRQ),
             )
             .map_err(FsDeviceError::RegisterFsDevice)?;
-
+            METRICS
+                .write()
+                .unwrap()
+                .mmio
+                .insert(info.config.sock_path.clone(), mmio_device.metrics());
             info.set_device(mmio_device);
         }
 

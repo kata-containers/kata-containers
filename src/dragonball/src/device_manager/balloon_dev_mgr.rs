@@ -200,6 +200,11 @@ impl BalloonDeviceMgr {
                     );
                     BalloonDeviceError::HotplugDeviceFailed(e)
                 })?;
+            METRICS
+                .write()
+                .unwrap()
+                .mmio
+                .insert(balloon_cfg.balloon_id.clone(), mmio_dev.metrics());
             let index = self.info_list.insert_or_update(&balloon_cfg)?;
             self.info_list[index].set_device(mmio_dev);
         }
@@ -239,6 +244,11 @@ impl BalloonDeviceMgr {
                     info.config.use_generic_irq.unwrap_or(USE_GENERIC_IRQ),
                 )
                 .map_err(BalloonDeviceError::RegisterBalloonDevice)?;
+            METRICS
+                .write()
+                .unwrap()
+                .mmio
+                .insert(info.config.balloon_id.clone(), mmio_dev.metrics());
             info.set_device(mmio_dev);
         }
 

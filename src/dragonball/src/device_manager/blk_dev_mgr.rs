@@ -398,6 +398,11 @@ impl BlockDeviceMgr {
                         self.update_device_by_index(index, Arc::clone(&dev))?;
                         // live-upgrade need save/restore device from info.device.
                         self.info_list[index].set_device(dev.clone());
+                        METRICS
+                            .write()
+                            .unwrap()
+                            .mmio
+                            .insert(config.drive_id.clone(), dev.metrics());
                         ctx.insert_hotplug_mmio_device(&dev, None).map_err(|e| {
                             let logger = ctx.logger().new(slog::o!());
                             self.remove_device(ctx, &config.drive_id).unwrap();
@@ -448,6 +453,11 @@ impl BlockDeviceMgr {
                         info.config.use_generic_irq.unwrap_or(USE_GENERIC_IRQ),
                     )
                     .map_err(BlockDeviceError::RegisterBlockDevice)?;
+                    METRICS
+                        .write()
+                        .unwrap()
+                        .mmio
+                        .insert(info.config.drive_id.clone(), device.metrics());
                     info.device = Some(device);
                 }
                 _ => {
@@ -468,6 +478,11 @@ impl BlockDeviceMgr {
             METRICS.write().unwrap().block.remove(&info.config.drive_id);
             if let Some(device) = info.device.take() {
                 DeviceManager::destroy_mmio_virtio_device(device, ctx)?;
+                METRICS
+                    .write()
+                    .unwrap()
+                    .mmio
+                    .remove(info.config.drive_id.as_str());
             }
         }
 
@@ -498,6 +513,11 @@ impl BlockDeviceMgr {
                 if let Some(device) = info.device.take() {
                     DeviceManager::destroy_mmio_virtio_device(device, &mut ctx)
                         .map_err(BlockDeviceError::DeviceManager)?;
+                    METRICS
+                        .write()
+                        .unwrap()
+                        .mmio
+                        .remove(info.config.drive_id.as_str());
                 }
             }
             None => return Err(BlockDeviceError::InvalidDeviceId(drive_id.to_owned())),

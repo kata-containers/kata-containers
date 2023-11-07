@@ -264,6 +264,11 @@ impl VsockDeviceMgr {
                 info.config.use_generic_irq.unwrap_or(USE_GENERIC_IRQ),
             )
             .map_err(StartMicroVmError::RegisterVsockDevice)?;
+            METRICS
+                .write()
+                .unwrap()
+                .mmio
+                .insert(info.config.id.clone(), device.metrics());
             info.device = Some(device);
         }
 
@@ -301,6 +306,11 @@ impl VsockDeviceMgr {
             );
             if let Some(device) = info.device.take() {
                 DeviceManager::destroy_mmio_virtio_device(device, ctx)?;
+                METRICS
+                    .write()
+                    .unwrap()
+                    .mmio
+                    .remove(info.config.id.as_str());
             }
         }
         Ok(())
