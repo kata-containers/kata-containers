@@ -98,6 +98,7 @@ options:
 	kernel-nvidia-gpu-tdx-experimental
 	kernel-sev-tarball
 	kernel-tdx-experimental
+	kernel-arm-experimental
 	log-parser-rs
 	nydus
 	ovmf
@@ -390,6 +391,18 @@ install_kernel_sev() {
 		"assets.kernel.sev.version" \
 		"kernel-sev" \
 		"-x sev -u ${kernel_url}"
+}
+
+#Install arm experimental kernel asset
+install_kernel_arm_experimental() {
+	info "build arm experimental kernel"
+	local kernel_url="$(get_from_kata_deps assets.kernel-arm-experimental.url)"
+	local kernel_version="$(get_from_kata_deps assets.kernel-arm-experimental.branch)"
+
+	install_kernel_helper \
+		"assets.kernel.arm-experimental.version" \
+		"kernel-arm-experimental" \
+		"${kernel_version} -u ${kernel_url} -E"
 }
 
 install_qemu_helper() {
@@ -801,6 +814,8 @@ handle_build() {
 	kernel-tdx-experimental) install_kernel_tdx_experimental ;;
 
 	kernel-sev) install_kernel_sev ;;
+
+	kernel-arm-experimental) install_kernel_arm_experimental ;;
 
 	log-parser-rs) install_log_parser_rs ;;
 

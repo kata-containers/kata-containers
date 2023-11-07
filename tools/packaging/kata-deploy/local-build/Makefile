@@ -29,6 +29,7 @@ all: serial-targets \
 	kernel-nvidia-gpu-tdx-experimental-tarball \
 	kernel-tarball \
 	kernel-tdx-experimental-tarball \
+	kernel-arm-experiemntal-tarball \
 	nydus-tarball \
 	ovmf-sev-tarball \
 	ovmf-tarball \
@@ -93,6 +94,9 @@ kernel-tdx-experimental-tarball:
 	${MAKE} $@-build
 
 kernel-sev-tarball:
+	${MAKE} $@-build
+
+kernel-arm-experimental-tarball:
 	${MAKE} $@-build
 
 log-parser-rs-tarball:
