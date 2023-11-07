@@ -197,6 +197,17 @@ get_kernel() {
 	mv "linux-${version}" "${kernel_path}"
 }
 
+get_arm_experimental_kernel() {
+	url=$(get_from_kata_deps "assets.kernel-arm-experimental.url")
+	branch=$(get_from_kata_deps "assets.kernel-arm-experimental.branch")
+
+	kernel_path="$1"
+	[ -n "${kernel_path}" ] || die "kernel_path not provided"
+        [ ! -d "${kernel_path}" ] || die "kernel_path already exist"
+
+	git clone --depth 1 ${url} -b ${branch} ${kernel_path}
+}
+
 get_major_kernel_version() {
 	local version="${1}"
 	[ -n "${version}" ] || die "kernel version not provided"
@@ -399,7 +410,12 @@ setup_kernel() {
 		[ -n "$kernel_version" ] || die "failed to get kernel version: Kernel version is emtpy"
 
 		if [[ ${download_kernel} == "true" ]]; then
-			get_kernel "${kernel_version}" "${kernel_path}"
+			if [ "$build_type" == "arch-experimental" ] && [ "$(uname -m)" == "aarch64" ]; then
+				build_type="arm-experimental"
+				get_arm_experimental_kernel "${kernel_path}"
+			else
+				get_kernel "${kernel_version}" "${kernel_path}"
+			fi
 		fi
 
 		[ -n "$kernel_path" ] || die "failed to find kernel source path"
@@ -538,6 +554,7 @@ install_kata() {
 }
 
 main() {
+	INSTALL_IN_GOPATH=false install_yq
 	while getopts "a:b:c:deEfg:hH:k:p:t:u:v:x:" opt; do
 		case "$opt" in
 			a)
@@ -623,8 +640,7 @@ main() {
 		elif [[ ${build_type} == "arch-experimental" ]]; then
 			case "${arch_target}" in
 			"aarch64")
-				build_type="arm-experimental"
-				kernel_version=$(get_from_kata_deps "assets.kernel-arm-experimental.version")
+				kernel_version=$(get_from_kata_deps "assets.kernel-arm-experimental.branch")
 			;;
 			*)
 				info "No arch-specific experimental kernel supported, using experimental one instead"
