@@ -18,6 +18,7 @@ use std::time::Duration;
 use caps::{CapSet, Capability};
 use dbs_device::resources::{DeviceResources, ResourceConstraint};
 use dbs_utils::epoll_manager::{EpollManager, SubscriberId};
+use dbs_utils::metric::{IncMetric, SharedIncMetric};
 use dbs_utils::rate_limiter::{BucketUpdate, RateLimiter};
 use fuse_backend_rs::api::{Vfs, VfsIndex, VfsOptions};
 use fuse_backend_rs::passthrough::{CachePolicy, Config as PassthroughConfig, PassthroughFs};
@@ -29,6 +30,7 @@ use nydus_api::ConfigV2;
 use nydus_rafs::blobfs::{BlobFs, Config as BlobfsConfig};
 use nydus_rafs::{fs::Rafs, RafsIoRead};
 use rlimit::Resource;
+use serde::Serialize;
 use virtio_bindings::bindings::virtio_blk::VIRTIO_F_VERSION_1;
 use virtio_queue::QueueT;
 use vm_memory::{
@@ -61,6 +63,29 @@ pub(crate) const PASSTHROUGHFS: &str = "passthroughfs";
 pub(crate) const BLOBFS: &str = "blobfs";
 pub(crate) const RAFS: &str = "rafs";
 
+/// Metrics specific to the virtio fs device.
+#[derive(Default, Serialize)]
+pub struct FsDeviceMetrics {
+    /// Number of times when activating events on the fs device.
+    pub activate_count: SharedIncMetric,
+    /// Number of times when activating failed on the fs device.
+    pub activate_fails: SharedIncMetric,
+    /// Number of times when configuring the fs device failed.
+    pub cfg_fails: SharedIncMetric,
+    /// Number of times when mounting blobfs on the fs device.
+    pub mount_blobfs_count: SharedIncMetric,
+    /// Number of times when mounting passthroughfs on the fs device.
+    pub mount_passthroughfs_count: SharedIncMetric,
+    /// Number of times when mounting rafs blob fs on the fs device.
+    pub mount_rafs_count: SharedIncMetric,
+    /// Number of times when unmounting the fs device.
+    pub umount_ops_count: SharedIncMetric,
+    /// Number of times when updating the fs device.
+    pub update_ops_count: SharedIncMetric,
+    /// Number of times when sending rate-limiter patch data on the fs device.
+    pub rate_limiter_update_count: SharedIncMetric,
+}
+
 /// Info of backend filesystems of VirtioFs
 #[allow(dead_code)]
 pub struct BackendFsInfo {
@@ -91,6 +116,7 @@ pub struct VirtioFs<AS: GuestAddressSpace> {
     pub(crate) patch_rate_limiter_fd: EventFd,
     pub(crate) sender: Option<mpsc::Sender<(BucketUpdate, BucketUpdate)>>,
     phantom: PhantomData<AS>,
+    metrics: Arc<FsDeviceMetrics>,
 }
 
 impl<AS> VirtioFs<AS>
@@ -114,6 +140,7 @@ where
                     );
                     Error::InternalError
                 })?;
+                self.metrics.rate_limiter_update_count.inc();
                 Ok(())
             }
             None => {
@@ -238,6 +265,7 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
             patch_rate_limiter_fd: EventFd::new(0).unwrap(),
             sender: None,
             phantom: PhantomData,
+            metrics: Arc::new(FsDeviceMetrics::default()),
         })
     }
 
@@ -346,6 +374,7 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
                     FsError::InvalidData
                 })?;
                 self.backend_fs.remove(mountpoint);
+                self.metrics.umount_ops_count.inc();
                 Ok(())
             }
             "update" => {
@@ -401,6 +430,7 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
                         src_cfg: None,
                     },
                 );
+                self.metrics.mount_blobfs_count.inc();
                 Ok(())
             }
             Err(e) => {
@@ -454,6 +484,7 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
                         src_cfg: None,
                     },
                 );
+                self.metrics.mount_passthroughfs_count.inc();
                 Ok(())
             }
             Err(e) => {
@@ -509,6 +540,7 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
                         src_cfg: Some((source, rafs_cfg)),
                     },
                 );
+                self.metrics.mount_rafs_count.inc();
                 Ok(())
             }
             Err(e) => {
@@ -574,6 +606,7 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
                 .update(&mut file, &rafs_conf)
                 .map_err(|e| FsError::BackendFs(format!("Update rafs failed: {e:?}")))?;
             self.backend_fs.insert(mountpoint.to_string(), new_info);
+            self.metrics.update_ops_count.inc();
             Ok(())
         } else {
             Err(FsError::BackendFs("no rafs is found".to_string()))
@@ -641,6 +674,9 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
         self.handler.insert_region(region.clone())?;
 
         Ok(region)
+    }
+    pub fn metrics(&self) -> Arc<FsDeviceMetrics> {
+        self.metrics.clone()
     }
 }
 
@@ -793,7 +829,10 @@ where
             offset,
             data
         );
-        self.device_info.read_config(offset, data)
+        self.device_info.read_config(offset, data).map_err(|e| {
+            self.metrics.cfg_fails.inc();
+            e
+        })
     }
 
     fn write_config(&mut self, offset: u64, data: &[u8]) -> ConfigResult {
@@ -804,7 +843,10 @@ where
             offset,
             data
         );
-        self.device_info.write_config(offset, data)
+        self.device_info.write_config(offset, data).map_err(|e| {
+            self.metrics.cfg_fails.inc();
+            e
+        })
     }
 
     fn activate(&mut self, config: VirtioDeviceConfig<AS, Q>) -> ActivateResult {
@@ -813,8 +855,14 @@ where
             "{}: VirtioDevice::activate()",
             self.id
         );
+        self.metrics.activate_count.inc();
 
-        self.device_info.check_queue_sizes(&config.queues)?;
+        self.device_info
+            .check_queue_sizes(&config.queues)
+            .map_err(|e| {
+                self.metrics.activate_fails.inc();
+                e
+            })?;
 
         let (sender, receiver) = mpsc::channel();
         self.sender = Some(sender);
@@ -824,6 +872,7 @@ where
                 "{}: failed to clone patch rate limiter eventfd {:?}",
                 VIRTIO_FS_NAME, e
             );
+            self.metrics.activate_fails.inc();
             ActivateError::InternalError
         })?;
 

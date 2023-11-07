@@ -18,6 +18,7 @@ use crate::device_manager::{
     DbsMmioV2Device, DeviceManager, DeviceMgrError, DeviceOpContext, DeviceVirtioRegionHandler,
 };
 use crate::get_bucket_update;
+use crate::metric::METRICS;
 
 use super::DbsVirtioDevice;
 
@@ -423,7 +424,11 @@ impl FsDeviceMgr {
             )
             .map_err(FsDeviceError::CreateFsDevice)?,
         );
-
+        METRICS
+            .write()
+            .unwrap()
+            .fs
+            .insert(config.tag.clone(), device.metrics());
         Ok(device)
     }
 
