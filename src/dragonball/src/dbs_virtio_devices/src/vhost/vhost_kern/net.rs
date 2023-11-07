@@ -117,12 +117,6 @@ fn validate_and_configure_tap(tap: &Tap, vq_pairs: usize) -> VirtioResult<()> {
         )));
     }
 
-    // Set offload flags to match the virtio features below.
-    tap.set_offload(
-        net_gen::TUN_F_CSUM | net_gen::TUN_F_UFO | net_gen::TUN_F_TSO4 | net_gen::TUN_F_TSO6,
-    )
-    .map_err(|err| VirtioError::VhostNet(Error::TapError(TapError::SetOffload(err))))?;
-
     let vnet_hdr_size = vnet_hdr_len() as i32;
     tap.set_vnet_hdr_size(vnet_hdr_size)
         .map_err(|err| VirtioError::VhostNet(Error::TapError(TapError::SetVnetHdrSize(err))))?;
@@ -342,6 +336,22 @@ where
             .set_features(features)
             .map_err(|err| VirtioError::VhostNet(Error::VhostError(err)))?;
 
+        let tap = &self.taps[pair_index];
+        tap.set_offload(Self::virtio_features_to_tap_offload(
+            self.device_info.acked_features(),
+        ))
+        .map_err(|err| VirtioError::VhostNet(Error::TapError(TapError::SetOffload(err))))?;
+
+        self.setup_mem_table(pair_index, mem)?;
+
+        self.init_vhost_queues(pair_index, config)?;
+
+        Ok(())
+    }
+
+    fn setup_mem_table(&mut self, pair_index: usize, mem: &AS::M) -> VirtioResult<()> {
+        let handle = &mut self.handles[pair_index];
+
         let mut regions = Vec::new();
         for region in mem.iter() {
             let guest_phys_addr = region.start_addr();
@@ -362,8 +372,6 @@ where
         handle
             .set_mem_table(&regions)
             .map_err(|err| VirtioError::VhostNet(Error::VhostError(err)))?;
-
-        self.init_vhost_queues(pair_index, config)?;
 
         Ok(())
     }
@@ -442,6 +450,28 @@ where
         }
 
         Ok(())
+    }
+
+    fn virtio_features_to_tap_offload(features: u64) -> u32 {
+        let mut tap_offloads: u32 = 0;
+
+        if features & (1 << VIRTIO_NET_F_GUEST_CSUM) != 0 {
+            tap_offloads |= net_gen::TUN_F_CSUM;
+        }
+        if features & (1 << VIRTIO_NET_F_GUEST_TSO4) != 0 {
+            tap_offloads |= net_gen::TUN_F_TSO4;
+        }
+        if features & (1 << VIRTIO_NET_F_GUEST_TSO6) != 0 {
+            tap_offloads |= net_gen::TUN_F_TSO6;
+        }
+        if features & (1 << VIRTIO_NET_F_GUEST_ECN) != 0 {
+            tap_offloads |= net_gen::TUN_F_TSO_ECN;
+        }
+        if features & (1 << VIRTIO_NET_F_GUEST_UFO) != 0 {
+            tap_offloads |= net_gen::TUN_F_UFO;
+        }
+
+        tap_offloads
     }
 }
 
