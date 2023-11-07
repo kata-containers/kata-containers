@@ -13,6 +13,8 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use crossbeam_channel::{unbounded, Receiver, Sender};
+use dbs_utils::metric::IncMetric;
+use dragonball::metric::METRICS;
 use dragonball::{
     api::v1::{
         BlockDeviceConfigInfo, BootSourceConfig, FsDeviceConfigInfo, FsMountConfigInfo,
@@ -152,6 +154,7 @@ impl VmmInstance {
     }
 
     pub fn put_boot_source(&self, boot_source_cfg: BootSourceConfig) -> Result<()> {
+        METRICS.read().unwrap().request.configure_boot_source.inc();
         self.handle_request(Request::Sync(VmmAction::ConfigureBootSource(
             boot_source_cfg,
         )))
@@ -160,6 +163,7 @@ impl VmmInstance {
     }
 
     pub fn instance_start(&self) -> Result<()> {
+        METRICS.read().unwrap().request.start_microvm.inc();
         self.handle_request(Request::Sync(VmmAction::StartMicroVm))
             .context("Failed to start MicroVm")?;
         Ok(())
@@ -185,6 +189,7 @@ impl VmmInstance {
     }
 
     pub fn get_machine_info(&self) -> Result<Box<VmConfigInfo>> {
+        METRICS.read().unwrap().request.get_vm_configuration.inc();
         if let Ok(VmmData::MachineConfiguration(vm_config)) =
             self.handle_request(Request::Sync(VmmAction::GetVmConfiguration))
         {
@@ -194,6 +199,7 @@ impl VmmInstance {
     }
 
     pub fn insert_block_device(&self, device_cfg: BlockDeviceConfigInfo) -> Result<()> {
+        METRICS.read().unwrap().request.insert_block_device.inc();
         self.handle_request_with_retry(Request::Sync(VmmAction::InsertBlockDevice(
             device_cfg.clone(),
         )))
@@ -203,12 +209,14 @@ impl VmmInstance {
 
     pub fn remove_block_device(&self, id: &str) -> Result<()> {
         info!(sl!(), "remove block device {}", id);
+        METRICS.read().unwrap().request.remove_block_device.inc();
         self.handle_request(Request::Sync(VmmAction::RemoveBlockDevice(id.to_string())))
             .with_context(|| format!("Failed to remove block device {:?}", id))?;
         Ok(())
     }
 
     pub fn set_vm_configuration(&self, vm_config: VmConfigInfo) -> Result<()> {
+        METRICS.read().unwrap().request.set_vm_configuration.inc();
         self.handle_request(Request::Sync(VmmAction::SetVmConfiguration(
             vm_config.clone(),
         )))
@@ -217,6 +225,7 @@ impl VmmInstance {
     }
 
     pub fn insert_network_device(&self, net_cfg: VirtioNetDeviceConfigInfo) -> Result<()> {
+        METRICS.read().unwrap().request.insert_net_device.inc();
         self.handle_request_with_retry(Request::Sync(VmmAction::InsertNetworkDevice(
             net_cfg.clone(),
         )))
@@ -225,6 +234,7 @@ impl VmmInstance {
     }
 
     pub fn insert_vsock(&self, vsock_cfg: VsockDeviceConfigInfo) -> Result<()> {
+        METRICS.read().unwrap().request.insert_vsock_device.inc();
         self.handle_request(Request::Sync(VmmAction::InsertVsockDevice(
             vsock_cfg.clone(),
         )))
@@ -233,12 +243,14 @@ impl VmmInstance {
     }
 
     pub fn insert_fs(&self, fs_cfg: &FsDeviceConfigInfo) -> Result<()> {
+        METRICS.read().unwrap().request.insert_fs_device.inc();
         self.handle_request(Request::Sync(VmmAction::InsertFsDevice(fs_cfg.clone())))
             .with_context(|| format!("Failed to insert {} fs device {:?}", fs_cfg.mode, fs_cfg))?;
         Ok(())
     }
 
     pub fn patch_fs(&self, cfg: &FsMountConfigInfo, op: ShareFsOperation) -> Result<()> {
+        METRICS.read().unwrap().request.manipulate_fs_backend.inc();
         self.handle_request(Request::Sync(VmmAction::ManipulateFsBackendFs(cfg.clone())))
             .with_context(|| {
                 format!(
@@ -250,6 +262,7 @@ impl VmmInstance {
     }
 
     pub fn resize_vcpu(&self, cfg: &VcpuResizeInfo) -> Result<()> {
+        METRICS.read().unwrap().request.resize_vcpu.inc();
         self.handle_request(Request::Sync(VmmAction::ResizeVcpu(cfg.clone())))
             .with_context(|| format!("Failed to resize_vm(hotplug vcpu), cfg: {:?}", cfg))?;
         Ok(())
@@ -277,6 +290,7 @@ impl VmmInstance {
     }
 
     pub fn stop(&mut self) -> Result<()> {
+        METRICS.read().unwrap().request.shutdown_microvm.inc();
         self.handle_request(Request::Sync(VmmAction::ShutdownMicroVm))
             .map_err(|e| {
                 warn!(sl!(), "Failed to shutdown MicroVM. {}", e);
@@ -322,17 +336,25 @@ impl VmmInstance {
     }
 
     fn handle_request(&self, req: Request) -> Result<VmmData> {
+        METRICS.read().unwrap().request.request_count.inc();
         let Request::Sync(vmm_action) = req;
         match self.send_request(vmm_action) {
             Ok(vmm_outcome) => match *vmm_outcome {
                 Ok(vmm_data) => Ok(vmm_data),
-                Err(vmm_action_error) => Err(anyhow!("vmm action error: {:?}", vmm_action_error)),
+                Err(vmm_action_error) => {
+                    METRICS.read().unwrap().request.response_fails.inc();
+                    Err(anyhow!("vmm action error: {:?}", vmm_action_error))
+                }
             },
-            Err(e) => Err(e),
+            Err(e) => {
+                METRICS.read().unwrap().request.request_fails.inc();
+                Err(e)
+            }
         }
     }
 
     fn handle_request_with_retry(&self, req: Request) -> Result<VmmData> {
+        METRICS.read().unwrap().request.request_count.inc();
         let Request::Sync(vmm_action) = req;
         for count in 0..REQUEST_RETRY {
             match self.send_request(vmm_action.clone()) {
@@ -349,15 +371,18 @@ impl VmmInstance {
                             std::thread::sleep(std::time::Duration::from_millis(10));
                             continue;
                         } else {
+                            METRICS.read().unwrap().request.response_fails.inc();
                             return Err(vmm_action_error.into());
                         }
                     }
                 },
                 Err(err) => {
+                    METRICS.read().unwrap().request.request_fails.inc();
                     return Err(err);
                 }
             }
         }
+        METRICS.read().unwrap().request.response_fails.inc();
         Err(anyhow::anyhow!(
             "After {} attempts, it still doesn't work.",
             REQUEST_RETRY

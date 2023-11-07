@@ -69,6 +69,51 @@ pub struct SignalMetrics {
     pub sigsegv: SharedIncMetric,
 }
 
+/// Metrics related to vmm action request.
+#[derive(Default, Serialize)]
+pub struct VmmRequestMetrics {
+    /// Number of vmm action request.
+    pub request_count: SharedIncMetric,
+    ///  Number of errors when sending the request.
+    pub request_fails: SharedIncMetric,
+    /// Number of errors received from the request.
+    pub response_fails: SharedIncMetric,
+    /// Number of times when configuring boot source.
+    pub configure_boot_source: SharedIncMetric,
+    /// Number of start vm operation.
+    pub start_microvm: SharedIncMetric,
+    /// Number of shutdown vm operation.
+    pub shutdown_microvm: SharedIncMetric,
+    /// Number of times when getting vm configuration.
+    pub get_vm_configuration: SharedIncMetric,
+    /// Number of times when setting vm configuration.
+    pub set_vm_configuration: SharedIncMetric,
+    /// Number of times when insertting vsock device.
+    pub insert_vsock_device: SharedIncMetric,
+    /// Number of times when insertting block device.
+    pub insert_block_device: SharedIncMetric,
+    /// Number of times when removing block device.
+    pub remove_block_device: SharedIncMetric,
+    /// Number of times when updating block device.
+    pub update_block_device: SharedIncMetric,
+    /// Number of times when insertting net device.
+    pub insert_net_device: SharedIncMetric,
+    /// Number of times when updating net device.
+    pub update_net_interface: SharedIncMetric,
+    /// Number of times when insertting fs device.
+    pub insert_fs_device: SharedIncMetric,
+    /// Number of times when manipulating fs backend.
+    pub manipulate_fs_backend: SharedIncMetric,
+    /// Number of times when updating fs device.
+    pub update_fs_device: SharedIncMetric,
+    /// Number of times when resizing vcpu.
+    pub resize_vcpu: SharedIncMetric,
+    /// Number of times when inserting memory device.
+    pub insert_mem_device: SharedIncMetric,
+    /// Number of times when inserting balloon device.
+    pub insert_balloon_device: SharedIncMetric,
+}
+
 /// Structure storing all metrics while enforcing serialization support on them.
 /// The type of the device metrics is HashMap<DeviceId, Arc<DeviceMetrics>> and the type of
 /// non-device metrics is XXMetrics.
@@ -80,6 +125,8 @@ pub struct DragonballMetrics {
     pub seccomp: SeccompMetrics,
     /// Metrics related to signals.
     pub signals: SignalMetrics,
+    /// Metrics related to vmm action request.
+    pub request: VmmRequestMetrics,
     /// Metrics related to i8032 device.
     #[cfg(target_arch = "x86_64")]
     pub i8042: Arc<I8042DeviceMetrics>,
