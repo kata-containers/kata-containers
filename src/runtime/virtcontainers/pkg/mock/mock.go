@@ -16,9 +16,9 @@ import (
 	"strings"
 
 	"github.com/containerd/ttrpc"
-	gpb "github.com/gogo/protobuf/types"
 	aTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
 	pb "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols/grpc"
+	gpb "google.golang.org/protobuf/types/known/emptypb"
 )
 
 const VSockPrefix = "mock://"

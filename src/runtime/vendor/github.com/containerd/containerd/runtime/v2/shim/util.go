@@ -21,15 +21,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/namespaces"
-	"github.com/gogo/protobuf/proto"
-	"github.com/gogo/protobuf/types"
+	"github.com/containerd/containerd/protobuf/proto"
+	"github.com/containerd/containerd/protobuf/types"
+	"github.com/containerd/ttrpc"
+	"github.com/containerd/typeurl/v2"
 	exec "golang.org/x/sys/execabs"
 )
 
@@ -64,7 +68,10 @@ func Command(ctx context.Context, config *CommandConfig) (*exec.Cmd, error) {
 	cmd.Env = append(
 		os.Environ(),
 		"GOMAXPROCS=2",
+		fmt.Sprintf("%s=2", maxVersionEnv),
 		fmt.Sprintf("%s=%s", ttrpcAddressEnv, config.TTRPCAddress),
+		fmt.Sprintf("%s=%s", grpcAddressEnv, config.Address),
+		fmt.Sprintf("%s=%s", namespaceEnv, ns),
 	)
 	if config.SchedCore {
 		cmd.Env = append(cmd.Env, "SCHED_CORE=1")
@@ -85,7 +92,7 @@ func Command(ctx context.Context, config *CommandConfig) (*exec.Cmd, error) {
 func BinaryName(runtime string) string {
 	// runtime name should format like $prefix.name.version
 	parts := strings.Split(runtime, ".")
-	if len(parts) < 2 {
+	if len(parts) < 2 || parts[0] == "" {
 		return ""
 	}
 
@@ -166,4 +173,64 @@ func ReadAddress(path string) (string, error) {
 		return "", ErrNoAddress
 	}
 	return string(data), nil
+}
+
+// ReadRuntimeOptions reads config bytes from io.Reader and unmarshals it into the provided type.
+// The type must be registered with typeurl.
+//
+// The function will return ErrNotFound, if the config is not provided.
+// And ErrInvalidArgument, if unable to cast the config to the provided type T.
+func ReadRuntimeOptions[T any](reader io.Reader) (T, error) {
+	var config T
+
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return config, fmt.Errorf("failed to read config bytes from stdin: %w", err)
+	}
+
+	if len(data) == 0 {
+		return config, errdefs.ErrNotFound
+	}
+
+	var any types.Any
+	if err := proto.Unmarshal(data, &any); err != nil {
+		return config, err
+	}
+
+	v, err := typeurl.UnmarshalAny(&any)
+	if err != nil {
+		return config, err
+	}
+
+	config, ok := v.(T)
+	if !ok {
+		return config, fmt.Errorf("invalid type %T: %w", v, errdefs.ErrInvalidArgument)
+	}
+
+	return config, nil
+}
+
+// chainUnaryServerInterceptors creates a single ttrpc server interceptor from
+// a chain of many interceptors executed from first to last.
+func chainUnaryServerInterceptors(interceptors ...ttrpc.UnaryServerInterceptor) ttrpc.UnaryServerInterceptor {
+	n := len(interceptors)
+
+	// force to use default interceptor in ttrpc
+	if n == 0 {
+		return nil
+	}
+
+	return func(ctx context.Context, unmarshal ttrpc.Unmarshaler, info *ttrpc.UnaryServerInfo, method ttrpc.Method) (interface{}, error) {
+		currentMethod := method
+
+		for i := n - 1; i > 0; i-- {
+			interceptor := interceptors[i]
+			innerMethod := currentMethod
+
+			currentMethod = func(currentCtx context.Context, currentUnmarshal func(interface{}) error) (interface{}, error) {
+				return interceptor(currentCtx, currentUnmarshal, info, innerMethod)
+			}
+		}
+		return interceptors[0](ctx, unmarshal, info, currentMethod)
+	}
 }

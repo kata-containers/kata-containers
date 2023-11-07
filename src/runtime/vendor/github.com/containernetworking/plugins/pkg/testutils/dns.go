@@ -16,7 +16,6 @@ package testutils
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 
@@ -28,7 +27,7 @@ import (
 // an error if any occurs while creating/writing the file. It is the caller's
 // responsibility to remove the file.
 func TmpResolvConf(dnsConf types.DNS) (string, error) {
-	f, err := ioutil.TempFile("", "cni_test_resolv.conf")
+	f, err := os.CreateTemp("", "cni_test_resolv.conf")
 	if err != nil {
 		return "", fmt.Errorf("failed to get temp file for CNI test resolv.conf: %v", err)
 	}

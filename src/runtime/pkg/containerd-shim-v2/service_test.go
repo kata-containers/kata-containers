@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	taskAPI "github.com/containerd/containerd/runtime/v2/task"
+	taskAPI "github.com/containerd/containerd/api/runtime/task/v2"
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	"github.com/stretchr/testify/assert"
 )

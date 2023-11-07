@@ -36,13 +36,14 @@ import (
 
 	"context"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/opencontainers/selinux/go-selinux"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	grpcStatus "google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 )
 
 // kataAgentTracingTags defines tags for the trace span
@@ -2119,7 +2120,7 @@ func (k *kataAgent) sendReq(spanCtx context.Context, request interface{}) (inter
 		defer k.disconnect(spanCtx)
 	}
 
-	msgName := proto.MessageName(request.(proto.Message))
+	msgName := string(proto.MessageName(request.(proto.Message)))
 
 	k.Lock()
 
@@ -2141,7 +2142,12 @@ func (k *kataAgent) sendReq(spanCtx context.Context, request interface{}) (inter
 	if cancel != nil {
 		defer cancel()
 	}
-	k.Logger().WithField("name", msgName).WithField("req", message.String()).Trace("sending request")
+
+	jsonStr, err := protojson.Marshal(message)
+	if err != nil {
+		return nil, err
+	}
+	k.Logger().WithField("name", msgName).WithField("req", string(jsonStr)).Trace("sending request")
 
 	defer func() {
 		agentRPCDurationsHistogram.WithLabelValues(msgName).Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
@@ -2365,7 +2371,7 @@ func (k *kataAgent) getGuestVolumeStats(ctx context.Context, volumeGuestPath str
 }
 
 func (k *kataAgent) resizeGuestVolume(ctx context.Context, volumeGuestPath string, size uint64) error {
-	_, err := k.sendReq(ctx, &grpc.ResizeVolumeRequest{VolumeGuestPath: volumeGuestPath, Size_: size})
+	_, err := k.sendReq(ctx, &grpc.ResizeVolumeRequest{VolumeGuestPath: volumeGuestPath, Size: size})
 	return err
 }
 

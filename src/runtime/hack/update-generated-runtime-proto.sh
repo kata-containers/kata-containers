@@ -4,11 +4,11 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+CACHE_PATH="protocols/cache"
+
 protoc \
-	-I=$GOPATH/src \
-	-I=$GOPATH/src/github.com/gogo/protobuf/protobuf \
-	--proto_path=protocols/cache \
-	--gogofast_out=\
-Mgoogle/protobuf/empty.proto=github.com/gogo/protobuf/types,\
-plugins=grpc:protocols/cache \
-	protocols/cache/cache.proto
+    -I=$GOPATH/src \
+    --proto_path=$CACHE_PATH \
+    --go_out=$CACHE_PATH \
+    --go-grpc_out=$CACHE_PATH \
+    $CACHE_PATH/cache.proto

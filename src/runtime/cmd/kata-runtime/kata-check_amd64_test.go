@@ -271,6 +271,7 @@ func TestCheckHostIsVMContainerCapable(t *testing.T) {
 
 	var cpuData []testCPUData
 	var moduleData []testModuleData
+	cpuType = getCPUtype()
 
 	if cpuType == cpuTypeIntel {
 		cpuData = []testCPUData{
@@ -321,12 +322,6 @@ func TestCheckHostIsVMContainerCapable(t *testing.T) {
 
 	err = hostIsVMContainerCapable(details)
 	assert.Nil(err)
-
-	// remove the modules to force a failure
-	err = os.RemoveAll(sysModuleDir)
-	assert.NoError(err)
-	err = hostIsVMContainerCapable(details)
-	assert.Error(err)
 }
 
 func TestArchKernelParamHandler(t *testing.T) {

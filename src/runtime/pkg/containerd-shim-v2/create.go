@@ -20,10 +20,10 @@ import (
 	"syscall"
 
 	"github.com/container-orchestrated-devices/container-device-interface/pkg/cdi"
+	taskAPI "github.com/containerd/containerd/api/runtime/task/v2"
 	containerd_types "github.com/containerd/containerd/api/types"
 	"github.com/containerd/containerd/mount"
-	taskAPI "github.com/containerd/containerd/runtime/v2/task"
-	"github.com/containerd/typeurl"
+	"github.com/containerd/typeurl/v2"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"

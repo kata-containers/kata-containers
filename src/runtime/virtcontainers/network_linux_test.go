@@ -7,7 +7,6 @@ package virtcontainers
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"reflect"
 	"testing"
@@ -106,10 +105,6 @@ func TestGenerateInterfacesAndRoutes(t *testing.T) {
 			Lladdr:      "6a:92:3a:59:70:aa",
 			ToIPAddress: &pbTypes.IPAddress{Address: "192.168.0.101", Family: utils.ConvertAddressFamily(netlink.FAMILY_V4)},
 		},
-	}
-
-	for _, r := range resRoutes {
-		fmt.Printf("resRoute: %+v\n", r)
 	}
 
 	assert.Nil(t, err, "unexpected failure when calling generateKataInterfacesAndRoutes")
