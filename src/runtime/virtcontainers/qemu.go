@@ -2079,8 +2079,8 @@ func (q *qemu) hotplugAddCPUs(amount uint32) (uint32, error) {
 		coreID := fmt.Sprintf("%d", hc.Properties.Core)
 		threadID := fmt.Sprintf("%d", hc.Properties.Thread)
 
-		// If CPU type is IBM pSeries, Z or arm virt, we do not set socketID and threadID
-		if machine.Type == "pseries" || machine.Type == QemuCCWVirtio || machine.Type == "virt" {
+		// If CPU type is IBM pSeries, Z, we do not set socketID and threadID
+		if machine.Type == "pseries" || machine.Type == QemuCCWVirtio {
 			socketID = ""
 			threadID = ""
 			dieID = ""
