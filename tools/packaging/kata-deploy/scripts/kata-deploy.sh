@@ -130,7 +130,6 @@ function install_artifacts() {
 	if [ "${HOST_OS:-}" == "cbl-mariner" ]; then
 		config_path="/opt/kata/share/defaults/kata-containers/configuration-clh.toml"
 		clh_path="/opt/kata/bin/cloud-hypervisor-glibc"
-		sed -i -E 's|(enable_annotations) = .+|\1 = ["enable_iommu", "initrd", "kernel"]|' "${config_path}"
 		sed -i -E "s|(valid_hypervisor_paths) = .+|\1 = [\"${clh_path}\"]|" "${config_path}"
 		sed -i -E "s|(path) = \".+/cloud-hypervisor\"|\1 = \"${clh_path}\"|" "${config_path}"
 	fi
