@@ -335,7 +335,6 @@ generate_qemu_options() {
 	# building QEMU.
 	case "$arch" in
 	aarch64)
-		qemu_options+=(functionality:--disable-virtiofsd)
 		;;
 	x86_64)
 		qemu_options+=(functionality:--disable-virtiofsd)
