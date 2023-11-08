@@ -3,6 +3,7 @@ import subprocess
 import sys
 
 # runs genpolicy tools on the following files
+# should run this after any change to genpolicy
 # usage: python3 update_policy_samples.py
 
 yaml_files = [
@@ -71,6 +72,12 @@ no_policy_yaml_files=[
 
 file_base_path = "../../agent/samples/policy/yaml"
 
+def runCmd(arg):
+    proc = subprocess.run([arg], stdout=sys.stdout, stderr=sys.stderr, universal_newlines=True, input="", shell=True)
+    if proc.returncode != 0:
+        print(f"`{arg}` failed with exit code {proc.returncode}. Stderr: {proc.stderr}, Stdout: {proc.stdout}")
+    return proc
+
 # check we can access all files we are about to update
 for file in yaml_files + silently_ignored_yaml_files + no_policy_yaml_files:
     filepath = os.path.join(file_base_path, file)
@@ -78,18 +85,16 @@ for file in yaml_files + silently_ignored_yaml_files + no_policy_yaml_files:
         print(f"filepath does not exists: {filepath}")
 
 # build tool
-subprocess.run(["cargo build"], stdout=sys.stdout, stderr=sys.stderr, shell=True)
+runCmd("cargo build")
 
 # update files
 genpolicy_path = "target/debug/genpolicy"
 for file in yaml_files:
-    filepath = os.path.join(file_base_path, file)
-    subprocess.run([genpolicy_path, "-y", filepath], stdout=sys.stdout, stderr=sys.stderr,)
+    runCmd(f"{genpolicy_path} -y {os.path.join(file_base_path, file)}")
 
 for file in silently_ignored_yaml_files:
-    filepath = os.path.join(file_base_path, file)
-    subprocess.run([genpolicy_path, "-y", filepath, "-s"])
+    runCmd(f"{genpolicy_path} -y {os.path.join(file_base_path, file)} -s")
 
 for file in no_policy_yaml_files:
-    filepath = os.path.join(file_base_path, file)
-    subprocess.run([genpolicy_path, "-y", filepath])
+    runCmd(f"{genpolicy_path} -y {os.path.join(file_base_path, file)}")
+
