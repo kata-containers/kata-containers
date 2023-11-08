@@ -12,7 +12,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 use std::{thread, time};
 
@@ -26,7 +26,7 @@ use nix::sys::stat::Mode;
 use oci::{Hook, Hooks};
 use protocols::agent::{OnlineCPUMemRequest, SharedMount};
 use regex::Regex;
-use rustjail::cgroups as rustjail_cgroups;
+use rustjail::cgroups::{self as rustjail_cgroups, DevicesCgroupInfo};
 use rustjail::container::BaseContainer;
 use rustjail::container::LinuxContainer;
 use rustjail::process::Process;
@@ -118,6 +118,7 @@ pub struct Sandbox {
     pub event_tx: Option<Sender<String>>,
     pub bind_watcher: BindWatcher,
     pub pcimap: HashMap<pci::Address, pci::Address>,
+    pub devcg_info: Arc<RwLock<DevicesCgroupInfo>>,
 }
 
 impl Sandbox {
@@ -151,6 +152,7 @@ impl Sandbox {
             event_tx: Some(tx),
             bind_watcher: BindWatcher::new(),
             pcimap: HashMap::new(),
+            devcg_info: Arc::new(RwLock::new(DevicesCgroupInfo::default())),
         })
     }
 
@@ -658,7 +660,7 @@ mod tests {
     use crate::mount::baremount;
     use anyhow::{anyhow, Error};
     use nix::mount::MsFlags;
-    use oci::{Linux, Root, Spec};
+    use oci::{Linux, LinuxDeviceCgroup, LinuxResources, Root, Spec};
     use rustjail::container::LinuxContainer;
     use rustjail::process::Process;
     use rustjail::specconv::CreateOpts;
@@ -667,8 +669,11 @@ mod tests {
     use std::io::prelude::*;
     use std::os::unix::fs::PermissionsExt;
     use std::path::Path;
+    use std::time::{SystemTime, UNIX_EPOCH};
     use tempfile::{tempdir, Builder, TempDir};
     use test_utils::skip_if_not_root;
+
+    const CGROUP_PARENT: &str = "kata.agent.test.k8s.io";
 
     fn bind_mount(src: &str, dst: &str, logger: &Logger) -> Result<(), Error> {
         let src_path = Path::new(src);
@@ -824,13 +829,39 @@ mod tests {
     }
 
     fn create_dummy_opts() -> CreateOpts {
+        let start = SystemTime::now();
+        let since_the_epoch = start
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards");
+
         let root = Root {
             path: String::from("/"),
             ..Default::default()
         };
 
+        let linux_resources = LinuxResources {
+            devices: vec![LinuxDeviceCgroup {
+                allow: true,
+                r#type: String::new(),
+                major: None,
+                minor: None,
+                access: String::from("rwm"),
+            }],
+            ..Default::default()
+        };
+
+        let cgroups_path = format!(
+            "/{}/dummycontainer{}",
+            CGROUP_PARENT,
+            since_the_epoch.as_millis()
+        );
+
         let spec = Spec {
-            linux: Some(Linux::default()),
+            linux: Some(Linux {
+                cgroups_path,
+                resources: Some(linux_resources),
+                ..Default::default()
+            }),
             root: Some(root),
             ..Default::default()
         };
@@ -853,22 +884,24 @@ mod tests {
             .map_err(|e| anyhow!(e).context("tempdir failed"))
             .unwrap();
 
-        // Create a new container
-        (
-            LinuxContainer::new(
-                "some_id",
-                dir.path().join("rootfs").to_str().unwrap(),
-                create_dummy_opts(),
-                &slog_scope::logger(),
-            )
-            .unwrap(),
-            dir,
+        let container = LinuxContainer::new(
+            "some_id",
+            dir.path().join("rootfs").to_str().unwrap(),
+            None,
+            create_dummy_opts(),
+            &slog_scope::logger(),
         )
+        .unwrap();
+
+        // Create a new container
+        (container, dir)
     }
 
     #[tokio::test]
     #[serial]
     async fn get_container_entry_exist() {
+        skip_if_not_root!();
+
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
         let (linux_container, _root) = create_linuxcontainer();
@@ -892,6 +925,8 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn add_and_get_container() {
+        skip_if_not_root!();
+
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
         let (linux_container, _root) = create_linuxcontainer();
@@ -903,6 +938,8 @@ mod tests {
     #[tokio::test]
     #[serial]
     async fn update_shared_pidns() {
+        skip_if_not_root!();
+
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
         let test_pid = 9999;
@@ -953,6 +990,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_find_container_process() {
+        skip_if_not_root!();
+
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
         let cid = "container-123";
@@ -998,6 +1037,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_find_process() {
+        skip_if_not_root!();
+
         let logger = slog::Logger::root(slog::Discard, o!());
 
         let test_pids = [std::i32::MIN, -1, 0, 1, std::i32::MAX];

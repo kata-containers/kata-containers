@@ -430,6 +430,143 @@ function stop_containerd() {
 	sudo systemctl stop containerd
 }
 
+function mountLoopDevice() {
+    local loop_file="$1"
+    if [ -e "$loop_file" ]; then
+        sudo rm -f $loop_file
+        info "$loop_file was removed"
+    fi
+
+    sudo dd if=/dev/zero of=$loop_file bs=100M count=2
+    sudo mkfs.ext4 $loop_file
+    sudo losetup -fP $loop_file
+    local loinfo=$(sudo losetup -a | grep $loop_file)
+    local device=$(echo "$loinfo" | awk -F'[: ]' '{print $1}')
+    echo $device
+}
+
+function startDeviceCgroupContainers() {
+    local pod_yaml=${REPORT_DIR}/device-cgroup-pod.yaml
+	local container1_yaml=${REPORT_DIR}/device-cgroup-container1.yaml
+	local container2_yaml=${REPORT_DIR}/device-cgroup-container2.yaml
+	local image="busybox:latest"
+
+    cat > "$pod_yaml" <<EOF
+metadata:
+  name: busybox-device-cgroup-sandbox
+  namespace: default
+  uid: busybox-device-cgroup-sandbox-uid
+EOF
+
+    cat > "$container1_yaml" <<EOF
+metadata:
+  name: busybox-device-cgroup-container1
+  namespace: default
+  uid: busybox-device-cgroup-container1-uid
+image:
+  image: $image
+command:
+- top
+linux: {}
+devices:
+- container_path: $loop_dev1_container_path
+  host_path: "$loop_dev1"
+  permissions: rwm
+EOF
+
+    cat > "$container2_yaml" <<EOF
+metadata:
+  name: busybox-device-cgroup-container2
+  namespace: default
+  uid: busybox-device-cgroup-container2-uid
+image:
+  image: $image
+command:
+- top
+linux: {}
+devices:
+- container_path: $loop_dev2_container_path
+  host_path: "$loop_dev2"
+  permissions: rwm
+EOF
+
+    sudo cp "$default_containerd_config" "$default_containerd_config_backup"
+	sudo cp $CONTAINERD_CONFIG_FILE "$default_containerd_config"
+
+	restart_containerd_service
+
+    sudo crictl pull $image
+	podid=$(sudo crictl runp $pod_yaml)
+	cid1=$(sudo crictl create $podid $container1_yaml $pod_yaml)
+	cid2=$(sudo crictl create $podid $container2_yaml $pod_yaml)
+	sudo crictl start $cid1
+	sudo crictl start $cid2
+}
+
+function stopDeviceCgroupContainers() {
+	info "show pod $podid"
+	sudo crictl --timeout=20s pods --id $podid
+	info "stop pod $podid"
+	sudo crictl --timeout=20s stopp $podid
+	info "remove pod $podid"
+	sudo crictl --timeout=20s rmp $podid
+
+	sudo cp "$default_containerd_config_backup" "$default_containerd_config"
+	restart_containerd_service
+}
+
+function TestDeviceCgroup() {
+    loop_dev1=$(mountLoopDevice "/tmp/device-cgroup-1.img" | tail -n 1)
+    loop_dev2=$(mountLoopDevice "/tmp/device-cgroup-2.img" | tail -n 1)
+    info "Two loop devices, $loop_dev1 and $loop_dev2, are created."
+    loop_dev1_container_path="/dev/test-block-1"
+    loop_dev2_container_path="/dev/test-block-2"
+
+    startDeviceCgroupContainers
+
+    local dev1_ls=$(sudo crictl exec $cid1 ls -l $loop_dev1_container_path)
+    local dev1_no=$(echo $dev1_ls | awk '{print $5, $6}')
+    local dev1_major=$(echo "${dev1_no%%,*}" | tr -d ' ')
+    local dev1_minor=$(echo "${dev1_no##*,}" | tr -d ' ')
+
+    local dev2_ls=$(sudo crictl exec $cid2 ls -l $loop_dev2_container_path)
+    local dev2_no=$(echo $dev2_ls | awk '{print $5, $6}')
+    local dev2_major=$(echo "${dev2_no%%,*}" | tr -d ' ')
+    local dev2_minor=$(echo "${dev2_no##*,}" | tr -d ' ')
+
+	info "\"$dev1_major:$dev1_minor\" is for container1, and \"$dev2_major:$dev2_minor\" is for container2."
+
+    local cid1_device_cgroup=$(sudo crictl exec $cid1 cat /sys/fs/cgroup/devices/devices.list)
+    local cid2_device_cgroup=$(sudo crictl exec $cid2 cat /sys/fs/cgroup/devices/devices.list)
+
+    if [[ $cid1_device_cgroup != *"b $dev1_major:$dev1_minor rwm"* ]]; then
+        die "The device cgroup of container1 is expected to have loop dev1"
+    fi
+	info "Container1 has \"b $dev1_major:$dev1_minor rwm\"."
+	
+    if [[ $cid1_device_cgroup == *"b $dev2_major:$dev2_minor rwm"* ]]; then
+        die "The device cgroup of container1 isn't expected to have loop dev2"
+    fi
+	info "Container1 doesn't have \"b $dev2_major:$dev2_minor rwm\"."
+
+    if [[ $cid2_device_cgroup == *"b $dev1_major:$dev1_minor rwm"* ]]; then
+        die "The device cgroup of container2 isn't expected to have loop dev2"
+    fi
+	info "Container2 doesn't have \"b $dev1_major:$dev1_minor rwm\"."
+
+    if [[ $cid2_device_cgroup != *"b $dev2_major:$dev2_minor rwm"* ]]; then
+        die "The device cgroup of container2 is expected to have loop dev2"
+    fi
+	info "Container2 has \"b $dev2_major:$dev2_minor rwm\"."
+
+    stopDeviceCgroupContainers
+
+    # Umount loop devices
+    sudo losetup -d $loop_dev1
+    sudo losetup -d $loop_dev2
+    info "Two loop devices, $loop_dev1 and $loop_dev2, are umounted."
+}
+
 function main() {
 
 	info "Stop crio service"
@@ -494,6 +631,7 @@ function main() {
 	fi
 
 	TestKilledVmmCleanup
+	TestDeviceCgroup
 
 	popd
 }

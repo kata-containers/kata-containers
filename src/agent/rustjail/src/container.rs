@@ -23,7 +23,7 @@ use crate::cgroups::fs::Manager as FsManager;
 #[cfg(test)]
 use crate::cgroups::mock::Manager as FsManager;
 use crate::cgroups::systemd::manager::Manager as SystemdManager;
-use crate::cgroups::Manager;
+use crate::cgroups::{DevicesCgroupInfo, Manager};
 #[cfg(feature = "standard-oci-runtime")]
 use crate::console;
 use crate::log_child;
@@ -55,7 +55,7 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::os::unix::io::FromRawFd;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use slog::{info, o, Logger};
 
@@ -136,7 +136,7 @@ lazy_static! {
         m
     };
 
-// type to name hashmap, better to be in NAMESPACES
+    // type to name hashmap, better to be in NAMESPACES
     pub static ref TYPETONAME: HashMap<&'static str, &'static str> = {
         let mut m = HashMap::new();
         m.insert("ipc", "ipc");
@@ -1494,6 +1494,7 @@ impl LinuxContainer {
     pub fn new<T: Into<String> + Display + Clone>(
         id: T,
         base: T,
+        devcg_info: Option<Arc<RwLock<DevicesCgroupInfo>>>,
         config: Config,
         logger: &Logger,
     ) -> Result<Self> {
@@ -1535,19 +1536,12 @@ impl LinuxContainer {
         };
 
         let cgroup_manager: Box<dyn Manager + Send + Sync> = if config.use_systemd_cgroup {
-            Box::new(SystemdManager::new(cpath.as_str()).map_err(|e| {
-                anyhow!(format!(
-                    "fail to create cgroup manager with path {}: {:}",
-                    cpath, e
-                ))
-            })?)
+            Box::new(SystemdManager::new(cpath.as_str()).context("Create systemd manager")?)
         } else {
-            Box::new(FsManager::new(cpath.as_str()).map_err(|e| {
-                anyhow!(format!(
-                    "fail to create cgroup manager with path {}: {:}",
-                    cpath, e
-                ))
-            })?)
+            Box::new(
+                FsManager::new(cpath.as_str(), spec, devcg_info)
+                    .context("Create cgroupfs manager")?,
+            )
         };
         info!(logger, "new cgroup_manager {:?}", &cgroup_manager);
 
@@ -1611,11 +1605,15 @@ mod tests {
     use super::*;
     use crate::process::Process;
     use nix::unistd::Uid;
+    use oci::{LinuxDeviceCgroup, Root};
     use std::fs;
     use std::os::unix::fs::MetadataExt;
     use std::os::unix::io::AsRawFd;
+    use std::time::UNIX_EPOCH;
     use tempfile::tempdir;
     use test_utils::skip_if_not_root;
+
+    const CGROUP_PARENT: &str = "kata.agent.test.k8s.io";
 
     fn sl() -> slog::Logger {
         slog_scope::logger()
@@ -1717,13 +1715,42 @@ mod tests {
     }
 
     fn create_dummy_opts() -> CreateOpts {
-        let mut root = oci::Root::default();
-        root.path = "/tmp".to_string();
+        let start = SystemTime::now();
+        let since_the_epoch = start
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards");
 
-        let linux = Linux::default();
-        let mut spec = Spec::default();
-        spec.root = Some(root).into();
-        spec.linux = Some(linux).into();
+        let root = Root {
+            path: String::from("/tmp"),
+            ..Default::default()
+        };
+
+        let linux_resources = LinuxResources {
+            devices: vec![LinuxDeviceCgroup {
+                allow: true,
+                r#type: String::new(),
+                major: None,
+                minor: None,
+                access: String::from("rwm"),
+            }],
+            ..Default::default()
+        };
+
+        let cgroups_path = format!(
+            "/{}/dummycontainer{}",
+            CGROUP_PARENT,
+            since_the_epoch.as_millis()
+        );
+
+        let spec = Spec {
+            linux: Some(Linux {
+                cgroups_path,
+                resources: Some(linux_resources),
+                ..Default::default()
+            }),
+            root: Some(root),
+            ..Default::default()
+        };
 
         CreateOpts {
             cgroup_name: "".to_string(),
@@ -1748,6 +1775,7 @@ mod tests {
             LinuxContainer::new(
                 "some_id",
                 &dir.path().join("rootfs").to_str().unwrap(),
+                None,
                 create_dummy_opts(),
                 &slog_scope::logger(),
             ),
@@ -1777,9 +1805,10 @@ mod tests {
     #[test]
     fn test_linuxcontainer_pause() {
         let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
-            c.cgroup_manager = Box::new(FsManager::new("").map_err(|e| {
-                anyhow!(format!("fail to create cgroup manager with path: {:}", e))
-            })?);
+            c.cgroup_manager =
+                Box::new(FsManager::new("", &Spec::default(), None).map_err(|e| {
+                    anyhow!(format!("fail to create cgroup manager with path: {:}", e))
+                })?);
             c.pause().map_err(|e| anyhow!(e))
         });
 
@@ -1801,9 +1830,10 @@ mod tests {
     #[test]
     fn test_linuxcontainer_resume() {
         let ret = new_linux_container_and_then(|mut c: LinuxContainer| {
-            c.cgroup_manager = Box::new(FsManager::new("").map_err(|e| {
-                anyhow!(format!("fail to create cgroup manager with path: {:}", e))
-            })?);
+            c.cgroup_manager =
+                Box::new(FsManager::new("", &Spec::default(), None).map_err(|e| {
+                    anyhow!(format!("fail to create cgroup manager with path: {:}", e))
+                })?);
             // Change status to paused, this way we can resume it
             c.status.transition(ContainerState::Paused);
             c.resume().map_err(|e| anyhow!(e))
