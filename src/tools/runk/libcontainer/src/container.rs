@@ -361,6 +361,7 @@ pub fn create_linux_container(
             .map(|s| s.to_string())
             .ok_or_else(|| anyhow!("failed to convert bundle path"))?
             .as_str(),
+        None,
         config,
         logger,
     )?;
@@ -384,6 +385,7 @@ pub fn load_linux_container(
             .to_str()
             .map(|s| s.to_string())
             .ok_or_else(|| anyhow!("failed to convert a root path"))?,
+        None,
         status.config.clone(),
         logger,
     )?;

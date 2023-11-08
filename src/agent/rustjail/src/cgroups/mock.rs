@@ -10,10 +10,13 @@ use crate::protocols::agent::{BlkioStats, CgroupStats, CpuStats, MemoryStats, Pi
 use anyhow::Result;
 use cgroups::freezer::FreezerState;
 use libc::{self, pid_t};
-use oci::LinuxResources;
+use oci::{LinuxResources, Spec};
 use std::any::Any;
 use std::collections::HashMap;
 use std::string::String;
+use std::sync::{Arc, RwLock};
+
+use super::DevicesCgroupInfo;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Manager {
@@ -72,7 +75,11 @@ impl CgroupManager for Manager {
 }
 
 impl Manager {
-    pub fn new(cpath: &str) -> Result<Self> {
+    pub fn new(
+        cpath: &str,
+        _spec: &Spec,
+        _devcg_info: Option<Arc<RwLock<DevicesCgroupInfo>>>,
+    ) -> Result<Self> {
         Ok(Self {
             paths: HashMap::new(),
             mounts: HashMap::new(),

@@ -11,6 +11,7 @@ use std::fmt;
 use std::fs;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
+use std::os::unix::prelude::FileTypeExt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -31,7 +32,6 @@ fn sl() -> slog::Logger {
     slog_scope::logger().new(o!("subsystem" => "device"))
 }
 
-const VM_ROOTFS: &str = "/";
 const BLOCK: &str = "block";
 pub const DRIVER_9P_TYPE: &str = "9p";
 pub const DRIVER_VIRTIOFS_TYPE: &str = "virtio-fs";
@@ -515,25 +515,53 @@ fn scan_scsi_bus(scsi_addr: &str) -> Result<()> {
 }
 
 #[derive(Debug, Clone)]
-struct DevNumUpdate {
-    // the major and minor numbers for the device within the guest
+pub struct DeviceInfo {
+    // Device type, "b" for block device and "c" for character device
+    cgroup_type: String,
+    // The major and minor numbers for the device within the guest
     guest_major: i64,
     guest_minor: i64,
 }
 
-impl DevNumUpdate {
-    fn from_vm_path<T: AsRef<Path>>(vm_path: T) -> Result<Self> {
-        let vm_path = vm_path.as_ref();
+impl DeviceInfo {
+    /// Create a device info.
+    ///
+    /// # Arguments
+    ///
+    /// * `vm_path` - Device's vm path.
+    /// * `is_rdev` - If the vm_path is a device, set to true. If the
+    ///   vm_path is a file in a device, set to false.
+    pub fn new(vm_path: &str, is_rdev: bool) -> Result<Self> {
+        let cgroup_type;
+        let devid;
 
+        let vm_path = PathBuf::from(vm_path);
         if !vm_path.exists() {
             return Err(anyhow!("VM device path {:?} doesn't exist", vm_path));
         }
 
-        let devid = fs::metadata(vm_path)?.rdev();
+        let metadata = fs::metadata(&vm_path)?;
+
+        if is_rdev {
+            devid = metadata.rdev();
+            let file_type = metadata.file_type();
+            if file_type.is_block_device() {
+                cgroup_type = String::from("b");
+            } else if file_type.is_char_device() {
+                cgroup_type = String::from("c");
+            } else {
+                return Err(anyhow!("Unknown device {:?}'s cgroup type", vm_path));
+            }
+        } else {
+            devid = metadata.dev();
+            cgroup_type = String::from("b");
+        }
+
         let guest_major = stat::major(devid) as i64;
         let guest_minor = stat::minor(devid) as i64;
 
-        Ok(DevNumUpdate {
+        Ok(DeviceInfo {
+            cgroup_type,
             guest_major,
             guest_minor,
         })
@@ -544,25 +572,25 @@ impl DevNumUpdate {
 // spec needed for a particular device
 #[derive(Debug, Clone)]
 struct DevUpdate {
-    num: DevNumUpdate,
+    info: DeviceInfo,
     // an optional new path to update the device to in the "inner" container
     // specification
     final_path: Option<String>,
 }
 
 impl DevUpdate {
-    fn from_vm_path<T: AsRef<Path>>(vm_path: T, final_path: String) -> Result<Self> {
+    fn new(vm_path: &str, final_path: &str) -> Result<Self> {
         Ok(DevUpdate {
-            final_path: Some(final_path),
-            ..DevNumUpdate::from_vm_path(vm_path)?.into()
+            final_path: Some(final_path.to_owned()),
+            ..DeviceInfo::new(vm_path, true)?.into()
         })
     }
 }
 
-impl From<DevNumUpdate> for DevUpdate {
-    fn from(num: DevNumUpdate) -> Self {
+impl From<DeviceInfo> for DevUpdate {
+    fn from(info: DeviceInfo) -> Self {
         DevUpdate {
-            num,
+            info,
             final_path: None,
         }
     }
@@ -596,7 +624,7 @@ fn update_spec_devices(spec: &mut Spec, mut updates: HashMap<&str, DevUpdate>) -
         .linux
         .as_mut()
         .ok_or_else(|| anyhow!("Spec didn't contain linux field"))?;
-    let mut res_updates = HashMap::<(&str, i64, i64), DevNumUpdate>::with_capacity(updates.len());
+    let mut res_updates = HashMap::<(&str, i64, i64), DeviceInfo>::with_capacity(updates.len());
 
     for specdev in &mut linux.devices {
         if let Some(update) = updates.remove(specdev.path.as_str()) {
@@ -610,13 +638,13 @@ fn update_spec_devices(spec: &mut Spec, mut updates: HashMap<&str, DevUpdate>) -
                 "type" => &specdev.r#type,
                 "host_major" => host_major,
                 "host_minor" => host_minor,
-                "guest_major" => update.num.guest_major,
-                "guest_minor" => update.num.guest_minor,
+                "guest_major" => update.info.guest_major,
+                "guest_minor" => update.info.guest_minor,
                 "final_path" => update.final_path.as_ref(),
             );
 
-            specdev.major = update.num.guest_major;
-            specdev.minor = update.num.guest_minor;
+            specdev.major = update.info.guest_major;
+            specdev.minor = update.info.guest_minor;
             if let Some(final_path) = update.final_path {
                 specdev.path = final_path;
             }
@@ -624,7 +652,7 @@ fn update_spec_devices(spec: &mut Spec, mut updates: HashMap<&str, DevUpdate>) -
             if res_updates
                 .insert(
                     (specdev.r#type.as_str(), host_major, host_minor),
-                    update.num,
+                    update.info,
                 )
                 .is_some()
             {
@@ -728,7 +756,9 @@ async fn virtiommio_blk_device_handler(
             .context("failed to get mmio device name")?;
     }
 
-    Ok(DevNumUpdate::from_vm_path(&device.vm_path)?.into())
+    Ok(DeviceInfo::new(device.vm_path(), true)
+        .context("New device info")?
+        .into())
 }
 
 // device.Id should be a PCI path string
@@ -740,7 +770,9 @@ async fn virtio_blk_device_handler(
     let pcipath = pci::Path::from_str(&device.id)?;
     let vm_path = get_virtio_blk_pci_device_name(sandbox, &pcipath).await?;
 
-    Ok(DevNumUpdate::from_vm_path(vm_path)?.into())
+    Ok(DeviceInfo::new(&vm_path, true)
+        .context("New device info")?
+        .into())
 }
 
 // device.id should be a CCW path string
@@ -753,7 +785,7 @@ async fn virtio_blk_ccw_device_handler(
     let ccw_device = ccw::Device::from_str(&device.id)?;
     let vm_path = get_virtio_blk_ccw_device_name(sandbox, &ccw_device).await?;
 
-    Ok(DevNumUpdate::from_vm_path(vm_path)?.into())
+    Ok(DeviceInfo::new(&vm_path, true)?.into())
 }
 
 #[cfg(not(target_arch = "s390x"))]
@@ -770,7 +802,9 @@ async fn virtio_scsi_device_handler(
 ) -> Result<SpecUpdate> {
     let vm_path = get_scsi_device_name(sandbox, &device.id).await?;
 
-    Ok(DevNumUpdate::from_vm_path(vm_path)?.into())
+    Ok(DeviceInfo::new(&vm_path, true)
+        .context("New device info")?
+        .into())
 }
 
 #[instrument]
@@ -782,7 +816,9 @@ async fn virtio_nvdimm_device_handler(
         return Err(anyhow!("Invalid path for nvdimm device"));
     }
 
-    Ok(DevNumUpdate::from_vm_path(&device.vm_path)?.into())
+    Ok(DeviceInfo::new(device.vm_path(), true)
+        .context("New device info")?
+        .into())
 }
 
 fn split_vfio_pci_option(opt: &str) -> Option<(&str, &str)> {
@@ -842,7 +878,7 @@ async fn vfio_pci_device_handler(
 
         let vm_path = get_vfio_device_name(sandbox, group).await?;
 
-        Some(DevUpdate::from_vm_path(&vm_path, vm_path.clone())?)
+        Some(DevUpdate::new(&vm_path, &vm_path)?)
     } else {
         None
     };
@@ -887,7 +923,7 @@ pub async fn add_devices(
         let update = add_device(device, sandbox).await?;
         if let Some(dev_update) = update.dev {
             if dev_updates
-                .insert(&device.container_path, dev_update)
+                .insert(&device.container_path, dev_update.clone())
                 .is_some()
             {
                 return Err(anyhow!(
@@ -907,6 +943,10 @@ pub async fn add_devices(
                     ));
                 }
             }
+
+            // Update cgroup to allow all devices added to guest.
+            insert_devices_cgroup_rule(spec, &dev_update.info, true, "rwm")
+                .context("Update device cgroup")?;
         }
     }
 
@@ -948,16 +988,14 @@ async fn add_device(device: &Device, sandbox: &Arc<Mutex<Sandbox>>) -> Result<Sp
     }
 }
 
-// update_device_cgroup update the device cgroup for container
-// to not allow access to the guest root partition. This prevents
-// the container from being able to access the VM rootfs.
+// Insert a devices cgroup rule to control access to device.
 #[instrument]
-pub fn update_device_cgroup(spec: &mut Spec) -> Result<()> {
-    let meta = fs::metadata(VM_ROOTFS)?;
-    let rdev = meta.dev();
-    let major = stat::major(rdev) as i64;
-    let minor = stat::minor(rdev) as i64;
-
+pub fn insert_devices_cgroup_rule(
+    spec: &mut Spec,
+    dev_info: &DeviceInfo,
+    allow: bool,
+    access: &str,
+) -> Result<()> {
     let linux = spec
         .linux
         .as_mut()
@@ -965,13 +1003,25 @@ pub fn update_device_cgroup(spec: &mut Spec) -> Result<()> {
 
     let resources = linux.resources.get_or_insert(LinuxResources::default());
 
-    resources.devices.push(LinuxDeviceCgroup {
-        allow: false,
-        major: Some(major),
-        minor: Some(minor),
-        r#type: String::from("b"),
-        access: String::from("rw"),
-    });
+    let cgroup = LinuxDeviceCgroup {
+        allow,
+        major: Some(dev_info.guest_major),
+        minor: Some(dev_info.guest_minor),
+        r#type: dev_info.cgroup_type.clone(),
+        access: access.to_owned(),
+    };
+
+    debug!(
+        sl(),
+        "Insert a devices cgroup rule";
+        "linux_device_cgroup" => cgroup.allow,
+        "guest_major" => cgroup.major,
+        "guest_minor" => cgroup.minor,
+        "type" => cgroup.r#type.as_str(),
+        "access" => cgroup.access.as_str(),
+    );
+
+    resources.devices.push(cgroup);
 
     Ok(())
 }
@@ -984,6 +1034,8 @@ mod tests {
     use std::iter::FromIterator;
     use tempfile::tempdir;
 
+    const VM_ROOTFS: &str = "/";
+
     #[test]
     fn test_update_device_cgroup() {
         let mut spec = Spec {
@@ -991,7 +1043,8 @@ mod tests {
             ..Default::default()
         };
 
-        update_device_cgroup(&mut spec).unwrap();
+        let dev_info = DeviceInfo::new(VM_ROOTFS, false).unwrap();
+        insert_devices_cgroup_rule(&mut spec, &dev_info, false, "rw").unwrap();
 
         let devices = spec.linux.unwrap().resources.unwrap().devices;
         assert_eq!(devices.len(), 1);
@@ -1011,7 +1064,7 @@ mod tests {
         let mut spec = Spec::default();
 
         // vm_path empty
-        let update = DevNumUpdate::from_vm_path("");
+        let update = DeviceInfo::new("", true);
         assert!(update.is_err());
 
         // linux is empty
@@ -1021,7 +1074,7 @@ mod tests {
             &mut spec,
             HashMap::from_iter(vec![(
                 container_path,
-                DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
+                DeviceInfo::new(vm_path, true).unwrap().into(),
             )]),
         );
         assert!(res.is_err());
@@ -1033,7 +1086,7 @@ mod tests {
             &mut spec,
             HashMap::from_iter(vec![(
                 container_path,
-                DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
+                DeviceInfo::new(vm_path, true).unwrap().into(),
             )]),
         );
         assert!(res.is_err());
@@ -1050,7 +1103,7 @@ mod tests {
             &mut spec,
             HashMap::from_iter(vec![(
                 container_path,
-                DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
+                DeviceInfo::new(vm_path, true).unwrap().into(),
             )]),
         );
         assert!(
@@ -1068,7 +1121,7 @@ mod tests {
             &mut spec,
             HashMap::from_iter(vec![(
                 container_path,
-                DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
+                DeviceInfo::new(vm_path, true).unwrap().into(),
             )]),
         );
         assert!(res.is_ok());
@@ -1094,7 +1147,7 @@ mod tests {
             &mut spec,
             HashMap::from_iter(vec![(
                 container_path,
-                DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
+                DeviceInfo::new(vm_path, true).unwrap().into(),
             )]),
         );
         assert!(res.is_ok());
@@ -1178,11 +1231,11 @@ mod tests {
         let updates = HashMap::from_iter(vec![
             (
                 container_path_a,
-                DevNumUpdate::from_vm_path(vm_path_a).unwrap().into(),
+                DeviceInfo::new(vm_path_a, true).unwrap().into(),
             ),
             (
                 container_path_b,
-                DevNumUpdate::from_vm_path(vm_path_b).unwrap().into(),
+                DeviceInfo::new(vm_path_b, true).unwrap().into(),
             ),
         ]);
         let res = update_spec_devices(&mut spec, updates);
@@ -1263,7 +1316,7 @@ mod tests {
             &mut spec,
             HashMap::from_iter(vec![(
                 container_path,
-                DevNumUpdate::from_vm_path(vm_path).unwrap().into(),
+                DeviceInfo::new(vm_path, true).unwrap().into(),
             )]),
         );
         assert!(res.is_ok());
@@ -1307,7 +1360,7 @@ mod tests {
             &mut spec,
             HashMap::from_iter(vec![(
                 container_path,
-                DevUpdate::from_vm_path(vm_path, final_path.to_string()).unwrap(),
+                DevUpdate::new(vm_path, final_path).unwrap(),
             )]),
         );
         assert!(res.is_ok());
