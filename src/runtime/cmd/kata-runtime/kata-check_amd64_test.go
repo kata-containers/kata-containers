@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"testing"
@@ -17,6 +18,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
+
+const denylistModuleConf = "/etc/modprobe.d/denylist-kata-kernel-modules.conf"
 
 func setupCheckHostIsVMContainerCapable(assert *assert.Assertions, cpuInfoFile string, cpuData []testCPUData, moduleData []testModuleData) {
 	createModules(assert, cpuInfoFile, moduleData)
@@ -322,6 +325,36 @@ func TestCheckHostIsVMContainerCapable(t *testing.T) {
 
 	err = hostIsVMContainerCapable(details)
 	assert.Nil(err)
+
+	// Remove required kernel modules and add them to denylist
+	denylistFile, err := os.Create(denylistModuleConf)
+	assert.Nil(err)
+	succeedToRemoveOneModule := false
+	for mod := range archRequiredKernelModules {
+		cmd := exec.Command(modProbeCmd, "-r", mod)
+		if output, err := cmd.CombinedOutput(); err == nil {
+			succeedToRemoveOneModule = true
+		} else {
+			kataLog.WithField("output", string(output)).Warn("failed to remove module")
+		}
+		// Write the following into the denylist file
+		// blacklist <mod>
+		// install <mod> /bin/false
+		_, err = denylistFile.WriteString(fmt.Sprintf("blacklist %s\ninstall %s /bin/false\n", mod, mod))
+		assert.Nil(err)
+	}
+	denylistFile.Close()
+	assert.True(succeedToRemoveOneModule)
+
+	defer func() {
+		os.Remove(denylistModuleConf)
+	}()
+
+	// remove the modules to force a failure
+	err = os.RemoveAll(sysModuleDir)
+	assert.NoError(err)
+	err = hostIsVMContainerCapable(details)
+	assert.Error(err)
 }
 
 func TestArchKernelParamHandler(t *testing.T) {
