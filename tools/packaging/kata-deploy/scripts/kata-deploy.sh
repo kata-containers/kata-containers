@@ -15,8 +15,14 @@ containerd_conf_file="/etc/containerd/config.toml"
 containerd_conf_file_backup="${containerd_conf_file}.bak"
 
 IFS=' ' read -a shims <<< "$SHIMS"
-
 default_shim="$DEFAULT_SHIM"
+
+IFS=' ' read -a non_formatted_allowed_hypervisor_annotations <<< "$ALLOWED_HYPERVISOR_ANNOTATIONS"
+allowed_hypervisor_annotations=""
+for allowed_hypervisor_annotation in "${non_formatted_allowed_hypervisor_annotations[@]}"; do
+	allowed_hypervisor_annotations+="\"$allowed_hypervisor_annotation\", "
+done
+allowed_hypervisor_annotations=$(echo $allowed_hypervisor_annotations | sed 's/,$//')
 
 # If we fail for any reason a message will be displayed
 die() {
@@ -105,15 +111,20 @@ function install_artifacts() {
 	[ -d /opt/kata/runtime-rs/bin ] && \
 		chmod +x /opt/kata/runtime-rs/bin/*
 
-	# Allow enabling debug for Kata Containers
-	if [[ "${DEBUG}" == "true" ]]; then
-		config_path="/opt/kata/share/defaults/kata-containers/"
-		for shim in "${shims[@]}"; do
-			sed -i -e 's/^#\(enable_debug\).*=.*$/\1 = true/g' "${config_path}/configuration-${shim}.toml"
-			sed -i -e 's/^#\(debug_console_enabled\).*=.*$/\1 = true/g' "${config_path}/configuration-${shim}.toml"
-			sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug initcall_debug"/g' "${config_path}/configuration-${shim}.toml"
-		done
-	fi
+	config_path="/opt/kata/share/defaults/kata-containers/"
+	for shim in "${shims[@]}"; do
+		local kata_config_file="${config_path}/configuration-${shim}.toml"
+		# Allow enabling debug for Kata Containers
+		if [[ "${DEBUG}" == "true" ]]; then
+			sed -i -e 's/^#\(enable_debug\).*=.*$/\1 = true/g' "${kata_config_file}"
+			sed -i -e 's/^#\(debug_console_enabled\).*=.*$/\1 = true/g' "${kata_config_file}"
+			sed -i -e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug initcall_debug"/g' "${kata_config_file}"
+		fi
+
+		if [ -n "${allowed_hypervisor_annotations}" ]; then
+			sed -i -e "s/^enable_annotations = \[\(.*\)\]/enable_annotations = [\1, $allowed_hypervisor_annotations]/" "${kata_config_file}"
+		fi
+	done
 
 	# Allow Mariner to use custom configuration.
 	if [ "${HOST_OS:-}" == "cbl-mariner" ]; then
@@ -123,6 +134,7 @@ function install_artifacts() {
 		sed -i -E "s|(valid_hypervisor_paths) = .+|\1 = [\"${clh_path}\"]|" "${config_path}"
 		sed -i -E "s|(path) = \".+/cloud-hypervisor\"|\1 = \"${clh_path}\"|" "${config_path}"
 	fi
+
 
 	if [[ "${CREATE_RUNTIMECLASSES}" == "true" ]]; then
 		create_runtimeclasses
@@ -415,6 +427,7 @@ function main() {
 	echo "* DEFAULT_SHIM: ${DEFAULT_SHIM}"
 	echo "* CREATE_RUNTIMECLASSES: ${CREATE_RUNTIMECLASSES}"
 	echo "* CREATE_DEFAULT_RUNTIMECLASS: ${CREATE_DEFAULT_RUNTIMECLASS}"
+	echo "* ALLOWED_HYPERVISOR_ANNOTATIONS: ${ALLOWED_HYPERVISOR_ANNOTATIONS}"
 
 	# script requires that user is root
 	euid=$(id -u)
