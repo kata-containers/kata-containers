@@ -2,15 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::net_util::MAC_ADDR_LEN;
 use crate::NamedHypervisorConfig;
 use crate::VmConfig;
 use crate::{
     guest_protection_is_tdx, ConsoleConfig, ConsoleOutputMode, CpuFeatures, CpuTopology,
-    CpusConfig, DiskConfig, MacAddr, MemoryConfig, PayloadConfig, PlatformConfig, PmemConfig,
-    RngConfig, VsockConfig,
+    CpusConfig, DiskConfig, MemoryConfig, PayloadConfig, PlatformConfig, PmemConfig, RngConfig,
+    VsockConfig,
 };
-use anyhow::{anyhow, Context, Result};
+use anyhow::Result;
 use kata_sys_util::protection::GuestProtection;
 use kata_types::config::default::DEFAULT_CH_ENTROPY_SOURCE;
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
@@ -19,7 +18,6 @@ use kata_types::config::hypervisor::{
 };
 use kata_types::config::BootInfo;
 use std::convert::TryFrom;
-use std::fmt::Display;
 use std::path::PathBuf;
 
 use crate::errors::*;
@@ -101,11 +99,7 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
 
         check_tdx_rootfs_settings(&cfg, &guest_protection_to_use)?;
 
-        let vsock_socket_path = if n.vsock_socket_path.is_empty() {
-            return Err(VmConfigError::EmptyVsockSocketPath);
-        } else {
-            n.vsock_socket_path
-        };
+        let vsock_socket_path = n.vsock_socket_path;
 
         let sandbox_path = if n.sandbox_path.is_empty() {
             return Err(VmConfigError::EmptySandboxPath);
@@ -540,41 +534,6 @@ fn get_platform_cfg(guest_protection_to_use: GuestProtection) -> Option<Platform
     } else {
         None
     }
-}
-
-#[allow(dead_code)]
-fn parse_mac<S>(s: &S) -> Result<MacAddr>
-where
-    S: AsRef<str> + ?Sized + Display,
-{
-    let v: Vec<&str> = s.as_ref().split(':').collect();
-    let mut bytes = [0u8; MAC_ADDR_LEN];
-
-    if v.len() != MAC_ADDR_LEN {
-        return Err(anyhow!(
-            "invalid MAC {} (length {}, expected {})",
-            s,
-            v.len(),
-            MAC_ADDR_LEN
-        ));
-    }
-
-    for i in 0..MAC_ADDR_LEN {
-        if v[i].len() != 2 {
-            return Err(anyhow!(
-                "invalid MAC {} (segment {} length {}, expected {})",
-                s,
-                i,
-                v.len(),
-                2
-            ));
-        }
-
-        bytes[i] =
-            u8::from_str_radix(v[i], 16).context(format!("failed to parse MAC address: {}", s))?;
-    }
-
-    Ok(MacAddr { bytes })
 }
 
 #[cfg(test)]
@@ -1978,7 +1937,7 @@ mod tests {
         let tests = &[
             TestData {
                 cfg: NamedHypervisorConfig::default(),
-                result: Err(VmConfigError::EmptyVsockSocketPath),
+                result: Err(VmConfigError::EmptySandboxPath),
             },
             TestData {
                 cfg: NamedHypervisorConfig {
@@ -1994,7 +1953,7 @@ mod tests {
 
                     ..Default::default()
                 },
-                result: Err(VmConfigError::EmptyVsockSocketPath),
+                result: Err(VmConfigError::CPUError(CpusConfigError::BootVCPUsTooSmall)),
             },
             TestData {
                 cfg: NamedHypervisorConfig {
@@ -2055,7 +2014,9 @@ mod tests {
             },
             TestData {
                 cfg: named_hypervisor_cfg_with_image_and_kernel_bad_vsock,
-                result: Err(VmConfigError::EmptyVsockSocketPath),
+                result: Err(VmConfigError::VsockError(
+                    VsockConfigError::NoVsockSocketPath,
+                )),
             },
             TestData {
                 cfg: named_hypervisor_cfg_with_image_and_kernel,
