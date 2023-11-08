@@ -105,6 +105,11 @@ impl DragonballInner {
 
         // get kernel params
         let mut kernel_params = KernelParams::new(self.config.debug_info.enable_debug);
+
+        // CONFIG_RANDOM_TRUST_CPU is removed from kernel v6.6, the only way to use CPU's random number generator
+        #[cfg(target_arch = "aarch64")]
+        kernel_params.append(&mut KernelParams::from_string("random.trust_cpu=on"));
+
         kernel_params.append(&mut KernelParams::new_rootfs_kernel_params(
             &rootfs_driver,
             &self.config.boot_info.rootfs_type,
