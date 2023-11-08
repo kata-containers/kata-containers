@@ -140,13 +140,19 @@ impl CloudHypervisorInner {
         // Start by adding the default set of kernel parameters.
         let mut params = KernelParams::new(enable_debug);
 
+        #[cfg(target_arch = "x86_64")]
+        let console_param_debug = KernelParams::from_string("console=ttyS0,115200n8");
+
+        #[cfg(target_arch = "aarch64")]
+        let console_param_debug = KernelParams::from_string("console=ttyAMA0,115200n8");
+
         let mut rootfs_param = KernelParams::new_rootfs_kernel_params(rootfs_driver, rootfs_type)?;
 
         let mut console_params = if enable_debug {
             if confidential_guest {
                 KernelParams::from_string("console=hvc0")
             } else {
-                KernelParams::from_string("console=ttyS0,115200n8")
+                console_param_debug
             }
         } else {
             KernelParams::from_string("quiet")
