@@ -11,6 +11,7 @@ yaml_files = [
     "configmap/pod-cm2.yaml",
     "deployment/deployment-azure-vote-back.yaml",
     "deployment/deployment-azure-vote-front.yaml",
+    "deployment/deployment-busybox.yaml",
     "job/test-job.yaml",
     "kubernetes/conformance/conformance-e2e.yaml",
     "kubernetes/conformance/csi-hostpath-plugin.yaml",
@@ -38,6 +39,7 @@ yaml_files = [
     "kubernetes/incomplete-init/cockroachdb-statefulset.yaml",
     "kubernetes/incomplete-init/node_ds.yaml",
     "pod/pod-exec.yaml",
+    "pod/pod-lifecycle.yaml",
     "pod/pod-one-container.yaml",
     "pod/pod-persistent-volumes.yaml",
     "pod/pod-same-containers.yaml",
@@ -62,6 +64,8 @@ silently_ignored_yaml_files=[
     "webhook2/webhook-pod11.yaml",
     "webhook2/webhook-pod12.yaml",
     "webhook2/webhook-pod13.yaml",
+    "webhook3/dns-test.yaml",
+    "webhook3/many-layers.yaml",
 ]
 
 no_policy_yaml_files=[
