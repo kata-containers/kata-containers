@@ -32,6 +32,7 @@ SECCOMP=${SECCOMP:-"yes"}
 SEALED_SECRET=${SEALED_SECRET:-"no"}
 CDH_RESOURCE_PROVIDER=${CDH_RESOURCE_PROVIDER:-"kbs"}
 SELINUX=${SELINUX:-"no"}
+ALIBABA_CLOUD_OSS=${ALIBABA_CLOUD_OSS:-"no"}
 
 lib_file="${script_dir}/../scripts/lib.sh"
 source "$lib_file"
@@ -181,6 +182,10 @@ AA_KBC              Key broker client module for attestation-agent. This is
                     See https://github.com/containers/attestation-agent
                     for more information on available modules.
                     Default value: <not set>
+
+ALIBABA_CLOUD_OSS   When set to "yes", related tools and dependencies will be build
+                    into rootfs.
+                    Default values: "no"
 
 Refer to the Platform-OS Compatibility Matrix for more details on the supported
 architectures:
@@ -480,6 +485,7 @@ build_rootfs_distro()
 			--env SELINUX="${SELINUX}" \
 			--env DEBUG="${DEBUG}" \
 			--env HOME="/root" \
+			--env ALIBABA_CLOUD_OSS=${ALIBABA_CLOUD_OSS} \
 			-v "${repo_dir}":"/kata-containers" \
 			-v "${ROOTFS_DIR}":"/rootfs" \
 			-v "${script_dir}/../scripts":"/scripts" \

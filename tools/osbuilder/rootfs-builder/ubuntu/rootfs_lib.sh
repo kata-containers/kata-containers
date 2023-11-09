@@ -72,6 +72,18 @@ EOF
 			exit 1
 		fi
 	fi
+    if [ "${ALIBABA_CLOUD_OSS}" == "yes" ] &&  [ "${ARCH}" == "x86_64" ]; then
+        source /etc/os-release
+        if [ "${VERSION_ID}" == "20.04" ]; then
+            echo 'deb [arch=amd64] http://security.ubuntu.com/ubuntu focal-security main universe' | tee ${rootfs_dir}/etc/apt/sources.list.d/universe.list
+            curl -o $rootfs_dir/ossfs_1.91.1_ubuntu20.04_amd64.deb -L https://github.com/aliyun/ossfs/releases/download/v1.91.1/ossfs_1.91.1_ubuntu20.04_amd64.deb
+            curl -o $rootfs_dir/gocryptfs_v2.4.0_linux-static_amd64.tar.gz -L https://github.com/rfjakob/gocryptfs/releases/download/v2.4.0/gocryptfs_v2.4.0_linux-static_amd64.tar.gz
+	        chroot "${rootfs_dir}" apt-get update && chroot "${rootfs_dir}" apt-get install -y fuse libcurl3-gnutls libxml2 libssl-dev
+            chroot "${rootfs_dir}" dpkg -i /ossfs_1.91.1_ubuntu20.04_amd64.deb
+            chroot "${rootfs_dir}" tar zxvf /gocryptfs_v2.4.0_linux-static_amd64.tar.gz -C /usr/local/bin
+            rm -f $rootfs_dir/ossfs_1.91.1_ubuntu20.04_amd64.deb $rootfs_dir/gocryptfs_v2.4.0_linux-static_amd64.tar.gz
+        fi
+    fi
 	
 	# Reduce image size and memory footprint by removing unnecessary files and directories.
 	rm -rf $rootfs_dir/usr/share/{bash-completion,bug,doc,info,lintian,locale,man,menu,misc,pixmaps,terminfo,zsh}
