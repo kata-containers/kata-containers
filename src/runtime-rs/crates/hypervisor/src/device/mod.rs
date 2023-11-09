@@ -10,9 +10,9 @@ use crate::device::driver::vhost_user_blk::VhostUserBlkDevice;
 use crate::{
     BlockConfig, BlockDevice, HybridVsockConfig, HybridVsockDevice, Hypervisor as hypervisor,
     NetworkConfig, NetworkDevice, ShareFsDevice, ShareFsDeviceConfig, ShareFsMountConfig,
-    ShareFsMountDevice, VfioConfig, VfioDevice, VhostUserConfig, VsockConfig,
+    ShareFsMountDevice, VfioConfig, VfioDevice, VhostUserConfig, VsockConfig, VsockDevice,
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 
 pub mod device_manager;
@@ -31,7 +31,7 @@ pub enum DeviceConfig {
     HybridVsockCfg(HybridVsockConfig),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum DeviceType {
     Block(BlockDevice),
     VhostUserBlk(VhostUserBlkDevice),
@@ -40,6 +40,7 @@ pub enum DeviceType {
     ShareFs(ShareFsDevice),
     ShareFsMount(ShareFsMountDevice),
     HybridVsock(HybridVsockDevice),
+    Vsock(VsockDevice),
 }
 
 impl DeviceType {
@@ -56,6 +57,7 @@ impl DeviceType {
                 Ok(DeviceType::ShareFsMount(share_fs_mount.clone()))
             }
             DeviceType::HybridVsock(hvsock) => Ok(DeviceType::HybridVsock(hvsock.clone())),
+            DeviceType::Vsock(_) => Err(anyhow!("DeviceType::Vsock cannot be cloned")),
         }
     }
 }
