@@ -39,6 +39,8 @@ spec:
               value: "false"
             - name: CREATE_DEFAULT_RUNTIMECLASS
               value: "false"
+            - name: ALLOWED_HYPERVISOR_ANNOTATIONS
+              value: ""
           securityContext:
             privileged: true
           volumeMounts:
