@@ -42,6 +42,24 @@ pub enum DeviceType {
     HybridVsock(HybridVsockDevice),
 }
 
+impl DeviceType {
+    pub fn try_clone(&self) -> Result<DeviceType> {
+        match self {
+            DeviceType::Block(block) => Ok(DeviceType::Block(block.clone())),
+            DeviceType::VhostUserBlk(vhost_user_blk) => {
+                Ok(DeviceType::VhostUserBlk(vhost_user_blk.clone()))
+            }
+            DeviceType::Vfio(vfio) => Ok(DeviceType::Vfio(vfio.clone())),
+            DeviceType::Network(network) => Ok(DeviceType::Network(network.clone())),
+            DeviceType::ShareFs(share_fs) => Ok(DeviceType::ShareFs(share_fs.clone())),
+            DeviceType::ShareFsMount(share_fs_mount) => {
+                Ok(DeviceType::ShareFsMount(share_fs_mount.clone()))
+            }
+            DeviceType::HybridVsock(hvsock) => Ok(DeviceType::HybridVsock(hvsock.clone())),
+        }
+    }
+}
+
 impl fmt::Display for DeviceType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
