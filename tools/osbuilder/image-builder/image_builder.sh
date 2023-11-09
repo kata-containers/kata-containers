@@ -406,15 +406,20 @@ create_disk() {
 	# The partition is the rootfs content
 	info "Creating partitions"
 
+	if [ "${rootfs_end}" == "-1" ]; then
+		rootfs_end_unit="s"
+	else
+		rootfs_end_unit="MiB"
+	fi
 	if [ "${MEASURED_ROOTFS}" == "yes" ]; then
 		info "Creating partitions with hash device"
 		# The hash data will take less than one percent disk space to store
 		hash_start=$(echo $img_size | awk '{print $1 * 0.99}' |cut -d $(locale decimal_point) -f 1)
-		partition_param="mkpart primary ${fs_type} ${part_start}M ${hash_start}M "
-		partition_param+="mkpart primary ${fs_type} ${hash_start}M ${rootfs_end}M "
+		partition_param="mkpart primary ${fs_type} ${part_start}MiB ${hash_start}MiB "
+		partition_param+="mkpart primary ${fs_type} ${hash_start}MiB ${rootfs_end}${rootfs_end_unit} "
 		partition_param+="set 1 boot on"
 	else
-		partition_param="mkpart primary ${fs_type} ${part_start}M ${rootfs_end}M"
+		partition_param="mkpart primary ${fs_type} ${part_start}MiB ${rootfs_end}${rootfs_end_unit}"
 	fi
 
 	parted -s -a optimal "${image}" -- \
