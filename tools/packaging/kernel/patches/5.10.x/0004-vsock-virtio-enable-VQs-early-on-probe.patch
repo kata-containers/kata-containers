@@ -1,0 +1,38 @@
+From cbb4f49c1f4e761d1d35dab0bbed3b6aed52d456 Mon Sep 17 00:00:00 2001
+From: Stefano Garzarella <sgarzare@redhat.com>
+Date: Wed, 23 Mar 2022 18:36:25 +0100
+Subject: [PATCH 4/7] vsock/virtio: enable VQs early on probe
+
+virtio spec requires drivers to set DRIVER_OK before using VQs.
+This is set automatically after probe returns, but virtio-vsock
+driver uses VQs in the probe function to fill rx and event VQs
+with new buffers.
+
+Let's fix this, calling virtio_device_ready() before using VQs
+in the probe function.
+
+Fixes: 0ea9e1d3a9e3 ("VSOCK: Introduce virtio_transport.ko")
+Signed-off-by: Stefano Garzarella <sgarzare@redhat.com>
+Acked-by: Michael S. Tsirkin <mst@redhat.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@redhat.com>
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ net/vmw_vsock/virtio_transport.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/net/vmw_vsock/virtio_transport.c b/net/vmw_vsock/virtio_transport.c
+index 0711aaed17da..ae22cc8e1b27 100644
+--- a/net/vmw_vsock/virtio_transport.c
++++ b/net/vmw_vsock/virtio_transport.c
+@@ -601,6 +601,8 @@ static int virtio_vsock_probe(struct virtio_device *vdev)
+ 
+ 	vdev->priv = vsock;
+ 
++	virtio_device_ready(vdev);
++
+ 	mutex_lock(&vsock->tx_lock);
+ 	vsock->tx_run = true;
+ 	mutex_unlock(&vsock->tx_lock);
+-- 
+2.34.1
+
