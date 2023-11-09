@@ -110,6 +110,8 @@ function install_artifacts() {
 	chmod +x /opt/kata/bin/*
 	[ -d /opt/kata/runtime-rs/bin ] && \
 		chmod +x /opt/kata/runtime-rs/bin/*
+    # Best effort to set selinux context on host
+    nsenter --target 1 --mount bash -c "chcon -Rt usr_t /opt/kata/ && chcon -t bin_t /opt/kata/bin/* && chcon -t bin_t /opt/kata/libexec/* && echo 'selinux labeles set successfully for /opt/kata'; chcon -t bin_t /opt/kata/runtime-rs/bin/*" || true
 
 	config_path="/opt/kata/share/defaults/kata-containers/"
 	for shim in "${shims[@]}"; do
