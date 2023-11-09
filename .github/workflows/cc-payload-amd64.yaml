@@ -18,7 +18,6 @@ jobs:
           - qemu
           - virtiofsd
           - kernel-sev
-          - kernel-snp-experimental
           - ovmf-sev
           - ovmf
           - qemu-snp-experimental
