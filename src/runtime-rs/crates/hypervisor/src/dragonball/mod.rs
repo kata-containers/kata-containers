@@ -94,10 +94,7 @@ impl Hypervisor for Dragonball {
 
     async fn add_device(&self, device: DeviceType) -> Result<DeviceType> {
         let mut inner = self.inner.write().await;
-        match inner.add_device(device.clone()).await {
-            Ok(_) => Ok(device),
-            Err(err) => Err(err),
-        }
+        inner.add_device(device).await
     }
 
     async fn remove_device(&self, device: DeviceType) -> Result<()> {

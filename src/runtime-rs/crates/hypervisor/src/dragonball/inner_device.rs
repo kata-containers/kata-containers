@@ -34,23 +34,27 @@ pub(crate) fn drive_index_to_id(index: u64) -> String {
 }
 
 impl DragonballInner {
-    pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<()> {
+    pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<DeviceType> {
         if self.state == VmmState::NotReady {
             info!(sl!(), "VMM not ready, queueing device {}", device);
 
             // add the pending device by reverse order, thus the
             // start_vm would pop the devices in an right order
             // to add the devices.
-            self.pending_devices.insert(0, device);
-            return Ok(());
+            self.pending_devices.insert(0, device.try_clone()?);
+            return Ok(device);
         }
 
         info!(sl!(), "dragonball add device {:?}", &device);
-        match device {
+        match &device {
             DeviceType::Network(network) => self
                 .add_net_device(&network.config)
+                .map(|_ok| device)
                 .context("add net device"),
-            DeviceType::Vfio(hostdev) => self.add_vfio_device(&hostdev).context("add vfio device"),
+            DeviceType::Vfio(hostdev) => self
+                .add_vfio_device(hostdev)
+                .map(|_ok| device)
+                .context("add vfio device"),
             DeviceType::Block(block) => self
                 .add_block_device(
                     block.config.path_on_host.as_str(),
@@ -58,6 +62,7 @@ impl DragonballInner {
                     block.config.is_readonly,
                     block.config.no_drop,
                 )
+                .map(|_ok| device)
                 .context("add block device"),
             DeviceType::VhostUserBlk(block) => self
                 .add_block_device(
@@ -66,13 +71,19 @@ impl DragonballInner {
                     block.is_readonly,
                     block.no_drop,
                 )
+                .map(|_ok| device)
                 .context("add vhost user based block device"),
-            DeviceType::HybridVsock(hvsock) => self.add_hvsock(&hvsock.config).context("add vsock"),
+            DeviceType::HybridVsock(hvsock) => self
+                .add_hvsock(&hvsock.config)
+                .map(|_ok| device)
+                .context("add vsock"),
             DeviceType::ShareFs(sharefs) => self
                 .add_share_fs_device(&sharefs.config)
+                .map(|_ok| device)
                 .context("add share fs device"),
             DeviceType::ShareFsMount(sharefs_mount) => self
                 .add_share_fs_mount(&sharefs_mount.config)
+                .map(|_ok| device)
                 .context("add share fs mount"),
         }
     }

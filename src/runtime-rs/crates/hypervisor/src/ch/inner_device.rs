@@ -57,8 +57,8 @@ impl CloudHypervisorInner {
             // - Network details need to be saved for later application.
             //
             match device {
-                DeviceType::ShareFs(_) => self.pending_devices.insert(0, device.clone()),
-                DeviceType::Network(_) => self.pending_devices.insert(0, device.clone()),
+                DeviceType::ShareFs(_) => self.pending_devices.insert(0, device.try_clone()?),
+                DeviceType::Network(_) => self.pending_devices.insert(0, device.try_clone()?),
                 _ => {
                     debug!(
                         sl!(),
