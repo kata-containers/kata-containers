@@ -445,6 +445,10 @@ components:
         pid:
           type: integer
           format: int64
+        features:
+          type: array
+          items:
+            type: string
       description: Virtual Machine Monitor information
 
     VmInfo:
@@ -947,9 +951,11 @@ components:
       properties:
         file:
           type: string
+        socket:
+          type: string
         mode:
           type: string
-          enum: [Off, Pty, Tty, File, Null]
+          enum: [Off, Pty, Tty, File, Socket, Null]
         iommu:
           type: boolean
           default: false
@@ -1074,6 +1080,11 @@ components:
           type: array
           items:
             type: string
+        pci_segments:
+          type: array
+          items:
+            type: integer
+            format: int32
 
     VmResize:
       type: object
