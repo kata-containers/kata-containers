@@ -9,6 +9,7 @@ Name | Type | Description | Notes
 **Distances** | Pointer to [**[]NumaDistance**](NumaDistance.md) |  | [optional] 
 **MemoryZones** | Pointer to **[]string** |  | [optional] 
 **SgxEpcSections** | Pointer to **[]string** |  | [optional] 
+**PciSegments** | Pointer to **[]int32** |  | [optional] 
 
 ## Methods
 
@@ -148,6 +149,31 @@ SetSgxEpcSections sets SgxEpcSections field to given value.
 `func (o *NumaConfig) HasSgxEpcSections() bool`
 
 HasSgxEpcSections returns a boolean if a field has been set.
+
+### GetPciSegments
+
+`func (o *NumaConfig) GetPciSegments() []int32`
+
+GetPciSegments returns the PciSegments field if non-nil, zero value otherwise.
+
+### GetPciSegmentsOk
+
+`func (o *NumaConfig) GetPciSegmentsOk() (*[]int32, bool)`
+
+GetPciSegmentsOk returns a tuple with the PciSegments field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetPciSegments
+
+`func (o *NumaConfig) SetPciSegments(v []int32)`
+
+SetPciSegments sets PciSegments field to given value.
+
+### HasPciSegments
+
+`func (o *NumaConfig) HasPciSegments() bool`
+
+HasPciSegments returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

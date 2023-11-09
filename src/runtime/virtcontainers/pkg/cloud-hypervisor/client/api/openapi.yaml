@@ -415,6 +415,9 @@ components:
     VmmPingResponse:
       description: Virtual Machine Monitor information
       example:
+        features:
+        - features
+        - features
         build_version: build_version
         pid: 0
         version: version
@@ -426,19 +429,24 @@ components:
         pid:
           format: int64
           type: integer
+        features:
+          items:
+            type: string
+          type: array
       required:
       - version
       type: object
     VmInfo:
       description: Virtual Machine information
       example:
-        memory_actual_size: 7
+        memory_actual_size: 5
         state: Created
         config:
           console:
             mode: "false"
             file: file
             iommu: false
+            socket: socket
           balloon:
             size: 1
             deflate_on_oom: false
@@ -565,6 +573,9 @@ components:
               destination: 8
             - distance: 7
               destination: 8
+            pci_segments:
+            - 3
+            - 3
             cpus:
             - 4
             - 4
@@ -580,6 +591,9 @@ components:
               destination: 8
             - distance: 7
               destination: 8
+            pci_segments:
+            - 3
+            - 3
             cpus:
             - 4
             - 4
@@ -621,8 +635,8 @@ components:
             cid: 3
           platform:
             iommu_segments:
-            - 3
-            - 3
+            - 7
+            - 7
             num_pci_segments: 3
             oem_strings:
             - oem_strings
@@ -656,6 +670,7 @@ components:
             mode: "false"
             file: file
             iommu: false
+            socket: socket
           net:
           - tap: tap
             host_mac: host_mac
@@ -803,6 +818,7 @@ components:
           mode: "false"
           file: file
           iommu: false
+          socket: socket
         balloon:
           size: 1
           deflate_on_oom: false
@@ -929,6 +945,9 @@ components:
             destination: 8
           - distance: 7
             destination: 8
+          pci_segments:
+          - 3
+          - 3
           cpus:
           - 4
           - 4
@@ -944,6 +963,9 @@ components:
             destination: 8
           - distance: 7
             destination: 8
+          pci_segments:
+          - 3
+          - 3
           cpus:
           - 4
           - 4
@@ -985,8 +1007,8 @@ components:
           cid: 3
         platform:
           iommu_segments:
-          - 3
-          - 3
+          - 7
+          - 7
           num_pci_segments: 3
           oem_strings:
           - oem_strings
@@ -1020,6 +1042,7 @@ components:
           mode: "false"
           file: file
           iommu: false
+          socket: socket
         net:
         - tap: tap
           host_mac: host_mac
@@ -1220,8 +1243,8 @@ components:
     PlatformConfig:
       example:
         iommu_segments:
-        - 3
-        - 3
+        - 7
+        - 7
         num_pci_segments: 3
         oem_strings:
         - oem_strings
@@ -1643,8 +1666,11 @@ components:
         mode: "false"
         file: file
         iommu: false
+        socket: socket
       properties:
         file:
+          type: string
+        socket:
           type: string
         mode:
           enum:
@@ -1652,6 +1678,7 @@ components:
           - Pty
           - Tty
           - File
+          - Socket
           - null
           type: string
         iommu:
@@ -1782,6 +1809,9 @@ components:
           destination: 8
         - distance: 7
           destination: 8
+        pci_segments:
+        - 3
+        - 3
         cpus:
         - 4
         - 4
@@ -1812,6 +1842,11 @@ components:
         sgx_epc_sections:
           items:
             type: string
+          type: array
+        pci_segments:
+          items:
+            format: int32
+            type: integer
           type: array
       required:
       - guest_numa_id
