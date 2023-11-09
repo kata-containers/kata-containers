@@ -1,0 +1,43 @@
+From d57616af2cfcd67e964f91867cdcc20124b49091 Mon Sep 17 00:00:00 2001
+From: Stefano Garzarella <sgarzare@redhat.com>
+Date: Wed, 23 Mar 2022 18:36:23 +0100
+Subject: [PATCH 3/7] vsock/virtio: initialize vdev->priv before using VQs
+
+When we fill VQs with empty buffers and kick the host, it may send
+an interrupt. `vdev->priv` must be initialized before this since it
+is used in the virtqueue callbacks.
+
+Fixes: 0deab087b16a ("vsock/virtio: use RCU to avoid use-after-free on the_virtio_vsock")
+Suggested-by: Michael S. Tsirkin <mst@redhat.com>
+Signed-off-by: Stefano Garzarella <sgarzare@redhat.com>
+Acked-by: Michael S. Tsirkin <mst@redhat.com>
+Reviewed-by: Stefan Hajnoczi <stefanha@redhat.com>
+Signed-off-by: Jakub Kicinski <kuba@kernel.org>
+---
+ net/vmw_vsock/virtio_transport.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/net/vmw_vsock/virtio_transport.c b/net/vmw_vsock/virtio_transport.c
+index e131121533ad..0711aaed17da 100644
+--- a/net/vmw_vsock/virtio_transport.c
++++ b/net/vmw_vsock/virtio_transport.c
+@@ -599,6 +599,8 @@ static int virtio_vsock_probe(struct virtio_device *vdev)
+ 	INIT_WORK(&vsock->event_work, virtio_transport_event_work);
+ 	INIT_WORK(&vsock->send_pkt_work, virtio_transport_send_pkt_work);
+ 
++	vdev->priv = vsock;
++
+ 	mutex_lock(&vsock->tx_lock);
+ 	vsock->tx_run = true;
+ 	mutex_unlock(&vsock->tx_lock);
+@@ -613,7 +615,6 @@ static int virtio_vsock_probe(struct virtio_device *vdev)
+ 	vsock->event_run = true;
+ 	mutex_unlock(&vsock->event_lock);
+ 
+-	vdev->priv = vsock;
+ 	rcu_assign_pointer(the_virtio_vsock, vsock);
+ 
+ 	mutex_unlock(&the_virtio_vsock_mutex);
+-- 
+2.34.1
+
