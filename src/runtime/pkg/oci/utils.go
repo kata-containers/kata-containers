@@ -1272,7 +1272,7 @@ func CalculateContainerSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint3
 }
 
 func calculateVMResources(period uint64, quota int64, memory int64) (numCPU float32, memSizeMB uint32) {
-	numCPU = vcutils.CalculateMilliCPUs(quota, period)
+	numCPU = vcutils.CalculateCPUsF(quota, period)
 
 	if memory < 0 {
 		// While spec allows for a negative value to indicate unconstrained, we don't

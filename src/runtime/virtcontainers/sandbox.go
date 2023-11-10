@@ -2394,7 +2394,7 @@ func (s *Sandbox) calculateSandboxMemory() (uint64, bool, int64) {
 }
 
 func (s *Sandbox) calculateSandboxCPUs() (float32, error) {
-	mCPU := float32(0)
+	floatCPU := float32(0)
 	cpusetCount := int(0)
 
 	for _, c := range s.config.Containers {
@@ -2406,7 +2406,7 @@ func (s *Sandbox) calculateSandboxCPUs() (float32, error) {
 
 		if cpu := c.Resources.CPU; cpu != nil {
 			if cpu.Period != nil && cpu.Quota != nil {
-				mCPU += utils.CalculateMilliCPUs(*cpu.Quota, *cpu.Period)
+				floatCPU += utils.CalculateCPUsF(*cpu.Quota, *cpu.Period)
 			}
 
 			set, err := cpuset.Parse(cpu.Cpus)
@@ -2420,11 +2420,11 @@ func (s *Sandbox) calculateSandboxCPUs() (float32, error) {
 	// If we aren't being constrained, then we could have two scenarios:
 	//  1. BestEffort QoS: no proper support today in Kata.
 	//  2. We could be constrained only by CPUSets. Check for this:
-	if mCPU == 0 && cpusetCount > 0 {
+	if floatCPU == 0 && cpusetCount > 0 {
 		return float32(cpusetCount), nil
 	}
 
-	return mCPU, nil
+	return floatCPU, nil
 }
 
 // GetHypervisorType is used for getting Hypervisor name currently used.
