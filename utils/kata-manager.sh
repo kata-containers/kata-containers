@@ -765,7 +765,7 @@ test_installation()
 	local image="docker.io/library/busybox:latest"
 	sudo $tool image pull "$image"
 
-	local container_name="test-kata"
+	local container_name="${script_name/./-}-test-kata"
 
 	# Used to prove that the kernel in the container
 	# is different to the host kernel.
