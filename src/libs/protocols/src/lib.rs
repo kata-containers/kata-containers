@@ -33,8 +33,8 @@ pub use serde_config::{
 };
 
 #[cfg(feature = "sealed-secret")]
-pub mod sealed_secret;
+pub mod confidential_data_hub;
 #[cfg(feature = "sealed-secret")]
-pub mod sealed_secret_ttrpc;
+pub mod confidential_data_hub_ttrpc;
 #[cfg(all(feature = "sealed-secret", feature = "async"))]
-pub mod sealed_secret_ttrpc_async;
+pub mod confidential_data_hub_ttrpc_async;

@@ -455,7 +455,7 @@ func (c *Container) mountSharedDirMounts(ctx context.Context, sharedDirMounts, i
 		}
 
 		// For non-block based mounts, we are only interested in bind mounts
-		if m.Type != "bind" {
+		if m.Type != "secure_mount" && m.Type != "bind" {
 			continue
 		}
 

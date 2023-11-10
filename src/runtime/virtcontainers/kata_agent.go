@@ -1330,6 +1330,13 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 	// Append container devices for block devices passed with --device.
 	ctrDevices = k.appendDevices(ctrDevices, c)
 
+    // secure mount info is put into storage object to pass to the agent
+    secureMountStorages, err := k.handleSecureMounts(c, ociSpec)
+    if err != nil {
+        return nil, err
+    }
+	ctrStorages = append(ctrStorages, secureMountStorages...)
+
 	// Block based volumes will require some adjustments in the OCI spec, and creation of
 	// storage objects to pass to the agent.
 	layerStorages, volumeStorages, err := k.handleBlkOCIMounts(c, ociSpec)
@@ -1750,6 +1757,45 @@ func (k *kataAgent) createBlkStorageObject(c *Container, m Mount) (*grpc.Storage
 
 	return vol, err
 }
+
+// because all the info for secure mount passed from csi driver is store in mountinfo,
+// we extract mountinfo from json file to generate grpc request to mount external storage
+func (k *kataAgent) handleSecureMounts(c *Container, spec *specs.Spec) ([]*grpc.Storage, error) {
+    var volumeStorages []*grpc.Storage
+    for i, m := range c.mounts {
+        if m.Type == "secure_mount" {
+            vol := &grpc.Storage{}
+            for _, ociMount := range spec.Mounts {
+                if ociMount.Destination == m.Destination {
+                    vol.Source = ociMount.Source
+                    break
+                }
+            }
+
+            mntInfo, e := volume.VolumeMountInfo(c.mounts[i].Source)
+            if e != nil && !os.IsNotExist(e) {
+                k.Logger().WithError(e).WithField("mount-source", c.mounts[i].Source).
+                Error("failed to parse the mount info file for a direct assigned volume")
+                continue
+            }
+            if mntInfo != nil {
+                metadata, err := json.Marshal(mntInfo.Metadata)
+                if err != nil {
+                    k.Logger().WithError(err).Error("Marshal metadata failed %s", c.mounts[i].Source)
+                    return nil, err
+                }
+                vol.Driver = "confidential-data-hub"
+                vol.DriverOptions = []string{string(mntInfo.VolumeType) + "=" + string(metadata)}
+                vol.Fstype = mntInfo.FsType
+                vol.Options = mntInfo.Options
+                vol.MountPoint = c.mounts[i].Destination
+                volumeStorages = append(volumeStorages, vol)
+            }
+        }
+    }
+    return volumeStorages, nil
+}
+
 
 // handleBlkOCIMounts will create a unique destination mountpoint in the guest for each volume in the
 // given container and will update the OCI spec to utilize this mount point as the new source for the

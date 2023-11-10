@@ -26,6 +26,7 @@ use tracing::instrument;
 
 use self::bind_watcher_handler::BindWatcherHandler;
 use self::block_handler::{PmemHandler, ScsiHandler, VirtioBlkMmioHandler, VirtioBlkPciHandler};
+use self::cdh_secure_mount_handler::CDHSecureMountHandler;
 use self::dm_verity::DmVerityHandler;
 use self::ephemeral_handler::EphemeralHandler;
 use self::fs_handler::{OverlayfsHandler, Virtio9pHandler, VirtioFsHandler};
@@ -33,9 +34,9 @@ use self::image_pull_handler::ImagePullHandler;
 use self::local_handler::LocalHandler;
 
 use crate::device::{
-    DRIVER_9P_TYPE, DRIVER_BLK_MMIO_TYPE, DRIVER_BLK_PCI_TYPE, DRIVER_EPHEMERAL_TYPE,
-    DRIVER_LOCAL_TYPE, DRIVER_NVDIMM_TYPE, DRIVER_OVERLAYFS_TYPE, DRIVER_SCSI_TYPE,
-    DRIVER_VIRTIOFS_TYPE, DRIVER_WATCHABLE_BIND_TYPE,
+    DRIVER_9P_TYPE, DRIVER_BLK_MMIO_TYPE, DRIVER_BLK_PCI_TYPE, DRIVER_CDH_TYPE,
+    DRIVER_EPHEMERAL_TYPE, DRIVER_LOCAL_TYPE, DRIVER_NVDIMM_TYPE, DRIVER_OVERLAYFS_TYPE,
+    DRIVER_SCSI_TYPE, DRIVER_VIRTIOFS_TYPE, DRIVER_WATCHABLE_BIND_TYPE,
 };
 use crate::mount::{baremount, is_mounted, remove_mounts};
 use crate::sandbox::Sandbox;
@@ -44,6 +45,7 @@ pub use self::ephemeral_handler::update_ephemeral_mounts;
 
 mod bind_watcher_handler;
 mod block_handler;
+mod cdh_secure_mount_handler;
 mod dm_verity;
 mod ephemeral_handler;
 mod fs_handler;
@@ -147,6 +149,7 @@ lazy_static! {
         manager.add_handler(crate::device::DRIVER_BLK_CCW_TYPE, Arc::new(self::block_handler::VirtioBlkCcwHandler{})).unwrap();
         manager.add_handler(DRIVER_BLK_MMIO_TYPE, Arc::new(VirtioBlkMmioHandler{})).unwrap();
         manager.add_handler(DRIVER_BLK_PCI_TYPE, Arc::new(VirtioBlkPciHandler{})).unwrap();
+        manager.add_handler(DRIVER_CDH_TYPE, Arc::new(CDHSecureMountHandler{})).unwrap();
         manager.add_handler(DRIVER_EPHEMERAL_TYPE, Arc::new(EphemeralHandler{})).unwrap();
         manager.add_handler(DRIVER_LOCAL_TYPE, Arc::new(LocalHandler{})).unwrap();
         manager.add_handler(DRIVER_NVDIMM_TYPE, Arc::new(PmemHandler{})).unwrap();

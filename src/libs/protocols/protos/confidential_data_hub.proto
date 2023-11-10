@@ -18,10 +18,27 @@ message GetResourceResponse {
     bytes Resource = 1;
 }
 
+message SecureMountRequest {
+    string driver = 1;
+    repeated string driver_options = 2;
+    string source = 3;
+    string fstype = 4;
+    repeated string options = 5;
+    string mount_point = 6;
+}
+
+message SecureMountResponse {
+    string mountPath = 1;
+}
+
 service SealedSecretService {
     rpc UnsealSecret(UnsealSecretInput) returns (UnsealSecretOutput) {};
 }
 
 service GetResourceService {
     rpc GetResource(GetResourceRequest) returns (GetResourceResponse) {};
+}
+
+service SecureMountService {
+    rpc SecureMount(SecureMountRequest) returns (SecureMountResponse) {};
 }
