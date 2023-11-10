@@ -112,6 +112,6 @@ impl Volume for ShmVolume {
     }
 }
 
-pub(crate) fn is_shim_volume(m: &oci::Mount) -> bool {
+pub(crate) fn is_shm_volume(m: &oci::Mount) -> bool {
     m.destination == "/dev/shm" && m.r#type != KATA_EPHEMERAL_DEV_TYPE
 }

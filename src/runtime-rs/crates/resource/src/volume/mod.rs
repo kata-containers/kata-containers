@@ -68,7 +68,7 @@ impl VolumeResource {
         // handle mounts
         for m in oci_mounts {
             let read_only = m.options.iter().any(|opt| opt == "ro");
-            let volume: Arc<dyn Volume> = if shm_volume::is_shim_volume(m) {
+            let volume: Arc<dyn Volume> = if shm_volume::is_shm_volume(m) {
                 let shm_size = shm_volume::DEFAULT_SHM_SIZE;
                 Arc::new(
                     shm_volume::ShmVolume::new(m, shm_size)
