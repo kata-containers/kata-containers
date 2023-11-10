@@ -40,6 +40,9 @@ function run() {
 	export ITERATIONS=2 MAX_CONTAINERS=20
 	bash "${stability_dir}/soak_parallel_rm.sh"
 
+	info "Running stressng scability test using ${KATA_HYPERVISOR} hypervisor"
+	bash "${stability_dir}/stressng.sh"
+
 	info "Running scability test using ${KATA_HYPERVISOR} hypervisor"
 	bash "${stability_dir}/scability_test.sh" 15 60
 

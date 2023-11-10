@@ -5,6 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 set -o pipefail
+set -x
 
 # General env
 SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
