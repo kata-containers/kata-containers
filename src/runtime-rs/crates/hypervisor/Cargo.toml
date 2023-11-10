@@ -16,7 +16,6 @@ go-flag = "0.1.0"
 libc = ">=0.2.39"
 nix = "0.24.2"
 persist = { path = "../persist" }
-regex = "1.10.2"
 rust-ini = "0.18.0"
 seccompiler = "0.2.0"
 serde = { version = "1.0.138", features = ["derive"] }
