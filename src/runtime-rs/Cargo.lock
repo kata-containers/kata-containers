@@ -1474,7 +1474,6 @@ dependencies = [
  "path-clean",
  "persist",
  "rand 0.8.5",
- "regex",
  "rust-ini",
  "safe-path 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "seccompiler",
