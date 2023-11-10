@@ -196,6 +196,15 @@ github_get_release_file_url()
 
 	[ -z "$download_url" ] && die "Cannot determine download URL for version $version ($url)"
 
+	# Check to ensure there is only a single matching URL
+	local expected_count=1
+
+	local count
+	count=$(echo "$download_url" | wc -l)
+
+	[ "$count" -eq "$expected_count" ] || \
+		die "expected $expected_count download URL but found $download_url"
+
 	echo "$download_url"
 }
 
@@ -501,7 +510,7 @@ configure_containerd()
 
 	sudo grep -q "$kata_runtime_type" "$containerd_config" || {
 		sudo cp "$containerd_config" "${original}"
-		info "Backed up $containerd_config to $original"
+		info "Backed up containerd config file '$containerd_config' to '$original'"
 	}
 
 	local modified="false"
@@ -553,7 +562,7 @@ configure_containerd()
 		modified="true"
 	fi
 
-	[ "$modified" = "true" ] && info "Modified $containerd_config"
+	[ "$modified" = "true" ] && info "Modified containerd config file '$containerd_config'"
 	sudo systemctl enable containerd
 	sudo systemctl start containerd
 
@@ -657,7 +666,7 @@ configure_kata()
 		-e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug"/g' \
 		"$cfg_to"
 
-	info "Configured $kata_project for full debug (delete $cfg_to to use pristine $kata_project configuration)"
+	info "Configured $kata_project for full debug (delete '$cfg_to' to use pristine $kata_project configuration)"
 }
 
 handle_kata()
