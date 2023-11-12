@@ -26,9 +26,9 @@ use crate::get_bucket_update;
 use super::DbsMmioV2Device;
 
 /// Default number of virtio queues, one rx/tx pair.
-pub const NUM_QUEUES: usize = 2;
+pub const DEFAULT_NUM_QUEUES: usize = 2;
 /// Default size of virtio queues.
-pub const QUEUE_SIZE: u16 = 256;
+pub const DEFAULT_QUEUE_SIZE: u16 = 256;
 // The flag of whether to use the shared irq.
 const USE_SHARED_IRQ: bool = true;
 // The flag of whether to use the generic irq.
@@ -123,6 +123,7 @@ impl VirtioNetDeviceConfigUpdateInfo {
 }
 
 /// Configuration information for virtio net devices.
+/// TODO: https://github.com/kata-containers/kata-containers/issues/8382.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Default)]
 pub struct VirtioNetDeviceConfigInfo {
     /// ID of the guest network interface.
@@ -163,12 +164,12 @@ impl VirtioNetDeviceConfigInfo {
     pub fn queue_sizes(&self) -> Vec<u16> {
         let mut queue_size = self.queue_size;
         if queue_size == 0 {
-            queue_size = QUEUE_SIZE;
+            queue_size = DEFAULT_QUEUE_SIZE;
         }
         let num_queues = if self.num_queues > 0 {
             self.num_queues
         } else {
-            NUM_QUEUES
+            DEFAULT_NUM_QUEUES
         };
 
         (0..num_queues).map(|_| queue_size).collect::<Vec<u16>>()

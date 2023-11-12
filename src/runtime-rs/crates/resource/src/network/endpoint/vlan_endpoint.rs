@@ -4,29 +4,21 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{
-    io::{self, Error},
-    sync::Arc,
-};
+use std::io::{self, Error};
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
+use hypervisor::device::device_manager::{do_handle_device, DeviceManager};
+use hypervisor::device::driver::NetworkConfig;
+use hypervisor::device::{DeviceConfig, DeviceType};
+use hypervisor::{Backend, Hypervisor, NetworkDevice};
 use tokio::sync::RwLock;
 
-use hypervisor::{
-    device::{
-        device_manager::{do_handle_device, DeviceManager},
-        driver::NetworkConfig,
-        DeviceConfig, DeviceType,
-    },
-    Hypervisor, NetworkDevice,
-};
-
-use super::{
-    endpoint_persist::{EndpointState, VlanEndpointState},
-    Endpoint,
-};
-use crate::network::{network_model::TC_FILTER_NET_MODEL_STR, utils, NetworkPair};
+use super::endpoint_persist::{EndpointState, VlanEndpointState};
+use super::Endpoint;
+use crate::network::network_model::TC_FILTER_NET_MODEL_STR;
+use crate::network::{utils, NetworkPair};
 
 #[derive(Debug)]
 pub struct VlanEndpoint {
@@ -64,6 +56,7 @@ impl VlanEndpoint {
         Ok(NetworkConfig {
             host_dev_name: iface.name.clone(),
             virt_iface_name: self.net_pair.virt_iface.name.clone(),
+            backend: Backend::Virtio,
             guest_mac: Some(guest_mac),
             ..Default::default()
         })

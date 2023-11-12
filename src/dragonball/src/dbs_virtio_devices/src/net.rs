@@ -31,8 +31,8 @@ use vmm_sys_util::eventfd::EventFd;
 
 use crate::device::{VirtioDeviceConfig, VirtioDeviceInfo};
 use crate::{
-    ActivateError, ActivateResult, ConfigResult, DbsGuestAddressSpace, Error, Result, VirtioDevice,
-    VirtioQueueConfig, TYPE_NET,
+    ActivateError, ActivateResult, ConfigResult, DbsGuestAddressSpace, Error, Result, TapError,
+    VirtioDevice, VirtioQueueConfig, TYPE_NET,
 };
 
 const NET_DRIVER_NAME: &str = "virtio-net";
@@ -60,15 +60,8 @@ pub const NET_EVENTS_COUNT: u32 = 6;
 /// Error for virtio-net devices to handle requests from guests.
 #[derive(Debug, thiserror::Error)]
 pub enum NetError {
-    /// Open tap device failed.
-    #[error("open tap device failed: {0}")]
-    TapOpen(#[source] dbs_utils::net::TapError),
-    /// Setting tap interface offload flags failed.
-    #[error("set tap device vnet header size failed: {0}")]
-    TapSetOffload(#[source] dbs_utils::net::TapError),
-    /// Setting vnet header size failed.
-    #[error("set tap device vnet header size failed: {0}")]
-    TapSetVnetHdrSize(#[source] dbs_utils::net::TapError),
+    #[error("tap device operation error: {0:?}")]
+    TapError(#[source] TapError),
 }
 
 /// Metrics specific to the net device.
@@ -150,7 +143,7 @@ impl<Q: QueueT> RxVirtio<Q> {
     }
 }
 
-fn vnet_hdr_len() -> usize {
+pub fn vnet_hdr_len() -> usize {
     mem::size_of::<virtio_net_hdr_v1>()
 }
 
@@ -665,11 +658,11 @@ impl<AS: GuestAddressSpace> Net<AS> {
         tap.set_offload(
             net_gen::TUN_F_CSUM | net_gen::TUN_F_UFO | net_gen::TUN_F_TSO4 | net_gen::TUN_F_TSO6,
         )
-        .map_err(NetError::TapSetOffload)?;
+        .map_err(|err| Error::VirtioNet(NetError::TapError(TapError::SetOffload(err))))?;
 
         let vnet_hdr_size = vnet_hdr_len() as i32;
         tap.set_vnet_hdr_size(vnet_hdr_size)
-            .map_err(NetError::TapSetVnetHdrSize)?;
+            .map_err(|err| Error::VirtioNet(NetError::TapError(TapError::SetVnetHdrSize(err))))?;
         info!("net tap set finished");
 
         let mut avail_features = 1u64 << VIRTIO_NET_F_GUEST_CSUM
@@ -722,7 +715,8 @@ impl<AS: GuestAddressSpace> Net<AS> {
         tx_rate_limiter: Option<RateLimiter>,
     ) -> Result<Self> {
         info!("open net tap {}", host_dev_name);
-        let tap = Tap::open_named(host_dev_name.as_str(), false).map_err(NetError::TapOpen)?;
+        let tap = Tap::open_named(host_dev_name.as_str(), false)
+            .map_err(|err| Error::VirtioNet(NetError::TapError(TapError::Open(err))))?;
         info!("net tap opened");
 
         Self::new_with_tap(
