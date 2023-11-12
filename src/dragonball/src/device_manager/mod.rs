@@ -102,6 +102,12 @@ pub mod balloon_dev_mgr;
 #[cfg(feature = "virtio-balloon")]
 use self::balloon_dev_mgr::BalloonDeviceMgr;
 
+#[cfg(feature = "vhost-net")]
+/// Device manager for vhost-net devices.
+pub mod vhost_net_dev_mgr;
+#[cfg(feature = "vhost-net")]
+use self::vhost_net_dev_mgr::VhostNetDeviceMgr;
+
 macro_rules! info(
     ($l:expr, $($args:tt)+) => {
         slog::info!($l, $($args)+; slog::o!("subsystem" => "device_manager"))
@@ -537,6 +543,9 @@ pub struct DeviceManager {
 
     #[cfg(feature = "virtio-balloon")]
     pub(crate) balloon_manager: BalloonDeviceMgr,
+
+    #[cfg(feature = "vhost-net")]
+    vhost_net_manager: VhostNetDeviceMgr,
 }
 
 impl DeviceManager {
@@ -573,6 +582,8 @@ impl DeviceManager {
             mem_manager: MemDeviceMgr::default(),
             #[cfg(feature = "virtio-balloon")]
             balloon_manager: BalloonDeviceMgr::default(),
+            #[cfg(feature = "vhost-net")]
+            vhost_net_manager: VhostNetDeviceMgr::default(),
         }
     }
 
@@ -742,6 +753,14 @@ impl DeviceManager {
         self.block_manager
             .generate_kernel_boot_args(kernel_config)
             .map_err(StartMicroVmError::DeviceManager)?;
+
+        #[cfg(feature = "vhost-net")]
+        self.vhost_net_manager
+            .attach_devices(&mut ctx)
+            .map_err(StartMicroVmError::VhostNetDeviceError)?;
+
+        // Ensure that all devices are attached before kernel boot args are
+        // generated.
         ctx.generate_kernel_boot_args(kernel_config)
             .map_err(StartMicroVmError::DeviceManager)?;
 
@@ -789,6 +808,9 @@ impl DeviceManager {
         self.virtio_net_manager.remove_devices(&mut ctx)?;
         #[cfg(feature = "virtio-vsock")]
         self.vsock_manager.remove_devices(&mut ctx)?;
+
+        #[cfg(feature = "vhost-net")]
+        self.vhost_net_manager.remove_devices(&mut ctx)?;
 
         Ok(())
     }
@@ -1144,6 +1166,8 @@ mod tests {
                 balloon_manager: BalloonDeviceMgr::default(),
                 #[cfg(target_arch = "aarch64")]
                 mmio_device_info: HashMap::new(),
+                #[cfg(feature = "vhost-net")]
+                vhost_net_manager: VhostNetDeviceMgr::default(),
 
                 logger,
                 shared_info,

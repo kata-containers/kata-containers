@@ -307,11 +307,12 @@ impl DeviceManager {
             }
             DeviceConfig::NetworkCfg(config) => {
                 // try to find the device, found and just return id.
-                if let Some(dev_id_matched) = self.find_device(config.host_dev_name.clone()).await {
+                let host_path = config.host_dev_name.as_str();
+                if let Some(dev_id_matched) = self.find_device(host_path.to_owned()).await {
                     info!(
                         sl!(),
                         "network device with path:{:?} found. return network device id: {:?}",
-                        config.host_dev_name.clone(),
+                        host_path,
                         dev_id_matched
                     );
 
