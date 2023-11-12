@@ -191,6 +191,7 @@ pub enum VmmAction {
     /// are the RX and TX rate limiters.
     UpdateBlockDevice(BlockDeviceConfigUpdateInfo),
 
+    #[cfg(any(feature = "virtio-net", feature = "vhost-net"))]
     /// Add a new network interface config or update one that already exists using the
     /// `NetworkInterfaceConfig` as input. This action can only be called before the microVM has
     /// booted. The response is sent using the `OutcomeSender`.
