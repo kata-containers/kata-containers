@@ -761,13 +761,16 @@ async fn cloud_hypervisor_log_output(mut child: Child, mut shutdown: Receiver<bo
 }
 
 pub fn parse_ch_log_level(line: &str) -> &str {
-    let re = Regex::new(r"cloud-hypervisor: [0-9]*[.][0-9]+ms: <\w+> (?<level>\w+)").unwrap();
-    let level = re
-        .captures(line)
-        .expect("There should be a match for level")
-        .name("level")
-        .expect("Level should be found in record")
-        .as_str();
+    let re = Regex::new(r"cloud-hypervisor: [0-9]*[.][0-9]+.s: <\w+> (?<clh_level>\w+)").unwrap();
+
+    let mut level = "INFO";
+
+    if let Some(captures) = re.captures(line) {
+        if let Some(clh_level) = captures.name("clh_level") {
+            level = clh_level.as_str();
+        }
+    }
+
     match level {
         "TRACE" => LOG_LEVEL_TRACE,
         "DEBUG" => LOG_LEVEL_DEBUG,
