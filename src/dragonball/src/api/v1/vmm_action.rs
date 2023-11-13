@@ -200,6 +200,8 @@ pub enum VmmAction {
     #[cfg(feature = "virtio-net")]
     /// Update a network interface, after microVM start. Currently, the only updatable properties
     /// are the RX and TX rate limiters.
+    /// TODO: vhost-net rate limiters aren't implemented, see:
+    /// https://github.com/kata-containers/kata-containers/issues/8327
     UpdateNetworkInterface(VirtioNetDeviceConfigUpdateInfo),
 
     #[cfg(feature = "virtio-fs")]
@@ -318,6 +320,7 @@ impl VmmService {
             VmmAction::RemoveBlockDevice(drive_id) => {
                 self.remove_block_device(vmm, event_mgr, &drive_id)
             }
+            #[cfg(any(feature = "virtio-net", feature = "vhost-net"))]
             VmmAction::InsertNetworkDevice(config) => match config.backend {
                 #[cfg(feature = "virtio-net")]
                 Backend::Virtio(_) => self.add_virtio_net_device(vmm, event_mgr, config.into()),

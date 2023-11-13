@@ -46,7 +46,10 @@ pub mod vhost;
 
 use std::io::Error as IOError;
 
-use net::NetError;
+#[cfg(any(feature = "virtio-net", feature = "vhost-net"))]
+use dbs_utils::metric::SharedIncMetric;
+#[cfg(any(feature = "virtio-net", feature = "vhost-net"))]
+use serde::Serialize;
 use virtio_queue::Error as VqError;
 use vm_memory::{GuestAddress, GuestAddressSpace, GuestMemoryError};
 
@@ -212,7 +215,7 @@ pub enum Error {
 
     #[cfg(feature = "virtio-net")]
     #[error("virtio-net error: {0:?}")]
-    VirtioNet(NetError),
+    VirtioNet(net::NetError),
 
     #[cfg(feature = "vhost-net")]
     #[error("vhost-net error: {0:?}")]
@@ -229,7 +232,7 @@ pub enum Error {
 }
 
 // Error for tap devices
-#[cfg(feature = "virtio-net")]
+#[cfg(any(feature = "virtio-net", feature = "vhost-net"))]
 #[derive(Debug, thiserror::Error)]
 pub enum TapError {
     #[error("missing {0} flags")]
@@ -240,12 +243,54 @@ pub enum TapError {
 
     #[error("failed to set vnet_hdr_size: {0}")]
     SetVnetHdrSize(#[source] dbs_utils::net::TapError),
-    
+
     #[error("failed to open a tap device: {0}")]
     Open(#[source] dbs_utils::net::TapError),
 
     #[error("failed to enable a tap device: {0}")]
     Enable(#[source] dbs_utils::net::TapError),
+}
+
+#[cfg(any(feature = "virtio-net", feature = "vhost-net"))]
+#[inline]
+pub fn vnet_hdr_len() -> usize {
+    std::mem::size_of::<virtio_bindings::bindings::virtio_net::virtio_net_hdr_v1>()
+}
+
+/// Metrics specific to the net device.
+#[cfg(any(feature = "virtio-net", feature = "vhost-net"))]
+#[derive(Default, Serialize)]
+pub struct NetDeviceMetrics {
+    /// Number of times when handling events on a network device.
+    pub event_count: SharedIncMetric,
+    /// Number of times when activate failed on a network device.
+    pub activate_fails: SharedIncMetric,
+    /// Number of times when interacting with the space config of a network device failed.
+    pub cfg_fails: SharedIncMetric,
+    /// Number of times when handling events on a network device failed.
+    pub event_fails: SharedIncMetric,
+    /// Number of events associated with the receiving queue.
+    pub rx_queue_event_count: SharedIncMetric,
+    /// Number of events associated with the rate limiter installed on the receiving path.
+    pub rx_event_rate_limiter_count: SharedIncMetric,
+    /// Number of events received on the associated tap.
+    pub rx_tap_event_count: SharedIncMetric,
+    /// Number of bytes received.
+    pub rx_bytes_count: SharedIncMetric,
+    /// Number of packets received.
+    pub rx_packets_count: SharedIncMetric,
+    /// Number of errors while receiving data.
+    pub rx_fails: SharedIncMetric,
+    /// Number of transmitted bytes.
+    pub tx_bytes_count: SharedIncMetric,
+    /// Number of errors while transmitting data.
+    pub tx_fails: SharedIncMetric,
+    /// Number of transmitted packets.
+    pub tx_packets_count: SharedIncMetric,
+    /// Number of events associated with the transmitting queue.
+    pub tx_queue_event_count: SharedIncMetric,
+    /// Number of events associated with the rate limiter installed on the transmitting path.
+    pub tx_rate_limiter_event_count: SharedIncMetric,
 }
 
 /// Specialized std::result::Result for Virtio device operations.
