@@ -18,6 +18,8 @@ function install_dependencies() {
 
 	declare -a system_deps=(
 		jq
+		curl
+		gnupg
 	)
 
 	sudo apt-get update
@@ -25,13 +27,22 @@ function install_dependencies() {
 
 	ensure_yq
 
-	declare -a github_deps
-	github_deps[0]="cri_containerd:$(get_from_kata_deps "externals.containerd.${CONTAINERD_VERSION}")"
+	# Add Docker's official GPG key:
+	sudo apt-get update
+	sudo apt-get -y install ca-certificates
+	sudo install -m 0755 -d /etc/apt/keyrings
+	curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+	sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
-	for github_dep in "${github_deps[@]}"; do
-		IFS=":" read -r -a dep <<< "${github_dep}"
-		install_${dep[0]} "${dep[1]}"
-	done
+	# Add the repository to Apt sources:
+	echo \
+		"deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+		"$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | \
+		sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+	sudo apt-get update
+
+	sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
 }
 
 function run() {
