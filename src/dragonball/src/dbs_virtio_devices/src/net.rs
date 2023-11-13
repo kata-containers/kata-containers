@@ -9,7 +9,6 @@ use std::any::Any;
 use std::cmp;
 use std::io::{self, Read, Write};
 use std::marker::PhantomData;
-use std::mem;
 use std::ops::Deref;
 use std::os::unix::io::AsRawFd;
 use std::sync::{mpsc, Arc};
@@ -18,12 +17,11 @@ use dbs_device::resources::ResourceConstraint;
 use dbs_utils::epoll_manager::{
     EpollManager, EventOps, EventSet, Events, MutEventSubscriber, SubscriberId,
 };
-use dbs_utils::metric::{IncMetric, SharedIncMetric};
+use dbs_utils::metric::IncMetric;
 use dbs_utils::net::{net_gen, MacAddr, Tap, MAC_ADDR_LEN};
 use dbs_utils::rate_limiter::{BucketUpdate, RateLimiter, TokenType};
 use libc;
 use log::{debug, error, info, trace, warn};
-use serde::Serialize;
 use virtio_bindings::bindings::virtio_net::*;
 use virtio_queue::{QueueOwnedT, QueueSync, QueueT};
 use vm_memory::{Bytes, GuestAddress, GuestAddressSpace, GuestMemoryRegion, GuestRegionMmap};
@@ -31,8 +29,8 @@ use vmm_sys_util::eventfd::EventFd;
 
 use crate::device::{VirtioDeviceConfig, VirtioDeviceInfo};
 use crate::{
-    ActivateError, ActivateResult, ConfigResult, DbsGuestAddressSpace, Error, Result, TapError,
-    VirtioDevice, VirtioQueueConfig, TYPE_NET,
+    vnet_hdr_len, ActivateError, ActivateResult, ConfigResult, DbsGuestAddressSpace, Error,
+    NetDeviceMetrics, Result, TapError, VirtioDevice, VirtioQueueConfig, TYPE_NET,
 };
 
 const NET_DRIVER_NAME: &str = "virtio-net";
@@ -62,41 +60,6 @@ pub const NET_EVENTS_COUNT: u32 = 6;
 pub enum NetError {
     #[error("tap device operation error: {0:?}")]
     TapError(#[source] TapError),
-}
-
-/// Metrics specific to the net device.
-#[derive(Default, Serialize)]
-pub struct NetDeviceMetrics {
-    /// Number of times when handling events on a network device.
-    pub event_count: SharedIncMetric,
-    /// Number of times when activate failed on a network device.
-    pub activate_fails: SharedIncMetric,
-    /// Number of times when interacting with the space config of a network device failed.
-    pub cfg_fails: SharedIncMetric,
-    /// Number of times when handling events on a network device failed.
-    pub event_fails: SharedIncMetric,
-    /// Number of events associated with the receiving queue.
-    pub rx_queue_event_count: SharedIncMetric,
-    /// Number of events associated with the rate limiter installed on the receiving path.
-    pub rx_event_rate_limiter_count: SharedIncMetric,
-    /// Number of events received on the associated tap.
-    pub rx_tap_event_count: SharedIncMetric,
-    /// Number of bytes received.
-    pub rx_bytes_count: SharedIncMetric,
-    /// Number of packets received.
-    pub rx_packets_count: SharedIncMetric,
-    /// Number of errors while receiving data.
-    pub rx_fails: SharedIncMetric,
-    /// Number of transmitted bytes.
-    pub tx_bytes_count: SharedIncMetric,
-    /// Number of errors while transmitting data.
-    pub tx_fails: SharedIncMetric,
-    /// Number of transmitted packets.
-    pub tx_packets_count: SharedIncMetric,
-    /// Number of events associated with the transmitting queue.
-    pub tx_queue_event_count: SharedIncMetric,
-    /// Number of events associated with the rate limiter installed on the transmitting path.
-    pub tx_rate_limiter_event_count: SharedIncMetric,
 }
 
 struct TxVirtio<Q: QueueT> {
@@ -141,10 +104,6 @@ impl<Q: QueueT> RxVirtio<Q> {
             frame_buf: [0u8; MAX_BUFFER_SIZE],
         }
     }
-}
-
-pub fn vnet_hdr_len() -> usize {
-    mem::size_of::<virtio_net_hdr_v1>()
 }
 
 #[allow(dead_code)]

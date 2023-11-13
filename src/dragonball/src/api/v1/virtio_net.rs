@@ -3,6 +3,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use core::panic;
+
 use dbs_utils::net::MacAddr;
 use serde::{Deserialize, Serialize};
 
@@ -29,8 +31,14 @@ pub enum Backend {
 }
 
 impl Default for Backend {
+    #[allow(unreachable_code)]
     fn default() -> Self {
-        Self::Virtio(VirtioConfig::default())
+        #[cfg(feature = "virtio-net")]
+        return Self::Virtio(VirtioConfig::default());
+        #[cfg(feature = "vhost-net")]
+        return Self::Vhost(VirtioConfig::default());
+
+        panic!("no available default network backend")
     }
 }
 
@@ -86,6 +94,7 @@ impl From<&NetworkInterfaceConfig> for VirtioNetDeviceConfigInfo {
             .unwrap_or(virtio_net_dev_mgr::DEFAULT_QUEUE_SIZE);
 
         // It is safe because we tested the type of config before.
+        #[allow(unreachable_patterns)]
         let config = match &value.backend {
             Backend::Virtio(config) => config,
             _ => panic!("The virtio backend config is invalid: {:?}", value),
@@ -125,6 +134,7 @@ impl From<&NetworkInterfaceConfig> for VhostNetDeviceConfigInfo {
             .unwrap_or(vhost_net_dev_mgr::DEFAULT_QUEUE_SIZE);
 
         // It is safe because we tested the type of config before.
+        #[allow(unreachable_patterns)]
         let config = match &value.backend {
             Backend::Vhost(config) => config,
             _ => panic!("The virtio backend config is invalid: {:?}", value),
