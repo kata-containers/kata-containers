@@ -23,7 +23,6 @@ use kata_sys_util::protection::{available_guest_protection, GuestProtection};
 use kata_types::capabilities::{Capabilities, CapabilityBits};
 use kata_types::config::default::DEFAULT_CH_ROOTFS_TYPE;
 use lazy_static::lazy_static;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::convert::TryFrom;
@@ -51,11 +50,14 @@ const CH_FEATURES_KEY: &str = "features";
 // The name of the CH build-time feature for Intel TDX.
 const CH_FEATURE_TDX: &str = "tdx";
 
-const LOG_LEVEL_TRACE: &str = "TRCE";
-const LOG_LEVEL_DEBUG: &str = "DEBG";
-const LOG_LEVEL_INFO: &str = "INFO";
-const LOG_LEVEL_WARNING: &str = "WARN";
-const LOG_LEVEL_ERROR: &str = "ERRO";
+#[derive(Debug, PartialEq)]
+enum CloudHypervisorLogLevel {
+    Trace,
+    Debug,
+    Info,
+    Warn,
+    Error,
+}
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct VmmPingResponse {
@@ -730,11 +732,12 @@ async fn cloud_hypervisor_log_output(mut child: Child, mut shutdown: Receiver<bo
             stderr_line = poll_fn(|cx| Pin::new(&mut stderr_lines).poll_next_line(cx)) => {
                 if let Ok(line) = stderr_line {
                     let line = line.ok_or("missing stderr line").map_err(|e| anyhow!(e))?;
+
                     match parse_ch_log_level(&line) {
-                        LOG_LEVEL_TRACE => trace!(sl!(), "{:?}", line; "stream" => "stderr"),
-                        LOG_LEVEL_DEBUG => debug!(sl!(), "{:?}", line; "stream" => "stderr"),
-                        LOG_LEVEL_WARNING => warn!(sl!(), "{:?}", line; "stream" => "stderr"),
-                        LOG_LEVEL_ERROR => error!(sl!(), "{:?}", line; "stream" => "stderr"),
+                        CloudHypervisorLogLevel::Trace => trace!(sl!(), "{:?}", line; "stream" => "stderr"),
+                        CloudHypervisorLogLevel::Debug => debug!(sl!(), "{:?}", line; "stream" => "stderr"),
+                        CloudHypervisorLogLevel::Warn => warn!(sl!(), "{:?}", line; "stream" => "stderr"),
+                        CloudHypervisorLogLevel::Error => error!(sl!(), "{:?}", line; "stream" => "stderr"),
                         _ => info!(sl!(), "{:?}", line; "stream" => "stderr"),
                     }
                 }
@@ -742,11 +745,12 @@ async fn cloud_hypervisor_log_output(mut child: Child, mut shutdown: Receiver<bo
             stdout_line = poll_fn(|cx| Pin::new(&mut stdout_lines).poll_next_line(cx)) => {
                 if let Ok(line) = stdout_line {
                     let line = line.ok_or("missing stdout line").map_err(|e| anyhow!(e))?;
+
                     match parse_ch_log_level(&line) {
-                        LOG_LEVEL_TRACE => trace!(sl!(), "{:?}", line; "stream" => "stdout"),
-                        LOG_LEVEL_DEBUG => debug!(sl!(), "{:?}", line; "stream" => "stdout"),
-                        LOG_LEVEL_WARNING => warn!(sl!(), "{:?}", line; "stream" => "stdout"),
-                        LOG_LEVEL_ERROR => error!(sl!(), "{:?}", line; "stream" => "stdout"),
+                        CloudHypervisorLogLevel::Trace => trace!(sl!(), "{:?}", line; "stream" => "stdout"),
+                        CloudHypervisorLogLevel::Debug => debug!(sl!(), "{:?}", line; "stream" => "stdout"),
+                        CloudHypervisorLogLevel::Warn => warn!(sl!(), "{:?}", line; "stream" => "stdout"),
+                        CloudHypervisorLogLevel::Error => error!(sl!(), "{:?}", line; "stream" => "stdout"),
                         _ => info!(sl!(), "{:?}", line; "stream" => "stdout"),
                     }
                 }
@@ -760,21 +764,27 @@ async fn cloud_hypervisor_log_output(mut child: Child, mut shutdown: Receiver<bo
     Ok(())
 }
 
-pub fn parse_ch_log_level(line: &str) -> &str {
-    let re = Regex::new(r"cloud-hypervisor: [0-9]*[.][0-9]+ms: <\w+> (?<level>\w+)").unwrap();
-    let level = re
-        .captures(line)
-        .expect("There should be a match for level")
-        .name("level")
-        .expect("Level should be found in record")
-        .as_str();
-    match level {
-        "TRACE" => LOG_LEVEL_TRACE,
-        "DEBUG" => LOG_LEVEL_DEBUG,
-        "WARN" => LOG_LEVEL_WARNING,
-        "ERROR" => LOG_LEVEL_ERROR,
-        _ => LOG_LEVEL_INFO, // info or other values will return info,
+// Search in the log line looking for the log level.
+//
+// For performance, the line is scanned exactly once and all log levels
+// are search for.
+fn parse_ch_log_level(line: &str) -> CloudHypervisorLogLevel {
+    for (i, c) in line.chars().enumerate() {
+        if c == 'I' && line[i..].starts_with("INFO:") {
+            return CloudHypervisorLogLevel::Info;
+        } else if c == 'D' && line[i..].starts_with("DEBG:") {
+            return CloudHypervisorLogLevel::Debug;
+        } else if c == 'W' && line[i..].starts_with("WARN:") {
+            return CloudHypervisorLogLevel::Warn;
+        } else if c == 'E' && line[i..].starts_with("ERRO:") {
+            return CloudHypervisorLogLevel::Error;
+        } else if c == 'T' && line[i..].starts_with("TRCE:") {
+            return CloudHypervisorLogLevel::Trace;
+        }
     }
+
+    // Default - logging code cannot fail.
+    CloudHypervisorLogLevel::Info
 }
 
 lazy_static! {
@@ -1131,6 +1141,119 @@ mod tests {
                     assert!(result.contains(token), "{}", msg);
                 }
             }
+        }
+    }
+
+    #[actix_rt::test]
+    async fn test_parse_ch_log_level() {
+        #[derive(Debug)]
+        struct TestData<'a> {
+            line: &'a str,
+            level: CloudHypervisorLogLevel,
+        }
+
+        let tests = &[
+            // Test default level with various values
+            TestData {
+                line: "",
+                level: CloudHypervisorLogLevel::Info,
+            },
+            TestData {
+                line: "foo",
+                level: CloudHypervisorLogLevel::Info,
+            },
+            TestData {
+                line: "info:",
+                level: CloudHypervisorLogLevel::Info,
+            },
+            // Levels are case sensitive
+            TestData {
+                line: "foo trce: bar",
+                level: CloudHypervisorLogLevel::Info,
+            },
+            TestData {
+                line: "foo debg: bar",
+                level: CloudHypervisorLogLevel::Info,
+            },
+            TestData {
+                line: "foo info: bar",
+                level: CloudHypervisorLogLevel::Info,
+            },
+            TestData {
+                line: "foo warn: bar",
+                level: CloudHypervisorLogLevel::Info,
+            },
+            TestData {
+                line: "foo erro: bar",
+                level: CloudHypervisorLogLevel::Info,
+            },
+            TestData {
+                line: "foo INFO: bar",
+                level: CloudHypervisorLogLevel::Info,
+            },
+            TestData {
+                line: "foo DEBUG: bar",
+                level: CloudHypervisorLogLevel::Info,
+            },
+            TestData {
+                line: "foo DEBG: bar",
+                level: CloudHypervisorLogLevel::Debug,
+            },
+            TestData {
+                line: "foo WARN:bar",
+                level: CloudHypervisorLogLevel::Warn,
+            },
+            TestData {
+                line: "foo ERROR: bar",
+                level: CloudHypervisorLogLevel::Info,
+            },
+            TestData {
+                line: "foo ERRO: bar",
+                level: CloudHypervisorLogLevel::Error,
+            },
+            TestData {
+                line: "foo TRACE: bar",
+                level: CloudHypervisorLogLevel::Info,
+            },
+            TestData {
+                line: "foo TRCE: bar",
+                level: CloudHypervisorLogLevel::Trace,
+            },
+            // First match wins
+            TestData {
+                line: "TRCE:ERRO:WARN:DEBG:INFO:",
+                level: CloudHypervisorLogLevel::Trace,
+            },
+            TestData {
+                line: "ERRO:WARN:DEBG:INFO:TRCE",
+                level: CloudHypervisorLogLevel::Error,
+            },
+            TestData {
+                line: "WARN:DEBG:INFO:TRCE:ERRO:",
+                level: CloudHypervisorLogLevel::Warn,
+            },
+            TestData {
+                line: "DEBG:INFO:TRCE:ERRO:WARN:",
+                level: CloudHypervisorLogLevel::Debug,
+            },
+            TestData {
+                line: "INFO:TRCE:ERRO:WARN:DEBG:",
+                level: CloudHypervisorLogLevel::Info,
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            let level = parse_ch_log_level(d.line);
+
+            let msg = format!("{}: actual level: {:?}", msg, level);
+
+            if std::env::var("DEBUG").is_ok() {
+                eprintln!("DEBUG: {}", msg);
+            }
+
+            assert_eq!(d.level, level, "{}", msg);
         }
     }
 }
