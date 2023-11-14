@@ -110,6 +110,11 @@ impl Hypervisor for Dragonball {
         inner.remove_device(device).await
     }
 
+    async fn update_device(&self, device: DeviceType) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        inner.update_device(device).await
+    }
+
     async fn get_agent_socket(&self) -> Result<String> {
         let inner = self.inner.read().await;
         inner.get_agent_socket().await

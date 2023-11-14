@@ -101,6 +101,12 @@ impl DragonballInner {
         }
     }
 
+    pub(crate) async fn update_device(&mut self, device: DeviceType) -> Result<()> {
+        info!(sl!(), "dragonball update device {:?}", &device);
+
+        Ok(())
+    }
+
     fn add_vfio_device(&mut self, device: &VfioDevice) -> Result<()> {
         let vfio_device = device.clone();
 

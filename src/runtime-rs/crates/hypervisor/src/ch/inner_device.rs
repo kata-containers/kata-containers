@@ -108,6 +108,10 @@ impl CloudHypervisorInner {
         }
     }
 
+    pub(crate) async fn update_device(&mut self, _device: DeviceType) -> Result<()> {
+        Ok(())
+    }
+
     async fn handle_share_fs_device(&mut self, sharefs: ShareFsDevice) -> Result<DeviceType> {
         let device: ShareFsDevice = sharefs.clone();
         if device.config.fs_type != VIRTIO_FS {

@@ -86,6 +86,11 @@ impl Device for VhostUserBlkDevice {
         Ok(Some(self.config.index))
     }
 
+    async fn update(&mut self, _h: &dyn hypervisor) -> Result<()> {
+        // There's no need to do update for vhost-user-blk
+        Ok(())
+    }
+
     async fn get_device_info(&self) -> DeviceType {
         DeviceType::VhostUserBlk(self.clone())
     }

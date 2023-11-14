@@ -95,6 +95,11 @@ impl Device for NetworkDevice {
         Ok(Some(self.config.index))
     }
 
+    async fn update(&mut self, _h: &dyn hypervisor) -> Result<()> {
+        // There's no need to do update for network device
+        Ok(())
+    }
+
     async fn get_device_info(&self) -> DeviceType {
         DeviceType::Network(self.clone())
     }

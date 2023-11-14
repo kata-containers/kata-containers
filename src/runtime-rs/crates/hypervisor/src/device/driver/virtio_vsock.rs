@@ -62,6 +62,11 @@ impl Device for HybridVsockDevice {
         Ok(None)
     }
 
+    async fn update(&mut self, _h: &dyn hypervisor) -> Result<()> {
+        // There's no need to do update for hvsock device
+        Ok(())
+    }
+
     async fn get_device_info(&self) -> DeviceType {
         DeviceType::HybridVsock(self.clone())
     }
