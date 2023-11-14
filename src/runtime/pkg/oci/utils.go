@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"path/filepath"
 	"regexp"
 	goruntime "runtime"
@@ -137,7 +138,7 @@ type RuntimeConfig struct {
 
 	// Sandbox sizing information which, if provided, indicates the size of
 	// the sandbox needed for the workload(s)
-	SandboxCPUs  uint32
+	SandboxCPUs  float32
 	SandboxMemMB uint32
 
 	// Determines if we should attempt to size the VM at boot time and skip
@@ -683,11 +684,11 @@ func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig
 func addHypervisorCPUOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
 	numCPUs := goruntime.NumCPU()
 
-	if err := newAnnotationConfiguration(ocispec, vcAnnotations.DefaultVCPUs).setUintWithCheck(func(vcpus uint64) error {
-		if uint32(vcpus) > uint32(numCPUs) {
-			return fmt.Errorf("Number of cpus %d specified in annotation default_vcpus is greater than the number of CPUs %d on the system", vcpus, numCPUs)
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.DefaultVCPUs).setFloat32WithCheck(func(vcpus float32) error {
+		if vcpus > float32(numCPUs) {
+			return fmt.Errorf("Number of cpus %f specified in annotation default_vcpus is greater than the number of CPUs %d on the system", vcpus, numCPUs)
 		}
-		sbConfig.HypervisorConfig.NumVCPUs = uint32(vcpus)
+		sbConfig.HypervisorConfig.NumVCPUsF = float32(vcpus)
 		return nil
 	}); err != nil {
 		return err
@@ -1016,10 +1017,10 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid st
 	// with the base number of CPU/memory (which is equal to the default CPU/memory specified for the runtime
 	// configuration or annotations) as well as any specified workload resources.
 	if sandboxConfig.StaticResourceMgmt {
-		sandboxConfig.SandboxResources.BaseCPUs = sandboxConfig.HypervisorConfig.NumVCPUs
+		sandboxConfig.SandboxResources.BaseCPUs = sandboxConfig.HypervisorConfig.NumVCPUsF
 		sandboxConfig.SandboxResources.BaseMemMB = sandboxConfig.HypervisorConfig.MemorySize
 
-		sandboxConfig.HypervisorConfig.NumVCPUs += sandboxConfig.SandboxResources.WorkloadCPUs
+		sandboxConfig.HypervisorConfig.NumVCPUsF += sandboxConfig.SandboxResources.WorkloadCPUs
 		sandboxConfig.HypervisorConfig.MemorySize += sandboxConfig.SandboxResources.WorkloadMemMB
 
 		ociLog.WithFields(logrus.Fields{
@@ -1140,6 +1141,7 @@ func IsCRIOContainerManager(spec *specs.Spec) bool {
 const (
 	errAnnotationPositiveNumericKey = "Error parsing annotation for %s: Please specify positive numeric value"
 	errAnnotationBoolKey            = "Error parsing annotation for %s: Please specify boolean value 'true|false'"
+	errAnnotationNumericKeyIsTooBig = "Error parsing annotation for %s: The number exceeds the maximum allowed for its type"
 )
 
 type annotationConfiguration struct {
@@ -1183,9 +1185,24 @@ func (a *annotationConfiguration) setUintWithCheck(f func(uint64) error) error {
 	return nil
 }
 
+func (a *annotationConfiguration) setFloat32WithCheck(f func(float32) error) error {
+	if value, ok := a.ocispec.Annotations[a.key]; ok {
+		float64Value, err := strconv.ParseFloat(value, 32)
+		if err != nil || float64Value < 0 {
+			return fmt.Errorf(errAnnotationPositiveNumericKey, a.key)
+		}
+		if float64Value > math.MaxFloat32 {
+			return fmt.Errorf(errAnnotationNumericKeyIsTooBig, a.key)
+		}
+		float32Value := float32(float64Value)
+		return f(float32Value)
+	}
+	return nil
+}
+
 // CalculateSandboxSizing will calculate the number of CPUs and amount of Memory that should
 // be added to the VM if sandbox annotations are provided with this sizing details
-func CalculateSandboxSizing(spec *specs.Spec) (numCPU, memSizeMB uint32) {
+func CalculateSandboxSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint32) {
 	var memory, quota int64
 	var period uint64
 	var err error
@@ -1232,7 +1249,7 @@ func CalculateSandboxSizing(spec *specs.Spec) (numCPU, memSizeMB uint32) {
 
 // CalculateContainerSizing will calculate the number of CPUs and amount of memory that is needed
 // based on the provided LinuxResources
-func CalculateContainerSizing(spec *specs.Spec) (numCPU, memSizeMB uint32) {
+func CalculateContainerSizing(spec *specs.Spec) (numCPU float32, memSizeMB uint32) {
 	var memory, quota int64
 	var period uint64
 
@@ -1254,8 +1271,8 @@ func CalculateContainerSizing(spec *specs.Spec) (numCPU, memSizeMB uint32) {
 	return calculateVMResources(period, quota, memory)
 }
 
-func calculateVMResources(period uint64, quota int64, memory int64) (numCPU, memSizeMB uint32) {
-	numCPU = vcutils.CalculateVCpusFromMilliCpus(vcutils.CalculateMilliCPUs(quota, period))
+func calculateVMResources(period uint64, quota int64, memory int64) (numCPU float32, memSizeMB uint32) {
+	numCPU = vcutils.CalculateCPUsF(quota, period)
 
 	if memory < 0 {
 		// While spec allows for a negative value to indicate unconstrained, we don't

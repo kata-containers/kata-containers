@@ -200,7 +200,7 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 	}
 
 	ss.Config.HypervisorConfig = persistapi.HypervisorConfig{
-		NumVCPUs:                sconfig.HypervisorConfig.NumVCPUs,
+		NumVCPUsF:               sconfig.HypervisorConfig.NumVCPUsF,
 		DefaultMaxVCPUs:         sconfig.HypervisorConfig.DefaultMaxVCPUs,
 		MemorySize:              sconfig.HypervisorConfig.MemorySize,
 		DefaultBridges:          sconfig.HypervisorConfig.DefaultBridges,
@@ -440,7 +440,7 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 
 	hconf := savedConf.HypervisorConfig
 	sconfig.HypervisorConfig = HypervisorConfig{
-		NumVCPUs:                hconf.NumVCPUs,
+		NumVCPUsF:               hconf.NumVCPUsF,
 		DefaultMaxVCPUs:         hconf.DefaultMaxVCPUs,
 		MemorySize:              hconf.MemorySize,
 		DefaultBridges:          hconf.DefaultBridges,

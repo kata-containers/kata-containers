@@ -520,7 +520,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 		clh.vmconfig.Memory.HotplugSize = func(i int64) *int64 { return &i }(int64((utils.MemUnit(hotplugSize) * utils.MiB).ToBytes()))
 	}
 	// Set initial amount of cpu's for the virtual machine
-	clh.vmconfig.Cpus = chclient.NewCpusConfig(int32(clh.config.NumVCPUs), int32(clh.config.DefaultMaxVCPUs))
+	clh.vmconfig.Cpus = chclient.NewCpusConfig(int32(clh.config.NumVCPUs()), int32(clh.config.DefaultMaxVCPUs))
 
 	params, err := GetKernelRootParams(hypervisorConfig.RootfsType, clh.config.ConfidentialGuest, false)
 	if err != nil {
@@ -855,7 +855,7 @@ func (clh *cloudHypervisor) hotplugAddBlockDevice(drive *config.BlockDrive) erro
 		clhDisk.Direct = &clh.config.BlockDeviceCacheDirect
 	}
 
-	queues := int32(clh.config.NumVCPUs)
+	queues := int32(clh.config.NumVCPUs())
 	queueSize := int32(1024)
 	clhDisk.NumQueues = &queues
 	clhDisk.QueueSize = &queueSize

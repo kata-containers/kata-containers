@@ -132,7 +132,7 @@ type HypervisorConfig struct {
 	SGXEPCSize int64
 
 	// NumVCPUs specifies default number of vCPUs for the VM.
-	NumVCPUs uint32
+	NumVCPUsF float32
 
 	//DefaultMaxVCPUs specifies the maximum number of vCPUs for the VM.
 	DefaultMaxVCPUs uint32

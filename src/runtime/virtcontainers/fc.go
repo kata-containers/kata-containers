@@ -692,7 +692,7 @@ func (fc *firecracker) fcInitConfiguration(ctx context.Context) error {
 	}
 
 	fc.fcSetVMBaseConfig(ctx, int64(fc.config.MemorySize),
-		int64(fc.config.NumVCPUs), false)
+		int64(fc.config.NumVCPUs()), false)
 
 	kernelPath, err := fc.config.KernelAssetPath()
 	if err != nil {
