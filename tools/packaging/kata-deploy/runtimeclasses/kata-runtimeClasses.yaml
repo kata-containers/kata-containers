@@ -15,6 +15,19 @@ scheduling:
 kind: RuntimeClass
 apiVersion: node.k8s.io/v1
 metadata:
+    name: kata-cloud-hypervisor
+handler: kata-cloud-hypervisor
+overhead:
+    podFixed:
+        memory: "130Mi"
+        cpu: "250m"
+scheduling:
+  nodeSelector:
+    katacontainers.io/kata-runtime: "true"
+---
+kind: RuntimeClass
+apiVersion: node.k8s.io/v1
+metadata:
     name: kata-dragonball
 handler: kata-dragonball
 overhead:
