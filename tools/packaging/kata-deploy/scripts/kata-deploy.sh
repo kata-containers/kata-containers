@@ -111,8 +111,39 @@ function install_artifacts() {
 	[ -d /opt/kata/runtime-rs/bin ] && \
 		chmod +x /opt/kata/runtime-rs/bin/*
 
-	config_path="/opt/kata/share/defaults/kata-containers/"
+	# Directory holding pristine configuration files for the current default golang runtime.
+	local golang_config_path="/opt/kata/share/defaults/kata-containers/"
+
+	# Directory holding pristine configuration files for the new rust runtime.
+	#
+	# These are put into a separate directory since:
+	#
+	# - In some cases, the rust runtime configuration syntax is
+	#   slightly different to the golang runtime configuration files
+	#   so some hypervisors need two different configuration files,
+	#   one for reach runtime type (for example Cloud Hypervisor which
+	#   uses 'clh' for the golang runtime and 'cloud-hypervisor' for
+	#   the rust runtime.
+	#
+	# - Some hypervisors only currently work with the golang runtime.
+	#
+	# - Some hypervisors only work with the rust runtime (dragonball).
+	#
+	# See: https://github.com/kata-containers/kata-containers/issues/6020
+	local rust_config_path="${golang_config_path}/runtime-rs"
+
+	local config_path
+
 	for shim in "${shims[@]}"; do
+		# Map the runtime shim name to the appropriate configuration
+		# file directory.
+		case "$shim" in
+			cloud-hypervisor | dragonball) config_path="$rust_config_path" ;;
+			*) config_path="$golang_config_path" ;;
+		esac
+
+		mkdir -p "$config_path"
+
 		local kata_config_file="${config_path}/configuration-${shim}.toml"
 		# Allow enabling debug for Kata Containers
 		if [[ "${DEBUG}" == "true" ]]; then
