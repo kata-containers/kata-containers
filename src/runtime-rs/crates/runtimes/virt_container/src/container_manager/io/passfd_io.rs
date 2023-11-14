@@ -98,6 +98,7 @@ impl PassfdIo {
         if let Some(stdout) = &self.stdout {
             let fout = OpenOptions::new()
                 .write(true)
+                .custom_flags(libc::O_NONBLOCK)
                 .open(&stdout)
                 .context("open stdout")?;
 
@@ -113,6 +114,7 @@ impl PassfdIo {
             if let Some(stderr) = &self.stderr {
                 let ferr = OpenOptions::new()
                     .write(true)
+                    .custom_flags(libc::O_NONBLOCK)
                     .open(&stderr)
                     .context("open stderr")?;
 
