@@ -155,4 +155,10 @@ impl QemuInner {
         info!(sl!(), "QemuInner::remove_device() {} ", device);
         todo!()
     }
+
+    pub(crate) async fn update_device(&mut self, device: DeviceType) -> Result<()> {
+        info!(sl!(), "QemuInner::update_device() {:?}", &device);
+
+        Ok(())
+    }
 }
