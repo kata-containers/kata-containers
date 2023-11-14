@@ -22,12 +22,10 @@ pub(crate) async fn start_listen(port: u32) -> Result<()> {
     let mut listener = VsockListener::bind(libc::VMADDR_CID_ANY, port)?;
     tokio::spawn(async move {
         loop {
-            if let Ok((stream, peer_addr)) = listener.accept().await {
-                if let Vsock(addr) = peer_addr {
-                    let port = addr.port();
-                    info!(sl(), "accept connection from peer port {}", port);
-                    HVSOCK_STREAMS.lock().await.insert(port, stream);
-                }
+            if let Ok((stream, Vsock(addr))) = listener.accept().await {
+                let port = addr.port();
+                info!(sl(), "accept connection from peer port {}", port);
+                HVSOCK_STREAMS.lock().await.insert(port, stream);
             }
         }
     });

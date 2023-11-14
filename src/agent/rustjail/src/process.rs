@@ -5,7 +5,7 @@
 
 use libc::pid_t;
 use std::fs::File;
-use std::os::unix::io::{AsRawFd, RawFd, IntoRawFd};
+use std::os::unix::io::{AsRawFd, IntoRawFd, RawFd};
 use tokio::sync::mpsc::Sender;
 use tokio_vsock::VsockStream;
 
@@ -195,7 +195,7 @@ impl Process {
                 p.parent_stdin = Some(pstdin);
                 p.stdin = Some(stdin);
 
-                if let Some(stdout) = p.proc_io.as_mut().map(|io| io.stdout.take()).flatten() {
+                if let Some(stdout) = p.proc_io.as_mut().and_then(|io| io.stdout.take()) {
                     let fd = stdout.into_raw_fd();
                     // The stdout/stderr of the process should be blocking, otherwise
                     // the process may encounter EAGAIN error when writing to stdout/stderr.
@@ -207,7 +207,7 @@ impl Process {
                     p.stdout = Some(stdout);
                 }
 
-                if let Some(stderr) = p.proc_io.as_mut().map(|io| io.stderr.take()).flatten() {
+                if let Some(stderr) = p.proc_io.as_mut().and_then(|io| io.stderr.take()) {
                     let fd = stderr.into_raw_fd();
                     set_blocking(fd)?;
                     p.stderr = Some(fd);
@@ -241,8 +241,8 @@ impl Process {
     }
 
     pub fn cleanup_process_stream(&mut self) {
-        if let Some(_) = self.proc_io.take() {
-            // taken
+        if let Some(proc_io) = self.proc_io.take() {
+            drop(proc_io);
 
             return;
         }
