@@ -210,20 +210,17 @@ impl Container {
                 .init_process
                 .passfd_io
                 .as_ref()
-                .map(|io| io.stdin_port)
-                .flatten(),
+                .and_then(|io| io.stdin_port),
             stdout_port: inner
                 .init_process
                 .passfd_io
                 .as_ref()
-                .map(|io| io.stdout_port)
-                .flatten(),
+                .and_then(|io| io.stdout_port),
             stderr_port: inner
                 .init_process
                 .passfd_io
                 .as_ref()
-                .map(|io| io.stderr_port)
-                .flatten(),
+                .and_then(|io| io.stderr_port),
             ..Default::default()
         };
 

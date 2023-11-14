@@ -85,7 +85,7 @@ impl PassfdIo {
                 .read(true)
                 .write(true)
                 .custom_flags(libc::O_NONBLOCK)
-                .open(&stdin)
+                .open(stdin)
                 .context("open stdin")?;
 
             let hostport = passfd_connect(uds_path, passfd_port, fin.into())
@@ -99,7 +99,7 @@ impl PassfdIo {
             let fout = OpenOptions::new()
                 .write(true)
                 .custom_flags(libc::O_NONBLOCK)
-                .open(&stdout)
+                .open(stdout)
                 .context("open stdout")?;
 
             let hostport = passfd_connect(uds_path, passfd_port, fout.into())
@@ -115,7 +115,7 @@ impl PassfdIo {
                 let ferr = OpenOptions::new()
                     .write(true)
                     .custom_flags(libc::O_NONBLOCK)
-                    .open(&stderr)
+                    .open(stderr)
                     .context("open stderr")?;
 
                 let hostport = passfd_connect(uds_path, passfd_port, ferr.into())

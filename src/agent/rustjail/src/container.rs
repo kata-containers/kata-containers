@@ -1015,7 +1015,7 @@ impl BaseContainer for LinuxContainer {
                                             break;
                                         }
                                         Ok(n) => {
-                                            if let Err(_) = term_master.write_all(&buf[..n]).await {
+                                            if term_master.write_all(&buf[..n]).await.is_err() {
                                                 break;
                                             }
                                         }
@@ -1035,11 +1035,12 @@ impl BaseContainer for LinuxContainer {
                     });
                 }
 
+                // Copy from term_master to stdout
                 if let Some(mut stdout_stream) = proc_io.stdout.take() {
                     let wgw_output = proc_io.wg_output.worker();
                     let mut term_master = unsafe { File::from_raw_fd(pseudo.master) };
                     let logger = logger.clone();
-                    let term_closer = term_closer.clone();
+                    let term_closer = term_closer;
                     tokio::spawn(async move {
                         let res = tokio::io::copy(&mut term_master, &mut stdout_stream).await;
                         debug!(logger, "copy from term_master to stdout end: {:?}", res);
@@ -1050,6 +1051,7 @@ impl BaseContainer for LinuxContainer {
                 }
             }
         } else {
+            // not using a terminal
             let stdin = p.stdin.unwrap();
             let stdout = p.stdout.unwrap();
             let stderr = p.stderr.unwrap();
@@ -1058,8 +1060,11 @@ impl BaseContainer for LinuxContainer {
             child_stderr = unsafe { std::process::Stdio::from_raw_fd(stderr) };
 
             if let Some(proc_io) = &mut p.proc_io {
-                // Copy from stdin to parent_stdin
+                // Here we copy from vsock stdin stream to parent_stdin manually.
+                // This is because we need to close the stdin fifo when the stdin stream
+                // is drained.
                 if let Some(mut stdin_stream) = proc_io.stdin.take() {
+                    info!(logger, "copy from stdin to parent_stdin");
                     let mut parent_stdin = unsafe { File::from_raw_fd(p.parent_stdin.unwrap()) };
                     let mut close_stdin_rx = proc_io.close_stdin_rx.clone();
                     let wgw_input = proc_io.wg_input.worker();
@@ -1073,11 +1078,11 @@ impl BaseContainer for LinuxContainer {
                                 res = stdin_stream.read(&mut buf) => {
                                     match res {
                                         Err(_) | Ok(0) => {
-                                            debug!(logger, "copy from stdin to term_master end: {:?}", res);
+                                            info!(logger, "copy from stdin to term_master end: {:?}", res);
                                             break;
                                         }
                                         Ok(n) => {
-                                            if let Err(_) = parent_stdin.write_all(&buf[..n]).await {
+                                            if parent_stdin.write_all(&buf[..n]).await.is_err() {
                                                 break;
                                             }
                                         }
@@ -1086,7 +1091,7 @@ impl BaseContainer for LinuxContainer {
                                 // As the stdin fifo is opened in RW mode in the shim, which will never
                                 // read EOF, we close the stdin fifo here when explicit requested.
                                 _ = close_stdin_rx.changed() => {
-                                    debug!(logger, "copy ends as requested");
+                                    info!(logger, "copy ends as requested");
                                     break
                                 }
                             }
