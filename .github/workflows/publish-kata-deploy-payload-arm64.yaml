@@ -65,7 +65,8 @@ jobs:
       - name: build-and-push-kata-payload
         id: build-and-push-kata-payload
         run: |
-          ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
-          $(pwd)/kata-static.tar.xz \
-          ${{ inputs.registry }}/${{ inputs.repo }} ${{ inputs.tag }}
+          export KATA_TARBALL="$(pwd)/kata-static.tar.xz"
+          export KATA_PAYLOAD="${{ inputs.registry }}/${{ inputs.repo }}"
+          export KATA_PAYLOAD_TAG="${{ inputs.tag }}"
 
+          make build-and-push-kata-payload

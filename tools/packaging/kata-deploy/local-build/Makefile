@@ -9,6 +9,13 @@ MK_DIR := $(dir $(MK_PATH))
 # Verbose build
 V := 1
 
+# Path to the artifacts tarball
+KATA_TARBALL ?= $(abspath $(MK_DIR)/../../../../kata-static.tar.xz)
+# Payload container image
+KATA_PAYLOAD ?= "quay.io/kata-containers/kata-deploy"
+# An optional payload container image tag
+KATA_PAYLOAD_TAG ?=
+
 define BUILD
 	$(MK_DIR)/kata-deploy-binaries-in-docker.sh $(if $(V),,-s) --build=$1
 endef
@@ -149,4 +156,8 @@ merge-builds:
 	$(MK_DIR)/kata-deploy-merge-builds.sh build "$(MK_DIR)/../../../../versions.yaml"
 
 install-tarball:
-	tar -xf ./kata-static.tar.xz -C /
+	tar -xf "$(KATA_TARBALL)" -C /
+
+build-and-push-kata-payload:
+	$(MK_DIR)kata-deploy-build-and-upload-payload.sh \
+		"$(KATA_TARBALL)" "$(KATA_PAYLOAD)" "$(KATA_PAYLOAD_TAG)"
