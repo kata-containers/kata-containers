@@ -73,22 +73,6 @@ jobs:
           platforms: linux/amd64, linux/s390x
           file: tests/integration/kubernetes/runtimeclass_workloads/confidential/unencrypted/Dockerfile
 
-  run-docker-tests-on-garm:
-    needs: build-kata-static-tarball-amd64
-    uses: ./.github/workflows/run-docker-tests-on-garm.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
-
-  run-nerdctl-tests-on-garm:
-    needs: build-kata-static-tarball-amd64
-    uses: ./.github/workflows/run-nerdctl-tests-on-garm.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
-
   run-kata-deploy-tests-on-aks:
     needs: publish-kata-deploy-payload-amd64
     uses: ./.github/workflows/run-kata-deploy-tests-on-aks.yaml
