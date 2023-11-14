@@ -750,7 +750,7 @@ endef
 # Returns the name of the kernel file to use based on the provided KERNELTYPE.
 # $1 : KERNELTYPE (compressed or uncompressed)
 define MAKE_KERNEL_NAME
-$(if $(findstring uncompressed,$1),vmlinux.container,vmlinuz.container)
+$(if $(findstring uncompressed,$1),vmlinux-arch-experimental.container,vmlinuz-arch-experimental.container)
 endef
 
 define MAKE_KERNEL_VIRTIOFS_NAME

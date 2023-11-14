@@ -10,7 +10,7 @@ KERNELPARAMS :=
 MACHINEACCELERATORS :=
 CPUFEATURES := pmu=off
 
-QEMUCMD := qemu-system-aarch64
+QEMUCMD := qemu-system-aarch64-arm-experimental
 
 # Firecracker binary name
 FCCMD := firecracker
