@@ -135,7 +135,11 @@ get_tee_kernel() {
 	mkdir -p ${kernel_path}
 
 	if [ -z "${kernel_url}" ]; then
-		kernel_url=$(get_from_kata_deps "assets.kernel.${tee}.url")
+		if [[ "${conf_guest}" == "tdx" ]]; then
+			kernel_url=$(get_from_kata_deps "assets.kernel-tdx-experimental.url")
+		else
+			kernel_url=$(get_from_kata_deps "assets.kernel.${tee}.url")
+		fi
 	fi
 
 	local kernel_tarball="${version}.tar.gz"
@@ -631,8 +635,12 @@ main() {
 			kernel_version=$(get_from_kata_deps "assets.kernel-dragonball-experimental.version")
 		elif [[ "${conf_guest}" != "" ]]; then
 			#If specifying a tag for kernel_version, must be formatted version-like to avoid unintended parsing issues
-			kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.version" 2>/dev/null || true)
-			[ -n "${kernel_version}" ] || kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.tag")
+			if [[ "${conf_guest}" == "tdx" ]]; then
+				kernel_version=$(get_from_kata_deps "assets.kernel-tdx-experimental.version" 2>/dev/null || true)
+			else
+				kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.version" 2>/dev/null || true)
+				[ -n "${kernel_version}" ] || kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.tag")
+			fi
 		else
 			kernel_version=$(get_from_kata_deps "assets.kernel.version")
 		fi

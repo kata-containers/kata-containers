@@ -37,10 +37,10 @@ jobs:
           - kernel
           - kernel-sev
           - kernel-dragonball-experimental
-          - kernel-tdx
+          - kernel-tdx-experimental
           - kernel-nvidia-gpu
           - kernel-nvidia-gpu-snp
-          - kernel-nvidia-gpu-tdx
+          - kernel-nvidia-gpu-tdx-experimental
           - log-parser-rs
           - nydus
           - ovmf
