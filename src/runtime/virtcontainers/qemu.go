@@ -315,7 +315,7 @@ func (q *qemu) setup(ctx context.Context, id string, hypervisorConfig *Hyperviso
 }
 
 func (q *qemu) cpuTopology() govmmQemu.SMP {
-	return q.arch.cpuTopology(q.config.NumVCPUs, q.config.DefaultMaxVCPUs)
+	return q.arch.cpuTopology(q.config.NumVCPUs(), q.config.DefaultMaxVCPUs)
 }
 
 func (q *qemu) memoryTopology() (govmmQemu.Memory, error) {
@@ -630,7 +630,7 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 			// we must ensure we use something like:
 			// `...,sockets=1,cores=numvcpus,threads=1,...`
 			smp.Sockets = 1
-			smp.Cores = q.config.NumVCPUs
+			smp.Cores = q.config.NumVCPUs()
 			smp.Threads = 1
 		}
 	}
@@ -1590,7 +1590,7 @@ func (q *qemu) hotplugAddBlockDevice(ctx context.Context, drive *config.BlockDri
 			return err
 		}
 
-		queues := int(q.config.NumVCPUs)
+		queues := int(q.config.NumVCPUs())
 
 		if err = q.qmpMonitorCh.qmp.ExecutePCIDeviceAdd(q.qmpMonitorCh.ctx, drive.ID, devID, driver, addr, bridge.ID, romFile, queues, true, defaultDisableModern); err != nil {
 			return err
@@ -1922,7 +1922,7 @@ func (q *qemu) hotplugNetDevice(ctx context.Context, endpoint Endpoint, op Opera
 			addr := "00"
 			bridgeID := fmt.Sprintf("%s%d", config.PCIeRootPortPrefix, len(config.PCIeDevices[config.RootPort]))
 			config.PCIeDevices[config.RootPort][devID] = true
-			return q.qmpMonitorCh.qmp.ExecuteNetPCIDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), addr, bridgeID, romFile, int(q.config.NumVCPUs), defaultDisableModern)
+			return q.qmpMonitorCh.qmp.ExecuteNetPCIDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), addr, bridgeID, romFile, int(q.config.NumVCPUs()), defaultDisableModern)
 		}
 
 		addr, bridge, err := q.arch.addDeviceToBridge(ctx, tap.ID, types.PCI)
@@ -1954,9 +1954,9 @@ func (q *qemu) hotplugNetDevice(ctx context.Context, endpoint Endpoint, op Opera
 		}
 		if machine.Type == QemuCCWVirtio {
 			devNoHotplug := fmt.Sprintf("fe.%x.%x", bridge.Addr, addr)
-			return q.qmpMonitorCh.qmp.ExecuteNetCCWDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), devNoHotplug, int(q.config.NumVCPUs))
+			return q.qmpMonitorCh.qmp.ExecuteNetCCWDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), devNoHotplug, int(q.config.NumVCPUs()))
 		}
-		return q.qmpMonitorCh.qmp.ExecuteNetPCIDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), addr, bridge.ID, romFile, int(q.config.NumVCPUs), defaultDisableModern)
+		return q.qmpMonitorCh.qmp.ExecuteNetPCIDeviceAdd(q.qmpMonitorCh.ctx, tap.Name, devID, endpoint.HardwareAddr(), addr, bridge.ID, romFile, int(q.config.NumVCPUs()), defaultDisableModern)
 	}
 
 	if err := q.arch.removeDeviceFromBridge(tap.ID); err != nil {
@@ -2687,9 +2687,9 @@ func calcHotplugMemMiBSize(mem uint32, memorySectionSizeMB uint32) (uint32, erro
 }
 
 func (q *qemu) ResizeVCPUs(ctx context.Context, reqVCPUs uint32) (currentVCPUs uint32, newVCPUs uint32, err error) {
-
-	currentVCPUs = q.config.NumVCPUs + uint32(len(q.state.HotpluggedVCPUs))
+	currentVCPUs = q.config.NumVCPUs() + uint32(len(q.state.HotpluggedVCPUs))
 	newVCPUs = currentVCPUs
+
 	switch {
 	case currentVCPUs < reqVCPUs:
 		//hotplug
@@ -2716,6 +2716,7 @@ func (q *qemu) ResizeVCPUs(ctx context.Context, reqVCPUs uint32) (currentVCPUs u
 		}
 		newVCPUs -= vCPUsRemoved
 	}
+
 	return currentVCPUs, newVCPUs, nil
 }
 

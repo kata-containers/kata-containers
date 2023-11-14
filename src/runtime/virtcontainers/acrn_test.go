@@ -25,7 +25,7 @@ func newAcrnConfig() HypervisorConfig {
 		ImagePath:         testAcrnImagePath,
 		HypervisorPath:    testAcrnPath,
 		HypervisorCtlPath: testAcrnCtlPath,
-		NumVCPUs:          defaultVCPUs,
+		NumVCPUsF:         defaultVCPUs,
 		MemorySize:        defaultMemSzMiB,
 		BlockDeviceDriver: config.VirtioBlock,
 		DefaultBridges:    defaultBridges,

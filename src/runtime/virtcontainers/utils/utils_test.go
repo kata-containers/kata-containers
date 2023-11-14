@@ -147,26 +147,23 @@ func TestWriteToFile(t *testing.T) {
 	assert.True(reflect.DeepEqual(testData, data))
 }
 
-func TestCalculateMilliCPUs(t *testing.T) {
+func TestCalculateCPUsF(t *testing.T) {
 	assert := assert.New(t)
 
-	n := CalculateMilliCPUs(1, 1)
-	expected := uint32(1000)
+	n := CalculateCPUsF(1, 1)
+	expected := float32(1)
 	assert.Equal(n, expected)
 
-	n = CalculateMilliCPUs(1, 0)
-	expected = uint32(0)
+	n = CalculateCPUsF(1, 0)
+	expected = float32(0)
 	assert.Equal(n, expected)
 
-	n = CalculateMilliCPUs(-1, 1)
+	n = CalculateCPUsF(-1, 1)
+	expected = float32(0)
 	assert.Equal(n, expected)
-}
 
-func TestCaluclateVCpusFromMilliCpus(t *testing.T) {
-	assert := assert.New(t)
-
-	n := CalculateVCpusFromMilliCpus(1)
-	expected := uint32(1)
+	n = CalculateCPUsF(500, 1000)
+	expected = float32(0.5)
 	assert.Equal(n, expected)
 }
 

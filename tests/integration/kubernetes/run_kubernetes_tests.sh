@@ -60,6 +60,7 @@ else
 	K8S_TEST_NORMAL_HOST_UNION=( \
 		"k8s-number-cpus.bats" \
 		"k8s-parallel.bats" \
+		"k8s-sandbox-vcpus-allocation.bats" \
 		"k8s-scale-nginx.bats" \
 	)
 
