@@ -189,7 +189,7 @@ KNOWN_HYPERVISORS =
 # List of hypervisors known for the current architecture
 KNOWN_HYPERVISORS =
 
-CONFDIR := $(DEFAULTSDIR)/$(PROJECT_DIR)
+CONFDIR := $(DEFAULTSDIR)/$(PROJECT_DIR)/runtime-rs
 SYSCONFDIR := $(SYSCONFDIR)/$(PROJECT_DIR)
 ##VAR CONFIG_PATH=<path> Main configuration file location for stateless systems
 CONFIG_PATH := $(abspath $(CONFDIR)/$(CONFIG_FILE))
