@@ -134,7 +134,7 @@ function get_kata_containers_config_path() {
 	# Map the runtime shim name to the appropriate configuration
 	# file directory.
 	case "$shim" in
-		dragonball) config_path="$rust_config_path" ;;
+		cloud-hypervisor | dragonball) config_path="$rust_config_path" ;;
 		*) config_path="$golang_config_path" ;;
 	esac
 
@@ -247,7 +247,7 @@ function configure_different_shims_base() {
 		# Map the runtime shim name to the appropriate
 		# containerd-shim-kata-v2 binary
 		case "$shim" in
-			dragonball)
+			cloud-hypervisor | dragonball)
 				ln -sf /opt/kata/runtime-rs/bin/containerd-shim-kata-v2 "${shim_file}" ;;
 			*)
 				ln -sf /opt/kata/bin/containerd-shim-kata-v2 "${shim_file}" ;;
