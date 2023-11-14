@@ -95,9 +95,9 @@ options:
 	kernel-experimental
 	kernel-nvidia-gpu
 	kernel-nvidia-gpu-snp
-	kernel-nvidia-gpu-tdx-experimental
+	kernel-nvidia-gpu-tdx
 	kernel-sev-tarball
-	kernel-tdx-experimental
+	kernel-tdx
 	log-parser-rs
 	nydus
 	ovmf
@@ -360,24 +360,24 @@ install_kernel_nvidia_gpu_snp() {
 }
 
 #Install GPU and TDX experimental enabled kernel asset
-install_kernel_nvidia_gpu_tdx_experimental() {
-	local kernel_url="$(get_from_kata_deps assets.kernel-tdx-experimental.url)"
+install_kernel_nvidia_gpu_tdx() {
+	local kernel_url="$(get_from_kata_deps assets.kernel.tdx.url)"
 
 	install_kernel_helper \
-		"assets.kernel-tdx-experimental.version" \
-		"kernel-nvidia-gpu-tdx-experimental" \
+		"assets.kernel.tdx.version" \
+		"kernel-nvidia-gpu-tdx" \
 		"-x tdx -g nvidia -u ${kernel_url} -H deb"
 }
 
 #Install experimental TDX kernel asset
-install_kernel_tdx_experimental() {
-	local kernel_url="$(get_from_kata_deps assets.kernel-tdx-experimental.url)"
+install_kernel_tdx() {
+	local kernel_url="$(get_from_kata_deps assets.kernel.tdx.url)"
 
 	export MEASURED_ROOTFS=yes
 
 	install_kernel_helper \
-		"assets.kernel-tdx-experimental.version" \
-		"kernel-tdx-experimental" \
+		"assets.kernel.tdx.version" \
+		"kernel-tdx" \
 		"-x tdx -u ${kernel_url}"
 }
 
@@ -796,9 +796,9 @@ handle_build() {
 
 	kernel-nvidia-gpu-snp) install_kernel_nvidia_gpu_snp;;
 
-	kernel-nvidia-gpu-tdx-experimental) install_kernel_nvidia_gpu_tdx_experimental;;
+	kernel-nvidia-gpu-tdx) install_kernel_nvidia_gpu_tdx;;
 
-	kernel-tdx-experimental) install_kernel_tdx_experimental ;;
+	kernel-tdx) install_kernel_tdx ;;
 
 	kernel-sev) install_kernel_sev ;;
 

@@ -26,9 +26,9 @@ all: serial-targets \
 	kernel-dragonball-experimental-tarball \
 	kernel-nvidia-gpu-tarball \
 	kernel-nvidia-gpu-snp-tarball \
-	kernel-nvidia-gpu-tdx-experimental-tarball \
+	kernel-nvidia-gpu-tdx-tarball \
 	kernel-tarball \
-	kernel-tdx-experimental-tarball \
+	kernel-tdx-tarball \
 	nydus-tarball \
 	ovmf-sev-tarball \
 	ovmf-tarball \
@@ -83,13 +83,13 @@ kernel-nvidia-gpu-tarball:
 kernel-nvidia-gpu-snp-tarball:
 	${MAKE} $@-build
 
-kernel-nvidia-gpu-tdx-experimental-tarball:
+kernel-nvidia-gpu-tdx-tarball:
 	${MAKE} $@-build	
 
 kernel-tarball:
 	${MAKE} $@-build
 
-kernel-tdx-experimental-tarball:
+kernel-tdx-tarball:
 	${MAKE} $@-build
 
 kernel-sev-tarball:
@@ -122,7 +122,7 @@ stratovirt-tarball:
 rootfs-image-tarball:
 	${MAKE} $@-build
 
-rootfs-image-tdx-tarball: kernel-tdx-experimental-tarball
+rootfs-image-tdx-tarball: kernel-tdx-tarball
 	${MAKE} $@-build
 
 rootfs-initrd-mariner-tarball:

@@ -183,6 +183,10 @@ assets:
       description: "Linux kernel that supports AMD SEV-SNP for VMs"
       url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
       version: "v5.19.2"
+    tdx:
+      description: "Linux kernel with TDX support for VMs"
+      url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
+      version: "v6.6.1"
 
   kernel-arm-experimental:
     description: "Linux kernel with cpu/mem hotplug support on arm64"
