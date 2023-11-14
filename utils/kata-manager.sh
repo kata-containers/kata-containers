@@ -698,7 +698,7 @@ handle_kata()
 	local enable_debug="${3:-}"
 	[ -z "$enable_debug" ] && die "no enable debug value"
 
-	install_kata "$version" "$tarball" "$enable_debug"
+	install_kata "$version" "$tarball"
 
 	configure_kata "$enable_debug"
 
