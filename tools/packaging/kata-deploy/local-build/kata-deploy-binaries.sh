@@ -366,7 +366,7 @@ install_kernel_nvidia_gpu_tdx_experimental() {
 	install_kernel_helper \
 		"assets.kernel-tdx-experimental.version" \
 		"kernel-nvidia-gpu-tdx-experimental" \
-		"-x tdx -g nvidia -u ${kernel_url} -H deb"
+		"-x tdx -g nvidia -u ${kernel_url}"
 }
 
 #Install experimental TDX kernel asset
