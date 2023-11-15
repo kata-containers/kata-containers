@@ -35,7 +35,6 @@ impl BlockVolume {
         d: &RwLock<DeviceManager>,
         m: &oci::Mount,
         read_only: bool,
-        cid: &str,
         sid: &str,
     ) -> Result<Self> {
         let mnt_src: &str = &m.source;
@@ -97,21 +96,14 @@ impl BlockVolume {
             .await
             .context("do handle device failed.")?;
 
-        // generate host guest shared path
-        let guest_path = generate_shared_path(m.destination.clone(), read_only, cid, sid)
-            .await
-            .context("generate host-guest shared path failed")?;
-
         // storage
         let mut storage = agent::Storage {
-            mount_point: guest_path.clone(),
+            options: if read_only {
+                vec!["ro".to_string()]
+            } else {
+                Vec::new()
+            },
             ..Default::default()
-        };
-
-        storage.options = if read_only {
-            vec!["ro".to_string()]
-        } else {
-            Vec::new()
         };
 
         // As the true Block Device wrapped in DeviceType, we need to
@@ -126,6 +118,12 @@ impl BlockVolume {
             storage.source = device.config.virt_path;
             device_id = device.device_id;
         }
+
+        // generate host guest shared path
+        let guest_path = generate_shared_path(m.destination.clone(), read_only, &device_id, sid)
+            .await
+            .context("generate host-guest shared path failed")?;
+        storage.mount_point = guest_path.clone();
 
         // In some case, dest is device /dev/xxx
         if m.destination.clone().starts_with("/dev") {
