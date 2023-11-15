@@ -104,6 +104,11 @@ assets:
       url: "https://github.com/qemu/qemu"
       version: "7a800cf9496fddddf71b21a00991e0ec757a170a"
 
+    qemu-arm-experimental:
+      description: "QEMU with vcpu hotplug support on Arm64"
+      url: "https://github.com/jongwu/qemu"
+      tag: "vcpu_hotplug"
+
     qemu-tdx-experimental:
       # yamllint disable-line rule:line-length
       description: "QEMU with TDX support - based on https://github.com/intel/tdx-tools/releases/tag/2023ww15"
@@ -186,8 +191,8 @@ assets:
 
   kernel-arm-experimental:
     description: "Linux kernel with cpu/mem hotplug support on arm64"
-    url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
-    version: "v5.15.138"
+    url: "https://github.com/jongwu/linux"
+    branch: "vcpu_hotplug"
 
   kernel-dragonball-experimental:
     description: "Linux kernel with Dragonball VMM optimizations like upcall"
