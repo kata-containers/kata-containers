@@ -52,4 +52,4 @@ virtio-fs-pro = ["virtio-fs", "nydus-storage/backend-registry", "nydus-storage/b
 virtio-mem = ["virtio-mmio"]
 virtio-balloon = ["virtio-mmio"]
 vhost = ["virtio-mmio", "vhost-rs/vhost-user-master", "vhost-rs/vhost-kern"]
-vhost-net = ["virtio-net", "vhost", "vhost-rs/vhost-net"]
+vhost-net = ["vhost", "vhost-rs/vhost-net"]

@@ -31,14 +31,14 @@ use virtio_bindings::bindings::virtio_ring::*;
 use virtio_queue::{Descriptor, DescriptorChain, QueueT};
 use vm_memory::{Address, Bytes, GuestMemory, GuestMemoryRegion, MemoryRegionAddress};
 
-use crate::net::{vnet_hdr_len, NetDeviceMetrics};
 #[cfg(test)]
 use crate::vhost::vhost_kern::test_utils::{
     MockVhostBackend as VhostBackend, MockVhostNet as VhostNet,
 };
 use crate::{
-    ActivateError, ConfigResult, DbsGuestAddressSpace, Error as VirtioError,
-    Result as VirtioResult, TapError, VirtioDevice, VirtioDeviceConfig, VirtioDeviceInfo, TYPE_NET,
+    vnet_hdr_len, ActivateError, ConfigResult, DbsGuestAddressSpace, Error as VirtioError,
+    NetDeviceMetrics, Result as VirtioResult, TapError, VirtioDevice, VirtioDeviceConfig,
+    VirtioDeviceInfo, TYPE_NET,
 };
 
 const NET_DRIVER_NAME: &str = "vhost-net";
