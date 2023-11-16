@@ -93,6 +93,50 @@ jobs:
       - name: Run containerd-stability tests
         run: bash tests/stability/gha-run.sh run
 
+  run-cloud-hypervisor-runtime-rs:
+    strategy:
+      fail-fast: false
+      matrix:
+        containerd_version: ['lts']
+        vmm: ['clh']
+    runs-on: garm-ubuntu-2204-smaller
+    env:
+      CONTAINERD_VERSION: ${{ matrix.containerd_version }}
+      GOPATH: ${{ github.workspace }}
+      KATA_HYPERVISOR: ${{ matrix.vmm }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: Install dependencies
+        run: bash tests/cloud-hypervisor-rs/gha-run.sh install-dependencies
+
+      - name: get-kata-tarball
+        uses: actions/download-artifact@v3
+        with:
+          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
+          path: kata-artifacts
+
+      - name: Install kata
+        run: bash tests/cloud-hypervisor-rs/gha-run.sh install-kata kata-artifacts
+
+      - name: Install cloud hypervisor runtime rs
+        run: bash tests/cloud-hypervisor-rs/gha-run.sh install-cloud-hypervisor-rs
+
+      - name: Setup cloud hypervisor runtime rs
+        run: bash tests/cloud-hypervisor-rs/gha-run.sh setup-cloud-hypervisor-rs
+
+      - name: Run cloud hypervisor runtime rs tests
+        run: bash tests/integration/cloud-hypervisor-rs/gha-run.sh run
+
   run-nydus:
     strategy:
       # We can set this to true whenever we're 100% sure that
