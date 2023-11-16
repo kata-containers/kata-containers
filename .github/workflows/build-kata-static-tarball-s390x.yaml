@@ -80,7 +80,7 @@ jobs:
         with:
           name: kata-artifacts-s390x${{ inputs.tarball-suffix }}
           path: kata-build/kata-static-${{ matrix.asset }}.tar.xz
-          retention-days: 1
+          retention-days: 15
           if-no-files-found: error
 
   create-kata-tarball:
@@ -113,5 +113,5 @@ jobs:
         with:
           name: kata-static-tarball-s390x${{ inputs.tarball-suffix }}
           path: kata-static.tar.xz
-          retention-days: 1
+          retention-days: 15
           if-no-files-found: error
