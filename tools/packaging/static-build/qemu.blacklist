@@ -29,7 +29,6 @@ qemu_black_list=(
 */share/*/qemu_vga.ndrv
 */share/*/sgabios.bin
 */share/*/skiboot.lid
-*/share/*/slof.bin
 */share/*/trace-events-all
 */share/*/u-boot*
 */share/*/vgabios*

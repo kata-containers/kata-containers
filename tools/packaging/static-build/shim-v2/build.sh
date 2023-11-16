@@ -74,7 +74,12 @@ sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 for vmm in ${VMM_CONFIGS}; do
 	config_file="${DESTDIR}/${PREFIX}/share/defaults/kata-containers/configuration-${vmm}.toml"
 	if [ -f ${config_file} ]; then
-		sudo sed -i -e '/^initrd =/d' ${config_file}
+		if [ ${ARCH} == "ppc64le" ]; then
+ 			sudo sed -i -e '/^image =/d' ${config_file}
+ 			sudo sed -i 's/^# \(initrd =.*\)/\1/g' ${config_file}
+ 		else
+ 			sudo sed -i -e '/^initrd =/d' ${config_file}
+ 		fi
 	fi
 done
 
