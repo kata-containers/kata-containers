@@ -25,5 +25,5 @@ RUN apk --no-cache add \
 ARG TARGETARCH
 
 RUN if [ "${TARGETARCH}" = "arm64" ]; then \
-        ln -s /usr/bin/$(uname -m)-alpine-linux-musl-gcc /usr/bin/$(uname -m)-linux-musl-gcc; fi 
+        ln -s "/usr/bin/$(uname -m)-alpine-linux-musl-gcc" "/usr/bin/$(uname -m)-linux-musl-gcc"; fi
 
