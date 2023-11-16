@@ -18,20 +18,15 @@ function install_dependencies() {
 
 	declare -a system_deps=(
 		jq
+		curl
+		gnupg
 	)
 
 	sudo apt-get update
 	sudo apt-get -y install "${system_deps[@]}"
 
 	ensure_yq
-
-	declare -a github_deps
-	github_deps[0]="cri_containerd:$(get_from_kata_deps "externals.containerd.${CONTAINERD_VERSION}")"
-
-	for github_dep in "${github_deps[@]}"; do
-		IFS=":" read -r -a dep <<< "${github_dep}"
-		install_${dep[0]} "${dep[1]}"
-	done
+	install_docker
 }
 
 function run() {
@@ -39,6 +34,9 @@ function run() {
 
 	export ITERATIONS=2 MAX_CONTAINERS=20
 	bash "${stability_dir}/soak_parallel_rm.sh"
+
+	info "Running stressng scability test using ${KATA_HYPERVISOR} hypervisor"
+	bash "${stability_dir}/stressng.sh"
 
 	info "Running scability test using ${KATA_HYPERVISOR} hypervisor"
 	bash "${stability_dir}/scability_test.sh" 15 60

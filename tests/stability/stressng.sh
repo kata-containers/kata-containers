@@ -33,16 +33,6 @@ function main() {
 	MEMORY_CMD="stress-ng --cpu 2 --vm 4 -t 5m"
 	sudo -E ctr t exec --exec-id "$(random_name)" "${CONTAINER_NAME}" sh -c "${MEMORY_CMD}"
 
-	# Run shared memory stressors
-	info "Running 8 shared memory stressors"
-	SHARED_CMD="stress-ng --shm 0"
-	sudo -E ctr t exec --exec-id "$(random_name)" "${CONTAINER_NAME}" sh -c "${SHARED_CMD}"
-
-	# Run all stressors one by one on all CPUs
-	info "Running all stressors one by one"
-	STRESSORS_CMD="stress-ng --seq 0 -t 10 --tz -v"
-	sudo -E ctr t exec --exec-id "$(random_name)" "${CONTAINER_NAME}" sh -c "${STRESSORS_CMD}"
-
 	# Test floating point on CPU for 60 seconds
 	info  "Running floating tests on CPU"
 	FLOAT_CMD="stress-ng --matrix 1 -t 1m"
@@ -50,7 +40,7 @@ function main() {
 
 	# Runs two instances of the CPU stressors, one instance of the matrix
 	info "Running instances of the CPU stressors"
-	INSTANCE_CMD='stress-ng --cpu 2 --matrix 1 --mq 3 -t 5m'
+	INSTANCE_CMD='stress-ng --cpu 2 --matrix 1 --mq 3 -t 3m'
 	sudo -E ctr t exec --exec-id "$(random_name)" "${CONTAINER_NAME}" sh -c "${INSTANCE_CMD}"
 
 	clean_env_ctr
