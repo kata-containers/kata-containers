@@ -42,6 +42,7 @@ use vm_memory::{
 };
 
 use crate::device::{VirtioDevice, VirtioDeviceConfig, VirtioDeviceInfo, VirtioQueueConfig};
+use crate::mmio::MMIODeviceMetrics;
 use crate::{
     ActivateResult, ConfigError, ConfigResult, DbsGuestAddressSpace, Error, Result, TYPE_BALLOON,
 };
@@ -107,6 +108,8 @@ pub struct BalloonDeviceMetrics {
     pub reporting_count: SharedIncMetric,
     /// Number of times when handling events on a balloon device failed.
     pub event_fails: SharedIncMetric,
+    /// mmio transport metrics.
+    pub mmio: Arc<MMIODeviceMetrics>,
 }
 
 pub type BalloonResult<T> = std::result::Result<T, BalloonError>;
@@ -740,6 +743,10 @@ where
 
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
+    }
+
+    fn get_mmio_metrics(&self) -> Option<Arc<MMIODeviceMetrics>> {
+        Some(self.metrics.mmio.clone())
     }
 }
 

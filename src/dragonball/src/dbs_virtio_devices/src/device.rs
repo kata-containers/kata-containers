@@ -31,6 +31,7 @@ use vm_memory::{
 };
 use vmm_sys_util::eventfd::{EventFd, EFD_NONBLOCK};
 
+use crate::mmio::MMIODeviceMetrics;
 use crate::{ActivateError, ActivateResult, ConfigError, ConfigResult, Error, Result};
 
 /// Virtio queue configuration information.
@@ -397,6 +398,11 @@ pub trait VirtioDevice<AS: GuestAddressSpace, Q: QueueT, R: GuestMemoryRegion>: 
     /// Used to downcast to the specific type.
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
+
+    /// Read the metrics of the device.
+    fn get_mmio_metrics(&self) -> Option<Arc<MMIODeviceMetrics>> {
+        None
+    }
 }
 
 /// A helper struct to support basic operations for emulated VirtioDevice backend devices.

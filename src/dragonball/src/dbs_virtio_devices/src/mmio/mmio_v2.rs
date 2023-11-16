@@ -9,8 +9,10 @@ use byteorder::{ByteOrder, LittleEndian};
 use dbs_device::resources::{DeviceResources, Resource};
 use dbs_device::{DeviceIo, IoAddress};
 use dbs_interrupt::{InterruptStatusRegister32, KvmIrqManager};
+use dbs_utils::metric::{IncMetric, SharedIncMetric, SharedStoreMetric, StoreMetric};
 use kvm_ioctls::VmFd;
 use log::{debug, info, warn};
+use serde::Serialize;
 use virtio_queue::QueueT;
 use vm_memory::{GuestAddressSpace, GuestMemoryRegion};
 
@@ -25,6 +27,27 @@ const DEVICE_STATUS_DRIVER: u32 = DEVICE_STATUS_ACKNOWLEDE | DEVICE_DRIVER;
 const DEVICE_STATUS_FEATURE_OK: u32 = DEVICE_STATUS_DRIVER | DEVICE_FEATURES_OK;
 const DEVICE_STATUS_DRIVER_OK: u32 = DEVICE_STATUS_FEATURE_OK | DEVICE_DRIVER_OK;
 
+/// mmio transport associated metrics.
+#[derive(Default, Serialize)]
+pub struct MMIODeviceMetrics {
+    /// Number of times when handling read events on a mmio device.
+    pub read_count: SharedIncMetric,
+    /// Number of times when handling write events on a mmio device.
+    pub write_count: SharedIncMetric,
+    /// Number of times when handling read events on a mmio device failed.
+    pub read_fails: SharedIncMetric,
+    /// Number of times when handling write events on a mmio device failed.
+    pub write_fails: SharedIncMetric,
+    /// Activate flag on a mmio deivce.
+    ///
+    /// - If `activate_flag` is 1, it means the device is activated.
+    /// - If `activate_flag` is 0 and `activate_fails` is 0, it means the device is not activated.
+    /// - If `activate_flag` is 0 and `activate_fails` is not 0, it means the device has failed to
+    /// activate.
+    pub activate_flag: SharedStoreMetric,
+    /// Number of times when activated on a mmio deivce failed.
+    pub activate_fails: SharedIncMetric,
+}
 /// Implements the
 /// [MMIO](http://docs.oasis-open.org/virtio/virtio/v1.0/cs04/virtio-v1.0-cs04.html#x1-1090002)
 /// transport for virtio devices.
@@ -47,6 +70,7 @@ pub struct MmioV2Device<AS: GuestAddressSpace + Clone, Q: QueueT, R: GuestMemory
     driver_status: AtomicU32,
     config_generation: AtomicU32,
     interrupt_status: Arc<InterruptStatusRegister32>,
+    metrics: Arc<MMIODeviceMetrics>,
 }
 
 impl<AS, Q, R> MmioV2Device<AS, Q, R>
@@ -103,7 +127,10 @@ where
         }
 
         debug!("mmiov2: fast-mmio enabled: {}", doorbell_enabled);
-
+        let metrics = match device.get_mmio_metrics() {
+            Some(m) => m,
+            None => Arc::new(MMIODeviceMetrics::default()),
+        };
         let state = MmioV2DeviceState::new(
             device,
             vm_fd,
@@ -128,6 +155,7 @@ where
             driver_status: AtomicU32::new(DEVICE_INIT),
             config_generation: AtomicU32::new(0),
             interrupt_status: Arc::new(InterruptStatusRegister32::new()),
+            metrics,
         })
     }
 
@@ -204,6 +232,9 @@ where
                     let _ = state.reset();
                     warn!("failed to activate MMIO Virtio device: {:?}", e);
                     result = Err(DEVICE_FAILED);
+                    self.metrics.activate_fails.inc();
+                } else {
+                    self.metrics.activate_flag.store(1);
                 }
             }
         } else if v == 0 {
@@ -215,6 +246,7 @@ where
                     warn!("failed to reset MMIO Virtio device: {:?}.", ret);
                 } else {
                     state.deactivate();
+                    self.metrics.activate_flag.store(0);
                     // it should reset the device's status to init, otherwise, the guest would
                     // get the wrong device's status.
                     if let Err(e) = state.reset() {
@@ -354,6 +386,7 @@ where
     fn read(&self, _base: IoAddress, offset: IoAddress, data: &mut [u8]) {
         let offset = offset.raw_value();
 
+        self.metrics.read_count.inc();
         if offset >= MMIO_CFG_SPACE_OFF {
             self.get_device_config(offset - MMIO_CFG_SPACE_OFF, data);
         } else if data.len() == 4 {
@@ -382,6 +415,7 @@ where
                 REG_MMIO_SHM_BASE_HIGH => self.get_shm_base_high(),
                 REG_MMIO_CONFIG_GENERATI => self.config_generation.load(Ordering::SeqCst),
                 _ => {
+                    self.metrics.read_fails.inc();
                     info!("unknown virtio mmio readl at 0x{:x}", offset);
                     return;
                 }
@@ -397,12 +431,14 @@ where
                     }
                 }
                 _ => {
+                    self.metrics.read_fails.inc();
                     info!("unknown virtio mmio readw from 0x{:x}", offset);
                     return;
                 }
             };
             LittleEndian::write_u16(data, v);
         } else {
+            self.metrics.read_fails.inc();
             info!(
                 "unknown virtio mmio register read: 0x{:x}/0x{:x}",
                 offset,
@@ -412,6 +448,7 @@ where
     }
 
     fn write(&self, _base: IoAddress, offset: IoAddress, data: &[u8]) {
+        self.metrics.write_count.inc();
         let offset = offset.raw_value();
         // Write to the device configuration area.
         if (MMIO_CFG_SPACE_OFF..DRAGONBALL_MMIO_DOORBELL_OFFSET).contains(&offset) {
@@ -449,7 +486,10 @@ where
                 REG_MMIO_MSI_ADDRESS_L => self.state().set_msi_address_low(v),
                 REG_MMIO_MSI_ADDRESS_H => self.state().set_msi_address_high(v),
                 REG_MMIO_MSI_DATA => self.state().set_msi_data(v),
-                _ => info!("unknown virtio mmio writel to 0x{:x}", offset),
+                _ => {
+                    self.metrics.write_fails.inc();
+                    info!("unknown virtio mmio writel to 0x{:x}", offset)
+                }
             }
         } else if data.len() == 2 {
             let v = LittleEndian::read_u16(data);
@@ -457,10 +497,12 @@ where
                 REG_MMIO_MSI_CSR => self.state().update_msi_enable(v, self),
                 REG_MMIO_MSI_COMMAND => self.state().handle_msi_cmd(v, self),
                 _ => {
+                    self.metrics.write_fails.inc();
                     info!("unknown virtio mmio writew to 0x{:x}", offset);
                 }
             }
         } else {
+            self.metrics.write_fails.inc();
             info!(
                 "unknown virtio mmio register write: 0x{:x}/0x{:x}",
                 offset,
