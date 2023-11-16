@@ -13,7 +13,7 @@ BASE_PACKAGES="alpine-base"
 # See a list of mirrors at http://nl.alpinelinux.org/alpine/MIRRORS.txt
 MIRROR=https://mirror.math.princeton.edu/pub/alpinelinux/
 
-PACKAGES="iptables ip6tables"
+PACKAGES="bash iptables ip6tables"
 
 # Init process must be one of {systemd,kata-agent}
 INIT_PROCESS=kata-agent
