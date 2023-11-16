@@ -8,6 +8,7 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+target_arch=$(uname -m | sed s/aarch64/arm64/ | sed s/x86_64/amd64/)
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly agent_builder="${script_dir}/build-static-agent.sh"
 
@@ -16,13 +17,13 @@ source "${script_dir}/../../scripts/lib.sh"
 container_image="${AGENT_CONTAINER_BUILDER:-$(get_agent_image_name)}"
 [ "${CROSS_BUILD}" == "true" ] && container_image="${container_image}-cross-build"
 
-sudo docker pull ${container_image} || \
+sudo docker pull --platform=linux/${target_arch} ${container_image} || \
 	(sudo docker $BUILDX build $PLATFORM \
 	    	--build-arg RUST_TOOLCHAIN="$(get_from_kata_deps "languages.rust.meta.newest-version")" \
 		-t "${container_image}" "${script_dir}" && \
 	 # No-op unless PUSH_TO_REGISTRY is exported as "yes"
 	 push_to_registry "${container_image}")
-
+exit 1
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	--env DESTDIR=${DESTDIR} \
 	--env AGENT_POLICY=${AGENT_POLICY:-no} \
