@@ -115,6 +115,11 @@ assets:
       url: "https://github.com/AMDESE/qemu"
       tag: "3b6a2b6b7466f6dea53243900b7516c3f29027b7"
 
+    stratovirt:
+      description: "StratoVirt is an lightweight opensource VMM"
+      url: "https://github.com/openeuler-mirror/stratovirt"
+      version: "v2.3.0"
+
   image:
     description: |
       Root filesystem disk image used to boot the guest virtual
