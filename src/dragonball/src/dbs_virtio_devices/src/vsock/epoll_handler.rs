@@ -8,8 +8,10 @@
 // found in the THIRD-PARTY file.
 
 use std::ops::Deref;
+use std::sync::Arc;
 
 use dbs_utils::epoll_manager::{EventOps, EventSet, Events, MutEventSubscriber};
+use dbs_utils::metric::IncMetric;
 use log::{error, trace, warn};
 use virtio_queue::{QueueOwnedT, QueueSync, QueueT};
 use vm_memory::{GuestMemoryRegion, GuestRegionMmap};
@@ -18,6 +20,7 @@ use super::defs;
 use super::muxer::{VsockGenericMuxer, VsockMuxer};
 use super::packet::VsockPacket;
 use crate::device::VirtioDeviceConfig;
+use crate::vsock::device::VsockDeviceMetrics;
 use crate::{DbsGuestAddressSpace, Result as VirtIoResult};
 
 const QUEUE_RX: usize = 0;
@@ -63,6 +66,7 @@ pub struct VsockEpollHandler<
     id: String,
     pub(crate) muxer: M,
     _cid: u64,
+    metrics: Arc<VsockDeviceMetrics>,
 }
 
 impl<AS, Q, R, M> VsockEpollHandler<AS, Q, R, M>
@@ -72,12 +76,19 @@ where
     R: GuestMemoryRegion,
     M: VsockGenericMuxer,
 {
-    pub fn new(config: VirtioDeviceConfig<AS, Q, R>, id: String, cid: u64, muxer: M) -> Self {
+    pub fn new(
+        config: VirtioDeviceConfig<AS, Q, R>,
+        id: String,
+        cid: u64,
+        muxer: M,
+        metrics: Arc<VsockDeviceMetrics>,
+    ) -> Self {
         VsockEpollHandler {
             config,
             id,
             _cid: cid,
             muxer,
+            metrics,
         }
     }
 
@@ -191,8 +202,10 @@ where
         trace!("{}: handle RX queue event", self.id);
         if let Err(e) = self.config.queues[QUEUE_RX].consume_event() {
             error!("{}: failed to consume rx queue event, {:?}", self.id, e);
+            self.metrics.rx_queue_event_fails.inc();
         } else if self.muxer.has_pending_rx() {
             self.process_rx(mem);
+            self.metrics.rx_queue_event_count.inc();
         }
     }
 
@@ -200,8 +213,10 @@ where
         trace!("{}: handle TX queue event", self.id);
         if let Err(e) = self.config.queues[QUEUE_TX].consume_event() {
             error!("{}: failed to consume tx queue event, {:?}", self.id, e);
+            self.metrics.tx_queue_event_fails.inc();
         } else {
             self.process_tx(mem);
+            self.metrics.tx_queue_event_count.inc();
             // The backend may have queued up responses to the packets
             // we sent during TX queue processing. If that happened, we
             // need to fetch those responses and place them into RX
@@ -216,6 +231,9 @@ where
         trace!("{}: handle event queue event", self.id);
         if let Err(e) = self.config.queues[QUEUE_CFG].consume_event() {
             error!("{}: failed to consume config queue event, {:?}", self.id, e);
+            self.metrics.ev_queue_event_fails.inc();
+        } else {
+            self.metrics.ev_queue_event_count.inc();
         }
     }
 
@@ -223,6 +241,7 @@ where
         trace!("{}: backend event", self.id);
         let events = epoll::Events::from_bits(events.event_set().bits()).unwrap();
         self.muxer.notify(events);
+        self.metrics.backend_event_count.inc();
         // After the backend has been kicked, it might've freed up some
         // resources, so we can attempt to send it more data to process. In
         // particular, if `self.backend.send_pkt()` halted the TX queue
@@ -247,7 +266,7 @@ where
     fn process(&mut self, events: Events, _ops: &mut EventOps) {
         let guard = self.config.lock_guest_memory();
         let mem = guard.deref();
-
+        self.metrics.event_count.inc();
         match events.data() {
             defs::RXQ_EVENT => self.handle_rxq_event(mem),
             defs::TXQ_EVENT => self.handle_txq_event(mem),

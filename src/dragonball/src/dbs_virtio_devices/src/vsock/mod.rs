@@ -17,7 +17,7 @@ use std::os::unix::io::AsRawFd;
 use vm_memory::GuestMemoryError;
 
 pub use self::defs::{NUM_QUEUES, QUEUE_SIZES};
-pub use self::device::Vsock;
+pub use self::device::{Vsock, VsockDeviceMetrics};
 use self::muxer::Error as MuxerError;
 pub use self::muxer::VsockMuxer;
 use self::packet::VsockPacket;
