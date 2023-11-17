@@ -13,6 +13,8 @@ use std::{
 
 use anyhow::{anyhow, Context, Result};
 use crossbeam_channel::{unbounded, Receiver, Sender};
+use dbs_utils::metric::{IncMetric, StoreMetric};
+use dragonball::metric::METRICS;
 use dragonball::{
     api::v1::{
         BlockDeviceConfigInfo, BootSourceConfig, FsDeviceConfigInfo, FsMountConfigInfo,
@@ -194,6 +196,7 @@ impl VmmInstance {
     }
 
     pub fn insert_block_device(&self, device_cfg: BlockDeviceConfigInfo) -> Result<()> {
+        METRICS.read().unwrap().request.insert_block_device.inc();
         self.handle_request_with_retry(Request::Sync(VmmAction::InsertBlockDevice(
             device_cfg.clone(),
         )))
@@ -217,6 +220,7 @@ impl VmmInstance {
     }
 
     pub fn insert_network_device(&self, net_cfg: VirtioNetDeviceConfigInfo) -> Result<()> {
+        METRICS.read().unwrap().request.insert_net_device.inc();
         self.handle_request_with_retry(Request::Sync(VmmAction::InsertNetworkDevice(
             net_cfg.clone(),
         )))
@@ -338,6 +342,12 @@ impl VmmInstance {
             match self.send_request(vmm_action.clone()) {
                 Ok(vmm_outcome) => match *vmm_outcome {
                     Ok(vmm_data) => {
+                        METRICS
+                            .read()
+                            .unwrap()
+                            .request
+                            .retry_count
+                            .store(count as usize);
                         info!(
                             sl!(),
                             "success to send {:?} after retry {}", &vmm_action, count

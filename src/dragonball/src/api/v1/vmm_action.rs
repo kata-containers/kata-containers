@@ -10,16 +10,17 @@ use std::fs::File;
 use std::sync::{Arc, Mutex};
 
 use crossbeam_channel::{Receiver, Sender, TryRecvError};
+use dbs_utils::metric::IncMetric;
 use log::{debug, error, info, warn};
 use tracing::instrument;
 
 use crate::error::{Result, StartMicroVmError, StopMicrovmError};
 use crate::event_manager::EventManager;
+use crate::hypervisor_metrics::get_hypervisor_metrics;
+use crate::metric::METRICS;
 use crate::tracer::{DragonballTracer, TraceError, TraceInfo};
 use crate::vm::{CpuTopology, KernelConfigInfo, VmConfigInfo};
 use crate::vmm::Vmm;
-
-use crate::hypervisor_metrics::get_hypervisor_metrics;
 
 use self::VmConfigError::*;
 use self::VmmActionError::MachineConfig;
@@ -268,6 +269,7 @@ impl VmmService {
 
     /// Handle requests from the HTTP API Server and send back replies.
     pub fn run_vmm_action(&mut self, vmm: &mut Vmm, event_mgr: &mut EventManager) -> Result<()> {
+        METRICS.read().unwrap().request.request_count.inc();
         let request = match self.from_api.try_recv() {
             Ok(t) => *t,
             Err(TryRecvError::Empty) => {
@@ -282,31 +284,47 @@ impl VmmService {
 
         let response = match request {
             VmmAction::ConfigureBootSource(boot_source_body) => {
+                METRICS.read().unwrap().request.configure_boot_source.inc();
                 self.configure_boot_source(vmm, boot_source_body)
             }
-            VmmAction::StartMicroVm => self.start_microvm(vmm, event_mgr),
-            VmmAction::ShutdownMicroVm => self.shutdown_microvm(vmm),
-            VmmAction::GetVmConfiguration => Ok(VmmData::MachineConfiguration(Box::new(
-                self.machine_config.clone(),
-            ))),
+            VmmAction::StartMicroVm => {
+                METRICS.read().unwrap().request.start_microvm.inc();
+                self.start_microvm(vmm, event_mgr)
+            }
+            VmmAction::ShutdownMicroVm => {
+                METRICS.read().unwrap().request.shutdown_microvm.inc();
+                self.shutdown_microvm(vmm)
+            }
+            VmmAction::GetVmConfiguration => {
+                METRICS.read().unwrap().request.get_vm_configuration.inc();
+                Ok(VmmData::MachineConfiguration(Box::new(
+                    self.machine_config.clone(),
+                )))
+            }
             VmmAction::GetHypervisorMetrics => self.get_hypervisor_metrics(),
             VmmAction::SetVmConfiguration(machine_config) => {
+                METRICS.read().unwrap().request.set_vm_configuration.inc();
                 self.set_vm_configuration(vmm, machine_config)
             }
             VmmAction::SetHypervisorTracing(trace_info) => self.setup_tracing(trace_info),
             VmmAction::EndHypervisorTracing => self.end_tracing(),
             #[cfg(feature = "virtio-vsock")]
-            VmmAction::InsertVsockDevice(vsock_cfg) => self.add_vsock_device(vmm, vsock_cfg),
+            VmmAction::InsertVsockDevice(vsock_cfg) => {
+                METRICS.read().unwrap().request.insert_vsock_device.inc();
+                self.add_vsock_device(vmm, vsock_cfg)
+            }
             #[cfg(feature = "virtio-blk")]
             VmmAction::InsertBlockDevice(block_device_config) => {
                 self.add_block_device(vmm, event_mgr, block_device_config)
             }
             #[cfg(feature = "virtio-blk")]
             VmmAction::UpdateBlockDevice(blk_update) => {
+                METRICS.read().unwrap().request.update_block_device.inc();
                 self.update_blk_rate_limiters(vmm, blk_update)
             }
             #[cfg(feature = "virtio-blk")]
             VmmAction::RemoveBlockDevice(drive_id) => {
+                METRICS.read().unwrap().request.remove_block_device.inc();
                 self.remove_block_device(vmm, event_mgr, &drive_id)
             }
             #[cfg(feature = "virtio-net")]
@@ -315,29 +333,49 @@ impl VmmService {
             }
             #[cfg(feature = "virtio-net")]
             VmmAction::UpdateNetworkInterface(netif_update) => {
+                METRICS.read().unwrap().request.update_net_interface.inc();
                 self.update_net_rate_limiters(vmm, netif_update)
             }
             #[cfg(feature = "virtio-fs")]
-            VmmAction::InsertFsDevice(fs_cfg) => self.add_fs_device(vmm, fs_cfg),
-
+            VmmAction::InsertFsDevice(fs_cfg) => {
+                METRICS.read().unwrap().request.insert_fs_device.inc();
+                self.add_fs_device(vmm, fs_cfg)
+            }
             #[cfg(feature = "virtio-fs")]
             VmmAction::ManipulateFsBackendFs(fs_mount_cfg) => {
+                METRICS.read().unwrap().request.manipulate_fs_backend.inc();
                 self.manipulate_fs_backend_fs(vmm, fs_mount_cfg)
             }
             #[cfg(feature = "virtio-fs")]
             VmmAction::UpdateFsDevice(fs_update_cfg) => {
+                METRICS.read().unwrap().request.update_fs_device.inc();
                 self.update_fs_rate_limiters(vmm, fs_update_cfg)
             }
             #[cfg(feature = "hotplug")]
-            VmmAction::ResizeVcpu(vcpu_resize_cfg) => self.resize_vcpu(vmm, vcpu_resize_cfg),
+            VmmAction::ResizeVcpu(vcpu_resize_cfg) => {
+                METRICS.read().unwrap().request.resize_vcpu.inc();
+                self.resize_vcpu(vmm, vcpu_resize_cfg)
+            }
             #[cfg(feature = "virtio-mem")]
-            VmmAction::InsertMemDevice(mem_cfg) => self.add_mem_device(vmm, event_mgr, mem_cfg),
+            VmmAction::InsertMemDevice(mem_cfg) => {
+                METRICS.read().unwrap().request.insert_mem_device.inc();
+                self.add_mem_device(vmm, event_mgr, mem_cfg)
+            }
             #[cfg(feature = "virtio-balloon")]
             VmmAction::InsertBalloonDevice(balloon_cfg) => {
+                METRICS.read().unwrap().request.insert_balloon_device.inc();
                 self.add_balloon_device(vmm, event_mgr, balloon_cfg)
             }
         };
-
+        // Since UpcallServerNotReady is not a real error, we don't count it as a failure.
+        if let Err(e) = response.as_ref() {
+            match e {
+                VmmActionError::UpcallServerNotReady => {
+                    METRICS.read().unwrap().request.upcall_not_ready_count.inc()
+                }
+                _ => METRICS.read().unwrap().request.response_fails.inc(),
+            }
+        }
         debug!("send vmm response: {:?}", response);
         self.send_response(response)
     }
@@ -586,6 +624,7 @@ impl VmmService {
                 }
                 VmmActionError::Block(BlockDeviceError::UpdateNotAllowedPostBoot)
             })?;
+        METRICS.read().unwrap().request.insert_block_device.inc();
 
         vm.device_manager_mut()
             .block_manager
