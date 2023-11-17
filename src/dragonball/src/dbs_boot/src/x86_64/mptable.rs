@@ -299,8 +299,7 @@ pub fn setup_mptable<M: GuestMemory>(
         // Patch irq routing entry for mptable if it is registered
         // as PCI legacy irq.
         if let Some(irq_device) = pci_legacy_irqs {
-            if irq_device.contains_key(&i) {
-                let device_id = irq_device.get(&i).unwrap();
+            if let Some(device_id) = irq_device.get(&i) {
                 mpc_intsrc.0.srcbus = BUS_ID_PCI;
                 mpc_intsrc.0.srcbusirq = device_id << 2;
             }
