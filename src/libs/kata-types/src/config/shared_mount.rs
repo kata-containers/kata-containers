@@ -36,19 +36,19 @@ pub struct SharedMount {
 
 impl SharedMount {
     pub fn validate(&self) -> Result<()> {
-        if self.name == "" {
+        if self.name.is_empty() {
             return Err(eother!("shared_mount: field 'name' couldn't be empty."));
         }
-        if self.src_ctr == "" {
+        if self.src_ctr.is_empty() {
             return Err(eother!("shared_mount: field 'src_ctr' couldn't be empty."));
         }
-        if self.dst_ctr == "" {
+        if self.dst_ctr.is_empty() {
             return Err(eother!("shared_mount: field 'dst_ctr' couldn't be empty."));
         }
-        if self.src_path == "" {
+        if self.src_path.is_empty() {
             return Err(eother!("shared_mount: field 'src_path' couldn't be empty."));
         }
-        if self.dst_path == "" {
+        if self.dst_path.is_empty() {
             return Err(eother!("shared_mount: field 'dst_path' couldn't be empty."));
         }
 
