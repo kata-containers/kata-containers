@@ -48,6 +48,10 @@ var testAcrnKernelPath = ""
 var testAcrnImagePath = ""
 var testAcrnPath = ""
 var testAcrnCtlPath = ""
+var testStratovirtKernelPath = ""
+var testStratovirtImagePath = ""
+var testStratovirtInitrdPath = ""
+var testStratovirtPath = ""
 var testVirtiofsdPath = ""
 
 var testHyperstartCtlSocket = ""
@@ -81,6 +85,18 @@ func setupClh() {
 	os.Mkdir(filepath.Join(testDir, testBundle), DirMode)
 
 	for _, filename := range []string{testClhKernelPath, testClhImagePath, testClhPath, testVirtiofsdPath} {
+		_, err := os.Create(filename)
+		if err != nil {
+			fmt.Printf("Could not recreate %s:%v", filename, err)
+			os.Exit(1)
+		}
+	}
+}
+
+func setupStratovirt() {
+	os.Mkdir(filepath.Join(testDir, testBundle), DirMode)
+
+	for _, filename := range []string{testStratovirtKernelPath, testStratovirtInitrdPath, testStratovirtPath, testVirtiofsdPath} {
 		_, err := os.Create(filename)
 		if err != nil {
 			fmt.Printf("Could not recreate %s:%v", filename, err)
@@ -148,6 +164,13 @@ func TestMain(m *testing.M) {
 	testClhPath = filepath.Join(testDir, testBundle, testHypervisor)
 
 	setupClh()
+
+	testStratovirtKernelPath = filepath.Join(testDir, testBundle, testKernel)
+	testStratovirtImagePath = filepath.Join(testDir, testBundle, testInitrd)
+	testStratovirtInitrdPath = filepath.Join(testDir, testBundle, testInitrd)
+	testStratovirtPath = filepath.Join(testDir, testBundle, testHypervisor)
+
+	setupStratovirt()
 
 	// set now that configStoragePath has been overridden.
 	sandboxDirState = filepath.Join(fs.MockRunStoragePath(), testSandboxID)

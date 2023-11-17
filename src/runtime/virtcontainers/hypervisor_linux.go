@@ -36,6 +36,8 @@ func NewHypervisor(hType HypervisorType) (Hypervisor, error) {
 		return &Acrn{}, nil
 	case ClhHypervisor:
 		return &cloudHypervisor{}, nil
+	case StratovirtHypervisor:
+		return &stratovirt{}, nil
 	case DragonballHypervisor:
 		return &mockHypervisor{}, nil
 	case MockHypervisor:

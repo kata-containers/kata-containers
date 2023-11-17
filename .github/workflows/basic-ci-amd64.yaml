@@ -22,7 +22,7 @@ jobs:
       fail-fast: false
       matrix:
         containerd_version: ['lts', 'active']
-        vmm: ['clh', 'qemu']
+        vmm: ['clh', 'qemu', 'stratovirt']
     runs-on: garm-ubuntu-2204-smaller
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
@@ -60,7 +60,7 @@ jobs:
       fail-fast: false
       matrix:
         containerd_version: ['lts', 'active']
-        vmm: ['clh', 'qemu']
+        vmm: ['clh', 'qemu', 'stratovirt']
     runs-on: garm-ubuntu-2204-smaller
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
@@ -101,7 +101,7 @@ jobs:
       fail-fast: false
       matrix:
         containerd_version: ['lts', 'active']
-        vmm: ['clh', 'qemu', 'dragonball']
+        vmm: ['clh', 'qemu', 'dragonball', 'stratovirt']
     runs-on: garm-ubuntu-2204-smaller
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
