@@ -127,6 +127,8 @@ pub struct FsDeviceConfigInfo {
     pub use_shared_irq: Option<bool>,
     /// Use generic irq
     pub use_generic_irq: Option<bool>,
+    /// Declaration of the uid/gid mapping rules
+    pub id_mapping: (u32, u32, u32),
 }
 
 impl std::default::Default for FsDeviceConfigInfo {
@@ -149,6 +151,7 @@ impl std::default::Default for FsDeviceConfigInfo {
             rate_limiter: Some(RateLimiterConfigInfo::default()),
             use_shared_irq: None,
             use_generic_irq: None,
+            id_mapping: (0, 0, 0),
         }
     }
 }
@@ -420,6 +423,7 @@ impl FsDeviceMgr {
                 Box::new(handler),
                 epoll_mgr,
                 limiter,
+                config.id_mapping,
             )
             .map_err(FsDeviceError::CreateFsDevice)?,
         );

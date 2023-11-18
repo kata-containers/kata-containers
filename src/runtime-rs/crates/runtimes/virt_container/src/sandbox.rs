@@ -342,6 +342,7 @@ impl Sandbox for VirtSandbox {
                 .security_info
                 .guest_hook_path,
             kernel_modules,
+            guest_userns: agent_config.guest_userns,
         };
 
         self.agent

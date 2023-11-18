@@ -39,6 +39,8 @@ pub struct ShareVirtioFsStandaloneConfig {
     pub virtio_fs_cache: String,
     // virtio_fs_extra_args passes options to virtiofsd daemon
     pub virtio_fs_extra_args: Vec<String>,
+    // virtio_fs_id_mapping declare the uid/gid mapping rules
+    pub virtio_fs_id_mapping: (u32, u32, u32),
 }
 
 #[derive(Default, Debug)]
@@ -62,6 +64,7 @@ impl ShareVirtioFsStandalone {
                 virtio_fs_daemon: config.virtio_fs_daemon.clone(),
                 virtio_fs_cache: config.virtio_fs_cache.clone(),
                 virtio_fs_extra_args: config.virtio_fs_extra_args.clone(),
+                virtio_fs_id_mapping: config.virtio_fs_id_mapping,
             },
             share_fs_mount: Arc::new(VirtiofsShareMount::new(id)),
             mounted_info_set: Arc::new(Mutex::new(HashMap::new())),
@@ -173,9 +176,15 @@ impl ShareFs for ShareVirtioFsStandalone {
     }
 
     async fn setup_device_before_start_vm(&self, h: &dyn Hypervisor) -> Result<()> {
-        prepare_virtiofs(h, VIRTIO_FS, &self.config.id, &h.get_jailer_root().await?)
-            .await
-            .context("prepare virtiofs")?;
+        prepare_virtiofs(
+            h,
+            VIRTIO_FS,
+            &self.config.id,
+            &h.get_jailer_root().await?,
+            self.config.virtio_fs_id_mapping,
+        )
+        .await
+        .context("prepare virtiofs")?;
         self.setup_virtiofsd(h).await.context("setup virtiofsd")?;
         Ok(())
     }

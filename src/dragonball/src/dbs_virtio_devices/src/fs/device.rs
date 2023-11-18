@@ -146,6 +146,7 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
         handler: Box<dyn VirtioRegionHandler>,
         epoll_mgr: EpollManager,
         rate_limiter: Option<RateLimiter>,
+        id_mapping: (u32, u32, u32),
     ) -> Result<Self> {
         info!(
             "{}: tag {} req_num_queues {} queue_size {} cache_size {} cache_policy {} thread_pool_size {} writeback_cache {} no_open {} killpriv_v2 {} xattr {} drop_sys_resource {} no_readdir {}",
@@ -209,6 +210,7 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
             no_open,
             killpriv_v2,
             no_readdir,
+            id_mapping,
             ..VfsOptions::default()
         };
 
@@ -1090,6 +1092,7 @@ pub mod tests {
             new_dummy_handler_helper(),
             epoll_manager.clone(),
             Some(rate_limiter),
+            (0, 0, 0),
         );
         assert!(res.is_err());
 
@@ -1111,6 +1114,7 @@ pub mod tests {
             new_dummy_handler_helper(),
             epoll_manager,
             Some(rate_limiter),
+            (0, 0, 0),
         );
         assert!(res.is_err());
     }
@@ -1135,6 +1139,7 @@ pub mod tests {
             new_dummy_handler_helper(),
             epoll_manager,
             Some(rate_limiter),
+            (0, 0, 0),
         )
         .unwrap();
 
@@ -1204,6 +1209,7 @@ pub mod tests {
                 new_dummy_handler_helper(),
                 epoll_manager.clone(),
                 Some(rate_limiter),
+                (0, 0, 0),
             )
             .unwrap();
 
@@ -1246,6 +1252,7 @@ pub mod tests {
                 new_dummy_handler_helper(),
                 epoll_manager,
                 Some(rate_limiter),
+                (0, 0, 0),
             )
             .unwrap();
 
@@ -1686,6 +1693,7 @@ pub mod tests {
             new_dummy_handler_helper(),
             epoll_manager,
             Some(rate_limiter),
+            (0, 0, 0),
         )
         .unwrap();
         let kvm = Kvm::new().unwrap();
@@ -1729,6 +1737,7 @@ pub mod tests {
             new_dummy_handler_helper(),
             epoll_manager,
             Some(rate_limiter),
+            (0, 0, 0),
         )
         .unwrap();
         let mut requirements = vec![
@@ -1772,6 +1781,7 @@ pub mod tests {
             new_dummy_handler_helper(),
             epoll_manager,
             Some(rate_limiter),
+            (0, 0, 0),
         )
         .unwrap();
         let kvm = Kvm::new().unwrap();
