@@ -16,6 +16,7 @@ containerd_conf_file_backup="${containerd_conf_file}.bak"
 
 IFS=' ' read -a shims <<< "$SHIMS"
 default_shim="$DEFAULT_SHIM"
+ALLOWED_HYPERVISOR_ANNOTATIONS="${ALLOWED_HYPERVISOR_ANNOTATIONS:-}"
 
 IFS=' ' read -a non_formatted_allowed_hypervisor_annotations <<< "$ALLOWED_HYPERVISOR_ANNOTATIONS"
 allowed_hypervisor_annotations=""
