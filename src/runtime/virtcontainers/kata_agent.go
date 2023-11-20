@@ -78,9 +78,13 @@ const (
 	defaultSeLinuxContainerType = "container_t"
 )
 
+type customRequestTimeoutKeyType struct{}
+
 var (
 	checkRequestTimeout           = 30 * time.Second
 	defaultRequestTimeout         = 60 * time.Second
+	remoteRequestTimeout          = 300 * time.Second
+	customRequestTimeoutKey       = customRequestTimeoutKeyType(struct{}{})
 	errorMissingOCISpec           = errors.New("Missing OCI specification")
 	defaultKataHostSharedDir      = "/run/kata-containers/shared/sandboxes/"
 	defaultKataGuestSharedDir     = "/run/kata-containers/shared/containers/"
@@ -376,6 +380,8 @@ func (k *kataAgent) agentURL() (string, error) {
 		return s.String(), nil
 	case types.HybridVSock:
 		return s.String(), nil
+	case types.RemoteSock:
+		return s.String(), nil
 	case types.MockHybridVSock:
 		return s.String(), nil
 	default:
@@ -426,6 +432,7 @@ func (k *kataAgent) configure(ctx context.Context, h Hypervisor, id, sharePath s
 		if err != nil {
 			return err
 		}
+	case types.RemoteSock:
 	case types.MockHybridVSock:
 	default:
 		return types.ErrInvalidConfigType
@@ -745,36 +752,42 @@ func (k *kataAgent) startSandbox(ctx context.Context, sandbox *Sandbox) error {
 		return err
 	}
 
-	// Check grpc server is serving
-	if err = k.check(ctx); err != nil {
-		return err
-	}
+	var kmodules []*grpc.KernelModule
 
-	// If a Policy has been specified, send it to the agent.
-	if len(sandbox.config.AgentConfig.Policy) > 0 {
-		if err := sandbox.agent.setPolicy(ctx, sandbox.config.AgentConfig.Policy); err != nil {
+	if sandbox.config.HypervisorType == RemoteHypervisor {
+		ctx = context.WithValue(ctx, customRequestTimeoutKey, remoteRequestTimeout)
+	} else {
+		// Check grpc server is serving
+		if err = k.check(ctx); err != nil {
 			return err
 		}
-	}
 
-	// Setup network interfaces and routes
-	interfaces, routes, neighs, err := generateVCNetworkStructures(ctx, sandbox.network)
-	if err != nil {
-		return err
-	}
-	if err = k.updateInterfaces(ctx, interfaces); err != nil {
-		return err
-	}
-	if _, err = k.updateRoutes(ctx, routes); err != nil {
-		return err
-	}
-	if err = k.addARPNeighbors(ctx, neighs); err != nil {
-		return err
+		// If a Policy has been specified, send it to the agent.
+		if len(sandbox.config.AgentConfig.Policy) > 0 {
+			if err := sandbox.agent.setPolicy(ctx, sandbox.config.AgentConfig.Policy); err != nil {
+				return err
+			}
+		}
+
+		// Setup network interfaces and routes
+		interfaces, routes, neighs, err := generateVCNetworkStructures(ctx, sandbox.network)
+		if err != nil {
+			return err
+		}
+		if err = k.updateInterfaces(ctx, interfaces); err != nil {
+			return err
+		}
+		if _, err = k.updateRoutes(ctx, routes); err != nil {
+			return err
+		}
+		if err = k.addARPNeighbors(ctx, neighs); err != nil {
+			return err
+		}
+
+		kmodules = setupKernelModules(k.kmodules)
 	}
 
 	storages := setupStorages(ctx, sandbox)
-
-	kmodules := setupKernelModules(k.kmodules)
 
 	req := &grpc.CreateSandboxRequest{
 		Hostname:      hostname,
@@ -1194,7 +1207,7 @@ func (k *kataAgent) appendDevices(deviceList []*grpc.Device, c *Container) []*gr
 			kataDevice = k.appendVfioDevice(dev, device, c)
 		}
 
-		if kataDevice == nil {
+		if kataDevice == nil || kataDevice.Type == "" {
 			continue
 		}
 
@@ -2104,7 +2117,12 @@ func (k *kataAgent) getReqContext(ctx context.Context, reqName string) (newCtx c
 	case grpcCheckRequest:
 		newCtx, cancel = context.WithTimeout(ctx, checkRequestTimeout)
 	default:
-		newCtx, cancel = context.WithTimeout(ctx, defaultRequestTimeout)
+		var requestTimeout = defaultRequestTimeout
+
+		if timeout, ok := ctx.Value(customRequestTimeoutKey).(time.Duration); ok {
+			requestTimeout = timeout
+		}
+		newCtx, cancel = context.WithTimeout(ctx, requestTimeout)
 	}
 
 	return newCtx, cancel

@@ -7,6 +7,7 @@ package types
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"strings"
 
@@ -37,6 +38,7 @@ const (
 	HybridVSockScheme     = "hvsock"
 	MockHybridVSockScheme = "mock"
 	VSockScheme           = "vsock"
+	RemoteSockScheme      = "remote"
 )
 
 // SandboxState is a sandbox state structure
@@ -208,6 +210,16 @@ type HybridVSock struct {
 
 func (s *HybridVSock) String() string {
 	return fmt.Sprintf("%s://%s:%d", HybridVSockScheme, s.UdsPath, s.Port)
+}
+
+type RemoteSock struct {
+	Conn             net.Conn
+	SandboxID        string
+	TunnelSocketPath string
+}
+
+func (s *RemoteSock) String() string {
+	return fmt.Sprintf("%s://%s", RemoteSockScheme, s.TunnelSocketPath)
 }
 
 // MockHybridVSock defines a mock hybrid vsocket for tests only.

@@ -53,6 +53,7 @@ const (
 	acrnHypervisorTableType        = "acrn"
 	dragonballHypervisorTableType  = "dragonball"
 	stratovirtHypervisorTableType  = "stratovirt"
+	remoteHypervisorTableType      = "remote"
 
 	// the maximum amount of PCI bridges that can be cold plugged in a VM
 	maxPCIBridges uint32 = 5
@@ -105,6 +106,7 @@ type hypervisor struct {
 	GuestMemoryDumpPath            string                    `toml:"guest_memory_dump_path"`
 	SeccompSandbox                 string                    `toml:"seccompsandbox"`
 	BlockDeviceAIO                 string                    `toml:"block_device_aio"`
+	RemoteHypervisorSocket         string                    `toml:"remote_hypervisor_socket"`
 	HypervisorPathList             []string                  `toml:"valid_hypervisor_paths"`
 	JailerPathList                 []string                  `toml:"valid_jailer_paths"`
 	CtlPathList                    []string                  `toml:"valid_ctlpaths"`
@@ -134,6 +136,7 @@ type hypervisor struct {
 	MemSlots                       uint32                    `toml:"memory_slots"`
 	DefaultBridges                 uint32                    `toml:"default_bridges"`
 	Msize9p                        uint32                    `toml:"msize_9p"`
+	RemoteHypervisorTimeout        uint32                    `toml:"remote_hypervisor_timeout"`
 	NumVCPUs                       float32                   `toml:"default_vcpus"`
 	BlockDeviceCacheSet            bool                      `toml:"block_device_cache_set"`
 	BlockDeviceCacheDirect         bool                      `toml:"block_device_cache_direct"`
@@ -645,6 +648,20 @@ func (h hypervisor) getIOMMUPlatform() bool {
 		kataUtilsLogger.Info("IOMMUPlatform is disabled by default.")
 	}
 	return h.IOMMUPlatform
+}
+
+func (h hypervisor) getRemoteHypervisorSocket() string {
+	if h.RemoteHypervisorSocket == "" {
+		return defaultRemoteHypervisorSocket
+	}
+	return h.RemoteHypervisorSocket
+}
+
+func (h hypervisor) getRemoteHypervisorTimeout() uint32 {
+	if h.RemoteHypervisorTimeout == 0 {
+		return defaultRemoteHypervisorTimeout
+	}
+	return h.RemoteHypervisorTimeout
 }
 
 func (a agent) debugConsoleEnabled() bool {
@@ -1242,6 +1259,20 @@ func newStratovirtHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	}, nil
 }
 
+func newRemoteHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
+
+	return vc.HypervisorConfig{
+		RemoteHypervisorSocket:  h.getRemoteHypervisorSocket(),
+		RemoteHypervisorTimeout: h.getRemoteHypervisorTimeout(),
+		DisableGuestSeLinux:     true, // The remote hypervisor has a different guest, so Guest SELinux config doesn't work
+
+		// No valid value so avoid to append block device to list in kata_agent.appendDevices
+		BlockDeviceDriver: "dummy",
+		EnableAnnotations: h.EnableAnnotations,
+		GuestHookPath:     h.guestHookPath(),
+	}, nil
+}
+
 func newFactoryConfig(f factory) (oci.FactoryConfig, error) {
 	if f.TemplatePath == "" {
 		f.TemplatePath = defaultTemplatePath
@@ -1281,6 +1312,9 @@ func updateRuntimeConfigHypervisor(configPath string, tomlConf tomlConfig, confi
 		case stratovirtHypervisorTableType:
 			config.HypervisorType = vc.StratovirtHypervisor
 			hConfig, err = newStratovirtHypervisorConfig(hypervisor)
+		case remoteHypervisorTableType:
+			config.HypervisorType = vc.RemoteHypervisor
+			hConfig, err = newRemoteHypervisorConfig(hypervisor)
 		default:
 			err = fmt.Errorf("%s: %+q", errInvalidHypervisorPrefix, k)
 		}
@@ -1882,6 +1916,11 @@ func checkFactoryConfig(config oci.RuntimeConfig) error {
 // checkHypervisorConfig performs basic "sanity checks" on the hypervisor
 // config.
 func checkHypervisorConfig(config vc.HypervisorConfig) error {
+
+	if config.RemoteHypervisorSocket != "" {
+		return nil
+	}
+
 	type image struct {
 		path   string
 		initrd bool
