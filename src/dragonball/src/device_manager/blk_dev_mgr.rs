@@ -45,7 +45,7 @@ macro_rules! error(
     };
 );
 
-/// Default queue size for VirtIo block devices.
+/// Default queue size for Virtio block devices.
 pub const QUEUE_SIZE: u16 = 128;
 
 /// Errors associated with the operations allowed on a drive.
