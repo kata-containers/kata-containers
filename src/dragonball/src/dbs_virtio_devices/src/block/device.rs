@@ -382,7 +382,7 @@ mod tests {
 
     use crate::epoll_helper::*;
     use crate::tests::{VirtQueue, VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_WRITE};
-    use crate::{Error as VirtIoError, VirtioQueueConfig};
+    use crate::{Error as VirtioError, VirtioQueueConfig};
 
     use super::*;
     use crate::block::*;
@@ -829,7 +829,7 @@ mod tests {
         .unwrap();
         assert!(matches!(
             req.execute(&mut disk, m, &data_descs, &disk_id),
-            Err(ExecuteError::BadRequest(VirtIoError::InvalidOffset))
+            Err(ExecuteError::BadRequest(VirtioError::InvalidOffset))
         ));
 
         let mut file = DummyFile::new();

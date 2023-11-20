@@ -5,7 +5,7 @@ use dbs_virtio_devices as virtio;
 use serde_derive::{Deserialize, Serialize};
 use slog::{error, info};
 use virtio::balloon::{Balloon, BalloonConfig};
-use virtio::Error as VirtIoError;
+use virtio::Error as VirtioError;
 
 use crate::address_space_manager::GuestAddressSpaceImpl;
 use crate::config_manager::{ConfigItem, DeviceConfigInfo, DeviceConfigInfos};
@@ -51,7 +51,7 @@ pub enum BalloonDeviceError {
 
     /// resize balloon device error
     #[error("failure while resizing virtio-balloon device, {0}")]
-    ResizeFailed(#[source] VirtIoError),
+    ResizeFailed(#[source] VirtioError),
 
     /// The balloon device id doesn't exist.
     #[error("invalid balloon device id '{0}'")]
