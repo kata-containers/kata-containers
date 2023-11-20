@@ -13,7 +13,7 @@ use tokio::sync::RwLock;
 use hypervisor::{
     device::{
         device_manager::{do_handle_device, do_update_device, DeviceManager},
-        driver::{ShareFsMountConfig, ShareFsMountType, ShareFsOperation},
+        driver::{ShareFsMountConfig, ShareFsMountOperation, ShareFsMountType},
         DeviceConfig,
     },
     ShareFsConfig,
@@ -89,7 +89,7 @@ pub(crate) async fn setup_inline_virtiofs(d: &RwLock<DeviceManager>, id: &str) -
         mount_point: mnt,
         config: None,
         tag: String::from(MOUNT_GUEST_TAG),
-        op: ShareFsOperation::Mount,
+        op: ShareFsMountOperation::Mount,
         prefetch_list_path: None,
     };
 
@@ -126,7 +126,7 @@ pub async fn rafs_mount(
         mount_point: rafs_mnt,
         config: Some(config_content),
         tag: String::from(MOUNT_GUEST_TAG),
-        op: ShareFsOperation::Mount,
+        op: ShareFsMountOperation::Mount,
         prefetch_list_path,
     };
 

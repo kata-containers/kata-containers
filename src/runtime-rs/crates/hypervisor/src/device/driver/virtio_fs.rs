@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use crate::device::{hypervisor, Device, DeviceType};
 
 #[derive(Copy, Clone, Debug, Default)]
-pub enum ShareFsOperation {
+pub enum ShareFsMountOperation {
     #[default]
     Mount,
     Umount,
@@ -43,7 +43,7 @@ pub struct ShareFsMountConfig {
     pub tag: String,
 
     /// op: the operation to take, e.g. mount, umount or update
-    pub op: ShareFsOperation,
+    pub op: ShareFsMountOperation,
 
     /// prefetch_list_path: path to file that contains file lists that should be prefetched by rafs
     pub prefetch_list_path: Option<String>,
