@@ -15,7 +15,7 @@ use dragonball::device_manager::blk_dev_mgr::BlockDeviceType;
 use super::DragonballInner;
 use crate::{
     device::DeviceType, HybridVsockConfig, NetworkConfig, ShareFsConfig, ShareFsMountConfig,
-    ShareFsMountType, ShareFsOperation, VfioBusMode, VfioDevice, VmmState, JAILER_ROOT,
+    ShareFsMountOperation, ShareFsMountType, VfioBusMode, VfioDevice, VmmState, JAILER_ROOT,
 };
 
 const MB_TO_B: u32 = 1024 * 1024;
@@ -346,9 +346,9 @@ impl DragonballInner {
 
     fn add_share_fs_mount(&mut self, config: &ShareFsMountConfig) -> Result<()> {
         let ops = match config.op {
-            ShareFsOperation::Mount => "mount",
-            ShareFsOperation::Umount => "umount",
-            ShareFsOperation::Update => "update",
+            ShareFsMountOperation::Mount => "mount",
+            ShareFsMountOperation::Umount => "umount",
+            ShareFsMountOperation::Update => "update",
         };
 
         let fstype = match config.fstype {
