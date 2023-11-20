@@ -28,3 +28,12 @@ func TestHypervisorConfigNoKernelPath(t *testing.T) {
 
 	testHypervisorConfigValid(t, hypervisorConfig, false)
 }
+
+func TestRemoteHypervisorConfigNoKernelPath(t *testing.T) {
+	hypervisorConfig := &HypervisorConfig{
+		RemoteHypervisorSocket: "dummy_socket",
+		KernelPath:             "",
+	}
+
+	testHypervisorConfigValid(t, hypervisorConfig, true)
+}

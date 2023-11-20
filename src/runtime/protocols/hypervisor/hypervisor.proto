@@ -1,0 +1,48 @@
+// (C) Copyright IBM Corp. 2022.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+option go_package = "./";
+
+package hypervisor;
+
+service Hypervisor {
+	rpc CreateVM(CreateVMRequest) returns (CreateVMResponse) {}
+	rpc StartVM(StartVMRequest) returns (StartVMResponse) {}
+	rpc StopVM(StopVMRequest) returns (StopVMResponse) {}
+	rpc Version(VersionRequest) returns (VersionResponse) {}
+}
+
+
+message VersionRequest {
+	string version = 1;
+}
+
+message VersionResponse {
+	string version = 1;
+}
+
+message CreateVMRequest {
+	string id = 1;
+	map<string, string> annotations = 2;
+	string networkNamespacePath = 3;
+}
+
+message CreateVMResponse {
+	string agentSocketPath = 1;
+}
+
+message StartVMRequest {
+	string id = 1;
+}
+
+message StartVMResponse {
+}
+
+message StopVMRequest {
+	string id = 1;
+}
+
+message StopVMResponse {
+}

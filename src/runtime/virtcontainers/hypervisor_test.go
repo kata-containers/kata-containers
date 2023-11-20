@@ -7,11 +7,12 @@ package virtcontainers
 
 import (
 	"fmt"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGetKernelRootParams(t *testing.T) {
@@ -186,6 +187,10 @@ func TestSetMockHypervisorType(t *testing.T) {
 	testSetHypervisorType(t, "mock", MockHypervisor)
 }
 
+func TestSetRemoteHypervisorType(t *testing.T) {
+	testSetHypervisorType(t, "remote", RemoteHypervisor)
+}
+
 func TestSetUnknownHypervisorType(t *testing.T) {
 	var hypervisorType HypervisorType
 	assert := assert.New(t)
@@ -207,6 +212,11 @@ func TestStringFromQemuHypervisorType(t *testing.T) {
 	testStringFromHypervisorType(t, hypervisorType, "qemu")
 }
 
+func TestStringFromRemoteHypervisorType(t *testing.T) {
+	hypervisorType := RemoteHypervisor
+	testStringFromHypervisorType(t, hypervisorType, "remote")
+}
+
 func TestStringFromMockHypervisorType(t *testing.T) {
 	hypervisorType := MockHypervisor
 	testStringFromHypervisorType(t, hypervisorType, "mock")
@@ -222,6 +232,12 @@ func testNewHypervisorFromHypervisorType(t *testing.T, hypervisorType Hypervisor
 	hy, err := NewHypervisor(hypervisorType)
 	assert.NoError(err)
 	assert.Exactly(hy, expected)
+}
+
+func TestNewHypervisorFromRemoteHypervisorType(t *testing.T) {
+	hypervisorType := RemoteHypervisor
+	expectedHypervisor := &remoteHypervisor{}
+	testNewHypervisorFromHypervisorType(t, hypervisorType, expectedHypervisor)
 }
 
 func TestNewHypervisorFromMockHypervisorType(t *testing.T) {
