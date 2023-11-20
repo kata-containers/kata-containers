@@ -6,7 +6,7 @@ use std::io;
 use std::sync::Arc;
 
 use dbs_address_space::{AddressSpace, AddressSpaceRegion, AddressSpaceRegionType};
-use dbs_virtio_devices::{Error as VirtIoError, VirtioRegionHandler};
+use dbs_virtio_devices::{Error as VirtioError, VirtioRegionHandler};
 use log::{debug, error};
 use vm_memory::{FileOffset, GuestAddressSpace, GuestMemoryRegion, GuestRegionMmap};
 
@@ -41,7 +41,7 @@ impl DeviceVirtioRegionHandler {
     fn insert_address_space(
         &mut self,
         region: Arc<GuestRegionMmap>,
-    ) -> std::result::Result<(), VirtIoError> {
+    ) -> std::result::Result<(), VirtioError> {
         let file_offset = match region.file_offset() {
             // TODO: use from_arc
             Some(f) => Some(FileOffset::new(f.file().try_clone()?, 0)),
@@ -63,7 +63,7 @@ impl DeviceVirtioRegionHandler {
             error!("inserting address apace error: {}", e);
             // dbs-virtio-devices should not depend on dbs-address-space.
             // So here io::Error is used instead of AddressSpaceError directly.
-            VirtIoError::IOError(io::Error::new(
+            VirtioError::IOError(io::Error::new(
                 io::ErrorKind::Other,
                 format!(
                     "invalid address space region ({0:#x}, {1:#x})",
@@ -78,13 +78,13 @@ impl DeviceVirtioRegionHandler {
     fn insert_vm_as(
         &mut self,
         region: Arc<GuestRegionMmap>,
-    ) -> std::result::Result<(), VirtIoError> {
+    ) -> std::result::Result<(), VirtioError> {
         let vm_as_new = self.vm_as.memory().insert_region(region).map_err(|e| {
             error!(
                 "DeviceVirtioRegionHandler failed to insert guest memory region: {:?}.",
                 e
             );
-            VirtIoError::InsertMmap(e)
+            VirtioError::InsertMmap(e)
         })?;
         // Do not expect poisoned lock here, so safe to unwrap().
         self.vm_as.lock().unwrap().replace(vm_as_new);
@@ -97,7 +97,7 @@ impl VirtioRegionHandler for DeviceVirtioRegionHandler {
     fn insert_region(
         &mut self,
         region: Arc<GuestRegionMmap>,
-    ) -> std::result::Result<(), VirtIoError> {
+    ) -> std::result::Result<(), VirtioError> {
         debug!(
             "add geust memory region to address_space/vm_as, new region: {:?}",
             region

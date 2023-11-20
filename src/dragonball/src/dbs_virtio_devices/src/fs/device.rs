@@ -970,7 +970,7 @@ pub mod tests {
     use vm_memory::GuestMemoryRegion;
     use vm_memory::{GuestAddress, GuestMemoryMmap, GuestRegionMmap};
     use vmm_sys_util::tempfile::TempFile;
-    use Error as VirtIoError;
+    use Error as VirtioError;
 
     use super::*;
     use crate::device::VirtioRegionHandler;
@@ -996,7 +996,7 @@ pub mod tests {
         fn insert_region(
             &mut self,
             _region: Arc<GuestRegionMmap>,
-        ) -> std::result::Result<(), VirtIoError> {
+        ) -> std::result::Result<(), VirtioError> {
             Ok(())
         }
     }
