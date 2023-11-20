@@ -264,6 +264,7 @@ Options:
  -f           : Force installation (use with care).
  -h           : Show this help statement.
  -k <version> : Specify Kata Containers version.
+ -K <tarball> : Specify local Kata Containers tarball to install (takes priority over '-k').
  -l           : List installed and available versions only, then exit (uses network).
  -o           : Only install Kata Containers.
  -r           : Don't cleanup on failure (retain files).
@@ -583,29 +584,36 @@ configure_containerd()
 install_kata()
 {
 	local requested_version="${1:-}"
+	local kata_tarball="${2:-}"
 
 	local project="$kata_project"
 
-	local version_desc="latest version"
-	[ -n "$requested_version" ] && version_desc="version $requested_version"
+	local version=""
+	if [ -z "$kata_tarball" ]
+	then
+		local version_desc="latest version"
+		[ -n "$requested_version" ] && version_desc="version $requested_version"
+	
+		info "Downloading $project release ($version_desc)"
+	
+		local results
+		results=$(github_download_package \
+			"$kata_releases_url" \
+			"$requested_version" \
+			"$project")
+	
+		[ -z "$results" ] && die "Cannot download $project release file"
+	
+		version=$(echo "$results"|cut -d: -f1)
 
-	info "Downloading $project release ($version_desc)"
+		[ -z "$version" ] && die "Cannot determine $project resolved version"
 
-	local results
-	results=$(github_download_package \
-		"$kata_releases_url" \
-		"$requested_version" \
-		"$project")
+		local file
+		file=$(echo "$results"|cut -d: -f2-)
+	else
+		file="$kata_tarball"
+	fi
 
-	[ -z "$results" ] && die "Cannot download $project release file"
-
-	local version
-	version=$(echo "$results"|cut -d: -f1)
-
-	local file
-	file=$(echo "$results"|cut -d: -f2-)
-
-	[ -z "$version" ] && die "Cannot determine $project resolved version"
 	[ -z "$file" ] && die "Cannot determine $project release file"
 
 	# Allow the containerd service to find the Kata shim and users to find
@@ -627,7 +635,12 @@ install_kata()
 
 	[ -n "$unexpected" ] && die "File '$file' contains unexpected paths: '$unexpected'"
 
-	info "Installing $project release $version from $file"
+	if [ -n "$kata_tarball" ]
+	then
+		info "Installing $project release from $file"
+	else
+		info "Installing $project release $version from $file"
+	fi
 
 	sudo tar -C / -xvf "${file}"
 
@@ -680,11 +693,12 @@ configure_kata()
 handle_kata()
 {
 	local version="${1:-}"
+	local tarball="${2:-}"
 
-	local enable_debug="${2:-}"
+	local enable_debug="${3:-}"
 	[ -z "$enable_debug" ] && die "no enable debug value"
 
-	install_kata "$version" "$enable_debug"
+	install_kata "$version" "$tarball"
 
 	configure_kata "$enable_debug"
 
@@ -838,10 +852,10 @@ handle_installation()
 	# These params can be blank
 	local kata_version="${7:-}"
 	local containerd_flavour="${8:-}"
-
 	local install_docker="${9:-}"
 	[ -z "$install_docker" ] && die "no install docker value"
 
+	local kata_tarball="${10:-}"
 	# The tool to be testing the installation with
 	local tool="ctr"
 
@@ -861,7 +875,7 @@ handle_installation()
 
 	setup "$cleanup" "$force" "$skip_containerd"
 
-	handle_kata "$kata_version" "$enable_debug"
+	handle_kata "$kata_version" "$kata_tarball" "$enable_debug"
 
 	[ "$skip_containerd" = "false" ] && \
 		handle_containerd \
@@ -957,8 +971,9 @@ handle_args()
 
 	local kata_version=""
 	local containerd_flavour="lts"
+	local kata_tarball=""
 
-	while getopts "c:dDfhk:lortT" opt "$@"
+	while getopts "c:dDfhk:K:lortT" opt "$@"
 	do
 		case "$opt" in
 			c) containerd_flavour="$OPTARG" ;;
@@ -967,6 +982,7 @@ handle_args()
 			f) force="true" ;;
 			h) usage; exit 0 ;;
 			k) kata_version="$OPTARG" ;;
+			K) kata_tarball="$OPTARG" ;;
 			l) list_versions='true' ;;
 			o) skip_containerd="true" ;;
 			r) cleanup="false" ;;
@@ -995,7 +1011,8 @@ handle_args()
 		"$only_run_test" \
 		"$kata_version" \
 		"$containerd_flavour" \
-		"$install_docker"
+		"$install_docker" \
+		"$kata_tarball"
 }
 
 main()
