@@ -675,11 +675,14 @@ where
             error!("Failed to write config space");
             return Err(ConfigError::InvalidOffset(offset));
         };
-        let Some(dst) = start.checked_add(data.len())
-            .and_then(|end| config_slice.get_mut(start..end)) else
-        {
+        let Some(dst) = start
+            .checked_add(data.len())
+            .and_then(|end| config_slice.get_mut(start..end))
+        else {
             error!("Failed to write config space");
-            return Err(ConfigError::InvalidOffsetPlusDataLen(offset + data.len() as u64));
+            return Err(ConfigError::InvalidOffsetPlusDataLen(
+                offset + data.len() as u64,
+            ));
         };
         dst.copy_from_slice(data);
         Ok(())
