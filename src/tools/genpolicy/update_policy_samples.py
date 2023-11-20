@@ -22,6 +22,7 @@ file_base_path = "../../agent/samples/policy/yaml"
 
 def runCmd(arg):
     proc = subprocess.run([arg], stdout=sys.stdout, stderr=sys.stderr, universal_newlines=True, input="", shell=True)
+    print(f"COMMAND: {arg}")
     if proc.returncode != 0:
         print(f"`{arg}` failed with exit code {proc.returncode}. Stderr: {proc.stderr}, Stdout: {proc.stdout}")
     return proc

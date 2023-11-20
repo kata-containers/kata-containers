@@ -30,8 +30,6 @@
         "kubernetes/incomplete-init/cassandra-statefulset.yaml",
         "kubernetes/incomplete-init/controller.yaml",
         "kubernetes/incomplete-init/cockroachdb-statefulset.yaml",
-        "kubernetes/incomplete-init/node_ds.yaml",
-        "kubernetes/incomplete-init/redis-master-controller.yaml",
         "pod/pod-exec.yaml",
         "pod/pod-lifecycle.yaml",
         "pod/pod-one-container.yaml",
@@ -41,7 +39,6 @@
         "pod/pod-three-containers.yaml",
         "replica-set/replica-busy.yaml",
         "secrets/azure-file-secrets.yaml",
-        "secrets/pull-secrets.yaml",
         "stateful-set/web.yaml"
     ],
     "silently_ignored": [
