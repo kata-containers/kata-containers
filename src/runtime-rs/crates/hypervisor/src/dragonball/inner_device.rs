@@ -14,7 +14,7 @@ use dragonball::device_manager::blk_dev_mgr::BlockDeviceType;
 
 use super::DragonballInner;
 use crate::{
-    device::DeviceType, HybridVsockConfig, NetworkConfig, ShareFsDeviceConfig, ShareFsMountConfig,
+    device::DeviceType, HybridVsockConfig, NetworkConfig, ShareFsConfig, ShareFsMountConfig,
     ShareFsMountType, ShareFsOperation, VfioBusMode, VfioDevice, VmmState, JAILER_ROOT,
 };
 
@@ -67,9 +67,6 @@ impl DragonballInner {
             DeviceType::ShareFs(sharefs) => self
                 .add_share_fs_device(&sharefs.config)
                 .context("add share fs device"),
-            DeviceType::ShareFsMount(sharefs_mount) => self
-                .add_share_fs_mount(&sharefs_mount.config)
-                .context("add share fs mount"),
         }
     }
 
@@ -103,8 +100,14 @@ impl DragonballInner {
 
     pub(crate) async fn update_device(&mut self, device: DeviceType) -> Result<()> {
         info!(sl!(), "dragonball update device {:?}", &device);
-
-        Ok(())
+        match device {
+            DeviceType::ShareFs(sharefs_mount) => {
+                // It's safe to unwrap mount config as mount_config is always there.
+                self.add_share_fs_mount(&sharefs_mount.config.mount_config.unwrap())
+                    .context("update share-fs device with mount operation.")
+            }
+            _ => Err(anyhow!("unsupported device {:?} to update.", device)),
+        }
     }
 
     fn add_vfio_device(&mut self, device: &VfioDevice) -> Result<()> {
@@ -291,7 +294,7 @@ impl DragonballInner {
         Ok(())
     }
 
-    fn add_share_fs_device(&self, config: &ShareFsDeviceConfig) -> Result<()> {
+    fn add_share_fs_device(&self, config: &ShareFsConfig) -> Result<()> {
         let mut fs_cfg = FsDeviceConfigInfo {
             sock_path: config.sock_path.clone(),
             tag: config.mount_tag.clone(),
