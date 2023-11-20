@@ -9,6 +9,7 @@
 //! MP Table configurations used for defining VM boot status.
 
 use libc::c_char;
+use std::collections::HashMap;
 use std::io;
 use std::mem;
 use std::result;
@@ -133,6 +134,7 @@ const MPC_OEM: [c_char; 8] = char_array!(c_char; 'A', 'L', 'I', 'C', 'L', 'O', '
 const MPC_PRODUCT_ID: [c_char; 12] =
     char_array!(c_char; 'D', 'R', 'A', 'G', 'O', 'N', 'B', 'A', 'L', 'L', '1', '0');
 const BUS_TYPE_ISA: [u8; 6] = char_array!(u8; 'I', 'S', 'A', ' ', ' ', ' ');
+const BUS_TYPE_PCI: [u8; 6] = char_array!(u8; 'P', 'C', 'I', ' ', ' ', ' ');
 const IO_APIC_DEFAULT_PHYS_BASE: u32 = 0xfec0_0000; // source: linux/arch/x86/include/asm/apicdef.h
 const APIC_DEFAULT_PHYS_BASE: u32 = 0xfee0_0000; // source: linux/arch/x86/include/asm/apicdef.h
 
@@ -144,6 +146,7 @@ const CPU_FEATURE_APIC: u32 = 0x200;
 const CPU_FEATURE_FPU: u32 = 0x001;
 
 const BUS_ID_ISA: u8 = 0;
+const BUS_ID_PCI: u8 = 1;
 
 fn compute_checksum<T: Copy>(v: &T) -> u8 {
     // Safe because we are only reading the bytes within the size of the `T` reference `v`.
@@ -171,7 +174,12 @@ fn compute_mp_size(num_cpus: u8) -> usize {
 }
 
 /// Performs setup of the MP table for the given `num_cpus`
-pub fn setup_mptable<M: GuestMemory>(mem: &M, boot_cpus: u8, max_cpus: u8) -> Result<()> {
+pub fn setup_mptable<M: GuestMemory>(
+    mem: &M,
+    boot_cpus: u8,
+    max_cpus: u8,
+    pci_legacy_irqs: Option<&HashMap<u8, u8>>,
+) -> Result<()> {
     if boot_cpus > max_cpus {
         return Err(Error::TooManyBootCpus);
     }
@@ -253,6 +261,18 @@ pub fn setup_mptable<M: GuestMemory>(mem: &M, boot_cpus: u8, max_cpus: u8) -> Re
     }
 
     {
+        let size = mem::size_of::<MpcBusWrapper>() as u64;
+        let mut mpc_bus = MpcBusWrapper(mpspec::mpc_bus::default());
+        mpc_bus.0.type_ = mpspec::MP_BUS as u8;
+        mpc_bus.0.busid = BUS_ID_PCI;
+        mpc_bus.0.bustype = BUS_TYPE_PCI;
+        mem.write_obj(mpc_bus, base_mp)
+            .map_err(|_| Error::WriteMpcBus)?;
+        base_mp = base_mp.unchecked_add(size);
+        checksum = checksum.wrapping_add(compute_checksum(&mpc_bus.0));
+    }
+
+    {
         let size = mem::size_of::<MpcIoapicWrapper>() as u64;
         let mut mpc_ioapic = MpcIoapicWrapper(mpspec::mpc_ioapic::default());
         mpc_ioapic.0.type_ = mpspec::MP_IOAPIC as u8;
@@ -276,6 +296,21 @@ pub fn setup_mptable<M: GuestMemory>(mem: &M, boot_cpus: u8, max_cpus: u8) -> Re
         mpc_intsrc.0.srcbusirq = i;
         mpc_intsrc.0.dstapic = ioapicid;
         mpc_intsrc.0.dstirq = i;
+        // Patch irq routing entry for mptable if it is registered
+        // as PCI legacy irq.
+        if let Some(irq_device) = pci_legacy_irqs {
+            if let Some(device_id) = irq_device.get(&i) {
+                mpc_intsrc.0.srcbus = BUS_ID_PCI;
+                mpc_intsrc.0.srcbusirq = device_id << 2;
+            }
+        }
+        // Keep it consistent with irq routing configuration in initialize_legacy(),
+        // IRQ0 is connected to Pin2 of the first IOAPIC and IRQ2 is unused.
+        if i == 0 {
+            mpc_intsrc.0.dstirq = 2;
+        } else if i == 2 {
+            continue;
+        }
         mem.write_obj(mpc_intsrc, base_mp)
             .map_err(|_| Error::WriteMpcIntsrc)?;
         base_mp = base_mp.unchecked_add(size);
@@ -368,7 +403,7 @@ mod tests {
         )])
         .unwrap();
 
-        setup_mptable(&mem, num_cpus, num_cpus).unwrap();
+        setup_mptable(&mem, num_cpus, num_cpus, None).unwrap();
     }
 
     #[test]
@@ -380,7 +415,7 @@ mod tests {
         )])
         .unwrap();
 
-        assert!(setup_mptable(&mem, num_cpus, num_cpus).is_err());
+        assert!(setup_mptable(&mem, num_cpus, num_cpus, None).is_err());
     }
 
     #[test]
@@ -392,7 +427,7 @@ mod tests {
         )])
         .unwrap();
 
-        setup_mptable(&mem, num_cpus, num_cpus).unwrap();
+        setup_mptable(&mem, num_cpus, num_cpus, None).unwrap();
 
         let mpf_intel: MpfIntelWrapper = mem.read_obj(GuestAddress(MPTABLE_START)).unwrap();
 
@@ -411,7 +446,7 @@ mod tests {
         )])
         .unwrap();
 
-        setup_mptable(&mem, num_cpus, num_cpus).unwrap();
+        setup_mptable(&mem, num_cpus, num_cpus, None).unwrap();
 
         let mpf_intel: MpfIntelWrapper = mem.read_obj(GuestAddress(MPTABLE_START)).unwrap();
         let mpc_offset = GuestAddress(u64::from(mpf_intel.0.physptr));
@@ -445,7 +480,7 @@ mod tests {
         .unwrap();
 
         for i in 0..MAX_SUPPORTED_CPUS as u8 {
-            setup_mptable(&mem, i, i).unwrap();
+            setup_mptable(&mem, i, i, None).unwrap();
 
             let mpf_intel: MpfIntelWrapper = mem.read_obj(GuestAddress(MPTABLE_START)).unwrap();
             let mpc_offset = GuestAddress(u64::from(mpf_intel.0.physptr));
@@ -481,7 +516,7 @@ mod tests {
         .unwrap();
 
         for i in 0..MAX_SUPPORTED_CPUS as u8 {
-            setup_mptable(&mem, i, MAX_SUPPORTED_CPUS as u8).unwrap();
+            setup_mptable(&mem, i, MAX_SUPPORTED_CPUS as u8, None).unwrap();
 
             let mpf_intel: MpfIntelWrapper = mem.read_obj(GuestAddress(MPTABLE_START)).unwrap();
             let mpc_offset = GuestAddress(u64::from(mpf_intel.0.physptr));
@@ -517,7 +552,34 @@ mod tests {
         )])
         .unwrap();
 
-        let result = setup_mptable(&mem, cpus as u8, cpus as u8).unwrap_err();
+        let result = setup_mptable(&mem, cpus as u8, cpus as u8, None).unwrap_err();
         assert_eq!(result, Error::TooManyCpus);
+    }
+
+    #[test]
+    fn irq_mptable_validation() {
+        let cpus = 1;
+        let mem = GuestMemoryMmap::<()>::from_ranges(&[(
+            GuestAddress(MPTABLE_START),
+            compute_mp_size(cpus as u8),
+        )])
+        .unwrap();
+        let mut pci_legacy_irqs = HashMap::new();
+        pci_legacy_irqs.insert(0_u8, 2_u8);
+        setup_mptable(&mem, cpus as u8, cpus as u8, Some(&pci_legacy_irqs)).unwrap();
+        let mpf_intel: MpfIntelWrapper = mem.read_obj(GuestAddress(MPTABLE_START)).unwrap();
+        let mpc_offset = GuestAddress(u64::from(mpf_intel.0.physptr));
+        let irq_offset = mpc_offset
+            .checked_add(
+                mem::size_of::<MpcTableWrapper>() as u64
+                    + mem::size_of::<MpcCpuWrapper>() as u64 * cpus as u64
+                    + mem::size_of::<MpcIoapicWrapper>() as u64
+                    + mem::size_of::<MpcBusWrapper>() as u64 * 2,
+            )
+            .unwrap();
+        let mpc_int_table: MpcIntsrcWrapper = mem.read_obj(irq_offset).unwrap();
+        assert_eq!(mpc_int_table.0.srcbusirq, 2 << 2);
+        assert_eq!(mpc_int_table.0.srcbus, BUS_ID_PCI);
+        assert_eq!(mpc_int_table.0.dstirq, 2);
     }
 }

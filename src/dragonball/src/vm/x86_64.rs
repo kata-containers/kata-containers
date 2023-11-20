@@ -59,7 +59,7 @@ fn configure_system<M: GuestMemory>(
     let himem_start = GuestAddress(layout::HIMEM_START);
 
     // Note that this puts the mptable at the last 1k of Linux's 640k base RAM
-    mptable::setup_mptable(guest_mem, boot_cpus, max_cpus).map_err(Error::MpTableSetup)?;
+    mptable::setup_mptable(guest_mem, boot_cpus, max_cpus, None).map_err(Error::MpTableSetup)?;
 
     let mut params: BootParamsWrapper = BootParamsWrapper(bootparam::boot_params::default());
 
