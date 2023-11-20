@@ -6,7 +6,7 @@
 use std::convert::TryInto;
 
 use dbs_utils::epoll_manager::EpollManager;
-use dbs_virtio_devices::{self as virtio, Error as VirtIoError};
+use dbs_virtio_devices::{self as virtio, Error as VirtioError};
 use serde_derive::{Deserialize, Serialize};
 use slog::{error, info};
 
@@ -77,7 +77,7 @@ pub enum FsDeviceError {
 
     /// Creating a shared-fs device fails (if the vhost-user socket cannot be open.)
     #[error("cannot create shared-fs device: {0}")]
-    CreateFsDevice(#[source] VirtIoError),
+    CreateFsDevice(#[source] VirtioError),
 
     /// Cannot initialize a shared-fs device or add a device to the MMIO Bus.
     #[error("failure while registering shared-fs device: {0}")]

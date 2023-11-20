@@ -18,7 +18,7 @@ use super::defs;
 use super::muxer::{VsockGenericMuxer, VsockMuxer};
 use super::packet::VsockPacket;
 use crate::device::VirtioDeviceConfig;
-use crate::{DbsGuestAddressSpace, Result as VirtIoResult};
+use crate::{DbsGuestAddressSpace, Result as VirtioResult};
 
 const QUEUE_RX: usize = 0;
 const QUEUE_TX: usize = 1;
@@ -83,7 +83,7 @@ where
 
     /// Signal the guest driver that we've used some virtio buffers that it had
     /// previously made available.
-    pub(crate) fn signal_used_queue(&self, idx: usize) -> VirtIoResult<()> {
+    pub(crate) fn signal_used_queue(&self, idx: usize) -> VirtioResult<()> {
         trace!("{}: raising IRQ", self.id);
         self.config.queues[idx].notify().map_err(|e| {
             error!("{}: failed to signal used queue {}, {:?}", self.id, idx, e);
