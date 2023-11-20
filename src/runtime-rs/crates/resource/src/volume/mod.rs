@@ -77,7 +77,7 @@ impl VolumeResource {
             } else if is_block_volume(m).context("block volume type")? {
                 // handle block volume
                 Arc::new(
-                    block_volume::BlockVolume::new(d, m, read_only, cid, sid)
+                    block_volume::BlockVolume::new(d, m, read_only, sid)
                         .await
                         .with_context(|| format!("new share fs volume {:?}", m))?,
                 )
