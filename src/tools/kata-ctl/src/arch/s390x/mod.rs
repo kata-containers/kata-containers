@@ -104,11 +104,11 @@ mod arch_specific {
 
         let check_fn = if search_values.is_empty() {
             |param: &str, search_param: &str, _search_values: &[&str]| {
-                return param.eq_ignore_ascii_case(search_param);
+                param.eq_ignore_ascii_case(search_param)
             }
         } else {
             |param: &str, search_param: &str, search_values: &[&str]| {
-                let split: Vec<&str> = param.splitn(2, "=").collect();
+                let split: Vec<&str> = param.splitn(2, '=').collect();
                 if split.len() < 2 || split[0] != search_param {
                     return false;
                 }
