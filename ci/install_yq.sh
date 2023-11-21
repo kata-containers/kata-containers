@@ -17,6 +17,7 @@ die() {
 function install_yq() {
 	local yq_pkg="github.com/mikefarah/yq"
 	local yq_version=3.4.1
+	local precmd=""
 	INSTALL_IN_GOPATH=${INSTALL_IN_GOPATH:-true}
 
 	if [ "${INSTALL_IN_GOPATH}"  == "true" ];then
@@ -25,6 +26,15 @@ function install_yq() {
 		local yq_path="${GOPATH}/bin/yq"
 	else
 		yq_path="/usr/local/bin/yq"
+		# Check if we need sudo to install yq
+		if [ ! -w "/usr/local/bin" ]; then
+			# Check if we have sudo privileges
+			if ! sudo -n true 2>/dev/null; then
+				die "Please provide sudo privileges to install yq"
+			else
+				precmd="sudo"
+			fi
+		fi
 	fi
 	[ -x  "${yq_path}" ] && [ "`${yq_path} --version`"X == "yq version ${yq_version}"X ] && return
 
@@ -75,9 +85,9 @@ function install_yq() {
 
 	## NOTE: ${var,,} => gives lowercase value of var
 	local yq_url="https://${yq_pkg}/releases/download/${yq_version}/yq_${goos}_${goarch}"
-	curl -o "${yq_path}" -LSsf "${yq_url}"
+	${precmd} curl -o "${yq_path}" -LSsf "${yq_url}"
 	[ $? -ne 0 ] && die "Download ${yq_url} failed"
-	chmod +x "${yq_path}"
+	${precmd} chmod +x "${yq_path}"
 
 	if ! command -v "${yq_path}" >/dev/null; then
 		die "Cannot not get ${yq_path} executable"
