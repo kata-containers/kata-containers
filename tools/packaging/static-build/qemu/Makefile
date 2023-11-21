@@ -12,5 +12,8 @@ build:
 build-experimental:
 	"$(MK_DIR)/build-static-qemu-experimental.sh"
 
+build-arm-experimental:
+	"$(MK_DIR)/build-static-qemu-arm-experimental.sh"
+
 clean:
 	rm -f kata-qemu-static.tar.gz

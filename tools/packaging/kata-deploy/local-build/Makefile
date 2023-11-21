@@ -34,6 +34,7 @@ all: serial-targets \
 	ovmf-sev-tarball \
 	ovmf-tarball \
 	qemu-snp-experimental-tarball \
+	qemu-arm-experimental-tarball \
 	qemu-tarball \
 	qemu-tdx-experimental-tarball \
 	stratovirt-tarball \
@@ -118,6 +119,9 @@ qemu-tarball:
 	${MAKE} $@-build
 
 qemu-tdx-experimental-tarball:
+	${MAKE} $@-build
+
+qemu-arm-experimental-tarball:
 	${MAKE} $@-build
 
 stratovirt-tarball:
