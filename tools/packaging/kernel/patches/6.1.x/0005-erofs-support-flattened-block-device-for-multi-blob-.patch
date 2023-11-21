@@ -1,0 +1,106 @@
+From 8b465fecc35a434e61728a6184d188c6daa37a5d Mon Sep 17 00:00:00 2001
+From: Jia Zhu <zhujia.zj@bytedance.com>
+Date: Thu, 2 Mar 2023 15:17:51 +0800
+Subject: [PATCH] erofs: support flattened block device for multi-blob images
+
+In order to support mounting multi-blobs container image as a single
+block device, add flattened block device feature for EROFS.
+
+In this mode, all meta/data contents will be mapped into one block
+space. User could compose a block device(by nbd/ublk/virtio-blk/
+vhost-user-blk) from multiple sources and mount the block device by
+EROFS directly. It can reduce the number of block devices used, and
+it's also benefits in both VM file passthrough and distributed storage
+scenarios.
+
+You can test this using the method mentioned by:
+https://github.com/dragonflyoss/image-service/pull/1139
+1. Compose a (nbd)block device from multi-blobs.
+2. Mount EROFS on mntdir/.
+3. Compare the md5sum between source dir and mntdir/.
+
+Later, we could also use it to refer original tar blobs.
+
+Signed-off-by: Jia Zhu <zhujia.zj@bytedance.com>
+Signed-off-by: Xin Yin <yinxin.x@bytedance.com>
+Reviewed-by: Jingbo Xu <jefflexu@linux.alibaba.com>
+Acked-by: Chao Yu <chao@kernel.org>
+Tested-by: Jiang Liu <gerry@linux.alibaba.com>
+Link: https://lore.kernel.org/r/20230302071751.48425-1-zhujia.zj@bytedance.com
+[ Gao Xiang: refine commit message and use erofs_pos(). ]
+Signed-off-by: Gao Xiang <hsiangkao@linux.alibaba.com>
+---
+ fs/erofs/data.c     | 8 ++++++--
+ fs/erofs/internal.h | 1 +
+ fs/erofs/super.c    | 5 ++++-
+ 3 files changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/fs/erofs/data.c b/fs/erofs/data.c
+index 1c931e32d28e..03c6ffdfcbfb 100644
+--- a/fs/erofs/data.c
++++ b/fs/erofs/data.c
+@@ -200,7 +200,6 @@ int erofs_map_dev(struct super_block *sb, struct erofs_map_dev *map)
+ 	struct erofs_device_info *dif;
+ 	int id;
+ 
+-	/* primary device by default */
+ 	map->m_bdev = sb->s_bdev;
+ 	map->m_daxdev = EROFS_SB(sb)->dax_dev;
+ 	map->m_dax_part_off = EROFS_SB(sb)->dax_part_off;
+@@ -213,12 +212,17 @@ int erofs_map_dev(struct super_block *sb, struct erofs_map_dev *map)
+ 			up_read(&devs->rwsem);
+ 			return -ENODEV;
+ 		}
++		if (devs->flatdev) {
++			map->m_pa += erofs_pos(sb, dif->mapped_blkaddr);
++			up_read(&devs->rwsem);
++			return 0;
++		}
+ 		map->m_bdev = dif->bdev;
+ 		map->m_daxdev = dif->dax_dev;
+ 		map->m_dax_part_off = dif->dax_part_off;
+ 		map->m_fscache = dif->fscache;
+ 		up_read(&devs->rwsem);
+-	} else if (devs->extra_devices) {
++	} else if (devs->extra_devices && !devs->flatdev) {
+ 		down_read(&devs->rwsem);
+ 		idr_for_each_entry(&devs->tree, dif, id) {
+ 			erofs_off_t startoff, length;
+diff --git a/fs/erofs/internal.h b/fs/erofs/internal.h
+index 9eff0c0ad2d7..e30a4fd43ccb 100644
+--- a/fs/erofs/internal.h
++++ b/fs/erofs/internal.h
+@@ -81,6 +81,7 @@ struct erofs_dev_context {
+ 	struct rw_semaphore rwsem;
+ 
+ 	unsigned int extra_devices;
++	bool flatdev;
+ };
+ 
+ struct erofs_fs_context {
+diff --git a/fs/erofs/super.c b/fs/erofs/super.c
+index dbffcdd696df..9e56a6fb2267 100644
+--- a/fs/erofs/super.c
++++ b/fs/erofs/super.c
+@@ -252,7 +252,7 @@ static int erofs_init_device(struct erofs_buf *buf, struct super_block *sb,
+ 		if (IS_ERR(fscache))
+ 			return PTR_ERR(fscache);
+ 		dif->fscache = fscache;
+-	} else {
++	} else if (!sbi->devs->flatdev) {
+ 		bdev = blkdev_get_by_path(dif->path, FMODE_READ | FMODE_EXCL,
+ 					  sb->s_type);
+ 		if (IS_ERR(bdev))
+@@ -294,6 +294,9 @@ static int erofs_scan_devices(struct super_block *sb,
+ 	if (!ondisk_extradevs)
+ 		return 0;
+ 
++	if (!sbi->devs->extra_devices && !erofs_is_fscache_mode(sb))
++		sbi->devs->flatdev = true;
++
+ 	sbi->device_id_mask = roundup_pow_of_two(ondisk_extradevs + 1) - 1;
+ 	pos = le16_to_cpu(dsb->devt_slotoff) * EROFS_DEVT_SLOT_SIZE;
+ 	down_read(&sbi->devs->rwsem);
+-- 
+2.34.1
+
