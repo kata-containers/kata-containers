@@ -87,6 +87,7 @@ pub trait Hypervisor: std::fmt::Debug + Send + Sync {
     // device manager
     async fn add_device(&self, device: DeviceType) -> Result<DeviceType>;
     async fn remove_device(&self, device: DeviceType) -> Result<()>;
+    async fn update_device(&self, device: DeviceType) -> Result<()>;
 
     // utils
     async fn get_agent_socket(&self) -> Result<String>;

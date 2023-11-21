@@ -102,7 +102,10 @@ impl ResourceManagerInner {
                     {
                         let share_fs = share_fs::new(&self.sid, &c).context("new share fs")?;
                         share_fs
-                            .setup_device_before_start_vm(self.hypervisor.as_ref())
+                            .setup_device_before_start_vm(
+                                self.hypervisor.as_ref(),
+                                &self.device_manager,
+                            )
                             .await
                             .context("setup share fs device before start vm")?;
 
@@ -212,7 +215,7 @@ impl ResourceManagerInner {
     pub async fn setup_after_start_vm(&mut self) -> Result<()> {
         if let Some(share_fs) = self.share_fs.as_ref() {
             share_fs
-                .setup_device_after_start_vm(self.hypervisor.as_ref())
+                .setup_device_after_start_vm(self.hypervisor.as_ref(), &self.device_manager)
                 .await
                 .context("setup share fs device after start vm")?;
         }
@@ -227,6 +230,7 @@ impl ResourceManagerInner {
                 .context("handle neighbors")?;
             self.handle_routes(network).await.context("handle routes")?;
         }
+
         Ok(())
     }
 

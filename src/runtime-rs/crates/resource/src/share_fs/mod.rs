@@ -22,11 +22,14 @@ pub mod sandbox_bind_mounts;
 
 use std::{collections::HashMap, fmt::Debug, path::PathBuf, sync::Arc};
 
-use agent::Storage;
 use anyhow::{anyhow, Context, Ok, Result};
 use async_trait::async_trait;
-use hypervisor::Hypervisor;
+use tokio::sync::RwLock;
+
+use agent::Storage;
 use kata_types::config::hypervisor::SharedFsInfo;
+
+use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
 
 const VIRTIO_FS: &str = "virtio-fs";
 const _VIRTIO_FS_NYDUS: &str = "virtio-fs-nydus";
@@ -45,8 +48,16 @@ const RAFS_DIR: &str = "rafs";
 #[async_trait]
 pub trait ShareFs: Send + Sync {
     fn get_share_fs_mount(&self) -> Arc<dyn ShareFsMount>;
-    async fn setup_device_before_start_vm(&self, h: &dyn Hypervisor) -> Result<()>;
-    async fn setup_device_after_start_vm(&self, h: &dyn Hypervisor) -> Result<()>;
+    async fn setup_device_before_start_vm(
+        &self,
+        h: &dyn Hypervisor,
+        d: &RwLock<DeviceManager>,
+    ) -> Result<()>;
+    async fn setup_device_after_start_vm(
+        &self,
+        h: &dyn Hypervisor,
+        d: &RwLock<DeviceManager>,
+    ) -> Result<()>;
     async fn get_storages(&self) -> Result<Vec<Storage>>;
     fn mounted_info_set(&self) -> Arc<Mutex<HashMap<String, MountedInfo>>>;
 }

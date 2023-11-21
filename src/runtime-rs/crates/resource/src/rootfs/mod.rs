@@ -23,6 +23,7 @@ use self::{block_rootfs::is_block_rootfs, nydus_rootfs::NYDUS_ROOTFS_TYPE};
 const ROOTFS: &str = "rootfs";
 const HYBRID_ROOTFS_LOWER_DIR: &str = "rootfs_lower";
 const TYPE_OVERLAY_FS: &str = "overlay";
+
 #[async_trait]
 pub trait Rootfs: Send + Sync {
     async fn get_guest_rootfs_path(&self) -> Result<String>;
@@ -102,9 +103,16 @@ impl RootFsResource {
                     // handle nydus rootfs
                     let share_rootfs: Arc<dyn Rootfs> = if layer.fs_type == NYDUS_ROOTFS_TYPE {
                         Arc::new(
-                            nydus_rootfs::NydusRootfs::new(share_fs, h, sid, cid, layer)
-                                .await
-                                .context("new nydus rootfs")?,
+                            nydus_rootfs::NydusRootfs::new(
+                                device_manager,
+                                share_fs,
+                                h,
+                                sid,
+                                cid,
+                                layer,
+                            )
+                            .await
+                            .context("new nydus rootfs")?,
                         )
                     }
                     // handle sharefs rootfs

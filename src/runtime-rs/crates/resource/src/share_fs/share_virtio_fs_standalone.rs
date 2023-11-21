@@ -6,15 +6,8 @@
 
 use std::{collections::HashMap, process::Stdio, sync::Arc};
 
-use crate::share_fs::share_virtio_fs::{
-    prepare_virtiofs, FS_TYPE_VIRTIO_FS, KATA_VIRTIO_FS_DEV_TYPE, MOUNT_GUEST_TAG,
-};
-use crate::share_fs::{KATA_GUEST_SHARE_DIR, VIRTIO_FS};
-use agent::Storage;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use hypervisor::Hypervisor;
-use kata_types::config::hypervisor::SharedFsInfo;
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::{Child, Command},
@@ -24,9 +17,19 @@ use tokio::{
     },
 };
 
+use agent::Storage;
+use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
+use kata_types::config::hypervisor::SharedFsInfo;
+
 use super::{
     share_virtio_fs::generate_sock_path, utils::ensure_dir_exist, utils::get_host_ro_shared_path,
     virtio_fs_share_mount::VirtiofsShareMount, MountedInfo, ShareFs, ShareFsMount,
+};
+use crate::share_fs::{
+    share_virtio_fs::{
+        prepare_virtiofs, FS_TYPE_VIRTIO_FS, KATA_VIRTIO_FS_DEV_TYPE, MOUNT_GUEST_TAG,
+    },
+    KATA_GUEST_SHARE_DIR, VIRTIO_FS,
 };
 
 #[derive(Debug, Clone)]
@@ -172,15 +175,24 @@ impl ShareFs for ShareVirtioFsStandalone {
         self.share_fs_mount.clone()
     }
 
-    async fn setup_device_before_start_vm(&self, h: &dyn Hypervisor) -> Result<()> {
-        prepare_virtiofs(h, VIRTIO_FS, &self.config.id, &h.get_jailer_root().await?)
+    async fn setup_device_before_start_vm(
+        &self,
+        h: &dyn Hypervisor,
+        d: &RwLock<DeviceManager>,
+    ) -> Result<()> {
+        prepare_virtiofs(d, VIRTIO_FS, &self.config.id, &h.get_jailer_root().await?)
             .await
             .context("prepare virtiofs")?;
         self.setup_virtiofsd(h).await.context("setup virtiofsd")?;
+
         Ok(())
     }
 
-    async fn setup_device_after_start_vm(&self, _h: &dyn Hypervisor) -> Result<()> {
+    async fn setup_device_after_start_vm(
+        &self,
+        _h: &dyn Hypervisor,
+        _d: &RwLock<DeviceManager>,
+    ) -> Result<()> {
         Ok(())
     }
 
