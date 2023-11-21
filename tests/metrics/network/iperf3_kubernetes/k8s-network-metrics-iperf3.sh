@@ -215,7 +215,8 @@ function iperf3_start_deployment() {
 
 function iperf3_deployment_cleanup() {
 	info "iperf: deleting deployments and services"
-	kubectl delete pod "${server_pod_name}" "${client_pod_name}"
+	kubectl delete pod "${server_pod_name}" -n default
+	kubectl delete pod "${client_pod_name}" -n default
 	kubectl delete -f "${IPERF_DAEMONSET}"
 	kubectl delete -f "${IPERF_DEPLOYMENT}"
 	kill_kata_components && sleep 1
