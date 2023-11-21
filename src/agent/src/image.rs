@@ -5,20 +5,32 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::sync::Arc;
+use anyhow::{anyhow, Result};
 use tokio::sync::Mutex;
-use crate::sandbox::Sandbox;
+
+#[rustfmt::skip]
+lazy_static! {
+    pub static ref IMAGE_SERVICE: Mutex<Option<ImageService>> = Mutex::new(None);
+}
 
 // Convenience function to obtain the scope logger.
 fn sl() -> slog::Logger {
     slog_scope::logger().new(o!("subsystem" => "image"))
 }
 
-pub struct ImageService {
-    sandbox: Arc<Mutex<Sandbox>>,
-}
+#[derive(Clone)]
+pub struct ImageService {}
 impl ImageService {
-    pub fn new(sandbox: Arc<Mutex<Sandbox>>) -> Self {
-        Self { sandbox }
+    pub fn new() -> Self {
+        Self {}
+    }
+
+    /// Get the singleton instance of image service.
+    pub async fn singleton() -> Result<ImageService> {
+        IMAGE_SERVICE
+            .lock()
+            .await
+            .clone()
+            .ok_or_else(|| anyhow!("image service is uninitialized"))
     }
 }
