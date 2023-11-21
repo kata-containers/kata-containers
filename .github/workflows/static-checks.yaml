@@ -80,14 +80,14 @@ jobs:
         instance:
           - "ubuntu-20.04"
           - "arm-no-k8s"
+          - "s390x"
     runs-on: ${{ matrix.instance }}
-
     steps:
       - name: Adjust a permission for repo
         run: |
           sudo chown -R $USER:$USER $GITHUB_WORKSPACE $HOME
           sudo rm -rf $GITHUB_WORKSPACE/*
-        if: ${{ matrix.instance == 'arm-no-k8s' }}
+        if: ${{ matrix.instance != 'ubuntu-20.04' }}
 
       - name: Checkout the code
         uses: actions/checkout@v4
