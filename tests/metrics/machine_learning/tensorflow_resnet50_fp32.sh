@@ -28,8 +28,8 @@ CMD="$dst_dir/$start_script"
 guest_trigger_file="$dst_dir/$trigger_file"
 host_trigger_file="$src_dir/$trigger_file"
 INITIAL_NUM_PIDS=1
-CMD_FILE="cat results | grep 'Average Throughput' | wc -l"
-CMD_RESULTS="cat results | grep 'Average Throughput' | cut -d':' -f2 | cut -d' ' -f2 | tr '\n' ','"
+CMD_FILE="cat results | grep 'Throughput' | wc -l"
+CMD_RESULTS="cat results | grep 'Throughput' | cut -d':' -f2 | cut -d' ' -f2 | tr '\n' ','"
 
 function remove_tmp_file() {
 	rm -rf "${tensorflow_file}"
