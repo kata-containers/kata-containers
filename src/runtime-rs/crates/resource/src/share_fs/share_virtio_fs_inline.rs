@@ -6,12 +6,13 @@
 
 use std::collections::HashMap;
 
-use agent::Storage;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use hypervisor::Hypervisor;
+use tokio::sync::{Mutex, RwLock};
+
+use agent::Storage;
+use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
 use kata_types::config::hypervisor::SharedFsInfo;
-use tokio::sync::Mutex;
 
 use super::{
     share_virtio_fs::{
@@ -52,19 +53,30 @@ impl ShareFs for ShareVirtioFsInline {
         self.share_fs_mount.clone()
     }
 
-    async fn setup_device_before_start_vm(&self, h: &dyn Hypervisor) -> Result<()> {
-        prepare_virtiofs(h, INLINE_VIRTIO_FS, &self.config.id, "")
+    async fn setup_device_before_start_vm(
+        &self,
+        _h: &dyn Hypervisor,
+        d: &RwLock<DeviceManager>,
+    ) -> Result<()> {
+        prepare_virtiofs(d, INLINE_VIRTIO_FS, &self.config.id, "")
             .await
             .context("prepare virtiofs")?;
+
         Ok(())
     }
 
-    async fn setup_device_after_start_vm(&self, h: &dyn Hypervisor) -> Result<()> {
-        setup_inline_virtiofs(&self.config.id, h)
+    async fn setup_device_after_start_vm(
+        &self,
+        _h: &dyn Hypervisor,
+        d: &RwLock<DeviceManager>,
+    ) -> Result<()> {
+        setup_inline_virtiofs(d, &self.config.id)
             .await
             .context("setup inline virtiofs")?;
+
         Ok(())
     }
+
     async fn get_storages(&self) -> Result<Vec<Storage>> {
         // setup storage
         let mut storages: Vec<Storage> = Vec::new();

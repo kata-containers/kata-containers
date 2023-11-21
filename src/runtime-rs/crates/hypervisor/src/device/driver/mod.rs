@@ -20,8 +20,7 @@ pub use virtio_blk::{
     VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
 };
 pub use virtio_fs::{
-    ShareFsDevice, ShareFsDeviceConfig, ShareFsMountConfig, ShareFsMountDevice, ShareFsMountType,
-    ShareFsOperation,
+    ShareFsConfig, ShareFsDevice, ShareFsMountConfig, ShareFsMountOperation, ShareFsMountType,
 };
 pub use virtio_net::{Address, Backend, NetworkConfig, NetworkDevice};
 pub use virtio_vsock::{

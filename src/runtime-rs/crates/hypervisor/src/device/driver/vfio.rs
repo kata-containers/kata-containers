@@ -543,6 +543,11 @@ impl Device for VfioDevice {
         Ok(device_index)
     }
 
+    async fn update(&mut self, _h: &dyn hypervisor) -> Result<()> {
+        // There's no need to do update for vfio device
+        Ok(())
+    }
+
     async fn increase_attach_count(&mut self) -> Result<bool> {
         match self.attach_count {
             0 => {

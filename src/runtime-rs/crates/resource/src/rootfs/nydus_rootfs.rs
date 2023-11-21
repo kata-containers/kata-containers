@@ -39,6 +39,7 @@ pub(crate) struct NydusRootfs {
 
 impl NydusRootfs {
     pub async fn new(
+        d: &RwLock<DeviceManager>,
         share_fs: &Arc<dyn ShareFs>,
         h: &dyn Hypervisor,
         sid: &str,
@@ -61,7 +62,8 @@ impl NydusRootfs {
                 // rafs mount the metadata of nydus rootfs
                 let rafs_mnt = do_get_guest_share_path(HYBRID_ROOTFS_LOWER_DIR, cid, true);
                 rafs_mount(
-                    h,
+                    d,
+                    sid,
                     rafs_meta.to_string(),
                     rafs_mnt,
                     extra_options.config.clone(),

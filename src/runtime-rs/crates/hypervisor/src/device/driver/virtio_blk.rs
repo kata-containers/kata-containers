@@ -114,6 +114,11 @@ impl Device for BlockDevice {
         Ok(Some(self.config.index))
     }
 
+    async fn update(&mut self, _h: &dyn hypervisor) -> Result<()> {
+        // There's no need to do update for virtio-blk
+        Ok(())
+    }
+
     async fn get_device_info(&self) -> DeviceType {
         DeviceType::Block(self.clone())
     }
