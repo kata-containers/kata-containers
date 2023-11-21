@@ -38,6 +38,9 @@ function run() {
 	info "Running stressng scability test using ${KATA_HYPERVISOR} hypervisor"
 	bash "${stability_dir}/stressng.sh"
 
+	info "Running cassandra stress test using ${KATA_HYPERVISOR} hypervisor"
+	bash "${stability_dir}/cassandra_stress.sh"
+
 	info "Running scability test using ${KATA_HYPERVISOR} hypervisor"
 	bash "${stability_dir}/scability_test.sh" 15 60
 
