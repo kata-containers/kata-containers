@@ -467,8 +467,14 @@ clean-generated-files:
 vendor:
 	@cargo vendor
 
+ifeq ($(ARCH),x86_64)
 ##TARGET check: run test
 check: $(GENERATED_FILES) standard_rust_check
+else
+check:
+	@echo "$(ARCH) is not currently supported"
+	exit 0
+endif
 
 ##TARGET run: build and run agent
 run:

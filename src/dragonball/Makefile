@@ -7,7 +7,7 @@ include ../../utils.mk
 PROJECT_DIRS := $(shell find . -name Cargo.toml -printf '%h\n' | sort -u)
 
 ifeq ($(ARCH), s390x)
-default build check test clippy:
+default build check test clippy vendor:
 	@echo "s390x not support currently"
 	exit 0
 else
