@@ -5,7 +5,7 @@
 include ../../utils.mk
 
 ifeq ($(ARCH), s390x)
-default build check test clippy:
+default build check test clippy vendor:
 	@echo "s390x not support currently"
 	exit 0
 else
