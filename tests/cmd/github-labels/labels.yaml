@@ -1,0 +1,555 @@
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+---
+description: |
+  This file contains a list of all the generic GitHub labels used by all Kata
+  Containers GitHub repositories.
+
+  Each repository can optionally contain a top-level `labels.yaml` that
+  specifies a list of repository-specific labels (and possibly additional
+  categories). The labels in the repository-specific labels file plus the
+  labels defined in this file define the minimum list of labels for the
+  repository in question.
+
+  Each label must specify:
+
+  - Name (which must be lower-case without spaces)
+  - Description
+  - Category
+  - Colour (explicit colour, or `ffffff`)
+
+  A label may also specify a "From" value. This is used for renaming labels;
+  if a label has an associated "From" value, an existing label whose name is
+  specified by the "From" value will be renamed to the label name.
+
+  A category is a collective name used to describe one or more related labels.
+  Each category must specify:
+
+  - Name (which must be lower-case without spaces)
+  - Description
+
+  A category may also specify a related URL which points to a document
+  containing further information.
+
+categories:
+  - name: api
+    description: Change related to an Application Programming Interface.
+
+  - name: architecture-committee
+    description: Needs input from the Architecture Committee.
+    url: https://github.com/kata-containers/community#architecture-committee
+
+  - name: area
+    description: Code component / general part of product affected.
+
+  - name: backport
+    description: |
+      Code that needs to be applied to other branches, generally older stable
+      ones.
+
+  - name: behaviour
+    description: |
+      How the issue affect the operation of the system. A more precise version
+      of regression.
+
+  - name: block
+    description: |
+      Stop a PR from being merged.
+
+  - name: cleanup
+    description: Refactoring, restructuring or general tidy-up needed.
+
+  - name: customer
+    description: Related to a customer.
+
+  - name: design
+    description: Requires formal review on the approach to solving the problem.
+
+  - name: detail
+    description: Need further information from the user or author.
+
+  - name: documentation
+    description: Needs more documentation.
+
+  - name: environment
+    description: Related to particular system environment.
+
+  - name: help
+    description: |
+      Request for technical help / extra resource. Also used for assisted
+      workflow.
+
+  - name: label-admin
+    description: Relates to the administration of labels.
+
+  - name: limitation
+    description: |
+      Issue cannot be resolved (too hard/impossible, would be too slow,
+      insufficient resources, etc).
+    url: |
+      https://github.com/kata-containers/kata-containers/blob/main/docs/Documentation-Requirements.md
+
+  - name: new-contributor
+    description: Small, self-contained tasks suitable for newcomers.
+    url: |
+      https://github.com/kata-containers/community/blob/main/CONTRIBUTING.md
+
+  - name: priority
+    description: |
+      Relative urgency (time-critical).
+
+  - name: question
+    description: Needs input from the team.
+
+  - name: rebase
+    description: Code conflicts need to be resolved.
+
+  - name: related
+    description: |
+      Related project. Base set can be generated from
+      https://github.com/kata-containers/kata-containers/blob/main/versions.yaml.
+
+  - name: release
+    description: Related to production of new versions.
+
+  - name: resolution
+    description: |
+      Issue is not (or no longer) valid for some reason. Label specifies
+      reason for closing.
+
+  - name: security
+    description: Potential or actual vulnerability / CVE.
+    url: https://github.com/kata-containers/community/blob/main/VMT/VMT.md
+
+  - name: severity
+    description: Relative importance (mission-critical).
+
+  - name: sizing
+    description: Estimate of the complexity of the task (story points).
+
+  - name: sub-type
+    description: More specific detail on the type category.
+
+  - name: team
+    description: Team that needs to analyse the issue.
+
+  - name: test
+    description: New tests needed.
+
+  - name: type
+    description: High-level summary of the issue.
+
+  - name: vendor
+    description: Related to handling imported code.
+    url: |
+      https://github.com/kata-containers/community/blob/main/CONTRIBUTING.md#re-vendor-prs
+
+repo: kata-containers/kata-containers
+
+labels:
+  - name: api-breakage
+    description: API was broken
+    category: api
+    color: ff0000
+
+  - name: api-change
+    description: API change
+    category: api
+    color: ffffff
+
+  - name: architecture-specific
+    description: Affects subset of architectures
+    category: environment
+    color: ffffff
+
+  - name: area/api
+    description: Application Programming Interface
+    category: area
+    color: ffffff
+
+  - name: area/cli
+    description: Command Line Interface (flags/options and arguments)
+    category: area
+    color: ffffff
+
+  - name: area/comms
+    description: Communications (gRPC, Yamux, etc)
+    category: area
+    color: ffffff
+
+  - name: area/config
+    description: Configuration
+    category: area
+    color: ffffff
+
+  - name: area/logging
+    description: Logging
+    category: area
+    color: ffffff
+
+  - name: area/networking
+    description: Networking
+    category: area
+    color: ffffff
+
+  - name: area/storage
+    description: Storage
+    category: area
+    color: ffffff
+
+  - name: area/tracing
+    description: Tracing
+    category: area
+    color: ffffff
+
+  - name: backport
+    description: Code needs to be applied to older (stable) releases
+    category: backport
+    color: ffffff
+
+  - name: bug
+    description: Incorrect behaviour
+    category: type
+    color: ff0000
+
+  - name: cannot-reproduce
+    description: Issue cannot be recreated
+    category: resolution
+    color: ffffff
+
+  - name: cleanup
+    description: General tidy-up
+    category: cleanup
+    color: ffffff
+
+  - name: crash
+    description: Causes part of the system to crash
+    category: behaviour
+    color: ffffff
+
+  - name: customer
+    description: Relates to a customer
+    category: customer
+    color: ffffff
+
+  - name: data-loss
+    description: System loses information
+    category: behaviour
+    color: ffffff
+
+  - name: deprecate
+    description: Highlight a feature that will soon be removed
+    category: cleanup
+    color: ffffff
+
+  - name: do-not-merge
+    description: PR has problems or depends on another
+    category: block
+    color: ff0000
+
+  - name: duplicate
+    description: Same issue as one already reported
+    category: resolution
+    color: ffffff
+
+  - name: enhancement
+    description: Improvement to an existing feature
+    category: type
+    color: ffffff
+
+  - name: feature
+    description: New functionality
+    category: type
+    color: ffffff
+
+  - name: good-first-issue
+    description: Small and simple task for new contributors
+    category: new-contributor
+    color: ffffff
+
+  - name: hang
+    description: System appears to stop operating or freeze
+    category: behaviour
+    color: ffffff
+
+  - name: high-priority
+    description: Very urgent issue (resolve quickly)
+    category: priority
+    color: ff7f00
+
+  - name: high-severity
+    description: Very important issue
+    category: severity
+    color: 00d7ff
+
+  - name: highest-priority
+    description: Critically urgent issue (must be resolved as soon as possible)
+    category: priority
+    color: ff0000
+
+  - name: highest-severity
+    description: Extremely important issue
+    category: severity
+    color: 00ffff
+
+  - name: invalid
+    description: Issue does not make sense
+    category: resolution
+    color: ffffff
+
+  - name: limitation
+    description: Issue cannot be resolved
+    category: limitation
+    color: ffffff
+
+  - name: medium-priority
+    description: Urgent issue (resolve before unprioritised issues)
+    category: priority
+    color: ffff00
+
+  - name: medium-severity
+    description: Important issue
+    category: severity
+    color: 0000ff
+
+  - name: needs-decision
+    description: Requires input from the Architecture Committee
+    category: architecture-committee
+    color: ffffff
+
+  - name: needs-design-doc
+    description: Needs a document explaining the design
+    category: design
+    color: ffffff
+
+  - name: needs-design-review
+    description: Needs a formal design review of the approach
+    category: design
+    color: ffffff
+
+  - name: needs-docs
+    description: Needs some new or updated documentation
+    category: documentation
+    color: ffffff
+
+  - name: needs-help
+    description: Request for extra help (technical, resource, etc)
+    category: help
+    color: ffffff
+
+  - name: needs-integration-tests
+    description: |
+      Needs new system/integration tests to validate behaviour in the tests
+      repository
+    category: test
+    color: ffffff
+
+  - name: needs-more-info
+    description: Blocked until user or author provides further details
+    category: detail
+    color: ffffff
+
+  - name: needs-new-label
+    description: New label required to categorise this issue
+    category: label-admin
+    color: ffffff
+
+  - name: needs-rebase
+    description: PR contains conflicts which need resolving
+    category: rebase
+    color: ffffff
+
+  - name: needs-revendor
+    description: Needs imported code to be re-vendored
+    category: vendor
+    color: ffffff
+
+  - name: needs-review
+    description: Needs to be assessed by the team.
+    category: team
+    color: 00ff00
+
+  - name: needs-unit-tests
+    description: Needs new unit tests to validate behaviour in this repository
+    category: test
+    color: ffffff
+
+  - name: os-specific
+    description: Affects subset of operating system / distro versions
+    category: environment
+    color: ffffff
+
+  - name: performance
+    description: System runs too slowly
+    category: behaviour
+    color: ffffff
+
+  - name: question
+    description: Requires an answer
+    category: question
+    color: ffffff
+
+  - name: refactor
+    description: Remove duplication, improve organisation, etc
+    category: cleanup
+    color: ffffff
+
+  - name: regression
+    description: Behaviour inadvertently reverted to older behaviour
+    category: sub-type
+    color: ffffff
+
+  - name: related/containerd
+    description: Containerd
+    category: related
+    color: ffffff
+
+  - name: related/cri
+    description: CRI
+    category: related
+    color: ffffff
+
+  - name: related/crio
+    description: CRIO
+    category: related
+    color: ffffff
+
+  - name: related/docker
+    description: Docker
+    category: related
+    color: ffffff
+
+  - name: related/firecracker
+    description: Firecracker
+    category: related
+    color: ffffff
+
+  - name: related/k8s
+    description: Kubernetes
+    category: related
+    color: ffffff
+
+  - name: related/qemu
+    description: QEMU
+    category: related
+    color: ffffff
+
+  - name: related/runc
+    description: Runc
+    category: related
+    color: ffffff
+
+  - name: release-gating
+    description: Release must wait for this to be resolved before release
+    category: release
+    color: ffffff
+
+  - name: resource-hog
+    description: System uses too many resources (such as memory)
+    category: behaviour
+    color: ffffff
+
+  - name: resource-leak
+    description: System does not free resources (such as memory)
+    category: behaviour
+    color: ffffff
+
+  - name: rfc
+    description: Requires input from the team
+    category: question
+    color: ffffff
+
+  - name: security
+    description: Potential or actual security issue
+    category: security
+    color: ff0000
+
+  - name: size/huge
+    description: |
+      Largest and most complex task (probably needs breaking into small
+      pieces)
+    category: sizing
+    color: ffffff
+
+  - name: size/large
+    description: Task of significant size
+    category: sizing
+    color: ffffff
+
+  - name: size/medium
+    description: Average sized task
+    category: sizing
+    color: ffffff
+
+  - name: size/small
+    description: Small and simple task
+    category: sizing
+    color: ffffff
+
+  - name: size/tiny
+    description: Smallest and simplest task
+    category: sizing
+    color: ffffff
+
+  - name: stale
+    description: Issue or PR was not updated in a timely fashion
+    category: resolution
+    color: ffffff
+
+  - name: team/ci
+    description: Need Continuous Integration Team input
+    category: team
+    color: ffffff
+
+  - name: team/developer
+    description: Need Developer Team input
+    category: team
+    color: ffffff
+
+  - name: team/documentation
+    description: Need Documentation Team input
+    category: team
+    color: ffffff
+
+  - name: team/kernel
+    description: Need Kernel Team input
+    category: team
+    color: ffffff
+
+  - name: team/metrics
+    description: Need Metrics Team input
+    category: team
+    color: ffffff
+
+  - name: team/packaging
+    description: Need Packaging Team input
+    category: team
+    color: ffffff
+
+  - name: team/test
+    description: Need Test Team input
+    category: team
+    color: ffffff
+
+  - name: unreliable
+    description: Part of the system is not stable
+    category: behaviour
+    color: ffffff
+
+  - name: wip
+    description: Work in Progress (PR incomplete - needs more work or rework)
+    category: block
+    color: ff0000
+
+  - name: wont-fix
+    description: Issue will not be fixed (not a good use of limited resources)
+    category: resolution
+    color: ffffff
+
+  - name: wrong-repo
+    description: Raised in incorrect repository
+    category: resolution
+    color: ffffff
