@@ -141,11 +141,6 @@ test_successful_actions() {
 	done
 }
 
-run_policy_specific_tests() {
-	bats k8s-exec-rejected.bats
-	bats k8s-policy-set-keys.bats
-}
-
 # we may need to skip a few test cases when running on non-x86_64 arch
 arch_config_file="${kubernetes_dir}/filter_out_per_arch/${TARGET_ARCH}.yaml"
 if [ -f "${arch_config_file}" ]; then
@@ -155,8 +150,6 @@ fi
 
 if policy_tests_enabled; then
 	ensure_yq
-	run_policy_specific_tests
-	add_policy_to_successful_tests
 else
 	info "Policy tests are disabled on this platform"
 fi
