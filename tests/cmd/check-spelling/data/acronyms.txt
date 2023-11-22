@@ -1,0 +1,123 @@
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Description: List of acronyms and abbreviations.
+
+ACPI/AB
+ACS/AB
+API/AB
+AUFS # Another Union FS
+AWS/AB
+BDF/AB
+CFS/AB
+CLI/AB
+CNI/AB
+CNM/AB
+CPUID/AB
+CRI/AB
+CVE/AB
+DAX/AB
+DinD/B # Docker in Docker
+dind/B
+DMA/AB
+DPDK/AB
+FaaS/B  # Function as a Service
+FS/AB
+fs/B	# For terms like "virtio-fs"
+GCE/AB
+GOPATH/AB
+GPG/AB
+GPU/AB
+gRPC/AB
+GSC/AB
+GVT/AB
+IaaS/B  # Infrastructure as a Service
+IOMMU/AB
+IoT/AB	# Internet of Things
+IOV/AB
+JSON/AB
+k8s/B
+KCSA/AB
+KSM/AB
+KVM/AB
+LTS/AB
+MACVTAP/AB
+mem/B	# For terms like "virtio-mem"
+memdisk/B
+MDEV/AB
+NEMU/AB
+NIC/AB
+NVDIMM/AB
+OCI/AB
+OVMF/AB
+OverlayFS/B
+PaaS/B  # Platform as a Service
+PCDIMM/AB
+PCI/AB
+PCIe/AB
+PID/AB
+pmem/B	# persistent memory
+PNG/AB
+POD/AB
+PR/AB
+PSS/AB
+QA/AB
+QAT/AB
+QEMU/AB
+RBAC/AB
+RDMA/AB
+RNG/AB
+SaaS/B  # Software as a Service
+SCSI/AB
+SDK/AB
+seccomp # secure computing mode
+SHA/AB
+SPDX/AB
+SRIOV/AB
+SVG/AB
+TBD/AB
+TOC/AB
+TOML/AB
+TTY/AB
+UI/AB
+UTS/AB
+UUID/AB
+vCPU/AB
+VETH/AB
+VF/AB
+VFIO/AB
+VGPU/AB
+vhost/AB
+VHOST/AB
+virtio/AB
+VirtIO/AB
+Virtio-fs/AB
+Virtio-mem/AB
+VLAN/AB
+VM/AB
+VMCache/AB
+vmm
+VMM/AB
+VMX/AB
+VPP/AB
+VSOCK/AB
+VSS/AB
+WIP/AB	# Work In Progress
+WRT/AB	# With Respect To
+XIP/AB
+YAML/AB
+irq/AB
+mmio/AB
+APIC
+msg/AB
+UDS
+dbs # Dragonball Sandbox
+TDX
+tdx 
+mptable 
+fdt
+gic
+msr
+cpuid
+pio
