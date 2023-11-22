@@ -615,3 +615,64 @@ function arch_to_kernel() {
 		*) die "unsupported architecture: ${arch}";;
 	esac
 }
+
+# Obtain a list of the files the PR changed.
+# Returns the information in format "${filter}\t${file}".
+get_pr_changed_file_details_full()
+{
+        # List of filters used to restrict the types of file changes.
+        # See git-diff-tree(1) for further info.
+        local filters=""
+
+        # Added file
+        filters+="A"
+
+        # Copied file
+        filters+="C"
+
+        # Modified file
+        filters+="M"
+
+        # Renamed file
+        filters+="R"
+
+        git diff-tree \
+                -r \
+                --name-status \
+                --diff-filter="${filters}" \
+                "origin/${branch}" HEAD
+}
+
+# Obtain a list of the files the PR changed, ignoring vendor files.
+# Returns the information in format "${filter}\t${file}".
+get_pr_changed_file_details()
+{
+        get_pr_changed_file_details_full | grep -v "vendor/"
+}
+
+function get_dep_from_yaml_db(){
+        local versions_file="$1"
+        local dependency="$2"
+
+        [ ! -f "$versions_file" ] && die "cannot find $versions_file"
+
+        "${repo_root_dir}/ci/install_yq.sh" >&2
+
+        result=$("${GOPATH}/bin/yq" r -X "$versions_file" "$dependency")
+        [ "$result" = "null" ] && result=""
+        echo "$result"
+}
+
+function get_test_version(){
+        local dependency="$1"
+
+        local db
+        local cidir
+
+        # directory of this script, not the caller
+        local cidir=$(dirname "${BASH_SOURCE[0]}")
+
+        db="${cidir}/../versions.yaml"
+
+        get_dep_from_yaml_db "${db}" "${dependency}"
+}

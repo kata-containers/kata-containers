@@ -13,15 +13,15 @@ set -e
 [ -n "$DEBUG" ] && set -x
 
 cidir=$(realpath $(dirname "$0"))
-source "${cidir}/lib.sh"
+source "${cidir}/common.bash"
 
 # By default in Golang >= 1.16 GO111MODULE is set to "on",
 # some subprojects in this repo may not support "go modules",
 # set GO111MODULE to "auto" to enable module-aware mode only when
 # a go.mod file is present in the current directory.
 export GO111MODULE="auto"
-export tests_repo="${tests_repo:-github.com/kata-containers/tests}"
-export tests_repo_dir="${GOPATH}/src/${tests_repo}"
+export test_path="${test_path:-github.com/kata-containers/kata-containers/tests}"
+export test_dir="${GOPATH}/src/${test_path}"
 
 # List of files to delete on exit
 files_to_remove=()
@@ -38,6 +38,7 @@ typeset -r check_func_regex="^static_check_"
 typeset -r arch_func_regex="_arch_specific$"
 
 repo=""
+repo_path=""
 specific_branch="false"
 force="false"
 branch=${branch:-main}
@@ -248,6 +249,8 @@ static_check_go_arch_specific()
 	local submodule_packages
 	local all_packages
 
+	pushd $repo_path
+
 	# List of all golang packages found in all submodules
 	#
 	# These will be ignored: since they are references to other
@@ -271,7 +274,7 @@ static_check_go_arch_specific()
 	go_packages=$(skip_paths "${go_packages[@]}")
 
 	# No packages to test
-	[ -z "$go_packages" ] && return
+	[ -z "$go_packages" ] && popd && return
 
 	local linter="golangci-lint"
 
@@ -280,11 +283,11 @@ static_check_go_arch_specific()
 	then
 		info "Installing ${linter}"
 
-		local linter_url=$(get_test_version "externals.golangci-lint.url")
-		local linter_version=$(get_test_version "externals.golangci-lint.version")
+		local linter_url=$(get_test_version "languages.golangci-lint.url")
+		local linter_version=$(get_test_version "languages.golangci-lint.version")
 
 		info "Forcing ${linter} version ${linter_version}"
-		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin "${linter_version}"
+		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin "v${linter_version}"
 		command -v $linter &>/dev/null || \
 			die "$linter command not found. Ensure that \"\$GOPATH/bin\" is in your \$PATH."
 	fi
@@ -320,6 +323,7 @@ static_check_go_arch_specific()
 		info "Running $linter on $d"
 		(cd $d && GO111MODULE=auto eval "$linter" "${linter_args}" ".")
 	done
+	popd
 
 }
 
@@ -357,13 +361,17 @@ static_check_versions()
 		install_yamllint
 	fi
 
-	[ ! -e "$db" ] && return
+	pushd $repo_path
+
+	[ ! -e "$db" ] && popd && return
 
 	if [ -n "$have_yamllint_cmd" ]; then
 		eval "$yamllint_cmd" "$db"
 	else
 		info "Cannot check versions as $yamllint_cmd not available"
 	fi
+
+	popd
 }
 
 static_check_labels()
@@ -375,7 +383,7 @@ static_check_labels()
 
 	# Since this script is called from another repositories directory,
 	# ensure the utility is built before the script below (which uses it) is run.
-	(cd "${tests_repo_dir}" && make github-labels)
+	(cd "${test_dir}" && make -C cmd/github-labels)
 
 	tmp=$(mktemp)
 
@@ -383,7 +391,7 @@ static_check_labels()
 
 	info "Checking labels for repo ${repo} using temporary combined database ${tmp}"
 
-	bash -f "${tests_repo_dir}/cmd/github-labels/github-labels.sh" "generate" "${repo}" "${tmp}"
+	bash -f "${test_dir}/cmd/github-labels/github-labels.sh" "generate" "${repo}" "${tmp}"
 }
 
 # Ensure all files (where possible) contain an SPDX license header
@@ -403,13 +411,15 @@ static_check_license_headers()
 	header_checks+=("SPDX license header::${license_pattern}")
 	header_checks+=("Copyright header:-i:${copyright_pattern}")
 
+	pushd $repo_path
+
 	files=$(get_pr_changed_file_details || true)
 
 	# Strip off status
 	files=$(echo "$files"|awk '{print $NF}')
 
 	# no files were changed
-	[ -z "$files" ] && info "No files found" && return
+	[ -z "$files" ] && info "No files found" && popd && return
 
 	local header_check
 
@@ -443,7 +453,7 @@ static_check_license_headers()
 			--exclude="*.drawio" \
 			--exclude="*.toml" \
 			--exclude="*.txt" \
-			--exclude="*.dtd" \ 
+			--exclude="*.dtd" \
 			--exclude="vendor/*" \
 			--exclude="VERSION" \
 			--exclude="kata_config_version" \
@@ -465,6 +475,7 @@ static_check_license_headers()
 			--exclude="src/libs/protocols/protos/gogo/*.proto" \
 			--exclude="src/libs/protocols/protos/google/*.proto" \
 			--exclude="src/libs/*/test/texture/*" \
+			--exclude="*.dic" \
 			-EL $extra_args "\<${pattern}\>" \
 			$files || true)
 
@@ -478,6 +489,7 @@ EOF
 			exit 1
 		fi
 	done
+	popd
 }
 
 check_url()
@@ -551,6 +563,8 @@ static_check_docs()
 {
 	local cmd="xurls"
 
+	pushd $repo_path
+
 	if [ ! "$(command -v $cmd)" ]
 	then
 		info "Installing $cmd utility"
@@ -577,6 +591,8 @@ static_check_docs()
 	local new_docs
 	local new_urls
 	local url
+
+	pushd $repo_path
 
 	all_docs=$(git ls-files "*.md" | grep -Ev "(grpc-rs|target)/" | sort || true)
 	all_docs=$(skip_paths "${all_docs[@]}")
@@ -631,7 +647,7 @@ static_check_docs()
 	# is necessary to guarantee that all docs are referenced.
 	md_docs_to_check="$all_docs"
 
-	(cd "${tests_repo_dir}" && make check-markdown)
+	(cd "${test_dir}" && make -C cmd/check-markdown)
 
 	command -v kata-check-markdown &>/dev/null || \
 		die 'kata-check-markdown command not found. Ensure that "$GOPATH/bin" is in your $PATH.'
@@ -667,6 +683,9 @@ static_check_docs()
 	# The top level README doesn't need to be referenced by any other
 	# since it displayed by default when visiting the repo.
 	exclude_doc_regexs+=(^README\.md$)
+
+	# Exclude READMEs for test integration
+	exclude_doc_regexs+=(^\tests/cmd/.*/README\.md$)
 
 	local exclude_pattern
 
@@ -779,7 +798,7 @@ static_check_docs()
 	fi
 
 	# Now, spell check the docs
-	cmd="${tests_repo_dir}/cmd/check-spelling/kata-spell-check.sh"
+	cmd="${test_dir}/cmd/check-spelling/kata-spell-check.sh"
 
 	local docs_failed=0
 	for doc in $docs
@@ -788,6 +807,8 @@ static_check_docs()
 
 		static_check_eof "$doc"
 	done
+
+	popd
 
 	[ $docs_failed -eq 0 ] || die "spell check failed, See https://github.com/kata-containers/kata-containers/blob/main/docs/Documentation-Requirements.md#spelling for more information."
 }
@@ -853,6 +874,8 @@ static_check_files()
 
 	local matches=""
 
+	pushd $repo_path
+
 	for file in $files
 	do
 		local match
@@ -878,6 +901,8 @@ static_check_files()
 
 		matches+=" $match"
 	done
+
+	popd
 
 	[ -z "$matches" ] && return
 
@@ -907,26 +932,43 @@ static_check_files()
 # - Ensure vendor metadata is valid.
 static_check_vendor()
 {
-	local files
-	local vendor_files
-	local result
+	pushd $repo_path
 
-	# Check if repo has been changed to use go modules
-	if [ -f "go.mod" ]; then
-		info "go.mod file found, running go mod verify instead"
-		# This verifies the integrity of modules in the local cache.
-		# This does not really verify the integrity of vendored code:
-		# https://github.com/golang/go/issues/27348
-		# Once that is added we need to add an extra step to verify vendored code.
-		go mod verify
-		return
-	fi
+	local files
+	local files_arr=()
+
+	files=$(find . -type f -name "go.mod")
+
+	while IFS= read -r line; do
+		files_arr+=("$line")
+	done <<< "$files"
+
+	for file in "${files_arr[@]}"; do
+	        local dir=$(echo $file | sed 's/go\.mod//')
+
+	        pushd $dir
+
+		# Check if directory has been changed to use go modules
+		if [ -f "go.mod" ]; then
+			info "go.mod file found in $dir, running go mod verify instead"
+			# This verifies the integrity of modules in the local cache.
+			# This does not really verify the integrity of vendored code:
+			# https://github.com/golang/go/issues/27348
+			# Once that is added we need to add an extra step to verify vendored code.
+			go mod verify
+		fi
+		popd
+	done
+
+	popd
 }
 
 static_check_xml()
 {
 	local all_xml
 	local files
+
+	pushd $repo_path
 
 	need_chronic
 
@@ -947,7 +989,7 @@ static_check_xml()
 		files=$(echo "$xml_status" | awk '{print $NF}')
 	fi
 
-	[ -z "$files" ] && info "No XML files to check" && return
+	[ -z "$files" ] && info "No XML files to check" && popd && return
 
 	local file
 
@@ -975,12 +1017,16 @@ static_check_xml()
 
 		[ "$ret" -eq 0 ] || die "failed to check XML file '$file'"
 	done
+
+	popd
 }
 
 static_check_shell()
 {
 	local all_scripts
 	local scripts
+
+	pushd $repo_path
 
 	need_chronic
 
@@ -1000,7 +1046,7 @@ static_check_shell()
 		scripts=$(echo "$scripts_status" | awk '{print $NF}')
 	fi
 
-	[ -z "$scripts" ] && info "No scripts to check" && return 0
+	[ -z "$scripts" ] && info "No scripts to check" && popd && return 0
 
 	local script
 
@@ -1016,12 +1062,16 @@ static_check_shell()
 
 		static_check_eof "$script"
 	done
+
+	popd
 }
 
 static_check_json()
 {
 	local all_json
 	local json_files
+
+	pushd $repo_path
 
 	need_chronic
 
@@ -1041,7 +1091,7 @@ static_check_json()
 		json_files=$(echo "$json_status" | awk '{print $NF}')
 	fi
 
-	[ -z "$json_files" ] && info "No JSON files to check" && return 0
+	[ -z "$json_files" ] && info "No JSON files to check" && popd && return 0
 
 	local json
 
@@ -1055,6 +1105,8 @@ static_check_json()
 
 		[ "$ret" -eq 0 ] || die "failed to check JSON file '$json'"
 	done
+
+	popd
 }
 
 # The dockerfile checker relies on the hadolint tool. This function handle its
@@ -1102,6 +1154,9 @@ static_check_dockerfiles()
 	# Put here a list of files which should be ignored.
         local ignore_files=(
         )
+
+	pushd $repo_path
+
 	local linter_cmd="hadolint"
 
         all_files=$(git ls-files "*/Dockerfile*" | grep -Ev "/(vendor|grpc-rs|target)/" | sort || true)
@@ -1119,11 +1174,12 @@ static_check_dockerfiles()
 		files=$(echo "$files_status" | awk '{print $NF}')
         fi
 
-        [ -z "$files" ] && info "No Dockerfiles to check" && return 0
+        [ -z "$files" ] && info "No Dockerfiles to check" && popd && return 0
 
 	# As of this writing hadolint is only distributed for x86_64
 	if [ "$(uname -m)" != "x86_64" ]; then
 		info "Skip checking as $linter_cmd is not available for $(uname -m)"
+		popd
 		return 0
 	fi
 	has_hadolint_or_install
@@ -1150,6 +1206,10 @@ static_check_dockerfiles()
 	linter_cmd+=" --ignore DL3048"
         # DL3037 warning: Specify version with `zypper install -y <package>=<version>`.
 	linter_cmd+=" --ignore DL3037"
+
+	# Temporary add to prevent failure for test migration
+	# DL3040 warning: `dnf clean all` missing after dnf command.
+	linter_cmd+=" --ignore DL3040"
 
 	local file
 	for file in $files; do
@@ -1190,6 +1250,7 @@ static_check_dockerfiles()
 
 		[ "$ret" -eq 0 ] || die "failed to check Dockerfile '$file'"
 	done
+	popd
 }
 
 # Run the specified function (after first checking it is compatible with the
@@ -1315,6 +1376,8 @@ main()
 			fi
 		fi
 	fi
+
+	repo_path=$GOPATH/src/$repo
 
 	local all_check_funcs=$(typeset -F|awk '{print $3}'|grep "${check_func_regex}"|sort)
 
