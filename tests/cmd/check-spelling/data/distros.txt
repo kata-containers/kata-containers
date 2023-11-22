@@ -1,0 +1,18 @@
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Description: List of Linux Distributions.
+
+CentOS/B
+Debian/B
+EulerOS/B
+Fedora/B
+macOS/B
+MacOS/B
+minikube/B
+openSUSE/B
+OpenSUSE/B
+RHEL/B
+SLES/B
+Ubuntu/B

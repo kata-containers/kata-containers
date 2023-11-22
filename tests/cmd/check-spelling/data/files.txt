@@ -1,0 +1,25 @@
+# Copyright (c) 2019 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Description: Names of commands, files and packages.
+#
+# Notes: These *should* strictly be placed in backticks but alas this
+#   doesn't always happen.
+#
+# References: https://github.com/kata-containers/kata-containers/blob/main/docs/Documentation-Requirements.md#files-and-command-names
+
+cgroup/AB
+coredump/A
+cpuset/AB
+Dockerfile/AB
+init/AB
+initramfs/AB
+initrd/AB
+netns/AB
+rootfs/AB
+stderr/AB
+stdin/AB
+stdout/AB
+syslog/AB
+Vagrantfile/B
