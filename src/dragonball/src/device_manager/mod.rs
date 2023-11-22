@@ -108,6 +108,12 @@ pub mod vhost_net_dev_mgr;
 #[cfg(feature = "vhost-net")]
 use self::vhost_net_dev_mgr::VhostNetDeviceMgr;
 
+#[cfg(feature = "vhost-user-net")]
+/// Device manager for vhost-user-net devices.
+pub mod vhost_user_net_dev_mgr;
+#[cfg(feature = "vhost-user-net")]
+use self::vhost_user_net_dev_mgr::VhostUserNetDeviceMgr;
+
 macro_rules! info(
     ($l:expr, $($args:tt)+) => {
         slog::info!($l, $($args)+; slog::o!("subsystem" => "device_manager"))
@@ -546,6 +552,9 @@ pub struct DeviceManager {
 
     #[cfg(feature = "vhost-net")]
     vhost_net_manager: VhostNetDeviceMgr,
+
+    #[cfg(feature = "vhost-user-net")]
+    vhost_user_net_manager: VhostUserNetDeviceMgr,
 }
 
 impl DeviceManager {
@@ -584,6 +593,8 @@ impl DeviceManager {
             balloon_manager: BalloonDeviceMgr::default(),
             #[cfg(feature = "vhost-net")]
             vhost_net_manager: VhostNetDeviceMgr::default(),
+            #[cfg(feature = "vhost-user-net")]
+            vhost_user_net_manager: VhostUserNetDeviceMgr::default(),
         }
     }
 
@@ -758,6 +769,11 @@ impl DeviceManager {
         self.vhost_net_manager
             .attach_devices(&mut ctx)
             .map_err(StartMicroVmError::VhostNetDeviceError)?;
+
+        #[cfg(feature = "vhost-user-net")]
+        self.vhost_user_net_manager
+            .attach_devices(&mut ctx)
+            .map_err(StartMicroVmError::VhostUserNetDeviceError)?;
 
         // Ensure that all devices are attached before kernel boot args are
         // generated.
@@ -1184,6 +1200,8 @@ mod tests {
                 mmio_device_info: HashMap::new(),
                 #[cfg(feature = "vhost-net")]
                 vhost_net_manager: VhostNetDeviceMgr::default(),
+                #[cfg(feature = "vhost-user-net")]
+                vhost_user_net_manager: VhostUserNetDeviceMgr::default(),
 
                 logger,
                 shared_info,
