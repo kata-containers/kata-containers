@@ -12,7 +12,10 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::mount::{create_mount_destination, parse_mount_options};
-use kata_types::mount::{StorageDevice, StorageHandlerManager, KATA_SHAREDFS_GUEST_PREMOUNT_TAG};
+use kata_types::mount::{
+    StorageDevice, StorageHandlerManager, KATA_SHAREDFS_GUEST_PREMOUNT_TAG,
+    KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL,
+};
 use nix::unistd::{Gid, Uid};
 use protocols::agent::Storage;
 use protocols::types::FSGroupChangePolicy;
@@ -24,6 +27,7 @@ use self::bind_watcher_handler::BindWatcherHandler;
 use self::block_handler::{PmemHandler, ScsiHandler, VirtioBlkMmioHandler, VirtioBlkPciHandler};
 use self::ephemeral_handler::EphemeralHandler;
 use self::fs_handler::{OverlayfsHandler, Virtio9pHandler, VirtioFsHandler};
+use self::image_pull_handler::ImagePullHandler;
 use self::local_handler::LocalHandler;
 use crate::device::{
     DRIVER_9P_TYPE, DRIVER_BLK_MMIO_TYPE, DRIVER_BLK_PCI_TYPE, DRIVER_EPHEMERAL_TYPE,
@@ -39,6 +43,7 @@ mod bind_watcher_handler;
 mod block_handler;
 mod ephemeral_handler;
 mod fs_handler;
+mod image_pull_handler;
 mod local_handler;
 
 const RW_MASK: u32 = 0o660;
@@ -145,6 +150,7 @@ lazy_static! {
         manager.add_handler(DRIVER_SCSI_TYPE, Arc::new(ScsiHandler{})).unwrap();
         manager.add_handler(DRIVER_VIRTIOFS_TYPE, Arc::new(VirtioFsHandler{})).unwrap();
         manager.add_handler(DRIVER_WATCHABLE_BIND_TYPE, Arc::new(BindWatcherHandler{})).unwrap();
+        manager.add_handler(KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL, Arc::new(ImagePullHandler{})).unwrap();
         manager
     };
 }
