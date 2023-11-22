@@ -28,9 +28,10 @@ use vhost_rs::VhostBackend;
 use vhost_rs::{VhostUserMemoryRegionInfo, VringConfigData};
 use virtio_bindings::bindings::virtio_net::*;
 use virtio_bindings::bindings::virtio_ring::*;
-use virtio_queue::{Descriptor, DescriptorChain, QueueT};
-use vm_memory::{Address, Bytes, GuestMemory, GuestMemoryRegion, MemoryRegionAddress};
+use virtio_queue::{DescriptorChain, QueueT};
+use vm_memory::{Address, GuestMemory, GuestMemoryRegion, MemoryRegionAddress};
 
+use crate::vhost::net::{virtio_handle_ctrl_mq, virtio_handle_ctrl_status, FromNetCtrl};
 #[cfg(test)]
 use crate::vhost::vhost_kern::test_utils::{
     MockVhostBackend as VhostBackend, MockVhostNet as VhostNet,
@@ -592,22 +593,6 @@ where
     }
 }
 
-trait FromNetCtrl<T> {
-    fn from_net_ctrl_st<M: GuestMemory>(mem: &M, desc: &Descriptor) -> VirtioResult<T> {
-        let mut buf = vec![0u8; std::mem::size_of::<T>()];
-        match mem.read_slice(&mut buf, desc.addr()) {
-            Ok(_) => unsafe { Ok(std::ptr::read_volatile(&buf[..] as *const _ as *const T)) },
-            Err(err) => {
-                error!("Failed to read from memory, {}", err);
-                Err(VirtioError::InternalError)
-            }
-        }
-    }
-}
-
-impl FromNetCtrl<virtio_net_ctrl_hdr> for virtio_net_ctrl_hdr {}
-impl FromNetCtrl<virtio_net_ctrl_mq> for virtio_net_ctrl_mq {}
-
 pub(crate) struct NetEpollHandler<AS, Q, R>
 where
     AS: DbsGuestAddressSpace,
@@ -627,6 +612,8 @@ where
     fn process_ctrl_request(&mut self) -> VirtioResult<()> {
         let guard = self.config.lock_guest_memory();
         let mem = guard.deref();
+        // It is safty to unwrap here as the value of ctrl_queue is
+        // confirmed in `CTRL_SLOT`.
         let cvq = self.config.ctrl_queue.as_mut().unwrap();
 
         while let Some(mut desc_chain) = cvq.get_next_descriptor(mem)? {
@@ -657,8 +644,16 @@ where
             let ctrl_hdr = virtio_net_ctrl_hdr::from_net_ctrl_st(mem, &header)?;
             match ctrl_hdr.class as u32 {
                 VIRTIO_NET_CTRL_MQ => {
-                    Self::virtio_handle_ctrl_mq(desc_chain, ctrl_hdr.cmd, mem)?;
-                    return Self::virtio_handle_ctrl_status(desc_chain, VIRTIO_NET_OK as u8, mem);
+                    virtio_handle_ctrl_mq::<AS, _>(desc_chain, ctrl_hdr.cmd, mem, |curr_queues| {
+                        info!("{}: vq pairs: {}", NET_DRIVER_NAME, curr_queues);
+                        Ok(())
+                    })?;
+                    return virtio_handle_ctrl_status::<AS>(
+                        NET_DRIVER_NAME,
+                        desc_chain,
+                        VIRTIO_NET_OK as u8,
+                        mem,
+                    );
                 }
                 _ => error!(
                     "{}: unknown net control request class: 0x{:x}",
@@ -667,45 +662,6 @@ where
             }
         }
         Ok(0)
-    }
-
-    fn virtio_handle_ctrl_mq(
-        desc_chain: &mut DescriptorChain<&AS::M>,
-        cmd: u8,
-        mem: &AS::M,
-    ) -> VirtioResult<()> {
-        if cmd == VIRTIO_NET_CTRL_MQ_VQ_PAIRS_SET as u8 {
-            if let Some(next) = desc_chain.next() {
-                if let Ok(ctrl_mq) = virtio_net_ctrl_mq::from_net_ctrl_st(mem, &next) {
-                    let curr_queues = ctrl_mq.virtqueue_pairs;
-                    info!("{}: vq pairs: {}", NET_DRIVER_NAME, curr_queues);
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn virtio_handle_ctrl_status(
-        desc_chain: &mut DescriptorChain<&AS::M>,
-        status: u8,
-        mem: &AS::M,
-    ) -> VirtioResult<u32> {
-        let buf = vec![status];
-        let mut total = 0;
-
-        for next in desc_chain {
-            if next.is_write_only() {
-                match mem.write_slice(&buf, next.addr()) {
-                    Ok(_) => {
-                        debug!("{}: succeed to update virtio ctrl status!", NET_DRIVER_NAME);
-                        total += 1;
-                    }
-                    Err(_) => warn!("{}: failed to update ctrl status!", NET_DRIVER_NAME),
-                }
-            }
-        }
-
-        Ok(total)
     }
 }
 

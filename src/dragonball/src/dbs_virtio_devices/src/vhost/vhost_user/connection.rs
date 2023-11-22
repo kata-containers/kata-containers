@@ -12,7 +12,7 @@ use vhost_rs::vhost_user::message::{VhostUserProtocolFeatures, VhostUserVringAdd
 use vhost_rs::vhost_user::{
     Error as VhostUserError, Listener as VhostUserListener, Master, VhostUserMaster,
 };
-use vhost_rs::{VhostBackend, VhostUserMemoryRegionInfo, VringConfigData};
+use vhost_rs::{Error as VhostError, VhostBackend, VhostUserMemoryRegionInfo, VringConfigData};
 use virtio_bindings::bindings::virtio_net::VIRTIO_F_RING_PACKED;
 use virtio_queue::QueueT;
 use vm_memory::{
@@ -20,9 +20,8 @@ use vm_memory::{
 };
 use vmm_sys_util::eventfd::EventFd;
 
-use super::super::super::device::VirtioDeviceConfig;
-use super::super::super::{Error as VirtioError, Result as VirtioResult};
-use super::VhostError;
+use crate::device::VirtioDeviceConfig;
+use crate::{Error as VirtioError, Result as VirtioResult};
 
 enum EndpointProtocolFlags {
     ProtocolMq = 1,
@@ -100,7 +99,9 @@ impl Listener {
     }
 }
 
+/// TODO: Mark as unused as it is used by vhost-user-block devices only.
 /// Struct to pass info to vhost user backend
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct BackendInfo {
     /// -1 means to tell backend to destroy corresponding
@@ -123,6 +124,8 @@ pub(super) struct EndpointParam<'a, AS: GuestAddressSpace, Q: QueueT, R: GuestMe
     pub protocol_flag: u16,
     pub dev_protocol_features: VhostUserProtocolFeatures,
     pub reconnect: bool,
+    // TODO: Mark as unused as it is used by vhost-user-block only.
+    #[allow(dead_code)]
     pub backend: Option<BackendInfo>,
     pub init_queues: u32,
     pub slave_req_fd: Option<RawFd>,
@@ -195,6 +198,9 @@ impl Endpoint {
         Ok(Some(features))
     }
 
+    // TODO: Remove this after enabling vhost-user-fs on the runtime-rs. Issue:
+    // https://github.com/kata-containers/kata-containers/issues/8691
+    #[allow(dead_code)]
     pub fn update_memory<AS: GuestAddressSpace>(&mut self, vm_as: &AS) -> VirtioResult<()> {
         let master = match self.conn.as_mut() {
             Some(conn) => conn,

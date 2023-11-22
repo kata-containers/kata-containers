@@ -40,6 +40,10 @@ pub use crate::device_manager::mem_dev_mgr::{MemDeviceConfigInfo, MemDeviceError
 pub use crate::device_manager::vhost_net_dev_mgr::{
     VhostNetDeviceConfigInfo, VhostNetDeviceError, VhostNetDeviceMgr,
 };
+#[cfg(feature = "vhost-user-net")]
+use crate::device_manager::vhost_user_net_dev_mgr::{
+    VhostUserNetDeviceConfigInfo, VhostUserNetDeviceError, VhostUserNetDeviceMgr,
+};
 #[cfg(feature = "virtio-net")]
 pub use crate::device_manager::virtio_net_dev_mgr::{
     VirtioNetDeviceConfigInfo, VirtioNetDeviceConfigUpdateInfo, VirtioNetDeviceError,
@@ -109,6 +113,11 @@ pub enum VmmActionError {
     #[error("vhost-net device error: {0:?}")]
     /// Vhost-net device relared errors.
     VhostNet(#[source] VhostNetDeviceError),
+
+    #[error("vhost-user-net device error: {0:?}")]
+    #[cfg(feature = "vhost-user-net")]
+    /// Vhost-user-net device relared errors.
+    VhostUserNet(#[source] VhostUserNetDeviceError),
 
     #[cfg(any(feature = "virtio-fs", feature = "vhost-user-fs"))]
     /// The action `InsertFsDevice` failed either because of bad user input or an internal error.
@@ -191,7 +200,11 @@ pub enum VmmAction {
     /// are the RX and TX rate limiters.
     UpdateBlockDevice(BlockDeviceConfigUpdateInfo),
 
-    #[cfg(any(feature = "virtio-net", feature = "vhost-net"))]
+    #[cfg(any(
+        feature = "virtio-net",
+        feature = "vhost-net",
+        feature = "vhost-user-net"
+    ))]
     /// Add a new network interface config or update one that already exists using the
     /// `NetworkInterfaceConfig` as input. This action can only be called before the microVM has
     /// booted. The response is sent using the `OutcomeSender`.
@@ -320,12 +333,20 @@ impl VmmService {
             VmmAction::RemoveBlockDevice(drive_id) => {
                 self.remove_block_device(vmm, event_mgr, &drive_id)
             }
-            #[cfg(any(feature = "virtio-net", feature = "vhost-net"))]
+            #[cfg(any(
+                feature = "virtio-net",
+                feature = "vhost-net",
+                feature = "vhost-user-net"
+            ))]
             VmmAction::InsertNetworkDevice(config) => match config.backend {
                 #[cfg(feature = "virtio-net")]
                 Backend::Virtio(_) => self.add_virtio_net_device(vmm, event_mgr, config.into()),
                 #[cfg(feature = "vhost-net")]
                 Backend::Vhost(_) => self.add_vhost_net_device(vmm, event_mgr, config.into()),
+                #[cfg(feature = "vhost-user-net")]
+                Backend::VhostUser(_) => {
+                    self.add_vhost_user_net_device(vmm, event_mgr, config.into())
+                }
             },
             #[cfg(feature = "virtio-net")]
             VmmAction::UpdateNetworkInterface(netif_update) => {
@@ -710,6 +731,30 @@ impl VmmService {
         VhostNetDeviceMgr::insert_device(vm.device_manager_mut(), ctx, config)
             .map(|_| VmmData::Empty)
             .map_err(VmmActionError::VhostNet)
+    }
+
+    #[cfg(feature = "vhost-user-net")]
+    fn add_vhost_user_net_device(
+        &mut self,
+        vmm: &mut Vmm,
+        event_mgr: &mut EventManager,
+        config: VhostUserNetDeviceConfigInfo,
+    ) -> VmmRequestResult {
+        let vm = vmm.get_vm_mut().ok_or(VmmActionError::InvalidVMID)?;
+        let ctx = vm
+            .create_device_op_context(Some(event_mgr.epoll_manager()))
+            .map_err(|err| {
+                if let StartMicroVmError::MicroVMAlreadyRunning = err {
+                    VmmActionError::VhostUserNet(VhostUserNetDeviceError::UpdateNotAllowedPostBoot)
+                } else if let StartMicroVmError::UpcallServerNotReady = err {
+                    VmmActionError::UpcallServerNotReady
+                } else {
+                    VmmActionError::StartMicroVm(err)
+                }
+            })?;
+        VhostUserNetDeviceMgr::insert_device(vm.device_manager_mut(), ctx, config)
+            .map(|_| VmmData::Empty)
+            .map_err(VmmActionError::VhostUserNet)
     }
 
     #[cfg(any(feature = "virtio-fs", feature = "vhost-user-fs"))]
