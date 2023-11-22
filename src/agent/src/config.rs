@@ -10,6 +10,7 @@ use std::fs;
 use std::str::FromStr;
 use std::time;
 use tracing::instrument;
+use url::Url;
 
 use kata_types::config::default::DEFAULT_AGENT_VSOCK_PORT;
 
@@ -25,6 +26,11 @@ const LOG_VPORT_OPTION: &str = "agent.log_vport";
 const CONTAINER_PIPE_SIZE_OPTION: &str = "agent.container_pipe_size";
 const UNIFIED_CGROUP_HIERARCHY_OPTION: &str = "agent.unified_cgroup_hierarchy";
 const CONFIG_FILE: &str = "agent.config_file";
+
+// Configure the proxy settings for HTTPS requests in the guest,
+// to solve the problem of not being able to access the specified image in some cases.
+const HTTPS_PROXY: &str = "agent.https_proxy";
+const NO_PROXY: &str = "agent.no_proxy";
 
 const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
 const DEFAULT_HOTPLUG_TIMEOUT: time::Duration = time::Duration::from_secs(3);
@@ -66,6 +72,8 @@ pub struct AgentConfig {
     pub unified_cgroup_hierarchy: bool,
     pub tracing: bool,
     pub supports_seccomp: bool,
+    pub https_proxy: String,
+    pub no_proxy: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -81,6 +89,8 @@ pub struct AgentConfigBuilder {
     pub passfd_listener_port: Option<i32>,
     pub unified_cgroup_hierarchy: Option<bool>,
     pub tracing: Option<bool>,
+    pub https_proxy: Option<String>,
+    pub no_proxy: Option<String>,
 }
 
 macro_rules! config_override {
@@ -142,6 +152,8 @@ impl Default for AgentConfig {
             unified_cgroup_hierarchy: false,
             tracing: false,
             supports_seccomp: rpc::have_seccomp(),
+            https_proxy: String::from(""),
+            no_proxy: String::from(""),
         }
     }
 }
@@ -171,6 +183,8 @@ impl FromStr for AgentConfig {
         config_override!(agent_config_builder, agent_config, passfd_listener_port);
         config_override!(agent_config_builder, agent_config, unified_cgroup_hierarchy);
         config_override!(agent_config_builder, agent_config, tracing);
+        config_override!(agent_config_builder, agent_config, https_proxy);
+        config_override!(agent_config_builder, agent_config, no_proxy);
 
         Ok(agent_config)
     }
@@ -270,6 +284,8 @@ impl AgentConfig {
                 config.unified_cgroup_hierarchy,
                 get_bool_value
             );
+            parse_cmdline_param!(param, HTTPS_PROXY, config.https_proxy, get_url_value);
+            parse_cmdline_param!(param, NO_PROXY, config.no_proxy, get_string_value);
         }
 
         if let Ok(addr) = env::var(SERVER_ADDR_ENV_VAR) {
@@ -417,6 +433,12 @@ fn get_container_pipe_size(param: &str) -> Result<i32> {
     Ok(value)
 }
 
+#[instrument]
+fn get_url_value(param: &str) -> Result<String> {
+    let value = get_string_value(param)?;
+    Ok(Url::parse(&value)?.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use test_utils::assert_result;
@@ -453,6 +475,8 @@ mod tests {
             server_addr: &'a str,
             unified_cgroup_hierarchy: bool,
             tracing: bool,
+            https_proxy: &'a str,
+            no_proxy: &'a str,
         }
 
         impl Default for TestData<'_> {
@@ -468,6 +492,8 @@ mod tests {
                     server_addr: TEST_SERVER_ADDR,
                     unified_cgroup_hierarchy: false,
                     tracing: false,
+                    https_proxy: "",
+                    no_proxy: "",
                 }
             }
         }
@@ -837,6 +863,26 @@ mod tests {
                 tracing: true,
                 ..Default::default()
             },
+            TestData {
+                contents: "agent.https_proxy=http://proxy.url.com:81/",
+                https_proxy: "http://proxy.url.com:81/",
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.https_proxy=http://192.168.1.100:81/",
+                https_proxy: "http://192.168.1.100:81/",
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.no_proxy=*.internal.url.com",
+                no_proxy: "*.internal.url.com",
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.no_proxy=192.168.1.0/24,172.16.0.0/12",
+                no_proxy: "192.168.1.0/24,172.16.0.0/12",
+                ..Default::default()
+            },
         ];
 
         let dir = tempdir().expect("failed to create tmpdir");
@@ -884,6 +930,8 @@ mod tests {
             assert_eq!(d.container_pipe_size, config.container_pipe_size, "{}", msg);
             assert_eq!(d.server_addr, config.server_addr, "{}", msg);
             assert_eq!(d.tracing, config.tracing, "{}", msg);
+            assert_eq!(d.https_proxy, config.https_proxy, "{}", msg);
+            assert_eq!(d.no_proxy, config.no_proxy, "{}", msg);
 
             for v in vars_to_unset {
                 env::remove_var(v);

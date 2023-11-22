@@ -17,6 +17,7 @@ use image_rs::image::ImageClient;
 use tokio::sync::Mutex;
 
 use crate::rpc::CONTAINER_BASE;
+use crate::AGENT_CONFIG;
 
 const KATA_IMAGE_WORK_DIR: &str = "/run/kata-containers/image/";
 
@@ -59,6 +60,22 @@ impl ImageService {
         self.images.lock().await.insert(image, cid);
     }
 
+    /// Set proxy environment from AGENT_CONFIG
+    fn set_proxy_env_vars() {
+        if env::var("HTTPS_PROXY").is_err() {
+            let https_proxy = &AGENT_CONFIG.https_proxy;
+            if !https_proxy.is_empty() {
+                env::set_var("HTTPS_PROXY", https_proxy);
+            }
+        }
+        if env::var("NO_PROXY").is_err() {
+            let no_proxy = &AGENT_CONFIG.no_proxy;
+            if !no_proxy.is_empty() {
+                env::set_var("NO_PROXY", no_proxy);
+            }
+        }
+    }
+
     /// pull_image is used for call image-rs to pull image in the guest.
     /// # Parameters
     /// - `image`: Image name (exp: quay.io/prometheus/busybox:latest)
@@ -73,6 +90,8 @@ impl ImageService {
         image_metadata: &HashMap<String, String>,
     ) -> Result<String> {
         info!(sl(), "image metadata: {image_metadata:?}");
+        Self::set_proxy_env_vars();
+        
         let bundle_base_dir = scoped_join(CONTAINER_BASE, cid)?;
         fs::create_dir_all(&bundle_base_dir)?;
         let bundle_path = scoped_join(&bundle_base_dir, "images")?;
