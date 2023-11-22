@@ -107,6 +107,9 @@ jobs:
           echo "Set environment variables for the libseccomp crate to link the libseccomp library statically"
           echo "LIBSECCOMP_LINK_TYPE=static" >> $GITHUB_ENV
           echo "LIBSECCOMP_LIB_PATH=${libseccomp_install_dir}/lib" >> $GITHUB_ENV
+      - name: Install protobuf-compiler
+        if: ${{ matrix.command == 'make check' && matrix.component == 'agent' }}
+        run: sudo apt-get -y install protobuf-compiler
       - name: Setup XDG_RUNTIME_DIR for the `runtime` tests
         if: ${{ matrix.command != 'make vendor' && matrix.command != 'make check' && matrix.component == 'runtime' }}
         run: |
