@@ -26,9 +26,9 @@ then
 fi
 
 self_dir=$(dirname "$(readlink -f "$0")")
-cidir="${self_dir}/../../.ci"
+cidir="${self_dir}/../../../tests"
 
-source "${cidir}/lib.sh"
+source "${cidir}/common.bash"
 
 # Directory containing word lists.
 #

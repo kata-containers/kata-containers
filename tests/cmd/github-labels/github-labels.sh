@@ -15,8 +15,8 @@ script_name=${0##*/}
 source "/etc/os-release" || "source /usr/lib/os-release"
 
 self_dir=$(dirname "$(readlink -f "$0")")
-cidir="${self_dir}/../../.ci"
-source "${cidir}/lib.sh"
+cidir="${self_dir}/../.."
+source "${cidir}/common.bash"
 
 typeset -r labels_file="labels.yaml"
 typeset -r labels_template="${labels_file}.in"
