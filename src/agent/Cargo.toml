@@ -21,13 +21,15 @@ scopeguard = "1.0.0"
 thiserror = "1.0.26"
 regex = "1.5.6"
 serial_test = "0.5.1"
+oci-distribution = "0.10.0"
 kata-sys-util = { path = "../libs/kata-sys-util" }
 kata-types = { path = "../libs/kata-types" }
+safe-path = { path = "../libs/safe-path" }
 
 # Async helpers
 async-trait = "0.1.42"
 async-recursion = "0.3.2"
-futures = "0.3.17"
+futures = "0.3.30"
 
 # Async runtime
 tokio = { version = "1.28.1", features = ["full"] }
@@ -72,6 +74,9 @@ http = { version = "0.2.8", optional = true }
 reqwest = { version = "0.11.14", optional = true }
 # The "vendored" feature for openssl is required for musl build
 openssl = { version = "0.10.54", features = ["vendored"], optional = true }
+
+# Image pull/decrypt
+image-rs = { git = "https://github.com/confidential-containers/guest-components", rev = "ca6b438", default-features = true, optional = true }
 
 [dev-dependencies]
 tempfile = "3.1.0"
