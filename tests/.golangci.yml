@@ -1,0 +1,33 @@
+# Copyright (c) 2017 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
+run:
+  concurrency: 4
+  deadline: 600s
+  skip-dirs:
+    - vendor
+# Ignore auto-generated protobuf code.
+  skip-files:
+    - ".*\\.pb\\.go$"
+
+linters:
+  disable-all: true
+  enable:
+    - gocyclo
+    - gofmt
+    - gosimple
+    - govet
+    - ineffassign
+    - misspell
+    - staticcheck
+    - typecheck
+    - unused
+
+linters-settings:
+  gocyclo:
+    min_complexity: 15
+  unused:
+    check-exported: true
+  govet:
+    enable:
