@@ -61,9 +61,8 @@ pub fn create_term_logger(level: slog::Level) -> (slog::Logger, slog_async::Asyn
     FILTER_RULE.rcu(|inner| {
         let mut updated_inner = HashMap::new();
         updated_inner.clone_from(inner);
-        for v in updated_inner.values_mut() {
-            *v = level;
-        }
+        updated_inner.insert(DEFAULT_SUBSYSTEM.to_string(), level);
+
         updated_inner
     });
 
@@ -105,9 +104,7 @@ where
     FILTER_RULE.rcu(|inner| {
         let mut updated_inner = HashMap::new();
         updated_inner.clone_from(inner);
-        for v in updated_inner.values_mut() {
-            *v = level;
-        }
+        updated_inner.insert(DEFAULT_SUBSYSTEM.to_string(), level);
         updated_inner
     });
 
@@ -328,13 +325,14 @@ where
                 break;
             }
         }
+
         let according_level = component_level_config
             .get(&component.unwrap_or(DEFAULT_SUBSYSTEM.to_string()))
             .unwrap_or(&self.log_level);
+
         if record.level().is_at_least(*according_level) {
             self.drain.log(record, values)?;
         }
-
         Ok(None)
     }
 }
@@ -346,6 +344,17 @@ mod tests {
     use slog::{crit, debug, error, info, warn, Logger};
     use std::io::prelude::*;
     use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_terminal_logger_levels() {
+        let (logger, _guard) = create_term_logger(slog::Level::Trace);
+
+        debug!(&logger, "This is a debug message");
+        info!(&logger, "This is an informational message");
+        warn!(&logger, "This is a warning message");
+        error!(&logger, "This is an error message");
+        crit!(&logger, "This is a crit message");
+    }
 
     #[test]
     fn test_get_log_levels() {
