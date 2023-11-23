@@ -27,8 +27,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        rust-runtime:
-          - false
         host_os:
           - ubuntu
         vmm:
@@ -42,8 +40,6 @@ jobs:
         include:
           - host_os: cbl-mariner
             vmm: clh
-          - dragonball:
-            rust-runtime: true
     runs-on: ubuntu-latest
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
@@ -55,7 +51,6 @@ jobs:
       KUBERNETES: "vanilla"
       USING_NFD: "false"
       K8S_TEST_HOST_TYPE: ${{ matrix.instance-type }}
-      RUST_RUNTIME: ${{ matrix.rust-runtime }}
     steps:
       - uses: actions/checkout@v4
         with:
