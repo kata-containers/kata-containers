@@ -1,0 +1,6 @@
+bases:
+- ../../../base
+
+components:
+-  ../../../components/k0s
+
