@@ -491,6 +491,19 @@ func handleVirtualVolume(c *Container) ([]*grpc.Storage, string, error) {
 				if err != nil {
 					return nil, "", err
 				}
+			} else if volumeType == types.KataVirtualVolumeImageRawBlockType || volumeType == types.KataVirtualVolumeLayerRawBlockType {
+				for i, d := range c.devices {
+					if d.ContainerPath == virtVolume.Source {
+						vol, err = handleVirtualVolumeStorageObject(c, d.ID, virtVolume)
+						if err != nil {
+							return nil, "", err
+						}
+						c.devices[i].ContainerPath = vol.MountPoint
+						vol.Fstype = virtVolume.FSType
+						vol.Options = append(vol.Options, virtVolume.Options...)
+						break
+					}
+				}
 			}
 
 			if vol != nil {
@@ -504,9 +517,30 @@ func handleVirtualVolume(c *Container) ([]*grpc.Storage, string, error) {
 
 func (f *FilesystemShare) shareRootFilesystemWithVirtualVolume(ctx context.Context, c *Container) (*SharedFile, error) {
 	guestPath := filepath.Join("/run/kata-containers/", c.id, c.rootfsSuffix)
-	rootFsStorages, _, err := handleVirtualVolume(c)
+	rootFsStorages, volumeType, err := handleVirtualVolume(c)
 	if err != nil {
 		return nil, err
+	}
+
+	if volumeType == types.KataVirtualVolumeImageRawBlockType || volumeType == types.KataVirtualVolumeLayerRawBlockType {
+		kataGuestDir := filepath.Join(defaultKataGuestVirtualVolumedir, "containers")
+		overlayDirDriverOption := "io.katacontainers.volume.overlayfs.create_directory"
+		rootfs := &grpc.Storage{}
+		rootfs.MountPoint = guestPath
+		rootfs.Source = typeOverlayFS
+		rootfs.Fstype = typeOverlayFS
+		rootfs.Driver = kataOverlayDevType
+		for _, v := range rootFsStorages {
+			rootfs.Options = append(rootfs.Options, fmt.Sprintf("%s=%s", lowerDir, v.MountPoint))
+		}
+		rootfsUpperDir := filepath.Join(kataGuestDir, c.id, "fs")
+		rootfsWorkDir := filepath.Join(kataGuestDir, c.id, "work")
+		rootfs.DriverOptions = append(rootfs.DriverOptions, fmt.Sprintf("%s=%s", overlayDirDriverOption, rootfsUpperDir))
+		rootfs.DriverOptions = append(rootfs.DriverOptions, fmt.Sprintf("%s=%s", overlayDirDriverOption, rootfsWorkDir))
+		rootfs.Options = append(rootfs.Options, fmt.Sprintf("%s=%s", upperDir, rootfsUpperDir))
+		rootfs.Options = append(rootfs.Options, fmt.Sprintf("%s=%s", workDir, rootfsWorkDir))
+		rootFsStorages = append(rootFsStorages, rootfs)
+		f.Logger().Infof("verity rootfs info: %#v\n", rootfs)
 	}
 
 	return &SharedFile{
