@@ -1,0 +1,9 @@
+bases:
+- ../../base
+
+images:
+- name: quay.io/kata-containers/kata-deploy
+  newTag: stable
+
+patches:
+- path: env_stable_conf.yaml
