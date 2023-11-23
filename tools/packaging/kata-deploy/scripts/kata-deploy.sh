@@ -244,11 +244,15 @@ function configure_different_shims_base() {
 
 		backup_shim "${shim_file}"
 
-		if [[ "${shim}" == "dragonball" ]]; then
-			ln -sf /opt/kata/runtime-rs/bin/containerd-shim-kata-v2 "${shim_file}"
-		else
-			ln -sf /opt/kata/bin/containerd-shim-kata-v2 "${shim_file}"
-		fi
+		# Map the runtime shim name to the appropriate
+		# containerd-shim-kata-v2 binary
+		case "$shim" in
+			dragonball)
+				ln -sf /opt/kata/runtime-rs/bin/containerd-shim-kata-v2 "${shim_file}" ;;
+			*)
+				ln -sf /opt/kata/bin/containerd-shim-kata-v2 "${shim_file}" ;;
+		esac
+
 		chmod +x "$shim_file"
 
 		if [ "${shim}" == "${default_shim}" ]; then
