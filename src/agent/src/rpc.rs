@@ -54,7 +54,6 @@ use rustjail::process::ProcessOperations;
 
 use crate::device::{add_devices, get_virtio_blk_pci_device_name, update_env_pci};
 use crate::features::get_build_features;
-use crate::image;
 use crate::linux_abi::*;
 use crate::metrics::get_metrics;
 use crate::mount::baremount;
@@ -73,6 +72,9 @@ use crate::tracer::extract_carrier_from_ttrpc;
 
 #[cfg(feature = "agent-policy")]
 use crate::policy::{do_set_policy, is_allowed};
+
+#[cfg(feature = "guest-pull")]
+use crate::image;
 
 use opentelemetry::global;
 use tracing::span;
@@ -202,8 +204,11 @@ impl AgentService {
 
         // In case of pulling image inside guest, we need to merge the image bundle OCI spec
         // into the container creation request OCI spec.
-        let image_service = image::ImageService::singleton().await?;
-        image_service.merge_bundle_oci(&mut oci).await?;
+        #[cfg(feature = "guest-pull")]
+        {
+            let image_service = image::ImageService::singleton().await?;
+            image_service.merge_bundle_oci(&mut oci).await?;
+        }
 
         // Some devices need some extra processing (the ones invoked with
         // --device for instance), and that's what this call is doing. It
@@ -1603,9 +1608,11 @@ pub async fn start(
     let health_service = Box::new(HealthService {}) as Box<dyn health_ttrpc::Health + Send + Sync>;
     let hservice = health_ttrpc::create_health(Arc::new(health_service));
 
-    let image_service = image::ImageService::new();
-    *image::IMAGE_SERVICE.lock().await = Some(image_service.clone());
-
+    #[cfg(feature = "guest-pull")]
+    {
+        let image_service = image::ImageService::new();
+        *image::IMAGE_SERVICE.lock().await = Some(image_service.clone());
+    }
     let server = TtrpcServer::new()
         .bind(server_address)?
         .register_service(aservice)

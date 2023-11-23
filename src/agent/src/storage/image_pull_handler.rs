@@ -3,15 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use crate::image;
+use crate::storage::{StorageContext, StorageHandler};
 use anyhow::{anyhow, Result};
 use kata_types::mount::KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL;
 use kata_types::mount::{ImagePullVolume, StorageDevice};
 use protocols::agent::Storage;
 use std::sync::Arc;
 use tracing::instrument;
-
-use crate::image;
-use crate::storage::{StorageContext, StorageHandler};
 
 use super::{common_storage_handler, new_device};
 
