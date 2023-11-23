@@ -1,0 +1,13 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata: 
+  name: kata-deploy
+  namespace: kube-system
+spec:
+  template:
+    spec:
+      containers:
+      - name: kube-kata
+        env:
+          - name: SHIMS
+            value: "clh cloud-hypervisor dragonball fc qemu qemu-nvidia-gpu qemu-sev qemu-snp qemu-tdx"
