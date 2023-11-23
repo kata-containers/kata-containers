@@ -18,11 +18,6 @@ lazy_static! {
         "/etc/kata-containers/runtime-rs/configuration.toml",
         "/usr/share/defaults/kata-containers/runtime-rs/configuration.toml",
         "/opt/kata/share/defaults/kata-containers/runtime-rs/configuration.toml",
-
-        // The traditional golang paths
-        "/etc/kata-containers/configuration.toml",
-        "/usr/share/defaults/kata-containers/configuration.toml",
-        "/opt/kata/share/defaults/kata-containers/configuration.toml",
     ];
 }
 
