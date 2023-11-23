@@ -630,8 +630,10 @@ function main() {
 		TestContainerMemoryUpdate 0
 	fi
 
-	TestKilledVmmCleanup
-	TestDeviceCgroup
+	if [[ "${ARCH}" != "ppc64le" ]]; then
+		TestKilledVmmCleanup
+		TestDeviceCgroup
+	fi
 
 	popd
 }
