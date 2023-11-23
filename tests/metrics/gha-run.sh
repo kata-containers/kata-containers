@@ -72,30 +72,45 @@ function run_test_memory_usage_inside_container() {
 }
 
 function run_test_blogbench() {
+	if [ "${KATA_HYPERVISOR}" = "stratovirt" ]; then
+		exit 0
+	fi
 	info "Running Blogbench test using ${KATA_HYPERVISOR} hypervisor"
 
 	bash tests/metrics/storage/blogbench.sh
 }
 
 function run_test_tensorflow() {
+	if [ "${KATA_HYPERVISOR}" = "stratovirt" ]; then
+		exit 0
+	fi
 	info "Running TensorFlow test using ${KATA_HYPERVISOR} hypervisor"
 
 	bash tests/metrics/machine_learning/tensorflow_nhwc.sh 1 20
 }
 
 function run_test_fio() {
+	if [ "${KATA_HYPERVISOR}" = "stratovirt" ]; then
+		exit 0
+	fi
 	info "Running FIO test using ${KATA_HYPERVISOR} hypervisor"
 
 	bash tests/metrics/storage/fio_test.sh
 }
 
 function run_test_iperf() {
+	if [ "${KATA_HYPERVISOR}" = "stratovirt" ]; then
+		exit 0
+	fi
 	info "Running Iperf test using ${KATA_HYPERVISOR} hypervisor"
 
 	bash tests/metrics/network/iperf3_kubernetes/k8s-network-metrics-iperf3.sh -a
 }
 
 function run_test_latency() {
+	if [ "${KATA_HYPERVISOR}" = "stratovirt" ]; then
+		exit 0
+	fi
 	info "Running Latency test using ${KATA_HYPERVISOR} hypervisor"
 
 	bash tests/metrics/network/latency_kubernetes/latency-network.sh

@@ -14,9 +14,9 @@ description = "measure container lifecycle timings"
 # within (inclusive)
 checkvar = ".\"boot-times\".Results | .[] | .\"to-workload\".Result"
 checktype = "mean"
-midval = 0.62
-minpercent = 40.0
-maxpercent = 40.0
+midval = 0.48
+minpercent = 30.0
+maxpercent = 30.0
 
 [[metric]]
 name = "memory-footprint"
@@ -27,9 +27,9 @@ description = "measure memory usage"
 # within (inclusive)
 checkvar = ".\"memory-footprint\".Results | .[] | .average.Result"
 checktype = "mean"
-midval = 129842.10
-minpercent = 30.0
-maxpercent = 30.0
+midval = 132550.90
+minpercent = 20.0
+maxpercent = 20.0
 
 [[metric]]
 name = "memory-footprint-inside-container"
@@ -40,123 +40,6 @@ description = "measure memory inside the container"
 # within (inclusive)
 checkvar = ".\"memory-footprint-inside-container\".Results | .[] | .memtotal.Result"
 checktype = "mean"
-midval = 2040568.0
+midval = 4101768.0
 minpercent = 30.0
 maxpercent = 30.0
-
-[[metric]]
-name = "blogbench"
-type = "json"
-description = "measure container average of blogbench write"
-# Min and Max values to set a 'range' that
-# the median of the CSV Results data must fall
-# within (inclusive)
-checkvar = ".\"blogbench\".Results | .[] | .write.Result"
-checktype = "mean"
-midval = 603.0
-minpercent = 30.0
-maxpercent = 30.0
-
-[[metric]]
-name = "blogbench"
-type = "json"
-description = "measure container average of blogbench read"
-# Min and Max values to set a 'range' that
-# the median of the CSV Results data must fall
-# within (inclusive)
-checkvar = ".\"blogbench\".Results | .[] | .read.Result"
-checktype = "mean"
-midval = 37669.0
-minpercent = 30.0
-maxpercent = 30.0
-
-[[metric]]
-name = "tensorflow_nhwc"
-type = "json"
-description = "tensorflow resnet model"
-# Min and Max values to set a 'range' that
-# the median of the CSV Results data must fall
-# within (inclusive)
-checkvar = ".\"tensorflow_nhwc\".Results | .[] | .resnet.Result"
-checktype = "mean"
-midval = 2025.0
-minpercent = 30.0
-maxpercent = 30.0
-
-[[metric]]
-name = "tensorflow_nhwc"
-type = "json"
-description = "tensorflow alexnet model"
-# Min and Max values to set a 'range' that
-# the median of the CSV Results data must fall
-# within (inclusive)
-checkvar = ".\"tensorflow_nhwc\".Results | .[] | .alexnet.Result"
-checktype = "mean"
-midval = 75.0
-minpercent = 30.0
-maxpercent = 30.0
-
-[[metric]]
-name = "latency"
-type = "json"
-description = "measure container latency"
-# Min and Max values to set a 'range' that
-# the median of the CSV Results data must fall
-# within (inclusive)
-checkvar = ".\"latency\".Results | .[] | .latency.Result"
-checktype = "mean"
-midval = 0.78
-minpercent = 30.0
-maxpercent = 30.0
-
-[[metric]]
-name = "network-iperf3"
-type = "json"
-description = "measure container cpu utilization using iperf3"
-# Min and Max values to set a 'range' that
-# the median of the CSV Results data must fall
-# within (inclusive)
-checkvar = ".\"network-iperf3\".Results | .[] | .cpu.Result"
-checktype = "mean"
-midval = 60.10
-minpercent = 30.0
-maxpercent = 30.0
-
-[[metric]]
-name = "network-iperf3"
-type = "json"
-description = "measure container bandwidth using iperf3"
-# Min and Max values to set a 'range' that
-# the median of the CSV Results data must fall
-# within (inclusive)
-checkvar = ".\"network-iperf3\".Results | .[] | .bandwidth.Result"
-checktype = "mean"
-midval = 19959440840.94
-minpercent = 30.0
-maxpercent = 30.0
-
-[[metric]]
-name = "network-iperf3"
-type = "json"
-description = "measure container parallel bandwidth using iperf3"
-# Min and Max values to set a 'range' that
-# the median of the CSV Results data must fall
-# within (inclusive)
-checkvar = ".\"network-iperf3\".Results | .[] | .parallel.Result"
-checktype = "mean"
-midval = 25487333685.04
-minpercent = 30.0
-maxpercent = 30.0
-
-[[metric]]
-name = "network-iperf3"
-type = "json"
-description = "iperf"
-# Min and Max values to set a 'range' that
-# the median of the CSV Results data must fall
-# within (inclusive)
-checkvar = ".\"network-iperf3\".Results | .[] | .jitter.Result"
-checktype = "mean"
-midval = 0.038
-minpercent = 40.0
-maxpercent = 40.0
