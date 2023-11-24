@@ -6,19 +6,19 @@ package virtcontainers
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"time"
 
 	cri "github.com/containerd/containerd/pkg/cri/annotations"
+	"github.com/containerd/ttrpc"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	pb "github.com/kata-containers/kata-containers/src/runtime/protocols/hypervisor"
 	hypannotations "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 const defaultMinTimeout = 60
@@ -32,18 +32,20 @@ type remoteHypervisor struct {
 type remoteHypervisorSandboxID string
 
 type remoteService struct {
-	conn   *grpc.ClientConn
-	client pb.HypervisorClient
+	conn   net.Conn
+	client pb.HypervisorService
 }
 
 func openRemoteService(socketPath string) (*remoteService, error) {
 
-	conn, err := grpc.Dial(fmt.Sprintf("unix://%s", socketPath), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := net.Dial("unix", socketPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to remote hypervisor socket: %w", err)
 	}
-	defer conn.Close()
-	client := pb.NewHypervisorClient(conn)
+
+	ttrpcClient := ttrpc.NewClient(conn)
+
+	client := pb.NewHypervisorClient(ttrpcClient)
 
 	s := &remoteService{
 		conn:   conn,
