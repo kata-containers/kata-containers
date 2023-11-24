@@ -367,7 +367,7 @@ func checkAndMount(s *service, r *taskAPI.CreateTaskRequest) (bool, error) {
 			return false, nil
 		}
 
-		if virtcontainers.HasOptionPrefix(m.Options, annotations.FileSystemLayer) {
+		if _, found := virtcontainers.GetOptionPrefix(m.Options, annotations.FileSystemLayer); found {
 			return false, nil
 		}
 

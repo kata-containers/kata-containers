@@ -245,10 +245,12 @@ func TestHandleDeviceBlockVolume(t *testing.T) {
 				BlockDrive: &config.BlockDrive{
 					Pmem:     true,
 					NvdimmID: testNvdimmID,
-					Format:   testBlkDriveFormat,
+					Format:   config.FormatRaw,
 				},
 			},
-			inputMount: Mount{},
+			inputMount: Mount{
+				Type: testBlkDriveFormat,
+			},
 			resultVol: &pb.Storage{
 				Driver:  kataNvdimmDevType,
 				Source:  fmt.Sprintf("/dev/pmem%s", testNvdimmID),

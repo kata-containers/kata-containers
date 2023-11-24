@@ -322,7 +322,7 @@ func TestQemuArchBaseAppendImage(t *testing.T) {
 			ID:        drive.ID,
 			File:      image.Name(),
 			AIO:       govmmQemu.Threads,
-			Format:    "raw",
+			Format:    govmmQemu.RAW,
 			Interface: "none",
 			ShareRW:   true,
 			ReadOnly:  true,
@@ -415,7 +415,6 @@ func TestQemuArchBaseAppendSocket(t *testing.T) {
 func TestQemuArchBaseAppendBlockDevice(t *testing.T) {
 	id := "blockDevTest"
 	file := "/root"
-	format := "raw"
 
 	expectedOut := []govmmQemu.Device{
 		govmmQemu.BlockDevice{
@@ -423,14 +422,14 @@ func TestQemuArchBaseAppendBlockDevice(t *testing.T) {
 			ID:        id,
 			File:      "/root",
 			AIO:       govmmQemu.Threads,
-			Format:    govmmQemu.BlockDeviceFormat(format),
+			Format:    govmmQemu.RAW,
 			Interface: "none",
 		},
 	}
 
 	drive := config.BlockDrive{
 		File:   file,
-		Format: format,
+		Format: config.FormatRaw,
 		ID:     id,
 	}
 

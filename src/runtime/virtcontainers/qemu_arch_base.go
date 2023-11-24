@@ -411,7 +411,7 @@ func genericImage(path string) (config.BlockDrive, error) {
 
 	drive := config.BlockDrive{
 		File:     path,
-		Format:   "raw",
+		Format:   config.FormatRaw,
 		ID:       id,
 		ShareRW:  true,
 		ReadOnly: true,

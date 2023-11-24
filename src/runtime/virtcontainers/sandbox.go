@@ -1276,7 +1276,7 @@ func (s *Sandbox) addSwap(ctx context.Context, swapID string, size int64) (*conf
 
 	blockDevice := &config.BlockDrive{
 		File:   swapFile,
-		Format: "raw",
+		Format: config.FormatRaw,
 		ID:     swapID,
 		Swap:   true,
 	}
@@ -2003,9 +2003,11 @@ func (s *Sandbox) HotplugAddDevice(ctx context.Context, device api.Device, devTy
 	defer span.End()
 
 	if s.sandboxController != nil {
-		if err := s.sandboxController.AddDevice(device.GetHostPath()); err != nil {
-			s.Logger().WithError(err).WithField("device", device).
-				Warnf("Could not add device to the %s controller", s.sandboxController)
+		if major, _ := device.GetMajorMinor(); major != config.HostFileMajor {
+			if err := s.sandboxController.AddDevice(device.GetHostPath()); err != nil {
+				s.Logger().WithError(err).WithField("device", device).
+					Warnf("Could not add device to the %s controller", s.sandboxController)
+			}
 		}
 	}
 
@@ -2056,9 +2058,11 @@ func (s *Sandbox) HotplugAddDevice(ctx context.Context, device api.Device, devTy
 func (s *Sandbox) HotplugRemoveDevice(ctx context.Context, device api.Device, devType config.DeviceType) error {
 	defer func() {
 		if s.sandboxController != nil {
-			if err := s.sandboxController.RemoveDevice(device.GetHostPath()); err != nil {
-				s.Logger().WithError(err).WithField("device", device).
-					Warnf("Could not add device to the %s controller", s.sandboxController)
+			if major, _ := device.GetMajorMinor(); major != config.HostFileMajor {
+				if err := s.sandboxController.RemoveDevice(device.GetHostPath()); err != nil {
+					s.Logger().WithError(err).WithField("device", device).
+						Warnf("Could not add device to the %s controller", s.sandboxController)
+				}
 			}
 		}
 	}()
