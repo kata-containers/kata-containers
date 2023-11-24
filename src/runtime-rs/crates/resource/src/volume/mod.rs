@@ -17,6 +17,9 @@ use vfio_volume::is_vfio_volume;
 pub mod spdk_volume;
 use spdk_volume::is_spdk_volume;
 
+pub mod rawblock_volume;
+use rawblock_volume::is_rawblock_volume;
+
 use std::{sync::Arc, vec::Vec};
 
 use anyhow::{Context, Result};
@@ -74,12 +77,19 @@ impl VolumeResource {
                     shm_volume::ShmVolume::new(m, shm_size)
                         .with_context(|| format!("new shm volume {:?}", m))?,
                 )
-            } else if is_block_volume(m).context("block volume type")? {
+            } else if is_block_volume(m) {
                 // handle block volume
                 Arc::new(
                     block_volume::BlockVolume::new(d, m, read_only, sid)
                         .await
-                        .with_context(|| format!("new share fs volume {:?}", m))?,
+                        .with_context(|| format!("new block volume {:?}", m))?,
+                )
+            } else if is_rawblock_volume(m)? {
+                // handle rawblock volume
+                Arc::new(
+                    rawblock_volume::RawblockVolume::new(d, m, read_only, sid)
+                        .await
+                        .with_context(|| format!("new rawblock volume {:?}", m))?,
                 )
             } else if is_vfio_volume(m) {
                 Arc::new(
