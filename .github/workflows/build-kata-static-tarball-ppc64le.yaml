@@ -23,7 +23,7 @@ on:
 
 jobs:
   build-asset:
-    runs-on: ppc64le
+    runs-on: ppc
     strategy:
       matrix:
         asset:

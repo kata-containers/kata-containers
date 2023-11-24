@@ -12,7 +12,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 source "${script_dir}/../../scripts/lib.sh"
 
-VMM_CONFIGS="qemu"
+VMM_CONFIGS="qemu fc"
 
 GO_VERSION=${GO_VERSION}
 RUST_VERSION=${RUST_VERSION}
@@ -75,9 +75,10 @@ for vmm in ${VMM_CONFIGS}; do
 	config_file="${DESTDIR}/${PREFIX}/share/defaults/kata-containers/configuration-${vmm}.toml"
 	if [ -f ${config_file} ]; then
 		if [ ${ARCH} == "ppc64le" ]; then
-			sudo sed -i -e '/^initrd =/d' ${config_file}
-		else
 			sudo sed -i -e '/^image =/d' ${config_file}
+			sudo sed -i 's/^# \(initrd =.*\)/\1/g' ${config_file}
+		else
+			sudo sed -i -e '/^initrd =/d' ${config_file}
 		fi
 	fi
 done

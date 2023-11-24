@@ -35,7 +35,7 @@ function install_dependencies() {
 	sudo apt-get -y install "${system_deps[@]}"
 
 	ensure_yq
-	${repo_root_dir}/tests/install_go.sh -p
+	${repo_root_dir}/tests/install_go.sh -p -f
 
 	# Dependency list of projects that we can install them
 	# directly from their releases on GitHub:

@@ -43,6 +43,13 @@ jobs:
       target-branch: ${{ github.ref_name }}
     secrets: inherit
 
+  run-cri-containerd-tests-ppc64le:
+    needs: build-assets-ppc64le
+    uses: ./.github/workflows/run-cri-containerd-tests-ppc64le.yaml
+    with:
+      commit-hash: ${{ github.event.pull_request.head.sha }}
+      target-branch: ${{ github.event.pull_request.base.ref }}
+
   publish-kata-deploy-payload-amd64:
     needs: build-assets-amd64
     uses: ./.github/workflows/publish-kata-deploy-payload-amd64.yaml

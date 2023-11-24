@@ -215,7 +215,7 @@ function testContainerStop() {
 }
 
 function TestKilledVmmCleanup() {
-	if [[ "${KATA_HYPERVISOR}" != "qemu" ]]; then
+	if [[ "${KATA_HYPERVISOR}" != "qemu" ]] || [[ "${ARCH}" == "ppc64le" ]]; then
 		info "TestKilledVmmCleanup is skipped for ${KATA_HYPERVISOR}, only QEMU is currently tested"
 		return 0
 	fi
