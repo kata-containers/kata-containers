@@ -9,11 +9,12 @@ use safe_path::scoped_join;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::path::PathBuf;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use image_rs::image::ImageClient;
+use kata_sys_util::validate::verify_id;
 use tokio::sync::Mutex;
 
 use crate::rpc::CONTAINER_BASE;
@@ -23,6 +24,7 @@ use crate::AGENT_CONFIG;
 const ANNO_K8S_IMAGE_NAME: &str = "io.kubernetes.cri.image-name";
 const KATA_IMAGE_WORK_DIR: &str = "/run/kata-containers/image/";
 const CONFIG_JSON: &str = "config.json";
+const KATA_PAUSE_BUNDLE: &str = "/pause_bundle";
 
 #[rustfmt::skip]
 lazy_static! {
@@ -77,6 +79,39 @@ impl ImageService {
                 env::set_var("NO_PROXY", no_proxy);
             }
         }
+    }
+
+    /// pause image is packaged in rootfs
+    fn unpack_pause_image(cid: &str, target_subpath: &str) -> Result<String> {
+        verify_id(cid).context("The guest pause image cid contains invalid characters.")?;
+
+        let guest_pause_bundle = Path::new(KATA_PAUSE_BUNDLE);
+        if !guest_pause_bundle.exists() {
+            bail!("Pause image not present in rootfs");
+        }
+
+        info!(sl(), "use guest pause image cid {:?}", cid);
+        let pause_bundle = Path::new(CONTAINER_BASE).join(cid).join(target_subpath);
+        let pause_rootfs = pause_bundle.join("rootfs");
+        fs::create_dir_all(&pause_rootfs)?;
+
+        let copy_if_not_exists = |src: &Path, dst: &Path| -> Result<()> {
+            if !dst.exists() {
+                info!(sl(), "copying file {src:?} to {dst:?}");
+                fs::copy(src, dst)?;
+            }
+            Ok(())
+        };
+        copy_if_not_exists(
+            &guest_pause_bundle.join(CONFIG_JSON),
+            &pause_bundle.join(CONFIG_JSON),
+        )?;
+        copy_if_not_exists(
+            &guest_pause_bundle.join("rootfs/pause"),
+            &pause_rootfs.join("pause"),
+        )?;
+
+        Ok(pause_rootfs.display().to_string())
     }
 
     /// pull_image is used for call image-rs to pull image in the guest.
