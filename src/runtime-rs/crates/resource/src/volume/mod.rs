@@ -15,10 +15,7 @@ pub mod direct_volume;
 use crate::volume::direct_volume::is_direct_volume;
 
 pub mod direct_volumes;
-use direct_volumes::{
-    spdk_volume::{is_spdk_volume, SPDKVolume},
-    vfio_volume::{is_vfio_volume, VfioVolume},
-};
+use direct_volumes::vfio_volume::{is_vfio_volume, VfioVolume};
 
 use std::{sync::Arc, vec::Vec};
 
@@ -98,12 +95,6 @@ impl VolumeResource {
                     VfioVolume::new(d, m, read_only, sid)
                         .await
                         .with_context(|| format!("new vfio volume {:?}", m))?,
-                )
-            } else if is_spdk_volume(m) {
-                Arc::new(
-                    SPDKVolume::new(d, m, read_only, sid)
-                        .await
-                        .with_context(|| format!("create spdk volume {:?}", m))?,
                 )
             } else if let Some(options) =
                 get_huge_page_option(m).context("failed to check huge page")?
