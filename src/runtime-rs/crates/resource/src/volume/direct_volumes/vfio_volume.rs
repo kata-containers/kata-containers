@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use tokio::sync::RwLock;
 
@@ -15,9 +15,9 @@ use hypervisor::{
     },
     get_vfio_device, VfioConfig,
 };
+use kata_types::mount::DirectVolumeMountInfo;
 
 use crate::volume::{
-    direct_volumes::{volume_mount_info, KATA_VFIO_VOLUME_TYPE},
     utils::{generate_shared_path, DEFAULT_VOLUME_FS_TYPE},
     Volume,
 };
@@ -33,19 +33,13 @@ impl VfioVolume {
     pub(crate) async fn new(
         d: &RwLock<DeviceManager>,
         m: &oci::Mount,
+        mount_info: &DirectVolumeMountInfo,
         read_only: bool,
         sid: &str,
     ) -> Result<Self> {
-        let mnt_src: &str = &m.source;
-
-        // deserde Information from mountinfo.json
-        let v = volume_mount_info(mnt_src).context("deserde information from mountinfo.json")?;
-        if v.volume_type != KATA_VFIO_VOLUME_TYPE {
-            return Err(anyhow!("volume type is invalid"));
-        }
-
         // support both /dev/vfio/X and BDF<DDDD:BB:DD.F> or BDF<BB:DD.F>
-        let vfio_device = get_vfio_device(v.device).context("get vfio device failed.")?;
+        let vfio_device =
+            get_vfio_device(mount_info.device.clone()).context("get vfio device failed.")?;
         let vfio_dev_config = &mut VfioConfig {
             host_path: vfio_device.clone(),
             dev_type: "b".to_string(),
@@ -84,14 +78,14 @@ impl VfioVolume {
         storage.mount_point = guest_path.clone();
 
         if m.r#type != "bind" {
-            storage.fs_type = v.fs_type.clone();
+            storage.fs_type = mount_info.fs_type.clone();
         } else {
             storage.fs_type = DEFAULT_VOLUME_FS_TYPE.to_string();
         }
 
         let mount = oci::Mount {
             destination: m.destination.clone(),
-            r#type: v.fs_type,
+            r#type: mount_info.fs_type.clone(),
             source: guest_path,
             options: m.options.clone(),
         };
@@ -131,12 +125,4 @@ impl Volume for VfioVolume {
     fn get_device_id(&self) -> Result<Option<String>> {
         Ok(Some(self.device_id.clone()))
     }
-}
-
-pub(crate) fn is_vfio_volume(m: &oci::Mount) -> bool {
-    if m.r#type == KATA_VFIO_VOLUME_TYPE {
-        return true;
-    }
-
-    false
 }
