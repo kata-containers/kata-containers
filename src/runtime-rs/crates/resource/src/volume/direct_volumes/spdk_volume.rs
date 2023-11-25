@@ -9,17 +9,18 @@ use async_trait::async_trait;
 use nix::sys::{stat, stat::SFlag};
 use tokio::sync::RwLock;
 
-use super::Volume;
-use crate::volume::utils::{
-    generate_shared_path, volume_mount_info, DEFAULT_VOLUME_FS_TYPE, KATA_SPDK_VOLUME_TYPE,
-    KATA_SPOOL_VOLUME_TYPE,
-};
 use hypervisor::{
     device::{
         device_manager::{do_handle_device, get_block_driver, DeviceManager},
         DeviceConfig, DeviceType,
     },
     VhostUserConfig, VhostUserType,
+};
+
+use crate::volume::{
+    direct_volumes::{volume_mount_info, KATA_SPDK_VOLUME_TYPE, KATA_SPOOL_VOLUME_TYPE},
+    utils::{generate_shared_path, DEFAULT_VOLUME_FS_TYPE},
+    Volume,
 };
 
 /// SPDKVolume: spdk block device volume

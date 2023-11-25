@@ -8,16 +8,18 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use tokio::sync::RwLock;
 
-use super::Volume;
-use crate::volume::utils::{
-    generate_shared_path, volume_mount_info, DEFAULT_VOLUME_FS_TYPE, KATA_VFIO_VOLUME_TYPE,
-};
 use hypervisor::{
     device::{
         device_manager::{do_handle_device, DeviceManager},
         DeviceConfig, DeviceType,
     },
     get_vfio_device, VfioConfig,
+};
+
+use crate::volume::{
+    direct_volumes::{volume_mount_info, KATA_VFIO_VOLUME_TYPE},
+    utils::{generate_shared_path, DEFAULT_VOLUME_FS_TYPE},
+    Volume,
 };
 
 pub(crate) struct VfioVolume {
