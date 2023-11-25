@@ -36,7 +36,6 @@ impl SPDKVolume {
         d: &RwLock<DeviceManager>,
         m: &oci::Mount,
         read_only: bool,
-        cid: &str,
         sid: &str,
     ) -> Result<Self> {
         let mnt_src: &str = &m.source;
@@ -100,21 +99,14 @@ impl SPDKVolume {
                 .await
                 .context("do handle device failed.")?;
 
-        // generate host guest shared path
-        let guest_path = generate_shared_path(m.destination.clone(), read_only, cid, sid)
-            .await
-            .context("generate host-guest shared path failed")?;
-
         // storage
         let mut storage = agent::Storage {
-            mount_point: guest_path.clone(),
+            options: if read_only {
+                vec!["ro".to_string()]
+            } else {
+                Vec::new()
+            },
             ..Default::default()
-        };
-
-        storage.options = if read_only {
-            vec!["ro".to_string()]
-        } else {
-            Vec::new()
         };
 
         let mut device_id = String::new();
@@ -125,6 +117,12 @@ impl SPDKVolume {
             storage.source = device.config.virt_path;
             device_id = device.device_id;
         }
+
+        // generate host guest shared path
+        let guest_path = generate_shared_path(m.destination.clone(), read_only, &device_id, sid)
+            .await
+            .context("generate host-guest shared path failed")?;
+        storage.mount_point = guest_path.clone();
 
         if m.r#type != "bind" {
             storage.fs_type = v.fs_type.clone();

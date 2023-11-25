@@ -97,7 +97,7 @@ impl VolumeResource {
                 )
             } else if is_spdk_volume(m) {
                 Arc::new(
-                    SPDKVolume::new(d, m, read_only, cid, sid)
+                    SPDKVolume::new(d, m, read_only, sid)
                         .await
                         .with_context(|| format!("create spdk volume {:?}", m))?,
                 )
