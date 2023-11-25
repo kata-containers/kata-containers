@@ -219,7 +219,7 @@ mod tests {
             TestData {
                 rootfs: root_fs_str,
                 volume_path: "",
-                result: Err(anyhow!("volume path must not be empty")),
+                result: Err(anyhow!(std::io::ErrorKind::NotFound)),
             },
             TestData {
                 rootfs: root_fs_str,
