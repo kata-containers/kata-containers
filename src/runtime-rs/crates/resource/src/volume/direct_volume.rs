@@ -14,11 +14,24 @@ use hypervisor::device::device_manager::DeviceManager;
 
 use crate::volume::{
     direct_volumes::{
-        get_direct_volume_path, rawblock_volume, volume_mount_info, KATA_DIRECT_VOLUME_TYPE,
+        get_direct_volume_path, rawblock_volume, spdk_volume, volume_mount_info,
+        KATA_DIRECT_VOLUME_TYPE, KATA_SPDK_VOLUME_TYPE, KATA_SPOOL_VOLUME_TYPE,
     },
     utils::KATA_MOUNT_BIND_TYPE,
     Volume,
 };
+
+enum DirectVolumeType {
+    RawBlock,
+    Spdk,
+}
+
+fn to_volume_type(volume_type: &str) -> DirectVolumeType {
+    match volume_type {
+        KATA_SPDK_VOLUME_TYPE | KATA_SPOOL_VOLUME_TYPE => DirectVolumeType::Spdk,
+        _ => DirectVolumeType::RawBlock,
+    }
+}
 
 pub(crate) async fn handle_direct_volume(
     d: &RwLock<DeviceManager>,
@@ -59,11 +72,18 @@ pub(crate) async fn handle_direct_volume(
         }
     };
 
-    let direct_volume: Arc<dyn Volume> = Arc::new(
-        rawblock_volume::RawblockVolume::new(d, m, &mount_info, read_only, sid)
-            .await
-            .with_context(|| format!("new sid {:?} rawblock volume {:?}", &sid, m))?,
-    );
+    let direct_volume: Arc<dyn Volume> = match to_volume_type(mount_info.volume_type.as_str()) {
+        DirectVolumeType::RawBlock => Arc::new(
+            rawblock_volume::RawblockVolume::new(d, m, &mount_info, read_only, sid)
+                .await
+                .with_context(|| format!("new sid {:?} rawblock volume {:?}", &sid, m))?,
+        ),
+        DirectVolumeType::Spdk => Arc::new(
+            spdk_volume::SPDKVolume::new(d, m, &mount_info, read_only, sid)
+                .await
+                .with_context(|| format!("create spdk volume {:?}", m))?,
+        ),
+    };
 
     Ok(Some(direct_volume))
 }
@@ -71,7 +91,12 @@ pub(crate) async fn handle_direct_volume(
 pub(crate) fn is_direct_volume(m: &oci::Mount) -> Result<bool> {
     let mount_type = m.r#type.as_str();
     // Filter the non-bind volume and non-direct-vol volume
-    let vol_types = [KATA_MOUNT_BIND_TYPE, KATA_DIRECT_VOLUME_TYPE];
+    let vol_types = [
+        KATA_MOUNT_BIND_TYPE,
+        KATA_DIRECT_VOLUME_TYPE,
+        KATA_SPDK_VOLUME_TYPE,
+        KATA_SPOOL_VOLUME_TYPE,
+    ];
     if !vol_types.contains(&mount_type) {
         return Ok(false);
     }
