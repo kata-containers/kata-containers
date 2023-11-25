@@ -11,14 +11,12 @@ mod share_fs_volume;
 mod shm_volume;
 pub mod utils;
 
-pub mod vfio_volume;
-use vfio_volume::is_vfio_volume;
-
-pub mod spdk_volume;
-use spdk_volume::is_spdk_volume;
-
-pub mod rawblock_volume;
-use rawblock_volume::is_rawblock_volume;
+pub mod direct_volumes;
+use direct_volumes::{
+    rawblock_volume::{is_rawblock_volume, RawblockVolume},
+    spdk_volume::{is_spdk_volume, SPDKVolume},
+    vfio_volume::{is_vfio_volume, VfioVolume},
+};
 
 use std::{sync::Arc, vec::Vec};
 
@@ -87,19 +85,19 @@ impl VolumeResource {
             } else if is_rawblock_volume(m)? {
                 // handle rawblock volume
                 Arc::new(
-                    rawblock_volume::RawblockVolume::new(d, m, read_only, sid)
+                    RawblockVolume::new(d, m, read_only, sid)
                         .await
                         .with_context(|| format!("new rawblock volume {:?}", m))?,
                 )
             } else if is_vfio_volume(m) {
                 Arc::new(
-                    vfio_volume::VfioVolume::new(d, m, read_only, cid, sid)
+                    VfioVolume::new(d, m, read_only, cid, sid)
                         .await
                         .with_context(|| format!("new vfio volume {:?}", m))?,
                 )
             } else if is_spdk_volume(m) {
                 Arc::new(
-                    spdk_volume::SPDKVolume::new(d, m, read_only, cid, sid)
+                    SPDKVolume::new(d, m, read_only, cid, sid)
                         .await
                         .with_context(|| format!("create spdk volume {:?}", m))?,
                 )

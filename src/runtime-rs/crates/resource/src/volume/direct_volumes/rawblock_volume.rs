@@ -1,5 +1,5 @@
-// Copyright (c) 2019-2022 Alibaba Cloud
-// Copyright (c) 2019-2022 Ant Group
+// Copyright (c) 2023 Alibaba Cloud
+// Copyright (c) 2023 Ant Group
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -9,16 +9,18 @@ use async_trait::async_trait;
 use nix::sys::{stat, stat::SFlag};
 use tokio::sync::RwLock;
 
-use super::Volume;
-use crate::volume::utils::{
-    get_direct_volume_path, handle_block_volume, volume_mount_info, KATA_DIRECT_VOLUME_TYPE,
-};
 use hypervisor::{
     device::{
         device_manager::{do_handle_device, get_block_driver, DeviceManager},
         DeviceConfig,
     },
     BlockConfig,
+};
+
+use crate::volume::{
+    direct_volumes::{get_direct_volume_path, volume_mount_info, KATA_DIRECT_VOLUME_TYPE},
+    utils::handle_block_volume,
+    Volume,
 };
 
 #[derive(Clone)]
