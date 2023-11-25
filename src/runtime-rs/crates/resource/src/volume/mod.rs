@@ -11,9 +11,11 @@ mod share_fs_volume;
 mod shm_volume;
 pub mod utils;
 
+pub mod direct_volume;
+use crate::volume::direct_volume::is_direct_volume;
+
 pub mod direct_volumes;
 use direct_volumes::{
-    rawblock_volume::{is_rawblock_volume, RawblockVolume},
     spdk_volume::{is_spdk_volume, SPDKVolume},
     vfio_volume::{is_vfio_volume, VfioVolume},
 };
@@ -82,13 +84,15 @@ impl VolumeResource {
                         .await
                         .with_context(|| format!("new block volume {:?}", m))?,
                 )
-            } else if is_rawblock_volume(m)? {
+            } else if is_direct_volume(m)? {
                 // handle rawblock volume
-                Arc::new(
-                    RawblockVolume::new(d, m, read_only, sid)
-                        .await
-                        .with_context(|| format!("new rawblock volume {:?}", m))?,
-                )
+                match direct_volume::handle_direct_volume(d, m, read_only, sid)
+                    .await
+                    .context("handle direct volume")?
+                {
+                    Some(directvol) => directvol,
+                    None => continue,
+                }
             } else if is_vfio_volume(m) {
                 Arc::new(
                     VfioVolume::new(d, m, read_only, sid)

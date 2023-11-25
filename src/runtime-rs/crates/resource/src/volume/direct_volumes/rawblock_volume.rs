@@ -16,12 +16,9 @@ use hypervisor::{
     },
     BlockConfig,
 };
+use kata_types::mount::DirectVolumeMountInfo;
 
-use crate::volume::{
-    direct_volumes::{get_direct_volume_path, volume_mount_info, KATA_DIRECT_VOLUME_TYPE},
-    utils::handle_block_volume,
-    Volume,
-};
+use crate::volume::{direct_volumes::KATA_DIRECT_VOLUME_TYPE, utils::handle_block_volume, Volume};
 
 #[derive(Clone)]
 pub(crate) struct RawblockVolume {
@@ -35,32 +32,34 @@ impl RawblockVolume {
     pub(crate) async fn new(
         d: &RwLock<DeviceManager>,
         m: &oci::Mount,
+        mount_info: &DirectVolumeMountInfo,
         read_only: bool,
         sid: &str,
     ) -> Result<Self> {
-        let mnt_src: &str = &m.source;
         let block_driver = get_block_driver(d).await;
-        // get volume mountinfo from mountinfo.json
-        let v = volume_mount_info(mnt_src).context("deserde information from mountinfo.json")?;
+
         // check volume type
-        if v.volume_type != KATA_DIRECT_VOLUME_TYPE {
-            return Err(anyhow!("volume type {:?} is invalid", v.volume_type));
+        if mount_info.volume_type != KATA_DIRECT_VOLUME_TYPE {
+            return Err(anyhow!(
+                "volume type {:?} is invalid",
+                mount_info.volume_type
+            ));
         }
 
-        let fstat = stat::stat(v.device.as_str())
-            .with_context(|| format!("stat volume device file: {}", v.device.clone()))?;
+        let fstat = stat::stat(mount_info.device.as_str())
+            .with_context(|| format!("stat volume device file: {}", mount_info.device.clone()))?;
         if SFlag::from_bits_truncate(fstat.st_mode) != SFlag::S_IFREG
             && SFlag::from_bits_truncate(fstat.st_mode) != SFlag::S_IFBLK
         {
             return Err(anyhow!(
                 "invalid volume device {:?} for volume type {:?}",
-                v.device,
-                v.volume_type
+                mount_info.device,
+                mount_info.volume_type
             ));
         }
 
         let block_config = BlockConfig {
-            path_on_host: v.device,
+            path_on_host: mount_info.device.clone(),
             driver_option: block_driver,
             ..Default::default()
         };
@@ -70,7 +69,7 @@ impl RawblockVolume {
             .await
             .context("do handle device failed.")?;
 
-        let block_volume = handle_block_volume(device_info, m, read_only, sid, &v.fs_type)
+        let block_volume = handle_block_volume(device_info, m, read_only, sid, &mount_info.fs_type)
             .await
             .context("do handle block volume failed")?;
 
@@ -109,17 +108,4 @@ impl Volume for RawblockVolume {
     fn get_device_id(&self) -> Result<Option<String>> {
         Ok(Some(self.device_id.clone()))
     }
-}
-
-pub(crate) fn is_rawblock_volume(m: &oci::Mount) -> Result<bool> {
-    // KATA_MOUNT_BIND_TYPE = "directvol"
-    if m.r#type.as_str() != KATA_DIRECT_VOLUME_TYPE {
-        return Ok(false);
-    }
-
-    let source = get_direct_volume_path(&m.source).context("get direct volume path failed")?;
-    let fstat =
-        stat::stat(source.as_str()).context(format!("stat mount source {} failed.", source))?;
-
-    Ok(SFlag::from_bits_truncate(fstat.st_mode) == SFlag::S_IFDIR)
 }
