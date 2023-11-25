@@ -13,9 +13,7 @@ pub mod utils;
 
 pub mod direct_volume;
 use crate::volume::direct_volume::is_direct_volume;
-
 pub mod direct_volumes;
-use direct_volumes::vfio_volume::{is_vfio_volume, VfioVolume};
 
 use std::{sync::Arc, vec::Vec};
 
@@ -82,7 +80,7 @@ impl VolumeResource {
                         .with_context(|| format!("new block volume {:?}", m))?,
                 )
             } else if is_direct_volume(m)? {
-                // handle rawblock volume
+                // handle direct volumes
                 match direct_volume::handle_direct_volume(d, m, read_only, sid)
                     .await
                     .context("handle direct volume")?
@@ -90,12 +88,6 @@ impl VolumeResource {
                     Some(directvol) => directvol,
                     None => continue,
                 }
-            } else if is_vfio_volume(m) {
-                Arc::new(
-                    VfioVolume::new(d, m, read_only, sid)
-                        .await
-                        .with_context(|| format!("new vfio volume {:?}", m))?,
-                )
             } else if let Some(options) =
                 get_huge_page_option(m).context("failed to check huge page")?
             {
