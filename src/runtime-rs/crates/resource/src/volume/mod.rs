@@ -91,7 +91,7 @@ impl VolumeResource {
                 )
             } else if is_vfio_volume(m) {
                 Arc::new(
-                    VfioVolume::new(d, m, read_only, cid, sid)
+                    VfioVolume::new(d, m, read_only, sid)
                         .await
                         .with_context(|| format!("new vfio volume {:?}", m))?,
                 )
