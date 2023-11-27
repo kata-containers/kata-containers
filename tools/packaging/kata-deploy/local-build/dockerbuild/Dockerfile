@@ -16,6 +16,9 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
+        make \
+        git \
+        wget \
         sudo && \
     apt-get clean && rm -rf /var/lib/apt/lists/ && \
     install_yq.sh && \
@@ -43,10 +46,7 @@ RUN apt-get update && \
   build-essential \
   cpio \
   gcc \
-  git \
-  make \
   unzip \
-  wget \
   xz-utils && \
   apt-get clean && rm -rf /var/lib/apt/lists
 

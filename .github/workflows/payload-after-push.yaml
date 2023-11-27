@@ -34,6 +34,14 @@ jobs:
       push-to-registry: yes
       target-branch: ${{ github.ref_name }}
     secrets: inherit
+  
+  build-assets-ppc64le:
+    uses: ./.github/workflows/build-kata-static-tarball-ppc64le.yaml
+    with:
+      commit-hash: ${{ github.sha }}
+      push-to-registry: yes
+      target-branch: ${{ github.ref_name }}
+    secrets: inherit
 
   publish-kata-deploy-payload-amd64:
     needs: build-assets-amd64
@@ -68,9 +76,20 @@ jobs:
       target-branch: ${{ github.ref_name }}
     secrets: inherit
 
+  publish-kata-deploy-payload-ppc64le:
+    needs: build-assets-ppc64le
+    uses: ./.github/workflows/publish-kata-deploy-payload-ppc64le.yaml
+    with:
+      commit-hash: ${{ github.sha }}
+      registry: quay.io
+      repo: kata-containers/kata-deploy-ci
+      tag: kata-containers-ppc64le
+      target-branch: ${{ github.ref_name }}
+    secrets: inherit
+
   publish-manifest:
     runs-on: ubuntu-latest
-    needs: [publish-kata-deploy-payload-amd64, publish-kata-deploy-payload-arm64, publish-kata-deploy-payload-s390x]
+    needs: [publish-kata-deploy-payload-amd64, publish-kata-deploy-payload-arm64, publish-kata-deploy-payload-s390x, publish-kata-deploy-payload-ppc64le]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -87,5 +106,6 @@ jobs:
           docker manifest create quay.io/kata-containers/kata-deploy-ci:kata-containers-latest \
           --amend quay.io/kata-containers/kata-deploy-ci:kata-containers-amd64 \
           --amend quay.io/kata-containers/kata-deploy-ci:kata-containers-arm64 \
-          --amend quay.io/kata-containers/kata-deploy-ci:kata-containers-s390x
+          --amend quay.io/kata-containers/kata-deploy-ci:kata-containers-s390x \
+          --amend quay.io/kata-containers/kata-deploy-ci:kata-containers-ppc64le
           docker manifest push quay.io/kata-containers/kata-deploy-ci:kata-containers-latest
