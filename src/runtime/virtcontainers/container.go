@@ -662,41 +662,9 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 			}
 		}
 
-		var stat unix.Stat_t
-		if err := unix.Stat(c.mounts[i].Source, &stat); err != nil {
-			return fmt.Errorf("stat %q failed: %v", c.mounts[i].Source, err)
-		}
-
-		var di *config.DeviceInfo
-		var err error
-
 		// Check if mount is a block device file. If it is, the block device will be attached to the host
 		// instead of passing this as a shared mount.
-		if stat.Mode&unix.S_IFMT == unix.S_IFBLK {
-			di = &config.DeviceInfo{
-				HostPath:      c.mounts[i].Source,
-				ContainerPath: c.mounts[i].Destination,
-				DevType:       "b",
-				Major:         int64(unix.Major(uint64(stat.Rdev))),
-				Minor:         int64(unix.Minor(uint64(stat.Rdev))),
-				ReadOnly:      c.mounts[i].ReadOnly,
-			}
-		} else if isBlockFile && stat.Mode&unix.S_IFMT == unix.S_IFREG {
-			di = &config.DeviceInfo{
-				HostPath:      c.mounts[i].Source,
-				ContainerPath: c.mounts[i].Destination,
-				DevType:       "b",
-				Major:         -1,
-				Minor:         0,
-				ReadOnly:      c.mounts[i].ReadOnly,
-			}
-			// Check whether source can be used as a pmem device
-		} else if di, err = config.PmemDeviceInfo(c.mounts[i].Source, c.mounts[i].Destination); err != nil {
-			c.Logger().WithError(err).
-				WithField("mount-source", c.mounts[i].Source).
-				Debug("no loop device")
-		}
-
+		di, err := c.createDeviceInfo(c.mounts[i].Source, c.mounts[i].Destination, c.mounts[i].ReadOnly, isBlockFile)
 		if err == nil && di != nil {
 			b, err := c.sandbox.devManager.NewDevice(*di)
 			if err != nil {
@@ -795,6 +763,58 @@ func newContainer(ctx context.Context, sandbox *Sandbox, contConfig *ContainerCo
 	return c, nil
 }
 
+// Create Device Information about the block device
+func (c *Container) createDeviceInfo(source, destination string, readonly, isBlockFile bool) (*config.DeviceInfo, error) {
+	var stat unix.Stat_t
+	if err := unix.Stat(source, &stat); err != nil {
+		return nil, fmt.Errorf("stat %q failed: %v", source, err)
+	}
+
+	var di *config.DeviceInfo
+	var err error
+
+	if stat.Mode&unix.S_IFMT == unix.S_IFBLK {
+		di = &config.DeviceInfo{
+			HostPath:      source,
+			ContainerPath: destination,
+			DevType:       "b",
+			Major:         int64(unix.Major(uint64(stat.Rdev))),
+			Minor:         int64(unix.Minor(uint64(stat.Rdev))),
+			ReadOnly:      readonly,
+		}
+	} else if isBlockFile && stat.Mode&unix.S_IFMT == unix.S_IFREG {
+		di = &config.DeviceInfo{
+			HostPath:      source,
+			ContainerPath: destination,
+			DevType:       "b",
+			Major:         -1,
+			Minor:         0,
+			ReadOnly:      readonly,
+		}
+		// Check whether source can be used as a pmem device
+	} else if di, err = config.PmemDeviceInfo(source, destination); err != nil {
+		c.Logger().WithError(err).
+			WithField("mount-source", source).
+			Debug("no loop device")
+	}
+	return di, err
+}
+
+// call hypervisor to create device about KataVirtualVolume.
+func (c *Container) createVirtualVolumeDevices() ([]config.DeviceInfo, error) {
+	var deviceInfos []config.DeviceInfo
+	for _, o := range c.rootFs.Options {
+		if strings.HasPrefix(o, VirtualVolumePrefix) {
+			virtVolume, err := types.ParseKataVirtualVolume(strings.TrimPrefix(o, VirtualVolumePrefix))
+			if err != nil {
+				return nil, err
+			}
+			c.Logger().Infof("KataVirtualVolume volumetype = %s", virtVolume.VolumeType)
+		}
+	}
+	return deviceInfos, nil
+}
+
 func (c *Container) createMounts(ctx context.Context) error {
 	// Create block devices for newly created container
 	return c.createBlockDevices(ctx)
@@ -804,7 +824,13 @@ func (c *Container) createDevices(contConfig *ContainerConfig) error {
 	// If devices were not found in storage, create Device implementations
 	// from the configuration. This should happen at create.
 	var storedDevices []ContainerDevice
-	for _, info := range contConfig.DeviceInfos {
+	virtualVolumesDeviceInfos, err := c.createVirtualVolumeDevices()
+	if err != nil {
+		return err
+	}
+	deviceInfos := append(virtualVolumesDeviceInfos, contConfig.DeviceInfos...)
+
+	for _, info := range deviceInfos {
 		dev, err := c.sandbox.devManager.NewDevice(info)
 		if err != nil {
 			return err

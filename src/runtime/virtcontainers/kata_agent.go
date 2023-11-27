@@ -69,6 +69,8 @@ const (
 
 	NydusRootFSType = "fuse.nydus-overlayfs"
 
+	VirtualVolumePrefix = "io.katacontainers.volume="
+
 	// enable debug console
 	kernelParamDebugConsole           = "agent.debug_console"
 	kernelParamDebugConsoleVPort      = "agent.debug_console_vport"
@@ -81,41 +83,42 @@ const (
 type customRequestTimeoutKeyType struct{}
 
 var (
-	checkRequestTimeout           = 30 * time.Second
-	defaultRequestTimeout         = 60 * time.Second
-	remoteRequestTimeout          = 300 * time.Second
-	customRequestTimeoutKey       = customRequestTimeoutKeyType(struct{}{})
-	errorMissingOCISpec           = errors.New("Missing OCI specification")
-	defaultKataHostSharedDir      = "/run/kata-containers/shared/sandboxes/"
-	defaultKataGuestSharedDir     = "/run/kata-containers/shared/containers/"
-	defaultKataGuestNydusRootDir  = "/run/kata-containers/shared/"
-	mountGuestTag                 = "kataShared"
-	defaultKataGuestSandboxDir    = "/run/kata-containers/sandbox/"
-	type9pFs                      = "9p"
-	typeVirtioFS                  = "virtiofs"
-	typeOverlayFS                 = "overlay"
-	kata9pDevType                 = "9p"
-	kataMmioBlkDevType            = "mmioblk"
-	kataBlkDevType                = "blk"
-	kataBlkCCWDevType             = "blk-ccw"
-	kataSCSIDevType               = "scsi"
-	kataNvdimmDevType             = "nvdimm"
-	kataVirtioFSDevType           = "virtio-fs"
-	kataOverlayDevType            = "overlayfs"
-	kataWatchableBindDevType      = "watchable-bind"
-	kataVfioPciDevType            = "vfio-pci"    // VFIO PCI device to used as VFIO in the container
-	kataVfioPciGuestKernelDevType = "vfio-pci-gk" // VFIO PCI device for consumption by the guest kernel
-	kataVfioApDevType             = "vfio-ap"
-	sharedDir9pOptions            = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
-	sharedDirVirtioFSOptions      = []string{}
-	sharedDirVirtioFSDaxOptions   = "dax"
-	shmDir                        = "shm"
-	kataEphemeralDevType          = "ephemeral"
-	defaultEphemeralPath          = filepath.Join(defaultKataGuestSandboxDir, kataEphemeralDevType)
-	grpcMaxDataSize               = int64(1024 * 1024)
-	localDirOptions               = []string{"mode=0777"}
-	maxHostnameLen                = 64
-	GuestDNSFile                  = "/etc/resolv.conf"
+	checkRequestTimeout              = 30 * time.Second
+	defaultRequestTimeout            = 60 * time.Second
+	remoteRequestTimeout             = 300 * time.Second
+	customRequestTimeoutKey          = customRequestTimeoutKeyType(struct{}{})
+	errorMissingOCISpec              = errors.New("Missing OCI specification")
+	defaultKataHostSharedDir         = "/run/kata-containers/shared/sandboxes/"
+	defaultKataGuestSharedDir        = "/run/kata-containers/shared/containers/"
+	defaultKataGuestNydusRootDir     = "/run/kata-containers/shared/"
+	defaultKataGuestVirtualVolumedir = "/run/kata-containers/virtual-volumes/"
+	mountGuestTag                    = "kataShared"
+	defaultKataGuestSandboxDir       = "/run/kata-containers/sandbox/"
+	type9pFs                         = "9p"
+	typeVirtioFS                     = "virtiofs"
+	typeOverlayFS                    = "overlay"
+	kata9pDevType                    = "9p"
+	kataMmioBlkDevType               = "mmioblk"
+	kataBlkDevType                   = "blk"
+	kataBlkCCWDevType                = "blk-ccw"
+	kataSCSIDevType                  = "scsi"
+	kataNvdimmDevType                = "nvdimm"
+	kataVirtioFSDevType              = "virtio-fs"
+	kataOverlayDevType               = "overlayfs"
+	kataWatchableBindDevType         = "watchable-bind"
+	kataVfioPciDevType               = "vfio-pci"    // VFIO PCI device to used as VFIO in the container
+	kataVfioPciGuestKernelDevType    = "vfio-pci-gk" // VFIO PCI device for consumption by the guest kernel
+	kataVfioApDevType                = "vfio-ap"
+	sharedDir9pOptions               = []string{"trans=virtio,version=9p2000.L,cache=mmap", "nodev"}
+	sharedDirVirtioFSOptions         = []string{}
+	sharedDirVirtioFSDaxOptions      = "dax"
+	shmDir                           = "shm"
+	kataEphemeralDevType             = "ephemeral"
+	defaultEphemeralPath             = filepath.Join(defaultKataGuestSandboxDir, kataEphemeralDevType)
+	grpcMaxDataSize                  = int64(1024 * 1024)
+	localDirOptions                  = []string{"mode=0777"}
+	maxHostnameLen                   = 64
+	GuestDNSFile                     = "/etc/resolv.conf"
 )
 
 const (
@@ -1198,6 +1201,10 @@ func (k *kataAgent) appendDevices(deviceList []*grpc.Device, c *Container) []*gr
 			return nil
 		}
 
+		if strings.HasPrefix(dev.ContainerPath, defaultKataGuestVirtualVolumedir) {
+			continue
+		}
+
 		switch device.DeviceType() {
 		case config.DeviceBlock:
 			kataDevice = k.appendBlockDevice(dev, device, c)
@@ -1256,12 +1263,17 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 		return nil, err
 	}
 
-	if sharedRootfs.storage != nil {
+	if sharedRootfs.containerStorages != nil {
 		// Add rootfs to the list of container storage.
-		// We only need to do this for block based rootfs, as we
+		ctrStorages = append(ctrStorages, sharedRootfs.containerStorages...)
+	}
+
+	if sharedRootfs.volumeStorages != nil {
+		// Add volumeStorages to the list of container storage.
+		// We only need to do this for KataVirtualVolume based rootfs, as we
 		// want the agent to mount it into the right location
-		// (kataGuestSharedDir/ctrID/
-		ctrStorages = append(ctrStorages, sharedRootfs.storage)
+
+		ctrStorages = append(ctrStorages, sharedRootfs.volumeStorages...)
 	}
 
 	ociSpec := c.GetPatchedOCISpec()
@@ -1536,14 +1548,11 @@ func (k *kataAgent) handleLocalStorage(mounts []specs.Mount, sandboxID string, r
 	return localStorages, nil
 }
 
-// handleDeviceBlockVolume handles volume that is block device file
-// and DeviceBlock type.
-func (k *kataAgent) handleDeviceBlockVolume(c *Container, m Mount, device api.Device) (*grpc.Storage, error) {
+func handleBlockVolume(c *Container, device api.Device) (*grpc.Storage, error) {
 	vol := &grpc.Storage{}
 
 	blockDrive, ok := device.GetDeviceInfo().(*config.BlockDrive)
 	if !ok || blockDrive == nil {
-		k.Logger().Error("malformed block drive")
 		return nil, fmt.Errorf("malformed block drive")
 	}
 	switch {
@@ -1567,6 +1576,22 @@ func (k *kataAgent) handleDeviceBlockVolume(c *Container, m Mount, device api.De
 		vol.Source = blockDrive.SCSIAddr
 	default:
 		return nil, fmt.Errorf("Unknown block device driver: %s", c.sandbox.config.HypervisorConfig.BlockDeviceDriver)
+	}
+	return vol, nil
+}
+
+// handleVirtualVolumeStorageObject handles KataVirtualVolume that is block device file.
+func handleVirtualVolumeStorageObject(c *Container, blockDeviceId string, virtVolume *types.KataVirtualVolume) (*grpc.Storage, error) {
+	var vol *grpc.Storage = &grpc.Storage{}
+	return vol, nil
+}
+
+// handleDeviceBlockVolume handles volume that is block device file
+// and DeviceBlock type.
+func (k *kataAgent) handleDeviceBlockVolume(c *Container, m Mount, device api.Device) (*grpc.Storage, error) {
+	vol, err := handleBlockVolume(c, device)
+	if err != nil {
+		return nil, err
 	}
 
 	vol.MountPoint = m.Destination
