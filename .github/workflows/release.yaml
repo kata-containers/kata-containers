@@ -27,9 +27,15 @@ jobs:
       target-arch: s390x
     secrets: inherit
 
+  build-and-push-assets-ppc64le:
+    uses: ./.github/workflows/release-ppc64le.yaml
+    with:
+      target-arch: ppc64le
+    secrets: inherit
+
   publish-multi-arch-images:
     runs-on: ubuntu-latest
-    needs: [build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x]
+    needs: [build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le]
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -58,12 +64,14 @@ jobs:
             docker manifest create quay.io/kata-containers/kata-deploy:${tag} \
               --amend quay.io/kata-containers/kata-deploy:${tag}-amd64 \
               --amend quay.io/kata-containers/kata-deploy:${tag}-arm64 \
-              --amend quay.io/kata-containers/kata-deploy:${tag}-s390x
+              --amend quay.io/kata-containers/kata-deploy:${tag}-s390x \
+              --amend quay.io/kata-containers/kata-deploy:${tag}-ppc64le
 
             docker manifest create docker.io/katadocker/kata-deploy:${tag} \
               --amend docker.io/katadocker/kata-deploy:${tag}-amd64 \
               --amend docker.io/katadocker/kata-deploy:${tag}-arm64 \
-              --amend docker.io/katadocker/kata-deploy:${tag}-s390x
+              --amend docker.io/katadocker/kata-deploy:${tag}-s390x \
+              --amend docker.io/katadocker/kata-deploy:${tag}-ppc64le
 
             docker manifest push quay.io/kata-containers/kata-deploy:${tag}
             docker manifest push docker.io/katadocker/kata-deploy:${tag}
@@ -115,6 +123,20 @@ jobs:
           pushd $GITHUB_WORKSPACE
           echo "uploading asset '${tarball}' for tag: ${tag}"
           GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} gh release upload "${tag}" "${tarball}"
+          popd
+
+      - name: download-artifacts-ppc64le
+        uses: actions/download-artifact@v3
+        with:
+          name: kata-static-tarball-ppc64le
+      - name: push ppc64le static tarball to github
+        run: |
+          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
+          tarball="kata-static-$tag-ppc64le.tar.xz"
+          mv kata-static.tar.xz "$GITHUB_WORKSPACE/${tarball}"
+          pushd $GITHUB_WORKSPACE
+          echo "uploading asset '${tarball}' for tag: ${tag}"
+          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a "${tarball}" "${tag}"
           popd
 
   upload-versions-yaml:

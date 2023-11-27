@@ -29,9 +29,21 @@ fi
 
 arch=$(uname -m)
 if [ "${arch}" = "ppc64le" ]; then
-	echo "An ORAS release for ppc64le is not available yet."
-	exit 0
-fi
+ 	echo "Building oras from source"
+	go_version="go1.21.3"
+ 	# Install go
+ 	wget https://go.dev/dl/${go_version}.linux-ppc64le.tar.gz
+ 	rm -rf /usr/local/go && tar -C /usr/local -xzf ${go_version}.linux-ppc64le.tar.gz
+ 	export PATH=$PATH:/usr/local/go/bin
+ 	go version
+
+ 	git clone https://github.com/oras-project/oras.git
+ 	pushd oras 
+	make build-linux-ppc64le
+ 	cp bin/linux/ppc64le/oras ${install_dest}
+ 	popd 
+ 	exit 0
+ fi
 if [ "${arch}" = "x86_64" ]; then
 	arch="amd64"
 fi

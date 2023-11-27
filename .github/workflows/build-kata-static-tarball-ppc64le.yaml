@@ -1,0 +1,116 @@
+name: CI | Build kata-static tarball for ppc64le
+on:
+  workflow_call:
+    inputs:
+      stage:
+        required: false
+        type: string
+        default: test
+      tarball-suffix:
+        required: false
+        type: string
+      push-to-registry:
+        required: false
+        type: string
+        default: no
+      commit-hash:
+        required: false
+        type: string
+      target-branch:
+        required: false
+        type: string
+        default: ""
+
+jobs:
+  build-asset:
+    runs-on: ppc64le
+    strategy:
+      matrix:
+        asset:
+          - kernel
+          - qemu
+          - rootfs-initrd
+          - shim-v2
+          - virtiofsd
+        stage:
+          - ${{ inputs.stage }}
+    steps:
+      - name: Adjust a permission for repo
+        run: |
+          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
+
+      - name: Login to Kata Containers quay.io
+        if: ${{ inputs.push-to-registry == 'yes' }}
+        uses: docker/login-action@v2
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
+          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0 # This is needed in order to keep the commit ids history
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: Build ${{ matrix.asset }}
+        run: |
+          make "${KATA_ASSET}-tarball"
+          build_dir=$(readlink -f build)
+          # store-artifact does not work with symlink
+          sudo cp -r "${build_dir}" "kata-build"
+          sudo chown -R $(id -u):$(id -g) "kata-build"
+        env:
+          KATA_ASSET: ${{ matrix.asset }}
+          TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
+          PUSH_TO_REGISTRY: ${{ inputs.push-to-registry }}
+          ARTEFACT_REGISTRY: ghcr.io
+          ARTEFACT_REGISTRY_USERNAME: ${{ github.actor }}
+          ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: store-artifact ${{ matrix.asset }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: kata-artifacts-ppc64le${{ inputs.tarball-suffix }}
+          path: kata-build/kata-static-${{ matrix.asset }}.tar.xz
+          retention-days: 1
+          if-no-files-found: error
+
+  create-kata-tarball:
+    runs-on: ppc64le
+    needs: build-asset
+    steps:
+      - name: Adjust a permission for repo
+        run: |
+          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+      - name: get-artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: kata-artifacts-ppc64le${{ inputs.tarball-suffix }}
+          path: kata-artifacts
+      - name: merge-artifacts
+        run: |
+          ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-builds.sh kata-artifacts versions.yaml
+      - name: store-artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: kata-static-tarball-ppc64le${{ inputs.tarball-suffix }}
+          path: kata-static.tar.xz
+          retention-days: 1
+          if-no-files-found: error
