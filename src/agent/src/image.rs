@@ -26,6 +26,11 @@ const KATA_IMAGE_WORK_DIR: &str = "/run/kata-containers/image/";
 const CONFIG_JSON: &str = "config.json";
 const KATA_PAUSE_BUNDLE: &str = "/pause_bundle";
 
+const K8S_CONTAINER_TYPE_KEYS: [&str; 2] = [
+    "io.kubernetes.cri.container-type",
+    "io.kubernetes.cri-o.ContainerType",
+];
+
 #[rustfmt::skip]
 lazy_static! {
     pub static ref IMAGE_SERVICE: Mutex<Option<ImageService>> = Mutex::new(None);
@@ -130,6 +135,25 @@ impl ImageService {
         info!(sl(), "image metadata: {image_metadata:?}");
         Self::set_proxy_env_vars();
 
+        //Check whether the image is for sandbox or for container.
+        let mut is_sandbox = false;
+        for key in K8S_CONTAINER_TYPE_KEYS.iter() {
+            if let Some(value) = image_metadata.get(key as &str) {
+                if value == "sandbox" {
+                    is_sandbox = true;
+                    break;
+                }
+            }
+        }
+
+        if is_sandbox {
+            let mount_path = Self::unpack_pause_image(cid, "pause")?;
+            self.add_image(String::from(image), String::from(cid)).await;
+            return Ok(mount_path);
+        }
+
+        // Image layers will store at KATA_IMAGE_WORK_DIR, generated bundles
+        // with rootfs and config.json will store under CONTAINER_BASE/cid/images.
         let bundle_base_dir = scoped_join(CONTAINER_BASE, cid)?;
         fs::create_dir_all(&bundle_base_dir)?;
         let bundle_path = scoped_join(&bundle_base_dir, "images")?;
