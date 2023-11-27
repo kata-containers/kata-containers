@@ -84,16 +84,13 @@ impl Device for HybridVsockDevice {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct VsockConfig {
     /// A 32-bit Context Identifier (CID) used to identify the guest.
     pub guest_cid: u32,
-
-    /// Vhost vsock fd. Hold to ensure CID is not used by other VM.
-    pub vhost_fd: File,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct VsockDevice {
     /// Unique identifier of the device
     pub id: String,
@@ -121,16 +118,13 @@ const CID_RETRY_COUNT: u32 = 50;
 
 impl VsockDevice {
     pub async fn new(id: String) -> Result<Self> {
-        let (guest_cid, vhost_fd) = generate_vhost_vsock_cid()
+        let (guest_cid, _vhost_fd) = generate_vhost_vsock_cid()
             .await
             .context("generate vhost vsock cid failed")?;
 
         Ok(Self {
             id,
-            config: VsockConfig {
-                guest_cid,
-                vhost_fd,
-            },
+            config: VsockConfig { guest_cid },
         })
     }
 }
