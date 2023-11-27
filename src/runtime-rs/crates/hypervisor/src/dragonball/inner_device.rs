@@ -67,6 +67,7 @@ impl DragonballInner {
             DeviceType::ShareFs(sharefs) => self
                 .add_share_fs_device(&sharefs.config)
                 .context("add share fs device"),
+            DeviceType::Vsock(_) => todo!(),
         }
     }
 
