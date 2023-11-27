@@ -1,4 +1,4 @@
-# Copyright (c) 2019 Intel Corporation
+# Copyright (c) 2019-2023 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -9,4 +9,83 @@
 # Order in this file is important. Only the last match will be
 # used. See https://help.github.com/articles/about-code-owners/
 
-*.md    @kata-containers/documentation
+/CODEOWNERS			@kata-containers/codeowners
+
+VERSION				@kata-containers/release
+
+# The versions database needs careful handling
+versions.yaml			@kata-containers/release @kata-containers/ci @kata-containers/tests
+
+Makefile*			@kata-containers/build
+*.mak				@kata-containers/build
+*.mk				@kata-containers/build
+
+# Documentation related files could also appear anywhere
+# else in the repo.
+*.md				@kata-containers/documentation
+*.drawio			@kata-containers/documentation
+*.jpg				@kata-containers/documentation
+*.png				@kata-containers/documentation
+*.svg				@kata-containers/documentation
+
+*.bash				@kata-containers/shell
+*.sh				@kata-containers/shell
+**/completions/			@kata-containers/shell
+
+Dockerfile*			@kata-containers/docker
+
+/ci/				@kata-containers/ci
+
+*.bats				@kata-containers/tests
+/tests/				@kata-containers/tests
+
+*.rs				@kata-containers/rust
+*.go				@kata-containers/golang
+
+/utils/				@kata-containers/utils
+
+# FIXME: Maybe a new "protocol" team would be better?
+#
+# All protocol changes must be reviewed.
+# Note, we include all subdirs, including the vendor dir, as at present there are no .proto files
+# in the vendor dir. Later we may have to extend this matching rule if that changes.
+/src/libs/protocols/*.proto	@kata-containers/architecture-committee @kata-containers/builder @kata-containers/packaging
+
+# GitHub Actions
+/.github/workflows/		@kata-containers/action-admins @kata-containers/ci
+
+/ci/				@kata-containers/ci @kata-containers/tests
+/docs/				@kata-containers/documentation
+
+/src/agent/			@kata-containers/agent
+
+/src/runtime*/			@kata-containers/runtime
+
+/src/runtime/			@kata-containers/golang
+
+src/runtime-rs/			@kata-containers/rust
+src/libs/			@kata-containers/rust
+
+src/dragonball/			@kata-containers/dragonball
+
+/tools/osbuilder/		@kata-containers/builder
+/tools/packaging/		@kata-containers/packaging
+/tools/packaging/kernel/	@kata-containers/kernel
+/tools/packaging/kata-deploy/	@kata-containers/kata-deploy
+/tools/packaging/qemu/		@kata-containers/qemu
+/tools/packaging/release/	@kata-containers/release
+
+**/vendor/			@kata-containers/vendoring
+
+# Handle arch specific files last so they match more specifically than
+# the kernel packaging files.
+**/*aarch64*			@kata-containers/arch-aarch64
+**/*arm64*			@kata-containers/arch-aarch64
+
+**/*amd64*			@kata-containers/arch-amd64
+**/*x86-64*			@kata-containers/arch-amd64
+**/*x86_64*			@kata-containers/arch-amd64
+
+**/*ppc64*			@kata-containers/arch-ppc64le
+
+**/*s390x*			@kata-containers/arch-s390x
