@@ -129,6 +129,43 @@ impl VsockDevice {
     }
 }
 
+#[async_trait]
+impl Device for VsockDevice {
+    async fn attach(&mut self, h: &dyn hypervisor) -> Result<()> {
+        h.add_device(DeviceType::Vsock(self.clone()))
+            .await
+            .context("add vsock device.")?;
+
+        return Ok(());
+    }
+
+    async fn detach(&mut self, _h: &dyn hypervisor) -> Result<Option<u64>> {
+        // no need to do detach, just return Ok(None)
+        Ok(None)
+    }
+
+    async fn update(&mut self, _h: &dyn hypervisor) -> Result<()> {
+        // There's no need to do update for vsock device
+        Ok(())
+    }
+
+    async fn get_device_info(&self) -> DeviceType {
+        DeviceType::Vsock(self.clone())
+    }
+
+    async fn increase_attach_count(&mut self) -> Result<bool> {
+        // vsock devices will not be attached multiple times, Just return Ok(false)
+
+        Ok(false)
+    }
+
+    async fn decrease_attach_count(&mut self) -> Result<bool> {
+        // vsock devices will not be detached multiple times, Just return Ok(false)
+
+        Ok(false)
+    }
+}
+
 pub async fn generate_vhost_vsock_cid() -> Result<(u32, File)> {
     let vhost_fd = OpenOptions::new()
         .read(true)
