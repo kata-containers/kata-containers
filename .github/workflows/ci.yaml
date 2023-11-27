@@ -224,3 +224,11 @@ jobs:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
+
+  run-cri-containerd-tests-ppc64le:
+    needs: build-kata-static-tarball-ppc64le
+    uses: ./.github/workflows/run-cri-containerd-tests-ppc64le.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
