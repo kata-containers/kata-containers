@@ -83,3 +83,7 @@ You may also need to add the target on your host system prior to the above step 
 ```
 rustup target add s390x-unknown-linux-gnu
 ``` 
+
+## Documentation for included tools:
+| Component | Description |
+| [`log-parser`](src/log_parser) | Tool that aid in analyzing logs from the kata runtime. |

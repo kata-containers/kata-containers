@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{log_message::AnyLogMessage, log_parser_error::LogParserError};
+use crate::log_parser::{log_message::AnyLogMessage, log_parser_error::LogParserError};
 use std::{fs, io::ErrorKind, path::Path};
 
 /// Reads the entire file into memory as a string.
@@ -55,7 +55,7 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::log_message::LogMessage;
+    use crate::log_parser::log_message::LogMessage;
 
     #[test]
     fn parse_strings() {

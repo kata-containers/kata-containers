@@ -8,7 +8,7 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum LogParserError {
     #[error("Unknown Error")]
-    Unknown(Box<dyn Error>),
+    Unknown(Box<dyn Error + Send + Sync>),
 
     #[error("Input file '{0}' cannot be found")]
     InputFileNotFound(PathBuf),
@@ -26,7 +26,7 @@ pub enum LogParserError {
     ParsingError(serde_json::Error, String),
 
     #[error("Error serializing {0}: {1}")]
-    SerializationError(String, Box<dyn Error>),
+    SerializationError(String, Box<dyn Error + Send + Sync>),
 
     #[error("No logs in any file")]
     NoRecordsError(),

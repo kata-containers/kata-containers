@@ -11,7 +11,7 @@ logs, and output them in a different format.
 For more information on the `kata-log-parser` tool, use the help command:
 
 ```
-$ kata-log-parser --help
+$ kata-ctl log-parser --help
 ```
 
 > **Note** this is a rewrite of the go-based `kata-log-parser` tool, and will eventually replace it.
@@ -43,6 +43,7 @@ The most valuable command line options are listed below:
 - `--output-format <OUTPUT_FORMAT>` Sets the format of the output. Defaults to `json`, and can be set to `csv`, `json`, `ron`, `text`, `toml`, `xml`, and `yaml`.
 - `-q, --quiet` Will not print invalid log entry errors to stderr.
 - `-s, --strict` Any invalid log entry will halt the program.
+- `-h, --help`, Displays a listing of all CLI options.
 
 For a comprehensive (and guaranteed up to date) list, please run `log-parser-rs --help`.
 
@@ -63,5 +64,5 @@ For a comprehensive (and guaranteed up to date) list, please run `log-parser-rs 
    ```
 1. Process the logs:
    ```
-   $ log-parser-rs kata.log -o out.log
+   $ kata-ctl log-parser kata.log -o out.log
    ```
