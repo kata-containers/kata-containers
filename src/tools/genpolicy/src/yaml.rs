@@ -11,31 +11,35 @@ use crate::daemon_set;
 use crate::deployment;
 use crate::job;
 use crate::list;
+use crate::mount_and_storage;
 use crate::no_policy;
-use crate::pause_container;
 use crate::pod;
 use crate::policy;
 use crate::replica_set;
 use crate::replication_controller;
 use crate::secret;
+use crate::settings;
 use crate::stateful_set;
 use crate::volume;
 
 use async_trait::async_trait;
 use core::fmt::Debug;
 use log::debug;
+use protocols::agent;
 use serde::{Deserialize, Serialize};
 use serde_yaml;
 use std::boxed;
 use std::collections::BTreeMap;
 use std::fs::read_to_string;
 
+/// K8s API version and resource type.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct YamlHeader {
     pub apiVersion: String,
     pub kind: String,
 }
 
+/// Trait implemented by each supportes K8s resource type (e.g., Pod or Deployment).
 #[async_trait]
 pub trait K8sResource {
     async fn init(
@@ -54,13 +58,13 @@ pub trait K8sResource {
     fn get_container_mounts_and_storages(
         &self,
         policy_mounts: &mut Vec<policy::KataMount>,
-        storages: &mut Vec<policy::SerializedStorage>,
+        storages: &mut Vec<agent::Storage>,
         container: &pod::Container,
-        agent_policy: &policy::AgentPolicy,
+        settings: &settings::Settings,
     );
 
     fn get_containers(&self) -> &Vec<pod::Container>;
-    fn get_annotations(&self) -> Option<BTreeMap<String, String>>;
+    fn get_annotations(&self) -> &Option<BTreeMap<String, String>>;
     fn use_host_network(&self) -> bool;
 }
 
@@ -142,6 +146,14 @@ pub fn new_k8s_resource(
             debug!("{:#?}", &pod);
             Ok((boxed::Box::new(pod), header.kind))
         }
+        "ReplicaSet" => {
+            let set: replica_set::ReplicaSet = serde_ignored::deserialize(d, |path| {
+                handle_unused_field(&path.to_string(), silent_unsupported_fields);
+            })
+            .unwrap();
+            debug!("{:#?}", &set);
+            Ok((boxed::Box::new(set), header.kind))
+        }
         "ReplicationController" => {
             let controller: replication_controller::ReplicationController =
                 serde_ignored::deserialize(d, |path| {
@@ -150,14 +162,6 @@ pub fn new_k8s_resource(
                 .unwrap();
             debug!("{:#?}", &controller);
             Ok((boxed::Box::new(controller), header.kind))
-        }
-        "ReplicaSet" => {
-            let set: replica_set::ReplicaSet = serde_ignored::deserialize(d, |path| {
-                handle_unused_field(&path.to_string(), silent_unsupported_fields);
-            })
-            .unwrap();
-            debug!("{:#?}", &set);
-            Ok((boxed::Box::new(set), header.kind))
         }
         "Secret" => {
             let secret: secret::Secret = serde_ignored::deserialize(d, |path| {
@@ -215,7 +219,7 @@ pub async fn k8s_resource_init(spec: &mut pod::PodSpec, use_cache: bool) {
         container.init(use_cache).await;
     }
 
-    pause_container::add_pause_container(&mut spec.containers, use_cache).await;
+    pod::add_pause_container(&mut spec.containers, use_cache).await;
 
     if let Some(init_containers) = &spec.initContainers {
         for container in init_containers {
@@ -228,16 +232,30 @@ pub async fn k8s_resource_init(spec: &mut pod::PodSpec, use_cache: bool) {
 
 pub fn get_container_mounts_and_storages(
     policy_mounts: &mut Vec<policy::KataMount>,
-    storages: &mut Vec<policy::SerializedStorage>,
+    storages: &mut Vec<agent::Storage>,
     container: &pod::Container,
-    agent_policy: &policy::AgentPolicy,
+    settings: &settings::Settings,
     volumes: &Vec<volume::Volume>,
 ) {
-    for volume in volumes {
-        agent_policy.get_container_mounts_and_storages(policy_mounts, storages, container, &volume);
+    if let Some(volume_mounts) = &container.volumeMounts {
+        for volume in volumes {
+            for volume_mount in volume_mounts {
+                if volume_mount.name.eq(&volume.name) {
+                    mount_and_storage::get_mount_and_storage(
+                        settings,
+                        policy_mounts,
+                        storages,
+                        volume,
+                        volume_mount,
+                    );
+                }
+            }
+        }
     }
 }
 
+/// Add the "io.katacontainers.config.agent.policy" annotation into
+/// a serde representation of a K8s resource YAML.
 pub fn add_policy_annotation(
     mut ancestor: &mut serde_yaml::Value,
     metadata_path: &str,
@@ -276,6 +294,11 @@ pub fn remove_policy_annotation(annotations: &mut BTreeMap<String, String>) {
     annotations.remove("io.katacontainers.config.agent.policy");
 }
 
+/// Report a fatal error if this app encounters an unsupported input YAML field,
+/// unless the user requested this app to ignore unsupported input fields.
+/// "Silent unsupported fields" is an expert level feature, because some of
+/// the fields ignored silently might be relevant for the output policy,
+/// with hard to predict outcomes.
 fn handle_unused_field(path: &str, silent_unsupported_fields: bool) {
     if !silent_unsupported_fields {
         panic!("Unsupported field: {}", path);

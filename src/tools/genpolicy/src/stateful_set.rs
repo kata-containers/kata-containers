@@ -11,9 +11,11 @@ use crate::persistent_volume_claim;
 use crate::pod;
 use crate::pod_template;
 use crate::policy;
+use crate::settings;
 use crate::yaml;
 
 use async_trait::async_trait;
+use protocols::agent;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -21,10 +23,10 @@ use std::path::Path;
 /// See Reference / Kubernetes API / Workload Resources / StatefulSet.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct StatefulSet {
-    pub apiVersion: String,
-    pub kind: String,
-    pub metadata: obj_meta::ObjectMeta,
-    pub spec: StatefulSetSpec,
+    apiVersion: String,
+    kind: String,
+    metadata: obj_meta::ObjectMeta,
+    spec: StatefulSetSpec,
 
     #[serde(skip)]
     doc_mapping: serde_yaml::Value,
@@ -32,7 +34,7 @@ pub struct StatefulSet {
 
 /// See Reference / Kubernetes API / Workload Resources / StatefulSet.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct StatefulSetSpec {
+struct StatefulSetSpec {
     serviceName: String,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -40,7 +42,7 @@ pub struct StatefulSetSpec {
 
     selector: yaml::LabelSelector,
 
-    pub template: pod_template::PodTemplateSpec,
+    template: pod_template::PodTemplateSpec,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     volumeClaimTemplates: Option<Vec<persistent_volume_claim::PersistentVolumeClaim>>,
@@ -63,7 +65,7 @@ pub struct StatefulSetSpec {
 
 /// See Reference / Kubernetes API / Workload Resources / StatefulSet.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct StatefulSetPersistentVolumeClaimRetentionPolicy {
+struct StatefulSetPersistentVolumeClaimRetentionPolicy {
     #[serde(skip_serializing_if = "Option::is_none")]
     whenDeleted: Option<String>,
 
@@ -73,7 +75,7 @@ pub struct StatefulSetPersistentVolumeClaimRetentionPolicy {
 
 /// See Reference / Kubernetes API / Workload Resources / StatefulSet.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct StatefulSetUpdateStrategy {
+struct StatefulSetUpdateStrategy {
     #[serde(skip_serializing_if = "Option::is_none")]
     r#type: Option<String>,
 
@@ -83,7 +85,7 @@ pub struct StatefulSetUpdateStrategy {
 
 /// See Reference / Kubernetes API / Workload Resources / StatefulSet.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct RollingUpdateStatefulSetStrategy {
+struct RollingUpdateStatefulSetStrategy {
     #[serde(skip_serializing_if = "Option::is_none")]
     maxUnavailable: Option<String>,
 
@@ -93,12 +95,7 @@ pub struct RollingUpdateStatefulSetStrategy {
 
 #[async_trait]
 impl yaml::K8sResource for StatefulSet {
-    async fn init(
-        &mut self,
-        use_cache: bool,
-        doc_mapping: &serde_yaml::Value,
-        _silent_unsupported_fields: bool,
-    ) {
+    async fn init(&mut self, use_cache: bool, doc_mapping: &serde_yaml::Value, _silent: bool) {
         yaml::k8s_resource_init(&mut self.spec.template.spec, use_cache).await;
         self.doc_mapping = doc_mapping.clone();
     }
@@ -114,16 +111,16 @@ impl yaml::K8sResource for StatefulSet {
     fn get_container_mounts_and_storages(
         &self,
         policy_mounts: &mut Vec<policy::KataMount>,
-        storages: &mut Vec<policy::SerializedStorage>,
+        storages: &mut Vec<agent::Storage>,
         container: &pod::Container,
-        agent_policy: &policy::AgentPolicy,
+        settings: &settings::Settings,
     ) {
         if let Some(volumes) = &self.spec.template.spec.volumes {
             yaml::get_container_mounts_and_storages(
                 policy_mounts,
                 storages,
                 container,
-                agent_policy,
+                settings,
                 volumes,
             );
         }
@@ -167,11 +164,8 @@ impl yaml::K8sResource for StatefulSet {
         &self.spec.template.spec.containers
     }
 
-    fn get_annotations(&self) -> Option<BTreeMap<String, String>> {
-        if let Some(annotations) = &self.spec.template.metadata.annotations {
-            return Some(annotations.clone());
-        }
-        None
+    fn get_annotations(&self) -> &Option<BTreeMap<String, String>> {
+        &self.spec.template.metadata.annotations
     }
 
     fn use_host_network(&self) -> bool {
@@ -198,7 +192,7 @@ impl StatefulSet {
                             .to_str()
                             .unwrap();
                         // TODO:
-                        // - Get the source path below from the infra module.
+                        // - Get the source path below from the settings file.
                         // - Generate proper options value.
                         policy_mounts.push(policy::KataMount {
                             destination: mount.mountPath.clone(),

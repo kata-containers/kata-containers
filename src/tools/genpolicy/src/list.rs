@@ -8,10 +8,12 @@
 
 use crate::pod;
 use crate::policy;
+use crate::settings;
 use crate::yaml;
 
 use async_trait::async_trait;
 use core::fmt::Debug;
+use protocols::agent;
 use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
 use std::boxed;
@@ -37,19 +39,12 @@ impl Debug for dyn yaml::K8sResource + Send + Sync {
 
 #[async_trait]
 impl yaml::K8sResource for List {
-    async fn init(
-        &mut self,
-        use_cache: bool,
-        _doc_mapping: &serde_yaml::Value,
-        silent_unsupported_fields: bool,
-    ) {
+    async fn init(&mut self, use_cache: bool, _doc_mapping: &serde_yaml::Value, silent: bool) {
+        // Create K8sResource objects for each item in this List.
         for item in &self.items {
             let yaml_string = serde_yaml::to_string(&item).unwrap();
-            let (mut resource, _kind) =
-                yaml::new_k8s_resource(&yaml_string, silent_unsupported_fields).unwrap();
-            resource
-                .init(use_cache, item, silent_unsupported_fields)
-                .await;
+            let (mut resource, _kind) = yaml::new_k8s_resource(&yaml_string, silent).unwrap();
+            resource.init(use_cache, item, silent).await;
             self.resources.push(resource);
         }
     }
@@ -65,9 +60,9 @@ impl yaml::K8sResource for List {
     fn get_container_mounts_and_storages(
         &self,
         _policy_mounts: &mut Vec<policy::KataMount>,
-        _storages: &mut Vec<policy::SerializedStorage>,
+        _storages: &mut Vec<agent::Storage>,
         _container: &pod::Container,
-        _agent_policy: &policy::AgentPolicy,
+        _settings: &settings::Settings,
     ) {
     }
 
@@ -98,7 +93,7 @@ impl yaml::K8sResource for List {
         panic!("Unsupported");
     }
 
-    fn get_annotations(&self) -> Option<BTreeMap<String, String>> {
+    fn get_annotations(&self) -> &Option<BTreeMap<String, String>> {
         panic!("Unsupported");
     }
 

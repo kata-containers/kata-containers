@@ -1,7 +1,7 @@
 [package]
 name = "genpolicy"
 version = "0.1.0"
-authors = ["The Confidential Containers community https://github.com/confidential-containers"]
+authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2021"
 
 [dependencies]
@@ -39,14 +39,18 @@ openssl = { version = "0.10.54", features = ["vendored"] }
 serde_ignored = "0.1.7"
 serde_json = "1.0.39"
 serde-transcode = "1.1.1"
-tokio = {version = "1.0", features = ["full"]}
+tokio = {version = "1.33.0", features = ["rt-multi-thread"]}
 
 # OCI container specs.
 oci = { path = "../../libs/oci" }
 
+# Kata Agent prototol.
+protocols = { path = "../../libs/protocols", features = ["with-serde"] }
+protobuf = "3.2.0"
+
 # dm-verity root hash support
+generic-array = "0.14.6"
 sha2 = "0.10.6"
 tarindex = { path = "../../tardev-snapshotter/tarindex" }
 tempfile = "3.5.0"
-verity = { path = "../../tardev-snapshotter/verity" }
 zerocopy = "0.6.1"

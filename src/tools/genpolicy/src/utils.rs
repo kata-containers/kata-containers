@@ -5,6 +5,7 @@
 
 use log::debug;
 
+/// Application configuration, derived from on command line parameters.
 #[derive(Clone, Debug)]
 pub struct Config {
     pub use_cache: bool,
@@ -30,11 +31,10 @@ impl Config {
         raw_out: bool,
         base64_out: bool,
     ) -> Self {
-        let input_path = input_files_path.to_string();
-        let rules_file = input_path.clone() + "/rules.rego";
+        let rules_file = format!("{input_files_path}/rules.rego");
         debug!("Rules file: {rules_file}");
 
-        let settings_file = input_path + "/" + settings_file_name;
+        let settings_file = format!("{input_files_path}/{settings_file_name}");
         debug!("Settings file: {settings_file}");
 
         let cm_files = if !config_map_files.is_empty() {

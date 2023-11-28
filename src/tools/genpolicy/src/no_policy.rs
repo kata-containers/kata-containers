@@ -8,9 +8,11 @@
 
 use crate::pod;
 use crate::policy;
+use crate::settings;
 use crate::yaml;
 
 use async_trait::async_trait;
+use protocols::agent;
 use std::collections::BTreeMap;
 
 #[derive(Clone, Debug)]
@@ -39,9 +41,9 @@ impl yaml::K8sResource for NoPolicyResource {
     fn get_container_mounts_and_storages(
         &self,
         _policy_mounts: &mut Vec<policy::KataMount>,
-        _storages: &mut Vec<policy::SerializedStorage>,
+        _storages: &mut Vec<agent::Storage>,
         _container: &pod::Container,
-        _agent_policy: &policy::AgentPolicy,
+        _settings: &settings::Settings,
     ) {
         panic!("Unsupported");
     }
@@ -58,7 +60,7 @@ impl yaml::K8sResource for NoPolicyResource {
         panic!("Unsupported");
     }
 
-    fn get_annotations(&self) -> Option<BTreeMap<String, String>> {
+    fn get_annotations(&self) -> &Option<BTreeMap<String, String>> {
         panic!("Unsupported");
     }
 

@@ -24,7 +24,41 @@
                     "noexec"
                 ]
             }
-        ]
+        ],
+        "Annotations": {
+            "io.kubernetes.cri.container-type": "sandbox",
+            "io.kubernetes.cri.sandbox-id": "^[a-z0-9]{64}$",
+            "io.kubernetes.cri.sandbox-log-directory": "^/var/log/pods/$(sandbox-namespace)_$(sandbox-name)_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "io.katacontainers.pkg.oci.container_type": "pod_sandbox",
+            "io.kubernetes.cri.sandbox-namespace": "default",
+            "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/$(bundle-id)"
+        },
+        "Process": {
+            "Args": [
+                "/pause"
+            ]
+        },
+        "Linux": {
+            "MaskedPaths": [
+                "/proc/acpi",
+                "/proc/asound",
+                "/proc/kcore",
+                "/proc/keys",
+                "/proc/latency_stats",
+                "/proc/timer_list",
+                "/proc/timer_stats",
+                "/proc/sched_debug",
+                "/sys/firmware",
+                "/proc/scsi"
+            ],
+            "ReadonlyPaths": [
+                "/proc/bus",
+                "/proc/fs",
+                "/proc/irq",
+                "/proc/sys",
+                "/proc/sysrq-trigger"
+            ]
+        }
     },
     "other_container": {
         "Root": {
@@ -92,7 +126,13 @@
                     "ro"
                 ]
             }
-        ]
+        ],
+        "Annotations": {
+            "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/$(bundle-id)",
+            "io.kubernetes.cri.sandbox-id": "^[a-z0-9]{64}$",
+            "io.katacontainers.pkg.oci.container_type": "pod_container",
+            "io.kubernetes.cri.container-type": "container"
+        }
     },
     "volumes": {
         "emptyDir": {
@@ -140,6 +180,16 @@
             ]
         }
     },
+    "mount_destinations": [
+        "/sys/fs/cgroup",
+        "/etc/hosts",
+        "/dev/termination-log",
+        "/etc/hostname",
+        "/etc/resolv.conf",
+        "/dev/shm",
+        "/var/run/secrets/kubernetes.io/serviceaccount",
+        "/var/run/secrets/azure/tokens"
+    ],
     "common": {
         "cpath": "/run/kata-containers/shared/containers",
         "sfprefix": "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-",

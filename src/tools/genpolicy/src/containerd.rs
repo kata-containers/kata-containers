@@ -31,18 +31,14 @@ pub fn get_process(privileged_container: bool, common: &policy::CommonData) -> p
         Args: Vec::new(),
         Env: Vec::new(),
         Cwd: "/".to_string(),
-        Capabilities: Some(capabilities),
+        Capabilities: capabilities,
         NoNewPrivileges: true,
     }
 }
 
 // Default mounts field from containerd.
 pub fn get_mounts(is_pause_container: bool, privileged_container: bool) -> Vec<policy::KataMount> {
-    let sysfs_read_write_option = if privileged_container {
-        "rw"
-    } else {
-        "ro"
-    };
+    let sysfs_read_write_option = if privileged_container { "rw" } else { "ro" };
 
     let mut mounts = vec![
         policy::KataMount {

@@ -10,19 +10,21 @@ use crate::obj_meta;
 use crate::pod;
 use crate::pod_template;
 use crate::policy;
+use crate::settings;
 use crate::yaml;
 
 use async_trait::async_trait;
+use protocols::agent;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 /// See ReplicationController in the Kubernetes API reference.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ReplicationController {
-    pub apiVersion: String,
-    pub kind: String,
-    pub metadata: obj_meta::ObjectMeta,
-    pub spec: ReplicationControllerSpec,
+    apiVersion: String,
+    kind: String,
+    metadata: obj_meta::ObjectMeta,
+    spec: ReplicationControllerSpec,
 
     #[serde(skip)]
     doc_mapping: serde_yaml::Value,
@@ -30,7 +32,7 @@ pub struct ReplicationController {
 
 /// See ReplicationControllerSpec in the Kubernetes API reference.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct ReplicationControllerSpec {
+struct ReplicationControllerSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     replicas: Option<i32>,
 
@@ -45,12 +47,7 @@ pub struct ReplicationControllerSpec {
 
 #[async_trait]
 impl yaml::K8sResource for ReplicationController {
-    async fn init(
-        &mut self,
-        use_cache: bool,
-        doc_mapping: &serde_yaml::Value,
-        _silent_unsupported_fields: bool,
-    ) {
+    async fn init(&mut self, use_cache: bool, doc_mapping: &serde_yaml::Value, _silent: bool) {
         yaml::k8s_resource_init(&mut self.spec.template.spec, use_cache).await;
         self.doc_mapping = doc_mapping.clone();
     }
@@ -66,16 +63,16 @@ impl yaml::K8sResource for ReplicationController {
     fn get_container_mounts_and_storages(
         &self,
         policy_mounts: &mut Vec<policy::KataMount>,
-        storages: &mut Vec<policy::SerializedStorage>,
+        storages: &mut Vec<agent::Storage>,
         container: &pod::Container,
-        agent_policy: &policy::AgentPolicy,
+        settings: &settings::Settings,
     ) {
         if let Some(volumes) = &self.spec.template.spec.volumes {
             yaml::get_container_mounts_and_storages(
                 policy_mounts,
                 storages,
                 container,
-                agent_policy,
+                settings,
                 volumes,
             );
         }
@@ -94,11 +91,8 @@ impl yaml::K8sResource for ReplicationController {
         &self.spec.template.spec.containers
     }
 
-    fn get_annotations(&self) -> Option<BTreeMap<String, String>> {
-        if let Some(annotations) = &self.spec.template.metadata.annotations {
-            return Some(annotations.clone());
-        }
-        None
+    fn get_annotations(&self) -> &Option<BTreeMap<String, String>> {
+        &self.spec.template.metadata.annotations
     }
 
     fn use_host_network(&self) -> bool {

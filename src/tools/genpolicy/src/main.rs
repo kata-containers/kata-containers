@@ -11,13 +11,11 @@ mod config_map;
 mod containerd;
 mod daemon_set;
 mod deployment;
-mod infra;
 mod job;
-mod kata;
 mod list;
+mod mount_and_storage;
 mod no_policy;
 mod obj_meta;
-mod pause_container;
 mod persistent_volume_claim;
 mod pod;
 mod pod_template;
@@ -26,14 +24,20 @@ mod registry;
 mod replica_set;
 mod replication_controller;
 mod secret;
+mod settings;
 mod stateful_set;
 mod utils;
+mod verity;
 mod volume;
 mod yaml;
 
 #[derive(Debug, Parser)]
 struct CommandLineOptions {
-    #[clap(short, long, help = "Kubernetes YAML input file path")]
+    #[clap(
+        short,
+        long,
+        help = "Kubernetes input/output YAML file path. stdin/stdout get used if this option is not specified."
+    )]
     yaml_file: Option<String>,
 
     #[clap(

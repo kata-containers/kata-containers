@@ -10,9 +10,11 @@ use crate::obj_meta;
 use crate::pod;
 use crate::pod_template;
 use crate::policy;
+use crate::settings;
 use crate::yaml;
 
 use async_trait::async_trait;
+use protocols::agent;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -21,8 +23,8 @@ use std::collections::BTreeMap;
 pub struct DaemonSet {
     apiVersion: String,
     kind: String,
-    pub metadata: obj_meta::ObjectMeta,
-    pub spec: DaemonSetSpec,
+    metadata: obj_meta::ObjectMeta,
+    spec: DaemonSetSpec,
 
     #[serde(skip)]
     doc_mapping: serde_yaml::Value,
@@ -89,16 +91,16 @@ impl yaml::K8sResource for DaemonSet {
     fn get_container_mounts_and_storages(
         &self,
         policy_mounts: &mut Vec<policy::KataMount>,
-        storages: &mut Vec<policy::SerializedStorage>,
+        storages: &mut Vec<agent::Storage>,
         container: &pod::Container,
-        agent_policy: &policy::AgentPolicy,
+        settings: &settings::Settings,
     ) {
         if let Some(volumes) = &self.spec.template.spec.volumes {
             yaml::get_container_mounts_and_storages(
                 policy_mounts,
                 storages,
                 container,
-                agent_policy,
+                settings,
                 volumes,
             )
         }
@@ -117,11 +119,8 @@ impl yaml::K8sResource for DaemonSet {
         &self.spec.template.spec.containers
     }
 
-    fn get_annotations(&self) -> Option<BTreeMap<String, String>> {
-        if let Some(annotations) = &self.spec.template.metadata.annotations {
-            return Some(annotations.clone());
-        }
-        None
+    fn get_annotations(&self) -> &Option<BTreeMap<String, String>> {
+        &self.spec.template.metadata.annotations
     }
 
     fn use_host_network(&self) -> bool {

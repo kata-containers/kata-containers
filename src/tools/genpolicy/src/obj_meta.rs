@@ -16,7 +16,7 @@ pub struct ObjectMeta {
     pub name: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub generateName: Option<String>,
+    generateName: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     labels: Option<BTreeMap<String, String>>,
