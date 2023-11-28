@@ -8,7 +8,8 @@ use std::{
     path::Path,
 };
 
-use crate::{args::Cli, log_message::AnyLogMessage, log_parser_error::LogParserError};
+use crate::args::LogParser;
+use crate::log_parser::{log_message::AnyLogMessage, log_parser_error::LogParserError};
 
 /// a simple dispatcher method that outputs the deserialized result of the parsed logs according to
 /// the CLI arguments.
@@ -19,7 +20,7 @@ use crate::{args::Cli, log_message::AnyLogMessage, log_parser_error::LogParserEr
 /// the output file.
 pub(crate) fn output_file<O: AnyLogMessage>(
     contents: Vec<O>,
-    options: &Cli,
+    options: &LogParser,
 ) -> Result<(), LogParserError> {
     let serializer = choose_formatting(options);
     if let Some(out_file) = &options.output_file {
@@ -31,16 +32,16 @@ pub(crate) fn output_file<O: AnyLogMessage>(
 }
 
 fn choose_formatting<O: AnyLogMessage>(
-    options: &Cli,
+    options: &LogParser,
 ) -> fn(Vec<O>) -> Result<String, LogParserError> {
     match options.output_format {
-        crate::args::OutputFormat::Csv => serialize_csv,
-        crate::args::OutputFormat::Json => serialize_json,
-        crate::args::OutputFormat::Ron => serialize_ron,
-        crate::args::OutputFormat::Text => serialize_text,
-        crate::args::OutputFormat::Toml => serialize_toml,
-        crate::args::OutputFormat::Xml => serialize_xml,
-        crate::args::OutputFormat::Yaml => serialize_yaml,
+        crate::args::LogOutputFormat::Csv => serialize_csv,
+        crate::args::LogOutputFormat::Json => serialize_json,
+        crate::args::LogOutputFormat::Ron => serialize_ron,
+        crate::args::LogOutputFormat::Text => serialize_text,
+        crate::args::LogOutputFormat::Toml => serialize_toml,
+        crate::args::LogOutputFormat::Xml => serialize_xml,
+        crate::args::LogOutputFormat::Yaml => serialize_yaml,
     }
 }
 
