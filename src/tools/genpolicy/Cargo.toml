@@ -50,3 +50,4 @@ sha2 = "0.10.6"
 tarindex = { path = "../../tardev-snapshotter/tarindex" }
 tempfile = "3.5.0"
 zerocopy = "0.6.1"
+fs2 = "0.4.3"
