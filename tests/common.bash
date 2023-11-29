@@ -80,23 +80,56 @@ function is_a_kata_runtime() {
 # Gets versions and paths of all the components
 # list in kata-env
 function extract_kata_env() {
-	RUNTIME_CONFIG_PATH=$(kata-runtime env --json | jq -r .Runtime.Config.Path)
-	RUNTIME_VERSION=$(kata-runtime env --json | jq -r .Runtime.Version | grep Semver | cut -d'"' -f4)
-	RUNTIME_COMMIT=$(kata-runtime env --json | jq -r .Runtime.Version | grep Commit | cut -d'"' -f4)
-	RUNTIME_PATH=$(kata-runtime env --json | jq -r .Runtime.Path)
+	local cmd
+	local config_path
+	local runtime_version
+	local runtime_version_semver
+	local runtime_version_commit
+	local runtime_path
+	local hypervisor_path
+	local virtiofsd_path
+	local initrd_path
+	case "${KATA_HYPERVISOR}" in
+		dragonball)
+			cmd=kata-ctl
+			config_path=".runtime.config.path"
+			runtime_version=".runtime.version"
+			runtime_version_semver="semver"
+			runtime_version_commit="commit"
+			runtime_path=".runtime.path"
+			hypervisor_path=".hypervisor.path"
+			virtio_fs_daemon_path=".hypervisor.virtio_fs_daemon"
+			initrd_path=".initrd.path"
+			;;
+		*)
+			cmd=kata-runtime
+			config_path=".Runtime.Config.Path"
+			runtime_version=".Runtime.Version"
+			runtime_version_semver="Semver"
+			runtime_version_commit="Commit"
+			runtime_path=".Runtime.Path"
+			hypervisor_path=".Hypervisor.Path"
+			virtio_fs_daemon_path=".Hypervisor.VirtioFSDaemon"
+			initrd_path=".Initrd.Path"
+			;;
+	esac
+	RUNTIME_CONFIG_PATH=$(sudo ${cmd} env --json | jq -r ${config_path})
+	RUNTIME_VERSION=$(sudo ${cmd} env --json | jq -r ${runtime_version} | grep ${runtime_version_semver} | cut -d'"' -f4)
+	RUNTIME_COMMIT=$(sudo ${cmd} env --json | jq -r ${runtime_version} | grep ${runtime_version_commit} | cut -d'"' -f4)
+	RUNTIME_PATH=$(sudo ${cmd} env --json | jq -r ${runtime_path})
 
 	# Shimv2 path is being affected by https://github.com/kata-containers/kata-containers/issues/1151
 	SHIM_PATH=$(readlink $(command -v containerd-shim-kata-v2))
 	SHIM_VERSION=${RUNTIME_VERSION}
 
-	HYPERVISOR_PATH=$(kata-runtime env --json | jq -r .Hypervisor.Path)
-	# TODO: there is no kata-runtime of rust version currently
+	HYPERVISOR_PATH=$(sudo ${cmd} env --json | jq -r ${hypervisor_path})
+	# TODO: there is no ${cmd} of rust version currently
 	if [ "${KATA_HYPERVISOR}" != "dragonball" ]; then
 		HYPERVISOR_VERSION=$(sudo -E ${HYPERVISOR_PATH} --version | head -n1)
 	fi
-	VIRTIOFSD_PATH=$(kata-runtime env --json | jq -r .Hypervisor.VirtioFSDaemon)
+	VIRTIOFSD_PATH=$(sudo ${cmd} env --json | jq -r ${virtio_fs_daemon_path})
 
-	INITRD_PATH=$(kata-runtime env --json | jq -r .Initrd.Path)
+	INITRD_PATH=$(sudo ${cmd} env --json | jq -r ${initrd_path})
 }
 
 # Checks that processes are not running
