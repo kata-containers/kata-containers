@@ -40,7 +40,7 @@ rootfs_type=@DEFROOTFSTYPE@
 # * Intel TDX
 #
 # Default false
-# confidential_guest = true
+confidential_guest = true
 
 # Enable running clh VMM as a non-root user.
 # By default clh VMM run as root. When this is set to true, clh VMM process runs as
