@@ -27,3 +27,7 @@ spec:
       securityContext:
         seccompProfile:
           type: RuntimeDefault
+  topologySpreadConstraints:
+    - maxSkew: 2
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
