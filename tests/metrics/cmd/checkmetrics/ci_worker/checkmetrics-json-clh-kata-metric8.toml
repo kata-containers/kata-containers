@@ -198,7 +198,7 @@ description = "measure container parallel bandwidth using iperf3"
 # within (inclusive)
 checkvar = ".\"network-iperf3\".Results | .[] | .parallel.Result"
 checktype = "mean"
-midval = 47734838389.0
+midval = 57516472021.90
 minpercent = 20.0
 maxpercent = 20.0
 
