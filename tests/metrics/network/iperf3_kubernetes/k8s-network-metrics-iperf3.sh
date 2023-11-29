@@ -36,8 +36,14 @@ function remove_tmp_file() {
 trap remove_tmp_file EXIT
 
 function iperf3_all_collect_results() {
+
+	if [ -z "${bandwidth_result}" ] || [ -z "${jitter_result}" ] || [ -z "${cpu_result}" ] || [ -z "${parallel_result}" ]; then
+		die "iperf has not results to save"
+	fi
+
 	metrics_json_init
 	metrics_json_start_array
+
 	local json="$(cat << EOF
 	{
 		"bandwidth": {
@@ -74,6 +80,10 @@ function iperf3_bandwidth() {
 	if [ "$COLLECT_ALL" == "true" ]; then
 		iperf3_all_collect_results
 	else
+		if [ -z "${bandwidth_result}" ]; then
+			die "iperf has not results to save"
+		fi
+
 		metrics_json_init
 		metrics_json_start_array
 
@@ -103,6 +113,10 @@ function iperf3_jitter() {
 	if [ "$COLLECT_ALL" == "true" ]; then
 		iperf3_all_collect_results
 	else
+		if [ -z "${jitter_result}" ]; then
+			die "iperf has not results to save"
+		fi
+
 		metrics_json_init
 		metrics_json_start_array
 
@@ -129,6 +143,10 @@ function iperf3_parallel() {
 	if [ "$COLLECT_ALL" == "true" ]; then
 		iperf3_all_collect_results
 	else
+		if [ -z "${parallel_result}" ]; then
+			die "iperf has not results to save"
+		fi
+
 		metrics_json_init
 		metrics_json_start_array
 
@@ -157,6 +175,10 @@ function iperf3_cpu() {
 	if [ "$COLLECT_ALL" == "true" ]; then
 		iperf3_all_collect_results
 	else
+		if [ -z "${cpu_result}" ]; then
+			die "iperf has not results to save"
+		fi
+
 		metrics_json_init
 		metrics_json_start_array
 
@@ -169,7 +191,6 @@ function iperf3_cpu() {
 		}
 EOF
 )"
-
 		metrics_json_add_array_element "$json"
 		metrics_json_end_array "Results"
 	fi
@@ -246,9 +267,6 @@ EOF
 }
 
 function main() {
-	init_env
-	iperf3_start_deployment
-
 	local OPTIND
 	while getopts ":abcjph:" opt
 	do
@@ -289,6 +307,9 @@ function main() {
 	[[ -z "$test_parallel" ]] && \
 	[[ -z "$test_all" ]] && \
 		help && die "Must choose at least one test"
+
+	init_env
+	iperf3_start_deployment
 
 	if [ "$test_bandwith" == "1" ]; then
 		iperf3_bandwidth
