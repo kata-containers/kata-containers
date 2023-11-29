@@ -29,37 +29,36 @@ COLLECT_ALL="${COLLECT_ALL:-false}"
 IPERF_DEPLOYMENT="${SCRIPT_PATH}/runtimeclass_workloads/iperf3-deployment.yaml"
 IPERF_DAEMONSET="${SCRIPT_PATH}/runtimeclass_workloads/iperf3-daemonset.yaml"
 
-function remove_tmp_file() {
-	rm -rf "${iperf_file}"
-}
-
-trap remove_tmp_file EXIT
-
 function iperf3_all_collect_results() {
+
+	if [ -z "${bandwidth_result}" ] || [ -z "${jitter_result}" ] || [ -z "${cpu_result}" ] || [ -z "${parallel_result}" ]; then
+		die "iperf couldn't find any results to save."
+	fi
+
 	metrics_json_init
 	metrics_json_start_array
 	local json="$(cat << EOF
 	{
 		"bandwidth": {
-			"Result" : $bandwidth_result,
-			"Units" : "$bandwidth_units"
+			"Result" : "${bandwidth_result}",
+			"Units" : "${bandwidth_units}"
 		},
 		"jitter": {
-			"Result" : $jitter_result,
-			"Units" : "$jitter_units"
+			"Result" : "${jitter_result}",
+			"Units" : "${jitter_units}"
 		},
 		"cpu": {
-			"Result" : $cpu_result,
-			"Units"  : "$cpu_units"
+			"Result" : "${cpu_result}",
+			"Units"  : "${cpu_units}"
 		},
 		"parallel": {
-			"Result" : $parallel_result,
-			"Units" : "$parallel_units"
+			"Result" : "${parallel_result}",
+			"Units" : "${parallel_units}"
 		}
 	}
 EOF
 )"
-	metrics_json_add_array_element "$json"
+	metrics_json_add_array_element "${json}"
 	metrics_json_end_array "Results"
 }
 
@@ -68,27 +67,27 @@ function iperf3_bandwidth() {
 	local transmit_timeout="30"
 
 	kubectl exec -i "$client_pod_name" -- sh -c "iperf3 -J -c ${server_ip_add} -t ${transmit_timeout}" | jq '.end.sum_received.bits_per_second' > "${iperf_file}"
-	export bandwidth_result=$(cat "${iperf_file}")
+	bandwidth_result=$(cat "${iperf_file}")
+	export bandwidth_result=$(printf "%.3f\n" ${bandwidth_result})
 	export bandwidth_units="bits per second"
 
-	if [ "$COLLECT_ALL" == "true" ]; then
-		iperf3_all_collect_results
-	else
-		metrics_json_init
-		metrics_json_start_array
+	[ -z "${bandwidth_result}" ] && die "iperf3 was unable to collect Bandwidth workload results."
+	[ "$COLLECT_ALL" == "true" ] && return
 
-		local json="$(cat << EOF
-		{
-			"bandwidth": {
-				"Result" : $bandwidth_result,
-				"Units" : "$bandwidth_units"
-			}
+	metrics_json_init
+	metrics_json_start_array
+
+	local json="$(cat << EOF
+	{
+		"bandwidth": {
+			"Result" : "${bandwidth_result}",
+			"Units" : "${bandwidth_units}"
 		}
+	}
 EOF
 )"
-		metrics_json_add_array_element "$json"
-		metrics_json_end_array "Results"
-	fi
+	metrics_json_add_array_element "${json}"
+	metrics_json_end_array "Results"
 }
 
 function iperf3_jitter() {
@@ -100,79 +99,77 @@ function iperf3_jitter() {
 	export jitter_result=$(printf "%0.3f\n" $result)
 	export jitter_units="ms"
 
-	if [ "$COLLECT_ALL" == "true" ]; then
-		iperf3_all_collect_results
-	else
-		metrics_json_init
-		metrics_json_start_array
+	[ -z "${jitter_result}" ] && die "Iperf3 was unable to collect Jitter results."
+	[ "$COLLECT_ALL" == "true" ] && return
 
-		local json="$(cat << EOF
-		{
-			"jitter": {
-				"Result" : $jitter_result,
-				"Units" : "ms"
-			}
+	metrics_json_init
+	metrics_json_start_array
+
+	local json="$(cat << EOF
+	{
+		"jitter": {
+			"Result" : "${jitter_result}",
+			"Units" : "${jitter_units}"
 		}
+	}
 EOF
 )"
-		metrics_json_add_array_element "$json"
-		metrics_json_end_array "Results"
-	fi
+	metrics_json_add_array_element "${json}"
+	metrics_json_end_array "Results"
 }
 
 function iperf3_parallel() {
 	# This will measure four parallel connections with iperf3
 	kubectl exec -i "$client_pod_name" -- sh -c "iperf3 -J -c ${server_ip_add} -P 4" | jq '.end.sum_received.bits_per_second' > "${iperf_file}"
-	export parallel_result=$(cat "${iperf_file}")
+	parallel_result=$(cat "${iperf_file}")
+	export parallel_result=$(printf "%0.3f\n" $parallel_result)
 	export parallel_units="bits per second"
 
-	if [ "$COLLECT_ALL" == "true" ]; then
-		iperf3_all_collect_results
-	else
-		metrics_json_init
-		metrics_json_start_array
+	[ -z "${parallel_result}" ] && die "Iperf3 was unable to collect Parallel workload results."
+	[ "$COLLECT_ALL" == "true" ] && return
 
-		local json="$(cat << EOF
-		{
-			"parallel": {
-				"Result" : $parallel_result,
-				"Units" : "$parallel_units"
-			}
+	metrics_json_init
+	metrics_json_start_array
+
+	local json="$(cat << EOF
+	{
+		"parallel": {
+			"Result" : "${parallel_result}",
+			"Units" : "${parallel_units}"
 		}
+	}
 EOF
 )"
-		metrics_json_add_array_element "$json"
-		metrics_json_end_array "Results"
-	fi
+	metrics_json_add_array_element "${json}"
+	metrics_json_end_array "Results"
 }
 
 function iperf3_cpu() {
-	# Start server
 	local transmit_timeout="80"
 
 	kubectl exec -i "$client_pod_name" -- sh -c "iperf3 -J -c ${server_ip_add} -t ${transmit_timeout}" | jq '.end.cpu_utilization_percent.host_total' > "${iperf_file}"
-	export cpu_result=$(cat "${iperf_file}")
+	cpu_result=$(cat "${iperf_file}")
+
+        export cpu_result=$(printf "%.3f\n" ${cpu_result})
 	export cpu_units="percent"
 
-	if [ "$COLLECT_ALL" == "true" ]; then
-		iperf3_all_collect_results
-	else
-		metrics_json_init
-		metrics_json_start_array
+	[ -z "${cpu_result}" ] && die "Iperf3 was unable to collect CPU workload results."
+	[ "$COLLECT_ALL" == "true" ] && return
 
-		local json="$(cat << EOF
-		{
-			"cpu": {
-				"Result" : $cpu_result,
-				"Units"  : "$cpu_units"
-			}
+	metrics_json_init
+	metrics_json_start_array
+
+	local json="$(cat << EOF
+	{
+		"cpu": {
+			"Result" : "${cpu_result}",
+			"Units"  : "${cpu_units}"
 		}
+	}
 EOF
 )"
-
-		metrics_json_add_array_element "$json"
-		metrics_json_end_array "Results"
-	fi
+	metrics_json_add_array_element "${json}"
+	metrics_json_end_array "Results"
 }
 
 function iperf3_start_deployment() {
@@ -214,19 +211,15 @@ function iperf3_start_deployment() {
 }
 
 function iperf3_deployment_cleanup() {
-	info "iperf: deleting deployments and services"
-	kubectl delete pod "${server_pod_name}" "${client_pod_name}"
+	info "Iperf: deleting deployments and services"
+	rm -rf "${iperf_file}"
 	kubectl delete -f "${IPERF_DAEMONSET}"
 	kubectl delete -f "${IPERF_DEPLOYMENT}"
 	kill_kata_components && sleep 1
 	kill_kata_components
 	check_processes
-	info "End of iperf3 test"
+	info "End of Iperf3 test"
 }
-
-# The deployment must be removed in
-# any case the script terminates.
-trap iperf3_deployment_cleanup EXIT
 
 function help() {
 echo "$(cat << EOF
@@ -246,13 +239,10 @@ EOF
 }
 
 function main() {
-	init_env
-	iperf3_start_deployment
-
 	local OPTIND
 	while getopts ":abcjph:" opt
 	do
-		case "$opt" in
+		case "${opt}" in
 		a)	# all tests
 			test_all="1"
 			;;
@@ -290,6 +280,12 @@ function main() {
 	[[ -z "$test_all" ]] && \
 		help && die "Must choose at least one test"
 
+	init_env
+	# The deployment must be removed in
+	# any case the script terminates.
+	trap iperf3_deployment_cleanup EXIT
+	iperf3_start_deployment
+
 	if [ "$test_bandwith" == "1" ]; then
 		iperf3_bandwidth
 	fi
@@ -307,10 +303,15 @@ function main() {
 	fi
 
 	if [ "$test_all" == "1" ]; then
-		export COLLECT_ALL=true && iperf3_bandwidth && iperf3_jitter && iperf3_cpu && iperf3_parallel
+		export COLLECT_ALL=true
+		iperf3_bandwidth
+		iperf3_jitter
+		iperf3_cpu
+		iperf3_parallel
+		iperf3_all_collect_results
 	fi
 
-	info "iperf3: saving test results"
+	info "Iperf3: saving test results"
 	metrics_json_save
 }
 
