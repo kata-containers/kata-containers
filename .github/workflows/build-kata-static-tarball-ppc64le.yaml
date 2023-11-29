@@ -51,6 +51,9 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0 # This is needed in order to keep the commit ids history
+      
+      - name: Prepare the self-hosted runner
+        run: ${HOME}/scripts/prepare_runner.sh
 
       - name: Rebase atop of the latest target branch
         run: |
