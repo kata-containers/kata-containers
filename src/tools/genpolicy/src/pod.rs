@@ -76,6 +76,9 @@ pub struct PodSpec {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hostNetwork: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    topologySpreadConstraints: Option<Vec<TopologySpreadConstraint>>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -437,6 +440,29 @@ struct Toleration {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct LocalObjectReference {
     name: String,
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct TopologySpreadConstraint {
+    maxSkew: i32,
+    topologyKey: String,
+    whenUnsatisfiable: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    labelSelector: Option<yaml::LabelSelector>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    matchLabelKeys: Option<Vec<String>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    minDomains: Option<i32>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    nodeAffinityPolicy : Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    nodeTaintsPolicy : Option<String>,
 }
 
 impl Container {

@@ -11,3 +11,15 @@ spec:
   containers:
     - name: spark
       image: "mcr.microsoft.com/mmlspark/spark2.4:v4_mini"
+  topologySpreadConstraints:
+    - maxSkew: 1
+      minDomains: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: DoNotSchedule
+      labelSelector:
+        matchLabels:
+          kubernetes.azure.com/os-sku: Mariner
+      matchLabelKeys:
+        - pod-template-hash
+      nodeAffinityPolicy: Ignore
+      nodeTaintsPolicy: Ignore
