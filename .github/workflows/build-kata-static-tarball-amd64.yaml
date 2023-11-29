@@ -41,7 +41,6 @@ jobs:
           - kernel-nvidia-gpu
           - kernel-nvidia-gpu-snp
           - kernel-nvidia-gpu-tdx-experimental
-          - log-parser-rs
           - nydus
           - ovmf
           - ovmf-sev
