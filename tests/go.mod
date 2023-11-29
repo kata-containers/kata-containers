@@ -3,8 +3,6 @@ module github.com/kata-containers/tests
 go 1.19
 
 require (
-	github.com/BurntSushi/toml v0.3.1
-	github.com/montanaflynn/stats v0.0.0-20151014174947-eeaced052adb
 	github.com/olekukonko/tablewriter v0.0.6-0.20210304033056-74c60be0ef68
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.1
