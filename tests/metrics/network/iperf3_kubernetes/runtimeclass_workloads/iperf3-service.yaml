@@ -19,20 +19,6 @@ spec:
       labels:
         app: iperf3-server
     spec:
-      affinity:
-        nodeAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 1
-            preference:
-              matchExpressions:
-              - key: kubernetes.io/role
-                operator: In
-                values:
-                - master
-      tolerations:
-        - key: node-role.kubernetes.io/master
-          operator: Exists
-          effect: NoSchedule
       containers:
       - name: iperf3-server
         image: networkstatic/iperf3

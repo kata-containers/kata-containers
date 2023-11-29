@@ -18,10 +18,6 @@ spec:
       labels:
         app: iperf3-client
     spec:
-      tolerations:
-        - key: node-role.kubernetes.io/master
-          operator: Exists
-          effect: NoSchedule
       containers:
       - name: iperf3-client
         image: networkstatic/iperf3
