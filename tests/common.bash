@@ -80,23 +80,23 @@ function is_a_kata_runtime() {
 # Gets versions and paths of all the components
 # list in kata-env
 function extract_kata_env() {
-	RUNTIME_CONFIG_PATH=$(kata-runtime kata-env --json | jq -r .Runtime.Config.Path)
-	RUNTIME_VERSION=$(kata-runtime kata-env --json | jq -r .Runtime.Version | grep Semver | cut -d'"' -f4)
-	RUNTIME_COMMIT=$(kata-runtime kata-env --json | jq -r .Runtime.Version | grep Commit | cut -d'"' -f4)
-	RUNTIME_PATH=$(kata-runtime kata-env --json | jq -r .Runtime.Path)
+	RUNTIME_CONFIG_PATH=$(kata-runtime env --json | jq -r .Runtime.Config.Path)
+	RUNTIME_VERSION=$(kata-runtime env --json | jq -r .Runtime.Version | grep Semver | cut -d'"' -f4)
+	RUNTIME_COMMIT=$(kata-runtime env --json | jq -r .Runtime.Version | grep Commit | cut -d'"' -f4)
+	RUNTIME_PATH=$(kata-runtime env --json | jq -r .Runtime.Path)
 
 	# Shimv2 path is being affected by https://github.com/kata-containers/kata-containers/issues/1151
 	SHIM_PATH=$(readlink $(command -v containerd-shim-kata-v2))
 	SHIM_VERSION=${RUNTIME_VERSION}
 
-	HYPERVISOR_PATH=$(kata-runtime kata-env --json | jq -r .Hypervisor.Path)
+	HYPERVISOR_PATH=$(kata-runtime env --json | jq -r .Hypervisor.Path)
 	# TODO: there is no kata-runtime of rust version currently
 	if [ "${KATA_HYPERVISOR}" != "dragonball" ]; then
 		HYPERVISOR_VERSION=$(sudo -E ${HYPERVISOR_PATH} --version | head -n1)
 	fi
-	VIRTIOFSD_PATH=$(kata-runtime kata-env --json | jq -r .Hypervisor.VirtioFSDaemon)
+	VIRTIOFSD_PATH=$(kata-runtime env --json | jq -r .Hypervisor.VirtioFSDaemon)
 
-	INITRD_PATH=$(kata-runtime kata-env --json | jq -r .Initrd.Path)
+	INITRD_PATH=$(kata-runtime env --json | jq -r .Initrd.Path)
 }
 
 # Checks that processes are not running
@@ -105,8 +105,8 @@ function check_processes() {
 
 	# Only check the kata-env if we have managed to find the kata executable...
 	if [ -x "$RUNTIME_PATH" ]; then
-		local vsock_configured=$($RUNTIME_PATH kata-env | awk '/UseVSock/ {print $3}')
-		local vsock_supported=$($RUNTIME_PATH kata-env | awk '/SupportVSock/ {print $3}')
+		local vsock_configured=$($RUNTIME_PATH env | awk '/UseVSock/ {print $3}')
+		local vsock_supported=$($RUNTIME_PATH env | awk '/SupportVSock/ {print $3}')
 	else
 		local vsock_configured="false"
 		local vsock_supported="false"
