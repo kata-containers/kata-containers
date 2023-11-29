@@ -48,3 +48,4 @@
 ## Confidential Containers
 - [How to use build and test the Confidential Containers `CCv0` proof of concept](how-to-build-and-test-ccv0.md)
 - [How to generate a Kata Containers payload for the Confidential Containers Operator](how-to-generate-a-kata-containers-payload-for-the-confidential-containers-operator.md)
+- [How to use the Kata Agent Policy](how-to-use-the-kata-agent-policy.md)
