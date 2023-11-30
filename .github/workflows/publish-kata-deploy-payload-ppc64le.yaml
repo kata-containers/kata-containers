@@ -30,9 +30,6 @@ jobs:
         run: |
           sudo chown -R $USER:$USER $GITHUB_WORKSPACE
 
-      - name: Prepare the self-hosted runner
-        run: ${HOME}/scripts/prepare_runner.sh
-
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.commit-hash }}
