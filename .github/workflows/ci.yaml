@@ -221,9 +221,9 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
     secrets: inherit
 
-  run-kata-coco-tests:
+  run-k8s-tests-on-bm:
     needs: [publish-kata-deploy-payload-amd64, build-and-publish-tee-confidential-unencrypted-image]
-    uses: ./.github/workflows/run-kata-coco-tests.yaml
+    uses: ./.github/workflows/run-k8s-tests-on-bm.yaml
     with:
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
