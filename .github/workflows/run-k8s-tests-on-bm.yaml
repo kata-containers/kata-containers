@@ -110,3 +110,28 @@ jobs:
       - name: Delete kata-deploy
         if: always()
         run: bash tests/integration/kubernetes/gha-run.sh cleanup-${{ matrix.machine }}
+
+  run-k8s-tests-on-arm64:
+    strategy:
+      fail-fast: false
+      matrix:
+        vmm:
+          - qemu
+          - dragonball
+        k8s:
+          - k3s
+        nfd:
+          - false
+    runs-on: arm64-k8s
+    env:
+      DOCKER_REGISTRY: ${{ inputs.registry }}
+      DOCKER_REPO: ${{ inputs.repo }}
+      DOCKER_TAG: ${{ inputs.tag }}
+      PR_NUMBER: ${{ inputs.pr-number }}
+      KATA_HYPERVISOR: ${{ matrix.vmm }}
+      KUBECONFIG: /home/kata/.kube/config
+      KUBERNETES: ${{ matrix.k8s }}
+      USING_NFD: ${{ matrix.nfd }}
+      K8S_TEST_HOST_TYPE: "baremetal"
+    steps:
+      - uses: actions/checkout@v3
