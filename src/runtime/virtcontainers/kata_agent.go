@@ -161,6 +161,7 @@ const (
 	grpcGetIPTablesRequest                    = "grpc.GetIPTablesRequest"
 	grpcSetIPTablesRequest                    = "grpc.SetIPTablesRequest"
 	grpcPullImageRequest                      = "grpc.PullImageRequest"
+	grpcSetPolicyRequest                      = "grpc.SetPolicyRequest"
 )
 
 // newKataAgent returns an agent from an agent type.
@@ -286,6 +287,7 @@ type KataAgentConfig struct {
 	Debug              bool
 	Trace              bool
 	EnableDebugConsole bool
+	Policy             string
 }
 
 // KataAgentState is the structure describing the data stored from this
@@ -784,7 +786,14 @@ func (k *kataAgent) startSandbox(ctx context.Context, sandbox *Sandbox) error {
 
 		kmodules = setupKernelModules(k.kmodules)
 	}
+	// If a Policy has been specified, send it to the agent.
+	if len(sandbox.config.AgentConfig.Policy) > 0 {
+		if err := sandbox.agent.setPolicy(ctx, sandbox.config.AgentConfig.Policy); err != nil {
+			return err
+		}
+	}
 
+	
 	storages := setupStorages(ctx, sandbox)
 
 	req := &grpc.CreateSandboxRequest{
@@ -2221,6 +2230,9 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	k.reqHandlers[grpcRemoveStaleVirtiofsShareMountsRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
 		return k.client.AgentServiceClient.RemoveStaleVirtiofsShareMounts(ctx, req.(*grpc.RemoveStaleVirtiofsShareMountsRequest))
 	}
+	k.reqHandlers[grpcSetPolicyRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.SetPolicy(ctx, req.(*grpc.SetPolicyRequest))
+	}
 }
 
 func (k *kataAgent) getReqContext(ctx context.Context, reqName string) (newCtx context.Context, cancel context.CancelFunc) {
@@ -2517,4 +2529,9 @@ func (k *kataAgent) PullImage(ctx context.Context, req *image.PullImageReq) (*im
 	return &image.PullImageResp{
 		ImageRef: response.ImageRef,
 	}, nil
+}
+
+func (k *kataAgent) setPolicy(ctx context.Context, policy string) error {
+	_, err := k.sendReq(ctx, &grpc.SetPolicyRequest{Policy: policy})
+	return err
 }

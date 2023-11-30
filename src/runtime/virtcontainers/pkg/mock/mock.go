@@ -260,3 +260,7 @@ func (p *HybridVSockTTRPCMockImp) GetIPTables(ctx context.Context, req *pb.GetIP
 func (p *HybridVSockTTRPCMockImp) SetIPTables(ctx context.Context, req *pb.SetIPTablesRequest) (*pb.SetIPTablesResponse, error) {
 	return &pb.SetIPTablesResponse{}, nil
 }
+
+func (p *HybridVSockTTRPCMockImp) SetPolicy(ctx context.Context, req *pb.SetPolicyRequest) (*gpb.Empty, error) {
+	return &gpb.Empty{}, nil
+}

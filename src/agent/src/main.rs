@@ -79,6 +79,9 @@ mod image_rpc;
 mod rpc;
 mod tracer;
 
+#[cfg(feature = "agent-policy")]
+mod policy;
+
 cfg_if! {
     if #[cfg(target_arch = "s390x")] {
         mod ap;
@@ -115,6 +118,11 @@ lazy_static! {
         // clap::Parser::parse() greedily process all command line input including cargo test parameters,
         // so should only be used inside main.
         AgentConfig::from_cmdline("/proc/cmdline", env::args().collect()).unwrap();
+}
+
+#[cfg(feature = "agent-policy")]
+lazy_static! {
+    static ref AGENT_POLICY: Mutex<policy::AgentPolicy> = Mutex::new(AgentPolicy::new());
 }
 
 #[derive(Parser)]
@@ -247,6 +255,27 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     }
 
     let root_span = span!(tracing::Level::TRACE, "root-span");
+
+    #[cfg(feature = "agent-policy")]
+    {
+        let debug_policy =
+            config.log_level == slog::Level::Debug || config.log_level == slog::Level::Trace;
+        if let Err(e) = AGENT_POLICY
+            .lock()
+            .await
+            .initialize(
+                debug_policy,
+                "http://localhost:8181/v1",
+                "/agent_policy",
+                "/etc/kata-opa/default-policy.rego",
+            )
+            .await
+        {
+            error!(logger, "Failed to initialize agent policy: {:?}", e);
+            // Continuing execution without a security policy could be dangerous.
+            std::process::abort();
+        }
+    }
 
     // XXX: Start the root trace transaction.
     //
@@ -535,6 +564,9 @@ fn reset_sigpipe() {
 
 use crate::config::AgentConfig;
 use std::os::unix::io::{FromRawFd, RawFd};
+
+#[cfg(feature = "agent-policy")]
+use crate::policy::AgentPolicy;
 
 #[cfg(test)]
 mod tests {
