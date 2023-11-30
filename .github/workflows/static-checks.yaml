@@ -46,7 +46,6 @@ jobs:
           - runtime-rs
           - agent-ctl
           - kata-ctl
-          - log-parser-rs
           - runk
           - trace-forwarder
         command:
@@ -67,8 +66,6 @@ jobs:
             component-path: src/tools/agent-ctl
           - component: kata-ctl
             component-path: src/tools/kata-ctl
-          - component: log-parser-rs
-            component-path: src/tools/log-parser-rs
           - component: runk
             component-path: src/tools/runk
           - component: trace-forwarder
