@@ -848,6 +848,7 @@ mod tests {
 
     use kata_types::config::hypervisor::{Hypervisor as HypervisorConfig, SecurityInfo};
     use serial_test::serial;
+    #[cfg(target_arch = "x86_64")]
     use std::path::PathBuf;
     use test_utils::{assert_result, skip_if_not_root};
 
