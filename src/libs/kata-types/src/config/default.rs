@@ -14,9 +14,10 @@ use lazy_static::lazy_static;
 lazy_static! {
     /// Default configuration file paths, vendor may extend the list
     pub static ref DEFAULT_RUNTIME_CONFIGURATIONS: Vec::<&'static str> = vec![
-        "/etc/kata-containers/configuration.toml",
-        "/usr/share/defaults/kata-containers/configuration.toml",
-        "/opt/kata/share/defaults/kata-containers/configuration.toml",
+        // The rust runtime specific paths
+        "/etc/kata-containers/runtime-rs/configuration.toml",
+        "/usr/share/defaults/kata-containers/runtime-rs/configuration.toml",
+        "/opt/kata/share/defaults/kata-containers/runtime-rs/configuration.toml",
     ];
 }
 
