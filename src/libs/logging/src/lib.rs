@@ -68,7 +68,7 @@ pub fn create_term_logger(level: slog::Level) -> (slog::Logger, slog_async::Asyn
     });
 
     // Allow runtime filtering of records by log level
-    let filter_drain = RuntimeComponentLevelFilter::new(unique_drain).fuse();
+    let filter_drain = RuntimeComponentLevelFilter::new(unique_drain, level).fuse();
 
     // Ensure the logger is thread-safe
     let (async_drain, guard) = slog_async::Async::new(filter_drain)
@@ -112,7 +112,7 @@ where
     });
 
     // Allow runtime filtering of records by log level
-    let filter_drain = RuntimeComponentLevelFilter::new(unique_drain).fuse();
+    let filter_drain = RuntimeComponentLevelFilter::new(unique_drain, level).fuse();
 
     // Ensure the logger is thread-safe
     let (async_drain, guard) = slog_async::Async::new(filter_drain)
@@ -283,11 +283,12 @@ where
 // specified in the struct according to the component it belongs to.
 struct RuntimeComponentLevelFilter<D> {
     drain: D,
+    log_level: slog::Level,
 }
 
 impl<D> RuntimeComponentLevelFilter<D> {
-    fn new(drain: D) -> Self {
-        RuntimeComponentLevelFilter { drain }
+    fn new(drain: D, log_level: slog::Level) -> Self {
+        RuntimeComponentLevelFilter { drain, log_level }
     }
 }
 
@@ -329,7 +330,7 @@ where
         }
         let according_level = component_level_config
             .get(&component.unwrap_or(DEFAULT_SUBSYSTEM.to_string()))
-            .unwrap_or(&slog::Level::Info);
+            .unwrap_or(&self.log_level);
         if record.level().is_at_least(*according_level) {
             self.drain.log(record, values)?;
         }
