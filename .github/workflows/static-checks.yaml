@@ -35,7 +35,6 @@ jobs:
           fi
 
   build-checks:
-    runs-on: ubuntu-20.04
     strategy:
       fail-fast: false
       matrix:
@@ -78,7 +77,18 @@ jobs:
             install-libseccomp: yes
           - component: genpolicy
             component-path: src/tools/genpolicy
+        instance:
+          - "ubuntu-20.04"
+          - "arm-no-k8s"
+    runs-on: ${{ matrix.instance }}
+
     steps:
+      - name: Adjust a permission for repo
+        run: |
+          sudo chown -R $USER:$USER $GITHUB_WORKSPACE $HOME
+          sudo rm -rf $GITHUB_WORKSPACE/*
+        if: ${{ matrix.instance == 'arm-no-k8s' }}
+
       - name: Checkout the code
         uses: actions/checkout@v4
         with:
