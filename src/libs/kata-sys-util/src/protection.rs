@@ -13,7 +13,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use thiserror::Error;
 
-#[cfg(any(target_arch = "s390x", target_arch = "x86_64"))]
+#[cfg(any(target_arch = "s390x", target_arch = "powerpc64le"))]
 use nix::unistd::Uid;
 
 #[cfg(target_arch = "x86_64")]
@@ -97,10 +97,6 @@ const TDX_MINOR_FILE: &str = "minor_version";
 
 #[cfg(target_arch = "x86_64")]
 pub fn available_guest_protection() -> Result<GuestProtection, ProtectionError> {
-    if !Uid::effective().is_root() {
-        return Err(ProtectionError::NoPerms);
-    }
-
     arch_guest_protection(
         TDX_SYS_FIRMWARE_DIR,
         SEV_KVM_PARAMETER_PATH,
@@ -262,22 +258,9 @@ pub fn available_guest_protection() -> Result<GuestProtection, ProtectionError> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nix::unistd::Uid;
     use std::fs;
     use std::io::Write;
     use tempfile::tempdir;
-
-    #[test]
-    fn test_available_guest_protection_no_privileges() {
-        if !Uid::effective().is_root() {
-            let res = available_guest_protection();
-            assert!(res.is_err());
-            assert_eq!(
-                "No permission to check guest protection",
-                res.unwrap_err().to_string()
-            );
-        }
-    }
 
     #[test]
     fn test_arch_guest_protection_snp() {
