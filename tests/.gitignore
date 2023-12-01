@@ -1,1 +1,3 @@
+cmd/check-markdown/kata-check-markdown
+cmd/github-labels/kata-github-labels
 integration/kubernetes/runtimeclass_workloads_work/

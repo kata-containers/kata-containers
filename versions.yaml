@@ -249,6 +249,11 @@ externals:
     url: "http://ftp.gnu.org/pub/gnu/gperf/"
     version: "3.1"
 
+  hadolint:
+    description: "the dockerfile linter used by static-checks"
+    url: "https://github.com/hadolint/hadolint"
+    version: "2.12.0"
+
   lvm2:
     description: "LVM2 and device-mapper tools and libraries"
     url: "https://github.com/lvmteam/lvm2"
@@ -343,6 +348,12 @@ externals:
       # yamllint disable-line rule:line-length
       binary: "https://gitlab.com/virtio-fs/virtiofsd/uploads/9ec473efd0203219d016e66aac4190aa/virtiofsd-v1.8.0.zip"
 
+  xurls:
+    description: |
+      Tool used by the CI to check URLs in documents and code comments.
+    url: "mvdan.cc/xurls/v2/cmd/xurls"
+    version: "v2.5.0"
+
 languages:
   description: |
     Details of programming languages required to build system
@@ -371,6 +382,7 @@ languages:
   golangci-lint:
     description: "golangci-lint"
     notes: "'version' is the default minimum version used by this project."
+    url: "github.com/golangci/golangci-lint"
     version: "1.50.1"
     meta:
       description: |
