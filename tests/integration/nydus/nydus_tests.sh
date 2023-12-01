@@ -21,7 +21,7 @@ kata_config_backup="/tmp/kata-configuration.toml"
 SYSCONFIG_FILE="/etc/kata-containers/configuration.toml"
 DEFAULT_CONFIG_FILE="/opt/kata/share/defaults/kata-containers/configuration-qemu.toml"
 CLH_CONFIG_FILE="/opt/kata/share/defaults/kata-containers/configuration-clh.toml"
-DB_CONFIG_FILE="/opt/kata/share/defaults/kata-containers/configuration-dragonball.toml"
+DB_CONFIG_FILE="/opt/kata/share/defaults/kata-containers/runtime-rs/configuration-dragonball.toml"
 need_restore_containerd_config=false
 containerd_config="/etc/containerd/config.toml"
 containerd_config_backup="/tmp/containerd.config.toml"
@@ -33,6 +33,14 @@ if [ "$KATA_HYPERVISOR" != "qemu" ] && [ "$KATA_HYPERVISOR" != "clh" ] && [ "$KA
 	echo "Skip nydus test for $KATA_HYPERVISOR, it only works for QEMU/CLH/DB now."
 	exit 0
 fi
+
+case "$KATA_HYPERVISOR" in
+	dragonball)
+		SYSCONFIG_FILE="/etc/kata-containers/runtime-rs/configuration.toml"
+		;;
+	*)
+		;;
+esac
 
 function setup_nydus() {
 	# Config nydus snapshotter
@@ -46,7 +54,7 @@ function setup_nydus() {
 }
 
 function config_kata() {
-	sudo mkdir -p /etc/kata-containers
+	sudo mkdir -p $(dirname $SYSCONFIG_FILE)
 	if [ -f "$SYSCONFIG_FILE" ]; then
 		need_restore_kata_config=true
 		sudo cp -a "${SYSCONFIG_FILE}" "${kata_config_backup}"

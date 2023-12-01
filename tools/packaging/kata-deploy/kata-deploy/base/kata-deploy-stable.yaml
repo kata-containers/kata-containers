@@ -32,7 +32,7 @@ spec:
             - name: DEBUG
               value: "false"
             - name: SHIMS
-              value: "clh dragonball fc qemu qemu-nvidia-gpu qemu-sev qemu-snp qemu-tdx"
+              value: "clh cloud-hypervisor dragonball fc qemu qemu-nvidia-gpu qemu-sev qemu-snp qemu-tdx"
             - name: DEFAULT_SHIM
               value: "qemu"
             - name: CREATE_RUNTIMECLASSES
