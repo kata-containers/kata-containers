@@ -216,6 +216,14 @@ impl TomlConfig {
 
         Err(io::Error::from(io::ErrorKind::NotFound))
     }
+
+    /// Return a list of default config file paths.
+    pub fn get_default_config_file_list() -> Vec<PathBuf> {
+        default::DEFAULT_RUNTIME_CONFIGURATIONS
+            .iter()
+            .map(|s| PathBuf::from(*s))
+            .collect()
+    }
 }
 
 /// Validate the `path` matches one of the pattern in `patterns`.

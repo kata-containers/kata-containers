@@ -489,8 +489,10 @@ fn load_config(spec: &oci::Spec, option: &Option<Vec<u8>>) -> Result<TomlConfig>
     let logger = slog::Logger::clone(&slog_scope::logger());
 
     info!(logger, "get config path {:?}", &config_path);
-    let (mut toml_config, _) =
-        TomlConfig::load_from_file(&config_path).context("load toml config")?;
+    let (mut toml_config, _) = TomlConfig::load_from_file(&config_path).context(format!(
+        "load TOML config failed (tried {:?})",
+        TomlConfig::get_default_config_file_list()
+    ))?;
     annotation.update_config_by_annotation(&mut toml_config)?;
     update_agent_kernel_params(&mut toml_config)?;
 
