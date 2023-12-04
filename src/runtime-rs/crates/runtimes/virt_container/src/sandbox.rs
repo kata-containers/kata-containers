@@ -102,13 +102,12 @@ impl VirtSandbox {
     ) -> Result<Vec<ResourceConfig>> {
         let mut resource_configs = vec![];
 
-        // Prepare VM hybrid vsock device config and add the hybrid vsock device first.
-        info!(sl!(), "prepare hybrid vsock resource for sandbox.");
-        let vm_hvsock = ResourceConfig::HybridVsock(HybridVsockConfig {
-            guest_cid: DEFAULT_GUEST_VSOCK_CID,
-            uds_path: get_hvsock_path(id),
-        });
-        resource_configs.push(vm_hvsock);
+        info!(sl!(), "prepare vm socket config for sandbox.");
+        let vm_socket_config = self
+            .prepare_vm_socket_config()
+            .await
+            .context("failed to prepare vm socket config")?;
+        resource_configs.push(vm_socket_config);
 
         // prepare network config
         if !network_env.network_created {
@@ -221,6 +220,26 @@ impl VirtSandbox {
             driver_option: boot_info.vm_rootfs_driver,
             ..Default::default()
         })
+    }
+
+    async fn prepare_vm_socket_config(&self) -> Result<ResourceConfig> {
+        // It will check the hypervisor's capabilities to see if it supports hybrid-vsock.
+        let vm_socket = if self
+            .hypervisor
+            .capabilities()
+            .await?
+            .is_hybrid_vsock_supported()
+        {
+            // Firecracker/Dragonball/CLH use the hybrid-vsock device model.
+            ResourceConfig::HybridVsock(HybridVsockConfig {
+                guest_cid: DEFAULT_GUEST_VSOCK_CID,
+                uds_path: get_hvsock_path(&self.sid),
+            })
+        } else {
+            return Err(anyhow!("unsupported vm socket"));
+        };
+
+        Ok(vm_socket)
     }
 
     fn has_prestart_hooks(
