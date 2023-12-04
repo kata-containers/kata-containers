@@ -14,6 +14,7 @@ use async_trait::async_trait;
 use common::message::{Action, Message};
 use common::{Sandbox, SandboxNetworkEnv};
 use containerd_shim_protos::events::task::TaskOOM;
+use hypervisor::VsockConfig;
 use hypervisor::{dragonball::Dragonball, BlockConfig, Hypervisor, HYPERVISOR_DRAGONBALL};
 use hypervisor::{utils::get_hvsock_path, HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID};
 use kata_sys_util::hooks::HookStates;
@@ -28,6 +29,7 @@ use tracing::instrument;
 use crate::health_check::HealthCheck;
 
 pub(crate) const VIRTCONTAINER: &str = "virt_container";
+
 pub struct SandboxRestoreArgs {
     pub sid: String,
     pub toml_config: TomlConfig,
@@ -224,6 +226,7 @@ impl VirtSandbox {
 
     async fn prepare_vm_socket_config(&self) -> Result<ResourceConfig> {
         // It will check the hypervisor's capabilities to see if it supports hybrid-vsock.
+        // If it does not, it'll assume that it only supports legacy vsock.
         let vm_socket = if self
             .hypervisor
             .capabilities()
@@ -236,7 +239,10 @@ impl VirtSandbox {
                 uds_path: get_hvsock_path(&self.sid),
             })
         } else {
-            return Err(anyhow!("unsupported vm socket"));
+            // Qemu uses the vsock device model.
+            ResourceConfig::Vsock(VsockConfig {
+                guest_cid: libc::VMADDR_CID_ANY,
+            })
         };
 
         Ok(vm_socket)
