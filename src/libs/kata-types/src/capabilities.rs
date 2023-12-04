@@ -17,6 +17,8 @@ pub enum CapabilityBits {
     MultiQueueSupport,
     /// hypervisor supports filesystem share
     FsSharingSupport,
+    /// hypervisor supports hybrid-vsock
+    HybridVsockSupport,
 }
 
 /// Capabilities describe a virtcontainers hypervisor capabilities through a bit mask.
@@ -60,6 +62,11 @@ impl Capabilities {
         self.flags.and(CapabilityBits::MultiQueueSupport) != 0
     }
 
+    /// is_hybrid_vsock_supported tells if an hypervisor supports hybrid-vsock support.
+    pub fn is_hybrid_vsock_supported(&self) -> bool {
+        self.flags.and(CapabilityBits::HybridVsockSupport) != 0
+    }
+
     /// is_fs_sharing_supported tells if an hypervisor supports host filesystem sharing.
     pub fn is_fs_sharing_supported(&self) -> bool {
         self.flags.and(CapabilityBits::FsSharingSupport) != 0
@@ -76,6 +83,9 @@ mod tests {
     fn test_set_hypervisor_capabilities() {
         let mut cap = Capabilities::new();
         assert!(!cap.is_block_device_supported());
+
+        // test legacy vsock support
+        assert!(!cap.is_hybrid_vsock_supported());
 
         // test set block device support
         cap.set(CapabilityBits::BlockDeviceSupport);
@@ -102,6 +112,10 @@ mod tests {
                 | CapabilityBits::MultiQueueSupport
                 | CapabilityBits::FsSharingSupport,
         );
-        assert!(cap.is_fs_sharing_supported())
+        assert!(cap.is_fs_sharing_supported());
+
+        // test set hybrid-vsock support
+        cap.set(CapabilityBits::HybridVsockSupport);
+        assert!(cap.is_hybrid_vsock_supported());
     }
 }
