@@ -5,7 +5,7 @@ bandwidth, jitter, latency and parallel bandwidth.
 
 ## Performance tools
 
-- `iperf3` measures bandwidth, jitter, CPU usage and the quality of a network link.
+- `iperf3` measures bandwidth, jitter, CPU usage, parallel bandwidth and the quality of a network link.
 
 ## Networking tests
 
