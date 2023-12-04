@@ -17,6 +17,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -1342,6 +1343,72 @@ func (s *Sandbox) cleanSwap(ctx context.Context) {
 	}
 }
 
+// setIntelRdt works on Intel Rdt and Arm MPAM
+func (s *Sandbox) setIntelRdt(pid int) error {
+	resctrRootPath := "/sys/fs/resctrl"
+
+	spec := s.GetSandboxOCISpec()
+	if spec == nil {
+		s.Logger().Debug("Get empty OCI spec in setIntelRdt")
+		return nil
+	}
+	if spec.Linux.IntelRdt == nil || spec.Linux.IntelRdt.ClosID == "" && spec.Linux.IntelRdt.L3CacheSchema == "" && spec.Linux.IntelRdt.MemBwSchema == "" {
+		s.Logger().Debug("IntelRdt/MPAM is not specified")
+		return nil
+	}
+
+	closid := spec.Linux.IntelRdt.ClosID
+	l3Cache := spec.Linux.IntelRdt.L3CacheSchema
+	memBw := spec.Linux.IntelRdt.MemBwSchema
+	var closidPath string
+	if closid != "" {
+		closidPath = resctrRootPath + "/" + closid
+		//TODO: If closid is exist, we should compare schemata with l3CacheSchema and memBwSchema
+	} else {
+		// Take sandbox ID as the closid
+		closidPath = resctrRootPath + "/" + s.ID()
+	}
+	if _, err := os.Stat(closidPath); os.IsNotExist(err) {
+		if err = os.Mkdir(closidPath, os.ModePerm); err != nil {
+			return err
+		}
+	}
+
+	// Set schema with l3CacheSchema and memBwSchema.
+	schemaPath := closidPath + "/schemata"
+	f, err := os.OpenFile(schemaPath, os.O_WRONLY, 0544)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if l3Cache != "" {
+		l3Cache = strings.TrimLeft(l3Cache, "MB:")
+		f.WriteString(l3Cache)
+	}
+	if memBw != "" {
+		f.WriteString(memBw)
+	}
+
+	// Write VM pid to "tasks"
+	closidTaskPath := closidPath + "/tasks"
+	if _, err := os.Stat(closidTaskPath); os.IsNotExist(err) {
+		return err
+	}
+	f, err = os.OpenFile(closidTaskPath, os.O_WRONLY, 0666)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	pidStr := strconv.Itoa(pid)
+	if _, err = f.WriteString(pidStr); err != nil {
+		return err
+	}
+
+	s.Logger().Infof("Set IntelRdt/MPAM with closid: %v, l3CacheSchema: %v, memBwSchema: %v", closid, l3Cache, memBw)
+	return nil
+}
+
 func (s *Sandbox) runPrestartHooks(ctx context.Context, prestartHookFunc func(context.Context) error) error {
 	hid, _ := s.GetHypervisorPid()
 	// Ignore errors here as hypervisor might not have been started yet, likely in FC case.
@@ -1408,6 +1475,15 @@ func (s *Sandbox) startVM(ctx context.Context, prestartHookFunc func(context.Con
 		return s.hypervisor.StartVM(ctx, VmStartTimeout)
 	}); err != nil {
 		return err
+	}
+
+	// Take a whole VM as a control unit of IntelRdt/MPAM
+	if hid, err := s.GetHypervisorPid(); err == nil {
+		if err = s.setIntelRdt(hid); err != nil {
+			s.Logger().Warnf("Set IntelRdt/MPAM fail: %v", err)
+		}
+	} else {
+		s.Logger().Debug("Skip set IntelRdt/MPAM")
 	}
 
 	if caps.IsNetworkDeviceHotplugSupported() && prestartHookFunc != nil {
@@ -2581,6 +2657,21 @@ func (s *Sandbox) GetPatchedOCISpec() *specs.Spec {
 	// On Linux, we derive the group path from this container.
 	for _, cConfig := range s.config.Containers {
 		if cConfig.Annotations[annotations.ContainerTypeKey] == string(PodSandbox) {
+			return cConfig.CustomSpec
+		}
+	}
+
+	return nil
+}
+
+func (s *Sandbox) GetSandboxOCISpec() *specs.Spec {
+	if s.config == nil {
+		return nil
+	}
+
+	for _, cConfig := range s.config.Containers {
+		t := cConfig.Annotations[annotations.ContainerTypeKey]
+		if t == string(PodSandbox) || t == string(SingleContainer) {
 			return cConfig.CustomSpec
 		}
 	}
