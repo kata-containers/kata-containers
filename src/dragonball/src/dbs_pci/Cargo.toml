@@ -1,0 +1,20 @@
+[package]
+name = "dbs-pci"
+version = "0.1.0"
+authors = ["Alibaba Dragonball Team"]
+license = "Apache-2.0"
+edition = "2018"
+description = "dbs-pci is a crate for emulating pci device"
+homepage = "https://github.com/openanolis/dragonball-sandbox"
+repository = "https://github.com/openanolis/dragonball-sandbox/tree/main/crates/dbs-pci"
+keywords = ["dragonball", "secure-sandbox", "devices", "pci"]
+readme = "README.md"
+ 
+[dependencies]
+dbs-device = { path = "../dbs_device" }
+dbs-interrupt = { path = "../dbs_interrupt", features = ["kvm-irq"] }
+dbs-allocator = { path = "../dbs_allocator" }
+log = "0.4.14"
+downcast-rs = "1.2.0"
+byteorder = "1.4.3"
+thiserror = "1"
