@@ -11,11 +11,9 @@ mod share_fs_volume;
 mod shm_volume;
 pub mod utils;
 
-pub mod vfio_volume;
-use vfio_volume::is_vfio_volume;
-
-pub mod spdk_volume;
-use spdk_volume::is_spdk_volume;
+pub mod direct_volume;
+use crate::volume::direct_volume::is_direct_volume;
+pub mod direct_volumes;
 
 use std::{sync::Arc, vec::Vec};
 
@@ -74,25 +72,22 @@ impl VolumeResource {
                     shm_volume::ShmVolume::new(m, shm_size)
                         .with_context(|| format!("new shm volume {:?}", m))?,
                 )
-            } else if is_block_volume(m).context("block volume type")? {
+            } else if is_block_volume(m) {
                 // handle block volume
                 Arc::new(
                     block_volume::BlockVolume::new(d, m, read_only, sid)
                         .await
-                        .with_context(|| format!("new share fs volume {:?}", m))?,
+                        .with_context(|| format!("new block volume {:?}", m))?,
                 )
-            } else if is_vfio_volume(m) {
-                Arc::new(
-                    vfio_volume::VfioVolume::new(d, m, read_only, cid, sid)
-                        .await
-                        .with_context(|| format!("new vfio volume {:?}", m))?,
-                )
-            } else if is_spdk_volume(m) {
-                Arc::new(
-                    spdk_volume::SPDKVolume::new(d, m, read_only, cid, sid)
-                        .await
-                        .with_context(|| format!("create spdk volume {:?}", m))?,
-                )
+            } else if is_direct_volume(m)? {
+                // handle direct volumes
+                match direct_volume::handle_direct_volume(d, m, read_only, sid)
+                    .await
+                    .context("handle direct volume")?
+                {
+                    Some(directvol) => directvol,
+                    None => continue,
+                }
             } else if let Some(options) =
                 get_huge_page_option(m).context("failed to check huge page")?
             {
