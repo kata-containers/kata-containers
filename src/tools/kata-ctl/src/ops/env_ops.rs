@@ -13,7 +13,6 @@ use kata_sys_util::protection;
 use kata_types::config::TomlConfig;
 
 use anyhow::{anyhow, Context, Result};
-use nix::unistd::Uid;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{self, Write};
@@ -473,10 +472,6 @@ pub fn get_env_info(toml_config: &TomlConfig) -> Result<EnvInfo> {
 }
 
 pub fn handle_env(env_args: EnvArgument) -> Result<()> {
-    if !Uid::effective().is_root() {
-        return Err(anyhow!("kata-ctl env command requires root privileges to get host information. Please run as root or use sudo"));
-    }
-
     let mut file: Box<dyn Write> = if let Some(path) = env_args.file {
         Box::new(
             File::create(path.as_str()).with_context(|| format!("Error creating file {}", path))?,
