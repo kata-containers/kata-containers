@@ -32,6 +32,7 @@ and configuration process.
 - `dbs_upcall`: [`dbs_upcall` Document](src/dbs_upcall/README.md)
 - `dbs_utils`: [`dbs_utils` Document](src/dbs_utils/README.md)
 - `dbs_virtio_devices`: [`dbs_virtio_devices` Document](src/dbs_virtio_devices/README.md)
+- `dbs_pci`: [`dbc_pci` Document](src/dbs_pci/README.md)
 
 Currently, the documents are still actively adding.
 You could see the [official documentation](docs/) page for more details.
