@@ -1,16 +1,14 @@
-// Copyright (c) 2019-2022 Alibaba Cloud
-// Copyright (c) 2019-2022 Ant Group
+// Copyright (c) 2023 Alibaba Cloud
+// Copyright (c) 2023 Ant Group
 //
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use nix::sys::{stat, stat::SFlag};
 use tokio::sync::RwLock;
 
-use super::Volume;
-use crate::volume::utils::{handle_block_volume, DEFAULT_VOLUME_FS_TYPE, KATA_MOUNT_BIND_TYPE};
 use hypervisor::{
     device::{
         device_manager::{do_handle_device, get_block_driver, DeviceManager},
@@ -18,41 +16,62 @@ use hypervisor::{
     },
     BlockConfig,
 };
+use kata_types::mount::DirectVolumeMountInfo;
+
+use crate::volume::{direct_volumes::KATA_DIRECT_VOLUME_TYPE, utils::handle_block_volume, Volume};
 
 #[derive(Clone)]
-pub(crate) struct BlockVolume {
+pub(crate) struct RawblockVolume {
     storage: Option<agent::Storage>,
     mount: oci::Mount,
     device_id: String,
 }
 
-/// BlockVolume for bind-mount block volume
-impl BlockVolume {
+/// RawblockVolume for raw block volume
+impl RawblockVolume {
     pub(crate) async fn new(
         d: &RwLock<DeviceManager>,
         m: &oci::Mount,
+        mount_info: &DirectVolumeMountInfo,
         read_only: bool,
         sid: &str,
     ) -> Result<Self> {
-        let mnt_src: &str = &m.source;
         let block_driver = get_block_driver(d).await;
-        let fstat = stat::stat(mnt_src).context(format!("stat {}", m.source))?;
-        let block_device_config = BlockConfig {
-            major: stat::major(fstat.st_rdev) as i64,
-            minor: stat::minor(fstat.st_rdev) as i64,
+
+        // check volume type
+        if mount_info.volume_type != KATA_DIRECT_VOLUME_TYPE {
+            return Err(anyhow!(
+                "volume type {:?} is invalid",
+                mount_info.volume_type
+            ));
+        }
+
+        let fstat = stat::stat(mount_info.device.as_str())
+            .with_context(|| format!("stat volume device file: {}", mount_info.device.clone()))?;
+        if SFlag::from_bits_truncate(fstat.st_mode) != SFlag::S_IFREG
+            && SFlag::from_bits_truncate(fstat.st_mode) != SFlag::S_IFBLK
+        {
+            return Err(anyhow!(
+                "invalid volume device {:?} for volume type {:?}",
+                mount_info.device,
+                mount_info.volume_type
+            ));
+        }
+
+        let block_config = BlockConfig {
+            path_on_host: mount_info.device.clone(),
             driver_option: block_driver,
             ..Default::default()
         };
 
         // create and insert block device into Kata VM
-        let device_info = do_handle_device(d, &DeviceConfig::BlockCfg(block_device_config.clone()))
+        let device_info = do_handle_device(d, &DeviceConfig::BlockCfg(block_config.clone()))
             .await
             .context("do handle device failed.")?;
 
-        let block_volume =
-            handle_block_volume(device_info, m, read_only, sid, DEFAULT_VOLUME_FS_TYPE)
-                .await
-                .context("do handle block volume failed")?;
+        let block_volume = handle_block_volume(device_info, m, read_only, sid, &mount_info.fs_type)
+            .await
+            .context("do handle block volume failed")?;
 
         Ok(Self {
             storage: Some(block_volume.0),
@@ -63,7 +82,7 @@ impl BlockVolume {
 }
 
 #[async_trait]
-impl Volume for BlockVolume {
+impl Volume for RawblockVolume {
     fn get_volume_mount(&self) -> Result<Vec<oci::Mount>> {
         Ok(vec![self.mount.clone()])
     }
@@ -88,16 +107,5 @@ impl Volume for BlockVolume {
 
     fn get_device_id(&self) -> Result<Option<String>> {
         Ok(Some(self.device_id.clone()))
-    }
-}
-
-pub(crate) fn is_block_volume(m: &oci::Mount) -> bool {
-    if m.r#type.as_str() != KATA_MOUNT_BIND_TYPE {
-        return false;
-    }
-
-    match stat::stat(m.source.as_str()) {
-        Ok(fstat) => SFlag::from_bits_truncate(fstat.st_mode) == SFlag::S_IFBLK,
-        Err(_) => false,
     }
 }
