@@ -87,6 +87,7 @@ jobs:
         run: |
           sudo chown -R $USER:$USER $GITHUB_WORKSPACE $HOME
           sudo rm -rf $GITHUB_WORKSPACE/*
+          sudo rm -f /tmp/kata_hybrid*  # Sometime we got leftover from test_setup_hvsock_failed()
         if: ${{ matrix.instance != 'ubuntu-20.04' }}
 
       - name: Checkout the code
