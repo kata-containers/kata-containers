@@ -23,10 +23,12 @@ use kata_sys_util::protection::{available_guest_protection, GuestProtection};
 use kata_types::capabilities::{Capabilities, CapabilityBits};
 use kata_types::config::default::DEFAULT_CH_ROOTFS_TYPE;
 use lazy_static::lazy_static;
+use nix::sched::{setns, CloneFlags};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::convert::TryFrom;
 use std::fs::create_dir_all;
+use std::os::unix::io::AsRawFd;
 use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::process::Stdio;
@@ -372,6 +374,26 @@ impl CloudHypervisorInner {
 
         if disable_seccomp {
             cmd.args(["--seccomp", "false"]);
+        }
+
+        let netns = self.netns.clone();
+        if self.netns.is_some() {
+            info!(
+                sl!(),
+                "set netns for vmm : {:?}",
+                self.netns.as_ref().unwrap()
+            );
+        }
+
+        unsafe {
+            let _pre = cmd.pre_exec(move || {
+                if let Some(netns_path) = &netns {
+                    let netns_fd = std::fs::File::open(netns_path);
+                    let _ = setns(netns_fd?.as_raw_fd(), CloneFlags::CLONE_NEWNET)
+                        .context("set netns failed");
+                }
+                Ok(())
+            });
         }
 
         debug!(sl!(), "launching {} as: {:?}", CH_NAME, cmd);
