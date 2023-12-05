@@ -879,14 +879,15 @@ vendor: handle_vendor
 
 static-checks-build: $(GENERATED_FILES)
 
-clean:
+clean: clean-generated-files
 	$(QUIET_CLEAN)rm -f \
-		$(CONFIGS) \
-		$(GENERATED_FILES) \
 		$(MONITOR) \
 		$(SHIMV2) \
 		$(TARGET) \
 		.git-commit .git-commit.tmp
+
+clean-generated-files:
+	$(QUIET_CLEAN)rm -f $(GENERATED_FILES)
 
 show-usage: show-header
 	@printf "• Overview:\n"
@@ -904,6 +905,7 @@ show-usage: show-header
 	@printf "\tfast-test                  : run tests with failfast option.\n"
 	@printf "\tcheck                      : run code checks.\n"
 	@printf "\tclean                      : remove built files.\n"
+	@printf "\tclean-generated-files      : remove generated files.\n"
 	@printf "\tcontainerd-shim-v2         : only build containerd shim v2.\n"
 	@printf "\tcoverage                   : run coverage tests.\n"
 	@printf "\tdefault                    : same as 'make build' (or just 'make').\n"
