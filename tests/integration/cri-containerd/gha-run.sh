@@ -60,6 +60,12 @@ function run() {
 	info "Running cri-containerd tests using ${KATA_HYPERVISOR} hypervisor"
 
 	enabling_hypervisor
+
+	if [ "${KATA_HYPERVISOR}" = "dragonball" ]; then
+		echo "Skipping test for ${KATA_HYPERVISOR}"
+		return 0
+	fi
+
 	bash -c ${cri_containerd_dir}/integration-tests.sh
 }
 
