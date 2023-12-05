@@ -47,6 +47,9 @@ pub use root_bus::create_pci_root_bus;
 mod root_device;
 pub use root_device::PciRootDevice;
 
+mod msi;
+mod msix;
+
 /// Error codes related to PCI root/bus/device operations.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
