@@ -29,6 +29,7 @@ jobs:
       matrix:
         vmm:
           - clh #cloud-hypervisor
+          - dragonball
           - fc #firecracker
           - qemu
         snapshotter:
