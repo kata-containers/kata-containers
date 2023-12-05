@@ -14,6 +14,7 @@ use async_trait::async_trait;
 use common::message::{Action, Message};
 use common::{Sandbox, SandboxNetworkEnv};
 use containerd_shim_protos::events::task::TaskOOM;
+use hypervisor::VsockConfig;
 use hypervisor::{dragonball::Dragonball, BlockConfig, Hypervisor, HYPERVISOR_DRAGONBALL};
 use hypervisor::{utils::get_hvsock_path, HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID};
 use kata_sys_util::hooks::HookStates;
@@ -28,6 +29,7 @@ use tracing::instrument;
 use crate::health_check::HealthCheck;
 
 pub(crate) const VIRTCONTAINER: &str = "virt_container";
+
 pub struct SandboxRestoreArgs {
     pub sid: String,
     pub toml_config: TomlConfig,
@@ -102,13 +104,12 @@ impl VirtSandbox {
     ) -> Result<Vec<ResourceConfig>> {
         let mut resource_configs = vec![];
 
-        // Prepare VM hybrid vsock device config and add the hybrid vsock device first.
-        info!(sl!(), "prepare hybrid vsock resource for sandbox.");
-        let vm_hvsock = ResourceConfig::HybridVsock(HybridVsockConfig {
-            guest_cid: DEFAULT_GUEST_VSOCK_CID,
-            uds_path: get_hvsock_path(id),
-        });
-        resource_configs.push(vm_hvsock);
+        info!(sl!(), "prepare vm socket config for sandbox.");
+        let vm_socket_config = self
+            .prepare_vm_socket_config()
+            .await
+            .context("failed to prepare vm socket config")?;
+        resource_configs.push(vm_socket_config);
 
         // prepare network config
         if !network_env.network_created {
@@ -221,6 +222,30 @@ impl VirtSandbox {
             driver_option: boot_info.vm_rootfs_driver,
             ..Default::default()
         })
+    }
+
+    async fn prepare_vm_socket_config(&self) -> Result<ResourceConfig> {
+        // It will check the hypervisor's capabilities to see if it supports hybrid-vsock.
+        // If it does not, it'll assume that it only supports legacy vsock.
+        let vm_socket = if self
+            .hypervisor
+            .capabilities()
+            .await?
+            .is_hybrid_vsock_supported()
+        {
+            // Firecracker/Dragonball/CLH use the hybrid-vsock device model.
+            ResourceConfig::HybridVsock(HybridVsockConfig {
+                guest_cid: DEFAULT_GUEST_VSOCK_CID,
+                uds_path: get_hvsock_path(&self.sid),
+            })
+        } else {
+            // Qemu uses the vsock device model.
+            ResourceConfig::Vsock(VsockConfig {
+                guest_cid: libc::VMADDR_CID_ANY,
+            })
+        };
+
+        Ok(vm_socket)
     }
 
     fn has_prestart_hooks(
