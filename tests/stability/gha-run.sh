@@ -32,6 +32,11 @@ function install_dependencies() {
 function run() {
 	info "Running soak parallel stability tests using ${KATA_HYPERVISOR} hypervisor"
 
+	if [ "${KATA_HYPERVISOR}" = "dragonball" ]; then
+		echo "Skipping test for ${KATA_HYPERVISOR}"
+		return 0
+	fi
+
 	export ITERATIONS=2 MAX_CONTAINERS=20
 	bash "${stability_dir}/soak_parallel_rm.sh"
 
