@@ -19,6 +19,7 @@ DOCKER_TAG=${DOCKER_TAG:-kata-containers-latest}
 KATA_DEPLOY_WAIT_TIMEOUT=${KATA_DEPLOY_WAIT_TIMEOUT:-10m}
 KATA_HYPERVISOR=${KATA_HYPERVISOR:-qemu}
 KUBERNETES="${KUBERNETES:-}"
+SNAPSHOTTER="${SNAPSHOTTER:-}"
 
 function configure_devmapper() {
 	sudo mkdir -p /var/lib/containerd/devmapper
@@ -172,7 +173,11 @@ function run_tests() {
 
     pushd "${kubernetes_dir}"
     bash setup.sh
-    bash run_kubernetes_tests.sh
+    if [[ "${KATA_HYPERVISOR}" = "dragonball" ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]]; then
+        echo "Skipping tests for dragonball using devmapper"
+    else
+        bash run_kubernetes_tests.sh
+    fi
     popd
 }
 
