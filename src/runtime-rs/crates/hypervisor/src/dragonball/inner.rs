@@ -76,7 +76,8 @@ impl DragonballInner {
         capabilities.set(
             CapabilityBits::BlockDeviceSupport
                 | CapabilityBits::BlockDeviceHotplugSupport
-                | CapabilityBits::FsSharingSupport,
+                | CapabilityBits::FsSharingSupport
+                | CapabilityBits::HybridVsockSupport,
         );
         DragonballInner {
             id: "".to_string(),

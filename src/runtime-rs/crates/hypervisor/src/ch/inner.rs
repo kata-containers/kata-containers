@@ -83,7 +83,8 @@ impl CloudHypervisorInner {
         capabilities.set(
             CapabilityBits::BlockDeviceSupport
                 | CapabilityBits::BlockDeviceHotplugSupport
-                | CapabilityBits::FsSharingSupport,
+                | CapabilityBits::FsSharingSupport
+                | CapabilityBits::HybridVsockSupport,
         );
 
         let (tx, rx) = channel(true);

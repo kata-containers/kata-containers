@@ -712,11 +712,14 @@ impl CloudHypervisorInner {
 
         let flags = if guest_protection_is_tdx(self.guest_protection_to_use.clone()) {
             // TDX does not permit the use of virtio-fs.
-            CapabilityBits::BlockDeviceSupport | CapabilityBits::BlockDeviceHotplugSupport
+            CapabilityBits::BlockDeviceSupport
+                | CapabilityBits::BlockDeviceHotplugSupport
+                | CapabilityBits::HybridVsockSupport
         } else {
             CapabilityBits::BlockDeviceSupport
                 | CapabilityBits::BlockDeviceHotplugSupport
                 | CapabilityBits::FsSharingSupport
+                | CapabilityBits::HybridVsockSupport
         };
 
         caps.set(flags);
