@@ -25,6 +25,19 @@ container_image="${SHIM_V2_CONTAINER_BUILDER:-$(get_shim_v2_image_name)}"
 EXTRA_OPTS="${EXTRA_OPTS:-""}"
 
 [ "${CROSS_BUILD}" == "true" ] && container_image_bk="${container_image}" && container_image="${container_image}-cross-build"
+if [ "${MEASURED_ROOTFS}" == "yes" ]; then
+	EXTRA_OPTS+=" DEFSERVICEOFFLOAD=true"
+	info "Enable rootfs measurement config"
+
+	root_hash_file="${repo_root_dir}/tools/osbuilder/root_hash.txt"
+	[ -f "$root_hash_file" ] || \
+		die "Root hash file for measured rootfs not found at ${root_hash_file}"
+
+	root_hash=$(sudo sed -e 's/Root hash:\s*//g;t;d' "${root_hash_file}")
+	root_measure_config="rootfs_verity.scheme=dm-verity rootfs_verity.hash=${root_hash}"
+	EXTRA_OPTS+=" ROOTMEASURECONFIG=\"${root_measure_config}\""
+fi
+
 sudo docker pull ${container_image} || \
 	(sudo docker ${BUILDX} build ${PLATFORM}  \
 		--build-arg GO_VERSION="${GO_VERSION}" \
@@ -49,7 +62,8 @@ sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	--env CC="${CC}" \
 	-w "${repo_root_dir}/src/runtime-rs" \
 	"${container_image}" \
-	bash -c "git config --global --add safe.directory ${repo_root_dir} && make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch}"
+	bash -c "git config --global --add safe.directory ${repo_root_dir} && \
+		make clean-generated-files && make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch}"
 
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	--env CROSS_BUILD=${CROSS_BUILD} \
@@ -64,7 +78,8 @@ sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${repo_root_dir}/src/runtime" \
 	"${container_image}" \
-	bash -c "git config --global --add safe.directory ${repo_root_dir} && make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch} ${EXTRA_OPTS}"
+	bash -c "git config --global --add safe.directory ${repo_root_dir} && \
+		make clean-generated-files && make PREFIX=${PREFIX} QEMUCMD=qemu-system-${arch} ${EXTRA_OPTS}"
 
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${repo_root_dir}/src/runtime" \

@@ -13,6 +13,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${script_dir}/../../scripts/lib.sh"
 
 readonly kernel_builder="${repo_root_dir}/tools/packaging/kernel/build-kernel.sh"
+readonly initramfs_builder="${repo_root_dir}/tools/packaging/static-build/initramfs/build.sh"
 
 BUILDX=
 PLATFORM=
@@ -20,6 +21,16 @@ PLATFORM=
 DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}
 container_image="${KERNEL_CONTAINER_BUILDER:-$(get_kernel_image_name)}"
+MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
+kernel_builder_args="-a ${ARCH} $*"
+
+if [ "${MEASURED_ROOTFS}" == "yes" ]; then
+	info "build initramfs for cc kernel"
+	"${initramfs_builder}"
+	# Turn on the flag to build the kernel with support to
+	# measured rootfs.
+	kernel_builder_args+=" -m"
+fi
 
 if [ "${CROSS_BUILD}" == "true" ]; then
        container_image="${container_image}-${ARCH}-cross-build"
@@ -39,23 +50,22 @@ sudo docker pull ${container_image} || \
 
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
-	--env MEASURED_ROOTFS="${MEASURED_ROOTFS:-}" \
 	"${container_image}" \
-	bash -c "${kernel_builder} -a ${ARCH} $* setup"
+	bash -c "${kernel_builder} ${kernel_builder_args} setup"
 
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
 	"${container_image}" \
-	bash -c "${kernel_builder} -a ${ARCH} $* build"
-
-sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
-	-w "${PWD}" \
-	--env DESTDIR="${DESTDIR}" --env PREFIX="${PREFIX}" \
-	"${container_image}" \
-	bash -c "${kernel_builder} -a ${ARCH} $* install"
+	bash -c "${kernel_builder} ${kernel_builder_args} build"
 
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
 	--env DESTDIR="${DESTDIR}" --env PREFIX="${PREFIX}" \
 	"${container_image}" \
-	bash -c "${kernel_builder} -a ${ARCH} $* build-headers"
+	bash -c "${kernel_builder} ${kernel_builder_args} install"
+
+sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
+	-w "${PWD}" \
+	--env DESTDIR="${DESTDIR}" --env PREFIX="${PREFIX}" \
+	"${container_image}" \
+	bash -c "${kernel_builder} ${kernel_builder_args} build-headers"

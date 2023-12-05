@@ -64,10 +64,10 @@ PREFIX="${PREFIX:-/usr}"
 kernel_url=""
 #Linux headers for GPU guest fs module building
 linux_headers=""
+# Enable measurement of the guest rootfs at boot.
+measured_rootfs="false"
 
 CROSS_BUILD_ARG=""
-
-MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
 
 packaging_scripts_dir="${script_dir}/../scripts"
 source "${packaging_scripts_dir}/lib.sh"
@@ -103,6 +103,7 @@ Options:
 	-g <vendor> 	: GPU vendor, intel or nvidia.
 	-h          	: Display this help.
 	-H <deb|rpm>	: Linux headers for guest fs module building.
+	-m              : Enable measured rootfs.
 	-k <path>   	: Path to kernel to build.
 	-p <path>   	: Path to a directory with patches to apply to kernel.
 	-s          	: Skip .config checks
@@ -125,6 +126,12 @@ arch_to_kernel() {
 		x86_64) echo "$arch" ;;
 		*) die "unsupported architecture: $arch" ;;
 	esac
+}
+
+# When building for measured rootfs the initramfs image should be previously built.
+check_initramfs_or_die() {
+	[ -f "${default_initramfs}" ] || \
+		die "Initramfs for measured rootfs not found at ${default_initramfs}"
 }
 
 get_tee_kernel() {
@@ -270,16 +277,15 @@ get_kernel_frag_path() {
 		all_configs="${all_configs} ${gpu_configs}"
 	fi
 
-	if [ "${MEASURED_ROOTFS}" == "yes" ]; then
+	if [ "${measured_rootfs}" == "true" ]; then
 		info "Enabling config for confidential guest trust storage protection"
 		local cryptsetup_configs="$(ls ${common_path}/confidential_containers/cryptsetup.conf)"
 		all_configs="${all_configs} ${cryptsetup_configs}"
 
-		if [ -f "${default_initramfs}" ]; then
-			info "Enabling config for confidential guest measured boot"
-			local initramfs_configs="$(ls ${common_path}/confidential_containers/initramfs.conf)"
-			all_configs="${all_configs} ${initramfs_configs}"
-		fi
+		check_initramfs_or_die
+		info "Enabling config for confidential guest measured boot"
+		local initramfs_configs="$(ls ${common_path}/confidential_containers/initramfs.conf)"
+		all_configs="${all_configs} ${initramfs_configs}"
 	fi
 
 	if [[ "${conf_guest}" != "" ]];then
@@ -431,7 +437,8 @@ setup_kernel() {
 	[ -n "${hypervisor_target}" ] || hypervisor_target="kvm"
 	[ -n "${kernel_config_path}" ] || kernel_config_path=$(get_default_kernel_config "${kernel_version}" "${hypervisor_target}" "${arch_target}" "${kernel_path}")
 
-	if [ "${MEASURED_ROOTFS}" == "yes" ] && [ -f "${default_initramfs}" ]; then
+	if [ "${measured_rootfs}" == "true" ]; then
+		check_initramfs_or_die
 		info "Copying initramfs from: ${default_initramfs}"
 		cp "${default_initramfs}" ./
 	fi
@@ -538,7 +545,7 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:b:c:deEfg:hH:k:p:t:u:v:x:" opt; do
+	while getopts "a:b:c:deEfg:hH:k:mp:t:u:v:x:" opt; do
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
@@ -571,6 +578,9 @@ main() {
 				;;
 			H)
 				linux_headers="${OPTARG}"
+				;;
+			m)
+				measured_rootfs="true"
 				;;
 			k)
 				kernel_path="$(realpath ${OPTARG})"

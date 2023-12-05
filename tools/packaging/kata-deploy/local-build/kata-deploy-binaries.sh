@@ -25,7 +25,6 @@ readonly versions_yaml="${repo_root_dir}/versions.yaml"
 readonly agent_builder="${static_build_dir}/agent/build.sh"
 readonly clh_builder="${static_build_dir}/cloud-hypervisor/build-static-clh.sh"
 readonly firecracker_builder="${static_build_dir}/firecracker/build-static-firecracker.sh"
-readonly initramfs_builder="${static_build_dir}/initramfs/build.sh"
 readonly kernel_builder="${static_build_dir}/kernel/build.sh"
 readonly ovmf_builder="${static_build_dir}/ovmf/build.sh"
 readonly qemu_builder="${static_build_dir}/qemu/build-static-qemu.sh"
@@ -300,7 +299,7 @@ install_cached_kernel_tarball_component() {
 install_kernel_helper() {
 	local kernel_version_yaml_path="${1}"
 	local kernel_name="${2}"
-	local extra_cmd=${3}
+	local extra_cmd="${3:-}"
 
 	export kernel_version="$(get_from_kata_deps ${kernel_version_yaml_path})"
 	export kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
@@ -313,11 +312,6 @@ install_kernel_helper() {
 	fi
 
 	install_cached_kernel_tarball_component ${kernel_name} ${module_dir} && return 0
-
-	if [ "${MEASURED_ROOTFS}" == "yes" ]; then
-		info "build initramfs for cc kernel"
-		"${initramfs_builder}"
-	fi
 
 	info "build ${kernel_name}"
 	info "Kernel version ${kernel_version}"
@@ -605,18 +599,7 @@ install_shimv2() {
 	export GO_VERSION
 	export RUST_VERSION
 
-	if [ "${MEASURED_ROOTFS}" == "yes" ]; then
-	        extra_opts="DEFSERVICEOFFLOAD=true"
-		if [ -f "${repo_root_dir}/tools/osbuilder/root_hash.txt" ]; then
-			root_hash=$(sudo sed -e 's/Root hash:\s*//g;t;d' "${repo_root_dir}/tools/osbuilder//root_hash.txt")
-			root_measure_config="rootfs_verity.scheme=dm-verity rootfs_verity.hash=${root_hash}"
-			extra_opts+=" ROOTMEASURECONFIG=\"${root_measure_config}\""
-		fi
-
-		DESTDIR="${destdir}" PREFIX="${prefix}" EXTRA_OPTS="${extra_opts}" "${shimv2_builder}"
-	else
-		DESTDIR="${destdir}" PREFIX="${prefix}" "${shimv2_builder}"
-	fi
+	DESTDIR="${destdir}" PREFIX="${prefix}" "${shimv2_builder}"
 }
 
 install_ovmf() {
