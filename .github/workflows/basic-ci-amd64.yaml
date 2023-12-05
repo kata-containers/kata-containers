@@ -53,6 +53,7 @@ jobs:
         run: bash tests/integration/cri-containerd/gha-run.sh install-kata kata-artifacts
 
       - name: Run cri-containerd tests
+        timeout-minutes: 10
         run: bash tests/integration/cri-containerd/gha-run.sh run
 
   run-containerd-stability:
@@ -91,6 +92,7 @@ jobs:
         run: bash tests/stability/gha-run.sh install-kata kata-artifacts
 
       - name: Run containerd-stability tests
+        timeout-minutes: 15
         run: bash tests/stability/gha-run.sh run
 
   run-nydus:
@@ -132,6 +134,7 @@ jobs:
         run: bash tests/integration/nydus/gha-run.sh install-kata kata-artifacts
 
       - name: Run nydus tests
+        timeout-minutes: 10
         run: bash tests/integration/nydus/gha-run.sh run
 
   run-runk:
@@ -163,6 +166,7 @@ jobs:
         run: bash tests/integration/runk/gha-run.sh install-kata kata-artifacts
 
       - name: Run tracing tests
+        timeout-minutes: 10
         run: bash tests/integration/runk/gha-run.sh run
 
   run-tracing:
@@ -200,6 +204,7 @@ jobs:
         run: bash tests/functional/tracing/gha-run.sh install-kata kata-artifacts
 
       - name: Run tracing tests
+        timeout-minutes: 15
         run: bash tests/functional/tracing/gha-run.sh run
 
   run-vfio:
