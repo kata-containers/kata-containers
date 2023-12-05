@@ -185,7 +185,7 @@ and then, run an untrusted workload with Kata Containers:
       runtime_type = "io.containerd.kata.v2"
 ```
 
-You can find more information on the [Containerd config documentation](https://github.com/containerd/cri/blob/master/docs/config.md)
+You can find more information on the [Containerd config documentation](https://github.com/containerd/containerd/blob/main/docs/cri/config.md)
 
 #### Kata Containers as the default runtime
 
