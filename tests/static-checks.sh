@@ -494,8 +494,11 @@ EOF
 
 check_url()
 {
-	local url="$1"
-	local invalid_urls_dir="$2"
+	local url="${1:-}"
+	[ -n "$url" ] || die "need URL to check"
+
+	local invalid_urls_dir="${2:-}"
+	[ -n "$invalid_urls_dir" ] || die "need invalid URLs directory"
 
 	local curl_out=$(mktemp)
 	files_to_remove+=("${curl_out}")
