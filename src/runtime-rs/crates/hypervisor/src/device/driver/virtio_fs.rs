@@ -76,6 +76,12 @@ pub struct ShareFsConfig {
 
     /// mount config for sharefs mount/umount/update
     pub mount_config: Option<ShareFsMountConfig>,
+
+    /// uid_mappings: the uid mappings
+    pub uid_mappings: Vec<(u32, u32, u32)>,
+
+    /// gid_mappings: the uid mappings
+    pub gid_mappings: Vec<(u32, u32, u32)>,
 }
 
 #[derive(Debug, Default, Clone)]

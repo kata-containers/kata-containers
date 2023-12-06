@@ -3,27 +3,100 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Result, Context};
+use nix::fcntl::{self, OFlag};
 use nix::mount::MsFlags;
 use nix::sched::{unshare, CloneFlags};
-use nix::unistd::{getpid, gettid};
+use nix::sys::stat::Mode;
+use nix::sys::wait::wait;
+use nix::unistd::{fork, ForkResult, getpid, gettid, self, Uid, Gid};
+use oci::LinuxIdMapping;
+use protocols::oci::LinuxIDMapping;
+use protocols::trans::from_vec;
 use slog::Logger;
 use std::fmt;
 use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use tracing::instrument;
-
+use rustjail::sync::{read_sync, write_sync, SYNC_SUCCESS};
 use crate::mount::baremount;
 
 const PERSISTENT_NS_DIR: &str = "/var/run/sandbox-ns";
 pub const NSTYPEIPC: &str = "ipc";
 pub const NSTYPEUTS: &str = "uts";
 pub const NSTYPEPID: &str = "pid";
+pub const NSTYPEUSER: &str = "user";
+pub const NSTYPENET: &str = "network";
 
 #[instrument]
-pub fn get_current_thread_ns_path(ns_type: &str) -> String {
+fn get_proc_ns_path(pid: i32, ns_type: &str) -> String {
+    format!("/proc/{}/ns/{}", pid, ns_type)
+}
+
+#[instrument]
+fn get_current_thread_ns_path(ns_type: &str) -> String {
     format!("/proc/{}/task/{}/ns/{}", getpid(), gettid(), ns_type)
+}
+
+#[instrument]
+fn get_proc_id_map_path(pid: i32, is_uid: bool) -> String {
+    if is_uid {
+        format!("/proc/{}/uid_map", pid)
+    } else {
+        format!("/proc/{}/gid_map", pid)
+    }
+}
+
+#[instrument]
+fn persist_namespace(ns_type: NamespaceType, hostname: Option<&String>, source: &Path, destination: &Path, logger: &Logger) -> Result<()> {
+    unshare(ns_type.get_flags())?;
+    if ns_type == NamespaceType::Uts && hostname.is_some() {
+        nix::unistd::sethostname(hostname.unwrap())?;
+    }
+    // Bind mount the new namespace from the current thread onto the mount point to persist it.
+
+    let mut flags = MsFlags::empty();
+    flags |= MsFlags::MS_BIND | MsFlags::MS_REC;
+
+    baremount(source, destination, "none", flags, "", &logger).map_err(|e| {
+        anyhow!(
+            "Failed to mount {:?} to {:?} with err:{:?}",
+            source,
+            destination,
+            e
+        )
+    })?;
+    Ok(())
+}
+
+#[instrument]
+fn setid(uid: Uid, gid: Gid) -> Result<()> {
+    unistd::setresuid(uid, uid, uid).map_err(|e| anyhow!(e).context("setresuid failed"))?;
+    unistd::setresgid(gid, gid, gid).map_err(|e| anyhow!(e).context("setresgid failed"))?;
+
+    Ok(())
+}
+
+#[instrument]
+fn write_mappings(logger: &Logger, path: &str, maps: &[LinuxIdMapping]) -> Result<()> {
+    let data = maps
+        .iter()
+        .filter(|m| m.size != 0)
+        .map(|m| format!("{} {} {}\n", m.container_id, m.host_id, m.size))
+        .collect::<Vec<_>>()
+        .join("");
+
+    info!(logger, "mapping: {}", data);
+    if !data.is_empty() {
+        let fd = fcntl::open(path, OFlag::O_WRONLY, Mode::empty())?;
+        defer!(unistd::close(fd).unwrap());
+        unistd::write(fd, data.as_bytes()).map_err(|e| {
+            info!(logger, "cannot write mapping");
+            e
+        })?;
+    }
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -34,6 +107,8 @@ pub struct Namespace {
     ns_type: NamespaceType,
     //only used for uts namespace
     pub hostname: Option<String>,
+    pub uid_mappings: Option<Vec<LinuxIDMapping>>,
+    pub gid_mappings: Option<Vec<LinuxIDMapping>>,
 }
 
 impl Namespace {
@@ -45,6 +120,8 @@ impl Namespace {
             persistent_ns_dir: String::from(PERSISTENT_NS_DIR),
             ns_type: NamespaceType::Ipc,
             hostname: None,
+            uid_mappings: None,
+            gid_mappings: None,
         }
     }
 
@@ -66,6 +143,25 @@ impl Namespace {
     #[instrument]
     pub fn get_pid(mut self) -> Self {
         self.ns_type = NamespaceType::Pid;
+        self
+    }
+
+    #[instrument]
+    pub fn get_user(mut self, uid_mappings: Vec<LinuxIDMapping>, gid_mappings: Vec<LinuxIDMapping>) -> Self {
+        self.ns_type = NamespaceType::User;
+        if !uid_mappings.is_empty() {
+            self.uid_mappings = Some(uid_mappings);
+        }
+        if !gid_mappings.is_empty() {
+            self.gid_mappings = Some(gid_mappings);
+        }
+
+        self
+    }
+
+    #[instrument]
+    pub fn get_net(mut self) -> Self {
+        self.ns_type = NamespaceType::Net;
         self
     }
 
@@ -143,12 +239,153 @@ impl Namespace {
     }
 }
 
+/// setup persistent namespace in a non-root user namespace without switching to it.
+/// Note, pid namespaces cannot be persisted.
+///
+/// CLONE_NEWUSER requires that the calling process is not threaded,
+/// so use a child process to execute unshare() or setns().
+/// Ref: https://man7.org/linux/man-pages/man2/unshare.2.html
+#[instrument]
+#[allow(clippy::question_mark)]
+pub async fn setup_in_userns(
+    logger: &Logger,
+    userns: &mut Namespace,
+    nses: Vec<&mut Namespace>,
+) -> Result<()> {
+    let (prfd, cwfd) = unistd::pipe().context("failed to create pipe")?;
+    let (crfd, pwfd) = unistd::pipe().context("failed to create pipe")?;
+
+    match unsafe { fork() } {
+        Ok(ForkResult::Parent { child, .. }) => {
+            unistd::close(crfd)?;
+            unistd::close(cwfd)?;
+
+            let mut mounts = Vec::new();
+            let logger = logger.clone();
+
+            // create mount path of namespaces
+            fs::create_dir_all(&userns.persistent_ns_dir)?;
+            let ns_path = PathBuf::from(&userns.persistent_ns_dir);
+            let new_ns_path = ns_path.join(userns.ns_type.get());
+            File::create(new_ns_path.as_path())?;
+            userns.path = new_ns_path.clone().into_os_string().into_string().unwrap();
+            let origin_ns_path = get_proc_ns_path(child.as_raw(), userns.ns_type.get());
+            mounts.push((origin_ns_path.clone(), new_ns_path.clone()));
+
+            for ns in nses {
+                let ns_type = ns.ns_type;
+                if ns_type == NamespaceType::Pid {
+                    return Err(anyhow!("Cannot persist namespace of PID type"));
+                }
+
+                fs::create_dir_all(&ns.persistent_ns_dir)?;
+
+                let ns_path = PathBuf::from(&ns.persistent_ns_dir);
+                let new_ns_path = ns_path.join(ns_type.get());
+                File::create(new_ns_path.as_path())?;
+                ns.path = new_ns_path.clone().into_os_string().into_string().unwrap();
+
+                let origin_ns_path = get_proc_ns_path(child.as_raw(), ns_type.get());
+
+                mounts.push((origin_ns_path, new_ns_path));
+            }
+
+            // wait child to setup user namespace
+            read_sync(prfd)?;
+
+            // after creating the userns, remap ids (temporarily remap 0~65535 to 1~65536).
+            if let Some(uid_mappings) = userns.uid_mappings.clone() {
+                write_mappings(&logger, &get_proc_id_map_path(child.as_raw(), true), &from_vec(uid_mappings)).map_err(|e| anyhow!(e).context("parent write child's uidmappings failed"))?;
+            }
+            if let Some(gid_mappings) = userns.gid_mappings.clone() {
+                write_mappings(&logger, &get_proc_id_map_path(child.as_raw(), false), &from_vec(gid_mappings)).map_err(|e| anyhow!(e).context("parent write child's gidmappings failed"))?;
+            }
+
+            // notify child to continue
+            write_sync(pwfd, SYNC_SUCCESS, "")?;
+
+            // wait child to setup other namespaces
+            read_sync(prfd)?;
+
+            // Bind mount the new namespaces onto the mount point to persist it.
+            for (origin_ns_path, new_ns_path) in mounts {
+                let source = Path::new(&origin_ns_path);
+                let destination = new_ns_path.as_path();
+
+                File::open(source)?;
+
+                let mut flags = MsFlags::empty();
+                flags |= MsFlags::MS_BIND | MsFlags::MS_REC;
+
+                baremount(source, destination, "none", flags, "", &logger).map_err(|e| {
+                    anyhow!(
+                        "Failed to mount {:?} to {:?} with err:{:?}",
+                        source,
+                        destination,
+                        e
+                    )
+                })?;
+            }
+
+            // notify child to exit
+            write_sync(pwfd, SYNC_SUCCESS, "")?;
+
+            unistd::close(prfd)?;
+            unistd::close(pwfd)?;
+            wait()?;
+        },
+        Ok(ForkResult::Child) => {
+            unistd::close(prfd)?;
+            unistd::close(pwfd)?;
+
+            let cf = userns.ns_type.get_flags();
+            unshare(cf).map_err(|e| anyhow!(e).context("child unshare user ns failed"))?;
+
+            // notify parent user namespace creation is complete
+            write_sync(cwfd, SYNC_SUCCESS, "")?;
+
+            // wait parent to remap ids
+            read_sync(crfd)?;
+
+            setid(Uid::from_raw(0), Gid::from_raw(0))?;
+
+            for ns in nses {
+                let cf = ns.ns_type.get_flags();
+                unshare(cf).map_err(|e| anyhow!(e).context(format!("child unshare {} ns failed", ns.ns_type.get())))?;
+
+                let hostname = ns.hostname.clone();
+                if ns.ns_type == NamespaceType::Uts && hostname.is_some() {
+                    nix::unistd::sethostname(hostname.unwrap())?;
+                }
+            }
+
+            // notify parent to persist namespace
+            write_sync(cwfd, SYNC_SUCCESS, "")?;
+
+            // wait parent to persist namespace
+            read_sync(crfd)?;
+
+            std::process::exit(0);
+        }
+        Err(e) => {
+            return Err(anyhow!(format!(
+                "failed to fork namespace setup process: {:?}",
+                e
+            )));
+        }
+    };
+
+    Ok(())
+}
+
 /// Represents the Namespace type.
 #[derive(Clone, Copy, PartialEq)]
 enum NamespaceType {
     Ipc,
     Uts,
     Pid,
+    User,
+    Net,
 }
 
 impl NamespaceType {
@@ -158,6 +395,8 @@ impl NamespaceType {
             Self::Ipc => "ipc",
             Self::Uts => "uts",
             Self::Pid => "pid",
+            Self::User => "user",
+            Self::Net => "net",
         }
     }
 
@@ -167,6 +406,8 @@ impl NamespaceType {
             Self::Ipc => CloneFlags::CLONE_NEWIPC,
             Self::Uts => CloneFlags::CLONE_NEWUTS,
             Self::Pid => CloneFlags::CLONE_NEWPID,
+            Self::User => CloneFlags::CLONE_NEWUSER,
+            Self::Net => CloneFlags::CLONE_NEWNET,
         }
     }
 }
