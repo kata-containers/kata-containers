@@ -126,10 +126,11 @@ func (endpoint *VethEndpoint) Detach(ctx context.Context, netNsCreated bool, net
 }
 
 // HotAttach for the veth endpoint uses hot plug device
-func (endpoint *VethEndpoint) HotAttach(ctx context.Context, h Hypervisor) error {
+func (endpoint *VethEndpoint) HotAttach(ctx context.Context, s *Sandbox) error {
 	span, ctx := vethTrace(ctx, "HotAttach", endpoint)
 	defer span.End()
 
+	h := s.hypervisor
 	if err := xConnectVMNetwork(ctx, endpoint, h); err != nil {
 		networkLogger().WithError(err).Error("Error bridging virtual ep")
 		return err
