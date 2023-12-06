@@ -539,58 +539,117 @@ check_url()
 
 	files_to_remove+=("${curl_out}")
 
-	info "Checking URL $url"
-
 	# Process specific file to avoid out-of-order writes
 	local invalid_file
 	invalid_file=$(printf "%s/%d" "$invalid_urls_dir" "$$")
 
 	local ret
-	local user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"
 
-	local curl_ua_args
-	curl_ua_args="-A '$user_agent'"
+	local -a errors=()
 
-	{ run_url_check_cmd "$url" "$curl_out" "$curl_ua_args"; ret=$?; } || true
+	local -a user_agents=()
 
-	# A transitory error, or the URL is incorrect,
-	# but capture either way.
-	if [ "$ret" -ne 0 ]; then
-		echo "$url" >> "${invalid_file}"
+	# Test an unspecified UA (curl default)
+	user_agents+=('')
 
-		die "check failed for URL $url after $url_check_max_tries tries"
-	fi
+	# Test an explictly blank UA
+	user_agents+=('""')
 
-	local http_statuses
+	# Single space
+	user_agents+=(' ')
 
-	http_statuses=$(grep -E "^HTTP" "$curl_out" | awk '{print $2}' || true)
-	if [ -z "$http_statuses" ]; then
-		echo "$url" >> "${invalid_file}"
-		die "no HTTP status codes for URL $url"
-	fi
+	# CLI HTTP tools
+	user_agents+=('Wget')
+	user_agents+=('curl')
 
-	local status
+	# console based browsers
+	# Hopefully, these will always be supported for a11y.
+	user_agents+=('Lynx')
+	user_agents+=('Elinks')
 
-	for status in $http_statuses
+	# Emacs' w3m browser
+	user_agents+=('Emacs')
+
+	# The full craziness
+	user_agents+=('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36')
+
+	local user_agent
+
+	# Cycle through the user agents until we find one that works.
+	#
+	# Note that we also test an unspecified user agent
+	# (no '-A <value>').
+	for user_agent in "${user_agents[@]}"
 	do
-		# Ignore the following ranges of status codes:
-		#
-		# - 1xx: Informational codes.
-		# - 2xx: Success codes.
-		# - 3xx: Redirection codes.
-		# - 405: Specifically to handle some sites
-		#   which get upset by "curl -L" when the
-		#   redirection is not required.
-		#
-		# Anything else is considered an error.
-		#
-		# See https://en.wikipedia.org/wiki/List_of_HTTP_status_codes
+		info "Checking URL $url with User Agent '$user_agent'"
 
-		if ! echo "$status" | grep -qE "^(1[0-9][0-9]|2[0-9][0-9]|3[0-9][0-9]|405)"; then
-			echo "$url" >> "$invalid_file"
-			die "found HTTP error status codes for URL $url ($status)"
+		local curl_ua_args
+		[ -n "$user_agent" ] && curl_ua_args="-A '$user_agent'"
+
+		{ run_url_check_cmd "$url" "$curl_out" "$curl_ua_args"; ret=$?; } || true
+
+		# A transitory error, or the URL is incorrect,
+		# but capture either way.
+		if [ "$ret" -ne 0 ]; then
+			errors+=("Failed to check URL '$url' (user agent: '$user_agent', return code $ret)")
+
+			# Try again with another UA since it appears that some return codes
+			# indicate the server was unhappy with the details
+			# presented by the client.
+			continue
 		fi
+
+		local http_statuses
+
+		http_statuses=$(grep -E "^HTTP" "$curl_out" |\
+			awk '{print $2}' || true)
+
+		if [ -z "$http_statuses" ]; then
+			errors+=("no HTTP status codes for URL '$url' (user agent: '$user_agent')")
+
+			continue
+		fi
+
+		local status
+
+		local -i fail_count=0
+
+		# Check all HTTP status codes
+		for status in $http_statuses
+		do
+			# Ignore the following ranges of status codes:
+			#
+			# - 1xx: Informational codes.
+			# - 2xx: Success codes.
+			# - 3xx: Redirection codes.
+			# - 405: Specifically to handle some sites
+			#   which get upset by "curl -L" when the
+			#   redirection is not required.
+			#
+			# Anything else is considered an error.
+			#
+			# See https://en.wikipedia.org/wiki/List_of_HTTP_status_codes
+
+			{ grep -qE "^(1[0-9][0-9]|2[0-9][0-9]|3[0-9][0-9]|405)" <<< "$status"; ret=$?; } || true
+
+			[ "$ret" -eq 0 ] && continue
+
+			fail_count+=1
+		done
+
+		# If we didn't receive any unexpected HTTP status codes for
+		# this UA, the URL is valid so we don't need to check with any
+		# further UAs, so clear any (transitory) errors we've
+		# recorded.
+		[ "$fail_count" -eq 0 ] && errors=() && break
+
+		echo "$url" >> "$invalid_file"
+		errors+=("found HTTP error status codes for URL $url (status: '$status', user agent: '$user_agent')")
 	done
+
+	[ "${#errors}" = 0 ] && return 0
+
+	die "failed to check URL '$url': errors: '${errors[*]}'"
 }
 
 # Perform basic checks on documentation files
