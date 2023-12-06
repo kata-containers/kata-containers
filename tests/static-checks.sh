@@ -500,13 +500,16 @@ check_url()
 	local invalid_urls_dir="${2:-}"
 	[ -n "$invalid_urls_dir" ] || die "need invalid URLs directory"
 
-	local curl_out=$(mktemp)
+	local curl_out
+	curl_out=$(mktemp)
+
 	files_to_remove+=("${curl_out}")
 
 	info "Checking URL $url"
 
 	# Process specific file to avoid out-of-order writes
-	local invalid_file=$(printf "%s/%d" "$invalid_urls_dir" "$$")
+	local invalid_file
+	invalid_file=$(printf "%s/%d" "$invalid_urls_dir" "$$")
 
 	local ret
 	local user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"
