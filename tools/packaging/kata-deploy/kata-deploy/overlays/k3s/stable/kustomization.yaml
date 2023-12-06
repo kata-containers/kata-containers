@@ -1,0 +1,6 @@
+bases:
+- ../../stable
+
+components:
+-  ../../../components/k3s
+
