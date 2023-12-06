@@ -125,10 +125,11 @@ func (endpoint *IPVlanEndpoint) Detach(ctx context.Context, netNsCreated bool, n
 	})
 }
 
-func (endpoint *IPVlanEndpoint) HotAttach(ctx context.Context, h Hypervisor) error {
+func (endpoint *IPVlanEndpoint) HotAttach(ctx context.Context, s *Sandbox) error {
 	span, ctx := ipvlanTrace(ctx, "HotAttach", endpoint)
 	defer span.End()
 
+	h := s.hypervisor
 	if err := xConnectVMNetwork(ctx, endpoint, h); err != nil {
 		networkLogger().WithError(err).Error("Error bridging ipvlan ep")
 		return err

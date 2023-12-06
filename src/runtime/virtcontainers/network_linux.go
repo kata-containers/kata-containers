@@ -202,7 +202,7 @@ func (n *LinuxNetwork) addSingleEndpoint(ctx context.Context, s *Sandbox, netInf
 
 	networkLogger().WithField("endpoint-type", endpoint.Type()).WithField("hotplug", hotplug).Info("Attaching endpoint")
 	if hotplug {
-		if err := endpoint.HotAttach(ctx, s.hypervisor); err != nil {
+		if err := endpoint.HotAttach(ctx, s); err != nil {
 			return nil, err
 		}
 	} else {

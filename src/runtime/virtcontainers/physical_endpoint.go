@@ -123,8 +123,32 @@ func (endpoint *PhysicalEndpoint) Detach(ctx context.Context, netNsCreated bool,
 }
 
 // HotAttach for physical endpoint not supported yet
-func (endpoint *PhysicalEndpoint) HotAttach(ctx context.Context, h Hypervisor) error {
-	return fmt.Errorf("PhysicalEndpoint does not support Hot attach")
+func (endpoint *PhysicalEndpoint) HotAttach(ctx context.Context, s *Sandbox) error {
+	span, ctx := physicalTrace(ctx, "HotAttach", endpoint)
+	defer span.End()
+
+	// Unbind physical interface from host driver and bind to vfio
+	// so that it can be passed to the hypervisor.
+	vfioPath, err := bindNICToVFIO(endpoint)
+	if err != nil {
+		return err
+	}
+
+	c, err := resCtrl.DeviceToCgroupDeviceRule(vfioPath)
+	if err != nil {
+		return err
+	}
+
+	d := config.DeviceInfo{
+		ContainerPath: vfioPath,
+		DevType:       string(c.Type),
+		Major:         c.Major,
+		Minor:         c.Minor,
+		ColdPlug:      false,
+	}
+
+	_, err = s.AddDevice(ctx, d)
+	return err
 }
 
 // HotDetach for physical endpoint not supported yet

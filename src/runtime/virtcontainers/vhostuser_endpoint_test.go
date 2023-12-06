@@ -97,9 +97,11 @@ func TestVhostUserEndpoint_HotAttach(t *testing.T) {
 		EndpointType: VhostUserEndpointType,
 	}
 
-	h := &mockHypervisor{}
+	s := &Sandbox{
+		hypervisor: &mockHypervisor{},
+	}
 
-	err := v.HotAttach(context.Background(), h)
+	err := v.HotAttach(context.Background(), s)
 	assert.Error(err)
 }
 
