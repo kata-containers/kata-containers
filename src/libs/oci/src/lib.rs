@@ -174,6 +174,10 @@ pub struct Mount {
     pub source: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub options: Vec<String>,
+    #[serde(default, rename = "uidMappings", skip_serializing_if = "Vec::is_empty")]
+    pub uid_mappings: Vec<LinuxIdMapping>,
+    #[serde(default, rename = "gidMappings", skip_serializing_if = "Vec::is_empty")]
+    pub gid_mappings: Vec<LinuxIdMapping>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
@@ -279,6 +283,7 @@ pub const IPCNAMESPACE: &str = "ipc";
 pub const USERNAMESPACE: &str = "user";
 pub const UTSNAMESPACE: &str = "uts";
 pub const CGROUPNAMESPACE: &str = "cgroup";
+pub const TIMENAMESPACE: &str = "time";
 
 #[derive(Serialize, Deserialize, Debug, Default, Clone, PartialEq)]
 pub struct LinuxIdMapping {

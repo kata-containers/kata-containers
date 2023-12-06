@@ -133,6 +133,8 @@ fn mount_grpc_to_oci(m: &grpc::Mount) -> oci::Mount {
         r#type: m.type_.clone(),
         source: m.source.clone(),
         options: m.options.clone(),
+        uid_mappings: idmaps_grpc_to_oci(&m.UIDMappings),
+        gid_mappings: idmaps_grpc_to_oci(&m.GIDMappings),
     }
 }
 
@@ -994,6 +996,8 @@ mod tests {
                     source: String::from("source"),
                     type_: String::from("fieldtype"),
                     options: Vec::from([String::from("option1"), String::from("option2")]),
+                    UIDMappings: vec![],
+                    GIDMappings: vec![],
                     ..Default::default()
                 },
                 result: oci::Mount {
@@ -1001,6 +1005,8 @@ mod tests {
                     source: String::from("source"),
                     r#type: String::from("fieldtype"),
                     options: Vec::from([String::from("option1"), String::from("option2")]),
+                    uid_mappings: vec![],
+                    gid_mappings: vec![],
                 },
             },
             TestData {
@@ -1009,6 +1015,8 @@ mod tests {
                     source: String::from("source"),
                     type_: String::from("fieldtype"),
                     options: Vec::new(),
+                    UIDMappings: vec![],
+                    GIDMappings: vec![],
                     ..Default::default()
                 },
                 result: oci::Mount {
@@ -1016,6 +1024,8 @@ mod tests {
                     source: String::from("source"),
                     r#type: String::from("fieldtype"),
                     options: Vec::new(),
+                    uid_mappings: vec![],
+                    gid_mappings: vec![],
                 },
             },
             TestData {
@@ -1024,6 +1034,8 @@ mod tests {
                     source: String::from("source"),
                     type_: String::from("fieldtype"),
                     options: Vec::from([String::from("option1")]),
+                    UIDMappings: vec![],
+                    GIDMappings: vec![],
                     ..Default::default()
                 },
                 result: oci::Mount {
@@ -1031,6 +1043,8 @@ mod tests {
                     source: String::from("source"),
                     r#type: String::from("fieldtype"),
                     options: Vec::from([String::from("option1")]),
+                    uid_mappings: vec![],
+                    gid_mappings: vec![],
                 },
             },
             TestData {
@@ -1039,6 +1053,8 @@ mod tests {
                     source: String::from("source"),
                     type_: String::new(),
                     options: Vec::from([String::from("option1")]),
+                    UIDMappings: vec![],
+                    GIDMappings: vec![],
                     ..Default::default()
                 },
                 result: oci::Mount {
@@ -1046,6 +1062,8 @@ mod tests {
                     source: String::from("source"),
                     r#type: String::new(),
                     options: Vec::from([String::from("option1")]),
+                    uid_mappings: vec![],
+                    gid_mappings: vec![],
                 },
             },
         ];

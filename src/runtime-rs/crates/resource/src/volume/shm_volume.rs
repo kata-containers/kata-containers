@@ -60,6 +60,8 @@ impl ShmVolume {
                 destination: m.destination.clone(),
                 source: mount_path.to_string(),
                 options: vec!["rbind".to_string()],
+                uid_mappings: m.uid_mappings.clone(),
+                gid_mappings: m.gid_mappings.clone(),
             };
 
             (Some(storage), mount)
@@ -78,6 +80,8 @@ impl ShmVolume {
                 .iter()
                 .map(|s| s.to_string())
                 .collect(),
+                uid_mappings: m.uid_mappings.clone(),
+                gid_mappings: m.gid_mappings.clone(),
             };
             (None, mount)
         };

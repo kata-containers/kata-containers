@@ -141,6 +141,8 @@ message Mount {
 	string source = 2;
 	string type = 3;
 	repeated string options = 4;
+	repeated LinuxIDMapping UIDMappings = 5;
+	repeated LinuxIDMapping GIDMappings = 6;
 }
 
 message Root {

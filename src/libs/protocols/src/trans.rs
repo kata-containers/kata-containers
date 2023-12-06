@@ -22,7 +22,7 @@ fn from_option<F: Sized, T: From<F>>(from: Option<F>) -> protobuf::MessageField<
     }
 }
 
-fn from_vec<F: Sized, T: From<F>>(from: Vec<F>) -> Vec<T> {
+pub fn from_vec<F: Sized, T: From<F>>(from: Vec<F>) -> Vec<T> {
     let mut to: Vec<T> = vec![];
     for data in from {
         to.push(data.into());
@@ -250,6 +250,8 @@ impl From<oci::Mount> for crate::oci::Mount {
             source: from.source,
             type_: from.r#type,
             options: from.options,
+            UIDMappings: from_vec(from.uid_mappings),
+            GIDMappings: from_vec(from.gid_mappings),
             ..Default::default()
         }
     }
@@ -424,6 +426,8 @@ impl From<crate::oci::Mount> for oci::Mount {
             destination: from.take_destination(),
             source: from.take_source(),
             options,
+            uid_mappings: from_vec(from.take_UIDMappings()),
+            gid_mappings: from_vec(from.take_GIDMappings()),
         }
     }
 }

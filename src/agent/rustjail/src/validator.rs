@@ -512,6 +512,8 @@ mod tests {
             r#type: "tmpfs".to_owned(),
             source: "".to_owned(),
             options: vec!["uid=10000".to_owned()],
+            uid_mappings: vec![],
+            gid_mappings: vec![],
         });
         rootless_euid_mount(&spec).unwrap_err();
 
@@ -521,6 +523,8 @@ mod tests {
                 r#type: "tmpfs".to_owned(),
                 source: "".to_owned(),
                 options: vec!["uid=500".to_owned(), "gid=500".to_owned()],
+                uid_mappings: vec![],
+                gid_mappings: vec![],
             }),
         ];
         rootless_euid(&spec).unwrap();
