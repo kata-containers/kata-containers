@@ -29,6 +29,10 @@ jobs:
       matrix:
         vmm:
           - qemu-tdx
+        snapshotter:
+          - nydus
+        pull-type:
+          - guest-pull
     runs-on: tdx
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
@@ -38,6 +42,8 @@ jobs:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
       KUBERNETES: "k3s"
       USING_NFD: "true"
+      SNAPSHOTTER: ${{ matrix.snapshotter }}
+      PULL_TYPE: ${{ matrix.pull-type }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -59,6 +65,10 @@ jobs:
       matrix:
         vmm:
           - qemu-tdx
+        snapshotter:
+          - nydus
+        pull-type:
+          - guest-pull
     runs-on: tdx
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
@@ -69,6 +79,8 @@ jobs:
       KUBERNETES: "k3s"
       USING_NFD: "true"
       K8S_TEST_HOST_TYPE: "baremetal"
+      SNAPSHOTTER: ${{ matrix.snapshotter }}
+      PULL_TYPE: ${{ matrix.pull-type }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -80,6 +92,10 @@ jobs:
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: Deploy Snapshotter
+        timeout-minutes: 5
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-snapshotter
 
       - name: Deploy Kata
         timeout-minutes: 10
@@ -93,12 +109,20 @@ jobs:
         if: always()
         run: bash tests/integration/kubernetes/gha-run.sh cleanup-tdx
 
+      - name: Delete Snapshotter
+        if: always()
+        run: bash tests/integration/kubernetes/gha-run.sh cleanup-snapshotter
+
   run-k8s-tests-on-sev:
     strategy:
       fail-fast: false
       matrix:
         vmm:
           - qemu-sev
+        snapshotter:
+          - nydus
+        pull-type:
+          - guest-pull
     runs-on: sev
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
@@ -110,6 +134,8 @@ jobs:
       KUBERNETES: "vanilla"
       USING_NFD: "false"
       K8S_TEST_HOST_TYPE: "baremetal"
+      SNAPSHOTTER: ${{ matrix.snapshotter }}
+      PULL_TYPE: ${{ matrix.pull-type }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -121,6 +147,10 @@ jobs:
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: Deploy Snapshotter
+        timeout-minutes: 5
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-snapshotter
 
       - name: Deploy Kata
         timeout-minutes: 10
@@ -134,12 +164,20 @@ jobs:
         if: always()
         run: bash tests/integration/kubernetes/gha-run.sh cleanup-sev
 
+      - name: Delete Snapshotter
+        if: always()
+        run: bash tests/integration/kubernetes/gha-run.sh cleanup-snapshotter
+
   run-k8s-tests-sev-snp:
     strategy:
       fail-fast: false
       matrix:
         vmm:
           - qemu-snp
+        snapshotter:
+          - nydus
+        pull-type:
+          - guest-pull
     runs-on: sev-snp
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
@@ -151,6 +189,8 @@ jobs:
       KUBERNETES: "vanilla"
       USING_NFD: "false"
       K8S_TEST_HOST_TYPE: "baremetal"
+      SNAPSHOTTER: ${{ matrix.snapshotter }}
+      PULL_TYPE: ${{ matrix.pull-type }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -163,6 +203,10 @@ jobs:
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
+      - name: Deploy Snapshotter
+        timeout-minutes: 5
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-snapshotter
+
       - name: Deploy Kata
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-snp
@@ -174,3 +218,7 @@ jobs:
       - name: Delete kata-deploy
         if: always()
         run: bash tests/integration/kubernetes/gha-run.sh cleanup-snp
+
+      - name: Delete Snapshotter
+        if: always()
+        run: bash tests/integration/kubernetes/gha-run.sh cleanup-snapshotter
