@@ -1,0 +1,6 @@
+bases:
+- ../../../overlays/stable
+
+components:
+- ../../../components/helm 
+  

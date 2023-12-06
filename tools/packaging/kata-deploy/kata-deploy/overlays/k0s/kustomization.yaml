@@ -1,5 +1,0 @@
-bases:
-- ../../base
-
-patchesStrategicMerge:
-- mount_k0s_conf.yaml
