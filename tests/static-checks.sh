@@ -647,7 +647,8 @@ static_check_docs()
 	# is necessary to guarantee that all docs are referenced.
 	md_docs_to_check="$all_docs"
 
-	(cd "${test_dir}" && make -C cmd/check-markdown)
+	command -v kata-check-markdown &>/dev/null ||\
+		(cd "${test_dir}" && make -C cmd/check-markdown)
 
 	command -v kata-check-markdown &>/dev/null || \
 		die 'kata-check-markdown command not found. Ensure that "$GOPATH/bin" is in your $PATH.'
