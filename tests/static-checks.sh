@@ -811,7 +811,10 @@ static_check_docs()
 
 	popd
 
-	[ $docs_failed -eq 0 ] || die "spell check failed, See https://github.com/kata-containers/kata-containers/blob/main/docs/Documentation-Requirements.md#spelling for more information."
+	[ $docs_failed -eq 0 ] || {
+        url='https://github.com/kata-containers/kata-containers/blob/main/docs/Documentation-Requirements.md#spelling'
+        die "spell check failed, See $url for more information."
+    }
 }
 
 static_check_eof()
