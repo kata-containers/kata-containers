@@ -48,7 +48,12 @@ mod root_device;
 pub use root_device::PciRootDevice;
 
 mod msi;
+pub use msi::{MsiCap, MsiState};
+
 mod msix;
+pub use msix::{MsixCap, MsixState, MSIX_TABLE_ENTRY_SIZE};
+
+mod vfio;
 
 /// Error codes related to PCI root/bus/device operations.
 #[derive(Debug, thiserror::Error)]
