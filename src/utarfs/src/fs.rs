@@ -263,4 +263,21 @@ impl fuser::Filesystem for Tar {
             reply.data(b"y");
         }
     }
+
+    fn listxattr(&mut self, _req: &Request<'_>, ino: u64, size: u32, reply: fuser::ReplyXattr) {
+        let inode = match self.inode(ino) {
+            Ok(i) => i,
+            Err(e) => return reply.error(e),
+        };
+        if inode.flags & inode_flags::OPAQUE == 0 {
+            return reply.data(&[]);
+        }
+        const DATA: &[u8] = b"trusted.overlay.opaque\0";
+        const DATA_SIZE: u32 = DATA.len() as u32;
+        if size < DATA_SIZE {
+            reply.size(DATA_SIZE);
+        } else {
+            reply.data(DATA);
+        }
+    }
 }
