@@ -492,6 +492,40 @@ EOF
 	popd
 }
 
+run_url_check_cmd()
+{
+	local url="${1:-}"
+	[ -n "$url" ] || die "need URL"
+
+	local out_file="${2:-}"
+	[ -n "$out_file" ] || die "need output file"
+
+	# Can be blank
+	local extra_args="${3:-}"
+
+	local curl_extra_args=()
+
+	curl_extra_args+=("$extra_args")
+
+	# Authenticate for github to increase threshold for rate limiting
+	if [[ "$url" =~ github\.com && -n "$GITHUB_USER" && -n "$GITHUB_TOKEN" ]]; then
+		curl_extra_args+=("-u ${GITHUB_USER}:${GITHUB_TOKEN}")
+	fi
+
+	# Some endpoints return 403 to HEAD but 200 for GET,
+	# so perform a GET but only read headers.
+	curl \
+		${curl_extra_args[*]} \
+		-sIL \
+		-X GET \
+		-c - \
+		-H "Accept-Encoding: zstd, none, gzip, deflate" \
+		--max-time "$url_check_timeout_secs" \
+		--retry "$url_check_max_tries" \
+		"$url" \
+		&>"$out_file"
+}
+
 check_url()
 {
 	local url="${1:-}"
@@ -514,15 +548,10 @@ check_url()
 	local ret
 	local user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"
 
-	# Authenticate for github to increase threshold for rate limiting
-	local curl_args=()
-	if [[ "$url" =~ github\.com && -n "$GITHUB_USER" && -n "$GITHUB_TOKEN" ]]; then
-		curl_args+=("-u ${GITHUB_USER}:${GITHUB_TOKEN}")
-	fi
+	local curl_ua_args
+	curl_ua_args="-A '$user_agent'"
 
-	# Some endpoints return 403 to HEAD but 200 for GET, so perform a GET but only read headers.
-	{ curl ${curl_args[*]} -sIL -X GET -c - -A "${user_agent}" -H "Accept-Encoding: zstd, none, gzip, deflate" --max-time "$url_check_timeout_secs" \
-		--retry "$url_check_max_tries" "$url" &>"$curl_out"; ret=$?; } || true
+	{ run_url_check_cmd "$url" "$curl_out" "$curl_ua_args"; ret=$?; } || true
 
 	# A transitory error, or the URL is incorrect,
 	# but capture either way.
