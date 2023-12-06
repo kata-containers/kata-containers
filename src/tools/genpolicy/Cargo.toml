@@ -1,7 +1,7 @@
 [package]
 name = "genpolicy"
 version = "0.1.0"
-authors = ["The Confidential Containers community https://github.com/confidential-containers"]
+authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
 edition = "2021"
 
 [dependencies]
