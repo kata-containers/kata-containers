@@ -9,6 +9,7 @@ use crate::device::DeviceType;
 use crate::BlockDevice;
 use crate::HybridVsockDevice;
 use crate::NetworkConfig;
+use crate::NetworkDevice;
 use crate::PciPath;
 use crate::ShareFsConfig;
 use crate::ShareFsDevice;
@@ -18,7 +19,8 @@ use anyhow::{anyhow, Context, Result};
 use ch_config::ch_api::cloud_hypervisor_vm_device_add;
 use ch_config::ch_api::{
     cloud_hypervisor_vm_blockdev_add, cloud_hypervisor_vm_device_remove,
-    cloud_hypervisor_vm_fs_add, cloud_hypervisor_vm_vsock_add, PciDeviceInfo, VmRemoveDeviceData,
+    cloud_hypervisor_vm_fs_add, cloud_hypervisor_vm_netdev_add, cloud_hypervisor_vm_vsock_add,
+    PciDeviceInfo, VmRemoveDeviceData,
 };
 use ch_config::convert::{DEFAULT_DISK_QUEUES, DEFAULT_DISK_QUEUE_SIZE, DEFAULT_NUM_PCI_SEGMENTS};
 use ch_config::DiskConfig;
@@ -79,6 +81,7 @@ impl CloudHypervisorInner {
             DeviceType::HybridVsock(hvsock) => self.handle_hvsock_device(hvsock).await,
             DeviceType::Block(block) => self.handle_block_device(block).await,
             DeviceType::Vfio(vfiodev) => self.handle_vfio_device(vfiodev).await,
+            DeviceType::Network(netdev) => self.handle_network_device(netdev).await,
             _ => Err(anyhow!("unhandled device: {:?}", device)),
         }
     }
@@ -339,6 +342,30 @@ impl CloudHypervisorInner {
         }
 
         Ok(DeviceType::Block(block_dev))
+    }
+
+    async fn handle_network_device(&mut self, device: NetworkDevice) -> Result<DeviceType> {
+        let netdev = device.clone();
+
+        let socket = self
+            .api_socket
+            .as_ref()
+            .ok_or("missing socket")
+            .map_err(|e| anyhow!(e))?;
+
+        let clh_net_config = NetConfig::try_from(device.config)?;
+
+        let response = cloud_hypervisor_vm_netdev_add(
+            socket.try_clone().context("failed to clone socket")?,
+            clh_net_config,
+        )
+        .await?;
+
+        if let Some(detail) = response {
+            debug!(sl!(), "netdev add response: {:?}", detail);
+        }
+
+        Ok(DeviceType::Network(netdev))
     }
 
     pub(crate) async fn get_shared_devices(
