@@ -218,11 +218,11 @@ func createPhysicalEndpoint(netInfo NetworkInfo) (*PhysicalEndpoint, error) {
 }
 
 func bindNICToVFIO(endpoint *PhysicalEndpoint) (string, error) {
-	return drivers.BindDevicetoVFIO(endpoint.BDF, endpoint.Driver, endpoint.VendorDeviceID)
+	return drivers.BindDevicetoVFIO(endpoint.BDF, endpoint.Driver)
 }
 
 func bindNICToHost(endpoint *PhysicalEndpoint) error {
-	return drivers.BindDevicetoHost(endpoint.BDF, endpoint.Driver, endpoint.VendorDeviceID)
+	return drivers.BindDevicetoHost(endpoint.BDF, endpoint.Driver)
 }
 
 func (endpoint *PhysicalEndpoint) save() persistapi.NetworkEndpoint {

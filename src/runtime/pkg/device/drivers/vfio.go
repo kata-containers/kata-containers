@@ -22,13 +22,12 @@ import (
 
 // bind/unbind paths to aid in SRIOV VF bring-up/restore
 const (
-	pciDriverUnbindPath = "/sys/bus/pci/devices/%s/driver/unbind"
-	pciDriverBindPath   = "/sys/bus/pci/drivers/%s/bind"
-	vfioNewIDPath       = "/sys/bus/pci/drivers/vfio-pci/new_id"
-	vfioRemoveIDPath    = "/sys/bus/pci/drivers/vfio-pci/remove_id"
-	iommuGroupPath      = "/sys/bus/pci/devices/%s/iommu_group"
-	vfioDevPath         = "/dev/vfio/%s"
-	vfioAPSysfsDir      = "/sys/devices/vfio_ap"
+	pciDriverUnbindPath   = "/sys/bus/pci/devices/%s/driver/unbind"
+	pciDriverOverridePath = "/sys/bus/pci/devices/%s/driver_override"
+	driversProbePath      = "/sys/bus/pci/drivers_probe"
+	iommuGroupPath        = "/sys/bus/pci/devices/%s/iommu_group"
+	vfioDevPath           = "/dev/vfio/%s"
+	vfioAPSysfsDir        = "/sys/devices/vfio_ap"
 )
 
 // VFIODevice is a vfio device meant to be passed to the hypervisor
@@ -269,42 +268,45 @@ func GetBDF(deviceSysStr string) string {
 	return tokens[1]
 }
 
-// BindDevicetoVFIO binds the device to vfio driver after unbinding from host.
+// BindDevicetoVFIO binds the device to vfio driver after unbinding from host
+// driver if present.
 // Will be called by a network interface or a generic pcie device.
-func BindDevicetoVFIO(bdf, hostDriver, vendorDeviceID string) (string, error) {
+func BindDevicetoVFIO(bdf, hostDriver string) (string, error) {
 
-	// Unbind from the host driver
+	overrideDriverPath := fmt.Sprintf(pciDriverOverridePath, bdf)
+	deviceLogger().WithFields(logrus.Fields{
+		"device-bdf":           bdf,
+		"driver-override-path": overrideDriverPath,
+	}).Info("Write vfio-pci to driver_override")
+
+	// Write vfio-pci to driver_override file to allow the device to bind to vfio-pci
+	// Reference: https://www.kernel.org/doc/Documentation/ABI/testing/sysfs-bus-platform
+	if err := utils.WriteToFile(overrideDriverPath, []byte("vfio-pci")); err != nil {
+		return "", err
+	}
+
 	unbindDriverPath := fmt.Sprintf(pciDriverUnbindPath, bdf)
 	deviceLogger().WithFields(logrus.Fields{
 		"device-bdf":  bdf,
 		"driver-path": unbindDriverPath,
 	}).Info("Unbinding device from driver")
 
-	if err := utils.WriteToFile(unbindDriverPath, []byte(bdf)); err != nil {
-		return "", err
-	}
+	// Unbind device from the host driver. In some cases, a driver may not be bound
+	// to the device, in which case this step may fail. Hence ignore error for this step.
+	utils.WriteToFile(unbindDriverPath, []byte(bdf))
 
-	// Add device id to vfio driver.
 	deviceLogger().WithFields(logrus.Fields{
-		"vendor-device-id": vendorDeviceID,
-		"vfio-new-id-path": vfioNewIDPath,
-	}).Info("Writing vendor-device-id to vfio new-id path")
+		"device-bdf":         bdf,
+		"drivers-probe-path": driversProbePath,
+	}).Info("Writing bdf to drivers-probe-path")
 
-	if err := utils.WriteToFile(vfioNewIDPath, []byte(vendorDeviceID)); err != nil {
+	// Invoke drivers_probe so that the driver matching driver_override, in our case
+	// the vfio-pci driver will probe the device.
+	if err := utils.WriteToFile(driversProbePath, []byte(bdf)); err != nil {
 		return "", err
 	}
 
-	// Bind to vfio-pci driver.
-	bindDriverPath := fmt.Sprintf(pciDriverBindPath, "vfio-pci")
-
-	api.DeviceLogger().WithFields(logrus.Fields{
-		"device-bdf":  bdf,
-		"driver-path": bindDriverPath,
-	}).Info("Binding device to vfio driver")
-
-	// Device may be already bound at this time because of earlier write to new_id, ignore error
-	utils.WriteToFile(bindDriverPath, []byte(bdf))
-
+	// Determine the iommu group that the device belongs to.
 	groupPath, err := os.Readlink(fmt.Sprintf(iommuGroupPath, bdf))
 	if err != nil {
 		return "", err
@@ -313,11 +315,25 @@ func BindDevicetoVFIO(bdf, hostDriver, vendorDeviceID string) (string, error) {
 	return fmt.Sprintf(vfioDevPath, filepath.Base(groupPath)), nil
 }
 
-// BindDevicetoHost binds the device to the host driver after unbinding from vfio-pci.
-func BindDevicetoHost(bdf, hostDriver, vendorDeviceID string) error {
-	// Unbind from vfio-pci driver
-	unbindDriverPath := fmt.Sprintf(pciDriverUnbindPath, bdf)
+// BindDevicetoHost unbinds the device from vfio-pci driver and binds it to the
+// previously bound driver.
+func BindDevicetoHost(bdf, hostDriver string) error {
+	overrideDriverPath := fmt.Sprintf(pciDriverOverridePath, bdf)
 	api.DeviceLogger().WithFields(logrus.Fields{
+		"device-bdf":           bdf,
+		"driver-override-path": overrideDriverPath,
+	}).Infof("Write %s to driver_override", hostDriver)
+
+	// write previously bound host driver to driver_override to allow the
+	// device to bind to it. This could be empty which means the device will not be
+	// bound to any driver later on.
+	if err := utils.WriteToFile(overrideDriverPath, []byte(hostDriver)); err != nil {
+		return err
+	}
+
+	// Unbind device from vfio-pci driver.
+	unbindDriverPath := fmt.Sprintf(pciDriverUnbindPath, bdf)
+	deviceLogger().WithFields(logrus.Fields{
 		"device-bdf":  bdf,
 		"driver-path": unbindDriverPath,
 	}).Info("Unbinding device from driver")
@@ -326,17 +342,12 @@ func BindDevicetoHost(bdf, hostDriver, vendorDeviceID string) error {
 		return err
 	}
 
-	// To prevent new VFs from binding to VFIO-PCI, remove_id
-	if err := utils.WriteToFile(vfioRemoveIDPath, []byte(vendorDeviceID)); err != nil {
-		return err
-	}
+	deviceLogger().WithFields(logrus.Fields{
+		"device-bdf":         bdf,
+		"drivers-probe-path": driversProbePath,
+	}).Info("Writing bdf to drivers-probe-path")
 
-	// Bind back to host driver
-	bindDriverPath := fmt.Sprintf(pciDriverBindPath, hostDriver)
-	api.DeviceLogger().WithFields(logrus.Fields{
-		"device-bdf":  bdf,
-		"driver-path": bindDriverPath,
-	}).Info("Binding back device to host driver")
-
-	return utils.WriteToFile(bindDriverPath, []byte(bdf))
+	// Invoke drivers_probe so that the driver matching driver_override, in this case
+	// the previous host driver will probe the device.
+	return utils.WriteToFile(driversProbePath, []byte(bdf))
 }
