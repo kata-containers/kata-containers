@@ -45,7 +45,7 @@ vmm-sys-util = "0.11.0"
 virtio-queue = { version = "0.7.0", optional = true }
 vm-memory = { version = "0.10.0", features = ["backend-mmap"] }
 crossbeam-channel = "0.5.6"
-fuse-backend-rs = "0.10.5"
+fuse-backend-rs = { path = "/home/mpiglet/workplace/github.com/yawqi/fuse-backend-rs" }
 
 [dev-dependencies]
 slog-async = "2.7.0"
@@ -64,3 +64,6 @@ virtio-fs = ["dbs-virtio-devices/virtio-fs-pro", "virtio-queue", "atomic-guest-m
 virtio-mem = ["dbs-virtio-devices/virtio-mem", "virtio-queue", "atomic-guest-memory"]
 virtio-balloon = ["dbs-virtio-devices/virtio-balloon", "virtio-queue"]
 vhost-net = ["dbs-virtio-devices/vhost-net"]
+
+[patch.crates-io]
+fuse-backend-rs = { path = "/home/mpiglet/workplace/github.com/yawqi/fuse-backend-rs" }

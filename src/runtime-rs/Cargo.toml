@@ -4,3 +4,5 @@ members = [
     "crates/shim-ctl",
 ]
 
+[patch.crates-io]
+fuse-backend-rs = { path = "/home/mpiglet/workplace/github.com/yawqi/fuse-backend-rs/" }

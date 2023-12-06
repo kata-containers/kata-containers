@@ -312,6 +312,8 @@ impl DragonballInner {
             cache_size: (self.config.shared_fs.virtio_fs_cache_size as u64)
                 .saturating_mul(MB_TO_B as u64),
             xattr: true,
+            uid_mappings: config.uid_mappings.clone(),
+            gid_mappings: config.gid_mappings.clone(),
             ..Default::default()
         };
 
