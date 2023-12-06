@@ -6,13 +6,13 @@
 // Allow OCI spec field names.
 #![allow(non_snake_case)]
 
+use crate::agent;
 use crate::pod;
 use crate::policy;
 use crate::settings;
 use crate::volume;
 
 use log::debug;
-use protocols::agent;
 use std::ffi::OsString;
 use std::path::Path;
 use std::str;
@@ -144,9 +144,8 @@ fn get_empty_dir_mount_and_storage(
             fstype: settings_empty_dir.fstype.clone(),
             options: settings_empty_dir.options.clone(),
             mount_point: format!("{}{}$", &settings_empty_dir.mount_point, &yaml_mount.name),
-            fs_group: protobuf::MessageField::none(),
-            special_fields: ::protobuf::SpecialFields::new(),
-        });
+            fs_group: None,
+            });
     }
 
     let source = if yaml_mount.subPathExpr.is_some() {
@@ -255,9 +254,8 @@ fn get_config_map_mount_and_storage(
             fstype: settings_config_map.fstype.clone(),
             options: settings_config_map.options.clone(),
             mount_point: format!("{}{mount_path_str}$", &settings_config_map.mount_point),
-            fs_group: protobuf::MessageField::none(),
-            special_fields: ::protobuf::SpecialFields::new(),
-        });
+            fs_group: None,
+            });
     }
 
     let file_name = Path::new(&yaml_mount.mountPath).file_name().unwrap();

@@ -6,13 +6,13 @@
 // Allow K8s YAML field names.
 #![allow(non_snake_case)]
 
+use crate::agent;
 use crate::pod;
 use crate::policy;
 use crate::settings;
 use crate::yaml;
 
 use async_trait::async_trait;
-use protocols::agent;
 use std::collections::BTreeMap;
 
 #[derive(Clone, Debug)]

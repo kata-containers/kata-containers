@@ -6,6 +6,7 @@
 // Allow K8s YAML field names.
 #![allow(non_snake_case)]
 
+use crate::agent;
 use crate::obj_meta;
 use crate::pod;
 use crate::policy;
@@ -14,7 +15,6 @@ use crate::yaml;
 
 use async_trait::async_trait;
 use log::debug;
-use protocols::agent;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs::File;
@@ -44,7 +44,6 @@ impl ConfigMap {
         debug!("Reading ConfigMap...");
         let config_map: ConfigMap = serde_yaml::from_reader(File::open(file)?)?;
         debug!("\nRead ConfigMap => {:#?}", config_map);
-
         Ok(config_map)
     }
 

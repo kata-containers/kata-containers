@@ -7,6 +7,7 @@ use clap::Parser;
 use env_logger;
 use log::{debug, info};
 
+mod agent;
 mod config_map;
 mod containerd;
 mod daemon_set;
