@@ -41,15 +41,19 @@ ifeq ($(AGENT_POLICY),yes)
     override EXTRA_RUSTFEATURES += agent-policy
 endif
 
-##VAR PULL_TYPE=default|guest-pull define if agent enables the guest pull image feature
+##VAR PULL_TYPE=default|guest-pull|host-share-image-block define the pull image type:
+##	default: enable all pull image features
+## 	guest-pull: enable guest pull image feature
+##  host-share-image-block: enable host share image blocks feature
 PULL_TYPE ?= default
 ifeq ($(PULL_TYPE),default)
     override EXTRA_RUSTFEATURES += default-pull
 # Enable guest pull image feature of rust build
 else ifeq ($(PULL_TYPE),guest-pull)
     override EXTRA_RUSTFEATURES += guest-pull
+else ifeq ($(PULL_TYPE),host-share-image-block)
+	override EXTRA_RUSTFEATURES += host-share-image-block
 endif
-
 
 include ../../utils.mk
 

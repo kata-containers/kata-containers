@@ -100,6 +100,8 @@ impl StorageHandler for VirtioBlkPciHandler {
 pub struct VirtioBlkCcwHandler {}
 
 impl VirtioBlkCcwHandler {
+    /// Currently this function is only called in dm_verity.rs
+    #[cfg(feature = "host-share-image-block")]
     pub async fn update_device_path(
         _storage: &mut Storage,
         _ctx: &mut StorageContext<'_>,

@@ -97,11 +97,12 @@ lto = true
 
 [features]
 # The default-pull feature would support all pull types, including sharing images by virtio-fs and pulling images in the guest
-default-pull = ["guest-pull"]
+default-pull = ["guest-pull", "host-share-image-block"]
 seccomp = ["rustjail/seccomp"]
 standard-oci-runtime = ["rustjail/standard-oci-runtime"]
 agent-policy = ["http", "openssl", "reqwest"]
 guest-pull = ["image-rs", "openssl"]
+host-share-image-block = ["kata-types/dm-verity"]
 
 [[bin]]
 name = "kata-agent"
