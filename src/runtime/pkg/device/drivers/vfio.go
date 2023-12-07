@@ -268,6 +268,16 @@ func GetBDF(deviceSysStr string) string {
 	return tokens[1]
 }
 
+func GetVFIODevPath(bdf string) (string, error) {
+	// Determine the iommu group that the device belongs to.
+	groupPath, err := os.Readlink(fmt.Sprintf(iommuGroupPath, bdf))
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprintf(vfioDevPath, filepath.Base(groupPath)), nil
+}
+
 // BindDevicetoVFIO binds the device to vfio driver after unbinding from host
 // driver if present.
 // Will be called by a network interface or a generic pcie device.
@@ -306,13 +316,7 @@ func BindDevicetoVFIO(bdf, hostDriver string) (string, error) {
 		return "", err
 	}
 
-	// Determine the iommu group that the device belongs to.
-	groupPath, err := os.Readlink(fmt.Sprintf(iommuGroupPath, bdf))
-	if err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf(vfioDevPath, filepath.Base(groupPath)), nil
+	return GetVFIODevPath(bdf)
 }
 
 // BindDevicetoHost unbinds the device from vfio-pci driver and binds it to the
