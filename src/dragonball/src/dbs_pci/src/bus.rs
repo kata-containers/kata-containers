@@ -179,8 +179,7 @@ impl PciBus {
 
     /// Read from PCI device configuration space.
     pub fn read_config(&self, dev: u32, func: u32, offset: u32, data: &mut [u8]) {
-        if check_pci_cfg_valid(dev, func, offset, data.len())
-        {
+        if check_pci_cfg_valid(dev, func, offset, data.len()) {
             return fill_config_data(data);
         }
 
@@ -194,8 +193,7 @@ impl PciBus {
 
     /// Write to PCI device configuration space.
     pub fn write_config(&self, dev: u32, func: u32, offset: u32, data: &[u8]) {
-        if check_pci_cfg_valid(dev, func, offset, data.len())
-        {
+        if check_pci_cfg_valid(dev, func, offset, data.len()) {
             return;
         }
 
@@ -324,8 +322,8 @@ impl PartialEq for PciBus {
 
 #[inline]
 fn check_pci_cfg_valid(dev: u32, func: u32, offset: u32, data_len: usize) -> bool {
-    dev > 0x1f || func !=0 || offset >= 0x1000 || offset & (data_len - 1 ) as u32 & 0x3 != 0
-} 
+    dev > 0x1f || func != 0 || offset >= 0x1000 || offset & (data_len - 1) as u32 & 0x3 != 0
+}
 
 #[cfg(test)]
 mod tests {
