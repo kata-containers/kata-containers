@@ -272,8 +272,8 @@
                 "^$(svc_name)_SERVICE_PORT=$(ip_p)$",
                 "^$(svc_name)_SERVICE_PORT_$(dns_label)=$(ip_p)$",
                 "^$(svc_name)_PORT=tcp://$(ipv4_a):$(ip_p)$",
-                "^AZURE_CLIENT_ID=[A-Fa-f0-9-]+$",
-                "^AZURE_TENANT_ID=[A-Fa-f0-9-]+$",
+                "^AZURE_CLIENT_ID=[A-Fa-f0-9-]*$",
+                "^AZURE_TENANT_ID=[A-Fa-f0-9-]*$",
                 "^AZURE_FEDERATED_TOKEN_FILE=/var/run/secrets/azure/tokens/azure-identity-token$",
                 "^AZURE_AUTHORITY_HOST=https://login\\.microsoftonline\\.com/$"
             ]
