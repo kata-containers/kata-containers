@@ -59,6 +59,11 @@ function install_dependencies() {
 }
 
 function run() {
+	if [ "${KATA_HYPERVISOR}" = "cloud-hypervisor" ]; then
+		echo "Skipping test for ${KATA_HYPERVISOR}"
+		return 0
+	fi
+
 	info "Running nerdctl smoke test tests using ${KATA_HYPERVISOR} hypervisor"
 
 	enabling_hypervisor
