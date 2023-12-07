@@ -140,7 +140,7 @@ func (endpoint *MacvlanEndpoint) HotAttach(ctx context.Context, s *Sandbox) erro
 	return nil
 }
 
-func (endpoint *MacvlanEndpoint) HotDetach(ctx context.Context, h Hypervisor, netNsCreated bool, netNsPath string) error {
+func (endpoint *MacvlanEndpoint) HotDetach(ctx context.Context, s *Sandbox, netNsCreated bool, netNsPath string) error {
 	if !netNsCreated {
 		return nil
 	}
@@ -154,6 +154,7 @@ func (endpoint *MacvlanEndpoint) HotDetach(ctx context.Context, h Hypervisor, ne
 		networkLogger().WithError(err).Warn("Error un-bridging macvlan ep")
 	}
 
+	h := s.hypervisor
 	if _, err := h.HotplugRemoveDevice(ctx, endpoint, NetDev); err != nil {
 		networkLogger().WithError(err).Error("Error detach macvlan ep")
 		return err

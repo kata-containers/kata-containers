@@ -152,8 +152,36 @@ func (endpoint *PhysicalEndpoint) HotAttach(ctx context.Context, s *Sandbox) err
 }
 
 // HotDetach for physical endpoint not supported yet
-func (endpoint *PhysicalEndpoint) HotDetach(ctx context.Context, h Hypervisor, netNsCreated bool, netNsPath string) error {
-	return fmt.Errorf("PhysicalEndpoint does not support Hot detach")
+func (endpoint *PhysicalEndpoint) HotDetach(ctx context.Context, s *Sandbox, netNsCreated bool, netNsPath string) error {
+	span, _ := physicalTrace(ctx, "HotDetach", endpoint)
+	defer span.End()
+
+	var vfioPath string
+	var err error
+
+	if vfioPath, err = drivers.GetVFIODevPath(endpoint.BDF); err != nil {
+		return err
+	}
+
+	c, err := resCtrl.DeviceToCgroupDeviceRule(vfioPath)
+	if err != nil {
+		return err
+	}
+
+	d := config.DeviceInfo{
+		ContainerPath: vfioPath,
+		DevType:       string(c.Type),
+		Major:         c.Major,
+		Minor:         c.Minor,
+		ColdPlug:      false,
+	}
+
+	device := s.devManager.FindDevice(&d)
+	s.devManager.RemoveDevice(device.DeviceID())
+
+	// We do not need to enter the network namespace to bind back the
+	// physical interface to host driver.
+	return bindNICToHost(endpoint)
 }
 
 // isPhysicalIface checks if an interface is a physical device.

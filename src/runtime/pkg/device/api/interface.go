@@ -94,4 +94,5 @@ type DeviceManager interface {
 	GetDeviceByID(string) Device
 	GetAllDevices() []Device
 	LoadDevices([]config.DeviceState)
+	FindDevice(*config.DeviceInfo) Device
 }
