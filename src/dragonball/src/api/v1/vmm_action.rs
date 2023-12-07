@@ -36,6 +36,8 @@ pub use crate::device_manager::fs_dev_mgr::{
 };
 #[cfg(feature = "virtio-mem")]
 pub use crate::device_manager::mem_dev_mgr::{MemDeviceConfigInfo, MemDeviceError};
+#[cfg(feature = "host-device")]
+use crate::device_manager::vfio_dev_mgr::{HostDeviceConfig, VfioDeviceError, VfioDeviceHostInfo};
 #[cfg(feature = "vhost-net")]
 pub use crate::device_manager::vhost_net_dev_mgr::{
     VhostNetDeviceConfigInfo, VhostNetDeviceError, VhostNetDeviceMgr,
@@ -148,11 +150,16 @@ pub enum VmmActionError {
     /// End tracing Failed.
     #[error("End tracing failed: {0}")]
     EndTracingFailed(#[source] TraceError),
+
+    #[cfg(feature = "host-device")]
+    /// The action `InsertHostDevice` failed either because of bad user input or an internal error.
+    #[error("failed to add VFIO passthrough device: {0:?}")]
+    HostDeviceConfig(#[source] VfioDeviceError),
 }
 
 /// This enum represents the public interface of the VMM. Each action contains various
 /// bits of information (ids, paths, etc.).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum VmmAction {
     /// Configure the boot source of the microVM using `BootSourceConfig`.
     /// This action can only be called before the microVM has booted.
@@ -245,6 +252,10 @@ pub enum VmmAction {
     /// Add a new balloon device or update one that already exists using the `BalloonDeviceConfig`
     /// as input.
     InsertBalloonDevice(BalloonDeviceConfigInfo),
+
+    #[cfg(feature = "host-device")]
+    /// Add a VFIO assignment host device or update that already exists
+    InsertHostDevice(HostDeviceConfig),
 }
 
 /// The enum represents the response sent by the VMM in case of success. The response is either
@@ -371,6 +382,8 @@ impl VmmService {
             VmmAction::InsertBalloonDevice(balloon_cfg) => {
                 self.add_balloon_device(vmm, event_mgr, balloon_cfg)
             }
+            #[cfg(feature = "host-device")]
+            VmmAction::InsertHostDevice(hostdev_cfg) => self.add_vfio_device(vmm, hostdev_cfg),
         };
 
         debug!("send vmm response: {:?}", response);
@@ -811,6 +824,22 @@ impl VmmService {
         FsDeviceMgr::update_device_ratelimiters(vm.device_manager_mut(), config)
             .map(|_| VmmData::Empty)
             .map_err(VmmActionError::FsDevice)
+    }
+
+    #[cfg(feature = "host-device")]
+    fn add_vfio_device(&self, vmm: &mut Vmm, config: HostDeviceConfig) -> VmmRequestResult {
+        let vm = vmm.get_vm_mut().ok_or(VmmActionError::HostDeviceConfig(
+            VfioDeviceError::InvalidVMID,
+        ))?;
+        info!("add_vfio_device: {:?}", config);
+
+        vm.device_manager()
+            .vfio_manager
+            .lock()
+            .unwrap()
+            .insert_device(config.into())
+            .map_err(VmmActionError::HostDeviceConfig)?;
+        Ok(VmmData::Empty)
     }
 
     #[cfg(feature = "hotplug")]

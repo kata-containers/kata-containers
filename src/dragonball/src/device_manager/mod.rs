@@ -107,6 +107,11 @@ use self::balloon_dev_mgr::BalloonDeviceMgr;
 pub mod vhost_net_dev_mgr;
 #[cfg(feature = "vhost-net")]
 use self::vhost_net_dev_mgr::VhostNetDeviceMgr;
+#[cfg(feature = "host-device")]
+/// Device manager for PCI/MMIO VFIO devices.
+pub mod vfio_dev_mgr;
+#[cfg(feature = "host-device")]
+use self::vfio_dev_mgr::VfioDeviceMgr;
 
 #[cfg(feature = "vhost-user-net")]
 /// Device manager for vhost-user-net devices.
@@ -273,6 +278,8 @@ pub struct DeviceOpContext {
     upcall_client: Option<Arc<UpcallClient<DevMgrService>>>,
     #[cfg(feature = "dbs-virtio-devices")]
     virtio_devices: Vec<Arc<DbsMmioV2Device>>,
+    #[cfg(feature = "host-device")]
+    vfio_manager: Option<Arc<Mutex<VfioDeviceMgr>>>,
     vm_config: Option<VmConfigInfo>,
     shared_info: Arc<RwLock<InstanceInfo>>,
 }
@@ -313,6 +320,8 @@ impl DeviceOpContext {
             virtio_devices: Vec::new(),
             vm_config,
             shared_info,
+            #[cfg(feature = "host-device")]
+            vfio_manager: None,
         }
     }
 
@@ -432,6 +441,13 @@ impl DeviceOpContext {
         _callback: Option<()>,
     ) -> Result<()> {
         Err(DeviceMgrError::InvalidOperation)
+    }
+}
+
+#[cfg(feature = "host-device")]
+impl DeviceOpContext {
+    pub(crate) fn set_vfio_manager(&mut self, vfio_device_mgr: Arc<Mutex<VfioDeviceMgr>>) {
+        self.vfio_manager = Some(vfio_device_mgr);
     }
 }
 
@@ -555,6 +571,8 @@ pub struct DeviceManager {
 
     #[cfg(feature = "vhost-user-net")]
     vhost_user_net_manager: VhostUserNetDeviceMgr,
+    #[cfg(feature = "host-device")]
+    pub(crate) vfio_manager: Arc<Mutex<VfioDeviceMgr>>,
 }
 
 impl DeviceManager {
@@ -571,7 +589,7 @@ impl DeviceManager {
             io_lock: Arc::new(Mutex::new(())),
             irq_manager: Arc::new(KvmIrqManager::new(vm_fd.clone())),
             res_manager,
-            vm_fd,
+            vm_fd: vm_fd.clone(),
             logger: logger.new(slog::o!()),
             shared_info,
 
@@ -595,6 +613,8 @@ impl DeviceManager {
             vhost_net_manager: VhostNetDeviceMgr::default(),
             #[cfg(feature = "vhost-user-net")]
             vhost_user_net_manager: VhostUserNetDeviceMgr::default(),
+            #[cfg(feature = "host-device")]
+            vfio_manager: Arc::new(Mutex::new(VfioDeviceMgr::new(vm_fd, logger))),
         }
     }
 
@@ -775,6 +795,14 @@ impl DeviceManager {
             .attach_devices(&mut ctx)
             .map_err(StartMicroVmError::VhostUserNetDeviceError)?;
 
+        #[cfg(feature = "host-device")]
+        {
+            // It is safe bacause we don't expect poison lock.
+            let mut vfio_manager = self.vfio_manager.lock().unwrap();
+            vfio_manager.attach_devices(&mut ctx)?;
+            ctx.set_vfio_manager(self.vfio_manager.clone())
+        }
+
         // Ensure that all devices are attached before kernel boot args are
         // generated.
         ctx.generate_kernel_boot_args(kernel_config)
@@ -792,8 +820,17 @@ impl DeviceManager {
     }
 
     /// Start all registered devices when booting the associated virtual machine.
-    pub fn start_devices(&mut self) -> std::result::Result<(), StartMicroVmError> {
-        // TODO: add vfio support here. issue #4589.
+    pub fn start_devices(
+        &mut self,
+        vm_as: &GuestAddressSpaceImpl,
+    ) -> std::result::Result<(), StartMicroVmError> {
+        // It is safe because we don't expect poison lock.
+        #[cfg(feature = "host-device")]
+        self.vfio_manager
+            .lock()
+            .unwrap()
+            .start_devices(vm_as)
+            .map_err(StartMicroVmError::RegisterDMAAddress)?;
         Ok(())
     }
 
@@ -1202,6 +1239,8 @@ mod tests {
                 vhost_net_manager: VhostNetDeviceMgr::default(),
                 #[cfg(feature = "vhost-user-net")]
                 vhost_user_net_manager: VhostUserNetDeviceMgr::default(),
+                #[cfg(feature = "host-device")]
+                vfio_manager: Arc::new(Mutex::new(VfioDeviceMgr::new(vm_fd, &logger))),
 
                 logger,
                 shared_info,
