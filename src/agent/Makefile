@@ -41,6 +41,14 @@ ifeq ($(AGENT_POLICY),yes)
     override EXTRA_RUSTFEATURES += agent-policy
 endif
 
+##VAR PULL_TYPE=default|host-share define if agent enables the host share image with dm-verity feature
+PULL_TYPE ?= default
+
+# Enable guest pull image feature of rust build
+ifeq ($(PULL_TYPE),host-share)
+    override EXTRA_RUSTFEATURES += dm-verity
+endif
+
 include ../../utils.mk
 
 ifeq ($(ARCH), ppc64le)

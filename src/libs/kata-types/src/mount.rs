@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+#[cfg(feature = "dm-verity")]
 use crate::dmverity::DmVerityInfo;
 use anyhow::{anyhow, Context, Error, Result};
 use std::collections::hash_map::Entry;
@@ -241,6 +242,7 @@ pub struct KataVirtualVolume {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nydus_image: Option<NydusImageVolume>,
     /// DmVerity: configuration information
+    #[cfg(feature = "dm-verity")]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dm_verity: Option<DmVerityInfo>,
 }
