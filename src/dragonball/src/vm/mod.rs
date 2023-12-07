@@ -494,7 +494,7 @@ impl Vm {
         )?;
 
         info!(self.logger, "VM: start devices");
-        self.device_manager.start_devices()?;
+        self.device_manager.start_devices(vm_as)?;
 
         info!(self.logger, "VM: initializing devices done");
         Ok(())
