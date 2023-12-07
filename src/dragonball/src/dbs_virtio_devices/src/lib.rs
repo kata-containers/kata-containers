@@ -258,7 +258,7 @@ pub enum Error {
     #[cfg(feature = "virtio-balloon")]
     #[error("Virtio-balloon error: {0}")]
     VirtioBalloonError(#[from] balloon::BalloonError),
-    
+
     #[cfg(feature = "vhost")]
     /// Error from the vhost subsystem
     #[error("Vhost error: {0:?}")]
