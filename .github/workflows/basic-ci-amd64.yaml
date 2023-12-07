@@ -293,6 +293,7 @@ jobs:
           - clh
           - dragonball
           - qemu
+          - cloud-hypervisor
     runs-on: garm-ubuntu-2304-smaller
     env:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
