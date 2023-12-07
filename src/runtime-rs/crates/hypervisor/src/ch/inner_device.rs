@@ -6,7 +6,6 @@
 
 use super::inner::CloudHypervisorInner;
 use crate::device::DeviceType;
-use crate::BlockDevice;
 use crate::HybridVsockDevice;
 use crate::NetworkConfig;
 use crate::NetworkDevice;
@@ -15,6 +14,7 @@ use crate::ShareFsConfig;
 use crate::ShareFsDevice;
 use crate::VfioDevice;
 use crate::VmmState;
+use crate::{BlockConfig, BlockDevice};
 use anyhow::{anyhow, Context, Result};
 use ch_config::ch_api::cloud_hypervisor_vm_device_add;
 use ch_config::ch_api::{
@@ -315,20 +315,11 @@ impl CloudHypervisorInner {
             .ok_or("missing socket")
             .map_err(|e| anyhow!(e))?;
 
-        let num_queues: usize = DEFAULT_DISK_QUEUES;
-        let queue_size: u16 = DEFAULT_DISK_QUEUE_SIZE;
-
-        let block_config = DiskConfig {
-            path: Some(device.config.path_on_host.as_str().into()),
-            readonly: device.config.is_readonly,
-            num_queues,
-            queue_size,
-            ..Default::default()
-        };
+        let disk_config = DiskConfig::try_from(device.config)?;
 
         let response = cloud_hypervisor_vm_blockdev_add(
             socket.try_clone().context("failed to clone socket")?,
-            block_config,
+            disk_config,
         )
         .await?;
 
@@ -415,6 +406,23 @@ impl TryFrom<NetworkConfig> for NetConfig {
         Err(anyhow!("Missing mac address for network device"))
     }
 }
+
+impl TryFrom<BlockConfig> for DiskConfig {
+    type Error = anyhow::Error;
+
+    fn try_from(blkcfg: BlockConfig) -> Result<Self, Self::Error> {
+        let disk_config: DiskConfig = DiskConfig {
+            path: Some(blkcfg.path_on_host.as_str().into()),
+            readonly: blkcfg.is_readonly,
+            num_queues: DEFAULT_DISK_QUEUES,
+            queue_size: DEFAULT_DISK_QUEUE_SIZE,
+            ..Default::default()
+        };
+
+        Ok(disk_config)
+    }
+}
+
 #[derive(Debug)]
 pub struct ShareFsSettings {
     cfg: ShareFsConfig,
