@@ -38,6 +38,7 @@ pub(crate) mod utils;
 pub mod capabilities;
 
 /// Constants and data types related to dm-verity device
+#[cfg(feature = "dm-verity")]
 pub mod dmverity;
 
 /// Common error codes.

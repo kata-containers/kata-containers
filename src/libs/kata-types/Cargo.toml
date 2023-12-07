@@ -15,9 +15,9 @@ bitmask-enum = "2.1.0"
 anyhow = "1.0"
 base64 = "0.13.0"
 byte-unit = "5.0.3"
-devicemapper = "0.34.1"
+devicemapper = { version = "0.34.1", optional = true }
 glob = "0.3.0"
-hex = "0.4.3"
+hex = { version = "0.4.3", optional = true }
 lazy_static = "1.4.0"
 num_cpus = "1.13.1"
 regex = "1.5.6"
@@ -42,3 +42,4 @@ loopdev = "0.4.0"
 [features]
 default = []
 enable-vendor = []
+dm-verity = ["devicemapper", "hex"]
