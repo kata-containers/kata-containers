@@ -21,7 +21,18 @@ function rebase_atop_of_the_latest_target_branch() {
 		echo "Rebasing atop of the latest ${TARGET_BRANCH}"
 		# Recover from any previous rebase left halfway
 		git rebase --abort 2> /dev/null || true
-		git rebase origin/${TARGET_BRANCH}
+		if ! git rebase origin/${TARGET_BRANCH}; then
+			# if GITHUB_WORKSPACE is defined and an architecture is not equal to x86_64
+			# (mostly self-hosted runners), then remove the repository
+			if [ -n "${GITHUB_WORKSPACE}" ] && [ "$(uname -m)" != "x86_64" ]; then
+				echo "Rebase failed, cleaning up a repository for self-hosted runners and exiting"
+				cd "${GITHUB_WORKSPACE}"/..
+				sudo rm -rf "${GITHUB_WORKSPACE}"
+			else
+				echo "Rebase failed, exiting"
+			fi
+			exit 1
+		fi
 	fi
 }
 
