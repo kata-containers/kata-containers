@@ -27,7 +27,7 @@ type Endpoint interface {
 	Attach(context.Context, *Sandbox) error
 	Detach(ctx context.Context, netNsCreated bool, netNsPath string) error
 	HotAttach(context.Context, *Sandbox) error
-	HotDetach(ctx context.Context, h Hypervisor, netNsCreated bool, netNsPath string) error
+	HotDetach(ctx context.Context, s *Sandbox, netNsCreated bool, netNsPath string) error
 
 	save() persistapi.NetworkEndpoint
 	load(persistapi.NetworkEndpoint)

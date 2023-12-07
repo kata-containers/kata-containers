@@ -265,7 +265,7 @@ func (n *LinuxNetwork) removeSingleEndpoint(ctx context.Context, s *Sandbox, end
 	// if required.
 	networkLogger().WithField("endpoint-type", endpoint.Type()).Info("Detaching endpoint")
 	if hotplug && s != nil {
-		if err := endpoint.HotDetach(ctx, s.hypervisor, n.netNSCreated, n.netNSPath); err != nil {
+		if err := endpoint.HotDetach(ctx, s, n.netNSCreated, n.netNSPath); err != nil {
 			return err
 		}
 	} else {

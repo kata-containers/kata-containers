@@ -112,7 +112,7 @@ func (endpoint *VhostUserEndpoint) HotAttach(ctx context.Context, s *Sandbox) er
 }
 
 // HotDetach for vhostuser endpoint not supported yet
-func (endpoint *VhostUserEndpoint) HotDetach(ctx context.Context, h Hypervisor, netNsCreated bool, netNsPath string) error {
+func (endpoint *VhostUserEndpoint) HotDetach(ctx context.Context, s *Sandbox, netNsCreated bool, netNsPath string) error {
 	return fmt.Errorf("VhostUserEndpoint does not support Hot detach")
 }
 
