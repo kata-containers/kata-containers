@@ -6,6 +6,8 @@
 use super::VhostError;
 
 pub mod connection;
+#[cfg(feature = "vhost-user-fs")]
+pub mod fs;
 
 #[cfg(test)]
 mod test_utils;

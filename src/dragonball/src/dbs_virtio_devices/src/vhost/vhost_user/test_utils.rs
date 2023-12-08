@@ -610,7 +610,6 @@ impl<T: Req> AsRawFd for Endpoint<T> {
 pub(crate) fn negotiate_slave(
     slave: &mut Endpoint<MasterReq>,
     pfeatures: VhostUserProtocolFeatures,
-    use_ali_feature: bool,
     has_protocol_mq: bool,
     queue_num: u64,
 ) {
