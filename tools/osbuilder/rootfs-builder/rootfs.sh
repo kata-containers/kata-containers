@@ -40,7 +40,17 @@ TARGET_ARCH=${TARGET_ARCH:-$(uname -m)}
 ARCH=${ARCH:-$(uname -m)}
 [ "${TARGET_ARCH}" == "aarch64" ] && TARGET_ARCH=arm64
 TARGET_OS=${TARGET_OS:-linux}
-[ "${CROSS_BUILD}" == "true" ] && BUILDX=buildx && PLATFORM="--platform=${TARGET_OS}/${TARGET_ARCH}"
+stripping_tool="strip"
+if [ "${CROSS_BUILD}" == "true" ]; then
+	BUILDX=buildx
+	PLATFORM="--platform=${TARGET_OS}/${TARGET_ARCH}"
+	if command -v "${TARGET_ARCH}-linux-gnu-strip" >/dev/null; then
+		stripping_tool="${TARGET_ARCH}-linux-gnu-strip"
+	else
+		die "Could not find ${TARGET_ARCH}-linux-gnu-strip for cross build"
+	fi
+fi
+
 
 handle_error() {
 	local exit_code="${?}"
@@ -457,6 +467,8 @@ build_rootfs_distro()
 			--env SECCOMP="${SECCOMP}" \
 			--env SELINUX="${SELINUX}" \
 			--env DEBUG="${DEBUG}" \
+			--env CROSS_BUILD="${CROSS_BUILD}" \
+			--env TARGET_ARCH="${TARGET_ARCH}" \
 			--env HOME="/root" \
 			--env AGENT_POLICY="${AGENT_POLICY}" \
 			-v "${repo_dir}":"/kata-containers" \
@@ -619,7 +631,7 @@ EOF
 		make clean
 		make LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP} AGENT_POLICY=${AGENT_POLICY}
 		make install DESTDIR="${ROOTFS_DIR}" LIBC=${LIBC} INIT=${AGENT_INIT}
-		strip ${ROOTFS_DIR}/usr/bin/kata-agent
+		${stripping_tool} ${ROOTFS_DIR}/usr/bin/kata-agent
 		if [ "${SECCOMP}" == "yes" ]; then
 			rm -rf "${libseccomp_install_dir}" "${gperf_install_dir}"
 		fi
@@ -664,7 +676,7 @@ EOF
 			local opa_bin="${ROOTFS_DIR}${opa_bin_dir}/opa"
 			info "Installing OPA binary to ${opa_bin}"
 			install -D -o root -g root -m 0755 opa -T "${opa_bin}"
-			strip ${ROOTFS_DIR}${opa_bin_dir}/opa
+			${stripping_tool} ${ROOTFS_DIR}${opa_bin_dir}/opa
 		else
 			info "OPA binary already exists in ${opa_bin_dir}"
 		fi

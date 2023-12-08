@@ -75,6 +75,7 @@ docker build -q -t build-kata-deploy \
 	--build-arg http_proxy="${http_proxy}" \
 	--build-arg https_proxy="${https_proxy}" \
 	--build-arg HOST_DOCKER_GID=${docker_gid} \
+	--build-arg ARCH="${ARCH}" \
 	"${script_dir}/dockerbuild/"
 
 CI="${CI:-}"
@@ -119,6 +120,9 @@ docker run \
 	--env VIRTIOFSD_CONTAINER_BUILDER="${VIRTIOFSD_CONTAINER_BUILDER}" \
 	--env MEASURED_ROOTFS="${MEASURED_ROOTFS}" \
 	--env USE_CACHE="${USE_CACHE}" \
+	--env AA_KBC="${AA_KBC:-}" \
+	--env HKD_PATH="$(realpath "${HKD_PATH:-}" 2> /dev/null || true)" \
+	--env SE_KERNEL_PARAMS="${SE_KERNEL_PARAMS:-}" \
 	--env CROSS_BUILD="${CROSS_BUILD}" \
 	--env TARGET_ARCH="${TARGET_ARCH}" \
 	--env ARCH="${ARCH}" \
