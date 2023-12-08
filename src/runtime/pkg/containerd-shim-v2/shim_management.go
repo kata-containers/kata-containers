@@ -38,6 +38,7 @@ const (
 	DirectVolumeStatUrl   = "/direct-volume/stats"
 	DirectVolumeResizeUrl = "/direct-volume/resize"
 	IPTablesUrl           = "/iptables"
+	PolicyUrl             = "/policy"
 	IP6TablesUrl          = "/ip6tables"
 	MetricsUrl            = "/metrics"
 )
@@ -199,6 +200,32 @@ func (s *service) serveVolumeResize(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(""))
 }
 
+func (s *service) policyHandler(w http.ResponseWriter, r *http.Request) {
+	logger := shimMgtLog.WithFields(logrus.Fields{"handler": "policy"})
+
+	switch r.Method {
+	case http.MethodPut:
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			logger.WithError(err).Error("failed to read request body")
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+			return
+		}
+
+		if err = s.sandbox.SetPolicy(context.Background(), string(body)); err != nil {
+			logger.WithError(err).Error("failed to set policy")
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(err.Error()))
+		}
+		w.Write([]byte(""))
+
+	default:
+		w.WriteHeader(http.StatusNotImplemented)
+		return
+	}
+}
+
 func (s *service) ip6TablesHandler(w http.ResponseWriter, r *http.Request) {
 	s.genericIPTablesHandler(w, r, true)
 }
@@ -266,6 +293,7 @@ func (s *service) startManagementServer(ctx context.Context, ociSpec *specs.Spec
 	m.Handle(DirectVolumeStatUrl, http.HandlerFunc(s.serveVolumeStats))
 	m.Handle(DirectVolumeResizeUrl, http.HandlerFunc(s.serveVolumeResize))
 	m.Handle(IPTablesUrl, http.HandlerFunc(s.ipTablesHandler))
+	m.Handle(PolicyUrl, http.HandlerFunc(s.policyHandler))
 	m.Handle(IP6TablesUrl, http.HandlerFunc(s.ip6TablesHandler))
 	s.mountPprofHandle(m, ociSpec)
 
