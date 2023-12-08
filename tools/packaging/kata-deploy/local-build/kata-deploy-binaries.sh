@@ -35,6 +35,7 @@ readonly virtiofsd_builder="${static_build_dir}/virtiofsd/build.sh"
 readonly nydus_builder="${static_build_dir}/nydus/build.sh"
 readonly rootfs_builder="${repo_root_dir}/tools/packaging/guest-image/build_image.sh"
 readonly tools_builder="${static_build_dir}/tools/build.sh"
+readonly se_image_builder="${repo_root_dir}/tools/packaging/guest-image/build_se_image.sh"
 
 ARCH=${ARCH:-$(uname -m)}
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
@@ -85,6 +86,7 @@ options:
 	agent
 	agent-opa
 	agent-ctl
+	boot-image-se
 	cloud-hypervisor
 	cloud-hypervisor-glibc
 	firecracker
@@ -256,6 +258,11 @@ install_initrd_mariner() {
 install_initrd_sev() {
 	export AGENT_POLICY=yes
 	install_initrd "sev"
+}
+
+install_se_image() {
+	info "Create IBM SE image configured with AA_KBC=${AA_KBC}"
+	"${se_image_builder}" --destdir="${destdir}"
 }
 
 #Install kernel component helper
@@ -762,6 +769,8 @@ handle_build() {
 	agent-opa) install_agent_opa ;;
 
 	agent-ctl) install_agent_ctl ;;
+	
+	boot-image-se) install_se_image ;;
 
 	cloud-hypervisor) install_clh ;;
 
