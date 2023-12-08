@@ -302,6 +302,18 @@ message CreateSandboxRequest {
 	string guest_hook_path = 6;
 	// This field is the list of kernel modules to be loaded in the guest kernel.
 	repeated KernelModule kernel_modules = 7;
+	// This field indicates whether we need to create a shared user namespace
+	// for this sandbox. All containers created will join this shared
+	// user namespace.
+	bool shared_userns = 8;
+	// This field indicates whether we need to create a shared network namespace
+	// for this sandbox. All containers created will join this shared
+	// network namespace. If shared_userns is false, this will always be false.
+	bool shared_netns = 9;
+	// This field is for setting up the uidmappings of the shared userns.
+	repeated LinuxIDMapping uid_mappings = 10;
+	// This field is for setting up the gidmappings of the shared userns.
+	repeated LinuxIDMapping gid_mappings = 11;
 }
 
 message DestroySandboxRequest {

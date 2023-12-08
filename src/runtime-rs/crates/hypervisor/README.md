@@ -44,7 +44,7 @@ async fn try_init(&mut self, spec: &oci::Spec) -> Result<()> {、
 
 ### new_instance
 
-This function will create a runtime_instance which include the operations for container and sandbox.  At the same time, a hypervisor instance will be created.  QEMU instance will be created here as well, and set the hypervisor config file
+This function will create a runtime_instance which include the operations for container and sandbox. At the same time, a hypervisor instance will be created. QEMU instance will be created here as well, and set the hypervisor config file
 ```rust
 async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>> {
     let hypervisor_name = &toml_config.runtime.hypervisor_name;
@@ -80,11 +80,11 @@ pub trait Hypervisor: Send + Sync {
     async fn pause_vm(&self) -> Result<()>;
     async fn save_vm(&self) -> Result<()>;
     async fn resume_vm(&self) -> Result<()>;
-    
+
     // device manager
     async fn add_device(&self, device: device::Device) -> Result<()>;
     async fn remove_device(&self, device: device::Device) -> Result<()>;
-    
+
     // utils
     async fn get_agent_socket(&self) -> Result<String>;
     async fn disconnect(&self);
@@ -95,7 +95,7 @@ pub trait Hypervisor: Send + Sync {
     async fn check(&self) -> Result<()>;
     async fn get_jailer_root(&self) -> Result<String>;
     async fn save_state(&self) -> Result<HypervisorState>;
-   }
+}
 ```
 In current design, VM will be started in the following steps.
 

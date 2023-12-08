@@ -101,6 +101,8 @@ impl VirtSandbox {
         &self,
         id: &str,
         network_env: SandboxNetworkEnv,
+        uid_mappings: Vec<(u32, u32, u32)>,
+        gid_mappings: Vec<(u32, u32, u32)>,
     ) -> Result<Vec<ResourceConfig>> {
         let mut resource_configs = vec![];
 
@@ -119,8 +121,10 @@ impl VirtSandbox {
         }
 
         // prepare sharefs device config
-        let virtio_fs_config =
-            ResourceConfig::ShareFs(self.hypervisor.hypervisor_config().await.shared_fs);
+        let mut virtio_fs_info = self.hypervisor.hypervisor_config().await.shared_fs;
+        virtio_fs_info.virtio_fs_uid_mappings = uid_mappings;
+        virtio_fs_info.virtio_fs_gid_mappings = gid_mappings;
+        let virtio_fs_config = ResourceConfig::ShareFs(virtio_fs_info);
         resource_configs.push(virtio_fs_config);
 
         // prepare VM rootfs device config
@@ -282,10 +286,37 @@ impl Sandbox for VirtSandbox {
             .await
             .context("prepare vm")?;
 
+        let mut shared_userns = false;
+        let mut shared_netns = false;
+        let mut uid_mappings = vec![];
+        let mut gid_mappings = vec![];
+        let mut virtio_fs_uid_mappings = vec![];
+        let mut virtio_fs_gid_mappings = vec![];
+        if let Some(linux) = &spec.linux {
+            for ns in &linux.namespaces {
+                if ns.r#type == oci::USERNAMESPACE {
+                    shared_userns = true;
+                }
+                if ns.r#type == oci::NETWORKNAMESPACE {
+                    shared_netns = true;
+                }
+            };
+
+            uid_mappings = linux.uid_mappings.clone();
+            gid_mappings = linux.gid_mappings.clone();
+            for uid_mapping in &linux.uid_mappings {
+                virtio_fs_uid_mappings.push((uid_mapping.container_id, uid_mapping.host_id, uid_mapping.size));
+            }
+            for gid_mapping in &linux.gid_mappings {
+                virtio_fs_gid_mappings.push((gid_mapping.container_id, gid_mapping.host_id, gid_mapping.size));
+            }
+        };
+        shared_netns &= shared_userns;
+
         // generate device and setup before start vm
         // should after hypervisor.prepare_vm
         let resources = self
-            .prepare_for_start_sandbox(id, network_env.clone())
+            .prepare_for_start_sandbox(id, network_env.clone(), virtio_fs_uid_mappings, virtio_fs_gid_mappings)
             .await?;
 
         self.resource_manager
@@ -367,6 +398,10 @@ impl Sandbox for VirtSandbox {
                 .security_info
                 .guest_hook_path,
             kernel_modules,
+            shared_userns,
+            shared_netns,
+            uid_mappings,
+            gid_mappings,
         };
 
         self.agent

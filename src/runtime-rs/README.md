@@ -51,7 +51,7 @@ The `runtime-rs` directory contains some crates in the crates directory that com
 `shim` is the entry point of the containerd shim process, it implements containerd shim's [binary protocol](https://github.com/containerd/containerd/tree/v1.6.8/runtime/v2#commands):
 
 - start: start a new shim process
-- delete: delete exist a shim process
+- delete: delete an existing shim process
 - run: run ttRPC service in shim
 
 containerd will launch a shim process and the shim process will serve as a ttRPC server to provide shim service through `TaskService` from `service` crate.

@@ -62,7 +62,7 @@ impl VolumeResource {
     ) -> Result<Vec<Arc<dyn Volume>>> {
         let mut volumes: Vec<Arc<dyn Volume>> = vec![];
         let oci_mounts = &spec.mounts;
-        info!(sl!(), " oci mount is : {:?}", oci_mounts.clone());
+        info!(sl!(), "oci mounts are: {:?}", oci_mounts.clone());
         // handle mounts
         for m in oci_mounts {
             let read_only = m.options.iter().any(|opt| opt == "ro");

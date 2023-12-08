@@ -25,6 +25,7 @@ use nix::sched::{setns, unshare, CloneFlags};
 use nix::sys::stat::Mode;
 use oci::{Hook, Hooks};
 use protocols::agent::{OnlineCPUMemRequest, SharedMount};
+use protocols::oci::LinuxIDMapping;
 use regex::Regex;
 use rustjail::cgroups::{self as rustjail_cgroups, DevicesCgroupInfo};
 use rustjail::container::BaseContainer;
@@ -38,7 +39,7 @@ use tracing::instrument;
 
 use crate::linux_abi::*;
 use crate::mount::{get_mount_fs_type, TYPE_ROOTFS};
-use crate::namespace::Namespace;
+use crate::namespace::{Namespace, setup_in_userns};
 use crate::netlink::Handle;
 use crate::network::Network;
 use crate::pci;
@@ -107,6 +108,8 @@ pub struct Sandbox {
     pub uevent_watchers: Vec<Option<UeventWatcher>>,
     pub shared_utsns: Namespace,
     pub shared_ipcns: Namespace,
+    pub shared_userns: Option<Namespace>,
+    pub shared_netns: Option<Namespace>,
     pub sandbox_pidns: Option<Namespace>,
     pub storages: HashMap<String, StorageState>,
     pub running: bool,
@@ -141,6 +144,8 @@ impl Sandbox {
             uevent_watchers: Vec::new(),
             shared_utsns: Namespace::new(&logger),
             shared_ipcns: Namespace::new(&logger),
+            shared_userns: None,
+            shared_netns: None,
             sandbox_pidns: None,
             storages: HashMap::new(),
             running: false,
@@ -227,6 +232,25 @@ impl Sandbox {
             .context("setup persistent UTS namespace")?;
 
         Ok(true)
+    }
+
+    #[instrument]
+    pub async fn setup_shared_namespaces_in_userns(&mut self, shared_netns: bool, uid_mappings: Vec<LinuxIDMapping>, gid_mappings: Vec<LinuxIDMapping>) -> Result<()> {
+        self.shared_userns = Some(Namespace::new(&self.logger).get_user(uid_mappings, gid_mappings));
+        self.shared_ipcns = Namespace::new(&self.logger).get_ipc();
+        self.shared_utsns = Namespace::new(&self.logger).get_uts(self.hostname.as_str());
+
+        let mut nses = vec![&mut self.shared_ipcns, &mut self.shared_utsns];
+        if shared_netns {
+            self.shared_netns = Some(Namespace::new(&self.logger).get_net());
+            nses.push(self.shared_netns.as_mut().unwrap());
+        }
+
+        setup_in_userns(&self.logger, self.shared_userns.as_mut().unwrap(), nses)
+            .await
+            .context("setup namespaces within userns")?;
+
+        Ok(())
     }
 
     #[instrument]

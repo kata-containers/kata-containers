@@ -107,6 +107,8 @@ pub async fn handle_block_volume(
         r#type: storage.fs_type.clone(),
         source: guest_path,
         options: m.options.clone(),
+        uid_mappings: m.uid_mappings.clone(),
+        gid_mappings: m.gid_mappings.clone(),
     };
 
     Ok((storage, mount, device_id))

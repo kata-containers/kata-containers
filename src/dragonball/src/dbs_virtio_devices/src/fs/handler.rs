@@ -681,6 +681,8 @@ pub mod tests {
             new_dummy_handler_helper(),
             epoll_manager,
             Some(rate_limiter),
+            vec![],
+            vec![],
         )
         .unwrap();
 

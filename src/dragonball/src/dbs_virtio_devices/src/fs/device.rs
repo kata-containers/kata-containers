@@ -19,7 +19,7 @@ use caps::{CapSet, Capability};
 use dbs_device::resources::{DeviceResources, ResourceConstraint};
 use dbs_utils::epoll_manager::{EpollManager, SubscriberId};
 use dbs_utils::rate_limiter::{BucketUpdate, RateLimiter};
-use fuse_backend_rs::api::{Vfs, VfsIndex, VfsOptions};
+use fuse_backend_rs::api::{Vfs, VfsIndex, VfsOptions, vfs::VfsIdMapping};
 use fuse_backend_rs::passthrough::{CachePolicy, Config as PassthroughConfig, PassthroughFs};
 use kvm_bindings::kvm_userspace_memory_region;
 use kvm_ioctls::VmFd;
@@ -146,6 +146,8 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
         handler: Box<dyn VirtioRegionHandler>,
         epoll_mgr: EpollManager,
         rate_limiter: Option<RateLimiter>,
+        uid_mappings: Vec<(u32, u32, u32)>,
+        gid_mappings: Vec<(u32, u32, u32)>,
     ) -> Result<Self> {
         info!(
             "{}: tag {} req_num_queues {} queue_size {} cache_size {} cache_policy {} thread_pool_size {} writeback_cache {} no_open {} killpriv_v2 {} xattr {} drop_sys_resource {} no_readdir {}",
@@ -204,11 +206,28 @@ impl<AS: GuestAddressSpace> VirtioFs<AS> {
             }
         }
 
+        let uid_mappings = uid_mappings
+            .into_iter()
+            .map(
+                |(internal_id, external_id, size)|
+                VfsIdMapping::new(internal_id, external_id, size)
+            )
+            .collect();
+        let gid_mappings = gid_mappings
+            .into_iter()
+            .map(
+                |(internal_id, external_id, size)|
+                VfsIdMapping::new(internal_id, external_id, size)
+            )
+            .collect();
+
         let vfs_opts = VfsOptions {
             no_writeback: !writeback_cache,
             no_open,
             killpriv_v2,
             no_readdir,
+            uid_mappings,
+            gid_mappings,
             ..VfsOptions::default()
         };
 
@@ -1090,6 +1109,8 @@ pub mod tests {
             new_dummy_handler_helper(),
             epoll_manager.clone(),
             Some(rate_limiter),
+            vec![],
+            vec![],
         );
         assert!(res.is_err());
 
@@ -1111,6 +1132,8 @@ pub mod tests {
             new_dummy_handler_helper(),
             epoll_manager,
             Some(rate_limiter),
+            vec![],
+            vec![],
         );
         assert!(res.is_err());
     }
@@ -1204,6 +1227,8 @@ pub mod tests {
                 new_dummy_handler_helper(),
                 epoll_manager.clone(),
                 Some(rate_limiter),
+                vec![],
+                vec![],
             )
             .unwrap();
 
@@ -1246,6 +1271,8 @@ pub mod tests {
                 new_dummy_handler_helper(),
                 epoll_manager,
                 Some(rate_limiter),
+                vec![],
+                vec![],
             )
             .unwrap();
 
@@ -1686,6 +1713,8 @@ pub mod tests {
             new_dummy_handler_helper(),
             epoll_manager,
             Some(rate_limiter),
+            vec![],
+            vec![],
         )
         .unwrap();
         let kvm = Kvm::new().unwrap();
@@ -1729,6 +1758,8 @@ pub mod tests {
             new_dummy_handler_helper(),
             epoll_manager,
             Some(rate_limiter),
+            vec![],
+            vec![],
         )
         .unwrap();
         let mut requirements = vec![
@@ -1772,6 +1803,8 @@ pub mod tests {
             new_dummy_handler_helper(),
             epoll_manager,
             Some(rate_limiter),
+            vec![],
+            vec![],
         )
         .unwrap();
         let kvm = Kvm::new().unwrap();

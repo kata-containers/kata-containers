@@ -29,6 +29,8 @@ lazy_static! {
 #[derive(Debug, Clone)]
 pub struct ShareVirtioFsInlineConfig {
     pub id: String,
+    pub uid_mappings: Vec<(u32, u32, u32)>,
+    pub gid_mappings: Vec<(u32, u32, u32)>,
 }
 
 pub struct ShareVirtioFsInline {
@@ -38,9 +40,13 @@ pub struct ShareVirtioFsInline {
 }
 
 impl ShareVirtioFsInline {
-    pub(crate) fn new(id: &str, _config: &SharedFsInfo) -> Result<Self> {
+    pub(crate) fn new(id: &str, config: &SharedFsInfo) -> Result<Self> {
         Ok(Self {
-            config: ShareVirtioFsInlineConfig { id: id.to_string() },
+            config: ShareVirtioFsInlineConfig {
+                id: id.to_string(),
+                uid_mappings: config.virtio_fs_uid_mappings.clone(),
+                gid_mappings: config.virtio_fs_gid_mappings.clone(),
+            },
             share_fs_mount: Arc::new(VirtiofsShareMount::new(id)),
             mounted_info_set: Arc::new(Mutex::new(HashMap::new())),
         })
@@ -58,7 +64,14 @@ impl ShareFs for ShareVirtioFsInline {
         _h: &dyn Hypervisor,
         d: &RwLock<DeviceManager>,
     ) -> Result<()> {
-        prepare_virtiofs(d, INLINE_VIRTIO_FS, &self.config.id, "")
+        prepare_virtiofs(
+            d,
+            INLINE_VIRTIO_FS,
+            &self.config.id,
+            "",
+            self.config.uid_mappings.clone(),
+            self.config.gid_mappings.clone()
+        )
             .await
             .context("prepare virtiofs")?;
 
