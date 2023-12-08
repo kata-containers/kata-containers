@@ -138,7 +138,7 @@ impl FromStr for LogLevel {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::log_parser_error::LogParserError;
+    use crate::log_parser::log_parser_error::LogParserError;
 
     #[test]
     fn parse_string() {

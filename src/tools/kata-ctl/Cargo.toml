@@ -51,6 +51,14 @@ prometheus = { version = "0.13.0", features = ["process"] }
 procfs = "0.12.0"
 lazy_static = "1.2"
 
+# for log-parser
+serde_yaml = "0.9"
+ron = "0.8"
+quick-xml = { version = "0.28", features = ["serialize"]}
+csv = "1.2"
+serde_with = "2.3"
+chrono = { version = "0.4", features = ["serde"]}
+
 [target.'cfg(target_arch = "s390x")'.dependencies]
 reqwest = { version = "0.11", default-features = false, features = ["json", "blocking", "native-tls"] }
 

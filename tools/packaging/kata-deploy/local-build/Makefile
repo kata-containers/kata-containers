@@ -116,9 +116,6 @@ kernel-tdx-experimental-tarball:
 kernel-sev-tarball:
 	${MAKE} $@-build
 
-log-parser-rs-tarball:
-	${MAKE} $@-build
-
 nydus-tarball:
 	${MAKE} $@-build
 
