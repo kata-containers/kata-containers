@@ -42,6 +42,7 @@ jobs:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
+    secrets: inherit
   
   build-kata-static-tarball-ppc64le:
     uses: ./.github/workflows/build-kata-static-tarball-ppc64le.yaml
