@@ -12,11 +12,13 @@ extern crate slog;
 mod arch;
 mod args;
 mod check;
+mod log_parser;
 mod monitor;
 mod ops;
 mod types;
 mod utils;
 
+use crate::log_parser::log_parser;
 use anyhow::Result;
 use clap::{crate_name, Parser};
 use std::io;
@@ -61,6 +63,7 @@ fn real_main() -> Result<()> {
         Commands::Metrics(args) => handle_metrics(args),
         Commands::Monitor(args) => handle_monitor(args),
         Commands::Version => handle_version(),
+        Commands::LogParser(args) => log_parser(args),
     };
 
     // Log errors here, then let the logger go out of scope in main() to ensure

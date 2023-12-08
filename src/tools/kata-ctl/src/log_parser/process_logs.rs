@@ -2,7 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{args::Cli, log_message::AnyLogMessage, log_parser_error::LogParserError};
+use crate::args::LogParser;
+use crate::log_parser::{log_message::AnyLogMessage, log_parser_error::LogParserError};
 
 /// Calls functions to either check for errors, or to filter them out, discarding them or printing
 /// them to stderr.
@@ -12,7 +13,7 @@ use crate::{args::Cli, log_message::AnyLogMessage, log_parser_error::LogParserEr
 ///  If cli.strict is true, will return the first error it finds in input (if any)
 pub(crate) fn filter_errors<O: AnyLogMessage>(
     input: Vec<Result<O, LogParserError>>,
-    cli: &Cli,
+    cli: &LogParser,
 ) -> Result<Vec<O>, LogParserError> {
     if cli.strict {
         find_errors(input)
@@ -61,7 +62,7 @@ pub(crate) fn sort_logs<O: AnyLogMessage>(input: &mut [O]) {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::log_message::LogMessage;
+    use crate::log_parser::log_message::LogMessage;
     #[test]
     fn error_filter() {
         let unclean_logs = vec![

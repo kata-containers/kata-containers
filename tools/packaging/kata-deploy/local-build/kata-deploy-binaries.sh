@@ -99,7 +99,6 @@ options:
 	kernel-nvidia-gpu-tdx-experimental
 	kernel-sev-tarball
 	kernel-tdx-experimental
-	log-parser-rs
 	nydus
 	ovmf
 	ovmf-sev
@@ -688,7 +687,6 @@ install_tools_helper() {
 
 	tool_binary=${tool}
 	[ ${tool} = "agent-ctl" ] && tool_binary="kata-agent-ctl"
-	[ ${tool} = "log-parser-rs" ] && tool_binary="log-parser"
 	[ ${tool} = "trace-forwarder" ] && tool_binary="kata-trace-forwarder"
 	binary=$(find ${repo_root_dir}/src/tools/${tool}/ -type f -name ${tool_binary})
 
@@ -703,10 +701,6 @@ install_agent_ctl() {
 
 install_kata_ctl() {
 	install_tools_helper "kata-ctl"
-}
-
-install_log_parser_rs() {
-	install_tools_helper "log-parser-rs"
 }
 
 install_runk() {
@@ -793,8 +787,6 @@ handle_build() {
 	kernel-tdx-experimental) install_kernel_tdx_experimental ;;
 
 	kernel-sev) install_kernel_sev ;;
-
-	log-parser-rs) install_log_parser_rs ;;
 
 	nydus) install_nydus ;;
 
@@ -887,7 +879,6 @@ main() {
 		kata-ctl
 		kernel
 		kernel-experimental
-		log-parser-rs
 		nydus
 		qemu
 		stratovirt
