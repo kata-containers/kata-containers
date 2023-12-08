@@ -360,6 +360,8 @@ impl FsDeviceMgr {
     ) -> std::result::Result<DbsVirtioDevice, FsDeviceError> {
         match &config.mode as &str {
             VIRTIO_FS_MODE => Self::attach_virtio_fs_devices(config, ctx, epoll_mgr),
+            #[cfg(feature = "vhost-user-fs")]
+            VHOSTUSER_FS_MODE => Self::attach_vhostuser_fs_devices(config, ctx, epoll_mgr),
             _ => Err(FsDeviceError::CreateFsDevice(virtio::Error::InvalidInput)),
         }
     }
@@ -420,6 +422,36 @@ impl FsDeviceMgr {
                 Box::new(handler),
                 epoll_mgr,
                 limiter,
+            )
+            .map_err(FsDeviceError::CreateFsDevice)?,
+        );
+
+        Ok(device)
+    }
+
+    #[cfg(feature = "vhost-user-fs")]
+    fn attach_vhostuser_fs_devices(
+        config: &FsDeviceConfigInfo,
+        ctx: &mut DeviceOpContext,
+        epoll_mgr: EpollManager,
+    ) -> std::result::Result<DbsVirtioDevice, FsDeviceError> {
+        slog::info!(
+            ctx.logger(),
+            "attach vhost-fs device";
+            "subsystem" => "vhost-fs",
+            "tag" => &config.tag,
+            "dax_window_size" => &config.cache_size,
+            "sock_path" => &config.sock_path,
+        );
+
+        let device = Box::new(
+            virtio::vhost::vhost_user::fs::VhostUserFs::new(
+                config.sock_path.clone(),
+                config.tag.clone(),
+                config.num_queues,
+                config.queue_size,
+                config.cache_size,
+                epoll_mgr,
             )
             .map_err(FsDeviceError::CreateFsDevice)?,
         );
