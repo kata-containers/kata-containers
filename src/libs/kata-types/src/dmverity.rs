@@ -235,3 +235,313 @@ pub fn get_verity_device_name(verity_options: &str) -> Result<String> {
     let option = DmVerityInfo::try_from(verity_options)?;
     Ok(option.hash)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use std::process::Command;
+
+    #[test]
+    fn test_decode_verity_options() {
+        let verity_option = DmVerityInfo {
+            hashtype: "sha256".to_string(),
+            blocksize: 512,
+            hashsize: 512,
+            blocknum: 16384,
+            offset: 8388608,
+            hash: "9de18652fe74edfb9b805aaed72ae2aa48f94333f1ba5c452ac33b1c39325174".to_string(),
+        };
+        let json_option = serde_json::to_string(&verity_option).unwrap();
+        let encoded = base64::encode(&json_option);
+
+        let decoded = DmVerityInfo::try_from(&encoded).unwrap_or_else(|err| panic!("{}", err));
+        assert_eq!(decoded.hashtype, verity_option.hashtype);
+        assert_eq!(decoded.blocksize, verity_option.blocksize);
+        assert_eq!(decoded.hashsize, verity_option.hashsize);
+        assert_eq!(decoded.blocknum, verity_option.blocknum);
+        assert_eq!(decoded.offset, verity_option.offset);
+        assert_eq!(decoded.hash, verity_option.hash);
+
+        let decoded = DmVerityInfo::try_from(&json_option).unwrap();
+        assert_eq!(decoded.hashtype, verity_option.hashtype);
+        assert_eq!(decoded.blocksize, verity_option.blocksize);
+        assert_eq!(decoded.hashsize, verity_option.hashsize);
+        assert_eq!(decoded.blocknum, verity_option.blocknum);
+        assert_eq!(decoded.offset, verity_option.offset);
+        assert_eq!(decoded.hash, verity_option.hash);
+    }
+
+    #[test]
+    fn test_check_verity_options() {
+        let tests = &[
+            DmVerityInfo {
+                hashtype: "md5".to_string(), // "md5" is not a supported hash algorithm
+                blocksize: 512,
+                hashsize: 512,
+                blocknum: 16384,
+                offset: 8388608,
+                hash: "9de18652fe74edfb9b805aaed72ae2aa48f94333f1ba5c452ac33b1c39325174"
+                    .to_string(),
+            },
+            DmVerityInfo {
+                hashtype: "sha256".to_string(),
+                blocksize: 3000, // Invalid block size, not a power of 2.
+                hashsize: 512,
+                blocknum: 16384,
+                offset: 8388608,
+                hash: "9de18652fe74edfb9b805aaed72ae2aa48f94333f1ba5c452ac33b1c39325174"
+                    .to_string(),
+            },
+            DmVerityInfo {
+                hashtype: "sha256".to_string(),
+                blocksize: 0, // Invalid block size, less than 512.
+                hashsize: 512,
+                blocknum: 16384,
+                offset: 8388608,
+                hash: "9de18652fe74edfb9b805aaed72ae2aa48f94333f1ba5c452ac33b1c39325174"
+                    .to_string(),
+            },
+            DmVerityInfo {
+                hashtype: "sha256".to_string(),
+                blocksize: 524800, // Invalid block size, greater than 524288.
+                hashsize: 512,
+                blocknum: 16384,
+                offset: 8388608,
+                hash: "9de18652fe74edfb9b805aaed72ae2aa48f94333f1ba5c452ac33b1c39325174"
+                    .to_string(),
+            },
+            DmVerityInfo {
+                hashtype: "sha256".to_string(),
+                blocksize: 512,
+                hashsize: 3000, // Invalid hash block size, not a power of 2.
+                blocknum: 16384,
+                offset: 8388608,
+                hash: "9de18652fe74edfb9b805aaed72ae2aa48f94333f1ba5c452ac33b1c39325174"
+                    .to_string(),
+            },
+            DmVerityInfo {
+                hashtype: "sha256".to_string(),
+                blocksize: 512,
+                hashsize: 0, // Invalid hash block size, less than 512.
+                blocknum: 16384,
+                offset: 8388608,
+                hash: "9de18652fe74edfb9b805aaed72ae2aa48f94333f1ba5c452ac33b1c39325174"
+                    .to_string(),
+            },
+            DmVerityInfo {
+                hashtype: "sha256".to_string(),
+                blocksize: 512,
+                hashsize: 524800, // Invalid hash block size, greater than 524288.
+                blocknum: 16384,
+                offset: 8388608,
+                hash: "9de18652fe74edfb9b805aaed72ae2aa48f94333f1ba5c452ac33b1c39325174"
+                    .to_string(),
+            },
+            DmVerityInfo {
+                hashtype: "sha256".to_string(),
+                blocksize: 512,
+                hashsize: 512,
+                blocknum: 0, // Invalid blocknum, it must be greater than 0.
+                offset: 8388608,
+                hash: "9de18652fe74edfb9b805aaed72ae2aa48f94333f1ba5c452ac33b1c39325174"
+                    .to_string(),
+            },
+            DmVerityInfo {
+                hashtype: "sha256".to_string(),
+                blocksize: 512,
+                hashsize: 512,
+                blocknum: 16384,
+                offset: 0, // Invalid offset, it must be greater than 0.
+                hash: "9de18652fe74edfb9b805aaed72ae2aa48f94333f1ba5c452ac33b1c39325174"
+                    .to_string(),
+            },
+            DmVerityInfo {
+                hashtype: "sha256".to_string(),
+                blocksize: 512,
+                hashsize: 512,
+                blocknum: 16384,
+                offset: 8193, // Invalid offset, it must be aligned to 512.
+                hash: "9de18652fe74edfb9b805aaed72ae2aa48f94333f1ba5c452ac33b1c39325174"
+                    .to_string(),
+            },
+            DmVerityInfo {
+                hashtype: "sha256".to_string(),
+                blocksize: 512,
+                hashsize: 512,
+                blocknum: 16384,
+                offset: 8388608 - 4096, // Invalid offset, it must be equal to blocksize * blocknum.
+                hash: "9de18652fe74edfb9b805aaed72ae2aa48f94333f1ba5c452ac33b1c39325174"
+                    .to_string(),
+            },
+        ];
+        for d in tests.iter() {
+            d.validate().unwrap_err();
+        }
+        let test_data = DmVerityInfo {
+            hashtype: "sha256".to_string(),
+            blocksize: 512,
+            hashsize: 512,
+            blocknum: 16384,
+            offset: 8388608,
+            hash: "9de18652fe74edfb9b805aaed72ae2aa48f94333f1ba5c452ac33b1c39325174".to_string(),
+        };
+        test_data.validate().unwrap();
+    }
+
+    #[test]
+    fn test_create_verity_device() {
+        let work_dir = tempfile::tempdir().unwrap();
+        let file_name: std::path::PathBuf = work_dir.path().join("test.file");
+        let data = vec![0u8; 1048576];
+        fs::write(&file_name, data)
+            .unwrap_or_else(|err| panic!("Failed to write to file: {}", err));
+
+        let loop_control = loopdev::LoopControl::open().unwrap_or_else(|err| panic!("{}", err));
+        let loop_device = loop_control
+            .next_free()
+            .unwrap_or_else(|err| panic!("{}", err));
+        loop_device
+            .with()
+            .autoclear(true)
+            .attach(file_name.to_str().unwrap())
+            .unwrap_or_else(|err| panic!("{}", err));
+        let loop_device_path = loop_device
+            .path()
+            .unwrap_or_else(|| panic!("failed to get loop device path"));
+
+        let tests = &[
+            DmVerityInfo {
+                hashtype: "sha256".to_string(),
+                blocksize: 512,
+                hashsize: 4096,
+                blocknum: 1024,
+                offset: 524288,
+                hash: "fc65e84aa2eb12941aeaa29b000bcf1d9d4a91190bd9b10b5f51de54892952c6"
+                    .to_string(),
+            },
+            DmVerityInfo {
+                hashtype: "sha1".to_string(),
+                blocksize: 512,
+                hashsize: 1024,
+                blocknum: 1024,
+                offset: 524288,
+                hash: "e889164102360c7b0f56cbef6880c4ae75f552cf".to_string(),
+            },
+        ];
+        for d in tests.iter() {
+            let verity_device_path =
+                create_verity_device(d, &loop_device_path).unwrap_or_else(|err| panic!("{}", err));
+            assert_eq!(verity_device_path, format!("/dev/mapper/{}", d.hash));
+            destroy_verity_device(&d.hash).unwrap();
+        }
+    }
+
+    #[test]
+    fn test_mount_and_umount_image_block_with_integrity() {
+        const VERITYSETUP_PATH: &[&str] = &["/sbin/veritysetup", "/usr/sbin/veritysetup"];
+        //create a disk image file
+        let work_dir = tempfile::tempdir().unwrap();
+        let mount_dir = tempfile::tempdir().unwrap();
+        let file_name: std::path::PathBuf = work_dir.path().join("test.file");
+        let default_hash_type = "sha256";
+        let default_data_block_size: u64 = 512;
+        let default_data_block_num: u64 = 1024;
+        let data_device_size = default_data_block_size * default_data_block_num;
+        let default_hash_size: u64 = 4096;
+        let default_resize_size: u64 = data_device_size * 4;
+        let data = vec![0u8; data_device_size as usize];
+        fs::write(&file_name, data)
+            .unwrap_or_else(|err| panic!("Failed to write to file: {}", err));
+        Command::new("mkfs")
+            .args(["-t", "ext4", file_name.to_str().unwrap()])
+            .output()
+            .map_err(|err| format!("Failed to format disk image: {}", err))
+            .unwrap_or_else(|err| panic!("{}", err));
+
+        Command::new("truncate")
+            .args([
+                "-s",
+                default_resize_size.to_string().as_str(),
+                file_name.to_str().unwrap(),
+            ])
+            .output()
+            .map_err(|err| format!("Failed to resize disk image: {}", err))
+            .unwrap_or_else(|err| panic!("{}", err));
+
+        //find an unused loop device and attach the file to the device
+        let loop_control = loopdev::LoopControl::open().unwrap_or_else(|err| panic!("{}", err));
+        let loop_device = loop_control
+            .next_free()
+            .unwrap_or_else(|err| panic!("{}", err));
+        loop_device
+            .with()
+            .autoclear(true)
+            .attach(file_name.to_str().unwrap())
+            .unwrap_or_else(|err| panic!("{}", err));
+        let loop_device_path = loop_device
+            .path()
+            .unwrap_or_else(|| panic!("failed to get loop device path"));
+        let loop_device_path_str = loop_device_path
+            .to_str()
+            .unwrap_or_else(|| panic!("failed to get path string"));
+
+        let mut verity_option = DmVerityInfo {
+            hashtype: default_hash_type.to_string(),
+            blocksize: default_data_block_size,
+            hashsize: default_hash_size,
+            blocknum: default_data_block_num,
+            offset: data_device_size,
+            hash: "".to_string(),
+        };
+
+        // Calculates and permanently stores hash verification data for data_device.
+        let veritysetup_bin = VERITYSETUP_PATH
+            .iter()
+            .find(|&path| Path::new(path).exists())
+            .copied()
+            .unwrap_or_else(|| panic!("Veritysetup path not found"));
+        let output = Command::new(veritysetup_bin)
+            .args([
+                "format",
+                "--no-superblock",
+                "--format=1",
+                "-s",
+                "",
+                &format!("--hash={}", verity_option.hashtype),
+                &format!("--data-block-size={}", verity_option.blocksize),
+                &format!("--hash-block-size={}", verity_option.hashsize),
+                "--data-blocks",
+                &format!("{}", verity_option.blocknum),
+                "--hash-offset",
+                &format!("{}", verity_option.offset),
+                loop_device_path_str,
+                loop_device_path_str,
+            ])
+            .output()
+            .unwrap_or_else(|err| panic!("{}", err));
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let lines: Vec<&str> = stdout.lines().collect();
+            let hash_strings: Vec<&str> = lines[lines.len() - 1].split_whitespace().collect();
+            verity_option.hash = hash_strings[2].to_string()
+        } else {
+            let error_message = String::from_utf8_lossy(&output.stderr);
+            panic!("Failed to create hash device: {}", error_message);
+        }
+
+        let verity_device_path = create_verity_device(&verity_option, &loop_device_path)
+            .unwrap_or_else(|_|panic!("failed to create verity device"));
+        let mount_dir_path= mount_dir.path();
+        assert!(nix::mount::mount(
+            Some(verity_device_path.as_str()),
+            mount_dir_path,
+            Some("ext4"),
+            nix::mount::MsFlags::MS_RDONLY,
+            None::<&str>,
+        ).is_ok());
+        let verity_device_name = verity_option.hash;
+        assert!(nix::mount::umount(mount_dir_path).is_ok());
+        assert!(destroy_verity_device(&verity_device_name).is_ok());
+    }
+}
