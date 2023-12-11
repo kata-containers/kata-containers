@@ -9,7 +9,7 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	[ "${KATA_HYPERVISOR}" == "dragonball" ] && \
+	[ "${KATA_HYPERVISOR}" == "dragonball" ] || [ "${KATA_HYPERVISOR}" == "cloud-hypervisor" ]&& \
 		skip "runtime-rs is still using the old vcpus allocation algorithm, skipping the test"
 
 	get_pod_config_dir
@@ -29,7 +29,7 @@ setup() {
 }
 
 teardown() {
-	[ "${KATA_HYPERVISOR}" == "dragonball" ] && \
+	[ "${KATA_HYPERVISOR}" == "dragonball" ] || [ "${KATA_HYPERVISOR}" == "cloud-hypervisor" ] && \
 		skip "runtime-rs is still using the old vcpus allocation algorithm, skipping the test"
 
 	for pod in "${pods[@]}"; do
