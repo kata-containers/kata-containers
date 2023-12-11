@@ -32,6 +32,7 @@ jobs:
           - dragonball
           - fc #firecracker
           - qemu
+          - cloud-hypervisor
         snapshotter:
           - devmapper
         k8s:
