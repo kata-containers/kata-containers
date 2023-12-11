@@ -12,8 +12,9 @@ use tokio::sync::{Mutex, RwLock};
 
 use crate::{
     vhost_user_blk::VhostUserBlkDevice, BlockConfig, BlockDevice, HybridVsockDevice, Hypervisor,
-    NetworkDevice, ShareFsDevice, VfioDevice, VhostUserConfig, VsockDevice, KATA_BLK_DEV_TYPE,
-    KATA_MMIO_BLK_DEV_TYPE, KATA_NVDIMM_DEV_TYPE, VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
+    NetworkDevice, ShareFsDevice, VfioDevice, VhostUserConfig, VhostUserNetDevice, VsockDevice,
+    KATA_BLK_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE, KATA_NVDIMM_DEV_TYPE, VIRTIO_BLOCK_MMIO,
+    VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
 };
 
 use super::{
@@ -231,6 +232,11 @@ impl DeviceManager {
                         return Some(device_id.to_string());
                     }
                 }
+                DeviceType::VhostUserNetwork(device) => {
+                    if device.config.socket_path == host_path {
+                        return Some(device_id.to_string());
+                    }
+                }
                 _ => {
                     // TODO: support find other device type
                     continue;
@@ -325,6 +331,22 @@ impl DeviceManager {
                 }
 
                 Arc::new(Mutex::new(NetworkDevice::new(device_id.clone(), config)))
+            }
+            DeviceConfig::VhostUserNetworkCfg(config) => {
+                if let Some(dev_id) = self.find_device(config.socket_path.clone()).await {
+                    info!(
+                        sl!(),
+                        "vhost-user-net device {} found, just return device id {}",
+                        config.socket_path,
+                        dev_id
+                    );
+                    return Ok(dev_id);
+                }
+
+                Arc::new(Mutex::new(VhostUserNetDevice::new(
+                    device_id.clone(),
+                    config.clone(),
+                )))
             }
             DeviceConfig::HybridVsockCfg(hvconfig) => {
                 // No need to do find device for hybrid vsock device.

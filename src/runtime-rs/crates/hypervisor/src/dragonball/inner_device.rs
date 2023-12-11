@@ -7,12 +7,16 @@
 use std::path::PathBuf;
 
 use anyhow::{anyhow, Context, Result};
+use dbs_utils::net::MacAddr;
+use dragonball::api::v1::VhostUserConfig as DragonballVhostUserConfig;
 use dragonball::api::v1::{
-    BlockDeviceConfigInfo, FsDeviceConfigInfo, FsMountConfigInfo, VsockDeviceConfigInfo,
+    BlockDeviceConfigInfo, FsDeviceConfigInfo, FsMountConfigInfo, NetworkInterfaceConfig,
+    VsockDeviceConfigInfo,
 };
 use dragonball::device_manager::blk_dev_mgr::BlockDeviceType;
 
 use super::{build_dragonball_network_config, DragonballInner};
+use crate::VhostUserConfig;
 use crate::{
     device::DeviceType, HybridVsockConfig, NetworkConfig, ShareFsConfig, ShareFsMountConfig,
     ShareFsMountOperation, ShareFsMountType, VfioBusMode, VfioDevice, VmmState, JAILER_ROOT,
@@ -67,6 +71,9 @@ impl DragonballInner {
             DeviceType::ShareFs(sharefs) => self
                 .add_share_fs_device(&sharefs.config)
                 .context("add share fs device"),
+            DeviceType::VhostUserNetwork(dev) => self
+                .add_vhost_user_net_device(&dev.config)
+                .context("add vhost-user-net device"),
             DeviceType::Vsock(_) => todo!(),
         }
     }
@@ -214,6 +221,25 @@ impl DragonballInner {
         self.vmm_instance
             .insert_network_device(net_cfg)
             .context("insert network device")
+    }
+
+    /// Add vhost-user-net deivce to Dragonball
+    fn add_vhost_user_net_device(&mut self, config: &VhostUserConfig) -> Result<()> {
+        let guest_mac = MacAddr::parse_str(&config.mac_address).ok();
+        let net_cfg = NetworkInterfaceConfig {
+            num_queues: Some(config.num_queues),
+            queue_size: Some(config.queue_size as u16),
+            backend: dragonball::api::v1::Backend::VhostUser(DragonballVhostUserConfig {
+                sock_path: config.socket_path.clone(),
+            }),
+            guest_mac,
+            use_shared_irq: None,
+            use_generic_irq: None,
+        };
+
+        self.vmm_instance
+            .insert_network_device(net_cfg)
+            .context("insert vhost-user-net device")
     }
 
     fn add_hvsock(&mut self, config: &HybridVsockConfig) -> Result<()> {
