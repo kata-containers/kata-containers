@@ -26,7 +26,7 @@ use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use tokio::sync::RwLock;
 use tracing::instrument;
 
-use crate::{Backend, DeviceType, Hypervisor, NetworkConfig, VcpuThreadIds};
+use crate::{DeviceType, Hypervisor, NetworkConfig, VcpuThreadIds};
 
 pub struct Dragonball {
     inner: Arc<RwLock<DragonballInner>>,
@@ -201,41 +201,39 @@ impl Persist for Dragonball {
     }
 }
 
-impl From<NetworkConfig> for DragonballNetworkConfig {
-    fn from(value: NetworkConfig) -> Self {
-        let r = &value;
-        r.into()
-    }
-}
+/// Generate Dragonball network config according to hypervisor config and
+/// runtime network config.
+pub(crate) fn build_dragonball_network_config(
+    hconfig: &HypervisorConfig,
+    nconfig: &NetworkConfig,
+) -> DragonballNetworkConfig {
+    let virtio_config = DragonballVirtioConfig {
+        iface_id: nconfig.virt_iface_name.clone(),
+        host_dev_name: nconfig.host_dev_name.clone(),
+        // TODO(justxuewei): rx_rate_limiter is not supported, see:
+        // https://github.com/kata-containers/kata-containers/issues/8327.
+        rx_rate_limiter: None,
+        // TODO(justxuewei): tx_rate_limiter is not supported, see:
+        // https://github.com/kata-containers/kata-containers/issues/8327.
+        tx_rate_limiter: None,
+        allow_duplicate_mac: nconfig.allow_duplicate_mac,
+    };
 
-impl From<&NetworkConfig> for DragonballNetworkConfig {
-    fn from(value: &NetworkConfig) -> Self {
-        let virtio_config = DragonballVirtioConfig {
-            iface_id: value.virt_iface_name.clone(),
-            host_dev_name: value.host_dev_name.clone(),
-            // TODO(justxuewei): rx_rate_limiter is not supported, see:
-            // https://github.com/kata-containers/kata-containers/issues/8327.
-            rx_rate_limiter: None,
-            // TODO(justxuewei): tx_rate_limiter is not supported, see:
-            // https://github.com/kata-containers/kata-containers/issues/8327.
-            tx_rate_limiter: None,
-            allow_duplicate_mac: value.allow_duplicate_mac,
-        };
-        let backend = match value.backend {
-            Backend::Virtio => DragonballBackend::Virtio(virtio_config),
-            Backend::Vhost => DragonballBackend::Vhost(virtio_config),
-        };
+    let backend = if hconfig.network_info.disable_vhost_net {
+        DragonballBackend::Virtio(virtio_config)
+    } else {
+        DragonballBackend::Vhost(virtio_config)
+    };
 
-        Self {
-            num_queues: Some(value.queue_num),
-            queue_size: Some(value.queue_size as u16),
-            backend,
-            guest_mac: value.guest_mac.clone().map(|mac| {
-                // We are safety since mac address is checked by endpoints.
-                DragonballMacAddr::from_bytes(&mac.0).unwrap()
-            }),
-            use_shared_irq: value.use_shared_irq,
-            use_generic_irq: value.use_generic_irq,
-        }
+    DragonballNetworkConfig {
+        num_queues: Some(nconfig.queue_num),
+        queue_size: Some(nconfig.queue_size as u16),
+        backend,
+        guest_mac: nconfig.guest_mac.clone().map(|mac| {
+            // We are safety since mac address is checked by endpoints.
+            DragonballMacAddr::from_bytes(&mac.0).unwrap()
+        }),
+        use_shared_irq: nconfig.use_shared_irq,
+        use_generic_irq: nconfig.use_generic_irq,
     }
 }

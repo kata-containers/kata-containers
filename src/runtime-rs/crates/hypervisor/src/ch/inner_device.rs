@@ -475,7 +475,7 @@ impl TryFrom<ShareFsSettings> for FsConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Address, Backend};
+    use crate::Address;
 
     #[test]
     fn test_networkconfig_to_netconfig() {
@@ -489,7 +489,6 @@ mod tests {
             allow_duplicate_mac: false,
             use_generic_irq: None,
             use_shared_irq: None,
-            backend: Backend::default(),
         };
 
         let net = NetConfig::try_from(cfg.clone());
