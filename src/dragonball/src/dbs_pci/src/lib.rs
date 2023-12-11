@@ -30,6 +30,7 @@ mod bus;
 mod configuration;
 mod device;
 
+pub use self::bus::PciBus;
 pub use self::configuration::{
     BarProgrammingParams, PciBarConfiguration, PciBarPrefetchable, PciBarRegionType,
     PciBridgeSubclass, PciCapability, PciCapabilityID, PciClassCode, PciConfiguration,
@@ -37,7 +38,6 @@ pub use self::configuration::{
     PciNetworkControllerSubclass, PciProgrammingInterface, PciSerialBusSubClass, PciSubclass,
     NUM_BAR_REGS, NUM_CONFIGURATION_REGISTERS,
 };
-pub use self::bus::PciBus;
 pub use self::device::PciDevice;
 
 /// Error codes related to PCI root/bus/device operations.

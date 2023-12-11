@@ -290,7 +290,9 @@ where
                 "{}: Invalid virtio queue pairs, expected a value greater than 0, but got {}",
                 NET_DRIVER_NAME, self.vq_pairs
             );
-            return Err(VirtioError::ActivateError(Box::new(ActivateError::InvalidParam)));
+            return Err(VirtioError::ActivateError(Box::new(
+                ActivateError::InvalidParam,
+            )));
         }
 
         if self.handles.len() != self.vq_pairs || self.taps.len() != self.vq_pairs {
@@ -299,7 +301,9 @@ where
                 self.handles.len(),
                 self.taps.len(),
                 self.vq_pairs);
-            return Err(VirtioError::ActivateError(Box::new(ActivateError::InternalError)));
+            return Err(VirtioError::ActivateError(Box::new(
+                ActivateError::InternalError,
+            )));
         }
 
         for idx in 0..self.vq_pairs {
