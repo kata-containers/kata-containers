@@ -10,7 +10,7 @@ use crate::device::driver::vhost_user_blk::VhostUserBlkDevice;
 use crate::{
     BlockConfig, BlockDevice, HybridVsockConfig, HybridVsockDevice, Hypervisor as hypervisor,
     NetworkConfig, NetworkDevice, ShareFsConfig, ShareFsDevice, VfioConfig, VfioDevice,
-    VhostUserConfig, VsockConfig, VsockDevice,
+    VhostUserConfig, VhostUserNetDevice, VsockConfig, VsockDevice,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -25,6 +25,7 @@ pub enum DeviceConfig {
     BlockCfg(BlockConfig),
     VhostUserBlkCfg(VhostUserConfig),
     NetworkCfg(NetworkConfig),
+    VhostUserNetworkCfg(VhostUserConfig),
     ShareFsCfg(ShareFsConfig),
     VfioCfg(VfioConfig),
     VsockCfg(VsockConfig),
@@ -37,6 +38,7 @@ pub enum DeviceType {
     VhostUserBlk(VhostUserBlkDevice),
     Vfio(VfioDevice),
     Network(NetworkDevice),
+    VhostUserNetwork(VhostUserNetDevice),
     ShareFs(ShareFsDevice),
     HybridVsock(HybridVsockDevice),
     Vsock(VsockDevice),

@@ -18,6 +18,8 @@ pub mod endpoint_persist;
 mod endpoints_test;
 mod tap_endpoint;
 pub use tap_endpoint::TapEndpoint;
+mod vhost_user_endpoint;
+pub use vhost_user_endpoint::VhostUserEndpoint;
 
 use anyhow::Result;
 use async_trait::async_trait;
