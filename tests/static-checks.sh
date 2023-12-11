@@ -492,70 +492,164 @@ EOF
 	popd
 }
 
-check_url()
+run_url_check_cmd()
 {
-	local url="$1"
-	local invalid_urls_dir="$2"
+	local url="${1:-}"
+	[ -n "$url" ] || die "need URL"
 
-	local curl_out=$(mktemp)
-	files_to_remove+=("${curl_out}")
+	local out_file="${2:-}"
+	[ -n "$out_file" ] || die "need output file"
 
-	info "Checking URL $url"
+	# Can be blank
+	local extra_args="${3:-}"
 
-	# Process specific file to avoid out-of-order writes
-	local invalid_file=$(printf "%s/%d" "$invalid_urls_dir" "$$")
+	local curl_extra_args=()
 
-	local ret
-	local user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"
+	curl_extra_args+=("$extra_args")
 
 	# Authenticate for github to increase threshold for rate limiting
-	local curl_args=()
 	if [[ "$url" =~ github\.com && -n "$GITHUB_USER" && -n "$GITHUB_TOKEN" ]]; then
-		curl_args+=("-u ${GITHUB_USER}:${GITHUB_TOKEN}")
+		curl_extra_args+=("-u ${GITHUB_USER}:${GITHUB_TOKEN}")
 	fi
 
-	# Some endpoints return 403 to HEAD but 200 for GET, so perform a GET but only read headers.
-	{ curl ${curl_args[*]} -sIL -X GET -c - -A "${user_agent}" -H "Accept-Encoding: zstd, none, gzip, deflate" --max-time "$url_check_timeout_secs" \
-		--retry "$url_check_max_tries" "$url" &>"$curl_out"; ret=$?; } || true
+	# Some endpoints return 403 to HEAD but 200 for GET,
+	# so perform a GET but only read headers.
+	curl \
+		${curl_extra_args[*]} \
+		-sIL \
+		-X GET \
+		-c - \
+		-H "Accept-Encoding: zstd, none, gzip, deflate" \
+		--max-time "$url_check_timeout_secs" \
+		--retry "$url_check_max_tries" \
+		"$url" \
+		&>"$out_file"
+}
 
-	# A transitory error, or the URL is incorrect,
-	# but capture either way.
-	if [ "$ret" -ne 0 ]; then
-		echo "$url" >> "${invalid_file}"
+check_url()
+{
+	local url="${1:-}"
+	[ -n "$url" ] || die "need URL to check"
 
-		die "check failed for URL $url after $url_check_max_tries tries"
-	fi
+	local invalid_urls_dir="${2:-}"
+	[ -n "$invalid_urls_dir" ] || die "need invalid URLs directory"
 
-	local http_statuses
+	local curl_out
+	curl_out=$(mktemp)
 
-	http_statuses=$(grep -E "^HTTP" "$curl_out" | awk '{print $2}' || true)
-	if [ -z "$http_statuses" ]; then
-		echo "$url" >> "${invalid_file}"
-		die "no HTTP status codes for URL $url"
-	fi
+	files_to_remove+=("${curl_out}")
 
-	local status
+	# Process specific file to avoid out-of-order writes
+	local invalid_file
+	invalid_file=$(printf "%s/%d" "$invalid_urls_dir" "$$")
 
-	for status in $http_statuses
+	local ret
+
+	local -a errors=()
+
+	local -a user_agents=()
+
+	# Test an unspecified UA (curl default)
+	user_agents+=('')
+
+	# Test an explictly blank UA
+	user_agents+=('""')
+
+	# Single space
+	user_agents+=(' ')
+
+	# CLI HTTP tools
+	user_agents+=('Wget')
+	user_agents+=('curl')
+
+	# console based browsers
+	# Hopefully, these will always be supported for a11y.
+	user_agents+=('Lynx')
+	user_agents+=('Elinks')
+
+	# Emacs' w3m browser
+	user_agents+=('Emacs')
+
+	# The full craziness
+	user_agents+=('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36')
+
+	local user_agent
+
+	# Cycle through the user agents until we find one that works.
+	#
+	# Note that we also test an unspecified user agent
+	# (no '-A <value>').
+	for user_agent in "${user_agents[@]}"
 	do
-		# Ignore the following ranges of status codes:
-		#
-		# - 1xx: Informational codes.
-		# - 2xx: Success codes.
-		# - 3xx: Redirection codes.
-		# - 405: Specifically to handle some sites
-		#   which get upset by "curl -L" when the
-		#   redirection is not required.
-		#
-		# Anything else is considered an error.
-		#
-		# See https://en.wikipedia.org/wiki/List_of_HTTP_status_codes
+		info "Checking URL $url with User Agent '$user_agent'"
 
-		if ! echo "$status" | grep -qE "^(1[0-9][0-9]|2[0-9][0-9]|3[0-9][0-9]|405)"; then
-			echo "$url" >> "$invalid_file"
-			die "found HTTP error status codes for URL $url ($status)"
+		local curl_ua_args
+		[ -n "$user_agent" ] && curl_ua_args="-A '$user_agent'"
+
+		{ run_url_check_cmd "$url" "$curl_out" "$curl_ua_args"; ret=$?; } || true
+
+		# A transitory error, or the URL is incorrect,
+		# but capture either way.
+		if [ "$ret" -ne 0 ]; then
+			errors+=("Failed to check URL '$url' (user agent: '$user_agent', return code $ret)")
+
+			# Try again with another UA since it appears that some return codes
+			# indicate the server was unhappy with the details
+			# presented by the client.
+			continue
 		fi
+
+		local http_statuses
+
+		http_statuses=$(grep -E "^HTTP" "$curl_out" |\
+			awk '{print $2}' || true)
+
+		if [ -z "$http_statuses" ]; then
+			errors+=("no HTTP status codes for URL '$url' (user agent: '$user_agent')")
+
+			continue
+		fi
+
+		local status
+
+		local -i fail_count=0
+
+		# Check all HTTP status codes
+		for status in $http_statuses
+		do
+			# Ignore the following ranges of status codes:
+			#
+			# - 1xx: Informational codes.
+			# - 2xx: Success codes.
+			# - 3xx: Redirection codes.
+			# - 405: Specifically to handle some sites
+			#   which get upset by "curl -L" when the
+			#   redirection is not required.
+			#
+			# Anything else is considered an error.
+			#
+			# See https://en.wikipedia.org/wiki/List_of_HTTP_status_codes
+
+			{ grep -qE "^(1[0-9][0-9]|2[0-9][0-9]|3[0-9][0-9]|405)" <<< "$status"; ret=$?; } || true
+
+			[ "$ret" -eq 0 ] && continue
+
+			fail_count+=1
+		done
+
+		# If we didn't receive any unexpected HTTP status codes for
+		# this UA, the URL is valid so we don't need to check with any
+		# further UAs, so clear any (transitory) errors we've
+		# recorded.
+		[ "$fail_count" -eq 0 ] && errors=() && break
+
+		echo "$url" >> "$invalid_file"
+		errors+=("found HTTP error status codes for URL $url (status: '$status', user agent: '$user_agent')")
 	done
+
+	[ "${#errors}" = 0 ] && return 0
+
+	die "failed to check URL '$url': errors: '${errors[*]}'"
 }
 
 # Perform basic checks on documentation files
@@ -647,7 +741,8 @@ static_check_docs()
 	# is necessary to guarantee that all docs are referenced.
 	md_docs_to_check="$all_docs"
 
-	(cd "${test_dir}" && make -C cmd/check-markdown)
+	command -v kata-check-markdown &>/dev/null ||\
+		(cd "${test_dir}" && make -C cmd/check-markdown)
 
 	command -v kata-check-markdown &>/dev/null || \
 		die 'kata-check-markdown command not found. Ensure that "$GOPATH/bin" is in your $PATH.'
@@ -810,7 +905,10 @@ static_check_docs()
 
 	popd
 
-	[ $docs_failed -eq 0 ] || die "spell check failed, See https://github.com/kata-containers/kata-containers/blob/main/docs/Documentation-Requirements.md#spelling for more information."
+	[ $docs_failed -eq 0 ] || {
+        url='https://github.com/kata-containers/kata-containers/blob/main/docs/Documentation-Requirements.md#spelling'
+        die "spell check failed, See $url for more information."
+    }
 }
 
 static_check_eof()
