@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright (c) 2017-2019 Intel Corporation
+# Copyright (c) 2017-2023 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -383,7 +383,7 @@ static_check_labels()
 
 	# Since this script is called from another repositories directory,
 	# ensure the utility is built before the script below (which uses it) is run.
-	(cd "${test_dir}" && make -C cmd/github-labels)
+	(cd "${test_dir}/cmd/github-labels" && make)
 
 	tmp=$(mktemp)
 
@@ -742,7 +742,7 @@ static_check_docs()
 	md_docs_to_check="$all_docs"
 
 	command -v kata-check-markdown &>/dev/null ||\
-		(cd "${test_dir}" && make -C cmd/check-markdown)
+		(cd "${test_dir}/cmd/check-markdown" && make)
 
 	command -v kata-check-markdown &>/dev/null || \
 		die 'kata-check-markdown command not found. Ensure that "$GOPATH/bin" is in your $PATH.'
