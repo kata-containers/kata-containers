@@ -110,8 +110,6 @@ impl CloudHypervisorInner {
             }
         }
 
-        self.state = VmmState::VmmServerReady;
-
         Ok(())
     }
 
@@ -246,8 +244,6 @@ impl CloudHypervisorInner {
         if let Some(detail) = response {
             debug!(sl!(), "vm start response: {:?}", detail);
         }
-
-        self.state = VmmState::VmRunning;
 
         Ok(())
     }
@@ -625,7 +621,11 @@ impl CloudHypervisorInner {
         self.timeout_secs = timeout_secs;
         self.start_hypervisor(self.timeout_secs).await?;
 
+        self.state = VmmState::VmmServerReady;
+
         self.boot_vm().await?;
+
+        self.state = VmmState::VmRunning;
 
         Ok(())
     }
