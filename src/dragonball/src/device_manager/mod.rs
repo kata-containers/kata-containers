@@ -68,10 +68,10 @@ pub mod vsock_dev_mgr;
 #[cfg(feature = "virtio-vsock")]
 use self::vsock_dev_mgr::VsockDeviceMgr;
 
-#[cfg(feature = "virtio-blk")]
+#[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
 /// virtio-block device manager
 pub mod blk_dev_mgr;
-#[cfg(feature = "virtio-blk")]
+#[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
 use self::blk_dev_mgr::BlockDeviceMgr;
 
 #[cfg(feature = "virtio-net")]
@@ -533,7 +533,7 @@ pub struct DeviceManager {
     #[cfg(feature = "virtio-vsock")]
     pub(crate) vsock_manager: VsockDeviceMgr,
 
-    #[cfg(feature = "virtio-blk")]
+    #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
     // If there is a Root Block Device, this should be added as the first element of the list.
     // This is necessary because we want the root to always be mounted on /dev/vda.
     pub(crate) block_manager: BlockDeviceMgr,
@@ -581,7 +581,7 @@ impl DeviceManager {
             mmio_device_info: HashMap::new(),
             #[cfg(feature = "virtio-vsock")]
             vsock_manager: VsockDeviceMgr::default(),
-            #[cfg(feature = "virtio-blk")]
+            #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
             block_manager: BlockDeviceMgr::default(),
             #[cfg(feature = "virtio-net")]
             virtio_net_manager: VirtioNetDeviceMgr::default(),
@@ -739,7 +739,7 @@ impl DeviceManager {
         self.create_legacy_devices(&mut ctx)?;
         self.init_legacy_devices(dmesg_fifo, com1_sock_path, &mut ctx)?;
 
-        #[cfg(feature = "virtio-blk")]
+        #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
         self.block_manager
             .attach_devices(&mut ctx)
             .map_err(StartMicroVmError::BlockDeviceError)?;
@@ -760,7 +760,7 @@ impl DeviceManager {
         #[cfg(feature = "virtio-vsock")]
         self.vsock_manager.attach_devices(&mut ctx)?;
 
-        #[cfg(feature = "virtio-blk")]
+        #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
         self.block_manager
             .generate_kernel_boot_args(kernel_config)
             .map_err(StartMicroVmError::DeviceManager)?;
@@ -1184,7 +1184,7 @@ mod tests {
                 res_manager,
 
                 legacy_manager: None,
-                #[cfg(feature = "virtio-blk")]
+                #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
                 block_manager: BlockDeviceMgr::default(),
                 #[cfg(any(feature = "virtio-fs", feature = "vhost-user-fs"))]
                 fs_manager: Arc::new(Mutex::new(FsDeviceMgr::default())),

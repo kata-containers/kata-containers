@@ -26,7 +26,7 @@ use self::VmmActionError::MachineConfig;
 
 #[cfg(feature = "virtio-balloon")]
 pub use crate::device_manager::balloon_dev_mgr::{BalloonDeviceConfigInfo, BalloonDeviceError};
-#[cfg(feature = "virtio-blk")]
+#[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
 pub use crate::device_manager::blk_dev_mgr::{
     BlockDeviceConfigInfo, BlockDeviceConfigUpdateInfo, BlockDeviceError, BlockDeviceMgr,
 };
@@ -99,7 +99,7 @@ pub enum VmmActionError {
     #[error("failed to add virtio-vsock device: {0}")]
     Vsock(#[source] VsockDeviceError),
 
-    #[cfg(feature = "virtio-blk")]
+    #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
     /// Block device related errors.
     #[error("virtio-blk device error: {0}")]
     Block(#[source] BlockDeviceError),
@@ -186,16 +186,16 @@ pub enum VmmAction {
     /// booted. The response is sent using the `OutcomeSender`.
     InsertVsockDevice(VsockDeviceConfigInfo),
 
-    #[cfg(feature = "virtio-blk")]
+    #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
     /// Add a new block device or update one that already exists using the `BlockDeviceConfig` as
     /// input. This action can only be called before the microVM has booted.
     InsertBlockDevice(BlockDeviceConfigInfo),
 
-    #[cfg(feature = "virtio-blk")]
+    #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
     /// Remove a new block device for according to given drive_id
     RemoveBlockDevice(String),
 
-    #[cfg(feature = "virtio-blk")]
+    #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
     /// Update a block device, after microVM start. Currently, the only updatable properties
     /// are the RX and TX rate limiters.
     UpdateBlockDevice(BlockDeviceConfigUpdateInfo),
@@ -321,15 +321,15 @@ impl VmmService {
             VmmAction::EndHypervisorTracing => self.end_tracing(),
             #[cfg(feature = "virtio-vsock")]
             VmmAction::InsertVsockDevice(vsock_cfg) => self.add_vsock_device(vmm, vsock_cfg),
-            #[cfg(feature = "virtio-blk")]
+            #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
             VmmAction::InsertBlockDevice(block_device_config) => {
                 self.add_block_device(vmm, event_mgr, block_device_config)
             }
-            #[cfg(feature = "virtio-blk")]
+            #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
             VmmAction::UpdateBlockDevice(blk_update) => {
                 self.update_blk_rate_limiters(vmm, blk_update)
             }
-            #[cfg(feature = "virtio-blk")]
+            #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
             VmmAction::RemoveBlockDevice(drive_id) => {
                 self.remove_block_device(vmm, event_mgr, &drive_id)
             }
@@ -602,7 +602,7 @@ impl VmmService {
             .map_err(VmmActionError::Vsock)
     }
 
-    #[cfg(feature = "virtio-blk")]
+    #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
     // Only call this function as part of the API.
     // If the drive_id does not exist, a new Block Device Config is added to the list.
     #[instrument(skip(self, event_mgr))]
@@ -629,7 +629,7 @@ impl VmmService {
             .map_err(VmmActionError::Block)
     }
 
-    #[cfg(feature = "virtio-blk")]
+    #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
     /// Updates configuration for an emulated net device as described in `config`.
     #[instrument(skip(self))]
     fn update_blk_rate_limiters(
@@ -646,7 +646,7 @@ impl VmmService {
             .map_err(VmmActionError::Block)
     }
 
-    #[cfg(feature = "virtio-blk")]
+    #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
     // Remove the device
     #[instrument(skip(self, event_mgr))]
     fn remove_block_device(
@@ -1342,7 +1342,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "virtio-blk")]
+    #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
     #[test]
     fn test_vmm_action_insert_block_device() {
         skip_if_not_root!();
@@ -1399,7 +1399,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "virtio-blk")]
+    #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
     #[test]
     fn test_vmm_action_update_block_device() {
         skip_if_not_root!();
@@ -1432,7 +1432,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "virtio-blk")]
+    #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
     #[test]
     fn test_vmm_action_remove_block_device() {
         skip_if_not_root!();
