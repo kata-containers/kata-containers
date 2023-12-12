@@ -1,8 +1,8 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata: 
-  name: kata-deploy
-  namespace: kube-system
+  name: not-important
+  namespace: not-important
 spec:
   template:
     spec:

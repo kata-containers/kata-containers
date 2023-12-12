@@ -1,2 +1,5 @@
 resources:
 - kata-cleanup.yaml
+
+components:
+-  ../../kata-deploy/components/latest
