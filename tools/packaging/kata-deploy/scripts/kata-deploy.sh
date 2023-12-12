@@ -353,7 +353,7 @@ function configure_containerd_runtime() {
 	local pluginid=cri
 	
 	# if we are running k0s auto containerd.toml generation, the base template is by default version 2
-	# we can safely assume to reference the older version of cri
+	# we can safely assume to reference the newer version of cri
 	if grep -q "version = 2\>" $containerd_conf_file || [ "$1" == "k0s-worker" ] || [ "$1" == "k0s-controller" ]; then
 		pluginid=\"io.containerd.grpc.v1.cri\"
 	fi
