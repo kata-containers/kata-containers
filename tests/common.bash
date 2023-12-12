@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright (c) 2018-2019 Intel Corporation
+# Copyright (c) 2018-2023 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 
