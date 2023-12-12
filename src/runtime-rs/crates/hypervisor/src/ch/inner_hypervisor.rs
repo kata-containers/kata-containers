@@ -631,7 +631,18 @@ impl CloudHypervisorInner {
     }
 
     pub(crate) fn stop_vm(&mut self) -> Result<()> {
-        block_on(self.cloud_hypervisor_shutdown())?;
+        // If the container workload exits, this method gets called. However,
+        // the container manager always makes a ShutdownContainer request,
+        // which results in this method being called potentially a second
+        // time. Without this check, we'll return an error representing EPIPE
+        // since the CH API socket is at that point invalid.
+        if self.state != VmmState::VmRunning {
+            return Ok(());
+        }
+
+        self.state = VmmState::NotReady;
+
+        block_on(self.cloud_hypervisor_shutdown()).map_err(|e| anyhow!(e))?;
 
         Ok(())
     }
