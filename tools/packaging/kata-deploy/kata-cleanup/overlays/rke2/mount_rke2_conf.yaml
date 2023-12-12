@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: kubelet-kata-cleanup
+  name: kata-cleanup
   namespace: kube-system
 spec:
   template:
