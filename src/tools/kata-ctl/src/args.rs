@@ -10,10 +10,15 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 use thiserror::Error;
 
 #[derive(Parser, Debug)]
-#[clap(name = "kata-ctl", author, about = "Kata Containers control tool")]
+#[clap(
+    name = "kata-ctl",
+    author,
+    about = "Kata Containers control tool",
+    arg_required_else_help = true
+)]
 pub struct KataCtlCli {
     #[clap(subcommand)]
-    pub command: Commands,
+    pub command: Option<Commands>,
     #[clap(short, long, value_enum, value_parser = parse_log_level)]
     /// Sets the minimum log level required for log messages to be displayed. Default is 'info'.
     /// Valid values are: trace, debug, info, warning, error, critical
@@ -21,6 +26,10 @@ pub struct KataCtlCli {
     #[clap(short, long, action)]
     /// If enabled, log messages will be JSON formatted for easier machine parsing
     pub json_logging: bool,
+
+    /// If specified, display a list of config file locations.
+    #[clap(long, action)]
+    pub show_default_config_paths: bool,
 }
 
 fn parse_log_level(arg: &str) -> Result<slog::Level, String> {
