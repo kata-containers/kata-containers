@@ -57,7 +57,7 @@ function create_start_script() {
 
 cat <<EOF >>"${script}"
 #!/bin/bash
-python3.8 models/benchmarks/launch_benchmark.py --benchmark-only --framework tensorflow --model-name resnet50  --precision int8 --mode inference --in-graph /resnet50_int8_pretrained_model.pb --batch-size 116 --num-intra-threads 16 >> results
+python3.10 models/benchmarks/launch_benchmark.py --benchmark-only --framework tensorflow --model-name resnet50  --precision int8 --mode inference --in-graph /resnet50_int8_pretrained_model.pb --batch-size 116 --num-intra-threads 16 >> results
 EOF
 	chmod +x "${script}"
 }
