@@ -13,6 +13,7 @@ use vhost_rs::vhost_user::{
     Error as VhostUserError, Listener as VhostUserListener, Master, VhostUserMaster,
 };
 use vhost_rs::{VhostBackend, VhostUserMemoryRegionInfo, VringConfigData};
+use virtio_bindings::bindings::virtio_net::VIRTIO_F_RING_PACKED;
 use virtio_queue::QueueT;
 use vm_memory::{
     Address, GuestAddress, GuestAddressSpace, GuestMemory, GuestMemoryRegion, MemoryRegionAddress,
@@ -50,7 +51,12 @@ impl Listener {
     pub fn accept(&self) -> VirtioResult<(Master, u64)> {
         loop {
             match self.try_accept() {
-                Ok(Some((master, feature))) => return Ok((master, feature)),
+                Ok(Some((master, mut feature))) => {
+                    // Disable VIRTIO_F_RING_PACKED since the layout of packed virtqueue isn't
+                    // supported by `Endpoint::negotiate()`.
+                    feature &= !(1 << VIRTIO_F_RING_PACKED);
+                    return Ok((master, feature));
+                }
                 Ok(None) => continue,
                 Err(e) => return Err(e),
             }
