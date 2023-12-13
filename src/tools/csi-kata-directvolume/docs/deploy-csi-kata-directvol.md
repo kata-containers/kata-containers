@@ -38,29 +38,38 @@ rolebinding.rbac.authorization.k8s.io/csi-provisioner-role-cfg created
 
 $ ./directvol-deploy.sh
 deploying kata directvolume components
-   ./csi-directvol-driverinfo.yaml
+   ./kata-directvolume/csi-directvol-driverinfo.yaml
 csidriver.storage.k8s.io/directvolume.csi.katacontainers.io created
-   ./csi-directvol-plugin.yaml
-        using           image: registry.k8s.io/sig-storage/csi-provisioner:v3.6.0
-        using           image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.9.0
-        using           image: localhost/kata-directvolume:v1.0.18
-        using           image: registry.k8s.io/sig-storage/livenessprobe:v2.8.0
+   ./kata-directvolume/csi-directvol-plugin.yaml
+kata-directvolume plugin        using           image: registry.k8s.io/sig-storage/csi-provisioner:v3.6.0
+kata-directvolume plugin        using           image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.9.0
+kata-directvolume plugin        using           image: localhost/kata-directvolume:v1.0.52
+kata-directvolume plugin        using           image: registry.k8s.io/sig-storage/livenessprobe:v2.8.0
 daemonset.apps/csi-kata-directvol-plugin created
-NAMESPACE      NAME                                  READY   STATUS    RESTARTS       AGE
-default        pod/csi-kata-directvol-plugin-dlphw   4/4     Running   0              3s
-kube-flannel   pod/kube-flannel-ds-vq796             1/1     Running   1 (52d ago)    52d
-kube-system    pod/coredns-66f779496c-9bmp2          1/1     Running   3 (52d ago)    52d
-kube-system    pod/coredns-66f779496c-qlq6d          1/1     Running   1 (52d ago)    52d
-kube-system    pod/etcd-node001                      1/1     Running   19 (52d ago)   52d
-kube-system    pod/kube-apiserver-node001            1/1     Running   5 (52d ago)    52d
-kube-system    pod/kube-controller-manager-node001   1/1     Running   8 (52d ago)    52d
-kube-system    pod/kube-proxy-p9t6t                  1/1     Running   6 (52d ago)    52d
-kube-system    pod/kube-scheduler-node001            1/1     Running   8 (52d ago)    52d
+   ./kata-directvolume/kata-directvol-ns.yaml
+namespace/kata-directvolume unchanged
+   ./kata-directvolume/kata-directvol-rbac.yaml
+serviceaccount/csi-provisioner unchanged
+clusterrole.rbac.authorization.k8s.io/external-provisioner-runner configured
+clusterrolebinding.rbac.authorization.k8s.io/csi-provisioner-role unchanged
+role.rbac.authorization.k8s.io/external-provisioner-cfg unchanged
+rolebinding.rbac.authorization.k8s.io/csi-provisioner-role-cfg unchanged
+NAMESPACE           NAME                                  READY   STATUS    RESTARTS       AGE
+default             pod/kata-driectvol-01                 1/1     Running   0              3h57m
+kata-directvolume   pod/csi-kata-directvol-plugin-92smp   4/4     Running   0              4s
+kube-flannel        pod/kube-flannel-ds-vq796             1/1     Running   1 (67d ago)    67d
+kube-system         pod/coredns-66f779496c-9bmp2          1/1     Running   3 (67d ago)    67d
+kube-system         pod/coredns-66f779496c-qlq6d          1/1     Running   1 (67d ago)    67d
+kube-system         pod/etcd-tnt001                       1/1     Running   19 (67d ago)   67d
+kube-system         pod/kube-apiserver-tnt001             1/1     Running   5 (67d ago)    67d
+kube-system         pod/kube-controller-manager-tnt001    1/1     Running   8 (67d ago)    67d
+kube-system         pod/kube-proxy-p9t6t                  1/1     Running   6 (67d ago)    67d
+kube-system         pod/kube-scheduler-tnt001             1/1     Running   8 (67d ago)    67d
 
-NAMESPACE      NAME                                       DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR            AGE
-default        daemonset.apps/csi-kata-directvol-plugin   1         1         1       1            1           <none>                   3s
-kube-flannel   daemonset.apps/kube-flannel-ds             1         1         1       1            1           <none>                   52d
-kube-system    daemonset.apps/kube-proxy                  1         1         1       1            1           kubernetes.io/os=linux   52d
+NAMESPACE           NAME                                       DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR            AGE
+kata-directvolume   daemonset.apps/csi-kata-directvol-plugin   1         1         1       1            1           <none>                   4s
+kube-flannel        daemonset.apps/kube-flannel-ds             1         1         1       1            1           <none>                   67d
+kube-system         daemonset.apps/kube-proxy                  1         1         1       1            1           kubernetes.io/os=linux   67d
 ```
 
 

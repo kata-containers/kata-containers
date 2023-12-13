@@ -1,0 +1,190 @@
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  namespace: kata-directvolume
+  name: csi-kata-directvol-plugin
+  labels:
+    app.kubernetes.io/instance: directvolume.csi.katacontainers.io
+    app.kubernetes.io/part-of: csi-driver-kata-directvolume
+    app.kubernetes.io/name: csi-kata-directvol-plugin
+    app.kubernetes.io/component: plugin
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: directvolume.csi.katacontainers.io
+      app.kubernetes.io/part-of: csi-driver-kata-directvolume
+      app.kubernetes.io/name: csi-kata-directvol-plugin
+      app.kubernetes.io/component: plugin
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: directvolume.csi.katacontainers.io
+        app.kubernetes.io/part-of: csi-driver-kata-directvolume
+        app.kubernetes.io/name: csi-kata-directvol-plugin
+        app.kubernetes.io/component: plugin
+    spec:
+      serviceAccountName: csi-provisioner
+      containers:
+        - name: csi-provisioner
+          image: registry.k8s.io/sig-storage/csi-provisioner:v3.6.0
+          args:
+            - -v=3
+            - --csi-address=/csi/csi.sock
+            - --feature-gates=Topology=true
+            - --node-deployment=true
+            - --strict-topology=true
+            - --immediate-topology=false
+            - --worker-threads=5
+              #- --enable-capacity
+              #- --capacity-ownerref-level=0 # pod is owner
+          env:
+          - name: NODE_NAME
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: spec.nodeName
+          - name: NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          securityContext:
+            # This is necessary only for systems with SELinux, where
+            # non-privileged sidecar containers cannot access unix domain socket
+            # created by privileged CSI driver container.
+            privileged: true
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
+
+        - name: node-driver-registrar
+          image: registry.k8s.io/sig-storage/csi-node-driver-registrar:v2.9.0
+          args:
+            - --v=3
+            - --csi-address=/csi/csi.sock
+            - --kubelet-registration-path=/var/lib/kubelet/plugins/csi-kata-directvolume/csi.sock
+          securityContext:
+            # This is necessary only for systems with SELinux, where
+            # non-privileged sidecar containers cannot access unix domain socket
+            # created by privileged CSI driver container.
+            privileged: true
+          env:
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.nodeName
+          volumeMounts:
+          - mountPath: /csi
+            name: socket-dir
+          - mountPath: /registration
+            name: registration-dir
+          - mountPath: /csi-persist-data
+            name: csi-persist-data
+
+        - name: kata-directvolume
+          # build and push it into registry
+          image: localhost/kata-directvolume:v1.0.18
+          args:
+            - --drivername=directvolume.csi.katacontainers.io
+            - --v=5
+            - --endpoint=$(CSI_ENDPOINT)
+            - --statedir=$(STATE_DIR)
+            - --storagepath=$(STORAGE_POOL)
+            - --nodeid=$(KUBE_NODE_NAME)
+          env:
+            - name: CSI_ENDPOINT
+              value: unix:///csi/csi.sock
+            - name: STORAGE_POOL
+              value: /tmp/kata-directvol-storages
+            - name: STATE_DIR
+              value: /csi-persist-data
+            - name: KUBE_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: spec.nodeName
+          securityContext:
+            privileged: true
+          ports:
+          - containerPort: 9898
+            name: healthz
+            protocol: TCP
+          livenessProbe:
+            failureThreshold: 5
+            httpGet:
+              path: /healthz
+              port: healthz
+            initialDelaySeconds: 10
+            timeoutSeconds: 3
+            periodSeconds: 2
+          volumeMounts:
+            - mountPath: /csi
+              name: socket-dir
+            - mountPath: /var/lib/kubelet/pods
+              mountPropagation: Bidirectional
+              name: mountpoint-dir
+            - mountPath: /var/lib/kubelet/plugins
+              mountPropagation: Bidirectional
+              name: plugins-dir
+            - mountPath: /csi-persist-data
+              name: csi-persist-data
+            - mountPath: /dev
+              name: dev-dir
+            # backend block file stored at storage-pool 
+            - mountPath: /tmp/kata-directvol-storages
+              name: storage-pool
+            # direct volume mountInfo.json stored at shared-directvols
+            - mountPath: /run/kata-containers/shared/direct-volumes
+              name: shared-directvols
+
+        - name: liveness-probe
+          volumeMounts:
+          - mountPath: /csi
+            name: socket-dir
+          image: registry.k8s.io/sig-storage/livenessprobe:v2.8.0
+          args:
+          - --csi-address=/csi/csi.sock
+          - --health-port=9898
+
+      volumes:
+        - hostPath:
+            path: /var/lib/kubelet/plugins/csi-kata-directvolume
+            type: DirectoryOrCreate
+          name: socket-dir
+        - hostPath:
+            path: /var/lib/kubelet/pods
+            type: DirectoryOrCreate
+          name: mountpoint-dir
+        - hostPath:
+            path: /var/lib/kubelet/plugins_registry
+            type: Directory
+          name: registration-dir
+        - hostPath:
+            path: /var/lib/kubelet/plugins
+            type: Directory
+          name: plugins-dir
+        - hostPath:
+            # 'path' is where PV data is persisted on host.
+            # using /tmp is also possible while the PVs will not available after plugin container recreation or host reboot
+            path: /var/lib/csi-directvolume-data/
+            type: DirectoryOrCreate
+          name: csi-persist-data
+        - hostPath:
+            path: /dev
+            type: Directory
+          name: dev-dir
+        # kata-containers backend rawblock stored there. 
+        - hostPath:
+            path: /tmp/kata-directvol-storages
+            type: DirectoryOrCreate
+          name: storage-pool
+        # kata-containers direct volumes stored there.
+        - hostPath:
+            path: /run/kata-containers/shared/direct-volumes/
+            type: DirectoryOrCreate
+          name: shared-directvols
+
