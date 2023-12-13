@@ -10,6 +10,14 @@ ARG DESTINATION=/opt/kata-artifacts
 
 COPY ${KATA_ARTIFACTS} ${WORKDIR}
 
+# I understand that in order to be on the safer side, it'd
+# be good to have the alpine packages pointing to a very
+# specific version, but this may break anyone else trying
+# to use a different version of alpine for one reason or
+# another.  With this in mind, let's ignore DL3018.
+# SC2086 is about using double quotes to prevent globbing and
+# word splitting, which can also be ignored for now.
+# hadolint ignore=DL3018,SC2086
 RUN \
 	apk --no-cache add bash curl && \
 	ARCH=$(uname -m) && \
@@ -20,7 +28,9 @@ RUN \
 	mkdir -p ${DESTINATION} && \
 	tar xvf ${WORKDIR}/${KATA_ARTIFACTS} -C ${DESTINATION} && \
 	rm -f ${WORKDIR}/${KATA_ARTIFACTS} && \
-	apk del curl
+	apk del curl && \
+	apk --no-cache add jq py3-pip && \
+	pip install --no-cache-dir yq==3.2.3
 
 COPY scripts ${DESTINATION}/scripts
 COPY runtimeclasses ${DESTINATION}/runtimeclasses
