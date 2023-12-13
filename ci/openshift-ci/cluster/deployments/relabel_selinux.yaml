@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: relabel-selinux-daemonset
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: restorecon
+  template:
+    metadata:
+      labels:
+        app: restorecon
+    spec:
+      serviceAccountName: kata-deploy-sa
+      hostPID: true
+      containers:
+        - name: relabel-selinux-container
+          image: alpine
+          securityContext:
+            privileged: true
+          command: ["/bin/sh", "-c", "
+            set -e;
+            echo Starting the relabel;
+            nsenter --target 1 --mount bash -xc '
+                for ENTRY in \
+                    \"/(.*/)?opt/kata/bin(/.*)?\" \
+                    \"/(.*/)?opt/kata/runtime-rs/bin(/.*)?\" \
+                    \"/(.*/)?opt/kata/share/kata-.*(/.*)?(/.*)?\" \
+                    \"/(.*/)?opt/kata/share/ovmf(/.*)?\" \
+                    \"/(.*/)?opt/kata/share/tdvf(/.*)?\" \
+                    \"/(.*/)?opt/kata/libexec(/.*)?\";
+                do
+                    semanage fcontext -a -t qemu_exec_t \"$ENTRY\" || { echo \"Error in semanage command\"; exit 1; }
+                done;
+                restorecon -v -R /opt/kata || { echo \"Error in restorecon command\"; exit 1; }
+            ';
+            echo NSENTER_FINISHED_WITH: $?;
+            sleep infinity"]
