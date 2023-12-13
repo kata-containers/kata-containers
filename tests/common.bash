@@ -148,6 +148,7 @@ function check_processes() {
 	general_processes=( ${HYPERVISOR_PATH} ${SHIM_PATH} )
 
 	for i in "${general_processes[@]}"; do
+		ps -C "$i" u || true
 		if pgrep -f "$i"; then
 			die "Found unexpected ${i} present"
 		fi
@@ -232,7 +233,8 @@ function kill_kata_components() {
 	# iterate over the list of kata components and stop them
 	for (( i=1; i<=ATTEMPTS; i++ )); do
 		for PID_NAME in "${PID_NAMES[@]}"; do
-			[[ ! -z "$(pidof ${PID_NAME})" ]] && sudo killall -KILL -w "${PID_NAME}" >/dev/null 2>&1 || true
+			ps -C "${PID_NAME}" u || true
+			[[ ! -z "$(pidof ${PID_NAME})" ]] && sudo killall -v -KILL -w "${PID_NAME}" >/dev/null 2>&1 || true
 		done
 		sleep 1
 	done
