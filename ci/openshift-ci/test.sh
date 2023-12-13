@@ -6,7 +6,7 @@
 #
 
 script_dir=$(dirname $0)
-source ${script_dir}/../lib.sh
+source ${script_dir}/lib.sh
 
 suite=$1
 if [ -z "$1" ]; then

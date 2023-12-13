@@ -14,8 +14,8 @@ set -o nounset
 set -o pipefail
 
 script_dir="$(dirname $0)"
-webhook_dir="${script_dir}/../../../kata-webhook"
-source "${script_dir}/../../lib.sh"
+webhook_dir="${script_dir}/../../../tools/testing/kata-webhook"
+source "${script_dir}/../lib.sh"
 KATA_RUNTIME=${KATA_RUNTIME:-kata-ci}
 
 info "Creates the kata-webhook ConfigMap"

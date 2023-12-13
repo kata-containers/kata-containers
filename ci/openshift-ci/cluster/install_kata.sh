@@ -11,7 +11,7 @@ scripts_dir=$(dirname $0)
 deployments_dir=${scripts_dir}/deployments
 configs_dir=${scripts_dir}/configs
 
-source ${scripts_dir}/../../lib.sh
+source ${scripts_dir}/../lib.sh
 
 # Set to 'yes' if you want to configure SELinux to permissive on the cluster
 # workers.
