@@ -45,9 +45,6 @@ jobs:
       USING_NFD: "true"
       TARGET_ARCH: "s390x"
     steps:
-      - name: Adjust a permission for repo
-        run: sudo chown -R $USER:$USER $GITHUB_WORKSPACE
-
       - name: Take a pre-action for self-hosted runner
         run: ${HOME}/script/pre_action.sh ubuntu-2204
 

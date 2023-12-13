@@ -36,9 +36,8 @@ jobs:
         stage:
           - ${{ inputs.stage }}
     steps:
-      - name: Adjust a permission for repo
-        run: |
-          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
+      - name: Take a pre-action for self-hosted runner
+        run: ${HOME}/script/pre_action.sh ubuntu-2204
 
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
@@ -87,9 +86,9 @@ jobs:
     runs-on: s390x
     needs: build-asset
     steps:
-      - name: Adjust a permission for repo
-        run: |
-          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
+      - name: Take a pre-action for self-hosted runner
+        run: ${HOME}/script/pre_action.sh ubuntu-2204
+
       - uses: actions/checkout@v3
 
       - name: get-artifacts
@@ -131,9 +130,8 @@ jobs:
     runs-on: s390x
     needs: [build-asset, build-asset-boot-image-se]
     steps:
-      - name: Adjust a permission for repo
-        run: |
-          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
+      - name: Take a pre-action for self-hosted runner
+        run: ${HOME}/script/pre_action.sh ubuntu-2204
 
       - uses: actions/checkout@v4
         with:
