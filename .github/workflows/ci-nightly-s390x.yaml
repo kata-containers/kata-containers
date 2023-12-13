@@ -22,11 +22,6 @@ jobs:
   k8s-cri-containerd-rhel9-e2e-tests:
     runs-on: s390x-rhel9
     steps:
-    - name: Delete the existing files
-      run: |
-        sudo chown -R $USER:$USER $GITHUB_WORKSPACE
-        sudo rm -rf $GITHUB_WORKSPACE/*
-
     - name: Take a pre-action for self-hosted runner
       run: |
         ${HOME}/script/pre_action.sh rhel9-nightly
