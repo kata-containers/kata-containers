@@ -1,0 +1,12 @@
+# Copyright (c) 2021 Red Hat, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Apply customizations to the kata-webhook.
+#
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kata-webhook
+data:
+  runtime_class: ${RUNTIME_CLASS}

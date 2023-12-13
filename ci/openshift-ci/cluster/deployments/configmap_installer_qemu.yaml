@@ -1,0 +1,14 @@
+# Copyright (c) 2021 Red Hat, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Instruct the daemonset installer to configure Kata Containers to use the
+# system QEMU.
+#
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ci.kata.installer.qemu
+data:
+  qemu_path: /usr/libexec/qemu-kvm
+  host_kernel: "yes"

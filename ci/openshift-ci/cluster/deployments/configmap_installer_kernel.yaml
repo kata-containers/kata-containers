@@ -1,0 +1,13 @@
+# Copyright (c) 2021 Red Hat, Inc.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Instruct the daemonset installer to configure Kata Containers to use the
+# host kernel.
+#
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ci.kata.installer.kernel
+data:
+  host_kernel: "yes"
