@@ -8,7 +8,7 @@
 #
 
 script_dir=$(dirname $0)
-source ${script_dir}/../lib.sh
+source ${script_dir}/lib.sh
 
 pod='http-server'
 
