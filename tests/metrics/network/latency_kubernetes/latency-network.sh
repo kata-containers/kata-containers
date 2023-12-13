@@ -18,6 +18,12 @@ function remove_tmp_file() {
 
 trap remove_tmp_file EXIT
 
+function latency_cleanup() {
+	info "Latency test cleanup"
+	kubectl delete -f "${SCRIPT_PATH}/latency-server.yaml"
+	kubectl delete -f "${SCRIPT_PATH}/latency-client.yaml"
+}
+
 function main() {
 	init_env
 	cmds=("bc" "jq")
@@ -43,6 +49,8 @@ function main() {
 
 	# Create client
 	kubectl create -f "${SCRIPT_PATH}/latency-client.yaml"
+
+	trap latency_cleanup EXIT
 
 	# Get the names of the client pod
 	export client_pod_name="latency-client"
@@ -80,9 +88,5 @@ EOF
 	metrics_json_add_array_element "$json"
 	metrics_json_end_array "Results"
 	metrics_json_save
-
-	kubectl delete pod "$client_pod_name" "$server_pod_name"
-	kubectl get pods -A
-	check_processes
 }
 main "$@"
