@@ -309,7 +309,6 @@ function configure_crio_runtime() {
 
 	cat <<EOF | tee -a "$crio_drop_in_conf_file"
 
-# Path to the Kata Containers runtime binary that uses the $1
 [$kata_conf]
 	runtime_path = "${kata_path}"
 	runtime_type = "vm"
