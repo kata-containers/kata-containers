@@ -294,14 +294,11 @@ function cleanup_different_shims_base() {
 }
 
 function configure_crio_runtime() {
-	local runtime="kata"
-	local configuration="configuration"
-	if [ -n "${1-}" ]; then
-		runtime+="-$1"
-		configuration+="-$1"
-	fi
+	local shim="${1}"
+	local runtime="kata-${shim}"
+	local configuration="configuration-${shim}"
 
-	local config_path=$(get_kata_containers_config_path "${1}")
+	local config_path=$(get_kata_containers_config_path "${shim}")
 
 	local kata_path="/usr/local/bin/containerd-shim-${runtime}-v2"
 	local kata_conf="crio.runtime.runtimes.${runtime}"
@@ -343,12 +340,9 @@ EOF
 }
 
 function configure_containerd_runtime() {
-	local runtime="kata"
-	local configuration="configuration"
-	if [ -n "${2-}" ]; then
-		runtime+="-$2"
-		configuration+="-$2"
-	fi
+	local shim="$2"
+	local runtime="kata-${shim}"
+	local configuration="configuration-${shim}"
 	local pluginid=cri
 	
 	# if we are running k0s auto containerd.toml generation, the base template is by default version 2
@@ -359,7 +353,7 @@ function configure_containerd_runtime() {
 	local runtime_table=".plugins.${pluginid}.containerd.runtimes.\"${runtime}\""
 	local runtime_options_table="${runtime_table}.options"
 	local runtime_type=\"io.containerd."${runtime}".v2\"
-	local runtime_config_path=\"$(get_kata_containers_config_path "${2-}")/${configuration}.toml\"
+	local runtime_config_path=\"$(get_kata_containers_config_path "${shim}")/${configuration}.toml\"
 	
 	tomlq -i -t $(printf '%s.runtime_type=%s' ${runtime_table} ${runtime_type}) ${containerd_conf_file}
 	tomlq -i -t $(printf '%s.privileged_without_host_devices=true' ${runtime_table}) ${containerd_conf_file}
@@ -381,9 +375,6 @@ function configure_containerd() {
 		# backup the config.toml only if a backup doesn't already exist (don't override original)
 		cp -n "$containerd_conf_file" "$containerd_conf_file_backup"
 	fi
-
-	# Add default Kata runtime configuration
-	configure_containerd_runtime "$1" 
 
 	for shim in "${shims[@]}"; do
 		configure_containerd_runtime "$1" $shim
