@@ -27,19 +27,10 @@ impl fmt::Debug for Address {
 }
 
 #[derive(Clone, Debug, Default)]
-pub enum Backend {
-    #[default]
-    Virtio,
-    Vhost,
-}
-
-#[derive(Clone, Debug, Default)]
 pub struct NetworkConfig {
     /// for detach, now it's default value 0.
     pub index: u64,
 
-    /// Network device backend
-    pub backend: Backend,
     /// Host level path for the guest network interface.
     pub host_dev_name: String,
     /// Guest iface name for the guest network interface.
