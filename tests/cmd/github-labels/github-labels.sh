@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Copyright (c) 2019 Intel Corporation
+# Copyright (c) 2019-2023 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -15,6 +15,7 @@ script_name=${0##*/}
 source "/etc/os-release" || "source /usr/lib/os-release"
 
 self_dir=$(dirname "$(readlink -f "$0")")
+yqdir="${self_dir}/../../../ci"
 cidir="${self_dir}/../.."
 source "${cidir}/common.bash"
 
@@ -30,7 +31,7 @@ typeset -r default_color="ffffff"
 
 need_yq() {
 	# install yq if not exist
-	${cidir}/install_yq.sh
+	${yqdir}/install_yq.sh
 
 	command -v yq &>/dev/null || \
 		die 'yq command not found. Ensure "$GOPATH/bin" is in your $PATH.'
