@@ -128,9 +128,23 @@ impl From<&NetworkInterfaceConfig> for VhostNetDeviceConfigInfo {
     fn from(value: &NetworkInterfaceConfig) -> Self {
         let num_queues = value
             .num_queues
+            .map(|nq| {
+                if nq == 0 {
+                    vhost_net_dev_mgr::DEFAULT_NUM_QUEUES
+                } else {
+                    nq
+                }
+            })
             .unwrap_or(vhost_net_dev_mgr::DEFAULT_NUM_QUEUES);
         let queue_size = value
             .queue_size
+            .map(|qs| {
+                if qs == 0 {
+                    vhost_net_dev_mgr::DEFAULT_QUEUE_SIZE
+                } else {
+                    qs
+                }
+            })
             .unwrap_or(vhost_net_dev_mgr::DEFAULT_QUEUE_SIZE);
 
         // It is safe because we tested the type of config before.
