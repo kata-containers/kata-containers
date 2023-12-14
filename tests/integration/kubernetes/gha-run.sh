@@ -251,7 +251,10 @@ function deploy_snapshotter() {
 
 function cleanup_snapshotter() {
 	echo "::group::Cleanuping ${SNAPSHOTTER}"
-	#TODO Add the logic for cleaning up the snapshotter in PR https://github.com/kata-containers/kata-containers/pull/8585.
+	case ${SNAPSHOTTER} in
+		nydus) cleanup_nydus_snapshotter ;;
+		*) >&2 echo "${SNAPSHOTTER} flavour is not supported"; exit 2 ;;
+	esac
 	echo "::endgroup::"
 }
 
@@ -299,6 +302,30 @@ function deploy_nydus_snapshotter() {
 	pods_name=$(kubectl get pods --selector=app=nydus-snapshotter -n nydus-system -o=jsonpath='{.items[*].metadata.name}')
 	kubectl logs ${pods_name} -n nydus-system
 	kubectl describe pod ${pods_name} -n nydus-system
+	echo "::endgroup::"
+}
+
+function cleanup_nydus_snapshotter() {
+	echo "cleanup_nydus_snapshotter"
+	local nydus_snapshotter_install_dir="/tmp/nydus-snapshotter"
+	if [ ! -d "${nydus_snapshotter_install_dir}" ]; then
+		>&2 echo "nydus snapshotter dir not found"
+		exit 1
+	fi
+	
+	pushd "$nydus_snapshotter_install_dir"
+
+	if [ "${KUBERNETES}" = "k3s" ]; then
+		kubectl delete -k "misc/snapshotter/overlays/k3s"
+	else
+		kubectl delete -f "misc/snapshotter/base/nydus-snapshotter.yaml"
+	fi
+	sleep 180s
+	kubectl delete -f "misc/snapshotter/nydus-snapshotter-rbac.yaml"
+	popd
+	sleep 30s
+
+	rm -rf "${nydus_snapshotter_install_dir}"
 	echo "::endgroup::"
 }
 
