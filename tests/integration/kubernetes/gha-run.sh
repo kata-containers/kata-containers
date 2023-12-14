@@ -21,6 +21,7 @@ DOCKER_REGISTRY=${DOCKER_REGISTRY:-quay.io}
 DOCKER_REPO=${DOCKER_REPO:-kata-containers/kata-deploy-ci}
 DOCKER_TAG=${DOCKER_TAG:-kata-containers-latest}
 KATA_DEPLOY_WAIT_TIMEOUT=${KATA_DEPLOY_WAIT_TIMEOUT:-10m}
+SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT=${SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT:-5m}
 KATA_HYPERVISOR=${KATA_HYPERVISOR:-qemu}
 KUBERNETES="${KUBERNETES:-}"
 SNAPSHOTTER="${SNAPSHOTTER:-}"
@@ -240,14 +241,64 @@ function cleanup() {
 }
 
 function deploy_snapshotter() {
-	echo "::group::Deploying ${SNAPSHOTTER:-}"
-	#TODO Add the deployment logic for the snapshotter in PR https://github.com/kata-containers/kata-containers/pull/8585.
+	echo "::group::Deploying ${SNAPSHOTTER}"
+	case ${SNAPSHOTTER} in
+		nydus) deploy_nydus_snapshotter ;;
+		*) >&2 echo "${SNAPSHOTTER} flavour is not supported"; exit 2 ;;
+	esac	
 	echo "::endgroup::"
 }
 
 function cleanup_snapshotter() {
-	echo "::group::Cleanuping ${SNAPSHOTTER:-}"
+	echo "::group::Cleanuping ${SNAPSHOTTER}"
 	#TODO Add the logic for cleaning up the snapshotter in PR https://github.com/kata-containers/kata-containers/pull/8585.
+	echo "::endgroup::"
+}
+
+function deploy_nydus_snapshotter() {
+    echo "::group::deploy_nydus_snapshotter"
+	ensure_yq
+
+	local nydus_snapshotter_install_dir="/tmp/nydus-snapshotter"
+	if [ -d "${nydus_snapshotter_install_dir}" ]; then
+		rm -rf "${nydus_snapshotter_install_dir}"
+	fi
+	mkdir -p "${nydus_snapshotter_install_dir}"
+	nydus_snapshotter_url=$(get_from_kata_deps "externals.nydus-snapshotter.url")
+	nydus_snapshotter_version=$(get_from_kata_deps "externals.nydus-snapshotter.version")
+	git clone -b "${nydus_snapshotter_version}" "${nydus_snapshotter_url}" "${nydus_snapshotter_install_dir}"
+
+	pushd "$nydus_snapshotter_install_dir"
+	if [ "${PULL_TYPE}" == "guest-pull" ]; then
+		# Enable guest pull feature in nydus snapshotter
+		yq write -i misc/snapshotter/base/nydus-snapshotter.yaml 'data.FS_DRIVER' "proxy" --style=double
+	else
+		>&2 echo "Invalid pull type"; exit 2 
+	fi
+	
+	# Disable to read snapshotter config from configmap
+	yq write -i misc/snapshotter/base/nydus-snapshotter.yaml 'data.ENABLE_CONFIG_FROM_VOLUME' "false" --style=double
+	# Enable to run snapshotter as a systemd service
+	yq write -i misc/snapshotter/base/nydus-snapshotter.yaml 'data.ENABLE_SYSTEMD_SERVICE' "true" --style=double
+	# Enable "runtime specific snapshotter" feature in containerd when configuring containerd for snapshotter
+	yq write -i misc/snapshotter/base/nydus-snapshotter.yaml 'data.ENABLE_RUNTIME_SPECIFIC_SNAPSHOTTER' "true" --style=double
+
+	# Deploy nydus snapshotter as a daemonset
+	kubectl create -f "misc/snapshotter/nydus-snapshotter-rbac.yaml"
+	if [ "${KUBERNETES}" = "k3s" ]; then
+		kubectl apply -k "misc/snapshotter/overlays/k3s"
+	else
+		kubectl apply -f "misc/snapshotter/base/nydus-snapshotter.yaml"
+	fi
+	popd
+
+	kubectl rollout status daemonset nydus-snapshotter -n nydus-system --timeout ${SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT}
+	
+	echo "::endgroup::"
+	echo "::group::nydus snapshotter logs"
+	pods_name=$(kubectl get pods --selector=app=nydus-snapshotter -n nydus-system -o=jsonpath='{.items[*].metadata.name}')
+	kubectl logs ${pods_name} -n nydus-system
+	kubectl describe pod ${pods_name} -n nydus-system
 	echo "::endgroup::"
 }
 
