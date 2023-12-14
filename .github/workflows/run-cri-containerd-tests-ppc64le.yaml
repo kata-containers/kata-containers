@@ -57,3 +57,6 @@ jobs:
 
       - name: Run cri-containerd tests
         run: bash tests/integration/cri-containerd/gha-run.sh run
+      
+      - name: Cleanup actions for the self hosted runner
+        run: ${HOME}/scripts/cleanup_runner.sh
