@@ -28,6 +28,7 @@ use lazy_static::lazy_static;
 use nix::sched::{setns, CloneFlags};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fs::create_dir_all;
 use std::os::unix::io::AsRawFd;
@@ -676,7 +677,16 @@ impl CloudHypervisorInner {
     }
 
     pub(crate) async fn get_thread_ids(&self) -> Result<VcpuThreadIds> {
-        Ok(VcpuThreadIds::default())
+        let mut vcpus = HashMap::new();
+
+        let vcpu = 0;
+        let thread_id = self.get_vmm_master_tid().await?;
+
+        vcpus.insert(vcpu, thread_id);
+
+        let vcpu_thread_ids = VcpuThreadIds { vcpus };
+
+        Ok(vcpu_thread_ids)
     }
 
     pub(crate) async fn cleanup(&self) -> Result<()> {
@@ -688,7 +698,9 @@ impl CloudHypervisorInner {
     }
 
     pub(crate) async fn get_pids(&self) -> Result<Vec<u32>> {
-        Ok(Vec::<u32>::new())
+        let pid = self.get_vmm_master_tid().await?;
+
+        Ok(vec![pid])
     }
 
     pub(crate) async fn get_vmm_master_tid(&self) -> Result<u32> {
