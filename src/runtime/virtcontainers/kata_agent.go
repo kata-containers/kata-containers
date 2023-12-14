@@ -793,7 +793,6 @@ func (k *kataAgent) startSandbox(ctx context.Context, sandbox *Sandbox) error {
 		}
 	}
 
-	
 	storages := setupStorages(ctx, sandbox)
 
 	req := &grpc.CreateSandboxRequest{
