@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 
 use kata_types::mount::{
     get_volume_mount_info, join_path, DirectVolumeMountInfo, KATA_DIRECT_VOLUME_ROOT_PATH,
@@ -28,5 +28,12 @@ pub fn get_direct_volume_path(volume_path: &str) -> Result<String> {
     let volume_full_path =
         join_path(KATA_DIRECT_VOLUME_ROOT_PATH, volume_path).context("failed to join path.")?;
 
-    Ok(volume_full_path.display().to_string())
+    if volume_full_path.exists() {
+        Ok(volume_full_path.display().to_string())
+    } else {
+        Err(anyhow!(format!(
+            "direct volume path  {:?} Not Found",
+            &volume_full_path
+        )))
+    }
 }

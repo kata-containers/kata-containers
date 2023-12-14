@@ -94,14 +94,18 @@ impl Mount {
 #[derive(Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
 pub struct DirectVolumeMountInfo {
     /// The type of the volume (ie. block)
+    #[serde(rename = "volume-type")]
     pub volume_type: String,
     /// The device backing the volume.
     pub device: String,
     /// The filesystem type to be mounted on the volume.
+    #[serde(rename = "fstype")]
     pub fs_type: String,
     /// Additional metadata to pass to the agent regarding this volume.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub metadata: HashMap<String, String>,
     /// Additional mount options.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub options: Vec<String>,
 }
 
