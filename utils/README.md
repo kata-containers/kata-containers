@@ -2,14 +2,6 @@
 
 # Kata Manager
 
-> **Warning:**
->
-> - Kata Manager will not work for Fedora 31 and higher since those
->   distribution versions only support cgroups version 2 by default. However,
->   Kata Containers currently requires cgroups version 1 (on the host side). See
->   https://github.com/kata-containers/kata-containers/issues/927 for further
->   details.
-
 > **Note:**
 >
 > We recommend users install Kata Containers using
