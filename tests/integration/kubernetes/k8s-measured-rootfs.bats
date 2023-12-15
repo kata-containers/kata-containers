@@ -8,21 +8,11 @@
 load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
-check_and_skip() {
-	# Currently the only kernel built with measured rootfs support is
-	# the kernel-tdx-experimental.
-	[ "${KATA_HYPERVISOR}" = "qemu-tdx" ] || \
-		skip "measured rootfs tests not implemented for hypervisor: $KATA_HYPERVISOR"
-}
-
 setup() {
-	check_and_skip
 	setup_common
 }
 
 teardown() {
-	check_and_skip
-
 	kubectl describe -f "${pod_config}" || true
 	kubectl delete -f "${pod_config}" || true
 }
