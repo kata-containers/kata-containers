@@ -93,4 +93,5 @@ pub trait Agent: AgentManager + HealthService + Send + Sync {
     async fn set_ip_tables(&self, req: SetIPTablesRequest) -> Result<SetIPTablesResponse>;
     async fn get_volume_stats(&self, req: VolumeStatsRequest) -> Result<VolumeStatsResponse>;
     async fn resize_volume(&self, req: ResizeVolumeRequest) -> Result<Empty>;
+    async fn get_guest_details(&self, req: GetGuestDetailsRequest) -> Result<GuestDetailsResponse>;
 }

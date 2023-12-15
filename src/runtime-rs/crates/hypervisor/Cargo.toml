@@ -35,7 +35,7 @@ kata-types = { path = "../../../libs/kata-types" }
 logging = { path = "../../../libs/logging" }
 shim-interface = { path = "../../../libs/shim-interface" }
 
-dragonball = { path = "../../../dragonball", features = ["atomic-guest-memory", "virtio-vsock", "hotplug", "virtio-blk", "virtio-net", "virtio-fs", "vhost-net", "dbs-upcall"] }
+dragonball = { path = "../../../dragonball", features = ["atomic-guest-memory", "virtio-vsock", "hotplug", "virtio-blk", "virtio-net", "virtio-fs", "vhost-net", "dbs-upcall","virtio-mem", "virtio-balloon"] }
 
 ch-config = { path = "ch-config", optional = true }
 tests_utils = { path = "../../tests/utils" }

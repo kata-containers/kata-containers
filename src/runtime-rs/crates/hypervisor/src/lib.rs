@@ -26,7 +26,7 @@ pub mod ch;
 use anyhow::Result;
 use async_trait::async_trait;
 use hypervisor_persist::HypervisorState;
-use kata_types::capabilities::Capabilities;
+use kata_types::capabilities::{Capabilities, CapabilityBits};
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 
 pub use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
@@ -73,6 +73,14 @@ pub struct VcpuThreadIds {
     pub vcpus: HashMap<u32, u32>,
 }
 
+#[derive(Debug, Default)]
+pub struct MemoryConfig {
+    pub slot: u32,
+    pub size_mb: u32,
+    pub addr: u64,
+    pub probe: bool,
+}
+
 #[async_trait]
 pub trait Hypervisor: std::fmt::Debug + Send + Sync {
     // vm manager
@@ -83,6 +91,7 @@ pub trait Hypervisor: std::fmt::Debug + Send + Sync {
     async fn save_vm(&self) -> Result<()>;
     async fn resume_vm(&self) -> Result<()>;
     async fn resize_vcpu(&self, old_vcpus: u32, new_vcpus: u32) -> Result<(u32, u32)>; // returns (old_vcpus, new_vcpus)
+    async fn resize_memory(&self, new_mem_mb: u32) -> Result<(u32, MemoryConfig)>;
 
     // device manager
     async fn add_device(&self, device: DeviceType) -> Result<DeviceType>;
@@ -103,4 +112,7 @@ pub trait Hypervisor: std::fmt::Debug + Send + Sync {
     async fn save_state(&self) -> Result<HypervisorState>;
     async fn capabilities(&self) -> Result<Capabilities>;
     async fn get_hypervisor_metrics(&self) -> Result<String>;
+    async fn set_capabilities(&self, flag: CapabilityBits);
+    async fn set_guest_memory_block_size(&self, size: u32);
+    async fn guest_memory_block_size(&self) -> u32;
 }
