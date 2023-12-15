@@ -22,18 +22,18 @@
 //! part and common part. But the Kata 2.0 has adopted a policy to build a superset for all
 //! hypervisors, so let's contain it...
 
+use super::{default, ConfigOps, ConfigPlugin, TomlConfig};
+use crate::annotations::KATA_ANNO_CFG_HYPERVISOR_PREFIX;
+use crate::{eother, resolve_path, sl, validate_path};
+use byte_unit::{Byte, Unit};
+use lazy_static::lazy_static;
+use regex::RegexSet;
+use serde_enum_str::{Deserialize_enum_str, Serialize_enum_str};
 use std::collections::HashMap;
 use std::io::{self, Result};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-
-use lazy_static::lazy_static;
-use regex::RegexSet;
-use serde_enum_str::{Deserialize_enum_str, Serialize_enum_str};
-
-use super::{default, ConfigOps, ConfigPlugin, TomlConfig};
-use crate::annotations::KATA_ANNO_CFG_HYPERVISOR_PREFIX;
-use crate::{eother, resolve_path, sl, validate_path};
+use sysinfo::{System, SystemExt};
 
 mod dragonball;
 pub use self::dragonball::{DragonballConfig, HYPERVISOR_NAME_DRAGONBALL};
@@ -586,6 +586,13 @@ pub struct MemoryInfo {
     #[serde(default)]
     pub default_memory: u32,
 
+    /// Default maximum memory in MiB per SB / VM
+    /// unspecified or == 0           --> will be set to the actual amount of physical RAM
+    /// > 0 <= amount of physical RAM --> will be set to the specified number
+    /// > amount of physical RAM      --> will be set to the actual amount of physical RAM
+    #[serde(default)]
+    pub default_maxmemory: u32,
+
     /// Default memory slots per SB/VM.
     ///
     /// This is will determine the times that memory will be hotadded to sandbox/VM.
@@ -662,6 +669,12 @@ impl MemoryInfo {
             self.file_mem_backend,
             "Memory backend file {} is invalid: {}"
         )?;
+        if self.default_maxmemory == 0 {
+            let s = System::new_all();
+            self.default_maxmemory = Byte::from_u64(s.total_memory())
+                .get_adjusted_unit(Unit::MiB)
+                .get_value() as u32;
+        }
         Ok(())
     }
 

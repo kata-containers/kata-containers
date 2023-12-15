@@ -6,13 +6,14 @@
 
 use super::vmm_instance::VmmInstance;
 use crate::{
-    device::DeviceType, hypervisor_persist::HypervisorState, kernel_param::KernelParams, VmmState,
-    DEV_HUGEPAGES, HUGETLBFS, HUGE_SHMEM, HYPERVISOR_DRAGONBALL, SHMEM,
+    device::DeviceType, hypervisor_persist::HypervisorState, kernel_param::KernelParams,
+    MemoryConfig, VmmState, DEV_HUGEPAGES, HUGETLBFS, HUGE_SHMEM, HYPERVISOR_DRAGONBALL, SHMEM,
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use dragonball::{
     api::v1::{BootSourceConfig, VcpuResizeInfo},
+    device_manager::{balloon_dev_mgr::BalloonDeviceConfigInfo, mem_dev_mgr::MemDeviceConfigInfo},
     vm::VmConfigInfo,
 };
 
@@ -26,11 +27,13 @@ use kata_types::{
 };
 use nix::mount::MsFlags;
 use persist::sandbox_persist::Persist;
+use std::cmp::Ordering;
 use std::{collections::HashSet, fs::create_dir_all};
 
 const DRAGONBALL_KERNEL: &str = "vmlinux";
 const DRAGONBALL_ROOT_FS: &str = "rootfs";
-
+const BALLOON_DEVICE_ID: &str = "balloon0";
+const MEM_DEVICE_ID: &str = "memmr0";
 #[derive(Debug)]
 pub struct DragonballInner {
     /// sandbox id
@@ -68,6 +71,15 @@ pub struct DragonballInner {
 
     /// dragonball capabilities
     pub(crate) capabilities: Capabilities,
+
+    /// the size of memory block of guest OS
+    pub(crate) guest_memory_block_size_mb: u32,
+
+    /// the hotplug memory size
+    pub(crate) mem_hotplug_size_mb: u32,
+
+    /// the balloon size
+    pub(crate) balloon_size: u32,
 }
 
 impl DragonballInner {
@@ -77,7 +89,8 @@ impl DragonballInner {
             CapabilityBits::BlockDeviceSupport
                 | CapabilityBits::BlockDeviceHotplugSupport
                 | CapabilityBits::FsSharingSupport
-                | CapabilityBits::HybridVsockSupport,
+                | CapabilityBits::HybridVsockSupport
+                | CapabilityBits::GuestMemoryProbe,
         );
         DragonballInner {
             id: "".to_string(),
@@ -92,6 +105,9 @@ impl DragonballInner {
             run_dir: "".to_string(),
             cached_block_devices: Default::default(),
             capabilities,
+            guest_memory_block_size_mb: 0,
+            mem_hotplug_size_mb: 0,
+            balloon_size: 0,
         }
     }
 
@@ -339,12 +355,108 @@ impl DragonballInner {
         Ok((old_vcpus, new_vcpus))
     }
 
+    pub(crate) fn resize_memory(&mut self, new_mem_mb: u32) -> Result<(u32, MemoryConfig)> {
+        // check the invalid request memory
+        if new_mem_mb > self.hypervisor_config().memory_info.default_maxmemory {
+            warn!(
+                sl!(),
+                "memory size unchanged, the request memory size {} is greater than the max memory size {}",
+                new_mem_mb, self.hypervisor_config().memory_info.default_maxmemory
+            );
+
+            return Ok((
+                0,
+                MemoryConfig {
+                    ..Default::default()
+                },
+            ));
+        }
+
+        let had_mem_mb = self.config.memory_info.default_memory + self.mem_hotplug_size_mb;
+        match new_mem_mb.cmp(&had_mem_mb) {
+            Ordering::Greater => {
+                // clean virtio-ballon device before hotplug memory, resize to 0
+                if self.balloon_size > 0 {
+                    let balloon_config = BalloonDeviceConfigInfo {
+                        balloon_id: BALLOON_DEVICE_ID.to_owned(),
+                        size_mib: 0,
+                        use_shared_irq: None,
+                        use_generic_irq: None,
+                        f_deflate_on_oom: false,
+                        f_reporting: false,
+                    };
+                    self.vmm_instance
+                        .insert_balloon_device(balloon_config)
+                        .context("failed to insert balloon device")?;
+                }
+
+                // update the hotplug size
+                self.mem_hotplug_size_mb = new_mem_mb - self.config.memory_info.default_memory;
+                self.balloon_size = 0;
+
+                let add_mem_mb = new_mem_mb - had_mem_mb;
+                self.vmm_instance.insert_mem_device(MemDeviceConfigInfo {
+                    mem_id: MEM_DEVICE_ID.to_owned(),
+                    size_mib: add_mem_mb as u64,
+                    capacity_mib: self.hypervisor_config().memory_info.default_maxmemory as u64,
+                    multi_region: true,
+                    host_numa_node_id: None,
+                    guest_numa_node_id: None,
+                    use_shared_irq: None,
+                    use_generic_irq: None,
+                })?;
+            }
+            Ordering::Less => {
+                // we only use one balloon device here, and resize it to release memory
+                // the operation we do here is inserting a new BALLOON_DEVICE_ID device or resizing it
+                let balloon_config = BalloonDeviceConfigInfo {
+                    balloon_id: BALLOON_DEVICE_ID.to_owned(),
+                    size_mib: (had_mem_mb - new_mem_mb) as u64,
+                    use_shared_irq: None,
+                    use_generic_irq: None,
+                    f_deflate_on_oom: false,
+                    f_reporting: false,
+                };
+                self.balloon_size = had_mem_mb - new_mem_mb;
+                self.vmm_instance
+                    .insert_balloon_device(balloon_config)
+                    .context("failed to insert balloon device")?;
+            }
+            Ordering::Equal => {
+                // Everything is already set up
+                info!(
+                    sl!(),
+                    "memory size unchanged, no need to do memory resizing"
+                );
+            }
+        };
+
+        Ok((
+            new_mem_mb,
+            MemoryConfig {
+                ..Default::default()
+            },
+        ))
+    }
+
     pub fn set_hypervisor_config(&mut self, config: HypervisorConfig) {
         self.config = config;
     }
 
     pub fn hypervisor_config(&self) -> HypervisorConfig {
         self.config.clone()
+    }
+
+    pub(crate) fn set_capabilities(&mut self, flag: CapabilityBits) {
+        self.capabilities.add(flag);
+    }
+
+    pub(crate) fn set_guest_memory_block_size(&mut self, size: u32) {
+        self.guest_memory_block_size_mb = size;
+    }
+
+    pub(crate) fn guest_memory_block_size_mb(&self) -> u32 {
+        self.guest_memory_block_size_mb
     }
 }
 
@@ -387,6 +499,9 @@ impl Persist for DragonballInner {
             pending_devices: vec![],
             cached_block_devices: hypervisor_state.cached_block_devices,
             capabilities: Capabilities::new(),
+            guest_memory_block_size_mb: 0,
+            mem_hotplug_size_mb: 0,
+            balloon_size: 0,
         })
     }
 }

@@ -705,10 +705,10 @@ impl Annotation {
                     }
                     // Hypervisor Memory related annotations
                     KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY => {
-                        match byte_unit::Byte::from_str(value) {
+                        match byte_unit::Byte::parse_str(value,true) {
                             Ok(mem_bytes) => {
                                 let memory_size = mem_bytes
-                                    .get_adjusted_unit(byte_unit::ByteUnit::MiB)
+                                    .get_adjusted_unit(byte_unit::Unit::MiB)
                                     .get_value()
                                     as u32;
                                 info!(sl!(), "get mem {} from annotations: {}", memory_size, value);
