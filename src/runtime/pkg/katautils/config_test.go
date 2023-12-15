@@ -980,7 +980,7 @@ func TestHypervisorDefaults(t *testing.T) {
 	assert.Equal(h.machineType(), defaultMachineType, "default hypervisor machine type wrong")
 	assert.Equal(h.defaultVCPUs(), float32(defaultVCPUCount), "default vCPU number is wrong")
 	assert.Equal(h.defaultMaxVCPUs(), numCPUs, "default max vCPU number is wrong")
-	assert.Equal(h.defaultMemSz(), defaultMemSize, "default memory size is wrong")
+	assert.Equal(h.defaultMemSz(), uint32(0), "default memory size is wrong")
 
 	machineType := "foo"
 	h.MachineType = machineType
@@ -1563,7 +1563,7 @@ func TestCheckHypervisorConfig(t *testing.T) {
 	// function, hence no test for it here.
 
 	data := []testData{
-		{"", "", 0, true, false},
+		{"", "", 0, false, false},
 
 		{imageENOENT, "", 2, true, false},
 		{"", initrdENOENT, 2, true, false},

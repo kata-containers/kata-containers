@@ -76,7 +76,7 @@ kernel_params = "@KERNELPARAMS@"
 # < 0                             --> will be set to the actual number of physical cores
 # > 0 <= number of physical cores --> will be set to the specified number
 # > number of physical cores      --> will be set to the actual number of physical cores
-default_vcpus = 1
+default_vcpus = @DEFVCPUS@
 
 # Default maximum number of vCPUs per SB/VM:
 # unspecified or == 0             --> will be set to the actual number of physical cores or to the maximum number
@@ -437,6 +437,16 @@ sandbox_cgroup_only = @DEFSANDBOXCGROUPONLY@
 #   does not yet support sandbox sizing annotations.
 # - When running single containers using a tool like ctr, container sizing information will be available.
 static_sandbox_resource_mgmt = @DEFSTATICRESOURCEMGMT_CLH@
+
+# If set, the runtime will use the value as the default workload memory in MB for the sandbox when no workload memory request is passed
+# down to the shim via the OCI when static sandbox resource management is enabled. With this, we ensure that workloads have a proper
+# default amount of memory available within the sandbox.
+static_sandbox_default_workload_mem=@DEFSTATICSANDBOXWORKLOADMEM@
+
+# If set, the runtime will use the value as the default number of vcpus for the sandbox when no workload vcpu request is passed
+# down to the shim via the OCI when static sandbox resource management is enabled. With this, we ensure that workloads have a proper
+# default amount of vcpus available within the sandbox.
+static_sandbox_default_workload_vcpus=@DEFSTATICSANDBOXWORKLOADVCPUS@
 
 # If specified, sandbox_bind_mounts identifieds host paths to be mounted (ro) into the sandboxes shared path.
 # This is only valid if filesystem sharing is utilized. The provided path(s) will be bindmounted into the shared fs directory.

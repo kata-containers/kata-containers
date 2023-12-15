@@ -195,6 +195,8 @@ type runtime struct {
 	Debug                     bool     `toml:"enable_debug"`
 	SandboxCgroupOnly         bool     `toml:"sandbox_cgroup_only"`
 	StaticSandboxResourceMgmt bool     `toml:"static_sandbox_resource_mgmt"`
+	StaticSandboxWorkloadDefaultMem uint32   `toml:"static_sandbox_default_workload_mem"`
+	StaticSandboxWorkloadDefaultVcpus float32  `toml:"static_sandbox_default_workload_vcpus"`
 	EnablePprof               bool     `toml:"enable_pprof"`
 	DisableGuestEmptyDir      bool     `toml:"disable_guest_empty_dir"`
 	EmptyDirMode              string   `toml:"emptydir_mode"`
@@ -1721,6 +1723,8 @@ func LoadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 	config.EnableVCPUsPinning = tomlConf.Runtime.EnableVCPUsPinning
 	config.GuestSeLinuxLabel = tomlConf.Runtime.GuestSeLinuxLabel
 	config.StaticSandboxResourceMgmt = tomlConf.Runtime.StaticSandboxResourceMgmt
+	config.StaticSandboxWorkloadDefaultMem = tomlConf.Runtime.StaticSandboxWorkloadDefaultMem
+	config.StaticSandboxWorkloadDefaultVcpus = tomlConf.Runtime.StaticSandboxWorkloadDefaultVcpus
 	config.SandboxCgroupOnly = tomlConf.Runtime.SandboxCgroupOnly
 	config.DisableNewNetNs = tomlConf.Runtime.DisableNewNetNs
 	config.EnablePprof = tomlConf.Runtime.EnablePprof
@@ -2119,11 +2123,6 @@ func checkHypervisorConfig(config vc.HypervisorConfig) error {
 	}
 
 	memSizeMB := int64(config.MemorySize)
-
-	if memSizeMB == 0 {
-		return errors.New("VM memory cannot be zero")
-	}
-
 	mb := int64(1024 * 1024)
 
 	for _, image := range images {
