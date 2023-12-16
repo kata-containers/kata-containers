@@ -45,6 +45,7 @@ The `runtime-rs` directory contains some crates in the crates directory that com
 | [`hypervisor`](crates/hypervisor)| hypervisor that act as a sandbox |
 | [`agent`](crates/agent)| library used to communicate with agent in the guest OS |
 | [`persist`](crates/persist)| persist container state to disk |
+| [`fuzz`](fuzz)| persist container state to disk |
 
 ### shim
 
@@ -121,6 +122,9 @@ See the
 [debugging section of the developer guide](../../docs/Developer-Guide.md#troubleshoot-kata-containers).
 
 An [experimental alternative binary](crates/shim-ctl/README.md) is available that removes containerd dependencies and makes it easier to run the shim proper outside of the runtime's usual deployment environment (i.e. on a developer machine).
+
+## Fuzzing
+The rust runtime make use of fuzz-testing to find bugs and security issues. See the [fuzzing guide](fuzz/README.md) for more details.
 
 ## Limitations
 

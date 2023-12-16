@@ -1,0 +1,25 @@
+[package]
+name = "fuzz"
+version = "0.0.0"
+publish = false
+edition = "2018"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+hypervisor = { path = "../crates/hypervisor" }
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "fuzz_hypervisor_device_roundtrip"
+path = "fuzz_targets/fuzz_hypervisor_device_roundtrip.rs"
+test = false
+doc = false
