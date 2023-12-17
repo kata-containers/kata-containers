@@ -24,6 +24,8 @@ use std::thread::sleep;
 use std::time::Duration;
 use ttrpc::context::Context;
 
+mod command;
+
 // Run the specified closure to set an automatic value if the ttRPC Context
 // does not contain the special values requesting automatic values be
 // suppressed.
