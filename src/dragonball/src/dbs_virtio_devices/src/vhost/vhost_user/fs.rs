@@ -813,7 +813,7 @@ mod tests {
 
     #[test]
     fn test_vhost_user_fs_virtio_device_normal() {
-        let device_socket = "/var/tmp/vhost.1";
+        let device_socket = "/tmp/vhost.1";
         let tag = "test_fs";
 
         let handler = thread::spawn(move || {
@@ -882,7 +882,7 @@ mod tests {
 
     #[test]
     fn test_vhost_user_fs_virtio_device_activate() {
-        let device_socket = "/var/tmp/vhost.1";
+        let device_socket = "/tmp/vhost.1";
         let tag = "test_fs";
 
         let handler = thread::spawn(move || {
