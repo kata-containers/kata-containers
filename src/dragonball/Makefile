@@ -4,6 +4,8 @@
 
 include ../../utils.mk
 
+PROJECT_DIRS := $(shell find . -name Cargo.toml -printf '%h\n' | sort -u)
+
 ifeq ($(ARCH), s390x)
 default build check test clippy:
 	@echo "s390x not support currently"
@@ -40,7 +42,10 @@ clean:
 
 test:
 ifdef SUPPORT_VIRTUALIZATION
-	RUST_BACKTRACE=1 cargo test --all-features --target $(TRIPLE) -- --nocapture --test-threads=1
+	@set -e; \
+	for dir in $(PROJECT_DIRS); do \
+		bash -c "pushd $${dir} && RUST_BACKTRACE=1 cargo test --all-features --target $(TRIPLE) -- --nocapture --test-threads=1 && popd"; \
+	done
 else
 	@echo "INFO: skip testing dragonball, it need virtualization support."
 	exit 0
