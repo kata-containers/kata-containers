@@ -92,6 +92,7 @@ Class | Method | HTTP request | Description
 *DefaultApi* | [**VmAddFsPut**](docs/DefaultApi.md#vmaddfsput) | **Put** /vm.add-fs | Add a new virtio-fs device to the VM
 *DefaultApi* | [**VmAddNetPut**](docs/DefaultApi.md#vmaddnetput) | **Put** /vm.add-net | Add a new network device to the VM
 *DefaultApi* | [**VmAddPmemPut**](docs/DefaultApi.md#vmaddpmemput) | **Put** /vm.add-pmem | Add a new pmem device to the VM
+*DefaultApi* | [**VmAddUserDevicePut**](docs/DefaultApi.md#vmadduserdeviceput) | **Put** /vm.add-user-device | Add a new userspace device to the VM
 *DefaultApi* | [**VmAddVdpaPut**](docs/DefaultApi.md#vmaddvdpaput) | **Put** /vm.add-vdpa | Add a new vDPA device to the VM
 *DefaultApi* | [**VmAddVsockPut**](docs/DefaultApi.md#vmaddvsockput) | **Put** /vm.add-vsock | Add a new vsock device to the VM
 *DefaultApi* | [**VmCoredumpPut**](docs/DefaultApi.md#vmcoredumpput) | **Put** /vm.coredump | Takes a VM coredump.
@@ -137,6 +138,7 @@ Class | Method | HTTP request | Description
  - [TokenBucket](docs/TokenBucket.md)
  - [TpmConfig](docs/TpmConfig.md)
  - [VdpaConfig](docs/VdpaConfig.md)
+ - [VmAddUserDevice](docs/VmAddUserDevice.md)
  - [VmConfig](docs/VmConfig.md)
  - [VmCoredumpData](docs/VmCoredumpData.md)
  - [VmInfo](docs/VmInfo.md)

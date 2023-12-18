@@ -328,6 +328,27 @@ paths:
         "500":
           description: The new vDPA device could not be added to the VM instance.
       summary: Add a new vDPA device to the VM
+  /vm.add-user-device:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VmAddUserDevice'
+        description: The path of the new device
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PciDeviceInfo'
+          description: The new device was successfully added to the VM instance.
+        "204":
+          description: The new device was successfully (cold) added to the VM instance.
+        "404":
+          description: The new device could not be added to the VM instance.
+      summary: Add a new userspace device to the VM
   /vm.snapshot:
     put:
       requestBody:
@@ -1934,4 +1955,13 @@ components:
           type: boolean
       required:
       - destination_url
+      type: object
+    VmAddUserDevice:
+      example:
+        socket: socket
+      properties:
+        socket:
+          type: string
+      required:
+      - socket
       type: object

@@ -35,6 +35,7 @@ docs/SgxEpcConfig.md
 docs/TokenBucket.md
 docs/TpmConfig.md
 docs/VdpaConfig.md
+docs/VmAddUserDevice.md
 docs/VmConfig.md
 docs/VmCoredumpData.md
 docs/VmInfo.md
@@ -75,6 +76,7 @@ model_sgx_epc_config.go
 model_token_bucket.go
 model_tpm_config.go
 model_vdpa_config.go
+model_vm_add_user_device.go
 model_vm_config.go
 model_vm_coredump_data.go
 model_vm_info.go
