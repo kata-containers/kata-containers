@@ -330,9 +330,11 @@ impl DeviceManager {
                 // No need to do find device for hybrid vsock device.
                 Arc::new(Mutex::new(HybridVsockDevice::new(&device_id, hvconfig)))
             }
-            DeviceConfig::VsockCfg(_vconfig) => {
+            DeviceConfig::VsockCfg(vconfig) => {
                 // No need to do find device for vsock device.
-                Arc::new(Mutex::new(VsockDevice::new(device_id.clone()).await?))
+                Arc::new(Mutex::new(
+                    VsockDevice::new(device_id.clone(), vconfig).await?,
+                ))
             }
             DeviceConfig::ShareFsCfg(config) => {
                 // Try to find the sharefs device. If found, just return matched device id.
