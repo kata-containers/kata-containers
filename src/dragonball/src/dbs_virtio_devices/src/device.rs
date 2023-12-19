@@ -576,6 +576,7 @@ pub(crate) mod tests {
     use vm_memory::{GuestMemoryAtomic, GuestMemoryMmap, GuestMemoryRegion, MmapRegion};
 
     use super::*;
+    use crate::tests::VirtQueue;
     use crate::{VIRTIO_INTR_CONFIG, VIRTIO_INTR_VRING};
 
     pub fn create_virtio_device_config() -> VirtioDeviceConfig<Arc<GuestMemoryMmap>> {
@@ -625,11 +626,17 @@ pub(crate) mod tests {
         let status = Arc::new(InterruptStatusRegister32::new());
         let notifier = Arc::new(LegacyNotifier::new(group, status, VIRTIO_INTR_VRING));
 
-        let mut cfg = VirtioQueueConfig::<QueueSync>::create(1024, 1).unwrap();
-        cfg.set_interrupt_notifier(notifier);
-
         let mem =
             Arc::new(GuestMemoryMmap::<()>::from_ranges(&[(GuestAddress(0), 0x10000)]).unwrap());
+        let vq = VirtQueue::new(GuestAddress(0), &mem, 1024);
+        let q = vq.create_queue();
+        let mut cfg = VirtioQueueConfig::new(
+            q,
+            Arc::new(EventFd::new(EFD_NONBLOCK).unwrap()),
+            notifier,
+            1,
+        );
+
         let desc = cfg.get_next_descriptor(mem.memory()).unwrap();
         assert!(matches!(desc, None));
 
@@ -650,12 +657,17 @@ pub(crate) mod tests {
         let status = Arc::new(InterruptStatusRegister32::new());
         let notifier = Arc::new(LegacyNotifier::new(group, status, VIRTIO_INTR_VRING));
 
-        let mut cfg = VirtioQueueConfig::<QueueSync>::create(1024, 1).unwrap();
-        cfg.set_interrupt_notifier(notifier);
-        let mut cfg = cfg.clone();
-
         let mem =
             Arc::new(GuestMemoryMmap::<()>::from_ranges(&[(GuestAddress(0), 0x10000)]).unwrap());
+        let vq = VirtQueue::new(GuestAddress(0), &mem, 1024);
+        let q = vq.create_queue();
+        let mut cfg = VirtioQueueConfig::new(
+            q,
+            Arc::new(EventFd::new(EFD_NONBLOCK).unwrap()),
+            notifier,
+            1,
+        );
+
         let desc = cfg.get_next_descriptor(mem.memory()).unwrap();
         assert!(matches!(desc, None));
 
