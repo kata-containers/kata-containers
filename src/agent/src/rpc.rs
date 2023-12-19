@@ -147,7 +147,6 @@ fn config_allows(req: &impl MessageDyn) -> ttrpc::Result<()> {
     }
 }
 
-
 #[cfg(feature = "agent-policy")]
 async fn policy_allows(req: &(impl MessageDyn + serde::Serialize)) -> ttrpc::Result<()> {
     let request = serde_json::to_string(req).unwrap();
