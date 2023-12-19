@@ -104,6 +104,9 @@ pub struct Container {
     env: Option<Vec<EnvVar>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    envFrom: Option<Vec<EnvFromSource>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     resources: Option<ResourceRequirements>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -368,6 +371,37 @@ pub struct ConfigMapKeySelector {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    optional: Option<bool>,
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EnvFromSource {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub configMapRef: Option<ConfigMapEnvSource>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secretRef: Option<SecretEnvSource>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prefix: Option<String>,
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SecretEnvSource {
+    pub name: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    optional: Option<bool>,
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ConfigMapEnvSource {
+    pub name: String,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     optional: Option<bool>,
