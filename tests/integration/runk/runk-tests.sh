@@ -40,8 +40,12 @@ test_runk() {
 
     echo "test ps command"
     sudo ctr t exec --detach --exec-id id1 ${CONTAINER_ID} sh
-    # one line is the titles, and the other 2 lines are porcess info
-    [ "3" == "$(sudo ctr t ps ${CONTAINER_ID} | wc -l)" ] || die "ps command failed"
+    ps_out="$(sudo ctr t ps ${CONTAINER_ID})" || die "ps command failed"
+    printf "ps output:\n%s\n" "${ps_out}"
+    lines_no="$(printf "%s\n" "${ps_out}" | wc -l)"
+    echo "ps output lines: ${lines_no}"
+    # one line is the titles, and the other 2 lines are process info
+    [ "3" == "${lines_no}" ] || die "unexpected ps command output"
 
     echo "test pause and resume"
     # The process outputs lines into /tmp/{CONTAINER_ID}, which can be read in host when it's frozon.
