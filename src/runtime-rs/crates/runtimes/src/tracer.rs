@@ -64,6 +64,11 @@ impl KataTracer {
         self.enabled
     }
 
+    /// Get the tracing subscriber.
+    pub fn subscriber(&self) -> Arc<dyn Subscriber + Send + Sync> {
+        self.subscriber.clone()
+    }
+
     /// Call when the tracing is enabled (set in toml configuration file)
     /// This setup the subscriber, which maintains the span's information, to global and
     /// inside KATA_TRACER.
