@@ -76,6 +76,27 @@ pub fn get_value(value_from: &pod::EnvVarSource, config_maps: &Vec<ConfigMap>) -
     None
 }
 
+//eg ["key1=value1", "key2=value2"]
+pub fn get_values(config_map_name: &str, config_maps: &Vec<ConfigMap>) -> Option<Vec<String>> {
+    for config_map in config_maps {
+        if config_map_name == &config_map.metadata.name.clone().unwrap() {
+            return config_map
+                .data
+                .as_ref()?
+                .keys()
+                .map(|key| {
+                    let value = config_map.data.as_ref().unwrap().get(key).unwrap();
+                    format!("{}={value}", &key)
+                })
+                .collect::<Vec<String>>()
+                .into();
+        }
+    }
+
+    None
+}
+
+
 #[async_trait]
 impl yaml::K8sResource for ConfigMap {
     async fn init(

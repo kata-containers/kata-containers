@@ -532,6 +532,21 @@ impl Container {
                 }
             }
         }
+
+        if let Some(env_from_sources) = &self.envFrom {
+            for env_from_source in env_from_sources {
+                let env_from_source_values = env_from_source.get_values(
+                    config_maps,
+                    secrets,
+                );
+
+                for value in env_from_source_values {
+                    if !dest_env.contains(&value) {
+                        dest_env.push(value.clone());
+                    }
+                }
+            }
+        }
     }
 
     pub fn is_privileged(&self) -> bool {
@@ -619,6 +634,34 @@ impl Container {
         }
 
         commands
+    }
+}
+
+impl EnvFromSource {
+    pub fn get_values(
+        &self,
+        config_maps: &Vec<config_map::ConfigMap>,
+        secrets: &Vec<secret::Secret>,
+    ) -> Vec<String> {
+
+        if let Some(config_map_env_source) = &self.configMapRef {
+            if let Some(value) = config_map::get_values(&config_map_env_source.name, config_maps) {
+                return value.clone();
+            }
+            else {
+                panic!("Couldn't get values from configmap ref: {}", &config_map_env_source.name);
+            }
+        }
+
+        if let Some(secret_env_source) = &self.secretRef {
+            if let Some(value) = secret::get_values(&secret_env_source.name, secrets) {
+                return value.clone();
+            }
+            else {
+                panic!("Couldn't get values from secret ref: {}", &secret_env_source.name);
+            }
+        }
+        panic!("envFrom: no configmap or secret source found!");
     }
 }
 

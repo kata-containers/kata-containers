@@ -15,6 +15,7 @@ use crate::yaml;
 
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
+use serde::de::value;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -62,6 +63,28 @@ pub fn get_value(value_from: &pod::EnvVarSource, secrets: &Vec<Secret>) -> Optio
     for secret in secrets {
         if let Some(value) = secret.get_value(value_from) {
             return Some(value);
+        }
+    }
+
+    None
+}
+
+//eg ["key1=secret1", "key2=secret2"]
+pub fn get_values(secret_name: &str, secrets: &Vec<Secret>) -> Option<Vec<String>> {
+    for secret in secrets {
+        if secret_name == &secret.metadata.name.clone().unwrap() {
+            return secret
+                .data
+                .as_ref()?
+                .keys()
+                .map(|key| {
+                    let value = secret.data.as_ref().unwrap().get(key).unwrap();
+                    let value_bytes = general_purpose::STANDARD.decode(&value).unwrap();
+                    let value_string = std::str::from_utf8(&value_bytes).unwrap();
+                    format!("{}={value_string}", &key)
+                })
+                .collect::<Vec<String>>()
+                .into();
         }
     }
 
