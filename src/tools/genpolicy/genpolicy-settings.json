@@ -286,6 +286,7 @@
             "regex": []
         },
         "ReadStreamRequest": true,
+        "UpdateEphemeralMountsRequest": false,
         "WriteStreamRequest": false
     }
 }

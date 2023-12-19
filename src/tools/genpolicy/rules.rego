@@ -22,7 +22,7 @@ default SignalProcessRequest := true
 default StartContainerRequest := true
 default StatsContainerRequest := true
 default TtyWinResizeRequest := true
-default UpdateEphemeralMountsRequest := true
+default UpdateEphemeralMountsRequest := false
 default UpdateInterfaceRequest := true
 default UpdateRoutesRequest := true
 default WaitProcessRequest := true
@@ -1113,6 +1113,10 @@ ExecProcessRequest {
 
 ReadStreamRequest {
     policy_data.request_defaults.ReadStreamRequest == true
+}
+
+UpdateEphemeralMountsRequest {
+    policy_data.request_defaults.UpdateEphemeralMountsRequest == true
 }
 
 WriteStreamRequest {

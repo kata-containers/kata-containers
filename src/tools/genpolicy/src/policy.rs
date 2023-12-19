@@ -324,6 +324,9 @@ pub struct RequestDefaults {
     /// Allow Host reading from Guest containers stdout and stderr.
     pub ReadStreamRequest: bool,
 
+    /// Allow Host to update Guest mounts.
+    pub UpdateEphemeralMountsRequest: bool,
+
     /// Allow Host writing to Guest containers stdin.
     pub WriteStreamRequest: bool,
 }
