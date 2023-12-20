@@ -229,6 +229,7 @@ async fn get_image_layers(
         if layer
             .media_type
             .eq(manifest::IMAGE_DOCKER_LAYER_GZIP_MEDIA_TYPE)
+            || layer.media_type.eq(manifest::IMAGE_LAYER_GZIP_MEDIA_TYPE)
         {
             if layer_index < config_layer.rootfs.diff_ids.len() {
                 layers.push(ImageLayer {
