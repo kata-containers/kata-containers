@@ -7,6 +7,7 @@
 # Description: Central script to run all static checks.
 #   This script should be called by all other repositories to ensure
 #   there is only a single source of all static checks.
+#
 
 set -e
 
