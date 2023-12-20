@@ -762,7 +762,7 @@ mod tests {
     use vmm_sys_util::eventfd::EventFd;
 
     use super::*;
-    use crate::tests::create_vm_and_irq_manager;
+    use crate::tests::{create_address_space, create_vm_and_irq_manager};
     use crate::{create_queue_notifier, VirtioQueueConfig};
 
     fn create_vhost_kern_net_epoll_handler(
@@ -777,8 +777,10 @@ mod tests {
         let kvm = Arc::new(Kvm::new().unwrap());
         let vm_fd = Arc::new(kvm.create_vm().unwrap());
         let resources = DeviceResources::new();
+        let address_space = create_address_space();
         let config = VirtioDeviceConfig::new(
             Arc::new(mem),
+            address_space,
             vm_fd,
             resources,
             queues,
@@ -856,8 +858,10 @@ mod tests {
             let kvm = Kvm::new().unwrap();
             let vm_fd = Arc::new(kvm.create_vm().unwrap());
             let resources = DeviceResources::new();
+            let address_space = create_address_space();
             let config = VirtioDeviceConfig::new(
                 Arc::new(mem),
+                address_space,
                 vm_fd,
                 resources,
                 queues,
@@ -889,8 +893,10 @@ mod tests {
             let kvm = Kvm::new().unwrap();
             let vm_fd = Arc::new(kvm.create_vm().unwrap());
             let resources = DeviceResources::new();
+            let address_space = create_address_space();
             let config = VirtioDeviceConfig::new(
                 Arc::new(mem),
+                address_space,
                 vm_fd,
                 resources,
                 queues,
@@ -932,8 +938,10 @@ mod tests {
             let kvm = Kvm::new().unwrap();
             let vm_fd = Arc::new(kvm.create_vm().unwrap());
             let resources = DeviceResources::new();
+            let address_space = create_address_space();
             let config = VirtioDeviceConfig::new(
                 Arc::new(mem),
+                address_space,
                 vm_fd,
                 resources,
                 queues,

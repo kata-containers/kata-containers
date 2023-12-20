@@ -381,7 +381,7 @@ mod tests {
     use vmm_sys_util::eventfd::EventFd;
 
     use crate::epoll_helper::*;
-    use crate::tests::{VirtQueue, VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_WRITE};
+    use crate::tests::{create_address_space, VirtQueue, VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_WRITE};
     use crate::{Error as VirtioError, VirtioQueueConfig};
 
     use super::*;
@@ -932,8 +932,10 @@ mod tests {
             let kvm = Kvm::new().unwrap();
             let vm_fd = Arc::new(kvm.create_vm().unwrap());
             let resources = DeviceResources::new();
+            let address_space = create_address_space();
             let config = VirtioDeviceConfig::<Arc<GuestMemoryMmap<()>>>::new(
                 Arc::new(mem),
+                address_space,
                 vm_fd,
                 resources,
                 queues,
@@ -968,8 +970,10 @@ mod tests {
             let kvm = Kvm::new().unwrap();
             let vm_fd = Arc::new(kvm.create_vm().unwrap());
             let resources = DeviceResources::new();
+            let address_space = create_address_space();
             let config = VirtioDeviceConfig::<Arc<GuestMemoryMmap<()>>>::new(
                 Arc::new(mem),
+                address_space,
                 vm_fd,
                 resources,
                 queues,
@@ -1003,8 +1007,10 @@ mod tests {
             let kvm = Kvm::new().unwrap();
             let vm_fd = Arc::new(kvm.create_vm().unwrap());
             let resources = DeviceResources::new();
+            let address_space = create_address_space();
             let config = VirtioDeviceConfig::<Arc<GuestMemoryMmap<()>>>::new(
                 Arc::new(mem),
+                address_space,
                 vm_fd,
                 resources,
                 queues,

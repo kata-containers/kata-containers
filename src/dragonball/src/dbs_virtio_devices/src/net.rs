@@ -855,7 +855,7 @@ mod tests {
     use vm_memory::{GuestAddress, GuestMemoryMmap};
 
     use super::*;
-    use crate::tests::{VirtQueue, VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_WRITE};
+    use crate::tests::{create_address_space, VirtQueue, VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_WRITE};
     use crate::ConfigError;
 
     static NEXT_IP: AtomicUsize = AtomicUsize::new(1);
@@ -880,8 +880,10 @@ mod tests {
         let kvm = Kvm::new().unwrap();
         let vm_fd = Arc::new(kvm.create_vm().unwrap());
         let resources = DeviceResources::new();
+        let address_space = create_address_space();
         let config = VirtioDeviceConfig::new(
             mem,
+            address_space,
             vm_fd,
             resources,
             queues,
@@ -990,9 +992,11 @@ mod tests {
             let kvm = Kvm::new().unwrap();
             let vm_fd = Arc::new(kvm.create_vm().unwrap());
             let resources = DeviceResources::new();
+            let address_space = create_address_space();
             let config =
                 VirtioDeviceConfig::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::new(
                     Arc::new(mem),
+                    address_space,
                     vm_fd,
                     resources,
                     queues,
@@ -1025,9 +1029,11 @@ mod tests {
             let kvm = Kvm::new().unwrap();
             let vm_fd = Arc::new(kvm.create_vm().unwrap());
             let resources = DeviceResources::new();
+            let address_space = create_address_space();
             let config =
                 VirtioDeviceConfig::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::new(
                     Arc::new(mem),
+                    address_space,
                     vm_fd,
                     resources,
                     queues,
@@ -1059,9 +1065,11 @@ mod tests {
             let kvm = Kvm::new().unwrap();
             let vm_fd = Arc::new(kvm.create_vm().unwrap());
             let resources = DeviceResources::new();
+            let address_space = create_address_space();
             let config =
                 VirtioDeviceConfig::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::new(
                     Arc::new(mem),
+                    address_space,
                     vm_fd,
                     resources,
                     queues,
@@ -1094,9 +1102,11 @@ mod tests {
             let kvm = Kvm::new().unwrap();
             let vm_fd = Arc::new(kvm.create_vm().unwrap());
             let resources = DeviceResources::new();
+            let address_space = create_address_space();
             let config =
                 VirtioDeviceConfig::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::new(
                     Arc::new(mem),
+                    address_space,
                     vm_fd,
                     resources,
                     queues,
