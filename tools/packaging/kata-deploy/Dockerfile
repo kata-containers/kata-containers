@@ -23,13 +23,17 @@ RUN \
 	ARCH=$(uname -m) && \
 	if [ "${ARCH}" = "x86_64" ]; then ARCH=amd64; fi && \
 	if [ "${ARCH}" = "aarch64" ]; then ARCH=arm64; fi && \
+	DEBIAN_ARCH=${ARCH} && \
+	if [ "${DEBIAN_ARCH}" = "ppc64le" ]; then DEBIAN_ARCH=ppc64el; fi && \
 	curl -fL --progress-bar -o /usr/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/${ARCH}/kubectl && \
 	chmod +x /usr/bin/kubectl && \
+	curl -fL --progress-bar -o /usr/bin/jq https://github.com/jqlang/jq/releases/download/jq-1.7.1/jq-linux-${DEBIAN_ARCH} && \
+	chmod +x /usr/bin/jq && \
 	mkdir -p ${DESTINATION} && \
 	tar xvf ${WORKDIR}/${KATA_ARTIFACTS} -C ${DESTINATION} && \
 	rm -f ${WORKDIR}/${KATA_ARTIFACTS} && \
 	apk del curl && \
-	apk --no-cache add jq py3-pip && \
+	apk --no-cache add py3-pip && \
 	pip install --no-cache-dir yq==3.2.3
 
 COPY scripts ${DESTINATION}/scripts
