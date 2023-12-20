@@ -735,7 +735,10 @@ fn handle_cmd(
         info!(sl!(), "Run command {:} ({})", cmd, count_msg);
 
         if first.is_lowercase() {
-            result = handle_builtin_cmd(cmd, &args);
+            result = match command::parse_builtin_cmd(cmd) {
+                Ok(builtin_cmd) => builtin_cmd.exec(&args),
+                Err(e) => (Err(e), false),
+            }
         } else {
             result = handle_agent_cmd(ctx, client, health, options, cmd, &args);
         }

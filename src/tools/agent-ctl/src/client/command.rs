@@ -1,6 +1,7 @@
-use crate::types::Options;
-use anyhow::Result;
+use crate::{types::Options, utils};
+use anyhow::{anyhow, Result};
 use protocols::{agent_ttrpc::AgentServiceClient, health_ttrpc::HealthClient};
+use std::{thread::sleep, time::Duration};
 use ttrpc::context::Context;
 
 pub trait AgentCmd {
@@ -554,6 +555,24 @@ impl AgentCmd for WriteStdin {
     }
 }
 
+pub fn parse_builtin_cmd(cmd: &str) -> Result<Box<dyn BuiltinCmd>> {
+    match cmd {
+        "help" => Ok(Box::new(Help {})),
+
+        "echo" => Ok(Box::new(Echo {})),
+
+        "list" => Ok(Box::new(List {})),
+
+        "repeat" => Ok(Box::new(Repeat {})),
+
+        "sleep" => Ok(Box::new(Sleep {})),
+
+        "quit" => Ok(Box::new(Quit {})),
+
+        _ => Err(anyhow!("Invalid command: {:?}", cmd)),
+    }
+}
+
 pub trait BuiltinCmd {
     fn exec(&self, args: &str) -> (Result<()>, bool);
 }
@@ -562,7 +581,8 @@ struct Echo;
 
 impl BuiltinCmd for Echo {
     fn exec(&self, args: &str) -> (Result<()>, bool) {
-        todo!()
+        println!("{}", args);
+        (Ok(()), false)
     }
 }
 
@@ -570,7 +590,7 @@ struct Help;
 
 impl BuiltinCmd for Help {
     fn exec(&self, args: &str) -> (Result<()>, bool) {
-        todo!()
+        super::builtin_cmd_list(args)
     }
 }
 
@@ -578,15 +598,23 @@ struct List;
 
 impl BuiltinCmd for List {
     fn exec(&self, args: &str) -> (Result<()>, bool) {
-        todo!()
+        super::builtin_cmd_list(args)
     }
 }
 
 struct Repeat;
 
 impl BuiltinCmd for Repeat {
-    fn exec(&self, args: &str) -> (Result<()>, bool) {
-        todo!()
+    fn exec(&self, _args: &str) -> (Result<()>, bool) {
+        // XXX: NOP implementation. Due to the way repeat has to work, providing a
+        // handler like this is "too late" to be useful. However, a handler
+        // is required as "repeat" is a valid command.
+        //
+        // A cleaner approach would be to make `AgentCmd.fp` an `Option` which for
+        // this command would be specified as `None`, but this is the only command
+        // which doesn't need an implementation, so this approach is simpler :)
+
+        (Ok(()), false)
     }
 }
 
@@ -594,14 +622,21 @@ struct Sleep;
 
 impl BuiltinCmd for Sleep {
     fn exec(&self, args: &str) -> (Result<()>, bool) {
-        todo!()
+        let ns = match utils::human_time_to_ns(args) {
+            Ok(t) => t,
+            Err(e) => return (Err(e), false),
+        };
+
+        sleep(Duration::from_nanos(ns as u64));
+
+        (Ok(()), false)
     }
 }
 
 struct Quit;
 
 impl BuiltinCmd for Quit {
-    fn exec(&self, args: &str) -> (Result<()>, bool) {
-        todo!()
+    fn exec(&self, _args: &str) -> (Result<()>, bool) {
+        (Ok(()), true)
     }
 }
