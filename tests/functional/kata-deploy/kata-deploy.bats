@@ -36,17 +36,17 @@ setup() {
 	yq write -i "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[4].value' --tag '!!str' "true"
 	# Let the `kata-deploy` create the default `kata` runtime class
 	yq write -i "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[5].value' --tag '!!str' "true"
-	
+
 	if [ "${KATA_HOST_OS}" = "cbl-mariner" ]; then
 		yq write -i "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[+].name' "HOST_OS"
 		yq write -i "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[-1].value' "${KATA_HOST_OS}"
 	fi
-	
+
 	echo "::group::Final kata-deploy.yaml that is used in the test"
 	cat "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 	grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" || die "Failed to setup the tests image"
 	echo "::endgroup::"
-	
+
 	kubectl apply -f "${repo_root_dir}/tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
 	if [ "${KUBERNETES}" = "k0s" ]; then
 		kubectl apply -k "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/overlays/k0s"
@@ -64,7 +64,7 @@ setup() {
 	sleep 30s
 }
 
-@test "Test runtimeclasses are being properly created" {
+@test "Test runtimeclasses are being properly created and container runtime not broken" {
 	# We filter `kata-mshv-vm-isolation` out as that's present on AKS clusters, but that's not coming from kata-deploy
 	current_runtime_classes=$(kubectl get runtimeclasses | grep -v "kata-mshv-vm-isolation" | grep "kata" | wc -l)
 	[[ ${current_runtime_classes} -eq ${expected_runtime_classes} ]]
@@ -73,6 +73,20 @@ setup() {
 	do
 		kubectl get runtimeclass | grep -E "${handler_re}"
 	done
+
+	# Ensure that kata-deploy didn't corrupt containerd config, by trying to get the container runtime and node status
+	echo "::group::kubectl node debug"
+	kubectl get node -o wide
+	kubectl describe nodes
+	echo "::endgroup::"
+
+	# Wait to see if the nodes get back into Ready state - if not then containerd might be having issues
+	kubectl wait nodes --timeout=60s --all --for condition=Ready=True
+
+	# Check that the container runtime verison doesn't have unknown, which happens when containerd can't start properly
+	container_runtime_version=$(kubectl get nodes --no-headers -o custom-columns=CONTAINER_RUNTIME:.status.nodeInfo.containerRuntimeVersion)
+	[[ ${container_runtime_version} != *"containerd://Unknown"* ]]
+
 }
 
 teardown() {
@@ -94,7 +108,7 @@ teardown() {
 
 	kubectl delete ${deploy_spec}
 	kubectl -n kube-system wait --timeout=10m --for=delete -l name=kata-deploy pod
-	
+
 	# Let the `kata-deploy` script take care of the runtime class creation / removal
 	yq write -i "${repo_root_dir}/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" 'spec.template.spec.containers[0].env[4].value' --tag '!!str' "true"
 	# Create the runtime class only for the shim that's being tested
@@ -103,14 +117,14 @@ teardown() {
 	yq write -i "${repo_root_dir}/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" 'spec.template.spec.containers[0].env[3].value' "${KATA_HYPERVISOR}"
 	# Let the `kata-deploy` create the default `kata` runtime class
 	yq write -i "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[5].value' --tag '!!str' "true"
-	
+
 	sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "${repo_root_dir}/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
 	cat "${repo_root_dir}/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
 	grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" "${repo_root_dir}/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" || die "Failed to setup the tests image"
 
 	kubectl apply ${cleanup_spec}
 	sleep 30s
-	
+
 	kubectl delete ${cleanup_spec}
 	kubectl delete -f "${repo_root_dir}/tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
 }
