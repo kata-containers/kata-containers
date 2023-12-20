@@ -376,6 +376,8 @@ version = "0.3.1"
 dependencies = [
  "byteorder",
  "caps",
+ "dbs-address-space",
+ "dbs-boot",
  "dbs-device",
  "dbs-interrupt",
  "dbs-utils",

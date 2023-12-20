@@ -1008,6 +1008,7 @@ impl DeviceManager {
         let virtio_dev = match MmioV2Device::new(
             ctx.vm_fd.clone(),
             ctx.get_vm_as()?,
+            ctx.get_address_space()?,
             ctx.irq_manager.clone(),
             device,
             resources,
@@ -1122,13 +1123,28 @@ impl DeviceManager {
 mod tests {
     use std::sync::{Arc, Mutex};
 
+    use dbs_address_space::{AddressSpaceLayout, AddressSpaceRegion, AddressSpaceRegionType};
     use kvm_ioctls::Kvm;
     use test_utils::skip_if_not_root;
-    use vm_memory::{GuestAddress, MmapRegion};
+    use vm_memory::{GuestAddress, GuestUsize, MmapRegion};
 
     use super::*;
     #[cfg(target_arch = "x86_64")]
     use crate::vm::CpuTopology;
+
+    pub const GUEST_PHYS_END: u64 = (1 << 46) - 1;
+    pub const GUEST_MEM_START: u64 = 0;
+    pub const GUEST_MEM_END: u64 = GUEST_PHYS_END >> 1;
+
+    pub fn create_address_space() -> AddressSpace {
+        let address_space_region = vec![Arc::new(AddressSpaceRegion::new(
+            AddressSpaceRegionType::DefaultMemory,
+            GuestAddress(0x0),
+            0x1000 as GuestUsize,
+        ))];
+        let layout = AddressSpaceLayout::new(GUEST_PHYS_END, GUEST_MEM_START, GUEST_MEM_END);
+        AddressSpace::from_regions(address_space_region, layout)
+    }
 
     impl DeviceManager {
         pub fn new_test_mgr() -> Self {
