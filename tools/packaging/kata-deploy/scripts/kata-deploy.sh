@@ -94,8 +94,8 @@ function get_container_runtime() {
 		else
 			echo "k3s"
 		fi
-	# Note: we assumed you used a conventional k0s setup and k0s will generate a systemd entry k0scontroller.service and k0sworker.service respectively    
-	# and it is impossible to run this script without a kubelet, so this k0s controller must also have worker mode enabled 
+	# Note: we assumed you used a conventional k0s setup and k0s will generate a systemd entry k0scontroller.service and k0sworker.service respectively
+	# and it is impossible to run this script without a kubelet, so this k0s controller must also have worker mode enabled
 	elif host_systemctl is-active --quiet k0scontroller; then
 		echo "k0s-controller"
 	elif host_systemctl is-active --quiet k0sworker; then
@@ -344,24 +344,48 @@ function configure_containerd_runtime() {
 	local runtime="kata-${shim}"
 	local configuration="configuration-${shim}"
 	local pluginid=cri
-	
+
 	# if we are running k0s auto containerd.toml generation, the base template is by default version 2
 	# we can safely assume to reference the newer version of cri
 	if grep -q "version = 2\>" $containerd_conf_file || [ "$1" == "k0s-worker" ] || [ "$1" == "k0s-controller" ]; then
 		pluginid=\"io.containerd.grpc.v1.cri\"
 	fi
-	local runtime_table=".plugins.${pluginid}.containerd.runtimes.\"${runtime}\""
-	local runtime_options_table="${runtime_table}.options"
-	local runtime_type=\"io.containerd."${runtime}".v2\"
-	local runtime_config_path=\"$(get_kata_containers_config_path "${shim}")/${configuration}.toml\"
-	
-	tomlq -i -t $(printf '%s.runtime_type=%s' ${runtime_table} ${runtime_type}) ${containerd_conf_file}
-	tomlq -i -t $(printf '%s.privileged_without_host_devices=true' ${runtime_table}) ${containerd_conf_file}
-	tomlq -i -t $(printf '%s.pod_annotations=["io.katacontainers.*"]' ${runtime_table}) ${containerd_conf_file}
-	tomlq -i -t $(printf '%s.ConfigPath=%s' ${runtime_options_table} ${runtime_config_path}) ${containerd_conf_file}
-	
+	local runtime_table="plugins.${pluginid}.containerd.runtimes.$runtime"
+	local runtime_type="io.containerd.$runtime.v2"
+	local options_table="$runtime_table.options"
+	local config_path="$(get_kata_containers_config_path "${shim}")/$configuration.toml"
+	if grep -q "\[$runtime_table\]" $containerd_conf_file; then
+		echo "Configuration exists for $runtime_table, overwriting"
+		sed -i "/\[$runtime_table\]/,+1s#runtime_type.*#runtime_type = \"${runtime_type}\"#" $containerd_conf_file
+	else
+		cat <<EOF | tee -a "$containerd_conf_file"
+[$runtime_table]
+  runtime_type = "${runtime_type}"
+  privileged_without_host_devices = true
+  pod_annotations = ["io.katacontainers.*"]
+EOF
+	fi
+
+	if grep -q "\[$options_table\]" $containerd_conf_file; then
+		echo "Configuration exists for $options_table, overwriting"
+		sed -i "/\[$options_table\]/,+1s#ConfigPath.*#ConfigPath = \"${config_path}\"#" $containerd_conf_file
+	else
+		cat <<EOF | tee -a "$containerd_conf_file"
+  [$options_table]
+    ConfigPath = "${config_path}"
+EOF
+	fi
+
 	if [ "${DEBUG}" == "true" ]; then
-		tomlq -i -t '.debug.level = "debug"' ${containerd_conf_file}
+		if grep -q "\[debug\]" $containerd_conf_file; then
+			sed -i 's/level.*/level = \"debug\"/' $containerd_conf_file
+		else
+			cat <<EOF | tee -a "$containerd_conf_file"
+[debug]
+  level = "debug"
+EOF
+		fi
+
 	fi
 }
 
@@ -461,7 +485,7 @@ function main() {
 		containerd_conf_file="${containerd_conf_tmpl_file}"
 		containerd_conf_file_backup="${containerd_conf_file}.bak"
 	elif [ "$runtime" == "k0s-worker" ] || [ "$runtime" == "k0s-controller" ]; then
-		# From 1.27.1 onwards k0s enables dynamic configuration on containerd CRI runtimes. 
+		# From 1.27.1 onwards k0s enables dynamic configuration on containerd CRI runtimes.
 		# This works by k0s creating a special directory in /etc/k0s/containerd.d/ where user can drop-in partial containerd configuration snippets.
 		# k0s will automatically pick up these files and adds these in containerd configuration imports list.
 		containerd_conf_file="/etc/containerd/kata-containers.toml"
