@@ -147,10 +147,11 @@ impl Persist for CloudHypervisorInner {
             vm_path: self.vm_path.clone(),
             jailed: false,
             jailer_root: String::default(),
-            netns: None,
+            netns: self.netns.clone(),
             config: self.hypervisor_config(),
             run_dir: self.run_dir.clone(),
-            cached_block_devices: Default::default(),
+            guest_protection_to_use: self.guest_protection_to_use.clone(),
+
             ..Default::default()
         })
     }
@@ -160,15 +161,29 @@ impl Persist for CloudHypervisorInner {
         _hypervisor_args: Self::ConstructorArgs,
         hypervisor_state: Self::State,
     ) -> Result<Self> {
-        let ch = Self {
+        let (tx, rx) = channel(true);
+
+        let mut ch = Self {
             config: Some(hypervisor_state.config),
             state: VmmState::NotReady,
             id: hypervisor_state.id,
             vm_path: hypervisor_state.vm_path,
             run_dir: hypervisor_state.run_dir,
+            netns: hypervisor_state.netns,
+            guest_protection_to_use: hypervisor_state.guest_protection_to_use.clone(),
+
+            pending_devices: vec![],
+            device_ids: HashMap::<String, String>::new(),
+            tasks: None,
+            shutdown_tx: Some(tx),
+            shutdown_rx: Some(rx),
+            timeout_secs: CH_DEFAULT_TIMEOUT_SECS as i32,
+            jailer_root: String::default(),
+            ch_features: None,
 
             ..Default::default()
         };
+        ch._capabilities = ch.capabilities().await?;
 
         Ok(ch)
     }
