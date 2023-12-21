@@ -176,7 +176,6 @@ impl From<&NetworkInterfaceConfig> for VhostNetDeviceConfigInfo {
             iface_id: config.iface_id.clone(),
             host_dev_name: config.host_dev_name.clone(),
             num_queues,
-            vq_pairs: num_queues / 2,
             queue_size,
             guest_mac: value.guest_mac,
             allow_duplicate_mac: config.allow_duplicate_mac,
