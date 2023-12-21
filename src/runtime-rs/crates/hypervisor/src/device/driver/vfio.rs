@@ -20,11 +20,13 @@ use async_trait::async_trait;
 use lazy_static::lazy_static;
 use path_clean::PathClean;
 
-use crate::{
-    device::{hypervisor, Device, DeviceType},
-    PciPath, PciSlot,
-};
 use kata_sys_util::fs::get_base_name;
+
+use crate::device::{
+    hypervisor,
+    pci_path::{PciPath, PciSlot},
+    Device, DeviceType,
+};
 
 pub const SYS_BUS_PCI_DRIVER_PROBE: &str = "/sys/bus/pci/drivers_probe";
 pub const SYS_BUS_PCI_DEVICES: &str = "/sys/bus/pci/devices";
