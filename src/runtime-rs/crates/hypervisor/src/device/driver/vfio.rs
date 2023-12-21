@@ -70,12 +70,6 @@ pub fn generate_guest_pci_path(bdf: String) -> Result<PciPath> {
     })
 }
 
-// get host/guest mapping for info
-pub fn get_host_guest_map(host_bdf: String) -> Option<String> {
-    // safe, just do unwrap as `HOST_GUEST_MAP` is always valid.
-    HOST_GUEST_MAP.read().unwrap().get(&host_bdf).cloned()
-}
-
 pub fn do_check_iommu_on() -> Result<bool> {
     let element = std::fs::read_dir(SYS_CLASS_IOMMU)?
         .filter_map(|e| e.ok())

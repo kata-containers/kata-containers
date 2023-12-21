@@ -12,8 +12,8 @@ mod virtio_net;
 mod virtio_vsock;
 
 pub use vfio::{
-    bind_device_to_host, bind_device_to_vfio, get_host_guest_map, get_vfio_device, HostDevice,
-    VfioBusMode, VfioConfig, VfioDevice,
+    bind_device_to_host, bind_device_to_vfio, get_vfio_device, HostDevice, VfioBusMode, VfioConfig,
+    VfioDevice,
 };
 pub use virtio_blk::{
     BlockConfig, BlockDevice, KATA_BLK_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE, KATA_NVDIMM_DEV_TYPE,
@@ -206,12 +206,5 @@ mod tests {
         let root_slot = pci_path.get_root_slot();
         assert!(root_slot.is_some());
         assert_eq!(root_slot.unwrap().0, 1);
-    }
-
-    #[test]
-    fn test_get_host_guest_map() {
-        // test unwrap is fine, no panic occurs.
-        let hg_map = get_host_guest_map("".to_owned());
-        assert!(hg_map.is_none());
     }
 }
