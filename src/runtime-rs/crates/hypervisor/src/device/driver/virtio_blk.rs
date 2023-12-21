@@ -4,10 +4,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use crate::device::pci_path::PciPath;
 use crate::device::Device;
 use crate::device::DeviceType;
 use crate::Hypervisor as hypervisor;
-use crate::PciPath;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 
