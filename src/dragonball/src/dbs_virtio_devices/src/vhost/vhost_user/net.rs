@@ -17,14 +17,15 @@ use vhost_rs::vhost_user::{
 use vhost_rs::Error as VhostError;
 use virtio_bindings::bindings::virtio_net::{
     virtio_net_ctrl_hdr, VIRTIO_NET_CTRL_MQ, VIRTIO_NET_F_CTRL_MAC_ADDR, VIRTIO_NET_F_CTRL_RX,
-    VIRTIO_NET_F_CTRL_VLAN, VIRTIO_NET_F_CTRL_VQ, VIRTIO_NET_F_GUEST_ANNOUNCE, VIRTIO_NET_F_MAC,
-    VIRTIO_NET_F_MQ, VIRTIO_NET_F_MTU, VIRTIO_NET_OK, VIRTIO_NET_S_LINK_UP,
+    VIRTIO_NET_F_CTRL_VLAN, VIRTIO_NET_F_CTRL_VQ, VIRTIO_NET_F_GUEST_ANNOUNCE, VIRTIO_NET_F_MQ,
+    VIRTIO_NET_F_MTU, VIRTIO_NET_OK,
 };
 use virtio_queue::{DescriptorChain, QueueT};
 use vm_memory::GuestMemoryRegion;
 use vmm_sys_util::epoll::EventSet;
 
 use super::connection::{Endpoint, Listener};
+use crate::net::{setup_config_space, DEFAULT_MTU};
 use crate::vhost::net::{virtio_handle_ctrl_mq, virtio_handle_ctrl_status, FromNetCtrl};
 use crate::vhost::vhost_user::connection::EndpointParam;
 use crate::{
@@ -65,58 +66,34 @@ impl VhostUserNetDevice {
         queue_sizes: Arc<Vec<u16>>,
         epoll_mgr: EpollManager,
     ) -> VirtioResult<Self> {
-        // hard-coding MTU
         info!(
             "{}: slave support features 0x{:x}",
             NET_DRIVER_NAME, avail_features
         );
+
         avail_features |= (1 << VIRTIO_NET_F_MTU) as u64;
-        // All these features depends on availability of control
-        // channel (VIRTIO_NET_F_CTRL_VQ).
+        // All these features depends on availability of control channel
+        // (VIRTIO_NET_F_CTRL_VQ).
         avail_features &= !(1 << VIRTIO_NET_F_CTRL_VQ
             | 1 << VIRTIO_NET_F_CTRL_RX
             | 1 << VIRTIO_NET_F_CTRL_VLAN
             | 1 << VIRTIO_NET_F_GUEST_ANNOUNCE
             | 1 << VIRTIO_NET_F_MQ
             | 1 << VIRTIO_NET_F_CTRL_MAC_ADDR) as u64;
+
         // Multi-queue features
         if queue_sizes.len() > 2 {
             avail_features |= (1 << VIRTIO_NET_F_MQ | 1 << VIRTIO_NET_F_CTRL_VQ) as u64;
         }
-        // Network device configuration layout:
-        // https://docs.oasis-open.org/virtio/virtio/v1.1/csprd01/virtio-v1.1-csprd01.html#x1-2000004
-        // - [u8; 6]: mac address
-        // - u16: status
-        // - u16: max_virtqueue_pairs
-        // - u16: mtu
-        // - u32: speed
-        // - u8: duplex
-        let mut config_space = vec![0u8; 17];
-        if let Some(mac) = guest_mac {
-            // When this feature isn't available, the driver generates a random
-            // MAC address. Otherwise, it should attempt to read the device MAC
-            // address from the config space.
-            avail_features |= 1u64 << VIRTIO_NET_F_MAC;
-            config_space[0..6].copy_from_slice(mac.get_bytes());
-        } else {
-            avail_features &= !(1 << VIRTIO_NET_F_MAC) as u64;
-        }
-        // status: mark link as up
-        config_space[6] = VIRTIO_NET_S_LINK_UP as u8;
-        config_space[7] = 0;
-        // max_virtqueue_pairs: only support one rx/tx pair
-        config_space[8] = (queue_sizes.len() / 2) as u8;
-        config_space[9] = 0;
-        // mtu: 1500 = 1536 - vxlan header?
-        config_space[10] = 220;
-        config_space[11] = 5;
-        // speed: 1000Mb
-        config_space[12] = 232;
-        config_space[13] = 3;
-        config_space[14] = 0;
-        config_space[15] = 0;
-        // duplex: full duplex: 0x01
-        config_space[16] = 1;
+
+        let config_space = setup_config_space(
+            NET_DRIVER_NAME,
+            &guest_mac,
+            &mut avail_features,
+            (queue_sizes.len() / 2) as u16,
+            DEFAULT_MTU,
+        )?;
+
         Ok(VhostUserNetDevice {
             id: NET_DRIVER_NAME.to_owned(),
             device_info: VirtioDeviceInfo::new(

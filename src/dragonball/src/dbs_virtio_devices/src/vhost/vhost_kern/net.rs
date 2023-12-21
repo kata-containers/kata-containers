@@ -31,6 +31,7 @@ use virtio_bindings::bindings::virtio_ring::*;
 use virtio_queue::{DescriptorChain, QueueT};
 use vm_memory::{Address, GuestMemory, GuestMemoryRegion, MemoryRegionAddress};
 
+use crate::net::{setup_config_space, DEFAULT_MTU};
 use crate::vhost::net::{virtio_handle_ctrl_mq, virtio_handle_ctrl_status, FromNetCtrl};
 #[cfg(test)]
 use crate::vhost::vhost_kern::test_utils::{
@@ -65,7 +66,6 @@ where
     R: GuestMemoryRegion + Sync + Send + 'static,
 {
     taps: Vec<Tap>,
-    vq_pairs: usize,
     handles: Vec<VhostNet<AS>>,
     device_info: VirtioDeviceInfo,
     queue_sizes: Arc<Vec<u16>>,
@@ -134,12 +134,13 @@ where
     /// Create a new vhost-net device with a given tap interface.
     pub fn new_with_tap(
         tap: Tap,
-        vq_pairs: usize,
         guest_mac: Option<&MacAddr>,
         queue_sizes: Arc<Vec<u16>>,
         event_mgr: EpollManager,
     ) -> VirtioResult<Self> {
         trace!(target: "vhost-net", "{}: Net::new_with_tap()", NET_DRIVER_NAME);
+
+        let vq_pairs = queue_sizes.len() / 2;
 
         let taps = tap
             .into_mq_taps(vq_pairs)
@@ -163,41 +164,14 @@ where
         if vq_pairs > 1 {
             avail_features |= (1 << VIRTIO_NET_F_MQ | 1 << VIRTIO_NET_F_CTRL_VQ) as u64;
         }
-        // Network device configuration layout:
-        // https://docs.oasis-open.org/virtio/virtio/v1.1/csprd01/virtio-v1.1-csprd01.html#x1-2000004
-        // - [u8; 6]: mac address
-        // - u16: status
-        // - u16: max_virtqueue_pairs
-        // - u16: mtu
-        // - u32: speed
-        // - u8: duplex
-        let mut config_space = vec![0u8; 17];
-        if let Some(mac) = guest_mac {
-            // When this feature isn't available, the driver generates a random
-            // MAC address. Otherwise, it should attempt to read the device MAC
-            // address from the config space.
-            avail_features |= 1u64 << VIRTIO_NET_F_MAC;
-            config_space[0..6].copy_from_slice(mac.get_bytes());
-        } else {
-            avail_features &= !(1 << VIRTIO_NET_F_MAC) as u64;
-        }
 
-        // status: mark link as up
-        config_space[6] = VIRTIO_NET_S_LINK_UP as u8;
-        config_space[7] = 0;
-        // max_virtqueue_pairs: only support one rx/tx pair
-        config_space[8] = vq_pairs as u8;
-        config_space[9] = 0;
-        // mtu: 1500 = 1536 - vxlan header?
-        config_space[10] = 220;
-        config_space[11] = 5;
-        // speed: 1000Mb
-        config_space[12] = 232;
-        config_space[13] = 3;
-        config_space[14] = 0;
-        config_space[15] = 0;
-        // duplex: full duplex: 0x01
-        config_space[16] = 1;
+        let config_space = setup_config_space(
+            NET_DRIVER_NAME,
+            &guest_mac,
+            &mut avail_features,
+            vq_pairs as u16,
+            DEFAULT_MTU,
+        )?;
 
         let device_info = VirtioDeviceInfo::new(
             NET_DRIVER_NAME.to_owned(),
@@ -210,7 +184,6 @@ where
 
         Ok(Net {
             taps,
-            vq_pairs,
             handles: Vec::new(),
             device_info,
             queue_sizes,
@@ -233,18 +206,19 @@ where
     /// Create a vhost network with the Tap name
     pub fn new(
         host_dev_name: String,
-        vq_pairs: usize,
         guest_mac: Option<&MacAddr>,
         queue_sizes: Arc<Vec<u16>>,
         event_mgr: EpollManager,
     ) -> VirtioResult<Self> {
+        let vq_pairs = queue_sizes.len() / 2;
+
         // Open a TAP interface
         let tap = Tap::open_named(&host_dev_name, vq_pairs > 1)
             .map_err(|err| VirtioError::VhostNet(Error::TapError(TapError::Open(err))))?;
         tap.enable()
             .map_err(|err| VirtioError::VhostNet(Error::TapError(TapError::Enable(err))))?;
 
-        Self::new_with_tap(tap, vq_pairs, guest_mac, queue_sizes, event_mgr)
+        Self::new_with_tap(tap, guest_mac, queue_sizes, event_mgr)
     }
 
     fn do_device_activate(
@@ -284,30 +258,31 @@ where
         Q: QueueT + Send + 'static,
         R: GuestMemoryRegion + Sync + Send + 'static,
     {
-        trace!(target: "vhost-net", "{}: Net::setup_vhost_backend(vq_pairs: {})", NET_DRIVER_NAME, self.vq_pairs);
+        let vq_pairs = self.queue_sizes.len() / 2;
+        trace!(target: "vhost-net", "{}: Net::setup_vhost_backend(vq_pairs: {})", NET_DRIVER_NAME, vq_pairs);
 
-        if self.vq_pairs < 1 {
+        if vq_pairs < 1 {
             error!(
                 "{}: Invalid virtio queue pairs, expected a value greater than 0, but got {}",
-                NET_DRIVER_NAME, self.vq_pairs
+                NET_DRIVER_NAME, vq_pairs
             );
             return Err(VirtioError::ActivateError(Box::new(
                 ActivateError::InvalidParam,
             )));
         }
 
-        if self.handles.len() != self.vq_pairs || self.taps.len() != self.vq_pairs {
+        if self.handles.len() != vq_pairs || self.taps.len() != vq_pairs {
             error!("{}: Invalid handlers or taps, handlers length {}, taps length {}, virtio queue pairs = {}",
                 NET_DRIVER_NAME,
                 self.handles.len(),
                 self.taps.len(),
-                self.vq_pairs);
+                vq_pairs);
             return Err(VirtioError::ActivateError(Box::new(
                 ActivateError::InternalError,
             )));
         }
 
-        for idx in 0..self.vq_pairs {
+        for idx in 0..vq_pairs {
             self.init_vhost_dev(idx, config, mem)?;
         }
 
@@ -755,7 +730,6 @@ mod tests {
         let epoll_mgr = EpollManager::default();
         let mut dev: Net<Arc<GuestMemoryMmap>, QueueSync, GuestRegionMmap> = Net::new(
             String::from("test_vhosttap"),
-            2,
             Some(&guest_mac),
             queue_sizes,
             epoll_mgr,
@@ -791,49 +765,12 @@ mod tests {
     fn test_vhost_kern_net_virtio_activate() {
         let guest_mac_str = "11:22:33:44:55:66";
         let guest_mac = MacAddr::parse_str(guest_mac_str).unwrap();
-        // Invalid vq_pairs
-        {
-            let queue_sizes = Arc::new(vec![128, 128]);
-            let epoll_mgr = EpollManager::default();
-            let mut dev: Net<Arc<GuestMemoryMmap>, QueueSync, GuestRegionMmap> = Net::new(
-                String::from("test_vhosttap"),
-                2,
-                Some(&guest_mac),
-                queue_sizes,
-                epoll_mgr,
-            )
-            .unwrap();
-
-            // The length of queues should be 4.
-            let queues = vec![
-                VirtioQueueConfig::create(128, 0).unwrap(),
-                VirtioQueueConfig::create(128, 0).unwrap(),
-            ];
-
-            let mem = GuestMemoryMmap::from_ranges(&[(GuestAddress(0), 0x10000)]).unwrap();
-            let kvm = Kvm::new().unwrap();
-            let vm_fd = Arc::new(kvm.create_vm().unwrap());
-            let resources = DeviceResources::new();
-            let address_space = create_address_space();
-            let config = VirtioDeviceConfig::new(
-                Arc::new(mem),
-                address_space,
-                vm_fd,
-                resources,
-                queues,
-                None,
-                Arc::new(NoopNotifier::default()),
-            );
-
-            assert!(dev.activate(config).is_err())
-        }
         // Invalid queue sizes
         {
             let queue_sizes = Arc::new(vec![128]);
             let epoll_mgr = EpollManager::default();
             let mut dev: Net<Arc<GuestMemoryMmap>, QueueSync, GuestRegionMmap> = Net::new(
                 String::from("test_vhosttap"),
-                1,
                 Some(&guest_mac),
                 queue_sizes,
                 epoll_mgr,
@@ -878,7 +815,6 @@ mod tests {
             let epoll_mgr = EpollManager::default();
             let mut dev: Net<Arc<GuestMemoryMmap>, Queue, GuestRegionMmap> = Net::new(
                 String::from("test_vhosttap"),
-                1,
                 Some(&guest_mac),
                 queue_sizes,
                 epoll_mgr,

@@ -69,8 +69,6 @@ pub struct VhostNetDeviceConfigInfo {
     pub host_dev_name: String,
     /// Number of virtqueues to use.
     pub num_queues: usize,
-    /// Number of vq pairs to use.
-    pub vq_pairs: usize,
     /// Size of each virtqueue.
     pub queue_size: u16,
     /// Guest MAC address.
@@ -159,7 +157,6 @@ impl VhostNetDeviceMgr {
         let epoll_mgr = ctx.epoll_mgr.clone().ok_or(VirtioError::InvalidInput)?;
         Ok(Box::new(Net::new(
             cfg.host_dev_name.clone(),
-            cfg.vq_pairs,
             cfg.guest_mac(),
             Arc::new(cfg.queue_sizes()),
             epoll_mgr,
@@ -302,7 +299,6 @@ mod tests {
             iface_id: id_1,
             host_dev_name: host_dev_name_1,
             num_queues: 2,
-            vq_pairs: 0,
             queue_size: 128,
             guest_mac: Some(MacAddr::parse_str(guest_mac_1).unwrap()),
             allow_duplicate_mac: false,
@@ -345,7 +341,6 @@ mod tests {
             iface_id: id_1,
             host_dev_name: host_dev_name_1,
             num_queues: 2,
-            vq_pairs: 0,
             queue_size: 128,
             guest_mac: Some(MacAddr::parse_str(guest_mac_1).unwrap()),
             allow_duplicate_mac: false,
@@ -390,7 +385,6 @@ mod tests {
             iface_id: id_1,
             host_dev_name: host_dev_name_1,
             num_queues: 2,
-            vq_pairs: 0,
             queue_size: 128,
             guest_mac: Some(MacAddr::parse_str(guest_mac_1).unwrap()),
             allow_duplicate_mac: false,
@@ -464,7 +458,6 @@ mod tests {
             iface_id: String::from("id_1"),
             host_dev_name: String::from("dev_1"),
             num_queues: 1,
-            vq_pairs: 0,
             queue_size: 128,
             guest_mac: Some(MacAddr::parse_str(guest_mac_1).unwrap()),
             allow_duplicate_mac: false,
@@ -539,7 +532,6 @@ mod tests {
             iface_id: String::from("id_2"),
             host_dev_name: String::from("dev_2"),
             num_queues: 2,
-            vq_pairs: 0,
             queue_size: 128,
             guest_mac: Some(MacAddr::parse_str(guest_mac_2).unwrap()),
             allow_duplicate_mac: false,
@@ -601,7 +593,6 @@ mod tests {
             iface_id: String::from("id_3"),
             host_dev_name: String::from("dev_3"),
             num_queues: 2,
-            vq_pairs: 0,
             queue_size: 128,
             guest_mac: Some(MacAddr::parse_str(guest_mac_1).unwrap()),
             allow_duplicate_mac: true,
