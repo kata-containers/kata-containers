@@ -57,11 +57,10 @@ run_docs_url_alive_check()
 
 run_get_pr_changed_file_details()
 {
-	clone_tests_repo
 	# Make sure we have the targeting branch
 	git remote set-branches --add origin "${branch}"
 	git fetch -a
-	source "$tests_repo_dir/.ci/lib.sh"
+	source "$kata_repo_dir/tests/common.bash"
 	get_pr_changed_file_details
 }
 
