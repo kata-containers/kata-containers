@@ -42,6 +42,7 @@ readonly se_image_builder="${repo_root_dir}/tools/packaging/guest-image/build_se
 ARCH=${ARCH:-$(uname -m)}
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
 PULL_TYPE=${PULL_TYPE:-default}
+DMVERITY_SUPPORT=${DMVERITY_SUPPORT:-no}
 USE_CACHE="${USE_CACHE:-"yes"}"
 ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY:-ghcr.io}"
 ARTEFACT_REGISTRY_USERNAME="${ARTEFACT_REGISTRY_USERNAME:-}"
@@ -330,6 +331,7 @@ install_image_confidential() {
 	export AGENT_POLICY=yes
 	export MEASURED_ROOTFS=yes
 	export PULL_TYPE=default
+	export DMVERITY_SUPPORT=yes
 	install_image "confidential"
 }
 
@@ -399,6 +401,7 @@ install_initrd_confidential() {
 	export AGENT_POLICY=yes
 	export MEASURED_ROOTFS=yes
 	export PULL_TYPE=default
+	export DMVERITY_SUPPORT=yes
 	install_initrd "confidential"
 }
 

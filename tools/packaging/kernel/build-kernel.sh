@@ -66,6 +66,8 @@ kernel_url=""
 linux_headers=""
 # Enable measurement of the guest rootfs at boot.
 measured_rootfs="false"
+# Enable dm-verity in the guest.
+dmverity_support="false"
 
 CROSS_BUILD_ARG=""
 
@@ -97,6 +99,7 @@ Options:
 	-b <type>    	: Enable optional config type.
 	-c <path>   	: Path to config file to build the kernel.
 	-d          	: Enable bash debug.
+	-D              : Enable dm-verity support.
 	-e          	: Enable experimental kernel.
 	-E          	: Enable arch-specific experimental kernel, arch info offered by "-a".
 	-f          	: Enable force generate config when setup, old kernel path and config will be removed.
@@ -280,11 +283,18 @@ get_kernel_frag_path() {
 		all_configs="${all_configs} ${gpu_configs}"
 	fi
 
-	if [ "${measured_rootfs}" == "true" ]; then
-		info "Enabling config for confidential guest trust storage protection"
+	if [ "${dmverity_support}" == "true" ]; then
+		info "Enabling config for data protection with device mapper support"
 		local cryptsetup_configs="$(ls ${common_path}/confidential_containers/cryptsetup.conf)"
 		all_configs="${all_configs} ${cryptsetup_configs}"
+	fi
 
+	if [ "${measured_rootfs}" == "true" ]; then
+		if [ "${dmverity_support}" != "true" ]; then
+			info "Enabling config for confidential guest trust storage protection"
+			local cryptsetup_configs="$(ls ${common_path}/confidential_containers/cryptsetup.conf)"
+			all_configs="${all_configs} ${cryptsetup_configs}"
+		fi
 		check_initramfs_or_die
 		info "Enabling config for confidential guest measured boot"
 		local initramfs_configs="$(ls ${common_path}/confidential_containers/initramfs.conf)"
@@ -559,7 +569,7 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:b:c:deEfg:hH:k:mp:st:u:v:x" opt; do
+	while getopts "a:b:c:dDeEfg:hH:k:mp:t:u:v:x:" opt; do
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
@@ -573,6 +583,9 @@ main() {
 			d)
 				PS4=' Line ${LINENO}: '
 				set -x
+				;;
+			D)
+				dmverity_support="true"
 				;;
 			e)
 				build_type="experimental"
