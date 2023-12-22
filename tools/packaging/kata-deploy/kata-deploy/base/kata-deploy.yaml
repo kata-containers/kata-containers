@@ -41,6 +41,8 @@ spec:
               value: "false"
             - name: ALLOWED_HYPERVISOR_ANNOTATIONS
               value: ""
+            - name: SNAPSHOTTER_HANDLER_MAPPING
+              value: ""
           securityContext:
             privileged: true
           volumeMounts:
