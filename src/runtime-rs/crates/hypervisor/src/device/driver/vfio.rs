@@ -68,7 +68,7 @@ pub fn generate_guest_pci_path(bdf: String) -> Result<PciPath> {
     hg_map.write().unwrap().insert(host_bdf, guest_bdf);
 
     Ok(PciPath {
-        slots: vec![PciSlot::convert_from_u32(slot.into()).context("pci slot convert failed.")?],
+        slots: vec![PciSlot::new(slot)],
     })
 }
 
@@ -501,7 +501,7 @@ impl Device for VfioDevice {
                         self.device_options.push(format!(
                             "0000:{}={}",
                             hostdev.bus_slot_func.clone(),
-                            pci_path.convert_to_string()
+                            pci_path.to_string()
                         ));
                     }
                 }

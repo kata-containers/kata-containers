@@ -313,7 +313,7 @@ impl ResourceManagerInner {
                         // The following would work for drivers virtio-blk-pci and mmio.
                         // Once scsi support is added, need to handle scsi identifiers.
                         let id = if let Some(pci_path) = device.config.pci_path {
-                            pci_path.convert_to_string()
+                            pci_path.to_string()
                         } else {
                             device.config.virt_path.clone()
                         };
