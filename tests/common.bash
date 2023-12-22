@@ -393,6 +393,7 @@ function install_kata() {
 		restart_crio_service
 	fi
 
+	load_vhost_mods
 }
 
 # creates a new kata configuration.toml hard link that
@@ -713,4 +714,11 @@ function get_test_version(){
         db="${cidir}/../versions.yaml"
 
         get_dep_from_yaml_db "${db}" "${dependency}"
+}
+
+# Load vhost, vhost_net, vhost_vsock modules.
+function load_vhost_mods() {
+	sudo modprobe vhost
+	sudo modprobe vhost_net
+	sudo modprobe vhost_vsock
 }
