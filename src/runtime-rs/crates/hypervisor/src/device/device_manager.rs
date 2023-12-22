@@ -291,7 +291,7 @@ impl DeviceManager {
                 Arc::new(Mutex::new(VfioDevice::new(
                     device_id.clone(),
                     &vfio_dev_config,
-                )))
+                )?))
             }
             DeviceConfig::VhostUserBlkCfg(config) => {
                 // try to find the device, found and just return id.
