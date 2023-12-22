@@ -473,11 +473,11 @@ function snapshotter_handler_mapping_validation_check() {
 		shim="${m%$snapshotters_delimiter*}"
 		snapshotter="${m#*$snapshotters_delimiter}"
 
-		if [ -z "$shim"]; then
+		if [ -z "$shim" ]; then
 			die "The snapshotter must follow the \"shim:snapshotter,shim:snapshotter,...\" format, but at least one shim is empty"
 		fi
 
-		if [ -z "$snapshotter"]; then
+		if [ -z "$snapshotter" ]; then
 			die "The snapshotter must follow the \"shim:snapshotter,shim:snapshotter,...\" format, but at least one snapshotter is empty"
 		fi
 
