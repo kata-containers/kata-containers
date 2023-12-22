@@ -14,4 +14,8 @@ There are several components in `dbs-pci` crate building together to emulate PCI
 
 4. root bus mod: mainly for emulating PCI root bridge and also create the PCI root bus with the given bus ID with the PCI root bridge.
 
-5. root device mod: A pseudo PCI root device to manage accessing to PCI configuration space.
+5. root device mod: a pseudo PCI root device to manage accessing to PCI configuration space.
+
+6. `msi` mod: struct to maintain information for PCI Message Signalled Interrupt Capability. It will be initialized when parsing PCI configuration space and used when getting interrupt capabilities.
+
+7. `msix` mod: struct to maintain information for PCI Message Signalled Interrupt Extended Capability. It will be initialized when parsing PCI configuration space and used when getting interrupt capabilities.
