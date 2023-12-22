@@ -4,6 +4,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::convert::TryFrom;
+
 use anyhow::{anyhow, Context, Result};
 
 // Tips:
@@ -26,13 +28,30 @@ const MAX_PCI_SLOTS: u32 = (1 << PCI_SLOT_BITS) - 1;
 pub struct PciSlot(pub u8);
 
 impl PciSlot {
-    pub fn convert_from_string(s: &str) -> Result<PciSlot> {
+    pub fn new(v: u8) -> PciSlot {
+        PciSlot(v)
+    }
+}
+
+impl ToString for PciSlot {
+    fn to_string(&self) -> String {
+        format!("{:02x}", self.0)
+    }
+}
+
+impl TryFrom<&str> for PciSlot {
+    type Error = anyhow::Error;
+
+    fn try_from(s: &str) -> Result<PciSlot> {
         if s.is_empty() || s.len() > 2 {
             return Err(anyhow!("string given is invalid."));
         }
 
         let base = 16;
-        let n = u64::from_str_radix(s, base).context("convert string to number failed")?;
+        let n = u64::from_str_radix(s, base).context(format!(
+            "convert string to number with base {:?} failed.",
+            base
+        ))?;
         if n >> PCI_SLOT_BITS > 0 {
             return Err(anyhow!(
                 "number {:?} exceeds MAX:{:?}, failed.",
@@ -43,17 +62,17 @@ impl PciSlot {
 
         Ok(PciSlot(n as u8))
     }
+}
 
-    pub fn convert_from_u32(v: u32) -> Result<PciSlot> {
+impl TryFrom<u32> for PciSlot {
+    type Error = anyhow::Error;
+
+    fn try_from(v: u32) -> Result<PciSlot> {
         if v > MAX_PCI_SLOTS {
             return Err(anyhow!("value {:?} exceeds MAX: {:?}", v, MAX_PCI_SLOTS));
         }
 
         Ok(PciSlot(v as u8))
-    }
-
-    pub fn convert_to_string(&self) -> String {
-        format!("{:02x}", self.0)
     }
 }
 
@@ -78,34 +97,7 @@ pub struct PciPath {
 }
 
 impl PciPath {
-    // method to format the PciPath into a string
-    pub fn convert_to_string(&self) -> String {
-        self.slots
-            .iter()
-            .map(|pci_slot| format!("{:02x}", pci_slot.0))
-            .collect::<Vec<String>>()
-            .join("/")
-    }
-
-    // method to parse a PciPath from a string
-    pub fn convert_from_string(path: &str) -> Result<PciPath> {
-        if path.is_empty() {
-            return Err(anyhow!("path given is empty."));
-        }
-
-        let mut pci_slots: Vec<PciSlot> = Vec::new();
-        let slots: Vec<&str> = path.split('/').collect();
-        for slot in slots {
-            match PciSlot::convert_from_string(slot) {
-                Ok(s) => pci_slots.push(s),
-                Err(e) => return Err(anyhow!("slot is invalid with: {:?}", e)),
-            }
-        }
-
-        Ok(PciPath { slots: pci_slots })
-    }
-
-    pub fn from_pci_slots(slots: Vec<PciSlot>) -> Option<PciPath> {
+    pub fn new(slots: Vec<PciSlot>) -> Option<PciPath> {
         if slots.is_empty() {
             return None;
         }
@@ -124,6 +116,50 @@ impl PciPath {
     }
 }
 
+impl ToString for PciPath {
+    // method to format the PciPath into a string
+    fn to_string(&self) -> String {
+        self.slots
+            .iter()
+            .map(|pci_slot| format!("{:02x}", pci_slot.0))
+            .collect::<Vec<String>>()
+            .join("/")
+    }
+}
+
+// convert from u32
+impl TryFrom<u32> for PciPath {
+    type Error = anyhow::Error;
+
+    fn try_from(slot: u32) -> Result<PciPath> {
+        Ok(PciPath {
+            slots: vec![PciSlot::try_from(slot).context("pci slot convert failed.")?],
+        })
+    }
+}
+
+impl TryFrom<&str> for PciPath {
+    type Error = anyhow::Error;
+
+    // method to parse a PciPath from a string
+    fn try_from(path: &str) -> Result<PciPath> {
+        if path.is_empty() {
+            return Err(anyhow!("path given is empty."));
+        }
+
+        let mut pci_slots: Vec<PciSlot> = Vec::new();
+        let slots: Vec<&str> = path.split('/').collect();
+        for slot in slots {
+            match PciSlot::try_from(slot) {
+                Ok(s) => pci_slots.push(s),
+                Err(e) => return Err(anyhow!("slot is invalid with: {:?}", e)),
+            }
+        }
+
+        Ok(PciPath { slots: pci_slots })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -131,46 +167,46 @@ mod tests {
     #[test]
     fn test_pci_slot() {
         // min
-        let pci_slot_01 = PciSlot::convert_from_string("00");
+        let pci_slot_01 = PciSlot::try_from("00");
         assert!(pci_slot_01.is_ok());
         // max
-        let pci_slot_02 = PciSlot::convert_from_string("1f");
+        let pci_slot_02 = PciSlot::try_from("1f");
         assert!(pci_slot_02.is_ok());
 
         // exceed
-        let pci_slot_03 = PciSlot::convert_from_string("20");
+        let pci_slot_03 = PciSlot::try_from("20");
         assert!(pci_slot_03.is_err());
 
         // valid number
-        let pci_slot_04 = PciSlot::convert_from_u32(1_u32);
+        let pci_slot_04 = PciSlot::try_from(1_u32);
         assert!(pci_slot_04.is_ok());
         assert_eq!(pci_slot_04.as_ref().unwrap().0, 1_u8);
-        let pci_slot_str = pci_slot_04.as_ref().unwrap().convert_to_string();
+        let pci_slot_str = pci_slot_04.as_ref().unwrap().to_string();
         assert_eq!(pci_slot_str, format!("{:02x}", pci_slot_04.unwrap().0));
 
         // max number
-        let pci_slot_05 = PciSlot::convert_from_u32(31_u32);
+        let pci_slot_05 = PciSlot::try_from(31_u32);
         assert!(pci_slot_05.is_ok());
         assert_eq!(pci_slot_05.unwrap().0, 31_u8);
 
         // exceed and error
-        let pci_slot_06 = PciSlot::convert_from_u32(32_u32);
+        let pci_slot_06 = PciSlot::try_from(32_u32);
         assert!(pci_slot_06.is_err());
     }
 
     #[test]
     fn test_pci_patch() {
-        let pci_path_0 = PciPath::convert_from_string("01/0a/05");
+        let pci_path_0 = PciPath::try_from("01/0a/05");
         assert!(pci_path_0.is_ok());
         let pci_path_unwrap = pci_path_0.unwrap();
         assert_eq!(pci_path_unwrap.slots[0].0, 1);
         assert_eq!(pci_path_unwrap.slots[1].0, 10);
         assert_eq!(pci_path_unwrap.slots[2].0, 5);
 
-        let pci_path_01 = PciPath::from_pci_slots(vec![PciSlot(1), PciSlot(10), PciSlot(5)]);
+        let pci_path_01 = PciPath::new(vec![PciSlot(1), PciSlot(10), PciSlot(5)]);
         assert!(pci_path_01.is_some());
         let pci_path = pci_path_01.unwrap();
-        let pci_path_02 = pci_path.convert_to_string();
+        let pci_path_02 = pci_path.to_string();
         assert_eq!(pci_path_02, "01/0a/05".to_string());
 
         let dev_slot = pci_path.get_device_slot();
