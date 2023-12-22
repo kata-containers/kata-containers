@@ -242,3 +242,11 @@ pub trait InterruptSourceGroup: Send + Sync {
         false
     }
 }
+
+impl PartialEq for dyn InterruptSourceGroup {
+    fn eq(&self, other: &dyn InterruptSourceGroup) -> bool {
+        self.interrupt_type() == other.interrupt_type()
+            && self.len() == other.len()
+            && self.base() == other.base()
+    }
+}

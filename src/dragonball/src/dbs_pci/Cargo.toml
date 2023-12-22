@@ -12,9 +12,13 @@ readme = "README.md"
  
 [dependencies]
 dbs-device = { path = "../dbs_device" }
-dbs-interrupt = { path = "../dbs_interrupt", features = ["kvm-irq"] }
+dbs-interrupt = { path = "../dbs_interrupt", features = ["kvm-irq", "kvm-legacy-irq", "kvm-msi-irq"] }
 dbs-allocator = { path = "../dbs_allocator" }
 log = "0.4.14"
 downcast-rs = "1.2.0"
 byteorder = "1.4.3"
 thiserror = "1"
+vm-memory = "0.10.0"
+
+[dev-dependencies]
+kvm-ioctls = "0.12.0"
