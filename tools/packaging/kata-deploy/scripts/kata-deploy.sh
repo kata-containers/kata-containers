@@ -25,6 +25,10 @@ for allowed_hypervisor_annotation in "${non_formatted_allowed_hypervisor_annotat
 done
 allowed_hypervisor_annotations=$(echo $allowed_hypervisor_annotations | sed 's/,$//')
 
+SNAPSHOTTER_HANDLER_MAPPING="${SNAPSHOTTER_HANDLER_MAPPING:-}"
+IFS=',' read -a snapshotters <<< "$SNAPSHOTTER_HANDLER_MAPPING"
+snapshotters_delimiter=':'
+
 # If we fail for any reason a message will be displayed
 die() {
         msg="$*"
@@ -363,6 +367,20 @@ function configure_containerd_runtime() {
 	if [ "${DEBUG}" == "true" ]; then
 		tomlq -i -t '.debug.level = "debug"' ${containerd_conf_file}
 	fi
+
+	if [ -n "${SNAPSHOTTER_HANDLER_MAPPING}" ]; then
+		for m in ${snapshotters[@]}; do
+			key="${m%$snapshotters_delimiter*}"
+
+			if [ "${key}" != "${shim}" ]; then
+				continue
+			fi
+
+			value="${m#*$snapshotters_delimiter}"
+			tomlq -i -t $(printf '%s.snapshotter=%s' ${shim} ${value}) ${containerd_conf_file}
+			break
+		done
+	fi
 }
 
 function configure_containerd() {
@@ -431,6 +449,49 @@ function reset_runtime() {
 	wait_till_node_is_ready
 }
 
+function containerd_snapshotter_version_check() {
+	local container_runtime_version=$(kubectl get node $NODE_NAME -o jsonpath='{.status.nodeInfo.containerRuntimeVersion}')
+	local containerd_prefix="containerd://"
+	local containerd_version_to_avoid="1.6"
+	local containerd_version=${container_runtime_version#$containerd_prefix}
+
+	if grep -q ^$containerd_version_to_avoid <<< $containerd_version; then
+		if [ -n "${SNAPSHOTTER_HANDLER_MAPPING}" ]; then
+			die "kata-deploy only supports snapshotter configuration with containerd 1.7 or newer"
+		fi
+	fi
+}
+
+function snapshotter_handler_mapping_validation_check() {
+	echo "Validating the snapshotter-handler mapping: \"${SNAPSHOTTER_HANDLER_MAPPING}\""
+	if [ -z "${SNAPSHOTTER_HANDLER_MAPPING}" ]; then
+		echo "No snapshotter has been requested, using the default value from containerd"
+		return
+	fi
+
+	for m in ${snapshotters[@]}; do
+		shim="${m%$snapshotters_delimiter*}"
+		snapshotter="${m#*$snapshotters_delimiter}"
+
+		if [ -z "$shim"]; then
+			die "The snapshotter must follow the \"shim:snapshotter,shim:snapshotter,...\" format, but at least one shim is empty"
+		fi
+
+		if [ -z "$snapshotter"]; then
+			die "The snapshotter must follow the \"shim:snapshotter,shim:snapshotter,...\" format, but at least one snapshotter is empty"
+		fi
+
+		if ! grep -q " $shim " <<< " $shims "; then
+			die "\"$shim\" is not part of \"$SHIMS\""
+		fi
+
+		matches=$(grep -o "$shim$snapshotters_delimiter" <<< "${SNAPSHOTTER_HANDLER_MAPPING}" | wc -l)
+		if [ $matches -ne 1 ]; then
+			die "One, and only one, entry per shim is required"
+		fi
+	done
+}
+
 function main() {
 	echo "Environment variables passed to this script"
 	echo "* NODE_NAME: ${NODE_NAME}"
@@ -481,6 +542,10 @@ function main() {
 
 	# only install / remove / update if we are dealing with CRIO or containerd
 	if [[ "$runtime" =~ ^(crio|containerd|k3s|k3s-agent|rke2-agent|rke2-server|k0s-worker|k0s-controller)$ ]]; then
+		if [ "$runtime" != "crio" ]; then
+			containerd_snapshotter_version_check
+			snapshotter_handler_mapping_validation_check
+		fi
 
 		case "$action" in
 		install)
