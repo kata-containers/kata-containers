@@ -277,7 +277,7 @@ impl CloudHypervisorInner {
             ));
         }
 
-        PciPath::convert_from_string(toks[0])
+        PciPath::try_from(toks[0])
     }
 
     async fn handle_hvsock_device(&mut self, device: HybridVsockDevice) -> Result<DeviceType> {
