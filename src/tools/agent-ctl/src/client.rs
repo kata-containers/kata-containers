@@ -740,7 +740,10 @@ fn handle_cmd(
                 Err(e) => (Err(e), false),
             }
         } else {
-            result = handle_agent_cmd(ctx, client, health, options, cmd, &args);
+            result = match command::parse_agent_cmd(cmd) {
+                Ok(agent_cmd) => agent_cmd.exec(ctx, client, health, options, &args),
+                Err(e) => (Err(e), false),
+            }
         }
 
         if result.0.is_err() {
