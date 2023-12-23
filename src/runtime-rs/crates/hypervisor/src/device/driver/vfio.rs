@@ -20,11 +20,13 @@ use async_trait::async_trait;
 use lazy_static::lazy_static;
 use path_clean::PathClean;
 
-use crate::{
-    device::{hypervisor, Device, DeviceType},
-    PciPath, PciSlot,
-};
 use kata_sys_util::fs::get_base_name;
+
+use crate::device::{
+    hypervisor,
+    pci_path::{PciPath, PciSlot},
+    Device, DeviceType,
+};
 
 pub const SYS_BUS_PCI_DRIVER_PROBE: &str = "/sys/bus/pci/drivers_probe";
 pub const SYS_BUS_PCI_DEVICES: &str = "/sys/bus/pci/devices";
@@ -66,14 +68,8 @@ pub fn generate_guest_pci_path(bdf: String) -> Result<PciPath> {
     hg_map.write().unwrap().insert(host_bdf, guest_bdf);
 
     Ok(PciPath {
-        slots: vec![PciSlot::convert_from_u32(slot.into()).context("pci slot convert failed.")?],
+        slots: vec![PciSlot::new(slot)],
     })
-}
-
-// get host/guest mapping for info
-pub fn get_host_guest_map(host_bdf: String) -> Option<String> {
-    // safe, just do unwrap as `HOST_GUEST_MAP` is always valid.
-    HOST_GUEST_MAP.read().unwrap().get(&host_bdf).cloned()
 }
 
 pub fn do_check_iommu_on() -> Result<bool> {
@@ -256,7 +252,7 @@ pub struct VfioDevice {
 
 impl VfioDevice {
     // new with VfioConfig
-    pub fn new(device_id: String, dev_info: &VfioConfig) -> Self {
+    pub fn new(device_id: String, dev_info: &VfioConfig) -> Result<Self> {
         // devices and device_options are in a 1-1 mapping, used in
         // vfio-pci handler for kata-agent.
         let devices: Vec<HostDevice> = Vec::with_capacity(MAX_DEV_ID_SIZE);
@@ -266,7 +262,7 @@ impl VfioDevice {
         let dev_type = dev_info.dev_type.as_str();
         let driver_type = VfioBusMode::driver_type(dev_type).to_owned();
 
-        Self {
+        let mut vfio_device = Self {
             device_id,
             attach_count: 0,
             bus_mode: VfioBusMode::PCI,
@@ -274,7 +270,13 @@ impl VfioDevice {
             config: dev_info.clone(),
             devices,
             device_options,
-        }
+        };
+
+        vfio_device
+            .initialize_vfio_device()
+            .context("initialize vfio device failed.")?;
+
+        Ok(vfio_device)
     }
 
     fn get_host_path(&self) -> String {
@@ -374,7 +376,7 @@ impl VfioDevice {
         Ok(DeviceVendor(device, vendor))
     }
 
-    async fn set_vfio_config(
+    fn set_vfio_config(
         &mut self,
         iommu_devs_path: PathBuf,
         device_name: &str,
@@ -426,11 +428,8 @@ impl VfioDevice {
             _ => None,
         }
     }
-}
 
-#[async_trait]
-impl Device for VfioDevice {
-    async fn attach(&mut self, h: &dyn hypervisor) -> Result<()> {
+    fn initialize_vfio_device(&mut self) -> Result<()> {
         // host path: /dev/vfio/X
         let host_path = self.get_host_path();
         // vfio group: X
@@ -464,7 +463,6 @@ impl Device for VfioDevice {
 
             let mut hostdev: HostDevice = self
                 .set_vfio_config(iommu_devs_path.clone(), device)
-                .await
                 .context("set vfio config failed")?;
             let dev_prefix = self.get_vfio_prefix();
             hostdev.hostdev_id = make_device_nameid(&dev_prefix, index, MAX_DEV_ID_SIZE);
@@ -472,6 +470,13 @@ impl Device for VfioDevice {
             self.devices.push(hostdev);
         }
 
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl Device for VfioDevice {
+    async fn attach(&mut self, h: &dyn hypervisor) -> Result<()> {
         if self
             .increase_attach_count()
             .await
@@ -505,7 +510,7 @@ impl Device for VfioDevice {
                         self.device_options.push(format!(
                             "0000:{}={}",
                             hostdev.bus_slot_func.clone(),
-                            pci_path.convert_to_string()
+                            pci_path.to_string()
                         ));
                     }
                 }
