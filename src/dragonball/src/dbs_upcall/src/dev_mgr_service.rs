@@ -45,6 +45,16 @@ struct DevMgrMsgHeader {
     pub msg_flags: u32,
 }
 
+/// Command struct to add/del a PCI Device.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct PciDevRequest {
+    /// PCI bus number
+    pub busno: u8,
+    /// Combined device number and function number
+    pub devfn: u8,
+}
+
 /// Command struct to add/del a MMIO Virtio Device.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -128,6 +138,10 @@ pub enum DevMgrRequest {
     AddVcpu(CpuDevRequest),
     /// Del a VCPU
     DelVcpu(CpuDevRequest),
+    /// Add a PCI device
+    AddPciDev(PciDevRequest),
+    /// Delete a PCI device
+    DelPciDev(PciDevRequest),
 }
 
 impl DevMgrRequest {
@@ -166,6 +180,18 @@ impl DevMgrRequest {
                 msg_hdr.msg_size = mem::size_of::<CpuDevRequest>() as u32;
                 let vcpu_dev = unsafe { &mut *(buffer[size_hdr..].as_ptr() as *mut CpuDevRequest) };
                 *vcpu_dev = s.clone();
+            }
+            DevMgrRequest::AddPciDev(s) => {
+                msg_hdr.msg_type = DevMgrMsgType::AddPci as u32;
+                msg_hdr.msg_size = mem::size_of::<PciDevRequest>() as u32;
+                let pci_dev = unsafe { &mut *(buffer[size_hdr..].as_ptr() as *mut PciDevRequest) };
+                *pci_dev = *s;
+            }
+            DevMgrRequest::DelPciDev(s) => {
+                msg_hdr.msg_type = DevMgrMsgType::DelPci as u32;
+                msg_hdr.msg_size = mem::size_of::<PciDevRequest>() as u32;
+                let pci_dev = unsafe { &mut *(buffer[size_hdr..].as_ptr() as *mut PciDevRequest) };
+                *pci_dev = *s;
             }
         }
 

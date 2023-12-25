@@ -3,6 +3,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+use std::any::Any;
 use std::io;
 use std::os::unix::io::AsRawFd;
 use std::ptr::null_mut;
@@ -884,7 +885,7 @@ impl Region {
     }
 }
 
-struct VfioPciDeviceState<C: PciSystemContext> {
+pub struct VfioPciDeviceState<C: PciSystemContext> {
     vfio_path: String,
     interrupt: Interrupt,
     vfio_dev: Arc<VfioDevice>,
@@ -945,6 +946,10 @@ impl<C: PciSystemContext> VfioPciDeviceState<C> {
             bus,
             vfio_container,
         })
+    }
+
+    pub fn vfio_dev(&self) -> &Arc<VfioDevice> {
+        &self.vfio_dev
     }
 
     fn read_config_byte(&self, offset: u32) -> u8 {
@@ -1314,6 +1319,23 @@ impl<C: PciSystemContext> VfioPciDeviceState<C> {
         Ok(())
     }
 
+    fn free_register_resources(&self) -> Result<()> {
+        let mut register_resources = DeviceResources::new();
+        for region in self.regions.iter() {
+            let resources = region.to_resources();
+            for res in resources.get_all_resources() {
+                register_resources.append(res.clone());
+            }
+        }
+
+        self.bus
+            .upgrade()
+            .ok_or(VfioPciError::BusIsDropped)?
+            .free_resources(register_resources);
+
+        Ok(())
+    }
+
     fn unregister_regions(&mut self, vm: &Arc<VmFd>) -> Result<()> {
         // This routine handle VfioPciDevice dropped but not unmap memory
         if self.context.upgrade().is_none() {
@@ -1661,7 +1683,7 @@ impl<C: PciSystemContext> VfioPciDevice<C> {
         Ok(())
     }
 
-    fn state(&self) -> MutexGuard<VfioPciDeviceState<C>> {
+    pub fn state(&self) -> MutexGuard<VfioPciDeviceState<C>> {
         // Don't expect poisoned lock
         self.state
             .lock()
@@ -1686,6 +1708,14 @@ impl<C: PciSystemContext> VfioPciDevice<C> {
             .lock()
             .expect("poisoned lock for VFIO PCI device")
             .read_config_word(PCI_CONFIG_VENDOR_OFFSET)
+    }
+
+    pub fn clear_device(&self) -> Result<()> {
+        let mut state = self.state();
+        state.free_register_resources()?;
+        let _ = state.unregister_regions(&self.vm_fd);
+
+        Ok(())
     }
 }
 
@@ -1784,7 +1814,8 @@ impl<C: 'static + PciSystemContext> DeviceIo for VfioPciDevice<C> {
     fn get_trapped_io_resources(&self) -> DeviceResources {
         self.state().trapped_resources.clone()
     }
-    fn as_any(&self) -> &dyn std::any::Any {
+
+    fn as_any(&self) -> &dyn Any {
         self
     }
 }
