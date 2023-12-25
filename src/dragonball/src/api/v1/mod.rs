@@ -32,4 +32,6 @@ pub use virtio_net::VirtioConfig;
     feature = "vhost-net",
     feature = "vhost-user-net"
 ))]
-pub use virtio_net::{Backend, NetworkInterfaceConfig, NetworkInterfaceUpdateConfig};
+pub use virtio_net::{
+    Backend, NetworkInterfaceConfig, NetworkInterfaceUpdateConfig, VhostUserConfig,
+};
