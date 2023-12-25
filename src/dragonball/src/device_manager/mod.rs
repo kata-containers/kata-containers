@@ -36,9 +36,11 @@ use dbs_virtio_devices::{
     VirtioDevice,
 };
 
+#[cfg(feature = "host-device")]
+use dbs_pci::VfioPciDevice;
 #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
 use dbs_upcall::{
-    DevMgrRequest, DevMgrService, MmioDevRequest, UpcallClient, UpcallClientError,
+    DevMgrRequest, DevMgrService, MmioDevRequest, PciDevRequest, UpcallClient, UpcallClientError,
     UpcallClientRequest, UpcallClientResponse,
 };
 #[cfg(feature = "hotplug")]
@@ -46,6 +48,8 @@ use dbs_virtio_devices::vsock::backend::VsockInnerConnector;
 
 use crate::address_space_manager::GuestAddressSpaceImpl;
 use crate::api::v1::InstanceInfo;
+#[cfg(feature = "host-device")]
+use crate::device_manager::vfio_dev_mgr::PciSystemManager;
 use crate::error::StartMicroVmError;
 use crate::resource_manager::ResourceManager;
 use crate::vm::{KernelConfigInfo, Vm, VmConfigInfo};
@@ -169,6 +173,11 @@ pub enum DeviceMgrError {
     /// Failed to free device resource.
     #[error("failed to free device resources: {0}")]
     ResourceError(#[source] crate::resource_manager::ResourceError),
+
+    #[cfg(feature = "host-device")]
+    /// Error from Vfio Pci
+    #[error("failed to do vfio pci operation: {0:?}")]
+    VfioPci(#[source] dbs_pci::VfioPciError),
 }
 
 /// Specialized version of `std::result::Result` for device manager operations.
@@ -273,6 +282,8 @@ pub struct DeviceOpContext {
     address_space: Option<AddressSpace>,
     logger: slog::Logger,
     is_hotplug: bool,
+    #[cfg(all(feature = "hotplug", feature = "host-device"))]
+    pci_hotplug_enabled: bool,
 
     #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
     upcall_client: Option<Arc<UpcallClient<DevMgrService>>>,
@@ -304,6 +315,12 @@ impl DeviceOpContext {
         };
         let logger = device_mgr.logger.new(slog::o!());
 
+        #[cfg(all(feature = "hotplug", feature = "host-device"))]
+        let pci_hotplug_enabled = vm_config
+            .clone()
+            .map(|c| c.pci_hotplug_enabled)
+            .unwrap_or(false);
+
         DeviceOpContext {
             epoll_mgr,
             io_context,
@@ -314,6 +331,8 @@ impl DeviceOpContext {
             address_space,
             logger,
             is_hotplug,
+            #[cfg(all(feature = "hotplug", feature = "host-device"))]
+            pci_hotplug_enabled,
             #[cfg(all(feature = "hotplug", feature = "dbs-upcall"))]
             upcall_client: None,
             #[cfg(feature = "dbs-virtio-devices")]
@@ -523,6 +542,37 @@ impl DeviceOpContext {
             mmio_size,
             mmio_irq,
         });
+
+        self.call_hotplug_device(req, callback)
+    }
+
+    #[cfg(feature = "host-device")]
+    pub(crate) fn insert_hotplug_pci_device(
+        &self,
+        dev: &Arc<dyn DeviceIo>,
+        callback: Option<Box<dyn Fn(UpcallClientResponse) + Send>>,
+    ) -> Result<()> {
+        if !self.is_hotplug || !self.pci_hotplug_enabled {
+            return Err(DeviceMgrError::InvalidOperation);
+        }
+
+        let (busno, devfn) = DeviceManager::get_pci_device_info(dev)?;
+        let req = DevMgrRequest::AddPciDev(PciDevRequest { busno, devfn });
+
+        self.call_hotplug_device(req, callback)
+    }
+
+    #[cfg(feature = "host-device")]
+    pub(crate) fn remove_hotplug_pci_device(
+        &self,
+        dev: &Arc<dyn DeviceIo>,
+        callback: Option<Box<dyn Fn(UpcallClientResponse) + Send>>,
+    ) -> Result<()> {
+        if !self.is_hotplug || !self.pci_hotplug_enabled {
+            return Err(DeviceMgrError::InvalidOperation);
+        }
+        let (busno, devfn) = DeviceManager::get_pci_device_info(dev)?;
+        let req = DevMgrRequest::DelPciDev(PciDevRequest { busno, devfn });
 
         self.call_hotplug_device(req, callback)
     }
@@ -1152,6 +1202,30 @@ impl DeviceManager {
             Ok(())
         }
     }
+
+    #[cfg(feature = "host-device")]
+    fn get_pci_device_info(device: &Arc<dyn DeviceIo>) -> Result<(u8, u8)> {
+        if let Some(pci_dev) = device
+            .as_any()
+            .downcast_ref::<VfioPciDevice<PciSystemManager>>()
+        {
+            // reference from kernel: include/uapi/linux/pci.h
+            let busno = pci_dev.bus_id().map_err(DeviceMgrError::VfioPci)?;
+            let slot = pci_dev.device_id();
+            let func = 0;
+            // The slot/function address of each device is encoded
+            // in a single byte as follows:
+            //
+            // 7:3 = slot
+            // 2:0 = function
+            // together those 8 bits combined as devfn value
+            let devfn = (((slot) & 0x1f) << 3) | ((func) & 0x07);
+
+            return Ok((busno, devfn));
+        }
+
+        Err(DeviceMgrError::GetDeviceResource)
+    }
 }
 
 #[cfg(feature = "hotplug")]
@@ -1282,6 +1356,7 @@ mod tests {
                 sockets: 1,
             },
             vpmu_feature: 0,
+            pci_hotplug_enabled: false,
         };
         vm.set_vm_config(vm_config.clone());
         vm.init_guest_memory().unwrap();

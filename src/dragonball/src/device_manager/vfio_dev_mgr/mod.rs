@@ -18,25 +18,29 @@ use std::os::fd::RawFd;
 use std::path::Path;
 use std::sync::{Arc, Weak};
 
-use super::StartMicroVmError;
-use crate::address_space_manager::{GuestAddressSpaceImpl, GuestMemoryImpl};
-use crate::config_manager::{ConfigItem, DeviceConfigInfo, DeviceConfigInfos};
-use crate::device_manager::{DeviceManagerContext, DeviceMgrError, DeviceOpContext};
-use crate::resource_manager::{ResourceError, ResourceManager};
+use crossbeam_channel::Sender;
 use dbs_device::resources::Resource::LegacyIrq;
-use dbs_device::resources::ResourceConstraint;
+use dbs_device::resources::{DeviceResources, Resource, ResourceConstraint};
 use dbs_device::DeviceIo;
 use dbs_interrupt::KvmIrqManager;
 #[cfg(target_arch = "aarch64")]
 use dbs_pci::ECAM_SPACE_LENGTH;
 use dbs_pci::{VfioPciDevice, VENDOR_NVIDIA};
+use dbs_upcall::{DevMgrResponse, UpcallClientResponse};
 use kvm_ioctls::{DeviceFd, VmFd};
+use log::error;
 use serde_derive::{Deserialize, Serialize};
 use vfio_ioctls::{VfioContainer, VfioDevice};
 use vm_memory::{
     Address, GuestAddressSpace, GuestMemory, GuestMemoryRegion, GuestRegionMmap,
     MemoryRegionAddress,
 };
+
+use super::StartMicroVmError;
+use crate::address_space_manager::{GuestAddressSpaceImpl, GuestMemoryImpl};
+use crate::config_manager::{ConfigItem, DeviceConfigInfo, DeviceConfigInfos};
+use crate::device_manager::{DeviceManagerContext, DeviceMgrError, DeviceOpContext};
+use crate::resource_manager::{ResourceError, ResourceManager};
 
 // The flag of whether to use the shared irq.
 const USE_SHARED_IRQ: bool = true;
@@ -245,9 +249,35 @@ impl VfioDeviceMgr {
         }
     }
 
-    /// Insert or update a VFIO device into the manager.
-    pub fn insert_device(&mut self, config: HostDeviceConfig) -> Result<()> {
-        let _device_index = self.info_list.insert_or_update(&config)?;
+    /// Insert or update a VFIO device into the manager.ig)?;
+    pub fn insert_device(
+        &mut self,
+        ctx: &mut DeviceOpContext,
+        config: HostDeviceConfig,
+    ) -> Result<()> {
+        if !cfg!(feature = "hotplug") && ctx.is_hotplug {
+            return Err(VfioDeviceError::UpdateNotAllowedPostBoot);
+        }
+        slog::info!(
+            ctx.logger(),
+            "add VFIO device configuration";
+            "subsystem" => "vfio_dev_mgr",
+            "hostdev_id" => &config.hostdev_id,
+            "bdf" => &config.dev_config.bus_slot_func,
+        );
+        let device_index = self.info_list.insert_or_update(&config)?;
+        // Handle device hotplug case
+        if ctx.is_hotplug {
+            slog::info!(
+                ctx.logger(),
+                "attach VFIO device";
+                "subsystem" => "vfio_dev_mgr",
+                "hostdev_id" => &config.hostdev_id,
+                "bdf" => &config.dev_config.bus_slot_func,
+            );
+            self.add_device(ctx, &config, device_index)?;
+        }
+
         Ok(())
     }
 
@@ -256,10 +286,100 @@ impl VfioDeviceMgr {
         &mut self,
         ctx: &mut DeviceOpContext,
     ) -> std::result::Result<(), StartMicroVmError> {
+        // create and attach pci root bus
+        #[cfg(all(feature = "hotplug", feature = "host-device"))]
+        if ctx.pci_hotplug_enabled {
+            let _ = self
+                .create_pci_manager(
+                    ctx.irq_manager.clone(),
+                    ctx.io_context.clone(),
+                    ctx.res_manager.clone(),
+                )
+                .map_err(StartMicroVmError::CreateVfioDevice)?;
+        }
         for (idx, info) in self.info_list.clone().iter().enumerate() {
             self.create_device(&info.config, ctx, idx)
                 .map_err(StartMicroVmError::CreateVfioDevice)?;
         }
+        Ok(())
+    }
+
+    pub fn remove_device(&mut self, ctx: &mut DeviceOpContext, hostdev_id: &str) -> Result<()> {
+        if !cfg!(feature = "hotplug") {
+            return Err(VfioDeviceError::UpdateNotAllowedPostBoot);
+        }
+
+        slog::info!(
+            ctx.logger(),
+            "remove VFIO device";
+            "subsystem" => "vfio_dev_mgr",
+            "hostdev_id" => hostdev_id,
+        );
+        let device_index = self
+            .get_index_of_hostdev_id(hostdev_id)
+            .ok_or(VfioDeviceError::InvalidConfig)?;
+        let mut info = self
+            .info_list
+            .remove(device_index)
+            .ok_or(VfioDeviceError::InvalidConfig)?;
+
+        self.remove_vfio_device(ctx, &mut info)
+    }
+
+    /// prepare to remove device
+    pub fn prepare_remove_device(
+        &self,
+        ctx: &DeviceOpContext,
+        hostdev_id: &str,
+        result_sender: Sender<Option<i32>>,
+    ) -> Result<()> {
+        if !cfg!(feature = "hotplug") {
+            return Err(VfioDeviceError::UpdateNotAllowedPostBoot);
+        }
+
+        slog::info!(
+            ctx.logger(),
+            "prepare remove VFIO device";
+            "subsystem" => "vfio_dev_mgr",
+            "hostdev_id" => hostdev_id,
+        );
+
+        let device_index = self
+            .get_index_of_hostdev_id(hostdev_id)
+            .ok_or(VfioDeviceError::InvalidConfig)?;
+
+        let info = &self.info_list[device_index];
+        if let Some(dev) = info.device.as_ref() {
+            let callback: Option<Box<dyn Fn(UpcallClientResponse) + Send>> =
+                Some(Box::new(move |result| match result {
+                    UpcallClientResponse::DevMgr(response) => {
+                        if let DevMgrResponse::Other(resp) = response {
+                            if let Err(e) = result_sender.send(Some(resp.result)) {
+                                error!("send upcall result failed, due to {:?}!", e);
+                            }
+                        }
+                    }
+                    UpcallClientResponse::UpcallReset => {
+                        if let Err(e) = result_sender.send(None) {
+                            error!("send upcall result failed, due to {:?}!", e);
+                        }
+                    }
+                    #[cfg(test)]
+                    UpcallClientResponse::FakeResponse => {}
+                }));
+            ctx.remove_hotplug_pci_device(dev, callback)
+                .map_err(VfioDeviceError::VfioDeviceMgr)?
+        }
+        Ok(())
+    }
+
+    fn remove_vfio_device(
+        &mut self,
+        ctx: &mut DeviceOpContext,
+        info: &mut DeviceConfigInfo<HostDeviceConfig>,
+    ) -> Result<()> {
+        let device = info.device.take().ok_or(VfioDeviceError::InvalidConfig)?;
+        self.remove_pci_vfio_device(&device, ctx)?;
         Ok(())
     }
 
@@ -310,6 +430,26 @@ impl VfioDeviceMgr {
         self.info_list[idx].device = Some(device.clone());
         Ok(device)
     }
+
+    fn add_device(
+        &mut self,
+        ctx: &mut DeviceOpContext,
+        cfg: &HostDeviceConfig,
+        idx: usize,
+    ) -> Result<()> {
+        let dev = self.create_device(cfg, ctx, idx)?;
+        if self.locked_vm_size == 0 && self.vfio_container.is_some() {
+            let vm_as = ctx
+                .get_vm_as()
+                .map_err(|_| VfioDeviceError::InternalError)?;
+            let vm_memory = vm_as.memory();
+
+            self.register_memory(vm_memory.deref())?;
+        }
+        ctx.insert_hotplug_pci_device(&dev, None)
+            .map_err(VfioDeviceError::VfioDeviceMgr)
+    }
+
     /// Gets the index of the device with the specified `hostdev_id` if it exists in the list.
     fn get_index_of_hostdev_id(&self, id: &str) -> Option<usize> {
         self.info_list
@@ -379,12 +519,14 @@ impl VfioDeviceMgr {
         self.locked_vm_size -= size;
         Ok(())
     }
+
     pub(crate) fn update_memory(&mut self, region: &GuestRegionMmap) -> Result<()> {
         if self.locked_vm_size != 0 {
             self.register_memory_region(region)?;
         }
         Ok(())
     }
+
     pub(crate) fn build_sysfs_path(cfg: &HostDeviceConfig) -> Result<String> {
         if cfg.sysfs_path.is_empty() {
             let (bdf, domain) = (
@@ -499,6 +641,52 @@ impl VfioDeviceMgr {
         Ok(vfio_pci_device)
     }
 
+    fn remove_pci_vfio_device(
+        &mut self,
+        device: &Arc<dyn DeviceIo>,
+        ctx: &mut DeviceOpContext,
+    ) -> Result<()> {
+        // safe to unwrap because type is decided
+        let vfio_pci_device = device
+            .as_any()
+            .downcast_ref::<VfioPciDevice<PciSystemManager>>()
+            .unwrap();
+
+        let device_id = vfio_pci_device.device_id() as u32;
+
+        // safe to unwrap because pci vfio manager is already created
+        let _ = self
+            .pci_vfio_manager
+            .as_mut()
+            .unwrap()
+            .free_device_id(device_id)
+            .ok_or(VfioDeviceError::InvalidDeviceID(device_id))?;
+
+        let resources = vfio_pci_device.get_assigned_resources();
+        let vendor_id = vfio_pci_device.vendor_id();
+        let filtered_resources = if vendor_id == VENDOR_NVIDIA {
+            let mut filtered_resources = DeviceResources::new();
+            for resource in resources.get_all_resources() {
+                if let Resource::LegacyIrq(_) = resource {
+                    continue;
+                } else {
+                    filtered_resources.append(resource.clone())
+                }
+            }
+            filtered_resources
+        } else {
+            resources
+        };
+
+        ctx.res_manager.free_device_resources(&filtered_resources);
+
+        vfio_pci_device
+            .clear_device()
+            .map_err(VfioDeviceError::VfioPciError)?;
+
+        Ok(())
+    }
+
     pub(crate) fn create_pci_manager(
         &mut self,
         irq_manager: Arc<KvmIrqManager>,
@@ -516,7 +704,7 @@ impl VfioDeviceMgr {
         }
         Ok(self.pci_vfio_manager.as_mut().unwrap())
     }
-    
+
     /// Get the PCI manager to support PCI device passthrough
     pub fn get_pci_manager(&mut self) -> Option<&mut Arc<PciSystemManager>> {
         self.pci_vfio_manager.as_mut()

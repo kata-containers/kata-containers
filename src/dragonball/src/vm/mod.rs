@@ -138,6 +138,9 @@ pub struct VmConfigInfo {
 
     /// sock path
     pub serial_path: Option<String>,
+
+    /// Enable PCI device hotplug or not
+    pub pci_hotplug_enabled: bool,
 }
 
 impl Default for VmConfigInfo {
@@ -157,6 +160,7 @@ impl Default for VmConfigInfo {
             mem_file_path: String::from(""),
             mem_size_mib: 128,
             serial_path: None,
+            pci_hotplug_enabled: false,
         }
     }
 }
@@ -182,7 +186,7 @@ pub struct Vm {
     shared_info: Arc<RwLock<InstanceInfo>>,
 
     address_space: AddressSpaceMgr,
-    device_manager: DeviceManager,
+    pub device_manager: DeviceManager,
     dmesg_fifo: Option<Box<dyn io::Write + Send>>,
     kernel_config: Option<KernelConfigInfo>,
     logger: slog::Logger,
@@ -928,6 +932,7 @@ pub mod tests {
                 sockets: 1,
             },
             vpmu_feature: 0,
+            pci_hotplug_enabled: false,
         };
 
         let mut vm = create_vm_instance();
@@ -960,6 +965,7 @@ pub mod tests {
                 sockets: 1,
             },
             vpmu_feature: 0,
+            pci_hotplug_enabled: false,
         };
         vm.set_vm_config(vm_config);
         assert!(vm.init_guest_memory().is_ok());
@@ -1008,6 +1014,7 @@ pub mod tests {
                 sockets: 1,
             },
             vpmu_feature: 0,
+            pci_hotplug_enabled: false,
         };
 
         vm.set_vm_config(vm_config);
@@ -1084,6 +1091,7 @@ pub mod tests {
                 sockets: 1,
             },
             vpmu_feature: 0,
+            pci_hotplug_enabled: false,
         };
 
         vm.set_vm_config(vm_config);
