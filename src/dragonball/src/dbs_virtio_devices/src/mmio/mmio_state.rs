@@ -8,6 +8,7 @@
 use std::ops::Deref;
 use std::sync::Arc;
 
+use dbs_address_space::AddressSpace;
 use dbs_device::resources::DeviceResources;
 use dbs_interrupt::{DeviceInterruptManager, DeviceInterruptMode, InterruptIndex, KvmIrqManager};
 use kvm_bindings::kvm_userspace_memory_region;
@@ -26,6 +27,7 @@ pub struct MmioV2DeviceState<AS: GuestAddressSpace + Clone, Q: QueueT, R: GuestM
     device: Box<dyn VirtioDevice<AS, Q, R>>,
     vm_fd: Arc<VmFd>,
     vm_as: AS,
+    address_space: AddressSpace,
     intr_mgr: DeviceInterruptManager<Arc<KvmIrqManager>>,
     device_resources: DeviceResources,
     queues: Vec<VirtioQueueConfig<Q>>,
@@ -62,10 +64,12 @@ where
         self.device.as_mut()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         mut device: Box<dyn VirtioDevice<AS, Q, R>>,
         vm_fd: Arc<VmFd>,
         vm_as: AS,
+        address_space: AddressSpace,
         irq_manager: Arc<KvmIrqManager>,
         device_resources: DeviceResources,
         mmio_base: u64,
@@ -99,6 +103,7 @@ where
             device,
             vm_fd,
             vm_as,
+            address_space,
             intr_mgr,
             device_resources,
             queues,
@@ -207,6 +212,7 @@ where
 
         let mut config = VirtioDeviceConfig::new(
             self.vm_as.clone(),
+            self.address_space.clone(),
             self.vm_fd.clone(),
             self.device_resources.clone(),
             queues,
@@ -607,6 +613,7 @@ pub(crate) mod tests {
 
     use super::*;
     use crate::mmio::mmio_v2::tests::*;
+    use crate::tests::create_address_space;
 
     pub fn get_mmio_state(
         have_msi: bool,
@@ -627,10 +634,13 @@ pub(crate) mod tests {
 
         let device = MmioDevice::new(ctrl_queue_size);
 
+        let address_space = create_address_space();
+
         MmioV2DeviceState::new(
             Box::new(device),
             vm_fd,
             mem,
+            address_space,
             irq_manager,
             device_resources,
             mmio_base,

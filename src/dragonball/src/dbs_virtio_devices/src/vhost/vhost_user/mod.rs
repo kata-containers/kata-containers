@@ -3,11 +3,12 @@
 
 //! Vhost-based virtio device backend implementations.
 
-use super::VhostError;
-
 pub mod connection;
 #[cfg(feature = "vhost-user-fs")]
 pub mod fs;
+
+#[cfg(feature = "vhost-user-net")]
+pub mod net;
 
 #[cfg(test)]
 mod test_utils;

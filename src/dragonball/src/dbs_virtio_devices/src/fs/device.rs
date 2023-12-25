@@ -974,6 +974,7 @@ pub mod tests {
 
     use super::*;
     use crate::device::VirtioRegionHandler;
+    use crate::tests::create_address_space;
     use crate::{ActivateError, VirtioQueueConfig, TYPE_VIRTIO_FS};
 
     pub(crate) const TAG: &str = "test";
@@ -1048,8 +1049,10 @@ pub mod tests {
         let kvm = Kvm::new().unwrap();
         let vm_fd = Arc::new(kvm.create_vm().unwrap());
         let resources = DeviceResources::new();
+        let address_space = create_address_space();
         let config = VirtioDeviceConfig::new(
             mem,
+            address_space,
             vm_fd,
             resources,
             queues,
@@ -1213,8 +1216,10 @@ pub mod tests {
             let kvm = Kvm::new().unwrap();
             let vm_fd = Arc::new(kvm.create_vm().unwrap());
             let resources = DeviceResources::new();
+            let address_space = create_address_space();
             let config = VirtioDeviceConfig::new(
                 Arc::new(mem),
+                address_space,
                 vm_fd,
                 resources,
                 queues,
@@ -1258,8 +1263,10 @@ pub mod tests {
             let kvm = Kvm::new().unwrap();
             let vm_fd = Arc::new(kvm.create_vm().unwrap());
             let resources = DeviceResources::new();
+            let address_space = create_address_space();
             let config = VirtioDeviceConfig::new(
                 Arc::new(mem),
+                address_space,
                 vm_fd,
                 resources,
                 queues,

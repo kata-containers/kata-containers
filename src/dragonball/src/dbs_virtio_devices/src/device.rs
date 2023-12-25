@@ -19,6 +19,7 @@ use std::io::Write;
 use std::ops::Deref;
 use std::sync::Arc;
 
+use dbs_address_space::AddressSpace;
 use dbs_device::resources::{DeviceResources, ResourceConstraint};
 use dbs_interrupt::{InterruptNotifier, NoopNotifier};
 use dbs_utils::epoll_manager::{EpollManager, EpollSubscriber, SubscriberId};
@@ -175,6 +176,8 @@ pub struct VirtioDeviceConfig<
 > {
     /// `GustMemoryAddress` object to access the guest memory.
     pub vm_as: AS,
+    /// Guest address space
+    pub address_space: AddressSpace,
     /// `VmFd` object for the device to access the hypervisor, such as KVM/HyperV etc.
     pub vm_fd: Arc<VmFd>,
     /// Resources assigned to the Virtio device.
@@ -198,6 +201,7 @@ where
     /// Creates a new `VirtioDeviceConfig` object.
     pub fn new(
         vm_as: AS,
+        address_space: AddressSpace,
         vm_fd: Arc<VmFd>,
         resources: DeviceResources,
         queues: Vec<VirtioQueueConfig<Q>>,
@@ -206,6 +210,7 @@ where
     ) -> Self {
         VirtioDeviceConfig {
             vm_as,
+            address_space,
             vm_fd,
             resources,
             queues,
@@ -576,7 +581,7 @@ pub(crate) mod tests {
     use vm_memory::{GuestMemoryAtomic, GuestMemoryMmap, GuestMemoryRegion, MmapRegion};
 
     use super::*;
-    use crate::tests::VirtQueue;
+    use crate::tests::{create_address_space, VirtQueue};
     use crate::{VIRTIO_INTR_CONFIG, VIRTIO_INTR_VRING};
 
     pub fn create_virtio_device_config() -> VirtioDeviceConfig<Arc<GuestMemoryMmap>> {
@@ -607,8 +612,11 @@ pub(crate) mod tests {
             ));
         }
 
+        let address_space = create_address_space();
+
         VirtioDeviceConfig::new(
             mem,
+            address_space,
             vmfd,
             DeviceResources::new(),
             queues,
@@ -883,8 +891,10 @@ pub(crate) mod tests {
         let kvm = Kvm::new().unwrap();
         let vm_fd = Arc::new(kvm.create_vm().unwrap());
         let resources = DeviceResources::new();
+        let address_space = create_address_space();
         let device_config = VirtioDeviceConfig::new(
             gm,
+            address_space,
             vm_fd,
             resources,
             queues,
