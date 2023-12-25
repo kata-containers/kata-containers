@@ -296,6 +296,7 @@ impl Drop for BalloonDeviceMgr {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::device_manager::tests::create_address_space;
     use crate::test_utils::tests::create_vm_for_test;
 
     impl Default for BalloonDeviceConfigInfo {
@@ -359,7 +360,7 @@ mod tests {
             Some(vm.epoll_manager().clone()),
             vm.device_manager(),
             Some(vm.vm_as().unwrap().clone()),
-            None,
+            Some(create_address_space()),
             false,
             Some(vm.vm_config().clone()),
             vm.shared_info().clone(),
@@ -377,7 +378,7 @@ mod tests {
             Some(vm.epoll_manager().clone()),
             vm.device_manager(),
             Some(vm.vm_as().unwrap().clone()),
-            None,
+            Some(create_address_space()),
             false,
             Some(vm.vm_config().clone()),
             vm.shared_info().clone(),
@@ -398,7 +399,7 @@ mod tests {
             Some(vm.epoll_manager().clone()),
             vm.device_manager(),
             Some(vm.vm_as().unwrap().clone()),
-            None,
+            Some(create_address_space()),
             false,
             Some(vm.vm_config().clone()),
             vm.shared_info().clone(),
@@ -415,7 +416,7 @@ mod tests {
             Some(vm.epoll_manager().clone()),
             vm.device_manager(),
             Some(vm.vm_as().unwrap().clone()),
-            None,
+            Some(create_address_space()),
             false,
             Some(vm.vm_config().clone()),
             vm.shared_info().clone(),

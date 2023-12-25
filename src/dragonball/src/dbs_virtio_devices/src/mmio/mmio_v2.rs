@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use byteorder::{ByteOrder, LittleEndian};
+use dbs_address_space::AddressSpace;
 use dbs_device::resources::{DeviceResources, Resource};
 use dbs_device::{DeviceIo, IoAddress};
 use dbs_interrupt::{InterruptStatusRegister32, KvmIrqManager};
@@ -59,6 +60,7 @@ where
     pub fn new(
         vm_fd: Arc<VmFd>,
         vm_as: AS,
+        address_space: AddressSpace,
         irq_manager: Arc<KvmIrqManager>,
         device: Box<dyn VirtioDevice<AS, Q, R>>,
         resources: DeviceResources,
@@ -108,6 +110,7 @@ where
             device,
             vm_fd,
             vm_as,
+            address_space,
             irq_manager,
             device_resources,
             mmio_base,
@@ -504,6 +507,7 @@ pub(crate) mod tests {
     };
 
     use super::*;
+    use crate::tests::create_address_space;
     use crate::{
         ActivateResult, ConfigResult, Error, VirtioDeviceConfig, VirtioDeviceInfo,
         VirtioSharedMemory, VirtioSharedMemoryList, DEVICE_ACKNOWLEDGE, DEVICE_DRIVER,
@@ -682,9 +686,12 @@ pub(crate) mod tests {
             None
         };
 
+        let address_space = create_address_space();
+
         MmioV2Device::new(
             vm_fd,
             mem,
+            address_space,
             irq_manager,
             Box::new(device),
             resources,
@@ -709,7 +716,16 @@ pub(crate) mod tests {
         vm_fd.create_irq_chip().unwrap();
         let irq_manager = Arc::new(KvmIrqManager::new(vm_fd.clone()));
         irq_manager.initialize().unwrap();
-        let ret = MmioV2Device::new(vm_fd, mem, irq_manager, Box::new(device), resources, None);
+        let address_space = create_address_space();
+        let ret = MmioV2Device::new(
+            vm_fd,
+            mem,
+            address_space,
+            irq_manager,
+            Box::new(device),
+            resources,
+            None,
+        );
         assert!(matches!(ret, Err(Error::InvalidInput)));
 
         // test create without msi

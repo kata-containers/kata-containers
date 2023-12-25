@@ -215,6 +215,7 @@ mod tests {
     use super::super::tests::{test_bytes, TestContext};
     use super::*;
     use crate::device::VirtioDeviceConfig;
+    use crate::tests::create_address_space;
     use crate::VirtioQueueConfig;
 
     impl<AS: DbsGuestAddressSpace, M: VsockGenericMuxer + 'static> Vsock<AS, M> {
@@ -354,8 +355,10 @@ mod tests {
         let kvm = Kvm::new().unwrap();
         let vm_fd = Arc::new(kvm.create_vm().unwrap());
         let resources = DeviceResources::new();
+        let address_space = create_address_space();
         let config = VirtioDeviceConfig::<Arc<GuestMemoryMmap<()>>>::new(
             Arc::new(mem),
+            address_space,
             vm_fd,
             resources,
             queues,

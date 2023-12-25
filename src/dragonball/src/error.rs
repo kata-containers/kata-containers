@@ -198,6 +198,13 @@ pub enum StartMicroVmError {
     #[cfg(feature = "vhost-net")]
     #[error("vhost-net errors: {0:?}")]
     VhostNetDeviceError(#[source] device_manager::vhost_net_dev_mgr::VhostNetDeviceError),
+
+    /// Vhost-user-net device errors.
+    #[cfg(feature = "vhost-user-net")]
+    #[error("vhost-user-net errors: {0:?}")]
+    VhostUserNetDeviceError(
+        #[source] device_manager::vhost_user_net_dev_mgr::VhostUserNetDeviceError,
+    ),
 }
 
 /// Errors associated with starting the instance.

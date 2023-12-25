@@ -1358,7 +1358,7 @@ pub(crate) mod tests {
     use vmm_sys_util::eventfd::EventFd;
 
     use super::*;
-    use crate::tests::{VirtQueue, VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_WRITE};
+    use crate::tests::{create_address_space, VirtQueue, VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_WRITE};
     use crate::VirtioQueueConfig;
 
     struct DummyMemRegionFactory {}
@@ -1417,8 +1417,10 @@ pub(crate) mod tests {
         let kvm = Kvm::new().unwrap();
         let vm_fd = Arc::new(kvm.create_vm().unwrap());
         let resources = DeviceResources::new();
+        let address_space = create_address_space();
         let config = VirtioDeviceConfig::new(
             mem,
+            address_space,
             vm_fd,
             resources,
             queues,
@@ -1898,8 +1900,10 @@ pub(crate) mod tests {
             let kvm = Kvm::new().unwrap();
             let vm_fd = Arc::new(kvm.create_vm().unwrap());
             let resources = DeviceResources::new();
+            let address_space = create_address_space();
             let config = VirtioDeviceConfig::<Arc<GuestMemoryMmap<()>>>::new(
                 Arc::new(mem),
+                address_space,
                 vm_fd,
                 resources,
                 queues,
@@ -1929,8 +1933,10 @@ pub(crate) mod tests {
             let kvm = Kvm::new().unwrap();
             let vm_fd = Arc::new(kvm.create_vm().unwrap());
             let resources = DeviceResources::new();
+            let address_space = create_address_space();
             let config = VirtioDeviceConfig::<Arc<GuestMemoryMmap<()>>>::new(
                 Arc::new(mem),
+                address_space,
                 vm_fd,
                 resources,
                 queues,
@@ -1953,8 +1959,10 @@ pub(crate) mod tests {
             let kvm = Kvm::new().unwrap();
             let vm_fd = Arc::new(kvm.create_vm().unwrap());
             let resources = DeviceResources::new();
+            let address_space = create_address_space();
             let config = VirtioDeviceConfig::<Arc<GuestMemoryMmap<()>>>::new(
                 Arc::new(mem),
+                address_space,
                 vm_fd,
                 resources,
                 queues,
@@ -1981,8 +1989,10 @@ pub(crate) mod tests {
         let kvm = Kvm::new().unwrap();
         let vm_fd = Arc::new(kvm.create_vm().unwrap());
         let resources = DeviceResources::new();
+        let address_space = create_address_space();
         let config = VirtioDeviceConfig::<Arc<GuestMemoryMmap<()>>>::new(
             Arc::new(mem),
+            address_space,
             vm_fd,
             resources,
             queues,
