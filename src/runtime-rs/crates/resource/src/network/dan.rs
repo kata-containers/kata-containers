@@ -87,7 +87,6 @@ impl DanInner {
                 } => Arc::new(
                     VhostUserEndpoint::new(
                         dev_mgr,
-                        idx as u32,
                         &name,
                         &device.guest_mac,
                         path,
@@ -104,7 +103,6 @@ impl DanInner {
                 } => Arc::new(
                     TapEndpoint::new(
                         &handle,
-                        idx as u32,
                         &name,
                         tap_name,
                         &device.guest_mac,
