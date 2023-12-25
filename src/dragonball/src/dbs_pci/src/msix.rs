@@ -11,7 +11,7 @@ use dbs_interrupt::{
 use log::debug;
 use vm_memory::ByteValued;
 
-use crate::configuration::{PciCapability, PciCapabilityID};
+use crate::configuration::{PciCapability, PciCapabilityId};
 
 const MAX_MSIX_VECTORS_PER_DEVICE: u16 = 2048;
 const FUNCTION_MASK_BIT: u8 = 14;
@@ -72,7 +72,7 @@ impl MsixCap {
         let msg_ctl: u16 = table_size - 1;
 
         MsixCap {
-            cap_id: PciCapabilityID::MSIX as u8,
+            cap_id: PciCapabilityId::MSIX as u8,
             cap_next: 0,
             msg_ctl,
             table: (table_off & MSIX_TABLE_OFFSET_MASK)
@@ -140,8 +140,8 @@ impl PciCapability for MsixCap {
         }
     }
 
-    fn pci_capability_type(&self) -> PciCapabilityID {
-        PciCapabilityID::MSIX
+    fn pci_capability_type(&self) -> PciCapabilityId {
+        PciCapabilityId::MSIX
     }
 }
 
@@ -495,7 +495,7 @@ mod tests {
         assert_eq!(msix.table_size(), 0x100);
 
         assert_eq!(msix.cap_next, 0);
-        assert_eq!(msix.cap_id, PciCapabilityID::MSIX as u8);
+        assert_eq!(msix.cap_id, PciCapabilityId::MSIX as u8);
         let msg_ctl = msix.msg_ctl;
         assert_eq!(msix.read_u16(0x2), msg_ctl);
         msix.write_u16(0x2, MSIX_ENABLE_MASK);

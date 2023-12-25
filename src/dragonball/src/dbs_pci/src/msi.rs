@@ -12,7 +12,7 @@ use dbs_interrupt::{
 };
 use log::{debug, error, warn};
 
-use crate::configuration::{PciCapability, PciCapabilityID};
+use crate::configuration::{PciCapability, PciCapabilityId};
 use crate::fill_config_data;
 
 // MSI control masks
@@ -114,7 +114,7 @@ pub struct MsiCap {
 impl MsiCap {
     /// Create a new PCI MSI capability structure.
     pub fn new(next: u8, mut msg_ctl: u16) -> Self {
-        let cap_id_next = (next as u16) << 8 | PciCapabilityID::MessageSignalledInterrupts as u16;
+        let cap_id_next = (next as u16) << 8 | PciCapabilityId::MessageSignalledInterrupts as u16;
 
         // By default MSI capability is disabled, and driver needs to explicitly turn it on.
         msg_ctl &= !MSI_CTL_ENABLE;
@@ -457,8 +457,8 @@ impl PciCapability for MsiCap {
         }
     }
 
-    fn pci_capability_type(&self) -> PciCapabilityID {
-        PciCapabilityID::MessageSignalledInterrupts
+    fn pci_capability_type(&self) -> PciCapabilityId {
+        PciCapabilityId::MessageSignalledInterrupts
     }
 }
 

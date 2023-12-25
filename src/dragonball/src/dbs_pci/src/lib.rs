@@ -32,7 +32,7 @@ pub use bus::PciBus;
 mod configuration;
 pub use configuration::{
     BarProgrammingParams, PciBarConfiguration, PciBarPrefetchable, PciBarRegionType,
-    PciBridgeSubclass, PciCapability, PciCapabilityID, PciClassCode, PciConfiguration,
+    PciBridgeSubclass, PciCapability, PciCapabilityId, PciClassCode, PciConfiguration,
     PciHeaderType, PciInterruptPin, PciMassStorageSubclass, PciMultimediaSubclass,
     PciNetworkControllerSubclass, PciProgrammingInterface, PciSerialBusSubClass, PciSubclass,
     NUM_BAR_REGS, NUM_CONFIGURATION_REGISTERS,
