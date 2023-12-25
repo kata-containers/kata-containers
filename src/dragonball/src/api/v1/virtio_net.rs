@@ -68,6 +68,7 @@ pub struct VirtioConfig {
     pub allow_duplicate_mac: bool,
 }
 
+/// Config for vhost-user-net device
 #[cfg(feature = "vhost-user-net")]
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
 pub struct VhostUserConfig {
@@ -197,9 +198,23 @@ impl From<&NetworkInterfaceConfig> for VhostUserNetDeviceConfigInfo {
     fn from(value: &NetworkInterfaceConfig) -> Self {
         let num_queues = value
             .num_queues
+            .map(|nq| {
+                if nq == 0 {
+                    vhost_user_net_dev_mgr::DEFAULT_NUM_QUEUES
+                } else {
+                    nq
+                }
+            })
             .unwrap_or(vhost_user_net_dev_mgr::DEFAULT_NUM_QUEUES);
         let queue_size = value
             .queue_size
+            .map(|qs| {
+                if qs == 0 {
+                    vhost_user_net_dev_mgr::DEFAULT_QUEUE_SIZE
+                } else {
+                    qs
+                }
+            })
             .unwrap_or(vhost_user_net_dev_mgr::DEFAULT_QUEUE_SIZE);
         // It is safe because we tested the type of config before.
         #[allow(unreachable_patterns)]
