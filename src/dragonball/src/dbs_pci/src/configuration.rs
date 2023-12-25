@@ -212,7 +212,7 @@ pub trait PciProgrammingInterface {
 /// Types of PCI capabilities.
 #[repr(u8)]
 #[derive(PartialEq, Copy, Clone)]
-pub enum PciCapabilityID {
+pub enum PciCapabilityId {
     ListID = 0,
     PowerManagement = 0x01,
     AcceleratedGraphicsPort = 0x02,
@@ -238,33 +238,33 @@ pub enum PciCapabilityID {
     Test = 0xFF,
 }
 
-impl From<u8> for PciCapabilityID {
+impl From<u8> for PciCapabilityId {
     fn from(c: u8) -> Self {
         match c {
-            0 => PciCapabilityID::ListID,
-            0x01 => PciCapabilityID::PowerManagement,
-            0x02 => PciCapabilityID::AcceleratedGraphicsPort,
-            0x03 => PciCapabilityID::VitalProductData,
-            0x04 => PciCapabilityID::SlotIdentification,
-            0x05 => PciCapabilityID::MessageSignalledInterrupts,
-            0x06 => PciCapabilityID::CompactPCIHotSwap,
-            0x07 => PciCapabilityID::PCIX,
-            0x08 => PciCapabilityID::HyperTransport,
-            0x09 => PciCapabilityID::VendorSpecific,
-            0x0A => PciCapabilityID::Debugport,
-            0x0B => PciCapabilityID::CompactPCICentralResourceControl,
-            0x0C => PciCapabilityID::PCIStandardHotPlugController,
-            0x0D => PciCapabilityID::BridgeSubsystemVendorDeviceID,
-            0x0E => PciCapabilityID::AGPTargetPCIPCIbridge,
-            0x0F => PciCapabilityID::SecureDevice,
-            0x10 => PciCapabilityID::PCIExpress,
-            0x11 => PciCapabilityID::MSIX,
-            0x12 => PciCapabilityID::SATADataIndexConf,
-            0x13 => PciCapabilityID::PCIAdvancedFeatures,
-            0x14 => PciCapabilityID::PCIEnhancedAllocation,
+            0 => PciCapabilityId::ListID,
+            0x01 => PciCapabilityId::PowerManagement,
+            0x02 => PciCapabilityId::AcceleratedGraphicsPort,
+            0x03 => PciCapabilityId::VitalProductData,
+            0x04 => PciCapabilityId::SlotIdentification,
+            0x05 => PciCapabilityId::MessageSignalledInterrupts,
+            0x06 => PciCapabilityId::CompactPCIHotSwap,
+            0x07 => PciCapabilityId::PCIX,
+            0x08 => PciCapabilityId::HyperTransport,
+            0x09 => PciCapabilityId::VendorSpecific,
+            0x0A => PciCapabilityId::Debugport,
+            0x0B => PciCapabilityId::CompactPCICentralResourceControl,
+            0x0C => PciCapabilityId::PCIStandardHotPlugController,
+            0x0D => PciCapabilityId::BridgeSubsystemVendorDeviceID,
+            0x0E => PciCapabilityId::AGPTargetPCIPCIbridge,
+            0x0F => PciCapabilityId::SecureDevice,
+            0x10 => PciCapabilityId::PCIExpress,
+            0x11 => PciCapabilityId::MSIX,
+            0x12 => PciCapabilityId::SATADataIndexConf,
+            0x13 => PciCapabilityId::PCIAdvancedFeatures,
+            0x14 => PciCapabilityId::PCIEnhancedAllocation,
             #[cfg(test)]
-            0xFF => PciCapabilityID::Test,
-            _ => PciCapabilityID::ListID,
+            0xFF => PciCapabilityId::Test,
+            _ => PciCapabilityId::ListID,
         }
     }
 }
@@ -309,7 +309,7 @@ pub trait PciCapability: Send + Sync {
     }
 
     /// The type of PCI Interrupt
-    fn pci_capability_type(&self) -> PciCapabilityID;
+    fn pci_capability_type(&self) -> PciCapabilityId;
 }
 
 /// PCI device has four interrupt pins A->D.
@@ -334,7 +334,7 @@ pub enum PciBarRegionType {
     /// 32-bit MMIO Bar.
     Memory32BitRegion = 0,
     /// IO port Bar.
-    IORegion = 0x01,
+    IoRegion = 0x01,
     /// 64-bit MMIO Bar.
     Memory64BitRegion = 0x04,
     /// Fake type for the upper Bar of 64-bit MMIO Bar.
@@ -469,7 +469,7 @@ impl BarProgrammingParams {
 
         let mut resources = DeviceResources::new();
         match self.bar_type {
-            PciBarRegionType::IORegion => resources.append(Resource::PioAddressRange {
+            PciBarRegionType::IoRegion => resources.append(Resource::PioAddressRange {
                 base: base as u16,
                 size: self.len as u16,
             }),
@@ -504,7 +504,7 @@ impl PciBarState {
     fn mask(&self) -> u32 {
         match self.type_ {
             None => 0,
-            Some(PciBarRegionType::IORegion) => !(self.size - 1),
+            Some(PciBarRegionType::IoRegion) => !(self.size - 1),
             Some(PciBarRegionType::Memory32BitRegion) => !(self.size - 1),
             Some(PciBarRegionType::Memory64BitRegion) => {
                 if self.size == 0 {
@@ -548,7 +548,7 @@ pub struct Vp2pCap {
 impl Vp2pCap {
     fn new(clique_id: u8) -> Self {
         Vp2pCap {
-            id: PciCapabilityID::VendorSpecific as u8,
+            id: PciCapabilityId::VendorSpecific as u8,
             next: 0,
             length: 8,
             sig_1: 0x50,
@@ -583,8 +583,8 @@ impl PciCapability for Vp2pCap {
 
     fn write_u8(&mut self, _offset: usize, _value: u8) {}
 
-    fn pci_capability_type(&self) -> PciCapabilityID {
-        PciCapabilityID::VendorSpecific
+    fn pci_capability_type(&self) -> PciCapabilityId {
+        PciCapabilityId::VendorSpecific
     }
 }
 
@@ -999,7 +999,7 @@ impl PciConfiguration {
             .checked_add(config.size - 1)
             .ok_or(Error::BarAddressInvalid(config.addr, config.size))?;
         match config.bar_type {
-            PciBarRegionType::IORegion => {
+            PciBarRegionType::IoRegion => {
                 if config.size < 0x4 || config.size > u64::from(u32::max_value()) {
                     return Err(Error::BarSizeInvalid(config.size));
                 }
@@ -1045,7 +1045,7 @@ impl PciConfiguration {
                 BAR_MEM_ADDR_MASK,
                 config.prefetchable as u32 | config.bar_type as u32,
             ),
-            PciBarRegionType::IORegion => (BAR_IO_ADDR_MASK, config.bar_type as u32),
+            PciBarRegionType::IoRegion => (BAR_IO_ADDR_MASK, config.bar_type as u32),
             PciBarRegionType::Memory64BitRegionUpper => {
                 panic!("Invalid PCI Bar type");
             }
@@ -1167,7 +1167,7 @@ impl PciConfiguration {
             let value = self.registers[reg_idx] & mask;
             if let Some(bar_type) = self.bar_type(bar_idx) {
                 match bar_type {
-                    PciBarRegionType::Memory32BitRegion | PciBarRegionType::IORegion => {
+                    PciBarRegionType::Memory32BitRegion | PciBarRegionType::IoRegion => {
                         if (value & mask) != self.bar_addr(bar_idx) {
                             debug!(
                                 "DETECT BAR REPROG: current 0x{:x}, new 0x{:x}",
@@ -1264,7 +1264,7 @@ impl PciConfiguration {
 
         assert!(!self.bar_allocated(param.bar_idx));
         let constraint = match param.bar_type {
-            PciBarRegionType::IORegion => {
+            PciBarRegionType::IoRegion => {
                 let range = (
                     param.new_base as u16,
                     (param.new_base + param.len - 1) as u16,
@@ -1299,7 +1299,7 @@ impl PciConfiguration {
                         size: param.len,
                     }
                 }
-                PciBarRegionType::IORegion => Resource::PioAddressRange {
+                PciBarRegionType::IoRegion => Resource::PioAddressRange {
                     base: param.old_base as u16,
                     size: param.len as u16,
                 },
@@ -1448,8 +1448,8 @@ pub(crate) mod tests {
             }
         }
 
-        fn pci_capability_type(&self) -> PciCapabilityID {
-            PciCapabilityID::Test
+        fn pci_capability_type(&self) -> PciCapabilityId {
+            PciCapabilityId::Test
         }
     }
 
@@ -1460,7 +1460,7 @@ pub(crate) mod tests {
 
         // Add two capabilities with different contents.
         let cap1 = Box::new(TestCap {
-            id: PciCapabilityID::VendorSpecific as u8,
+            id: PciCapabilityId::VendorSpecific as u8,
             next: 0,
             len: 4,
             foo: 0xAA,
@@ -1472,7 +1472,7 @@ pub(crate) mod tests {
         assert_eq!(cap1_offset % 4, 0);
 
         let cap2 = Box::new(TestCap {
-            id: PciCapabilityID::VendorSpecific as u8,
+            id: PciCapabilityId::VendorSpecific as u8,
             next: 0,
             len: 8,
             foo: 0xBB,
@@ -1556,8 +1556,8 @@ pub(crate) mod tests {
         assert_eq!(config.size(), 0);
         assert_eq!(config.addr, 0);
 
-        config = config.set_bar_type(PciBarRegionType::IORegion);
-        assert_eq!(config.bar_type(), PciBarRegionType::IORegion);
+        config = config.set_bar_type(PciBarRegionType::IoRegion);
+        assert_eq!(config.bar_type(), PciBarRegionType::IoRegion);
         config = config.set_address(0x1000);
         assert_eq!(config.address(), 0x1000);
         config = config.set_size(0x2000);
@@ -1744,7 +1744,7 @@ pub(crate) mod tests {
         // Allocate BAR5
         let bar = PciBarConfiguration {
             bar_idx: 5,
-            bar_type: PciBarRegionType::IORegion,
+            bar_type: PciBarRegionType::IoRegion,
             prefetchable: PciBarPrefetchable::NotPrefetchable,
             addr: 0x2000,
             size: 0x1000,

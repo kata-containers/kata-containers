@@ -32,7 +32,7 @@ use vm_memory::{Address, GuestAddress, GuestUsize};
 
 use crate::{
     BarProgrammingParams, MsiCap, MsiState, MsixCap, MsixState, PciBarConfiguration,
-    PciBarPrefetchable, PciBarRegionType, PciBus, PciCapability, PciCapabilityID, PciClassCode,
+    PciBarPrefetchable, PciBarRegionType, PciBus, PciCapability, PciCapabilityId, PciClassCode,
     PciConfiguration, PciDevice, PciHeaderType, PciInterruptPin, PciSubclass, PciSystemContext,
     MSIX_TABLE_ENTRY_SIZE,
 };
@@ -1043,7 +1043,7 @@ impl<C: PciSystemContext> VfioPciDeviceState<C> {
 
             if io_bar {
                 // IO BAR
-                region_type = PciBarRegionType::IORegion;
+                region_type = PciBarRegionType::IoRegion;
                 // Clear first bit.
                 lsb_size &= 0xffff_fffc;
                 // Find the first bit that's set to 1.
@@ -1433,11 +1433,11 @@ impl<C: PciSystemContext> VfioPciDeviceState<C> {
         while cap_next != 0 {
             let cap_id = self.read_config_byte(cap_next.into());
 
-            match PciCapabilityID::from(cap_id) {
-                PciCapabilityID::MessageSignalledInterrupts => {
+            match PciCapabilityId::from(cap_id) {
+                PciCapabilityId::MessageSignalledInterrupts => {
                     self.parse_msi_capabilities(cap_next)
                 }
-                PciCapabilityID::MSIX => self.parse_msix_capabilities(cap_next),
+                PciCapabilityId::MSIX => self.parse_msix_capabilities(cap_next),
                 _ => {}
             }
 
@@ -1467,7 +1467,7 @@ impl<C: PciSystemContext> VfioPciDeviceState<C> {
         let table = self.read_config_dword((cap + 4).into());
         let pba = self.read_config_dword((cap + 8).into());
         let msix_cap = MsixCap {
-            cap_id: PciCapabilityID::MSIX as u8,
+            cap_id: PciCapabilityId::MSIX as u8,
             cap_next,
             msg_ctl,
             table,
