@@ -18,9 +18,6 @@ use crate::network::EndpointState;
 /// VhostUserEndpoint uses vhost-user-net device, which supports DPDK, etc.
 #[derive(Debug)]
 pub struct VhostUserEndpoint {
-    // Endpoint index
-    #[allow(dead_code)]
-    index: u32,
     // Name of virt interface
     name: String,
     // Hardware address of virt interface
@@ -38,7 +35,6 @@ pub struct VhostUserEndpoint {
 impl VhostUserEndpoint {
     pub async fn new(
         dev_mgr: &Arc<RwLock<DeviceManager>>,
-        index: u32,
         name: &str,
         guest_mac: &str,
         socket_path: &str,
@@ -51,7 +47,6 @@ impl VhostUserEndpoint {
         }
 
         Ok(VhostUserEndpoint {
-            index,
             name: name.to_string(),
             guest_mac: guest_mac.to_string(),
             socket_path: socket_path.to_string(),
