@@ -481,7 +481,7 @@ function snapshotter_handler_mapping_validation_check() {
 			die "The snapshotter must follow the \"shim:snapshotter,shim:snapshotter,...\" format, but at least one snapshotter is empty"
 		fi
 
-		if ! grep -q " $shim " <<< " $shims "; then
+		if ! grep -q " $shim " <<< " $SHIMS "; then
 			die "\"$shim\" is not part of \"$SHIMS\""
 		fi
 
