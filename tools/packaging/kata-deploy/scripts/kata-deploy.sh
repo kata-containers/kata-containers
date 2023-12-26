@@ -377,7 +377,7 @@ function configure_containerd_runtime() {
 			fi
 
 			value="${m#*$snapshotters_delimiter}"
-			tomlq -i -t $(printf '%s.snapshotter=%s' ${shim} ${value}) ${containerd_conf_file}
+			tomlq -i -t $(printf '%s.snapshotter=%s' ${runtime_table} ${value}) ${containerd_conf_file}
 			break
 		done
 	fi
