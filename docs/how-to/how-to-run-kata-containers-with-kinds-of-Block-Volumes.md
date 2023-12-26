@@ -224,3 +224,7 @@ In the case, `ctr run --mount type=X, src=source, dst=dest`, the X will be set `
 $ # ctr run with --mount type=spdkvol,src=/kubelet/kata-test-vol-001/volume001,dst=/disk001
 $ sudo ctr run -t --rm --runtime io.containerd.kata.v2 --mount type=spdkvol,src=/kubelet/kata-test-vol-001/volume001,dst=/disk001,options=rbind:rw "$image" kata-spdk-vol-xx0530 /bin/bash
 ```
+
+## Integrate Direct Volume with K8S
+
+Details see [`csi-kata-directvolume`](../../src/tools/csi-kata-directvolume/README.md)
