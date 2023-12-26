@@ -21,9 +21,6 @@ use crate::network::{utils, EndpointState};
 /// TapEndpoint is used to attach to the hypervisor directly
 #[derive(Debug)]
 pub struct TapEndpoint {
-    // Index
-    #[allow(dead_code)]
-    index: u32,
     // Name of virt interface
     name: String,
     // Hardware address of virt interface
@@ -42,7 +39,6 @@ impl TapEndpoint {
     #[allow(clippy::too_many_arguments)]
     pub async fn new(
         handle: &rtnetlink::Handle,
-        index: u32,
         name: &str,
         tap_name: &str,
         guest_mac: &str,
@@ -57,7 +53,6 @@ impl TapEndpoint {
             utils::get_mac_addr(&tap_link.attrs().hardware_addr).context("Get mac addr of tap")?;
 
         Ok(TapEndpoint {
-            index,
             name: name.to_owned(),
             guest_mac: guest_mac.to_owned(),
             tap_iface: NetworkInterface {

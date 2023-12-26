@@ -6,29 +6,20 @@
 
 use crate::device::pci_path::PciPath;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum VhostUserType {
     /// Blk - represents a block vhostuser device type
-    /// "vhost-user-blk-pci"
-    Blk(String),
+    #[default]
+    Blk,
 
     /// SCSI - represents SCSI based vhost-user type
-    /// "vhost-user-scsi-pci"
-    SCSI(String),
+    SCSI,
 
     /// Net - represents Net based vhost-user type
-    /// "virtio-net-pci"
-    Net(String),
+    Net,
 
     /// FS - represents a virtio-fs vhostuser device type
-    /// "vhost-user-fs-pci"
-    FS(String),
-}
-
-impl Default for VhostUserType {
-    fn default() -> Self {
-        VhostUserType::Blk("vhost-user-blk-pci".to_owned())
-    }
+    FS,
 }
 
 #[derive(Debug, Clone, Default)]
