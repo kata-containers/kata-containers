@@ -237,8 +237,7 @@ impl DeviceManager {
                         return Some(device_id.to_string());
                     }
                 }
-                _ => {
-                    // TODO: support find other device type
+                DeviceType::HybridVsock(_) | DeviceType::Vsock(_) => {
                     continue;
                 }
             }
