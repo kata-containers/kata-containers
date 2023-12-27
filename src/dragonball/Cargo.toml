@@ -13,16 +13,18 @@ edition = "2018"
 anyhow = "1.0.32"
 arc-swap = "1.5.0"
 bytes = "1.1.0"
-dbs-address-space =  { path = "./src/dbs_address_space" }
+dbs-address-space = { path = "./src/dbs_address_space" }
 dbs-allocator = { path = "./src/dbs_allocator" }
 dbs-arch = { path = "./src/dbs_arch" }
 dbs-boot = { path = "./src/dbs_boot" }
 dbs-device = { path = "./src/dbs_device" }
 dbs-interrupt = { path = "./src/dbs_interrupt", features = ["kvm-irq"] }
 dbs-legacy-devices = { path = "./src/dbs_legacy_devices" }
-dbs-upcall = { path = "./src/dbs_upcall" , optional = true }
+dbs-upcall = { path = "./src/dbs_upcall", optional = true }
 dbs-utils = { path = "./src/dbs_utils" }
-dbs-virtio-devices = { path = "./src/dbs_virtio_devices", optional = true, features = ["virtio-mmio"] }
+dbs-virtio-devices = { path = "./src/dbs_virtio_devices", optional = true, features = [
+    "virtio-mmio",
+] }
 derivative = "2.2.0"
 kvm-bindings = "0.6.0"
 kvm-ioctls = "0.12.0"
@@ -60,9 +62,18 @@ virtio-vsock = ["dbs-virtio-devices/virtio-vsock", "virtio-queue"]
 virtio-blk = ["dbs-virtio-devices/virtio-blk", "virtio-queue"]
 virtio-net = ["dbs-virtio-devices/virtio-net", "virtio-queue"]
 # virtio-fs only work on atomic-guest-memory
-virtio-fs = ["dbs-virtio-devices/virtio-fs-pro", "virtio-queue", "atomic-guest-memory"]
-virtio-mem = ["dbs-virtio-devices/virtio-mem", "virtio-queue", "atomic-guest-memory"]
+virtio-fs = [
+    "dbs-virtio-devices/virtio-fs-pro",
+    "virtio-queue",
+    "atomic-guest-memory",
+]
+virtio-mem = [
+    "dbs-virtio-devices/virtio-mem",
+    "virtio-queue",
+    "atomic-guest-memory",
+]
 virtio-balloon = ["dbs-virtio-devices/virtio-balloon", "virtio-queue"]
 vhost-net = ["dbs-virtio-devices/vhost-net"]
 vhost-user-fs = ["dbs-virtio-devices/vhost-user-fs"]
 vhost-user-net = ["dbs-virtio-devices/vhost-user-net"]
+vhost-user-blk = ["dbs-virtio-devices/vhost-user-blk"]

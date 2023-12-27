@@ -45,6 +45,7 @@ pub mod balloon;
 pub mod vhost;
 
 use std::io::Error as IOError;
+use std::num::ParseIntError;
 
 #[cfg(any(feature = "virtio-net", feature = "vhost-net"))]
 use dbs_utils::metric::SharedIncMetric;
@@ -205,6 +206,9 @@ pub enum Error {
     /// Generic IO error
     #[error("IO: {0}.")]
     IOError(#[from] IOError),
+    /// Error from ParseInt
+    #[error("ParseIntError")]
+    ParseIntError(ParseIntError),
     /// Error from virtio_queue
     #[error("virtio queue error: {0}")]
     VirtioQueueError(#[from] VqError),
