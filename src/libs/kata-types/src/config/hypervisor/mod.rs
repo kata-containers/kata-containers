@@ -492,6 +492,38 @@ impl DeviceInfo {
     }
 }
 
+/// Virtual machine PCIe Topology configuration.
+#[derive(Clone, Debug, Default)]
+pub struct TopologyConfigInfo {
+    /// Hypervisor name
+    pub hypervisor_name: String,
+    /// Device Info
+    pub device_info: DeviceInfo,
+}
+
+impl TopologyConfigInfo {
+    /// Initialize the topology config info from toml config
+    pub fn new(toml_config: &TomlConfig) -> Option<Self> {
+        // Firecracker does not support PCIe Devices, so we should not initialize such a PCIe topology for it.
+        // If the case of fc hit, just return None.
+        let hypervisor_names = [
+            HYPERVISOR_NAME_QEMU,
+            HYPERVISOR_NAME_CH,
+            HYPERVISOR_NAME_DRAGONBALL,
+        ];
+        let hypervisor_name = toml_config.runtime.hypervisor_name.as_str();
+        if !hypervisor_names.contains(&hypervisor_name) {
+            return None;
+        }
+
+        let hv = toml_config.hypervisor.get(hypervisor_name)?;
+        Some(Self {
+            hypervisor_name: hypervisor_name.to_string(),
+            device_info: hv.device_info.clone(),
+        })
+    }
+}
+
 /// Configuration information for virtual machine.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct MachineInfo {

@@ -5,27 +5,24 @@
 //
 
 use std::{
-    collections::HashMap,
     fs,
     path::{Path, PathBuf},
     process::Command,
-    sync::{
-        atomic::{AtomicU8, Ordering},
-        Arc, RwLock,
-    },
 };
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use lazy_static::lazy_static;
 use path_clean::PathClean;
 
 use kata_sys_util::fs::get_base_name;
 
-use crate::device::{
-    hypervisor,
-    pci_path::{PciPath, PciSlot},
-    Device, DeviceType,
+use crate::{
+    device::{
+        pci_path::PciPath,
+        topology::{do_add_pcie_endpoint, PCIeTopology},
+        Device, DeviceType, PCIeDevice,
+    },
+    register_pcie_device, unregister_pcie_device, update_pcie_device, Hypervisor as hypervisor,
 };
 
 pub const SYS_BUS_PCI_DRIVER_PROBE: &str = "/sys/bus/pci/drivers_probe";
@@ -42,35 +39,6 @@ const SYS_CLASS_IOMMU: &str = "/sys/class/iommu";
 const INTEL_IOMMU_PREFIX: &str = "dmar";
 const AMD_IOMMU_PREFIX: &str = "ivhd";
 const ARM_IOMMU_PREFIX: &str = "smmu";
-
-lazy_static! {
-    static ref GUEST_DEVICE_ID: Arc<AtomicU8> = Arc::new(AtomicU8::new(0_u8));
-    static ref HOST_GUEST_MAP: Arc<RwLock<HashMap<String, String>>> =
-        Arc::new(RwLock::new(HashMap::new()));
-}
-
-// map host/guest bdf and the mapping saved into `HOST_GUEST_MAP`,
-// and return PciPath.
-pub fn generate_guest_pci_path(bdf: String) -> Result<PciPath> {
-    let hg_map = HOST_GUEST_MAP.clone();
-    let current_id = GUEST_DEVICE_ID.clone();
-
-    current_id.fetch_add(1, Ordering::SeqCst);
-    let slot = current_id.load(Ordering::SeqCst);
-
-    // In some Hypervisors, dragonball, cloud-hypervisor or firecracker,
-    // the device is directly connected to the bus without intermediary bus.
-    // FIXME: Qemu's pci path needs to be implemented;
-    let host_bdf = normalize_device_bdf(bdf.as_str());
-    let guest_bdf = format!("0000:00:{:02x}.0", slot);
-
-    // safe, just do unwrap as `HOST_GUEST_MAP` is always valid.
-    hg_map.write().unwrap().insert(host_bdf, guest_bdf);
-
-    Ok(PciPath {
-        slots: vec![PciSlot::new(slot)],
-    })
-}
 
 pub fn do_check_iommu_on() -> Result<bool> {
     let element = std::fs::read_dir(SYS_CLASS_IOMMU)?
@@ -476,7 +444,13 @@ impl VfioDevice {
 
 #[async_trait]
 impl Device for VfioDevice {
-    async fn attach(&mut self, h: &dyn hypervisor) -> Result<()> {
+    async fn attach(
+        &mut self,
+        pcie_topo: &mut Option<&mut PCIeTopology>,
+        h: &dyn hypervisor,
+    ) -> Result<()> {
+        register_pcie_device!(self, pcie_topo)?;
+
         if self
             .increase_attach_count()
             .await
@@ -494,37 +468,23 @@ impl Device for VfioDevice {
                     self.devices = vfio.devices;
                 }
 
-                if self.bus_mode == VfioBusMode::PCI {
-                    for hostdev in self.devices.iter_mut() {
-                        if hostdev.guest_pci_path.is_none() {
-                            // guest_pci_path may be empty for certain hypervisors such as
-                            // dragonball
-                            hostdev.guest_pci_path = Some(
-                                generate_guest_pci_path(hostdev.bus_slot_func.clone())
-                                    .map_err(|e| anyhow!("generate pci path failed: {:?}", e))?,
-                            );
-                        }
-
-                        // Safe to call unwrap here because of previous assignment.
-                        let pci_path = hostdev.guest_pci_path.clone().unwrap();
-                        self.device_options.push(format!(
-                            "0000:{}={}",
-                            hostdev.bus_slot_func.clone(),
-                            pci_path.to_string()
-                        ));
-                    }
-                }
+                update_pcie_device!(self, pcie_topo)?;
 
                 Ok(())
             }
             Err(e) => {
                 self.decrease_attach_count().await?;
+                unregister_pcie_device!(self, pcie_topo)?;
                 return Err(e);
             }
         }
     }
 
-    async fn detach(&mut self, h: &dyn hypervisor) -> Result<Option<u64>> {
+    async fn detach(
+        &mut self,
+        pcie_topo: &mut Option<&mut PCIeTopology>,
+        h: &dyn hypervisor,
+    ) -> Result<Option<u64>> {
         if self
             .decrease_attach_count()
             .await
@@ -544,6 +504,8 @@ impl Device for VfioDevice {
         } else {
             None
         };
+
+        unregister_pcie_device!(self, pcie_topo)?;
 
         Ok(device_index)
     }
@@ -585,6 +547,48 @@ impl Device for VfioDevice {
 
     async fn get_device_info(&self) -> DeviceType {
         DeviceType::Vfio(self.clone())
+    }
+}
+
+#[async_trait]
+impl PCIeDevice for VfioDevice {
+    async fn register(&mut self, pcie_topo: &mut PCIeTopology) -> Result<()> {
+        if self.bus_mode != VfioBusMode::PCI {
+            return Ok(());
+        }
+
+        self.device_options.clear();
+        for hostdev in self.devices.iter_mut() {
+            let pci_path = do_add_pcie_endpoint(
+                self.device_id.clone(),
+                hostdev.guest_pci_path.clone(),
+                pcie_topo,
+            )
+            .context(format!(
+                "add pcie endpoint for host device {:?} in PCIe Topology failed",
+                self.device_id
+            ))?;
+            hostdev.guest_pci_path = Some(pci_path.clone());
+
+            self.device_options.push(format!(
+                "0000:{}={}",
+                hostdev.bus_slot_func,
+                pci_path.to_string()
+            ));
+        }
+
+        Ok(())
+    }
+
+    async fn unregister(&mut self, pcie_topo: &mut PCIeTopology) -> Result<()> {
+        if let Some(_slot) = pcie_topo.remove_device(&self.device_id.clone()) {
+            Ok(())
+        } else {
+            Err(anyhow!(
+                "vfio device with {:?} not found.",
+                self.device_id.clone()
+            ))
+        }
     }
 }
 

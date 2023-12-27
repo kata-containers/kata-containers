@@ -4,6 +4,7 @@
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 
+use crate::device::topology::PCIeTopology;
 use crate::device::{Device, DeviceType};
 use crate::{Hypervisor, VhostUserConfig};
 
@@ -22,14 +23,22 @@ impl VhostUserNetDevice {
 
 #[async_trait]
 impl Device for VhostUserNetDevice {
-    async fn attach(&mut self, h: &dyn Hypervisor) -> Result<()> {
+    async fn attach(
+        &mut self,
+        _pcie_topo: &mut Option<&mut PCIeTopology>,
+        h: &dyn Hypervisor,
+    ) -> Result<()> {
         h.add_device(DeviceType::VhostUserNetwork(self.clone()))
             .await
             .context("add vhost-user-net device to hypervisor")?;
         Ok(())
     }
 
-    async fn detach(&mut self, h: &dyn Hypervisor) -> Result<Option<u64>> {
+    async fn detach(
+        &mut self,
+        _pcie_topo: &mut Option<&mut PCIeTopology>,
+        h: &dyn Hypervisor,
+    ) -> Result<Option<u64>> {
         h.remove_device(DeviceType::VhostUserNetwork(self.clone()))
             .await
             .context("remove vhost-user-net device from hypervisor")?;
