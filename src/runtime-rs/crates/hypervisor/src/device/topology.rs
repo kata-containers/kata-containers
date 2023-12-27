@@ -66,6 +66,65 @@ const DEFAULT_PCIE_ROOT_BUS: &str = "pcie.0";
 const DEFAULT_PCIE_ROOT_BUS_ADDRESS: &str = "0000:00";
 pub const PCIE_ROOT_BUS_SLOTS_CAPACITY: u32 = 32;
 
+// register_pcie_device: do pre register device into PCIe Topology which
+// be called in device driver's attach before device real attached into
+// VM. It'll allocate one available PCI path for the device.
+// register_pcie_device can be expanded as below:
+// register_pcie_device {
+//     match pcie_topology {
+//         Some(topology) => self.register(topology).await,
+//         None => Ok(())
+//     }
+// }
+#[macro_export]
+macro_rules! register_pcie_device {
+    ($self:ident, $opt:expr) => {
+        match $opt {
+            Some(topology) => $self.register(topology).await,
+            None => Ok(()),
+        }
+    };
+}
+
+// update_pcie_device: do update device info, as some VMMs will be able to
+// return the device info containing guest PCI path which differs the one allocated
+// in runtime. So we need to compair the two PCI path, and finally update it or not
+// based on the difference between them.
+// update_pcie_device can be expanded as below:
+// update_pcie_device {
+//     match pcie_topology {
+//         Some(topology) => self.register(topology).await,
+//         None => Ok(())
+//     }
+// }
+#[macro_export]
+macro_rules! update_pcie_device {
+    ($self:ident, $opt:expr) => {
+        match $opt {
+            Some(topology) => $self.register(topology).await,
+            None => Ok(()),
+        }
+    };
+}
+
+// unregister_pcie_device: do unregister device from pcie topology.
+// unregister_pcie_device can be expanded as below:
+// unregister_pcie_device {
+//     match pcie_topology {
+//         Some(topology) => self.unregister(topology).await,
+//         None => Ok(())
+//     }
+// }
+#[macro_export]
+macro_rules! unregister_pcie_device {
+    ($self:ident, $opt:expr) => {
+        match $opt {
+            Some(topology) => $self.unregister(topology).await,
+            None => Ok(()),
+        }
+    };
+}
+
 pub trait PCIeDevice: Send + Sync {
     fn device_id(&self) -> &str;
 }
