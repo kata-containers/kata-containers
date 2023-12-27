@@ -14,18 +14,12 @@ source "${script_dir}/../../scripts/lib.sh"
 
 qemu_repo="${qemu_repo:-}"
 qemu_version="${qemu_version:-}"
-qemu_suffix="${qemu_suffix:-experimental}"
-qemu_tarball_name="${qemu_tarball_name:-kata-static-qemu-experimental.tar.gz}"
+qemu_suffix="${qemu_suffix:-}"
+qemu_tarball_name="${qemu_tarball_name:-}"
 
-if [ -z "$qemu_repo" ]; then
-	info "Get qemu information from runtime versions.yaml"
-	qemu_url=$(get_from_kata_deps "assets.hypervisor.qemu-experimental.url")
-	[ -n "$qemu_url" ] || die "failed to get qemu url"
-	qemu_repo="${qemu_url}.git"
-fi
 [ -n "$qemu_repo" ] || die "failed to get qemu repo"
-
-[ -n "$qemu_version" ] || qemu_version=$(get_from_kata_deps "assets.hypervisor.qemu-experimental.version")
 [ -n "$qemu_version" ] || die "failed to get qemu version"
+[ -n "$qemu_suffix" ] || die "failed to get qemu suffix"
+[ -n "$qemu_tarball_name" ] || die "failed to get qemu tarball name"
 
 "${script_dir}/build-base-qemu.sh" "${qemu_repo}" "${qemu_version}" "${qemu_suffix}" "${qemu_tarball_name}"
