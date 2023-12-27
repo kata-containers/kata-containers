@@ -32,7 +32,7 @@ pub use bus::PciBus;
 mod configuration;
 pub use configuration::{
     BarProgrammingParams, PciBarConfiguration, PciBarPrefetchable, PciBarRegionType,
-    PciBridgeSubclass, PciCapability, PciCapabilityID, PciClassCode, PciConfiguration,
+    PciBridgeSubclass, PciCapability, PciCapabilityId, PciClassCode, PciConfiguration,
     PciHeaderType, PciInterruptPin, PciMassStorageSubclass, PciMultimediaSubclass,
     PciNetworkControllerSubclass, PciProgrammingInterface, PciSerialBusSubClass, PciSubclass,
     NUM_BAR_REGS, NUM_CONFIGURATION_REGISTERS,
@@ -48,7 +48,12 @@ mod root_device;
 pub use root_device::PciRootDevice;
 
 mod msi;
+pub use msi::{MsiCap, MsiState};
+
 mod msix;
+pub use msix::{MsixCap, MsixState, MSIX_TABLE_ENTRY_SIZE};
+
+mod vfio;
 
 /// Error codes related to PCI root/bus/device operations.
 #[derive(Debug, thiserror::Error)]
