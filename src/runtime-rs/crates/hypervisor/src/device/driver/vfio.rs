@@ -477,7 +477,11 @@ impl VfioDevice {
 
 #[async_trait]
 impl Device for VfioDevice {
-    async fn attach(&mut self, h: &dyn hypervisor) -> Result<()> {
+    async fn attach(
+        &mut self,
+        _pcie_topo: &mut Option<&mut PCIeTopology>,
+        h: &dyn hypervisor,
+    ) -> Result<()> {
         if self
             .increase_attach_count()
             .await
@@ -525,7 +529,11 @@ impl Device for VfioDevice {
         }
     }
 
-    async fn detach(&mut self, h: &dyn hypervisor) -> Result<Option<u64>> {
+    async fn detach(
+        &mut self,
+        _pcie_topo: &mut Option<&mut PCIeTopology>,
+        h: &dyn hypervisor,
+    ) -> Result<Option<u64>> {
         if self
             .decrease_attach_count()
             .await

@@ -18,6 +18,7 @@ use crate::{
 };
 
 use super::{
+    topology::PCIeTopology,
     util::{get_host_path, get_virt_drive_name, DEVICE_TYPE_BLOCK},
     Device, DeviceConfig, DeviceType,
 };
@@ -121,7 +122,9 @@ impl DeviceManager {
             .context("failed to find device")?;
         let mut device_guard = device.lock().await;
         // attach device
-        let result = device_guard.attach(self.hypervisor.as_ref()).await;
+        let result = device_guard
+            .attach(&mut None::<&mut PCIeTopology>, self.hypervisor.as_ref())
+            .await;
         // handle attach error
         if let Err(e) = result {
             match device_guard.get_device_info().await {
@@ -161,7 +164,10 @@ impl DeviceManager {
     pub async fn try_remove_device(&mut self, device_id: &str) -> Result<()> {
         if let Some(dev) = self.devices.get(device_id) {
             let mut device_guard = dev.lock().await;
-            let result = match device_guard.detach(self.hypervisor.as_ref()).await {
+            let result = match device_guard
+                .detach(&mut None::<&mut PCIeTopology>, self.hypervisor.as_ref())
+                .await
+            {
                 Ok(index) => {
                     if let Some(i) = index {
                         // release the declared device index

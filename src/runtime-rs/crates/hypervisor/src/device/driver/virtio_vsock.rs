@@ -12,7 +12,7 @@ use tokio::fs::{File, OpenOptions};
 use async_trait::async_trait;
 
 use crate::{
-    device::{Device, DeviceType},
+    device::{topology::PCIeTopology, Device, DeviceType},
     Hypervisor as hypervisor,
 };
 
@@ -49,7 +49,11 @@ impl HybridVsockDevice {
 
 #[async_trait]
 impl Device for HybridVsockDevice {
-    async fn attach(&mut self, h: &dyn hypervisor) -> Result<()> {
+    async fn attach(
+        &mut self,
+        _pcie_topo: &mut Option<&mut PCIeTopology>,
+        h: &dyn hypervisor,
+    ) -> Result<()> {
         h.add_device(DeviceType::HybridVsock(self.clone()))
             .await
             .context("add hybrid vsock device.")?;
@@ -57,7 +61,11 @@ impl Device for HybridVsockDevice {
         return Ok(());
     }
 
-    async fn detach(&mut self, _h: &dyn hypervisor) -> Result<Option<u64>> {
+    async fn detach(
+        &mut self,
+        _pcie_topo: &mut Option<&mut PCIeTopology>,
+        _h: &dyn hypervisor,
+    ) -> Result<Option<u64>> {
         // no need to do detach, just return Ok(None)
         Ok(None)
     }
@@ -135,7 +143,11 @@ impl VsockDevice {
 
 #[async_trait]
 impl Device for VsockDevice {
-    async fn attach(&mut self, h: &dyn hypervisor) -> Result<()> {
+    async fn attach(
+        &mut self,
+        _pcie_topo: &mut Option<&mut PCIeTopology>,
+        h: &dyn hypervisor,
+    ) -> Result<()> {
         h.add_device(DeviceType::Vsock(self.clone()))
             .await
             .context("add vsock device.")?;
@@ -143,7 +155,11 @@ impl Device for VsockDevice {
         return Ok(());
     }
 
-    async fn detach(&mut self, _h: &dyn hypervisor) -> Result<Option<u64>> {
+    async fn detach(
+        &mut self,
+        _pcie_topo: &mut Option<&mut PCIeTopology>,
+        _h: &dyn hypervisor,
+    ) -> Result<Option<u64>> {
         // no need to do detach, just return Ok(None)
         Ok(None)
     }

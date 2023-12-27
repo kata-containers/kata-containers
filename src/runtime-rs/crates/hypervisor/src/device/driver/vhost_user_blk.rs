@@ -9,7 +9,7 @@ use async_trait::async_trait;
 
 use super::VhostUserConfig;
 use crate::{
-    device::{Device, DeviceType},
+    device::{topology::PCIeTopology, Device, DeviceType},
     Hypervisor as hypervisor,
 };
 
@@ -45,7 +45,11 @@ impl VhostUserBlkDevice {
 
 #[async_trait]
 impl Device for VhostUserBlkDevice {
-    async fn attach(&mut self, h: &dyn hypervisor) -> Result<()> {
+    async fn attach(
+        &mut self,
+        _pcie_topo: &mut Option<&mut PCIeTopology>,
+        h: &dyn hypervisor,
+    ) -> Result<()> {
         // increase attach count, skip attach the device if the device is already attached
         if self
             .increase_attach_count()
@@ -64,7 +68,11 @@ impl Device for VhostUserBlkDevice {
         return Ok(());
     }
 
-    async fn detach(&mut self, h: &dyn hypervisor) -> Result<Option<u64>> {
+    async fn detach(
+        &mut self,
+        _pcie_topo: &mut Option<&mut PCIeTopology>,
+        h: &dyn hypervisor,
+    ) -> Result<Option<u64>> {
         // get the count of device detached, and detach once it reaches 0
         if self
             .decrease_attach_count()
