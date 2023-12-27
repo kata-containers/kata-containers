@@ -25,7 +25,8 @@ use kata_sys_util::fs::get_base_name;
 use crate::device::{
     hypervisor,
     pci_path::{PciPath, PciSlot},
-    Device, DeviceType,
+    topology::{do_add_pcie_endpoint, PCIeTopology},
+    Device, DeviceType, PCIeDevice,
 };
 
 pub const SYS_BUS_PCI_DRIVER_PROBE: &str = "/sys/bus/pci/drivers_probe";
@@ -585,6 +586,48 @@ impl Device for VfioDevice {
 
     async fn get_device_info(&self) -> DeviceType {
         DeviceType::Vfio(self.clone())
+    }
+}
+
+#[async_trait]
+impl PCIeDevice for VfioDevice {
+    async fn register(&mut self, pcie_topo: &mut PCIeTopology) -> Result<()> {
+        if self.bus_mode != VfioBusMode::PCI {
+            return Ok(());
+        }
+
+        self.device_options.clear();
+        for hostdev in self.devices.iter_mut() {
+            let pci_path = do_add_pcie_endpoint(
+                self.device_id.clone(),
+                hostdev.guest_pci_path.clone(),
+                pcie_topo,
+            )
+            .context(format!(
+                "add pcie endpoint for host device {:?} in PCIe Topology failed",
+                self.device_id
+            ))?;
+            hostdev.guest_pci_path = Some(pci_path.clone());
+
+            self.device_options.push(format!(
+                "0000:{}={}",
+                hostdev.bus_slot_func,
+                pci_path.to_string()
+            ));
+        }
+
+        Ok(())
+    }
+
+    async fn unregister(&mut self, pcie_topo: &mut PCIeTopology) -> Result<()> {
+        if let Some(_slot) = pcie_topo.remove_device(&self.device_id.clone()) {
+            Ok(())
+        } else {
+            Err(anyhow!(
+                "vfio device with {:?} not found.",
+                self.device_id.clone()
+            ))
+        }
     }
 }
 
