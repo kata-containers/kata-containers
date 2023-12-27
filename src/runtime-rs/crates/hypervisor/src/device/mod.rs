@@ -56,9 +56,17 @@ impl fmt::Display for DeviceType {
 #[async_trait]
 pub trait Device: std::fmt::Debug + Send + Sync {
     // attach is to plug device into VM
-    async fn attach(&mut self, h: &dyn hypervisor) -> Result<()>;
+    async fn attach(
+        &mut self,
+        pcie_topo: &mut Option<&mut PCIeTopology>,
+        h: &dyn hypervisor,
+    ) -> Result<()>;
     // detach is to unplug device from VM
-    async fn detach(&mut self, h: &dyn hypervisor) -> Result<Option<u64>>;
+    async fn detach(
+        &mut self,
+        pcie_topo: &mut Option<&mut PCIeTopology>,
+        h: &dyn hypervisor,
+    ) -> Result<Option<u64>>;
     // update is to do update for some device
     async fn update(&mut self, h: &dyn hypervisor) -> Result<()>;
     // get_device_info returns device config
