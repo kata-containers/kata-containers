@@ -15,6 +15,8 @@ use crate::{
 use anyhow::Result;
 use async_trait::async_trait;
 
+use self::topology::PCIeTopology;
+
 pub mod device_manager;
 pub mod driver;
 pub mod pci_path;
@@ -71,4 +73,12 @@ pub trait Device: std::fmt::Debug + Send + Sync {
     // * false: no need to do real dettach when current attach count is not zero, skip following actions.
     // * err error: error while do decrease attach count
     async fn decrease_attach_count(&mut self) -> Result<bool>;
+}
+
+#[async_trait]
+pub trait PCIeDevice: std::fmt::Debug + Send + Sync {
+    // register pcie device into PCIe Topology for virtio-pci device or PCI/PCIe device.
+    async fn register(&mut self, topology: &mut PCIeTopology) -> Result<()>;
+    // unregister pcie device from PCIe Topology
+    async fn unregister(&mut self, topology: &mut PCIeTopology) -> Result<()>;
 }
