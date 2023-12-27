@@ -8,6 +8,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::rand::RandomBytes;
+use kata_types::config::hypervisor::TopologyConfigInfo;
 use tokio::sync::{Mutex, RwLock};
 
 use crate::{
@@ -94,15 +95,20 @@ pub struct DeviceManager {
     devices: HashMap<String, ArcMutexDevice>,
     hypervisor: Arc<dyn Hypervisor>,
     shared_info: SharedInfo,
+    pcie_topology: Option<PCIeTopology>,
 }
 
 impl DeviceManager {
-    pub async fn new(hypervisor: Arc<dyn Hypervisor>) -> Result<Self> {
+    pub async fn new(
+        hypervisor: Arc<dyn Hypervisor>,
+        topo_config: Option<&TopologyConfigInfo>,
+    ) -> Result<Self> {
         let devices = HashMap::<String, ArcMutexDevice>::new();
         Ok(DeviceManager {
             devices,
             hypervisor,
             shared_info: SharedInfo::new().await,
+            pcie_topology: PCIeTopology::new(topo_config),
         })
     }
 
@@ -120,10 +126,11 @@ impl DeviceManager {
             .devices
             .get(device_id)
             .context("failed to find device")?;
+
         let mut device_guard = device.lock().await;
         // attach device
         let result = device_guard
-            .attach(&mut None::<&mut PCIeTopology>, self.hypervisor.as_ref())
+            .attach(&mut self.pcie_topology.as_mut(), self.hypervisor.as_ref())
             .await;
         // handle attach error
         if let Err(e) = result {
@@ -165,7 +172,7 @@ impl DeviceManager {
         if let Some(dev) = self.devices.get(device_id) {
             let mut device_guard = dev.lock().await;
             let result = match device_guard
-                .detach(&mut None::<&mut PCIeTopology>, self.hypervisor.as_ref())
+                .detach(&mut self.pcie_topology.as_mut(), self.hypervisor.as_ref())
                 .await
             {
                 Ok(index) => {
@@ -605,6 +612,7 @@ mod tests {
         BlockConfig, KATA_BLK_DEV_TYPE,
     };
     use anyhow::{anyhow, Context, Result};
+    use kata_types::config::hypervisor::TopologyConfigInfo;
     use std::sync::Arc;
     use tests_utils::load_test_config;
     use tokio::sync::RwLock;
@@ -612,6 +620,7 @@ mod tests {
     async fn new_device_manager() -> Result<Arc<RwLock<DeviceManager>>> {
         let hypervisor_name: &str = "qemu";
         let toml_config = load_test_config(hypervisor_name.to_owned())?;
+        let topo_config = TopologyConfigInfo::new(&toml_config);
         let hypervisor_config = toml_config
             .hypervisor
             .get(hypervisor_name)
@@ -623,7 +632,7 @@ mod tests {
             .await;
 
         let dm = Arc::new(RwLock::new(
-            DeviceManager::new(Arc::new(hypervisor))
+            DeviceManager::new(Arc::new(hypervisor), topo_config.as_ref())
                 .await
                 .context("device manager")?,
         ));

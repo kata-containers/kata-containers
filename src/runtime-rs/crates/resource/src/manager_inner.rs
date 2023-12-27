@@ -17,7 +17,7 @@ use hypervisor::{
     },
     BlockConfig, Hypervisor, VfioConfig,
 };
-use kata_types::config::TomlConfig;
+use kata_types::config::{hypervisor::TopologyConfigInfo, TomlConfig};
 use kata_types::mount::Mount;
 use oci::{Linux, LinuxCpu, LinuxResources};
 use persist::sandbox_persist::Persist;
@@ -59,8 +59,9 @@ impl ResourceManagerInner {
         toml_config: Arc<TomlConfig>,
         init_size_manager: InitialSizeManager,
     ) -> Result<Self> {
+        let topo_config = TopologyConfigInfo::new(&toml_config);
         // create device manager
-        let dev_manager = DeviceManager::new(hypervisor.clone())
+        let dev_manager = DeviceManager::new(hypervisor.clone(), topo_config.as_ref())
             .await
             .context("failed to create device manager")?;
 
@@ -510,12 +511,14 @@ impl Persist for ResourceManagerInner {
             sid: resource_args.sid.clone(),
             config: resource_args.config,
         };
+        let topo_config = TopologyConfigInfo::new(&args.config);
+
         Ok(Self {
             sid: resource_args.sid,
             agent: resource_args.agent,
             hypervisor: resource_args.hypervisor.clone(),
             device_manager: Arc::new(RwLock::new(
-                DeviceManager::new(resource_args.hypervisor).await?,
+                DeviceManager::new(resource_args.hypervisor, topo_config.as_ref()).await?,
             )),
             network: None,
             share_fs: None,
