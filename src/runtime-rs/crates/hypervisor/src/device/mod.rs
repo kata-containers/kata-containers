@@ -18,6 +18,7 @@ use async_trait::async_trait;
 pub mod device_manager;
 pub mod driver;
 pub mod pci_path;
+pub mod topology;
 pub mod util;
 
 #[derive(Debug)]
