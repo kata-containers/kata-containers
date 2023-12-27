@@ -174,7 +174,7 @@ pub enum StartMicroVmError {
     #[error("failure while connecting the upcall client: {0}")]
     UpcallConnectError(#[source] dbs_upcall::UpcallClientError),
 
-    #[cfg(feature = "virtio-blk")]
+    #[cfg(any(feature = "virtio-blk", feature = "vhost-user-blk"))]
     /// Virtio-blk errors.
     #[error("virtio-blk errors: {0}")]
     BlockDeviceError(#[source] device_manager::blk_dev_mgr::BlockDeviceError),
