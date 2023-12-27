@@ -482,7 +482,7 @@ impl Device for VfioDevice {
 
     async fn detach(
         &mut self,
-        _pcie_topo: &mut Option<&mut PCIeTopology>,
+        pcie_topo: &mut Option<&mut PCIeTopology>,
         h: &dyn hypervisor,
     ) -> Result<Option<u64>> {
         if self
@@ -504,6 +504,8 @@ impl Device for VfioDevice {
         } else {
             None
         };
+
+        unregister_pcie_device!(self, pcie_topo)?;
 
         Ok(device_index)
     }
