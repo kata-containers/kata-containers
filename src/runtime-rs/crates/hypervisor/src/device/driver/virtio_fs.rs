@@ -7,7 +7,7 @@
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 
-use crate::device::{hypervisor, Device, DeviceType};
+use crate::device::{hypervisor, topology::PCIeTopology, Device, DeviceType};
 
 #[derive(Copy, Clone, Debug, Default)]
 pub enum ShareFsMountOperation {
@@ -99,7 +99,11 @@ impl ShareFsDevice {
 
 #[async_trait]
 impl Device for ShareFsDevice {
-    async fn attach(&mut self, h: &dyn hypervisor) -> Result<()> {
+    async fn attach(
+        &mut self,
+        _pcie_topo: &mut Option<&mut PCIeTopology>,
+        h: &dyn hypervisor,
+    ) -> Result<()> {
         h.add_device(DeviceType::ShareFs(self.clone()))
             .await
             .context("add share-fs device.")?;
@@ -107,7 +111,11 @@ impl Device for ShareFsDevice {
         Ok(())
     }
 
-    async fn detach(&mut self, _h: &dyn hypervisor) -> Result<Option<u64>> {
+    async fn detach(
+        &mut self,
+        _pcie_topo: &mut Option<&mut PCIeTopology>,
+        _h: &dyn hypervisor,
+    ) -> Result<Option<u64>> {
         // no need to detach share-fs device
 
         Ok(None)
