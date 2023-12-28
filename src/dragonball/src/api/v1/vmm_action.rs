@@ -9,13 +9,14 @@
 use std::fs::File;
 use std::sync::{Arc, Mutex};
 
-use crossbeam_channel::{Receiver, Sender, TryRecvError};
+use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
 use log::{debug, error, info, warn};
 use tracing::instrument;
 
 use crate::error::{Result, StartMicroVmError, StopMicrovmError};
 use crate::event_manager::EventManager;
 use crate::tracer::{DragonballTracer, TraceError, TraceInfo};
+use crate::vcpu::VcpuManagerError;
 use crate::vm::{CpuTopology, KernelConfigInfo, VmConfigInfo};
 use crate::vmm::Vmm;
 
@@ -36,6 +37,8 @@ pub use crate::device_manager::fs_dev_mgr::{
 };
 #[cfg(feature = "virtio-mem")]
 pub use crate::device_manager::mem_dev_mgr::{MemDeviceConfigInfo, MemDeviceError};
+#[cfg(feature = "host-device")]
+use crate::device_manager::vfio_dev_mgr::{HostDeviceConfig, VfioDeviceError};
 #[cfg(feature = "vhost-net")]
 pub use crate::device_manager::vhost_net_dev_mgr::{
     VhostNetDeviceConfigInfo, VhostNetDeviceError, VhostNetDeviceMgr,
@@ -148,11 +151,20 @@ pub enum VmmActionError {
     /// End tracing Failed.
     #[error("End tracing failed: {0}")]
     EndTracingFailed(#[source] TraceError),
+
+    #[cfg(feature = "host-device")]
+    /// The action `InsertHostDevice` failed either because of bad user input or an internal error.
+    #[error("failed to add VFIO passthrough device: {0:?}")]
+    HostDeviceConfig(#[source] VfioDeviceError),
+    #[cfg(feature = "host-device")]
+    /// The action 'RemoveHostDevice' failed because of vcpu manager internal error.
+    #[error("remove host device error: {0}")]
+    RemoveHostDevice(#[source] VcpuManagerError),
 }
 
 /// This enum represents the public interface of the VMM. Each action contains various
 /// bits of information (ids, paths, etc.).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum VmmAction {
     /// Configure the boot source of the microVM using `BootSourceConfig`.
     /// This action can only be called before the microVM has booted.
@@ -245,6 +257,18 @@ pub enum VmmAction {
     /// Add a new balloon device or update one that already exists using the `BalloonDeviceConfig`
     /// as input.
     InsertBalloonDevice(BalloonDeviceConfigInfo),
+
+    #[cfg(feature = "host-device")]
+    /// Add a VFIO assignment host device or update that already exists
+    InsertHostDevice(HostDeviceConfig),
+
+    #[cfg(feature = "host-device")]
+    /// Prepare to remove a VFIO assignment host device that already exists
+    PrepareRemoveHostDevice(String),
+
+    #[cfg(feature = "host-device")]
+    /// Add a VFIO assignment host device or update that already exists
+    RemoveHostDevice(String),
 }
 
 /// The enum represents the response sent by the VMM in case of success. The response is either
@@ -257,6 +281,8 @@ pub enum VmmData {
     MachineConfiguration(Box<VmConfigInfo>),
     /// Prometheus Metrics represented by String.
     HypervisorMetrics(String),
+    /// Sync Hotplug
+    SyncHotplug((Sender<Option<i32>>, Receiver<Option<i32>>)),
 }
 
 /// Request data type used to communicate between the API and the VMM.
@@ -371,6 +397,14 @@ impl VmmService {
             VmmAction::InsertBalloonDevice(balloon_cfg) => {
                 self.add_balloon_device(vmm, event_mgr, balloon_cfg)
             }
+            #[cfg(feature = "host-device")]
+            VmmAction::InsertHostDevice(hostdev_cfg) => self.add_vfio_device(vmm, hostdev_cfg),
+            #[cfg(feature = "host-device")]
+            VmmAction::PrepareRemoveHostDevice(hostdev_id) => {
+                self.prepare_remove_vfio_device(vmm, &hostdev_id)
+            }
+            #[cfg(feature = "host-device")]
+            VmmAction::RemoveHostDevice(hostdev_cfg) => self.remove_vfio_device(vmm, &hostdev_cfg),
         };
 
         debug!("send vmm response: {:?}", response);
@@ -538,6 +572,8 @@ impl VmmService {
         // - None, legacy_manager will create_stdio_console.
         // - Some(path), legacy_manager will create_socket_console on that path.
         config.serial_path = machine_config.serial_path;
+
+        config.pci_hotplug_enabled = machine_config.pci_hotplug_enabled;
 
         vm.set_vm_config(config.clone());
         self.machine_config = config;
@@ -811,6 +847,101 @@ impl VmmService {
         FsDeviceMgr::update_device_ratelimiters(vm.device_manager_mut(), config)
             .map(|_| VmmData::Empty)
             .map_err(VmmActionError::FsDevice)
+    }
+
+    #[cfg(feature = "host-device")]
+    fn add_vfio_device(&self, vmm: &mut Vmm, config: HostDeviceConfig) -> VmmRequestResult {
+        let vm = vmm.get_vm_mut().ok_or(VmmActionError::HostDeviceConfig(
+            VfioDeviceError::InvalidVMID,
+        ))?;
+        info!("add_vfio_device: {:?}", config);
+
+        let mut ctx = vm.create_device_op_context(None).map_err(|e| {
+            info!("create device op context error: {:?}", e);
+            if let StartMicroVmError::MicroVMAlreadyRunning = e {
+                VmmActionError::HostDeviceConfig(VfioDeviceError::UpdateNotAllowedPostBoot)
+            } else if let StartMicroVmError::UpcallServerNotReady = e {
+                VmmActionError::UpcallServerNotReady
+            } else {
+                VmmActionError::StartMicroVm(e)
+            }
+        })?;
+
+        vm.device_manager()
+            .vfio_manager
+            .lock()
+            .unwrap()
+            .insert_device(&mut ctx, config)
+            .map_err(VmmActionError::HostDeviceConfig)?;
+        Ok(VmmData::Empty)
+    }
+
+    // using upcall to unplug the pci device in the guest
+    #[cfg(feature = "host-device")]
+    fn prepare_remove_vfio_device(&mut self, vmm: &mut Vmm, hostdev_id: &str) -> VmmRequestResult {
+        let vm = vmm.get_vm_mut().ok_or(VmmActionError::HostDeviceConfig(
+            VfioDeviceError::InvalidVMID,
+        ))?;
+
+        info!("prepare_remove_vfio_device: {:?}", hostdev_id);
+        let ctx = vm.create_device_op_context(None).map_err(|e| {
+            info!("create device op context error: {:?}", e);
+            if let StartMicroVmError::MicroVMAlreadyRunning = e {
+                VmmActionError::HostDeviceConfig(VfioDeviceError::UpdateNotAllowedPostBoot)
+            } else if let StartMicroVmError::UpcallServerNotReady = e {
+                VmmActionError::UpcallServerNotReady
+            } else {
+                VmmActionError::StartMicroVm(e)
+            }
+        })?;
+
+        let (sender, receiver) = unbounded();
+
+        // It is safe because we don't expect poison lock.
+        let vfio_manager = vm.device_manager.vfio_manager.lock().unwrap();
+
+        vfio_manager
+            .prepare_remove_device(&ctx, hostdev_id, sender.clone())
+            .map(|_| VmmData::SyncHotplug((sender, receiver)))
+            .map_err(VmmActionError::HostDeviceConfig)
+    }
+
+    #[cfg(feature = "host-device")]
+    fn remove_vfio_device(&self, vmm: &mut Vmm, hostdev_id: &str) -> VmmRequestResult {
+        let vm = vmm.get_vm_mut().ok_or(VmmActionError::HostDeviceConfig(
+            VfioDeviceError::InvalidVMID,
+        ))?;
+
+        info!("remove_vfio_device: {:?}", hostdev_id);
+        let mut ctx = vm.create_device_op_context(None).map_err(|e| {
+            info!("create device op context error: {:?}", e);
+            if let StartMicroVmError::MicroVMAlreadyRunning = e {
+                VmmActionError::HostDeviceConfig(VfioDeviceError::UpdateNotAllowedPostBoot)
+            } else if let StartMicroVmError::UpcallServerNotReady = e {
+                VmmActionError::UpcallServerNotReady
+            } else {
+                VmmActionError::StartMicroVm(e)
+            }
+        })?;
+
+        // It is safe because we don't expect poison lock.
+        let mut vfio_manager = vm.device_manager.vfio_manager.lock().unwrap();
+
+        vfio_manager
+            .remove_device(&mut ctx, hostdev_id)
+            .map_err(VmmActionError::HostDeviceConfig)?;
+
+        // we need to revalidate io_manager cache in all vcpus
+        // in order to drop old io_manager and close device's fd
+        vm.vcpu_manager()
+            .map_err(VmmActionError::RemoveHostDevice)?
+            .revalidate_all_vcpus_cache()
+            .map_err(VmmActionError::RemoveHostDevice)?;
+
+        // FIXME: we should clear corresponding information because vfio module in
+        // host kernel will clear iommu table in this scenario.
+
+        Ok(VmmData::Empty)
     }
 
     #[cfg(feature = "hotplug")]

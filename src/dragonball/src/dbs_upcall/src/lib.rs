@@ -23,7 +23,7 @@ use log::{debug, error, info, trace, warn};
 use timerfd::{SetTimeFlags, TimerFd, TimerState};
 
 pub use crate::dev_mgr_service::{
-    CpuDevRequest, DevMgrRequest, DevMgrResponse, DevMgrService, MmioDevRequest,
+    CpuDevRequest, DevMgrRequest, DevMgrResponse, DevMgrService, MmioDevRequest, PciDevRequest,
 };
 
 const SERVER_PORT: u32 = 0xDB;

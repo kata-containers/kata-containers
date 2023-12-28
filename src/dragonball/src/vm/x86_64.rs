@@ -6,6 +6,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the THIRD-PARTY file.
 
+use std::collections::HashMap;
 use std::convert::TryInto;
 use std::ops::Deref;
 
@@ -48,6 +49,7 @@ fn configure_system<M: GuestMemory>(
     initrd: &Option<InitrdConfig>,
     boot_cpus: u8,
     max_cpus: u8,
+    pci_legacy_irqs: Option<&HashMap<u8, u8>>,
 ) -> super::Result<()> {
     const KERNEL_BOOT_FLAG_MAGIC: u16 = 0xaa55;
     const KERNEL_HDR_MAGIC: u32 = 0x5372_6448;
@@ -59,7 +61,8 @@ fn configure_system<M: GuestMemory>(
     let himem_start = GuestAddress(layout::HIMEM_START);
 
     // Note that this puts the mptable at the last 1k of Linux's 640k base RAM
-    mptable::setup_mptable(guest_mem, boot_cpus, max_cpus, None).map_err(Error::MpTableSetup)?;
+    mptable::setup_mptable(guest_mem, boot_cpus, max_cpus, pci_legacy_irqs)
+        .map_err(Error::MpTableSetup)?;
 
     let mut params: BootParamsWrapper = BootParamsWrapper(bootparam::boot_params::default());
 
@@ -219,6 +222,24 @@ impl Vm {
             .as_bytes_with_nul()
             .len();
 
+        #[cfg(feature = "host-device")]
+        {
+            // Don't expect poisoned lock here.
+            let vfio_manager = self.device_manager.vfio_manager.lock().unwrap();
+            configure_system(
+                vm_memory,
+                self.address_space.address_space(),
+                cmdline_addr,
+                cmdline_size,
+                &initrd,
+                self.vm_config.vcpu_count,
+                self.vm_config.max_vcpu_count,
+                vfio_manager.get_pci_legacy_irqs(),
+            )
+            .map_err(StartMicroVmError::ConfigureSystem)
+        }
+
+        #[cfg(not(feature = "host-device"))]
         configure_system(
             vm_memory,
             self.address_space.address_space(),
@@ -227,6 +248,7 @@ impl Vm {
             &initrd,
             self.vm_config.vcpu_count,
             self.vm_config.max_vcpu_count,
+            None,
         )
         .map_err(StartMicroVmError::ConfigureSystem)
     }
