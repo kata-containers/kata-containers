@@ -23,12 +23,10 @@ use dbs_device::resources::Resource::LegacyIrq;
 use dbs_device::resources::{DeviceResources, Resource, ResourceConstraint};
 use dbs_device::DeviceIo;
 use dbs_interrupt::KvmIrqManager;
-#[cfg(target_arch = "aarch64")]
-use dbs_pci::ECAM_SPACE_LENGTH;
 use dbs_pci::{VfioPciDevice, VENDOR_NVIDIA};
 use dbs_upcall::{DevMgrResponse, UpcallClientResponse};
 use kvm_ioctls::{DeviceFd, VmFd};
-use log::error;
+use log::{debug, error};
 use serde_derive::{Deserialize, Serialize};
 use vfio_ioctls::{VfioContainer, VfioDevice};
 use vm_memory::{
@@ -115,6 +113,10 @@ pub enum VfioDeviceError {
     /// Failed to allocate device resource
     #[error("failure while allocate device resource: {0:?}")]
     AllocateDeviceResource(#[source] ResourceError),
+
+    /// Failed to free device resource
+    #[error("failure while freeing device resource: {0:?}")]
+    FreeDeviceResource(#[source] ResourceError),
 
     /// Vfio container not found
     #[error("vfio container not found")]
@@ -364,8 +366,10 @@ impl VfioDeviceMgr {
                             error!("send upcall result failed, due to {:?}!", e);
                         }
                     }
-                    #[cfg(test)]
-                    UpcallClientResponse::FakeResponse => {}
+                    #[allow(unreachable_patterns)]
+                    _ => {
+                        debug!("this arm should only be triggered under test");
+                    }
                 }));
             ctx.remove_hotplug_pci_device(dev, callback)
                 .map_err(VfioDeviceError::VfioDeviceMgr)?
@@ -678,7 +682,9 @@ impl VfioDeviceMgr {
             resources
         };
 
-        ctx.res_manager.free_device_resources(&filtered_resources);
+        ctx.res_manager
+            .free_device_resources(&filtered_resources)
+            .map_err(VfioDeviceError::FreeDeviceResource)?;
 
         vfio_pci_device
             .clear_device()

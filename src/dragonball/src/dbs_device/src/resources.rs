@@ -403,7 +403,7 @@ pub(crate) mod tests {
         resource.append(entry.clone());
         assert_eq!(entry, resource[6]);
 
-        let entry = Resource::MacAddresss(MAC_ADDRESS.to_string());
+        let entry = Resource::MacAddress(MAC_ADDRESS.to_string());
         resource.append(entry.clone());
         assert_eq!(entry, resource[7]);
 
