@@ -20,6 +20,8 @@ use dbs_device::resources::Resource;
 use dbs_device::DeviceIo;
 use dbs_interrupt::KvmIrqManager;
 use dbs_legacy_devices::ConsoleHandler;
+#[cfg(all(feature = "host-device", target_arch = "aarch64"))]
+use dbs_pci::PciBusResources;
 use dbs_utils::epoll_manager::EpollManager;
 use kvm_ioctls::VmFd;
 
@@ -1029,6 +1031,23 @@ impl DeviceManager {
         }
 
         Err(DeviceMgrError::GetDeviceResource)
+    }
+
+    /// Get pci bus resources for creating fdt.
+    #[cfg(feature = "host-device")]
+    pub fn get_pci_bus_resources(&self) -> Option<PciBusResources> {
+        let mut vfio_dev_mgr = self.vfio_manager.lock().unwrap();
+        let vfio_pci_mgr = vfio_dev_mgr.get_pci_manager();
+        if vfio_pci_mgr.is_none() {
+            return None;
+        }
+        let pci_manager = vfio_pci_mgr.unwrap();
+        let ecam_space = pci_manager.get_ecam_space();
+        let bar_space = pci_manager.get_bar_space();
+        Some(PciBusResources {
+            ecam_space,
+            bar_space,
+        })
     }
 }
 

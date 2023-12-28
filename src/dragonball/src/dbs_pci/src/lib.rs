@@ -40,6 +40,8 @@ pub use configuration::{
 
 mod device;
 pub use device::PciDevice;
+#[cfg(target_arch = "aarch64")]
+pub use device::{PciBusResources, ECAM_SPACE_LENGTH};
 
 mod root_bus;
 pub use root_bus::create_pci_root_bus;

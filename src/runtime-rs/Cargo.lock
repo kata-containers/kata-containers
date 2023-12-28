@@ -776,6 +776,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "dbs-pci"
+version = "0.1.0"
+dependencies = [
+ "byteorder",
+ "dbs-allocator",
+ "dbs-boot",
+ "dbs-device",
+ "dbs-interrupt",
+ "downcast-rs",
+ "kvm-bindings",
+ "kvm-ioctls",
+ "libc",
+ "log",
+ "thiserror",
+ "vfio-bindings",
+ "vfio-ioctls",
+ "vm-memory",
+]
+
+[[package]]
 name = "dbs-upcall"
 version = "0.3.0"
 dependencies = [
@@ -907,6 +927,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0688c2a7f92e427f44895cd63841bff7b29f8d7a1648b9e7e07a4a365b2e1257"
 
 [[package]]
+name = "downcast-rs"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ea835d29036a4087793836fa931b08837ad5e957da9e23886b29586fb9b6650"
+
+[[package]]
 name = "dragonball"
 version = "0.1.0"
 dependencies = [
@@ -921,6 +947,7 @@ dependencies = [
  "dbs-device",
  "dbs-interrupt",
  "dbs-legacy-devices",
+ "dbs-pci",
  "dbs-upcall",
  "dbs-utils",
  "dbs-virtio-devices",
@@ -943,6 +970,8 @@ dependencies = [
  "slog-scope",
  "thiserror",
  "tracing",
+ "vfio-bindings",
+ "vfio-ioctls",
  "virtio-queue",
  "vm-memory",
  "vmm-sys-util 0.11.1",
@@ -4146,6 +4175,29 @@ name = "version_check"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
+
+[[package]]
+name = "vfio-bindings"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "43449b404c488f70507dca193debd4bea361fe8089869b947adc19720e464bce"
+
+[[package]]
+name = "vfio-ioctls"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "068bac78842164a8ecc1d1a84a8d8a9168ab29fa3c96942689e286a30ae22ac4"
+dependencies = [
+ "byteorder",
+ "kvm-bindings",
+ "kvm-ioctls",
+ "libc",
+ "log",
+ "thiserror",
+ "vfio-bindings",
+ "vm-memory",
+ "vmm-sys-util 0.11.1",
+]
 
 [[package]]
 name = "vhost"

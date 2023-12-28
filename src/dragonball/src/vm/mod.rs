@@ -186,6 +186,7 @@ pub struct Vm {
     shared_info: Arc<RwLock<InstanceInfo>>,
 
     address_space: AddressSpaceMgr,
+    /// device manager for Dragonball
     pub device_manager: DeviceManager,
     dmesg_fifo: Option<Box<dyn io::Write + Send>>,
     kernel_config: Option<KernelConfigInfo>,

@@ -38,7 +38,7 @@ pub use crate::device_manager::fs_dev_mgr::{
 #[cfg(feature = "virtio-mem")]
 pub use crate::device_manager::mem_dev_mgr::{MemDeviceConfigInfo, MemDeviceError};
 #[cfg(feature = "host-device")]
-use crate::device_manager::vfio_dev_mgr::{HostDeviceConfig, VfioDeviceError, VfioDeviceHostInfo};
+use crate::device_manager::vfio_dev_mgr::{HostDeviceConfig, VfioDeviceError};
 #[cfg(feature = "vhost-net")]
 pub use crate::device_manager::vhost_net_dev_mgr::{
     VhostNetDeviceConfigInfo, VhostNetDeviceError, VhostNetDeviceMgr,
@@ -871,7 +871,7 @@ impl VmmService {
             .vfio_manager
             .lock()
             .unwrap()
-            .insert_device(&mut ctx, config.into())
+            .insert_device(&mut ctx, config)
             .map_err(VmmActionError::HostDeviceConfig)?;
         Ok(VmmData::Empty)
     }
