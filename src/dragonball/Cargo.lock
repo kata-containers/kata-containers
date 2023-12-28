@@ -398,6 +398,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "threadpool",
+ "timerfd",
  "vhost",
  "virtio-bindings",
  "virtio-queue",

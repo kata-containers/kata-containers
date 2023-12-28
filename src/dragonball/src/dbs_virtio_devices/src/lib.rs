@@ -28,6 +28,18 @@ pub mod vsock;
 
 #[cfg(feature = "virtio-net")]
 pub mod net;
+#[cfg(any(
+    feature = "virtio-net",
+    feature = "vhost-net",
+    feature = "vhost-user-net"
+))]
+mod net_common;
+#[cfg(any(
+    feature = "virtio-net",
+    feature = "vhost-net",
+    feature = "vhost-user-net"
+))]
+pub use net_common::*;
 
 #[cfg(feature = "virtio-blk")]
 pub mod block;
