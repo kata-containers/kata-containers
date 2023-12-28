@@ -202,7 +202,7 @@ pub enum Resource {
         size: u32,
     },
     /// Network Interface Card MAC address.
-    MacAddresss(String),
+    MacAddress(String),
     /// KVM memslot index.
     KvmMemSlot(u32),
 }
@@ -310,7 +310,7 @@ impl DeviceResources {
     /// Get the first resource information for NIC MAC address.
     pub fn get_mac_address(&self) -> Option<String> {
         for entry in self.0.iter().as_ref() {
-            if let Resource::MacAddresss(addr) = entry {
+            if let Resource::MacAddress(addr) = entry {
                 return Some(addr.clone());
             }
         }
@@ -403,7 +403,7 @@ pub(crate) mod tests {
         resource.append(entry.clone());
         assert_eq!(entry, resource[6]);
 
-        let entry = Resource::MacAddresss(MAC_ADDRESS.to_string());
+        let entry = Resource::MacAddress(MAC_ADDRESS.to_string());
         resource.append(entry.clone());
         assert_eq!(entry, resource[7]);
 

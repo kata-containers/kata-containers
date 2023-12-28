@@ -25,6 +25,7 @@ dbs-utils = { path = "./src/dbs_utils" }
 dbs-virtio-devices = { path = "./src/dbs_virtio_devices", optional = true, features = [
     "virtio-mmio",
 ] }
+dbs-pci = { path = "./src/dbs_pci", optional = true }
 derivative = "2.2.0"
 kvm-bindings = "0.6.0"
 kvm-ioctls = "0.12.0"
@@ -48,6 +49,8 @@ virtio-queue = { version = "0.7.0", optional = true }
 vm-memory = { version = "0.10.0", features = ["backend-mmap"] }
 crossbeam-channel = "0.5.6"
 fuse-backend-rs = "0.10.5"
+vfio-bindings = { version = "0.3.0", optional = true }
+vfio-ioctls =  { version = "0.1.0", optional = true }
 
 [dev-dependencies]
 slog-async = "2.7.0"
@@ -77,3 +80,4 @@ vhost-net = ["dbs-virtio-devices/vhost-net"]
 vhost-user-fs = ["dbs-virtio-devices/vhost-user-fs"]
 vhost-user-net = ["dbs-virtio-devices/vhost-user-net"]
 vhost-user-blk = ["dbs-virtio-devices/vhost-user-blk"]
+host-device = ["dep:vfio-bindings", "dep:vfio-ioctls", "dep:dbs-pci"]

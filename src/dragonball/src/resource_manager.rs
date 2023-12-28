@@ -565,7 +565,7 @@ impl ResourceManager {
                 Resource::LegacyIrq(base) => self.free_legacy_irq(*base),
                 Resource::MsiIrq { ty: _, base, size } => self.free_msi_irq(*base, *size),
                 Resource::KvmMemSlot(slot) => self.free_kvm_mem_slot(*slot),
-                Resource::MacAddresss(_) => Ok(()),
+                Resource::MacAddress(_) => Ok(()),
             };
             result?;
         }

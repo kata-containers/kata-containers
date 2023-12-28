@@ -40,6 +40,8 @@ pub use configuration::{
 
 mod device;
 pub use device::PciDevice;
+#[cfg(target_arch = "aarch64")]
+pub use device::{PciBusResources, ECAM_SPACE_LENGTH};
 
 mod root_bus;
 pub use root_bus::create_pci_root_bus;
@@ -54,6 +56,7 @@ mod msix;
 pub use msix::{MsixCap, MsixState, MSIX_TABLE_ENTRY_SIZE};
 
 mod vfio;
+pub use vfio::{VfioPciDevice, VfioPciError, VENDOR_NVIDIA};
 
 /// Error codes related to PCI root/bus/device operations.
 #[derive(Debug, thiserror::Error)]

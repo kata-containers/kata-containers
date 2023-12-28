@@ -1,0 +1,173 @@
+From 4ed40d8ce3793129ba9c0b7b663a5e137aceb70c Mon Sep 17 00:00:00 2001
+From: Chao Wu <chaowu@linux.alibaba.com>
+Date: Wed, 27 Dec 2023 14:43:47 +0800
+Subject: [PATCH] upcall: add pci hotplug / hot-unplug support
+
+add two new upcall functions add_pci_dev and del_pci_dev, mainly for hotplugging
+and hot-unplugging pci device in the guest kernel through the upcall server.
+
+Users could implement upcall client side with add_pci or del_pci command and trigger
+those commands in the hypervisor side.
+
+As always, Dragonball hypervisor will implement the client side to do pci hotplug and
+hot-unplug as an example
+
+Signed-off-by: Gerry Liu <gerry@linux.alibaba.com>
+Signed-off-by: Helin Guo <helinguo@linux.alibaba.com>
+Signed-off-by: Chao Wu <chaowu@linux.alibaba.com>
+---
+ drivers/misc/dragonball/upcall_srv/Kconfig    | 11 +++
+ .../upcall_srv/dragonball_device_manager.c    | 90 +++++++++++++++++++
+ 2 files changed, 101 insertions(+)
+
+diff --git a/drivers/misc/dragonball/upcall_srv/Kconfig b/drivers/misc/dragonball/upcall_srv/Kconfig
+index fc83f03c2edd..19a6ca957ea6 100644
+--- a/drivers/misc/dragonball/upcall_srv/Kconfig
++++ b/drivers/misc/dragonball/upcall_srv/Kconfig
+@@ -47,3 +47,14 @@ config DRAGONBALL_HOTPLUG_CPU
+ 	  structure with command and parameter to hot-pluging an vCPU.
+ 
+ 	  If unsure, say N.
++	  
++config DRAGONBALL_HOTPLUG_PCI
++        bool "PCI hotplug/hotunplug support"
++        depends on DRAGONBALL_DEVICE_MANAGER
++        default y
++        help
++          This configure implements a PCI hotplug/hotunplug support, vmm
++          should send hotplug request by vsock which follow special data
++          structure with command and parameter to hot-pluging a PCI device.
++
++          If unsure, say N.
+diff --git a/drivers/misc/dragonball/upcall_srv/dragonball_device_manager.c b/drivers/misc/dragonball/upcall_srv/dragonball_device_manager.c
+index 088d38623b8d..3544afefa2a9 100644
+--- a/drivers/misc/dragonball/upcall_srv/dragonball_device_manager.c
++++ b/drivers/misc/dragonball/upcall_srv/dragonball_device_manager.c
+@@ -22,6 +22,7 @@
+ #include <linux/cpu.h>
+ #include <linux/cpumask.h>
+ #include <linux/cpuhotplug.h>
++#include <linux/pci.h>
+ #include <asm/cpu.h>
+ #include <dragonball/upcall_srv.h>
+ #include <dragonball/device_manager.h>
+@@ -90,6 +91,12 @@ struct devmgr_req {
+ 			uint8_t apic_ids[256];
+ #endif
+ 		} cpu_dev_info;
++#endif
++#if defined(CONFIG_DRAGONBALL_HOTPLUG_PCI)
++		struct {
++			uint8_t busno;
++			uint8_t devfn;
++		} pci_dev_info;
+ #endif
+ 	} msg_load;
+ };
+@@ -117,6 +124,9 @@ struct devmgr_reply {
+ #endif
+ #if defined(CONFIG_DRAGONBALL_HOTPLUG_CPU)
+ 	struct cpu_dev_reply_info cpu_dev_info;
++#endif
++#if defined(CONFIG_DRAGONBALL_HOTPLUG_PCI)
++	struct {} pci_dev_info;
+ #endif
+ 	} msg_load;
+ };
+@@ -286,6 +296,82 @@ static int del_mmio_dev(struct devmgr_req *req,
+ }
+ #endif
+ 
++#if defined(CONFIG_DRAGONBALL_HOTPLUG_PCI)
++static int add_pci_dev(struct devmgr_req *req,
++			struct devmgr_reply *rep)
++{
++	int ret = 0;
++	struct devmgr_msg_header *rep_mh = &rep->msg_header;
++	uint8_t busno = req->msg_load.pci_dev_info.busno;
++	uint8_t devfn = req->msg_load.pci_dev_info.devfn;
++	struct pci_bus *bus;
++	struct pci_dev *dev;
++
++	pr_info("add pci device of busno: %02x, devfn: %02x\n", busno, devfn);
++
++	pci_lock_rescan_remove();
++
++	/* It is similar to pci_rescan_bus */
++
++	bus = pci_find_bus(0, busno);
++	if (!bus) {
++		pr_err("Could not find PCI bus for busno %02x\n", busno);
++		ret = -ENODEV;
++		goto out;
++	}
++
++	pci_scan_slot(bus, devfn);
++	dev = pci_get_slot(bus, devfn);
++	if (!dev) {
++		pr_err("Could not find PCI device for slot %02x\n", devfn);
++		ret = -ENODEV;
++		goto out;
++	}
++
++	pci_bus_claim_resources(bus);
++
++	pci_bus_add_devices(bus);
++
++	pci_dev_put(dev);
++
++out:
++	pci_unlock_rescan_remove();
++	if (!ret)
++		_fill_msg_header(rep_mh, 0, ADD_PCI, 0);
++	return ret;
++}
++
++static int del_pci_dev(struct devmgr_req *req,
++			struct devmgr_reply *rep)
++{
++	int ret = 0;
++	struct devmgr_msg_header *rep_mh = &rep->msg_header;
++	uint8_t busno = req->msg_load.pci_dev_info.busno;
++	uint8_t devfn = req->msg_load.pci_dev_info.devfn;
++	struct pci_dev *dev;
++
++	pr_info("remove pci device of busno: %02x, devfn: %02x\n", busno, devfn);
++
++	pci_lock_rescan_remove();
++
++	dev = pci_get_domain_bus_and_slot(0, busno, devfn);
++
++	if (!dev) {
++		pr_err("Could not find PCI device for slot %02x\n", devfn);
++		ret = -ENODEV;
++		goto out;
++	}
++
++	pci_stop_and_remove_bus_device(dev);
++
++	pci_dev_put(dev);
++out:
++	pci_unlock_rescan_remove();
++	if (!ret)
++		_fill_msg_header(rep_mh, 0, DEL_PCI, 0);
++	return ret;
++}
++#endif
+ 
+ #if defined(CONFIG_DRAGONBALL_HOTPLUG_CPU)
+ #if defined(CONFIG_X86_64)
+@@ -522,6 +608,10 @@ static struct {
+ 	{ADD_CPU, add_cpu_dev},
+ 	{DEL_CPU, del_cpu_dev},
+ #endif
++#if defined(CONFIG_DRAGONBALL_HOTPLUG_PCI)
++	{ADD_PCI, add_pci_dev},
++	{DEL_PCI, del_pci_dev},
++#endif
+ };
+ 
+ static action_route_t get_action(struct devmgr_req *req)
+-- 
+2.31.1
+
