@@ -138,6 +138,15 @@ spec:
       runtimeClassName: kata-fc
 ```
 
+The following YAML snippet shows how to specify a workload should use Kata with StratoVirt:
+
+```yaml
+spec:
+  template:
+    spec:
+      runtimeClassName: kata-stratovirt
+```
+
 The following YAML snippet shows how to specify a workload should use Kata with QEMU:
 
 ```yaml
@@ -164,6 +173,12 @@ To run an example with `kata-fc`:
 $ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/examples/test-deploy-kata-fc.yaml
 ```
 
+To run an example with `kata-stratovirt`:
+
+```bash
+$ kubectl apply -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/examples/test-deploy-kata-stratovirt.yaml
+```
+
 To run an example with `kata-qemu`:
 
 ```bash
@@ -176,6 +191,7 @@ The following removes the test pods:
 $ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/examples/test-deploy-kata-dragonball.yaml
 $ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/examples/test-deploy-kata-clh.yaml
 $ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/examples/test-deploy-kata-fc.yaml
+$ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/examples/test-deploy-kata-stratovirt.yaml
 $ kubectl delete -f https://raw.githubusercontent.com/kata-containers/kata-containers/main/tools/packaging/kata-deploy/examples/test-deploy-kata-qemu.yaml
 ```
 
@@ -235,7 +251,7 @@ This image contains all the necessary artifacts for running Kata Containers, all
 from the [Kata Containers release page](https://github.com/kata-containers/kata-containers/releases).
 
 Host artifacts:
-* `cloud-hypervisor`, `firecracker`, `qemu`, and supporting binaries
+* `cloud-hypervisor`, `firecracker`, `qemu`, `stratovirt` and supporting binaries
 * `containerd-shim-kata-v2` (go runtime and rust runtime)
 * `kata-collect-data.sh`
 * `kata-runtime`
@@ -254,7 +270,8 @@ applying labels to the nodes.
 This DaemonSet installs the necessary Kata binaries, configuration files, and virtual machine artifacts on
 the node. Once installed, the DaemonSet adds a node label `katacontainers.io/kata-runtime=true` and reconfigures
 either CRI-O or containerd to register three `runtimeClasses`: `kata-clh` (for Cloud Hypervisor isolation), `kata-qemu` (for QEMU isolation),
-and `kata-fc` (for Firecracker isolation). As a final step the DaemonSet restarts either CRI-O or containerd. Upon deletion,
+`kata-fc` (for Firecracker isolation) and `kata-stratovirt` (for StratoVirt isolation).
+As a final step the DaemonSet restarts either CRI-O or containerd. Upon deletion,
 the DaemonSet removes the Kata binaries and VM artifacts and updates the node label to `katacontainers.io/kata-runtime=cleanup`.
 
 #### Kata cleanup

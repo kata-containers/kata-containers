@@ -437,7 +437,7 @@ You can build and install the guest kernel image as shown [here](../tools/packag
 # Install a hypervisor
 
 When setting up Kata using a [packaged installation method](install/README.md#installing-on-a-linux-system), the
-`QEMU` VMM is installed automatically. Cloud-Hypervisor and Firecracker VMMs are available from the [release tarballs](https://github.com/kata-containers/kata-containers/releases), as well as through [`kata-deploy`](../tools/packaging/kata-deploy/README.md).
+`QEMU` VMM is installed automatically. Cloud-Hypervisor, Firecracker and StratoVirt VMMs are available from the [release tarballs](https://github.com/kata-containers/kata-containers/releases), as well as through [`kata-deploy`](../tools/packaging/kata-deploy/README.md).
 You may choose to manually build your VMM/hypervisor.
 
 ## Build a custom QEMU

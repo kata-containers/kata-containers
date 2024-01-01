@@ -29,11 +29,12 @@ are available, their default values and how each setting can be used.
 
 | Hypervisor | Written in | Architectures | Type | Configuration file |
 |-|-|-|-|-|
-[ACRN] | C | `x86_64` | Type 1 (bare metal) | `configuration-acrn.toml` |
-[Cloud Hypervisor] | rust | `aarch64`, `x86_64` | Type 2 ([KVM]) | `configuration-clh.toml` |
-[Firecracker] | rust | `aarch64`, `x86_64` | Type 2 ([KVM]) | `configuration-fc.toml` |
-[QEMU] | C | all | Type 2 ([KVM]) | `configuration-qemu.toml` |
-[`Dragonball`] | rust | `aarch64`, `x86_64` | Type 2 ([KVM]) | `configuration-dragonball.toml` |
+|[ACRN] | C | `x86_64` | Type 1 (bare metal) | `configuration-acrn.toml` |
+|[Cloud Hypervisor] | rust | `aarch64`, `x86_64` | Type 2 ([KVM]) | `configuration-clh.toml` |
+|[Firecracker] | rust | `aarch64`, `x86_64` | Type 2 ([KVM]) | `configuration-fc.toml` |
+|[QEMU] | C | all | Type 2 ([KVM]) | `configuration-qemu.toml` |
+|[`Dragonball`] | rust | `aarch64`, `x86_64` | Type 2 ([KVM]) | `configuration-dragonball.toml` |
+|[StratoVirt] | rust | `aarch64`, `x86_64` | Type 2 ([KVM]) | `configuration-stratovirt.toml` |
 
 ## Determine currently configured hypervisor
 
@@ -49,11 +50,12 @@ the hypervisors:
 
 | Hypervisor | Summary | Features | Limitations | Container Creation speed | Memory density | Use cases | Comment |
 |-|-|-|-|-|-|-|-|
-[ACRN] | Safety critical and real-time workloads | | | excellent | excellent | Embedded and IOT systems | For advanced users |
-[Cloud Hypervisor] | Low latency, small memory footprint, small attack surface | Minimal | | excellent | excellent | High performance modern cloud workloads | |
-[Firecracker] | Very slimline | Extremely minimal | Doesn't support all device types | excellent | excellent | Serverless / FaaS | |
-[QEMU] | Lots of features | Lots | | good | good | Good option for most users | | All users |
-[`Dragonball`] | Built-in VMM,  low CPU and memory overhead| Minimal | | excellent | excellent | Optimized for most container workloads | `out-of-the-box` Kata Containers experience |
+|[ACRN] | Safety critical and real-time workloads | | | excellent | excellent | Embedded and IOT systems | For advanced users |
+|[Cloud Hypervisor] | Low latency, small memory footprint, small attack surface | Minimal | | excellent | excellent | High performance modern cloud workloads | |
+|[Firecracker] | Very slimline | Extremely minimal | Doesn't support all device types | excellent | excellent | Serverless / FaaS | |
+|[QEMU] | Lots of features | Lots | | good | good | Good option for most users | |
+|[`Dragonball`] | Built-in VMM,  low CPU and memory overhead| Minimal | | excellent | excellent | Optimized for most container workloads | `out-of-the-box` Kata Containers experience |
+|[StratoVirt] | Unified architecture supporting three scenarios: VM, container, and serverless | Extremely minimal(`MicroVM`) to Lots(`StandardVM`) | | excellent | excellent | Common container workloads | `StandardVM` type of StratoVirt for Kata is under development |
 
 For further details, see the [Virtualization in Kata Containers](design/virtualization.md) document and the official documentation for each hypervisor.
 
@@ -63,3 +65,4 @@ For further details, see the [Virtualization in Kata Containers](design/virtuali
 [KVM]: https://en.wikipedia.org/wiki/Kernel-based_Virtual_Machine
 [QEMU]: http://www.qemu-project.org
 [`Dragonball`]: https://github.com/kata-containers/kata-containers/blob/main/src/dragonball
+[StratoVirt]: https://gitee.com/openeuler/stratovirt
