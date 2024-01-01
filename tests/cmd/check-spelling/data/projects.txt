@@ -86,6 +86,7 @@ SemaphoreCI/B
 snapcraft/B
 snapd/B
 SQLite/B
+StratoVirt/B
 SUSE/B
 Sysbench/B
 systemd/B
