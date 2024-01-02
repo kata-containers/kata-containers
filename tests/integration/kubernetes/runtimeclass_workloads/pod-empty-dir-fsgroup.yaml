@@ -17,26 +17,20 @@ spec:
   - name: mounttest-container
     image: ${agnhost_image}
     command:
-      - /agnhost
+      - bash
     args:
-      - mounttest
-      - --fs_type=/test-volume
-      - --new_file_0660=/test-volume/test-file
-      - --file_perm=/test-volume/test-file
-      - --file_owner=/test-volume/test-file
+      - -c
+      - "/agnhost mounttest --fs_type=/test-volume --new_file_0660=/test-volume/test-file --file_perm=/test-volume/test-file --file_owner=/test-volume/test-file && sleep 2"
     volumeMounts:
       - name: emptydir-volume
         mountPath: /test-volume
   - name: mounttest-container-2
     image: ${agnhost_image}
     command:
-      - /agnhost
+      - bash
     args:
-      - mounttest
-      - --fs_type=/test-volume-2
-      - --new_file_0660=/test-volume-2/test-file
-      - --file_perm=/test-volume-2/test-file
-      - --file_owner=/test-volume-2/test-file
+      - -c
+      - "/agnhost mounttest --fs_type=/test-volume-2 --new_file_0660=/test-volume-2/test-file --file_perm=/test-volume-2/test-file --file_owner=/test-volume-2/test-file && sleep 2"
     volumeMounts:
       - name: mem-emptydir-volume
         mountPath: /test-volume-2
