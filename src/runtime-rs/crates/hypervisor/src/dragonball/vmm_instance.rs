@@ -19,7 +19,10 @@ use dragonball::{
         InstanceInfo, InstanceState, NetworkInterfaceConfig, VcpuResizeInfo, VmmAction,
         VmmActionError, VmmData, VmmRequest, VmmResponse, VmmService, VsockDeviceConfigInfo,
     },
-    device_manager::{balloon_dev_mgr::BalloonDeviceConfigInfo, mem_dev_mgr::MemDeviceConfigInfo},
+    device_manager::{
+        balloon_dev_mgr::BalloonDeviceConfigInfo, mem_dev_mgr::MemDeviceConfigInfo,
+        vfio_dev_mgr::HostDeviceConfig,
+    },
     vm::VmConfigInfo,
     Vmm,
 };
@@ -192,6 +195,30 @@ impl VmmInstance {
             return Ok(vm_config);
         }
         Err(anyhow!("Failed to get machine info"))
+    }
+
+    pub fn insert_host_device(&self, device_cfg: HostDeviceConfig) -> Result<()> {
+        self.handle_request_with_retry(Request::Sync(VmmAction::InsertHostDevice(
+            device_cfg.clone(),
+        )))
+        .with_context(|| format!("Failed to insert host device {:?}", device_cfg))?;
+        Ok(())
+    }
+
+    pub fn prepare_remove_host_device(&self, id: &str) -> Result<()> {
+        info!(sl!(), "prepare to remove host device {}", id);
+        self.handle_request(Request::Sync(VmmAction::PrepareRemoveHostDevice(
+            id.to_string(),
+        )))
+        .with_context(|| format!("Prepare to remove host device {:?} failed", id))?;
+        Ok(())
+    }
+
+    pub fn remove_host_device(&self, id: &str) -> Result<()> {
+        info!(sl!(), "remove host device {}", id);
+        self.handle_request(Request::Sync(VmmAction::RemoveHostDevice(id.to_string())))
+            .with_context(|| format!("Failed to remove host device {:?}", id))?;
+        Ok(())
     }
 
     pub fn insert_block_device(&self, device_cfg: BlockDeviceConfigInfo) -> Result<()> {
