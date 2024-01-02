@@ -561,7 +561,7 @@ fn create_ttrpc_client(
         }
     };
 
-    Ok(ttrpc::Client::new(fd))
+    ttrpc::Client::new(fd).map_err(|err| anyhow!("failed to new a ttrpc client: {:?}", err))
 }
 
 fn kata_service_agent(
