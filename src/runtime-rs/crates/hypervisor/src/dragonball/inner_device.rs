@@ -137,13 +137,10 @@ impl DragonballInner {
             0
         };
 
-        let guest_dev_id = if let Some(pci_path) = primary_device.guest_pci_path {
-            // safe here, dragonball's pci device directly connects to root bus.
-            // usually, it has been assigned in vfio device manager.
-            pci_path.get_device_slot().unwrap().0
-        } else {
-            0
-        };
+        // It's safe to unwrap the guest_pci_path and get device slot,
+        // As it has been assigned in vfio device manager.
+        let pci_path = primary_device.guest_pci_path.unwrap();
+        let guest_dev_id = pci_path.get_device_slot().unwrap().0;
 
         info!(
             sl!(),
