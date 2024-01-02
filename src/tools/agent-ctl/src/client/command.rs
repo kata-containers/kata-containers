@@ -14,6 +14,55 @@ use ttrpc::context::Context;
 
 const REQUEST_BUILD_FAIL_MESSAGE: &str = "Fail to build request";
 
+lazy_static! {
+    static ref BUILTIN_COMMANDS: Vec<Box<dyn Describe + Sync>> = vec![
+        Box::new(Echo),
+        Box::new(Help),
+        Box::new(List),
+        Box::new(Repeat),
+        Box::new(Sleep),
+        Box::new(Quit),
+    ];
+    static ref AGENT_COMMANDS: Vec<Box<dyn Describe + Sync>> = vec![
+        Box::new(AddARPNeighbors),
+        Box::new(AddSwap),
+        Box::new(Check),
+        Box::new(Version),
+        Box::new(CloseStdin),
+        Box::new(CopyFile),
+        Box::new(CreateContainer),
+        Box::new(CreateSandbox),
+        Box::new(DestroySandbox),
+        Box::new(ExecProcess),
+        Box::new(GetGuestDetails),
+        Box::new(GetIptables),
+        Box::new(GetMetrics),
+        Box::new(GetOOMEvent),
+        Box::new(GetVolumeStats),
+        Box::new(ListInterfaces),
+        Box::new(ListRoutes),
+        Box::new(MemHotplugByProbe),
+        Box::new(OnlineCPUMem),
+        Box::new(PauseContainer),
+        Box::new(ReadStderr),
+        Box::new(ReadStdout),
+        Box::new(ReseedRandomDev),
+        Box::new(RemoveContainer),
+        Box::new(ResumeContainer),
+        Box::new(SetGuestDateTime),
+        Box::new(SetIptables),
+        Box::new(SignalProcess),
+        Box::new(StartContainer),
+        Box::new(StatsContainer),
+        Box::new(TtyWinResize),
+        Box::new(UpdateContainer),
+        Box::new(UpdateInterface),
+        Box::new(UpdateRoutes),
+        Box::new(WaitProcess),
+        Box::new(WriteStdin),
+    ];
+}
+
 // Run the specified closure to set an automatic value if the ttRPC Context
 // does not contain the special values requesting automatic values be
 // suppressed.
@@ -31,6 +80,24 @@ macro_rules! check_auto_values {
             }
         }
     }};
+}
+
+pub fn cmd_list() {
+    let mut builtin_cmd = String::new();
+    let mut agent_cmd = String::new();
+
+    for cmd in BUILTIN_COMMANDS.iter() {
+        builtin_cmd.push_str(&format!("\t{}\n", cmd.describe()))
+    }
+
+    for cmd in AGENT_COMMANDS.iter() {
+        agent_cmd.push_str(&format!("\t{}\n", cmd.describe()))
+    }
+
+    println!(
+        "AGENT COMMANDS:\n{}\nBUILTIN COMMANDS:\n{}",
+        agent_cmd, builtin_cmd
+    )
 }
 
 pub fn parse_agent_cmd(cmd: &str) -> Result<Box<dyn AgentCmd>> {
@@ -111,7 +178,13 @@ pub fn parse_agent_cmd(cmd: &str) -> Result<Box<dyn AgentCmd>> {
     }
 }
 
-pub trait AgentCmd {
+pub trait Describe {
+    fn describe(&self) -> &str {
+        ""
+    }
+}
+
+pub trait AgentCmd: Describe {
     fn exec(
         &self,
         ctx: &Context,
@@ -122,7 +195,14 @@ pub trait AgentCmd {
     ) -> (Result<()>, bool);
 }
 
+#[derive(Default, Clone, Debug)]
 struct AddARPNeighbors;
+
+impl Describe for AddARPNeighbors {
+    fn describe(&self) -> &str {
+        "AddARPNeighbors "
+    }
+}
 
 impl AgentCmd for AddARPNeighbors {
     fn exec(
@@ -158,7 +238,14 @@ impl AgentCmd for AddARPNeighbors {
     }
 }
 
+#[derive(Default, Debug, Clone)]
 struct AddSwap;
+
+impl Describe for AddSwap {
+    fn describe(&self) -> &str {
+        "AddSwap"
+    }
+}
 
 impl AgentCmd for AddSwap {
     fn exec(
@@ -186,7 +273,14 @@ impl AgentCmd for AddSwap {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct Check;
+
+impl Describe for Check {
+    fn describe(&self) -> &str {
+        "Check"
+    }
+}
 
 impl AgentCmd for Check {
     fn exec(
@@ -219,7 +313,14 @@ impl AgentCmd for Check {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct Version;
+
+impl Describe for Version {
+    fn describe(&self) -> &str {
+        "Version"
+    }
+}
 
 impl AgentCmd for Version {
     fn exec(
@@ -253,7 +354,14 @@ impl AgentCmd for Version {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct CloseStdin;
+
+impl Describe for CloseStdin {
+    fn describe(&self) -> &str {
+        "CloseStdin"
+    }
+}
 
 impl AgentCmd for CloseStdin {
     fn exec(
@@ -296,7 +404,14 @@ impl AgentCmd for CloseStdin {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct CopyFile;
+
+impl Describe for CopyFile {
+    fn describe(&self) -> &str {
+        "CopyFile"
+    }
+}
 
 impl AgentCmd for CopyFile {
     fn exec(
@@ -402,7 +517,14 @@ impl AgentCmd for CopyFile {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct CreateContainer;
+
+impl Describe for CreateContainer {
+    fn describe(&self) -> &str {
+        "CreateContainer"
+    }
+}
 
 impl AgentCmd for CreateContainer {
     fn exec(
@@ -449,7 +571,14 @@ impl AgentCmd for CreateContainer {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct CreateSandbox;
+
+impl Describe for CreateSandbox {
+    fn describe(&self) -> &str {
+        "CreateSandbox"
+    }
+}
 
 impl AgentCmd for CreateSandbox {
     fn exec(
@@ -489,7 +618,14 @@ impl AgentCmd for CreateSandbox {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct DestroySandbox;
+
+impl Describe for DestroySandbox {
+    fn describe(&self) -> &str {
+        "DestroySandbox"
+    }
+}
 
 impl AgentCmd for DestroySandbox {
     fn exec(
@@ -522,7 +658,14 @@ impl AgentCmd for DestroySandbox {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct ExecProcess;
+
+impl Describe for ExecProcess {
+    fn describe(&self) -> &str {
+        "ExecProcess"
+    }
+}
 
 impl AgentCmd for ExecProcess {
     fn exec(
@@ -582,7 +725,14 @@ impl AgentCmd for ExecProcess {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct GetGuestDetails;
+
+impl Describe for GetGuestDetails {
+    fn describe(&self) -> &str {
+        "GetGuestDetails"
+    }
+}
 
 impl AgentCmd for GetGuestDetails {
     #[allow(clippy::redundant_closure_call)]
@@ -623,7 +773,14 @@ impl AgentCmd for GetGuestDetails {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct GetIptables;
+
+impl Describe for GetIptables {
+    fn describe(&self) -> &str {
+        "GetIptables"
+    }
+}
 
 impl AgentCmd for GetIptables {
     fn exec(
@@ -656,7 +813,14 @@ impl AgentCmd for GetIptables {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct GetMetrics;
+
+impl Describe for GetMetrics {
+    fn describe(&self) -> &str {
+        "GetMetrics"
+    }
+}
 
 impl AgentCmd for GetMetrics {
     fn exec(
@@ -689,7 +853,14 @@ impl AgentCmd for GetMetrics {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct GetOOMEvent;
+
+impl Describe for GetOOMEvent {
+    fn describe(&self) -> &str {
+        "GetOOMEvent"
+    }
+}
 
 impl AgentCmd for GetOOMEvent {
     fn exec(
@@ -722,7 +893,14 @@ impl AgentCmd for GetOOMEvent {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct GetVolumeStats;
+
+impl Describe for GetVolumeStats {
+    fn describe(&self) -> &str {
+        "GetVolumeStats"
+    }
+}
 
 impl AgentCmd for GetVolumeStats {
     fn exec(
@@ -755,7 +933,14 @@ impl AgentCmd for GetVolumeStats {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct ListInterfaces;
+
+impl Describe for ListInterfaces {
+    fn describe(&self) -> &str {
+        "ListInterfaces"
+    }
+}
 
 impl AgentCmd for ListInterfaces {
     fn exec(
@@ -788,7 +973,14 @@ impl AgentCmd for ListInterfaces {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct ListRoutes;
+
+impl Describe for ListRoutes {
+    fn describe(&self) -> &str {
+        "ListRoutes"
+    }
+}
 
 impl AgentCmd for ListRoutes {
     fn exec(
@@ -821,7 +1013,14 @@ impl AgentCmd for ListRoutes {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct MemHotplugByProbe;
+
+impl Describe for MemHotplugByProbe {
+    fn describe(&self) -> &str {
+        "MemHotplugByProbe"
+    }
+}
 
 impl AgentCmd for MemHotplugByProbe {
     #[allow(clippy::redundant_closure_call)]
@@ -885,7 +1084,14 @@ impl AgentCmd for MemHotplugByProbe {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct OnlineCPUMem;
+
+impl Describe for OnlineCPUMem {
+    fn describe(&self) -> &str {
+        "OnlineCPUMem"
+    }
+}
 
 impl AgentCmd for OnlineCPUMem {
     fn exec(
@@ -952,7 +1158,14 @@ impl AgentCmd for OnlineCPUMem {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct PauseContainer;
+
+impl Describe for PauseContainer {
+    fn describe(&self) -> &str {
+        "PauseContainer"
+    }
+}
 
 impl AgentCmd for PauseContainer {
     fn exec(
@@ -992,7 +1205,14 @@ impl AgentCmd for PauseContainer {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct ReadStderr;
+
+impl Describe for ReadStderr {
+    fn describe(&self) -> &str {
+        "ReadStderr"
+    }
+}
 
 impl AgentCmd for ReadStderr {
     fn exec(
@@ -1044,7 +1264,14 @@ impl AgentCmd for ReadStderr {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct ReadStdout;
+
+impl Describe for ReadStdout {
+    fn describe(&self) -> &str {
+        "ReadStdout"
+    }
+}
 
 impl AgentCmd for ReadStdout {
     fn exec(
@@ -1096,7 +1323,14 @@ impl AgentCmd for ReadStdout {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct ReseedRandomDev;
+
+impl Describe for ReseedRandomDev {
+    fn describe(&self) -> &str {
+        "ReseedRandomDev"
+    }
+}
 
 impl AgentCmd for ReseedRandomDev {
     fn exec(
@@ -1138,7 +1372,14 @@ impl AgentCmd for ReseedRandomDev {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct RemoveContainer;
+
+impl Describe for RemoveContainer {
+    fn describe(&self) -> &str {
+        "RemoveContainer"
+    }
+}
 
 impl AgentCmd for RemoveContainer {
     fn exec(
@@ -1177,7 +1418,14 @@ impl AgentCmd for RemoveContainer {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct ResumeContainer;
+
+impl Describe for ResumeContainer {
+    fn describe(&self) -> &str {
+        "ResumeContainer"
+    }
+}
 
 impl AgentCmd for ResumeContainer {
     fn exec(
@@ -1217,7 +1465,14 @@ impl AgentCmd for ResumeContainer {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct SetGuestDateTime;
+
+impl Describe for SetGuestDateTime {
+    fn describe(&self) -> &str {
+        "SetGuestDateTime"
+    }
+}
 
 impl AgentCmd for SetGuestDateTime {
     fn exec(
@@ -1274,7 +1529,14 @@ impl AgentCmd for SetGuestDateTime {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct SetIptables;
+
+impl Describe for SetIptables {
+    fn describe(&self) -> &str {
+        "SetIptables"
+    }
+}
 
 impl AgentCmd for SetIptables {
     fn exec(
@@ -1307,7 +1569,14 @@ impl AgentCmd for SetIptables {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct SignalProcess;
+
+impl Describe for SignalProcess {
+    fn describe(&self) -> &str {
+        "SignalProcess"
+    }
+}
 
 impl AgentCmd for SignalProcess {
     fn exec(
@@ -1360,7 +1629,14 @@ impl AgentCmd for SignalProcess {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct StartContainer;
+
+impl Describe for StartContainer {
+    fn describe(&self) -> &str {
+        "StartContainer"
+    }
+}
 
 impl AgentCmd for StartContainer {
     fn exec(
@@ -1400,7 +1676,14 @@ impl AgentCmd for StartContainer {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct StatsContainer;
+
+impl Describe for StatsContainer {
+    fn describe(&self) -> &str {
+        "StatsContainer"
+    }
+}
 
 impl AgentCmd for StatsContainer {
     fn exec(
@@ -1440,7 +1723,14 @@ impl AgentCmd for StatsContainer {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct TtyWinResize;
+
+impl Describe for TtyWinResize {
+    fn describe(&self) -> &str {
+        "TtyWinResize"
+    }
+}
 
 impl AgentCmd for TtyWinResize {
     fn exec(
@@ -1502,7 +1792,14 @@ impl AgentCmd for TtyWinResize {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct UpdateContainer;
+
+impl Describe for UpdateContainer {
+    fn describe(&self) -> &str {
+        "UpdateContainer"
+    }
+}
 
 impl AgentCmd for UpdateContainer {
     fn exec(
@@ -1546,7 +1843,14 @@ impl AgentCmd for UpdateContainer {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct UpdateInterface;
+
+impl Describe for UpdateInterface {
+    fn describe(&self) -> &str {
+        "UpdateInterface"
+    }
+}
 
 impl AgentCmd for UpdateInterface {
     fn exec(
@@ -1582,7 +1886,14 @@ impl AgentCmd for UpdateInterface {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct UpdateRoutes;
+
+impl Describe for UpdateRoutes {
+    fn describe(&self) -> &str {
+        "UpdateRoutes"
+    }
+}
 
 impl AgentCmd for UpdateRoutes {
     fn exec(
@@ -1618,7 +1929,14 @@ impl AgentCmd for UpdateRoutes {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct WaitProcess;
+
+impl Describe for WaitProcess {
+    fn describe(&self) -> &str {
+        "WaitProcess"
+    }
+}
 
 impl AgentCmd for WaitProcess {
     fn exec(
@@ -1661,7 +1979,14 @@ impl AgentCmd for WaitProcess {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct WriteStdin;
+
+impl Describe for WriteStdin {
+    fn describe(&self) -> &str {
+        "WriteStdin"
+    }
+}
 
 impl AgentCmd for WriteStdin {
     fn exec(
@@ -1726,11 +2051,18 @@ pub fn parse_builtin_cmd(cmd: &str) -> Result<Box<dyn BuiltinCmd>> {
     }
 }
 
-pub trait BuiltinCmd {
+pub trait BuiltinCmd: Describe {
     fn exec(&self, args: &str) -> (Result<()>, bool);
 }
 
+#[derive(Default, Clone, Debug)]
 struct Echo;
+
+impl Describe for Echo {
+    fn describe(&self) -> &str {
+        "echo: Display arguments"
+    }
+}
 
 impl BuiltinCmd for Echo {
     fn exec(&self, args: &str) -> (Result<()>, bool) {
@@ -1739,23 +2071,48 @@ impl BuiltinCmd for Echo {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct Help;
 
-impl BuiltinCmd for Help {
-    fn exec(&self, args: &str) -> (Result<()>, bool) {
-        super::builtin_cmd_list(args)
+impl Describe for Help {
+    fn describe(&self) -> &str {
+        "help: Alias for 'list'"
     }
 }
 
+impl BuiltinCmd for Help {
+    fn exec(&self, _args: &str) -> (Result<()>, bool) {
+        cmd_list();
+
+        (Ok(()), false)
+    }
+}
+
+#[derive(Default, Clone, Debug)]
 struct List;
 
-impl BuiltinCmd for List {
-    fn exec(&self, args: &str) -> (Result<()>, bool) {
-        super::builtin_cmd_list(args)
+impl Describe for List {
+    fn describe(&self) -> &str {
+        "list: List all available commands"
     }
 }
 
+impl BuiltinCmd for List {
+    fn exec(&self, _args: &str) -> (Result<()>, bool) {
+        cmd_list();
+
+        (Ok(()), false)
+    }
+}
+
+#[derive(Default, Clone, Debug)]
 struct Repeat;
+
+impl Describe for Repeat {
+    fn describe(&self) -> &str {
+        "repeat: Repeat the next command 'n' times [-1 for forever]"
+    }
+}
 
 impl BuiltinCmd for Repeat {
     fn exec(&self, _args: &str) -> (Result<()>, bool) {
@@ -1771,7 +2128,14 @@ impl BuiltinCmd for Repeat {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct Sleep;
+
+impl Describe for Sleep {
+    fn describe(&self) -> &str {
+        "sleep: Pause for specified period number of nanoseconds (supports human-readable suffixes [no floating points numbers])"
+    }
+}
 
 impl BuiltinCmd for Sleep {
     fn exec(&self, args: &str) -> (Result<()>, bool) {
@@ -1786,7 +2150,14 @@ impl BuiltinCmd for Sleep {
     }
 }
 
+#[derive(Default, Clone, Debug)]
 struct Quit;
+
+impl Describe for Quit {
+    fn describe(&self) -> &str {
+        "quit: Exit the program"
+    }
+}
 
 impl BuiltinCmd for Quit {
     fn exec(&self, _args: &str) -> (Result<()>, bool) {

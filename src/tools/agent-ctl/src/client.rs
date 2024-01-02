@@ -24,6 +24,7 @@ use std::thread::sleep;
 use std::time::Duration;
 use ttrpc::context::Context;
 
+#[macro_use]
 mod command;
 
 // Run the specified closure to set an automatic value if the ttRPC Context
@@ -90,7 +91,6 @@ struct BuiltinCmd {
 }
 
 // Command that causes the agent to exit (iff tracing is enabled)
-const SHUTDOWN_CMD: &str = "DestroySandbox";
 
 // Command that requests this program ends
 const CMD_QUIT: &str = "quit";
@@ -334,31 +334,6 @@ fn get_agent_cmd_names() -> Vec<String> {
     names
 }
 
-fn get_agent_cmd_details() -> Vec<String> {
-    let mut cmds = Vec::new();
-
-    for cmd in AGENT_CMDS {
-        let service = match cmd.st {
-            ServiceType::Agent => "agent",
-            ServiceType::Health => "health",
-        };
-
-        cmds.push(format!("{} ({} service)", cmd.name, service));
-    }
-
-    cmds
-}
-
-fn get_agent_cmd_func(name: &str) -> Result<AgentCmdFp> {
-    for cmd in AGENT_CMDS {
-        if cmd.name.eq(name) {
-            return Ok(cmd.fp);
-        }
-    }
-
-    Err(anyhow!("Invalid command: {:?}", name))
-}
-
 fn get_builtin_cmd_details() -> Vec<String> {
     let mut cmds = Vec::new();
 
@@ -375,16 +350,6 @@ fn get_all_cmd_details() -> Vec<String> {
     cmds.append(&mut get_agent_cmd_names());
 
     cmds
-}
-
-fn get_builtin_cmd_func(name: &str) -> Result<BuiltinCmdFp> {
-    for cmd in BUILTIN_CMDS {
-        if cmd.name.eq(name) {
-            return Ok(cmd.fp);
-        }
-    }
-
-    Err(anyhow!("Invalid command: {:?}", name))
 }
 
 fn client_create_vsock_fd(cid: libc::c_uint, port: u32) -> Result<RawFd> {
@@ -592,21 +557,8 @@ fn announce(cfg: &Config) {
 
 pub fn client(cfg: &Config, commands: Vec<&str>) -> Result<()> {
     if commands.len() == 1 && commands[0].eq("list") {
-        println!("Built-in commands:\n");
-
-        let mut builtin_cmds = get_builtin_cmd_details();
-        builtin_cmds.sort();
-        builtin_cmds.iter().for_each(|n| println!("  {}", n));
-
-        println!();
-
-        println!("Agent API commands:\n");
-
-        let mut agent_cmds = get_agent_cmd_details();
-        agent_cmds.sort();
-        agent_cmds.iter().for_each(|n| println!("  {}", n));
-
-        println!();
+        // print_cmd_list!();
+        command::cmd_list();
 
         return Ok(());
     }
@@ -777,40 +729,6 @@ fn handle_cmd(
     }
 }
 
-fn handle_builtin_cmd(cmd: &str, args: &str) -> (Result<()>, bool) {
-    let f = match get_builtin_cmd_func(cmd) {
-        Ok(fp) => fp,
-        Err(e) => return (Err(e), false),
-    };
-
-    f(args)
-}
-
-// Execute the ttRPC specified by the first field of "line". Return a result
-// along with a bool which if set means the client should shutdown.
-fn handle_agent_cmd(
-    ctx: &Context,
-    client: &AgentServiceClient,
-    health: &HealthClient,
-    options: &mut Options,
-    cmd: &str,
-    args: &str,
-) -> (Result<()>, bool) {
-    let f = match get_agent_cmd_func(cmd) {
-        Ok(fp) => fp,
-        Err(e) => return (Err(e), false),
-    };
-
-    let result = f(ctx, client, health, options, args);
-    if result.is_err() {
-        return (result, false);
-    }
-
-    let shutdown = cmd.eq(SHUTDOWN_CMD);
-
-    (Ok(()), shutdown)
-}
-
 fn interactive_client_loop(
     cfg: &Config,
     options: &mut Options,
@@ -818,10 +736,7 @@ fn interactive_client_loop(
     health: &HealthClient,
     ctx: &Context,
 ) -> Result<()> {
-    let result = builtin_cmd_list("");
-    if result.0.is_err() {
-        return result.0;
-    }
+    command::cmd_list();
 
     let mut repeat_count: i64 = 1;
 
