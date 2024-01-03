@@ -141,7 +141,7 @@ fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
 
     let server_address = args
         .value_of("server-address")
-        .ok_or_else(|| anyhow!("need server adddress"))?
+        .ok_or_else(|| anyhow!("need server address"))?
         .to_string();
 
     let mut commands: Vec<&str> = Vec::new();
@@ -270,6 +270,7 @@ fn real_main() -> Result<()> {
                     Arg::with_name("server-address")
                     .long("server-address")
                     .help("server URI (vsock:// or unix://)")
+                    .required(true)
                     .takes_value(true)
                     .value_name("URI"),
                     )
