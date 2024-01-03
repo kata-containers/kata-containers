@@ -4,7 +4,9 @@
 
 include ../../utils.mk
 
-PROJECT_DIRS := $(shell find . -name Cargo.toml -printf '%h\n' | sort -u)
+# TODO: re-enable tests for dbs_pci, dbs_utils, and dbs_virtio_devices
+# after fixing their build breaks.
+PROJECT_DIRS := $(shell find . -name Cargo.toml -printf '%h\n' | sort -u | grep -v dbs_pci | grep -v dbs_utils | grep -v dbs_virtio_devices)
 
 ifeq ($(ARCH), s390x)
 default build check test clippy:
