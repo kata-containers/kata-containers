@@ -58,6 +58,9 @@ pub struct PolicyData {
     /// Settings read from genpolicy-settings.json.
     pub common: CommonData,
 
+    /// Sandbox settings read from genpolicy-settings.json.
+    pub sandbox: SandboxData,
+
     /// Settings read from genpolicy-settings.json, related directly to each
     /// kata agent endpoint, that get added to the output policy.
     pub request_defaults: RequestDefaults,
@@ -391,6 +394,13 @@ pub struct ClusterConfig {
     pub pause_container_image: String,
 }
 
+/// Struct used to read data from the settings file and copy that data into the policy.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SandboxData {
+    /// Expected value of the CreateSandboxRequest storages field.
+    pub storages: Vec<agent::Storage>,
+}
+
 impl AgentPolicy {
     pub async fn from_files(config: &utils::Config) -> Result<AgentPolicy> {
         let mut config_maps = Vec::new();
@@ -498,6 +508,7 @@ impl AgentPolicy {
             containers: policy_containers,
             request_defaults: self.config.settings.request_defaults.clone(),
             common: self.config.settings.common.clone(),
+            sandbox: self.config.settings.sandbox.clone(),
         };
 
         let json_data = serde_json::to_string_pretty(&policy_data).unwrap();
