@@ -226,7 +226,7 @@ function clean_env_ctr()
 function kill_kata_components() {
 	local ATTEMPTS=2
 	local TIMEOUT="30s"
-	local PID_NAMES=( "containerd-shim-kata-v2" "qemu-system-x86_64" "cloud-hypervisor" )
+	local PID_NAMES=( "containerd-shim-kata-v2" "qemu-system-x86_64" "qemu-system-x86_64-tdx-experimental" "cloud-hypervisor" )
 
 	sudo systemctl stop containerd
 	# iterate over the list of kata components and stop them
