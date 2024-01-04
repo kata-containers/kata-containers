@@ -15,7 +15,7 @@ path = "src/bin/main.rs"
 [dependencies]
 anyhow = "^1.0"
 backtrace = {version = ">=0.3.35", features = ["libunwind", "libbacktrace", "std"], default-features = false}
-containerd-shim-protos = { version = "0.3.0", features = ["async"]}
+containerd-shim-protos = { version = "0.6.0", features = ["async"]}
 go-flag = "0.1.0"
 libc = "0.2.108"
 log = "0.4.14"

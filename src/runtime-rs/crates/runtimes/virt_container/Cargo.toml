@@ -9,7 +9,7 @@ license = "Apache-2.0"
 anyhow = "^1.0"
 async-trait = "0.1.48"
 awaitgroup = "0.6.0"
-containerd-shim-protos = { version = "0.3.0", features = ["async"]}
+containerd-shim-protos = { version = "0.6.0", features = ["async"]}
 futures = "0.3.19"
 lazy_static = "1.4.0"
 libc = ">=0.2.39"
