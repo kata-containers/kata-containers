@@ -25,6 +25,8 @@ pub use self::machine_config::{VmConfigError, MAX_SUPPORTED_VCPUS};
     feature = "vhost-user-net"
 ))]
 mod virtio_net;
+#[cfg(feature = "vhost-user-net")]
+pub use virtio_net::VhostUserConfig;
 #[cfg(any(feature = "virtio-net", feature = "vhost-net"))]
 pub use virtio_net::VirtioConfig;
 #[cfg(any(
@@ -32,6 +34,4 @@ pub use virtio_net::VirtioConfig;
     feature = "vhost-net",
     feature = "vhost-user-net"
 ))]
-pub use virtio_net::{
-    Backend, NetworkInterfaceConfig, NetworkInterfaceUpdateConfig, VhostUserConfig,
-};
+pub use virtio_net::{Backend, NetworkInterfaceConfig, NetworkInterfaceUpdateConfig};

@@ -25,12 +25,12 @@ use vm_memory::GuestMemoryRegion;
 use vmm_sys_util::epoll::EventSet;
 
 use super::connection::{Endpoint, Listener};
-use crate::net::{setup_config_space, DEFAULT_MTU};
 use crate::vhost::net::{virtio_handle_ctrl_mq, virtio_handle_ctrl_status, FromNetCtrl};
 use crate::vhost::vhost_user::connection::EndpointParam;
 use crate::{
-    ActivateResult, ConfigResult, DbsGuestAddressSpace, Error as VirtioError,
-    Result as VirtioResult, VirtioDevice, VirtioDeviceConfig, VirtioDeviceInfo, TYPE_NET,
+    setup_config_space, ActivateResult, ConfigResult, DbsGuestAddressSpace, Error as VirtioError,
+    Result as VirtioResult, VirtioDevice, VirtioDeviceConfig, VirtioDeviceInfo, DEFAULT_MTU,
+    TYPE_NET,
 };
 
 const NET_DRIVER_NAME: &str = "vhost-user-net";
