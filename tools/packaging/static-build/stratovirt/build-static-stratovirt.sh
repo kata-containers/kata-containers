@@ -26,12 +26,12 @@ stratovirt_version="${stratovirt_version:-}"
 [ -n "$stratovirt_version" ] || die "failed to get stratovirt version"
 
 pull_stratovirt_released_binary() {
-    file_name="stratovirt-static-${stratovirt_version##*v}-${ARCH}"
-    download_url="${stratovirt_url}/releases/download/${stratovirt_version}/${file_name}.tar.gz"
+	file_name="stratovirt-static-${stratovirt_version##*v}-${ARCH}"
+	download_url="${stratovirt_url}/releases/download/${stratovirt_version}/${file_name}.tar.gz"
 
-    curl -L ${download_url} -o ${file_name}.tar.gz
-    mkdir -p static-stratovirt
-    tar zxvf ${file_name}.tar.gz -C static-stratovirt
+	curl -L ${download_url} -o ${file_name}.tar.gz
+	mkdir -p static-stratovirt
+	tar zxvf ${file_name}.tar.gz -C static-stratovirt
 }
 
 pull_stratovirt_released_binary
