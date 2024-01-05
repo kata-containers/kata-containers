@@ -138,12 +138,15 @@ test_successful_actions() {
 	info "Test actions that must be successful"
 	for K8S_TEST_ENTRY in ${K8S_TEST_UNION[@]}
 	do
+		info "$(kubectl get pods --all-namespaces 2>&1)"
 		bats "${K8S_TEST_ENTRY}"
 	done
 }
 
 run_policy_specific_tests() {
+	info "$(kubectl get pods --all-namespaces 2>&1)"
 	bats k8s-exec-rejected.bats
+	info "$(kubectl get pods --all-namespaces 2>&1)"
 	bats k8s-policy-set-keys.bats
 }
 
