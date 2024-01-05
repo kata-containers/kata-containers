@@ -90,11 +90,11 @@ fn make_examples_text(program_name: &str) -> String {
 
 - Attempt to create 7 sandboxes, ignoring any errors:
 
-  $ {program} connect --server-address "{vsock_server_address}" --repeat 7 --cmd CreateSandbox
+  $ {program} connect --server-address "{vsock_server_address}" --cmd "repeat 7" --cmd CreateSandbox
 
 - Query guest details forever:
 
-  $ {program} connect --server-address "{vsock_server_address}" --repeat -1 --cmd GetGuestDetails
+  $ {program} connect --server-address "{vsock_server_address}" --cmd "repeat -1" --cmd GetGuestDetails
 
 - Query guest details, asking for full details by specifying the API request object in JSON format:
 
