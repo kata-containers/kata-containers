@@ -61,11 +61,6 @@ function run() {
 
 	enabling_hypervisor
 
-	if [ "${KATA_HYPERVISOR}" = "dragonball" ]; then
-		echo "Skipping test for ${KATA_HYPERVISOR}"
-		return 0
-	fi
-
 	bash -c ${cri_containerd_dir}/integration-tests.sh
 }
 
