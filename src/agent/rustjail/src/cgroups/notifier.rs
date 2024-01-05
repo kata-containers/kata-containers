@@ -3,18 +3,19 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::{anyhow, Context, Result};
-use eventfd::{eventfd, EfdFlags};
-use nix::sys::eventfd;
 use std::fs::{self, File};
 use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::path::Path;
 
-use crate::pipestream::PipeStream;
+use anyhow::{anyhow, Context, Result};
+use eventfd::{eventfd, EfdFlags};
 use futures::StreamExt as _;
 use inotify::{Inotify, WatchMask};
+use nix::sys::eventfd;
 use tokio::io::AsyncReadExt;
 use tokio::sync::mpsc::{channel, Receiver};
+
+use crate::pipestream::PipeStream;
 
 // Convenience function to obtain the scope logger.
 fn sl() -> slog::Logger {
@@ -165,7 +166,6 @@ async fn register_memory_event(
 
     tokio::spawn(async move {
         loop {
-            let sender = sender.clone();
             let mut buf = [0u8; 8];
             match eventfd_stream.read(&mut buf).await {
                 Err(err) => {
@@ -173,14 +173,15 @@ async fn register_memory_event(
                     return;
                 }
                 Ok(_) => {
-                    let content = fs::read_to_string(path.clone());
-                    info!(
-                        sl(),
-                        "cgroup event for container: {}, path: {:?}, content: {:?}",
-                        &containere_id,
-                        &path,
-                        content
-                    );
+                    if let Ok(times) = get_value_from_cgroup(&path, "oom_kill") {
+                        if times < 1 {
+                            // Do not send an OOM event in the case where no OOM has occurred
+                            continue;
+                        }
+                    }
+                    // Send an OOM event in two cases:
+                    // 1. The value is not empty && times > 0: OOM kill has occurred.
+                    // 2. The value is empty: Do what previous implemention did.
                 }
             }
 
