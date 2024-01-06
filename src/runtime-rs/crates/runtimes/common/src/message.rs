@@ -47,6 +47,7 @@ impl Message {
 }
 
 const TASK_OOM_EVENT_TOPIC: &str = "/tasks/oom";
+const TASK_OOM_EVENT_URL: &str = "containerd.events.TaskOOM";
 
 pub trait Event: std::fmt::Debug + Send {
     fn r#type(&self) -> String;
@@ -60,7 +61,7 @@ impl Event for TaskOOM {
     }
 
     fn type_url(&self) -> String {
-        "containerd.events.TaskOOM".to_string()
+        TASK_OOM_EVENT_URL.to_string()
     }
 
     fn value(&self) -> Result<Vec<u8>> {
