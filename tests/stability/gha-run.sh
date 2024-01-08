@@ -12,6 +12,8 @@ set -o pipefail
 kata_tarball_dir="${2:-kata-artifacts}"
 stability_dir="$(dirname "$(readlink -f "$0")")"
 source "${stability_dir}/../common.bash"
+DOCKERFILE="${SCRIPT_PATH}/stressng_dockerfile/Dockerfile"
+IMAGE="docker.io/library/local-stressng:latest"
 
 function install_dependencies() {
 	info "Installing the dependencies needed for running the containerd-stability tests"
@@ -27,6 +29,7 @@ function install_dependencies() {
 
 	ensure_yq
 	install_docker
+	check_ctr_images "${IMAGE}" "${DOCKERFILE}"
 }
 
 function run() {
