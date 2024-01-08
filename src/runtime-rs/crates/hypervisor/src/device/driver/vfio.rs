@@ -456,7 +456,12 @@ impl Device for VfioDevice {
             .await
             .context("failed to increase attach count")?
         {
-            return Err(anyhow!("attach count increased failed as some reason."));
+            warn!(
+                sl!(),
+                "The device {:?} is not permitted to be attached many times.", self.device_id
+            );
+
+            return Ok(());
         }
 
         // do add device for vfio deivce
