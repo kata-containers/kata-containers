@@ -92,6 +92,7 @@ options:
 	firecracker
 	kata-ctl
 	kernel
+	kernel-confidential
 	kernel-dragonball-experimental
 	kernel-experimental
 	kernel-nvidia-gpu
@@ -280,7 +281,7 @@ install_cached_kernel_tarball_component() {
 		"${final_tarball_path}" \
 		|| return 1
 	
-	if [[ "${kernel_name}" != "kernel-sev" ]]; then
+	if [[ "${kernel_name}" != "kernel-sev" ]] && [[ "${kernel_name}" != "kernel-confidential" ]]; then
 		return 0
 	fi
 
@@ -289,13 +290,13 @@ install_cached_kernel_tarball_component() {
 		"${kernel_name}" \
 		"${latest_artefact}" \
 		"${latest_builder_image}" \
-		"kata-static-kernel-sev-modules.tar.xz" \
-		"${workdir}/kata-static-kernel-sev-modules.tar.xz" \
+		"kata-static-${kernel_name}-modules.tar.xz" \
+		"${workdir}/kata-static-${kernel_name}-modules.tar.xz" \
 		|| return 1
 
 	if [[ -n "${module_dir}" ]]; then
 		mkdir -p "${module_dir}"
-		tar xvf "${workdir}/kata-static-kernel-sev-modules.tar.xz" -C  "${module_dir}" && return 0
+		tar xvf "${workdir}/kata-static-${kernel_name}-modules.tar.xz" -C  "${module_dir}" && return 0
 	fi
 
 	return 1
@@ -315,6 +316,10 @@ install_kernel_helper() {
 		kernel_version="$(get_from_kata_deps assets.kernel.sev.version)"
 		default_patches_dir="${repo_root_dir}/tools/packaging/kernel/patches"
 		module_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/kernel-sev/builddir/kata-linux-${kernel_version#v}-${kernel_kata_config_version}/lib/modules/${kernel_version#v}"
+	elif [[ "${kernel_name}" == "kernel-confidential" ]]; then
+		kernel_version="$(get_from_kata_deps assets.kernel.confidential.version)"
+		default_patches_dir="${repo_root_dir}/tools/packaging/kernel/patches"
+		module_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/kernel-confidential/builddir/kata-linux-${kernel_version#v}-${kernel_kata_config_version}/lib/modules/${kernel_version#v}"
 	fi
 
 	install_cached_kernel_tarball_component ${kernel_name} ${module_dir} && return 0
@@ -330,6 +335,15 @@ install_kernel() {
 		"assets.kernel.version" \
 		"kernel" \
 		"-f"
+}
+
+install_kernel_confidential() {
+	local kernel_url="$(get_from_kata_deps assets.kernel.confidential.url)"
+
+	install_kernel_helper \
+		"assets.kernel.confidential.version" \
+		"kernel" \
+		"-x confidential -u ${kernel_url}"
 }
 
 install_kernel_dragonball_experimental() {
@@ -741,6 +755,7 @@ handle_build() {
 		install_initrd_sev
 		install_kata_ctl
 		install_kernel
+		install_kernel_confidential
 		install_kernel_dragonball_experimental
 		install_kernel_tdx_experimental
 		install_log_parser_rs
@@ -775,6 +790,8 @@ handle_build() {
 	kata-ctl) install_kata_ctl ;;
 
 	kernel) install_kernel ;;
+
+	kernel-confidential) install_kernel_confidential ;;
 
 	kernel-dragonball-experimental) install_kernel_dragonball_experimental ;;
 
