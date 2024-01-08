@@ -35,6 +35,7 @@ jobs:
           - firecracker
           - kata-ctl
           - kernel
+          - kernel-confidential
           - kernel-sev
           - kernel-dragonball-experimental
           - kernel-tdx-experimental
