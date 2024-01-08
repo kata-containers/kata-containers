@@ -12,7 +12,8 @@ set -o pipefail
 kata_tarball_dir="${2:-kata-artifacts}"
 stability_dir="$(dirname "$(readlink -f "$0")")"
 source "${stability_dir}/../common.bash"
-DOCKERFILE="${SCRIPT_PATH}/stressng_dockerfile/Dockerfile"
+source "${stability_dir}/../metrics/lib/common.bash"
+DOCKERFILE="${stability_dir}/stressng_dockerfile/Dockerfile"
 IMAGE="docker.io/library/local-stressng:latest"
 
 function install_dependencies() {
