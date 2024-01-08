@@ -69,8 +69,32 @@ pub(crate) fn get_virt_drive_name(mut index: i32) -> Result<String> {
     Ok(String::from(PREFIX) + std::str::from_utf8(&disk_letters)?)
 }
 
+// Do increase attach reference count when the device is attached.
+pub fn do_increase_count(ref_count: &mut u64) -> Result<bool> {
+    match *ref_count {
+        0 => {
+            // When ref_count is 0, it indicates that the device is new here。
+            // In this case, we know that the device has not been attached into the Guest.
+            *ref_count += 1;
+            Ok(false)
+        }
+        // While in practice, the number of times a device is attempted to be inserted into the Guest
+        // cannot reach this maximum value, the device is theoretically allowed to do so.
+        // However, we will not allow the device to actually be inserted into the Guest more than once.
+        std::u64::MAX => Err(anyhow!("This device was attached too many times")),
+        _ => {
+            // When ref_count is greater than 0, it indicates that how many times the device has been
+            // attempted to be inserted into the Guest.
+            // In this case, we know the device has been attached into the Guest.
+            *ref_count += 1;
+            Ok(true)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::device::util::do_increase_count;
     use crate::device::util::get_virt_drive_name;
 
     #[actix_rt::test]
@@ -87,5 +111,46 @@ mod tests {
             let out = get_virt_drive_name(input).unwrap();
             assert_eq!(&out, output);
         }
+    }
+
+    #[test]
+    fn test_do_increase_count() {
+        // First, ref_count is 0
+        let ref_count_0 = &mut 0_u64;
+        assert!(!do_increase_count(ref_count_0).unwrap());
+
+        // Second, ref_count > 0
+        let ref_count_3 = &mut 3_u64;
+        assert!(do_increase_count(ref_count_3).unwrap());
+
+        // Third, ref_count is MAX
+        let mut max_count = std::u64::MAX;
+        let ref_count_max: &mut u64 = &mut max_count;
+        let _ = do_increase_count(ref_count_max).is_err();
+    }
+
+    #[test]
+    fn test_data_reference_count() {
+        #[derive(Default)]
+        struct TestData {
+            ref_cnt: u64,
+        }
+
+        impl TestData {
+            fn attach(&mut self) -> bool {
+                do_increase_count(&mut self.ref_cnt).unwrap()
+            }
+        }
+
+        let testd = &mut TestData { ref_cnt: 0_u64 };
+
+        // First, ref_cnt is 0
+        assert!(!testd.attach());
+        assert_eq!(testd.ref_cnt, 1_u64);
+        // Second, ref_cnt > 0
+        assert!(testd.attach());
+        assert_eq!(testd.ref_cnt, 2_u64);
+        assert!(testd.attach());
+        assert_eq!(testd.ref_cnt, 3_u64);
     }
 }
