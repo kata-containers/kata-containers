@@ -18,7 +18,6 @@ lazy_static! {
     static ref BUILTIN_COMMANDS: Vec<Box<dyn Describe + Sync>> = vec![
         Box::new(Echo),
         Box::new(Help),
-        Box::new(List),
         Box::new(Repeat),
         Box::new(Sleep),
         Box::new(Quit),
@@ -2039,8 +2038,6 @@ pub fn parse_builtin_cmd(cmd: &str) -> Result<Box<dyn BuiltinCmd>> {
 
         "echo" => Ok(Box::new(Echo {})),
 
-        "list" => Ok(Box::new(List {})),
-
         "repeat" => Ok(Box::new(Repeat {})),
 
         "sleep" => Ok(Box::new(Sleep {})),
@@ -2081,23 +2078,6 @@ impl Describe for Help {
 }
 
 impl BuiltinCmd for Help {
-    fn exec(&self, _args: &str) -> (Result<()>, bool) {
-        cmd_list();
-
-        (Ok(()), false)
-    }
-}
-
-#[derive(Default, Clone, Debug)]
-struct List;
-
-impl Describe for List {
-    fn describe(&self) -> &str {
-        "list: List all available commands"
-    }
-}
-
-impl BuiltinCmd for List {
     fn exec(&self, _args: &str) -> (Result<()>, bool) {
         cmd_list();
 

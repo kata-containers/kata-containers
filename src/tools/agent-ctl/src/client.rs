@@ -20,7 +20,7 @@ use std::os::unix::net::UnixStream;
 use ttrpc::context::Context;
 
 #[macro_use]
-mod command;
+pub mod command;
 
 // Command that requests this program ends
 const CMD_REPEAT: &str = "repeat";
@@ -240,13 +240,6 @@ fn announce(cfg: &Config) {
 }
 
 pub fn client(cfg: &Config, commands: Vec<&str>) -> Result<()> {
-    if commands.len() == 1 && commands[0].eq("list") {
-        // print_cmd_list!();
-        command::cmd_list();
-
-        return Ok(());
-    }
-
     announce(cfg);
 
     // Create separate connections for each of the services provided

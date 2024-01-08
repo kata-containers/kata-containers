@@ -78,7 +78,7 @@ fn make_examples_text(program_name: &str) -> String {
 
 - List all available (built-in and Kata Agent API) commands:
 
-  $ {program} connect --server-address "{vsock_server_address}" --cmd list
+  $ {program} cmd-list
 
 - Generate a random container ID:
 
@@ -291,6 +291,10 @@ fn real_main() -> Result<()> {
                     .about("Create a random sandbox ID")
                 )
                 .subcommand(
+                    SubCommand::with_name("cmd-list")
+                    .about("List all available commands")
+                )
+                .subcommand(
                     SubCommand::with_name("examples")
                     .about("Show usage examples")
                 );
@@ -315,6 +319,10 @@ fn real_main() -> Result<()> {
             Ok(())
         }
         "connect" => connect(name, args),
+        "cmd-list" => {
+            client::command::cmd_list();
+            Ok(())
+        }
         _ => Err(anyhow!(format!("invalid sub-command: {:?}", subcmd))),
     }
 }
