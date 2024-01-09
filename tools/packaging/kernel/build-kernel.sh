@@ -151,7 +151,7 @@ get_tee_kernel() {
 
 	local kernel_tarball="${version}.tar.gz"
 
-	# Depending on where we're getting the terball from it may have a
+	# Depending on where we're getting the tarball from it may have a
 	# different name, such as linux-${version}.tar.gz or simply
 	# ${version}.tar.gz.  Let's try both before failing.
 	curl --fail -L "${kernel_url}/linux-${kernel_tarball}" -o ${kernel_tarball} || curl --fail -OL "${kernel_url}/${kernel_tarball}"
