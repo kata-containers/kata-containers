@@ -1038,9 +1038,7 @@ impl DeviceManager {
     pub fn get_pci_bus_resources(&self) -> Option<PciBusResources> {
         let mut vfio_dev_mgr = self.vfio_manager.lock().unwrap();
         let vfio_pci_mgr = vfio_dev_mgr.get_pci_manager();
-        if vfio_pci_mgr.is_none() {
-            return None;
-        }
+        vfio_pci_mgr.as_ref()?;
         let pci_manager = vfio_pci_mgr.unwrap();
         let ecam_space = pci_manager.get_ecam_space();
         let bar_space = pci_manager.get_bar_space();
