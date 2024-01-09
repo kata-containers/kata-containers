@@ -56,7 +56,7 @@ fn do_setup_guest_dns(logger: Logger, dns_list: &[String], src: &str, dst: &str)
     }
 
     if attr.unwrap().is_dir() {
-        return Err(anyhow!("{} is a directory", GUEST_DNS_FILE));
+        return Err(anyhow!("{} is a directory", dst));
     }
 
     // write DNS to file
