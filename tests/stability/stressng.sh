@@ -11,8 +11,6 @@ SCRIPT_PATH=$(dirname "$(readlink -f "$0")")
 source "${SCRIPT_PATH}/../metrics/lib/common.bash"
 
 PAYLOAD_ARGS="${PAYLOAD_ARGS:-tail -f /dev/null}"
-DOCKERFILE="${SCRIPT_PATH}/stressng_dockerfile/Dockerfile"
-IMAGE="docker.io/library/local-stressng:latest"
 CONTAINER_NAME="${CONTAINER_NAME:-stressng_test}"
 
 function main() {
@@ -20,7 +18,6 @@ function main() {
 
 	init_env
 	check_cmds "${cmds[@]}"
-	check_ctr_images "${IMAGE}" "${DOCKERFILE}"
 	sudo -E ctr run -d --runtime "${CTR_RUNTIME}" "${IMAGE}" "${CONTAINER_NAME}" sh -c "${PAYLOAD_ARGS}"
 
 	# Run 1 iomix stressor (mix of I/O operations) for 20 seconds with verbose output
