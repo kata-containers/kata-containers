@@ -81,6 +81,7 @@ jobs:
           - "ubuntu-20.04"
           - "arm-no-k8s"
           - "s390x"
+          - "ppc64le"
     runs-on: ${{ matrix.instance }}
     steps:
       - name: Adjust a permission for repo
