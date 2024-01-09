@@ -95,6 +95,7 @@ mod tests {
     use std::fs::{create_dir, File};
     use std::path::Path;
     use tempfile::tempdir;
+    use test_utils::skip_if_not_root;
 
     #[test]
     fn test_init_container_validate() {
@@ -113,6 +114,8 @@ mod tests {
 
     #[test]
     fn test_init_container_create_launcher() {
+        #[cfg(target_arch = "powerpc64")]
+        skip_if_not_root!();
         let logger = slog::Logger::root(slog::Discard, o!());
         let root_dir = tempdir().unwrap();
         let bundle_dir = tempdir().unwrap();
