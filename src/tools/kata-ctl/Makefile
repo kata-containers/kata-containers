@@ -32,6 +32,12 @@ GENERATED_FILES := $(GENERATED_CODE)
 
 .DEFAULT_GOAL := default
 
+ifeq ($(ARCH), ppc64le)
+default build check test vendor:
+	@echo "Building kata-ctl on $(ARCH) is currently being skipped"
+	exit 0
+else
+
 default: $(TARGET) build
 
 $(TARGET): $(GENERATED_CODE)
@@ -59,6 +65,8 @@ install:
 	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo install --locked --target $(TRIPLE) --path . --root $(INSTALL_PATH)
 
 check: $(GENERATED_CODE) standard_rust_check
+
+endif
 
 .PHONY: \
 	build \
