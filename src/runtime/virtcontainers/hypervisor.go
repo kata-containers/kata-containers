@@ -671,6 +671,10 @@ type HypervisorConfig struct {
 
 	// ExtraMonitorSocket allows to add an extra HMP or QMP socket when the VMM is Qemu
 	ExtraMonitorSocket govmmQemu.MonitorProtocol
+
+	// Policy text, for sandboxes created using a valid io.katacontainers.config.agent.policy
+	// annotation
+	AgentPolicy string
 }
 
 // vcpu mapping from vcpu number to thread number

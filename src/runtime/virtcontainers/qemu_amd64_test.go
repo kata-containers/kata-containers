@@ -9,6 +9,10 @@ package virtcontainers
 
 import (
 	"context"
+	"crypto/sha256"
+	"crypto/sha512"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"testing"
@@ -247,6 +251,34 @@ func TestQemuAmd64Microvm(t *testing.T) {
 	assert.False(amd64.supportGuestMemoryHotplug())
 }
 
+// return the policy hash in the host-data format expected by QEMU for SEV-SNP.
+func testSnpHostData(policy string) string {
+	if len(policy) == 0 {
+		return ""
+	}
+
+	h := sha256.New()
+	h.Write([]byte(policy))
+	hash := h.Sum(nil)
+
+	encoded_hash := make([]byte, base64.StdEncoding.EncodedLen(len(hash)))
+	base64.StdEncoding.Encode(encoded_hash, hash)
+	return string(encoded_hash)
+}
+
+// return the policy hash in the mrconfigid format expected by QEMU for TDX.
+func testTdxMRCONFIGID(policy string) string {
+	if len(policy) == 0 {
+		return ""
+	}
+
+	h := sha512.New384()
+	h.Write([]byte(policy))
+	hash := h.Sum(nil)
+
+	return hex.EncodeToString(hash)
+}
+
 func TestQemuAmd64AppendProtectionDevice(t *testing.T) {
 	var devices []govmmQemu.Device
 	assert := assert.New(t)
@@ -255,30 +287,48 @@ func TestQemuAmd64AppendProtectionDevice(t *testing.T) {
 
 	id := amd64.(*qemuAmd64).devLoadersCount
 	firmware := "tdvf.fd"
+	policy := "package test1"
+	hostData := testSnpHostData(policy)
+	mrconfigid := testTdxMRCONFIGID(policy)
 	var bios string
 	var err error
-	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "")
-	assert.NoError(err)
 
 	// non-protection
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "", "")
+	assert.NoError(err)
+	assert.NotEmpty(bios)
+
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "", policy)
+	assert.NoError(err)
 	assert.NotEmpty(bios)
 
 	// pef protection
 	amd64.(*qemuAmd64).protection = pefProtection
-	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "")
+
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "", "")
+	assert.Error(err)
+	assert.Empty(bios)
+
+	amd64.(*qemuAmd64).protection = pefProtection
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "", policy)
 	assert.Error(err)
 	assert.Empty(bios)
 
 	// Secure Execution protection
 	amd64.(*qemuAmd64).protection = seProtection
-	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "")
+
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "", "")
+	assert.Error(err)
+	assert.Empty(bios)
+
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "", policy)
 	assert.Error(err)
 	assert.Empty(bios)
 
 	// sev protection
 	amd64.(*qemuAmd64).protection = sevProtection
 
-	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "")
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "", "")
 	assert.NoError(err)
 	assert.Empty(bios)
 
@@ -295,10 +345,27 @@ func TestQemuAmd64AppendProtectionDevice(t *testing.T) {
 
 	assert.Equal(expectedOut, devices)
 
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "", policy)
+	assert.NoError(err)
+	assert.Empty(bios)
+
+	expectedOut = append(expectedOut,
+		govmmQemu.Object{
+			Type:            govmmQemu.SEVGuest,
+			ID:              "sev",
+			Debug:           false,
+			File:            firmware,
+			CBitPos:         cpuid.AMDMemEncrypt.CBitPosition,
+			ReducedPhysBits: 1,
+		},
+	)
+
+	assert.Equal(expectedOut, devices)
+
 	// snp protection
 	amd64.(*qemuAmd64).protection = snpProtection
 
-	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "")
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "", "")
 	assert.NoError(err)
 	assert.Empty(bios)
 
@@ -313,12 +380,28 @@ func TestQemuAmd64AppendProtectionDevice(t *testing.T) {
 		},
 	)
 
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "", policy)
+	assert.NoError(err)
+	assert.Empty(bios)
+
+	expectedOut = append(expectedOut,
+		govmmQemu.Object{
+			Type:            govmmQemu.SNPGuest,
+			ID:              "snp",
+			Debug:           false,
+			File:            firmware,
+			CBitPos:         cpuid.AMDMemEncrypt.CBitPosition,
+			ReducedPhysBits: 1,
+			TEEConfigData:   hostData,
+		},
+	)
+
 	assert.Equal(expectedOut, devices)
 
 	// tdxProtection
 	amd64.(*qemuAmd64).protection = tdxProtection
 
-	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "")
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "", "")
 	assert.NoError(err)
 	assert.Empty(bios)
 
@@ -330,6 +413,25 @@ func TestQemuAmd64AppendProtectionDevice(t *testing.T) {
 			DeviceID: fmt.Sprintf("fd%d", id),
 			Debug:    false,
 			File:     firmware,
+		},
+	)
+
+	assert.Equal(expectedOut, devices)
+
+	id += 1
+	devices, bios, err = amd64.appendProtectionDevice(devices, firmware, "", policy)
+	assert.NoError(err)
+	assert.Empty(bios)
+
+	expectedOut = append(expectedOut,
+		govmmQemu.Object{
+			Driver:        govmmQemu.Loader,
+			Type:          govmmQemu.TDXGuest,
+			ID:            "tdx",
+			DeviceID:      fmt.Sprintf("fd%d", id),
+			Debug:         false,
+			File:          firmware,
+			TEEConfigData: mrconfigid,
 		},
 	)
 

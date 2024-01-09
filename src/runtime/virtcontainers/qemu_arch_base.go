@@ -162,7 +162,7 @@ type qemuArch interface {
 	// This implementation is architecture specific, some archs may need
 	// a firmware, returns a string containing the path to the firmware that should
 	// be used with the -bios option, ommit -bios option if the path is empty.
-	appendProtectionDevice(devices []govmmQemu.Device, firmware, firmwareVolume string) ([]govmmQemu.Device, string, error)
+	appendProtectionDevice(devices []govmmQemu.Device, firmware, firmwareVolume string, agentPolicy string) ([]govmmQemu.Device, string, error)
 
 	// scans the PCIe space and returns the biggest BAR sizes for 32-bit
 	// and 64-bit addressable memory
@@ -897,7 +897,7 @@ func (q *qemuArchBase) setPFlash(p []string) {
 }
 
 // append protection device
-func (q *qemuArchBase) appendProtectionDevice(devices []govmmQemu.Device, firmware, firmwareVolume string) ([]govmmQemu.Device, string, error) {
+func (q *qemuArchBase) appendProtectionDevice(devices []govmmQemu.Device, firmware, firmwareVolume string, agentPolicy string) ([]govmmQemu.Device, string, error) {
 	hvLogger.WithField("arch", runtime.GOARCH).Warnf("Confidential Computing has not been implemented for this architecture")
 	return devices, firmware, nil
 }

@@ -698,7 +698,7 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		PidFile:        filepath.Join(q.config.VMStorePath, q.id, "pid"),
 	}
 
-	qemuConfig.Devices, qemuConfig.Bios, err = q.arch.appendProtectionDevice(qemuConfig.Devices, firmwarePath, firmwareVolumePath)
+	qemuConfig.Devices, qemuConfig.Bios, err = q.arch.appendProtectionDevice(qemuConfig.Devices, firmwarePath, firmwareVolumePath, q.config.AgentPolicy)
 	if err != nil {
 		return err
 	}
