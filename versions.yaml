@@ -281,7 +281,7 @@ externals:
     uscan-url: >-
       https://github.com/opencontainers/runc/tags
       .*/v?(\d\S+)\.tar\.gz
-    version: "v1.1.4"
+    version: "v1.1.11"
 
   nydus:
     description: "Nydus image acceleration service"
