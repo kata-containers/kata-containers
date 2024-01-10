@@ -110,7 +110,7 @@ Options:
 	-t <hypervisor>	: Hypervisor_target.
 	-u <url>	: Kernel URL to be used to download the kernel tarball.
 	-v <version>	: Kernel version to use if kernel path not provided.
-	-x <type>	: Confidential guest protection type, such as sev, snp and tdx
+	-x <type>	: Confidential guest protection type, such as sev, snp, tdx, or "confidential" (for all of those).
 EOF
 	exit "$exit_code"
 }
@@ -151,7 +151,7 @@ get_tee_kernel() {
 
 	local kernel_tarball="${version}.tar.gz"
 
-	# Depending on where we're getting the terball from it may have a
+	# Depending on where we're getting the tarball from it may have a
 	# different name, such as linux-${version}.tar.gz or simply
 	# ${version}.tar.gz.  Let's try both before failing.
 	curl --fail -L "${kernel_url}/linux-${kernel_tarball}" -o ${kernel_tarball} || curl --fail -OL "${kernel_url}/${kernel_tarball}"
@@ -457,7 +457,7 @@ build_kernel() {
 	arch_target=$(arch_to_kernel "${arch_target}")
 	pushd "${kernel_path}" >>/dev/null
 	make -j $(nproc ${CI:+--ignore 1}) ARCH="${arch_target}" ${CROSS_BUILD_ARG}
-	if [ "${conf_guest}" == "sev" ]; then
+	if [ "${conf_guest}" == "sev" ] || [ "${conf_guest}" == "confidential" ]; then
 		make -j $(nproc ${CI:+--ignore 1}) INSTALL_MOD_STRIP=1 INSTALL_MOD_PATH=${kernel_path} modules_install
 	fi
 	[ "$arch_target" != "powerpc" ] && ([ -e "arch/${arch_target}/boot/bzImage" ] || [ -e "arch/${arch_target}/boot/Image.gz" ])
@@ -603,7 +603,7 @@ main() {
 			x)
 				conf_guest="${OPTARG}"
 				case "$conf_guest" in
-					sev|snp|tdx) ;;
+					confidential|sev|snp|tdx) ;;
 					*) die "Confidential guest type '$conf_guest' not supported" ;;
 				esac
 				;;
