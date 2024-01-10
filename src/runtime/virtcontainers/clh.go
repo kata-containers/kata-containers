@@ -84,6 +84,7 @@ const (
 	clhAPISocket                           = "clh-api.sock"
 	virtioFsSocket                         = "virtiofsd.sock"
 	defaultClhPath                         = "/usr/local/bin/cloud-hypervisor"
+	dmModCreateParam                       = "dm-mod.create"
 )
 
 // Interface that hides the implementation of openAPI client
@@ -522,7 +523,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	// Set initial amount of cpu's for the virtual machine
 	clh.vmconfig.Cpus = chclient.NewCpusConfig(int32(clh.config.NumVCPUs()), int32(clh.config.DefaultMaxVCPUs))
 
-	params, err := GetKernelRootParams(hypervisorConfig.RootfsType, clh.config.ConfidentialGuest, false)
+	params, err := GetKernelRootParams(hypervisorConfig.RootfsType, clh.config.ConfidentialGuest, false, clh.config.KernelParams)
 	if err != nil {
 		return err
 	}
@@ -547,7 +548,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	}
 
 	// Followed by extra kernel parameters defined in the configuration file
-	params = append(params, clh.config.KernelParams...)
+	params = appendConfigFileParams(params, clh.config.KernelParams)
 
 	clh.vmconfig.Payload.SetCmdline(kernelParamsToString(params))
 

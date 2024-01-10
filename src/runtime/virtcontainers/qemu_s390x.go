@@ -83,7 +83,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 	}
 
 	if config.ImagePath != "" {
-		kernelParams, err := GetKernelRootParams(config.RootfsType, true, false)
+		kernelParams, err := GetKernelRootParams(config.RootfsType, true, false, config.KernelParams)
 		if err != nil {
 			return nil, err
 		}

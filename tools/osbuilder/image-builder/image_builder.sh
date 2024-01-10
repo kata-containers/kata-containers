@@ -12,6 +12,7 @@ set -o pipefail
 
 DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
+DM_VERITY_FORMAT=${DM_VERITY_FORMAT:-veritysetup}
 
 #For cross build
 CROSS_BUILD=${CROSS_BUILD:-false}
@@ -197,6 +198,7 @@ build_with_container() {
 		   --env ROOT_FREE_SPACE="${root_free_space}" \
 		   --env NSDAX_BIN="${nsdax_bin}" \
 		   --env MEASURED_ROOTFS="${MEASURED_ROOTFS}" \
+		   --env DM_VERITY_FORMAT="${DM_VERITY_FORMAT}" \
 		   --env SELINUX="${SELINUX}" \
 		   --env DEBUG="${DEBUG}" \
 		   --env ARCH="${ARCH}" \
@@ -517,9 +519,27 @@ create_rootfs_image() {
 	fi
 
 	if [ "${MEASURED_ROOTFS}" == "yes" ] && [ -b "${device}p2" ]; then
-		info "veritysetup format rootfs device: ${device}p1, hash device: ${device}p2"
+		setup_cmd="veritysetup format ${device}p1 ${device}p2"
+
+		case "${DM_VERITY_FORMAT}" in
+			veritysetup)
+				# Partition format compatible with "veritysetup open" but not with kernel's
+				# "dm-mod.create" command line parameter.
+				;;
+			kernelinit)
+				# Partition format compatible with kernel's "dm-mod.create" command line
+				# parameter but not with "veritysetup open".
+				setup_cmd+=" --no-superblock"
+				;;
+			*)
+				error "DM_VERITY_FORMAT(${DM_VERITY_FORMAT}) is incorrect (must be veritysetup or kernelinit)"
+				return 1
+				;;
+		esac
+
+		info "${setup_cmd}"
 		local image_dir=$(dirname "${image}")
-		veritysetup format "${device}p1" "${device}p2" > "${image_dir}"/root_hash.txt 2>&1
+		eval "${setup_cmd}" > "${image_dir}"/root_hash.txt 2>&1
 	fi
 
 	losetup -d "${device}"

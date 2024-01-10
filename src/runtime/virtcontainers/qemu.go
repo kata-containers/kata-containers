@@ -198,7 +198,7 @@ func (q *qemu) kernelParameters() string {
 	// add the params specified by the provided config. As the kernel
 	// honours the last parameter value set and since the config-provided
 	// params are added here, they will take priority over the defaults.
-	params = append(params, q.config.KernelParams...)
+	params = appendConfigFileParams(params, q.config.KernelParams)
 
 	paramsStr := SerializeParams(params, "=")
 

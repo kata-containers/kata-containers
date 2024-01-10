@@ -18,146 +18,300 @@ import (
 func TestGetKernelRootParams(t *testing.T) {
 	assert := assert.New(t)
 	tests := []struct {
-		rootfstype    string
-		expected      []Param
-		disableNvdimm bool
-		dax           bool
-		error         bool
+		rootfstype       string
+		expected         []Param
+		disableNvdimm    bool
+		dax              bool
+		error            bool
+		configFileParams []Param
 	}{
 		// EXT4
 		{
 			rootfstype: string(EXT4),
 			expected: []Param{
-				{"root", string(Nvdimm)},
+				{"root", string(NvdimmRoot)},
 				{"rootflags", "data=ordered,errors=remount-ro ro"},
 				{"rootfstype", string(EXT4)},
 			},
-			disableNvdimm: false,
-			dax:           false,
-			error:         false,
+			disableNvdimm:    false,
+			dax:              false,
+			error:            false,
+			configFileParams: []Param{},
 		},
 		{
 			rootfstype: string(EXT4),
 			expected: []Param{
-				{"root", string(Nvdimm)},
+				{"root", string(NvdimmRoot)},
 				{"rootflags", "dax,data=ordered,errors=remount-ro ro"},
 				{"rootfstype", string(EXT4)},
 			},
-			disableNvdimm: false,
-			dax:           true,
-			error:         false,
+			disableNvdimm:    false,
+			dax:              true,
+			error:            false,
+			configFileParams: []Param{},
 		},
 		{
 			rootfstype: string(EXT4),
 			expected: []Param{
-				{"root", string(VirtioBlk)},
+				{"root", string(VirtioBlkRoot)},
 				{"rootflags", "data=ordered,errors=remount-ro ro"},
 				{"rootfstype", string(EXT4)},
 			},
-			disableNvdimm: true,
-			dax:           false,
-			error:         false,
+			disableNvdimm:    true,
+			dax:              false,
+			error:            false,
+			configFileParams: []Param{},
 		},
 
 		// XFS
 		{
 			rootfstype: string(XFS),
 			expected: []Param{
-				{"root", string(Nvdimm)},
+				{"root", string(NvdimmRoot)},
 				{"rootflags", "data=ordered,errors=remount-ro ro"},
 				{"rootfstype", string(XFS)},
 			},
-			disableNvdimm: false,
-			dax:           false,
-			error:         false,
+			disableNvdimm:    false,
+			dax:              false,
+			error:            false,
+			configFileParams: []Param{},
 		},
 		{
 			rootfstype: string(XFS),
 			expected: []Param{
-				{"root", string(Nvdimm)},
+				{"root", string(NvdimmRoot)},
 				{"rootflags", "dax,data=ordered,errors=remount-ro ro"},
 				{"rootfstype", string(XFS)},
 			},
-			disableNvdimm: false,
-			dax:           true,
-			error:         false,
+			disableNvdimm:    false,
+			dax:              true,
+			error:            false,
+			configFileParams: []Param{},
 		},
 		{
 			rootfstype: string(XFS),
 			expected: []Param{
-				{"root", string(VirtioBlk)},
+				{"root", string(VirtioBlkRoot)},
 				{"rootflags", "data=ordered,errors=remount-ro ro"},
 				{"rootfstype", string(XFS)},
 			},
-			disableNvdimm: true,
-			dax:           false,
-			error:         false,
+			disableNvdimm:    true,
+			dax:              false,
+			error:            false,
+			configFileParams: []Param{},
 		},
 
 		// EROFS
 		{
 			rootfstype: string(EROFS),
 			expected: []Param{
-				{"root", string(Nvdimm)},
+				{"root", string(NvdimmRoot)},
 				{"rootflags", "ro"},
 				{"rootfstype", string(EROFS)},
 			},
-			disableNvdimm: false,
-			dax:           false,
-			error:         false,
+			disableNvdimm:    false,
+			dax:              false,
+			error:            false,
+			configFileParams: []Param{},
 		},
 		{
 			rootfstype: string(EROFS),
 			expected: []Param{
-				{"root", string(Nvdimm)},
+				{"root", string(NvdimmRoot)},
 				{"rootflags", "dax ro"},
 				{"rootfstype", string(EROFS)},
 			},
-			disableNvdimm: false,
-			dax:           true,
-			error:         false,
+			disableNvdimm:    false,
+			dax:              true,
+			error:            false,
+			configFileParams: []Param{},
 		},
 		{
 			rootfstype: string(EROFS),
 			expected: []Param{
-				{"root", string(VirtioBlk)},
+				{"root", string(VirtioBlkRoot)},
 				{"rootflags", "ro"},
 				{"rootfstype", string(EROFS)},
 			},
-			disableNvdimm: true,
-			dax:           false,
-			error:         false,
+			disableNvdimm:    true,
+			dax:              false,
+			error:            false,
+			configFileParams: []Param{},
 		},
 
 		// Unsupported rootfs type
 		{
 			rootfstype: "foo",
 			expected: []Param{
-				{"root", string(VirtioBlk)},
+				{"root", string(VirtioBlkRoot)},
 				{"rootflags", "data=ordered,errors=remount-ro ro"},
 				{"rootfstype", string(EXT4)},
 			},
-			disableNvdimm: false,
-			dax:           false,
-			error:         true,
+			disableNvdimm:    false,
+			dax:              false,
+			error:            true,
+			configFileParams: []Param{},
 		},
 
 		// Nvdimm does not support DAX
 		{
 			rootfstype: string(EXT4),
 			expected: []Param{
-				{"root", string(VirtioBlk)},
+				{"root", string(VirtioBlkRoot)},
 				{"rootflags", "dax,data=ordered,errors=remount-ro ro"},
 				{"rootfstype", string(EXT4)},
 			},
-			disableNvdimm: true,
+			disableNvdimm:    true,
+			dax:              true,
+			error:            true,
+			configFileParams: []Param{},
+		},
+
+		// EXT4 + "dm-mod.create"
+		{
+			rootfstype: string(EXT4),
+			expected: []Param{
+				{"dm-mod.create", "foo"},
+				{"root", string(DMVerityRoot)},
+				{"rootflags", "data=ordered,errors=remount-ro ro"},
+				{"rootfstype", string(EXT4)},
+			},
+			disableNvdimm: false,
+			dax:           false,
+			error:         false,
+			configFileParams: []Param{
+				{"dm-mod.create", "foo"},
+			},
+		},
+		{
+			rootfstype: string(EXT4),
+			expected: []Param{
+				{"dm-mod.create", "\"bar baz\""},
+				{"root", string(DMVerityRoot)},
+				{"rootflags", "dax,data=ordered,errors=remount-ro ro"},
+				{"rootfstype", string(EXT4)},
+			},
+			disableNvdimm: false,
 			dax:           true,
-			error:         true,
+			error:         false,
+			configFileParams: []Param{
+				{"dm-mod.create", "\"bar baz\""},
+			},
+		},
+		{
+			rootfstype: string(EXT4),
+			expected: []Param{
+				{"dm-mod.create", "\"abc,defg hijk\""},
+				{"root", string(DMVerityRoot)},
+				{"rootflags", "data=ordered,errors=remount-ro ro"},
+				{"rootfstype", string(EXT4)},
+			},
+			disableNvdimm: true,
+			dax:           false,
+			error:         false,
+			configFileParams: []Param{
+				{"dm-mod.create", "\"abc,defg hijk\""},
+			},
+		},
+
+		// XFS + "dm-mod.create"
+		{
+			rootfstype: string(XFS),
+			expected: []Param{
+				{"dm-mod.create", "\"dm-verity,,,ro,0 123 verity 1 /dev/pmem0p1 /dev/pmem0p2 4096 4096 9876 0 sha256 MyVerityRootHash MyVeritySalt\""},
+				{"root", string(DMVerityRoot)},
+				{"rootflags", "data=ordered,errors=remount-ro ro"},
+				{"rootfstype", string(XFS)},
+			},
+			disableNvdimm: false,
+			dax:           false,
+			error:         false,
+			configFileParams: []Param{
+				{"dm-mod.create", "\"dm-verity,,,ro,0 123 verity 1 @ROOTFS_DEVICE@ @VERITY_DEVICE@ 4096 4096 9876 0 sha256 MyVerityRootHash MyVeritySalt\""},
+			},
+		},
+		{
+			rootfstype: string(XFS),
+			expected: []Param{
+				{"dm-mod.create", "\"dm-verity,X,Y,ro,0 123 verity 1 /dev/pmem0p1 /dev/pmem0p2 4096 4096 9876 0 sha256 MyVerityRootHash MyVeritySalt\""},
+				{"root", string(DMVerityRoot)},
+				{"rootflags", "dax,data=ordered,errors=remount-ro ro"},
+				{"rootfstype", string(XFS)},
+			},
+			disableNvdimm: false,
+			dax:           true,
+			error:         false,
+			configFileParams: []Param{
+				{"dm-mod.create", "\"dm-verity,X,Y,ro,0 123 verity 1 /dev/pmem0p1 /dev/pmem0p2 4096 4096 9876 0 sha256 MyVerityRootHash MyVeritySalt\""},
+			},
+		},
+		{
+			rootfstype: string(XFS),
+			expected: []Param{
+				{"dm-mod.create", "\"dm-verity,,,ro,0 123 verity 1 /dev/vda1 /dev/vda2 4096 4096 9876 0 sha256 MyVerityRootHash MyVeritySalt\""},
+				{"root", string(DMVerityRoot)},
+				{"rootflags", "data=ordered,errors=remount-ro ro"},
+				{"rootfstype", string(XFS)},
+			},
+			disableNvdimm: true,
+			dax:           false,
+			error:         false,
+			configFileParams: []Param{
+				{"dm-mod.create", "\"dm-verity,,,ro,0 123 verity 1 @ROOTFS_DEVICE@ @VERITY_DEVICE@ 4096 4096 9876 0 sha256 MyVerityRootHash MyVeritySalt\""},
+			},
+		},
+
+		// EROFS + config params other than "dm-mod.create"
+		{
+			rootfstype: string(EROFS),
+			expected: []Param{
+				{"root", string(NvdimmRoot)},
+				{"rootflags", "ro"},
+				{"rootfstype", string(EROFS)},
+			},
+			disableNvdimm: false,
+			dax:           false,
+			error:         false,
+			configFileParams: []Param{
+				{"aaaaaaaaaaaaaaaa", "bbbb"},
+			},
+		},
+		{
+			rootfstype: string(EROFS),
+			expected: []Param{
+				{"root", string(NvdimmRoot)},
+				{"rootflags", "dax ro"},
+				{"rootfstype", string(EROFS)},
+			},
+			disableNvdimm: false,
+			dax:           true,
+			error:         false,
+			configFileParams: []Param{
+				{"zzz", ""},
+				{"aaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+			},
+		},
+		{
+			rootfstype: string(EROFS),
+			expected: []Param{
+				{"dm-mod.create", "\"dm-verity,,,ro,0 123 verity 1 /dev/vda1 /dev/vda2 4096 4096 9876 0 sha256 MyVerityRootHash MyVeritySalt\""},
+				{"root", string(DMVerityRoot)},
+				{"rootflags", "ro"},
+				{"rootfstype", string(EROFS)},
+			},
+			disableNvdimm: true,
+			dax:           false,
+			error:         false,
+			configFileParams: []Param{
+				{"zzz", ""},
+				{"dm-mod.create", "\"dm-verity,,,ro,0 123 verity 1 @ROOTFS_DEVICE@ @VERITY_DEVICE@ 4096 4096 9876 0 sha256 MyVerityRootHash MyVeritySalt\""},
+				{"aaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+			},
 		},
 	}
 
 	for _, t := range tests {
-		kernelRootParams, err := GetKernelRootParams(t.rootfstype, t.disableNvdimm, t.dax)
+		kernelRootParams, err := GetKernelRootParams(t.rootfstype, t.disableNvdimm, t.dax, t.configFileParams)
 		if t.error {
 			assert.Error(err)
 			continue
