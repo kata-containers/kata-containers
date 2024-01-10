@@ -12,8 +12,6 @@ use slog::{debug, info};
 use std::{thread::sleep, time::Duration};
 use ttrpc::context::Context;
 
-const REQUEST_BUILD_FAIL_MESSAGE: &str = "Fail to build request";
-
 lazy_static! {
     static ref BUILTIN_COMMANDS: Vec<Box<dyn Describe + Sync>> = vec![
         Box::new(Echo),
@@ -214,12 +212,7 @@ impl AgentCmd for AddARPNeighbors {
     ) -> (Result<()>, bool) {
         let req: AddARPNeighborsRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         // FIXME: Implement fully.
@@ -292,12 +285,7 @@ impl AgentCmd for Check {
     ) -> (Result<()>, bool) {
         let req: CheckRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
@@ -333,12 +321,7 @@ impl AgentCmd for Version {
         // XXX: Yes, the API is actually broken!
         let req: CheckRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
@@ -373,12 +356,7 @@ impl AgentCmd for CloseStdin {
     ) -> (Result<()>, bool) {
         let mut req: CloseStdinRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         check_auto_values!(ctx, || -> Result<()> {
@@ -423,12 +401,7 @@ impl AgentCmd for CopyFile {
     ) -> (Result<()>, bool) {
         let mut req: CopyFileRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         check_auto_values!(ctx, || -> Result<()> {
@@ -536,12 +509,7 @@ impl AgentCmd for CreateContainer {
     ) -> (Result<()>, bool) {
         let mut req: CreateContainerRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         // FIXME: container create: add back "spec=file:///" support
@@ -590,12 +558,7 @@ impl AgentCmd for CreateSandbox {
     ) -> (Result<()>, bool) {
         let mut req: CreateSandboxRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         check_auto_values!(ctx, || -> Result<()> {
@@ -637,12 +600,7 @@ impl AgentCmd for DestroySandbox {
     ) -> (Result<()>, bool) {
         let req: DestroySandboxRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
@@ -677,12 +635,7 @@ impl AgentCmd for ExecProcess {
     ) -> (Result<()>, bool) {
         let mut req: ExecProcessRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         check_auto_values!(ctx, || -> Result<()> {
@@ -745,12 +698,7 @@ impl AgentCmd for GetGuestDetails {
     ) -> (Result<()>, bool) {
         let mut req: GuestDetailsRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         check_auto_values!(ctx, || -> Result<()> {
@@ -792,12 +740,7 @@ impl AgentCmd for GetIptables {
     ) -> (Result<()>, bool) {
         let req: GetIPTablesRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
@@ -832,12 +775,7 @@ impl AgentCmd for GetMetrics {
     ) -> (Result<()>, bool) {
         let req: GetMetricsRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
@@ -872,12 +810,7 @@ impl AgentCmd for GetOOMEvent {
     ) -> (Result<()>, bool) {
         let req: GetOOMEventRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
@@ -912,12 +845,7 @@ impl AgentCmd for GetVolumeStats {
     ) -> (Result<()>, bool) {
         let req: VolumeStatsRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
@@ -952,12 +880,7 @@ impl AgentCmd for ListInterfaces {
     ) -> (Result<()>, bool) {
         let req: ListInterfacesRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
@@ -992,12 +915,7 @@ impl AgentCmd for ListRoutes {
     ) -> (Result<()>, bool) {
         let req: ListRoutesRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
@@ -1033,12 +951,7 @@ impl AgentCmd for MemHotplugByProbe {
     ) -> (Result<()>, bool) {
         let mut req: MemHotplugByProbeRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         // Expected to be a comma separated list of hex addresses
@@ -1103,12 +1016,7 @@ impl AgentCmd for OnlineCPUMem {
     ) -> (Result<()>, bool) {
         let mut req: OnlineCPUMemRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         check_auto_values!(ctx, || -> Result<()> {
@@ -1177,12 +1085,7 @@ impl AgentCmd for PauseContainer {
     ) -> (Result<()>, bool) {
         let mut req: PauseContainerRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         check_auto_values!(ctx, || -> Result<()> {
@@ -1224,12 +1127,7 @@ impl AgentCmd for ReadStderr {
     ) -> (Result<()>, bool) {
         let mut req: ReadStreamRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         check_auto_values!(ctx, || -> Result<()> {
@@ -1283,12 +1181,7 @@ impl AgentCmd for ReadStdout {
     ) -> (Result<()>, bool) {
         let mut req: ReadStreamRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         check_auto_values!(ctx, || -> Result<()> {
@@ -1342,12 +1235,7 @@ impl AgentCmd for ReseedRandomDev {
     ) -> (Result<()>, bool) {
         let mut req: ReseedRandomDevRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         check_auto_values!(ctx, || -> Result<()> {
@@ -1391,12 +1279,7 @@ impl AgentCmd for RemoveContainer {
     ) -> (Result<()>, bool) {
         let mut req: RemoveContainerRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         check_auto_values!(ctx, || -> Result<()> {
@@ -1437,12 +1320,7 @@ impl AgentCmd for ResumeContainer {
     ) -> (Result<()>, bool) {
         let mut req: ResumeContainerRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         check_auto_values!(ctx, || -> Result<()> {
@@ -1484,12 +1362,7 @@ impl AgentCmd for SetGuestDateTime {
     ) -> (Result<()>, bool) {
         let mut req: SetGuestDateTimeRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         check_auto_values!(ctx, || -> Result<()> {
@@ -1548,12 +1421,7 @@ impl AgentCmd for SetIptables {
     ) -> (Result<()>, bool) {
         let req: SetIPTablesRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
@@ -1588,12 +1456,7 @@ impl AgentCmd for SignalProcess {
     ) -> (Result<()>, bool) {
         let mut req: SignalProcessRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         check_auto_values!(ctx, || -> Result<()> {
@@ -1648,12 +1511,7 @@ impl AgentCmd for StartContainer {
     ) -> (Result<()>, bool) {
         let mut req: StartContainerRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         check_auto_values!(ctx, || -> Result<()> {
@@ -1695,12 +1553,7 @@ impl AgentCmd for StatsContainer {
     ) -> (Result<()>, bool) {
         let mut req: StatsContainerRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         check_auto_values!(ctx, || -> Result<()> {
@@ -1742,12 +1595,7 @@ impl AgentCmd for TtyWinResize {
     ) -> (Result<()>, bool) {
         let mut req: TtyWinResizeRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         check_auto_values!(ctx, || -> Result<()> {
@@ -1811,12 +1659,7 @@ impl AgentCmd for UpdateContainer {
     ) -> (Result<()>, bool) {
         let mut req: UpdateContainerRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         check_auto_values!(ctx, || -> Result<()> {
@@ -1862,12 +1705,7 @@ impl AgentCmd for UpdateInterface {
     ) -> (Result<()>, bool) {
         let req: UpdateInterfaceRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         // FIXME: Implement 'UpdateInterface' fully.
@@ -1905,12 +1743,7 @@ impl AgentCmd for UpdateRoutes {
     ) -> (Result<()>, bool) {
         let req: UpdateRoutesRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         // FIXME: Implement 'UpdateRoutes' fully.
@@ -1948,12 +1781,7 @@ impl AgentCmd for WaitProcess {
     ) -> (Result<()>, bool) {
         let mut req: WaitProcessRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         check_auto_values!(ctx, || -> Result<()> {
@@ -1998,12 +1826,7 @@ impl AgentCmd for WriteStdin {
     ) -> (Result<()>, bool) {
         let mut req: WriteStreamRequest = match utils::make_request(args) {
             Ok(res) => res,
-            Err(e) => {
-                return (
-                    Err(anyhow!("{:?}", e).context(REQUEST_BUILD_FAIL_MESSAGE)),
-                    false,
-                )
-            }
+            Err(e) => return (Err(e), false),
         };
 
         check_auto_values!(ctx, || -> Result<()> {
