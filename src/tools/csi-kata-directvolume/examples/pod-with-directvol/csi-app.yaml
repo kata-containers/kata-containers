@@ -1,0 +1,18 @@
+kind: Pod
+apiVersion: v1
+metadata:
+  name: kata-driectvol-01
+spec:
+  runtimeClassName: kata
+  containers:
+    - name: first-container
+      image: ubuntu:22.04 
+      volumeMounts:
+      - mountPath: "/data"
+        name: kata-driectvol0-volume
+      command: [ "sleep", "1000000" ]
+  volumes:
+    - name: kata-driectvol0-volume
+      persistentVolumeClaim:
+        claimName: csi-directvolume-pvc # defined in csi-pvc.yaml
+

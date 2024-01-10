@@ -10,7 +10,7 @@ license = "Apache-2.0"
 [dependencies]
 anyhow = "^1.0"
 async-trait = "0.1.48"
-containerd-shim-protos = { version = "0.3.0", features = ["async"]}
+containerd-shim-protos = { version = "0.6.0", features = ["async"]}
 lazy_static = "1.4.0"
 nix = "0.24.2"
 protobuf = "3.2.0"
@@ -20,10 +20,11 @@ slog-scope = "4.4.0"
 strum = { version = "0.24.0", features = ["derive"] }
 thiserror = "^1.0"
 tokio = { version = "1.28.1", features = ["rt-multi-thread", "process", "fs"] }
-ttrpc = { version = "0.7.1" }
+ttrpc = "0.8"
 persist = {path = "../../persist"}
 agent = { path = "../../agent" }
 kata-sys-util = { path = "../../../../libs/kata-sys-util" }
 kata-types = { path = "../../../../libs/kata-types" }
 oci = { path = "../../../../libs/oci" }
+resource = { path = "../../resource" }
 

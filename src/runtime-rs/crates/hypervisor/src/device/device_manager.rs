@@ -8,15 +8,18 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::rand::RandomBytes;
+use kata_types::config::hypervisor::TopologyConfigInfo;
 use tokio::sync::{Mutex, RwLock};
 
 use crate::{
     vhost_user_blk::VhostUserBlkDevice, BlockConfig, BlockDevice, HybridVsockDevice, Hypervisor,
-    NetworkDevice, ShareFsDevice, VfioDevice, VhostUserConfig, VsockDevice, KATA_BLK_DEV_TYPE,
-    KATA_MMIO_BLK_DEV_TYPE, KATA_NVDIMM_DEV_TYPE, VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
+    NetworkDevice, ShareFsDevice, VfioDevice, VhostUserConfig, VhostUserNetDevice, VsockDevice,
+    KATA_BLK_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE, KATA_NVDIMM_DEV_TYPE, VIRTIO_BLOCK_MMIO,
+    VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
 };
 
 use super::{
+    topology::PCIeTopology,
     util::{get_host_path, get_virt_drive_name, DEVICE_TYPE_BLOCK},
     Device, DeviceConfig, DeviceType,
 };
@@ -92,15 +95,20 @@ pub struct DeviceManager {
     devices: HashMap<String, ArcMutexDevice>,
     hypervisor: Arc<dyn Hypervisor>,
     shared_info: SharedInfo,
+    pcie_topology: Option<PCIeTopology>,
 }
 
 impl DeviceManager {
-    pub async fn new(hypervisor: Arc<dyn Hypervisor>) -> Result<Self> {
+    pub async fn new(
+        hypervisor: Arc<dyn Hypervisor>,
+        topo_config: Option<&TopologyConfigInfo>,
+    ) -> Result<Self> {
         let devices = HashMap::<String, ArcMutexDevice>::new();
         Ok(DeviceManager {
             devices,
             hypervisor,
             shared_info: SharedInfo::new().await,
+            pcie_topology: PCIeTopology::new(topo_config),
         })
     }
 
@@ -118,9 +126,12 @@ impl DeviceManager {
             .devices
             .get(device_id)
             .context("failed to find device")?;
+
         let mut device_guard = device.lock().await;
         // attach device
-        let result = device_guard.attach(self.hypervisor.as_ref()).await;
+        let result = device_guard
+            .attach(&mut self.pcie_topology.as_mut(), self.hypervisor.as_ref())
+            .await;
         // handle attach error
         if let Err(e) = result {
             match device_guard.get_device_info().await {
@@ -160,7 +171,10 @@ impl DeviceManager {
     pub async fn try_remove_device(&mut self, device_id: &str) -> Result<()> {
         if let Some(dev) = self.devices.get(device_id) {
             let mut device_guard = dev.lock().await;
-            let result = match device_guard.detach(self.hypervisor.as_ref()).await {
+            let result = match device_guard
+                .detach(&mut self.pcie_topology.as_mut(), self.hypervisor.as_ref())
+                .await
+            {
                 Ok(index) => {
                     if let Some(i) = index {
                         // release the declared device index
@@ -231,8 +245,12 @@ impl DeviceManager {
                         return Some(device_id.to_string());
                     }
                 }
-                _ => {
-                    // TODO: support find other device type
+                DeviceType::VhostUserNetwork(device) => {
+                    if device.config.socket_path == host_path {
+                        return Some(device_id.to_string());
+                    }
+                }
+                DeviceType::HybridVsock(_) | DeviceType::Vsock(_) => {
                     continue;
                 }
             }
@@ -291,7 +309,7 @@ impl DeviceManager {
                 Arc::new(Mutex::new(VfioDevice::new(
                     device_id.clone(),
                     &vfio_dev_config,
-                )))
+                )?))
             }
             DeviceConfig::VhostUserBlkCfg(config) => {
                 // try to find the device, found and just return id.
@@ -326,13 +344,31 @@ impl DeviceManager {
 
                 Arc::new(Mutex::new(NetworkDevice::new(device_id.clone(), config)))
             }
+            DeviceConfig::VhostUserNetworkCfg(config) => {
+                if let Some(dev_id) = self.find_device(config.socket_path.clone()).await {
+                    info!(
+                        sl!(),
+                        "vhost-user-net device {} found, just return device id {}",
+                        config.socket_path,
+                        dev_id
+                    );
+                    return Ok(dev_id);
+                }
+
+                Arc::new(Mutex::new(VhostUserNetDevice::new(
+                    device_id.clone(),
+                    config.clone(),
+                )))
+            }
             DeviceConfig::HybridVsockCfg(hvconfig) => {
                 // No need to do find device for hybrid vsock device.
                 Arc::new(Mutex::new(HybridVsockDevice::new(&device_id, hvconfig)))
             }
-            DeviceConfig::VsockCfg(_vconfig) => {
+            DeviceConfig::VsockCfg(vconfig) => {
                 // No need to do find device for vsock device.
-                Arc::new(Mutex::new(VsockDevice::new(device_id.clone()).await?))
+                Arc::new(Mutex::new(
+                    VsockDevice::new(device_id.clone(), vconfig).await?,
+                ))
             }
             DeviceConfig::ShareFsCfg(config) => {
                 // Try to find the sharefs device. If found, just return matched device id.
@@ -576,6 +612,7 @@ mod tests {
         BlockConfig, KATA_BLK_DEV_TYPE,
     };
     use anyhow::{anyhow, Context, Result};
+    use kata_types::config::hypervisor::TopologyConfigInfo;
     use std::sync::Arc;
     use tests_utils::load_test_config;
     use tokio::sync::RwLock;
@@ -583,6 +620,7 @@ mod tests {
     async fn new_device_manager() -> Result<Arc<RwLock<DeviceManager>>> {
         let hypervisor_name: &str = "qemu";
         let toml_config = load_test_config(hypervisor_name.to_owned())?;
+        let topo_config = TopologyConfigInfo::new(&toml_config);
         let hypervisor_config = toml_config
             .hypervisor
             .get(hypervisor_name)
@@ -594,7 +632,7 @@ mod tests {
             .await;
 
         let dm = Arc::new(RwLock::new(
-            DeviceManager::new(Arc::new(hypervisor))
+            DeviceManager::new(Arc::new(hypervisor), topo_config.as_ref())
                 .await
                 .context("device manager")?,
         ));

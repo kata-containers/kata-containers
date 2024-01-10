@@ -27,25 +27,49 @@ use dbs_device::device_manager::IoManagerContext;
 use dbs_interrupt::KvmIrqManager;
 
 mod bus;
-mod configuration;
-mod device;
+pub use bus::PciBus;
 
-pub use self::bus::PciBus;
-pub use self::configuration::{
+mod configuration;
+pub use configuration::{
     BarProgrammingParams, PciBarConfiguration, PciBarPrefetchable, PciBarRegionType,
-    PciBridgeSubclass, PciCapability, PciCapabilityID, PciClassCode, PciConfiguration,
+    PciBridgeSubclass, PciCapability, PciCapabilityId, PciClassCode, PciConfiguration,
     PciHeaderType, PciInterruptPin, PciMassStorageSubclass, PciMultimediaSubclass,
     PciNetworkControllerSubclass, PciProgrammingInterface, PciSerialBusSubClass, PciSubclass,
     NUM_BAR_REGS, NUM_CONFIGURATION_REGISTERS,
 };
-pub use self::device::PciDevice;
+
+mod device;
+pub use device::PciDevice;
+#[cfg(target_arch = "aarch64")]
+pub use device::{PciBusResources, ECAM_SPACE_LENGTH};
+
+mod root_bus;
+pub use root_bus::create_pci_root_bus;
+
+mod root_device;
+pub use root_device::PciRootDevice;
+
+mod msi;
+pub use msi::{MsiCap, MsiState};
+
+mod msix;
+pub use msix::{MsixCap, MsixState, MSIX_TABLE_ENTRY_SIZE};
+
+mod vfio;
+pub use vfio::{VfioPciDevice, VfioPciError, VENDOR_NVIDIA};
 
 /// Error codes related to PCI root/bus/device operations.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// Failed to activate the PCI root/bus/device.
+    #[error("failed to activate PCI device, {0:?}")]
+    ActivateFailure(#[source] dbs_device::device_manager::Error),
     /// Invalid resource assigned/allocated.
     #[error("invalid resource {0:?}")]
     InvalidResource(dbs_device::resources::Resource),
+    /// Invalid bus id
+    #[error("bus id {0} invalid")]
+    InvalidBusId(u8),
     /// Errors from IoManager
     /// No resources available.
     #[error("No resources available")]

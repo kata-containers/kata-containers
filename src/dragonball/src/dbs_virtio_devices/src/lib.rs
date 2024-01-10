@@ -28,6 +28,18 @@ pub mod vsock;
 
 #[cfg(feature = "virtio-net")]
 pub mod net;
+#[cfg(any(
+    feature = "virtio-net",
+    feature = "vhost-net",
+    feature = "vhost-user-net"
+))]
+mod net_common;
+#[cfg(any(
+    feature = "virtio-net",
+    feature = "vhost-net",
+    feature = "vhost-user-net"
+))]
+pub use net_common::*;
 
 #[cfg(feature = "virtio-blk")]
 pub mod block;
@@ -45,6 +57,7 @@ pub mod balloon;
 pub mod vhost;
 
 use std::io::Error as IOError;
+use std::num::ParseIntError;
 
 #[cfg(any(feature = "virtio-net", feature = "vhost-net"))]
 use dbs_utils::metric::SharedIncMetric;
@@ -205,6 +218,9 @@ pub enum Error {
     /// Generic IO error
     #[error("IO: {0}.")]
     IOError(#[from] IOError),
+    /// Error from ParseInt
+    #[error("ParseIntError")]
+    ParseIntError(ParseIntError),
     /// Error from virtio_queue
     #[error("virtio queue error: {0}")]
     VirtioQueueError(#[from] VqError),
@@ -353,6 +369,10 @@ pub mod tests {
     use std::mem;
     use std::sync::Arc;
 
+    use dbs_address_space::{
+        AddressSpace, AddressSpaceLayout, AddressSpaceRegion, AddressSpaceRegionType,
+    };
+    use dbs_boot::layout::{GUEST_MEM_END, GUEST_MEM_START, GUEST_PHYS_END};
     use dbs_interrupt::KvmIrqManager;
     use kvm_ioctls::{Kvm, VmFd};
     use virtio_queue::{QueueSync, QueueT};
@@ -372,6 +392,16 @@ pub mod tests {
         assert!(irq_manager.initialize().is_ok());
 
         (vmfd, irq_manager)
+    }
+
+    pub fn create_address_space() -> AddressSpace {
+        let address_space_region = vec![Arc::new(AddressSpaceRegion::new(
+            AddressSpaceRegionType::DefaultMemory,
+            GuestAddress(0x0),
+            0x1000 as GuestUsize,
+        ))];
+        let layout = AddressSpaceLayout::new(*GUEST_PHYS_END, GUEST_MEM_START, *GUEST_MEM_END);
+        AddressSpace::from_regions(address_space_region, layout)
     }
 
     // Represents a virtio descriptor in guest memory.

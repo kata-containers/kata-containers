@@ -12,7 +12,13 @@ use serde::{Deserialize, Serialize};
 use super::{VirtioNetDeviceConfigInfo, VirtioNetDeviceConfigUpdateInfo};
 use crate::config_manager::RateLimiterConfigInfo;
 #[cfg(feature = "vhost-net")]
-use crate::device_manager::vhost_net_dev_mgr::{self, VhostNetDeviceConfigInfo};
+use crate::device_manager::vhost_net_dev_mgr;
+#[cfg(feature = "vhost-net")]
+use crate::device_manager::vhost_net_dev_mgr::VhostNetDeviceConfigInfo;
+#[cfg(feature = "vhost-user-net")]
+use crate::device_manager::vhost_user_net_dev_mgr;
+#[cfg(feature = "vhost-user-net")]
+use crate::device_manager::vhost_user_net_dev_mgr::VhostUserNetDeviceConfigInfo;
 #[cfg(feature = "virtio-net")]
 use crate::device_manager::virtio_net_dev_mgr;
 
@@ -28,6 +34,10 @@ pub enum Backend {
     #[cfg(feature = "vhost-net")]
     /// Vhost-net
     Vhost(VirtioConfig),
+    #[serde(rename = "vhost-user")]
+    #[cfg(feature = "vhost-user-net")]
+    /// Vhost-user-net
+    VhostUser(VhostUserConfig),
 }
 
 impl Default for Backend {
@@ -43,6 +53,7 @@ impl Default for Backend {
 }
 
 /// Virtio network config, working for virtio-net and vhost-net.
+#[cfg(any(feature = "virtio-net", feature = "vhost-net"))]
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
 pub struct VirtioConfig {
     /// ID of the guest network interface.
@@ -55,6 +66,14 @@ pub struct VirtioConfig {
     pub tx_rate_limiter: Option<RateLimiterConfigInfo>,
     /// Allow duplicate mac
     pub allow_duplicate_mac: bool,
+}
+
+/// Config for vhost-user-net device
+#[cfg(feature = "vhost-user-net")]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
+pub struct VhostUserConfig {
+    /// Vhost-user socket path.
+    pub sock_path: String,
 }
 
 /// This struct represents the strongly typed equivalent of the json body from
@@ -128,9 +147,23 @@ impl From<&NetworkInterfaceConfig> for VhostNetDeviceConfigInfo {
     fn from(value: &NetworkInterfaceConfig) -> Self {
         let num_queues = value
             .num_queues
+            .map(|nq| {
+                if nq == 0 {
+                    vhost_net_dev_mgr::DEFAULT_NUM_QUEUES
+                } else {
+                    nq
+                }
+            })
             .unwrap_or(vhost_net_dev_mgr::DEFAULT_NUM_QUEUES);
         let queue_size = value
             .queue_size
+            .map(|qs| {
+                if qs == 0 {
+                    vhost_net_dev_mgr::DEFAULT_QUEUE_SIZE
+                } else {
+                    qs
+                }
+            })
             .unwrap_or(vhost_net_dev_mgr::DEFAULT_QUEUE_SIZE);
 
         // It is safe because we tested the type of config before.
@@ -144,10 +177,56 @@ impl From<&NetworkInterfaceConfig> for VhostNetDeviceConfigInfo {
             iface_id: config.iface_id.clone(),
             host_dev_name: config.host_dev_name.clone(),
             num_queues,
-            vq_pairs: num_queues / 2,
             queue_size,
             guest_mac: value.guest_mac,
             allow_duplicate_mac: config.allow_duplicate_mac,
+            use_shared_irq: value.use_shared_irq,
+            use_generic_irq: value.use_generic_irq,
+        }
+    }
+}
+
+#[cfg(feature = "vhost-user-net")]
+impl From<NetworkInterfaceConfig> for VhostUserNetDeviceConfigInfo {
+    fn from(value: NetworkInterfaceConfig) -> Self {
+        let self_ref = &value;
+        self_ref.into()
+    }
+}
+#[cfg(feature = "vhost-user-net")]
+impl From<&NetworkInterfaceConfig> for VhostUserNetDeviceConfigInfo {
+    fn from(value: &NetworkInterfaceConfig) -> Self {
+        let num_queues = value
+            .num_queues
+            .map(|nq| {
+                if nq == 0 {
+                    vhost_user_net_dev_mgr::DEFAULT_NUM_QUEUES
+                } else {
+                    nq
+                }
+            })
+            .unwrap_or(vhost_user_net_dev_mgr::DEFAULT_NUM_QUEUES);
+        let queue_size = value
+            .queue_size
+            .map(|qs| {
+                if qs == 0 {
+                    vhost_user_net_dev_mgr::DEFAULT_QUEUE_SIZE
+                } else {
+                    qs
+                }
+            })
+            .unwrap_or(vhost_user_net_dev_mgr::DEFAULT_QUEUE_SIZE);
+        // It is safe because we tested the type of config before.
+        #[allow(unreachable_patterns)]
+        let config = match &value.backend {
+            Backend::VhostUser(config) => config,
+            _ => panic!("The virtio backend config is invalid: {:?}", value),
+        };
+        Self {
+            sock_path: config.sock_path.clone(),
+            num_queues,
+            queue_size,
+            guest_mac: value.guest_mac,
             use_shared_irq: value.use_shared_irq,
             use_generic_irq: value.use_generic_irq,
         }
@@ -188,13 +267,13 @@ impl From<&NetworkInterfaceUpdateConfig> for VirtioNetDeviceConfigUpdateInfo {
     }
 }
 
+#[cfg(feature = "virtio-net")]
 #[cfg(test)]
 mod tests {
     use dbs_utils::net::MacAddr;
 
-    use crate::api::v1::Backend;
-
     use super::NetworkInterfaceConfig;
+    use crate::api::v1::Backend;
 
     #[test]
     fn test_network_interface_config() {

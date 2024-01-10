@@ -12,7 +12,7 @@ use async_trait::async_trait;
 use hypervisor::device::device_manager::{do_handle_device, DeviceManager};
 use hypervisor::device::driver::NetworkConfig;
 use hypervisor::device::{DeviceConfig, DeviceType};
-use hypervisor::{Backend, Hypervisor, NetworkDevice};
+use hypervisor::{Hypervisor, NetworkDevice};
 use tokio::sync::RwLock;
 
 use super::endpoint_persist::{EndpointState, IpVlanEndpointState};
@@ -57,7 +57,6 @@ impl IPVlanEndpoint {
         Ok(NetworkConfig {
             host_dev_name: iface.name.clone(),
             virt_iface_name: self.net_pair.virt_iface.name.clone(),
-            backend: Backend::Virtio,
             guest_mac: Some(guest_mac),
             ..Default::default()
         })

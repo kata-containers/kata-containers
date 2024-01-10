@@ -2,8 +2,6 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-use std::any::Any;
-
 #[cfg(target_arch = "aarch64")]
 use dbs_device::resources::DeviceResources;
 use dbs_device::DeviceIo;

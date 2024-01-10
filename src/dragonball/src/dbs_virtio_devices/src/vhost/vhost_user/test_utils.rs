@@ -700,6 +700,8 @@ pub(crate) fn negotiate_slave(
             std::mem::size_of::<VhostUserInflight>() as u32,
         );
         slave.send_header(&hdr, None).unwrap();
+    } else {
+        slave.send_header(&hdr, None).unwrap();
     }
 
     // set vring num

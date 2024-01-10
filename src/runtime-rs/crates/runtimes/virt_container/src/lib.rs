@@ -31,6 +31,7 @@ use hypervisor::ch::CloudHypervisor;
 #[cfg(feature = "cloud-hypervisor")]
 use kata_types::config::{hypervisor::HYPERVISOR_NAME_CH, CloudHypervisorConfig};
 
+use resource::cpu_mem::initial_size::InitialSizeManager;
 use resource::ResourceManager;
 use sandbox::VIRTCONTAINER;
 use tokio::sync::mpsc::Sender;
@@ -77,13 +78,22 @@ impl RuntimeHandler for VirtContainer {
         sid: &str,
         msg_sender: Sender<Message>,
         config: Arc<TomlConfig>,
+        init_size_manager: InitialSizeManager,
     ) -> Result<RuntimeInstance> {
         let hypervisor = new_hypervisor(&config).await.context("new hypervisor")?;
 
         // get uds from hypervisor and get config from toml_config
         let agent = new_agent(&config).context("new agent")?;
-        let resource_manager =
-            Arc::new(ResourceManager::new(sid, agent.clone(), hypervisor.clone(), config).await?);
+        let resource_manager = Arc::new(
+            ResourceManager::new(
+                sid,
+                agent.clone(),
+                hypervisor.clone(),
+                config,
+                init_size_manager,
+            )
+            .await?,
+        );
         let pid = std::process::id();
 
         let sandbox = sandbox::VirtSandbox::new(

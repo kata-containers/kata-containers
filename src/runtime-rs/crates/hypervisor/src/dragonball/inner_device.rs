@@ -7,15 +7,22 @@
 use std::path::PathBuf;
 
 use anyhow::{anyhow, Context, Result};
+use dbs_utils::net::MacAddr;
+use dragonball::api::v1::VhostUserConfig as DragonballVhostUserConfig;
 use dragonball::api::v1::{
-    BlockDeviceConfigInfo, FsDeviceConfigInfo, FsMountConfigInfo, VsockDeviceConfigInfo,
+    BlockDeviceConfigInfo, FsDeviceConfigInfo, FsMountConfigInfo, NetworkInterfaceConfig,
+    VsockDeviceConfigInfo,
 };
-use dragonball::device_manager::blk_dev_mgr::BlockDeviceType;
+use dragonball::device_manager::{
+    blk_dev_mgr::BlockDeviceType,
+    vfio_dev_mgr::{HostDeviceConfig, VfioPciDeviceConfig},
+};
 
-use super::DragonballInner;
+use super::{build_dragonball_network_config, DragonballInner};
+use crate::VhostUserConfig;
 use crate::{
     device::DeviceType, HybridVsockConfig, NetworkConfig, ShareFsConfig, ShareFsMountConfig,
-    ShareFsMountOperation, ShareFsMountType, VfioBusMode, VfioDevice, VmmState, JAILER_ROOT,
+    ShareFsMountOperation, ShareFsMountType, VfioDevice, VmmState, JAILER_ROOT,
 };
 
 const MB_TO_B: u32 = 1024 * 1024;
@@ -67,6 +74,9 @@ impl DragonballInner {
             DeviceType::ShareFs(sharefs) => self
                 .add_share_fs_device(&sharefs.config)
                 .context("add share fs device"),
+            DeviceType::VhostUserNetwork(dev) => self
+                .add_vhost_user_net_device(&dev.config)
+                .context("add vhost-user-net device"),
             DeviceType::Vsock(_) => todo!(),
         }
     }
@@ -127,47 +137,52 @@ impl DragonballInner {
             0
         };
 
-        let guest_dev_id = if let Some(pci_path) = primary_device.guest_pci_path {
-            // safe here, dragonball's pci device directly connects to root bus.
-            // usually, it has been assigned in vfio device manager.
-            pci_path.get_device_slot().unwrap().0
-        } else {
-            0
-        };
+        // It's safe to unwrap the guest_pci_path and get device slot,
+        // As it has been assigned in vfio device manager.
+        let pci_path = primary_device.guest_pci_path.unwrap();
+        let guest_dev_id = pci_path.get_device_slot().unwrap().0;
 
-        let bus_mode = VfioBusMode::to_string(vfio_device.bus_mode);
-
-        info!(sl!(), "Mock for dragonball insert host device.");
         info!(
             sl!(),
-            " Mock for dragonball insert host device. 
+            "insert host device. 
             host device id: {:?}, 
             bus_slot_func: {:?}, 
-            bus mod: {:?}, 
             guest device id: {:?}, 
             vendor/device id: {:?}",
             primary_device.hostdev_id,
             primary_device.bus_slot_func,
-            bus_mode,
             guest_dev_id,
             vendor_device_id,
         );
 
-        // FIXME:
-        // interface implementation to be done when dragonball supports
-        // self.vmm_instance.insert_host_device(host_cfg)?;
+        let vfio_dev_config = VfioPciDeviceConfig {
+            bus_slot_func: primary_device.bus_slot_func,
+            vendor_device_id,
+            guest_dev_id: Some(guest_dev_id),
+            ..Default::default()
+        };
+        let host_dev_config = HostDeviceConfig {
+            hostdev_id: primary_device.hostdev_id,
+            sysfs_path: primary_device.sysfs_path.clone(),
+            dev_config: vfio_dev_config,
+        };
+
+        self.vmm_instance
+            .insert_host_device(host_dev_config)
+            .context("insert host device failed")?;
 
         Ok(())
     }
 
     fn remove_vfio_device(&mut self, hostdev_id: String) -> Result<()> {
-        info!(
-            sl!(),
-            "Mock for dragonball remove host_device with hostdev id {:?}", hostdev_id
-        );
-        // FIXME:
-        // interface implementation to be done when dragonball supports
-        // self.vmm_instance.remove_host_device(hostdev_id)?;
+        info!(sl!(), "remove host_device with hostdev id {:?}", hostdev_id);
+
+        self.vmm_instance
+            .prepare_remove_host_device(&hostdev_id)
+            .context("prepare to remove host device failed")?;
+        self.vmm_instance
+            .remove_host_device(&hostdev_id)
+            .context("remove host device failed")?;
 
         Ok(())
     }
@@ -210,9 +225,29 @@ impl DragonballInner {
     }
 
     fn add_net_device(&mut self, config: &NetworkConfig) -> Result<()> {
+        let net_cfg = build_dragonball_network_config(&self.config, config);
         self.vmm_instance
-            .insert_network_device(config.into())
+            .insert_network_device(net_cfg)
             .context("insert network device")
+    }
+
+    /// Add vhost-user-net deivce to Dragonball
+    fn add_vhost_user_net_device(&mut self, config: &VhostUserConfig) -> Result<()> {
+        let guest_mac = MacAddr::parse_str(&config.mac_address).ok();
+        let net_cfg = NetworkInterfaceConfig {
+            num_queues: Some(config.num_queues),
+            queue_size: Some(config.queue_size as u16),
+            backend: dragonball::api::v1::Backend::VhostUser(DragonballVhostUserConfig {
+                sock_path: config.socket_path.clone(),
+            }),
+            guest_mac,
+            use_shared_irq: None,
+            use_generic_irq: None,
+        };
+
+        self.vmm_instance
+            .insert_network_device(net_cfg)
+            .context("insert vhost-user-net device")
     }
 
     fn add_hvsock(&mut self, config: &HybridVsockConfig) -> Result<()> {

@@ -4,10 +4,14 @@
 //
 
 use anyhow::{bail, Result};
+use protobuf::MessageDyn;
 use serde::{Deserialize, Serialize};
 use slog::Drain;
 use tokio::io::AsyncWriteExt;
 use tokio::time::{sleep, Duration};
+
+use crate::rpc::ttrpc_error;
+use crate::AGENT_POLICY;
 
 static EMPTY_JSON_INPUT: &str = "{\"input\":{}}";
 
@@ -21,6 +25,34 @@ macro_rules! sl {
     () => {
         slog_scope::logger()
     };
+}
+
+async fn allow_request(policy: &mut AgentPolicy, ep: &str, request: &str) -> ttrpc::Result<()> {
+    if !policy.allow_request(ep, request).await {
+        warn!(sl!(), "{ep} is blocked by policy");
+        Err(ttrpc_error(
+            ttrpc::Code::PERMISSION_DENIED,
+            format!("{ep} is blocked by policy"),
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+pub async fn is_allowed(req: &(impl MessageDyn + serde::Serialize)) -> ttrpc::Result<()> {
+    let request = serde_json::to_string(req).unwrap();
+    let mut policy = AGENT_POLICY.lock().await;
+    allow_request(&mut policy, req.descriptor_dyn().name(), &request).await
+}
+
+pub async fn do_set_policy(req: &protocols::agent::SetPolicyRequest) -> ttrpc::Result<()> {
+    let request = serde_json::to_string(req).unwrap();
+    let mut policy = AGENT_POLICY.lock().await;
+    allow_request(&mut policy, "SetPolicyRequest", &request).await?;
+    policy
+        .set_policy(&req.policy)
+        .await
+        .map_err(|e| ttrpc_error(ttrpc::Code::INVALID_ARGUMENT, e))
 }
 
 /// Example of HTTP response from OPA: {"result":true}
@@ -127,7 +159,7 @@ impl AgentPolicy {
     }
 
     /// Ask OPA to check if an API call should be allowed or not.
-    pub async fn is_allowed_endpoint(&mut self, ep: &str, request: &str) -> bool {
+    pub async fn allow_request(&mut self, ep: &str, request: &str) -> bool {
         let post_input = format!("{{\"input\":{request}}}");
         self.log_opa_input(ep, &post_input).await;
         match self.post_query(ep, &post_input).await {

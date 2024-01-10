@@ -197,7 +197,9 @@ mod tests {
     use super::packet::{VsockPacket, VSOCK_PKT_HDR_SIZE};
     use super::*;
     use crate::device::VirtioDeviceConfig;
-    use crate::tests::{VirtQueue as GuestQ, VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_WRITE};
+    use crate::tests::{
+        create_address_space, VirtQueue as GuestQ, VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_WRITE,
+    };
     use crate::Result as VirtioResult;
     use crate::VirtioQueueConfig;
 
@@ -427,8 +429,10 @@ mod tests {
             let kvm = Kvm::new().unwrap();
             let vm_fd = Arc::new(kvm.create_vm().unwrap());
             let resources = DeviceResources::new();
+            let address_space = create_address_space();
             let config = VirtioDeviceConfig::<Arc<GuestMemoryMmap<()>>, QueueSync>::new(
                 Arc::new(mem.clone()),
+                address_space,
                 vm_fd,
                 resources,
                 self.queues.drain(..).collect(),

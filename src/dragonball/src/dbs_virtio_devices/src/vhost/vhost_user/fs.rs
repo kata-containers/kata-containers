@@ -793,13 +793,10 @@ mod tests {
     use vmm_sys_util::tempfile::TempFile;
 
     use crate::device::VirtioDevice;
+    use crate::tests::create_address_space;
     use crate::vhost::vhost_user::fs::VhostUserFs;
     use crate::vhost::vhost_user::test_utils::*;
     use crate::{GuestAddress, VirtioDeviceConfig, VirtioQueueConfig, TYPE_VIRTIO_FS};
-
-    pub(crate) const GUEST_PHYS_END: u64 = (1 << 46) - 1;
-    pub(crate) const GUEST_MEM_START: u64 = 0;
-    pub(crate) const GUEST_MEM_END: u64 = GUEST_PHYS_END >> 1;
 
     fn create_vhost_user_fs_slave(slave: &mut Endpoint<MasterReq>) {
         let (hdr, rfds) = slave.recv_header().unwrap();
@@ -813,7 +810,7 @@ mod tests {
 
     #[test]
     fn test_vhost_user_fs_virtio_device_normal() {
-        let device_socket = "/var/tmp/vhost.1";
+        let device_socket = "/tmp/vhost.1";
         let tag = "test_fs";
 
         let handler = thread::spawn(move || {
@@ -882,7 +879,7 @@ mod tests {
 
     #[test]
     fn test_vhost_user_fs_virtio_device_activate() {
-        let device_socket = "/var/tmp/vhost.1";
+        let device_socket = "/tmp/vhost.1";
         let tag = "test_fs";
 
         let handler = thread::spawn(move || {
@@ -914,8 +911,10 @@ mod tests {
             let mem = GuestMemoryMmap::from_ranges(&[(GuestAddress(0), 0x10000)]).unwrap();
             let resources = DeviceResources::new();
             let queues = vec![VirtioQueueConfig::<QueueSync>::create(128, 0).unwrap()];
+            let address_space = create_address_space();
             let config = VirtioDeviceConfig::new(
                 Arc::new(mem),
+                address_space,
                 vm_fd,
                 resources,
                 queues,
@@ -956,8 +955,10 @@ mod tests {
             )])
             .unwrap();
             let resources = DeviceResources::new();
+            let address_space = create_address_space();
             let config = VirtioDeviceConfig::new(
                 Arc::new(mem),
+                address_space,
                 vm_fd,
                 resources,
                 queues,

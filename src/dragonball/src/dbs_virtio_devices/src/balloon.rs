@@ -755,7 +755,7 @@ pub(crate) mod tests {
     use vmm_sys_util::eventfd::EventFd;
 
     use super::*;
-    use crate::tests::VirtQueue;
+    use crate::tests::{create_address_space, VirtQueue};
 
     fn create_balloon_epoll_handler() -> BalloonEpollHandler<Arc<GuestMemoryMmap>> {
         let mem = Arc::new(GuestMemoryMmap::from_ranges(&[(GuestAddress(0x0), 0x10000)]).unwrap());
@@ -763,9 +763,11 @@ pub(crate) mod tests {
         let resources = DeviceResources::new();
         let kvm = Kvm::new().unwrap();
         let vm_fd = Arc::new(kvm.create_vm().unwrap());
+        let address_space = create_address_space();
 
         let config = VirtioDeviceConfig::new(
             mem,
+            address_space,
             vm_fd,
             resources,
             queues,
@@ -877,8 +879,10 @@ pub(crate) mod tests {
             let kvm = Kvm::new().unwrap();
             let vm_fd = Arc::new(kvm.create_vm().unwrap());
             let resources = DeviceResources::new();
+            let address_space = create_address_space();
             let config = VirtioDeviceConfig::<Arc<GuestMemoryMmap<()>>>::new(
                 Arc::new(mem),
+                address_space,
                 vm_fd,
                 resources,
                 queues,
@@ -906,8 +910,10 @@ pub(crate) mod tests {
             let kvm = Kvm::new().unwrap();
             let vm_fd = Arc::new(kvm.create_vm().unwrap());
             let resources = DeviceResources::new();
+            let address_space = create_address_space();
             let config = VirtioDeviceConfig::<Arc<GuestMemoryMmap<()>>>::new(
                 Arc::new(mem),
+                address_space,
                 vm_fd,
                 resources,
                 queues,

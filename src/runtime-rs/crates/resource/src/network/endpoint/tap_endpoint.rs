@@ -10,7 +10,7 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use hypervisor::device::device_manager::{do_handle_device, DeviceManager};
 use hypervisor::device::{DeviceConfig, DeviceType};
-use hypervisor::{Backend, Hypervisor, NetworkConfig, NetworkDevice};
+use hypervisor::{Hypervisor, NetworkConfig, NetworkDevice};
 use tokio::sync::RwLock;
 
 use super::endpoint_persist::TapEndpointState;
@@ -21,9 +21,6 @@ use crate::network::{utils, EndpointState};
 /// TapEndpoint is used to attach to the hypervisor directly
 #[derive(Debug)]
 pub struct TapEndpoint {
-    // Index
-    #[allow(dead_code)]
-    index: u32,
     // Name of virt interface
     name: String,
     // Hardware address of virt interface
@@ -42,7 +39,6 @@ impl TapEndpoint {
     #[allow(clippy::too_many_arguments)]
     pub async fn new(
         handle: &rtnetlink::Handle,
-        index: u32,
         name: &str,
         tap_name: &str,
         guest_mac: &str,
@@ -57,7 +53,6 @@ impl TapEndpoint {
             utils::get_mac_addr(&tap_link.attrs().hardware_addr).context("Get mac addr of tap")?;
 
         Ok(TapEndpoint {
-            index,
             name: name.to_owned(),
             guest_mac: guest_mac.to_owned(),
             tap_iface: NetworkInterface {
@@ -76,7 +71,6 @@ impl TapEndpoint {
         Ok(NetworkConfig {
             host_dev_name: self.tap_iface.name.clone(),
             virt_iface_name: self.name.clone(),
-            backend: Backend::Virtio,
             guest_mac: Some(guest_mac),
             queue_num: self.queue_num,
             queue_size: self.queue_size,

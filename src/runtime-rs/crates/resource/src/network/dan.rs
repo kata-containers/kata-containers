@@ -33,9 +33,10 @@ use tokio::sync::RwLock;
 use super::network_entity::NetworkEntity;
 use super::utils::address::{ip_family_from_ip_addr, parse_ip_cidr};
 use super::{EndpointState, NetnsGuard, Network};
-use crate::network::endpoint::TapEndpoint;
+use crate::network::endpoint::{TapEndpoint, VhostUserEndpoint};
 use crate::network::network_info::network_info_from_dan::NetworkInfoFromDan;
 use crate::network::utils::generate_private_mac_addr;
+use crate::network::Endpoint;
 
 /// Directly attachable network
 pub struct Dan {
@@ -78,16 +79,23 @@ impl DanInner {
         let mut entity_list = Vec::with_capacity(config.devices.len());
         for (idx, device) in config.devices.iter().enumerate() {
             let name = format!("eth{}", idx);
-            let endpoint = match &device.device {
-                // TODO: Support VhostUserNet protocol
+            let endpoint: Arc<dyn Endpoint> = match &device.device {
                 Device::VhostUser {
                     path,
-                    queue_num: _,
-                    queue_size: _,
-                } => {
-                    warn!(sl!(), "A DAN device whose type is \"vhost-user\" and socket path is {} is ignored.", path);
-                    continue;
-                }
+                    queue_num,
+                    queue_size,
+                } => Arc::new(
+                    VhostUserEndpoint::new(
+                        dev_mgr,
+                        &name,
+                        &device.guest_mac,
+                        path,
+                        *queue_num,
+                        *queue_size,
+                    )
+                    .await
+                    .with_context(|| format!("create a vhost user endpoint, path: {}", path))?,
+                ),
                 Device::HostTap {
                     tap_name,
                     queue_num,
@@ -95,7 +103,6 @@ impl DanInner {
                 } => Arc::new(
                     TapEndpoint::new(
                         &handle,
-                        idx as u32,
                         &name,
                         tap_name,
                         &device.guest_mac,
@@ -104,7 +111,7 @@ impl DanInner {
                         dev_mgr,
                     )
                     .await
-                    .with_context(|| format!("New a {} tap endpoint", tap_name))?,
+                    .with_context(|| format!("create a {} tap endpoint", tap_name))?,
                 ),
             };
 

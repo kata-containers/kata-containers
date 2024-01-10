@@ -6,7 +6,7 @@
 
 use std::{sync::Arc, thread};
 
-use agent::{types::Device, Agent, Storage};
+use agent::{types::Device, Agent, OnlineCPUMemRequest, Storage};
 use anyhow::{anyhow, Context, Ok, Result};
 use async_trait::async_trait;
 use hypervisor::{
@@ -17,7 +17,7 @@ use hypervisor::{
     },
     BlockConfig, Hypervisor, VfioConfig,
 };
-use kata_types::config::TomlConfig;
+use kata_types::config::{hypervisor::TopologyConfigInfo, TomlConfig};
 use kata_types::mount::Mount;
 use oci::{Linux, LinuxCpu, LinuxResources};
 use persist::sandbox_persist::Persist;
@@ -25,7 +25,7 @@ use tokio::{runtime, sync::RwLock};
 
 use crate::{
     cgroups::{CgroupArgs, CgroupsResource},
-    cpu_mem::cpu::CpuResource,
+    cpu_mem::{cpu::CpuResource, initial_size::InitialSizeManager, mem::MemResource},
     manager::ManagerArgs,
     network::{self, Network, NetworkConfig},
     resource_persist::ResourceState,
@@ -48,6 +48,7 @@ pub(crate) struct ResourceManagerInner {
     pub volume_resource: VolumeResource,
     pub cgroups_resource: CgroupsResource,
     pub cpu_resource: CpuResource,
+    pub mem_resource: MemResource,
 }
 
 impl ResourceManagerInner {
@@ -56,14 +57,17 @@ impl ResourceManagerInner {
         agent: Arc<dyn Agent>,
         hypervisor: Arc<dyn Hypervisor>,
         toml_config: Arc<TomlConfig>,
+        init_size_manager: InitialSizeManager,
     ) -> Result<Self> {
+        let topo_config = TopologyConfigInfo::new(&toml_config);
         // create device manager
-        let dev_manager = DeviceManager::new(hypervisor.clone())
+        let dev_manager = DeviceManager::new(hypervisor.clone(), topo_config.as_ref())
             .await
             .context("failed to create device manager")?;
 
         let cgroups_resource = CgroupsResource::new(sid, &toml_config)?;
         let cpu_resource = CpuResource::new(toml_config.clone())?;
+        let mem_resource = MemResource::new(init_size_manager)?;
         Ok(Self {
             sid: sid.to_string(),
             toml_config,
@@ -76,6 +80,7 @@ impl ResourceManagerInner {
             volume_resource: VolumeResource::new(),
             cgroups_resource,
             cpu_resource,
+            mem_resource,
         })
     }
 
@@ -309,7 +314,7 @@ impl ResourceManagerInner {
                         // The following would work for drivers virtio-blk-pci and mmio.
                         // Once scsi support is added, need to handle scsi identifiers.
                         let id = if let Some(pci_path) = device.config.pci_path {
-                            pci_path.convert_to_string()
+                            pci_path.to_string()
                         } else {
                             device.config.virt_path.clone()
                         };
@@ -427,15 +432,23 @@ impl ResourceManagerInner {
 
         // if static_sandbox_resource_mgmt, we will not have to update sandbox's cpu or mem resource
         if !self.toml_config.runtime.static_sandbox_resource_mgmt {
+            // update cpu
             self.cpu_resource
-                .update_cpu_resources(
-                    cid,
-                    linux_cpus,
-                    op,
-                    self.hypervisor.as_ref(),
-                    self.agent.as_ref(),
-                )
+                .update_cpu_resources(cid, linux_cpus, op, self.hypervisor.as_ref())
                 .await?;
+            // update memory
+            self.mem_resource
+                .update_mem_resources(cid, linux_resources, op, self.hypervisor.as_ref())
+                .await?;
+
+            self.agent
+                .online_cpu_mem(OnlineCPUMemRequest {
+                    wait: false,
+                    nb_cpus: self.cpu_resource.current_vcpu().await,
+                    cpu_only: false,
+                })
+                .await
+                .context("online vcpus")?;
         }
 
         // we should firstly update the vcpus and mems, and then update the host cgroups
@@ -498,12 +511,14 @@ impl Persist for ResourceManagerInner {
             sid: resource_args.sid.clone(),
             config: resource_args.config,
         };
+        let topo_config = TopologyConfigInfo::new(&args.config);
+
         Ok(Self {
             sid: resource_args.sid,
             agent: resource_args.agent,
             hypervisor: resource_args.hypervisor.clone(),
             device_manager: Arc::new(RwLock::new(
-                DeviceManager::new(resource_args.hypervisor).await?,
+                DeviceManager::new(resource_args.hypervisor, topo_config.as_ref()).await?,
             )),
             network: None,
             share_fs: None,
@@ -516,6 +531,7 @@ impl Persist for ResourceManagerInner {
             .await?,
             toml_config: Arc::new(TomlConfig::default()),
             cpu_resource: CpuResource::default(),
+            mem_resource: MemResource::default(),
         })
     }
 }

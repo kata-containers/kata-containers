@@ -4,29 +4,22 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-#[derive(Debug, Clone)]
+use crate::device::pci_path::PciPath;
+
+#[derive(Debug, Clone, Default)]
 pub enum VhostUserType {
     /// Blk - represents a block vhostuser device type
-    /// "vhost-user-blk-pci"
-    Blk(String),
+    #[default]
+    Blk,
 
     /// SCSI - represents SCSI based vhost-user type
-    /// "vhost-user-scsi-pci"
-    SCSI(String),
+    SCSI,
 
     /// Net - represents Net based vhost-user type
-    /// "virtio-net-pci"
-    Net(String),
+    Net,
 
     /// FS - represents a virtio-fs vhostuser device type
-    /// "vhost-user-fs-pci"
-    FS(String),
-}
-
-impl Default for VhostUserType {
-    fn default() -> Self {
-        VhostUserType::Blk("vhost-user-blk-pci".to_owned())
-    }
+    FS,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -50,8 +43,8 @@ pub struct VhostUserConfig {
     pub device_type: VhostUserType,
     /// guest block driver
     pub driver_option: String,
-    /// pci_addr is the PCI address used to identify the slot at which the drive is attached.
-    pub pci_addr: Option<String>,
+    /// pci_path is the PCI Path used to identify the slot at which the device is attached.
+    pub pci_path: Option<PciPath>,
 
     /// Block index of the device if assigned
     /// type u64 is not OK

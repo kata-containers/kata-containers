@@ -18,7 +18,7 @@ use dbs_utils::epoll_manager::{
     EpollManager, EventOps, EventSet, Events, MutEventSubscriber, SubscriberId,
 };
 use dbs_utils::metric::IncMetric;
-use dbs_utils::net::{net_gen, MacAddr, Tap, MAC_ADDR_LEN};
+use dbs_utils::net::{net_gen, MacAddr, Tap};
 use dbs_utils::rate_limiter::{BucketUpdate, RateLimiter, TokenType};
 use libc;
 use log::{debug, error, info, trace, warn};
@@ -29,8 +29,9 @@ use vmm_sys_util::eventfd::EventFd;
 
 use crate::device::{VirtioDeviceConfig, VirtioDeviceInfo};
 use crate::{
-    vnet_hdr_len, ActivateError, ActivateResult, ConfigResult, DbsGuestAddressSpace, Error,
-    NetDeviceMetrics, Result, TapError, VirtioDevice, VirtioQueueConfig, TYPE_NET,
+    setup_config_space, vnet_hdr_len, ActivateError, ActivateResult, ConfigResult,
+    DbsGuestAddressSpace, Error, NetDeviceMetrics, Result, TapError, VirtioDevice,
+    VirtioQueueConfig, DEFAULT_MTU, TYPE_NET,
 };
 
 const NET_DRIVER_NAME: &str = "virtio-net";
@@ -632,14 +633,13 @@ impl<AS: GuestAddressSpace> Net<AS> {
             | 1u64 << VIRTIO_NET_F_HOST_UFO
             | 1u64 << VIRTIO_F_VERSION_1;
 
-        let mut config_space = Vec::new();
-        if let Some(mac) = guest_mac {
-            config_space.resize(MAC_ADDR_LEN, 0);
-            config_space[..].copy_from_slice(mac.get_bytes());
-            // When this feature isn't available, the driver generates a random MAC address.
-            // Otherwise, it should attempt to read the device MAC address from the config space.
-            avail_features |= 1u64 << VIRTIO_NET_F_MAC;
-        }
+        let config_space = setup_config_space(
+            NET_DRIVER_NAME,
+            &guest_mac,
+            &mut avail_features,
+            1,
+            DEFAULT_MTU,
+        )?;
 
         let device_info = VirtioDeviceInfo::new(
             NET_DRIVER_NAME.to_string(),
@@ -843,6 +843,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::convert::TryInto;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::thread;
     use std::time::Duration;
@@ -855,8 +856,8 @@ mod tests {
     use vm_memory::{GuestAddress, GuestMemoryMmap};
 
     use super::*;
-    use crate::tests::{VirtQueue, VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_WRITE};
-    use crate::ConfigError;
+    use crate::tests::{create_address_space, VirtQueue, VIRTQ_DESC_F_NEXT, VIRTQ_DESC_F_WRITE};
+    use crate::{ConfigError, CONFIG_SPACE_SIZE};
 
     static NEXT_IP: AtomicUsize = AtomicUsize::new(1);
 
@@ -880,8 +881,10 @@ mod tests {
         let kvm = Kvm::new().unwrap();
         let vm_fd = Arc::new(kvm.create_vm().unwrap());
         let resources = DeviceResources::new();
+        let address_space = create_address_space();
         let config = VirtioDeviceConfig::new(
             mem,
+            address_space,
             vm_fd,
             resources,
             queues,
@@ -946,24 +949,20 @@ mod tests {
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::get_avail_features(&dev, 2),
             0
         );
-        // device config length is 0 because guest_mac is None
-        let mut config: [u8; 1] = [0];
-        assert_eq!(
-            VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::read_config(
-                &mut dev,
-                0,
-                &mut config,
-            )
-            .unwrap_err(),
-            ConfigError::InvalidOffset(0)
-        );
-        let config: [u8; 16] = [0; 16];
+        // Config with correct size
+        let config: [u8; CONFIG_SPACE_SIZE] = [0; CONFIG_SPACE_SIZE];
+        VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::write_config(
+            &mut dev, 0, &config,
+        )
+        .unwrap();
+        // Config with invalid size
+        let config: [u8; CONFIG_SPACE_SIZE + 1] = [0; CONFIG_SPACE_SIZE + 1];
         assert_eq!(
             VirtioDevice::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::write_config(
                 &mut dev, 0, &config,
             )
             .unwrap_err(),
-            ConfigError::InvalidOffset(0)
+            ConfigError::InvalidOffsetPlusDataLen(CONFIG_SPACE_SIZE as u64 + 1)
         );
     }
 
@@ -990,9 +989,11 @@ mod tests {
             let kvm = Kvm::new().unwrap();
             let vm_fd = Arc::new(kvm.create_vm().unwrap());
             let resources = DeviceResources::new();
+            let address_space = create_address_space();
             let config =
                 VirtioDeviceConfig::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::new(
                     Arc::new(mem),
+                    address_space,
                     vm_fd,
                     resources,
                     queues,
@@ -1025,9 +1026,11 @@ mod tests {
             let kvm = Kvm::new().unwrap();
             let vm_fd = Arc::new(kvm.create_vm().unwrap());
             let resources = DeviceResources::new();
+            let address_space = create_address_space();
             let config =
                 VirtioDeviceConfig::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::new(
                     Arc::new(mem),
+                    address_space,
                     vm_fd,
                     resources,
                     queues,
@@ -1059,9 +1062,11 @@ mod tests {
             let kvm = Kvm::new().unwrap();
             let vm_fd = Arc::new(kvm.create_vm().unwrap());
             let resources = DeviceResources::new();
+            let address_space = create_address_space();
             let config =
                 VirtioDeviceConfig::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::new(
                     Arc::new(mem),
+                    address_space,
                     vm_fd,
                     resources,
                     queues,
@@ -1094,9 +1099,11 @@ mod tests {
             let kvm = Kvm::new().unwrap();
             let vm_fd = Arc::new(kvm.create_vm().unwrap());
             let resources = DeviceResources::new();
+            let address_space = create_address_space();
             let config =
                 VirtioDeviceConfig::<Arc<GuestMemoryMmap<()>>, QueueSync, GuestRegionMmap>::new(
                     Arc::new(mem),
+                    address_space,
                     vm_fd,
                     resources,
                     queues,

@@ -87,7 +87,7 @@ Resources are classified into two types:
 
 For `VirtContainer`, there will be more hypervisors to choose.
 
-Currently, only built-in `Dragonball` has been implemented.
+Currently, built-in `Dragonball` has been implemented. We have also added initial support for `cloud-hypervisor` with CI being added next.
 
 ### agent
 

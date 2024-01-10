@@ -23,7 +23,7 @@ use ttrpc::{
 use anyhow::{anyhow, Context, Result};
 use cgroups::freezer::FreezerState;
 use oci::{LinuxNamespace, Root, Spec};
-use protobuf::{MessageDyn, MessageField};
+use protobuf::MessageField;
 use protocols::agent::{
     AddSwapRequest, AgentDetails, CopyFileRequest, GetIPTablesRequest, GetIPTablesResponse,
     GuestDetailsResponse, Interfaces, Metrics, OOMEvent, ReadStreamResponse, Routes,
@@ -69,7 +69,7 @@ use crate::trace_rpc_call;
 use crate::tracer::extract_carrier_from_ttrpc;
 
 #[cfg(feature = "agent-policy")]
-use crate::AGENT_POLICY;
+use crate::policy::{do_set_policy, is_allowed};
 
 use opentelemetry::global;
 use tracing::span;
@@ -123,31 +123,13 @@ fn sl() -> slog::Logger {
 }
 
 // Convenience function to wrap an error and response to ttrpc client
-fn ttrpc_error(code: ttrpc::Code, err: impl Debug) -> ttrpc::Error {
+pub fn ttrpc_error(code: ttrpc::Code, err: impl Debug) -> ttrpc::Error {
     get_rpc_status(code, format!("{:?}", err))
 }
 
 #[cfg(not(feature = "agent-policy"))]
-async fn is_allowed(_req: &(impl MessageDyn + serde::Serialize)) -> ttrpc::Result<()> {
+async fn is_allowed(_req: &impl serde::Serialize) -> ttrpc::Result<()> {
     Ok(())
-}
-
-#[cfg(feature = "agent-policy")]
-async fn is_allowed(req: &(impl MessageDyn + serde::Serialize)) -> ttrpc::Result<()> {
-    let request = serde_json::to_string(req).unwrap();
-    let mut policy = AGENT_POLICY.lock().await;
-    if !policy
-        .is_allowed_endpoint(req.descriptor_dyn().name(), &request)
-        .await
-    {
-        warn!(sl(), "{} is blocked by policy", req.descriptor_dyn().name());
-        Err(ttrpc_error(
-            ttrpc::Code::PERMISSION_DENIED,
-            format!("{} is blocked by policy", req.descriptor_dyn().name()),
-        ))
-    } else {
-        Ok(())
-    }
 }
 
 fn same<E>(e: E) -> E {
@@ -1439,14 +1421,8 @@ impl agent_ttrpc::AgentService for AgentService {
         req: protocols::agent::SetPolicyRequest,
     ) -> ttrpc::Result<Empty> {
         trace_rpc_call!(ctx, "set_policy", req);
-        is_allowed(&req).await?;
 
-        AGENT_POLICY
-            .lock()
-            .await
-            .set_policy(&req.policy)
-            .await
-            .map_ttrpc_err(same)?;
+        do_set_policy(&req).await?;
 
         Ok(Empty::new())
     }

@@ -4,14 +4,18 @@
 
 //! Vhost-based virtio device backend implementations.
 
-#[cfg(feature = "vhost-net")]
+#[cfg(feature = "vhost")]
 pub mod vhost_kern;
-
-pub use vhost_rs::vhost_user::Error as VhostUserError;
-pub use vhost_rs::Error as VhostError;
 
 #[cfg(feature = "vhost-user")]
 pub mod vhost_user;
+
+/// Common code for vhost-based network device
+#[cfg(any(feature = "vhost-net", feature = "vhost-user-net"))]
+mod net;
+
+pub use vhost_rs::vhost_user::Error as VhostUserError;
+pub use vhost_rs::Error as VhostError;
 
 impl std::convert::From<VhostError> for super::Error {
     fn from(e: VhostError) -> Self {

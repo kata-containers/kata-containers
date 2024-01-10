@@ -11,7 +11,7 @@ with-serde = [ "serde", "serde_json" ]
 async = ["ttrpc/async", "async-trait"]
 
 [dependencies]
-ttrpc = { version = "0.7.1" }
+ttrpc = "0.8"
 async-trait = { version = "0.1.42", optional = true }
 protobuf = { version = "3.2.0" }
 serde = { version = "1.0.130", features = ["derive"], optional = true }

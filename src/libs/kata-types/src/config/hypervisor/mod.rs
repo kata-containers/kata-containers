@@ -22,18 +22,18 @@
 //! part and common part. But the Kata 2.0 has adopted a policy to build a superset for all
 //! hypervisors, so let's contain it...
 
+use super::{default, ConfigOps, ConfigPlugin, TomlConfig};
+use crate::annotations::KATA_ANNO_CFG_HYPERVISOR_PREFIX;
+use crate::{eother, resolve_path, sl, validate_path};
+use byte_unit::{Byte, Unit};
+use lazy_static::lazy_static;
+use regex::RegexSet;
+use serde_enum_str::{Deserialize_enum_str, Serialize_enum_str};
 use std::collections::HashMap;
 use std::io::{self, Result};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-
-use lazy_static::lazy_static;
-use regex::RegexSet;
-use serde_enum_str::{Deserialize_enum_str, Serialize_enum_str};
-
-use super::{default, ConfigOps, ConfigPlugin, TomlConfig};
-use crate::annotations::KATA_ANNO_CFG_HYPERVISOR_PREFIX;
-use crate::{eother, resolve_path, sl, validate_path};
+use sysinfo::{System, SystemExt};
 
 mod dragonball;
 pub use self::dragonball::{DragonballConfig, HYPERVISOR_NAME_DRAGONBALL};
@@ -492,6 +492,38 @@ impl DeviceInfo {
     }
 }
 
+/// Virtual machine PCIe Topology configuration.
+#[derive(Clone, Debug, Default)]
+pub struct TopologyConfigInfo {
+    /// Hypervisor name
+    pub hypervisor_name: String,
+    /// Device Info
+    pub device_info: DeviceInfo,
+}
+
+impl TopologyConfigInfo {
+    /// Initialize the topology config info from toml config
+    pub fn new(toml_config: &TomlConfig) -> Option<Self> {
+        // Firecracker does not support PCIe Devices, so we should not initialize such a PCIe topology for it.
+        // If the case of fc hit, just return None.
+        let hypervisor_names = [
+            HYPERVISOR_NAME_QEMU,
+            HYPERVISOR_NAME_CH,
+            HYPERVISOR_NAME_DRAGONBALL,
+        ];
+        let hypervisor_name = toml_config.runtime.hypervisor_name.as_str();
+        if !hypervisor_names.contains(&hypervisor_name) {
+            return None;
+        }
+
+        let hv = toml_config.hypervisor.get(hypervisor_name)?;
+        Some(Self {
+            hypervisor_name: hypervisor_name.to_string(),
+            device_info: hv.device_info.clone(),
+        })
+    }
+}
+
 /// Configuration information for virtual machine.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct MachineInfo {
@@ -586,6 +618,13 @@ pub struct MemoryInfo {
     #[serde(default)]
     pub default_memory: u32,
 
+    /// Default maximum memory in MiB per SB / VM
+    /// unspecified or == 0           --> will be set to the actual amount of physical RAM
+    /// > 0 <= amount of physical RAM --> will be set to the specified number
+    /// > amount of physical RAM      --> will be set to the actual amount of physical RAM
+    #[serde(default)]
+    pub default_maxmemory: u32,
+
     /// Default memory slots per SB/VM.
     ///
     /// This is will determine the times that memory will be hotadded to sandbox/VM.
@@ -662,6 +701,12 @@ impl MemoryInfo {
             self.file_mem_backend,
             "Memory backend file {} is invalid: {}"
         )?;
+        if self.default_maxmemory == 0 {
+            let s = System::new_all();
+            self.default_maxmemory = Byte::from_u64(s.total_memory())
+                .get_adjusted_unit(Unit::MiB)
+                .get_value() as u32;
+        }
         Ok(())
     }
 

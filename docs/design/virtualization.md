@@ -112,6 +112,22 @@ Devices and features used:
 - seccomp filters
 - [HTTP OpenAPI](https://github.com/cloud-hypervisor/cloud-hypervisor/blob/main/vmm/src/api/openapi/cloud-hypervisor.yaml)
 
+### StratoVirt/KVM
+
+[StratoVirt](https://gitee.com/openeuler/stratovirt) is an enterprise-level open source VMM oriented to cloud data centers, implements a unified architecture to support Standard-VMs, containers and serverless (Micro-VM). StratoVirt has some competitive advantages, such as lightweight and low resource overhead, fast boot, hardware acceleration, and language-level security with Rust.
+
+Currently, StratoVirt in Kata supports Micro-VM machine type, mainly focus on FaaS cases, supporting device hotplug (virtio block), file-system sharing through virtio fs and so on. Kata Containers with StratoVirt now use virtio-mmio bus as driver, and doesn't support CPU/memory resize nor VFIO, thus doesn't support updating container resources after booted.
+
+Devices and features used currently:
+- Micro-VM machine type for FaaS(mmio, no ACPI)
+- Virtual Socket(vhost VSOCK、virtio console)
+- Virtual Storage(virtio block, mmio)
+- Virtual Networking(virtio net, mmio)
+- Shared Filesystem(virtio fs)
+- Device Hotplugging(virtio block hotplug)
+- Entropy Source(virtio RNG)
+- QMP API
+
 ### Summary
 
 | Solution | release introduced | brief summary |
@@ -119,3 +135,4 @@ Devices and features used:
 | Cloud Hypervisor | 1.10 | upstream Cloud Hypervisor with rich feature support, e.g. hotplug, VFIO and FS sharing|
 | Firecracker | 1.5 | upstream Firecracker, rust-VMM based, no VFIO, no FS sharing, no memory/CPU hotplug |
 | QEMU | 1.0 | upstream QEMU, with support for hotplug and filesystem sharing |
+| StratoVirt | 3.3 | upstream StratoVirt with FS sharing and virtio block hotplug, no VFIO, no CPU/memory resize |

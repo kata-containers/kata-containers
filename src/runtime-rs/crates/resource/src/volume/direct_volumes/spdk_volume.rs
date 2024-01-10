@@ -75,7 +75,7 @@ impl SPDKVolume {
 
         let vhu_blk_config = &mut VhostUserConfig {
             socket_path: device,
-            device_type: VhostUserType::Blk("vhost-user-blk-pci".to_owned()),
+            device_type: VhostUserType::Blk,
             driver_option: block_driver,
             ..Default::default()
         };

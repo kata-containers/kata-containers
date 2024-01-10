@@ -1,4 +1,4 @@
-383
+384
 ACPI/AB
 ACS/AB
 API/AB
@@ -145,6 +145,7 @@ SUSE/B
 SVG/AB
 SaaS/B
 SemaphoreCI/B
+StratoVirt/B
 Struct/A#
 Sysbench/B
 TBD/AB

@@ -9,6 +9,7 @@ use std::fmt;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 
+use crate::device::topology::PCIeTopology;
 use crate::device::{Device, DeviceType};
 use crate::Hypervisor as hypervisor;
 
@@ -27,19 +28,10 @@ impl fmt::Debug for Address {
 }
 
 #[derive(Clone, Debug, Default)]
-pub enum Backend {
-    #[default]
-    Virtio,
-    Vhost,
-}
-
-#[derive(Clone, Debug, Default)]
 pub struct NetworkConfig {
     /// for detach, now it's default value 0.
     pub index: u64,
 
-    /// Network device backend
-    pub backend: Backend,
     /// Host level path for the guest network interface.
     pub host_dev_name: String,
     /// Guest iface name for the guest network interface.
@@ -79,7 +71,11 @@ impl NetworkDevice {
 
 #[async_trait]
 impl Device for NetworkDevice {
-    async fn attach(&mut self, h: &dyn hypervisor) -> Result<()> {
+    async fn attach(
+        &mut self,
+        _pcie_topo: &mut Option<&mut PCIeTopology>,
+        h: &dyn hypervisor,
+    ) -> Result<()> {
         h.add_device(DeviceType::Network(self.clone()))
             .await
             .context("add network device.")?;
@@ -87,7 +83,11 @@ impl Device for NetworkDevice {
         return Ok(());
     }
 
-    async fn detach(&mut self, h: &dyn hypervisor) -> Result<Option<u64>> {
+    async fn detach(
+        &mut self,
+        _pcie_topo: &mut Option<&mut PCIeTopology>,
+        h: &dyn hypervisor,
+    ) -> Result<Option<u64>> {
         h.remove_device(DeviceType::Network(self.clone()))
             .await
             .context("remove network device.")?;

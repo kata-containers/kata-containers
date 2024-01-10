@@ -12,7 +12,7 @@ use tokio::fs::{File, OpenOptions};
 use async_trait::async_trait;
 
 use crate::{
-    device::{Device, DeviceType},
+    device::{topology::PCIeTopology, Device, DeviceType},
     Hypervisor as hypervisor,
 };
 
@@ -49,7 +49,11 @@ impl HybridVsockDevice {
 
 #[async_trait]
 impl Device for HybridVsockDevice {
-    async fn attach(&mut self, h: &dyn hypervisor) -> Result<()> {
+    async fn attach(
+        &mut self,
+        _pcie_topo: &mut Option<&mut PCIeTopology>,
+        h: &dyn hypervisor,
+    ) -> Result<()> {
         h.add_device(DeviceType::HybridVsock(self.clone()))
             .await
             .context("add hybrid vsock device.")?;
@@ -57,7 +61,11 @@ impl Device for HybridVsockDevice {
         return Ok(());
     }
 
-    async fn detach(&mut self, _h: &dyn hypervisor) -> Result<Option<u64>> {
+    async fn detach(
+        &mut self,
+        _pcie_topo: &mut Option<&mut PCIeTopology>,
+        _h: &dyn hypervisor,
+    ) -> Result<Option<u64>> {
         // no need to do detach, just return Ok(None)
         Ok(None)
     }
@@ -117,21 +125,29 @@ nix::ioctl_write_ptr!(
 const CID_RETRY_COUNT: u32 = 50;
 
 impl VsockDevice {
-    pub async fn new(id: String) -> Result<Self> {
-        let (guest_cid, _vhost_fd) = generate_vhost_vsock_cid()
-            .await
-            .context("generate vhost vsock cid failed")?;
-
+    pub async fn new(id: String, config: &VsockConfig) -> Result<Self> {
         Ok(Self {
             id,
-            config: VsockConfig { guest_cid },
+            config: config.clone(),
         })
+    }
+
+    pub async fn init_config(&mut self) -> Result<File> {
+        let (guest_cid, vhost_fd) = generate_vhost_vsock_cid()
+            .await
+            .context("generate vhost vsock cid failed")?;
+        self.config.guest_cid = guest_cid;
+        Ok(vhost_fd)
     }
 }
 
 #[async_trait]
 impl Device for VsockDevice {
-    async fn attach(&mut self, h: &dyn hypervisor) -> Result<()> {
+    async fn attach(
+        &mut self,
+        _pcie_topo: &mut Option<&mut PCIeTopology>,
+        h: &dyn hypervisor,
+    ) -> Result<()> {
         h.add_device(DeviceType::Vsock(self.clone()))
             .await
             .context("add vsock device.")?;
@@ -139,7 +155,11 @@ impl Device for VsockDevice {
         return Ok(());
     }
 
-    async fn detach(&mut self, _h: &dyn hypervisor) -> Result<Option<u64>> {
+    async fn detach(
+        &mut self,
+        _pcie_topo: &mut Option<&mut PCIeTopology>,
+        _h: &dyn hypervisor,
+    ) -> Result<Option<u64>> {
         // no need to do detach, just return Ok(None)
         Ok(None)
     }

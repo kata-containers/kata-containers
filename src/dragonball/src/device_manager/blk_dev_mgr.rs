@@ -17,6 +17,8 @@ use std::sync::Arc;
 
 use dbs_virtio_devices as virtio;
 use dbs_virtio_devices::block::{aio::Aio, io_uring::IoUring, Block, LocalFile, Ufile};
+#[cfg(feature = "vhost-user-blk")]
+use dbs_virtio_devices::vhost::vhost_user::block::VhostUserBlock;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::address_space_manager::GuestAddressSpaceImpl;
@@ -404,9 +406,29 @@ impl BlockDeviceMgr {
                             BlockDeviceError::DeviceManager(e)
                         })
                     }
+                    #[cfg(feature = "vhost-user-blk")]
                     BlockDeviceType::Spool | BlockDeviceType::Spdk => {
-                        // TBD
-                        todo!()
+                        let device = Self::create_vhost_user_device(&config, &mut ctx)
+                            .map_err(BlockDeviceError::Virtio)?;
+                        let dev = DeviceManager::create_mmio_virtio_device(
+                            device,
+                            &mut ctx,
+                            config.use_shared_irq.unwrap_or(self.use_shared_irq),
+                            config.use_generic_irq.unwrap_or(USE_GENERIC_IRQ),
+                        )
+                        .map_err(BlockDeviceError::DeviceManager)?;
+                        self.update_device_by_index(index, Arc::clone(&dev))?;
+                        ctx.insert_hotplug_mmio_device(&dev, None).map_err(|e| {
+                            let logger = ctx.logger().new(slog::o!());
+                            self.remove_device(ctx, &config.drive_id).unwrap();
+                            error!(
+                                logger,
+                                "failed to hot-add virtio block device {}, {:?}",
+                                &config.drive_id,
+                                e
+                            );
+                            BlockDeviceError::DeviceManager(e)
+                        })
                     }
                     _ => Err(BlockDeviceError::InvalidBlockDeviceType),
                 }
@@ -429,6 +451,25 @@ impl BlockDeviceMgr {
                         info.config.path_on_host.to_str().unwrap_or("<unknown>")
                     );
                     let device = Self::create_blk_device(&info.config, ctx)
+                        .map_err(BlockDeviceError::Virtio)?;
+                    let device = DeviceManager::create_mmio_virtio_device(
+                        device,
+                        ctx,
+                        info.config.use_shared_irq.unwrap_or(self.use_shared_irq),
+                        info.config.use_generic_irq.unwrap_or(USE_GENERIC_IRQ),
+                    )
+                    .map_err(BlockDeviceError::RegisterBlockDevice)?;
+                    info.device = Some(device);
+                }
+                #[cfg(feature = "vhost-user-blk")]
+                BlockDeviceType::Spool | BlockDeviceType::Spdk => {
+                    info!(
+                        ctx.logger(),
+                        "attach vhost-user-blk device, drive_id {}, path {}",
+                        info.config.drive_id,
+                        info.config.path_on_host.to_str().unwrap_or("<unknown>")
+                    );
+                    let device = Self::create_vhost_user_device(&info.config, ctx)
                         .map_err(BlockDeviceError::Virtio)?;
                     let device = DeviceManager::create_mmio_virtio_device(
                         device,
@@ -570,6 +611,25 @@ impl BlockDeviceMgr {
             Arc::new(cfg.queue_sizes()),
             epoll_mgr,
             limiters,
+        )?))
+    }
+
+    #[cfg(feature = "vhost-user-blk")]
+    fn create_vhost_user_device(
+        cfg: &BlockDeviceConfigInfo,
+        ctx: &mut DeviceOpContext,
+    ) -> std::result::Result<Box<VhostUserBlock<GuestAddressSpaceImpl>>, virtio::Error> {
+        info!(
+            ctx.logger(),
+            "new vhost user block device {:?}", cfg.path_on_host
+        );
+        let epoll_mgr = ctx.epoll_mgr.clone().ok_or(virtio::Error::InvalidInput)?;
+        let path = cfg.path_on_host.to_str().unwrap().to_string();
+
+        Ok(Box::new(VhostUserBlock::new(
+            path,
+            Arc::new(cfg.queue_sizes()),
+            epoll_mgr,
         )?))
     }
 
@@ -786,6 +846,7 @@ mod tests {
     use vmm_sys_util::tempfile::TempFile;
 
     use super::*;
+    use crate::device_manager::tests::create_address_space;
     use crate::test_utils::tests::create_vm_for_test;
 
     #[test]
@@ -877,7 +938,7 @@ mod tests {
             Some(vm.epoll_manager().clone()),
             vm.device_manager(),
             Some(vm.vm_as().unwrap().clone()),
-            None,
+            Some(create_address_space()),
             false,
             Some(vm.vm_config().clone()),
             vm.shared_info().clone(),
@@ -915,7 +976,7 @@ mod tests {
             Some(vm.epoll_manager().clone()),
             vm.device_manager(),
             Some(vm.vm_as().unwrap().clone()),
-            None,
+            Some(create_address_space()),
             false,
             Some(vm.vm_config().clone()),
             vm.shared_info().clone(),

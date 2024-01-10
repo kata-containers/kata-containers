@@ -5,11 +5,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::inner::CloudHypervisorInner;
+use crate::device::pci_path::PciPath;
 use crate::device::DeviceType;
 use crate::HybridVsockDevice;
 use crate::NetworkConfig;
 use crate::NetworkDevice;
-use crate::PciPath;
 use crate::ShareFsConfig;
 use crate::ShareFsDevice;
 use crate::VfioDevice;
@@ -277,7 +277,7 @@ impl CloudHypervisorInner {
             ));
         }
 
-        PciPath::convert_from_string(toks[0])
+        PciPath::try_from(toks[0])
     }
 
     async fn handle_hvsock_device(&mut self, device: HybridVsockDevice) -> Result<DeviceType> {
@@ -475,7 +475,7 @@ impl TryFrom<ShareFsSettings> for FsConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Address, Backend};
+    use crate::Address;
 
     #[test]
     fn test_networkconfig_to_netconfig() {
@@ -489,7 +489,6 @@ mod tests {
             allow_duplicate_mac: false,
             use_generic_irq: None,
             use_shared_irq: None,
-            backend: Backend::default(),
         };
 
         let net = NetConfig::try_from(cfg.clone());

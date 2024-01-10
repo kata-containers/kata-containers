@@ -1,0 +1,21 @@
+apiVersion: storage.k8s.io/v1
+kind: CSIDriver
+metadata:
+  name: directvolume.csi.katacontainers.io
+  labels:
+    app.kubernetes.io/instance: directvolume.csi.katacontainers.io
+    app.kubernetes.io/part-of: csi-driver-kata-directvolume
+    app.kubernetes.io/name: directvolume.csi.katacontainers.io
+    app.kubernetes.io/component: csi-driver
+spec:
+  # Supports persistent volume.
+  volumeLifecycleModes:
+  - Persistent
+  # To determine at runtime which mode a volume uses, pod info.
+  podInfoOnMount: true
+  # No attacher needed.
+  attachRequired: false
+  storageCapacity: false 
+  # Kubernetes may use fsGroup to change permissions and ownership 
+  # of the volume to match user requested fsGroup in the pod's SecurityPolicy
+  fsGroupPolicy: File

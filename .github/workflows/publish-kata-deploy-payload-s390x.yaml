@@ -26,9 +26,8 @@ jobs:
   kata-payload:
     runs-on: s390x
     steps:
-      - name: Adjust a permission for repo
-        run: |
-          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
+      - name: Take a pre-action for self-hosted runner
+        run: ${HOME}/script/pre_action.sh ubuntu-2204
 
       - uses: actions/checkout@v4
         with:

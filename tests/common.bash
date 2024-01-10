@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright (c) 2018-2019 Intel Corporation
+# Copyright (c) 2018-2023 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -226,7 +226,7 @@ function clean_env_ctr()
 function kill_kata_components() {
 	local ATTEMPTS=2
 	local TIMEOUT="30s"
-	local PID_NAMES=( "containerd-shim-kata-v2" "qemu-system-x86_64" "cloud-hypervisor" )
+	local PID_NAMES=( "containerd-shim-kata-v2" "qemu-system-x86_64" "qemu-system-x86_64-tdx-experimental" "cloud-hypervisor" )
 
 	sudo systemctl stop containerd
 	# iterate over the list of kata components and stop them
@@ -393,6 +393,7 @@ function install_kata() {
 		restart_crio_service
 	fi
 
+	load_vhost_mods
 }
 
 # creates a new kata configuration.toml hard link that
@@ -713,4 +714,11 @@ function get_test_version(){
         db="${cidir}/../versions.yaml"
 
         get_dep_from_yaml_db "${db}" "${dependency}"
+}
+
+# Load vhost, vhost_net, vhost_vsock modules.
+function load_vhost_mods() {
+	sudo modprobe vhost
+	sudo modprobe vhost_net
+	sudo modprobe vhost_vsock
 }
