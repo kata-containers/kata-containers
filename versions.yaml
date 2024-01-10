@@ -99,11 +99,6 @@ assets:
         https://github.com/qemu/qemu/tags
         .*/v?(\d\S+)\.tar\.gz
 
-    qemu-experimental:
-      description: "QEMU with virtiofs support"
-      url: "https://github.com/qemu/qemu"
-      version: "7a800cf9496fddddf71b21a00991e0ec757a170a"
-
     qemu-tdx-experimental:
       # yamllint disable-line rule:line-length
       description: "QEMU with TDX support - based on https://github.com/intel/tdx-tools/releases/tag/2023ww15"
@@ -175,6 +170,10 @@ assets:
     description: "Linux kernel optimised for virtual machines"
     url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
     version: "v6.1.62"
+    confidential:
+      description: "Linux kernel with x86_64 TEEs (SEV, SNP, and TDX) support"
+      url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
+      version: "v6.7"
     sev:
       description: "Linux kernel that supports SEV and SNP"
       url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
