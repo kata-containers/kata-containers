@@ -27,6 +27,10 @@
   Refer to the following guides for additional configuration steps:
 - [Kata Containers with ACRN Hypervisor](how-to-use-kata-containers-with-acrn.md)
 
+## Confidential Containers Policy
+
+- [How to auto-generate policy](../../src/tools/genpolicy/README.md)
+
 ## Advanced Topics
 
 - [How to use Kata Containers with virtio-fs](how-to-use-virtio-fs-with-kata.md)
