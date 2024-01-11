@@ -73,6 +73,9 @@ pub struct CloudHypervisorInner {
     // If the version of CH does not provide these details, the value will be
     // None.
     pub(crate) ch_features: Option<Vec<String>>,
+
+    /// Size of memory block of guest OS in MB (currently unused)
+    pub(crate) _guest_memory_block_size_mb: u32,
 }
 
 const CH_DEFAULT_TIMEOUT_SECS: u32 = 10;
@@ -112,6 +115,7 @@ impl CloudHypervisorInner {
             tasks: None,
             guest_protection_to_use: GuestProtection::NoProtection,
             ch_features: None,
+            _guest_memory_block_size_mb: 0,
         }
     }
 
