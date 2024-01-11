@@ -28,6 +28,10 @@ const (
 	// InitrdAsset is an initrd asset.
 	InitrdAsset AssetType = "initrd"
 
+	// SecureBootAsset is a secure boot asset.
+	// (IBM Z Secure Execution only)
+	SecureBootAsset AssetType = "secure_boot"
+
 	// HypervisorAsset is an hypervisor asset.
 	HypervisorAsset AssetType = "hypervisor"
 
