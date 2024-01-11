@@ -40,12 +40,11 @@ readonly default_containerd_config="/etc/containerd/config.toml"
 readonly default_containerd_config_backup="$CONTAINERD_CONFIG_FILE.backup"
 readonly kata_config="/etc/kata-containers/configuration.toml"
 readonly kata_config_backup="$kata_config.backup"
-readonly default_kata_config="/opt/kata/share/defaults/kata-containers/configuration.toml"
 
 function ci_config() {
 	sudo mkdir -p $(dirname "${kata_config}")
-	[ -f "$kata_config" ] && sudo cp "$kata_config" "$kata_config_backup" || \
-		sudo cp "$default_kata_config" "$kata_config"
+	[ -f "$kata_config" ] && sudo cp "$kata_config" "$kata_config_backup"
+	sudo cp -f "${KATA_CONFIG_PATH}" "$kata_config"
 
 	source /etc/os-release || source /usr/lib/os-release
 	ID=${ID:-""}
@@ -88,10 +87,18 @@ function create_containerd_config() {
 	[ -n "${runtime}" ] || die "need runtime to create config"
 
 	local runtime_type="${containerd_runtime_type}"
+
+	local runtime_config_path="${kata_config}"
+
+	local containerd_runtime=$(command -v "containerd-shim-${runtime}-v2")
+	local runtime_binary_path="${containerd_runtime}"
+
 	if [ "${runtime}" == "runc" ]; then
 		runtime_type="io.containerd.runc.v2"
+		runtime_config_path=""
+		runtime_binary_path=""
 	fi
-	local containerd_runtime=$(command -v "containerd-shim-${runtime}-v2")
+	info "Kata Config Path ${runtime_config_path}, Runtime Binary Name ${runtime_binary_path}"
 
 cat << EOF | sudo tee "${CONTAINERD_CONFIG_FILE}"
 [debug]
@@ -107,7 +114,8 @@ cat << EOF | sudo tee "${CONTAINERD_CONFIG_FILE}"
         echo '        container_annotations = ["io.katacontainers.*"]'
         )
         [plugins.cri.containerd.runtimes.${runtime}.options]
-          Runtime = "${containerd_runtime}"
+          ConfigPath = "${runtime_config_path}"
+          BinaryName = "${runtime_binary_path}"
 [plugins.linux]
        shim = "${containerd_shim_path}"
 EOF
