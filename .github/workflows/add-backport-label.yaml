@@ -19,18 +19,11 @@ jobs:
     if: ${{ github.event.label.name != 'auto-backport' }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code to allow hub to communicate with the project
+      - name: Checkout code to get gh-utils script
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
         uses: actions/checkout@v4
 
-      - name: Install hub extension script
-        run: |
-          pushd $(mktemp -d) &>/dev/null
-          git clone --single-branch --depth 1 "https://github.com/kata-containers/.github" && cd .github/scripts
-          sudo install hub-util.sh /usr/local/bin
-          popd &>/dev/null
-
-      - name: Determine whether to add label 
+      - name: Determine whether to add label
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -38,25 +31,19 @@ jobs:
         id: add_label
         run: |
           pr=${{ github.event.pull_request.number }}
-          linked_issue_urls=$(hub-util.sh \
+          linked_issues=$(./ci/gh-util.sh \
             list-issues-for-pr "$pr" |\
-            grep -v "^\#"  |\
-            cut -d';' -f3 || true)
-          [ -z "$linked_issue_urls" ] && {
+            grep -v "^\#" || true)
+          [ -z "${linked_issues}" ] && {
             echo "::error::No linked issues for PR $pr"
             exit 1
           }
           has_bug=false
-          for issue_url in $(echo "$linked_issue_urls")
+          for issue in $(echo "$linked_issues")
           do
-            issue=$(echo "$issue_url"| awk -F\/ '{print $NF}' || true)
-            [ -z "$issue" ] && {
-              echo "::error::Cannot determine issue number from $issue_url for PR $pr"
-              exit 1
-            }
-            labels=$(hub-util.sh list-labels-for-issue "$issue")
-            
-            label_names=$(echo $labels | jq -r '.[].name' || true)
+            labels=$(./ci/gh-util.sh list-labels-for-issue "$issue")
+
+            label_names=$(echo $labels | jq -r '.labels[].name' || true)
             if [[ "$label_names" =~ "bug" ]]; then
               has_bug=true
               break
