@@ -11,6 +11,7 @@ on:
       - opened
       - reopened
       - synchronize
+      - labeled
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -18,6 +19,7 @@ concurrency:
 
 jobs:
   add-pr-size-label:
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code

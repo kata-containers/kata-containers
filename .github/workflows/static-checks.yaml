@@ -5,6 +5,7 @@ on:
       - edited
       - reopened
       - synchronize
+      - labeled
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -126,6 +127,7 @@ jobs:
           RUST_BACKTRACE: "1"
 
   build-checks-depending-on-kvm:
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
     runs-on: garm-ubuntu-2004-smaller
     strategy:
       fail-fast: false
