@@ -747,6 +747,12 @@ func (conf *HypervisorConfig) ImageOrInitrdAssetPath() (string, types.AssetType,
 			return initrd, types.InitrdAsset, nil
 		}
 
+		// Even if neither image nor initrd are set, we still need to return
+		// if we are running a confidential guest on QemuCCWVirtio. (IBM Z Secure Execution)
+		if conf.ConfidentialGuest && conf.HypervisorMachineType == QemuCCWVirtio {
+			return "", types.SecureBootAsset, nil
+		}
+
 		return "", types.UnkownAsset, fmt.Errorf("one of image and initrd must be set")
 	}
 
