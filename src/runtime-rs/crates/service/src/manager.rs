@@ -4,28 +4,19 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{
-    fs,
-    os::unix::io::{FromRawFd, RawFd},
-    process::Stdio,
-    sync::Arc,
-};
+use std::fs;
+use std::os::unix::io::{FromRawFd, RawFd};
+use std::sync::Arc;
 
 use anyhow::{Context, Result};
-use common::message::{Action, Event, Message};
-use containerd_shim_protos::{
-    protobuf::{well_known_types::any::Any, Message as ProtobufMessage},
-    shim_async,
-};
+use common::message::{Action, Message};
+use containerd_shim_protos::shim_async;
 use kata_types::config::KATA_PATH;
 use runtimes::RuntimeHandlerManager;
-use tokio::{
-    io::AsyncWriteExt,
-    process::Command,
-    sync::mpsc::{channel, Receiver},
-};
+use tokio::sync::mpsc::{channel, Receiver};
 use ttrpc::asynchronous::Server;
 
+use crate::event::{new_event_publisher, Forwarder};
 use crate::task_service::TaskService;
 
 /// message buffer size
@@ -38,6 +29,7 @@ pub struct ServiceManager {
     binary: String,
     address: String,
     namespace: String,
+    event_publisher: Box<dyn Forwarder>,
 }
 
 impl std::fmt::Debug for ServiceManager {
@@ -70,6 +62,10 @@ impl ServiceManager {
         let handler = Arc::new(rt_mgr);
         let mut task_server = unsafe { Server::from_raw_fd(task_server_fd) };
         task_server = task_server.set_domain_unix();
+        let event_publisher = new_event_publisher(namespace)
+            .await
+            .context("new event publisher")?;
+
         Ok(Self {
             receiver: Some(receiver),
             handler,
@@ -77,6 +73,7 @@ impl ServiceManager {
             binary: containerd_binary.to_string(),
             address: address.to_string(),
             namespace: namespace.to_string(),
+            event_publisher,
         })
     }
 
@@ -99,7 +96,10 @@ impl ServiceManager {
                     }
                     Action::Event(event) => {
                         info!(sl!(), "get event {:?}", &event);
-                        self.send_event(event).await.context("send event")
+                        self.event_publisher
+                            .forward(event)
+                            .await
+                            .context("forward event")
                     }
                 };
 
@@ -156,42 +156,6 @@ impl ServiceManager {
         if let Some(t) = self.task_server.as_mut() {
             t.stop_listen().await;
         }
-        Ok(())
-    }
-
-    async fn send_event(&self, event: Arc<dyn Event>) -> Result<()> {
-        let any = Any {
-            type_url: event.type_url(),
-            value: event.value().context("get event value")?,
-            ..Default::default()
-        };
-        let data = any.write_to_bytes().context("write to any")?;
-        let mut child = Command::new(&self.binary)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .args([
-                "--address",
-                &self.address,
-                "publish",
-                "--topic",
-                &event.r#type(),
-                "--namespace",
-                &self.namespace,
-            ])
-            .spawn()
-            .context("spawn containerd cmd to publish event")?;
-
-        let stdin = child.stdin.as_mut().context("failed to open stdin")?;
-        stdin
-            .write_all(&data)
-            .await
-            .context("failed to write to stdin")?;
-        let output = child
-            .wait_with_output()
-            .await
-            .context("failed to read stdout")?;
-        info!(sl!(), "get output: {:?}", output);
         Ok(())
     }
 }
