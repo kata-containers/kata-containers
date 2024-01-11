@@ -246,10 +246,26 @@ function TestKilledVmmCleanup() {
 }
 
 function TestContainerMemoryUpdate() {
+	# there's no need to set true for enable_virtio_mem  in dragonball
+	# As it can support virtio-mem by default.
+	if [[ "${KATA_HYPERVISOR}" == "dragonball" ]]; then
+		# Currently, dragonball fails at decrease memory, just test increasing memory.
+		# We'll re-enable it as soon as we get it to work.
+		# Reference: https://github.com/kata-containers/kata-containers/issues/8804
+		DoContainerMemoryUpdate 0
+	fi
+
 	if [[ "${KATA_HYPERVISOR}" != "qemu" ]] || [[ "${ARCH}" == "ppc64le" ]] || [[ "${ARCH}" == "s390x" ]]; then
 		return
 	fi
 
+	for virtio_mem_enabled in {1, 0}; do
+		PrepareContainerMemoryUpdate $virtio_mem_enabled
+		DoContainerMemoryUpdate $virtio_mem_enabled
+	done
+}
+
+function PrepareContainerMemoryUpdate() {
 	test_virtio_mem=$1
 
 	if [ $test_virtio_mem -eq 1 ]; then
@@ -264,7 +280,12 @@ function TestContainerMemoryUpdate() {
 
 		sudo sed -i -e 's/^enable_virtio_mem.*$/#enable_virtio_mem = true/g' "${kata_config}"
 	fi
+}
 
+function DoContainerMemoryUpdate() {
+	descrease_memory=$1
+
+	# start a test container
 	testContainerStart
 
 	vm_size=$(($(sudo crictl exec $cid cat /proc/meminfo | grep "MemTotal:" | awk '{print $2}')*1024))
@@ -282,7 +303,7 @@ function TestContainerMemoryUpdate() {
 		die "The VM memory size $vm_size after increase is not right"
 	fi
 
-	if [ $test_virtio_mem -eq 1 ]; then
+	if [ $descrease_memory -eq 1 ]; then
 		sudo crictl update --memory $((1*1024*1024*1024)) $cid
 		sleep 1
 
@@ -293,6 +314,7 @@ function TestContainerMemoryUpdate() {
 		fi
 	fi
 
+	# stop the test container
 	testContainerStop
 }
 
@@ -632,11 +654,7 @@ function main() {
 	# Reference: https://github.com/kata-containers/kata-containers/issues/7410
 	# TestContainerSwap
 
-	# TODO: runtime-rs doesn't support memory update currently
-	if [ "$KATA_HYPERVISOR" != "dragonball" ]; then
-		TestContainerMemoryUpdate 1
-		TestContainerMemoryUpdate 0
-	fi
+	TestContainerMemoryUpdate
 
 	if [[ "${ARCH}" != "ppc64le" ]]; then
 		TestKilledVmmCleanup
