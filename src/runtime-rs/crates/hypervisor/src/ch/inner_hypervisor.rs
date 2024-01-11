@@ -744,20 +744,24 @@ impl CloudHypervisorInner {
         Err(anyhow!("CH hypervisor metrics not implemented - see https://github.com/kata-containers/kata-containers/issues/8800"))
     }
 
-    pub(crate) fn set_capabilities(&mut self, _flag: CapabilityBits) {
-        todo!()
+    pub(crate) fn set_capabilities(&mut self, flag: CapabilityBits) {
+        let mut caps = Capabilities::default();
+
+        caps.set(flag)
     }
 
-    pub(crate) fn set_guest_memory_block_size(&mut self, _size: u32) {
-        todo!()
+    pub(crate) fn set_guest_memory_block_size(&mut self, size: u32) {
+        self._guest_memory_block_size_mb = size;
     }
 
     pub(crate) fn guest_memory_block_size_mb(&self) -> u32 {
-        todo!()
+        self._guest_memory_block_size_mb
     }
 
     pub(crate) fn resize_memory(&self, _new_mem_mb: u32) -> Result<(u32, MemoryConfig)> {
-        todo!()
+        warn!(sl!(), "CH memory resize not implemented - see https://github.com/kata-containers/kata-containers/issues/8801");
+
+        Ok((0, MemoryConfig::default()))
     }
 }
 
