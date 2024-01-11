@@ -741,7 +741,7 @@ impl CloudHypervisorInner {
     }
 
     pub(crate) async fn get_hypervisor_metrics(&self) -> Result<String> {
-        todo!()
+        Err(anyhow!("CH hypervisor metrics not implemented - see https://github.com/kata-containers/kata-containers/issues/8800"))
     }
 
     pub(crate) fn set_capabilities(&mut self, _flag: CapabilityBits) {
