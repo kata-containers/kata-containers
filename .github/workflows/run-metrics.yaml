@@ -48,7 +48,7 @@ jobs:
       # all the tests due to a single flaky instance.
       fail-fast: false
       matrix:
-        vmm: ['clh', 'qemu']
+        vmm: ['clh', 'qemu', 'stratovirt']
       max-parallel: 1
     runs-on: metrics
     env:

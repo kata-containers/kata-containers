@@ -125,7 +125,11 @@ function extract_kata_env() {
 	HYPERVISOR_PATH=$(sudo ${cmd} env --json | jq -r ${hypervisor_path})
 	# TODO: there is no ${cmd} of rust version currently
 	if [ "${KATA_HYPERVISOR}" != "dragonball" ]; then
-		HYPERVISOR_VERSION=$(sudo -E ${HYPERVISOR_PATH} --version | head -n1)
+		if [ "${KATA_HYPERVISOR}" = "stratovirt" ]; then
+			HYPERVISOR_VERSION=$(sudo -E ${HYPERVISOR_PATH} -version | head -n1)
+		else
+			HYPERVISOR_VERSION=$(sudo -E ${HYPERVISOR_PATH} --version | head -n1)
+		fi
 	fi
 	VIRTIOFSD_PATH=$(sudo ${cmd} env --json | jq -r ${virtio_fs_daemon_path})
 
