@@ -586,12 +586,43 @@ func TestAppendMemoryFileBackedMem(t *testing.T) {
 	knobs := Knobs{
 		FileBackedMem: true,
 		MemShared:     false,
+		Private:       false,
 	}
 	objMemString := "-object memory-backend-file,id=dimm1,size=1G,mem-path=foobar"
 	numaMemString := "-numa node,memdev=dimm1"
 	memBackendString := "-machine memory-backend=dimm1"
 
 	knobsString := objMemString + " "
+	if isDimmSupported(nil) {
+		knobsString += numaMemString
+	} else {
+		knobsString += memBackendString
+	}
+
+	testConfigAppend(conf, knobs, memString+" "+knobsString, t)
+
+	// Reset the conf and memString values
+	conf = &Config{
+		Memory: Memory{
+			Size:   "1G",
+			Slots:  8,
+			MaxMem: "3G",
+			Path:   "foobar",
+		},
+	}
+	memString = "-m 1G,slots=8,maxmem=3G"
+	testConfigAppend(conf, conf.Memory, memString, t)
+
+	knobs = Knobs{
+		FileBackedMem: true,
+		MemShared:     false,
+		Private:       true,
+	}
+	objMemString = "-object memory-backend-file,id=dimm1,size=1G,mem-path=foobar,private=on"
+	numaMemString = "-numa node,memdev=dimm1"
+	memBackendString = "-machine memory-backend=dimm1"
+
+	knobsString = objMemString + " "
 	if isDimmSupported(nil) {
 		knobsString += numaMemString
 	} else {
@@ -628,29 +659,6 @@ func TestAppendMemoryFileBackedMemPrealloc(t *testing.T) {
 	} else {
 		knobsString += memBackendString
 	}
-
-	testConfigAppend(conf, knobs, memString+" "+knobsString, t)
-}
-
-func TestAppendMemoryBackedMemFdPrivate(t *testing.T) {
-	conf := &Config{
-		Memory: Memory{
-			Size:  "1G",
-			Slots: 8,
-		},
-	}
-	memString := "-m 1G,slots=8"
-	testConfigAppend(conf, conf.Memory, memString, t)
-
-	knobs := Knobs{
-		MemFDPrivate: true,
-		MemShared:    false,
-	}
-	objMemString := "-object memory-backend-memfd-private,id=dimm1,size=1G"
-	memBackendString := "-machine memory-backend=dimm1"
-
-	knobsString := objMemString + " "
-	knobsString += memBackendString
 
 	testConfigAppend(conf, knobs, memString+" "+knobsString, t)
 }
