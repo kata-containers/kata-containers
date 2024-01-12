@@ -153,7 +153,7 @@ rootfs-image-tdx-tarball: kernel-tdx-experimental-tarball
 rootfs-initrd-mariner-tarball:
 	${MAKE} $@-build
 
-rootfs-initrd-sev-tarball: kernel-sev-tarball
+rootfs-initrd-sev-tarball: kernel-confidential-tarball
 	${MAKE} $@-build
 
 rootfs-initrd-tarball:
