@@ -98,8 +98,6 @@ options:
 	kernel-nvidia-gpu
 	kernel-nvidia-gpu-snp
 	kernel-nvidia-gpu-tdx-experimental
-	kernel-sev-tarball
-	kernel-tdx-experimental
 	nydus
 	ovmf
 	ovmf-sev
@@ -381,29 +379,6 @@ install_kernel_nvidia_gpu_tdx_experimental() {
 		"assets.kernel-tdx-experimental.version" \
 		"kernel-nvidia-gpu-tdx-experimental" \
 		"-x tdx -g nvidia -u ${kernel_url} -H deb"
-}
-
-#Install experimental TDX kernel asset
-install_kernel_tdx_experimental() {
-	local kernel_url="$(get_from_kata_deps assets.kernel-tdx-experimental.url)"
-
-	export MEASURED_ROOTFS=yes
-
-	install_kernel_helper \
-		"assets.kernel-tdx-experimental.version" \
-		"kernel-tdx-experimental" \
-		"-x tdx -u ${kernel_url}"
-}
-
-#Install sev kernel asset
-install_kernel_sev() {
-	info "build sev kernel"
-	local kernel_url="$(get_from_kata_deps assets.kernel.sev.url)"
-
-	install_kernel_helper \
-		"assets.kernel.sev.version" \
-		"kernel-sev" \
-		"-x sev -u ${kernel_url}"
 }
 
 install_qemu_helper() {
@@ -757,7 +732,6 @@ handle_build() {
 		install_kernel
 		install_kernel_confidential
 		install_kernel_dragonball_experimental
-		install_kernel_tdx_experimental
 		install_log_parser_rs
 		install_nydus
 		install_ovmf
@@ -800,10 +774,6 @@ handle_build() {
 	kernel-nvidia-gpu-snp) install_kernel_nvidia_gpu_snp;;
 
 	kernel-nvidia-gpu-tdx-experimental) install_kernel_nvidia_gpu_tdx_experimental;;
-
-	kernel-tdx-experimental) install_kernel_tdx_experimental ;;
-
-	kernel-sev) install_kernel_sev ;;
 
 	nydus) install_nydus ;;
 
