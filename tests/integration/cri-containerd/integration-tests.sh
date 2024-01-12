@@ -40,12 +40,11 @@ readonly default_containerd_config="/etc/containerd/config.toml"
 readonly default_containerd_config_backup="$CONTAINERD_CONFIG_FILE.backup"
 readonly kata_config="/etc/kata-containers/configuration.toml"
 readonly kata_config_backup="$kata_config.backup"
-readonly default_kata_config="/opt/kata/share/defaults/kata-containers/configuration.toml"
 
 function ci_config() {
 	sudo mkdir -p $(dirname "${kata_config}")
-	[ -f "$kata_config" ] && sudo cp "$kata_config" "$kata_config_backup" || \
-		sudo cp "$default_kata_config" "$kata_config"
+	[ -f "$kata_config" ] && sudo cp "$kata_config" "$kata_config_backup"
+	sudo cp -f "${KATA_CONFIG_PATH}" "$kata_config"
 
 	source /etc/os-release || source /usr/lib/os-release
 	ID=${ID:-""}
@@ -88,10 +87,18 @@ function create_containerd_config() {
 	[ -n "${runtime}" ] || die "need runtime to create config"
 
 	local runtime_type="${containerd_runtime_type}"
+
+	local runtime_config_path="${kata_config}"
+
+	local containerd_runtime=$(command -v "containerd-shim-${runtime}-v2")
+	local runtime_binary_path="${containerd_runtime}"
+
 	if [ "${runtime}" == "runc" ]; then
 		runtime_type="io.containerd.runc.v2"
+		runtime_config_path=""
+		runtime_binary_path=""
 	fi
-	local containerd_runtime=$(command -v "containerd-shim-${runtime}-v2")
+	info "Kata Config Path ${runtime_config_path}, Runtime Binary Name ${runtime_binary_path}"
 
 cat << EOF | sudo tee "${CONTAINERD_CONFIG_FILE}"
 [debug]
@@ -107,7 +114,8 @@ cat << EOF | sudo tee "${CONTAINERD_CONFIG_FILE}"
         echo '        container_annotations = ["io.katacontainers.*"]'
         )
         [plugins.cri.containerd.runtimes.${runtime}.options]
-          Runtime = "${containerd_runtime}"
+          ConfigPath = "${runtime_config_path}"
+          BinaryName = "${runtime_binary_path}"
 [plugins.linux]
        shim = "${containerd_shim_path}"
 EOF
@@ -238,10 +246,26 @@ function TestKilledVmmCleanup() {
 }
 
 function TestContainerMemoryUpdate() {
+	# there's no need to set true for enable_virtio_mem  in dragonball
+	# As it can support virtio-mem by default.
+	if [[ "${KATA_HYPERVISOR}" == "dragonball" ]]; then
+		# Currently, dragonball fails at decrease memory, just test increasing memory.
+		# We'll re-enable it as soon as we get it to work.
+		# Reference: https://github.com/kata-containers/kata-containers/issues/8804
+		DoContainerMemoryUpdate 0
+	fi
+
 	if [[ "${KATA_HYPERVISOR}" != "qemu" ]] || [[ "${ARCH}" == "ppc64le" ]] || [[ "${ARCH}" == "s390x" ]]; then
 		return
 	fi
 
+	for virtio_mem_enabled in {1, 0}; do
+		PrepareContainerMemoryUpdate $virtio_mem_enabled
+		DoContainerMemoryUpdate $virtio_mem_enabled
+	done
+}
+
+function PrepareContainerMemoryUpdate() {
 	test_virtio_mem=$1
 
 	if [ $test_virtio_mem -eq 1 ]; then
@@ -256,7 +280,12 @@ function TestContainerMemoryUpdate() {
 
 		sudo sed -i -e 's/^enable_virtio_mem.*$/#enable_virtio_mem = true/g' "${kata_config}"
 	fi
+}
 
+function DoContainerMemoryUpdate() {
+	descrease_memory=$1
+
+	# start a test container
 	testContainerStart
 
 	vm_size=$(($(sudo crictl exec $cid cat /proc/meminfo | grep "MemTotal:" | awk '{print $2}')*1024))
@@ -274,7 +303,7 @@ function TestContainerMemoryUpdate() {
 		die "The VM memory size $vm_size after increase is not right"
 	fi
 
-	if [ $test_virtio_mem -eq 1 ]; then
+	if [ $descrease_memory -eq 1 ]; then
 		sudo crictl update --memory $((1*1024*1024*1024)) $cid
 		sleep 1
 
@@ -285,6 +314,7 @@ function TestContainerMemoryUpdate() {
 		fi
 	fi
 
+	# stop the test container
 	testContainerStop
 }
 
@@ -624,11 +654,7 @@ function main() {
 	# Reference: https://github.com/kata-containers/kata-containers/issues/7410
 	# TestContainerSwap
 
-	# TODO: runtime-rs doesn't support memory update currently
-	if [ "$KATA_HYPERVISOR" != "dragonball" ]; then
-		TestContainerMemoryUpdate 1
-		TestContainerMemoryUpdate 0
-	fi
+	TestContainerMemoryUpdate
 
 	if [[ "${ARCH}" != "ppc64le" ]]; then
 		TestKilledVmmCleanup
