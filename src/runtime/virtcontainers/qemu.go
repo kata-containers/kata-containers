@@ -629,13 +629,6 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 			// headaches in the future.
 			knobs.FileBackedMem = false
 			knobs.MemShared = false
-
-			// SMP is currently broken with TDX 1.5, and
-			// we must ensure we use something like:
-			// `...,sockets=1,cores=numvcpus,threads=1,...`
-			smp.Sockets = 1
-			smp.Cores = q.config.NumVCPUs()
-			smp.Threads = 1
 		}
 	}
 
