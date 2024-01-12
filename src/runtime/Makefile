@@ -378,18 +378,6 @@ ifneq (,$(QEMUCMD))
     KERNELNAME = $(call MAKE_KERNEL_NAME,$(KERNELTYPE))
     KERNELPATH = $(KERNELDIR)/$(KERNELNAME)
 
-    KERNELSEVTYPE = compressed
-    KERNELSEVNAME = $(call MAKE_KERNEL_SEV_NAME,$(KERNELSEVTYPE))
-    KERNELSEVPATH = $(KERNELDIR)/$(KERNELSEVNAME)
-
-    KERNELTDXTYPE = compressed
-    KERNELTDXNAME = $(call MAKE_KERNEL_TDX_NAME,$(KERNELTDXTYPE))
-    KERNELTDXPATH = $(KERNELDIR)/$(KERNELTDXNAME)
-
-    KERNELSNPTYPE = compressed
-    KERNELSNPNAME = $(call MAKE_KERNEL_SNP_NAME,$(KERNELSNPTYPE))
-    KERNELSNPPATH = $(KERNELDIR)/$(KERNELSNPNAME)
-
     KERNELCONFIDENTIALTYPE = compressed
     KERNELCONFIDENTIALNAME = $(call MAKE_KERNEL_CONFIDENTIAL_NAME,$(KERNELCONFIDENTIALTYPE))
     KERNELCONFIDENTIALPATH = $(KERNELDIR)/$(KERNELCONFIDENTIALNAME)
@@ -590,9 +578,6 @@ USER_VARS += KERNELTYPE_CLH
 USER_VARS += KERNELPATH_ACRN
 USER_VARS += KERNELPATH
 USER_VARS += KERNELCONFIDENTIALPATH
-USER_VARS += KERNELSEVPATH
-USER_VARS += KERNELTDXPATH
-USER_VARS += KERNELSNPPATH
 USER_VARS += KERNELSEPATH
 USER_VARS += KERNELPATH_CLH
 USER_VARS += KERNELPATH_FC
@@ -776,19 +761,6 @@ endef
 
 define MAKE_KERNEL_VIRTIOFS_NAME
 $(if $(findstring uncompressed,$1),vmlinux-virtiofs.container,vmlinuz-virtiofs.container)
-endef
-
-define MAKE_KERNEL_SEV_NAME
-$(if $(findstring uncompressed,$1),vmlinux-sev.container,vmlinuz-sev.container)
-endef
-
-define MAKE_KERNEL_TDX_NAME
-$(if $(findstring uncompressed,$1),vmlinux-tdx.container,vmlinuz-tdx.container)
-endef
-
-# SNP configuration uses the SEV kernel
-define MAKE_KERNEL_SNP_NAME
-$(if $(findstring uncompressed,$1),vmlinux-sev.container,vmlinuz-sev.container)
 endef
 
 define MAKE_KERNEL_CONFIDENTIAL_NAME
