@@ -421,6 +421,8 @@ function enabling_hypervisor() {
 	declare -r DEST_KATA_CONFIG="${CONFIG_DIR}/configuration.toml"
 
 	sudo ln -sf "${SRC_HYPERVISOR_CONFIG}" "${DEST_KATA_CONFIG}"
+
+	export KATA_CONFIG_PATH="${DEST_KATA_CONFIG}"
 }
 
 
