@@ -390,6 +390,10 @@ ifneq (,$(QEMUCMD))
     KERNELSNPNAME = $(call MAKE_KERNEL_SNP_NAME,$(KERNELSNPTYPE))
     KERNELSNPPATH = $(KERNELDIR)/$(KERNELSNPNAME)
 
+    KERNELCONFIDENTIALTYPE = compressed
+    KERNELCONFIDENTIALNAME = $(call MAKE_KERNEL_CONFIDENTIAL_NAME,$(KERNELCONFIDENTIALTYPE))
+    KERNELCONFIDENTIALPATH = $(KERNELDIR)/$(KERNELCONFIDENTIALNAME)
+
     KERNELSENAME = kata-containers-se.img
     KERNELSEPATH = $(KERNELDIR)/$(KERNELSENAME)
 endif
@@ -585,6 +589,7 @@ USER_VARS += KERNELTYPE_ACRN
 USER_VARS += KERNELTYPE_CLH
 USER_VARS += KERNELPATH_ACRN
 USER_VARS += KERNELPATH
+USER_VARS += KERNELCONFIDENTIALPATH
 USER_VARS += KERNELSEVPATH
 USER_VARS += KERNELTDXPATH
 USER_VARS += KERNELSNPPATH
@@ -784,6 +789,10 @@ endef
 # SNP configuration uses the SEV kernel
 define MAKE_KERNEL_SNP_NAME
 $(if $(findstring uncompressed,$1),vmlinux-sev.container,vmlinuz-sev.container)
+endef
+
+define MAKE_KERNEL_CONFIDENTIAL_NAME
+$(if $(findstring uncompressed,$1),vmlinux-confidential.container,vmlinuz-confidential.container)
 endef
 
 GENERATED_FILES += pkg/katautils/config-settings.go
