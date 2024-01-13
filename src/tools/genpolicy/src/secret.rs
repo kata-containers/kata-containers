@@ -44,7 +44,7 @@ impl Secret {
                     if my_name.eq(name) {
                         if let Some(data) = &self.data {
                             if let Some(value) = data.get(&key_ref.key) {
-                                let value_bytes = general_purpose::STANDARD.decode(&value).unwrap();
+                                let value_bytes = general_purpose::STANDARD.decode(value).unwrap();
                                 let value_string = std::str::from_utf8(&value_bytes).unwrap();
                                 return Some(value_string.to_string());
                             }

@@ -32,9 +32,9 @@ pub fn get_policy_mounts(
     };
 
     for s_mount in settings_mounts {
-        if keep_settings_mount(settings, &s_mount, &yaml_container.volumeMounts) {
+        if keep_settings_mount(settings, s_mount, &yaml_container.volumeMounts) {
             let mut mount = s_mount.clone();
-            adjust_termination_path(&mut mount, &yaml_container);
+            adjust_termination_path(&mut mount, yaml_container);
 
             if mount.source.is_empty() && mount.type_.eq("bind") {
                 if let Some(file_name) = Path::new(&mount.destination).file_name() {
@@ -54,12 +54,11 @@ pub fn get_policy_mounts(
                 policy_mount.options = mount.options.iter().map(String::from).collect();
             } else {
                 // Add a new mount.
-                if !is_pause_container {
-                    if s_mount.destination.eq("/etc/hostname")
-                        || s_mount.destination.eq("/etc/resolv.conf")
-                    {
-                        mount.options.push(rootfs_access.to_string());
-                    }
+                if !is_pause_container
+                    && (s_mount.destination.eq("/etc/hostname")
+                        || s_mount.destination.eq("/etc/resolv.conf"))
+                {
+                    mount.options.push(rootfs_access.to_string());
                 }
                 p_mounts.push(mount);
             }
