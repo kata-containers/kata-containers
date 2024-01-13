@@ -37,8 +37,7 @@ pub struct Volume {
     pub secret: Option<SecretVolumeSource>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub downwardAPI: Option<DownwardAPIVolumeSource>
-    // TODO: additional fields.
+    pub downwardAPI: Option<DownwardAPIVolumeSource>, // TODO: additional fields.
 }
 
 /// See Reference / Kubernetes API / Config and Storage Resources / Volume.
