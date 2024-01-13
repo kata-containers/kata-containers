@@ -27,7 +27,6 @@ use core::fmt::Debug;
 use log::debug;
 use protocols::agent;
 use serde::{Deserialize, Serialize};
-use serde_yaml;
 use std::boxed;
 use std::collections::BTreeMap;
 use std::fs::read_to_string;
@@ -95,7 +94,7 @@ pub fn new_k8s_resource(
 ) -> anyhow::Result<(boxed::Box<dyn K8sResource + Sync + Send>, String)> {
     let header = get_yaml_header(yaml)?;
     let kind: &str = &header.kind;
-    let d = serde_yaml::Deserializer::from_str(&yaml);
+    let d = serde_yaml::Deserializer::from_str(yaml);
 
     match kind {
         "ConfigMap" => {
@@ -202,7 +201,7 @@ pub fn new_k8s_resource(
 
 pub fn get_input_yaml(yaml_file: &Option<String>) -> anyhow::Result<String> {
     let yaml_string = if let Some(yaml) = yaml_file {
-        read_to_string(&yaml)?
+        read_to_string(yaml)?
     } else {
         std::io::read_to_string(std::io::stdin())?
     };
@@ -211,7 +210,7 @@ pub fn get_input_yaml(yaml_file: &Option<String>) -> anyhow::Result<String> {
 }
 
 pub fn get_yaml_header(yaml: &str) -> anyhow::Result<YamlHeader> {
-    return Ok(serde_yaml::from_str(yaml)?);
+    Ok(serde_yaml::from_str(yaml)?)
 }
 
 pub async fn k8s_resource_init(spec: &mut pod::PodSpec, use_cache: bool) {
@@ -267,7 +266,7 @@ pub fn add_policy_annotation(
 
     let path_components = metadata_path.split('.');
     for name in path_components {
-        ancestor = ancestor.get_mut(&name).unwrap();
+        ancestor = ancestor.get_mut(name).unwrap();
     }
 
     if let Some(annotations) = ancestor.get_mut(&annotations_key) {

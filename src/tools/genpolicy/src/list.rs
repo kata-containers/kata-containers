@@ -75,13 +75,13 @@ impl yaml::K8sResource for List {
     }
 
     fn serialize(&mut self, policy: &str) -> String {
-        let policies: Vec<&str> = policy.split(":").collect();
+        let policies: Vec<&str> = policy.split(':').collect();
         let len = policies.len();
         assert!(len == self.resources.len());
 
         self.items.clear();
-        for i in 0..len {
-            let yaml = self.resources[i].serialize(policies[i]);
+        for (i, p) in policies.iter().enumerate().take(len) {
+            let yaml = self.resources[i].serialize(p);
             let document = serde_yaml::Deserializer::from_str(&yaml);
             let doc_value = Value::deserialize(document).unwrap();
             self.items.push(doc_value.clone());

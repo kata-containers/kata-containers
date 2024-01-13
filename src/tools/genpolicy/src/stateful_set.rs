@@ -200,7 +200,7 @@ impl StatefulSet {
                             source:
                                 "^/run/kata-containers/shared/containers/$(bundle-id)-[a-z0-9]{16}-"
                                     .to_string()
-                                    + &file_name
+                                    + file_name
                                     + "$",
                             options: vec![
                                 "rbind".to_string(),
