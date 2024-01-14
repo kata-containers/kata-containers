@@ -878,7 +878,10 @@ fn add_missing_strings(src: &Vec<String>, dest: &mut Vec<String>) {
     debug!("src = {:?}, dest = {:?}", src, dest)
 }
 
-pub fn get_kata_namespaces(is_pause_container: bool, use_host_network: bool) -> Vec<KataLinuxNamespace> {
+pub fn get_kata_namespaces(
+    is_pause_container: bool,
+    use_host_network: bool,
+) -> Vec<KataLinuxNamespace> {
     let mut namespaces: Vec<KataLinuxNamespace> = vec![KataLinuxNamespace {
         Type: "ipc".to_string(),
         Path: "".to_string(),
