@@ -729,7 +729,7 @@ impl Container {
                             capabilities.Permitted.clear();
                             capabilities.Effective.clear();
                         } else {
-                            let cap = "CAP_".to_string() + &c;
+                            let cap = "CAP_".to_string() + c;
 
                             capabilities.Bounding.retain(|x| !x.eq(&cap));
                             capabilities.Permitted.retain(|x| !x.eq(&cap));
@@ -739,7 +739,7 @@ impl Container {
                 }
                 if let Some(add) = &yaml_capabilities.add {
                     for c in add {
-                        let cap = "CAP_".to_string() + &c;
+                        let cap = "CAP_".to_string() + c;
 
                         if !capabilities.Bounding.contains(&cap) {
                             capabilities.Bounding.push(cap.clone());
@@ -779,7 +779,7 @@ fn compress_capabilities(capabilities: &mut Vec<String>, defaults: &policy::Comm
         ""
     };
 
-    if default_caps.len() != 0 {
+    if !default_caps.is_empty() {
         capabilities.clear();
         capabilities.push(default_caps.to_string());
     }

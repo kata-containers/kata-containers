@@ -9,7 +9,7 @@
 use crate::policy;
 use crate::verity;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use docker_credential::{CredentialRetrievalError, DockerCredential};
 use log::warn;
 use log::{debug, info, LevelFilter};
@@ -17,7 +17,8 @@ use oci_distribution::client::{linux_amd64_resolver, ClientConfig};
 use oci_distribution::{manifest, secrets::RegistryAuth, Client, Reference};
 use serde::{Deserialize, Serialize};
 use sha2::{digest::typenum::Unsigned, digest::OutputSizeUser, Sha256};
-use std::{io, io::Seek, io::Write, path::Path};
+use std::io::{self, Seek, Write};
+use std::path::{Path, PathBuf};
 use tokio::{fs, io::AsyncWriteExt};
 
 /// Container image properties obtained from an OCI repository.
@@ -253,10 +254,33 @@ async fn get_image_layers(
     Ok(layers)
 }
 
-fn delete_files(decompressed_path: &Path, compressed_path: &Path, verity_path: &Path) {
-    let _ = fs::remove_file(&decompressed_path);
-    let _ = fs::remove_file(&compressed_path);
-    let _ = fs::remove_file(&verity_path);
+fn get_verity_path(base_dir: &Path, file_name: &str) -> PathBuf {
+    let mut verity_path: PathBuf = base_dir.join(file_name);
+    verity_path.set_extension("verity");
+    verity_path
+}
+
+fn get_decompressed_path(verity_path: &Path) -> PathBuf {
+    let mut decompressed_path = verity_path.to_path_buf().clone();
+    decompressed_path.set_extension("tar");
+    decompressed_path
+}
+
+fn get_compressed_path(decompressed_path: &Path) -> PathBuf {
+    let mut compressed_path = decompressed_path.to_path_buf().clone();
+    compressed_path.set_extension("gz");
+    compressed_path
+}
+
+async fn delete_files(base_dir: &Path, file_name: &str) {
+    let verity_path = get_verity_path(base_dir, file_name);
+    let _ = fs::remove_file(&verity_path).await;
+
+    let decompressed_path = get_decompressed_path(&verity_path);
+    let _ = fs::remove_file(&decompressed_path).await;
+
+    let compressed_path = get_compressed_path(&decompressed_path);
+    let _ = fs::remove_file(&compressed_path).await;
 }
 
 async fn get_verity_hash(
@@ -265,23 +289,11 @@ async fn get_verity_hash(
     reference: &Reference,
     layer_digest: &str,
 ) -> Result<String> {
-    let base_dir = std::path::Path::new("layers_cache");
-
     // Use file names supported by both Linux and Windows.
-    let file_name = str::replace(&layer_digest, ":", "-");
+    let file_name = str::replace(layer_digest, ":", "-");
 
-    let mut decompressed_path = base_dir.join(file_name);
-    decompressed_path.set_extension("tar");
-
-    let mut compressed_path = decompressed_path.clone();
-    compressed_path.set_extension("gz");
-
-    let mut verity_path = decompressed_path.clone();
-    verity_path.set_extension("verity");
-
-    let mut verity_hash = "".to_string();
-    let mut error_message = "".to_string();
-    let mut error = false;
+    let base_dir = std::path::Path::new("layers_cache");
+    let verity_path = get_verity_path(base_dir, &file_name);
 
     if use_cached_files && verity_path.exists() {
         info!("Using cached file {:?}", &verity_path);
@@ -290,40 +302,27 @@ async fn get_verity_hash(
         client,
         reference,
         layer_digest,
-        &base_dir,
-        &decompressed_path,
-        &compressed_path,
-        &verity_path,
+        base_dir,
+        &get_decompressed_path(&verity_path),
     )
     .await
     {
-        error = true;
-        error_message = format!("Failed to create verity hash for {layer_digest}, error {e}");
+        delete_files(base_dir, &file_name).await;
+        bail!("{e}");
     }
 
-    if !error {
-        match std::fs::read_to_string(&verity_path) {
-            Err(e) => {
-                error = true;
-                error_message = format!("Failed to read {:?}, error {e}", &verity_path);
-            }
-            Ok(v) => {
-                verity_hash = v;
-                info!("dm-verity root hash: {verity_hash}");
-            }
+    match std::fs::read_to_string(&verity_path) {
+        Err(e) => {
+            delete_files(base_dir, &file_name).await;
+            bail!("Failed to read {:?}, error {e}", &verity_path);
         }
-    }
-
-    if !use_cached_files {
-        let _ = std::fs::remove_dir_all(&base_dir);
-    } else if error {
-        delete_files(&decompressed_path, &compressed_path, &verity_path);
-    }
-
-    if error {
-        panic!("{error_message}");
-    } else {
-        Ok(verity_hash)
+        Ok(v) => {
+            if !use_cached_files {
+                let _ = std::fs::remove_dir_all(base_dir);
+            }
+            info!("dm-verity root hash: {v}");
+            Ok(v)
+        }
     }
 }
 
@@ -333,27 +332,23 @@ async fn create_verity_hash_file(
     reference: &Reference,
     layer_digest: &str,
     base_dir: &Path,
-    decompressed_path: &Path,
-    compressed_path: &Path,
-    verity_path: &Path,
+    decompressed_path: &PathBuf,
 ) -> Result<()> {
     if use_cached_files && decompressed_path.exists() {
         info!("Using cached file {:?}", &decompressed_path);
     } else {
-        std::fs::create_dir_all(&base_dir)?;
-
+        std::fs::create_dir_all(base_dir)?;
         create_decompressed_layer_file(
             use_cached_files,
             client,
             reference,
             layer_digest,
-            &decompressed_path,
-            &compressed_path,
+            decompressed_path,
         )
         .await?;
     }
 
-    do_create_verity_hash_file(decompressed_path, verity_path)
+    do_create_verity_hash_file(decompressed_path)
 }
 
 async fn create_decompressed_layer_file(
@@ -361,9 +356,10 @@ async fn create_decompressed_layer_file(
     client: &mut Client,
     reference: &Reference,
     layer_digest: &str,
-    decompressed_path: &Path,
-    compressed_path: &Path,
+    decompressed_path: &PathBuf,
 ) -> Result<()> {
+    let compressed_path = get_compressed_path(decompressed_path);
+
     if use_cached_files && compressed_path.exists() {
         info!("Using cached file {:?}", &compressed_path);
     } else {
@@ -372,20 +368,20 @@ async fn create_decompressed_layer_file(
             .await
             .map_err(|e| anyhow!(e))?;
         client
-            .pull_blob(&reference, layer_digest, &mut file)
+            .pull_blob(reference, layer_digest, &mut file)
             .await
             .map_err(|e| anyhow!(e))?;
         file.flush().await.map_err(|e| anyhow!(e))?;
     }
 
     info!("Decompressing layer");
-    let compressed_file = std::fs::File::open(&compressed_path).map_err(|e| anyhow!(e))?;
+    let compressed_file = std::fs::File::open(compressed_path).map_err(|e| anyhow!(e))?;
     let mut decompressed_file = std::fs::OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
         .truncate(true)
-        .open(&decompressed_path)?;
+        .open(decompressed_path)?;
     let mut gz_decoder = flate2::read::GzDecoder::new(compressed_file);
     std::io::copy(&mut gz_decoder, &mut decompressed_file).map_err(|e| anyhow!(e))?;
 
@@ -397,12 +393,15 @@ async fn create_decompressed_layer_file(
     Ok(())
 }
 
-fn do_create_verity_hash_file(path: &Path, verity_path: &Path) -> Result<()> {
+fn do_create_verity_hash_file(decompressed_path: &PathBuf) -> Result<()> {
     info!("Calculating dm-verity root hash");
-    let mut file = std::fs::File::open(path)?;
+    let mut file = std::fs::File::open(decompressed_path)?;
     let size = file.seek(std::io::SeekFrom::End(0))?;
     if size < 4096 {
-        return Err(anyhow!("Block device {:?} is too small: {size}", &path));
+        return Err(anyhow!(
+            "Block device {:?} is too small: {size}",
+            &decompressed_path
+        ));
     }
 
     let salt = [0u8; <Sha256 as OutputSizeUser>::OutputSize::USIZE];
@@ -410,6 +409,8 @@ fn do_create_verity_hash_file(path: &Path, verity_path: &Path) -> Result<()> {
     let hash = verity::traverse_file(&mut file, 0, false, v, &mut verity::no_write)?;
     let result = format!("{:x}", hash);
 
+    let mut verity_path = decompressed_path.clone();
+    verity_path.set_extension("verity");
     let mut verity_file = std::fs::File::create(verity_path).map_err(|e| anyhow!(e))?;
     verity_file
         .write_all(result.as_bytes())
@@ -428,7 +429,7 @@ fn build_auth(reference: &Reference) -> RegistryAuth {
 
     let server = reference
         .resolve_registry()
-        .strip_suffix("/")
+        .strip_suffix('/')
         .unwrap_or_else(|| reference.resolve_registry());
 
     match docker_credential::get_credential(server) {
