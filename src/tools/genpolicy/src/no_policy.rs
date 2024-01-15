@@ -49,7 +49,7 @@ impl yaml::K8sResource for NoPolicyResource {
     }
 
     fn generate_policy(&self, _agent_policy: &policy::AgentPolicy) -> String {
-        return "".to_string();
+        "".to_string()
     }
 
     fn serialize(&mut self, _policy: &str) -> String {
