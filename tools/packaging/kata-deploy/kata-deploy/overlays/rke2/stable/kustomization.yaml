@@ -1,0 +1,5 @@
+bases:
+- ../../stable
+
+components:
+-  ../../../components/rke2

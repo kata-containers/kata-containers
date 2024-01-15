@@ -124,7 +124,6 @@ bump_repo() {
 	local kata_cleanup_base="${kata_deploy_dir}/kata-cleanup/base"
 	local kata_deploy_yaml="${kata_deploy_base}/kata-deploy.yaml"
 	local kata_cleanup_yaml="${kata_cleanup_base}/kata-cleanup.yaml"
-	local kata_deploy_stable_yaml="${kata_deploy_base}/kata-deploy-stable.yaml"
 	local kata_cleanup_stable_yaml="${kata_cleanup_base}/kata-cleanup-stable.yaml"
 
 	local tests_dir="tests"
@@ -194,7 +193,6 @@ bump_repo() {
 		if [ "${target_branch}" == "main" ];then
 			if [[ "${new_version}" =~ "rc" ]]; then
 				## We are bumping from alpha to RC, should drop kata-deploy-stable yamls.
-				git rm "${kata_deploy_stable_yaml}"
 				git rm "${kata_cleanup_stable_yaml}"
 
 				need_commit=true
