@@ -53,6 +53,5 @@ spec:
   selector:
     app: iperf3-server
   ports:
-  - protocol: TCP
-    port: 5201
+  - port: 5201
     targetPort: server
