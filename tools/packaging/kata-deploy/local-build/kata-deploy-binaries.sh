@@ -99,6 +99,7 @@ options:
 	kernel-nvidia-gpu
 	kernel-nvidia-gpu-snp
 	kernel-nvidia-gpu-tdx-experimental
+	kernel-nvidia-gpu-confidential
 	kernel-sev-tarball
 	kernel-tdx-experimental
 	nydus
@@ -317,7 +318,7 @@ install_kernel_helper() {
 		kernel_version="$(get_from_kata_deps assets.kernel.sev.version)"
 		default_patches_dir="${repo_root_dir}/tools/packaging/kernel/patches"
 		module_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/kernel-sev/builddir/kata-linux-${kernel_version#v}-${kernel_kata_config_version}/lib/modules/${kernel_version#v}"
-	elif [[ "${kernel_name}" == "kernel-confidential" ]]; then
+	elif [[ "${kernel_name}" == "kernel"*"-confidential" ]]; then
 		kernel_version="$(get_from_kata_deps assets.kernel.confidential.version)"
 		default_patches_dir="${repo_root_dir}/tools/packaging/kernel/patches"
 		module_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/kernel-confidential/builddir/kata-linux-${kernel_version#v}-${kernel_kata_config_version}/lib/modules/${kernel_version#v}"
@@ -362,6 +363,16 @@ install_kernel_nvidia_gpu() {
 		"assets.kernel.version" \
 		"kernel-nvidia-gpu" \
 		"-g nvidia -u ${kernel_url} -H deb"
+}
+
+#Install GPU and TEE enabled kernel asset
+install_kernel_nvidia_gpu_confidential() {
+	local kernel_url="$(get_from_kata_deps assets.kernel.confidential.url)"
+
+	install_kernel_helper \
+		"assets.kernel.confidential.version" \
+		"kernel-nvidia-gpu-confidential" \
+		"-x confidential -g nvidia -u ${kernel_url} -H deb"
 }
 
 #Install GPU and SNP enabled kernel asset
@@ -810,6 +821,8 @@ handle_build() {
 	kernel-dragonball-experimental) install_kernel_dragonball_experimental ;;
 
 	kernel-nvidia-gpu) install_kernel_nvidia_gpu ;;
+
+	kernel-nvidia-gpu-confidential) install_kernel_nvidia_gpu_confidential ;;
 
 	kernel-nvidia-gpu-snp) install_kernel_nvidia_gpu_snp;;
 
