@@ -15,6 +15,7 @@ RUN apt-get update && \
 	    build-essential \
 	    ca-certificates \
 	    curl \
+	    debhelper \
 	    flex \
 	    git \
 	    iptables \
