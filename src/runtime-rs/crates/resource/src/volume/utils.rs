@@ -19,6 +19,8 @@ use hypervisor::device::DeviceType;
 pub const DEFAULT_VOLUME_FS_TYPE: &str = "ext4";
 pub const KATA_MOUNT_BIND_TYPE: &str = "bind";
 
+pub const KATA_BLK_DEV_TYPE: &str = "blk";
+
 pub fn get_file_name<P: AsRef<Path>>(src: P) -> Result<String> {
     let file_name = src
         .as_ref()
@@ -80,10 +82,19 @@ pub async fn handle_block_volume(
     // safe here, device_info is correct and only unwrap it.
     let mut device_id = String::new();
     if let DeviceType::Block(device) = device_info {
+        let blk_driver = device.config.driver_option;
         // blk, mmioblk
-        storage.driver = device.config.driver_option;
-        // /dev/vdX
-        storage.source = device.config.virt_path;
+        storage.driver = blk_driver.clone();
+        storage.source = match blk_driver.as_str() {
+            KATA_BLK_DEV_TYPE => {
+                if let Some(pci_path) = device.config.pci_path {
+                    pci_path.to_string()
+                } else {
+                    return Err(anyhow!("block driver is blk but no pci path exists"));
+                }
+            }
+            _ => device.config.virt_path,
+        };
         device_id = device.device_id;
     }
 
