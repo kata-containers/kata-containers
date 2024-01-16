@@ -428,7 +428,8 @@ allow_by_bundle_or_sandbox_id(p_oci, i_oci, p_storages, i_storages) {
         allow_mount(p_oci, i_mount, bundle_id, sandbox_id)
     }
 
-    allow_storages(p_storages, i_storages, bundle_id, sandbox_id)
+    # TODO: enable allow_storages() after fixing https://github.com/kata-containers/kata-containers/issues/8833
+    # allow_storages(p_storages, i_storages, bundle_id, sandbox_id)
 
     print("allow_by_bundle_or_sandbox_id: true")
 }
