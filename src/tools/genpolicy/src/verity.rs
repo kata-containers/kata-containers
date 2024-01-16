@@ -56,9 +56,7 @@ impl<T: Digest + Clone> Verity<T> {
             count
         };
 
-        let mut data = Vec::new();
-        data.resize(hash_block_size, 0);
-
+        let data = vec![0; hash_block_size];
         let mut levels = Vec::new();
         levels.resize(
             level_count,
@@ -209,8 +207,7 @@ pub fn traverse_file<T: Digest + Clone>(
     mut verity: Verity<T>,
     writer: &mut impl FnMut(&mut File, &[u8], u64) -> io::Result<()>,
 ) -> io::Result<GenericArray<u8, T::OutputSize>> {
-    let mut buf = Vec::new();
-    buf.resize(verity.data_block_size, 0);
+    let mut buf = vec![0; verity.data_block_size];
     while verity.more_blocks() {
         file.seek(SeekFrom::Start(read_offset))?;
         file.read_exact(&mut buf)?;
