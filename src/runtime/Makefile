@@ -382,10 +382,6 @@ ifneq (,$(QEMUCMD))
     KERNELSEVNAME = $(call MAKE_KERNEL_SEV_NAME,$(KERNELSEVTYPE))
     KERNELSEVPATH = $(KERNELDIR)/$(KERNELSEVNAME)
 
-    KERNELTDXTYPE = compressed
-    KERNELTDXNAME = $(call MAKE_KERNEL_TDX_NAME,$(KERNELTDXTYPE))
-    KERNELTDXPATH = $(KERNELDIR)/$(KERNELTDXNAME)
-
     KERNELSNPTYPE = compressed
     KERNELSNPNAME = $(call MAKE_KERNEL_SNP_NAME,$(KERNELSNPTYPE))
     KERNELSNPPATH = $(KERNELDIR)/$(KERNELSNPNAME)
@@ -591,7 +587,6 @@ USER_VARS += KERNELPATH_ACRN
 USER_VARS += KERNELPATH
 USER_VARS += KERNELCONFIDENTIALPATH
 USER_VARS += KERNELSEVPATH
-USER_VARS += KERNELTDXPATH
 USER_VARS += KERNELSNPPATH
 USER_VARS += KERNELSEPATH
 USER_VARS += KERNELPATH_CLH
@@ -780,10 +775,6 @@ endef
 
 define MAKE_KERNEL_SEV_NAME
 $(if $(findstring uncompressed,$1),vmlinux-sev.container,vmlinuz-sev.container)
-endef
-
-define MAKE_KERNEL_TDX_NAME
-$(if $(findstring uncompressed,$1),vmlinux-tdx.container,vmlinuz-tdx.container)
 endef
 
 # SNP configuration uses the SEV kernel
