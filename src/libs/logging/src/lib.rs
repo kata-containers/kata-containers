@@ -13,6 +13,7 @@ use std::io::Write;
 use std::process;
 use std::result;
 use std::sync::Arc;
+use slog_term::{CompactFormat, TermDecorator};
 
 mod file_rotate;
 mod log_writer;
@@ -51,7 +52,8 @@ const DEFAULT_SUBSYSTEM: &str = "root";
 
 // Creates a logger which prints output as human readable text to the terminal
 pub fn create_term_logger(level: slog::Level) -> (slog::Logger, slog_async::AsyncGuard) {
-    let term_drain = slog_term::term_compact().fuse();
+    let decorator = TermDecorator::new().stdout().build();
+    let term_drain = CompactFormat::new(decorator).build().fuse();
 
     // Ensure only a unique set of key/value fields is logged
     let unique_drain = UniqueDrain::new(term_drain).fuse();
@@ -240,7 +242,6 @@ impl<D> UniqueDrain<D> {
         UniqueDrain { drain }
     }
 }
-
 impl<D> Drain for UniqueDrain<D>
 where
     D: Drain,
