@@ -30,6 +30,7 @@ SMEM_BIN="smem"
 KSM_ENABLE_FILE="/sys/kernel/mm/ksm/run"
 MEM_TMP_FILE=$(mktemp meminfo.XXXXXXXXXX)
 PS_TMP_FILE=$(mktemp psinfo.XXXXXXXXXX)
+SKIP_VIRTIO_FS=0
 
 # Variables used to collect memory footprint
 global_hypervisor_mem=0
@@ -150,7 +151,12 @@ function get_pss_memory_virtiofsd() {
 	avg=0
 	virtiofsd_path=${1:-}
 
-	[ -z "${virtiofsd_path}" ] && die "virtiofsd_path not provided"
+	if [ $(ps aux | grep -c '[v]irtiofsd') -eq 0 ]; then
+		SKIP_VIRTIO_FS=1
+		return
+	fi
+
+	[ -z "${virtiofsd_path}" ] && die "virtiofs path not provided"
 
 	echo "${virtiofsd_path}" >> "${PS_TMP_FILE}"
 
@@ -159,6 +165,7 @@ function get_pss_memory_virtiofsd() {
 	data="$(sudo smem --no-header -P "^${virtiofsd_path}" -c "pid pss")"
 
 	for p in "${virtiofsd_pids}"; do
+		echo "get_pss_memory_virtiofsd: p=${p}"
 		parent_pid=$(ppid "${p}")
 		cmd="$(cat /proc/${p}/cmdline | tr -d '\0')"
 		cmd_parent="$(cat /proc/${parent_pid}/cmdline | tr -d '\0')"
@@ -213,7 +220,8 @@ function get_individual_memory(){
 	# remove trailing commas
 	fv_array[-1]="$(sed -r 's/,*$//g' <<< "${fv_array[-1]}")"
 	sv_array[-1]="$(sed -r 's/,*$//g' <<< "${sv_array[-1]}")"
-	tv_array[-1]="$(sed -r 's/,*$//g' <<< "${tv_array[-1]}")"
+
+	[ "${SKIP_VIRTIO_FS}" -eq 0 ] && tv_array[-1]="$(sed -r 's/,*$//g' <<< "${tv_array[-1]}")"
 
 	metrics_json_start_array
 
@@ -379,6 +387,7 @@ function main(){
 	clean_env_ctr
 	init_env
 	check_images "${IMAGE}"
+
 	if [ "${CTR_RUNTIME}" == "io.containerd.kata.v2" ]; then
 		export RUNTIME="kata-runtime"
         elif [ "${CTR_RUNTIME}" == "io.containerd.runc.v2" ]; then
