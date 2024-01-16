@@ -33,6 +33,7 @@ jobs:
           - cloud-hypervisor
           - cloud-hypervisor-glibc
           - firecracker
+          - genpolicy
           - kata-ctl
           - kernel
           - kernel-confidential

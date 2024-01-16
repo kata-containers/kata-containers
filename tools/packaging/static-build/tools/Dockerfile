@@ -9,11 +9,14 @@ ARG RUST_TOOLCHAIN
 SHELL ["/bin/ash", "-o", "pipefail", "-c"]
 RUN apk --no-cache add \
         bash \
+        cmake \
         curl \
         gcc \
         git \
         libcap-ng-static \
         libseccomp-static \
+        openssl-dev \
+        openssl-libs-static \
         make \
         musl-dev \
         protoc && \

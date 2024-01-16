@@ -48,6 +48,7 @@ jobs:
           - kata-ctl
           - runk
           - trace-forwarder
+          - genpolicy
         command:
           - "make vendor"
           - "make check"
@@ -75,6 +76,8 @@ jobs:
             install-libseccomp: yes
           - component: runk
             install-libseccomp: yes
+          - component: genpolicy
+            component-path: src/tools/genpolicy
     steps:
       - name: Checkout the code
         uses: actions/checkout@v4
