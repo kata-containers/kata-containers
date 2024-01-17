@@ -69,7 +69,7 @@ async fn handle_sigchild(logger: Logger, sandbox: Arc<Mutex<Sandbox>>) -> Result
                 }
             };
 
-            // In passfd io mode, when using tty, we need to wait for the copy task end.
+            // In passfd io mode, we need to wait for the copy task end.
             if let Some(proc_io) = &mut p.proc_io {
                 proc_io.wg_output.wait().await;
             }
