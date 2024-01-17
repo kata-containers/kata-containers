@@ -701,8 +701,9 @@ is_ip_other_byte(component) {
 
 # OCI root.Path
 allow_root_path(p_oci, i_oci, bundle_id) {
+    i_path := i_oci.Root.Path
     p_path1 := p_oci.Root.Path
-    print("allow_root_path: p_path1 =", p_path1)
+    print("allow_root_path: i_path =", i_path, "p_path1 =", p_path1)
 
     p_path2 := replace(p_path1, "$(cpath)", policy_data.common.cpath)
     print("allow_root_path: p_path2 =", p_path2)
@@ -710,7 +711,7 @@ allow_root_path(p_oci, i_oci, bundle_id) {
     p_path3 := replace(p_path2, "$(bundle-id)", bundle_id)
     print("allow_root_path: p_path3 =", p_path3)
 
-    p_path3 == i_oci.Root.Path
+    p_path3 == i_path
 
     print("allow_root_path: true")
 }
