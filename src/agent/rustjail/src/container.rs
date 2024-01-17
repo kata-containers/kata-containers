@@ -1064,7 +1064,7 @@ impl BaseContainer for LinuxContainer {
                 // This is because we need to close the stdin fifo when the stdin stream
                 // is drained.
                 if let Some(mut stdin_stream) = proc_io.stdin.take() {
-                    info!(logger, "copy from stdin to parent_stdin");
+                    debug!(logger, "copy from stdin to parent_stdin");
                     let mut parent_stdin = unsafe { File::from_raw_fd(p.parent_stdin.unwrap()) };
                     let mut close_stdin_rx = proc_io.close_stdin_rx.clone();
                     let wgw_input = proc_io.wg_input.worker();
@@ -1078,7 +1078,7 @@ impl BaseContainer for LinuxContainer {
                                 res = stdin_stream.read(&mut buf) => {
                                     match res {
                                         Err(_) | Ok(0) => {
-                                            info!(logger, "copy from stdin to term_master end: {:?}", res);
+                                            debug!(logger, "copy from stdin to term_master end: {:?}", res);
                                             break;
                                         }
                                         Ok(n) => {
@@ -1091,12 +1091,44 @@ impl BaseContainer for LinuxContainer {
                                 // As the stdin fifo is opened in RW mode in the shim, which will never
                                 // read EOF, we close the stdin fifo here when explicit requested.
                                 _ = close_stdin_rx.changed() => {
-                                    info!(logger, "copy ends as requested");
+                                    debug!(logger, "copy ends as requested");
                                     break
                                 }
                             }
                         }
                         wgw_input.done();
+                    });
+                }
+
+                // copy from parent_stdout to stdout stream
+                if let Some(mut stdout_stream) = proc_io.stdout.take() {
+                    debug!(logger, "copy from parent_stdout to stdout stream");
+                    let wgw_output = proc_io.wg_output.worker();
+                    let mut parent_stdout = unsafe { File::from_raw_fd(p.parent_stdout.unwrap()) };
+                    let logger = logger.clone();
+                    tokio::spawn(async move {
+                        let res = tokio::io::copy(&mut parent_stdout, &mut stdout_stream).await;
+                        debug!(
+                            logger,
+                            "copy from parent_stdout to stdout stream end: {:?}", res
+                        );
+                        wgw_output.done();
+                    });
+                }
+
+                // copy from parent_stderr to stderr stream
+                if let Some(mut stderr_stream) = proc_io.stderr.take() {
+                    debug!(logger, "copy from parent_stderr to stderr stream");
+                    let wgw_output = proc_io.wg_output.worker();
+                    let mut parent_stderr = unsafe { File::from_raw_fd(p.parent_stderr.unwrap()) };
+                    let logger = logger.clone();
+                    tokio::spawn(async move {
+                        let res = tokio::io::copy(&mut parent_stderr, &mut stderr_stream).await;
+                        debug!(
+                            logger,
+                            "copy from parent_stderr to stderr stream end: {:?}", res
+                        );
+                        wgw_output.done();
                     });
                 }
             }

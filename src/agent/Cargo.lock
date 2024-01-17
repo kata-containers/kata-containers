@@ -2526,7 +2526,7 @@ dependencies = [
  "tempfile",
  "test-utils",
  "tokio",
- "tokio-vsock",
+ "tokio-vsock 0.3.1",
  "xattr",
  "zbus",
 ]
