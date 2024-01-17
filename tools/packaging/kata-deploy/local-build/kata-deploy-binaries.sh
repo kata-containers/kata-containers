@@ -708,6 +708,13 @@ install_tools_helper() {
 	info "Install static ${tool_binary}"
 	mkdir -p "${destdir}/opt/kata/bin/"
 	sudo install -D --owner root --group root --mode 0744 ${binary} "${destdir}/opt/kata/bin/${tool_binary}"
+
+	if [[ "${tool}" == "genpolicy" ]]; then
+		defaults_path="${destdir}/opt/kata/share/defaults/kata-containers"
+		mkdir -p "${defaults_path}"
+		sudo install -D --owner root --group root --mode 0644 ${repo_root_dir}/src/tools/${tool}/rules.rego "${defaults_path}/rules.rego"
+		sudo install -D --owner root --group root --mode 0644 ${repo_root_dir}/src/tools/${tool}/genpolicy-settings.json "${defaults_path}/genpolicy-settings.json"
+	fi
 }
 
 install_agent_ctl() {
