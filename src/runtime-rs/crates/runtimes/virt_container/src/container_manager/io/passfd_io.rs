@@ -1,3 +1,7 @@
+// Copyright 2024 Kata Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+//
 use anyhow::{anyhow, Context, Result};
 use sendfd::SendWithFd;
 use std::{
