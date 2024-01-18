@@ -57,6 +57,10 @@ const (
 
 	// the maximum amount of PCI bridges that can be cold plugged in a VM
 	maxPCIBridges uint32 = 5
+	// For mor info why these values, see:
+	// https://github.com/kata-containers/kata-containers/blob/main/docs/design/kata-vra.md#hypervisor-resource-limits
+	maxPCIeRootPorts   uint32 = 16
+	maxPCIeSwitchPorts uint32 = 16
 
 	errInvalidHypervisorPrefix = "configuration file contains invalid hypervisor section"
 )
@@ -150,6 +154,8 @@ type hypervisor struct {
 	DisableImageNvdimm             bool                      `toml:"disable_image_nvdimm"`
 	HotPlugVFIO                    config.PCIePort           `toml:"hot_plug_vfio"`
 	ColdPlugVFIO                   config.PCIePort           `toml:"cold_plug_vfio"`
+	PCIeRootPort                   uint32                    `toml:"pcie_root_port"`
+	PCIeSwitchPort                 uint32                    `toml:"pcie_switch_port"`
 	DisableVhostNet                bool                      `toml:"disable_vhost_net"`
 	GuestMemoryDumpPaging          bool                      `toml:"guest_memory_dump_paging"`
 	ConfidentialGuest              bool                      `toml:"confidential_guest"`
@@ -300,6 +306,20 @@ func (h hypervisor) hotPlugVFIO() config.PCIePort {
 		return defaultHotPlugVFIO
 	}
 	return h.HotPlugVFIO
+}
+
+func (h hypervisor) pcieRootPort() uint32 {
+	if h.PCIeRootPort > maxPCIeRootPorts {
+		return maxPCIeRootPorts
+	}
+	return h.PCIeRootPort
+}
+
+func (h hypervisor) pcieSwitchPort() uint32 {
+	if h.PCIeSwitchPort > maxPCIeSwitchPorts {
+		return maxPCIeSwitchPorts
+	}
+	return h.PCIeSwitchPort
 }
 
 func (h hypervisor) firmwareVolume() (string, error) {
@@ -936,6 +956,8 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DisableImageNvdimm:      h.DisableImageNvdimm,
 		HotPlugVFIO:             h.hotPlugVFIO(),
 		ColdPlugVFIO:            h.coldPlugVFIO(),
+		PCIeRootPort:            h.pcieRootPort(),
+		PCIeSwitchPort:          h.pcieSwitchPort(),
 		DisableVhostNet:         h.DisableVhostNet,
 		EnableVhostUserStore:    h.EnableVhostUserStore,
 		VhostUserStorePath:      h.vhostUserStorePath(),
@@ -1131,6 +1153,8 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		Msize9p:                        h.msize9p(),
 		ColdPlugVFIO:                   h.coldPlugVFIO(),
 		HotPlugVFIO:                    h.hotPlugVFIO(),
+		PCIeRootPort:                   h.pcieRootPort(),
+		PCIeSwitchPort:                 h.pcieSwitchPort(),
 		DisableVhostNet:                true,
 		GuestHookPath:                  h.guestHookPath(),
 		VirtioFSExtraArgs:              h.VirtioFSExtraArgs,
@@ -1484,6 +1508,8 @@ func GetDefaultHypervisorConfig() vc.HypervisorConfig {
 		Msize9p:                  defaultMsize9p,
 		ColdPlugVFIO:             defaultColdPlugVFIO,
 		HotPlugVFIO:              defaultHotPlugVFIO,
+		PCIeRootPort:             defaultPCIeRootPort,
+		PCIeSwitchPort:           defaultPCIeSwitchPort,
 		GuestHookPath:            defaultGuestHookPath,
 		VhostUserStorePath:       defaultVhostUserStorePath,
 		VhostUserDeviceReconnect: defaultVhostUserDeviceReconnect,

@@ -227,13 +227,11 @@ func (p PCIePort) Valid() bool {
 	return false
 }
 
-type PCIePortMapping map[string]bool
-
 var (
 	// Each of this structures keeps track of the devices attached to the
 	// different types of PCI ports. We can deduces the Bus number from it
 	// and eliminate duplicates being assigned.
-	PCIeDevices = map[PCIePort]PCIePortMapping{}
+	PCIeDevicesPerPort = map[PCIePort][]VFIODev{}
 )
 
 // DeviceInfo is an embedded type that contains device data common to all types of devices.
@@ -420,11 +418,12 @@ type VFIODev struct {
 	// APDevices are the Adjunct Processor devices assigned to the mdev
 	APDevices []string
 
-	// Rank identifies a device in a IOMMU group
-	Rank int
-
 	// Port is the PCIe port type to which the device is attached
 	Port PCIePort
+
+	// HostPath is the path to the device on the host we need it as a reference
+	// to match a /dev/vfio/<num> device to a device in GK mode
+	HostPath string
 }
 
 // RNGDev represents a random number generator device

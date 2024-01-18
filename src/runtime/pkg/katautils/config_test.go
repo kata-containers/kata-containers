@@ -87,6 +87,8 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (testConfig testRuntime
 	enableIOThreads := true
 	hotPlugVFIO = config.NoPort
 	coldPlugVFIO = config.BridgePort
+	pcieRootPort := uint32(0)
+	pcieSwitchPort := uint32(0)
 	disableNewNetNs := false
 	sharedFS := "virtio-9p"
 	virtioFSdaemon := path.Join(dir, "virtiofsd")
@@ -109,6 +111,8 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (testConfig testRuntime
 		EnableIOThreads:      enableIOThreads,
 		HotPlugVFIO:          hotPlugVFIO,
 		ColdPlugVFIO:         coldPlugVFIO,
+		PCIeRootPort:         pcieRootPort,
+		PCIeSwitchPort:       pcieSwitchPort,
 		DisableNewNetNs:      disableNewNetNs,
 		DefaultVCPUCount:     defaultVCPUCount,
 		DefaultMaxVCPUCount:  defaultMaxVCPUCount,
@@ -172,6 +176,8 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (testConfig testRuntime
 		EnableIOThreads:       enableIOThreads,
 		HotPlugVFIO:           hotPlugVFIO,
 		ColdPlugVFIO:          coldPlugVFIO,
+		PCIeRootPort:          pcieRootPort,
+		PCIeSwitchPort:        pcieSwitchPort,
 		Msize9p:               defaultMsize9p,
 		MemSlots:              defaultMemSlots,
 		EntropySource:         defaultEntropySource,
@@ -569,6 +575,8 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		DisableGuestSeLinux:   defaultDisableGuestSeLinux,
 		HotPlugVFIO:           defaultHotPlugVFIO,
 		ColdPlugVFIO:          defaultColdPlugVFIO,
+		PCIeRootPort:          defaultPCIeRootPort,
+		PCIeSwitchPort:        defaultPCIeSwitchPort,
 	}
 
 	expectedAgentConfig := vc.KataAgentConfig{
@@ -610,6 +618,8 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 	disableBlock := true
 	enableIOThreads := true
 	coldPlugVFIO = config.BridgePort
+	pcieRootPort := uint32(0)
+	pcieSwitchPort := uint32(0)
 	orgVHostVSockDevicePath := utils.VHostVSockDevicePath
 	blockDeviceAIO := "io_uring"
 	defer func() {
@@ -628,6 +638,8 @@ func TestNewQemuHypervisorConfig(t *testing.T) {
 		DisableBlockDeviceUse: disableBlock,
 		EnableIOThreads:       enableIOThreads,
 		ColdPlugVFIO:          coldPlugVFIO,
+		PCIeRootPort:          pcieRootPort,
+		PCIeSwitchPort:        pcieSwitchPort,
 		RxRateLimiterMaxRate:  rxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:  txRateLimiterMaxRate,
 		SharedFS:              "virtio-fs",
