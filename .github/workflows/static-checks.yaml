@@ -35,7 +35,6 @@ jobs:
           fi
 
   build-checks:
-    runs-on: ubuntu-20.04
     strategy:
       fail-fast: false
       matrix:
@@ -78,6 +77,10 @@ jobs:
             install-libseccomp: yes
           - component: genpolicy
             component-path: src/tools/genpolicy
+        instance:
+          - "ubuntu-20.04"
+          - "ppc64le"
+    runs-on: ${{ matrix.instance }}
     steps:
       - name: Checkout the code
         uses: actions/checkout@v4
