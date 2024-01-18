@@ -320,7 +320,9 @@ impl Handle {
                 route.device = self.find_link(LinkFilter::Index(index)).await?.name();
             }
 
-            result.push(route);
+            if !route.dest.is_empty() {
+                result.push(route);
+            }
         }
 
         Ok(result)
