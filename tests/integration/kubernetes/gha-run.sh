@@ -236,6 +236,11 @@ function cleanup() {
 	kubectl delete -f "${tools_dir}/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
 }
 
+install_kata_tools_placeholder() {
+	echo "Kata tools will be installed (for the genpolicy app)"\
+		"after CI picks up the gha yaml changes required to test that installation."
+}
+
 function main() {
 	export KATA_HOST_OS="${KATA_HOST_OS:-}"
 	export K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-}"
@@ -251,6 +256,7 @@ function main() {
 		setup-crio) setup_crio ;;
 		deploy-k8s) deploy_k8s ;;
 		install-bats) install_bats ;;
+		install-kata-tools) install_kata_tools_placeholder ;;
 		install-kubectl) install_kubectl ;;
 		get-cluster-credentials) get_cluster_credentials ;;
 		deploy-kata-aks) deploy_kata "aks" ;;
