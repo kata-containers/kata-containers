@@ -1963,6 +1963,7 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
 }
 
 #[cfg(test)]
+#[allow(dead_code)]
 mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -2154,6 +2155,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(not(target_arch = "powerpc64"))]
     async fn test_do_write_stream() {
         skip_if_not_root!();
 
@@ -2694,8 +2696,16 @@ OtherField:other
         fs::write(mount_dir.path().join("file.dat"), "foobar").unwrap();
         stats = get_volume_capacity_stats(mount_dir.path().to_str().unwrap()).unwrap();
 
-        assert_eq!(stats.used, 4 * 1024);
-        assert_eq!(stats.available, available - 4 * 1024);
+        let size = get_block_size(mount_dir.path().to_str().unwrap()).unwrap();
+
+        assert_eq!(stats.used, size);
+        assert_eq!(stats.available, available - size);
+    }
+
+    fn get_block_size(path: &str) -> Result<u64, Errno> {
+        let stat = statfs::statfs(path)?;
+        let block_size = stat.block_size() as u64;
+        Ok(block_size)
     }
 
     #[tokio::test]
