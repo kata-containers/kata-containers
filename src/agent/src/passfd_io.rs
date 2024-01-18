@@ -1,3 +1,7 @@
+// Copyright 2024 Kata Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+//
 use anyhow::Result;
 use lazy_static::lazy_static;
 use rustjail::process::ProcessIo;
