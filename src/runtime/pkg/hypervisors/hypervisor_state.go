@@ -47,4 +47,6 @@ type HypervisorState struct {
 	Pid               int
 	HotPlugVFIO       config.PCIePort
 	ColdPlugVFIO      config.PCIePort
+	PCIeRootPort      uint32
+	PCIeSwitchPort    uint32
 }

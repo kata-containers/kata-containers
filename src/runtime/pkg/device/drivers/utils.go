@@ -41,6 +41,8 @@ var (
 	PCISysFsDevicesClass     PCISysFsProperty = "class"         // /sys/bus/pci/devices/xxx/class
 	PCISysFsSlotsAddress     PCISysFsProperty = "address"       // /sys/bus/pci/slots/xxx/address
 	PCISysFsSlotsMaxBusSpeed PCISysFsProperty = "max_bus_speed" // /sys/bus/pci/slots/xxx/max_bus_speed
+	PCISysFsDevicesVendor    PCISysFsProperty = "vendor"        // /sys/bus/pci/devices/xxx/vendor
+	PCISysFsDevicesDevice    PCISysFsProperty = "device"        // /sys/bus/pci/devices/xxx/device
 )
 
 func deviceLogger() *logrus.Entry {
@@ -194,6 +196,10 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODe
 			if ignorePCIDevice {
 				continue
 			}
+			// Fetch the PCI Vendor ID and Device ID
+			vendorID := getPCIDeviceProperty(deviceBDF, PCISysFsDevicesVendor)
+			deviceID := getPCIDeviceProperty(deviceBDF, PCISysFsDevicesDevice)
+
 			// Do not directly assign to `vfio` -- need to access field still
 			vfio = config.VFIODev{
 				ID:       id,
@@ -202,8 +208,10 @@ func GetAllVFIODevicesFromIOMMUGroup(device config.DeviceInfo) ([]*config.VFIODe
 				SysfsDev: deviceSysfsDev,
 				IsPCIe:   IsPCIeDevice(deviceBDF),
 				Class:    pciClass,
-				Rank:     -1,
+				VendorID: vendorID,
+				DeviceID: deviceID,
 				Port:     device.Port,
+				HostPath: device.HostPath,
 			}
 
 		case config.VFIOAPDeviceMediatedType:
