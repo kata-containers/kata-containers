@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+mod cmdline_generator;
 mod inner;
 
 use crate::device::DeviceType;
@@ -11,8 +12,9 @@ use crate::{Hypervisor, MemoryConfig};
 use crate::{HypervisorConfig, VcpuThreadIds};
 use inner::QemuInner;
 use kata_types::capabilities::{Capabilities, CapabilityBits};
+use persist::sandbox_persist::Persist;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 
 use std::sync::Arc;
@@ -145,7 +147,7 @@ impl Hypervisor for Qemu {
     }
 
     async fn save_state(&self) -> Result<HypervisorState> {
-        todo!()
+        self.save().await
     }
 
     async fn capabilities(&self) -> Result<Capabilities> {
@@ -176,5 +178,28 @@ impl Hypervisor for Qemu {
     async fn resize_memory(&self, new_mem_mb: u32) -> Result<(u32, MemoryConfig)> {
         let inner = self.inner.read().await;
         inner.resize_memory(new_mem_mb)
+    }
+}
+
+#[async_trait]
+impl Persist for Qemu {
+    type State = HypervisorState;
+    type ConstructorArgs = ();
+
+    /// Save a state of the component.
+    async fn save(&self) -> Result<Self::State> {
+        let inner = self.inner.read().await;
+        inner.save().await.context("save qemu hypervisor state")
+    }
+
+    /// Restore a component from a specified state.
+    async fn restore(
+        hypervisor_args: Self::ConstructorArgs,
+        hypervisor_state: Self::State,
+    ) -> Result<Self> {
+        let inner = QemuInner::restore(hypervisor_args, hypervisor_state).await?;
+        Ok(Self {
+            inner: Arc::new(RwLock::new(inner)),
+        })
     }
 }

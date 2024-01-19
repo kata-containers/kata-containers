@@ -59,6 +59,7 @@ pub const MAX_DRAGONBALL_VCPUS: u32 = 256;
 pub const MIN_DRAGONBALL_MEMORY_SIZE_MB: u32 = 64;
 // Default configuration for qemu
 pub const DEFAULT_QEMU_BINARY_PATH: &str = "/usr/bin/qemu-system-x86_64";
+pub const DEFAULT_QEMU_ROOTFS_TYPE: &str = "ext4";
 pub const DEFAULT_QEMU_CONTROL_PATH: &str = "";
 pub const DEFAULT_QEMU_MACHINE_TYPE: &str = "q35";
 pub const DEFAULT_QEMU_ENTROPY_SOURCE: &str = "/dev/urandom";
