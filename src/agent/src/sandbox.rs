@@ -655,6 +655,8 @@ fn onlined_cpus() -> Result<i32> {
 }
 
 #[cfg(test)]
+#[allow(dead_code)]
+#[allow(unused_imports)]
 mod tests {
     use super::*;
     use crate::mount::baremount;
@@ -924,6 +926,7 @@ mod tests {
 
     #[tokio::test]
     #[serial]
+    #[cfg(not(target_arch = "powerpc64"))]
     async fn add_and_get_container() {
         skip_if_not_root!();
 
@@ -989,6 +992,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(not(target_arch = "powerpc64"))]
     async fn test_find_container_process() {
         skip_if_not_root!();
 
@@ -1036,6 +1040,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(not(target_arch = "powerpc64"))]
     async fn test_find_process() {
         skip_if_not_root!();
 

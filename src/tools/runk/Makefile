@@ -10,7 +10,7 @@ include ../../../utils.mk
 
 ifeq ($(ARCH), ppc64le)
      override ARCH = powerpc64le
- endif
+endif
 
 TARGET = runk
 TARGET_PATH = target/$(TRIPLE)/$(BUILD_TYPE)/$(TARGET)

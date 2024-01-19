@@ -25,6 +25,9 @@ use crate::{Error as VirtioError, Result as VirtioResult};
 
 enum EndpointProtocolFlags {
     ProtocolMq = 1,
+    #[allow(dead_code)]
+    #[cfg(feature = "vhost-user-blk")]
+    ProtocolBackend = 2,
 }
 
 pub(super) struct Listener {

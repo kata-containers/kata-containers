@@ -1400,6 +1400,20 @@ mod tests {
     fn test_new_fs_manager() {
         skip_if_not_root!();
 
+        let output = Command::new("stat")
+            .arg("-f")
+            .arg("-c")
+            .arg("%T")
+            .arg("/sys/fs/cgroup/")
+            .output()
+            .unwrap();
+        let output_str = String::from_utf8(output.stdout).unwrap();
+        let cgroup_version = output_str.strip_suffix("\n").unwrap();
+        if cgroup_version.eq("cgroup2fs") {
+            println!("INFO: Skipping the test as cgroups v2 is used by default");
+            return;
+        }
+
         struct TestCase {
             cpath: Vec<String>,
             devices: Vec<Vec<LinuxDeviceCgroup>>,
