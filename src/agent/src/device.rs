@@ -1563,7 +1563,7 @@ mod tests {
 
         // Valid path
         let device = ccw::Device::from_str(relpath).unwrap();
-        let matcher = VirtioBlkCCWMatcher::new(&root_bus, &device);
+        let matcher = VirtioBlkCCWMatcher::new(root_bus, &device);
         assert!(matcher.is_match(&uev));
 
         // Invalid paths
@@ -1794,12 +1794,7 @@ mod tests {
         assert!(!matcher.is_match(&uev_remove));
 
         let mut uev_other_device = uev.clone();
-        uev_other_device.devpath = format!(
-            "{}/card{}/{}",
-            AP_ROOT_BUS_PATH,
-            card,
-            format!("{}.0002", card)
-        );
+        uev_other_device.devpath = format!("{}/card{}/{}.0002", AP_ROOT_BUS_PATH, card, card);
         assert!(!matcher.is_match(&uev_other_device));
     }
 }
