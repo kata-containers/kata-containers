@@ -16,9 +16,6 @@ export PATH=${PATH}:/usr/local/go/bin:${GOPATH}/bin
 kata_repo=github.com/kata-containers/kata-containers
 kata_repo_path=${GOPATH}/src/${kata_repo}
 
-tests_repo=github.com/kata-containers/tests
-tests_repo_path=${GOPATH}/src/${tests_repo}
-
 grab_qat_drivers()
 {
     /bin/echo -e "\n\e[1;42mDownload and extract the drivers\e[0m" 
@@ -39,17 +36,16 @@ grab_kata_repos()
     # Check out all the repos we will use now, so we can try and ensure they use the specified branch
     # Only check out the branch needed, and make it shallow and thus space/bandwidth efficient
     # Use a green prompt with white text for easy viewing
-    /bin/echo -e "\n\e[1;42mClone and checkout Kata repos\e[0m"
+    /bin/echo -e "\n\e[1;42mClone and checkout Kata repo\e[0m"
     [ -d "${kata_repo_path}" ] || git clone --single-branch --branch $KATA_REPO_VERSION --depth=1 https://${kata_repo} ${kata_repo_path}
-    [ -d "${tests_repo_path}" ] || git clone --single-branch --branch $KATA_REPO_VERSION --depth=1 https://${tests_repo} ${tests_repo_path}
 }
 
 configure_kernel()
 {
     cp /input/qat.conf ${kata_repo_path}/tools/packaging/kernel/configs/fragments/common/qat.conf
     # We need yq and go to grab kernel versions etc.
-    ${tests_repo_path}/.ci/install_yq.sh
-    ${tests_repo_path}/.ci/install_go.sh -p
+    ${kata_repo_path}/ci/install_yq.sh
+    ${kata_repo_path}/tests/install_go.sh -p
     cd ${kata_repo_path}
     /bin/echo -e "\n\e[1;42mDownload and configure Kata kernel with CRYPTO support\e[0m"
     ./tools/packaging/kernel/build-kernel.sh setup
