@@ -375,6 +375,37 @@ install_kernel_nvidia_gpu_confidential() {
 		"-x confidential -g nvidia -u ${kernel_url} -H deb"
 }
 
+#Install kernel-headers for the specified kernel-name
+install_kernel_headers_helper() {
+	local kernel_name="${1}"
+	local pkg_type="${2}"
+
+	local pkg_header_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/${kernel_name}/builddir/"
+
+	# If the kernel is built without -H deb or -H rpm then we may miss the
+	# needed packages, make sure it was built correctly or bail out.
+	if find "${pkg_header_dir}" -type f -name "*.${pkg_type}" -print -quit | grep -q .; then
+		cp ${pkg_header_dir}/*.${pkg_type} ${destdir}
+	else
+		echo "No kernel .${pkg_type} files found in ${pkg_header_dir}. Exiting."
+		exit 1
+	fi
+}
+
+#Install nvidia-gpu kernel-headers assset
+install_kernel_headers_nvidia_gpu() {
+	install_kernel_headers_helper \
+		"kernel-nvidia-gpu" \
+		"deb"
+}
+
+#Install nvidia-gpu-confidential kernel-headers assset
+install_kernel_headers_nvidia_gpu_confidential() {
+	install_kernel_headers_helper \
+		"kernel-nvidia-gpu-confidential" \
+		"deb"
+}
+
 #Install GPU and SNP enabled kernel asset
 install_kernel_nvidia_gpu_snp() {
 	local kernel_url="$(get_from_kata_deps assets.kernel.sev.url)"
@@ -823,6 +854,10 @@ handle_build() {
 	kernel-nvidia-gpu) install_kernel_nvidia_gpu ;;
 
 	kernel-nvidia-gpu-confidential) install_kernel_nvidia_gpu_confidential ;;
+
+	kernel-headers-nvidia-gpu) install_kernel_headers_nvidia_gpu ;;
+
+	kernel-headers-nvidia-gpu-confidential) install_kernel_headers_nvidia_gpu_confidential ;;
 
 	kernel-nvidia-gpu-snp) install_kernel_nvidia_gpu_snp;;
 
