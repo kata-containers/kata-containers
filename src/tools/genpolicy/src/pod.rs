@@ -89,6 +89,9 @@ pub struct PodSpec {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     dnsPolicy: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    securityContext: Option<PodSecurityContext>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -228,7 +231,7 @@ struct Probe {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     tcpSocket: Option<TCPSocketAction>,
-    // TODO: additional fiels.
+    // TODO: additional fields.
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -256,7 +259,7 @@ struct HTTPGetAction {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     httpHeaders: Option<Vec<HTTPHeader>>,
-    // TODO: additional fiels.
+    // TODO: additional fields.
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -300,6 +303,14 @@ struct SeccompProfile {
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
+struct PodSecurityContext {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    runAsUser: Option<i64>,
+    // TODO: additional fields.
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct Lifecycle {
     #[serde(skip_serializing_if = "Option::is_none")]
     postStart: Option<LifecycleHandler>,
@@ -313,7 +324,7 @@ struct Lifecycle {
 struct LifecycleHandler {
     #[serde(skip_serializing_if = "Option::is_none")]
     exec: Option<ExecAction>,
-    // TODO: additional fiels.
+    // TODO: additional fields.
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -543,15 +554,6 @@ impl Container {
             }
         }
         false
-    }
-
-    pub fn allow_privilege_escalation(&self) -> bool {
-        if let Some(context) = &self.securityContext {
-            if let Some(allow) = context.allowPrivilegeEscalation {
-                return allow;
-            }
-        }
-        true
     }
 
     pub fn read_only_root_filesystem(&self) -> bool {
@@ -785,6 +787,14 @@ impl yaml::K8sResource for Pod {
             .clone()
             .or_else(|| Some(String::new()))
     }
+
+    fn get_process_fields(&self, process: &mut policy::KataProcess) {
+        if let Some(context) = &self.spec.securityContext {
+            if let Some(uid) = context.runAsUser {
+                process.User.UID = uid.try_into().unwrap();
+            }
+        }
+    }
 }
 
 impl Container {
@@ -831,6 +841,17 @@ impl Container {
             }
         }
         compress_default_capabilities(capabilities, defaults);
+    }
+
+    pub fn get_process_fields(&self, process: &mut policy::KataProcess) {
+        if let Some(context) = &self.securityContext {
+            if let Some(uid) = context.runAsUser {
+                process.User.UID = uid.try_into().unwrap();
+            }
+            if let Some(allow) = context.allowPrivilegeEscalation {
+                process.NoNewPrivileges = !allow
+            }
+        }
     }
 }
 

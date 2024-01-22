@@ -27,3 +27,5 @@ spec:
       securityContext:
         seccompProfile:
           type: RuntimeDefault
+  securityContext:
+    runAsUser: 1000

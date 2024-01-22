@@ -540,11 +540,8 @@ allow_user(p_process, i_process) {
     p_user := p_process.User
     i_user := i_process.User
 
-    # TODO: track down the reason for mcr.microsoft.com/oss/bitnami/redis:6.0.8 being
-    #       executed with uid = 0 despite having "User": "1001" in its container image
-    #       config.
-    #print("allow_user: input uid =", i_user.UID, "policy uid =", p_user.UID)
-    #p_user.UID == i_user.UID
+    print("allow_user: input uid =", i_user.UID, "policy uid =", p_user.UID)
+    p_user.UID == i_user.UID
 
     # TODO: track down the reason for registry.k8s.io/pause:3.9 being
     #       executed with gid = 0 despite having "65535:65535" in its container image
