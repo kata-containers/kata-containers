@@ -13,6 +13,7 @@ setup() {
 
 	configmap_name="policy-configmap"
 	pod_name="policy-pod"
+	priority_class_name="test-high-priority"
 
 	get_pod_config_dir
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
@@ -27,10 +28,12 @@ setup() {
 	testcase_pre_generate_configmap_yaml="${pod_config_dir}/k8s-policy-configmap-testcase-pre-generation.yaml"
 
 	correct_pod_yaml="${pod_config_dir}/k8s-policy-pod.yaml"
+	priority_class_yaml="${pod_config_dir}/k8s-priority-class.yaml"
 	pre_generate_pod_yaml="${pod_config_dir}/k8s-policy-pod-pre-generation.yaml"
 	incorrect_pod_yaml="${pod_config_dir}/k8s-policy-pod-incorrect.yaml"
 	testcase_pre_generate_pod_yaml="${pod_config_dir}/k8s-policy-pod-testcase-pre-generation.yaml"
 
+	kubectl create -f "${priority_class_yaml}"
 
     # Save some time by executing genpolicy a single time.
     if [ "${BATS_TEST_NUMBER}" == "1" ]; then
@@ -233,6 +236,7 @@ teardown() {
 	# Clean-up
 	kubectl delete pod "${pod_name}"
 	kubectl delete configmap "${configmap_name}"
+	kubectl delete priorityClass "${priority_class_name}"
 	rm -f "${incorrect_pod_yaml}"
 	rm -f "${incorrect_configmap_yaml}"
 	rm -f "${testcase_pre_generate_pod_yaml}"
