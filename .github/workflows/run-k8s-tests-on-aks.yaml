@@ -2,6 +2,9 @@ name: CI | Run kubernetes tests on AKS
 on:
   workflow_call:
     inputs:
+      tarball-suffix:
+        required: false
+        type: string
       registry:
         required: true
         type: string
@@ -62,6 +65,15 @@ jobs:
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: get-kata-tarball
+        uses: actions/download-artifact@v3
+        with:
+          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
+          path: kata-artifacts
+
+      - name: Install kata
+        run: bash tests/integration/kubernetes/gha-run.sh install-kata-tools kata-artifacts
 
       - name: Download Azure CLI
         run: bash tests/integration/kubernetes/gha-run.sh install-azure-cli
