@@ -24,8 +24,6 @@ BASE_TARBALLS = serial-targets \
 	kernel-dragonball-experimental-tarball \
 	kernel-nvidia-gpu-tarball \
 	kernel-nvidia-gpu-confidential-tarball \
-	kernel-nvidia-gpu-snp-tarball \
-	kernel-nvidia-gpu-tdx-experimental-tarball \
 	kernel-tarball \
 	kernel-tdx-experimental-tarball \
 	nydus-tarball \
@@ -116,12 +114,6 @@ kernel-nvidia-gpu-tarball:
 
 kernel-nvidia-gpu-confidential-tarball:
 	${MAKE} $@-build
-
-kernel-nvidia-gpu-snp-tarball:
-	${MAKE} $@-build
-
-kernel-nvidia-gpu-tdx-experimental-tarball:
-	${MAKE} $@-build	
 
 kernel-tarball:
 	${MAKE} $@-build
