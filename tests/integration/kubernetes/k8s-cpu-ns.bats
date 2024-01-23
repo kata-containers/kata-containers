@@ -26,11 +26,15 @@ setup() {
 	total_cpu_container=1
 
 	get_pod_config_dir
+	yaml_file="${pod_config_dir}/pod-cpu.yaml"
 }
 
 @test "Check CPU constraints" {
+	# TODO: disabled due to #8850
+	# auto_generate_policy "${yaml_file}"
+
 	# Create the pod
-	kubectl create -f "${pod_config_dir}/pod-cpu.yaml"
+	kubectl create -f "${yaml_file}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"

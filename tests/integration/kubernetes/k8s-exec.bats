@@ -13,11 +13,15 @@ setup() {
 	pod_name="busybox"
 	first_container_name="first-test-container"
 	second_container_name="second-test-container"
+	yaml_file="${pod_config_dir}/busybox-pod.yaml"
 }
 
 @test "Kubectl exec" {
+	# TODO: disabled due to 8868
+	# auto_generate_policy "${yaml_file}"
+
 	# Create the pod
-	kubectl create -f "${pod_config_dir}/busybox-pod.yaml"
+	kubectl create -f "${yaml_file}"
 
 	# Get pod specification
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"

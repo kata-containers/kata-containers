@@ -24,29 +24,37 @@ setup_yaml() {
 @test "Exceeding memory constraints" {
 	memory_limit_size="50Mi"
 	allocated_size="250M"
+	yaml_file="${pod_config_dir}/test_exceed_memory.yaml"
+
 	# Create test .yaml
-	setup_yaml > "${pod_config_dir}/test_exceed_memory.yaml"
+	setup_yaml > "${yaml_file}"
+
+	auto_generate_policy "${yaml_file}"
 
 	# Create the pod exceeding memory constraints
-	run kubectl create -f "${pod_config_dir}/test_exceed_memory.yaml"
+	run kubectl create -f "${yaml_file}"
 	[ "$status" -ne 0 ]
 
-	rm -f "${pod_config_dir}/test_exceed_memory.yaml"
+	rm -f "${yaml_file}"
 }
 
 @test "Running within memory constraints" {
 	memory_limit_size="600Mi"
 	allocated_size="150M"
+	yaml_file="${pod_config_dir}/test_within_memory.yaml"
+
 	# Create test .yaml
-	setup_yaml > "${pod_config_dir}/test_within_memory.yaml"
+	setup_yaml > "${yaml_file}"
+
+	auto_generate_policy "${yaml_file}"
 
 	# Create the pod within memory constraints
-	kubectl create -f "${pod_config_dir}/test_within_memory.yaml"
+	kubectl create -f "${yaml_file}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
 
-	rm -f "${pod_config_dir}/test_within_memory.yaml"
+	rm -f "${yaml_file}"
 	kubectl delete pod "$pod_name"
 }
 

@@ -10,13 +10,17 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
 	get_pod_config_dir
+	yaml_file="${pod_config_dir}/job.yaml"
 }
 
 @test "Run a job to completion" {
 	job_name="job-pi-test"
+	
+	# TODO: disabled due to #8891
+	# auto_generate_policy "${yaml_file}"
 
 	# Create job
-	kubectl apply -f "${pod_config_dir}/job.yaml"
+	kubectl apply -f "${yaml_file}"
 
 	# Verify job
 	kubectl describe jobs/"$job_name" | grep "SuccessfulCreate"

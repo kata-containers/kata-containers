@@ -14,11 +14,15 @@ setup() {
 	second_container_name="second-test-container"
 
 	get_pod_config_dir
+	yaml_file="${pod_config_dir}/busybox-pod.yaml"
 }
 
 @test "Check PID namespaces" {
+	# TODO: disabled due to #8850
+	# auto_generate_policy "${yaml_file}"
+
 	# Create the pod
-	kubectl create -f "${pod_config_dir}/busybox-pod.yaml"
+	kubectl create -f "${yaml_file}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name

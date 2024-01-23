@@ -13,11 +13,14 @@ setup() {
 
 	pod_name="pod-oom"
 	get_pod_config_dir
+	yaml_file="${pod_config_dir}/$pod_name.yaml"
 }
 
 @test "Test OOM events for pods" {
+	auto_generate_policy "${yaml_file}"
+
 	# Create pod
-	kubectl create -f "${pod_config_dir}/$pod_name.yaml"
+	kubectl create -f "${yaml_file}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"

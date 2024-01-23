@@ -11,6 +11,8 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 setup() {
         pod_name="pod-caps"
         get_pod_config_dir
+        yaml_file="${pod_config_dir}/${pod_name}.yaml"
+
 # We expect the capabilities mask to very per distribution, runtime
 # configuration. Even for this, we should expect a few common items to
 # not be set in the mask unless we are failing to apply capabilities. If
@@ -28,8 +30,11 @@ setup() {
 }
 
 @test "Check capabilities of pod" {
+        # TODO: disabled due to #8850
+        # auto_generate_policy "${yaml_file}"
+
         # Create pod
-        kubectl create -f "${pod_config_dir}/pod-caps.yaml"
+        kubectl create -f "${yaml_file}"
         # Check pod creation
         kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
 

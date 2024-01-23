@@ -34,6 +34,9 @@ setup() {
 	volume_name="pv-volume"
 	volume_claim="pv-claim"
 
+	# TODO: disabled due to #8888
+	# auto_generate_policy "$pod_yaml"
+
 	# Create the persistent volume
 	kubectl create -f "$pv_yaml"
 

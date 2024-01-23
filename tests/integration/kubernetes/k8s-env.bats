@@ -11,11 +11,15 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 setup() {
 	pod_name="test-env"
 	get_pod_config_dir
+	yaml_file="${pod_config_dir}/pod-env.yaml"
 }
 
 @test "Environment variables" {
+	# TODO: disabled due to #8850
+	# auto_generate_policy "${yaml_file}"
+
 	# Create pod
-	kubectl create -f "${pod_config_dir}/pod-env.yaml"
+	kubectl create -f "${yaml_file}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"

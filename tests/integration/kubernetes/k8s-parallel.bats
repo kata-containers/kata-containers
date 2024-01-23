@@ -17,7 +17,9 @@ setup() {
 @test "Parallel jobs" {
 	# Create yaml files
 	for i in "${names[@]}"; do
-		sed "s/\$ITEM/$i/" ${pod_config_dir}/job-template.yaml > ${pod_config_dir}/job-$i.yaml
+		yaml_file="${pod_config_dir}/job-$i.yaml"
+		sed "s/\$ITEM/$i/" ${pod_config_dir}/job-template.yaml > "${yaml_file}"
+		auto_generate_policy "${yaml_file}"
 	done
 
 	# Create the jobs

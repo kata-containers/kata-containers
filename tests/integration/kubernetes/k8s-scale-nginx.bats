@@ -14,14 +14,17 @@ setup() {
 	replicas="3"
 	deployment="nginx-deployment"
 	get_pod_config_dir
+	yaml_file="${pod_config_dir}/test-${deployment}.yaml"
 }
 
 @test "Scale nginx deployment" {
 
 	sed -e "s/\${nginx_version}/${nginx_image}/" \
-		"${pod_config_dir}/${deployment}.yaml" > "${pod_config_dir}/test-${deployment}.yaml"
+		"${pod_config_dir}/${deployment}.yaml" > "${yaml_file}"
 
-	kubectl create -f "${pod_config_dir}/test-${deployment}.yaml"
+	auto_generate_policy "${yaml_file}"
+
+	kubectl create -f "${yaml_file}"
 	kubectl wait --for=condition=Available --timeout=$timeout deployment/${deployment}
 	kubectl expose deployment/${deployment}
 	kubectl scale deployment/${deployment} --replicas=${replicas}
@@ -30,7 +33,7 @@ setup() {
 }
 
 teardown() {
-	rm -f "${pod_config_dir}/test-${deployment}.yaml"
+	rm -f "${yaml_file}"
 	kubectl delete deployment "$deployment"
 	kubectl delete service "$deployment"
 }

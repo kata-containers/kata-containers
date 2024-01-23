@@ -15,15 +15,19 @@ setup() {
 	pod_name="handlers"
 
 	get_pod_config_dir
+	yaml_file="${pod_config_dir}/test-lifecycle-events.yaml"
 }
 
 @test "Running with postStart and preStop handlers" {
 	# Create yaml
 	sed -e "s/\${nginx_version}/${nginx_image}/" \
-		"${pod_config_dir}/lifecycle-events.yaml" > "${pod_config_dir}/test-lifecycle-events.yaml"
+		"${pod_config_dir}/lifecycle-events.yaml" > "${yaml_file}"
+
+	# TODO: disabled due to #8850
+	# auto_generate_policy "${yaml_file}"
 
 	# Create the pod with postStart and preStop handlers
-	kubectl create -f "${pod_config_dir}/test-lifecycle-events.yaml"
+	kubectl create -f "${yaml_file}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name
@@ -37,6 +41,6 @@ teardown(){
 	# Debugging information
 	kubectl describe "pod/$pod_name"
 
-	rm -f "${pod_config_dir}/test-lifecycle-events.yaml"
+	rm -f "${yaml_file}"
 	kubectl delete pod "$pod_name"
 }

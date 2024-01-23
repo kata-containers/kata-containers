@@ -13,12 +13,16 @@ setup() {
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 
 	get_pod_config_dir
+	yaml_file="${pod_config_dir}/pod-projected-volume.yaml"
 }
 
 @test "Projected volume" {
 	password="1f2d1e2e67df"
 	username="admin"
 	pod_name="test-projected-volume"
+
+	# TODO: disabled due to #8894
+	# auto_generate_policy "${yaml_file}"
 
 	TMP_FILE=$(mktemp username.XXXX)
 	SECOND_TMP_FILE=$(mktemp password.XXXX)
@@ -32,7 +36,7 @@ setup() {
 	kubectl create secret generic pass --from-file=$SECOND_TMP_FILE
 
 	# Create pod
-	kubectl create -f "${pod_config_dir}/pod-projected-volume.yaml"
+	kubectl create -f "${yaml_file}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"

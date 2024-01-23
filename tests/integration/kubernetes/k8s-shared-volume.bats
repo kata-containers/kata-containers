@@ -16,9 +16,13 @@ setup() {
 	pod_name="test-shared-volume"
 	first_container_name="busybox-first-container"
 	second_container_name="busybox-second-container"
+	yaml_file="${pod_config_dir}/pod-shared-volume.yaml"
+
+	# TODO: disabled due to #8896
+	# auto_generate_policy "${yaml_file}"
 
 	# Create pod
-	kubectl create -f "${pod_config_dir}/pod-shared-volume.yaml"
+	kubectl create -f "${yaml_file}"
 
 	# Check pods
 	kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name
@@ -32,9 +36,13 @@ setup() {
 @test "initContainer with shared volume" {
 	pod_name="initcontainer-shared-volume"
 	last_container="last"
+	yaml_file="${pod_config_dir}/initContainer-shared-volume.yaml"
+
+	# TODO: disabled due to #8896
+	# auto_generate_policy "${yaml_file}"
 
 	# Create pod
-	kubectl create -f "${pod_config_dir}/initContainer-shared-volume.yaml"
+	kubectl create -f "${yaml_file}"
 
 	# Check pods
 	kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name

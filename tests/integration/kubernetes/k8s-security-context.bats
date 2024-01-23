@@ -10,13 +10,17 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
 	get_pod_config_dir
+	yaml_file="${pod_config_dir}/pod-security-context.yaml"
 }
 
 @test "Security context" {
 	pod_name="security-context-test"
 
+	# TODO: disabled due to #8879
+	# auto_generate_policy "${yaml_file}"
+
 	# Create pod
-	kubectl create -f "${pod_config_dir}/pod-security-context.yaml"
+	kubectl create -f "${yaml_file}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"

@@ -371,11 +371,10 @@ log_level = "debug"
 EOF
 }
 
-function install_kata() {
-	local kata_tarball="kata-static.tar.xz"
-	declare -r katadir="/opt/kata"
+function install_kata_common() {
+	local katadir="$1"
 	declare -r destdir="/"
-	declare -r local_bin_dir="/usr/local/bin/"
+	declare -r kata_tarball="kata-static.tar.xz"
 
 	# Removing previous kata installation
 	sudo rm -rf "${katadir}"
@@ -383,6 +382,18 @@ function install_kata() {
 	pushd "${kata_tarball_dir}"
 	sudo tar -xvf "${kata_tarball}" -C "${destdir}"
 	popd
+}
+
+function install_kata_tools() {
+	declare -r katadir="/opt/kata"
+	install_kata_common "${katadir}"
+}
+
+function install_kata() {
+	declare -r katadir="/opt/kata"
+	declare -r local_bin_dir="/usr/local/bin/"
+
+	install_kata_common "${katadir}"
 
 	# create symbolic links to kata components
 	for b in "${katadir}"/bin/* ; do
@@ -727,4 +738,20 @@ function load_vhost_mods() {
 	sudo modprobe vhost
 	sudo modprobe vhost_net
 	sudo modprobe vhost_vsock
+}
+
+function auto_generate_policy() {
+	local yaml_file="$1"
+	local config_map_yaml_file="$2"
+	local host_os="${KATA_HOST_OS:-}"
+
+	# TODO: enable genpolicy based testing for other types of hosts too.
+	if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
+		local genpolicy_command="RUST_LOG=info /opt/kata/bin/genpolicy -u -i /opt/kata/share/defaults/kata-containers -y ${yaml_file}"
+		if [ ! -z "${config_map_yaml_file}" ]; then
+			genpolicy_command+=" -c ${config_map_yaml_file}"
+		fi
+		info "Executing: ${genpolicy_command}"
+		eval "${genpolicy_command}"
+	fi
 }

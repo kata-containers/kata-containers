@@ -13,14 +13,17 @@ issue="https://github.com/kata-containers/runtime/issues/1834"
 setup() {
 	skip "test not working see: ${issue}"
 	get_pod_config_dir
+	deployment_yaml_file="${pod_config_dir}/redis-master-deployment.yaml"
 }
 
 @test "Port forwarding" {
 	skip "test not working see: ${issue}"
 	deployment_name="redis-master"
 
+	auto_generate_policy "${deployment_yaml_file}"
+
 	# Create deployment
-	kubectl apply -f "${pod_config_dir}/redis-master-deployment.yaml"
+	kubectl apply -f "${deployment_yaml_file}"
 
 	# Check deployment
 	kubectl wait --for=condition=Available --timeout=$timeout deployment/"$deployment_name"
@@ -66,6 +69,6 @@ setup() {
 
 teardown() {
 	skip "test not working see: ${issue}"
-	kubectl delete -f "${pod_config_dir}/redis-master-deployment.yaml"
+	kubectl delete -f "${deployment_yaml_file}"
 	kubectl delete -f "${pod_config_dir}/redis-master-service.yaml"
 }

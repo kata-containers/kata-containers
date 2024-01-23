@@ -13,6 +13,7 @@ setup() {
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 
 	get_pod_config_dir
+	pod_yaml_file="${pod_config_dir}/pod-secret.yaml"
 }
 
 @test "Credentials using secrets" {
@@ -26,8 +27,11 @@ setup() {
 	# View information about the secret
 	kubectl get secret "${secret_name}" -o yaml | grep "type: Opaque"
 
+	# TODO: disabled due to #8886
+	# auto_generate_policy "${pod_yaml_file}"
+
 	# Create a pod that has access to the secret through a volume
-	kubectl create -f "${pod_config_dir}/pod-secret.yaml"
+	kubectl create -f "${pod_yaml_file}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"

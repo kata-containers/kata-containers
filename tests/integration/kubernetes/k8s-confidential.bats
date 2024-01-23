@@ -18,11 +18,14 @@ setup() {
 
 	get_pod_config_dir
 	setup_unencrypted_confidential_pod
+	yaml_file="${pod_config_dir}/pod-confidential-unencrypted.yaml"
 }
 
 @test "Test unencrypted confidential container launch success and verify that we are running in a secure enclave." {
+	auto_generate_policy "${yaml_file}"
+
 	# Start the service/deployment/pod
-	kubectl apply -f "${pod_config_dir}/pod-confidential-unencrypted.yaml"
+	kubectl apply -f "${yaml_file}"
 
 	# Retrieve pod name, wait for it to come up, retrieve pod ip
 	pod_name=$(kubectl get pod -o wide | grep "confidential-unencrypted" | awk '{print $1;}')
@@ -49,5 +52,5 @@ teardown() {
 	[[ " ${SUPPORTED_HYPERVISORS[*]} " =~  " ${KATA_HYPERVISOR} " ]] ||  skip "Test not supported for ${KATA_HYPERVISOR}."
 
 	kubectl describe "pod/${pod_name}" || true
-	kubectl delete -f "${pod_config_dir}/pod-confidential-unencrypted.yaml" || true
+	kubectl delete -f "${yaml_file}" || true
 }

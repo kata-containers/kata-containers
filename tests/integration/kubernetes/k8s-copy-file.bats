@@ -24,6 +24,9 @@ setup() {
 	sed -i "s/POD_NAME/$pod_name/" "$pod_config"
 	sed -i "s/CTR_NAME/$ctr_name/" "$pod_config"
 
+	# TODO: disabled due to #8868
+	# auto_generate_policy "$pod_config"
+
 	kubectl create -f "${pod_config}"
 
 	# Check pod creation
@@ -48,6 +51,9 @@ setup() {
 	cp "$pod_config_dir/busybox-template.yaml" "$pod_config"
 	sed -i "s/POD_NAME/$pod_name/" "$pod_config"
 	sed -i "s/CTR_NAME/$ctr_name/" "$pod_config"
+
+	# TODO: disabled due to #8868
+	# auto_generate_policy "$pod_config"
 
 	kubectl create -f "${pod_config}"
 

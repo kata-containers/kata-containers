@@ -13,6 +13,7 @@ setup() {
 	nginx_image="nginx:$nginx_version"
 
 	get_pod_config_dir
+	yaml_file="${pod_config_dir}/test-replication-controller.yaml"
 }
 
 @test "Replication controller" {
@@ -20,10 +21,12 @@ setup() {
 
 	# Create yaml
 	sed -e "s/\${nginx_version}/${nginx_image}/" \
-		"${pod_config_dir}/replication-controller.yaml" > "${pod_config_dir}/test-replication-controller.yaml"
+		"${pod_config_dir}/replication-controller.yaml" > "${yaml_file}"
+
+	auto_generate_policy "${yaml_file}"
 
 	# Create replication controller
-	kubectl create -f "${pod_config_dir}/test-replication-controller.yaml"
+	kubectl create -f "${yaml_file}"
 
 	# Check replication controller
 	local cmd="kubectl describe replicationcontrollers/$replication_name | grep replication-controller"
@@ -57,6 +60,6 @@ teardown() {
 	# Debugging information
 	kubectl describe replicationcontrollers/"$replication_name"
 
-	rm -f "${pod_config_dir}/test-replication-controller.yaml"
+	rm -f "${yaml_file}"
 	kubectl delete rc "$replication_name"
 }

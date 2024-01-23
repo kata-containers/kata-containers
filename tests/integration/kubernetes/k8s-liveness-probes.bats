@@ -18,6 +18,9 @@ setup() {
 
 @test "Liveness probe" {
 	pod_name="liveness-exec"
+	yaml_file="${pod_config_dir}/pod-liveness.yaml"
+
+	auto_generate_policy "${yaml_file}"
 
 	# Create pod
 	kubectl create -f "${pod_config_dir}/pod-liveness.yaml"
@@ -35,11 +38,15 @@ setup() {
 
 @test "Liveness http probe" {
 	pod_name="liveness-http"
+	yaml_file="${pod_config_dir}/pod-http-liveness-test.yaml"
+
+	sed -e "s#\${agnhost_image}#${agnhost_name}:${agnhost_version}#" \
+		"${pod_config_dir}/pod-http-liveness.yaml" > "${yaml_file}"
+
+	auto_generate_policy "${yaml_file}"
 
 	# Create pod
-	sed -e "s#\${agnhost_image}#${agnhost_name}:${agnhost_version}#" \
-		"${pod_config_dir}/pod-http-liveness.yaml" |\
-		kubectl create -f -
+	kubectl create -f "${yaml_file}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
@@ -55,11 +62,15 @@ setup() {
 
 @test "Liveness tcp probe" {
 	pod_name="tcptest"
+	yaml_file="${pod_config_dir}/pod-tcp-liveness-test.yaml"
+
+	sed -e "s#\${agnhost_image}#${agnhost_name}:${agnhost_version}#" \
+		"${pod_config_dir}/pod-tcp-liveness.yaml" > "${yaml_file}"
+
+	auto_generate_policy "${yaml_file}"
 
 	# Create pod
-	sed -e "s#\${agnhost_image}#${agnhost_name}:${agnhost_version}#" \
-		"${pod_config_dir}/pod-tcp-liveness.yaml" |\
-		kubectl create -f -
+	kubectl create -f "${yaml_file}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
@@ -77,4 +88,6 @@ teardown() {
 	kubectl describe "pod/$pod_name"
 
 	kubectl delete pod "$pod_name"
+	rm -f ${pod_config_dir}/pod-http-liveness-test.yaml
+	rm -f ${pod_config_dir}/pod-tcp-liveness-test.yaml
 }

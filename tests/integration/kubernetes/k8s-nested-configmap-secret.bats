@@ -15,11 +15,15 @@ setup() {
 	get_pod_config_dir
 
 	pod_name="nested-configmap-secret-pod"
+	yaml_file="${pod_config_dir}/pod-nested-configmap-secret.yaml"
 }
 
 @test "Nested mount of a secret volume in a configmap volume for a pod" {
+	# TODO: disabled due to #8892
+	# auto_generate_policy "${yaml_file}"
+
 	# Creates a configmap, secret and pod that mounts the secret inside the configmap
-	kubectl create -f "${pod_config_dir}/pod-nested-configmap-secret.yaml"
+	kubectl create -f "${yaml_file}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
@@ -37,5 +41,5 @@ teardown() {
 	kubectl describe "pod/$pod_name"
 
 	# Delete the configmap, secret, and pod used for testing
-	kubectl delete -f "${pod_config_dir}/pod-nested-configmap-secret.yaml"
+	kubectl delete -f "${yaml_file}"
 }

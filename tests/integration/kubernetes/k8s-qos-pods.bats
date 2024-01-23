@@ -16,9 +16,12 @@ setup() {
 
 @test "Guaranteed QoS" {
 	pod_name="qos-test"
+	yaml_file="${pod_config_dir}/pod-guaranteed.yaml"
+
+	auto_generate_policy "${yaml_file}"
 
 	# Create pod
-	kubectl create -f "${pod_config_dir}/pod-guaranteed.yaml"
+	kubectl create -f "${yaml_file}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
@@ -29,9 +32,12 @@ setup() {
 
 @test "Burstable QoS" {
 	pod_name="burstable-test"
+	yaml_file="${pod_config_dir}/pod-burstable.yaml"
+
+	auto_generate_policy "${yaml_file}"
 
 	# Create pod
-	kubectl create -f "${pod_config_dir}/pod-burstable.yaml"
+	kubectl create -f "${yaml_file}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
@@ -42,9 +48,12 @@ setup() {
 
 @test "BestEffort QoS" {
 	pod_name="besteffort-test"
+	yaml_file="${pod_config_dir}/pod-besteffort.yaml"
+
+	auto_generate_policy "${yaml_file}"
 
 	# Create pod
-	kubectl create -f "${pod_config_dir}/pod-besteffort.yaml"
+	kubectl create -f "${yaml_file}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"

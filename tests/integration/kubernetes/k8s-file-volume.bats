@@ -19,6 +19,7 @@ setup() {
 	mount_path="/tmp/foo.txt"
 	file_body="test"
 	get_pod_config_dir
+	yaml_file="${pod_config_dir}/test-pod-file-volume.yaml"
 }
 
 @test "Test readonly volume for pods" {
@@ -26,12 +27,15 @@ setup() {
 	exec_host "$node" "echo "$file_body" > $tmp_file"
 
 	# Create test yaml
-	sed -e "s|HOST_FILE|$tmp_file|" ${pod_config_dir}/pod-file-volume.yaml > ${pod_config_dir}/test-pod-file-volume.yaml
-	sed -i "s|MOUNT_PATH|$mount_path|" ${pod_config_dir}/test-pod-file-volume.yaml
-	sed -i "s|NODE|$node|" ${pod_config_dir}/test-pod-file-volume.yaml
+	sed -e "s|HOST_FILE|$tmp_file|" ${pod_config_dir}/pod-file-volume.yaml > "${yaml_file}"
+	sed -i "s|MOUNT_PATH|$mount_path|" "${yaml_file}"
+	sed -i "s|NODE|$node|" "${yaml_file}"
+
+	# TODO: disabled due to #8888
+	# auto_generate_policy "${yaml_file}"
 
 	# Create pod
-	kubectl create -f "${pod_config_dir}/test-pod-file-volume.yaml"
+	kubectl create -f "${yaml_file}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
@@ -46,5 +50,5 @@ teardown() {
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 	kubectl delete pod "$pod_name"
 	exec_host "$node" rm -f $tmp_file
-	rm -f ${pod_config_dir}/test-pod-file-volume.yaml.yaml
+	rm -f "${yaml_file}"
 }

@@ -13,13 +13,18 @@ setup() {
 		skip "runtime-rs is still using the old vcpus allocation algorithm, skipping the test"
 
 	get_pod_config_dir
+	yaml_file="${pod_config_dir}/pod-sandbox-vcpus-allocation.yaml"
+
 	pods=( "vcpus-less-than-one-with-no-limits" "vcpus-less-than-one-with-limits" "vcpus-more-than-one-with-limits" )
 	expected_vcpus=( 1 1 2 )
 }
 
 @test "Check the number vcpus are correctly allocated to the sandbox" {
+	# TODO: disabled due to #8895
+	# auto_generate_policy "${yaml_file}"
+
 	# Create the pods
-	kubectl create -f "${pod_config_dir}/pod-sandbox-vcpus-allocation.yaml"
+	kubectl create -f "${yaml_file}"
 
 	# Check the pods
 	for i in {0..2}; do
@@ -36,5 +41,5 @@ teardown() {
 		kubectl logs ${pod}
 	done
 
-	kubectl delete -f "${pod_config_dir}/pod-sandbox-vcpus-allocation.yaml"
+	kubectl delete -f "${yaml_file}"
 }

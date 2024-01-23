@@ -24,8 +24,13 @@ setup() {
 }
 
 @test "Empty dir volumes" {
+	pod_file="${pod_config_dir}/pod-empty-dir.yaml"
+
+	# TODO: disabled due to #8887
+	# auto_generate_policy "${pod_file}"
+
 	# Create the pod
-	kubectl create -f "${pod_config_dir}/pod-empty-dir.yaml"
+	kubectl create -f "${pod_file}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
@@ -45,6 +50,8 @@ setup() {
 	agnhost_name="${container_images_agnhost_name}"
 	agnhost_version="${container_images_agnhost_version}"
 	image="${agnhost_name}:${agnhost_version}"
+
+	# TODO: auto-generate policy for this yaml file - see #8887
 
 	# Try to avoid timeout by prefetching the image.
 	sed -e "s#\${agnhost_image}#${image}#" "$pod_file" |\

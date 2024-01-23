@@ -23,17 +23,22 @@ setup() {
 	sed -e "/\${ssh_key}/r ${public_key_path}" -e "/\${ssh_key}/d" \
 		"${pod_config_dir}/footloose-configmap.yaml" > "$configmap_yaml"
 	sed -i 's/ssh-rsa/      ssh-rsa/' "$configmap_yaml"
+
+	pod_yaml="${pod_config_dir}/pod-footloose.yaml"
 }
 
 @test "Footloose pod" {
 	cmd="uname -r"
 	sleep_connect="10"
 
+	# TODO: disabled due to #8850
+	# auto_generate_policy "${pod_yaml}" "${configmap_yaml}"
+
 	# Create ConfigMap
 	kubectl create -f "$configmap_yaml"
 
 	# Create pod
-	kubectl create -f "${pod_config_dir}/pod-footloose.yaml"
+	kubectl create -f "${pod_yaml}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"

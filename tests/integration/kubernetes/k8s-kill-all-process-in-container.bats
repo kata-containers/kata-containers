@@ -13,11 +13,15 @@ setup() {
 	first_container_name="first-test-container"
 
 	get_pod_config_dir
+	yaml_file="${pod_config_dir}/initcontainer-shareprocesspid.yaml"
 }
 
 @test "Kill all processes in container" {
+	# TODO: disabled due to #8868
+	# auto_generate_policy "${yaml_file}"
+
 	# Create the pod
-	kubectl create -f "${pod_config_dir}/initcontainer-shareprocesspid.yaml"
+	kubectl create -f "${yaml_file}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name

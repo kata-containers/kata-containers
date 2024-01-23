@@ -10,20 +10,25 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
 	get_pod_config_dir
+	configmap_yaml_file="${pod_config_dir}/configmap.yaml"
+	pod_yaml_file="${pod_config_dir}/pod-configmap.yaml"
 }
 
 @test "ConfigMap for a pod" {
 	config_name="test-configmap"
 	pod_name="config-env-test-pod"
 
+	# TODO: disabled due to #8850
+	# auto_generate_policy "${pod_yaml_file}" "${configmap_yaml_file}"
+
 	# Create ConfigMap
-	kubectl create -f "${pod_config_dir}/configmap.yaml"
+	kubectl create -f "${configmap_yaml_file}"
 
 	# View the values of the keys
 	kubectl get configmaps $config_name -o yaml | grep -q "data-"
 
 	# Create a pod that consumes the ConfigMap
-	kubectl create -f "${pod_config_dir}/pod-configmap.yaml"
+	kubectl create -f "${pod_yaml_file}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"

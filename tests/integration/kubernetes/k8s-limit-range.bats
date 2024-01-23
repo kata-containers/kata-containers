@@ -12,9 +12,12 @@ setup() {
 	get_pod_config_dir
 	namespace_name="default-cpu-example"
 	pod_name="default-cpu-test"
+	pod_yaml_file="${pod_config_dir}/pod-cpu-defaults.yaml"
 }
 
 @test "Limit range for storage" {
+	auto_generate_policy "${pod_yaml_file}"
+
 	# Create namespace
 	kubectl create namespace "$namespace_name"
 
@@ -22,7 +25,7 @@ setup() {
 	kubectl create -f "${pod_config_dir}/limit-range.yaml" --namespace=${namespace_name}
 
 	# Create the pod
-	kubectl create -f "${pod_config_dir}/pod-cpu-defaults.yaml" --namespace=${namespace_name}
+	kubectl create -f "${pod_yaml_file}" --namespace=${namespace_name}
 
 	# Get pod specification
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name" --namespace="$namespace_name"
