@@ -475,7 +475,7 @@ build_kernel_headers() {
 	pushd "${kernel_path}" >>/dev/null
 
 	if [ "$linux_headers" == "deb" ]; then
-		make -j $(nproc ${CI:+--ignore 1}) deb-pkg ARCH="${arch_target}"
+		make -j $(nproc ${CI:+--ignore 1}) bindeb-pkg ARCH="${arch_target}"
 	fi
 	if [ "$linux_headers" == "rpm" ]; then
 		make -j $(nproc ${CI:+--ignore 1}) rpm-pkg ARCH="${arch_target}"
