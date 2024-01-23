@@ -1352,15 +1352,14 @@ func (dev LoaderDevice) QemuParams(config *Config) []string {
 // in to the guest
 // nolint: govet
 type VhostUserDevice struct {
-	SocketPath     string //path to vhostuser socket on host
-	CharDevID      string
-	TypeDevID      string //variable QEMU parameter based on value of VhostUserType
-	Address        string //used for MAC address in net case
-	Tag            string //virtio-fs volume id for mounting inside guest
-	CacheSize      uint32 //virtio-fs DAX cache size in MiB
-	QueueSize      uint32 //size of virtqueues
-	SharedVersions bool   //enable virtio-fs shared version metadata
-	VhostUserType  DeviceDriver
+	SocketPath    string //path to vhostuser socket on host
+	CharDevID     string
+	TypeDevID     string //variable QEMU parameter based on value of VhostUserType
+	Address       string //used for MAC address in net case
+	Tag           string //virtio-fs volume id for mounting inside guest
+	CacheSize     uint32 //virtio-fs DAX cache size in MiB
+	QueueSize     uint32 //size of virtqueues
+	VhostUserType DeviceDriver
 
 	// ROMFile specifies the ROM file being used for this device.
 	ROMFile string
@@ -1533,9 +1532,6 @@ func (vhostuserDev VhostUserDevice) QemuFSParams(config *Config) []string {
 	deviceParams = append(deviceParams, fmt.Sprintf("queue-size=%d", queueSize))
 	if vhostuserDev.CacheSize != 0 {
 		deviceParams = append(deviceParams, fmt.Sprintf("cache-size=%dM", vhostuserDev.CacheSize))
-	}
-	if vhostuserDev.SharedVersions {
-		deviceParams = append(deviceParams, "versiontable=/dev/shm/fuse_shared_versions")
 	}
 	if vhostuserDev.Transport.isVirtioCCW(config) {
 		if config.Knobs.IOMMUPlatform {
