@@ -139,15 +139,15 @@ test_successful_actions() {
 	for K8S_TEST_ENTRY in ${K8S_TEST_UNION[@]}
 	do
 		info "$(kubectl get pods --all-namespaces 2>&1)"
-		bats "${K8S_TEST_ENTRY}"
+		bats --show-output-of-passing-tests "${K8S_TEST_ENTRY}"
 	done
 }
 
 run_policy_specific_tests() {
 	info "$(kubectl get pods --all-namespaces 2>&1)"
-	bats k8s-exec-rejected.bats
+	bats --show-output-of-passing-tests k8s-exec-rejected.bats
 	info "$(kubectl get pods --all-namespaces 2>&1)"
-	bats k8s-policy-set-keys.bats
+	bats --show-output-of-passing-tests k8s-policy-set-keys.bats
 }
 
 # we may need to skip a few test cases when running on non-x86_64 arch
