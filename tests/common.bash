@@ -751,6 +751,9 @@ function auto_generate_policy() {
 		if [ ! -z "${config_map_yaml_file}" ]; then
 			genpolicy_command+=" -c ${config_map_yaml_file}"
 		fi
+
+		find /opt/kata/ -ls
+
 		info "Executing: ${genpolicy_command}"
 		eval "${genpolicy_command}"
 	fi
