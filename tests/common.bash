@@ -741,20 +741,54 @@ function load_vhost_mods() {
 }
 
 function auto_generate_policy() {
-	local yaml_file="$1"
-	local config_map_yaml_file="$2"
+	local test_settings_dir="$1"
+	local yaml_file="$2"
+	local config_map_yaml_file="$3"
 	local host_os="${KATA_HOST_OS:-}"
 
 	# TODO: enable genpolicy based testing for other types of hosts too.
-	if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
-		local genpolicy_command="RUST_LOG=info /opt/kata/bin/genpolicy -u -i /opt/kata/share/defaults/kata-containers -y ${yaml_file}"
+	if [[ "${host_os}" == "cbl-mariner" ]]; then
+		find /opt/kata/ -ls
+
+		if [ -z "${test_settings_dir}" ]; then
+			test_settings_dir="/opt/kata/share/defaults/kata-containers"
+		fi
+
+		local genpolicy_command="RUST_LOG=info /opt/kata/bin/genpolicy -u -i ${test_settings_dir} -y ${yaml_file}"
 		if [ ! -z "${config_map_yaml_file}" ]; then
 			genpolicy_command+=" -c ${config_map_yaml_file}"
 		fi
 
-		find /opt/kata/ -ls
-
 		info "Executing: ${genpolicy_command}"
 		eval "${genpolicy_command}"
 	fi
+}
+
+function enable_exec_in_policy() {
+	local allowed_exec="$1"
+	local test_settings_dir="$2"
+
+	if [ -z "${test_settings_dir}" ]; then
+		local kata_defaults_dir="/opt/kata/share/defaults/kata-containers"
+		test_settings_dir=$(mktemp -d --tmpdir genpolicy.XXXXXXXXXX)
+		cp "${kata_defaults_dir}/rules.rego" "${test_settings_dir}"
+		cp "${kata_defaults_dir}/genpolicy-settings.json" "${test_settings_dir}"
+	fi
+
+	# Allow kubectl to exec this command.
+	jq --arg allowed_exec "${allowed_exec}" \
+		'.request_defaults.ExecProcessRequest.commands |= . + [$allowed_exec]' \
+		"${test_settings_dir}"/genpolicy-settings.json > \
+		"${test_settings_dir}"/genpolicy-settings-test.json
+
+	mv "${test_settings_dir}"/genpolicy-settings-test.json "${test_settings_dir}"/genpolicy-settings.json
+
+	# Allow kubectl to read the output from any commands.
+	jq '.request_defaults.ReadStreamRequest |= true' \
+		"${test_settings_dir}"/genpolicy-settings.json > \
+		"${test_settings_dir}"/genpolicy-settings-test.json
+	
+	mv "${test_settings_dir}"/genpolicy-settings-test.json "${test_settings_dir}"/genpolicy-settings.json
+
+	echo "${test_settings_dir}"
 }

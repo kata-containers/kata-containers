@@ -20,7 +20,7 @@ setup() {
 	skip "test not working see: ${issue}"
 	deployment_name="redis-master"
 
-	auto_generate_policy "${deployment_yaml_file}"
+	auto_generate_policy "" "${deployment_yaml_file}"
 
 	# Create deployment
 	kubectl apply -f "${deployment_yaml_file}"

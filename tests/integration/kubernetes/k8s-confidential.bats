@@ -22,7 +22,7 @@ setup() {
 }
 
 @test "Test unencrypted confidential container launch success and verify that we are running in a secure enclave." {
-	auto_generate_policy "${yaml_file}"
+	auto_generate_policy "" "${yaml_file}"
 
 	# Start the service/deployment/pod
 	kubectl apply -f "${yaml_file}"

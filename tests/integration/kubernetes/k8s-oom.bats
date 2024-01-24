@@ -17,7 +17,7 @@ setup() {
 }
 
 @test "Test OOM events for pods" {
-	auto_generate_policy "${yaml_file}"
+	auto_generate_policy "" "${yaml_file}"
 
 	# Create pod
 	kubectl create -f "${yaml_file}"

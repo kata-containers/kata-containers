@@ -18,7 +18,7 @@ setup() {
 	resource_name="pod-quota"
 	deployment_name="deploymenttest"
 
-	auto_generate_policy "${deployment_yaml_file}"
+	auto_generate_policy "" "${deployment_yaml_file}"
 
 	# Create the resourcequota
 	kubectl create -f "${pod_config_dir}/resource-quota.yaml"

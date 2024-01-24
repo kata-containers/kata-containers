@@ -22,7 +22,7 @@ setup() {
 	sed -e "s/\${nginx_version}/${nginx_image}/" \
 		"${pod_config_dir}/${deployment}.yaml" > "${yaml_file}"
 
-	auto_generate_policy "${yaml_file}"
+	auto_generate_policy "" "${yaml_file}"
 
 	kubectl create -f "${yaml_file}"
 	kubectl wait --for=condition=Available --timeout=$timeout deployment/${deployment}

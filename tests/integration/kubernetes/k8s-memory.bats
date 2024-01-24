@@ -29,7 +29,7 @@ setup_yaml() {
 	# Create test .yaml
 	setup_yaml > "${yaml_file}"
 
-	auto_generate_policy "${yaml_file}"
+	auto_generate_policy "" "${yaml_file}"
 
 	# Create the pod exceeding memory constraints
 	run kubectl create -f "${yaml_file}"
@@ -46,7 +46,7 @@ setup_yaml() {
 	# Create test .yaml
 	setup_yaml > "${yaml_file}"
 
-	auto_generate_policy "${yaml_file}"
+	auto_generate_policy "" "${yaml_file}"
 
 	# Create the pod within memory constraints
 	kubectl create -f "${yaml_file}"

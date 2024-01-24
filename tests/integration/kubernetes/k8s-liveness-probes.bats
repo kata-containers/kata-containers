@@ -20,7 +20,7 @@ setup() {
 	pod_name="liveness-exec"
 	yaml_file="${pod_config_dir}/pod-liveness.yaml"
 
-	auto_generate_policy "${yaml_file}"
+	auto_generate_policy "" "${yaml_file}"
 
 	# Create pod
 	kubectl create -f "${pod_config_dir}/pod-liveness.yaml"
@@ -43,7 +43,7 @@ setup() {
 	sed -e "s#\${agnhost_image}#${agnhost_name}:${agnhost_version}#" \
 		"${pod_config_dir}/pod-http-liveness.yaml" > "${yaml_file}"
 
-	auto_generate_policy "${yaml_file}"
+	auto_generate_policy "" "${yaml_file}"
 
 	# Create pod
 	kubectl create -f "${yaml_file}"
@@ -67,7 +67,7 @@ setup() {
 	sed -e "s#\${agnhost_image}#${agnhost_name}:${agnhost_version}#" \
 		"${pod_config_dir}/pod-tcp-liveness.yaml" > "${yaml_file}"
 
-	auto_generate_policy "${yaml_file}"
+	auto_generate_policy "" "${yaml_file}"
 
 	# Create pod
 	kubectl create -f "${yaml_file}"

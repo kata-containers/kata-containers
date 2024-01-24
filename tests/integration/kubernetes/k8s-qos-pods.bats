@@ -18,7 +18,7 @@ setup() {
 	pod_name="qos-test"
 	yaml_file="${pod_config_dir}/pod-guaranteed.yaml"
 
-	auto_generate_policy "${yaml_file}"
+	auto_generate_policy "" "${yaml_file}"
 
 	# Create pod
 	kubectl create -f "${yaml_file}"
@@ -34,7 +34,7 @@ setup() {
 	pod_name="burstable-test"
 	yaml_file="${pod_config_dir}/pod-burstable.yaml"
 
-	auto_generate_policy "${yaml_file}"
+	auto_generate_policy "" "${yaml_file}"
 
 	# Create pod
 	kubectl create -f "${yaml_file}"
@@ -50,7 +50,7 @@ setup() {
 	pod_name="besteffort-test"
 	yaml_file="${pod_config_dir}/pod-besteffort.yaml"
 
-	auto_generate_policy "${yaml_file}"
+	auto_generate_policy "" "${yaml_file}"
 
 	# Create pod
 	kubectl create -f "${yaml_file}"

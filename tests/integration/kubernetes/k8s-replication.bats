@@ -23,7 +23,7 @@ setup() {
 	sed -e "s/\${nginx_version}/${nginx_image}/" \
 		"${pod_config_dir}/replication-controller.yaml" > "${yaml_file}"
 
-	auto_generate_policy "${yaml_file}"
+	auto_generate_policy "" "${yaml_file}"
 
 	# Create replication controller
 	kubectl create -f "${yaml_file}"

@@ -19,7 +19,7 @@ setup() {
 	for i in "${names[@]}"; do
 		yaml_file="${pod_config_dir}/job-$i.yaml"
 		sed "s/\$ITEM/$i/" ${pod_config_dir}/job-template.yaml > "${yaml_file}"
-		auto_generate_policy "${yaml_file}"
+		auto_generate_policy "" "${yaml_file}"
 	done
 
 	# Create the jobs
