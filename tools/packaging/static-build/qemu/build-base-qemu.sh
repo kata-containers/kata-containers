@@ -47,7 +47,7 @@ CACHE_TIMEOUT=$(date +"%Y-%m-%d")
 container_image="${QEMU_CONTAINER_BUILDER:-$(get_qemu_image_name)}"
 [ "${CROSS_BUILD}" == "true" ] && container_image="${container_image}-cross-build"
 
-sudo docker pull ${container_image} || (sudo "${container_engine}" build \
+sudo ${container_engine} pull ${container_image} || (sudo "${container_engine}" build \
 	--build-arg CACHE_TIMEOUT="${CACHE_TIMEOUT}" \
 	--build-arg http_proxy="${http_proxy}" \
 	--build-arg https_proxy="${https_proxy}" \
@@ -56,8 +56,8 @@ sudo docker pull ${container_image} || (sudo "${container_engine}" build \
 	"${packaging_dir}" \
 	-f "${script_dir}/Dockerfile" \
 	-t "${container_image}" && \
-	 # No-op unless PUSH_TO_REGISTRY is exported as "yes"
-	 push_to_registry "${container_image}")
+	# No-op unless PUSH_TO_REGISTRY is exported as "yes"
+	push_to_registry "${container_image}")
 
 sudo "${container_engine}" run \
 	--rm \
