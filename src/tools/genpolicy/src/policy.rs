@@ -256,6 +256,9 @@ pub struct ContainerPolicy {
     /// Data compared with req.storages for CreateContainerRequest calls.
     storages: Vec<agent::Storage>,
 
+    /// Data compared with req.sandbox_pidns for CreateContainerRequest calls.
+    sandbox_pidns: bool,
+
     /// Allow list of ommand lines that are allowed to be executed using
     /// ExecProcessRequest. By default, all ExecProcessRequest calls are blocked
     /// by the policy.
@@ -518,6 +521,11 @@ impl AgentPolicy {
             linux.ReadonlyPaths = c_settings.Linux.ReadonlyPaths.clone();
         }
 
+        let sandbox_pidns = if is_pause_container {
+            false
+        } else {
+            resource.use_sandbox_pidns()
+        };
         let exec_commands = yaml_container.get_exec_commands();
 
         ContainerPolicy {
@@ -531,6 +539,7 @@ impl AgentPolicy {
                 Linux: linux,
             },
             storages,
+            sandbox_pidns,
             exec_commands,
         }
     }

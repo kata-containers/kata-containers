@@ -78,6 +78,9 @@ pub struct PodSpec {
     pub hostNetwork: Option<bool>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub shareProcessNamespace: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     dnsConfig: Option<PodDNSConfig>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -734,6 +737,13 @@ impl yaml::K8sResource for Pod {
     fn use_host_network(&self) -> bool {
         if let Some(host_network) = self.spec.hostNetwork {
             return host_network;
+        }
+        false
+    }
+
+    fn use_sandbox_pidns(&self) -> bool {
+        if let Some(shared) = self.spec.shareProcessNamespace {
+            return shared;
         }
         false
     }

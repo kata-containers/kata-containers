@@ -45,8 +45,12 @@ CreateContainerRequest {
     some p_container in policy_data.containers
     print("======== CreateContainerRequest: trying next policy container")
 
+    p_pidns := p_container.sandbox_pidns
+    i_pidns := input.sandbox_pidns
+    print("CreateContainerRequest: p_pidns =", p_pidns, "i_pidns =", i_pidns)
+    p_pidns == i_pidns
+
     p_oci := p_container.OCI
-    p_storages := p_container.storages
 
     print("CreateContainerRequest: p Version =", p_oci.Version, "i Version =", i_oci.Version)
     p_oci.Version == i_oci.Version
@@ -55,7 +59,10 @@ CreateContainerRequest {
     p_oci.Root.Readonly == i_oci.Root.Readonly
 
     allow_anno(p_oci, i_oci)
+
+    p_storages := p_container.storages
     allow_by_anno(p_oci, i_oci, p_storages, i_storages)
+
     allow_linux(p_oci, i_oci)
 
     print("CreateContainerRequest: true")
@@ -1074,6 +1081,12 @@ CopyFileRequest {
     regex.match(regex2, input.path)
 
     print("CopyFileRequest: true")
+}
+
+CreateSandboxRequest {
+    i_pidns := input.sandbox_pidns
+    print("CreateSandboxRequest: i_pidns =", i_pidns)
+    i_pidns == false
 }
 
 ExecProcessRequest {
