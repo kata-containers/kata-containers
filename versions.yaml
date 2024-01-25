@@ -271,7 +271,7 @@ externals:
   libseccomp:
     description: "High level interface to Linux seccomp filter"
     url: "https://github.com/seccomp/libseccomp"
-    version: "2.5.4"
+    version: "2.5.5"
 
   runc:
     description: "OCI CLI reference runtime implementation"
