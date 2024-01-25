@@ -29,7 +29,7 @@ TARGET_OS=${TARGET_OS:-linux}
 
 install_yq() {
 	pushd "${repo_root_dir}"
-	.ci/install_yq.sh
+	./ci/install_yq.sh
 	popd
 }
 
