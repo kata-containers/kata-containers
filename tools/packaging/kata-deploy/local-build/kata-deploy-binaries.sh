@@ -156,6 +156,16 @@ install_cached_tarball_component() {
 	mv "${component_tarball_name}" "${component_tarball_path}"
 }
 
+get_agent_tarball_path() {
+	agent_local_build_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
+	agent_tarball_name="kata-static-agent.tar.xz"
+	if [ "${AGENT_POLICY:-no}" = "yes" ]; then
+		agent_tarball_name="kata-static-agent-opa.tar.xz"
+	fi
+
+	echo "${agent_local_build_dir}/${agent_tarball_name}"
+}
+
 #Install guest image
 install_image() {
 	local variant="${1:-}"
@@ -195,7 +205,8 @@ install_image() {
 		os_name="$(get_from_kata_deps "assets.image.architecture.${ARCH}.name")"
 		os_version="$(get_from_kata_deps "assets.image.architecture.${ARCH}.version")"
 	fi
-	
+
+	export AGENT_TARBALL=$(get_agent_tarball_path)
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
 
@@ -247,6 +258,7 @@ install_initrd() {
 		os_version="$(get_from_kata_deps "assets.initrd.architecture.${ARCH}.version")"
 	fi
 
+	export AGENT_TARBALL=$(get_agent_tarball_path)
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
 
