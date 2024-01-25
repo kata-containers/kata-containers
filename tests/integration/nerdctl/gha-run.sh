@@ -59,30 +59,32 @@ function install_dependencies() {
 }
 
 function run() {
-	info "Running nerdctl smoke test tests using ${KATA_HYPERVISOR} hypervisor"
-
-	enabling_hypervisor
+	info "Running nerdctl smoke test tests using RunC"
 
 	info "Running nerdctl with runc"
 	sudo nerdctl run --rm --entrypoint nping instrumentisto/nmap --tcp-connect -c 2 -p 80 www.github.com
 
-	info "Running nerdctl with Kata Containers (${KATA_HYPERVISOR})"
-	sudo nerdctl run --rm --runtime io.containerd.kata-${KATA_HYPERVISOR}.v2 --entrypoint nping instrumentisto/nmap --tcp-connect -c 2 -p 80 www.github.com
-
-	parent_interface="eth0"
+	local parent_interface="eth0"
 	# The following creates an ipvlan network with eth0 on host as parent. The test assumes
 	# that an interface called eth0 exists on the host.
-	ipvlan_net_name="ipvlan10"
+	local ipvlan_net_name="ipvlan10"
 	info "Creating ipvlan network with eth0 interface on host as parent"
 	sudo nerdctl network create ${ipvlan_net_name=} --driver ipvlan --subnet=10.5.74.0/24 -o parent=${parent_interface}
 
-	info "Running nerdctl with Kata Containers (${KATA_HYPERVISOR}) and ipvlan network"
-	sudo nerdctl run  --rm --net ${ipvlan_net_name}  --runtime io.containerd.kata-${KATA_HYPERVISOR}.v2 alpine ip a | grep "eth0"
-
 	# The following creates an ipvlan network with eth0 on host as parent.
-	macvlan_net_name="macvlan20"
+	local macvlan_net_name="macvlan20"
 	info "Creating macvlan network with eth0 interface on host as parent"
 	sudo nerdctl network create ${macvlan_net_name=} --driver ipvlan --subnet=10.8.0.0/24 -o parent=${parent_interface}
+
+	enabling_hypervisor
+
+	info "Running nerdctl smoke test tests using ${KATA_HYPERVISOR} hypervisor"
+
+	info "Running nerdctl with Kata Containers (${KATA_HYPERVISOR})"
+	sudo nerdctl run --rm --runtime io.containerd.kata-${KATA_HYPERVISOR}.v2 --entrypoint nping instrumentisto/nmap --tcp-connect -c 2 -p 80 www.github.com
+
+	info "Running nerdctl with Kata Containers (${KATA_HYPERVISOR}) and ipvlan network"
+	sudo nerdctl run  --rm --net ${ipvlan_net_name}  --runtime io.containerd.kata-${KATA_HYPERVISOR}.v2 alpine ip a | grep "eth0"
 
 	info "Running nerdctl with Kata Containers (${KATA_HYPERVISOR}) and macvlan network"
 	sudo nerdctl run  --rm --net ${macvlan_net_name}  --runtime io.containerd.kata-${KATA_HYPERVISOR}.v2 alpine ip a | grep "eth0"
