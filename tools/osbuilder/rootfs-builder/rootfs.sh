@@ -680,7 +680,6 @@ EOF
 		make clean
 		make LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP} AGENT_POLICY=${AGENT_POLICY}
 		make install DESTDIR="${ROOTFS_DIR}" LIBC=${LIBC} INIT=${AGENT_INIT}
-		${stripping_tool} ${ROOTFS_DIR}/usr/bin/kata-agent
 		if [ "${SECCOMP}" == "yes" ]; then
 			rm -rf "${libseccomp_install_dir}" "${gperf_install_dir}"
 		fi
@@ -692,6 +691,8 @@ EOF
 	else
 		tar xvJpf ${AGENT_TARBALL} -C ${ROOTFS_DIR}
 	fi
+
+	${stripping_tool} ${ROOTFS_DIR}/usr/bin/kata-agent
 
 	[ -x "${AGENT_DEST}" ] || die "${AGENT_DEST} is not installed in ${ROOTFS_DIR}"
 	OK "Agent installed"
