@@ -173,7 +173,7 @@ allows you to think about what types of value to test.
 
 Raised a GitHub issue in the Kata Containers repository that
 explains what sort of test is required along with as much detail as
-possible. Ensure the original issue is referenced on the `tests` issue.
+possible. Ensure the original issue is referenced in the issue.
 
 ### Unsafe code
 
