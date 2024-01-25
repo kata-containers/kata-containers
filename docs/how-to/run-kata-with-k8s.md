@@ -74,7 +74,7 @@ implementation you chose, and the Kubelet service has to be updated accordingly.
 `/etc/systemd/system/kubelet.service.d/0-crio.conf`
 ```
 [Service]
-Environment="KUBELET_EXTRA_ARGS=--container-runtime=remote --runtime-request-timeout=15m --container-runtime-endpoint=unix:///var/run/crio/crio.sock"
+Environment="KUBELET_EXTRA_ARGS=--runtime-request-timeout=15m --container-runtime-endpoint=unix:///var/run/crio/crio.sock"
 ```
 
 ### Configure for containerd
@@ -82,7 +82,7 @@ Environment="KUBELET_EXTRA_ARGS=--container-runtime=remote --runtime-request-tim
 `/etc/systemd/system/kubelet.service.d/0-cri-containerd.conf`
 ```
 [Service]
-Environment="KUBELET_EXTRA_ARGS=--container-runtime=remote --runtime-request-timeout=15m --container-runtime-endpoint=unix:///run/containerd/containerd.sock"
+Environment="KUBELET_EXTRA_ARGS=--runtime-request-timeout=15m --container-runtime-endpoint=unix:///run/containerd/containerd.sock"
 ```
 For more information about containerd see the "Configure Kubelet to use containerd"
 documentation [here](../how-to/how-to-use-k8s-with-containerd-and-kata.md#configure-kubelet-to-use-containerd).
