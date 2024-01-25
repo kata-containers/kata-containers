@@ -42,8 +42,6 @@ jobs:
           - kernel-tdx-experimental
           - kernel-nvidia-gpu
           - kernel-nvidia-gpu-confidential
-          - kernel-nvidia-gpu-snp
-          - kernel-nvidia-gpu-tdx-experimental
           - nydus
           - ovmf
           - ovmf-sev
