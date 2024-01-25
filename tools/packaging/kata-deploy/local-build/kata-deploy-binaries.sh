@@ -716,16 +716,19 @@ install_tools_helper() {
 	[ ${tool} = "trace-forwarder" ] && tool_binary="kata-trace-forwarder"
 	binary=$(find ${repo_root_dir}/src/tools/${tool}/ -type f -name ${tool_binary})
 
-	info "Install static ${tool_binary}"
-	mkdir -p "${destdir}/opt/kata/bin/"
-	sudo install -D --owner root --group root --mode 0744 ${binary} "${destdir}/opt/kata/bin/${tool_binary}"
-
 	if [[ "${tool}" == "genpolicy" ]]; then
 		defaults_path="${destdir}/opt/kata/share/defaults/kata-containers"
 		mkdir -p "${defaults_path}"
 		sudo install -D --owner root --group root --mode 0644 ${repo_root_dir}/src/tools/${tool}/rules.rego "${defaults_path}/rules.rego"
 		sudo install -D --owner root --group root --mode 0644 ${repo_root_dir}/src/tools/${tool}/genpolicy-settings.json "${defaults_path}/genpolicy-settings.json"
+		binary_permissions="0755"
+	else
+		binary_permissions="0744"
 	fi
+
+	info "Install static ${tool_binary}"
+	mkdir -p "${destdir}/opt/kata/bin/"
+	sudo install -D --owner root --group root --mode ${binary_permissions} ${binary} "${destdir}/opt/kata/bin/${tool_binary}"
 }
 
 install_agent_ctl() {
