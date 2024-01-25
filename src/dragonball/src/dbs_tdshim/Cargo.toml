@@ -1,0 +1,15 @@
+[package]
+name = "dbs-tdshim"
+version = "0.1.0"
+authors = ["Alibaba Dragonball Team"]
+description = "helpers and utilities to support td-shim firmware"
+license = "Apache-2.0 AND BSD-2-Clause-Patent"
+edition = "2018"
+homepage = "https://github.com/kata-containers"
+repository = "https://github.com/kata-containers/kata-containers"
+keywords = ["dragonball", "td-shim", "TDX", "confidential container"]
+readme = "README.md"
+
+[dependencies]
+thiserror = "1"
+scroll = { version = "0.10", default-features = false, features = ["derive"]}

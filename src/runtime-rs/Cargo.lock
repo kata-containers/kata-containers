@@ -852,6 +852,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "dbs-tdshim"
+version = "0.1.0"
+dependencies = [
+ "scroll",
+ "thiserror",
+]
+
+[[package]]
 name = "dbs-upcall"
 version = "0.3.0"
 dependencies = [
@@ -1045,6 +1053,7 @@ dependencies = [
  "dbs-interrupt",
  "dbs-legacy-devices",
  "dbs-pci",
+ "dbs-tdshim",
  "dbs-upcall",
  "dbs-utils",
  "dbs-virtio-devices",
@@ -2747,7 +2756,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "059a34f111a9dee2ce1ac2826a68b24601c4298cfeb1a587c3cb493d5ab46f52"
 dependencies = [
  "libc",
- "nix 0.26.2",
+ "nix 0.27.1",
 ]
 
 [[package]]
@@ -3408,6 +3417,26 @@ name = "scopeguard"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
+
+[[package]]
+name = "scroll"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fda28d4b4830b807a8b43f7b0e6b5df875311b3e7621d84577188c175b6ec1ec"
+dependencies = [
+ "scroll_derive",
+]
+
+[[package]]
+name = "scroll_derive"
+version = "0.10.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aaaae8f38bb311444cfb7f1979af0bc9240d95795f75f9ceddf6a59b79ceffa0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
 
 [[package]]
 name = "seccompiler"
