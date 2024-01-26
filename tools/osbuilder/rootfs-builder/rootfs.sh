@@ -690,7 +690,7 @@ EOF
 			rm -rf "${libseccomp_install_dir}" "${gperf_install_dir}"
 		fi
 		popd
-	elif [ "${AGENT_SOURCE_BIN}" ]; then
+	elif [ -n "${AGENT_SOURCE_BIN}" ]; then
 		mkdir -p ${AGENT_DIR}
 		cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}
 		OK "cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}"
