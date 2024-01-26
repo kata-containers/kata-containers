@@ -28,6 +28,7 @@ jobs:
       matrix:
         asset:
           - agent
+          - coco-guest-components
           - kernel
           - qemu
           - rootfs-image

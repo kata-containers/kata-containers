@@ -88,6 +88,9 @@ agent-opa-tarball: copy-scripts-for-the-agent-build
 agent-ctl-tarball:
 	${MAKE} $@-build
 
+coco-guest-components-tarball:
+	${MAKE} $@-build
+
 cloud-hypervisor-tarball:
 	${MAKE} $@-build
 

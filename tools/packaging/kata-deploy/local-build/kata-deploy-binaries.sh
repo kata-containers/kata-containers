@@ -23,6 +23,7 @@ readonly version_file="${repo_root_dir}/VERSION"
 readonly versions_yaml="${repo_root_dir}/versions.yaml"
 
 readonly agent_builder="${static_build_dir}/agent/build.sh"
+readonly coco_guest_components_builder="${static_build_dir}/coco-guest-components/build.sh"
 readonly clh_builder="${static_build_dir}/cloud-hypervisor/build-static-clh.sh"
 readonly firecracker_builder="${static_build_dir}/firecracker/build-static-firecracker.sh"
 readonly kernel_builder="${static_build_dir}/kernel/build.sh"
@@ -87,6 +88,7 @@ options:
 	agent-opa
 	agent-ctl
 	boot-image-se
+	coco-guest-components
 	cloud-hypervisor
 	cloud-hypervisor-glibc
 	firecracker
@@ -710,6 +712,22 @@ install_agent_opa() {
 	install_agent_helper "yes"
 }
 
+install_coco_guest_components() {
+	latest_artefact="$(get_from_kata_deps "externals.coco-guest-components.version")-$(get_from_kata_deps "externals.coco-guest-components.toolchain")"
+	latest_builder_image="$(get_coco_guest_components_image_name)"
+
+	install_cached_tarball_component \
+		"${build_target}" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
+	info "build static coco-guest-components"
+	"${coco_guest_components_builder}"
+}
+
 install_tools_helper() {
 	tool=${1}
 
@@ -821,8 +839,10 @@ handle_build() {
 	agent-opa) install_agent_opa ;;
 
 	agent-ctl) install_agent_ctl ;;
-	
+
 	boot-image-se) install_se_image ;;
+
+	coco-guest-components) install_coco_guest_components ;;
 
 	cloud-hypervisor) install_clh ;;
 
@@ -941,6 +961,7 @@ main() {
 		agent-opa
 		agent-ctl
 		cloud-hypervisor
+		coco-guest-components
 		firecracker
 		genpolicy
 		kata-ctl

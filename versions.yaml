@@ -207,6 +207,12 @@ externals:
     url: "https://github.com/containernetworking/plugins"
     version: "v1.2.0"
 
+  coco-guest-components:
+    description: "Provides attested key unwrapping for image decryption"
+    url: "https://github.com/confidential-containers/guest-components/"
+    version: "42b7c9687ecd0907ef70da31cf290a60ee8432cd"
+    toolchain: "1.72.0"
+
   conmon:
     description: "An OCI container runtime monitor"
     url: "https://github.com/containers/conmon"
