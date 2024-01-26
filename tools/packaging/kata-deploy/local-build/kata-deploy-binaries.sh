@@ -140,7 +140,7 @@ install_cached_tarball_component() {
 	local component_tarball_name="${4}"
 	local component_tarball_path="${5}"
 
-	sudo oras pull ${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m)
+	sudo oras pull ${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) || return 1
 
 	cached_version="$(cat ${component}-version)"
 	cached_image_version="$(cat ${component}-builder-image-version)"
@@ -154,6 +154,16 @@ install_cached_tarball_component() {
 
 	info "Using cached tarball of ${component}"
 	mv "${component_tarball_name}" "${component_tarball_path}"
+}
+
+get_agent_tarball_path() {
+	agent_local_build_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
+	agent_tarball_name="kata-static-agent.tar.xz"
+	if [ "${AGENT_POLICY:-no}" = "yes" ]; then
+		agent_tarball_name="kata-static-agent-opa.tar.xz"
+	fi
+
+	echo "${agent_local_build_dir}/${agent_tarball_name}"
 }
 
 #Install guest image
@@ -195,7 +205,8 @@ install_image() {
 		os_name="$(get_from_kata_deps "assets.image.architecture.${ARCH}.name")"
 		os_version="$(get_from_kata_deps "assets.image.architecture.${ARCH}.version")"
 	fi
-	
+
+	export AGENT_TARBALL=$(get_agent_tarball_path)
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
 
@@ -247,6 +258,7 @@ install_initrd() {
 		os_version="$(get_from_kata_deps "assets.initrd.architecture.${ARCH}.version")"
 	fi
 
+	export AGENT_TARBALL=$(get_agent_tarball_path)
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
 
@@ -681,6 +693,11 @@ install_agent_helper() {
 		"${final_tarball_path}" \
 		&& return 0
 
+	export LIBSECCOMP_VERSION="$(get_from_kata_deps "externals.libseccomp.version")"
+	export LIBSECCOMP_URL="$(get_from_kata_deps "externals.libseccomp.url")"
+	export GPERF_VERSION="$(get_from_kata_deps "externals.gperf.version")"
+	export GPERF_URL="$(get_from_kata_deps "externals.gperf.url")"
+
 	info "build static agent"
 	DESTDIR="${destdir}" AGENT_POLICY=${agent_policy} "${agent_builder}"
 }
@@ -915,6 +932,8 @@ silent_mode_error_trap() {
 }
 
 main() {
+	git config --global --add safe.directory ${repo_root_dir}
+
 	local build_targets
 	local silent
 	build_targets=(

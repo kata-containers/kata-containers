@@ -32,7 +32,8 @@ RUN apt-get update && apt-get --no-install-recommends install -y \
     systemd \
     tar \
     vim \
-    wget
+    wget \
+    xz-utils
 # aarch64 requires this name -- link for all
 RUN ln -s /usr/bin/musl-gcc "/usr/bin/$(uname -m)-linux-musl-gcc"
 

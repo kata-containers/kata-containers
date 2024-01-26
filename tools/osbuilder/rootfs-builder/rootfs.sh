@@ -125,6 +125,14 @@ AGENT_INIT          When set to "yes", use ${AGENT_BIN} as init process in place
 
 AGENT_SOURCE_BIN    Path to the directory of agent binary.
                     If set, use the binary as agent but not build agent package.
+                    AGENT_SOURCE_BIN and AGENT_TARBALL should never be used toghether.
+                    Default value: <not set>
+
+AGENT_TARBALL       Path to the kata-agent.tar.xz tarball to be unpacked inside the
+                    rootfs.
+                    If set, this will take the priority and will be used instead of
+                    building the agent.
+                    AGENT_SOURCE_BIN and AGENT_TARBALL should never be used toghether.
                     Default value: <not set>
 
 AGENT_VERSION       Version of the agent to include in the rootfs.
@@ -419,13 +427,21 @@ build_rootfs_distro()
 		engine_run_args+=" --ulimit nofile=262144:262144"
 		engine_run_args+=" --runtime ${DOCKER_RUNTIME}"
 
-		if [ -z "${AGENT_SOURCE_BIN}" ] ; then
-			engine_run_args+=" -v ${GOPATH_LOCAL}:${GOPATH_LOCAL} --env GOPATH=${GOPATH_LOCAL}"
-		else
+		if [ -n "${AGENT_SOURCE_BIN}" ] && [ -n "${AGENT_TARBALL}" ]; then
+			die "AGENT_SOURCE_BIN and AGENT_TARBALL should never be used together!"
+		fi
+
+		if [ -n "${AGENT_SOURCE_BIN}" ] ; then
 			engine_run_args+=" --env AGENT_SOURCE_BIN=${AGENT_SOURCE_BIN}"
 			engine_run_args+=" -v ${AGENT_SOURCE_BIN}:${AGENT_SOURCE_BIN}"
-			engine_run_args+=" -v ${GOPATH_LOCAL}:${GOPATH_LOCAL} --env GOPATH=${GOPATH_LOCAL}"
 		fi
+
+		if [ -n "${AGENT_TARBALL}" ] ; then
+			engine_run_args+=" --env AGENT_TARBALL=${AGENT_TARBALL}"
+			engine_run_args+=" -v $(dirname ${AGENT_TARBALL}):$(dirname ${AGENT_TARBALL})"
+		fi
+
+		engine_run_args+=" -v ${GOPATH_LOCAL}:${GOPATH_LOCAL} --env GOPATH=${GOPATH_LOCAL}"
 
 		engine_run_args+=" $(docker_extra_args $distro)"
 
@@ -630,7 +646,7 @@ EOF
 	AGENT_DIR="${ROOTFS_DIR}/usr/bin"
 	AGENT_DEST="${AGENT_DIR}/${AGENT_BIN}"
 
-	if [ -z "${AGENT_SOURCE_BIN}" ] ; then
+	if [ -z "${AGENT_SOURCE_BIN}" ] && [ -z "${AGENT_TARBALL}" ] ; then
 		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
 		# rust agent needs ${arch}-unknown-linux-${LIBC}
 		if ! (rustup show | grep -v linux-${LIBC} > /dev/null); then
@@ -664,16 +680,19 @@ EOF
 		make clean
 		make LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP} AGENT_POLICY=${AGENT_POLICY}
 		make install DESTDIR="${ROOTFS_DIR}" LIBC=${LIBC} INIT=${AGENT_INIT}
-		${stripping_tool} ${ROOTFS_DIR}/usr/bin/kata-agent
 		if [ "${SECCOMP}" == "yes" ]; then
 			rm -rf "${libseccomp_install_dir}" "${gperf_install_dir}"
 		fi
 		popd
-	else
+	elif [ "${AGENT_SOURCE_BIN}" ]; then
 		mkdir -p ${AGENT_DIR}
 		cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}
 		OK "cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}"
+	else
+		tar xvJpf ${AGENT_TARBALL} -C ${ROOTFS_DIR}
 	fi
+
+	${stripping_tool} ${ROOTFS_DIR}/usr/bin/kata-agent
 
 	[ -x "${AGENT_DEST}" ] || die "${AGENT_DEST} is not installed in ${ROOTFS_DIR}"
 	OK "Agent installed"

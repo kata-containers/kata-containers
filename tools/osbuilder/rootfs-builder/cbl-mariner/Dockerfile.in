@@ -10,6 +10,7 @@ RUN tdnf -y install \
     build-essential \
     dnf \
     git \
-    tar
+    tar \
+    xz
 
 @INSTALL_RUST@
