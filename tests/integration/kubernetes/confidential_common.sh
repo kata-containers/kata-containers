@@ -29,6 +29,7 @@ function get_remote_command_per_hypervisor() {
 	REMOTE_COMMAND_PER_HYPERVISOR[qemu-sev]="dmesg | grep \"Memory Encryption Features active:.*\(SEV$\|SEV \)\""
 	REMOTE_COMMAND_PER_HYPERVISOR[qemu-snp]="dmesg | grep \"Memory Encryption Features active:.*SEV-SNP\""
 	REMOTE_COMMAND_PER_HYPERVISOR[qemu-tdx]="cpuid | grep TDX_GUEST"
+	REMOTE_COMMAND_PER_HYPERVISOR[qemu-se]="cd /sys/firmware/uv; cat prot_virt_guest | grep 1"
 
 	echo "${REMOTE_COMMAND_PER_HYPERVISOR[${KATA_HYPERVISOR}]}"
 }
