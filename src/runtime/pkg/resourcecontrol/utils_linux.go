@@ -8,18 +8,35 @@ package resourcecontrol
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/containerd/cgroups"
+	cgroupsv2 "github.com/containerd/cgroups/v2"
 	systemdDbus "github.com/coreos/go-systemd/v22/dbus"
 	"github.com/godbus/dbus/v5"
+	runc_cgroups "github.com/opencontainers/runc/libcontainer/cgroups"
 	"github.com/opencontainers/runc/libcontainer/cgroups/systemd"
 	"golang.org/x/sys/unix"
 )
 
+// cgroup v2 mount point
+const UnifiedMountpoint = "/sys/fs/cgroup"
+
 // DefaultResourceControllerID runtime-determined location in the cgroups hierarchy.
 const DefaultResourceControllerID = "/vc"
+
+// CgroupMode is the cgroup mode in cgroup v2.
+type CgroupMode string
+
+const (
+	CgroupModeDomain         CgroupMode = "domain"
+	CgroupModeDomainThreaded CgroupMode = "domain threaded"
+	CgroupModeDomainInvalid  CgroupMode = "domain invalid"
+	CgroupModeThreaded       CgroupMode = "threaded"
+)
 
 // ValidCgroupPath returns a valid cgroup path.
 // see https://github.com/opencontainers/runtime-spec/blob/master/config-linux.md#cgroups-path
@@ -55,8 +72,8 @@ func newProperty(name string, units interface{}) systemdDbus.Property {
 	}
 }
 
-func cgroupHierarchy(path string) (cgroups.Hierarchy, cgroups.Path, error) {
-	if !IsSystemdCgroup(path) {
+func cgroupHierarchy(path string, sandboxCgroupOnly bool) (cgroups.Hierarchy, cgroups.Path, error) {
+	if !IsSystemdCgroup(path) || !sandboxCgroupOnly {
 		return cgroups.V1, cgroups.StaticPath(path), nil
 	} else {
 		slice, unit, err := getSliceAndUnit(path)
@@ -131,6 +148,119 @@ func IsCgroupV1() (bool, error) {
 	} else {
 		return false, ErrCgroupMode
 	}
+}
+
+// SandboxAndOverheadPath gets the cgroup path in thread mode in cgroup v2.
+// The sandbox and overhead cgroup in threaded mode are placed under the same cgroup in domain threaded mode.
+// In this way, vCPU threads and VMM processes can be separated into two cgroups.
+// For details, please refer to https://github.com/kata-containers/kata-containers/issues/4886
+// and host cgroups design document https://github.com/kata-containers/kata-containers/blob/main/docs/design/host-cgroups.md.
+func SandboxAndOverheadPath(sandboxPath string, overheadPath string, sandboxCgroupOnly bool) (string, string, error) {
+	isCgroupV1, err := IsCgroupV1()
+	if err != nil {
+		return "", "", err
+	}
+
+	sandboxThreadedPath := sandboxPath
+	overheadThreadedPath := overheadPath
+
+	// For cgroup v2, when sandboxCgroupOnly = false, need to use threaded mode for management.
+	if !isCgroupV1 && !sandboxCgroupOnly {
+		sandboxThreadedPath = filepath.Join(sandboxPath, "sandbox")
+		overheadThreadedPath = filepath.Join(sandboxPath, "overhead")
+	}
+
+	return sandboxThreadedPath, overheadThreadedPath, nil
+}
+
+func SetThreadedMode(path string) error {
+	if err := runc_cgroups.WriteFile(filepath.Join(UnifiedMountpoint, path), "cgroup.type", string(CgroupModeThreaded)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func GetThreadedMode(path string) (string, error) {
+	cgroupType, err := runc_cgroups.ReadFile(filepath.Join(UnifiedMountpoint, path), "cgroup.type")
+	if err != nil {
+		return "", err
+	}
+	cgroupType = strings.Replace(cgroupType, "\n", "", -1)
+
+	return cgroupType, nil
+}
+
+// AllowAddThread determine the cgroup mode that allows adding threads.
+func AllowAddThread(cgroupType string) bool {
+	if cgroupType == string(CgroupModeDomainThreaded) ||
+		cgroupType == string(CgroupModeThreaded) {
+		return true
+	} else {
+		return false
+	}
+}
+
+func moveTo(manager *cgroupsv2.Manager, destination *cgroupsv2.Manager) error {
+	var lastError error
+	maxRetries := 5
+	delay := 10 * time.Millisecond
+	for i := 0; i < maxRetries; i++ {
+		// Sleep for a short duration before retrying
+		if i != 0 {
+			time.Sleep(delay)
+			delay *= 2
+		}
+		processes, err := manager.Procs(false)
+		if err != nil {
+			return err
+		}
+		if len(processes) == 0 {
+			return nil
+		}
+
+		for _, p := range processes {
+			if err := destination.AddProc(p); err != nil {
+				if strings.Contains(err.Error(), "no such process") {
+					continue
+				}
+				lastError = err
+			}
+		}
+	}
+
+	return fmt.Errorf("cgroups: unable to move all processes after %d retries. Last error: %v", maxRetries, lastError)
+}
+
+func deleteCgroup(manager *cgroupsv2.Manager, path string) error {
+	// kernel prevents cgroups with running process from being removed, check the tree is empty
+	processes, err := manager.Procs(false)
+	if err != nil {
+		return err
+	}
+	if len(processes) > 0 {
+		return fmt.Errorf("cgroups: unable to remove path %q: still contains running processes %v", path, processes)
+	}
+
+	return remove(path)
+}
+
+// remove will remove a cgroup path handling EAGAIN and EBUSY errors and
+// retrying the remove after a exp timeout
+func remove(path string) error {
+	var err error
+	maxRetries := 5
+	delay := 10 * time.Millisecond
+	for i := 0; i < maxRetries; i++ {
+		if i != 0 {
+			time.Sleep(delay)
+			delay *= 2
+		}
+		if err = os.RemoveAll(path); err == nil {
+			return nil
+		}
+	}
+	return fmt.Errorf("cgroups: unable to remove path %q: %w", path, err)
 }
 
 func SetThreadAffinity(threadID int, cpuSetSlice []int) error {

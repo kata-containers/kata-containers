@@ -45,7 +45,7 @@ type ResourceController interface {
 	// Type returns the resource controller implementation type.
 	Type() ResourceControllerType
 
-	// The controller identifier, e.g. a Linux cgroups path.
+	// ID return the controller identifier, e.g. a Linux cgroups path.
 	ID() string
 
 	// Parent returns the parent controller, on hierarchically
@@ -69,7 +69,7 @@ type ResourceController interface {
 	Update(*specs.LinuxResources) error
 
 	// MoveTo moves a controller to another one.
-	MoveTo(string) error
+	MoveTo(string, bool) error
 
 	// AddDevice adds a device resource to the controller.
 	AddDevice(string) error
@@ -79,4 +79,7 @@ type ResourceController interface {
 
 	// UpdateCpuSet updates the set of controlled CPUs and memory nodes.
 	UpdateCpuSet(string, string) error
+
+	// CgroupType get cgroup type.
+	CgroupType() (string, error)
 }

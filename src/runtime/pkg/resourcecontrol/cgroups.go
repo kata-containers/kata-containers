@@ -25,9 +25,6 @@ const (
 	// find kata containers cgroup path on host to prevent it
 	// from grabbing the stats data.
 	CgroupKataPrefix = "kata"
-
-	// cgroup v2 mount point
-	unifiedMountpoint = "/sys/fs/cgroup"
 )
 
 func RenameCgroupPath(path string) (string, error) {
@@ -130,7 +127,7 @@ func sandboxDevices() []specs.LinuxDeviceCgroup {
 	return devices
 }
 
-func NewResourceController(path string, resources *specs.LinuxResources) (ResourceController, error) {
+func NewResourceController(path string, resources *specs.LinuxResources, sandboxCgroupOnly bool) (ResourceController, error) {
 	var err error
 	var cgroup interface{}
 	var cgroupPath string
@@ -149,9 +146,12 @@ func NewResourceController(path string, resources *specs.LinuxResources) (Resour
 		if err != nil {
 			return nil, err
 		}
-		cgroup, err = cgroupsv2.NewManager(unifiedMountpoint, cgroupPath, cgroupsv2.ToResources(resources))
+		cgroup, err = cgroupsv2.NewManager(UnifiedMountpoint, cgroupPath, cgroupsv2.ToResources(resources))
 		if err != nil {
 			return nil, err
+		}
+		if !sandboxCgroupOnly {
+			SetThreadedMode(cgroupPath)
 		}
 	} else {
 		return nil, ErrCgroupMode
@@ -172,7 +172,7 @@ func NewSandboxResourceController(path string, resources *specs.LinuxResources, 
 	// Currently we know to handle systemd cgroup path only when it's the only cgroup (no overhead group), hence,
 	// if sandboxCgroupOnly is not true we treat it as cgroupfs path as it used to be, although it may be incorrect.
 	if !IsSystemdCgroup(path) || !sandboxCgroupOnly {
-		return NewResourceController(path, &sandboxResources)
+		return NewResourceController(path, &sandboxResources, sandboxCgroupOnly)
 	}
 
 	var cgroup interface{}
@@ -192,7 +192,7 @@ func NewSandboxResourceController(path string, resources *specs.LinuxResources, 
 
 	// Create systemd cgroup
 	if cgroups.Mode() == cgroups.Legacy || cgroups.Mode() == cgroups.Hybrid {
-		cgHierarchy, cgPath, err := cgroupHierarchy(path)
+		cgHierarchy, cgPath, err := cgroupHierarchy(path, sandboxCgroupOnly)
 		if err != nil {
 			return nil, err
 		}
@@ -226,13 +226,13 @@ func NewSandboxResourceController(path string, resources *specs.LinuxResources, 
 	}, nil
 }
 
-func LoadResourceController(path string) (ResourceController, error) {
+func LoadResourceController(path string, sandboxCgroupOnly bool) (ResourceController, error) {
 	var err error
 	var cgroup interface{}
 
 	// load created cgroup and update with resources
 	if cgroups.Mode() == cgroups.Legacy || cgroups.Mode() == cgroups.Hybrid {
-		cgHierarchy, cgPath, err := cgroupHierarchy(path)
+		cgHierarchy, cgPath, err := cgroupHierarchy(path, sandboxCgroupOnly)
 		if err != nil {
 			return nil, err
 		}
@@ -242,7 +242,7 @@ func LoadResourceController(path string) (ResourceController, error) {
 			return nil, err
 		}
 	} else if cgroups.Mode() == cgroups.Unified {
-		if IsSystemdCgroup(path) {
+		if IsSystemdCgroup(path) && sandboxCgroupOnly {
 			slice, unit, err := getSliceAndUnit(path)
 			if err != nil {
 				return nil, err
@@ -252,7 +252,7 @@ func LoadResourceController(path string) (ResourceController, error) {
 				return nil, err
 			}
 		} else {
-			cgroup, err = cgroupsv2.LoadManager(unifiedMountpoint, path)
+			cgroup, err = cgroupsv2.LoadManager(UnifiedMountpoint, path)
 			if err != nil {
 				return nil, err
 			}
@@ -309,12 +309,20 @@ func (c *LinuxCgroup) AddProcess(pid int, subsystems ...string) error {
 	}
 }
 
-func (c *LinuxCgroup) AddThread(pid int, subsystems ...string) error {
+func (c *LinuxCgroup) AddThread(tid int, subsystems ...string) error {
 	switch cg := c.cgroup.(type) {
 	case cgroups.Cgroup:
-		return cg.AddTask(cgroups.Process{Pid: pid})
+		return cg.AddTask(cgroups.Process{Pid: tid})
 	case *cgroupsv2.Manager:
-		return cg.AddProc(uint64(pid))
+		cgroupType, err := c.CgroupType()
+		if err != nil {
+			return err
+		}
+		if AllowAddThread(cgroupType) {
+			return cg.AddThread(uint64(tid))
+		} else {
+			return ErrCgroupMode
+		}
 	default:
 		return ErrCgroupMode
 	}
@@ -468,4 +476,8 @@ func (c *LinuxCgroup) ID() string {
 
 func (c *LinuxCgroup) Parent() string {
 	return filepath.Dir(c.path)
+}
+
+func (c *LinuxCgroup) CgroupType() (string, error) {
+	return GetThreadedMode(c.ID())
 }
