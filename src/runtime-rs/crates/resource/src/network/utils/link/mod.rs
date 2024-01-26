@@ -7,7 +7,7 @@
 mod create;
 pub use create::{create_link, LinkType};
 mod driver_info;
-pub use driver_info::{get_driver_info, DriverInfo};
+pub use driver_info::get_driver_info;
 mod macros;
 mod manager;
 pub use manager::get_link_from_message;
