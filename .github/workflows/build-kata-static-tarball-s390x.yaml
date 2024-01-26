@@ -27,6 +27,7 @@ jobs:
     strategy:
       matrix:
         asset:
+          - agent
           - kernel
           - qemu
           - rootfs-image
