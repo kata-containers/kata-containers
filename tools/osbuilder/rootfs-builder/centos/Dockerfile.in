@@ -13,6 +13,7 @@ RUN dnf -y update && \
     file \
     g++ \
     git \
-    protobuf-compiler
+    protobuf-compiler \
+    xz
 
 @INSTALL_RUST@

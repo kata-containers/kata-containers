@@ -64,6 +64,9 @@ kata-tarball: | all-parallel merge-builds
 $(MK_DIR)/dockerbuild/install_yq.sh:
 	$(MK_DIR)/kata-deploy-copy-yq-installer.sh
 
+copy-scripts-for-the-agent-build:
+	${MK_DIR}/kata-deploy-copy-libseccomp-installer.sh
+
 all-parallel: $(MK_DIR)/dockerbuild/install_yq.sh
 	${MAKE} -f $(MK_PATH) all -j $(shell nproc ${CI:+--ignore 1}) V=
 
@@ -76,10 +79,10 @@ serial-targets:
 %-tarball-build: $(MK_DIR)/dockerbuild/install_yq.sh
 	$(call BUILD,$*)
 
-agent-tarball:
+agent-tarball: copy-scripts-for-the-agent-build
 	${MAKE} $@-build
 
-agent-opa-tarball:
+agent-opa-tarball: copy-scripts-for-the-agent-build
 	${MAKE} $@-build
 
 agent-ctl-tarball:
@@ -151,19 +154,19 @@ qemu-tdx-experimental-tarball:
 stratovirt-tarball:
 	${MAKE} $@-build
 
-rootfs-image-tarball:
+rootfs-image-tarball: agent-tarball
 	${MAKE} $@-build
 
-rootfs-image-tdx-tarball: kernel-tdx-experimental-tarball
+rootfs-image-tdx-tarball: agent-opa-tarball kernel-tdx-experimental-tarball
 	${MAKE} $@-build
 
-rootfs-initrd-mariner-tarball:
+rootfs-initrd-mariner-tarball: agent-opa-tarball
 	${MAKE} $@-build
 
-rootfs-initrd-sev-tarball: kernel-sev-tarball
+rootfs-initrd-sev-tarball: agent-opa-tarball kernel-sev-tarball
 	${MAKE} $@-build
 
-rootfs-initrd-tarball:
+rootfs-initrd-tarball: agent-tarball
 	${MAKE} $@-build
 
 runk-tarball:
