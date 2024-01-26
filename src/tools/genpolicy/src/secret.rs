@@ -33,6 +33,9 @@ pub struct Secret {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     immutable: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    r#type: Option<String>,
     // TODO: additional fields.
 }
 
