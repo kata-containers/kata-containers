@@ -99,4 +99,11 @@ impl yaml::K8sResource for ReplicaSet {
         }
         false
     }
+
+    fn use_sandbox_pidns(&self) -> bool {
+        if let Some(shared) = self.spec.template.spec.shareProcessNamespace {
+            return shared;
+        }
+        false
+    }
 }
