@@ -24,3 +24,6 @@ spec:
             configMapKeyRef:
               name: policy-configmap
               key: data-2
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault

@@ -283,6 +283,19 @@ struct SecurityContext {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     runAsUser: Option<i64>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    seccompProfile: Option<SeccompProfile>,
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct SeccompProfile {
+    #[serde(rename = "type")]
+    profile_type: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    localhostProfile: Option<String>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -860,6 +873,7 @@ pub async fn add_pause_container(containers: &mut Vec<Container>, config: &Confi
             privileged: None,
             capabilities: None,
             runAsUser: None,
+            seccompProfile: None,
         }),
         ..Default::default()
     };
