@@ -28,6 +28,7 @@ LIBC=${LIBC:-musl}
 SECCOMP=${SECCOMP:-"yes"}
 SELINUX=${SELINUX:-"no"}
 AGENT_POLICY=${AGENT_POLICY:-no}
+COCO_GUEST_COMPONENTS_TARBALL=${COCO_GUEST_COMPONENTS_TARBALL:-""}
 
 lib_file="${script_dir}/../scripts/lib.sh"
 source "$lib_file"
@@ -142,6 +143,11 @@ ARCH                Target architecture (according to \`uname -m\`).
                     Foreign bootstraps are currently only supported for Ubuntu
                     and glibc agents.
                     Default value: $(uname -m)
+
+COCO_GUEST_COMPONENTS_TARBALL       Path to the kata-coco-guest-components.tar.xz tarball to be unpacked inside the
+                                    rootfs.
+                                    If set, the tarball will be unpacked onto the rootfs.
+                                    Default value: <not set>
 
 DISTRO_REPO         Use host repositories to install guest packages.
                     Default value: <not set>
@@ -771,6 +777,10 @@ EOF
 	info "Check init is installed"
 	[ -x "${init}" ] || [ -L "${init}" ] || die "/sbin/init is not installed in ${ROOTFS_DIR}"
 	OK "init is installed"
+
+	if [ -n "${COCO_GUEST_COMPONENTS_TARBALL}" ] ; then
+		tar xvJpf ${COCO_GUEST_COMPONENTS_TARBALL} -C ${ROOTFS_DIR}
+	fi
 
 	# Create an empty /etc/resolv.conf, to allow agent to bind mount container resolv.conf to Kata VM
 	dns_file="${ROOTFS_DIR}/etc/resolv.conf"
