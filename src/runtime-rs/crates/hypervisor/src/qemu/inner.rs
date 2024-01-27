@@ -46,14 +46,14 @@ impl QemuInner {
         info!(sl!(), "Preparing QEMU VM");
         self.id = id.to_string();
 
+        let vm_path = [KATA_PATH, self.id.as_str()].join("/");
+        std::fs::create_dir_all(vm_path)?;
+
         Ok(())
     }
 
     pub(crate) async fn start_vm(&mut self, _timeout: i32) -> Result<()> {
         info!(sl!(), "Starting QEMU VM");
-
-        let vm_path = [KATA_PATH, self.id.as_str()].join("/");
-        std::fs::create_dir_all(vm_path)?;
 
         let mut cmdline = QemuCmdLine::new(&self.id, &self.config)?;
 
