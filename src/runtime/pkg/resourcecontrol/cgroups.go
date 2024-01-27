@@ -276,12 +276,7 @@ func (c *LinuxCgroup) Delete() error {
 	case cgroups.Cgroup:
 		return cg.Delete()
 	case *cgroupsv2.Manager:
-		if IsSystemdCgroup(c.ID()) {
-			if err := cg.DeleteSystemd(); err != nil {
-				return err
-			}
-		}
-		return cg.Delete()
+		return deleteCgroup(cg, filepath.Join(UnifiedMountpoint, c.path))
 	default:
 		return ErrCgroupMode
 	}
@@ -339,10 +334,10 @@ func (c *LinuxCgroup) Update(resources *specs.LinuxResources) error {
 	}
 }
 
-func (c *LinuxCgroup) MoveTo(path string) error {
+func (c *LinuxCgroup) MoveTo(path string, sandboxCgroupOnly bool) error {
 	switch cg := c.cgroup.(type) {
 	case cgroups.Cgroup:
-		cgHierarchy, cgPath, err := cgroupHierarchy(path)
+		cgHierarchy, cgPath, err := cgroupHierarchy(path, sandboxCgroupOnly)
 		if err != nil {
 			return err
 		}
@@ -352,11 +347,25 @@ func (c *LinuxCgroup) MoveTo(path string) error {
 		}
 		return cg.MoveTo(newCgroup)
 	case *cgroupsv2.Manager:
-		newCgroup, err := cgroupsv2.LoadManager(unifiedMountpoint, path)
-		if err != nil {
-			return err
+		var newCgroup *cgroupsv2.Manager
+		if IsSystemdCgroup(path) && sandboxCgroupOnly {
+			slice, unit, err := getSliceAndUnit(path)
+			if err != nil {
+				return err
+			}
+			cg, err := cgroupsv2.LoadSystemd(slice, unit)
+			if err != nil {
+				return err
+			}
+			newCgroup = cg
+		} else {
+			cg, err := cgroupsv2.LoadManager(UnifiedMountpoint, path)
+			if err != nil {
+				return err
+			}
+			newCgroup = cg
 		}
-		return cg.MoveTo(newCgroup)
+		return moveTo(cg, newCgroup)
 	default:
 		return ErrCgroupMode
 	}

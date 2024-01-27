@@ -2494,39 +2494,96 @@ func (s *Sandbox) resourceControllerUpdate(ctx context.Context) error {
 // resourceControllerDelete will move the running processes in the sandbox resource
 // cvontroller to the parent and then delete the sandbox controller.
 func (s *Sandbox) resourceControllerDelete() error {
-	s.Logger().Debugf("Deleting sandbox %s resource controler", s.sandboxController)
+	s.Logger().Debugf("Deleting sandbox %s resource controller", s.sandboxController)
 	if s.state.SandboxCgroupPath == "" {
-		s.Logger().Warnf("sandbox %s resource controler path is empty", s.sandboxController)
+		s.Logger().Warnf("sandbox %s resource controller path is empty", s.sandboxController)
 		return nil
 	}
 
-	sandboxController, err := resCtrl.LoadResourceController(s.state.SandboxCgroupPath)
+	sandboxController, err := resCtrl.LoadResourceController(s.state.SandboxCgroupPath, s.config.SandboxCgroupOnly)
 	if err != nil {
 		return err
 	}
 
-	resCtrlParent := sandboxController.Parent()
-	if err := sandboxController.MoveTo(resCtrlParent); err != nil {
+	isCgroupV1, err := resCtrl.IsCgroupV1()
+	if err != nil {
 		return err
 	}
 
-	if err := sandboxController.Delete(); err != nil {
-		return err
-	}
+	if isCgroupV1 {
+		resCtrlParent := sandboxController.Parent()
+		if err := sandboxController.MoveTo(resCtrlParent, s.config.SandboxCgroupOnly); err != nil {
+			return err
+		}
 
-	if s.state.OverheadCgroupPath != "" {
-		overheadController, err := resCtrl.LoadResourceController(s.state.OverheadCgroupPath)
+		if err := sandboxController.Delete(); err != nil {
+			return err
+		}
+
+		if s.state.OverheadCgroupPath != "" {
+			overheadController, err := resCtrl.LoadResourceController(s.state.OverheadCgroupPath, s.config.SandboxCgroupOnly)
+			if err != nil {
+				return err
+			}
+
+			resCtrlParent := overheadController.Parent()
+			if err := s.overheadController.MoveTo(resCtrlParent, s.config.SandboxCgroupOnly); err != nil {
+				return err
+			}
+
+			if err := overheadController.Delete(); err != nil {
+				return err
+			}
+		}
+	} else {
+		cgroupRootPath := "/"
+		sandboxControllerCgroupType, err := resCtrl.GetThreadedMode(s.state.SandboxCgroupPath)
 		if err != nil {
 			return err
 		}
+		if sandboxControllerCgroupType == string(resCtrl.CgroupModeThreaded) {
+			resCtrlParent := sandboxController.Parent()
+			resCtrlParentCgroupType, err := resCtrl.GetThreadedMode(resCtrlParent)
+			if err != nil {
+				return err
+			}
+			if resCtrlParentCgroupType == string(resCtrl.CgroupModeDomainThreaded) {
+				resCtrlParentController, err := resCtrl.LoadResourceController(resCtrlParent, s.config.SandboxCgroupOnly)
+				if err != nil {
+					return err
+				}
 
-		resCtrlParent := overheadController.Parent()
-		if err := s.overheadController.MoveTo(resCtrlParent); err != nil {
-			return err
-		}
+				if err := resCtrlParentController.MoveTo(cgroupRootPath, s.config.SandboxCgroupOnly); err != nil {
+					return err
+				}
 
-		if err := overheadController.Delete(); err != nil {
-			return err
+				if err := resCtrlParentController.Delete(); err != nil {
+					return err
+				}
+			}
+		} else {
+			if err := sandboxController.MoveTo(cgroupRootPath, s.config.SandboxCgroupOnly); err != nil {
+				return err
+			}
+
+			if err := sandboxController.Delete(); err != nil {
+				return err
+			}
+
+			if s.state.OverheadCgroupPath != "" {
+				overheadController, err := resCtrl.LoadResourceController(s.state.OverheadCgroupPath, s.config.SandboxCgroupOnly)
+				if err != nil {
+					return err
+				}
+
+				if err := s.overheadController.MoveTo(cgroupRootPath, s.config.SandboxCgroupOnly); err != nil {
+					return err
+				}
+
+				if err := overheadController.Delete(); err != nil {
+					return err
+				}
+			}
 		}
 	}
 
