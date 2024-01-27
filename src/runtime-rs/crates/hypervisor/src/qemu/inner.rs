@@ -8,7 +8,7 @@ use crate::{
     hypervisor_persist::HypervisorState, HypervisorConfig, MemoryConfig, VcpuThreadIds,
     VsockDevice, HYPERVISOR_QEMU,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_types::{
     capabilities::{Capabilities, CapabilityBits},
@@ -17,7 +17,11 @@ use kata_types::{
 use persist::sandbox_persist::Persist;
 use std::collections::HashMap;
 use std::os::unix::io::AsRawFd;
-use tokio::process::{Child, Command};
+use std::process::Stdio;
+use tokio::{
+    io::{AsyncBufReadExt, BufReader},
+    process::{Child, ChildStderr, Command},
+};
 
 const VSOCK_SCHEME: &str = "vsock";
 
@@ -108,7 +112,12 @@ impl QemuInner {
         command.args(cmdline.build().await?);
 
         info!(sl!(), "qemu cmd: {:?}", command);
-        self.qemu_process = Some(command.spawn()?);
+        self.qemu_process = Some(command.stderr(Stdio::piped()).spawn()?);
+        info!(sl!(), "qemu process started");
+
+        if let Some(ref mut qemu_process) = &mut self.qemu_process {
+            tokio::spawn(log_qemu_stderr(qemu_process.stderr.take().unwrap()));
+        }
 
         Ok(())
     }
@@ -265,6 +274,24 @@ impl QemuInner {
             },
         ))
     }
+}
+
+async fn log_qemu_stderr(stderr: ChildStderr) -> Result<()> {
+    info!(sl!(), "starting reading qemu stderr");
+
+    let stderr_reader = BufReader::new(stderr);
+    let mut stderr_lines = stderr_reader.lines();
+
+    while let Some(buffer) = stderr_lines
+        .next_line()
+        .await
+        .context("next_line() failed on qemu stderr")?
+    {
+        info!(sl!(), "qemu stderr: {:?}", buffer);
+    }
+
+    info!(sl!(), "finished reading qemu stderr");
+    Ok(())
 }
 
 use crate::device::DeviceType;
