@@ -83,10 +83,10 @@ $ genpolicy -j my-settings.json -y test.yaml
 
 # Use a custom path to `genpolicy` input files
 
-By default, the `genpolicy` input files [`rules.rego`](rules.rego) and [`genpolicy-settings.json`](genpolicy-settings.json) must be present in the current directory - otherwise `genpolicy` returns an error. Users can specify a different path to these two files, using the `-i` command line parameter - e.g.,
+By default, the `genpolicy` input files [`rules.rego`](rules.rego) and [`genpolicy-settings.json`](genpolicy-settings.json) must be present in the current directory - otherwise `genpolicy` returns an error. Users can specify different paths to these two files, using the `-p` and `-j` command line parameters - e.g.,
 
 ```bash
-$ genpolicy -i /tmp -y test.yaml
+$ genpolicy -p /tmp/rules.rego -j /tmp/genpolicy-settings.json -y test.yaml
 ```
 
 # Silently ignore unsupported input `YAML` fields
