@@ -83,7 +83,7 @@ impl yaml::K8sResource for Job {
     }
 
     fn serialize(&mut self, policy: &str) -> String {
-        yaml::add_policy_annotation(&mut self.doc_mapping, "spec.template.metadata", policy);
+        yaml::add_policy_annotation(&mut self.doc_mapping, "spec.template", policy);
         serde_yaml::to_string(&self.doc_mapping).unwrap()
     }
 
@@ -92,7 +92,10 @@ impl yaml::K8sResource for Job {
     }
 
     fn get_annotations(&self) -> &Option<BTreeMap<String, String>> {
-        &self.spec.template.metadata.annotations
+        if let Some(metadata) = &self.spec.template.metadata {
+            return &metadata.annotations;
+        }
+        &None
     }
 
     fn use_host_network(&self) -> bool {

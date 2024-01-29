@@ -265,10 +265,23 @@ pub fn add_policy_annotation(
     let policy_key = serde_yaml::Value::String("io.katacontainers.config.agent.policy".to_string());
     let policy_value = serde_yaml::Value::String(policy.to_string());
 
-    let path_components = metadata_path.split('.');
-    for name in path_components {
-        ancestor = ancestor.get_mut(name).unwrap();
+    if !metadata_path.is_empty() {
+        let path_components = metadata_path.split('.');
+        for name in path_components {
+            ancestor = ancestor.get_mut(name).unwrap();
+        }
     }
+
+    // Add metadata to the output if the input YAML didn't include it.
+    let metadata = "metadata";
+    if ancestor.get(metadata).is_none() {
+        let new_mapping = serde_yaml::Value::Mapping(serde_yaml::Mapping::new());
+        ancestor
+            .as_mapping_mut()
+            .unwrap()
+            .insert(serde_yaml::Value::String(metadata.to_string()), new_mapping);
+    }
+    ancestor = ancestor.get_mut(metadata).unwrap();
 
     if let Some(annotations) = ancestor.get_mut(&annotations_key) {
         if let Some(annotation) = annotations.get_mut(&policy_key) {

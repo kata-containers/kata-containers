@@ -23,6 +23,8 @@ pub struct PodTemplate {
 /// Reference / Kubernetes API / Workload /  Resources / PodTemplate.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct PodTemplateSpec {
-    pub metadata: obj_meta::ObjectMeta,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<obj_meta::ObjectMeta>,
+
     pub spec: pod::PodSpec,
 }
