@@ -201,35 +201,45 @@ func AllowAddThread(cgroupType string) bool {
 	}
 }
 
-func moveTo(manager *cgroupsv2.Manager, destination *cgroupsv2.Manager) error {
-	var lastError error
+func RetryOperation(operation func() error) error {
+	var err error
 	maxRetries := 5
 	delay := 10 * time.Millisecond
+
 	for i := 0; i < maxRetries; i++ {
-		// Sleep for a short duration before retrying
 		if i != 0 {
 			time.Sleep(delay)
 			delay *= 2
 		}
-		processes, err := manager.Procs(false)
-		if err != nil {
-			return err
-		}
-		if len(processes) == 0 {
-			return nil
-		}
+		err = operation()
+	}
 
-		for _, p := range processes {
-			if err := destination.AddProc(p); err != nil {
-				if strings.Contains(err.Error(), "no such process") {
-					continue
-				}
-				lastError = err
+	if err != nil {
+		return fmt.Errorf("operation failed after %d retries, %w", maxRetries, err)
+	}
+
+	return nil
+}
+
+func moveTo(manager *cgroupsv2.Manager, destination *cgroupsv2.Manager) error {
+	processes, err := manager.Procs(false)
+	if err != nil {
+		return err
+	}
+	if len(processes) == 0 {
+		return nil
+	}
+
+	for _, p := range processes {
+		if err := destination.AddProc(p); err != nil {
+			if strings.Contains(err.Error(), "no such process") {
+				continue
 			}
+			return err
 		}
 	}
 
-	return fmt.Errorf("cgroups: unable to move all processes after %d retries. Last error: %v", maxRetries, lastError)
+	return nil
 }
 
 func deleteCgroup(manager *cgroupsv2.Manager, path string) error {
@@ -242,25 +252,22 @@ func deleteCgroup(manager *cgroupsv2.Manager, path string) error {
 		return fmt.Errorf("cgroups: unable to remove path %q: still contains running processes %v", path, processes)
 	}
 
-	return remove(path)
+	err = RetryOperation(func() error { return remove(path) })
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // remove will remove a cgroup path handling EAGAIN and EBUSY errors and
 // retrying the remove after a exp timeout
 func remove(path string) error {
-	var err error
-	maxRetries := 5
-	delay := 10 * time.Millisecond
-	for i := 0; i < maxRetries; i++ {
-		if i != 0 {
-			time.Sleep(delay)
-			delay *= 2
-		}
-		if err = os.RemoveAll(path); err == nil {
-			return nil
-		}
+	if err := os.RemoveAll(path); err != nil {
+		return err
 	}
-	return fmt.Errorf("cgroups: unable to remove path %q: %w", path, err)
+
+	return nil
 }
 
 func SetThreadAffinity(threadID int, cpuSetSlice []int) error {

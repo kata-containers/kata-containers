@@ -345,7 +345,10 @@ func (c *LinuxCgroup) MoveTo(path string, sandboxCgroupOnly bool) error {
 		if err != nil {
 			return err
 		}
-		return cg.MoveTo(newCgroup)
+		err = RetryOperation(func() error { return cg.MoveTo(newCgroup) })
+		if err != nil {
+			return err
+		}
 	case *cgroupsv2.Manager:
 		var newCgroup *cgroupsv2.Manager
 		if IsSystemdCgroup(path) && sandboxCgroupOnly {
@@ -365,10 +368,15 @@ func (c *LinuxCgroup) MoveTo(path string, sandboxCgroupOnly bool) error {
 			}
 			newCgroup = cg
 		}
-		return moveTo(cg, newCgroup)
+		err := RetryOperation(func() error { return moveTo(cg, newCgroup) })
+		if err != nil {
+			return err
+		}
 	default:
 		return ErrCgroupMode
 	}
+
+	return nil
 }
 
 func (c *LinuxCgroup) AddDevice(deviceHostPath string) error {
