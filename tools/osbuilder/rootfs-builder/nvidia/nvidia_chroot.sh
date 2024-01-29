@@ -224,8 +224,6 @@ prepare_run_file_drivers()
 
 	driver_source_version=$(compgen -G NVIDIA-* | grep -v '.run' | cut -d'-' -f4)
 
-	echo "$driver_source_version" > /nvidia_driver_version
-
 	popd >> /dev/null
 }
 
@@ -238,8 +236,6 @@ prepare_distribution_drivers()
 	export driver_version
 	echo "chroot: Prepare NVIDIA distribution drivers"
 	eval "${APT_INSTALL}" nvidia-headless-no-dkms-"${driver_version}${driver_type}" nvidia-utils-"${driver_version}"
-
-	echo "${driver_version}" > /nvidia_driver_version
 }
 
 install_build_dependencies() 
@@ -415,6 +411,14 @@ get_supported_gpus_from_distro_drivers()
 	#exit 1
 }
 
+export_driver_version() { 
+       for modules_version in /lib/modules.save_from_purge/*; do
+               modinfo "${modules_version}"/kernel/drivers/video/nvidia.ko | grep ^version | awk '{ print $2 }' > /nvidia_driver_version
+               break
+       done
+}
+
+
 # Start of script
 echo "chroot: Setup NVIDIA GPU rootfs"
 
@@ -458,6 +462,7 @@ fi
 time { install_nvidia_container_runtime; }
 time { install_nvidia_nvtrust_tools; }
 time { install_nvidia_dcgm_exporter; }
+#time { install_nvidia_dcgm_exporter; }
 time { cleanup_rootfs; }
 
 
