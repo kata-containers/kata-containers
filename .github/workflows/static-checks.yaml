@@ -141,7 +141,7 @@ jobs:
           RUST_BACKTRACE: "1"
 
   build-checks-depending-on-kvm:
-    runs-on: garm-ubuntu-2004-smaller
+    runs-on: ubuntu-20.04
     strategy:
       fail-fast: false
       matrix:
