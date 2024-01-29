@@ -297,17 +297,6 @@ externals:
     description: "Open Policy Agent"
     url: "https://github.com/open-policy-agent/opa"
     version: "v0.55.0"
-    meta:
-      # - If an OPA package is available for the Guest image distro, that
-      #   package is used instead of the binary below.
-      #
-      # - TODO: if an OPA package is not available for the Guest image distro,
-      #   Kata should cache the OPA source code, toolchain information, etc.
-      #   OPA should be built from the cached source code instead of downloading
-      #   this binary.
-      #
-      # yamllint disable-line rule:line-length
-      binary: "https://github.com/open-policy-agent/opa/releases/download/v0.55.0/opa_linux_amd64_static"
 
   ovmf:
     description: "Firmware, implementation of UEFI for virtual machines."
