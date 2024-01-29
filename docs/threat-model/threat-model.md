@@ -68,6 +68,40 @@ In case of Kata, today the devices which we need in the guest are:
 How these devices are utilized varies depending on the VMM utilized. We clarify the default settings provided when integrating Kata
 with the QEMU, Firecracker and Cloud Hypervisor VMMs in the following sections.
 
+### Virtual Machine Monitor(s)
+
+In a KVM/QEMU (any other VMM utilizing KVM) virtualization setup, all virtual
+machines (VMs) share the same host kernel. This shared environment can lead to
+scenarios where one VM could potentially impact the performance or stability of
+other VMs, including the possibility of a Denial of Service (DoS) attack.
+
+- Kernel Vulnerabilities: Since all VMs rely on the host's kernel, a
+vulnerability in the kernel could be exploited by a process running within one
+VM to affect the entire system. This could lead to scenarios where the
+compromised VM impacts other VMs or even takes down the host.
+
+- Improper Isolation and Containment: If the virtualization environment is not
+correctly configured, processes in one VM might impact other VMs. This could
+occur through improper isolation of network traffic, shared file systems, or
+other inter-VM communication channels.
+
+- Hypervisor Vulnerabilities: Flaws in the KVM hypervisor or QEMU could be
+exploited to cause information disclosure, data tampering, elevation of
+privileges, DoS, and others. Since KVM/QEMU leverages the host kernel for its
+operation, any exploit at this level can have widespread impacts.
+
+- Malicious or Flawed Guest Operating Systems: A guest operating system that is
+maliciously designed or has serious flaws could engage in activities that
+disrupt the normal operation of the host or other guests. This might include
+aggressive network activity or interactions with the virtualization stack that
+lead to instability. Escaping Virtualized Containers:
+https://i.blackhat.com/USA-20/Thursday/us-20-Avrahami-Escaping-Virtualized-Containers.pdf
+
+- Resource Exhaustion: A VM could consume excessive shared resources such as
+CPU, memory, or I/O bandwidth, leading to resource starvation for other VMs.
+This could be due to misconfiguration, a runaway process, or a deliberate DoS
+attack from a compromised VM. DoS attacks on VM-based containers: https://www.usenix.org/system/files/sec23fall-prepub-591-xiao-jietao.pdf
+
 ### Devices
 
 Each virtio device is implemented by a backend, which may execute within userspace on the host (vhost-user), the VMM itself, or within the host kernel (vhost). While it may provide enhanced performance,
@@ -122,16 +156,79 @@ In Firecracker and Cloud Hypervisor, vsock is backed by a unix-domain-socket in 
 
 #### VFIO
 
-Utilizing VFIO, devices can be passed through to the virtual machine. We will assess this separately. Exposure to
-host is limited to gaps in device pass-through handling. This is supported in QEMU and Cloud Hypervisor, but not
-Firecracker.
+Utilizing VFIO, devices can be passed through to the virtual machine. Exposure
+to the host is limited to gaps in device pass-through handling. This is supported in
+QEMU and Cloud Hypervisor, but not Firecracker.
+
+- Device Isolation Failure: One of the primary risks associated with VFIO is the
+failure to isolate the physical device. If a VM can affect the operation of the
+physical device in a way that impacts other VMs or the host system, it could
+lead to security breaches or system instability.
+
+- DMA Attacks: Direct Memory Access (DMA) attacks are a significant concern with
+VFIO. Since the device has direct access to the system's memory, there's a risk
+that a compromised VM could use its assigned device to read or write memory
+outside of its allocated space, potentially accessing sensitive information or
+affecting the host or other VMs.
+
+- Firmware Vulnerabilities: Devices attached via VFIO rely on their firmware,
+which can have vulnerabilities. A compromised device firmware could be exploited
+to gain unauthorized access or to disrupt the system. Resource Starvation:
+Improperly managed, a VM with direct access to hardware resources could
+monopolize those resources, leading to performance degradation or denial of
+service for other VMs or the host system.
+
+- Escalation of Privileges: If a VM with VFIO access is compromised, it could
+potentially be used to gain higher privileges than intended, especially if the
+I/O devices have capabilities that are not adequately controlled or monitored.
+
+- Improper Configuration and Management: Human errors in configuring VFIO, such
+as incorrect group or user permissions, can expose the system to risks.
+Additionally, inadequate monitoring and management of the VMs and their devices
+can lead to security lapses.
+
+- Software Vulnerabilities: Like any software, the components of VFIO (like the
+kernel modules, device drivers, and management tools) can have vulnerabilities
+that might be exploited by an attacker to compromise the security of the system.
+Inter-VM Interference and Side-Channel Attacks: Even with device assignment,
+there could be side-channel attacks where an attacker VM infers sensitive
+information from the physical device's behavior or through shared resources like
+cache.
 
 #### ACPI
 
-ACPI is necessary for hotplug of CPU, memory and devices. ACPI is available in QEMU and Cloud Hypervisor. Device, CPU and memory hotplug
-are not available in Firecracker.
+ACPI is necessary for hotplugging of CPU, memory and devices. ACPI is available
+in QEMU and Cloud Hypervisor. Device, CPU and memory hotplug are not available
+in Firecracker.
+
+- Hypervisor Vulnerabilities: In virtualized environments, the hypervisor
+manages ACPI calls for virtual machines (VMs). If the hypervisor has
+vulnerabilities in handling ACPI requests, it could lead to escalated privileges
+or other security breaches.
+
+- VM Escape: A sophisticated attack could exploit ACPI functionality to achieve a
+VM escape, where malicious code in a VM breaks out to the host system or other
+VMs. Firmware Attacks in a Virtualized Context: Similar to physical
+environments, firmware-based attacks (including those targeting ACPI) in
+virtualized systems can be persistent and difficult to detect. In a virtualized
+environment, such attacks might not only compromise the host system but also all
+the VMs running on it.
+
+- Resource Starvation Attacks: ACPI functionality could be exploited to manipulate
+power management features, causing denial of service (DoS) through resource
+starvation. For example, an attacker could force a VM into a low-power state,
+degrading its performance or availability.
+
+- Compromised VMs Affecting Host ACPI Settings: If a VM is compromised, it might
+be used to alter ACPI settings on the host, affecting all VMs on that host. This
+could lead to various impacts, from performance degradation to system
+instability.
+
+- Supply Chain Risks: As with non-virtualized environments, the firmware,
+including ACPI firmware used in virtualized environments, could be compromised
+during the supply chain process, leading to vulnerabilities that affect all VMs
+running on the hardware.
 
 ## Devices and threat model
 
 ![Threat model](threat-model-boundaries.svg "threat-model")
-
