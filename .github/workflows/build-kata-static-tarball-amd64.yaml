@@ -54,6 +54,8 @@ jobs:
           - rootfs-initrd
           - rootfs-initrd-mariner
           - rootfs-initrd-sev
+          - rootfs-nvidia-gpu-initrd-tarball
+          - rootfs-nvidia-gpu-image-tarball
           - runk
           - shim-v2
           - tdvf

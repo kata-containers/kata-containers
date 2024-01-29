@@ -24,6 +24,8 @@ BASE_TARBALLS = serial-targets \
 	kernel-dragonball-experimental-tarball \
 	kernel-nvidia-gpu-tarball \
 	kernel-nvidia-gpu-confidential-tarball \
+	kernel-headers-nvidia-gpu-tarball \
+	kernel-headers-nvidia-gpu-confidential-tarball \
 	kernel-nvidia-gpu-snp-tarball \
 	kernel-nvidia-gpu-tdx-experimental-tarball \
 	kernel-tarball \
@@ -112,6 +114,12 @@ kernel-nvidia-gpu-tarball:
 kernel-nvidia-gpu-confidential-tarball:
 	${MAKE} $@-build
 
+kernel-headers-nvidia-gpu-tarball: kernel-nvidia-gpu-tarball
+	${MAKE} $@-build
+
+kernel-headers-nvidia-gpu-confidential-tarball: kernel-nvidia-gpu-confidential-tarball
+	${MAKE} $@-build
+
 kernel-nvidia-gpu-snp-tarball:
 	${MAKE} $@-build
 
@@ -167,6 +175,21 @@ rootfs-initrd-sev-tarball: agent-opa-tarball kernel-sev-tarball
 	${MAKE} $@-build
 
 rootfs-initrd-tarball: agent-tarball
+	${MAKE} $@-build
+
+rootfs-nvidia-gpu-image-tarball: #kernel-headers-nvidia-gpu-tarball
+	${MAKE} $@-build
+
+rootfs-nvidia-gpu-initrd-tarball: #kernel-headers-nvidia-gpu-tarball
+	${MAKE} $@-build
+
+rootfs-nvidia-gpu-confidential-image-tarball: #kernel-headers-nvidia-gpu-confidential-tarball
+	${MAKE} $@-build
+
+rootfs-nvidia-gpu-confidential-initrd-tarball: #kernel-headers-nvidia-gpu-confidential-tarball
+	${MAKE} $@-build
+
+rootfs-initrd-tarball:
 	${MAKE} $@-build
 
 runk-tarball:
