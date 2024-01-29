@@ -60,6 +60,9 @@ pub struct PodSpec {
     pub volumes: Option<Vec<volume::Volume>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    nodeName: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     serviceAccountName: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
