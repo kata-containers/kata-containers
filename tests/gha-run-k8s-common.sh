@@ -52,6 +52,9 @@ function login_azure() {
         -u "${AZ_APPID}" \
         -p "${AZ_PASSWORD}" \
         --tenant "${AZ_TENANT_ID}"
+
+    # Switch to the Kata Containers subscription
+    az account set --subscription "${AZ_SUBSCRIPTION_ID}"
 }
 
 function create_cluster() {
