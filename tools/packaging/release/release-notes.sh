@@ -151,6 +151,7 @@ used to build the release artefacts.
 The users who want to rebuild the tarballs using exactly the same images can simply use the following environment
 variables:
 * \`AGENT_CONTAINER_BUILDER\`
+* \`COCO_GUEST_COMPONENTS_CONTAINER_BUILDER\`
 * \`KERNEL_CONTAINER_BUILDER\`
 * \`OVMF_CONTAINER_BUILDER\`
 * \`QEMU_CONTAINER_BUILDER\`

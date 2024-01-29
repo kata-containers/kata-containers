@@ -32,6 +32,7 @@ jobs:
           - agent-ctl
           - cloud-hypervisor
           - cloud-hypervisor-glibc
+          - coco-guest-components
           - firecracker
           - genpolicy
           - kata-ctl

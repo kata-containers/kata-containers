@@ -216,3 +216,8 @@ get_agent_image_name() {
 
 	echo "${BUILDER_REGISTRY}:agent-$(get_last_modification ${libs_dir})-$(get_last_modification ${agent_dir})-$(uname -m)"
 }
+
+get_coco_guest_components_image_name() {
+	coco_guest_components_script_dir="${repo_root_dir}/tools/packaging/static-build/coco-guest-components"
+	echo "${BUILDER_REGISTRY}:coco-guest-components-$(get_from_kata_deps "externals.coco-guest-components.toolchain")-$(get_last_modification ${coco_guest_components_script_dir})-$(uname -m)"
+}
