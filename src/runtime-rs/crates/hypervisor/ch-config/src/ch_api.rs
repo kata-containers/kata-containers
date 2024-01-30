@@ -20,6 +20,17 @@ pub async fn cloud_hypervisor_vmm_ping(mut socket: UnixStream) -> Result<Option<
     .await?
 }
 
+pub async fn cloud_hypervisor_vm_counters(mut socket: UnixStream) -> Result<Option<String>> {
+    task::spawn_blocking(move || -> Result<Option<String>> {
+        let response =
+            simple_api_full_command_and_response(&mut socket, "GET", "vm.counters", None)
+                .map_err(|e| anyhow!(e))?;
+
+        Ok(response)
+    })
+    .await?
+}
+
 pub async fn cloud_hypervisor_vmm_shutdown(mut socket: UnixStream) -> Result<Option<String>> {
     task::spawn_blocking(move || -> Result<Option<String>> {
         let response =

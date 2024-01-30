@@ -13,6 +13,7 @@ use crate::VM_ROOTFS_DRIVER_BLK;
 use crate::VM_ROOTFS_DRIVER_PMEM;
 use crate::{VcpuThreadIds, VmmState};
 use anyhow::{anyhow, Context, Result};
+use ch_config::ch_api::cloud_hypervisor_vm_counters;
 use ch_config::ch_api::{
     cloud_hypervisor_vm_create, cloud_hypervisor_vm_start, cloud_hypervisor_vmm_ping,
     cloud_hypervisor_vmm_shutdown,
@@ -753,7 +754,27 @@ impl CloudHypervisorInner {
     }
 
     pub(crate) async fn get_hypervisor_metrics(&self) -> Result<String> {
-        Err(anyhow!("CH hypervisor metrics not implemented - see https://github.com/kata-containers/kata-containers/issues/8800"))
+        let socket = self
+            .api_socket
+            .as_ref()
+            .ok_or("missing socket")
+            .map_err(|e| anyhow!(e))?;
+
+        info!(sl!(), "get hypervisor metrics");
+
+        let mut counters = String::new();
+
+        if let Some(c) =
+            cloud_hypervisor_vm_counters(socket.try_clone().context("failed to clone socket")?)
+                .await?
+        {
+            counters.push_str(c.as_str());
+        }
+
+        debug!(sl!(), "cloud hypervisor counters: {:?}", counters);
+
+        Ok(counters)
+        // Err(anyhow!("CH hypervisor metrics not implemented - see https://github.com/kata-containers/kata-containers/issues/8800"))
     }
 
     pub(crate) fn set_capabilities(&mut self, flag: CapabilityBits) {
