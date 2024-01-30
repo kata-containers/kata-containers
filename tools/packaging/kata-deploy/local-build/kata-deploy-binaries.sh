@@ -181,11 +181,13 @@ install_image() {
 
 	local osbuilder_last_commit="$(get_last_modification "${repo_root_dir}/tools/osbuilder")"
 	local guest_image_last_commit="$(get_last_modification "${repo_root_dir}/tools/packaging/guest-image")"
-	local agent_last_commit="$(get_last_modification "${repo_root_dir}/src/agent")"
 	local libs_last_commit="$(get_last_modification "${repo_root_dir}/src/libs")"
 	local gperf_version="$(get_from_kata_deps "externals.gperf.version")"
 	local libseccomp_version="$(get_from_kata_deps "externals.libseccomp.version")"
 	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
+	local agent_last_commit=$(merge_two_hashes \
+		"$(get_last_modification "${repo_root_dir}/src/agent")" \
+		"$(get_last_modification "${repo_root_dir}/tools/packaging/static-build/agent")")
 
 	latest_artefact="${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${image_type}"
 	latest_builder_image=""
@@ -231,11 +233,13 @@ install_initrd() {
 
 	local osbuilder_last_commit="$(get_last_modification "${repo_root_dir}/tools/osbuilder")"
 	local guest_image_last_commit="$(get_last_modification "${repo_root_dir}/tools/packaging/guest-image")"
-	local agent_last_commit="$(get_last_modification "${repo_root_dir}/src/agent")"
 	local libs_last_commit="$(get_last_modification "${repo_root_dir}/src/libs")"
 	local gperf_version="$(get_from_kata_deps "externals.gperf.version")"
 	local libseccomp_version="$(get_from_kata_deps "externals.libseccomp.version")"
 	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
+	local agent_last_commit=$(merge_two_hashes \
+		"$(get_last_modification "${repo_root_dir}/src/agent")" \
+		"$(get_last_modification "${repo_root_dir}/tools/packaging/static-build/agent")")
 
 	latest_artefact="${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${initrd_type}"
 	latest_builder_image=""
