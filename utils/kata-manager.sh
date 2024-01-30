@@ -31,6 +31,11 @@ readonly docker_slug="moby/moby"
 readonly docker_project="Docker (moby)"
 readonly docker_releases_url="https://api.github.com/repos/${docker_slug}/releases"
 
+readonly nerdctl_slug="containerd/nerdctl"
+readonly nerdctl_project="nerdctl"
+readonly nerdctl_releases_url="https://api.github.com/repos/${nerdctl_slug}/releases"
+readonly nerdctl_supported_arches="x86_64 aarch64"
+
 # Directory created when unpacking a binary release archive downloaded from
 # $kata_releases_url.
 readonly kata_install_dir="${kata_install_dir:-/opt/kata}"
@@ -182,6 +187,10 @@ github_get_release_file_url()
 	case "$url" in
 		*kata*)
 			regex="kata-static-${version}-${arch_regex}.tar.xz" ;;
+		*nerdctl*)
+			# Keep this *always* before the containerd check, as it comes from
+			# the very same containerd organisation on GitHub.
+			regex="nerdctl-full-${version_number}-linux-${arch_regex}.tar.gz" ;;
 		*containerd*)
 			regex="containerd-${version_number}-linux-${arch_regex}.tar.gz" ;;
 		*) die "invalid url: '$url'" ;;
@@ -261,6 +270,7 @@ Options:
                 https://containerd.io/releases/#support-horizon
  -d           : Enable debug for all components.
  -D           : Install Docker server and CLI tooling (takes priority over '-c').
+ -N           : Install nerdctl (takes priority over '-c', only implemented for x86_64 and ARM).
  -f           : Force installation (use with care).
  -h           : Show this help statement.
  -k <version> : Specify Kata Containers version.
@@ -467,43 +477,84 @@ install_containerd()
 	info "$project installed\n"
 }
 
+install_nerdctl()
+{
+	local project="$nerdctl_project"
+
+	info "Downloading $project latest release"
+
+	local results
+	results=$(github_download_package \
+		"$nerdctl_releases_url" \
+		"" \
+		"$project")
+
+	[ -z "$results" ] && die "Cannot download $project release file"
+
+	local version
+	version=$(echo "$results"|cut -d: -f1)
+
+	local file
+	file=$(echo "$results"|cut -d: -f2-)
+
+	[ -z "$version" ] && die "Cannot determine $project resolved version"
+	[ -z "$file" ] && die "Cannot determine $project release file"
+
+	info "Installing $project release $version from $file"
+
+	sudo tar -C /usr/local -xvf "${file}"
+	for file in \
+		/usr/local/bin/containerd \
+		/usr/local/bin/ctr \
+		/usr/local/bin/nerdctl
+		do
+			sudo ln -sf "$file" "${link_dir}"
+		done
+
+	info "$project installed\n"
+}
+
 configure_containerd()
 {
 	local enable_debug="${1:-}"
 	[ -z "$enable_debug" ] && die "no enable debug value"
+	local configure_systemd_service="${2:-true}"
 
 	local project="$containerd_project"
 
 	info "Configuring $project"
 
-	local systemd_unit_dir="/etc/systemd/system"
-	sudo mkdir -p "$systemd_unit_dir"
-
-	local dest="${systemd_unit_dir}/${containerd_service_name}"
-
-	if [ ! -f "$dest" ]
+	if [ "$configure_systemd_service" = "true" ]
 	then
-		pushd "$tmpdir" >/dev/null
-
-		local service_url
-		service_url=$(printf "%s/%s/%s/%s" \
-			"https://raw.githubusercontent.com" \
-			"${containerd_slug}" \
-			"main" \
-			"${containerd_service_name}")
-
-		curl -LO "$service_url"
-
-		printf "# %s: Service installed for Kata Containers\n" \
-			"$(date -Iseconds)" |\
-			tee -a "$containerd_service_name"
-
-		sudo cp "${containerd_service_name}" "${dest}"
-		sudo systemctl daemon-reload
-
-		info "Installed ${dest}"
-
-		popd >/dev/null
+		local systemd_unit_dir="/etc/systemd/system"
+		sudo mkdir -p "$systemd_unit_dir"
+	
+		local dest="${systemd_unit_dir}/${containerd_service_name}"
+	
+		if [ ! -f "$dest" ]
+		then
+			pushd "$tmpdir" >/dev/null
+	
+			local service_url
+			service_url=$(printf "%s/%s/%s/%s" \
+				"https://raw.githubusercontent.com" \
+				"${containerd_slug}" \
+				"main" \
+				"${containerd_service_name}")
+	
+			curl -LO "$service_url"
+	
+			printf "# %s: Service installed for Kata Containers\n" \
+				"$(date -Iseconds)" |\
+				tee -a "$containerd_service_name"
+	
+			sudo cp "${containerd_service_name}" "${dest}"
+			sudo systemctl daemon-reload
+	
+			info "Installed ${dest}"
+	
+			popd >/dev/null
+		fi
 	fi
 
 	# Backup the original containerd configuration:
@@ -572,6 +623,7 @@ configure_containerd()
 	fi
 
 	[ "$modified" = "true" ] && info "Modified containerd config file '$containerd_config'"
+	sudo systemctl daemon-reload
 	sudo systemctl enable containerd
 	sudo systemctl start containerd
 
@@ -782,6 +834,25 @@ handle_docker()
 	docker --version
 }
 
+handle_nerdctl()
+{
+	{ containerd_installed; ret=$?; } || true
+	if [ "$ret" -eq 0 ]
+	then
+		info "Backing up previous $containerd_project configuration"
+		[ -e "$containerd_config" ] && sudo mv $containerd_config $containerd_config.system-$(date -Iseconds)
+	fi
+
+	install_nerdctl
+
+	configure_containerd "$enable_debug" "false"
+
+	sudo systemctl enable --now containerd
+
+	containerd --version
+	nerdctl --version
+}
+
 test_installation()
 {
 	local tool="${1:-}"
@@ -853,9 +924,11 @@ handle_installation()
 	local kata_version="${7:-}"
 	local containerd_flavour="${8:-}"
 	local install_docker="${9:-}"
+	local install_nerdctl="${10:-}"
 	[ -z "$install_docker" ] && die "no install docker value"
+	[ -z "$install_nerdctl" ] && die "no install nerdctl value"
 
-	local kata_tarball="${10:-}"
+	local kata_tarball="${11:-}"
 	# The tool to be testing the installation with
 	local tool="ctr"
 
@@ -871,6 +944,24 @@ handle_installation()
 		tool="docker"
 	fi
 
+	if [ "$install_nerdctl" = "true" ]
+	then
+		local arch=$(uname -m)
+		if ! grep -q " $arch " <<< " $nerdctl_supported_arches "
+		then
+			die "nerdctl deployment only supports $nerdctl_supported_arches"
+		fi
+
+		if [ "$skip_containerd" = "false" ]
+		then
+			# The script provided by nerdctl already takes care
+			# of properly installing containerd
+			skip_containerd="true"
+			info "Containerd will be installed during the nerdctl installation ('-c' option ignored)"
+		fi
+		tool="nerdctl"
+	fi
+
 	[ "$only_run_test" = "true" ] && test_installation "$tool"  && return 0
 
 	setup "$cleanup" "$force" "$skip_containerd"
@@ -883,16 +974,22 @@ handle_installation()
 		"$force" \
 		"$enable_debug"
 
+	[ "$install_docker" = "true" ] && [ "$install_nerdctl" = "true" ] && \
+		die "Installing docker and nerdctl at the same time is not possible."
+
 	[ "$install_docker" = "true" ] && handle_docker
+
+	[ "$install_nerdctl" = "true" ] && handle_nerdctl
 
 	[ "$disable_test" = "false" ] && test_installation "$tool"
 
-	if [ "$skip_containerd" = "true" ] && [ "$install_docker" = "false" ]
+	if [ "$skip_containerd" = "true" ] && ( [ "$install_docker" = "false" ] || [ "$install_nerdctl" = "false" ] )
 	then
 		info "$kata_project is now installed"
 	else
 		local extra_projects="containerd"
 		[ "$install_docker" = "true" ] && extra_projects+=" and docker"
+		[ "$install_nerdctl" = "true" ] && extra_projects+=" and nerdctl"
 		info "$kata_project and $extra_projects are now installed"
 	fi
 
@@ -965,6 +1062,7 @@ handle_args()
 	local only_run_test="false"
 	local enable_debug="false"
 	local install_docker="false"
+	local install_nerdctl="false"
 	local list_versions='false'
 
 	local opt
@@ -973,7 +1071,7 @@ handle_args()
 	local containerd_flavour="lts"
 	local kata_tarball=""
 
-	while getopts "c:dDfhk:K:lortT" opt "$@"
+	while getopts "c:dDfhk:K:lNortT" opt "$@"
 	do
 		case "$opt" in
 			c) containerd_flavour="$OPTARG" ;;
@@ -984,6 +1082,7 @@ handle_args()
 			k) kata_version="$OPTARG" ;;
 			K) kata_tarball="$OPTARG" ;;
 			l) list_versions='true' ;;
+			N) install_nerdctl="true" ;;
 			o) skip_containerd="true" ;;
 			r) cleanup="false" ;;
 			t) disable_test="true" ;;
@@ -1012,6 +1111,7 @@ handle_args()
 		"$kata_version" \
 		"$containerd_flavour" \
 		"$install_docker" \
+		"$install_nerdctl" \
 		"$kata_tarball"
 }
 
