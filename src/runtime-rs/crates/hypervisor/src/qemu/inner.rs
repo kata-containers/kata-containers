@@ -17,7 +17,7 @@ use kata_types::{
 use persist::sandbox_persist::Persist;
 use std::collections::HashMap;
 use std::os::unix::io::AsRawFd;
-use std::process::Child;
+use tokio::process::{Child, Command};
 
 const VSOCK_SCHEME: &str = "vsock";
 
@@ -104,7 +104,7 @@ impl QemuInner {
         //cmdline.add_serial_console("/dev/pts/23");
 
         info!(sl!(), "qemu args: {}", cmdline.build().await?.join(" "));
-        let mut command = std::process::Command::new(&self.config.path);
+        let mut command = Command::new(&self.config.path);
         command.args(cmdline.build().await?);
 
         info!(sl!(), "qemu cmd: {:?}", command);
@@ -113,11 +113,11 @@ impl QemuInner {
         Ok(())
     }
 
-    pub(crate) fn stop_vm(&mut self) -> Result<()> {
+    pub(crate) async fn stop_vm(&mut self) -> Result<()> {
         info!(sl!(), "Stopping QEMU VM");
         if let Some(ref mut qemu_process) = &mut self.qemu_process {
             info!(sl!(), "QemuInner::stop_vm(): kill()'ing qemu");
-            qemu_process.kill().map_err(anyhow::Error::from)
+            qemu_process.kill().await.map_err(anyhow::Error::from)
         } else {
             Err(anyhow!("qemu process not running"))
         }
@@ -164,12 +164,15 @@ impl QemuInner {
     pub(crate) async fn get_vmm_master_tid(&self) -> Result<u32> {
         info!(sl!(), "QemuInner::get_vmm_master_tid()");
         if let Some(qemu_process) = &self.qemu_process {
-            info!(
-                sl!(),
-                "QemuInner::get_vmm_master_tid(): returning {}",
-                qemu_process.id()
-            );
-            Ok(qemu_process.id())
+            if let Some(qemu_pid) = qemu_process.id() {
+                info!(
+                    sl!(),
+                    "QemuInner::get_vmm_master_tid(): returning {}", qemu_pid
+                );
+                Ok(qemu_pid)
+            } else {
+                Err(anyhow!("cannot get qemu pid (though it seems running)"))
+            }
         } else {
             Err(anyhow!("qemu process not running"))
         }
