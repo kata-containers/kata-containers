@@ -71,6 +71,7 @@ pub struct PersistentVolumeClaimVolumeSource {
 pub struct ConfigMapVolumeSource {
     pub name: String,
     pub items: Option<Vec<KeyToPath>>,
+    optional: Option<bool>,
     // TODO: additional fields.
 }
 
