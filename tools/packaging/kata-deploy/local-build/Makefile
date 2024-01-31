@@ -160,13 +160,13 @@ stratovirt-tarball:
 rootfs-image-tarball: agent-tarball
 	${MAKE} $@-build
 
-rootfs-image-tdx-tarball: agent-opa-tarball kernel-tdx-experimental-tarball
+rootfs-image-tdx-tarball: agent-opa-tarball kernel-confidential-tarball
 	${MAKE} $@-build
 
 rootfs-initrd-mariner-tarball: agent-opa-tarball
 	${MAKE} $@-build
 
-rootfs-initrd-sev-tarball: agent-opa-tarball kernel-sev-tarball
+rootfs-initrd-sev-tarball: agent-opa-tarball kernel-confidential-tarball
 	${MAKE} $@-build
 
 rootfs-initrd-tarball: agent-tarball
