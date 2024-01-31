@@ -92,10 +92,6 @@ impl yaml::K8sResource for ConfigMap {
         panic!("Unsupported");
     }
 
-    fn get_namespace(&self) -> String {
-        panic!("Unsupported");
-    }
-
     fn get_container_mounts_and_storages(
         &self,
         _policy_mounts: &mut Vec<policy::KataMount>,

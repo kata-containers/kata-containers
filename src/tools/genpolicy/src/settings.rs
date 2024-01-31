@@ -20,6 +20,7 @@ pub struct Settings {
     pub other_container: policy::KataSpec,
     pub volumes: Volumes,
     pub kata_config: KataConfig,
+    pub cluster_config: policy::ClusterConfig,
     pub request_defaults: policy::RequestDefaults,
     pub common: policy::CommonData,
     pub mount_destinations: Vec<String>,
