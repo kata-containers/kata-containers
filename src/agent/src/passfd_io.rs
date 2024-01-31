@@ -27,9 +27,11 @@ pub(crate) async fn start_listen(port: u32) -> Result<()> {
     tokio::spawn(async move {
         loop {
             if let Ok((stream, Vsock(addr))) = listener.accept().await {
+                // We should insert the stream into the mapping as soon
+                // to minimize the risk of encountering race conditions.
                 let port = addr.port();
-                info!(sl(), "accept connection from peer port {}", port);
                 HVSOCK_STREAMS.lock().await.insert(port, stream);
+                info!(sl(), "accept connection from peer port {}", port);
             }
         }
     });
@@ -37,8 +39,21 @@ pub(crate) async fn start_listen(port: u32) -> Result<()> {
 }
 
 async fn take_stream(port: u32) -> Option<VsockStream> {
-    let mut mapping = HVSOCK_STREAMS.lock().await;
-    mapping.remove(&port)
+    // There may be a race condition where the stream is accepted but
+    // not yet inserted into the mapping. We will retry several times.
+    // If it still fails, we just give up.
+    let mut count = 0;
+    while count < 3 {
+        let stream = HVSOCK_STREAMS.lock().await.remove(&port);
+        if stream.is_some() {
+            return stream;
+        }
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+        count += 1;
+    }
+
+    warn!(sl(), "failed to take stream for port {}", port);
+    None
 }
 
 macro_rules! take_io_stream {
