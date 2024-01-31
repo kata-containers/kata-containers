@@ -133,6 +133,9 @@ assets:
       x86_64:
         name: *default-image-name
         version: *default-image-version
+        confidential:
+          name: *default-image-name
+          version: *default-image-version
         tdx:
           name: *default-image-name
           version: *default-image-version
@@ -159,6 +162,9 @@ assets:
       x86_64:
         name: *default-initrd-name
         version: *default-initrd-version
+        confidential:
+          name: *glibc-initrd-name
+          version: *glibc-initrd-version
         mariner:
           name: "cbl-mariner"
           version: "2.0"

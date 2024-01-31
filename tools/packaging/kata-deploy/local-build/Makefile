@@ -39,7 +39,9 @@ BASE_TARBALLS = serial-targets \
 	tdvf-tarball \
 	virtiofsd-tarball
 BASE_SERIAL_TARBALLS = rootfs-image-tarball \
+	rootfs-image-confidential-tarball \
 	rootfs-image-tdx-tarball \
+	rootfs-initrd-confidential-tarball \
 	rootfs-initrd-mariner-tarball \
 	rootfs-initrd-sev-tarball \
 	rootfs-initrd-tarball \
@@ -160,10 +162,16 @@ stratovirt-tarball:
 rootfs-image-tarball: agent-tarball
 	${MAKE} $@-build
 
+rootfs-image-confidential-tarball: agent-opa-tarball kernel-confidential-tarball
+	${MAKE} $@-build
+
 rootfs-image-tdx-tarball: agent-opa-tarball kernel-confidential-tarball
 	${MAKE} $@-build
 
 rootfs-initrd-mariner-tarball: agent-opa-tarball
+	${MAKE} $@-build
+
+rootfs-initrd-confidential-tarball: agent-opa-tarball kernel-confidential-tarball
 	${MAKE} $@-build
 
 rootfs-initrd-sev-tarball: agent-opa-tarball kernel-confidential-tarball
