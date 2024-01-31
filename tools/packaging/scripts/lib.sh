@@ -95,6 +95,13 @@ get_kata_hash() {
 	git ls-remote --heads --tags "https://github.com/${project}/${repo}.git" | grep "${ref}" | awk '{print $1}'
 }
 
+merge_two_hashes() {
+	local hash1="${1}"
+	local hash2="${2}"
+
+	echo "${hash1}${hash2}" | sha256sum | cut -c1-9
+}
+
 # $1 - The file we're looking for the last modification
 get_last_modification() {
 	local file="${1}"
@@ -211,10 +218,12 @@ get_tools_image_name() {
 }
 
 get_agent_image_name() {
-	libs_dir="${repo_root_dir}/src/libs"
-	agent_dir="${repo_root_dir}/src/agent"
+	libseccomp_hash=$(merge_two_hashes \
+		"$(get_last_modification "${repo_root_dir}/ci/install_libseccomp.sh")" \
+		"$(get_last_modification "${repo_root_dir}/tools/packaging/kata-deploy/local-build/kata-deploy-copy-libseccomp-installer.sh")")
+	agent_dir="${repo_root_dir}/tools/packaging/static-build/agent"
 
-	echo "${BUILDER_REGISTRY}:agent-$(get_last_modification ${libs_dir})-$(get_last_modification ${agent_dir})-$(uname -m)"
+	echo "${BUILDER_REGISTRY}:agent-${libseccomp_hash}-$(get_last_modification ${agent_dir})-$(uname -m)"
 }
 
 get_coco_guest_components_image_name() {
