@@ -24,11 +24,14 @@ use rustjail::{
     specconv::CreateOpts,
 };
 use scopeguard::defer;
+use serde::Serialize;
 use slog::{debug, info, Logger};
 use std::{
     env::current_dir,
     fs,
     path::{Path, PathBuf},
+    thread::sleep,
+    time::Duration,
 };
 
 use kata_sys_util::hooks::HookStates;
@@ -207,6 +210,43 @@ impl Container {
     pub fn destroy(&self) -> Result<()> {
         remove_cgroup_dir(&self.cgroup)?;
         self.status.remove_dir()
+    }
+
+    pub fn events(&self, logger: &Logger, stats: bool, interval: u32) -> Result<()> {
+        #[derive(Serialize)]
+        struct EventsResponse {
+            #[serde(rename = "type")]
+            _type: String,
+            id: String,
+            data: protocols::agent::CgroupStats,
+        }
+        impl EventsResponse {
+            fn new(linux_container: &LinuxContainer) -> Result<Self> {
+                Ok(EventsResponse {
+                    _type: String::from("stats"),
+                    id: linux_container.id.clone(),
+                    data: linux_container.stats()?.cgroup_stats().clone(),
+                })
+            }
+        }
+
+        let linux_container = load_linux_container(&self.status, None, logger)?;
+        if !stats {
+            loop {
+                println!(
+                    "{}",
+                    serde_json::to_string(&EventsResponse::new(&linux_container)?)?
+                );
+                sleep(Duration::from_secs(interval as u64));
+            }
+        }
+
+        println!(
+            "{}",
+            serde_json::to_string(&EventsResponse::new(&linux_container)?)?
+        );
+
+        Ok(())
     }
 }
 
