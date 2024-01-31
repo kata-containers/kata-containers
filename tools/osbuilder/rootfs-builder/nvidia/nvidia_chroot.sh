@@ -43,6 +43,7 @@ regen_apt_cache_multistrap()
 	eval "${APT_INSTALL}" "$(cat ${multistrap_log})"
 }
 
+# If we hot-plug we need udev to run the nvidia-ctk CDI files generation
 create_udev_rule() 
 {
 	cat <<-'CHROOT_EOF' > /etc/udev/rules.d/99-nvidia.rules
@@ -461,11 +462,7 @@ fi
 
 time { install_nvidia_container_runtime; }
 time { install_nvidia_nvtrust_tools; }
-time { install_nvidia_dcgm_exporter; }
+time { export_driver_version; }
 #time { install_nvidia_dcgm_exporter; }
 time { cleanup_rootfs; }
-
-
-
-
-#time create_udev_rule
+time { create_udev_rule; }
