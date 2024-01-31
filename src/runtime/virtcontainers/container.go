@@ -685,7 +685,7 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 
 func (c *Container) initConfigResourcesMemory() {
 	ociSpec := c.GetPatchedOCISpec()
-	c.config.Resources.Memory = &specs.LinuxMemory{}
+	c.config.Resources.Memory = &specs.LinuxMemory{}zv	
 	ociSpec.Linux.Resources.Memory = c.config.Resources.Memory
 }
 

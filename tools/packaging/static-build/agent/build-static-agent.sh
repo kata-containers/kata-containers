@@ -49,7 +49,7 @@ build_agent_from_source() {
 	/usr/bin/install_libseccomp.sh /usr /usr
 
 	cd src/agent
-	DESTDIR=${DESTDIR} AGENT_POLICY=${AGENT_POLICY} make
+	DESTDIR=${DESTDIR} AGENT_POLICY=${AGENT_POLICY} make -j $(nproc)
 	DESTDIR=${DESTDIR} AGENT_POLICY=${AGENT_POLICY} make install
 }
 

@@ -45,9 +45,15 @@ regen_apt_cache_multistrap()
 
 # If we hot-plug we need udev to run the nvidia-ctk CDI files generation
 create_udev_rule() 
-{
+{	
+	eval "${APT_INSTALL}" udev
+	apt-mark hold udev
+
+	mkdir -p /etc/udev/rules.d
+	
 	cat <<-'CHROOT_EOF' > /etc/udev/rules.d/99-nvidia.rules
-		ATTRS{vendor}=="0x10de", DRIVER=="nvidia",  RUN+="/usr/bin/nvidia-ctk cdi generate --output=/var/run/cdi/nvidia.json"
+		SUBSYSTEM=="pci", ATTRS{vendor}=="0x10de", RUN+="nvidia-persistenced
+		SUBSYSTEM=="pci", ATTRS{vendor}=="0x10de", DRIVER=="nvidia",  RUN+="/usr/bin/nvidia-ctk cdi generate --output=/var/run/cdi/nvidia.json"
 	CHROOT_EOF
 }
 
@@ -123,9 +129,11 @@ install_nvidia_container_runtime()
 	echo "chroot: Installing NVIDIA GPU container runtime"
 
 	# Base  gives a nvidia-ctk and the nvidia-container-runtime 
-	eval "${APT_INSTALL}" nvidia-container-toolkit-base=1.13.2-1
+	#eval "${APT_INSTALL}" nvidia-container-toolkit-base=1.13.2-1
+	eval "${APT_INSTALL}" nvidia-container-toolkit-base
 	# This gives us the nvidia-container-runtime-hook
-	eval "${APT_INSTALL}" nvidia-container-toolkit=1.13.2-1
+	#eval "${APT_INSTALL}" nvidia-container-toolkit=1.13.2-1
+	eval "${APT_INSTALL}" nvidia-container-toolkit
 
 	sed -i "s/#debug/debug/g"                             		/etc/nvidia-container-runtime/config.toml
 	sed -i "s|/var/log|/var/log/nvidia-kata-containers|g" 		/etc/nvidia-container-runtime/config.toml
@@ -184,6 +192,12 @@ build_nvidia_drivers()
 		if [ "${arch_target}" == "aarch64" ]; then
 			ln -sf /lib/modules/"${kernel_version}"/build/arch/arm64 /lib/modules/"${kernel_version}"/build/arch/aarch64
 		fi
+
+		if [ "${arch_target}" == "x86_64" ]; then
+			ln -sf /lib/modules/"${kernel_version}"/build/arch/x86 /lib/modules/"${kernel_version}"/build/arch/amd64
+		fi
+
+
 
 		make -j "$(nproc)" CC=gcc SYSSRC=/lib/modules/"${kernel_version}"/build > /dev/null
 		make -j "$(nproc)" CC=gcc SYSSRC=/lib/modules/"${kernel_version}"/build modules_install
@@ -408,7 +422,8 @@ get_supported_gpus_from_run_file()
 
 get_supported_gpus_from_distro_drivers() 
 {
-	local source_dir="$1"
+	#apt download nvidia-driver-
+	echo "TODO"
 	#exit 1
 }
 
@@ -419,17 +434,29 @@ export_driver_version() {
        done
 }
 
+log_time() 
+{
+    local func_name=$1
+    shift
+    local func_args="$@"
+
+    { time -p $func_name $func_args; } 2> temp_time_log
+
+    local exec_time=$(cat temp_time_log | grep real | awk '{print $2}')
+    echo "$func_name with arguments '$func_args' took $exec_time seconds" >> performance_report.txt
+    rm temp_time_log
+}
 
 # Start of script
 echo "chroot: Setup NVIDIA GPU rootfs"
 
-time { setup_apt_repositories; }
-time { regen_apt_cache_multistrap; }
-time { install_kernel_dependencies; }
-time { install_build_dependencies; }
+log_time setup_apt_repositories
+log_time regen_apt_cache_multistrap
+log_time install_kernel_dependencies
+log_time install_build_dependencies
 
 if [ -f /root/"${run_file_name}" ]; then 
-	time { prepare_run_file_drivers; }
+	log_time prepare_run_file_drivers
 
 	driver_source_dir=""
 	for source_dir in /root/NVIDIA-*; do
@@ -439,9 +466,9 @@ if [ -f /root/"${run_file_name}" ]; then
 			break
 		fi
 	done
-	time { get_supported_gpus_from_run_file "${driver_source_dir}"; }
+	log_time get_supported_gpus_from_run_file "${driver_source_dir}"
 else 
-	time { prepare_distribution_drivers; }
+	log_time prepare_distribution_drivers
 
 	driver_source_dir=""
 	for source_dir in /usr/src/nvidia*; do
@@ -451,18 +478,20 @@ else
 			break
 		fi
 	done
-	time { get_supported_gpus_from_distro_drivers "${driver_source_dir}"; }
+	log_time get_supported_gpus_from_distro_drivers "${driver_source_dir}"
 fi
 
-time { build_nvidia_drivers; }
+log_time build_nvidia_drivers
 
 if [ -f /root/"${run_file_name}" ]; then 
-	time { install_userspace_components; }
+	log_time install_userspace_components
 fi 
 
-time { install_nvidia_container_runtime; }
-time { install_nvidia_nvtrust_tools; }
-time { export_driver_version; }
-#time { install_nvidia_dcgm_exporter; }
-time { cleanup_rootfs; }
-time { create_udev_rule; }
+log_time install_nvidia_container_runtime
+log_time install_nvidia_nvtrust_tools
+log_time export_driver_version
+#time { install_nvidia_dcgm_exporter
+log_time create_udev_rule
+
+log_time cleanup_rootfs
+

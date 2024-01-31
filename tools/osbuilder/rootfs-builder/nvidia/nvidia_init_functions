@@ -134,6 +134,20 @@ mount_setup()
         ln -sfT /proc/self/fd/0 /dev/stdin
         ln -sfT /proc/self/fd/1 /dev/stdout
         ln -sfT /proc/self/fd/2 /dev/stderr
+
+	# setub dev/null zero raandom urandom if not exist create
+	if [ ! -e /dev/null ]; then
+		mknod -m 666 /dev/null c 1 3
+	fi
+	if [ ! -e /dev/zero ]; then
+		mknod -m 666 /dev/zero c 1 5
+	fi
+	if [ ! -e /dev/random ]; then
+		mknod -m 666 /dev/random c 1 8
+	fi
+	if [ ! -e /dev/urandom ]; then
+		mknod -m 666 /dev/urandom c 1 9
+	fi
 	
         debug=$(debug_enabled)
 
@@ -145,6 +159,12 @@ mount_setup()
 	nvlog_preamble "mount_setup" 
 	nvlog_ok
 }
+
+nvidia_udev_setup() 
+{
+	/etc/init.d/udev start	
+}
+
 # We need to know if we're running on AMD or Intel CPUs, rename it to amd or intel
 nvidia_query_cpu_vendor()
 {	
@@ -223,11 +243,11 @@ nvidia_persistenced()
 	nvidia-persistenced
 }
 
-nvidia_container_toolkit()
-{
-	nvidia-ctk system create-device-nodes --control-devices --load-kernel-modules 
-	nvidia-ctk cdi generate --output=/var/run/cdi/nvidia.json                     
-}
+#nvidia_container_toolkit()
+#{
+#	nvidia-ctk system create-device-nodes --control-devices --load-kernel-modules 
+#	nvidia-ctk cdi generate --output=/var/run/cdi/nvidia.json                     
+#}
 
 nvidia_verifier_hook()
 {

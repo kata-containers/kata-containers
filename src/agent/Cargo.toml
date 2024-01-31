@@ -94,3 +94,6 @@ agent-policy = ["http", "openssl", "reqwest"]
 [[bin]]
 name = "kata-agent"
 path = "src/main.rs"
+
+[build]
+rustflags = ["-Z", "threads=8"]

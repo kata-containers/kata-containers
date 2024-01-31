@@ -6,6 +6,7 @@
 # write to the filesystem and inspect /dev, /proc etc
 mount_setup               
 
+assert_ok nvidia_udev_setup
 assert_ok nvidia_query_cpu_vendor cpu_vendor
 assert_ok nvidia_gpu_get_devices 
 assert_ok nvidia_gpu_query_cc_mode confidential_compute 
@@ -18,9 +19,10 @@ if assert_ok nvidia_check_if_supported; then
         if [ -n "${gpu_device_ids}" ]; then
                 assert_ok nvidia_reset_gpus
                 assert_ok nvidia_persistenced
-                assert_ok nvidia_container_toolkit
+                #assert_ok nvidia_container_toolkit
         fi
 fi 
+
 assert_ok nvidia_process_kernel_params 
 # Setting AGENT_INIT to yes will make the agent the init process
 exec /sbin/init
