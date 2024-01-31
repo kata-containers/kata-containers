@@ -1,5 +1,3 @@
-bases:
-- ../../base
 
 images:
 - name: quay.io/kata-containers/kata-deploy
@@ -7,3 +5,7 @@ images:
 
 patches:
 - path: env_stable_conf.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ../../base
