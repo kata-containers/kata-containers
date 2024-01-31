@@ -11,8 +11,8 @@ libcontainer = { path = "./libcontainer" }
 rustjail = { path = "../../agent/rustjail", features = ["standard-oci-runtime"] }
 oci = { path = "../../libs/oci" }
 logging = { path = "../../libs/logging" }
-liboci-cli = "0.0.4"
-clap = { version = "3.0.6", features = ["derive", "cargo"] }
+liboci-cli = "0.3.1"
+clap = { version = "4.3.24", features = ["derive", "cargo"] }
 libc = "0.2.108"
 nix = "0.23.0"
 anyhow = "1.0.52"
