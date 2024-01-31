@@ -26,15 +26,11 @@ ARCH_FILE_SUFFIX = -options.mk
 ARCH_FILE = $(ARCH_DIR)/$(ARCH)$(ARCH_FILE_SUFFIX)
 
 ifeq ($(ARCH), s390x)
-default:
-	@echo "s390x is not currently supported"
-	exit 0
+default: runtime show-header
 test:
 	@echo "s390x is not currently supported"
 	exit 0
-install:
-	@echo "s390x is not currently supported"
-	exit 0
+install: install-runtime install-configs
 else ifeq ($(ARCH), powerpc64le)
 default:
 	@echo "PowerPC 64 LE is not currently supported"
