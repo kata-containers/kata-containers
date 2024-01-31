@@ -12,9 +12,6 @@ use std::u32;
 
 use serde::Deserialize;
 
-use crate::config::default::DEFAULT_AGENT_TYPE_NAME;
-use crate::config::default::DEFAULT_HYPERVISOR;
-use crate::config::default::DEFAULT_RUNTIME_NAME;
 use crate::config::hypervisor::{get_hypervisor_plugin, HugePageType};
 
 use crate::config::TomlConfig;
@@ -463,13 +460,22 @@ impl Annotation {
 
         // set default values for runtime.name, runtime.hypervisor_name and runtime.agent
         if config.runtime.name.is_empty() {
-            config.runtime.name = DEFAULT_RUNTIME_NAME.to_string()
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Runtime name is missing in the configuration",
+            ));
         }
         if config.runtime.hypervisor_name.is_empty() {
-            config.runtime.hypervisor_name = DEFAULT_HYPERVISOR.to_string()
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Hypervisor name is missing in the configuration",
+            ));
         }
         if config.runtime.agent_name.is_empty() {
-            config.runtime.agent_name = DEFAULT_AGENT_TYPE_NAME.to_string()
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Agent name is missing in the configuration",
+            ));
         }
 
         let hypervisor_name = &config.runtime.hypervisor_name;
