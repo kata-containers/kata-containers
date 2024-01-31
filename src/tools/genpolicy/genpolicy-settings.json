@@ -260,6 +260,9 @@
     "kata_config": {
         "confidential_guest": false
     },
+    "cluster_config": {
+        "default_namespace": "default"
+    },
     "request_defaults": {
         "CreateContainerRequest": {
             "allow_env_regex": [

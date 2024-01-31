@@ -56,7 +56,7 @@ impl yaml::K8sResource for ReplicationController {
         None
     }
 
-    fn get_namespace(&self) -> String {
+    fn get_namespace(&self) -> Option<String> {
         self.metadata.get_namespace()
     }
 
