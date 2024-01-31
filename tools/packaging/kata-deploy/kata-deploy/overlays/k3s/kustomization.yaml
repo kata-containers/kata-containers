@@ -1,5 +1,7 @@
-bases:
-- ../../base
 
-patchesStrategicMerge:
-- mount_k3s_conf.yaml
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- ../../base
+patches:
+- path: mount_k3s_conf.yaml
