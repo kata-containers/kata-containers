@@ -11,7 +11,6 @@ license = "Apache-2.0"
 actix-rt = "2.7.0"
 anyhow = "^1.0"
 async-trait = "0.1.48"
-dbs-utils = { path = "../../../dragonball/src/dbs_utils" }
 go-flag = "0.1.0"
 libc = ">=0.2.39"
 nix = "0.24.2"
@@ -35,14 +34,16 @@ kata-types = { path = "../../../libs/kata-types" }
 logging = { path = "../../../libs/logging" }
 shim-interface = { path = "../../../libs/shim-interface" }
 
-dragonball = { path = "../../../dragonball", features = ["atomic-guest-memory", "virtio-vsock", "hotplug", "virtio-blk", "virtio-net", "virtio-fs", "vhost-net", "dbs-upcall", "virtio-mem", "virtio-balloon", "vhost-user-net", "host-device"] }
-
 ch-config = { path = "ch-config", optional = true }
 tests_utils = { path = "../../tests/utils" }
 
 futures = "0.3.25"
 safe-path = "0.1.0"
 crossbeam-channel = "0.5.6"
+
+[target.'cfg(not(target_arch = "s390x"))'.dependencies]
+dragonball = { path = "../../../dragonball", features = ["atomic-guest-memory", "virtio-vsock", "hotplug", "virtio-blk", "virtio-net", "virtio-fs", "vhost-net", "dbs-upcall", "virtio-mem", "virtio-balloon", "vhost-user-net", "host-device"] }
+dbs-utils = { path = "../../../dragonball/src/dbs_utils" }
 
 [features]
 default = []

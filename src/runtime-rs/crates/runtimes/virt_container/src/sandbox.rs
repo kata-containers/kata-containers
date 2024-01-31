@@ -17,7 +17,9 @@ use common::message::{Action, Message};
 use common::{Sandbox, SandboxNetworkEnv};
 use containerd_shim_protos::events::task::TaskOOM;
 use hypervisor::VsockConfig;
-use hypervisor::{dragonball::Dragonball, BlockConfig, Hypervisor, HYPERVISOR_DRAGONBALL};
+use hypervisor::{BlockConfig, Hypervisor};
+#[cfg(not(target_arch = "s390x"))]
+use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
 use hypervisor::{utils::get_hvsock_path, HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID};
 use kata_sys_util::hooks::HookStates;
 use kata_types::capabilities::CapabilityBits;
@@ -585,6 +587,7 @@ impl Persist for VirtSandbox {
         let h = sandbox_state.hypervisor.unwrap_or_default();
         let hypervisor = match h.hypervisor_type.as_str() {
             // TODO support other hypervisors
+            #[cfg(not(target_arch = "s390x"))]
             HYPERVISOR_DRAGONBALL => Ok(Arc::new(Dragonball::restore((), h).await?)),
             _ => Err(anyhow!("Unsupported hypervisor {}", &h.hypervisor_type)),
         }?;

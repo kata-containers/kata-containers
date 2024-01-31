@@ -20,15 +20,17 @@ use agent::{kata::KataAgent, AGENT_KATA};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use common::{message::Message, RuntimeHandler, RuntimeInstance};
-use hypervisor::{dragonball::Dragonball, Hypervisor, HYPERVISOR_DRAGONBALL};
+use hypervisor::Hypervisor;
+#[cfg(not(target_arch = "s390x"))]
+use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
 use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
-use kata_types::config::{
-    hypervisor::register_hypervisor_plugin, DragonballConfig, QemuConfig, TomlConfig,
-};
+#[cfg(not(target_arch = "s390x"))]
+use kata_types::config::DragonballConfig;
+use kata_types::config::{hypervisor::register_hypervisor_plugin, QemuConfig, TomlConfig};
 
-#[cfg(feature = "cloud-hypervisor")]
+#[cfg(all(feature = "cloud-hypervisor", not(target_arch = "s390x")))]
 use hypervisor::ch::CloudHypervisor;
-#[cfg(feature = "cloud-hypervisor")]
+#[cfg(all(feature = "cloud-hypervisor", not(target_arch = "s390x")))]
 use kata_types::config::{hypervisor::HYPERVISOR_NAME_CH, CloudHypervisorConfig};
 
 use resource::cpu_mem::initial_size::InitialSizeManager;
@@ -49,13 +51,16 @@ impl RuntimeHandler for VirtContainer {
         logging::register_subsystem_logger("runtimes", "virt-container");
 
         // register
-        let dragonball_config = Arc::new(DragonballConfig::new());
-        register_hypervisor_plugin("dragonball", dragonball_config);
+        #[cfg(not(target_arch = "s390x"))]
+        {
+            let dragonball_config = Arc::new(DragonballConfig::new());
+            register_hypervisor_plugin("dragonball", dragonball_config);
+        }
 
         let qemu_config = Arc::new(QemuConfig::new());
         register_hypervisor_plugin("qemu", qemu_config);
 
-        #[cfg(feature = "cloud-hypervisor")]
+        #[cfg(all(feature = "cloud-hypervisor", not(target_arch = "s390x")))]
         {
             let ch_config = Arc::new(CloudHypervisorConfig::new());
             register_hypervisor_plugin(HYPERVISOR_NAME_CH, ch_config);
@@ -135,6 +140,7 @@ async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>>
     // TODO: support other hypervisor
     // issue: https://github.com/kata-containers/kata-containers/issues/4634
     match hypervisor_name.as_str() {
+        #[cfg(not(target_arch = "s390x"))]
         HYPERVISOR_DRAGONBALL => {
             let mut hypervisor = Dragonball::new();
             hypervisor
@@ -150,7 +156,7 @@ async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>>
             Ok(Arc::new(hypervisor))
         }
 
-        #[cfg(feature = "cloud-hypervisor")]
+        #[cfg(all(feature = "cloud-hypervisor", not(target_arch = "s390x")))]
         HYPERVISOR_NAME_CH => {
             let mut hypervisor = CloudHypervisor::new();
 
