@@ -136,7 +136,7 @@ func NewResourceController(path string, resources *specs.LinuxResources) (Resour
 	var cgroupPath string
 
 	if cgroups.Mode() == cgroups.Legacy || cgroups.Mode() == cgroups.Hybrid {
-		cgroupPath, err = ValidCgroupPathV1(path, IsSystemdCgroup(path))
+		cgroupPath, err = ValidCgroupPath(path, false, IsSystemdCgroup(path))
 		if err != nil {
 			return nil, err
 		}
@@ -145,7 +145,7 @@ func NewResourceController(path string, resources *specs.LinuxResources) (Resour
 			return nil, err
 		}
 	} else if cgroups.Mode() == cgroups.Unified {
-		cgroupPath, err = ValidCgroupPathV2(path, IsSystemdCgroup(path))
+		cgroupPath, err = ValidCgroupPath(path, true, IsSystemdCgroup(path))
 		if err != nil {
 			return nil, err
 		}
