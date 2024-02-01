@@ -169,6 +169,11 @@ function run_tests() {
 	[ "$platform" = "kcli" ] && \
 		export KUBECONFIG="$HOME/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
 
+	# Enable auto-generated policy for CI images that support policy.
+	#
+	# TODO: enable testing auto-generated policy for other types of hosts too.
+	[ "${KATA_HOST_OS}" = "cbl-mariner" ] && export AUTO_GENERATE_POLICY="yes"
+
 	set_test_cluster_namespace
 
 	pushd "${kubernetes_dir}"

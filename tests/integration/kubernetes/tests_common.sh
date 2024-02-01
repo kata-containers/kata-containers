@@ -105,9 +105,9 @@ create_common_genpolicy_settings() {
 	cp "${default_genpolicy_settings_dir}/rules.rego" "${genpolicy_settings_dir}"
 
 	# Set the default namespace of Kata CI tests in the genpolicy settings.
-	info "${genpolicy_settings_dir}/genpolicy-settings.json: default namespace: ${test_cluster_namespace}"
-	jq --arg test_cluster_namespace "${test_cluster_namespace}" \
-		'.cluster_config.default_namespace |= $test_cluster_namespace' \
+	info "${genpolicy_settings_dir}/genpolicy-settings.json: default namespace: ${TEST_CLUSTER_NAMESPACE}"
+	jq --arg TEST_CLUSTER_NAMESPACE "${TEST_CLUSTER_NAMESPACE}" \
+		'.cluster_config.default_namespace |= $TEST_CLUSTER_NAMESPACE' \
 		"${genpolicy_settings_dir}/genpolicy-settings.json" > \
 		"${genpolicy_settings_dir}/new-genpolicy-settings.json"
 	mv "${genpolicy_settings_dir}/new-genpolicy-settings.json" "${genpolicy_settings_dir}/genpolicy-settings.json"

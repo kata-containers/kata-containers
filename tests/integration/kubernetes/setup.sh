@@ -19,22 +19,29 @@ else
     )
 fi
 
-kubernetes_dir=$(dirname "$(readlink -f "$0")")
+declare -r kubernetes_dir=$(dirname "$(readlink -f "$0")")
 source "${kubernetes_dir}/../../common.bash"
+source "${kubernetes_dir}/tests_common.sh"
 
 reset_workloads_work_dir() {
 	rm -rf ${kubernetes_dir}/runtimeclass_workloads_work
 	cp -R ${kubernetes_dir}/runtimeclass_workloads ${kubernetes_dir}/runtimeclass_workloads_work
-	copy_test_policy_files
+	setup_policy_files
 }
 
-copy_test_policy_files() {
-	local kata_opa_dir="${kubernetes_dir}/../../../src/kata-opa"
+setup_policy_files() {
+	declare -r kata_opa_dir="${kubernetes_dir}/../../../src/kata-opa"
+	declare -r workloads_work_dir="${kubernetes_dir}/runtimeclass_workloads_work"
 
+	# Copy hard-coded policy files used for basic policy testing.
 	for policy_file in ${K8S_TEST_POLICY_FILES[@]}
 	do
 		cp "${kata_opa_dir}/${policy_file}" ${kubernetes_dir}/runtimeclass_workloads_work/
 	done
+
+	# For testing more sophisticated policies, create genpolicy settings that are common for all tests.
+	# Some of the tests will make temporary copies of these common settings and customize them as needed.
+	create_common_genpolicy_settings "${workloads_work_dir}"
 }
 
 add_kernel_initrd_annotations_to_yaml() {
