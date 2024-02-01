@@ -392,7 +392,7 @@ impl AgentPolicy {
             resources.push(resource);
         }
 
-        let settings = settings::Settings::new(&config.settings_file);
+        let settings = settings::Settings::new(&config.json_settings_path);
 
         if let Some(config_map_files) = &config.config_map_files {
             for file in config_map_files {
@@ -400,7 +400,7 @@ impl AgentPolicy {
             }
         }
 
-        if let Ok(rules) = read_to_string(&config.rules_file) {
+        if let Ok(rules) = read_to_string(&config.rego_rules_path) {
             Ok(AgentPolicy {
                 resources,
                 rules,
@@ -410,8 +410,8 @@ impl AgentPolicy {
                 config: config.clone(),
             })
         } else {
-            panic!("Cannot open file {}. Please copy it to the current directory or specify the path to it using the -i parameter.",
-                &config.rules_file);
+            panic!("Cannot open file {}. Please copy it to the current directory or specify the path to it using the -p parameter.",
+                &config.rego_rules_path);
         }
     }
 

@@ -4,7 +4,6 @@
 //
 
 use clap::Parser;
-use log::debug;
 
 #[derive(Debug, Parser)]
 struct CommandLineOptions {
@@ -23,20 +22,20 @@ struct CommandLineOptions {
     config_map_file: Option<String>,
 
     #[clap(
+        short = 'p',
+        long,
+        default_value_t = String::from("rules.rego"),
+        help = "Path to rego rules file"
+    )]
+    rego_rules_path: String,
+
+    #[clap(
         short = 'j',
         long,
         default_value_t = String::from("genpolicy-settings.json"),
-        help = "genpolicy settings file name"
+        help = "Path to genpolicy settings file"
     )]
-    settings_file_name: String,
-
-    #[clap(
-        short,
-        long,
-        default_value_t = String::from("."),
-        help = "Path to the rules.rego and settings input files"
-    )]
-    input_files_path: String,
+    json_settings_path: String,
 
     #[clap(
         short,
@@ -73,8 +72,8 @@ pub struct Config {
     pub use_cache: bool,
 
     pub yaml_file: Option<String>,
-    pub rules_file: String,
-    pub settings_file: String,
+    pub rego_rules_path: String,
+    pub json_settings_path: String,
     pub config_map_files: Option<Vec<String>>,
 
     pub silent_unsupported_fields: bool,
@@ -97,17 +96,11 @@ impl Config {
             None
         };
 
-        let rules_file = format!("{}/rules.rego", &args.input_files_path);
-        debug!("Rules file: {rules_file}");
-
-        let settings_file = format!("{}/{}", &args.input_files_path, &args.settings_file_name);
-        debug!("Settings file: {settings_file}");
-
         Self {
             use_cache: args.use_cached_files,
             yaml_file: args.yaml_file,
-            rules_file,
-            settings_file,
+            rego_rules_path: args.rego_rules_path,
+            json_settings_path: args.json_settings_path,
             config_map_files: cm_files,
             silent_unsupported_fields: args.silent_unsupported_fields,
             raw_out: args.raw_out,
