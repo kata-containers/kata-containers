@@ -48,6 +48,7 @@ Documents that help to understand and contribute to Kata Containers.
 
 * [Developer Guide](Developer-Guide.md): Setup the Kata Containers developing environments
 * [How to contribute to Kata Containers](https://github.com/kata-containers/community/blob/main/CONTRIBUTING.md)
+* [Kata Containers CI](./ci.md)
 * [Code of Conduct](../CODE_OF_CONDUCT.md)
 
 ## Help Writing a Code PR
