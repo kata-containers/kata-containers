@@ -65,15 +65,15 @@ pub struct KataConfig {
 }
 
 impl Settings {
-    pub fn new(settings_file: &str) -> Self {
+    pub fn new(json_settings_path: &str) -> Self {
         debug!("Loading settings file...");
-        if let Ok(file) = File::open(settings_file) {
+        if let Ok(file) = File::open(json_settings_path) {
             let settings: Self = serde_json::from_reader(file).unwrap();
             debug!("settings = {:?}", &settings);
             settings
         } else {
-            panic!("Cannot open file {}. Please copy it to the current directory or specify the path to it using the -i parameter.", 
-                settings_file);
+            panic!("Cannot open file {}. Please copy it to the current directory or specify the path to it using the -p parameter.",
+                json_settings_path);
         }
     }
 
