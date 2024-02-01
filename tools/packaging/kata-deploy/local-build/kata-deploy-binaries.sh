@@ -126,6 +126,24 @@ EOF
 	exit "${return_code}"
 }
 
+get_kernel_modules_dir() {
+	local kernel_version="${1:-}"
+	local kernel_kata_config_version="${2:-}"
+	local kernel_name"=${3:-}"
+	[ -z "${kernel_version}" ] && die "kernel version is a required argument"
+	[ -z "${kernel_kata_config_version}" ] && die "kernel kata config version is a required argument"
+	[ -z "${kernel_name}" ] && die "kernel name is a required argument"
+
+	local version=${kernel_version#v}
+	local numeric_final_version=${version}
+
+	# Every first release of a kernel is x.y, while the resulting folder would be x.y.0
+	local dots=$(echo ${version} | grep -o '\.' | wc -l)
+	[ "${dots}" == "1" ] && numeric_final_version="${version}.0"
+
+	echo "${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/${kernel_name}/builddir/kata-linux-${version}-${kernel_kata_config_version}/lib/modules/${numeric_final_version}"
+}
+
 cleanup_and_fail() {
        rm -f "${component_tarball_name}"
        return 1
