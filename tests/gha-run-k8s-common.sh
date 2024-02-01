@@ -11,6 +11,10 @@ set -o pipefail
 tests_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${tests_dir}/common.bash"
 
+# The next two variables define, in seconds, the polling interval and timeout
+# for waiting the az group creation and deletion.
+AZ_GROUP_INTERVAL=${AZ_GROUP_INTERVAL:-10}
+AZ_GROUP_TIMEOUT=${AZ_GROUP_TIMEOUT:-30}
 K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-small}"
 
 function _print_instance_type() {
@@ -69,6 +73,11 @@ function create_cluster() {
         -l eastus2 \
         -n "${rg}"
 
+    az group wait --exists \
+        -g "${rg}" \
+        --interval "${AZ_GROUP_INTERVAL}" \
+        --timeout "${AZ_GROUP_TIMEOUT}"
+
     az aks create \
         -g "${rg}" \
 	--node-resource-group "node-${rg}" \
@@ -104,10 +113,17 @@ function get_cluster_credentials() {
 
 function delete_cluster() {
     test_type="${1:-k8s}"
+	local rg
+	rg="$(_print_rg_name ${test_type})"
 
     az group delete \
-        -g "$(_print_rg_name ${test_type})" \
+        -g "${rg}" \
         --yes
+
+    az group wait --deleted \
+        -g "${rg}" \
+        --interval "${AZ_GROUP_INTERVAL}" \
+        --timeout "${AZ_GROUP_TIMEOUT}"
 }
 
 function delete_cluster_kcli() {
