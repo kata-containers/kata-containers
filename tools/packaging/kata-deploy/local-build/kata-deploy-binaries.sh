@@ -333,7 +333,7 @@ install_se_image() {
 #Install kernel component helper
 install_cached_kernel_tarball_component() {
 	local kernel_name=${1}
-	local module_dir=${2:-""}
+	local extra_tarballs="${2:-}"
 
 	latest_artefact="${kernel_version}-${kernel_kata_config_version}-$(get_last_modification $(dirname $kernel_builder))"
 	latest_builder_image="$(get_kernel_image_name)"
@@ -344,25 +344,16 @@ install_cached_kernel_tarball_component() {
 		"${latest_builder_image}" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
+		"${extra_tarballs} " \
 		|| return 1
 	
-	if [[ "${kernel_name}" != "kernel-sev" ]] && [[ "${kernel_name}" != "kernel-confidential" ]]; then
+	if [[ "${kernel_name}" != "kernel-sev" ]] && [[ "${kernel_name}" != "kernel"*"-confidential" ]]; then
 		return 0
 	fi
 
-	# SEV specific code path
-	install_cached_tarball_component \
-		"${kernel_name}" \
-		"${latest_artefact}" \
-		"${latest_builder_image}" \
-		"kata-static-${kernel_name}-modules.tar.xz" \
-		"${workdir}/kata-static-${kernel_name}-modules.tar.xz" \
-		|| return 1
-
-	if [[ -n "${module_dir}" ]]; then
-		mkdir -p "${module_dir}"
-		tar xvf "${workdir}/kata-static-${kernel_name}-modules.tar.xz" -C  "${module_dir}" && return 0
-	fi
+	local modules_dir=$(get_kernel_modules_dir ${kernel_version} ${kernel_kata_config_version})
+	mkdir -p "${modules_dir}" || true
+	tar xvf "${workdir}/kata-static-${kernel_name}-modules.tar.xz" -C  "${modules_dir}" && return 0
 
 	return 1
 }
@@ -372,22 +363,26 @@ install_kernel_helper() {
 	local kernel_version_yaml_path="${1}"
 	local kernel_name="${2}"
 	local extra_cmd="${3:-}"
+	local extra_tarballs=""
 
 	export kernel_version="$(get_from_kata_deps ${kernel_version_yaml_path})"
 	export kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
-	local module_dir=""
 
 	if [[ "${kernel_name}" == "kernel-sev" ]]; then
 		kernel_version="$(get_from_kata_deps assets.kernel.sev.version)"
-		default_patches_dir="${repo_root_dir}/tools/packaging/kernel/patches"
-		module_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/kernel-sev/builddir/kata-linux-${kernel_version#v}-${kernel_kata_config_version}/lib/modules/${kernel_version#v}"
 	elif [[ "${kernel_name}" == "kernel"*"-confidential" ]]; then
 		kernel_version="$(get_from_kata_deps assets.kernel.confidential.version)"
-		default_patches_dir="${repo_root_dir}/tools/packaging/kernel/patches"
-		module_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/kernel-confidential/builddir/kata-linux-${kernel_version#v}-${kernel_kata_config_version}/lib/modules/${kernel_version#v}"
 	fi
 
-	install_cached_kernel_tarball_component ${kernel_name} ${module_dir} && return 0
+	if [[ "${kernel_name}" == "kernel-sev" ]] || [[ "${kernel_name}" == "kernel"*"-confidential" ]]; then
+		local kernel_modules_tarball_name="kata-static-${kernel_name}-modules.tar.xz"
+		local kernel_modules_tarball_path="${workdir}/${kernel_modules_tarball_name}"
+		extra_tarballs="${kernel_modules_tarball_name}:${kernel_modules_tarball_path}"
+	fi
+
+	default_patches_dir="${repo_root_dir}/tools/packaging/kernel/patches"
+
+	install_cached_kernel_tarball_component ${kernel_name} ${extra_tarballs} && return 0
 
 	info "build ${kernel_name}"
 	info "Kernel version ${kernel_version}"
