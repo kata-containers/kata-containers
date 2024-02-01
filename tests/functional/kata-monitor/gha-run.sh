@@ -56,6 +56,14 @@ function install_dependencies() {
 	if [ "${CONTAINER_ENGINE}" = "crio" ]; then
 		install_crio ${cri_tools_version#v}
 	fi
+
+	if [ "${CONTAINER_ENGINE}" == "containerd" ]; then
+		#sudo systemctl status containerd
+		sudo systemctl restart containerd
+	fi
+
+	info "pull the image to be used for the test"
+	sudo crictl pull busybox
 }
 
 function run() {

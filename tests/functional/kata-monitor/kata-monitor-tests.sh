@@ -14,6 +14,7 @@
 set -o errexit
 set -o nounset
 set -o pipefail
+set -x
 
 source "/etc/os-release" || source "/usr/lib/os-release"
 
@@ -218,11 +219,11 @@ main() {
 	echo_ok "$CURRENT_TASK"
 
 	###########################
-	title "pull the image to be used"
-	sudo crictl pull busybox
-
-	###########################
 	title "create workloads"
+
+	crictl pods
+	crictl images
+	cat /etc/crictl.yaml
 
 	CURRENT_TASK="start workload (runc)"
 	start_workload
