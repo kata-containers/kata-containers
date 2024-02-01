@@ -374,28 +374,29 @@ impl AgentPolicy {
 
         for document in serde_yaml::Deserializer::from_str(&yaml_contents) {
             let doc_mapping = Value::deserialize(document)?;
-            let yaml_string = serde_yaml::to_string(&doc_mapping)?;
+            if doc_mapping != Value::Null {
+                let yaml_string = serde_yaml::to_string(&doc_mapping)?;
+                let silent = config.silent_unsupported_fields;
+                let (mut resource, kind) = yaml::new_k8s_resource(&yaml_string, silent)?;
+                resource.init(config.use_cache, &doc_mapping, silent).await;
 
-            let silent = config.silent_unsupported_fields;
-            let (mut resource, kind) = yaml::new_k8s_resource(&yaml_string, silent)?;
-            resource.init(config.use_cache, &doc_mapping, silent).await;
+                // ConfigMap and Secret documents contain additional input for policy generation.
+                if kind.eq("ConfigMap") {
+                    let config_map: config_map::ConfigMap = serde_yaml::from_str(&yaml_string)?;
+                    debug!("{:#?}", &config_map);
+                    config_maps.push(config_map);
+                } else if kind.eq("Secret") {
+                    let secret: secret::Secret = serde_yaml::from_str(&yaml_string)?;
+                    debug!("{:#?}", &secret);
+                    secrets.push(secret);
+                }
 
-            // ConfigMap and Secret documents contain additional input for policy generation.
-            if kind.eq("ConfigMap") {
-                let config_map: config_map::ConfigMap = serde_yaml::from_str(&yaml_string)?;
-                debug!("{:#?}", &config_map);
-                config_maps.push(config_map);
-            } else if kind.eq("Secret") {
-                let secret: secret::Secret = serde_yaml::from_str(&yaml_string)?;
-                debug!("{:#?}", &secret);
-                secrets.push(secret);
+                // Although copies of ConfigMap and Secret resources get created above,
+                // those resources still have to be present in the resources vector, because
+                // the elements of this vector will eventually be used to create the output
+                // YAML file.
+                resources.push(resource);
             }
-
-            // Although copies of ConfigMap and Secret resources get created above,
-            // those resources still have to be present in the resources vector, because
-            // the elements of this vector will eventually be used to create the output
-            // YAML file.
-            resources.push(resource);
         }
 
         let settings = settings::Settings::new(&config.json_settings_path);
