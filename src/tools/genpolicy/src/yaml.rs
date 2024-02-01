@@ -52,7 +52,9 @@ pub trait K8sResource {
     fn serialize(&mut self, policy: &str) -> String;
 
     fn get_sandbox_name(&self) -> Option<String>;
-    fn get_namespace(&self) -> String;
+    fn get_namespace(&self) -> Option<String> {
+        panic!("Unsupported");
+    }
 
     fn get_container_mounts_and_storages(
         &self,

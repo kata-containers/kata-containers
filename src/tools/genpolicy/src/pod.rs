@@ -698,7 +698,7 @@ impl yaml::K8sResource for Pod {
         panic!("No pod name.");
     }
 
-    fn get_namespace(&self) -> String {
+    fn get_namespace(&self) -> Option<String> {
         self.metadata.get_namespace()
     }
 

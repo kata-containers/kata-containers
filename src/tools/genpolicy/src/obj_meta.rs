@@ -33,17 +33,13 @@ impl ObjectMeta {
         if let Some(name) = &self.name {
             name.clone()
         } else if self.generateName.is_some() {
-            return "$(generated-name)".to_string();
+            "$(generated-name)".to_string()
         } else {
             String::new()
         }
     }
 
-    pub fn get_namespace(&self) -> String {
-        if let Some(namespace) = &self.namespace {
-            namespace.clone()
-        } else {
-            "default".to_string()
-        }
+    pub fn get_namespace(&self) -> Option<String> {
+        self.namespace.as_ref().cloned()
     }
 }
