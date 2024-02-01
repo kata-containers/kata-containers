@@ -37,6 +37,7 @@ jobs:
           - dragonball
           - qemu
           - stratovirt
+          - cloud-hypervisor
         instance-type:
           - small
           - normal
