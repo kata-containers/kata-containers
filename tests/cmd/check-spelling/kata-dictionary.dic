@@ -222,6 +222,7 @@ deliverable/AB
 deploy
 dev
 devicemapper/B
+devmapper
 dialer
 dialog/A
 dind/B
@@ -333,6 +334,7 @@ serverless
 signoff/A
 snapcraft/B
 snapd/B
+snapshotters
 stalebot/B
 startup
 stderr/AB
