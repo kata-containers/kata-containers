@@ -371,11 +371,10 @@ log_level = "debug"
 EOF
 }
 
-function install_kata() {
-	local kata_tarball="kata-static.tar.xz"
-	declare -r katadir="/opt/kata"
+function install_kata_common() {
+	declare -r katadir="$1"
 	declare -r destdir="/"
-	declare -r local_bin_dir="/usr/local/bin/"
+	declare -r kata_tarball="kata-static.tar.xz"
 
 	# Removing previous kata installation
 	sudo rm -rf "${katadir}"
@@ -383,6 +382,18 @@ function install_kata() {
 	pushd "${kata_tarball_dir}"
 	sudo tar -xvf "${kata_tarball}" -C "${destdir}"
 	popd
+}
+
+function install_kata_tools() {
+	declare -r katadir="/opt/kata"
+	install_kata_common "${katadir}"
+}
+
+function install_kata() {
+	declare -r katadir="/opt/kata"
+	declare -r local_bin_dir="/usr/local/bin/"
+
+	install_kata_common "${katadir}"
 
 	# create symbolic links to kata components
 	for b in "${katadir}"/bin/* ; do
