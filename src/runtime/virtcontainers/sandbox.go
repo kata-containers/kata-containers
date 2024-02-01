@@ -2576,11 +2576,12 @@ func (s *Sandbox) GetPatchedOCISpec() *specs.Spec {
 		return nil
 	}
 
-	// get the container associated with the PodSandbox annotation. In Kubernetes, this
-	// represents the pause container. In Docker, this is the container.
-	// On Linux, we derive the group path from this container.
+	// Get the container associated with the PodSandbox annotation.
+	// In Kubernetes, this represents the pause container.
+	// In CRI-compliant runtimes like Containerd, this is the container.
+	// On Linux, we derive the cgroup path from this container.
 	for _, cConfig := range s.config.Containers {
-		if cConfig.Annotations[annotations.ContainerTypeKey] == string(PodSandbox) {
+		if ContainerType(cConfig.Annotations[annotations.ContainerTypeKey]).IsSandbox() {
 			return cConfig.CustomSpec
 		}
 	}
