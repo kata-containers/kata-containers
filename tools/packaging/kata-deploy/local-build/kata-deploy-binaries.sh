@@ -145,8 +145,21 @@ get_kernel_modules_dir() {
 }
 
 cleanup_and_fail() {
-       rm -f "${component_tarball_name}"
-       return 1
+	local component_tarball_name="${1:-}"
+	local extra_tarballs="${2:-}"
+
+	rm -f "${component_tarball_name}"
+
+	if [ -n "${extra_tarballs}" ]; then
+		local mapping
+		IFS=' ' read -a mapping <<< "${extra_tarballs}"
+		for m in ${mapping[@]}; do
+			local extra_tarball_name=${m%:*}
+			rm -f "${extra_tarball_name}"
+		done
+	fi
+       
+	return 1
 }
 
 install_cached_tarball_component() {
@@ -159,6 +172,9 @@ install_cached_tarball_component() {
 	local current_image_version="${3}"
 	local component_tarball_name="${4}"
 	local component_tarball_path="${5}"
+	# extra_tarballs must be in the following format:
+	# "tarball1_name:tarball1_path tarball2_name:tarball2_path ... tarballN_name:tarballN_path"
+	local extra_tarballs="${6:-}"
 
 	sudo oras pull ${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) || return 1
 
@@ -170,10 +186,21 @@ install_cached_tarball_component() {
 
 	[ "${cached_image_version}" != "${current_image_version}" ] && return 1
 	[ "${cached_version}" != "${current_version}" ] && return 1
-	sha256sum -c "${component}-sha256sum" || return $(cleanup_and_fail)
+	sha256sum -c "${component}-sha256sum" || return $(cleanup_and_fail "${component_tarball_path}" "${extra_tarballs}")
 
 	info "Using cached tarball of ${component}"
 	mv "${component_tarball_name}" "${component_tarball_path}"
+	
+	[ -z "${extra_tarballs}" ] && return 0
+
+	local mapping
+	IFS=' ' read -a mapping <<< "${extra_tarballs}"
+	for m in ${mapping[@]}; do
+		local extra_tarball_name=${m%:*}
+		local extra_tarball_path=${m#&:}
+
+		mv ${extra_tarball_name} ${extra_tarball_path}
+	done
 }
 
 get_agent_tarball_path() {
