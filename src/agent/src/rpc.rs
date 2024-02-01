@@ -58,6 +58,7 @@ use crate::metrics::get_metrics;
 use crate::mount::baremount;
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
 use crate::network::setup_guest_dns;
+use crate::passfd_io;
 use crate::pci;
 use crate::random;
 use crate::sandbox::Sandbox;
@@ -260,7 +261,15 @@ impl AgentService {
         let pipe_size = AGENT_CONFIG.container_pipe_size;
 
         let p = if let Some(p) = oci.process {
-            Process::new(&sl(), &p, cid.as_str(), true, pipe_size)?
+            let proc_io = if AGENT_CONFIG.passfd_listener_port != 0 {
+                Some(
+                    passfd_io::take_io_streams(req.stdin_port, req.stdout_port, req.stderr_port)
+                        .await,
+                )
+            } else {
+                None
+            };
+            Process::new(&sl(), &p, cid.as_str(), true, pipe_size, proc_io)?
         } else {
             info!(sl(), "no process configurations!");
             return Err(anyhow!(nix::Error::EINVAL));
@@ -369,7 +378,15 @@ impl AgentService {
 
         let pipe_size = AGENT_CONFIG.container_pipe_size;
         let ocip = rustjail::process_grpc_to_oci(&process);
-        let p = Process::new(&sl(), &ocip, exec_id.as_str(), false, pipe_size)?;
+
+        // passfd_listener_port != 0 indicates passfd io mode
+        let proc_io = if AGENT_CONFIG.passfd_listener_port != 0 {
+            Some(passfd_io::take_io_streams(req.stdin_port, req.stdout_port, req.stderr_port).await)
+        } else {
+            None
+        };
+
+        let p = Process::new(&sl(), &ocip, exec_id.as_str(), false, pipe_size, proc_io)?;
 
         let ctr = sandbox
             .get_container(&cid)
@@ -834,7 +851,7 @@ impl agent_ttrpc::AgentService for AgentService {
                 )
             })?;
 
-        p.close_stdin();
+        p.close_stdin().await;
 
         Ok(Empty::new())
     }
@@ -2252,6 +2269,7 @@ mod tests {
                     &exec_process_id.to_string(),
                     false,
                     1,
+                    None,
                 )
                 .unwrap();
 

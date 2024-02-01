@@ -93,6 +93,14 @@ message CreateContainerRequest {
 	// This field is used to declare a set of shared mount points
 	// that support cross-container sharing of mount objects.
 	repeated SharedMount shared_mounts = 8;
+
+	// These fields are the host-side vport numbers of passfd streams
+	// pre-created by runtime-rs, and used as identifiers for the agent
+	// to select the right streams for init process's stdin/stdout/stderr.
+	// Disable the feature by setting the associated port to 0.
+	uint32 stdin_port = 9;
+	uint32 stdout_port = 10;
+	uint32 stderr_port = 11;
 }
 
 message StartContainerRequest {
@@ -115,6 +123,14 @@ message ExecProcessRequest {
 	string exec_id = 2;
 	StringUser string_user = 3;
 	Process process = 4;
+
+	// These fields are the host-side vport numbers of passfd streams
+	// pre-created by runtime-rs, and used as identifiers for the agent
+	// to select the right streams for process's stdin/stdout/stderr.
+	// Disable the feature by setting the associated port to 0.
+	uint32 stdin_port = 5;
+	uint32 stdout_port = 6;
+	uint32 stderr_port = 7;
 }
 
 message SignalProcessRequest {

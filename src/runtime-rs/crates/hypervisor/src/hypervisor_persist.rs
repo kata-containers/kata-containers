@@ -33,4 +33,5 @@ pub struct HypervisorState {
     /// cached block device
     pub cached_block_devices: HashSet<String>,
     pub virtiofs_daemon_pid: i32,
+    pub passfd_listener_port: Option<u32>,
 }

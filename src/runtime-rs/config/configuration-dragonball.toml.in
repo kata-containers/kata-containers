@@ -372,3 +372,10 @@ sandbox_bind_mounts=@DEFBINDMOUNTS@
 # to the hypervisor.
 # (default: /run/kata-containers/dans)
 dan_conf = "@DEFDANCONF@"
+
+# If enabled, the runtime will attempt to use fd passthrough feature for process io.
+# Note: this feature is only supported by the Dragonball hypervisor.
+use_passfd_io = true
+
+# If fd passthrough io is enabled, the runtime will attempt to use the specified port instead of the default port.
+# passfd_listener_port = 1027

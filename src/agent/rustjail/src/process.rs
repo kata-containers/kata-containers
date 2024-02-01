@@ -7,6 +7,7 @@ use libc::pid_t;
 use std::fs::File;
 use std::os::unix::io::{AsRawFd, RawFd};
 use tokio::sync::mpsc::Sender;
+use tokio_vsock::VsockStream;
 
 use nix::errno::Errno;
 use nix::fcntl::{fcntl, FcntlArg, OFlag};
@@ -18,6 +19,7 @@ use oci::Process as OCIProcess;
 use slog::Logger;
 
 use crate::pipestream::PipeStream;
+use awaitgroup::WaitGroup;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::io::{split, ReadHalf, WriteHalf};
@@ -48,6 +50,41 @@ type Reader = Arc<Mutex<ReadHalf<PipeStream>>>;
 type Writer = Arc<Mutex<WriteHalf<PipeStream>>>;
 
 #[derive(Debug)]
+pub struct ProcessIo {
+    pub stdin: Option<VsockStream>,
+    pub stdout: Option<VsockStream>,
+    pub stderr: Option<VsockStream>,
+    // used to close stdin stream
+    pub close_stdin_tx: tokio::sync::watch::Sender<bool>,
+    pub close_stdin_rx: tokio::sync::watch::Receiver<bool>,
+    // wait for stdin copy task to finish
+    pub wg_input: WaitGroup,
+    // used to wait for all process outputs to be copied to the vsock streams
+    // only used when tty is used.
+    pub wg_output: WaitGroup,
+}
+
+impl ProcessIo {
+    pub fn new(
+        stdin: Option<VsockStream>,
+        stdout: Option<VsockStream>,
+        stderr: Option<VsockStream>,
+    ) -> Self {
+        let (close_stdin_tx, close_stdin_rx) = tokio::sync::watch::channel(false);
+
+        ProcessIo {
+            stdin,
+            stdout,
+            stderr,
+            close_stdin_tx,
+            close_stdin_rx,
+            wg_input: WaitGroup::new(),
+            wg_output: WaitGroup::new(),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Process {
     pub exec_id: String,
     pub stdin: Option<RawFd>,
@@ -74,6 +111,8 @@ pub struct Process {
 
     readers: HashMap<StreamType, Reader>,
     writers: HashMap<StreamType, Writer>,
+
+    pub proc_io: Option<ProcessIo>,
 }
 
 pub trait ProcessOperations {
@@ -105,6 +144,7 @@ impl Process {
         id: &str,
         init: bool,
         pipe_size: i32,
+        proc_io: Option<ProcessIo>,
     ) -> Result<Self> {
         let logger = logger.new(o!("subsystem" => "process"));
         let (exit_tx, exit_rx) = tokio::sync::watch::channel(false);
@@ -131,6 +171,7 @@ impl Process {
             term_exit_notifier: Arc::new(Notify::new()),
             readers: HashMap::new(),
             writers: HashMap::new(),
+            proc_io,
         };
 
         info!(logger, "before create console socket!");
@@ -147,6 +188,10 @@ impl Process {
                 p.parent_stdin = Some(pstdin);
                 p.stdin = Some(stdin);
 
+                // These pipes are necessary as the stdout/stderr of the child process
+                // cannot be a socket. Otherwise, some images relying on the /dev/stdout(stderr)
+                // and /proc/self/fd/1(2) will fail to boot as opening an existing socket
+                // is forbidden by the Linux kernel.
                 let (pstdout, stdout) = create_extended_pipe(OFlag::O_CLOEXEC, pipe_size)?;
                 p.parent_stdout = Some(pstdout);
                 p.stdout = Some(stdout);
@@ -164,7 +209,14 @@ impl Process {
         notify.notify_waiters();
     }
 
-    pub fn close_stdin(&mut self) {
+    pub async fn close_stdin(&mut self) {
+        if let Some(proc_io) = &mut self.proc_io {
+            // notify io copy task to close stdin stream
+            let _ = proc_io.close_stdin_tx.send(true);
+            // wait for io copy task to finish
+            proc_io.wg_input.wait().await;
+        }
+
         close_process_stream!(self, term_master, TermMaster);
         close_process_stream!(self, parent_stdin, ParentStdin);
 
@@ -172,6 +224,13 @@ impl Process {
     }
 
     pub fn cleanup_process_stream(&mut self) {
+        if let Some(proc_io) = self.proc_io.take() {
+            drop(proc_io);
+
+            return;
+        }
+
+        // legacy io mode
         close_process_stream!(self, parent_stdin, ParentStdin);
         close_process_stream!(self, parent_stdout, ParentStdout);
         close_process_stream!(self, parent_stderr, ParentStderr);
@@ -277,6 +336,7 @@ mod tests {
             id,
             init,
             32,
+            None,
         );
 
         let mut process = process.unwrap();

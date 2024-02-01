@@ -55,6 +55,11 @@ impl Dragonball {
         let mut inner = self.inner.write().await;
         inner.set_hypervisor_config(config)
     }
+
+    pub async fn set_passfd_listener_port(&mut self, port: u32) {
+        let mut inner = self.inner.write().await;
+        inner.set_passfd_listener_port(port)
+    }
 }
 
 #[async_trait]
@@ -197,6 +202,11 @@ impl Hypervisor for Dragonball {
     async fn resize_memory(&self, new_mem_mb: u32) -> Result<(u32, MemoryConfig)> {
         let mut inner = self.inner.write().await;
         inner.resize_memory(new_mem_mb)
+    }
+
+    async fn get_passfd_listener_addr(&self) -> Result<(String, u32)> {
+        let inner = self.inner.read().await;
+        inner.get_passfd_listener_addr().await
     }
 }
 
