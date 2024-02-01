@@ -88,3 +88,99 @@ exec_host() {
 	echo "$(echo "${output}" | head -n -1)"
 	return ${exit_code}
 }
+
+auto_generate_policy_enabled() {
+	[ "${AUTO_GENERATE_POLICY}" == "yes" ]
+}
+
+# If auto-generated policy testing is enabled, make a copy of the genpolicy settings,
+# and change these settings to use Kata CI cluster's default namespace.
+create_common_genpolicy_settings() {
+	declare -r genpolicy_settings_dir="$1"
+	declare -r default_genpolicy_settings_dir="/opt/kata/share/defaults/kata-containers"
+
+	auto_generate_policy_enabled || return 0
+
+	cp "${default_genpolicy_settings_dir}/genpolicy-settings.json" "${genpolicy_settings_dir}"
+	cp "${default_genpolicy_settings_dir}/rules.rego" "${genpolicy_settings_dir}"
+
+	# Set the default namespace of Kata CI tests in the genpolicy settings.
+	info "${genpolicy_settings_dir}/genpolicy-settings.json: default namespace: ${test_cluster_namespace}"
+	jq --arg test_cluster_namespace "${test_cluster_namespace}" \
+		'.cluster_config.default_namespace |= $test_cluster_namespace' \
+		"${genpolicy_settings_dir}/genpolicy-settings.json" > \
+		"${genpolicy_settings_dir}/new-genpolicy-settings.json"
+	mv "${genpolicy_settings_dir}/new-genpolicy-settings.json" "${genpolicy_settings_dir}/genpolicy-settings.json"
+}
+
+# If auto-generated policy testing is enabled, make a copy of the common genpolicy settings
+# described above into a temporary directory that will be used by the current test case.
+create_tmp_policy_settings_dir() {
+	declare -r common_settings_dir="$1"
+
+	auto_generate_policy_enabled || return 0
+
+	tmp_settings_dir=$(mktemp -d --tmpdir="${common_settings_dir}" genpolicy.XXXXXXXXXX)
+	cp "${common_settings_dir}/rules.rego" "${tmp_settings_dir}"
+	cp "${common_settings_dir}/genpolicy-settings.json" "${tmp_settings_dir}"
+
+	echo "${tmp_settings_dir}"
+}
+
+# Delete a directory created by create_tmp_policy_settings_dir.
+delete_tmp_policy_settings_dir() {
+	local settings_dir="$1"
+
+	auto_generate_policy_enabled || return 0
+
+	if [ -d "${settings_dir}" ]; then
+		info "Deleting ${settings_dir}"
+		rm -rf "${settings_dir}"
+	fi
+}
+
+# Execute genpolicy to auto-generate policy for a test YAML file.
+auto_generate_policy() {
+	declare -r settings_dir="$1"
+	declare -r yaml_file="$2"
+	declare -r config_map_yaml_file="$3"
+
+	auto_generate_policy_enabled || return 0
+
+	local genpolicy_command="RUST_LOG=info /opt/kata/bin/genpolicy -u -y ${yaml_file}"
+	genpolicy_command+=" -p ${settings_dir}/rules.rego"
+	genpolicy_command+=" -j ${settings_dir}/genpolicy-settings.json"
+
+	if [ ! -z "${config_map_yaml_file}" ]; then
+		genpolicy_command+=" -c ${config_map_yaml_file}"
+	fi
+
+	info "Executing: ${genpolicy_command}"
+	eval "${genpolicy_command}"
+}
+
+# Change genpolicy settings to allow "kubectl exec" to execute a command
+# and to read console output from a test pod.
+add_exec_to_policy_settings() {
+	declare -r settings_dir="$1"
+	declare -r allowed_exec="$2"
+
+	auto_generate_policy_enabled || return 0
+
+	# Change genpolicy settings to allow kubectl to exec the command specified by the caller.
+	info "${settings_dir}/genpolicy-settings.json: allowing exec: ${allowed_exec}"
+	jq --arg allowed_exec "${allowed_exec}" \
+		'.request_defaults.ExecProcessRequest.commands |= . + [$allowed_exec]' \
+		"${settings_dir}/genpolicy-settings.json" > \
+		"${settings_dir}/new-genpolicy-settings.json"
+	mv "${settings_dir}/new-genpolicy-settings.json" \
+		"${settings_dir}/genpolicy-settings.json"
+
+	# Change genpolicy settings to allow kubectl to read the output of the command being executed.
+	info "${settings_dir}/genpolicy-settings.json: allowing ReadStreamRequest"
+	jq '.request_defaults.ReadStreamRequest |= true' \
+		"${settings_dir}"/genpolicy-settings.json > \
+		"${settings_dir}"/new-genpolicy-settings.json
+	mv "${settings_dir}"/new-genpolicy-settings.json \
+		"${settings_dir}"/genpolicy-settings.json
+}
