@@ -7,6 +7,9 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+DEBUG="${DEBUG:-}"
+[ -n "$DEBUG" ] && set -x
+
 if [ -n "${K8S_TEST_POLICY_FILES:-}" ]; then
 	K8S_TEST_POLICY_FILES=($K8S_TEST_POLICY_FILES)
 else

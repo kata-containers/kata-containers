@@ -8,6 +8,9 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+DEBUG="${DEBUG:-}"
+[ -n "$DEBUG" ] && set -x
+
 kubernetes_dir="$(dirname "$(readlink -f "$0")")"
 source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
 # shellcheck disable=2154
