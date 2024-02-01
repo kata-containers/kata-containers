@@ -66,12 +66,12 @@ function create_cluster() {
     local rg="$(_print_rg_name ${test_type})"
 
     az group create \
-        -l eastus2 \
+        -l eastus \
         -n "${rg}"
 
     az aks create \
         -g "${rg}" \
-	--node-resource-group "node-${rg}" \
+        --node-resource-group "node-${rg}" \
         -n "$(_print_cluster_name ${test_type})" \
         -s "$(_print_instance_type)" \
         --node-count 1 \
