@@ -14,6 +14,7 @@ use std::fs;
 use std::os::unix::io::RawFd;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
+use tokio::fs::File;
 
 use cgroups::freezer::FreezerState;
 
@@ -64,7 +65,7 @@ use crate::sync::{read_sync, write_count, write_sync, SYNC_DATA, SYNC_FAILED, SY
 use crate::sync_with_async::{read_async, write_async};
 use async_trait::async_trait;
 use rlimit::{setrlimit, Resource, Rlim};
-use tokio::io::AsyncBufReadExt;
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt};
 use tokio::sync::Mutex;
 
 use kata_sys_util::hooks::HookStates;
@@ -989,13 +990,148 @@ impl BaseContainer for LinuxContainer {
             child_stdin = unsafe { std::process::Stdio::from_raw_fd(pseudo.slave) };
             child_stdout = unsafe { std::process::Stdio::from_raw_fd(pseudo.slave) };
             child_stderr = unsafe { std::process::Stdio::from_raw_fd(pseudo.slave) };
+
+            if let Some(proc_io) = &mut p.proc_io {
+                // A reference count used to clean up the term master fd.
+                let term_closer = Arc::from(unsafe { File::from_raw_fd(pseudo.master) });
+
+                // Copy from stdin to term_master
+                if let Some(mut stdin_stream) = proc_io.stdin.take() {
+                    let mut term_master = unsafe { File::from_raw_fd(pseudo.master) };
+                    let mut close_stdin_rx = proc_io.close_stdin_rx.clone();
+                    let wgw_input = proc_io.wg_input.worker();
+                    let logger = logger.clone();
+                    let term_closer = term_closer.clone();
+                    tokio::spawn(async move {
+                        let mut buf = [0u8; 8192];
+                        loop {
+                            tokio::select! {
+                                // Make sure stdin_stream is drained before exiting
+                                biased;
+                                res = stdin_stream.read(&mut buf) => {
+                                    match res {
+                                        Err(_) | Ok(0) => {
+                                            debug!(logger, "copy from stdin to term_master end: {:?}", res);
+                                            break;
+                                        }
+                                        Ok(n) => {
+                                            if term_master.write_all(&buf[..n]).await.is_err() {
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                                // As the stdin fifo is opened in RW mode in the shim, which will never
+                                // read EOF, we close the stdin fifo here when explicit requested.
+                                _ = close_stdin_rx.changed() => {
+                                    debug!(logger, "copy ends as requested");
+                                    break
+                                }
+                            }
+                        }
+                        wgw_input.done();
+                        std::mem::forget(term_master); // Avoid auto closing of term_master
+                        drop(term_closer);
+                    });
+                }
+
+                // Copy from term_master to stdout
+                if let Some(mut stdout_stream) = proc_io.stdout.take() {
+                    let wgw_output = proc_io.wg_output.worker();
+                    let mut term_master = unsafe { File::from_raw_fd(pseudo.master) };
+                    let logger = logger.clone();
+                    let term_closer = term_closer;
+                    tokio::spawn(async move {
+                        let res = tokio::io::copy(&mut term_master, &mut stdout_stream).await;
+                        debug!(logger, "copy from term_master to stdout end: {:?}", res);
+                        wgw_output.done();
+                        std::mem::forget(term_master); // Avoid auto closing of term_master
+                        drop(term_closer);
+                    });
+                }
+            }
         } else {
+            // not using a terminal
             let stdin = p.stdin.unwrap();
             let stdout = p.stdout.unwrap();
             let stderr = p.stderr.unwrap();
             child_stdin = unsafe { std::process::Stdio::from_raw_fd(stdin) };
             child_stdout = unsafe { std::process::Stdio::from_raw_fd(stdout) };
             child_stderr = unsafe { std::process::Stdio::from_raw_fd(stderr) };
+
+            if let Some(proc_io) = &mut p.proc_io {
+                // Here we copy from vsock stdin stream to parent_stdin manually.
+                // This is because we need to close the stdin fifo when the stdin stream
+                // is drained.
+                if let Some(mut stdin_stream) = proc_io.stdin.take() {
+                    debug!(logger, "copy from stdin to parent_stdin");
+                    let mut parent_stdin = unsafe { File::from_raw_fd(p.parent_stdin.unwrap()) };
+                    let mut close_stdin_rx = proc_io.close_stdin_rx.clone();
+                    let wgw_input = proc_io.wg_input.worker();
+                    let logger = logger.clone();
+                    tokio::spawn(async move {
+                        let mut buf = [0u8; 8192];
+                        loop {
+                            tokio::select! {
+                                // Make sure stdin_stream is drained before exiting
+                                biased;
+                                res = stdin_stream.read(&mut buf) => {
+                                    match res {
+                                        Err(_) | Ok(0) => {
+                                            debug!(logger, "copy from stdin to term_master end: {:?}", res);
+                                            break;
+                                        }
+                                        Ok(n) => {
+                                            if parent_stdin.write_all(&buf[..n]).await.is_err() {
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                                // As the stdin fifo is opened in RW mode in the shim, which will never
+                                // read EOF, we close the stdin fifo here when explicit requested.
+                                _ = close_stdin_rx.changed() => {
+                                    debug!(logger, "copy ends as requested");
+                                    break
+                                }
+                            }
+                        }
+                        wgw_input.done();
+                    });
+                }
+
+                // copy from parent_stdout to stdout stream
+                if let Some(mut stdout_stream) = proc_io.stdout.take() {
+                    debug!(logger, "copy from parent_stdout to stdout stream");
+                    let wgw_output = proc_io.wg_output.worker();
+                    let mut parent_stdout = unsafe { File::from_raw_fd(p.parent_stdout.unwrap()) };
+                    let logger = logger.clone();
+                    tokio::spawn(async move {
+                        let res = tokio::io::copy(&mut parent_stdout, &mut stdout_stream).await;
+                        debug!(
+                            logger,
+                            "copy from parent_stdout to stdout stream end: {:?}", res
+                        );
+                        wgw_output.done();
+                    });
+                }
+
+                // copy from parent_stderr to stderr stream
+                if let Some(mut stderr_stream) = proc_io.stderr.take() {
+                    debug!(logger, "copy from parent_stderr to stderr stream");
+                    let wgw_output = proc_io.wg_output.worker();
+                    let mut parent_stderr = unsafe { File::from_raw_fd(p.parent_stderr.unwrap()) };
+                    let logger = logger.clone();
+                    tokio::spawn(async move {
+                        let res = tokio::io::copy(&mut parent_stderr, &mut stderr_stream).await;
+                        debug!(
+                            logger,
+                            "copy from parent_stderr to stderr stream end: {:?}", res
+                        );
+                        wgw_output.done();
+                    });
+                }
+            }
         }
 
         let pidns = get_pid_namespace(&self.logger, linux)?;
@@ -1904,7 +2040,7 @@ mod tests {
         let _ = new_linux_container_and_then(|mut c: LinuxContainer| {
             c.processes.insert(
                 1,
-                Process::new(&sl(), &oci::Process::default(), "123", true, 1).unwrap(),
+                Process::new(&sl(), &oci::Process::default(), "123", true, 1, None).unwrap(),
             );
             let p = c.get_process("123");
             assert!(p.is_ok(), "Expecting Ok, Got {:?}", p);
@@ -1931,7 +2067,7 @@ mod tests {
         let (c, _dir) = new_linux_container();
         let ret = c
             .unwrap()
-            .start(Process::new(&sl(), &oci::Process::default(), "123", true, 1).unwrap())
+            .start(Process::new(&sl(), &oci::Process::default(), "123", true, 1, None).unwrap())
             .await;
         assert!(ret.is_err(), "Expecting Err, Got {:?}", ret);
     }
@@ -1941,7 +2077,7 @@ mod tests {
         let (c, _dir) = new_linux_container();
         let ret = c
             .unwrap()
-            .run(Process::new(&sl(), &oci::Process::default(), "123", true, 1).unwrap())
+            .run(Process::new(&sl(), &oci::Process::default(), "123", true, 1, None).unwrap())
             .await;
         assert!(ret.is_err(), "Expecting Err, Got {:?}", ret);
     }

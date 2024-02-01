@@ -1006,12 +1006,20 @@ mod tests {
         // add init process
         linux_container.processes.insert(
             1,
-            Process::new(&logger, &oci::Process::default(), "1", true, 1).unwrap(),
+            Process::new(&logger, &oci::Process::default(), "1", true, 1, None).unwrap(),
         );
         // add exec process
         linux_container.processes.insert(
             123,
-            Process::new(&logger, &oci::Process::default(), "exec-123", false, 1).unwrap(),
+            Process::new(
+                &logger,
+                &oci::Process::default(),
+                "exec-123",
+                false,
+                1,
+                None,
+            )
+            .unwrap(),
         );
 
         s.add_container(linux_container);
@@ -1058,6 +1066,7 @@ mod tests {
                 "this_is_a_test_process",
                 true,
                 1,
+                None,
             )
             .unwrap();
             // processes interally only have pids when manually set

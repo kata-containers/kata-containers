@@ -167,6 +167,18 @@ pub struct Runtime {
     /// shared_mount declarations
     #[serde(default)]
     pub shared_mounts: Vec<SharedMount>,
+
+    /// If enabled, the runtime will attempt to use fd passthrough feature for process io.
+    #[serde(default)]
+    pub use_passfd_io: bool,
+
+    /// If fd passthrough io is enabled, the runtime will attempt to use the specified port instead of the default port.
+    #[serde(default = "default_passfd_listener_port")]
+    pub passfd_listener_port: u32,
+}
+
+fn default_passfd_listener_port() -> u32 {
+    default::DEFAULT_PASSFD_LISTENER_PORT
 }
 
 impl ConfigOps for Runtime {

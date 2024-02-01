@@ -54,6 +54,8 @@ pub const DEBUG_CONSOLE_VPORT_OPTION: &str = "agent.debug_console_vport";
 pub const LOG_VPORT_OPTION: &str = "agent.log_vport";
 /// Option of setting the container's pipe size
 pub const CONTAINER_PIPE_SIZE_OPTION: &str = "agent.container_pipe_size";
+/// Option of setting the fd passthrough io listener port
+pub const PASSFD_LISTENER_PORT: &str = "agent.passfd_listener_port";
 
 /// Trait to manipulate global Kata configuration information.
 pub trait ConfigPlugin: Send + Sync {
