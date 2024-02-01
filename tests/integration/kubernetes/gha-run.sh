@@ -20,6 +20,7 @@ KATA_DEPLOY_WAIT_TIMEOUT=${KATA_DEPLOY_WAIT_TIMEOUT:-10m}
 KATA_HYPERVISOR=${KATA_HYPERVISOR:-qemu}
 KUBERNETES="${KUBERNETES:-}"
 SNAPSHOTTER="${SNAPSHOTTER:-}"
+export TEST_CLUSTER_NAMESPACE="${TEST_CLUSTER_NAMESPACE:-kata-containers-k8s-tests}"
 
 function configure_devmapper() {
 	sudo mkdir -p /var/lib/containerd/devmapper
@@ -103,8 +104,7 @@ function deploy_kata() {
 	[ "$platform" = "kcli" ] && \
 	export KUBECONFIG="$HOME/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
 
-	# Ensure we're in the default namespace
-	kubectl config set-context --current --namespace=default
+	set_default_cluster_namespace
 
 	sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 
@@ -164,12 +164,7 @@ function run_tests() {
 	[ "$platform" = "kcli" ] && \
 		export KUBECONFIG="$HOME/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
 
-	# Delete any spurious tests namespace that was left behind
-	kubectl delete namespace kata-containers-k8s-tests &> /dev/null || true
-
-	# Create a new namespace for the tests and switch to it
-	kubectl apply -f "${kubernetes_dir}/runtimeclass_workloads/tests-namespace.yaml"
-	kubectl config set-context --current --namespace=kata-containers-k8s-tests
+	set_test_cluster_namespace
 
 	pushd "${kubernetes_dir}"
 	bash setup.sh
@@ -199,8 +194,7 @@ function cleanup() {
 	fi
 
 	# Switch back to the default namespace and delete the tests one
-	kubectl config set-context --current --namespace=default
-	kubectl delete namespace kata-containers-k8s-tests
+	delete_test_cluster_namespace
 
 	if [ "${KUBERNETES}" = "k3s" ]; then
 		deploy_spec="-k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k3s""

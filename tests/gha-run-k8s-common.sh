@@ -269,3 +269,21 @@ function deploy_k8s() {
 
 	echo "::endgroup::"
 }
+
+function set_test_cluster_namespace() {
+	# Delete any spurious tests namespace that was left behind
+	kubectl delete namespace "${TEST_CLUSTER_NAMESPACE}" &> /dev/null || true
+
+	# Create a new namespace for the tests and switch to it
+	kubectl apply -f "${kubernetes_dir}/runtimeclass_workloads/tests-namespace.yaml"
+	kubectl config set-context --current --namespace="${TEST_CLUSTER_NAMESPACE}"
+}
+
+function set_default_cluster_namespace() {
+	kubectl config set-context --current --namespace=default
+}
+
+function delete_test_cluster_namespace() {
+	set_default_cluster_namespace
+	kubectl delete namespace "${TEST_CLUSTER_NAMESPACE}"
+}
