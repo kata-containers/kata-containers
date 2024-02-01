@@ -359,6 +359,12 @@ pub struct CommonData {
     pub privileged_caps: Vec<String>,
 }
 
+/// Configuration from "kubectl config".
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ClusterConfig {
+    default_namespace: String,
+}
+
 impl AgentPolicy {
     pub async fn from_files(config: &utils::Config) -> Result<AgentPolicy> {
         let mut config_maps = Vec::new();
@@ -472,7 +478,12 @@ impl AgentPolicy {
         let mut root = c_settings.Root.clone();
         root.Readonly = yaml_container.read_only_root_filesystem();
 
-        let namespace = resource.get_namespace();
+        let namespace = if let Some(ns) = resource.get_namespace() {
+            ns
+        } else {
+            self.settings.cluster_config.default_namespace.clone()
+        };
+
         let use_host_network = resource.use_host_network();
         let annotations = get_container_annotations(
             resource,
