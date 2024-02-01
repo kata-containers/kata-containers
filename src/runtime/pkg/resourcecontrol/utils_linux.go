@@ -21,35 +21,15 @@ import (
 // DefaultResourceControllerID runtime-determined location in the cgroups hierarchy.
 const DefaultResourceControllerID = "/vc"
 
-// ValidCgroupPathV1 returns a valid cgroup path for cgroup v1.
+// ValidCgroupPath returns a valid cgroup path.
 // see https://github.com/opencontainers/runtime-spec/blob/master/config-linux.md#cgroups-path
-func ValidCgroupPathV1(path string, systemdCgroup bool) (string, error) {
+func ValidCgroupPath(path string, isCgroupV2 bool, systemdCgroup bool) (string, error) {
 	if IsSystemdCgroup(path) {
-		return path, nil
-	}
-
-	if systemdCgroup {
-		return "", fmt.Errorf("malformed systemd path '%v': expected to be of form 'slice:prefix:name'", path)
-	}
-
-	// In the case of an absolute path (starting with /), the runtime MUST
-	// take the path to be relative to the cgroups mount point.
-	if filepath.IsAbs(path) {
-		return filepath.Clean(path), nil
-	}
-
-	// In the case of a relative path (not starting with /), the runtime MAY
-	// interpret the path relative to a runtime-determined location in the cgroups hierarchy.
-	// clean up path and return a new path relative to DefaultResourceControllerID
-	return filepath.Join(DefaultResourceControllerID, filepath.Clean("/"+path)), nil
-}
-
-// ValidCgroupPathV2 returns a valid cgroup path for cgroup v2.
-// see https://github.com/opencontainers/runtime-spec/blob/master/config-linux.md#cgroups-path
-func ValidCgroupPathV2(path string, systemdCgroup bool) (string, error) {
-	// In cgroup v2，path must be a "clean" absolute path starts with "/".
-	if IsSystemdCgroup(path) {
-		return filepath.Join("/", path), nil
+		if isCgroupV2 {
+			return filepath.Join("/", path), nil
+		} else {
+			return path, nil
+		}
 	}
 
 	if systemdCgroup {
