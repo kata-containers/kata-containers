@@ -966,6 +966,21 @@ handle_build() {
 	fi
 	tar tvf "${final_tarball_path}"
 
+	case ${build_target} in
+		kernel*-confidential|kernel-sev)
+			local modules_final_tarball_path="${workdir}/kata-static-${build_target}-modules.tar.xz"
+			if [ ! -f "${modules_final_tarball_path}" ]; then
+				local modules_dir=$(get_kernel_modules_dir ${kernel_version} ${kernel_kata_config_version})
+
+				pushd "${modules_dir}"
+				sudo rm -f build
+				sudo tar cvfJ "${modules_final_tarball_path}" "."
+				popd
+			fi
+			tar tvf "${modules_final_tarball_path}"
+			;;
+	esac
+
 	pushd ${workdir}
 	echo "${latest_artefact}" > ${build_target}-version
 	echo "${latest_builder_image}" > ${build_target}-builder-image-version
