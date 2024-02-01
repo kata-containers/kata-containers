@@ -996,7 +996,25 @@ handle_build() {
 
 		echo "${ARTEFACT_REGISTRY_PASSWORD}" | sudo oras login "${ARTEFACT_REGISTRY}" -u "${ARTEFACT_REGISTRY_USERNAME}" --password-stdin
 
-		sudo oras push ${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) ${final_tarball_name} ${build_target}-version ${build_target}-builder-image-version ${build_target}-sha256sum
+		case ${build_target} in
+			kernel*-confidential|kernel-sev)
+				sudo oras push \
+					${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
+					${final_tarball_name} \
+					"kata-static-${build_target}-modules.tar.xz" \
+					${build_target}-version \
+					${build_target}-builder-image-version \
+					{build_target}-sha256sum
+				;;
+			*)
+				sudo oras push \
+					${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
+					${final_tarball_name} \
+					${build_target}-version \
+					${build_target}-builder-image-version \
+					{build_target}-sha256sum
+				;;
+		esac
 		sudo oras logout "${ARTEFACT_REGISTRY}"
 	fi
 
