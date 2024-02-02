@@ -261,6 +261,7 @@ function main() {
 		get-cluster-credentials) get_cluster_credentials ;;
 		deploy-kata-aks) deploy_kata "aks" ;;
 		deploy-kata-kcli) deploy_kata "kcli" ;;
+		deploy-kata-kubeadm) deploy_kata "kubeadm" ;;
 		deploy-kata-sev) deploy_kata "sev" ;;
 		deploy-kata-snp) deploy_kata "snp" ;;
 		deploy-kata-tdx) deploy_kata "tdx" ;;

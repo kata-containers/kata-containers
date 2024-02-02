@@ -202,6 +202,17 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
+      
+  run-k8s-tests-on-ppc64le:
+    needs: publish-kata-deploy-payload-ppc64le
+    uses: ./.github/workflows/run-k8s-tests-on-ppc64le.yaml
+    with:
+      registry: ghcr.io
+      repo: ${{ github.repository_owner }}/kata-deploy-ci
+      tag: ${{ inputs.tag }}-ppc64le
+      commit-hash: ${{ inputs.commit-hash }}
+      pr-number: ${{ inputs.pr-number }}
+      target-branch: ${{ inputs.target-branch }}
 
   run-metrics-tests:
     needs: build-kata-static-tarball-amd64
