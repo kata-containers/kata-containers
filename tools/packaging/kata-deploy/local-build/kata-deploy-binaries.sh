@@ -402,7 +402,7 @@ install_kernel_confidential() {
 
 	install_kernel_helper \
 		"assets.kernel.confidential.version" \
-		"kernel" \
+		"kernel-confidential" \
 		"-x confidential -u ${kernel_url}"
 }
 
