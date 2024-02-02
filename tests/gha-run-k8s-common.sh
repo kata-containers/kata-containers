@@ -104,10 +104,12 @@ function get_cluster_credentials() {
 
 function delete_cluster() {
     test_type="${1:-k8s}"
+    local rg
+    rg="$(_print_rg_name ${test_type})"
 
-    az group delete \
-        -g "$(_print_rg_name ${test_type})" \
-        --yes
+    if [ "$(az group exists -g "${rg}")" == "true" ]; then
+        az group delete -g "${rg}" --yes
+    fi
 }
 
 function delete_cluster_kcli() {
