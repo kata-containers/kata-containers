@@ -351,7 +351,7 @@ install_cached_kernel_tarball_component() {
 		return 0
 	fi
 
-	local modules_dir=$(get_kernel_modules_dir ${kernel_version} ${kernel_kata_config_version})
+	local modules_dir=$(get_kernel_modules_dir ${kernel_version} ${kernel_kata_config_version} ${build_target})
 	mkdir -p "${modules_dir}" || true
 	tar xvf "${workdir}/kata-static-${kernel_name}-modules.tar.xz" -C  "${modules_dir}" && return 0
 
@@ -965,7 +965,7 @@ handle_build() {
 		kernel*-confidential|kernel-sev)
 			local modules_final_tarball_path="${workdir}/kata-static-${build_target}-modules.tar.xz"
 			if [ ! -f "${modules_final_tarball_path}" ]; then
-				local modules_dir=$(get_kernel_modules_dir ${kernel_version} ${kernel_kata_config_version})
+				local modules_dir=$(get_kernel_modules_dir ${kernel_version} ${kernel_kata_config_version} ${build_target})
 
 				pushd "${modules_dir}"
 				sudo rm -f build
