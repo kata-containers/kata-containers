@@ -197,7 +197,7 @@ install_cached_tarball_component() {
 	IFS=' ' read -a mapping <<< "${extra_tarballs}"
 	for m in ${mapping[@]}; do
 		local extra_tarball_name=${m%:*}
-		local extra_tarball_path=${m#&:}
+		local extra_tarball_path=${m#*:}
 
 		mv ${extra_tarball_name} ${extra_tarball_path}
 	done
@@ -344,14 +344,14 @@ install_cached_kernel_tarball_component() {
 		"${latest_builder_image}" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
-		"${extra_tarballs} " \
+		"${extra_tarballs}" \
 		|| return 1
 	
 	if [[ "${kernel_name}" != "kernel-sev" ]] && [[ "${kernel_name}" != "kernel"*"-confidential" ]]; then
 		return 0
 	fi
 
-	local modules_dir=$(get_kernel_modules_dir ${kernel_version} ${kernel_kata_config_version})
+	local modules_dir=$(get_kernel_modules_dir ${kernel_version} ${kernel_kata_config_version} ${build_target})
 	mkdir -p "${modules_dir}" || true
 	tar xvf "${workdir}/kata-static-${kernel_name}-modules.tar.xz" -C  "${modules_dir}" && return 0
 
@@ -402,7 +402,7 @@ install_kernel_confidential() {
 
 	install_kernel_helper \
 		"assets.kernel.confidential.version" \
-		"kernel" \
+		"kernel-confidential" \
 		"-x confidential -u ${kernel_url}"
 }
 
@@ -965,7 +965,7 @@ handle_build() {
 		kernel*-confidential|kernel-sev)
 			local modules_final_tarball_path="${workdir}/kata-static-${build_target}-modules.tar.xz"
 			if [ ! -f "${modules_final_tarball_path}" ]; then
-				local modules_dir=$(get_kernel_modules_dir ${kernel_version} ${kernel_kata_config_version})
+				local modules_dir=$(get_kernel_modules_dir ${kernel_version} ${kernel_kata_config_version} ${build_target})
 
 				pushd "${modules_dir}"
 				sudo rm -f build
