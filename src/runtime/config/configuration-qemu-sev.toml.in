@@ -12,7 +12,7 @@
 
 [hypervisor.qemu]
 path = "@QEMUPATH@"
-kernel = "@KERNELSEVPATH@"
+kernel = "@KERNELCONFIDENTIALPATH@"
 initrd = "@INITRDSEVPATH@"
 machine_type = "@MACHINETYPE@"
 

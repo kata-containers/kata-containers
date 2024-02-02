@@ -38,9 +38,7 @@ jobs:
           - kata-ctl
           - kernel
           - kernel-confidential
-          - kernel-sev
           - kernel-dragonball-experimental
-          - kernel-tdx-experimental
           - kernel-nvidia-gpu
           - kernel-nvidia-gpu-confidential
           - nydus
