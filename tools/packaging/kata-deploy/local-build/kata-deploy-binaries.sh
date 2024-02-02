@@ -141,7 +141,16 @@ get_kernel_modules_dir() {
 	local dots=$(echo ${version} | grep -o '\.' | wc -l)
 	[ "${dots}" == "1" ] && numeric_final_version="${version}.0"
 
-	echo "${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/${kernel_name}/builddir/kata-linux-${version}-${kernel_kata_config_version}/lib/modules/${numeric_final_version}"
+	local kernel_modules_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/${kernel_name}/builddir/kata-linux-${version}-${kernel_kata_config_version}/lib/modules/${numeric_final_version}"
+	case ${kernel_name} in
+		kernel-nvidia-gpu-confidential)
+			kernel_modules_dir+="-nvidia-gpu-confidential"
+			;;
+		*)
+			;;
+	esac
+
+	echo ${kernel_modules_dir}
 }
 
 cleanup_and_fail() {
