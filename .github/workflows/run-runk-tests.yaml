@@ -42,5 +42,5 @@ jobs:
       - name: Install kata
         run: bash tests/integration/runk/gha-run.sh install-kata kata-artifacts
 
-      - name: Run tracing tests
+      - name: Run runk tests
         run: bash tests/integration/runk/gha-run.sh run
