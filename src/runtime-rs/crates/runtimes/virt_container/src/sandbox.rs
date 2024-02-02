@@ -17,8 +17,11 @@ use common::message::{Action, Message};
 use common::{Sandbox, SandboxNetworkEnv};
 use containerd_shim_protos::events::task::TaskOOM;
 use hypervisor::VsockConfig;
-use hypervisor::{dragonball::Dragonball, BlockConfig, Hypervisor, HYPERVISOR_DRAGONBALL};
+#[cfg(not(target_arch = "s390x"))]
+use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
+use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
 use hypervisor::{utils::get_hvsock_path, HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID};
+use hypervisor::{BlockConfig, Hypervisor};
 use kata_sys_util::hooks::HookStates;
 use kata_types::capabilities::CapabilityBits;
 use kata_types::config::TomlConfig;
@@ -585,7 +588,15 @@ impl Persist for VirtSandbox {
         let h = sandbox_state.hypervisor.unwrap_or_default();
         let hypervisor = match h.hypervisor_type.as_str() {
             // TODO support other hypervisors
-            HYPERVISOR_DRAGONBALL => Ok(Arc::new(Dragonball::restore((), h).await?)),
+            #[cfg(not(target_arch = "s390x"))]
+            HYPERVISOR_DRAGONBALL => {
+                let hypervisor = Arc::new(Dragonball::restore((), h).await?) as Arc<dyn Hypervisor>;
+                Ok(hypervisor)
+            }
+            HYPERVISOR_QEMU => {
+                let hypervisor = Arc::new(Qemu::restore((), h).await?) as Arc<dyn Hypervisor>;
+                Ok(hypervisor)
+            }
             _ => Err(anyhow!("Unsupported hypervisor {}", &h.hypervisor_type)),
         }?;
         let agent = Arc::new(KataAgent::new(kata_types::config::Agent::default()));
