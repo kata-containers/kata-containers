@@ -128,6 +128,9 @@ jobs:
       - name: Install protobuf-compiler
         if: ${{ matrix.command == 'make check' && matrix.component == 'agent' }}
         run: sudo apt-get -y install protobuf-compiler
+      - name: Install clang
+        if: ${{ matrix.command == 'make check' && matrix.component == 'agent' }}
+        run: sudo apt-get -y install clang
       - name: Setup XDG_RUNTIME_DIR for the `runtime` tests
         if: ${{ matrix.command != 'make vendor' && matrix.command != 'make check' && matrix.component == 'runtime' }}
         run: |
