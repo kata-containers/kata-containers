@@ -344,7 +344,7 @@ install_cached_kernel_tarball_component() {
 		"${latest_builder_image}" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
-		"${extra_tarballs} " \
+		"${extra_tarballs}" \
 		|| return 1
 	
 	if [[ "${kernel_name}" != "kernel-sev" ]] && [[ "${kernel_name}" != "kernel"*"-confidential" ]]; then
