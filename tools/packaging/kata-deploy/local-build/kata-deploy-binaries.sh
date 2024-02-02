@@ -126,9 +126,40 @@ EOF
 	exit "${return_code}"
 }
 
+get_kernel_modules_dir() {
+	local kernel_version="${1:-}"
+	local kernel_kata_config_version="${2:-}"
+	local kernel_name"=${3:-}"
+	[ -z "${kernel_version}" ] && die "kernel version is a required argument"
+	[ -z "${kernel_kata_config_version}" ] && die "kernel kata config version is a required argument"
+	[ -z "${kernel_name}" ] && die "kernel name is a required argument"
+
+	local version=${kernel_version#v}
+	local numeric_final_version=${version}
+
+	# Every first release of a kernel is x.y, while the resulting folder would be x.y.0
+	local dots=$(echo ${version} | grep -o '\.' | wc -l)
+	[ "${dots}" == "1" ] && numeric_final_version="${version}.0"
+
+	echo "${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/${kernel_name}/builddir/kata-linux-${version}-${kernel_kata_config_version}/lib/modules/${numeric_final_version}"
+}
+
 cleanup_and_fail() {
-       rm -f "${component_tarball_name}"
-       return 1
+	local component_tarball_name="${1:-}"
+	local extra_tarballs="${2:-}"
+
+	rm -f "${component_tarball_name}"
+
+	if [ -n "${extra_tarballs}" ]; then
+		local mapping
+		IFS=' ' read -a mapping <<< "${extra_tarballs}"
+		for m in ${mapping[@]}; do
+			local extra_tarball_name=${m%:*}
+			rm -f "${extra_tarball_name}"
+		done
+	fi
+       
+	return 1
 }
 
 install_cached_tarball_component() {
@@ -141,6 +172,9 @@ install_cached_tarball_component() {
 	local current_image_version="${3}"
 	local component_tarball_name="${4}"
 	local component_tarball_path="${5}"
+	# extra_tarballs must be in the following format:
+	# "tarball1_name:tarball1_path tarball2_name:tarball2_path ... tarballN_name:tarballN_path"
+	local extra_tarballs="${6:-}"
 
 	sudo oras pull ${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) || return 1
 
@@ -152,10 +186,21 @@ install_cached_tarball_component() {
 
 	[ "${cached_image_version}" != "${current_image_version}" ] && return 1
 	[ "${cached_version}" != "${current_version}" ] && return 1
-	sha256sum -c "${component}-sha256sum" || return $(cleanup_and_fail)
+	sha256sum -c "${component}-sha256sum" || return $(cleanup_and_fail "${component_tarball_path}" "${extra_tarballs}")
 
 	info "Using cached tarball of ${component}"
 	mv "${component_tarball_name}" "${component_tarball_path}"
+	
+	[ -z "${extra_tarballs}" ] && return 0
+
+	local mapping
+	IFS=' ' read -a mapping <<< "${extra_tarballs}"
+	for m in ${mapping[@]}; do
+		local extra_tarball_name=${m%:*}
+		local extra_tarball_path=${m#&:}
+
+		mv ${extra_tarball_name} ${extra_tarball_path}
+	done
 }
 
 get_agent_tarball_path() {
@@ -288,7 +333,7 @@ install_se_image() {
 #Install kernel component helper
 install_cached_kernel_tarball_component() {
 	local kernel_name=${1}
-	local module_dir=${2:-""}
+	local extra_tarballs="${2:-}"
 
 	latest_artefact="${kernel_version}-${kernel_kata_config_version}-$(get_last_modification $(dirname $kernel_builder))"
 	latest_builder_image="$(get_kernel_image_name)"
@@ -299,25 +344,16 @@ install_cached_kernel_tarball_component() {
 		"${latest_builder_image}" \
 		"${final_tarball_name}" \
 		"${final_tarball_path}" \
+		"${extra_tarballs} " \
 		|| return 1
 	
-	if [[ "${kernel_name}" != "kernel-sev" ]] && [[ "${kernel_name}" != "kernel-confidential" ]]; then
+	if [[ "${kernel_name}" != "kernel-sev" ]] && [[ "${kernel_name}" != "kernel"*"-confidential" ]]; then
 		return 0
 	fi
 
-	# SEV specific code path
-	install_cached_tarball_component \
-		"${kernel_name}" \
-		"${latest_artefact}" \
-		"${latest_builder_image}" \
-		"kata-static-${kernel_name}-modules.tar.xz" \
-		"${workdir}/kata-static-${kernel_name}-modules.tar.xz" \
-		|| return 1
-
-	if [[ -n "${module_dir}" ]]; then
-		mkdir -p "${module_dir}"
-		tar xvf "${workdir}/kata-static-${kernel_name}-modules.tar.xz" -C  "${module_dir}" && return 0
-	fi
+	local modules_dir=$(get_kernel_modules_dir ${kernel_version} ${kernel_kata_config_version})
+	mkdir -p "${modules_dir}" || true
+	tar xvf "${workdir}/kata-static-${kernel_name}-modules.tar.xz" -C  "${modules_dir}" && return 0
 
 	return 1
 }
@@ -327,22 +363,26 @@ install_kernel_helper() {
 	local kernel_version_yaml_path="${1}"
 	local kernel_name="${2}"
 	local extra_cmd="${3:-}"
+	local extra_tarballs=""
 
 	export kernel_version="$(get_from_kata_deps ${kernel_version_yaml_path})"
 	export kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
-	local module_dir=""
 
 	if [[ "${kernel_name}" == "kernel-sev" ]]; then
 		kernel_version="$(get_from_kata_deps assets.kernel.sev.version)"
-		default_patches_dir="${repo_root_dir}/tools/packaging/kernel/patches"
-		module_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/kernel-sev/builddir/kata-linux-${kernel_version#v}-${kernel_kata_config_version}/lib/modules/${kernel_version#v}"
 	elif [[ "${kernel_name}" == "kernel"*"-confidential" ]]; then
 		kernel_version="$(get_from_kata_deps assets.kernel.confidential.version)"
-		default_patches_dir="${repo_root_dir}/tools/packaging/kernel/patches"
-		module_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/kernel-confidential/builddir/kata-linux-${kernel_version#v}-${kernel_kata_config_version}/lib/modules/${kernel_version#v}"
 	fi
 
-	install_cached_kernel_tarball_component ${kernel_name} ${module_dir} && return 0
+	if [[ "${kernel_name}" == "kernel-sev" ]] || [[ "${kernel_name}" == "kernel"*"-confidential" ]]; then
+		local kernel_modules_tarball_name="kata-static-${kernel_name}-modules.tar.xz"
+		local kernel_modules_tarball_path="${workdir}/${kernel_modules_tarball_name}"
+		extra_tarballs="${kernel_modules_tarball_name}:${kernel_modules_tarball_path}"
+	fi
+
+	default_patches_dir="${repo_root_dir}/tools/packaging/kernel/patches"
+
+	install_cached_kernel_tarball_component ${kernel_name} ${extra_tarballs} && return 0
 
 	info "build ${kernel_name}"
 	info "Kernel version ${kernel_version}"
@@ -921,6 +961,21 @@ handle_build() {
 	fi
 	tar tvf "${final_tarball_path}"
 
+	case ${build_target} in
+		kernel*-confidential|kernel-sev)
+			local modules_final_tarball_path="${workdir}/kata-static-${build_target}-modules.tar.xz"
+			if [ ! -f "${modules_final_tarball_path}" ]; then
+				local modules_dir=$(get_kernel_modules_dir ${kernel_version} ${kernel_kata_config_version})
+
+				pushd "${modules_dir}"
+				sudo rm -f build
+				sudo tar cvfJ "${modules_final_tarball_path}" "."
+				popd
+			fi
+			tar tvf "${modules_final_tarball_path}"
+			;;
+	esac
+
 	pushd ${workdir}
 	echo "${latest_artefact}" > ${build_target}-version
 	echo "${latest_builder_image}" > ${build_target}-builder-image-version
@@ -936,7 +991,25 @@ handle_build() {
 
 		echo "${ARTEFACT_REGISTRY_PASSWORD}" | sudo oras login "${ARTEFACT_REGISTRY}" -u "${ARTEFACT_REGISTRY_USERNAME}" --password-stdin
 
-		sudo oras push ${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) ${final_tarball_name} ${build_target}-version ${build_target}-builder-image-version ${build_target}-sha256sum
+		case ${build_target} in
+			kernel*-confidential|kernel-sev)
+				sudo oras push \
+					${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
+					${final_tarball_name} \
+					"kata-static-${build_target}-modules.tar.xz" \
+					${build_target}-version \
+					${build_target}-builder-image-version \
+					{build_target}-sha256sum
+				;;
+			*)
+				sudo oras push \
+					${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
+					${final_tarball_name} \
+					${build_target}-version \
+					${build_target}-builder-image-version \
+					{build_target}-sha256sum
+				;;
+		esac
 		sudo oras logout "${ARTEFACT_REGISTRY}"
 	fi
 
