@@ -222,6 +222,15 @@ get_agent_tarball_path() {
 	echo "${agent_local_build_dir}/${agent_tarball_name}"
 }
 
+get_latest_kernel_confidential_artefact_and_builder_image_version() {
+		local kernel_version=$(get_from_kata_deps "assets.kernel.confidential.version")
+		local kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
+		local latest_kernel_artefact="${kernel_version}-${kernel_kata_config_version}-$(get_last_modification $(dirname $kernel_builder))"
+		local latest_kernel_builder_image="$(get_kernel_image_name)"
+
+		echo "${latest_kernel_artefact}-${latest_kernel_builder_image}"
+}
+
 #Install guest image
 install_image() {
 	local variant="${1:-}"
@@ -243,7 +252,14 @@ install_image() {
 		"$(get_last_modification "${repo_root_dir}/src/agent")" \
 		"$(get_last_modification "${repo_root_dir}/tools/packaging/static-build/agent")")
 
+
 	latest_artefact="${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${image_type}"
+	if [ "${variant}" == "tdx" ]; then
+		# For the TDX image we depend on the kernel built in order to ensure that
+		# measured boot is used
+		latest_artefacts+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
+	fi
+
 	latest_builder_image=""
 
 	install_cached_tarball_component \
@@ -296,6 +312,12 @@ install_initrd() {
 		"$(get_last_modification "${repo_root_dir}/tools/packaging/static-build/agent")")
 
 	latest_artefact="${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${initrd_type}"
+	if [ "${variant}" == "tdx" ]; then
+		# For the TDX image we depend on the kernel built in order to ensure that
+		# measured boot is used
+		latest_artefacts+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
+	fi
+
 	latest_builder_image=""
 
 	[[ "${ARCH}" == "aarch64" && "${CROSS_BUILD}" == "true" ]] && echo "warning: Don't cross build initrd for aarch64 as it's too slow" && exit 0
