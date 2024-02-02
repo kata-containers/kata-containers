@@ -197,7 +197,7 @@ install_cached_tarball_component() {
 	IFS=' ' read -a mapping <<< "${extra_tarballs}"
 	for m in ${mapping[@]}; do
 		local extra_tarball_name=${m%:*}
-		local extra_tarball_path=${m#&:}
+		local extra_tarball_path=${m#*:}
 
 		mv ${extra_tarball_name} ${extra_tarball_path}
 	done
