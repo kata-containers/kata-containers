@@ -409,6 +409,8 @@ install_kernel() {
 install_kernel_confidential() {
 	local kernel_url="$(get_from_kata_deps assets.kernel.confidential.url)"
 
+	export MEASURED_ROOTFS=yes
+
 	install_kernel_helper \
 		"assets.kernel.confidential.version" \
 		"kernel-confidential" \
