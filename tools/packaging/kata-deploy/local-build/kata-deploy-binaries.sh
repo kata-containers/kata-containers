@@ -999,7 +999,7 @@ handle_build() {
 					"kata-static-${build_target}-modules.tar.xz" \
 					${build_target}-version \
 					${build_target}-builder-image-version \
-					{build_target}-sha256sum
+					${build_target}-sha256sum
 				;;
 			*)
 				sudo oras push \
@@ -1007,7 +1007,7 @@ handle_build() {
 					${final_tarball_name} \
 					${build_target}-version \
 					${build_target}-builder-image-version \
-					{build_target}-sha256sum
+					${build_target}-sha256sum
 				;;
 		esac
 		sudo oras logout "${ARTEFACT_REGISTRY}"
