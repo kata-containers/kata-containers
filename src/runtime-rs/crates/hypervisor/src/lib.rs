@@ -13,6 +13,7 @@ pub mod device;
 pub mod hypervisor_persist;
 pub use device::driver::*;
 use device::DeviceType;
+#[cfg(not(target_arch = "s390x"))]
 pub mod dragonball;
 mod kernel_param;
 pub mod qemu;
@@ -20,7 +21,7 @@ pub use kernel_param::Param;
 pub mod utils;
 use std::collections::HashMap;
 
-#[cfg(feature = "cloud-hypervisor")]
+#[cfg(all(feature = "cloud-hypervisor", not(target_arch = "s390x")))]
 pub mod ch;
 
 use anyhow::Result;
@@ -49,9 +50,12 @@ const VM_ROOTFS_FILESYSTEM_EROFS: &str = "erofs";
 // /dev/hugepages will be the mount point
 // mkdir -p /dev/hugepages
 // mount -t hugetlbfs none /dev/hugepages
+#[cfg(not(target_arch = "s390x"))]
 const DEV_HUGEPAGES: &str = "/dev/hugepages";
 pub const HUGETLBFS: &str = "hugetlbfs";
+#[cfg(not(target_arch = "s390x"))]
 const SHMEM: &str = "shmem";
+#[cfg(not(target_arch = "s390x"))]
 const HUGE_SHMEM: &str = "hugeshmem";
 
 pub const HYPERVISOR_DRAGONBALL: &str = "dragonball";
@@ -60,6 +64,7 @@ pub const HYPERVISOR_QEMU: &str = "qemu";
 pub const DEFAULT_HYBRID_VSOCK_NAME: &str = "kata.hvsock";
 pub const JAILER_ROOT: &str = "root";
 
+#[cfg(not(target_arch = "s390x"))]
 #[derive(PartialEq, Debug, Clone)]
 pub(crate) enum VmmState {
     NotReady,
