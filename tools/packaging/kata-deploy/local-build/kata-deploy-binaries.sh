@@ -112,8 +112,10 @@ options:
 	qemu-tdx-experimental
 	stratovirt
 	rootfs-image
+	rootfs-image-confidential
 	rootfs-image-tdx
 	rootfs-initrd
+	rootfs-initrd-confidential
 	rootfs-initrd-mariner
 	rootfs-initrd-sev
 	runk
@@ -284,6 +286,13 @@ install_image() {
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
 
+#Install guest image for confidential guests
+install_image_confidential() {
+	export AGENT_POLICY=yes
+	export MEASURED_ROOTFS=yes
+	install_image "confidential"
+}
+
 #Install guest image for tdx
 install_image_tdx() {
 	export AGENT_POLICY=yes
@@ -342,6 +351,13 @@ install_initrd() {
 
 	export AGENT_TARBALL=$(get_agent_tarball_path)
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
+}
+
+#Install guest initrd for confidential guests
+install_initrd_confidential() {
+	export AGENT_POLICY=yes
+	export MEASURED_ROOTFS=yes
+	install_initrd "confidential"
 }
 
 #Install Mariner guest initrd
@@ -888,7 +904,9 @@ handle_build() {
 		install_clh
 		install_firecracker
 		install_image
+		install_image_confidential
 		install_initrd
+		install_initrd_confidential
 		install_initrd_mariner
 		install_initrd_sev
 		install_kata_ctl
@@ -965,9 +983,13 @@ handle_build() {
 
 	rootfs-image) install_image ;;
 
+	rootfs-image-confidential) install_image_confidential ;;
+
 	rootfs-image-tdx) install_image_tdx ;;
 
 	rootfs-initrd) install_initrd ;;
+
+	rootfs-initrd-confidential) install_initrd_confidential ;;
 
 	rootfs-initrd-mariner) install_initrd_mariner ;;
 
@@ -1081,7 +1103,9 @@ main() {
 		qemu
 		stratovirt
 		rootfs-image
+		rootfs-image-confidential
 		rootfs-initrd
+		rootfs-initrd-confidential
 		rootfs-initrd-mariner
 		runk
 		shim-v2
