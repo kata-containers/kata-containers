@@ -15,7 +15,7 @@ setup() {
 }
 
 @test "Copy file in a pod" {
-	# Create pod
+	# Create pod config YAML file.
 	pod_name="pod-copy-file-from-host"
 	ctr_name="ctr-copy-file-from-host"
 
@@ -24,6 +24,25 @@ setup() {
 	sed -i "s/POD_NAME/$pod_name/" "$pod_config"
 	sed -i "s/CTR_NAME/$ctr_name/" "$pod_config"
 
+	# Add policy to the YAML file.
+	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
+	allowed_requests=(
+		"CloseStdinRequest"
+		"ReadStreamRequest"
+		"WriteStreamRequest"
+	)
+	add_requests_to_policy_settings "${policy_settings_dir}" "${allowed_requests[@]}"
+	add_copy_from_host_to_policy_settings "${policy_settings_dir}"
+
+	cat_command="cat /tmp/$file_name"
+	exec_command="sh -c ${cat_command}"
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
+
+	auto_generate_policy "${policy_settings_dir}" "${pod_config}"
+	delete_tmp_policy_settings_dir "${policy_settings_dir}"
+	policy_settings_dir=""
+
+	# Create pod
 	kubectl create -f "${pod_config}"
 
 	# Check pod creation
@@ -36,11 +55,11 @@ setup() {
 	kubectl cp "$file_name" $pod_name:/tmp
 
 	# Print environment variables
-	kubectl exec $pod_name -- sh -c "cat /tmp/$file_name | grep $content"
+	kubectl exec $pod_name -- sh -c "${cat_command}" | grep $content
 }
 
 @test "Copy from pod to host" {
-	# Create pod
+	# Create pod config YAML file.
 	pod_name="pod-copy-file-to-host"
 	ctr_name="ctr-copy-file-to-host"
 
@@ -49,6 +68,20 @@ setup() {
 	sed -i "s/POD_NAME/$pod_name/" "$pod_config"
 	sed -i "s/CTR_NAME/$ctr_name/" "$pod_config"
 
+	# Add policy to the YAML file.
+	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
+	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
+	add_copy_from_guest_to_policy_settings "${policy_settings_dir}" "/tmp/file.txt"
+
+	guest_command="cd /tmp && echo $content > $file_name"
+	exec_command="sh -c ${guest_command}"
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
+
+	auto_generate_policy "${policy_settings_dir}" "${pod_config}"
+	delete_tmp_policy_settings_dir "${policy_settings_dir}"
+	policy_settings_dir=""
+
+	# Create pod
 	kubectl create -f "${pod_config}"
 
 	# Check pod creation
@@ -59,7 +92,7 @@ setup() {
 	kubectl get pods --all-namespaces
 
 	# Create a file in the pod
-	kubectl exec "$pod_name" -- sh -c "cd /tmp && echo $content > $file_name"
+	kubectl exec "$pod_name" -- sh -c "$guest_command"
 
 	kubectl logs "$pod_name" || true
 	kubectl describe pod "$pod_name" || true
@@ -80,4 +113,6 @@ teardown() {
 	kubectl delete pod "$pod_name"
 
 	rm -f "$pod_config"
+
+	delete_tmp_policy_settings_dir "${policy_settings_dir}"
 }
