@@ -49,8 +49,10 @@ jobs:
           - qemu-tdx-experimental
           - stratovirt
           - rootfs-image
+          - rootfs-image-confidential
           - rootfs-image-tdx
           - rootfs-initrd
+          - rootfs-initrd-confidential
           - rootfs-initrd-mariner
           - rootfs-initrd-sev
           - runk
