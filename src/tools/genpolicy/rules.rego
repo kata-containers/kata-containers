@@ -217,7 +217,6 @@ allow_by_container_type(i_cri_type, p_oci, i_oci, s_name, s_namespace) {
 
     print("allow_by_container_type 1: true")
 }
-
 allow_by_container_type(i_cri_type, p_oci, i_oci, s_name, s_namespace) {
     print("allow_by_container_type 2: i_cri_type =", i_cri_type)
     i_cri_type == "container"
@@ -515,6 +514,7 @@ allow_args(p_process, i_process, s_name) {
 
     print("allow_args 2: true")
 }
+
 allow_arg(i, i_arg, p_process, s_name) {
     p_arg := p_process.Args[i]
     print("allow_arg 1: i =", i, "i_arg =", i_arg, "p_arg =", p_arg)
@@ -566,7 +566,6 @@ allow_var(p_process, i_process, i_var, s_name) {
 
     print("allow_var 1: true")
 }
-
 # Match input with one of the policy variables, after substituting $(sandbox-name).
 allow_var(p_process, i_process, i_var, s_name) {
     print("allow_var 2: i_var =", i_var)
@@ -579,7 +578,6 @@ allow_var(p_process, i_process, i_var, s_name) {
 
     print("allow_var 2: true")
 }
-
 # Allow input env variables that match with a request_defaults regex.
 allow_var(p_process, i_process, i_var, s_name) {
     print("allow_var 3: start")
@@ -604,7 +602,6 @@ allow_var(p_process, i_process, i_var, s_name) {
 
     print("allow_var 3: true")
 }
-
 # Allow fieldRef "fieldPath: status.podIP" values.
 allow_var(p_process, i_process, i_var, s_name) {
     print("allow_var 4: i_var =", i_var)
@@ -618,7 +615,6 @@ allow_var(p_process, i_process, i_var, s_name) {
 
     print("allow_var 4: true")
 }
-
 # Allow common fieldRef variables.
 allow_var(p_process, i_process, i_var, s_name) {
     print("allow_var 5: i_var =", i_var)
@@ -639,7 +635,6 @@ allow_var(p_process, i_process, i_var, s_name) {
 
     print("allow_var 5: true")
 }
-
 # Allow fieldRef "fieldPath: status.hostIP" values.
 allow_var(p_process, i_process, i_var, s_name) {
     print("allow_var 6: i_var =", i_var)
@@ -653,7 +648,6 @@ allow_var(p_process, i_process, i_var, s_name) {
 
     print("allow_var 6: true")
 }
-
 # Allow resourceFieldRef values (e.g., "limits.cpu").
 allow_var(p_process, i_process, i_var, s_name) {
     print("allow_var 7: i_var =", i_var)
@@ -723,14 +717,14 @@ is_ip_other_byte(component) {
 allow_root_path(p_oci, i_oci, bundle_id) {
     i_path := i_oci.Root.Path
     p_path1 := p_oci.Root.Path
-    print("allow_root_path: i_path =", i_path, "p_path1 =", p_path1)
-
-    p_path2 := replace(p_path1, "$(cpath)", policy_data.common.cpath)
+    print("allow_root_path start: i_path =", i_path, "p_path1 =", p_path1)
+    
+    subpaths = [policy_data.common.cpath, "/run/kata-containers"]
+    some p in subpaths
+    p_path2 := replace(p_path1, "$(cpath)", p)
     print("allow_root_path: p_path2 =", p_path2)
 
     p_path3 := replace(p_path2, "$(bundle-id)", bundle_id)
-    print("allow_root_path: p_path3 =", p_path3)
-
     p_path3 == i_path
 
     print("allow_root_path: true")
@@ -748,6 +742,7 @@ allow_mount(p_oci, i_mount, bundle_id, sandbox_id) {
 
     print("allow_mount: true")
 }
+
 check_mount(p_mount, i_mount, bundle_id, sandbox_id) {
     print("check_mount 1: p_mount =", p_mount)
     print("check_mount 1: i_mount =", i_mount)
@@ -814,46 +809,74 @@ mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) {
 ######################################################################
 # Storages
 allow_storages(p_storages, i_storages, bundle_id, sandbox_id) {
-    print("allow_storages: start)
+    p_count := count(p_storages)
+    i_count := count(i_storages)
+    print("allow_storages start: p_count =", p_count, " i_count =", i_count)
     count(p_storages) == count(i_storages)
 
     index := [index | i_storages[index]; true]
     every i in index {
         allow_storage(p_storages, i_storages, bundle_id, sandbox_id, i)
     }
+
     print("allow_storages: true")
 }
+
 allow_storage(p_storages, i_storages, bundle_id, sandbox_id, index) {
-    print("allow_storage: start")
     some p_storage in p_storages
-    print("allow_storage: p_storage =", p_storage)
-    print("allow_storage: i_storage =", i_storages[index])
+    print("allow_storage: p_storage =", p_storage, " i_storage =",i_storages[index])
 
     p_storage.driver == i_storages[index].driver
     p_storage.fs_group == i_storages[index].fs_group
     
     allow_storage_driver_options(p_storage, i_storages[index], bundle_id)
-    allow_storage_options(p_storage, i_storages, index)
+    allow_storage_options(p_storage, i_storages, bundle_id, index)
     allow_mount_point(p_storage, i_storages, bundle_id, sandbox_id, index)
     # TODO: validate the source field too.
 
     print("allow_storage: true")
 }
+
 allow_storage_driver_options(p_storage, i_storage, bundle_id) {
-    print("allow_storage_driver_options: start")
+    print("allow_storage_driver_options 1 start: p_storage.driver_options =", p_storage.driver_options, "i_storage.driver_options =", i_storage.driver_options)
     p_storage.driver_options == i_storage.driver_options
-    p_storage.driver_options == i_storage.driver_options
+
     print("allow_storage_driver_options: true")
 }
-allow_storage_options(p_storage, i_storages, index) {
-    print("allow_storage_options 1: start")
+allow_storage_driver_options(p_storage, i_storage, bundle_id) {
+    print("allow_storage_driver_options 2 start: p_storage.driver_options =", p_storage.driver_options, "i_storage.driver_options =", i_storage.driver_options)
+
+    p_storage.driver == "dmverity"
+    count(p_storage.driver_options) == 2
+    p_storage.driver_options[0] == i_storage.driver_options[0]
+    p_storage.driver_options[1] == i_storage.driver_options[1]
+
+    print("allow_storage_driver_options 2: true")
+}
+allow_storage_driver_options(p_storage, i_storage, bundle_id) {
+    print("allow_storage_driver_options 3 start: p_storage.driver_options =", p_storage.driver_options, "i_storage.driver_options =", i_storage.driver_options)
+
+    p_storage.driver == "overlayfs"
+    count(p_storage.driver_options) == 2
+    driver_options_fs := replace(p_storage.driver_options[0], "$(bundle-id)", bundle_id)
+    driver_options_work := replace(p_storage.driver_options[1], "$(bundle-id)", bundle_id)
+
+    driver_options_fs == i_storage.driver_options[0]
+    driver_options_work == i_storage.driver_options[1]
+    print("allow_storage_driver_options 3: true")
+}
+
+allow_storage_options(p_storage, i_storages, bundle_id, index) {
+    print("allow_storage_options 1 start: p_storage.options =", p_storage.options, "i_storage.options =", i_storages[index].options)
     p_storage.driver != "blk"
     p_storage.driver != "overlayfs"
+    p_storage.driver != "dm-verity"
     p_storage.options == i_storages[index].options
+
     print("allow_storage_options 1: true")
 }
-allow_storage_options(p_storage, i_storages, index) {
-    print("allow_storage_options 2: start")
+allow_storage_options(p_storage, i_storages, bundle_id, index) {
+    print("allow_storage_options 2 start: p_storage.options =", p_storage.options, "i_storage.options =", i_storages[index].options)
     p_storage.driver == "overlayfs"
     count(p_storage.options) == 2
 
@@ -878,8 +901,8 @@ allow_storage_options(p_storage, i_storages, index) {
     }
     print("allow_storage_options 2: true")
 }
-allow_storage_options(p_storage, i_storages, index) {
-    print("allow_storage_options 3: start")
+allow_storage_options(p_storage, i_storages, bundle_id, index) {
+    print("allow_storage_options 3 start: p_storage.options =", p_storage.options, "i_storage.options =", i_storages[index].options)
     p_storage.driver == "blk"
     count(p_storage.options) == 1
 
@@ -901,6 +924,20 @@ allow_storage_options(p_storage, i_storages, index) {
 
     print("allow_storage_options 3: true")
 }
+allow_storage_options(p_storage, i_storages, bundle_id, index) {
+    print("allow_storage_options 4 start: p_storage.options =", p_storage.options, "i_storage.options =", i_storages[index].options)
+    p_storage.driver == "overlayfs"
+    count(p_storage.options) == 3
+
+    p_storage.options[0] == i_storages[index].options[0]
+    p_storage_option_1 := replace(p_storage.options[1], "$(bundle-id)", bundle_id)
+    p_storage_option_2 := replace(p_storage.options[2], "$(bundle-id)", bundle_id)
+    p_storage_option_1 == i_storages[index].options[1]
+    p_storage_option_2 == i_storages[index].options[2]
+
+    print("allow_storage_options 4: true")
+}
+
 index_of_overlayfs(i_storages) = i {
   some i
   i_storages[i].driver == "overlayfs"
@@ -915,10 +952,12 @@ allow_overlay_layer(policy_id, policy_hash, i_option) {
     p_value := concat(",", [policy_id, policy_suffix])
 
     p_value == i_value_decoded
+
     print("allow_overlay_layer: true")
 }
+
 allow_mount_point(p_storage, i_storages, bundle_id, sandbox_id, index) {
-    print("allow_mount_point 1: start")
+    print("allow_mount_point 1 start: p_storage.mount_point =", p_storage.mount_point, "i_storage.mount_point =", i_storages[index].mount_point)
     p_storage.fstype == "tar"
 
     startswith(p_storage.mount_point, "$(layer")
@@ -936,17 +975,18 @@ allow_mount_point(p_storage, i_storages, bundle_id, sandbox_id, index) {
     print("allow_mount_point 1: true")
 }
 allow_mount_point(p_storage, i_storages, bundle_id, sandbox_id, index) {
-    print("allow_mount_point 2: start")
+    print("allow_mount_point 2 start: p_storage.mount_point =", p_storage.mount_point, "i_storage.mount_point =", i_storages[index].mount_point)
     p_storage.fstype == "fuse3.kata-overlay"
 
     mount1 := replace(p_storage.mount_point, "$(cpath)", policy_data.common.cpath)
     mount2 := replace(mount1, "$(bundle-id)", bundle_id)
 
     mount2 == i_storages[index].mount_point
+
     print("allow_mount_point 2: true")
 }
 allow_mount_point(p_storage, i_storages, bundle_id, sandbox_id, index) {
-    print("allow_mount_point 3: start")
+    print("allow_mount_point 3 start: p_storage.mount_point =", p_storage.mount_point, "i_storage.mount_point =", i_storages[index].mount_point)
     p_storage.fstype == "local"
 
     mount1 := p_storage.mount_point
@@ -954,10 +994,11 @@ allow_mount_point(p_storage, i_storages, bundle_id, sandbox_id, index) {
     mount3 := replace(mount2, "$(sandbox-id)", sandbox_id)
 
     regex.match(mount3, i_storages[index].mount_point)
+
     print("allow_mount_point 3: true")
 }
 allow_mount_point(p_storage, i_storages, bundle_id, sandbox_id, index) {
-    print("allow_mount_point 4: start")
+    print("allow_mount_point 4 start: p_storage.mount_point =", p_storage.mount_point, "i_storage.mount_point =", i_storages[index].mount_point)
     p_storage.fstype == "bind"
 
     mount1 := p_storage.mount_point
@@ -965,16 +1006,35 @@ allow_mount_point(p_storage, i_storages, bundle_id, sandbox_id, index) {
     mount3 := replace(mount2, "$(bundle-id)", bundle_id)
 
     regex.match(mount3, i_storages[index].mount_point)
+
     print("allow_mount_point 4: true")
 }
 allow_mount_point(p_storage, i_storages, bundle_id, sandbox_id, index) {
-    print("allow_mount_point 5: start")
+    print("allow_mount_point 5 start: p_storage.mount_point =", p_storage.mount_point, "i_storage.mount_point =", i_storages[index].mount_point)
     p_storage.fstype == "tmpfs"
 
     mount1 := p_storage.mount_point
 
-    regex.match(mount1, i_storages[i].mount_point)
+    regex.match(mount1, i_storages[index].mount_point)
+
     print("allow_mount_point 5: true")
+}
+allow_mount_point(p_storage, i_storages, bundle_id, sandbox_id, index) {
+    print("allow_mount_point 6 start: p_storage.mount_point =", p_storage.mount_point, "i_storage.mount_point =", i_storages[index].mount_point)
+    p_storage.driver == "dmverity"
+    mount1 := replace(p_storage.mount_point, "$(bundle-id)", bundle_id)
+    mount1 == i_storages[index].mount_point
+
+    print("allow_mount_point 6: true")
+}
+allow_mount_point(p_storage, i_storages, bundle_id, sandbox_id, index) {
+    print("allow_mount_point 7 start: p_storage.mount_point =", p_storage.mount_point, "i_storage.mount_point =", i_storages[index].mount_point)
+    p_storage.fstype == "overlay"
+    mount1 := replace(p_storage.mount_point, "$(bundle-id)", bundle_id)
+    mount1 == i_storages[index].mount_point
+
+    print("allow_mount_point 7: true")
+
 }
 
 # process.Capabilities
