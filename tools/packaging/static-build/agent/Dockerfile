@@ -21,7 +21,8 @@ RUN apt-get update && \
 		musl-tools \
 		openssl \
 		perl \
-		protobuf-compiler && \
+		protobuf-compiler \
+		clang && \
 	apt-get clean && rm -rf /var/lib/apt/lists/ && \
     	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_TOOLCHAIN}
 
