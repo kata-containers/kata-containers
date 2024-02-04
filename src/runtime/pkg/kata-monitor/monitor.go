@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	containerdshim "github.com/kata-containers/kata-containers/src/runtime/pkg/containerd-shim-v2"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils/shimclient"
 
 	"github.com/fsnotify/fsnotify"
@@ -183,7 +184,7 @@ func (km *KataMonitor) GetAgentURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := shimclient.DoGet(sandboxID, defaultTimeout, "agent-url")
+	data, err := shimclient.DoGet(sandboxID, defaultTimeout, containerdshim.AgentUrl)
 	if err != nil {
 		commonServeError(w, http.StatusBadRequest, err)
 		return
