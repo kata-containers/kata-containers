@@ -173,9 +173,7 @@ function run_tests() {
 
 	pushd "${kubernetes_dir}"
 	bash setup.sh
-	if [[ "${KATA_HYPERVISOR}" = "dragonball" ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]]; then
-		echo "Skipping tests for dragonball using devmapper"
-	elif [[ "${KATA_HYPERVISOR}" = "cloud-hypervisor" ]]; then
+	if [[ "${KATA_HYPERVISOR}" = "cloud-hypervisor" ]]; then
 		echo "Skipping tests for ${KATA_HYPERVISOR}"
 	else
 		bash run_kubernetes_tests.sh
