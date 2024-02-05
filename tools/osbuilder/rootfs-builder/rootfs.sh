@@ -794,6 +794,7 @@ EOF
 	OK "init is installed"
 
 	if [ -n "${COCO_GUEST_COMPONENTS_TARBALL}" ] ; then
+		info "Installing the Confidential Containers guest components tarball"
 		tar xvJpf ${COCO_GUEST_COMPONENTS_TARBALL} -C ${ROOTFS_DIR}
 	fi
 
