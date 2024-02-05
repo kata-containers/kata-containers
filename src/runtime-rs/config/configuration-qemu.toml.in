@@ -1,5 +1,6 @@
 # Copyright (c) 2017-2019 Intel Corporation
 # Copyright (c) 2021 Adobe Inc.
+# Copyright (c) 2024 IBM Corp.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
@@ -13,7 +14,7 @@
 
 [hypervisor.qemu]
 path = "@QEMUPATH@"
-kernel = "@KERNELPATH@"
+kernel = "@KERNELPATH_QEMU@"
 image = "@IMAGEPATH@"
 # initrd = "@INITRDPATH@"
 machine_type = "@MACHINETYPE@"
@@ -23,6 +24,10 @@ machine_type = "@MACHINETYPE@"
 #   - xfs
 #   - erofs
 rootfs_type=@DEFROOTFSTYPE@
+
+# Block storage driver to be used for the VM rootfs is backed
+# by a block device. This is virtio-blk-pci, virtio-blk-mmio or nvdimm
+vm_rootfs_driver = "@VMROOTFSDRIVER_QEMU@"
 
 # Enable confidential guest support.
 # Toggling that setting may trigger different hardware features, ranging
@@ -107,7 +112,7 @@ cpu_features="@CPUFEATURES@"
 # < 0                             --> will be set to the actual number of physical cores
 # > 0 <= number of physical cores --> will be set to the specified number
 # > number of physical cores      --> will be set to the actual number of physical cores
-default_vcpus = 1
+default_vcpus = @DEFVCPUS_QEMU@
 
 # Default maximum number of vCPUs per SB/VM:
 # unspecified or == 0             --> will be set to the actual number of physical cores or to the maximum number
@@ -124,7 +129,7 @@ default_vcpus = 1
 # vCPUs supported by the SB/VM. In general, we recommend that you do not edit this variable,
 # unless you know what are you doing.
 # NOTICE: on arm platform with gicv2 interrupt controller, set it to 8.
-default_maxvcpus = @DEFMAXVCPUS@
+default_maxvcpus = @DEFMAXVCPUS_QEMU@
 
 # Bridges can be used to hot plug devices.
 # Limitations:
@@ -589,6 +594,10 @@ dial_timeout = 45
 #     provided by plugin to a tap interface connected to the VM.
 #
 internetworking_model="@DEFNETWORKMODEL_QEMU@"
+
+name="@RUNTIMENAME@"
+hypervisor_name="@HYPERVISOR_QEMU@"
+agent_name="@PROJECT_TYPE@"
 
 # disable guest seccomp
 # Determines whether container seccomp profiles are passed to the virtual
