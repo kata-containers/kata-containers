@@ -818,7 +818,7 @@ install_coco_guest_components() {
 		&& return 0
 
 	info "build static coco-guest-components"
-	"${coco_guest_components_builder}"
+	DESTDIR="${destdir}" "${coco_guest_components_builder}"
 }
 
 install_tools_helper() {
