@@ -338,12 +338,16 @@ func ServerSocketAddress(id string) string {
 // shim management endpoint
 // NOTE: this code allows various go clients, e.g. kata-runtime or kata-monitor commands, to
 // connect to the rust shim management implementation.
-func ClientSocketAddress(id string) string {
+func ClientSocketAddress(id string) (string, error) {
 	// get the go runtime uds path
 	socketPath := SocketPathGo(id)
 	// if the path not exist, use the rust runtime uds path instead
 	if _, err := os.Stat(socketPath); err != nil {
 		socketPath = SocketPathRust(id)
+		if _, err := os.Stat(socketPath); err != nil {
+			return "", fmt.Errorf("It fails to stat both %s and %s with error %v.", SocketPathGo(id), SocketPathRust(id), err)
+		}
 	}
-	return fmt.Sprintf("unix://%s", socketPath)
+
+	return fmt.Sprintf("unix://%s", socketPath), nil
 }
