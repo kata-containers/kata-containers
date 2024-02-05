@@ -273,7 +273,11 @@ ifneq (,$(QEMUCMD))
 
     # qemu-specific options
     DEFSANDBOXCGROUPONLY_QEMU := false
+ifeq ($(ARCH), s390x)
+    VMROOTFSDRIVER_QEMU := virtio-blk-ccw
+else
     VMROOTFSDRIVER_QEMU := virtio-pmem
+endif
     DEFVCPUS_QEMU := 1
     DEFMAXVCPUS_QEMU := 0
     DEFSHAREDFS_QEMU_VIRTIOFS := virtio-fs
