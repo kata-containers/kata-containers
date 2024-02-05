@@ -480,7 +480,7 @@ install_kernel_confidential() {
 	install_kernel_helper \
 		"assets.kernel.confidential.version" \
 		"kernel-confidential" \
-		"-x confidential -u ${kernel_url}"
+		"-x -u ${kernel_url}"
 }
 
 install_kernel_dragonball_experimental() {
@@ -507,7 +507,7 @@ install_kernel_nvidia_gpu_confidential() {
 	install_kernel_helper \
 		"assets.kernel.confidential.version" \
 		"kernel-nvidia-gpu-confidential" \
-		"-x confidential -g nvidia -u ${kernel_url} -H deb"
+		"-x -g nvidia -u ${kernel_url} -H deb"
 }
 
 install_qemu_helper() {
