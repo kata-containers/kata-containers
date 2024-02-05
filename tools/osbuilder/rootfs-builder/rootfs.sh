@@ -31,6 +31,7 @@ AGENT_POLICY=${AGENT_POLICY:-no}
 AGENT_SOURCE_BIN=${AGENT_SOURCE_BIN:-""}
 AGENT_TARBALL=${AGENT_TARBALL:-""}
 COCO_GUEST_COMPONENTS_TARBALL=${COCO_GUEST_COMPONENTS_TARBALL:-""}
+CONFIDENTIAL_GUEST="${CONFIDENTIAL_GUEST:-no}"
 
 lib_file="${script_dir}/../scripts/lib.sh"
 source "$lib_file"
@@ -450,6 +451,7 @@ build_rootfs_distro()
 		fi
 
 		if [ -n "${COCO_GUEST_COMPONENTS_TARBALL}" ] ; then
+			CONFIDENTIAL_GUEST="yes"
 			engine_run_args+=" --env COCO_GUEST_COMPONENTS_TARBALL=${COCO_GUEST_COMPONENTS_TARBALL}"
 			engine_run_args+=" -v $(dirname ${COCO_GUEST_COMPONENTS_TARBALL}):$(dirname ${COCO_GUEST_COMPONENTS_TARBALL})"
 		fi
@@ -500,6 +502,7 @@ build_rootfs_distro()
 			--env TARGET_ARCH="${TARGET_ARCH}" \
 			--env HOME="/root" \
 			--env AGENT_POLICY="${AGENT_POLICY}" \
+			--env CONFIDENTIAL_GUEST="${CONFIDENTIAL_GUEST}" \
 			-v "${repo_dir}":"/kata-containers" \
 			-v "${ROOTFS_DIR}":"/rootfs" \
 			-v "${script_dir}/../scripts":"/scripts" \
