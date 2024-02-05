@@ -1,0 +1,26 @@
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled # a workflow runs only when the 'ok-to-test' label is added
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+name: Static checks self-hosted
+jobs:
+  build-checks:
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        instance:
+          - "arm-no-k8s"
+          - "s390x"
+          - "ppc64le"
+    uses: ./.github/workflows/build-checks.yaml
+    with:
+      instance: ${{ matrix.instance }}
