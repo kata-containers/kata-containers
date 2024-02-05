@@ -449,6 +449,11 @@ build_rootfs_distro()
 			engine_run_args+=" -v $(dirname ${AGENT_TARBALL}):$(dirname ${AGENT_TARBALL})"
 		fi
 
+		if [ -n "${COCO_GUEST_COMPONENTS_TARBALL}" ] ; then
+			engine_run_args+=" --env COCO_GUEST_COMPONENTS_TARBALL=${COCO_GUEST_COMPONENTS_TARBALL}"
+			engine_run_args+=" -v $(dirname ${COCO_GUEST_COMPONENTS_TARBALL}):$(dirname ${COCO_GUEST_COMPONENTS_TARBALL})"
+		fi
+
 		engine_run_args+=" -v ${GOPATH_LOCAL}:${GOPATH_LOCAL} --env GOPATH=${GOPATH_LOCAL}"
 
 		engine_run_args+=" $(docker_extra_args $distro)"
