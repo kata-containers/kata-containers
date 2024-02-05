@@ -9,6 +9,7 @@ concurrency:
 jobs:
   backport:
     name: Backport PR
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
     runs-on: ubuntu-latest
     if: |
       github.event.pull_request.merged == true

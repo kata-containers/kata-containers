@@ -10,10 +10,12 @@ on:
     types:
       - opened
       - reopened
+      - labeled
 
 jobs:
   move-linked-issues-to-in-progress:
     runs-on: ubuntu-latest
+    if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
     steps:
       - name: Install hub
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
