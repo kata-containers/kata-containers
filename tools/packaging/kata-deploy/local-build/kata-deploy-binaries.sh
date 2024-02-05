@@ -111,11 +111,9 @@ options:
 	stratovirt
 	rootfs-image
 	rootfs-image-confidential
-	rootfs-image-tdx
 	rootfs-initrd
 	rootfs-initrd-confidential
 	rootfs-initrd-mariner
-	rootfs-initrd-sev
 	runk
 	shim-v2
 	tdvf
@@ -330,12 +328,6 @@ install_image_confidential() {
 	install_image "confidential"
 }
 
-#Install guest image for tdx
-install_image_tdx() {
-	export AGENT_POLICY=yes
-	install_image "tdx"
-}
-
 #Install guest initrd
 install_initrd() {
 	local variant="${1:-}"
@@ -408,12 +400,6 @@ install_initrd_confidential() {
 install_initrd_mariner() {
 	export AGENT_POLICY=yes
 	install_initrd "mariner"
-}
-
-#Install guest initrd for sev
-install_initrd_sev() {
-	export AGENT_POLICY=yes
-	install_initrd "sev"
 }
 
 install_se_image() {
@@ -924,7 +910,6 @@ handle_build() {
 		install_initrd
 		install_initrd_confidential
 		install_initrd_mariner
-		install_initrd_sev
 		install_kata_ctl
 		install_kernel
 		install_kernel_confidential
@@ -994,15 +979,11 @@ handle_build() {
 
 	rootfs-image-confidential) install_image_confidential ;;
 
-	rootfs-image-tdx) install_image_tdx ;;
-
 	rootfs-initrd) install_initrd ;;
 
 	rootfs-initrd-confidential) install_initrd_confidential ;;
 
 	rootfs-initrd-mariner) install_initrd_mariner ;;
-
-	rootfs-initrd-sev) install_initrd_sev ;;
 
 	runk) install_runk ;;
 	
