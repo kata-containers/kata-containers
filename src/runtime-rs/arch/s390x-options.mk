@@ -4,12 +4,9 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-MACHINETYPE :=
+MACHINETYPE := s390-ccw-virtio
 KERNELPARAMS :=
 MACHINEACCELERATORS :=
-CPUFEATURES := pmu=off
+CPUFEATURES :=
 
 QEMUCMD := qemu-system-s390x
-
-# dragonball binary name
-DBCMD := dragonball
