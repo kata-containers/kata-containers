@@ -13,6 +13,8 @@ readonly coco_guest_components_builder="${script_dir}/build-static-coco-guest-co
 
 source "${script_dir}/../../scripts/lib.sh"
 
+DESTDIR=${DESTDIR:-${PWD}}
+
 coco_guest_components_repo="${coco_guest_components_repo:-}"
 coco_guest_components_version="${coco_guest_components_version:-}"
 coco_guest_components_toolchain="${coco_guest_components_toolchain:-}"
@@ -38,6 +40,7 @@ sudo docker pull ${container_image} || \
 
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
+	--env DESTDIR="${DESTDIR}" \
 	--env TEE_PLATFORM=${TEE_PLATFORM:-all} \
 	--env coco_guest_components_repo="${coco_guest_components_repo}" \
 	--env coco_guest_components_version="${coco_guest_components_version}" \

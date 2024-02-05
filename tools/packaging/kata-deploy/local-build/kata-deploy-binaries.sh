@@ -224,6 +224,22 @@ get_agent_tarball_path() {
 	echo "${agent_local_build_dir}/${agent_tarball_name}"
 }
 
+get_coco_guest_components_tarball_path() {
+	coco_guest_components_local_build_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
+	coco_guest_components_tarball_name="kata-static-coco-guest-components.tar.xz"
+
+	echo "${coco_guest_components_local_build_dir}/${coco_guest_components_tarball_name}"
+}
+
+get_latest_coco_guest_components_artefact_and_builder_image_version() {
+	local coco_guest_components_version=$(get_from_kata_deps "externals.coco-guest-components.version")
+	local coco_guest_components_toolchain=$(get_from_kata_deps "externals.coco-guest-components.toolchain")
+	local latest_coco_guest_components_artefact="${coco_guest_components_version}-${coco_guest_components_toolchain}"
+	local latest_coco_guest_components_builder_image="$(get_coco_guest_components_image_name)"
+
+	echo "${latest_coco_guest_components_artefact}-${latest_coco_guest_components_builder_image}"
+}
+
 get_latest_kernel_confidential_artefact_and_builder_image_version() {
 		local kernel_version=$(get_from_kata_deps "assets.kernel.confidential.version")
 		local kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
@@ -256,10 +272,11 @@ install_image() {
 
 
 	latest_artefact="${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${image_type}"
-	if [ "${variant}" == "tdx" ]; then
-		# For the TDX image we depend on the kernel built in order to ensure that
+	if [ "${variant}" == "confidential" ]; then
+		# For the confidential image we depend on the kernel built in order to ensure that
 		# measured boot is used
 		latest_artefacts+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
+		latest_artefacts+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
 	fi
 
 	latest_builder_image=""
@@ -277,6 +294,10 @@ install_image() {
 	if [ -n "${variant}" ]; then
 		os_name="$(get_from_kata_deps "assets.image.architecture.${ARCH}.${variant}.name")"
 		os_version="$(get_from_kata_deps "assets.image.architecture.${ARCH}.${variant}.version")"
+
+		if [ "${variant}" == "confidential" ]; then
+			export COCO_GUEST_COMPONENTS_TARBALL="$(get_coco_guest_components_tarball_path)"
+		fi
 	else
 		os_name="$(get_from_kata_deps "assets.image.architecture.${ARCH}.name")"
 		os_version="$(get_from_kata_deps "assets.image.architecture.${ARCH}.version")"
@@ -321,10 +342,11 @@ install_initrd() {
 		"$(get_last_modification "${repo_root_dir}/tools/packaging/static-build/agent")")
 
 	latest_artefact="${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${initrd_type}"
-	if [ "${variant}" == "tdx" ]; then
-		# For the TDX image we depend on the kernel built in order to ensure that
+	if [ "${variant}" == "confidential" ]; then
+		# For the confidential initrd we depend on the kernel built in order to ensure that
 		# measured boot is used
 		latest_artefacts+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
+		latest_artefacts+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
 	fi
 
 	latest_builder_image=""
@@ -344,6 +366,10 @@ install_initrd() {
 	if [ -n "${variant}" ]; then
 		os_name="$(get_from_kata_deps "assets.initrd.architecture.${ARCH}.${variant}.name")"
 		os_version="$(get_from_kata_deps "assets.initrd.architecture.${ARCH}.${variant}.version")"
+
+		if [ "${variant}" == "confidential" ]; then
+			export COCO_GUEST_COMPONENTS_TARBALL="$(get_coco_guest_components_tarball_path)"
+		fi
 	else
 		os_name="$(get_from_kata_deps "assets.initrd.architecture.${ARCH}.name")"
 		os_version="$(get_from_kata_deps "assets.initrd.architecture.${ARCH}.version")"
@@ -818,7 +844,7 @@ install_coco_guest_components() {
 		&& return 0
 
 	info "build static coco-guest-components"
-	"${coco_guest_components_builder}"
+	DESTDIR="${destdir}" "${coco_guest_components_builder}"
 }
 
 install_tools_helper() {
