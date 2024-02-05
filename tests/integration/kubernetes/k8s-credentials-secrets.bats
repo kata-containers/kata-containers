@@ -69,4 +69,6 @@ teardown() {
 
 	kubectl delete pod "$pod_name" "$second_pod_name"
 	kubectl delete secret "$secret_name"
+
+	delete_tmp_policy_settings_dir "${policy_settings_dir}"
 }
