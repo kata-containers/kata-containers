@@ -11,7 +11,7 @@ set -o nounset
 set -o pipefail
 
 webhook_dir=$(dirname $0)
-source "${webhook_dir}/../lib/common.bash"
+source "${webhook_dir}/../../../tests/common.bash"
 source "${webhook_dir}/common.bash"
 
 readonly hello_pod="hello-kata-webhook"
