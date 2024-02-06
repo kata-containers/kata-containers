@@ -124,7 +124,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 			legacySerial:         config.LegacySerial,
 		},
 		vmFactory: factory,
-		snpGuest:  config.ConfidentialGuest,
+		snpGuest:  config.SevSnpGuest,
 	}
 
 	if config.ConfidentialGuest {
