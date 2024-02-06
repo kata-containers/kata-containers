@@ -17,6 +17,7 @@ setup() {
 }
 
 @test "Scale nginx deployment" {
+
 	sed -e "s/\${nginx_version}/${nginx_image}/" \
 		"${pod_config_dir}/${deployment}.yaml" > "${pod_config_dir}/test-${deployment}.yaml"
 
