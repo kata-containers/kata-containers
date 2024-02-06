@@ -371,7 +371,7 @@ log_level = "debug"
 EOF
 }
 
-function install_kata_common() {
+function install_kata_core() {
 	declare -r katadir="$1"
 	declare -r destdir="/"
 	declare -r kata_tarball="kata-static.tar.xz"
@@ -386,14 +386,16 @@ function install_kata_common() {
 
 function install_kata_tools() {
 	declare -r katadir="/opt/kata"
-	install_kata_common "${katadir}"
+
+	# TODO: implement a better way to install the tools - see issue #8864.
+	install_kata_core "${katadir}"
 }
 
 function install_kata() {
 	declare -r katadir="/opt/kata"
 	declare -r local_bin_dir="/usr/local/bin/"
 
-	install_kata_common "${katadir}"
+	install_kata_core "${katadir}"
 
 	# create symbolic links to kata components
 	for b in "${katadir}"/bin/* ; do
