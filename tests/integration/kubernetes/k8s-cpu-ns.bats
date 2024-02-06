@@ -12,6 +12,7 @@ setup() {
 	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 	[ "${KATA_HYPERVISOR}" == "dragonball" ] && skip "test not working see: ${dragonball_limitations}"
+	[ "${KATA_HYPERVISOR}" == "cloud-hypervisor" ] && skip "https://github.com/kata-containers/kata-containers/issues/9039"
 	( [ "${KATA_HYPERVISOR}" == "qemu-tdx" ] || [ "${KATA_HYPERVISOR}" == "qemu-snp" ] || \
 		[ "${KATA_HYPERVISOR}" == "qemu-sev" ] || [ "${KATA_HYPERVISOR}" == "qemu-se" ] ) \
 		&& skip "TEEs do not support memory / CPU hotplug"
@@ -74,6 +75,7 @@ teardown() {
 	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 	[ "${KATA_HYPERVISOR}" == "dragonball" ] && skip "test not working see: ${dragonball_limitations}"
+	[ "${KATA_HYPERVISOR}" == "cloud-hypervisor" ] && skip "https://github.com/kata-containers/kata-containers/issues/9039"
 	( [ "${KATA_HYPERVISOR}" == "qemu-tdx" ] || [ "${KATA_HYPERVISOR}" == "qemu-snp" ] || \
 		[ "${KATA_HYPERVISOR}" == "qemu-sev" ] || [ "${KATA_HYPERVISOR}" == "qemu-se" ] ) \
 		&& skip "TEEs do not support memory / CPU hotplug"

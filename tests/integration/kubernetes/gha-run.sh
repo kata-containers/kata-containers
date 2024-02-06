@@ -173,10 +173,9 @@ function run_tests() {
 
 	pushd "${kubernetes_dir}"
 	bash setup.sh
-	if [[ "${KATA_HYPERVISOR}" = "dragonball" ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]]; then
-		echo "Skipping tests for dragonball using devmapper"
-	elif [[ "${KATA_HYPERVISOR}" = "cloud-hypervisor" ]]; then
-		echo "Skipping tests for ${KATA_HYPERVISOR}"
+	if [[ "${KATA_HYPERVISOR}" = "dragonball" ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]] || [[ "${KATA_HYPERVISOR}" = "cloud-hypervisor" ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]]; then
+		# cloud-hypervisor runtime-rs issue is https://github.com/kata-containers/kata-containers/issues/9034
+		echo "Skipping tests for $KATA_HYPERVISOR using devmapper"
 	else
 		bash run_kubernetes_tests.sh
 	fi
