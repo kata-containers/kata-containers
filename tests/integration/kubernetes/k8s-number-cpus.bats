@@ -9,6 +9,7 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
+	[[ "${KATA_HYPERVISOR}" = "cloud-hypervisor" ]]&& skip "test not working https://github.com/kata-containers/kata-containers/issues/9039"
 	pod_name="cpu-test"
 	container_name="c1"
 	get_pod_config_dir
@@ -40,6 +41,7 @@ setup() {
 }
 
 teardown() {
+	[[ "${KATA_HYPERVISOR}" = "cloud-hypervisor" ]]&& skip "test not working https://github.com/kata-containers/kata-containers/issues/9039"
 	# Debugging information
 	kubectl describe "pod/$pod_name"
 
