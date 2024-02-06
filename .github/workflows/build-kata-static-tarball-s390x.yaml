@@ -30,6 +30,7 @@ jobs:
           - agent
           - coco-guest-components
           - kernel
+          - pause-image
           - qemu
           - rootfs-image
           - rootfs-initrd
