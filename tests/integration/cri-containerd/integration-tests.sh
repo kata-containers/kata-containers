@@ -259,7 +259,7 @@ function TestContainerMemoryUpdate() {
 		return
 	fi
 
-	for virtio_mem_enabled in {1, 0}; do
+	for virtio_mem_enabled in 1 0; do
 		PrepareContainerMemoryUpdate $virtio_mem_enabled
 		DoContainerMemoryUpdate $virtio_mem_enabled
 	done
