@@ -241,6 +241,18 @@ install_kata_tools_placeholder() {
 		"after CI picks up the gha yaml changes required to test that installation."
 }
 
+function deploy_snapshotter() {
+	echo "::group::Deploying ${SNAPSHOTTER:-}"
+	#TODO Add the deployment logic for the snapshotter in PR https://github.com/kata-containers/kata-containers/pull/8585.
+	echo "::endgroup::"
+}
+
+function cleanup_snapshotter() {
+	echo "::group::Cleanuping ${SNAPSHOTTER:-}"
+	#TODO Add the logic for cleaning up the snapshotter in PR https://github.com/kata-containers/kata-containers/pull/8585.
+	echo "::endgroup::"
+}
+
 function main() {
 	export KATA_HOST_OS="${KATA_HOST_OS:-}"
 	export K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-}"
@@ -267,6 +279,7 @@ function main() {
 		deploy-kata-tdx) deploy_kata "tdx" ;;
 		deploy-kata-garm) deploy_kata "garm" ;;
 		deploy-kata-zvsi) deploy_kata "zvsi" ;;
+		deploy-snapshotter) deploy_snapshotter ;;
 		run-tests) run_tests ;;
 		run-tests-kcli) run_tests "kcli" ;;
 		cleanup-kcli) cleanup "kcli" ;;
@@ -275,6 +288,7 @@ function main() {
 		cleanup-tdx) cleanup "tdx" ;;
 		cleanup-garm) cleanup "garm" ;;
 		cleanup-zvsi) cleanup "zvsi" ;;
+		cleanup-snapshotter) cleanup_snapshotter ;;
 		delete-cluster) cleanup "aks" ;;
 		delete-cluster-kcli) delete_cluster_kcli ;;
 		*) >&2 echo "Invalid argument"; exit 2 ;;
