@@ -28,6 +28,7 @@ readonly clh_builder="${static_build_dir}/cloud-hypervisor/build-static-clh.sh"
 readonly firecracker_builder="${static_build_dir}/firecracker/build-static-firecracker.sh"
 readonly kernel_builder="${static_build_dir}/kernel/build.sh"
 readonly ovmf_builder="${static_build_dir}/ovmf/build.sh"
+readonly pause_image_builder="${static_build_dir}/pause-image/build.sh"
 readonly qemu_builder="${static_build_dir}/qemu/build-static-qemu.sh"
 readonly qemu_experimental_builder="${static_build_dir}/qemu/build-static-qemu-experimental.sh"
 readonly stratovirt_builder="${static_build_dir}/stratovirt/build-static-stratovirt.sh"
@@ -105,6 +106,7 @@ options:
 	kernel-sev-tarball
 	kernel-tdx-experimental
 	nydus
+	pause-image
 	ovmf
 	ovmf-sev
 	qemu
@@ -847,6 +849,23 @@ install_coco_guest_components() {
 	DESTDIR="${destdir}" "${coco_guest_components_builder}"
 }
 
+install_pause_image() {
+	latest_artefact="$(get_from_kata_deps "externals.pause.repo")-$(get_from_kata_deps "externals.pause.version")"
+	latest_builder_image="$(get_pause_image_name)"
+
+	install_cached_tarball_component \
+		"${build_target}" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
+	info "build static pause-image"
+	DESTDIR="${destdir}" "${pause_image_builder}"
+}
+
+
 install_tools_helper() {
 	tool=${1}
 
@@ -999,6 +1018,8 @@ handle_build() {
 
 	ovmf-sev) install_ovmf_sev ;;
 
+	pause-image) install_pause_image ;;
+
 	qemu) install_qemu ;;
 
 	qemu-snp-experimental) install_qemu_snp_experimental ;;
@@ -1126,6 +1147,7 @@ main() {
 		kernel
 		kernel-experimental
 		nydus
+		pause-image
 		qemu
 		stratovirt
 		rootfs-image
