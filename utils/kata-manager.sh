@@ -528,31 +528,31 @@ configure_containerd()
 	then
 		local systemd_unit_dir="/etc/systemd/system"
 		sudo mkdir -p "$systemd_unit_dir"
-	
+
 		local dest="${systemd_unit_dir}/${containerd_service_name}"
-	
+
 		if [ ! -f "$dest" ]
 		then
 			pushd "$tmpdir" >/dev/null
-	
+
 			local service_url
 			service_url=$(printf "%s/%s/%s/%s" \
 				"https://raw.githubusercontent.com" \
 				"${containerd_slug}" \
 				"main" \
 				"${containerd_service_name}")
-	
+
 			curl -LO "$service_url"
-	
+
 			printf "# %s: Service installed for Kata Containers\n" \
 				"$(date -Iseconds)" |\
 				tee -a "$containerd_service_name"
-	
+
 			sudo cp "${containerd_service_name}" "${dest}"
 			sudo systemctl daemon-reload
-	
+
 			info "Installed ${dest}"
-	
+
 			popd >/dev/null
 		fi
 	fi
@@ -645,17 +645,17 @@ install_kata()
 	then
 		local version_desc="latest version"
 		[ -n "$requested_version" ] && version_desc="version $requested_version"
-	
+
 		info "Downloading $project release ($version_desc)"
-	
+
 		local results
 		results=$(github_download_package \
 			"$kata_releases_url" \
 			"$requested_version" \
 			"$project")
-	
+
 		[ -z "$results" ] && die "Cannot download $project release file"
-	
+
 		version=$(echo "$results"|cut -d: -f1)
 
 		[ -z "$version" ] && die "Cannot determine $project resolved version"
