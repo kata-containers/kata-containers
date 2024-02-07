@@ -215,7 +215,7 @@ mod tests {
         assert_eq!(state.vm_path, clh.vm_path);
         assert_eq!(state.run_dir, clh.run_dir);
         assert_eq!(state.guest_protection_to_use, clh.guest_protection_to_use);
-        assert_eq!(state.jailed, false);
+        assert!(!state.jailed);
         assert_eq!(state.hypervisor_type, HYPERVISOR_NAME_CH.to_string());
 
         let clh = CloudHypervisorInner::restore((), state.clone())
