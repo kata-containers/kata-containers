@@ -40,15 +40,15 @@ Commands:
 Options:
 
 	-a <arch>       : Arch target to build the kernel, such as aarch64/ppc64le/s390x/x86_64.
-	-c <path>   	: Path to config file to build the kernel.
-	-d          	: Enable bash debug.
-	-e          	: Enable experimental kernel.
-	-f          	: Enable force generate config when setup.
-	-g <vendor> 	: GPU vendor, intel or nvidia.
-	-h          	: Display this help.
+	-c <path>       : Path to config file to build the kernel.
+	-d              : Enable bash debug.
+	-e              : Enable experimental kernel.
+	-f              : Enable force generate config when setup.
+	-g <vendor>     : GPU vendor, intel or nvidia.
+	-h              : Display this help.
   -H <deb|rpm>  : Linux headers for guest fs module building.
-	-k <path>   	: Path to kernel to build.
-	-p <path>   	: Path to a directory with patches to apply to kernel, only patches in top-level directory are applied.
+	-k <path>       : Path to kernel to build.
+	-p <path>       : Path to a directory with patches to apply to kernel, only patches in top-level directory are applied.
 	-t <hypervisor>	: Hypervisor_target.
 	-v <version>	: Kernel version to use if kernel path not provided.
 ```
@@ -180,4 +180,3 @@ repository and which pull request [it depends on][depends-on-docs].
 [kata-containers-versions-file]: ../../../versions.yaml
 [patches-dir]: patches
 [depends-on-docs]: https://github.com/kata-containers/tests/blob/main/README.md#breaking-compatibility
-[cache-job]: http://jenkins.katacontainers.io/job/image-nightly-x86_64/
