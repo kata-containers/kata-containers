@@ -8,10 +8,14 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+DEBUG="${DEBUG:-}"
+[ -n "$DEBUG" ] && set -x
+
 kubernetes_dir="$(dirname "$(readlink -f "$0")")"
 source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
 # shellcheck disable=2154
 tools_dir="${repo_root_dir}/tools"
+kata_tarball_dir="${2:-kata-artifacts}"
 
 DOCKER_REGISTRY=${DOCKER_REGISTRY:-quay.io}
 DOCKER_REPO=${DOCKER_REPO:-kata-containers/kata-deploy-ci}
@@ -20,6 +24,8 @@ KATA_DEPLOY_WAIT_TIMEOUT=${KATA_DEPLOY_WAIT_TIMEOUT:-10m}
 KATA_HYPERVISOR=${KATA_HYPERVISOR:-qemu}
 KUBERNETES="${KUBERNETES:-}"
 SNAPSHOTTER="${SNAPSHOTTER:-}"
+export AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-no}"
+export TEST_CLUSTER_NAMESPACE="${TEST_CLUSTER_NAMESPACE:-kata-containers-k8s-tests}"
 
 function configure_devmapper() {
 	sudo mkdir -p /var/lib/containerd/devmapper
@@ -103,8 +109,7 @@ function deploy_kata() {
 	[ "$platform" = "kcli" ] && \
 	export KUBECONFIG="$HOME/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
 
-	# Ensure we're in the default namespace
-	kubectl config set-context --current --namespace=default
+	set_default_cluster_namespace
 
 	sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 
@@ -164,12 +169,12 @@ function run_tests() {
 	[ "$platform" = "kcli" ] && \
 		export KUBECONFIG="$HOME/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
 
-	# Delete any spurious tests namespace that was left behind
-	kubectl delete namespace kata-containers-k8s-tests &> /dev/null || true
+	# Enable auto-generated policy for CI images that support policy.
+	#
+	# TODO: enable testing auto-generated policy for other types of hosts too.
+	[ "${KATA_HOST_OS}" = "cbl-mariner" ] && export AUTO_GENERATE_POLICY="yes"
 
-	# Create a new namespace for the tests and switch to it
-	kubectl apply -f "${kubernetes_dir}/runtimeclass_workloads/tests-namespace.yaml"
-	kubectl config set-context --current --namespace=kata-containers-k8s-tests
+	set_test_cluster_namespace
 
 	pushd "${kubernetes_dir}"
 	bash setup.sh
@@ -199,8 +204,7 @@ function cleanup() {
 	fi
 
 	# Switch back to the default namespace and delete the tests one
-	kubectl config set-context --current --namespace=default
-	kubectl delete namespace kata-containers-k8s-tests
+	delete_test_cluster_namespace
 
 	if [ "${KUBERNETES}" = "k3s" ]; then
 		deploy_spec="-k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k3s""
@@ -235,11 +239,6 @@ function cleanup() {
 	kubectl delete -f "${tools_dir}/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
 }
 
-install_kata_tools_placeholder() {
-	echo "Kata tools will be installed (for the genpolicy app)"\
-		"after CI picks up the gha yaml changes required to test that installation."
-}
-
 function deploy_snapshotter() {
 	echo "::group::Deploying ${SNAPSHOTTER:-}"
 	#TODO Add the deployment logic for the snapshotter in PR https://github.com/kata-containers/kata-containers/pull/8585.
@@ -267,7 +266,7 @@ function main() {
 		setup-crio) setup_crio ;;
 		deploy-k8s) deploy_k8s ;;
 		install-bats) install_bats ;;
-		install-kata-tools) install_kata_tools_placeholder ;;
+		install-kata-tools) install_kata_tools ;;
 		install-kubectl) install_kubectl ;;
 		get-cluster-credentials) get_cluster_credentials ;;
 		deploy-kata-aks) deploy_kata "aks" ;;
