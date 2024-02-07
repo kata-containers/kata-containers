@@ -23,6 +23,8 @@ DOCKER_TAG=${DOCKER_TAG:-kata-containers-latest}
 KATA_DEPLOY_WAIT_TIMEOUT=${KATA_DEPLOY_WAIT_TIMEOUT:-10m}
 SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT=${SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT:-8m}
 KATA_HYPERVISOR=${KATA_HYPERVISOR:-qemu}
+KBS=${KBS:-false}
+KBS_INGRESS=${KBS_INGRESS:-}
 KUBERNETES="${KUBERNETES:-}"
 SNAPSHOTTER="${SNAPSHOTTER:-}"
 export AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-no}"
@@ -103,6 +105,10 @@ function configure_snapshotter() {
 	echo "::endgroup::"
 }
 
+function deploy_coco_kbs() {
+	echo "TODO: deploy https://github.com/confidential-containers/kbs"
+}
+
 function deploy_kata() {
 	platform="${1}"
 	ensure_yq
@@ -168,6 +174,10 @@ function deploy_kata() {
 	echo "::group::Runtime classes"
 	kubectl get runtimeclass
 	echo "::endgroup::"
+}
+
+function install_kbs_client() {
+	echo "TODO: install kbs-client - https://github.com/kata-containers/kata-containers/pull/9114"
 }
 
 function run_tests() {
@@ -354,9 +364,11 @@ function main() {
 		create-cluster-kcli) create_cluster_kcli ;;
 		configure-snapshotter) configure_snapshotter ;;
 		setup-crio) setup_crio ;;
+		deploy-coco-kbs) deploy_coco_kbs ;;
 		deploy-k8s) deploy_k8s ;;
 		install-bats) install_bats ;;
 		install-kata-tools) install_kata_tools ;;
+		install-kbs-client) install_kbs_client ;;
 		install-kubectl) install_kubectl ;;
 		get-cluster-credentials) get_cluster_credentials ;;
 		deploy-kata-aks) deploy_kata "aks" ;;
