@@ -270,12 +270,12 @@ Options:
                 https://containerd.io/releases/#support-horizon
  -d           : Enable debug for all components.
  -D           : Install Docker server and CLI tooling (takes priority over '-c').
- -N           : Install nerdctl (takes priority over '-c', only implemented for x86_64 and ARM).
  -f           : Force installation (use with care).
  -h           : Show this help statement.
  -k <version> : Specify Kata Containers version.
  -K <tarball> : Specify local Kata Containers tarball to install (takes priority over '-k').
  -l           : List installed and available versions only, then exit (uses network).
+ -N           : Install nerdctl (takes priority over '-c', only implemented for x86_64 and ARM).
  -o           : Only install Kata Containers.
  -r           : Don't cleanup on failure (retain files).
  -t           : Disable self test (don't try to create a container after install).
