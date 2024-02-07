@@ -13,6 +13,8 @@ DEBUG="${DEBUG:-}"
 
 kubernetes_dir="$(dirname "$(readlink -f "$0")")"
 source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
+# shellcheck disable=1091
+source "${kubernetes_dir}/confidential_kbs.sh"
 # shellcheck disable=2154
 tools_dir="${repo_root_dir}/tools"
 kata_tarball_dir="${2:-kata-artifacts}"
@@ -105,8 +107,12 @@ function configure_snapshotter() {
 	echo "::endgroup::"
 }
 
+function delete_coco_kbs() {
+	kbs_k8s_delete
+}
+
 function deploy_coco_kbs() {
-	echo "TODO: deploy https://github.com/confidential-containers/kbs"
+	kbs_k8s_deploy
 }
 
 function deploy_kata() {
@@ -389,6 +395,7 @@ function main() {
 		cleanup-garm) cleanup "garm" ;;
 		cleanup-zvsi) cleanup "zvsi" ;;
 		cleanup-snapshotter) cleanup_snapshotter ;;
+		delete-coco-kbs) delete_coco_kbs ;;
 		delete-cluster) cleanup "aks" ;;
 		delete-cluster-kcli) delete_cluster_kcli ;;
 		*) >&2 echo "Invalid argument"; exit 2 ;;
