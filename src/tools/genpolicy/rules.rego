@@ -1109,6 +1109,7 @@ ExecProcessRequest {
     print("ExecProcessRequest 3: i_command =", i_command)
 
     some p_command in policy_data.request_defaults.ExecProcessRequest.commands
+    print("ExecProcessRequest 1: p_command =", p_command)
     p_command == i_command
 
     print("ExecProcessRequest 1: true")
