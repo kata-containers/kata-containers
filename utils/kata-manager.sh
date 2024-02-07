@@ -736,7 +736,18 @@ configure_kata()
 
 	sudo install -o root -g root -m 0644 "$cfg_from" "$cfg_to"
 
+	# Note that '--follow-symlinks' is essential: without it,
+	# sed(1) will break the sym-link and convert it into a file,
+	# which is not desirable behaviour as the whole point of the
+	# "well known" config file name is that it is a sym-link to
+	# the actual config file.
+	#
+	# However, this option is GNU sed(1) specific so if this
+	# script is run on a non-Linux system, it may be necessary
+	# to install GNU sed, or find an equivalent option for the
+	# local version of sed.
 	sudo sed -i \
+		--follow-symlinks \
 		-e 's/^# *\(enable_debug\).*=.*$/\1 = true/g' \
 		-e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug"/g' \
 		"$cfg_to"
