@@ -551,7 +551,7 @@ function install_nydus_snapshotter() {
 	version="${1}"
 
 	project="containerd/nydus-snapshotter"
-	tarball_name="nydus-snapshotter-${version}-$(${repo_root_dir}/tests/kata-arch.sh).tgz"
+	tarball_name="nydus-snapshotter-${version}-$(uname -s| tr A-Z a-z)-$(${repo_root_dir}/tests/kata-arch.sh -g).tar.gz"
 
 	download_github_project_tarball "${project}" "${version}" "${tarball_name}"
 	sudo tar xfz "${tarball_name}" -C /usr/local/bin --strip-components=1
