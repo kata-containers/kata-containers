@@ -147,10 +147,11 @@ impl Persist for CloudHypervisorInner {
             vm_path: self.vm_path.clone(),
             jailed: false,
             jailer_root: String::default(),
-            netns: None,
+            netns: self.netns.clone(),
             config: self.hypervisor_config(),
             run_dir: self.run_dir.clone(),
-            cached_block_devices: Default::default(),
+            guest_protection_to_use: self.guest_protection_to_use.clone(),
+
             ..Default::default()
         })
     }
@@ -160,16 +161,70 @@ impl Persist for CloudHypervisorInner {
         _hypervisor_args: Self::ConstructorArgs,
         hypervisor_state: Self::State,
     ) -> Result<Self> {
-        let ch = Self {
+        let (tx, rx) = channel(true);
+
+        let mut ch = Self {
             config: Some(hypervisor_state.config),
             state: VmmState::NotReady,
             id: hypervisor_state.id,
             vm_path: hypervisor_state.vm_path,
             run_dir: hypervisor_state.run_dir,
+            netns: hypervisor_state.netns,
+            guest_protection_to_use: hypervisor_state.guest_protection_to_use.clone(),
+
+            pending_devices: vec![],
+            device_ids: HashMap::<String, String>::new(),
+            tasks: None,
+            shutdown_tx: Some(tx),
+            shutdown_rx: Some(rx),
+            timeout_secs: CH_DEFAULT_TIMEOUT_SECS as i32,
+            jailer_root: String::default(),
+            ch_features: None,
 
             ..Default::default()
         };
+        ch._capabilities = ch.capabilities().await?;
 
         Ok(ch)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kata_sys_util::protection::TDXDetails;
+
+    #[actix_rt::test]
+    async fn test_save_clh() {
+        let mut clh = CloudHypervisorInner::new();
+        clh.id = String::from("123456");
+        clh.netns = Some(String::from("/var/run/netns/testnet"));
+        clh.vm_path = String::from("/opt/kata/bin/cloud-hypervisor");
+        clh.run_dir = String::from("/var/run/kata-containers/") + &clh.id;
+
+        let details = TDXDetails {
+            major_version: 1,
+            minor_version: 0,
+        };
+
+        clh.guest_protection_to_use = GuestProtection::Tdx(details);
+
+        let state = clh.save().await.unwrap();
+        assert_eq!(state.id, clh.id);
+        assert_eq!(state.netns, clh.netns);
+        assert_eq!(state.vm_path, clh.vm_path);
+        assert_eq!(state.run_dir, clh.run_dir);
+        assert_eq!(state.guest_protection_to_use, clh.guest_protection_to_use);
+        assert_eq!(state.jailed, false);
+        assert_eq!(state.hypervisor_type, HYPERVISOR_NAME_CH.to_string());
+
+        let clh = CloudHypervisorInner::restore((), state.clone())
+            .await
+            .unwrap();
+        assert_eq!(clh.id, state.id);
+        assert_eq!(clh.netns, state.netns);
+        assert_eq!(clh.vm_path, state.vm_path);
+        assert_eq!(clh.run_dir, state.run_dir);
+        assert_eq!(clh.guest_protection_to_use, state.guest_protection_to_use);
     }
 }
