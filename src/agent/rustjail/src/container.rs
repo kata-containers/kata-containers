@@ -556,6 +556,10 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
 
     sched::unshare(to_new & !CloneFlags::CLONE_NEWUSER)?;
 
+    if cgroups::hierarchies::is_cgroup2_unified_mode() {
+        sched::unshare(CloneFlags::CLONE_NEWCGROUP)?;
+    }
+
     if userns {
         bind_device = true;
     }
