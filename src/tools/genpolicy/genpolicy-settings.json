@@ -299,6 +299,7 @@
             "commands": [],
             "regex": []
         },
+        "CloseStdinRequest": false,
         "ReadStreamRequest": false,
         "WriteStreamRequest": false
     }
