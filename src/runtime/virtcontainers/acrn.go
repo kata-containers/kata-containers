@@ -533,6 +533,15 @@ func (a *Acrn) PauseVM(ctx context.Context) error {
 	return nil
 }
 
+func (a *Acrn) AttestVM(ctx context.Context) error {
+	span, _ := katatrace.Trace(ctx, a.Logger(), "AttestVM", acrnTracingTags, map[string]string{"sandbox_id": a.id})
+	defer span.End()
+
+	a.Logger().Warning("AttestVM: unimplemented")
+
+	return nil
+}
+
 func (a *Acrn) ResumeVM(ctx context.Context) error {
 	span, _ := katatrace.Trace(ctx, a.Logger(), "ResumeVM", acrnTracingTags, map[string]string{"sandbox_id": a.id})
 	defer span.End()
