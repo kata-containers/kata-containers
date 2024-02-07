@@ -679,6 +679,8 @@ install_kata()
 	local from_dir
 	from_dir=$(printf "%s/bin" "$kata_install_dir")
 
+	info "Checking file '$file'"
+
 	# Since we're unpacking to the root directory, perform a sanity check
 	# on the archive first.
 	local unexpected
