@@ -99,12 +99,24 @@ pub fn get_mount_and_storage(
     yaml_mount: &pod::VolumeMount,
 ) {
     if let Some(emptyDir) = &yaml_volume.emptyDir {
-        let memory_medium = if let Some(medium) = &emptyDir.medium {
-            medium == "Memory"
-        } else {
-            false
-        };
-        get_empty_dir_mount_and_storage(settings, p_mounts, storages, yaml_mount, memory_medium);
+        let settings_volumes = &settings.volumes;
+        let mut volume: Option<&settings::EmptyDirVolume> = None;
+
+        if let Some(medium) = &emptyDir.medium {
+            if medium == "Memory" {
+                volume = Some(&settings_volumes.emptyDir_memory);
+            }
+        }
+
+        if volume.is_none() {
+            volume = if settings.kata_config.confidential_guest {
+                Some(&settings_volumes.confidential_emptyDir)
+            } else {
+                Some(&settings_volumes.emptyDir)
+            }
+        }
+
+        get_empty_dir_mount_and_storage(settings, p_mounts, storages, yaml_mount, volume.unwrap());
     } else if yaml_volume.persistentVolumeClaim.is_some() || yaml_volume.azureFile.is_some() {
         get_shared_bind_mount(yaml_mount, p_mounts, "rprivate", "rw");
     } else if yaml_volume.hostPath.is_some() {
@@ -125,14 +137,8 @@ fn get_empty_dir_mount_and_storage(
     p_mounts: &mut Vec<policy::KataMount>,
     storages: &mut Vec<agent::Storage>,
     yaml_mount: &pod::VolumeMount,
-    memory_medium: bool,
+    settings_empty_dir: &settings::EmptyDirVolume,
 ) {
-    let settings_volumes = &settings.volumes;
-    let settings_empty_dir = if memory_medium {
-        &settings_volumes.emptyDir_memory
-    } else {
-        &settings_volumes.emptyDir
-    };
     debug!("Settings emptyDir: {:?}", settings_empty_dir);
 
     if yaml_mount.subPathExpr.is_none() {
@@ -151,7 +157,7 @@ fn get_empty_dir_mount_and_storage(
     let source = if yaml_mount.subPathExpr.is_some() {
         let file_name = Path::new(&yaml_mount.mountPath).file_name().unwrap();
         let name = OsString::from(file_name).into_string().unwrap();
-        format!("{}{name}$", &settings_volumes.configMap.mount_source)
+        format!("{}{name}$", &settings.volumes.configMap.mount_source)
     } else {
         format!("{}{}$", &settings_empty_dir.mount_source, &yaml_mount.name)
     };
