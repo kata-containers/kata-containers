@@ -61,7 +61,6 @@ impl ShimExecutor {
     fn new_command(&self) -> Result<std::process::Command> {
         if self.args.id.is_empty()
             || self.args.namespace.is_empty()
-            || self.args.address.is_empty()
             || self.args.publish_binary.is_empty()
         {
             return Err(anyhow!("invalid param"));

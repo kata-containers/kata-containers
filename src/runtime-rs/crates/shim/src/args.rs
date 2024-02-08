@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{os::unix::fs::FileTypeExt, path::PathBuf};
+use std::path::PathBuf;
 
 use anyhow::{anyhow, Context, Result};
 use kata_sys_util::validate;
@@ -38,11 +38,7 @@ impl Args {
     /// The id, namespace, address and publish_binary are mandatory for START, RUN and DELETE.
     /// And bundle is mandatory for DELETE.
     pub fn validate(&mut self, should_check_bundle: bool) -> Result<()> {
-        if self.id.is_empty()
-            || self.namespace.is_empty()
-            || self.address.is_empty()
-            || self.publish_binary.is_empty()
-        {
+        if self.id.is_empty() || self.namespace.is_empty() || self.publish_binary.is_empty() {
             return Err(anyhow!(Error::ArgumentIsEmpty(format!(
                 "id: {} namespace: {} address: {} publish_binary: {}",
                 &self.id, &self.namespace, &self.address, &self.publish_binary
@@ -51,21 +47,6 @@ impl Args {
 
         validate::verify_id(&self.id).context("verify container id")?;
         validate::verify_id(&self.namespace).context("verify namespace")?;
-
-        // Ensure `address` is a valid path.
-        let path = PathBuf::from(self.address.clone())
-            .canonicalize()
-            .context(Error::InvalidPath(self.address.clone()))?;
-        let md = path
-            .metadata()
-            .context(Error::FileGetMetadata(format!("{:?}", path)))?;
-        if !md.file_type().is_socket() {
-            return Err(Error::InvalidArgument).context("address is not socket");
-        }
-        self.address = path
-            .to_str()
-            .map(|v| v.to_owned())
-            .ok_or(Error::InvalidArgument)?;
 
         // Ensure `bundle` is a valid path.
         if should_check_bundle {
@@ -182,10 +163,7 @@ mod tests {
                     arg.clone()
                 },
                 should_check_bundle: false,
-                result: Err(anyhow!(Error::ArgumentIsEmpty(format!(
-                    "id: {} namespace: {} address: {} publish_binary: {}",
-                    &arg.id, &arg.namespace, &arg.address, &arg.publish_binary
-                )))),
+                result: Ok(()),
             },
             TestData {
                 arg: {
@@ -275,22 +253,6 @@ mod tests {
                 },
                 should_check_bundle: true,
                 result: Ok(()),
-            },
-            TestData {
-                arg: {
-                    arg.address = default_address.clone() + "/..";
-                    arg.clone()
-                },
-                should_check_bundle: true,
-                result: Err(anyhow!(Error::InvalidPath(arg.address.clone()))),
-            },
-            TestData {
-                arg: {
-                    arg.address = default_address.clone() + "/..";
-                    arg.clone()
-                },
-                should_check_bundle: true,
-                result: Err(anyhow!(Error::InvalidPath(arg.address.clone()))),
             },
             TestData {
                 arg: {

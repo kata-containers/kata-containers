@@ -38,12 +38,14 @@ pub(crate) trait Forwarder {
 /// `TTRPC_ADDRESS` existing. Otherwise, fall back to `LogForwarder`.
 pub(crate) async fn new_event_publisher(namespace: &str) -> Result<Box<dyn Forwarder>> {
     let fwd: Box<dyn Forwarder> = match env::var(TTRPC_ADDRESS_ENV) {
-        Ok(address) => Box::new(
+        Ok(address) if !address.is_empty() => Box::new(
             ContainerdForwarder::new(namespace, &address)
                 .await
                 .context("new containerd forwarder")?,
         ),
-        Err(_) => Box::new(
+        // an empty address doesn't match the arm above so catch it here
+        // and handle it the same way as if it's missing altogether
+        Ok(_) | Err(_) => Box::new(
             LogForwarder::new(namespace)
                 .await
                 .context("new log forwarder")?,
