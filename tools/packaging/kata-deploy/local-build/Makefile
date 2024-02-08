@@ -105,6 +105,9 @@ firecracker-tarball:
 genpolicy-tarball:
 	${MAKE} $@-build
 
+pause-image-tarball:
+	${MAKE} $@-build
+
 kata-ctl-tarball:
 	${MAKE} $@-build
 

@@ -28,6 +28,7 @@ readonly clh_builder="${static_build_dir}/cloud-hypervisor/build-static-clh.sh"
 readonly firecracker_builder="${static_build_dir}/firecracker/build-static-firecracker.sh"
 readonly kernel_builder="${static_build_dir}/kernel/build.sh"
 readonly ovmf_builder="${static_build_dir}/ovmf/build.sh"
+readonly pause_image_builder="${static_build_dir}/pause-image/build.sh"
 readonly qemu_builder="${static_build_dir}/qemu/build-static-qemu.sh"
 readonly qemu_experimental_builder="${static_build_dir}/qemu/build-static-qemu-experimental.sh"
 readonly stratovirt_builder="${static_build_dir}/stratovirt/build-static-stratovirt.sh"
@@ -105,6 +106,7 @@ options:
 	kernel-sev-tarball
 	kernel-tdx-experimental
 	nydus
+	pause-image
 	ovmf
 	ovmf-sev
 	qemu
@@ -240,6 +242,22 @@ get_latest_coco_guest_components_artefact_and_builder_image_version() {
 	echo "${latest_coco_guest_components_artefact}-${latest_coco_guest_components_builder_image}"
 }
 
+get_pause_image_tarball_path() {
+	pause_image_local_build_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
+	pause_image_tarball_name="kata-static-pause-image.tar.xz"
+
+	echo "${pause_image_local_build_dir}/${pause_image_tarball_name}"
+}
+
+get_latest_pause_image_artefact_and_builder_image_version() {
+	local pause_image_repo="$(get_from_kata_deps "externals.pause.repo")"
+	local pause_image_version=$(get_from_kata_deps "externals.pause.version")
+	local latest_pause_image_artefact="${pause_image_repo}-${pause_image_version}"
+	local latest_pause_image_builder_image="$(get_pause_image_name)"
+
+	echo "${latest_pause_image_artefact}-${latest_pause_image_builder_image}"
+}
+
 get_latest_kernel_confidential_artefact_and_builder_image_version() {
 		local kernel_version=$(get_from_kata_deps "assets.kernel.confidential.version")
 		local kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
@@ -277,6 +295,7 @@ install_image() {
 		# measured boot is used
 		latest_artefacts+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
 		latest_artefacts+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
+		latest_artefacts+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
 	fi
 
 	latest_builder_image=""
@@ -297,6 +316,7 @@ install_image() {
 
 		if [ "${variant}" == "confidential" ]; then
 			export COCO_GUEST_COMPONENTS_TARBALL="$(get_coco_guest_components_tarball_path)"
+			export PAUSE_IMAGE_TARBALL="$(get_pause_image_tarball_path)"
 		fi
 	else
 		os_name="$(get_from_kata_deps "assets.image.architecture.${ARCH}.name")"
@@ -347,6 +367,7 @@ install_initrd() {
 		# measured boot is used
 		latest_artefacts+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
 		latest_artefacts+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
+		latest_artefacts+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
 	fi
 
 	latest_builder_image=""
@@ -369,6 +390,7 @@ install_initrd() {
 
 		if [ "${variant}" == "confidential" ]; then
 			export COCO_GUEST_COMPONENTS_TARBALL="$(get_coco_guest_components_tarball_path)"
+			export PAUSE_IMAGE_TARBALL="$(get_pause_image_tarball_path)"
 		fi
 	else
 		os_name="$(get_from_kata_deps "assets.initrd.architecture.${ARCH}.name")"
@@ -847,6 +869,23 @@ install_coco_guest_components() {
 	DESTDIR="${destdir}" "${coco_guest_components_builder}"
 }
 
+install_pause_image() {
+	latest_artefact="$(get_from_kata_deps "externals.pause.repo")-$(get_from_kata_deps "externals.pause.version")"
+	latest_builder_image="$(get_pause_image_name)"
+
+	install_cached_tarball_component \
+		"${build_target}" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
+	info "build static pause-image"
+	DESTDIR="${destdir}" "${pause_image_builder}"
+}
+
+
 install_tools_helper() {
 	tool=${1}
 
@@ -999,6 +1038,8 @@ handle_build() {
 
 	ovmf-sev) install_ovmf_sev ;;
 
+	pause-image) install_pause_image ;;
+
 	qemu) install_qemu ;;
 
 	qemu-snp-experimental) install_qemu_snp_experimental ;;
@@ -1126,6 +1167,7 @@ main() {
 		kernel
 		kernel-experimental
 		nydus
+		pause-image
 		qemu
 		stratovirt
 		rootfs-image

@@ -285,6 +285,11 @@ externals:
     url: "https://github.com/seccomp/libseccomp"
     version: "2.5.5"
 
+  pause:
+    description: "Kubernetes pause container image"
+    repo: "docker://registry.k8s.io/pause"
+    version: "3.9"
+
   runc:
     description: "OCI CLI reference runtime implementation"
     url: "https://github.com/opencontainers/runc"

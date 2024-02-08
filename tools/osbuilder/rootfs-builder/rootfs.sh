@@ -32,6 +32,7 @@ AGENT_SOURCE_BIN=${AGENT_SOURCE_BIN:-""}
 AGENT_TARBALL=${AGENT_TARBALL:-""}
 COCO_GUEST_COMPONENTS_TARBALL=${COCO_GUEST_COMPONENTS_TARBALL:-""}
 CONFIDENTIAL_GUEST="${CONFIDENTIAL_GUEST:-no}"
+PAUSE_IMAGE_TARBALL=${PAUSE_IMAGE_TARBALL:-""}
 
 lib_file="${script_dir}/../scripts/lib.sh"
 source "$lib_file"
@@ -175,6 +176,12 @@ KERNEL_MODULES_DIR  Path to a directory containing kernel modules to include in
 
 LIBC                libc the agent is built against (gnu or musl).
                     Default value: ${LIBC} (varies with architecture)
+
+PAUSE_IMAGE_TARBALL Path to the kata-static-pause-image.tar.xz tarball to be unpacked inside the
+                    rootfs.
+                    If set, the tarball will be unpacked onto the rootfs.
+                    Default value: <not set>
+
 
 ROOTFS_DIR          Path to the directory that is populated with the rootfs.
                     Default value: <${script_name} path>/rootfs-<DISTRO-name>
@@ -795,6 +802,11 @@ EOF
 	info "Check init is installed"
 	[ -x "${init}" ] || [ -L "${init}" ] || die "/sbin/init is not installed in ${ROOTFS_DIR}"
 	OK "init is installed"
+
+	if [ -n "${PAUSE_IMAGE_TARBALL}" ] ; then
+		info "Installing the pause image tarball"
+		tar xvJpf ${PAUSE_IMAGE_TARBALL} -C ${ROOTFS_DIR}
+	fi
 
 	if [ -n "${COCO_GUEST_COMPONENTS_TARBALL}" ] ; then
 		info "Installing the Confidential Containers guest components tarball"
