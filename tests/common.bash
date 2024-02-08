@@ -587,6 +587,18 @@ function install_crio() {
 	local version=${1}
 
 	os=$(_get_os_for_crio)
+	
+	# Currently, we retrieve the CRIO version from the K0s project, where the stable version of CRIO used is v1.29:
+	# ```
+	# $ k0s_version=$(curl -sSLf "https://docs.k0sproject.io/stable.txt")
+	# $ crio_version=${k0s_version%\.*+*}
+	# v1.29.1+k0s.1
+	# ```
+	# However, we encounter an issue getting the CRI-O repository of version v1.29 from
+	# https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/, as the latest version available is v1.28.
+	#
+	# We can remove the following line after it has a new release.
+	version="$(printf '%s\n' "$version" "1.28" | sort -V | head -n1)"
 
 	echo "deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/${os}/ /"|sudo tee /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list
 	echo "deb http://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/${version}/${os}/ /"|sudo tee /etc/apt/sources.list.d/devel:kubic:libcontainers:stable:cri-o:${version}.list
