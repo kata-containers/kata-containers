@@ -147,6 +147,10 @@ function deploy_kata() {
 	# Enable 'default_vcpus' hypervisor annotation
 	yq write -i "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[6].value' "default_vcpus"
 
+	if [ -n "${SNAPSHOTTER}" ]; then
+		yq write -i "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[7].value' "${KATA_HYPERVISOR}:${SNAPSHOTTER}"
+	fi
+
 	if [ "${KATA_HOST_OS}" = "cbl-mariner" ]; then
 		yq write -i "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[6].value' "initrd kernel default_vcpus"
 		yq write -i "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[+].name' "HOST_OS"
