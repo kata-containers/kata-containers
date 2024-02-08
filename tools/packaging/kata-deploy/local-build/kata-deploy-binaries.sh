@@ -242,6 +242,22 @@ get_latest_coco_guest_components_artefact_and_builder_image_version() {
 	echo "${latest_coco_guest_components_artefact}-${latest_coco_guest_components_builder_image}"
 }
 
+get_pause_image_tarball_path() {
+	pause_image_local_build_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
+	pause_image_tarball_name="kata-static-pause-image.tar.xz"
+
+	echo "${pause_image_local_build_dir}/${pause_image_tarball_name}"
+}
+
+get_latest_pause_image_artefact_and_builder_image_version() {
+	local pause_image_repo="$(get_from_kata_deps "externals.pause.repo")"
+	local pause_image_version=$(get_from_kata_deps "externals.pause.version")
+	local latest_pause_image_artefact="${pause_image_repo}-${pause_image_version}"
+	local latest_pause_image_builder_image="$(get_pause_image_name)"
+
+	echo "${latest_pause_image_artefact}-${latest_pause_image_builder_image}"
+}
+
 get_latest_kernel_confidential_artefact_and_builder_image_version() {
 		local kernel_version=$(get_from_kata_deps "assets.kernel.confidential.version")
 		local kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
@@ -279,6 +295,7 @@ install_image() {
 		# measured boot is used
 		latest_artefacts+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
 		latest_artefacts+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
+		latest_artefacts+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
 	fi
 
 	latest_builder_image=""
@@ -299,6 +316,7 @@ install_image() {
 
 		if [ "${variant}" == "confidential" ]; then
 			export COCO_GUEST_COMPONENTS_TARBALL="$(get_coco_guest_components_tarball_path)"
+			export PAUSE_IMAGE_TARBALL="$(get_pause_image_tarball_path)"
 		fi
 	else
 		os_name="$(get_from_kata_deps "assets.image.architecture.${ARCH}.name")"
@@ -349,6 +367,7 @@ install_initrd() {
 		# measured boot is used
 		latest_artefacts+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
 		latest_artefacts+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
+		latest_artefacts+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
 	fi
 
 	latest_builder_image=""
@@ -371,6 +390,7 @@ install_initrd() {
 
 		if [ "${variant}" == "confidential" ]; then
 			export COCO_GUEST_COMPONENTS_TARBALL="$(get_coco_guest_components_tarball_path)"
+			export PAUSE_IMAGE_TARBALL="$(get_pause_image_tarball_path)"
 		fi
 	else
 		os_name="$(get_from_kata_deps "assets.initrd.architecture.${ARCH}.name")"
