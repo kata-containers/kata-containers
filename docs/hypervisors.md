@@ -16,25 +16,14 @@ which hypervisors you may wish to investigate further.
 
 ## Types
 
-Since each hypervisor offers different features and options, Kata Containers
-provides a separate
-[configuration file](/src/runtime/README.md#configuration)
-for each. The configuration files contain comments explaining which options
-are available, their default values and how each setting can be used.
-
-> **Note:**
->
-> The simplest way to switch between hypervisors is to create a symbolic link
-> to the appropriate hypervisor-specific configuration file.
-
-| Hypervisor | Written in | Architectures | Type | Configuration file |
-|-|-|-|-|-|
-|[ACRN] | C | `x86_64` | Type 1 (bare metal) | `configuration-acrn.toml` |
-|[Cloud Hypervisor] | rust | `aarch64`, `x86_64` | Type 2 ([KVM]) | `configuration-clh.toml` |
-|[Firecracker] | rust | `aarch64`, `x86_64` | Type 2 ([KVM]) | `configuration-fc.toml` |
+| Hypervisor | Written in | Architectures | Type |
+|-|-|-|-|
+|[ACRN] | C | `x86_64` | Type 1 (bare metal) |
+|[Cloud Hypervisor] | rust | `aarch64`, `x86_64` | Type 2 ([KVM]) |
+|[Firecracker] | rust | `aarch64`, `x86_64` | Type 2 ([KVM]) |
 |[QEMU] | C | all | Type 2 ([KVM]) | `configuration-qemu.toml` |
-|[`Dragonball`] | rust | `aarch64`, `x86_64` | Type 2 ([KVM]) | `configuration-dragonball.toml` |
-|[StratoVirt] | rust | `aarch64`, `x86_64` | Type 2 ([KVM]) | `configuration-stratovirt.toml` |
+|[`Dragonball`] | rust | `aarch64`, `x86_64` | Type 2 ([KVM]) |
+|[StratoVirt] | rust | `aarch64`, `x86_64` | Type 2 ([KVM]) |
 
 ## Determine currently configured hypervisor
 
@@ -57,6 +46,52 @@ the hypervisors:
 |[StratoVirt] | Unified architecture supporting three scenarios: VM, container, and serverless | Extremely minimal(`MicroVM`) to Lots(`StandardVM`) | | excellent | excellent | Common container workloads | `StandardVM` type of StratoVirt for Kata is under development |
 
 For further details, see the [Virtualization in Kata Containers](design/virtualization.md) document and the official documentation for each hypervisor.
+
+## Hypervisor configuration files
+
+Since each hypervisor offers different features and options, Kata Containers
+provides a separate
+[configuration file](../src/runtime/README.md#configuration)
+for each. The configuration files contain comments explaining which options
+are available, their default values and how each setting can be used.
+
+| Hypervisor | Golang runtime config file | golang runtime short name | golang runtime default | rust runtime config file | rust runtime short name | rust runtime default |
+|-|-|-|-|-|-|-|
+| [ACRN] | [`configuration-acrn.toml`](../src/runtime/config/configuration-acrn.toml.in) | `acrn` | | | | |
+| [Cloud Hypervisor] | [`configuration-clh.toml`](../src/runtime/config/configuration-clh.toml.in) | `clh` | | [`configuration-cloud-hypervisor.toml`](../src/runtime-rs/config/configuration-cloud-hypervisor.toml.in) | `cloud-hypervisor` | |
+| [Firecracker] | [`configuration-fc.toml`](../src/runtime/config/configuration-fc.toml.in) | `fc` | | | | |
+| [QEMU] | [`configuration-qemu.toml`](../src/runtime/config/configuration-qemu.toml.in) | `qemu` | yes | [`configuration-qemu.toml`](../src/runtime-rs/config/configuration-qemu.toml.in) | `qemu` | |
+| [`Dragonball`] | | | | [`configuration-dragonball.toml`](../src/runtime-rs/config/configuration-dragonball.toml.in) | `dragonball` | yes |
+| [StratoVirt] | [`configuration-stratovirt.toml`](../src/runtime/config/configuration-stratovirt.toml.in) | `stratovirt` | | | | |
+
+> **Notes:**
+>
+> - The short names specified are used by the [`kata-manager`](../utils/README.md) tool.
+> - As shown by the default columns, each runtime type has its own default hypervisor.
+> - The [golang runtime](../src/runtime) is the current default runtime.
+> - The [rust runtime](../src/runtime-rs), also known as `runtime-rs`,
+>   is the newer runtime written in the rust language.
+> - See the [Configuration](../README.md#configuration) for further details.
+> - The configuration file links in the table link to the "source"
+>   versions: these are not usable configuration files as they contain
+>   variables that need to be expanded:
+>   - The links are provided for reference only.
+>   - The final (installed) versions, where all variables have been
+>     expanded, are built from these source configuration files.
+> - The pristine configuration files are usually installed in the
+>   `/opt/kata/share/defaults/kata-containers/` or
+>   `/usr/share/defaults/kata-containers/` directories.
+> - Some hypervisors may have the same name for both golang and rust
+>   runtimes, but the file contents may differ.
+> - If there is no configuration file listed for the golang or
+>   rust runtimes, this either means the hypervisor cannot be run with
+>   a particular runtime, or that a driver has not yet been made
+>   available for that runtime.
+
+## Switch configured hypervisor
+
+To switch the configured hypervisor, you only need to run a single command.
+See [the `kata-manager` documentation](../utils/README.md#choose-a-hypervisor) for further details.
 
 [ACRN]: https://projectacrn.org
 [Cloud Hypervisor]: https://github.com/cloud-hypervisor/cloud-hypervisor
