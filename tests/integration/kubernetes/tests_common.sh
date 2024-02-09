@@ -63,6 +63,19 @@ get_one_kata_node() {
 	echo "${resource_name/"node/"}"
 }
 
+# Deletes new_pod it wasn't present in the old_pods array.
+delete_pod_if_new() {
+	declare -r new_pod="$1"
+	shift
+	declare -r old_pods=("$@")
+
+	for old_pod in "${old_pods[@]}"; do
+		[ "${old_pod}" == "${new_pod}" ] && return 0
+	done
+
+	kubectl delete "${new_pod}" >&2
+}
+
 # Runs a command in the host filesystem.
 #
 # Parameters:
@@ -73,8 +86,12 @@ exec_host() {
 	# `kubectl debug` always returns 0, so we hack it to return the right exit code.
 	command="${@:2}"
 	command+='; echo -en \\n$?'
+
+	# Get the already existing debugger pods.
+	declare -a old_debugger_pods=( $(kubectl get pods -o name | grep node-debugger) )
+
 	# We're trailing the `\r` here due to: https://github.com/kata-containers/kata-containers/issues/8051
-	# tl;dr: When testing with CRI-O we're facing the foillowing error:
+	# tl;dr: When testing with CRI-O we're facing the following error:
 	# ```
 	# (from function `exec_host' in file tests_common.sh, line 51,
 	# in test file k8s-file-volume.bats, line 25)
@@ -83,7 +100,15 @@ exec_host() {
 	# bash: line 1: $'\r': command not found
 	# ```
 	output="$(kubectl debug -qit "node/${node}" --image=alpine:latest -- chroot /host bash -c "${command}" | tr -d '\r')"
-	kubectl get pods -o name | grep node-debugger | xargs kubectl delete > /dev/null
+
+	# Get the updated list of debugger pods.
+	declare -a new_debugger_pods=( $(kubectl get pods -o name | grep node-debugger) )
+
+	# Delete the debugger pod created above.
+	for new_pod in "${new_debugger_pods[@]}"; do
+		delete_pod_if_new "${new_pod}" "${old_debugger_pods[@]}"
+	done
+
 	exit_code="$(echo "${output}" | tail -1)"
 	echo "$(echo "${output}" | head -n -1)"
 	return ${exit_code}
