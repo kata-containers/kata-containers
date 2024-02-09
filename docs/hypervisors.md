@@ -47,7 +47,6 @@ $ kata-runtime kata-env | awk -v RS= '/\[Hypervisor\]/' | grep Path
 The table below provides a brief summary of some of the differences between
 the hypervisors:
 
-
 | Hypervisor | Summary | Features | Limitations | Container Creation speed | Memory density | Use cases | Comment |
 |-|-|-|-|-|-|-|-|
 |[ACRN] | Safety critical and real-time workloads | | | excellent | excellent | Embedded and IOT systems | For advanced users |
