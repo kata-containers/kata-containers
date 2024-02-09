@@ -175,12 +175,44 @@ add_exec_to_policy_settings() {
 		"${settings_dir}/new-genpolicy-settings.json"
 	mv "${settings_dir}/new-genpolicy-settings.json" \
 		"${settings_dir}/genpolicy-settings.json"
+}
 
-	# Change genpolicy settings to allow kubectl to read the output of the command being executed.
-	info "${settings_dir}/genpolicy-settings.json: allowing ReadStreamRequest"
-	jq '.request_defaults.ReadStreamRequest |= true' \
-		"${settings_dir}"/genpolicy-settings.json > \
-		"${settings_dir}"/new-genpolicy-settings.json
-	mv "${settings_dir}"/new-genpolicy-settings.json \
-		"${settings_dir}"/genpolicy-settings.json
+# Change genpolicy settings to allow one or more ttrpc requests from the Host to the Guest.
+add_requests_to_policy_settings() {
+	declare -r settings_dir="$1"
+	shift
+	declare -r requests=("$@")
+
+	auto_generate_policy_enabled || return 0
+
+	for request in ${requests[@]}
+	do
+		info "${settings_dir}/genpolicy-settings.json: allowing ${request}"
+		jq ".request_defaults.${request} |= true" \
+			"${settings_dir}"/genpolicy-settings.json > \
+			"${settings_dir}"/new-genpolicy-settings.json
+		mv "${settings_dir}"/new-genpolicy-settings.json \
+			"${settings_dir}"/genpolicy-settings.json
+	done
+}
+
+# Change genpolicy settings to allow executing on the Guest VM the commands
+# used by "kubectl cp" from the Host to the Guest.
+add_copy_from_host_to_policy_settings() {
+	declare -r genpolicy_settings_dir="$1"
+
+	exec_command="test -d /tmp"
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
+	exec_command="tar -xmf - -C /tmp"
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
+}
+
+# Change genpolicy settings to allow executing on the Guest VM the commands
+# used by "kubectl cp" from the Guest to the Host.
+add_copy_from_guest_to_policy_settings() {
+	declare -r genpolicy_settings_dir="$1"
+	declare -r copied_file="$2"
+
+	exec_command="tar cf - ${copied_file}"
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
 }

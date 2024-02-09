@@ -324,6 +324,9 @@ pub struct RequestDefaults {
     /// Commands allowed to be executed by the Host in all Guest containers.
     pub ExecProcessRequest: ExecProcessRequestDefaults,
 
+    /// Allow the Host to close stdin for a container. Typically used with WriteStreamRequest.
+    pub CloseStdinRequest: bool,
+
     /// Allow Host reading from Guest containers stdout and stderr.
     pub ReadStreamRequest: bool,
 

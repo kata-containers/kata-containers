@@ -10,6 +10,9 @@ import future.keywords.every
 import input
 
 # Default values, returned by OPA when rules cannot be evaluated to true.
+default AddARPNeighborsRequest := false
+default AddSwapRequest := false
+default CloseStdinRequest := false
 default CopyFileRequest := false
 default CreateContainerRequest := false
 default CreateSandboxRequest := true
@@ -17,15 +20,25 @@ default DestroySandboxRequest := true
 default ExecProcessRequest := false
 default GetOOMEventRequest := true
 default GuestDetailsRequest := true
+default ListInterfacesRequest := false
+default ListRoutesRequest := false
+default MemHotplugByProbeRequest := false
 default OnlineCPUMemRequest := true
-default PullImageRequest := true
+default PauseContainerRequest := false
 default ReadStreamRequest := false
 default RemoveContainerRequest := true
 default RemoveStaleVirtiofsShareMountsRequest := true
+default ReseedRandomDevRequest := false
+default ResumeContainerRequest := false
+default SetGuestDateTimeRequest := false
+default SetPolicyRequest := false
 default SignalProcessRequest := true
 default StartContainerRequest := true
+default StartTracingRequest := false
 default StatsContainerRequest := true
+default StopTracingRequest := false
 default TtyWinResizeRequest := true
+default UpdateContainerRequest := false
 default UpdateEphemeralMountsRequest := true
 default UpdateInterfaceRequest := true
 default UpdateRoutesRequest := true
@@ -1096,6 +1109,7 @@ ExecProcessRequest {
     print("ExecProcessRequest 3: i_command =", i_command)
 
     some p_command in policy_data.request_defaults.ExecProcessRequest.commands
+    print("ExecProcessRequest 1: p_command =", p_command)
     p_command == i_command
 
     print("ExecProcessRequest 1: true")
@@ -1128,6 +1142,10 @@ ExecProcessRequest {
     regex.match(p_regex, i_command)
 
     print("ExecProcessRequest 3: true")
+}
+
+CloseStdinRequest {
+    policy_data.request_defaults.CloseStdinRequest == true
 }
 
 ReadStreamRequest {
