@@ -44,24 +44,22 @@ setup_policy_files() {
 	create_common_genpolicy_settings "${workloads_work_dir}"
 }
 
-add_kernel_initrd_annotations_to_yaml() {
+add_annotations_to_yaml() {
 	local yaml_file="$1"
-	local mariner_kernel_path="/usr/share/cloud-hypervisor/vmlinux.bin"
-	local mariner_initrd_path="/opt/kata/share/kata-containers/kata-containers-initrd-mariner.img"
+	local annotation_name="$2"
+	local annotation_value="$3"
 	local resource_kind="$(yq read ${yaml_file} kind)"
 
 	case "${resource_kind}" in
 
 	Pod)
 		echo "Adding kernel and initrd annotations to ${resource_kind} from ${yaml_file}"
-		yq write -i "${K8S_TEST_YAML}" 'metadata.annotations[io.katacontainers.config.hypervisor.kernel]' "${mariner_kernel_path}"
-		yq write -i "${K8S_TEST_YAML}" 'metadata.annotations[io.katacontainers.config.hypervisor.initrd]' "${mariner_initrd_path}"
+		yq write -i "${K8S_TEST_YAML}" "metadata.annotations[${annotation_name}]" "${annotation_value}"
 		;;
 
 	Deployment|Job|ReplicationController)
 		echo "Adding kernel and initrd annotations to ${resource_kind} from ${yaml_file}"
-		yq write -i "${K8S_TEST_YAML}" 'spec.template.metadata.annotations[io.katacontainers.config.hypervisor.kernel]' "${mariner_kernel_path}"
-		yq write -i "${K8S_TEST_YAML}" 'spec.template.metadata.annotations[io.katacontainers.config.hypervisor.initrd]' "${mariner_initrd_path}"
+		yq write -i "${K8S_TEST_YAML}" "spec.template.metadata.annotations[${annotation_name}]" "${annotation_value}"
 		;;
 
 	List)
@@ -79,12 +77,19 @@ add_kernel_initrd_annotations_to_yaml() {
 	esac
 }
 
-add_kernel_initrd_annotations() {
+add_cbl_mariner_kernel_initrd_annotations() {
 	if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
-		info "Add kernel and initrd annotations"
+		info "Add kernel and initrd path and annotations for cbl-mariner"
+		local mariner_annotation_kernel="io.katacontainers.config.hypervisor.kernel"
+		local mariner_kernel_path="/usr/share/cloud-hypervisor/vmlinux.bin"
+
+		local mariner_annotation_initrd="io.katacontainers.config.hypervisor.initrd"
+		local mariner_initrd_path="/opt/kata/share/kata-containers/kata-containers-initrd-mariner.img"
+
 		for K8S_TEST_YAML in runtimeclass_workloads_work/*.yaml
 		do
-			add_kernel_initrd_annotations_to_yaml "${K8S_TEST_YAML}"
+			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_kernel}" "${mariner_kernel_path}"
+			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_initrd}" "${mariner_initrd_path}"
 		done
 	fi
 }
@@ -92,7 +97,7 @@ add_kernel_initrd_annotations() {
 main() {
 	ensure_yq
 	reset_workloads_work_dir
-	add_kernel_initrd_annotations
+	add_cbl_mariner_kernel_initrd_annotations
 }
 
 main "$@"
