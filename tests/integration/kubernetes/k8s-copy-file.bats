@@ -39,8 +39,6 @@ setup() {
 	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
 
 	auto_generate_policy "${policy_settings_dir}" "${pod_config}"
-	delete_tmp_policy_settings_dir "${policy_settings_dir}"
-	policy_settings_dir=""
 
 	# Create pod
 	kubectl create -f "${pod_config}"
@@ -78,8 +76,6 @@ setup() {
 	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
 
 	auto_generate_policy "${policy_settings_dir}" "${pod_config}"
-	delete_tmp_policy_settings_dir "${policy_settings_dir}"
-	policy_settings_dir=""
 
 	# Create pod
 	kubectl create -f "${pod_config}"
