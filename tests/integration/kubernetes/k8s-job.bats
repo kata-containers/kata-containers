@@ -10,13 +10,17 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
 	get_pod_config_dir
+	job_name="job-pi-test"
+	yaml_file="${pod_config_dir}/job.yaml"
+
+	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
+	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
+	auto_generate_policy "${policy_settings_dir}" "${yaml_file}"
 }
 
 @test "Run a job to completion" {
-	job_name="job-pi-test"
-
 	# Create job
-	kubectl apply -f "${pod_config_dir}/job.yaml"
+	kubectl apply -f "${yaml_file}"
 
 	# Verify job
 	kubectl describe jobs/"$job_name" | grep "SuccessfulCreate"
@@ -45,10 +49,11 @@ teardown() {
 	echo "$output"
 	[[ "$output" =~ "No resources found" ]]
 
-
 	kubectl delete jobs/"$job_name"
 	# Verify that the job is not running
 	run kubectl get jobs
 	echo "$output"
 	[[ "$output" =~ "No resources found" ]]
+
+	delete_tmp_policy_settings_dir "${policy_settings_dir}"
 }
