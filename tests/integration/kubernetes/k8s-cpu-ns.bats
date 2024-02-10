@@ -28,18 +28,42 @@ setup() {
 	total_cpu_container=1
 
 	get_pod_config_dir
+	yaml_file="${pod_config_dir}/pod-cpu.yaml"
+
+	# Add policy to the yaml file
+	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
+
+	num_cpus_cmd='grep -e "^processor" /proc/cpuinfo |wc -l'
+	exec_command="sh -c ${num_cpus_cmd}"
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
+
+	quotasyspath_cmd="cat ${quotasyspath}"
+	exec_command="sh -c ${quotasyspath_cmd}"
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
+
+	periodsyspath_cmd="cat $periodsyspath"
+	exec_command="sh -c ${periodsyspath_cmd}"
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
+
+	sharessyspath_cmd="cat $sharessyspath"
+	exec_command="sh -c ${sharessyspath_cmd}"
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
+
+	add_exec_to_policy_settings "${policy_settings_dir}" "sh -c "
+
+	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
+	auto_generate_policy "${policy_settings_dir}" "${yaml_file}"
 }
 
 @test "Check CPU constraints" {
 	# Create the pod
-	kubectl create -f "${pod_config_dir}/pod-cpu.yaml"
+	kubectl create -f "${yaml_file}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
 
 	retries="10"
 
-	num_cpus_cmd='grep -e "^processor" /proc/cpuinfo |wc -l'
 	# Check the total of cpus
 	for _ in $(seq 1 "$retries"); do
 		# Get number of cpus
@@ -54,17 +78,18 @@ setup() {
 
 	# Check the total of requests
 	total_requests_container=$(kubectl exec $pod_name -c $container_name \
-		-- sh -c "cat $sharessyspath")
+		-- sh -c "$sharessyspath_cmd")
+	info "total_requests_container = $total_requests_container"
 
 	[ "$total_requests_container" -eq "$total_requests" ]
 
 	# Check the cpus inside the container
 
 	total_cpu_quota=$(kubectl exec $pod_name -c $container_name \
-		-- sh -c "cat $quotasyspath")
+		-- sh -c "$quotasyspath_cmd")
 
 	total_cpu_period=$(kubectl exec $pod_name -c $container_name \
-		-- sh -c "cat $periodsyspath")
+		-- sh -c "$periodsyspath_cmd")
 
 	division_quota_period=$(echo $((total_cpu_quota/total_cpu_period)))
 
@@ -84,4 +109,6 @@ teardown() {
 	kubectl describe "pod/$pod_name"
 
 	kubectl delete pod "$pod_name"
+
+	delete_tmp_policy_settings_dir "${policy_settings_dir}"
 }
