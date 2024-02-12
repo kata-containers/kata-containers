@@ -104,6 +104,17 @@ EOF
 ## ${repo} Changes
 $(changes)
 
+## Survey
+
+Please take the Kata Containers survey:
+
+- https://openinfrafoundation.formstack.com/forms/kata_containers_user_survey
+
+This will help the Kata Containers community understand:
+
+- how you use Kata Containers
+- what features and improvements you would like to see in Kata Containers
+
 EOF
 		popd >>/dev/null
 		rm -rf "${tmp_dir}/${repo}"
