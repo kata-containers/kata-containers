@@ -40,6 +40,21 @@ function _print_rg_name() {
     echo "${AZ_RG:-"kataCI-$(_print_cluster_name ${test_type})"}"
 }
 
+# Enable the HTTP application routing add-on to AKS.
+# Use with ingress to expose a service API externally.
+#
+function enable_cluster_http_application_routing() {
+	local test_type="${1:-k8s}"
+	local cluster_name
+	local rg
+
+	rg="$(_print_rg_name "${test_type}")"
+	cluster_name="$(_print_cluster_name "${test_type}")"
+
+	az aks enable-addons -g "$rg" -n "$cluster_name" \
+		--addons http_application_routing
+}
+
 function install_azure_cli() {
     curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
     # The aks-preview extension is required while the Mariner Kata host is in preview.
@@ -127,6 +142,24 @@ function get_cluster_credentials() {
     az aks get-credentials \
         -g "$(_print_rg_name ${test_type})" \
         -n "$(_print_cluster_name ${test_type})"
+}
+
+
+# Get the AKS DNS zone name of HTTP application routing.
+#
+# Note: if the HTTP application routing add-on isn't installed in the cluster
+# then it will return an empty string.
+#
+function get_cluster_specific_dns_zone() {
+	local test_type="${1:-k8s}"
+	local cluster_name
+	local rg
+	local q="addonProfiles.httpApplicationRouting.config.HTTPApplicationRoutingZoneName"
+
+	rg="$(_print_rg_name "${test_type}")"
+	cluster_name="$(_print_cluster_name "${test_type}")"
+
+	az aks show -g "$rg" -n "$cluster_name" --query "$q" | tr -d \"
 }
 
 function delete_cluster() {

@@ -34,10 +34,16 @@ function kbs_k8s_delete() {
 
 # Deploy the kbs on Kubernetes
 #
+# Parameters:
+#	$1 - apply the specificed ingress handler to expose the service externally
+#
 function kbs_k8s_deploy() {
 	local image
 	local image_tag
+	local ingress=${1:-}
 	local repo
+	local svc_host
+	local timeout
 	local kbs_ip
 	local kbs_port
 	local version
@@ -50,6 +56,15 @@ function kbs_k8s_deploy() {
 	version=$(get_from_kata_deps "externals.coco-kbs.version")
 	image=$(get_from_kata_deps "externals.coco-kbs.image")
 	image_tag=$(get_from_kata_deps "externals.coco-kbs.image_tag")
+
+	# The ingress handler for AKS relies on the cluster's name which in turn
+	# contain the HEAD commit of the kata-containers repository (supposedly the
+	# current directory). It will be needed to save the cluster's name before
+	# it switches to the kbs repository and get a wrong HEAD commit.
+	if [ -z "${AKS_NAME:-}" ]; then
+		AKS_NAME=$(_print_cluster_name)
+		export AKS_NAME
+	fi
 
 	if [ -d "$COCO_KBS_DIR" ]; then
 		rm -rf "$COCO_KBS_DIR"
@@ -74,6 +89,8 @@ function kbs_k8s_deploy() {
 	kustomize edit set image "kbs-container-image=${image}:${image_tag}"
 	popd
 	echo "::endgroup::"
+
+	[ -n "$ingress" ] && _handle_ingress "$ingress"
 
 	echo "::group::Deploy the KBS"
 	./deploy-kbs.sh
@@ -116,4 +133,89 @@ function kbs_k8s_deploy() {
 	kubectl delete pod "$pod"
 	echo "KBS service respond to requests"
 	echo "::endgroup::"
+
+	if [ -n "$ingress" ]; then
+		echo "::group::Check the kbs service is exposed"
+		svc_host=$(kbs_k8s_svc_host)
+		if [ -z "$svc_host" ]; then
+			echo "ERROR: service host not found"
+			return 1
+		fi
+
+		# AZ DNS can take several minutes to update its records so that
+		# the host name will take a while to start resolving.
+		timeout=350
+		echo "Trying to connect at $svc_host. Timeout=$timeout"
+		if ! waitForProcess "$timeout" "30" "curl -s -I \"$svc_host\" | grep -q \"404 Not Found\""; then
+			echo "ERROR: service seems to not respond on $svc_host host"
+			curl -I "$svc_host"
+			return 1
+		fi
+		echo "KBS service respond to requests at $svc_host"
+		echo "::endgroup::"
+	fi
+}
+
+# Return the kbs service host name in case ingress is configured
+# otherwise the cluster IP.
+#
+kbs_k8s_svc_host() {
+	if kubectl get ingress -n "$KBS_NS" | grep -q kbs; then
+		kubectl get ingress kbs -n "$KBS_NS" \
+			-o jsonpath='{.spec.rules[0].host}' 2>/dev/null
+	else
+		kubectl get svc kbs -n "$KBS_NS" \
+			-o jsonpath='{.spec.clusterIP}' 2>/dev/null
+	fi
+}
+
+# Choose the appropriated ingress handler.
+#
+# To add a new handler, create a function named as _handle_ingress_NAME where
+# NAME is the handler name. This is enough for this method to pick up the right
+# implementation.
+#
+_handle_ingress() {
+	local ingress="$1"
+
+	type -a "_handle_ingress_$ingress" &>/dev/null || {
+		echo "ERROR: ingress '$ingress' handler not implemented";
+		return 1;
+	}
+
+	"_handle_ingress_$ingress"
+}
+
+# Implement the ingress handler for AKS.
+#
+_handle_ingress_aks() {
+	local dns_zone
+
+	dns_zone=$(get_cluster_specific_dns_zone "")
+
+	# In case the DNS zone name is empty, the cluster might not have the HTTP
+	# application routing add-on. Let's try to enable it.
+	if [ -z "$dns_zone" ]; then
+		echo "::group::Enable HTTP application routing add-on"
+		enable_cluster_http_application_routing ""
+		echo "::endgroup::"
+		dns_zone=$(get_cluster_specific_dns_zone "")
+	fi
+
+	if [ -z "$dns_zone" ]; then
+		echo "ERROR: the DNS zone name is nil, it cannot configure Ingress"
+		return 1
+	fi
+
+	pushd "$COCO_KBS_DIR/kbs/config/kubernetes/overlays"
+
+	echo "::group::$(pwd)/ingress.yaml"
+	KBS_INGRESS_CLASS="addon-http-application-routing" \
+		KBS_INGRESS_HOST="kbs.${dns_zone}" \
+		envsubst < ingress.yaml | tee ingress.yaml.tmp
+	echo "::endgroup::"
+	mv ingress.yaml.tmp ingress.yaml
+
+	kustomize edit add resource ingress.yaml
+	popd
 }

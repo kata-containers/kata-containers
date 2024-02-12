@@ -111,8 +111,14 @@ function delete_coco_kbs() {
 	kbs_k8s_delete
 }
 
+# Deploy the CoCo KBS in Kubernetes
+#
+# Environment variables:
+#	KBS_INGRESS - (optional) specify the ingress implementation to expose the
+#	              service externally
+#
 function deploy_coco_kbs() {
-	kbs_k8s_deploy
+	kbs_k8s_deploy "$KBS_INGRESS"
 }
 
 function deploy_kata() {
