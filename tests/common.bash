@@ -571,29 +571,20 @@ function install_nydus_snapshotter() {
 	rm -f "${tarball_name}"
 }
 
-function _get_os_for_crio() {
-	source /etc/os-release
-
-	if [ "${NAME}" != "Ubuntu" ]; then
-		echo "Only Ubuntu is supported for now"
-		exit 2
-	fi
-
-	echo "x${NAME}_${VERSION_ID}"
-}
-
 # version: the CRI-O version to be installe
 function install_crio() {
 	local version=${1}
 
-	os=$(_get_os_for_crio)
+	sudo mkdir -p /etc/apt/keyrings
+	sudo mkdir -p /etc/apt/sources.list.d
 
-	echo "deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/${os}/ /"|sudo tee /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list
-	echo "deb http://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/${version}/${os}/ /"|sudo tee /etc/apt/sources.list.d/devel:kubic:libcontainers:stable:cri-o:${version}.list
-	curl -L https://download.opensuse.org/repositories/devel:kubic:libcontainers:stable:cri-o:${version}/${os}/Release.key | sudo apt-key add -
-	curl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/${os}/Release.key | sudo apt-key add -
+	curl -fsSL https://pkgs.k8s.io/addons:/cri-o:/stable:/v${version}/deb/Release.key | \
+		sudo gpg --dearmor -o /etc/apt/keyrings/cri-o-apt-keyring.gpg
+	echo "deb [signed-by=/etc/apt/keyrings/cri-o-apt-keyring.gpg] https://pkgs.k8s.io/addons:/cri-o:/stable:/v${version}/deb/ /" | \
+		sudo tee /etc/apt/sources.list.d/cri-o.list
+
 	sudo apt update
-	sudo apt install -y cri-o cri-o-runc
+	sudo apt install -y cri-o
 
 	# We need to set the default capabilities to ensure our tests will pass
 	# See: https://github.com/kata-containers/kata-containers/issues/8034
