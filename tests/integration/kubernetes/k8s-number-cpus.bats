@@ -13,12 +13,22 @@ setup() {
 	pod_name="cpu-test"
 	container_name="c1"
 	get_pod_config_dir
+	yaml_file="${pod_config_dir}/pod-number-cpu.yaml"
+
+	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
+
+	num_cpus_cmd='cat /proc/cpuinfo |grep processor|wc -l'
+	exec_command="sh -c ${num_cpus_cmd}"
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
+
+	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
+	auto_generate_policy "${policy_settings_dir}" "${yaml_file}"
 }
 
 # Skip on aarch64 due to missing cpu hotplug related functionality.
 @test "Check number of cpus" {
 	# Create pod
-	kubectl create -f "${pod_config_dir}/pod-number-cpu.yaml"
+	kubectl create -f "${yaml_file}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
@@ -26,7 +36,6 @@ setup() {
 	retries="10"
 	max_number_cpus="3"
 
-	num_cpus_cmd='cat /proc/cpuinfo |grep processor|wc -l'
 	for _ in $(seq 1 "$retries"); do
 		# Get number of cpus
 		number_cpus=$(kubectl exec pod/"$pod_name" -c "$container_name" \
@@ -46,4 +55,6 @@ teardown() {
 	kubectl describe "pod/$pod_name"
 
 	kubectl delete pod "$pod_name"
+
+	delete_tmp_policy_settings_dir "${policy_settings_dir}"
 }
