@@ -75,9 +75,19 @@ changes() {
 	echo "**FIXME - message this section by hand to produce a summary please**"
 
 	echo "### Shortlog"
+
+	echo "<details>"
+	echo "<summary>Click the icon to show the list of commits included in this release</summary>"
+
+	# XXX: Essential to have at least one blank line here. It forces
+	# GitHub to show each commit on a separate line.
+	echo
+
 	for cr in $(git log --merges "${previous_release}".."${new_release}" | grep 'Merge:' | awk '{print $2".."$3}'); do
 		git log --oneline "$cr"
 	done
+
+	echo "</details>"
 }
 
 print_release_notes() {
