@@ -70,6 +70,8 @@ jobs:
             stage: release
           - asset: pause-image
             stage: release
+          - asset: coco-guest-components
+            stage: release
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
