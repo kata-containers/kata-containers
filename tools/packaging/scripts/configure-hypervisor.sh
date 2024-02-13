@@ -328,7 +328,11 @@ generate_qemu_options() {
 	# From Kata Containers 2.5.0-alpha2 all arches but powerpc have been
 	# using the new implementation of virtiofs daemon, which is not part
 	# of QEMU.
-	qemu_options+=(functionality:--disable-virtiofsd)
+	#
+	# qemu configure does not support virtiofsd if qemu version >= 8.0.0.
+        if ! gt_eq "${qemu_version}" "8.0.0" ; then
+		qemu_options+=(functionality:--disable-virtiofsd)
+        fi
 
 	qemu_options+=(functionality:--enable-virtfs)
 

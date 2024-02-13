@@ -106,9 +106,9 @@ assets:
       tag: "b67b00e6b4c7831a3f5bc684bc0df7a9bfd1bd56-plus-TDX-v1.10"
 
     qemu-snp-experimental:
-      description: "QEMU with experimental SNP support (no UPM)"
+      description: "QEMU with experimental SNP support"
       url: "https://github.com/AMDESE/qemu"
-      tag: "3b6a2b6b7466f6dea53243900b7516c3f29027b7"
+      tag: "b6ee1218e6c9b98a556841615dd10d094e648393"
 
     stratovirt:
       description: "StratoVirt is an lightweight opensource VMM"
