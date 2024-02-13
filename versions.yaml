@@ -136,9 +136,6 @@ assets:
         confidential:
           name: *default-image-name
           version: *default-image-version
-        tdx:
-          name: *default-image-name
-          version: *default-image-version
     meta:
       image-type: *default-image-name
 
@@ -168,9 +165,6 @@ assets:
         mariner:
           name: "cbl-mariner"
           version: "2.0"
-        sev:
-          name: *glibc-initrd-name
-          version: *glibc-initrd-version
 
   kernel:
     description: "Linux kernel optimised for virtual machines"
