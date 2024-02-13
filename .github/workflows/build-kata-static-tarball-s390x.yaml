@@ -38,6 +38,9 @@ jobs:
           - virtiofsd
         stage:
           - ${{ inputs.stage }}
+        exclude:
+          - asset: pause-image
+            stage: release
     steps:
       - name: Take a pre-action for self-hosted runner
         run: ${HOME}/script/pre_action.sh ubuntu-2204

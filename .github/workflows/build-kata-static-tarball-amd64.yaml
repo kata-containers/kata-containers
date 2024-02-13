@@ -68,6 +68,8 @@ jobs:
             stage: release
           - asset: cloud-hypervisor-glibc
             stage: release
+          - asset: pause-image
+            stage: release
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
