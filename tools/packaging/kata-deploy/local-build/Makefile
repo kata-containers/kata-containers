@@ -111,6 +111,9 @@ pause-image-tarball:
 kata-ctl-tarball:
 	${MAKE} $@-build
 
+kata-manager-tarball:
+	${MAKE} $@-build
+
 kernel-dragonball-experimental-tarball:
 	${MAKE} $@-build
 

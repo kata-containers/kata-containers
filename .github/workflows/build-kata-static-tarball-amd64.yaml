@@ -36,6 +36,7 @@ jobs:
           - firecracker
           - genpolicy
           - kata-ctl
+          - kata-manager
           - kernel
           - kernel-confidential
           - kernel-dragonball-experimental

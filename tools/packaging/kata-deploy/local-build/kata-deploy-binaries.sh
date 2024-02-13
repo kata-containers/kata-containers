@@ -97,6 +97,7 @@ options:
 	firecracker
 	genpolicy
 	kata-ctl
+	kata-manager
 	kernel
 	kernel-confidential
 	kernel-dragonball-experimental
@@ -825,6 +826,53 @@ install_pause_image() {
 }
 
 
+install_script_helper() {
+	local script="${1:-}"
+	[ -n "$script" ] || die "need script"
+
+	local script_path
+
+	# If the script isn't specified as an absolute or relative path,
+	# find it.
+	if grep -q '/' <<< "$script"
+	then
+		script_path="$script"
+	else
+		script_path=$(find "${repo_root_dir}/" -type f -name "$script")
+	fi
+
+	local script_file
+	script_file=$(basename "$script_path")
+
+	local script_file_name
+
+	# Remove any extension
+	script_file_name="${script_file%%.*}"
+
+	info "installing utility script ${script}"
+
+	local bin_dir
+	bin_dir="${destdir}/opt/kata/bin/"
+
+	mkdir -p "$bin_dir"
+
+	sudo install -D \
+		--owner root \
+		--group root \
+		--mode "${default_binary_permissions}" \
+		"${script_path}" \
+		"${bin_dir}/${script_file}"
+
+	[ "$script_file" = "$script_file_name" ] && return 0
+
+	pushd "$bin_dir" &>/dev/null
+
+	# Create a sym-link with the extension removed
+	sudo ln -sf "$script_file" "$script_file_name"
+
+	popd &>/dev/null
+}
+
 install_tools_helper() {
 	tool=${1}
 
@@ -875,6 +923,10 @@ install_kata_ctl() {
 	install_tools_helper "kata-ctl"
 }
 
+install_kata_manager() {
+	install_script_helper "kata-manager.sh"
+}
+
 install_runk() {
 	install_tools_helper "runk"
 }
@@ -913,6 +965,7 @@ handle_build() {
 		install_initrd_confidential
 		install_initrd_mariner
 		install_kata_ctl
+		install_kata_manager
 		install_kernel
 		install_kernel_confidential
 		install_kernel_dragonball_experimental
@@ -950,6 +1003,8 @@ handle_build() {
 	genpolicy) install_genpolicy ;;
 
 	kata-ctl) install_kata_ctl ;;
+
+	kata-manager) install_kata_manager ;;
 
 	kernel) install_kernel ;;
 
@@ -1089,6 +1144,7 @@ main() {
 		firecracker
 		genpolicy
 		kata-ctl
+		kata-manager
 		kernel
 		kernel-experimental
 		nydus
