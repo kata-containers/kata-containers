@@ -10,7 +10,7 @@ set -o nounset
 set -o pipefail
 
 kata_tarball_dir="${2:-kata-artifacts}"
-nydus_dir="$(dirname "$(readlink -f "$0")")" 
+nydus_dir="$(dirname "$(readlink -f "$0")")"
 source "${nydus_dir}/../../common.bash"
 
 function install_dependencies() {
@@ -21,7 +21,7 @@ function install_dependencies() {
 	declare -a system_deps=(
 		jq
 	)
-	
+
 	sudo apt-get update
 	sudo apt-get -y install "${system_deps[@]}"
 
@@ -39,10 +39,10 @@ function install_dependencies() {
 	github_deps[1]="cri_tools:$(get_from_kata_deps "externals.critools.latest")"
 	github_deps[2]="nydus:$(get_from_kata_deps "externals.nydus.version")"
 	github_deps[3]="nydus_snapshotter:$(get_from_kata_deps "externals.nydus-snapshotter.version")"
-	
+
 	for github_dep in "${github_deps[@]}"; do
-	        IFS=":" read -r -a dep <<< "${github_dep}"
-	        install_${dep[0]} "${dep[1]}"
+		IFS=":" read -r -a dep <<< "${github_dep}"
+		install_${dep[0]} "${dep[1]}"
 	done
 }
 
