@@ -110,7 +110,7 @@ Options:
 	-t <hypervisor>	: Hypervisor_target.
 	-u <url>	: Kernel URL to be used to download the kernel tarball.
 	-v <version>	: Kernel version to use if kernel path not provided.
-	-x <type>	: Confidential guest protection type, such as sev, snp, tdx, or "confidential" (for all of those).
+	-x       	: All the confidential guest protection type for a specific architecture.
 EOF
 	exit "$exit_code"
 }
@@ -142,11 +142,7 @@ get_tee_kernel() {
 	mkdir -p ${kernel_path}
 
 	if [ -z "${kernel_url}" ]; then
-		if [[ "${conf_guest}" == "tdx" ]]; then
-			kernel_url=$(get_from_kata_deps "assets.kernel-tdx-experimental.url")
-		else
-			kernel_url=$(get_from_kata_deps "assets.kernel.${tee}.url")
-		fi
+		kernel_url=$(get_from_kata_deps "assets.kernel.${tee}.url")
 	fi
 
 	local kernel_tarball="${version}.tar.gz"
@@ -262,7 +258,7 @@ get_kernel_frag_path() {
 		info "Add kernel config for GPU due to '-g ${gpu_vendor}'"
 		# If conf_guest is set we need to update the CONFIG_LOCALVERSION
 		# to match the suffix created in install_kata
-		# -nvidia-gpu-{snp|tdx}, the linux headers will be named the very
+		# -nvidia-gpu-confidential, the linux headers will be named the very
 		# same if build with make deb-pkg for TDX or SNP.
 		local gpu_configs=$(mktemp).conf
 		local gpu_subst_configs="${gpu_path}/${gpu_vendor}.${arch_target}.conf.in"
@@ -457,7 +453,7 @@ build_kernel() {
 	arch_target=$(arch_to_kernel "${arch_target}")
 	pushd "${kernel_path}" >>/dev/null
 	make -j $(nproc ${CI:+--ignore 1}) ARCH="${arch_target}" ${CROSS_BUILD_ARG}
-	if [ "${conf_guest}" == "sev" ] || [ "${conf_guest}" == "confidential" ]; then
+	if [ "${conf_guest}" == "confidential" ]; then
 		make -j $(nproc ${CI:+--ignore 1}) INSTALL_MOD_STRIP=1 INSTALL_MOD_PATH=${kernel_path} modules_install
 	fi
 	[ "$arch_target" != "powerpc" ] && ([ -e "arch/${arch_target}/boot/bzImage" ] || [ -e "arch/${arch_target}/boot/Image.gz" ])
@@ -545,7 +541,7 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:b:c:deEfg:hH:k:mp:t:u:v:x:" opt; do
+	while getopts "a:b:c:deEfg:hH:k:mp:t:u:v:x" opt; do
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
@@ -601,11 +597,7 @@ main() {
 				kernel_version="${OPTARG}"
 				;;
 			x)
-				conf_guest="${OPTARG}"
-				case "$conf_guest" in
-					confidential|sev|snp|tdx) ;;
-					*) die "Confidential guest type '$conf_guest' not supported" ;;
-				esac
+				conf_guest="confidential"
 				;;
 		esac
 	done
@@ -645,12 +637,8 @@ main() {
 			kernel_version=$(get_from_kata_deps "assets.kernel-dragonball-experimental.version")
 		elif [[ "${conf_guest}" != "" ]]; then
 			#If specifying a tag for kernel_version, must be formatted version-like to avoid unintended parsing issues
-			if [[ "${conf_guest}" == "tdx" ]]; then
-				kernel_version=$(get_from_kata_deps "assets.kernel-tdx-experimental.version" 2>/dev/null || true)
-			else
-				kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.version" 2>/dev/null || true)
-				[ -n "${kernel_version}" ] || kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.tag")
-			fi
+			kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.version" 2>/dev/null || true)
+			[ -n "${kernel_version}" ] || kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.tag")
 		else
 			kernel_version=$(get_from_kata_deps "assets.kernel.version")
 		fi

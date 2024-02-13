@@ -100,11 +100,7 @@ options:
 	kernel-dragonball-experimental
 	kernel-experimental
 	kernel-nvidia-gpu
-	kernel-nvidia-gpu-snp
-	kernel-nvidia-gpu-tdx-experimental
 	kernel-nvidia-gpu-confidential
-	kernel-sev-tarball
-	kernel-tdx-experimental
 	nydus
 	pause-image
 	ovmf
@@ -115,11 +111,9 @@ options:
 	stratovirt
 	rootfs-image
 	rootfs-image-confidential
-	rootfs-image-tdx
 	rootfs-initrd
 	rootfs-initrd-confidential
 	rootfs-initrd-mariner
-	rootfs-initrd-sev
 	runk
 	shim-v2
 	tdvf
@@ -334,12 +328,6 @@ install_image_confidential() {
 	install_image "confidential"
 }
 
-#Install guest image for tdx
-install_image_tdx() {
-	export AGENT_POLICY=yes
-	install_image "tdx"
-}
-
 #Install guest initrd
 install_initrd() {
 	local variant="${1:-}"
@@ -414,12 +402,6 @@ install_initrd_mariner() {
 	install_initrd "mariner"
 }
 
-#Install guest initrd for sev
-install_initrd_sev() {
-	export AGENT_POLICY=yes
-	install_initrd "sev"
-}
-
 install_se_image() {
 	info "Create IBM SE image configured with AA_KBC=${AA_KBC}"
 	"${se_image_builder}" --destdir="${destdir}"
@@ -442,7 +424,7 @@ install_cached_kernel_tarball_component() {
 		"${extra_tarballs}" \
 		|| return 1
 	
-	if [[ "${kernel_name}" != "kernel-sev" ]] && [[ "${kernel_name}" != "kernel"*"-confidential" ]]; then
+	if [[ "${kernel_name}" != "kernel"*"-confidential" ]]; then
 		return 0
 	fi
 
@@ -463,13 +445,11 @@ install_kernel_helper() {
 	export kernel_version="$(get_from_kata_deps ${kernel_version_yaml_path})"
 	export kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
 
-	if [[ "${kernel_name}" == "kernel-sev" ]]; then
-		kernel_version="$(get_from_kata_deps assets.kernel.sev.version)"
-	elif [[ "${kernel_name}" == "kernel"*"-confidential" ]]; then
+	if [[ "${kernel_name}" == "kernel"*"-confidential" ]]; then
 		kernel_version="$(get_from_kata_deps assets.kernel.confidential.version)"
 	fi
 
-	if [[ "${kernel_name}" == "kernel-sev" ]] || [[ "${kernel_name}" == "kernel"*"-confidential" ]]; then
+	if [[ "${kernel_name}" == "kernel"*"-confidential" ]]; then
 		local kernel_modules_tarball_name="kata-static-${kernel_name}-modules.tar.xz"
 		local kernel_modules_tarball_path="${workdir}/${kernel_modules_tarball_name}"
 		extra_tarballs="${kernel_modules_tarball_name}:${kernel_modules_tarball_path}"
@@ -500,7 +480,7 @@ install_kernel_confidential() {
 	install_kernel_helper \
 		"assets.kernel.confidential.version" \
 		"kernel-confidential" \
-		"-x confidential -u ${kernel_url}"
+		"-x -u ${kernel_url}"
 }
 
 install_kernel_dragonball_experimental() {
@@ -527,50 +507,7 @@ install_kernel_nvidia_gpu_confidential() {
 	install_kernel_helper \
 		"assets.kernel.confidential.version" \
 		"kernel-nvidia-gpu-confidential" \
-		"-x confidential -g nvidia -u ${kernel_url} -H deb"
-}
-
-#Install GPU and SNP enabled kernel asset
-install_kernel_nvidia_gpu_snp() {
-	local kernel_url="$(get_from_kata_deps assets.kernel.sev.url)"
-
-	install_kernel_helper \
-		"assets.kernel.sev.version" \
-		"kernel-nvidia-gpu-snp" \
-		"-x sev -g nvidia -u ${kernel_url} -H deb"
-}
-
-#Install GPU and TDX experimental enabled kernel asset
-install_kernel_nvidia_gpu_tdx_experimental() {
-	local kernel_url="$(get_from_kata_deps assets.kernel-tdx-experimental.url)"
-
-	install_kernel_helper \
-		"assets.kernel-tdx-experimental.version" \
-		"kernel-nvidia-gpu-tdx-experimental" \
-		"-x tdx -g nvidia -u ${kernel_url} -H deb"
-}
-
-#Install experimental TDX kernel asset
-install_kernel_tdx_experimental() {
-	local kernel_url="$(get_from_kata_deps assets.kernel-tdx-experimental.url)"
-
-	export MEASURED_ROOTFS=yes
-
-	install_kernel_helper \
-		"assets.kernel-tdx-experimental.version" \
-		"kernel-tdx-experimental" \
-		"-x tdx -u ${kernel_url}"
-}
-
-#Install sev kernel asset
-install_kernel_sev() {
-	info "build sev kernel"
-	local kernel_url="$(get_from_kata_deps assets.kernel.sev.url)"
-
-	install_kernel_helper \
-		"assets.kernel.sev.version" \
-		"kernel-sev" \
-		"-x sev -u ${kernel_url}"
+		"-x -g nvidia -u ${kernel_url} -H deb"
 }
 
 install_qemu_helper() {
@@ -973,12 +910,10 @@ handle_build() {
 		install_initrd
 		install_initrd_confidential
 		install_initrd_mariner
-		install_initrd_sev
 		install_kata_ctl
 		install_kernel
 		install_kernel_confidential
 		install_kernel_dragonball_experimental
-		install_kernel_tdx_experimental
 		install_log_parser_rs
 		install_nydus
 		install_ovmf
@@ -1024,14 +959,6 @@ handle_build() {
 
 	kernel-nvidia-gpu-confidential) install_kernel_nvidia_gpu_confidential ;;
 
-	kernel-nvidia-gpu-snp) install_kernel_nvidia_gpu_snp;;
-
-	kernel-nvidia-gpu-tdx-experimental) install_kernel_nvidia_gpu_tdx_experimental;;
-
-	kernel-tdx-experimental) install_kernel_tdx_experimental ;;
-
-	kernel-sev) install_kernel_sev ;;
-
 	nydus) install_nydus ;;
 
 	ovmf) install_ovmf ;;
@@ -1052,15 +979,11 @@ handle_build() {
 
 	rootfs-image-confidential) install_image_confidential ;;
 
-	rootfs-image-tdx) install_image_tdx ;;
-
 	rootfs-initrd) install_initrd ;;
 
 	rootfs-initrd-confidential) install_initrd_confidential ;;
 
 	rootfs-initrd-mariner) install_initrd_mariner ;;
-
-	rootfs-initrd-sev) install_initrd_sev ;;
 
 	runk) install_runk ;;
 	
@@ -1084,7 +1007,7 @@ handle_build() {
 	tar tvf "${final_tarball_path}"
 
 	case ${build_target} in
-		kernel*-confidential|kernel-sev)
+		kernel*-confidential)
 			local modules_final_tarball_path="${workdir}/kata-static-${build_target}-modules.tar.xz"
 			if [ ! -f "${modules_final_tarball_path}" ]; then
 				local modules_dir=$(get_kernel_modules_dir ${kernel_version} ${kernel_kata_config_version} ${build_target})
@@ -1114,7 +1037,7 @@ handle_build() {
 		echo "${ARTEFACT_REGISTRY_PASSWORD}" | sudo oras login "${ARTEFACT_REGISTRY}" -u "${ARTEFACT_REGISTRY_USERNAME}" --password-stdin
 
 		case ${build_target} in
-			kernel*-confidential|kernel-sev)
+			kernel*-confidential)
 				sudo oras push \
 					${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
 					${final_tarball_name} \
