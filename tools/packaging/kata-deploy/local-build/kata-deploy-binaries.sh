@@ -165,7 +165,7 @@ cleanup_and_fail() {
 			rm -f "${extra_tarball_name}"
 		done
 	fi
-       
+
 	return 1
 }
 
@@ -197,7 +197,7 @@ install_cached_tarball_component() {
 
 	info "Using cached tarball of ${component}"
 	mv "${component_tarball_name}" "${component_tarball_path}"
-	
+
 	[ -z "${extra_tarballs}" ] && return 0
 
 	local mapping
@@ -423,7 +423,7 @@ install_cached_kernel_tarball_component() {
 		"${final_tarball_path}" \
 		"${extra_tarballs}" \
 		|| return 1
-	
+
 	if [[ "${kernel_name}" != "kernel"*"-confidential" ]]; then
 		return 0
 	fi
@@ -708,7 +708,7 @@ install_shimv2() {
 	local protocols_last_commit="$(get_last_modification "${repo_root_dir}/src/libs/protocols")"
 	local GO_VERSION="$(get_from_kata_deps "languages.golang.meta.newest-version")"
 	local RUST_VERSION="$(get_from_kata_deps "languages.rust.meta.newest-version")"
-	
+
 	latest_artefact="${shim_v2_last_commit}-${protocols_last_commit}-${runtime_rs_last_commit}-${GO_VERSION}-${RUST_VERSION}"
 	latest_builder_image="$(get_shim_v2_image_name)"
 
@@ -986,7 +986,7 @@ handle_build() {
 	rootfs-initrd-mariner) install_initrd_mariner ;;
 
 	runk) install_runk ;;
-	
+
 	shim-v2) install_shimv2 ;;
 
 	tdvf) install_tdvf ;;

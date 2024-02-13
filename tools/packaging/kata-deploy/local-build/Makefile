@@ -124,7 +124,7 @@ kernel-nvidia-gpu-snp-tarball:
 	${MAKE} $@-build
 
 kernel-nvidia-gpu-tdx-experimental-tarball:
-	${MAKE} $@-build	
+	${MAKE} $@-build
 
 kernel-tarball:
 	${MAKE} $@-build
