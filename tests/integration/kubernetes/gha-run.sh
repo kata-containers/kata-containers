@@ -135,6 +135,10 @@ function deploy_kata() {
 		yq write -i "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[-1].value' "${KATA_HOST_OS}"
 	fi
 
+	if [ "${KATA_HYPERVISOR}" = "qemu" ]; then
+		yq write -i "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[6].value' "image initrd kernel default_vcpus"
+	fi
+
 	echo "::group::Final kata-deploy.yaml that is used in the test"
 	cat "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 	grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" || die "Failed to setup the tests image"
