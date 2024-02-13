@@ -110,6 +110,8 @@ function deploy_kata() {
 	[ "$platform" = "kcli" ] && \
 	export KUBECONFIG="$HOME/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
 
+	cleanup_kata_deploy || true
+
 	set_default_cluster_namespace
 
 	sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
@@ -188,24 +190,8 @@ function run_tests() {
 	popd
 }
 
-function cleanup() {
-	platform="${1}"
-	test_type="${2:-k8s}"
+function cleanup_kata_deploy() {
 	ensure_yq
-
-	[ "$platform" = "kcli" ] && \
-		export KUBECONFIG="$HOME/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
-
-	echo "Gather information about the nodes and pods before cleaning up the node"
-	get_nodes_and_pods_info
-
-	if [ "${platform}" = "aks" ]; then
-		delete_cluster ${test_type}
-		return
-	fi
-
-	# Switch back to the default namespace and delete the tests one
-	delete_test_cluster_namespace
 
 	if [ "${KUBERNETES}" = "k3s" ]; then
 		deploy_spec="-k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k3s""
@@ -238,6 +224,28 @@ function cleanup() {
 	# shellcheck disable=2086
 	kubectl delete ${cleanup_spec}
 	kubectl delete -f "${tools_dir}/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
+}
+
+function cleanup() {
+	platform="${1}"
+	test_type="${2:-k8s}"
+	ensure_yq
+
+	[ "$platform" = "kcli" ] && \
+		export KUBECONFIG="$HOME/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
+
+	echo "Gather information about the nodes and pods before cleaning up the node"
+	get_nodes_and_pods_info
+
+	if [ "${platform}" = "aks" ]; then
+		delete_cluster ${test_type}
+		return
+	fi
+
+	# Switch back to the default namespace and delete the tests one
+	delete_test_cluster_namespace
+
+	cleanup_kata_deploy
 }
 
 function deploy_snapshotter() {
