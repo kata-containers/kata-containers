@@ -32,6 +32,28 @@ machine_type = "@MACHINETYPE@"
 # Default false
 confidential_guest = true
 
+# Enable pre-attestation for AMD SEV and SEV-ES guests.
+# Applies only if confidential_guest is true.
+# (default: false)
+guest_pre_attestation = true
+
+# A remote key broker server (KBS) is required to validate the attestation
+# measurement and inject a secret key.  
+# See https://github.com/confidential-containers/simple-kbs
+guest_pre_attestation_kbs_uri = "@DEFGUESTPREATTESTATIONPROXY@"
+
+# The simple-kbs can be run in "online" and "offline" modes
+guest_pre_attestation_kbs_mode="@DEFGUESTPREATTESTATIONMODE@" 
+
+# Keyset ID for injected secrets (offline kbs)
+guest_pre_attestation_keyset = "@DEFGUESTPREATTESTATIONKEYSET@"
+
+# SEV guest policy
+sev_guest_policy = @DEFSEVGUESTPOLICY@
+
+# SEV certificate chain path 
+sev_cert_chain = "@DEFSEVCERTCHAIN@"
+
 # Enable running QEMU VMM as a non-root user.
 # By default QEMU VMM run as root. When this is set to true, QEMU VMM process runs as
 # a non-root random user. See documentation for the limitations of this mode.
