@@ -275,6 +275,18 @@ function deploy_nydus_snapshotter() {
 	ensure_yq
 
 	local nydus_snapshotter_install_dir="/tmp/nydus-snapshotter"
+	local nydus_snapshotter_local_build="false"
+	# At the time of writing, a container image for nydus snapshotter only supports x86_64
+	# So, we need to build the image locally for other architectures
+	if [ "$(uname -m)" != "x86_64" ]; then
+		nydus_snapshotter_local_build="true"
+		nydus_snapshotter_image="localhost:5000/nydus-snapshotter:latest"
+		# Check if a local registry is running
+		if ! ss -ntlp | grep -q 5000; then
+			echo "Local registry is not running"
+			docker run -d -p 5000:5000 --name local-registry registry:2.8.1
+		fi
+	fi
 	if [ -d "${nydus_snapshotter_install_dir}" ]; then
 		rm -rf "${nydus_snapshotter_install_dir}"
 	fi
@@ -284,6 +296,16 @@ function deploy_nydus_snapshotter() {
 	git clone -b "${nydus_snapshotter_version}" "${nydus_snapshotter_url}" "${nydus_snapshotter_install_dir}"
 
 	pushd "$nydus_snapshotter_install_dir"
+	if [ "${nydus_snapshotter_local_build}" == "true" ]; then
+		# Build and push a nydus snapshotter image locally
+		make build
+		cp bin/* misc/snapshotter/
+		pushd misc/snapshotter/
+		nydus_version=$(get_from_kata_deps "externals.nydus.version")
+		docker build --build-arg NYDUS_VER="${nydus_version}" -t "${nydus_snapshotter_image}" .
+		docker push "${nydus_snapshotter_image}"
+		popd
+	fi
 	if [ "${PULL_TYPE}" == "guest-pull" ]; then
 		# Enable guest pull feature in nydus snapshotter
 		yq write -i misc/snapshotter/base/nydus-snapshotter.yaml 'data.FS_DRIVER' "proxy" --style=double
@@ -297,6 +319,10 @@ function deploy_nydus_snapshotter() {
 	yq write -i misc/snapshotter/base/nydus-snapshotter.yaml 'data.ENABLE_SYSTEMD_SERVICE' "true" --style=double
 	# Enable "runtime specific snapshotter" feature in containerd when configuring containerd for snapshotter
 	yq write -i misc/snapshotter/base/nydus-snapshotter.yaml 'data.ENABLE_RUNTIME_SPECIFIC_SNAPSHOTTER' "true" --style=double
+	if [ "${nydus_snapshotter_local_build}" == "true" ]; then
+		# Replace the image with the local image
+		yq write -i --doc=1 misc/snapshotter/base/nydus-snapshotter.yaml 'spec.template.spec.containers[*].image' "${nydus_snapshotter_image}"
+	fi
 
 	# Deploy nydus snapshotter as a daemonset
 	kubectl create -f "misc/snapshotter/nydus-snapshotter-rbac.yaml"
