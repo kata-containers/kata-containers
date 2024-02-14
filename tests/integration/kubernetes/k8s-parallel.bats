@@ -12,14 +12,20 @@ setup() {
 	get_pod_config_dir
 	job_name="jobtest"
 	names=( "test1" "test2" "test3" )
+
+	# Create genpolicy settings - common for all of the test jobs
+	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
+	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
+
+	# Create yaml files
+	for i in "${names[@]}"; do
+		yaml_file="${pod_config_dir}/job-$i.yaml"
+		sed "s/\$ITEM/$i/" ${pod_config_dir}/job-template.yaml > ${yaml_file}
+		auto_generate_policy "${policy_settings_dir}" "${yaml_file}"
+	done
 }
 
 @test "Parallel jobs" {
-	# Create yaml files
-	for i in "${names[@]}"; do
-		sed "s/\$ITEM/$i/" ${pod_config_dir}/job-template.yaml > ${pod_config_dir}/job-$i.yaml
-	done
-
 	# Create the jobs
 	for i in "${names[@]}"; do
 		kubectl create -f "${pod_config_dir}/job-$i.yaml"
@@ -45,4 +51,6 @@ teardown() {
 	for i in "${names[@]}"; do
 		rm -f ${pod_config_dir}/job-$i.yaml
 	done
+
+	delete_tmp_policy_settings_dir "${policy_settings_dir}"
 }
