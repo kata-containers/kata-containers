@@ -11,6 +11,7 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 setup() {
 	[ "${KATA_HYPERVISOR}" == "dragonball" ] || [ "${KATA_HYPERVISOR}" == "cloud-hypervisor" ]&& \
 		skip "runtime-rs is still using the old vcpus allocation algorithm, skipping the test see https://github.com/kata-containers/kata-containers/issues/8660"
+	[ "$(uname -m)" == "s390x" ] && skip "Different behaviour identified on s390x, skipping the test see https://github.com/kata-containers/kata-containers/issues/9093"
 
 	get_pod_config_dir
 	pods=( "vcpus-less-than-one-with-no-limits" "vcpus-less-than-one-with-limits" "vcpus-more-than-one-with-limits" )
@@ -31,6 +32,7 @@ setup() {
 teardown() {
 	[ "${KATA_HYPERVISOR}" == "dragonball" ] || [ "${KATA_HYPERVISOR}" == "cloud-hypervisor" ] && \
 		skip "runtime-rs is still using the old vcpus allocation algorithm, skipping the test see https://github.com/kata-containers/kata-containers/issues/8660"
+	[ "$(uname -m)" == "s390x" ] && skip "Different behaviour identified on s390x, skipping the test see https://github.com/kata-containers/kata-containers/issues/9093"
 
 	for pod in "${pods[@]}"; do
 		kubectl logs ${pod}
