@@ -27,11 +27,19 @@ function _print_instance_type() {
     esac
 }
 
+# Print the cluster name set by $AKS_NAME or generated out of runtime
+# metadata (e.g. pull request number, commit SHA, etc).
+#
 function _print_cluster_name() {
-    test_type="${1:-k8s}"
+    local test_type="${1:-k8s}"
+    local short_sha
 
-    short_sha="$(git rev-parse --short=12 HEAD)"
-    echo "${test_type}-${GH_PR_NUMBER}-${short_sha}-${KATA_HYPERVISOR}-${KATA_HOST_OS}-amd64-${K8S_TEST_HOST_TYPE:0:1}"
+    if [ -n "${AKS_NAME:-}" ]; then
+        echo "$AKS_NAME"
+    else
+        short_sha="$(git rev-parse --short=12 HEAD)"
+        echo "${test_type}-${GH_PR_NUMBER}-${short_sha}-${KATA_HYPERVISOR}-${KATA_HOST_OS}-amd64-${K8S_TEST_HOST_TYPE:0:1}"
+    fi
 }
 
 function _print_rg_name() {
