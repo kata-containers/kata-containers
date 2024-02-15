@@ -52,6 +52,8 @@ workdir="${WORKDIR:-$PWD}"
 
 destdir="${workdir}/kata-static"
 
+default_binary_permissions='0744'
+
 die() {
 	msg="$*"
 	echo "ERROR: ${msg}" >&2
@@ -95,6 +97,7 @@ options:
 	firecracker
 	genpolicy
 	kata-ctl
+	kata-manager
 	kernel
 	kernel-confidential
 	kernel-dragonball-experimental
@@ -165,7 +168,7 @@ cleanup_and_fail() {
 			rm -f "${extra_tarball_name}"
 		done
 	fi
-       
+
 	return 1
 }
 
@@ -197,7 +200,7 @@ install_cached_tarball_component() {
 
 	info "Using cached tarball of ${component}"
 	mv "${component_tarball_name}" "${component_tarball_path}"
-	
+
 	[ -z "${extra_tarballs}" ] && return 0
 
 	local mapping
@@ -423,7 +426,7 @@ install_cached_kernel_tarball_component() {
 		"${final_tarball_path}" \
 		"${extra_tarballs}" \
 		|| return 1
-	
+
 	if [[ "${kernel_name}" != "kernel"*"-confidential" ]]; then
 		return 0
 	fi
@@ -586,8 +589,8 @@ install_firecracker() {
 	"${firecracker_builder}"
 	info "Install static firecracker"
 	mkdir -p "${destdir}/opt/kata/bin/"
-	sudo install -D --owner root --group root --mode 0744 release-${firecracker_version}-${ARCH}/firecracker-${firecracker_version}-${ARCH} "${destdir}/opt/kata/bin/firecracker"
-	sudo install -D --owner root --group root --mode 0744 release-${firecracker_version}-${ARCH}/jailer-${firecracker_version}-${ARCH} "${destdir}/opt/kata/bin/jailer"
+	sudo install -D --owner root --group root --mode "$default_binary_permissions" release-${firecracker_version}-${ARCH}/firecracker-${firecracker_version}-${ARCH} "${destdir}/opt/kata/bin/firecracker"
+	sudo install -D --owner root --group root --mode "$default_binary_permissions" release-${firecracker_version}-${ARCH}/jailer-${firecracker_version}-${ARCH} "${destdir}/opt/kata/bin/jailer"
 }
 
 install_clh_helper() {
@@ -610,7 +613,7 @@ install_clh_helper() {
 	libc="${libc}" features="${features}" "${clh_builder}"
 	info "Install static cloud-hypervisor"
 	mkdir -p "${destdir}/opt/kata/bin/"
-	sudo install -D --owner root --group root --mode 0744 cloud-hypervisor/cloud-hypervisor "${destdir}/opt/kata/bin/cloud-hypervisor${suffix}"
+	sudo install -D --owner root --group root --mode "$default_binary_permissions" cloud-hypervisor/cloud-hypervisor "${destdir}/opt/kata/bin/cloud-hypervisor${suffix}"
 }
 
 # Install static cloud-hypervisor asset
@@ -654,7 +657,7 @@ install_stratovirt() {
 	"${stratovirt_builder}"
 	info "Install static stratovirt"
 	mkdir -p "${destdir}/opt/kata/bin/"
-	sudo install -D --owner root --group root --mode 0744 static-stratovirt/stratovirt "${destdir}/opt/kata/bin/stratovirt"
+	sudo install -D --owner root --group root --mode "$default_binary_permissions" static-stratovirt/stratovirt "${destdir}/opt/kata/bin/stratovirt"
 }
 
 # Install static virtiofsd asset
@@ -674,7 +677,7 @@ install_virtiofsd() {
 	"${virtiofsd_builder}"
 	info "Install static virtiofsd"
 	mkdir -p "${destdir}/opt/kata/libexec/"
-	sudo install -D --owner root --group root --mode 0744 virtiofsd/virtiofsd "${destdir}/opt/kata/libexec/virtiofsd"
+	sudo install -D --owner root --group root --mode "$default_binary_permissions" virtiofsd/virtiofsd "${destdir}/opt/kata/libexec/virtiofsd"
 }
 
 # Install static nydus asset
@@ -698,7 +701,7 @@ install_nydus() {
 	mkdir -p "${destdir}/opt/kata/libexec/"
 	ls -tl . || true
 	ls -tl nydus-static || true
-	sudo install -D --owner root --group root --mode 0744 nydus-static/nydusd "${destdir}/opt/kata/libexec/nydusd"
+	sudo install -D --owner root --group root --mode "$default_binary_permissions" nydus-static/nydusd "${destdir}/opt/kata/libexec/nydusd"
 }
 
 #Install all components that are not assets
@@ -708,7 +711,7 @@ install_shimv2() {
 	local protocols_last_commit="$(get_last_modification "${repo_root_dir}/src/libs/protocols")"
 	local GO_VERSION="$(get_from_kata_deps "languages.golang.meta.newest-version")"
 	local RUST_VERSION="$(get_from_kata_deps "languages.rust.meta.newest-version")"
-	
+
 	latest_artefact="${shim_v2_last_commit}-${protocols_last_commit}-${runtime_rs_last_commit}-${GO_VERSION}-${RUST_VERSION}"
 	latest_builder_image="$(get_shim_v2_image_name)"
 
@@ -823,6 +826,53 @@ install_pause_image() {
 }
 
 
+install_script_helper() {
+	local script="${1:-}"
+	[ -n "$script" ] || die "need script"
+
+	local script_path
+
+	# If the script isn't specified as an absolute or relative path,
+	# find it.
+	if grep -q '/' <<< "$script"
+	then
+		script_path="$script"
+	else
+		script_path=$(find "${repo_root_dir}/" -type f -name "$script")
+	fi
+
+	local script_file
+	script_file=$(basename "$script_path")
+
+	local script_file_name
+
+	# Remove any extension
+	script_file_name="${script_file%%.*}"
+
+	info "installing utility script ${script}"
+
+	local bin_dir
+	bin_dir="${destdir}/opt/kata/bin/"
+
+	mkdir -p "$bin_dir"
+
+	sudo install -D \
+		--owner root \
+		--group root \
+		--mode "${default_binary_permissions}" \
+		"${script_path}" \
+		"${bin_dir}/${script_file}"
+
+	[ "$script_file" = "$script_file_name" ] && return 0
+
+	pushd "$bin_dir" &>/dev/null
+
+	# Create a sym-link with the extension removed
+	sudo ln -sf "$script_file" "$script_file_name"
+
+	popd &>/dev/null
+}
+
 install_tools_helper() {
 	tool=${1}
 
@@ -853,7 +903,7 @@ install_tools_helper() {
 		sudo install -D --owner root --group root --mode 0644 ${repo_root_dir}/src/tools/${tool}/genpolicy-settings.json "${defaults_path}/genpolicy-settings.json"
 		binary_permissions="0755"
 	else
-		binary_permissions="0744"
+		binary_permissions="$default_binary_permissions"
 	fi
 
 	info "Install static ${tool_binary}"
@@ -871,6 +921,10 @@ install_genpolicy() {
 
 install_kata_ctl() {
 	install_tools_helper "kata-ctl"
+}
+
+install_kata_manager() {
+	install_script_helper "kata-manager.sh"
 }
 
 install_runk() {
@@ -911,6 +965,7 @@ handle_build() {
 		install_initrd_confidential
 		install_initrd_mariner
 		install_kata_ctl
+		install_kata_manager
 		install_kernel
 		install_kernel_confidential
 		install_kernel_dragonball_experimental
@@ -949,6 +1004,8 @@ handle_build() {
 
 	kata-ctl) install_kata_ctl ;;
 
+	kata-manager) install_kata_manager ;;
+
 	kernel) install_kernel ;;
 
 	kernel-confidential) install_kernel_confidential ;;
@@ -986,7 +1043,7 @@ handle_build() {
 	rootfs-initrd-mariner) install_initrd_mariner ;;
 
 	runk) install_runk ;;
-	
+
 	shim-v2) install_shimv2 ;;
 
 	tdvf) install_tdvf ;;
@@ -1087,6 +1144,7 @@ main() {
 		firecracker
 		genpolicy
 		kata-ctl
+		kata-manager
 		kernel
 		kernel-experimental
 		nydus
