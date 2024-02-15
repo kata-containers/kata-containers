@@ -160,13 +160,38 @@ function kbs_k8s_deploy() {
 # otherwise the cluster IP.
 #
 kbs_k8s_svc_host() {
-	if kubectl get ingress -n "$KBS_NS" | grep -q kbs; then
+	if kubectl get ingress -n "$KBS_NS" 2>/dev/null | grep -q kbs; then
 		kubectl get ingress kbs -n "$KBS_NS" \
 			-o jsonpath='{.spec.rules[0].host}' 2>/dev/null
 	else
 		kubectl get svc kbs -n "$KBS_NS" \
 			-o jsonpath='{.spec.clusterIP}' 2>/dev/null
 	fi
+}
+
+# Return the kbs service port number. In case ingress is configured
+# it will return "80", otherwise the pod's service port.
+#
+kbs_k8s_svc_port() {
+	if kubectl get ingress -n "$KBS_NS" 2>/dev/null | grep -q kbs; then
+		# Assume served on default HTTP port 80
+		echo "80"
+	else
+		kubectl get svc kbs -n "$KBS_NS" \
+			-o jsonpath='{.spec.ports[0].port}' 2>/dev/null
+	fi
+}
+
+# Return the kbs service HTTP address (http://host:port).
+#
+kbs_k8s_svc_http_addr() {
+	local host
+	local port
+
+	host=$(kbs_k8s_svc_host)
+	port=$(kbs_k8s_svc_port)
+
+	echo "http://${host}:${port}"
 }
 
 # Choose the appropriated ingress handler.
