@@ -33,8 +33,6 @@ lazy_static! {
 
     static ref SHIM_PROC_STAT: GaugeVec = GaugeVec::new(Opts::new(format!("{}_{}",NAMESPACE_KATA_SHIM,"proc_stat"), "Kata containerd shim v2 process statistics."), &["item"]).unwrap();
 
-    static ref SHIM_NETDEV: GaugeVec = GaugeVec::new(Opts::new(format!("{}_{}",NAMESPACE_KATA_SHIM,"netdev"), "Kata containerd shim v2 network devices statistics."), &["interface", "item"]).unwrap();
-
     static ref SHIM_IO_STAT: GaugeVec = GaugeVec::new(Opts::new(format!("{}_{}",NAMESPACE_KATA_SHIM,"io_stat"), "Kata containerd shim v2 process IO statistics."), &["item"]).unwrap();
 
     static ref SHIM_OPEN_FDS: Gauge = Gauge::new(format!("{}_{}", NAMESPACE_KATA_SHIM, "fds"), "Kata containerd shim v2 open FDs.").unwrap();
@@ -66,7 +64,6 @@ fn register_shim_metrics() -> Result<()> {
     REGISTRY.register(Box::new(SHIM_THREADS.clone()))?;
     REGISTRY.register(Box::new(SHIM_PROC_STATUS.clone()))?;
     REGISTRY.register(Box::new(SHIM_PROC_STAT.clone()))?;
-    REGISTRY.register(Box::new(SHIM_NETDEV.clone()))?;
     REGISTRY.register(Box::new(SHIM_IO_STAT.clone()))?;
     REGISTRY.register(Box::new(SHIM_OPEN_FDS.clone()))?;
 
@@ -102,17 +99,6 @@ fn update_shim_metrics() -> Result<()> {
         }
         Ok(stat) => {
             set_gauge_vec_proc_stat(&SHIM_PROC_STAT, &stat);
-        }
-    }
-
-    match procfs::net::dev_status() {
-        Err(err) => {
-            error!(sl!(), "failed to get host net::dev_status: {:?}", err);
-        }
-        Ok(devs) => {
-            for (_, status) in devs {
-                set_gauge_vec_netdev(&SHIM_NETDEV, &status);
-            }
         }
     }
 
@@ -184,41 +170,6 @@ fn set_gauge_vec_proc_stat(gv: &prometheus::GaugeVec, stat: &procfs::process::St
     gv.with_label_values(&["stime"]).set(stat.stime as f64);
     gv.with_label_values(&["cutime"]).set(stat.cutime as f64);
     gv.with_label_values(&["cstime"]).set(stat.cstime as f64);
-}
-
-fn set_gauge_vec_netdev(gv: &prometheus::GaugeVec, status: &procfs::net::DeviceStatus) {
-    gv.with_label_values(&[status.name.as_str(), "recv_bytes"])
-        .set(status.recv_bytes as f64);
-    gv.with_label_values(&[status.name.as_str(), "recv_packets"])
-        .set(status.recv_packets as f64);
-    gv.with_label_values(&[status.name.as_str(), "recv_errs"])
-        .set(status.recv_errs as f64);
-    gv.with_label_values(&[status.name.as_str(), "recv_drop"])
-        .set(status.recv_drop as f64);
-    gv.with_label_values(&[status.name.as_str(), "recv_fifo"])
-        .set(status.recv_fifo as f64);
-    gv.with_label_values(&[status.name.as_str(), "recv_frame"])
-        .set(status.recv_frame as f64);
-    gv.with_label_values(&[status.name.as_str(), "recv_compressed"])
-        .set(status.recv_compressed as f64);
-    gv.with_label_values(&[status.name.as_str(), "recv_multicast"])
-        .set(status.recv_multicast as f64);
-    gv.with_label_values(&[status.name.as_str(), "sent_bytes"])
-        .set(status.sent_bytes as f64);
-    gv.with_label_values(&[status.name.as_str(), "sent_packets"])
-        .set(status.sent_packets as f64);
-    gv.with_label_values(&[status.name.as_str(), "sent_errs"])
-        .set(status.sent_errs as f64);
-    gv.with_label_values(&[status.name.as_str(), "sent_drop"])
-        .set(status.sent_drop as f64);
-    gv.with_label_values(&[status.name.as_str(), "sent_fifo"])
-        .set(status.sent_fifo as f64);
-    gv.with_label_values(&[status.name.as_str(), "sent_colls"])
-        .set(status.sent_colls as f64);
-    gv.with_label_values(&[status.name.as_str(), "sent_carrier"])
-        .set(status.sent_carrier as f64);
-    gv.with_label_values(&[status.name.as_str(), "sent_compressed"])
-        .set(status.sent_compressed as f64);
 }
 
 fn set_gauge_vec_proc_io(gv: &prometheus::GaugeVec, io_stat: &procfs::process::Io) {
