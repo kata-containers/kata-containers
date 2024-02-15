@@ -30,7 +30,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/intel-go/cpuid v0.0.0-20210602155658-5747e5cec0d9
 	github.com/mdlayher/vsock v1.1.0
-	github.com/opencontainers/runc v1.1.9
+	github.com/opencontainers/runc v1.1.12
 	github.com/opencontainers/runtime-spec v1.1.0-rc.1
 	github.com/opencontainers/selinux v1.11.0
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58
