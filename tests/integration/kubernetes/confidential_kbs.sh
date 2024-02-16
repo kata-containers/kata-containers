@@ -21,8 +21,73 @@ source "${kubernetes_dir}/../../../ci/lib.sh"
 readonly COCO_KBS_DIR="/tmp/kbs"
 # The k8s namespace where the kbs service is deployed
 readonly KBS_NS="coco-tenant"
+# The private key file used for CLI authentication
+readonly KBS_PRIVATE_KEY="${COCO_KBS_DIR}/kbs/config/kubernetes/base/kbs.key"
 # The kbs service name
 readonly KBS_SVC_NAME="kbs"
+
+# Set resource data.
+#
+# Parameters:
+#	$1 - repository name (optional)
+#	$2 - resource type (mandatory)
+#	$3 - tag (mandatory)
+#	$4 - resource data
+#
+kbs_set_resource() {
+	local repository="${1:-}"
+	local type="${2:-}"
+	local tag="${3:-}"
+	local data="${4:-}"
+	local file
+	local rc=0
+
+	if [ -z "$data" ]; then
+		>&2 echo "ERROR: missing data parameter"
+		return 1
+	fi
+
+	file=$(mktemp -t kbs-resource-XXXXX)
+	echo "$data" > "$file"
+
+	kbs_set_resource_from_file "$repository" "$type" "$tag" "$file" || \
+		rc=$?
+
+	rm -f "$file"
+	return $rc
+}
+
+# Set resource, read data from file.
+#
+# Parameters:
+#	$1 - repository name (optional)
+#	$2 - resource type (mandatory)
+#	$3 - tag (mandatory)
+#	$4 - resource data
+#
+kbs_set_resource_from_file() {
+	local repository="${1:-}"
+	local type="${2:-}"
+	local tag="${3:-}"
+	local file="${4:-}"
+
+	if [[ -z "$type" || -z "$tag" ]]; then
+		>&2 echo "ERROR: missing type='$type' and/or tag='$tag' parameters"
+		return 1
+	elif [ ! -f "$file" ]; then
+		>&2 echo "ERROR: resource file '$file' does not exist"
+		return 1
+	fi
+
+	local path=""
+	[ -n "$repository" ] && path+="${repository}/"
+	path+="${type}/"
+	path+="${tag}"
+
+	kbs-client --url "$(kbs_k8s_svc_http_addr)" config \
+		--auth-private-key "$KBS_PRIVATE_KEY" set-resource \
+		--path "$path" --resource-file "$file"
+}
 
 # Build and install the kbs-client binary, unless it is already present.
 #
