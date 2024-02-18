@@ -113,3 +113,43 @@ agent control tool, rather than the Kata runtime.
 
 For further details, see the
 [agent control tool documentation](../tools/agent-ctl/README.md#run-the-tool-and-the-agent-in-the-same-environment).
+
+## Agent options
+
+The kata agent has the ability to configure agent options in guest kernel command line at runtime. Currently, the following agent options can be configured: 
+
+| Option | Name | Description  | Type | Default |
+|-|-|:-:|:-:|:-:|
+| `agent.config_file` | `Configuration file` | Allow to configure options through a configuration file from the root filesystem | string | `""` |
+| `agent.container_pipe_size` | `Container pipe sizes` | Allow to configure the stdout or stderr pipe sizes | integer | `0` |
+| `agent.debug_console` | Debug console flag | Allow to connect guest OS running inside hypervisor Connect using `kata-runtime exec <sandbox-id>` | boolean | `false` |
+| `agent.debug_console_vport` | Debug console port | Allow to specify the `vsock` port to connect the debugging console | integer | `0` |
+| `agent.devmode` | Developer mode | Allow the agent process to coredump | boolean | `false` |
+| `agent.hotplug_timeout` | Hotplug timeout | Allow to configure hotplug timeout(seconds) of block devices | integer | `3` |
+| `agent.log` | Log level | Allow the agent log level to be changed (produces more or less output) | string | `"info"` |
+| `agent.log_vport` | Log port | Allow to specify the `vsock` port to read logs | integer | `0` |
+| `agent.passfd_listener_port` | File descriptor passthrough IO listener port | Allow to set the file descriptor passthrough IO listener port | integer | `0` |
+| `agent.server_addr` | Server address | Allow the ttRPC server address to be specified | string | `"vsock://-1:1024"` |
+| `agent.trace` | Trace mode | Allow to static tracing | boolean | `false` |
+| `agent.unified_cgroup_hierarchy` | `Cgroup hierarchy` | Allow to setup v2 cgroups | boolean | `false` |
+
+> **Note:** Accepted values for some agent options
+>  - `agent.config_file`: If we enable `agent.config_file` in guest kernel command line, 
+>    we will generate the agent config from it.
+>    The agent will fail to start if the configuration file is not present,
+>    or if it can't be parsed properly.
+>  - `agent.devmode`: true | false
+>  - `agent.hotplug_timeout`: a whole number of seconds
+>  - `agent.log`:   "critical"("fatal" | "panic") | "error" | "warn"("warning") | "info" | "debug"
+>  - `agent.server_addr`: "{VSOCK_ADDR}:{VSOCK_PORT}"
+>  - `agent.trace`: true | false
+>  - `agent.unified_cgroup_hierarchy`: true | false
+
+For instance, you can enable the debug console and set the agent log level to debug by configuring the guest kernel command line in the configuration file: 
+```toml
+kernel_params = "agent.debug_console agent.log=debug agent.hotplug_timeout=10" 
+```
+results in:
+```bash
+{"msg":"announce","level":"INFO","subsystem":"root","version":"0.1.0","pid":"214","source":"agent","name":"kata-agent","config":"AgentConfig { debug_console: true, dev_mode: false, log_level: Debug, hotplug_timeout: 10s, debug_console_vport: 0, log_vport: 0, container_pipe_size: 0, server_addr: "vsock://-1:1024", passfd_listener_port: 0, unified_cgroup_hierarchy: false, tracing: false, supports_seccomp: true }","agent-version":"3.3.0-alpha0"}
+```
