@@ -26,6 +26,38 @@ readonly KBS_PRIVATE_KEY="${COCO_KBS_DIR}/kbs/config/kubernetes/base/kbs.key"
 # The kbs service name
 readonly KBS_SVC_NAME="kbs"
 
+# Set "allow all" policy to resources.
+#
+kbs_set_allow_all_resources() {
+	kbs_set_resources_policy \
+		"${COCO_KBS_DIR}/kbs/sample_policies/allow_all.rego"
+}
+
+# Set "deny all" policy to resources.
+#
+kbs_set_deny_all_resources() {
+	kbs_set_resources_policy \
+		"${COCO_KBS_DIR}/kbs/sample_policies/deny_all.rego"
+}
+
+# Set resources policy.
+#
+# Parameters:
+#	$1 - path to policy file
+#
+kbs_set_resources_policy() {
+	local file="${1:-}"
+
+	if [ ! -f "$file" ]; then
+		>&2 echo "ERROR: policy file '$file' does not exist"
+		return 1
+	fi
+
+	kbs-client --url "$(kbs_k8s_svc_http_addr)" config \
+		--auth-private-key "$KBS_PRIVATE_KEY" set-resource-policy \
+		--policy-file "$file"
+}
+
 # Set resource data.
 #
 # Parameters:
