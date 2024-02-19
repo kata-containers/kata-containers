@@ -60,6 +60,7 @@ RUN apt-get update && apt-get upgrade -y && \
 	    patch \
 	    python \
 	    python-dev \
+	    python3-venv \
 	    rsync \
 	    zlib1g-dev${DPKG_ARCH} && \
     if [ "${ARCH}" != s390x ]; then apt-get install -y --no-install-recommends libpmem-dev${DPKG_ARCH}; fi && \
