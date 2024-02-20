@@ -10,6 +10,8 @@
 this_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export repo_root_dir="$(cd "${this_script_dir}/../" && pwd)"
 
+source "${this_script_dir}/error.sh"
+
 # Kata tests directory used for storing various test-related artifacts.
 KATA_TESTS_BASEDIR="${KATA_TESTS_BASEDIR:-/var/log/kata-tests}"
 
@@ -28,7 +30,35 @@ RUNTIME="${RUNTIME:-containerd-shim-kata-v2}"
 
 function die() {
 	local msg="$*"
-	echo -e "[$(basename $0):${BASH_LINENO[0]}] ERROR: $msg" >&2
+
+	if [ -z "${KATA_TEST_VERBOSE:-}" ]; then
+		echo -e "[$(basename $0):${BASH_LINENO[0]}] ERROR: $msg" >&2
+		exit 1
+	fi
+
+	echo >&2 "ERROR: $msg"
+
+	# This function is called to indicate a fatal error occurred, so
+	# the caller of this function is the site of the detected error.
+	local error_location
+	error_location=$(caller 0)
+
+	local line
+	local func
+	local file
+
+	line=$(echo "$error_location"|awk '{print $1}')
+	func=$(echo "$error_location"|awk '{print $2}')
+	file=$(echo "$error_location"|awk '{print $3}')
+
+	local path
+	path=$(resolve_path "$file")
+
+	dump_details \
+		"${line}" \
+		"${func}" \
+		"${path}"
+
 	exit 1
 }
 
