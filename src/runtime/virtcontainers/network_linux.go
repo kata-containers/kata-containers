@@ -437,7 +437,12 @@ func (n *LinuxNetwork) RemoveEndpoints(ctx context.Context, s *Sandbox, endpoint
 		}
 
 		if err := n.removeSingleEndpoint(ctx, s, ep, hotplug); err != nil {
-			return err
+			// Log the error instead of returning right away
+			// Proceed to remove the next endpoint so as to clean the network setup as
+			// much as possible.
+			// This is crucial for physical endpoints as we want to bind back the physical
+			// interface to its original host driver.
+			networkLogger().Warnf("Error removing endpoint %v : %v", ep.Name(), err)
 		}
 	}
 

@@ -70,17 +70,18 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 		}
 	}()
 
+	// network rollback
+	defer func() {
+		if err != nil {
+			virtLog.Info("Removing network after failure in createSandbox")
+			s.removeNetwork(ctx)
+		}
+	}()
+
 	// Create the sandbox network
 	if err = s.createNetwork(ctx); err != nil {
 		return nil, err
 	}
-
-	// network rollback
-	defer func() {
-		if err != nil {
-			s.removeNetwork(ctx)
-		}
-	}()
 
 	// Set the sandbox host cgroups.
 	if err := s.setupResourceController(); err != nil {
