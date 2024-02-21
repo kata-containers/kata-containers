@@ -204,6 +204,16 @@ function run_tests() {
 	popd
 }
 
+function collect_artifacts() {
+	local artifacts_dir="/tmp/artifacts"
+	if [ -d "${artifacts_dir}" ]; then
+		rm -rf "${artifacts_dir}"
+	fi
+	mkdir -p "${artifacts_dir}"
+	info "Running teardown script to collect artifacts using ${KATA_HYPERVISOR} hypervisor"
+	bash "${kubernetes_dir}/../../../ci/teardown.sh" "${artifacts_dir}"
+}
+
 function cleanup_kata_deploy() {
 	ensure_yq
 
@@ -267,7 +277,7 @@ function deploy_snapshotter() {
 	case ${SNAPSHOTTER} in
 		nydus) deploy_nydus_snapshotter ;;
 		*) >&2 echo "${SNAPSHOTTER} flavour is not supported"; exit 2 ;;
-	esac	
+	esac
 	echo "::endgroup::"
 }
 
@@ -299,9 +309,9 @@ function deploy_nydus_snapshotter() {
 		# Enable guest pull feature in nydus snapshotter
 		yq write -i misc/snapshotter/base/nydus-snapshotter.yaml 'data.FS_DRIVER' "proxy" --style=double
 	else
-		>&2 echo "Invalid pull type"; exit 2 
+		>&2 echo "Invalid pull type"; exit 2
 	fi
-	
+
 	# Disable to read snapshotter config from configmap
 	yq write -i misc/snapshotter/base/nydus-snapshotter.yaml 'data.ENABLE_CONFIG_FROM_VOLUME' "false" --style=double
 	# Enable to run snapshotter as a systemd service
@@ -319,7 +329,7 @@ function deploy_nydus_snapshotter() {
 	popd
 
 	kubectl rollout status daemonset nydus-snapshotter -n nydus-system --timeout ${SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT}
-	
+
 	echo "::endgroup::"
 	echo "::group::nydus snapshotter logs"
 	pods_name=$(kubectl get pods --selector=app=nydus-snapshotter -n nydus-system -o=jsonpath='{.items[*].metadata.name}')
@@ -335,7 +345,7 @@ function cleanup_nydus_snapshotter() {
 		>&2 echo "nydus snapshotter dir not found"
 		exit 1
 	fi
-	
+
 	pushd "$nydus_snapshotter_install_dir"
 
 	if [ "${KUBERNETES}" = "k3s" ]; then
@@ -382,6 +392,7 @@ function main() {
 		deploy-snapshotter) deploy_snapshotter ;;
 		run-tests) run_tests ;;
 		run-tests-kcli) run_tests "kcli" ;;
+		collect-artifacts) collect_artifacts ;;
 		cleanup-kcli) cleanup "kcli" ;;
 		cleanup-sev) cleanup "sev" ;;
 		cleanup-snp) cleanup "snp" ;;

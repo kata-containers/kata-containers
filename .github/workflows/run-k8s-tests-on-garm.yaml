@@ -85,10 +85,10 @@ jobs:
         timeout-minutes: 30
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
   
-      - name: Make artifacts tarball ${{ matrix.vmm }}
-        run: bash tests/integration/kubernetes/gha-run.sh make-tarball-artifacts
+      - name: Collect artifacts
+        run: bash tests/integration/kubernetes/gha-run.sh collect-artifacts
 
-      - name: Archive artifacts ${{ matrix.vmm }}
+      - name: Archive artifacts
         uses: actions/upload-artifact@v3
         with:
           name: k8s-tests-garm-${{ matrix.vmm }}
