@@ -24,10 +24,7 @@ BASE_TARBALLS = serial-targets \
 	kernel-dragonball-experimental-tarball \
 	kernel-nvidia-gpu-tarball \
 	kernel-nvidia-gpu-confidential-tarball \
-	kernel-nvidia-gpu-snp-tarball \
-	kernel-nvidia-gpu-tdx-experimental-tarball \
 	kernel-tarball \
-	kernel-tdx-experimental-tarball \
 	nydus-tarball \
 	ovmf-sev-tarball \
 	ovmf-tarball \
@@ -40,10 +37,8 @@ BASE_TARBALLS = serial-targets \
 	virtiofsd-tarball
 BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	rootfs-image-confidential-tarball \
-	rootfs-image-tdx-tarball \
 	rootfs-initrd-confidential-tarball \
 	rootfs-initrd-mariner-tarball \
-	rootfs-initrd-sev-tarball \
 	rootfs-initrd-tarball \
 	cloud-hypervisor-tarball \
 	cloud-hypervisor-glibc-tarball
@@ -123,22 +118,10 @@ kernel-nvidia-gpu-tarball:
 kernel-nvidia-gpu-confidential-tarball:
 	${MAKE} $@-build
 
-kernel-nvidia-gpu-snp-tarball:
-	${MAKE} $@-build
-
-kernel-nvidia-gpu-tdx-experimental-tarball:
-	${MAKE} $@-build
-
 kernel-tarball:
 	${MAKE} $@-build
 
 kernel-confidential-tarball:
-	${MAKE} $@-build
-
-kernel-tdx-experimental-tarball:
-	${MAKE} $@-build
-
-kernel-sev-tarball:
 	${MAKE} $@-build
 
 nydus-tarball:
@@ -171,16 +154,10 @@ rootfs-image-tarball: agent-tarball
 rootfs-image-confidential-tarball: agent-opa-tarball coco-guest-components-tarball kernel-confidential-tarball
 	${MAKE} $@-build
 
-rootfs-image-tdx-tarball: agent-opa-tarball kernel-confidential-tarball
-	${MAKE} $@-build
-
 rootfs-initrd-mariner-tarball: agent-opa-tarball
 	${MAKE} $@-build
 
 rootfs-initrd-confidential-tarball: agent-opa-tarball coco-guest-components-tarball kernel-confidential-tarball
-	${MAKE} $@-build
-
-rootfs-initrd-sev-tarball: agent-opa-tarball kernel-confidential-tarball
 	${MAKE} $@-build
 
 rootfs-initrd-tarball: agent-tarball
