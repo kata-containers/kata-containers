@@ -151,13 +151,13 @@ stratovirt-tarball:
 rootfs-image-tarball: agent-tarball
 	${MAKE} $@-build
 
-rootfs-image-confidential-tarball: agent-opa-tarball coco-guest-components-tarball kernel-confidential-tarball
+rootfs-image-confidential-tarball: agent-opa-tarball pause-image-tarball coco-guest-components-tarball kernel-confidential-tarball
 	${MAKE} $@-build
 
 rootfs-initrd-mariner-tarball: agent-opa-tarball
 	${MAKE} $@-build
 
-rootfs-initrd-confidential-tarball: agent-opa-tarball coco-guest-components-tarball kernel-confidential-tarball
+rootfs-initrd-confidential-tarball: agent-opa-tarball pause-image-tarball coco-guest-components-tarball kernel-confidential-tarball
 	${MAKE} $@-build
 
 rootfs-initrd-tarball: agent-tarball
