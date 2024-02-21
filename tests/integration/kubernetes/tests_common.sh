@@ -130,12 +130,7 @@ create_common_genpolicy_settings() {
 	cp "${default_genpolicy_settings_dir}/rules.rego" "${genpolicy_settings_dir}"
 
 	# Set the default namespace of Kata CI tests in the genpolicy settings.
-	info "${genpolicy_settings_dir}/genpolicy-settings.json: default namespace: ${TEST_CLUSTER_NAMESPACE}"
-	jq --arg TEST_CLUSTER_NAMESPACE "${TEST_CLUSTER_NAMESPACE}" \
-		'.cluster_config.default_namespace |= $TEST_CLUSTER_NAMESPACE' \
-		"${genpolicy_settings_dir}/genpolicy-settings.json" > \
-		"${genpolicy_settings_dir}/new-genpolicy-settings.json"
-	mv "${genpolicy_settings_dir}/new-genpolicy-settings.json" "${genpolicy_settings_dir}/genpolicy-settings.json"
+	set_namespace_to_policy_settings "${genpolicy_settings_dir}" "${TEST_CLUSTER_NAMESPACE}"
 }
 
 # If auto-generated policy testing is enabled, make a copy of the common genpolicy settings
@@ -240,4 +235,20 @@ add_copy_from_guest_to_policy_settings() {
 
 	exec_command="tar cf - ${copied_file}"
 	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
+}
+
+# Change genpolicy settings to allow "kubectl exec" to execute a command
+# and to read console output from a test pod.
+set_namespace_to_policy_settings() {
+	declare -r settings_dir="$1"
+	declare -r namespace="$2"
+
+	auto_generate_policy_enabled || return 0
+
+	info "${settings_dir}/genpolicy-settings.json: namespace: ${namespace}"
+	jq --arg namespace "${namespace}" \
+		'.cluster_config.default_namespace |= $namespace' \
+		"${settings_dir}/genpolicy-settings.json" > \
+		"${settings_dir}/new-genpolicy-settings.json"
+	mv "${settings_dir}/new-genpolicy-settings.json" "${settings_dir}/genpolicy-settings.json"
 }

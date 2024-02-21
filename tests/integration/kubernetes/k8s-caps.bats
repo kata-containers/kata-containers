@@ -11,6 +11,17 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 setup() {
         pod_name="pod-caps"
         get_pod_config_dir
+
+        yaml_file="${pod_config_dir}/pod-caps.yaml"
+	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
+
+	command="cat /proc/self/status"
+	exec_command="sh -c ${command}"
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
+
+	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
+	auto_generate_policy "${policy_settings_dir}" "${yaml_file}"
+
 # We expect the capabilities mask to very per distribution, runtime
 # configuration. Even for this, we should expect a few common items to
 # not be set in the mask unless we are failing to apply capabilities. If
@@ -29,7 +40,7 @@ setup() {
 
 @test "Check capabilities of pod" {
         # Create pod
-        kubectl create -f "${pod_config_dir}/pod-caps.yaml"
+        kubectl create -f "${yaml_file}"
         # Check pod creation
         kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
 
@@ -41,7 +52,7 @@ setup() {
         waitForProcess "$wait_time" "$sleep_time" "$cmd"
 
         # Verify expected capabilities from exec context:
-        kubectl exec "$pod_name" -- sh -c "cat /proc/self/status" | grep -q "$expected"
+        kubectl exec "$pod_name" -- sh -c "${command}" | grep -q "$expected"
 }
 
 teardown() {
@@ -50,6 +61,7 @@ teardown() {
         echo "$expected"
         echo "observed: "
         kubectl logs "pod/$pod_name"
-        kubectl exec "$pod_name" -- sh -c "cat /proc/self/status | grep Cap"
+        kubectl exec "$pod_name" -- sh -c "${command}" | grep Cap
         kubectl delete pod "$pod_name"
+	delete_tmp_policy_settings_dir "${policy_settings_dir}"
 }

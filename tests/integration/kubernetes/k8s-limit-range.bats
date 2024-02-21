@@ -12,6 +12,11 @@ setup() {
 	get_pod_config_dir
 	namespace_name="default-cpu-example"
 	pod_name="default-cpu-test"
+	pod_yaml="${pod_config_dir}/pod-cpu-defaults.yaml"
+
+	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
+	set_namespace_to_policy_settings "${policy_settings_dir}" "${namespace_name}"
+	auto_generate_policy "${policy_settings_dir}" "${pod_yaml}"
 }
 
 @test "Limit range for storage" {
@@ -22,7 +27,7 @@ setup() {
 	kubectl create -f "${pod_config_dir}/limit-range.yaml" --namespace=${namespace_name}
 
 	# Create the pod
-	kubectl create -f "${pod_config_dir}/pod-cpu-defaults.yaml" --namespace=${namespace_name}
+	kubectl create -f "${pod_yaml}" --namespace=${namespace_name}
 
 	# Get pod specification
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name" --namespace="$namespace_name"
@@ -34,8 +39,10 @@ setup() {
 
 teardown() {
 	# Debugging information
-	kubectl describe "pod/$pod_name"
+	kubectl describe "pod/$pod_name" -n "$namespace_name"
 
-	kubectl delete pod "$pod_name"
+	kubectl delete pod "$pod_name" -n "$namespace_name"
 	kubectl delete namespaces "$namespace_name"
+
+	delete_tmp_policy_settings_dir "${policy_settings_dir}"
 }

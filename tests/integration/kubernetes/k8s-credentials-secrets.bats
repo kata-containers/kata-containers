@@ -13,6 +13,17 @@ setup() {
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 
 	get_pod_config_dir
+	pod_yaml_file="${pod_config_dir}/pod-secret.yaml"
+	cmd="ls /tmp/secret-volume"
+
+	# Add policy to the pod yaml file
+	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
+
+	exec_command="sh -c ${cmd}"
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
+	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
+
+	auto_generate_policy "${policy_settings_dir}" "${pod_yaml_file}"
 }
 
 @test "Credentials using secrets" {
@@ -27,13 +38,12 @@ setup() {
 	kubectl get secret "${secret_name}" -o yaml | grep "type: Opaque"
 
 	# Create a pod that has access to the secret through a volume
-	kubectl create -f "${pod_config_dir}/pod-secret.yaml"
+	kubectl create -f "${pod_yaml_file}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
 
 	# List the files
-	cmd="ls /tmp/secret-volume"
 	kubectl exec $pod_name -- sh -c "$cmd" | grep -w "password"
 	kubectl exec $pod_name -- sh -c "$cmd" | grep -w "username"
 
@@ -59,4 +69,6 @@ teardown() {
 
 	kubectl delete pod "$pod_name" "$second_pod_name"
 	kubectl delete secret "$secret_name"
+
+	delete_tmp_policy_settings_dir "${policy_settings_dir}"
 }
