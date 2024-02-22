@@ -15,7 +15,7 @@ actix-rt = "2.7.0"
 async-trait = "0.1.48"
 bitflags = "1.2.1"
 byte-unit = "4.0.14"
-cgroups-rs = "0.3.2"
+cgroups = { package = "cgroups-rs", version = "0.3.2" }
 futures = "0.3.11"
 hex = "0.4.3"
 lazy_static = "1.4.0"
