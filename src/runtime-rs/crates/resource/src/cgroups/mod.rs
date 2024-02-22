@@ -178,35 +178,8 @@ impl CgroupsResource {
     /// delete will move the running processes in the cgroup_manager and
     /// overhead_cgroup_manager to the parent and then delete the cgroups.
     pub async fn delete(&self) -> Result<()> {
-        for cg_pid in self.cgroup_manager.tasks() {
-            // For now, we can't guarantee that the thread in cgroup_manager does still
-            // exist. Once it exit, we should ignore that error returned by remove_task
-            // to let it go.
-            if let Err(error) = self.cgroup_manager.remove_task(cg_pid) {
-                match error.source() {
-                    Some(err) => match err.downcast_ref::<io::Error>() {
-                        Some(e) => {
-                            if e.raw_os_error() != Some(OS_ERROR_NO_SUCH_PROCESS) {
-                                return Err(error.into());
-                            }
-                        }
-                        None => return Err(error.into()),
-                    },
-                    None => return Err(error.into()),
-                }
-            }
-        }
-
-        self.cgroup_manager
-            .delete()
-            .context("delete cgroup manager")?;
-
-        if let Some(overhead) = self.overhead_cgroup_manager.as_ref() {
-            for cg_pid in overhead.tasks() {
-                overhead.remove_task(cg_pid)?;
-            }
-            overhead.delete().context("delete overhead")?;
-        }
+        let version_operator = operation_version();
+        version_operator.do_delete_cgroups(self)?;
 
         Ok(())
     }
@@ -335,6 +308,131 @@ impl CgroupsResource {
             ..Default::default()
         }
     }
+}
+
+trait CgroupOperator {
+    fn do_delete_cgroups(&self, resource: &CgroupsResource) -> Result<()>;
+
+    fn move_tasks_to_root(&self, cgroup_manager: &Cgroup) -> Result<()> {
+        for cg_tid in cgroup_manager.tasks() {
+            if let Err(error) = cgroup_manager
+                .remove_task(cg_tid)
+                .context("move threads to root cgroup manager")
+            {
+                ignore_cgroup_move_error(error)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn move_procs_to_root(&self, cgroup_manager: &Cgroup) -> Result<()> {
+        for cg_tgid in cgroup_manager.procs() {
+            if let Err(error) = cgroup_manager
+                .remove_task_by_tgid(cg_tgid)
+                .context("move procs to root cgroup manager")
+            {
+                ignore_cgroup_move_error(error)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn move_tasks_to_parent(&self, cgroup_manager: &Cgroup) -> Result<()> {
+        for cg_tid in cgroup_manager.tasks() {
+            if let Err(error) = cgroup_manager
+                .move_task_to_parent(cg_tid)
+                .context("move threads to parent cgroup manager")
+            {
+                ignore_cgroup_move_error(error)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn delete_cgroup_manager(&self, cgroup_manager: &Cgroup) -> Result<()> {
+        cgroup_manager.delete().context("delete cgroup manager")
+    }
+}
+
+struct CgroupOperatorV1;
+struct CgroupOperatorV2;
+
+fn operation_version() -> Box<dyn CgroupOperator> {
+    match hierarchies::is_cgroup2_unified_mode() {
+        true => Box::new(CgroupOperatorV2),
+        false => Box::new(CgroupOperatorV1),
+    }
+}
+
+impl CgroupOperator for CgroupOperatorV1 {
+    fn do_delete_cgroups(&self, resource: &CgroupsResource) -> Result<()> {
+        self.move_tasks_to_root(&resource.cgroup_manager)?;
+        self.delete_cgroup_manager(&resource.cgroup_manager)?;
+
+        if let Some(overhead) = resource.overhead_cgroup_manager.as_ref() {
+            self.move_tasks_to_root(overhead)?;
+            self.delete_cgroup_manager(overhead)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl CgroupOperator for CgroupOperatorV2 {
+    fn do_delete_cgroups(&self, resource: &CgroupsResource) -> Result<()> {
+        let mut cgmgr = resource.cgroup_manager.clone();
+
+        // If the cgroup manager is in threaded mode, we need to delete the parent cgroup manager.
+        // The hierarchy of cgroups in thread mode look like this:
+        //           ┌──────────────────────────┐
+        //           │ cgroup:/container-cgroup │
+        //           │  type:domain-threaded    │
+        //           └──┬────────────────────┬──┘
+        //              │                    │
+        //              │                    │
+        //  ┌───────────▼───┐              ┌─▼─────────────┐
+        //  │   overhead    │              │   sandbox     │
+        //  │ type:threaded │              │ type:threaded │
+        //  └───────────────┘              └───────────────┘
+        if resource.cgroup_config.threaded_mode {
+            // Delete sandbox cgroup
+            self.move_tasks_to_parent(&cgmgr)?;
+            self.delete_cgroup_manager(&cgmgr)?;
+            // Delete overhead cgroup if exists
+            if let Some(overhead) = resource.overhead_cgroup_manager.as_ref() {
+                self.move_tasks_to_parent(overhead)?;
+                self.delete_cgroup_manager(overhead)?;
+            }
+            cgmgr = resource.cgroup_manager.parent_control_group();
+        }
+
+        // Delete parent cgroup
+        self.move_procs_to_root(&cgmgr)?;
+        self.delete_cgroup_manager(&cgmgr)?;
+
+        Ok(())
+    }
+}
+
+// For now, we can't guarantee that the process or thread in cgroup_manager does still
+// exist. Once it exit, we should ignore that error returned by to let it go.
+fn ignore_cgroup_move_error(error: anyhow::Error) -> Result<(), anyhow::Error> {
+    match error.source() {
+        Some(err) => match err.downcast_ref::<io::Error>() {
+            Some(e) => {
+                if e.raw_os_error() != Some(OS_ERROR_NO_SUCH_PROCESS) {
+                    return Err(error);
+                }
+            }
+            None => return Err(error),
+        },
+        None => return Err(error),
+    }
+
+    Ok(())
 }
 
 #[async_trait]
