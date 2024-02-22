@@ -76,6 +76,8 @@ EOF
 	# We're not using this with baremetal machines, so we're fine on cutting
 	# corners here and just append this to the configuration file.
 	cat<<EOF | sudo tee -a ${containerd_config_file}
+[debug]
+  level = "debug"
 [plugins."io.containerd.snapshotter.v1.devmapper"]
   pool_name = "contd-thin-pool"
   base_image_size = "4096MB"
