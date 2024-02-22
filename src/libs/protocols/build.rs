@@ -218,8 +218,129 @@ fn real_main() -> Result<(), std::io::Error> {
     Ok(())
 }
 
+fn real_main_grpctls() -> Result<(), std::io::Error> {
+
+    tonic_build::configure()
+        .out_dir("src/grpctls")
+        .type_attribute("ContainerInfoList", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("ContainerInfo", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("CheckRequest", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("CloseStdinRequest", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("CreateContainerRequest", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("GetMetricsRequest", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("WaitProcessRequest", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("SignalProcessRequest", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("ReadStreamRequest", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("WriteStreamRequest", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("UpdateContainerRequest", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("StatsContainerRequest", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("StatsContainerResponse", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("CgroupStats", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("CpuStats", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("CpuUsage", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("MemoryStats", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("MemoryData", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("PidsStats", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("BlkioStats", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("BlkioStatsEntry", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("HugetlbStats", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("NetworkStats", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("ThrottlingData", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("TtyWinResizeRequest", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("ListInterfacesRequest", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("ListRoutesRequest", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("Route", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("Interfaces", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .field_attribute("Interfaces", "#[serde (rename = \"Interfaces\")]")
+        .type_attribute("Device", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("Spec", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(default)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("SharedMount", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("OnlineCPUMemRequest", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("StartContainerRequest", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("RemoveContainerRequest", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("PauseContainerRequest", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("ReseedRandomDevRequest", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("GuestDetailsRequest", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("GuestDetailsResponse", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("AgentDetails", "#[derive(serde::Deserialize, serde::Serialize)] #[serde (rename = \"AgentDetails\")]")
+        .type_attribute("ResumeContainerRequest", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("SetGuestDateTimeRequest", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .field_attribute("Sec", "#[serde (rename = \"Sec\")]")
+        .field_attribute("Usec", "#[serde (rename = \"Usec\")]")
+        .type_attribute("CopyFileRequest", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("GetOOMEventRequest", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(default)] #[serde(rename=\"GetOOMEventRequest\")]")
+        .type_attribute("OOMEvent", "#[derive(serde::Deserialize, serde::Serialize)] #[serde (rename = \"OOMEvent\")]")
+        .type_attribute("StringUser", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("Process", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(default)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("Box", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("User", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(default)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("LinuxCapabilities", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("POSIXRlimit", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("ExecProcessRequest", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("Storage", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("Windows", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("Solaris", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("Linux", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(rename_all = \"PascalCase\")] ")
+        .field_attribute("UIDMappings", "#[serde (rename = \"UIDMappings\")]")
+        .field_attribute("GIDMappings", "#[serde (rename = \"GIDMappings\")]")
+        .field_attribute("type", "#[serde (rename(serialize = \"type_\", deserialize = \"type_\"))]")
+        .type_attribute("LinuxIntelRdt", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("LinuxResources", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("LinuxIDMapping", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("LinuxSyscall", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("LinuxSeccomp", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("LinuxSeccompArg", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("FSGroup", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("ErrnoRet", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("oneof", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .type_attribute("LinuxBlockIO", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("LinuxWeightDevice", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("LinuxThrottleDevice", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("LinuxNetwork", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("LinuxInterfacePriority", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("LinuxHugepageLimit", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("LinuxMemory", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("LinuxCPU", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("LinuxPids", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("LinuxDeviceCgroup", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("LinuxNamespace", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("Root", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(default)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("Hooks", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(default)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("Hook", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(default)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("Mount", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(default)] ")
+        .type_attribute("LinuxDevice", "#[derive(serde::Deserialize, serde::Serialize)] #[serde(rename_all = \"PascalCase\")] ")
+        .type_attribute("ServingStatus", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .field_attribute("UNKNOWN", "#[serde (rename = \"UNKNOWN\")]")
+        .field_attribute("SERVING", "#[serde (rename = \"SERVING\")]")
+        .field_attribute("NOT_SERVING", "#[serde (rename = \"NOT_SERVING\")]")
+        .type_attribute("IPFamily", "#[derive(serde::Deserialize, serde::Serialize)] #[serde (rename = \"IPFamily\")]")
+        .field_attribute("v4", "#[serde (rename = \"v4\")]")
+        .field_attribute("v6", "#[serde (rename(serialize = \"v6\", deserialize = \"v6\"))]")
+        .type_attribute("IPAddress", "#[derive(serde::Deserialize, serde::Serialize)] #[serde (rename = \"IPAddress\")] #[serde(default)]")
+        .field_attribute("IPAddresses", "#[serde (rename = \"IPAddresses\")]")
+        .type_attribute("Interface", "#[derive(serde::Deserialize, serde::Serialize)]")
+        .field_attribute("hwAddr", "#[serde (rename = \"hwAddr\")]")
+        .field_attribute("pciPath", "#[serde (rename = \"pciPath\")]")
+
+
+        .compile(
+            &["secprotos/secagent.proto",
+            "secprotos/oci.proto",
+            "secprotos/health.proto",
+            "secprotos/types.proto"],
+            &["secprotos"],
+        )?;
+
+    Ok(())
+}
+
 fn main() {
     if let Err(e) = real_main() {
+        eprintln!("ERROR: {}", e);
+        exit(1);
+    }
+
+    if let Err(e) = real_main_grpctls() {
         eprintln!("ERROR: {}", e);
         exit(1);
     }

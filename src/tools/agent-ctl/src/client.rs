@@ -242,6 +242,11 @@ static AGENT_CMDS: &[AgentCmd] = &[
         fp: agent_cmd_sandbox_set_ip_tables,
     },
     AgentCmd {
+        name: "SetPolicy",
+        st: ServiceType::Agent,
+        fp: agent_cmd_sandbox_set_policy,
+    },
+    AgentCmd {
         name: "SignalProcess",
         st: ServiceType::Agent,
         fp: agent_cmd_container_signal_process,
@@ -1948,6 +1953,35 @@ fn agent_cmd_sandbox_set_ip_tables(
 
     let reply = client
         .set_ip_tables(ctx, &req)
+        .map_err(|e| anyhow!(e).context(ERR_API_FAILED))?;
+
+    info!(sl!(), "response received";
+        "response" => format!("{:?}", reply));
+
+    Ok(())
+}
+
+fn agent_cmd_sandbox_set_policy(
+    ctx: &Context,
+    client: &AgentServiceClient,
+    _health: &HealthClient,
+    options: &mut Options,
+    args: &str,
+) -> Result<()> {
+    let mut req: SetPolicyRequest = utils::make_request(args)?;
+
+    let ctx = clone_context(ctx);
+
+    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
+     run_if_auto_values!(ctx, || -> Result<()> {
+        let base64data = utils::get_option("policy", options, args)?;
+        req.set_policy(base64data);
+        Ok(())
+    });
+
+    let reply = client
+        .set_policy(ctx, &req)
         .map_err(|e| anyhow!(e).context(ERR_API_FAILED))?;
 
     info!(sl!(), "response received";

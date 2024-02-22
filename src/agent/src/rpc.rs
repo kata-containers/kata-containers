@@ -96,6 +96,8 @@ use std::path::PathBuf;
 
 use kata_types::k8s;
 
+pub mod rpctls;
+
 pub const CONTAINER_BASE: &str = "/run/kata-containers";
 const MODPROBE_PATH: &str = "/sbin/modprobe";
 

@@ -17,7 +17,10 @@ protobuf = { version = "3.2.0" }
 serde = { version = "1.0.130", features = ["derive"], optional = true }
 serde_json = { version = "1.0.68", optional = true }
 oci = { path = "../oci" }
+tonic = { version = "0.8" }
 
 [build-dependencies]
 ttrpc-codegen = "0.4.2"
 protobuf = { version = "3.2.0" }
+tonic-build = "0.8"
+prost-build = "0.11"

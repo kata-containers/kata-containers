@@ -16,6 +16,7 @@ use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 use std::{thread, time};
 
+use crate::rpc::rpctls::grpctls::ContainerInfo;
 use anyhow::{anyhow, Context, Result};
 use kata_types::cpu::CpuSet;
 use kata_types::mount::StorageDevice;
@@ -23,7 +24,7 @@ use libc::{pid_t, syscall};
 use nix::fcntl::{self, OFlag};
 use nix::sched::{setns, unshare, CloneFlags};
 use nix::sys::stat::Mode;
-use oci::{Hook, Hooks};
+use oci::{ContainerState, Hook, Hooks};
 use protocols::agent::{OnlineCPUMemRequest, SharedMount};
 use regex::Regex;
 use rustjail::cgroups::{self as rustjail_cgroups, DevicesCgroupInfo};
@@ -298,6 +299,32 @@ impl Sandbox {
             ctr.destroy().await?;
         }
         Ok(())
+    }
+
+    #[instrument]
+    pub fn list_containers(&self) -> Result<Vec<ContainerInfo>> {
+        let mut list = Vec::new();
+
+        for (_, c) in self.containers.iter() {
+            let mut cinfo = ContainerInfo {
+                container_id: c.id(),
+                created: c.init_process_start_time,
+                ..Default::default()
+            };
+            cinfo.state = match c.status() {
+                ContainerState::Created => "Created".to_string(),
+                ContainerState::Running => "Running".to_string(),
+                ContainerState::Paused => "Pause".to_string(),
+                ContainerState::Stopped => "Stopped".to_string(),
+                _ => "Unknown".to_string(),
+            };
+
+            let config = c.config().unwrap();
+            let oci = config.spec.as_ref().unwrap();
+            cinfo.annotations = serde_json::to_string(&oci.annotations).unwrap();
+            list.push(cinfo);
+        }
+        Ok(list)
     }
 
     #[instrument]

@@ -28,6 +28,8 @@ const CONTAINER_PIPE_SIZE_OPTION: &str = "agent.container_pipe_size";
 const UNIFIED_CGROUP_HIERARCHY_OPTION: &str = "systemd.unified_cgroup_hierarchy";
 const CONFIG_FILE: &str = "agent.config_file";
 const GUEST_COMPONENTS_REST_API_OPTION: &str = "agent.guest_components_rest_api";
+const AA_KBC_PARAMS: &str = "agent.aa_kbc_params";
+const SPLIT_API_FLAG: &str = "agent.split_api";
 
 // Configure the proxy settings for HTTPS requests in the guest,
 // to solve the problem of not being able to access the specified image in some cases.
@@ -89,6 +91,8 @@ pub struct AgentConfig {
     pub https_proxy: String,
     pub no_proxy: String,
     pub guest_components_rest_api: GuestComponentsFeatures,
+    pub aa_kbc_params: String,
+    pub split_api: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -107,6 +111,8 @@ pub struct AgentConfigBuilder {
     pub https_proxy: Option<String>,
     pub no_proxy: Option<String>,
     pub guest_components_rest_api: Option<GuestComponentsFeatures>,
+    pub aa_kbc_params: Option<String>,
+    pub split_api: Option<bool>,
 }
 
 macro_rules! config_override {
@@ -171,6 +177,8 @@ impl Default for AgentConfig {
             https_proxy: String::from(""),
             no_proxy: String::from(""),
             guest_components_rest_api: GuestComponentsFeatures::default(),
+            aa_kbc_params: String::from(""),
+            split_api: false,
         }
     }
 }
@@ -207,6 +215,8 @@ impl FromStr for AgentConfig {
             agent_config,
             guest_components_rest_api
         );
+        config_override!(agent_config_builder, agent_config, aa_kbc_params);
+        config_override!(agent_config_builder, agent_config, split_api);
 
         Ok(agent_config)
     }
@@ -314,6 +324,8 @@ impl AgentConfig {
                 config.guest_components_rest_api,
                 get_guest_components_features_value
             );
+            parse_cmdline_param!(param, AA_KBC_PARAMS, config.aa_kbc_params, get_string_value);
+            parse_cmdline_param!(param, SPLIT_API_FLAG, config.split_api, get_bool_value);
         }
 
         if let Ok(addr) = env::var(SERVER_ADDR_ENV_VAR) {
