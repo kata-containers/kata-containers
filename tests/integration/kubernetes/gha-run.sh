@@ -21,7 +21,7 @@ DOCKER_REGISTRY=${DOCKER_REGISTRY:-quay.io}
 DOCKER_REPO=${DOCKER_REPO:-kata-containers/kata-deploy-ci}
 DOCKER_TAG=${DOCKER_TAG:-kata-containers-latest}
 KATA_DEPLOY_WAIT_TIMEOUT=${KATA_DEPLOY_WAIT_TIMEOUT:-10m}
-SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT=${SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT:-5m}
+SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT=${SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT:-8m}
 KATA_HYPERVISOR=${KATA_HYPERVISOR:-qemu}
 KUBERNETES="${KUBERNETES:-}"
 SNAPSHOTTER="${SNAPSHOTTER:-}"
@@ -284,6 +284,7 @@ function deploy_nydus_snapshotter() {
 	git clone -b "${nydus_snapshotter_version}" "${nydus_snapshotter_url}" "${nydus_snapshotter_install_dir}"
 
 	pushd "$nydus_snapshotter_install_dir"
+	cleanup_nydus_snapshotter || true
 	if [ "${PULL_TYPE}" == "guest-pull" ]; then
 		# Enable guest pull feature in nydus snapshotter
 		yq write -i misc/snapshotter/base/nydus-snapshotter.yaml 'data.FS_DRIVER' "proxy" --style=double
@@ -334,10 +335,9 @@ function cleanup_nydus_snapshotter() {
 	fi
 	sleep 180s
 	kubectl delete -f "misc/snapshotter/nydus-snapshotter-rbac.yaml"
+	kubectl get ns nydus-system -o json | jq '.spec.finalizers = []' | kubectl replace --raw "/api/v1/namespaces/nydus-system/finalize" -f || true
 	popd
 	sleep 30s
-
-	rm -rf "${nydus_snapshotter_install_dir}"
 	echo "::endgroup::"
 }
 
