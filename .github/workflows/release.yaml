@@ -123,15 +123,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: upload versions.yaml
-        env:
-          GITHUB_TOKEN: ${{ secrets.GIT_UPLOAD_TOKEN }}
         run: |
-          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
-          pushd $GITHUB_WORKSPACE
-          versions_file="kata-containers-$tag-versions.yaml"
-          cp versions.yaml ${versions_file}
-          gh release upload "${tag}" "${versions_file}"
-          popd
+          ./tools/packaging/release/release.sh upload-versions-yaml-file
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   upload-cargo-vendored-tarball:
     needs: upload-multi-arch-static-tarball

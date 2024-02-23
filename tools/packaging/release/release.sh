@@ -74,6 +74,15 @@ function _upload_kata_static_tarball()
 	gh release upload "${RELEASE_VERSION}" "${new_tarball_name}"
 }
 
+function _upload_versions_yaml_file()
+{
+	[ -z "${RELEASE_VERSION}" ] && RELEASE_VERSION=$(cat "${repo_root_dir}/VERSION")
+
+	versions_file="kata-containers-${RELEASE_VERSION}-versions.yaml"
+	cp "${repo_root_dir}/versions.yaml" ${versions_file}
+	gh release upload "${RELEASE_VERSION}" "${versions_file}"
+}
+
 function main()
 {
 	action="${1:-}"
@@ -81,6 +90,7 @@ function main()
 	case "${action}" in
 		publish-multiarch-manifest) _publish_multiarch_manifest ;;
 		upload-kata-static-tarball) _upload_kata_static_tarball ;;
+		upload-versions-yaml-file) _upload_versions_yaml_file ;;
 		*) >&2 _die "Invalid argument" ;;
 	esac
 }
