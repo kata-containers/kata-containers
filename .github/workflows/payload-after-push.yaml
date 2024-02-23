@@ -103,9 +103,7 @@ jobs:
 
       - name: Push multi-arch manifest
         run: |
-          docker manifest create quay.io/kata-containers/kata-deploy-ci:kata-containers-latest \
-          --amend quay.io/kata-containers/kata-deploy-ci:kata-containers-amd64 \
-          --amend quay.io/kata-containers/kata-deploy-ci:kata-containers-arm64 \
-          --amend quay.io/kata-containers/kata-deploy-ci:kata-containers-s390x \
-          --amend quay.io/kata-containers/kata-deploy-ci:kata-containers-ppc64le
-          docker manifest push quay.io/kata-containers/kata-deploy-ci:kata-containers-latest
+          ./tools/packaging/release/release.sh publish-multiarch-manifest
+        env:
+          KATA_DEPLOY_IMAGE_TAGS="kata-containers-latest"
+          KATA_DEPLOY_REGISTRIES="quay.io/kata-containers/kata-deploy-ci"

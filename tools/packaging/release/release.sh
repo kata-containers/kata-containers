@@ -15,23 +15,53 @@ set -o errtrace
 this_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root_dir="$(cd "$this_script_dir/../../../" && pwd)"
 
+IFS=' ' read -a IMAGE_TAGS <<< "${KATA_DEPLOY_IMAGE_TAGS:-}"
+IFS=' ' read -a REGISTRIES <<< "${KATA_DEPLOY_REGISTRIES:-}"
+
 function _die()
 {
 	echo >&2 "ERROR: $*"
 	exit 1
 }
 
-function _info()
+function _check_required_env_var()
 {
-	echo "INFO: $*"
+	local env_var
+
+	case ${1} in
+		KATA_DEPLOY_IMAGE_TAGS) env_var="${KATA_DEPLOY_IMAGE_TAGS}" ;;
+		KATA_DEPLOY_REGISTRIES) env_var="${KATA_DEPLOY_REGISTRIES}" ;;
+		*) >&2 _die "Invalid environment variable \"${1}\"" ;;
+	esac
+
+	[ -z "${env_var}" ] && \
+		_die "\"${1}\" environment variable is required but was not set"
+}
+
+function _publish_multiarch_manifest()
+{
+	_check_required_env_var "KATA_DEPLOY_IMAGE_TAGS"
+	_check_required_env_var "KATA_DEPLOY_REGISTRIES"
+
+	for registry in ${REGISTRIES[@]}; do
+		for tag in ${IMAGE_TAGS[@]}; do
+			docker manifest create ${registry}:${tag} \
+				--amend ${registry}:${tag}-amd64 \
+				--amend ${registry}:${tag}-arm64 \
+				--amend ${registry}:${tag}-s390x \
+				--amend ${registry}:${tag}-ppc64le
+
+			docker manifest push ${registry}:${tag}
+		done
+	done
 }
 
 function main()
 {
 	action="${1:-}"
-	_info "DO NOT USE this script, it does nothing!"
 
 	case "${action}" in
+		publish-multiarch-manifest) _publish_multiarch_manifest ;;
 		*) >&2 _die "Invalid argument" ;;
 	esac
 }

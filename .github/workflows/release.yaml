@@ -55,27 +55,13 @@ jobs:
 
       - name: Push multi-arch manifest
         run: |
-          # tag the container image we created and push to DockerHub
-          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
-          tags=($tag)
-          tags+=($([[ "$tag" =~ "alpha"|"rc" ]] && echo "latest" || echo "stable"))
-          # push to quay.io and docker.io
-          for tag in ${tags[@]}; do
-            docker manifest create quay.io/kata-containers/kata-deploy:${tag} \
-              --amend quay.io/kata-containers/kata-deploy:${tag}-amd64 \
-              --amend quay.io/kata-containers/kata-deploy:${tag}-arm64 \
-              --amend quay.io/kata-containers/kata-deploy:${tag}-s390x \
-              --amend quay.io/kata-containers/kata-deploy:${tag}-ppc64le
+          tags="$(echo $GITHUB_REF | cut -d/ -f3-)"
+          tags+=" $([[ \"${tag}\" =~ \"alpha\"|\"rc\" ]] && echo \"latest\" || echo \"stable\"))"
+          echo "KATA_DEPLOY_IMAGE_TAGS=\"${tags}\"" >> "$GITHUB_ENV"
 
-            docker manifest create docker.io/katadocker/kata-deploy:${tag} \
-              --amend docker.io/katadocker/kata-deploy:${tag}-amd64 \
-              --amend docker.io/katadocker/kata-deploy:${tag}-arm64 \
-              --amend docker.io/katadocker/kata-deploy:${tag}-s390x \
-              --amend docker.io/katadocker/kata-deploy:${tag}-ppc64le
-
-            docker manifest push quay.io/kata-containers/kata-deploy:${tag}
-            docker manifest push docker.io/katadocker/kata-deploy:${tag}
-          done
+          ./tools/packaging/release/release.sh publish-multiarch-manifest
+        env:
+          KATA_DEPLOY_REGISTRIES: "quay.io/kata-containers/kata-deploy docker.io/katadocker/kata-deploy"
 
   upload-multi-arch-static-tarball:
     needs: publish-multi-arch-images
