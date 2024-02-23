@@ -1,0 +1,10 @@
+name: Major Release
+on:
+  workflow_dispatch
+
+jobs:
+  major-release:
+    uses: ./.github/workflows/release.yaml
+    with:
+      release-type: major
+    secrets: inherit
