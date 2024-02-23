@@ -69,19 +69,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set KATA_STATIC_TARBALL env var
+        run: |
+          tarball=$(pwd)/kata-static.tar.xz
+          echo "KATA_STATIC_TARBALL=${tarball}" >> "$GITHUB_ENV"
+
       - name: download-artifacts-amd64
         uses: actions/download-artifact@v3
         with:
           name: kata-static-tarball-amd64
       - name: push amd64 static tarball to github
         run: |
-          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
-          tarball="kata-static-$tag-amd64.tar.xz"
-          mv kata-static.tar.xz "$GITHUB_WORKSPACE/${tarball}"
-          pushd $GITHUB_WORKSPACE
-          echo "uploading asset '${tarball}' for tag: ${tag}"
-          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} gh release upload "${tag}" "${tarball}"
-          popd
+          ./tools/packaging/release/release.sh upload-kata-static-tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHITECTURE: amd64
 
       - name: download-artifacts-arm64
         uses: actions/download-artifact@v3
@@ -89,13 +91,10 @@ jobs:
           name: kata-static-tarball-arm64
       - name: push arm64 static tarball to github
         run: |
-          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
-          tarball="kata-static-$tag-arm64.tar.xz"
-          mv kata-static.tar.xz "$GITHUB_WORKSPACE/${tarball}"
-          pushd $GITHUB_WORKSPACE
-          echo "uploading asset '${tarball}' for tag: ${tag}"
-          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} gh release upload "${tag}" "${tarball}"
-          popd
+          ./tools/packaging/release/release.sh upload-kata-static-tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHITECTURE: arm4
 
       - name: download-artifacts-s390x
         uses: actions/download-artifact@v3
@@ -103,13 +102,10 @@ jobs:
           name: kata-static-tarball-s390x
       - name: push s390x static tarball to github
         run: |
-          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
-          tarball="kata-static-$tag-s390x.tar.xz"
-          mv kata-static.tar.xz "$GITHUB_WORKSPACE/${tarball}"
-          pushd $GITHUB_WORKSPACE
-          echo "uploading asset '${tarball}' for tag: ${tag}"
-          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} gh release upload "${tag}" "${tarball}"
-          popd
+          ./tools/packaging/release/release.sh upload-kata-static-tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHITECTURE: s390x
 
       - name: download-artifacts-ppc64le
         uses: actions/download-artifact@v3
@@ -117,13 +113,10 @@ jobs:
           name: kata-static-tarball-ppc64le
       - name: push ppc64le static tarball to github
         run: |
-          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
-          tarball="kata-static-$tag-ppc64le.tar.xz"
-          mv kata-static.tar.xz "$GITHUB_WORKSPACE/${tarball}"
-          pushd $GITHUB_WORKSPACE
-          echo "uploading asset '${tarball}' for tag: ${tag}"
-          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a "${tarball}" "${tag}"
-          popd
+          ./tools/packaging/release/release.sh upload-kata-static-tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHITECTURE: ppc64le
 
   upload-versions-yaml:
     runs-on: ubuntu-latest

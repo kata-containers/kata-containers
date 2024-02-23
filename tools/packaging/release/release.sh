@@ -17,6 +17,10 @@ repo_root_dir="$(cd "$this_script_dir/../../../" && pwd)"
 
 IFS=' ' read -a IMAGE_TAGS <<< "${KATA_DEPLOY_IMAGE_TAGS:-}"
 IFS=' ' read -a REGISTRIES <<< "${KATA_DEPLOY_REGISTRIES:-}"
+GH_TOKEN="${GH_TOKEN:-}"
+ARCHITECTURE="${ARCHITECURE:-}"
+KATA_STATIC_TARBALL="${KATA_STATIC_TARBALL:-}"
+RELEASE_VERSION="${RELEASE_VERSION:-}"
 
 function _die()
 {
@@ -56,12 +60,27 @@ function _publish_multiarch_manifest()
 	done
 }
 
+function _upload_kata_static_tarball()
+{
+	_check_required_env_var "GH_TOKEN"
+	_check_required_env_var "ARCHITECTURE"
+	_check_required_env_var "KATA_STATIC_TARBALL"
+
+	[ -z "${RELEASE_VERSION}" ] && RELEASE_VERSION=$(cat "${repo_root_dir}/VERSION")
+
+	new_tarball_name="kata-static-${RELEASE_VERSION}-${ARCHITECTURE}.tar.xz"
+	mv ${KATA_STATIC_TARBALL} "${new_tarball_name}"
+	echo "uploading asset '${new_tarball_name}' (${ARCHITECTURE}) for tag: ${RELEASE_VERSION}"
+	gh release upload "${RELEASE_VERSION}" "${new_tarball_name}"
+}
+
 function main()
 {
 	action="${1:-}"
 
 	case "${action}" in
 		publish-multiarch-manifest) _publish_multiarch_manifest ;;
+		upload-kata-static-tarball) _upload_kata_static_tarball ;;
 		*) >&2 _die "Invalid argument" ;;
 	esac
 }
