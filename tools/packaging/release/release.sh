@@ -83,6 +83,17 @@ function _upload_versions_yaml_file()
 	gh release upload "${RELEASE_VERSION}" "${versions_file}"
 }
 
+function _upload_vendored_code_tarball()
+{
+	_check_required_env_var "GH_TOKEN"
+
+	[ -z "${RELEASE_VERSION}" ] && RELEASE_VERSION=$(cat "${repo_root_dir}/VERSION")
+
+	vendored_code_tarball="kata-containers-${RELEASE_VERSION}-vendor.tar.gz"
+	bash -c "${repo_root_dir}/tools/packaging/release/generate_vendor.sh ${vendored_code_tarball}"
+	gh release upload "${RELEASE_VERSION}" "${vendored_code_tarball}"
+}
+
 function main()
 {
 	action="${1:-}"
@@ -91,6 +102,7 @@ function main()
 		publish-multiarch-manifest) _publish_multiarch_manifest ;;
 		upload-kata-static-tarball) _upload_kata_static_tarball ;;
 		upload-versions-yaml-file) _upload_versions_yaml_file ;;
+		upload-vendored-code-tarball) _upload_vendored_code_tarball ;;
 		*) >&2 _die "Invalid argument" ;;
 	esac
 }

@@ -135,12 +135,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: generate-and-upload-tarball
         run: |
-          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
-          tarball="kata-containers-$tag-vendor.tar.gz"
-          pushd $GITHUB_WORKSPACE
-          bash -c "tools/packaging/release/generate_vendor.sh ${tarball}"
-          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} gh release upload "${tag}" "${tarball}"
-          popd
+          ./tools/packaging/release/release.sh upload-vendored-code-tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   upload-libseccomp-tarball:
     needs: upload-cargo-vendored-tarball
