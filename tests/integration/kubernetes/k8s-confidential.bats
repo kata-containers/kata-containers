@@ -10,21 +10,8 @@ load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	SUPPORTED_TEE_HYPERVISORS=("qemu-sev" "qemu-snp" "qemu-tdx" "qemu-se")
-	SUPPORTED_NON_TEE_HYPERVISORS=("qemu")
-
-	# This check must be done with "<SPACE>${KATA_HYPERVISOR}<SPACE>" to avoid
-	# having substrings, like qemu, being matched with qemu-$something.
-	if ! [[ " ${SUPPORTED_TEE_HYPERVISORS[@]} " =~ " ${KATA_HYPERVISOR} " ]] && ! [[ " ${SUPPORTED_NON_TEE_HYPERVISORS} " =~ " ${KATA_HYPERVISOR} " ]]; then
-		skip "Test not supported for ${KATA_HYPERVISOR}."
-	fi
-
-	if [[ " ${SUPPORTED_NON_TEE_HYPERVISORS} " =~ " ${KATA_HYPERVISOR} " ]]; then
-		info "Need to apply image annotations"
-	else
-		get_pod_config_dir
-		setup_unencrypted_confidential_pod
-	fi
+	confidential_setup || skip "Test not supported for ${KATA_HYPERVISOR}."
+	setup_unencrypted_confidential_pod
 }
 
 @test "Test unencrypted confidential container launch success and verify that we are running in a secure enclave." {
@@ -54,10 +41,8 @@ setup() {
 }
 
 teardown() {
-	if ! [[ " ${SUPPORTED_TEE_HYPERVISORS[@]} " =~ " ${KATA_HYPERVISOR} " ]] && ! [[ " ${SUPPORTED_NON_TEE_HYPERVISORS} " =~ " ${KATA_HYPERVISOR} " ]]; then
-		skip "Test not supported for ${KATA_HYPERVISOR}."
-	fi
-
+	check_hypervisor_for_confidential_tests ${KATA_HYPERVISOR} || skip "Test not supported for ${KATA_HYPERVISOR}."
+	
 	kubectl describe "pod/${pod_name}" || true
 	kubectl delete -f "${pod_config_dir}/pod-confidential-unencrypted.yaml" || true
 }
