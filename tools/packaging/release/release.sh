@@ -42,6 +42,14 @@ function _check_required_env_var()
 		_die "\"${1}\" environment variable is required but was not set"
 }
 
+function _create_new_release()
+{
+	_check_required_env_var "RELEASE_VERSION"
+	_check_required_env_var "GH_TOKEN"
+
+	gh release create ${RELEASE_VERSION} --generate-notes --title "Kata Containers ${RELEASE_VERSION}"
+}
+
 function _publish_multiarch_manifest()
 {
 	_check_required_env_var "KATA_DEPLOY_IMAGE_TAGS"
@@ -120,6 +128,7 @@ function main()
 
 	case "${action}" in
 		publish-multiarch-manifest) _publish_multiarch_manifest ;;
+		create-new-release) _create_new_release ;;
 		upload-kata-static-tarball) _upload_kata_static_tarball ;;
 		upload-versions-yaml-file) _upload_versions_yaml_file ;;
 		upload-vendored-code-tarball) _upload_vendored_code_tarball ;;
