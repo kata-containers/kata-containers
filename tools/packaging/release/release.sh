@@ -42,6 +42,20 @@ function _check_required_env_var()
 		_die "\"${1}\" environment variable is required but was not set"
 }
 
+function _update_version_file()
+{
+	_check_required_env_var "RELEASE_VERSION"
+
+	git config user.email "katacontainersbot@gmail.com"
+	git config user.name "Kata Containers Bot"
+
+	echo "${RELEASE_VERSION}" > "${repo_root_dir}/VERSION"
+	git diff
+	git add "${repo_root_dir}/VERSION"
+	git commit -s -m "release: Kata Containers ${RELEASE_VERSION}"
+	git push
+}
+
 function _create_new_release()
 {
 	_check_required_env_var "RELEASE_VERSION"
@@ -128,6 +142,7 @@ function main()
 
 	case "${action}" in
 		publish-multiarch-manifest) _publish_multiarch_manifest ;;
+		update-version-file) _update_version_file ;;
 		create-new-release) _create_new_release ;;
 		upload-kata-static-tarball) _upload_kata_static_tarball ;;
 		upload-versions-yaml-file) _upload_versions_yaml_file ;;
