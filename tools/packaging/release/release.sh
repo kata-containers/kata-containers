@@ -21,6 +21,7 @@ GH_TOKEN="${GH_TOKEN:-}"
 ARCHITECTURE="${ARCHITECURE:-}"
 KATA_STATIC_TARBALL="${KATA_STATIC_TARBALL:-}"
 RELEASE_VERSION="${RELEASE_VERSION:-}"
+RELEASE_TYPE="${RELEASE_TYPE:-minor}"
 
 function _die()
 {
@@ -40,6 +41,42 @@ function _check_required_env_var()
 
 	[ -z "${env_var}" ] && \
 		_die "\"${1}\" environment variable is required but was not set"
+}
+
+function _next_release_version()
+{
+	local current_release=$(cat "${repo_root_dir}/VERSION")
+	local current_major
+	local current_everything_else
+	local next_major
+	local next_minor
+
+	IFS="." read current_major current_minor current_everything_else <<< ${current_release}
+
+	case ${RELEASE_TYPE} in
+		major)
+			next_major=$(expr $current_major + 1)
+			next_minor=0
+			;;
+		minor)
+			next_major=${current_major}
+			# TODO: As we're moving from an alpha release to the
+			# new scheme, this check is needed for the very first
+			# release, after that it can be dropped and only the
+			# else part can be kept.
+			if grep -qE "alpha|rc" <<< ${current_everything_else}; then
+				next_minor=${current_minor}
+			else
+				next_minor=$(expr $current_minor + 1)
+			fi
+			;;
+		*)
+			_die "${RELEASE_TYPE} is not a valid release type, it must be: major or minor"
+			;;
+	esac
+
+	next_release_number="${next_major}.${next_minor}.0"
+	echo "${next_release_number}"
 }
 
 function _update_version_file()
@@ -143,6 +180,7 @@ function main()
 	case "${action}" in
 		publish-multiarch-manifest) _publish_multiarch_manifest ;;
 		update-version-file) _update_version_file ;;
+		next-release-version) _next_release_version;;
 		create-new-release) _create_new_release ;;
 		upload-kata-static-tarball) _upload_kata_static_tarball ;;
 		upload-versions-yaml-file) _upload_versions_yaml_file ;;
