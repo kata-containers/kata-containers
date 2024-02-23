@@ -94,6 +94,26 @@ function _upload_vendored_code_tarball()
 	gh release upload "${RELEASE_VERSION}" "${vendored_code_tarball}"
 }
 
+function _upload_libseccomp_tarball()
+{
+	_check_required_env_var "GH_TOKEN"
+
+	[ -z "${RELEASE_VERSION}" ] && RELEASE_VERSION=$(cat "${repo_root_dir}/VERSION")
+
+	INSTALL_IN_GO_PATH=false ${repo_root_dir}/ci/install_yq.sh
+
+	versions_yaml="versions.yaml"
+	version=$(/usr/local/bin/yq read ${versions_yaml} "externals.libseccomp.version")
+	repo_url=$(/usr/local/bin/yq read ${versions_yaml} "externals.libseccomp.url")
+	download_url="${repo_url}releases/download/v${version}"
+	tarball="libseccomp-${version}.tar.gz"
+	asc="${tarball}.asc"
+	curl -sSLO "${download_url}/${tarball}"
+	curl -sSLO "${download_url}/${asc}"
+	gh release upload "${RELEASE_VERSION}" "${tarball}"
+	gh release upload "${RELEASE_VERSIOB}" "${asc}"
+}
+
 function main()
 {
 	action="${1:-}"
@@ -103,6 +123,7 @@ function main()
 		upload-kata-static-tarball) _upload_kata_static_tarball ;;
 		upload-versions-yaml-file) _upload_versions_yaml_file ;;
 		upload-vendored-code-tarball) _upload_vendored_code_tarball ;;
+		upload-libseccomp-tarball) _upload_libseccomp_tarball ;;
 		*) >&2 _die "Invalid argument" ;;
 	esac
 }
