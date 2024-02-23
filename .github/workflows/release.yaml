@@ -1,14 +1,37 @@
-name: Publish Kata release artifacts
+name: Release Kata Containers
 on:
-  push:
-    tags:
-      - '[0-9]+.[0-9]+.[0-9]+*'
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  workflow_call:
+    inputs:
+      release-type:
+        required: true
+        type: string
 
 jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get the new release version
+        run: |
+          release_version=$(./tools/packaging/release/release.sh next-release-version)
+          echo "RELEASE_VERSION=$release_version" >> "$GITHUB_ENV"
+        env:
+          RELEASE_TYPE: ${{ inputs.release-type }}
+
+      - name: Update VERSION file
+        run: |
+          ./tools/packaging/release/release.sh update-version-file
+
+      - name: Create a new release
+        run: |
+          ./tools/packaging/release/release.sh create-new-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   build-and-push-assets-amd64:
     uses: ./.github/workflows/release-amd64.yaml
     with:
@@ -55,8 +78,7 @@ jobs:
 
       - name: Push multi-arch manifest
         run: |
-          tags="$(echo $GITHUB_REF | cut -d/ -f3-)"
-          tags+=" $([[ \"${tag}\" =~ \"alpha\"|\"rc\" ]] && echo \"latest\" || echo \"stable\"))"
+          tags="$(cat VERSION) latest"
           echo "KATA_DEPLOY_IMAGE_TAGS=\"${tags}\"" >> "$GITHUB_ENV"
 
           ./tools/packaging/release/release.sh publish-multiarch-manifest
