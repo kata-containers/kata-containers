@@ -622,6 +622,59 @@ impl ToQemuParams for DeviceNvdimm {
     }
 }
 
+#[derive(Debug)]
+struct BlockDriver {
+    image_id: String,
+    path: String,
+}
+
+impl BlockDriver {
+    fn new(image_id: &str, path: &str) -> BlockDriver {
+        BlockDriver {
+            image_id: image_id.to_owned(),
+            path: path.to_owned()
+        }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for BlockDriver {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push(format!("id=image-{}", self.image_id));
+        params.push(format!("file={}", self.path));
+        params.push("aio=threads,format=raw,if=none,readonly=on".to_owned());
+
+        Ok(vec!["-drive".to_owned(), params.join(",")])
+    }
+}
+
+#[derive(Debug)]
+struct DeviceCcw {
+    drive_id: String,
+}
+
+impl DeviceCcw {
+    fn new(drive_id: &str) -> DeviceCcw {
+        DeviceCcw {
+            drive_id: drive_id.to_owned(),
+        }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for DeviceCcw {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push("virtio-blk-ccw".to_owned());
+        params.push(format!("drive=image-{}", self.drive_id));
+        params.push("scsi=off,config-wce=off,share-rw=on".to_owned());
+        params.push(format!("serial=image-{}", self.drive_id));
+
+        Ok(vec!["-device".to_owned(), params.join(",")])
+    }
+}
+
 struct VhostVsockPci {
     vhostfd: RawFd,
     guest_cid: u32,
@@ -842,6 +895,12 @@ impl<'a> QemuCmdLine<'a> {
         let nvdimm = DeviceNvdimm::new("TODO", is_readonly);
         self.devices.push(Box::new(nvdimm));
 
+        Ok(())
+    }
+
+    pub fn add_ccw(&mut self, device_id: &str, path: &str) -> Result<()> {
+        self.devices.push(Box::new(BlockDriver::new(device_id, path)));
+        self.devices.push(Box::new(DeviceCcw::new(device_id)));
         Ok(())
     }
 
