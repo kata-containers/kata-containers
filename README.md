@@ -123,7 +123,7 @@ The table below lists the core parts of the project:
 | [agent](src/agent) | core | Management process running inside the virtual machine / POD that sets up the container environment. |
 | [`dragonball`](src/dragonball) | core | An optional built-in VMM brings out-of-the-box Kata Containers experience with optimizations on container workloads |
 | [documentation](docs) | documentation | Documentation common to all components (such as design and install documentation). |
-| [tests](https://github.com/kata-containers/tests) | tests | Excludes unit tests which live with the main code. |
+| [tests](tests) | tests | Excludes unit tests which live with the main code. |
 
 ### Additional components
 
