@@ -11,7 +11,7 @@ load "${BATS_TEST_DIRNAME}/../../metrics/lib/common.bash"
 
 setup_file() {
 	export RUNK_BIN_PATH="/usr/local/bin/runk"
-	export TEST_IMAGE="docker.io/library/busybox:latest"
+	export TEST_IMAGE="quay.io/prometheus/busybox:latest"
 	export CONTAINER_ID="id1"
 	export PID_FILE="${CONTAINER_ID}.pid"
 	export WORK_DIR="${BATS_FILE_TMPDIR}"
