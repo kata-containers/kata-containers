@@ -1,0 +1,6 @@
+bases:
+- ../../base
+
+components: 
+- ../../../kata-deploy/components/stable
+

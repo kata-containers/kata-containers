@@ -2,23 +2,23 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: kubelet-kata-cleanup
+  name: kata-cleanup
   namespace: kube-system
 spec:
   selector:
     matchLabels:
-      name: kubelet-kata-cleanup
+      name: kata-cleanup
   template:
     metadata:
       labels:
-        name: kubelet-kata-cleanup
+        name: kata-cleanup
     spec:
       serviceAccountName: kata-deploy-sa
       hostPID: true
       nodeSelector:
         katacontainers.io/kata-runtime: cleanup
       containers:
-        - name: kube-kata-cleanup
+        - name: kata-cleanup
           image: quay.io/kata-containers/kata-deploy:latest
           imagePullPolicy: Always
           command: ["bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh reset"]
