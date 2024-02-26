@@ -99,7 +99,7 @@ Options:
 	-d          	: Enable bash debug.
 	-e          	: Enable experimental kernel.
 	-E          	: Enable arch-specific experimental kernel, arch info offered by "-a".
-	-f          	: Enable force generate config when setup.
+	-f          	: Enable force generate config when setup, old kernel path and config will be removed.
 	-g <vendor> 	: GPU vendor, intel or nvidia.
 	-h          	: Display this help.
 	-H <deb|rpm>	: Linux headers for guest fs module building.
@@ -174,12 +174,19 @@ get_kernel() {
 	major_version=$(echo "${version}" | cut -d. -f1)
 	kernel_tarball="linux-${version}.tar.xz"
 
-	if [ ! -f sha256sums.asc ] || ! grep -q "${kernel_tarball}" sha256sums.asc; then
+	if [[ -f "${kernel_tarball}.sha256" ]] && (grep -qF "${kernel_tarball}" "${kernel_tarball}.sha256"); then
+		info "Restore valid ${kernel_tarball}.sha256 to sha256sums.asc"
+		cp -f "${kernel_tarball}.sha256" sha256sums.asc
+	else
 		shasum_url="https://cdn.kernel.org/pub/linux/kernel/v${major_version}.x/sha256sums.asc"
 		info "Download kernel checksum file: sha256sums.asc from ${shasum_url}"
 		curl --fail -OL "${shasum_url}"
+		if (grep -F "${kernel_tarball}" sha256sums.asc >"${kernel_tarball}.sha256"); then
+			info "sha256sums.asc is valid, ${kernel_tarball}.sha256 generated"
+		else
+			die "sha256sums.asc is invalid"
+		fi
 	fi
-	grep "${kernel_tarball}" sha256sums.asc >"${kernel_tarball}.sha256"
 
 	if [ -f "${kernel_tarball}" ] && ! sha256sum -c "${kernel_tarball}.sha256"; then
 		info "invalid kernel tarball ${kernel_tarball} removing "
@@ -290,6 +297,12 @@ get_kernel_frag_path() {
 		all_configs="${all_configs} ${conf_configs}"
 	fi
 
+	if [[ "$force_setup_generate_config" == "true" ]]; then
+		info "Remove existing config ${config_path} due to '-f'"
+		[ -f "$config_path" ] && rm -f "${config_path}"
+		[ -f "$config_path".old ] && rm -f "${config_path}".old
+	fi
+
 	info "Constructing config from fragments: ${config_path}"
 
 
@@ -387,6 +400,11 @@ get_config_version() {
 setup_kernel() {
 	local kernel_path=${1:-}
 	[ -n "${kernel_path}" ] || die "kernel_path not provided"
+
+	if [[ "$force_setup_generate_config" == "true" ]] && [[ -d "$kernel_path" ]];then
+		info "Remove existing directory ${kernel_path} due to '-f'"
+		rm -rf "${kernel_path}"
+	fi
 
 	if [ -d "$kernel_path" ]; then
 		info "${kernel_path} already exist"
@@ -541,7 +559,7 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:b:c:deEfg:hH:k:mp:t:u:v:x" opt; do
+	while getopts "a:b:c:deEfg:hH:k:mp:st:u:v:x" opt; do
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
@@ -598,6 +616,10 @@ main() {
 				;;
 			x)
 				conf_guest="confidential"
+				;;
+			*)
+				echo "ERROR: invalid argument '$opt'"
+				exit 1
 				;;
 		esac
 	done
