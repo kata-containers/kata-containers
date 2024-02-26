@@ -49,14 +49,6 @@ var (
 		[]string{"item"},
 	)
 
-	katashimNetdev = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: namespaceKatashim,
-		Name:      "netdev",
-		Help:      "Kata containerd shim v2 network devices statistics.",
-	},
-		[]string{"interface", "item"},
-	)
-
 	katashimIOStat = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: namespaceKatashim,
 		Name:      "io_stat",
@@ -89,7 +81,6 @@ func registerMetrics() {
 	prometheus.MustRegister(katashimThreads)
 	prometheus.MustRegister(katashimProcStatus)
 	prometheus.MustRegister(katashimProcStat)
-	prometheus.MustRegister(katashimNetdev)
 	prometheus.MustRegister(katashimIOStat)
 	prometheus.MustRegister(katashimOpenFDs)
 	prometheus.MustRegister(katashimPodOverheadCPU)
@@ -106,14 +97,6 @@ func updateShimMetrics() error {
 	// metrics about open FDs
 	if fds, err := proc.FileDescriptorsLen(); err == nil {
 		katashimOpenFDs.Set(float64(fds))
-	}
-
-	// network device metrics
-	if netdev, err := proc.NetDev(); err == nil {
-		// netdev: map[string]NetDevLine
-		for _, v := range netdev {
-			mutils.SetGaugeVecNetDev(katashimNetdev, v)
-		}
 	}
 
 	// proc stat
