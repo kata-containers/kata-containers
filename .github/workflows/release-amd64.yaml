@@ -41,8 +41,12 @@ jobs:
           # We need to do such trick here as the format of the $GITHUB_REF 
           # is "refs/tags/<tag>"
           tag=$(echo $GITHUB_REF | cut -d/ -f3-)
-          tags=($tag)
-          tags+=($([[ "$tag" =~ "alpha"|"rc" ]] && echo "latest" || echo "stable"))
+          if [ "${tag}" = "main" ]; then
+              tag=$(./tools/packaging/release/release.sh next-release-version)
+              tags=(${tag} "latest")
+          else
+              tags=(${tag})
+          fi
           for tag in ${tags[@]}; do
               ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
                   $(pwd)/kata-static.tar.xz "docker.io/katadocker/kata-deploy" \
