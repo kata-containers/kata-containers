@@ -14,6 +14,8 @@ set -o pipefail
 kubernetes_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=1091
 source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
+# shellcheck disable=1091
+source "${kubernetes_dir}/../../../ci/lib.sh"
 
 # Where the kbs sources will be cloned
 readonly COCO_KBS_DIR="/tmp/kbs"
@@ -21,6 +23,38 @@ readonly COCO_KBS_DIR="/tmp/kbs"
 readonly KBS_NS="coco-tenant"
 # The kbs service name
 readonly KBS_SVC_NAME="kbs"
+
+# Build and install the kbs-client binary, unless it is already present.
+#
+kbs_install_cli() {
+	command -v kbs-client >/dev/null && return
+
+	if ! command -v apt >/dev/null; then
+		>&2 echo "ERROR: running on unsupported distro"
+		return 1
+	fi
+
+	local pkgs="build-essential"
+
+	sudo apt-get update -y
+	# shellcheck disable=2086
+	sudo apt-get install -y $pkgs
+
+	# Mininum required version to build the client (read from versions.yaml)
+	local rust_version
+	ensure_yq
+	rust_version=$(get_from_kata_deps "externals.coco-kbs.toolchain")
+	# Currently kata version from version.yaml is 1.72.0
+	# which doesn't match the requirement, so let's pass
+	# the required version.
+	_ensure_rust "$rust_version"
+
+	pushd "${COCO_KBS_DIR}/kbs"
+	# Compile with sample features to bypass attestation.
+	make CLI_FEATURES=sample_only cli
+	sudo make install-cli
+	popd
+}
 
 # Delete the kbs on Kubernetes
 #
@@ -192,6 +226,37 @@ kbs_k8s_svc_http_addr() {
 	port=$(kbs_k8s_svc_port)
 
 	echo "http://${host}:${port}"
+}
+
+# Ensure rust is installed in the host.
+#
+# It won't install rust if it's already present, however, if the current
+# version isn't greater or equal than the mininum required then it will
+# bail out with an error.
+#
+_ensure_rust() {
+	rust_version=${1:-}
+
+	if ! command -v rustc >/dev/null; then
+		"${kubernetes_dir}/../../install_rust.sh" "${rust_version}"
+
+		# shellcheck disable=1091
+		source "$HOME/.cargo/env"
+	else
+		[ -z "$rust_version" ] && return
+
+		# We don't want to mess with installation on bare-metal so
+		# if rust is installed then just check it's >= the required
+		# version.
+		#
+		local current_rust_version
+		current_rust_version="$(rustc --version | cut -d' ' -f2)"
+		if ! version_greater_than_equal "${current_rust_version}" \
+			"${rust_version}"; then
+			>&2 echo "ERROR: installed rust $current_rust_version < $rust_version (required)"
+			return 1
+		fi
+	fi
 }
 
 # Choose the appropriated ingress handler.
