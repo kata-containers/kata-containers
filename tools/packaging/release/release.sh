@@ -18,7 +18,7 @@ repo_root_dir="$(cd "$this_script_dir/../../../" && pwd)"
 IFS=' ' read -a IMAGE_TAGS <<< "${KATA_DEPLOY_IMAGE_TAGS:-}"
 IFS=' ' read -a REGISTRIES <<< "${KATA_DEPLOY_REGISTRIES:-}"
 GH_TOKEN="${GH_TOKEN:-}"
-ARCHITECTURE="${ARCHITECURE:-}"
+ARCHITECTURE="${ARCHITECTURE:-}"
 KATA_STATIC_TARBALL="${KATA_STATIC_TARBALL:-}"
 RELEASE_VERSION="${RELEASE_VERSION:-}"
 RELEASE_TYPE="${RELEASE_TYPE:-minor}"
@@ -34,6 +34,10 @@ function _check_required_env_var()
 	local env_var
 
 	case ${1} in
+		RELEASE_VERSION) env_var="${RELEASE_VERSION}" ;;
+		GH_TOKEN) env_var="${GH_TOKEN}" ;;
+		ARCHITECTURE) env_var="${ARCHITECTURE}" ;;
+		KATA_STATIC_TARBALL) env_var="${KATA_STATIC_TARBALL}" ;;
 		KATA_DEPLOY_IMAGE_TAGS) env_var="${KATA_DEPLOY_IMAGE_TAGS}" ;;
 		KATA_DEPLOY_REGISTRIES) env_var="${KATA_DEPLOY_REGISTRIES}" ;;
 		*) >&2 _die "Invalid environment variable \"${1}\"" ;;
