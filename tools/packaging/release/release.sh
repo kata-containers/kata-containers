@@ -177,7 +177,7 @@ function _upload_libseccomp_tarball()
 	curl -sSLO "${download_url}/${tarball}"
 	curl -sSLO "${download_url}/${asc}"
 	gh release upload "${RELEASE_VERSION}" "${tarball}"
-	gh release upload "${RELEASE_VERSIOB}" "${asc}"
+	gh release upload "${RELEASE_VERSION}" "${asc}"
 }
 
 function main()
