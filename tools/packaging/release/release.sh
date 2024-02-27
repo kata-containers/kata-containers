@@ -45,6 +45,8 @@ function _check_required_env_var()
 
 	[ -z "${env_var}" ] && \
 		_die "\"${1}\" environment variable is required but was not set"
+
+	return 0
 }
 
 function _next_release_version()
