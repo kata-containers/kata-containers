@@ -195,6 +195,7 @@ function run_tests() {
 
 	pushd "${kubernetes_dir}"
 	bash setup.sh
+	export start_time=$(date '+%Y-%m-%d %H:%M:%S')
 	if [[ "${KATA_HYPERVISOR}" = "dragonball" ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]] || [[ "${KATA_HYPERVISOR}" = "cloud-hypervisor" ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]]; then
 		# cloud-hypervisor runtime-rs issue is https://github.com/kata-containers/kata-containers/issues/9034
 		echo "Skipping tests for $KATA_HYPERVISOR using devmapper"
@@ -210,8 +211,10 @@ function collect_artifacts() {
 		rm -rf "${artifacts_dir}"
 	fi
 	mkdir -p "${artifacts_dir}"
-	info "Running teardown script to collect artifacts using ${KATA_HYPERVISOR} hypervisor"
-	bash "${kubernetes_dir}/../../../ci/teardown.sh" "${artifacts_dir}"
+	info "Collecting artifacts using ${KATA_HYPERVISOR} hypervisor"
+	local journalctl_log_filename="journalctl.log"
+	local journalctl_log_path="${artifacts_dir}/${journalctl_log_filename}"
+	sudo journalctl --since="$start_time" > "${journalctl_log_path}"
 }
 
 function cleanup_kata_deploy() {
