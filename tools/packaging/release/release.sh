@@ -20,7 +20,6 @@ IFS=' ' read -a REGISTRIES <<< "${KATA_DEPLOY_REGISTRIES:-}"
 GH_TOKEN="${GH_TOKEN:-}"
 ARCHITECTURE="${ARCHITECTURE:-}"
 KATA_STATIC_TARBALL="${KATA_STATIC_TARBALL:-}"
-RELEASE_VERSION="${RELEASE_VERSION:-}"
 RELEASE_TYPE="${RELEASE_TYPE:-minor}"
 
 function _die()
@@ -131,7 +130,7 @@ function _upload_kata_static_tarball()
 	_check_required_env_var "ARCHITECTURE"
 	_check_required_env_var "KATA_STATIC_TARBALL"
 
-	[ -z "${RELEASE_VERSION}" ] && RELEASE_VERSION=$(cat "${repo_root_dir}/VERSION")
+	RELEASE_VERSION="$(_next_release_version)"
 
 	new_tarball_name="kata-static-${RELEASE_VERSION}-${ARCHITECTURE}.tar.xz"
 	mv ${KATA_STATIC_TARBALL} "${new_tarball_name}"
@@ -141,7 +140,7 @@ function _upload_kata_static_tarball()
 
 function _upload_versions_yaml_file()
 {
-	[ -z "${RELEASE_VERSION}" ] && RELEASE_VERSION=$(cat "${repo_root_dir}/VERSION")
+	RELEASE_VERSION="$(_next_release_version)"
 
 	versions_file="kata-containers-${RELEASE_VERSION}-versions.yaml"
 	cp "${repo_root_dir}/versions.yaml" ${versions_file}
@@ -152,7 +151,7 @@ function _upload_vendored_code_tarball()
 {
 	_check_required_env_var "GH_TOKEN"
 
-	[ -z "${RELEASE_VERSION}" ] && RELEASE_VERSION=$(cat "${repo_root_dir}/VERSION")
+	RELEASE_VERSION="$(_next_release_version)"
 
 	vendored_code_tarball="kata-containers-${RELEASE_VERSION}-vendor.tar.gz"
 	bash -c "${repo_root_dir}/tools/packaging/release/generate_vendor.sh ${vendored_code_tarball}"
@@ -163,7 +162,7 @@ function _upload_libseccomp_tarball()
 {
 	_check_required_env_var "GH_TOKEN"
 
-	[ -z "${RELEASE_VERSION}" ] && RELEASE_VERSION=$(cat "${repo_root_dir}/VERSION")
+	RELEASE_VERSION="$(_next_release_version)"
 
 	INSTALL_IN_GO_PATH=false ${repo_root_dir}/ci/install_yq.sh
 

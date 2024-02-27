@@ -6,6 +6,9 @@ on:
         required: true
         type: string
 
+env:
+  RELEASE_TYPE: ${{ inputs.release-type }}
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -19,8 +22,6 @@ jobs:
         run: |
           release_version=$(./tools/packaging/release/release.sh next-release-version)
           echo "RELEASE_VERSION=$release_version" >> "$GITHUB_ENV"
-        env:
-          RELEASE_TYPE: ${{ inputs.release-type }}
 
       - name: Update VERSION file
         run: |
