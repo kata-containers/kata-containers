@@ -156,15 +156,21 @@ function run_test() {
 
 function teardown() {
 	echo "Running teardown"
+	local rc=0
 
-	# kill nydus-snapshotter
-	bin=containerd-nydus-grpc
-	sudo -E kill -9 $(pidof $bin) || true
-	[ "$(pidof $bin)" == "" ] || die "$bin is running"
-
-	bin=nydusd
-	sudo -E kill -9 $(pidof $bin) || true
-	[ "$(pidof $bin)" == "" ] || die "$bin is running"
+	local pid
+	for bin in containerd-nydus-grpc nydusd; do
+		pid=$(pidof $bin)
+		if [ -n "$pid" ]; then
+			echo "Killing $bin processes"
+			# shellcheck disable=SC2086
+			sudo -E kill -9 $pid || true
+			if [ -n "$(pidof $bin)" ]; then
+				echo "$bin is still running ($pid) but it should not"
+				rc=1
+			fi
+		fi
+	done
 
 	# restore kata configuratiom.toml if needed
 	if [ "${need_restore_kata_config}" == "true" ]; then
@@ -180,8 +186,9 @@ function teardown() {
 		sudo rm "$containerd_config"
 	fi
 
-	clean_env_ctr
+	clean_env_ctr || rc=1
 	check_processes
+	return $rc
 }
 
 trap teardown EXIT
