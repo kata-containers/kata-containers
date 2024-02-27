@@ -10,8 +10,10 @@ This document lists the tasks required to create a Kata Release.
 ### Check GitHub Actions
 
 We make use of [GitHub actions](https://github.com/features/actions) in the
-[minor](../.github/workflows/release-minor.yaml) and
-[major](../.github/workflows/release-major.yaml) files from the
+[minor](https://github.com/kata-containers/kata-containers/actions/workflows/release-minor.yaml)
+and
+[major](https://github.com/kata-containers/kata-containers/actions/workflows/release-major.yaml)
+files from the
 `kata-containers/kata-containers` repository to build and upload release
 artifacts.
 
