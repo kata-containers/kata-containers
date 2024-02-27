@@ -1,14 +1,37 @@
-name: Publish Kata release artifacts
+name: Release Kata Containers
 on:
-  push:
-    tags:
-      - '[0-9]+.[0-9]+.[0-9]+*'
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  workflow_call:
+    inputs:
+      release-type:
+        required: true
+        type: string
 
 jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get the new release version
+        run: |
+          release_version=$(./tools/packaging/release/release.sh next-release-version)
+          echo "RELEASE_VERSION=$release_version" >> "$GITHUB_ENV"
+        env:
+          RELEASE_TYPE: ${{ inputs.release-type }}
+
+      - name: Update VERSION file
+        run: |
+          ./tools/packaging/release/release.sh update-version-file
+
+      - name: Create a new release
+        run: |
+          ./tools/packaging/release/release.sh create-new-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   build-and-push-assets-amd64:
     uses: ./.github/workflows/release-amd64.yaml
     with:
@@ -55,27 +78,12 @@ jobs:
 
       - name: Push multi-arch manifest
         run: |
-          # tag the container image we created and push to DockerHub
-          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
-          tags=($tag)
-          tags+=($([[ "$tag" =~ "alpha"|"rc" ]] && echo "latest" || echo "stable"))
-          # push to quay.io and docker.io
-          for tag in ${tags[@]}; do
-            docker manifest create quay.io/kata-containers/kata-deploy:${tag} \
-              --amend quay.io/kata-containers/kata-deploy:${tag}-amd64 \
-              --amend quay.io/kata-containers/kata-deploy:${tag}-arm64 \
-              --amend quay.io/kata-containers/kata-deploy:${tag}-s390x \
-              --amend quay.io/kata-containers/kata-deploy:${tag}-ppc64le
+          tags="$(cat VERSION) latest"
+          echo "KATA_DEPLOY_IMAGE_TAGS=\"${tags}\"" >> "$GITHUB_ENV"
 
-            docker manifest create docker.io/katadocker/kata-deploy:${tag} \
-              --amend docker.io/katadocker/kata-deploy:${tag}-amd64 \
-              --amend docker.io/katadocker/kata-deploy:${tag}-arm64 \
-              --amend docker.io/katadocker/kata-deploy:${tag}-s390x \
-              --amend docker.io/katadocker/kata-deploy:${tag}-ppc64le
-
-            docker manifest push quay.io/kata-containers/kata-deploy:${tag}
-            docker manifest push docker.io/katadocker/kata-deploy:${tag}
-          done
+          ./tools/packaging/release/release.sh publish-multiarch-manifest
+        env:
+          KATA_DEPLOY_REGISTRIES: "quay.io/kata-containers/kata-deploy docker.io/katadocker/kata-deploy"
 
   upload-multi-arch-static-tarball:
     needs: publish-multi-arch-images
@@ -83,19 +91,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set KATA_STATIC_TARBALL env var
+        run: |
+          tarball=$(pwd)/kata-static.tar.xz
+          echo "KATA_STATIC_TARBALL=${tarball}" >> "$GITHUB_ENV"
+
       - name: download-artifacts-amd64
         uses: actions/download-artifact@v3
         with:
           name: kata-static-tarball-amd64
       - name: push amd64 static tarball to github
         run: |
-          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
-          tarball="kata-static-$tag-amd64.tar.xz"
-          mv kata-static.tar.xz "$GITHUB_WORKSPACE/${tarball}"
-          pushd $GITHUB_WORKSPACE
-          echo "uploading asset '${tarball}' for tag: ${tag}"
-          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} gh release upload "${tag}" "${tarball}"
-          popd
+          ./tools/packaging/release/release.sh upload-kata-static-tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHITECTURE: amd64
 
       - name: download-artifacts-arm64
         uses: actions/download-artifact@v3
@@ -103,13 +113,10 @@ jobs:
           name: kata-static-tarball-arm64
       - name: push arm64 static tarball to github
         run: |
-          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
-          tarball="kata-static-$tag-arm64.tar.xz"
-          mv kata-static.tar.xz "$GITHUB_WORKSPACE/${tarball}"
-          pushd $GITHUB_WORKSPACE
-          echo "uploading asset '${tarball}' for tag: ${tag}"
-          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} gh release upload "${tag}" "${tarball}"
-          popd
+          ./tools/packaging/release/release.sh upload-kata-static-tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHITECTURE: arm4
 
       - name: download-artifacts-s390x
         uses: actions/download-artifact@v3
@@ -117,13 +124,10 @@ jobs:
           name: kata-static-tarball-s390x
       - name: push s390x static tarball to github
         run: |
-          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
-          tarball="kata-static-$tag-s390x.tar.xz"
-          mv kata-static.tar.xz "$GITHUB_WORKSPACE/${tarball}"
-          pushd $GITHUB_WORKSPACE
-          echo "uploading asset '${tarball}' for tag: ${tag}"
-          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} gh release upload "${tag}" "${tarball}"
-          popd
+          ./tools/packaging/release/release.sh upload-kata-static-tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHITECTURE: s390x
 
       - name: download-artifacts-ppc64le
         uses: actions/download-artifact@v3
@@ -131,28 +135,20 @@ jobs:
           name: kata-static-tarball-ppc64le
       - name: push ppc64le static tarball to github
         run: |
-          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
-          tarball="kata-static-$tag-ppc64le.tar.xz"
-          mv kata-static.tar.xz "$GITHUB_WORKSPACE/${tarball}"
-          pushd $GITHUB_WORKSPACE
-          echo "uploading asset '${tarball}' for tag: ${tag}"
-          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} hub release edit -m "" -a "${tarball}" "${tag}"
-          popd
+          ./tools/packaging/release/release.sh upload-kata-static-tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHITECTURE: ppc64le
 
   upload-versions-yaml:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: upload versions.yaml
-        env:
-          GITHUB_TOKEN: ${{ secrets.GIT_UPLOAD_TOKEN }}
         run: |
-          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
-          pushd $GITHUB_WORKSPACE
-          versions_file="kata-containers-$tag-versions.yaml"
-          cp versions.yaml ${versions_file}
-          gh release upload "${tag}" "${versions_file}"
-          popd
+          ./tools/packaging/release/release.sh upload-versions-yaml-file
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   upload-cargo-vendored-tarball:
     needs: upload-multi-arch-static-tarball
@@ -161,12 +157,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: generate-and-upload-tarball
         run: |
-          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
-          tarball="kata-containers-$tag-vendor.tar.gz"
-          pushd $GITHUB_WORKSPACE
-          bash -c "tools/packaging/release/generate_vendor.sh ${tarball}"
-          GITHUB_TOKEN=${{ secrets.GIT_UPLOAD_TOKEN }} gh release upload "${tag}" "${tarball}"
-          popd
+          ./tools/packaging/release/release.sh upload-vendored-code-tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
 
   upload-libseccomp-tarball:
     needs: upload-cargo-vendored-tarball
@@ -174,21 +167,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: download-and-upload-tarball
-        env:
-          GITHUB_TOKEN: ${{ secrets.GIT_UPLOAD_TOKEN }}
-          GOPATH: ${HOME}/go
         run: |
-          pushd $GITHUB_WORKSPACE
-          ./ci/install_yq.sh
-          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
-          versions_yaml="versions.yaml"
-          version=$(${GOPATH}/bin/yq read ${versions_yaml} "externals.libseccomp.version")
-          repo_url=$(${GOPATH}/bin/yq read ${versions_yaml} "externals.libseccomp.url")
-          download_url="${repo_url}/releases/download/v${version}"
-          tarball="libseccomp-${version}.tar.gz"
-          asc="${tarball}.asc"
-          curl -sSLO "${download_url}/${tarball}"
-          curl -sSLO "${download_url}/${asc}"
-          gh release upload "${tag}" "${tarball}"
-          gh release upload "${tag}" "${asc}"
-          popd
+          ./tools/packaging/release/release.sh upload-libseccomp-tarball
+        env:
+          GH_TOKEN: ${{ github.token }}

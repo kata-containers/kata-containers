@@ -1,0 +1,10 @@
+name: Minor Release
+on:
+  workflow_dispatch
+
+jobs:
+  minor-release:
+    uses: ./.github/workflows/release.yaml
+    with:
+      release-type: minor
+    secrets: inherit
