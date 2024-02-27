@@ -81,11 +81,13 @@ jobs:
           username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
           password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
+      - name: Get the image tags
+        run: |
+          release_version=$(./tools/packaging/release/release.sh next-release-version)
+          echo "KATA_DEPLOY_IMAGE_TAGS=$release_version latest" >> "$GITHUB_ENV"
+
       - name: Push multi-arch manifest
         run: |
-          tags="$(cat VERSION) latest"
-          echo "KATA_DEPLOY_IMAGE_TAGS=\"${tags}\"" >> "$GITHUB_ENV"
-
           ./tools/packaging/release/release.sh publish-multiarch-manifest
         env:
           KATA_DEPLOY_REGISTRIES: "quay.io/kata-containers/kata-deploy docker.io/katadocker/kata-deploy"
