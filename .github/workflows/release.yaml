@@ -121,7 +121,7 @@ jobs:
           ./tools/packaging/release/release.sh upload-kata-static-tarball
         env:
           GH_TOKEN: ${{ github.token }}
-          ARCHITECTURE: arm4
+          ARCHITECTURE: arm64
 
       - name: download-artifacts-s390x
         uses: actions/download-artifact@v3
