@@ -166,11 +166,11 @@ function _upload_libseccomp_tarball()
 
 	RELEASE_VERSION="$(_next_release_version)"
 
-	INSTALL_IN_GO_PATH=false ${repo_root_dir}/ci/install_yq.sh
+	GOPATH=${HOME}/go ./ci/install_yq.sh
 
 	versions_yaml="versions.yaml"
-	version=$(/usr/local/bin/yq read ${versions_yaml} "externals.libseccomp.version")
-	repo_url=$(/usr/local/bin/yq read ${versions_yaml} "externals.libseccomp.url")
+	version=$(${HOME}/go/bin/yq read ${versions_yaml} "externals.libseccomp.version")
+	repo_url=$(${HOME}/go/bin/yq read ${versions_yaml} "externals.libseccomp.url")
 	download_url="${repo_url}releases/download/v${version}"
 	tarball="libseccomp-${version}.tar.gz"
 	asc="${tarball}.asc"
