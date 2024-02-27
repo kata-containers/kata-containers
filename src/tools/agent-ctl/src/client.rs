@@ -1974,7 +1974,7 @@ fn agent_cmd_sandbox_set_policy(
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
-     run_if_auto_values!(ctx, || -> Result<()> {
+    run_if_auto_values!(ctx, || -> Result<()> {
         let base64data = utils::get_option("policy", options, args)?;
         req.set_policy(base64data);
         Ok(())

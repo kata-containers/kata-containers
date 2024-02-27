@@ -187,7 +187,7 @@ impl grpctls::agent_service_server::AgentService for AgentService {
         let mut sandbox = s.lock().await;
 
         let ctr = sandbox.get_container(&cid).ok_or_else(|| {
-            tonic::Status::new(tonic::Code::Internal, format!("SA invalid container id"))
+            tonic::Status::new(tonic::Code::Internal, "Ivalid container id".to_string())
         })?;
 
         ctr.pause().map_err(|e| {
@@ -250,7 +250,7 @@ impl grpctls::agent_service_server::AgentService for AgentService {
         let mut sandbox = s.lock().await;
 
         let ctr = sandbox.get_container(&cid).ok_or_else(|| {
-            tonic::Status::new(tonic::Code::Internal, format!("SA invalid container id"))
+            tonic::Status::new(tonic::Code::Internal, "Invalid container id".to_string())
         })?;
 
         ctr.resume().map_err(|e| {
@@ -327,7 +327,7 @@ impl grpctls::agent_service_server::AgentService for AgentService {
 
         let mut sandbox = self.sandbox.lock().await;
         let ctr = sandbox.get_container(&cid).ok_or_else(|| {
-            tonic::Status::new(tonic::Code::Internal, format!("invalid container id"))
+            tonic::Status::new(tonic::Code::Internal, "Invalid container id".to_string())
         })?;
 
         let ctr_stats = ctr.stats().map_err(|e| {
@@ -473,7 +473,7 @@ impl grpctls::agent_service_server::AgentService for AgentService {
 
         let len = response.len();
 
-        Ok(tonic::Response::new(WriteStreamResponse { len: len }))
+        Ok(tonic::Response::new(WriteStreamResponse { len }))
     }
 
     async fn read_stdout(
@@ -588,7 +588,7 @@ impl grpctls::agent_service_server::AgentService for AgentService {
             // return Err(ttrpc_error!(ttrpc::Code::UNAVAILABLE, "no tty".to_string()));
             return Err(tonic::Status::new(
                 tonic::Code::Unavailable,
-                format!("no tty"),
+                "no tty".to_string(),
             ));
         }
 
@@ -640,7 +640,6 @@ impl grpctls::agent_service_server::AgentService for AgentService {
 
         Ok(tonic::Response::new(Interfaces {
             interfaces: vec_interface,
-            ..Default::default()
         }))
     }
 
@@ -682,10 +681,7 @@ impl grpctls::agent_service_server::AgentService for AgentService {
         };
 
         //info!(sl!(), "grpctls: interface  obj: {:?}", vec_routes);
-        Ok(tonic::Response::new(Routes {
-            routes: vec_routes,
-            ..Default::default()
-        }))
+        Ok(tonic::Response::new(Routes { routes: vec_routes }))
     }
 
     async fn get_metrics(
@@ -838,7 +834,7 @@ impl grpctls::agent_service_server::AgentService for AgentService {
             return Ok(tonic::Response::new(OomEvent { container_id }));
         }
 
-        Err(tonic::Status::new(tonic::Code::Internal, format!("")))
+        Err(tonic::Status::new(tonic::Code::Internal, String::new()))
     }
 }
 

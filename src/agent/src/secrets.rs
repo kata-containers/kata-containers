@@ -158,7 +158,7 @@ pub fn tls_keys_exist() -> bool {
         }
     }
 
-    return false;
+    false
 }
 
 pub async fn get_resource_with_attestation(
