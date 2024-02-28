@@ -20,7 +20,7 @@ kata_tarball_dir="${2:-kata-artifacts}"
 DOCKER_REGISTRY=${DOCKER_REGISTRY:-quay.io}
 DOCKER_REPO=${DOCKER_REPO:-kata-containers/kata-deploy-ci}
 DOCKER_TAG=${DOCKER_TAG:-kata-containers-latest}
-KATA_DEPLOY_WAIT_TIMEOUT=${KATA_DEPLOY_WAIT_TIMEOUT:-10m}
+KATA_DEPLOY_WAIT_TIMEOUT=${KATA_DEPLOY_WAIT_TIMEOUT:-600}
 SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT=${SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT:-8m}
 KATA_HYPERVISOR=${KATA_HYPERVISOR:-qemu}
 KBS=${KBS:-false}
@@ -156,7 +156,9 @@ function deploy_kata() {
 	else
 		kubectl apply -f "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 	fi
-	kubectl -n kube-system wait --timeout="${KATA_DEPLOY_WAIT_TIMEOUT}" --for=condition=Ready -l name=kata-deploy pod
+
+	local cmd="kubectl -n kube-system get -l name=kata-deploy pod 2>/dev/null | grep '\<Running\>'"
+	waitForProcess "${KATA_DEPLOY_WAIT_TIMEOUT}" 10 "$cmd"
 
 	# This is needed as the kata-deploy pod will be set to "Ready" when it starts running,
 	# which may cause issues like not having the node properly labeled or the artefacts

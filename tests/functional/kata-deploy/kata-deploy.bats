@@ -57,7 +57,9 @@ setup() {
 	else
 		kubectl apply -f "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 	fi
-	kubectl -n kube-system wait --timeout=10m --for=condition=Ready -l name=kata-deploy pod
+
+	local cmd="kubectl -n kube-system get -l name=kata-deploy pod 2>/dev/null | grep '\<Running\>'"
+	waitForProcess 600 10 "$cmd"
 
 	# Give some time for the pod to finish what's doing and have the
 	# runtimeclasses properly created
