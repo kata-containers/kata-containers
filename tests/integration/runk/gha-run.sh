@@ -12,6 +12,7 @@ set -o pipefail
 kata_tarball_dir="${2:-kata-artifacts}"
 runk_dir="$(dirname "$(readlink -f "$0")")" 
 source "${runk_dir}/../../common.bash"
+source "${runk_dir}/../../gha-run-k8s-common.sh"
 
 function install_dependencies() {
 	info "Installing the dependencies needed for running the runk tests"
@@ -38,12 +39,15 @@ function install_dependencies() {
 		IFS=":" read -r -a dep <<< "${github_dep}"
 		install_${dep[0]} "${dep[1]}"
 	done
+
+	# Requires bats to run the tests
+	install_bats
 }
 
 function run() {
 	info "Running runk tests using"
 
-	bash -c ${runk_dir}/runk-tests.sh
+	bats "${runk_dir}/runk-tests.bats"
 }
 
 function main() {
