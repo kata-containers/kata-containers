@@ -50,6 +50,8 @@ k8s_create_pod() {
 		return 1
 	fi
 
+	kubectl describe pod/${pod_name}
+
 	if ! k8s_wait_pod_be_ready "$pod_name"; then
 		# TODO: run this command for debugging. Maybe it should be
 		#       guarded by DEBUG=true?
