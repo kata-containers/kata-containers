@@ -94,7 +94,6 @@ jobs:
           name: k8s-tests-garm-${{ matrix.vmm }}
           path: /tmp/artifacts
           retention-days: 1
-          if-no-files-found: error
 
       - name: Delete kata-deploy
         if: always()

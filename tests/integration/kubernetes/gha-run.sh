@@ -70,14 +70,14 @@ EOF
 	case "${KUBERNETES}" in
 		k3s)
 			containerd_config_file="/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl"
-			sudo cp /var/lib/rancher/k3s/agent/etc/containerd/config.toml ${containerd_config_file}
+			sudo cp /var/lib/rancher/k3s/agent/etc/containerd/config.toml "${containerd_config_file}"
 			;;
 		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
 	esac
 
 	# We're not using this with baremetal machines, so we're fine on cutting
 	# corners here and just append this to the configuration file.
-	cat<<EOF | sudo tee -a ${containerd_config_file}
+	cat<<EOF | sudo tee -a "${containerd_config_file}"
 [plugins."io.containerd.snapshotter.v1.devmapper"]
   pool_name = "contd-thin-pool"
   base_image_size = "4096MB"
@@ -85,19 +85,19 @@ EOF
 
 	case "${KUBERNETES}" in
 		k3s)
-			sudo sed -i -e 's/snapshotter = "overlayfs"/snapshotter = "devmapper"/g' ${containerd_config_file}
+			sudo sed -i -e 's/snapshotter = "overlayfs"/snapshotter = "devmapper"/g' "${containerd_config_file}"
 			sudo systemctl restart k3s ;;
 		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
 	esac
 
 	sleep 60s
-	sudo cat ${containerd_config_file}
+	sudo cat "${containerd_config_file}"
 }
 
 function configure_snapshotter() {
 	echo "::group::Configuring ${SNAPSHOTTER}"
 
-	case ${SNAPSHOTTER} in
+	case "${SNAPSHOTTER}" in
 		devmapper) configure_devmapper ;;
 		*) >&2 echo "${SNAPSHOTTER} flavour is not supported"; exit 2 ;;
 	esac
@@ -265,7 +265,7 @@ function cleanup() {
 	get_nodes_and_pods_info
 
 	if [ "${platform}" = "aks" ]; then
-		delete_cluster ${test_type}
+		delete_cluster "${test_type}"
 		return
 	fi
 
@@ -336,8 +336,8 @@ function deploy_nydus_snapshotter() {
 	echo "::endgroup::"
 	echo "::group::nydus snapshotter logs"
 	pods_name=$(kubectl get pods --selector=app=nydus-snapshotter -n nydus-system -o=jsonpath='{.items[*].metadata.name}')
-	kubectl logs ${pods_name} -n nydus-system
-	kubectl describe pod ${pods_name} -n nydus-system
+	kubectl logs "${pods_name}" -n nydus-system
+	kubectl describe pod "${pods_name}" -n nydus-system
 	echo "::endgroup::"
 }
 
