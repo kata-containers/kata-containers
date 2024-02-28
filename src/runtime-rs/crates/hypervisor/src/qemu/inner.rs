@@ -18,6 +18,7 @@ use kata_types::{
 use persist::sandbox_persist::Persist;
 use std::collections::HashMap;
 use std::os::unix::io::AsRawFd;
+use std::path::Path;
 use std::process::Stdio;
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
@@ -127,6 +128,10 @@ impl QemuInner {
         // line and replace its argument appropriately (open a terminal, run
         // `tty` in it to get its device file path and use it as the argument).
         //cmdline.add_serial_console("/dev/pts/23");
+
+        // Add a console to the devices of the cmdline
+        let console_socket_path = Path::new(&self.get_jailer_root().await?).join("console.sock");
+        cmdline.add_console(console_socket_path.to_str().unwrap());
 
         info!(sl!(), "qemu args: {}", cmdline.build().await?.join(" "));
         let mut command = Command::new(&self.config.path);
