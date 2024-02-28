@@ -61,7 +61,11 @@ function run() {
 
 	enabling_hypervisor
 
-	bash -c ${cri_containerd_dir}/integration-tests.sh
+	if [[ "${KATA_HYPERVISOR}" = "cloud-hypervisor" ]]; then
+		echo "Skipping cri-containerd tests for ${KATA_HYPERVISOR}"
+	else
+		bash -c ${cri_containerd_dir}/integration-tests.sh
+	fi
 }
 
 function main() {
