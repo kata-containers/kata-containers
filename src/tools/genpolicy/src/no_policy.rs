@@ -9,6 +9,7 @@
 use crate::pod;
 use crate::policy;
 use crate::settings;
+use crate::utils::Config;
 use crate::yaml;
 
 use async_trait::async_trait;
@@ -24,7 +25,7 @@ pub struct NoPolicyResource {
 impl yaml::K8sResource for NoPolicyResource {
     async fn init(
         &mut self,
-        _use_cache: bool,
+        _config: &Config,
         _doc_mapping: &serde_yaml::Value,
         _silent_unsupported_fields: bool,
     ) {
