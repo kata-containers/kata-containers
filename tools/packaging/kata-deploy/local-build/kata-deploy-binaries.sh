@@ -327,7 +327,7 @@ install_image() {
 
 #Install guest image for confidential guests
 install_image_confidential() {
-	export AGENT_POLICY=yes
+	export AGENT_POLICY=no
 	export MEASURED_ROOTFS=yes
 	export PULL_TYPE=default
 	install_image "confidential"
@@ -396,7 +396,7 @@ install_initrd() {
 
 #Install guest initrd for confidential guests
 install_initrd_confidential() {
-	export AGENT_POLICY=yes
+	export AGENT_POLICY=no
 	export MEASURED_ROOTFS=yes
 	export PULL_TYPE=default
 	install_initrd "confidential"
