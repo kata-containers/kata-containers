@@ -23,6 +23,14 @@ pub fn get_policy_mounts(
     yaml_container: &pod::Container,
     is_pause_container: bool,
 ) {
+    if let Some(volumeMounts) = &yaml_container.volumeMounts {
+        for volumeMount in volumeMounts {
+            if volumeMount.subPath.is_some() {
+                panic!("Kata Containers doesn't support volumeMounts.subPath - see https://github.com/kata-containers/runtime/issues/2812");
+            }
+        }
+    }
+
     let c_settings = settings.get_container_settings(is_pause_container);
     let settings_mounts = &c_settings.Mounts;
     let rootfs_access = if yaml_container.read_only_root_filesystem() {
