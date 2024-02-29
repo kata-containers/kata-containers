@@ -21,9 +21,11 @@ setup() {
 	# Create the pods
 	kubectl create -f "${pod_config_dir}/pod-sandbox-vcpus-allocation.yaml"
 
+	# Wait for completion
+	kubectl wait --for=jsonpath='{.status.conditions[0].reason}'=PodCompleted --timeout=$timeout pod --all
+
 	# Check the pods
 	for i in {0..2}; do
-		kubectl wait --for=jsonpath='{.status.conditions[0].reason}'=PodCompleted --timeout=$timeout pod ${pods[$i]}
 		[ `kubectl logs ${pods[$i]}` -eq ${expected_vcpus[$i]} ]
 	done
 }
