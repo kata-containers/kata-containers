@@ -57,7 +57,7 @@ section explains what this means.
 > [the architectural history document](history.md).
 
 The
-[containerd runtime shimv2 architecture](https://github.com/containerd/containerd/tree/main/runtime/v2)
+[containerd runtime shimv2 architecture](https://github.com/containerd/containerd/tree/main/core/runtime/v2)
 or _shim API_ architecture resolves the issues with the old
 architecture by defining a set of shimv2 APIs that a compatible
 runtime implementation must supply. Rather than calling the runtime
