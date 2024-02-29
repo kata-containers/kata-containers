@@ -6,12 +6,11 @@ on:
         required: true
         type: string
 
-env:
-  RELEASE_TYPE: ${{ inputs.release-type }}
-
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TYPE: ${{ inputs.release-type }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -38,6 +37,7 @@ jobs:
     uses: ./.github/workflows/release-amd64.yaml
     with:
       target-arch: amd64
+      release-type: ${{ inputs.release-type }}
     secrets: inherit
 
   build-and-push-assets-arm64:
@@ -45,6 +45,7 @@ jobs:
     uses: ./.github/workflows/release-arm64.yaml
     with:
       target-arch: arm64
+      release-type: ${{ inputs.release-type }}
     secrets: inherit
 
   build-and-push-assets-s390x:
@@ -52,6 +53,7 @@ jobs:
     uses: ./.github/workflows/release-s390x.yaml
     with:
       target-arch: s390x
+      release-type: ${{ inputs.release-type }}
     secrets: inherit
 
   build-and-push-assets-ppc64le:
@@ -59,11 +61,14 @@ jobs:
     uses: ./.github/workflows/release-ppc64le.yaml
     with:
       target-arch: ppc64le
+      release-type: ${{ inputs.release-type }}
     secrets: inherit
 
   publish-multi-arch-images:
     runs-on: ubuntu-latest
     needs: [build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le]
+    env:
+      RELEASE_TYPE: ${{ inputs.release-type }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -95,6 +100,8 @@ jobs:
   upload-multi-arch-static-tarball:
     needs: [build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le]
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TYPE: ${{ inputs.release-type }}
     steps:
       - uses: actions/checkout@v4
 
@@ -150,6 +157,8 @@ jobs:
   upload-versions-yaml:
     needs: release
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TYPE: ${{ inputs.release-type }}
     steps:
       - uses: actions/checkout@v4
       - name: upload versions.yaml
@@ -161,6 +170,8 @@ jobs:
   upload-cargo-vendored-tarball:
     needs: release
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TYPE: ${{ inputs.release-type }}
     steps:
       - uses: actions/checkout@v4
       - name: generate-and-upload-tarball
@@ -172,6 +183,8 @@ jobs:
   upload-libseccomp-tarball:
     needs: release
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TYPE: ${{ inputs.release-type }}
     steps:
       - uses: actions/checkout@v4
       - name: download-and-upload-tarball

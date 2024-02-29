@@ -5,6 +5,9 @@ on:
       target-arch:
         required: true
         type: string
+      release-type:
+        required: true
+        type: string
 
 jobs:
   build-kata-static-tarball-ppc64le:
@@ -42,7 +45,7 @@ jobs:
           # is "refs/tags/<tag>"
           tag=$(echo $GITHUB_REF | cut -d/ -f3-)
           if [ "${tag}" = "main" ]; then
-              tag=$(./tools/packaging/release/release.sh next-release-version)
+              tag=$(RELEASE_TYPE=${{ inputs.release-type }} ./tools/packaging/release/release.sh next-release-version)
               tags=(${tag} "latest")
           else
               tags=(${tag})

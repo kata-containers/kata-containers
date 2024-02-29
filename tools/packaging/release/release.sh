@@ -22,7 +22,7 @@ IFS=' ' read -a REGISTRIES <<< "${KATA_DEPLOY_REGISTRIES}"
 GH_TOKEN="${GH_TOKEN:-}"
 ARCHITECTURE="${ARCHITECTURE:-}"
 KATA_STATIC_TARBALL="${KATA_STATIC_TARBALL:-}"
-RELEASE_TYPE="${RELEASE_TYPE:-minor}"
+RELEASE_TYPE="${RELEASE_TYPE:-}"
 
 function _die()
 {
@@ -35,6 +35,7 @@ function _check_required_env_var()
 	local env_var
 
 	case ${1} in
+		RELEASE_TYPE) env_var="${RELEASE_TYPE}" ;;
 		RELEASE_VERSION) env_var="${RELEASE_VERSION}" ;;
 		GH_TOKEN) env_var="${GH_TOKEN}" ;;
 		ARCHITECTURE) env_var="${ARCHITECTURE}" ;;
@@ -52,6 +53,8 @@ function _check_required_env_var()
 
 function _next_release_version()
 {
+	_check_required_env_var "RELEASE_TYPE"
+
 	local current_release=$(cat "${repo_root_dir}/VERSION")
 	local current_major
 	local current_everything_else
