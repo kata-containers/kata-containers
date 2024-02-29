@@ -35,7 +35,7 @@ function install_dependencies() {
 	sudo apt-get -y install "${system_deps[@]}"
 
 	ensure_yq
-	"${repo_root_dir}"/tests/install_go.sh -p -f
+	. "${repo_root_dir}/tests/install_go.sh" -p -f
 
 	# Dependency list of projects that we can install them
 	# directly from their releases on GitHub:
@@ -48,7 +48,7 @@ function install_dependencies() {
 
 	for github_dep in "${github_deps[@]}"; do
 		IFS=":" read -r -a dep <<< "${github_dep}"
-		install_"${dep[0]}" "${dep[1]}"
+		"install_${dep[0]}" "${dep[1]}"
 	done
 
 	# Clone containerd as we'll need to build it in order to run the tests
