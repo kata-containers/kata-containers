@@ -158,6 +158,8 @@ variables:
 * \`TOOLS_CONTAINER_BUILDER\`
 * \`VIRTIOFSD_CONTAINER_BUILDER\`
 
+foo
+
 ## Installation
 
 Follow the Kata [installation instructions][installation].
