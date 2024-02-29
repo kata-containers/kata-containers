@@ -26,7 +26,7 @@ jobs:
         include:
           - container_engine: containerd
             containerd_version: lts
-    runs-on: garm-ubuntu-2204-smaller
+    runs-on: ubuntu-22.04
     env:
       CONTAINER_ENGINE: ${{ matrix.container_engine }}
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}

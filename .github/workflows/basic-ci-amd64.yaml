@@ -23,7 +23,7 @@ jobs:
       matrix:
         containerd_version: ['lts', 'active']
         vmm: ['clh', 'dragonball', 'qemu', 'stratovirt']
-    runs-on: garm-ubuntu-2204-smaller
+    runs-on: ubuntu-22.04
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
       GOPATH: ${{ github.workspace }}
@@ -62,7 +62,7 @@ jobs:
       matrix:
         containerd_version: ['lts', 'active']
         vmm: ['clh', 'cloud-hypervisor', 'dragonball', 'qemu', 'stratovirt']
-    runs-on: garm-ubuntu-2204-smaller
+    runs-on: ubuntu-22.04
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
       GOPATH: ${{ github.workspace }}
@@ -104,7 +104,7 @@ jobs:
       matrix:
         containerd_version: ['lts', 'active']
         vmm: ['clh', 'qemu', 'dragonball', 'stratovirt']
-    runs-on: garm-ubuntu-2204-smaller
+    runs-on: ubuntu-22.04
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
       GOPATH: ${{ github.workspace }}
@@ -138,7 +138,7 @@ jobs:
         run: bash tests/integration/nydus/gha-run.sh run
 
   run-runk:
-    runs-on: garm-ubuntu-2204-smaller
+    runs-on: ubuntu-22.04
     env:
       CONTAINERD_VERSION: lts
     steps:
@@ -176,7 +176,7 @@ jobs:
         vmm:
           - clh # cloud-hypervisor
           - qemu
-    runs-on: garm-ubuntu-2204-smaller
+    runs-on: ubuntu-22.04
     env:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:

@@ -38,13 +38,7 @@ jobs:
         k8s:
           - k3s
         instance:
-          - garm-ubuntu-2004
-          - garm-ubuntu-2004-smaller
-        include:
-          - instance: garm-ubuntu-2004
-            instance-type: normal
-          - instance: garm-ubuntu-2004-smaller
-            instance-type: small
+          - ubuntu-20.04
     runs-on: ${{ matrix.instance }}
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
@@ -55,7 +49,7 @@ jobs:
       KUBERNETES: ${{ matrix.k8s }}
       SNAPSHOTTER: ${{ matrix.snapshotter }}
       USING_NFD: "false"
-      K8S_TEST_HOST_TYPE: ${{ matrix.instance-type }}
+      K8S_TEST_HOST_TYPE: normal
     steps:
       - uses: actions/checkout@v4
         with:

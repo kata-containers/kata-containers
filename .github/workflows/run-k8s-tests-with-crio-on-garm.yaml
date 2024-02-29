@@ -32,13 +32,10 @@ jobs:
         k8s:
           - k0s
         instance:
-          - garm-ubuntu-2204
-          - garm-ubuntu-2204-smaller
+          - ubuntu-22.04
         include:
-          - instance: garm-ubuntu-2204
+          - instance: ubuntu-22.04
             instance-type: normal
-          - instance: garm-ubuntu-2204-smaller
-            instance-type: small
           - k8s: k0s
             k8s-extra-params: '--cri-socket remote:unix:///var/run/crio/crio.sock --kubelet-extra-args --cgroup-driver="systemd"'
     runs-on: ${{ matrix.instance }}
