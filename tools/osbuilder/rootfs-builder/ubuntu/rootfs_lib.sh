@@ -55,4 +55,9 @@ EOF
 	pushd $rootfs_dir/dev
 	MAKEDEV -v console tty ttyS null zero fd
 	popd
+
+	for file in /etc/{resolv.conf,ssl/certs/ca-certificates.crt}; do
+                mkdir -p "$rootfs_dir/$(dirname $file)"
+                cp --remove-destination "$file" "$rootfs_dir/$file"
+	done
 }
