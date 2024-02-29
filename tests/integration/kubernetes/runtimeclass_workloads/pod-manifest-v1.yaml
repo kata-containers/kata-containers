@@ -1,0 +1,18 @@
+#
+# Copyright (c) 2024 Microsoft
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginxhttps
+  
+spec:
+  runtimeClassName: kata
+  terminationGracePeriodSeconds: 0
+  containers:
+    - name: nginxhttps
+      image: "docker.io/ymqytw/nginxhttps:1.5"
+      ports:
+        - containerPort: 80

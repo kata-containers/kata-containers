@@ -1,4 +1,4 @@
-// Copyright (c) 2023 Microsoft Corporation
+// Copyright (c) 2024 Microsoft Corporation
 //
 // SPDX-License-Identifier: Apache-2.0
 //
@@ -166,7 +166,7 @@ pub async fn pull_image(
     image_ref: &Reference,
     mut client: ImageServiceClient<tonic::transport::Channel>,
 ) -> Result<()> {
-    let auth = build_auth(&image_ref);
+    let auth = build_auth(image_ref);
 
     debug!("cri auth: {:?}", auth);
 

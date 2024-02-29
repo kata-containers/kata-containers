@@ -61,6 +61,7 @@ else
 		"k8s-shared-volume.bats" \
 		"k8s-volume.bats" \
 		"k8s-nginx-connectivity.bats" \
+		"k8s-pod-manifest-v1.bats" \
 	)
 
 	K8S_TEST_NORMAL_HOST_UNION=( \
@@ -157,6 +158,10 @@ run_policy_specific_tests() {
 	info "$(kubectl get pods --all-namespaces 2>&1)"
 	info "Executing k8s-policy-set-keys.bats"
 	bats --show-output-of-passing-tests k8s-policy-set-keys.bats
+
+	info "$(kubectl get pods --all-namespaces 2>&1)"
+	info "Executing k8s-caps.bats (default image pull)"
+	bats --show-output-of-passing-tests k8s-caps.bats
 }
 
 # we may need to skip a few test cases when running on non-x86_64 arch
@@ -168,8 +173,10 @@ fi
 
 if policy_tests_enabled; then
 	ensure_yq
+	export use_containerd_pull=0	
 	run_policy_specific_tests
 	add_policy_to_successful_tests
+	use_containerd_pull=1
 else
 	info "Policy tests are disabled on this platform"
 fi
