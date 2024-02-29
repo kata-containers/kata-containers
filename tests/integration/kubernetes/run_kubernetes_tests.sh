@@ -64,6 +64,10 @@ else
 		"k8s-nginx-connectivity.bats" \
 	)
 
+	if [ "${GENPOLICY_PULL_METHOD}" == "containerd" ]; then
+		K8S_TEST_SMALL_HOST_UNION+=("k8s-pod-manifest-v1.bats")
+	fi
+
 	K8S_TEST_NORMAL_HOST_UNION=( \
 		"k8s-number-cpus.bats" \
 		"k8s-parallel.bats" \

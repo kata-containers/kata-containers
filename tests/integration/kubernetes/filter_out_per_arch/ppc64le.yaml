@@ -12,3 +12,4 @@ kubernetes:
   - k8s-limit-range
   - k8s-number-cpus
   - k8s-oom
+  - k8s-pod-manifest-v1.bats

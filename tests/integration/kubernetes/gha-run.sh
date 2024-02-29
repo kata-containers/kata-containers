@@ -33,6 +33,7 @@ HTTPS_PROXY="${HTTPS_PROXY:-${https_proxy:-}}"
 NO_PROXY="${NO_PROXY:-${no_proxy:-}}"
 export AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-no}"
 export TEST_CLUSTER_NAMESPACE="${TEST_CLUSTER_NAMESPACE:-kata-containers-k8s-tests}"
+export GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-oci-distribution-client}"
 
 function configure_devmapper() {
 	sudo mkdir -p /var/lib/containerd/devmapper
@@ -252,10 +253,19 @@ function run_tests() {
 	[ "$platform" = "kcli" ] && \
 		export KUBECONFIG="$HOME/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
 
-	# Enable auto-generated policy for CI images that support policy.
-	#
+	# Enable auto-generated policy for CI images that support policy
+	# and enable cri plugin in containerd config.
 	# TODO: enable testing auto-generated policy for other types of hosts too.
-	[ "${KATA_HOST_OS}" = "cbl-mariner" ] && export AUTO_GENERATE_POLICY="yes"
+
+	if [ "${KATA_HOST_OS}" = "cbl-mariner" ]; then
+
+		export AUTO_GENERATE_POLICY="yes"
+
+		# set default containerd config
+		sudo containerd config default | sudo tee /etc/containerd/config.toml > /dev/null
+		echo "containerd config has been set to default"
+		sudo systemctl restart containerd && sudo systemctl is-active containerd
+	fi
 
 	set_test_cluster_namespace
 
