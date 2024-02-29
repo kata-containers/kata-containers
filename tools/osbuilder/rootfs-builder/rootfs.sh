@@ -463,6 +463,11 @@ build_rootfs_distro()
 			engine_run_args+=" -v $(dirname ${COCO_GUEST_COMPONENTS_TARBALL}):$(dirname ${COCO_GUEST_COMPONENTS_TARBALL})"
 		fi
 
+		if [ -n "${PAUSE_IMAGE_TARBALL}" ]; then
+			engine_run_args+=" --env PAUSE_IMAGE_TARBALL=${PAUSE_IMAGE_TARBALL}"
+			engine_run_args+=" -v $(dirname ${PAUSE_IMAGE_TARBALL}):$(dirname ${PAUSE_IMAGE_TARBALL})"
+		fi
+
 		engine_run_args+=" -v ${GOPATH_LOCAL}:${GOPATH_LOCAL} --env GOPATH=${GOPATH_LOCAL}"
 
 		engine_run_args+=" $(docker_extra_args $distro)"
