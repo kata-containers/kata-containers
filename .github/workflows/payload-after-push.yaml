@@ -3,12 +3,10 @@ on:
   push:
     branches:
       - main
-      - stable-*
   workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
 
 jobs:
   build-assets-amd64:
@@ -105,5 +103,5 @@ jobs:
         run: |
           ./tools/packaging/release/release.sh publish-multiarch-manifest
         env:
-          KATA_DEPLOY_IMAGE_TAGS="kata-containers-latest"
-          KATA_DEPLOY_REGISTRIES="quay.io/kata-containers/kata-deploy-ci"
+          KATA_DEPLOY_IMAGE_TAGS: "kata-containers-latest"
+          KATA_DEPLOY_REGISTRIES: "quay.io/kata-containers/kata-deploy-ci"
