@@ -90,7 +90,7 @@ func CreateTracer(name string, config *JaegerConfig) (*sdktrace.TracerProvider, 
 	}
 
 	// build tracer provider, that combining both jaeger exporter and kata exporter.
-	tp := sdktrace.NewTracerProvider(
+	tp = sdktrace.NewTracerProvider(
 		sdktrace.WithSampler(sdktrace.AlwaysSample()),
 		sdktrace.WithSyncer(kataExporter),
 		sdktrace.WithSyncer(jaegerExporter),
