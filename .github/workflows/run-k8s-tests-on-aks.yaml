@@ -110,12 +110,12 @@ jobs:
 
       - name: Deploy CoCo KBS
         if: env.KBS == 'true'
-        timeout-minutes: 5
+        timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh deploy-coco-kbs
 
       - name: Install `kbs-client`
         if: env.KBS == 'true'
-        timeout-minutes: 5
+        timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh install-kbs-client
 
       - name: Run tests
