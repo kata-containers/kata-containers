@@ -11,6 +11,8 @@ use nix::sched::{setns, CloneFlags};
 use nix::unistd::{getpid, gettid};
 use rand::Rng;
 
+use kata_types::sl;
+
 pub struct NetnsGuard {
     old_netns: Option<File>,
 }

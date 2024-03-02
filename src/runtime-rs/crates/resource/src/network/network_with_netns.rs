@@ -17,6 +17,7 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use futures::stream::TryStreamExt;
 use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
+use kata_sys_util::netns;
 use netns_rs::get_from_path;
 use scopeguard::defer;
 use tokio::sync::RwLock;
@@ -27,7 +28,7 @@ use super::{
     },
     network_entity::NetworkEntity,
     network_info::network_info_from_link::{handle_addresses, NetworkInfoFromLink},
-    utils::{link, netns},
+    utils::link,
     Network,
 };
 use crate::network::NetworkInfo;

@@ -12,6 +12,7 @@ pub mod fs;
 pub mod hooks;
 pub mod k8s;
 pub mod mount;
+pub mod netns;
 pub mod numa;
 pub mod protection;
 pub mod rand;

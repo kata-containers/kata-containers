@@ -28,6 +28,7 @@ slog-scope = "4.4.0"
 subprocess = "0.2.8"
 rand = "0.8.5"
 thiserror = "1.0.30"
+hex = "0.4.3"
 
 kata-types = { path = "../kata-types" }
 oci = { path = "../oci" }
@@ -37,3 +38,4 @@ safe-path = { path = "../safe-path" }
 num_cpus = "1.13.1"
 serial_test = "0.5.1"
 tempfile = "3.2.0"
+test-utils = { path = "../test-utils" }

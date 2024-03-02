@@ -24,6 +24,7 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::device::device_manager::DeviceManager;
 use hypervisor::Hypervisor;
+use kata_sys_util::netns::NetnsGuard;
 use kata_types::config::TomlConfig;
 use scopeguard::defer;
 use serde::{Deserialize, Serialize};
@@ -32,7 +33,7 @@ use tokio::sync::RwLock;
 
 use super::network_entity::NetworkEntity;
 use super::utils::address::{ip_family_from_ip_addr, parse_ip_cidr};
-use super::{EndpointState, NetnsGuard, Network};
+use super::{EndpointState, Network};
 use crate::network::endpoint::{TapEndpoint, VhostUserEndpoint};
 use crate::network::network_info::network_info_from_dan::NetworkInfoFromDan;
 use crate::network::utils::generate_private_mac_addr;

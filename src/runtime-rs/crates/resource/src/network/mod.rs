@@ -22,8 +22,8 @@ use network_with_netns::NetworkWithNetns;
 mod network_pair;
 use network_pair::NetworkPair;
 mod utils;
+pub use kata_sys_util::netns::{generate_netns_name, NetnsGuard};
 use tokio::sync::RwLock;
-pub use utils::netns::{generate_netns_name, NetnsGuard};
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
