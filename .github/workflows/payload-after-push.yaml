@@ -48,7 +48,7 @@ jobs:
       commit-hash: ${{ github.sha }}
       registry: quay.io
       repo: kata-containers/kata-deploy-ci
-      tag: kata-containers-amd64
+      tag: kata-containers-latest-amd64
       target-branch: ${{ github.ref_name }}
     secrets: inherit
 
@@ -59,7 +59,7 @@ jobs:
       commit-hash: ${{ github.sha }}
       registry: quay.io
       repo: kata-containers/kata-deploy-ci
-      tag: kata-containers-arm64
+      tag: kata-containers-latest-arm64
       target-branch: ${{ github.ref_name }}
     secrets: inherit
 
@@ -70,7 +70,7 @@ jobs:
       commit-hash: ${{ github.sha }}
       registry: quay.io
       repo: kata-containers/kata-deploy-ci
-      tag: kata-containers-s390x
+      tag: kata-containers-latest-s390x
       target-branch: ${{ github.ref_name }}
     secrets: inherit
 
@@ -81,7 +81,7 @@ jobs:
       commit-hash: ${{ github.sha }}
       registry: quay.io
       repo: kata-containers/kata-deploy-ci
-      tag: kata-containers-ppc64le
+      tag: kata-containers-latest-ppc64le
       target-branch: ${{ github.ref_name }}
     secrets: inherit
 
