@@ -156,28 +156,17 @@ mod tests {
 
     #[test]
     fn test_signal_handler() {
+        // When METRICS initializes lazy, it will call the call_once to add locks.
+        // If the signal interrupts the initialization process, initializing again the
+        // metrics in the signal interrupt handler will cause a deadlock.
+        lazy_static::initialize(&METRICS);
         let child = thread::spawn(move || {
             assert!(register_signal_handlers().is_ok());
 
             let filter = SeccompFilter::new(
-                vec![
-                    (libc::SYS_brk, vec![]),
-                    (libc::SYS_exit, vec![]),
-                    (libc::SYS_futex, vec![]),
-                    (libc::SYS_getpid, vec![]),
-                    (libc::SYS_munmap, vec![]),
-                    (libc::SYS_kill, vec![]),
-                    (libc::SYS_rt_sigprocmask, vec![]),
-                    (libc::SYS_rt_sigreturn, vec![]),
-                    (libc::SYS_sched_getaffinity, vec![]),
-                    (libc::SYS_set_tid_address, vec![]),
-                    (libc::SYS_sigaltstack, vec![]),
-                    (libc::SYS_write, vec![]),
-                ]
-                .into_iter()
-                .collect(),
-                SeccompAction::Trap,
+                vec![(libc::SYS_mkdirat, vec![])].into_iter().collect(),
                 SeccompAction::Allow,
+                SeccompAction::Trap,
                 std::env::consts::ARCH.try_into().unwrap(),
             )
             .unwrap();
