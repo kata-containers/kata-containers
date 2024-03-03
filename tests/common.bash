@@ -620,6 +620,10 @@ function install_crio() {
 	# See: https://github.com/kata-containers/kata-containers/issues/8034
 	sudo mkdir -p /etc/crio/crio.conf.d/
 	cat <<EOF | sudo tee /etc/crio/crio.conf.d/00-default-capabilities
+[crio]
+storage_option = [
+	"overlay.skip_mount_home=true",
+]
 [crio.runtime]
 default_capabilities = [
        "CHOWN",
