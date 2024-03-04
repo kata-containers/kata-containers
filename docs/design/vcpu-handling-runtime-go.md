@@ -43,10 +43,9 @@ A Kubernetes pod is a group of one or more containers, with shared storage and
 network, and a specification for how to run the containers [[specification][2]].
 In Kata Containers this group of containers, which is called a sandbox, runs inside
 the same virtual machine. If you do not specify a CPU constraint, the runtime does
-not add more vCPUs and the container is not placed inside a CPU cgroup.
-Instead, the container uses the number of vCPUs specified by `default_vcpus`
-and shares these resources with other containers in the same situation
-(without a CPU constraint).
+not add more vCPUs and the container is placed in a CPU cgroup however the cgroup
+is unrestrained (limit of -1). This means that containers without limit have 
+no constraint when it comes to CPU utilization.
 
 ## Container lifecycle
 
@@ -56,13 +55,9 @@ the runtime removes these resources.
 
 ## Container without CPU constraint
 
-A container without a CPU constraint uses the default number of vCPUs specified
-in the configuration file. In the case of Kubernetes pods, containers without a
-CPU constraint use and share between them the default number of vCPUs. For
-example, if `default_vcpus` is equal to 1 and you have 2 containers without CPU
-constraints with each container trying to consume 100% of vCPU, the resources
-divide in two parts, 50% of vCPU for each container because your virtual
-machine does not have enough resources to satisfy containers needs. If you want
+A container without a CPU constraint can uses as much CPU as the the VM since 
+the container's cpu cgroup won't have a limit. They will still be subjected to
+CFS schuduling which would prioritize containers with large request. If you want
 to give access to a greater or lesser portion of vCPUs to a specific container,
 use [Kubernetes `cpu` requests][1].
 
