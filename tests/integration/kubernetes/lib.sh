@@ -203,6 +203,7 @@ set_container_command() {
 	local yaml="${1}"
 	local container_idx="${2}"
 	shift 2
+
     for command_value in "$@"; do
         yq write -i "${yaml}" "spec.containers[${container_idx}].command[+]" --tag '!!str' "${command_value}"
     done

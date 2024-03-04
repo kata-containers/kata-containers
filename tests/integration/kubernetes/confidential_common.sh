@@ -6,6 +6,7 @@
 #
 
 source "${BATS_TEST_DIRNAME}/tests_common.sh"
+source "${BATS_TEST_DIRNAME}/../../common.bash"
 
 SUPPORTED_TEE_HYPERVISORS=("qemu-sev" "qemu-snp" "qemu-tdx" "qemu-se")
 SUPPORTED_NON_TEE_HYPERVISORS=("qemu")
@@ -53,6 +54,7 @@ function check_hypervisor_for_confidential_tests() {
 
 # Common setup for confidential tests.
 function confidential_setup() {
+	ensure_yq
 	if ! check_hypervisor_for_confidential_tests "${KATA_HYPERVISOR}"; then
         return 1
     elif [[ " ${SUPPORTED_NON_TEE_HYPERVISORS[*]} " =~ " ${KATA_HYPERVISOR} " ]]; then
