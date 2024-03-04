@@ -199,6 +199,13 @@ externals:
     version: "42b7c9687ecd0907ef70da31cf290a60ee8432cd"
     toolchain: "1.72.0"
 
+  coco-kbs:
+    description: "Provides attestation and secret Management services"
+    url: "https://github.com/confidential-containers/kbs"
+    version: "18c8ee378c6d83446ee635a702d5dee389028d8f"
+    image: "ghcr.io/confidential-containers/staged-images/kbs"
+    image_tag: "18c8ee378c6d83446ee635a702d5dee389028d8f"
+
   conmon:
     description: "An OCI container runtime monitor"
     url: "https://github.com/containers/conmon"
@@ -259,6 +266,17 @@ externals:
       https://github.com/kubernetes/kubernetes/tags
       .*/v?([\d\.]+)\.tar\.gz
     version: "1.23.1-00"
+
+  kustomize:
+    description: "Kubernetes native configuration management"
+    url: "https://github.com/kubernetes-sigs/kustomize"
+    version: "v5.3.0"
+    checksum:
+      amd64: "3ab32f92360d752a2a53e56be073b649abc1e7351b912c0fb32b960d1def854c"
+      arm64: "a1ec622d4adeb483e3cdabd70f0d66058b1e4bcec013c4f74f370666e1e045d8"
+      # yamllint disable-line rule:line-length
+      ppc64le: "946b1aa9325e7234157881fe2098e59c05c6834e56205bf6ec0a9a5fc83c9cc4"
+      s390x: "0b1a00f0e33efa2ecaa6cda9eeb63141ddccf97a912425974d6b65e66cf96cd4"
 
   libseccomp:
     description: "High level interface to Linux seccomp filter"

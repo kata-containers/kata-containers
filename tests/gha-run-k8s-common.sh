@@ -27,17 +27,40 @@ function _print_instance_type() {
     esac
 }
 
+# Print the cluster name set by $AKS_NAME or generated out of runtime
+# metadata (e.g. pull request number, commit SHA, etc).
+#
 function _print_cluster_name() {
-    test_type="${1:-k8s}"
+    local test_type="${1:-k8s}"
+    local short_sha
 
-    short_sha="$(git rev-parse --short=12 HEAD)"
-    echo "${test_type}-${GH_PR_NUMBER}-${short_sha}-${KATA_HYPERVISOR}-${KATA_HOST_OS}-amd64-${K8S_TEST_HOST_TYPE:0:1}"
+    if [ -n "${AKS_NAME:-}" ]; then
+        echo "$AKS_NAME"
+    else
+        short_sha="$(git rev-parse --short=12 HEAD)"
+        echo "${test_type}-${GH_PR_NUMBER}-${short_sha}-${KATA_HYPERVISOR}-${KATA_HOST_OS}-amd64-${K8S_TEST_HOST_TYPE:0:1}"
+    fi
 }
 
 function _print_rg_name() {
     test_type="${1:-k8s}"
 
     echo "${AZ_RG:-"kataCI-$(_print_cluster_name ${test_type})"}"
+}
+
+# Enable the HTTP application routing add-on to AKS.
+# Use with ingress to expose a service API externally.
+#
+function enable_cluster_http_application_routing() {
+	local test_type="${1:-k8s}"
+	local cluster_name
+	local rg
+
+	rg="$(_print_rg_name "${test_type}")"
+	cluster_name="$(_print_cluster_name "${test_type}")"
+
+	az aks enable-addons -g "$rg" -n "$cluster_name" \
+		--addons http_application_routing
 }
 
 function install_azure_cli() {
@@ -94,12 +117,57 @@ function install_kubectl() {
     sudo az aks install-cli
 }
 
+# Install the kustomize tool in /usr/local/bin if it doesn't exist on
+# the system yet.
+#
+function install_kustomize() {
+	local arch
+	local checksum
+	local version
+
+	if command -v kustomize >/dev/null; then
+		return
+	fi
+
+	ensure_yq
+	version=$(get_from_kata_deps "externals.kustomize.version")
+	arch=$(arch_to_golang)
+	checksum=$(get_from_kata_deps "externals.kustomize.checksum.${arch}")
+
+	local tarball="kustomize_${version}_linux_${arch}.tar.gz"
+	curl -Lf -o "$tarball" "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/${version}/${tarball}"
+
+	local rc=0
+	echo "${checksum} $tarball" | sha256sum -c || rc=$?
+	[ $rc -eq 0 ] && sudo tar -xvzf "${tarball}" -C /usr/local/bin || rc=$?
+	rm -f "$tarball"
+	[ $rc -eq 0 ]
+}
+
 function get_cluster_credentials() {
     test_type="${1:-k8s}"
 
     az aks get-credentials \
         -g "$(_print_rg_name ${test_type})" \
         -n "$(_print_cluster_name ${test_type})"
+}
+
+
+# Get the AKS DNS zone name of HTTP application routing.
+#
+# Note: if the HTTP application routing add-on isn't installed in the cluster
+# then it will return an empty string.
+#
+function get_cluster_specific_dns_zone() {
+	local test_type="${1:-k8s}"
+	local cluster_name
+	local rg
+	local q="addonProfiles.httpApplicationRouting.config.HTTPApplicationRoutingZoneName"
+
+	rg="$(_print_rg_name "${test_type}")"
+	cluster_name="$(_print_cluster_name "${test_type}")"
+
+	az aks show -g "$rg" -n "$cluster_name" --query "$q" | tr -d \"
 }
 
 function delete_cluster() {
