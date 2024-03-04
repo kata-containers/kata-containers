@@ -80,6 +80,10 @@ impl CgroupManager for Manager {
         }
     }
 
+    fn kill(&self) -> Result<()> {
+        self.fs_manager.kill()
+    }
+
     fn destroy(&mut self) -> Result<()> {
         self.dbus_client.kill_unit()?;
         self.fs_manager.destroy()

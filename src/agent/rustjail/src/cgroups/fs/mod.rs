@@ -194,6 +194,11 @@ impl CgroupManager for Manager {
         Ok(())
     }
 
+    fn kill(&self) -> Result<()> {
+        self.cgroup.kill()?;
+        Ok(())
+    }
+
     fn destroy(&mut self) -> Result<()> {
         if let Err(err) = self.cgroup.delete() {
             warn!(
