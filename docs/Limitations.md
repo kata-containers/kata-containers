@@ -64,10 +64,10 @@ Currently Kata Containers does not support Podman.
 
 See issue https://github.com/kata-containers/kata-containers/issues/722 for more information.
 
-Docker supports Kata Containers since 22.06:
+Docker supports Kata Containers since 23.0:
 
 ```bash
-$ sudo docker run --runtime io.containerd.kata.v2
+$ docker run --runtime io.containerd.kata.v2
 ```
 
 Kata Containers works perfectly with containerd, we recommend to use
