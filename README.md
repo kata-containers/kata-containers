@@ -148,6 +148,10 @@ The table below lists the remaining parts of the project:
 Kata Containers is now
 [available natively for most distributions](docs/install/README.md#packaged-installation-methods).
 
+## General tests
+
+See the [tests documentation](tests/README.md).
+
 ## Metrics tests
 
 See the [metrics documentation](tests/metrics/README.md).
