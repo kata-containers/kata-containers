@@ -85,6 +85,16 @@ jobs:
         timeout-minutes: 30
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
   
+      - name: Collect artifacts ${{ matrix.vmm }}
+        run: bash tests/integration/kubernetes/gha-run.sh collect-artifacts
+
+      - name: Archive artifacts ${{ matrix.vmm }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: k8s-tests-garm-${{ matrix.vmm }}
+          path: /tmp/artifacts
+          retention-days: 1
+
       - name: Delete kata-deploy
         if: always()
         run: bash tests/integration/kubernetes/gha-run.sh cleanup-garm

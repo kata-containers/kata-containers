@@ -70,14 +70,14 @@ EOF
 	case "${KUBERNETES}" in
 		k3s)
 			containerd_config_file="/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl"
-			sudo cp /var/lib/rancher/k3s/agent/etc/containerd/config.toml ${containerd_config_file}
+			sudo cp /var/lib/rancher/k3s/agent/etc/containerd/config.toml "${containerd_config_file}"
 			;;
 		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
 	esac
 
 	# We're not using this with baremetal machines, so we're fine on cutting
 	# corners here and just append this to the configuration file.
-	cat<<EOF | sudo tee -a ${containerd_config_file}
+	cat<<EOF | sudo tee -a "${containerd_config_file}"
 [plugins."io.containerd.snapshotter.v1.devmapper"]
   pool_name = "contd-thin-pool"
   base_image_size = "4096MB"
@@ -85,19 +85,19 @@ EOF
 
 	case "${KUBERNETES}" in
 		k3s)
-			sudo sed -i -e 's/snapshotter = "overlayfs"/snapshotter = "devmapper"/g' ${containerd_config_file}
+			sudo sed -i -e 's/snapshotter = "overlayfs"/snapshotter = "devmapper"/g' "${containerd_config_file}"
 			sudo systemctl restart k3s ;;
 		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
 	esac
 
 	sleep 60s
-	sudo cat ${containerd_config_file}
+	sudo cat "${containerd_config_file}"
 }
 
 function configure_snapshotter() {
 	echo "::group::Configuring ${SNAPSHOTTER}"
 
-	case ${SNAPSHOTTER} in
+	case "${SNAPSHOTTER}" in
 		devmapper) configure_devmapper ;;
 		*) >&2 echo "${SNAPSHOTTER} flavour is not supported"; exit 2 ;;
 	esac
@@ -195,6 +195,7 @@ function run_tests() {
 
 	pushd "${kubernetes_dir}"
 	bash setup.sh
+	export start_time=$(date '+%Y-%m-%d %H:%M:%S')
 	if [[ "${KATA_HYPERVISOR}" = "dragonball" ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]] || [[ "${KATA_HYPERVISOR}" = "cloud-hypervisor" ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]]; then
 		# cloud-hypervisor runtime-rs issue is https://github.com/kata-containers/kata-containers/issues/9034
 		echo "Skipping tests for $KATA_HYPERVISOR using devmapper"
@@ -202,6 +203,18 @@ function run_tests() {
 		bash run_kubernetes_tests.sh
 	fi
 	popd
+}
+
+function collect_artifacts() {
+	local artifacts_dir="/tmp/artifacts"
+	if [ -d "${artifacts_dir}" ]; then
+		rm -rf "${artifacts_dir}"
+	fi
+	mkdir -p "${artifacts_dir}"
+	info "Collecting artifacts using ${KATA_HYPERVISOR} hypervisor"
+	local journalctl_log_filename="journalctl.log"
+	local journalctl_log_path="${artifacts_dir}/${journalctl_log_filename}"
+	sudo journalctl --since="$start_time" > "${journalctl_log_path}"
 }
 
 function cleanup_kata_deploy() {
@@ -252,7 +265,7 @@ function cleanup() {
 	get_nodes_and_pods_info
 
 	if [ "${platform}" = "aks" ]; then
-		delete_cluster ${test_type}
+		delete_cluster "${test_type}"
 		return
 	fi
 
@@ -267,7 +280,7 @@ function deploy_snapshotter() {
 	case ${SNAPSHOTTER} in
 		nydus) deploy_nydus_snapshotter ;;
 		*) >&2 echo "${SNAPSHOTTER} flavour is not supported"; exit 2 ;;
-	esac	
+	esac
 	echo "::endgroup::"
 }
 
@@ -299,9 +312,9 @@ function deploy_nydus_snapshotter() {
 		# Enable guest pull feature in nydus snapshotter
 		yq write -i misc/snapshotter/base/nydus-snapshotter.yaml 'data.FS_DRIVER' "proxy" --style=double
 	else
-		>&2 echo "Invalid pull type"; exit 2 
+		>&2 echo "Invalid pull type"; exit 2
 	fi
-	
+
 	# Disable to read snapshotter config from configmap
 	yq write -i misc/snapshotter/base/nydus-snapshotter.yaml 'data.ENABLE_CONFIG_FROM_VOLUME' "false" --style=double
 	# Enable to run snapshotter as a systemd service
@@ -319,12 +332,12 @@ function deploy_nydus_snapshotter() {
 	popd
 
 	kubectl rollout status daemonset nydus-snapshotter -n nydus-system --timeout ${SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT}
-	
+
 	echo "::endgroup::"
 	echo "::group::nydus snapshotter logs"
 	pods_name=$(kubectl get pods --selector=app=nydus-snapshotter -n nydus-system -o=jsonpath='{.items[*].metadata.name}')
-	kubectl logs ${pods_name} -n nydus-system
-	kubectl describe pod ${pods_name} -n nydus-system
+	kubectl logs "${pods_name}" -n nydus-system
+	kubectl describe pod "${pods_name}" -n nydus-system
 	echo "::endgroup::"
 }
 
@@ -335,7 +348,7 @@ function cleanup_nydus_snapshotter() {
 		>&2 echo "nydus snapshotter dir not found"
 		exit 1
 	fi
-	
+
 	pushd "$nydus_snapshotter_install_dir"
 
 	if [ "${KUBERNETES}" = "k3s" ]; then
@@ -382,6 +395,7 @@ function main() {
 		deploy-snapshotter) deploy_snapshotter ;;
 		run-tests) run_tests ;;
 		run-tests-kcli) run_tests "kcli" ;;
+		collect-artifacts) collect_artifacts ;;
 		cleanup-kcli) cleanup "kcli" ;;
 		cleanup-sev) cleanup "sev" ;;
 		cleanup-snp) cleanup "snp" ;;
