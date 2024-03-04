@@ -1007,6 +1007,8 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid st
 		GuestSeLinuxLabel: runtime.GuestSeLinuxLabel,
 
 		Experimental: runtime.Experimental,
+
+		EnableVCPUsPinning: runtime.EnableVCPUsPinning,
 	}
 
 	if err := addAnnotations(ocispec, &sandboxConfig, runtime); err != nil {
