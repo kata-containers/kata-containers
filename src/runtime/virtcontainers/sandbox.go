@@ -2485,9 +2485,9 @@ func (s *Sandbox) resourceControllerUpdate(ctx context.Context) error {
 // resourceControllerDelete will move the running processes in the sandbox resource
 // cvontroller to the parent and then delete the sandbox controller.
 func (s *Sandbox) resourceControllerDelete() error {
-	s.Logger().Debugf("Deleting sandbox %s resource controler", s.sandboxController)
+	s.Logger().Debugf("Deleting sandbox %s resource controller", s.sandboxController)
 	if s.state.SandboxCgroupPath == "" {
-		s.Logger().Warnf("sandbox %s resource controler path is empty", s.sandboxController)
+		s.Logger().Warnf("sandbox %s resource controller path is empty", s.sandboxController)
 		return nil
 	}
 
