@@ -205,7 +205,10 @@ set_container_command() {
 	shift 2
 
     for command_value in "$@"; do
-        yq write -i "${yaml}" "spec.containers[${container_idx}].command[+]" --tag '!!str' "${command_value}"
+        yq write -i \
+          "${yaml}" \
+          "spec.containers[${container_idx}].command[+]" \
+          --tag '!!str' "${command_value}"
     done
 }
 
@@ -220,7 +223,10 @@ set_node() {
 	local node="$2"
 	[ -n "$node" ] || return 1
 
-	yq write -i "${yaml}" "spec.nodeName" "$node"
+	yq write -i \
+	  "${yaml}" \
+	  "spec.nodeName" \
+	  "$node"
 }
 
 # Get the systemd's journal from a worker node

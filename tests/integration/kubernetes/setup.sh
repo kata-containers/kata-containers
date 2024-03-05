@@ -54,12 +54,18 @@ add_annotations_to_yaml() {
 
 	Pod)
 		echo "Adding kernel and initrd annotations to ${resource_kind} from ${yaml_file}"
-		yq write -i "${K8S_TEST_YAML}" "metadata.annotations[${annotation_name}]" "${annotation_value}"
+		yq write -i \
+		  "${K8S_TEST_YAML}" \
+		  "metadata.annotations[${annotation_name}]" \
+		  "${annotation_value}"
 		;;
 
 	Deployment|Job|ReplicationController)
 		echo "Adding kernel and initrd annotations to ${resource_kind} from ${yaml_file}"
-		yq write -i "${K8S_TEST_YAML}" "spec.template.metadata.annotations[${annotation_name}]" "${annotation_value}"
+		yq write -i \
+		  "${K8S_TEST_YAML}" \
+		  "spec.template.metadata.annotations[${annotation_name}]" \
+		  "${annotation_value}"
 		;;
 
 	List)
