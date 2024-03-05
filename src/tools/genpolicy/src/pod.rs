@@ -137,6 +137,9 @@ pub struct Container {
     startupProbe: Option<Probe>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    restartPolicy: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub serviceAccountName: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
