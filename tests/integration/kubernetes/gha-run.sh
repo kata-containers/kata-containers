@@ -243,6 +243,53 @@ function collect_artifacts() {
 	local journalctl_log_filename="journalctl.log"
 	local journalctl_log_path="${artifacts_dir}/${journalctl_log_filename}"
 	sudo journalctl --since="$start_time" > "${journalctl_log_path}"
+
+	local k3s_dir='/var/lib/rancher/k3s/agent'
+
+	if [ -d "$k3s_dir" ]
+	then
+		info "Collecting k3s artifacts"
+
+		local -a files=()
+
+		files+=('etc/containerd/config.toml')
+		files+=('etc/containerd/config.toml.tmpl')
+
+		files+=('containerd/containerd.log')
+
+		# Add any rotated containerd logs
+		files+=( $(sudo find \
+			"${k3s_dir}/containerd/" \
+			-type f \
+			-name 'containerd*\.log\.gz') )
+
+		local file
+
+		for file in "${files[@]}"
+		do
+			local path="$k3s_dir/$file"
+			sudo [ ! -e "$path" ] && continue
+
+			local encoded
+			encoded=$(echo "$path" | tr '/' '-' | sed 's/^-//g')
+
+			local from="$path"
+
+			local to
+
+			to="${artifacts_dir}/${encoded}"
+
+			if [[ $path = *.gz ]]
+			then
+				sudo cp "$from" "$to"
+			else
+				to="${to}.gz"
+				sudo gzip -c "$from" > "$to"
+			fi
+
+			info "  Collected k3s file '$from' to '$to'"
+		done
+	fi
 }
 
 function cleanup_kata_deploy() {
