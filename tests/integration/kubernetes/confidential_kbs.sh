@@ -7,10 +7,6 @@
 # Provides a library to deal with the CoCo KBS
 #
 
-set -o errexit
-set -o nounset
-set -o pipefail
-
 kubernetes_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=1091
 source "${kubernetes_dir}/../../gha-run-k8s-common.sh"

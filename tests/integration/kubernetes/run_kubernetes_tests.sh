@@ -21,6 +21,7 @@ if [ -n "${K8S_TEST_UNION:-}" ]; then
 	K8S_TEST_UNION=($K8S_TEST_UNION)
 else
 	K8S_TEST_SMALL_HOST_UNION=( \
+		"k8s-confidential-attestation.bats" \
 		"k8s-confidential.bats" \
 		"k8s-attach-handlers.bats" \
 		"k8s-caps.bats" \

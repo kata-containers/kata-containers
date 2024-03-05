@@ -195,6 +195,7 @@ function install_kbs_client() {
 }
 
 function run_tests() {
+	ensure_yq
 	platform="${1:-}"
 
 	[ "$platform" = "kcli" ] && \
