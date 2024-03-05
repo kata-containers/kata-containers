@@ -209,7 +209,16 @@ function run_tests() {
 
 	pushd "${kubernetes_dir}"
 	bash setup.sh
-	export start_time=$(date '+%Y-%m-%d %H:%M:%S')
+
+	# In case of running on Github workflow it needs to save the start time
+	# on the environment variables file so that the variable is exported on
+	# next workflow steps.
+	if [ -n "$GITHUB_ENV" ]; then
+		start_time=$(date '+%Y-%m-%d %H:%M:%S')
+		export start_time
+		echo "start_time=${start_time}" >> "$GITHUB_ENV"
+	fi
+
 	if [[ "${KATA_HYPERVISOR}" = "dragonball" ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]] || [[ "${KATA_HYPERVISOR}" = "cloud-hypervisor" ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]]; then
 		# cloud-hypervisor runtime-rs issue is https://github.com/kata-containers/kata-containers/issues/9034
 		echo "Skipping tests for $KATA_HYPERVISOR using devmapper"
@@ -220,6 +229,11 @@ function run_tests() {
 }
 
 function collect_artifacts() {
+	if [ -z "${start_time:-}" ]; then
+		warn "tests start time is not defined. Cannot gather journal information"
+		return
+	fi
+
 	local artifacts_dir="/tmp/artifacts"
 	if [ -d "${artifacts_dir}" ]; then
 		rm -rf "${artifacts_dir}"
