@@ -332,7 +332,7 @@ fn setup_client(server_url: String, dbg_console_port: u32) -> anyhow::Result<Uni
 }
 
 async fn get_agent_socket(sandbox_id: &str) -> anyhow::Result<String> {
-    let shim_client = MgmtClient::new(sandbox_id, Some(TIMEOUT))?;
+    let shim_client = MgmtClient::new(sandbox_id, Some(TIMEOUT), "")?;
 
     // get agent sock from body when status code is OK.
     let response = shim_client.get(AGENT_URL).await?;

@@ -50,6 +50,9 @@ pub const VIRTIO_BLK_PCI: &str = "virtio-blk-pci";
 /// Virtual MMIO block device driver.
 pub const VIRTIO_BLK_MMIO: &str = "virtio-blk-mmio";
 
+mod firecracker;
+pub use self::firecracker::{FirecrackerConfig, HYPERVISOR_NAME_FIRECRACKER};
+
 const VIRTIO_BLK_CCW: &str = "virtio-blk-ccw";
 const VIRTIO_SCSI: &str = "virtio-scsi";
 const VIRTIO_PMEM: &str = "virtio-pmem";

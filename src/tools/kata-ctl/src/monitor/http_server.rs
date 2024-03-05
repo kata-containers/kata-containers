@@ -88,8 +88,8 @@ async fn metrics_uri_handler(req: Request<Body>) -> Result<Response<Body>> {
 
 async fn get_runtime_metrics(sandbox_id: &str) -> Result<String> {
     // build shim client
-    let shim_client =
-        MgmtClient::new(sandbox_id, Some(TIMEOUT)).context("failed to build shim mgmt client")?;
+    let shim_client = MgmtClient::new(sandbox_id, Some(TIMEOUT), "")
+        .context("failed to build shim mgmt client")?;
 
     // get METRICS_URI
     let shim_response = shim_client
