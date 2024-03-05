@@ -83,6 +83,10 @@ the image.
 Ubuntu is the default distro for building the rootfs, to use a different one, you can set `DISTRO=alpine|debian|ubuntu|cbl-mariner`.
 For example `make USE_DOCKER=true DISTRO=alpine rootfs` will make an Alpine rootfs using Docker.
 
+### Azure Linux host node deployment
+
+See [the node builder documentation](node-builder/azure-linux/README.md).
+
 ### Rootfs creation
 
 This section shows how to build a basic rootfs using the default distribution.

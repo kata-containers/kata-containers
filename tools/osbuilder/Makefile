@@ -7,6 +7,8 @@ MK_DIR         := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 ROOTFS_BUILDER := $(MK_DIR)/rootfs-builder/rootfs.sh
 INITRD_BUILDER := $(MK_DIR)/initrd-builder/initrd_builder.sh
 IMAGE_BUILDER  := $(MK_DIR)/image-builder/image_builder.sh
+IGVM_BUILDER   := $(MK_DIR)/igvm-builder/igvm_builder.sh
+IGVM_SVN       ?= 0
 
 DISTRO                ?= ubuntu
 BUILD_METHOD          := distro
@@ -15,11 +17,17 @@ AGENT_INIT            ?= no
 USE_DOCKER            ?= true
 ROOTFS_BUILD_DEST     := $(shell pwd)
 IMAGES_BUILD_DEST     := $(shell pwd)
+IGVM_BUILD_DEST       := $(shell pwd)
 ROOTFS_MARKER_SUFFIX   := _rootfs.done
 TARGET_ROOTFS         := $(ROOTFS_BUILD_DEST)/$(DISTRO)_rootfs
 TARGET_ROOTFS_MARKER  := $(ROOTFS_BUILD_DEST)/.$(DISTRO)$(ROOTFS_MARKER_SUFFIX)
 TARGET_IMAGE          := $(IMAGES_BUILD_DEST)/kata-containers.img
 TARGET_INITRD         := $(IMAGES_BUILD_DEST)/kata-containers-initrd.img
+TARGET_IGVM           := $(IGVM_BUILD_DEST)/kata-containers-igvm.img
+TARGET_IGVM_MSMT      := $(IGVM_BUILD_DEST)/igvm-measurement.cose
+TARGET_IGVM_DEBUG     := $(IGVM_BUILD_DEST)/kata-containers-igvm-debug.img
+TARGET_IGVM_DEBUG_MSMT:= $(IGVM_BUILD_DEST)/igvm-debug-measurement.cose
+TARGET_IGVM_LOG       := $(IGVM_BUILD_DEST)/igvm.log
 
 VERSION_FILE   := ./VERSION
 VERSION        := $(shell grep -v ^\# $(VERSION_FILE) 2>/dev/null || echo "unknown")
@@ -85,7 +93,7 @@ endif
 ################################################################################
 
 .PHONY: all
-all: image initrd
+all: image initrd igvm
 
 rootfs-%: $(ROOTFS_BUILD_DEST)/.%$(ROOTFS_MARKER_SUFFIX)
 	@ # DONT remove. This is not cancellation rule.
@@ -155,6 +163,21 @@ $(DRACUT_OVERLAY_DIR):
 	mkdir -p $@/etc/modules-load.d
 	echo $(DRACUT_KMODULES) | tr " " "\n" > $@/etc/modules-load.d/kata-modules.conf
 
+.PHONY: igvm
+igvm: $(TARGET_IMAGE)
+	$(IGVM_BUILDER) -o $(IGVM_BUILD_DEST) -s $(IGVM_SVN)
+
+.PHONY: test
+test:
+	$(TEST_RUNNER) "$(DISTRO)"
+
+.PHONY: test-image-only
+test-image-only:
+	$(TEST_RUNNER) --test-images-only "$(DISTRO)"
+
+.PHONY: test-initrd-only
+test-initrd-only:
+	$(TEST_RUNNER) --test-initrds-only "$(DISTRO)"
 .PHONY: list-distros
 list-distros:
 	@ $(ROOTFS_BUILDER) -l
@@ -195,7 +218,8 @@ install-scripts:
 
 .PHONY: clean
 clean:
-	rm -rf $(TARGET_ROOTFS_MARKER) $(TARGET_ROOTFS) $(TARGET_IMAGE) $(TARGET_INITRD) $(DRACUT_OVERLAY_DIR)
+	rm -rf $(TARGET_ROOTFS_MARKER) $(TARGET_ROOTFS) $(TARGET_IMAGE) $(TARGET_INITRD) $(DRACUT_OVERLAY_DIR) $(TARGET_IGVM) $(TARGET_IGVM_DEBUG) $(TARGET_IGVM_MSMT) $(TARGET_IGVM_DEBUG_MSMT) $(TARGET_IGVM_LOG)
+	rm -rf $(IGVM_TOOL_SRC)
 
 # Prints the name of the variable passed as suffix to the print- target,
 # E.g., if Makefile contains:

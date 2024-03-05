@@ -16,5 +16,9 @@ QEMUFW := AAVMF_CODE.fd
 
 # dragonball binary name
 DBCMD := dragonball
+
+# cloud-hypervisor binary name
+CLHCMD := cloud-hypervisor
+
 FCCMD := firecracker
 FCJAILERCMD := jailer
