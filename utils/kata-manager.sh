@@ -23,6 +23,8 @@ readonly containerd_slug="containerd/containerd"
 readonly kata_project_url="https://github.com/${kata_slug}"
 readonly containerd_project_url="https://github.com/${containerd_slug}"
 
+readonly kata_hypervisors_doc_url='https://github.com/kata-containers/kata-containers/blob/main/docs/hypervisors.md'
+
 readonly kata_releases_url="https://api.github.com/repos/${kata_slug}/releases"
 readonly containerd_releases_url="https://api.github.com/repos/${containerd_slug}/releases"
 readonly containerd_io_releases_url="https://raw.githubusercontent.com/containerd/containerd.io/main/content/releases.md"
@@ -56,6 +58,33 @@ readonly containerd_service_name="containerd.service"
 
 # Containerd configuration file
 readonly containerd_config="/etc/containerd/config.toml"
+
+# Directory containing packaged configuration files
+readonly kata_config_dir_golang="${kata_install_dir}/share/defaults/kata-containers"
+
+# Directory containing local configuration files
+readonly kata_local_config_dir_golang="/etc/kata-containers"
+
+# Name of the Kata configuration file (or more usually the sym-link
+# to the real config file).
+readonly kata_config_file_name='configuration.toml'
+
+readonly kata_config_file_golang="${kata_local_config_dir_golang}/${kata_config_file_name}"
+
+# Currently, the golang runtime is the default runtime.
+readonly default_config_dir="$kata_config_dir_golang"
+readonly local_config_dir="$kata_local_config_dir_golang"
+readonly kata_config_file="$kata_config_file_golang"
+readonly kata_runtime_language='golang'
+readonly pristine_config_type='packaged'
+
+# The string to display to denote a default value.
+readonly default_value='default'
+
+# String to display if a value cannot be determined
+readonly unknown_tag='unknown'
+
+readonly cfg_file_install_perms='0644'
 
 # Directory in which to create symbolic links
 readonly link_dir=${link_dir:-/usr/bin}
@@ -265,31 +294,54 @@ Description: Install $kata_project [1] (and optionally $containerd_project [2])
 
 Options:
 
- -c <flavour> : Specify containerd flavour ("lts" | "active" - default: "lts").
-                Find more details on LTS and Active versions of containerd on
-                https://containerd.io/releases/#support-horizon
- -d           : Enable debug for all components.
- -D           : Install Docker server and CLI tooling (takes priority over '-c').
- -N           : Install nerdctl (takes priority over '-c', only implemented for x86_64 and ARM).
- -f           : Force installation (use with care).
- -h           : Show this help statement.
- -k <version> : Specify Kata Containers version.
- -K <tarball> : Specify local Kata Containers tarball to install (takes priority over '-k').
- -l           : List installed and available versions only, then exit (uses network).
- -o           : Only install Kata Containers.
- -r           : Don't cleanup on failure (retain files).
- -t           : Disable self test (don't try to create a container after install).
- -T           : Only run self test (do not install anything).
+ -c <flavour>    : Specify containerd flavour ("lts" | "active" - default: "lts").
+                   Find more details on LTS and Active versions of containerd on
+                   https://containerd.io/releases/#support-horizon
+ -d              : Enable debug for all components.
+ -D              : Install Docker server and CLI tooling (takes priority over '-c').
+ -e              : List short names and details for local hypervisor configuration files (for '-S').
+ -f              : Force installation (use with care).
+ -h              : Show this help statement.
+ -H <hypervisor> : Specify the hypervisor name to use when *INSTALLING* a system.
+ -k <version>    : Specify Kata Containers version.
+ -K <tarball>    : Specify local Kata Containers tarball to install (takes priority over '-k').
+ -l              : List installed and available versions only, then exit (uses network).
+ -L              : List short names and details for official packaged hypervisor configurations (for '-S').
+ -N              : Install nerdctl (takes priority over '-c', only implemented for x86_64 and ARM).
+ -o              : Only install Kata Containers.
+ -r              : Don't cleanup on failure (retain files).
+ -S <hypervisor> : Only change the hypervisor config for an *EXISTING* installation.
+ -t              : Disable self test (don't try to create a container after install).
+ -T              : Only run self test (do not install anything).
 
 Notes:
 
 - The version strings must refer to official GitHub releases for each project.
   If not specified or set to "", install the latest available version.
 
+- The '-L' option requires an installed system.
+
+  > **Note:** For details of each hypervisor, see [3].
+
+- If an invalid hypervisor name is specified with the '-H' option, an
+  error will be generated, but the system will be left in a working
+  state and configured to use the hypervisor configured at build time.
+
+  > **Note:** For details of each hypervisor, see [3].
+
+- Since '-L' cannot be used until a system is installed, if you wish
+  to change the configured Kata hypervisor, unless you know the
+  hypervisor name, the recommended approach is to:
+
+  1) Install this script with no arguments to install a Kata system.
+  2) Run again with '-L' to list the available hypervisor configurations.
+  3) Run again with '-S <hypervisor>' to switch to your chosen hypervisor.
+
 See also:
 
 [1] - $kata_project_url
 [2] - $containerd_project_url
+[3] - $kata_hypervisors_doc_url
 
 $warnings
 
@@ -315,6 +367,26 @@ containerd_installed()
 		&& return 0
 
 	return 1
+}
+
+# Return 0 if Kata is already installed, else return 1.
+kata_installed()
+{
+	command -v "$kata_shim_v2" &>/dev/null
+}
+
+# Assert that Kata is installed and error with a message if it isn't.
+ensure_kata_already_installed()
+{
+	local msg
+	msg=$(cat <<-EOF
+		$kata_project is not yet installed (or is installed in a non-standard directory).
+
+		Run this script with no options to install Kata Containers.
+	EOF
+	)
+
+	kata_installed || die "$msg"
 }
 
 pre_checks()
@@ -528,31 +600,31 @@ configure_containerd()
 	then
 		local systemd_unit_dir="/etc/systemd/system"
 		sudo mkdir -p "$systemd_unit_dir"
-	
+
 		local dest="${systemd_unit_dir}/${containerd_service_name}"
-	
+
 		if [ ! -f "$dest" ]
 		then
 			pushd "$tmpdir" >/dev/null
-	
+
 			local service_url
 			service_url=$(printf "%s/%s/%s/%s" \
 				"https://raw.githubusercontent.com" \
 				"${containerd_slug}" \
 				"main" \
 				"${containerd_service_name}")
-	
+
 			curl -LO "$service_url"
-	
+
 			printf "# %s: Service installed for Kata Containers\n" \
 				"$(date -Iseconds)" |\
 				tee -a "$containerd_service_name"
-	
+
 			sudo cp "${containerd_service_name}" "${dest}"
 			sudo systemctl daemon-reload
-	
+
 			info "Installed ${dest}"
-	
+
 			popd >/dev/null
 		fi
 	fi
@@ -645,17 +717,17 @@ install_kata()
 	then
 		local version_desc="latest version"
 		[ -n "$requested_version" ] && version_desc="version $requested_version"
-	
+
 		info "Downloading $project release ($version_desc)"
-	
+
 		local results
 		results=$(github_download_package \
 			"$kata_releases_url" \
 			"$requested_version" \
 			"$project")
-	
+
 		[ -z "$results" ] && die "Cannot download $project release file"
-	
+
 		version=$(echo "$results"|cut -d: -f1)
 
 		[ -z "$version" ] && die "Cannot determine $project resolved version"
@@ -678,6 +750,8 @@ install_kata()
 
 	local from_dir
 	from_dir=$(printf "%s/bin" "$kata_install_dir")
+
+	info "Checking file '$file'"
 
 	# Since we're unpacking to the root directory, perform a sanity check
 	# on the archive first.
@@ -715,31 +789,44 @@ configure_kata()
 	local enable_debug="${1:-}"
 	[ -z "$enable_debug" ] && die "no enable debug value"
 
+	local force="${2:-}"
+	[ -z "$force" ] && die "no force value"
+
+	local hypervisor="${3:-}"
+
 	[ "$enable_debug" = "false" ] && \
 		info "Using default $kata_project configuration" && \
 		return 0
 
-	local config_file='configuration.toml'
-	local kata_dir='/etc/kata-containers'
+	local default_hypervisor
+	default_hypervisor=$(get_default_packaged_hypervisor || true)
 
-	sudo mkdir -p "$kata_dir"
+	[ -z "$hypervisor" ] && \
+		hypervisor="$default_hypervisor" && \
+		info "Using default $kata_project hypervisor ('$hypervisor')"
 
-	local cfg_from
-	local cfg_to
+	set_kata_config_file "$force" "$hypervisor"
 
-	cfg_from="${kata_install_dir}/share/defaults/kata-containers/${config_file}"
-	cfg_to="${kata_dir}/${config_file}"
+	local cfg_file="$kata_config_file"
 
-	[ -e "$cfg_from" ] || die "cannot find $kata_project configuration file"
-
-	sudo install -o root -g root -m 0644 "$cfg_from" "$cfg_to"
-
+	# Note that '--follow-symlinks' is essential: without it,
+	# sed(1) will break the sym-link and convert it into a file,
+	# which is not desirable behaviour as the whole point of the
+	# "well known" config file name is that it is a sym-link to
+	# the actual config file.
+	#
+	# However, this option is GNU sed(1) specific so if this
+	# script is run on a non-Linux system, it may be necessary
+	# to install GNU sed, or find an equivalent option for the
+	# local version of sed.
 	sudo sed -i \
+		--follow-symlinks \
 		-e 's/^# *\(enable_debug\).*=.*$/\1 = true/g' \
 		-e 's/^kernel_params = "\(.*\)"/kernel_params = "\1 agent.log=debug"/g' \
-		"$cfg_to"
+		"$cfg_file"
 
-	info "Configured $kata_project for full debug (delete '$cfg_to' to use pristine $kata_project configuration)"
+	info "Configured $kata_project config file '$cfg_file' for full debug"
+	info "(delete '$cfg_file' to use pristine $kata_project configuration)"
 }
 
 handle_kata()
@@ -750,9 +837,14 @@ handle_kata()
 	local enable_debug="${3:-}"
 	[ -z "$enable_debug" ] && die "no enable debug value"
 
+	local force="${4:-}"
+	[ -z "$force" ] && die "no force value"
+
+	local hypervisor="${5:-}"
+
 	install_kata "$version" "$tarball"
 
-	configure_kata "$enable_debug"
+	configure_kata "$enable_debug" "$force" "$hypervisor"
 
 	kata-runtime --version
 }
@@ -929,6 +1021,8 @@ handle_installation()
 	[ -z "$install_nerdctl" ] && die "no install nerdctl value"
 
 	local kata_tarball="${11:-}"
+	local hypervisor="${12:-}"
+
 	# The tool to be testing the installation with
 	local tool="ctr"
 
@@ -966,7 +1060,12 @@ handle_installation()
 
 	setup "$cleanup" "$force" "$skip_containerd"
 
-	handle_kata "$kata_version" "$kata_tarball" "$enable_debug"
+	handle_kata \
+		"$kata_version" \
+		"$kata_tarball" \
+		"$enable_debug" \
+		"$force" \
+		"$hypervisor"
 
 	[ "$skip_containerd" = "false" ] && \
 		handle_containerd \
@@ -1053,6 +1152,345 @@ list_versions()
 	info "$docker_project: latest version: $latest_docker"
 }
 
+# Returns the full path to the specified hypervisors
+# configuration file in the specified directory.
+#
+# Note that the hypervisor "name" argument is not just a literal
+# hypervisor name/alias, it is the string that matches the "*" glob
+# in the pattern, "configuration-*.toml".
+#
+# If the specified name is "$default_value",
+# use the default hypervisor configuration file name.
+#
+# If the specified name is not found, return the empty string.
+get_hypervisor_config_file()
+{
+        local name="${1:-}"
+	[ -z "$name" ] && die "need name"
+
+        local dir="${2:-}"
+	[ -z "$dir" ] && die "need config directory"
+
+	# Expand the default value to the name of the the default hypervisor
+	# config file.
+	if [ "$name" = "$default_value" ]
+	then
+		local file
+		file="${dir}/${kata_config_file_name}"
+		name=$(readlink -e "$file")
+
+		echo "$name" && return 0
+	fi
+
+	local -a cfg_files=()
+
+	mapfile -t cfg_files < <(get_hypervisor_config_file_names "$dir")
+
+	local cfg
+	for cfg in ${cfg_files[*]}
+	do
+		local cfg_name
+		cfg_name="${cfg#"${dir}/"}"
+
+		local -a possible_names=()
+
+		# Allow a file fragment name or a full name
+		# to be specified.
+		possible_names+=("configuration-${name}.toml")
+		possible_names+=("configuration${name}.toml")
+		possible_names+=("${name}.toml")
+		possible_names+=("${name}")
+
+		local possible
+
+		for possible in "${possible_names[@]}"
+		do
+			[ "$possible" = "$cfg_name" ] && echo "$cfg" && return 0
+		done
+	done
+
+	# Failed to find config file, but don't fail in case it's a
+	# local only name.
+	echo
+}
+
+# Return the name of the config file specified by the name fragment,
+# or the empty string if no matching file found.
+get_local_cfg_file()
+{
+        local name="${1:-}"
+	[ -z "$name" ] && die "need name"
+
+	local dir="$local_config_dir"
+
+	get_hypervisor_config_file "$name" "$dir"
+}
+
+# Return the full path to the pristine config file specified
+# by the name fragment.
+get_pristine_config_file()
+{
+        local name="${1:-}"
+	[ -z "$name" ] && die "need name"
+
+	local dir="${default_config_dir}"
+
+	local result
+	result=$(get_hypervisor_config_file "$name" "$dir")
+
+	echo "$result"
+}
+
+# Returns a list of available hypervisor configuration files
+# (full paths) for the specified directory.
+get_hypervisor_config_file_names()
+{
+	local dir="${1:-}"
+	[ -z "$dir" ] && die "need directory"
+
+	# Note that we do not check for a trailing dash to also match
+	# the default config file ("configuration.toml")
+	echo "${dir}"/configuration*\.toml
+}
+
+# Determine the default hypervisor by looking at sym-link in the
+# specified config directory.
+get_default_hypervisor_by_dir()
+{
+	local dir="${1:-}"
+	[ -z "$dir" ] && die "need directory"
+
+	local -a cfg_files=()
+
+	mapfile -t cfg_files < <(get_hypervisor_config_file_names "$dir")
+
+	local cfg
+
+	local cfg_type="$pristine_config_type"
+
+	local default_cfg=
+
+	# First, establish what the current default is by resolving
+	# the $kata_config_file_name sym link.
+	for cfg in ${cfg_files[*]}
+	do
+		if grep -q "/${kata_config_file_name}$" <<< "$cfg" && [ -h "$cfg" ]
+		then
+			default_cfg=$(readlink -e "$cfg")
+			default_cfg="${default_cfg#"${dir}/"}"
+			default_cfg="${default_cfg#configuration-}"
+			default_cfg="${default_cfg%.toml}"
+
+			break
+		fi
+	done
+
+	echo "$default_cfg"
+}
+
+# Determine the default hypervisor by looking at sym-link in the
+# packaged config directory.
+get_default_packaged_hypervisor()
+{
+	local dir="$default_config_dir"
+
+	local hypervisor
+	hypervisor=$(get_default_hypervisor_by_dir "$dir" || true)
+
+	echo "$hypervisor"
+}
+
+# Return a list of pristine hypervisor configs, one per line.
+# Each line is a tab separated list of fields:
+#
+# field 1: hypervisor config name.
+# field 2: $default_value if this is the default hypervisor,
+#          otherwise an empty string.
+# field 3: hypervisor config type ($pristine_config_type).
+# field 4: hypervisor configs runtime type ($kata_runtime_language).
+list_hypervisor_config_file_details_by_dir()
+{
+	local dir="${1:-}"
+	[ -n "$dir" ] || die "need directory"
+
+	local dir_type="${2:-}"
+	[ -n "$dir_type" ] || die "need directory type"
+
+	# Ignore a non-existent directory
+	[ -d "$dir" ] || return 0
+
+	# First, establish what the current default hypervisor is.
+	local default_cfg
+	default_cfg=$(get_default_hypervisor_by_dir "$dir" || true)
+
+	local -a cfg_files=()
+
+	mapfile -t cfg_files < <(get_hypervisor_config_file_names "$dir")
+
+	local cfg
+
+	local cfg_type="$pristine_config_type"
+
+	for cfg in ${cfg_files[*]}
+	do
+		# Ignore the sym-link
+		grep -q "/${kata_config_file_name}$" <<< "$cfg" && [ -h "$cfg" ] && continue
+
+		local cfg_name
+		cfg_name="${cfg#"${dir}/"}"
+		cfg_name="${cfg_name#configuration-}"
+		cfg_name="${cfg_name%.toml}"
+
+		local cfg_default_value='-'
+
+		[ "$cfg_name" = "$default_cfg" ] && cfg_default_value="$default_value"
+
+		printf "%s\t%s\t%s\t%s\n" \
+			"$cfg_name" \
+			"$cfg_default_value" \
+			"$cfg_type" \
+			"$dir_type"
+	done | sort -u
+}
+
+# Display a list of packaged hypervisor config file name fragments,
+# one line per config file. Each line is a set of fields.
+#
+# See list_hypervisor_config_file_details_by_dir() for the fields
+# displayed.
+list_packaged_hypervisor_config_names()
+{
+	ensure_kata_already_installed
+
+	local golang_cfgs
+	golang_cfgs=$(list_hypervisor_config_file_details_by_dir \
+		"$kata_config_dir_golang" \
+		"$kata_runtime_language")
+
+	echo "${golang_cfgs}"
+}
+
+# Display a list of local hypervisor config file name fragments,
+# one line per config file. Each line is a set of fields.
+#
+# See list_hypervisor_config_file_details_by_dir() for the fields
+# displayed.
+list_local_hypervisor_config_names()
+{
+	ensure_kata_already_installed
+
+	local golang_cfgs
+	golang_cfgs=$(list_hypervisor_config_file_details_by_dir \
+		"$local_config_dir" \
+		"$kata_runtime_language")
+
+	echo "${golang_cfgs}"
+}
+
+# Change the configured hypervisor to the one specified.
+#
+# This function creates a local Kata configuration file if one does
+# not exist and creates a symbolic link to it.
+set_kata_config_file()
+{
+	ensure_kata_already_installed
+
+	local force="${1:-}"
+	[ -z "$force" ] && die "no force value"
+
+	local hypervisor="${2:-}"
+	[ -z "$hypervisor" ] && die "no hypervisor value"
+
+	local hypervisor_cfg_file
+	hypervisor_cfg_file=$(get_pristine_config_file "$hypervisor")
+
+	sudo mkdir -p "$local_config_dir"
+
+	# The name of the local config file
+	local local_cfg_file
+
+	# The name of the local kata config file sym-link
+	local local_kata_cfg_symlink="$kata_config_file"
+
+	if [ -n "$hypervisor_cfg_file" ]
+	then
+		# A pristine hypervisor config file exists
+
+		local hypervisor_cfg_file_name
+		hypervisor_cfg_file_name=$(basename "$hypervisor_cfg_file")
+
+		sudo mkdir -p "$local_config_dir"
+
+		local_cfg_file="${local_config_dir}/${hypervisor_cfg_file_name}"
+
+		if [ -e "$local_cfg_file" ]
+		then
+			if [ -n "$(diff "$local_cfg_file" "$hypervisor_cfg_file")" ]
+			then
+				[ "$force" = 'false' ] && \
+					die "existing hypervisor config file '$local_cfg_file' differs from pristine version: '$hypervisor_cfg_file'"
+			fi
+		fi
+
+		# First, install a copy of the config file to the local config dir.
+		sudo install \
+			-o root \
+			-g root \
+			-m "$cfg_file_install_perms" \
+			"$hypervisor_cfg_file" \
+			"$local_cfg_file"
+
+	else
+		# There is no pristine config file, so look for a
+		# local-only config file.
+		local_cfg_file=$(get_local_cfg_file "$hypervisor" || true)
+		[ -z "$local_cfg_file" ] && \
+			die "no packaged or local hypervisor config file found for '$hypervisor'"
+	fi
+
+	# Next, create the standard sym-link, pointing to the
+	# requested hypervisor-specific config file, taking care to
+	# fail if the default config file is not a sym-link already.
+	if [ -e "$local_kata_cfg_symlink" ]
+	then
+		if [ ! -L "$local_kata_cfg_symlink" ]
+		then
+			# Don't do this, even if force is in operation
+			# as we don't know what the contents of the
+			# file are.
+			die "not overwriting non-sym-link config file: '$local_kata_cfg_symlink'"
+		fi
+
+		if [ "$force" = false ]
+		then
+			# Back up the existing version of the file
+			local now
+			now=$(date '+%Y-%m-%d.%H-%M-%S.%N')
+
+			local backup_name
+			backup_name="${local_kata_cfg_symlink}.${now}.saved"
+
+			sudo install -o root -g root \
+				-m "$cfg_file_install_perms" \
+				"$local_kata_cfg_symlink" \
+				"$backup_name"
+		fi
+	fi
+
+	local default_hypervisor
+	default_hypervisor=$(get_default_packaged_hypervisor || true)
+
+	# We can now safely force install the sym-link.
+	sudo ln -sf "$local_cfg_file" "$local_kata_cfg_symlink"
+
+	local hypervisor_descr="'$hypervisor'"
+
+	[ "$hypervisor" = "$default_value" ] || [ "$hypervisor" = "$default_hypervisor" ] && \
+		hypervisor_descr="'$default_hypervisor' ($default_value)"
+
+	info "Set config to $hypervisor_descr"
+}
+
 handle_args()
 {
 	local cleanup="true"
@@ -1064,6 +1502,10 @@ handle_args()
 	local install_docker="false"
 	local install_nerdctl="false"
 	local list_versions='false'
+	local hypervisor="$default_value"
+	local switch_to_hypervisor=''
+	local list_available_pristine_hypervisor_configs='false'
+	local list_available_local_hypervisor_configs='false'
 
 	local opt
 
@@ -1071,20 +1513,24 @@ handle_args()
 	local containerd_flavour="lts"
 	local kata_tarball=""
 
-	while getopts "c:dDfhk:K:lNortT" opt "$@"
+	while getopts "c:dDefhH:k:K:lLNorS:tT" opt "$@"
 	do
 		case "$opt" in
 			c) containerd_flavour="$OPTARG" ;;
 			d) enable_debug="true" ;;
 			D) install_docker="true" ;;
+			e) list_available_local_hypervisor_configs='true' ;;
 			f) force="true" ;;
 			h) usage; exit 0 ;;
+			H) hypervisor="$OPTARG" ;;
 			k) kata_version="$OPTARG" ;;
 			K) kata_tarball="$OPTARG" ;;
 			l) list_versions='true' ;;
+			L) list_available_pristine_hypervisor_configs='true' ;;
 			N) install_nerdctl="true" ;;
 			o) skip_containerd="true" ;;
 			r) cleanup="false" ;;
+			S) switch_to_hypervisor="$OPTARG" ;;
 			t) disable_test="true" ;;
 			T) only_run_test="true" ;;
 
@@ -1095,6 +1541,36 @@ handle_args()
 	shift $[$OPTIND-1]
 
 	[ "$list_versions" = 'true' ] && list_versions && exit 0
+
+	if [ "$list_available_pristine_hypervisor_configs" = true ]
+	then
+		list_packaged_hypervisor_config_names
+		exit 0
+	fi
+
+	if [ "$list_available_local_hypervisor_configs" = true ]
+	then
+		list_local_hypervisor_config_names
+		exit 0
+	fi
+
+	if [ -n "$switch_to_hypervisor" ]
+	then
+		# XXX: If the user is asking to switch hypervisor
+		# config, to keep life simpler and to avoid polluting
+		# config directories with backup files, we make the assumption
+		# that they have already backed up any needed config
+		# files.
+		#
+		# Note that the function below checks that Kata is
+		# installed.
+		force='true'
+
+		set_kata_config_file \
+			"$force" \
+			"$switch_to_hypervisor"
+		exit 0
+	fi
 
 	[ -z "$kata_version" ] && kata_version="${1:-}" || true
 	[ -z "$containerd_flavour" ] && containerd_flavour="${2:-}" || true
@@ -1112,7 +1588,8 @@ handle_args()
 		"$containerd_flavour" \
 		"$install_docker" \
 		"$install_nerdctl" \
-		"$kata_tarball"
+		"$kata_tarball" \
+		"$hypervisor"
 }
 
 main()
