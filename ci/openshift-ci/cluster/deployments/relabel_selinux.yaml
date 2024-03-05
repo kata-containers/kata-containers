@@ -23,6 +23,7 @@ spec:
             set -e;
             echo Starting the relabel;
             nsenter --target 1 --mount bash -xc '
+                command -v semanage &>/dev/null || { echo Does not look like a SELINUX cluster, skipping; exit 0; };
                 for ENTRY in \
                     \"/(.*/)?opt/kata/bin(/.*)?\" \
                     \"/(.*/)?opt/kata/runtime-rs/bin(/.*)?\" \
