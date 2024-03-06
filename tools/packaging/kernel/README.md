@@ -171,12 +171,5 @@ In order to do Kata Kernel changes. There are places to contribute:
 - Kernel patches, the CI and packaging scripts will apply all patches in the
   [patches directory][patches-dir].
 
-Note: The kernel version and configuration file live in different locations,
-which could result in a circular dependency on your (runtime or packaging) PR.
-In this case, the PR you submit needs to be tested together with a patch from
-another Kata Containers repository. To do this you have to specify which
-repository and which pull request [it depends on][depends-on-docs].
-
 [kata-containers-versions-file]: ../../../versions.yaml
 [patches-dir]: patches
-[depends-on-docs]: https://github.com/kata-containers/tests/blob/main/README.md#breaking-compatibility
