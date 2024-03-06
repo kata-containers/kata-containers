@@ -147,6 +147,48 @@ debug_pod() {
         oc logs "$pod"
 }
 
+# Wait for all pods of the app label to contain expected message
+#
+# Params:
+#   $1 - app labela
+#   $2 - expected pods count (>=1)
+#   $3 - message to be present in the logs
+#   $4 - timeout (60)
+#   $5 - namespace (the current one)
+wait_for_app_pods_message() {
+	local app="$1"
+	local pod_count="$2"
+	local message="$3"
+	local timeout="$4"
+	local namespace="$5"
+	[ -z "$pod_count" ] && pod_count=1
+	[ -z "$timeout" ] && timeout=60
+	[ -n "$namespace" ] && namespace=" -n $namespace "
+	local pod
+	local pods
+	local i
+	SECONDS=0
+	while :; do
+		pods=($(oc get pods -l app="$app" --no-headers=true $namespace | awk '{print $1}'))
+		[ "${#pods}" -ge "$pod_count" ] && break
+		if [ "$SECONDS" -gt "$timeout" ]; then
+			echo "Unable to find ${pod_count} pods for '-l app=\"$app\"' in ${SECONDS}s (${pods[@]})"
+			return -1
+		fi
+	done
+	for pod in "${pods[@]}"; do
+		while :; do
+			oc logs $namespace "$pod" | grep "$message" -q && echo "Found $message in $pod's log ($SECONDS)" && break;
+			if [ "$SECONDS" -gt "$timeout" ]; then
+				echo -n "Message '$message' not present in '${pod}' pod of the '-l app=\"$app\"' "
+				echo "pods after ${SECONDS}s (${pods[@]})"
+				return -1
+			fi
+			sleep 1;
+		done
+	done
+}
+
 oc config set-context --current --namespace=default
 
 worker_nodes=$(oc get nodes |  awk '{if ($3 == "worker") { print $1 } }')
@@ -185,7 +227,4 @@ fi
 # FIXME: Remove when https://github.com/kata-containers/kata-containers/pull/8417 is resolved
 # Selinux context is currently not handled by kata-deploy
 oc apply -f ${deployments_dir}/relabel_selinux.yaml
-( for I in $(seq 30); do
-	sleep 10
-	oc logs -n kube-system ds/relabel-selinux-daemonset | grep "NSENTER_FINISHED_WITH:" && exit
-done ) || { echo "Selinux relabel failed, check the logs"; exit -1; }
+wait_for_app_pods_message restorecon "$num_nodes" "NSENTER_FINISHED_WITH:" 120 "kube-system" || { echo "Selinux relabel failed, check the logs"; exit -1; }
