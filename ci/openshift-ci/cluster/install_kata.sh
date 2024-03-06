@@ -96,7 +96,7 @@ wait_for_reboot() {
 }
 
 wait_mcp_update() {
-	local delta="${1:-900}"
+	local delta="${1:-1200}"
 	local sleep_time=30
 	# The machineconfigpool is fine when all the workers updated and are ready,
 	# and none are degraded.
