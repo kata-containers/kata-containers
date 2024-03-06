@@ -93,7 +93,7 @@ make_dictionary()
 	local dict
 
 	dict=$(cat "$fragment_dir"/*.txt |\
-		grep -v '^\#' |\
+		grep -v '^#' |\
 		grep -v '^$' |\
 		awk '{print $1}' |\
 		sort -u || true)
@@ -255,7 +255,7 @@ spell_check_file()
 	local near_misses
 
 	near_misses=$(echo "$final_results" | grep '^&' || true)
-	incorrects=$(echo "$final_results" | grep '^\#' | awk '{print $2}' || true)
+	incorrects=$(echo "$final_results" | grep '^#' | awk '{print $2}' || true)
 
 	local -i failed=0
 
