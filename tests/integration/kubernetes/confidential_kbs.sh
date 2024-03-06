@@ -17,12 +17,14 @@ source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
 # shellcheck disable=1091
 source "${kubernetes_dir}/../../../ci/lib.sh"
 
+# Where the trustee (includes kbs) sources will be cloned
+readonly COCO_TRUSTEE_DIR="/tmp/trustee"
 # Where the kbs sources will be cloned
-readonly COCO_KBS_DIR="/tmp/kbs"
+readonly COCO_KBS_DIR="${COCO_TRUSTEE_DIR}/kbs"
 # The k8s namespace where the kbs service is deployed
 readonly KBS_NS="coco-tenant"
 # The private key file used for CLI authentication
-readonly KBS_PRIVATE_KEY="${COCO_KBS_DIR}/kbs/config/kubernetes/base/kbs.key"
+readonly KBS_PRIVATE_KEY="${COCO_KBS_DIR}/config/kubernetes/base/kbs.key"
 # The kbs service name
 readonly KBS_SVC_NAME="kbs"
 
@@ -30,14 +32,14 @@ readonly KBS_SVC_NAME="kbs"
 #
 kbs_set_allow_all_resources() {
 	kbs_set_resources_policy \
-		"${COCO_KBS_DIR}/kbs/sample_policies/allow_all.rego"
+		"${COCO_KBS_DIR}/sample_policies/allow_all.rego"
 }
 
 # Set "deny all" policy to resources.
 #
 kbs_set_deny_all_resources() {
 	kbs_set_resources_policy \
-		"${COCO_KBS_DIR}/kbs/sample_policies/deny_all.rego"
+		"${COCO_KBS_DIR}/sample_policies/deny_all.rego"
 }
 
 # Set resources policy.
@@ -146,7 +148,7 @@ kbs_install_cli() {
 	# the required version.
 	_ensure_rust "$rust_version"
 
-	pushd "${COCO_KBS_DIR}/kbs"
+	pushd "${COCO_KBS_DIR}"
 	# Compile with sample features to bypass attestation.
 	make CLI_FEATURES=sample_only cli
 	sudo make install-cli
@@ -155,11 +157,11 @@ kbs_install_cli() {
 
 # Delete the kbs on Kubernetes
 #
-# Note: assume the kbs sources were cloned to $COCO_KBS_DIR
+# Note: assume the kbs sources were cloned to $COCO_TRUSTEE_DIR
 #
 function kbs_k8s_delete() {
 	pushd "$COCO_KBS_DIR"
-	kubectl delete -k kbs/config/kubernetes/overlays
+	kubectl delete -k config/kubernetes/overlays
 	popd
 }
 
@@ -183,10 +185,10 @@ function kbs_k8s_deploy() {
 	ensure_yq
 
 	# Read from versions.yaml
-	repo=$(get_from_kata_deps "externals.coco-kbs.url")
-	version=$(get_from_kata_deps "externals.coco-kbs.version")
-	image=$(get_from_kata_deps "externals.coco-kbs.image")
-	image_tag=$(get_from_kata_deps "externals.coco-kbs.image_tag")
+	repo=$(get_from_kata_deps "externals.coco-trustee.url")
+	version=$(get_from_kata_deps "externals.coco-trustee.version")
+	image=$(get_from_kata_deps "externals.coco-trustee.image")
+	image_tag=$(get_from_kata_deps "externals.coco-trustee.image_tag")
 
 	# The ingress handler for AKS relies on the cluster's name which in turn
 	# contain the HEAD commit of the kata-containers repository (supposedly the
@@ -197,18 +199,19 @@ function kbs_k8s_deploy() {
 		export AKS_NAME
 	fi
 
-	if [ -d "$COCO_KBS_DIR" ]; then
-		rm -rf "$COCO_KBS_DIR"
+	if [ -d "$COCO_TRUSTEE_DIR" ]; then
+		rm -rf "$COCO_TRUSTEE_DIR"
 	fi
 
 	echo "::group::Clone the kbs sources"
-	git clone --depth 1 "${repo}" "$COCO_KBS_DIR"
-	pushd "$COCO_KBS_DIR"
+	git clone --depth 1 "${repo}" "$COCO_TRUSTEE_DIR"
+	pushd "$COCO_TRUSTEE_DIR"
 	git fetch --depth=1 origin "${version}"
 	git checkout FETCH_HEAD -b kbs_$$
+	popd
 	echo "::endgroup::"
 
-	pushd kbs/config/kubernetes/
+	pushd "${COCO_KBS_DIR}/config/kubernetes/"
 
 	# Tests should fill kbs resources later, however, the deployment
 	# expects at least one secret served at install time.
@@ -225,7 +228,6 @@ function kbs_k8s_deploy() {
 
 	echo "::group::Deploy the KBS"
 	./deploy-kbs.sh
-	popd
 	popd
 
 	if ! waitForProcess "120" "10" "kubectl -n \"$KBS_NS\" get pods | \
@@ -394,7 +396,7 @@ _handle_ingress_aks() {
 		return 1
 	fi
 
-	pushd "$COCO_KBS_DIR/kbs/config/kubernetes/overlays"
+	pushd "${COCO_KBS_DIR}/config/kubernetes/overlays"
 
 	echo "::group::$(pwd)/ingress.yaml"
 	KBS_INGRESS_CLASS="addon-http-application-routing" \
