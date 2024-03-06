@@ -41,7 +41,7 @@ struct DockerConfigLayer {
 struct DockerImageConfig {
     User: Option<String>,
     Tty: Option<bool>,
-    Env: Vec<String>,
+    Env: Option<Vec<String>>,
     Cmd: Option<Vec<String>>,
     WorkingDir: Option<String>,
     Entrypoint: Option<Vec<String>>,
@@ -159,8 +159,10 @@ impl Container {
             process.Terminal = false;
         }
 
-        for env in &docker_config.Env {
-            process.Env.push(env.clone());
+        if let Some(config_env) = &docker_config.Env {
+            for env in config_env {
+                process.Env.push(env.clone());
+            }
         }
 
         let policy_args = &mut process.Args;
