@@ -10,18 +10,19 @@ Containers.
 
 ## Packaged installation methods
 
-Packaged installation methods uses your distribution's native package format (such as RPM or DEB).
+The packaged installation method uses your distribution's native package format (such as RPM or DEB).
 
-> **Note:** We encourage installation methods that provides automatic updates, it ensures security updates and bug fixes are
-> easily applied.
+> **Note:**
+>
+> We encourage you to select an installation method that provides
+> automatic updates, to ensure you get the latest security updates and
+> bug fixes.
 
 | Installation method                                  | Description                                                                                  | Automatic updates | Use case                                                                                      |
 |------------------------------------------------------|----------------------------------------------------------------------------------------------|-------------------|-----------------------------------------------------------------------------------------------|
-| [Using kata-deploy](#kata-deploy-installation)       | The preferred way to deploy the Kata Containers distributed binaries on a Kubernetes cluster | **No!**           | Best way to give it a try on kata-containers on an already up and running Kubernetes cluster. | 
 | [Using official distro packages](#official-packages) | Kata packages provided by Linux distributions official repositories                          | yes               | Recommended for most users.                                                                   |
 | [Automatic](#automatic-installation)                 | Run a single command to install a full system                                                | **No!**           | For those wanting the latest release quickly.                                                 |
-| [Manual](#manual-installation)                       | Follow a guide step-by-step to install a working system                                      | **No!**           | For those who want the latest release with more control.                                      |
-| [Build from source](#build-from-source-installation) | Build the software components manually                                                       | **No!**           | Power users and developers only.                                                              |
+| [Using kata-deploy](#kata-deploy-installation)       | The preferred way to deploy the Kata Containers distributed binaries on a Kubernetes cluster | **No!**           | Best way to give it a try on kata-containers on an already up and running Kubernetes cluster. |
 
 ### Kata Deploy Installation
 
@@ -44,20 +45,6 @@ Kata packages are provided by official distribution repositories for:
 ### Automatic Installation
 
 [Use `kata-manager`](/utils/README.md) to automatically install a working Kata Containers system.
-
-### Manual Installation
-
-Follow the [containerd installation guide](container-manager/containerd/containerd-install.md).
-
-## Build from source installation
-
-> **Note:** Power users who decide to build from sources should be aware of the
-> implications of using an unpackaged system which will not be automatically
-> updated as new [releases](../Stable-Branch-Strategy.md) are made available.
-
-[Building from sources](../Developer-Guide.md#initial-setup)  allows power users
-who are comfortable building software from source to use the latest component
-versions. This is not recommended for normal users.
 
 ## Installing on a Cloud Service Platform
 
