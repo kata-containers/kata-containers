@@ -27,6 +27,11 @@ KATA_WITH_SYSTEM_QEMU=${KATA_WITH_SYSTEM_QEMU:-no}
 #
 KATA_WITH_HOST_KERNEL=${KATA_WITH_HOST_KERNEL:-no}
 
+# kata-deploy image to be used to deploy the kata (by default use CI image
+# that is built for each pull request)
+#
+KATA_DEPLOY_IMAGE=${KATA_DEPLOY_IMAGE:-quay.io/kata-containers/kata-deploy-ci:kata-containers-latest}
+
 # Enable workaround for OCP 4.13 https://github.com/kata-containers/kata-containers/pull/9206
 #
 WORKAROUND_9206_CRIO=${WORKAROUND_9206_CRIO:-no}
@@ -35,11 +40,8 @@ WORKAROUND_9206_CRIO=${WORKAROUND_9206_CRIO:-no}
 #
 apply_kata_deploy() {
 	local deploy_file="tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-	# Use the kata-deploy CI image which is built for each pull request merged
-	local new_img="quay.io/kata-containers/kata-deploy-ci:kata-containers-latest"
-
 	pushd "$katacontainers_repo_dir"
-	sed -ri "s#(\s+image:) .*#\1 ${new_img}#" "$deploy_file"
+	sed -ri "s#(\s+image:) .*#\1 ${KATA_DEPLOY_IMAGE}#" "$deploy_file"
 
 	info "Applying kata-deploy"
 	oc apply -f tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
