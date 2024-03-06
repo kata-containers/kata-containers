@@ -1114,6 +1114,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DisableSeccomp:                 h.DisableSeccomp,
 		ConfidentialGuest:              h.ConfidentialGuest,
 		Rootless:                       h.Rootless,
+		LegacySerial:                   h.LegacySerial,
 		DisableSeLinux:                 h.DisableSeLinux,
 		DisableGuestSeLinux:            h.DisableGuestSeLinux,
 		NetRateLimiterBwMaxRate:        h.getNetRateLimiterBwMaxRate(),

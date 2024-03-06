@@ -271,15 +271,15 @@ var clhKernelParams = []Param{
 	{"noreplace-smp", ""},  // do not replace SMP instructions
 }
 
-var clhDebugKernelParams = []Param{
+var clhDebugSerialKernelParams = []Param{
 	{"console", "ttyS0,115200n8"}, // enable serial console
 }
 
-var clhArmDebugKernelParams = []Param{
+var clhArmDebugSerialKernelParams = []Param{
 	{"console", "ttyAMA0,115200n8"}, // enable serial console
 }
 
-var clhDebugConfidentialGuestKernelParams = []Param{
+var clhDebugConsoleKernelParams = []Param{
 	{"console", "hvc0"}, // enable HVC console
 }
 
@@ -534,12 +534,19 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	// Followed by extra debug parameters if debug enabled in configuration file
 	if clh.config.Debug {
 		if clh.config.ConfidentialGuest {
-			params = append(params, clhDebugConfidentialGuestKernelParams...)
-		} else if runtime.GOARCH == "arm64" {
-			params = append(params, clhArmDebugKernelParams...)
-		} else {
-			params = append(params, clhDebugKernelParams...)
+			clh.config.LegacySerial = false
 		}
+
+		if clh.config.LegacySerial {
+			if runtime.GOARCH == "arm64" {
+				params = append(params, clhArmDebugSerialKernelParams...)
+			} else {
+				params = append(params, clhDebugSerialKernelParams...)
+			}
+		} else {
+			params = append(params, clhDebugConsoleKernelParams...)
+		}
+
 		params = append(params, clhDebugKernelParamsCommon...)
 	} else {
 		// start the guest kernel with 'quiet' in non-debug mode
@@ -595,17 +602,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 		clh.vmconfig.Payload.SetInitramfs(assetPath)
 	}
 
-	if clh.config.ConfidentialGuest {
-		// Use HVC as the guest console only in debug mode, only
-		// for Confidential Guests
-		if clh.config.Debug {
-			clh.vmconfig.Console = chclient.NewConsoleConfig(cctTTY)
-		} else {
-			clh.vmconfig.Console = chclient.NewConsoleConfig(cctOFF)
-		}
-
-		clh.vmconfig.Serial = chclient.NewConsoleConfig(cctOFF)
-	} else {
+	if clh.config.LegacySerial {
 		// Use serial port as the guest console only in debug mode,
 		// so that we can gather early OS booting log
 		if clh.config.Debug {
@@ -615,6 +612,16 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 		}
 
 		clh.vmconfig.Console = chclient.NewConsoleConfig(cctOFF)
+	} else {
+		// Use HVC as the guest console only in debug mode when legacy
+		// serial flag is false
+		if clh.config.Debug {
+			clh.vmconfig.Console = chclient.NewConsoleConfig(cctTTY)
+		} else {
+			clh.vmconfig.Console = chclient.NewConsoleConfig(cctOFF)
+		}
+
+		clh.vmconfig.Serial = chclient.NewConsoleConfig(cctOFF)
 	}
 	clh.vmconfig.Console.SetIommu(clh.config.IOMMU)
 

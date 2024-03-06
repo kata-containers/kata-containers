@@ -92,7 +92,7 @@ There are several kinds of Kata configurations and they are listed below.
 | `io.katacontainers.config.hypervisor.virtio_fs_daemon` | string | virtio-fs `vhost-user` daemon path |
 | `io.katacontainers.config.hypervisor.virtio_fs_extra_args` | string | extra options passed to `virtiofs` daemon |
 | `io.katacontainers.config.hypervisor.enable_guest_swap` | `boolean` | enable swap in the guest |
-| `io.katacontainers.config.hypervisor.use_legacy_serial` | `boolean` | uses legacy serial device for guest's console (QEMU) |
+| `io.katacontainers.config.hypervisor.use_legacy_serial` | `boolean` | uses legacy serial device for guest's console (QEMU,CLH) |
 
 ## Container Options
 | Key | Value Type | Comments |
