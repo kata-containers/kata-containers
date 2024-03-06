@@ -27,6 +27,10 @@ KATA_WITH_SYSTEM_QEMU=${KATA_WITH_SYSTEM_QEMU:-no}
 #
 KATA_WITH_HOST_KERNEL=${KATA_WITH_HOST_KERNEL:-no}
 
+# Enable workaround for OCP 4.13 https://github.com/kata-containers/kata-containers/pull/9206
+#
+WORKAROUND_9206_CRIO=${WORKAROUND_9206_CRIO:-no}
+
 # Leverage kata-deploy to install Kata Containers in the cluster.
 #
 apply_kata_deploy() {
@@ -222,6 +226,13 @@ if [ ${SELINUX_PERMISSIVE} == "yes" ]; then
 		die "SELinux machineconfig not found"
 	# The new SELinux configuration will trigger another reboot.
 	wait_for_reboot
+fi
+
+if [[ "$WORKAROUND_9206_CRIO" == "yes" ]]; then
+	info "Applying workaround to enable skip_mount_home in crio on OCP 4.13"
+	oc apply -f "${deployments_dir}/workaround-9206-crio.yaml"
+	oc apply -f "${deployments_dir}/workaround-9206-crio-ds.yaml"
+	wait_for_app_pods_message workaround-9206-crio-ds "$num_nodes" "Config file present" 1200 || echo "Failed to apply the workaround, proceeding anyway..."
 fi
 
 # FIXME: Remove when https://github.com/kata-containers/kata-containers/pull/8417 is resolved
