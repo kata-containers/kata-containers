@@ -35,12 +35,11 @@ WORKAROUND_9206_CRIO=${WORKAROUND_9206_CRIO:-no}
 #
 apply_kata_deploy() {
 	local deploy_file="tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-	local old_img="quay.io/kata-containers/kata-deploy:latest"
 	# Use the kata-deploy CI image which is built for each pull request merged
 	local new_img="quay.io/kata-containers/kata-deploy-ci:kata-containers-latest"
 
 	pushd "$katacontainers_repo_dir"
-	sed -i "s#${old_img}#${new_img}#" "$deploy_file"
+	sed -ri "s#(\s+image:) .*#\1 ${new_img}#" "$deploy_file"
 
 	info "Applying kata-deploy"
 	oc apply -f tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
