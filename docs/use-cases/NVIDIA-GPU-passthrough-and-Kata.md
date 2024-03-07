@@ -154,6 +154,29 @@ $ ./build-kernel.sh -v 5.15.23 -g nvidia build
 $ sudo -E ./build-kernel.sh -v 5.15.23 -g nvidia install
 ```
 
+However, there are special cases like `Dragonball VMM`. It directly supports device `hot-plug/hot-unplug`
+via upcall to avoid `ACPI` virtualization and minimize `VM` overhead. Since upcall isn't upstream kernel
+code, using `Dragonball VMM` for NVIDIA GPU `hot-plug/hot-unplug` requires applying the Upcall patchset in
+addition to the above kernel configuration items. Follow these steps to build for NVIDIA GPU `hot-[un]plug`
+for `Dragonball`:
+
+```sh 
+# Prepare .config to support both upcall and nvidia gpu 
+$ ./build-kernel.sh -v 5.10.25 -e -t dragonball -g nvidia -f setup
+
+# Build guest kernel to support both upcall and nvidia gpu 
+$ ./build-kernel.sh -v 5.10.25 -e -t dragonball -g nvidia build
+
+# Install guest kernel to support both upcall and nvidia gpu
+$ sudo -E ./build-kernel.sh -v 5.10.25 -e -t dragonball -g nvidia install
+```
+
+> **Note**:
+> - `-v 5.10.25` is for the guest kernel version.
+> - `-e` here means experimental, mainly because `upcall` patches are not in upstream Linux kernel.
+> - `-t dragonball` is for specifying hypervisor type.
+> - `-f` is for generating `.config` file.
+
 To build NVIDIA Driver in Kata container, `linux-headers` are required.
 This is a way to generate deb packages for `linux-headers`:
 
