@@ -1475,6 +1475,9 @@ dependencies = [
  "hyperlocal",
  "kata-sys-util",
  "kata-types",
+ "nix 0.24.2",
+ "tempfile",
+ "test-utils",
  "tokio",
 ]
 
