@@ -58,6 +58,23 @@ function install_dependencies() {
 	sudo systemctl restart containerd
 }
 
+function collect_artifacts() {
+	if [ -z "${start_time:-}" ]; then
+		warn "tests start time is not defined. Cannot gather journal information"
+		return
+	fi
+
+	local artifacts_dir="/tmp/artifacts"
+	if [ -d "${artifacts_dir}" ]; then
+		rm -rf "${artifacts_dir}"
+	fi
+	mkdir -p "${artifacts_dir}"
+	info "Collecting artifacts using ${KATA_HYPERVISOR} hypervisor"
+	local journalctl_log_filename="journalctl.log"
+	local journalctl_log_path="${artifacts_dir}/${journalctl_log_filename}"
+	sudo journalctl --since="$start_time" > "${journalctl_log_path}"
+}
+
 function run() {
 	info "Running nerdctl smoke test tests using RunC"
 
@@ -78,6 +95,12 @@ function run() {
 
 	enabling_hypervisor
 
+	if [ -n "$GITHUB_ENV" ]; then
+		start_time=$(date '+%Y-%m-%d %H:%M:%S')
+		export start_time
+		echo "start_time=${start_time}" >> "$GITHUB_ENV"
+	fi
+
 	info "Running nerdctl smoke test tests using ${KATA_HYPERVISOR} hypervisor"
 
 	info "Running nerdctl with Kata Containers (${KATA_HYPERVISOR})"
@@ -96,6 +119,7 @@ function main() {
 		install-dependencies) install_dependencies ;;
 		install-kata) install_kata ;;
 		run) run ;;
+		collect-artifacts) collect_artifacts ;;
 		*) >&2 die "Invalid argument" ;;
 	esac
 }

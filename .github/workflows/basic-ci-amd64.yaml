@@ -324,3 +324,13 @@ jobs:
       - name: Run nerdctl smoke test
         timeout-minutes: 5
         run: bash tests/integration/nerdctl/gha-run.sh run
+
+      - name: Collect artifacts ${{ matrix.vmm }}
+        run: bash tests/integration/nerdctl/gha-run.sh collect-artifacts
+
+      - name: Archive artifacts ${{ matrix.vmm }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: nerdctl-tests-garm-${{ matrix.vmm }}
+          path: /tmp/artifacts
+          retention-days: 1
