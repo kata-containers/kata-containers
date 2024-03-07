@@ -82,6 +82,10 @@ type VCSandbox interface {
 
 	GetIPTables(ctx context.Context, isIPv6 bool) ([]byte, error)
 	SetIPTables(ctx context.Context, isIPv6 bool, data []byte) error
+
+	ListDevice() []api.Device
+	AttachDevice(ctx context.Context, devInfo config.DeviceInfo) error
+	DetachDevice(ctx context.Context, devPath string) error
 }
 
 // VCContainer is the Container interface
