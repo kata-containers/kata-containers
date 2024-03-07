@@ -15,15 +15,56 @@
 //! HTTP request to the server. The server inside shim will multiplex the request
 //! to its corresponding handler and run certain methods.
 
-use std::path::Path;
+use std::fs;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 
 pub mod shim_mgmt;
 
+use kata_sys_util::validate::verify_id;
 use kata_types::config::KATA_PATH;
 
 pub const SHIM_MGMT_SOCK_NAME: &str = "shim-monitor.sock";
+
+fn get_uds_with_sid(short_id: &str, path: &str) -> Result<String> {
+    verify_id(short_id).context("The short id contains invalid characters.")?;
+
+    let kata_run_path = fs::canonicalize(path).context("failed to canonicalize path")?;
+
+    let p = kata_run_path.join(short_id).join(SHIM_MGMT_SOCK_NAME);
+    if p.exists() {
+        return Ok(format!("unix://{}", p.display()));
+    }
+
+    let target_ids: Vec<String> = fs::read_dir(&kata_run_path)?
+        .filter_map(|e| {
+            let x = e.ok()?.file_name().to_string_lossy().into_owned();
+            x.as_str().starts_with(short_id).then_some(x)
+        })
+        .collect::<Vec<_>>();
+
+    match target_ids.len() {
+        0 => Err(anyhow!(
+            "sandbox with the provided prefix {short_id:?} is not found"
+        )),
+        1 => {
+            // One element and only one exists.
+            Ok(format!(
+                "unix://{}",
+                kata_run_path
+                    .join(target_ids[0].as_str())
+                    .join(SHIM_MGMT_SOCK_NAME)
+                    .display()
+            ))
+        }
+        _ => {
+            // n > 1 return error
+            Err(anyhow!(
+                "more than one sandbox exists with the provided prefix {short_id:?}, please provide a unique prefix"
+            ))
+        }
+    }
+}
 
 // return sandbox's storage path
 pub fn sb_storage_path() -> String {
@@ -40,15 +81,7 @@ pub fn mgmt_socket_addr(sid: &str) -> Result<String> {
         ));
     }
 
-    let p = Path::new(&sb_storage_path())
-        .join(sid)
-        .join(SHIM_MGMT_SOCK_NAME);
-
-    if let Some(p) = p.to_str() {
-        Ok(format!("unix://{}", p))
-    } else {
-        Err(anyhow!("Bad socket path"))
-    }
+    get_uds_with_sid(sid, &sb_storage_path())
 }
 
 #[cfg(test)]

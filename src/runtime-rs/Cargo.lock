@@ -3688,6 +3688,7 @@ dependencies = [
  "anyhow",
  "hyper",
  "hyperlocal",
+ "kata-sys-util",
  "kata-types",
  "tokio",
 ]
