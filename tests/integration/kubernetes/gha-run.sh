@@ -191,7 +191,7 @@ function deploy_kata() {
 }
 
 function install_kbs_client() {
-	echo "TODO: install kbs-client - https://github.com/kata-containers/kata-containers/pull/9114"
+	kbs_install_cli
 }
 
 function run_tests() {

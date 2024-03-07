@@ -5,6 +5,7 @@
 
 set -o nounset
 
+GOPATH=${GOPATH:-${HOME}/go}
 export kata_repo="github.com/kata-containers/kata-containers"
 export kata_repo_dir="$GOPATH/src/$kata_repo"
 export tests_repo="${tests_repo:-github.com/kata-containers/tests}"

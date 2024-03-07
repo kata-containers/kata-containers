@@ -199,12 +199,13 @@ externals:
     version: "42b7c9687ecd0907ef70da31cf290a60ee8432cd"
     toolchain: "1.72.0"
 
-  coco-kbs:
-    description: "Provides attestation and secret Management services"
-    url: "https://github.com/confidential-containers/kbs"
+  coco-trustee:
+    description: "Provides attestation and secret delivery components"
+    url: "https://github.com/confidential-containers/trustee"
     version: "18c8ee378c6d83446ee635a702d5dee389028d8f"
     image: "ghcr.io/confidential-containers/staged-images/kbs"
     image_tag: "18c8ee378c6d83446ee635a702d5dee389028d8f"
+    toolchain: "1.74.0"
 
   conmon:
     description: "An OCI container runtime monitor"
