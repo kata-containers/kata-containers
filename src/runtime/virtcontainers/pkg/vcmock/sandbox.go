@@ -269,3 +269,7 @@ func (s *Sandbox) GetIPTables(ctx context.Context, isIPv6 bool) ([]byte, error) 
 func (s *Sandbox) SetIPTables(ctx context.Context, isIPv6 bool, data []byte) error {
 	return nil
 }
+
+func (s *Sandbox) SetPolicy(ctx context.Context, policy string) error {
+	return nil
+}

@@ -349,6 +349,16 @@ The `exec` command allows an administrator or developer to enter the
 
 See [the developer guide](../../Developer-Guide.md#connect-to-debug-console) for further details.
 
+### policy command
+
+The `policy set` command allows an administrator or developer to set the policy
+to [VM root environment](#environments). In this way, we can enable/disable
+kata-agent API through policy.
+The command is: `kata-runtime policy set policy.rego --sandbox-id XXXXXXXX`
+
+Please refer to [`genpolicy tool`](../../../src/tools/genpolicy/README.md) to see how to generate `policy.rego` mentioned above.
+And more about policy itself can be found at [Policy Details](../../../src/tools/genpolicy/genpolicy-auto-generated-policy-details.md).
+
 ### Configuration
 
 See the [configuration file details](../../../src/runtime/README.md#configuration).
