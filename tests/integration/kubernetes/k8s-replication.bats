@@ -13,17 +13,23 @@ setup() {
 	nginx_image="nginx:$nginx_version"
 
 	get_pod_config_dir
+
+	# Create yaml
+	test_yaml="${pod_config_dir}/test-replication-controller.yaml"
+	sed -e "s/\${nginx_version}/${nginx_image}/" \
+		"${pod_config_dir}/replication-controller.yaml" > "${test_yaml}"
+
+	# Add policy to the yaml file
+	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
+	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
+	auto_generate_policy "${policy_settings_dir}" "${test_yaml}"
 }
 
 @test "Replication controller" {
 	replication_name="replicationtest"
 
-	# Create yaml
-	sed -e "s/\${nginx_version}/${nginx_image}/" \
-		"${pod_config_dir}/replication-controller.yaml" > "${pod_config_dir}/test-replication-controller.yaml"
-
 	# Create replication controller
-	kubectl create -f "${pod_config_dir}/test-replication-controller.yaml"
+	kubectl create -f "${test_yaml}"
 
 	# Check replication controller
 	local cmd="kubectl describe replicationcontrollers/$replication_name | grep replication-controller"
@@ -57,6 +63,7 @@ teardown() {
 	# Debugging information
 	kubectl describe replicationcontrollers/"$replication_name"
 
-	rm -f "${pod_config_dir}/test-replication-controller.yaml"
+	rm -f "${test_yaml}"
 	kubectl delete rc "$replication_name"
+	delete_tmp_policy_settings_dir "${policy_settings_dir}"
 }
