@@ -1429,11 +1429,7 @@ mod tests {
             Some(vm.vm_config().clone()),
             vm.shared_info().clone(),
         );
-        #[cfg(target_arch = "x86_64")]
-        let guest_addr = GuestAddress(0x200000000000);
-        // TODO: #7290 - https://github.com/kata-containers/kata-containers/issues/7290
-        #[cfg(target_arch = "aarch64")]
-        let guest_addr = GuestAddress(0xF800000000);
+        let guest_addr = GuestAddress(*dbs_boot::layout::GUEST_MEM_END);
 
         let cache_len = 1024 * 1024 * 1024;
         let mmap_region = MmapRegion::build(
