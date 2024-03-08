@@ -22,7 +22,7 @@ IFS=' ' read -a REGISTRIES <<< "${KATA_DEPLOY_REGISTRIES}"
 GH_TOKEN="${GH_TOKEN:-}"
 ARCHITECTURE="${ARCHITECTURE:-}"
 KATA_STATIC_TARBALL="${KATA_STATIC_TARBALL:-}"
-RELEASE_TYPE="${RELEASE_TYPE:-minor}"
+RELEASE_TYPE="${RELEASE_TYPE:-}"
 
 function _die()
 {
@@ -35,6 +35,7 @@ function _check_required_env_var()
 	local env_var
 
 	case ${1} in
+		RELEASE_TYPE) env_var="${RELEASE_TYPE}" ;;
 		RELEASE_VERSION) env_var="${RELEASE_VERSION}" ;;
 		GH_TOKEN) env_var="${GH_TOKEN}" ;;
 		ARCHITECTURE) env_var="${ARCHITECTURE}" ;;
@@ -52,6 +53,8 @@ function _check_required_env_var()
 
 function _next_release_version()
 {
+	_check_required_env_var "RELEASE_TYPE"
+
 	local current_release=$(cat "${repo_root_dir}/VERSION")
 	local current_major
 	local current_everything_else
@@ -130,14 +133,8 @@ statically linked with the following [GNU LGPL-2.1][lgpl-2.1] licensed libseccom
 The \`kata-agent\` uses the libseccomp v${libseccomp_version} which is not modified from the upstream version.
 However, in order to comply with the LGPL-2.1 (§6(a)), we attach the complete source code for the library.
 
-If you want to use the \`kata-agent\` which is not statically linked with the library, you can build
-a custom \`kata-agent\` that does not use the library from sources.
-
 ## Kata Containers builder images
-The majority of the components of the project were built using containers.  In order to do a step towards
-build reproducibility we publish those container images, and when those are used combined with the version
-of the projects listed as part of the "versions.yaml" file, users can get as close to the environment we
-used to build the release artefacts.
+
 * agent (on all its different flavours): $(get_agent_image_name)
 * Kernel (on all its different flavours): $(get_kernel_image_name)
 * OVMF (on all its different flavours): $(get_ovmf_image_name)
@@ -146,29 +143,12 @@ used to build the release artefacts.
 * tools: $(get_tools_image_name)
 * virtiofsd: $(get_virtiofsd_image_name)
 
-The users who want to rebuild the tarballs using exactly the same images can simply use the following environment
-variables:
-* \`AGENT_CONTAINER_BUILDER\`
-* \`COCO_GUEST_COMPONENTS_CONTAINER_BUILDER\`
-* \`KERNEL_CONTAINER_BUILDER\`
-* \`OVMF_CONTAINER_BUILDER\`
-* \`PAUSE_IMAGE_CONTAINER_BUILDER\`
-* \`QEMU_CONTAINER_BUILDER\`
-* \`SHIM_V2_CONTAINER_BUILDER\`
-* \`TOOLS_CONTAINER_BUILDER\`
-* \`VIRTIOFSD_CONTAINER_BUILDER\`
-
 ## Installation
 
 Follow the Kata [installation instructions][installation].
 
-## Issues & limitations
-
-More information [Limitations][limitations]
-
 [libseccomp]: ${libseccomp_url}
 [lgpl-2.1]: https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
-[limitations]: https://github.com/kata-containers/kata-containers/blob/${RELEASE_VERSION}/docs/Limitations.md
 [installation]: https://github.com/kata-containers/kata-containers/blob/${RELEASE_VERSION}/docs/install
 EOF
 
