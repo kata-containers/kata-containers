@@ -20,7 +20,12 @@ ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY:-$(base64 -w 0 runtimeclass_workloads_work/
 if [ -n "${K8S_TEST_UNION:-}" ]; then
 	K8S_TEST_UNION=($K8S_TEST_UNION)
 else
+	# Before we use containerd 2.0 with 'image pull per runtime class' feature
+	# we need run k8s-guest-pull-image.bats test first, otherwise the test result will be affected
+	# by other cases which are using 'alpine' and 'quay.io/prometheus/busybox:latest' image.
+	# more details https://github.com/kata-containers/kata-containers/issues/8337
 	K8S_TEST_SMALL_HOST_UNION=( \
+		"k8s-guest-pull-image.bats" \
 		"k8s-confidential.bats" \
 		"k8s-attach-handlers.bats" \
 		"k8s-caps.bats" \

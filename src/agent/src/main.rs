@@ -72,6 +72,9 @@ use tokio::{
     task::JoinHandle,
 };
 
+#[cfg(feature = "guest-pull")]
+mod image;
+
 mod rpc;
 mod tracer;
 
@@ -373,7 +376,7 @@ async fn start_sandbox(
     sandbox.lock().await.sender = Some(tx);
 
     // vsock:///dev/vsock, port
-    let mut server = rpc::start(sandbox.clone(), config.server_addr.as_str(), init_mode)?;
+    let mut server = rpc::start(sandbox.clone(), config.server_addr.as_str(), init_mode).await?;
     server.start().await?;
 
     rx.await?;

@@ -26,6 +26,7 @@ sudo docker pull ${container_image} || \
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	--env DESTDIR=${DESTDIR} \
 	--env AGENT_POLICY=${AGENT_POLICY:-no} \
+	--env PULL_TYPE=${PULL_TYPE:-default} \
 	--env LIBSECCOMP_VERSION=${LIBSECCOMP_VERSION} \
 	--env LIBSECCOMP_URL=${LIBSECCOMP_URL} \
 	--env GPERF_VERSION=${GPERF_VERSION} \

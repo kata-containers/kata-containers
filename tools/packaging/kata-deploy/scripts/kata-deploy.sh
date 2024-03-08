@@ -308,7 +308,19 @@ function configure_crio_runtime() {
 	local kata_conf="crio.runtime.runtimes.${runtime}"
 	local kata_config_path="${config_path}/${configuration}.toml"
 
-	cat <<EOF | tee -a "$crio_drop_in_conf_file"
+	if [ "${shim}" = "qemu-tdx" ]; then
+		cat <<EOF | tee -a "$crio_drop_in_conf_file"
+
+[$kata_conf]
+	runtime_path = "${kata_path}"
+	runtime_type = "vm"
+	runtime_root = "/run/vc"
+	runtime_config_path = "${kata_config_path}"
+	runtime_pull_image = true
+	privileged_without_host_devices = true
+EOF
+	else
+		cat <<EOF | tee -a "$crio_drop_in_conf_file"
 
 [$kata_conf]
 	runtime_path = "${kata_path}"
@@ -317,6 +329,7 @@ function configure_crio_runtime() {
 	runtime_config_path = "${kata_config_path}"
 	privileged_without_host_devices = true
 EOF
+	fi
 }
 
 function configure_crio() {
@@ -336,7 +349,7 @@ function configure_crio() {
 
 
 	if [ "${DEBUG}" == "true" ]; then
-		cat <<EOF | tee -a $crio_drop_in_conf_file_debug
+		cat <<EOF | tee $crio_drop_in_conf_file_debug
 [crio]
 log_level = "debug"
 EOF

@@ -45,6 +45,7 @@ build_initrd() {
 		AGENT_TARBALL="${AGENT_TARBALL}" \
 		AGENT_INIT="yes" \
 		AGENT_POLICY="${AGENT_POLICY:-}" \
+		PULL_TYPE="${PULL_TYPE:-default}" \
 		COCO_GUEST_COMPONENTS_TARBALL="${COCO_GUEST_COMPONENTS_TARBALL:-}" \
 		PAUSE_IMAGE_TARBALL="${PAUSE_IMAGE_TARBALL:-}"
 	mv "kata-containers-initrd.img" "${install_dir}/${artifact_name}"
@@ -66,6 +67,7 @@ build_image() {
 		ROOTFS_BUILD_DEST="${builddir}/rootfs-image" \
 		AGENT_TARBALL="${AGENT_TARBALL}" \
 		AGENT_POLICY="${AGENT_POLICY:-}" \
+		PULL_TYPE="${PULL_TYPE:-default}" \
 		COCO_GUEST_COMPONENTS_TARBALL="${COCO_GUEST_COMPONENTS_TARBALL:-}" \
 		PAUSE_IMAGE_TARBALL="${PAUSE_IMAGE_TARBALL:-}"
 	mv -f "kata-containers.img" "${install_dir}/${artifact_name}"

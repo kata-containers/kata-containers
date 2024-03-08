@@ -41,6 +41,7 @@ readonly se_image_builder="${repo_root_dir}/tools/packaging/guest-image/build_se
 
 ARCH=${ARCH:-$(uname -m)}
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
+PULL_TYPE=${PULL_TYPE:-default}
 USE_CACHE="${USE_CACHE:-"yes"}"
 ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY:-ghcr.io}"
 ARTEFACT_REGISTRY_USERNAME="${ARTEFACT_REGISTRY_USERNAME:-}"
@@ -326,8 +327,9 @@ install_image() {
 
 #Install guest image for confidential guests
 install_image_confidential() {
-	export AGENT_POLICY=yes
+	export AGENT_POLICY=no
 	export MEASURED_ROOTFS=yes
+	export PULL_TYPE=default
 	install_image "confidential"
 }
 
@@ -394,8 +396,9 @@ install_initrd() {
 
 #Install guest initrd for confidential guests
 install_initrd_confidential() {
-	export AGENT_POLICY=yes
+	export AGENT_POLICY=no
 	export MEASURED_ROOTFS=yes
+	export PULL_TYPE=default
 	install_initrd "confidential"
 }
 
@@ -782,7 +785,7 @@ install_agent_helper() {
 	export GPERF_URL="$(get_from_kata_deps "externals.gperf.url")"
 
 	info "build static agent"
-	DESTDIR="${destdir}" AGENT_POLICY=${agent_policy} "${agent_builder}"
+	DESTDIR="${destdir}" AGENT_POLICY=${agent_policy} PULL_TYPE=${PULL_TYPE} "${agent_builder}"
 }
 
 install_agent() {

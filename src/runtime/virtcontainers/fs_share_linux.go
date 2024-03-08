@@ -486,9 +486,11 @@ func handleVirtualVolume(c *Container) ([]*grpc.Storage, string, error) {
 
 			volumeType = virtVolume.VolumeType
 			var vol *grpc.Storage
-			vol, err = handleVirtualVolumeStorageObject(c, "", virtVolume)
-			if err != nil {
-				return nil, "", err
+			if volumeType == types.KataVirtualVolumeImageGuestPullType {
+				vol, err = handleVirtualVolumeStorageObject(c, "", virtVolume)
+				if err != nil {
+					return nil, "", err
+				}
 			}
 
 			if vol != nil {
