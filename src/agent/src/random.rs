@@ -10,6 +10,7 @@ use nix::sys::stat::Mode;
 use std::fs;
 use std::os::unix::io::{AsRawFd, FromRawFd};
 use tracing::instrument;
+use crate::util::IoctlRequestType;
 
 pub const RNGDEV: &str = "/dev/random";
 #[cfg(target_arch = "powerpc64")]
@@ -20,12 +21,6 @@ pub const RNDRESEEDCRNG: libc::c_int = 0x20005207;
 pub const RNDADDTOENTCNT: libc::c_int = 0x40045201;
 #[cfg(not(target_arch = "powerpc64"))]
 pub const RNDRESEEDCRNG: libc::c_int = 0x5207;
-
-// Handle the differing ioctl(2) request types for different targets
-#[cfg(target_env = "musl")]
-type IoctlRequestType = libc::c_int;
-#[cfg(target_env = "gnu")]
-type IoctlRequestType = libc::c_ulong;
 
 #[instrument]
 pub fn reseed_rng(data: &[u8]) -> Result<()> {
