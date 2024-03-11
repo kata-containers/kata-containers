@@ -452,15 +452,31 @@ function deploy_nydus_snapshotter() {
 		  misc/snapshotter/base/nydus-snapshotter.yaml \
 		  'data.FS_DRIVER' \
 		  "proxy" --style=double
+		# Disable to read snapshotter config from configmap
+		yq write -i \
+		  misc/snapshotter/base/nydus-snapshotter.yaml \
+		  'data.ENABLE_CONFIG_FROM_VOLUME' \
+		  "false" --style=double
+	elif [ "${PULL_TYPE}" == "host-share-with-block" ]; then
+		# Enable host share feature in nydus snapshotter
+		yq write -i \
+		  misc/snapshotter/base/nydus-snapshotter.yaml \
+		  'data.FS_DRIVER' \
+		  "blockdev" --style=double
+		# Enable to read snapshotter config from configmap
+		yq write -i \
+		  misc/snapshotter/base/nydus-snapshotter.yaml \
+		  'data.ENABLE_CONFIG_FROM_VOLUME' \
+		  "true" --style=double
+		# Copy the config file for host share to configmap
+		yq write -i --style=literal \
+		  misc/snapshotter/base/nydus-snapshotter.yaml \
+		  'data."config.toml"' \
+		  "$(< misc/snapshotter/config-blockdev.toml)"
 	else
 		>&2 echo "Invalid pull type"; exit 2
 	fi
 
-	# Disable to read snapshotter config from configmap
-	yq write -i \
-	  misc/snapshotter/base/nydus-snapshotter.yaml \
-	  'data.ENABLE_CONFIG_FROM_VOLUME' \
-	  "false" --style=double
 	# Enable to run snapshotter as a systemd service
 	yq write -i \
 	  misc/snapshotter/base/nydus-snapshotter.yaml \
