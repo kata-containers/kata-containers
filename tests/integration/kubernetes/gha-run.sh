@@ -453,15 +453,31 @@ function deploy_nydus_snapshotter() {
 		  misc/snapshotter/base/nydus-snapshotter.yaml \
 		  'data.FS_DRIVER' \
 		  "proxy" --style=double
+		# Disable to read snapshotter config from configmap
+		yq write -i \
+		  misc/snapshotter/base/nydus-snapshotter.yaml \
+		  'data.ENABLE_CONFIG_FROM_VOLUME' \
+		  "false" --style=double
+	elif [ "${PULL_TYPE}" == "host-share-image-block" ]; then
+		# Enable host share feature in nydus snapshotter
+		yq write -i \
+		  misc/snapshotter/base/nydus-snapshotter.yaml \
+		  'data.FS_DRIVER' \
+		  "blockdev" --style=double
+		# Enable to read snapshotter config from configmap
+		yq write -i \
+		  misc/snapshotter/base/nydus-snapshotter.yaml \
+		  'data.ENABLE_CONFIG_FROM_VOLUME' \
+		  "true" --style=double
+		# Copy the config file for host share to configmap
+		yq write -i --style=literal \
+		  misc/snapshotter/base/nydus-snapshotter.yaml \
+		  'data."config.toml"' \
+		  "$(< misc/snapshotter/config-blockdev.toml)"
 	else
 		>&2 echo "Invalid pull type"; exit 2
 	fi
 
-	# Disable to read snapshotter config from configmap
-	yq write -i \
-	  misc/snapshotter/base/nydus-snapshotter.yaml \
-	  'data.ENABLE_CONFIG_FROM_VOLUME' \
-	  "false" --style=double
 	# Enable to run snapshotter as a systemd service
 	yq write -i \
 	  misc/snapshotter/base/nydus-snapshotter.yaml \
@@ -483,7 +499,17 @@ function deploy_nydus_snapshotter() {
 	popd
 
 	kubectl rollout status daemonset nydus-snapshotter -n nydus-system --timeout ${SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT}
-
+	if [ "${PULL_TYPE}" == "host-share-image-block" ]; then
+		# Download nydus-image binary for host share feature, which the feature depends on nydus v2.3.0,
+		# but the default nydus version in the daemonset is v2.2.4.
+		nydus_image_version="v2.3.0-alpha.1"
+		project="dragonflyoss/image-service"
+		tarball_name="nydus-static-${nydus_image_version}-linux-$(${repo_root_dir}/tests/kata-arch.sh -g).tgz"
+		download_github_project_tarball "${project}" "${nydus_image_version}" "${tarball_name}"
+		sudo tar xfz "${tarball_name}" -C /usr/local/bin nydus-static/nydus-image --strip-components=1
+		sudo rm -f "${tarball_name}"
+		sudo systemctl restart nydus-snapshotter
+	fi
 	echo "::endgroup::"
 	echo "::group::nydus snapshotter logs"
 	pods_name=$(kubectl get pods --selector=app=nydus-snapshotter -n nydus-system -o=jsonpath='{.items[*].metadata.name}')
