@@ -34,6 +34,7 @@ pub struct QemuInner {
 
     config: HypervisorConfig,
     devices: Vec<DeviceType>,
+    netns: Option<String>,
 }
 
 impl QemuInner {
@@ -43,12 +44,14 @@ impl QemuInner {
             qemu_process: None,
             config: Default::default(),
             devices: Vec::new(),
+            netns: None,
         }
     }
 
-    pub(crate) async fn prepare_vm(&mut self, id: &str, _netns: Option<String>) -> Result<()> {
+    pub(crate) async fn prepare_vm(&mut self, id: &str, netns: Option<String>) -> Result<()> {
         info!(sl!(), "Preparing QEMU VM");
         self.id = id.to_string();
+        self.netns = netns;
 
         let vm_path = [KATA_PATH, self.id.as_str()].join("/");
         std::fs::create_dir_all(vm_path)?;
@@ -357,6 +360,7 @@ impl Persist for QemuInner {
             qemu_process: None,
             config: hypervisor_state.config,
             devices: Vec::new(),
+            netns: None,
         })
     }
 }
