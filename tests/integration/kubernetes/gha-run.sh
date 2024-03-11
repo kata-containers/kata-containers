@@ -463,6 +463,9 @@ function deploy_nydus_snapshotter() {
 		  misc/snapshotter/base/nydus-snapshotter.yaml \
 		  'data.FS_DRIVER' \
 		  "proxy" --style=double
+	elif [ "${PULL_TYPE}" == "host-share-image-block" ]; then
+		echo "Skip deploying nydus for the pull type `host-share-image-block` until the PR https://github.com/kata-containers/kata-containers/pull/7837 is prepared"
+		return
 	else
 		>&2 echo "Invalid pull type"; exit 2
 	fi
