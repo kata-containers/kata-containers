@@ -330,8 +330,6 @@ static_check_go_arch_specific()
 # Install yamllint in the different Linux distributions
 install_yamllint()
 {
-	source /etc/os-release || source /usr/lib/os-release
-
 	package="yamllint"
 
 	case "$ID" in
@@ -1399,9 +1397,16 @@ run_or_list_check_function()
 	eval "$func"
 }
 
+setup()
+{
+	source /etc/os-release || source /usr/lib/os-release
+
+	trap remove_tmp_files EXIT
+}
+
 main()
 {
-	trap remove_tmp_files EXIT
+	setup
 
 	local long_option_names="${!long_options[@]}"
 
