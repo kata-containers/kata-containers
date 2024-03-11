@@ -3,11 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use crate::utils::clear_fd_flags;
 use crate::{kernel_param::KernelParams, HypervisorConfig};
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use nix::fcntl;
 use std::fs::read_to_string;
 use std::os::unix::io::RawFd;
 
@@ -782,16 +782,7 @@ impl<'a> QemuCmdLine<'a> {
     }
 
     pub fn add_vsock(&mut self, vhostfd: RawFd, guest_cid: u32) -> Result<()> {
-        // Clear the O_CLOEXEC which is set by default by Rust standard library
-        // as it would obviously prevent passing the descriptor to the qemu process.
-        if let Err(err) = fcntl::fcntl(vhostfd, fcntl::FcntlArg::F_SETFD(fcntl::FdFlag::empty())) {
-            info!(
-                sl!(),
-                "couldn't clear O_CLOEXEC on vsock, communication with agent will not work: {:?}",
-                err
-            );
-            return Err(err.into());
-        }
+        clear_fd_flags(vhostfd).context("clear flags failed")?;
 
         let mut vhost_vsock_pci = VhostVsockPci::new(vhostfd, guest_cid);
 

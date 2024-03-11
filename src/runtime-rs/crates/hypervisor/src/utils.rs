@@ -4,9 +4,11 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::collections::HashSet;
+use std::{collections::HashSet, os::fd::RawFd};
 
+use anyhow::Result;
 use kata_types::config::KATA_PATH;
+use nix::fcntl;
 
 use crate::{DEFAULT_HYBRID_VSOCK_NAME, JAILER_ROOT};
 
@@ -46,4 +48,19 @@ pub fn get_jailer_root(sid: &str) -> String {
     let sandbox_path = get_sandbox_path(sid);
 
     [&sandbox_path, JAILER_ROOT].join("/")
+}
+
+// Clear the O_CLOEXEC which is set by default by Rust standard library
+// as it would obviously prevent passing the descriptor to the hypervisor process.
+pub fn clear_fd_flags(rawfd: RawFd) -> Result<()> {
+    if let Err(err) = fcntl::fcntl(rawfd, fcntl::FcntlArg::F_SETFD(fcntl::FdFlag::empty())) {
+        info!(
+            sl!(),
+            "couldn't clear O_CLOEXEC on device's fd, communication with agent will not work: {:?}",
+            err
+        );
+        return Err(err.into());
+    }
+
+    Ok(())
 }
