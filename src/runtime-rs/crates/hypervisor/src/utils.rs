@@ -4,11 +4,18 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{collections::HashSet, os::fd::RawFd};
+use std::{
+    collections::HashSet,
+    fs::File,
+    os::fd::{AsRawFd, RawFd},
+};
 
-use anyhow::Result;
+use anyhow::{anyhow, Context, Result};
 use kata_types::config::KATA_PATH;
-use nix::fcntl;
+use nix::{
+    fcntl,
+    sched::{setns, CloneFlags},
+};
 
 use crate::{DEFAULT_HYBRID_VSOCK_NAME, JAILER_ROOT};
 
@@ -60,6 +67,16 @@ pub fn clear_fd_flags(rawfd: RawFd) -> Result<()> {
             err
         );
         return Err(err.into());
+    }
+
+    Ok(())
+}
+
+pub fn enter_netns(netns_path: &str) -> Result<()> {
+    if !netns_path.is_empty() {
+        let netns =
+            File::open(netns_path).context(anyhow!("open netns path {:?} failed.", netns_path))?;
+        setns(netns.as_raw_fd(), CloneFlags::CLONE_NEWNET).context("set netns failed")?;
     }
 
     Ok(())
