@@ -66,13 +66,11 @@ impl QemuInner {
 
         let mut cmdline = QemuCmdLine::new(&self.id, &self.config)?;
 
-        // If there's a Vsock Device in `self.devices` the vhost-vsock file
-        // descriptor needs to stay open until the qemu process launches.
-        // This is why we need to store it in a variable at this scope.
-        let mut _vhost_fd = None;
-        // We need to keep the vhost-net/tuntap file descriptor open until the QEMU process launches.
-        // However, we're likely not interested in the specific type of file descriptor itself. We just
-        // want to ensure any fds associated with network devices remain open within the current scope.
+        // CAUTION: File descriptors that are passed to QEMU must stay open until the QEMU process
+        // is started and closed afterwards. This is achieved by collecting them in _fds_for_qemu.
+        // It is mandatory for _fds_for_qemu to last until the QEMU process is forked. Leave it
+        // in the outer scope of this function for this to happen. The files in _fds_for_qemu
+        // should not be used in any way.
         let mut _fds_for_qemu: Vec<std::fs::File> = Vec::new();
 
         for device in &mut self.devices {
@@ -89,7 +87,7 @@ impl QemuInner {
                 DeviceType::Vsock(vsock_dev) => {
                     let fd = vsock_dev.init_config().await?;
                     cmdline.add_vsock(fd.as_raw_fd(), vsock_dev.config.guest_cid)?;
-                    _vhost_fd = Some(fd);
+                    _fds_for_qemu.push(fd.into_std().await);
                 }
                 DeviceType::Block(block_dev) => {
                     if block_dev.config.path_on_host == self.config.boot_info.initrd {
@@ -114,7 +112,8 @@ impl QemuInner {
                     // we need ensure add_network_device happens in netns.
                     let _netns_guard = NetnsGuard::new(&netns).context("new netns guard")?;
 
-                    _fds_for_qemu = cmdline.add_network_device(&network.config, network_info)?;
+                    _fds_for_qemu
+                        .append(&mut cmdline.add_network_device(&network.config, network_info)?);
                 }
                 _ => info!(sl!(), "qemu cmdline: unsupported device: {:?}", device),
             }
