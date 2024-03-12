@@ -5,6 +5,7 @@
 
 mod cmdline_generator;
 mod inner;
+mod network;
 
 use crate::device::DeviceType;
 use crate::hypervisor_persist::HypervisorState;

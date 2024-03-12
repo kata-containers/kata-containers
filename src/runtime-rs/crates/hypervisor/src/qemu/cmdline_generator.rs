@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use super::network::NetDevice;
 use crate::utils::clear_fd_flags;
 use crate::{kernel_param::KernelParams, HypervisorConfig, NetworkConfig};
 
@@ -701,6 +702,25 @@ impl Serial {
 impl ToQemuParams for Serial {
     async fn qemu_params(&self) -> Result<Vec<String>> {
         Ok(vec!["-serial".to_owned(), self.character_device.clone()])
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for NetDevice {
+    // qemu_params returns the qemu parameters built out of this network device.
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut qemu_params: Vec<String> = Vec::new();
+
+        let netdev_params = self.qemu_netdev_params()?;
+        let device_params = self.qemu_device_params()?;
+
+        qemu_params.push("-netdev".to_owned());
+        qemu_params.push(netdev_params.join(","));
+
+        qemu_params.push("-device".to_owned());
+        qemu_params.push(device_params.join(","));
+
+        Ok(qemu_params)
     }
 }
 
