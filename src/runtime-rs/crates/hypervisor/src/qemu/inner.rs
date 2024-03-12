@@ -62,6 +62,7 @@ impl QemuInner {
 
     pub(crate) async fn start_vm(&mut self, _timeout: i32) -> Result<()> {
         info!(sl!(), "Starting QEMU VM");
+        let netns = self.netns.clone().unwrap_or_default();
 
         let mut cmdline = QemuCmdLine::new(&self.id, &self.config)?;
 
@@ -110,6 +111,9 @@ impl QemuInner {
                 DeviceType::Network(network) => {
                     let network_info = &self.config.network_info;
 
+                    // we need ensure add_network_device happens in netns.
+                    let _netns_guard = NetnsGuard::new(&netns).context("new netns guard")?;
+
                     _fds_for_qemu = cmdline.add_network_device(&network.config, network_info)?;
                 }
                 _ => info!(sl!(), "qemu cmdline: unsupported device: {:?}", device),
@@ -125,6 +129,16 @@ impl QemuInner {
         command.args(cmdline.build().await?);
 
         info!(sl!(), "qemu cmd: {:?}", command);
+
+        // we need move the qemu process into Network Namespace.
+        unsafe {
+            let _pre_exec = command.pre_exec(move || {
+                let _ = enter_netns(&netns);
+
+                Ok(())
+            });
+        }
+
         self.qemu_process = Some(command.stderr(Stdio::piped()).spawn()?);
         info!(sl!(), "qemu process started");
 
