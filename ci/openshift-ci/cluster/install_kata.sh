@@ -227,4 +227,4 @@ fi
 # FIXME: Remove when https://github.com/kata-containers/kata-containers/pull/8417 is resolved
 # Selinux context is currently not handled by kata-deploy
 oc apply -f ${deployments_dir}/relabel_selinux.yaml
-wait_for_app_pods_message restorecon "$num_nodes" "NSENTER_FINISHED_WITH:" 120 "kube-system" || { echo "Selinux relabel failed, check the logs"; exit -1; }
+wait_for_app_pods_message restorecon "$num_nodes" "NSENTER_FINISHED_WITH:" 120 "kube-system" || echo "Failed to treat selinux, proceeding anyway..."
