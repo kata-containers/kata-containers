@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use super::network::NetDevice;
+use super::network::{generate_netdev_fds, NetDevice};
 use crate::utils::clear_fd_flags;
 use crate::{kernel_param::KernelParams, HypervisorConfig, NetworkConfig};
 
@@ -11,6 +11,7 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_types::config::hypervisor::NetworkInfo;
 use std::fs::{read_to_string, File};
+use std::os::fd::AsRawFd;
 use std::os::unix::io::RawFd;
 
 // These should have been called MiB and GiB for better readability but the
@@ -869,12 +870,21 @@ impl<'a> QemuCmdLine<'a> {
 
     pub fn add_network_device(
         &mut self,
-        _config: &NetworkConfig,
+        config: &NetworkConfig,
         network_info: &NetworkInfo,
     ) -> Result<Vec<File>> {
-        let _disable_vhost_net = network_info.disable_vhost_net;
-        let _queues = network_info.network_queues;
-        let fds: Vec<std::fs::File> = Vec::new();
+        let disable_vhost_net = network_info.disable_vhost_net;
+        let queues = network_info.network_queues;
+
+        let (tun_files, vhost_files) = generate_netdev_fds(config, queues)?;
+        let tun_fds: Vec<i32> = tun_files.iter().map(|dev| dev.as_raw_fd()).collect();
+        let vhost_fds: Vec<i32> = vhost_files.iter().map(|dev| dev.as_raw_fd()).collect();
+
+        let net_device = NetDevice::new(config, disable_vhost_net, tun_fds, vhost_fds);
+        self.devices.push(Box::new(net_device));
+
+        let dev_files = vec![tun_files, vhost_files];
+        let fds: Vec<File> = dev_files.into_iter().flatten().collect();
 
         Ok(fds)
     }

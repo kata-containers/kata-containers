@@ -5,9 +5,10 @@
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::fs::{File, OpenOptions};
 use std::os::fd::RawFd;
 
-use crate::utils::clear_fd_flags;
+use crate::utils::{clear_fd_flags, open_named_tuntap};
 use crate::{Address, NetworkConfig};
 use anyhow::{anyhow, Context, Result};
 
@@ -271,5 +272,68 @@ impl ToString for Address {
             "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
             b[0], b[1], b[2], b[3], b[4], b[5]
         )
+    }
+}
+
+// /dev/tap$(cat /sys/class/net/macvtap1/ifindex)
+// for example: /dev/tap2381
+#[allow(dead_code)]
+pub fn create_macvtap_fds(ifindex: u32, queues: u32) -> Result<Vec<File>> {
+    let macvtap = format!("/dev/tap{}", ifindex);
+    create_fds(macvtap.as_str(), queues as usize)
+}
+
+pub fn create_vhost_net_fds(queues: u32) -> Result<Vec<File>> {
+    let vhost_dev = "/dev/vhost-net";
+    let num_fds = if queues > 1 { queues as usize } else { 1_usize };
+
+    create_fds(vhost_dev, num_fds)
+}
+
+// For example: if num_fds = 3; fds = {0xc000012028, 0xc000012030, 0xc000012038}
+fn create_fds(device: &str, num_fds: usize) -> Result<Vec<File>> {
+    let mut fds: Vec<File> = Vec::with_capacity(num_fds);
+
+    for i in 0..num_fds {
+        match OpenOptions::new().read(true).write(true).open(device) {
+            Ok(f) => {
+                fds.push(f);
+            }
+            Err(e) => {
+                fds.clear();
+                return Err(anyhow!(
+                    "It failed with error {:?} when opened the {:?} device.",
+                    e,
+                    i
+                ));
+            }
+        };
+    }
+
+    Ok(fds)
+}
+
+pub fn generate_netdev_fds(
+    network_config: &NetworkConfig,
+    queues: u32,
+) -> Result<(Vec<File>, Vec<File>)> {
+    let if_name = network_config.host_dev_name.as_str();
+    let tun_taps = open_named_tuntap(if_name, queues)?;
+    let vhost_fds = create_vhost_net_fds(queues)?;
+
+    Ok((tun_taps, vhost_fds))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::create_fds;
+
+    #[test]
+    fn test_ctreate_fds() {
+        let device = "/dev/null";
+        let num_fds = 3_usize;
+        let fds = create_fds(device, num_fds);
+        assert!(fds.is_ok());
+        assert_eq!(fds.unwrap().len(), num_fds);
     }
 }
