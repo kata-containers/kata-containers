@@ -11,6 +11,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
+use dbs_utils::net::Tap;
 use kata_types::config::KATA_PATH;
 use nix::{
     fcntl,
@@ -80,4 +81,22 @@ pub fn enter_netns(netns_path: &str) -> Result<()> {
     }
 
     Ok(())
+}
+
+pub fn open_named_tuntap(if_name: &str, queues: u32) -> Result<Vec<File>> {
+    let (multi_vq, vq_pairs) = if queues > 1 {
+        (true, queues as usize)
+    } else {
+        (false, 1_usize)
+    };
+
+    let tap: Tap = Tap::open_named(if_name, multi_vq).context("open named tuntap device failed")?;
+    let taps: Vec<Tap> = tap.into_mq_taps(vq_pairs).context("into mq taps failed.")?;
+
+    let mut tap_files: Vec<std::fs::File> = Vec::new();
+    for tap in taps {
+        tap_files.push(tap.tap_file);
+    }
+
+    Ok(tap_files)
 }
