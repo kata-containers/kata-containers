@@ -183,10 +183,13 @@ wait_for_app_pods_message() {
 	done
 	for pod in "${pods[@]}"; do
 		while :; do
-			oc logs $namespace "$pod" | grep "$message" -q && echo "Found $message in $pod's log ($SECONDS)" && break;
+			local log=$(oc logs $namespace "$pod")
+			echo "$log" | grep "$message" -q && echo "Found $(echo "$log" | grep "$message") in $pod's log ($SECONDS)" && break;
 			if [ "$SECONDS" -gt "$timeout" ]; then
 				echo -n "Message '$message' not present in '${pod}' pod of the '-l app=\"$app\"' "
 				echo "pods after ${SECONDS}s (${pods[@]})"
+				echo "Pod $pod's output so far:"
+				echo "$log"
 				return -1
 			fi
 			sleep 1;
