@@ -4,11 +4,12 @@
 //
 
 use crate::utils::clear_fd_flags;
-use crate::{kernel_param::KernelParams, HypervisorConfig};
+use crate::{kernel_param::KernelParams, HypervisorConfig, NetworkConfig};
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use std::fs::read_to_string;
+use kata_types::config::hypervisor::NetworkInfo;
+use std::fs::{read_to_string, File};
 use std::os::unix::io::RawFd;
 
 // These should have been called MiB and GiB for better readability but the
@@ -844,6 +845,18 @@ impl<'a> QemuCmdLine<'a> {
         self.kernel.params.append(&mut KernelParams::from_string(
             "systemd.log_target=console console=ttyS0",
         ));
+    }
+
+    pub fn add_network_device(
+        &mut self,
+        _config: &NetworkConfig,
+        network_info: &NetworkInfo,
+    ) -> Result<Vec<File>> {
+        let _disable_vhost_net = network_info.disable_vhost_net;
+        let _queues = network_info.network_queues;
+        let fds: Vec<std::fs::File> = Vec::new();
+
+        Ok(fds)
     }
 
     pub async fn build(&self) -> Result<Vec<String>> {

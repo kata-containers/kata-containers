@@ -5,11 +5,12 @@
 
 use super::cmdline_generator::QemuCmdLine;
 use crate::{
-    hypervisor_persist::HypervisorState, HypervisorConfig, MemoryConfig, VcpuThreadIds,
-    VsockDevice, HYPERVISOR_QEMU,
+    hypervisor_persist::HypervisorState, utils::enter_netns, HypervisorConfig, MemoryConfig,
+    VcpuThreadIds, VsockDevice, HYPERVISOR_QEMU,
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
+use kata_sys_util::netns::NetnsGuard;
 use kata_types::{
     capabilities::{Capabilities, CapabilityBits},
     config::KATA_PATH,
@@ -68,6 +69,10 @@ impl QemuInner {
         // descriptor needs to stay open until the qemu process launches.
         // This is why we need to store it in a variable at this scope.
         let mut _vhost_fd = None;
+        // We need to keep the vhost-net/tuntap file descriptor open until the QEMU process launches.
+        // However, we're likely not interested in the specific type of file descriptor itself. We just
+        // want to ensure any fds associated with network devices remain open within the current scope.
+        let mut _fds_for_qemu: Vec<std::fs::File> = Vec::new();
 
         for device in &mut self.devices {
             match device {
@@ -101,6 +106,11 @@ impl QemuInner {
                             info!(sl!(), "unsupported block device driver: {}", unsupported)
                         }
                     }
+                }
+                DeviceType::Network(network) => {
+                    let network_info = &self.config.network_info;
+
+                    _fds_for_qemu = cmdline.add_network_device(&network.config, network_info)?;
                 }
                 _ => info!(sl!(), "qemu cmdline: unsupported device: {:?}", device),
             }
