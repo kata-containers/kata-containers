@@ -45,7 +45,7 @@ jobs:
     steps:
       - name: Prepare the self-hosted runner
         run: | 
-          bash ${HOME}/scripts/prepare_runner.sh
+          bash ${HOME}/scripts/prepare_runner.sh kubernetes
           sudo rm -rf $GITHUB_WORKSPACE/*
 
       - uses: actions/checkout@v4

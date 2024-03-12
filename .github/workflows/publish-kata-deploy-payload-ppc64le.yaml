@@ -26,6 +26,11 @@ jobs:
   kata-payload:
     runs-on: ppc64le
     steps:
+      - name: Prepare the self-hosted runner
+        run: |
+          ${HOME}/scripts/prepare_runner.sh
+          sudo rm -rf $GITHUB_WORKSPACE/*
+
       - name: Adjust a permission for repo
         run: |
           sudo chown -R $USER:$USER $GITHUB_WORKSPACE

@@ -31,6 +31,11 @@ jobs:
     steps:
       - name: Adjust a permission for repo
         run: sudo chown -R $USER:$USER $GITHUB_WORKSPACE
+  
+      - name: Prepare the self-hosted runner
+        run: |
+          bash ${HOME}/scripts/prepare_runner.sh cri-containerd
+          sudo rm -rf $GITHUB_WORKSPACE/*
 
       - uses: actions/checkout@v4
         with:

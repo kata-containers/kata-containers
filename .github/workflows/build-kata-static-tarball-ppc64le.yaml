@@ -39,6 +39,12 @@ jobs:
       - name: Adjust a permission for repo
         run: |
           sudo chown -R $USER:$USER $GITHUB_WORKSPACE
+      
+      - name: Prepare the self-hosted runner
+        run: |
+            ${HOME}/scripts/prepare_runner.sh
+            sudo rm -rf $GITHUB_WORKSPACE/*
+
 
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
@@ -52,9 +58,6 @@ jobs:
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0 # This is needed in order to keep the commit ids history
-      
-      - name: Prepare the self-hosted runner
-        run: ${HOME}/scripts/prepare_runner.sh
 
       - name: Rebase atop of the latest target branch
         run: |
