@@ -160,14 +160,21 @@ cgroup and moves all non workload related processes (Anything but the virtual CP
 threads) to it. The name of this overhead cgroup is `/kata_overhead` and a per
 sandbox sub cgroup will be created under it for each sandbox Kata Containers creates.
 
-Kata Containers does not add any constraints or limitations on the overhead cgroup. It is up to the infrastructure
-owner to either:
+Kata Containers does not add any constraints or limitations on the overhead cgroup. 
+It is up to the infrastructure owner to either:
 
 - Provision nodes with a pre-sized `/kata_overhead` cgroup. Kata Containers will
   load that existing cgroup and move all non workload related processes to it.
 - Let Kata Containers create the `/kata_overhead` cgroup, leave it
   unconstrained or resize it a-posteriori.
 
+
+### Design in cgroups v1
+
+In cgroups v1, it is allowed to place a process itself in `cgroup.procs` of a cgroup
+controller, and child threads of a process to be placed in `tasks` of another cgroup
+controller. When `sandbox_cgroup_only = false`, the cgroup structure can be designed
+as follows:
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
@@ -207,7 +214,77 @@ owner to either:
 │                                                                    │
 │ Node                                                               │
 └────────────────────────────────────────────────────────────────────┘
+```
 
+### Design in cgroups v2
+
+In cgroups v2, it is not allowed to place processes and threads in two adjacent cgroup
+controllers, so we cannot design the cgroups structure in the form of cgroups v1.
+
+cgroups v2 provides threaded mode. After the type of cgroup controller is set to
+`threaded` mode, the type of its parent controller and other child controllers of the
+parent controller will be set to `domain threaded` mode. It allows different threads of
+a process to be placed in two adjacent threaded controllers.
+When `sandbox_cgroup_only = false`, the cgroups structure can be designed as follows:
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│                                                                            │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │                                                                      │  │
+│  │  ┌────────────────────────────────────────────────────────────────┐  │  │
+│  │  │                                                                │  │  │
+│  │  │  ┌──────────────────────────────────────────────────────────┐  │  │  │
+│  │  │  │                                                          │  │  │  │
+│  │  │  │  ┌───────────────────────┐    ┌───────────────────────┐  │  │  │  │
+│  │  │  │  │ cgroup.threads:       │    │ cgroup.threads:       │  │  │  │  │
+│  │  │  │  │   VMM vCPU threads    │    │   VMM (excluding vCPU)│  │  │  │  │
+│  │  │  │  │                       │    │   I/O threads         │  │  │  │  │
+│  │  │  │  │                       │    │   Kata Shim           │  │  │  │  │
+│  │  │  │  │                       │    │                       │  │  │  │  │
+│  │  │  │  │ /sandbox (threaded)   │    │ /overhead (threaded)  │  │  │  │  │
+│  │  │  │  └───────────────────────┘    └───────────────────────┘  │  │  │  │
+│  │  │  │                                                          │  │  │  │                                                      
+│  │  │  │  cgroup.procs:                                           │  │  │  │                                                      
+│  │  │  │    VMM                                                   │  │  │  │                                                      
+│  │  │  │    I/O                                                   │  │  │  │                                                      
+│  │  │  │    Kata Shim                                             │  │  │  │                                                      
+│  │  │  │                                                          │  │  │  │                                                      
+│  │  │  │ /kata_<sandbox_id> (domain threaded)                     │  │  │  │                                                      
+│  │  │  └──────────────────────────────────────────────────────────┘  │  │  │
+│  │  │                                                                │  │  │
+│  │  │ Pod 1                                                          │  │  │
+│  │  └────────────────────────────────────────────────────────────────┘  │  │
+│  │                                                                      │  │
+│  │  ┌────────────────────────────────────────────────────────────────┐  │  │
+│  │  │                                                                │  │  │
+│  │  │  ┌──────────────────────────────────────────────────────────┐  │  │  │
+│  │  │  │                                                          │  │  │  │
+│  │  │  │  ┌───────────────────────┐    ┌───────────────────────┐  │  │  │  │
+│  │  │  │  │ cgroup.threads:       │    │ cgroup.threads:       │  │  │  │  │
+│  │  │  │  │   VMM vCPU threads    │    │   VMM (excluding vCPU)│  │  │  │  │
+│  │  │  │  │                       │    │   I/O threads         │  │  │  │  │
+│  │  │  │  │                       │    │   Kata Shim           │  │  │  │  │
+│  │  │  │  │                       │    │                       │  │  │  │  │
+│  │  │  │  │ /sandbox (threaded)   │    │ /overhead (threaded)  │  │  │  │  │
+│  │  │  │  └───────────────────────┘    └───────────────────────┘  │  │  │  │
+│  │  │  │                                                          │  │  │  │                                                      
+│  │  │  │  cgroup.procs:                                           │  │  │  │                                                      
+│  │  │  │    VMM                                                   │  │  │  │                                                      
+│  │  │  │    I/O                                                   │  │  │  │                                                      
+│  │  │  │    Kata Shim                                             │  │  │  │                                                      
+│  │  │  │                                                          │  │  │  │                                                      
+│  │  │  │ /kata_<sandbox_id> (domain threaded)                     │  │  │  │                                                      
+│  │  │  └──────────────────────────────────────────────────────────┘  │  │  │
+│  │  │                                                                │  │  │
+│  │  │ Pod 2                                                          │  │  │
+│  │  └────────────────────────────────────────────────────────────────┘  │  │
+│  │                                                                      │  │
+│  │ /kubepods                                                            │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                            │
+│ Node                                                                       │
+└────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Implementation Details
@@ -356,10 +433,16 @@ Same as `cgroups v1`, a process can join the cgroup by writing its process id (`
 ### Distro Support
 
 Many Linux distributions do not yet support `cgroups v2`, as it is quite a recent addition.
-For more information about the status of this feature see [issue #2494][4].
+
+Here are some Linux distributions that use cgroup v2 by default:
+- Ubuntu (since 21.10, 22.04+ recommended)
+- Debian GNU/Linux (since 11)
+- Fedora (since 31)
+- Arch Linux (from April 2021)
+- Container-Optimized OS (since M97)
+- RHEL and RHEL-like distributions (since 9)
 
 
 [1]: http://man7.org/linux/man-pages/man5/tmpfs.5.html
 [2]: http://man7.org/linux/man-pages/man7/cgroups.7.html#CGROUPS_VERSION_1
 [3]: http://man7.org/linux/man-pages/man7/cgroups.7.html#CGROUPS_VERSION_2
-[4]: https://github.com/kata-containers/runtime/issues/2494
