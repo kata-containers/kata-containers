@@ -15,10 +15,21 @@ The recommended way to create a development environment is to first
 to create a working system.
 
 The installation guide instructions will install all required Kata Containers
-components, plus *Docker*, the hypervisor, and the Kata Containers image and
-guest kernel.
+components, plus a container manager, the hypervisor, and the Kata
+Containers image and guest kernel.
+
+Alternatively, you can perform a
+[manual installation](install/container-manager/containerd/containerd-install.md),
+or continue with [the instructions below](#requirements-to-build-individual-components)
+to build the Kata Containers components from source.
 
 # Requirements to build individual components
+
+> **Note:**
+>
+> If you decide to build from sources, you should be aware of the
+> implications of using an unpackaged system which will not be automatically
+> updated as new [releases](Stable-Branch-Strategy.md) are made available.
 
 You need to install the following to build Kata Containers components:
 
