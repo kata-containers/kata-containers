@@ -845,6 +845,14 @@ func addHypervisorNetworkOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfi
 		return err
 	}
 
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.NetworkQueues).setUint(func(NetworkQueues uint64) {
+		if NetworkQueues > 0 {
+			sbConfig.HypervisorConfig.NetworkQueues = uint32(NetworkQueues)
+		}
+	}); err != nil {
+		return err
+	}
+
 	return newAnnotationConfiguration(ocispec, vcAnnotations.TxRateLimiterMaxRate).setUint(func(txRateLimiterMaxRate uint64) {
 		sbConfig.HypervisorConfig.TxRateLimiterMaxRate = txRateLimiterMaxRate
 	})

@@ -237,6 +237,9 @@ const (
 
 	// EnableRootlessHypervisor is a sandbox annotation to enable rootless hypervisor (only supported in QEMU currently).
 	EnableRootlessHypervisor = kataAnnotHypervisorPrefix + "rootless"
+
+	// NetworkQueues is a sandbox annotation for passing the default number of queues assigned for the tap interface by the hypervisor.
+	NetworkQueues = kataAnnotHypervisorPrefix + "network_queues"
 )
 
 // Runtime related annotations
