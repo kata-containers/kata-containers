@@ -527,6 +527,7 @@ pub struct AgentDetails {
     pub device_handlers: Vec<String>,
     pub storage_handlers: Vec<std::string::String>,
     pub supports_seccomp: bool,
+    pub extra_features: Vec<std::string::String>,
 }
 
 #[derive(PartialEq, Clone, Default)]

@@ -53,6 +53,7 @@ use nix::unistd::{self, Pid};
 use rustjail::process::ProcessOperations;
 
 use crate::device::{add_devices, get_virtio_blk_pci_device_name, update_env_pci};
+use crate::features::get_build_features;
 use crate::linux_abi::*;
 use crate::metrics::get_metrics;
 use crate::mount::baremount;
@@ -1563,6 +1564,7 @@ fn get_agent_details() -> AgentDetails {
 
     detail.device_handlers = Vec::new();
     detail.storage_handlers = STORAGE_HANDLERS.get_handlers();
+    detail.extra_features = get_build_features();
 
     detail
 }

@@ -38,6 +38,7 @@ use tracing::{instrument, span};
 mod config;
 mod console;
 mod device;
+mod features;
 mod linux_abi;
 mod metrics;
 mod mount;
@@ -121,11 +122,14 @@ enum SubCommand {
 
 #[instrument]
 fn announce(logger: &Logger, config: &AgentConfig) {
+    let extra_features = features::get_build_features();
+
     info!(logger, "announce";
     "agent-commit" => version::VERSION_COMMIT,
     "agent-version" =>  version::AGENT_VERSION,
     "api-version" => version::API_VERSION,
     "config" => format!("{:?}", config),
+    "extra-features" => format!("{extra_features:?}"),
     );
 }
 
@@ -293,8 +297,10 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let args = AgentOpts::parse();
 
     if args.version {
+        let extra_features = features::get_build_features();
+
         println!(
-            "{} version {} (api version: {}, commit version: {}, type: rust)",
+            "{} version {} (api version: {}, commit version: {}, type: rust, extra-features: {extra_features:?})",
             NAME,
             version::AGENT_VERSION,
             version::API_VERSION,

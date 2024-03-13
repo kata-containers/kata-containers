@@ -1357,6 +1357,7 @@ dependencies = [
  "chrono",
  "common-path",
  "fail",
+ "hex",
  "kata-types",
  "lazy_static",
  "libc",

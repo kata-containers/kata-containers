@@ -417,6 +417,9 @@ message AgentDetails {
 	// Set only if the agent is built with seccomp support and the guest
 	// environment supports seccomp.
 	bool supports_seccomp = 5;
+
+	// List of additional features enabled at agent build time.
+	repeated string extra_features = 6;
 }
 
 message GuestDetailsRequest {
