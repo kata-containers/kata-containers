@@ -166,6 +166,7 @@ type hypervisor struct {
 	DisableGuestSeLinux            bool                      `toml:"disable_guest_selinux"`
 	LegacySerial                   bool                      `toml:"use_legacy_serial"`
 	ExtraMonitorSocket             govmmQemu.MonitorProtocol `toml:"extra_monitor_socket"`
+	NetworkQueues                  uint32                    `toml:"network_queues"`
 }
 
 type runtime struct {
@@ -664,6 +665,19 @@ func (h hypervisor) getRemoteHypervisorTimeout() uint32 {
 	return h.RemoteHypervisorTimeout
 }
 
+func (h hypervisor) getNetworkQueues() uint32 {
+	var queues uint32
+
+	queues = h.NetworkQueues
+	if queues <= 0 {
+		queues = uint32(h.defaultVCPUs())
+	} else if queues > h.defaultMaxVCPUs() {
+		queues = uint32(h.defaultMaxVCPUs())
+	}
+
+	return queues
+}
+
 func (a agent) debugConsoleEnabled() bool {
 	return a.DebugConsoleEnabled
 }
@@ -930,6 +944,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DisableSeLinux:          h.DisableSeLinux,
 		DisableGuestSeLinux:     h.DisableGuestSeLinux,
 		ExtraMonitorSocket:      extraMonitorSocket,
+		NetworkQueues:           h.getNetworkQueues(),
 	}, nil
 }
 
