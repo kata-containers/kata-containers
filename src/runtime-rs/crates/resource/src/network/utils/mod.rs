@@ -6,7 +6,6 @@
 
 pub(crate) mod address;
 pub(crate) mod link;
-pub(crate) mod netns;
 
 use anyhow::{anyhow, Result};
 use rand::rngs::OsRng;

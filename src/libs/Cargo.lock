@@ -692,6 +692,7 @@ dependencies = [
  "chrono",
  "common-path",
  "fail",
+ "hex",
  "kata-types",
  "lazy_static",
  "libc",
@@ -708,6 +709,7 @@ dependencies = [
  "slog-scope",
  "subprocess",
  "tempfile",
+ "test-utils",
  "thiserror",
 ]
 

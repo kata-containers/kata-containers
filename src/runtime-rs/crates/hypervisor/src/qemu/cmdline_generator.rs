@@ -3,12 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use crate::{kernel_param::KernelParams, HypervisorConfig};
+use super::network::{generate_netdev_fds, NetDevice};
+use crate::utils::clear_fd_flags;
+use crate::{kernel_param::KernelParams, HypervisorConfig, NetworkConfig};
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use nix::fcntl;
-use std::fs::read_to_string;
+use kata_types::config::hypervisor::NetworkInfo;
+use std::fs::{read_to_string, File};
+use std::os::fd::AsRawFd;
 use std::os::unix::io::RawFd;
 
 // These should have been called MiB and GiB for better readability but the
@@ -703,6 +706,25 @@ impl ToQemuParams for Serial {
     }
 }
 
+#[async_trait]
+impl ToQemuParams for NetDevice {
+    // qemu_params returns the qemu parameters built out of this network device.
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut qemu_params: Vec<String> = Vec::new();
+
+        let netdev_params = self.qemu_netdev_params()?;
+        let device_params = self.qemu_device_params()?;
+
+        qemu_params.push("-netdev".to_owned());
+        qemu_params.push(netdev_params.join(","));
+
+        qemu_params.push("-device".to_owned());
+        qemu_params.push(device_params.join(","));
+
+        Ok(qemu_params)
+    }
+}
+
 fn is_running_in_vm() -> Result<bool> {
     let res = read_to_string("/proc/cpuinfo")?
         .lines()
@@ -782,16 +804,7 @@ impl<'a> QemuCmdLine<'a> {
     }
 
     pub fn add_vsock(&mut self, vhostfd: RawFd, guest_cid: u32) -> Result<()> {
-        // Clear the O_CLOEXEC which is set by default by Rust standard library
-        // as it would obviously prevent passing the descriptor to the qemu process.
-        if let Err(err) = fcntl::fcntl(vhostfd, fcntl::FcntlArg::F_SETFD(fcntl::FdFlag::empty())) {
-            info!(
-                sl!(),
-                "couldn't clear O_CLOEXEC on vsock, communication with agent will not work: {:?}",
-                err
-            );
-            return Err(err.into());
-        }
+        clear_fd_flags(vhostfd).context("clear flags failed")?;
 
         let mut vhost_vsock_pci = VhostVsockPci::new(vhostfd, guest_cid);
 
@@ -853,6 +866,27 @@ impl<'a> QemuCmdLine<'a> {
         self.kernel.params.append(&mut KernelParams::from_string(
             "systemd.log_target=console console=ttyS0",
         ));
+    }
+
+    pub fn add_network_device(
+        &mut self,
+        config: &NetworkConfig,
+        network_info: &NetworkInfo,
+    ) -> Result<Vec<File>> {
+        let disable_vhost_net = network_info.disable_vhost_net;
+        let queues = network_info.network_queues;
+
+        let (tun_files, vhost_files) = generate_netdev_fds(config, queues)?;
+        let tun_fds: Vec<i32> = tun_files.iter().map(|dev| dev.as_raw_fd()).collect();
+        let vhost_fds: Vec<i32> = vhost_files.iter().map(|dev| dev.as_raw_fd()).collect();
+
+        let net_device = NetDevice::new(config, disable_vhost_net, tun_fds, vhost_fds);
+        self.devices.push(Box::new(net_device));
+
+        let dev_files = vec![tun_files, vhost_files];
+        let fds: Vec<File> = dev_files.into_iter().flatten().collect();
+
+        Ok(fds)
     }
 
     pub async fn build(&self) -> Result<Vec<String>> {

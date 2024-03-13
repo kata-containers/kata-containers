@@ -21,12 +21,11 @@ use common::{
 };
 use hypervisor::Hypervisor;
 use oci::Process as OCIProcess;
-use resource::network::NetnsGuard;
 use resource::ResourceManager;
 use tokio::sync::RwLock;
 use tracing::instrument;
 
-use kata_sys_util::hooks::HookStates;
+use kata_sys_util::{hooks::HookStates, netns::NetnsGuard};
 
 use super::{logger_with_process, Container};
 

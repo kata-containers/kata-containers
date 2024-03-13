@@ -5,11 +5,12 @@
 
 use super::cmdline_generator::QemuCmdLine;
 use crate::{
-    hypervisor_persist::HypervisorState, HypervisorConfig, MemoryConfig, VcpuThreadIds,
-    VsockDevice, HYPERVISOR_QEMU,
+    hypervisor_persist::HypervisorState, utils::enter_netns, HypervisorConfig, MemoryConfig,
+    VcpuThreadIds, VsockDevice, HYPERVISOR_QEMU,
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
+use kata_sys_util::netns::NetnsGuard;
 use kata_types::{
     capabilities::{Capabilities, CapabilityBits},
     config::KATA_PATH,
@@ -34,6 +35,7 @@ pub struct QemuInner {
 
     config: HypervisorConfig,
     devices: Vec<DeviceType>,
+    netns: Option<String>,
 }
 
 impl QemuInner {
@@ -43,12 +45,14 @@ impl QemuInner {
             qemu_process: None,
             config: Default::default(),
             devices: Vec::new(),
+            netns: None,
         }
     }
 
-    pub(crate) async fn prepare_vm(&mut self, id: &str, _netns: Option<String>) -> Result<()> {
+    pub(crate) async fn prepare_vm(&mut self, id: &str, netns: Option<String>) -> Result<()> {
         info!(sl!(), "Preparing QEMU VM");
         self.id = id.to_string();
+        self.netns = netns;
 
         let vm_path = [KATA_PATH, self.id.as_str()].join("/");
         std::fs::create_dir_all(vm_path)?;
@@ -58,6 +62,7 @@ impl QemuInner {
 
     pub(crate) async fn start_vm(&mut self, _timeout: i32) -> Result<()> {
         info!(sl!(), "Starting QEMU VM");
+        let netns = self.netns.clone().unwrap_or_default();
 
         let mut cmdline = QemuCmdLine::new(&self.id, &self.config)?;
 
@@ -65,6 +70,10 @@ impl QemuInner {
         // descriptor needs to stay open until the qemu process launches.
         // This is why we need to store it in a variable at this scope.
         let mut _vhost_fd = None;
+        // We need to keep the vhost-net/tuntap file descriptor open until the QEMU process launches.
+        // However, we're likely not interested in the specific type of file descriptor itself. We just
+        // want to ensure any fds associated with network devices remain open within the current scope.
+        let mut _fds_for_qemu: Vec<std::fs::File> = Vec::new();
 
         for device in &mut self.devices {
             match device {
@@ -99,6 +108,14 @@ impl QemuInner {
                         }
                     }
                 }
+                DeviceType::Network(network) => {
+                    let network_info = &self.config.network_info;
+
+                    // we need ensure add_network_device happens in netns.
+                    let _netns_guard = NetnsGuard::new(&netns).context("new netns guard")?;
+
+                    _fds_for_qemu = cmdline.add_network_device(&network.config, network_info)?;
+                }
                 _ => info!(sl!(), "qemu cmdline: unsupported device: {:?}", device),
             }
         }
@@ -112,6 +129,16 @@ impl QemuInner {
         command.args(cmdline.build().await?);
 
         info!(sl!(), "qemu cmd: {:?}", command);
+
+        // we need move the qemu process into Network Namespace.
+        unsafe {
+            let _pre_exec = command.pre_exec(move || {
+                let _ = enter_netns(&netns);
+
+                Ok(())
+            });
+        }
+
         self.qemu_process = Some(command.stderr(Stdio::piped()).spawn()?);
         info!(sl!(), "qemu process started");
 
@@ -357,6 +384,7 @@ impl Persist for QemuInner {
             qemu_process: None,
             config: hypervisor_state.config,
             devices: Vec::new(),
+            netns: None,
         })
     }
 }

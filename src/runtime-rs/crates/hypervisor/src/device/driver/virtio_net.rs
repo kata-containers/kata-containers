@@ -13,7 +13,7 @@ use crate::device::topology::PCIeTopology;
 use crate::device::{Device, DeviceType};
 use crate::Hypervisor as hypervisor;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Address(pub [u8; 6]);
 
 impl fmt::Debug for Address {
