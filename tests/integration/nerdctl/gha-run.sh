@@ -95,7 +95,7 @@ function run() {
 
 	enabling_hypervisor
 
-	if [ -n "$GITHUB_ENV" ]; then
+	if [ -n "${GITHUB_ENV:-}" ]; then
 		start_time=$(date '+%Y-%m-%d %H:%M:%S')
 		export start_time
 		echo "start_time=${start_time}" >> "$GITHUB_ENV"
