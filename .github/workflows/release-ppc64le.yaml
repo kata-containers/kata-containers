@@ -19,6 +19,11 @@ jobs:
     needs: build-kata-static-tarball-ppc64le
     runs-on: ppc64le
     steps:
+      - name: Prepare the self-hosted runner
+        run: |
+          bash ${HOME}/scripts/prepare_runner.sh
+          sudo rm -rf $GITHUB_WORKSPACE/*
+
       - name: Login to Kata Containers docker.io
         uses: docker/login-action@v2
         with:
