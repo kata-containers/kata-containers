@@ -6,6 +6,7 @@
 // Allow Docker image config field names.
 #![allow(non_snake_case)]
 
+use crate::containerd;
 use crate::policy;
 use crate::verity;
 
@@ -159,10 +160,13 @@ impl Container {
             process.Terminal = false;
         }
 
+        assert!(process.Env.is_empty());
         if let Some(config_env) = &docker_config.Env {
             for env in config_env {
                 process.Env.push(env.clone());
             }
+        } else {
+            containerd::get_default_unix_env(&mut process.Env);
         }
 
         let policy_args = &mut process.Args;

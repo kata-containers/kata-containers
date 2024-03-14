@@ -161,3 +161,10 @@ pub fn get_linux(privileged_container: bool) -> policy::KataLinux {
         }
     }
 }
+
+pub fn get_default_unix_env(env: &mut Vec<String>) {
+    assert!(env.is_empty());
+
+    // Return the value of defaultUnixEnv from containerd.
+    env.push("PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string());
+}

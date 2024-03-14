@@ -550,10 +550,9 @@ allow_env(p_process, i_process, s_name) {
     print("allow_env: p env =", p_process.Env)
     print("allow_env: i env =", i_process.Env)
 
-    # TODO: re-enable after fixing https://github.com/kata-containers/kata-containers/issues/9239.
-    # every i_var in i_process.Env {
-    #    allow_var(p_process, i_process, i_var, s_name)
-    # }
+    every i_var in i_process.Env {
+        allow_var(p_process, i_process, i_var, s_name)
+    }
 
     print("allow_env: true")
 }
