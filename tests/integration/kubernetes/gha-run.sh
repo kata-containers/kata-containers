@@ -213,7 +213,7 @@ function run_tests() {
 	# In case of running on Github workflow it needs to save the start time
 	# on the environment variables file so that the variable is exported on
 	# next workflow steps.
-	if [ -n "$GITHUB_ENV" ]; then
+	if [ -n "${GITHUB_ENV:-}" ]; then
 		start_time=$(date '+%Y-%m-%d %H:%M:%S')
 		export start_time
 		echo "start_time=${start_time}" >> "$GITHUB_ENV"
