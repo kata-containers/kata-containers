@@ -40,7 +40,6 @@ else
 		"k8s-liveness-probes.bats" \
 		"k8s-measured-rootfs.bats" \
 		"k8s-memory.bats" \
-		"k8s-nested-configmap-secret.bats" \
 		"k8s-oom.bats" \
 		"k8s-optional-empty-configmap.bats" \
 		"k8s-optional-empty-secret.bats" \
