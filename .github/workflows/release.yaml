@@ -1,10 +1,6 @@
 name: Release Kata Containers
 on:
-  workflow_call:
-    inputs:
-      release-type:
-        required: true
-        type: string
+  workflow_dispatch
 
 jobs:
   release:
@@ -19,12 +15,8 @@ jobs:
 
       - name: Get the new release version
         run: |
-          release_version=$(./tools/packaging/release/release.sh next-release-version)
+          release_version=$(./tools/packaging/release/release.sh release-version)
           echo "RELEASE_VERSION=$release_version" >> "$GITHUB_ENV"
-
-      - name: Update VERSION file
-        run: |
-          ./tools/packaging/release/release.sh update-version-file
 
       - name: Create a new release
         run: |
@@ -88,7 +80,7 @@ jobs:
 
       - name: Get the image tags
         run: |
-          release_version=$(./tools/packaging/release/release.sh next-release-version)
+          release_version=$(./tools/packaging/release/release.sh release-version)
           echo "KATA_DEPLOY_IMAGE_TAGS=$release_version latest" >> "$GITHUB_ENV"
 
       - name: Push multi-arch manifest
