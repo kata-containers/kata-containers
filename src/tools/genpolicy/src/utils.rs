@@ -76,12 +76,19 @@ struct CommandLineOptions {
         require_equals= true
     )]
     containerd_socket_path: Option<String>,
+
+    #[clap(
+        long,
+        help = "Registry that uses plain HTTP. Can be passed more than once to configure multiple insecure registries."
+    )]
+    insecure_registry: Vec<String>,
 }
 
 /// Application configuration, derived from on command line parameters.
 #[derive(Clone, Debug)]
 pub struct Config {
     pub use_cache: bool,
+    pub insecure_registries: Vec<String>,
 
     pub yaml_file: Option<String>,
     pub rego_rules_path: String,
@@ -113,6 +120,7 @@ impl Config {
 
         Self {
             use_cache: args.use_cached_files,
+            insecure_registries: args.insecure_registry,
             yaml_file: args.yaml_file,
             rego_rules_path: args.rego_rules_path,
             settings,
