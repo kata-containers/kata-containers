@@ -90,6 +90,7 @@ lto = true
 seccomp = ["rustjail/seccomp"]
 standard-oci-runtime = ["rustjail/standard-oci-runtime"]
 agent-policy = ["http", "openssl", "reqwest"]
+dm-verity = ["kata-types/dm-verity"]
 
 [[bin]]
 name = "kata-agent"

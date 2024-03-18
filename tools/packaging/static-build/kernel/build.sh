@@ -22,7 +22,14 @@ DESTDIR=${DESTDIR:-${PWD}}
 PREFIX=${PREFIX:-/opt/kata}
 container_image="${KERNEL_CONTAINER_BUILDER:-$(get_kernel_image_name)}"
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
+DMVERITY_SUPPORT=${DMVERITY_SUPPORT:-false}
 kernel_builder_args="-a ${ARCH} $*"
+
+if [ "${DMVERITY_SUPPORT}" == "true" ]; then
+	# Turn on the flag to build the kernel with enabling
+	# device mapper support.
+	kernel_builder_args+=" -D"
+fi
 
 if [ "${MEASURED_ROOTFS}" == "yes" ]; then
 	info "build initramfs for cc kernel"

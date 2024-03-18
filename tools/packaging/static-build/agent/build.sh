@@ -30,6 +30,7 @@ sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	--env LIBSECCOMP_URL=${LIBSECCOMP_URL} \
 	--env GPERF_VERSION=${GPERF_VERSION} \
 	--env GPERF_URL=${GPERF_URL} \
+	--env PULL_TYPE=${PULL_TYPE:-default} \
 	-w "${repo_root_dir}" \
 	"${container_image}" \
 	bash -c "${agent_builder}"

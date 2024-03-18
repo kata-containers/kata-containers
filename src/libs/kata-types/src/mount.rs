@@ -4,6 +4,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+#[cfg(feature = "dm-verity")]
+use crate::dmverity::DmVerityInfo;
 use anyhow::{anyhow, Context, Error, Result};
 use std::collections::hash_map::Entry;
 use std::convert::TryFrom;
@@ -147,23 +149,6 @@ impl NydusExtraOptions {
     }
 }
 
-/// Configuration information for DmVerity device.
-#[derive(Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
-pub struct DmVerityInfo {
-    /// Hash algorithm for dm-verity.
-    pub hashtype: String,
-    /// Root hash for device verification or activation.
-    pub hash: String,
-    /// Size of data device used in verification.
-    pub blocknum: u64,
-    /// Used block size for the data device.
-    pub blocksize: u64,
-    /// Used block size for the hash device.
-    pub hashsize: u64,
-    /// Offset of hash area/superblock on hash_device.
-    pub offset: u64,
-}
-
 /// Information about directly assigned volume.
 #[derive(Debug, Clone, Eq, PartialEq, Default, Serialize, Deserialize)]
 pub struct DirectAssignedVolume {
@@ -257,6 +242,7 @@ pub struct KataVirtualVolume {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nydus_image: Option<NydusImageVolume>,
     /// DmVerity: configuration information
+    #[cfg(feature = "dm-verity")]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dm_verity: Option<DmVerityInfo>,
 }

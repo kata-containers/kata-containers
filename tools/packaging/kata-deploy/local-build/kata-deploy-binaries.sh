@@ -41,6 +41,8 @@ readonly se_image_builder="${repo_root_dir}/tools/packaging/guest-image/build_se
 
 ARCH=${ARCH:-$(uname -m)}
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
+PULL_TYPE=${PULL_TYPE:-default}
+DMVERITY_SUPPORT=${DMVERITY_SUPPORT:-false}
 USE_CACHE="${USE_CACHE:-"yes"}"
 ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY:-ghcr.io}"
 ARTEFACT_REGISTRY_USERNAME="${ARTEFACT_REGISTRY_USERNAME:-}"
@@ -448,6 +450,8 @@ install_kernel_helper() {
 	export kernel_version="$(get_from_kata_deps ${kernel_version_yaml_path})"
 	export kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
 
+	[ "${PULL_TYPE}" == "host-share" ] && export DMVERITY_SUPPORT="true"
+
 	if [[ "${kernel_name}" == "kernel"*"-confidential" ]]; then
 		kernel_version="$(get_from_kata_deps assets.kernel.confidential.version)"
 	fi
@@ -782,7 +786,7 @@ install_agent_helper() {
 	export GPERF_URL="$(get_from_kata_deps "externals.gperf.url")"
 
 	info "build static agent"
-	DESTDIR="${destdir}" AGENT_POLICY=${agent_policy} "${agent_builder}"
+	DESTDIR="${destdir}" AGENT_POLICY=${agent_policy} PULL_TYPE=${PULL_TYPE} "${agent_builder}"
 }
 
 install_agent() {
