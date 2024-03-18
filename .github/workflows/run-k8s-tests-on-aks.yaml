@@ -44,6 +44,10 @@ jobs:
         include:
           - host_os: cbl-mariner
             vmm: clh
+            instance-type: small
+          - host_os: cbl-mariner
+            vmm: clh
+            instance-type: normal
     runs-on: ubuntu-latest
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
