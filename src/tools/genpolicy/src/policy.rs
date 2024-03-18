@@ -362,6 +362,9 @@ pub struct CommonData {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ClusterConfig {
     default_namespace: String,
+
+    /// Pause container image reference.
+    pub pause_container_image: String,
 }
 
 impl AgentPolicy {

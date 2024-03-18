@@ -834,9 +834,7 @@ fn compress_capabilities(capabilities: &mut Vec<String>, defaults: &policy::Comm
 pub async fn add_pause_container(containers: &mut Vec<Container>, config: &Config) {
     debug!("Adding pause container...");
     let mut pause_container = Container {
-        // TODO: load this path from the settings file.
-        image: "mcr.microsoft.com/oss/kubernetes/pause:3.6".to_string(),
-
+        image: config.settings.cluster_config.pause_container_image.clone(),
         name: String::new(),
         imagePullPolicy: None,
         securityContext: Some(SecurityContext {
