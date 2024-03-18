@@ -14,7 +14,7 @@ use std::fs::File;
 use std::str;
 
 /// Policy settings loaded from genpolicy-settings.json.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Settings {
     pub pause_container: policy::KataSpec,
     pub other_container: policy::KataSpec,

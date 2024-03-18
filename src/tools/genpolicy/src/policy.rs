@@ -13,7 +13,6 @@ use crate::pod;
 use crate::policy;
 use crate::registry;
 use crate::secret;
-use crate::settings;
 use crate::utils;
 use crate::yaml;
 
@@ -47,10 +46,7 @@ pub struct AgentPolicy {
     /// Rego rules read from a file (rules.rego).
     pub rules: String,
 
-    /// Settings loaded from genpolicy-settings.json.
-    pub settings: settings::Settings,
-
-    /// Additional Policy settings.
+    /// Policy settings.
     pub config: utils::Config,
 }
 
@@ -73,7 +69,7 @@ pub struct PolicyData {
 /// is ordered, thus resulting in the same output policy contents every time
 /// when this apps runs with the same inputs. Also, it preserves the upper
 /// case field names, for consistency with the structs used by agent's rpc.rs.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct KataSpec {
     /// Version of the Open Container Initiative Runtime Specification with which the bundle complies.
     #[serde(default = "version_default")]
@@ -402,8 +398,6 @@ impl AgentPolicy {
             }
         }
 
-        let settings = settings::Settings::new(&config.json_settings_path);
-
         if let Some(config_map_files) = &config.config_map_files {
             for file in config_map_files {
                 config_maps.push(config_map::ConfigMap::new(file)?);
@@ -414,7 +408,6 @@ impl AgentPolicy {
             Ok(AgentPolicy {
                 resources,
                 rules,
-                settings,
                 config_maps,
                 secrets,
                 config: config.clone(),
@@ -460,8 +453,8 @@ impl AgentPolicy {
 
         let policy_data = policy::PolicyData {
             containers: policy_containers,
-            request_defaults: self.settings.request_defaults.clone(),
-            common: self.settings.common.clone(),
+            request_defaults: self.config.settings.request_defaults.clone(),
+            common: self.config.settings.common.clone(),
         };
 
         let json_data = serde_json::to_string_pretty(&policy_data).unwrap();
@@ -478,14 +471,21 @@ impl AgentPolicy {
         yaml_container: &pod::Container,
         is_pause_container: bool,
     ) -> ContainerPolicy {
-        let c_settings = self.settings.get_container_settings(is_pause_container);
+        let c_settings = self
+            .config
+            .settings
+            .get_container_settings(is_pause_container);
         let mut root = c_settings.Root.clone();
         root.Readonly = yaml_container.read_only_root_filesystem();
 
         let namespace = if let Some(ns) = resource.get_namespace() {
             ns
         } else {
-            self.settings.cluster_config.default_namespace.clone()
+            self.config
+                .settings
+                .cluster_config
+                .default_namespace
+                .clone()
         };
 
         let use_host_network = resource.use_host_network();
@@ -510,7 +510,7 @@ impl AgentPolicy {
 
         let mut mounts = containerd::get_mounts(is_pause_container, is_privileged);
         mount_and_storage::get_policy_mounts(
-            &self.settings,
+            &self.config.settings,
             &mut mounts,
             yaml_container,
             is_pause_container,
@@ -523,7 +523,7 @@ impl AgentPolicy {
             &mut mounts,
             &mut storages,
             yaml_container,
-            &self.settings,
+            &self.config.settings,
         );
 
         let mut linux = containerd::get_linux(is_privileged);
@@ -570,9 +570,9 @@ impl AgentPolicy {
     ) -> KataProcess {
         // Start with the Default Unix Spec from
         // https://github.com/containerd/containerd/blob/release/1.6/oci/spec.go#L132
-        let mut process = containerd::get_process(is_privileged, &self.settings.common);
+        let mut process = containerd::get_process(is_privileged, &self.config.settings.common);
 
-        yaml_container.apply_capabilities(&mut process.Capabilities, &self.settings.common);
+        yaml_container.apply_capabilities(&mut process.Capabilities, &self.config.settings.common);
 
         let (yaml_has_command, yaml_has_args) = yaml_container.get_process_args(&mut process.Args);
         yaml_container
