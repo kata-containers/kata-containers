@@ -66,6 +66,9 @@ struct CommandLineOptions {
         help = "Ignore unsupported input Kubernetes YAML fields. This is not recommeded unless you understand exactly how genpolicy works!"
     )]
     silent_unsupported_fields: bool,
+
+    #[clap(long, help = "Registry that uses plain HTTP. Can be passed more than once to configure multiple insecure registries.")]
+    insecure_registry: Vec<String>,
 }
 
 /// Application configuration, derived from on command line parameters.
@@ -103,6 +106,7 @@ impl Config {
         let registry_options = registry::Options {
             use_cached_files: args.use_cached_files,
             pause_container_image: settings.cluster_config.pause_container_image.clone(),
+            insecure_registries: args.insecure_registry,
         };
 
         Self {

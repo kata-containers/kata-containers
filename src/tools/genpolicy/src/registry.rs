@@ -14,7 +14,7 @@ use anyhow::{anyhow, bail, Result};
 use docker_credential::{CredentialRetrievalError, DockerCredential};
 use log::warn;
 use log::{debug, info, LevelFilter};
-use oci_distribution::client::{linux_amd64_resolver, ClientConfig};
+use oci_distribution::client::{linux_amd64_resolver, ClientConfig, ClientProtocol};
 use oci_distribution::{manifest, secrets::RegistryAuth, Client, Reference};
 use serde::{Deserialize, Serialize};
 use sha2::{digest::typenum::Unsigned, digest::OutputSizeUser, Sha256};
@@ -67,6 +67,7 @@ pub struct ImageLayer {
 pub struct Options {
     pub use_cached_files: bool,
     pub pause_container_image: String,
+    pub insecure_registries: Vec<String>,
 }
 
 impl Container {
@@ -77,6 +78,7 @@ impl Container {
         let auth = build_auth(&reference);
 
         let mut client = Client::new(ClientConfig {
+            protocol: ClientProtocol::HttpsExcept(options.insecure_registries.clone()),
             platform_resolver: Some(Box::new(linux_amd64_resolver)),
             ..Default::default()
         });
