@@ -906,8 +906,6 @@ handle_docker()
 		[ -e "$containerd_config" ] && sudo mv $containerd_config $containerd_config.system-$(date -Iseconds)
 	fi
 
-	containerd_installed
-
 	local filename='get-docker.sh'
 
 	local file
