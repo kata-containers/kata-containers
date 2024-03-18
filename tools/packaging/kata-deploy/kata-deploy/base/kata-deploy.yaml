@@ -43,6 +43,10 @@ spec:
               value: ""
             - name: SNAPSHOTTER_HANDLER_MAPPING
               value: ""
+            - name: AGENT_HTTPS_PROXY
+              value: ""
+            - name: AGENT_NO_PROXY
+              value: ""
           securityContext:
             privileged: true
           volumeMounts:
