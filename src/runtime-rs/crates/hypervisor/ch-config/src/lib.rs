@@ -267,8 +267,8 @@ impl Default for NetConfig {
     fn default() -> Self {
         NetConfig {
             tap: None,
-            ip: Ipv4Addr::new(0, 0, 0, 0),
-            mask: Ipv4Addr::new(0, 0, 0, 0),
+            ip: Ipv4Addr::new(192, 168, 249, 1),
+            mask: Ipv4Addr::new(255, 255, 255, 0),
             mac: MacAddr::default(),
             host_mac: None,
             mtu: None,
