@@ -7,6 +7,11 @@ This document lists the tasks required to create a Kata Release.
 
 ## Release Process
 
+### Bump the `VERSION` file
+
+When the `kata-containers/kata-containers` repository is ready for a new release,
+first create a PR to set the release in the `VERSION` file and have it merged.
+
 ### Check GitHub Actions
 
 We make use of [GitHub actions](https://github.com/features/actions) in the
