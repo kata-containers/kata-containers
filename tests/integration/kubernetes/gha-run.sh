@@ -29,6 +29,8 @@ KBS=${KBS:-false}
 KBS_INGRESS=${KBS_INGRESS:-}
 KUBERNETES="${KUBERNETES:-}"
 SNAPSHOTTER="${SNAPSHOTTER:-}"
+HTTPS_PROXY="${HTTPS_PROXY:-${https_proxy:-}}"
+NO_PROXY="${NO_PROXY:-${no_proxy:-}}"
 export AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-no}"
 export TEST_CLUSTER_NAMESPACE="${TEST_CLUSTER_NAMESPACE:-kata-containers-k8s-tests}"
 
@@ -192,6 +194,18 @@ function deploy_kata() {
 		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
 		  'spec.template.spec.containers[0].env[6].value' \
 		  "image initrd kernel default_vcpus"
+	fi
+
+	if [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
+		yq write -i \
+		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
+		  'spec.template.spec.containers[0].env[8].value' \
+		  "${HTTPS_PROXY}"
+
+		yq write -i \
+		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
+		  'spec.template.spec.containers[0].env[9].value' \
+		  "${NO_PROXY}"
 	fi
 
 	echo "::group::Final kata-deploy.yaml that is used in the test"
