@@ -66,6 +66,7 @@ pub struct ImageLayer {
 #[derive(Clone, Debug)]
 pub struct Options {
     pub use_cached_files: bool,
+    pub pause_container_image: String,
 }
 
 impl Container {

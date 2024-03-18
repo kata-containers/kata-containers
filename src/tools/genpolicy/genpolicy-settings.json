@@ -272,7 +272,8 @@
         "confidential_guest": false
     },
     "cluster_config": {
-        "default_namespace": "default"
+        "default_namespace": "default",
+        "pause_container_image": "mcr.microsoft.com/oss/kubernetes/pause:3.6"
     },
     "request_defaults": {
         "CreateContainerRequest": {

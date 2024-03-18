@@ -102,6 +102,7 @@ impl Config {
 
         let registry_options = registry::Options {
             use_cached_files: args.use_cached_files,
+            pause_container_image: settings.cluster_config.pause_container_image.clone(),
         };
 
         Self {
