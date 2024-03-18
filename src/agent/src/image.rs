@@ -70,22 +70,6 @@ impl ImageService {
         self.images.lock().await.insert(image, cid);
     }
 
-    /// Set proxy environment from AGENT_CONFIG
-    fn set_proxy_env_vars() {
-        if env::var("HTTPS_PROXY").is_err() {
-            let https_proxy = &AGENT_CONFIG.https_proxy;
-            if !https_proxy.is_empty() {
-                env::set_var("HTTPS_PROXY", https_proxy);
-            }
-        }
-        if env::var("NO_PROXY").is_err() {
-            let no_proxy = &AGENT_CONFIG.no_proxy;
-            if !no_proxy.is_empty() {
-                env::set_var("NO_PROXY", no_proxy);
-            }
-        }
-    }
-
     /// pause image is packaged in rootfs
     fn unpack_pause_image(cid: &str, target_subpath: &str) -> Result<String> {
         verify_id(cid).context("The guest pause image cid contains invalid characters.")?;
@@ -133,7 +117,6 @@ impl ImageService {
         image_metadata: &HashMap<String, String>,
     ) -> Result<String> {
         info!(sl(), "image metadata: {image_metadata:?}");
-        Self::set_proxy_env_vars();
 
         //Check whether the image is for sandbox or for container.
         let mut is_sandbox = false;
@@ -257,6 +240,33 @@ impl ImageService {
         }
     }
 }
+
+/// Set proxy environment from AGENT_CONFIG
+pub async fn set_proxy_env_vars() {
+    if env::var("HTTPS_PROXY").is_err() {
+        let https_proxy = &AGENT_CONFIG.https_proxy;
+        if !https_proxy.is_empty() {
+            env::set_var("HTTPS_PROXY", https_proxy);
+        }
+    }
+
+    match env::var("HTTPS_PROXY") {
+        Ok(val) => info!(sl(), "https_proxy is set to: {}", val),
+        Err(e) => info!(sl(), "https_proxy is not set ({})", e),
+    };
+
+    if env::var("NO_PROXY").is_err() {
+        let no_proxy = &AGENT_CONFIG.no_proxy;
+        if !no_proxy.is_empty() {
+            env::set_var("NO_PROXY", no_proxy);
+        }
+    }
+    match env::var("NO_PROXY") {
+        Ok(val) => info!(sl(), "no_proxy is set to: {}", val),
+        Err(e) => info!(sl(), "no_proxy is not set ({})", e),
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::ImageService;

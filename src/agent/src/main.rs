@@ -351,6 +351,9 @@ async fn start_sandbox(
         s.rtnl.handle_localhost().await?;
     }
 
+    #[cfg(feature = "guest-pull")]
+    image::set_proxy_env_vars().await;
+
     // - When init_mode is true, enabling the localhost link during the
     //   handle_localhost call above is required before starting OPA with the
     //   initialize_policy call below.
