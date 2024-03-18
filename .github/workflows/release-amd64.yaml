@@ -5,9 +5,6 @@ on:
       target-arch:
         required: true
         type: string
-      release-type:
-        required: true
-        type: string
 
 jobs:
   build-kata-static-tarball-amd64:
@@ -41,11 +38,11 @@ jobs:
       - name: build-and-push-kata-deploy-ci-amd64
         id: build-and-push-kata-deploy-ci-amd64
         run: |
-          # We need to do such trick here as the format of the $GITHUB_REF 
+          # We need to do such trick here as the format of the $GITHUB_REF
           # is "refs/tags/<tag>"
           tag=$(echo $GITHUB_REF | cut -d/ -f3-)
           if [ "${tag}" = "main" ]; then
-              tag=$(RELEASE_TYPE=${{ inputs.release-type }} ./tools/packaging/release/release.sh next-release-version)
+              tag=$(./tools/packaging/release/release.sh release-version)
               tags=(${tag} "latest")
           else
               tags=(${tag})

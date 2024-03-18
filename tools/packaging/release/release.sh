@@ -22,7 +22,6 @@ IFS=' ' read -a REGISTRIES <<< "${KATA_DEPLOY_REGISTRIES}"
 GH_TOKEN="${GH_TOKEN:-}"
 ARCHITECTURE="${ARCHITECTURE:-}"
 KATA_STATIC_TARBALL="${KATA_STATIC_TARBALL:-}"
-RELEASE_TYPE="${RELEASE_TYPE:-}"
 
 function _die()
 {
@@ -35,7 +34,6 @@ function _check_required_env_var()
 	local env_var
 
 	case ${1} in
-		RELEASE_TYPE) env_var="${RELEASE_TYPE}" ;;
 		RELEASE_VERSION) env_var="${RELEASE_VERSION}" ;;
 		GH_TOKEN) env_var="${GH_TOKEN}" ;;
 		ARCHITECTURE) env_var="${ARCHITECTURE}" ;;
@@ -51,56 +49,9 @@ function _check_required_env_var()
 	return 0
 }
 
-function _next_release_version()
+function _release_version()
 {
-	_check_required_env_var "RELEASE_TYPE"
-
-	local current_release=$(cat "${repo_root_dir}/VERSION")
-	local current_major
-	local current_everything_else
-	local next_major
-	local next_minor
-
-	IFS="." read current_major current_minor current_everything_else <<< ${current_release}
-
-	case ${RELEASE_TYPE} in
-		major)
-			next_major=$(expr $current_major + 1)
-			next_minor=0
-			;;
-		minor)
-			next_major=${current_major}
-			# TODO: As we're moving from an alpha release to the
-			# new scheme, this check is needed for the very first
-			# release, after that it can be dropped and only the
-			# else part can be kept.
-			if grep -qE "alpha|rc" <<< ${current_everything_else}; then
-				next_minor=${current_minor}
-			else
-				next_minor=$(expr $current_minor + 1)
-			fi
-			;;
-		*)
-			_die "${RELEASE_TYPE} is not a valid release type, it must be: major or minor"
-			;;
-	esac
-
-	next_release_number="${next_major}.${next_minor}.0"
-	echo "${next_release_number}"
-}
-
-function _update_version_file()
-{
-	_check_required_env_var "RELEASE_VERSION"
-
-	git config user.email "katacontainersbot@gmail.com"
-	git config user.name "Kata Containers Bot"
-
-	echo "${RELEASE_VERSION}" > "${repo_root_dir}/VERSION"
-	git diff
-	git add "${repo_root_dir}/VERSION"
-	git commit -s -m "release: Kata Containers ${RELEASE_VERSION}"
-	git push
+	cat "${repo_root_dir}/VERSION"
 }
 
 function _create_our_own_notes()
@@ -191,7 +142,7 @@ function _upload_kata_static_tarball()
 	_check_required_env_var "ARCHITECTURE"
 	_check_required_env_var "KATA_STATIC_TARBALL"
 
-	RELEASE_VERSION="$(_next_release_version)"
+	RELEASE_VERSION="$(_release_version)"
 
 	new_tarball_name="kata-static-${RELEASE_VERSION}-${ARCHITECTURE}.tar.xz"
 	mv ${KATA_STATIC_TARBALL} "${new_tarball_name}"
@@ -201,7 +152,7 @@ function _upload_kata_static_tarball()
 
 function _upload_versions_yaml_file()
 {
-	RELEASE_VERSION="$(_next_release_version)"
+	RELEASE_VERSION="$(_release_version)"
 
 	versions_file="kata-containers-${RELEASE_VERSION}-versions.yaml"
 	cp "${repo_root_dir}/versions.yaml" ${versions_file}
@@ -212,7 +163,7 @@ function _upload_vendored_code_tarball()
 {
 	_check_required_env_var "GH_TOKEN"
 
-	RELEASE_VERSION="$(_next_release_version)"
+	RELEASE_VERSION="$(_release_version)"
 
 	vendored_code_tarball="kata-containers-${RELEASE_VERSION}-vendor.tar.gz"
 	bash -c "${repo_root_dir}/tools/packaging/release/generate_vendor.sh ${vendored_code_tarball}"
@@ -223,7 +174,7 @@ function _upload_libseccomp_tarball()
 {
 	_check_required_env_var "GH_TOKEN"
 
-	RELEASE_VERSION="$(_next_release_version)"
+	RELEASE_VERSION="$(_release_version)"
 
 	GOPATH=${HOME}/go ./ci/install_yq.sh
 
@@ -245,8 +196,7 @@ function main()
 
 	case "${action}" in
 		publish-multiarch-manifest) _publish_multiarch_manifest ;;
-		update-version-file) _update_version_file ;;
-		next-release-version) _next_release_version;;
+		release-version) _release_version;;
 		create-new-release) _create_new_release ;;
 		upload-kata-static-tarball) _upload_kata_static_tarball ;;
 		upload-versions-yaml-file) _upload_versions_yaml_file ;;

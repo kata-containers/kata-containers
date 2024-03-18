@@ -98,15 +98,6 @@ function test_kata() {
     [[ -z "$PKG_SHA" ]] && die "no PKG_SHA provided"
 
     YAMLPATH="./tools/packaging/kata-deploy/"
-    VERSION=$(cat ./VERSION)
-    # kata-deploy.yaml and kata-cleanup.yaml do not have tags for the non-stable releases, thus
-    # in this cases, let's ensure we use "latest" as version.
-    # For more details, please, see:
-    # https://github.com/kata-containers/kata-containers/blob/f7c7dc8d33288e588b284ae4820df342aa8e2d74/tools/packaging/release/update-repository-version.sh#L143-L179
-    if [[ $VERSION =~ "alpha"|"rc" ]];
-    then
-	    VERSION="latest"
-    fi
 
     # This action could be called in two contexts:
     #  1. Packaging workflows: testing in packaging repository, where we assume yaml/packaging
@@ -128,8 +119,8 @@ function test_kata() {
     kubectl get runtimeclasses
 
     # update deployment daemonset to utilize the container under test:
-    sed -i "s#quay.io/kata-containers/kata-deploy:${VERSION}#quay.io/kata-containers/kata-deploy-ci:${PKG_SHA}#g" $YAMLPATH/kata-deploy/base/kata-deploy.yaml
-    sed -i "s#quay.io/kata-containers/kata-deploy:${VERSION}#quay.io/kata-containers/kata-deploy-ci:${PKG_SHA}#g" $YAMLPATH/kata-cleanup/base/kata-cleanup.yaml
+    sed -i "s#quay.io/kata-containers/kata-deploy:latest#quay.io/kata-containers/kata-deploy-ci:${PKG_SHA}#g" $YAMLPATH/kata-deploy/base/kata-deploy.yaml
+    sed -i "s#quay.io/kata-containers/kata-deploy:latest#quay.io/kata-containers/kata-deploy-ci:${PKG_SHA}#g" $YAMLPATH/kata-cleanup/base/kata-cleanup.yaml
 
     cat $YAMLPATH/kata-deploy/base/kata-deploy.yaml
 
