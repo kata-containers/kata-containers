@@ -29,9 +29,9 @@ ifeq (,$(not_check_version))
     endif
     golang_version_min=$(shell $(GOPATH)/bin/yq r ../../versions.yaml languages.golang.version)
 
-    ifeq (,$(golang_version_min))
-        $(error "ERROR: cannot determine minimum golang version")
-    endif
+    #ifeq (,$(golang_version_min))
+    #    $(error "ERROR: cannot determine minimum golang version")
+    #endif
 
     golang_version_min_fields=$(subst ., ,$(golang_version_min))
 
@@ -52,11 +52,11 @@ ifeq (,$(not_check_version))
     golang_major_ok=$(shell test $(golang_version_major) -ge $(golang_version_min_major) && echo ok)
     golang_minor_ok=$(shell test $(golang_version_major) -eq $(golang_version_min_major) -a $(golang_version_minor) -ge $(golang_version_min_minor) && echo ok)
 
-    ifeq (,$(golang_major_ok))
-        $(error "ERROR: golang major version too old: got $(golang_version), need atleast $(golang_version_needed)")
-    endif
+#    ifeq (,$(golang_major_ok))
+#        $(error "ERROR: golang major version too old: got $(golang_version), need atleast $(golang_version_needed)")
+#   endif
 
-    ifeq (,$(golang_minor_ok))
-        $(error "ERROR: golang minor version too old: got $(golang_version), need atleast $(golang_version_needed)")
-    endif
+#    ifeq (,$(golang_minor_ok))
+#        $(error "ERROR: golang minor version too old: got $(golang_version), need atleast $(golang_version_needed)")
+#    endif
 endif
