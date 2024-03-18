@@ -10,6 +10,7 @@ use crate::obj_meta;
 use crate::pod;
 use crate::pod_template;
 use crate::policy;
+use crate::registry;
 use crate::settings;
 use crate::yaml;
 
@@ -70,11 +71,11 @@ struct RollingUpdateDeployment {
 impl yaml::K8sResource for Deployment {
     async fn init(
         &mut self,
-        use_cache: bool,
+        registry_options: &registry::Options,
         doc_mapping: &serde_yaml::Value,
         _silent_unsupported_fields: bool,
     ) {
-        yaml::k8s_resource_init(&mut self.spec.template.spec, use_cache).await;
+        yaml::k8s_resource_init(&mut self.spec.template.spec, registry_options).await;
         self.doc_mapping = doc_mapping.clone();
     }
 

@@ -5,6 +5,8 @@
 
 use clap::Parser;
 
+use crate::registry;
+
 #[derive(Debug, Parser)]
 struct CommandLineOptions {
     #[clap(
@@ -69,7 +71,7 @@ struct CommandLineOptions {
 /// Application configuration, derived from on command line parameters.
 #[derive(Clone, Debug)]
 pub struct Config {
-    pub use_cache: bool,
+    pub registry_options: registry::Options,
 
     pub yaml_file: Option<String>,
     pub rego_rules_path: String,
@@ -96,8 +98,12 @@ impl Config {
             None
         };
 
+        let registry_options = registry::Options {
+            use_cached_files: args.use_cached_files,
+        };
+
         Self {
-            use_cache: args.use_cached_files,
+            registry_options: registry_options,
             yaml_file: args.yaml_file,
             rego_rules_path: args.rego_rules_path,
             json_settings_path: args.json_settings_path,

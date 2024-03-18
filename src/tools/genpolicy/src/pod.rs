@@ -480,9 +480,9 @@ struct PodDNSConfigOption {
 }
 
 impl Container {
-    pub async fn init(&mut self, use_cache: bool) {
+    pub async fn init(&mut self, registry_options: &registry::Options) {
         // Load container image properties from the registry.
-        self.registry = registry::get_container(use_cache, &self.image)
+        self.registry = registry::get_container(registry_options, &self.image)
             .await
             .unwrap();
     }
@@ -691,8 +691,8 @@ impl EnvVar {
 
 #[async_trait]
 impl yaml::K8sResource for Pod {
-    async fn init(&mut self, use_cache: bool, doc_mapping: &serde_yaml::Value, _silent: bool) {
-        yaml::k8s_resource_init(&mut self.spec, use_cache).await;
+    async fn init(&mut self, registry_options: &registry::Options, doc_mapping: &serde_yaml::Value, _silent: bool) {
+        yaml::k8s_resource_init(&mut self.spec, registry_options).await;
         self.doc_mapping = doc_mapping.clone();
     }
 
@@ -832,7 +832,7 @@ fn compress_capabilities(capabilities: &mut Vec<String>, defaults: &policy::Comm
     }
 }
 
-pub async fn add_pause_container(containers: &mut Vec<Container>, use_cache: bool) {
+pub async fn add_pause_container(containers: &mut Vec<Container>, registry_options: &registry::Options) {
     debug!("Adding pause container...");
     let mut pause_container = Container {
         // TODO: load this path from the settings file.
@@ -849,7 +849,7 @@ pub async fn add_pause_container(containers: &mut Vec<Container>, use_cache: boo
         }),
         ..Default::default()
     };
-    pause_container.init(use_cache).await;
+    pause_container.init(registry_options).await;
     containers.insert(0, pause_container);
     debug!("pause container added.");
 }

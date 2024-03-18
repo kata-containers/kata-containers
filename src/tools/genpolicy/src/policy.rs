@@ -366,6 +366,9 @@ pub struct CommonData {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ClusterConfig {
     default_namespace: String,
+
+    /// Pause container image reference.
+    pub pause_container_image: String,
 }
 
 impl AgentPolicy {
@@ -381,7 +384,7 @@ impl AgentPolicy {
                 let yaml_string = serde_yaml::to_string(&doc_mapping)?;
                 let silent = config.silent_unsupported_fields;
                 let (mut resource, kind) = yaml::new_k8s_resource(&yaml_string, silent)?;
-                resource.init(config.use_cache, &doc_mapping, silent).await;
+                resource.init(&config.registry_options, &doc_mapping, silent).await;
 
                 // ConfigMap and Secret documents contain additional input for policy generation.
                 if kind.eq("ConfigMap") {
