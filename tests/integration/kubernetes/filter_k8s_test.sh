@@ -35,7 +35,19 @@ main()
 		local flag="false"
 		for SKIP_ENTRY in "${_K8S_SKIP_UNION[@]}"
 		do
-			SKIP_ENTRY="${SKIP_ENTRY#- }.bats"
+			# Remove '- ' from the beginning of the string
+			# Example: "- test.bats" -> "test.bats"
+			SKIP_ENTRY="${SKIP_ENTRY#- }"
+			# Remove a comment if it exists
+			# Example: "test.bats # comment" -> "test.bats "
+			SKIP_ENTRY="${SKIP_ENTRY%#*}"
+			# Strip trailing spaces if it exists
+			# Example: "test.bats " -> "test.bats"
+			# Explanation for parameter expansion:
+			# A="${SKIP_ENTRY##*[![:space:]]}" - get spaces after the last non-space character
+			# SKIP_ENTRY="${SKIP_ENTRY%"${A}"}" - remove the spaces from the string
+			SKIP_ENTRY="${SKIP_ENTRY%"${SKIP_ENTRY##*[![:space:]]}"}"
+			SKIP_ENTRY="${SKIP_ENTRY}.bats"
 			[ "$SKIP_ENTRY" == "$TEST_ENTRY" ] && flag="true"
 		done
 		[ "$flag" == "false" ] && result+=("$TEST_ENTRY")
