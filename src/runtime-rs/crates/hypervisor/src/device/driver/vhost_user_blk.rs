@@ -4,12 +4,16 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 
 use super::VhostUserConfig;
 use crate::{
-    device::{topology::PCIeTopology, Device, DeviceType},
+    device::{
+        topology::PCIeTopology,
+        util::{do_decrease_count, do_increase_count},
+        Device, DeviceType,
+    },
     Hypervisor as hypervisor,
 };
 
@@ -104,32 +108,10 @@ impl Device for VhostUserBlkDevice {
     }
 
     async fn increase_attach_count(&mut self) -> Result<bool> {
-        match self.attach_count {
-            0 => {
-                // do real attach
-                self.attach_count += 1;
-                Ok(false)
-            }
-            std::u64::MAX => Err(anyhow!("device was attached too many times")),
-            _ => {
-                self.attach_count += 1;
-                Ok(true)
-            }
-        }
+        do_increase_count(&mut self.attach_count)
     }
 
     async fn decrease_attach_count(&mut self) -> Result<bool> {
-        match self.attach_count {
-            0 => Err(anyhow!("detaching a device that wasn't attached")),
-            1 => {
-                // do real wrok
-                self.attach_count -= 1;
-                Ok(false)
-            }
-            _ => {
-                self.attach_count -= 1;
-                Ok(true)
-            }
-        }
+        do_decrease_count(&mut self.attach_count)
     }
 }
