@@ -218,6 +218,17 @@ pub fn init_rootfs(
             ));
         }
 
+        // From https://github.com/opencontainers/runtime-spec/blob/main/config.md#mounts
+        // type (string, OPTIONAL) The type of the filesystem to be mounted.
+        // bind may be only specified in the oci spec options -> flags update r#type
+        let m = &{
+            let mut mbind = m.clone();
+            if mbind.r#type.is_empty() && flags & MsFlags::MS_BIND == MsFlags::MS_BIND {
+                mbind.r#type = "bind".to_string();
+            }
+            mbind
+        };
+
         if m.r#type == "cgroup" {
             mount_cgroups(cfd_log, m, rootfs, flags, &data, cpath, mounts)?;
         } else {
