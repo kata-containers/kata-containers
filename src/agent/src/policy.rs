@@ -6,11 +6,14 @@
 use anyhow::{bail, Result};
 use protobuf::MessageDyn;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256, Sha384};
 use slog::Drain;
 use tokio::io::AsyncWriteExt;
 use tokio::time::{sleep, Duration};
 
 use crate::rpc::ttrpc_error;
+use crate::sev::get_snp_host_data;
+use crate::tdx::get_tdx_mrconfigid;
 use crate::AGENT_POLICY;
 
 static EMPTY_JSON_INPUT: &str = "{\"input\":{}}";
@@ -176,6 +179,8 @@ impl AgentPolicy {
 
     /// Replace the Policy in OPA.
     pub async fn set_policy(&mut self, policy: &str) -> Result<()> {
+        verify_policy_digest(policy)?;
+
         if let Some(opa_client) = &mut self.opa_client {
             // Delete the old rules.
             opa_client.delete(&self.policy_path).send().await?;
@@ -296,4 +301,66 @@ fn start_opa(opa_addr: &str) -> Result<()> {
         }
     }
     bail!("OPA binary not found in {:?}", &bin_dirs);
+}
+
+fn verify_policy_digest(policy: &str) -> Result<()> {
+    // TODO: check if the user configured this Guest VM as using either SNP or TDX,
+    // and if that's the case return an error if the TEE attestation report didn't
+    // provide a policy digest value.
+
+    if let Ok(expected_digest) = get_tdx_mrconfigid() {
+        info!(sl!(), "policy: TDX expected digest ({:?})", expected_digest);
+        verify_sha_384(policy, expected_digest.as_slice())
+    } else if let Ok(expected_digest) = get_snp_host_data() {
+        info!(sl!(), "policy: SNP expected digest ({:?})", expected_digest);
+        // TODO: fix the SNP CI machines and then don't ignore zeroes anymore.
+        let ignore_zero_digest = true;
+        verify_sha_256(policy, expected_digest.as_slice(), ignore_zero_digest)
+    } else {
+        warn!(sl!(), "policy: integrity has not been verified!");
+        Ok(())
+    }
+}
+
+fn verify_sha_384(policy: &str, expected_digest: &[u8]) -> Result<()> {
+    let mut hasher = Sha384::new();
+    hasher.update(policy.as_bytes());
+    let digest = hasher.finalize();
+    info!(sl!(), "policy: calculated digest ({:?})", digest);
+
+    if expected_digest != digest.as_slice() {
+        bail!(
+            "policy: rejecting unexpected digest ({:?}), expected ({:?})",
+            digest.as_slice(),
+            expected_digest
+        );
+    }
+
+    Ok(())
+}
+
+pub fn verify_sha_256(
+    policy: &str,
+    expected_digest: &[u8],
+    ignore_zero_digest: bool,
+) -> Result<()> {
+    let mut hasher = Sha256::new();
+    hasher.update(policy.as_bytes());
+    let digest = hasher.finalize();
+    info!(sl!(), "policy: calculated digest ({:?})", digest);
+
+    if expected_digest != digest.as_slice() {
+        if ignore_zero_digest && !expected_digest.iter().any(|&x| x != 0) {
+            error!(sl!(), "Temporarily ignoring incorrect SNP Host Data field");
+            return Ok(());
+        }
+
+        bail!(
+            "policy: rejecting unexpected digest ({:?}), expected ({:?})",
+            digest,
+            expected_digest
+        );
+    }
+
+    Ok(())
 }
