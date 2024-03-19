@@ -24,6 +24,8 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 )
 
 // Machine describes the machine type qemu will emulate.
@@ -3216,7 +3218,7 @@ func LaunchCustomQemu(ctx context.Context, path string, params []string, fds []*
 	/* #nosec */
 	cmd := exec.CommandContext(ctx, path, params...)
 	if len(fds) > 0 {
-		logger.Infof("Adding extra file %v", fds)
+		logger.Infof("Adding extra files %v", utils.ExpandFdsNames(fds))
 		cmd.ExtraFiles = fds
 	}
 

@@ -26,6 +26,7 @@ import (
 	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
 	hv "github.com/kata-containers/kata-containers/src/runtime/pkg/hypervisors"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
+	pkgUtils "github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/uuid"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
@@ -981,7 +982,7 @@ func launchStratovirt(ctx context.Context, s *stratovirt) (*exec.Cmd, io.ReadClo
 	cmd := exec.CommandContext(ctx, s.path, params...)
 
 	if len(s.fds) > 0 {
-		s.Logger().Infof("Adding extra file %v", s.fds)
+		s.Logger().Infof("Adding extra files %v", pkgUtils.ExpandFdsNames(s.fds))
 		cmd.ExtraFiles = s.fds
 	}
 

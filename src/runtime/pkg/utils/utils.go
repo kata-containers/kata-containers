@@ -155,3 +155,12 @@ func RemoveVmmUser(user string) error {
 	}
 	return err
 }
+
+// Expands fds to it's names for logging
+func ExpandFdsNames(fds []*os.File) []string {
+	names := make([]string, len(fds))
+	for i, fd := range fds {
+		names[i] = fd.Name()
+	}
+	return names
+}
