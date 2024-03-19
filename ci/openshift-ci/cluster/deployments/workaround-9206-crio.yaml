@@ -1,0 +1,18 @@
+---
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: worker
+  name: 10-workaround-9206-crio
+spec:
+  config:
+    ignition:
+      version: 2.2.0
+    storage:
+      files:
+      - contents:
+              source: data:text/plain;charset=utf-8;base64,W2NyaW9dCnN0b3JhZ2Vfb3B0aW9uID0gWwoJIm92ZXJsYXkuc2tpcF9tb3VudF9ob21lPXRydWUiLApdCg==
+        filesystem: root
+        mode: 0644
+        path: /etc/crio/crio.conf.d/10-workaround-9206-crio

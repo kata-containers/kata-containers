@@ -27,16 +27,21 @@ KATA_WITH_SYSTEM_QEMU=${KATA_WITH_SYSTEM_QEMU:-no}
 #
 KATA_WITH_HOST_KERNEL=${KATA_WITH_HOST_KERNEL:-no}
 
+# kata-deploy image to be used to deploy the kata (by default use CI image
+# that is built for each pull request)
+#
+KATA_DEPLOY_IMAGE=${KATA_DEPLOY_IMAGE:-quay.io/kata-containers/kata-deploy-ci:kata-containers-latest}
+
+# Enable workaround for OCP 4.13 https://github.com/kata-containers/kata-containers/pull/9206
+#
+WORKAROUND_9206_CRIO=${WORKAROUND_9206_CRIO:-no}
+
 # Leverage kata-deploy to install Kata Containers in the cluster.
 #
 apply_kata_deploy() {
 	local deploy_file="tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-	local old_img="quay.io/kata-containers/kata-deploy:latest"
-	# Use the kata-deploy CI image which is built for each pull request merged
-	local new_img="quay.io/kata-containers/kata-deploy-ci:kata-containers-latest"
-
 	pushd "$katacontainers_repo_dir"
-	sed -i "s#${old_img}#${new_img}#" "$deploy_file"
+	sed -ri "s#(\s+image:) .*#\1 ${KATA_DEPLOY_IMAGE}#" "$deploy_file"
 
 	info "Applying kata-deploy"
 	oc apply -f tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml
@@ -91,7 +96,7 @@ wait_for_reboot() {
 }
 
 wait_mcp_update() {
-	local delta="${1:-900}"
+	local delta="${1:-1200}"
 	local sleep_time=30
 	# The machineconfigpool is fine when all the workers updated and are ready,
 	# and none are degraded.
@@ -147,6 +152,51 @@ debug_pod() {
         oc logs "$pod"
 }
 
+# Wait for all pods of the app label to contain expected message
+#
+# Params:
+#   $1 - app labela
+#   $2 - expected pods count (>=1)
+#   $3 - message to be present in the logs
+#   $4 - timeout (60)
+#   $5 - namespace (the current one)
+wait_for_app_pods_message() {
+	local app="$1"
+	local pod_count="$2"
+	local message="$3"
+	local timeout="$4"
+	local namespace="$5"
+	[ -z "$pod_count" ] && pod_count=1
+	[ -z "$timeout" ] && timeout=60
+	[ -n "$namespace" ] && namespace=" -n $namespace "
+	local pod
+	local pods
+	local i
+	SECONDS=0
+	while :; do
+		pods=($(oc get pods -l app="$app" --no-headers=true $namespace | awk '{print $1}'))
+		[ "${#pods}" -ge "$pod_count" ] && break
+		if [ "$SECONDS" -gt "$timeout" ]; then
+			echo "Unable to find ${pod_count} pods for '-l app=\"$app\"' in ${SECONDS}s (${pods[@]})"
+			return -1
+		fi
+	done
+	for pod in "${pods[@]}"; do
+		while :; do
+			local log=$(oc logs $namespace "$pod")
+			echo "$log" | grep "$message" -q && echo "Found $(echo "$log" | grep "$message") in $pod's log ($SECONDS)" && break;
+			if [ "$SECONDS" -gt "$timeout" ]; then
+				echo -n "Message '$message' not present in '${pod}' pod of the '-l app=\"$app\"' "
+				echo "pods after ${SECONDS}s (${pods[@]})"
+				echo "Pod $pod's output so far:"
+				echo "$log"
+				return -1
+			fi
+			sleep 1;
+		done
+	done
+}
+
 oc config set-context --current --namespace=default
 
 worker_nodes=$(oc get nodes |  awk '{if ($3 == "worker") { print $1 } }')
@@ -182,10 +232,14 @@ if [ ${SELINUX_PERMISSIVE} == "yes" ]; then
 	wait_for_reboot
 fi
 
+if [[ "$WORKAROUND_9206_CRIO" == "yes" ]]; then
+	info "Applying workaround to enable skip_mount_home in crio on OCP 4.13"
+	oc apply -f "${deployments_dir}/workaround-9206-crio.yaml"
+	oc apply -f "${deployments_dir}/workaround-9206-crio-ds.yaml"
+	wait_for_app_pods_message workaround-9206-crio-ds "$num_nodes" "Config file present" 1200 || echo "Failed to apply the workaround, proceeding anyway..."
+fi
+
 # FIXME: Remove when https://github.com/kata-containers/kata-containers/pull/8417 is resolved
 # Selinux context is currently not handled by kata-deploy
 oc apply -f ${deployments_dir}/relabel_selinux.yaml
-( for I in $(seq 30); do
-	sleep 10
-	oc logs -n kube-system ds/relabel-selinux-daemonset | grep "NSENTER_FINISHED_WITH:" && exit
-done ) || { echo "Selinux relabel failed, check the logs"; exit -1; }
+wait_for_app_pods_message restorecon "$num_nodes" "NSENTER_FINISHED_WITH:" 120 "kube-system" || echo "Failed to treat selinux, proceeding anyway..."

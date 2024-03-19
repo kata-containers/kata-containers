@@ -1,0 +1,28 @@
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: workaround-9206-crio-ds
+spec:
+  selector:
+    matchLabels:
+      app: workaround-9206-crio-ds
+  template:
+    metadata:
+      labels:
+        app: workaround-9206-crio-ds
+    spec:
+      containers:
+      - name: workaround-9206-crio-ds
+        image: alpine
+        volumeMounts:
+        - name: host-dir
+          mountPath: /tmp/config
+        securityContext:
+          runAsUser: 0
+          privileged: true
+        command: ["/bin/sh", "-c", "while [ ! -f '/tmp/config/10-workaround-9206-crio' ]; do sleep 1; done; echo 'Config file present'; sleep infinity"]
+      volumes:
+      - name: host-dir
+        hostPath:
+          path: /etc/crio/crio.conf.d/

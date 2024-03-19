@@ -23,6 +23,7 @@ spec:
             set -e;
             echo Starting the relabel;
             nsenter --target 1 --mount bash -xc '
+                command -v semanage &>/dev/null || { echo Does not look like a SELINUX cluster, skipping; exit 0; };
                 for ENTRY in \
                     \"/(.*/)?opt/kata/bin(/.*)?\" \
                     \"/(.*/)?opt/kata/runtime-rs/bin(/.*)?\" \
@@ -31,7 +32,7 @@ spec:
                     \"/(.*/)?opt/kata/share/tdvf(/.*)?\" \
                     \"/(.*/)?opt/kata/libexec(/.*)?\";
                 do
-                    semanage fcontext -a -t qemu_exec_t \"$ENTRY\" || { echo \"Error in semanage command\"; exit 1; }
+                    semanage fcontext -a -t qemu_exec_t \"$ENTRY\" || semanage fcontext -m -t qemu_exec_t \"$ENTRY\" || { echo \"Error in semanage command\"; exit 1; }
                 done;
                 restorecon -v -R /opt/kata || { echo \"Error in restorecon command\"; exit 1; }
             ';
