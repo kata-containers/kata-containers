@@ -126,8 +126,10 @@ The kata agent has the ability to configure agent options in guest kernel comman
 | `agent.debug_console_vport` | Debug console port | Allow to specify the `vsock` port to connect the debugging console | integer | `0` |
 | `agent.devmode` | Developer mode | Allow the agent process to coredump | boolean | `false` |
 | `agent.hotplug_timeout` | Hotplug timeout | Allow to configure hotplug timeout(seconds) of block devices | integer | `3` |
+| `agent.https_proxy` | HTTPS proxy | Allow to configure `https_proxy` in the guest | string | `""` |
 | `agent.log` | Log level | Allow the agent log level to be changed (produces more or less output) | string | `"info"` |
 | `agent.log_vport` | Log port | Allow to specify the `vsock` port to read logs | integer | `0` |
+| `agent.no_proxy` | NO proxy | Allow to configure `no_proxy` in the guest | string | `""` |
 | `agent.passfd_listener_port` | File descriptor passthrough IO listener port | Allow to set the file descriptor passthrough IO listener port | integer | `0` |
 | `agent.server_addr` | Server address | Allow the ttRPC server address to be specified | string | `"vsock://-1:1024"` |
 | `agent.trace` | Trace mode | Allow to static tracing | boolean | `false` |

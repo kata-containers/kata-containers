@@ -8,6 +8,9 @@
 #
 set -e
 
+wait_time=60
+sleep_time=3
+
 # Delete all pods if any exist, otherwise just return
 #
 k8s_delete_all_pods_if_any_exists() {
@@ -94,11 +97,49 @@ assert_pod_fail() {
 	! k8s_create_pod "$container_config" || /bin/false
 }
 
+
+# Check the pulled rootfs on host for given node and sandbox_id
+#
+# Parameters:
+#	$1 - the k8s worker node name
+#	$2 - the sandbox id for kata container
+#	$3 - the expected count of pulled rootfs
+#
+assert_rootfs_count() {
+	local node="$1"
+	local sandbox_id="$2"
+	local expect_count="$3"
+	local allrootfs=""
+
+	# verify that the sandbox_id is not empty; 
+	# otherwise, the command $(exec_host $node "find /run/kata-containers/shared/sandboxes/${sandbox_id} -name rootfs -type d")
+	# may yield an unexpected count of rootfs.
+	if [ -z "$sandbox_id" ]; then
+		return 1
+	fi
+
+	# Max loop 3 times to get all pulled rootfs for given sandbox_id
+	for _ in {1..3}
+	do
+		allrootfs=$(exec_host $node "find /run/kata-containers/shared/sandboxes/${sandbox_id} -name rootfs -type d")
+		if [ -n "$allrootfs" ]; then
+			break
+		else
+			sleep 1
+		fi
+	done
+	echo "allrootfs is: $allrootfs"
+	count=$(echo $allrootfs | grep -o "rootfs" | wc -l)
+	echo "count of container rootfs in host is: $count, expect count is: $expect_count"
+	[ $expect_count -eq $count ]
+}
+
 # Create a pod configuration out of a template file.
 #
 # Parameters:
 #	$1 - the container image.
-#	$2 - the runtimeclass
+#	$2 - the runtimeclass, is not optional.
+#	$3 - the specific node name, optional.
 #
 # Return:
 # 	the path to the configuration file. The caller should not care about
@@ -116,6 +157,7 @@ new_pod_config() {
 
 	new_config=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${base_config}").XXX")
 	IMAGE="$image" RUNTIMECLASS="$runtimeclass" envsubst < "$base_config" > "$new_config"
+
 	echo "$new_config"
 }
 
@@ -147,7 +189,27 @@ set_metadata_annotation() {
 	echo "$annotation_key"
 	# yq set annotations in yaml. Quoting the key because it can have
 	# dots.
-	yq w -i --style=double "${yaml}" "${annotation_key}" "${value}"
+	yq write -i --style=double "${yaml}" "${annotation_key}" "${value}"
+}
+
+# Set the command for container spec.
+#
+# Parameters:
+#	$1 - the yaml file
+#	$2 - the index of the container
+#	$N - the command values
+#
+set_container_command() {
+	local yaml="${1}"
+	local container_idx="${2}"
+	shift 2
+
+    for command_value in "$@"; do
+        yq write -i \
+          "${yaml}" \
+          "spec.containers[${container_idx}].command[+]" \
+          --tag '!!str' "${command_value}"
+    done
 }
 
 # Set the node name on configuration spec.
@@ -161,7 +223,10 @@ set_node() {
 	local node="$2"
 	[ -n "$node" ] || return 1
 
-	yq w -i "${yaml}" "spec.nodeName" "$node"
+	yq write -i \
+	  "${yaml}" \
+	  "spec.nodeName" \
+	  "$node"
 }
 
 # Get the systemd's journal from a worker node
@@ -182,4 +247,31 @@ print_node_journal() {
 	# Delete the debugger pod
 	kubectl get pods -o name | grep "node-debugger-${node}" | \
 		xargs kubectl delete > /dev/null
+}
+
+
+# Get the sandbox id for kata container from a worker node
+#
+# Parameters:
+#	$1 - the k8s worker node name
+#
+get_node_kata_sandbox_id() {
+	local node="$1"
+	local kata_sandbox_id=""
+	local local_wait_time="${wait_time}"
+	# Max loop 3 times to get kata_sandbox_id
+	while [ "$local_wait_time" -gt 0 ];
+	do
+		kata_sandbox_id=$(exec_host $node "ps -ef |\
+		  grep containerd-shim-kata-v2" |\
+		  grep -oP '(?<=-id\s)[a-f0-9]+' |\
+		  tail -1)
+		if [ -n "$kata_sandbox_id" ]; then
+			break
+		else
+			sleep "${sleep_time}"
+			local_wait_time=$((local_wait_time-sleep_time))
+		fi
+	done
+	echo $kata_sandbox_id
 }

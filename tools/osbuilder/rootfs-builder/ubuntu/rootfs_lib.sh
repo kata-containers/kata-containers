@@ -47,6 +47,10 @@ EOF
 	ln -s /run "$rootfs_dir/var/run"
 	cp --remove-destination /etc/resolv.conf "$rootfs_dir/etc"
 
+	local dir="$rootfs_dir/etc/ssl/certs"
+	mkdir -p "$dir"
+	cp --remove-destination /etc/ssl/certs/ca-certificates.crt "$dir"
+
 	# Reduce image size and memory footprint by removing unnecessary files and directories.
 	rm -rf $rootfs_dir/usr/share/{bash-completion,bug,doc,info,lintian,locale,man,menu,misc,pixmaps,terminfo,zsh}
 

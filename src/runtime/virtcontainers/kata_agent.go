@@ -36,6 +36,8 @@ import (
 
 	"context"
 
+	ctrAnnotations "github.com/containerd/containerd/pkg/cri/annotations"
+	podmanAnnotations "github.com/containers/podman/v4/pkg/annotations"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/opencontainers/selinux/go-selinux"
 	"github.com/sirupsen/logrus"
@@ -1580,9 +1582,73 @@ func handleBlockVolume(c *Container, device api.Device) (*grpc.Storage, error) {
 	return vol, nil
 }
 
+// getContainerTypeforCRI get container type from different CRI annotations
+func getContainerTypeforCRI(c *Container) (string, string) {
+
+	// CRIContainerTypeKeyList lists all the CRI keys that could define
+	// the container type from annotations in the config.json.
+	CRIContainerTypeKeyList := []string{ctrAnnotations.ContainerType, podmanAnnotations.ContainerType}
+	containerType := c.config.Annotations[vcAnnotations.ContainerTypeKey]
+	for _, key := range CRIContainerTypeKeyList {
+		_, ok := c.config.CustomSpec.Annotations[key]
+		if ok {
+			return containerType, key
+		}
+	}
+	return "", ""
+}
+
+func handleImageGuestPullBlockVolume(c *Container, virtualVolumeInfo *types.KataVirtualVolume, vol *grpc.Storage) (*grpc.Storage, error) {
+	container_annotations := c.GetAnnotations()
+	containerType, criContainerType := getContainerTypeforCRI(c)
+
+	var image_ref string
+	if containerType == string(PodSandbox) {
+		image_ref = "pause"
+	} else {
+		switch criContainerType {
+		case ctrAnnotations.ContainerType:
+			image_ref = container_annotations["io.kubernetes.cri.image-name"]
+		case podmanAnnotations.ContainerType:
+			image_ref = container_annotations["io.kubernetes.cri-o.ImageName"]
+		default:
+			image_ref = ""
+		}
+
+		if image_ref == "" {
+			return nil, fmt.Errorf("Failed to get image name from annotations")
+		}
+	}
+	virtualVolumeInfo.Source = image_ref
+
+	//merge virtualVolumeInfo.ImagePull.Metadata and container_annotations
+	for k, v := range container_annotations {
+		virtualVolumeInfo.ImagePull.Metadata[k] = v
+	}
+
+	no, err := json.Marshal(virtualVolumeInfo.ImagePull)
+	if err != nil {
+		return nil, err
+	}
+	vol.Driver = types.KataVirtualVolumeImageGuestPullType
+	vol.DriverOptions = append(vol.DriverOptions, types.KataVirtualVolumeImageGuestPullType+"="+string(no))
+	vol.Source = virtualVolumeInfo.Source
+	vol.Fstype = typeOverlayFS
+	return vol, nil
+}
+
 // handleVirtualVolumeStorageObject handles KataVirtualVolume that is block device file.
 func handleVirtualVolumeStorageObject(c *Container, blockDeviceId string, virtVolume *types.KataVirtualVolume) (*grpc.Storage, error) {
-	var vol *grpc.Storage = &grpc.Storage{}
+	var vol *grpc.Storage
+	if virtVolume.VolumeType == types.KataVirtualVolumeImageGuestPullType {
+		var err error
+		vol = &grpc.Storage{}
+		vol, err = handleImageGuestPullBlockVolume(c, virtVolume, vol)
+		if err != nil {
+			return nil, err
+		}
+		vol.MountPoint = filepath.Join("/run/kata-containers/", c.id, c.rootfsSuffix)
+	}
 	return vol, nil
 }
 

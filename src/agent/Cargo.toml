@@ -21,13 +21,16 @@ scopeguard = "1.0.0"
 thiserror = "1.0.26"
 regex = "1.5.6"
 serial_test = "0.5.1"
+oci-distribution = "0.10.0"
+url = "2.5.0"
 kata-sys-util = { path = "../libs/kata-sys-util" }
 kata-types = { path = "../libs/kata-types" }
+safe-path = { path = "../libs/safe-path" }
 
 # Async helpers
 async-trait = "0.1.42"
 async-recursion = "0.3.2"
-futures = "0.3.17"
+futures = "0.3.30"
 
 # Async runtime
 tokio = { version = "1.28.1", features = ["full"] }
@@ -73,10 +76,15 @@ reqwest = { version = "0.11.14", optional = true }
 # The "vendored" feature for openssl is required for musl build
 openssl = { version = "0.10.54", features = ["vendored"], optional = true }
 
+# Image pull/decrypt
+image-rs = { git = "https://github.com/confidential-containers/guest-components", rev = "ca6b438", default-features = true, optional = true }
+
 [dev-dependencies]
 tempfile = "3.1.0"
 test-utils = { path = "../libs/test-utils" }
 which = "4.3.0"
+rstest = "0.18.0"
+async-std = { version = "1.12.0", features = ["attributes"] }
 
 [workspace]
 members = [
@@ -87,9 +95,12 @@ members = [
 lto = true
 
 [features]
+# The default-pull feature would support all pull types, including sharing images by virtio-fs and pulling images in the guest
+default-pull = [ "guest-pull" ]
 seccomp = ["rustjail/seccomp"]
 standard-oci-runtime = ["rustjail/standard-oci-runtime"]
 agent-policy = ["http", "openssl", "reqwest"]
+guest-pull = ["image-rs", "openssl"]
 
 [[bin]]
 name = "kata-agent"

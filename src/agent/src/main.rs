@@ -73,6 +73,9 @@ use tokio::{
     task::JoinHandle,
 };
 
+#[cfg(feature = "guest-pull")]
+mod image;
+
 mod rpc;
 mod tracer;
 
@@ -348,6 +351,9 @@ async fn start_sandbox(
         s.rtnl.handle_localhost().await?;
     }
 
+    #[cfg(feature = "guest-pull")]
+    image::set_proxy_env_vars().await;
+
     // - When init_mode is true, enabling the localhost link during the
     //   handle_localhost call above is required before starting OPA with the
     //   initialize_policy call below.
@@ -379,7 +385,7 @@ async fn start_sandbox(
     sandbox.lock().await.sender = Some(tx);
 
     // vsock:///dev/vsock, port
-    let mut server = rpc::start(sandbox.clone(), config.server_addr.as_str(), init_mode)?;
+    let mut server = rpc::start(sandbox.clone(), config.server_addr.as_str(), init_mode).await?;
     server.start().await?;
 
     rx.await?;

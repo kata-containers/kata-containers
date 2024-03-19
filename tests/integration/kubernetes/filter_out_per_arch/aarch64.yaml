@@ -12,7 +12,9 @@ test:
   - cri-containerd
 
 kubernetes:
+  - k8s-confidential
   - k8s-cpu-ns
+  - k8s-guest-pull-image
   - k8s-limit-range
   - k8s-number-cpus
   - k8s-expose-ip

@@ -29,6 +29,8 @@ KBS=${KBS:-false}
 KBS_INGRESS=${KBS_INGRESS:-}
 KUBERNETES="${KUBERNETES:-}"
 SNAPSHOTTER="${SNAPSHOTTER:-}"
+HTTPS_PROXY="${HTTPS_PROXY:-${https_proxy:-}}"
+NO_PROXY="${NO_PROXY:-${no_proxy:-}}"
 export AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-no}"
 export TEST_CLUSTER_NAMESPACE="${TEST_CLUSTER_NAMESPACE:-kata-containers-k8s-tests}"
 
@@ -135,26 +137,75 @@ function deploy_kata() {
 	sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 
 	# Enable debug for Kata Containers
-	yq write -i "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[1].value' --tag '!!str' "true"
+	yq write -i \
+	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
+	  'spec.template.spec.containers[0].env[1].value' \
+	  --tag '!!str' "true"
 	# Create the runtime class only for the shim that's being tested
-	yq write -i "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[2].value' "${KATA_HYPERVISOR}"
+	yq write -i \
+	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
+	  'spec.template.spec.containers[0].env[2].value' \
+	  "${KATA_HYPERVISOR}"
 	# Set the tested hypervisor as the default `kata` shim
-	yq write -i "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[3].value' "${KATA_HYPERVISOR}"
+	yq write -i \
+	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
+	  'spec.template.spec.containers[0].env[3].value' \
+	  "${KATA_HYPERVISOR}"
 	# Let the `kata-deploy` script take care of the runtime class creation / removal
-	yq write -i "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[4].value' --tag '!!str' "true"
+	yq write -i \
+	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
+	  'spec.template.spec.containers[0].env[4].value' \
+	  --tag '!!str' "true"
 	# Let the `kata-deploy` create the default `kata` runtime class
-	yq write -i "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[5].value' --tag '!!str' "true"
+	yq write -i \
+	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
+	  'spec.template.spec.containers[0].env[5].value' \
+	  --tag '!!str' "true"
 	# Enable 'default_vcpus' hypervisor annotation
-	yq write -i "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[6].value' "default_vcpus"
+	yq write -i \
+	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
+	  'spec.template.spec.containers[0].env[6].value' \
+	  "default_vcpus"
+
+	if [ -n "${SNAPSHOTTER}" ]; then
+		yq write -i \
+		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
+		  'spec.template.spec.containers[0].env[7].value' \
+		  "${KATA_HYPERVISOR}:${SNAPSHOTTER}"
+	fi
 
 	if [ "${KATA_HOST_OS}" = "cbl-mariner" ]; then
-		yq write -i "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[6].value' "initrd kernel default_vcpus"
-		yq write -i "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[+].name' "HOST_OS"
-		yq write -i "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[-1].value' "${KATA_HOST_OS}"
+		yq write -i \
+		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
+		  'spec.template.spec.containers[0].env[6].value' \
+		  "initrd kernel default_vcpus"
+		yq write -i \
+		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
+		  'spec.template.spec.containers[0].env[+].name' \
+		  "HOST_OS"
+		yq write -i \
+		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
+		  'spec.template.spec.containers[0].env[-1].value' \
+		  "${KATA_HOST_OS}"
 	fi
 
 	if [ "${KATA_HYPERVISOR}" = "qemu" ]; then
-		yq write -i "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[6].value' "image initrd kernel default_vcpus"
+		yq write -i \
+		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
+		  'spec.template.spec.containers[0].env[6].value' \
+		  "image initrd kernel default_vcpus"
+	fi
+
+	if [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
+		yq write -i \
+		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
+		  'spec.template.spec.containers[0].env[8].value' \
+		  "${HTTPS_PROXY}"
+
+		yq write -i \
+		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
+		  'spec.template.spec.containers[0].env[9].value' \
+		  "${NO_PROXY}"
 	fi
 
 	echo "::group::Final kata-deploy.yaml that is used in the test"
@@ -308,13 +359,25 @@ function cleanup_kata_deploy() {
 	kubectl -n kube-system wait --timeout=10m --for=delete -l name=kata-deploy pod
 
 	# Let the `kata-deploy` script take care of the runtime class creation / removal
-	yq write -i "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" 'spec.template.spec.containers[0].env[4].value' --tag '!!str' "true"
+	yq write -i \
+	  "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" \
+	  'spec.template.spec.containers[0].env[4].value' \
+	  --tag '!!str' "true"
 	# Create the runtime class only for the shim that's being tested
-	yq write -i "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" 'spec.template.spec.containers[0].env[2].value' "${KATA_HYPERVISOR}"
+	yq write -i \
+	  "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" \
+	  'spec.template.spec.containers[0].env[2].value' \
+	  "${KATA_HYPERVISOR}"
 	# Set the tested hypervisor as the default `kata` shim
-	yq write -i "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" 'spec.template.spec.containers[0].env[3].value' "${KATA_HYPERVISOR}"
+	yq write -i \
+	  "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" \
+	  'spec.template.spec.containers[0].env[3].value' \
+	  "${KATA_HYPERVISOR}"
 	# Let the `kata-deploy` create the default `kata` runtime class
-	yq write -i "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" 'spec.template.spec.containers[0].env[5].value' --tag '!!str' "true"
+	yq write -i \
+	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
+	  'spec.template.spec.containers[0].env[5].value' \
+	  --tag '!!str' "true"
 
 	sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
 	cat "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
@@ -385,17 +448,29 @@ function deploy_nydus_snapshotter() {
 	cleanup_nydus_snapshotter || true
 	if [ "${PULL_TYPE}" == "guest-pull" ]; then
 		# Enable guest pull feature in nydus snapshotter
-		yq write -i misc/snapshotter/base/nydus-snapshotter.yaml 'data.FS_DRIVER' "proxy" --style=double
+		yq write -i \
+		  misc/snapshotter/base/nydus-snapshotter.yaml \
+		  'data.FS_DRIVER' \
+		  "proxy" --style=double
 	else
 		>&2 echo "Invalid pull type"; exit 2
 	fi
 
 	# Disable to read snapshotter config from configmap
-	yq write -i misc/snapshotter/base/nydus-snapshotter.yaml 'data.ENABLE_CONFIG_FROM_VOLUME' "false" --style=double
+	yq write -i \
+	  misc/snapshotter/base/nydus-snapshotter.yaml \
+	  'data.ENABLE_CONFIG_FROM_VOLUME' \
+	  "false" --style=double
 	# Enable to run snapshotter as a systemd service
-	yq write -i misc/snapshotter/base/nydus-snapshotter.yaml 'data.ENABLE_SYSTEMD_SERVICE' "true" --style=double
+	yq write -i \
+	  misc/snapshotter/base/nydus-snapshotter.yaml \
+	  'data.ENABLE_SYSTEMD_SERVICE' \
+	  "true" --style=double
 	# Enable "runtime specific snapshotter" feature in containerd when configuring containerd for snapshotter
-	yq write -i misc/snapshotter/base/nydus-snapshotter.yaml 'data.ENABLE_RUNTIME_SPECIFIC_SNAPSHOTTER' "true" --style=double
+	yq write -i \
+	  misc/snapshotter/base/nydus-snapshotter.yaml \
+	  'data.ENABLE_RUNTIME_SPECIFIC_SNAPSHOTTER' \
+	  "true" --style=double
 
 	# Deploy nydus snapshotter as a daemonset
 	kubectl create -f "misc/snapshotter/nydus-snapshotter-rbac.yaml"

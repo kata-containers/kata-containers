@@ -6,6 +6,10 @@
 #
 
 source "${BATS_TEST_DIRNAME}/tests_common.sh"
+source "${BATS_TEST_DIRNAME}/../../common.bash"
+
+SUPPORTED_TEE_HYPERVISORS=("qemu-sev" "qemu-snp" "qemu-tdx" "qemu-se")
+SUPPORTED_NON_TEE_HYPERVISORS=("qemu")
 
 function setup_unencrypted_confidential_pod() {
 	get_pod_config_dir
@@ -32,4 +36,28 @@ function get_remote_command_per_hypervisor() {
 	REMOTE_COMMAND_PER_HYPERVISOR[qemu-se]="cd /sys/firmware/uv; cat prot_virt_guest | grep 1"
 
 	echo "${REMOTE_COMMAND_PER_HYPERVISOR[${KATA_HYPERVISOR}]}"
+}
+
+# This function verifies whether the input hypervisor supports confidential tests and 
+# relies on `KATA_HYPERVISOR` being an environment variable
+function check_hypervisor_for_confidential_tests() {
+	local kata_hypervisor="${1}"
+	# This check must be done with "<SPACE>${KATA_HYPERVISOR}<SPACE>" to avoid
+	# having substrings, like qemu, being matched with qemu-$something.
+    if [[ " ${SUPPORTED_TEE_HYPERVISORS[*]} " =~ " ${kata_hypervisor} " ]] ||\
+       [[ " ${SUPPORTED_NON_TEE_HYPERVISORS[*]} " =~ " ${kata_hypervisor} " ]]; then        
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Common setup for confidential tests.
+function confidential_setup() {
+	ensure_yq
+	if ! check_hypervisor_for_confidential_tests "${KATA_HYPERVISOR}"; then
+        return 1
+    elif [[ " ${SUPPORTED_NON_TEE_HYPERVISORS[*]} " =~ " ${KATA_HYPERVISOR} " ]]; then
+        info "Need to apply image annotations"
+    fi
 }

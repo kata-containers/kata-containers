@@ -29,6 +29,9 @@ SNAPSHOTTER_HANDLER_MAPPING="${SNAPSHOTTER_HANDLER_MAPPING:-}"
 IFS=',' read -a snapshotters <<< "$SNAPSHOTTER_HANDLER_MAPPING"
 snapshotters_delimiter=':'
 
+AGENT_HTTPS_PROXY="${AGENT_HTTPS_PROXY:-}"
+AGENT_NO_PROXY="${AGENT_NO_PROXY:-}"
+
 # If we fail for any reason a message will be displayed
 die() {
         msg="$*"
@@ -159,6 +162,15 @@ function install_artifacts() {
 		mkdir -p "$config_path"
 
 		local kata_config_file="${config_path}/configuration-${shim}.toml"
+		# Properly set https_proxy and no_proxy for Kata Containers
+		if [ -n "${AGENT_HTTPS_PROXY}" ]; then
+			sed -i -e 's|^kernel_params = "\(.*\)"|kernel_params = "\1 agent.https_proxy='${AGENT_HTTPS_PROXY}'"|g' "${kata_config_file}"
+		fi
+
+		if [ -n "${AGENT_NO_PROXY}" ]; then
+			sed -i -e 's|^kernel_params = "\(.*\)"|kernel_params = "\1 agent.no_proxy='${AGENT_NO_PROXY}'"|g' "${kata_config_file}"
+		fi
+
 		# Allow enabling debug for Kata Containers
 		if [[ "${DEBUG}" == "true" ]]; then
 			sed -i -e 's/^#\(enable_debug\).*=.*$/\1 = true/g' "${kata_config_file}"
@@ -501,6 +513,9 @@ function main() {
 	echo "* CREATE_RUNTIMECLASSES: ${CREATE_RUNTIMECLASSES}"
 	echo "* CREATE_DEFAULT_RUNTIMECLASS: ${CREATE_DEFAULT_RUNTIMECLASS}"
 	echo "* ALLOWED_HYPERVISOR_ANNOTATIONS: ${ALLOWED_HYPERVISOR_ANNOTATIONS}"
+	echo "* SNAPSHOTTER_HANDLER_MAPPING: ${SNAPSHOTTER_HANDLER_MAPPING}"
+	echo "* AGENT_HTTPS_PROXY: ${AGENT_HTTPS_PROXY}"
+	echo "* AGENT_NO_PROXY: ${AGENT_NO_PROXY}"
 
 	# script requires that user is root
 	euid=$(id -u)
