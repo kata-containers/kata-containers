@@ -747,6 +747,7 @@ impl From<agent::AgentDetails> for AgentDetails {
             device_handlers: trans_vec(src.device_handlers),
             storage_handlers: trans_vec(src.storage_handlers),
             supports_seccomp: src.supports_seccomp,
+            extra_features: trans_vec(src.extra_features),
         }
     }
 }
