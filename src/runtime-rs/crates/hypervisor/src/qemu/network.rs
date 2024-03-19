@@ -8,7 +8,7 @@ use std::convert::TryFrom;
 use std::fs::{File, OpenOptions};
 use std::os::fd::RawFd;
 
-use crate::utils::{clear_fd_flags, open_named_tuntap};
+use crate::utils::{clear_cloexec, open_named_tuntap};
 use crate::{Address, NetworkConfig};
 use anyhow::{anyhow, Context, Result};
 
@@ -232,7 +232,7 @@ impl NetDevice {
             netdev_params.push("vhost=on".to_owned());
             if let Some(vhost_fds) = self.fds.get("vhostfds") {
                 for fd in vhost_fds.iter() {
-                    clear_fd_flags(*fd)?;
+                    clear_cloexec(*fd).context("clearing O_CLOEXEC failed on vhost fd")?;
                 }
                 let s = vhost_fds
                     .iter()
@@ -246,7 +246,7 @@ impl NetDevice {
 
         if let Some(tuntap_fds) = self.fds.get("fds") {
             for fd in tuntap_fds.iter() {
-                clear_fd_flags(*fd).context("clear flag of fd failed")?;
+                clear_cloexec(*fd).context("clearing O_CLOEXEC failed on tuntap fd")?;
             }
             let s = tuntap_fds
                 .iter()

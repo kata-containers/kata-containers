@@ -4,7 +4,7 @@
 //
 
 use super::network::{generate_netdev_fds, NetDevice};
-use crate::utils::clear_fd_flags;
+use crate::utils::clear_cloexec;
 use crate::{kernel_param::KernelParams, HypervisorConfig, NetworkConfig};
 
 use anyhow::{anyhow, Context, Result};
@@ -1056,7 +1056,7 @@ impl<'a> QemuCmdLine<'a> {
     }
 
     pub fn add_vsock(&mut self, vhostfd: RawFd, guest_cid: u32) -> Result<()> {
-        clear_fd_flags(vhostfd).context("clear flags failed")?;
+        clear_cloexec(vhostfd).context("clearing O_CLOEXEC failed on vsock fd")?;
 
         let mut vhost_vsock_pci = VhostVsock::new(vhostfd, guest_cid, self.bus_type());
 
