@@ -268,8 +268,10 @@ to install `libseccomp` for the agent.
 
 ```bash
 $ mkdir -p ${seccomp_install_path} ${gperf_install_path}
-$ kata-containers/ci/install_libseccomp.sh ${seccomp_install_path} ${gperf_install_path}
+$ pushd kata-containers/ci 
+$ script -fec 'sudo -E ./install_libseccomp.sh ${seccomp_install_path} ${gperf_install_path}"'
 $ export LIBSECCOMP_LIB_PATH="${seccomp_install_path}/lib"
+$ popd
 ```
 
 On `ppc64le` and `s390x`, `glibc` is used. You will need to install the `libseccomp` library
