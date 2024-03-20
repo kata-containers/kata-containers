@@ -19,14 +19,21 @@ function install_dependencies() {
 
 	# Dependency list of projects that we can rely on the system packages
 	# - jq
+	# - make
+		# - make is required to run containerd integration test.
+	# - gcc
+		# - gcc is required to run containerd integration test.
 	declare -a system_deps=(
 		jq
+		make
+		gcc
 	)
 
 	sudo apt-get update
 	sudo apt-get -y install "${system_deps[@]}"
 
 	ensure_yq
+	${repo_root_dir}/tests/install_go.sh -p -f
 
 	# Dependency list of projects that we can install them
 	# directly from their releases on GitHub:
