@@ -105,7 +105,7 @@ This section lists requirements for displaying commands and command output.
 The requirements must be adhered to since documentation containing code blocks
 is validated by the CI system, which executes the command blocks with the help
 of the
-[doc-to-script](https://github.com/kata-containers/tests/tree/main/.ci/kata-doc-to-script.sh)
+[doc-to-script](https://github.com/kata-containers/kata-containers/blob/main/tests/kata-doc-to-script.sh)
 utility.
 
 - If a document includes commands the user should run, they **MUST** be shown
@@ -189,7 +189,7 @@ and compare them with standard tools (e.g. `diff(1)`).
 
 Since this project uses a number of terms not found in conventional
 dictionaries, we have a
-[spell checking tool](https://github.com/kata-containers/tests/tree/main/cmd/check-spelling)
+[spell checking tool](https://github.com/kata-containers/kata-containers/tree/main/tests/cmd/check-spelling)
 that checks both dictionary words and the additional terms we use.
 
 Run the spell checking tool on your document before raising a PR to ensure it
