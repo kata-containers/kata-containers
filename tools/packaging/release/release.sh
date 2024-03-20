@@ -114,7 +114,7 @@ function _create_new_release()
 	_create_our_own_notes
 
 	gh release create ${RELEASE_VERSION} \
-		--generate-notes --title "Kata Containers ${RELEASE_VERSION}" \
+		--title "Kata Containers ${RELEASE_VERSION}" \
 		--notes-file "/tmp/our_notes_${RELEASE_VERSION}"
 }
 
