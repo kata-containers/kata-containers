@@ -21,13 +21,22 @@ release artifacts.
 
 The action is manually triggered and is responsible for generating a new
 release (including a new tag), pushing those to the
-`kata-containers/kata-containers` repository.
+`kata-containers/kata-containers` repository. The new release is initially
+created as a draft. It is promoted to an official release when the whole
+workflow has completed successfully.
 
 Check the [actions status
 page](https://github.com/kata-containers/kata-containers/actions) to verify all
 steps in the actions workflow have completed successfully. On success, a static
 tarball containing Kata release artifacts will be uploaded to the [Release
 page](https://github.com/kata-containers/kata-containers/releases).
+
+If the workflow fails because of some external environmental causes, e.g. network
+timeout, simply re-run the failed jobs until they eventually succeed.
+
+If for some reason you need to cancel the workflow or re-run it entirely, go first
+to the [Release page](https://github.com/kata-containers/kata-containers/releases) and
+delete the draft release from the previous run.
 
 ### Improve the release notes
 

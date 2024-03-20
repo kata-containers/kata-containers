@@ -174,3 +174,16 @@ jobs:
           ./tools/packaging/release/release.sh upload-libseccomp-tarball
         env:
           GH_TOKEN: ${{ github.token }}
+
+  publish-release:
+    needs: [ build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le, publish-multi-arch-images, upload-multi-arch-static-tarball, upload-versions-yaml, upload-cargo-vendored-tarball, upload-libseccomp-tarball ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Publish a release
+        run: |
+          ./tools/packaging/release/release.sh publish-release
+        env:
+          GH_TOKEN: ${{ github.token }}
