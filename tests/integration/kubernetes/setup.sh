@@ -10,6 +10,8 @@ set -o pipefail
 DEBUG="${DEBUG:-}"
 [ -n "$DEBUG" ] && set -x
 
+KATA_HYPERVISOR="${KATA_HYPERVISOR:-}"
+
 if [ -n "${K8S_TEST_POLICY_FILES:-}" ]; then
 	K8S_TEST_POLICY_FILES=($K8S_TEST_POLICY_FILES)
 else
@@ -100,10 +102,25 @@ add_cbl_mariner_kernel_initrd_annotations() {
 	fi
 }
 
+add_tee_containerd_cri_runtime_handler_annotations() {
+	case "${KATA_HYPERVISOR}" in
+		qemu-tdx)
+			echo "Setting up io.containerd.cri.runtime-handler: ${KATA_HYPERVISOR} for TEEs"
+			for K8S_TEST_YAML in runtimeclass_workloads_work/*.yaml
+			do
+				add_annotations_to_yaml "${K8S_TEST_YAML}" "io.containerd.cri.runtime-handler" "kata-${KATA_HYPERVISOR}"
+			done
+			;;
+		*)
+			;;
+	esac
+}
+
 main() {
 	ensure_yq
 	reset_workloads_work_dir
 	add_cbl_mariner_kernel_initrd_annotations
+	add_tee_containerd_cri_runtime_handler_annotations
 }
 
 main "$@"
