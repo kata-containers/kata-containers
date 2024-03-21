@@ -205,10 +205,7 @@ impl AgentService {
         // In case of pulling image inside guest, we need to merge the image bundle OCI spec
         // into the container creation request OCI spec.
         #[cfg(feature = "guest-pull")]
-        {
-            let image_service = image::ImageService::singleton().await?;
-            image_service.merge_bundle_oci(&mut oci).await?;
-        }
+        image::merge_bundle_oci(&mut oci).await?;
 
         // Some devices need some extra processing (the ones invoked with
         // --device for instance), and that's what this call is doing. It
@@ -1609,10 +1606,8 @@ pub async fn start(
     let hservice = health_ttrpc::create_health(Arc::new(health_service));
 
     #[cfg(feature = "guest-pull")]
-    {
-        let image_service = image::ImageService::new();
-        *image::IMAGE_SERVICE.lock().await = Some(image_service.clone());
-    }
+    image::init_image_service().await;
+
     let server = TtrpcServer::new()
         .bind(server_address)?
         .register_service(aservice)

@@ -49,10 +49,7 @@ impl StorageHandler for ImagePullHandler {
             .cid
             .clone()
             .ok_or_else(|| anyhow!("failed to get container id"))?;
-        let image_service = image::ImageService::singleton().await?;
-        let bundle_path = image_service
-            .pull_image(image_name, &cid, &image_pull_volume.metadata)
-            .await?;
+        let bundle_path = image::pull_image(image_name, &cid, &image_pull_volume.metadata).await?;
 
         storage.source = bundle_path;
         storage.options = vec!["bind".to_string(), "ro".to_string()];

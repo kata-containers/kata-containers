@@ -33,7 +33,7 @@ const K8S_CONTAINER_TYPE_KEYS: [&str; 2] = [
 
 #[rustfmt::skip]
 lazy_static! {
-    pub static ref IMAGE_SERVICE: Mutex<Option<ImageService>> = Mutex::new(None);
+    pub static ref IMAGE_SERVICE: Arc<Mutex<Option<ImageService>>> = Arc::new(Mutex::new(None));
 }
 
 // Convenience function to obtain the scope logger.
@@ -41,33 +41,21 @@ fn sl() -> slog::Logger {
     slog_scope::logger().new(o!("subsystem" => "image"))
 }
 
-#[derive(Clone)]
 pub struct ImageService {
-    image_client: Arc<Mutex<ImageClient>>,
-    images: Arc<Mutex<HashMap<String, String>>>,
+    image_client: ImageClient,
+    images: HashMap<String, String>,
 }
 
 impl ImageService {
     pub fn new() -> Self {
         Self {
-            image_client: Arc::new(Mutex::new(ImageClient::new(PathBuf::from(
-                KATA_IMAGE_WORK_DIR,
-            )))),
-            images: Arc::new(Mutex::new(HashMap::new())),
+            image_client: ImageClient::new(PathBuf::from(KATA_IMAGE_WORK_DIR)),
+            images: HashMap::new(),
         }
     }
 
-    /// Get the singleton instance of image service.
-    pub async fn singleton() -> Result<ImageService> {
-        IMAGE_SERVICE
-            .lock()
-            .await
-            .clone()
-            .ok_or_else(|| anyhow!("image service is uninitialized"))
-    }
-
-    async fn add_image(&self, image: String, cid: String) {
-        self.images.lock().await.insert(image, cid);
+    async fn add_image(&mut self, image: String, cid: String) {
+        self.images.insert(image, cid);
     }
 
     /// pause image is packaged in rootfs
@@ -111,7 +99,7 @@ impl ImageService {
     /// # Returns
     /// - The image rootfs bundle path. (exp. /run/kata-containers/cb0b47276ea66ee9f44cc53afa94d7980b57a52c3f306f68cb034e58d9fbd3c6/images/rootfs)
     pub async fn pull_image(
-        &self,
+        &mut self,
         image: &str,
         cid: &str,
         image_metadata: &HashMap<String, String>,
@@ -145,8 +133,6 @@ impl ImageService {
 
         let res = self
             .image_client
-            .lock()
-            .await
             .pull_image(image, &bundle_path, &None, &None)
             .await;
         match res {
@@ -168,51 +154,6 @@ impl ImageService {
         self.add_image(String::from(image), String::from(cid)).await;
         let image_bundle_path = scoped_join(&bundle_path, "rootfs")?;
         Ok(image_bundle_path.as_path().display().to_string())
-    }
-
-    /// When being passed an image name through a container annotation, merge its
-    /// corresponding bundle OCI specification into the passed container creation one.
-    pub async fn merge_bundle_oci(&self, container_oci: &mut oci::Spec) -> Result<()> {
-        if let Some(image_name) = container_oci.annotations.get(ANNO_K8S_IMAGE_NAME) {
-            let images = self.images.lock().await;
-            if let Some(container_id) = images.get(image_name) {
-                let image_oci_config_path = Path::new(CONTAINER_BASE)
-                    .join(container_id)
-                    .join(CONFIG_JSON);
-                debug!(
-                    sl(),
-                    "Image bundle config path: {:?}", image_oci_config_path
-                );
-
-                let image_oci =
-                    oci::Spec::load(image_oci_config_path.to_str().ok_or_else(|| {
-                        anyhow!(
-                            "Invalid container image OCI config path {:?}",
-                            image_oci_config_path
-                        )
-                    })?)
-                    .context("load image bundle")?;
-
-                if let (Some(container_root), Some(image_root)) =
-                    (container_oci.root.as_mut(), image_oci.root.as_ref())
-                {
-                    let root_path = Path::new(CONTAINER_BASE)
-                        .join(container_id)
-                        .join(image_root.path.clone());
-                    container_root.path = String::from(root_path.to_str().ok_or_else(|| {
-                        anyhow!("Invalid container image root path {:?}", root_path)
-                    })?);
-                }
-
-                if let (Some(container_process), Some(image_process)) =
-                    (container_oci.process.as_mut(), image_oci.process.as_ref())
-                {
-                    self.merge_oci_process(container_process, image_process);
-                }
-            }
-        }
-
-        Ok(())
     }
 
     /// Partially merge an OCI process specification into another one.
@@ -261,10 +202,80 @@ pub async fn set_proxy_env_vars() {
             env::set_var("NO_PROXY", no_proxy);
         }
     }
+
     match env::var("NO_PROXY") {
         Ok(val) => info!(sl(), "no_proxy is set to: {}", val),
         Err(e) => info!(sl(), "no_proxy is not set ({})", e),
     };
+}
+
+/// When being passed an image name through a container annotation, merge its
+/// corresponding bundle OCI specification into the passed container creation one.
+pub async fn merge_bundle_oci(container_oci: &mut oci::Spec) -> Result<()> {
+    let image_service = IMAGE_SERVICE.clone();
+    let mut image_service = image_service.lock().await;
+    let image_service = image_service
+        .as_mut()
+        .expect("Image Service not initialized");
+    if let Some(image_name) = container_oci.annotations.get(ANNO_K8S_IMAGE_NAME) {
+        if let Some(container_id) = image_service.images.get(image_name) {
+            let image_oci_config_path = Path::new(CONTAINER_BASE)
+                .join(container_id)
+                .join(CONFIG_JSON);
+            debug!(
+                sl(),
+                "Image bundle config path: {:?}", image_oci_config_path
+            );
+
+            let image_oci = oci::Spec::load(image_oci_config_path.to_str().ok_or_else(|| {
+                anyhow!(
+                    "Invalid container image OCI config path {:?}",
+                    image_oci_config_path
+                )
+            })?)
+            .context("load image bundle")?;
+
+            if let (Some(container_root), Some(image_root)) =
+                (container_oci.root.as_mut(), image_oci.root.as_ref())
+            {
+                let root_path = Path::new(CONTAINER_BASE)
+                    .join(container_id)
+                    .join(image_root.path.clone());
+                container_root.path =
+                    String::from(root_path.to_str().ok_or_else(|| {
+                        anyhow!("Invalid container image root path {:?}", root_path)
+                    })?);
+            }
+
+            if let (Some(container_process), Some(image_process)) =
+                (container_oci.process.as_mut(), image_oci.process.as_ref())
+            {
+                image_service.merge_oci_process(container_process, image_process);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Init the image service
+pub async fn init_image_service() {
+    let image_service = ImageService::new();
+    *IMAGE_SERVICE.lock().await = Some(image_service);
+}
+
+pub async fn pull_image(
+    image: &str,
+    cid: &str,
+    image_metadata: &HashMap<String, String>,
+) -> Result<String> {
+    let image_service = IMAGE_SERVICE.clone();
+    let mut image_service = image_service.lock().await;
+    let image_service = image_service
+        .as_mut()
+        .expect("Image Service not initialized");
+
+    image_service.pull_image(image, cid, image_metadata).await
 }
 
 #[cfg(test)]
