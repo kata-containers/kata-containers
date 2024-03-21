@@ -11,11 +11,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get the new release version
-        run: |
-          release_version=$(./tools/packaging/release/release.sh release-version)
-          echo "RELEASE_VERSION=$release_version" >> "$GITHUB_ENV"
-
       - name: Create a new release
         run: |
           ./tools/packaging/release/release.sh create-new-release

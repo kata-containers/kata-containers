@@ -108,8 +108,9 @@ EOF
 
 function _create_new_release()
 {
-	_check_required_env_var "RELEASE_VERSION"
 	_check_required_env_var "GH_TOKEN"
+
+	RELEASE_VERSION="$(_release_version)"
 
 	_create_our_own_notes
 
