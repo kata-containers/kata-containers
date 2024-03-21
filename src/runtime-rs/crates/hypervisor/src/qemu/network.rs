@@ -313,11 +313,7 @@ fn create_fds(device: &str, num_fds: usize) -> Result<Vec<File>> {
     Ok(fds)
 }
 
-pub fn generate_netdev_fds(
-    network_config: &NetworkConfig,
-    queues: u32,
-) -> Result<(Vec<File>, Vec<File>)> {
-    let if_name = network_config.host_dev_name.as_str();
+pub fn generate_netdev_fds(if_name: &str, queues: u32) -> Result<(Vec<File>, Vec<File>)> {
     let tun_taps = open_named_tuntap(if_name, queues)?;
     let vhost_fds = create_vhost_net_fds(queues)?;
 

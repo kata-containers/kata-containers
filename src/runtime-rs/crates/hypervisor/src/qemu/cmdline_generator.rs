@@ -1135,8 +1135,9 @@ impl<'a> QemuCmdLine<'a> {
     ) -> Result<Vec<File>> {
         let disable_vhost_net = network_info.disable_vhost_net;
         let queues = network_info.network_queues;
+        let if_name = config.host_dev_name.as_str();
 
-        let (tun_files, vhost_files) = generate_netdev_fds(config, queues)?;
+        let (tun_files, vhost_files) = generate_netdev_fds(if_name, queues)?;
         let tun_fds: Vec<i32> = tun_files.iter().map(|dev| dev.as_raw_fd()).collect();
         let vhost_fds: Vec<i32> = vhost_files.iter().map(|dev| dev.as_raw_fd()).collect();
 
