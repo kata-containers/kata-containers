@@ -330,8 +330,6 @@ static_check_go_arch_specific()
 # Install yamllint in the different Linux distributions
 install_yamllint()
 {
-	source /etc/os-release || source /usr/lib/os-release
-
 	package="yamllint"
 
 	case "$ID" in
@@ -1399,9 +1397,66 @@ run_or_list_check_function()
 	eval "$func"
 }
 
+setup()
+{
+	source /etc/os-release || source /usr/lib/os-release
+
+	trap remove_tmp_files EXIT
+}
+
+# Display a message showing some system details.
+announce()
+{
+	local arch
+	arch=$(uname -m)
+
+	local file='/proc/cpuinfo'
+
+	local detail
+	detail=$(grep -m 1 -E '\<vendor_id\>|\<cpu\> *	*:' "$file" \
+		2>/dev/null |\
+		cut -d: -f2- |\
+		tr -d ' ' || true)
+
+	local arch="$arch"
+
+	[ -n "$detail" ] && arch+=" ('$detail')"
+
+	local kernel
+	kernel=$(uname -r)
+
+	local distro_name
+	local distro_version
+
+	distro_name="${NAME:-}"
+	distro_version="${VERSION:-}"
+
+	local -a lines
+
+	local IFS=$'\n'
+
+    lines=( $(cat <<-EOF
+	Running static checks:
+	  script: $script_name
+	  architecture: $arch
+	  kernel: $kernel
+	  distro:
+	    name: $distro_name
+	    version: $distro_version
+	EOF
+	))
+
+	local line
+
+	for line in "${lines[@]}"
+	do
+		info "$line"
+	done
+}
+
 main()
 {
-	trap remove_tmp_files EXIT
+	setup
 
 	local long_option_names="${!long_options[@]}"
 
@@ -1476,6 +1531,8 @@ main()
 	fi
 
 	repo_path=$GOPATH/src/$repo
+
+	announce
 
 	local all_check_funcs=$(typeset -F|awk '{print $3}'|grep "${check_func_regex}"|sort)
 
