@@ -10,6 +10,9 @@ set -o pipefail
 DEBUG="${DEBUG:-}"
 [ -n "$DEBUG" ] && set -x
 
+export AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-no}"
+export KATA_HOST_OS="${KATA_HOST_OS:-}"
+
 if [ -n "${K8S_TEST_POLICY_FILES:-}" ]; then
 	K8S_TEST_POLICY_FILES=($K8S_TEST_POLICY_FILES)
 else
