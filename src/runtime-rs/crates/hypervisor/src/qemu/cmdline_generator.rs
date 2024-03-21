@@ -10,6 +10,7 @@ use crate::{kernel_param::KernelParams, HypervisorConfig, NetworkConfig};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_types::config::hypervisor::NetworkInfo;
+use std::fmt::Display;
 use std::fs::{read_to_string, File};
 use std::os::fd::AsRawFd;
 use std::os::unix::io::RawFd;
@@ -42,6 +43,27 @@ trait ToQemuParams: Send + Sync {
     // nothing but UTF-8 (in fact probably just ASCII) switching to OsStrings
     // now seems pointless.
     async fn qemu_params(&self) -> Result<Vec<String>>;
+}
+
+#[derive(Debug)]
+enum VirtioBusType {
+    Pci,
+    Ccw,
+}
+
+impl VirtioBusType {
+    fn as_str(&self) -> &str {
+        match self {
+            VirtioBusType::Pci => "pci",
+            VirtioBusType::Ccw => "ccw",
+        }
+    }
+}
+
+impl Display for VirtioBusType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
 }
 
 #[derive(Debug)]
@@ -532,7 +554,8 @@ impl ToQemuParams for ChardevSocket {
 }
 
 #[derive(Debug)]
-struct DeviceVhostUserFsPci {
+struct DeviceVhostUserFs {
+    bus_type: VirtioBusType,
     chardev: String,
     tag: String,
     queue_size: u64,
@@ -540,9 +563,10 @@ struct DeviceVhostUserFsPci {
     iommu_platform: bool,
 }
 
-impl DeviceVhostUserFsPci {
-    fn new(chardev: &str, tag: &str) -> DeviceVhostUserFsPci {
-        DeviceVhostUserFsPci {
+impl DeviceVhostUserFs {
+    fn new(chardev: &str, tag: &str, bus_type: VirtioBusType) -> DeviceVhostUserFs {
+        DeviceVhostUserFs {
+            bus_type,
             chardev: chardev.to_owned(),
             tag: tag.to_owned(),
             queue_size: 0,
@@ -559,7 +583,9 @@ impl DeviceVhostUserFsPci {
             // throughout runtime-rs
             warn!(
                 sl!(),
-                "bad vhost-user-fs-pci queue_size (must be power of two): {}, ignoring", queue_size
+                "bad vhost-user-fs-{} queue_size (must be power of two): {}, ignoring",
+                self.bus_type,
+                queue_size
             );
         }
         self
@@ -578,10 +604,10 @@ impl DeviceVhostUserFsPci {
 }
 
 #[async_trait]
-impl ToQemuParams for DeviceVhostUserFsPci {
+impl ToQemuParams for DeviceVhostUserFs {
     async fn qemu_params(&self) -> Result<Vec<String>> {
         let mut params = Vec::new();
-        params.push("vhost-user-fs-pci".to_owned());
+        params.push(format!("vhost-user-fs-{}", self.bus_type));
         params.push(format!("chardev={}", self.chardev));
         params.push(format!("tag={}", self.tag));
         if self.queue_size != 0 {
@@ -625,15 +651,17 @@ impl ToQemuParams for DeviceNvdimm {
     }
 }
 
-struct VhostVsockPci {
+struct VhostVsock {
+    bus_type: VirtioBusType,
     vhostfd: RawFd,
     guest_cid: u32,
     disable_modern: bool,
 }
 
-impl VhostVsockPci {
-    fn new(vhostfd: RawFd, guest_cid: u32) -> VhostVsockPci {
-        VhostVsockPci {
+impl VhostVsock {
+    fn new(vhostfd: RawFd, guest_cid: u32, bus_type: VirtioBusType) -> VhostVsock {
+        VhostVsock {
+            bus_type,
             vhostfd,
             guest_cid,
             disable_modern: false,
@@ -647,10 +675,10 @@ impl VhostVsockPci {
 }
 
 #[async_trait]
-impl ToQemuParams for VhostVsockPci {
+impl ToQemuParams for VhostVsock {
     async fn qemu_params(&self) -> Result<Vec<String>> {
         let mut params = Vec::new();
-        params.push("vhost-vsock-pci".to_owned());
+        params.push(format!("vhost-vsock-{}", self.bus_type));
         if self.disable_modern {
             params.push("disable-modern=true".to_owned());
         }
@@ -767,6 +795,14 @@ impl<'a> QemuCmdLine<'a> {
         })
     }
 
+    fn bus_type(&self) -> VirtioBusType {
+        if self.config.machine_info.machine_type.contains("-ccw-") {
+            VirtioBusType::Ccw
+        } else {
+            VirtioBusType::Pci
+        }
+    }
+
     pub fn add_virtiofs_share(
         &mut self,
         virtiofsd_socket_path: &str,
@@ -783,7 +819,7 @@ impl<'a> QemuCmdLine<'a> {
 
         self.devices.push(Box::new(virtiofsd_socket_chardev));
 
-        let mut virtiofs_device = DeviceVhostUserFsPci::new(chardev_name, mount_tag);
+        let mut virtiofs_device = DeviceVhostUserFs::new(chardev_name, mount_tag, self.bus_type());
         virtiofs_device.set_queue_size(queue_size);
         if self.config.device_info.enable_iommu_platform {
             virtiofs_device.set_iommu_platform(true);
@@ -806,7 +842,7 @@ impl<'a> QemuCmdLine<'a> {
     pub fn add_vsock(&mut self, vhostfd: RawFd, guest_cid: u32) -> Result<()> {
         clear_fd_flags(vhostfd).context("clear flags failed")?;
 
-        let mut vhost_vsock_pci = VhostVsockPci::new(vhostfd, guest_cid);
+        let mut vhost_vsock_pci = VhostVsock::new(vhostfd, guest_cid, self.bus_type());
 
         if !self.config.disable_nesting_checks {
             let nested = match is_running_in_vm() {
