@@ -651,6 +651,154 @@ impl ToQemuParams for DeviceNvdimm {
     }
 }
 
+#[derive(Debug)]
+struct BlockBackend {
+    driver: String,
+    id: String,
+    path: String,
+    aio: String,
+    cache_direct: bool,
+    cache_no_flush: bool,
+    read_only: bool,
+}
+
+impl BlockBackend {
+    fn new(id: &str, path: &str) -> BlockBackend {
+        BlockBackend {
+            driver: "file".to_owned(),
+            id: id.to_owned(),
+            path: path.to_owned(),
+            aio: "threads".to_owned(),
+            cache_direct: true,
+            cache_no_flush: false,
+            read_only: true,
+        }
+    }
+
+    #[allow(dead_code)]
+    fn set_driver(&mut self, driver: &str) -> &mut Self {
+        self.driver = driver.to_owned();
+        self
+    }
+
+    #[allow(dead_code)]
+    fn set_aio(&mut self, aio: &str) -> &mut Self {
+        self.aio = aio.to_owned();
+        self
+    }
+
+    #[allow(dead_code)]
+    fn set_cache_direct(&mut self, cache_direct: bool) -> &mut Self {
+        self.cache_direct = cache_direct;
+        self
+    }
+
+    #[allow(dead_code)]
+    fn set_cache_no_flush(&mut self, cache_no_flush: bool) -> &mut Self {
+        self.cache_no_flush = cache_no_flush;
+        self
+    }
+
+    #[allow(dead_code)]
+    fn set_read_only(&mut self, read_only: bool) -> &mut Self {
+        self.read_only = read_only;
+        self
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for BlockBackend {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push(format!("driver={}", self.driver));
+        params.push(format!("node-name=image-{}", self.id));
+        params.push(format!("filename={}", self.path));
+        params.push(format!("aio={}", self.aio));
+        if self.cache_direct {
+            params.push("cache.direct=on".to_owned());
+        } else {
+            params.push("cache.direct=off".to_owned());
+        }
+        if self.cache_no_flush {
+            params.push("cache.no-flush=on".to_owned());
+        } else {
+            params.push("cache.no-flush=off".to_owned());
+        }
+        if self.read_only {
+            params.push("auto-read-only=on".to_owned());
+        } else {
+            params.push("auto-read-only=off".to_owned());
+        }
+        Ok(vec!["-blockdev".to_owned(), params.join(",")])
+    }
+}
+
+#[derive(Debug)]
+struct DeviceVirtioBlk {
+    bus_type: VirtioBusType,
+    id: String,
+    scsi: bool,
+    config_wce: bool,
+    share_rw: bool,
+}
+
+impl DeviceVirtioBlk {
+    fn new(id: &str, bus_type: VirtioBusType) -> DeviceVirtioBlk {
+        DeviceVirtioBlk {
+            bus_type,
+            id: id.to_owned(),
+            scsi: false,
+            config_wce: false,
+            share_rw: true,
+        }
+    }
+
+    #[allow(dead_code)]
+    fn set_scsi(&mut self, scsi: bool) -> &mut Self {
+        self.scsi = scsi;
+        self
+    }
+
+    #[allow(dead_code)]
+    fn set_config_wce(&mut self, config_wce: bool) -> &mut Self {
+        self.config_wce = config_wce;
+        self
+    }
+
+    #[allow(dead_code)]
+    fn set_share_rw(&mut self, share_rw: bool) -> &mut Self {
+        self.share_rw = share_rw;
+        self
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for DeviceVirtioBlk {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push(format!("virtio-blk-{}", self.bus_type));
+        params.push(format!("drive=image-{}", self.id));
+        if self.scsi {
+            params.push("scsi=on".to_owned());
+        } else {
+            params.push("scsi=off".to_owned());
+        }
+        if self.config_wce {
+            params.push("config-wce=on".to_owned());
+        } else {
+            params.push("config-wce=off".to_owned());
+        }
+        if self.share_rw {
+            params.push("share-rw=on".to_owned());
+        } else {
+            params.push("share-rw=off".to_owned());
+        }
+        params.push(format!("serial=image-{}", self.id));
+
+        Ok(vec!["-device".to_owned(), params.join(",")])
+    }
+}
+
 struct VhostVsock {
     bus_type: VirtioBusType,
     vhostfd: RawFd,
@@ -891,6 +1039,14 @@ impl<'a> QemuCmdLine<'a> {
         let nvdimm = DeviceNvdimm::new("TODO", is_readonly);
         self.devices.push(Box::new(nvdimm));
 
+        Ok(())
+    }
+
+    pub fn add_block_device(&mut self, device_id: &str, path: &str) -> Result<()> {
+        self.devices
+            .push(Box::new(BlockBackend::new(device_id, path)));
+        self.devices
+            .push(Box::new(DeviceVirtioBlk::new(device_id, self.bus_type())));
         Ok(())
     }
 

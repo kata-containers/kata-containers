@@ -14,8 +14,8 @@ use tokio::sync::{Mutex, RwLock};
 use crate::{
     vhost_user_blk::VhostUserBlkDevice, BlockConfig, BlockDevice, HybridVsockDevice, Hypervisor,
     NetworkDevice, ShareFsDevice, VfioDevice, VhostUserConfig, VhostUserNetDevice, VsockDevice,
-    KATA_BLK_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE, KATA_NVDIMM_DEV_TYPE, VIRTIO_BLOCK_MMIO,
-    VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
+    KATA_BLK_DEV_TYPE, KATA_CCW_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE, KATA_NVDIMM_DEV_TYPE,
+    VIRTIO_BLOCK_CCW, VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
 };
 
 use super::{
@@ -446,6 +446,9 @@ impl DeviceManager {
             }
             VIRTIO_BLOCK_PCI => {
                 block_config.driver_option = KATA_BLK_DEV_TYPE.to_string();
+            }
+            VIRTIO_BLOCK_CCW => {
+                block_config.driver_option = KATA_CCW_DEV_TYPE.to_string();
             }
             VIRTIO_PMEM => {
                 block_config.driver_option = KATA_NVDIMM_DEV_TYPE.to_string();
