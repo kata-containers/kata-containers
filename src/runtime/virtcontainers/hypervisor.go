@@ -1083,6 +1083,43 @@ func AvailableGuestProtections() (protections []string) {
 	return []string{gp.String()}
 }
 
+func adjustMaxVCPUs(currentMax uint32) uint32 {
+	availableCPUs := uint32(runtime.NumCPU())
+	maxCPUs := govmm.MaxVCPUs()
+	resultingCPUs := currentMax
+
+	if currentMax >= availableCPUs || resultingCPUs == 0 {
+		resultingCPUs = availableCPUs
+	}
+
+	if resultingCPUs > maxCPUs {
+		return maxCPUs
+	}
+
+	return resultingCPUs
+}
+
+const defaultCPU uint32 = 1
+
+func adjustDefaultVCPUs(max, currentDefault uint32) uint32 {
+	resultingCPUs := currentDefault
+	// available is lesser of available to the process and maximum
+	availableCPUs := uint32(runtime.NumCPU())
+	if availableCPUs > max {
+		availableCPUs = max
+	}
+
+	if resultingCPUs < 0 || resultingCPUs > availableCPUs {
+		return availableCPUs
+	}
+
+	if resultingCPUs == 0 {
+		return defaultCPU
+	}
+
+	return uint32(resultingCPUs)
+}
+
 // hypervisor is the virtcontainers hypervisor interface.
 // The default hypervisor implementation is Qemu.
 type Hypervisor interface {

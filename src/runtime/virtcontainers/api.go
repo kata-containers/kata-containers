@@ -88,6 +88,14 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 		return nil, err
 	}
 
+	// Now that we're in our 'final host cgroup' - let's make sure that the maximum number of
+	// CPUs reflects what is available to the shim.
+	currentMax := s.config.HypervisorConfig.DefaultMaxVCPUs
+	currentDefaultCPU := s.config.HypervisorConfig.NumVCPUs
+
+	s.config.HypervisorConfig.DefaultMaxVCPUs = adjustMaxVCPUs(currentMax)
+	s.config.HypervisorConfig.NumVCPUs = adjustDefaultVCPUs(s.config.HypervisorConfig.DefaultMaxVCPUs, currentDefaultCPU)
+
 	// Start the VM
 	if err = s.startVM(ctx, prestartHookFunc); err != nil {
 		return nil, err
