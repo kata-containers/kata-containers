@@ -10,6 +10,7 @@ use crate::{kernel_param::KernelParams, HypervisorConfig, NetworkConfig};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_types::config::hypervisor::NetworkInfo;
+use std::fmt::Display;
 use std::fs::{read_to_string, File};
 use std::os::fd::AsRawFd;
 use std::os::unix::io::RawFd;
@@ -42,6 +43,27 @@ trait ToQemuParams: Send + Sync {
     // nothing but UTF-8 (in fact probably just ASCII) switching to OsStrings
     // now seems pointless.
     async fn qemu_params(&self) -> Result<Vec<String>>;
+}
+
+#[derive(Debug)]
+enum VirtioBusType {
+    Pci,
+    Ccw,
+}
+
+impl VirtioBusType {
+    fn as_str(&self) -> &str {
+        match self {
+            VirtioBusType::Pci => "pci",
+            VirtioBusType::Ccw => "ccw",
+        }
+    }
+}
+
+impl Display for VirtioBusType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
 }
 
 #[derive(Debug)]
@@ -263,6 +285,7 @@ struct Machine {
     nvdimm: bool,
 
     is_nvdimm_supported: bool,
+    memory_backend: Option<String>,
 }
 
 impl Machine {
@@ -288,6 +311,7 @@ impl Machine {
             options: config.machine_info.machine_accelerators.clone(),
             nvdimm: false,
             is_nvdimm_supported,
+            memory_backend: None,
         }
     }
 
@@ -296,6 +320,11 @@ impl Machine {
             warn!(sl!(), "called to enable nvdimm but nvdimm is not supported");
         }
         self.nvdimm = is_on && self.is_nvdimm_supported;
+        self
+    }
+
+    fn set_memory_backend(&mut self, mem_backend: &str) -> &mut Self {
+        self.memory_backend = Some(mem_backend.to_owned());
         self
     }
 }
@@ -311,6 +340,9 @@ impl ToQemuParams for Machine {
         }
         if self.nvdimm {
             params.push("nvdimm=on".to_owned());
+        }
+        if let Some(mem_backend) = &self.memory_backend {
+            params.push(format!("memory-backend={}", mem_backend));
         }
         Ok(vec!["-machine".to_owned(), params.join(",")])
     }
@@ -496,13 +528,11 @@ impl ChardevSocket {
         }
     }
 
-    #[allow(dead_code)]
     fn set_server(&mut self, server: bool) -> &mut Self {
         self.server = server;
         self
     }
 
-    #[allow(dead_code)]
     fn set_wait(&mut self, wait: bool) -> &mut Self {
         self.wait = wait;
         self
@@ -524,6 +554,8 @@ impl ToQemuParams for ChardevSocket {
             params.push("server=on".to_owned());
             if self.wait {
                 params.push("wait=on".to_owned());
+            } else {
+                params.push("wait=off".to_owned());
             }
         }
         params.append(&mut self.protocol_options.qemu_params().await?);
@@ -532,7 +564,8 @@ impl ToQemuParams for ChardevSocket {
 }
 
 #[derive(Debug)]
-struct DeviceVhostUserFsPci {
+struct DeviceVhostUserFs {
+    bus_type: VirtioBusType,
     chardev: String,
     tag: String,
     queue_size: u64,
@@ -540,9 +573,10 @@ struct DeviceVhostUserFsPci {
     iommu_platform: bool,
 }
 
-impl DeviceVhostUserFsPci {
-    fn new(chardev: &str, tag: &str) -> DeviceVhostUserFsPci {
-        DeviceVhostUserFsPci {
+impl DeviceVhostUserFs {
+    fn new(chardev: &str, tag: &str, bus_type: VirtioBusType) -> DeviceVhostUserFs {
+        DeviceVhostUserFs {
+            bus_type,
             chardev: chardev.to_owned(),
             tag: tag.to_owned(),
             queue_size: 0,
@@ -559,7 +593,9 @@ impl DeviceVhostUserFsPci {
             // throughout runtime-rs
             warn!(
                 sl!(),
-                "bad vhost-user-fs-pci queue_size (must be power of two): {}, ignoring", queue_size
+                "bad vhost-user-fs-{} queue_size (must be power of two): {}, ignoring",
+                self.bus_type,
+                queue_size
             );
         }
         self
@@ -578,10 +614,10 @@ impl DeviceVhostUserFsPci {
 }
 
 #[async_trait]
-impl ToQemuParams for DeviceVhostUserFsPci {
+impl ToQemuParams for DeviceVhostUserFs {
     async fn qemu_params(&self) -> Result<Vec<String>> {
         let mut params = Vec::new();
-        params.push("vhost-user-fs-pci".to_owned());
+        params.push(format!("vhost-user-fs-{}", self.bus_type));
         params.push(format!("chardev={}", self.chardev));
         params.push(format!("tag={}", self.tag));
         if self.queue_size != 0 {
@@ -625,15 +661,165 @@ impl ToQemuParams for DeviceNvdimm {
     }
 }
 
-struct VhostVsockPci {
+#[derive(Debug)]
+struct BlockBackend {
+    driver: String,
+    id: String,
+    path: String,
+    aio: String,
+    cache_direct: bool,
+    cache_no_flush: bool,
+    read_only: bool,
+}
+
+impl BlockBackend {
+    fn new(id: &str, path: &str) -> BlockBackend {
+        BlockBackend {
+            driver: "file".to_owned(),
+            id: id.to_owned(),
+            path: path.to_owned(),
+            aio: "threads".to_owned(),
+            cache_direct: true,
+            cache_no_flush: false,
+            read_only: true,
+        }
+    }
+
+    #[allow(dead_code)]
+    fn set_driver(&mut self, driver: &str) -> &mut Self {
+        self.driver = driver.to_owned();
+        self
+    }
+
+    #[allow(dead_code)]
+    fn set_aio(&mut self, aio: &str) -> &mut Self {
+        self.aio = aio.to_owned();
+        self
+    }
+
+    #[allow(dead_code)]
+    fn set_cache_direct(&mut self, cache_direct: bool) -> &mut Self {
+        self.cache_direct = cache_direct;
+        self
+    }
+
+    #[allow(dead_code)]
+    fn set_cache_no_flush(&mut self, cache_no_flush: bool) -> &mut Self {
+        self.cache_no_flush = cache_no_flush;
+        self
+    }
+
+    #[allow(dead_code)]
+    fn set_read_only(&mut self, read_only: bool) -> &mut Self {
+        self.read_only = read_only;
+        self
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for BlockBackend {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push(format!("driver={}", self.driver));
+        params.push(format!("node-name=image-{}", self.id));
+        params.push(format!("filename={}", self.path));
+        params.push(format!("aio={}", self.aio));
+        if self.cache_direct {
+            params.push("cache.direct=on".to_owned());
+        } else {
+            params.push("cache.direct=off".to_owned());
+        }
+        if self.cache_no_flush {
+            params.push("cache.no-flush=on".to_owned());
+        } else {
+            params.push("cache.no-flush=off".to_owned());
+        }
+        if self.read_only {
+            params.push("auto-read-only=on".to_owned());
+        } else {
+            params.push("auto-read-only=off".to_owned());
+        }
+        Ok(vec!["-blockdev".to_owned(), params.join(",")])
+    }
+}
+
+#[derive(Debug)]
+struct DeviceVirtioBlk {
+    bus_type: VirtioBusType,
+    id: String,
+    scsi: bool,
+    config_wce: bool,
+    share_rw: bool,
+}
+
+impl DeviceVirtioBlk {
+    fn new(id: &str, bus_type: VirtioBusType) -> DeviceVirtioBlk {
+        DeviceVirtioBlk {
+            bus_type,
+            id: id.to_owned(),
+            scsi: false,
+            config_wce: false,
+            share_rw: true,
+        }
+    }
+
+    #[allow(dead_code)]
+    fn set_scsi(&mut self, scsi: bool) -> &mut Self {
+        self.scsi = scsi;
+        self
+    }
+
+    #[allow(dead_code)]
+    fn set_config_wce(&mut self, config_wce: bool) -> &mut Self {
+        self.config_wce = config_wce;
+        self
+    }
+
+    #[allow(dead_code)]
+    fn set_share_rw(&mut self, share_rw: bool) -> &mut Self {
+        self.share_rw = share_rw;
+        self
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for DeviceVirtioBlk {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push(format!("virtio-blk-{}", self.bus_type));
+        params.push(format!("drive=image-{}", self.id));
+        if self.scsi {
+            params.push("scsi=on".to_owned());
+        } else {
+            params.push("scsi=off".to_owned());
+        }
+        if self.config_wce {
+            params.push("config-wce=on".to_owned());
+        } else {
+            params.push("config-wce=off".to_owned());
+        }
+        if self.share_rw {
+            params.push("share-rw=on".to_owned());
+        } else {
+            params.push("share-rw=off".to_owned());
+        }
+        params.push(format!("serial=image-{}", self.id));
+
+        Ok(vec!["-device".to_owned(), params.join(",")])
+    }
+}
+
+struct VhostVsock {
+    bus_type: VirtioBusType,
     vhostfd: RawFd,
     guest_cid: u32,
     disable_modern: bool,
 }
 
-impl VhostVsockPci {
-    fn new(vhostfd: RawFd, guest_cid: u32) -> VhostVsockPci {
-        VhostVsockPci {
+impl VhostVsock {
+    fn new(vhostfd: RawFd, guest_cid: u32, bus_type: VirtioBusType) -> VhostVsock {
+        VhostVsock {
+            bus_type,
             vhostfd,
             guest_cid,
             disable_modern: false,
@@ -647,10 +833,10 @@ impl VhostVsockPci {
 }
 
 #[async_trait]
-impl ToQemuParams for VhostVsockPci {
+impl ToQemuParams for VhostVsock {
     async fn qemu_params(&self) -> Result<Vec<String>> {
         let mut params = Vec::new();
-        params.push("vhost-vsock-pci".to_owned());
+        params.push(format!("vhost-vsock-{}", self.bus_type));
         if self.disable_modern {
             params.push("disable-modern=true".to_owned());
         }
@@ -725,6 +911,57 @@ impl ToQemuParams for NetDevice {
     }
 }
 
+#[derive(Debug)]
+struct DeviceVirtioSerial {
+    id: String,
+    bus_type: VirtioBusType,
+}
+
+impl DeviceVirtioSerial {
+    fn new(id: &str, bus_type: VirtioBusType) -> DeviceVirtioSerial {
+        DeviceVirtioSerial {
+            id: id.to_owned(),
+            bus_type,
+        }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for DeviceVirtioSerial {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push(format!("virtio-serial-{}", self.bus_type));
+        params.push(format!("id={}", self.id));
+        Ok(vec!["-device".to_owned(), params.join(",")])
+    }
+}
+
+#[derive(Debug)]
+struct DeviceVirtconsole {
+    id: String,
+    chardev: String,
+}
+
+impl DeviceVirtconsole {
+    fn new(id: &str, chardev: &str) -> DeviceVirtconsole {
+        DeviceVirtconsole {
+            id: id.to_owned(),
+            chardev: chardev.to_owned(),
+        }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for DeviceVirtconsole {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push("virtconsole".to_owned());
+        params.push(format!("id={}", self.id));
+        params.push(format!("chardev={}", self.chardev));
+        Ok(vec!["-device".to_owned(), params.join(",")])
+    }
+}
+
 fn is_running_in_vm() -> Result<bool> {
     let res = read_to_string("/proc/cpuinfo")?
         .lines()
@@ -767,6 +1004,14 @@ impl<'a> QemuCmdLine<'a> {
         })
     }
 
+    fn bus_type(&self) -> VirtioBusType {
+        if self.config.machine_info.machine_type.contains("-ccw-") {
+            VirtioBusType::Ccw
+        } else {
+            VirtioBusType::Pci
+        }
+    }
+
     pub fn add_virtiofs_share(
         &mut self,
         virtiofsd_socket_path: &str,
@@ -783,7 +1028,7 @@ impl<'a> QemuCmdLine<'a> {
 
         self.devices.push(Box::new(virtiofsd_socket_chardev));
 
-        let mut virtiofs_device = DeviceVhostUserFsPci::new(chardev_name, mount_tag);
+        let mut virtiofs_device = DeviceVhostUserFs::new(chardev_name, mount_tag, self.bus_type());
         virtiofs_device.set_queue_size(queue_size);
         if self.config.device_info.enable_iommu_platform {
             virtiofs_device.set_iommu_platform(true);
@@ -799,14 +1044,21 @@ impl<'a> QemuCmdLine<'a> {
         //self.devices.push(Box::new(mem_file));
         self.memory.set_memory_backend_file(&mem_file);
 
-        self.machine.set_nvdimm(true);
-        self.devices.push(Box::new(NumaNode::new(&mem_file.id)));
+        match self.bus_type() {
+            VirtioBusType::Pci => {
+                self.machine.set_nvdimm(true);
+                self.devices.push(Box::new(NumaNode::new(&mem_file.id)));
+            }
+            VirtioBusType::Ccw => {
+                self.machine.set_memory_backend(&mem_file.id);
+            }
+        }
     }
 
     pub fn add_vsock(&mut self, vhostfd: RawFd, guest_cid: u32) -> Result<()> {
         clear_fd_flags(vhostfd).context("clear flags failed")?;
 
-        let mut vhost_vsock_pci = VhostVsockPci::new(vhostfd, guest_cid);
+        let mut vhost_vsock_pci = VhostVsock::new(vhostfd, guest_cid, self.bus_type());
 
         if !self.config.disable_nesting_checks {
             let nested = match is_running_in_vm() {
@@ -858,6 +1110,14 @@ impl<'a> QemuCmdLine<'a> {
         Ok(())
     }
 
+    pub fn add_block_device(&mut self, device_id: &str, path: &str) -> Result<()> {
+        self.devices
+            .push(Box::new(BlockBackend::new(device_id, path)));
+        self.devices
+            .push(Box::new(DeviceVirtioBlk::new(device_id, self.bus_type())));
+        Ok(())
+    }
+
     #[allow(dead_code)]
     pub fn add_serial_console(&mut self, character_device_file_path: &str) {
         let serial = Serial::new(character_device_file_path);
@@ -887,6 +1147,23 @@ impl<'a> QemuCmdLine<'a> {
         let fds: Vec<File> = dev_files.into_iter().flatten().collect();
 
         Ok(fds)
+    }
+
+    pub fn add_console(&mut self, console_socket_path: &str) {
+        let serial_dev = DeviceVirtioSerial::new("serial0", self.bus_type());
+        self.devices.push(Box::new(serial_dev));
+
+        let chardev_name = "charconsole0";
+        let console_device = DeviceVirtconsole::new("console0", chardev_name);
+        self.devices.push(Box::new(console_device));
+
+        let mut console_socket_chardev = ChardevSocket::new(chardev_name);
+        console_socket_chardev.set_socket_opts(ProtocolOptions::Unix(UnixSocketOpts {
+            path: console_socket_path.to_owned(),
+        }));
+        console_socket_chardev.set_server(true);
+        console_socket_chardev.set_wait(false);
+        self.devices.push(Box::new(console_socket_chardev));
     }
 
     pub async fn build(&self) -> Result<Vec<String>> {

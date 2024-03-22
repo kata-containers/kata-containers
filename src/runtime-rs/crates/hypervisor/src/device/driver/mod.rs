@@ -20,8 +20,8 @@ pub use vfio::{
 pub use vhost_user::{VhostUserConfig, VhostUserDevice, VhostUserType};
 pub use vhost_user_net::VhostUserNetDevice;
 pub use virtio_blk::{
-    BlockConfig, BlockDevice, KATA_BLK_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE, KATA_NVDIMM_DEV_TYPE,
-    VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
+    BlockConfig, BlockDevice, KATA_BLK_DEV_TYPE, KATA_CCW_DEV_TYPE, KATA_MMIO_BLK_DEV_TYPE,
+    KATA_NVDIMM_DEV_TYPE, VIRTIO_BLOCK_CCW, VIRTIO_BLOCK_MMIO, VIRTIO_BLOCK_PCI, VIRTIO_PMEM,
 };
 pub use virtio_fs::{
     ShareFsConfig, ShareFsDevice, ShareFsMountConfig, ShareFsMountOperation, ShareFsMountType,
