@@ -86,6 +86,7 @@ type customRequestTimeoutKeyType struct{}
 
 var (
 	checkRequestTimeout              = 30 * time.Second
+	createContainerRequestTimeout    = 60 * time.Second
 	defaultRequestTimeout            = 60 * time.Second
 	remoteRequestTimeout             = 300 * time.Second
 	customRequestTimeoutKey          = customRequestTimeoutKeyType(struct{}{})
@@ -2207,6 +2208,8 @@ func (k *kataAgent) getReqContext(ctx context.Context, reqName string) (newCtx c
 		// Wait and GetOOMEvent have no timeout
 	case grpcCheckRequest:
 		newCtx, cancel = context.WithTimeout(ctx, checkRequestTimeout)
+	case grpcCreateContainerRequest:
+		newCtx, cancel = context.WithTimeout(ctx, createContainerRequestTimeout)
 	default:
 		var requestTimeout = defaultRequestTimeout
 
