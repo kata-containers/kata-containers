@@ -13,6 +13,7 @@ setup() {
     setup_common 
     unencrypted_image_1="quay.io/sjenning/nginx:1.15-alpine"
     unencrypted_image_2="quay.io/prometheus/busybox:latest"
+    large_image="quay.io/confidential-containers/test-images:largeimage"
 }
 
 @test "Test we can pull an unencrypted image outside the guest with runc and then inside the guest successfully" {
@@ -56,6 +57,43 @@ setup() {
     echo "sandbox_id is: $sandbox_id"
     # With annotation for nydus, only rootfs for pause container can be found on host
     assert_rootfs_count "$node" "$sandbox_id" "1"
+}
+
+@test "Test we can pull a large image inside the guest" {
+    [[ " ${SUPPORTED_NON_TEE_HYPERVISORS} " =~ " ${KATA_HYPERVISOR} " ]] && skip "Test not supported for ${KATA_HYPERVISOR}."
+    skip "This test requires large memory, which the encrypted memory is typically small and valuable in TEE. \
+          The test will be skiped until https://github.com/kata-containers/kata-containers/issues/8142 is addressed."
+    kata_pod_with_nydus_config="$(new_pod_config "$large_image" "kata-${KATA_HYPERVISOR}")"
+    set_node "$kata_pod_with_nydus_config" "$node"
+    set_container_command "$kata_pod_with_nydus_config" "0" "sleep" "30"
+
+    # Set annotation to pull large image in guest
+    set_metadata_annotation "$kata_pod_with_nydus_config" \
+        "io.containerd.cri.runtime-handler" \
+        "kata-${KATA_HYPERVISOR}"
+
+    # For debug sake
+    echo "Pod $kata_pod_with_nydus_config file:"
+    cat $kata_pod_with_nydus_config
+
+    # The pod should be failed because the default timeout of CreateContainerRequest is 60s 
+    assert_pod_fail "$kata_pod_with_nydus_config"
+    assert_logs_contain "$node" kata "$node_start_time" \
+		'context deadline exceeded'
+
+    kubectl delete -f $kata_pod_with_nydus_config
+
+    # Set CreateContainerRequest timeout in the annotation to pull large image in guest
+    create_container_timeout=300
+    set_metadata_annotation "$kata_pod_with_nydus_config" \
+        "io.katacontainers.config.runtime.create_container_timeout" \
+        "${create_container_timeout}"
+
+    # For debug sake
+    echo "Pod $kata_pod_with_nydus_config file:"
+    cat $kata_pod_with_nydus_config
+
+    k8s_create_pod "$kata_pod_with_nydus_config"
 }
 
 @test "Test we can pull an unencrypted image inside the guest twice in a row and then outside the guest successfully" {
