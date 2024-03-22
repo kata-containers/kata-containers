@@ -1105,6 +1105,19 @@ fn is_running_in_vm() -> Result<bool> {
     Ok(res)
 }
 
+fn should_disable_modern() -> bool {
+    match is_running_in_vm() {
+        Ok(retval) => retval,
+        Err(err) => {
+            info!(
+                sl!(),
+                "unable to check if running in VM, assuming not: {}", err
+            );
+            false
+        }
+    }
+}
+
 pub struct QemuCmdLine<'a> {
     id: String,
     config: &'a HypervisorConfig,
@@ -1191,20 +1204,8 @@ impl<'a> QemuCmdLine<'a> {
 
         let mut vhost_vsock_pci = VhostVsock::new(vhostfd, guest_cid, self.bus_type());
 
-        if !self.config.disable_nesting_checks {
-            let nested = match is_running_in_vm() {
-                Ok(retval) => retval,
-                Err(err) => {
-                    info!(
-                        sl!(),
-                        "unable to check if running in VM, assuming not: {}", err
-                    );
-                    false
-                }
-            };
-            if nested {
-                vhost_vsock_pci.set_disable_modern(true);
-            }
+        if !self.config.disable_nesting_checks && should_disable_modern() {
+            vhost_vsock_pci.set_disable_modern(true);
         }
 
         self.devices.push(Box::new(vhost_vsock_pci));
@@ -1276,17 +1277,7 @@ impl<'a> QemuCmdLine<'a> {
         let mut virtio_net_device =
             DeviceVirtioNet::new(&netdev.id, config.guest_mac.clone().unwrap());
 
-        let nested = match is_running_in_vm() {
-            Ok(retval) => retval,
-            Err(err) => {
-                info!(
-                    sl!(),
-                    "unable to check if running in VM, assuming not: {}", err
-                );
-                false
-            }
-        };
-        if nested {
+        if should_disable_modern() {
             virtio_net_device.set_disable_modern(true);
         }
         if self.config.network_info.network_queues > 1 {
