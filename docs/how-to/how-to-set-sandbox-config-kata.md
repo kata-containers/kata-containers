@@ -27,6 +27,7 @@ There are several kinds of Kata configurations and they are listed below.
 | `io.katacontainers.config.runtime.internetworking_model` | string| determines how the VM should be connected to the container network interface. Valid values are `macvtap`, `tcfilter` and `none` |
 | `io.katacontainers.config.runtime.sandbox_cgroup_only`| `boolean` | determines if Kata processes are managed only in sandbox cgroup |
 | `io.katacontainers.config.runtime.enable_pprof` | `boolean` | enables Golang `pprof` for `containerd-shim-kata-v2` process |
+| `io.katacontainers.config.runtime.create_container_timeout` | `uint64` | the timeout for create a container in `seconds`, default is `60` |
 
 ## Agent Options
 | Key | Value Type | Comments |
