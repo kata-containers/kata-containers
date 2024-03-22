@@ -1262,23 +1262,40 @@ impl<'a> QemuCmdLine<'a> {
     pub fn add_network_device(
         &mut self,
         config: &NetworkConfig,
-        network_info: &NetworkInfo,
+        _network_info: &NetworkInfo,
     ) -> Result<Vec<File>> {
-        let disable_vhost_net = network_info.disable_vhost_net;
-        let queues = network_info.network_queues;
-        let if_name = config.host_dev_name.as_str();
+        let mut netdev = Netdev::new(
+            &format!("network-{}", &config.index),
+            &config.host_dev_name,
+            self.config.network_info.network_queues,
+        )?;
+        if self.config.network_info.disable_vhost_net {
+            netdev.set_disable_vhost_net(true);
+        }
 
-        let (tun_files, vhost_files) = generate_netdev_fds(if_name, queues)?;
-        let tun_fds: Vec<i32> = tun_files.iter().map(|dev| dev.as_raw_fd()).collect();
-        let vhost_fds: Vec<i32> = vhost_files.iter().map(|dev| dev.as_raw_fd()).collect();
+        let mut virtio_net_device =
+            DeviceVirtioNet::new(&netdev.id, config.guest_mac.clone().unwrap());
 
-        let net_device = NetDevice::new(config, disable_vhost_net, tun_fds, vhost_fds);
-        self.devices.push(Box::new(net_device));
+        let nested = match is_running_in_vm() {
+            Ok(retval) => retval,
+            Err(err) => {
+                info!(
+                    sl!(),
+                    "unable to check if running in VM, assuming not: {}", err
+                );
+                false
+            }
+        };
+        if nested {
+            virtio_net_device.set_disable_modern(true);
+        }
+        if self.config.network_info.network_queues > 1 {
+            virtio_net_device.set_num_queues(self.config.network_info.network_queues);
+        }
 
-        let dev_files = vec![tun_files, vhost_files];
-        let fds: Vec<File> = dev_files.into_iter().flatten().collect();
-
-        Ok(fds)
+        self.devices.push(Box::new(netdev));
+        self.devices.push(Box::new(virtio_net_device));
+        Ok(vec![])
     }
 
     pub fn add_console(&mut self, console_socket_path: &str) {
