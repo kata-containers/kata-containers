@@ -5,11 +5,10 @@
 
 use super::network::{generate_netdev_fds, NetDevice};
 use crate::utils::clear_cloexec;
-use crate::{kernel_param::KernelParams, Address, HypervisorConfig, NetworkConfig};
+use crate::{kernel_param::KernelParams, Address, HypervisorConfig};
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use kata_types::config::hypervisor::NetworkInfo;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fs::{read_to_string, File};
@@ -1262,20 +1261,20 @@ impl<'a> QemuCmdLine<'a> {
 
     pub fn add_network_device(
         &mut self,
-        config: &NetworkConfig,
-        _network_info: &NetworkInfo,
-    ) -> Result<Vec<File>> {
+        dev_index: u64,
+        host_dev_name: &str,
+        guest_mac: Address,
+    ) -> Result<()> {
         let mut netdev = Netdev::new(
-            &format!("network-{}", &config.index),
-            &config.host_dev_name,
+            &format!("network-{}", dev_index),
+            host_dev_name,
             self.config.network_info.network_queues,
         )?;
         if self.config.network_info.disable_vhost_net {
             netdev.set_disable_vhost_net(true);
         }
 
-        let mut virtio_net_device =
-            DeviceVirtioNet::new(&netdev.id, config.guest_mac.clone().unwrap());
+        let mut virtio_net_device = DeviceVirtioNet::new(&netdev.id, guest_mac);
 
         if should_disable_modern() {
             virtio_net_device.set_disable_modern(true);
@@ -1286,7 +1285,7 @@ impl<'a> QemuCmdLine<'a> {
 
         self.devices.push(Box::new(netdev));
         self.devices.push(Box::new(virtio_net_device));
-        Ok(vec![])
+        Ok(())
     }
 
     pub fn add_console(&mut self, console_socket_path: &str) {

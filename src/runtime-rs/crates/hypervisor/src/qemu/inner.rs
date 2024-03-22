@@ -112,13 +112,14 @@ impl QemuInner {
                     }
                 }
                 DeviceType::Network(network) => {
-                    let network_info = &self.config.network_info;
-
                     // we need ensure add_network_device happens in netns.
                     let _netns_guard = NetnsGuard::new(&netns).context("new netns guard")?;
 
-                    _fds_for_qemu
-                        .append(&mut cmdline.add_network_device(&network.config, network_info)?);
+                    cmdline.add_network_device(
+                        network.config.index,
+                        &network.config.host_dev_name,
+                        network.config.guest_mac.clone().unwrap(),
+                    )?;
                 }
                 _ => info!(sl!(), "qemu cmdline: unsupported device: {:?}", device),
             }
