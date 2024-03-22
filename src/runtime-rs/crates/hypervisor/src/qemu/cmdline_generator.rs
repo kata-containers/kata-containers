@@ -5,11 +5,12 @@
 
 use super::network::{generate_netdev_fds, NetDevice};
 use crate::utils::clear_cloexec;
-use crate::{kernel_param::KernelParams, HypervisorConfig, NetworkConfig};
+use crate::{kernel_param::KernelParams, Address, HypervisorConfig, NetworkConfig};
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_types::config::hypervisor::NetworkInfo;
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::fs::{read_to_string, File};
 use std::os::fd::AsRawFd;
@@ -889,6 +890,136 @@ impl Serial {
 impl ToQemuParams for Serial {
     async fn qemu_params(&self) -> Result<Vec<String>> {
         Ok(vec!["-serial".to_owned(), self.character_device.clone()])
+    }
+}
+
+fn format_fds(files: &[File]) -> String {
+    files
+        .iter()
+        .map(|file| file.as_raw_fd().to_string())
+        .collect::<Vec<String>>()
+        .join(":")
+}
+
+#[derive(Debug)]
+struct Netdev {
+    id: String,
+
+    // File descriptors for vhost multi-queue support.
+    // {
+    //      queue_fds: Vec<File>,
+    //      vhost_fds: Vec<File>,
+    // }
+    fds: HashMap<String, Vec<File>>,
+
+    // disable_vhost_net disables virtio device emulation from the host kernel instead of from qemu.
+    disable_vhost_net: bool,
+}
+
+impl Netdev {
+    fn new(id: &str, host_if_name: &str, num_queues: u32) -> Result<Netdev> {
+        let (tun_files, vhost_files) = generate_netdev_fds(host_if_name, num_queues)?;
+        let fds = HashMap::from([
+            ("fds".to_owned(), tun_files),
+            ("vhostfds".to_owned(), vhost_files),
+        ]);
+        for file in fds.values().flatten() {
+            clear_cloexec(file.as_raw_fd()).context("clearing O_CLOEXEC failed")?;
+        }
+
+        Ok(Netdev {
+            id: id.to_owned(),
+            fds,
+            disable_vhost_net: false,
+        })
+    }
+
+    fn set_disable_vhost_net(&mut self, disable_vhost_net: bool) -> &mut Self {
+        self.disable_vhost_net = disable_vhost_net;
+        self
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for Netdev {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params: Vec<String> = Vec::new();
+        params.push("tap".to_owned());
+        params.push(format!("id={}", self.id));
+
+        if !self.disable_vhost_net {
+            params.push("vhost=on".to_owned());
+            if let Some(vhost_fds) = self.fds.get("vhostfds") {
+                params.push(format!("vhostfds={}", format_fds(vhost_fds)));
+            }
+        }
+
+        if let Some(tuntap_fds) = self.fds.get("fds") {
+            params.push(format!("fds={}", format_fds(tuntap_fds)));
+        }
+
+        Ok(vec!["-netdev".to_owned(), params.join(",")])
+    }
+}
+
+#[derive(Debug)]
+pub struct DeviceVirtioNet {
+    // driver is the qemu device driver
+    device_driver: String,
+
+    // id is the corresponding backend net device identifier.
+    netdev_id: String,
+
+    // mac_address is the guest-side networking device interface MAC address.
+    mac_address: Address,
+
+    // disable_modern prevents qemu from relying on fast MMIO.
+    disable_modern: bool,
+
+    num_queues: u32,
+}
+
+impl DeviceVirtioNet {
+    fn new(netdev_id: &str, mac_address: Address) -> DeviceVirtioNet {
+        DeviceVirtioNet {
+            device_driver: "virtio-net-pci".to_owned(),
+            netdev_id: netdev_id.to_owned(),
+            mac_address,
+            disable_modern: false,
+            num_queues: 1,
+        }
+    }
+
+    fn set_disable_modern(&mut self, disable_modern: bool) -> &mut Self {
+        self.disable_modern = disable_modern;
+        self
+    }
+
+    fn set_num_queues(&mut self, num_queues: u32) -> &mut Self {
+        self.num_queues = num_queues;
+        self
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for DeviceVirtioNet {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params: Vec<String> = Vec::new();
+
+        //params.push(format!("driver={}", &self.device_driver.to_string()));
+        params.push(self.device_driver.clone());
+        params.push(format!("netdev={}", &self.netdev_id));
+
+        params.push(format!("mac={}", self.mac_address.to_string()));
+
+        if self.disable_modern {
+            params.push("disable-modern=true".to_owned());
+        }
+
+        params.push("mq=on".to_owned());
+        params.push(format!("vectors={}", 2 * self.num_queues + 2));
+
+        Ok(vec!["-device".to_owned(), params.join(",")])
     }
 }
 
