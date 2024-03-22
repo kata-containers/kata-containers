@@ -285,6 +285,7 @@ struct Machine {
     nvdimm: bool,
 
     is_nvdimm_supported: bool,
+    memory_backend: Option<String>,
 }
 
 impl Machine {
@@ -310,6 +311,7 @@ impl Machine {
             options: config.machine_info.machine_accelerators.clone(),
             nvdimm: false,
             is_nvdimm_supported,
+            memory_backend: None,
         }
     }
 
@@ -318,6 +320,11 @@ impl Machine {
             warn!(sl!(), "called to enable nvdimm but nvdimm is not supported");
         }
         self.nvdimm = is_on && self.is_nvdimm_supported;
+        self
+    }
+
+    fn set_memory_backend(&mut self, mem_backend: &str) -> &mut Self {
+        self.memory_backend = Some(mem_backend.to_owned());
         self
     }
 }
@@ -333,6 +340,9 @@ impl ToQemuParams for Machine {
         }
         if self.nvdimm {
             params.push("nvdimm=on".to_owned());
+        }
+        if let Some(mem_backend) = &self.memory_backend {
+            params.push(format!("memory-backend={}", mem_backend));
         }
         Ok(vec!["-machine".to_owned(), params.join(",")])
     }
@@ -983,8 +993,15 @@ impl<'a> QemuCmdLine<'a> {
         //self.devices.push(Box::new(mem_file));
         self.memory.set_memory_backend_file(&mem_file);
 
-        self.machine.set_nvdimm(true);
-        self.devices.push(Box::new(NumaNode::new(&mem_file.id)));
+        match self.bus_type() {
+            VirtioBusType::Pci => {
+                self.machine.set_nvdimm(true);
+                self.devices.push(Box::new(NumaNode::new(&mem_file.id)));
+            }
+            VirtioBusType::Ccw => {
+                self.machine.set_memory_backend(&mem_file.id);
+            }
+        }
     }
 
     pub fn add_vsock(&mut self, vhostfd: RawFd, guest_cid: u32) -> Result<()> {
