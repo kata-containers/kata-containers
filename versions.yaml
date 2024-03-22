@@ -307,7 +307,7 @@ externals:
   nydus-snapshotter:
     description: "Snapshotter for Nydus image acceleration service"
     url: "https://github.com/containerd/nydus-snapshotter"
-    version: "v0.13.8"
+    version: "v0.13.11"
 
   open-policy-agent:
     description: "Open Policy Agent"
