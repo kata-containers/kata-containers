@@ -26,7 +26,6 @@ EXTRA_OPTS="${EXTRA_OPTS:-""}"
 
 [ "${CROSS_BUILD}" == "true" ] && container_image_bk="${container_image}" && container_image="${container_image}-cross-build"
 if [ "${MEASURED_ROOTFS}" == "yes" ]; then
-	EXTRA_OPTS+=" DEFSERVICEOFFLOAD=true"
 	info "Enable rootfs measurement config"
 
 	root_hash_file="${repo_root_dir}/tools/osbuilder/root_hash.txt"
