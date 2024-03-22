@@ -271,6 +271,9 @@ const (
 	// VfioMode is a sandbox annotation to specify how attached VFIO devices should be treated
 	// Overrides the runtime.vfio_mode parameter in the global configuration.toml
 	VfioMode = kataAnnotRuntimePrefix + "vfio_mode"
+
+	// CreateContainerTimeout is a sandbox annotaion that sets the create container timeout.
+	CreateContainerTimeout = kataAnnotRuntimePrefix + "create_container_timeout"
 )
 
 // Agent related annotations
