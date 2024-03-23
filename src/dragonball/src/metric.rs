@@ -10,6 +10,8 @@ use dbs_legacy_devices::I8042DeviceMetrics;
 #[cfg(target_arch = "aarch64")]
 use dbs_legacy_devices::RTCDeviceMetrics;
 use dbs_legacy_devices::SerialDeviceMetrics;
+#[cfg(feature = "dbs-upcall")]
+use dbs_upcall::UpcallClientMetrics;
 use dbs_utils::metric::SharedIncMetric;
 #[cfg(feature = "virtio-balloon")]
 use dbs_virtio_devices::balloon::BalloonDeviceMetrics;
@@ -80,6 +82,9 @@ pub struct DragonballMetrics {
     #[cfg(feature = "virtio-balloon")]
     /// Metrics related to balloon device.
     pub balloon: HashMap<String, Arc<BalloonDeviceMetrics>>,
+    #[cfg(feature = "dbs-upcall")]
+    /// Metrics related to upcall client.
+    pub upcall: Arc<UpcallClientMetrics>,
 }
 
 #[cfg(test)]
