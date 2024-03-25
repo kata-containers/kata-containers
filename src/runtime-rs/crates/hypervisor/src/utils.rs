@@ -6,7 +6,7 @@
 
 use std::{
     collections::HashSet,
-    fs::File,
+    fs::{File, OpenOptions},
     os::fd::{AsRawFd, RawFd},
 };
 
@@ -103,4 +103,56 @@ pub fn open_named_tuntap(if_name: &str, queues: u32) -> Result<Vec<File>> {
     }
 
     Ok(tap_files)
+}
+
+// /dev/tap$(cat /sys/class/net/macvtap1/ifindex)
+// for example: /dev/tap2381
+#[allow(dead_code)]
+pub fn create_macvtap_fds(ifindex: u32, queues: u32) -> Result<Vec<File>> {
+    let macvtap = format!("/dev/tap{}", ifindex);
+    create_fds(macvtap.as_str(), queues as usize)
+}
+
+pub fn create_vhost_net_fds(queues: u32) -> Result<Vec<File>> {
+    let vhost_dev = "/dev/vhost-net";
+    let num_fds = if queues > 1 { queues as usize } else { 1_usize };
+
+    create_fds(vhost_dev, num_fds)
+}
+
+// For example: if num_fds = 3; fds = {0xc000012028, 0xc000012030, 0xc000012038}
+fn create_fds(device: &str, num_fds: usize) -> Result<Vec<File>> {
+    let mut fds: Vec<File> = Vec::with_capacity(num_fds);
+
+    for i in 0..num_fds {
+        match OpenOptions::new().read(true).write(true).open(device) {
+            Ok(f) => {
+                fds.push(f);
+            }
+            Err(e) => {
+                fds.clear();
+                return Err(anyhow!(
+                    "It failed with error {:?} when opened the {:?} device.",
+                    e,
+                    i
+                ));
+            }
+        };
+    }
+
+    Ok(fds)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::create_fds;
+
+    #[test]
+    fn test_ctreate_fds() {
+        let device = "/dev/null";
+        let num_fds = 3_usize;
+        let fds = create_fds(device, num_fds);
+        assert!(fds.is_ok());
+        assert_eq!(fds.unwrap().len(), num_fds);
+    }
 }

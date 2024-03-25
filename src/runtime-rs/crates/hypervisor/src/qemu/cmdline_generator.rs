@@ -3,8 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use super::network::{generate_netdev_fds, NetDevice};
-use crate::utils::clear_cloexec;
+use crate::utils::{clear_cloexec, create_vhost_net_fds, open_named_tuntap};
 use crate::{kernel_param::KernelParams, Address, HypervisorConfig};
 
 use anyhow::{anyhow, Context, Result};
@@ -917,10 +916,12 @@ struct Netdev {
 
 impl Netdev {
     fn new(id: &str, host_if_name: &str, num_queues: u32) -> Result<Netdev> {
-        let (tun_files, vhost_files) = generate_netdev_fds(host_if_name, num_queues)?;
         let fds = HashMap::from([
-            ("fds".to_owned(), tun_files),
-            ("vhostfds".to_owned(), vhost_files),
+            (
+                "fds".to_owned(),
+                open_named_tuntap(host_if_name, num_queues)?,
+            ),
+            ("vhostfds".to_owned(), create_vhost_net_fds(num_queues)?),
         ]);
         for file in fds.values().flatten() {
             clear_cloexec(file.as_raw_fd()).context("clearing O_CLOEXEC failed")?;
@@ -1009,7 +1010,7 @@ impl ToQemuParams for DeviceVirtioNet {
         params.push(self.device_driver.clone());
         params.push(format!("netdev={}", &self.netdev_id));
 
-        params.push(format!("mac={}", self.mac_address.to_string()));
+        params.push(format!("mac={:?}", self.mac_address));
 
         if self.disable_modern {
             params.push("disable-modern=true".to_owned());
@@ -1019,25 +1020,6 @@ impl ToQemuParams for DeviceVirtioNet {
         params.push(format!("vectors={}", 2 * self.num_queues + 2));
 
         Ok(vec!["-device".to_owned(), params.join(",")])
-    }
-}
-
-#[async_trait]
-impl ToQemuParams for NetDevice {
-    // qemu_params returns the qemu parameters built out of this network device.
-    async fn qemu_params(&self) -> Result<Vec<String>> {
-        let mut qemu_params: Vec<String> = Vec::new();
-
-        let netdev_params = self.qemu_netdev_params()?;
-        let device_params = self.qemu_device_params()?;
-
-        qemu_params.push("-netdev".to_owned());
-        qemu_params.push(netdev_params.join(","));
-
-        qemu_params.push("-device".to_owned());
-        qemu_params.push(device_params.join(","));
-
-        Ok(qemu_params)
     }
 }
 
