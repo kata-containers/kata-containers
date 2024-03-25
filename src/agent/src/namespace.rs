@@ -182,6 +182,7 @@ mod tests {
     use super::{Namespace, NamespaceType};
     use crate::mount::remove_mounts;
     use nix::sched::CloneFlags;
+    use rstest::rstest;
     use tempfile::Builder;
     use test_utils::skip_if_not_root;
 
@@ -226,26 +227,23 @@ mod tests {
         assert!(ns_pid.is_err());
     }
 
-    #[test]
-    fn test_namespace_type() {
-        let ipc = NamespaceType::Ipc;
-        assert_eq!("ipc", ipc.get());
-        assert_eq!(CloneFlags::CLONE_NEWIPC, ipc.get_flags());
-
-        let uts = NamespaceType::Uts;
-        assert_eq!("uts", uts.get());
-        assert_eq!(CloneFlags::CLONE_NEWUTS, uts.get_flags());
-
-        let pid = NamespaceType::Pid;
-        assert_eq!("pid", pid.get());
-        assert_eq!(CloneFlags::CLONE_NEWPID, pid.get_flags());
+    #[rstest]
+    #[case::ipc(NamespaceType::Ipc, "ipc", CloneFlags::CLONE_NEWIPC)]
+    #[case::uts(NamespaceType::Uts, "uts", CloneFlags::CLONE_NEWUTS)]
+    #[case::pid(NamespaceType::Pid, "pid", CloneFlags::CLONE_NEWPID)]
+    fn test_namespace_type(
+        #[case] ns_type: NamespaceType,
+        #[case] ns_name: &str,
+        #[case] ns_flag: CloneFlags,
+    ) {
+        assert_eq!(ns_name, ns_type.get());
+        assert_eq!(ns_flag, ns_type.get_flags());
     }
 
     #[test]
     fn test_new() {
         // Create dummy logger and temp folder.
         let logger = slog::Logger::root(slog::Discard, o!());
-
         let ns_ipc = Namespace::new(&logger);
         assert_eq!(NamespaceType::Ipc, ns_ipc.ns_type);
     }
@@ -301,65 +299,20 @@ mod tests {
         assert_eq!(ns_root.persistent_ns_dir, tmpdir.path().to_str().unwrap());
     }
 
-    #[test]
-    fn test_namespace_type_get() {
-        #[derive(Debug)]
-        struct TestData<'a> {
-            ns_type: NamespaceType,
-            str: &'a str,
-        }
-
-        let tests = &[
-            TestData {
-                ns_type: NamespaceType::Ipc,
-                str: "ipc",
-            },
-            TestData {
-                ns_type: NamespaceType::Uts,
-                str: "uts",
-            },
-            TestData {
-                ns_type: NamespaceType::Pid,
-                str: "pid",
-            },
-        ];
-
-        // Run the tests
-        for (i, d) in tests.iter().enumerate() {
-            // Create a string containing details of the test
-            let msg = format!("test[{}]: {:?}", i, d);
-            assert_eq!(d.str, d.ns_type.get(), "{}", msg)
-        }
+    #[rstest]
+    #[case::namespace_type_get_ipc(NamespaceType::Ipc, "ipc")]
+    #[case::namespace_type_get_uts(NamespaceType::Uts, "uts")]
+    #[case::namespace_type_get_pid(NamespaceType::Pid, "pid")]
+    fn test_namespace_type_get(#[case] ns_type: NamespaceType, #[case] ns_name: &str) {
+        assert_eq!(ns_name, ns_type.get())
     }
 
-    #[test]
-    fn test_namespace_type_get_flags() {
-        #[derive(Debug)]
-        struct TestData {
-            ns_type: NamespaceType,
-            ns_flag: CloneFlags,
-        }
-
-        let tests = &[
-            TestData {
-                ns_type: NamespaceType::Ipc,
-                ns_flag: CloneFlags::CLONE_NEWIPC,
-            },
-            TestData {
-                ns_type: NamespaceType::Uts,
-                ns_flag: CloneFlags::CLONE_NEWUTS,
-            },
-            TestData {
-                ns_type: NamespaceType::Pid,
-                ns_flag: CloneFlags::CLONE_NEWPID,
-            },
-        ];
-
+    #[rstest]
+    #[case::namespace_type_get_flags_ipc(NamespaceType::Ipc, CloneFlags::CLONE_NEWIPC)]
+    #[case::namespace_type_get_flags_uts(NamespaceType::Uts, CloneFlags::CLONE_NEWUTS)]
+    #[case::namespace_type_get_flags_pid(NamespaceType::Pid, CloneFlags::CLONE_NEWPID)]
+    fn test_namespace_type_get_flags(#[case] ns_type: NamespaceType, #[case] ns_flag: CloneFlags) {
         // Run the tests
-        for (i, d) in tests.iter().enumerate() {
-            // Create a string containing details of the test
-            let msg = format!("test[{}]: {:?}", i, d);
-            assert_eq!(d.ns_flag, d.ns_type.get_flags(), "{}", msg)
-        }
+        assert_eq!(ns_flag, ns_type.get_flags())
     }
 }
