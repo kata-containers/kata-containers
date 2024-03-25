@@ -1746,7 +1746,7 @@ fn is_signal_handled(proc_status_file: &str, signum: u32) -> bool {
     // read lines start with SigBlk/SigIgn/SigCgt and check any match the signal mask
     reader
         .lines()
-        .flatten()
+        .map_while(Result::ok)
         .filter(|line| {
             line.starts_with("SigBlk:")
                 || line.starts_with("SigIgn:")
