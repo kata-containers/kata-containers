@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::fs::{read_to_string, File};
 use std::os::fd::AsRawFd;
-use std::os::unix::io::RawFd;
+use tokio;
 
 // These should have been called MiB and GiB for better readability but the
 // more fitting names unfortunately generate linter warnings.
@@ -811,13 +811,13 @@ impl ToQemuParams for DeviceVirtioBlk {
 
 struct VhostVsock {
     bus_type: VirtioBusType,
-    vhostfd: RawFd,
+    vhostfd: tokio::fs::File,
     guest_cid: u32,
     disable_modern: bool,
 }
 
 impl VhostVsock {
-    fn new(vhostfd: RawFd, guest_cid: u32, bus_type: VirtioBusType) -> VhostVsock {
+    fn new(vhostfd: tokio::fs::File, guest_cid: u32, bus_type: VirtioBusType) -> VhostVsock {
         VhostVsock {
             bus_type,
             vhostfd,
@@ -840,7 +840,7 @@ impl ToQemuParams for VhostVsock {
         if self.disable_modern {
             params.push("disable-modern=true".to_owned());
         }
-        params.push(format!("vhostfd={}", self.vhostfd));
+        params.push(format!("vhostfd={}", self.vhostfd.as_raw_fd()));
         params.push(format!("guest-cid={}", self.guest_cid));
 
         Ok(vec!["-device".to_owned(), params.join(",")])
@@ -1198,8 +1198,8 @@ impl<'a> QemuCmdLine<'a> {
         }
     }
 
-    pub fn add_vsock(&mut self, vhostfd: RawFd, guest_cid: u32) -> Result<()> {
-        clear_cloexec(vhostfd).context("clearing O_CLOEXEC failed on vsock fd")?;
+    pub fn add_vsock(&mut self, vhostfd: tokio::fs::File, guest_cid: u32) -> Result<()> {
+        clear_cloexec(vhostfd.as_raw_fd()).context("clearing O_CLOEXEC failed on vsock fd")?;
 
         let mut vhost_vsock_pci = VhostVsock::new(vhostfd, guest_cid, self.bus_type());
 
