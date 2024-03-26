@@ -379,7 +379,7 @@ mod tests {
         // tenth one (i.e the one with index msr_index::MSR_IA32_MISC_ENABLE has the data we
         // expect.
         let entry_vec = create_msr_entries();
-        assert_eq!(entry_vec[9], kvm_msrs.as_slice()[0]);
+        assert_eq!(entry_vec[10], kvm_msrs.as_slice()[0]);
     }
 
     #[test]
