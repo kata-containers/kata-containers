@@ -10,6 +10,8 @@ set -o pipefail
 DEBUG="${DEBUG:-}"
 [ -n "$DEBUG" ] && set -x
 
+KATA_HYPERVISOR="${KATA_HYPERVISOR:-}"
+
 if [ -n "${K8S_TEST_POLICY_FILES:-}" ]; then
 	K8S_TEST_POLICY_FILES=($K8S_TEST_POLICY_FILES)
 else
@@ -53,7 +55,7 @@ add_annotations_to_yaml() {
 	case "${resource_kind}" in
 
 	Pod)
-		echo "Adding kernel and initrd annotations to ${resource_kind} from ${yaml_file}"
+		echo "Adding \"${annotation_name}: ${annotation_value}\" annotations to ${resource_kind} from ${yaml_file}"
 		yq write -i \
 		  "${K8S_TEST_YAML}" \
 		  "metadata.annotations[${annotation_name}]" \
@@ -61,7 +63,7 @@ add_annotations_to_yaml() {
 		;;
 
 	Deployment|Job|ReplicationController)
-		echo "Adding kernel and initrd annotations to ${resource_kind} from ${yaml_file}"
+		echo "Adding \"${annotation_name}: ${annotation_value}\" annotations to ${resource_kind} from ${yaml_file}"
 		yq write -i \
 		  "${K8S_TEST_YAML}" \
 		  "spec.template.metadata.annotations[${annotation_name}]" \
@@ -69,15 +71,15 @@ add_annotations_to_yaml() {
 		;;
 
 	List)
-		echo "Issue #7765: adding kernel and initrd annotations to ${resource_kind} from ${yaml_file} is not implemented yet"
+		echo "Issue #7765: adding annotations to ${resource_kind} from ${yaml_file} is not implemented yet"
 		;;
 
 	ConfigMap|LimitRange|Namespace|PersistentVolume|PersistentVolumeClaim|RuntimeClass|Secret|Service)
-		echo "Kernel and initrd annotations are not required for ${resource_kind} from ${yaml_file}"
+		echo "Annotations are not required for ${resource_kind} from ${yaml_file}"
 		;;
 
 	*)
-		echo "k8s resource type ${resource_kind} from ${yaml_file} is not yet supported for kernel and initrd annotations testing"
+		echo "k8s resource type ${resource_kind} from ${yaml_file} is not yet supported for annotations testing"
 		return 1
 		;;
 	esac
@@ -100,10 +102,25 @@ add_cbl_mariner_kernel_initrd_annotations() {
 	fi
 }
 
+add_tee_containerd_cri_runtime_handler_annotations() {
+	case "${KATA_HYPERVISOR}" in
+		qemu-tdx)
+			echo "Setting up io.containerd.cri.runtime-handler: ${KATA_HYPERVISOR} for TEEs"
+			for K8S_TEST_YAML in runtimeclass_workloads_work/*.yaml
+			do
+				add_annotations_to_yaml "${K8S_TEST_YAML}" "io.containerd.cri.runtime-handler" "kata-${KATA_HYPERVISOR}"
+			done
+			;;
+		*)
+			;;
+	esac
+}
+
 main() {
 	ensure_yq
 	reset_workloads_work_dir
 	add_cbl_mariner_kernel_initrd_annotations
+	add_tee_containerd_cri_runtime_handler_annotations
 }
 
 main "$@"

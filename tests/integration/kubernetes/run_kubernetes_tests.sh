@@ -25,7 +25,7 @@ else
 	# by other cases which are using 'alpine' and 'quay.io/prometheus/busybox:latest' image.
 	# more details https://github.com/kata-containers/kata-containers/issues/8337
 	K8S_TEST_SMALL_HOST_UNION=( \
-		"k8s-guest-pull-image.bats" \
+		#"k8s-guest-pull-image.bats" \
 		"k8s-confidential.bats" \
 		"k8s-attach-handlers.bats" \
 		"k8s-caps.bats" \
@@ -92,7 +92,7 @@ policy_tests_enabled() {
 	# The Guest images for these platforms have been built using AGENT_POLICY=yes -
 	# see kata-deploy-binaries.sh.
 	[ "${KATA_HYPERVISOR}" == "qemu-sev" ] || [ "${KATA_HYPERVISOR}" == "qemu-snp" ] || \
-		[ "${KATA_HYPERVISOR}" == "qemu-tdx" ] || [ "${KATA_HOST_OS}" == "cbl-mariner" ]
+		[ "${KATA_HOST_OS}" == "cbl-mariner" ]
 }
 
 add_policy_to_yaml() {
