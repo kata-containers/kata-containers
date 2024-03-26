@@ -70,7 +70,7 @@ function collect_artifacts() {
 	fi
 	mkdir -p "${artifacts_dir}"
 	info "Collecting artifacts using ${KATA_HYPERVISOR} hypervisor"
-	local journalctl_log_filename="journalctl.log"
+	local journalctl_log_filename="journalctl-$RANDOM.log"
 	local journalctl_log_path="${artifacts_dir}/${journalctl_log_filename}"
 	sudo journalctl --since="$start_time" > "${journalctl_log_path}"
 }
