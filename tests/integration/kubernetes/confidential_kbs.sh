@@ -269,7 +269,7 @@ function kbs_k8s_deploy() {
 
 	if [ -n "$ingress" ]; then
 		echo "::group::Check the kbs service is exposed"
-		svc_host=$(kbs_k8s_svc_host)
+		svc_host=$(kbs_k8s_svc_http_addr)
 		if [ -z "$svc_host" ]; then
 			echo "ERROR: service host not found"
 			return 1
