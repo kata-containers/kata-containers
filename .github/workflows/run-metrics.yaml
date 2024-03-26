@@ -32,7 +32,7 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: get-kata-tarball
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
@@ -86,7 +86,7 @@ jobs:
         run: bash tests/metrics/gha-run.sh make-tarball-results
 
       - name: archive metrics results ${{ matrix.vmm }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: metrics-artifacts-${{ matrix.vmm }}
           path: results-${{ matrix.vmm }}.tar.gz

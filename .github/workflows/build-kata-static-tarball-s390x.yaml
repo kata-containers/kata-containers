@@ -83,7 +83,7 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: store-artifact ${{ matrix.asset }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: kata-artifacts-s390x${{ inputs.tarball-suffix }}
           path: kata-build/kata-static-${{ matrix.asset }}.tar.xz
@@ -100,7 +100,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: get-artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: kata-artifacts-s390x${{ inputs.tarball-suffix }}
           path: kata-artifacts
@@ -127,7 +127,7 @@ jobs:
           HKD_PATH: "host-key-document"
 
       - name: store-artifact boot-image-se
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: kata-artifacts-s390x${{ inputs.tarball-suffix }}
           path: kata-build/kata-static-boot-image-se.tar.xz
@@ -151,7 +151,7 @@ jobs:
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
       - name: get-artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: kata-artifacts-s390x${{ inputs.tarball-suffix }}
           path: kata-artifacts
@@ -159,7 +159,7 @@ jobs:
         run: |
           ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-builds.sh kata-artifacts versions.yaml
       - name: store-artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: kata-static-tarball-s390x${{ inputs.tarball-suffix }}
           path: kata-static.tar.xz
