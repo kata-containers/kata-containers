@@ -104,7 +104,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Docker build and push
-        uses: docker/build-push-action@v4
+        uses: docker/build-push-action@v5
         with:
           tags: ghcr.io/kata-containers/test-images:unencrypted-${{ inputs.pr-number }}
           push: true
