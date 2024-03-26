@@ -91,7 +91,7 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
