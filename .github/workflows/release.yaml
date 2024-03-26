@@ -89,7 +89,7 @@ jobs:
           echo "KATA_STATIC_TARBALL=${tarball}" >> "$GITHUB_ENV"
 
       - name: Download amd64 artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: kata-static-tarball-amd64
 
@@ -101,7 +101,7 @@ jobs:
           ARCHITECTURE: amd64
 
       - name: Download arm64 artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: kata-static-tarball-arm64
 
@@ -113,7 +113,7 @@ jobs:
           ARCHITECTURE: arm64
 
       - name: Download s390x artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: kata-static-tarball-s390x
 
@@ -125,7 +125,7 @@ jobs:
           ARCHITECTURE: s390x
 
       - name: Download ppc64le artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: kata-static-tarball-ppc64le
 
