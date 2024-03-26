@@ -48,7 +48,7 @@ jobs:
 
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: quay.io
           username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
