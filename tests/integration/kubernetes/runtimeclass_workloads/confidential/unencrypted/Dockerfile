@@ -16,9 +16,9 @@ RUN apk add --no-cache curl openssh-server
 RUN /bin/sh -c \
     'ARCH=$(uname -m) && \
     [[ "${ARCH}" == "x86_64" ]] && \
-    curl -LO https://github.com/klauspost/cpuid/releases/download/v2.2.5/cpuid-Linux_x86_64_2.2.5.tar.gz && \
-    tar -xvzf cpuid-Linux_x86_64_2.2.5.tar.gz  -C /usr/bin && \
-    rm -rf cpuid-Linux_x86_64_2.2.5.tar.gz && \
+    curl -LO https://github.com/klauspost/cpuid/releases/download/v2.2.7/cpuid-Linux_x86_64_2.2.7.tar.gz && \
+    tar -xvzf cpuid-Linux_x86_64_2.2.7.tar.gz  -C /usr/bin && \
+    rm -rf cpuid-Linux_x86_64_2.2.7.tar.gz && \
     rm -f /usr/bin/LICENSE' || true
 
 # This is done just to avoid the following error starting sshd
