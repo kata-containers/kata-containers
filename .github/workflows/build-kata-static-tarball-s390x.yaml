@@ -28,6 +28,7 @@ jobs:
       matrix:
         asset:
           - agent
+          - agent-opa
           - coco-guest-components
           - kernel
           - pause-image

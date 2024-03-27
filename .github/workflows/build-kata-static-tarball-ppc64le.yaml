@@ -28,6 +28,7 @@ jobs:
       matrix:
         asset:
           - agent
+          - agent-opa
           - kernel
           - qemu
           - rootfs-initrd
@@ -39,7 +40,7 @@ jobs:
       - name: Adjust a permission for repo
         run: |
           sudo chown -R $USER:$USER $GITHUB_WORKSPACE
-      
+
       - name: Prepare the self-hosted runner
         run: |
             ${HOME}/scripts/prepare_runner.sh
