@@ -186,6 +186,7 @@ type runtime struct {
 	StaticSandboxResourceMgmt bool     `toml:"static_sandbox_resource_mgmt"`
 	EnablePprof               bool     `toml:"enable_pprof"`
 	DisableGuestEmptyDir      bool     `toml:"disable_guest_empty_dir"`
+	CreateContainerTimeout    uint64   `toml:"create_container_timeout"`
 }
 
 type agent struct {
@@ -1569,6 +1570,7 @@ func LoadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 	config.JaegerEndpoint = tomlConf.Runtime.JaegerEndpoint
 	config.JaegerUser = tomlConf.Runtime.JaegerUser
 	config.JaegerPassword = tomlConf.Runtime.JaegerPassword
+	config.CreateContainerTimeout = tomlConf.Runtime.CreateContainerTimeout
 	for _, f := range tomlConf.Runtime.Experimental {
 		feature := exp.Get(f)
 		if feature == nil {
