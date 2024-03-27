@@ -817,7 +817,7 @@ fast-test: $(GENERATED_FILES)
 	go clean -testcache
 	for s in $$(go list ./...); do if ! go test -failfast -v -mod=vendor -p 1 $$s; then break; fi; done
 
-GOLANGCI_LINT_FILE := ../../../tests/.ci/.golangci.yml
+GOLANGCI_LINT_FILE := ../../tests/.golangci.yml
 GOLANGCI_LINT_NAME = golangci-lint
 GOLANGCI_LINT_CMD := $(shell command -v $(GOLANGCI_LINT_NAME) 2>/dev/null)
 lint: all
