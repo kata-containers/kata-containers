@@ -1,0 +1,24 @@
+name: Skip the CI if the PR only changes document files.
+
+on: [workflow_call]
+
+jobs:
+  check_and_label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+          
+      - name: Get files changed
+        uses: technote-space/get-diff-action@v6
+        with:
+          PATTERNS: |
+            **
+            !docs/*
+        
+      - name: Add label
+        if: ${{!env.GIT_DIFF}}
+        uses: actions-ecosystem/action-add-labels@v1
+        with:
+          labels: 
+            force-skip-ci

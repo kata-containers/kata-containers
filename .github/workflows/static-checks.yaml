@@ -78,6 +78,7 @@ jobs:
 
   static-checks:
     runs-on: ubuntu-20.04
+    uses: ./.github/workflows/check-docs-only.yaml
     strategy:
       fail-fast: false
       matrix:
