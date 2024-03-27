@@ -138,7 +138,7 @@ enable_sandboxedcontainers_extension() {
 	oc apply -f ${deployment_file}
 	oc get -f ${deployment_file} || \
 		die "Sandboxed Containers extension machineconfig not found"
-	wait_mcp_update || die "Failed to update the machineconfigpool"
+	wait_mcp_update 1200 || die "Failed to update the machineconfigpool"
 }
 
 # Print useful information for debugging.
