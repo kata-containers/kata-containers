@@ -32,6 +32,8 @@ setup() {
 	[ "${PID}" == "$(cat "${PID_FILE}")" ]
 	# Check the container status is RUNNING
 	[ "${STATUS}" == "RUNNING" ]
+	# Install yq in GOPATH/bin
+	ensure_yq
 }
 
 teardown() {
@@ -120,4 +122,35 @@ stop_container() {
 	[ $status -eq 1 ]
 	# Check  kill --all should not fail
 	sudo ctr t kill --signal SIGKILL --all "${CONTAINER_ID}"
+}
+
+@test "containerd integration test with runk" {
+    export CONTAINERD_VERSION=$(get_from_kata_deps "externals.containerd.version")
+
+	# TODO: Replace the below code with method in https://github.com/containerd/containerd/pull/9647 
+	# to call any container runtime for integration test, after the PR is merged to containerd mainline.
+    # Rename runk bin as runc (workaround for containerd integration test)
+    RUNC_PATH=$(command -v  runc)
+    if [ -f "${RUNC_PATH}" ]; then
+        sudo cp ${RUNK_BIN_PATH} ${RUNC_PATH}
+    else
+        sudo cp ${RUNK_BIN_PATH} /usr/local/sbin/runc
+    fi
+
+    # Get containerd source for version ${CONTAINERD_VERSION}
+	git clone --branch ${CONTAINERD_VERSION} https://github.com/containerd/containerd.git
+	cd containerd
+	
+	# Running test using 'go test'
+	export TESTFLAGS=""
+	export RUNC_FLAVOR=runc
+	export TESTFLAGS_PARALLEL=1
+	export TESTFLAGS="-skip 'TestUserNamespaces|TestTaskUpdate|TestContentClient'"
+
+	sudo -E PATH="${PATH}:/usr/local/go/bin" make integration
+
+    cd ../
+
+    # cleanup
+    run rm -rf containerd
 }
