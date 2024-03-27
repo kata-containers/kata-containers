@@ -5,6 +5,27 @@ This document lists the tasks required to create a Kata Release.
 
 - GitHub permissions to run workflows.
 
+## Versioning
+
+The Kata Containers project uses [semantic versioning](http://semver.org/) for all releases.
+Semantic versions are comprised of three fields in the form:
+
+```
+MAJOR.MINOR.PATCH
+```
+
+When `MINOR` increases, the new release adds **new features** but *without changing the existing behavior*.
+
+When `MAJOR` increases, the new release adds **new features, bug fixes, or
+both** and which **changes the behavior from the previous release** (incompatible with previous releases).
+
+A major release will also likely require a change of the container manager version used,
+-for example Containerd or CRI-O. Please refer to the release notes for further details.
+
+**Important** : the Kata Containers project doesn't have stable branches (see
+[this issue](https://github.com/kata-containers/kata-containers/issues/9064) for details).
+Bug fixes are released as part of `MINOR` or `MAJOR` releases only. `PATCH` is always `0`.
+
 ## Release Process
 
 ### Bump the `VERSION` file
