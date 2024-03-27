@@ -381,12 +381,32 @@ func (h hypervisor) GetEntropySource() string {
 	return h.EntropySource
 }
 
+var procCPUInfo = "/proc/cpuinfo"
+
+func getHostCPUs() uint32 {
+	cpuInfo, err := os.ReadFile(procCPUInfo)
+	if err != nil {
+		kataUtilsLogger.Warn("unable to read /proc/cpuinfo to determine cpu count - using go runtime value instead")
+		return uint32(goruntime.NumCPU())
+	}
+
+	cores := 0
+	lines := strings.Split(string(cpuInfo), "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "processor") {
+			cores++
+		}
+	}
+
+	return uint32(cores)
+}
+
 // Current cpu number should not larger than defaultMaxVCPUs()
 func getCurrentCpuNum() uint32 {
 	var cpu uint32
 	h := hypervisor{}
 
-	cpu = uint32(goruntime.NumCPU())
+	cpu = getHostCPUs()
 	if cpu > h.defaultMaxVCPUs() {
 		cpu = h.defaultMaxVCPUs()
 	}
@@ -408,7 +428,7 @@ func (h hypervisor) defaultVCPUs() float32 {
 }
 
 func (h hypervisor) defaultMaxVCPUs() uint32 {
-	numcpus := uint32(goruntime.NumCPU())
+	numcpus := getHostCPUs()
 	maxvcpus := govmm.MaxVCPUs()
 	reqVCPUs := h.DefaultMaxVCPUs
 
