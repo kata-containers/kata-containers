@@ -289,16 +289,6 @@ externals:
     repo: "docker://registry.k8s.io/pause"
     version: "3.9"
 
-  runc:
-    description: "OCI CLI reference runtime implementation"
-    url: "https://github.com/opencontainers/runc"
-    # Oddly, here we do want rc versions, as there appears to be little else
-    # really for runc.
-    uscan-url: >-
-      https://github.com/opencontainers/runc/tags
-      .*/v?(\d\S+)\.tar\.gz
-    version: "v1.1.11"
-
   nydus:
     description: "Nydus image acceleration service"
     url: "https://github.com/dragonflyoss/image-service"
