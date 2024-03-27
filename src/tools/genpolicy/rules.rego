@@ -551,6 +551,7 @@ allow_env(p_process, i_process, s_name) {
     print("allow_env: i env =", i_process.Env)
 
     every i_var in i_process.Env {
+        print("allow_env: i_var =", i_var)
         allow_var(p_process, i_process, i_var, s_name)
     }
 
@@ -559,22 +560,17 @@ allow_env(p_process, i_process, s_name) {
 
 # Allow input env variables that are present in the policy data too.
 allow_var(p_process, i_process, i_var, s_name) {
-    print("allow_var 1: i_var =", i_var)
-
     some p_var in p_process.Env
     p_var == i_var
-
     print("allow_var 1: true")
 }
 
 # Match input with one of the policy variables, after substituting $(sandbox-name).
 allow_var(p_process, i_process, i_var, s_name) {
-    print("allow_var 2: i_var =", i_var)
-
     some p_var in p_process.Env
     p_var2 := replace(p_var, "$(sandbox-name)", s_name)
-    print("allow_var 2: p_var2 =", p_var2)
 
+    print("allow_var 2: p_var2 =", p_var2)
     p_var2 == i_var
 
     print("allow_var 2: true")
@@ -582,24 +578,13 @@ allow_var(p_process, i_process, i_var, s_name) {
 
 # Allow input env variables that match with a request_defaults regex.
 allow_var(p_process, i_process, i_var, s_name) {
-    print("allow_var 3: start")
-
     some p_regex1 in policy_data.request_defaults.CreateContainerRequest.allow_env_regex
-    print("allow_var 3: p_regex1 =", p_regex1)
-
     p_regex2 := replace(p_regex1, "$(ipv4_a)", policy_data.common.ipv4_a)
-    print("allow_var 3: p_regex2 =", p_regex2)
-
     p_regex3 := replace(p_regex2, "$(ip_p)", policy_data.common.ip_p)
-    print("allow_var 3: p_regex3 =", p_regex3)
-
     p_regex4 := replace(p_regex3, "$(svc_name)", policy_data.common.svc_name)
-    print("allow_var 3: p_regex4 =", p_regex4)
-
     p_regex5 := replace(p_regex4, "$(dns_label)", policy_data.common.dns_label)
-    print("allow_var 3: p_regex5 =", p_regex5)
 
-    print("allow_var 3: i_var =", i_var)
+    print("allow_var 3: p_regex5 =", p_regex5)
     regex.match(p_regex5, i_var)
 
     print("allow_var 3: true")
@@ -607,8 +592,6 @@ allow_var(p_process, i_process, i_var, s_name) {
 
 # Allow fieldRef "fieldPath: status.podIP" values.
 allow_var(p_process, i_process, i_var, s_name) {
-    print("allow_var 4: i_var =", i_var)
-
     name_value := split(i_var, "=")
     count(name_value) == 2
     is_ip(name_value[1])
@@ -621,8 +604,6 @@ allow_var(p_process, i_process, i_var, s_name) {
 
 # Allow common fieldRef variables.
 allow_var(p_process, i_process, i_var, s_name) {
-    print("allow_var 5: i_var =", i_var)
-
     name_value := split(i_var, "=")
     count(name_value) == 2
 
@@ -642,8 +623,6 @@ allow_var(p_process, i_process, i_var, s_name) {
 
 # Allow fieldRef "fieldPath: status.hostIP" values.
 allow_var(p_process, i_process, i_var, s_name) {
-    print("allow_var 6: i_var =", i_var)
-
     name_value := split(i_var, "=")
     count(name_value) == 2
     is_ip(name_value[1])
@@ -656,8 +635,6 @@ allow_var(p_process, i_process, i_var, s_name) {
 
 # Allow resourceFieldRef values (e.g., "limits.cpu").
 allow_var(p_process, i_process, i_var, s_name) {
-    print("allow_var 7: i_var =", i_var)
-
     name_value := split(i_var, "=")
     count(name_value) == 2
 
@@ -738,9 +715,10 @@ allow_root_path(p_oci, i_oci, bundle_id) {
 
 # device mounts
 allow_mount(p_oci, i_mount, bundle_id, sandbox_id) {
-    print("allow_mount: start")
+    print("allow_mount: i_mount =", i_mount)
 
     some p_mount in p_oci.Mounts
+    print("allow_mount: p_mount =", p_mount)
     check_mount(p_mount, i_mount, bundle_id, sandbox_id)
 
     # TODO: are there any other required policy checks for mounts - e.g.,
@@ -750,22 +728,12 @@ allow_mount(p_oci, i_mount, bundle_id, sandbox_id) {
 }
 
 check_mount(p_mount, i_mount, bundle_id, sandbox_id) {
-    print("check_mount 1: p_mount =", p_mount)
-    print("check_mount 1: i_mount =", i_mount)
-
     p_mount == i_mount
-
     print("check_mount 1: true")
 }
 check_mount(p_mount, i_mount, bundle_id, sandbox_id) {
-    print("check_mount 2: i destination =", i_mount.destination, "p destination =", p_mount.destination)
     p_mount.destination == i_mount.destination
-
-    print("check_mount 2: i type =", i_mount.type_, "p type =", p_mount.type_)
     p_mount.type_ == i_mount.type_
-
-    print("check_mount 2: i options =", i_mount.options)
-    print("check_mount 2: p options =", p_mount.options)
     p_mount.options == i_mount.options
 
     mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id)
@@ -774,39 +742,23 @@ check_mount(p_mount, i_mount, bundle_id, sandbox_id) {
 }
 
 mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) {
-    print("mount_source_allows 1: i_mount.source =", i_mount.source)
-
     regex1 := p_mount.source
-    print("mount_source_allows 1: regex1 =", regex1)
-
     regex2 := replace(regex1, "$(sfprefix)", policy_data.common.sfprefix)
-    print("mount_source_allows 1: regex2 =", regex2)
-
     regex3 := replace(regex2, "$(cpath)", policy_data.common.cpath)
-    print("mount_source_allows 1: regex3 =", regex3)
-
     regex4 := replace(regex3, "$(bundle-id)", bundle_id)
-    print("mount_source_allows 1: regex4 =", regex4)
 
+    print("mount_source_allows 1: regex4 =", regex4)
     regex.match(regex4, i_mount.source)
 
     print("mount_source_allows 1: true")
 }
 mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) {
-    print("mount_source_allows 2: i_mount.source=", i_mount.source)
-
     regex1 := p_mount.source
-    print("mount_source_allows 2: regex1 =", regex1)
-
     regex2 := replace(regex1, "$(sfprefix)", policy_data.common.sfprefix)
-    print("mount_source_allows 2: regex2 =", regex2)
-
     regex3 := replace(regex2, "$(cpath)", policy_data.common.cpath)
-    print("mount_source_allows 2: regex3 =", regex3)
-
     regex4 := replace(regex3, "$(sandbox-id)", sandbox_id)
-    print("mount_source_allows 2: regex4 =", regex4)
 
+    print("mount_source_allows 2: regex4 =", regex4)
     regex.match(regex4, i_mount.source)
 
     print("mount_source_allows 2: true")
@@ -953,7 +905,6 @@ allow_overlay_layer(policy_id, policy_hash, i_option) {
 }
 
 allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids) {
-    print("allow_mount_point 1: i_storage.mount_point =", i_storage.mount_point)
     p_storage.fstype == "tar"
 
     startswith(p_storage.mount_point, "$(layer")
@@ -975,7 +926,6 @@ allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids) {
     print("allow_mount_point 1: true")
 }
 allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids) {
-    print("allow_mount_point 2: i_storage.mount_point =", i_storage.mount_point)
     p_storage.fstype == "fuse3.kata-overlay"
 
     mount1 := replace(p_storage.mount_point, "$(cpath)", policy_data.common.cpath)
@@ -987,7 +937,6 @@ allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids) {
     print("allow_mount_point 2: true")
 }
 allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids) {
-    print("allow_mount_point 3: i_storage.mount_point =", i_storage.mount_point)
     p_storage.fstype == "local"
 
     mount1 := p_storage.mount_point
@@ -1004,7 +953,6 @@ allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids) {
     print("allow_mount_point 3: true")
 }
 allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids) {
-    print("allow_mount_point 4: i_storage.mount_point =", i_storage.mount_point)
     p_storage.fstype == "bind"
 
     mount1 := p_storage.mount_point
@@ -1021,7 +969,6 @@ allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids) {
     print("allow_mount_point 4: true")
 }
 allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids) {
-    print("allow_mount_point 5: i_storage.mount_point =", i_storage.mount_point)
     p_storage.fstype == "tmpfs"
 
     mount1 := p_storage.mount_point
