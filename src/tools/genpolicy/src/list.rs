@@ -9,6 +9,7 @@
 use crate::pod;
 use crate::policy;
 use crate::settings;
+use crate::utils::Config;
 use crate::yaml;
 
 use async_trait::async_trait;
@@ -39,12 +40,12 @@ impl Debug for dyn yaml::K8sResource + Send + Sync {
 
 #[async_trait]
 impl yaml::K8sResource for List {
-    async fn init(&mut self, use_cache: bool, _doc_mapping: &serde_yaml::Value, silent: bool) {
+    async fn init(&mut self, config: &Config, _doc_mapping: &serde_yaml::Value, silent: bool) {
         // Create K8sResource objects for each item in this List.
         for item in &self.items {
             let yaml_string = serde_yaml::to_string(&item).unwrap();
             let (mut resource, _kind) = yaml::new_k8s_resource(&yaml_string, silent).unwrap();
-            resource.init(use_cache, item, silent).await;
+            resource.init(config, item, silent).await;
             self.resources.push(resource);
         }
     }

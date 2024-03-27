@@ -95,7 +95,7 @@ jobs:
           echo "LIBSECCOMP_LINK_TYPE=static" >> $GITHUB_ENV
           echo "LIBSECCOMP_LIB_PATH=${libseccomp_install_dir}/lib" >> $GITHUB_ENV
       - name: Install protobuf-compiler
-        if: ${{ matrix.command != 'make vendor' && (matrix.component == 'agent' || matrix.component == 'runk') }}
+        if: ${{ matrix.command != 'make vendor' && (matrix.component == 'agent' || matrix.component == 'runk' || matrix.component == 'genpolicy') }}
         run: sudo apt-get -y install protobuf-compiler
       - name: Install clang
         if: ${{ matrix.command == 'make check' && matrix.component == 'agent' }}

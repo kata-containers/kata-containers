@@ -7,3 +7,4 @@ kubernetes:
   - k8s-caps
   - k8s-inotify
   - k8s-sandbox-vcpus-allocation # see https://github.com/kata-containers/kata-containers/issues/9093
+  - k8s-pod-manifest-v1.bats

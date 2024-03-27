@@ -131,6 +131,9 @@ create_common_genpolicy_settings() {
 
 	# Set the default namespace of Kata CI tests in the genpolicy settings.
 	set_namespace_to_policy_settings "${genpolicy_settings_dir}" "${TEST_CLUSTER_NAMESPACE}"
+
+	# allow genpolicy to access containerd without sudo
+	sudo chmod a+rw /var/run/containerd/containerd.sock
 }
 
 # If auto-generated policy testing is enabled, make a copy of the common genpolicy settings
@@ -166,13 +169,16 @@ auto_generate_policy() {
 	declare -r config_map_yaml_file="$3"
 
 	auto_generate_policy_enabled || return 0
-
 	local genpolicy_command="RUST_LOG=info /opt/kata/bin/genpolicy -u -y ${yaml_file}"
 	genpolicy_command+=" -p ${settings_dir}/rules.rego"
 	genpolicy_command+=" -j ${settings_dir}/genpolicy-settings.json"
 
 	if [ ! -z "${config_map_yaml_file}" ]; then
 		genpolicy_command+=" -c ${config_map_yaml_file}"
+	fi
+
+	if [ -n "${use_containerd_pull}" ] && [ "${use_containerd_pull}" -eq 1 ]; then
+		genpolicy_command+=" -d"
 	fi
 
 	info "Executing: ${genpolicy_command}"

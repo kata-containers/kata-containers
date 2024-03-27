@@ -57,6 +57,19 @@ To enable caching, use the `-u` command line parameter - e.g.,
 $ RUST_LOG=info genpolicy -u -y test.yaml
 ```
 
+# Use containerd to pull and manage images
+You may specify `-d` to use existing containerd installation as image manager. This method supports a wider set of images (e.g., older images with v1 manifest). Needs sudo permission to access socket - e.g.,
+
+```bash
+$ sudo genpolicy -d -y test.yaml
+```
+
+This will use `/var/contaienrd/containerd.sock` as default socket path. Or you may specify your own socket path - e.g.,
+
+```bash
+$ sudo genpolicy -d=/my/path/containerd.sock -y test.yaml
+```
+
 # Print the Policy text
 
 To print the auto-generated Policy text, in addition to adding its `base64` encoding into the `YAML` file, specify the `-r` parameter - e.g.,
