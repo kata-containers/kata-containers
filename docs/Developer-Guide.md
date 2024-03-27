@@ -29,7 +29,7 @@ to build the Kata Containers components from source.
 >
 > If you decide to build from sources, you should be aware of the
 > implications of using an unpackaged system which will not be automatically
-> updated as new [releases](Stable-Branch-Strategy.md) are made available.
+> updated as new [releases](https://github.com/kata-containers/kata-containers/releases) are made available.
 
 You need to install the following to build Kata Containers components:
 

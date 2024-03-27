@@ -108,14 +108,29 @@ EOF
 
 function _create_new_release()
 {
-	_check_required_env_var "RELEASE_VERSION"
 	_check_required_env_var "GH_TOKEN"
+
+	RELEASE_VERSION="$(_release_version)"
 
 	_create_our_own_notes
 
+	# This automatically creates the ${RELEASE_VERSION} tag in the repo
 	gh release create ${RELEASE_VERSION} \
 		--generate-notes --title "Kata Containers ${RELEASE_VERSION}" \
-		--notes-file "/tmp/our_notes_${RELEASE_VERSION}"
+		--notes-file "/tmp/our_notes_${RELEASE_VERSION}" \
+		--draft
+}
+
+function _publish_release()
+{
+	_check_required_env_var "GH_TOKEN"
+
+	RELEASE_VERSION="$(_release_version)"
+
+	# Make the release live on GitHub
+	gh release edit ${RELEASE_VERSION} \
+		--verify-tag \
+		--draft=false
 }
 
 function _publish_multiarch_manifest()
@@ -202,6 +217,7 @@ function main()
 		upload-versions-yaml-file) _upload_versions_yaml_file ;;
 		upload-vendored-code-tarball) _upload_vendored_code_tarball ;;
 		upload-libseccomp-tarball) _upload_libseccomp_tarball ;;
+		publish-release) _publish_release ;;
 		*) >&2 _die "Invalid argument" ;;
 	esac
 }

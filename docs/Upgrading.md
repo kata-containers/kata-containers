@@ -14,9 +14,6 @@ period of time, once a stable release for Kata Containers 2.x is published,
 Kata Containers 1.x stable users should consider switching to the Kata 2.x
 release.
 
-See the [stable branch strategy documentation](Stable-Branch-Strategy.md) for
-further details.
-
 # Determine current version
 
 To display the current Kata Containers version, run one of the following:

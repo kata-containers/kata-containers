@@ -69,7 +69,6 @@ Documents that help to understand and contribute to Kata Containers.
 
 ### The Release Process
 
-* [Release strategy](Stable-Branch-Strategy.md)
 * [Release Process](Release-Process.md)
 
 ## Presentations
