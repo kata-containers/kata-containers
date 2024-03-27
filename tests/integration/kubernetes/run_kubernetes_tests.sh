@@ -17,6 +17,13 @@ K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-small}"
 
 ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY:-$(base64 -w 0 runtimeclass_workloads_work/allow-all.rego)}"
 
+# Wait for the memory usage of each node to become lower than this maximum percentage
+# before starting each test.
+MAX_MEM_USAGE_BEFORE_TEST="${MAX_MEM_USAGE_BEFORE_TEST:-70}"
+
+# Maximum time in seconds to wait for the node memory usage to become lower than the maximum above.
+MAX_MEM_USAGE_WAIT_TIME="${MAX_MEM_USAGE_WAIT_TIME:-120}"
+
 if [ -n "${K8S_TEST_UNION:-}" ]; then
 	K8S_TEST_UNION=($K8S_TEST_UNION)
 else
@@ -139,22 +146,43 @@ add_policy_to_successful_tests() {
 	done
 }
 
+enough_memory_available() {
+	kubectl top pods --all-namespaces
+
+	top_output="$(kubectl top nodes | tail -n +2)"
+	info "Per-node resource usage:"
+	echo "${top_output}"
+
+	while IFS= read -r line; do
+		if [ ! -z "${line}" ]; then
+			percentage="$(echo "${line}" | awk '{print $5}' | tr -d '%')"
+			(( ${percentage} < ${MAX_MEM_USAGE_BEFORE_TEST} )) || return 1
+		fi
+	done <<< "${top_output}"
+}
+
+prepare_for_test() {
+	sleep_time=1
+	waitForProcess "${MAX_MEM_USAGE_WAIT_TIME}" "${sleep_time}" enough_memory_available || \
+		die "Giving up!"
+}
+
 test_successful_actions() {
 	info "Test actions that must be successful"
 	for K8S_TEST_ENTRY in ${K8S_TEST_UNION[@]}
 	do
-		info "$(kubectl get pods --all-namespaces 2>&1)"
+		prepare_for_test
 		info "Executing ${K8S_TEST_ENTRY}"
 		bats --show-output-of-passing-tests "${K8S_TEST_ENTRY}"
 	done
 }
 
 run_policy_specific_tests() {
-	info "$(kubectl get pods --all-namespaces 2>&1)"
+	prepare_for_test
 	info "Executing k8s-exec-rejected.bats"
 	bats --show-output-of-passing-tests k8s-exec-rejected.bats
 
-	info "$(kubectl get pods --all-namespaces 2>&1)"
+	prepare_for_test
 	info "Executing k8s-policy-set-keys.bats"
 	bats --show-output-of-passing-tests k8s-policy-set-keys.bats
 }
