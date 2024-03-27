@@ -64,14 +64,8 @@ const (
 type tomlConfig struct {
 	Hypervisor map[string]hypervisor
 	Agent      map[string]agent
-	Image      image
 	Factory    factory
 	Runtime    runtime
-}
-
-type image struct {
-	Provision      string `toml:"provision"`
-	ServiceOffload bool   `toml:"service_offload"`
 }
 
 type factory struct {

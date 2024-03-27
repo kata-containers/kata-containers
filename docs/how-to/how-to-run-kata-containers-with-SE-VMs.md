@@ -224,10 +224,6 @@ $ diff ${runtime_config_path}.old ${runtime_config_path}
 < dial_timeout = 45
 ---
 > dial_timeout = 90
-679c679
-< #service_offload = true
----
-> service_offload = true
 ```
 
 ### Verification

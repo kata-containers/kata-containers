@@ -666,30 +666,3 @@ experimental=@DEFAULTEXPFEATURES@
 # (https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/#:~:text=runtime%2Drequest%2Dtimeout) and create_container_timeout. 
 # In essence, the timeout used for guest pull=runtime-request-timeout<create_container_timeout?runtime-request-timeout:create_container_timeout.
 create_container_timeout = @DEFCREATECONTAINERTIMEOUT@
-
-# WARNING: All the options in the following section have not been implemented yet.
-# This section was added as a placeholder. DO NOT USE IT!
-[image]
-# Container image service.
-#
-# Offload the CRI image management service to the Kata agent.
-# (default: false)
-#service_offload = true
-
-# Container image decryption keys provisioning.
-# Applies only if service_offload is true.
-# Keys can be provisioned locally (e.g. through a special command or
-# a local file) or remotely (usually after the guest is remotely attested).
-# The provision setting is a complete URL that lets the Kata agent decide
-# which method to use in order to fetch the keys.
-#
-# Keys can be stored in a local file, in a measured and attested initrd:
-#provision=data:///local/key/file
-#
-# Keys could be fetched through a special command or binary from the
-# initrd (guest) image, e.g. a firmware call:
-#provision=file:///path/to/bin/fetcher/in/guest
-#
-# Keys can be remotely provisioned. The Kata agent fetches them from e.g.
-# a HTTPS URL:
-#provision=https://my-key-broker.foo/tenant/<tenant-id>
