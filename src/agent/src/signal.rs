@@ -144,15 +144,12 @@ mod tests {
 
         tx.send(true).expect("failed to request shutdown");
 
-        loop {
-            select! {
-                _ = handle => {
-                    println!("INFO: task completed");
-                    break;
-                },
-                _ = &mut timeout => {
-                    panic!("signal thread failed to stop");
-                }
+        select! {
+            _ = handle => {
+                println!("INFO: task completed");
+            },
+            _ = &mut timeout => {
+                panic!("signal thread failed to stop");
             }
         }
     }

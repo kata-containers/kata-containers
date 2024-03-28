@@ -569,7 +569,7 @@ pub fn parse_mount_table(mountinfo_path: &str) -> Result<Vec<Info>> {
     let reader = BufReader::new(file);
     let mut infos = Vec::new();
 
-    for (_index, line) in reader.lines().enumerate() {
+    for line in reader.lines() {
         let line = line?;
 
         //Example mountinfo format:
