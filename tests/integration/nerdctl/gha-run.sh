@@ -5,9 +5,10 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-set -o errexit
-set -o nounset
-set -o pipefail
+#set -o errexit
+#set -o nounset
+#set -o pipefail
+set -x
 
 kata_tarball_dir="${2:-kata-artifacts}"
 nerdctl_dir="$(dirname "$(readlink -f "$0")")"
