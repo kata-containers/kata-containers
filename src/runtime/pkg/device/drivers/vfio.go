@@ -78,9 +78,12 @@ func (device *VFIODevice) Attach(ctx context.Context, devReceiver api.DeviceRece
 		}
 
 		if vfio.IsPCIe {
-			busIndex := len(config.PCIeDevices[vfio.Port])
+			busIndex := len(config.PCIeDevicesPerPort[vfio.Port])
 			vfio.Bus = fmt.Sprintf("%s%d", config.PCIePortPrefixMapping[vfio.Port], busIndex)
-			config.PCIeDevices[vfio.Port][vfio.BDF] = true
+			// We need to keep track the number of devices per port to deduce
+			// the corectu bus number, additionally we can use the VFIO device
+			// info to act upon different Vendor IDs and Device IDs.
+			config.PCIeDevicesPerPort[vfio.Port] = append(config.PCIeDevicesPerPort[vfio.Port], *vfio)
 		}
 	}
 

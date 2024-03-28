@@ -19,11 +19,11 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/container-orchestrated-devices/container-device-interface/pkg/cdi"
 	taskAPI "github.com/containerd/containerd/api/runtime/task/v2"
 	containerd_types "github.com/containerd/containerd/api/types"
 	"github.com/containerd/containerd/mount"
 	"github.com/containerd/typeurl/v2"
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/utils"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
@@ -74,63 +74,6 @@ func copyLayersToMounts(rootFs *vc.RootFs, spec *specs.Spec) error {
 	return nil
 }
 
-// CDI (Container Device Interface), is a specification, for container- runtimes,
-// to support third-party devices.
-// It introduces an abstract notion of a device as a resource. Such devices are
-// uniquely specified by a fully-qualified name that is constructed from a
-// vendor ID, a device class, and a name that is unique per vendor ID-device
-// class pair.
-//
-// vendor.com/class=unique_name
-//
-// The combination of vendor ID and device class (vendor.com/class in the
-// above example) is referred to as the device kind.
-// CDI concerns itself only with enabling containers to be device aware.
-// Areas like resource management are explicitly left out of CDI (and are
-// expected to be handled by the orchestrator). Because of this focus, the CDI
-// specification is simple to implement and allows great flexibility for
-// runtimes and orchestrators.
-func withCDI(annotations map[string]string, cdiSpecDirs []string, spec *specs.Spec) (*specs.Spec, error) {
-	// Add devices from CDI annotations
-	_, devsFromAnnotations, err := cdi.ParseAnnotations(annotations)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse CDI device annotations: %w", err)
-	}
-
-	if len(devsFromAnnotations) == 0 {
-		// No devices found, skip device injection
-		return spec, nil
-	}
-
-	var registry cdi.Registry
-	if len(cdiSpecDirs) > 0 {
-		// We can override the directories where to search for CDI specs
-		// if needed, the default is /etc/cdi /var/run/cdi
-		registry = cdi.GetRegistry(cdi.WithSpecDirs(cdiSpecDirs...))
-	} else {
-		registry = cdi.GetRegistry()
-	}
-
-	if err = registry.Refresh(); err != nil {
-		// We don't consider registry refresh failure a fatal error.
-		// For instance, a dynamically generated invalid CDI Spec file for
-		// any particular vendor shouldn't prevent injection of devices of
-		// different vendors. CDI itself knows better and it will fail the
-		// injection if necessary.
-		return nil, fmt.Errorf("CDI registry refresh failed: %w", err)
-	}
-
-	if _, err := registry.InjectDevices(spec, devsFromAnnotations...); err != nil {
-		return nil, fmt.Errorf("CDI device injection failed: %w", err)
-	}
-
-	// One crucial thing to keep in mind is that CDI device injection
-	// might add OCI Spec environment variables, hooks, and mounts as
-	// well. Therefore it is important that none of the corresponding
-	// OCI Spec fields are reset up in the call stack once we return.
-	return spec, nil
-}
-
 func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*container, error) {
 	rootFs := vc.RootFs{}
 	if len(r.Rootfs) == 1 {
@@ -175,9 +118,13 @@ func create(ctx context.Context, s *service, r *taskAPI.CreateTaskRequest) (*con
 		//
 		// _, err = withCDI(ociSpec.Annotations, []string{"/opt/cdi"}, ociSpec)
 		//
-		_, err = withCDI(ociSpec.Annotations, []string{}, ociSpec)
-		if err != nil {
-			return nil, fmt.Errorf("adding CDI devices failed")
+		// Only inject CDI devices if single_container we do not want
+		// CDI devices in the pod_sandbox
+		if containerType == vc.SingleContainer {
+			_, err = config.WithCDI(ociSpec.Annotations, []string{}, ociSpec)
+			if err != nil {
+				return nil, fmt.Errorf("adding CDI devices failed")
+			}
 		}
 
 		s.config = runtimeConfig

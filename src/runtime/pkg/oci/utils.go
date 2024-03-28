@@ -463,6 +463,14 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		return err
 	}
 
+	if err := addHypervisorPCIeRootPortOverrides(ocispec, config); err != nil {
+		return err
+	}
+
+	if err := addHypervisorPCIeSwitchPortOverrides(ocispec, config); err != nil {
+		return err
+	}
+
 	if value, ok := ocispec.Annotations[vcAnnotations.MachineType]; ok {
 		if value != "" {
 			config.HypervisorConfig.HypervisorMachineType = value
@@ -601,6 +609,29 @@ func addHypervisorHotColdPlugVfioOverrides(ocispec specs.Spec, sbConfig *vc.Sand
 		}
 		// If cold-plug is specified disable hot-plug and vice versa
 		sbConfig.HypervisorConfig.HotPlugVFIO = config.NoPort
+	}
+	return nil
+}
+
+func addHypervisorPCIeRootPortOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.PCIeRootPort).setUint(func(pcieRootPort uint64) {
+		if pcieRootPort > 0 {
+			sbConfig.HypervisorConfig.PCIeRootPort = uint32(pcieRootPort)
+		}
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+func addHypervisorPCIeSwitchPortOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.PCIeSwitchPort).setUint(func(pcieSwitchPort uint64) {
+		if pcieSwitchPort > 0 {
+			sbConfig.HypervisorConfig.PCIeSwitchPort = uint32(pcieSwitchPort)
+		}
+	}); err != nil {
+		return err
 	}
 	return nil
 }

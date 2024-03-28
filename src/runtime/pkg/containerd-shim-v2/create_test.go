@@ -335,6 +335,8 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (runtimeConfig string, 
 	virtioFSdaemon := path.Join(dir, "virtiofsd")
 	hotPlugVFIO = config.BridgePort
 	coldPlugVFIO = config.NoPort
+	pcieRootPort := uint32(0)
+	pcieSwitchPort := uint32(0)
 
 	configFileOptions := ktu.RuntimeConfigOptions{
 		Hypervisor:        "qemu",
@@ -353,6 +355,8 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (runtimeConfig string, 
 		VirtioFSDaemon:    virtioFSdaemon,
 		HotPlugVFIO:       hotPlugVFIO,
 		ColdPlugVFIO:      coldPlugVFIO,
+		PCIeRootPort:      pcieRootPort,
+		PCIeSwitchPort:    pcieSwitchPort,
 	}
 
 	runtimeConfigFileData := ktu.MakeRuntimeConfigFileData(configFileOptions)
