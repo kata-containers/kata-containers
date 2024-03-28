@@ -28,6 +28,7 @@ else
 		"k8s-guest-pull-image.bats" \
 		"k8s-confidential.bats" \
 		"k8s-attach-handlers.bats" \
+		"k8s-block-volume.bats" \
 		"k8s-caps.bats" \
 		"k8s-configmap.bats" \
 		"k8s-copy-file.bats" \
