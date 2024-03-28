@@ -116,7 +116,7 @@ For further details, see the
 
 ## Agent options
 
-The kata agent has the ability to configure agent options in guest kernel command line at runtime. Currently, the following agent options can be configured: 
+The kata agent has the ability to configure agent options in guest kernel command line at runtime. Currently, the following agent options can be configured:
 
 | Option | Name | Description  | Type | Default |
 |-|-|:-:|:-:|:-:|
@@ -126,6 +126,7 @@ The kata agent has the ability to configure agent options in guest kernel comman
 | `agent.debug_console_vport` | Debug console port | Allow to specify the `vsock` port to connect the debugging console | integer | `0` |
 | `agent.devmode` | Developer mode | Allow the agent process to coredump | boolean | `false` |
 | `agent.hotplug_timeout` | Hotplug timeout | Allow to configure hotplug timeout(seconds) of block devices | integer | `3` |
+| `agent.guest_components_rest_api` | `api-server-rest` configuration | Select the features that the API Server Rest attestation component will run with. Valid values are `all`, `attestation`, `resource`, or `none` to not launch the `api-server-rest` component | string | `resource` |
 | `agent.https_proxy` | HTTPS proxy | Allow to configure `https_proxy` in the guest | string | `""` |
 | `agent.log` | Log level | Allow the agent log level to be changed (produces more or less output) | string | `"info"` |
 | `agent.log_vport` | Log port | Allow to specify the `vsock` port to read logs | integer | `0` |
@@ -136,7 +137,7 @@ The kata agent has the ability to configure agent options in guest kernel comman
 | `systemd.unified_cgroup_hierarchy` | `Cgroup hierarchy` | Allow to setup v2 cgroups | boolean | `false` |
 
 > **Note:** Accepted values for some agent options
->  - `agent.config_file`: If we enable `agent.config_file` in guest kernel command line, 
+>  - `agent.config_file`: If we enable `agent.config_file` in guest kernel command line,
 >    we will generate the agent config from it.
 >    The agent will fail to start if the configuration file is not present,
 >    or if it can't be parsed properly.
@@ -147,9 +148,9 @@ The kata agent has the ability to configure agent options in guest kernel comman
 >  - `agent.trace`: true | false
 >  - `systemd.unified_cgroup_hierarchy`: true | false
 
-For instance, you can enable the debug console and set the agent log level to debug by configuring the guest kernel command line in the configuration file: 
+For instance, you can enable the debug console and set the agent log level to debug by configuring the guest kernel command line in the configuration file:
 ```toml
-kernel_params = "agent.debug_console agent.log=debug agent.hotplug_timeout=10" 
+kernel_params = "agent.debug_console agent.log=debug agent.hotplug_timeout=10"
 ```
 results in:
 ```bash
