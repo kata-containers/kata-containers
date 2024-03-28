@@ -446,6 +446,14 @@ disable_selinux=@DEFDISABLESELINUX@
 # (default: true)
 disable_guest_selinux=@DEFDISABLEGUESTSELINUX@
 
+# Default number of queues for the tap device.
+#  <= 0 will be set to the same value as default_vcpus
+#  > 0 will be set to the value
+#  > defaultMaxVCPUs will be set to default_vcpus
+#  Leaving it at default should yield the best performance in a multi-stream scenario.
+#  If your application is single-stream it's better to set it at 1.
+network_queues = 0
+
 
 [factory]
 # VM templating support. Once enabled, new VMs are created from template

@@ -574,6 +574,9 @@ type HypervisorConfig struct {
 	// Size of virtqueues
 	VirtioFSQueueSize uint32
 
+	// Numbmer of queues for the tap interface
+	NetworkQueues uint32
+
 	// User ID.
 	Uid uint32
 

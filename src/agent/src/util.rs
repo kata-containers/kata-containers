@@ -13,6 +13,12 @@ use tokio::sync::watch::Receiver;
 use tokio_vsock::{Incoming, VsockListener, VsockStream};
 use tracing::instrument;
 
+// Handle the differing ioctl(2) request types for different targets
+#[cfg(target_env = "musl")]
+pub type IoctlRequestType = libc::c_int;
+#[cfg(target_env = "gnu")]
+pub type IoctlRequestType = libc::c_ulong;
+
 // Size of I/O read buffer
 const BUF_SIZE: usize = 8192;
 
