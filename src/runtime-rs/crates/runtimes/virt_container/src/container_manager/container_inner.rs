@@ -82,7 +82,8 @@ impl ContainerInner {
             .get_mut(&process.exec_id)
             .ok_or_else(|| Error::ProcessNotFound(process.clone()))?;
 
-        self.agent
+        let err = self
+            .agent
             .exec_process(agent::ExecProcessRequest {
                 process_id: process.clone().into(),
                 string_user: None,
@@ -99,10 +100,19 @@ impl ContainerInner {
                     .as_ref()
                     .and_then(|io| io.stderr_port),
             })
-            .await
-            .context("exec process")?;
-        exec.process.set_status(ProcessStatus::Running).await;
-        Ok(())
+            .await;
+        match err {
+            Err(e) => {
+                error!(self.logger, "start_exec_process error: {:?}", e);
+                // notify all exit watcher
+                let _ = exec.process.exit_watcher_tx.take();
+                Err(e).context("exec process")
+            }
+            Ok(_) => {
+                exec.process.set_status(ProcessStatus::Running).await;
+                Ok(())
+            }
+        }
     }
 
     pub(crate) async fn win_resize_process(
