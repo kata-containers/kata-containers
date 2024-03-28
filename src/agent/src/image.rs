@@ -41,6 +41,15 @@ fn sl() -> slog::Logger {
     slog_scope::logger().new(o!("subsystem" => "image"))
 }
 
+// Function to copy a file if it does not exist at the destination
+fn copy_if_not_exists(src: &Path, dst: &Path) -> Result<()> {
+    if let Some(dst_dir) = dst.parent() {
+        fs::create_dir_all(dst_dir)?;
+    }
+    fs::copy(src, dst)?;
+    Ok(())
+}
+
 pub struct ImageService {
     image_client: ImageClient,
     images: HashMap<String, String>,
@@ -66,26 +75,41 @@ impl ImageService {
         if !guest_pause_bundle.exists() {
             bail!("Pause image not present in rootfs");
         }
+        let guest_pause_config = guest_pause_bundle.join(CONFIG_JSON);
 
         info!(sl(), "use guest pause image cid {:?}", cid);
         let pause_bundle = Path::new(CONTAINER_BASE).join(cid).join(target_subpath);
         let pause_rootfs = pause_bundle.join("rootfs");
         fs::create_dir_all(&pause_rootfs)?;
+        info!(sl(), "pause_rootfs {:?}", pause_rootfs);
+        let image_oci = oci::Spec::load(guest_pause_config.to_str().ok_or_else(|| {
+            anyhow!(
+                "Invalid container image OCI config path {:?}",
+                guest_pause_config
+            )
+        })?)
+        .context("load image config file")?;
 
-        let copy_if_not_exists = |src: &Path, dst: &Path| -> Result<()> {
-            if !dst.exists() {
-                info!(sl(), "copying file {src:?} to {dst:?}");
-                fs::copy(src, dst)?;
-            }
-            Ok(())
-        };
+        let image_oci_process = image_oci.process.ok_or_else(|| {
+            anyhow!("The image config file does not contain a process specification.")
+        })?;
+        info!(
+            sl(),
+            "pause image oci process {:?}",
+            image_oci_process.clone()
+        );
+
+        // Ensure that the args vector is not empty before accessing its elements.
+        let args = image_oci_process.args;
+        // Check the number of arguments.
+        if args.len() != 1 {
+            bail!("The number of args should be only one! Please check the pause image.");
+        }
+        let arg_path = Path::new(&args[0]).strip_prefix("/")?;
+        copy_if_not_exists(&guest_pause_config, &pause_bundle.join(CONFIG_JSON))?;
         copy_if_not_exists(
-            &guest_pause_bundle.join(CONFIG_JSON),
-            &pause_bundle.join(CONFIG_JSON),
-        )?;
-        copy_if_not_exists(
-            &guest_pause_bundle.join("rootfs/pause"),
-            &pause_rootfs.join("pause"),
+            &guest_pause_bundle.join("rootfs").join(arg_path),
+            &pause_rootfs.join(arg_path),
         )?;
 
         Ok(pause_rootfs.display().to_string())
