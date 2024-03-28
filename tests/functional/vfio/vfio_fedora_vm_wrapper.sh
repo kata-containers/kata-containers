@@ -177,11 +177,14 @@ ${environment}
     cri_containerd=\$(get_from_kata_deps "externals.containerd.lts")
     cri_tools=\$(get_from_kata_deps "externals.critools.latest")
     install_cri_containerd \${cri_containerd}
-    install_cri_tools \${cri_tools}
 
     kata_tarball_dir="kata-artifacts"
     install_kata
 
+    if [ "\${KATA_HYPERVISOR}" = "clh" ]; then
+        export VFIO_CHECK_NUM_DEVICES=1
+        export VFIO_PORT=root-port
+    fi
     sudo /workspace/tests/functional/vfio/run.sh -s false -p \${KATA_HYPERVISOR} -m q35 -i image
     sudo /workspace/tests/functional/vfio/run.sh -s true -p \${KATA_HYPERVISOR} -m q35 -i image
 
