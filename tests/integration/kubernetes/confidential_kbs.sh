@@ -269,7 +269,7 @@ function kbs_k8s_deploy() {
 
 	if [ -n "$ingress" ]; then
 		echo "::group::Check the kbs service is exposed"
-		svc_host=$(kbs_k8s_svc_host)
+		svc_host=$(kbs_k8s_svc_http_addr)
 		if [ -z "$svc_host" ]; then
 			echo "ERROR: service host not found"
 			return 1
@@ -296,6 +296,11 @@ kbs_k8s_svc_host() {
 	if kubectl get ingress -n "$KBS_NS" 2>/dev/null | grep -q kbs; then
 		kubectl get ingress kbs -n "$KBS_NS" \
 			-o jsonpath='{.spec.rules[0].host}' 2>/dev/null
+	elif kubectl get svc kbs-nodeport -n "$KBS_NS" &>/dev/null; then
+			local host
+			host=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalIP")].address}' -n "$KBS_NS")
+			[ -z "$host"] && host=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' -n "$KBS_NS")
+			echo "$host"
 	else
 		kubectl get svc kbs -n "$KBS_NS" \
 			-o jsonpath='{.spec.clusterIP}' 2>/dev/null
@@ -309,6 +314,8 @@ kbs_k8s_svc_port() {
 	if kubectl get ingress -n "$KBS_NS" 2>/dev/null | grep -q kbs; then
 		# Assume served on default HTTP port 80
 		echo "80"
+	elif kubectl get svc kbs-nodeport -n "$KBS_NS" &>/dev/null; then
+		kubectl get -o jsonpath='{.spec.ports[0].nodePort}' svc kbs-nodeport -n "$KBS_NS"
 	else
 		kubectl get svc kbs -n "$KBS_NS" \
 			-o jsonpath='{.spec.ports[0].port}' 2>/dev/null
@@ -406,5 +413,33 @@ _handle_ingress_aks() {
 	mv ingress.yaml.tmp ingress.yaml
 
 	kustomize edit add resource ingress.yaml
+	popd
+}
+
+
+# Implements the ingress handler for servernode
+# this is useful on kcli or anywhere where cluster IPs are accessible
+# from the testing machines.
+#
+_handle_ingress_nodeport() {
+	pushd "${COCO_KBS_DIR}/config/kubernetes/overlays"
+
+	cat > nodeport_service.yaml <<EOF
+# Service to expose the KBS on nodes
+apiVersion: v1
+kind: Service
+metadata:
+  name: kbs-nodeport
+  namespace: "$KBS_NS"
+spec:
+  selector:
+    app: kbs
+  ports:
+  - protocol: TCP
+    port: 8080
+    targetPort: 8080
+  type: NodePort
+EOF
+	kustomize edit add resource nodeport_service.yaml
 	popd
 }
