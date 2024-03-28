@@ -140,7 +140,7 @@ const (
 
 func isDimmSupported(config *Config) bool {
 	switch runtime.GOARCH {
-	case "amd64", "386", "ppc64le", "arm64":
+	case "amd64", "386", "ppc64le", "arm64", "loong64":
 		if config != nil {
 			if config.Machine.Type == MachineTypeMicrovm {
 				// microvm does not support NUMA

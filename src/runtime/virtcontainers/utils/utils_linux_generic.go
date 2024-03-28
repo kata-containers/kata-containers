@@ -1,4 +1,4 @@
-//go:build amd64 || arm64 || s390x || !ppc64le
+//go:build amd64 || arm64 || s390x || loong64 || !ppc64le
 
 // Copyright (c) 2019 IBM
 //

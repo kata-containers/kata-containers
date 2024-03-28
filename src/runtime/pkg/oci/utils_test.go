@@ -418,6 +418,9 @@ func TestGetShmSizeBindMounted(t *testing.T) {
 		// PAGE_SIZE on ppc64le is 65536
 		size = 65536
 	}
+	if runtime.GOARCH == "loong64" {
+		size = 16384
+	}
 
 	shmOptions := "mode=1777,size=" + strconv.Itoa(size)
 	err = unix.Mount("shm", shmPath, "tmpfs", unix.MS_NOEXEC|unix.MS_NOSUID|unix.MS_NODEV, shmOptions)

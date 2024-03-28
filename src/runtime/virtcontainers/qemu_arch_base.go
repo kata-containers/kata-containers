@@ -218,7 +218,7 @@ const (
 	// QemuMicrovm is the QEMU microvm machine type for amd64
 	QemuMicrovm = "microvm"
 
-	// QemuVirt is the QEMU virt machine type for aarch64 or amd64
+	// QemuVirt is the QEMU virt machine type for aarch64 or amd64 or loongarch64
 	QemuVirt = "virt"
 
 	// QemuPseries is a QEMU virt machine type for ppc64le
