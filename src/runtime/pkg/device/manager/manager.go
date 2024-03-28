@@ -83,7 +83,7 @@ func NewDeviceManager(blockDriver string, vhostUserStoreEnabled bool, vhostUserS
 	return dm
 }
 
-func (dm *deviceManager) findDevice(devInfo *config.DeviceInfo) api.Device {
+func (dm *deviceManager) FindDevice(devInfo *config.DeviceInfo) api.Device {
 	// For devices with a major of -1, we use the host path to find existing instances.
 	if devInfo.Major == -1 {
 		for _, dev := range dm.devices {
@@ -122,7 +122,7 @@ func (dm *deviceManager) createDevice(devInfo config.DeviceInfo) (dev api.Device
 		}
 	}()
 
-	if existingDev := dm.findDevice(&devInfo); existingDev != nil {
+	if existingDev := dm.FindDevice(&devInfo); existingDev != nil {
 		return existingDev, nil
 	}
 

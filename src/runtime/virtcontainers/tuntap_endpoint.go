@@ -103,12 +103,13 @@ func (endpoint *TuntapEndpoint) Detach(ctx context.Context, netNsCreated bool, n
 }
 
 // HotAttach for the tun/tap endpoint uses hot plug device
-func (endpoint *TuntapEndpoint) HotAttach(ctx context.Context, h Hypervisor) error {
+func (endpoint *TuntapEndpoint) HotAttach(ctx context.Context, s *Sandbox) error {
 	networkLogger().Info("Hot attaching tun/tap endpoint")
 
 	span, ctx := tuntapTrace(ctx, "HotAttach", endpoint)
 	defer span.End()
 
+	h := s.hypervisor
 	if err := tuntapNetwork(endpoint, h.HypervisorConfig().NumVCPUs(), h.HypervisorConfig().DisableVhostNet); err != nil {
 		networkLogger().WithError(err).Error("Error bridging tun/tap ep")
 		return err
@@ -122,7 +123,7 @@ func (endpoint *TuntapEndpoint) HotAttach(ctx context.Context, h Hypervisor) err
 }
 
 // HotDetach for the tun/tap endpoint uses hot pull device
-func (endpoint *TuntapEndpoint) HotDetach(ctx context.Context, h Hypervisor, netNsCreated bool, netNsPath string) error {
+func (endpoint *TuntapEndpoint) HotDetach(ctx context.Context, s *Sandbox, netNsCreated bool, netNsPath string) error {
 	networkLogger().Info("Hot detaching tun/tap endpoint")
 
 	span, ctx := tuntapTrace(ctx, "HotDetach", endpoint)
@@ -134,6 +135,7 @@ func (endpoint *TuntapEndpoint) HotDetach(ctx context.Context, h Hypervisor, net
 		networkLogger().WithError(err).Warn("Error un-bridging tun/tap ep")
 	}
 
+	h := s.hypervisor
 	if _, err := h.HotplugRemoveDevice(ctx, endpoint, NetDev); err != nil {
 		networkLogger().WithError(err).Error("Error detach tun/tap ep")
 		return err
