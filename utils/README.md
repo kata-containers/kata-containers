@@ -87,36 +87,20 @@ This means you can switch between hypervisors whenever you wish.
 
 #### List available hypervisors
 
-Run one of the following commands on an installed system.
+Run the following command on an installed system:
 
-- If you Kata Containers installation includes the `kata-manager.sh` script, run:
-
-  ```bash
-  $ kata-manager -L
-  ```
-
-- If your Kata Containers installation does not include the `kata-manager.sh` script, run:
-
-  ```bash
-  $ bash -c "$(curl -fsSL https://raw.githubusercontent.com/kata-containers/kata-containers/main/utils/kata-manager.sh) -L"
-  ```
+```bash
+$ kata-manager -L
+```
 
 #### Show the default packaged hypervisor
 
-To show the default packaged hypervisor, run one of the following
-commands on an installed system:
+To show the default packaged hypervisor, run the following
+command on an installed system:
 
-- If you Kata Containers installation includes the `kata-manager.sh` script, run:
-
-  ```bash
-  $ kata-manager -L | grep default
-  ```
-
-- If your Kata Containers installation does not include the `kata-manager.sh` script, run:
-
-  ```bash
-  $ bash -c "$(curl -fsSL https://raw.githubusercontent.com/kata-containers/kata-containers/main/utils/kata-manager.sh) -L | grep default"
-  ```
+```bash
+$ kata-manager -L | grep default
+```
 
 #### Show the locally configured hypervisor
 
@@ -124,19 +108,11 @@ commands on an installed system:
 file.
 
 To show details of the _local_ copy of the configuration files, run
-one of the following on an installed system.
+the following command on an installed system:
 
-- If you Kata Containers installation includes the `kata-manager.sh` script, run:
-
-  ```bash
-  $ kata-manager -e
-  ```
-
-- If your Kata Containers installation does not include the `kata-manager.sh` script, run:
-
-  ```bash
-  $ bash -c "$(curl -fsSL https://raw.githubusercontent.com/kata-containers/kata-containers/main/utils/kata-manager.sh) -e"
-  ```
+```bash
+$ kata-manager -e
+```
 
 > **Note:** This command can only be run once Kata has been installed.
 
@@ -169,19 +145,11 @@ $ bash -c "$(curl -fsSL https://raw.githubusercontent.com/kata-containers/kata-c
 
 To switch the local hypervisor config on an installed system use the
 `-S` option. For example, to switch to the Cloud Hypervisor hypervisor,
-run one of the following commands on an installed system:
+run the following command on an installed system:
 
-- If you Kata Containers installation includes the `kata-manager.sh` script, run:
-
-  ```bash
-  $ kata-manager -S clh
-  ```
-
-- If your Kata Containers installation does not include the `kata-manager.sh` script, run:
-
-  ```bash
-  $ bash -c "$(curl -fsSL https://raw.githubusercontent.com/kata-containers/kata-containers/main/utils/kata-manager.sh) -S clh"
-  ```
+```bash
+$ kata-manager -S clh
+```
 
 > **Note:** See the [List available hypervisors](#list-available-hypervisors) section
 > for details of how to obtain the list of available hypervisor names.
@@ -189,16 +157,8 @@ run one of the following commands on an installed system:
 #### Switch to the default packaged hypervisor
 
 To undo your changes and switch back to the default Kata hypervisor,
-specify the hypervisor name as `default`. For example, run one of the following commands on an installed system:
+specify the hypervisor name as `default`. For example, run the following command on an installed system:
 
-- If you Kata Containers installation includes the `kata-manager.sh` script, run:
-
-  ```bash
-  $ kata-manager -S default
-  ```
-
-- If your Kata Containers installation does not include the `kata-manager.sh` script, run:
-
-  ```bash
-  $ bash -c "$(curl -fsSL https://raw.githubusercontent.com/kata-containers/kata-containers/main/utils/kata-manager.sh) -S default"
-  ```
+```bash
+$ kata-manager -S default
+```
