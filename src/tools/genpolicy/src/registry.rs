@@ -14,7 +14,7 @@ use anyhow::{anyhow, bail, Result};
 use docker_credential::{CredentialRetrievalError, DockerCredential};
 use log::warn;
 use log::{debug, info, LevelFilter};
-use oci_distribution::client::{linux_amd64_resolver, ClientConfig};
+use oci_distribution::client::{linux_amd64_resolver, ClientConfig, ClientProtocol};
 use oci_distribution::{manifest, secrets::RegistryAuth, Client, Reference};
 use serde::{Deserialize, Serialize};
 use sha2::{digest::typenum::Unsigned, digest::OutputSizeUser, Sha256};
@@ -62,14 +62,23 @@ pub struct ImageLayer {
     pub verity_hash: String,
 }
 
+/// Options for working with container registries.
+#[derive(Clone, Debug)]
+pub struct Options {
+    pub use_cached_files: bool,
+    pub pause_container_image: String,
+    pub insecure_registries: Vec<String>,
+}
+
 impl Container {
-    pub async fn new(use_cached_files: bool, image: &str) -> Result<Self> {
+    pub async fn new(options: &Options, image: &str) -> Result<Self> {
         info!("============================================");
         info!("Pulling manifest and config for {:?}", image);
         let reference: Reference = image.to_string().parse().unwrap();
         let auth = build_auth(&reference);
 
         let mut client = Client::new(ClientConfig {
+            protocol: ClientProtocol::HttpsExcept(options.insecure_registries.clone()),
             platform_resolver: Some(Box::new(linux_amd64_resolver)),
             ..Default::default()
         });
@@ -92,7 +101,7 @@ impl Container {
                 let config_layer: DockerConfigLayer =
                     serde_json::from_str(&config_layer_str).unwrap();
                 let image_layers = get_image_layers(
-                    use_cached_files,
+                    options.use_cached_files,
                     &mut client,
                     &reference,
                     &manifest,
@@ -426,8 +435,8 @@ fn do_create_verity_hash_file(decompressed_path: &PathBuf) -> Result<()> {
     Ok(())
 }
 
-pub async fn get_container(use_cache: bool, image: &str) -> Result<Container> {
-    Container::new(use_cache, image).await
+pub async fn get_container(options: &Options, image: &str) -> Result<Container> {
+    Container::new(options, image).await
 }
 
 fn build_auth(reference: &Reference) -> RegistryAuth {

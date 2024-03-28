@@ -11,6 +11,7 @@ use crate::persistent_volume_claim;
 use crate::pod;
 use crate::pod_template;
 use crate::policy;
+use crate::registry;
 use crate::settings;
 use crate::yaml;
 
@@ -95,8 +96,8 @@ struct RollingUpdateStatefulSetStrategy {
 
 #[async_trait]
 impl yaml::K8sResource for StatefulSet {
-    async fn init(&mut self, use_cache: bool, doc_mapping: &serde_yaml::Value, _silent: bool) {
-        yaml::k8s_resource_init(&mut self.spec.template.spec, use_cache).await;
+    async fn init(&mut self, registry_options: &registry::Options, doc_mapping: &serde_yaml::Value, _silent: bool) {
+        yaml::k8s_resource_init(&mut self.spec.template.spec, registry_options).await;
         self.doc_mapping = doc_mapping.clone();
     }
 

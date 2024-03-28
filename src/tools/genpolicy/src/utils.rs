@@ -5,6 +5,8 @@
 
 use clap::Parser;
 
+use crate::{registry, settings};
+
 #[derive(Debug, Parser)]
 struct CommandLineOptions {
     #[clap(
@@ -64,16 +66,19 @@ struct CommandLineOptions {
         help = "Ignore unsupported input Kubernetes YAML fields. This is not recommeded unless you understand exactly how genpolicy works!"
     )]
     silent_unsupported_fields: bool,
+
+    #[clap(long, help = "Registry that uses plain HTTP. Can be passed more than once to configure multiple insecure registries.")]
+    insecure_registry: Vec<String>,
 }
 
 /// Application configuration, derived from on command line parameters.
 #[derive(Clone, Debug)]
 pub struct Config {
-    pub use_cache: bool,
+    pub registry_options: registry::Options,
 
     pub yaml_file: Option<String>,
     pub rego_rules_path: String,
-    pub json_settings_path: String,
+    pub settings: settings::Settings,
     pub config_map_files: Option<Vec<String>>,
 
     pub silent_unsupported_fields: bool,
@@ -96,11 +101,19 @@ impl Config {
             None
         };
 
+        let settings = settings::Settings::new(&args.json_settings_path);
+
+        let registry_options = registry::Options {
+            use_cached_files: args.use_cached_files,
+            pause_container_image: settings.cluster_config.pause_container_image.clone(),
+            insecure_registries: args.insecure_registry,
+        };
+
         Self {
-            use_cache: args.use_cached_files,
+            registry_options: registry_options,
             yaml_file: args.yaml_file,
             rego_rules_path: args.rego_rules_path,
-            json_settings_path: args.json_settings_path,
+            settings,
             config_map_files: cm_files,
             silent_unsupported_fields: args.silent_unsupported_fields,
             raw_out: args.raw_out,

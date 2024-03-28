@@ -9,6 +9,7 @@
 use crate::obj_meta;
 use crate::pod;
 use crate::policy;
+use crate::registry;
 use crate::settings;
 use crate::yaml;
 
@@ -73,7 +74,7 @@ pub fn get_value(value_from: &pod::EnvVarSource, secrets: &Vec<Secret>) -> Optio
 
 #[async_trait]
 impl yaml::K8sResource for Secret {
-    async fn init(&mut self, _use_cache: bool, doc_mapping: &serde_yaml::Value, _silent: bool) {
+    async fn init(&mut self, _registry_options: &registry::Options, doc_mapping: &serde_yaml::Value, _silent: bool) {
         self.doc_mapping = doc_mapping.clone();
     }
 
