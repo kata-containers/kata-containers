@@ -26,6 +26,11 @@ url = "2.5.0"
 kata-sys-util = { path = "../libs/kata-sys-util" }
 kata-types = { path = "../libs/kata-types" }
 safe-path = { path = "../libs/safe-path" }
+prost = "0.11"
+tonic = {version="0.8", features = ["tls"]}
+zip = "0.5.4"
+
+kbs_protocol = { git = "https://github.com/confidential-containers/guest-components.git", rev = "42b7c96", default-features = false,  features = [ "background_check", "openssl" ]}
 
 # Async helpers
 async-trait = "0.1.42"
@@ -78,6 +83,9 @@ openssl = { version = "0.10.54", features = ["vendored"], optional = true }
 
 # Image pull/decrypt
 image-rs = { git = "https://github.com/confidential-containers/guest-components", rev = "ca6b438", default-features = true, optional = true }
+
+[build-dependencies]
+tonic-build = "0.8"
 
 [dev-dependencies]
 tempfile = "3.1.0"
