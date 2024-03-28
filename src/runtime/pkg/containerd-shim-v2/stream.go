@@ -10,9 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"strings"
 	"sync"
-	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -127,20 +125,7 @@ func ioCopy(shimLog *logrus.Entry, exitch, stdinCloser chan struct{}, tty *ttyIO
 			shimLog.Debug("stdout io stream copy started")
 			p := bufPool.Get().(*[]byte)
 			defer bufPool.Put(p)
-
-			for {
-				var _, err = io.CopyBuffer(tty.io.Stdout(), stdoutPipe, *p)
-				if err != nil {
-					shimLog.Debug("stdout io stream copy error happens: error = %w", err.Error())
-					if !strings.Contains(err.Error(), "blocked by policy") {
-						break
-					}
-					time.Sleep(1 * time.Second)
-				} else {
-					break
-				}
-			}
-
+			io.CopyBuffer(tty.io.Stdout(), stdoutPipe, *p)
 			if tty.io.Stdin() != nil {
 				// close stdin to make the other routine stop
 				tty.io.Stdin().Close()
