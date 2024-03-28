@@ -7,7 +7,7 @@ use anyhow::{anyhow, Result};
 use clap::{crate_description, crate_name, Parser};
 use liboci_cli::{CommonCmd, GlobalOpts};
 use liboci_cli::{Create, Delete, Kill, Start, State};
-use slog::{o, Logger};
+use slog::Logger;
 use slog_async::AsyncGuard;
 use std::{
     fs::OpenOptions,
@@ -75,23 +75,31 @@ async fn cmd_run(subcmd: SubCommand, root_path: &Path, logger: &Logger) -> Resul
 fn setup_logger(
     log_file: Option<PathBuf>,
     log_level: slog::Level,
+    log_to_stdout: bool,
 ) -> Result<(Logger, Option<AsyncGuard>)> {
-    if let Some(ref file) = log_file {
-        let log_writer = OpenOptions::new()
-            .write(true)
-            .read(true)
-            .create(true)
-            .truncate(true)
-            .open(file)?;
+    match log_to_stdout {
+        false => {
+            if let Some(file) = log_file {
+                let log_writer = OpenOptions::new()
+                    .write(true)
+                    .read(true)
+                    .create(true)
+                    .truncate(true)
+                    .open(file)?;
 
-        // TODO: Support 'text' log format.
-        let (logger_local, logger_async_guard_local) =
-            logging::create_logger(crate_name!(), crate_name!(), log_level, log_writer);
+                // TODO: Support 'text' log format.
+                let (logger_local, logger_async_guard_local) =
+                    logging::create_logger(crate_name!(), crate_name!(), log_level, log_writer);
 
-        Ok((logger_local, Some(logger_async_guard_local)))
-    } else {
-        let logger = slog::Logger::root(slog::Discard, o!());
-        Ok((logger, None))
+                Ok((logger_local, Some(logger_async_guard_local)))
+            } else {
+                unreachable!();
+            }
+        }
+        true => {
+            let (logger_local, logger_async_guard_local) = logging::create_term_logger(log_level);
+            Ok((logger_local, Some(logger_async_guard_local)))
+        }
     }
 }
 
@@ -109,13 +117,19 @@ async fn real_main() -> Result<()> {
         PathBuf::from(DEFAULT_ROOT_DIR)
     };
 
+    let mut log_to_stdout = false;
+
     let log_level = if cli.global.debug {
+        log_to_stdout = true;
         slog::Level::Debug
+    } else if cli.global.log.is_none() {
+        log_to_stdout = true;
+        slog::Level::Error
     } else {
         DEFAULT_LOG_LEVEL
     };
 
-    let (logger, _async_guard) = setup_logger(cli.global.log, log_level)?;
+    let (logger, _async_guard) = setup_logger(cli.global.log, log_level, log_to_stdout)?;
 
     cmd_run(cli.subcmd, &root_path, &logger).await?;
 
