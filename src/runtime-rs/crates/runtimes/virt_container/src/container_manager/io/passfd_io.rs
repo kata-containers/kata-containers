@@ -101,6 +101,12 @@ impl PassfdIo {
 
         if let Some(stdout) = &self.stdout {
             let fout = OpenOptions::new()
+                //A process can open a FIFO in nonblocking mode. In this case, opening for read-only
+                //will succeed even if no-one has opened on the write side yet, opening for write-only
+                //will fail with ENXIO (no such device or address) unless the other end has already been
+                //opened. Since we cann't make sure the peer had opened this pipe, thus here must open it
+                //with read & write.
+                .read(true)
                 .write(true)
                 .custom_flags(libc::O_NONBLOCK)
                 .open(stdout)
@@ -117,6 +123,8 @@ impl PassfdIo {
             // stderr is not used in terminal mode
             if let Some(stderr) = &self.stderr {
                 let ferr = OpenOptions::new()
+                    //The same with stdout, it must opened with read & write.
+                    .read(true)
                     .write(true)
                     .custom_flags(libc::O_NONBLOCK)
                     .open(stderr)
