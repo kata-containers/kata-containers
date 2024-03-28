@@ -93,6 +93,7 @@ function create_cluster() {
         -n "${rg}"
 
     az aks create \
+        --tier standard \
         -g "${rg}" \
         --node-resource-group "node-${rg}" \
         -n "$(_print_cluster_name ${test_type})" \
