@@ -3,17 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use super::network::{generate_netdev_fds, NetDevice};
-use crate::utils::clear_fd_flags;
-use crate::{kernel_param::KernelParams, HypervisorConfig, NetworkConfig};
+use crate::utils::{clear_cloexec, create_vhost_net_fds, open_named_tuntap};
+use crate::{kernel_param::KernelParams, Address, HypervisorConfig};
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use kata_types::config::hypervisor::NetworkInfo;
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::fs::{read_to_string, File};
 use std::os::fd::AsRawFd;
-use std::os::unix::io::RawFd;
+use tokio;
 
 // These should have been called MiB and GiB for better readability but the
 // more fitting names unfortunately generate linter warnings.
@@ -811,13 +810,13 @@ impl ToQemuParams for DeviceVirtioBlk {
 
 struct VhostVsock {
     bus_type: VirtioBusType,
-    vhostfd: RawFd,
+    vhostfd: tokio::fs::File,
     guest_cid: u32,
     disable_modern: bool,
 }
 
 impl VhostVsock {
-    fn new(vhostfd: RawFd, guest_cid: u32, bus_type: VirtioBusType) -> VhostVsock {
+    fn new(vhostfd: tokio::fs::File, guest_cid: u32, bus_type: VirtioBusType) -> VhostVsock {
         VhostVsock {
             bus_type,
             vhostfd,
@@ -840,7 +839,7 @@ impl ToQemuParams for VhostVsock {
         if self.disable_modern {
             params.push("disable-modern=true".to_owned());
         }
-        params.push(format!("vhostfd={}", self.vhostfd));
+        params.push(format!("vhostfd={}", self.vhostfd.as_raw_fd()));
         params.push(format!("guest-cid={}", self.guest_cid));
 
         Ok(vec!["-device".to_owned(), params.join(",")])
@@ -892,22 +891,135 @@ impl ToQemuParams for Serial {
     }
 }
 
+fn format_fds(files: &[File]) -> String {
+    files
+        .iter()
+        .map(|file| file.as_raw_fd().to_string())
+        .collect::<Vec<String>>()
+        .join(":")
+}
+
+#[derive(Debug)]
+struct Netdev {
+    id: String,
+
+    // File descriptors for vhost multi-queue support.
+    // {
+    //      queue_fds: Vec<File>,
+    //      vhost_fds: Vec<File>,
+    // }
+    fds: HashMap<String, Vec<File>>,
+
+    // disable_vhost_net disables virtio device emulation from the host kernel instead of from qemu.
+    disable_vhost_net: bool,
+}
+
+impl Netdev {
+    fn new(id: &str, host_if_name: &str, num_queues: u32) -> Result<Netdev> {
+        let fds = HashMap::from([
+            (
+                "fds".to_owned(),
+                open_named_tuntap(host_if_name, num_queues)?,
+            ),
+            ("vhostfds".to_owned(), create_vhost_net_fds(num_queues)?),
+        ]);
+        for file in fds.values().flatten() {
+            clear_cloexec(file.as_raw_fd()).context("clearing O_CLOEXEC failed")?;
+        }
+
+        Ok(Netdev {
+            id: id.to_owned(),
+            fds,
+            disable_vhost_net: false,
+        })
+    }
+
+    fn set_disable_vhost_net(&mut self, disable_vhost_net: bool) -> &mut Self {
+        self.disable_vhost_net = disable_vhost_net;
+        self
+    }
+}
+
 #[async_trait]
-impl ToQemuParams for NetDevice {
-    // qemu_params returns the qemu parameters built out of this network device.
+impl ToQemuParams for Netdev {
     async fn qemu_params(&self) -> Result<Vec<String>> {
-        let mut qemu_params: Vec<String> = Vec::new();
+        let mut params: Vec<String> = Vec::new();
+        params.push("tap".to_owned());
+        params.push(format!("id={}", self.id));
 
-        let netdev_params = self.qemu_netdev_params()?;
-        let device_params = self.qemu_device_params()?;
+        if !self.disable_vhost_net {
+            params.push("vhost=on".to_owned());
+            if let Some(vhost_fds) = self.fds.get("vhostfds") {
+                params.push(format!("vhostfds={}", format_fds(vhost_fds)));
+            }
+        }
 
-        qemu_params.push("-netdev".to_owned());
-        qemu_params.push(netdev_params.join(","));
+        if let Some(tuntap_fds) = self.fds.get("fds") {
+            params.push(format!("fds={}", format_fds(tuntap_fds)));
+        }
 
-        qemu_params.push("-device".to_owned());
-        qemu_params.push(device_params.join(","));
+        Ok(vec!["-netdev".to_owned(), params.join(",")])
+    }
+}
 
-        Ok(qemu_params)
+#[derive(Debug)]
+pub struct DeviceVirtioNet {
+    // driver is the qemu device driver
+    device_driver: String,
+
+    // id is the corresponding backend net device identifier.
+    netdev_id: String,
+
+    // mac_address is the guest-side networking device interface MAC address.
+    mac_address: Address,
+
+    // disable_modern prevents qemu from relying on fast MMIO.
+    disable_modern: bool,
+
+    num_queues: u32,
+}
+
+impl DeviceVirtioNet {
+    fn new(netdev_id: &str, mac_address: Address) -> DeviceVirtioNet {
+        DeviceVirtioNet {
+            device_driver: "virtio-net-pci".to_owned(),
+            netdev_id: netdev_id.to_owned(),
+            mac_address,
+            disable_modern: false,
+            num_queues: 1,
+        }
+    }
+
+    fn set_disable_modern(&mut self, disable_modern: bool) -> &mut Self {
+        self.disable_modern = disable_modern;
+        self
+    }
+
+    fn set_num_queues(&mut self, num_queues: u32) -> &mut Self {
+        self.num_queues = num_queues;
+        self
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for DeviceVirtioNet {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params: Vec<String> = Vec::new();
+
+        //params.push(format!("driver={}", &self.device_driver.to_string()));
+        params.push(self.device_driver.clone());
+        params.push(format!("netdev={}", &self.netdev_id));
+
+        params.push(format!("mac={:?}", self.mac_address));
+
+        if self.disable_modern {
+            params.push("disable-modern=true".to_owned());
+        }
+
+        params.push("mq=on".to_owned());
+        params.push(format!("vectors={}", 2 * self.num_queues + 2));
+
+        Ok(vec!["-device".to_owned(), params.join(",")])
     }
 }
 
@@ -972,6 +1084,19 @@ fn is_running_in_vm() -> Result<bool> {
         .skip(1)
         .any(|flag| flag == "hypervisor");
     Ok(res)
+}
+
+fn should_disable_modern() -> bool {
+    match is_running_in_vm() {
+        Ok(retval) => retval,
+        Err(err) => {
+            info!(
+                sl!(),
+                "unable to check if running in VM, assuming not: {}", err
+            );
+            false
+        }
+    }
 }
 
 pub struct QemuCmdLine<'a> {
@@ -1055,25 +1180,13 @@ impl<'a> QemuCmdLine<'a> {
         }
     }
 
-    pub fn add_vsock(&mut self, vhostfd: RawFd, guest_cid: u32) -> Result<()> {
-        clear_fd_flags(vhostfd).context("clear flags failed")?;
+    pub fn add_vsock(&mut self, vhostfd: tokio::fs::File, guest_cid: u32) -> Result<()> {
+        clear_cloexec(vhostfd.as_raw_fd()).context("clearing O_CLOEXEC failed on vsock fd")?;
 
         let mut vhost_vsock_pci = VhostVsock::new(vhostfd, guest_cid, self.bus_type());
 
-        if !self.config.disable_nesting_checks {
-            let nested = match is_running_in_vm() {
-                Ok(retval) => retval,
-                Err(err) => {
-                    info!(
-                        sl!(),
-                        "unable to check if running in VM, assuming not: {}", err
-                    );
-                    false
-                }
-            };
-            if nested {
-                vhost_vsock_pci.set_disable_modern(true);
-            }
+        if !self.config.disable_nesting_checks && should_disable_modern() {
+            vhost_vsock_pci.set_disable_modern(true);
         }
 
         self.devices.push(Box::new(vhost_vsock_pci));
@@ -1130,23 +1243,31 @@ impl<'a> QemuCmdLine<'a> {
 
     pub fn add_network_device(
         &mut self,
-        config: &NetworkConfig,
-        network_info: &NetworkInfo,
-    ) -> Result<Vec<File>> {
-        let disable_vhost_net = network_info.disable_vhost_net;
-        let queues = network_info.network_queues;
+        dev_index: u64,
+        host_dev_name: &str,
+        guest_mac: Address,
+    ) -> Result<()> {
+        let mut netdev = Netdev::new(
+            &format!("network-{}", dev_index),
+            host_dev_name,
+            self.config.network_info.network_queues,
+        )?;
+        if self.config.network_info.disable_vhost_net {
+            netdev.set_disable_vhost_net(true);
+        }
 
-        let (tun_files, vhost_files) = generate_netdev_fds(config, queues)?;
-        let tun_fds: Vec<i32> = tun_files.iter().map(|dev| dev.as_raw_fd()).collect();
-        let vhost_fds: Vec<i32> = vhost_files.iter().map(|dev| dev.as_raw_fd()).collect();
+        let mut virtio_net_device = DeviceVirtioNet::new(&netdev.id, guest_mac);
 
-        let net_device = NetDevice::new(config, disable_vhost_net, tun_fds, vhost_fds);
-        self.devices.push(Box::new(net_device));
+        if should_disable_modern() {
+            virtio_net_device.set_disable_modern(true);
+        }
+        if self.config.network_info.network_queues > 1 {
+            virtio_net_device.set_num_queues(self.config.network_info.network_queues);
+        }
 
-        let dev_files = vec![tun_files, vhost_files];
-        let fds: Vec<File> = dev_files.into_iter().flatten().collect();
-
-        Ok(fds)
+        self.devices.push(Box::new(netdev));
+        self.devices.push(Box::new(virtio_net_device));
+        Ok(())
     }
 
     pub fn add_console(&mut self, console_socket_path: &str) {
