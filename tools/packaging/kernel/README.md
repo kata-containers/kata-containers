@@ -13,8 +13,6 @@ It also requires [yq](https://github.com/mikefarah/yq) version 3.4.1
 
 
 The Linux kernel scripts further require a few packages (flex, bison, and libelf-dev)
-See the CI scripts for your distro for more information...
-Look for the setup*.sh files [here](https://github.com/kata-containers/tests/tree/main/.ci)
 
 
 ## Usage
