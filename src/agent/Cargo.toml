@@ -26,6 +26,7 @@ url = "2.5.0"
 kata-sys-util = { path = "../libs/kata-sys-util" }
 kata-types = { path = "../libs/kata-types" }
 safe-path = { path = "../libs/safe-path" }
+const_format = "0.2.30"
 
 # Async helpers
 async-trait = "0.1.42"
@@ -36,7 +37,7 @@ futures = "0.3.30"
 tokio = { version = "1.28.1", features = ["full"] }
 tokio-vsock = "0.3.1"
 
-netlink-sys = { version = "0.7.0", features = ["tokio_socket",]}
+netlink-sys = { version = "0.7.0", features = ["tokio_socket"] }
 rtnetlink = "0.8.0"
 netlink-packet-utils = "0.4.1"
 ipnetwork = "0.17.0"
@@ -62,7 +63,7 @@ cgroups = { package = "cgroups-rs", version = "0.3.3" }
 tracing = "0.1.26"
 tracing-subscriber = "0.2.18"
 tracing-opentelemetry = "0.13.0"
-opentelemetry = { version = "0.14.0", features = ["rt-tokio-current-thread"]}
+opentelemetry = { version = "0.14.0", features = ["rt-tokio-current-thread"] }
 vsock-exporter = { path = "vsock-exporter" }
 
 # Configuration
@@ -87,16 +88,14 @@ rstest = "0.18.0"
 async-std = { version = "1.12.0", features = ["attributes"] }
 
 [workspace]
-members = [
-    "rustjail",
-]
+members = ["rustjail"]
 
 [profile.release]
 lto = true
 
 [features]
 # The default-pull feature would support all pull types, including sharing images by virtio-fs and pulling images in the guest
-default-pull = [ "guest-pull" ]
+default-pull = ["guest-pull"]
 seccomp = ["rustjail/seccomp"]
 standard-oci-runtime = ["rustjail/standard-oci-runtime"]
 agent-policy = ["http", "openssl", "reqwest"]

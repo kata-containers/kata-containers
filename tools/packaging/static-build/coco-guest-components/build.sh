@@ -38,10 +38,19 @@ sudo docker pull ${container_image} || \
 	 # No-op unless PUSH_TO_REGISTRY is exported as "yes"
 	 push_to_registry "${container_image}")
 
+# Temp settings until we have a matching TEE_PLATFORM
+TEE_PLATFORM=""
+RESOURCE_PROVIDER="kbs,sev"
+ATTESTER="none"
+# snp-attester and tdx-attester crates require packages only available on x86
+[ "$(uname -m)" == "x86_64" ] && ATTESTER="snp-attester,tdx-attester"
+
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
 	--env DESTDIR="${DESTDIR}" \
-	--env TEE_PLATFORM=${TEE_PLATFORM:-all} \
+	--env TEE_PLATFORM=${TEE_PLATFORM:+"all"} \
+	--env RESOURCE_PROVIDER=${RESOURCE_PROVIDER:-} \
+	--env ATTESTER=${ATTESTER:-} \
 	--env coco_guest_components_repo="${coco_guest_components_repo}" \
 	--env coco_guest_components_version="${coco_guest_components_version}" \
 	"${container_image}" \

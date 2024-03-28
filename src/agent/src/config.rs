@@ -3,9 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 use crate::rpc;
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{anyhow, bail, ensure, Context, Result};
 use serde::Deserialize;
 use std::env;
+use std::fmt;
 use std::fs;
 use std::str::FromStr;
 use std::time;
@@ -26,6 +27,7 @@ const LOG_VPORT_OPTION: &str = "agent.log_vport";
 const CONTAINER_PIPE_SIZE_OPTION: &str = "agent.container_pipe_size";
 const UNIFIED_CGROUP_HIERARCHY_OPTION: &str = "agent.unified_cgroup_hierarchy";
 const CONFIG_FILE: &str = "agent.config_file";
+const GUEST_COMPONENTS_REST_API_OPTION: &str = "agent.guest_components_rest_api";
 
 // Configure the proxy settings for HTTPS requests in the guest,
 // to solve the problem of not being able to access the specified image in some cases.
@@ -48,7 +50,6 @@ const ERR_INVALID_GET_VALUE_PARAM: &str = "expected name=value";
 const ERR_INVALID_GET_VALUE_NO_NAME: &str = "name=value parameter missing name";
 const ERR_INVALID_GET_VALUE_NO_VALUE: &str = "name=value parameter missing value";
 const ERR_INVALID_LOG_LEVEL_KEY: &str = "invalid log level key name";
-
 const ERR_INVALID_HOTPLUG_TIMEOUT: &str = "invalid hotplug timeout parameter";
 const ERR_INVALID_HOTPLUG_TIMEOUT_PARAM: &str = "unable to parse hotplug timeout";
 const ERR_INVALID_HOTPLUG_TIMEOUT_KEY: &str = "invalid hotplug timeout key name";
@@ -57,6 +58,29 @@ const ERR_INVALID_CONTAINER_PIPE_SIZE: &str = "invalid container pipe size param
 const ERR_INVALID_CONTAINER_PIPE_SIZE_PARAM: &str = "unable to parse container pipe size";
 const ERR_INVALID_CONTAINER_PIPE_SIZE_KEY: &str = "invalid container pipe size key name";
 const ERR_INVALID_CONTAINER_PIPE_NEGATIVE: &str = "container pipe size should not be negative";
+
+const ERR_INVALID_GUEST_COMPONENTS_REST_API_VALUE: &str = "invalid guest components rest api feature given. Valid values are `all`, `attestation`, `resource`, or `none`";
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq)]
+pub enum GuestComponentsFeatures {
+    All,
+    Attestation,
+    None,
+    #[default]
+    Resource,
+}
+
+impl fmt::Display for GuestComponentsFeatures {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let display = match self {
+            Self::All => String::from("all"),
+            Self::Attestation => String::from("attestation"),
+            Self::None => String::from("none"),
+            Self::Resource => String::from("resource"),
+        };
+        write!(f, "{display}")
+    }
+}
 
 #[derive(Debug)]
 pub struct AgentConfig {
@@ -74,6 +98,7 @@ pub struct AgentConfig {
     pub supports_seccomp: bool,
     pub https_proxy: String,
     pub no_proxy: String,
+    pub guest_components_rest_api: GuestComponentsFeatures,
 }
 
 #[derive(Debug, Deserialize)]
@@ -91,6 +116,7 @@ pub struct AgentConfigBuilder {
     pub tracing: Option<bool>,
     pub https_proxy: Option<String>,
     pub no_proxy: Option<String>,
+    pub guest_components_rest_api: Option<GuestComponentsFeatures>,
 }
 
 macro_rules! config_override {
@@ -154,6 +180,7 @@ impl Default for AgentConfig {
             supports_seccomp: rpc::have_seccomp(),
             https_proxy: String::from(""),
             no_proxy: String::from(""),
+            guest_components_rest_api: GuestComponentsFeatures::default(),
         }
     }
 }
@@ -185,6 +212,11 @@ impl FromStr for AgentConfig {
         config_override!(agent_config_builder, agent_config, tracing);
         config_override!(agent_config_builder, agent_config, https_proxy);
         config_override!(agent_config_builder, agent_config, no_proxy);
+        config_override!(
+            agent_config_builder,
+            agent_config,
+            guest_components_rest_api
+        );
 
         Ok(agent_config)
     }
@@ -286,6 +318,12 @@ impl AgentConfig {
             );
             parse_cmdline_param!(param, HTTPS_PROXY, config.https_proxy, get_url_value);
             parse_cmdline_param!(param, NO_PROXY, config.no_proxy, get_string_value);
+            parse_cmdline_param!(
+                param,
+                GUEST_COMPONENTS_REST_API_OPTION,
+                config.guest_components_rest_api,
+                get_guest_components_features_value
+            );
         }
 
         if let Ok(addr) = env::var(SERVER_ADDR_ENV_VAR) {
@@ -439,6 +477,24 @@ fn get_url_value(param: &str) -> Result<String> {
     Ok(Url::parse(&value)?.to_string())
 }
 
+#[instrument]
+fn get_guest_components_features_value(param: &str) -> Result<GuestComponentsFeatures> {
+    let fields: Vec<&str> = param.split('=').collect();
+    ensure!(fields.len() >= 2, ERR_INVALID_GET_VALUE_PARAM);
+
+    // We need name (but the value can be blank)
+    ensure!(!fields[0].is_empty(), ERR_INVALID_GET_VALUE_NO_NAME);
+
+    let value = fields[1..].join("=");
+    match value.as_str() {
+        "all" => Ok(GuestComponentsFeatures::All),
+        "attestation" => Ok(GuestComponentsFeatures::Attestation),
+        "none" => Ok(GuestComponentsFeatures::None),
+        "resource" => Ok(GuestComponentsFeatures::Resource),
+        _ => Err(anyhow!(ERR_INVALID_GUEST_COMPONENTS_REST_API_VALUE)),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use test_utils::assert_result;
@@ -477,6 +533,7 @@ mod tests {
             tracing: bool,
             https_proxy: &'a str,
             no_proxy: &'a str,
+            guest_components_rest_api: GuestComponentsFeatures,
         }
 
         impl Default for TestData<'_> {
@@ -494,6 +551,7 @@ mod tests {
                     tracing: false,
                     https_proxy: "",
                     no_proxy: "",
+                    guest_components_rest_api: GuestComponentsFeatures::default(),
                 }
             }
         }
@@ -883,6 +941,26 @@ mod tests {
                 no_proxy: "192.168.1.0/24,172.16.0.0/12",
                 ..Default::default()
             },
+            TestData {
+               contents: "agent.guest_components_rest_api=attestation",
+               guest_components_rest_api: GuestComponentsFeatures::Attestation,
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.guest_components_rest_api=resource",
+                guest_components_rest_api: GuestComponentsFeatures::Resource,
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.guest_components_rest_api=all",
+                guest_components_rest_api: GuestComponentsFeatures::All,
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.guest_components_rest_api=none",
+                guest_components_rest_api: GuestComponentsFeatures::None,
+                ..Default::default()
+            },
         ];
 
         let dir = tempdir().expect("failed to create tmpdir");
@@ -932,6 +1010,11 @@ mod tests {
             assert_eq!(d.tracing, config.tracing, "{}", msg);
             assert_eq!(d.https_proxy, config.https_proxy, "{}", msg);
             assert_eq!(d.no_proxy, config.no_proxy, "{}", msg);
+            assert_eq!(
+                d.guest_components_rest_api, config.guest_components_rest_api,
+                "{}",
+                msg
+            );
 
             for v in vars_to_unset {
                 env::remove_var(v);
@@ -1396,6 +1479,68 @@ Caused by:
             let msg = format!("test[{}]: {:?}", i, d);
 
             let result = get_string_value(d.param);
+
+            let msg = format!("{}: result: {:?}", msg, result);
+
+            assert_result!(d.result, result, msg);
+        }
+    }
+
+    #[test]
+    fn test_get_guest_components_features_value() {
+        #[derive(Debug)]
+        struct TestData<'a> {
+            param: &'a str,
+            result: Result<GuestComponentsFeatures>,
+        }
+
+        let tests = &[
+            TestData {
+                param: "",
+                result: Err(anyhow!(ERR_INVALID_GET_VALUE_PARAM)),
+            },
+            TestData {
+                param: "=",
+                result: Err(anyhow!(ERR_INVALID_GET_VALUE_NO_NAME)),
+            },
+            TestData {
+                param: "==",
+                result: Err(anyhow!(ERR_INVALID_GET_VALUE_NO_NAME)),
+            },
+            TestData {
+                param: "x=all",
+                result: Ok(GuestComponentsFeatures::All),
+            },
+            TestData {
+                param: "x=attestation",
+                result: Ok(GuestComponentsFeatures::Attestation),
+            },
+            TestData {
+                param: "x=none",
+                result: Ok(GuestComponentsFeatures::None),
+            },
+            TestData {
+                param: "x=resource",
+                result: Ok(GuestComponentsFeatures::Resource),
+            },
+            TestData {
+                param: "x===",
+                result: Err(anyhow!(ERR_INVALID_GUEST_COMPONENTS_REST_API_VALUE)),
+            },
+            TestData {
+                param: "x==x",
+                result: Err(anyhow!(ERR_INVALID_GUEST_COMPONENTS_REST_API_VALUE)),
+            },
+            TestData {
+                param: "x=x",
+                result: Err(anyhow!(ERR_INVALID_GUEST_COMPONENTS_REST_API_VALUE)),
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            let result = get_guest_components_features_value(d.param);
 
             let msg = format!("{}: result: {:?}", msg, result);
 

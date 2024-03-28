@@ -5,9 +5,10 @@
 
 kubernetes:
   - k8s-block-volume
+  - k8s-confidential-attestation
   - k8s-confidential
   - k8s-guest-pull-image
+  - k8s-inotify
   - k8s-limit-range
   - k8s-number-cpus
   - k8s-oom
-  - k8s-inotify
