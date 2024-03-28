@@ -9,6 +9,33 @@
 >
 > - These instructions only apply to the current default (golang) Kata runtime.
 >   See https://github.com/kata-containers/kata-containers/issues/9060 for further details.
+>
+> - If you get a "command not found" error when you try to run the `kata-manager` command,
+>   your version of Kata Containers is too old. Please consider
+>   [updating to version 3.3.0 or newer](https://github.com/kata-containers/kata-containers/releases).
+
+### Permissions
+
+The permissions of certain Kata binaries are currently overly
+restrictive. To allow you to call the `kata-manager` script directly
+as shown below, run the following command:
+
+```bash
+$ sudo chmod 755 /opt/kata/bin/kata-manager*
+```
+
+Alternatively, call the `kata-manager` script using `sudo(1)` by
+specifying its full path in all the examples below. For example,
+to show the usage statement:
+
+```bash
+$ sudo /opt/kata/bin/kata-manager -h
+```
+
+> **Note:**
+>
+> For further details, see:
+> https://github.com/kata-containers/kata-containers/issues/9373.
 
 The [`kata-manager.sh`](kata-manager.sh) script automatically installs and
 configures Kata Containers and a container manager (such as containerd, Docker and `nerdctl`).
