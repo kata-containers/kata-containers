@@ -133,7 +133,7 @@ The kata agent has the ability to configure agent options in guest kernel comman
 | `agent.passfd_listener_port` | File descriptor passthrough IO listener port | Allow to set the file descriptor passthrough IO listener port | integer | `0` |
 | `agent.server_addr` | Server address | Allow the ttRPC server address to be specified | string | `"vsock://-1:1024"` |
 | `agent.trace` | Trace mode | Allow to static tracing | boolean | `false` |
-| `agent.unified_cgroup_hierarchy` | `Cgroup hierarchy` | Allow to setup v2 cgroups | boolean | `false` |
+| `systemd.unified_cgroup_hierarchy` | `Cgroup hierarchy` | Allow to setup v2 cgroups | boolean | `false` |
 
 > **Note:** Accepted values for some agent options
 >  - `agent.config_file`: If we enable `agent.config_file` in guest kernel command line, 
@@ -145,7 +145,7 @@ The kata agent has the ability to configure agent options in guest kernel comman
 >  - `agent.log`:   "critical"("fatal" | "panic") | "error" | "warn"("warning") | "info" | "debug"
 >  - `agent.server_addr`: "{VSOCK_ADDR}:{VSOCK_PORT}"
 >  - `agent.trace`: true | false
->  - `agent.unified_cgroup_hierarchy`: true | false
+>  - `systemd.unified_cgroup_hierarchy`: true | false
 
 For instance, you can enable the debug console and set the agent log level to debug by configuring the guest kernel command line in the configuration file: 
 ```toml
