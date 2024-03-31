@@ -45,6 +45,11 @@ jobs:
           - host_os: cbl-mariner
             vmm: clh
             instance-type: small
+            genpolicy-pull-method: oci-distribution
+          - host_os: cbl-mariner
+            vmm: clh
+            instance-type: small
+            genpolicy-pull-method: containerd
           - host_os: cbl-mariner
             vmm: clh
             instance-type: normal
@@ -63,6 +68,7 @@ jobs:
       KUBERNETES: "vanilla"
       USING_NFD: "false"
       K8S_TEST_HOST_TYPE: ${{ matrix.instance-type }}
+      GENPOLICY_PULL_METHOD: ${{ matrix.genpolicy-pull-method }}
     steps:
       - uses: actions/checkout@v4
         with:
