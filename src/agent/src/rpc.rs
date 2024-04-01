@@ -1168,15 +1168,6 @@ impl agent_ttrpc::AgentService for AgentService {
             s.hostname = req.hostname.clone();
             s.running = true;
 
-            if !req.guest_hook_path.is_empty() {
-                let _ = s.add_hooks(&req.guest_hook_path).map_err(|e| {
-                    error!(
-                        sl(),
-                        "add guest hook {} failed: {:?}", req.guest_hook_path, e
-                    );
-                });
-            }
-
             if !req.sandbox_id.is_empty() {
                 s.id = req.sandbox_id.clone();
             }
@@ -1188,10 +1179,24 @@ impl agent_ttrpc::AgentService for AgentService {
             s.setup_shared_namespaces().await.map_ttrpc_err(same)?;
         }
 
-        let m = add_storages(sl(), req.storages, &self.sandbox, None)
+        let m = add_storages(sl(), req.storages.clone(), &self.sandbox, None)
             .await
             .map_ttrpc_err(same)?;
         self.sandbox.lock().await.mounts = m;
+
+        // Scan guest hooks upon creating new sandbox and append
+        // them to guest OCI spec before running containers.
+        {
+            let mut s = self.sandbox.lock().await;
+            if !req.guest_hook_path.is_empty() {
+                let _ = s.add_hooks(&req.guest_hook_path).map_err(|e| {
+                    error!(
+                        sl(),
+                        "add guest hook {} failed: {:?}", req.guest_hook_path, e
+                    );
+                });
+            }
+        }
 
         setup_guest_dns(sl(), &req.dns).map_ttrpc_err(same)?;
         {
