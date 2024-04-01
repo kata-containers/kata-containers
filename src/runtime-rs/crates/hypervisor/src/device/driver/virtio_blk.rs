@@ -6,11 +6,12 @@
 
 use crate::device::pci_path::PciPath;
 use crate::device::topology::PCIeTopology;
+use crate::device::util::do_decrease_count;
 use crate::device::util::do_increase_count;
 use crate::device::Device;
 use crate::device::DeviceType;
 use crate::Hypervisor as hypervisor;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 
 /// VIRTIO_BLOCK_PCI indicates block driver is virtio-pci based
@@ -140,17 +141,6 @@ impl Device for BlockDevice {
     }
 
     async fn decrease_attach_count(&mut self) -> Result<bool> {
-        match self.attach_count {
-            0 => Err(anyhow!("detaching a device that wasn't attached")),
-            1 => {
-                // do real wrok
-                self.attach_count -= 1;
-                Ok(false)
-            }
-            _ => {
-                self.attach_count -= 1;
-                Ok(true)
-            }
-        }
+        do_decrease_count(&mut self.attach_count)
     }
 }
