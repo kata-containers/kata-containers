@@ -6,6 +6,7 @@
 
 use crate::device::pci_path::PciPath;
 use crate::device::topology::PCIeTopology;
+use crate::device::util::do_increase_count;
 use crate::device::Device;
 use crate::device::DeviceType;
 use crate::Hypervisor as hypervisor;
@@ -135,18 +136,7 @@ impl Device for BlockDevice {
     }
 
     async fn increase_attach_count(&mut self) -> Result<bool> {
-        match self.attach_count {
-            0 => {
-                // do real attach
-                self.attach_count += 1;
-                Ok(false)
-            }
-            std::u64::MAX => Err(anyhow!("device was attached too many times")),
-            _ => {
-                self.attach_count += 1;
-                Ok(true)
-            }
-        }
+        do_increase_count(&mut self.attach_count)
     }
 
     async fn decrease_attach_count(&mut self) -> Result<bool> {

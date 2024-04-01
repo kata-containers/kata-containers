@@ -9,7 +9,7 @@ use async_trait::async_trait;
 
 use super::VhostUserConfig;
 use crate::{
-    device::{topology::PCIeTopology, Device, DeviceType},
+    device::{topology::PCIeTopology, util::do_increase_count, Device, DeviceType},
     Hypervisor as hypervisor,
 };
 
@@ -104,18 +104,7 @@ impl Device for VhostUserBlkDevice {
     }
 
     async fn increase_attach_count(&mut self) -> Result<bool> {
-        match self.attach_count {
-            0 => {
-                // do real attach
-                self.attach_count += 1;
-                Ok(false)
-            }
-            std::u64::MAX => Err(anyhow!("device was attached too many times")),
-            _ => {
-                self.attach_count += 1;
-                Ok(true)
-            }
-        }
+        do_increase_count(&mut self.attach_count)
     }
 
     async fn decrease_attach_count(&mut self) -> Result<bool> {

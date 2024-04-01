@@ -20,6 +20,7 @@ use crate::{
     device::{
         pci_path::PciPath,
         topology::{do_add_pcie_endpoint, PCIeTopology},
+        util::do_increase_count,
         Device, DeviceType, PCIeDevice,
     },
     register_pcie_device, unregister_pcie_device, update_pcie_device, Hypervisor as hypervisor,
@@ -522,18 +523,7 @@ impl Device for VfioDevice {
     }
 
     async fn increase_attach_count(&mut self) -> Result<bool> {
-        match self.attach_count {
-            0 => {
-                // do real attach
-                self.attach_count += 1;
-                Ok(false)
-            }
-            std::u64::MAX => Err(anyhow!("device was attached too many times")),
-            _ => {
-                self.attach_count += 1;
-                Ok(true)
-            }
-        }
+        do_increase_count(&mut self.attach_count)
     }
 
     async fn decrease_attach_count(&mut self) -> Result<bool> {
