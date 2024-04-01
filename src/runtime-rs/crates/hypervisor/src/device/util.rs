@@ -84,10 +84,28 @@ pub fn do_increase_count(ref_count: &mut u64) -> Result<bool> {
     Ok((*ref_count) != 1)
 }
 
+// The return value of do_decrease_count can be used to indicate whether the device is still in use.
+// Specifically, the reference count can be decremented by 1 first, then check the decremented ref_count:
+// If the decremented reference count is not equal to 0, it indicates that the device is still in use by
+// the guest and cannot be detached. Return true.
+// If the reference count is equal to 0, it indicates that the device will not be used and can be unplugged
+// from the guest. Return false.
+pub fn do_decrease_count(ref_count: &mut u64) -> Result<bool> {
+    // ref_count = 0: Device not inserted (cannot decrease further).
+    // ref_count = 1: Device is attached to the Guest. Decrement ref_count and notify Device Manager of detachment.
+    // ref_count > 1: Device remains attached to the Guest. Simply decrement ref_count and notify Device Manager.
+    *ref_count = (*ref_count)
+        .checked_sub(1)
+        .ok_or("The device is not attached")
+        .map_err(|e| anyhow!(e))?;
+
+    Ok((*ref_count) != 0)
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::device::util::do_increase_count;
     use crate::device::util::get_virt_drive_name;
+    use crate::device::util::{do_decrease_count, do_increase_count};
 
     #[actix_rt::test]
     async fn test_get_virt_drive_name() {
@@ -109,11 +127,15 @@ mod tests {
     fn test_do_increase_count() {
         // First, ref_count is 0
         let ref_count_0 = &mut 0_u64;
+        assert!(do_decrease_count(ref_count_0).is_err());
+
         assert!(!do_increase_count(ref_count_0).unwrap());
+        assert!(!do_decrease_count(ref_count_0).unwrap());
 
         // Second, ref_count > 0
         let ref_count_3 = &mut 3_u64;
         assert!(do_increase_count(ref_count_3).unwrap());
+        assert!(do_decrease_count(ref_count_3).unwrap());
 
         // Third, ref_count is MAX
         let mut max_count = std::u64::MAX;
@@ -132,6 +154,10 @@ mod tests {
             fn attach(&mut self) -> bool {
                 do_increase_count(&mut self.ref_cnt).unwrap()
             }
+
+            fn detach(&mut self) -> bool {
+                do_decrease_count(&mut self.ref_cnt).unwrap()
+            }
         }
 
         let testd = &mut TestData { ref_cnt: 0_u64 };
@@ -144,5 +170,13 @@ mod tests {
         assert_eq!(testd.ref_cnt, 2_u64);
         assert!(testd.attach());
         assert_eq!(testd.ref_cnt, 3_u64);
+
+        let testd2 = &mut TestData { ref_cnt: 2_u64 };
+
+        assert!(testd2.detach());
+        assert_eq!(testd2.ref_cnt, 1_u64);
+
+        assert!(!testd2.detach());
+        assert_eq!(testd2.ref_cnt, 0_u64);
     }
 }
