@@ -449,6 +449,48 @@ function cleanup_snapshotter() {
 	echo "::endgroup::"
 }
 
+function reset_k8s_images(){
+	# we are encountering the issue (https://github.com/kata-containers/kata-containers/issues/8407)
+	# with containerd on CI is likely due to the content digest being missing from the content store,
+	# which can happen when switching between different snapshotters.
+	# To help sort it out, we now clean up related images in k8s.io namespace.
+
+	# remove related images in k8s.io namespace
+	test_images_to_remove=(
+		"registry.k8s.io/pause"
+		"quay.io/sjenning/nginx"
+		"quay.io/prometheus/busybox"
+		"quay.io/confidential-containers/test-images"
+	)
+
+	ctr_args=""
+	if [ "${KUBERNETES}" = "k3s" ]; then
+		ctr_args="--address /run/k3s/containerd/containerd.sock "
+	fi
+	ctr_args+="--namespace k8s.io"
+	ctr_command="sudo -E ctr ${ctr_args}"
+	for related_image in "${test_images_to_remove[@]}"; do
+		# We need to delete related image
+		image_list=($(${ctr_command} i ls -q |grep "$related_image" |awk '{print $1}'))
+		if [ "${#image_list[@]}" -gt 0 ]; then
+			for image in "${image_list[@]}"; do
+				${ctr_command} i remove "$image"
+			done
+		fi
+		# We need to delete related content of image
+		IFS="/" read -ra parts <<< "$related_image"; 
+		repository="${parts[0]}";     
+		image_name="${parts[1]}";
+		formatted_image="${parts[0]}=${parts[-1]}"
+		image_contents=($(${ctr_command} content ls | grep "${formatted_image}" | awk '{print $1}'))
+		if [ "${#image_contents[@]}" -gt 0 ]; then
+			for content in $image_contents; do
+				${ctr_command} content rm "$content"
+			done
+		fi
+	done
+}
+
 function deploy_nydus_snapshotter() {
 	echo "::group::deploy_nydus_snapshotter"
 	ensure_yq
@@ -509,6 +551,10 @@ function deploy_nydus_snapshotter() {
 	pods_name=$(kubectl get pods --selector=app=nydus-snapshotter -n nydus-system -o=jsonpath='{.items[*].metadata.name}')
 	kubectl logs "${pods_name}" -n nydus-system
 	kubectl describe pod "${pods_name}" -n nydus-system
+	echo "::endgroup::"
+	echo "::group::reset some k8s images"
+	sleep 10
+	reset_k8s_images
 	echo "::endgroup::"
 }
 
