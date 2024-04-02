@@ -10,12 +10,15 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 setup() {
 	pod_name="seccomp-container"
 	get_pod_config_dir
+
+	yaml_file="${pod_config_dir}/pod-seccomp.yaml"
+	add_allow_all_policy_to_yaml "${yaml_file}"
 }
 
 @test "Support seccomp runtime/default profile" {
 	expected_seccomp_mode="2"
 	# Create pod
-	kubectl create -f "${pod_config_dir}/pod-seccomp.yaml"
+	kubectl create -f "${yaml_file}"
 
 	# Wait it to complete
 	cmd="kubectl get pods ${pod_name} | grep Completed"
@@ -31,5 +34,5 @@ teardown() {
 	echo "seccomp mode is ${seccomp_mode}, expected $expected_seccomp_mode"
 	kubectl describe "pod/${pod_name}"
 
-	kubectl delete -f "${pod_config_dir}/pod-seccomp.yaml" || true
+	kubectl delete -f "${yaml_file}" || true
 }
