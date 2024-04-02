@@ -464,3 +464,8 @@ set_kata_configuration_performance() {
                 sed -i "s/default_vcpus =[^=&]*/default_vcpus = $NUM_CPUS/g" "${WORKLOAD_CONFIG_FILE}"
         popd > /dev/null
 }
+
+function clean_cache() {
+        sudo sync; echo 1 > /proc/sys/vm/drop_caches
+}
+
