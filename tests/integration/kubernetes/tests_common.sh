@@ -33,6 +33,10 @@ dragonball_limitations="https://github.com/kata-containers/kata-containers/issue
 # overwrite it.
 export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
 
+# ALLOW_ALL_POLICY is a Rego policy that allows all the Agent ttrpc requests.
+K8S_TEST_DIR="${kubernetes_dir:-"${BATS_TEST_DIRNAME}"}"
+ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY:-$(base64 -w 0 "${K8S_TEST_DIR}/../../../src/kata-opa/allow-all.rego")}"
+
 # Common setup for tests.
 #
 # Global variables exported:
@@ -251,4 +255,48 @@ set_namespace_to_policy_settings() {
 		"${settings_dir}/genpolicy-settings.json" > \
 		"${settings_dir}/new-genpolicy-settings.json"
 	mv "${settings_dir}/new-genpolicy-settings.json" "${settings_dir}/genpolicy-settings.json"
+}
+
+policy_tests_enabled() {
+	# The Guest images for these platforms have been built using AGENT_POLICY=yes -
+	# see kata-deploy-binaries.sh.
+	[ "${KATA_HYPERVISOR}" == "qemu-sev" ] || [ "${KATA_HYPERVISOR}" == "qemu-snp" ] || \
+		[ "${KATA_HYPERVISOR}" == "qemu-tdx" ] || [ "${KATA_HOST_OS}" == "cbl-mariner" ]
+}
+
+add_allow_all_policy_to_yaml() {
+	policy_tests_enabled || return 0
+
+	local yaml_file="$1"
+	local resource_kind="$(yq read ${yaml_file} kind)"
+
+	case "${resource_kind}" in
+
+	Pod)
+		info "Adding allow all policy to ${resource_kind} from ${yaml_file}"
+		ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY}" yq write -i "${yaml_file}" \
+			'metadata.annotations."io.katacontainers.config.agent.policy"' \
+			"${ALLOW_ALL_POLICY}"
+		;;
+
+	Deployment|Job|ReplicationController)
+		info "Adding allow all policy to ${resource_kind} from ${yaml_file}"
+		ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY}" yq write -i "${yaml_file}" \
+			'spec.template.metadata.annotations."io.katacontainers.config.agent.policy"' \
+			"${ALLOW_ALL_POLICY}"
+		;;
+
+	List)
+		die "Issue #7765: adding allow all policy to ${resource_kind} from ${yaml_file} is not implemented yet"
+		;;
+
+	ConfigMap|LimitRange|Namespace|PersistentVolume|PersistentVolumeClaim|RuntimeClass|Secret|Service)
+		die "Policy is not required for ${resource_kind} from ${yaml_file}"
+		;;
+
+	*)
+		die "k8s resource type ${resource_kind} from ${yaml_file} is not yet supported for policy testing"
+		;;
+
+	esac
 }

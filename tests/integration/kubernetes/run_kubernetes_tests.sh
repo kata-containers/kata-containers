@@ -15,8 +15,6 @@ KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 K8S_TEST_DEBUG="${K8S_TEST_DEBUG:-false}"
 K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-small}"
 
-ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY:-$(base64 -w 0 runtimeclass_workloads_work/allow-all.rego)}"
-
 if [ -n "${K8S_TEST_UNION:-}" ]; then
 	K8S_TEST_UNION=($K8S_TEST_UNION)
 else
@@ -37,6 +35,7 @@ else
 		"k8s-empty-dirs.bats" \
 		"k8s-env.bats" \
 		"k8s-exec.bats" \
+		"k8s-exec-rejected.bats" \
 		"k8s-file-volume.bats" \
 		"k8s-inotify.bats" \
 		"k8s-job.bats" \
@@ -51,6 +50,7 @@ else
 		"k8s-optional-empty-secret.bats" \
 		"k8s-pid-ns.bats" \
 		"k8s-pod-quota.bats" \
+		"k8s-policy-set-keys.bats" \
 		"k8s-port-forward.bats" \
 		"k8s-projected-volume.bats" \
 		"k8s-qos-pods.bats" \
@@ -88,69 +88,6 @@ else
 	esac
 fi
 
-policy_tests_enabled() {
-	# The Guest images for these platforms have been built using AGENT_POLICY=yes -
-	# see kata-deploy-binaries.sh.
-	[ "${KATA_HYPERVISOR}" == "qemu-sev" ] || [ "${KATA_HYPERVISOR}" == "qemu-snp" ] || \
-		[ "${KATA_HYPERVISOR}" == "qemu-tdx" ] || [ "${KATA_HOST_OS}" == "cbl-mariner" ]
-}
-
-add_policy_to_yaml() {
-	local yaml_file="$1"
-	local resource_kind="$(yq read ${yaml_file} kind)"
-
-	case "${resource_kind}" in
-
-	Pod)
-		echo "Adding policy to ${resource_kind} from ${yaml_file}"
-		ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY}" yq write -i "${K8S_TEST_YAML}" \
-			'metadata.annotations."io.katacontainers.config.agent.policy"' \
-			"${ALLOW_ALL_POLICY}"
-		;;
-
-	Deployment|Job|ReplicationController)
-		echo "Adding policy to ${resource_kind} from ${yaml_file}"
-		ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY}" yq write -i "${K8S_TEST_YAML}" \
-			'spec.template.metadata.annotations."io.katacontainers.config.agent.policy"' \
-			"${ALLOW_ALL_POLICY}"
-		;;
-
-	List)
-		echo "Issue #7765: adding policy to ${resource_kind} from ${yaml_file} is not implemented yet"
-		;;
-
-	ConfigMap|LimitRange|Namespace|PersistentVolume|PersistentVolumeClaim|RuntimeClass|Secret|Service)
-		echo "Policy is not required for ${resource_kind} from ${yaml_file}"
-		;;
-
-	*)
-		echo "k8s resource type ${resource_kind} from ${yaml_file} is not yet supported for policy testing"
-		return 1
-		;;
-
-	esac
-}
-
-test_successful_actions() {
-	info "Test actions that must be successful"
-	for K8S_TEST_ENTRY in ${K8S_TEST_UNION[@]}
-	do
-		info "$(kubectl get pods --all-namespaces 2>&1)"
-		info "Executing ${K8S_TEST_ENTRY}"
-		bats --show-output-of-passing-tests "${K8S_TEST_ENTRY}"
-	done
-}
-
-run_policy_specific_tests() {
-	info "$(kubectl get pods --all-namespaces 2>&1)"
-	info "Executing k8s-exec-rejected.bats"
-	bats --show-output-of-passing-tests k8s-exec-rejected.bats
-
-	info "$(kubectl get pods --all-namespaces 2>&1)"
-	info "Executing k8s-policy-set-keys.bats"
-	bats --show-output-of-passing-tests k8s-policy-set-keys.bats
-}
-
 # we may need to skip a few test cases when running on non-x86_64 arch
 arch_config_file="${kubernetes_dir}/filter_out_per_arch/${TARGET_ARCH}.yaml"
 if [ -f "${arch_config_file}" ]; then
@@ -158,11 +95,11 @@ if [ -f "${arch_config_file}" ]; then
 	mapfile -d " " -t K8S_TEST_UNION <<< "${arch_k8s_test_union}"
 fi
 
-if policy_tests_enabled; then
-	ensure_yq
-	run_policy_specific_tests
-else
-	info "Policy tests are disabled on this platform"
-fi
+ensure_yq
 
-test_successful_actions
+for K8S_TEST_ENTRY in ${K8S_TEST_UNION[@]}
+do
+	info "$(kubectl get pods --all-namespaces 2>&1)"
+	info "Executing ${K8S_TEST_ENTRY}"
+	bats --show-output-of-passing-tests "${K8S_TEST_ENTRY}"
+done
