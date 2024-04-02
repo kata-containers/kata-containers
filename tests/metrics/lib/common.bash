@@ -41,6 +41,10 @@ public.ecr.aws/lts
 mirror.gcr.io/library
 quay.io/libpod"
 
+# Default Kata Configuration Directory
+readonly DEFAULT_KATA_CONFIG_DIR="/opt/kata/share/defaults/kata-containers"
+readonly DEFAULT_KATA_CONFIG_FNAME="configuration.toml"
+
 # This function checks existence of commands.
 # They can be received standalone or as an array, e.g.
 #
@@ -424,4 +428,39 @@ function check_containers_are_running() {
 		warn "Time out exceeded"
 		return 1
 	fi
+}
+
+# This function receives an identifier used to name a performance Kata configuration file.
+# The current kata configuration is copied to a new kata config file with the difference
+# that the parameters 'default_vcpus' and 'default_memory' will be updated with the values
+# of the max vcpus and the available memory in the system.
+# Finally it makes Kata point to the new configuration file.
+set_kata_configuration_performance() {
+	WORKLOAD_CONFIG_FILE="${1}"
+
+	[ -z "${WORKLOAD_CONFIG_FILE}" ] && die "Unable to set a performance Kata configuration because the passed identifier is empty."
+
+        local NUM_CPUS="$(nproc --all)"
+        local MEM_AVAIL_KB="$(grep MemAvailable /proc/meminfo | awk '{print $2}')"
+        local MEM_AVAIL_MB=$(echo "scale=0; $MEM_AVAIL_KB / 1024" | bc)
+
+        info "Updating Kata configuration to increase memory and cpu resources assigned to the workload."
+
+        # Copy the current kata configuration file to the workload config file,
+        # and increase memory size and num of vcpus assigned.
+
+        pushd "${DEFAULT_KATA_CONFIG_DIR}" > /dev/null
+
+                if [ ! -f "${DEFAULT_KATA_CONFIG_FNAME}" ]; then
+                        die "Kata config file not found."
+                fi
+
+                info "Changing the kata configuration to assign '${NUM_CPUS} vcpus' and ${MEM_AVAIL_MB} MB of memory to the performance workload."
+
+                cp "${DEFAULT_KATA_CONFIG_FNAME}" "${WORKLOAD_CONFIG_FILE}"
+                ln -sf "${WORKLOAD_CONFIG_FILE}" "${DEFAULT_KATA_CONFIG_FNAME}"
+
+                sed -i "s/default_memory =[^=&]*/default_memory = $MEM_AVAIL_MB/g" "${WORKLOAD_CONFIG_FILE}"
+                sed -i "s/default_vcpus =[^=&]*/default_vcpus = $NUM_CPUS/g" "${WORKLOAD_CONFIG_FILE}"
+        popd > /dev/null
 }
