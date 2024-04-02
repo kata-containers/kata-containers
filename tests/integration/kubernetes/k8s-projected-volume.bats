@@ -13,6 +13,9 @@ setup() {
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 
 	get_pod_config_dir
+
+	pod_yaml="${pod_config_dir}/pod-projected-volume.yaml"
+	add_allow_all_policy_to_yaml "${pod_yaml}"
 }
 
 @test "Projected volume" {
@@ -32,7 +35,7 @@ setup() {
 	kubectl create secret generic pass --from-file=$SECOND_TMP_FILE
 
 	# Create pod
-	kubectl create -f "${pod_config_dir}/pod-projected-volume.yaml"
+	kubectl create -f "${pod_yaml}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
