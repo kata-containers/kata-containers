@@ -2069,7 +2069,9 @@ func (q *qemu) hotplugAddCPUs(amount uint32) (uint32, error) {
 	machine := q.arch.machine()
 
 	var hotpluggedVCPUs uint32
-	for _, hc := range hotpluggableVCPUs {
+	for i := len(hotpluggableVCPUs) - 1; i >= 0; i-- {
+		// reverse loop to get the continuous cpuID because it's in reverse order on hotpluggableVCPUs list
+		hc := hotpluggableVCPUs[i]
 		// qom-path is the path to the CPU, non-empty means that this CPU is already in use
 		if hc.QOMPath != "" {
 			continue
