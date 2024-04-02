@@ -469,3 +469,31 @@ function clean_cache() {
         sudo sync; echo 1 > /proc/sys/vm/drop_caches
 }
 
+# This function receives as single parameter, the name of a valid Kata configuration file
+# which will be established as the default Kata configuration to start new Kata containers.
+function set_kata_config_file() {
+	NEW_KATA_CONFIG=${1}
+
+	[ -z "${NEW_KATA_CONFIG}" ] && die "Failed to set a new Kata configuration because the configuration file was not not provided."
+	[ ! -d "${DEFAULT_KATA_CONFIG_DIR}" ] && die "Kata configuration directory was not found: ${DEFAULT_KATA_CONFIG_DIR}."
+
+	pushd "${DEFAULT_KATA_CONFIG_DIR}" > /dev/null
+
+	[ ! -f "${NEW_KATA_CONFIG}" ] && die "The Kata configuration file provided: ${NEW_KATA_CONFIG} was not found."
+
+	info "Aplying a new Kata configuration using the file: ${NEW_KATA_CONFIG}."
+
+        ln -sf "${NEW_KATA_CONFIG}" "${DEFAULT_KATA_CONFIG_FNAME}"
+
+        popd > /dev/null
+}
+
+function get_current_kata_config_file() {
+	declare -n current_config_file=$1
+
+	pushd "${DEFAULT_KATA_CONFIG_DIR}" > /dev/null
+	KATA_CONFIG_FNAME="$(readlink -f ${DEFAULT_KATA_CONFIG_FNAME})"
+	popd > /dev/null
+
+	current_config_file="${KATA_CONFIG_FNAME}"
+}
