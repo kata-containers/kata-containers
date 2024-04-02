@@ -30,6 +30,7 @@ setup() {
     echo "Pod $runc_pod_config file:"
     cat $runc_pod_config
 
+    add_allow_all_policy_to_yaml "$runc_pod_config"
     k8s_create_pod "$runc_pod_config"
 
     echo "Runc pod test-e2e is running"
@@ -49,6 +50,7 @@ setup() {
     echo "Pod $kata_pod_with_nydus_config file:"
     cat $kata_pod_with_nydus_config
 
+    add_allow_all_policy_to_yaml "$kata_pod_with_nydus_config"
     k8s_create_pod "$kata_pod_with_nydus_config"
     echo "Kata pod test-e2e with nydus annotation is running"
 
@@ -93,6 +95,7 @@ setup() {
     echo "Pod $kata_pod_with_nydus_config file:"
     cat $kata_pod_with_nydus_config
 
+    add_allow_all_policy_to_yaml "$kata_pod_with_nydus_config"
     k8s_create_pod "$kata_pod_with_nydus_config"
 }
 
@@ -113,6 +116,7 @@ setup() {
     echo "Pod $kata_pod_with_nydus_config file:"
     cat $kata_pod_with_nydus_config
 
+    add_allow_all_policy_to_yaml "$kata_pod_with_nydus_config"
     k8s_create_pod "$kata_pod_with_nydus_config"
     
     echo "Kata pod test-e2e with nydus annotation is running"
@@ -134,6 +138,7 @@ setup() {
     echo "Pod $kata_pod_without_nydus_config file:"
     cat $kata_pod_without_nydus_config
 
+    add_allow_all_policy_to_yaml "$kata_pod_without_nydus_config"
     k8s_create_pod "$kata_pod_without_nydus_config"
 
     echo "Kata pod test-e2e without nydus annotation is running"
@@ -163,6 +168,7 @@ setup() {
     echo "Pod $kata_pod_without_nydus_config file:"
     cat $kata_pod_without_nydus_config
 
+    add_allow_all_policy_to_yaml "$kata_pod_without_nydus_config"
     k8s_create_pod "$kata_pod_without_nydus_config"
     
     echo "Kata pod test-e2e without nydus annotation is running"
@@ -189,6 +195,7 @@ setup() {
     echo "Pod $kata_pod_with_nydus_config file:"
     cat $kata_pod_with_nydus_config
 
+    add_allow_all_policy_to_yaml "$kata_pod_with_nydus_config"
     k8s_create_pod "$kata_pod_with_nydus_config"
     
     echo "Kata pod test-e2e with nydus annotation is running"
