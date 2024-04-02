@@ -14,6 +14,9 @@ setup() {
 	issue_url="https://github.com/kata-containers/kata-containers/issues/8906"
 	[ "${KATA_HYPERVISOR}" == "qemu-se" ] && skip "test not working for IBM Z LPAR (see ${issue_url})"
 	get_pod_config_dir
+
+	pod_yaml="${pod_config_dir}"/inotify-configmap-pod.yaml
+	add_allow_all_policy_to_yaml "${pod_yaml}"
 }
 
 @test "configmap update works, and preserves symlinks" {
@@ -23,7 +26,7 @@ setup() {
         kubectl apply -f "${pod_config_dir}"/inotify-configmap.yaml
 
         # Create deployment that expects identity-certs
-        kubectl apply -f "${pod_config_dir}"/inotify-configmap-pod.yaml
+        kubectl apply -f "${pod_yaml}"
         kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
 
         # Update configmap
