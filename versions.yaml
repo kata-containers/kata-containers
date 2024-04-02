@@ -207,11 +207,6 @@ externals:
     image_tag: "18c8ee378c6d83446ee635a702d5dee389028d8f"
     toolchain: "1.74.0"
 
-  conmon:
-    description: "An OCI container runtime monitor"
-    url: "https://github.com/containers/conmon"
-    version: "v2.0.10"
-
   crio:
     description: |
       OCI-based Kubernetes Container Runtime Interface implementation
