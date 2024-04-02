@@ -24,7 +24,7 @@ const HOTPLUG_TIMOUT_OPTION: &str = "agent.hotplug_timeout";
 const DEBUG_CONSOLE_VPORT_OPTION: &str = "agent.debug_console_vport";
 const LOG_VPORT_OPTION: &str = "agent.log_vport";
 const CONTAINER_PIPE_SIZE_OPTION: &str = "agent.container_pipe_size";
-const UNIFIED_CGROUP_HIERARCHY_OPTION: &str = "agent.unified_cgroup_hierarchy";
+const UNIFIED_CGROUP_HIERARCHY_OPTION: &str = "systemd.unified_cgroup_hierarchy";
 const CONFIG_FILE: &str = "agent.config_file";
 
 // Configure the proxy settings for HTTPS requests in the guest,
@@ -625,28 +625,28 @@ mod tests {
                 ..Default::default()
             },
             TestData {
-                contents: "agent.devmode agent.debug_console agent.hotplug_timeout=100 agent.unified_cgroup_hierarchy=a",
+                contents: "agent.devmode agent.debug_console agent.hotplug_timeout=100 systemd.unified_cgroup_hierarchy=a",
                 debug_console: true,
                 dev_mode: true,
                 hotplug_timeout: time::Duration::from_secs(100),
                 ..Default::default()
             },
             TestData {
-                contents: "agent.devmode agent.debug_console agent.hotplug_timeout=0 agent.unified_cgroup_hierarchy=11",
+                contents: "agent.devmode agent.debug_console agent.hotplug_timeout=0 systemd.unified_cgroup_hierarchy=11",
                 debug_console: true,
                 dev_mode: true,
                 unified_cgroup_hierarchy: true,
                 ..Default::default()
             },
             TestData {
-                contents: "agent.devmode agent.debug_console agent.container_pipe_size=2097152 agent.unified_cgroup_hierarchy=false",
+                contents: "agent.devmode agent.debug_console agent.container_pipe_size=2097152 systemd.unified_cgroup_hierarchy=false",
                 debug_console: true,
                 dev_mode: true,
                 container_pipe_size: 2097152,
                 ..Default::default()
             },
             TestData {
-                contents: "agent.devmode agent.debug_console agent.container_pipe_size=100 agent.unified_cgroup_hierarchy=true",
+                contents: "agent.devmode agent.debug_console agent.container_pipe_size=100 systemd.unified_cgroup_hierarchy=true",
                 debug_console: true,
                 dev_mode: true,
                 container_pipe_size: 100,
@@ -654,13 +654,13 @@ mod tests {
                 ..Default::default()
             },
             TestData {
-                contents: "agent.devmode agent.debug_console agent.container_pipe_size=0 agent.unified_cgroup_hierarchy=0",
+                contents: "agent.devmode agent.debug_console agent.container_pipe_size=0 systemd.unified_cgroup_hierarchy=0",
                 debug_console: true,
                 dev_mode: true,
                 ..Default::default()
             },
             TestData {
-                contents: "agent.devmode agent.debug_console agent.container_pip_siz=100 agent.unified_cgroup_hierarchy=1",
+                contents: "agent.devmode agent.debug_console agent.container_pip_siz=100 systemd.unified_cgroup_hierarchy=1",
                 debug_console: true,
                 dev_mode: true,
                 unified_cgroup_hierarchy: true,
