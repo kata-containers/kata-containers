@@ -10,6 +10,9 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
 	get_pod_config_dir
+
+	pod_yaml="${pod_config_dir}/pod-optional-empty-secret.yaml"
+	add_allow_all_policy_to_yaml "${pod_yaml}"
 }
 
 @test "Optional and Empty Secret Volume for a pod" {
@@ -20,7 +23,7 @@ setup() {
 	kubectl create secret generic "$secret_name"
 
 	# Create a pod that consumes the "empty-secret" and "optional-missing-secret" Secrets as volumes
-	kubectl create -f "${pod_config_dir}/pod-optional-empty-secret.yaml"
+	kubectl create -f "${pod_yaml}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
