@@ -39,6 +39,7 @@ RUN apt-get update && \
          echo "gcc-$gcc_arch-linux-gnu libc6-dev-$libc_arch-cross")) \
     git \
     gnupg2 \
+    libclang-dev \
     make \
     makedev \
     multistrap \
