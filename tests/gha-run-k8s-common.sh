@@ -13,6 +13,7 @@ source "${tests_dir}/common.bash"
 
 K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-small}"
 GH_PR_NUMBER="${GH_PR_NUMBER:-}"
+GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-oci-distribution}"
 
 function _print_instance_type() {
     case ${K8S_TEST_HOST_TYPE} in
@@ -39,7 +40,7 @@ function _print_cluster_name() {
         echo "$AKS_NAME"
     else
         short_sha="$(git rev-parse --short=12 HEAD)"
-        echo "${test_type}-${GH_PR_NUMBER}-${short_sha}-${KATA_HYPERVISOR}-${KATA_HOST_OS}-amd64-${K8S_TEST_HOST_TYPE:0:1}"
+        echo "${test_type}-${GH_PR_NUMBER}-${short_sha}-${KATA_HYPERVISOR}-${KATA_HOST_OS}-amd64-${K8S_TEST_HOST_TYPE:0:1}-${GENPOLICY_PULL_METHOD:0:1}"
     fi
 }
 
