@@ -98,7 +98,7 @@ jobs:
       - name: Take a pre-action for self-hosted runner
         run: ${HOME}/script/pre_action.sh ubuntu-2204
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: get-artifacts
         uses: actions/download-artifact@v3
