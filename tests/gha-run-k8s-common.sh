@@ -12,6 +12,7 @@ tests_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${tests_dir}/common.bash"
 
 K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-small}"
+GH_PR_NUMBER="${GH_PR_NUMBER:-}"
 
 function _print_instance_type() {
     case ${K8S_TEST_HOST_TYPE} in
