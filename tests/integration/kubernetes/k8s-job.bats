@@ -23,7 +23,7 @@ setup() {
 	kubectl apply -f "${yaml_file}"
 
 	# Verify job
-	kubectl describe jobs/"$job_name" | grep "SuccessfulCreate"
+	waitForProcess "$wait_time" "$sleep_time" "kubectl describe job $job_name | grep SuccessfulCreate"
 
 	# List pods that belong to the job
 	pod_name=$(kubectl get pods --selector=job-name=$job_name --output=jsonpath='{.items[*].metadata.name}')
