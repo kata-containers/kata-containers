@@ -90,10 +90,14 @@ function generate_build_dockerfile()
 	local map_key="$3"
 	local text_to_replace="$4"
 	local regs=(${registries["${map_key}"]})
+
 	for r in ${regs[@]}; do
 		sed 's|'${text_to_replace}'|'${r}'|g' \
 			"${dockerfile}.in" > "${dockerfile}"
-		if sudo "${DOCKER_EXE}" build --build-arg http_proxy="${http_proxy}" --build-arg https_proxy="${https_proxy}" --label "$image" --tag "${image}" -f "$dockerfile" "$dockerfile_dir"; then
+		if sudo -E "${DOCKER_EXE}" build \
+			--build-arg http_proxy="${http_proxy}" --build-arg https_proxy="${https_proxy}" \
+			--build-arg HTTP_PROXY="${http_proxy}" --build-arg HTTPS_PROXY="${https_proxy}" \
+			--label "$image" --tag "${image}" -f "$dockerfile" "$dockerfile_dir"; then
 			return 0
 		fi
 	done
@@ -111,7 +115,10 @@ function build_dockerfile_image()
 
 	if [ -f "$dockerfile_path" ]; then
 		info "docker building $image"
-		if ! sudo "${DOCKER_EXE}" build --build-arg http_proxy="${http_proxy}" --build-arg https_proxy="${https_proxy}" --label "$image" --tag "${image}" -f "$dockerfile_path" "$dockerfile_dir"; then
+		if ! sudo -E "${DOCKER_EXE}" build \
+			--build-arg http_proxy="${http_proxy}" --build-arg https_proxy="${https_proxy}" \
+			--build-arg HTTP_PROXY="${http_proxy}" --build-arg HTTPS_PROXY="${https_proxy}" \
+			--label "$image" --tag "${image}" -f "$dockerfile_path" "$dockerfile_dir"; then
 			die "Failed to docker build image $image"
 		fi
 		return 0
@@ -496,4 +503,8 @@ function get_current_kata_config_file() {
 	popd > /dev/null
 
 	current_config_file="${KATA_CONFIG_FNAME}"
+}
+
+function check_if_root() {
+	[ "$EUID" -ne 0 ] && die "Please run as root or use sudo."
 }
