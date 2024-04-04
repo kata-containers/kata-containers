@@ -11,6 +11,7 @@ AUFS # Another Union FS
 AWS/AB
 BDF/AB
 CFS/AB
+ci/AB
 CLI/AB
 CNI/AB
 CNM/AB
@@ -33,6 +34,7 @@ gRPC/AB
 GSC/AB
 GVT/AB
 IaaS/B  # Infrastructure as a Service
+io/B
 IOMMU/AB
 IoT/AB	# Internet of Things
 IOV/AB
