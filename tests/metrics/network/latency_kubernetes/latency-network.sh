@@ -22,6 +22,10 @@ function latency_cleanup() {
 	info "Latency test cleanup"
 	kubectl delete -f "${SCRIPT_PATH}/latency-server.yaml"
 	kubectl delete -f "${SCRIPT_PATH}/latency-client.yaml"
+	kubectl delete pods "${client_pod_name}" "${server_pod_name}"
+	kill_kata_components && sleep 1
+	check_processes
+	info "End of latency test"
 }
 
 function main() {
