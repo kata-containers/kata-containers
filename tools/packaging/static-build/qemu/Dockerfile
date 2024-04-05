@@ -58,8 +58,8 @@ RUN apt-get update && apt-get upgrade -y && \
 	    libseccomp-dev${DPKG_ARCH} \
 	    libseccomp2${DPKG_ARCH} \
 	    patch \
-	    python \
-	    python-dev \
+	    python3 \
+	    python3-dev \
 	    python3-venv \
 	    rsync \
 	    zlib1g-dev${DPKG_ARCH} && \

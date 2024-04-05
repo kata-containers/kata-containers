@@ -620,22 +620,9 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		// on the hypervisor specific code, as availableGuestProtection()
 		// has been called earlier and we know we have the value stored.
 		if q.arch.getProtection() == tdxProtection {
-			knobs.MemFDPrivate = true
 
-			// In case Nydus or VirtioFS is used, which may become a reality
-			// in the future, whenever we get those hardened for TDX, those
-			// knobs below would be automatically set.  Let's make sure we
-			// pre-emptively disable them, and with that we can avoid some
-			// headaches in the future.
-			knobs.FileBackedMem = false
-			knobs.MemShared = false
-
-			// SMP is currently broken with TDX 1.5, and
-			// we must ensure we use something like:
-			// `...,sockets=1,cores=numvcpus,threads=1,...`
-			smp.Sockets = 1
-			smp.Cores = q.config.NumVCPUs()
-			smp.Threads = 1
+			// TDX relies on ",private=on" passed to the memory object.
+			knobs.Private = true
 		}
 	}
 
