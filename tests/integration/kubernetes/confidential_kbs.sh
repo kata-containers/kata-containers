@@ -158,6 +158,9 @@ kbs_install_cli() {
 function kbs_k8s_delete() {
 	pushd "$COCO_KBS_DIR"
 	kubectl delete -k config/kubernetes/overlays
+	# Verify that coco-tenant resources were properly deleted
+	cmd="kubectl get all -n coco-tenant 2>&1 | grep 'No resources found'"
+	waitForProcess "120" "30" "$cmd"
 	popd
 }
 
