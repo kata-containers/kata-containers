@@ -10,6 +10,8 @@ load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 
 setup() {
     confidential_setup || skip "Test not supported for ${KATA_HYPERVISOR}."
+    [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
+
     setup_common 
     unencrypted_image_1="quay.io/sjenning/nginx:1.15-alpine"
     unencrypted_image_2="quay.io/prometheus/busybox:latest"
@@ -17,7 +19,6 @@ setup() {
 }
 
 @test "Test we can pull an unencrypted image outside the guest with runc and then inside the guest successfully" {
-    [[ " ${SUPPORTED_NON_TEE_HYPERVISORS} " =~ " ${KATA_HYPERVISOR} " ]] && skip "Test not supported for ${KATA_HYPERVISOR}."
     # 1. Create one runc pod with the $unencrypted_image_1 image
     # We want to have one runc pod, so we pass a fake runtimeclass "runc" and then delete the runtimeClassName,
     # because the runtimeclass is not optional in new_pod_config function.
@@ -100,7 +101,6 @@ setup() {
 }
 
 @test "Test we can pull an unencrypted image inside the guest twice in a row and then outside the guest successfully" {
-    [[ " ${SUPPORTED_NON_TEE_HYPERVISORS} " =~ " ${KATA_HYPERVISOR} " ]] && skip "Test not supported for ${KATA_HYPERVISOR}."
     skip "Skip this test until we use containerd 2.0 with 'image pull per runtime class' feature: https://github.com/containerd/containerd/issues/9377"
     # 1. Create one kata pod with the $unencrypted_image_1 image and nydus annotation twice
     kata_pod_with_nydus_config="$(new_pod_config "$unencrypted_image_1" "kata-${KATA_HYPERVISOR}")"
@@ -157,7 +157,6 @@ setup() {
 }
 
 @test "Test we can pull an other unencrypted image outside the guest and then inside the guest successfully" {
-    [[ " ${SUPPORTED_NON_TEE_HYPERVISORS} " =~ " ${KATA_HYPERVISOR} " ]] && skip "Test not supported for ${KATA_HYPERVISOR}."
     skip "Skip this test until we use containerd 2.0 with 'image pull per runtime class' feature: https://github.com/containerd/containerd/issues/9377"
     # 1. Create one kata pod with the $unencrypted_image_2 image and without nydus annotation
     kata_pod_without_nydus_config="$(new_pod_config "$unencrypted_image_2" "kata-${KATA_HYPERVISOR}")"
@@ -215,6 +214,8 @@ setup() {
 
 teardown() {
     check_hypervisor_for_confidential_tests ${KATA_HYPERVISOR} || skip "Test not supported for ${KATA_HYPERVISOR}."
+    [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
+
     kubectl describe pod "$pod_name"
     k8s_delete_all_pods_if_any_exists || true
 }
