@@ -146,6 +146,7 @@ function get_cluster_credentials() {
     test_type="${1:-k8s}"
 
     az aks get-credentials \
+        --overwrite-existing \
         -g "$(_print_rg_name ${test_type})" \
         -n "$(_print_cluster_name ${test_type})"
 }
