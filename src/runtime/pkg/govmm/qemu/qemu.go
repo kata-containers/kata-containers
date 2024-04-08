@@ -2776,6 +2776,8 @@ type Config struct {
 	PidFile string
 
 	qemuParams []string
+
+	Debug bool
 }
 
 // appendFDs appends a list of arbitrary file descriptors to the qemu configuration and
@@ -2812,8 +2814,15 @@ func (config *Config) appendSeccompSandbox() {
 
 func (config *Config) appendName() {
 	if config.Name != "" {
+		var nameParams []string
+		nameParams = append(nameParams, config.Name)
+
+		if config.Debug {
+			nameParams = append(nameParams, "debug-threads=on")
+		}
+
 		config.qemuParams = append(config.qemuParams, "-name")
-		config.qemuParams = append(config.qemuParams, config.Name)
+		config.qemuParams = append(config.qemuParams, strings.Join(nameParams, ","))
 	}
 }
 
