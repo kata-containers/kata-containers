@@ -10,13 +10,16 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
 	get_pod_config_dir
+
+	yaml_file="${pod_config_dir}/pod-security-context.yaml"
+	add_allow_all_policy_to_yaml "${yaml_file}"
 }
 
 @test "Security context" {
 	pod_name="security-context-test"
 
 	# Create pod
-	kubectl create -f "${pod_config_dir}/pod-security-context.yaml"
+	kubectl create -f "${yaml_file}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"

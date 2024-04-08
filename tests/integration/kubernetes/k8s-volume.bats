@@ -26,6 +26,7 @@ setup() {
 	sed -e "s|tmp_data|${tmp_file}|g" ${pod_config_dir}/pv-volume.yaml > "$pv_yaml"
 	sed -e "s|NODE|${node}|g" "${pod_config_dir}/pv-pod.yaml" > "$pod_yaml"
 
+	add_allow_all_policy_to_yaml "${pod_yaml}"
 }
 
 @test "Create Persistent Volume" {

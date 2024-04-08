@@ -23,6 +23,10 @@ setup() {
 	sed -e "/\${ssh_key}/r ${public_key_path}" -e "/\${ssh_key}/d" \
 		"${pod_config_dir}/footloose-configmap.yaml" > "$configmap_yaml"
 	sed -i 's/ssh-rsa/      ssh-rsa/' "$configmap_yaml"
+
+	# Add an "allow all" policy to the pod yaml file.
+	pod_yaml="${pod_config_dir}/pod-footloose.yaml"
+	add_allow_all_policy_to_yaml "${pod_yaml}"
 }
 
 @test "Footloose pod" {
@@ -33,7 +37,7 @@ setup() {
 	kubectl create -f "$configmap_yaml"
 
 	# Create pod
-	kubectl create -f "${pod_config_dir}/pod-footloose.yaml"
+	kubectl create -f "${pod_yaml}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"

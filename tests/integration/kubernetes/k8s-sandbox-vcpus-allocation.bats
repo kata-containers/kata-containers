@@ -15,11 +15,14 @@ setup() {
 	get_pod_config_dir
 	pods=( "vcpus-less-than-one-with-no-limits" "vcpus-less-than-one-with-limits" "vcpus-more-than-one-with-limits" )
 	expected_vcpus=( 1 1 2 )
+
+	yaml_file="${pod_config_dir}/pod-sandbox-vcpus-allocation.yaml"
+	add_allow_all_policy_to_yaml "${yaml_file}"
 }
 
 @test "Check the number vcpus are correctly allocated to the sandbox" {
 	# Create the pods
-	kubectl create -f "${pod_config_dir}/pod-sandbox-vcpus-allocation.yaml"
+	kubectl create -f "${yaml_file}"
 
 	# Wait for completion
 	kubectl wait --for=jsonpath='{.status.phase}'=Succeeded --timeout=$timeout pod --all
@@ -38,5 +41,5 @@ teardown() {
 		kubectl logs ${pod}
 	done
 
-	kubectl delete -f "${pod_config_dir}/pod-sandbox-vcpus-allocation.yaml"
+	kubectl delete -f "${yaml_file}"
 }

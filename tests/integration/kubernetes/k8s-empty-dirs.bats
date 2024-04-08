@@ -21,11 +21,14 @@ setup() {
 	pod_name="sharevol-kata"
 	get_pod_config_dir
 	pod_logs_file=""
+
+	yaml_file="${pod_config_dir}/pod-empty-dir.yaml"
+	add_allow_all_policy_to_yaml "${yaml_file}"
 }
 
 @test "Empty dir volumes" {
 	# Create the pod
-	kubectl create -f "${pod_config_dir}/pod-empty-dir.yaml"
+	kubectl create -f "${yaml_file}"
 
 	# Check pod creation
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
