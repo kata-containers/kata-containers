@@ -22,6 +22,7 @@ extern crate slog;
 use anyhow::{anyhow, Context, Result};
 use cfg_if::cfg_if;
 use clap::{AppSettings, Parser};
+use const_format::concatcp;
 use nix::fcntl::OFlag;
 use nix::sys::socket::{self, AddressFamily, SockFlag, SockType, VsockAddr};
 use nix::unistd::{self, dup, Pid};
@@ -32,6 +33,7 @@ use std::os::unix::fs as unixfs;
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
 use std::process::exit;
+use std::process::Command;
 use std::sync::Arc;
 use tracing::{instrument, span};
 
@@ -56,6 +58,7 @@ mod util;
 mod version;
 mod watcher;
 
+use config::GuestComponentsFeatures;
 use mount::{cgroups_mount, general_mount};
 use sandbox::Sandbox;
 use signal::setup_signal_handler;
@@ -90,6 +93,20 @@ cfg_if! {
 }
 
 const NAME: &str = "kata-agent";
+
+const UNIX_SOCKET_PREFIX: &str = "unix://";
+
+const AA_PATH: &str = "/usr/local/bin/attestation-agent";
+const AA_ATTESTATION_SOCKET: &str =
+    "/run/confidential-containers/attestation-agent/attestation-agent.sock";
+const AA_ATTESTATION_URI: &str = concatcp!(UNIX_SOCKET_PREFIX, AA_ATTESTATION_SOCKET);
+
+const CDH_PATH: &str = "/usr/local/bin/confidential-data-hub";
+const CDH_SOCKET: &str = "/run/confidential-containers/cdh.sock";
+
+const API_SERVER_PATH: &str = "/usr/local/bin/api-server-rest";
+
+const DEFAULT_LAUNCH_PROCESS_TIMEOUT: i32 = 6;
 
 lazy_static! {
     static ref AGENT_CONFIG: AgentConfig =
@@ -384,12 +401,99 @@ async fn start_sandbox(
     let (tx, rx) = tokio::sync::oneshot::channel();
     sandbox.lock().await.sender = Some(tx);
 
+    if Path::new(CDH_PATH).exists() && Path::new(AA_PATH).exists() {
+        init_attestation_components(logger, config)?;
+    }
+
     // vsock:///dev/vsock, port
     let mut server = rpc::start(sandbox.clone(), config.server_addr.as_str(), init_mode).await?;
     server.start().await?;
 
     rx.await?;
     server.shutdown().await?;
+
+    Ok(())
+}
+
+// Start-up attestation-agent, CDH and api-server-rest if they are packaged in the rootfs
+fn init_attestation_components(logger: &Logger, _config: &AgentConfig) -> Result<()> {
+    // The Attestation Agent will run for the duration of the guest.
+    launch_process(
+        logger,
+        AA_PATH,
+        &vec!["--attestation_sock", AA_ATTESTATION_URI],
+        AA_ATTESTATION_SOCKET,
+        DEFAULT_LAUNCH_PROCESS_TIMEOUT,
+    )
+    .map_err(|e| anyhow!("launch_process {} failed: {:?}", AA_PATH, e))?;
+
+    if let Err(e) = launch_process(
+        logger,
+        CDH_PATH,
+        &vec![],
+        CDH_SOCKET,
+        DEFAULT_LAUNCH_PROCESS_TIMEOUT,
+    ) {
+        error!(logger, "launch_process {} failed: {:?}", CDH_PATH, e);
+    } else {
+        let features = _config.guest_components_rest_api;
+        match features {
+            GuestComponentsFeatures::None => {}
+            _ => {
+                if let Err(e) = launch_process(
+                    logger,
+                    API_SERVER_PATH,
+                    &vec!["--features", &features.to_string()],
+                    "",
+                    0,
+                ) {
+                    error!(logger, "launch_process {} failed: {:?}", API_SERVER_PATH, e);
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn wait_for_path_to_exist(logger: &Logger, path: &str, timeout_secs: i32) -> Result<()> {
+    let p = Path::new(path);
+    let mut attempts = 0;
+    loop {
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        if p.exists() {
+            return Ok(());
+        }
+        if attempts >= timeout_secs {
+            break;
+        }
+        attempts += 1;
+        info!(
+            logger,
+            "waiting for {} to exist (attempts={})", path, attempts
+        );
+    }
+
+    Err(anyhow!("wait for {} to exist timeout.", path))
+}
+
+fn launch_process(
+    logger: &Logger,
+    path: &str,
+    args: &Vec<&str>,
+    unix_socket_path: &str,
+    timeout_secs: i32,
+) -> Result<()> {
+    if !Path::new(path).exists() {
+        return Err(anyhow!("path {} does not exist.", path));
+    }
+    if !unix_socket_path.is_empty() && Path::new(unix_socket_path).exists() {
+        fs::remove_file(unix_socket_path)?;
+    }
+    Command::new(path).args(args).spawn()?;
+    if !unix_socket_path.is_empty() && timeout_secs > 0 {
+        wait_for_path_to_exist(logger, unix_socket_path, timeout_secs)?;
+    }
 
     Ok(())
 }

@@ -26,6 +26,7 @@ else
 	# more details https://github.com/kata-containers/kata-containers/issues/8337
 	K8S_TEST_SMALL_HOST_UNION=( \
 		"k8s-guest-pull-image.bats" \
+		"k8s-confidential-attestation.bats" \
 		"k8s-confidential.bats" \
 		"k8s-attach-handlers.bats" \
 		"k8s-caps.bats" \

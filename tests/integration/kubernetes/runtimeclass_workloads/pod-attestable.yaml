@@ -1,0 +1,19 @@
+# Copyright (c) 2023-2024 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: aa-test-cc
+spec:
+  runtimeClassName: kata
+  containers:
+    - name: bash-curl
+      image: storytel/alpine-bash-curl:latest
+      imagePullPolicy: Always
+      command:
+        - sh
+        - -c
+        - |
+          curl http://127.0.0.1:8006/cdh/resource/default/aa/key; sleep 1000
