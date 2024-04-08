@@ -1802,3 +1802,96 @@ func TestUpdateRuntimeConfigHypervisor(t *testing.T) {
 		}
 	}
 }
+
+func TestGetHostCPUs(t *testing.T) {
+	testCases := []struct {
+		input    string
+		expected uint32
+	}{
+		{
+			input: `processor   : 0
+processor   : 1
+vendor_id   : GenuineAmzing
+cpu family  : 6
+model       : 60
+model name  : whatever
+            ...
+processor   : 1
+vendor_id   : Genuine
+cpu family  : 6
+model       : 60
+model name  : Intel(R) Core(TM) i7-4770 CPU @ 3.40GHz
+...
+            `,
+			expected: 3,
+		},
+		{
+
+			input: `processor   : 0
+processor	: 1
+BogoMIPS	: 48.00
+Features	: fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 asimddp sha512 asimdfhm dit uscat ilrcpc flagm ssbs sb paca pacg dcpodp flagm2 frint
+CPU implementer	: 0x00
+CPU architecture: 8
+CPU variant	: 0x0
+CPU part	: 0x000
+CPU revision	: 00
+processor	: 2
+vendor_id   : GenuineAmzing
+processor	: 3
+cpu family  : 6
+processor	: 4
+model       : 60
+processor	: 5
+cpu family  : 6
+model       : 60
+
+
+model name  : Intel(R) Core(TM) i7-4770 CPU @ 3.40GHz
+...
+            `,
+			expected: 6,
+		},
+	}
+
+	for _, tc := range testCases {
+		// Create tmp file for mocking cpuinfo
+		file, err := os.CreateTemp("", "cpuinfo")
+		procCPUInfo = file.Name()
+		if err != nil {
+			t.Fatalf("Error creating temp file: %v", err)
+		}
+		defer os.Remove(file.Name())
+
+		if _, err := file.WriteString(tc.input); err != nil {
+			t.Fatalf("Error writing to temp file: %v", err)
+		}
+
+		if err := file.Close(); err != nil {
+			t.Fatalf("Error closing temp file: %v", err)
+		}
+
+		parsed := getHostCPUs()
+
+		if parsed != tc.expected {
+			t.Errorf("Expected number of cores: %d, got: %d", tc.expected, parsed)
+		}
+	}
+}
+
+func TestGetHostCPUsNoProc(t *testing.T) {
+
+	// override logger so we can check the output when calling function under test:
+	logBuf := &bytes.Buffer{}
+	kataUtilsLogger.Logger.Out = logBuf
+
+	// make sure we fail to read:
+	procCPUInfo = "/i/am/not/here"
+
+	getHostCPUs()
+
+	expectedLog := "unable to read /proc/cpuinfo to determine cpu count - using go runtime value instead"
+	actualLog := logBuf.String()
+	assert.Contains(t, actualLog, expectedLog, "Expected log message not found")
+
+}
