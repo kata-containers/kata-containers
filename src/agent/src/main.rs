@@ -24,8 +24,9 @@ use cfg_if::cfg_if;
 use clap::{AppSettings, Parser};
 use const_format::concatcp;
 use nix::fcntl::OFlag;
+use nix::sys::reboot::{reboot, RebootMode};
 use nix::sys::socket::{self, AddressFamily, SockFlag, SockType, VsockAddr};
-use nix::unistd::{self, dup, Pid};
+use nix::unistd::{self, dup, sync, Pid};
 use std::env;
 use std::ffi::OsStr;
 use std::fs::{self, File};
@@ -179,7 +180,7 @@ async fn create_logger_task(rfd: RawFd, vsock_port: u32, shutdown: Receiver<bool
     Ok(())
 }
 
-async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
+async fn real_main(init_mode: bool) -> std::result::Result<(), Box<dyn std::error::Error>> {
     env::set_var("RUST_BACKTRACE", "full");
 
     // List of tasks that need to be stopped for a clean shutdown
@@ -192,7 +193,6 @@ async fn real_main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     let (shutdown_tx, shutdown_rx) = channel(true);
 
-    let init_mode = unistd::getpid() == Pid::from_raw(1);
     if init_mode {
         // dup a new file descriptor for this temporary logger writer,
         // since this logger would be dropped and it's writer would
@@ -339,7 +339,15 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         .enable_all()
         .build()?;
 
-    rt.block_on(real_main())
+    let init_mode = unistd::getpid() == Pid::from_raw(1);
+    let result = rt.block_on(real_main(init_mode));
+
+    if init_mode {
+        sync();
+        let _ = reboot(RebootMode::RB_POWER_OFF);
+    }
+
+    result
 }
 
 #[instrument]
