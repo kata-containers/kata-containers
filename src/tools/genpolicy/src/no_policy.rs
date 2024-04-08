@@ -14,7 +14,6 @@ use crate::yaml;
 
 use async_trait::async_trait;
 use protocols::agent;
-use std::collections::BTreeMap;
 
 #[derive(Clone, Debug)]
 pub struct NoPolicyResource {
@@ -54,10 +53,6 @@ impl yaml::K8sResource for NoPolicyResource {
     }
 
     fn get_containers(&self) -> &Vec<pod::Container> {
-        panic!("Unsupported");
-    }
-
-    fn get_annotations(&self) -> &Option<BTreeMap<String, String>> {
         panic!("Unsupported");
     }
 

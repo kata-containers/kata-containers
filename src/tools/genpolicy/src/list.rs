@@ -18,7 +18,6 @@ use protocols::agent;
 use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
 use std::boxed;
-use std::collections::BTreeMap;
 use std::marker::{Send, Sync};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -87,10 +86,6 @@ impl yaml::K8sResource for List {
     }
 
     fn get_containers(&self) -> &Vec<pod::Container> {
-        panic!("Unsupported");
-    }
-
-    fn get_annotations(&self) -> &Option<BTreeMap<String, String>> {
         panic!("Unsupported");
     }
 

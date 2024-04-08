@@ -66,7 +66,10 @@ pub trait K8sResource {
     );
 
     fn get_containers(&self) -> &Vec<pod::Container>;
-    fn get_annotations(&self) -> &Option<BTreeMap<String, String>>;
+    fn get_annotations(&self) -> &Option<BTreeMap<String, String>> {
+        panic!("Unsupported");
+    }
+
     fn use_host_network(&self) -> bool;
     fn use_sandbox_pidns(&self) -> bool;
 }
