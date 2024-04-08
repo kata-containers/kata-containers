@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV INSTALL_IN_GOPATH=false
 # Required for libxml2-dev
@@ -27,8 +27,6 @@ RUN apt-get update && \
     install_yq.sh && \
     install_oras.sh && \
     curl -fsSL https://get.docker.com -o get-docker.sh && \
-    if uname -m | grep -Eq 's390x|ppc64le'; then export VERSION="v20.10" && \
-    sed -i 's/\<docker-compose-plugin\>//g' get-docker.sh; fi && \
     sh get-docker.sh
 
 ARG IMG_USER=kata-builder
