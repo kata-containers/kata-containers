@@ -42,13 +42,13 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: get-kata-tarball
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: kata-static-tarball-arm64${{ inputs.tarball-suffix }}
 
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.registry == 'quay.io' }}
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: quay.io
           username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
@@ -56,7 +56,7 @@ jobs:
 
       - name: Login to Kata Containers ghcr.io
         if: ${{ inputs.registry == 'ghcr.io' }}
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}

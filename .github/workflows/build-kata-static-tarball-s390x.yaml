@@ -50,7 +50,7 @@ jobs:
 
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: quay.io
           username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
@@ -84,9 +84,9 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: store-artifact ${{ matrix.asset }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: kata-artifacts-s390x${{ inputs.tarball-suffix }}
+          name: kata-artifacts-s390x-${{ matrix.asset }}${{ inputs.tarball-suffix }}
           path: kata-build/kata-static-${{ matrix.asset }}.tar.xz
           retention-days: 15
           if-no-files-found: error
@@ -98,13 +98,14 @@ jobs:
       - name: Take a pre-action for self-hosted runner
         run: ${HOME}/script/pre_action.sh ubuntu-2204
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: get-artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
-          name: kata-artifacts-s390x${{ inputs.tarball-suffix }}
+          pattern: kata-artifacts-s390x-*${{ inputs.tarball-suffix }}
           path: kata-artifacts
+          merge-multiple: true
 
       - name: Place a host key document
         run: |
@@ -128,7 +129,7 @@ jobs:
           HKD_PATH: "host-key-document"
 
       - name: store-artifact boot-image-se
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: kata-artifacts-s390x${{ inputs.tarball-suffix }}
           path: kata-build/kata-static-boot-image-se.tar.xz
@@ -152,15 +153,16 @@ jobs:
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
       - name: get-artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
-          name: kata-artifacts-s390x${{ inputs.tarball-suffix }}
+          pattern: kata-artifacts-s390x-*${{ inputs.tarball-suffix }}
           path: kata-artifacts
+          merge-multiple: true
       - name: merge-artifacts
         run: |
           ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-builds.sh kata-artifacts versions.yaml
       - name: store-artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: kata-static-tarball-s390x${{ inputs.tarball-suffix }}
           path: kata-static.tar.xz
