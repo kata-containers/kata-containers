@@ -117,6 +117,12 @@ default_maxvcpus = @DEFMAXVCPUS@
 # If unspecified then it will be set @DEFMEMSZ@ MiB.
 default_memory = @DEFMEMSZ@
 
+# Specifies virtio-mem will be enabled or not.
+# Please note that this option should be used with the command
+# "echo 1 > /proc/sys/vm/overcommit_memory".
+# Default false
+#enable_virtio_mem = true
+
 # Default memory slots per SB/VM.
 # If unspecified then it will be set @DEFMEMSLOTS@.
 # This is will determine the times that memory will be hotadded to sandbox/VM.

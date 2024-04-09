@@ -65,8 +65,10 @@ const (
 )
 
 const (
-	clhStateCreated = "Created"
-	clhStateRunning = "Running"
+	clhStateCreated      = "Created"
+	clhStateRunning      = "Running"
+	clhDefaultMemoryZone = "mem0"
+	virtioHotplugMethod  = "VirtioMem"
 )
 
 const (
@@ -87,6 +89,7 @@ const (
 	clhAPISocket                           = "clh-api.sock"
 	virtioFsSocket                         = "virtiofsd.sock"
 	defaultClhPath                         = "/usr/local/bin/cloud-hypervisor"
+	clhMemoryAlignSize                     = uint64(128)
 )
 
 // Interface that hides the implementation of openAPI client
@@ -113,6 +116,8 @@ type clhClient interface {
 	VmAddDiskPut(ctx context.Context, diskConfig chclient.DiskConfig) (chclient.PciDeviceInfo, *http.Response, error)
 	// Remove a device from the VM
 	VmRemoveDevicePut(ctx context.Context, vmRemoveDevice chclient.VmRemoveDevice) (*http.Response, error)
+	// Add/resize memory zone in VM
+	VmResizeZonePut(ctx context.Context, vmResize chclient.VmResizeZone) (*http.Response, error)
 }
 
 type clhClientApi struct {
@@ -142,6 +147,10 @@ func (c *clhClientApi) BootVM(ctx context.Context) (*http.Response, error) {
 
 func (c *clhClientApi) VmResizePut(ctx context.Context, vmResize chclient.VmResize) (*http.Response, error) {
 	return c.ApiInternal.VmResizePut(ctx).VmResize(vmResize).Execute()
+}
+
+func (c *clhClientApi) VmResizeZonePut(ctx context.Context, vmResize chclient.VmResizeZone) (*http.Response, error) {
+	return c.ApiInternal.VmResizeZonePut(ctx).VmResizeZone(vmResize).Execute()
 }
 
 func (c *clhClientApi) VmAddDevicePut(ctx context.Context, deviceConfig chclient.DeviceConfig) (chclient.PciDeviceInfo, *http.Response, error) {
@@ -511,17 +520,43 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 		}
 	}
 
-	// Create the VM memory config via the constructor to ensure default values are properly assigned
-	clh.vmconfig.Memory = chclient.NewMemoryConfig(int64((utils.MemUnit(clh.config.MemorySize) * utils.MiB).ToBytes()))
-	// shared memory should be enabled if using vhost-user(kata uses virtiofsd)
-	clh.vmconfig.Memory.Shared = func(b bool) *bool { return &b }(true)
-	// Enable hugepages if needed
-	clh.vmconfig.Memory.Hugepages = func(b bool) *bool { return &b }(clh.config.HugePages)
-	if !clh.config.ConfidentialGuest {
-		hotplugSize := clh.config.DefaultMaxMemorySize
-		// OpenAPI only supports int64 values
-		clh.vmconfig.Memory.HotplugSize = func(i int64) *int64 { return &i }(int64((utils.MemUnit(hotplugSize) * utils.MiB).ToBytes()))
+	if clh.config.VirtioMem {
+		clh.vmconfig.Memory = chclient.NewMemoryConfig(0)
+
+		var hotplugMethod = virtioHotplugMethod
+		clh.vmconfig.Memory.HotplugMethod = &hotplugMethod
+		clh.vmconfig.Memory.Thp = func(b bool) *bool { return &b }(false)
+
+		zone := chclient.NewMemoryZoneConfig(clhDefaultMemoryZone, int64((utils.MemUnit(clh.config.MemorySize) * utils.MiB).ToBytes()))
+		// shared memory should be enabled if using vhost-user(kata uses virtiofsd)
+		zone.Shared = func(b bool) *bool { return &b }(true)
+		// Enable hugepages if needed
+		zone.Hugepages = func(b bool) *bool { return &b }(clh.config.HugePages)
+
+		if !clh.config.ConfidentialGuest && uint64(clh.config.MemorySize) < clh.config.DefaultMaxMemorySize {
+			hotplugSize := clh.config.DefaultMaxMemorySize - uint64(clh.config.MemorySize)
+			hotplugSize = (hotplugSize + clhMemoryAlignSize - 1) & ^(clhMemoryAlignSize - 1)
+			// OpenAPI only supports int64 values
+			zone.HotplugSize = func(i int64) *int64 { return &i }(int64((utils.MemUnit(hotplugSize) * utils.MiB).ToBytes()))
+		}
+
+		clh.vmconfig.Memory.Zones = &[]chclient.MemoryZoneConfig{*zone}
+	} else {
+		// Create the VM memory config via the constructor to ensure default values are properly assigned
+		clh.vmconfig.Memory = chclient.NewMemoryConfig(int64((utils.MemUnit(clh.config.MemorySize) * utils.MiB).ToBytes()))
+		// shared memory should be enabled if using vhost-user(kata uses virtiofsd)
+		clh.vmconfig.Memory.Shared = func(b bool) *bool { return &b }(true)
+		// Enable hugepages if needed
+		clh.vmconfig.Memory.Hugepages = func(b bool) *bool { return &b }(clh.config.HugePages)
+
+		if !clh.config.ConfidentialGuest && uint64(clh.config.MemorySize) < clh.config.DefaultMaxMemorySize {
+			hotplugSize := clh.config.DefaultMaxMemorySize - uint64(clh.config.MemorySize)
+			hotplugSize = (hotplugSize + clhMemoryAlignSize - 1) & ^(clhMemoryAlignSize - 1)
+			// OpenAPI only supports int64 values
+			clh.vmconfig.Memory.HotplugSize = func(i int64) *int64 { return &i }(int64((utils.MemUnit(hotplugSize) * utils.MiB).ToBytes()))
+		}
 	}
+
 	// Set initial amount of cpu's for the virtual machine
 	clh.vmconfig.Cpus = chclient.NewCpusConfig(int32(clh.config.NumVCPUs()), int32(clh.config.DefaultMaxVCPUs))
 
@@ -990,9 +1025,6 @@ func (clh *cloudHypervisor) HypervisorConfig() HypervisorConfig {
 }
 
 func (clh *cloudHypervisor) ResizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSizeMB uint32, probe bool) (uint32, MemoryDevice, error) {
-
-	// TODO: Add support for virtio-mem
-
 	if probe {
 		return 0, MemoryDevice{}, errors.New("probe memory is not supported for cloud-hypervisor")
 	}
@@ -1007,18 +1039,23 @@ func (clh *cloudHypervisor) ResizeMemory(ctx context.Context, reqMemMB uint32, m
 		return 0, MemoryDevice{}, err
 	}
 
-	// HotplugSize can be nil in cases where Hotplug is not supported, as Cloud Hypervisor API
-	// does *not* allow us to set 0 as the HotplugSize.
-	maxHotplugSize := 0 * utils.Byte
-	if info.Config.Memory.HotplugSize != nil {
-		maxHotplugSize = utils.MemUnit(*info.Config.Memory.HotplugSize) * utils.Byte
+	maxHotplugSize := utils.MemUnit(clh.config.DefaultMaxMemorySize) * utils.MiB
+
+	currentMem := utils.MemUnit(0)
+	if clh.config.VirtioMem {
+		memzone := (*info.Config.Memory.Zones)[0]
+		currentMem = utils.MemUnit(memzone.Size) * utils.Byte
+		if memzone.HotpluggedSize != nil {
+			currentMem += utils.MemUnit(*memzone.HotpluggedSize) * utils.Byte
+		}
+	} else {
+		currentMem = utils.MemUnit(info.Config.Memory.Size) * utils.Byte
 	}
 
 	if reqMemMB > uint32(maxHotplugSize.ToMiB()) {
 		reqMemMB = uint32(maxHotplugSize.ToMiB())
 	}
 
-	currentMem := utils.MemUnit(info.Config.Memory.Size) * utils.Byte
 	newMem := utils.MemUnit(reqMemMB) * utils.MiB
 
 	// Early Check to verify if boot memory is the same as requested
@@ -1032,7 +1069,13 @@ func (clh *cloudHypervisor) ResizeMemory(ctx context.Context, reqMemMB uint32, m
 		return uint32(currentMem.ToMiB()), MemoryDevice{}, nil
 	}
 
-	blockSize := utils.MemUnit(memoryBlockSizeMB) * utils.MiB
+	blockSize := utils.MemUnit(0)
+
+	if clh.config.VirtioMem {
+		blockSize = utils.MemUnit(2) * utils.MiB
+	} else {
+		blockSize = utils.MemUnit(memoryBlockSizeMB) * utils.MiB
+	}
 	hotplugSize := (newMem - currentMem).AlignMem(blockSize)
 
 	// Update memory request to increase memory aligned block
@@ -1053,11 +1096,22 @@ func (clh *cloudHypervisor) ResizeMemory(ctx context.Context, reqMemMB uint32, m
 	ctx, cancelResize := context.WithTimeout(ctx, clh.getClhAPITimeout()*time.Second)
 	defer cancelResize()
 
-	resize := *chclient.NewVmResize()
-	// OpenApi does not support uint64, convert to int64
-	resize.DesiredRam = func(i int64) *int64 { return &i }(int64(newMem.ToBytes()))
 	clh.Logger().WithFields(log.Fields{"current-memory": currentMem, "new-memory": newMem}).Debug("updating VM memory")
-	if _, err = cl.VmResizePut(ctx, resize); err != nil {
+
+	if clh.config.VirtioMem {
+		resize := *chclient.NewVmResizeZone()
+
+		resize.DesiredRam = func(i int64) *int64 { return &i }(int64(newMem.ToBytes()))
+		resize.Id = func(s string) *string { return &s }(clhDefaultMemoryZone)
+		_, err = cl.VmResizeZonePut(ctx, resize)
+	} else {
+		resize := *chclient.NewVmResize()
+		// OpenApi does not support uint64, convert to int64
+		resize.DesiredRam = func(i int64) *int64 { return &i }(int64(newMem.ToBytes()))
+		_, err = cl.VmResizePut(ctx, resize)
+	}
+
+	if err != nil {
 		clh.Logger().WithError(err).WithFields(log.Fields{"current-memory": currentMem, "new-memory": newMem}).Warnf("failed to update memory %s", openAPIClientError(err))
 		err = fmt.Errorf("Failed to resize memory from %d to %d: %s", currentMem, newMem, openAPIClientError(err))
 		return uint32(currentMem.ToMiB()), MemoryDevice{}, openAPIClientError(err)
