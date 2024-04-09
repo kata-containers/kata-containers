@@ -300,3 +300,13 @@ add_allow_all_policy_to_yaml() {
 
 	esac
 }
+
+# Execute "kubectl describe ${pod}" in a loop, until its output contains "${endpoint} is blocked by policy"
+wait_for_blocked_request() {
+	endpoint="$1"
+	pod="$2"
+
+	command="kubectl describe pod ${pod} | grep \"${endpoint} is blocked by policy\""
+	info "Waiting ${wait_time} seconds for: ${command}"
+	waitForProcess "${wait_time}" "$sleep_time" "${command}" || return 1
+}
