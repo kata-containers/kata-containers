@@ -40,6 +40,7 @@ Documents that help to understand and contribute to Kata Containers.
 ### Design and Implementations
 
 * [Kata Containers Architecture](design/architecture): Architectural overview of Kata Containers
+* [Kata Containers CI](../ci/README.md): Kata Containers CI document
 * [Kata Containers E2E Flow](design/end-to-end-flow.md): The entire end-to-end flow of Kata Containers
 * [Kata Containers design](./design/README.md): More Kata Containers design documents
 * [Kata Containers threat model](./threat-model/threat-model.md): Kata Containers threat model
