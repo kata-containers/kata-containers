@@ -21,6 +21,10 @@ on:
         required: false
         type: string
         default: ""
+      skip:
+        required: false
+        type: string
+        default: no
 
 jobs:
   run-k8s-tests-on-tdx:
@@ -47,35 +51,44 @@ jobs:
       PULL_TYPE: ${{ matrix.pull-type }}
     steps:
       - uses: actions/checkout@v4
+        if: ${{ inputs.skip != 'yes' }}
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
 
       - name: Rebase atop of the latest target branch
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Deploy Snapshotter
+        if: ${{ inputs.skip != 'yes' }}
         timeout-minutes: 5
         run: bash tests/integration/kubernetes/gha-run.sh deploy-snapshotter
 
       - name: Deploy Kata
+        if: ${{ inputs.skip != 'yes' }}
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-tdx
 
       - name: Run tests
+        if: ${{ inputs.skip != 'yes' }}
         timeout-minutes: 30
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
 
       - name: Delete kata-deploy
-        if: always()
+        if: always() && ${{ inputs.skip != 'yes' }}
         run: bash tests/integration/kubernetes/gha-run.sh cleanup-tdx
 
       - name: Delete Snapshotter
-        if: always()
+        if: always() && ${{ inputs.skip != 'yes' }}
         run: bash tests/integration/kubernetes/gha-run.sh cleanup-snapshotter
+
+      - name: skip
+        if: ${{ inputs.skip == 'yes' }}
+        run: echo "Skip this test"
 
   run-k8s-tests-on-sev:
     strategy:
@@ -102,35 +115,44 @@ jobs:
       PULL_TYPE: ${{ matrix.pull-type }}
     steps:
       - uses: actions/checkout@v4
+        if: ${{ inputs.skip != 'yes' }}
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
 
       - name: Rebase atop of the latest target branch
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Deploy Snapshotter
+        if: ${{ inputs.skip != 'yes' }}
         timeout-minutes: 5
         run: bash tests/integration/kubernetes/gha-run.sh deploy-snapshotter
 
       - name: Deploy Kata
+        if: ${{ inputs.skip != 'yes' }}
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-sev
 
       - name: Run tests
+        if: ${{ inputs.skip != 'yes' }}
         timeout-minutes: 30
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
 
       - name: Delete kata-deploy
-        if: always()
+        if: always() && ${{ inputs.skip != 'yes' }}
         run: bash tests/integration/kubernetes/gha-run.sh cleanup-sev
 
       - name: Delete Snapshotter
-        if: always()
+        if: always() && ${{ inputs.skip != 'yes' }}
         run: bash tests/integration/kubernetes/gha-run.sh cleanup-snapshotter
+
+      - name: skip
+        if: ${{ inputs.skip == 'yes' }}
+        run: echo "Skip this test"
 
   run-k8s-tests-sev-snp:
     strategy:
@@ -157,32 +179,41 @@ jobs:
       PULL_TYPE: ${{ matrix.pull-type }}
     steps:
       - uses: actions/checkout@v4
+        if: ${{ inputs.skip != 'yes' }}
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
 
       - name: Rebase atop of the latest target branch
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Deploy Snapshotter
+        if: ${{ inputs.skip != 'yes' }}
         timeout-minutes: 5
         run: bash tests/integration/kubernetes/gha-run.sh deploy-snapshotter
 
       - name: Deploy Kata
+        if: ${{ inputs.skip != 'yes' }}
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-snp
 
       - name: Run tests
+        if: ${{ inputs.skip != 'yes' }}
         timeout-minutes: 30
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
 
       - name: Delete kata-deploy
-        if: always()
+        if: always() && ${{ inputs.skip != 'yes' }}
         run: bash tests/integration/kubernetes/gha-run.sh cleanup-snp
 
       - name: Delete Snapshotter
-        if: always()
+        if: always() && ${{ inputs.skip != 'yes' }}
         run: bash tests/integration/kubernetes/gha-run.sh cleanup-snapshotter
+
+      - name: skip
+        if: ${{ inputs.skip == 'yes' }}
+        run: echo "Skip this test"

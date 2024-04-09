@@ -20,6 +20,10 @@ on:
         required: false
         type: string
         default: ""
+      skip:
+        required: false
+        type: string
+        default: no
 
 jobs:
   build-asset:
@@ -46,10 +50,11 @@ jobs:
             stage: release
     steps:
       - name: Take a pre-action for self-hosted runner
+        if: ${{ inputs.skip != 'yes' }}
         run: ${HOME}/script/pre_action.sh ubuntu-2204
 
       - name: Login to Kata Containers quay.io
-        if: ${{ inputs.push-to-registry == 'yes' }}
+        if: ${{ inputs.push-to-registry == 'yes' && inputs.skip != 'yes' }}
         uses: docker/login-action@v3
         with:
           registry: quay.io
@@ -57,17 +62,20 @@ jobs:
           password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
       - uses: actions/checkout@v4
+        if: ${{ inputs.skip != 'yes' }}
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0 # This is needed in order to keep the commit ids history
 
       - name: Rebase atop of the latest target branch
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Build ${{ matrix.asset }}
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           make "${KATA_ASSET}-tarball"
           build_dir=$(readlink -f build)
@@ -84,6 +92,7 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: store-artifact ${{ matrix.asset }}
+        if: ${{ inputs.skip != 'yes' }}
         uses: actions/upload-artifact@v4
         with:
           name: kata-artifacts-s390x-${{ matrix.asset }}${{ inputs.tarball-suffix }}
@@ -91,16 +100,23 @@ jobs:
           retention-days: 15
           if-no-files-found: error
 
+      - name: skip
+        if: ${{ inputs.skip == 'yes' }}
+        run: echo "Skip this test"
+
   build-asset-boot-image-se:
     runs-on: s390x
     needs: build-asset
     steps:
       - name: Take a pre-action for self-hosted runner
+        if: ${{ inputs.skip != 'yes' }}
         run: ${HOME}/script/pre_action.sh ubuntu-2204
 
       - uses: actions/checkout@v4
+        if: ${{ inputs.skip != 'yes' }}
 
       - name: get-artifacts
+        if: ${{ inputs.skip != 'yes' }}
         uses: actions/download-artifact@v4
         with:
           pattern: kata-artifacts-s390x-*${{ inputs.tarball-suffix }}
@@ -108,6 +124,7 @@ jobs:
           merge-multiple: true
 
       - name: Place a host key document
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           mkdir -p "host-key-document"
           cp "${CI_HKD_PATH}" "host-key-document"
@@ -115,6 +132,7 @@ jobs:
           CI_HKD_PATH: ${{ secrets.CI_HKD_PATH }}
 
       - name: Build boot-image-se
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           base_dir=tools/packaging/kata-deploy/local-build/
           cp -r kata-artifacts ${base_dir}/build
@@ -129,6 +147,7 @@ jobs:
           HKD_PATH: "host-key-document"
 
       - name: store-artifact boot-image-se
+        if: ${{ inputs.skip != 'yes' }}
         uses: actions/upload-artifact@v4
         with:
           name: kata-artifacts-s390x${{ inputs.tarball-suffix }}
@@ -136,35 +155,49 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+      - name: skip
+        if: ${{ inputs.skip == 'yes' }}
+        run: echo "Skip this test"
+
   create-kata-tarball:
     runs-on: s390x
     needs: [build-asset, build-asset-boot-image-se]
     steps:
       - name: Take a pre-action for self-hosted runner
+        if: ${{ inputs.skip != 'yes' }}
         run: ${HOME}/script/pre_action.sh ubuntu-2204
 
       - uses: actions/checkout@v4
+        if: ${{ inputs.skip != 'yes' }}
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
       - name: Rebase atop of the latest target branch
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
       - name: get-artifacts
+        if: ${{ inputs.skip != 'yes' }}
         uses: actions/download-artifact@v4
         with:
           pattern: kata-artifacts-s390x-*${{ inputs.tarball-suffix }}
           path: kata-artifacts
           merge-multiple: true
       - name: merge-artifacts
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-builds.sh kata-artifacts versions.yaml
       - name: store-artifacts
+        if: ${{ inputs.skip != 'yes' }}
         uses: actions/upload-artifact@v4
         with:
           name: kata-static-tarball-s390x${{ inputs.tarball-suffix }}
           path: kata-static.tar.xz
           retention-days: 15
           if-no-files-found: error
+
+      - name: skip
+        if: ${{ inputs.skip == 'yes' }}
+        run: echo "Skip this test"

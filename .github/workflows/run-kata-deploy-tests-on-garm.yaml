@@ -21,6 +21,10 @@ on:
         required: false
         type: string
         default: ""
+      skip:
+        required: false
+        type: string
+        default: no
 
 jobs:
   run-kata-deploy-tests:
@@ -45,21 +49,30 @@ jobs:
       USING_NFD: "false"
     steps:
       - uses: actions/checkout@v4
+        if: ${{ inputs.skip != 'yes' }}
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
 
       - name: Rebase atop of the latest target branch
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Deploy ${{ matrix.k8s }}
+        if: ${{ inputs.skip != 'yes' }}
         run:  bash tests/functional/kata-deploy/gha-run.sh deploy-k8s
 
       - name: Install `bats`
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/functional/kata-deploy/gha-run.sh install-bats
 
       - name: Run tests
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/functional/kata-deploy/gha-run.sh run-tests
+
+      - name: skip
+        if: ${{ inputs.skip == 'yes' }}
+        run: echo "Skip this test"

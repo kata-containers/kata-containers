@@ -4,6 +4,10 @@ on:
       instance:
         required: true
         type: string
+      skip:
+        required: false
+        type: string
+        default: no
 
 name: Build checks
 jobs:
@@ -57,36 +61,38 @@ jobs:
           sudo chown -R $USER:$USER $GITHUB_WORKSPACE $HOME
           sudo rm -rf $GITHUB_WORKSPACE/* && echo "GITHUB_WORKSPACE removed" || { sleep 10 && sudo rm -rf $GITHUB_WORKSPACE/*; }
           sudo rm -f /tmp/kata_hybrid*  # Sometime we got leftover from test_setup_hvsock_failed()
-        if: ${{ inputs.instance != 'ubuntu-20.04' }}
+        if: ${{ inputs.instance != 'ubuntu-20.04' && inputs.skip != 'yes' }}
 
       - name: Checkout the code
+        if: ${{ inputs.skip != 'yes' }}
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Install yq
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           ./ci/install_yq.sh
         env:
           INSTALL_IN_GOPATH: false
       - name: Install golang
-        if: ${{ matrix.component == 'runtime' }}
+        if: ${{ matrix.component == 'runtime' && inputs.skip != 'yes' }}
         run: |
           ./tests/install_go.sh -f -p
           echo "/usr/local/go/bin" >> $GITHUB_PATH
       - name: Install rust
-        if: ${{ matrix.component != 'runtime' }}
+        if: ${{ matrix.component != 'runtime' && inputs.skip != 'yes' }}
         run: |
           ./tests/install_rust.sh
           echo "${HOME}/.cargo/bin" >> $GITHUB_PATH
       - name: Install musl-tools
-        if: ${{ matrix.component != 'runtime' }}
+        if: ${{ matrix.component != 'runtime' && inputs.skip != 'yes' }}
         run: sudo apt-get -y install musl-tools
       - name: Install devicemapper
-        if: ${{ matrix.command == 'make check' && matrix.component == 'agent' }}
+        if: ${{ matrix.command == 'make check' && matrix.component == 'agent' && inputs.skip != 'yes' }}
         run: sudo apt-get -y install libdevmapper-dev
       - name: Install libseccomp
-        if: ${{ matrix.command != 'make vendor'  &&  matrix.command != 'make check' &&  matrix.install-libseccomp == 'yes' }}
+        if: ${{ matrix.command != 'make vendor'  &&  matrix.command != 'make check' &&  matrix.install-libseccomp == 'yes' && inputs.skip != 'yes' }}
         run: |
           libseccomp_install_dir=$(mktemp -d -t libseccomp.XXXXXXXXXX)
           gperf_install_dir=$(mktemp -d -t gperf.XXXXXXXXXX)
@@ -95,19 +101,23 @@ jobs:
           echo "LIBSECCOMP_LINK_TYPE=static" >> $GITHUB_ENV
           echo "LIBSECCOMP_LIB_PATH=${libseccomp_install_dir}/lib" >> $GITHUB_ENV
       - name: Install protobuf-compiler
-        if: ${{ matrix.command != 'make vendor' && (matrix.component == 'agent' || matrix.component == 'runk') }}
+        if: ${{ matrix.command != 'make vendor' && (matrix.component == 'agent' || matrix.component == 'runk') && inputs.skip != 'yes' }}
         run: sudo apt-get -y install protobuf-compiler
       - name: Install clang
-        if: ${{ matrix.command == 'make check' && matrix.component == 'agent' }}
+        if: ${{ matrix.command == 'make check' && matrix.component == 'agent' && inputs.skip != 'yes' }}
         run: sudo apt-get -y install clang
       - name: Setup XDG_RUNTIME_DIR for the `runtime` tests
-        if: ${{ matrix.command != 'make vendor' && matrix.command != 'make check' && matrix.component == 'runtime' }}
+        if: ${{ matrix.command != 'make vendor' && matrix.command != 'make check' && matrix.component == 'runtime' && inputs.skip != 'yes' }}
         run: |
           XDG_RUNTIME_DIR=$(mktemp -d /tmp/kata-tests-$USER.XXX | tee >(xargs chmod 0700))
           echo "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}" >> $GITHUB_ENV
       - name: Running `${{ matrix.command }}` for ${{ matrix.component }}
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           cd ${{ matrix.component-path }}
           ${{ matrix.command }}
         env:
           RUST_BACKTRACE: "1"
+      - name: skip
+        if: ${{ inputs.skip == 'yes' }}
+        run: echo "Skip this test"

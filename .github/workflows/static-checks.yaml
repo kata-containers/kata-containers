@@ -12,14 +12,64 @@ concurrency:
 
 name: Static checks
 jobs:
+  skipper:
+    runs-on: ubuntu-latest
+    outputs:
+      skip_build: ${{ steps.skipper.outputs.skip_build }}
+      skip_test: ${{ steps.skipper.outputs.skip_test }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+      - id: skipper
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+        run: |
+          #!/bin/bash -x
+          # NOTE: keep ALL_SKIPS and skipper.outputs in sync
+          ALL_SKIPS=( skip_build skip_test )
+          DISABLE_SKIPS=()
+          CHANGED_FILES=$(git diff --name-only "origin/${TARGET_BRANCH}")
+          echo "$CHANGED_FILES"
+          echo
+
+          # ci/* doesn't require any tests, just remove them
+          CHANGED_FILES=$(echo "$CHANGED_FILES" | grep -v '^ci/')
+          # **/*.{rst,md} file require only build
+          echo "$CHANGED_FILES" | grep -e '\.rst$' -e '\.md$' -q && DISABLE_SKIPS+=( skip_build ) && CHANGED_FILES=$(echo "$CHANGED_FILES" | grep -v -e '\.rst$' -e '\.md$')
+          # Add more rules here; don't forget to remove treated CHANGED_FILES
+
+          if [ -n "$CHANGED_FILES" ]; then
+            # Remaining utreated files, run all tests
+            for SKIP in "${ALL_SKIPS[@]}"; do
+              echo "$SKIP=no" >> "$GITHUB_OUTPUT"
+            done
+          else
+            # Set DISABLE_SKIPS to no (don't want to skip them)
+            for SKIP in "${DISABLE_SKIPS[@]}"; do
+              echo "$SKIP=no" >> "$GITHUB_OUTPUT"
+            done
+            # Now SKIP all untreated checks
+            for SKIP in "${ALL_SKIPS[@]}"; do
+              grep "^$SKIP=" "$GITHUB_OUTPUT" || echo "$SKIP=yes" >> "$GITHUB_OUTPUT"
+            done
+          fi
+          echo "GH OUTPUT"
+          cat "$GITHUB_OUTPUT"
+        shell: /usr/bin/bash {0}
+
   check-kernel-config-version:
     runs-on: ubuntu-latest
+    needs: skipper
     steps:
       - name: Checkout the code
+        if: ${{ needs.skipper.outputs.skip_build != 'yes' }}
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Ensure the kernel config version has been updated
+        if: ${{ needs.skipper.outputs.skip_build != 'yes' }}
         run: |
           kernel_dir="tools/packaging/kernel/"
           kernel_version_file="${kernel_dir}kata_config_version"
@@ -34,10 +84,16 @@ jobs:
             echo "Check passed"
           fi
 
+      - name: skip
+        if: ${{ needs.skipper.outputs.skip_build == 'yes' }}
+        run: echo "Skip this test"
+
   build-checks:
+    needs: skipper
     uses: ./.github/workflows/build-checks.yaml
     with:
       instance: ubuntu-20.04
+      skip: ${{ needs.skipper.outputs.skip_build }}
 
   build-checks-depending-on-kvm:
     runs-on: garm-ubuntu-2004-smaller
@@ -53,28 +109,36 @@ jobs:
             component-path: src/dragonball
     steps:
       - name: Checkout the code
+        if: ${{ needs.skipper.outputs.skip_build != 'yes' }}
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Install system deps
+        if: ${{ needs.skipper.outputs.skip_build != 'yes' }}
         run: |
           sudo apt-get install -y build-essential musl-tools
       - name: Install yq
+        if: ${{ needs.skipper.outputs.skip_build != 'yes' }}
         run: |
           sudo -E ./ci/install_yq.sh
         env:
           INSTALL_IN_GOPATH: false
       - name: Install rust
+        if: ${{ needs.skipper.outputs.skip_build != 'yes' }}
         run: |
           export PATH="$PATH:/usr/local/bin"
           ./tests/install_rust.sh
       - name: Running `${{ matrix.command }}` for ${{ matrix.component }}
+        if: ${{ needs.skipper.outputs.skip_build != 'yes' }}
         run: |
           export PATH="$PATH:${HOME}/.cargo/bin"
           cd ${{ matrix.component-path }}
           ${{ matrix.command }}
         env:
           RUST_BACKTRACE: "1"
+      - name: skip
+        if: ${{ needs.skipper.outputs.skip_build == 'yes' }}
+        run: echo "Skip this test"
 
   static-checks:
     runs-on: ubuntu-20.04
@@ -87,25 +151,33 @@ jobs:
       GOPATH: ${{ github.workspace }}
     steps:
       - name: Checkout code
+        if: ${{ needs.skipper.outputs.skip_build != 'yes' }}
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           path: ./src/github.com/${{ github.repository }}
       - name: Install yq
+        if: ${{ needs.skipper.outputs.skip_build != 'yes' }}
         run: |
           cd ${GOPATH}/src/github.com/${{ github.repository }}
           ./ci/install_yq.sh
         env:
           INSTALL_IN_GOPATH: false
       - name: Install golang
+        if: ${{ needs.skipper.outputs.skip_build != 'yes' }}
         run: |
           cd ${GOPATH}/src/github.com/${{ github.repository }}
           ./tests/install_go.sh -f -p
           echo "/usr/local/go/bin" >> $GITHUB_PATH
       - name: Install system dependencies
+        if: ${{ needs.skipper.outputs.skip_build != 'yes' }}
         run: |
           sudo apt-get -y install moreutils hunspell hunspell-en-gb hunspell-en-us pandoc
       - name: Run check
+        if: ${{ needs.skipper.outputs.skip_build != 'yes' }}
         run: |
           export PATH=${PATH}:${GOPATH}/bin
           cd ${GOPATH}/src/github.com/${{ github.repository }} && ${{ matrix.cmd }}
+      - name: skip
+        if: ${{ needs.skipper.outputs.skip_build == 'yes' }}
+        run: echo "Skip this test"

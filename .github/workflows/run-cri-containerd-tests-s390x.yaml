@@ -12,6 +12,10 @@ on:
         required: false
         type: string
         default: ""
+      skip:
+        required: false
+        type: string
+        default: no
 
 jobs:
   run-cri-containerd:
@@ -29,35 +33,46 @@ jobs:
       GOPATH: ${{ github.workspace }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
+      if: ${{ inputs.skip != 'yes' }}
       - name: Take a pre-action for self-hosted runner
         run: ${HOME}/script/pre_action.sh ubuntu-2204
 
       - uses: actions/checkout@v4
+        if: ${{ inputs.skip != 'yes' }}
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
 
       - name: Rebase atop of the latest target branch
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Install dependencies
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/integration/cri-containerd/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
+        if: ${{ inputs.skip != 'yes' }}
         uses: actions/download-artifact@v4
         with:
           name: kata-static-tarball-s390x${{ inputs.tarball-suffix }}
           path: kata-artifacts
 
       - name: Install kata
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/integration/cri-containerd/gha-run.sh install-kata kata-artifacts
 
       - name: Run cri-containerd tests
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/integration/cri-containerd/gha-run.sh run
 
       - name: Take a post-action for self-hosted runner
-        if: always()
+        if: always() && ${{ inputs.skip != 'yes' }}
         run: ${HOME}/script/post_action.sh ubuntu-2204
+
+      - name: skip
+        if: ${{ inputs.skip == 'yes' }}
+        run: echo "Skip this test"

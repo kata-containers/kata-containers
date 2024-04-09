@@ -20,6 +20,10 @@ on:
         required: false
         type: string
         default: ""
+      skip:
+        required: false
+        type: string
+        default: no
 
 jobs:
   build-asset:
@@ -38,16 +42,19 @@ jobs:
           - ${{ inputs.stage }}
     steps:
       - name: Adjust a permission for repo
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           sudo chown -R $USER:$USER $GITHUB_WORKSPACE
 
       - name: Prepare the self-hosted runner
+        if: ${{ inputs.skip != 'yes' }}
         run: |
             ${HOME}/scripts/prepare_runner.sh
             sudo rm -rf $GITHUB_WORKSPACE/*
 
 
       - name: Login to Kata Containers quay.io
+        if: ${{ inputs.skip != 'yes' }}
         if: ${{ inputs.push-to-registry == 'yes' }}
         uses: docker/login-action@v3
         with:
@@ -56,17 +63,20 @@ jobs:
           password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
       - uses: actions/checkout@v4
+        if: ${{ inputs.skip != 'yes' }}
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0 # This is needed in order to keep the commit ids history
 
       - name: Rebase atop of the latest target branch
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Build ${{ matrix.asset }}
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           make "${KATA_ASSET}-tarball"
           build_dir=$(readlink -f build)
@@ -83,6 +93,7 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: store-artifact ${{ matrix.asset }}
+        if: ${{ inputs.skip != 'yes' }}
         uses: actions/upload-artifact@v4
         with:
           name: kata-artifacts-ppc64le-${{ matrix.asset }}${{ inputs.tarball-suffix }}
@@ -90,36 +101,48 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+      - name: skip
+        if: ${{ inputs.skip == 'yes' }}
+        run: echo "Skip this test"
+
   create-kata-tarball:
     runs-on: ppc64le
     needs: build-asset
     steps:
       - name: Adjust a permission for repo
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           sudo chown -R $USER:$USER $GITHUB_WORKSPACE
 
       - uses: actions/checkout@v4
+        if: ${{ inputs.skip != 'yes' }}
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
       - name: Rebase atop of the latest target branch
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
       - name: get-artifacts
+        if: ${{ inputs.skip != 'yes' }}
         uses: actions/download-artifact@v4
         with:
           pattern: kata-artifacts-ppc64le-*${{ inputs.tarball-suffix }}
           path: kata-artifacts
-          merge-multiple: true
       - name: merge-artifacts
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-builds.sh kata-artifacts versions.yaml
       - name: store-artifacts
+        if: ${{ inputs.skip != 'yes' }}
         uses: actions/upload-artifact@v4
         with:
           name: kata-static-tarball-ppc64le${{ inputs.tarball-suffix }}
           path: kata-static.tar.xz
           retention-days: 1
           if-no-files-found: error
+      - name: skip
+        if: ${{ inputs.skip == 'yes' }}
+        run: echo "Skip this test"

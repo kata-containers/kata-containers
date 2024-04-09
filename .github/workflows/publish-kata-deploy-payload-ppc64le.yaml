@@ -21,38 +21,47 @@ on:
         required: false
         type: string
         default: ""
+      skip:
+        required: false
+        type: string
+        default: no
 
 jobs:
   kata-payload:
     runs-on: ppc64le
     steps:
       - name: Prepare the self-hosted runner
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           ${HOME}/scripts/prepare_runner.sh
           sudo rm -rf $GITHUB_WORKSPACE/*
 
       - name: Adjust a permission for repo
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           sudo chown -R $USER:$USER $GITHUB_WORKSPACE
 
       - uses: actions/checkout@v4
+        if: ${{ inputs.skip != 'yes' }}
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
 
       - name: Rebase atop of the latest target branch
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: get-kata-tarball
+        if: ${{ inputs.skip != 'yes' }}
         uses: actions/download-artifact@v4
         with:
           name: kata-static-tarball-ppc64le${{ inputs.tarball-suffix }}
 
       - name: Login to Kata Containers quay.io
-        if: ${{ inputs.registry == 'quay.io' }}
+        if: ${{ inputs.registry == 'quay.io' && inputs.skip != 'yes' }}
         uses: docker/login-action@v3
         with:
           registry: quay.io
@@ -60,7 +69,7 @@ jobs:
           password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
       - name: Login to Kata Containers ghcr.io
-        if: ${{ inputs.registry == 'ghcr.io' }}
+        if: ${{ inputs.registry == 'ghcr.io' && inputs.skip != 'yes' }}
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -68,8 +77,13 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: build-and-push-kata-payload
+        if: ${{ inputs.skip != 'yes' }}
         id: build-and-push-kata-payload
         run: |
           ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
           $(pwd)/kata-static.tar.xz \
           ${{ inputs.registry }}/${{ inputs.repo }} ${{ inputs.tag }}
+
+      - name: skip
+        if: ${{ inputs.skip == 'yes' }}
+        run: echo "Skip this test"

@@ -21,6 +21,10 @@ on:
         required: false
         type: string
         default: ""
+      skip:
+        required: false
+        type: string
+        default: no
 
 jobs:
   run-kata-deploy-tests:
@@ -48,20 +52,24 @@ jobs:
       USING_NFD: "false"
     steps:
       - uses: actions/checkout@v4
+        if: ${{ inputs.skip != 'yes' }}
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
 
       - name: Rebase atop of the latest target branch
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Download Azure CLI
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/functional/kata-deploy/gha-run.sh install-azure-cli
 
       - name: Log into the Azure account
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/functional/kata-deploy/gha-run.sh login-azure
         env:
           AZ_APPID: ${{ secrets.AZ_APPID }}
@@ -70,21 +78,30 @@ jobs:
           AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
 
       - name: Create AKS cluster
+        if: ${{ inputs.skip != 'yes' }}
         timeout-minutes: 10
         run: bash tests/functional/kata-deploy/gha-run.sh create-cluster
 
       - name: Install `bats`
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/functional/kata-deploy/gha-run.sh install-bats
 
       - name: Install `kubectl`
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/functional/kata-deploy/gha-run.sh install-kubectl
 
       - name: Download credentials for the Kubernetes CLI to use them
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/functional/kata-deploy/gha-run.sh get-cluster-credentials
 
       - name: Run tests
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/functional/kata-deploy/gha-run.sh run-tests
-      
+
       - name: Delete AKS cluster
-        if: always()
+        if: always() && ${{ inputs.skip != 'yes' }}
         run: bash tests/functional/kata-deploy/gha-run.sh delete-cluster
+
+      - name: skip
+        if: ${{ inputs.skip == 'yes' }}
+        run: echo "Skip this test"

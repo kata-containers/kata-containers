@@ -12,6 +12,10 @@ on:
         required: false
         type: string
         default: ""
+      skip:
+        required: false
+        type: string
+        default: no
 
 jobs:
   run-cri-containerd:
@@ -30,31 +34,41 @@ jobs:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
       - uses: actions/checkout@v4
+        if: ${{ inputs.skip != 'yes' }}
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
 
       - name: Rebase atop of the latest target branch
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Install dependencies
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/integration/cri-containerd/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
+        if: ${{ inputs.skip != 'yes' }}
         uses: actions/download-artifact@v4
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
 
       - name: Install kata
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/integration/cri-containerd/gha-run.sh install-kata kata-artifacts
 
       - name: Run cri-containerd tests
+        if: ${{ inputs.skip != 'yes' }}
         timeout-minutes: 10
         run: bash tests/integration/cri-containerd/gha-run.sh run
+
+      - name: skip
+        if: ${{ inputs.skip == 'yes' }}
+        run: echo "Skip this test"
 
   run-containerd-stability:
     strategy:
@@ -69,31 +83,41 @@ jobs:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
       - uses: actions/checkout@v4
+        if: ${{ inputs.skip != 'yes' }}
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
 
       - name: Rebase atop of the latest target branch
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Install dependencies
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/stability/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
+        if: ${{ inputs.skip != 'yes' }}
         uses: actions/download-artifact@v4
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
 
       - name: Install kata
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/stability/gha-run.sh install-kata kata-artifacts
 
       - name: Run containerd-stability tests
+        if: ${{ inputs.skip != 'yes' }}
         timeout-minutes: 15
         run: bash tests/stability/gha-run.sh run
+
+      - name: skip
+        if: ${{ inputs.skip == 'yes' }}
+        run: echo "Skip this test"
 
   run-nydus:
     strategy:
@@ -111,31 +135,41 @@ jobs:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
       - uses: actions/checkout@v4
+        if: ${{ inputs.skip != 'yes' }}
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
 
       - name: Rebase atop of the latest target branch
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Install dependencies
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/integration/nydus/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
+        if: ${{ inputs.skip != 'yes' }}
         uses: actions/download-artifact@v4
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
 
       - name: Install kata
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/integration/nydus/gha-run.sh install-kata kata-artifacts
 
       - name: Run nydus tests
+        if: ${{ inputs.skip != 'yes' }}
         timeout-minutes: 10
         run: bash tests/integration/nydus/gha-run.sh run
+
+      - name: skip
+        if: ${{ inputs.skip == 'yes' }}
+        run: echo "Skip this test"
 
   run-runk:
     runs-on: garm-ubuntu-2204-smaller
@@ -148,26 +182,35 @@ jobs:
           fetch-depth: 0
 
       - name: Rebase atop of the latest target branch
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Install dependencies
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/integration/runk/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
+        if: ${{ inputs.skip != 'yes' }}
         uses: actions/download-artifact@v4
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
 
       - name: Install kata
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/integration/runk/gha-run.sh install-kata kata-artifacts
 
       - name: Run runk tests
+        if: ${{ inputs.skip != 'yes' }}
         timeout-minutes: 10
         run: bash tests/integration/runk/gha-run.sh run
+
+      - name: skip
+        if: ${{ inputs.skip == 'yes' }}
+        run: echo "Skip this test"
 
   run-tracing:
     strategy:
@@ -181,31 +224,41 @@ jobs:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
       - uses: actions/checkout@v4
+        if: ${{ inputs.skip != 'yes' }}
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
 
       - name: Rebase atop of the latest target branch
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Install dependencies
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/functional/tracing/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
+        if: ${{ inputs.skip != 'yes' }}
         uses: actions/download-artifact@v4
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
 
       - name: Install kata
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/functional/tracing/gha-run.sh install-kata kata-artifacts
 
       - name: Run tracing tests
+        if: ${{ inputs.skip != 'yes' }}
         timeout-minutes: 15
         run: bash tests/functional/tracing/gha-run.sh run
+
+      - name: skip
+        if: ${{ inputs.skip == 'yes' }}
+        run: echo "Skip this test"
 
   run-vfio:
     strategy:
@@ -218,28 +271,37 @@ jobs:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
       - uses: actions/checkout@v4
+        if: ${{ inputs.skip != 'yes' }}
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
 
       - name: Rebase atop of the latest target branch
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Install dependencies
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/functional/vfio/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
+        if: ${{ inputs.skip != 'yes' }}
         uses: actions/download-artifact@v4
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
 
       - name: Run vfio tests
+        if: ${{ inputs.skip != 'yes' }}
         timeout-minutes: 15
         run: bash tests/functional/vfio/gha-run.sh run
+
+      - name: skip
+        if: ${{ inputs.skip == 'yes' }}
+        run: echo "Skip this test"
 
   run-docker-tests:
     strategy:
@@ -256,31 +318,41 @@ jobs:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
       - uses: actions/checkout@v4
+        if: ${{ inputs.skip != 'yes' }}
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
 
       - name: Rebase atop of the latest target branch
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Install dependencies
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/integration/docker/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
+        if: ${{ inputs.skip != 'yes' }}
         uses: actions/download-artifact@v4
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
 
       - name: Install kata
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/integration/docker/gha-run.sh install-kata kata-artifacts
 
       - name: Run docker smoke test
+        if: ${{ inputs.skip != 'yes' }}
         timeout-minutes: 5
         run: bash tests/integration/docker/gha-run.sh run
+
+      - name: skip
+        if: ${{ inputs.skip == 'yes' }}
+        run: echo "Skip this test"
 
   run-nerdctl-tests:
     strategy:
@@ -299,38 +371,50 @@ jobs:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
       - uses: actions/checkout@v4
+        if: ${{ inputs.skip != 'yes' }}
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
 
       - name: Rebase atop of the latest target branch
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Install dependencies
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/integration/nerdctl/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
+        if: ${{ inputs.skip != 'yes' }}
         uses: actions/download-artifact@v4
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
 
       - name: Install kata
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/integration/nerdctl/gha-run.sh install-kata kata-artifacts
 
       - name: Run nerdctl smoke test
+        if: ${{ inputs.skip != 'yes' }}
         timeout-minutes: 5
         run: bash tests/integration/nerdctl/gha-run.sh run
 
       - name: Collect artifacts ${{ matrix.vmm }}
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/integration/nerdctl/gha-run.sh collect-artifacts
 
       - name: Archive artifacts ${{ matrix.vmm }}
+        if: ${{ inputs.skip != 'yes' }}
         uses: actions/upload-artifact@v4
         with:
           name: nerdctl-tests-garm-${{ matrix.vmm }}
           path: /tmp/artifacts
           retention-days: 1
+
+      - name: skip
+        if: ${{ inputs.skip == 'yes' }}
+        run: echo "Skip this test"

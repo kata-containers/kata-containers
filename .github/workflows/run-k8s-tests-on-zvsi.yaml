@@ -21,6 +21,10 @@ on:
         required: false
         type: string
         default: ""
+      skip:
+        required: false
+        type: string
+        default: no
 
 jobs:
   run-k8s-tests:
@@ -46,35 +50,46 @@ jobs:
       TARGET_ARCH: "s390x"
     steps:
       - name: Take a pre-action for self-hosted runner
+        if: ${{ inputs.skip != 'yes' }}
         run: ${HOME}/script/pre_action.sh ubuntu-2204
 
       - uses: actions/checkout@v4
+        if: ${{ inputs.skip != 'yes' }}
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
 
       - name: Rebase atop of the latest target branch
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Deploy ${{ matrix.k8s }}
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/integration/kubernetes/gha-run.sh deploy-k8s
 
       - name: Configure the ${{ matrix.snapshotter }} snapshotter
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/integration/kubernetes/gha-run.sh configure-snapshotter
 
       - name: Deploy Kata
+        if: ${{ inputs.skip != 'yes' }}
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-zvsi
 
       - name: Run tests
+        if: ${{ inputs.skip != 'yes' }}
         timeout-minutes: 30
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
 
       - name: Take a post-action
-        if: always()
+        if: always() && ${{ inputs.skip != 'yes' }}
         run: |
           bash tests/integration/kubernetes/gha-run.sh cleanup-zvsi || true
           ${HOME}/script/post_action.sh ubuntu-2204
+
+      - name: skip
+        if: ${{ inputs.skip == 'yes' }}
+        run: echo "Skip this test"

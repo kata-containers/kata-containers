@@ -21,6 +21,10 @@ on:
         required: false
         type: string
         default: ""
+      skip:
+        required: false
+        type: string
+        default: no
 
 jobs:
   run-k8s-tests:
@@ -44,39 +48,52 @@ jobs:
       TARGET_ARCH: "ppc64le"
     steps:
       - name: Prepare the self-hosted runner
-        run: | 
+        if: ${{ inputs.skip != 'yes' }}
+        run: |
           bash ${HOME}/scripts/prepare_runner.sh kubernetes
           sudo rm -rf $GITHUB_WORKSPACE/*
 
       - uses: actions/checkout@v4
+        if: ${{ inputs.skip != 'yes' }}
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
 
       - name: Rebase atop of the latest target branch
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Install golang
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           ./tests/install_go.sh -f -p
           echo "/usr/local/go/bin" >> $GITHUB_PATH
 
       - name: Prepare the runner for k8s cluster creation
+        if: ${{ inputs.skip != 'yes' }}
         run: bash ${HOME}/scripts/k8s_cluster_cleanup.sh
 
       - name: Create k8s cluster using kubeadm
+        if: ${{ inputs.skip != 'yes' }}
         run: bash ${HOME}/scripts/k8s_cluster_create.sh
 
       - name: Deploy Kata
+        if: ${{ inputs.skip != 'yes' }}
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-kubeadm
 
       - name: Run tests
+        if: ${{ inputs.skip != 'yes' }}
         timeout-minutes: 30
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
 
       - name: Delete cluster and post cleanup actions
+        if: ${{ inputs.skip != 'yes' }}
         run: bash ${HOME}/scripts/k8s_cluster_cleanup.sh
+
+      - name: skip
+        if: ${{ inputs.skip == 'yes' }}
+        run: echo "Skip this test"

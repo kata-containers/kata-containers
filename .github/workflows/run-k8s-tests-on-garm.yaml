@@ -21,6 +21,10 @@ on:
         required: false
         type: string
         default: ""
+      skip:
+        required: false
+        type: string
+        default: no
 
 jobs:
   run-k8s-tests:
@@ -58,37 +62,46 @@ jobs:
       K8S_TEST_HOST_TYPE: ${{ matrix.instance-type }}
     steps:
       - uses: actions/checkout@v4
+        if: ${{ inputs.skip != 'yes' }}
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
 
       - name: Rebase atop of the latest target branch
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Deploy ${{ matrix.k8s }}
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/integration/kubernetes/gha-run.sh deploy-k8s
 
       - name: Configure the ${{ matrix.snapshotter }} snapshotter
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/integration/kubernetes/gha-run.sh configure-snapshotter
 
       - name: Deploy Kata
+        if: ${{ inputs.skip != 'yes' }}
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-garm
 
       - name: Install `bats`
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/integration/kubernetes/gha-run.sh install-bats
   
       - name: Run tests
+        if: ${{ inputs.skip != 'yes' }}
         timeout-minutes: 30
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
   
       - name: Collect artifacts ${{ matrix.vmm }}
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/integration/kubernetes/gha-run.sh collect-artifacts
 
       - name: Archive artifacts ${{ matrix.vmm }}
+        if: ${{ inputs.skip != 'yes' }}
         uses: actions/upload-artifact@v4
         with:
           name: k8s-tests-garm-${{ matrix.vmm }}-${{ matrix.snapshotter }}-${{ matrix.k8s }}-${{ matrix.instance }}-${{ inputs.tag }}
@@ -96,5 +109,9 @@ jobs:
           retention-days: 1
 
       - name: Delete kata-deploy
-        if: always()
+        if: always() && ${{ inputs.skip != 'yes' }}
         run: bash tests/integration/kubernetes/gha-run.sh cleanup-garm
+
+      - name: skip
+        if: ${{ inputs.skip == 'yes' }}
+        run: echo "Skip this test"

@@ -12,7 +12,57 @@ concurrency:
 
 name: Static checks self-hosted
 jobs:
+name: Static checks
+jobs:
+  skipper:
+    runs-on: ubuntu-latest
+    outputs:
+      skip_build: ${{ steps.skipper.outputs.skip_build }}
+      skip_test: ${{ steps.skipper.outputs.skip_test }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+      - id: skipper
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+        run: |
+          #!/bin/bash -x
+          # NOTE: keep ALL_SKIPS and skipper.outputs in sync
+          ALL_SKIPS=( skip_build skip_test )
+          DISABLE_SKIPS=()
+          CHANGED_FILES=$(git diff --name-only "origin/${TARGET_BRANCH}")
+          echo "$CHANGED_FILES"
+          echo
+
+          # ci/* doesn't require any tests, just remove them
+          CHANGED_FILES=$(echo "$CHANGED_FILES" | grep -v '^ci/')
+          # **/*.{rst,md} file require only build
+          echo "$CHANGED_FILES" | grep -e '\.rst$' -e '\.md$' -q && DISABLE_SKIPS+=( skip_build ) && CHANGED_FILES=$(echo "$CHANGED_FILES" | grep -v -e '\.rst$' -e '\.md$')
+          # Add more rules here; don't forget to remove treated CHANGED_FILES
+
+          if [ -n "$CHANGED_FILES" ]; then
+            # Remaining utreated files, run all tests
+            for SKIP in "${ALL_SKIPS[@]}"; do
+              echo "$SKIP=no" >> "$GITHUB_OUTPUT"
+            done
+          else
+            # Set DISABLE_SKIPS to no (don't want to skip them)
+            for SKIP in "${DISABLE_SKIPS[@]}"; do
+              echo "$SKIP=no" >> "$GITHUB_OUTPUT"
+            done
+            # Now SKIP all untreated checks
+            for SKIP in "${ALL_SKIPS[@]}"; do
+              grep "^$SKIP=" "$GITHUB_OUTPUT" || echo "$SKIP=yes" >> "$GITHUB_OUTPUT"
+            done
+          fi
+          echo "GH OUTPUT"
+          cat "$GITHUB_OUTPUT"
+        shell: /usr/bin/bash {0}
+
   build-checks:
+    needs: skipper
     if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
     strategy:
       fail-fast: false
@@ -24,3 +74,4 @@ jobs:
     uses: ./.github/workflows/build-checks.yaml
     with:
       instance: ${{ matrix.instance }}
+      skip: ${{ needs.skipper.outputs.skip_build }}

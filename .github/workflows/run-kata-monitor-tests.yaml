@@ -12,6 +12,10 @@ on:
         required: false
         type: string
         default: ""
+      skip:
+        required: false
+        type: string
+        default: no
 
 jobs:
   run-monitor:
@@ -33,27 +37,37 @@ jobs:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
       - uses: actions/checkout@v4
+        if: ${{ inputs.skip != 'yes' }}
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
 
       - name: Rebase atop of the latest target branch
+        if: ${{ inputs.skip != 'yes' }}
         run: |
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Install dependencies
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/functional/kata-monitor/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
+        if: ${{ inputs.skip != 'yes' }}
         uses: actions/download-artifact@v4
         with:
           name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
           path: kata-artifacts
 
       - name: Install kata
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/functional/kata-monitor/gha-run.sh install-kata kata-artifacts
 
       - name: Run kata-monitor tests
+        if: ${{ inputs.skip != 'yes' }}
         run: bash tests/functional/kata-monitor/gha-run.sh run
+
+      - name: skip
+        if: ${{ inputs.skip == 'yes' }}
+        run: echo "Skip this test"
