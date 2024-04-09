@@ -42,7 +42,9 @@ jobs:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
       KUBERNETES: "k3s"
       USING_NFD: "true"
+      KBS: "true"
       K8S_TEST_HOST_TYPE: "baremetal"
+      KBS_INGRESS: "nodeport"
       SNAPSHOTTER: ${{ matrix.snapshotter }}
       PULL_TYPE: ${{ matrix.pull-type }}
     steps:
@@ -65,6 +67,14 @@ jobs:
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-tdx
 
+      - name: Deploy CoCo KBS
+        timeout-minutes: 10
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-coco-kbs
+
+      - name: Install `kbs-client`
+        timeout-minutes: 10
+        run: bash tests/integration/kubernetes/gha-run.sh install-kbs-client
+
       - name: Run tests
         timeout-minutes: 30
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
@@ -76,6 +86,10 @@ jobs:
       - name: Delete Snapshotter
         if: always()
         run: bash tests/integration/kubernetes/gha-run.sh cleanup-snapshotter
+
+      - name: Delete CoCo KBS
+        if: always()
+        run: bash tests/integration/kubernetes/gha-run.sh delete-coco-kbs
 
   run-k8s-tests-on-sev:
     strategy:
