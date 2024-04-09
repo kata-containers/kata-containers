@@ -65,8 +65,10 @@ const (
 )
 
 const (
-	clhStateCreated = "Created"
-	clhStateRunning = "Running"
+	clhStateCreated      = "Created"
+	clhStateRunning      = "Running"
+	clhDefaultMemoryZone = "mem0"
+	virtioHotplugMethod  = "VirtioMem"
 )
 
 const (
@@ -87,6 +89,7 @@ const (
 	clhAPISocket                           = "clh-api.sock"
 	virtioFsSocket                         = "virtiofsd.sock"
 	defaultClhPath                         = "/usr/local/bin/cloud-hypervisor"
+	virtioMemMemoryAlignSize               = uint64(128)
 )
 
 // Interface that hides the implementation of openAPI client
@@ -511,17 +514,41 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 		}
 	}
 
-	// Create the VM memory config via the constructor to ensure default values are properly assigned
-	clh.vmconfig.Memory = chclient.NewMemoryConfig(int64((utils.MemUnit(clh.config.MemorySize) * utils.MiB).ToBytes()))
-	// shared memory should be enabled if using vhost-user(kata uses virtiofsd)
-	clh.vmconfig.Memory.Shared = func(b bool) *bool { return &b }(true)
-	// Enable hugepages if needed
-	clh.vmconfig.Memory.Hugepages = func(b bool) *bool { return &b }(clh.config.HugePages)
-	if !clh.config.ConfidentialGuest {
-		hotplugSize := clh.config.DefaultMaxMemorySize
-		// OpenAPI only supports int64 values
-		clh.vmconfig.Memory.HotplugSize = func(i int64) *int64 { return &i }(int64((utils.MemUnit(hotplugSize) * utils.MiB).ToBytes()))
+	if clh.config.VirtioMem {
+		clh.vmconfig.Memory = chclient.NewMemoryConfig(0)
+
+		var hotplugMethod = virtioHotplugMethod
+		clh.vmconfig.Memory.HotplugMethod = &hotplugMethod
+		clh.vmconfig.Memory.Thp = func(b bool) *bool { return &b }(false)
+
+		zone := chclient.NewMemoryZoneConfig(clhDefaultMemoryZone, int64((utils.MemUnit(clh.config.MemorySize) * utils.MiB).ToBytes()))
+		// shared memory should be enabled if using vhost-user(kata uses virtiofsd)
+		zone.Shared = func(b bool) *bool { return &b }(true)
+		// Enable hugepages if needed
+		zone.Hugepages = func(b bool) *bool { return &b }(clh.config.HugePages)
+
+		if !clh.config.ConfidentialGuest {
+			hotplugSize := clh.config.DefaultMaxMemorySize & ^(virtioMemMemoryAlignSize - 1)
+			// OpenAPI only supports int64 values
+			zone.HotplugSize = func(i int64) *int64 { return &i }(int64((utils.MemUnit(hotplugSize) * utils.MiB).ToBytes()))
+		}
+
+		clh.vmconfig.Memory.Zones = &[]chclient.MemoryZoneConfig{*zone}
+	} else {
+		// Create the VM memory config via the constructor to ensure default values are properly assigned
+		clh.vmconfig.Memory = chclient.NewMemoryConfig(int64((utils.MemUnit(clh.config.MemorySize) * utils.MiB).ToBytes()))
+		// shared memory should be enabled if using vhost-user(kata uses virtiofsd)
+		clh.vmconfig.Memory.Shared = func(b bool) *bool { return &b }(true)
+		// Enable hugepages if needed
+		clh.vmconfig.Memory.Hugepages = func(b bool) *bool { return &b }(clh.config.HugePages)
+
+		if !clh.config.ConfidentialGuest {
+			hotplugSize := clh.config.DefaultMaxMemorySize
+			// OpenAPI only supports int64 values
+			clh.vmconfig.Memory.HotplugSize = func(i int64) *int64 { return &i }(int64((utils.MemUnit(hotplugSize) * utils.MiB).ToBytes()))
+		}
 	}
+
 	// Set initial amount of cpu's for the virtual machine
 	clh.vmconfig.Cpus = chclient.NewCpusConfig(int32(clh.config.NumVCPUs()), int32(clh.config.DefaultMaxVCPUs))
 
