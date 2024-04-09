@@ -433,7 +433,7 @@ function cleanup_snapshotter() {
 }
 
 function deploy_nydus_snapshotter() {
-    echo "::group::deploy_nydus_snapshotter"
+	echo "::group::deploy_nydus_snapshotter"
 	ensure_yq
 
 	local nydus_snapshotter_install_dir="/tmp/nydus-snapshotter"
