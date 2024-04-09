@@ -64,6 +64,17 @@ struct CommandLineOptions {
         help = "Ignore unsupported input Kubernetes YAML fields. This is not recommeded unless you understand exactly how genpolicy works!"
     )]
     silent_unsupported_fields: bool,
+
+    #[clap(
+        short = 'd',
+        long,
+        help = "If specified, will use existing containerd service to pull container images. This option is only supported on Linux",
+        // from https://docs.rs/clap/4.1.8/clap/struct.Arg.html#method.default_missing_value
+        default_missing_value = "/var/run/containerd/containerd.sock", // used if flag is present but no value is given
+        num_args = 0..=1,
+        require_equals= true
+    )]
+    containerd_socket_path: Option<String>,
 }
 
 /// Application configuration, derived from on command line parameters.
@@ -79,6 +90,7 @@ pub struct Config {
     pub silent_unsupported_fields: bool,
     pub raw_out: bool,
     pub base64_out: bool,
+    pub containerd_socket_path: Option<String>,
 }
 
 impl Config {
@@ -105,6 +117,7 @@ impl Config {
             silent_unsupported_fields: args.silent_unsupported_fields,
             raw_out: args.raw_out,
             base64_out: args.base64_out,
+            containerd_socket_path: args.containerd_socket_path,
         }
     }
 }

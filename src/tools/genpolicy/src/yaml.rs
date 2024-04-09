@@ -20,6 +20,7 @@ use crate::replication_controller;
 use crate::secret;
 use crate::settings;
 use crate::stateful_set;
+use crate::utils::Config;
 use crate::volume;
 
 use async_trait::async_trait;
@@ -43,7 +44,7 @@ pub struct YamlHeader {
 pub trait K8sResource {
     async fn init(
         &mut self,
-        use_cache: bool,
+        config: &Config,
         doc_mapping: &serde_yaml::Value,
         silent_unsupported_fields: bool,
     );
@@ -216,17 +217,17 @@ pub fn get_yaml_header(yaml: &str) -> anyhow::Result<YamlHeader> {
     Ok(serde_yaml::from_str(yaml)?)
 }
 
-pub async fn k8s_resource_init(spec: &mut pod::PodSpec, use_cache: bool) {
+pub async fn k8s_resource_init(spec: &mut pod::PodSpec, config: &Config) {
     for container in &mut spec.containers {
-        container.init(use_cache).await;
+        container.init(config).await;
     }
 
-    pod::add_pause_container(&mut spec.containers, use_cache).await;
+    pod::add_pause_container(&mut spec.containers, config).await;
 
     if let Some(init_containers) = &spec.initContainers {
         for container in init_containers {
             let mut new_container = container.clone();
-            new_container.init(use_cache).await;
+            new_container.init(config).await;
             spec.containers.insert(1, new_container);
         }
     }

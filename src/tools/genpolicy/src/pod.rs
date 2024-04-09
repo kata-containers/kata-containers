@@ -12,6 +12,7 @@ use crate::policy;
 use crate::registry;
 use crate::secret;
 use crate::settings;
+use crate::utils::Config;
 use crate::volume;
 use crate::yaml;
 
@@ -480,11 +481,9 @@ struct PodDNSConfigOption {
 }
 
 impl Container {
-    pub async fn init(&mut self, use_cache: bool) {
+    pub async fn init(&mut self, config: &Config) {
         // Load container image properties from the registry.
-        self.registry = registry::get_container(use_cache, &self.image)
-            .await
-            .unwrap();
+        self.registry = registry::get_container(config, &self.image).await.unwrap();
     }
 
     pub fn get_env_variables(
@@ -691,8 +690,8 @@ impl EnvVar {
 
 #[async_trait]
 impl yaml::K8sResource for Pod {
-    async fn init(&mut self, use_cache: bool, doc_mapping: &serde_yaml::Value, _silent: bool) {
-        yaml::k8s_resource_init(&mut self.spec, use_cache).await;
+    async fn init(&mut self, config: &Config, doc_mapping: &serde_yaml::Value, _silent: bool) {
+        yaml::k8s_resource_init(&mut self.spec, config).await;
         self.doc_mapping = doc_mapping.clone();
     }
 
@@ -832,7 +831,7 @@ fn compress_capabilities(capabilities: &mut Vec<String>, defaults: &policy::Comm
     }
 }
 
-pub async fn add_pause_container(containers: &mut Vec<Container>, use_cache: bool) {
+pub async fn add_pause_container(containers: &mut Vec<Container>, config: &Config) {
     debug!("Adding pause container...");
     let mut pause_container = Container {
         // TODO: load this path from the settings file.
@@ -849,7 +848,7 @@ pub async fn add_pause_container(containers: &mut Vec<Container>, use_cache: boo
         }),
         ..Default::default()
     };
-    pause_container.init(use_cache).await;
+    pause_container.init(config).await;
     containers.insert(0, pause_container);
     debug!("pause container added.");
 }

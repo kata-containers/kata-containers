@@ -11,6 +11,7 @@ use crate::pod;
 use crate::pod_template;
 use crate::policy;
 use crate::settings;
+use crate::utils::Config;
 use crate::yaml;
 
 use async_trait::async_trait;
@@ -72,11 +73,11 @@ struct RollingUpdateDaemonSet {
 impl yaml::K8sResource for DaemonSet {
     async fn init(
         &mut self,
-        use_cache: bool,
+        config: &Config,
         doc_mapping: &serde_yaml::Value,
         _silent_unsupported_fields: bool,
     ) {
-        yaml::k8s_resource_init(&mut self.spec.template.spec, use_cache).await;
+        yaml::k8s_resource_init(&mut self.spec.template.spec, config).await;
         self.doc_mapping = doc_mapping.clone();
     }
 
