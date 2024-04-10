@@ -41,6 +41,10 @@ public.ecr.aws/lts
 mirror.gcr.io/library
 quay.io/libpod"
 
+# Default Kata Configuration Directory
+readonly DEFAULT_KATA_CONFIG_DIR="/opt/kata/share/defaults/kata-containers"
+readonly DEFAULT_KATA_CONFIG_FNAME="configuration.toml"
+
 # This function checks existence of commands.
 # They can be received standalone or as an array, e.g.
 #
@@ -86,10 +90,14 @@ function generate_build_dockerfile()
 	local map_key="$3"
 	local text_to_replace="$4"
 	local regs=(${registries["${map_key}"]})
+
 	for r in ${regs[@]}; do
 		sed 's|'${text_to_replace}'|'${r}'|g' \
 			"${dockerfile}.in" > "${dockerfile}"
-		if sudo "${DOCKER_EXE}" build --build-arg http_proxy="${http_proxy}" --build-arg https_proxy="${https_proxy}" --label "$image" --tag "${image}" -f "$dockerfile" "$dockerfile_dir"; then
+		if sudo -E "${DOCKER_EXE}" build \
+			--build-arg http_proxy="${http_proxy}" --build-arg https_proxy="${https_proxy}" \
+			--build-arg HTTP_PROXY="${http_proxy}" --build-arg HTTPS_PROXY="${https_proxy}" \
+			--label "$image" --tag "${image}" -f "$dockerfile" "$dockerfile_dir"; then
 			return 0
 		fi
 	done
@@ -107,7 +115,10 @@ function build_dockerfile_image()
 
 	if [ -f "$dockerfile_path" ]; then
 		info "docker building $image"
-		if ! sudo "${DOCKER_EXE}" build --build-arg http_proxy="${http_proxy}" --build-arg https_proxy="${https_proxy}" --label "$image" --tag "${image}" -f "$dockerfile_path" "$dockerfile_dir"; then
+		if ! sudo -E "${DOCKER_EXE}" build \
+			--build-arg http_proxy="${http_proxy}" --build-arg https_proxy="${https_proxy}" \
+			--build-arg HTTP_PROXY="${http_proxy}" --build-arg HTTPS_PROXY="${https_proxy}" \
+			--label "$image" --tag "${image}" -f "$dockerfile_path" "$dockerfile_dir"; then
 			die "Failed to docker build image $image"
 		fi
 		return 0
@@ -424,4 +435,76 @@ function check_containers_are_running() {
 		warn "Time out exceeded"
 		return 1
 	fi
+}
+
+# This function receives an identifier used to name a performance Kata configuration file.
+# The current kata configuration is copied to a new kata config file with the difference
+# that the parameters 'default_vcpus' and 'default_memory' will be updated with the values
+# of the max vcpus and the available memory in the system.
+# Finally it makes Kata point to the new configuration file.
+set_kata_configuration_performance() {
+	WORKLOAD_CONFIG_FILE="${1}"
+
+	[ -z "${WORKLOAD_CONFIG_FILE}" ] && die "Unable to set a performance Kata configuration because the passed identifier is empty."
+
+        local NUM_CPUS="$(nproc --all)"
+        local MEM_AVAIL_KB="$(grep MemAvailable /proc/meminfo | awk '{print $2}')"
+        local MEM_AVAIL_MB=$(echo "scale=0; $MEM_AVAIL_KB / 1024" | bc)
+
+        info "Updating Kata configuration to increase memory and cpu resources assigned to the workload."
+
+        # Copy the current kata configuration file to the workload config file,
+        # and increase memory size and num of vcpus assigned.
+
+        pushd "${DEFAULT_KATA_CONFIG_DIR}" > /dev/null
+
+                if [ ! -f "${DEFAULT_KATA_CONFIG_FNAME}" ]; then
+                        die "Kata config file not found."
+                fi
+
+                info "Changing the kata configuration to assign '${NUM_CPUS} vcpus' and ${MEM_AVAIL_MB} MB of memory to the performance workload."
+
+                cp "${DEFAULT_KATA_CONFIG_FNAME}" "${WORKLOAD_CONFIG_FILE}"
+                ln -sf "${WORKLOAD_CONFIG_FILE}" "${DEFAULT_KATA_CONFIG_FNAME}"
+
+                sed -i "s/default_memory =[^=&]*/default_memory = $MEM_AVAIL_MB/g" "${WORKLOAD_CONFIG_FILE}"
+                sed -i "s/default_vcpus =[^=&]*/default_vcpus = $NUM_CPUS/g" "${WORKLOAD_CONFIG_FILE}"
+        popd > /dev/null
+}
+
+function clean_cache() {
+        sudo sync; echo 1 > /proc/sys/vm/drop_caches
+}
+
+# This function receives as single parameter, the name of a valid Kata configuration file
+# which will be established as the default Kata configuration to start new Kata containers.
+function set_kata_config_file() {
+	NEW_KATA_CONFIG=${1}
+
+	[ -z "${NEW_KATA_CONFIG}" ] && die "Failed to set a new Kata configuration because the configuration file was not not provided."
+	[ ! -d "${DEFAULT_KATA_CONFIG_DIR}" ] && die "Kata configuration directory was not found: ${DEFAULT_KATA_CONFIG_DIR}."
+
+	pushd "${DEFAULT_KATA_CONFIG_DIR}" > /dev/null
+
+	[ ! -f "${NEW_KATA_CONFIG}" ] && die "The Kata configuration file provided: ${NEW_KATA_CONFIG} was not found."
+
+	info "Aplying a new Kata configuration using the file: ${NEW_KATA_CONFIG}."
+
+        ln -sf "${NEW_KATA_CONFIG}" "${DEFAULT_KATA_CONFIG_FNAME}"
+
+        popd > /dev/null
+}
+
+function get_current_kata_config_file() {
+	declare -n current_config_file=$1
+
+	pushd "${DEFAULT_KATA_CONFIG_DIR}" > /dev/null
+	KATA_CONFIG_FNAME="$(readlink -f ${DEFAULT_KATA_CONFIG_FNAME})"
+	popd > /dev/null
+
+	current_config_file="${KATA_CONFIG_FNAME}"
+}
+
+function check_if_root() {
+	[ "$EUID" -ne 0 ] && die "Please run as root or use sudo."
 }
