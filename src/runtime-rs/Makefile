@@ -249,7 +249,7 @@ endif
 ifneq (,$(QEMUCMD))
     KNOWN_HYPERVISORS += $(HYPERVISOR_QEMU)
 
-    CONFIG_FILE_QEMU = configuration-qemu.toml
+    CONFIG_FILE_QEMU = configuration-qemu-runtime-rs.toml
     CONFIG_QEMU = config/$(CONFIG_FILE_QEMU)
     CONFIG_QEMU_IN = $(CONFIG_QEMU).in
 
