@@ -1325,6 +1325,7 @@ mod tests {
     use std::collections::HashMap;
     use std::process::Command;
     use std::sync::{Arc, RwLock};
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     use cgroups::devices::{DevicePermissions, DeviceType};
     use oci::{Linux, LinuxDeviceCgroup, LinuxResources, Spec};
@@ -1438,48 +1439,38 @@ mod tests {
             access: String::from("rwm"),
         };
 
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let one_time_pod_name = format!("kata-agent-fs-manager-test-{}", now);
+        let one_time_cpath =
+            |child: &str| -> String { format!("/{}/{}", one_time_pod_name, child) };
+
         let test_cases = vec![
             TestCase {
-                cpath: vec![String::from(
-                    "/kata-agent-fs-manager-test/449ccd81-9320-4f3e-bb67-78f84700fac9",
-                )],
+                cpath: vec![one_time_cpath("child1")],
                 devices: vec![vec![allow_all.clone()]],
                 allowed_all: vec![true],
                 pod_devices_list: vec![String::from("a *:* rwm\n")],
                 container_devices_list: vec![String::from("a *:* rwm\n")],
             },
             TestCase {
-                cpath: vec![String::from(
-                    "/kata-agent-fs-manager-test/449ccd81-9320-4f3e-bb67-78f84700fac9",
-                )],
+                cpath: vec![one_time_cpath("child1")],
                 devices: vec![vec![deny_all.clone()]],
                 allowed_all: vec![false],
                 pod_devices_list: vec![String::new()],
                 container_devices_list: vec![String::new()],
             },
             TestCase {
-                cpath: vec![
-                    String::from(
-                        "/kata-agent-fs-manager-test/449ccd81-9320-4f3e-bb67-78f84700fac9",
-                    ),
-                    String::from(
-                        "/kata-agent-fs-manager-test/1c7affca-1f65-427c-ba92-caff1cea61f6",
-                    ),
-                ],
+                cpath: vec![one_time_cpath("child1"), one_time_cpath("child2")],
                 devices: vec![vec![deny_all.clone()], vec![allow_all.clone()]],
                 allowed_all: vec![false, true],
                 pod_devices_list: vec![String::new(), String::from("b *:* rwm\nc *:* rwm\n")],
                 container_devices_list: vec![String::new(), String::from("b *:* rwm\nc *:* rwm\n")],
             },
             TestCase {
-                cpath: vec![
-                    String::from(
-                        "/kata-agent-fs-manager-test/449ccd81-9320-4f3e-bb67-78f84700fac9",
-                    ),
-                    String::from(
-                        "/kata-agent-fs-manager-test/1c7affca-1f65-427c-ba92-caff1cea61f6",
-                    ),
-                ],
+                cpath: vec![one_time_cpath("child1"), one_time_cpath("child2")],
                 devices: vec![vec![allow_all], vec![deny_all]],
                 allowed_all: vec![true, true],
                 pod_devices_list: vec![String::from("a *:* rwm\n"), String::from("a *:* rwm\n")],
@@ -1517,13 +1508,16 @@ mod tests {
                 assert!(devcg_info.inited);
                 assert_eq!(
                     devcg_info.allowed_all, tc.allowed_all[cid],
-                    "Round {}, cid {} allowed all assertion failure",
+                    "Test case {}: cid {} allowed all assertion failure",
                     round, cid
                 );
                 drop(devcg_info);
 
                 let pod_devices_list = Command::new("cat")
-                    .arg("/sys/fs/cgroup/devices/kata-agent-fs-manager-test/devices.list")
+                    .arg(&format!(
+                        "/sys/fs/cgroup/devices/{}/devices.list",
+                        one_time_pod_name
+                    ))
                     .output()
                     .unwrap();
                 let container_devices_list = Command::new("cat")
@@ -1538,8 +1532,16 @@ mod tests {
                 let container_devices_list =
                     String::from_utf8(container_devices_list.stdout).unwrap();
 
-                assert_eq!(&pod_devices_list, &tc.pod_devices_list[cid]);
-                assert_eq!(&container_devices_list, &tc.container_devices_list[cid])
+                assert_eq!(
+                    &pod_devices_list, &tc.pod_devices_list[cid],
+                    "Test case {}: cid {} allowed all assertion failure",
+                    round, cid
+                );
+                assert_eq!(
+                    &container_devices_list, &tc.container_devices_list[cid],
+                    "Test case {}: cid {} allowed all assertion failure",
+                    round, cid
+                )
             }
 
             // Clean up cgroups
