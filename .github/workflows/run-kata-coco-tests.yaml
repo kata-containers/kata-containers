@@ -33,6 +33,7 @@ jobs:
           - nydus
         pull-type:
           - guest-pull
+          - host-share-image-block
     runs-on: tdx
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
@@ -87,6 +88,7 @@ jobs:
           - nydus
         pull-type:
           - guest-pull
+          - host-share-image-block
     runs-on: sev
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
@@ -142,6 +144,7 @@ jobs:
           - nydus
         pull-type:
           - guest-pull
+          - host-share-image-block
     runs-on: sev-snp
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}

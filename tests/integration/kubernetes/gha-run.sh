@@ -31,6 +31,7 @@ KUBERNETES="${KUBERNETES:-}"
 SNAPSHOTTER="${SNAPSHOTTER:-}"
 HTTPS_PROXY="${HTTPS_PROXY:-${https_proxy:-}}"
 NO_PROXY="${NO_PROXY:-${no_proxy:-}}"
+PULL_TYPE="${PULL_TYPE:-default}"
 export AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-no}"
 export TEST_CLUSTER_NAMESPACE="${TEST_CLUSTER_NAMESPACE:-kata-containers-k8s-tests}"
 export GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-oci-distribution-client}"
@@ -248,6 +249,12 @@ function install_kbs_client() {
 
 function run_tests() {
 	ensure_yq
+	
+	# Skip running tests for the pull type `host-share-image-block` until
+	# the PR https://github.com/kata-containers/kata-containers/pull/7837 is prepared for testing.
+	echo "PULL_TYPE = ${PULL_TYPE}"
+	[ "${PULL_TYPE}" = "host-share-image-block" ] && return
+
 	platform="${1:-}"
 
 	[ "$platform" = "kcli" ] && \
@@ -463,6 +470,9 @@ function deploy_nydus_snapshotter() {
 		  misc/snapshotter/base/nydus-snapshotter.yaml \
 		  'data.FS_DRIVER' \
 		  "proxy" --style=double
+	elif [ "${PULL_TYPE}" == "host-share-image-block" ]; then
+		echo "Skip deploying nydus for the pull type `host-share-image-block` until the PR https://github.com/kata-containers/kata-containers/pull/7837 is prepared"
+		return
 	else
 		>&2 echo "Invalid pull type"; exit 2
 	fi
@@ -517,11 +527,11 @@ function cleanup_nydus_snapshotter() {
 	else
 		kubectl delete -f "misc/snapshotter/base/nydus-snapshotter.yaml"
 	fi
-	sleep 180s
+	sleep 120s
 	kubectl delete -f "misc/snapshotter/nydus-snapshotter-rbac.yaml"
 	kubectl get namespace nydus-system -o json | jq 'del(.spec.finalizers)' | kubectl replace --raw "/api/v1/namespaces/nydus-system/finalize" -f - || true
 	popd
-	sleep 30s
+	sleep 10s
 	echo "::endgroup::"
 }
 
