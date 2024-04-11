@@ -36,6 +36,27 @@ export TEST_CLUSTER_NAMESPACE="${TEST_CLUSTER_NAMESPACE:-kata-containers-k8s-tes
 export GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-oci-distribution-client}"
 
 function configure_devmapper() {
+	case "${KUBERNETES}" in
+		k3s)
+			sudo systemctl stop k3s ;;
+		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
+	esac
+
+	local dm_dir='/var/lib/containerd/devmapper'
+
+	if [ -d "${dm_dir}" ]; then
+		# Clean up any boltdb database state files that will cause containerd / k3s
+		# to attempt to recreate devicemapper volumes and snapshots.
+		local -a dirs=()
+
+		dirs+=("${dm_dir}/")
+		dirs+=('/var/lib/containerd/io.containerd.metadata.v1.bolt/')
+		dirs+=('/var/lib/rancher/k3s/agent/containerd/io.containerd.metadata.v1.bolt/')
+		dirs+=('/var/lib/rancher/k3s/server/db/')
+
+		sudo find "${dirs[@]}" -type f -name "*.db*" -exec rm -f {} \;
+	fi
+
 	sudo mkdir -p /var/lib/containerd/devmapper
 	sudo truncate --size 10G /var/lib/containerd/devmapper/data-disk.img
 	sudo truncate --size 10G /var/lib/containerd/devmapper/meta-disk.img
@@ -50,8 +71,8 @@ Wants=systemd-udev-settle.service
 [Service]
 Type=oneshot
 RemainAfterExit=true
-ExecStart=-/sbin/losetup /dev/loop20 /var/lib/containerd/devmapper/data-disk.img
-ExecStart=-/sbin/losetup /dev/loop21 /var/lib/containerd/devmapper/meta-disk.img
+ExecStart=-/sbin/losetup /dev/loop20 ${dm_dir}/data-disk.img
+ExecStart=-/sbin/losetup /dev/loop21 ${dm_dir}/meta-disk.img
 [Install]
 WantedBy=local-fs.target
 EOF
@@ -85,7 +106,9 @@ EOF
 	cat<<EOF | sudo tee -a "${containerd_config_file}"
 [plugins."io.containerd.snapshotter.v1.devmapper"]
   pool_name = "contd-thin-pool"
+  root_path = "$dm_dir"
   base_image_size = "4096MB"
+  discard_blocks = true
 EOF
 
 	case "${KUBERNETES}" in
@@ -97,6 +120,14 @@ EOF
 
 	sleep 60s
 	sudo cat "${containerd_config_file}"
+	sudo systemctl restart k3s
+
+	local ctr_dm_status=$(sudo ctr plugins ls | awk '$2 ~ /^devmapper$/ { print $0 }')
+	local result=$(echo "$ctr_dm_status" | awk '{print $4}')
+	[ "$result" = 'ok' ] || die "k3s containerd device mapper not configured: '$ctr_dm_status'"
+
+	info "devicemapper (DM) devices"
+	sudo dmsetup ls --tree
 }
 
 function configure_snapshotter() {
@@ -281,8 +312,15 @@ function run_tests() {
 		echo "start_time=${start_time}" >> "$GITHUB_ENV"
 	fi
 
-	if [[ "${KATA_HYPERVISOR}" = "dragonball" ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]] || [[ "${KATA_HYPERVISOR}" = "cloud-hypervisor" ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]]; then
-		# cloud-hypervisor runtime-rs issue is https://github.com/kata-containers/kata-containers/issues/9034
+	if [[ "${KATA_HYPERVISOR}" = "cloud-hypervisor" ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]]; then
+		if [ -n "$GITHUB_ENV" ]; then
+			KATA_TEST_VERBOSE=true
+			export KATA_TEST_VERBOSE
+			echo "KATA_TEST_VERBOSE=${KATA_TEST_VERBOSE}" >> "$GITHUB_ENV"
+		fi
+	fi
+
+	if [[ "${KATA_HYPERVISOR}" = "dragonball" ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]]; then
 		echo "Skipping tests for $KATA_HYPERVISOR using devmapper"
 	else
 		bash run_kubernetes_tests.sh
