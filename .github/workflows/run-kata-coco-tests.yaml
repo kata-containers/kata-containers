@@ -186,3 +186,78 @@ jobs:
       - name: Delete Snapshotter
         if: always()
         run: bash tests/integration/kubernetes/gha-run.sh cleanup-snapshotter
+
+  # Generate jobs for testing CoCo on non-TEE environments
+  run-k8s-tests-coco-nontee:
+    strategy:
+      fail-fast: false
+      matrix:
+        vmm:
+          - qemu
+        snapshotter:
+          - nydus
+        pull-type:
+          - guest-pull
+    runs-on: ubuntu-latest
+    env:
+      DOCKER_REGISTRY: ${{ inputs.registry }}
+      DOCKER_REPO: ${{ inputs.repo }}
+      DOCKER_TAG: ${{ inputs.tag }}
+      GH_PR_NUMBER: ${{ inputs.pr-number }}
+      KATA_HOST_OS: ${{ matrix.host_os }}
+      KATA_HYPERVISOR: ${{ matrix.vmm }}
+      KUBERNETES: "vanilla"
+      PULL_TYPE: ${{ matrix.pull-type }}
+      SNAPSHOTTER: ${{ matrix.snapshotter }}
+      USING_NFD: "false"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: Download Azure CLI
+        run: bash tests/integration/kubernetes/gha-run.sh install-azure-cli
+
+      - name: Log into the Azure account
+        run: bash tests/integration/kubernetes/gha-run.sh login-azure
+        env:
+          AZ_APPID: ${{ secrets.AZ_APPID }}
+          AZ_PASSWORD: ${{ secrets.AZ_PASSWORD }}
+          AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
+          AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
+
+      - name: Create AKS cluster
+        timeout-minutes: 10
+        run: bash tests/integration/kubernetes/gha-run.sh create-cluster
+
+      - name: Install `bats`
+        run: bash tests/integration/kubernetes/gha-run.sh install-bats
+
+      - name: Install `kubectl`
+        run: bash tests/integration/kubernetes/gha-run.sh install-kubectl
+
+      - name: Download credentials for the Kubernetes CLI to use them
+        run: bash tests/integration/kubernetes/gha-run.sh get-cluster-credentials
+
+      - name: Deploy Snapshotter
+        timeout-minutes: 5
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-snapshotter
+
+      - name: Deploy Kata
+        timeout-minutes: 10
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-aks
+
+      - name: Run tests
+        timeout-minutes: 60
+        run: bash tests/integration/kubernetes/gha-run.sh run-tests
+
+      - name: Delete AKS cluster
+        if: always()
+        run: bash tests/integration/kubernetes/gha-run.sh delete-cluster
