@@ -47,6 +47,8 @@ spec:
               value: ""
             - name: AGENT_NO_PROXY
               value: ""
+            - name: CONTAINERD_DROP_IN_CONF
+              value: ""
           securityContext:
             privileged: true
           volumeMounts:

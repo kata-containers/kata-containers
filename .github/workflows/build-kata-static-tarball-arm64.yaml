@@ -48,7 +48,7 @@ jobs:
 
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
-        uses: docker/login-action@v2
+        uses: docker/login-action@v3
         with:
           registry: quay.io
           username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
@@ -81,9 +81,9 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: store-artifact ${{ matrix.asset }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: kata-artifacts-arm64${{ inputs.tarball-suffix }}
+          name: kata-artifacts-arm64-${{ matrix.asset }}${{ inputs.tarball-suffix }}
           path: kata-build/kata-static-${{ matrix.asset }}.tar.xz
           retention-days: 15
           if-no-files-found: error
@@ -106,15 +106,16 @@ jobs:
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
       - name: get-artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
-          name: kata-artifacts-arm64${{ inputs.tarball-suffix }}
+          pattern: kata-artifacts-arm64-*${{ inputs.tarball-suffix }}
           path: kata-artifacts
+          merge-multiple: true
       - name: merge-artifacts
         run: |
           ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-builds.sh kata-artifacts versions.yaml
       - name: store-artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: kata-static-tarball-arm64${{ inputs.tarball-suffix }}
           path: kata-static.tar.xz
