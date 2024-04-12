@@ -31,6 +31,8 @@ snapshotters_delimiter=':'
 
 AGENT_HTTPS_PROXY="${AGENT_HTTPS_PROXY:-}"
 AGENT_NO_PROXY="${AGENT_NO_PROXY:-}"
+CONTAINERD_DROP_IN_CONF="${CONTAINERD_DROP_IN_CONF:-}"
+INSTALL_PREFIX="${INSTALL_PREFIX:-/usr/local/bin}"
 
 # If we fail for any reason a message will be displayed
 die() {
@@ -250,13 +252,13 @@ function configure_different_shims_base() {
 	#   https://github.com/containerd/containerd/issues/3073
 	#   https://github.com/containerd/containerd/issues/5006
 
-	local default_shim_file="/usr/local/bin/containerd-shim-kata-v2"
+	local default_shim_file="${INSTALL_PREFIX}/containerd-shim-kata-v2"
 
-	mkdir -p /usr/local/bin
+	mkdir -p "${INSTALL_PREFIX}"
 
 	for shim in "${shims[@]}"; do
 		local shim_binary="containerd-shim-kata-${shim}-v2"
-		local shim_file="/usr/local/bin/${shim_binary}"
+		local shim_file="${INSTALL_PREFIX}/${shim_binary}"
 
 		backup_shim "${shim_file}"
 
@@ -266,7 +268,7 @@ function configure_different_shims_base() {
 			cloud-hypervisor | dragonball)
 				ln -sf /opt/kata/runtime-rs/bin/containerd-shim-kata-v2 "${shim_file}" ;;
 			*)
-				ln -sf /opt/kata/bin/containerd-shim-kata-v2 "${shim_file}" ;;
+				[ "/opt/kata/bin/containerd-shim-kata-v2" != "${shim_file}" ] || ln -sf /opt/kata/bin/containerd-shim-kata-v2 "${shim_file}" ;;
 		esac
 
 		chmod +x "$shim_file"
@@ -518,6 +520,7 @@ function main() {
 	echo "* AGENT_HTTPS_PROXY: ${AGENT_HTTPS_PROXY}"
 	echo "* AGENT_NO_PROXY: ${AGENT_NO_PROXY}"
 	echo "* CONTAINERD_DROP_IN_CONF: ${CONTAINERD_DROP_IN_CONF}"
+	echo "* INSTALL_PREFIX: ${INSTALL_PREFIX}"
 
 	# script requires that user is root
 	euid=$(id -u)

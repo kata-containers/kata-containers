@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kata-deploy
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      name: kata-deploy
+  template:
+    metadata:
+      labels:
+        name: kata-deploy
+    spec:
+      containers:
+      - command:
+        - bash
+        - -c
+        - /opt/kata-artifacts/scripts/kata-deploy.sh install
+        env:
+        - name: DEBUG
+          value: '{{ .Values.kataDeploy.debug }}'
+        - name: DEFAULT_SHIM
+          value: '{{ .Values.kataDeploy.defaultShim }}'
+        - name: CREATE_RUNTIMECLASSES
+          value: '{{ .Values.kataDeploy.createRuntimeClasses }}'
+        - name: CREATE_DEFAULT_RUNTIMECLASS
+          value: '{{ .Values.kataDeploy.createDefaultRuntimeClass }}'
+        - name: ALLOWED_HYPERVISOR_ANNOTATIONS
+          value: '{{ .Values.kataDeploy.allowedHypervisorAnnotations }}'
+        - name: CONTAINERD_DROP_IN_CONF
+          value: '{{ .Values.kataDeploy.containerdDropInConf }}'
+        - name: SHIMS
+          value: '{{ .Values.kataDeploy.shims }}'
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: SNAPSHOTTER_HANDLER_MAPPING
+          value: ""
+        - name: AGENT_HTTPS_PROXY
+          value: ""
+        - name: AGENT_NO_PROXY
+          value: ""
+        image: '{{ .Values.kataDeploy.repository }}:{{ .Values.kataDeploy.version
+          }}'
+        imagePullPolicy: '{{ .Values.kataDeploy.imagePullPolicy }}'
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - bash
+              - -c
+              - /opt/kata-artifacts/scripts/kata-deploy.sh cleanup
+        name: kube-kata
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - mountPath: /etc/crio/
+          name: crio-conf
+        - mountPath: /etc/containerd/
+          name: containerd-conf
+        - mountPath: /opt/kata/
+          name: kata-artifacts
+        - mountPath: /usr/local/bin/
+          name: local-bin
+      hostPID: true
+      serviceAccountName: kata-deploy-sa
+      volumes:
+      - hostPath:
+          path: '{{- template "kataDeploy.containerdConfPath" .Values.kataDeploy }}'
+        name: containerd-conf
+      - hostPath:
+          path: /etc/crio/
+        name: crio-conf
+      - hostPath:
+          path: /opt/kata/
+          type: DirectoryOrCreate
+        name: kata-artifacts
+      - hostPath:
+          path: /usr/local/bin/
+        name: local-bin
+  updateStrategy:
+    rollingUpdate:
+      maxUnavailable: 1
+    type: RollingUpdate

@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata: 
+  name: kata-deploy
+  namespace: kube-system
+spec:
+  template:
+    spec:
+      #imagePullSecrets: []
+      containers:
+      - name: kube-kata
+        image: "{{ .Values.kataDeploy.repository }}:{{ .Values.kataDeploy.version }}"
+        imagePullPolicy: "{{ .Values.kataDeploy.imagePullPolicy }}"
+        env:
+          - name: DEBUG
+            value: "{{ .Values.kataDeploy.debug }}"
+          - name: DEFAULT_SHIM
+            value: "{{ .Values.kataDeploy.defaultShim }}"
+          - name: CREATE_RUNTIMECLASSES
+            value: "{{ .Values.kataDeploy.createRuntimeClasses }}"
+          - name: CREATE_DEFAULT_RUNTIMECLASS
+            value: "{{ .Values.kataDeploy.createDefaultRuntimeClass }}"
+          - name: ALLOWED_HYPERVISOR_ANNOTATIONS
+            value: "{{ .Values.kataDeploy.allowedHypervisorAnnotations }}"
+          - name: CONTAINERD_DROP_IN_CONF
+            value: "{{ .Values.kataDeploy.containerdDropInConf }}"
+          - name: SHIMS
+            value: "{{ .Values.kataDeploy.shims }}"
