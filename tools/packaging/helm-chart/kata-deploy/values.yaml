@@ -1,0 +1,16 @@
+# Default values for kata-deploy.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# kata-deploy/values.yaml
+
+kataDeploy:
+  # version can be latest or stable 
+  version: "latest"
+  # k8s-dist can be k8s, k3s, rke2, k0s
+  k8sDistribution: "k8s"
+  debug: "false"
+  defaultShim: "qemu"
+  createRuntimeClasses: "false"
+  createDefaultRuntimeClass: "false"
+  allowedHypervisorAnnotations: ""
