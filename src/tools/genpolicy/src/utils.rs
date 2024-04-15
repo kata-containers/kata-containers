@@ -23,6 +23,13 @@ struct CommandLineOptions {
     config_map_file: Option<String>,
 
     #[clap(
+        long,
+        num_args = 0..=std::usize::MAX,
+        help = "Optional Kubernetes YAML input file paths"
+    )]
+    data_source_files: Option<Vec<String>>,
+
+    #[clap(
         short = 'p',
         long,
         default_value_t = String::from("rules.rego"),
@@ -111,7 +118,7 @@ pub struct Config {
     pub yaml_file: Option<String>,
     pub rego_rules_path: String,
     pub settings: settings::Settings,
-    pub config_map_files: Option<Vec<String>>,
+    pub data_source_files: Option<Vec<String>>,
 
     pub silent_unsupported_fields: bool,
     pub raw_out: bool,
@@ -125,13 +132,14 @@ impl Config {
     pub fn new() -> Self {
         let args = CommandLineOptions::parse();
 
-        let mut config_map_files = Vec::new();
+        // Migrate all files from the old `config_map_files` to the new `data_source_files` field
+        let mut data_source_files = args.data_source_files.unwrap_or_default();
         if let Some(config_map_file) = &args.config_map_file {
-            config_map_files.push(config_map_file.clone());
+            data_source_files.push(config_map_file.clone());
         }
 
-        let cm_files = if !config_map_files.is_empty() {
-            Some(config_map_files.clone())
+        let data_source_files = if !data_source_files.is_empty() {
+            Some(data_source_files.clone())
         } else {
             None
         };
@@ -151,7 +159,7 @@ impl Config {
             yaml_file: args.yaml_file,
             rego_rules_path: args.rego_rules_path,
             settings,
-            config_map_files: cm_files,
+            data_source_files: data_source_files,
             silent_unsupported_fields: args.silent_unsupported_fields,
             raw_out: args.raw_out,
             base64_out: args.base64_out,
