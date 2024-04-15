@@ -1,20 +1,22 @@
 # Copyright (c) 2017-2019 Intel Corporation
 # Copyright (c) 2021 Adobe Inc.
+# Copyright (c) 2023 IBM Inc.
 #
 # SPDX-License-Identifier: Apache-2.0
 #
 
 # XXX: WARNING: this file is auto-generated.
 # XXX:
-# XXX: Source file: "@CONFIG_QEMU_IN@"
+# XXX: Source file: "@CONFIG_QEMU_SNP_IN@"
 # XXX: Project:
 # XXX:   Name: @PROJECT_NAME@
 # XXX:   Type: @PROJECT_TYPE@
 
 [hypervisor.qemu]
-path = "@QEMUPATH@"
-kernel = "@KERNELPATH_NV@"
-initrd = "@INITRDPATH_NV@"
+path = "@QEMUSNPPATH@"
+kernel = "@KERNELPATH_CONFIDENTIAL_NV@"
+initrd = "@INITRDPATH_CONFIDENTIAL_NV@"
+
 machine_type = "@MACHINETYPE@"
 
 # rootfs filesystem type:
@@ -37,13 +39,10 @@ rootfs_type=@DEFROOTFSTYPE@
 #   - NVDIMM devices
 #
 # Default false
-# confidential_guest = true
+confidential_guest = true
 
-# Choose AMD SEV-SNP confidential guests
-# In case of using confidential guests on AMD hardware that supports both SEV
-# and SEV-SNP, the following enables SEV-SNP guests. SEV guests are default.
-# Default false
-# sev_snp_guest = true
+# enable SEV SNP VMs
+sev_snp_guest = true
 
 # Enable running QEMU VMM as a non-root user.
 # By default QEMU VMM run as root. When this is set to true, QEMU VMM process runs as
@@ -59,7 +58,7 @@ enable_annotations = @DEFENABLEANNOTATIONS@
 # Each member of the list is a path pattern as described by glob(3).
 # The default if not set is empty (all annotations rejected.)
 # Your distribution recommends: @QEMUVALIDHYPERVISORPATHS@
-valid_hypervisor_paths = @QEMUVALIDHYPERVISORPATHS@
+valid_hypervisor_paths = @QEMUSNPVALIDHYPERVISORPATHS@
 
 # Optional space-separated list of options to pass to the guest kernel.
 # For example, use `kernel_params = "vsyscall=emulate"` if you are having
@@ -71,17 +70,17 @@ valid_hypervisor_paths = @QEMUVALIDHYPERVISORPATHS@
 # may stop the virtual machine from booting.
 # To see the list of default parameters, enable hypervisor debug, create a
 # container and look for 'default-kernel-parameters' log entries.
-kernel_params = "@KERNELPARAMS_NV@"
+kernel_params = "@KERNELPARAMS@"
 
 # Path to the firmware.
 # If you want that qemu uses the default firmware leave this option empty
-firmware = "@FIRMWAREPATH@"
+firmware = "@FIRMWARESNPPATH@"
 
 # Path to the firmware volume.
 # firmware TDVF or OVMF can be split into FIRMWARE_VARS.fd (UEFI variables
 # as configuration) and FIRMWARE_CODE.fd (UEFI program image). UEFI variables
 # can be customized per each user while UEFI code is kept same.
-firmware_volume = "@FIRMWAREVOLUMEPATH@"
+firmware_volume = "@FIRMWARETDVFVOLUMEPATH@"
 
 # Machine accelerators
 # comma-separated list of machine accelerators to pass to the hypervisor.
@@ -178,7 +177,7 @@ disable_block_device_use = @DEFDISABLEBLOCK@
 #   - virtio-9p
 #   - virtio-fs-nydus
 #   - none
-shared_fs = "@DEFSHAREDFS_QEMU_VIRTIOFS@"
+shared_fs = "@DEFSHAREDFS_QEMU_SNP_VIRTIOFS@"
 
 # Path to vhost-user-fs daemon.
 virtio_fs_daemon = "@DEFVIRTIOFSDAEMON@"
@@ -197,9 +196,9 @@ virtio_fs_queue_size = @DEFVIRTIOFSQUEUESIZE@
 # Extra args for virtiofsd daemon
 #
 # Format example:
-#   ["--arg1=xxx", "--arg2=yyy"]
+#   ["-o", "arg1=xxx,arg2", "-o", "hello world", "--arg3=yyy"]
 # Examples:
-#   Set virtiofsd log level to debug : ["--log-level=debug"]
+#   Set virtiofsd log level to debug : ["-o", "log_level=debug"] or ["-d"]
 #
 # see `virtiofsd -h` for possible options.
 virtio_fs_extra_args = @DEFVIRTIOFSEXTRAARGS@
@@ -310,7 +309,7 @@ vhost_user_reconnect_timeout_sec = 0
 # will disable this feature. In the case of virtio-fs, this is enabled
 # automatically and '/dev/shm' is used as the backing folder.
 # This option will be ignored if VM templating is enabled.
-#file_mem_backend = "@DEFFILEMEMBACKEND@"
+file_mem_backend = ""
 
 # List of valid annotations values for the file_mem_backend annotation
 # The default if not set is empty (all annotations rejected.)
@@ -322,25 +321,10 @@ valid_file_mem_backends = @DEFVALIDFILEMEMBACKENDS@
 pflashes = []
 
 # This option changes the default hypervisor and kernel parameters
-# to enable debug output where available.
+# to enable debug output where available. And Debug also enable the hmp socket.
 #
 # Default false
 #enable_debug = true
-
-# This option allows to add an extra HMP or QMP socket when `enable_debug = true`
-#
-# WARNING: Anyone with access to the extra socket can take full control of
-# Qemu. This is for debugging purpose only and must *NEVER* be used in
-# production.
-#
-# Valid values are :
-# - "hmp"
-# - "qmp"
-# - "qmp-pretty" (same as "qmp" with pretty json formatting)
-#
-# If set to the empty string "", no extra monitor socket is added. This is
-# the default.
-#extra_monitor_socket = hmp
 
 # Disable the customizations done in the runtime when it detects
 # that it is running on top a VMM. This will result in the runtime
@@ -358,7 +342,7 @@ pflashes = []
 # nvdimm is not supported when `confidential_guest = true`.
 #
 # Default is false
-#disable_image_nvdimm = true
+disable_image_nvdimm = true
 
 # VFIO devices are hotplugged on a bridge by default.
 # Enable hotplugging on root bus. This may be required for devices with
@@ -367,24 +351,19 @@ pflashes = []
 # Default false
 #hotplug_vfio_on_root_bus = true
 
-# Enable hot-plugging of VFIO devices to a bridge-port, 
-# root-port or switch-port. 
-# The default setting is  "no-port"
-hot_plug_vfio = "@DEFAULTVFIOPORT_NV@"
+# Before hot plugging a PCIe device, you need to add a pcie_root_port device.
+# Use this parameter when using some large PCI bar devices, such as Nvidia GPU
+# The value means the number of pcie_root_port
+# This value is valid when hotplug_vfio_on_root_bus is true and machine_type is "q35"
+# Default 0
+#pcie_root_port = 2
 
 # In a confidential compute environment hot-plugging can compromise
 # security. 
 # Enable cold-plugging of VFIO devices to a bridge-port, 
 # root-port or switch-port. 
 # The default setting is  "no-port", which means disabled. 
-#cold_plug_vfio = "@DEFAULTVFIOPORT_NV@"
-
-# Before hot plugging a PCIe device, you need to add a pcie_root_port device.
-# Use this parameter when using some large PCI bar devices, such as Nvidia GPU
-# The value means the number of pcie_root_port
-# This value is valid when hotplug_vfio_on_root_bus is true and machine_type is "q35"
-# Default 0
-pcie_root_port = @DEFAULTPCIEROOTPORT_NV@
+cold_plug_vfio = "@DEFAULTVFIOPORT_NV@"
 
 # If vhost-net backend for virtio-net is not desired, set to true. Default is false, which trades off
 # security (vhost-net runs ring0) for network I/O performance.
@@ -563,7 +542,7 @@ kernel_modules=[]
 
 # Agent connection dialing timeout value in seconds
 # (default: 90)
-dial_timeout = @DEFAULTTIMEOUT_NV@
+dial_timeout = @DEFAULTTIMEOUT_NV
 
 [runtime]
 # If enabled, the runtime will log additional debug messages to the
@@ -647,7 +626,7 @@ sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY@
 # - When running with pods, sandbox sizing information will only be available if using Kubernetes >= 1.23 and containerd >= 1.6. CRI-O
 #   does not yet support sandbox sizing annotations.
 # - When running single containers using a tool like ctr, container sizing information will be available.
-static_sandbox_resource_mgmt=@DEFSTATICRESOURCEMGMT@
+static_sandbox_resource_mgmt=@DEFSTATICRESOURCEMGMT_TEE@
 
 # If specified, sandbox_bind_mounts identifieds host paths to be mounted (ro) into the sandboxes shared path.
 # This is only valid if filesystem sharing is utilized. The provided path(s) will be bindmounted into the shared fs directory.
