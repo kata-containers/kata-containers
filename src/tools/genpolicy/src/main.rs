@@ -27,6 +27,7 @@ mod settings;
 mod stateful_set;
 mod utils;
 mod verity;
+mod version;
 mod volume;
 mod yaml;
 
@@ -34,6 +35,16 @@ mod yaml;
 async fn main() {
     env_logger::init();
     let config = utils::Config::new();
+
+    if config.version {
+        println!(
+            "Kata Containers policy tool (Rust): id: {}, version: {}, commit: {}",
+            env!("CARGO_PKG_NAME"),
+            env!("CARGO_PKG_VERSION"),
+            version::COMMIT_INFO
+        );
+        return;
+    }
 
     debug!("Creating policy from yaml, settings, and rules.rego files...");
     let mut policy = policy::AgentPolicy::from_files(&config).await.unwrap();

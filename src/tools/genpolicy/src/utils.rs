@@ -96,6 +96,8 @@ struct CommandLineOptions {
         require_equals = true
     )]
     layers_cache_file_path: Option<String>,
+    #[clap(short, long, help = "Print version information and exit")]
+    version: bool,
 }
 
 /// Application configuration, derived from on command line parameters.
@@ -115,6 +117,7 @@ pub struct Config {
     pub base64_out: bool,
     pub containerd_socket_path: Option<String>,
     pub layers_cache_file_path: Option<String>,
+    pub version: bool,
 }
 
 impl Config {
@@ -153,6 +156,7 @@ impl Config {
             base64_out: args.base64_out,
             containerd_socket_path: args.containerd_socket_path,
             layers_cache_file_path,
+            version: args.version,
         }
     }
 }
