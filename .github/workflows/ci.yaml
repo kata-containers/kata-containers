@@ -191,6 +191,7 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
+    secrets: inherit
 
   run-k8s-tests-on-zvsi:
     needs: [publish-kata-deploy-payload-s390x, build-and-publish-tee-confidential-unencrypted-image]
