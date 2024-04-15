@@ -48,6 +48,7 @@ ARTEFACT_REGISTRY_USERNAME="${ARTEFACT_REGISTRY_USERNAME:-}"
 ARTEFACT_REGISTRY_PASSWORD="${ARTEFACT_REGISTRY_PASSWORD:-}"
 TARGET_BRANCH="${TARGET_BRANCH:-main}"
 PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-}"
+KERNEL_HEADERS_PKG_TYPE="${KERNEL_HEADERS_PKG_TYPE:-deb}"
 
 workdir="${WORKDIR:-$PWD}"
 
@@ -125,6 +126,15 @@ options:
 EOF
 
 	exit "${return_code}"
+}
+
+get_kernel_headers_dir() {
+	local kernel_name"=${1:-}"
+	[ -z "${kernel_name}" ] && die "kernel name is a required argument"
+
+	local kernel_headers_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/${kernel_name}/builddir"
+
+	echo "${kernel_headers_dir}"
 }
 
 get_kernel_modules_dir() {
@@ -457,6 +467,12 @@ install_kernel_helper() {
 		local kernel_modules_tarball_name="kata-static-${kernel_name}-modules.tar.xz"
 		local kernel_modules_tarball_path="${workdir}/${kernel_modules_tarball_name}"
 		extra_tarballs="${kernel_modules_tarball_name}:${kernel_modules_tarball_path}"
+	fi
+
+	if [[ "${kernel_name}" == "kernel-nvidia-gpu*" ]]; then
+		local kernel_headers_tarball_name="kata-static-${kernel_name}-headers.tar.xz"
+		local kernel_headers_tarball_path="${workdir}/${kernel_headers_tarball_name}"
+		extra_tarballs+=" ${kernel_headers_tarball_name}:${kernel_headers_tarball_path}"
 	fi
 
 	default_patches_dir="${repo_root_dir}/tools/packaging/kernel/patches"
@@ -1053,6 +1069,19 @@ handle_build() {
 	tar tvf "${final_tarball_path}"
 
 	case ${build_target} in
+		kernel-nvidia-gpu*)
+			local kernel_headers_final_tarball_path="${workdir}/kata-static-${build_target}-headers.tar.xz"
+			if [ ! -f "${kernel_headers_final_tarball_path}" ]; then
+				local kernel_headers_dir 
+				kernel_headers_dir=$(get_kernel_headers_dir "${build_target}")
+
+				pushd "${kernel_headers_dir}"
+				find . -type f -name "*.${KERNEL_HEADERS_PKG_TYPE}" -exec sudo tar cvfJ "${kernel_headers_final_tarball_path}" {} +
+				popd
+			fi
+			tar tvf "${kernel_headers_final_tarball_path}"
+			;;& # fallthrough in the confidential case we need the modules.tar.xz and for every kernel-nvidia-gpu we need the headers
+
 		kernel*-confidential)
 			local modules_final_tarball_path="${workdir}/kata-static-${build_target}-modules.tar.xz"
 			if [ ! -f "${modules_final_tarball_path}" ]; then
@@ -1083,6 +1112,16 @@ handle_build() {
 		echo "${ARTEFACT_REGISTRY_PASSWORD}" | sudo oras login "${ARTEFACT_REGISTRY}" -u "${ARTEFACT_REGISTRY_USERNAME}" --password-stdin
 
 		case ${build_target} in
+			kernel-nvidia-gpu*)
+				sudo oras push \
+					${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
+					${final_tarball_name} \
+					"kata-static-${build_target}-modules.tar.xz" \
+					"kata-static-${build_target}-headers.tar.xz" \
+					${build_target}-version \
+					${build_target}-builder-image-version \
+					${build_target}-sha256sum
+				;;
 			kernel*-confidential)
 				sudo oras push \
 					${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
