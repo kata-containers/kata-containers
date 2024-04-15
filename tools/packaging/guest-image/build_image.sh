@@ -48,6 +48,12 @@ build_initrd() {
 		PULL_TYPE="${PULL_TYPE:-default}" \
 		COCO_GUEST_COMPONENTS_TARBALL="${COCO_GUEST_COMPONENTS_TARBALL:-}" \
 		PAUSE_IMAGE_TARBALL="${PAUSE_IMAGE_TARBALL:-}"
+
+	if [[ "$artifact_name" == *"nvidia-gpu"* ]]; then
+		nvidia_driver_version=$(cat "${builddir}"/initrd-image/*/nvidia_driver_version)
+		artifact_name=${artifact_name/.initrd/"-${nvidia_driver_version}".initrd}
+	fi
+
 	mv "kata-containers-initrd.img" "${install_dir}/${artifact_name}"
 	(
 		cd "${install_dir}"
@@ -70,6 +76,12 @@ build_image() {
 		PULL_TYPE="${PULL_TYPE:-default}" \
 		COCO_GUEST_COMPONENTS_TARBALL="${COCO_GUEST_COMPONENTS_TARBALL:-}" \
 		PAUSE_IMAGE_TARBALL="${PAUSE_IMAGE_TARBALL:-}"
+
+	if [[ "$artifact_name" == *"nvidia-gpu"* ]]; then
+		nvidia_driver_version=$(cat "${builddir}"/rootfs-image/*/nvidia_driver_version)
+		artifact_name=${artifact_name/.img/"-${nvidia_driver_version}".img}
+	fi
+
 	mv -f "kata-containers.img" "${install_dir}/${artifact_name}"
 	if [ -e "root_hash.txt" ]; then
 	    cp root_hash.txt "${install_dir}/"
