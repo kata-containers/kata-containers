@@ -54,7 +54,7 @@ build_initrd() {
 		artifact_name=${artifact_name/.initrd/"-${nvidia_driver_version}".initrd}
 	fi
 
-	mv "kata-containers-initrd.img" "${install_dir}/${artifact_name}"
+	mv -f "kata-containers-initrd.img" "${install_dir}/${artifact_name}"
 	(
 		cd "${install_dir}"
 		ln -sf "${artifact_name}" "${final_artifact_name}${image_initrd_extension}"
