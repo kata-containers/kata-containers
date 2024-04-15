@@ -129,6 +129,9 @@ assets:
       s390x:
         name: *default-image-name
         version: *default-image-version
+        confidential:
+          name: *default-image-name
+          version: *default-image-version
       x86_64:
         name: *default-image-name
         version: *default-image-version
@@ -155,6 +158,9 @@ assets:
       s390x:
         name: *glibc-initrd-name
         version: *glibc-initrd-version
+        confidential:
+          name: *glibc-initrd-name
+          version: *glibc-initrd-version
       x86_64:
         name: *default-initrd-name
         version: *default-initrd-version
