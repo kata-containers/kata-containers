@@ -450,7 +450,7 @@ function enabling_hypervisor() {
 	declare -r CONTAINERD_SHIM_KATA="/usr/local/bin/containerd-shim-kata-${KATA_HYPERVISOR}-v2"
 
 	case "${KATA_HYPERVISOR}" in
-		dragonball | cloud-hypervisor)
+		dragonball|cloud-hypervisor|qemu-runtime-rs)
 			sudo ln -sf "${KATA_DIR}/runtime-rs/bin/containerd-shim-kata-v2" "${CONTAINERD_SHIM_KATA}"
 			declare -r CONFIG_DIR="${KATA_DIR}/share/defaults/kata-containers/runtime-rs"
 			;;

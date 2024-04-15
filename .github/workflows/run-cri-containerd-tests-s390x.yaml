@@ -22,7 +22,7 @@ jobs:
       fail-fast: false
       matrix:
         containerd_version: ['active']
-        vmm: ['qemu']
+        vmm: ['qemu', 'qemu-runtime-rs']
     runs-on: s390x
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
