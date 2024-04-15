@@ -206,6 +206,10 @@ jobs:
       GH_PR_NUMBER: ${{ inputs.pr-number }}
       KATA_HOST_OS: ${{ matrix.host_os }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
+      # Some tests rely on that variable to run (or not)
+      KBS: "true"
+      # Set the KBS ingress handler (empty string disables handling)
+      KBS_INGRESS: "aks"
       KUBERNETES: "vanilla"
       PULL_TYPE: ${{ matrix.pull-type }}
       SNAPSHOTTER: ${{ matrix.snapshotter }}
@@ -253,6 +257,14 @@ jobs:
       - name: Deploy Kata
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-aks
+
+      - name: Deploy CoCo KBS
+        timeout-minutes: 10
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-coco-kbs
+
+      - name: Install `kbs-client`
+        timeout-minutes: 10
+        run: bash tests/integration/kubernetes/gha-run.sh install-kbs-client
 
       - name: Run tests
         timeout-minutes: 60

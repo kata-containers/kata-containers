@@ -61,10 +61,6 @@ jobs:
       GH_PR_NUMBER: ${{ inputs.pr-number }}
       KATA_HOST_OS: ${{ matrix.host_os }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
-      # Set to install the KBS for attestation tests
-      KBS: ${{ (matrix.vmm == 'qemu' && matrix.host_os == 'ubuntu') && 'true' || 'false' }}
-      # Set the KBS ingress handler (empty string disables handling)
-      KBS_INGRESS: "aks"
       KUBERNETES: "vanilla"
       USING_NFD: "false"
       K8S_TEST_HOST_TYPE: ${{ matrix.instance-type }}
@@ -117,16 +113,6 @@ jobs:
       - name: Deploy Kata
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-aks
-
-      - name: Deploy CoCo KBS
-        if: env.KBS == 'true'
-        timeout-minutes: 10
-        run: bash tests/integration/kubernetes/gha-run.sh deploy-coco-kbs
-
-      - name: Install `kbs-client`
-        if: env.KBS == 'true'
-        timeout-minutes: 10
-        run: bash tests/integration/kubernetes/gha-run.sh install-kbs-client
 
       - name: Run tests
         timeout-minutes: 60
