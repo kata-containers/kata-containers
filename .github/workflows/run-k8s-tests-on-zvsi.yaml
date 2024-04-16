@@ -31,18 +31,31 @@ jobs:
           - qemu
         snapshotter:
           - devmapper
+          - nydus
         k8s:
           - k3s
+        include:
+          - snapshotter: devmapper
+            pull-type: default
+            using-nfd: true
+            deploy-cmd: configure-snapshotter
+          - snapshotter: nydus
+            pull-type: guest-pull
+            using-nfd: false
+            deploy-cmd: deploy-snapshotter
     runs-on: s390x-large
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
       DOCKER_TAG: ${{ inputs.tag }}
       PR_NUMBER: ${{ inputs.pr-number }}
+      GH_PR_NUMBER: ${{ inputs.pr-number }}
+      KATA_HOST_OS: "ubuntu"
       KATA_HYPERVISOR: ${{ matrix.vmm }}
       KUBERNETES: "k3s"
+      PULL_TYPE: ${{ matrix.pull-type }}
       SNAPSHOTTER: ${{ matrix.snapshotter }}
-      USING_NFD: "true"
+      USING_NFD: ${{ matrix.using-nfd }}
       TARGET_ARCH: "s390x"
     steps:
       - name: Take a pre-action for self-hosted runner
@@ -63,14 +76,14 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh deploy-k8s
 
       - name: Configure the ${{ matrix.snapshotter }} snapshotter
-        run: bash tests/integration/kubernetes/gha-run.sh configure-snapshotter
+        run: bash tests/integration/kubernetes/gha-run.sh ${{ matrix.deploy-cmd }}
 
       - name: Deploy Kata
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-zvsi
 
       - name: Run tests
-        timeout-minutes: 30
+        timeout-minutes: 60
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
 
       - name: Take a post-action
