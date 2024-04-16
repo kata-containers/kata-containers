@@ -460,7 +460,8 @@ impl VsockEpollListener for VsockConnection {
     /// Notify the connection about an event (or set of events) that it was
     /// interested in.
     fn notify(&mut self, evset: epoll::Events) {
-        if evset.contains(epoll::Events::EPOLLIN) {
+        // EPOLLHUP also needs to be read and will be got len 0
+        if evset.contains(epoll::Events::EPOLLIN) || evset.contains(epoll::Events::EPOLLHUP) {
             // Data can be read from the host stream. Setting a Rw pending
             // indication, so that the muxer will know to call `recv_pkt()`
             // later.
@@ -513,6 +514,19 @@ impl VsockEpollListener for VsockConnection {
                 // the peer know it can safely send more data our way.
                 self.pending_rx.insert(PendingRx::CreditUpdate);
             }
+        }
+
+        // The host stream has encountered an error. We'll kill this
+        // connection.
+        if evset.contains(epoll::Events::EPOLLERR)
+            && !evset.contains(epoll::Events::EPOLLIN)
+            && !evset.contains(epoll::Events::EPOLLOUT)
+        {
+            warn!(
+                "vsock: connection received EPOLLERR event: lp={}, pp={}",
+                self.local_port, self.peer_port
+            );
+            self.kill();
         }
     }
 }
