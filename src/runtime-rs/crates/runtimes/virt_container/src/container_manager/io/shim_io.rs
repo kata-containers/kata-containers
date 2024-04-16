@@ -6,21 +6,20 @@
 
 use std::{
     io,
-    os::unix::{
-        io::{FromRawFd, RawFd},
-        net::UnixStream as StdUnixStream,
-        prelude::AsRawFd,
+    os::{
+        fd::IntoRawFd,
+        unix::{
+            fs::OpenOptionsExt,
+            io::{FromRawFd, RawFd},
+            net::UnixStream as StdUnixStream,
+            prelude::AsRawFd,
+        },
     },
     pin::Pin,
-    task::Context as TaskContext,
-    task::Poll,
+    task::{Context as TaskContext, Poll},
 };
 
 use anyhow::{anyhow, Context, Result};
-use nix::{
-    fcntl::{self, OFlag},
-    sys::stat::Mode,
-};
 use tokio::{
     fs::OpenOptions,
     io::{AsyncRead, AsyncWrite},
@@ -28,13 +27,16 @@ use tokio::{
 };
 use url::Url;
 
-fn open_fifo(path: &str) -> Result<AsyncUnixStream> {
-    let fd = fcntl::open(path, OFlag::O_RDWR, Mode::from_bits(0).unwrap())?;
-
+fn open_fifo_write(path: &str) -> Result<AsyncUnixStream> {
+    let std_file = std::fs::OpenOptions::new()
+        .write(true)
+        // It's not for non-block openning FIFO but for non-block stream which
+        // will be add into tokio runtime.
+        .custom_flags(libc::O_NONBLOCK)
+        .open(path)
+        .with_context(|| format!("open {} with write", path))?;
+    let fd = std_file.into_raw_fd();
     let std_stream = unsafe { StdUnixStream::from_raw_fd(fd) };
-    std_stream
-        .set_nonblocking(true)
-        .context("set nonblocking")?;
 
     AsyncUnixStream::from_std(std_stream).map_err(|e| anyhow!(e))
 }
@@ -67,13 +69,10 @@ impl ShimIo {
         let stdin_fd: Option<Box<dyn AsyncRead + Send + Unpin>> = if let Some(stdin) = stdin {
             info!(sl!(), "open stdin {:?}", &stdin);
 
-            // Since the stdin peer point (which is hold by containerd) could not be openned
-            // immediately, which would block here's open with block mode, and we wouldn't want to
-            // block here, thus here opened with nonblock and then reset it to block mode for
-            // tokio async io.
+            // Since we had opened the stdin as write mode in the Process::new function,
+            // thus it wouldn't be blocked to open it as read mode.
             match OpenOptions::new()
                 .read(true)
-                .write(false)
                 .custom_flags(libc::O_NONBLOCK)
                 .open(&stdin)
                 .await
@@ -118,7 +117,7 @@ impl ShimIo {
             if let Some(url) = url {
                 if url.scheme() == "fifo" {
                     let path = url.path();
-                    match open_fifo(path) {
+                    match open_fifo_write(path) {
                         Ok(s) => {
                             return Some(Box::new(ShimIoWrite::Stream(s)));
                         }
