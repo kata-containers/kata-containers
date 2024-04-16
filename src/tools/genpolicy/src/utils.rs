@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use crate::settings;
 use clap::Parser;
 
 #[derive(Debug, Parser)]
@@ -75,16 +76,23 @@ struct CommandLineOptions {
         require_equals= true
     )]
     containerd_socket_path: Option<String>,
+
+    #[clap(
+        long,
+        help = "Registry that uses plain HTTP. Can be passed more than once to configure multiple insecure registries."
+    )]
+    insecure_registry: Vec<String>,
 }
 
 /// Application configuration, derived from on command line parameters.
 #[derive(Clone, Debug)]
 pub struct Config {
     pub use_cache: bool,
+    pub insecure_registries: Vec<String>,
 
     pub yaml_file: Option<String>,
     pub rego_rules_path: String,
-    pub json_settings_path: String,
+    pub settings: settings::Settings,
     pub config_map_files: Option<Vec<String>>,
 
     pub silent_unsupported_fields: bool,
@@ -108,11 +116,14 @@ impl Config {
             None
         };
 
+        let settings = settings::Settings::new(&args.json_settings_path);
+
         Self {
             use_cache: args.use_cached_files,
+            insecure_registries: args.insecure_registry,
             yaml_file: args.yaml_file,
             rego_rules_path: args.rego_rules_path,
-            json_settings_path: args.json_settings_path,
+            settings,
             config_map_files: cm_files,
             silent_unsupported_fields: args.silent_unsupported_fields,
             raw_out: args.raw_out,
