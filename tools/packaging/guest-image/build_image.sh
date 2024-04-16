@@ -47,7 +47,8 @@ build_initrd() {
 		AGENT_POLICY="${AGENT_POLICY:-}" \
 		PULL_TYPE="${PULL_TYPE:-default}" \
 		COCO_GUEST_COMPONENTS_TARBALL="${COCO_GUEST_COMPONENTS_TARBALL:-}" \
-		PAUSE_IMAGE_TARBALL="${PAUSE_IMAGE_TARBALL:-}"
+		PAUSE_IMAGE_TARBALL="${PAUSE_IMAGE_TARBALL:-}" \
+		GO_VERSION="${GO_VERSION:-}"
 	mv "kata-containers-initrd.img" "${install_dir}/${artifact_name}"
 	(
 		cd "${install_dir}"
@@ -69,7 +70,8 @@ build_image() {
 		AGENT_POLICY="${AGENT_POLICY:-}" \
 		PULL_TYPE="${PULL_TYPE:-default}" \
 		COCO_GUEST_COMPONENTS_TARBALL="${COCO_GUEST_COMPONENTS_TARBALL:-}" \
-		PAUSE_IMAGE_TARBALL="${PAUSE_IMAGE_TARBALL:-}"
+		PAUSE_IMAGE_TARBALL="${PAUSE_IMAGE_TARBALL:-}" \
+		GO_VERSION="${GO_VERSION:-}"
 	mv -f "kata-containers.img" "${install_dir}/${artifact_name}"
 	if [ -e "root_hash.txt" ]; then
 	    cp root_hash.txt "${install_dir}/"
