@@ -121,3 +121,4 @@ gic
 msr
 cpuid
 pio
+gpu
