@@ -1,0 +1,26 @@
+#
+# Copyright (c) 2024 Microsoft
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: policy-pod
+spec:
+  terminationGracePeriodSeconds: 0
+  runtimeClassName: kata
+  containers:
+    - name: busybox
+      image: quay.io/prometheus/busybox:latest
+      env:
+        - name: KUBE_CONFIG_1
+          valueFrom:
+            configMapKeyRef:
+              name: policy-configmap
+              key: data-1
+        - name: KUBE_CONFIG_2
+          valueFrom:
+            configMapKeyRef:
+              name: policy-configmap
+              key: data-2
