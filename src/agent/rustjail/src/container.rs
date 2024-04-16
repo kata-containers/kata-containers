@@ -65,7 +65,7 @@ use crate::sync::{read_sync, write_count, write_sync, SYNC_DATA, SYNC_FAILED, SY
 use crate::sync_with_async::{read_async, write_async};
 use async_trait::async_trait;
 use rlimit::{setrlimit, Resource, Rlim};
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncBufReadExt;
 use tokio::sync::Mutex;
 
 use kata_sys_util::hooks::HookStates;
@@ -1002,38 +1002,12 @@ impl BaseContainer for LinuxContainer {
                 // Copy from stdin to term_master
                 if let Some(mut stdin_stream) = proc_io.stdin.take() {
                     let mut term_master = unsafe { File::from_raw_fd(pseudo.master) };
-                    let mut close_stdin_rx = proc_io.close_stdin_rx.clone();
-                    let wgw_input = proc_io.wg_input.worker();
                     let logger = logger.clone();
                     let term_closer = term_closer.clone();
                     tokio::spawn(async move {
-                        let mut buf = [0u8; 8192];
-                        loop {
-                            tokio::select! {
-                                // Make sure stdin_stream is drained before exiting
-                                biased;
-                                res = stdin_stream.read(&mut buf) => {
-                                    match res {
-                                        Err(_) | Ok(0) => {
-                                            debug!(logger, "copy from stdin to term_master end: {:?}", res);
-                                            break;
-                                        }
-                                        Ok(n) => {
-                                            if term_master.write_all(&buf[..n]).await.is_err() {
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                                // As the stdin fifo is opened in RW mode in the shim, which will never
-                                // read EOF, we close the stdin fifo here when explicit requested.
-                                _ = close_stdin_rx.changed() => {
-                                    debug!(logger, "copy ends as requested");
-                                    break
-                                }
-                            }
-                        }
-                        wgw_input.done();
+                        let res = tokio::io::copy(&mut stdin_stream, &mut term_master).await;
+                        debug!(logger, "copy from stdin to term_master end: {:?}", res);
+
                         std::mem::forget(term_master); // Avoid auto closing of term_master
                         drop(term_closer);
                     });
@@ -1070,37 +1044,10 @@ impl BaseContainer for LinuxContainer {
                 if let Some(mut stdin_stream) = proc_io.stdin.take() {
                     debug!(logger, "copy from stdin to parent_stdin");
                     let mut parent_stdin = unsafe { File::from_raw_fd(p.parent_stdin.unwrap()) };
-                    let mut close_stdin_rx = proc_io.close_stdin_rx.clone();
-                    let wgw_input = proc_io.wg_input.worker();
                     let logger = logger.clone();
                     tokio::spawn(async move {
-                        let mut buf = [0u8; 8192];
-                        loop {
-                            tokio::select! {
-                                // Make sure stdin_stream is drained before exiting
-                                biased;
-                                res = stdin_stream.read(&mut buf) => {
-                                    match res {
-                                        Err(_) | Ok(0) => {
-                                            debug!(logger, "copy from stdin to term_master end: {:?}", res);
-                                            break;
-                                        }
-                                        Ok(n) => {
-                                            if parent_stdin.write_all(&buf[..n]).await.is_err() {
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                                // As the stdin fifo is opened in RW mode in the shim, which will never
-                                // read EOF, we close the stdin fifo here when explicit requested.
-                                _ = close_stdin_rx.changed() => {
-                                    debug!(logger, "copy ends as requested");
-                                    break
-                                }
-                            }
-                        }
-                        wgw_input.done();
+                        let res = tokio::io::copy(&mut stdin_stream, &mut parent_stdin).await;
+                        debug!(logger, "copy from stdin to term_master end: {:?}", res);
                     });
                 }
 
