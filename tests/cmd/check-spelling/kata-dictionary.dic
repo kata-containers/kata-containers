@@ -1,4 +1,4 @@
-384
+386
 ACPI/AB
 ACS/AB
 API/AB
@@ -146,7 +146,7 @@ SVG/AB
 SaaS/B
 SemaphoreCI/B
 StratoVirt/B
-Struct/A#
+Struct/A
 Sysbench/B
 TBD/AB
 TDX
@@ -222,7 +222,6 @@ deliverable/AB
 deploy
 dev
 devicemapper/B
-devmapper
 dialer
 dialog/A
 dind/B
@@ -242,6 +241,7 @@ gRPC/AB
 gic
 golang/B
 goroutine/AB
+gpu
 hostname/AB
 hotplug/ACD
 howto/AB
@@ -254,6 +254,7 @@ implementor/A
 init/AB
 initramfs/AB
 initrd/AB
+intel
 ioctl/A
 iodepth/A
 ioengine/A
@@ -334,7 +335,6 @@ serverless
 signoff/A
 snapcraft/B
 snapd/B
-snapshotters
 stalebot/B
 startup
 stderr/AB

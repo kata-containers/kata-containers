@@ -60,7 +60,7 @@ are available, their default values and how each setting can be used.
 | [ACRN] | [`configuration-acrn.toml`](../src/runtime/config/configuration-acrn.toml.in) | `acrn` | | | | |
 | [Cloud Hypervisor] | [`configuration-clh.toml`](../src/runtime/config/configuration-clh.toml.in) | `clh` | | [`configuration-cloud-hypervisor.toml`](../src/runtime-rs/config/configuration-cloud-hypervisor.toml.in) | `cloud-hypervisor` | |
 | [Firecracker] | [`configuration-fc.toml`](../src/runtime/config/configuration-fc.toml.in) | `fc` | | | | |
-| [QEMU] | [`configuration-qemu.toml`](../src/runtime/config/configuration-qemu.toml.in) | `qemu` | yes | [`configuration-qemu.toml`](../src/runtime-rs/config/configuration-qemu.toml.in) | `qemu` | |
+| [QEMU] | [`configuration-qemu.toml`](../src/runtime/config/configuration-qemu.toml.in) | `qemu` | yes | [`configuration-qemu.toml`](../src/runtime-rs/config/configuration-qemu-runtime-rs.toml.in) | `qemu` | |
 | [`Dragonball`] | | | | [`configuration-dragonball.toml`](../src/runtime-rs/config/configuration-dragonball.toml.in) | `dragonball` | yes |
 | [StratoVirt] | [`configuration-stratovirt.toml`](../src/runtime/config/configuration-stratovirt.toml.in) | `stratovirt` | | | | |
 
