@@ -39,8 +39,6 @@ jobs:
           - rootfs-initrd
           - shim-v2
           - virtiofsd
-        stage:
-          - ${{ inputs.stage }}
     steps:
       - name: Adjust a permission for repo
         run: |
@@ -82,6 +80,7 @@ jobs:
           RELEASE: ${{ if inputs.stage == 'release' && 'yes' || 'no' }}
 
       - name: store-artifact ${{ matrix.asset }}
+        if: ${{ inputs.stage != 'release' || matrix.component != 'agent' }}
         uses: actions/upload-artifact@v4
         with:
           name: kata-artifacts-arm64-${{ matrix.asset }}${{ inputs.tarball-suffix }}

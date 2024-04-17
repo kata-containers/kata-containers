@@ -39,13 +39,6 @@ jobs:
           - rootfs-initrd-confidential
           - shim-v2
           - virtiofsd
-        stage:
-          - ${{ inputs.stage }}
-        exclude:
-          - asset: pause-image
-            stage: release
-          - asset: coco-guest-components
-            stage: release
     steps:
       - name: Take a pre-action for self-hosted runner
         run: ${HOME}/script/pre_action.sh ubuntu-2204
@@ -87,6 +80,7 @@ jobs:
           RELEASE: ${{ if inputs.stage == 'release' && 'yes' || 'no' }}
 
       - name: store-artifact ${{ matrix.asset }}
+        if: ${{ inputs.stage != 'release' || (matrix.component != 'agent' && matrix.component != 'coco-guest-components' && matrix.component != 'pause-image') }}
         uses: actions/upload-artifact@v4
         with:
           name: kata-artifacts-s390x-${{ matrix.asset }}${{ inputs.tarball-suffix }}

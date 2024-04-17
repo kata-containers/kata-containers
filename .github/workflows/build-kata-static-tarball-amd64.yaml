@@ -60,13 +60,7 @@ jobs:
         stage:
           - ${{ inputs.stage }}
         exclude:
-          - asset: agent
-            stage: release
           - asset: cloud-hypervisor-glibc
-            stage: release
-          - asset: pause-image
-            stage: release
-          - asset: coco-guest-components
             stage: release
     steps:
       - name: Login to Kata Containers quay.io
@@ -105,6 +99,7 @@ jobs:
           RELEASE: ${{ if inputs.stage == 'release' && 'yes' || 'no' }}
 
       - name: store-artifact ${{ matrix.asset }}
+        if: ${{ matrix.stage != 'release' || (matrix.component != 'agent' && matrix.component != 'coco-guest-components' && matrix.component != 'pause-image') }}
         uses: actions/upload-artifact@v4
         with:
           name: kata-artifacts-amd64-${{ matrix.asset }}${{ inputs.tarball-suffix }}
