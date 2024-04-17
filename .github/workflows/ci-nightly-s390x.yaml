@@ -19,25 +19,3 @@ jobs:
         /home/${USER}/script/handle_test_log.sh download $file_name
       env:
         TEST_TITLE: ${{ matrix.test_title }}
-
-  k8s-cri-containerd-rhel9-e2e-tests:
-    runs-on: s390x-rhel9
-    steps:
-    - name: Take a pre-action for self-hosted runner
-      run: |
-        ${HOME}/script/pre_action.sh rhel9-nightly
-
-    - name: Run k8s/cri-containerd e2e tests on RHEL9
-      run: |
-        export WORKSPACE=$GITHUB_WORKSPACE
-        export GITHUB_ACTION=""
-        bash ci_crio_entry_point.sh
-      env:
-        BAREMETAL: "true"
-        REPO_OWNER: "cri-o"
-        REPO_NAME: "cri-o"
-    
-    - name: Take a post-action for self-hosted runner
-      if: always()
-      run: |
-        ${HOME}/script/post_action.sh rhel9-nightly
