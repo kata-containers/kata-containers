@@ -23,7 +23,7 @@ jobs:
       matrix:
         containerd_version: ['active']
         vmm: ['qemu', 'qemu-runtime-rs']
-    runs-on: s390x
+    runs-on: s390x-large
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
       GOPATH: ${{ github.workspace }}
