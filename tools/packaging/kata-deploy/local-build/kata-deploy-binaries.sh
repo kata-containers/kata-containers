@@ -315,6 +315,11 @@ install_image() {
 		if [ "${variant}" == "confidential" ]; then
 			export COCO_GUEST_COMPONENTS_TARBALL="$(get_coco_guest_components_tarball_path)"
 			export PAUSE_IMAGE_TARBALL="$(get_pause_image_tarball_path)"
+			# GO_VERSION should be exported to install the package in ubuntu-rootfs-osbuilder
+			# This is necessary for installing opa from the source for s390x and ppc64le
+			if [ "${AGENT_POLICY}" == "yes" ] && [ "${ARCH}" == "s390x" -o "${ARCH}" == "ppc64le" ]; then
+				export GO_VERSION=$(get_from_kata_deps "languages.golang.meta.newest-version")
+			fi
 		fi
 	else
 		os_name="$(get_from_kata_deps "assets.image.architecture.${ARCH}.name")"
@@ -384,6 +389,11 @@ install_initrd() {
 		if [ "${variant}" == "confidential" ]; then
 			export COCO_GUEST_COMPONENTS_TARBALL="$(get_coco_guest_components_tarball_path)"
 			export PAUSE_IMAGE_TARBALL="$(get_pause_image_tarball_path)"
+			# GO_VERSION should be exported to install the package in ubuntu-rootfs-osbuilder
+			# This is necessary for installing opa from the source for s390x and ppc64le
+			if [ "${AGENT_POLICY}" == "yes" ] && [ "${ARCH}" == "s390x" -o "${ARCH}" == "ppc64le" ]; then
+				export GO_VERSION=$(get_from_kata_deps "languages.golang.meta.newest-version")
+			fi
 		fi
 	else
 		os_name="$(get_from_kata_deps "assets.initrd.architecture.${ARCH}.name")"
