@@ -151,6 +151,12 @@ kbs_install_cli() {
 	popd
 }
 
+kbs_uninstall_cli() {
+	pushd "${COCO_KBS_DIR}"
+	sudo make uninstall
+	popd
+}
+
 # Delete the kbs on Kubernetes
 #
 # Note: assume the kbs sources were cloned to $COCO_TRUSTEE_DIR
