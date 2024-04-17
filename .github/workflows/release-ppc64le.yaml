@@ -10,6 +10,7 @@ jobs:
   build-kata-static-tarball-ppc64le:
     uses: ./.github/workflows/build-kata-static-tarball-ppc64le.yaml
     with:
+      push-to-registry: yes
       stage: release
 
   kata-deploy:
