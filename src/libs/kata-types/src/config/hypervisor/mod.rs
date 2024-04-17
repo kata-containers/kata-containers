@@ -50,9 +50,15 @@ pub const VIRTIO_BLK_PCI: &str = "virtio-blk-pci";
 /// Virtual MMIO block device driver.
 pub const VIRTIO_BLK_MMIO: &str = "virtio-blk-mmio";
 
-const VIRTIO_BLK_CCW: &str = "virtio-blk-ccw";
-const VIRTIO_SCSI: &str = "virtio-scsi";
-const VIRTIO_PMEM: &str = "virtio-pmem";
+/// Virtual CCW block device driver.
+pub const VIRTIO_BLK_CCW: &str = "virtio-blk-ccw";
+
+/// Virtual SCSI block device driver.
+pub const VIRTIO_SCSI: &str = "virtio-scsi";
+
+/// Virtual PMEM device driver.
+pub const VIRTIO_PMEM: &str = "virtio-pmem";
+
 const VIRTIO_9P: &str = "virtio-9p";
 const VIRTIO_FS: &str = "virtio-fs";
 const VIRTIO_FS_INLINE: &str = "inline-virtio-fs";
