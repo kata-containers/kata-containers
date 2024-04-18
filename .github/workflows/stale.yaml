@@ -8,7 +8,7 @@ jobs:
   stale:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/stale@v8
+      - uses: actions/stale@v9
         with:
           stale-pr-message: 'This PR has been opened without with no activity for 180 days. Comment on the issue otherwise it will be closed in 7 days'
           days-before-pr-stale: 180
