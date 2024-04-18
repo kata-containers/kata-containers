@@ -86,17 +86,6 @@ jobs:
         error: 'Body line too long (max 150)'
         post_error: ${{ env.error_msg }}
 
-    - name: Check Fixes
-      if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') && ( success() || failure() ) }}
-      uses: tim-actions/commit-message-checker-with-regex@v0.3.1
-      with:
-        commits: ${{ steps.get-pr-commits.outputs.commits }}
-        pattern: '\s*Fixes\s*:?\s*(#\d+|github\.com\/kata-containers\/[a-z-.]*#\d+)|^\s*release\s*:'
-        flags: 'i'
-        error: 'No "Fixes" found'
-        post_error: ${{ env.error_msg }}
-        one_pass_all_pass: 'true'
-
     - name: Check Subsystem
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') && ( success() || failure() ) }}
       uses: tim-actions/commit-message-checker-with-regex@v0.3.1
