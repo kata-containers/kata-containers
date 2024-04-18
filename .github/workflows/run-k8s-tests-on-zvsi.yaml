@@ -33,7 +33,7 @@ jobs:
           - devmapper
         k8s:
           - k3s
-    runs-on: s390x
+    runs-on: s390x-large
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
