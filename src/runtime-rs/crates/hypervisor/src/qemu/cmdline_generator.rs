@@ -282,6 +282,7 @@ struct Machine {
     accel: String,
     options: String,
     nvdimm: bool,
+    kernel_irqchip: Option<String>,
 
     is_nvdimm_supported: bool,
     memory_backend: Option<String>,
@@ -309,6 +310,7 @@ impl Machine {
             accel: "kvm".to_owned(),
             options: config.machine_info.machine_accelerators.clone(),
             nvdimm: false,
+            kernel_irqchip: None,
             is_nvdimm_supported,
             memory_backend: None,
         }
@@ -326,6 +328,11 @@ impl Machine {
         self.memory_backend = Some(mem_backend.to_owned());
         self
     }
+
+    fn set_kernel_irqchip(&mut self, kernel_irqchip: &str) -> &mut Self {
+        self.kernel_irqchip = Some(kernel_irqchip.to_owned());
+        self
+    }
 }
 
 #[async_trait]
@@ -339,6 +346,9 @@ impl ToQemuParams for Machine {
         }
         if self.nvdimm {
             params.push("nvdimm=on".to_owned());
+        }
+        if let Some(kernel_irqchip) = &self.kernel_irqchip {
+            params.push(format!("kernel_irqchip={}", kernel_irqchip));
         }
         if let Some(mem_backend) = &self.memory_backend {
             params.push(format!("memory-backend={}", mem_backend));
