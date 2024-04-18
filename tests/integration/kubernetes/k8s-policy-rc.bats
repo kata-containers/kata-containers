@@ -163,7 +163,9 @@ teardown() {
 
     for pod_name in ${launched_pods[@]}; do
         info "Pod ${pod_name}:"
-        kubectl describe pod "${pod_name}"
+
+        # Don't print the "Message:" line because it contains a truncated policy log.
+        kubectl describe pod "${pod_name}" | grep -v "Message:"
     done
 
     # Clean-up
