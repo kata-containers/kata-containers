@@ -139,7 +139,7 @@ qemu-snp-experimental-tarball:
 qemu-tarball:
 	${MAKE} $@-build
 
-boot-image-se-tarball: kernel-tarball rootfs-initrd-tarball
+boot-image-se-tarball: kernel-confidential-tarball rootfs-initrd-confidential-tarball
 	${MAKE} $@-build
 
 qemu-tdx-experimental-tarball:
