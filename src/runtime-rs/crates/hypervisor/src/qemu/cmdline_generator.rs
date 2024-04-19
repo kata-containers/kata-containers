@@ -1118,6 +1118,36 @@ impl ToQemuParams for Rtc {
     }
 }
 
+#[derive(Debug)]
+struct DeviceIntelIommu {
+    intremap: bool,
+    device_iotlb: bool,
+    caching_mode: bool,
+}
+
+impl DeviceIntelIommu {
+    fn new() -> DeviceIntelIommu {
+        DeviceIntelIommu {
+            intremap: true,
+            device_iotlb: true,
+            caching_mode: true,
+        }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for DeviceIntelIommu {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push("intel-iommu".to_owned());
+        let to_onoff = |b| if b { "on" } else { "off" };
+        params.push(format!("intremap={}", to_onoff(self.intremap)));
+        params.push(format!("device-iotlb={}", to_onoff(self.device_iotlb)));
+        params.push(format!("caching-mode={}", to_onoff(self.caching_mode)));
+        Ok(vec!["-device".to_owned(), params.join(",")])
+    }
+}
+
 fn is_running_in_vm() -> Result<bool> {
     let res = read_to_string("/proc/cpuinfo")?
         .lines()
