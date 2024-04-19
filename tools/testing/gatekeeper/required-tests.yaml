@@ -1,0 +1,36 @@
+required_tests:
+  # Always required tests
+  - "Commit Message Check / Commit Message Check"
+required_regexps:
+  # Always required regexps
+
+paths:
+  # Mapping of path (python) regexps to set-of-tests (sort by order of importance)
+  # CI
+  - "^ci/openshift-ci/": []
+  - "^\\.github/workflows/": []
+  # TODO: Expand filters
+  # Documentation
+  #- "\\.rst$": ["build"]
+  #- "\\.md$": ["build"]
+  # Sources
+  #- "^src/": ["static", "build", "test"]
+
+mapping:
+  # Mapping of set-of-tests to required test names and/or test name regexps
+  # TODO: Modify this according to actual required tests
+  test:
+    # Checks the basic functional tests work
+    regexps: "Kata Containers CI / .*run-basic-amd64-tests.*|Kata Containers CI / .*run-metrics-tests.*"
+    names:
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-ppc64le / run-k8s-tests (qemu, kubeadm)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (ubuntu, qemu, small)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-with-crio-on-garm / run-k8s-tests (qemu, k0s, garm-ubuntu-2204)
+    # TODO: Add support for "depends" to automatically add dependant set-of-tests
+    #       (eg. "build" is required for "test")
+  build:
+    # Checks that the kata-containers static tarball is created
+    regexps: "Kata Containers CI / .*build-kata-static-tarball.*"
+  static:
+    # Checks that static checks are passing
+    regexps: "Static checks.*"

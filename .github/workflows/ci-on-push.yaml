@@ -19,12 +19,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  kata-containers-ci-on-push:
+  skipper:
     if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
+    uses: ./.github/workflows/gatekeeper-skipper.yaml
+    with:
+      commit-hash: ${{ github.event.pull_request.head.sha }}
+      target-branch: ${{ github.event.pull_request.base.ref }}
+
+  kata-containers-ci-on-push:
+    needs: skipper
+    if: ${{ needs.skipper.outputs.skip_build != 'yes' }}
     uses: ./.github/workflows/ci.yaml
     with:
       commit-hash: ${{ github.event.pull_request.head.sha }}
       pr-number: ${{ github.event.pull_request.number }}
       tag: ${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
       target-branch: ${{ github.event.pull_request.base.ref }}
+      skip-test: ${{ needs.skipper.outputs.skip_test }}
     secrets: inherit
