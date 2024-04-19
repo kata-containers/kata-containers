@@ -6,6 +6,8 @@
 #
 # Run a smoke test.
 #
+# CHANGE
+#
 
 script_dir=$(dirname $0)
 source ${script_dir}/lib.sh
