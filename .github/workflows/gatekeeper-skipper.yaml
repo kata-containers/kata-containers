@@ -1,0 +1,30 @@
+name: Skipper
+on:
+  workflow_call:
+    inputs:
+      commit-hash:
+        required: true
+        type: string
+      target-branch:
+        required: false
+        type: string
+        default: ""
+
+
+jobs:
+  skipper:
+    runs-on: ubuntu-latest
+    outputs:
+      skip_build: ${{ steps.skipper.outputs.skip_build }}
+      skip_test: ${{ steps.skipper.outputs.skip_test }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+      - id: skipper
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+        run: |
+          python3 tools/testing/gatekeeper/skips.py | tee -a "$GITHUB_ENV"
+        shell: /usr/bin/bash -x {0}

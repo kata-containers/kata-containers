@@ -1,0 +1,32 @@
+name: Gatekeeper
+on:
+  pull_request_target:
+    types:
+      - open
+      - synchronize
+      - reopened
+      - labeled
+
+jobs:
+  gatekeeper:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - id: gatekeeper
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          TARGET_BRANCH: ${{ github.event.pull_request.base.ref }}
+        run: |
+          #!/usr/bin/env bash -x
+          export REQUIRED_REGEXPS="$(python3 tools/testing/gatekeeper/skips.py -t)"
+          echo "REQUIRED_REGEXPS: $REQUIRED_REGEXPS"
+          if [ -z "$REQUIRED_REGEXPS" ]; then
+            echo "No required jobs; PASS"
+            exit 0
+          fi
+          python3 tools/testing/gatekeeper/jobs.py
+          exit $?
+        shell: /usr/bin/bash -x {0}

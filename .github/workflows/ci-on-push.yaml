@@ -19,8 +19,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  kata-containers-ci-on-push:
+  skipper:
+    # This adds "skip_XXX=yes|no" entries to this GH workflow's environment
+    # Use ${{ env.KEY }} to access it's values
     if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
+    uses: ./.github/workflows/gatekeeper-skipper.yaml
+    with:
+      commit-hash: ${{ github.event.pull_request.head.sha }}
+      target-branch: ${{ github.event.pull_request.base.ref }}
+
+  kata-containers-ci-on-push:
+    needs: skipper
+    if: ${{ env.skip_build != "yes" }}
     uses: ./.github/workflows/ci.yaml
     with:
       commit-hash: ${{ github.event.pull_request.head.sha }}
