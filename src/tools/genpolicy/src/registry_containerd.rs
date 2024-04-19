@@ -6,23 +6,22 @@
 // Allow Docker image config field names.
 #![allow(non_snake_case)]
 use crate::registry::{
-    delete_files, do_create_verity_hash_file, get_compressed_path, get_decompressed_path,
-    get_verity_path, Container, DockerConfigLayer, ImageLayer,
+    add_verity_to_store, get_verity_hash_value, read_verity_from_store, Container,
+    DockerConfigLayer, ImageLayer,
 };
-use anyhow::{anyhow, bail, Result};
-use containerd_client::services::v1::GetImageRequest;
-use containerd_client::with_namespace;
+
+use anyhow::{anyhow, Result};
+use containerd_client::{services::v1::GetImageRequest, with_namespace};
 use docker_credential::{CredentialRetrievalError, DockerCredential};
 use k8s_cri::v1::{image_service_client::ImageServiceClient, AuthConfig};
-use log::warn;
-use log::{debug, info};
+use log::{debug, info, warn};
 use oci_distribution::Reference;
-use std::collections::HashMap;
-use std::convert::TryFrom;
-use std::{io::Seek, io::Write, path::Path, path::PathBuf};
-use tokio::io;
-use tokio::io::{AsyncSeekExt, AsyncWriteExt};
-use tokio::net::UnixStream;
+use std::{collections::HashMap, convert::TryFrom, io::Seek, io::Write, path::Path};
+use tokio::{
+    io,
+    io::{AsyncSeekExt, AsyncWriteExt},
+    net::UnixStream,
+};
 use tonic::transport::{Endpoint, Uri};
 use tonic::Request;
 use tower::service_fn;
@@ -263,8 +262,9 @@ pub async fn get_image_layers(
                     diff_id: config_layer.rootfs.diff_ids[layer_index].clone(),
                     verity_hash: get_verity_hash(
                         use_cached_files,
-                        client,
                         layer["digest"].as_str().unwrap(),
+                        client,
+                        &config_layer.rootfs.diff_ids[layer_index].clone(),
                     )
                     .await?,
                 };
@@ -281,104 +281,107 @@ pub async fn get_image_layers(
 
 async fn get_verity_hash(
     use_cached_files: bool,
-    client: &containerd_client::Client,
     layer_digest: &str,
+    client: &containerd_client::Client,
+    diff_id: &str,
 ) -> Result<String> {
+    let temp_dir = tempfile::tempdir_in(".")?;
+    let base_dir = temp_dir.path();
+    let cache_file = "layers-cache.json";
     // Use file names supported by both Linux and Windows.
     let file_name = str::replace(layer_digest, ":", "-");
+    let mut decompressed_path = base_dir.join(file_name);
+    decompressed_path.set_extension("tar");
 
-    let base_dir = std::path::Path::new("layers_cache");
-    let verity_path = get_verity_path(base_dir, &file_name);
+    let mut compressed_path = decompressed_path.clone();
+    compressed_path.set_extension("gz");
 
-    if use_cached_files && verity_path.exists() {
+    let mut verity_hash = "".to_string();
+    let mut error_message = "".to_string();
+    let mut error = false;
+
+    if use_cached_files {
+        verity_hash = read_verity_from_store(cache_file, diff_id)?;
         info!("Using cache file");
-    } else if let Err(e) = create_verity_hash_file(
-        use_cached_files,
-        layer_digest,
-        base_dir,
-        &get_decompressed_path(&verity_path),
-        client,
-    )
-    .await
-    {
-        delete_files(base_dir, &file_name).await;
-        bail!("{e}");
+        info!("dm-verity root hash: {verity_hash}");
     }
 
-    match std::fs::read_to_string(&verity_path) {
-        Err(e) => {
-            delete_files(base_dir, &file_name).await;
-            bail!("Failed to read {:?}, error {e}", &verity_path);
+    if verity_hash.is_empty() {
+        // go find verity hash if not found in cache
+        if let Err(e) = create_decompressed_layer_file(
+            client,
+            layer_digest,
+            &decompressed_path,
+            &compressed_path,
+        )
+        .await
+        {
+            error = true;
+            error_message = format!("Failed to create verity hash for {layer_digest}, error {e}");
         }
-        Ok(v) => {
-            if !use_cached_files {
-                let _ = std::fs::remove_dir_all(base_dir);
+
+        if !error {
+            match get_verity_hash_value(&decompressed_path) {
+                Err(e) => {
+                    error_message = format!("Failed to get verity hash {e}");
+                    error = true;
+                }
+                Ok(v) => {
+                    verity_hash = v;
+                    if use_cached_files {
+                        add_verity_to_store(cache_file, diff_id, &verity_hash)?;
+                    }
+                    info!("dm-verity root hash: {verity_hash}");
+                }
             }
-            info!("dm-verity root hash: {v}");
-            Ok(v)
         }
     }
-}
-
-async fn create_verity_hash_file(
-    use_cached_files: bool,
-    layer_digest: &str,
-    base_dir: &Path,
-    decompressed_path: &PathBuf,
-    client: &containerd_client::Client,
-) -> Result<()> {
-    if use_cached_files && decompressed_path.exists() {
-        info!("Using cached file {:?}", &decompressed_path);
-    } else {
-        std::fs::create_dir_all(base_dir)?;
-        create_decompressed_layer_file(use_cached_files, layer_digest, decompressed_path, client)
-            .await?;
+    temp_dir.close()?;
+    if error {
+        // remove the cache file if we're using it
+        if use_cached_files {
+            std::fs::remove_file(cache_file)?;
+        }
+        warn!("{error_message}");
     }
-
-    do_create_verity_hash_file(decompressed_path)
+    Ok(verity_hash)
 }
 
 async fn create_decompressed_layer_file(
-    use_cached_files: bool,
-    layer_digest: &str,
-    decompressed_path: &PathBuf,
     client: &containerd_client::Client,
+    layer_digest: &str,
+    decompressed_path: &Path,
+    compressed_path: &Path,
 ) -> Result<()> {
-    let compressed_path = get_compressed_path(decompressed_path);
+    info!("Pulling layer {layer_digest}");
+    let mut file = tokio::fs::File::create(&compressed_path)
+        .await
+        .map_err(|e| anyhow!(e))?;
 
-    if use_cached_files && compressed_path.exists() {
-        info!("Using cached file {:?}", &compressed_path);
-    } else {
-        info!("Pulling layer {layer_digest}");
-        let mut file = tokio::fs::File::create(&compressed_path)
-            .await
-            .map_err(|e| anyhow!(e))?;
+    info!("Decompressing layer");
 
-        info!("Decompressing layer");
+    let req = containerd_client::services::v1::ReadContentRequest {
+        digest: layer_digest.to_string(),
+        offset: 0,
+        size: 0,
+    };
+    let req = with_namespace!(req, "k8s.io");
+    let mut c = client.content();
+    let resp = c.read(req).await?;
+    let mut stream = resp.into_inner();
 
-        let req = containerd_client::services::v1::ReadContentRequest {
-            digest: layer_digest.to_string(),
-            offset: 0,
-            size: 0,
-        };
-        let req = with_namespace!(req, "k8s.io");
-        let mut c = client.content();
-        let resp = c.read(req).await?;
-        let mut stream = resp.into_inner();
-
-        while let Some(chunk) = stream.message().await? {
-            if chunk.offset < 0 {
-                print!("oop")
-            }
-            file.seek(io::SeekFrom::Start(chunk.offset as u64)).await?;
-            file.write_all(&chunk.data).await?;
+    while let Some(chunk) = stream.message().await? {
+        if chunk.offset < 0 {
+            return Err(anyhow!("Too many Docker gzip layers"));
         }
-
-        file.flush()
-            .await
-            .map_err(|e| anyhow!(e))
-            .expect("Failed to flush file");
+        file.seek(io::SeekFrom::Start(chunk.offset as u64)).await?;
+        file.write_all(&chunk.data).await?;
     }
+
+    file.flush()
+        .await
+        .map_err(|e| anyhow!(e))
+        .expect("Failed to flush file");
     let compressed_file = std::fs::File::open(compressed_path).map_err(|e| anyhow!(e))?;
     let mut decompressed_file = std::fs::OpenOptions::new()
         .read(true)

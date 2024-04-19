@@ -59,6 +59,7 @@ sha2 = "0.10.6"
 tarindex = { git = "https://github.com/kata-containers/tardev-snapshotter", rev = "06183a5" }
 tempfile = "3.5.0"
 zerocopy = "0.6.1"
+fs2 = "0.4.3"
 
 # containerd image pull support
 k8s-cri = "0.7.0"
