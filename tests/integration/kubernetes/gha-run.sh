@@ -98,6 +98,25 @@ EOF
 
 	sleep 60s
 	sudo cat "${containerd_config_file}"
+
+	if [ "${KUBERNETES}" = 'k3s' ]
+	then
+		local ctr_dm_status
+		local result
+
+		ctr_dm_status=$(sudo ctr \
+			--address '/run/k3s/containerd/containerd.sock' \
+			plugins ls |\
+			awk '$2 ~ /^devmapper$/ { print $0 }' || true)
+
+		result=$(echo "$ctr_dm_status" | awk '{print $4}' || true)
+
+		[ "$result" = 'ok' ] || die "k3s containerd device mapper not configured: '$ctr_dm_status'"
+	fi
+
+	info "devicemapper (DM) devices"
+	sudo dmsetup ls --tree
+	sudo dmsetup status -v
 }
 
 function configure_snapshotter() {
@@ -282,8 +301,15 @@ function run_tests() {
 		echo "start_time=${start_time}" >> "$GITHUB_ENV"
 	fi
 
-	if [[ "${KATA_HYPERVISOR}" = "dragonball" ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]] || [[ "${KATA_HYPERVISOR}" = "cloud-hypervisor" ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]]; then
-		# cloud-hypervisor runtime-rs issue is https://github.com/kata-containers/kata-containers/issues/9034
+	if [[ "${KATA_HYPERVISOR}" = "cloud-hypervisor" ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]]; then
+		if [ -n "$GITHUB_ENV" ]; then
+			KATA_TEST_VERBOSE=true
+			export KATA_TEST_VERBOSE
+			echo "KATA_TEST_VERBOSE=${KATA_TEST_VERBOSE}" >> "$GITHUB_ENV"
+		fi
+	fi
+
+	if [[ "${KATA_HYPERVISOR}" = "dragonball" ]] && [[ "${SNAPSHOTTER}" = "devmapper" ]]; then
 		echo "Skipping tests for $KATA_HYPERVISOR using devmapper"
 	else
 		bash run_kubernetes_tests.sh
