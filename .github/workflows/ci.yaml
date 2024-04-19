@@ -15,6 +15,10 @@ on:
         required: false
         type: string
         default: ""
+      skip-test:
+        required: false
+        type: string
+        default: no
 
 jobs:
   build-kata-static-tarball-amd64:
@@ -114,7 +118,7 @@ jobs:
 
   run-kata-deploy-tests-on-aks:
     # TODO: Reenable when Azure CI budget is secured (see #9939).
-    if: false
+    if: ${{ false && inputs.skip-test != 'yes' }}
     needs: publish-kata-deploy-payload-amd64
     uses: ./.github/workflows/run-kata-deploy-tests-on-aks.yaml
     with:
@@ -128,7 +132,7 @@ jobs:
 
   run-kata-deploy-tests-on-garm:
     # TODO: Transition to free runner (see #9940).
-    if: false
+    if: ${{ false && inputs.skip-test != 'yes' }}
     needs: publish-kata-deploy-payload-amd64
     uses: ./.github/workflows/run-kata-deploy-tests-on-garm.yaml
     with:
@@ -141,6 +145,7 @@ jobs:
     secrets: inherit
 
   run-kata-monitor-tests:
+    if: ${{ inputs.skip-test != 'yes' }}
     needs: build-kata-static-tarball-amd64
     uses: ./.github/workflows/run-kata-monitor-tests.yaml
     with:
@@ -149,6 +154,7 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
 
   run-k8s-tests-on-aks:
+    if: ${{ inputs.skip-test != 'yes' }}
     needs: publish-kata-deploy-payload-amd64
     uses: ./.github/workflows/run-k8s-tests-on-aks.yaml
     with:
@@ -162,6 +168,7 @@ jobs:
     secrets: inherit
 
   run-k8s-tests-on-garm:
+    if: ${{ inputs.skip-test != 'yes' }}
     needs: publish-kata-deploy-payload-amd64
     uses: ./.github/workflows/run-k8s-tests-on-garm.yaml
     with:
@@ -174,6 +181,7 @@ jobs:
     secrets: inherit
 
   run-k8s-tests-with-crio-on-garm:
+    if: ${{ inputs.skip-test != 'yes' }}
     needs: publish-kata-deploy-payload-amd64
     uses: ./.github/workflows/run-k8s-tests-with-crio-on-garm.yaml
     with:
@@ -186,6 +194,7 @@ jobs:
     secrets: inherit
 
   run-kata-coco-tests:
+    if: ${{ inputs.skip-test != 'yes' }}
     needs: [publish-kata-deploy-payload-amd64, build-and-publish-tee-confidential-unencrypted-image]
     uses: ./.github/workflows/run-kata-coco-tests.yaml
     with:
@@ -198,6 +207,7 @@ jobs:
     secrets: inherit
 
   run-k8s-tests-on-zvsi:
+    if: ${{ inputs.skip-test != 'yes' }}
     needs: [publish-kata-deploy-payload-s390x, build-and-publish-tee-confidential-unencrypted-image]
     uses: ./.github/workflows/run-k8s-tests-on-zvsi.yaml
     with:
@@ -210,6 +220,7 @@ jobs:
     secrets: inherit
 
   run-k8s-tests-on-ppc64le:
+    if: ${{ inputs.skip-test != 'yes' }}
     needs: publish-kata-deploy-payload-ppc64le
     uses: ./.github/workflows/run-k8s-tests-on-ppc64le.yaml
     with:
@@ -221,6 +232,7 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
 
   run-metrics-tests:
+    if: ${{ inputs.skip-test != 'yes' }}
     needs: build-kata-static-tarball-amd64
     uses: ./.github/workflows/run-metrics.yaml
     with:
@@ -229,6 +241,7 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
 
   run-basic-amd64-tests:
+    if: ${{ inputs.skip-test != 'yes' }}
     needs: build-kata-static-tarball-amd64
     uses: ./.github/workflows/basic-ci-amd64.yaml
     with:
@@ -237,6 +250,7 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
 
   run-cri-containerd-tests-s390x:
+    if: ${{ inputs.skip-test != 'yes' }}
     needs: build-kata-static-tarball-s390x
     uses: ./.github/workflows/run-cri-containerd-tests-s390x.yaml
     with:
@@ -245,6 +259,7 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
 
   run-cri-containerd-tests-ppc64le:
+    if: ${{ inputs.skip-test != 'yes' }}
     needs: build-kata-static-tarball-ppc64le
     uses: ./.github/workflows/run-cri-containerd-tests-ppc64le.yaml
     with:
