@@ -32,6 +32,9 @@ snapshotters_delimiter=':'
 AGENT_HTTPS_PROXY="${AGENT_HTTPS_PROXY:-}"
 AGENT_NO_PROXY="${AGENT_NO_PROXY:-}"
 
+PULL_TYPE_MAPPING="${PULL_TYPE_MAPPING:-}"
+IFS=',' read -a pull_types <<< "$PULL_TYPE_MAPPING"
+
 # If we fail for any reason a message will be displayed
 die() {
         msg="$*"
@@ -426,6 +429,27 @@ function configure_crio_runtime() {
 	runtime_config_path = "${kata_config_path}"
 	privileged_without_host_devices = true
 EOF
+
+	local key
+	local value
+	if [ -n "${PULL_TYPE_MAPPING}" ]; then
+		for m in "${pull_types[@]}"; do
+			key="${m%"$snapshotters_delimiter"*}"
+			value="${m#*"$snapshotters_delimiter"}"
+
+			if [[ "${value}" = "default" || "${key}" != "${shim}" ]]; then
+				continue
+			fi
+
+			if [ "${value}" == "guest-pull" ]; then
+				echo -e "\truntime_pull_image = true" | \
+					tee -a "$crio_drop_in_conf_file"
+			else
+				die "Unsupported pull type '$value' for ${shim}"
+			fi
+			break
+		done
+	fi
 }
 
 function configure_crio() {
@@ -616,6 +640,7 @@ function main() {
 	echo "* SNAPSHOTTER_HANDLER_MAPPING: ${SNAPSHOTTER_HANDLER_MAPPING}"
 	echo "* AGENT_HTTPS_PROXY: ${AGENT_HTTPS_PROXY}"
 	echo "* AGENT_NO_PROXY: ${AGENT_NO_PROXY}"
+	echo "* PULL_TYPE_MAPPING: ${PULL_TYPE_MAPPING}"
 
 	# script requires that user is root
 	euid=$(id -u)

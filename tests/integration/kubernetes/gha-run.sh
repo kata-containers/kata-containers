@@ -215,6 +215,13 @@ function deploy_kata() {
 		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 	fi
 
+	# Set the PULL_TYPE_MAPPING
+	if [ "${PULL_TYPE}" != "default" ]; then
+		yq -i \
+		  ".spec.template.spec.containers[0].env[10].value = \"${KATA_HYPERVISOR}:${PULL_TYPE}\"" \
+		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
+	fi
+
 	echo "::group::Final kata-deploy.yaml that is used in the test"
 	cat "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 	grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" || die "Failed to setup the tests image"
