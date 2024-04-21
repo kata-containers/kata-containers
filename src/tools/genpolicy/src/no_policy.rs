@@ -35,10 +35,6 @@ impl yaml::K8sResource for NoPolicyResource {
         self.yaml.clone()
     }
 
-    fn use_host_network(&self) -> bool {
-        panic!("Unsupported");
-    }
-
     fn use_sandbox_pidns(&self) -> bool {
         panic!("Unsupported");
     }

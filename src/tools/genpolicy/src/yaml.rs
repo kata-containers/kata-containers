@@ -78,7 +78,10 @@ pub trait K8sResource {
         panic!("Unsupported");
     }
 
-    fn use_host_network(&self) -> bool;
+    fn use_host_network(&self) -> bool {
+        panic!("Unsupported");
+    }
+
     fn use_sandbox_pidns(&self) -> bool;
 }
 

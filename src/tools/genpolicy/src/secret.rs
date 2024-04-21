@@ -84,10 +84,6 @@ impl yaml::K8sResource for Secret {
         serde_yaml::to_string(&self.doc_mapping).unwrap()
     }
 
-    fn use_host_network(&self) -> bool {
-        panic!("Unsupported");
-    }
-
     fn use_sandbox_pidns(&self) -> bool {
         panic!("Unsupported");
     }
