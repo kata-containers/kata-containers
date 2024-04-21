@@ -80,8 +80,4 @@ impl yaml::K8sResource for List {
         }
         serde_yaml::to_string(&self).unwrap()
     }
-
-    fn use_sandbox_pidns(&self) -> bool {
-        panic!("Unsupported");
-    }
 }

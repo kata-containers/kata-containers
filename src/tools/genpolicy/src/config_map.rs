@@ -98,8 +98,4 @@ impl yaml::K8sResource for ConfigMap {
     fn get_annotations(&self) -> &Option<BTreeMap<String, String>> {
         &self.metadata.annotations
     }
-
-    fn use_sandbox_pidns(&self) -> bool {
-        panic!("Unsupported");
-    }
 }

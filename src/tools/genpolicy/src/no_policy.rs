@@ -34,8 +34,4 @@ impl yaml::K8sResource for NoPolicyResource {
     fn serialize(&mut self, _policy: &str) -> String {
         self.yaml.clone()
     }
-
-    fn use_sandbox_pidns(&self) -> bool {
-        panic!("Unsupported");
-    }
 }

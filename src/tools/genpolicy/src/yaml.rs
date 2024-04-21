@@ -82,7 +82,9 @@ pub trait K8sResource {
         panic!("Unsupported");
     }
 
-    fn use_sandbox_pidns(&self) -> bool;
+    fn use_sandbox_pidns(&self) -> bool {
+        panic!("Unsupported");
+    }
 }
 
 /// See Reference / Kubernetes API / Common Definitions / LabelSelector.

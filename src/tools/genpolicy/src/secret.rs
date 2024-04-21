@@ -83,8 +83,4 @@ impl yaml::K8sResource for Secret {
     fn serialize(&mut self, _policy: &str) -> String {
         serde_yaml::to_string(&self.doc_mapping).unwrap()
     }
-
-    fn use_sandbox_pidns(&self) -> bool {
-        panic!("Unsupported");
-    }
 }
