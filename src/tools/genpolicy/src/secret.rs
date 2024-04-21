@@ -9,13 +9,11 @@
 use crate::obj_meta;
 use crate::pod;
 use crate::policy;
-use crate::settings;
 use crate::utils::Config;
 use crate::yaml;
 
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
-use protocols::agent;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -76,16 +74,6 @@ pub fn get_value(value_from: &pod::EnvVarSource, secrets: &Vec<Secret>) -> Optio
 impl yaml::K8sResource for Secret {
     async fn init(&mut self, _config: &Config, doc_mapping: &serde_yaml::Value, _silent: bool) {
         self.doc_mapping = doc_mapping.clone();
-    }
-
-    fn get_container_mounts_and_storages(
-        &self,
-        _policy_mounts: &mut Vec<policy::KataMount>,
-        _storages: &mut Vec<agent::Storage>,
-        _container: &pod::Container,
-        _settings: &settings::Settings,
-    ) {
-        panic!("Unsupported");
     }
 
     fn generate_policy(&self, _agent_policy: &policy::AgentPolicy) -> String {

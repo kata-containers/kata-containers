@@ -9,13 +9,11 @@
 use crate::obj_meta;
 use crate::pod;
 use crate::policy;
-use crate::settings;
 use crate::utils::Config;
 use crate::yaml;
 
 use async_trait::async_trait;
 use log::debug;
-use protocols::agent;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs::File;
@@ -87,16 +85,6 @@ impl yaml::K8sResource for ConfigMap {
         _silent_unsupported_fields: bool,
     ) {
         self.doc_mapping = doc_mapping.clone();
-    }
-
-    fn get_container_mounts_and_storages(
-        &self,
-        _policy_mounts: &mut Vec<policy::KataMount>,
-        _storages: &mut Vec<agent::Storage>,
-        _container: &pod::Container,
-        _settings: &settings::Settings,
-    ) {
-        panic!("Unsupported");
     }
 
     fn generate_policy(&self, _agent_policy: &policy::AgentPolicy) -> String {

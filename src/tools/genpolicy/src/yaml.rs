@@ -62,11 +62,13 @@ pub trait K8sResource {
 
     fn get_container_mounts_and_storages(
         &self,
-        policy_mounts: &mut Vec<policy::KataMount>,
-        storages: &mut Vec<agent::Storage>,
-        container: &pod::Container,
-        settings: &settings::Settings,
-    );
+        _policy_mounts: &mut Vec<policy::KataMount>,
+        _storages: &mut Vec<agent::Storage>,
+        _container: &pod::Container,
+        _settings: &settings::Settings,
+    ) {
+        panic!("Unsupported");
+    }
 
     fn get_containers(&self) -> &Vec<pod::Container>;
     fn get_annotations(&self) -> &Option<BTreeMap<String, String>> {
