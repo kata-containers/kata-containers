@@ -84,10 +84,6 @@ impl yaml::K8sResource for Secret {
         serde_yaml::to_string(&self.doc_mapping).unwrap()
     }
 
-    fn get_containers(&self) -> &Vec<pod::Container> {
-        panic!("Unsupported");
-    }
-
     fn use_host_network(&self) -> bool {
         panic!("Unsupported");
     }

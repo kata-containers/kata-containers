@@ -95,10 +95,6 @@ impl yaml::K8sResource for ConfigMap {
         serde_yaml::to_string(&self.doc_mapping).unwrap()
     }
 
-    fn get_containers(&self) -> &Vec<pod::Container> {
-        panic!("Unsupported");
-    }
-
     fn get_annotations(&self) -> &Option<BTreeMap<String, String>> {
         &self.metadata.annotations
     }

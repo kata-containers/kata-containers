@@ -70,7 +70,10 @@ pub trait K8sResource {
         panic!("Unsupported");
     }
 
-    fn get_containers(&self) -> &Vec<pod::Container>;
+    fn get_containers(&self) -> &Vec<pod::Container> {
+        panic!("Unsupported");
+    }
+
     fn get_annotations(&self) -> &Option<BTreeMap<String, String>> {
         panic!("Unsupported");
     }

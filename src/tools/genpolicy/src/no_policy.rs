@@ -6,7 +6,6 @@
 // Allow K8s YAML field names.
 #![allow(non_snake_case)]
 
-use crate::pod;
 use crate::policy;
 use crate::utils::Config;
 use crate::yaml;
@@ -34,10 +33,6 @@ impl yaml::K8sResource for NoPolicyResource {
 
     fn serialize(&mut self, _policy: &str) -> String {
         self.yaml.clone()
-    }
-
-    fn get_containers(&self) -> &Vec<pod::Container> {
-        panic!("Unsupported");
     }
 
     fn use_host_network(&self) -> bool {
