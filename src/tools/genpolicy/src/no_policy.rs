@@ -30,10 +30,6 @@ impl yaml::K8sResource for NoPolicyResource {
     ) {
     }
 
-    fn get_sandbox_name(&self) -> Option<String> {
-        panic!("Unsupported");
-    }
-
     fn get_container_mounts_and_storages(
         &self,
         _policy_mounts: &mut Vec<policy::KataMount>,

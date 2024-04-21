@@ -52,7 +52,10 @@ pub trait K8sResource {
     fn generate_policy(&self, agent_policy: &policy::AgentPolicy) -> String;
     fn serialize(&mut self, policy: &str) -> String;
 
-    fn get_sandbox_name(&self) -> Option<String>;
+    fn get_sandbox_name(&self) -> Option<String> {
+        panic!("Unsupported");
+    }
+
     fn get_namespace(&self) -> Option<String> {
         panic!("Unsupported");
     }
