@@ -49,8 +49,13 @@ pub trait K8sResource {
         silent_unsupported_fields: bool,
     );
 
-    fn generate_policy(&self, agent_policy: &policy::AgentPolicy) -> String;
-    fn serialize(&mut self, policy: &str) -> String;
+    fn generate_policy(&self, _agent_policy: &policy::AgentPolicy) -> String {
+        panic!("Unsupported");
+    }
+
+    fn serialize(&mut self, _policy: &str) -> String {
+        panic!("Unsupported");
+    }
 
     fn get_sandbox_name(&self) -> Option<String> {
         panic!("Unsupported");
