@@ -379,14 +379,9 @@ async fn start_sandbox(
     #[cfg(feature = "guest-pull")]
     image::set_proxy_env_vars().await;
 
-    // - When init_mode is true, enabling the localhost link during the
-    //   handle_localhost call above is required before starting OPA with the
-    //   initialize_policy call below.
-    // - When init_mode is false, the Policy could be initialized earlier,
-    //   because initialize_policy doesn't start OPA. OPA is started by
-    //   systemd after localhost has been enabled.
+    // TODO: initialize earlier.
     #[cfg(feature = "agent-policy")]
-    if let Err(e) = initialize_policy(init_mode).await {
+    if let Err(e) = initialize_policy().await {
         error!(logger, "Failed to initialize agent policy: {:?}", e);
         // Continuing execution without a security policy could be dangerous.
         std::process::abort();
@@ -541,14 +536,11 @@ fn init_agent_as_init(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result
 }
 
 #[cfg(feature = "agent-policy")]
-async fn initialize_policy(init_mode: bool) -> Result<()> {
-    let opa_addr = "localhost:8181";
-    let agent_policy_path = "/agent_policy";
-    let default_agent_policy = "/etc/kata-opa/default-policy.rego";
+async fn initialize_policy() -> Result<()> {
     AGENT_POLICY
         .lock()
         .await
-        .initialize(init_mode, opa_addr, agent_policy_path, default_agent_policy)
+        .initialize("/etc/kata-opa/default-policy.rego")
         .await
 }
 
