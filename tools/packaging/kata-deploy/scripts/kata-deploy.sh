@@ -341,6 +341,8 @@ function configure_crio() {
 	mkdir -p "$crio_drop_in_conf_dir"
 	rm -f "$crio_drop_in_conf_file"
 	touch "$crio_drop_in_conf_file"
+	rm -f "$crio_drop_in_conf_file_debug"
+	touch "$crio_drop_in_conf_file_debug"
 
 	for shim in "${shims[@]}"; do
 		configure_crio_runtime $shim
@@ -348,7 +350,7 @@ function configure_crio() {
 
 
 	if [ "${DEBUG}" == "true" ]; then
-		cat <<EOF | tee -a $crio_drop_in_conf_file_debug
+		cat <<EOF | tee $crio_drop_in_conf_file_debug
 [crio]
 log_level = "debug"
 EOF
