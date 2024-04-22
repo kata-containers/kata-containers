@@ -56,7 +56,23 @@ log = "0.4.11"
 cfg-if = "1.0.0"
 prometheus = { version = "0.13.0", features = ["process"] }
 procfs = "0.12.0"
-anyhow = "1.0.32"
+
+# Failed experiment with more recent version of the anyhow crate:
+# - "make test" passes for the Kata Agent when using anyhow 1.0.76 or older
+# - "make test" fails when using anyhow 1.0.77 or newer
+#
+# failures:
+#    config::tests::test_get_container_pipe_size
+#    config::tests::test_get_guest_components_features_value
+#    config::tests::test_get_hotplug_timeout
+#    config::tests::test_get_log_level
+#    config::tests::test_get_string_value
+#    config::tests::test_logrus_to_slog_level
+#    rpc::tests::test_do_write_stream
+#    rpc::tests::test_get_memory_info
+#    rpc::tests::test_update_container_namespaces
+anyhow = "=1.0.77"
+
 cgroups = { package = "cgroups-rs", version = "0.3.3" }
 
 # Tracing
