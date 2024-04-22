@@ -31,6 +31,8 @@ readonly KBS_PRIVATE_KEY="${KBS_PRIVATE_KEY:-/opt/trustee/install/kbs.key}"
 readonly KBS_SVC_NAME="kbs"
 # The kbs ingress name
 readonly KBS_INGRESS_NAME="kbs"
+# The install directory for kbs-client
+readonly KBS_CLIENT_INSTALL_DIR="/usr/local/bin"
 
 # Set "allow all" policy to resources.
 #
@@ -167,46 +169,27 @@ kbs_set_resource_from_file() {
 	fi
 }
 
-# Build and install the kbs-client binary, unless it is already present.
+# Pull and install the kbs-client binary, unless it is already present.
+#
+# Note: Assumes (1) oras is installed, (2) this is an x86_64-linux-gnu machine,
+# and (3) staged-images/kbs-client:latest is a sample_only build for
+# this target triplet.
 #
 kbs_install_cli() {
 	command -v kbs-client >/dev/null && return
 
-	source /etc/os-release || source /usr/lib/os-release
-	case "${ID}" in
-		ubuntu)
-			local pkgs="build-essential pkg-config libssl-dev"
+	if ! command -v oras >/dev/null; then
+		>&2 echo "ERROR: oras must be installed in order to pull kbs-client"
+		return 1
+	fi
+	if ! [[ "$(gcc -dumpmachine)" =~ "x86_64-linux-gnu" ]]; then
+		>&2 echo "ERROR: only x86_64-linux-gnu kbs-client currently supported"
+		return 2
+	fi
 
-			sudo apt-get update -y
-			# shellcheck disable=2086
-			sudo apt-get install -y $pkgs
-			;;
-		centos)
-			local pkgs="make"
-
-			# shellcheck disable=2086
-			sudo dnf install -y $pkgs
-			;;
-		*)
-			>&2 echo "ERROR: running on unsupported distro"
-			return 1
-			;;
-	esac
-
-	# Mininum required version to build the client (read from versions.yaml)
-	local rust_version
-	ensure_yq
-	rust_version=$(get_from_kata_deps ".externals.coco-trustee.toolchain")
-	# Currently kata version from version.yaml is 1.72.0
-	# which doesn't match the requirement, so let's pass
-	# the required version.
-	_ensure_rust "$rust_version"
-
-	pushd "${COCO_KBS_DIR}"
-	# Compile with sample features to bypass attestation.
-	make CLI_FEATURES=sample_only cli
-	sudo make install-cli
-	popd
+	oras pull ghcr.io/confidential-containers/staged-images/kbs-client:latest
+	sudo install -D -m0755 kbs-client ${KBS_CLIENT_INSTALL_DIR}
+	rm kbs-client
 }
 
 kbs_uninstall_cli() {
