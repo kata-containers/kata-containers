@@ -16,6 +16,9 @@ use hypervisor::{
     },
     BlockConfig,
 };
+use kata_types::config::hypervisor::{
+    VIRTIO_BLK_CCW, VIRTIO_BLK_MMIO, VIRTIO_BLK_PCI, VIRTIO_PMEM, VIRTIO_SCSI,
+};
 use kata_types::mount::Mount;
 use nix::sys::stat::{self, SFlag};
 use std::fs;
@@ -48,7 +51,7 @@ impl BlockRootfs {
         let block_device_config = &mut BlockConfig {
             major: stat::major(dev_id) as i64,
             minor: stat::minor(dev_id) as i64,
-            driver_option: block_driver,
+            driver_option: block_driver.clone(),
             ..Default::default()
         };
 
@@ -67,8 +70,30 @@ impl BlockRootfs {
         let mut device_id: String = "".to_owned();
         if let DeviceType::Block(device) = device_info {
             storage.driver = device.config.driver_option;
-            storage.source = device.config.virt_path;
             device_id = device.device_id;
+
+            match block_driver.as_str() {
+                VIRTIO_BLK_PCI => {
+                    storage.source = device
+                        .config
+                        .pci_path
+                        .ok_or("PCI path missing for pci block device")
+                        .map_err(|e| anyhow!(e))?
+                        .to_string();
+                }
+                VIRTIO_BLK_MMIO => {
+                    storage.source = device.config.virt_path;
+                }
+                VIRTIO_SCSI | VIRTIO_BLK_CCW | VIRTIO_PMEM => {
+                    return Err(anyhow!(
+                        "Complete support for block driver {} has not been implemented yet",
+                        block_driver
+                    ));
+                }
+                _ => {
+                    return Err(anyhow!("Unknown block driver : {}", block_driver));
+                }
+            }
         }
 
         Ok(Self {
