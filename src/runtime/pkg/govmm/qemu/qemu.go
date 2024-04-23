@@ -3028,9 +3028,6 @@ func (config *Config) appendMemoryKnobs() {
 		numaMemParam = "node,memdev=" + dimmName
 	}
 
-	if config.Knobs.Private {
-		objMemParam += ",private=on"
-	}
 	if config.Knobs.MemShared {
 		objMemParam += ",share=on"
 	}
