@@ -102,7 +102,7 @@ assets:
     qemu-tdx-experimental:
       description: ¨QEMU with TDX support"
       url: "https://github.com/intel/qemu-tdx"
-      tag: "tdx-qemu-next-2023.9.21-v8.1.0"
+      tag: "tdx-qemu-upstream-2024.03.27-v9.0.0-rc0"
 
     qemu-snp-experimental:
       description: "QEMU with SNP support"
