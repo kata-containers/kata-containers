@@ -75,12 +75,12 @@ build_secure_image() {
 		fi
 	fi
 
-	if [ ! -f "${install_src_dir}/vmlinuz.container" ] ||
-		[ ! -f "${install_src_dir}/kata-containers-initrd.img" ]; then
+	if [ ! -f "${install_src_dir}/vmlinuz-confidential.container" ] ||
+		[ ! -f "${install_src_dir}/kata-containers-initrd-confidential.img" ]; then
 		cat << EOF >&2
 Either kernel or initrd does not exist or is mistakenly named
-A file name for kernel must be vmlinuz.container (raw binary)
-A file name for initrd must be kata-containers-initrd.img
+A file name for kernel must be vmlinuz-confidential.container (raw binary)
+A file name for initrd must be kata-containers-initrd-confidential.img
 EOF
 		return 1
 	fi
@@ -108,8 +108,8 @@ EOF
 		"${extra_arguments}" \
 		"${hkd_options}" \
 		--output="${install_dest_dir}/kata-containers-se.img" \
-		--image="${install_src_dir}/vmlinuz.container" \
-		--ramdisk="${install_src_dir}/kata-containers-initrd.img" \
+		--image="${install_src_dir}/vmlinuz-confidential.container" \
+		--ramdisk="${install_src_dir}/kata-containers-initrd-confidential.img" \
 		--parmfile="${parmfile}" \
 		"${key_verify_option}"
 
@@ -125,7 +125,7 @@ build_image() {
 	image_source_dir="${builddir}/secure-image"
 	mkdir -p "${image_source_dir}"
 	pushd "${tarball_dir}"
-	for tarball_id in kernel rootfs-initrd; do
+	for tarball_id in kernel-confidential rootfs-initrd-confidential; do
 		tar xvf kata-static-${tarball_id}.tar.xz -C "${image_source_dir}"
 	done
 	popd
@@ -167,7 +167,7 @@ main() {
 	readonly destdir
 	readonly builddir
 
-	info "Build IBM zSystems & LinuxONE SE image"
+	info "Build IBM zSystems & LinuxONE Secure Execution(SE) image"
 
 	install_dir="${destdir}${prefix}/share/kata-containers"
 	readonly install_dir

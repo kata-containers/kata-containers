@@ -62,17 +62,25 @@ $ export PATH="$PATH:/opt/kata/bin"
 $ ls -1 $(dirname $(kata-runtime env --json | jq -r '.Kernel.Path'))
 config-6.1.62-121
 kata-containers.img
+kata-containers-confidential.img
 kata-containers-initrd.img
+kata-containers-initrd-confidential.img
 kata-ubuntu-20.04.initrd
+kata-ubuntu-20.04-confidential.initrd
 kata-ubuntu-latest.image
+kata-ubuntu-latest-confidential.image
 vmlinux-6.1.62-121
+vmlinux-6.1.62-121-confidential
 vmlinux.container
+vmlinux-confidential.container
 vmlinuz-6.1.62-121
+vmlinuz-6.1.62-121-confidential
 vmlinuz.container
+vmlinuz-confidential.container
 ```
 
-The output indicates the deployment of the kernel (`vmlinux-6.1.62-121`, though the version
-may vary at the time of testing), rootfs-image (`kata-ubuntu-latest.image`), and rootfs-initrd (`kata-ubuntu-20.04.initrd`).
+The output indicates the deployment of the kernel (`vmlinux-6.1.62-121-confidential`, though the version
+may vary at the time of testing), rootfs-image (`kata-ubuntu-latest-confidential.image`), and rootfs-initrd (`kata-ubuntu-20.04-confidential.initrd`).
 In this scenario, the available kernel and initrd can be utilized for a secure image.
 However, if any of these components are absent, they must be built from the
 [project source](https://github.com/kata-containers/kata-containers) as follows:
@@ -80,19 +88,19 @@ However, if any of these components are absent, they must be built from the
 ```
 $ # Assume that the project is cloned at $GOPATH/src/github.com/kata-containers
 $ cd $GOPATH/src/github.com/kata-containers/kata-containers
-$ sudo -E PATH=$PATH make kernel-tarball
-$ sudo -E PATH=$PATH make rootfs-initrd-tarball
-$ tar -tf build/kata-static-kernel.tar.xz | grep vmlinuz
-./opt/kata/share/kata-containers/vmlinuz.container
-./opt/kata/share/kata-containers/vmlinuz-6.1.62-121
-$ tar -tf build/kata-static-rootfs-initrd.tar.xz | grep initrd
-./opt/kata/share/kata-containers/kata-containers-initrd.img
-./opt/kata/share/kata-containers/kata-ubuntu-20.04.initrd
+$ sudo -E PATH=$PATH make kernel-confidential-tarball
+$ sudo -E PATH=$PATH make rootfs-initrd-confidential-tarball
+$ tar -tf build/kata-static-kernel-confidential.tar.xz | grep vmlinuz
+./opt/kata/share/kata-containers/vmlinuz-confidential.container
+./opt/kata/share/kata-containers/vmlinuz-6.1.62-121-confidential
+$ tar -tf build/kata-static-rootfs-initrd-confidential.tar.xz | grep initrd
+./opt/kata/share/kata-containers/kata-containers-initrd-confidential.img
+./opt/kata/share/kata-containers/kata-ubuntu-20.04-confidential.initrd
 $ mkdir artifacts
-$ tar -xvf build/kata-static-kernel.tar.xz -C artifacts ./opt/kata/share/kata-containers/vmlinuz-6.1.62-121
-$ tar -xvf build/kata-static-rootfs-initrd.tar.xz -C artifacts ./opt/kata/share/kata-containers/kata-ubuntu-20.04.initrd
+$ tar -xvf build/kata-static-kernel-confidential.tar.xz -C artifacts ./opt/kata/share/kata-containers/vmlinuz-6.1.62-121-confidential
+$ tar -xvf build/kata-static-rootfs-initrd-confidential.tar.xz -C artifacts ./opt/kata/share/kata-containers/kata-ubuntu-20.04-confidential.initrd
 $ ls artifacts/opt/kata/share/kata-containers/
-kata-ubuntu-20.04.initrd  vmlinuz-6.1.62-121
+kata-ubuntu-20.04-confidential.initrd  vmlinuz-6.1.62-121-confidential
 ```
 
 3. Secure Image Generation Tool
@@ -131,7 +139,6 @@ These files will be used for verification during secure image construction in th
 
 ### Build a Secure Image
 
-
 Assuming you have placed a host key document at `$HOME/host-key-document`:
 
 - Host key document as `HKD-0000-0000000.crt`
@@ -147,8 +154,8 @@ you can construct a secure image using the following procedure:
 $ # Change a directory to the project root
 $ cd $GOPATH/src/github.com/kata-containers/kata-containers
 $ host_key_document=$HOME/host-key-document/HKD-0000-0000000.crt
-$ kernel_image=artifacts/opt/kata/share/kata-containers/vmlinuz-6.1.62-121
-$ initrd_image=artifacts/opt/kata/share/kata-containers/kata-ubuntu-20.04.initrd
+$ kernel_image=artifacts/opt/kata/share/kata-containers/vmlinuz-6.1.62-121-confidential
+$ initrd_image=artifacts/opt/kata/share/kata-containers/kata-ubuntu-20.04-confidential.initrd
 $ echo "panic=1 scsi_mod.scan=none swiotlb=262144 agent.log=debug" > parmfile
 $ genprotimg --host-key-document=${host_key_document} \
 --output=kata-containers-se.img --image=${kernel_image} --ramdisk=${initrd_image} \
@@ -319,7 +326,7 @@ for confidential containers.
 $ cd $GOPATH/src/github.com/kata-containers/kata-containers
 $ host_key_document=$HOME/host-key-document/HKD-0000-0000000.crt
 $ mkdir hkd_dir && cp $host_key_document hkd_dir
-$ # kernel and rootfs-initrd are built automactially by the command below
+$ # kernel-confidential and rootfs-initrd-confidential are built automactially by the command below
 $ sudo -E PATH=$PATH HKD_PATH=hkd_dir SE_KERNEL_PARAMS="agent.log=debug" \
 make boot-image-se-tarball
 $ sudo -E PATH=$PATH make qemu-tarball
@@ -330,10 +337,13 @@ $ mkdir kata-artifacts
 $ build_dir=$(readlink -f build)
 $ cp -r $build_dir/*.tar.xz kata-artifacts
 $ ls -1 kata-artifacts
+kata-static-agent-opa.tar.xz
 kata-static-boot-image-se.tar.xz
-kata-static-kernel.tar.xz
+kata-static-coco-guest-components.tar.xz
+kata-static-kernel-confidential.tar.xz
+kata-static-pause-image.tar.xz
 kata-static-qemu.tar.xz
-kata-static-rootfs-initrd.tar.xz
+kata-static-rootfs-initrd-confidential.tar.xz
 kata-static-shim-v2.tar.xz
 kata-static-virtiofsd.tar.xz
 $ ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-builds.sh kata-artifacts
