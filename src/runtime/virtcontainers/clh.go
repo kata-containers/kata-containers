@@ -1467,7 +1467,12 @@ func (clh *cloudHypervisor) isClhRunning(timeout uint) (bool, error) {
 	timeStart := time.Now()
 	cl := clh.client()
 	for {
-		err := syscall.Kill(pid, syscall.Signal(0))
+		waitedPid, err := syscall.Wait4(pid, nil, syscall.WNOHANG, nil)
+		if waitedPid == pid && err == nil {
+			return false, nil
+		}
+
+		err = syscall.Kill(pid, syscall.Signal(0))
 		if err != nil {
 			return false, nil
 		}
