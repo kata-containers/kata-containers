@@ -2664,10 +2664,6 @@ type Knobs struct {
 
 	// IOMMUPlatform will enable IOMMU for supported devices
 	IOMMUPlatform bool
-
-	// Whether private memory should be used or not
-	// This is required by TDX, at least.
-	Private bool
 }
 
 // IOThread allows IO to be performed on a separate thread.
