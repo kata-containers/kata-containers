@@ -271,9 +271,18 @@ func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Sp
 	}
 	ctx = context.WithValue(ctx, vc.HypervisorPidKey{}, hid)
 
-	// Run pre-start OCI hooks.
 	err = EnterNetNS(sandbox.GetNetNs(), func() error {
-		return PreStartHooks(ctx, ociSpec, containerID, bundlePath)
+		// Run pre-start OCI hooks, in the runtime namespace.
+		if err := PreStartHooks(ctx, ociSpec, containerID, bundlePath); err != nil {
+			return err
+		}
+
+		// Run create runtime OCI hooks, in the runtime namespace.
+		if err := CreateRuntimeHooks(ctx, ociSpec, containerID, bundlePath); err != nil {
+			return err
+		}
+
+		return nil
 	})
 	if err != nil {
 		return vc.Process{}, err
