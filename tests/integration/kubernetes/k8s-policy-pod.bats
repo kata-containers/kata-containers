@@ -9,7 +9,7 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	policy_tests_enabled || skip "Policy tests are disabled."
+	auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
 
 	configmap_name="policy-configmap"
 	pod_name="policy-pod"
@@ -144,7 +144,7 @@ test_pod_policy_error() {
 }
 
 teardown() {
-	policy_tests_enabled || skip "Policy tests are disabled."
+	auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
 
 	# Debugging information. Don't print the "Message:" line because it contains a truncated policy log.
 	kubectl describe pod "${pod_name}" | grep -v "Message:"

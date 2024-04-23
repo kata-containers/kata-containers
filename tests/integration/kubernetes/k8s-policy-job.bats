@@ -9,7 +9,7 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-    policy_tests_enabled || skip "Policy tests are disabled."
+    auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
 
     get_pod_config_dir
 
@@ -171,7 +171,7 @@ test_job_policy_error() {
 }
 
 teardown() {
-    policy_tests_enabled || skip "Policy tests are disabled."
+    auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
 
     # Debugging information
     for pod_name in ${pod_names[@]}; do

@@ -9,7 +9,7 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-    policy_tests_enabled || skip "Policy tests are disabled."
+    auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
 
     replication_name="policy-rc-test"
     app_name="policy-nginx-rc"
@@ -156,7 +156,7 @@ test_rc_policy() {
 }
 
 teardown() {
-    policy_tests_enabled || skip "Policy tests are disabled."
+    auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
 
     # Debugging information
     kubectl describe rc "${replication_name}"
