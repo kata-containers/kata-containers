@@ -179,6 +179,14 @@ impl AgentService {
         &self,
         req: protocols::agent::CreateContainerRequest,
     ) -> Result<()> {
+        // create the proc_io first, in case there's some error occur below, thus we can make sure
+        // the io stream closed when error occur.
+        let proc_io = if AGENT_CONFIG.passfd_listener_port != 0 {
+            Some(passfd_io::take_io_streams(req.stdin_port, req.stdout_port, req.stderr_port).await)
+        } else {
+            None
+        };
+
         let cid = req.container_id.clone();
 
         kata_sys_util::validate::verify_id(&cid)?;
@@ -270,14 +278,6 @@ impl AgentService {
         let pipe_size = AGENT_CONFIG.container_pipe_size;
 
         let p = if let Some(p) = oci.process {
-            let proc_io = if AGENT_CONFIG.passfd_listener_port != 0 {
-                Some(
-                    passfd_io::take_io_streams(req.stdin_port, req.stdout_port, req.stderr_port)
-                        .await,
-                )
-            } else {
-                None
-            };
             Process::new(&sl(), &p, cid.as_str(), true, pipe_size, proc_io)?
         } else {
             info!(sl(), "no process configurations!");
@@ -376,6 +376,14 @@ impl AgentService {
 
         info!(sl(), "do_exec_process cid: {} eid: {}", cid, exec_id);
 
+        // create the proc_io first, in case there's some error occur below, thus we can make sure
+        // the io stream closed when error occur.
+        let proc_io = if AGENT_CONFIG.passfd_listener_port != 0 {
+            Some(passfd_io::take_io_streams(req.stdin_port, req.stdout_port, req.stderr_port).await)
+        } else {
+            None
+        };
+
         let mut sandbox = self.sandbox.lock().await;
         let mut process = req
             .process
@@ -387,13 +395,6 @@ impl AgentService {
 
         let pipe_size = AGENT_CONFIG.container_pipe_size;
         let ocip = rustjail::process_grpc_to_oci(&process);
-
-        // passfd_listener_port != 0 indicates passfd io mode
-        let proc_io = if AGENT_CONFIG.passfd_listener_port != 0 {
-            Some(passfd_io::take_io_streams(req.stdin_port, req.stdout_port, req.stderr_port).await)
-        } else {
-            None
-        };
 
         let p = Process::new(&sl(), &ocip, exec_id.as_str(), false, pipe_size, proc_io)?;
 

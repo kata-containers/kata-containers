@@ -54,11 +54,6 @@ pub struct ProcessIo {
     pub stdin: Option<VsockStream>,
     pub stdout: Option<VsockStream>,
     pub stderr: Option<VsockStream>,
-    // used to close stdin stream
-    pub close_stdin_tx: tokio::sync::watch::Sender<bool>,
-    pub close_stdin_rx: tokio::sync::watch::Receiver<bool>,
-    // wait for stdin copy task to finish
-    pub wg_input: WaitGroup,
     // used to wait for all process outputs to be copied to the vsock streams
     // only used when tty is used.
     pub wg_output: WaitGroup,
@@ -70,15 +65,10 @@ impl ProcessIo {
         stdout: Option<VsockStream>,
         stderr: Option<VsockStream>,
     ) -> Self {
-        let (close_stdin_tx, close_stdin_rx) = tokio::sync::watch::channel(false);
-
         ProcessIo {
             stdin,
             stdout,
             stderr,
-            close_stdin_tx,
-            close_stdin_rx,
-            wg_input: WaitGroup::new(),
             wg_output: WaitGroup::new(),
         }
     }
@@ -210,11 +200,9 @@ impl Process {
     }
 
     pub async fn close_stdin(&mut self) {
-        if let Some(proc_io) = &mut self.proc_io {
-            // notify io copy task to close stdin stream
-            let _ = proc_io.close_stdin_tx.send(true);
-            // wait for io copy task to finish
-            proc_io.wg_input.wait().await;
+        // stdin will be closed automatically in passfd-io senario
+        if self.proc_io.is_some() {
+            return;
         }
 
         close_process_stream!(self, term_master, TermMaster);

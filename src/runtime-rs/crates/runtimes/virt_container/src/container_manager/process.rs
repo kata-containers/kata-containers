@@ -5,7 +5,7 @@
 //
 
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::{fs::File, os::unix::fs::OpenOptionsExt, sync::Arc};
 
 use agent::Agent;
 use anyhow::{Context, Result};
@@ -33,6 +33,26 @@ pub struct Process {
     pub stdin: Option<String>,
     pub stdout: Option<String>,
     pub stderr: Option<String>,
+
+    // In linux, when a FIFO is opened and there are no writers, the reader
+    // will continuously receive the HUP event. This can be problematic.
+    // To avoid this problem, we open stdin in write mode and keep the stdin-writer
+    pub stdin_w: Option<File>,
+    // We need to open the stdout as the read mode and keep the open endpoint
+    // until the process is delete. otherwise,
+    // the process would exit before the containerd side open and read
+    // the stdout fifo, thus Kata would write all of the stdout contents into
+    // the stdout fifo and then closed the write endpoint. Then, containerd
+    // open the stdout fifo and try to read, since the write side had closed,
+    // thus containerd would block on the read forever.
+    // Here we keep the stdout/stderr read endpoint File in the process struct,
+    // which would be destroied when containerd send the delete rpc call,
+    // at this time the containerd had waited the stdout read return, thus it
+    // can make sure the contents in the stdout/stderr fifo wouldn't be lost.
+    pub stdout_r: Option<File>,
+    // The purpose is the same as stdout_r
+    pub stderr_r: Option<File>,
+
     pub terminal: bool,
 
     pub height: u32,
@@ -49,6 +69,24 @@ pub struct Process {
 
     // io streams using vsock fd passthrough feature
     pub passfd_io: Option<PassfdIo>,
+}
+
+fn open_fifo(path: &str, is_read: bool, is_write: bool) -> Result<File> {
+    let file = std::fs::OpenOptions::new()
+        .read(is_read)
+        .write(is_write)
+        .custom_flags(libc::O_NONBLOCK)
+        .open(path)?;
+
+    Ok(file)
+}
+
+fn open_fifo_read(path: &str) -> Result<File> {
+    open_fifo(path, true, false)
+}
+
+fn open_fifo_write(path: &str) -> Result<File> {
+    open_fifo(path, false, true)
 }
 
 impl Process {
@@ -71,6 +109,9 @@ impl Process {
             stdin,
             stdout,
             stderr,
+            stdin_w: None,
+            stdout_r: None,
+            stderr_r: None,
             terminal,
             height: 0,
             width: 0,
@@ -83,6 +124,25 @@ impl Process {
         }
     }
 
+    pub fn pre_fifos_open(&mut self) -> Result<()> {
+        if let Some(ref stdout) = self.stdout {
+            self.stdout_r = Some(open_fifo_read(stdout)?);
+        }
+
+        if let Some(ref stderr) = self.stderr {
+            self.stderr_r = Some(open_fifo_read(stderr)?);
+        }
+
+        Ok(())
+    }
+
+    pub fn post_fifos_open(&mut self) -> Result<()> {
+        if let Some(ref stdin) = self.stdin {
+            self.stdin_w = Some(open_fifo_write(stdin)?);
+        }
+        Ok(())
+    }
+
     /// Init the `passfd_io` struct and vsock connections for io to the agent.
     pub async fn passfd_io_init(&mut self, hvsock_uds_path: &str, passfd_port: u32) -> Result<()> {
         info!(self.logger, "passfd io init");
@@ -90,10 +150,12 @@ impl Process {
         let mut passfd_io =
             PassfdIo::new(self.stdin.clone(), self.stdout.clone(), self.stderr.clone()).await;
 
+        self.pre_fifos_open()?;
         passfd_io
             .open_and_passfd(hvsock_uds_path, passfd_port, self.terminal)
             .await
             .context("passfd connect")?;
+        self.post_fifos_open()?;
 
         self.passfd_io = Some(passfd_io);
 
@@ -176,10 +238,12 @@ impl Process {
     ) -> Result<()> {
         info!(self.logger, "start io and wait");
 
+        self.pre_fifos_open()?;
         // new shim io
         let shim_io = ShimIo::new(&self.stdin, &self.stdout, &self.stderr)
             .await
             .context("new shim io")?;
+        self.post_fifos_open()?;
 
         // start io copy for stdin
         let wgw_stdin = self.wg_stdin.worker();
@@ -337,6 +401,10 @@ impl Process {
 
     /// Close the stdin of the process in container.
     pub async fn close_io(&mut self, agent: Arc<dyn Agent>) {
+        // Close the stdin writer keeper so that
+        // the end signal could be received in the read side
+        self.stdin_w.take();
+
         // In passfd io mode, the stdin close and sync logic is handled
         // in the agent side.
         if self.passfd_io.is_none() {

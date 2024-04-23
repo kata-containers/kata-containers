@@ -20,9 +20,9 @@ async fn passfd_connect(uds: &str, port: u32, fd: OwnedFd) -> Result<u32> {
     let mut stream = UnixStream::connect(&uds).await.context("connect")?;
     stream.write_all(b"passfd\n").await.context("write all")?;
 
-    // We want the io connection keep connected when the containerd closed the io pipe,
-    // thus it can be attached on the io stream.
-    let buf = format!("{} keep", port);
+    // Since we have already keep stdin_w/stdout_r/stderr_r, "keep" of passfd is no longer needed.
+    // Also, we can't keep connection here or the stdin would be stuck.
+    let buf = format!("{}", port);
     stream
         .send_with_fd(buf.as_bytes(), &[fd.as_raw_fd()])
         .context("send port and fd")?;
@@ -78,16 +78,9 @@ impl PassfdIo {
         passfd_port: u32,
         terminal: bool,
     ) -> Result<()> {
-        // In linux, when a FIFO is opened and there are no writers, the reader
-        // will continuously receive the HUP event. This can be problematic
-        // when creating containers in detached mode, as the stdin FIFO writer
-        // is closed after the container is created, resulting in this situation.
-        //
-        // See: https://stackoverflow.com/questions/15055065/o-rdwr-on-named-pipes-with-poll
         if let Some(stdin) = &self.stdin {
             let fin = OpenOptions::new()
                 .read(true)
-                .write(true)
                 .custom_flags(libc::O_NONBLOCK)
                 .open(stdin)
                 .context("open stdin")?;
