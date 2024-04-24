@@ -1191,7 +1191,7 @@ pub struct QemuCmdLine<'a> {
 
 impl<'a> QemuCmdLine<'a> {
     pub fn new(id: &str, config: &'a HypervisorConfig) -> Result<QemuCmdLine<'a>> {
-        Ok(QemuCmdLine {
+        let mut qemu_cmd_line = QemuCmdLine {
             id: id.to_string(),
             config,
             kernel: Kernel::new(config)?,
@@ -1202,7 +1202,13 @@ impl<'a> QemuCmdLine<'a> {
             rtc: Rtc::new(),
             knobs: Knobs::new(config),
             devices: Vec::new(),
-        })
+        };
+
+        if config.device_info.enable_iommu {
+            qemu_cmd_line.add_iommu();
+        }
+
+        Ok(qemu_cmd_line)
     }
 
     fn bus_type(&self) -> VirtioBusType {
@@ -1211,6 +1217,17 @@ impl<'a> QemuCmdLine<'a> {
         } else {
             VirtioBusType::Pci
         }
+    }
+
+    fn add_iommu(&mut self) {
+        let dev_iommu = DeviceIntelIommu::new();
+        self.devices.push(Box::new(dev_iommu));
+
+        self.kernel
+            .params
+            .append(&mut KernelParams::from_string("intel_iommu=on iommu=pt"));
+
+        self.machine.set_kernel_irqchip("split");
     }
 
     pub fn add_virtiofs_share(
