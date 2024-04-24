@@ -44,7 +44,7 @@ trait ToQemuParams: Send + Sync {
     async fn qemu_params(&self) -> Result<Vec<String>>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum VirtioBusType {
     Pci,
     Ccw,
@@ -1047,6 +1047,7 @@ impl ToQemuParams for DeviceVirtioNet {
 struct DeviceVirtioSerial {
     id: String,
     bus_type: VirtioBusType,
+    iommu_platform: bool,
 }
 
 impl DeviceVirtioSerial {
@@ -1054,7 +1055,13 @@ impl DeviceVirtioSerial {
         DeviceVirtioSerial {
             id: id.to_owned(),
             bus_type,
+            iommu_platform: false,
         }
+    }
+
+    fn set_iommu_platform(&mut self, iommu_platform: bool) -> &mut Self {
+        self.iommu_platform = iommu_platform;
+        self
     }
 }
 
@@ -1064,6 +1071,9 @@ impl ToQemuParams for DeviceVirtioSerial {
         let mut params = Vec::new();
         params.push(format!("virtio-serial-{}", self.bus_type));
         params.push(format!("id={}", self.id));
+        if self.iommu_platform {
+            params.push("iommu_platform=on".to_owned());
+        }
         Ok(vec!["-device".to_owned(), params.join(",")])
     }
 }
@@ -1378,7 +1388,10 @@ impl<'a> QemuCmdLine<'a> {
     }
 
     pub fn add_console(&mut self, console_socket_path: &str) {
-        let serial_dev = DeviceVirtioSerial::new("serial0", self.bus_type());
+        let mut serial_dev = DeviceVirtioSerial::new("serial0", self.bus_type());
+        if self.config.device_info.enable_iommu_platform && self.bus_type() == VirtioBusType::Ccw {
+            serial_dev.set_iommu_platform(true);
+        }
         self.devices.push(Box::new(serial_dev));
 
         let chardev_name = "charconsole0";
