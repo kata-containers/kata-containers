@@ -379,7 +379,6 @@ async fn start_sandbox(
     #[cfg(feature = "guest-pull")]
     image::set_proxy_env_vars().await;
 
-    // TODO: initialize earlier.
     #[cfg(feature = "agent-policy")]
     if let Err(e) = initialize_policy().await {
         error!(logger, "Failed to initialize agent policy: {:?}", e);
