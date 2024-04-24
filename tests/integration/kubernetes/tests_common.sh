@@ -314,5 +314,5 @@ wait_for_blocked_request() {
 
 	command="kubectl describe pod ${pod} | grep \"${endpoint} is blocked by policy\""
 	info "Waiting ${wait_time} seconds for: ${command}"
-	waitForProcess "${wait_time}" "$sleep_time" "${command}" || return 1
+	waitForProcess "${wait_time}" "$sleep_time" "${command}" >/dev/null 2>/dev/null
 }
