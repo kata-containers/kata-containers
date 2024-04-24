@@ -9,13 +9,11 @@
 use crate::obj_meta;
 use crate::pod;
 use crate::policy;
-use crate::settings;
 use crate::utils::Config;
 use crate::yaml;
 
 use async_trait::async_trait;
 use base64::{engine::general_purpose, Engine as _};
-use protocols::agent;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -78,41 +76,11 @@ impl yaml::K8sResource for Secret {
         self.doc_mapping = doc_mapping.clone();
     }
 
-    fn get_sandbox_name(&self) -> Option<String> {
-        panic!("Unsupported");
-    }
-
-    fn get_container_mounts_and_storages(
-        &self,
-        _policy_mounts: &mut Vec<policy::KataMount>,
-        _storages: &mut Vec<agent::Storage>,
-        _container: &pod::Container,
-        _settings: &settings::Settings,
-    ) {
-        panic!("Unsupported");
-    }
-
     fn generate_policy(&self, _agent_policy: &policy::AgentPolicy) -> String {
         "".to_string()
     }
 
     fn serialize(&mut self, _policy: &str) -> String {
         serde_yaml::to_string(&self.doc_mapping).unwrap()
-    }
-
-    fn get_containers(&self) -> &Vec<pod::Container> {
-        panic!("Unsupported");
-    }
-
-    fn get_annotations(&self) -> &Option<BTreeMap<String, String>> {
-        panic!("Unsupported");
-    }
-
-    fn use_host_network(&self) -> bool {
-        panic!("Unsupported");
-    }
-
-    fn use_sandbox_pidns(&self) -> bool {
-        panic!("Unsupported");
     }
 }

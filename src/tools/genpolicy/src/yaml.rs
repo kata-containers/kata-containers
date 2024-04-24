@@ -49,26 +49,47 @@ pub trait K8sResource {
         silent_unsupported_fields: bool,
     );
 
-    fn generate_policy(&self, agent_policy: &policy::AgentPolicy) -> String;
-    fn serialize(&mut self, policy: &str) -> String;
+    fn generate_policy(&self, _agent_policy: &policy::AgentPolicy) -> String {
+        panic!("Unsupported");
+    }
 
-    fn get_sandbox_name(&self) -> Option<String>;
+    fn serialize(&mut self, _policy: &str) -> String {
+        panic!("Unsupported");
+    }
+
+    fn get_sandbox_name(&self) -> Option<String> {
+        panic!("Unsupported");
+    }
+
     fn get_namespace(&self) -> Option<String> {
         panic!("Unsupported");
     }
 
     fn get_container_mounts_and_storages(
         &self,
-        policy_mounts: &mut Vec<policy::KataMount>,
-        storages: &mut Vec<agent::Storage>,
-        container: &pod::Container,
-        settings: &settings::Settings,
-    );
+        _policy_mounts: &mut Vec<policy::KataMount>,
+        _storages: &mut Vec<agent::Storage>,
+        _container: &pod::Container,
+        _settings: &settings::Settings,
+    ) {
+        panic!("Unsupported");
+    }
 
-    fn get_containers(&self) -> &Vec<pod::Container>;
-    fn get_annotations(&self) -> &Option<BTreeMap<String, String>>;
-    fn use_host_network(&self) -> bool;
-    fn use_sandbox_pidns(&self) -> bool;
+    fn get_containers(&self) -> &Vec<pod::Container> {
+        panic!("Unsupported");
+    }
+
+    fn get_annotations(&self) -> &Option<BTreeMap<String, String>> {
+        panic!("Unsupported");
+    }
+
+    fn use_host_network(&self) -> bool {
+        panic!("Unsupported");
+    }
+
+    fn use_sandbox_pidns(&self) -> bool {
+        panic!("Unsupported");
+    }
 }
 
 /// See Reference / Kubernetes API / Common Definitions / LabelSelector.

@@ -18,7 +18,6 @@ use protocols::agent;
 use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
 use std::boxed;
-use std::collections::BTreeMap;
 use std::marker::{Send, Sync};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -48,10 +47,6 @@ impl yaml::K8sResource for List {
             resource.init(config, item, silent).await;
             self.resources.push(resource);
         }
-    }
-
-    fn get_sandbox_name(&self) -> Option<String> {
-        panic!("Unsupported");
     }
 
     fn get_container_mounts_and_storages(
@@ -84,21 +79,5 @@ impl yaml::K8sResource for List {
             self.items.push(doc_value.clone());
         }
         serde_yaml::to_string(&self).unwrap()
-    }
-
-    fn get_containers(&self) -> &Vec<pod::Container> {
-        panic!("Unsupported");
-    }
-
-    fn get_annotations(&self) -> &Option<BTreeMap<String, String>> {
-        panic!("Unsupported");
-    }
-
-    fn use_host_network(&self) -> bool {
-        panic!("Unsupported");
-    }
-
-    fn use_sandbox_pidns(&self) -> bool {
-        panic!("Unsupported");
     }
 }
