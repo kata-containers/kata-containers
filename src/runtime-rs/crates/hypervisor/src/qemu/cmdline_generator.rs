@@ -997,6 +997,7 @@ pub struct DeviceVirtioNet {
     disable_modern: bool,
 
     num_queues: u32,
+    iommu_platform: bool,
 }
 
 impl DeviceVirtioNet {
@@ -1007,6 +1008,7 @@ impl DeviceVirtioNet {
             mac_address,
             disable_modern: false,
             num_queues: 1,
+            iommu_platform: false,
         }
     }
 
@@ -1017,6 +1019,11 @@ impl DeviceVirtioNet {
 
     fn set_num_queues(&mut self, num_queues: u32) -> &mut Self {
         self.num_queues = num_queues;
+        self
+    }
+
+    fn set_iommu_platform(&mut self, iommu_platform: bool) -> &mut Self {
+        self.iommu_platform = iommu_platform;
         self
     }
 }
@@ -1034,6 +1041,9 @@ impl ToQemuParams for DeviceVirtioNet {
 
         if self.disable_modern {
             params.push("disable-modern=true".to_owned());
+        }
+        if self.iommu_platform {
+            params.push("iommu_platform=on".to_owned());
         }
 
         params.push("mq=on".to_owned());
@@ -1377,6 +1387,9 @@ impl<'a> QemuCmdLine<'a> {
 
         if should_disable_modern() {
             virtio_net_device.set_disable_modern(true);
+        }
+        if self.config.device_info.enable_iommu_platform && self.bus_type() == VirtioBusType::Ccw {
+            virtio_net_device.set_iommu_platform(true);
         }
         if self.config.network_info.network_queues > 1 {
             virtio_net_device.set_num_queues(self.config.network_info.network_queues);
