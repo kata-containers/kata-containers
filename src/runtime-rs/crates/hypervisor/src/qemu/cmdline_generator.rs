@@ -1278,7 +1278,7 @@ impl<'a> QemuCmdLine<'a> {
 
         let mut virtiofs_device = DeviceVhostUserFs::new(chardev_name, mount_tag, self.bus_type());
         virtiofs_device.set_queue_size(queue_size);
-        if self.config.device_info.enable_iommu_platform {
+        if self.config.device_info.enable_iommu_platform && self.bus_type() == VirtioBusType::Ccw {
             virtiofs_device.set_iommu_platform(true);
         }
         self.devices.push(Box::new(virtiofs_device));
