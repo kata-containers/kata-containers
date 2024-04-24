@@ -823,6 +823,7 @@ struct VhostVsock {
     vhostfd: tokio::fs::File,
     guest_cid: u32,
     disable_modern: bool,
+    iommu_platform: bool,
 }
 
 impl VhostVsock {
@@ -832,11 +833,17 @@ impl VhostVsock {
             vhostfd,
             guest_cid,
             disable_modern: false,
+            iommu_platform: false,
         }
     }
 
     fn set_disable_modern(&mut self, disable_modern: bool) -> &mut Self {
         self.disable_modern = disable_modern;
+        self
+    }
+
+    fn set_iommu_platform(&mut self, iommu_platform: bool) -> &mut Self {
+        self.iommu_platform = iommu_platform;
         self
     }
 }
@@ -848,6 +855,9 @@ impl ToQemuParams for VhostVsock {
         params.push(format!("vhost-vsock-{}", self.bus_type));
         if self.disable_modern {
             params.push("disable-modern=true".to_owned());
+        }
+        if self.iommu_platform {
+            params.push("iommu_platform=on".to_owned());
         }
         params.push(format!("vhostfd={}", self.vhostfd.as_raw_fd()));
         params.push(format!("guest-cid={}", self.guest_cid));
@@ -1280,6 +1290,10 @@ impl<'a> QemuCmdLine<'a> {
 
         if !self.config.disable_nesting_checks && should_disable_modern() {
             vhost_vsock_pci.set_disable_modern(true);
+        }
+
+        if self.config.device_info.enable_iommu_platform {
+            vhost_vsock_pci.set_iommu_platform(true);
         }
 
         self.devices.push(Box::new(vhost_vsock_pci));
