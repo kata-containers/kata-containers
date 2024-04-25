@@ -9,7 +9,7 @@ source "${BATS_TEST_DIRNAME}/tests_common.sh"
 source "${BATS_TEST_DIRNAME}/../../common.bash"
 
 SUPPORTED_TEE_HYPERVISORS=("qemu-sev" "qemu-snp" "qemu-tdx" "qemu-se")
-SUPPORTED_NON_TEE_HYPERVISORS=("qemu")
+SUPPORTED_NON_TEE_HYPERVISORS=("qemu-coco-dev")
 
 function setup_unencrypted_confidential_pod() {
 	get_pod_config_dir
@@ -57,7 +57,5 @@ function confidential_setup() {
 	ensure_yq
 	if ! check_hypervisor_for_confidential_tests "${KATA_HYPERVISOR}"; then
         return 1
-    elif [[ " ${SUPPORTED_NON_TEE_HYPERVISORS[*]} " =~ " ${KATA_HYPERVISOR} " ]]; then
-        info "Need to apply image annotations"
     fi
 }

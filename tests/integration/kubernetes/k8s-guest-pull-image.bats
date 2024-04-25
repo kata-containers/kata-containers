@@ -47,11 +47,6 @@ setup() {
         "io.containerd.cri.runtime-handler" \
         "kata-${KATA_HYPERVISOR}"
 
-    [[ " ${SUPPORTED_NON_TEE_HYPERVISORS} " =~ " ${KATA_HYPERVISOR} " ]] && \
-        set_metadata_annotation "$kata_pod_with_nydus_config" \
-            "io.katacontainers.config.hypervisor.image" \
-            "/opt/kata/share/kata-containers/kata-containers-confidential.img"
-
     # For debug sake
     echo "Pod $kata_pod_with_nydus_config file:"
     cat $kata_pod_with_nydus_config
@@ -116,11 +111,6 @@ setup() {
     set_metadata_annotation "$kata_pod_with_nydus_config" \
         "io.containerd.cri.runtime-handler" \
         "kata-${KATA_HYPERVISOR}"
-
-    [[ " ${SUPPORTED_NON_TEE_HYPERVISORS} " =~ " ${KATA_HYPERVISOR} " ]] && \
-        set_metadata_annotation "$kata_pod_with_nydus_config" \
-            "io.katacontainers.config.hypervisor.image" \
-            "/opt/kata/share/kata-containers/kata-containers-confidential.img"
 
     # For debug sake
     echo "Pod $kata_pod_with_nydus_config file:"
@@ -199,11 +189,6 @@ setup() {
     set_metadata_annotation "$kata_pod_with_nydus_config" \
         "io.containerd.cri.runtime-handler" \
         "kata-${KATA_HYPERVISOR}"
-
-    [[ " ${SUPPORTED_NON_TEE_HYPERVISORS} " =~ " ${KATA_HYPERVISOR} " ]] && \
-        set_metadata_annotation "$kata_pod_with_nydus_config" \
-            "io.katacontainers.config.hypervisor.image" \
-            "/opt/kata/share/kata-containers/kata-containers-confidential.img"
 
     # For debug sake
     echo "Pod $kata_pod_with_nydus_config file:"
