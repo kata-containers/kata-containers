@@ -276,6 +276,24 @@ pub fn init_rootfs(
         }
     }
 
+    spec.annotations.iter().for_each(|(k, v)| {
+        if k == "io.katacontainers.pkg.oci.container_type" && v != "pod_sandbox" {
+            let err = mount(
+                Some("configfs"),
+                format!("{}/sys/kernel/config", rootfs).as_str(),
+                Some("configfs"),
+                MsFlags::MS_NODEV | MsFlags::MS_NOSUID | MsFlags::MS_NOEXEC | MsFlags::MS_RELATIME,
+                None::<&str>,
+            );        
+            match err {
+                Ok(_) => (),
+                Err(e) => {
+                    log_child!(cfd_log, "mount /sys/kernel/config configs error: {}", e.to_string());
+                }
+            }
+        }
+    });
+
     let olddir = unistd::getcwd()?;
     unistd::chdir(rootfs)?;
 
