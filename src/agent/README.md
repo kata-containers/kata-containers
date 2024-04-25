@@ -125,6 +125,7 @@ The kata agent has the ability to configure agent options in guest kernel comman
 | `agent.debug_console` | Debug console flag | Allow to connect guest OS running inside hypervisor Connect using `kata-runtime exec <sandbox-id>` | boolean | `false` |
 | `agent.debug_console_vport` | Debug console port | Allow to specify the `vsock` port to connect the debugging console | integer | `0` |
 | `agent.devmode` | Developer mode | Allow the agent process to coredump | boolean | `false` |
+| `agent.expose_configfs` | `expose-configs` configuration | Whether `/sys/kernel/config` is exposed to the container | boolean | `false` |
 | `agent.guest_components_rest_api` | `api-server-rest` configuration | Select the features that the API Server Rest attestation component will run with. Valid values are `all`, `attestation`, `resource` | string | `resource` |
 | `agent.guest_components_procs` | guest-components processes | Attestation-related processes that should be spawned as children of the guest. Valid values are `none`, `attestation-agent`, `confidential-data-hub` (implies `attestation-agent`), `api-server-rest` (implies `attestation-agent` and `confidential-data-hub`) | string | `api-server-rest` |
 | `agent.hotplug_timeout` | Hotplug timeout | Allow to configure hotplug timeout(seconds) of block devices | integer | `3` |

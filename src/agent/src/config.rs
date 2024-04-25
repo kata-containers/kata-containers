@@ -30,6 +30,7 @@ const UNIFIED_CGROUP_HIERARCHY_OPTION: &str = "systemd.unified_cgroup_hierarchy"
 const CONFIG_FILE: &str = "agent.config_file";
 const GUEST_COMPONENTS_REST_API_OPTION: &str = "agent.guest_components_rest_api";
 const GUEST_COMPONENTS_PROCS_OPTION: &str = "agent.guest_components_procs";
+const EXPOSE_CONFIGFS: &str = "agent.expose_configfs";
 #[cfg(feature = "guest-pull")]
 const IMAGE_REGISTRY_AUTH_OPTION: &str = "agent.image_registry_auth";
 const SECURE_STORAGE_INTEGRITY_OPTION: &str = "agent.secure_storage_integrity";
@@ -139,6 +140,7 @@ pub struct AgentConfig {
     pub unified_cgroup_hierarchy: bool,
     pub tracing: bool,
     pub supports_seccomp: bool,
+    pub expose_configfs: bool,
     pub https_proxy: String,
     pub no_proxy: String,
     pub guest_components_rest_api: GuestComponentsFeatures,
@@ -274,6 +276,7 @@ impl Default for AgentConfig {
             unified_cgroup_hierarchy: false,
             tracing: false,
             supports_seccomp: rpc::have_seccomp(),
+            expose_configfs: false,
             https_proxy: String::from(""),
             no_proxy: String::from(""),
             guest_components_rest_api: GuestComponentsFeatures::default(),
@@ -458,6 +461,13 @@ impl AgentConfig {
             }
 
             parse_cmdline_param!(param, TRACE_MODE_OPTION, config.tracing, get_bool_value);
+
+            parse_cmdline_param!(
+                param,
+                EXPOSE_CONFIGFS,
+                config.expose_configfs,
+                get_bool_value
+            );
 
             // parse cmdline options
             parse_cmdline_param!(param, LOG_LEVEL_OPTION, config.log_level, get_log_level);
@@ -900,6 +910,7 @@ mod tests {
             server_addr: &'a str,
             unified_cgroup_hierarchy: bool,
             tracing: bool,
+            expose_configfs: bool,
             https_proxy: &'a str,
             no_proxy: &'a str,
             guest_components_rest_api: GuestComponentsFeatures,
@@ -929,6 +940,7 @@ mod tests {
                     server_addr: TEST_SERVER_ADDR,
                     unified_cgroup_hierarchy: false,
                     tracing: false,
+                    expose_configfs: false,
                     https_proxy: "",
                     no_proxy: "",
                     guest_components_rest_api: GuestComponentsFeatures::default(),
@@ -1320,6 +1332,16 @@ mod tests {
                 ..Default::default()
             },
             TestData {
+                contents: "",
+                expose_configfs: false,
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.expose_configfs=true",
+                expose_configfs: true,
+                ..Default::default()
+            },
+            TestData {
                 contents: "agent.https_proxy=http://proxy.url.com:81/",
                 https_proxy: "http://proxy.url.com:81/",
                 ..Default::default()
@@ -1518,6 +1540,7 @@ mod tests {
             assert_eq!(d.container_pipe_size, config.container_pipe_size, "{}", msg);
             assert_eq!(d.server_addr, config.server_addr, "{}", msg);
             assert_eq!(d.tracing, config.tracing, "{}", msg);
+            assert_eq!(d.expose_configfs, config.expose_configfs, "{}", msg);
             assert_eq!(d.https_proxy, config.https_proxy, "{}", msg);
             assert_eq!(d.no_proxy, config.no_proxy, "{}", msg);
             assert_eq!(

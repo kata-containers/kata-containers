@@ -167,6 +167,7 @@ pub fn init_rootfs(
     cpath: &HashMap<String, String>,
     mounts: &HashMap<String, String>,
     bind_device: bool,
+    expose_configfs: bool,
 ) -> Result<()> {
     lazy_static::initialize(&OPTIONS);
     lazy_static::initialize(&PROPAGATION);
@@ -285,6 +286,31 @@ pub fn init_rootfs(
                     None::<&str>,
                 )?;
             }
+        }
+    }
+
+    if expose_configfs {
+        if let Some(annotations) = spec.annotations() {
+            annotations.iter().for_each(|(k, v)| {
+                if k == "io.katacontainers.pkg.oci.container_type" && v != "pod_sandbox" {
+                    if let Err(e) = mount(
+                        Some("configfs"),
+                        format!("{}/sys/kernel/config", rootfs).as_str(),
+                        Some("configfs"),
+                        MsFlags::MS_NODEV
+                            | MsFlags::MS_NOSUID
+                            | MsFlags::MS_NOEXEC
+                            | MsFlags::MS_RELATIME,
+                        None::<&str>,
+                    ) {
+                        log_child!(
+                            cfd_log,
+                            "mount /sys/kernel/config configs error: {}",
+                            e.to_string()
+                        );
+                    }
+                }
+            });
         }
     }
 
@@ -1185,7 +1211,7 @@ mod tests {
         let mounts = HashMap::new();
 
         // there is no spec.linux, should fail
-        let ret = init_rootfs(stdout_fd, &spec, &cpath, &mounts, true);
+        let ret = init_rootfs(stdout_fd, &spec, &cpath, &mounts, true, false);
         assert!(
             ret.is_err(),
             "Should fail: there is no spec.linux. Got: {:?}",
@@ -1194,7 +1220,7 @@ mod tests {
 
         // there is no spec.Root, should fail
         spec.set_linux(Some(oci::Linux::default()));
-        let ret = init_rootfs(stdout_fd, &spec, &cpath, &mounts, true);
+        let ret = init_rootfs(stdout_fd, &spec, &cpath, &mounts, true, false);
         assert!(
             ret.is_err(),
             "should fail: there is no spec.Root. Got: {:?}",
@@ -1211,7 +1237,7 @@ mod tests {
         spec.set_root(Some(oci_root));
 
         // there is no spec.mounts, but should pass
-        let ret = init_rootfs(stdout_fd, &spec, &cpath, &mounts, true);
+        let ret = init_rootfs(stdout_fd, &spec, &cpath, &mounts, true, false);
         assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
         let _ = remove_dir_all(rootfs.path().join("dev"));
         let _ = create_dir(rootfs.path().join("dev"));
@@ -1228,7 +1254,7 @@ mod tests {
         spec.mounts_mut().as_mut().unwrap().push(oci_mount);
 
         // destination doesn't start with /, should fail
-        let ret = init_rootfs(stdout_fd, &spec, &cpath, &mounts, true);
+        let ret = init_rootfs(stdout_fd, &spec, &cpath, &mounts, true, false);
         assert!(
             ret.is_err(),
             "Should fail: destination doesn't start with '/'. Got: {:?}",
@@ -1246,7 +1272,7 @@ mod tests {
         oci_mount.set_options(Some(vec!["shared".into()]));
         spec.mounts_mut().as_mut().unwrap().push(oci_mount);
 
-        let ret = init_rootfs(stdout_fd, &spec, &cpath, &mounts, true);
+        let ret = init_rootfs(stdout_fd, &spec, &cpath, &mounts, true, false);
         assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
         spec.mounts_mut().as_mut().unwrap().pop();
         let _ = remove_dir_all(rootfs.path().join("dev"));
@@ -1260,7 +1286,18 @@ mod tests {
         oci_mount.set_options(Some(vec!["shared".into()]));
         spec.mounts_mut().as_mut().unwrap().push(oci_mount);
 
-        let ret = init_rootfs(stdout_fd, &spec, &cpath, &mounts, true);
+        let ret = init_rootfs(stdout_fd, &spec, &cpath, &mounts, true, false);
+        assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
+
+        // expose_configfs = true
+        let mut oci_mount = oci::Mount::default();
+        oci_mount.set_destination("/dev".into());
+        oci_mount.set_typ(Some("bind".into()));
+        oci_mount.set_source(Some("/dev".into()));
+        oci_mount.set_options(Some(vec!["shared".into()]));
+        spec.mounts_mut().as_mut().unwrap().push(oci_mount);
+
+        let ret = init_rootfs(stdout_fd, &spec, &cpath, &mounts, true, true);
         assert!(ret.is_ok(), "Should pass. Got: {:?}", ret);
     }
 

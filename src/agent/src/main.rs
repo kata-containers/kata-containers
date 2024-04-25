@@ -346,7 +346,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
 
     if let Some(SubCommand::Init {}) = args.subcmd {
         reset_sigpipe();
-        rustjail::container::init_child();
+        rustjail::container::init_child(AGENT_CONFIG.expose_configfs);
         exit(0);
     }
 
