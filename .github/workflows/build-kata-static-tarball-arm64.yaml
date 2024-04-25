@@ -79,6 +79,7 @@ jobs:
           ARTEFACT_REGISTRY_USERNAME: ${{ github.actor }}
           ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           TARGET_BRANCH: ${{ inputs.target-branch }}
+          RELEASE: ${{ if inputs.stage == 'release' && 'yes' || 'no' }}
 
       - name: store-artifact ${{ matrix.asset }}
         uses: actions/upload-artifact@v4
