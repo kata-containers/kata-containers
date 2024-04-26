@@ -5,7 +5,7 @@ The following is an overview of the different installation methods available.
 ## Prerequisites
 
 Kata Containers requires nested virtualization or bare metal. Check 
-[hardware requirements](/src/runtime/README.md#hardware-requirements) to see if your system is capable of running Kata 
+[hardware requirements](./../../README.md#hardware-requirements) to see if your system is capable of running Kata 
 Containers.
 
 ## Packaged installation methods
