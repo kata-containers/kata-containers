@@ -1074,6 +1074,40 @@ impl ToQemuParams for DeviceVirtconsole {
     }
 }
 
+// RTC represents a qemu Real Time Clock configuration.
+#[derive(Debug)]
+struct Rtc {
+    // Base is the RTC start time.
+    base: String,
+
+    // Clock is the is the RTC clock driver.
+    clock: String,
+
+    // DriftFix is the drift fixing mechanism.
+    driftfix: String,
+}
+
+impl Rtc {
+    fn new() -> Rtc {
+        Rtc {
+            base: "utc".to_owned(),
+            clock: "host".to_owned(),
+            driftfix: "slew".to_owned(),
+        }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for Rtc {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push(format!("base={}", self.base));
+        params.push(format!("clock={}", self.clock));
+        params.push(format!("driftfix={}", self.driftfix));
+        Ok(vec!["-rtc".to_owned(), params.join(",")])
+    }
+}
+
 fn is_running_in_vm() -> Result<bool> {
     let res = read_to_string("/proc/cpuinfo")?
         .lines()
@@ -1108,6 +1142,7 @@ pub struct QemuCmdLine<'a> {
     smp: Smp,
     machine: Machine,
     cpu: Cpu,
+    rtc: Rtc,
 
     knobs: Knobs,
 
@@ -1124,6 +1159,7 @@ impl<'a> QemuCmdLine<'a> {
             smp: Smp::new(config),
             machine: Machine::new(config),
             cpu: Cpu::new(config),
+            rtc: Rtc::new(),
             knobs: Knobs::new(config),
             devices: Vec::new(),
         })
@@ -1299,6 +1335,7 @@ impl<'a> QemuCmdLine<'a> {
         result.append(&mut self.machine.qemu_params().await?);
         result.append(&mut self.cpu.qemu_params().await?);
         result.append(&mut self.memory.qemu_params().await?);
+        result.append(&mut self.rtc.qemu_params().await?);
 
         for device in &self.devices {
             result.append(&mut device.qemu_params().await?);
