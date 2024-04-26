@@ -381,12 +381,12 @@ languages:
   golang:
     description: "Google's 'go' language"
     notes: "'version' is the default minimum version used by this project."
-    version: "1.19.3"
+    version: "1.22.2"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.19.3"
+      newest-version: "1.22.2"
 
   rust:
     description: "Rust language"
@@ -402,12 +402,12 @@ languages:
     description: "golangci-lint"
     notes: "'version' is the default minimum version used by this project."
     url: "github.com/golangci/golangci-lint"
-    version: "1.50.1"
+    version: "1.57.2"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.50.1"
+      newest-version: "1.57.2"
 
 specs:
   description: "Details of important specifications"
