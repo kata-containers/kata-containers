@@ -553,9 +553,10 @@ build_opa_from_source()
 	local opa_repo_url=$1
 	opa_version="$(get_package_version_from_kata_yaml externals.open-policy-agent.version)"
 
-	export PATH="$PATH:/usr/local/go/bin"
-	export GOOS="${TARGET_OS}"
-	[ ${CROSS_BUILD} == "yes" ] && export GOARCH="${TARGET_ARCH}" || export GOARCH="$(uname -m)"
+	if [ ${CROSS_BUILD} == "yes" ]; then
+		export GOOS="${TARGET_OS}"
+		export GOARCH="${TARGET_ARCH}}"
+	fi
 
 	current_dir="$(pwd)"
 	pushd $(mktemp -d) &>/dev/null
@@ -564,7 +565,7 @@ build_opa_from_source()
 		cd opa
 		export WASM_ENABLED=0
 		export DOCKER_RUNNING=0
-		make ci-build-linux-static || return 1
+		make ci-go-ci-build-linux-static || return 1
 
 		info "Copy OPA binary to ${current_dir}/opa"
 		binary_name="_release/${opa_version##v}/opa_${GOOS}_${GOARCH}_static"

@@ -6,7 +6,6 @@ ARG IMAGE_REGISTRY=docker.io
 FROM ${IMAGE_REGISTRY}/ubuntu:@OS_VERSION@
 @SET_PROXY@
 
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 # makedev tries to mknod from postinst
 RUN [ -x /usr/bin/systemd-detect-virt ] || ( echo "echo docker" >/usr/bin/systemd-detect-virt && chmod +x /usr/bin/systemd-detect-virt )
 # hadolint ignore=DL3009,SC2046
@@ -30,9 +29,7 @@ RUN apt-get update && \
     multistrap \
     musl-tools \
     protobuf-compiler \
-    xz-utils && \
-    ( go_version="@GO_VERSION@" && [ "${go_version}" = "" ] || ( \
-    echo "Installing go @GO_VERSION@" && curl -sSL "https://golang.org/dl/go@GO_VERSION@.linux-@ARCH@.tar.gz" | tar -xz -C /usr/local ))
+    xz-utils
 # aarch64 requires this name -- link for all
 RUN if [ ! -f "/usr/bin/$(uname -m)-linux-musl-gcc" ]; then ln -s /usr/bin/musl-gcc "/usr/bin/$(uname -m)-linux-musl-gcc"; fi
 
