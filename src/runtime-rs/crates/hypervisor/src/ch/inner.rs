@@ -48,7 +48,7 @@ pub struct CloudHypervisorInner {
     /// List of devices that will be added to the VM once it boots
     pub(crate) pending_devices: Vec<DeviceType>,
 
-    pub(crate) _capabilities: Capabilities,
+    pub(crate) capabilities: Capabilities,
 
     pub(crate) shutdown_tx: Option<Sender<bool>>,
     pub(crate) shutdown_rx: Option<Receiver<bool>>,
@@ -74,16 +74,18 @@ pub struct CloudHypervisorInner {
     // None.
     pub(crate) ch_features: Option<Vec<String>>,
 
-    /// Size of memory block of guest OS in MB (currently unused)
-    pub(crate) _guest_memory_block_size_mb: u32,
+    // hotplug memory size
+    pub(crate) mem_hotplug_size_mb: u32,
+    /// Size of memory block of guest OS in MB
+    pub(crate) guest_memory_block_size_mb: u32,
 }
 
 const CH_DEFAULT_TIMEOUT_SECS: u32 = 10;
 
 impl CloudHypervisorInner {
     pub fn new() -> Self {
-        let mut capabilities = Capabilities::new();
-        capabilities.set(
+        let mut caps = Capabilities::new();
+        caps.set(
             CapabilityBits::BlockDeviceSupport
                 | CapabilityBits::BlockDeviceHotplugSupport
                 | CapabilityBits::FsSharingSupport
@@ -109,13 +111,14 @@ impl CloudHypervisorInner {
             netns: None,
             pending_devices: vec![],
             device_ids: HashMap::<String, String>::new(),
-            _capabilities: capabilities,
+            capabilities: caps,
             shutdown_tx: Some(tx),
             shutdown_rx: Some(rx),
             tasks: None,
             guest_protection_to_use: GuestProtection::NoProtection,
             ch_features: None,
-            _guest_memory_block_size_mb: 0,
+            mem_hotplug_size_mb: 0,
+            guest_memory_block_size_mb: 0,
         }
     }
 
@@ -183,7 +186,7 @@ impl Persist for CloudHypervisorInner {
 
             ..Default::default()
         };
-        ch._capabilities = ch.capabilities().await?;
+        ch.capabilities = ch.capabilities().await?;
 
         Ok(ch)
     }

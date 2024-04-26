@@ -100,6 +100,31 @@ pub async fn cloud_hypervisor_vm_blockdev_add(
     .await?
 }
 
+#[derive(Deserialize, Serialize, Default, Debug)]
+pub struct VmResizeData {
+    pub desired_vcpus: Option<u8>,
+    pub desired_ram: Option<u64>,
+    pub desired_balloon: Option<u64>,
+}
+
+pub async fn cloud_hypervisor_vm_resize(
+    mut socket: UnixStream,
+    resize_data: VmResizeData,
+) -> Result<Option<String>> {
+    task::spawn_blocking(move || -> Result<Option<String>> {
+        let response = simple_api_full_command_and_response(
+            &mut socket,
+            "PUT",
+            "vm.resize",
+            Some(&serde_json::to_string(&resize_data)?),
+        )
+        .map_err(|e| anyhow!(e))?;
+
+        Ok(response)
+    })
+    .await?
+}
+
 pub async fn cloud_hypervisor_vm_netdev_add(
     mut socket: UnixStream,
     net_config: NetConfig,

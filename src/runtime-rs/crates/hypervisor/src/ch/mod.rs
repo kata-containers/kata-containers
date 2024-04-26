@@ -179,8 +179,8 @@ impl Hypervisor for CloudHypervisor {
     }
 
     async fn resize_memory(&self, new_mem_mb: u32) -> Result<(u32, MemoryConfig)> {
-        let inner = self.inner.read().await;
-        inner.resize_memory(new_mem_mb)
+        let mut inner = self.inner.write().await;
+        inner.resize_memory(new_mem_mb).await
     }
 
     async fn get_passfd_listener_addr(&self) -> Result<(String, u32)> {
