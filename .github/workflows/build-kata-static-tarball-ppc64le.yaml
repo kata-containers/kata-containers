@@ -28,7 +28,6 @@ jobs:
       matrix:
         asset:
           - agent
-          - agent-opa
           - kernel
           - qemu
           - rootfs-initrd

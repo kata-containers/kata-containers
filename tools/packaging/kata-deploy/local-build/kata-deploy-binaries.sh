@@ -89,7 +89,6 @@ options:
 --build=<asset>       :
 	all
 	agent
-	agent-opa
 	agent-ctl
 	boot-image-se
 	coco-guest-components
@@ -217,9 +216,6 @@ install_cached_tarball_component() {
 get_agent_tarball_path() {
 	agent_local_build_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
 	agent_tarball_name="kata-static-agent.tar.xz"
-	if [ "${AGENT_POLICY:-no}" = "yes" ]; then
-		agent_tarball_name="kata-static-agent-opa.tar.xz"
-	fi
 
 	echo "${agent_local_build_dir}/${agent_tarball_name}"
 }
@@ -322,6 +318,7 @@ install_image() {
 	fi
 
 	export AGENT_TARBALL=$(get_agent_tarball_path)
+
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
 
@@ -391,6 +388,7 @@ install_initrd() {
 	fi
 
 	export AGENT_TARBALL=$(get_agent_tarball_path)
+
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
 
@@ -786,10 +784,6 @@ install_agent() {
 	DESTDIR="${destdir}" AGENT_POLICY="yes" PULL_TYPE=${PULL_TYPE} "${agent_builder}"
 }
 
-install_agent_opa() {
-	install_agent
-}
-
 install_coco_guest_components() {
 	latest_artefact="$(get_from_kata_deps "externals.coco-guest-components.version")-$(get_from_kata_deps "externals.coco-guest-components.toolchain")"
 	latest_builder_image="$(get_coco_guest_components_image_name)"
@@ -983,8 +977,6 @@ handle_build() {
 
 	agent) install_agent ;;
 
-	agent-opa) install_agent_opa ;;
-
 	agent-ctl) install_agent_ctl ;;
 
 	boot-image-se) install_se_image ;;
@@ -1134,7 +1126,6 @@ main() {
 	local silent
 	build_targets=(
 		agent
-		agent-opa
 		agent-ctl
 		cloud-hypervisor
 		coco-guest-components
