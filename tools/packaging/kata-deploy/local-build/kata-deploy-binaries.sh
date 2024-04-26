@@ -765,9 +765,7 @@ install_ovmf_sev() {
 	install_ovmf "sev" "edk2-sev.tar.gz"
 }
 
-install_agent_helper() {
-	agent_policy="${1:-no}"
-
+install_agent() {
 	latest_artefact="$(git log -1 --pretty=format:"%h" ${repo_root_dir}/src/agent)"
 	latest_builder_image="$(get_agent_image_name)"
 
@@ -785,15 +783,11 @@ install_agent_helper() {
 	export GPERF_URL="$(get_from_kata_deps "externals.gperf.url")"
 
 	info "build static agent"
-	DESTDIR="${destdir}" AGENT_POLICY=${agent_policy} PULL_TYPE=${PULL_TYPE} "${agent_builder}"
-}
-
-install_agent() {
-	install_agent_helper
+	DESTDIR="${destdir}" AGENT_POLICY="yes" PULL_TYPE=${PULL_TYPE} "${agent_builder}"
 }
 
 install_agent_opa() {
-	install_agent_helper "yes"
+	install_agent
 }
 
 install_coco_guest_components() {
