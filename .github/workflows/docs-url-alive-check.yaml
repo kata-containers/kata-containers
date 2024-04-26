@@ -14,7 +14,7 @@ jobs:
     - name: Install Go
       uses: actions/setup-go@v2
       with:
-        go-version: 1.19.3
+        go-version: 1.22.2
       env:
         GOPATH: ${{ runner.workspace }}/kata-containers
     - name: Set env

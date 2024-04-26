@@ -5,10 +5,11 @@
 run:
   concurrency: 4
   deadline: 600s
-  skip-dirs:
+
+issues:
+  exclude-dirs:
     - vendor
-# Ignore auto-generated protobuf code.
-  skip-files:
+  exclude-files:
     - ".*\\.pb\\.go$"
 
 linters:
