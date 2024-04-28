@@ -198,6 +198,9 @@ pub struct VfioConfig {
     /// outside of the container mount namespace
     /// virt_path: Option<(index, virt_path_name)>
     pub virt_path: Option<(u64, String)>,
+
+    /// NVIDIA GPUs within the same clique ID are capable of direct P2P
+    pub clique_id: Option<u8>,
 }
 
 #[derive(Clone, Debug, Default)]

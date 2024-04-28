@@ -19,7 +19,7 @@ use hypervisor::{
 };
 use kata_types::config::{hypervisor::TopologyConfigInfo, TomlConfig};
 use kata_types::mount::Mount;
-use oci::{Linux, LinuxCpu, LinuxResources};
+use oci::{LinuxCpu, LinuxResources};
 use persist::sandbox_persist::Persist;
 use tokio::{runtime, sync::RwLock};
 
@@ -291,7 +291,12 @@ impl ResourceManagerInner {
             .await
     }
 
-    pub async fn handler_devices(&self, _cid: &str, linux: &Linux) -> Result<Vec<Device>> {
+    pub async fn handler_devices(&self, _cid: &str, spec: &oci::Spec) -> Result<Vec<Device>> {
+        let annotations = &spec.annotations;
+        let linux = spec
+            .linux
+            .as_ref()
+            .context("OCI spec missing linux field")?;
         let mut devices = vec![];
         for d in linux.devices.iter() {
             match d.r#type.as_str() {
@@ -337,10 +342,15 @@ impl ResourceManagerInner {
                         continue;
                     }
 
+                    // we get gpudirect p2p clique id from spec annotations
+                    let x_gpudirect_clique = annotations.get("x-nv-gpudirect-clique");
+                    let clique_id = x_gpudirect_clique.and_then(|s| s.parse::<u8>().ok());
+
                     let dev_info = DeviceConfig::VfioCfg(VfioConfig {
                         host_path,
                         dev_type: "c".to_string(),
                         hostdev_prefix: "vfio_device".to_owned(),
+                        clique_id,
                         ..Default::default()
                     });
 

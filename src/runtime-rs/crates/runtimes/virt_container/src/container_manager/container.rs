@@ -149,14 +149,9 @@ impl Container {
         }
         spec.mounts = oci_mounts;
 
-        let linux = spec
-            .linux
-            .as_ref()
-            .context("OCI spec missing linux field")?;
-
         let devices_agent = self
             .resource_manager
-            .handler_devices(&config.container_id, linux)
+            .handler_devices(&config.container_id, &spec)
             .await?;
 
         // update vcpus, mems and host cgroups
