@@ -64,12 +64,37 @@ impl ConfigMap {
 
         None
     }
+
+    pub fn get_key_value_pairs(&self) -> Option<Vec<String>> {
+        //eg ["key1=value1", "key2=value2"]
+        self.data
+            .as_ref()?
+            .keys()
+            .map(|key| {
+                let value = self.data.as_ref().unwrap().get(key).unwrap();
+                format!("{key}={value}")
+            })
+            .collect::<Vec<String>>()
+            .into()
+    }
 }
 
 pub fn get_value(value_from: &pod::EnvVarSource, config_maps: &Vec<ConfigMap>) -> Option<String> {
     for config_map in config_maps {
         if let Some(value) = config_map.get_value(value_from) {
             return Some(value);
+        }
+    }
+
+    None
+}
+
+pub fn get_values(config_map_name: &str, config_maps: &Vec<ConfigMap>) -> Option<Vec<String>> {
+    for config_map in config_maps {
+        if let Some(existing_configmap_name) = &config_map.metadata.name {
+            if config_map_name == existing_configmap_name {
+                return config_map.get_key_value_pairs();
+            }
         }
     }
 

@@ -15,6 +15,11 @@ setup() {
 	pod_name="policy-pod"
 
 	get_pod_config_dir
+	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
+	
+	exec_command="printenv data-3"
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
+	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
 
 	correct_configmap_yaml="${pod_config_dir}/k8s-policy-configmap.yaml"
 	pre_generate_configmap_yaml="${pod_config_dir}/k8s-policy-configmap-pre-generation.yaml"
@@ -34,7 +39,7 @@ setup() {
 		cp "${correct_pod_yaml}" "${pre_generate_pod_yaml}"
 
 		# Add policy to the correct pod yaml file
-		auto_generate_policy "${pod_config_dir}" "${correct_pod_yaml}" "${correct_configmap_yaml}"
+		auto_generate_policy "${policy_settings_dir}" "${correct_pod_yaml}" "${correct_configmap_yaml}"
 	fi
 
     # Start each test case with a copy of the correct yaml files.
@@ -55,6 +60,14 @@ wait_for_pod_ready() {
 
 @test "Successful pod with auto-generated policy" {
 	wait_for_pod_ready
+}
+
+@test "Able to read env variables sourced from configmap using envFrom" {
+	kubectl create -f "${correct_configmap_yaml}"
+	kubectl create -f "${correct_pod_yaml}"
+	kubectl wait --for=condition=Ready "--timeout=${timeout}" pod "${pod_name}"
+	expected_env_var=$(kubectl exec "${pod_name}" -- printenv data-3)
+	[ "$expected_env_var" = "value-3" ] || fail "expected_env_var is not equal to value-3"
 }
 
 @test "Successful pod with auto-generated policy and runtimeClassName filter" {
