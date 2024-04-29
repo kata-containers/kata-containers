@@ -44,7 +44,7 @@ trait ToQemuParams: Send + Sync {
     async fn qemu_params(&self) -> Result<Vec<String>>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum VirtioBusType {
     Pci,
     Ccw,
@@ -282,6 +282,7 @@ struct Machine {
     accel: String,
     options: String,
     nvdimm: bool,
+    kernel_irqchip: Option<String>,
 
     is_nvdimm_supported: bool,
     memory_backend: Option<String>,
@@ -309,6 +310,7 @@ impl Machine {
             accel: "kvm".to_owned(),
             options: config.machine_info.machine_accelerators.clone(),
             nvdimm: false,
+            kernel_irqchip: None,
             is_nvdimm_supported,
             memory_backend: None,
         }
@@ -326,6 +328,11 @@ impl Machine {
         self.memory_backend = Some(mem_backend.to_owned());
         self
     }
+
+    fn set_kernel_irqchip(&mut self, kernel_irqchip: &str) -> &mut Self {
+        self.kernel_irqchip = Some(kernel_irqchip.to_owned());
+        self
+    }
 }
 
 #[async_trait]
@@ -339,6 +346,9 @@ impl ToQemuParams for Machine {
         }
         if self.nvdimm {
             params.push("nvdimm=on".to_owned());
+        }
+        if let Some(kernel_irqchip) = &self.kernel_irqchip {
+            params.push(format!("kernel_irqchip={}", kernel_irqchip));
         }
         if let Some(mem_backend) = &self.memory_backend {
             params.push(format!("memory-backend={}", mem_backend));
@@ -813,6 +823,7 @@ struct VhostVsock {
     vhostfd: tokio::fs::File,
     guest_cid: u32,
     disable_modern: bool,
+    iommu_platform: bool,
 }
 
 impl VhostVsock {
@@ -822,11 +833,17 @@ impl VhostVsock {
             vhostfd,
             guest_cid,
             disable_modern: false,
+            iommu_platform: false,
         }
     }
 
     fn set_disable_modern(&mut self, disable_modern: bool) -> &mut Self {
         self.disable_modern = disable_modern;
+        self
+    }
+
+    fn set_iommu_platform(&mut self, iommu_platform: bool) -> &mut Self {
+        self.iommu_platform = iommu_platform;
         self
     }
 }
@@ -838,6 +855,9 @@ impl ToQemuParams for VhostVsock {
         params.push(format!("vhost-vsock-{}", self.bus_type));
         if self.disable_modern {
             params.push("disable-modern=true".to_owned());
+        }
+        if self.iommu_platform {
+            params.push("iommu_platform=on".to_owned());
         }
         params.push(format!("vhostfd={}", self.vhostfd.as_raw_fd()));
         params.push(format!("guest-cid={}", self.guest_cid));
@@ -977,6 +997,7 @@ pub struct DeviceVirtioNet {
     disable_modern: bool,
 
     num_queues: u32,
+    iommu_platform: bool,
 }
 
 impl DeviceVirtioNet {
@@ -987,6 +1008,7 @@ impl DeviceVirtioNet {
             mac_address,
             disable_modern: false,
             num_queues: 1,
+            iommu_platform: false,
         }
     }
 
@@ -997,6 +1019,11 @@ impl DeviceVirtioNet {
 
     fn set_num_queues(&mut self, num_queues: u32) -> &mut Self {
         self.num_queues = num_queues;
+        self
+    }
+
+    fn set_iommu_platform(&mut self, iommu_platform: bool) -> &mut Self {
+        self.iommu_platform = iommu_platform;
         self
     }
 }
@@ -1015,6 +1042,9 @@ impl ToQemuParams for DeviceVirtioNet {
         if self.disable_modern {
             params.push("disable-modern=true".to_owned());
         }
+        if self.iommu_platform {
+            params.push("iommu_platform=on".to_owned());
+        }
 
         params.push("mq=on".to_owned());
         params.push(format!("vectors={}", 2 * self.num_queues + 2));
@@ -1027,6 +1057,7 @@ impl ToQemuParams for DeviceVirtioNet {
 struct DeviceVirtioSerial {
     id: String,
     bus_type: VirtioBusType,
+    iommu_platform: bool,
 }
 
 impl DeviceVirtioSerial {
@@ -1034,7 +1065,13 @@ impl DeviceVirtioSerial {
         DeviceVirtioSerial {
             id: id.to_owned(),
             bus_type,
+            iommu_platform: false,
         }
+    }
+
+    fn set_iommu_platform(&mut self, iommu_platform: bool) -> &mut Self {
+        self.iommu_platform = iommu_platform;
+        self
     }
 }
 
@@ -1044,6 +1081,9 @@ impl ToQemuParams for DeviceVirtioSerial {
         let mut params = Vec::new();
         params.push(format!("virtio-serial-{}", self.bus_type));
         params.push(format!("id={}", self.id));
+        if self.iommu_platform {
+            params.push("iommu_platform=on".to_owned());
+        }
         Ok(vec!["-device".to_owned(), params.join(",")])
     }
 }
@@ -1108,6 +1148,36 @@ impl ToQemuParams for Rtc {
     }
 }
 
+#[derive(Debug)]
+struct DeviceIntelIommu {
+    intremap: bool,
+    device_iotlb: bool,
+    caching_mode: bool,
+}
+
+impl DeviceIntelIommu {
+    fn new() -> DeviceIntelIommu {
+        DeviceIntelIommu {
+            intremap: true,
+            device_iotlb: true,
+            caching_mode: true,
+        }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for DeviceIntelIommu {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push("intel-iommu".to_owned());
+        let to_onoff = |b| if b { "on" } else { "off" };
+        params.push(format!("intremap={}", to_onoff(self.intremap)));
+        params.push(format!("device-iotlb={}", to_onoff(self.device_iotlb)));
+        params.push(format!("caching-mode={}", to_onoff(self.caching_mode)));
+        Ok(vec!["-device".to_owned(), params.join(",")])
+    }
+}
+
 fn is_running_in_vm() -> Result<bool> {
     let res = read_to_string("/proc/cpuinfo")?
         .lines()
@@ -1151,7 +1221,7 @@ pub struct QemuCmdLine<'a> {
 
 impl<'a> QemuCmdLine<'a> {
     pub fn new(id: &str, config: &'a HypervisorConfig) -> Result<QemuCmdLine<'a>> {
-        Ok(QemuCmdLine {
+        let mut qemu_cmd_line = QemuCmdLine {
             id: id.to_string(),
             config,
             kernel: Kernel::new(config)?,
@@ -1162,7 +1232,13 @@ impl<'a> QemuCmdLine<'a> {
             rtc: Rtc::new(),
             knobs: Knobs::new(config),
             devices: Vec::new(),
-        })
+        };
+
+        if config.device_info.enable_iommu {
+            qemu_cmd_line.add_iommu();
+        }
+
+        Ok(qemu_cmd_line)
     }
 
     fn bus_type(&self) -> VirtioBusType {
@@ -1171,6 +1247,17 @@ impl<'a> QemuCmdLine<'a> {
         } else {
             VirtioBusType::Pci
         }
+    }
+
+    fn add_iommu(&mut self) {
+        let dev_iommu = DeviceIntelIommu::new();
+        self.devices.push(Box::new(dev_iommu));
+
+        self.kernel
+            .params
+            .append(&mut KernelParams::from_string("intel_iommu=on iommu=pt"));
+
+        self.machine.set_kernel_irqchip("split");
     }
 
     pub fn add_virtiofs_share(
@@ -1191,7 +1278,7 @@ impl<'a> QemuCmdLine<'a> {
 
         let mut virtiofs_device = DeviceVhostUserFs::new(chardev_name, mount_tag, self.bus_type());
         virtiofs_device.set_queue_size(queue_size);
-        if self.config.device_info.enable_iommu_platform {
+        if self.config.device_info.enable_iommu_platform && self.bus_type() == VirtioBusType::Ccw {
             virtiofs_device.set_iommu_platform(true);
         }
         self.devices.push(Box::new(virtiofs_device));
@@ -1223,6 +1310,10 @@ impl<'a> QemuCmdLine<'a> {
 
         if !self.config.disable_nesting_checks && should_disable_modern() {
             vhost_vsock_pci.set_disable_modern(true);
+        }
+
+        if self.config.device_info.enable_iommu_platform {
+            vhost_vsock_pci.set_iommu_platform(true);
         }
 
         self.devices.push(Box::new(vhost_vsock_pci));
@@ -1297,6 +1388,9 @@ impl<'a> QemuCmdLine<'a> {
         if should_disable_modern() {
             virtio_net_device.set_disable_modern(true);
         }
+        if self.config.device_info.enable_iommu_platform && self.bus_type() == VirtioBusType::Ccw {
+            virtio_net_device.set_iommu_platform(true);
+        }
         if self.config.network_info.network_queues > 1 {
             virtio_net_device.set_num_queues(self.config.network_info.network_queues);
         }
@@ -1307,7 +1401,10 @@ impl<'a> QemuCmdLine<'a> {
     }
 
     pub fn add_console(&mut self, console_socket_path: &str) {
-        let serial_dev = DeviceVirtioSerial::new("serial0", self.bus_type());
+        let mut serial_dev = DeviceVirtioSerial::new("serial0", self.bus_type());
+        if self.config.device_info.enable_iommu_platform && self.bus_type() == VirtioBusType::Ccw {
+            serial_dev.set_iommu_platform(true);
+        }
         self.devices.push(Box::new(serial_dev));
 
         let chardev_name = "charconsole0";
