@@ -4,6 +4,7 @@
 package vsock
 
 import (
+	"context"
 	"net"
 	"os"
 	"time"
@@ -29,7 +30,7 @@ func (l *listener) SetDeadline(t time.Time) error { return l.c.SetDeadline(t) }
 // Accept accepts a single connection from the listener, and sets up
 // a net.Conn backed by conn.
 func (l *listener) Accept() (net.Conn, error) {
-	c, rsa, err := l.c.Accept(0)
+	c, rsa, err := l.c.Accept(context.Background(), 0)
 	if err != nil {
 		return nil, err
 	}

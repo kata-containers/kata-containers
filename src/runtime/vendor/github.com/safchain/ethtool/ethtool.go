@@ -19,10 +19,10 @@
  *
  */
 
-// Package ethtool  aims to provide a library giving a simple access to the
-// Linux SIOCETHTOOL ioctl operations. It can be used to retrieve informations
-// from a network device like statistics, driver related informations or
-// even the peer of a VETH interface.
+// The ethtool package aims to provide a library that provides easy access
+// to the Linux SIOCETHTOOL ioctl operations. It can be used to retrieve information
+// from a network device such as statistics, driver related information or even
+// the peer of a VETH interface.
 package ethtool
 
 import (
@@ -47,12 +47,14 @@ const (
 
 // ethtool stats related constants.
 const (
-	ETH_GSTRING_LEN  = 32
-	ETH_SS_STATS     = 1
-	ETH_SS_FEATURES  = 4
-	ETHTOOL_GDRVINFO = 0x00000003
-	ETHTOOL_GSTRINGS = 0x0000001b
-	ETHTOOL_GSTATS   = 0x0000001d
+	ETH_GSTRING_LEN = 32
+	ETH_SS_STATS    = 1
+	ETH_SS_FEATURES = 4
+
+	// CMD supported
+	ETHTOOL_GDRVINFO = 0x00000003 /* Get driver info. */
+	ETHTOOL_GSTRINGS = 0x0000001b /* get specified string set */
+	ETHTOOL_GSTATS   = 0x0000001d /* get NIC-specific statistics */
 	// other CMDs from ethtool-copy.h of ethtool-3.5 package
 	ETHTOOL_GSET      = 0x00000001 /* Get settings. */
 	ETHTOOL_SSET      = 0x00000002 /* Set settings. */
@@ -66,17 +68,18 @@ const (
 	ETHTOOL_GLINK         = 0x0000000a
 	ETHTOOL_GMODULEINFO   = 0x00000042 /* Get plug-in module information */
 	ETHTOOL_GMODULEEEPROM = 0x00000043 /* Get plug-in module eeprom */
-	ETHTOOL_GPERMADDR     = 0x00000020
+	ETHTOOL_GPERMADDR     = 0x00000020 /* Get permanent hardware address */
 	ETHTOOL_GFEATURES     = 0x0000003a /* Get device offload settings */
 	ETHTOOL_SFEATURES     = 0x0000003b /* Change device offload settings */
 	ETHTOOL_GFLAGS        = 0x00000025 /* Get flags bitmap(ethtool_value) */
 	ETHTOOL_GSSET_INFO    = 0x00000037 /* Get string set info */
+	ETHTOOL_GET_TS_INFO   = 0x00000041 /* Get time stamping and PHC info */
 )
 
 // MAX_GSTRINGS maximum number of stats entries that ethtool can
 // retrieve currently.
 const (
-	MAX_GSTRINGS       = 16384
+	MAX_GSTRINGS       = 32768
 	MAX_FEATURE_BLOCKS = (MAX_GSTRINGS + 32 - 1) / 32
 	EEPROM_LEN         = 640
 	PERMADDR_LEN       = 32
@@ -189,6 +192,88 @@ type Coalesce struct {
 	TxCoalesceUsecsHigh      uint32
 	TxMaxCoalescedFramesHigh uint32
 	RateSampleInterval       uint32
+}
+
+const (
+	SOF_TIMESTAMPING_TX_HARDWARE  = (1 << 0)
+	SOF_TIMESTAMPING_TX_SOFTWARE  = (1 << 1)
+	SOF_TIMESTAMPING_RX_HARDWARE  = (1 << 2)
+	SOF_TIMESTAMPING_RX_SOFTWARE  = (1 << 3)
+	SOF_TIMESTAMPING_SOFTWARE     = (1 << 4)
+	SOF_TIMESTAMPING_SYS_HARDWARE = (1 << 5)
+	SOF_TIMESTAMPING_RAW_HARDWARE = (1 << 6)
+	SOF_TIMESTAMPING_OPT_ID       = (1 << 7)
+	SOF_TIMESTAMPING_TX_SCHED     = (1 << 8)
+	SOF_TIMESTAMPING_TX_ACK       = (1 << 9)
+	SOF_TIMESTAMPING_OPT_CMSG     = (1 << 10)
+	SOF_TIMESTAMPING_OPT_TSONLY   = (1 << 11)
+	SOF_TIMESTAMPING_OPT_STATS    = (1 << 12)
+	SOF_TIMESTAMPING_OPT_PKTINFO  = (1 << 13)
+	SOF_TIMESTAMPING_OPT_TX_SWHW  = (1 << 14)
+	SOF_TIMESTAMPING_BIND_PHC     = (1 << 15)
+)
+
+const (
+	/*
+	 * No outgoing packet will need hardware time stamping;
+	 * should a packet arrive which asks for it, no hardware
+	 * time stamping will be done.
+	 */
+	HWTSTAMP_TX_OFF = iota
+
+	/*
+	 * Enables hardware time stamping for outgoing packets;
+	 * the sender of the packet decides which are to be
+	 * time stamped by setting %SOF_TIMESTAMPING_TX_SOFTWARE
+	 * before sending the packet.
+	 */
+	HWTSTAMP_TX_ON
+
+	/*
+	 * Enables time stamping for outgoing packets just as
+	 * HWTSTAMP_TX_ON does, but also enables time stamp insertion
+	 * directly into Sync packets. In this case, transmitted Sync
+	 * packets will not received a time stamp via the socket error
+	 * queue.
+	 */
+	HWTSTAMP_TX_ONESTEP_SYNC
+
+	/*
+	 * Same as HWTSTAMP_TX_ONESTEP_SYNC, but also enables time
+	 * stamp insertion directly into PDelay_Resp packets. In this
+	 * case, neither transmitted Sync nor PDelay_Resp packets will
+	 * receive a time stamp via the socket error queue.
+	 */
+	HWTSTAMP_TX_ONESTEP_P2P
+)
+
+const (
+	HWTSTAMP_FILTER_NONE                = iota /* time stamp no incoming packet at all */
+	HWTSTAMP_FILTER_ALL                        /* time stamp any incoming packet */
+	HWTSTAMP_FILTER_SOME                       /* return value: time stamp all packets requested plus some others */
+	HWTSTAMP_FILTER_PTP_V1_L4_EVENT            /* PTP v1, UDP, any kind of event packet */
+	HWTSTAMP_FILTER_PTP_V1_L4_SYNC             /* PTP v1, UDP, Sync packet */
+	HWTSTAMP_FILTER_PTP_V1_L4_DELAY_REQ        /* PTP v1, UDP, Delay_req packet */
+	HWTSTAMP_FILTER_PTP_V2_L4_EVENT            /* PTP v2, UDP, any kind of event packet */
+	HWTSTAMP_FILTER_PTP_V2_L4_SYNC             /* PTP v2, UDP, Sync packet */
+	HWTSTAMP_FILTER_PTP_V2_L4_DELAY_REQ        /* PTP v2, UDP, Delay_req packet */
+	HWTSTAMP_FILTER_PTP_V2_L2_EVENT            /* 802.AS1, Ethernet, any kind of event packet */
+	HWTSTAMP_FILTER_PTP_V2_L2_SYNC             /* 802.AS1, Ethernet, Sync packet */
+	HWTSTAMP_FILTER_PTP_V2_L2_DELAY_REQ        /* 802.AS1, Ethernet, Delay_req packet */
+	HWTSTAMP_FILTER_PTP_V2_EVENT               /* PTP v2/802.AS1, any layer, any kind of event packet */
+	HWTSTAMP_FILTER_PTP_V2_SYNC                /* PTP v2/802.AS1, any layer, Sync packet */
+	HWTSTAMP_FILTER_PTP_V2_DELAY_REQ           /* PTP v2/802.AS1, any layer, Delay_req packet */
+	HWTSTAMP_FILTER_NTP_ALL                    /* NTP, UDP, all versions and packet modes */
+)
+
+type TimestampingInformation struct {
+	Cmd            uint32
+	SoTimestamping uint32 /* SOF_TIMESTAMPING_* bitmask */
+	PhcIndex       int32
+	TxTypes        uint32 /* HWTSTAMP_TX_* */
+	txReserved     [3]uint32
+	RxFilters      uint32 /* HWTSTAMP_FILTER_ */
+	rxReserved     [3]uint32
 }
 
 type ethtoolGStrings struct {
@@ -336,6 +421,15 @@ func (e *Ethtool) GetCoalesce(intf string) (Coalesce, error) {
 	return coalesce, nil
 }
 
+// GetTimestampingInformation returns the PTP timestamping information for the given interface name.
+func (e *Ethtool) GetTimestampingInformation(intf string) (TimestampingInformation, error) {
+	ts, err := e.getTimestampingInformation(intf)
+	if err != nil {
+		return TimestampingInformation{}, err
+	}
+	return ts, nil
+}
+
 // PermAddr returns permanent address of the given interface name.
 func (e *Ethtool) PermAddr(intf string) (string, error) {
 	permAddr, err := e.getPermAddr(intf)
@@ -420,6 +514,18 @@ func (e *Ethtool) getCoalesce(intf string) (Coalesce, error) {
 	}
 
 	return coalesce, nil
+}
+
+func (e *Ethtool) getTimestampingInformation(intf string) (TimestampingInformation, error) {
+	ts := TimestampingInformation{
+		Cmd: ETHTOOL_GET_TS_INFO,
+	}
+
+	if err := e.ioctl(intf, uintptr(unsafe.Pointer(&ts))); err != nil {
+		return TimestampingInformation{}, err
+	}
+
+	return ts, nil
 }
 
 func (e *Ethtool) getPermAddr(intf string) (ethtoolPermAddr, error) {
