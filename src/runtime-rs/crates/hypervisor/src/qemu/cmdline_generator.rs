@@ -1268,7 +1268,6 @@ pub struct QemuCmdLine<'a> {
     smp: Smp,
     machine: Machine,
     cpu: Cpu,
-    rtc: Rtc,
 
     knobs: Knobs,
 
@@ -1285,7 +1284,6 @@ impl<'a> QemuCmdLine<'a> {
             smp: Smp::new(config),
             machine: Machine::new(config),
             cpu: Cpu::new(config),
-            rtc: Rtc::new(),
             knobs: Knobs::new(config),
             devices: Vec::new(),
         };
@@ -1502,7 +1500,6 @@ impl<'a> QemuCmdLine<'a> {
         result.append(&mut self.machine.qemu_params().await?);
         result.append(&mut self.cpu.qemu_params().await?);
         result.append(&mut self.memory.qemu_params().await?);
-        result.append(&mut self.rtc.qemu_params().await?);
 
         for device in &self.devices {
             result.append(&mut device.qemu_params().await?);
