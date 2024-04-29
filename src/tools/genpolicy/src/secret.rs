@@ -58,12 +58,39 @@ impl Secret {
 
         None
     }
+
+    pub fn get_key_value_pairs(&self) -> Option<Vec<String>> {
+        //eg ["key1=secret1", "key2=secret2"]
+        self.data
+            .as_ref()?
+            .keys()
+            .map(|key| {
+                let value = self.data.as_ref().unwrap().get(key).unwrap();
+                let value_bytes = general_purpose::STANDARD.decode(value).unwrap();
+                let value_string = std::str::from_utf8(&value_bytes).unwrap();
+                format!("{key}={value_string}")
+            })
+            .collect::<Vec<String>>()
+            .into()
+    }
 }
 
 pub fn get_value(value_from: &pod::EnvVarSource, secrets: &Vec<Secret>) -> Option<String> {
     for secret in secrets {
         if let Some(value) = secret.get_value(value_from) {
             return Some(value);
+        }
+    }
+
+    None
+}
+
+pub fn get_values(secret_name: &str, secrets: &Vec<Secret>) -> Option<Vec<String>> {
+    for secret in secrets {
+        if let Some(existing_secret_name) = &secret.metadata.name {
+            if existing_secret_name == secret_name {
+                return secret.get_key_value_pairs();
+            }
         }
     }
 
