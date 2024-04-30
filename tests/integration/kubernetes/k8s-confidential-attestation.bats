@@ -31,12 +31,6 @@ setup() {
 	# debugging.
 	set_node "$K8S_TEST_YAML" "$node"
 
-	if [[ " ${SUPPORTED_NON_TEE_HYPERVISORS} " =~ " ${KATA_HYPERVISOR} " ]]; then
-		set_metadata_annotation "${K8S_TEST_YAML}" \
-			"io.katacontainers.config.hypervisor.image" \
-			"/opt/kata/share/kata-containers/kata-containers-confidential.img"
-	fi
-
 	kbs_set_resource "default" "aa" "key" "$test_key"
 	kbs_set_allow_all_resources
 }

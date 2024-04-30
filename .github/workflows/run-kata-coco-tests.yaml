@@ -193,7 +193,7 @@ jobs:
       fail-fast: false
       matrix:
         vmm:
-          - qemu
+          - qemu-coco-dev
         snapshotter:
           - nydus
         pull-type:
