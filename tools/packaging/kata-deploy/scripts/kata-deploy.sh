@@ -268,7 +268,7 @@ function configure_different_shims_base() {
 			cloud-hypervisor | dragonball)
 				ln -sf /opt/kata/runtime-rs/bin/containerd-shim-kata-v2 "${shim_file}" ;;
 			*)
-				[ "/opt/kata/bin/containerd-shim-kata-v2" != "${shim_file}" ] || ln -sf /opt/kata/bin/containerd-shim-kata-v2 "${shim_file}" ;;
+				[ "/opt/kata/bin/containerd-shim-kata-v2" != "${shim_file}" ] && ln -sf /opt/kata/bin/containerd-shim-kata-v2 "${shim_file}" ;;
 		esac
 
 		chmod +x "$shim_file"
@@ -292,11 +292,11 @@ function restore_shim() {
 }
 
 function cleanup_different_shims_base() {
-	local default_shim_file="/usr/local/bin/containerd-shim-kata-v2"
+	local default_shim_file="${INSTALL_PREFIX}/containerd-shim-kata-v2"
 
 	for shim in "${shims[@]}"; do
 		local shim_binary="containerd-shim-kata-${shim}-v2"
-		local shim_file="/usr/local/bin/${shim_binary}"
+		local shim_file="${INSTALL_PREFIX/}/${shim_binary}"
 
 		rm  -f "${shim_file}"
 
@@ -318,7 +318,7 @@ function configure_crio_runtime() {
 
 	local config_path=$(get_kata_containers_config_path "${shim}")
 
-	local kata_path="/usr/local/bin/containerd-shim-${runtime}-v2"
+	local kata_path="${INSTALL_PREFIX}/containerd-shim-${runtime}-v2"
 	local kata_conf="crio.runtime.runtimes.${runtime}"
 	local kata_config_path="${config_path}/${configuration}.toml"
 
@@ -404,7 +404,7 @@ function configure_containerd() {
 	mkdir -p /etc/containerd/
 
 	
-	if [ -f "$containerd_conf_file" ] && [ -z ${CONTAINERD_DROP_IN_CONF} ]; then
+	if [ -f "$containerd_conf_file" ] && [ -z "${CONTAINERD_DROP_IN_CONF}" ]; then
 		# backup the config.toml only if a backup doesn't already exist (don't override original)
 		cp -n "$containerd_conf_file" "$containerd_conf_file_backup"
 	fi
@@ -580,7 +580,6 @@ function main() {
             SystemdCgroup = true
 
 EOF
-
 	else
 		# runtime == containerd
 		if [ ! -f "$containerd_conf_file" ] && [ -d $(dirname "$containerd_conf_file") ] && \
