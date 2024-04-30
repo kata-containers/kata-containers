@@ -8,6 +8,7 @@ Name | Type | Description | Notes
 **Iommu** | Pointer to **bool** |  | [optional] [default to false]
 **PciSegment** | Pointer to **int32** |  | [optional] 
 **Id** | Pointer to **string** |  | [optional] 
+**XNvGpudirectClique** | Pointer to **int32** |  | [optional] 
 
 ## Methods
 
@@ -122,6 +123,31 @@ SetId sets Id field to given value.
 `func (o *DeviceConfig) HasId() bool`
 
 HasId returns a boolean if a field has been set.
+
+### GetXNvGpudirectClique
+
+`func (o *DeviceConfig) GetXNvGpudirectClique() int32`
+
+GetXNvGpudirectClique returns the XNvGpudirectClique field if non-nil, zero value otherwise.
+
+### GetXNvGpudirectCliqueOk
+
+`func (o *DeviceConfig) GetXNvGpudirectCliqueOk() (*int32, bool)`
+
+GetXNvGpudirectCliqueOk returns a tuple with the XNvGpudirectClique field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetXNvGpudirectClique
+
+`func (o *DeviceConfig) SetXNvGpudirectClique(v int32)`
+
+SetXNvGpudirectClique sets XNvGpudirectClique field to given value.
+
+### HasXNvGpudirectClique
+
+`func (o *DeviceConfig) HasXNvGpudirectClique() bool`
+
+HasXNvGpudirectClique returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

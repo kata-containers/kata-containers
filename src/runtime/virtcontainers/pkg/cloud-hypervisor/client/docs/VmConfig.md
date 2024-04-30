@@ -7,6 +7,7 @@ Name | Type | Description | Notes
 **Cpus** | Pointer to [**CpusConfig**](CpusConfig.md) |  | [optional] 
 **Memory** | Pointer to [**MemoryConfig**](MemoryConfig.md) |  | [optional] 
 **Payload** | [**PayloadConfig**](PayloadConfig.md) |  | 
+**RateLimitGroups** | Pointer to [**[]RateLimitGroupConfig**](RateLimitGroupConfig.md) |  | [optional] 
 **Disks** | Pointer to [**[]DiskConfig**](DiskConfig.md) |  | [optional] 
 **Net** | Pointer to [**[]NetConfig**](NetConfig.md) |  | [optional] 
 **Rng** | Pointer to [**RngConfig**](RngConfig.md) |  | [optional] 
@@ -15,6 +16,7 @@ Name | Type | Description | Notes
 **Pmem** | Pointer to [**[]PmemConfig**](PmemConfig.md) |  | [optional] 
 **Serial** | Pointer to [**ConsoleConfig**](ConsoleConfig.md) |  | [optional] 
 **Console** | Pointer to [**ConsoleConfig**](ConsoleConfig.md) |  | [optional] 
+**DebugConsole** | Pointer to [**DebugConsoleConfig**](DebugConsoleConfig.md) |  | [optional] 
 **Devices** | Pointer to [**[]DeviceConfig**](DeviceConfig.md) |  | [optional] 
 **Vdpa** | Pointer to [**[]VdpaConfig**](VdpaConfig.md) |  | [optional] 
 **Vsock** | Pointer to [**VsockConfig**](VsockConfig.md) |  | [optional] 
@@ -22,6 +24,8 @@ Name | Type | Description | Notes
 **Numa** | Pointer to [**[]NumaConfig**](NumaConfig.md) |  | [optional] 
 **Iommu** | Pointer to **bool** |  | [optional] [default to false]
 **Watchdog** | Pointer to **bool** |  | [optional] [default to false]
+**Pvpanic** | Pointer to **bool** |  | [optional] [default to false]
+**PciSegments** | Pointer to [**[]PciSegmentConfig**](PciSegmentConfig.md) |  | [optional] 
 **Platform** | Pointer to [**PlatformConfig**](PlatformConfig.md) |  | [optional] 
 **Tpm** | Pointer to [**TpmConfig**](TpmConfig.md) |  | [optional] 
 
@@ -113,6 +117,31 @@ and a boolean to check if the value has been set.
 
 SetPayload sets Payload field to given value.
 
+
+### GetRateLimitGroups
+
+`func (o *VmConfig) GetRateLimitGroups() []RateLimitGroupConfig`
+
+GetRateLimitGroups returns the RateLimitGroups field if non-nil, zero value otherwise.
+
+### GetRateLimitGroupsOk
+
+`func (o *VmConfig) GetRateLimitGroupsOk() (*[]RateLimitGroupConfig, bool)`
+
+GetRateLimitGroupsOk returns a tuple with the RateLimitGroups field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetRateLimitGroups
+
+`func (o *VmConfig) SetRateLimitGroups(v []RateLimitGroupConfig)`
+
+SetRateLimitGroups sets RateLimitGroups field to given value.
+
+### HasRateLimitGroups
+
+`func (o *VmConfig) HasRateLimitGroups() bool`
+
+HasRateLimitGroups returns a boolean if a field has been set.
 
 ### GetDisks
 
@@ -314,6 +343,31 @@ SetConsole sets Console field to given value.
 
 HasConsole returns a boolean if a field has been set.
 
+### GetDebugConsole
+
+`func (o *VmConfig) GetDebugConsole() DebugConsoleConfig`
+
+GetDebugConsole returns the DebugConsole field if non-nil, zero value otherwise.
+
+### GetDebugConsoleOk
+
+`func (o *VmConfig) GetDebugConsoleOk() (*DebugConsoleConfig, bool)`
+
+GetDebugConsoleOk returns a tuple with the DebugConsole field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetDebugConsole
+
+`func (o *VmConfig) SetDebugConsole(v DebugConsoleConfig)`
+
+SetDebugConsole sets DebugConsole field to given value.
+
+### HasDebugConsole
+
+`func (o *VmConfig) HasDebugConsole() bool`
+
+HasDebugConsole returns a boolean if a field has been set.
+
 ### GetDevices
 
 `func (o *VmConfig) GetDevices() []DeviceConfig`
@@ -488,6 +542,56 @@ SetWatchdog sets Watchdog field to given value.
 `func (o *VmConfig) HasWatchdog() bool`
 
 HasWatchdog returns a boolean if a field has been set.
+
+### GetPvpanic
+
+`func (o *VmConfig) GetPvpanic() bool`
+
+GetPvpanic returns the Pvpanic field if non-nil, zero value otherwise.
+
+### GetPvpanicOk
+
+`func (o *VmConfig) GetPvpanicOk() (*bool, bool)`
+
+GetPvpanicOk returns a tuple with the Pvpanic field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetPvpanic
+
+`func (o *VmConfig) SetPvpanic(v bool)`
+
+SetPvpanic sets Pvpanic field to given value.
+
+### HasPvpanic
+
+`func (o *VmConfig) HasPvpanic() bool`
+
+HasPvpanic returns a boolean if a field has been set.
+
+### GetPciSegments
+
+`func (o *VmConfig) GetPciSegments() []PciSegmentConfig`
+
+GetPciSegments returns the PciSegments field if non-nil, zero value otherwise.
+
+### GetPciSegmentsOk
+
+`func (o *VmConfig) GetPciSegmentsOk() (*[]PciSegmentConfig, bool)`
+
+GetPciSegmentsOk returns a tuple with the PciSegments field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetPciSegments
+
+`func (o *VmConfig) SetPciSegments(v []PciSegmentConfig)`
+
+SetPciSegments sets PciSegments field to given value.
+
+### HasPciSegments
+
+`func (o *VmConfig) HasPciSegments() bool`
+
+HasPciSegments returns a boolean if a field has been set.
 
 ### GetPlatform
 
