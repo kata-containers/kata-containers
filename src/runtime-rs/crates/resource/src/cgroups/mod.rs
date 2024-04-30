@@ -222,7 +222,7 @@ impl CgroupsResource {
         // All vCPU threads move to the sandbox controller.
         for tid in tids {
             self.cgroup_manager
-                .add_task(CgroupPid { pid: *tid as u64 })?
+                .add_task_by_tgid(CgroupPid { pid: *tid as u64 })?
         }
 
         Ok(())
