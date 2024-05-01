@@ -48,7 +48,7 @@ ATTESTER="none"
 sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
 	--env DESTDIR="${DESTDIR}" \
-	--env TEE_PLATFORM=${TEE_PLATFORM:+"all"} \
+	--env TEE_PLATFORM=${TEE_PLATFORM:-"all"} \
 	--env RESOURCE_PROVIDER=${RESOURCE_PROVIDER:-} \
 	--env ATTESTER=${ATTESTER:-} \
 	--env coco_guest_components_repo="${coco_guest_components_repo}" \
