@@ -12,6 +12,10 @@ spec:
       labels:
         name: kata-deploy
     spec:
+{{- with .Values.kataDeploy.imagePullSecrets }}
+      imagePullSecrets:
+{{- toYaml . | nindent 6 }}
+{{- end }}
       containers:
       - command:
         - bash
