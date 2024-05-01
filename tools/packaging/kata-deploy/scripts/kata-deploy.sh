@@ -351,7 +351,7 @@ function configure_crio() {
 
 	if [ "${DEBUG}" == "true" ]; then
 		cat <<EOF | tee $crio_drop_in_conf_file_debug
-[crio]
+[crio.runtime]
 log_level = "debug"
 EOF
 	fi
