@@ -79,9 +79,6 @@ serial-targets:
 agent-tarball: copy-scripts-for-the-agent-build
 	${MAKE} $@-build
 
-agent-opa-tarball: copy-scripts-for-the-agent-build
-	${MAKE} $@-build
-
 agent-ctl-tarball:
 	${MAKE} $@-build
 
@@ -151,13 +148,13 @@ stratovirt-tarball:
 rootfs-image-tarball: agent-tarball
 	${MAKE} $@-build
 
-rootfs-image-confidential-tarball: agent-opa-tarball pause-image-tarball coco-guest-components-tarball kernel-confidential-tarball
+rootfs-image-confidential-tarball: agent-tarball pause-image-tarball coco-guest-components-tarball kernel-confidential-tarball
 	${MAKE} $@-build
 
-rootfs-initrd-mariner-tarball: agent-opa-tarball
+rootfs-initrd-mariner-tarball: agent-tarball
 	${MAKE} $@-build
 
-rootfs-initrd-confidential-tarball: agent-opa-tarball pause-image-tarball coco-guest-components-tarball kernel-confidential-tarball
+rootfs-initrd-confidential-tarball: agent-tarball pause-image-tarball coco-guest-components-tarball kernel-confidential-tarball
 	${MAKE} $@-build
 
 rootfs-initrd-tarball: agent-tarball

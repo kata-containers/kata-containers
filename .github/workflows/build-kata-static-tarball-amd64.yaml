@@ -28,7 +28,6 @@ jobs:
       matrix:
         asset:
           - agent
-          - agent-opa
           - agent-ctl
           - cloud-hypervisor
           - cloud-hypervisor-glibc
@@ -64,8 +63,6 @@ jobs:
           - ${{ inputs.stage }}
         exclude:
           - asset: agent
-            stage: release
-          - asset: agent-opa
             stage: release
           - asset: cloud-hypervisor-glibc
             stage: release

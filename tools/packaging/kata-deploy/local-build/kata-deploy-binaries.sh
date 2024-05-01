@@ -89,7 +89,6 @@ options:
 --build=<asset>       :
 	all
 	agent
-	agent-opa
 	agent-ctl
 	boot-image-se
 	coco-guest-components
@@ -217,9 +216,6 @@ install_cached_tarball_component() {
 get_agent_tarball_path() {
 	agent_local_build_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
 	agent_tarball_name="kata-static-agent.tar.xz"
-	if [ "${AGENT_POLICY:-no}" = "yes" ]; then
-		agent_tarball_name="kata-static-agent-opa.tar.xz"
-	fi
 
 	echo "${agent_local_build_dir}/${agent_tarball_name}"
 }
@@ -322,6 +318,7 @@ install_image() {
 	fi
 
 	export AGENT_TARBALL=$(get_agent_tarball_path)
+
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
 
@@ -391,6 +388,7 @@ install_initrd() {
 	fi
 
 	export AGENT_TARBALL=$(get_agent_tarball_path)
+
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
 
@@ -765,9 +763,7 @@ install_ovmf_sev() {
 	install_ovmf "sev" "edk2-sev.tar.gz"
 }
 
-install_agent_helper() {
-	agent_policy="${1:-no}"
-
+install_agent() {
 	latest_artefact="$(git log -1 --pretty=format:"%h" ${repo_root_dir}/src/agent)"
 	latest_builder_image="$(get_agent_image_name)"
 
@@ -785,15 +781,7 @@ install_agent_helper() {
 	export GPERF_URL="$(get_from_kata_deps "externals.gperf.url")"
 
 	info "build static agent"
-	DESTDIR="${destdir}" AGENT_POLICY=${agent_policy} PULL_TYPE=${PULL_TYPE} "${agent_builder}"
-}
-
-install_agent() {
-	install_agent_helper
-}
-
-install_agent_opa() {
-	install_agent_helper "yes"
+	DESTDIR="${destdir}" AGENT_POLICY="yes" PULL_TYPE=${PULL_TYPE} "${agent_builder}"
 }
 
 install_coco_guest_components() {
@@ -989,8 +977,6 @@ handle_build() {
 
 	agent) install_agent ;;
 
-	agent-opa) install_agent_opa ;;
-
 	agent-ctl) install_agent_ctl ;;
 
 	boot-image-se) install_se_image ;;
@@ -1140,7 +1126,6 @@ main() {
 	local silent
 	build_targets=(
 		agent
-		agent-opa
 		agent-ctl
 		cloud-hypervisor
 		coco-guest-components
