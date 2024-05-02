@@ -6,7 +6,7 @@
 
 kataDeploy:
   imagePullPolicy: Always
-  imagePullSecrets: [""]
+  imagePullSecrets: []
   repository: quay.io/kata-containers/kata-deploy
   # version can be latest or development 
   version: "latest"
