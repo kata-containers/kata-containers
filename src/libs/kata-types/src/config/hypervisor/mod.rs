@@ -447,6 +447,14 @@ pub struct DeviceInfo {
     #[serde(default)]
     pub default_bridges: u32,
 
+    /// Enable PCI hotplug support, default false
+    ///
+    /// This is a Dragonball only config for the time being.
+    ///
+    /// Enabling this will result in hotplugin VFIO devices (see below).
+    #[serde(default)]
+    pub pci_hotplug: bool,
+
     /// VFIO devices are hotplugged on a bridge by default.
     ///
     /// Enable hotplugging on root bus. This may be required for devices with a large PCI bar,

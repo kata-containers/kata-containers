@@ -97,6 +97,12 @@ default_maxvcpus = @DEFMAXVCPUS_DB@
 # > 5                --> will be set to 5
 default_bridges = @DEFBRIDGES@
 
+# PCI hotplug
+# Enable or disable pci_hotplug
+# Only available on Dragonball for the time being.
+# Default value: @DEFPCIHOTPLUG@
+pci_hotplug = @DEFPCIHOTPLUG@
+
 # Default memory size in MiB for SB/VM.
 # If unspecified then it will be set @DEFMEMSZ@ MiB.
 default_memory = @DEFMEMSZ@
