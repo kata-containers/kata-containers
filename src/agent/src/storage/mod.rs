@@ -15,6 +15,8 @@ use kata_sys_util::mount::{create_mount_destination, parse_mount_options};
 #[cfg(feature = "guest-pull")]
 use kata_types::mount::KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL;
 use kata_types::mount::{StorageDevice, StorageHandlerManager, KATA_SHAREDFS_GUEST_PREMOUNT_TAG};
+#[cfg(feature = "host-share-image-block")]
+use kata_types::volume::KATA_VOLUME_TYPE_DMVERITY;
 use nix::unistd::{Gid, Uid};
 use protocols::agent::Storage;
 use protocols::types::FSGroupChangePolicy;
@@ -24,6 +26,8 @@ use tracing::instrument;
 
 use self::bind_watcher_handler::BindWatcherHandler;
 use self::block_handler::{PmemHandler, ScsiHandler, VirtioBlkMmioHandler, VirtioBlkPciHandler};
+#[cfg(feature = "host-share-image-block")]
+use self::dm_verity_handler::DmVerityHandler;
 use self::ephemeral_handler::EphemeralHandler;
 use self::fs_handler::{OverlayfsHandler, Virtio9pHandler, VirtioFsHandler};
 #[cfg(feature = "guest-pull")]
@@ -41,6 +45,8 @@ pub use self::ephemeral_handler::update_ephemeral_mounts;
 
 mod bind_watcher_handler;
 mod block_handler;
+#[cfg(feature = "host-share-image-block")]
+mod dm_verity_handler;
 mod ephemeral_handler;
 mod fs_handler;
 #[cfg(feature = "guest-pull")]
@@ -153,6 +159,8 @@ lazy_static! {
         manager.add_handler(DRIVER_WATCHABLE_BIND_TYPE, Arc::new(BindWatcherHandler{})).unwrap();
         #[cfg(feature = "guest-pull")]
         manager.add_handler(KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL, Arc::new(ImagePullHandler{})).unwrap();
+        #[cfg(feature = "host-share-image-block")]
+        manager.add_handler(KATA_VOLUME_TYPE_DMVERITY, Arc::new(DmVerityHandler{})).unwrap();
         manager
     };
 }
@@ -192,6 +200,9 @@ pub async fn add_storages(
                 sandbox,
             };
 
+            //TODO For dm-verity storage handler exclusively, it's necessary to verify the integrity of dm-verity information prior to creating the storage device.
+            // This is to ensure that the dm-verity storage device is not created with tampered data.
+            // The check logic ought to be invoked within `do_create_container` and precede the `add_storages` logic in `rpc.rs`.
             match handler.create_device(storage, &mut ctx).await {
                 Ok(device) => {
                     match sandbox

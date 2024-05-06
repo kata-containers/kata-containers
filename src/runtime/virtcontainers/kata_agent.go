@@ -105,6 +105,7 @@ var (
 	kataBlkDevType                   = "blk"
 	kataBlkCCWDevType                = "blk-ccw"
 	kataSCSIDevType                  = "scsi"
+	kataDmVerityBlkDevType           = "dmverity"
 	kataNvdimmDevType                = "nvdimm"
 	kataVirtioFSDevType              = "virtio-fs"
 	kataOverlayDevType               = "overlayfs"
@@ -1556,6 +1557,31 @@ func (k *kataAgent) handleLocalStorage(mounts []specs.Mount, sandboxID string, r
 	return localStorages, nil
 }
 
+// Add the source block type to DriverOptions in the volume with dm-verity
+func handleDmVerityBlockVolume(driverType, source string, verityInfo *types.DmVerityInfo, vol *grpc.Storage) (*grpc.Storage, error) {
+	info, err := json.Marshal(verityInfo)
+	if err != nil {
+		return nil, err
+	}
+	vol.Driver = kataDmVerityBlkDevType
+	vol.DriverOptions = append(vol.DriverOptions, "verity_info="+string(info))
+	switch driverType {
+	case kataNvdimmDevType:
+		vol.DriverOptions = append(vol.DriverOptions, "source_type=pmem")
+	case kataBlkCCWDevType:
+		vol.DriverOptions = append(vol.DriverOptions, "source_type=virtio_ccw")
+	case kataBlkDevType:
+		vol.DriverOptions = append(vol.DriverOptions, "source_type=virtio_pci")
+	case kataMmioBlkDevType:
+		vol.DriverOptions = append(vol.DriverOptions, "source_type=virtio_mmio")
+	case kataSCSIDevType:
+		vol.DriverOptions = append(vol.DriverOptions, "source_type=scsi")
+	}
+	vol.Options = []string{"ro"}
+	vol.MountPoint = filepath.Join(defaultKataGuestVirtualVolumedir, "verity", verityInfo.Hash)
+	return vol, nil
+}
+
 func handleBlockVolume(c *Container, device api.Device) (*grpc.Storage, error) {
 	vol := &grpc.Storage{}
 
@@ -1645,15 +1671,34 @@ func handleImageGuestPullBlockVolume(c *Container, virtualVolumeInfo *types.Kata
 
 // handleVirtualVolumeStorageObject handles KataVirtualVolume that is block device file.
 func handleVirtualVolumeStorageObject(c *Container, blockDeviceId string, virtVolume *types.KataVirtualVolume) (*grpc.Storage, error) {
-	var vol *grpc.Storage
+	var vol *grpc.Storage = &grpc.Storage{}
 	if virtVolume.VolumeType == types.KataVirtualVolumeImageGuestPullType {
 		var err error
-		vol = &grpc.Storage{}
 		vol, err = handleImageGuestPullBlockVolume(c, virtVolume, vol)
 		if err != nil {
 			return nil, err
 		}
 		vol.MountPoint = filepath.Join("/run/kata-containers/", c.id, c.rootfsSuffix)
+	} else if virtVolume.VolumeType == types.KataVirtualVolumeImageRawBlockType || virtVolume.VolumeType == types.KataVirtualVolumeLayerRawBlockType {
+		device := c.sandbox.devManager.GetDeviceByID(blockDeviceId)
+		if device == nil {
+			return nil, fmt.Errorf("Failed to find device by id (id=%s) in handleVirtualVolumeStorageObject", blockDeviceId)
+		}
+		var err error
+		vol, err = handleBlockVolume(c, device)
+		if err != nil {
+			return nil, err
+		}
+		filename := b64.URLEncoding.EncodeToString([]byte(vol.Source))
+		vol.MountPoint = filepath.Join(defaultKataGuestVirtualVolumedir, filename)
+
+		//convert block storage to dmverity storage if dm-verity info is available
+		if virtVolume.DmVerity != nil {
+			vol, err = handleDmVerityBlockVolume(vol.Driver, virtVolume.Source, virtVolume.DmVerity, vol)
+			if err != nil {
+				return nil, err
+			}
+		}
 	}
 	return vol, nil
 }

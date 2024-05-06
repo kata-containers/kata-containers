@@ -10,6 +10,8 @@ pub fn get_build_features() -> Vec<String> {
         "agent-policy",
         #[cfg(feature = "guest-pull")]
         "guest-pull",
+        #[cfg(feature = "host-share-image-block")]
+        "host-share-image-block",
         #[cfg(feature = "seccomp")]
         "seccomp",
         #[cfg(feature = "standard-oci-runtime")]

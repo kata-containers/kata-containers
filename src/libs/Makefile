@@ -11,6 +11,15 @@ ifeq ($(USERID), 0)
     override EXTRA_TEST_FLAGS = --ignored
 endif
 
+##VAR PULL_TYPE=default|host-share-image-block define if agent enables the host share image blocks with dm-verity feature
+PULL_TYPE ?= default
+
+# Enable pull-type feature of rust build
+ifeq ($(PULL_TYPE),host-share-image-block)
+    override EXTRA_RUSTFEATURES += dm-verity
+endif
+
+
 default: build
 
 build:

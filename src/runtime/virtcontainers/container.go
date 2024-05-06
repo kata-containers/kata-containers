@@ -810,6 +810,14 @@ func (c *Container) createVirtualVolumeDevices() ([]config.DeviceInfo, error) {
 				return nil, err
 			}
 			c.Logger().Infof("KataVirtualVolume volumetype = %s", virtVolume.VolumeType)
+
+			if virtVolume.VolumeType == types.KataVirtualVolumeImageRawBlockType || virtVolume.VolumeType == types.KataVirtualVolumeLayerRawBlockType {
+				di, err := c.createDeviceInfo(virtVolume.Source, virtVolume.Source, true, true)
+				if err != nil {
+					return nil, err
+				}
+				deviceInfos = append(deviceInfos, *di)
+			}
 		}
 	}
 	return deviceInfos, nil

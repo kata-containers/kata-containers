@@ -17,8 +17,9 @@ RUST_VERSION="null"
 AGENT_BIN=${AGENT_BIN:-kata-agent}
 AGENT_INIT=${AGENT_INIT:-no}
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
-# The kata agent enables guest-pull feature.
+# The kata agent enables pull image feature.
 PULL_TYPE=${PULL_TYPE:-default}
+DMVERITY_SUPPORT=${DMVERITY_SUPPORT:-no}
 KERNEL_MODULES_DIR=${KERNEL_MODULES_DIR:-""}
 OSBUILDER_VERSION="unknown"
 DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
@@ -503,6 +504,8 @@ build_rootfs_distro()
 			--env ARCH="${ARCH}" \
 			--env CI="${CI}" \
 			--env MEASURED_ROOTFS="${MEASURED_ROOTFS}" \
+			--env PULL_TYPE="${PULL_TYPE}" \
+			--env DMVERITY_SUPPORT="${DMVERITY_SUPPORT}" \
 			--env KERNEL_MODULES_DIR="${KERNEL_MODULES_DIR}" \
 			--env LIBC="${LIBC}" \
 			--env EXTRA_PKGS="${EXTRA_PKGS}" \

@@ -12,7 +12,7 @@ set -o pipefail
 
 DOCKER_RUNTIME=${DOCKER_RUNTIME:-runc}
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
-
+DMVERITY_SUPPORT=${DMVERITY_SUPPORT:-no}
 #For cross build
 CROSS_BUILD=${CROSS_BUILD:-false}
 BUILDX=""
@@ -50,6 +50,13 @@ readonly dax_header_sz=2
 # [2] - https://nvdimm.wiki.kernel.org/2mib_fs_dax
 readonly dax_alignment=2
 
+readonly -a udev_systemd_units=(
+	"systemd-udevd"
+	"systemd-udevd-control"
+	"systemd-udevd-kernel"
+	"systemd-udev-trigger"
+)
+
 # The list of systemd units and files that are not needed in Kata Containers
 readonly -a systemd_units=(
 	"systemd-coredump@"
@@ -59,10 +66,6 @@ readonly -a systemd_units=(
 	"systemd-random-seed"
 	"systemd-timesyncd"
 	"systemd-tmpfiles-setup"
-	"systemd-udevd"
-	"systemd-udevd-control"
-	"systemd-udevd-kernel"
-	"systemd-udev-trigger"
 	"systemd-update-utmp"
 )
 
@@ -197,6 +200,7 @@ build_with_container() {
 		   --env ROOT_FREE_SPACE="${root_free_space}" \
 		   --env NSDAX_BIN="${nsdax_bin}" \
 		   --env MEASURED_ROOTFS="${MEASURED_ROOTFS}" \
+		   --env DMVERITY_SUPPORT="${DMVERITY_SUPPORT}" \
 		   --env SELINUX="${SELINUX}" \
 		   --env DEBUG="${DEBUG}" \
 		   --env ARCH="${ARCH}" \
@@ -455,8 +459,17 @@ setup_selinux() {
 
 setup_systemd() {
 		local mount_dir="$1"
-
 		info "Removing unneeded systemd services and sockets"
+
+		if [ "${DMVERITY_SUPPORT}" == "no" ]; then
+			for u in "${udev_systemd_units[@]}"; do
+				find "${mount_dir}" -type f \( \
+					-name "${u}.service" -o \
+					-name "${u}.socket" \) \
+					-exec rm -f {} \;
+			done
+		fi
+
 		for u in "${systemd_units[@]}"; do
 			find "${mount_dir}" -type f \( \
 				 -name "${u}.service" -o \
