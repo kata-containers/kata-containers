@@ -67,6 +67,10 @@ jobs:
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-tdx
 
+      - name: Uninstall previous `kbs-client`
+        timeout-minutes: 10
+        run: bash tests/integration/kubernetes/gha-run.sh uninstall-kbs-client
+
       - name: Deploy CoCo KBS
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh deploy-coco-kbs

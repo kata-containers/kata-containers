@@ -266,6 +266,10 @@ function install_kbs_client() {
 	kbs_install_cli
 }
 
+function uninstall_kbs_client() {
+	kbs_uninstall_cli
+}
+
 function run_tests() {
 	ensure_yq
 	platform="${1:-}"
@@ -594,6 +598,7 @@ function main() {
 		delete-coco-kbs) delete_coco_kbs ;;
 		delete-cluster) cleanup "aks" ;;
 		delete-cluster-kcli) delete_cluster_kcli ;;
+		uninstall-kbs-client) uninstall_kbs_client ;;
 		*) >&2 echo "Invalid argument"; exit 2 ;;
 	esac
 }
