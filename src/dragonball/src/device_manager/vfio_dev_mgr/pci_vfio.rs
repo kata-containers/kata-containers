@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use dbs_boot::layout::{GUEST_MEM_END, GUEST_PHYS_END};
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use dbs_device::resources::Resource;
 use dbs_device::resources::{DeviceResources, ResourceConstraint};
@@ -19,6 +20,8 @@ use crate::resource_manager::ResourceManager;
 
 /// we only support one pci bus
 pub const PCI_BUS_DEFAULT: u8 = 0;
+/// The default mmio size for pci root bus.
+const PCI_MMIO_DEFAULT_SIZE: u64 = 2048u64 << 30;
 
 /// PCI pass-through device manager.
 #[derive(Clone)]
@@ -117,7 +120,7 @@ impl PciSystemManager {
         requests.push(ResourceConstraint::MmioAddress {
             range: Some((0x1_0000_0000, 0xffff_ffff_ffff_ffff)),
             align: 4096,
-            size: 2048u64 << 30,
+            size: Self::get_mmio_size(),
         });
         // allocate 8KB IO port
         requests.push(ResourceConstraint::PioAddress {
@@ -127,6 +130,14 @@ impl PciSystemManager {
         });
 
         requests
+    }
+
+    fn get_mmio_size() -> u64 {
+        if (*GUEST_PHYS_END - *GUEST_MEM_END) > PCI_MMIO_DEFAULT_SIZE {
+            PCI_MMIO_DEFAULT_SIZE
+        } else {
+            (*GUEST_PHYS_END - *GUEST_MEM_END) / 2
+        }
     }
 
     /// Get the PCI root bus.
