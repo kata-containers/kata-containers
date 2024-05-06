@@ -128,13 +128,16 @@ impl RuntimeHandlerManagerInner {
             }
         }
 
+        let instance = Arc::new(runtime_instance);
+        self.runtime_instance = Some(instance.clone());
+
         // start sandbox
-        runtime_instance
+        instance
             .sandbox
             .start(dns, spec, state, network_env)
             .await
             .context("start sandbox")?;
-        self.runtime_instance = Some(Arc::new(runtime_instance));
+
         Ok(())
     }
 
