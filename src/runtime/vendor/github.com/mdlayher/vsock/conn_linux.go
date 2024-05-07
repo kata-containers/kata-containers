@@ -4,9 +4,16 @@
 package vsock
 
 import (
+	"context"
+
 	"github.com/mdlayher/socket"
 	"golang.org/x/sys/unix"
 )
+
+// A conn is the net.Conn implementation for connection-oriented VM sockets.
+// We can use socket.Conn directly on Linux to implement all of the necessary
+// methods.
+type conn = socket.Conn
 
 // dial is the entry point for Dial on Linux.
 func dial(cid, port uint32, _ *Config) (*Conn, error) {
@@ -19,7 +26,7 @@ func dial(cid, port uint32, _ *Config) (*Conn, error) {
 	}
 
 	sa := &unix.SockaddrVM{CID: cid, Port: port}
-	rsa, err := c.Connect(sa)
+	rsa, err := c.Connect(context.Background(), sa)
 	if err != nil {
 		_ = c.Close()
 		return nil, err

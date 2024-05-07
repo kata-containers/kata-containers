@@ -21,7 +21,7 @@ type BadReader struct {
 	Error error
 }
 
-func (r *BadReader) Read(buffer []byte) (int, error) {
+func (r *BadReader) Read(_ []byte) (int, error) {
 	if r.Error != nil {
 		return 0, r.Error
 	}

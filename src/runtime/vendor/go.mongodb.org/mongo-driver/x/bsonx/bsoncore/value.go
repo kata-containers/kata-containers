@@ -323,7 +323,7 @@ func (v Value) String() string {
 		if !ok {
 			return ""
 		}
-		return fmt.Sprintf(`{"$timestamp":{"t":"%s","i":"%s"}}`, strconv.FormatUint(uint64(t), 10), strconv.FormatUint(uint64(i), 10))
+		return fmt.Sprintf(`{"$timestamp":{"t":%v,"i":%v}}`, t, i)
 	case bsontype.Int64:
 		i64, ok := v.Int64OK()
 		if !ok {
@@ -602,7 +602,7 @@ func (v Value) Time() time.Time {
 	if !ok {
 		panic(NewInsufficientBytesError(v.Data, v.Data))
 	}
-	return time.Unix(int64(dt)/1000, int64(dt)%1000*1000000)
+	return time.Unix(dt/1000, dt%1000*1000000)
 }
 
 // TimeOK is the same as Time, except it returns a boolean instead of
@@ -615,7 +615,7 @@ func (v Value) TimeOK() (time.Time, bool) {
 	if !ok {
 		return time.Time{}, false
 	}
-	return time.Unix(int64(dt)/1000, int64(dt)%1000*1000000), true
+	return time.Unix(dt/1000, dt%1000*1000000), true
 }
 
 // Regex returns the BSON regex value the Value represents. It panics if the value is a BSON

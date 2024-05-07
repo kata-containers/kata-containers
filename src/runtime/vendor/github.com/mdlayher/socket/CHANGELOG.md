@@ -1,5 +1,49 @@
 # CHANGELOG
 
+## v0.4.1
+
+- [Bug Fix] [commit](https://github.com/mdlayher/socket/commit/2a14ceef4da279de1f957c5761fffcc6c87bbd3b):
+  ensure `socket.Conn` can be used with non-socket file descriptors by handling
+  `ENOTSOCK` in the constructor.
+
+## v0.4.0
+
+**This is the first release of package socket that only supports Go 1.18+.
+Users on older versions of Go must use v0.3.0.**
+
+- [Improvement]: drop support for older versions of Go so we can begin using
+  modern versions of `x/sys` and other dependencies.
+
+## v0.3.0
+
+**This is the last release of package socket that supports Go 1.17 and below.**
+
+- [New API/API change] [PR](https://github.com/mdlayher/socket/pull/8):
+  numerous `socket.Conn` methods now support context cancelation. Future
+  releases will continue adding support as needed.
+  - New `ReadContext` and `WriteContext` methods.
+  - `Connect`, `Recvfrom`, `Recvmsg`, `Sendmsg`, and `Sendto` methods now accept
+    a context.
+  - `Sendto` parameter order was also fixed to match the underlying syscall.
+
+## v0.2.3
+
+- [New API] [commit](https://github.com/mdlayher/socket/commit/a425d96e0f772c053164f8ce4c9c825380a98086):
+  `socket.Conn` has new `Pidfd*` methods for wrapping the `pidfd_*(2)` family of
+  system calls.
+
+## v0.2.2
+
+- [New API] [commit](https://github.com/mdlayher/socket/commit/a2429f1dfe8ec2586df5a09f50ead865276cd027):
+  `socket.Conn` has new `IoctlKCM*` methods for wrapping `ioctl(2)` for `AF_KCM`
+  operations.
+
+## v0.2.1
+
+- [New API] [commit](https://github.com/mdlayher/socket/commit/b18ddbe9caa0e34552b4409a3aa311cb460d2f99):
+  `socket.Conn` has a new `SetsockoptPacketMreq` method for wrapping
+  `setsockopt(2)` for `AF_PACKET` socket options.
+
 ## v0.2.0
 
 - [New API] [commit](https://github.com/mdlayher/socket/commit/6e912a68523c45e5fd899239f4b46c402dd856da):

@@ -438,7 +438,7 @@ func testVersionString(assert *assert.Assertions, versionString, expectedVersion
 	versionRE := regexp.MustCompile(fmt.Sprintf(`%s\s*:\s*%v`, katautils.NAME, expectedVersion))
 	commitRE := regexp.MustCompile(fmt.Sprintf(`%s\s*:\s*%v`, "commit", expectedCommit))
 
-	ociRE := regexp.MustCompile(fmt.Sprintf(`%s\s*:\s*%v`, "OCI specs", expectedOCIVersion))
+	ociRE := regexp.MustCompile(fmt.Sprintf(`%s\s*:\s*%v`, "OCI specs", regexp.QuoteMeta(expectedOCIVersion)))
 
 	lines := strings.Split(versionString, "\n")
 	assert.True(len(lines) > 0)

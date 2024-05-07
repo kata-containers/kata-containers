@@ -1,23 +1,18 @@
 # ethtool go package #
 
-[![Build Status](https://travis-ci.org/safchain/ethtool.png?branch=master)](https://travis-ci.org/safchain/ethtool)
+![Build Status](https://github.com/safchain/ethtool/actions/workflows/unittests.yml/badge.svg)
 [![GoDoc](https://godoc.org/github.com/safchain/ethtool?status.svg)](https://godoc.org/github.com/safchain/ethtool)
 
-The ethtool package aims to provide a library giving a simple access to the Linux SIOCETHTOOL ioctl operations. It can be used to retrieve informations from a network device like statistics, driver related informations or even the peer of a VETH interface.
 
-## Build and Test ##
+The ethtool package aims to provide a library that provides easy access to the Linux SIOCETHTOOL ioctl operations. It can be used to retrieve information from a network device such as statistics, driver related information or even the peer of a VETH interface.
 
-go get command:
+# Installation
 
-    go get github.com/safchain/ethtool
+```shell
+go get github.com/safchain/ethtool
+```
 
-Testing
-
-In order to run te
-
-    go test github.com/safchain/ethtool
-
-## Examples ##
+# How to use
 
 ```go
 package main
