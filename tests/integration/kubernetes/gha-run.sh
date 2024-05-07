@@ -12,9 +12,12 @@ DEBUG="${DEBUG:-}"
 [ -n "$DEBUG" ] && set -x
 
 kubernetes_dir="$(dirname "$(readlink -f "$0")")"
+# shellcheck disable=1091
 source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
 # shellcheck disable=1091
 source "${kubernetes_dir}/confidential_kbs.sh"
+# shellcheck disable=1091
+source "${kubernetes_dir}/tests_common.sh"
 # shellcheck disable=2154
 tools_dir="${repo_root_dir}/tools"
 kata_tarball_dir="${2:-kata-artifacts}"
@@ -268,7 +271,7 @@ function run_tests() {
 	# and enable cri plugin in containerd config.
 	# TODO: enable testing auto-generated policy for other types of hosts too.
 
-	if [ "${KATA_HOST_OS}" = "cbl-mariner" ]; then
+	if policy_tests_enabled; then
 
 		export AUTO_GENERATE_POLICY="yes"
 
