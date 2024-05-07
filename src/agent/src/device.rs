@@ -710,7 +710,14 @@ pub fn update_env_pci(
     env: &mut [String],
     pcimap: &HashMap<pci::Address, pci::Address>,
 ) -> Result<()> {
-    for envvar in env {
+    // SR-IOV device plugin may add two environment variables for one resource:
+    // - PCIDEVICE_<prefix>_<resource-name>: a list of PCI device ids separated by comma
+    // - PCIDEVICE_<prefix>_<resource-name>_INFO: detailed info in JSON for above PCI devices
+    // Both environment variables hold information about the same set of PCI devices.
+    // Below code updates both of them in two passes:
+    // - 1st pass updates PCIDEVICE_<prefix>_<resource-name> and collects host to guest PCI address mapping
+    let mut pci_dev_map: HashMap<String, HashMap<String, String>> = HashMap::new();
+    for envvar in env.iter_mut() {
         let eqpos = envvar
             .find('=')
             .ok_or_else(|| anyhow!("Malformed OCI env entry {:?}", envvar))?;
@@ -718,22 +725,44 @@ pub fn update_env_pci(
         let (name, eqval) = envvar.split_at(eqpos);
         let val = &eqval[1..];
 
-        if !name.starts_with("PCIDEVICE_") {
+        if !name.starts_with("PCIDEVICE_") || name.ends_with("_INFO") {
             continue;
         }
 
+        let mut addr_map: HashMap<String, String> = HashMap::new();
         let mut guest_addrs = Vec::<String>::new();
-
-        for host_addr in val.split(',') {
-            let host_addr = pci::Address::from_str(host_addr)
+        for host_addr_str in val.split(',') {
+            let host_addr = pci::Address::from_str(host_addr_str)
                 .with_context(|| format!("Can't parse {} environment variable", name))?;
             let guest_addr = pcimap
                 .get(&host_addr)
                 .ok_or_else(|| anyhow!("Unable to translate host PCI address {}", host_addr))?;
+
             guest_addrs.push(format!("{}", guest_addr));
+            addr_map.insert(host_addr_str.to_string(), format!("{}", guest_addr));
         }
 
+        pci_dev_map.insert(format!("{}_INFO", name), addr_map);
+
         envvar.replace_range(eqpos + 1.., guest_addrs.join(",").as_str());
+    }
+
+    // - 2nd pass update PCIDEVICE_<prefix>_<resource-name>_INFO if it exists
+    for envvar in env.iter_mut() {
+        let eqpos = envvar
+            .find('=')
+            .ok_or_else(|| anyhow!("Malformed OCI env entry {:?}", envvar))?;
+
+        let (name, _) = envvar.split_at(eqpos);
+        if !(name.starts_with("PCIDEVICE_") && name.ends_with("_INFO")) {
+            continue;
+        }
+
+        if let Some(addr_map) = pci_dev_map.get(name) {
+            for (host_addr, guest_addr) in addr_map {
+                *envvar = envvar.replace(host_addr, guest_addr);
+            }
+        }
     }
 
     Ok(())
@@ -1382,8 +1411,11 @@ mod tests {
             ("0000:01:01.0", "ffff:02:1f.7"),
         ];
 
+        let pci_dev_info_original = r#"PCIDEVICE_x_INFO={"0000:1a:01.0":{"generic":{"deviceID":"0000:1a:01.0"}},"0000:1b:02.0":{"generic":{"deviceID":"0000:1b:02.0"}}}"#;
+        let pci_dev_info_expected = r#"PCIDEVICE_x_INFO={"0000:01:01.0":{"generic":{"deviceID":"0000:01:01.0"}},"0000:01:02.0":{"generic":{"deviceID":"0000:01:02.0"}}}"#;
         let mut env = vec![
             "PCIDEVICE_x=0000:1a:01.0,0000:1b:02.0".to_string(),
+            pci_dev_info_original.to_string(),
             "PCIDEVICE_y=0000:01:01.0".to_string(),
             "NOTAPCIDEVICE_blah=abcd:ef:01.0".to_string(),
         ];
@@ -1399,11 +1431,12 @@ mod tests {
             .collect();
 
         let res = update_env_pci(&mut env, &pci_fixups);
-        assert!(res.is_ok());
+        assert!(res.is_ok(), "error: {}", res.err().unwrap());
 
         assert_eq!(env[0], "PCIDEVICE_x=0000:01:01.0,0000:01:02.0");
-        assert_eq!(env[1], "PCIDEVICE_y=ffff:02:1f.7");
-        assert_eq!(env[2], "NOTAPCIDEVICE_blah=abcd:ef:01.0");
+        assert_eq!(env[1], pci_dev_info_expected);
+        assert_eq!(env[2], "PCIDEVICE_y=ffff:02:1f.7");
+        assert_eq!(env[3], "NOTAPCIDEVICE_blah=abcd:ef:01.0");
     }
 
     #[test]
