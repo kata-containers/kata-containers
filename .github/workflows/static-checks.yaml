@@ -50,11 +50,11 @@ jobs:
       instance: ubuntu-20.04
 
   build-checks-depending-on-kvm:
-    # TODO: Transition to free runner (see #9940).
-    if: false
     runs-on: garm-ubuntu-2004-smaller
     needs: skipper
-    if: ${{ needs.skipper.outputs.skip_static != 'yes' }}
+    # TODO: Transition to free runner (see #9940).
+    #if: ${{ needs.skipper.outputs.skip_static != 'yes' }}
+    if: false
     strategy:
       fail-fast: false
       matrix:
