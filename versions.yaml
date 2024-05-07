@@ -404,17 +404,6 @@ languages:
         building Kata
       newest-version: "1.57.2"
 
-specs:
-  description: "Details of important specifications"
-
-  oci:
-    description: "Open Containers Initiative runtime specification"
-    url: "https://github.com/opencontainers/runtime-spec/releases"
-    uscan-url: >-
-      https://github.com/opencontainers/runtime-spec/tags
-      .*/v?(\d\S+)\.tar\.gz
-    version: "v1.0.2"
-
 plugins:
   description: |
     Details of plugins required for the components or testing.
