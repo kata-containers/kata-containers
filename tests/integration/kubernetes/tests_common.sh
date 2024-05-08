@@ -138,14 +138,21 @@ create_common_genpolicy_settings() {
 
 	auto_generate_policy_enabled || return 0
 
+	# TODO: Remove once the Mariner host is reinstated, see #9593.
+	# Set the OCI version to 1.1.0 for "Mariner" (temporary using Ubuntu instead) host.
+	[ "${KATA_HOST_OS}" = "cbl-mariner" ] && sudo sed -i 's/"oci_version": "1\.1\.0-rc\.1"/"oci_version": "1\.1\.0"/' "${default_genpolicy_settings_dir}/genpolicy-settings.json"
+
+	[ "${KATA_HYPERVISOR}" = "qemu-tdx" ] && sudo sed -i 's/"oci_version": "1\.1\.0-rc\.1"/"oci_version": "1\.2\.0"/' "${default_genpolicy_settings_dir}/genpolicy-settings.json"
 	cp "${default_genpolicy_settings_dir}/genpolicy-settings.json" "${genpolicy_settings_dir}"
 	cp "${default_genpolicy_settings_dir}/rules.rego" "${genpolicy_settings_dir}"
 
 	# Set the default namespace of Kata CI tests in the genpolicy settings.
 	set_namespace_to_policy_settings "${genpolicy_settings_dir}" "${TEST_CLUSTER_NAMESPACE}"
 
-	# allow genpolicy to access containerd without sudo
-	sudo chmod a+rw /var/run/containerd/containerd.sock
+	if [ "${GENPOLICY_PULL_METHOD}" == "containerd" ]; then
+		# allow genpolicy to access containerd without sudo
+		sudo chmod a+rw /var/run/containerd/containerd.sock
+	fi
 }
 
 # If auto-generated policy testing is enabled, make a copy of the common genpolicy settings

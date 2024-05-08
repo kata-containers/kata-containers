@@ -4,6 +4,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+# shellcheck disable=1091
+
 set -o errexit
 set -o nounset
 set -o pipefail
@@ -12,11 +14,8 @@ DEBUG="${DEBUG:-}"
 [ -n "$DEBUG" ] && set -x
 
 kubernetes_dir="$(dirname "$(readlink -f "$0")")"
-# shellcheck disable=1091
 source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
-# shellcheck disable=1091
 source "${kubernetes_dir}/confidential_kbs.sh"
-# shellcheck disable=1091
 source "${kubernetes_dir}/tests_common.sh"
 # shellcheck disable=2154
 tools_dir="${repo_root_dir}/tools"
@@ -274,11 +273,13 @@ function run_tests() {
 	if policy_tests_enabled; then
 
 		export AUTO_GENERATE_POLICY="yes"
-
-		# set default containerd config
-		sudo containerd config default | sudo tee /etc/containerd/config.toml > /dev/null
-		echo "containerd config has been set to default"
-		sudo systemctl restart containerd && sudo systemctl is-active containerd
+        
+		if [ "${GENPOLICY_PULL_METHOD}" = "containerd" ]; then
+			# set default containerd config
+			sudo containerd config default | sudo tee /etc/containerd/config.toml > /dev/null
+			echo "containerd config has been set to default"
+			sudo systemctl restart containerd && sudo systemctl is-active containerd
+		fi
 	fi
 
 	set_test_cluster_namespace

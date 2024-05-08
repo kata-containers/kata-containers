@@ -66,8 +66,7 @@ CreateContainerRequest {
     p_oci := p_container.OCI
 
     print("CreateContainerRequest: p Version =", p_oci.Version, "i Version =", i_oci.Version)
-    # TODO: Reenable when the Mariner host is reinstated, see #9593.
-    # p_oci.Version == i_oci.Version
+    p_oci.Version == i_oci.Version
 
     print("CreateContainerRequest: p Readonly =", p_oci.Root.Readonly, "i Readonly =", i_oci.Root.Readonly)
     p_oci.Root.Readonly == i_oci.Root.Readonly
