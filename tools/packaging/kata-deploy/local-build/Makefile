@@ -33,7 +33,6 @@ BASE_TARBALLS = serial-targets \
 	qemu-tdx-experimental-tarball \
 	stratovirt-tarball \
 	shim-v2-tarball \
-	tdvf-tarball \
 	virtiofsd-tarball
 BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	rootfs-image-confidential-tarball \
@@ -164,9 +163,6 @@ runk-tarball:
 	${MAKE} $@-build
 
 shim-v2-tarball:
-	${MAKE} $@-build
-
-tdvf-tarball:
 	${MAKE} $@-build
 
 trace-forwarder-tarball:

@@ -77,9 +77,6 @@ popd
 
 info "Install fd to destdir"
 install_dir="${DESTDIR}/${PREFIX}/share/ovmf"
-if [ "${ovmf_build}" == "tdx" ]; then
-	install_dir="$DESTDIR/$PREFIX/share/tdvf"
-fi
 
 mkdir -p "${install_dir}"
 if [ "${ovmf_build}" == "sev" ]; then

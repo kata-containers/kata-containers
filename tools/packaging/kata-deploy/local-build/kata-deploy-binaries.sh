@@ -119,7 +119,6 @@ options:
 	rootfs-initrd-mariner
 	runk
 	shim-v2
-	tdvf
 	trace-forwarder
 	virtiofsd
 EOF
@@ -736,7 +735,6 @@ install_ovmf() {
 
 	local component_name="ovmf"
 	[ "${ovmf_type}" == "sev" ] && component_name="ovmf-sev"
-	[ "${ovmf_type}" == "tdx" ] && component_name="tdvf"
 
 	latest_artefact="$(get_from_kata_deps "externals.ovmf.${ovmf_type}.version")"
 	latest_builder_image="$(get_ovmf_image_name)"
@@ -751,11 +749,6 @@ install_ovmf() {
 
 	DESTDIR="${destdir}" PREFIX="${prefix}" ovmf_build="${ovmf_type}" "${ovmf_builder}"
 	tar xvf "${builddir}/${tarball_name}" -C "${destdir}"
-}
-
-# Install TDVF
-install_tdvf() {
-	install_ovmf "tdx" "edk2-tdx.tar.gz"
 }
 
 # Install OVMF SEV
@@ -970,7 +963,6 @@ handle_build() {
 		install_stratovirt
 		install_runk
 		install_shimv2
-		install_tdvf
 		install_trace_forwarder
 		install_virtiofsd
 		;;
@@ -1034,8 +1026,6 @@ handle_build() {
 	runk) install_runk ;;
 
 	shim-v2) install_shimv2 ;;
-
-	tdvf) install_tdvf ;;
 
 	trace-forwarder) install_trace_forwarder ;;
 
