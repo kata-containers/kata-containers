@@ -58,6 +58,8 @@ spec:
               mountPath: /opt/kata/
             - name: local-bin
               mountPath: /usr/local/bin/
+            - name: host
+              mountPath: /host/
       volumes:
         - name: crio-conf
           hostPath:
@@ -72,6 +74,9 @@ spec:
         - name: local-bin
           hostPath:
             path: /usr/local/bin/
+        - name: host
+          hostPath:
+            path: /
   updateStrategy:
     rollingUpdate:
       maxUnavailable: 1
