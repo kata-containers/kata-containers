@@ -47,7 +47,6 @@ jobs:
           - pause-image
           - qemu
           - qemu-snp-experimental
-          - qemu-tdx-experimental
           - stratovirt
           - rootfs-image
           - rootfs-image-confidential
@@ -56,7 +55,6 @@ jobs:
           - rootfs-initrd-mariner
           - runk
           - shim-v2
-          - tdvf
           - trace-forwarder
           - virtiofsd
         stage:
