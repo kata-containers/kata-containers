@@ -156,6 +156,8 @@ func (q *qemuArm64) enableProtection() error {
 
 func (q *qemuArm64) appendProtectionDevice(devices []govmmQemu.Device, firmware, firmwareVolume string) ([]govmmQemu.Device, string, error) {
 	err := q.enableProtection()
-	hvLogger.WithField("arch", runtime.GOARCH).Warnf("%v", err)
+	if err != nil {
+		hvLogger.WithField("arch", runtime.GOARCH).Error(err)
+	}
 	return devices, firmware, err
 }
