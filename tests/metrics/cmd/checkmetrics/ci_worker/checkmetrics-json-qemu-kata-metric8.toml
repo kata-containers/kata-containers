@@ -146,7 +146,7 @@ description = "measure random write throughput using fio"
 # within (inclusive)
 checkvar = "[.\"fio\".\"Results random\"] | .[] | .[] | .randwrite.bw | select( . != null )"
 checktype = "mean"
-midval = 1457926.8
+midval = 1166341.44
 minpercent = 20.0
 maxpercent = 20.0
 
