@@ -30,7 +30,6 @@ BASE_TARBALLS = serial-targets \
 	ovmf-tarball \
 	qemu-snp-experimental-tarball \
 	qemu-tarball \
-	qemu-tdx-experimental-tarball \
 	stratovirt-tarball \
 	shim-v2-tarball \
 	virtiofsd-tarball
@@ -136,9 +135,6 @@ qemu-tarball:
 	${MAKE} $@-build
 
 boot-image-se-tarball: kernel-confidential-tarball rootfs-initrd-confidential-tarball
-	${MAKE} $@-build
-
-qemu-tdx-experimental-tarball:
 	${MAKE} $@-build
 
 stratovirt-tarball:

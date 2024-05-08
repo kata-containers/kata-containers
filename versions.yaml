@@ -99,11 +99,6 @@ assets:
         https://github.com/qemu/qemu/tags
         .*/v?(\d\S+)\.tar\.gz
 
-    qemu-tdx-experimental:
-      description: ¨QEMU with TDX support"
-      url: "https://github.com/intel/qemu-tdx"
-      tag: "tdx-qemu-next-2023.9.21-v8.1.0"
-
     qemu-snp-experimental:
       description: "QEMU with SNP support"
       url: "https://github.com/confidential-containers/qemu.git"
