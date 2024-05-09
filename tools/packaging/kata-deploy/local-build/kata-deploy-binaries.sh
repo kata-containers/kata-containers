@@ -111,7 +111,6 @@ options:
 	ovmf-sev
 	qemu
 	qemu-snp-experimental
-	qemu-tdx-experimental
 	stratovirt
 	rootfs-image
 	rootfs-image-confidential
@@ -120,7 +119,6 @@ options:
 	rootfs-initrd-mariner
 	runk
 	shim-v2
-	tdvf
 	trace-forwarder
 	virtiofsd
 EOF
@@ -565,17 +563,6 @@ install_qemu() {
 		"${qemu_builder}"
 }
 
-install_qemu_tdx_experimental() {
-	export qemu_suffix="tdx-experimental"
-	export qemu_tarball_name="kata-static-qemu-${qemu_suffix}.tar.gz"
-
-	install_qemu_helper \
-		"assets.hypervisor.qemu-${qemu_suffix}.url" \
-		"assets.hypervisor.qemu-${qemu_suffix}.tag" \
-		"qemu-${qemu_suffix}" \
-		"${qemu_experimental_builder}"
-}
-
 install_qemu_snp_experimental() {
 	export qemu_suffix="snp-experimental"
 	export qemu_tarball_name="kata-static-qemu-${qemu_suffix}.tar.gz"
@@ -752,7 +739,6 @@ install_ovmf() {
 
 	local component_name="ovmf"
 	[ "${ovmf_type}" == "sev" ] && component_name="ovmf-sev"
-	[ "${ovmf_type}" == "tdx" ] && component_name="tdvf"
 
 	latest_artefact="$(get_from_kata_deps "externals.ovmf.${ovmf_type}.version")"
 	latest_builder_image="$(get_ovmf_image_name)"
@@ -767,11 +753,6 @@ install_ovmf() {
 
 	DESTDIR="${destdir}" PREFIX="${prefix}" ovmf_build="${ovmf_type}" "${ovmf_builder}"
 	tar xvf "${builddir}/${tarball_name}" -C "${destdir}"
-}
-
-# Install TDVF
-install_tdvf() {
-	install_ovmf "tdx" "edk2-tdx.tar.gz"
 }
 
 # Install OVMF SEV
@@ -982,11 +963,9 @@ handle_build() {
 		install_ovmf_sev
 		install_qemu
 		install_qemu_snp_experimental
-		install_qemu_tdx_experimental
 		install_stratovirt
 		install_runk
 		install_shimv2
-		install_tdvf
 		install_trace_forwarder
 		install_virtiofsd
 		;;
@@ -1033,8 +1012,6 @@ handle_build() {
 
 	qemu-snp-experimental) install_qemu_snp_experimental ;;
 
-	qemu-tdx-experimental) install_qemu_tdx_experimental ;;
-
 	stratovirt) install_stratovirt ;;
 
 	rootfs-image) install_image ;;
@@ -1050,8 +1027,6 @@ handle_build() {
 	runk) install_runk ;;
 
 	shim-v2) install_shimv2 ;;
-
-	tdvf) install_tdvf ;;
 
 	trace-forwarder) install_trace_forwarder ;;
 

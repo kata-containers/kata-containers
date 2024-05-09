@@ -615,17 +615,6 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		return err
 	}
 
-	if q.config.ConfidentialGuest {
-		// At this point we're safe to just check for the protection field
-		// on the hypervisor specific code, as availableGuestProtection()
-		// has been called earlier and we know we have the value stored.
-		if q.arch.getProtection() == tdxProtection {
-
-			// TDX relies on ",private=on" passed to the memory object.
-			knobs.Private = true
-		}
-	}
-
 	kernelPath, err := q.config.KernelAssetPath()
 	if err != nil {
 		return err

@@ -99,11 +99,6 @@ assets:
         https://github.com/qemu/qemu/tags
         .*/v?(\d\S+)\.tar\.gz
 
-    qemu-tdx-experimental:
-      description: ¨QEMU with TDX support"
-      url: "https://github.com/intel/qemu-tdx"
-      tag: "tdx-qemu-next-2023.9.21-v8.1.0"
-
     qemu-snp-experimental:
       description: "QEMU with SNP support"
       url: "https://github.com/confidential-containers/qemu.git"
@@ -337,18 +332,6 @@ externals:
       version: "edk2-stable202302"
       package: "OvmfPkg/AmdSev/AmdSevX64.dsc"
       package_output_dir: "AmdSev"
-    tdx:
-      # yamllint disable-line rule:line-length
-      description: "QEMU with TDX support - based on https://github.com/intel/tdx-tools/releases/tag/2023ww15"
-      version: "edk2-stable202302"
-      package: "OvmfPkg/IntelTdx/IntelTdxX64.dsc"
-      package_output_dir: "IntelTdx"
-
-  td-shim:
-    description: "Confidential Containers Shim Firmware"
-    url: "https://github.com/confidential-containers/td-shim"
-    version: "cf9592ef70bd6ba4c7ab1330d278a743f5ba3133"
-    toolchain: "nightly-2022-05-15"
 
   virtiofsd:
     description: "vhost-user virtio-fs device backend written in Rust"

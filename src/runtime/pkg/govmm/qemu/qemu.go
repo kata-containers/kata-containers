@@ -363,7 +363,6 @@ func (object Object) QemuParams(config *Config) []string {
 
 	case TDXGuest:
 		objectParams = append(objectParams, string(object.Type))
-		objectParams = append(objectParams, "sept-ve-disable=on")
 		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
 		if object.Debug {
 			objectParams = append(objectParams, "debug=on")
@@ -2664,10 +2663,6 @@ type Knobs struct {
 
 	// IOMMUPlatform will enable IOMMU for supported devices
 	IOMMUPlatform bool
-
-	// Whether private memory should be used or not
-	// This is required by TDX, at least.
-	Private bool
 }
 
 // IOThread allows IO to be performed on a separate thread.
@@ -3032,9 +3027,6 @@ func (config *Config) appendMemoryKnobs() {
 		numaMemParam = "node,memdev=" + dimmName
 	}
 
-	if config.Knobs.Private {
-		objMemParam += ",private=on"
-	}
 	if config.Knobs.MemShared {
 		objMemParam += ",share=on"
 	}
