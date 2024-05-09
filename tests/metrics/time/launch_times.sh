@@ -34,7 +34,7 @@ CALCULATE_KERNEL=
 
 REQUIRED_CMDS=("bc" "awk")
 
-# set the total number of decimal digits after the decimal point 
+# set the total number of decimal digits after the decimal point
 # for representing the calculations results
 CALC_SCALE=4
 
@@ -65,13 +65,13 @@ data_is_valid=0
 
 check_entropy_level() {
 	retries="10"
-	for i in $(seq 1 "$retries"); do
-		if [ $(cat /proc/sys/kernel/random/entropy_avail) -ge ${entropy_level} ]; then
+	for i in $(seq 1 "${retries}"); do
+		if [ $(cat "/proc/sys/kernel/random/entropy_avail") -ge "${entropy_level}" ]; then
 			break;
 		fi
 		sleep 1
 	done
-	if [ $(cat /proc/sys/kernel/random/entropy_avail) -lt ${entropy_level} ]; then
+	if [ $(cat "/proc/sys/kernel/random/entropy_avail") -lt "${entropy_level}" ]; then
 		die "Not enough entropy level to run this test"
 	fi
 }
@@ -79,11 +79,11 @@ check_entropy_level() {
 # convert a 'seconds:nanoseconds' string into nanoseconds
 sn_to_ns() {
 	# !!: Remove 0's from beginning otherwise the number will be converted to octal
-	s=$(echo ${1%:*} | sed 's/^0*//g')
-	ns=$(echo ${1##*:} | sed 's/^0*//g')
+	s=$(echo "${1%:*}" | sed 's/^0*//g')
+	ns=$(echo "${1##*:}" | sed 's/^0*//g')
 	# use shell magic to strip out the 's' and 'ns' fields and print
 	# them as a 0-padded ns string...
-	printf "%d%09d" ${s} ${ns}
+	printf "%d%09d" "${s}" "${ns}"
 }
 
 # convert 'nanoseconds' (since epoch) into a 'float' seconds
@@ -97,26 +97,26 @@ run_workload() {
 	# for 'bc' performing math in kernel period estimation
 	L_CALC_SCALE=13
 	local CONTAINER_NAME="kata_launch_times_$(( $RANDOM % 1000 + 1))"
-	start_time=$($DATECMD)
+	start_time=$("${DATECMD}")
 
 	# Check entropy level of the host
 	check_entropy_level
 
 	# Run the image and command and capture the results into an array...
 	declare workload_result
-	readarray -n 0 workload_result < <(sudo -E "${CTR_EXE}" run --rm --runtime ${CTR_RUNTIME} ${IMAGE} ${CONTAINER_NAME} bash -c "$DATECMD $DMESGCMD")
-	end_time=$($DATECMD)
+	readarray -n 0 workload_result < <(sudo -E "${CTR_EXE}" run --rm --runtime "${CTR_RUNTIME}" "${IMAGE}" "${CONTAINER_NAME}" bash -c "${DATECMD} ${DMESGCMD}")
+	end_time=$("${DATECMD}")
 
 	# Delay this calculation until after we have run - do not want
 	# to measure it in the results
-	start_time=$(sn_to_ns $start_time)
-	end_time=$(sn_to_ns $end_time)
+	start_time=$(sn_to_ns "${start_time}")
+	end_time=$(sn_to_ns "${end_time}")
 
 	# Extract the 'date' info from the first line of the log
 	# This script assumes the VM clock is in sync with the host clock...
-	workload_time=${workload_result[0]}
-	workload_time=$(echo $workload_time | tr -d '\r')
-	workload_time=$(sn_to_ns $workload_time)
+	workload_time="${workload_result[0]}"
+	workload_time=$(echo "${workload_time}" | tr -d '\r')
+	workload_time=$(sn_to_ns "${workload_time}")
 
 	# How long did the whole launch/quit take
 	total_period=$((end_time-start_time))
@@ -125,7 +125,7 @@ run_workload() {
 	# How long did it take to quit
 	shutdown_period=$((end_time-workload_time))
 
-	if [ -n "$CALCULATE_KERNEL" ]; then
+	if [ -n "${CALCULATE_KERNEL}" ]; then
 		# Grab the last kernel dmesg time
 		# In our case, we need to find the last real kernel line before
 		# the systemd lines begin. The last:
@@ -139,7 +139,7 @@ run_workload() {
 			EOF
 			) | tail -1 )
 
-		if [ -z "$kernel_last_line" ]; then
+		if [ -z "${kernel_last_line}" ]; then
 			echo "No kernel last line"
 			for l in "${workload_result[@]}"; do
 				echo ">: [$l]"
@@ -147,7 +147,7 @@ run_workload() {
 			die "No kernel last line"
 		fi
 
-		kernel_period=$(echo $kernel_last_line | awk '{print $2}' | tr -d "]")
+		kernel_period=$(echo "${kernel_last_line}" | awk '{print $2}' | tr -d "]")
 
 		# And we can then work out how much time it took to get to the kernel
 		to_kernel_period=$(printf "%f" $(bc <<<"scale=$L_CALC_SCALE; $(ns_to_s $workload_period) - $kernel_period"))
@@ -156,28 +156,28 @@ run_workload() {
 		to_kernel_period="0.0"
 	fi
 
-	total_result="$(ns_to_s $total_period)"
-	to_workload="$(ns_to_s $workload_period)"
-	in_kernel=$kernel_period
-	to_kernel=$to_kernel_period
-	to_quit=$(ns_to_s $shutdown_period)
+	total_result="$(ns_to_s ${total_period})"
+	to_workload="$(ns_to_s ${workload_period})"
+	in_kernel="${kernel_period}"
+	to_kernel="${to_kernel_period}"
+	to_quit=$(ns_to_s "${shutdown_period}")
 
-	tr_is_neg=$(echo $total_result'<='0.0 | bc -l)
-	tw_is_neg=$(echo $to_workload'<='0.0 | bc -l)
-	ik_is_neg=$(echo $in_kernel'<='0.0 | bc -l)
-	tk_is_neg=$(echo $to_kernel'<='0.0 | bc -l)
-	tq_is_neg=$(echo $to_quit'<='0.0 | bc -l)
+	tr_is_neg=$(echo "${total_result}"'<='0.0 | bc -l)
+	tw_is_neg=$(echo "${to_workload}"'<='0.0 | bc -l)
+	ik_is_neg=$(echo "${in_kernel}"'<='0.0 | bc -l)
+	tk_is_neg=$(echo "${to_kernel}"'<='0.0 | bc -l)
+	tq_is_neg=$(echo "${to_quit}"'<='0.0 | bc -l)
 
 	data_is_valid=0
-	if [ $tr_is_neg -eq 1 ] || [ $tw_is_neg -eq 1 ] || [ $ik_is_neg -eq 1 ] || [ $tk_is_neg -eq 1 ] || [ $tq_is_neg -eq 1 ]; then
+	if [ "${tr_is_neg}" -eq 1 ] || [ "${tw_is_neg}" -eq 1 ] || [ "${ik_is_neg}" -eq 1 ] || [ "${tk_is_neg}" -eq 1 ] || [ "${tq_is_neg}" -eq 1 ]; then
 		data_is_valid=1
 	else
 		# Insert results individually
-		total_result_ds+=($total_result)
-		to_workload_ds+=($to_workload)
-		in_kernel_ds+=($in_kernel)
-		to_kernel_ds+=($to_kernel)
-		to_quit_ds+=($to_quit)
+		total_result_ds+=("${total_result}")
+		to_workload_ds+=("${to_workload}")
+		in_kernel_ds+=("${in_kernel}")
+		to_kernel_ds+=("${to_kernel}")
+		to_quit_ds+=("${to_quit}")
 	fi
 
 	((num_iters+=1))
@@ -185,8 +185,8 @@ run_workload() {
 	# If we are doing an (optional) scaling test, then we launch a permanent container
 	# between each of our 'test' containers. The aim being to see if our launch times
 	# are linear with the number of running containers or not
-	if [ -n "$SCALING" ]; then
-		sudo -E "${CTR_EXE}" run --runtime=${CTR_RUNTIME} -d ${IMAGE} test bash -c "tail -f /dev/null"
+	if [ -n "${SCALING}" ]; then
+		sudo -E "${CTR_EXE}" run --runtime="${CTR_RUNTIME}" -d "${IMAGE}" test bash -c "tail -f /dev/null"
 	fi
 }
 
@@ -248,7 +248,7 @@ init () {
 
 	# Start from a fairly clean environment
 	init_env
-	check_images "$IMAGE"
+	check_images "${IMAGE}"
 }
 
 # Computes the average of the data
@@ -258,12 +258,12 @@ calc_avg_array() {
 	LSCALE=6
 	size="${#data[@]}"
 
-	[ -z "$data" ] && die "List of results was not passed to the calc_avg_array() function when trying to calculate the average result."
-	[ $size -eq 0 ] && die "Division by zero: The number of items is 0 when trying to calculate the average result."
+	[ -z "${data}" ] && die "List of results was not passed to the calc_avg_array() function when trying to calculate the average result."
+	[ "${size}" -eq 0 ] && die "Division by zero: The number of items is 0 when trying to calculate the average result."
 
 	sum=$(IFS='+'; echo "scale=4; ${data[*]}" | bc)
-	avg=$(echo "scale=$LSCALE; $sum / $size" | bc)
-	printf "%.0${CALC_SCALE}f" $avg
+	avg=$(echo "scale=$LSCALE; ${sum} / ${size}" | bc)
+	printf "%.0${CALC_SCALE}f" "${avg}"
 }
 
 
@@ -271,15 +271,15 @@ calc_avg_array() {
 calc_sd_array() {
 	data=("$@")
 	sum_sqr_n=0
-	size=${#data[@]}
+	size="${#data[@]}"
 
 	# LSCALE is the scale used for calculations in the middle
 	# CALC_SCALE is the scale used for the result
 	LSCALE=13
 	CALC_SCALE=6
 
-	[ -z "$data" ] && die "List results was not passed to the calc_sd_result() function when trying to calculate the standard deviation result."
-	[ $size -eq 0 ] && die "Division by zero: The number of items is 0 when trying to calculate the standard deviation result."
+	[ -z "${data}" ] && die "List results was not passed to the calc_sd_result() function when trying to calculate the standard deviation result."
+	[ "${size}" -eq 0 ] && die "Division by zero: The number of items is 0 when trying to calculate the standard deviation result."
 
 
 	# [1] sum data
@@ -307,10 +307,10 @@ calc_sd_array() {
 	sd=$(echo "scale=$LSCALE; sqrt($var)" | bc)
 
 	# if sd is zero, limit the decimal scale to 1 digit
-	sd_is_zero=$(echo $sd'=='0.0 | bc -l)
-	[ $sd_is_zero -eq 1 ] && CALC_SCALE=1
+	sd_is_zero=$(echo "${sd}"'=='0.0 | bc -l)
+	[ "${sd_is_zero}" -eq 1 ] && CALC_SCALE=1
 
-	printf "%.0${CALC_SCALE}f" $sd
+	printf "%.0${CALC_SCALE}f" "${sd}"
 }
 
 # Computes the Coefficient of variation.
@@ -324,20 +324,20 @@ calc_cov_array() {
 	LSCALE=13
 	CALC_SCALE=6
 
-	mean_is_zero=$(echo $mean'=='0.0 | bc -l)
+	mean_is_zero=$(echo "${mean}"'=='0.0 | bc -l)
 
-	[ -z "$sd" ] && die "Standard deviation was not passed to the calc_cov_array() function when trying to calculate the CoV result."
-	[ -z "$mean" ] && die "Mean was not passed to the calc_cov_array() function when trying to calculate the CoV result."
-	[ $mean_is_zero -eq 1 ] && die "Division by zero: Mean value passed is 0 when trying to get CoV result."
+	[ -z "${sd}" ] && die "Standard deviation was not passed to the calc_cov_array() function when trying to calculate the CoV result."
+	[ -z "${mean}" ] && die "Mean was not passed to the calc_cov_array() function when trying to calculate the CoV result."
+	[ "${mean_is_zero}" -eq 1 ] && die "Division by zero: Mean value passed is 0 when trying to get CoV result."
 
 	cov=$(echo "scale=$LSCALE; $sd / $mean" | bc)
 	cov=$(echo "scale=$LSCALE; $cov * 100" | bc)
 
 	# if cov is zero, limit the decimal scale to 1 digit
-	cov_is_zero=$(echo $cov'=='0.0 | bc -l)
-	[ $cov_is_zero -eq 1 ] && CALC_SCALE=1
+	cov_is_zero=$(echo "${cov}"'=='0.0 | bc -l)
+	[ "${cov_is_zero}" -eq 1 ] && CALC_SCALE=1
 
-	printf "%.0${CALC_SCALE}f" $cov
+	printf "%.0${CALC_SCALE}f" "${cov}"
 }
 
 # Writes a JSON with the statistics results
@@ -356,11 +356,11 @@ write_stats_results() {
 	sd_to_kernel=$(calc_sd_array "${to_kernel_ds[@]}")
 	sd_to_quit=$(calc_sd_array "${to_quit_ds[@]}")
 
-	cov_total_result=$(calc_cov_array ${sd_total_result} ${avg_total_result})
-	cov_to_workload=$(calc_cov_array ${sd_to_workload} ${avg_to_workload})
-	cov_in_kernel=$(calc_cov_array ${sd_in_kernel} ${avg_in_kernel})
-	cov_to_kernel=$(calc_cov_array ${sd_to_kernel} ${avg_to_kernel})
-	cov_to_quit=$(calc_cov_array ${sd_to_quit} ${avg_to_quit})
+	cov_total_result=$(calc_cov_array "${sd_total_result}" "${avg_total_result}")
+	cov_to_workload=$(calc_cov_array "${sd_to_workload}" "${avg_to_workload}")
+	cov_in_kernel=$(calc_cov_array "${sd_in_kernel}" "${avg_in_kernel}")
+	cov_to_kernel=$(calc_cov_array "${sd_to_kernel}" "${avg_to_kernel}")
+	cov_to_quit=$(calc_cov_array "${sd_to_quit}" "${avg_to_quit}")
 
 	local json="$(cat << EOF
 	{
@@ -438,32 +438,32 @@ main() {
 	done
 	shift $((OPTIND-1))
 
-	[ -z "$IMAGE" ] && help && die "Mandatory IMAGE name not supplied"
-	[ -z "$TIMES" ] && help && die "Mandatory nunmber of containers not supplied"
+	[ -z "${IMAGE}" ] && help && die "Mandatory IMAGE name not supplied"
+	[ -z "${TIMES}" ] && help && die "Mandatory nunmber of containers not supplied"
 	# Although this is mandatory, the 'lib/common.bash' environment can set
 	# it, so we may not fail if it is not set on the command line...
-	[ -z "$RUNTIME" ] && help && die "Mandatory runtime argument not supplied"
+	[ -z "${RUNTIME}" ] && help && die "Mandatory runtime argument not supplied"
 
 	init
 	j=0
-	max_reps=$MAX_REPETITIONS
+	max_reps="${MAX_REPETITIONS}"
 
-	while [ $j -lt $TIMES ]; do
+	while [ "${j}" -lt "${TIMES}" ]; do
 
-		echo " run $num_iters"
+		echo " run ${num_iters}"
 		run_workload
 
-		if [ $data_is_valid -eq 0 ]; then
+		if [ "${data_is_valid}" -eq 0 ]; then
 			j=$(( j + 1 ))
 			# if valid result then reset 'max_reps' to initial value
-			max_reps=$MAX_REPETITIONS
+			max_reps="${MAX_REPETITIONS}"
 			continue
 		fi
 
 		echo "Skipping run due to invalid result"
 		((max_reps-=1))
 
-		if [ $max_reps -lt 0 ]; then
+		if [ "${max_reps}" -lt 0 ]; then
 			die "Max. num of repetitions reached for run: $j"
 		fi
 	done
