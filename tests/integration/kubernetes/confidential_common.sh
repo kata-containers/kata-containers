@@ -52,10 +52,12 @@ function check_hypervisor_for_confidential_tests() {
     fi
 }
 
-# Common setup for confidential tests.
-function confidential_setup() {
+# Common check for confidential tests.
+function is_confidential_runtime_class() {
 	ensure_yq
-	if ! check_hypervisor_for_confidential_tests "${KATA_HYPERVISOR}"; then
-        return 1
-    fi
+	if check_hypervisor_for_confidential_tests "${KATA_HYPERVISOR}"; then
+		return 0
+	fi
+
+	return 1
 }

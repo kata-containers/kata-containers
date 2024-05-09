@@ -9,7 +9,9 @@ load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 
 setup() {
-    confidential_setup && skip "Due to issues related to pull-image integration skip tests for ${KATA_HYPERVISOR}."
+    if is_confidential_runtime_class; then
+        skip "Due to issues related to pull-image integration skip tests for ${KATA_HYPERVISOR}."
+    fi
 
     [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
 
@@ -20,7 +22,9 @@ setup() {
 }
 
 @test "Test we can pull an unencrypted image outside the guest with runc and then inside the guest successfully" {
-    confidential_setup && skip "Due to issues related to pull-image integration skip tests for ${KATA_HYPERVISOR}."
+    if is_confidential_runtime_class; then
+        skip "Due to issues related to pull-image integration skip tests for ${KATA_HYPERVISOR}."
+    fi
 
     # 1. Create one runc pod with the $unencrypted_image_1 image
     # We want to have one runc pod, so we pass a fake runtimeclass "runc" and then delete the runtimeClassName,
@@ -216,7 +220,9 @@ setup() {
 }
 
 teardown() {
-    confidential_setup && skip "Due to issues related to pull-image integration skip tests for ${KATA_HYPERVISOR}."
+    if is_confidential_runtime_class; then
+        skip "Due to issues related to pull-image integration skip tests for ${KATA_HYPERVISOR}."
+    fi
 
     [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
 
