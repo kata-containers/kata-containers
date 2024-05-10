@@ -1087,7 +1087,16 @@ handle_build() {
 		echo "${ARTEFACT_REGISTRY_PASSWORD}" | sudo oras login "${ARTEFACT_REGISTRY}" -u "${ARTEFACT_REGISTRY_USERNAME}" --password-stdin
 
 		case ${build_target} in
-			kernel-nvidia-gpu*)
+			kernel-nvidia-gpu)
+				sudo oras push \
+					${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
+					${final_tarball_name} \
+					"kata-static-${build_target}-headers.tar.xz" \
+					${build_target}-version \
+					${build_target}-builder-image-version \
+					${build_target}-sha256sum
+				;;
+			kernel-nvidia-gpu-confidential)
 				sudo oras push \
 					${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
 					${final_tarball_name} \
