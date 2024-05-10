@@ -37,6 +37,7 @@ build_initrd() {
 	info "initrd os: $os_name"
 	info "initrd os version: $os_version"
 	sudo -E PATH="$PATH" make initrd \
+		VARIANT="${image_initrd_suffix}" \
 		DISTRO="$os_name" \
 		DEBUG="${DEBUG:-}" \
 		OS_VERSION="${os_version}" \
@@ -66,6 +67,7 @@ build_image() {
 	info "image os: $os_name"
 	info "image os version: $os_version"
 	sudo -E PATH="${PATH}" make image \
+		VARIANT="${image_initrd_suffix}" \
 		DISTRO="${os_name}" \
 		DEBUG="${DEBUG:-}" \
 		USE_DOCKER="1" \
