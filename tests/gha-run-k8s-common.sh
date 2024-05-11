@@ -193,6 +193,17 @@ function deploy_k0s() {
 
 	sudo k0s install controller --single ${KUBERNETES_EXTRA_PARAMS:-}
 
+	# kube-router decided to use :8080 for its metrics, and this seems
+	# to be a change that affected k0s 1.30.0+, leading to kube-router
+	# pod crashing all the time and anything can actually be started
+	# after that.
+	#
+	# Due to this issue, let's simply use a different port (:9999) and
+	# move on with our tests.
+	sudo mkdir -p /etc/k0s
+	k0s config create | sudo tee /etc/k0s/k0s.yaml
+	sudo sed -i -e "s/metricsPort: 8080/metricsPort: 9999/g" /etc/k0s/k0s.yaml
+
 	sudo k0s start
 
 	# This is an arbitrary value that came up from local tests
