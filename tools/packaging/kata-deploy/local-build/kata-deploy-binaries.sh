@@ -436,15 +436,20 @@ install_cached_kernel_tarball_component() {
 		"${extra_tarballs}" \
 		|| return 1
 
-	if [[ "${kernel_name}" != "kernel"*"-confidential" ]]; then
-		return 0
-	fi
+	case ${kernel_name} in
+		"kernel-nvidia-gpu"*"")
+			local kernel_headers_dir=$(get_kernel_headers_dir "${kernel_name}")
+			mkdir -p ${kernel_headers_dir} || true
+			tar xvf ${workdir}/${kernel_name}/builddir/kata-static-${kernel_name}-headers.tar.xz -C "${kernel_headers_dir}" || return 1
+			;;& # fallthrough in the confidential case we need the modules.tar.xz and for every kernel-nvidia-gpu we need the headers
+		"kernel"*"-confidential")
+			local modules_dir=$(get_kernel_modules_dir ${kernel_version} ${kernel_kata_config_version} ${build_target})
+			mkdir -p "${modules_dir}" || true
+			tar xvf "${workdir}/kata-static-${kernel_name}-modules.tar.xz" -C "${modules_dir}" || return 1
+			;;
+	esac
 
-	local modules_dir=$(get_kernel_modules_dir ${kernel_version} ${kernel_kata_config_version} ${build_target})
-	mkdir -p "${modules_dir}" || true
-	tar xvf "${workdir}/kata-static-${kernel_name}-modules.tar.xz" -C  "${modules_dir}" && return 0
-
-	return 1
+	return 0
 }
 
 #Install kernel asset
