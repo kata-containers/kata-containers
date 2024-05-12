@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	b64 "encoding/base64"
 	"encoding/json"
 	"errors"
@@ -33,8 +34,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
-
-	"context"
 
 	ctrAnnotations "github.com/containerd/containerd/pkg/cri/annotations"
 	podmanAnnotations "github.com/containers/podman/v4/pkg/annotations"
@@ -1200,8 +1199,6 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 }
 
 func (k *kataAgent) appendDevices(deviceList []*grpc.Device, c *Container) []*grpc.Device {
-	var kataDevice *grpc.Device
-
 	for _, dev := range c.devices {
 		device := c.sandbox.devManager.GetDeviceByID(dev.ID)
 		if device == nil {
@@ -1212,6 +1209,8 @@ func (k *kataAgent) appendDevices(deviceList []*grpc.Device, c *Container) []*gr
 		if strings.HasPrefix(dev.ContainerPath, defaultKataGuestVirtualVolumedir) {
 			continue
 		}
+
+		var kataDevice *grpc.Device
 
 		switch device.DeviceType() {
 		case config.DeviceBlock:
