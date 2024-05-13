@@ -134,6 +134,7 @@ docker run \
 	--env ARCH="${ARCH}" \
 	--rm \
 	-w ${script_dir} \
+	--user $(id -u):$(id -g) \
 	build-kata-deploy "${kata_deploy_create}" $@
 
 if [ $remove_dot_docker_dir == true ]; then
