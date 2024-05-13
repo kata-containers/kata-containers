@@ -11,6 +11,8 @@ set -o nounset
 set -o pipefail
 set -o errtrace
 
+set -x
+
 script_dir=$(dirname "$(readlink -f "$0")")
 kata_dir=$(realpath "${script_dir}/../../../../")
 kata_deploy_create="${script_dir}/kata-deploy-binaries.sh"
@@ -134,6 +136,7 @@ docker run \
 	--env ARCH="${ARCH}" \
 	--rm \
 	-w ${script_dir} \
+	--user $(id -u):$(id -g) \
 	build-kata-deploy "${kata_deploy_create}" $@
 
 if [ $remove_dot_docker_dir == true ]; then

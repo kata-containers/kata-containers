@@ -5,11 +5,11 @@
 
 name: Move issues to "In progress" in backlog project when referenced by a PR
 
-on:
-  pull_request_target:
-    types:
-      - opened
-      - reopened
+# on:
+#   pull_request_target:
+#     types:
+#       - opened
+#       - reopened
 
 jobs:
   move-linked-issues-to-in-progress:

@@ -1,10 +1,10 @@
-on:
-  pull_request:
-    types:
-      - opened
-      - synchronize
-      - reopened
-      - labeled # a workflow runs only when the 'ok-to-test' label is added
+# on:
+#   pull_request:
+#     types:
+#       - opened
+#       - synchronize
+#       - reopened
+#       - labeled # a workflow runs only when the 'ok-to-test' label is added
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}

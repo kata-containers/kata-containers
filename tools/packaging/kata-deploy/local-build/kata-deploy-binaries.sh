@@ -10,6 +10,8 @@ set -o nounset
 set -o pipefail
 set -o errtrace
 
+set -x
+
 readonly project="kata-containers"
 
 readonly script_name="$(basename "${BASH_SOURCE[0]}")"
@@ -194,7 +196,7 @@ install_cached_tarball_component() {
 	# "tarball1_name:tarball1_path tarball2_name:tarball2_path ... tarballN_name:tarballN_path"
 	local extra_tarballs="${6:-}"
 
-	sudo oras pull ${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) || return 1
+	oras pull ${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) || return 1
 
 	cached_version="$(cat ${component}-version)"
 	cached_image_version="$(cat ${component}-builder-image-version)"
@@ -1039,7 +1041,7 @@ handle_build() {
 
 	if [ ! -f "${final_tarball_path}" ]; then
 		cd "${destdir}"
-		sudo tar cvfJ "${final_tarball_path}" "."
+		tar cvfJ "${final_tarball_path}" "."
 	fi
 	tar tvf "${final_tarball_path}"
 
@@ -1051,7 +1053,7 @@ handle_build() {
 				kernel_headers_dir=$(get_kernel_headers_dir "${build_target}")
 
 				pushd "${kernel_headers_dir}"
-				find . -type f -name "*.${KERNEL_HEADERS_PKG_TYPE}" -exec sudo tar cvfJ "${kernel_headers_final_tarball_path}" {} +
+				find . -type f -name "*.${KERNEL_HEADERS_PKG_TYPE}" -exec tar cvfJ "${kernel_headers_final_tarball_path}" {} +
 				popd
 			fi
 			tar tvf "${kernel_headers_final_tarball_path}"
@@ -1063,8 +1065,8 @@ handle_build() {
 				local modules_dir=$(get_kernel_modules_dir ${kernel_version} ${kernel_kata_config_version} ${build_target})
 
 				pushd "${modules_dir}"
-				sudo rm -f build
-				sudo tar cvfJ "${modules_final_tarball_path}" "."
+				rm -f build
+				tar cvfJ "${modules_final_tarball_path}" "."
 				popd
 			fi
 			tar tvf "${modules_final_tarball_path}"
@@ -1084,11 +1086,11 @@ handle_build() {
 			die "ARTEFACT_REGISTRY, ARTEFACT_REGISTRY_USERNAME, ARTEFACT_REGISTRY_PASSWORD and TARGET_BRANCH must be passed to the script when pushing the artefacts to the registry!"
 		fi
 
-		echo "${ARTEFACT_REGISTRY_PASSWORD}" | sudo oras login "${ARTEFACT_REGISTRY}" -u "${ARTEFACT_REGISTRY_USERNAME}" --password-stdin
+		echo "${ARTEFACT_REGISTRY_PASSWORD}" | oras login "${ARTEFACT_REGISTRY}" -u "${ARTEFACT_REGISTRY_USERNAME}" --password-stdin
 
 		case ${build_target} in
 			kernel-nvidia-gpu*)
-				sudo oras push \
+				oras push \
 					${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
 					${final_tarball_name} \
 					"kata-static-${build_target}-modules.tar.xz" \
@@ -1098,7 +1100,7 @@ handle_build() {
 					${build_target}-sha256sum
 				;;
 			kernel*-confidential)
-				sudo oras push \
+				oras push \
 					${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
 					${final_tarball_name} \
 					"kata-static-${build_target}-modules.tar.xz" \
@@ -1107,7 +1109,7 @@ handle_build() {
 					${build_target}-sha256sum
 				;;
 			*)
-				sudo oras push \
+				oras push \
 					${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
 					${final_tarball_name} \
 					${build_target}-version \
@@ -1115,7 +1117,7 @@ handle_build() {
 					${build_target}-sha256sum
 				;;
 		esac
-		sudo oras logout "${ARTEFACT_REGISTRY}"
+		oras logout "${ARTEFACT_REGISTRY}"
 	fi
 
 	popd
@@ -1134,7 +1136,11 @@ silent_mode_error_trap() {
 }
 
 main() {
-	git config --global --add safe.directory ${repo_root_dir}
+	#git config --global --add safe.directory ${repo_root_dir}
+
+	sudo usermod -aG docker "${USER}"
+	newgrp docker
+	#sudo chmod 666 /var/run/docker.sock
 
 	local build_targets
 	local silent

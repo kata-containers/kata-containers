@@ -7,6 +7,7 @@
 set -o errexit
 set -o nounset
 set -o pipefail
+set -x
 
 readonly script_name="$(basename "${BASH_SOURCE[0]}")"
 readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -489,6 +490,7 @@ build_kernel_headers() {
 	pushd "${kernel_path}" >>/dev/null
 
 	if [ "$linux_headers" == "deb" ]; then
+		export KBUILD_BUILD_USER="${USER}"
 		make -j $(nproc ${CI:+--ignore 1}) bindeb-pkg ARCH="${arch_target}"
 	fi
 	if [ "$linux_headers" == "rpm" ]; then

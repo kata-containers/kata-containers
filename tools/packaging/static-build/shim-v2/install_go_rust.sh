@@ -82,9 +82,9 @@ case "${ARCH}" in
 		;;
 esac
 
-curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSLf | sh -s -- -y --default-toolchain ${rust_version} -t ${ARCH}-unknown-linux-${LIBC}
-source /root/.cargo/env
-rustup target add ${ARCH}-unknown-linux-${LIBC}
+#curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSLf | sh -s -- -y --default-toolchain ${rust_version} -t ${ARCH}-unknown-linux-${LIBC}
+
+#rustup target add ${ARCH}-unknown-linux-${LIBC}
 
 pushd "${tmp_dir}"
 

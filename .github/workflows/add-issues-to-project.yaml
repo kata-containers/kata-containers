@@ -5,11 +5,11 @@
 
 name: Add newly created issues to the backlog project
 
-on:
-  issues:
-    types:
-      - opened
-      - reopened
+#on:
+#  issues:
+#    types:
+#      - opened
+#      - reopened
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}

@@ -1,4 +1,4 @@
-name: CI | Run kata-monitor tests
+name: CI | Run cri-containerd tests
 on:
   workflow_call:
     inputs:
@@ -14,24 +14,24 @@ on:
         default: ""
 
 jobs:
-  run-monitor:
+  run-cri-containerd:
     strategy:
+      # We can set this to true whenever we're 100% sure that
+      # the all the tests are not flaky, otherwise we'll fail
+      # all the tests due to a single flaky instance
       fail-fast: false
       matrix:
-        vmm:
-          - qemu
-        container_engine:
-          - crio
-          - containerd
-        include:
-          - container_engine: containerd
-            containerd_version: lts
+        containerd_version: ['active']
+        vmm: ['qemu', 'qemu-runtime-rs']
     runs-on: arm64-nvidia-gpu
     env:
-      CONTAINER_ENGINE: ${{ matrix.container_engine }}
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
+      GOPATH: ${{ github.workspace }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
+      - name: Take a pre-action for self-hosted runner
+        run: ${HOME}/script/pre_action.sh ubuntu-2204
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.commit-hash }}
@@ -44,16 +44,20 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Install dependencies
-        run: bash tests/functional/kata-monitor/gha-run.sh install-dependencies
+        run: bash tests/integration/cri-containerd/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
         uses: actions/download-artifact@v4
         with:
-          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
+          name: kata-static-tarball-nvidia-gpu${{ inputs.tarball-suffix }}
           path: kata-artifacts
 
       - name: Install kata
-        run: bash tests/functional/kata-monitor/gha-run.sh install-kata kata-artifacts
+        run: bash tests/integration/cri-containerd/gha-run.sh install-kata kata-artifacts
 
-      - name: Run kata-monitor tests
-        run: bash tests/functional/kata-monitor/gha-run.sh run
+      - name: Run cri-containerd tests
+        run: bash tests/integration/cri-containerd/gha-run.sh run
+
+      - name: Take a post-action for self-hosted runner
+        if: always()
+        run: ${HOME}/script/post_action.sh ubuntu-2204
