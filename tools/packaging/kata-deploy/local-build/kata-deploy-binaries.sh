@@ -186,7 +186,7 @@ install_cached_tarball_component() {
 	fi
 
 	local component="${1}"
-	local current_version="${2}"
+	local current_version="${2}-$(git log -1 --pretty=format:"%h" ${repo_root_dir}/tools/packaging/kata-deploy/local-build)"
 	local current_image_version="${3}"
 	local component_tarball_name="${4}"
 	local component_tarball_path="${5}"
@@ -1077,7 +1077,7 @@ handle_build() {
 	esac
 
 	pushd ${workdir}
-	echo "${latest_artefact}" > ${build_target}-version
+	echo "${latest_artefact}-$(git log -1 --pretty=format:"%h" ${repo_root_dir}/tools/packaging/kata-deploy/local-build)" > ${build_target}-version
 	echo "${latest_builder_image}" > ${build_target}-builder-image-version
 	sha256sum "${final_tarball_name}" > ${build_target}-sha256sum
 
