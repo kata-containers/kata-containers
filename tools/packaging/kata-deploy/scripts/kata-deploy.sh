@@ -273,7 +273,7 @@ function install_artifacts() {
 					esac
 					;;
 				*)
-					tdx_not_supported_warning
+					tdx_not_supported ${ID} ${VERSION_ID}
 					;;
 			esac	
 		fi
