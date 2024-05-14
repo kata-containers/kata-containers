@@ -1295,7 +1295,7 @@ impl<'a> QemuCmdLine<'a> {
         qemu_cmd_line.add_rtc();
 
         qemu_cmd_line.add_rng();
-
+      
         Ok(qemu_cmd_line)
     }
 
