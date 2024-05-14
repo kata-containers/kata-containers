@@ -1212,7 +1212,6 @@ pub struct QemuCmdLine<'a> {
     smp: Smp,
     machine: Machine,
     cpu: Cpu,
-    rtc: Rtc,
 
     knobs: Knobs,
 
@@ -1229,7 +1228,6 @@ impl<'a> QemuCmdLine<'a> {
             smp: Smp::new(config),
             machine: Machine::new(config),
             cpu: Cpu::new(config),
-            rtc: Rtc::new(),
             knobs: Knobs::new(config),
             devices: Vec::new(),
         };
@@ -1238,7 +1236,14 @@ impl<'a> QemuCmdLine<'a> {
             qemu_cmd_line.add_iommu();
         }
 
+        qemu_cmd_line.add_rtc();
+
         Ok(qemu_cmd_line)
+    }
+
+    fn add_rtc(&mut self) {
+        let rtc = Rtc::new();
+        self.devices.push(Box::new(rtc));
     }
 
     fn bus_type(&self) -> VirtioBusType {
@@ -1432,7 +1437,6 @@ impl<'a> QemuCmdLine<'a> {
         result.append(&mut self.machine.qemu_params().await?);
         result.append(&mut self.cpu.qemu_params().await?);
         result.append(&mut self.memory.qemu_params().await?);
-        result.append(&mut self.rtc.qemu_params().await?);
 
         for device in &self.devices {
             result.append(&mut device.qemu_params().await?);
