@@ -8,6 +8,7 @@ use crate::{kernel_param::KernelParams, Address, HypervisorConfig};
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
+use serde_json::de;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fs::{read_to_string, File};
@@ -1148,6 +1149,61 @@ impl ToQemuParams for Rtc {
     }
 }
 
+// RngDevice represents a random number generator device.
+#[derive(Debug)]
+struct RngDevice {
+    // id is the device ID
+    id: String,
+
+    // filename is the entropy source on the host
+    filename: String,
+
+    // max_bytes is the bytes allowed to guest to get from the host’s entropy per period
+    max_bytes: u32,
+
+    // period is duration of a read period in seconds
+    period: u32,
+
+    // transport is the virtio transport for this device.
+    transport: String,
+}
+
+impl RngDevice {
+    fn new() -> RngDevice {
+        RngDevice {
+            id: "rng0".to_owned(),
+            filename: "/dev/urandom".to_owned(),
+            max_bytes: 1024,
+            period: 1000,
+            transport: "virtio-rng-pci".to_owned(),
+        }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for RngDevice {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut object_params = Vec::new();
+        let mut device_params = Vec::new();
+
+        object_params.push("rng-random".to_owned());
+        object_params.push(format!("id={}", self.id));
+        object_params.push(format!("filename={} ", self.filename));
+
+        device_params.push(format!("-device {}", self.transport));
+        device_params.push(format!("rng={}", self.id));
+        device_params.push(format!("max_bytes={}", self.max_bytes));
+        device_params.push(format!("period={}", self.period));
+
+        Ok(vec![
+            "-object".to_owned(),
+            object_params.join(","),
+            "-device".to_owned(),
+            device_params.join(","),
+        ])
+    }
+}
+
 #[derive(Debug)]
 struct DeviceIntelIommu {
     intremap: bool,
@@ -1238,7 +1294,21 @@ impl<'a> QemuCmdLine<'a> {
             qemu_cmd_line.add_iommu();
         }
 
+        qemu_cmd_line.add_rtc();
+
+        qemu_cmd_line.add_rng();
+
         Ok(qemu_cmd_line)
+    }
+
+    fn add_rtc(&mut self) {
+        let rtc = Rtc::new();
+        self.devices.push(Box::new(rtc));
+    }
+
+    fn add_rng(&mut self) {
+        let rng = RngDevice::new();
+        self.devices.push(Box::new(rng));
     }
 
     fn bus_type(&self) -> VirtioBusType {
