@@ -326,13 +326,13 @@ install_image() {
 	fi
 
 	export AGENT_TARBALL=$(get_agent_tarball_path)
+	export AGENT_POLICY=yes
 
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
 
 #Install guest image for confidential guests
 install_image_confidential() {
-	export AGENT_POLICY=yes
 	export MEASURED_ROOTFS=yes
 	export PULL_TYPE=default
 	install_image "confidential"
@@ -396,13 +396,13 @@ install_initrd() {
 	fi
 
 	export AGENT_TARBALL=$(get_agent_tarball_path)
+	export AGENT_POLICY=yes
 
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
 
 #Install guest initrd for confidential guests
 install_initrd_confidential() {
-	export AGENT_POLICY=yes
 	export MEASURED_ROOTFS=yes
 	export PULL_TYPE=default
 	install_initrd "confidential"
@@ -410,7 +410,6 @@ install_initrd_confidential() {
 
 #Install Mariner guest initrd
 install_initrd_mariner() {
-	export AGENT_POLICY=yes
 	install_initrd "mariner"
 }
 
