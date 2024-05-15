@@ -2316,9 +2316,46 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 			maxhotPluggableMemoryMB = uint32(hconfig.DefaultMaxMemorySize) - currentMemoryMB
 		}
 
-		deltaMB := int32(finalMemoryMB - currentMemoryMB)
+		deltaMB := finalMemoryMB - currentMemoryMB
 
-		if deltaMB > int32(maxhotPluggableMemoryMB) {
+		// The first time we hotplug memory, only add what is above the documented overhead if there is any.
+		//
+		// If there is an orchestrator like Kubernetes or OpenShift, it is likely to setup its own host-side cgroup.
+		// That typically only happens when the memory for the containers is specified, which is also the case where we hotplug memory.
+		// To build this cgroup, it does not use the default VM memory size (e.g. 2G) because that would significantly reduce container density.
+		// Instead, it relies on a "pod overhead" which is typically defined in the runtime class, e.g. 256M.
+		// That pod overhead is an estimate of how much memory is actually consumed by the hypervisor and the guest after boot.
+		// Consider a scenario where the guest default memory is 2G and the pod overhead is 256M.
+		// When we tell the orchestrator about a container that requires 4G of memory, Kata would normally hotplug 4G.
+		// This means that the guest now is configured with 6G of memory.
+		// However, the orchestrator only knows about 4G (container) + 256M (overhead).
+		// Within the guest, we setup guest-side cgroups, so the 4G limit for the container will be enforced.
+		// However, if the guest uses kernel resources, e.g. doing intensive I/O, that memory is not accounted in the guest cgroup.
+		// So the guest could end up using up to 6G of actual memory, exceeeding the host-side cgroup, and the pod gets killed.
+		// Therefore, the first time we hotplug memory, we need to hotplug only 4G - (2G - 256M).
+		if hconfig.MemoryOverhead != 0 && hconfig.MemoryOverhead <= hconfig.MemorySize {
+			hostUnaccountedMB := hconfig.MemorySize - hconfig.MemoryOverhead
+			s.Logger().
+				WithField("memory overhead", hconfig.MemoryOverhead).
+				WithField("final memory", finalMemoryMB).
+				WithField("requested memory", deltaMB).
+				Info("Memory overhead specified")
+			if hostUnaccountedMB > deltaMB {
+				// We would not hotplug enough: defer to next hotplug
+				// If we wanted to add 1G, 2G - 256M > 1G, so we don't hotplug 1G, and we bump overhead to 1G+256M.
+				// Next time, if we add 1G, we will compare to 2G - (1G + 256M), and add 256M,
+				// matching what is known to the orchestrator, i.e.
+				// 1G (container) +1G (container) +256M (overhead) = 2G (memory size) + added second time (256M)
+				hconfig.MemoryOverhead += deltaMB
+				break
+			} else {
+				// This request is big enough to hide the overhead
+				deltaMB -= hostUnaccountedMB
+				hconfig.MemoryOverhead = 0
+			}
+		}
+
+		if deltaMB > maxhotPluggableMemoryMB {
 			s.Logger().Warnf("Large hotplug. Adding %d MB of %d total memory", maxhotPluggableMemoryMB, deltaMB)
 			newMemoryMB = currentMemoryMB + maxhotPluggableMemoryMB
 		} else {

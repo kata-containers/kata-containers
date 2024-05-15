@@ -119,6 +119,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (testConfig testRuntime
 		DefaultMemSize:       defaultMemSize,
 		DefaultMaxMemorySize: maxMemory,
 		DefaultMsize9p:       defaultMsize9p,
+		DefaultMemOverhead:   defaultMemOverhead,
 		HypervisorDebug:      hypervisorDebug,
 		RuntimeDebug:         runtimeDebug,
 		RuntimeTrace:         runtimeTrace,
@@ -169,6 +170,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (testConfig testRuntime
 		DefaultMaxVCPUs:       getCurrentCpuNum(),
 		MemorySize:            defaultMemSize,
 		DefaultMaxMemorySize:  maxMemory,
+		MemoryOverhead:        defaultMemOverhead,
 		DisableBlockDeviceUse: disableBlockDevice,
 		BlockDeviceDriver:     defaultBlockDeviceDriver,
 		BlockDeviceAIO:        defaultBlockDeviceAIO,
@@ -566,6 +568,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		DefaultMaxVCPUs:       defaultMaxVCPUCount,
 		MemorySize:            defaultMemSize,
 		DisableBlockDeviceUse: defaultDisableBlockDeviceUse,
+		MemoryOverhead:        defaultMemOverhead,
 		DefaultBridges:        defaultBridgesCount,
 		BlockDeviceDriver:     defaultBlockDeviceDriver,
 		Msize9p:               defaultMsize9p,
@@ -944,6 +947,7 @@ func TestHypervisorDefaults(t *testing.T) {
 	assert.Equal(h.defaultVCPUs(), float32(defaultVCPUCount), "default vCPU number is wrong")
 	assert.Equal(h.defaultMaxVCPUs(), numCPUs, "default max vCPU number is wrong")
 	assert.Equal(h.defaultMemSz(), defaultMemSize, "default memory size is wrong")
+	assert.Equal(h.defaultMemOverhead(), defaultMemOverhead, "default memory overhead is wrong")
 
 	machineType := "foo"
 	h.MachineType = machineType
@@ -971,6 +975,9 @@ func TestHypervisorDefaults(t *testing.T) {
 
 	h.MemorySize = 1024
 	assert.Equal(h.defaultMemSz(), uint32(1024), "default memory size is wrong")
+
+	h.MemoryOverhead = 1235
+	assert.Equal(h.defaultMemOverhead(), uint32(1235), "configured default memory overhead is wrong")
 }
 
 func TestHypervisorDefaultsHypervisor(t *testing.T) {
@@ -1790,6 +1797,7 @@ func TestUpdateRuntimeConfigHypervisor(t *testing.T) {
 				h.name: {
 					NumVCPUs:       float32(2),
 					MemorySize:     uint32(2048),
+					MemoryOverhead: uint32(0),
 					Path:           "/",
 					Kernel:         "/",
 					Image:          "/",

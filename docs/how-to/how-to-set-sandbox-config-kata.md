@@ -59,7 +59,7 @@ There are several kinds of Kata configurations and they are listed below.
 | `io.katacontainers.config.hypervisor.enable_iothreads` | `boolean`| enable IO to be processed in a separate thread. Supported currently for virtio-`scsi` driver |
 | `io.katacontainers.config.hypervisor.enable_mem_prealloc` | `boolean` | the memory space used for `nvdimm` device by the hypervisor |
 | `io.katacontainers.config.hypervisor.enable_vhost_user_store` | `boolean` | enable vhost-user storage device (QEMU) |
-| `io.katacontainers.config.hypervisor.vhost_user_reconnect_timeout_sec` | `string`| the timeout for reconnecting vhost user socket (QEMU) 
+| `io.katacontainers.config.hypervisor.vhost_user_reconnect_timeout_sec` | `string`| the timeout for reconnecting vhost user socket (QEMU)
 | `io.katacontainers.config.hypervisor.enable_virtio_mem` | `boolean` | enable virtio-mem (QEMU) |
 | `io.katacontainers.config.hypervisor.entropy_source` (R) | string| the path to a host source of entropy (`/dev/random`, `/dev/urandom` or real hardware RNG device) |
 | `io.katacontainers.config.hypervisor.file_mem_backend` (R) | string | file based memory backend root directory |
@@ -83,6 +83,7 @@ There are several kinds of Kata configurations and they are listed below.
 | `io.katacontainers.config.hypervisor.machine_type` | string | the type of machine being emulated by the hypervisor |
 | `io.katacontainers.config.hypervisor.memory_offset` | uint64| the memory space used for `nvdimm` device by the hypervisor |
 | `io.katacontainers.config.hypervisor.memory_slots` | uint32| the memory slots assigned to the VM by the hypervisor |
+| `io.katacontainers.config.hypervisor.memory_overhead` | uint32| the memory overhead for the VM in `MiB` |
 | `io.katacontainers.config.hypervisor.msize_9p` | uint32 | the `msize` for 9p shares |
 | `io.katacontainers.config.hypervisor.path` | string | the hypervisor that will run the container VM |
 | `io.katacontainers.config.hypervisor.pcie_root_port` | specify the number of PCIe Root Port devices. The PCIe Root Port device is used to hot-plug a PCIe device (QEMU) |
