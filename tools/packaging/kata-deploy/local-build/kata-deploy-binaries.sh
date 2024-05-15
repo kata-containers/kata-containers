@@ -186,7 +186,7 @@ install_cached_tarball_component() {
 	fi
 
 	local component="${1}"
-	local current_version="${2}"
+	local current_version="${2}-$(git log -1 --pretty=format:"%h" ${repo_root_dir}/tools/packaging/kata-deploy/local-build)"
 	local current_image_version="${3}"
 	local component_tarball_name="${4}"
 	local component_tarball_path="${5}"
@@ -326,13 +326,13 @@ install_image() {
 	fi
 
 	export AGENT_TARBALL=$(get_agent_tarball_path)
+	export AGENT_POLICY=yes
 
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
 
 #Install guest image for confidential guests
 install_image_confidential() {
-	export AGENT_POLICY=yes
 	export MEASURED_ROOTFS=yes
 	export PULL_TYPE=default
 	install_image "confidential"
@@ -396,13 +396,13 @@ install_initrd() {
 	fi
 
 	export AGENT_TARBALL=$(get_agent_tarball_path)
+	export AGENT_POLICY=yes
 
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
 
 #Install guest initrd for confidential guests
 install_initrd_confidential() {
-	export AGENT_POLICY=yes
 	export MEASURED_ROOTFS=yes
 	export PULL_TYPE=default
 	install_initrd "confidential"
@@ -410,7 +410,6 @@ install_initrd_confidential() {
 
 #Install Mariner guest initrd
 install_initrd_mariner() {
-	export AGENT_POLICY=yes
 	install_initrd "mariner"
 }
 
@@ -1077,7 +1076,7 @@ handle_build() {
 	esac
 
 	pushd ${workdir}
-	echo "${latest_artefact}" > ${build_target}-version
+	echo "${latest_artefact}-$(git log -1 --pretty=format:"%h" ${repo_root_dir}/tools/packaging/kata-deploy/local-build)" > ${build_target}-version
 	echo "${latest_builder_image}" > ${build_target}-builder-image-version
 	sha256sum "${final_tarball_name}" > ${build_target}-sha256sum
 
