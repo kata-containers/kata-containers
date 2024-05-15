@@ -186,7 +186,7 @@ install_cached_tarball_component() {
 	fi
 
 	local component="${1}"
-	local current_version="${2}-$(git log -1 --pretty=format:"%h" ${repo_root_dir}/tools/packaging/kata-deploy/local-build)"
+	local current_version="${2}-$(git log -1 --abbrev=9 --pretty=format:"%h" ${repo_root_dir}/tools/packaging/kata-deploy/local-build)"
 	local current_image_version="${3}"
 	local component_tarball_name="${4}"
 	local component_tarball_path="${5}"
@@ -798,7 +798,7 @@ install_ovmf_sev() {
 }
 
 install_agent() {
-	latest_artefact="$(git log -1 --pretty=format:"%h" ${repo_root_dir}/src/agent)"
+	latest_artefact="$(git log -1 --abbrev=9 --pretty=format:"%h" ${repo_root_dir}/src/agent)"
 	latest_builder_image="$(get_agent_image_name)"
 
 	install_cached_tarball_component \
@@ -901,7 +901,7 @@ install_script_helper() {
 install_tools_helper() {
 	tool=${1}
 
-	latest_artefact="$(git log -1 --pretty=format:"%h" ${repo_root_dir}/src/tools/${tool})"
+	latest_artefact="$(git log -1 --abbrev=9 --pretty=format:"%h" ${repo_root_dir}/src/tools/${tool})"
 	latest_builder_image="$(get_tools_image_name)"
 
 	install_cached_tarball_component \
@@ -1117,7 +1117,7 @@ handle_build() {
 	esac
 
 	pushd ${workdir}
-	echo "${latest_artefact}-$(git log -1 --pretty=format:"%h" ${repo_root_dir}/tools/packaging/kata-deploy/local-build)" > ${build_target}-version
+	echo "${latest_artefact}-$(git log -1 --abbrev=9 --pretty=format:"%h" ${repo_root_dir}/tools/packaging/kata-deploy/local-build)" > ${build_target}-version
 	echo "${latest_builder_image}" > ${build_target}-builder-image-version
 	sha256sum "${final_tarball_name}" > ${build_target}-sha256sum
 

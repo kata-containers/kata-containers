@@ -113,7 +113,7 @@ get_last_modification() {
 	dirty=""
 	[ $(git status --porcelain | grep "${file#${repo_root_dir}/}" | wc -l) -gt 0 ] && dirty="-dirty"
 
-	echo "$(git log -1 --pretty=format:"%h" ${file})${dirty}"
+	echo "$(git log -1 --abbrev=9 --pretty=format:"%h" ${file})${dirty}"
 	popd &> /dev/null
 }
 
