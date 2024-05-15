@@ -432,7 +432,7 @@ allow_by_bundle_or_sandbox_id(p_oci, i_oci, p_storages, i_storages) {
     print("allow_by_bundle_or_sandbox_id: start")
 
     bundle_path := i_oci.Annotations["io.katacontainers.pkg.oci.bundle_path"]
-    bundle_id := replace(bundle_path, "/run/containerd/io.containerd.runtime.v2.task/k8s.io/", "")
+    bundle_id := replace(bundle_path, policy_data.common.bundle_path_prefix, "")
 
     key := "io.kubernetes.cri.sandbox-id"
 
@@ -755,11 +755,12 @@ mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) {
 mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) {
     regex1 := p_mount.source
     regex2 := replace(regex1, "$(sfprefix)", policy_data.common.sfprefix)
-    regex3 := replace(regex2, "$(cpath)", policy_data.common.cpath)
+    regex3 := replace(regex2, "$(cpath)", "/run/kata-containers/shared/containers")
     regex4 := replace(regex3, "$(sandbox-id)", sandbox_id)
+    regex5 := replace(regex4, "$(bundle-id)", bundle_id)
 
-    print("mount_source_allows 2: regex4 =", regex4)
-    regex.match(regex4, i_mount.source)
+    print("mount_source_allows 2: regex5 =", regex5)
+    regex.match(regex5, i_mount.source)
 
     print("mount_source_allows 2: true")
 }

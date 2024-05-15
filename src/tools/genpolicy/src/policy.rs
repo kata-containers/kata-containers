@@ -350,6 +350,9 @@ pub struct CommonData {
 
     /// Default capabilities for a privileged container.
     pub privileged_caps: Vec<String>,
+
+    /// Prefix for bundled path
+    pub bundle_path_prefix: String,
 }
 
 /// Configuration from "kubectl config".

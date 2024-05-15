@@ -266,7 +266,8 @@
             "CAP_PERFMON",
             "CAP_BPF",
             "CAP_CHECKPOINT_RESTORE"
-        ]
+        ],
+        "bundle_path_prefix": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/"
     },
     "kata_config": {
         "confidential_guest": false,
