@@ -1,4 +1,4 @@
-name: Publish Kata release artifacts for arm64
+name: Publish Kata release artifacts for ppc64le
 on:
   workflow_call:
     inputs:
@@ -7,16 +7,21 @@ on:
         type: string
 
 jobs:
-  build-kata-static-tarball-arm64:
-    uses: ./.github/workflows/build-kata-static-tarball-arm64.yaml
+  build-kata-static-tarball-ppc64le:
+    uses: ./.github/actions/ppc64le/build-kata-static-tarball.yaml
     with:
       push-to-registry: yes
       stage: release
 
   kata-deploy:
-    needs: build-kata-static-tarball-arm64
-    runs-on: arm64-builder
+    needs: build-kata-static-tarball-ppc64le
+    runs-on: ppc64le
     steps:
+      - name: Prepare the self-hosted runner
+        run: |
+          bash ${HOME}/scripts/prepare_runner.sh
+          sudo rm -rf $GITHUB_WORKSPACE/*
+
       - name: Login to Kata Containers docker.io
         uses: docker/login-action@v3
         with:
@@ -34,10 +39,10 @@ jobs:
       - name: get-kata-tarball
         uses: actions/download-artifact@v4
         with:
-          name: kata-static-tarball-arm64
+          name: kata-static-tarball-ppc64le
 
-      - name: build-and-push-kata-deploy-ci-arm64
-        id: build-and-push-kata-deploy-ci-arm64
+      - name: build-and-push-kata-deploy-ci-ppc64le
+        id: build-and-push-kata-deploy-ci-ppc64le
         run: |
           # We need to do such trick here as the format of the $GITHUB_REF
           # is "refs/tags/<tag>"

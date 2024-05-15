@@ -1,4 +1,4 @@
-name: Publish Kata release artifacts for ppc64le
+name: Publish Kata release artifacts for s390x
 on:
   workflow_call:
     inputs:
@@ -7,20 +7,19 @@ on:
         type: string
 
 jobs:
-  build-kata-static-tarball-ppc64le:
-    uses: ./.github/workflows/build-kata-static-tarball-ppc64le.yaml
+  build-kata-static-tarball-s390x:
+    uses: ./.github/actions/s390x/build-kata-static-tarball.yaml
     with:
       push-to-registry: yes
       stage: release
+    secrets: inherit
 
   kata-deploy:
-    needs: build-kata-static-tarball-ppc64le
-    runs-on: ppc64le
+    needs: build-kata-static-tarball-s390x
+    runs-on: s390x
     steps:
-      - name: Prepare the self-hosted runner
-        run: |
-          bash ${HOME}/scripts/prepare_runner.sh
-          sudo rm -rf $GITHUB_WORKSPACE/*
+      - name: Take a pre-action for self-hosted runner
+        run: ${HOME}/script/pre_action.sh ubuntu-2204
 
       - name: Login to Kata Containers docker.io
         uses: docker/login-action@v3
@@ -39,10 +38,10 @@ jobs:
       - name: get-kata-tarball
         uses: actions/download-artifact@v4
         with:
-          name: kata-static-tarball-ppc64le
+          name: kata-static-tarball-s390x
 
-      - name: build-and-push-kata-deploy-ci-ppc64le
-        id: build-and-push-kata-deploy-ci-ppc64le
+      - name: build-and-push-kata-deploy-ci-s390x
+        id: build-and-push-kata-deploy-ci-s390x
         run: |
           # We need to do such trick here as the format of the $GITHUB_REF
           # is "refs/tags/<tag>"

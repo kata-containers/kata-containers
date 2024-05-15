@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-kata-static-tarball-amd64:
-    uses: ./.github/workflows/build-kata-static-tarball-amd64.yaml
+    uses: ./.github/actions/amd64/build-kata-static-tarball.yaml
     with:
       push-to-registry: yes
       stage: release

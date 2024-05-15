@@ -19,28 +19,28 @@ jobs:
 
   build-and-push-assets-amd64:
     needs: release
-    uses: ./.github/workflows/release-amd64.yaml
+    uses: ./.github/actions/amd64/release.yaml
     with:
       target-arch: amd64
     secrets: inherit
 
   build-and-push-assets-arm64:
     needs: release
-    uses: ./.github/workflows/release-arm64.yaml
+    uses: ./.github/actions/arm64/release.yaml
     with:
       target-arch: arm64
     secrets: inherit
 
   build-and-push-assets-s390x:
     needs: release
-    uses: ./.github/workflows/release-s390x.yaml
+    uses: ./.github/actions/s390x/release.yaml
     with:
       target-arch: s390x
     secrets: inherit
 
   build-and-push-assets-ppc64le:
     needs: release
-    uses: ./.github/workflows/release-ppc64le.yaml
+    uses: ./.github/actions/ppc64le/release.yaml
     with:
       target-arch: ppc64le
     secrets: inherit

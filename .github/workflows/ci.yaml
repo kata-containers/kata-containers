@@ -18,7 +18,22 @@ on:
 
 jobs:
   build-kata-static-tarball-amd64:
-    uses: ./.github/workflows/build-kata-static-tarball-amd64.yaml
+    uses: ./.github/actions/amd64/build-kata-static-tarball.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
+
+  build-kata-static-tarball-s390x:
+    uses: ./.github/actions/s390x/build-kata-static-tarball.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
+    secrets: inherit
+
+  build-kata-static-tarball-ppc64le:
+    uses: ./.github/actions/ppc64le/build-kata-static-tarball.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
@@ -26,7 +41,7 @@ jobs:
 
   publish-kata-deploy-payload-amd64:
     needs: build-kata-static-tarball-amd64
-    uses: ./.github/workflows/publish-kata-deploy-payload-amd64.yaml
+    uses: ./.github/actions/amd64/publish-kata-deploy-payload.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
       registry: ghcr.io
@@ -36,24 +51,9 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
     secrets: inherit
 
-  build-kata-static-tarball-s390x:
-    uses: ./.github/workflows/build-kata-static-tarball-s390x.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
-    secrets: inherit
-  
-  build-kata-static-tarball-ppc64le:
-    uses: ./.github/workflows/build-kata-static-tarball-ppc64le.yaml
-    with:
-      tarball-suffix: -${{ inputs.tag }}
-      commit-hash: ${{ inputs.commit-hash }}
-      target-branch: ${{ inputs.target-branch }}
-
   publish-kata-deploy-payload-s390x:
     needs: build-kata-static-tarball-s390x
-    uses: ./.github/workflows/publish-kata-deploy-payload-s390x.yaml
+    uses: ./.github/actions/s390x/publish-kata-deploy-payload.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
       registry: ghcr.io
@@ -65,7 +65,7 @@ jobs:
   
   publish-kata-deploy-payload-ppc64le:
     needs: build-kata-static-tarball-ppc64le
-    uses: ./.github/workflows/publish-kata-deploy-payload-ppc64le.yaml
+    uses: ./.github/actions/ppc64le/publish-kata-deploy-payload.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
       registry: ghcr.io
@@ -114,7 +114,7 @@ jobs:
 
   run-kata-deploy-tests-on-aks:
     needs: publish-kata-deploy-payload-amd64
-    uses: ./.github/workflows/run-kata-deploy-tests-on-aks.yaml
+    uses: ./.github/actions/amd64/run-kata-deploy-tests-on-aks.yaml
     with:
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
@@ -126,7 +126,7 @@ jobs:
 
   run-kata-deploy-tests-on-garm:
     needs: publish-kata-deploy-payload-amd64
-    uses: ./.github/workflows/run-kata-deploy-tests-on-garm.yaml
+    uses: ./.github/actions/amd64/run-kata-deploy-tests-on-garm.yaml
     with:
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
@@ -138,7 +138,7 @@ jobs:
 
   run-kata-monitor-tests:
     needs: build-kata-static-tarball-amd64
-    uses: ./.github/workflows/run-kata-monitor-tests.yaml
+    uses: ./.github/actions/amd64/run-kata-monitor-tests.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
@@ -146,7 +146,7 @@ jobs:
 
   run-k8s-tests-on-aks:
     needs: publish-kata-deploy-payload-amd64
-    uses: ./.github/workflows/run-k8s-tests-on-aks.yaml
+    uses: ./.github/actions/amd64/run-k8s-tests-on-aks.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
       registry: ghcr.io
@@ -159,7 +159,7 @@ jobs:
 
   run-k8s-tests-on-garm:
     needs: publish-kata-deploy-payload-amd64
-    uses: ./.github/workflows/run-k8s-tests-on-garm.yaml
+    uses: ./.github/actions/amd64/run-k8s-tests-on-garm.yaml
     with:
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
@@ -171,7 +171,7 @@ jobs:
 
   run-k8s-tests-with-crio-on-garm:
     needs: publish-kata-deploy-payload-amd64
-    uses: ./.github/workflows/run-k8s-tests-with-crio-on-garm.yaml
+    uses: ./.github/actions/amd64/run-k8s-tests-with-crio-on-garm.yaml
     with:
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
@@ -183,7 +183,7 @@ jobs:
 
   run-kata-coco-tests:
     needs: [publish-kata-deploy-payload-amd64, build-and-publish-tee-confidential-unencrypted-image]
-    uses: ./.github/workflows/run-kata-coco-tests.yaml
+    uses: ./.github/actions/amd64/run-kata-coco-tests.yaml
     with:
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
@@ -195,7 +195,7 @@ jobs:
 
   run-k8s-tests-on-zvsi:
     needs: [publish-kata-deploy-payload-s390x, build-and-publish-tee-confidential-unencrypted-image]
-    uses: ./.github/workflows/run-k8s-tests-on-zvsi.yaml
+    uses: ./.github/actions/s390x/run-k8s-tests-on-zvsi.yaml
     with:
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
@@ -206,7 +206,7 @@ jobs:
       
   run-k8s-tests-on-ppc64le:
     needs: publish-kata-deploy-payload-ppc64le
-    uses: ./.github/workflows/run-k8s-tests-on-ppc64le.yaml
+    uses: ./.github/actions/ppc64le/run-k8s-tests.yaml
     with:
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
@@ -217,7 +217,7 @@ jobs:
 
   run-metrics-tests:
     needs: build-kata-static-tarball-amd64
-    uses: ./.github/workflows/run-metrics.yaml
+    uses: ./.github/actions/amd64/run-metrics.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
@@ -225,7 +225,7 @@ jobs:
 
   run-basic-amd64-tests:
     needs: build-kata-static-tarball-amd64
-    uses: ./.github/workflows/basic-ci-amd64.yaml
+    uses: ./.github/actions/amd64/basic-ci.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
@@ -233,7 +233,7 @@ jobs:
 
   run-cri-containerd-tests-s390x:
     needs: build-kata-static-tarball-s390x
-    uses: ./.github/workflows/run-cri-containerd-tests-s390x.yaml
+    uses: ./.github/actions/s390x/run-cri-containerd-tests.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
@@ -241,7 +241,7 @@ jobs:
 
   run-cri-containerd-tests-ppc64le:
     needs: build-kata-static-tarball-ppc64le
-    uses: ./.github/workflows/run-cri-containerd-tests-ppc64le.yaml
+    uses: ./.github/actions/ppc64le/run-cri-containerd-tests.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}
       commit-hash: ${{ inputs.commit-hash }}
