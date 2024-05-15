@@ -10,8 +10,8 @@ load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	if ! is_confidential_runtime_class; then
-		skip "Test not supported for ${KATA_HYPERVISOR}."
+	if ! is_confidential_hardware; then
+		skip "Test is supported only on confidential hardware (which ${KATA_HYPERVISOR} is not)"
 	fi
 	setup_unencrypted_confidential_pod
 }
@@ -43,8 +43,8 @@ setup() {
 }
 
 teardown() {
-	if ! is_confidential_runtime_class; then
-		skip "Test not supported for ${KATA_HYPERVISOR}."
+	if ! is_confidential_hardware; then
+		skip "Test is supported only on confidential hardware (which ${KATA_HYPERVISOR} is not)"
 	fi
 	
 	kubectl describe "pod/${pod_name}" || true
