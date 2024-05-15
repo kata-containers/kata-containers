@@ -689,6 +689,12 @@ func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig
 		return err
 	}
 
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.MemOverhead).setUint(func(movhd uint64) {
+		sbConfig.HypervisorConfig.MemoryOverhead = uint32(movhd)
+	}); err != nil {
+		return err
+	}
+
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.VirtioMem).setBool(func(virtioMem bool) {
 		sbConfig.HypervisorConfig.VirtioMem = virtioMem
 	}); err != nil {
@@ -1171,6 +1177,7 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid st
 
 		sandboxConfig.HypervisorConfig.NumVCPUsF += sandboxConfig.SandboxResources.WorkloadCPUs
 		sandboxConfig.HypervisorConfig.MemorySize += sandboxConfig.SandboxResources.WorkloadMemMB
+		sandboxConfig.HypervisorConfig.MemorySize += sandboxConfig.HypervisorConfig.MemoryOverhead
 
 		sandboxConfig.HypervisorConfig.DefaultMaxVCPUs = sandboxConfig.HypervisorConfig.NumVCPUs()
 
