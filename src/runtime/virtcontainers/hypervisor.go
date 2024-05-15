@@ -85,6 +85,10 @@ const (
 	// MinHypervisorMemory is the minimum memory required for a VM.
 	MinHypervisorMemory = 256
 
+	// MinHypervisorOverhead is the minimum memory overhead required for a VM.
+	defaultMemoryOverhead = 0
+	MinHypervisorMemoryOverhead = 64 // Experimentally nothing works below that
+
 	defaultMsize9p = 8192
 
 	defaultDisableGuestSeLinux = true
@@ -578,6 +582,9 @@ type HypervisorConfig struct {
 
 	// MemSlots specifies default memory slots the VM.
 	MemSlots uint32
+
+	// MemoryOverhead specifies default memory overhead in MiB for the VM.
+	MemoryOverhead uint32
 
 	// VirtioFSCacheSize is the DAX cache size in MiB
 	VirtioFSCacheSize uint32
