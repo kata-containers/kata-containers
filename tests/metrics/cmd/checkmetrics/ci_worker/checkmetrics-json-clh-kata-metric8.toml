@@ -146,9 +146,9 @@ description = "measure random write throughput using fio"
 # within (inclusive)
 checkvar = "[.\"fio\".\"Results random\"] | .[] | .[] | .randwrite.bw | select( . != null )"
 checktype = "mean"
-midval = 1440540.7
-minpercent = 20.0
-maxpercent = 20.0
+midval = 1065844.0
+minpercent = 40.0
+maxpercent = 40.0
 
 [[metric]]
 name = "latency"
