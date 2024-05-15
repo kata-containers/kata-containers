@@ -363,10 +363,6 @@ struct Knobs {
     nodefaults: bool,
     nographic: bool,
     no_reboot: bool,
-    no_shutdown: bool,
-    daemonize: bool,
-    stopped: bool,
-
     vga: String,
 }
 
@@ -377,9 +373,6 @@ impl Knobs {
             nodefaults: true,
             nographic: true,
             no_reboot: true,
-            no_shutdown: false,
-            daemonize: false,
-            stopped: false,
             vga: "none".to_owned(),
         }
     }
@@ -402,15 +395,6 @@ impl ToQemuParams for Knobs {
         }
         if self.no_reboot {
             result.push("-no-reboot".to_owned());
-        }
-        if self.no_shutdown {
-            result.push("-no-shutdown".to_owned());
-        }
-        if self.daemonize {
-            result.push("-daemonize".to_owned());
-        }
-        if self.stopped {
-            result.push("-S".to_owned());
         }
         Ok(result)
     }
