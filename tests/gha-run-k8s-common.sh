@@ -12,38 +12,38 @@ GH_PR_NUMBER="${GH_PR_NUMBER:-}"
 GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-oci-distribution}"
 
 function _print_instance_type() {
-    case ${K8S_TEST_HOST_TYPE} in
-        small)
-            echo "Standard_D2s_v5"
-            ;;
-        normal)
-            echo "Standard_D4s_v5"
-            ;;
-        *)
-            echo "Unknown instance type '${K8S_TEST_HOST_TYPE}'" >&2
-            exit 1
-    esac
+	case ${K8S_TEST_HOST_TYPE} in
+		small)
+			echo "Standard_D2s_v5"
+			;;
+		normal)
+			echo "Standard_D4s_v5"
+			;;
+		*)
+			echo "Unknown instance type '${K8S_TEST_HOST_TYPE}'" >&2
+			exit 1
+	esac
 }
 
 # Print the cluster name set by $AKS_NAME or generated out of runtime
 # metadata (e.g. pull request number, commit SHA, etc).
 #
 function _print_cluster_name() {
-    local test_type="${1:-k8s}"
-    local short_sha
+	local test_type="${1:-k8s}"
+	local short_sha
 
-    if [ -n "${AKS_NAME:-}" ]; then
-        echo "$AKS_NAME"
-    else
-        short_sha="$(git rev-parse --short=12 HEAD)"
-        echo "${test_type}-${GH_PR_NUMBER}-${short_sha}-${KATA_HYPERVISOR}-${KATA_HOST_OS}-amd64-${K8S_TEST_HOST_TYPE:0:1}-${GENPOLICY_PULL_METHOD:0:1}"
-    fi
+	if [ -n "${AKS_NAME:-}" ]; then
+		echo "$AKS_NAME"
+	else
+		short_sha="$(git rev-parse --short=12 HEAD)"
+		echo "${test_type}-${GH_PR_NUMBER}-${short_sha}-${KATA_HYPERVISOR}-${KATA_HOST_OS}-amd64-${K8S_TEST_HOST_TYPE:0:1}-${GENPOLICY_PULL_METHOD:0:1}"
+	fi
 }
 
 function _print_rg_name() {
-    test_type="${1:-k8s}"
+	test_type="${1:-k8s}"
 
-    echo "${AZ_RG:-"kataCI-$(_print_cluster_name ${test_type})"}"
+	echo "${AZ_RG:-"kataCI-$(_print_cluster_name ${test_type})"}"
 }
 
 # Enable the HTTP application routing add-on to AKS.
@@ -62,56 +62,56 @@ function enable_cluster_http_application_routing() {
 }
 
 function install_azure_cli() {
-    curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
-    # The aks-preview extension is required while the Mariner Kata host is in preview.
-    az extension add --name aks-preview
+	curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+	# The aks-preview extension is required while the Mariner Kata host is in preview.
+	az extension add --name aks-preview
 }
 
 function login_azure() {
-    az login \
-        --service-principal \
-        -u "${AZ_APPID}" \
-        -p "${AZ_PASSWORD}" \
-        --tenant "${AZ_TENANT_ID}"
+	az login \
+		--service-principal \
+		-u "${AZ_APPID}" \
+		-p "${AZ_PASSWORD}" \
+		--tenant "${AZ_TENANT_ID}"
 
-    # Switch to the Kata Containers subscription
-    az account set --subscription "${AZ_SUBSCRIPTION_ID}"
+	# Switch to the Kata Containers subscription
+	az account set --subscription "${AZ_SUBSCRIPTION_ID}"
 }
 
 function create_cluster() {
-    test_type="${1:-k8s}"
+	test_type="${1:-k8s}"
 
-    # First ensure it didn't fail to get cleaned up from a previous run.
-    delete_cluster "${test_type}" || true
+	# First ensure it didn't fail to get cleaned up from a previous run.
+	delete_cluster "${test_type}" || true
 
-    local rg="$(_print_rg_name ${test_type})"
+	local rg="$(_print_rg_name ${test_type})"
 
-    az group create \
-        -l eastus \
-        -n "${rg}"
+	az group create \
+		-l eastus \
+		-n "${rg}"
 
-    az aks create \
-        -g "${rg}" \
-        --node-resource-group "node-${rg}" \
-        -n "$(_print_cluster_name ${test_type})" \
-        -s "$(_print_instance_type)" \
-        --node-count 1 \
-        --generate-ssh-keys
+	az aks create \
+		-g "${rg}" \
+		--node-resource-group "node-${rg}" \
+		-n "$(_print_cluster_name ${test_type})" \
+		-s "$(_print_instance_type)" \
+		--node-count 1 \
+		--generate-ssh-keys
 }
 
 function install_bats() {
-    # Installing bats from the lunar repo.
-    # This installs newer version of the bats which supports setup_file and teardown_file functions.
-    # These functions are helpful when adding new tests that require one time setup.
+	# Installing bats from the lunar repo.
+	# This installs newer version of the bats which supports setup_file and teardown_file functions.
+	# These functions are helpful when adding new tests that require one time setup.
 
-    sudo apt install -y software-properties-common
-    sudo add-apt-repository 'deb http://archive.ubuntu.com/ubuntu/ lunar universe'
-    sudo apt install -y bats
-    sudo add-apt-repository --remove 'deb http://archive.ubuntu.com/ubuntu/ lunar universe'
+	sudo apt install -y software-properties-common
+	sudo add-apt-repository 'deb http://archive.ubuntu.com/ubuntu/ lunar universe'
+	sudo apt install -y bats
+	sudo add-apt-repository --remove 'deb http://archive.ubuntu.com/ubuntu/ lunar universe'
 }
 
 function install_kubectl() {
-    sudo az aks install-cli
+	sudo az aks install-cli
 }
 
 # Install the kustomize tool in /usr/local/bin if it doesn't exist on
@@ -142,12 +142,12 @@ function install_kustomize() {
 }
 
 function get_cluster_credentials() {
-    test_type="${1:-k8s}"
+	test_type="${1:-k8s}"
 
-    az aks get-credentials \
-        --overwrite-existing \
-        -g "$(_print_rg_name ${test_type})" \
-        -n "$(_print_cluster_name ${test_type})"
+	az aks get-credentials \
+		--overwrite-existing \
+		-g "$(_print_rg_name ${test_type})" \
+		-n "$(_print_cluster_name ${test_type})"
 }
 
 
@@ -169,13 +169,13 @@ function get_cluster_specific_dns_zone() {
 }
 
 function delete_cluster() {
-    test_type="${1:-k8s}"
-    local rg
-    rg="$(_print_rg_name ${test_type})"
+	test_type="${1:-k8s}"
+	local rg
+	rg="$(_print_rg_name ${test_type})"
 
-    if [ "$(az group exists -g "${rg}")" == "true" ]; then
-        az group delete -g "${rg}" --yes
-    fi
+	if [ "$(az group exists -g "${rg}")" == "true" ]; then
+		az group delete -g "${rg}" --yes
+	fi
 }
 
 function delete_cluster_kcli() {
@@ -184,8 +184,8 @@ function delete_cluster_kcli() {
 }
 
 function get_nodes_and_pods_info() {
-    kubectl debug $(kubectl get nodes -o name) -it --image=quay.io/kata-containers/kata-debug:latest || true
-    kubectl get pods -o name | grep node-debugger | xargs kubectl delete || true
+	kubectl debug $(kubectl get nodes -o name) -it --image=quay.io/kata-containers/kata-debug:latest || true
+	kubectl get pods -o name | grep node-debugger | xargs kubectl delete || true
 }
 
 function deploy_k0s() {
