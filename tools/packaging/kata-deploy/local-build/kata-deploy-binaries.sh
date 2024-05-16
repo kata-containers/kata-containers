@@ -1177,7 +1177,7 @@ handle_build() {
 		esac
 
 		tags=(latest-${TARGET_BRANCH}-$(uname -m))
-		if [ -n "${artefact_tag}" ]; then
+		if [ -n "${artefact_tag:-}" ]; then
 			tags+=("${artefact_tag}")
 		fi
 		if [ "${RELEASE}" == "yes" ]; then
