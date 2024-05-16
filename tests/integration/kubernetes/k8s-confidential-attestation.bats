@@ -76,9 +76,7 @@ setup() {
 	sleep 5
 
 	kubectl logs aa-test-cc
-	cmd="kubectl logs aa-test-cc | grep -q aatest"
-	run $cmd
-	[ "$status" -eq 1 ]
+	kubectl logs aa-test-cc | grep -q "Failed to connect"
 }
 
 teardown() {
