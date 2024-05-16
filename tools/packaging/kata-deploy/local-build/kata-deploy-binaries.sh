@@ -44,6 +44,7 @@ MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
 PULL_TYPE=${PULL_TYPE:-default}
 USE_CACHE="${USE_CACHE:-"yes"}"
 ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY:-ghcr.io}"
+ARTEFACT_REPOSITORY="${ARTEFACT_REPOSITORY:-kata-containers}"
 ARTEFACT_REGISTRY_USERNAME="${ARTEFACT_REGISTRY_USERNAME:-}"
 ARTEFACT_REGISTRY_PASSWORD="${ARTEFACT_REGISTRY_PASSWORD:-}"
 TARGET_BRANCH="${TARGET_BRANCH:-main}"
@@ -194,7 +195,7 @@ install_cached_tarball_component() {
 	# "tarball1_name:tarball1_path tarball2_name:tarball2_path ... tarballN_name:tarballN_path"
 	local extra_tarballs="${6:-}"
 
-	sudo oras pull ${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) || return 1
+	sudo oras pull ${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) || return 1
 
 	cached_version="$(cat ${component}-version)"
 	cached_image_version="$(cat ${component}-builder-image-version)"
@@ -1123,10 +1124,11 @@ handle_build() {
 
 	if [ "${PUSH_TO_REGISTRY}" = "yes" ]; then
 		if [ -z "${ARTEFACT_REGISTRY}" ] ||
+			[ -z "${ARTEFACT_REPOSITORY}" ] ||
 			[ -z "${ARTEFACT_REGISTRY_USERNAME}" ] ||
 			[ -z "${ARTEFACT_REGISTRY_PASSWORD}" ] ||
 		      	[ -z "${TARGET_BRANCH}" ]; then
-			die "ARTEFACT_REGISTRY, ARTEFACT_REGISTRY_USERNAME, ARTEFACT_REGISTRY_PASSWORD and TARGET_BRANCH must be passed to the script when pushing the artefacts to the registry!"
+			die "ARTEFACT_REGISTRY, ARTEFACT_REPOSITORY, ARTEFACT_REGISTRY_USERNAME, ARTEFACT_REGISTRY_PASSWORD and TARGET_BRANCH must be passed to the script when pushing the artefacts to the registry!"
 		fi
 
 		echo "${ARTEFACT_REGISTRY_PASSWORD}" | sudo oras login "${ARTEFACT_REGISTRY}" -u "${ARTEFACT_REGISTRY_USERNAME}" --password-stdin
@@ -1143,7 +1145,7 @@ handle_build() {
 				;;
 			kernel-nvidia-gpu-confidential)
 				sudo oras push \
-					${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
+					${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
 					${final_tarball_name} \
 					"kata-static-${build_target}-modules.tar.xz" \
 					"kata-static-${build_target}-headers.tar.xz" \
@@ -1153,7 +1155,7 @@ handle_build() {
 				;;
 			kernel*-confidential)
 				sudo oras push \
-					${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
+					${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
 					${final_tarball_name} \
 					"kata-static-${build_target}-modules.tar.xz" \
 					${build_target}-version \
@@ -1162,7 +1164,7 @@ handle_build() {
 				;;
 			*)
 				sudo oras push \
-					${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
+					${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
 					${final_tarball_name} \
 					${build_target}-version \
 					${build_target}-builder-image-version \
