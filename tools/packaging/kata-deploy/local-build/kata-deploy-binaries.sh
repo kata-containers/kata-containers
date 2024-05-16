@@ -50,6 +50,7 @@ ARTEFACT_REGISTRY_PASSWORD="${ARTEFACT_REGISTRY_PASSWORD:-}"
 TARGET_BRANCH="${TARGET_BRANCH:-main}"
 PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-}"
 KERNEL_HEADERS_PKG_TYPE="${KERNEL_HEADERS_PKG_TYPE:-deb}"
+RELEASE="${RELEASE:-"no"}"
 
 workdir="${WORKDIR:-$PWD}"
 
@@ -800,6 +801,7 @@ install_ovmf_sev() {
 
 install_agent() {
 	latest_artefact="$(git log -1 --abbrev=9 --pretty=format:"%h" ${repo_root_dir}/src/agent)"
+	artefact_tag="$(git log -1 --abbrev=9 --pretty=format:"%h" ${repo_root_dir})"
 	latest_builder_image="$(get_agent_image_name)"
 
 	install_cached_tarball_component \
@@ -821,6 +823,7 @@ install_agent() {
 
 install_coco_guest_components() {
 	latest_artefact="$(get_from_kata_deps "externals.coco-guest-components.version")-$(get_from_kata_deps "externals.coco-guest-components.toolchain")"
+	artefact_tag="$(get_from_kata_deps "externals.coco-guest-components.version")"
 	latest_builder_image="$(get_coco_guest_components_image_name)"
 
 	install_cached_tarball_component \
@@ -837,6 +840,7 @@ install_coco_guest_components() {
 
 install_pause_image() {
 	latest_artefact="$(get_from_kata_deps "externals.pause.repo")-$(get_from_kata_deps "externals.pause.version")"
+	artefact_tag=${latest_artefact}
 	latest_builder_image="$(get_pause_image_name)"
 
 	install_cached_tarball_component \
@@ -1064,8 +1068,8 @@ handle_build() {
 
 	rootfs-nvidia-gpu-image) install_image_nvidia_gpu ;;
 
-	rootfs-nvidia-gpu-initrd) install_initrd_nvidia_gpu ;;	
-	
+	rootfs-nvidia-gpu-initrd) install_initrd_nvidia_gpu ;;
+
 	rootfs-nvidia-gpu-confidential-image) install_image_nvidia_gpu_confidential ;;
 
 	rootfs-nvidia-gpu-confidential-initrd) install_initrd_nvidia_gpu_confidential ;;
@@ -1093,7 +1097,7 @@ handle_build() {
 		kernel-nvidia-gpu*)
 			local kernel_headers_final_tarball_path="${workdir}/kata-static-${build_target}-headers.tar.xz"
 			if [ ! -f "${kernel_headers_final_tarball_path}" ]; then
-				local kernel_headers_dir 
+				local kernel_headers_dir
 				kernel_headers_dir=$(get_kernel_headers_dir "${build_target}")
 
 				pushd "${kernel_headers_dir}"
@@ -1171,6 +1175,36 @@ handle_build() {
 					${build_target}-sha256sum
 				;;
 		esac
+
+		tags=(latest-${TARGET_BRANCH}-$(uname -m))
+		if [ -n "${artefact_tag}" ]; then
+			tags+=("${artefact_tag}")
+		fi
+		if [ "${RELEASE}" == "yes" ]; then
+			tags+=("$(cat "${version_file}")")
+		fi
+
+		for tag in "${tags[@]}"; do
+			case ${build_target} in
+				kernel*-confidential)
+					sudo oras push \
+						${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:${tag} \
+						${final_tarball_name} \
+						"kata-static-${build_target}-modules.tar.xz" \
+						${build_target}-version \
+						${build_target}-builder-image-version \
+						${build_target}-sha256sum
+					;;
+				*)
+					sudo oras push \
+						${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:${tag} \
+						${final_tarball_name} \
+						${build_target}-version \
+						${build_target}-builder-image-version \
+						${build_target}-sha256sum
+					;;
+			esac
+		done
 		sudo oras logout "${ARTEFACT_REGISTRY}"
 	fi
 

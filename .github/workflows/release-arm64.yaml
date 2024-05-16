@@ -10,6 +10,7 @@ jobs:
   build-kata-static-tarball-arm64:
     uses: ./.github/workflows/build-kata-static-tarball-arm64.yaml
     with:
+      push-to-registry: yes
       stage: release
 
   kata-deploy:
