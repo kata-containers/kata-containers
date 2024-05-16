@@ -19,7 +19,7 @@ setup() {
 
     [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
 
-    setup_common 
+    setup_common
     unencrypted_image_1="quay.io/sjenning/nginx:1.15-alpine"
     unencrypted_image_2="quay.io/prometheus/busybox:latest"
     large_image="quay.io/confidential-containers/test-images:largeimage"
@@ -94,7 +94,7 @@ setup() {
     echo "Pod $kata_pod_with_nydus_config file:"
     cat $kata_pod_with_nydus_config
 
-    # The pod should be failed because the default timeout of CreateContainerRequest is 60s 
+    # The pod should be failed because the default timeout of CreateContainerRequest is 60s
     assert_pod_fail "$kata_pod_with_nydus_config"
     assert_logs_contain "$node" kata "$node_start_time" \
 		'context deadline exceeded'
@@ -116,7 +116,6 @@ setup() {
 }
 
 @test "Test we can pull an unencrypted image inside the guest twice in a row and then outside the guest successfully" {
-    skip "Skip this test until we use containerd 2.0 with 'image pull per runtime class' feature: https://github.com/containerd/containerd/issues/9377"
     # 1. Create one kata pod with the $unencrypted_image_1 image and nydus annotation twice
     kata_pod_with_nydus_config="$(new_pod_config "$unencrypted_image_1" "kata-${KATA_HYPERVISOR}")"
     set_node "$kata_pod_with_nydus_config" "$node"
@@ -133,7 +132,7 @@ setup() {
 
     add_allow_all_policy_to_yaml "$kata_pod_with_nydus_config"
     k8s_create_pod "$kata_pod_with_nydus_config"
-    
+
     echo "Kata pod test-e2e with nydus annotation is running"
     echo "Checking the image was pulled in the guest"
 
@@ -172,7 +171,6 @@ setup() {
 }
 
 @test "Test we can pull an other unencrypted image outside the guest and then inside the guest successfully" {
-    skip "Skip this test until we use containerd 2.0 with 'image pull per runtime class' feature: https://github.com/containerd/containerd/issues/9377"
     # 1. Create one kata pod with the $unencrypted_image_2 image and without nydus annotation
     kata_pod_without_nydus_config="$(new_pod_config "$unencrypted_image_2" "kata-${KATA_HYPERVISOR}")"
     set_node "$kata_pod_without_nydus_config" "$node"
@@ -184,7 +182,7 @@ setup() {
 
     add_allow_all_policy_to_yaml "$kata_pod_without_nydus_config"
     k8s_create_pod "$kata_pod_without_nydus_config"
-    
+
     echo "Kata pod test-e2e without nydus annotation is running"
     echo "Checking the image was pulled in the host"
 
@@ -211,7 +209,7 @@ setup() {
 
     add_allow_all_policy_to_yaml "$kata_pod_with_nydus_config"
     k8s_create_pod "$kata_pod_with_nydus_config"
-    
+
     echo "Kata pod test-e2e with nydus annotation is running"
     echo "Checking the image was pulled in the guest"
     sandbox_id=$(get_node_kata_sandbox_id $node)
