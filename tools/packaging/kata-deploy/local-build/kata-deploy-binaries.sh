@@ -1148,6 +1148,8 @@ handle_build() {
 		echo "Pushing ${build_target} with tags: ${tags[*]}"
 
 		for tag in "${tags[@]}"; do
+			# tags can only contain lowercase and uppercase letters, digits, underscores, periods, and hyphens
+			tag=("$(echo ${tag} | tr -c '[a-zA-Z0-9\_\.\-]' _)")
 			case ${build_target} in
 				kernel-nvidia-gpu)
 					sudo oras push \
