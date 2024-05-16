@@ -1137,45 +1137,6 @@ handle_build() {
 
 		echo "${ARTEFACT_REGISTRY_PASSWORD}" | sudo oras login "${ARTEFACT_REGISTRY}" -u "${ARTEFACT_REGISTRY_USERNAME}" --password-stdin
 
-		case ${build_target} in
-			kernel-nvidia-gpu)
-				sudo oras push \
-					${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
-					${final_tarball_name} \
-					"kata-static-${build_target}-headers.tar.xz" \
-					${build_target}-version \
-					${build_target}-builder-image-version \
-					${build_target}-sha256sum
-				;;
-			kernel-nvidia-gpu-confidential)
-				sudo oras push \
-					${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
-					${final_tarball_name} \
-					"kata-static-${build_target}-modules.tar.xz" \
-					"kata-static-${build_target}-headers.tar.xz" \
-					${build_target}-version \
-					${build_target}-builder-image-version \
-					${build_target}-sha256sum
-				;;
-			kernel*-confidential)
-				sudo oras push \
-					${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
-					${final_tarball_name} \
-					"kata-static-${build_target}-modules.tar.xz" \
-					${build_target}-version \
-					${build_target}-builder-image-version \
-					${build_target}-sha256sum
-				;;
-			*)
-				sudo oras push \
-					${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
-					${final_tarball_name} \
-					${build_target}-version \
-					${build_target}-builder-image-version \
-					${build_target}-sha256sum
-				;;
-		esac
-
 		tags=(latest-${TARGET_BRANCH}-$(uname -m))
 		if [ -n "${artefact_tag:-}" ]; then
 			tags+=("${artefact_tag}")
@@ -1184,11 +1145,32 @@ handle_build() {
 			tags+=("$(cat "${version_file}")")
 		fi
 
+		echo "Pushing ${build_target} with tags: ${tags[*]}"
+
 		for tag in "${tags[@]}"; do
 			case ${build_target} in
-				kernel*-confidential)
+				kernel-nvidia-gpu)
 					sudo oras push \
 						${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:${tag} \
+						${final_tarball_name} \
+						"kata-static-${build_target}-headers.tar.xz" \
+						${build_target}-version \
+						${build_target}-builder-image-version \
+						${build_target}-sha256sum
+					;;
+				kernel-nvidia-gpu-confidential)
+					sudo oras push \
+						${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:${tag} \
+						${final_tarball_name} \
+						"kata-static-${build_target}-modules.tar.xz" \
+						"kata-static-${build_target}-headers.tar.xz" \
+						${build_target}-version \
+						${build_target}-builder-image-version \
+						${build_target}-sha256sum
+					;;
+				kernel*-confidential)
+					sudo oras push \
+						${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:${tag} \
 						${final_tarball_name} \
 						"kata-static-${build_target}-modules.tar.xz" \
 						${build_target}-version \
@@ -1197,7 +1179,7 @@ handle_build() {
 					;;
 				*)
 					sudo oras push \
-						${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:${tag} \
+						${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:${tag} \
 						${final_tarball_name} \
 						${build_target}-version \
 						${build_target}-builder-image-version \
