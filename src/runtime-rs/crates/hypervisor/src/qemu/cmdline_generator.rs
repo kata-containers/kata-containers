@@ -11,13 +11,18 @@ use async_trait::async_trait;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fs::{read_to_string, File};
-use std::os::fd::AsRawFd;
+use std::os::fd::{AsRawFd, FromRawFd, IntoRawFd};
+use std::os::unix::net::UnixListener;
+use std::path::PathBuf;
 use tokio;
 
 // These should have been called MiB and GiB for better readability but the
 // more fitting names unfortunately generate linter warnings.
 const MI_B: u64 = 1024 * 1024;
 const GI_B: u64 = 1024 * MI_B;
+
+const QMP_SOCKET_FILE: &str = "qmp.sock";
+const DEBUG_MONITOR_SOCKET: &str = "debug-monitor.sock";
 
 // The approach taken here is inspired by govmm.  We build structs, each
 // corresponding to a qemu command line parameter, like Kernel, or a device,
@@ -1162,6 +1167,121 @@ impl ToQemuParams for DeviceIntelIommu {
     }
 }
 
+// Qemu provides methods and types for managing QEMU instances.
+// To manage a qemu instance after it has been launched you need
+// to pass the -qmp option during launch requesting the qemu instance
+// to create a QMP unix domain manageent socket, e.g.,
+// -qmp unix:fd=SOCK_FD,server=on,wait=off.
+// -monitor unix:path=SOCK_PATH,server=on,wait=off.
+#[derive(Debug, Default, PartialEq)]
+pub enum MonitorProtocol {
+    // Socket using a human-friendly text-based protocol.
+    Hmp,
+
+    // Socket using a richer json-based protocol.
+    #[default]
+    Qmp,
+
+    // Same as Qmp with pretty json formatting.
+    QmpPretty,
+}
+
+impl MonitorProtocol {
+    pub fn new(proto: &str) -> Self {
+        match proto {
+            "hmp" => MonitorProtocol::Hmp,
+            "qmp-pretty" => MonitorProtocol::QmpPretty,
+            _ => MonitorProtocol::Qmp,
+        }
+    }
+}
+
+impl ToString for MonitorProtocol {
+    fn to_string(&self) -> String {
+        match *self {
+            MonitorProtocol::Hmp => "monitor".to_string(),
+            MonitorProtocol::QmpPretty => "qmp-pretty".to_string(),
+            _ => "qmp".to_string(),
+        }
+    }
+}
+
+#[derive(Debug)]
+enum QmpSockType {
+    Fd(File),
+    Path(PathBuf),
+}
+
+#[derive(Debug)]
+pub struct QmpSocket {
+    // protocol to be used on the socket.
+    protocol: MonitorProtocol,
+    // QMP unix socket to be passed to qemu
+    address: QmpSockType,
+    // server tells if this is a server socket.
+    server: bool,
+    // nowait tells if qemu should block waiting for a client to connect.
+    nowait: bool,
+}
+
+impl QmpSocket {
+    fn new(proto: MonitorProtocol) -> Result<Self> {
+        let qmp_socket = match proto {
+            MonitorProtocol::Qmp | MonitorProtocol::QmpPretty => {
+                // let sock_path = root_path.join(QMP_SOCKET_FILE);
+                let listener =
+                    UnixListener::bind(QMP_SOCKET_FILE).context("unix listener bind failed.")?;
+                let raw_fd = listener.into_raw_fd();
+                clear_cloexec(raw_fd).context("clearing unix listenser O_CLOEXEC failed")?;
+                let sock_file = unsafe { File::from_raw_fd(raw_fd) };
+                // The default QMP socket or called base socket is qmp.sock.
+                QmpSocket {
+                    protocol: MonitorProtocol::new("qmp"),
+                    address: QmpSockType::Fd(sock_file),
+                    server: true,
+                    nowait: true,
+                }
+            }
+            MonitorProtocol::Hmp => {
+                // If extra monitor needed, HMP socket with qmp-extra.sock will be added.
+                QmpSocket {
+                    protocol: MonitorProtocol::new("hmp"),
+                    address: QmpSockType::Path(PathBuf::from(DEBUG_MONITOR_SOCKET)),
+                    server: true,
+                    nowait: true,
+                }
+            }
+        };
+
+        Ok(qmp_socket)
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for QmpSocket {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let param_qmp = format!("-{}", self.protocol.to_string());
+
+        let mut params: Vec<String> = Vec::new();
+
+        match &self.address {
+            // -qmp unix:fd=SOCK_FD,server=on,wait=off
+            QmpSockType::Fd(f) => params.push(format!("unix:fd={}", f.as_raw_fd())),
+            // -monitor unix:path=SOCK_PATH,server=on,wait=off
+            QmpSockType::Path(p) => params.push(format!("unix:path={}", p.display())),
+        }
+
+        if self.server {
+            params.push("server=on".to_owned());
+            if self.nowait {
+                params.push("wait=off".to_owned());
+            }
+        }
+
+        Ok(vec![param_qmp, params.join(",")])
+    }
+}
+
 fn is_running_in_vm() -> Result<bool> {
     let res = read_to_string("/proc/cpuinfo")?
         .lines()
@@ -1196,6 +1316,7 @@ pub struct QemuCmdLine<'a> {
     smp: Smp,
     machine: Machine,
     cpu: Cpu,
+    qmp_socket: QmpSocket,
 
     knobs: Knobs,
 
@@ -1212,6 +1333,7 @@ impl<'a> QemuCmdLine<'a> {
             smp: Smp::new(config),
             machine: Machine::new(config),
             cpu: Cpu::new(config),
+            qmp_socket: QmpSocket::new(MonitorProtocol::Qmp)?,
             knobs: Knobs::new(config),
             devices: Vec::new(),
         };
@@ -1220,9 +1342,20 @@ impl<'a> QemuCmdLine<'a> {
             qemu_cmd_line.add_iommu();
         }
 
+        if config.debug_info.enable_debug && !config.debug_info.dbg_monitor_socket.is_empty() {
+            qemu_cmd_line.add_monitor(&config.debug_info.dbg_monitor_socket)?;
+        }
+
         qemu_cmd_line.add_rtc();
 
         Ok(qemu_cmd_line)
+    }
+
+    fn add_monitor(&mut self, proto: &str) -> Result<()> {
+        let monitor = QmpSocket::new(MonitorProtocol::new(proto))?;
+        self.devices.push(Box::new(monitor));
+
+        Ok(())
     }
 
     fn add_rtc(&mut self) {
@@ -1421,6 +1554,7 @@ impl<'a> QemuCmdLine<'a> {
         result.append(&mut self.machine.qemu_params().await?);
         result.append(&mut self.cpu.qemu_params().await?);
         result.append(&mut self.memory.qemu_params().await?);
+        result.append(&mut self.qmp_socket.qemu_params().await?);
 
         for device in &self.devices {
             result.append(&mut device.qemu_params().await?);
