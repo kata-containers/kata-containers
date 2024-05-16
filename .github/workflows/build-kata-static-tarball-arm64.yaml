@@ -77,10 +77,10 @@ jobs:
           ARTEFACT_REGISTRY_USERNAME: ${{ github.actor }}
           ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           TARGET_BRANCH: ${{ inputs.target-branch }}
-          RELEASE: ${{ if inputs.stage == 'release' && 'yes' || 'no' }}
+          RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
 
       - name: store-artifact ${{ matrix.asset }}
-        if: ${{ inputs.stage != 'release' || matrix.component != 'agent' }}
+        if: ${{ inputs.stage != 'release' || matrix.asset != 'agent' }}
         uses: actions/upload-artifact@v4
         with:
           name: kata-artifacts-arm64-${{ matrix.asset }}${{ inputs.tarball-suffix }}
