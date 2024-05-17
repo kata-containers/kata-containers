@@ -63,7 +63,7 @@ declare -a to_quit_ds
 # data_is_valid value 0 represent is valid
 data_is_valid=0
 
-check_entropy_level() {
+function check_entropy_level() {
 	retries="10"
 	for i in $(seq 1 "${retries}"); do
 		if [ $(cat "/proc/sys/kernel/random/entropy_avail") -ge "${entropy_level}" ]; then
@@ -77,7 +77,7 @@ check_entropy_level() {
 }
 
 # convert a 'seconds:nanoseconds' string into nanoseconds
-sn_to_ns() {
+function sn_to_ns() {
 	# !!: Remove 0's from beginning otherwise the number will be converted to octal
 	s=$(echo "${1%:*}" | sed 's/^0*//g')
 	ns=$(echo "${1##*:}" | sed 's/^0*//g')
@@ -87,17 +87,17 @@ sn_to_ns() {
 }
 
 # convert 'nanoseconds' (since epoch) into a 'float' seconds
-ns_to_s() {
+function ns_to_s() {
 	printf "%.0${CALC_SCALE}f" $(bc <<< "scale=$CALC_SCALE; $1 / 1000000000")
 }
 
-run_workload() {
+function run_workload() {
 	# L_CALC_SCALE is set to accounting a significant
 	# number of decimal digits after the decimal points
 	# for 'bc' performing math in kernel period estimation
 	L_CALC_SCALE=13
 	local CONTAINER_NAME="kata_launch_times_$(( $RANDOM % 1000 + 1))"
-	start_time=$("${DATECMD}")
+	start_time=$(eval "${DATECMD}")
 
 	# Check entropy level of the host
 	check_entropy_level
@@ -105,7 +105,7 @@ run_workload() {
 	# Run the image and command and capture the results into an array...
 	declare workload_result
 	readarray -n 0 workload_result < <(sudo -E "${CTR_EXE}" run --rm --runtime "${CTR_RUNTIME}" "${IMAGE}" "${CONTAINER_NAME}" bash -c "${DATECMD} ${DMESGCMD}")
-	end_time=$("${DATECMD}")
+	end_time=$(eval "${DATECMD}")
 
 	# Delay this calculation until after we have run - do not want
 	# to measure it in the results
@@ -192,7 +192,7 @@ run_workload() {
 
 # Writes a JSON  with the measurements
 # results per execution
-write_individual_results() {
+function write_individual_results() {
 	for i in "${!total_result_ds[@]}"; do
 		local json="$(cat << EOF
 	{
@@ -223,7 +223,7 @@ EOF
 	done
 }
 
-init () {
+function init() {
 	TEST_ARGS="image=${IMAGE} runtime=${CTR_RUNTIME} units=seconds"
 
 	# We set the generic name here, but we save the different time results separately,
@@ -233,7 +233,7 @@ init () {
 	# If we are scaling, note that in the name
 	[ -n "$SCALING" ] && TEST_NAME="${TEST_NAME} scaling"
 
-	echo "Executing test: ${TEST_NAME} ${TEST_ARGS}"
+	info "Executing test: ${TEST_NAME} ${TEST_ARGS}"
 	check_cmds "${REQUIRED_CMDS[@]}"
 
 	# For non-VM runtimes, we don't use the output of dmesg, and
@@ -450,7 +450,7 @@ main() {
 
 	while [ "${j}" -lt "${TIMES}" ]; do
 
-		echo " run ${num_iters}"
+		info " run ${num_iters}"
 		run_workload
 
 		if [ "${data_is_valid}" -eq 0 ]; then
@@ -460,7 +460,7 @@ main() {
 			continue
 		fi
 
-		echo "Skipping run due to invalid result"
+		info "Skipping run due to invalid result"
 		((max_reps-=1))
 
 		if [ "${max_reps}" -lt 0 ]; then
