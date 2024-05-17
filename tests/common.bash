@@ -149,7 +149,9 @@ function extract_kata_env() {
 	RUNTIME_PATH=$(sudo ${cmd} env --json | jq -r ${runtime_path})
 
 	# Shimv2 path is being affected by https://github.com/kata-containers/kata-containers/issues/1151
-	SHIM_PATH=$(readlink $(command -v containerd-shim-kata-v2))
+	SHIM_PATH=$(command -v containerd-shim-kata-v2)
+	[ -L ${SHIM_PATH} ] && SHIM_PATH=$(readlink ${SHIM_PATH})
+
 	SHIM_VERSION=${RUNTIME_VERSION}
 
 	HYPERVISOR_PATH=$(sudo ${cmd} env --json | jq -r ${hypervisor_path})
