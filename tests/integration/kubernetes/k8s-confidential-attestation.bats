@@ -15,7 +15,7 @@ export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 export AA_KBC="${AA_KBC:-cc_kbc}"
 
 setup() {
-	confidential_setup || skip "Test not supported for ${KATA_HYPERVISOR}."
+	is_confidential_runtime_class || skip "Test not supported for ${KATA_HYPERVISOR}."
 
 	if [ "${KBS}" = "false" ]; then
 		skip "Test skipped as KBS not setup"
@@ -82,7 +82,7 @@ setup() {
 }
 
 teardown() {
-	check_hypervisor_for_confidential_tests ${KATA_HYPERVISOR} || skip "Test not supported for ${KATA_HYPERVISOR}."
+	is_confidential_runtime_class || skip "Test not supported for ${KATA_HYPERVISOR}."
 
 	if [ "${KBS}" = "false" ]; then
 		skip "Test skipped as KBS not setup"
