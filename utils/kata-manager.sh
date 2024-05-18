@@ -38,6 +38,10 @@ readonly nerdctl_project="nerdctl"
 readonly nerdctl_releases_url="https://api.github.com/repos/${nerdctl_slug}/releases"
 readonly nerdctl_supported_arches="x86_64 aarch64"
 
+readonly cni_project="cni-plugins"
+readonly cni_slug="containernetworking/plugins"
+readonly cni_releases_url="https://api.github.com/repos/${cni_slug}/releases"
+
 # Directory created when unpacking a binary release archive downloaded from
 # $kata_releases_url.
 readonly kata_install_dir="${kata_install_dir:-/opt/kata}"
@@ -222,6 +226,9 @@ github_get_release_file_url()
 			regex="nerdctl-full-${version_number}-linux-${arch_regex}.tar.gz" ;;
 		*containerd*)
 			regex="containerd-${version_number}-linux-${arch_regex}.tar.gz" ;;
+		*containernetworking*)
+			regex="cni-plugins-linux-${arch_regex}-${version}.tgz" ;;
+
 		*) die "invalid url: '$url'" ;;
 	esac
 
@@ -547,6 +554,9 @@ install_containerd()
 		done
 
 	info "$project installed\n"
+
+	# Installing cni plugins for containerd
+	install_cni
 }
 
 install_nerdctl()
@@ -592,6 +602,38 @@ install_nerdctl()
 	sudo cp /usr/local/libexec/cni/* /opt/cni/bin/
 
 	info "cni plugins installed under /opt/cni/bin"
+}
+
+install_cni()
+{
+	local project="$cni_project"
+
+	info "Downloading $project latest release"
+
+	local results
+	results=$(github_download_package \
+		"$cni_releases_url" \
+		"" \
+		"$project")
+
+	[ -z "$results" ] && die "Cannot download $project release file"
+
+	local version
+	version=$(echo "$results"|cut -d: -f1)
+
+	local file
+	file=$(echo "$results"|cut -d: -f2-)
+
+	[ -z "$version" ] && die "Cannot determine $project resolved version"
+	[ -z "$file" ] && die "Cannot determine $project release file"
+
+	info "Installing $project release $version from $file"
+
+	sudo mkdir -p /opt/cni/bin
+
+	sudo tar -C /opt/cni/bin -xvf "${file}"
+
+	info "$project installed\n"
 }
 
 configure_containerd()
