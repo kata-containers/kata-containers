@@ -584,6 +584,14 @@ install_nerdctl()
 		done
 
 	info "$project installed\n"
+
+	sudo mkdir -p /opt/cni/bin
+
+	# nerdctl requires cni plugins to be installed in /opt/cni/bin
+	# Copy extracted tarball cni files under /usr/local/libexec
+	sudo cp /usr/local/libexec/cni/* /opt/cni/bin/
+
+	info "cni plugins installed under /opt/cni/bin"
 }
 
 configure_containerd()
