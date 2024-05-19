@@ -9,6 +9,8 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
+	[ "${KATA_HYPERVISOR}" = "qemu-tdx" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/9666"
+
 	pod_name="sysctl-test"
 	get_pod_config_dir
 
@@ -30,6 +32,8 @@ setup() {
 }
 
 teardown() {
+	[ "${KATA_HYPERVISOR}" = "qemu-tdx" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/9666"
+
 	# Debugging information
 	kubectl describe "pod/$pod_name"
 
