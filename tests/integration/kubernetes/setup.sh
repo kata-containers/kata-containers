@@ -57,7 +57,7 @@ add_annotations_to_yaml() {
 	case "${resource_kind}" in
 
 	Pod)
-		echo "Adding kernel and initrd annotations to ${resource_kind} from ${yaml_file}"
+		info "Adding \"${annotation_name}=${annotation_value}\" to ${resource_kind} from ${yaml_file}"
 		yq write -i \
 		  "${K8S_TEST_YAML}" \
 		  "metadata.annotations[${annotation_name}]" \
@@ -65,7 +65,7 @@ add_annotations_to_yaml() {
 		;;
 
 	Deployment|Job|ReplicationController)
-		echo "Adding kernel and initrd annotations to ${resource_kind} from ${yaml_file}"
+		info "Adding \"${annotation_name}=${annotation_value}\" to ${resource_kind} from ${yaml_file}"
 		yq write -i \
 		  "${K8S_TEST_YAML}" \
 		  "spec.template.metadata.annotations[${annotation_name}]" \
@@ -73,15 +73,15 @@ add_annotations_to_yaml() {
 		;;
 
 	List)
-		echo "Issue #7765: adding kernel and initrd annotations to ${resource_kind} from ${yaml_file} is not implemented yet"
+		info "Issue #7765: adding annotations to ${resource_kind} from ${yaml_file} is not implemented yet"
 		;;
 
 	ConfigMap|LimitRange|Namespace|PersistentVolume|PersistentVolumeClaim|RuntimeClass|Secret|Service)
-		echo "Kernel and initrd annotations are not required for ${resource_kind} from ${yaml_file}"
+		info "Annotations are not required for ${resource_kind} from ${yaml_file}"
 		;;
 
 	*)
-		echo "k8s resource type ${resource_kind} from ${yaml_file} is not yet supported for kernel and initrd annotations testing"
+		info "k8s resource type ${resource_kind} from ${yaml_file} is not yet supported for annotations testing"
 		return 1
 		;;
 	esac
