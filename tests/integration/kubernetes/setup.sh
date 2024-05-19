@@ -12,6 +12,7 @@ DEBUG="${DEBUG:-}"
 
 export AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-no}"
 export KATA_HOST_OS="${KATA_HOST_OS:-}"
+export KATA_HYPERVISOR="${KATA_HYPERVISOR:-}"
 
 if [ -n "${K8S_TEST_POLICY_FILES:-}" ]; then
 	K8S_TEST_POLICY_FILES=($K8S_TEST_POLICY_FILES)
@@ -102,10 +103,25 @@ add_cbl_mariner_kernel_initrd_annotations() {
 	fi
 }
 
+add_runtime_handler_annotations() {
+	case "${KATA_HYPERVISOR}" in
+		qemu-tdx)
+			info "Add runtime handler annotations for ${KATA_HYPERVISOR}"
+			local handler_annotation="io.containerd.cri.runtime-handler"
+			local handler_value="kata-${KATA_HYPERVISOR}"
+			for K8S_TEST_YAML in runtimeclass_workloads_work/*.yaml
+			do
+				add_annotations_to_yaml "${K8S_TEST_YAML}" "${handler_annotation}" "${handler_value}"
+			done
+			;;
+	esac
+}
+
 main() {
 	ensure_yq
 	reset_workloads_work_dir
 	add_cbl_mariner_kernel_initrd_annotations
+	add_runtime_handler_annotations
 }
 
 main "$@"
