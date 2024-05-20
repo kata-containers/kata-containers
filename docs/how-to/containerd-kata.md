@@ -149,7 +149,7 @@ The following configuration includes two runtime classes:
             CriuPath = ""
             CriuWorkPath = ""
             IoGid = 0
-      [plugins.cri.containerd.runtimes.kata]
+      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata]
          runtime_type = "io.containerd.kata.v2"
          privileged_without_host_devices = true
          pod_annotations = ["io.katacontainers.*"]
