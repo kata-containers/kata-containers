@@ -131,7 +131,12 @@ function configure_snapshotter() {
 }
 
 function delete_coco_kbs() {
-	kbs_k8s_delete
+	if [ "${KATA_HYPERVISOR}" == "qemu-tdx" ]; then
+		echo "Skipping deleting coco kbs for ${KATA_HYPERVISOR}"
+		exit 0
+	else
+		kbs_k8s_delete
+	fi
 }
 
 # Deploy the CoCo KBS in Kubernetes
@@ -141,7 +146,12 @@ function delete_coco_kbs() {
 #	              service externally
 #
 function deploy_coco_kbs() {
-	kbs_k8s_deploy "$KBS_INGRESS"
+	if [ "${KATA_HYPERVISOR}" == "qemu-tdx" ]; then
+		echo "Skipping deploying coco kbs for ${KATA_HYPERVISOR}"
+		exit 0
+	else
+		kbs_k8s_deploy "$KBS_INGRESS"
+	fi
 }
 
 function deploy_kata() {
@@ -263,11 +273,21 @@ function deploy_kata() {
 }
 
 function install_kbs_client() {
-	kbs_install_cli
+	if [ "${KATA_HYPERVISOR}" == "qemu-tdx" ]; then
+		echo "Skipping install kbs client for ${KATA_HYPERVISOR}"
+		exit 0
+	else
+		kbs_install_cli
+	fi
 }
 
 function uninstall_kbs_client() {
-	kbs_uninstall_cli
+	if [ "${KATA_HYPERVISOR}" == "qemu-tdx" ]; then
+		echo "Skipping uninstall kbs client for ${KATA_HYPERVISOR}"
+		exit 0
+	else
+		kbs_uninstall_cli
+	fi
 }
 
 function run_tests() {

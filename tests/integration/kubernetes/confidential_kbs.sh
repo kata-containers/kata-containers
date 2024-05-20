@@ -13,6 +13,7 @@ source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
 # shellcheck disable=1091
 source "${kubernetes_dir}/../../../ci/lib.sh"
 
+KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 # Where the trustee (includes kbs) sources will be cloned
 readonly COCO_TRUSTEE_DIR="/tmp/trustee"
 # Where the kbs sources will be cloned
@@ -232,6 +233,17 @@ function kbs_k8s_deploy() {
 	[ -n "$ingress" ] && _handle_ingress "$ingress"
 
 	echo "::group::Deploy the KBS"
+	if [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
+		cat <<- EOF > "${COCO_KBS_DIR}/config/kubernetes/custom_pccs/sgx_default_qcnl.conf"
+{
+ "pccs_url": "https://localhost:8081/sgx/certification/v4/",
+
+ // To accept insecure HTTPS certificate, set this option to false
+ "use_secure_cert": false
+}
+EOF
+		export DEPLOYMENT_DIR=custom_pccs
+	fi
 	./deploy-kbs.sh
 	popd
 
