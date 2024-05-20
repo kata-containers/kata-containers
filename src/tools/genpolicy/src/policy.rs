@@ -481,14 +481,14 @@ impl AgentPolicy {
         let mut root = c_settings.Root.clone();
         root.Readonly = yaml_container.read_only_root_filesystem();
 
-        let namespace = if let Some(ns) = resource.get_namespace() {
-            ns
-        } else {
-            self.config
+        let namespace = match resource.get_namespace() {
+            Some(ns) if !ns.is_empty() => ns,
+            _ => self
+                .config
                 .settings
                 .cluster_config
                 .default_namespace
-                .clone()
+                .clone(),
         };
 
         let use_host_network = resource.use_host_network();
