@@ -250,6 +250,7 @@ function install_artifacts() {
 		fi
 
 		if grep -q "tdx" <<< "$shim"; then
+  			VERSION_ID=version_unset # VERSION_ID may be unset, see https://www.freedesktop.org/software/systemd/man/latest/os-release.html#Notes
 			source /host/etc/os-release || source /host/usr/lib/os-release
 			case ${ID} in
 				ubuntu)
