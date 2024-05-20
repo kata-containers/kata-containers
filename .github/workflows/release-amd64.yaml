@@ -12,6 +12,7 @@ jobs:
     with:
       push-to-registry: yes
       stage: release
+    secrets: inherit
 
   kata-deploy:
     needs: build-kata-static-tarball-amd64
