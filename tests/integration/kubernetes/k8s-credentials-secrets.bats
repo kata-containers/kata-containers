@@ -11,6 +11,7 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 setup() {
 	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
+	[ "${KATA_HYPERVISOR}" == "qemu-tdx" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/9667"
 
 	get_pod_config_dir
 	pod_yaml_file="${pod_config_dir}/pod-secret.yaml"
@@ -62,6 +63,7 @@ setup() {
 teardown() {
 	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
+	[ "${KATA_HYPERVISOR}" == "qemu-tdx" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/9667"
 
 	# Debugging information
 	kubectl describe "pod/$pod_name"
