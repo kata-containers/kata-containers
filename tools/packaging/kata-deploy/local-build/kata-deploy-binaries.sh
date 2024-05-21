@@ -801,7 +801,7 @@ install_ovmf_sev() {
 
 install_agent() {
 	latest_artefact="$(git log -1 --abbrev=9 --pretty=format:"%h" ${repo_root_dir}/src/agent)"
-	artefact_tag="$(git log -1 --abbrev=9 --pretty=format:"%h" ${repo_root_dir})"
+	artefact_tag="$(git log -1 --pretty=format:"%H" ${repo_root_dir})"
 	latest_builder_image="$(get_agent_image_name)"
 
 	install_cached_tarball_component \
