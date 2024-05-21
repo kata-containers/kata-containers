@@ -153,9 +153,13 @@ kbs_install_cli() {
 }
 
 kbs_uninstall_cli() {
-	pushd "${COCO_KBS_DIR}"
-	sudo make uninstall
-	popd
+	if [ -d "${COCO_KBS_DIR}" ]; then
+		pushd "${COCO_KBS_DIR}"
+		sudo make uninstall
+		popd
+	else
+		echo "${COCO_KBS_DIR} does not exist in the machine, skip uninstalling the kbs cli"
+	fi
 }
 
 # Delete the kbs on Kubernetes
