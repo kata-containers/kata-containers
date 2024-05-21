@@ -139,7 +139,7 @@ kbs_install_cli() {
 	# Mininum required version to build the client (read from versions.yaml)
 	local rust_version
 	ensure_yq
-	rust_version=$(get_from_kata_deps "externals.coco-kbs.toolchain")
+	rust_version=$(get_from_kata_deps "externals.coco-trustee.toolchain")
 	# Currently kata version from version.yaml is 1.72.0
 	# which doesn't match the requirement, so let's pass
 	# the required version.
