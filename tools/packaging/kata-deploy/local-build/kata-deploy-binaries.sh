@@ -1137,7 +1137,7 @@ handle_build() {
 
 		echo "${ARTEFACT_REGISTRY_PASSWORD}" | sudo oras login "${ARTEFACT_REGISTRY}" -u "${ARTEFACT_REGISTRY_USERNAME}" --password-stdin
 
-		tags=(latest-${TARGET_BRANCH}-$(uname -m))
+		tags=(latest-"${TARGET_BRANCH}")
 		if [ -n "${artefact_tag:-}" ]; then
 			tags+=("${artefact_tag}")
 		fi
@@ -1150,7 +1150,7 @@ handle_build() {
 		for tag in "${tags[@]}"; do
 			# tags can only contain lowercase and uppercase letters, digits, underscores, periods, and hyphens, so
 			# filter out non-printable characers and then replace invalid printable characters with underscode
-			tag=("$(echo ${tag} | tr -dc '[:print:]' | tr -c '[a-zA-Z0-9\_\.\-]' _)")
+			tag=("$(echo ${tag} | tr -dc '[:print:]' | tr -c '[a-zA-Z0-9\_\.\-]' _)-$(uname -m)")
 			case ${build_target} in
 				kernel-nvidia-gpu)
 					sudo oras push \
