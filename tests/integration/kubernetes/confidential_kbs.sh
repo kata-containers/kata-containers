@@ -238,6 +238,7 @@ function kbs_k8s_deploy() {
 
 	echo "::group::Deploy the KBS"
 	if [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
+		echo "Setting up custom PCCS for TDX"
 		cat <<- EOF > "${COCO_KBS_DIR}/config/kubernetes/custom_pccs/sgx_default_qcnl.conf"
 {
  "pccs_url": "https://localhost:8081/sgx/certification/v4/",
