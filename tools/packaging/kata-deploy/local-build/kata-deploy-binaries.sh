@@ -1148,9 +1148,11 @@ handle_build() {
 		echo "Pushing ${build_target} with tags: ${tags[*]}"
 
 		for tag in "${tags[@]}"; do
-			# tags can only contain lowercase and uppercase letters, digits, underscores, periods, and hyphens, so
-			# filter out non-printable characers and then replace invalid printable characters with underscode
-			tag=("$(echo ${tag} | tr -dc '[:print:]' | tr -c '[a-zA-Z0-9\_\.\-]' _)-$(uname -m)")
+			# tags can only contain lowercase and uppercase letters, digits, underscores, periods, and hyphens
+			# and limited to 128 characters, so filter out non-printable characers, replace invalid printable
+			# characters with underscode and trim down to leave enough space for the arch suffix
+			tag_length_limit=$(expr 128 - $(echo "-$(uname -m)" | wc -c))
+			tag=("$(echo ${tag} | tr -dc '[:print:]' | tr -c '[a-zA-Z0-9\_\.\-]' _ | head -c ${tag_length_limit})-$(uname -m)")
 			case ${build_target} in
 				kernel-nvidia-gpu)
 					sudo oras push \
