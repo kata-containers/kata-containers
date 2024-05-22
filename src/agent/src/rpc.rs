@@ -1920,11 +1920,10 @@ pub fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
         return Err(anyhow!(nix::Error::EINVAL));
     };
 
-    let spec_root_path = Path::new(&spec_root.path);
-
     let bundle_path = Path::new(CONTAINER_BASE).join(cid);
     let config_path = bundle_path.join("config.json");
     let rootfs_path = bundle_path.join("rootfs");
+    let spec_root_path = Path::new(&spec_root.path);
 
     let rootfs_exists = Path::new(&rootfs_path).exists();
     info!(

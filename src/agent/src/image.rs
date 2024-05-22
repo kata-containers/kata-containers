@@ -68,7 +68,7 @@ impl ImageService {
     }
 
     /// pause image is packaged in rootfs
-    fn unpack_pause_image(cid: &str, target_subpath: &str) -> Result<String> {
+    fn unpack_pause_image(cid: &str) -> Result<String> {
         verify_id(cid).context("The guest pause image cid contains invalid characters.")?;
 
         let guest_pause_bundle = Path::new(KATA_PAUSE_BUNDLE);
@@ -102,9 +102,7 @@ impl ImageService {
             bail!("The number of args should be greater than or equal to one! Please check the pause image.");
         }
 
-        let container_bundle = scoped_join(CONTAINER_BASE, cid)?;
-        fs::create_dir_all(&container_bundle)?;
-        let pause_bundle = scoped_join(&container_bundle, target_subpath)?;
+        let pause_bundle = scoped_join(CONTAINER_BASE, cid)?;
         fs::create_dir_all(&pause_bundle)?;
         let pause_rootfs = scoped_join(&pause_bundle, "rootfs")?;
         fs::create_dir_all(&pause_rootfs)?;
@@ -125,7 +123,7 @@ impl ImageService {
     /// - `cid`: Container id
     /// - `image_metadata`: Annotations about the image (exp: "containerd.io/snapshot/cri.layer-digest": "sha256:24fb2886d6f6c5d16481dd7608b47e78a8e92a13d6e64d87d57cb16d5f766d63")
     /// # Returns
-    /// - The image rootfs bundle path. (exp. /run/kata-containers/cb0b47276ea66ee9f44cc53afa94d7980b57a52c3f306f68cb034e58d9fbd3c6/images/rootfs)
+    /// - The image rootfs bundle path. (exp. /run/kata-containers/cb0b47276ea66ee9f44cc53afa94d7980b57a52c3f306f68cb034e58d9fbd3c6/rootfs)
     pub async fn pull_image(
         &mut self,
         image: &str,
@@ -146,16 +144,14 @@ impl ImageService {
         }
 
         if is_sandbox {
-            let mount_path = Self::unpack_pause_image(cid, "pause")?;
+            let mount_path = Self::unpack_pause_image(cid)?;
             self.add_image(String::from(image), String::from(cid)).await;
             return Ok(mount_path);
         }
 
         // Image layers will store at KATA_IMAGE_WORK_DIR, generated bundles
         // with rootfs and config.json will store under CONTAINER_BASE/cid/images.
-        let bundle_base_dir = scoped_join(CONTAINER_BASE, cid)?;
-        fs::create_dir_all(&bundle_base_dir)?;
-        let bundle_path = scoped_join(&bundle_base_dir, "images")?;
+        let bundle_path = scoped_join(CONTAINER_BASE, cid)?;
         fs::create_dir_all(&bundle_path)?;
         info!(sl(), "pull image {image:?}, bundle path {bundle_path:?}");
 
