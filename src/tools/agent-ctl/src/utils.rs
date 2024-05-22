@@ -3,16 +3,18 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use crate::types::{Config, Options};
+use crate::types::{Config, CopyFileInput, Options};
 use anyhow::{anyhow, Result};
 use oci::{Root as ociRoot, Spec as ociSpec};
 use oci_spec::runtime as oci;
+use protocols::agent::CopyFileRequest;
 use protocols::oci::{Mount as ttrpcMount, Root as ttrpcRoot, Spec as ttrpcSpec};
 use rand::Rng;
 use serde::de::DeserializeOwned;
 use slog::{debug, warn};
 use std::collections::HashMap;
-use std::fs::File;
+use std::fs::{self, File};
+use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -225,7 +227,8 @@ pub fn random_container_id() -> String {
 
 fn config_file_from_bundle_dir(bundle_dir: &str) -> Result<String> {
     if bundle_dir.is_empty() {
-        return Err(anyhow!("missing bundle directory"));
+        debug!(sl!(), "bundle dir is empty");
+        return Ok("".to_owned());
     }
 
     let config_path = PathBuf::from(&bundle_dir).join(CONFIG_FILE);
@@ -336,6 +339,11 @@ pub fn spec_file_to_string(spec_file: String) -> Result<String> {
 pub fn get_oci_spec_json(cfg: &Config) -> Result<String> {
     let spec_file = config_file_from_bundle_dir(&cfg.bundle_dir)?;
 
+    if spec_file.is_empty() {
+        debug!(sl!(), "Empty bundle dir");
+        return Ok("".to_owned());
+    }
+
     spec_file_to_string(spec_file)
 }
 
@@ -426,4 +434,37 @@ pub fn make_request<T: Default + DeserializeOwned>(args: &str) -> Result<T> {
         // are not handled by this functionz.
         _ => Ok(Default::default()),
     }
+}
+
+pub fn make_copy_file_request(input: &CopyFileInput) -> Result<CopyFileRequest> {
+    // create dir mode permissions
+    // Dir mode | 750
+    let perms = 0o20000000750;
+
+    let src_meta: fs::Metadata = fs::symlink_metadata(&input.src)?;
+
+    let mut req = CopyFileRequest::default();
+
+    req.set_path(input.dest.clone());
+    req.set_dir_mode(perms);
+    req.set_file_mode(src_meta.mode());
+    req.set_uid(src_meta.uid() as i32);
+    req.set_gid(src_meta.gid() as i32);
+    req.set_offset(0);
+    req.set_file_size(0);
+
+    if src_meta.is_symlink() {
+        match fs::read_link(&input.src)?.into_os_string().into_string() {
+            Ok(path) => {
+                req.set_data(path.into_bytes());
+            }
+            Err(_) => {
+                return Err(anyhow!("failed to read link for {}", input.src));
+            }
+        }
+    } else if src_meta.is_file() {
+        req.set_file_size(src_meta.size() as i64);
+    }
+
+    Ok(req)
 }
