@@ -801,7 +801,7 @@ install_ovmf_sev() {
 
 install_agent() {
 	latest_artefact="$(git log -1 --abbrev=9 --pretty=format:"%h" ${repo_root_dir}/src/agent)"
-	artefact_tag="$(git log -1 --abbrev=9 --pretty=format:"%h" ${repo_root_dir})"
+	artefact_tag="$(git log -1 --pretty=format:"%H" ${repo_root_dir})"
 	latest_builder_image="$(get_agent_image_name)"
 
 	install_cached_tarball_component \
@@ -1137,7 +1137,7 @@ handle_build() {
 
 		echo "${ARTEFACT_REGISTRY_PASSWORD}" | sudo oras login "${ARTEFACT_REGISTRY}" -u "${ARTEFACT_REGISTRY_USERNAME}" --password-stdin
 
-		tags=(latest-${TARGET_BRANCH}-$(uname -m))
+		tags=(latest-"${TARGET_BRANCH}")
 		if [ -n "${artefact_tag:-}" ]; then
 			tags+=("${artefact_tag}")
 		fi
@@ -1148,9 +1148,11 @@ handle_build() {
 		echo "Pushing ${build_target} with tags: ${tags[*]}"
 
 		for tag in "${tags[@]}"; do
-			# tags can only contain lowercase and uppercase letters, digits, underscores, periods, and hyphens, so
-			# filter out non-printable characers and then replace invalid printable characters with underscode
-			tag=("$(echo ${tag} | tr -dc '[:print:]' | tr -c '[a-zA-Z0-9\_\.\-]' _)")
+			# tags can only contain lowercase and uppercase letters, digits, underscores, periods, and hyphens
+			# and limited to 128 characters, so filter out non-printable characers, replace invalid printable
+			# characters with underscode and trim down to leave enough space for the arch suffix
+			tag_length_limit=$(expr 128 - $(echo "-$(uname -m)" | wc -c))
+			tag=("$(echo ${tag} | tr -dc '[:print:]' | tr -c '[a-zA-Z0-9\_\.\-]' _ | head -c ${tag_length_limit})-$(uname -m)")
 			case ${build_target} in
 				kernel-nvidia-gpu)
 					sudo oras push \
