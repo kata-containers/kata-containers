@@ -5,7 +5,7 @@
 
 // Description: Client side of ttRPC comms
 
-use crate::types::{Config, Options};
+use crate::types::{Config, CopyFileInput, Options};
 use crate::utils;
 use anyhow::{anyhow, Result};
 use byteorder::ByteOrder;
@@ -15,8 +15,10 @@ use protocols::agent_ttrpc::*;
 use protocols::health::*;
 use protocols::health_ttrpc::*;
 use slog::{debug, info};
-use std::io;
+use std::convert::TryFrom;
+use std::fs;
 use std::io::Write; // XXX: for flush()
+use std::io::{self, Read, Seek, SeekFrom};
 use std::io::{BufRead, BufReader};
 use std::os::unix::io::{IntoRawFd, RawFd};
 use std::os::unix::net::UnixStream;
@@ -1705,94 +1707,50 @@ fn agent_cmd_sandbox_copy_file(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    options: &mut Options,
+    _options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req: CopyFileRequest = utils::make_request(args)?;
+    let input: CopyFileInput = utils::make_request(args)?;
 
-    let ctx = clone_context(ctx);
+    let mut req: CopyFileRequest = utils::make_copy_file_request(&input)?;
 
-    run_if_auto_values!(ctx, || -> Result<()> {
-        let path = utils::get_option("path", options, args)?;
-        if !path.is_empty() {
-            req.set_path(path);
+    info!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
+    if req.file_size() == 0 {
+        let reply = client
+            .copy_file(clone_context(ctx), &req)
+            .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
+
+        info!(sl!(), "response received"; "response" => format!("{:?}", reply));
+
+        return Ok(());
+    }
+
+    let chunk_size = 1024 * 1024;
+    let mut remaining_bytes = req.file_size();
+    let mut src_file = fs::File::open(&input.src)?;
+    let mut offset = 0;
+    while remaining_bytes > 0 {
+        let mut copy_size = remaining_bytes;
+        if copy_size > chunk_size {
+            copy_size = chunk_size;
         }
 
-        let file_size_str = utils::get_option("file_size", options, args)?;
+        let mut buf = vec![0; usize::try_from(copy_size)?];
+        src_file.read_exact(&mut buf)?;
+        req.set_data(buf);
+        req.set_offset(offset);
 
-        if !file_size_str.is_empty() {
-            let file_size = file_size_str
-                .parse::<i64>()
-                .map_err(|e| anyhow!(e).context("invalid file_size"))?;
+        let reply = client
+            .copy_file(clone_context(ctx), &req)
+            .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
 
-            req.set_file_size(file_size);
-        }
+        info!(sl!(), "response received"; "response" => format!("{:?}", reply));
 
-        let file_mode_str = utils::get_option("file_mode", options, args)?;
-
-        if !file_mode_str.is_empty() {
-            let file_mode = file_mode_str
-                .parse::<u32>()
-                .map_err(|e| anyhow!(e).context("invalid file_mode"))?;
-
-            req.set_file_mode(file_mode);
-        }
-
-        let dir_mode_str = utils::get_option("dir_mode", options, args)?;
-
-        if !dir_mode_str.is_empty() {
-            let dir_mode = dir_mode_str
-                .parse::<u32>()
-                .map_err(|e| anyhow!(e).context("invalid dir_mode"))?;
-
-            req.set_dir_mode(dir_mode);
-        }
-
-        let uid_str = utils::get_option("uid", options, args)?;
-
-        if !uid_str.is_empty() {
-            let uid = uid_str
-                .parse::<i32>()
-                .map_err(|e| anyhow!(e).context("invalid uid"))?;
-
-            req.set_uid(uid);
-        }
-
-        let gid_str = utils::get_option("gid", options, args)?;
-
-        if !gid_str.is_empty() {
-            let gid = gid_str
-                .parse::<i32>()
-                .map_err(|e| anyhow!(e).context("invalid gid"))?;
-            req.set_gid(gid);
-        }
-
-        let offset_str = utils::get_option("offset", options, args)?;
-
-        if !offset_str.is_empty() {
-            let offset = offset_str
-                .parse::<i64>()
-                .map_err(|e| anyhow!(e).context("invalid offset"))?;
-            req.set_offset(offset);
-        }
-
-        let data_str = utils::get_option("data", options, args)?;
-        if !data_str.is_empty() {
-            let data = utils::str_to_bytes(&data_str)?;
-            req.set_data(data.to_vec());
-        }
-
-        Ok(())
-    });
-
-    debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
-
-    let reply = client
-        .copy_file(ctx, &req)
-        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
-
-    info!(sl!(), "response received";
-        "response" => format!("{:?}", reply));
+        remaining_bytes -= copy_size;
+        offset += copy_size;
+        src_file.seek(SeekFrom::Start(offset as u64))?;
+    }
 
     Ok(())
 }

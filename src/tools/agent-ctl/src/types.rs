@@ -20,3 +20,10 @@ pub struct Config {
     pub ignore_errors: bool,
     pub no_auto_values: bool,
 }
+
+// CopyFile input struct
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct CopyFileInput {
+    pub src: String,
+    pub dest: String,
+}
