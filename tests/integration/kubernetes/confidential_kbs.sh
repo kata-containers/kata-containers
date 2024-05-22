@@ -125,21 +125,31 @@ kbs_set_resource_from_file() {
 kbs_install_cli() {
 	command -v kbs-client >/dev/null && return
 
-	if ! command -v apt >/dev/null; then
-		>&2 echo "ERROR: running on unsupported distro"
-		return 1
-	fi
+	source /etc/os-release || source /usr/lib/os-release
+	case "${ID}" in
+		ubuntu)
+			local pkgs="build-essential"
 
-	local pkgs="build-essential"
+			sudo apt-get update -y
+			# shellcheck disable=2086
+			sudo apt-get install -y $pkgs
+			;;
+		centos)
+			local pkgs="make"
 
-	sudo apt-get update -y
-	# shellcheck disable=2086
-	sudo apt-get install -y $pkgs
+			# shellcheck disable=2086
+			sudo dnf install -y $pkgs
+			;;
+		*)
+			>&2 echo "ERROR: running on unsupported distro"
+			return 1
+			;;
+	esac
 
 	# Mininum required version to build the client (read from versions.yaml)
 	local rust_version
 	ensure_yq
-	rust_version=$(get_from_kata_deps "externals.coco-kbs.toolchain")
+	rust_version=$(get_from_kata_deps "externals.coco-trustee.toolchain")
 	# Currently kata version from version.yaml is 1.72.0
 	# which doesn't match the requirement, so let's pass
 	# the required version.
@@ -153,9 +163,13 @@ kbs_install_cli() {
 }
 
 kbs_uninstall_cli() {
-	pushd "${COCO_KBS_DIR}"
-	sudo make uninstall
-	popd
+	if [ -d "${COCO_KBS_DIR}" ]; then
+		pushd "${COCO_KBS_DIR}"
+		sudo make uninstall
+		popd
+	else
+		echo "${COCO_KBS_DIR} does not exist in the machine, skip uninstalling the kbs cli"
+	fi
 }
 
 # Delete the kbs on Kubernetes
@@ -234,6 +248,7 @@ function kbs_k8s_deploy() {
 
 	echo "::group::Deploy the KBS"
 	if [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
+		echo "Setting up custom PCCS for TDX"
 		cat <<- EOF > "${COCO_KBS_DIR}/config/kubernetes/custom_pccs/sgx_default_qcnl.conf"
 {
  "pccs_url": "https://localhost:8081/sgx/certification/v4/",

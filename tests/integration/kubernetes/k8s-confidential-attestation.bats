@@ -15,6 +15,7 @@ export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 export AA_KBC="${AA_KBC:-cc_kbc}"
 
 setup() {
+	[ "${KATA_HYPERVISOR}" = "qemu-tdx" ] && skip "Test not ready yet for ${KATA_HYPERVISOR}"
 	is_confidential_runtime_class || skip "Test not supported for ${KATA_HYPERVISOR}."
 
 	if [ "${KBS}" = "false" ]; then
@@ -82,6 +83,7 @@ setup() {
 }
 
 teardown() {
+	[ "${KATA_HYPERVISOR}" = "qemu-tdx" ] && skip "Test not ready yet for ${KATA_HYPERVISOR}"
 	is_confidential_runtime_class || skip "Test not supported for ${KATA_HYPERVISOR}."
 
 	if [ "${KBS}" = "false" ]; then

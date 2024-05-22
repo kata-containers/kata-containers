@@ -227,9 +227,9 @@ externals:
   coco-trustee:
     description: "Provides attestation and secret delivery components"
     url: "https://github.com/confidential-containers/trustee"
-    version: "18c8ee378c6d83446ee635a702d5dee389028d8f"
+    version: "6adb8383309cbb7279f1d8e1e4620556ac66481e"
     image: "ghcr.io/confidential-containers/staged-images/kbs"
-    image_tag: "18c8ee378c6d83446ee635a702d5dee389028d8f"
+    image_tag: "6adb8383309cbb7279f1d8e1e4620556ac66481e"
     toolchain: "1.74.0"
 
   crio:
