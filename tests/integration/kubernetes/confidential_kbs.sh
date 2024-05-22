@@ -125,16 +125,26 @@ kbs_set_resource_from_file() {
 kbs_install_cli() {
 	command -v kbs-client >/dev/null && return
 
-	if ! command -v apt >/dev/null; then
-		>&2 echo "ERROR: running on unsupported distro"
-		return 1
-	fi
+	source /etc/os-release || source /usr/lib/os-release
+	case "${ID}" in
+		ubuntu)
+			local pkgs="build-essential"
 
-	local pkgs="build-essential"
+			sudo apt-get update -y
+			# shellcheck disable=2086
+			sudo apt-get install -y $pkgs
+			;;
+		centos)
+			local pkgs="make"
 
-	sudo apt-get update -y
-	# shellcheck disable=2086
-	sudo apt-get install -y $pkgs
+			# shellcheck disable=2086
+			sudo dnf install -y $pkgs
+			;;
+		*)
+			>&2 echo "ERROR: running on unsupported distro"
+			return 1
+			;;
+	esac
 
 	# Mininum required version to build the client (read from versions.yaml)
 	local rust_version
