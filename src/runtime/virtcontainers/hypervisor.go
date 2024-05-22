@@ -671,6 +671,9 @@ type HypervisorConfig struct {
 
 	// ExtraMonitorSocket allows to add an extra HMP or QMP socket when the VMM is Qemu
 	ExtraMonitorSocket govmmQemu.MonitorProtocol
+
+	// QgsPort defines Intel Quote Generation Service port exposed from the host
+	QgsPort uint32
 }
 
 // vcpu mapping from vcpu number to thread number

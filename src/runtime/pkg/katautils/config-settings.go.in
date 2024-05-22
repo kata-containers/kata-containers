@@ -58,6 +58,7 @@ var systemdUnitName = "kata-containers.target"
 
 const defaultKernelParams = ""
 const defaultMachineType = "q35"
+const defaultQgsPort = 4050
 
 const defaultVCPUCount uint32 = 1
 const defaultMaxVCPUCount uint32 = 0

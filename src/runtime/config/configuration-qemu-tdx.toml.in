@@ -17,6 +17,7 @@ kernel = "@KERNELCONFIDENTIALPATH@"
 image = "@IMAGECONFIDENTIALPATH@"
 # initrd = "@INITRDPATH@"
 machine_type = "@MACHINETYPE@"
+tdx_quote_generation_service_socket_port = @QEMUTDXQUOTEGENERATIONSERVICESOCKETPORT@
 
 # rootfs filesystem type:
 #   - ext4 (default)
