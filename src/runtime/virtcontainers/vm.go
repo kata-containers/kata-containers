@@ -112,7 +112,7 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 		if err != nil {
 			virtLog.WithField("vm", id).WithError(err).Error("failed to create new vm")
 			virtLog.WithField("vm", id).Errorf("Deleting store for %s", id)
-			store.Destroy(id)
+			_ = store.Destroy(id)
 		}
 	}()
 
@@ -142,7 +142,7 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 	defer func() {
 		if err != nil {
 			virtLog.WithField("vm", id).WithError(err).Info("clean up vm")
-			hypervisor.StopVM(ctx, false)
+			_ = hypervisor.StopVM(ctx, false)
 		}
 	}()
 
@@ -184,7 +184,7 @@ func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, err
 		if err != nil {
 			virtLog.WithField("vm", v.Id).WithError(err).Error("failed to create new vm from Grpc")
 			virtLog.WithField("vm", v.Id).Errorf("Deleting store for %s", v.Id)
-			store.Destroy(v.Id)
+			_ = store.Destroy(v.Id)
 		}
 	}()
 
@@ -196,7 +196,7 @@ func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, err
 	// create agent instance
 	newAagentFunc := getNewAgentFunc(ctx)
 	agent := newAagentFunc()
-	agent.configureFromGrpc(ctx, hypervisor, v.Id, config.AgentConfig)
+	_ = agent.configureFromGrpc(ctx, hypervisor, v.Id, config.AgentConfig)
 
 	return &VM{
 		id:         v.Id,

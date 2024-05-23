@@ -640,7 +640,7 @@ func (s *stratovirt) setupVirtiofsDaemon(ctx context.Context) (err error) {
 	s.Logger().Info("Starting virtiofsDaemon")
 
 	pid, err := s.virtiofsDaemon.Start(ctx, func() {
-		s.StopVM(ctx, false)
+		_ = s.StopVM(ctx, false)
 	})
 	if err != nil {
 		return err
@@ -704,7 +704,7 @@ func (s *stratovirt) logAndWait(stratovirtCmd *exec.Cmd, reader io.ReadCloser) {
 		}
 	}
 	s.Logger().Infof("Stop logging StratoVirt (Pid=%d)", s.state.pid)
-	stratovirtCmd.Wait()
+	_ = stratovirtCmd.Wait()
 }
 
 // waitVM will wait for the Sandbox's VM to be up and running.
@@ -875,7 +875,7 @@ func (s *stratovirt) hotplugBlk(ctx context.Context, drive *config.BlockDrive, o
 
 	defer func() {
 		if err != nil {
-			s.qmpMonitorCh.qmp.ExecuteBlockdevDel(s.qmpMonitorCh.ctx, drive.ID)
+			_ = s.qmpMonitorCh.qmp.ExecuteBlockdevDel(s.qmpMonitorCh.ctx, drive.ID)
 			if errDel := s.delDevSlot(drive.VirtPath); errDel != nil {
 				s.Logger().WithError(errDel).Warn("Failed to delete device slot.")
 			}
@@ -1016,7 +1016,7 @@ func (s *stratovirt) StartVM(ctx context.Context, timeout int) error {
 	defer func() {
 		if err != nil {
 			if s.state.virtiofsPid != 0 {
-				syscall.Kill(s.state.virtiofsPid, syscall.SIGILL)
+				_ = syscall.Kill(s.state.virtiofsPid, syscall.SIGILL)
 			}
 		}
 		for _, fd := range s.fds {
@@ -1064,7 +1064,7 @@ func (s *stratovirt) StopVM(ctx context.Context, waitOnly bool) (err error) {
 	}
 
 	defer func() {
-		s.cleanupVM(true)
+		_ = s.cleanupVM(true)
 		if err == nil {
 			s.stopped.Store(true)
 		}

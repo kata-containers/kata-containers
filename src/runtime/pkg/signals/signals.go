@@ -55,7 +55,7 @@ func Backtrace() {
 	for _, p := range profiles {
 		// The magic number requests a full stacktrace. See
 		// https://golang.org/pkg/runtime/pprof/#Profile.WriteTo.
-		pprof.Lookup(p.Name()).WriteTo(buf, 2)
+		_ = pprof.Lookup(p.Name()).WriteTo(buf, 2)
 	}
 
 	for _, line := range strings.Split(buf.String(), "\n") {
@@ -105,7 +105,7 @@ func Die(dieCb DieCb) {
 
 	if CrashOnError {
 		signal.Reset(syscall.SIGABRT)
-		syscall.Kill(0, syscall.SIGABRT)
+		_ = syscall.Kill(0, syscall.SIGABRT)
 	}
 
 	os.Exit(1)

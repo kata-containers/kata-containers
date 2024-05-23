@@ -24,7 +24,7 @@ var kataPolicyCommand = cli.Command{
 	Usage:       "set policy within the Kata Containers guest",
 	Subcommands: policySubCmds,
 	Action: func(context *cli.Context) {
-		cli.ShowSubcommandHelp(context)
+		_ = cli.ShowSubcommandHelp(context)
 	},
 }
 

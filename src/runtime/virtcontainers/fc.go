@@ -778,7 +778,7 @@ func (fc *firecracker) StartVM(ctx context.Context, timeout int) error {
 	var err error
 	defer func() {
 		if err != nil {
-			fc.fcEnd(ctx, false)
+			_ = fc.fcEnd(ctx, false)
 		}
 	}()
 

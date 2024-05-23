@@ -133,7 +133,7 @@ func (f *factory) GetVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error)
 	defer func() {
 		if err != nil {
 			f.log().WithError(err).Error("clean up vm")
-			vm.Stop(ctx)
+			_ = vm.Stop(ctx)
 		}
 	}()
 

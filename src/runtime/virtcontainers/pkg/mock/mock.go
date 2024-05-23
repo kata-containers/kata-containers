@@ -82,7 +82,7 @@ func (hv *HybridVSockTTRPCMock) Start(socketAddr string) error {
 	hv.ttrpcRegister(ttrpcServer)
 
 	go func() {
-		ttrpcServer.Serve(context.Background(), l)
+		_ = ttrpcServer.Serve(context.Background(), l)
 	}()
 
 	return nil

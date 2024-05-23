@@ -66,7 +66,7 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 	// Cleanup sandbox resources in case of any failure
 	defer func() {
 		if err != nil {
-			s.Delete(ctx)
+			_ = s.Delete(ctx)
 		}
 	}()
 
@@ -74,7 +74,7 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 	defer func() {
 		if err != nil {
 			virtLog.Info("Removing network after failure in createSandbox")
-			s.removeNetwork(ctx)
+			_ = s.removeNetwork(ctx)
 		}
 	}()
 
@@ -96,11 +96,11 @@ func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, f
 	// rollback to stop VM if error occurs
 	defer func() {
 		if err != nil {
-			s.stopVM(ctx)
+			_ = s.stopVM(ctx)
 		}
 	}()
 
-	s.postCreatedNetwork(ctx)
+	_ = s.postCreatedNetwork(ctx)
 
 	if err = s.getAndStoreGuestDetails(ctx); err != nil {
 		return nil, err

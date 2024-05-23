@@ -37,7 +37,7 @@ func (d *direct) GetBaseVM(ctx context.Context, config vc.VMConfig) (*vc.VM, err
 
 	err = vm.Pause(ctx)
 	if err != nil {
-		vm.Stop(ctx)
+		_ = vm.Stop(ctx)
 		return nil, err
 	}
 

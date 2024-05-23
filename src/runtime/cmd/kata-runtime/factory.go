@@ -38,7 +38,7 @@ var factoryCLICommand = cli.Command{
 	Usage:       "manage vm factory",
 	Subcommands: factorySubCmds,
 	Action: func(context *cli.Context) {
-		cli.ShowSubcommandHelp(context)
+		_ = cli.ShowSubcommandHelp(context)
 	},
 }
 
@@ -196,7 +196,7 @@ var initFactoryCommand = cli.Command{
 			signal.Notify(signals, handledSignals...)
 
 			kataLog.WithField("endpoint", runtimeConfig.FactoryConfig.VMCacheEndpoint).Info("VM cache server start")
-			s.rpc.Serve(l)
+			_ = s.rpc.Serve(l)
 
 			<-s.done
 

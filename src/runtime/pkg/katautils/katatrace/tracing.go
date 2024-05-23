@@ -118,8 +118,8 @@ func StopTracing(ctx context.Context) {
 	}
 
 	// report all possible spans to the collector
-	tp.ForceFlush(ctx)
-	tp.Shutdown(ctx)
+	_ = tp.ForceFlush(ctx)
+	_ = tp.Shutdown(ctx)
 }
 
 // Trace creates a new tracing span based on the specified name and parent context.

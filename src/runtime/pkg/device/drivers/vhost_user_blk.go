@@ -62,9 +62,9 @@ func (device *VhostUserBlkDevice) Attach(ctx context.Context, devReceiver api.De
 	defer func() {
 		if err != nil {
 			if updateBlockIndex {
-				devReceiver.UnsetSandboxBlockIndex(index)
+				_ = devReceiver.UnsetSandboxBlockIndex(index)
 			}
-			device.bumpAttachCount(false)
+			_, _ = device.bumpAttachCount(false)
 		}
 	}()
 
@@ -147,11 +147,11 @@ func (device *VhostUserBlkDevice) Detach(ctx context.Context, devReceiver api.De
 
 	defer func() {
 		if err != nil {
-			device.bumpAttachCount(true)
+			_, _ = device.bumpAttachCount(true)
 		} else {
 			updateBlockIndex := isVirtioBlkBlockDriver(device.DeviceInfo.DriverOptions)
 			if updateBlockIndex {
-				devReceiver.UnsetSandboxBlockIndex(device.VhostUserDeviceAttrs.Index)
+				_ = devReceiver.UnsetSandboxBlockIndex(device.VhostUserDeviceAttrs.Index)
 			}
 		}
 	}()

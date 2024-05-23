@@ -58,21 +58,21 @@ func (s *service) agentURL(w http.ResponseWriter, r *http.Request) {
 	url, err := s.sandbox.GetAgentURL()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
+		_, _ = w.Write([]byte(err.Error()))
 		return
 	}
 
-	fmt.Fprint(w, url)
+	_, _ = fmt.Fprint(w, url)
 }
 
 // serveMetrics handle /metrics requests
 func (s *service) serveMetrics(w http.ResponseWriter, r *http.Request) {
 
 	// update metrics from sandbox
-	s.sandbox.UpdateRuntimeMetrics()
+	_ = s.sandbox.UpdateRuntimeMetrics()
 
 	// update metrics for shim process
-	updateShimMetrics()
+	_ = updateShimMetrics()
 
 	// metrics gathered by shim
 	mfs, err := prometheus.DefaultGatherer.Gather()
@@ -83,7 +83,7 @@ func (s *service) serveMetrics(w http.ResponseWriter, r *http.Request) {
 	// encode the metrics
 	encoder := expfmt.NewEncoder(w, expfmt.FmtText)
 	for _, mf := range mfs {
-		encoder.Encode(mf)
+		_ = encoder.Encode(mf)
 	}
 
 	// if using an old agent, only collect shim/sandbox metrics.
@@ -108,7 +108,7 @@ func (s *service) serveMetrics(w http.ResponseWriter, r *http.Request) {
 
 	// encode the metrics to output
 	for _, mf := range list {
-		encoder.Encode(mf)
+		_ = encoder.Encode(mf)
 	}
 
 	// collect pod overhead metrics need sleep to get the changes of cpu/memory resources usage
@@ -151,7 +151,7 @@ func (s *service) serveVolumeStats(w http.ResponseWriter, r *http.Request) {
 		msg := fmt.Sprintf("Required parameter %s not found", DirectVolumePathKey)
 		shimMgtLog.Info(msg)
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(msg))
+		_, _ = w.Write([]byte(msg))
 		return
 	}
 
@@ -159,7 +159,7 @@ func (s *service) serveVolumeStats(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		shimMgtLog.WithError(err).Error("failed to unescape the volume stat url path")
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
+		_, _ = w.Write([]byte(err.Error()))
 		return
 	}
 
@@ -167,10 +167,10 @@ func (s *service) serveVolumeStats(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		shimMgtLog.WithError(err).WithField("volume-path", volumePath).Error("failed to get volume stats")
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
+		_, _ = w.Write([]byte(err.Error()))
 		return
 	}
-	w.Write(buf)
+	_, _ = w.Write(buf)
 }
 
 func (s *service) serveVolumeResize(w http.ResponseWriter, r *http.Request) {
@@ -305,7 +305,7 @@ func (s *service) startManagementServer(ctx context.Context, ociSpec *specs.Spec
 
 	// start serve
 	svr := &http.Server{Handler: m}
-	svr.Serve(listener)
+	_ = svr.Serve(listener)
 }
 
 // mountPprofHandle provides a debug endpoint

@@ -38,7 +38,7 @@ func (device *VhostUserSCSIDevice) Attach(ctx context.Context, devReceiver api.D
 
 	defer func() {
 		if err != nil {
-			device.bumpAttachCount(false)
+			_, _ = device.bumpAttachCount(false)
 		}
 	}()
 

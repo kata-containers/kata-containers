@@ -29,7 +29,7 @@ var kataIPTablesCommand = cli.Command{
 	Usage:       "get or set iptables within the Kata Containers guest",
 	Subcommands: iptablesSubCmds,
 	Action: func(context *cli.Context) {
-		cli.ShowSubcommandHelp(context)
+		_ = cli.ShowSubcommandHelp(context)
 	},
 }
 

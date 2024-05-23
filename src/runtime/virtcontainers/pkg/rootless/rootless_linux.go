@@ -129,7 +129,7 @@ func NewNS() (ns.NetNS, error) {
 	wg.Wait()
 
 	if err != nil {
-		unix.Unmount(nsPath, unix.MNT_DETACH)
+		_ = unix.Unmount(nsPath, unix.MNT_DETACH)
 		return nil, fmt.Errorf("failed to create namespace: %v", err)
 	}
 

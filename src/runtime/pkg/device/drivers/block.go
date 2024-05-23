@@ -51,8 +51,8 @@ func (device *BlockDevice) Attach(ctx context.Context, devReceiver api.DeviceRec
 
 	defer func() {
 		if err != nil {
-			devReceiver.UnsetSandboxBlockIndex(index)
-			device.bumpAttachCount(false)
+			_ = devReceiver.UnsetSandboxBlockIndex(index)
+			_, _ = device.bumpAttachCount(false)
 		}
 	}()
 
@@ -138,9 +138,9 @@ func (device *BlockDevice) Detach(ctx context.Context, devReceiver api.DeviceRec
 
 	defer func() {
 		if err != nil {
-			device.bumpAttachCount(true)
+			_, _ = device.bumpAttachCount(true)
 		} else {
-			devReceiver.UnsetSandboxBlockIndex(device.BlockDrive.Index)
+			_ = devReceiver.UnsetSandboxBlockIndex(device.BlockDrive.Index)
 		}
 	}()
 

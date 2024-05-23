@@ -33,7 +33,7 @@ func (device *VhostUserFSDevice) Attach(ctx context.Context, devReceiver api.Dev
 
 	defer func() {
 		if err != nil {
-			device.bumpAttachCount(false)
+			_, _ = device.bumpAttachCount(false)
 		}
 	}()
 

@@ -180,7 +180,7 @@ func bindUnmountAllRootfs(ctx context.Context, sharedDir string, sandbox *Sandbo
 			mountLogger().WithField("container", c.id).Warnf("container dir is a symlink, malicious guest?")
 			continue
 		}
-		c.unmountHostMounts(ctx)
+		_ = c.unmountHostMounts(ctx)
 		if c.state.Fstype == "" {
 			// even if error found, don't break out of loop until all mounts attempted
 			// to be unmounted, and collect all errors

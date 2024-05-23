@@ -146,7 +146,7 @@ func (v *virtiofsd) Start(ctx context.Context, onQuit onQuitFunc) (int, error) {
 	}
 
 	go func() {
-		cmd.Process.Wait()
+		_, _ = cmd.Process.Wait()
 		v.Logger().Info("virtiofsd quits")
 		if onQuit != nil {
 			onQuit()

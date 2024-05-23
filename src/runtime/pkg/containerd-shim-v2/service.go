@@ -288,7 +288,7 @@ func (s *service) StartShim(ctx context.Context, opts cdshim.StartOpts) (_ strin
 
 	defer func() {
 		if retErr != nil {
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 		}
 	}()
 
@@ -988,7 +988,7 @@ func (s *service) Shutdown(ctx context.Context, r *taskAPI.ShutdownRequest) (_ *
 	// Since we only send an shutdown qmp command to qemu when do stopSandbox, and
 	// didn't wait until qemu process's exit, thus we'd better to make sure it had
 	// exited when shimv2 terminated. Thus here to do the last cleanup of the hypervisor.
-	syscall.Kill(int(s.hpid), syscall.SIGKILL)
+	_ = syscall.Kill(int(s.hpid), syscall.SIGKILL)
 
 	// os.Exit() will terminate program immediately, the defer functions won't be executed,
 	// so we add defer functions again before os.Exit().

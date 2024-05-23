@@ -852,7 +852,7 @@ func (q *qemu) nydusdAPISocketPath(id string) (string, error) {
 
 func (q *qemu) setupVirtiofsDaemon(ctx context.Context) (err error) {
 	pid, err := q.virtiofsDaemon.Start(ctx, func() {
-		q.StopVM(ctx, false)
+		_ = q.StopVM(ctx, false)
 	})
 	if err != nil {
 		return err
@@ -928,7 +928,7 @@ func (q *qemu) setupVirtioMem(ctx context.Context) error {
 
 	defer func() {
 		if err != nil {
-			q.arch.removeDeviceFromBridge("virtiomem-dev")
+			_ = q.arch.removeDeviceFromBridge("virtiomem-dev")
 		}
 	}()
 
@@ -1025,7 +1025,7 @@ func (q *qemu) LogAndWait(qemuCmd *exec.Cmd, reader io.ReadCloser) {
 		}
 	}
 	q.Logger().Infof("Stop logging QEMU (qemuPid=%d)", pid)
-	qemuCmd.Wait()
+	_ = qemuCmd.Wait()
 }
 
 // StartVM will start the Sandbox's VM.
@@ -1109,7 +1109,7 @@ func (q *qemu) StartVM(ctx context.Context, timeout int) error {
 		// LaunchQemu returns a handle on the upper QEMU process.
 		// Wait for it to exit to assume that the QEMU daemon was
 		// actually started.
-		qemuCmd.Wait()
+		_ = qemuCmd.Wait()
 	} else {
 		// Log QEMU errors and ensure the QEMU process is reaped after
 		// termination.
@@ -1218,7 +1218,7 @@ func (q *qemu) StopVM(ctx context.Context, waitOnly bool) (err error) {
 	}
 
 	defer func() {
-		q.cleanupVM()
+		_ = q.cleanupVM()
 		if err == nil {
 			atomic.StoreInt32(&q.stopped, 1)
 		}
@@ -1553,7 +1553,7 @@ func (q *qemu) hotplugAddBlockDevice(ctx context.Context, drive *config.BlockDri
 
 	defer func() {
 		if err != nil {
-			q.qmpMonitorCh.qmp.ExecuteBlockdevDel(q.qmpMonitorCh.ctx, drive.ID)
+			_ = q.qmpMonitorCh.qmp.ExecuteBlockdevDel(q.qmpMonitorCh.ctx, drive.ID)
 		}
 	}()
 
@@ -1569,7 +1569,7 @@ func (q *qemu) hotplugAddBlockDevice(ctx context.Context, drive *config.BlockDri
 
 		defer func() {
 			if err != nil {
-				q.arch.removeDeviceFromBridge(drive.ID)
+				_ = q.arch.removeDeviceFromBridge(drive.ID)
 			}
 		}()
 
@@ -1641,7 +1641,7 @@ func (q *qemu) hotplugAddVhostUserBlkDevice(ctx context.Context, vAttr *config.V
 
 	defer func() {
 		if err != nil {
-			q.qmpMonitorCh.qmp.ExecuteChardevDel(q.qmpMonitorCh.ctx, vAttr.DevID)
+			_ = q.qmpMonitorCh.qmp.ExecuteChardevDel(q.qmpMonitorCh.ctx, vAttr.DevID)
 		}
 	}()
 
@@ -1686,7 +1686,7 @@ func (q *qemu) hotplugAddVhostUserBlkDevice(ctx context.Context, vAttr *config.V
 		}
 		defer func() {
 			if err != nil {
-				q.arch.removeDeviceFromBridge(vAttr.DevID)
+				_ = q.arch.removeDeviceFromBridge(vAttr.DevID)
 			}
 		}()
 
@@ -1779,7 +1779,7 @@ func (q *qemu) hotplugVFIODeviceBridgePort(ctx context.Context, device *config.V
 
 	defer func() {
 		if err != nil {
-			q.arch.removeDeviceFromBridge(device.ID)
+			_ = q.arch.removeDeviceFromBridge(device.ID)
 		}
 	}()
 	return q.executePCIVFIODeviceAdd(device, addr, bridge.ID)
@@ -1910,7 +1910,7 @@ func (q *qemu) hotplugNetDevice(ctx context.Context, endpoint Endpoint, op Opera
 
 		defer func() {
 			if err != nil {
-				q.qmpMonitorCh.qmp.ExecuteNetdevDel(q.qmpMonitorCh.ctx, tap.Name)
+				_ = q.qmpMonitorCh.qmp.ExecuteNetdevDel(q.qmpMonitorCh.ctx, tap.Name)
 			}
 		}()
 
@@ -1931,7 +1931,7 @@ func (q *qemu) hotplugNetDevice(ctx context.Context, endpoint Endpoint, op Opera
 
 		defer func() {
 			if err != nil {
-				q.arch.removeDeviceFromBridge(tap.ID)
+				_ = q.arch.removeDeviceFromBridge(tap.ID)
 			}
 		}()
 
@@ -2800,7 +2800,7 @@ func (q *qemu) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig,
 func (q *qemu) toGrpc(ctx context.Context) ([]byte, error) {
 	q.qmpShutdown()
 
-	q.Cleanup(ctx)
+	_ = q.Cleanup(ctx)
 	qp := qemuGrpc{
 		ID:             q.id,
 		QmpChannelpath: q.qmpMonitorCh.path,

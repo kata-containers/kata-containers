@@ -66,7 +66,7 @@ func (m *monitor) newWatcher(ctx context.Context) (chan error, error) {
 					m.wg.Done()
 					return
 				case <-tick.C:
-					m.watchHypervisor(ctx)
+					_ = m.watchHypervisor(ctx)
 					m.watchAgent(ctx)
 				}
 			}
@@ -140,8 +140,7 @@ func (m *monitor) stop() {
 }
 
 func (m *monitor) watchAgent(ctx context.Context) {
-	err := m.sandbox.agent.check(ctx)
-	if err != nil {
+	if err := m.sandbox.agent.check(ctx); err != nil {
 		// TODO: define and export error types
 		m.notify(ctx, errors.Wrapf(err, "failed to ping agent"))
 	}

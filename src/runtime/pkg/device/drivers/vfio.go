@@ -61,7 +61,7 @@ func (device *VFIODevice) Attach(ctx context.Context, devReceiver api.DeviceRece
 
 	defer func() {
 		if retErr != nil {
-			device.bumpAttachCount(false)
+			_, _ = device.bumpAttachCount(false)
 		}
 	}()
 
@@ -123,7 +123,7 @@ func (device *VFIODevice) Detach(ctx context.Context, devReceiver api.DeviceRece
 
 	defer func() {
 		if retErr != nil {
-			device.bumpAttachCount(true)
+			_, _ = device.bumpAttachCount(true)
 		}
 	}()
 
@@ -293,7 +293,7 @@ func BindDevicetoVFIO(bdf, hostDriver, vendorDeviceID string) (string, error) {
 	}).Info("Binding device to vfio driver")
 
 	// Device may be already bound at this time because of earlier write to new_id, ignore error
-	utils.WriteToFile(bindDriverPath, []byte(bdf))
+	_ = utils.WriteToFile(bindDriverPath, []byte(bdf))
 
 	groupPath, err := os.Readlink(fmt.Sprintf(iommuGroupPath, bdf))
 	if err != nil {

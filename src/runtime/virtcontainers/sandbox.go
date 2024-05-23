@@ -590,7 +590,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	defer func() {
 		if retErr != nil {
 			s.Logger().WithError(retErr).Error("Create new sandbox failed")
-			s.store.Destroy(s.id)
+			_ = s.store.Destroy(s.id)
 		}
 	}()
 
@@ -1441,7 +1441,7 @@ func (s *Sandbox) startVM(ctx context.Context, prestartHookFunc func(context.Con
 
 	defer func() {
 		if err != nil {
-			s.hypervisor.StopVM(ctx, false)
+			_ = s.hypervisor.StopVM(ctx, false)
 		}
 	}()
 
@@ -1595,7 +1595,7 @@ func (s *Sandbox) CreateContainer(ctx context.Context, contConfig ContainerConfi
 			}
 
 			logger.Debug("Removing stopped container from sandbox store")
-			s.removeContainer(c.id)
+			_ = s.removeContainer(c.id)
 		}
 	}()
 
@@ -1940,7 +1940,7 @@ func (s *Sandbox) Start(ctx context.Context) error {
 	var startErr error
 	defer func() {
 		if startErr != nil {
-			s.setSandboxState(prevState)
+			_ = s.setSandboxState(prevState)
 		}
 	}()
 	for _, c := range s.containers {
@@ -2219,7 +2219,7 @@ func (s *Sandbox) AddDevice(ctx context.Context, info config.DeviceInfo) (api.De
 	}
 	defer func() {
 		if err != nil {
-			s.devManager.RemoveDevice(add.DeviceID())
+			_ = s.devManager.RemoveDevice(add.DeviceID())
 		}
 	}()
 
@@ -2228,7 +2228,7 @@ func (s *Sandbox) AddDevice(ctx context.Context, info config.DeviceInfo) (api.De
 	}
 	defer func() {
 		if err != nil {
-			s.devManager.DetachDevice(ctx, add.DeviceID(), s)
+			_ = s.devManager.DetachDevice(ctx, add.DeviceID(), s)
 		}
 	}()
 

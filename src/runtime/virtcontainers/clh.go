@@ -373,7 +373,7 @@ func (clh *cloudHypervisor) setupVirtiofsDaemon(ctx context.Context) error {
 	}
 
 	pid, err := clh.virtiofsDaemon.Start(ctx, func() {
-		clh.StopVM(ctx, false)
+		_ = clh.StopVM(ctx, false)
 	})
 	if err != nil {
 		return err

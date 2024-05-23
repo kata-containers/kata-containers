@@ -103,7 +103,7 @@ func ioCopy(stream *iostream, con console.Console) {
 	go func() {
 		p := bufPool.Get().(*[]byte)
 		defer bufPool.Put(p)
-		io.CopyBuffer(stream, con, *p)
+		_, _ = io.CopyBuffer(stream, con, *p)
 	}()
 
 	// stdout
@@ -111,7 +111,7 @@ func ioCopy(stream *iostream, con console.Console) {
 	go func() {
 		p := bufPool.Get().(*[]byte)
 		defer bufPool.Put(p)
-		io.CopyBuffer(os.Stdout, stream, *p)
+		_, _ = io.CopyBuffer(os.Stdout, stream, *p)
 		wg.Done()
 	}()
 
