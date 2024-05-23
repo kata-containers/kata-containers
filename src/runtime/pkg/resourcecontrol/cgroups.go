@@ -186,7 +186,7 @@ func NewSandboxResourceController(path string, resources *specs.LinuxResources, 
 	//v1 and v2 cgroups against systemd, the following interacts directly with systemd
 	//to create the cgroup and then load it using containerd's api.
 	//adding runtime process, it makes calling setupCgroups redundant
-	if createCgroupsSystemd(slice, unit, os.Getpid()); err != nil {
+	if err = createCgroupsSystemd(slice, unit, os.Getpid()); err != nil {
 		return nil, err
 	}
 
@@ -200,7 +200,7 @@ func NewSandboxResourceController(path string, resources *specs.LinuxResources, 
 		// load created cgroup and update with resources
 		cg, err := cgroups.Load(cgHierarchy, cgPath)
 		if err != nil {
-			if cg.Update(&sandboxResources); err != nil {
+			if err = cg.Update(&sandboxResources); err != nil {
 				return nil, err
 			}
 		}
@@ -209,7 +209,7 @@ func NewSandboxResourceController(path string, resources *specs.LinuxResources, 
 		// load created cgroup and update with resources
 		cg, err := cgroupsv2.LoadSystemd(slice, unit)
 		if err != nil {
-			if cg.Update(cgroupsv2.ToResources(&sandboxResources)); err != nil {
+			if err = cg.Update(cgroupsv2.ToResources(&sandboxResources)); err != nil {
 				return nil, err
 			}
 		}
