@@ -407,10 +407,14 @@ func (f *FilesystemShare) UnshareFile(ctx context.Context, c *Container, m *Moun
 		}
 		// Remove the empty file or directory
 		if s.Mode().IsRegular() && s.Size() == 0 {
-			os.Remove(m.HostPath)
+			if err := os.Remove(m.HostPath); err != nil {
+				return errors.Wrapf(err, "Could not remove file from host %v", m.HostPath)
+			}
 		}
 		if s.Mode().IsDir() {
-			syscall.Rmdir(m.HostPath)
+			if err := syscall.Rmdir(m.HostPath); err != nil {
+				return errors.Wrapf(err, "Could not remove directory from host %v", m.HostPath)
+			}
 		}
 	}
 
