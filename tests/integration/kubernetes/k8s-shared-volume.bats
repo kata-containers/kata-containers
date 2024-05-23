@@ -13,8 +13,6 @@ setup() {
 }
 
 @test "Containers with shared volume" {
-	[ "${KATA_HYPERVISOR}" = "qemu-coco-dev" ] && \
-		skip "See: https://github.com/kata-containers/kata-containers/issues/9668"
 	pod_name="test-shared-volume"
 	first_container_name="busybox-first-container"
 	second_container_name="busybox-second-container"
@@ -42,9 +40,6 @@ setup() {
 }
 
 @test "initContainer with shared volume" {
-	[[ "${KATA_HYPERVISOR}" = "qemu-tdx" || "${KATA_HYPERVISOR}" = "qemu-coco-dev" || \
-		"${KATA_HYPERVISOR}" = "qemu-sev" || "${KATA_HYPERVISOR}" = "qemu-snp" ]] && \
-		skip "See: https://github.com/kata-containers/kata-containers/issues/9668"
 
 	pod_name="initcontainer-shared-volume"
 	last_container="last"
