@@ -60,6 +60,11 @@ setup() {
 	grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" || die "Failed to setup the tests image"
 	echo "::endgroup::"
 
+	echo "::group::Debug overlays directory content"
+	echo "Current working directory: $(pwd)"
+	ls -la tools/packaging/kata-deploy/kata-deploy/overlays/
+	echo "::endgroup::"
+
 	kubectl apply -f "tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
 	if [ "${KUBERNETES}" = "k0s" ]; then
 		kubectl apply -k "tools/packaging/kata-deploy/kata-deploy/overlays/k0s"
@@ -80,6 +85,7 @@ setup() {
 			echo "Describing pod: $pod"
 			kubectl -n kube-system describe pod "$pod"
 		done
+
 		echo "ERROR: kata-deploy pod is not running, tests will not be execute."
 		echo "ERROR: setup() aborting tests..."
 		return 1
