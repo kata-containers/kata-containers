@@ -152,12 +152,14 @@ pub fn get_linux(privileged_container: bool) -> policy::KataLinux {
                 "/proc/sys".to_string(),
                 "/proc/sysrq-trigger".to_string(),
             ],
+            Devices: vec![],
         }
     } else {
         policy::KataLinux {
             Namespaces: vec![],
             MaskedPaths: vec![],
             ReadonlyPaths: vec![],
+            Devices: vec![],
         }
     }
 }
