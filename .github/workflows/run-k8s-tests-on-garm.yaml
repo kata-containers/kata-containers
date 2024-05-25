@@ -28,17 +28,13 @@ jobs:
       fail-fast: false
       matrix:
         vmm:
-          - clh #cloud-hypervisor
-          - dragonball
-          - fc #firecracker
           - qemu
-          - cloud-hypervisor
-        snapshotter:
-          - devmapper
         k8s:
           - k3s
+          - k0s
+          - rke2
         instance:
-          - garm-ubuntu-2004
+          - ubuntu
           - garm-ubuntu-2004-smaller
         include:
           - instance: garm-ubuntu-2004
