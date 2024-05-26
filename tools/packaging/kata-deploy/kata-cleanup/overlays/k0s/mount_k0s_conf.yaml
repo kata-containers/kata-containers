@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kubelet-kata-cleanup
+  namespace: kube-system
+spec:
+  template:
+    spec:
+      containers:
+      - name: kube-kata-cleanup
+        volumeMounts:
+        - name: containerd-conf
+          mountPath: /etc/containerd/
+      volumes:
+        - name: containerd-conf
+          hostPath:
+            path: /etc/k0s/containerd.d/
