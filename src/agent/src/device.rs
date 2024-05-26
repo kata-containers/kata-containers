@@ -896,9 +896,10 @@ async fn vfio_pci_device_handler(
             }
 
             group = Some(devgroup);
-
-            pci_fixups.push((host, guestdev));
         }
+
+        // collect PCI address mapping for both vfio-pci-gk and vfio-pci device
+        pci_fixups.push((host, guestdev));
     }
 
     let dev_update = if vfio_in_guest {
@@ -961,21 +962,21 @@ pub async fn add_devices(
                 ));
             }
 
-            let mut sb = sandbox.lock().await;
-            for (host, guest) in update.pci {
-                if let Some(other_guest) = sb.pcimap.insert(host, guest) {
-                    return Err(anyhow!(
-                        "Conflicting guest address for host device {} ({} versus {})",
-                        host,
-                        guest,
-                        other_guest
-                    ));
-                }
-            }
-
             // Update cgroup to allow all devices added to guest.
             insert_devices_cgroup_rule(spec, &dev_update.info, true, "rwm")
                 .context("Update device cgroup")?;
+        }
+
+        let mut sb = sandbox.lock().await;
+        for (host, guest) in update.pci {
+            if let Some(other_guest) = sb.pcimap.insert(host, guest) {
+                return Err(anyhow!(
+                    "Conflicting guest address for host device {} ({} versus {})",
+                    host,
+                    guest,
+                    other_guest
+                ));
+            }
         }
     }
 
