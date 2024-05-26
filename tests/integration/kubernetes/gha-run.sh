@@ -235,11 +235,12 @@ function deploy_kata() {
 	echo "::endgroup::"
 
 	kubectl apply -f "${tools_dir}/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
-	if [ "${KUBERNETES}" = "k3s" ]; then
-		kubectl apply -k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k3s"
-	else
-		kubectl apply -f "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-	fi
+	case "${KUBERNETES}" in
+		k0s) kubectl apply -k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k0s" ;;
+		k3s) kubectl apply -k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k3s" ;;
+		rke2) kubectl apply -k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/rke2" ;;
+		*) kubectl apply -f "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
+	esac
 
 	local cmd="kubectl -n kube-system get -l name=kata-deploy pod 2>/dev/null | grep '\<Running\>'"
 	waitForProcess "${KATA_DEPLOY_WAIT_TIMEOUT}" 10 "$cmd"
@@ -388,13 +389,24 @@ function collect_artifacts() {
 function cleanup_kata_deploy() {
 	ensure_yq
 
-	if [ "${KUBERNETES}" = "k3s" ]; then
-		deploy_spec="-k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k3s""
-		cleanup_spec="-k "${tools_dir}/packaging/kata-deploy/kata-cleanup/overlays/k3s""
-	else
-		deploy_spec="-f "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml""
-		cleanup_spec="-f "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml""
-	fi
+	case "${KUBERNETES}" in
+		k0s)
+			deploy_spec="-k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k0s""
+			cleanup_spec="-k "${tools_dir}/packaging/kata-deploy/kata-cleanup/overlays/k0s""
+			;;
+		k3s)
+			deploy_spec="-k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k3s""
+			cleanup_spec="-k "${tools_dir}/packaging/kata-deploy/kata-cleanup/overlays/k3s""
+			;;
+		rke2)
+			deploy_spec="-k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/rke2""
+			cleanup_spec="-k "${tools_dir}/packaging/kata-deploy/kata-cleanup/overlays/rke2""
+			;;
+		*)
+			deploy_spec="-f "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml""
+			cleanup_spec="-f "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml""
+			;;
+	esac
 
 	# shellcheck disable=2086
 	kubectl delete ${deploy_spec}
