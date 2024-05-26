@@ -151,7 +151,9 @@ function deploy_kata() {
 	[ "$platform" = "kcli" ] && \
 	export KUBECONFIG="$HOME/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
 
-	cleanup_kata_deploy || true
+	if [ "${K8S_TEST_HOST_TYPE}" = "baremetal" ]; then
+		cleanup_kata_deploy || true
+	fi
 
 	set_default_cluster_namespace
 
@@ -499,7 +501,9 @@ function deploy_nydus_snapshotter() {
 	git clone -b "${nydus_snapshotter_version}" "${nydus_snapshotter_url}" "${nydus_snapshotter_install_dir}"
 
 	pushd "$nydus_snapshotter_install_dir"
-	cleanup_nydus_snapshotter || true
+	if [ "${K8S_TEST_HOST_TYPE}" = "baremetal" ]; then
+		cleanup_nydus_snapshotter || true
+	fi
 	if [ "${PULL_TYPE}" == "guest-pull" ]; then
 		# Enable guest pull feature in nydus snapshotter
 		yq write -i \
