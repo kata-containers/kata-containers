@@ -346,7 +346,7 @@ pflashes = []
 #
 # If set to the empty string "", no extra monitor socket is added. This is
 # the default.
-#extra_monitor_socket = hmp
+#extra_monitor_socket = "hmp"
 
 # Disable the customizations done in the runtime when it detects
 # that it is running on top a VMM. This will result in the runtime
