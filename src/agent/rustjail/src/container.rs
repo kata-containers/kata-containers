@@ -601,6 +601,22 @@ fn do_init_child(cwfd: RawFd) -> Result<()> {
         unistd::close(mount_fd)?;
     }
 
+    if init {
+        // CreateContainer Hooks:
+        // before pivot_root after prestart, createruntime
+        state.pid = std::process::id() as i32;
+        state.status = oci::ContainerState::Created;
+        if let Some(hooks) = spec.hooks.as_ref() {
+            log_child!(
+                cfd_log,
+                "create_container hooks {:?}",
+                hooks.create_container
+            );
+            let mut create_container_states = HookStates::new();
+            create_container_states.execute_hooks(&hooks.create_container, Some(state.clone()))?;
+        }
+    }
+
     if to_new.contains(CloneFlags::CLONE_NEWNS) {
         // unistd::chroot(rootfs)?;
         if no_pivot {
