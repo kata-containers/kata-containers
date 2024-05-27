@@ -82,7 +82,7 @@ setup() {
 	fi
 
 	local cmd="kubectl -n kube-system get -l name=kata-deploy pod 2>/dev/null | grep '\<Running\>'"
-	waitForProcess 600 10 "$cmd"
+	waitForProcess 240 10 "$cmd"
 
 	# Give some time for the pod to finish what's doing and have the
 	# runtimeclasses properly created
