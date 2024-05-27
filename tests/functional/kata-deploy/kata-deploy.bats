@@ -11,6 +11,8 @@ setup() {
 	repo_root_dir="${BATS_TEST_DIRNAME}/../../../"
 	ensure_yq
 
+	pushd "${repo_root_dir}"
+
 	# We expect 2 runtime classes because:
 	# * `kata` is the default runtimeclass created, basically an alias for `kata-${KATA_HYPERVISOR}`.
 	# * `kata-${KATA_HYPERVISOR}` is the other one
@@ -24,59 +26,59 @@ setup() {
 	)
 
 	# Set the latest image, the one generated as part of the PR, to be used as part of the tests
-	sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
+	sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 
 	# Enable debug for Kata Containers
 	yq write -i \
-	  "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
+	  "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
 	  'spec.template.spec.containers[0].env[1].value' \
 	  --tag '!!str' "true"
 	# Create the runtime class only for the shim that's being tested
 	yq write -i \
-	  "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
+	  "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
 	  'spec.template.spec.containers[0].env[2].value' \
 	  "${KATA_HYPERVISOR}"
 	# Set the tested hypervisor as the default `kata` shim
 	yq write -i \
-	  "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
+	  "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
 	  'spec.template.spec.containers[0].env[3].value' \
 	  "${KATA_HYPERVISOR}"
 	# Let the `kata-deploy` script take care of the runtime class creation / removal
 	yq write -i \
-	  "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
+	  "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
 	  'spec.template.spec.containers[0].env[4].value' \
 	  --tag '!!str' "true"
 	# Let the `kata-deploy` create the default `kata` runtime class
 	yq write -i \
-	  "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
+	  "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
 	  'spec.template.spec.containers[0].env[5].value' \
 	  --tag '!!str' "true"
 
 	if [ "${KATA_HOST_OS}" = "cbl-mariner" ]; then
 		yq write -i \
-		  "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
+		  "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
 		  'spec.template.spec.containers[0].env[+].name' \
 		  "HOST_OS"
 		yq write -i \
-		  "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
+		  "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
 		  'spec.template.spec.containers[0].env[-1].value' \
 		  "${KATA_HOST_OS}"
 	fi
 
 	echo "::group::Final kata-deploy.yaml that is used in the test"
-	cat "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-	grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" || die "Failed to setup the tests image"
+	cat "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
+	grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" || die "Failed to setup the tests image"
 	echo "::endgroup::"
 
-	kubectl apply -f "${repo_root_dir}/tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
+	kubectl apply -f "tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
 	if [ "${KUBERNETES}" = "k0s" ]; then
-		kubectl apply -k "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/overlays/k0s"
+		kubectl apply -k "tools/packaging/kata-deploy/kata-deploy/overlays/k0s"
 	elif [ "${KUBERNETES}" = "k3s" ]; then
-		kubectl apply -k "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/overlays/k3s"
+		kubectl apply -k "tools/packaging/kata-deploy/kata-deploy/overlays/k3s"
 	elif [ "${KUBERNETES}" = "rke2" ]; then
-		kubectl apply -k "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/overlays/rke2"
+		kubectl apply -k "tools/packaging/kata-deploy/kata-deploy/overlays/rke2"
 	else
-		kubectl apply -f "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
+		kubectl apply -f "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 	fi
 
 	local cmd="kubectl -n kube-system get -l name=kata-deploy pod 2>/dev/null | grep '\<Running\>'"
@@ -93,6 +95,8 @@ setup() {
 	echo "::group::Runtime classes"
 	kubectl get runtimeclass
 	echo "::endgroup::"
+
+	popd
 }
 
 @test "Test runtimeclasses are being properly created and container runtime not broken" {
@@ -117,22 +121,23 @@ setup() {
 	# Check that the container runtime verison doesn't have unknown, which happens when containerd can't start properly
 	container_runtime_version=$(kubectl get nodes --no-headers -o custom-columns=CONTAINER_RUNTIME:.status.nodeInfo.containerRuntimeVersion)
 	[[ ${container_runtime_version} != *"containerd://Unknown"* ]]
-
 }
 
 teardown() {
+	pushd "${repo_root_dir}"
+
 	if [ "${KUBERNETES}" = "k0s" ]; then
-		deploy_spec="-k \"${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/overlays/k0s\""
-		cleanup_spec="-k \"${repo_root_dir}/tools/packaging/kata-deploy/kata-cleanup/overlays/k0s\""
+		deploy_spec="-k \"tools/packaging/kata-deploy/kata-deploy/overlays/k0s\""
+		cleanup_spec="-k \"tools/packaging/kata-deploy/kata-cleanup/overlays/k0s\""
 	elif [ "${KUBERNETES}" = "k3s" ]; then
-		deploy_spec="-k \"${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/overlays/k3s\""
-		cleanup_spec="-k \"${repo_root_dir}/tools/packaging/kata-deploy/kata-cleanup/overlays/k3s\""
+		deploy_spec="-k \"tools/packaging/kata-deploy/kata-deploy/overlays/k3s\""
+		cleanup_spec="-k \"tools/packaging/kata-deploy/kata-cleanup/overlays/k3s\""
 	elif [ "${KUBERNETES}" = "rke2" ]; then
-		deploy_spec="-k \"${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/overlays/rke2\""
-		cleanup_spec="-k \"${repo_root_dir}/tools/packaging/kata-deploy/kata-cleanup/overlays/rke2\""
+		deploy_spec="-k \"tools/packaging/kata-deploy/kata-deploy/overlays/rke2\""
+		cleanup_spec="-k \"tools/packaging/kata-deploy/kata-cleanup/overlays/rke2\""
 	else
-		deploy_spec="-f \"${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml\""
-		cleanup_spec="-f \"${repo_root_dir}/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml\""
+		deploy_spec="-f \"tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml\""
+		cleanup_spec="-f \"tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml\""
 	fi
 
 	kubectl delete ${deploy_spec}
@@ -140,32 +145,34 @@ teardown() {
 
 	# Let the `kata-deploy` script take care of the runtime class creation / removal
 	yq write -i \
-	  "${repo_root_dir}/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" \
+	  "tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" \
 	  'spec.template.spec.containers[0].env[4].value' \
 	  --tag '!!str' "true"
 	# Create the runtime class only for the shim that's being tested
 	yq write -i \
-	  "${repo_root_dir}/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" \
+	  "tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" \
 	  'spec.template.spec.containers[0].env[2].value' \
 	  "${KATA_HYPERVISOR}"
 	# Set the tested hypervisor as the default `kata` shim
 	yq write -i \
-	  "${repo_root_dir}/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" \
+	  "tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" \
 	  'spec.template.spec.containers[0].env[3].value' \
 	  "${KATA_HYPERVISOR}"
 	# Let the `kata-deploy` create the default `kata` runtime class
 	yq write -i \
-	  "${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
+	  "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
 	  'spec.template.spec.containers[0].env[5].value' \
 	  --tag '!!str' "true"
 
-	sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "${repo_root_dir}/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
-	cat "${repo_root_dir}/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
-	grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" "${repo_root_dir}/tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" || die "Failed to setup the tests image"
+	sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
+	cat "tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
+	grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" "tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" || die "Failed to setup the tests image"
 
 	kubectl apply ${cleanup_spec}
 	sleep 30s
 
 	kubectl delete ${cleanup_spec}
-	kubectl delete -f "${repo_root_dir}/tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
+	kubectl delete -f "tools/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
+
+	popd
 }
