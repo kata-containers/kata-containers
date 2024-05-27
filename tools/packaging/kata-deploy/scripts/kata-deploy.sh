@@ -459,12 +459,13 @@ function configure_containerd_runtime() {
 	local runtime="kata-${shim}"
 	local configuration="configuration-${shim}"
 	local pluginid=cri
-	
+
 	# if we are running k0s auto containerd.toml generation, the base template is by default version 2
 	# we can safely assume to reference the newer version of cri
 	if grep -q "version = 2\>" $containerd_conf_file || [ "$1" == "k0s-worker" ] || [ "$1" == "k0s-controller" ]; then
 		pluginid=\"io.containerd.grpc.v1.cri\"
 	fi
+
 	local runtime_table=".plugins.${pluginid}.containerd.runtimes.\"${runtime}\""
 	local runtime_options_table="${runtime_table}.options"
 	local runtime_type=\"io.containerd."${runtime}".v2\"
@@ -640,6 +641,7 @@ function main() {
 		# This works by k0s creating a special directory in /etc/k0s/containerd.d/ where user can drop-in partial containerd configuration snippets.
 		# k0s will automatically pick up these files and adds these in containerd configuration imports list.
 		containerd_conf_file="/etc/containerd/kata-containers.toml"
+		touch "$containerd_conf_file"
 	else
 		# runtime == containerd
 		if [ ! -f "$containerd_conf_file" ] && [ -d $(dirname "$containerd_conf_file") ] && \

@@ -86,12 +86,12 @@ else
 		normal)
 			K8S_TEST_UNION=(${K8S_TEST_NORMAL_HOST_UNION[@]})
 			;;
-		baremetal)
+		all|baremetal)
 			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_UNION[@]} ${K8S_TEST_NORMAL_HOST_UNION[@]})
 
 			;;
 		*)
-			echo "${K8S_TEST_HOST_TYPE} is an invalid K8S_TEST_HOST_TYPE option. Valid options are: small | normal | baremetal"
+			echo "${K8S_TEST_HOST_TYPE} is an invalid K8S_TEST_HOST_TYPE option. Valid options are: small | normal | all | baremetal"
 			return 1
 			;;
 	esac
