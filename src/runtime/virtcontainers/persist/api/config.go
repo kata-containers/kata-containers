@@ -199,6 +199,12 @@ type HypervisorConfig struct {
 	// root, bridge, switch or no-port
 	ColdPlugVFIO config.PCIePort
 
+	// PCIeRootPort is the number of ports needed in the hypvervisor
+	PCIeRootPort uint32
+
+	// PCIeSwitchPort is the number of ports needed in the hypvervisor
+	PCIeSwitchPort uint32
+
 	// BootToBeTemplate used to indicate if the VM is created to be a template VM
 	BootToBeTemplate bool
 
