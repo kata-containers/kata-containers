@@ -90,6 +90,10 @@ pub trait K8sResource {
     fn use_sandbox_pidns(&self) -> bool {
         panic!("Unsupported");
     }
+
+    fn get_runtime_class_name(&self) -> Option<String> {
+        None
+    }
 }
 
 /// See Reference / Kubernetes API / Common Definitions / LabelSelector.

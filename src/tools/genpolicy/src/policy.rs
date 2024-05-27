@@ -9,6 +9,7 @@
 use crate::config_map;
 use crate::containerd;
 use crate::mount_and_storage;
+use crate::no_policy;
 use crate::pod;
 use crate::policy;
 use crate::registry;
@@ -380,6 +381,22 @@ impl AgentPolicy {
                 let yaml_string = serde_yaml::to_string(&doc_mapping)?;
                 let silent = config.silent_unsupported_fields;
                 let (mut resource, kind) = yaml::new_k8s_resource(&yaml_string, silent)?;
+
+                // Filter out resources that don't match the runtime class name.
+                if let Some(resource_runtime_name) = resource.get_runtime_class_name() {
+                    if !config.runtime_class_names.is_empty()
+                        && !config
+                            .runtime_class_names
+                            .iter()
+                            .any(|prefix| resource_runtime_name.starts_with(prefix))
+                    {
+                        resource =
+                            boxed::Box::new(no_policy::NoPolicyResource { yaml: yaml_string });
+                        resources.push(resource);
+                        continue;
+                    }
+                }
+
                 resource.init(config, &doc_mapping, silent).await;
 
                 // ConfigMap and Secret documents contain additional input for policy generation.

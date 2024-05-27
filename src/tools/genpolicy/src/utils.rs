@@ -82,6 +82,12 @@ struct CommandLineOptions {
         help = "Registry that uses plain HTTP. Can be passed more than once to configure multiple insecure registries."
     )]
     insecure_registry: Vec<String>,
+
+    #[clap(
+        long,
+        help = "If specified, resources that have a runtimeClassName field defined will only receive a policy if the parameter is a prefix one of the given runtime class names."
+    )]
+    runtime_class_names: Vec<String>,
 }
 
 /// Application configuration, derived from on command line parameters.
@@ -89,6 +95,7 @@ struct CommandLineOptions {
 pub struct Config {
     pub use_cache: bool,
     pub insecure_registries: Vec<String>,
+    pub runtime_class_names: Vec<String>,
 
     pub yaml_file: Option<String>,
     pub rego_rules_path: String,
@@ -121,6 +128,7 @@ impl Config {
         Self {
             use_cache: args.use_cached_files,
             insecure_registries: args.insecure_registry,
+            runtime_class_names: args.runtime_class_names,
             yaml_file: args.yaml_file,
             rego_rules_path: args.rego_rules_path,
             settings,

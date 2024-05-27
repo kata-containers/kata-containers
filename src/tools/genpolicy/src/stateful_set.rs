@@ -185,6 +185,15 @@ impl yaml::K8sResource for StatefulSet {
         }
         false
     }
+
+    fn get_runtime_class_name(&self) -> Option<String> {
+        self.spec
+            .template
+            .spec
+            .runtimeClassName
+            .clone()
+            .or_else(|| Some(String::new()))
+    }
 }
 
 impl StatefulSet {
