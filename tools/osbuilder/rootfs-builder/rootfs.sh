@@ -548,38 +548,6 @@ prepare_overlay()
 	popd  > /dev/null
 }
 
-build_opa_from_source()
-{
-	local opa_repo_url=$1
-	opa_version="$(get_package_version_from_kata_yaml externals.open-policy-agent.version)"
-
-	export PATH="$PATH:/usr/local/go/bin"
-	export GOOS="${TARGET_OS}"
-	[ ${CROSS_BUILD} == "yes" ] && export GOARCH="${TARGET_ARCH}" || export GOARCH="$(uname -m)"
-
-	current_dir="$(pwd)"
-	pushd $(mktemp -d) &>/dev/null
-	git clone -b "${opa_version}" "${opa_repo_url}" opa || return 1
-	(
-		cd opa
-		export WASM_ENABLED=0
-		export DOCKER_RUNNING=0
-		make ci-build-linux-static || return 1
-
-		info "Copy OPA binary to ${current_dir}/opa"
-		binary_name="_release/${opa_version##v}/opa_${GOOS}_${GOARCH}_static"
-		if [ -f "${binary_name}" ]; then
-			cp "${binary_name}" "${current_dir}/opa"
-		else
-			echo "OPA binary ${binary_name} not found"
-			return 1
-		fi
-	)
-	rm -rf opa
-	popd &>/dev/null
-	return 0
-}
-
 # Setup an existing rootfs directory, based on the OPTIONAL distro name
 # provided as argument
 setup_rootfs()
@@ -738,44 +706,7 @@ EOF
 	fi
 
 	if [ "${AGENT_POLICY}" == "yes" ]; then
-		# Setup systemd-based environment for kata-opa.
-		local opa_bin_dir="$(get_opa_bin_dir "${ROOTFS_DIR}")"
-		if [ -z "${opa_bin_dir}" ]; then
-			# OPA was not installed already, so download it here.
-			#
-			# TODO: if an OPA package is not available for the Guest image distro,
-			#   	Kata should cache the OPA source code, toolchain information, etc.
-			#   	OPA should be built from the cached source code instead of downloading
-			#   	this binary.
-			#
-			local opa_repo_url="$(get_package_version_from_kata_yaml externals.open-policy-agent.url)"
-			local opa_version="$(get_package_version_from_kata_yaml externals.open-policy-agent.version)"
-			if [ "$ARCH" == "ppc64le" ] || [ "$ARCH" == "s390x" ]; then
-				info "Building OPA binary from source at ${opa_repo_url}"
-				build_opa_from_source "${opa_repo_url}" || die "Failed to build OPA"
-			else
-				local opa_binary_arch
-				case ${ARCH} in
-					x86_64) opa_binary_arch="amd64" ;;
-					aarch64) opa_binary_arch="arm64" ;;
-					*) die "Unsupported architecture for the OPA binary" ;;
-				esac
-
-				local opa_bin_url="${opa_repo_url}/releases/download/${opa_version}/opa_linux_${opa_binary_arch}_static"
-				info "Downloading OPA binary from ${opa_bin_url}"
-				curl --fail -L "${opa_bin_url}" -o opa || die "Failed to download OPA"
-			fi
-
-			# Install the OPA binary.
-			opa_bin_dir="/usr/local/bin"
-			local opa_bin="${ROOTFS_DIR}${opa_bin_dir}/opa"
-			info "Installing OPA binary to ${opa_bin}"
-			install -D -o root -g root -m 0755 opa -T "${opa_bin}"
-			${stripping_tool} ${ROOTFS_DIR}${opa_bin_dir}/opa
-		else
-			info "OPA binary already exists in ${opa_bin_dir}"
-		fi
-
+		info "Install the default policy"
 		# Install default settings for the kata-opa service.
 		local kata_opa_in_dir="${script_dir}/../../../src/kata-opa"
 		local opa_settings_dir="/etc/kata-opa"
@@ -784,25 +715,6 @@ EOF
 		mkdir -p "${policy_dir}"
 		install -D -o root -g root -m 0644 "${kata_opa_in_dir}/${policy_file}" -T "${policy_dir}/${policy_file}"
 		ln -sf "${policy_file}" "${policy_dir}/default-policy.rego"
-
-		if [ "${AGENT_INIT}" == "yes" ]; then
-			info "OPA will be started by the kata agent"
-		else
-			# Install the unit file for the kata-opa service.
-			local kata_opa_unit="kata-opa.service"
-			local kata_opa_unit_path="${ROOTFS_DIR}/usr/lib/systemd/system/${kata_opa_unit}"
-			local kata_containers_wants="${ROOTFS_DIR}/etc/systemd/system/kata-containers.target.wants"
-
-			opa_settings_dir="${opa_settings_dir//\//\\/}"
-			sed -e "s/@SETTINGSDIR@/${opa_settings_dir}/g" "${kata_opa_in_dir}/${kata_opa_unit}.in" > "${kata_opa_unit}"
-
-			opa_bin_dir="${opa_bin_dir//\//\\/}"
-			sed -i -e "s/@BINDIR@/${opa_bin_dir}/g" "${kata_opa_unit}"
-
-			install -D -o root -g root -m 0644 "${kata_opa_unit}" -T "${kata_opa_unit_path}"
-			mkdir -p "${kata_containers_wants}"
-			ln -sf "${kata_opa_unit_path}" "${kata_containers_wants}/${kata_opa_unit}"
-		fi
 	fi
 
 	info "Check init is installed"
@@ -830,24 +742,6 @@ EOF
 
 	info "Creating summary file"
 	create_summary_file "${ROOTFS_DIR}"
-}
-
-get_opa_bin_dir()
-{
-	local rootfs_dir="$1"
-	local -a bin_dirs=(
-		"/bin"
-		"/usr/bin"
-		"/usr/local/bin"
-	)
-	for bin_dir in "${bin_dirs[@]}"
-	do
-		local opa_bin="${rootfs_dir}${bin_dir}/opa"
-		if [ -f "${opa_bin}" ]; then
-			echo "${bin_dir}"
-			return 0
-		fi
-	done
 }
 
 parse_arguments()

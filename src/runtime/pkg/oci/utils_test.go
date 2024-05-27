@@ -726,6 +726,51 @@ func TestAddHypervisorAnnotations(t *testing.T) {
 	assert.Error(err)
 }
 
+func TestAddRemoteHypervisorAnnotations(t *testing.T) {
+	// Remote hypervisor uses DefaultVCPUs, DefaultMemory etc as annotations to pick the size of the separate VM to create,
+	// so doesn't need to be bound by the host's capacity limits.
+	assert := assert.New(t)
+
+	config := vc.SandboxConfig{
+		Annotations: make(map[string]string),
+	}
+
+	sbConfig := vc.SandboxConfig{
+		Annotations:    make(map[string]string),
+		HypervisorType: vc.RemoteHypervisor,
+	}
+
+	ocispec := specs.Spec{
+		Annotations: make(map[string]string),
+	}
+
+	runtimeConfig := RuntimeConfig{
+		HypervisorType: vc.RemoteHypervisor,
+	}
+
+	err := addAnnotations(ocispec, &config, runtimeConfig)
+	assert.NoError(err)
+	assert.Exactly(vc.HypervisorConfig{}, config.HypervisorConfig)
+
+	// Enable annotations
+	runtimeConfig.HypervisorConfig.EnableAnnotations = []string{".*"}
+
+	// When DefaultVCPUs is more than the number of cpus on the host, remote hypervisor annotations don't throw an error
+	ocispec.Annotations[vcAnnotations.DefaultVCPUs] = "2000"
+	err = addAnnotations(ocispec, &sbConfig, runtimeConfig)
+	assert.NoError(err)
+
+	// When DefaultMaxVCPUs is more than the number of cpus on the host, remote hypervisor annotations don't throw an error
+	ocispec.Annotations[vcAnnotations.DefaultMaxVCPUs] = "2000"
+	err = addAnnotations(ocispec, &sbConfig, runtimeConfig)
+	assert.NoError(err)
+
+	// When memory is smaller than the minimum Hypervisor memory, remote hypervisor annotations don't throw an error
+	ocispec.Annotations[vcAnnotations.DefaultMemory] = "1"
+	err = addAnnotations(ocispec, &sbConfig, runtimeConfig)
+	assert.NoError(err)
+}
+
 func TestAddProtectedHypervisorAnnotations(t *testing.T) {
 	assert := assert.New(t)
 

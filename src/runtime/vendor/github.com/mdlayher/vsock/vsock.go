@@ -9,8 +9,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"github.com/mdlayher/socket"
 )
 
 const (
@@ -197,7 +195,7 @@ var (
 
 // A Conn is a VM sockets implementation of a net.Conn.
 type Conn struct {
-	c      *socket.Conn
+	c      *conn
 	local  *Addr
 	remote *Addr
 }

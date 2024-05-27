@@ -337,7 +337,7 @@ $ mkdir kata-artifacts
 $ build_dir=$(readlink -f build)
 $ cp -r $build_dir/*.tar.xz kata-artifacts
 $ ls -1 kata-artifacts
-kata-static-agent-opa.tar.xz
+kata-static-agent.tar.xz
 kata-static-boot-image-se.tar.xz
 kata-static-coco-guest-components.tar.xz
 kata-static-kernel-confidential.tar.xz

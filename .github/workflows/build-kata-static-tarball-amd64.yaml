@@ -28,7 +28,6 @@ jobs:
       matrix:
         asset:
           - agent
-          - agent-opa
           - agent-ctl
           - cloud-hypervisor
           - cloud-hypervisor-glibc
@@ -48,7 +47,6 @@ jobs:
           - pause-image
           - qemu
           - qemu-snp-experimental
-          - qemu-tdx-experimental
           - stratovirt
           - rootfs-image
           - rootfs-image-confidential
@@ -57,21 +55,12 @@ jobs:
           - rootfs-initrd-mariner
           - runk
           - shim-v2
-          - tdvf
           - trace-forwarder
           - virtiofsd
         stage:
           - ${{ inputs.stage }}
         exclude:
-          - asset: agent
-            stage: release
-          - asset: agent-opa
-            stage: release
           - asset: cloud-hypervisor-glibc
-            stage: release
-          - asset: pause-image
-            stage: release
-          - asset: coco-guest-components
             stage: release
     steps:
       - name: Login to Kata Containers quay.io
@@ -107,8 +96,10 @@ jobs:
           ARTEFACT_REGISTRY_USERNAME: ${{ github.actor }}
           ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           TARGET_BRANCH: ${{ inputs.target-branch }}
+          RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
 
       - name: store-artifact ${{ matrix.asset }}
+        if: ${{ matrix.stage != 'release' || (matrix.asset != 'agent' && matrix.asset != 'coco-guest-components' && matrix.asset != 'pause-image') }}
         uses: actions/upload-artifact@v4
         with:
           name: kata-artifacts-amd64-${{ matrix.asset }}${{ inputs.tarball-suffix }}

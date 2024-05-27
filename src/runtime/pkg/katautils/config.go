@@ -89,6 +89,7 @@ type hypervisor struct {
 	CPUFeatures                    string                    `toml:"cpu_features"`
 	KernelParams                   string                    `toml:"kernel_params"`
 	MachineType                    string                    `toml:"machine_type"`
+	QgsPort                        uint32                    `toml:"tdx_quote_generation_service_socket_port"`
 	BlockDeviceDriver              string                    `toml:"block_device_driver"`
 	EntropySource                  string                    `toml:"entropy_source"`
 	SharedFS                       string                    `toml:"shared_fs"`
@@ -371,6 +372,14 @@ func (h hypervisor) machineType() string {
 	}
 
 	return h.MachineType
+}
+
+func (h hypervisor) qgsPort() uint32 {
+	if h.QgsPort == 0 {
+		return defaultQgsPort
+	}
+
+	return h.QgsPort
 }
 
 func (h hypervisor) GetEntropySource() string {
@@ -890,6 +899,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		CPUFeatures:             cpuFeatures,
 		KernelParams:            vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
 		HypervisorMachineType:   machineType,
+		QgsPort:                 h.qgsPort(),
 		NumVCPUsF:               h.defaultVCPUs(),
 		DefaultMaxVCPUs:         h.defaultMaxVCPUs(),
 		MemorySize:              h.defaultMemSz(),

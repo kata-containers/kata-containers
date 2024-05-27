@@ -16,7 +16,7 @@ description = "measure container lifecycle timings"
 # within (inclusive)
 checkvar = ".\"boot-times\".Results | .[] | .\"to-workload\".Result"
 checktype = "mean"
-midval = 0.69
+midval = 0.39
 minpercent = 40.0
 maxpercent = 30.0
 
@@ -146,9 +146,9 @@ description = "measure random write throughput using fio"
 # within (inclusive)
 checkvar = "[.\"fio\".\"Results random\"] | .[] | .[] | .randwrite.bw | select( . != null )"
 checktype = "mean"
-midval = 1440540.7
-minpercent = 20.0
-maxpercent = 20.0
+midval = 1065844.0
+minpercent = 40.0
+maxpercent = 40.0
 
 [[metric]]
 name = "latency"

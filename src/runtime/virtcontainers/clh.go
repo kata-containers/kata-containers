@@ -1042,11 +1042,14 @@ func (clh *cloudHypervisor) ResizeMemory(ctx context.Context, reqMemMB uint32, m
 		newMem = alignedRequest
 	}
 
-	// Check if memory is the same as requested, a second Check is done
-	// to consider the memory request now that is updated to be memory aligned
+	// Post-alignment checks
 	if currentMem == newMem {
 		clh.Logger().WithFields(log.Fields{"current-memory": currentMem, "new-memory": newMem}).Debug("VM already has requested memory(after alignment)")
 		return uint32(currentMem.ToMiB()), MemoryDevice{}, nil
+	}
+	// Check for aligned memory exceeding max hotplug size
+	if newMem > (utils.MemUnit(uint32(maxHotplugSize.ToMiB())) * utils.MiB) {
+		newMem = utils.MemUnit(uint32(maxHotplugSize.ToMiB())) * utils.MiB
 	}
 
 	cl := clh.client()

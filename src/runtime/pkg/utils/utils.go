@@ -13,7 +13,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -125,7 +124,6 @@ func CreateVmmUser() (string, error) {
 	// Add retries to mitigate temporary errors and race conditions. For example, the user already exists
 	// or another instance of the runtime is also creating a user.
 	maxAttempt := 5
-	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < maxAttempt; i++ {
 		userName = fmt.Sprintf("kata-%v", rand.Intn(100000))
 		_, err = RunCommand([]string{useraddPath, "-M", "-s", nologinPath, userName, "-c", "\"Kata Containers temporary hypervisor user\""})

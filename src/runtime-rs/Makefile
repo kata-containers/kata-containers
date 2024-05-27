@@ -208,18 +208,18 @@ ifneq (,$(DBCMD))
     SYSCONFIG_PATHS += $(SYSCONFIG_DB)
     CONFIGS += $(CONFIG_DB)
     # dragonball-specific options (all should be suffixed by "_DB")
-	VMROOTFSDRIVER_DB := virtio-blk-pci
+    VMROOTFSDRIVER_DB := virtio-blk-pci
     DEFMAXVCPUS_DB := 1
     DEFBLOCKSTORAGEDRIVER_DB := virtio-blk-mmio
     DEFNETWORKMODEL_DB := tcfilter
     KERNELPARAMS_DB = console=ttyS1 agent.log_vport=1025
-	KERNELTYPE_DB = uncompressed
+    KERNELTYPE_DB = uncompressed
     KERNEL_NAME_DB = $(call MAKE_KERNEL_NAME_DB,$(KERNELTYPE_DB))
     KERNELPATH_DB = $(KERNELDIR)/$(KERNEL_NAME_DB)
     DEFSANDBOXCGROUPONLY = true
     RUNTIMENAME := virt_container
     PIPESIZE := 1
-	DBSHAREDFS := inline-virtio-fs
+    DBSHAREDFS := inline-virtio-fs
 endif
 
 ifneq (,$(CLHCMD))

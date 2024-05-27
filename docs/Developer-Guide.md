@@ -771,6 +771,11 @@ $ sudo su -c 'cd /var/run/vc/vm/${sandbox_id} && socat "stdin,raw,echo=0,escape=
 To disconnect from the virtual machine, type `CONTROL+q` (hold down the
 `CONTROL` key and press `q`).
 
+## Use a debugger with the runtime
+
+For developers interested in using a debugger with the runtime, please
+look at [this document](Debug-shim-guide.md).
+
 ## Obtain details of the image
 
 If the image is created using

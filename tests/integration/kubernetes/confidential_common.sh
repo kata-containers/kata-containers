@@ -9,7 +9,7 @@ source "${BATS_TEST_DIRNAME}/tests_common.sh"
 source "${BATS_TEST_DIRNAME}/../../common.bash"
 
 SUPPORTED_TEE_HYPERVISORS=("qemu-sev" "qemu-snp" "qemu-tdx" "qemu-se")
-SUPPORTED_NON_TEE_HYPERVISORS=("qemu")
+SUPPORTED_NON_TEE_HYPERVISORS=("qemu-coco-dev")
 
 function setup_unencrypted_confidential_pod() {
 	get_pod_config_dir
@@ -38,26 +38,47 @@ function get_remote_command_per_hypervisor() {
 	echo "${REMOTE_COMMAND_PER_HYPERVISOR[${KATA_HYPERVISOR}]}"
 }
 
-# This function verifies whether the input hypervisor supports confidential tests and 
+# This function verifies whether the input hypervisor supports confidential tests and
 # relies on `KATA_HYPERVISOR` being an environment variable
 function check_hypervisor_for_confidential_tests() {
 	local kata_hypervisor="${1}"
 	# This check must be done with "<SPACE>${KATA_HYPERVISOR}<SPACE>" to avoid
 	# having substrings, like qemu, being matched with qemu-$something.
-    if [[ " ${SUPPORTED_TEE_HYPERVISORS[*]} " =~ " ${kata_hypervisor} " ]] ||\
-       [[ " ${SUPPORTED_NON_TEE_HYPERVISORS[*]} " =~ " ${kata_hypervisor} " ]]; then        
-        return 0
-    else
-        return 1
-    fi
+	if check_hypervisor_for_confidential_tests_tee_only "${kata_hypervisor}" ||\
+	[[ " ${SUPPORTED_NON_TEE_HYPERVISORS[*]} " =~ " ${kata_hypervisor} " ]]; then
+		return 0
+	else
+		return 1
+	fi
 }
 
-# Common setup for confidential tests.
-function confidential_setup() {
-	ensure_yq
-	if ! check_hypervisor_for_confidential_tests "${KATA_HYPERVISOR}"; then
-        return 1
-    elif [[ " ${SUPPORTED_NON_TEE_HYPERVISORS[*]} " =~ " ${KATA_HYPERVISOR} " ]]; then
-        info "Need to apply image annotations"
-    fi
+# This function verifies whether the input hypervisor supports confidential tests and
+# relies on `KATA_HYPERVISOR` being an environment variable
+function check_hypervisor_for_confidential_tests_tee_only() {
+	local kata_hypervisor="${1}"
+	# This check must be done with "<SPACE>${KATA_HYPERVISOR}<SPACE>" to avoid
+	# having substrings, like qemu, being matched with qemu-$something.
+	if [[ " ${SUPPORTED_TEE_HYPERVISORS[*]} " =~ " ${kata_hypervisor} " ]]; then
+		return 0
+	fi
+
+	return 1
+}
+
+# Common check for confidential tests.
+function is_confidential_runtime_class() {
+	if check_hypervisor_for_confidential_tests "${KATA_HYPERVISOR}"; then
+		return 0
+	fi
+
+	return 1
+}
+
+# Common check for confidential hardware tests.
+function is_confidential_hardware() {
+	if check_hypervisor_for_confidential_tests_tee_only "${KATA_HYPERVISOR}"; then
+		return 0
+	fi
+
+	return 1
 }

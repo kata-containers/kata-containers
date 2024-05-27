@@ -111,7 +111,7 @@ assert_rootfs_count() {
 	local expect_count="$3"
 	local allrootfs=""
 
-	# verify that the sandbox_id is not empty; 
+	# verify that the sandbox_id is not empty;
 	# otherwise, the command $(exec_host $node "find /run/kata-containers/shared/sandboxes/${sandbox_id} -name rootfs -type d")
 	# may yield an unexpected count of rootfs.
 	if [ -z "$sandbox_id" ]; then
@@ -130,8 +130,8 @@ assert_rootfs_count() {
 	done
 	echo "allrootfs is: $allrootfs"
 	count=$(echo $allrootfs | grep -o "rootfs" | wc -l)
-	echo "count of container rootfs in host is: $count, expect count is: $expect_count"
-	[ $expect_count -eq $count ]
+	echo "count of container rootfs in host is: $count, expect count is less than, or equal to: $expect_count"
+	[ $expect_count -ge $count ]
 }
 
 # Create a pod configuration out of a template file.

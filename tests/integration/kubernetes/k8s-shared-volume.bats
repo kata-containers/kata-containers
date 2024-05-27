@@ -40,6 +40,8 @@ setup() {
 }
 
 @test "initContainer with shared volume" {
+	[ "${KATA_HYPERVISOR}" = "qemu-tdx" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/9668"
+
 	pod_name="initcontainer-shared-volume"
 	last_container="last"
 	cmd='test $(cat /volume/initContainer) -lt $(cat /volume/container)'

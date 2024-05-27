@@ -13,6 +13,7 @@ source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
 # shellcheck disable=1091
 source "${kubernetes_dir}/../../../ci/lib.sh"
 
+KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 # Where the trustee (includes kbs) sources will be cloned
 readonly COCO_TRUSTEE_DIR="/tmp/trustee"
 # Where the kbs sources will be cloned
@@ -124,21 +125,31 @@ kbs_set_resource_from_file() {
 kbs_install_cli() {
 	command -v kbs-client >/dev/null && return
 
-	if ! command -v apt >/dev/null; then
-		>&2 echo "ERROR: running on unsupported distro"
-		return 1
-	fi
+	source /etc/os-release || source /usr/lib/os-release
+	case "${ID}" in
+		ubuntu)
+			local pkgs="build-essential"
 
-	local pkgs="build-essential"
+			sudo apt-get update -y
+			# shellcheck disable=2086
+			sudo apt-get install -y $pkgs
+			;;
+		centos)
+			local pkgs="make"
 
-	sudo apt-get update -y
-	# shellcheck disable=2086
-	sudo apt-get install -y $pkgs
+			# shellcheck disable=2086
+			sudo dnf install -y $pkgs
+			;;
+		*)
+			>&2 echo "ERROR: running on unsupported distro"
+			return 1
+			;;
+	esac
 
 	# Mininum required version to build the client (read from versions.yaml)
 	local rust_version
 	ensure_yq
-	rust_version=$(get_from_kata_deps "externals.coco-kbs.toolchain")
+	rust_version=$(get_from_kata_deps "externals.coco-trustee.toolchain")
 	# Currently kata version from version.yaml is 1.72.0
 	# which doesn't match the requirement, so let's pass
 	# the required version.
@@ -152,9 +163,13 @@ kbs_install_cli() {
 }
 
 kbs_uninstall_cli() {
-	pushd "${COCO_KBS_DIR}"
-	sudo make uninstall
-	popd
+	if [ -d "${COCO_KBS_DIR}" ]; then
+		pushd "${COCO_KBS_DIR}"
+		sudo make uninstall
+		popd
+	else
+		echo "${COCO_KBS_DIR} does not exist in the machine, skip uninstalling the kbs cli"
+	fi
 }
 
 # Delete the kbs on Kubernetes
@@ -232,6 +247,18 @@ function kbs_k8s_deploy() {
 	[ -n "$ingress" ] && _handle_ingress "$ingress"
 
 	echo "::group::Deploy the KBS"
+	if [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
+		echo "Setting up custom PCCS for TDX"
+		cat <<- EOF > "${COCO_KBS_DIR}/config/kubernetes/custom_pccs/sgx_default_qcnl.conf"
+{
+ "pccs_url": "https://localhost:8081/sgx/certification/v4/",
+
+ // To accept insecure HTTPS certificate, set this option to false
+ "use_secure_cert": false
+}
+EOF
+		export DEPLOYMENT_DIR=custom_pccs
+	fi
 	./deploy-kbs.sh
 	popd
 

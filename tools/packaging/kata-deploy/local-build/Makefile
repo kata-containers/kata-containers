@@ -30,10 +30,8 @@ BASE_TARBALLS = serial-targets \
 	ovmf-tarball \
 	qemu-snp-experimental-tarball \
 	qemu-tarball \
-	qemu-tdx-experimental-tarball \
 	stratovirt-tarball \
 	shim-v2-tarball \
-	tdvf-tarball \
 	virtiofsd-tarball
 BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	rootfs-image-confidential-tarball \
@@ -77,9 +75,6 @@ serial-targets:
 	$(call BUILD,$*)
 
 agent-tarball: copy-scripts-for-the-agent-build
-	${MAKE} $@-build
-
-agent-opa-tarball: copy-scripts-for-the-agent-build
 	${MAKE} $@-build
 
 agent-ctl-tarball:
@@ -142,22 +137,19 @@ qemu-tarball:
 boot-image-se-tarball: kernel-confidential-tarball rootfs-initrd-confidential-tarball
 	${MAKE} $@-build
 
-qemu-tdx-experimental-tarball:
-	${MAKE} $@-build
-
 stratovirt-tarball:
 	${MAKE} $@-build
 
 rootfs-image-tarball: agent-tarball
 	${MAKE} $@-build
 
-rootfs-image-confidential-tarball: agent-opa-tarball pause-image-tarball coco-guest-components-tarball kernel-confidential-tarball
+rootfs-image-confidential-tarball: agent-tarball pause-image-tarball coco-guest-components-tarball kernel-confidential-tarball
 	${MAKE} $@-build
 
-rootfs-initrd-mariner-tarball: agent-opa-tarball
+rootfs-initrd-mariner-tarball: agent-tarball
 	${MAKE} $@-build
 
-rootfs-initrd-confidential-tarball: agent-opa-tarball pause-image-tarball coco-guest-components-tarball kernel-confidential-tarball
+rootfs-initrd-confidential-tarball: agent-tarball pause-image-tarball coco-guest-components-tarball kernel-confidential-tarball
 	${MAKE} $@-build
 
 rootfs-initrd-tarball: agent-tarball
@@ -167,9 +159,6 @@ runk-tarball:
 	${MAKE} $@-build
 
 shim-v2-tarball:
-	${MAKE} $@-build
-
-tdvf-tarball:
 	${MAKE} $@-build
 
 trace-forwarder-tarball:

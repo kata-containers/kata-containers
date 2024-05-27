@@ -44,10 +44,13 @@ MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
 PULL_TYPE=${PULL_TYPE:-default}
 USE_CACHE="${USE_CACHE:-"yes"}"
 ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY:-ghcr.io}"
+ARTEFACT_REPOSITORY="${ARTEFACT_REPOSITORY:-kata-containers}"
 ARTEFACT_REGISTRY_USERNAME="${ARTEFACT_REGISTRY_USERNAME:-}"
 ARTEFACT_REGISTRY_PASSWORD="${ARTEFACT_REGISTRY_PASSWORD:-}"
 TARGET_BRANCH="${TARGET_BRANCH:-main}"
 PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-}"
+KERNEL_HEADERS_PKG_TYPE="${KERNEL_HEADERS_PKG_TYPE:-deb}"
+RELEASE="${RELEASE:-"no"}"
 
 workdir="${WORKDIR:-$PWD}"
 
@@ -89,7 +92,6 @@ options:
 --build=<asset>       :
 	all
 	agent
-	agent-opa
 	agent-ctl
 	boot-image-se
 	coco-guest-components
@@ -111,7 +113,6 @@ options:
 	ovmf-sev
 	qemu
 	qemu-snp-experimental
-	qemu-tdx-experimental
 	stratovirt
 	rootfs-image
 	rootfs-image-confidential
@@ -120,12 +121,20 @@ options:
 	rootfs-initrd-mariner
 	runk
 	shim-v2
-	tdvf
 	trace-forwarder
 	virtiofsd
 EOF
 
 	exit "${return_code}"
+}
+
+get_kernel_headers_dir() {
+	local kernel_name"=${1:-}"
+	[ -z "${kernel_name}" ] && die "kernel name is a required argument"
+
+	local kernel_headers_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/${kernel_name}/builddir"
+
+	echo "${kernel_headers_dir}"
 }
 
 get_kernel_modules_dir() {
@@ -179,7 +188,7 @@ install_cached_tarball_component() {
 	fi
 
 	local component="${1}"
-	local current_version="${2}"
+	local current_version="${2}-$(git log -1 --abbrev=9 --pretty=format:"%h" ${repo_root_dir}/tools/packaging/kata-deploy/local-build)"
 	local current_image_version="${3}"
 	local component_tarball_name="${4}"
 	local component_tarball_path="${5}"
@@ -187,7 +196,7 @@ install_cached_tarball_component() {
 	# "tarball1_name:tarball1_path tarball2_name:tarball2_path ... tarballN_name:tarballN_path"
 	local extra_tarballs="${6:-}"
 
-	sudo oras pull ${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) || return 1
+	sudo oras pull ${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) || return 1
 
 	cached_version="$(cat ${component}-version)"
 	cached_image_version="$(cat ${component}-builder-image-version)"
@@ -217,9 +226,6 @@ install_cached_tarball_component() {
 get_agent_tarball_path() {
 	agent_local_build_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
 	agent_tarball_name="kata-static-agent.tar.xz"
-	if [ "${AGENT_POLICY:-no}" = "yes" ]; then
-		agent_tarball_name="kata-static-agent-opa.tar.xz"
-	fi
 
 	echo "${agent_local_build_dir}/${agent_tarball_name}"
 }
@@ -315,11 +321,6 @@ install_image() {
 		if [ "${variant}" == "confidential" ]; then
 			export COCO_GUEST_COMPONENTS_TARBALL="$(get_coco_guest_components_tarball_path)"
 			export PAUSE_IMAGE_TARBALL="$(get_pause_image_tarball_path)"
-			# GO_VERSION should be exported to install the package in ubuntu-rootfs-osbuilder
-			# This is necessary for installing opa from the source for s390x and ppc64le
-			if [ "${AGENT_POLICY}" == "yes" ] && [ "${ARCH}" == "s390x" -o "${ARCH}" == "ppc64le" ]; then
-				export GO_VERSION=$(get_from_kata_deps "languages.golang.meta.newest-version")
-			fi
 		fi
 	else
 		os_name="$(get_from_kata_deps "assets.image.architecture.${ARCH}.name")"
@@ -327,12 +328,13 @@ install_image() {
 	fi
 
 	export AGENT_TARBALL=$(get_agent_tarball_path)
+	export AGENT_POLICY=yes
+
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
 
 #Install guest image for confidential guests
 install_image_confidential() {
-	export AGENT_POLICY=yes
 	export MEASURED_ROOTFS=yes
 	export PULL_TYPE=default
 	install_image "confidential"
@@ -389,11 +391,6 @@ install_initrd() {
 		if [ "${variant}" == "confidential" ]; then
 			export COCO_GUEST_COMPONENTS_TARBALL="$(get_coco_guest_components_tarball_path)"
 			export PAUSE_IMAGE_TARBALL="$(get_pause_image_tarball_path)"
-			# GO_VERSION should be exported to install the package in ubuntu-rootfs-osbuilder
-			# This is necessary for installing opa from the source for s390x and ppc64le
-			if [ "${AGENT_POLICY}" == "yes" ] && [ "${ARCH}" == "s390x" -o "${ARCH}" == "ppc64le" ]; then
-				export GO_VERSION=$(get_from_kata_deps "languages.golang.meta.newest-version")
-			fi
 		fi
 	else
 		os_name="$(get_from_kata_deps "assets.initrd.architecture.${ARCH}.name")"
@@ -401,12 +398,13 @@ install_initrd() {
 	fi
 
 	export AGENT_TARBALL=$(get_agent_tarball_path)
+	export AGENT_POLICY=yes
+
 	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
 
 #Install guest initrd for confidential guests
 install_initrd_confidential() {
-	export AGENT_POLICY=yes
 	export MEASURED_ROOTFS=yes
 	export PULL_TYPE=default
 	install_initrd "confidential"
@@ -414,9 +412,41 @@ install_initrd_confidential() {
 
 #Install Mariner guest initrd
 install_initrd_mariner() {
-	export AGENT_POLICY=yes
 	install_initrd "mariner"
 }
+
+#Instal NVIDIA GPU image
+install_image_nvidia_gpu() {
+	export AGENT_POLICY="yes"
+	export AGENT_INIT="yes"
+	export EXTRA_PKGS="apt udev"
+	install_image "nvidia-gpu"
+}
+
+#Install NVIDIA GPU initrd
+install_initrd_nvidia_gpu() {
+	export AGENT_POLICY="yes"
+	export AGENT_INIT="yes"
+	export EXTRA_PKGS="apt udev"
+	install_initrd "nvidia-gpu"
+}
+
+#Instal NVIDIA GPU confidential image
+install_image_nvidia_gpu_confidential() {
+	export AGENT_POLICY="yes"
+	export AGENT_INIT="yes"
+	export EXTRA_PKGS="apt udev"
+	install_image "nvidia-gpu-confidential"
+}
+
+#Install NVIDIA GPU confidential initrd
+install_initrd_nvidia_gpu_confidential() {
+	export AGENT_POLICY="yes"
+	export AGENT_INIT="yes"
+	export EXTRA_PKGS="apt udev"
+	install_initrd "nvidia-gpu-confidential"
+}
+
 
 install_se_image() {
 	info "Create IBM SE image configured with AA_KBC=${AA_KBC}"
@@ -440,15 +470,20 @@ install_cached_kernel_tarball_component() {
 		"${extra_tarballs}" \
 		|| return 1
 
-	if [[ "${kernel_name}" != "kernel"*"-confidential" ]]; then
-		return 0
-	fi
+	case ${kernel_name} in
+		"kernel-nvidia-gpu"*"")
+			local kernel_headers_dir=$(get_kernel_headers_dir "${kernel_name}")
+			mkdir -p ${kernel_headers_dir} || true
+			tar xvf ${workdir}/${kernel_name}/builddir/kata-static-${kernel_name}-headers.tar.xz -C "${kernel_headers_dir}" || return 1
+			;;& # fallthrough in the confidential case we need the modules.tar.xz and for every kernel-nvidia-gpu we need the headers
+		"kernel"*"-confidential")
+			local modules_dir=$(get_kernel_modules_dir ${kernel_version} ${kernel_kata_config_version} ${build_target})
+			mkdir -p "${modules_dir}" || true
+			tar xvf "${workdir}/kata-static-${kernel_name}-modules.tar.xz" -C "${modules_dir}" || return 1
+			;;
+	esac
 
-	local modules_dir=$(get_kernel_modules_dir ${kernel_version} ${kernel_kata_config_version} ${build_target})
-	mkdir -p "${modules_dir}" || true
-	tar xvf "${workdir}/kata-static-${kernel_name}-modules.tar.xz" -C  "${modules_dir}" && return 0
-
-	return 1
+	return 0
 }
 
 #Install kernel asset
@@ -469,6 +504,12 @@ install_kernel_helper() {
 		local kernel_modules_tarball_name="kata-static-${kernel_name}-modules.tar.xz"
 		local kernel_modules_tarball_path="${workdir}/${kernel_modules_tarball_name}"
 		extra_tarballs="${kernel_modules_tarball_name}:${kernel_modules_tarball_path}"
+	fi
+
+	if [[ "${kernel_name}" == "kernel-nvidia-gpu*" ]]; then
+		local kernel_headers_tarball_name="kata-static-${kernel_name}-headers.tar.xz"
+		local kernel_headers_tarball_path="${workdir}/${kernel_headers_tarball_name}"
+		extra_tarballs+=" ${kernel_headers_tarball_name}:${kernel_headers_tarball_path}"
 	fi
 
 	default_patches_dir="${repo_root_dir}/tools/packaging/kernel/patches"
@@ -559,17 +600,6 @@ install_qemu() {
 		"assets.hypervisor.qemu.version" \
 		"qemu" \
 		"${qemu_builder}"
-}
-
-install_qemu_tdx_experimental() {
-	export qemu_suffix="tdx-experimental"
-	export qemu_tarball_name="kata-static-qemu-${qemu_suffix}.tar.gz"
-
-	install_qemu_helper \
-		"assets.hypervisor.qemu-${qemu_suffix}.url" \
-		"assets.hypervisor.qemu-${qemu_suffix}.tag" \
-		"qemu-${qemu_suffix}" \
-		"${qemu_experimental_builder}"
 }
 
 install_qemu_snp_experimental() {
@@ -748,7 +778,6 @@ install_ovmf() {
 
 	local component_name="ovmf"
 	[ "${ovmf_type}" == "sev" ] && component_name="ovmf-sev"
-	[ "${ovmf_type}" == "tdx" ] && component_name="tdvf"
 
 	latest_artefact="$(get_from_kata_deps "externals.ovmf.${ovmf_type}.version")"
 	latest_builder_image="$(get_ovmf_image_name)"
@@ -765,20 +794,14 @@ install_ovmf() {
 	tar xvf "${builddir}/${tarball_name}" -C "${destdir}"
 }
 
-# Install TDVF
-install_tdvf() {
-	install_ovmf "tdx" "edk2-tdx.tar.gz"
-}
-
 # Install OVMF SEV
 install_ovmf_sev() {
 	install_ovmf "sev" "edk2-sev.tar.gz"
 }
 
-install_agent_helper() {
-	agent_policy="${1:-no}"
-
-	latest_artefact="$(git log -1 --pretty=format:"%h" ${repo_root_dir}/src/agent)"
+install_agent() {
+	latest_artefact="$(git log -1 --abbrev=9 --pretty=format:"%h" ${repo_root_dir}/src/agent)"
+	artefact_tag="$(git log -1 --pretty=format:"%H" ${repo_root_dir})"
 	latest_builder_image="$(get_agent_image_name)"
 
 	install_cached_tarball_component \
@@ -795,19 +818,12 @@ install_agent_helper() {
 	export GPERF_URL="$(get_from_kata_deps "externals.gperf.url")"
 
 	info "build static agent"
-	DESTDIR="${destdir}" AGENT_POLICY=${agent_policy} PULL_TYPE=${PULL_TYPE} "${agent_builder}"
-}
-
-install_agent() {
-	install_agent_helper
-}
-
-install_agent_opa() {
-	install_agent_helper "yes"
+	DESTDIR="${destdir}" AGENT_POLICY="yes" PULL_TYPE=${PULL_TYPE} "${agent_builder}"
 }
 
 install_coco_guest_components() {
 	latest_artefact="$(get_from_kata_deps "externals.coco-guest-components.version")-$(get_from_kata_deps "externals.coco-guest-components.toolchain")"
+	artefact_tag="$(get_from_kata_deps "externals.coco-guest-components.version")"
 	latest_builder_image="$(get_coco_guest_components_image_name)"
 
 	install_cached_tarball_component \
@@ -824,6 +840,7 @@ install_coco_guest_components() {
 
 install_pause_image() {
 	latest_artefact="$(get_from_kata_deps "externals.pause.repo")-$(get_from_kata_deps "externals.pause.version")"
+	artefact_tag=${latest_artefact}
 	latest_builder_image="$(get_pause_image_name)"
 
 	install_cached_tarball_component \
@@ -889,7 +906,7 @@ install_script_helper() {
 install_tools_helper() {
 	tool=${1}
 
-	latest_artefact="$(git log -1 --pretty=format:"%h" ${repo_root_dir}/src/tools/${tool})"
+	latest_artefact="$(git log -1 --abbrev=9 --pretty=format:"%h" ${repo_root_dir}/src/tools/${tool})"
 	latest_builder_image="$(get_tools_image_name)"
 
 	install_cached_tarball_component \
@@ -988,18 +1005,14 @@ handle_build() {
 		install_ovmf_sev
 		install_qemu
 		install_qemu_snp_experimental
-		install_qemu_tdx_experimental
 		install_stratovirt
 		install_runk
 		install_shimv2
-		install_tdvf
 		install_trace_forwarder
 		install_virtiofsd
 		;;
 
 	agent) install_agent ;;
-
-	agent-opa) install_agent_opa ;;
 
 	agent-ctl) install_agent_ctl ;;
 
@@ -1041,8 +1054,6 @@ handle_build() {
 
 	qemu-snp-experimental) install_qemu_snp_experimental ;;
 
-	qemu-tdx-experimental) install_qemu_tdx_experimental ;;
-
 	stratovirt) install_stratovirt ;;
 
 	rootfs-image) install_image ;;
@@ -1055,11 +1066,17 @@ handle_build() {
 
 	rootfs-initrd-mariner) install_initrd_mariner ;;
 
+	rootfs-nvidia-gpu-image) install_image_nvidia_gpu ;;
+
+	rootfs-nvidia-gpu-initrd) install_initrd_nvidia_gpu ;;
+
+	rootfs-nvidia-gpu-confidential-image) install_image_nvidia_gpu_confidential ;;
+
+	rootfs-nvidia-gpu-confidential-initrd) install_initrd_nvidia_gpu_confidential ;;
+
 	runk) install_runk ;;
 
 	shim-v2) install_shimv2 ;;
-
-	tdvf) install_tdvf ;;
 
 	trace-forwarder) install_trace_forwarder ;;
 
@@ -1077,6 +1094,19 @@ handle_build() {
 	tar tvf "${final_tarball_path}"
 
 	case ${build_target} in
+		kernel-nvidia-gpu*)
+			local kernel_headers_final_tarball_path="${workdir}/kata-static-${build_target}-headers.tar.xz"
+			if [ ! -f "${kernel_headers_final_tarball_path}" ]; then
+				local kernel_headers_dir
+				kernel_headers_dir=$(get_kernel_headers_dir "${build_target}")
+
+				pushd "${kernel_headers_dir}"
+				find . -type f -name "*.${KERNEL_HEADERS_PKG_TYPE}" -exec sudo tar cvfJ "${kernel_headers_final_tarball_path}" {} +
+				popd
+			fi
+			tar tvf "${kernel_headers_final_tarball_path}"
+			;;& # fallthrough in the confidential case we need the modules.tar.xz and for every kernel-nvidia-gpu we need the headers
+
 		kernel*-confidential)
 			local modules_final_tarball_path="${workdir}/kata-static-${build_target}-modules.tar.xz"
 			if [ ! -f "${modules_final_tarball_path}" ]; then
@@ -1092,39 +1122,76 @@ handle_build() {
 	esac
 
 	pushd ${workdir}
-	echo "${latest_artefact}" > ${build_target}-version
+	echo "${latest_artefact}-$(git log -1 --abbrev=9 --pretty=format:"%h" ${repo_root_dir}/tools/packaging/kata-deploy/local-build)" > ${build_target}-version
 	echo "${latest_builder_image}" > ${build_target}-builder-image-version
 	sha256sum "${final_tarball_name}" > ${build_target}-sha256sum
 
 	if [ "${PUSH_TO_REGISTRY}" = "yes" ]; then
 		if [ -z "${ARTEFACT_REGISTRY}" ] ||
+			[ -z "${ARTEFACT_REPOSITORY}" ] ||
 			[ -z "${ARTEFACT_REGISTRY_USERNAME}" ] ||
 			[ -z "${ARTEFACT_REGISTRY_PASSWORD}" ] ||
 		      	[ -z "${TARGET_BRANCH}" ]; then
-			die "ARTEFACT_REGISTRY, ARTEFACT_REGISTRY_USERNAME, ARTEFACT_REGISTRY_PASSWORD and TARGET_BRANCH must be passed to the script when pushing the artefacts to the registry!"
+			die "ARTEFACT_REGISTRY, ARTEFACT_REPOSITORY, ARTEFACT_REGISTRY_USERNAME, ARTEFACT_REGISTRY_PASSWORD and TARGET_BRANCH must be passed to the script when pushing the artefacts to the registry!"
 		fi
 
 		echo "${ARTEFACT_REGISTRY_PASSWORD}" | sudo oras login "${ARTEFACT_REGISTRY}" -u "${ARTEFACT_REGISTRY_USERNAME}" --password-stdin
 
-		case ${build_target} in
-			kernel*-confidential)
-				sudo oras push \
-					${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
-					${final_tarball_name} \
-					"kata-static-${build_target}-modules.tar.xz" \
-					${build_target}-version \
-					${build_target}-builder-image-version \
-					${build_target}-sha256sum
-				;;
-			*)
-				sudo oras push \
-					${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) \
-					${final_tarball_name} \
-					${build_target}-version \
-					${build_target}-builder-image-version \
-					${build_target}-sha256sum
-				;;
-		esac
+		tags=(latest-"${TARGET_BRANCH}")
+		if [ -n "${artefact_tag:-}" ]; then
+			tags+=("${artefact_tag}")
+		fi
+		if [ "${RELEASE}" == "yes" ]; then
+			tags+=("$(cat "${version_file}")")
+		fi
+
+		echo "Pushing ${build_target} with tags: ${tags[*]}"
+
+		for tag in "${tags[@]}"; do
+			# tags can only contain lowercase and uppercase letters, digits, underscores, periods, and hyphens
+			# and limited to 128 characters, so filter out non-printable characers, replace invalid printable
+			# characters with underscode and trim down to leave enough space for the arch suffix
+			tag_length_limit=$(expr 128 - $(echo "-$(uname -m)" | wc -c))
+			tag=("$(echo ${tag} | tr -dc '[:print:]' | tr -c '[a-zA-Z0-9\_\.\-]' _ | head -c ${tag_length_limit})-$(uname -m)")
+			case ${build_target} in
+				kernel-nvidia-gpu)
+					sudo oras push \
+						${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:${tag} \
+						${final_tarball_name} \
+						"kata-static-${build_target}-headers.tar.xz" \
+						${build_target}-version \
+						${build_target}-builder-image-version \
+						${build_target}-sha256sum
+					;;
+				kernel-nvidia-gpu-confidential)
+					sudo oras push \
+						${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:${tag} \
+						${final_tarball_name} \
+						"kata-static-${build_target}-modules.tar.xz" \
+						"kata-static-${build_target}-headers.tar.xz" \
+						${build_target}-version \
+						${build_target}-builder-image-version \
+						${build_target}-sha256sum
+					;;
+				kernel*-confidential)
+					sudo oras push \
+						${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:${tag} \
+						${final_tarball_name} \
+						"kata-static-${build_target}-modules.tar.xz" \
+						${build_target}-version \
+						${build_target}-builder-image-version \
+						${build_target}-sha256sum
+					;;
+				*)
+					sudo oras push \
+						${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:${tag} \
+						${final_tarball_name} \
+						${build_target}-version \
+						${build_target}-builder-image-version \
+						${build_target}-sha256sum
+					;;
+			esac
+		done
 		sudo oras logout "${ARTEFACT_REGISTRY}"
 	fi
 
@@ -1150,7 +1217,6 @@ main() {
 	local silent
 	build_targets=(
 		agent
-		agent-opa
 		agent-ctl
 		cloud-hypervisor
 		coco-guest-components

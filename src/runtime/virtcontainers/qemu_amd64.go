@@ -31,6 +31,8 @@ type qemuAmd64 struct {
 	devLoadersCount uint32
 
 	sgxEPCSize int64
+
+	qgsPort uint32
 }
 
 const (
@@ -125,6 +127,7 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 		},
 		vmFactory: factory,
 		snpGuest:  config.SevSnpGuest,
+		qgsPort:   config.QgsPort,
 	}
 
 	if config.ConfidentialGuest {
@@ -282,6 +285,7 @@ func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 			govmmQemu.Object{
 				Driver:         govmmQemu.Loader,
 				Type:           govmmQemu.TDXGuest,
+				QgsPort:        q.qgsPort,
 				ID:             "tdx",
 				DeviceID:       fmt.Sprintf("fd%d", id),
 				Debug:          false,

@@ -10,6 +10,7 @@ jobs:
   build-kata-static-tarball-s390x:
     uses: ./.github/workflows/build-kata-static-tarball-s390x.yaml
     with:
+      push-to-registry: yes
       stage: release
     secrets: inherit
 

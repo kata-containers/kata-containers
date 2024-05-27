@@ -8,4 +8,3 @@ LIBC="gnu"
 PACKAGES="core-packages-base-image ca-certificates"
 [ "$AGENT_INIT" = no ] && PACKAGES+=" systemd"
 [ "$SECCOMP" = yes ] && PACKAGES+=" libseccomp"
-[ "$AGENT_POLICY" = yes ] && PACKAGES+=" opa" || true

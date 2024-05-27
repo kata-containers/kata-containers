@@ -14,6 +14,8 @@ TARGET_ARCH="${TARGET_ARCH:-x86_64}"
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 K8S_TEST_DEBUG="${K8S_TEST_DEBUG:-false}"
 K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-small}"
+# Setting to "yes" enables fail fast, stopping execution at the first failed test.
+K8S_TEST_FAIL_FAST="${K8S_TEST_FAIL_FAST:-no}"
 
 if [ -n "${K8S_TEST_UNION:-}" ]; then
 	K8S_TEST_UNION=($K8S_TEST_UNION)
@@ -104,9 +106,17 @@ fi
 
 ensure_yq
 
+tests_fail=()
 for K8S_TEST_ENTRY in ${K8S_TEST_UNION[@]}
 do
 	info "$(kubectl get pods --all-namespaces 2>&1)"
 	info "Executing ${K8S_TEST_ENTRY}"
-	bats --show-output-of-passing-tests "${K8S_TEST_ENTRY}"
+	if ! bats --show-output-of-passing-tests "${K8S_TEST_ENTRY}"; then
+		tests_fail+=("${K8S_TEST_ENTRY}")
+		[ "${K8S_TEST_FAIL_FAST}" = "yes" ] && break
+	fi
 done
+
+[ ${#tests_fail[@]} -ne 0 ] && die "Tests FAILED from suites: ${tests_fail[*]}"
+
+info "All tests SUCCEEDED"

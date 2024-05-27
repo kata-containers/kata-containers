@@ -21,7 +21,7 @@ endif
 ifeq (,$(not_check_version))
     have_yq=$(shell if [ -x "$(GOPATH)/bin/yq" ]; then echo "true"; else echo ""; fi)
     ifeq (,$(have_yq))
-        $(info INFO: yq was not found, installing it)
+        $(info INFO: yq was not found in GOPATH/bin, installing it)
         install_yq=$(shell ../../ci/install_yq.sh)
     endif
     ifneq (,$(install_yq))

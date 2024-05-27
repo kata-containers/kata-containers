@@ -28,7 +28,6 @@ jobs:
       matrix:
         asset:
           - agent
-          - agent-opa
           - coco-guest-components
           - kernel
           - kernel-confidential
@@ -40,13 +39,6 @@ jobs:
           - rootfs-initrd-confidential
           - shim-v2
           - virtiofsd
-        stage:
-          - ${{ inputs.stage }}
-        exclude:
-          - asset: pause-image
-            stage: release
-          - asset: coco-guest-components
-            stage: release
     steps:
       - name: Take a pre-action for self-hosted runner
         run: ${HOME}/script/pre_action.sh ubuntu-2204
@@ -85,8 +77,10 @@ jobs:
           ARTEFACT_REGISTRY_USERNAME: ${{ github.actor }}
           ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           TARGET_BRANCH: ${{ inputs.target-branch }}
+          RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
 
       - name: store-artifact ${{ matrix.asset }}
+        if: ${{ inputs.stage != 'release' || (matrix.asset != 'agent' && matrix.asset != 'coco-guest-components' && matrix.asset != 'pause-image') }}
         uses: actions/upload-artifact@v4
         with:
           name: kata-artifacts-s390x-${{ matrix.asset }}${{ inputs.tarball-suffix }}

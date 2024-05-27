@@ -99,6 +99,7 @@ func (m MethodNotAllowedError) MarshalJSON() ([]byte, error) {
 }
 
 func errorAsJSON(err Error) []byte {
+	//nolint:errchkjson
 	b, _ := json.Marshal(struct {
 		Code    int32  `json:"code"`
 		Message string `json:"message"`
@@ -111,7 +112,7 @@ func flattenComposite(errs *CompositeError) *CompositeError {
 	for _, er := range errs.Errors {
 		switch e := er.(type) {
 		case *CompositeError:
-			if len(e.Errors) > 0 {
+			if e != nil && len(e.Errors) > 0 {
 				flat := flattenComposite(e)
 				if len(flat.Errors) > 0 {
 					res = append(res, flat.Errors...)
@@ -146,7 +147,7 @@ func ServeError(rw http.ResponseWriter, r *http.Request, err error) {
 			ServeError(rw, r, nil)
 		}
 	case *MethodNotAllowedError:
-		rw.Header().Add("Allow", strings.Join(err.(*MethodNotAllowedError).Allowed, ","))
+		rw.Header().Add("Allow", strings.Join(e.Allowed, ","))
 		rw.WriteHeader(asHTTPCode(int(e.Code())))
 		if r == nil || r.Method != http.MethodHead {
 			_, _ = rw.Write(errorAsJSON(e))

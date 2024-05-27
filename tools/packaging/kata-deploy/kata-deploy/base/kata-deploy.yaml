@@ -32,7 +32,7 @@ spec:
             - name: DEBUG
               value: "false"
             - name: SHIMS
-              value: "clh cloud-hypervisor dragonball fc qemu qemu-nvidia-gpu qemu-sev qemu-snp qemu-tdx stratovirt"
+              value: "clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-sev qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx"
             - name: DEFAULT_SHIM
               value: "qemu"
             - name: CREATE_RUNTIMECLASSES
@@ -58,6 +58,8 @@ spec:
               mountPath: /opt/kata/
             - name: local-bin
               mountPath: /usr/local/bin/
+            - name: host
+              mountPath: /host/
       volumes:
         - name: crio-conf
           hostPath:
@@ -72,6 +74,9 @@ spec:
         - name: local-bin
           hostPath:
             path: /usr/local/bin/
+        - name: host
+          hostPath:
+            path: /
   updateStrategy:
     rollingUpdate:
       maxUnavailable: 1

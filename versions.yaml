@@ -99,11 +99,6 @@ assets:
         https://github.com/qemu/qemu/tags
         .*/v?(\d\S+)\.tar\.gz
 
-    qemu-tdx-experimental:
-      description: ¨QEMU with TDX support"
-      url: "https://github.com/intel/qemu-tdx"
-      tag: "tdx-qemu-next-2023.9.21-v8.1.0"
-
     qemu-snp-experimental:
       description: "QEMU with SNP support"
       url: "https://github.com/confidential-containers/qemu.git"
@@ -232,9 +227,9 @@ externals:
   coco-trustee:
     description: "Provides attestation and secret delivery components"
     url: "https://github.com/confidential-containers/trustee"
-    version: "18c8ee378c6d83446ee635a702d5dee389028d8f"
+    version: "6adb8383309cbb7279f1d8e1e4620556ac66481e"
     image: "ghcr.io/confidential-containers/staged-images/kbs"
-    image_tag: "18c8ee378c6d83446ee635a702d5dee389028d8f"
+    image_tag: "6adb8383309cbb7279f1d8e1e4620556ac66481e"
     toolchain: "1.74.0"
 
   crio:
@@ -322,12 +317,7 @@ externals:
   nydus-snapshotter:
     description: "Snapshotter for Nydus image acceleration service"
     url: "https://github.com/containerd/nydus-snapshotter"
-    version: "v0.13.11"
-
-  open-policy-agent:
-    description: "Open Policy Agent"
-    url: "https://github.com/open-policy-agent/opa"
-    version: "v0.55.0"
+    version: "v0.13.13"
 
   ovmf:
     description: "Firmware, implementation of UEFI for virtual machines."
@@ -342,18 +332,6 @@ externals:
       version: "edk2-stable202302"
       package: "OvmfPkg/AmdSev/AmdSevX64.dsc"
       package_output_dir: "AmdSev"
-    tdx:
-      # yamllint disable-line rule:line-length
-      description: "QEMU with TDX support - based on https://github.com/intel/tdx-tools/releases/tag/2023ww15"
-      version: "edk2-stable202302"
-      package: "OvmfPkg/IntelTdx/IntelTdxX64.dsc"
-      package_output_dir: "IntelTdx"
-
-  td-shim:
-    description: "Confidential Containers Shim Firmware"
-    url: "https://github.com/confidential-containers/td-shim"
-    version: "cf9592ef70bd6ba4c7ab1330d278a743f5ba3133"
-    toolchain: "nightly-2022-05-15"
 
   virtiofsd:
     description: "vhost-user virtio-fs device backend written in Rust"
@@ -408,17 +386,6 @@ languages:
         'newest-version' is the latest version known to work when
         building Kata
       newest-version: "1.57.2"
-
-specs:
-  description: "Details of important specifications"
-
-  oci:
-    description: "Open Containers Initiative runtime specification"
-    url: "https://github.com/opencontainers/runtime-spec/releases"
-    uscan-url: >-
-      https://github.com/opencontainers/runtime-spec/tags
-      .*/v?(\d\S+)\.tar\.gz
-    version: "v1.0.2"
 
 plugins:
   description: |

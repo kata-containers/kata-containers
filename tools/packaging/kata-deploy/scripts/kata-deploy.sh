@@ -39,6 +39,16 @@ die() {
         exit 1
 }
 
+warn() {
+        msg="$*"
+        echo "WARN: $msg" >&2
+}
+
+info() {
+	msg="$*"
+	echo "INFO: $msg" >&2
+}
+
 function host_systemctl() {
 	nsenter --target 1 --mount systemctl "${@}"
 }
@@ -148,6 +158,63 @@ function get_kata_containers_config_path() {
 	echo "$config_path"
 }
 
+function tdx_not_supported() {
+	distro="${1}"
+	version="${2}"
+
+	warn "Distro ${distro} ${version} does not support TDX and the TDX related runtime classes will not work in your cluster!"
+}
+
+function tdx_supported() {
+	distro="${1}"
+	version="${2}"
+	config="${3}"
+
+	sed -i -e "s|PLACEHOLDER_FOR_DISTRO_QEMU_WITH_TDX_SUPPORT|$(get_tdx_qemu_path_from_distro ${distro})|g" ${config}
+	sed -i -e "s|PLACEHOLDER_FOR_DISTRO_OVMF_WITH_TDX_SUPPORT|$(get_tdx_ovmf_path_from_distro ${distro})|g" ${config}
+
+	info "In order to use the tdx related runtime classes, ensure TDX is properly configured for ${distro} ${version} by following the instructions provided at: $(get_tdx_distro_instructions ${distro})"
+}
+
+function get_tdx_distro_instructions() {
+	distro="${1}"
+
+	case ${distro} in
+		ubuntu)
+			echo "https://github.com/canonical/tdx/tree/noble-24.04"
+			;;
+		centos)
+			echo "https://sigs.centos.org/virt/tdx"
+			;;
+	esac
+}
+
+function get_tdx_qemu_path_from_distro() {
+	distro="${1}"
+
+	case ${distro} in
+		ubuntu)
+			echo "/usr/bin/qemu-system-x86_64"
+			;;
+		centos)
+			echo "/usr/libexec/qemu-kvm"
+			;;
+	esac
+}
+
+function get_tdx_ovmf_path_from_distro() {
+	distro="${1}"
+
+	case ${distro} in
+		ubuntu)
+			echo "/usr/share/ovmf/OVMF.fd"
+			;;
+		centos)
+			echo "/usr/share/edk2/ovmf/OVMF.inteltdx.fd"
+			;;
+	esac
+}
+
 function install_artifacts() {
 	echo "copying kata artifacts onto host"
 	cp -au /opt/kata-artifacts/opt/kata/* /opt/kata/
@@ -180,6 +247,36 @@ function install_artifacts() {
 
 		if [ -n "${allowed_hypervisor_annotations}" ]; then
 			sed -i -e "s/^enable_annotations = \[\(.*\)\]/enable_annotations = [\1, $allowed_hypervisor_annotations]/" "${kata_config_file}"
+		fi
+
+		if grep -q "tdx" <<< "$shim"; then
+  			VERSION_ID=version_unset # VERSION_ID may be unset, see https://www.freedesktop.org/software/systemd/man/latest/os-release.html#Notes
+			source /host/etc/os-release || source /host/usr/lib/os-release
+			case ${ID} in
+				ubuntu)
+					case ${VERSION_ID} in
+						24.04)
+							tdx_supported ${ID} ${VERSION_ID} ${kata_config_file}
+							;;
+						*)
+							tdx_not_supported ${ID} ${VERSION_ID}
+							;;
+					esac
+					;;
+				centos)
+					case ${VERSION_ID} in
+						9)
+							tdx_supported ${ID} ${VERSION_ID} ${kata_config_file}
+							;;
+						*)
+							tdx_not_supported ${ID} ${VERSION_ID}
+							;;
+					esac
+					;;
+				*)
+					tdx_not_supported ${ID} ${VERSION_ID}
+					;;
+			esac	
 		fi
 	done
 
@@ -351,7 +448,7 @@ function configure_crio() {
 
 	if [ "${DEBUG}" == "true" ]; then
 		cat <<EOF | tee $crio_drop_in_conf_file_debug
-[crio]
+[crio.runtime]
 log_level = "debug"
 EOF
 	fi
