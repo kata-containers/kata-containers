@@ -85,6 +85,14 @@ setup() {
 	# Give some time for the pod to finish what's doing and have the
 	# runtimeclasses properly created
 	sleep 30s
+
+	echo "::group::kata-deploy logs"
+	kubectl -n kube-system logs --tail=100 -l name=kata-deploy
+	echo "::endgroup::"
+
+	echo "::group::Runtime classes"
+	kubectl get runtimeclass
+	echo "::endgroup::"
 }
 
 @test "Test runtimeclasses are being properly created and container runtime not broken" {
@@ -113,8 +121,6 @@ setup() {
 }
 
 teardown() {
-	kubectl get runtimeclasses -o name | grep -v "kata-mshv-vm-isolation"
-
 	if [ "${KUBERNETES}" = "k0s" ]; then
 		deploy_spec="-k \"${repo_root_dir}/tools/packaging/kata-deploy/kata-deploy/overlays/k0s\""
 		cleanup_spec="-k \"${repo_root_dir}/tools/packaging/kata-deploy/kata-cleanup/overlays/k0s\""
