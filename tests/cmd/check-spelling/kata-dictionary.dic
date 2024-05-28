@@ -1,4 +1,4 @@
-386
+387
 ACPI/AB
 ACS/AB
 API/AB
@@ -90,6 +90,7 @@ MITRE/B
 MacOS/B
 Mellanox/B
 Minikube/B
+MonitorTest/A
 NEMU/AB
 NIC/AB
 NVDIMM/AB
@@ -197,6 +198,7 @@ backend
 backport/ACD
 backtick/AB
 backtrace
+bisecter/B
 blogbench/B
 bootloader/AB
 ccloudvm/B
@@ -204,6 +206,7 @@ centric/B
 cgroup/AB
 checkbox/A
 chipset/AB
+ci/AB
 cnn/B
 codebase
 codecov/B
@@ -255,6 +258,7 @@ init/AB
 initramfs/AB
 initrd/AB
 intel
+io/B
 ioctl/A
 iodepth/A
 ioengine/A
@@ -295,6 +299,7 @@ netns/AB
 nvidia/A
 onwards
 openSUSE/B
+openshift/B
 osbuilder/B
 packagecloud/B
 parallelize/AC

@@ -25,6 +25,10 @@ WORKAROUND_9206_CRIO=${WORKAROUND_9206_CRIO:-no}
 # Ignore errors as we want best-effort-approach here
 trap - ERR
 
+# Delete webhook resources
+oc delete -f "${scripts_dir}/../../tools/testing/kata-webhook/deploy"
+oc delete -f "${scripts_dir}/cluster/deployments/configmap_kata-webhook.yaml.in"
+
 # Delete potential smoke-test resources
 oc delete -f "${scripts_dir}/smoke/service.yaml"
 oc delete -f "${scripts_dir}/smoke/service_kubernetes.yaml"
