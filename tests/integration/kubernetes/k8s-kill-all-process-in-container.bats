@@ -9,7 +9,8 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	[ "${KATA_HYPERVISOR}" = "qemu-tdx" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/9664"
+	[[ "${KATA_HYPERVISOR}" = "qemu-tdx" || "${KATA_HYPERVISOR}" = "qemu-coco-dev" ]] && \
+		skip "See: https://github.com/kata-containers/kata-containers/issues/9664"
 
 	pod_name="busybox"
 	first_container_name="first-test-container"
@@ -41,7 +42,8 @@ setup() {
 }
 
 teardown() {
-	[ "${KATA_HYPERVISOR}" = "qemu-tdx" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/9664"
+	[[ "${KATA_HYPERVISOR}" = "qemu-tdx" || "${KATA_HYPERVISOR}" = "qemu-coco-dev" ]] && \
+		skip "See: https://github.com/kata-containers/kata-containers/issues/9664"
 
 	# Debugging information
 	kubectl describe "pod/$pod_name"
