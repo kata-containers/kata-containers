@@ -26,10 +26,9 @@ build_tool_from_source() {
 	tool=${1}
 
 	echo "build ${tool} from source"
-	init_env
 
-	cd src/tools/${tool}
+	cd "src/tools/${tool}"
 	make
 }
 
-build_tool_from_source $@
+build_tool_from_source "$@"
