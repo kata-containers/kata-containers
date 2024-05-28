@@ -75,6 +75,44 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
     secrets: inherit
 
+  build-kata-static-tarball-amd64-nvidia-gpu:
+    uses: ./.github/workflows/build-kata-static-tarball-amd64-nvidia-gpu.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
+
+  publish-kata-deploy-payload-amd64-nvidia-gpu:
+    needs: build-kata-static-tarball-amd64-nvidia-gpu
+    uses: ./.github/workflows/publish-kata-deploy-payload-amd64-nvidia-gpu.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      registry: ghcr.io
+      repo: ${{ github.repository_owner }}/kata-deploy-ci
+      tag: ${{ inputs.tag }}-amd64
+      commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
+    secrets: inherit
+
+  build-kata-static-tarball-arm64-nvidia-gpu:
+    uses: ./.github/workflows/build-kata-static-tarball-arm4-nvidia-gpu.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
+
+  publish-kata-deploy-payload-arm64-nvidia-gpu:
+    needs: build-kata-static-tarball-arm64-nvidia-gpu
+    uses: ./.github/workflows/publish-kata-deploy-payload-arm64-nvidia-gpu.yaml
+    with:
+      tarball-suffix: -${{ inputs.tag }}
+      registry: ghcr.io
+      repo: ${{ github.repository_owner }}/kata-deploy-ci
+      tag: ${{ inputs.tag }}-amd64
+      commit-hash: ${{ inputs.commit-hash }}
+      target-branch: ${{ inputs.target-branch }}
+    secrets: inherit
+
   build-and-publish-tee-confidential-unencrypted-image:
     runs-on: ubuntu-latest
     steps:
