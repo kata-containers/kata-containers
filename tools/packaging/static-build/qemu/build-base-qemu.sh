@@ -47,7 +47,7 @@ CACHE_TIMEOUT=$(date +"%Y-%m-%d")
 container_image="${QEMU_CONTAINER_BUILDER:-$(get_qemu_image_name)}"
 [ "${CROSS_BUILD}" == "true" ] && container_image="${container_image}-cross-build"
 
-sudo ${container_engine} pull ${container_image} || (sudo "${container_engine}" build \
+${container_engine} pull ${container_image} || ("${container_engine}" build \
 	--build-arg CACHE_TIMEOUT="${CACHE_TIMEOUT}" \
 	--build-arg http_proxy="${http_proxy}" \
 	--build-arg https_proxy="${https_proxy}" \
@@ -59,7 +59,7 @@ sudo ${container_engine} pull ${container_image} || (sudo "${container_engine}" 
 	# No-op unless PUSH_TO_REGISTRY is exported as "yes"
 	push_to_registry "${container_image}")
 
-sudo "${container_engine}" run \
+"${container_engine}" run \
 	--rm \
 	-i \
 	--env BUILD_SUFFIX="${build_suffix}" \
@@ -75,4 +75,3 @@ sudo "${container_engine}" run \
 	-v "${PWD}":/share "${container_image}" \
 	bash -c "/root/kata-containers/tools/packaging/static-build/qemu/build-qemu.sh"
 
-sudo chown ${USER}:$(id -gn ${USER}) "${PWD}/${qemu_tar}"
