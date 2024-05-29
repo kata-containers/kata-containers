@@ -1,7 +1,7 @@
 # Copyright (c) 2022 Intel Corporation
 #
 # SPDX-License-Identifier: Apache-2.0
-from ubuntu:20.04
+FROM ubuntu:20.04
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG cryptsetup_repo=${cryptsetup_repo}
