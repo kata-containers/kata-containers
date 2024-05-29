@@ -28,16 +28,17 @@ package_output_dir="${package_output_dir:-}"
 container_image="${PAUSE_IMAGE_CONTAINER_BUILDER:-$(get_pause_image_name)}"
 [ "${CROSS_BUILD}" == "true" ] && container_image="${container_image}-cross-build"
 
-sudo docker pull ${container_image} || \
-	(sudo docker $BUILDX build $PLATFORM \
+docker pull ${container_image} || \
+	(docker $BUILDX build $PLATFORM \
 		-t "${container_image}" "${script_dir}" && \
 	 # No-op unless PUSH_TO_REGISTRY is exported as "yes"
 	 push_to_registry "${container_image}")
 
-sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
+docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
 	--env DESTDIR="${DESTDIR}" \
 	--env pause_image_repo="${pause_image_repo}" \
 	--env pause_image_version="${pause_image_version}" \
+	--user "$(id -u)":"$(id -g)" \
 	"${container_image}" \
 	bash -c "${pause_image_builder}"
