@@ -141,6 +141,16 @@ func (device *VFIODevice) Detach(ctx context.Context, devReceiver api.DeviceRece
 		deviceLogger().WithError(err).Error("Failed to remove device")
 		return err
 	}
+	for _, vfio := range device.VfioDevs {
+		if vfio.IsPCIe {
+			for ix, dev := range config.PCIeDevicesPerPort[vfio.Port] {
+				if dev.BDF == vfio.BDF {
+					config.PCIeDevicesPerPort[vfio.Port] = append(config.PCIeDevicesPerPort[vfio.Port][:ix], config.PCIeDevicesPerPort[vfio.Port][ix+1:]...)
+					break
+				}
+			}
+		}
+	}
 
 	deviceLogger().WithFields(logrus.Fields{
 		"device-group": device.DeviceInfo.HostPath,
