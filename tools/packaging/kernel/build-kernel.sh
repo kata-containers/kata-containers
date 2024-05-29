@@ -489,6 +489,7 @@ build_kernel_headers() {
 	pushd "${kernel_path}" >>/dev/null
 
 	if [ "$linux_headers" == "deb" ]; then
+		export KBUILD_BUILD_USER="${USER}"
 		make -j $(nproc ${CI:+--ignore 1}) bindeb-pkg ARCH="${arch_target}"
 	fi
 	if [ "$linux_headers" == "rpm" ]; then
