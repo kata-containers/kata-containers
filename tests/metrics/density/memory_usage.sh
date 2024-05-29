@@ -112,24 +112,24 @@ function get_pss_memory(){
 	# This will help us to retrieve raw information
 	echo "${data}" >> "${MEM_TMP_FILE}"
 
-	arrData=($data)
+	arrData=(${data})
 
 	for i in "${arrData[@]}"; do
-		if [ ${i} -gt 0 ]; then
+		if [ "${i}" -gt 0 ]; then
 			let "mem_amount+=i"
 			let "count+=1"
-			[ $count -eq $NUM_CONTAINERS ] && break
+			[ "${count}" -eq "${NUM_CONTAINERS}" ] && break
 		fi
 	done
 
-	[ ${count}  -eq 0 ] && die "No pss memory was measured for PID: ${ps}"
+	[ "${count}" -eq 0 ] && die "No pss memory was measured for PID: ${ps}"
 
 	avg=$(bc -l <<< "scale=2; ${mem_amount} / ${count}")
 
 	if [ "${shim_result_on}" -eq "1" ]; then
 		global_shim_mem="${avg}"
 	else
-		global_hypervisor_mem="${avg}" 
+		global_hypervisor_mem="${avg}"
 	fi
 }
 
@@ -149,7 +149,7 @@ function get_pss_memory_virtiofsd() {
 	mem_amount=0
 	count=0
 	avg=0
-	virtiofsd_path=${1:-}
+	virtiofsd_path="${1:-}"
 
 	if [ $(ps aux | grep -c '[v]irtiofsd') -eq 0 ]; then
 		SKIP_VIRTIO_FS=1
@@ -298,7 +298,7 @@ function get_memory_usage(){
 	}
 EOF
 )"
-	else [ "$RUNTIME" == "kata-runtime" ] || [ "$RUNTIME" == "kata-qemu" ]
+	else [ "${RUNTIME}" == "kata-runtime" ] || [ "${RUNTIME}" == "kata-qemu" ]
 		# Get PSS memory of VM runtime components.
 		# And check that the smem search has found the process - we get a "0"
 		#  back if that procedure fails (such as if a process has changed its name
@@ -306,18 +306,18 @@ EOF
 		# As an added bonus - this script must be run as root.
 		# Now if you do not have enough rights
 		#  the smem failure to read the stats will also be trapped.
-		get_pss_memory ${HYPERVISOR_PATH}
+		get_pss_memory "${HYPERVISOR_PATH}"
 
 		if [ "${global_hypervisor_mem}" == "0" ]; then
 			die "Failed to find PSS for ${HYPERVISOR_PATH}"
 		fi
 
-		get_pss_memory_virtiofsd ${VIRTIOFSD_PATH}
+		get_pss_memory_virtiofsd "${VIRTIOFSD_PATH}"
 
 		if [ "${global_virtiofsd_mem}" == "0" ]; then
 			echo >&2 "WARNING: Failed to find PSS for ${VIRTIOFSD_PATH}"
 		fi
-		get_pss_memory ${SHIM_PATH} 1
+		get_pss_memory "${SHIM_PATH}" 1
 
 		if [ "${global_shim_mem}" == "0" ]; then
 			die "Failed to find PSS for ${SHIM_PATH}"
@@ -399,9 +399,9 @@ function main(){
 	save_config
 	get_memory_usage
 
-	if [ "$RUNTIME" == "runc" ]; then
+	if [ "${RUNTIME}" == "runc" ]; then
 		get_runc_individual_memory
-	elif [ "$RUNTIME" == "kata-runtime" ]; then
+	elif [ "${RUNTIME}" == "kata-runtime" ]; then
 		get_individual_memory
 	fi
 
