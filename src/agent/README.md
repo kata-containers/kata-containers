@@ -126,7 +126,8 @@ The kata agent has the ability to configure agent options in guest kernel comman
 | `agent.debug_console_vport` | Debug console port | Allow to specify the `vsock` port to connect the debugging console | integer | `0` |
 | `agent.devmode` | Developer mode | Allow the agent process to coredump | boolean | `false` |
 | `agent.hotplug_timeout` | Hotplug timeout | Allow to configure hotplug timeout(seconds) of block devices | integer | `3` |
-| `agent.guest_components_rest_api` | `api-server-rest` configuration | Select the features that the API Server Rest attestation component will run with. Valid values are `all`, `attestation`, `resource`, or `none` to not launch the `api-server-rest` component | string | `resource` |
+| `agent.guest_components_rest_api` | `api-server-rest` configuration | Select the features that the API Server Rest attestation component will run with. Valid values are `all`, `attestation`, `resource` | string | `resource` |
+| `agent.guest_components_procs` | guest-components processes | Attestation-related processes that should be spawned as children of the guest. Valid values are `none`, `attestation-agent`, `confidential-data-hub` (implies `attestation-agent`), `api-server-rest` (implies `attestation-agent` and `confidential-data-hub`) | string | `api-server-rest` |
 | `agent.https_proxy` | HTTPS proxy | Allow to configure `https_proxy` in the guest | string | `""` |
 | `agent.log` | Log level | Allow the agent log level to be changed (produces more or less output) | string | `"info"` |
 | `agent.log_vport` | Log port | Allow to specify the `vsock` port to read logs | integer | `0` |

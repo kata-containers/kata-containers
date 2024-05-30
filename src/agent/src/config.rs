@@ -28,6 +28,7 @@ const CONTAINER_PIPE_SIZE_OPTION: &str = "agent.container_pipe_size";
 const UNIFIED_CGROUP_HIERARCHY_OPTION: &str = "systemd.unified_cgroup_hierarchy";
 const CONFIG_FILE: &str = "agent.config_file";
 const GUEST_COMPONENTS_REST_API_OPTION: &str = "agent.guest_components_rest_api";
+const GUEST_COMPONENTS_PROCS_OPTION: &str = "agent.guest_components_procs";
 
 // Configure the proxy settings for HTTPS requests in the guest,
 // to solve the problem of not being able to access the specified image in some cases.
@@ -59,7 +60,8 @@ const ERR_INVALID_CONTAINER_PIPE_SIZE_PARAM: &str = "unable to parse container p
 const ERR_INVALID_CONTAINER_PIPE_SIZE_KEY: &str = "invalid container pipe size key name";
 const ERR_INVALID_CONTAINER_PIPE_NEGATIVE: &str = "container pipe size should not be negative";
 
-const ERR_INVALID_GUEST_COMPONENTS_REST_API_VALUE: &str = "invalid guest components rest api feature given. Valid values are `all`, `attestation`, `resource`, or `none`";
+const ERR_INVALID_GUEST_COMPONENTS_REST_API_VALUE: &str = "invalid guest components rest api feature given. Valid values are `all`, `attestation`, `resource`";
+const ERR_INVALID_GUEST_COMPONENTS_PROCS_VALUE: &str = "invalid guest components process param given. Valid values are `attestation-agent`, `confidential-data-hub`, `api-server-rest`, or `none`";
 
 #[derive(Clone, Copy, Debug, Default, Display, Deserialize, EnumString, PartialEq)]
 // Features seem to typically be in kebab-case format, but we only have single words at the moment
@@ -67,9 +69,21 @@ const ERR_INVALID_GUEST_COMPONENTS_REST_API_VALUE: &str = "invalid guest compone
 pub enum GuestComponentsFeatures {
     All,
     Attestation,
-    None,
     #[default]
     Resource,
+}
+
+#[derive(Clone, Copy, Debug, Default, Display, Deserialize, EnumString, PartialEq)]
+/// Attestation-related processes that we want to spawn as children of the agent
+#[strum(serialize_all = "kebab-case")]
+pub enum GuestComponentsProcs {
+    None,
+    /// ApiServerRest implies ConfidentialDataHub and AttestationAgent
+    #[default]
+    ApiServerRest,
+    AttestationAgent,
+    /// ConfidentialDataHub implies AttestationAgent
+    ConfidentialDataHub,
 }
 
 #[derive(Debug)]
@@ -89,6 +103,7 @@ pub struct AgentConfig {
     pub https_proxy: String,
     pub no_proxy: String,
     pub guest_components_rest_api: GuestComponentsFeatures,
+    pub guest_components_procs: GuestComponentsProcs,
 }
 
 #[derive(Debug, Deserialize)]
@@ -107,6 +122,7 @@ pub struct AgentConfigBuilder {
     pub https_proxy: Option<String>,
     pub no_proxy: Option<String>,
     pub guest_components_rest_api: Option<GuestComponentsFeatures>,
+    pub guest_components_procs: Option<GuestComponentsProcs>,
 }
 
 macro_rules! config_override {
@@ -171,6 +187,7 @@ impl Default for AgentConfig {
             https_proxy: String::from(""),
             no_proxy: String::from(""),
             guest_components_rest_api: GuestComponentsFeatures::default(),
+            guest_components_procs: GuestComponentsProcs::default(),
         }
     }
 }
@@ -313,6 +330,12 @@ impl AgentConfig {
                 GUEST_COMPONENTS_REST_API_OPTION,
                 config.guest_components_rest_api,
                 get_guest_components_features_value
+            );
+            parse_cmdline_param!(
+                param,
+                GUEST_COMPONENTS_PROCS_OPTION,
+                config.guest_components_procs,
+                get_guest_components_procs_value
             );
         }
 
@@ -480,6 +503,19 @@ fn get_guest_components_features_value(param: &str) -> Result<GuestComponentsFea
         .map_err(|_| anyhow!(ERR_INVALID_GUEST_COMPONENTS_REST_API_VALUE))
 }
 
+#[instrument]
+fn get_guest_components_procs_value(param: &str) -> Result<GuestComponentsProcs> {
+    let fields: Vec<&str> = param.split('=').collect();
+    ensure!(fields.len() >= 2, ERR_INVALID_GET_VALUE_PARAM);
+
+    // We need name (but the value can be blank)
+    ensure!(!fields[0].is_empty(), ERR_INVALID_GET_VALUE_NO_NAME);
+
+    let value = fields[1..].join("=");
+    GuestComponentsProcs::from_str(&value)
+        .map_err(|_| anyhow!(ERR_INVALID_GUEST_COMPONENTS_PROCS_VALUE))
+}
+
 #[cfg(test)]
 mod tests {
     use test_utils::assert_result;
@@ -519,6 +555,7 @@ mod tests {
             https_proxy: &'a str,
             no_proxy: &'a str,
             guest_components_rest_api: GuestComponentsFeatures,
+            guest_components_procs: GuestComponentsProcs,
         }
 
         impl Default for TestData<'_> {
@@ -537,6 +574,7 @@ mod tests {
                     https_proxy: "",
                     no_proxy: "",
                     guest_components_rest_api: GuestComponentsFeatures::default(),
+                    guest_components_procs: GuestComponentsProcs::default(),
                 }
             }
         }
@@ -942,8 +980,23 @@ mod tests {
                 ..Default::default()
             },
             TestData {
-                contents: "agent.guest_components_rest_api=none",
-                guest_components_rest_api: GuestComponentsFeatures::None,
+               contents: "agent.guest_components_procs=api-server-rest",
+               guest_components_procs: GuestComponentsProcs::ApiServerRest,
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.guest_components_procs=confidential-data-hub",
+                guest_components_procs: GuestComponentsProcs::ConfidentialDataHub,
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.guest_components_procs=attestation-agent",
+                guest_components_procs: GuestComponentsProcs::AttestationAgent,
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.guest_components_procs=none",
+                guest_components_procs: GuestComponentsProcs::None,
                 ..Default::default()
             },
         ];
@@ -997,6 +1050,11 @@ mod tests {
             assert_eq!(d.no_proxy, config.no_proxy, "{}", msg);
             assert_eq!(
                 d.guest_components_rest_api, config.guest_components_rest_api,
+                "{}",
+                msg
+            );
+            assert_eq!(
+                d.guest_components_procs, config.guest_components_procs,
                 "{}",
                 msg
             );
@@ -1501,10 +1559,6 @@ Caused by:
                 result: Ok(GuestComponentsFeatures::Attestation),
             },
             TestData {
-                param: "x=none",
-                result: Ok(GuestComponentsFeatures::None),
-            },
-            TestData {
                 param: "x=resource",
                 result: Ok(GuestComponentsFeatures::Resource),
             },
@@ -1526,6 +1580,68 @@ Caused by:
             let msg = format!("test[{}]: {:?}", i, d);
 
             let result = get_guest_components_features_value(d.param);
+
+            let msg = format!("{}: result: {:?}", msg, result);
+
+            assert_result!(d.result, result, msg);
+        }
+    }
+
+    #[test]
+    fn test_get_guest_components_procs_value() {
+        #[derive(Debug)]
+        struct TestData<'a> {
+            param: &'a str,
+            result: Result<GuestComponentsProcs>,
+        }
+
+        let tests = &[
+            TestData {
+                param: "",
+                result: Err(anyhow!(ERR_INVALID_GET_VALUE_PARAM)),
+            },
+            TestData {
+                param: "=",
+                result: Err(anyhow!(ERR_INVALID_GET_VALUE_NO_NAME)),
+            },
+            TestData {
+                param: "==",
+                result: Err(anyhow!(ERR_INVALID_GET_VALUE_NO_NAME)),
+            },
+            TestData {
+                param: "x=attestation-agent",
+                result: Ok(GuestComponentsProcs::AttestationAgent),
+            },
+            TestData {
+                param: "x=confidential-data-hub",
+                result: Ok(GuestComponentsProcs::ConfidentialDataHub),
+            },
+            TestData {
+                param: "x=none",
+                result: Ok(GuestComponentsProcs::None),
+            },
+            TestData {
+                param: "x=api-server-rest",
+                result: Ok(GuestComponentsProcs::ApiServerRest),
+            },
+            TestData {
+                param: "x===",
+                result: Err(anyhow!(ERR_INVALID_GUEST_COMPONENTS_PROCS_VALUE)),
+            },
+            TestData {
+                param: "x==x",
+                result: Err(anyhow!(ERR_INVALID_GUEST_COMPONENTS_PROCS_VALUE)),
+            },
+            TestData {
+                param: "x=x",
+                result: Err(anyhow!(ERR_INVALID_GUEST_COMPONENTS_PROCS_VALUE)),
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            let result = get_guest_components_procs_value(d.param);
 
             let msg = format!("{}: result: {:?}", msg, result);
 
