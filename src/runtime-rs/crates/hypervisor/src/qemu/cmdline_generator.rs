@@ -1213,6 +1213,63 @@ impl ToQemuParams for Rtc {
 }
 
 #[derive(Debug)]
+struct ObjectRngRandom {
+    // id is the device ID
+    id: String,
+
+    // filename is the entropy source on the host
+    filename: String,
+}
+
+impl ObjectRngRandom {
+    fn new() -> ObjectRngRandom {
+        ObjectRngRandom {
+            id: "rng0".to_owned(),
+            filename: "/dev/urandom".to_owned(),
+        }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for ObjectRngRandom {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut object_params = Vec::new();
+
+        object_params.push("rng-random".to_owned());
+        object_params.push(format!("id={}", self.id));
+        object_params.push(format!("filename={}", self.filename));
+
+        Ok(vec!["-object".to_owned(), object_params.join(",")])
+    }
+}
+
+#[derive(Debug)]
+struct DeviceRng {
+    // transport is the virtio transport for this device.
+    transport: String,
+}
+
+impl DeviceRng {
+    fn new() -> DeviceRng {
+        DeviceRng {
+            transport: "virtio-rng-pci".to_owned(),
+        }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for DeviceRng {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut device_params = Vec::new();
+
+        device_params.push(self.transport.clone());
+        device_params.push(format!("rng={}", "rng0".to_owned()));
+
+        Ok(vec!["-device".to_owned(), device_params.join(",")])
+    }
+}
+
+#[derive(Debug)]
 struct DeviceIntelIommu {
     intremap: bool,
     device_iotlb: bool,
@@ -1432,6 +1489,10 @@ impl<'a> QemuCmdLine<'a> {
 
         qemu_cmd_line.add_rtc();
 
+        if qemu_cmd_line.bus_type() != VirtioBusType::Ccw {
+            qemu_cmd_line.add_rng();
+        }
+
         Ok(qemu_cmd_line)
     }
 
@@ -1445,6 +1506,14 @@ impl<'a> QemuCmdLine<'a> {
     fn add_rtc(&mut self) {
         let rtc = Rtc::new();
         self.devices.push(Box::new(rtc));
+    }
+
+    fn add_rng(&mut self) {
+        let rng_object = ObjectRngRandom::new();
+        let rng_device = DeviceRng::new();
+
+        self.devices.push(Box::new(rng_object));
+        self.devices.push(Box::new(rng_device));
     }
 
     fn bus_type(&self) -> VirtioBusType {
