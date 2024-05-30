@@ -59,7 +59,6 @@ build_clh_from_source() {
 	repo_dir="${repo_dir//.git}"
 	rm -rf "${repo_dir}"
 	git clone "${cloud_hypervisor_repo}"
-	git config --global --add safe.directory "$PWD/repo_dir"
 	pushd "${repo_dir}"
 
 	if [ -n "${cloud_hypervisor_pr}" ]; then

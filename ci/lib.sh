@@ -21,13 +21,7 @@ clone_tests_repo()
 {
 	if [ -d "$tests_repo_dir" ]; then
 		[ -n "${CI:-}" ] && return
-		# git config --global --add safe.directory will always append
-		# the target to .gitconfig without checking the existence of
-		# the target, so it's better to check it before adding the target repo.
-		local sd="$(git config --global --get safe.directory ${tests_repo_dir} || true)"
-		if [ -z "${sd}" ]; then
-			git config --global --add safe.directory ${tests_repo_dir}
-		fi
+
 		pushd "${tests_repo_dir}"
 		git checkout "${branch}"
 		git pull

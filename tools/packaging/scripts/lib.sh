@@ -107,8 +107,6 @@ get_last_modification() {
 	local file="${1}"
 
 	pushd ${repo_root_dir} &> /dev/null
-	# This is a workaround needed for when running this code on Jenkins
-	git config --global --add safe.directory ${repo_root_dir} &> /dev/null
 
 	dirty=""
 	[ $(git status --porcelain | grep "${file#${repo_root_dir}/}" | wc -l) -gt 0 ] && dirty="-dirty"
