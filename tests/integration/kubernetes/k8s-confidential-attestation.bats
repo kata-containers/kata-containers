@@ -93,7 +93,7 @@ teardown() {
 	[ -n "${pod_name:-}" ] && kubectl describe "pod/${pod_name}" || true
 	[ -n "${pod_config_dir:-}" ] && kubectl delete -f "${K8S_TEST_YAML}" || true
 
-	if [ -n "${node_start_time}:-}" ]; then
+	if [[ -n "${node_start_time}:-}" && -z "$BATS_TEST_COMPLETED" ]]; then
 		echo "DEBUG: system logs of node '$node' since test start time ($node_start_time)"
 		print_node_journal "$node" "kata" --since "$node_start_time" || true
 	fi
