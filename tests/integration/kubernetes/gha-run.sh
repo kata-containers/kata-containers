@@ -530,6 +530,13 @@ function deploy_nydus_snapshotter() {
 	  'data.ENABLE_RUNTIME_SPECIFIC_SNAPSHOTTER' \
 	  "true" --style=double
 
+	# Pin the version of nydus-snapshotter image.
+	# TODO: replace with a definitive solution (see https://github.com/kata-containers/kata-containers/issues/9742)
+	yq write -i -d 1 \
+	  misc/snapshotter/base/nydus-snapshotter.yaml \
+	  'spec.template.spec.containers[0].image' \
+	  "ghcr.io/containerd/nydus-snapshotter:${nydus_snapshotter_version}" --style=double
+
 	# Deploy nydus snapshotter as a daemonset
 	kubectl create -f "misc/snapshotter/nydus-snapshotter-rbac.yaml"
 	if [ "${KUBERNETES}" = "k3s" ]; then
