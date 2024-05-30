@@ -569,7 +569,6 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		NoDefaults:    true,
 		NoGraphic:     true,
 		NoReboot:      true,
-		Daemonize:     false,
 		MemPrealloc:   q.config.MemPrealloc,
 		HugePages:     q.config.HugePages,
 		IOMMUPlatform: q.config.IOMMUPlatform,
@@ -1105,16 +1104,10 @@ func (q *qemu) StartVM(ctx context.Context, timeout int) error {
 		q.Logger().WithError(err).Error("failed to launch qemu")
 		return fmt.Errorf("failed to launch qemu: %s", err)
 	}
-	if q.qemuConfig.Knobs.Daemonize {
-		// LaunchQemu returns a handle on the upper QEMU process.
-		// Wait for it to exit to assume that the QEMU daemon was
-		// actually started.
-		qemuCmd.Wait()
-	} else {
-		// Log QEMU errors and ensure the QEMU process is reaped after
-		// termination.
-		go q.LogAndWait(qemuCmd, reader)
-	}
+
+	// Log QEMU errors and ensure the QEMU process is reaped after
+	// termination.
+	go q.LogAndWait(qemuCmd, reader)
 
 	err = q.waitVM(ctx, qmpConn, timeout)
 	if err != nil {
