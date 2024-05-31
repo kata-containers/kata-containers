@@ -24,6 +24,8 @@ readonly KBS_NS="coco-tenant"
 readonly KBS_PRIVATE_KEY="${COCO_KBS_DIR}/config/kubernetes/base/kbs.key"
 # The kbs service name
 readonly KBS_SVC_NAME="kbs"
+# The features to enable in the kbs client
+KBS_CLI_FEATURES="sample_only"
 
 # Set "allow all" policy to resources.
 #
@@ -52,9 +54,14 @@ kbs_set_resources_policy() {
 		return 1
 	fi
 
-	kbs-client --url "$(kbs_k8s_svc_http_addr)" config \
-		--auth-private-key "$KBS_PRIVATE_KEY" set-resource-policy \
-		--policy-file "$file"
+	docker run \
+		-v "/tmp:/tmp" \
+		--privileged \
+		--net=host \
+		$(kbs_get_cli_container_image_name) \
+			kbs-client --url "$(kbs_k8s_svc_http_addr)" config \
+			--auth-private-key "$KBS_PRIVATE_KEY" set-resource-policy \
+			--policy-file "$file"
 }
 
 # Set resource data.
@@ -115,61 +122,49 @@ kbs_set_resource_from_file() {
 	path+="${type}/"
 	path+="${tag}"
 
-	kbs-client --url "$(kbs_k8s_svc_http_addr)" config \
-		--auth-private-key "$KBS_PRIVATE_KEY" set-resource \
-		--path "$path" --resource-file "$file"
+	docker run \
+		-v "/tmp:/tmp" \
+		--privileged \
+		--net=host \
+		$(kbs_get_cli_container_image_name) \
+			kbs-client --url "$(kbs_k8s_svc_http_addr)" config \
+			--auth-private-key "$KBS_PRIVATE_KEY" set-resource \
+			--path "$path" --resource-file "$file"
 }
 
-# Build and install the kbs-client binary, unless it is already present.
-#
-kbs_install_cli() {
-	command -v kbs-client >/dev/null && return
-
-	source /etc/os-release || source /usr/lib/os-release
-	case "${ID}" in
-		ubuntu)
-			local pkgs="build-essential"
-
-			sudo apt-get update -y
-			# shellcheck disable=2086
-			sudo apt-get install -y $pkgs
-			;;
-		centos)
-			local pkgs="make"
-
-			# shellcheck disable=2086
-			sudo dnf install -y $pkgs
-			;;
-		*)
-			>&2 echo "ERROR: running on unsupported distro"
-			return 1
-			;;
-	esac
+kbs_get_cli_container_image_name() {
+	ensure_yq
 
 	# Mininum required version to build the client (read from versions.yaml)
-	local rust_version
-	ensure_yq
 	rust_version=$(get_from_kata_deps "externals.coco-trustee.toolchain")
-	# Currently kata version from version.yaml is 1.72.0
-	# which doesn't match the requirement, so let's pass
-	# the required version.
-	_ensure_rust "$rust_version"
 
-	pushd "${COCO_KBS_DIR}"
-	# Compile with sample features to bypass attestation.
-	make CLI_FEATURES=sample_only cli
-	sudo make install-cli
+	# trustee version (read from versions.yaml)
+	trustee_version=$(get_from_kata_deps "externals.coco-trustee.version")
+
+	# The container image name
+	coco_kbs_client_container_image="ghcr.io/kata-containers/kata-containers/coco-kbs-client:${KBS_CLI_FEATURES}-${rust_version}-${trustee_version}-$(uname -m)"
+
+	echo "${coco_kbs_client_container_image}"
+}
+
+kbs_build_cli_container() {
+	coco_kbs_client_container_image=$(kbs_get_cli_container_image_name)
+
+	ensure_yq
+	pushd "${kubernetes_dir}"
+	docker build \
+		--build-arg RUST_TOOLCHAIN="$(get_from_kata_deps "externals.coco-trustee.toolchain")" \
+		--build-arg TRUSTEE_VERSION="$(get_from_kata_deps "externals.coco-trustee.version")" \
+		--build-arg CLI_FEATURES="${KBS_CLI_FEATURES}" \
+		-t ${coco_kbs_client_container_image} \
+		-f Dockerfile.kbs-client .
 	popd
 }
 
-kbs_uninstall_cli() {
-	if [ -d "${COCO_KBS_DIR}" ]; then
-		pushd "${COCO_KBS_DIR}"
-		sudo make uninstall
-		popd
-	else
-		echo "${COCO_KBS_DIR} does not exist in the machine, skip uninstalling the kbs cli"
-	fi
+# If a docker image is not existent for the kbs-client, build it
+kbs_pull_cli_container() {
+	coco_kbs_client_container_image=$(kbs_get_cli_container_image_name)
+	kbs_build_cli_container
 }
 
 # Delete the kbs on Kubernetes

@@ -265,12 +265,13 @@ function deploy_kata() {
 	echo "::endgroup::"
 }
 
-function install_kbs_client() {
-	kbs_install_cli
+function pull_kbs_client_container() {
+	kbs_pull_cli_container
 }
 
 function uninstall_kbs_client() {
-	kbs_uninstall_cli
+	# no-op, just left behind for backward compatibility with the CI
+	return 0
 }
 
 function run_tests() {
@@ -596,7 +597,7 @@ function main() {
 		deploy-k8s) deploy_k8s ;;
 		install-bats) install_bats ;;
 		install-kata-tools) install_kata_tools ;;
-		install-kbs-client) install_kbs_client ;;
+		install-kbs-client) pull_kbs_client_container ;;
 		install-kubectl) install_kubectl ;;
 		get-cluster-credentials) get_cluster_credentials ;;
 		deploy-kata-aks) deploy_kata "aks" ;;
