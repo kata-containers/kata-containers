@@ -2714,9 +2714,6 @@ type Knobs struct {
 	// Prevents QEMU from rebooting in the event of a Triple Fault.
 	NoReboot bool
 
-	// Don’t exit QEMU on guest shutdown, but instead only stop the emulation.
-	NoShutdown bool
-
 	// IOMMUPlatform will enable IOMMU for supported devices
 	IOMMUPlatform bool
 }
@@ -3116,10 +3113,6 @@ func (config *Config) appendKnobs() {
 
 	if config.Knobs.NoReboot {
 		config.qemuParams = append(config.qemuParams, "--no-reboot")
-	}
-
-	if config.Knobs.NoShutdown {
-		config.qemuParams = append(config.qemuParams, "--no-shutdown")
 	}
 
 	config.appendMemoryKnobs()
