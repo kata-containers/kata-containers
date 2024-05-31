@@ -67,7 +67,7 @@ shift $(( $OPTIND - 1 ))
 go_version="${1:-""}"
 
 if [ -z "$go_version" ] && [ "${USE_VERSIONS_FILE}"  = "true" ] ;then
-	go_version=$(get_from_kata_deps "languages.golang.meta.newest-version")
+	go_version=$(get_from_kata_deps ".languages.golang.meta.newest-version")
 fi
 
 if [ -z "$go_version" ];then

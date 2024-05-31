@@ -173,7 +173,7 @@ function init() {
 	fi
 
 	versions_file="${cidir}/../../versions.yaml"
-	nginx_version=$("${GOPATH}/bin/yq" read "$versions_file" "docker_images.nginx.version")
+	nginx_version=$("${GOPATH}/bin/yq" ".docker_images.nginx.version" "$versions_file")
 	nginx_image="docker.io/library/nginx:$nginx_version"
 
 	# Pull nginx image

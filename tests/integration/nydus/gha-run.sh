@@ -35,10 +35,10 @@ function install_dependencies() {
 	# - nydus
 	# - nydus-snapshotter
 	declare -a github_deps
-	github_deps[0]="cri_containerd:$(get_from_kata_deps "externals.containerd.${CONTAINERD_VERSION}")"
-	github_deps[1]="cri_tools:$(get_from_kata_deps "externals.critools.latest")"
-	github_deps[2]="nydus:$(get_from_kata_deps "externals.nydus.version")"
-	github_deps[3]="nydus_snapshotter:$(get_from_kata_deps "externals.nydus-snapshotter.version")"
+	github_deps[0]="cri_containerd:$(get_from_kata_deps ".externals.containerd.${CONTAINERD_VERSION}")"
+	github_deps[1]="cri_tools:$(get_from_kata_deps ".externals.critools.latest")"
+	github_deps[2]="nydus:$(get_from_kata_deps ".externals.nydus.version")"
+	github_deps[3]="nydus_snapshotter:$(get_from_kata_deps ".externals.nydus-snapshotter.version")"
 
 	for github_dep in "${github_deps[@]}"; do
 		IFS=":" read -r -a dep <<< "${github_dep}"

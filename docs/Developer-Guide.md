@@ -461,7 +461,7 @@ and repository utilized can be found by looking at the [versions file](../versio
 Find the correct version of QEMU from the versions file:
 ```bash
 $ source kata-containers/tools/packaging/scripts/lib.sh
-$ qemu_version="$(get_from_kata_deps "assets.hypervisor.qemu.version")"
+$ qemu_version="$(get_from_kata_deps ".assets.hypervisor.qemu.version")"
 $ echo "${qemu_version}"
 ```
 Get source from the matching branch of QEMU:

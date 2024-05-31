@@ -26,7 +26,7 @@ cloud_hypervisor_pull_ref_branch="${cloud_hypervisor_pull_ref_branch:-main}"
 
 if [ -z "$cloud_hypervisor_repo" ]; then
 	info "Get cloud_hypervisor information from runtime versions.yaml"
-	cloud_hypervisor_url=$(get_from_kata_deps "assets.hypervisor.cloud_hypervisor.url")
+	cloud_hypervisor_url=$(get_from_kata_deps ".assets.hypervisor.cloud_hypervisor.url")
 	[ -n "$cloud_hypervisor_url" ] || die "failed to get cloud_hypervisor url"
 	cloud_hypervisor_repo="${cloud_hypervisor_url}.git"
 fi
@@ -36,7 +36,7 @@ if [ -n "$cloud_hypervisor_pr" ]; then
 	force_build_from_source=true
 	cloud_hypervisor_version="PR $cloud_hypervisor_pr"
 else
-	[ -n "$cloud_hypervisor_version" ] || cloud_hypervisor_version=$(get_from_kata_deps "assets.hypervisor.cloud_hypervisor.version")
+	[ -n "$cloud_hypervisor_version" ] || cloud_hypervisor_version=$(get_from_kata_deps ".assets.hypervisor.cloud_hypervisor.version")
 	[ -n "$cloud_hypervisor_version" ] || die "failed to get cloud_hypervisor version"
 fi
 

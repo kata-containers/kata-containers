@@ -60,8 +60,8 @@ function _create_our_own_notes()
 	export PATH=${HOME}/go/bin:${PATH}
 
 	source "${repo_root_dir}/tools/packaging/scripts/lib.sh"
-	libseccomp_version=$(get_from_kata_deps "externals.libseccomp.version")
-	libseccomp_url=$(get_from_kata_deps "externals.libseccomp.url")
+	libseccomp_version=$(get_from_kata_deps ".externals.libseccomp.version")
+	libseccomp_url=$(get_from_kata_deps ".externals.libseccomp.url")
 
 	cat >> /tmp/our_notes_${RELEASE_VERSION} <<EOF 
 ## Survey
@@ -194,8 +194,8 @@ function _upload_libseccomp_tarball()
 	GOPATH=${HOME}/go ./ci/install_yq.sh
 
 	versions_yaml="versions.yaml"
-	version=$(${HOME}/go/bin/yq read ${versions_yaml} "externals.libseccomp.version")
-	repo_url=$(${HOME}/go/bin/yq read ${versions_yaml} "externals.libseccomp.url")
+	version=$(${HOME}/go/bin/yq ".externals.libseccomp.version" ${versions_yaml})
+	repo_url=$(${HOME}/go/bin/yq ".externals.libseccomp.url" ${versions_yaml})
 	download_url="${repo_url}releases/download/v${version}"
 	tarball="libseccomp-${version}.tar.gz"
 	asc="${tarball}.asc"

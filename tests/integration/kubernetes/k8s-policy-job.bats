@@ -69,103 +69,64 @@ test_job_policy_error() {
 
 @test "Policy failure: unexpected environment variable" {
     # Changing the job spec after generating its policy will cause CreateContainer to be denied.
-    yq write -i \
-        "${incorrect_yaml}" \
-        'spec.template.spec.containers[0].env.[+].name' unexpected_variable
-
-    yq write -i \
-        "${incorrect_yaml}" \
-        'spec.template.spec.containers[0].env.[-1].value' unexpected_value
+    yq -i \
+        '.spec.template.spec.containers[0].env += [{"name": "unexpected_variable", "value": "unexpected_value"}]' \
+        "${incorrect_yaml}"
 
     test_job_policy_error
 }
 
 @test "Policy failure: unexpected command line argument" {
     # Changing the job spec after generating its policy will cause CreateContainer to be denied.
-    yq write -i \
-        "${incorrect_yaml}" \
-        "spec.template.spec.containers[0].args[+]" \
-        "unexpected_arg"
+    yq -i \
+        '.spec.template.spec.containers[0].args += ["unexpected_arg"]' \
+        "${incorrect_yaml}"
 
     test_job_policy_error
 }
 
 @test "Policy failure: unexpected emptyDir volume" {
     # Changing the job spec after generating its policy will cause CreateContainer to be denied.
-    yq write -i \
-        "${incorrect_yaml}" \
-        "spec.template.spec.containers[0].volumeMounts.[+].mountPath" \
-        "/unexpected1"
+    yq -i \
+        '.spec.template.spec.containers[0].volumeMounts += [{"mountPath": "/unexpected1", "name": "unexpected-volume1"}]' \
+        "${incorrect_yaml}"
 
-    yq write -i \
-        "${incorrect_yaml}" \
-        "spec.template.spec.containers[0].volumeMounts.[-1].name" \
-        "unexpected-volume1"
-
-    yq write -i \
-        "${incorrect_yaml}" \
-        "spec.template.spec.volumes[+].name" \
-        "unexpected-volume1"
-
-    yq write -i \
-        "${incorrect_yaml}" \
-        "spec.template.spec.volumes[-1].emptyDir.medium" \
-        "Memory"
-
-    yq write -i \
-        "${incorrect_yaml}" \
-        "spec.template.spec.volumes[-1].emptyDir.sizeLimit" \
-        "50M"
+    yq -i \
+        '.spec.template.spec.volumes += [{"name": "unexpected-volume1", "emptyDir": {"medium": "Memory", "sizeLimit": "50M"}}]' \
+        "${incorrect_yaml}"
 
     test_job_policy_error
 }
 
 @test "Policy failure: unexpected projected volume" {
     # Changing the job spec after generating its policy will cause CreateContainer to be denied.
-    yq write -i \
-        "${incorrect_yaml}" \
-        "spec.template.spec.containers[0].volumeMounts.[+].mountPath" \
-        "/test-volume"
+    yq -i \
+        '.spec.template.spec.containers[0].volumeMounts += [{"mountPath": "/test-volume", "name": "test-volume", "readOnly": true}]' \
+        "${incorrect_yaml}"
 
-    yq write -i \
-        "${incorrect_yaml}" \
-        "spec.template.spec.containers[0].volumeMounts.[-1].name" \
-        "test-volume"
-
-    yq write -i \
-        "${incorrect_yaml}" \
-        "spec.template.spec.containers[0].volumeMounts.[-1].readOnly" \
-        "true"
-
-    yq write -i \
-        "${incorrect_yaml}" \
-        "spec.template.spec.volumes.[+].name" \
-        "test-volume"
-
-    yq write -i \
-        "${incorrect_yaml}" \
-        "spec.template.spec.volumes.[-1].projected.defaultMode" \
-        "420"
-
-    yq write -i \
-        "${incorrect_yaml}" \
-        "spec.template.spec.volumes.[-1].projected.sources.[+].serviceAccountToken.expirationSeconds" \
-        "3600"
-
-    yq write -i \
-        "${incorrect_yaml}" \
-        "spec.template.spec.volumes.[-1].projected.sources.[-1].serviceAccountToken.path" \
-        "token"
+    yq -i '
+      .spec.template.spec.volumes += [{
+        "name": "test-volume",
+        "projected": {
+          "defaultMode": 420,
+          "sources": [{
+            "serviceAccountToken": {
+              "expirationSeconds": 3600,
+              "path": "token"
+            }
+          }]
+        }
+      }]
+    ' "${incorrect_yaml}"
 
     test_job_policy_error
 }
 
 @test "Policy failure: unexpected readOnlyRootFilesystem" {
     # Changing the job spec after generating its policy will cause CreateContainer to be denied.
-    yq write -i \
-        "${incorrect_yaml}" \
-        "spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem" \
-        "false"
+    yq -i \
+        ".spec.template.spec.containers[0].securityContext.readOnlyRootFilesystem = false" \
+        "${incorrect_yaml}"
 
     test_job_policy_error
 }

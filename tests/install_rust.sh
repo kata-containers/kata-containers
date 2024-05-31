@@ -17,7 +17,7 @@ rustarch=$(arch_to_rust)
 
 version="${1:-""}"
 if [ -z "${version}" ]; then
-	version=$(get_from_kata_deps "languages.rust.meta.newest-version")
+	version=$(get_from_kata_deps ".languages.rust.meta.newest-version")
 fi
 
 echo "Install rust ${version}"

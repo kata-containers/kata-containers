@@ -43,8 +43,8 @@ function install_dependencies() {
 	#   - cri-container-cni release tarball already includes CNI plugins
 	# - cri-tools
 	declare -a github_deps
-	github_deps[0]="cri_containerd:$(get_from_kata_deps "externals.containerd.${CONTAINERD_VERSION}")"
-	github_deps[1]="cri_tools:$(get_from_kata_deps "externals.critools.latest")"
+	github_deps[0]="cri_containerd:$(get_from_kata_deps ".externals.containerd.${CONTAINERD_VERSION}")"
+	github_deps[1]="cri_tools:$(get_from_kata_deps ".externals.critools.latest")"
 
 	for github_dep in "${github_deps[@]}"; do
 		IFS=":" read -r -a dep <<< "${github_dep}"
@@ -53,7 +53,7 @@ function install_dependencies() {
 
 	# Clone containerd as we'll need to build it in order to run the tests
 	# base_version: The version to be intalled in the ${major}.${minor} format
-	clone_cri_containerd $(get_from_kata_deps "externals.containerd.${CONTAINERD_VERSION}")
+	clone_cri_containerd $(get_from_kata_deps ".externals.containerd.${CONTAINERD_VERSION}")
 }
 
 function run() {

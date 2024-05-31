@@ -34,11 +34,11 @@ install_yq() {
 }
 
 get_from_kata_deps() {
-	local dependency="$1"
+  local dependency="$1 | explode(.)"
 	versions_file="${this_script_dir}/../../../versions.yaml"
 
 	command -v yq &>/dev/null || die 'yq command is not in your $PATH'
-	result=$("yq" read -X "$versions_file" "$dependency")
+	result=$("yq" "$dependency" "$versions_file")
 	[ "$result" = "null" ] && result=""
 	echo "$result"
 }
@@ -178,7 +178,7 @@ get_qemu_image_name() {
 
 get_shim_v2_image_name() {
 	shim_v2_script_dir="${repo_root_dir}/tools/packaging/static-build/shim-v2"
-	echo "${BUILDER_REGISTRY}:shim-v2-go-$(get_from_kata_deps "languages.golang.meta.newest-version")-rust-$(get_from_kata_deps "languages.rust.meta.newest-version")-$(get_last_modification ${shim_v2_script_dir})-$(uname -m)"
+	echo "${BUILDER_REGISTRY}:shim-v2-go-$(get_from_kata_deps ".languages.golang.meta.newest-version")-rust-$(get_from_kata_deps ".languages.rust.meta.newest-version")-$(get_last_modification ${shim_v2_script_dir})-$(uname -m)"
 }
 
 get_ovmf_image_name() {
@@ -204,7 +204,7 @@ get_virtiofsd_image_name() {
 	esac
 
 	virtiofsd_script_dir="${repo_root_dir}/tools/packaging/static-build/virtiofsd"
-	echo "${BUILDER_REGISTRY}:virtiofsd-$(get_from_kata_deps "externals.virtiofsd.toolchain")-${libc}-$(get_last_modification ${virtiofsd_script_dir})-$(uname -m)"
+	echo "${BUILDER_REGISTRY}:virtiofsd-$(get_from_kata_deps ".externals.virtiofsd.toolchain")-${libc}-$(get_last_modification ${virtiofsd_script_dir})-$(uname -m)"
 }
 
 get_tools_image_name() {
@@ -227,7 +227,7 @@ get_agent_image_name() {
 
 get_coco_guest_components_image_name() {
 	coco_guest_components_script_dir="${repo_root_dir}/tools/packaging/static-build/coco-guest-components"
-	echo "${BUILDER_REGISTRY}:coco-guest-components-$(get_from_kata_deps "externals.coco-guest-components.toolchain")-$(get_last_modification ${coco_guest_components_script_dir})-$(uname -m)"
+	echo "${BUILDER_REGISTRY}:coco-guest-components-$(get_from_kata_deps ".externals.coco-guest-components.toolchain")-$(get_last_modification ${coco_guest_components_script_dir})-$(uname -m)"
 }
 
 get_pause_image_name() {

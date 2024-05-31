@@ -26,7 +26,7 @@ main()
 		${repo_root_dir}/ci/install_yq.sh > /dev/null
 	fi
 
-        local K8S_SKIP_UNION=$("${GOPATH_LOCAL}/bin/yq" read "${K8S_CONFIG_FILE}" "${K8S_FILTER_FLAG}")
+        local K8S_SKIP_UNION=$("${GOPATH_LOCAL}/bin/yq" ".${K8S_FILTER_FLAG}" "${K8S_CONFIG_FILE}")
         [ "${K8S_SKIP_UNION}" == "null" ] && return
         mapfile -t _K8S_SKIP_UNION <<< "${K8S_SKIP_UNION}"
 

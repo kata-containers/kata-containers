@@ -20,9 +20,9 @@ coco_guest_components_version="${coco_guest_components_version:-}"
 coco_guest_components_toolchain="${coco_guest_components_toolchain:-}"
 package_output_dir="${package_output_dir:-}"
 
-[ -n "${coco_guest_components_repo}" ] || coco_guest_components_repo=$(get_from_kata_deps "externals.coco-guest-components.url")
-[ -n "${coco_guest_components_version}" ] || coco_guest_components_version=$(get_from_kata_deps "externals.coco-guest-components.version")
-[ -n "${coco_guest_components_toolchain}" ] || coco_guest_components_toolchain=$(get_from_kata_deps "externals.coco-guest-components.toolchain")
+[ -n "${coco_guest_components_repo}" ] || coco_guest_components_repo=$(get_from_kata_deps ".externals.coco-guest-components.url")
+[ -n "${coco_guest_components_version}" ] || coco_guest_components_version=$(get_from_kata_deps ".externals.coco-guest-components.version")
+[ -n "${coco_guest_components_toolchain}" ] || coco_guest_components_toolchain=$(get_from_kata_deps ".externals.coco-guest-components.toolchain")
 
 [ -n "${coco_guest_components_repo}" ] || die "Failed to get coco-guest-components repo"
 [ -n "${coco_guest_components_version}" ] || die "Failed to get coco-guest-components version or commit"

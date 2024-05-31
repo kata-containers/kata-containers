@@ -189,7 +189,7 @@ set_metadata_annotation() {
 	echo "$annotation_key"
 	# yq set annotations in yaml. Quoting the key because it can have
 	# dots.
-	yq write -i --style=double "${yaml}" "${annotation_key}" "${value}"
+	yq -i ".${annotation_key} = \"${value}\"" "${yaml}"
 }
 
 # Set the command for container spec.
@@ -205,10 +205,9 @@ set_container_command() {
 	shift 2
 
     for command_value in "$@"; do
-        yq write -i \
-          "${yaml}" \
-          "spec.containers[${container_idx}].command[+]" \
-          --tag '!!str' "${command_value}"
+        yq -i \
+          '.spec.containers['"${container_idx}"'].command += ["'"${command_value}"'"]' \
+          "${yaml}"
     done
 }
 
@@ -223,10 +222,9 @@ set_node() {
 	local node="$2"
 	[ -n "$node" ] || return 1
 
-	yq write -i \
-	  "${yaml}" \
-	  "spec.nodeName" \
-	  "$node"
+  yq -i \
+    ".spec.nodeName = \"$node\"" \
+    "${yaml}"
 }
 
 # Get the systemd's journal from a worker node

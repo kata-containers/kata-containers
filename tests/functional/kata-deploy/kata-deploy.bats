@@ -29,40 +29,30 @@ setup() {
 	sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 
 	# Enable debug for Kata Containers
-	yq write -i \
-	  "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
-	  'spec.template.spec.containers[0].env[1].value' \
-	  --tag '!!str' "true"
+	yq -i \
+	  '.spec.template.spec.containers[0].env[1].value = "true"' \
+	  "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 	# Create the runtime class only for the shim that's being tested
-	yq write -i \
-	  "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
-	  'spec.template.spec.containers[0].env[2].value' \
-	  "${KATA_HYPERVISOR}"
+	yq -i \
+	  ".spec.template.spec.containers[0].env[2].value = \"${KATA_HYPERVISOR}\"" \
+	  "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 	# Set the tested hypervisor as the default `kata` shim
-	yq write -i \
-	  "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
-	  'spec.template.spec.containers[0].env[3].value' \
-	  "${KATA_HYPERVISOR}"
+	yq -i \
+	  ".spec.template.spec.containers[0].env[3].value = \"${KATA_HYPERVISOR}\"" \
+	  "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 	# Let the `kata-deploy` script take care of the runtime class creation / removal
-	yq write -i \
-	  "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
-	  'spec.template.spec.containers[0].env[4].value' \
-	  --tag '!!str' "true"
+	yq -i \
+	  '.spec.template.spec.containers[0].env[4].value = "true"' \
+	  "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 	# Let the `kata-deploy` create the default `kata` runtime class
-	yq write -i \
-	  "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
-	  'spec.template.spec.containers[0].env[5].value' \
-	  --tag '!!str' "true"
+	yq -i \
+	  '.spec.template.spec.containers[0].env[5].value = "true"' \
+	  "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 
 	if [ "${KATA_HOST_OS}" = "cbl-mariner" ]; then
-		yq write -i \
-		  "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
-		  'spec.template.spec.containers[0].env[+].name' \
-		  "HOST_OS"
-		yq write -i \
-		  "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
-		  'spec.template.spec.containers[0].env[-1].value' \
-		  "${KATA_HOST_OS}"
+		yq -i \
+		  ".spec.template.spec.containers[0].env += [{\"name\": \"HOST_OS\", \"value\": \"${KATA_HOST_OS}\"}]" \
+		  "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 	fi
 
 	echo "::group::Final kata-deploy.yaml that is used in the test"
@@ -144,25 +134,21 @@ teardown() {
 	kubectl -n kube-system wait --timeout=10m --for=delete -l name=kata-deploy pod
 
 	# Let the `kata-deploy` script take care of the runtime class creation / removal
-	yq write -i \
-	  "tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" \
-	  'spec.template.spec.containers[0].env[4].value' \
-	  --tag '!!str' "true"
+	yq -i \
+	  '.spec.template.spec.containers[0].env[4].value = "true"' \
+	  "tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
 	# Create the runtime class only for the shim that's being tested
-	yq write -i \
-	  "tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" \
-	  'spec.template.spec.containers[0].env[2].value' \
-	  "${KATA_HYPERVISOR}"
+	yq -i \
+	  ".spec.template.spec.containers[0].env[2].value = \"${KATA_HYPERVISOR}\"" \
+	  "tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
 	# Set the tested hypervisor as the default `kata` shim
-	yq write -i \
-	  "tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" \
-	  'spec.template.spec.containers[0].env[3].value' \
-	  "${KATA_HYPERVISOR}"
+	yq -i \
+	  ".spec.template.spec.containers[0].env[3].value = \"${KATA_HYPERVISOR}\"" \
+	  "tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
 	# Let the `kata-deploy` create the default `kata` runtime class
-	yq write -i \
-	  "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
-	  'spec.template.spec.containers[0].env[5].value' \
-	  --tag '!!str' "true"
+	yq -i \
+	  '.spec.template.spec.containers[0].env[5].value = "true"' \
+	  "tools/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 
 	sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
 	cat "tools/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"

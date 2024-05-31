@@ -23,10 +23,10 @@ virtiofsd_toolchain="${virtiofsd_toolchain:-}"
 virtiofsd_zip="${virtiofsd_zip:-}"
 package_output_dir="${package_output_dir:-}"
 
-[ -n "${virtiofsd_repo}" ] || virtiofsd_repo=$(get_from_kata_deps "externals.virtiofsd.url")
-[ -n "${virtiofsd_version}" ] || virtiofsd_version=$(get_from_kata_deps "externals.virtiofsd.version")
-[ -n "${virtiofsd_toolchain}" ] || virtiofsd_toolchain=$(get_from_kata_deps "externals.virtiofsd.toolchain")
-[ -n "${virtiofsd_zip}" ] || virtiofsd_zip=$(get_from_kata_deps "externals.virtiofsd.meta.binary")
+[ -n "${virtiofsd_repo}" ] || virtiofsd_repo=$(get_from_kata_deps ".externals.virtiofsd.url")
+[ -n "${virtiofsd_version}" ] || virtiofsd_version=$(get_from_kata_deps ".externals.virtiofsd.version")
+[ -n "${virtiofsd_toolchain}" ] || virtiofsd_toolchain=$(get_from_kata_deps ".externals.virtiofsd.toolchain")
+[ -n "${virtiofsd_zip}" ] || virtiofsd_zip=$(get_from_kata_deps ".externals.virtiofsd.meta.binary")
 
 [ -n "${virtiofsd_repo}" ] || die "Failed to get virtiofsd repo"
 [ -n "${virtiofsd_version}" ] || die "Failed to get virtiofsd version or commit"

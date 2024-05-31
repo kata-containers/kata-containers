@@ -22,10 +22,10 @@ lvm2_repo="${lvm2_repo:-}"
 lvm2_version="${lvm2_version:-}"
 package_output_dir="${package_output_dir:-}"
 
-[ -n "${cryptsetup_repo}" ] || cryptsetup_repo=$(get_from_kata_deps "externals.cryptsetup.url")
-[ -n "${cryptsetup_version}" ] || cryptsetup_version=$(get_from_kata_deps "externals.cryptsetup.version")
-[ -n "${lvm2_repo}" ] || lvm2_repo=$(get_from_kata_deps "externals.lvm2.url")
-[ -n "${lvm2_version}" ] || lvm2_version=$(get_from_kata_deps "externals.lvm2.version")
+[ -n "${cryptsetup_repo}" ] || cryptsetup_repo=$(get_from_kata_deps ".externals.cryptsetup.url")
+[ -n "${cryptsetup_version}" ] || cryptsetup_version=$(get_from_kata_deps ".externals.cryptsetup.version")
+[ -n "${lvm2_repo}" ] || lvm2_repo=$(get_from_kata_deps ".externals.lvm2.url")
+[ -n "${lvm2_version}" ] || lvm2_version=$(get_from_kata_deps ".externals.lvm2.version")
 
 [ -n "${cryptsetup_repo}" ] || die "Failed to get cryptsetup repo"
 [ -n "${cryptsetup_version}" ] || die "Failed to get cryptsetup version"
