@@ -176,6 +176,8 @@ jobs:
         vmm:
           - clh # cloud-hypervisor
           - qemu
+    # TODO: enable me when https://github.com/kata-containers/kata-containers/issues/9763 is fixed
+    if: false
     runs-on: garm-ubuntu-2204-smaller
     env:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
