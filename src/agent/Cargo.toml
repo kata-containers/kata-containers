@@ -27,6 +27,11 @@ kata-sys-util = { path = "../libs/kata-sys-util" }
 kata-types = { path = "../libs/kata-types" }
 safe-path = { path = "../libs/safe-path" }
 const_format = "0.2.30"
+prost = "0.11"
+tonic = {version="0.8", features = ["tls"]}
+zip = "0.5.4"
+ 
+kbs_protocol = { git = "https://github.com/confidential-containers/guest-components.git", rev = "42b7c96", default-features = false,  features = [ "background_check", "openssl" ]}
 
 # Async helpers
 async-trait = "0.1.42"
@@ -62,7 +67,7 @@ procfs = "0.12.0"
 #   However, those versions are passing "make test" for the Kata Agent.
 # - Versions 1.0.77 or newer fail during "make test" - see
 #   https://github.com/kata-containers/kata-containers/issues/9538
-anyhow = "=1.0.58"
+anyhow = "=1.0.71"
 
 cgroups = { package = "cgroups-rs", version = "0.3.3" }
 
@@ -86,6 +91,9 @@ openssl = { version = "0.10.54", features = ["vendored"], optional = true }
 
 # Agent Policy
 regorus = { version = "0.1.4", default-features = false, features = ["arc", "regex"], optional = true }
+
+[build-dependencies]
+tonic-build = "0.8"
 
 [dev-dependencies]
 tempfile = "3.1.0"
