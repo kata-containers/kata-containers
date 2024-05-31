@@ -1211,8 +1211,6 @@ silent_mode_error_trap() {
 }
 
 main() {
-	git config --global --add safe.directory ${repo_root_dir}
-
 	local build_targets
 	local silent
 	build_targets=(
