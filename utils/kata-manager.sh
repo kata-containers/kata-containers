@@ -588,7 +588,9 @@ install_nerdctl()
 	for file in \
 		/usr/local/bin/containerd \
 		/usr/local/bin/ctr \
-		/usr/local/bin/nerdctl
+		/usr/local/bin/nerdctl \
+		/usr/local/bin/runc \
+		/usr/local/bin/slirp4netns
 		do
 			sudo ln -sf "$file" "${link_dir}"
 		done
