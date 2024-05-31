@@ -26,6 +26,10 @@ readonly KBS_PRIVATE_KEY="${COCO_KBS_DIR}/config/kubernetes/base/kbs.key"
 readonly KBS_SVC_NAME="kbs"
 # The features to enable in the kbs client
 KBS_CLI_FEATURES="sample_only"
+if [ "${KATA_HYPERVISOR}" == "qemu-tdx" ]; then
+       echo "Set KBS_CLI_FEATURES=default for ${KATA_HYPERVISOR}"
+       KBS_CLI_FEATURES="default"
+fi
 
 # Set "allow all" policy to resources.
 #
