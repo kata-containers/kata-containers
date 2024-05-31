@@ -213,7 +213,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        vmm: ['clh', 'qemu']
+        vmm:
+          - clh
+          - qemu
+        exclude:
+          # TODO: enable with clh when https://github.com/kata-containers/kata-containers/issues/9764 is fixed
+          - vmm: clh
     runs-on: garm-ubuntu-2304
     env:
       GOPATH: ${{ github.workspace }}
