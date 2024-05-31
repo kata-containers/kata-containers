@@ -4,8 +4,6 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 #
-
-SKIP_GO_VERSION_CHECK=
 include golang.mk
 
 #Get ARCH.
