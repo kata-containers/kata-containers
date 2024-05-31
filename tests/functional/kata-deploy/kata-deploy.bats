@@ -72,7 +72,18 @@ setup() {
 	fi
 
 	local cmd="kubectl -n kube-system get -l name=kata-deploy pod 2>/dev/null | grep '\<Running\>'"
-	waitForProcess 240 10 "$cmd"
+
+	if ! waitForProcess 240 10 "$cmd"; then
+		echo "Kata-deploy pod is not running. Printing pod details for debugging:"
+		kubectl -n kube-system get pods -o wide
+		kubectl -n kube-system get pods -l name=kata-deploy -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | while read -r pod; do
+			echo "Describing pod: $pod"
+			kubectl -n kube-system describe pod "$pod"
+		done
+		echo "ERROR: kata-deploy pod is not running, tests will not be execute."
+		echo "ERROR: setup() aborting tests..."
+		return 1
+	fi
 
 	# Give some time for the pod to finish what's doing and have the
 	# runtimeclasses properly created
