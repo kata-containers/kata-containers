@@ -196,7 +196,7 @@ install_cached_tarball_component() {
 	# "tarball1_name:tarball1_path tarball2_name:tarball2_path ... tarballN_name:tarballN_path"
 	local extra_tarballs="${6:-}"
 
-	sudo oras pull ${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) || return 1
+	oras pull ${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) || return 1
 
 	cached_version="$(cat ${component}-version)"
 	cached_image_version="$(cat ${component}-builder-image-version)"
@@ -632,8 +632,8 @@ install_firecracker() {
 	"${firecracker_builder}"
 	info "Install static firecracker"
 	mkdir -p "${destdir}/opt/kata/bin/"
-	sudo install -D --owner root --group root --mode "$default_binary_permissions" release-${firecracker_version}-${ARCH}/firecracker-${firecracker_version}-${ARCH} "${destdir}/opt/kata/bin/firecracker"
-	sudo install -D --owner root --group root --mode "$default_binary_permissions" release-${firecracker_version}-${ARCH}/jailer-${firecracker_version}-${ARCH} "${destdir}/opt/kata/bin/jailer"
+	install -D --mode "$default_binary_permissions" release-${firecracker_version}-${ARCH}/firecracker-${firecracker_version}-${ARCH} "${destdir}/opt/kata/bin/firecracker"
+	install -D --mode "$default_binary_permissions" release-${firecracker_version}-${ARCH}/jailer-${firecracker_version}-${ARCH} "${destdir}/opt/kata/bin/jailer"
 }
 
 install_clh_helper() {
@@ -656,7 +656,7 @@ install_clh_helper() {
 	libc="${libc}" features="${features}" "${clh_builder}"
 	info "Install static cloud-hypervisor"
 	mkdir -p "${destdir}/opt/kata/bin/"
-	sudo install -D --owner root --group root --mode "$default_binary_permissions" cloud-hypervisor/cloud-hypervisor "${destdir}/opt/kata/bin/cloud-hypervisor${suffix}"
+	install -D --mode "$default_binary_permissions" cloud-hypervisor/cloud-hypervisor "${destdir}/opt/kata/bin/cloud-hypervisor${suffix}"
 }
 
 # Install static cloud-hypervisor asset
@@ -700,7 +700,7 @@ install_stratovirt() {
 	"${stratovirt_builder}"
 	info "Install static stratovirt"
 	mkdir -p "${destdir}/opt/kata/bin/"
-	sudo install -D --owner root --group root --mode "$default_binary_permissions" static-stratovirt/stratovirt "${destdir}/opt/kata/bin/stratovirt"
+	install -D --mode "$default_binary_permissions" static-stratovirt/stratovirt "${destdir}/opt/kata/bin/stratovirt"
 }
 
 # Install static virtiofsd asset
@@ -720,7 +720,7 @@ install_virtiofsd() {
 	"${virtiofsd_builder}"
 	info "Install static virtiofsd"
 	mkdir -p "${destdir}/opt/kata/libexec/"
-	sudo install -D --owner root --group root --mode "$default_binary_permissions" virtiofsd/virtiofsd "${destdir}/opt/kata/libexec/virtiofsd"
+	install -D --mode "$default_binary_permissions" virtiofsd/virtiofsd "${destdir}/opt/kata/libexec/virtiofsd"
 }
 
 # Install static nydus asset
@@ -744,7 +744,7 @@ install_nydus() {
 	mkdir -p "${destdir}/opt/kata/libexec/"
 	ls -tl . || true
 	ls -tl nydus-static || true
-	sudo install -D --owner root --group root --mode "$default_binary_permissions" nydus-static/nydusd "${destdir}/opt/kata/libexec/nydusd"
+	install -D --mode "$default_binary_permissions" nydus-static/nydusd "${destdir}/opt/kata/libexec/nydusd"
 }
 
 #Install all components that are not assets
@@ -886,9 +886,7 @@ install_script_helper() {
 
 	mkdir -p "$bin_dir"
 
-	sudo install -D \
-		--owner root \
-		--group root \
+	install -D \
 		--mode "${default_binary_permissions}" \
 		"${script_path}" \
 		"${bin_dir}/${script_file}"
@@ -898,7 +896,7 @@ install_script_helper() {
 	pushd "$bin_dir" &>/dev/null
 
 	# Create a sym-link with the extension removed
-	sudo ln -sf "$script_file" "$script_file_name"
+	ln -sf "$script_file" "$script_file_name"
 
 	popd &>/dev/null
 }
@@ -929,8 +927,8 @@ install_tools_helper() {
 	if [[ "${tool}" == "genpolicy" ]]; then
 		defaults_path="${destdir}/opt/kata/share/defaults/kata-containers"
 		mkdir -p "${defaults_path}"
-		sudo install -D --owner root --group root --mode 0644 ${repo_root_dir}/src/tools/${tool}/rules.rego "${defaults_path}/rules.rego"
-		sudo install -D --owner root --group root --mode 0644 ${repo_root_dir}/src/tools/${tool}/genpolicy-settings.json "${defaults_path}/genpolicy-settings.json"
+		install -D --mode 0644 ${repo_root_dir}/src/tools/${tool}/rules.rego "${defaults_path}/rules.rego"
+		install -D --mode 0644 ${repo_root_dir}/src/tools/${tool}/genpolicy-settings.json "${defaults_path}/genpolicy-settings.json"
 		binary_permissions="0755"
 	else
 		binary_permissions="$default_binary_permissions"
@@ -938,7 +936,7 @@ install_tools_helper() {
 
 	info "Install static ${tool_binary}"
 	mkdir -p "${destdir}/opt/kata/bin/"
-	sudo install -D --owner root --group root --mode ${binary_permissions} ${binary} "${destdir}/opt/kata/bin/${tool_binary}"
+	install -D --mode ${binary_permissions} ${binary} "${destdir}/opt/kata/bin/${tool_binary}"
 }
 
 install_agent_ctl() {
@@ -1089,7 +1087,7 @@ handle_build() {
 
 	if [ ! -f "${final_tarball_path}" ]; then
 		cd "${destdir}"
-		sudo tar cvfJ "${final_tarball_path}" "."
+		tar cvfJ "${final_tarball_path}" "."
 	fi
 	tar tvf "${final_tarball_path}"
 
@@ -1101,7 +1099,7 @@ handle_build() {
 				kernel_headers_dir=$(get_kernel_headers_dir "${build_target}")
 
 				pushd "${kernel_headers_dir}"
-				find . -type f -name "*.${KERNEL_HEADERS_PKG_TYPE}" -exec sudo tar cvfJ "${kernel_headers_final_tarball_path}" {} +
+				find . -type f -name "*.${KERNEL_HEADERS_PKG_TYPE}" -exec tar cvfJ "${kernel_headers_final_tarball_path}" {} +
 				popd
 			fi
 			tar tvf "${kernel_headers_final_tarball_path}"
@@ -1113,8 +1111,8 @@ handle_build() {
 				local modules_dir=$(get_kernel_modules_dir ${kernel_version} ${kernel_kata_config_version} ${build_target})
 
 				pushd "${modules_dir}"
-				sudo rm -f build
-				sudo tar cvfJ "${modules_final_tarball_path}" "."
+				rm -f build
+				tar cvfJ "${modules_final_tarball_path}" "."
 				popd
 			fi
 			tar tvf "${modules_final_tarball_path}"
@@ -1135,7 +1133,7 @@ handle_build() {
 			die "ARTEFACT_REGISTRY, ARTEFACT_REPOSITORY, ARTEFACT_REGISTRY_USERNAME, ARTEFACT_REGISTRY_PASSWORD and TARGET_BRANCH must be passed to the script when pushing the artefacts to the registry!"
 		fi
 
-		echo "${ARTEFACT_REGISTRY_PASSWORD}" | sudo oras login "${ARTEFACT_REGISTRY}" -u "${ARTEFACT_REGISTRY_USERNAME}" --password-stdin
+		echo "${ARTEFACT_REGISTRY_PASSWORD}" | oras login "${ARTEFACT_REGISTRY}" -u "${ARTEFACT_REGISTRY_USERNAME}" --password-stdin
 
 		tags=(latest-"${TARGET_BRANCH}")
 		if [ -n "${artefact_tag:-}" ]; then
@@ -1155,7 +1153,7 @@ handle_build() {
 			tag=("$(echo ${tag} | tr -dc '[:print:]' | tr -c '[a-zA-Z0-9\_\.\-]' _ | head -c ${tag_length_limit})-$(uname -m)")
 			case ${build_target} in
 				kernel-nvidia-gpu)
-					sudo oras push \
+					oras push \
 						${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:${tag} \
 						${final_tarball_name} \
 						"kata-static-${build_target}-headers.tar.xz" \
@@ -1164,7 +1162,7 @@ handle_build() {
 						${build_target}-sha256sum
 					;;
 				kernel-nvidia-gpu-confidential)
-					sudo oras push \
+					oras push \
 						${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:${tag} \
 						${final_tarball_name} \
 						"kata-static-${build_target}-modules.tar.xz" \
@@ -1174,7 +1172,7 @@ handle_build() {
 						${build_target}-sha256sum
 					;;
 				kernel*-confidential)
-					sudo oras push \
+					oras push \
 						${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:${tag} \
 						${final_tarball_name} \
 						"kata-static-${build_target}-modules.tar.xz" \
@@ -1183,7 +1181,7 @@ handle_build() {
 						${build_target}-sha256sum
 					;;
 				*)
-					sudo oras push \
+					oras push \
 						${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:${tag} \
 						${final_tarball_name} \
 						${build_target}-version \
@@ -1192,7 +1190,7 @@ handle_build() {
 					;;
 			esac
 		done
-		sudo oras logout "${ARTEFACT_REGISTRY}"
+		oras logout "${ARTEFACT_REGISTRY}"
 	fi
 
 	popd
