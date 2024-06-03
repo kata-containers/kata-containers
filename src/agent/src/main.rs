@@ -59,11 +59,11 @@ mod util;
 mod version;
 mod watcher;
 
-use config::GuestComponentsFeatures;
+use config::GuestComponentsProcs;
 use mount::{cgroups_mount, general_mount};
 use sandbox::Sandbox;
 use signal::setup_signal_handler;
-use slog::{error, info, o, warn, Logger};
+use slog::{debug, error, info, o, warn, Logger};
 use uevent::watch_uevents;
 
 use futures::future::join_all;
@@ -403,8 +403,16 @@ async fn start_sandbox(
     let (tx, rx) = tokio::sync::oneshot::channel();
     sandbox.lock().await.sender = Some(tx);
 
-    if Path::new(CDH_PATH).exists() && Path::new(AA_PATH).exists() {
-        init_attestation_components(logger, config)?;
+    let gc_procs = config.guest_components_procs;
+    if gc_procs != GuestComponentsProcs::None {
+        if !attestation_binaries_available(logger, &gc_procs) {
+            warn!(
+                logger,
+                "attestation binaries requested for launch not available"
+            );
+        } else {
+            init_attestation_components(logger, config)?;
+        }
     }
 
     // vsock:///dev/vsock, port
@@ -417,9 +425,33 @@ async fn start_sandbox(
     Ok(())
 }
 
+// Check if required attestation binaries are available on the rootfs.
+fn attestation_binaries_available(logger: &Logger, procs: &GuestComponentsProcs) -> bool {
+    let binaries = match procs {
+        GuestComponentsProcs::AttestationAgent => vec![AA_PATH],
+        GuestComponentsProcs::ConfidentialDataHub => vec![AA_PATH, CDH_PATH],
+        GuestComponentsProcs::ApiServerRest => vec![AA_PATH, CDH_PATH, API_SERVER_PATH],
+        _ => vec![],
+    };
+    for binary in binaries.iter() {
+        if !Path::new(binary).exists() {
+            warn!(logger, "{} not found", binary);
+            return false;
+        }
+    }
+    true
+}
+
 // Start-up attestation-agent, CDH and api-server-rest if they are packaged in the rootfs
-fn init_attestation_components(logger: &Logger, _config: &AgentConfig) -> Result<()> {
-    // The Attestation Agent will run for the duration of the guest.
+// and the corresponding procs are enabled in the agent configuration. the process will be
+// launched in the background and the function will return immediately.
+fn init_attestation_components(logger: &Logger, config: &AgentConfig) -> Result<()> {
+    // skip launch of any guest-component
+    if config.guest_components_procs == GuestComponentsProcs::None {
+        return Ok(());
+    }
+
+    debug!(logger, "spawning attestation-agent process {}", AA_PATH);
     launch_process(
         logger,
         AA_PATH,
@@ -429,31 +461,42 @@ fn init_attestation_components(logger: &Logger, _config: &AgentConfig) -> Result
     )
     .map_err(|e| anyhow!("launch_process {} failed: {:?}", AA_PATH, e))?;
 
-    if let Err(e) = launch_process(
+    // skip launch of confidential-data-hub and api-server-rest
+    if config.guest_components_procs == GuestComponentsProcs::AttestationAgent {
+        return Ok(());
+    }
+
+    debug!(
+        logger,
+        "spawning confidential-data-hub process {}", CDH_PATH
+    );
+    launch_process(
         logger,
         CDH_PATH,
         &vec![],
         CDH_SOCKET,
         DEFAULT_LAUNCH_PROCESS_TIMEOUT,
-    ) {
-        error!(logger, "launch_process {} failed: {:?}", CDH_PATH, e);
-    } else {
-        let features = _config.guest_components_rest_api;
-        match features {
-            GuestComponentsFeatures::None => {}
-            _ => {
-                if let Err(e) = launch_process(
-                    logger,
-                    API_SERVER_PATH,
-                    &vec!["--features", &features.to_string()],
-                    "",
-                    0,
-                ) {
-                    error!(logger, "launch_process {} failed: {:?}", API_SERVER_PATH, e);
-                }
-            }
-        }
+    )
+    .map_err(|e| anyhow!("launch_process {} failed: {:?}", CDH_PATH, e))?;
+
+    // skip launch of api-server-rest
+    if config.guest_components_procs == GuestComponentsProcs::ConfidentialDataHub {
+        return Ok(());
     }
+
+    let features = config.guest_components_rest_api;
+    debug!(
+        logger,
+        "spawning api-server-rest process {} --features {}", API_SERVER_PATH, features
+    );
+    launch_process(
+        logger,
+        API_SERVER_PATH,
+        &vec!["--features", &features.to_string()],
+        "",
+        0,
+    )
+    .map_err(|e| anyhow!("launch_process {} failed: {:?}", API_SERVER_PATH, e))?;
 
     Ok(())
 }
