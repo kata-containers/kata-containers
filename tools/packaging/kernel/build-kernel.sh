@@ -142,7 +142,7 @@ get_tee_kernel() {
 	mkdir -p ${kernel_path}
 
 	if [ -z "${kernel_url}" ]; then
-		kernel_url=$(get_from_kata_deps "assets.kernel.${tee}.url")
+		kernel_url=$(get_from_kata_deps ".assets.kernel.${tee}.url")
 	fi
 
 	local kernel_tarball="${version}.tar.gz"
@@ -644,26 +644,26 @@ main() {
 	# If not kernel version take it from versions.yaml
 	if [ -z "$kernel_version" ]; then
 		if [[ ${build_type} == "experimental" ]]; then
-			kernel_version=$(get_from_kata_deps "assets.kernel-experimental.tag")
+			kernel_version=$(get_from_kata_deps ".assets.kernel-experimental.tag")
 		elif [[ ${build_type} == "arch-experimental" ]]; then
 			case "${arch_target}" in
 			"aarch64")
 				build_type="arm-experimental"
-				kernel_version=$(get_from_kata_deps "assets.kernel-arm-experimental.version")
+				kernel_version=$(get_from_kata_deps ".assets.kernel-arm-experimental.version")
 			;;
 			*)
 				info "No arch-specific experimental kernel supported, using experimental one instead"
-				kernel_version=$(get_from_kata_deps "assets.kernel-experimental.tag")
+				kernel_version=$(get_from_kata_deps ".assets.kernel-experimental.tag")
 			;;
 			esac
 		elif [[ ${build_type} == "dragonball-experimental" ]]; then
-			kernel_version=$(get_from_kata_deps "assets.kernel-dragonball-experimental.version")
+			kernel_version=$(get_from_kata_deps ".assets.kernel-dragonball-experimental.version")
 		elif [[ "${conf_guest}" != "" ]]; then
 			#If specifying a tag for kernel_version, must be formatted version-like to avoid unintended parsing issues
-			kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.version" 2>/dev/null || true)
-			[ -n "${kernel_version}" ] || kernel_version=$(get_from_kata_deps "assets.kernel.${conf_guest}.tag")
+			kernel_version=$(get_from_kata_deps ".assets.kernel.${conf_guest}.version" 2>/dev/null || true)
+			[ -n "${kernel_version}" ] || kernel_version=$(get_from_kata_deps ".assets.kernel.${conf_guest}.tag")
 		else
-			kernel_version=$(get_from_kata_deps "assets.kernel.version")
+			kernel_version=$(get_from_kata_deps ".assets.kernel.version")
 		fi
 	fi
 	#Remove extra 'v'

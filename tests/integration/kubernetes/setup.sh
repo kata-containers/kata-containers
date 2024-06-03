@@ -53,24 +53,26 @@ add_annotations_to_yaml() {
 	local yaml_file="$1"
 	local annotation_name="$2"
 	local annotation_value="$3"
-	local resource_kind="$(yq read ${yaml_file} kind)"
+
+	# Previous version of yq was not ready to handle multiple objects in a single yaml.
+	# By default was changing only the first object.
+	# With yq>4 we need to make it explicit during the read and write.
+	local resource_kind="$(yq .kind ${yaml_file} | head -1)"
 
 	case "${resource_kind}" in
 
 	Pod)
 		info "Adding \"${annotation_name}=${annotation_value}\" to ${resource_kind} from ${yaml_file}"
-		yq write -i \
-		  "${K8S_TEST_YAML}" \
-		  "metadata.annotations[${annotation_name}]" \
-		  "${annotation_value}"
+		yq -i \
+		  ".metadata.annotations.\"${annotation_name}\" = \"${annotation_value}\"" \
+		  "${K8S_TEST_YAML}"
 		;;
 
 	Deployment|Job|ReplicationController)
 		info "Adding \"${annotation_name}=${annotation_value}\" to ${resource_kind} from ${yaml_file}"
-		yq write -i \
-		  "${K8S_TEST_YAML}" \
-		  "spec.template.metadata.annotations[${annotation_name}]" \
-		  "${annotation_value}"
+		yq -i \
+		  ".spec.template.metadata.annotations.\"${annotation_name}\" = \"${annotation_value}\"" \
+		  "${K8S_TEST_YAML}"
 		;;
 
 	List)

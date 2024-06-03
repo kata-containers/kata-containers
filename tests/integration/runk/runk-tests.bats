@@ -66,8 +66,12 @@ stop_container() {
 
 @test "run ps command" {
 	sudo ctr t exec --detach --exec-id id1 "${CONTAINER_ID}" sh
+
+	return_code=$?
+	echo "ctr t exec sh return: ${return_code}"
+
 	# Give some time for the sh process to start within the container.
-	sleep 1
+	sleep 5
 	ps_out="$(sudo ctr t ps ${CONTAINER_ID})" || die "ps command failed"
 	printf "ps output:\n%s\n" "${ps_out}"
 	lines_no="$(printf "%s\n" "${ps_out}" | wc -l)"

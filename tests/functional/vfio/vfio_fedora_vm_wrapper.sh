@@ -174,8 +174,8 @@ ${environment}
     pushd /workspace
     source tests/common.bash
     ensure_yq
-    cri_containerd=\$(get_from_kata_deps "externals.containerd.lts")
-    cri_tools=\$(get_from_kata_deps "externals.critools.latest")
+    cri_containerd=\$(get_from_kata_deps ".externals.containerd.lts")
+    cri_tools=\$(get_from_kata_deps ".externals.critools.latest")
     install_cri_containerd \${cri_containerd}
     install_cri_tools \${cri_tools}
 

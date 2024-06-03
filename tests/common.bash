@@ -497,11 +497,19 @@ function ensure_yq() {
 
 # dependency: What we want to get the version from the versions.yaml file
 function get_from_kata_deps() {
-        local dependency="$1"
         versions_file="${repo_root_dir}/versions.yaml"
 
         command -v yq &>/dev/null || die 'yq command is not in your $PATH'
-        result=$("yq" read -X "$versions_file" "$dependency")
+
+        yq_version=$(yq --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | cut -d. -f1)
+        if [ "$yq_version" -eq 3 ]; then
+          dependency=$(echo "$1" | sed "s/^\.//g")
+          result=$("yq" read "$versions_file" "$dependency")
+        else
+          dependency=$1
+          result=$("yq" "$dependency | explode (.)" "$versions_file")
+        fi
+
         [ "$result" = "null" ] && result=""
         echo "$result"
 }
@@ -743,7 +751,7 @@ function get_dep_from_yaml_db(){
 
         "${repo_root_dir}/ci/install_yq.sh" >&2
 
-        result=$("${GOPATH}/bin/yq" r -X "$versions_file" "$dependency")
+        result=$("${GOPATH}/bin/yq" "$dependency" "$versions_file")
         [ "$result" = "null" ] && result=""
         echo "$result"
 }
@@ -759,7 +767,7 @@ function get_test_version(){
 
         db="${cidir}/../versions.yaml"
 
-        get_dep_from_yaml_db "${db}" "${dependency}"
+        get_dep_from_yaml_db "${db}" ".${dependency}"
 }
 
 # Load vhost, vhost_net, vhost_vsock modules.

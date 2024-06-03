@@ -19,8 +19,8 @@ pause_image_repo="${pause_image_repo:-}"
 pause_image_version="${pause_image_version:-}"
 package_output_dir="${package_output_dir:-}"
 
-[ -n "${pause_image_repo}" ] || pause_image_repo=$(get_from_kata_deps "externals.pause.repo")
-[ -n "${pause_image_version}" ] || pause_image_version=$(get_from_kata_deps "externals.pause.version")
+[ -n "${pause_image_repo}" ] || pause_image_repo=$(get_from_kata_deps ".externals.pause.repo")
+[ -n "${pause_image_version}" ] || pause_image_version=$(get_from_kata_deps ".externals.pause.version")
 
 [ -n "${pause_image_repo}" ] || die "Failed to get pause image repo"
 [ -n "${pause_image_version}" ] || die "Failed to get pause image version or commit"

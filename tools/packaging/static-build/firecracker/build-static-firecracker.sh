@@ -20,10 +20,10 @@ firecracker_version="${firecracker_version:-}"
 
 arch=$(uname -m)
 
-[ -n "$firecracker_url" ] ||firecracker_url=$(get_from_kata_deps "assets.hypervisor.firecracker.url")
+[ -n "$firecracker_url" ] ||firecracker_url=$(get_from_kata_deps ".assets.hypervisor.firecracker.url")
 [ -n "$firecracker_url" ] || die "failed to get firecracker url"
 
-[ -n "$firecracker_version" ] || firecracker_version=$(get_from_kata_deps "assets.hypervisor.firecracker.version")
+[ -n "$firecracker_version" ] || firecracker_version=$(get_from_kata_deps ".assets.hypervisor.firecracker.version")
 [ -n "$firecracker_version" ] || die "failed to get firecracker version"
 
 firecracker_tarball_url="${firecracker_url}/releases/download"

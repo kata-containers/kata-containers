@@ -8,8 +8,8 @@ automates the process to build a kernel for Kata Containers.
 
 The `build-kernel.sh` script requires an installed Golang version matching the
 [component build requirements](../../../docs/Developer-Guide.md#requirements-to-build-individual-components).
-It also requires [yq](https://github.com/mikefarah/yq) version 3.4.1
-> **Hint**: `go install github.com/mikefarah/yq/v3@latest`
+It also requires [yq](https://github.com/mikefarah/yq) version v4.40.7.
+> **Hint**: `go install github.com/mikefarah/yq/v4@latest`
 
 
 The Linux kernel scripts further require a few packages (flex, bison, and libelf-dev)

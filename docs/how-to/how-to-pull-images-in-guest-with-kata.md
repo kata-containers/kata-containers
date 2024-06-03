@@ -35,27 +35,23 @@ $ git clone -b "${nydus_snapshotter_version}" "${nydus_snapshotter_url}" "${nydu
 2. Configure DaemonSet file
 ```bash
 $ pushd "$nydus_snapshotter_install_dir"
-$ yq write -i \
->	 misc/snapshotter/base/nydus-snapshotter.yaml \
->	 'data.FS_DRIVER' \
->	 "proxy" --style=double
+$ yq -i \
+>	 '.data.FS_DRIVER = "proxy"' -P \
+>	 misc/snapshotter/base/nydus-snapshotter.yaml
 # Disable to read snapshotter config from configmap
-$ yq write -i \
->	 misc/snapshotter/base/nydus-snapshotter.yaml \
->	 'data.ENABLE_CONFIG_FROM_VOLUME' \
->	 "false" --style=double
+$ yq -i \
+>	 'data.ENABLE_CONFIG_FROM_VOLUME = "false"' -P \
+>	 misc/snapshotter/base/nydus-snapshotter.yaml
 # Enable to run snapshotter as a systemd service 
 # (skip if you want to run nydus snapshotter as a standalone process)
-$ yq write -i \
->	 misc/snapshotter/base/nydus-snapshotter.yaml \
->	 'data.ENABLE_SYSTEMD_SERVICE' \
->	 "true" --style=double
+$ yq -i \
+>	 'data.ENABLE_SYSTEMD_SERVICE = "true"' -P \
+>	 misc/snapshotter/base/nydus-snapshotter.yaml
 # Enable "runtime specific snapshotter" feature in containerd when configuring containerd for snapshotter
 # (skip if you want to configure nydus snapshotter as a global snapshotter in containerd)
-$ yq write -i \
->	 misc/snapshotter/base/nydus-snapshotter.yaml \
->	 'data.ENABLE_RUNTIME_SPECIFIC_SNAPSHOTTER' \
->	 "true" --style=double
+$ yq -i \
+>	 'data.ENABLE_RUNTIME_SPECIFIC_SNAPSHOTTER = "true"' -P \
+>	 misc/snapshotter/base/nydus-snapshotter.yaml
 ```
 
 3. Install `nydus snapshotter` as a DaemonSet

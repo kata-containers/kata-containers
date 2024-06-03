@@ -51,4 +51,3 @@ spec:
         cpu: "1.2"
     command: ['nproc', '--all']
   restartPolicy: Never
----

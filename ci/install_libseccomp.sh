@@ -23,11 +23,11 @@ workdir="$(mktemp -d --tmpdir build-libseccomp.XXXXX)"
 # Variables for libseccomp
 libseccomp_version="${LIBSECCOMP_VERSION:-""}"
 if [ -z "${libseccomp_version}" ]; then
-    libseccomp_version=$(get_from_kata_deps "externals.libseccomp.version")
+    libseccomp_version=$(get_from_kata_deps ".externals.libseccomp.version")
 fi
 libseccomp_url="${LIBSECCOMP_URL:-""}"
 if [ -z "${libseccomp_url}" ]; then
-    libseccomp_url=$(get_from_kata_deps "externals.libseccomp.url")
+    libseccomp_url=$(get_from_kata_deps ".externals.libseccomp.url")
 fi
 libseccomp_tarball="libseccomp-${libseccomp_version}.tar.gz"
 libseccomp_tarball_url="${libseccomp_url}/releases/download/v${libseccomp_version}/${libseccomp_tarball}"
@@ -36,11 +36,11 @@ cflags="-O2"
 # Variables for gperf
 gperf_version="${GPERF_VERSION:-""}"
 if [ -z "${gperf_version}" ]; then
-    gperf_version=$(get_from_kata_deps "externals.gperf.version")
+    gperf_version=$(get_from_kata_deps ".externals.gperf.version")
 fi
 gperf_url="${GPERF_URL:-""}"
 if [ -z "${gperf_url}" ]; then
-    gperf_url=$(get_from_kata_deps "externals.gperf.url")
+    gperf_url=$(get_from_kata_deps ".externals.gperf.url")
 fi
 gperf_tarball="gperf-${gperf_version}.tar.gz"
 gperf_tarball_url="${gperf_url}/${gperf_tarball}"

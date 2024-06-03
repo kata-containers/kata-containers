@@ -18,9 +18,9 @@ nydus_url="${nydus_url:-}"
 nydus_version="${nydus_version:-}"
 
 info "Get nydus information from runtime versions.yaml"
-[ -n "$nydus_url" ] || nydus_url=$(get_from_kata_deps "externals.nydus.url")
+[ -n "$nydus_url" ] || nydus_url=$(get_from_kata_deps ".externals.nydus.url")
 [ -n "$nydus_url" ] || die "failed to get nydus url"
-[ -n "$nydus_version" ] || nydus_version=$(get_from_kata_deps "externals.nydus.version")
+[ -n "$nydus_version" ] || nydus_version=$(get_from_kata_deps ".externals.nydus.version")
 [ -n "$nydus_version" ] || die "failed to get nydus version"
 
 nydus_tarball_url="${nydus_url}/releases/download"

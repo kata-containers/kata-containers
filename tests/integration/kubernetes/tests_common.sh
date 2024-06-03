@@ -275,22 +275,25 @@ add_allow_all_policy_to_yaml() {
 	policy_tests_enabled || return 0
 
 	local yaml_file="$1"
-	local resource_kind="$(yq read ${yaml_file} kind)"
+	# Previous version of yq was not ready to handle multiple objects in a single yaml.
+	# By default was changing only the first object.
+	# With yq>4 we need to make it explicit during the read and write.
+	local resource_kind="$(yq .kind ${yaml_file} | head -1)"
 
 	case "${resource_kind}" in
 
 	Pod)
 		info "Adding allow all policy to ${resource_kind} from ${yaml_file}"
-		ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY}" yq write -i "${yaml_file}" \
-			'metadata.annotations."io.katacontainers.config.agent.policy"' \
-			"${ALLOW_ALL_POLICY}"
+		ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY}" yq -i \
+			".metadata.annotations.\"io.katacontainers.config.agent.policy\" = \"${ALLOW_ALL_POLICY}\"" \
+      "${yaml_file}"
 		;;
 
 	Deployment|Job|ReplicationController)
 		info "Adding allow all policy to ${resource_kind} from ${yaml_file}"
-		ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY}" yq write -i "${yaml_file}" \
-			'spec.template.metadata.annotations."io.katacontainers.config.agent.policy"' \
-			"${ALLOW_ALL_POLICY}"
+		ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY}" yq -i \
+			".spec.template.metadata.annotations.\"io.katacontainers.config.agent.policy\" = \"${ALLOW_ALL_POLICY}\"" \
+      "${yaml_file}"
 		;;
 
 	List)

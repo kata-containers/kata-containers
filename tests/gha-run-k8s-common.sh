@@ -127,9 +127,9 @@ function install_kustomize() {
 	fi
 
 	ensure_yq
-	version=$(get_from_kata_deps "externals.kustomize.version")
+	version=$(get_from_kata_deps ".externals.kustomize.version")
 	arch=$(arch_to_golang)
-	checksum=$(get_from_kata_deps "externals.kustomize.checksum.${arch}")
+	checksum=$(get_from_kata_deps ".externals.kustomize.checksum.${arch}")
 
 	local tarball="kustomize_${version}_linux_${arch}.tar.gz"
 	curl -Lf -o "$tarball" "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/${version}/${tarball}"

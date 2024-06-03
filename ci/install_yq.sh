@@ -16,7 +16,7 @@ die() {
 # Install via binary download, as we may not have golang installed at this point
 function install_yq() {
 	local yq_pkg="github.com/mikefarah/yq"
-	local yq_version=3.4.1
+	local yq_version=v4.40.7
 	local precmd=""
 	INSTALL_IN_GOPATH=${INSTALL_IN_GOPATH:-true}
 
