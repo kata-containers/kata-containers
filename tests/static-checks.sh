@@ -188,36 +188,36 @@ EOF
 
 # Calls die() if the specified function is not valid.
 func_is_valid() {
-    local name="$1"
+	local name="$1"
 
-    type -t "$name" &>/dev/null || die "function '$name' does not exist"
+	type -t "$name" &>/dev/null || die "function '$name' does not exist"
 }
 
 # Calls die() if the specified function is not valid or not a check function.
 ensure_func_is_check_func() {
-    local name="$1"
+	local name="$1"
 
-    func_is_valid "$name"
+	func_is_valid "$name"
 
-    { echo "$name" | grep -q "${check_func_regex}"; ret=$?; }
+	{ echo "$name" | grep -q "${check_func_regex}"; ret=$?; }
 
-    [ "$ret" = 0 ] || die "function '$name' is not a check function"
+	[ "$ret" = 0 ] || die "function '$name' is not a check function"
 }
 
 # Returns "yes" if the specified function needs to run on all architectures,
 # else "no".
 func_is_arch_specific() {
-    local name="$1"
+	local name="$1"
 
-    ensure_func_is_check_func "$name"
+	ensure_func_is_check_func "$name"
 
-    { echo "$name" | grep -q "${arch_func_regex}"; ret=$?; }
+	{ echo "$name" | grep -q "${arch_func_regex}"; ret=$?; }
 
-    if [ "$ret" = 0 ]; then
-        echo "yes"
-    else
-        echo "no"
-    fi
+	if [ "$ret" = 0 ]; then
+		echo "yes"
+	else
+		echo "no"
+	fi
 }
 
 function remove_tmp_files() {
