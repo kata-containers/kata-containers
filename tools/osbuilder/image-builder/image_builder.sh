@@ -201,6 +201,8 @@ build_with_container() {
 		   --env DEBUG="${DEBUG}" \
 		   --env ARCH="${ARCH}" \
 		   --env TARGET_ARCH="${TARGET_ARCH}" \
+		   --env USER="$(id -u)" \
+		   --env GROUP="$(id -g)" \
 		   -v /dev:/dev \
 		   -v "${script_dir}":"/osbuilder" \
 		   -v "${script_dir}/../scripts":"/scripts" \
@@ -678,6 +680,8 @@ main() {
 	fi
 	# insert at the beginning of the image the MBR + DAX header
 	set_dax_header "${image}" "${img_size}" "${fs_type}" "${nsdax_bin}"
+
+	sudo chown "${USER}:${GROUP}" "${image}"
 }
 
 main "$@"
