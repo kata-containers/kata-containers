@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use super::cmdline_generator::QemuCmdLine;
+use super::cmdline_generator::{QemuCmdLine, QMP_SOCKET_FILE};
+use super::qmp::Qmp;
 use crate::{
     hypervisor_persist::HypervisorState, utils::enter_netns, HypervisorConfig, MemoryConfig,
     VcpuThreadIds, VsockDevice, HYPERVISOR_QEMU,
@@ -32,6 +33,7 @@ pub struct QemuInner {
     id: String,
 
     qemu_process: Option<Child>,
+    qmp: Option<Qmp>,
 
     config: HypervisorConfig,
     devices: Vec<DeviceType>,
@@ -43,6 +45,7 @@ impl QemuInner {
         QemuInner {
             id: "".to_string(),
             qemu_process: None,
+            qmp: None,
             config: Default::default(),
             devices: Vec::new(),
             netns: None,
@@ -147,6 +150,14 @@ impl QemuInner {
 
         if let Some(ref mut qemu_process) = &mut self.qemu_process {
             tokio::spawn(log_qemu_stderr(qemu_process.stderr.take().unwrap()));
+        }
+
+        match Qmp::new(QMP_SOCKET_FILE) {
+            Ok(qmp) => self.qmp = Some(qmp),
+            Err(e) => {
+                error!(sl!(), "couldn't initialise QMP: {:?}", e);
+                return Err(e);
+            }
         }
 
         Ok(())
@@ -385,6 +396,7 @@ impl Persist for QemuInner {
         Ok(QemuInner {
             id: hypervisor_state.id,
             qemu_process: None,
+            qmp: None,
             config: hypervisor_state.config,
             devices: Vec::new(),
             netns: None,

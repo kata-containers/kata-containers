@@ -4,12 +4,22 @@
 //
 
 use anyhow::Result;
+use std::fmt::{Debug, Error, Formatter};
 use std::io::BufReader;
 use std::os::unix::net::UnixStream;
 use std::time::Duration;
 
 pub struct Qmp {
     qmp: qapi::Qmp<qapi::Stream<BufReader<UnixStream>, UnixStream>>,
+}
+
+// We have to implement Debug since the Hypervisor trait requires it and Qmp
+// is ultimately stored in one of Hypervisor's implementations (Qemu).
+// We can't do it automatically since the type of Qmp::qmp isn't Debug.
+impl Debug for Qmp {
+    fn fmt(&self, _f: &mut Formatter<'_>) -> Result<(), Error> {
+        Ok(())
+    }
 }
 
 impl Qmp {
