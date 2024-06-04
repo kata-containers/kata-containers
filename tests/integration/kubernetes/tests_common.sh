@@ -111,7 +111,7 @@ exec_host() {
 	# [bats-exec-test:38] INFO: k8s configured to use runtimeclass
 	# bash: line 1: $'\r': command not found
 	# ```
-	output="$(kubectl debug -qit "node/${node}" --image=alpine:latest -- chroot /host bash -c "${command}" | tr -d '\r')"
+	output="$(kubectl debug -qit "node/${node}" --image=ghcr.io/linuxcontainers/alpine:latest -- chroot /host bash -c "${command}" | tr -d '\r')"
 
 	# Get the updated list of debugger pods.
 	declare -a new_debugger_pods=( $(kubectl get pods -o name | grep node-debugger) )

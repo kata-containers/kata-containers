@@ -444,7 +444,7 @@ function cleanup() {
 	fi
 
 	# Switch back to the default namespace and delete the tests one
-	delete_test_cluster_namespace
+	delete_test_cluster_namespace || true
 
 	cleanup_kata_deploy
 }
