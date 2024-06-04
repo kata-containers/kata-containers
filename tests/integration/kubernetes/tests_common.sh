@@ -48,6 +48,14 @@ setup_common() {
 	node=$(get_one_kata_node)
 	[ -n "$node" ]
 	node_start_time=$(exec_host "$node" date +\"%Y-%m-%d %H:%M:%S\")
+	# If node_start_time is empty, try again 3 times with a 5 seconds sleep between each try.
+	count=0
+	while [ -z "$node_start_time" ] && [ $count -lt 3 ]; do
+		echo "node_start_time is empty, trying again..."
+		sleep 5
+		node_start_time=$(exec_host "$node" date +\"%Y-%m-%d %H:%M:%S\")
+		count=$((count + 1))
+	done
 	[ -n "$node_start_time" ]
 	export node node_start_time
 
