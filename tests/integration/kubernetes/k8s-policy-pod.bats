@@ -17,13 +17,22 @@ setup() {
 	get_pod_config_dir
 
 	correct_configmap_yaml="${pod_config_dir}/k8s-policy-configmap.yaml"
+	pre_generate_configmap_yaml="${pod_config_dir}/k8s-policy-configmap-pre-generation.yaml"
 	incorrect_configmap_yaml="${pod_config_dir}/k8s-policy-configmap-incorrect.yaml"
+	testcase_pre_generate_configmap_yaml="${pod_config_dir}/k8s-policy-configmap-testcase-pre-generation.yaml"
 
 	correct_pod_yaml="${pod_config_dir}/k8s-policy-pod.yaml"
+	pre_generate_pod_yaml="${pod_config_dir}/k8s-policy-pod-pre-generation.yaml"
 	incorrect_pod_yaml="${pod_config_dir}/k8s-policy-pod-incorrect.yaml"
+	testcase_pre_generate_pod_yaml="${pod_config_dir}/k8s-policy-pod-testcase-pre-generation.yaml"
+
 
     # Save some time by executing genpolicy a single time.
     if [ "${BATS_TEST_NUMBER}" == "1" ]; then
+		# Save pre-generated yaml files
+		cp "${correct_configmap_yaml}" "${pre_generate_configmap_yaml}" 
+		cp "${correct_pod_yaml}" "${pre_generate_pod_yaml}"
+
 		# Add policy to the correct pod yaml file
 		auto_generate_policy "${pod_config_dir}" "${correct_pod_yaml}" "${correct_configmap_yaml}"
 	fi
@@ -31,11 +40,26 @@ setup() {
     # Start each test case with a copy of the correct yaml files.
 	cp "${correct_configmap_yaml}" "${incorrect_configmap_yaml}"
 	cp "${correct_pod_yaml}" "${incorrect_pod_yaml}"
+
+	# Also give each testcase a copy of the pre-generated yaml files.
+	cp "${pre_generate_configmap_yaml}" "${testcase_pre_generate_configmap_yaml}"
+	cp "${pre_generate_pod_yaml}" "${testcase_pre_generate_pod_yaml}"
 }
 
 @test "Successful pod with auto-generated policy" {
 	kubectl create -f "${correct_configmap_yaml}"
 	kubectl create -f "${correct_pod_yaml}"
+	kubectl wait --for=condition=Ready "--timeout=${timeout}" pod "${pod_name}"
+}
+
+@test "Successful pod with auto-generated policy and runtimeClassName filter" {
+	runtime_class_name=$(yq read "${testcase_pre_generate_pod_yaml}" "spec.runtimeClassName")
+
+	auto_generate_policy "${pod_config_dir}" "${testcase_pre_generate_pod_yaml}" "${testcase_pre_generate_configmap_yaml}" \
+		"--runtime-class-names=other-runtime-class-name --runtime-class-names=${runtime_class_name}" 
+
+	kubectl create -f "${testcase_pre_generate_configmap_yaml}"
+	kubectl create -f "${testcase_pre_generate_pod_yaml}"
 	kubectl wait --for=condition=Ready "--timeout=${timeout}" pod "${pod_name}"
 }
 
@@ -120,6 +144,17 @@ test_pod_policy_error() {
 	waitForProcess "${wait_time}" "$sleep_time" "${command}" | grep -v "Message:"
 }
 
+@test "RuntimeClassName filter: no policy" {
+	# The policy should not be generated because the pod spec does not have a runtimeClassName.
+	runtime_class_name=$(yq read "${testcase_pre_generate_pod_yaml}" "spec.runtimeClassName")
+
+	auto_generate_policy "${pod_config_dir}" "${testcase_pre_generate_pod_yaml}" "${testcase_pre_generate_configmap_yaml}" \
+		"--runtime-class-names=other-${runtime_class_name}"
+
+	# Check that the pod yaml does not contain a policy annotation.
+	run ! grep -q "io.katacontainers.config.agent.policy" "${testcase_pre_generate_pod_yaml}"
+}
+
 teardown() {
 	auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
 
@@ -131,4 +166,6 @@ teardown() {
 	kubectl delete configmap "${configmap_name}"
 	rm -f "${incorrect_pod_yaml}"
 	rm -f "${incorrect_configmap_yaml}"
+	rm -f "${testcase_pre_generate_pod_yaml}"
+	rm -f "${testcase_pre_generate_configmap_yaml}"
 }

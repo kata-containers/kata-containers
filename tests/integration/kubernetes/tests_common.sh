@@ -179,6 +179,7 @@ auto_generate_policy() {
 	declare -r settings_dir="$1"
 	declare -r yaml_file="$2"
 	declare -r config_map_yaml_file="$3"
+	declare -r additional_flags="$4"
 
 	auto_generate_policy_enabled || return 0
 	local genpolicy_command="RUST_LOG=info /opt/kata/bin/genpolicy -u -y ${yaml_file}"
@@ -192,6 +193,8 @@ auto_generate_policy() {
 	if [ "${GENPOLICY_PULL_METHOD}" == "containerd" ]; then
 		genpolicy_command+=" -d"
 	fi
+
+	genpolicy_command+=" ${additional_flags}"
 
 	info "Executing: ${genpolicy_command}"
 	eval "${genpolicy_command}"
