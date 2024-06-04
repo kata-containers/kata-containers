@@ -17,6 +17,7 @@ use kata_types::{
     config::KATA_PATH,
 };
 use persist::sandbox_persist::Persist;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::path::Path;
 use std::process::Stdio;
@@ -244,15 +245,48 @@ impl QemuInner {
         Ok(())
     }
 
-    pub(crate) async fn resize_vcpu(&self, old_vcpus: u32, new_vcpus: u32) -> Result<(u32, u32)> {
+    pub(crate) async fn resize_vcpu(
+        &mut self,
+        old_vcpus: u32,
+        mut new_vcpus: u32,
+    ) -> Result<(u32, u32)> {
         info!(
             sl!(),
             "QemuInner::resize_vcpu(): {} -> {}", old_vcpus, new_vcpus
         );
+
+        // TODO The following sanity checks apparently have to be performed by
+        // any hypervisor - wouldn't it make sense to move them to the caller?
         if new_vcpus == old_vcpus {
             return Ok((old_vcpus, new_vcpus));
         }
-        todo!()
+
+        if new_vcpus == 0 {
+            return Err(anyhow!("resize to 0 vcpus requested"));
+        }
+
+        if new_vcpus > self.config.cpu_info.default_maxvcpus {
+            warn!(
+                sl!(),
+                "Cannot allocate more vcpus than the max allowed number of vcpus. The maximum allowed amount of vcpus will be used instead.");
+            new_vcpus = self.config.cpu_info.default_maxvcpus;
+        }
+
+        if let Some(ref mut qmp) = self.qmp {
+            match new_vcpus.cmp(&old_vcpus) {
+                Ordering::Greater => {
+                    let hotplugged = qmp.hotplug_vcpus(new_vcpus - old_vcpus)?;
+                    new_vcpus = old_vcpus + hotplugged;
+                }
+                Ordering::Less => {
+                    let hotunplugged = qmp.hotunplug_vcpus(old_vcpus - new_vcpus)?;
+                    new_vcpus = old_vcpus - hotunplugged;
+                }
+                Ordering::Equal => {}
+            }
+        }
+
+        Ok((old_vcpus, new_vcpus))
     }
 
     pub(crate) async fn get_pids(&self) -> Result<Vec<u32>> {
