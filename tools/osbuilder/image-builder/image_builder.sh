@@ -201,6 +201,8 @@ build_with_container() {
 		   --env DEBUG="${DEBUG}" \
 		   --env ARCH="${ARCH}" \
 		   --env TARGET_ARCH="${TARGET_ARCH}" \
+		   --env USER="$(id -u)" \
+		   --env GROUP="$(id -g)" \
 		   -v /dev:/dev \
 		   -v "${script_dir}":"/osbuilder" \
 		   -v "${script_dir}/../scripts":"/scripts" \
@@ -609,9 +611,6 @@ set_dax_header() {
 }
 
 main() {
-	[ "$(id -u)" -eq 0 ] || die "$0: must be run as root"
-	[ "$#" -eq 0 ] && usage && return 0
-
 	# variables that can be overwritten by environment variables
 	local agent_bin="${AGENT_BIN:-kata-agent}"
 	local agent_init="${AGENT_INIT:-no}"
@@ -678,6 +677,8 @@ main() {
 	fi
 	# insert at the beginning of the image the MBR + DAX header
 	set_dax_header "${image}" "${img_size}" "${fs_type}" "${nsdax_bin}"
+
+	chown "${USER}:${GROUP}" "${image}"
 }
 
 main "$@"
