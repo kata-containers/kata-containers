@@ -27,8 +27,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        vmm:
-          - qemu
         snapshotter:
           - devmapper
           - nydus
@@ -39,10 +37,12 @@ jobs:
             pull-type: default
             using-nfd: true
             deploy-cmd: configure-snapshotter
+            vmm: qemu
           - snapshotter: nydus
             pull-type: guest-pull
             using-nfd: false
             deploy-cmd: deploy-snapshotter
+            vmm: qemu-coco-dev
     runs-on: s390x-large
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
