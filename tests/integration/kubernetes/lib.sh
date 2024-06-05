@@ -57,6 +57,7 @@ k8s_create_pod() {
 		# TODO: run this command for debugging. Maybe it should be
 		#       guarded by DEBUG=true?
 		kubectl get pods "$pod_name"
+		kubectl describe pod "$pod_name"
 		return 1
 	fi
 }
