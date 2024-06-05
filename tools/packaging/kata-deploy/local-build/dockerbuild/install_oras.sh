@@ -15,7 +15,7 @@ function get_installed_oras_version() {
 	oras version | grep Version | sed -e s/Version:// | tr -d [:blank:]
 }
 
-oras_required_version="v1.1.0"
+oras_required_version="v1.2.0"
 if command -v oras; then
 	if [[ "${oras_required_version}" == "v$(get_installed_oras_version)" ]]; then
 		echo "ORAS is already installed in the system"
@@ -28,22 +28,6 @@ if command -v oras; then
 fi
 
 arch=$(uname -m)
-if [ "${arch}" = "ppc64le" ]; then
- 	echo "Building oras from source"
-	go_version="go1.21.3"
- 	# Install go
- 	wget https://go.dev/dl/${go_version}.linux-ppc64le.tar.gz
- 	rm -rf /usr/local/go && tar -C /usr/local -xzf ${go_version}.linux-ppc64le.tar.gz
- 	export PATH=$PATH:/usr/local/go/bin
- 	go version
-
- 	git clone https://github.com/oras-project/oras.git
- 	pushd oras 
-	make build-linux-ppc64le
- 	cp bin/linux/ppc64le/oras ${install_dest}
- 	popd 
- 	exit 0
- fi
 if [ "${arch}" = "x86_64" ]; then
 	arch="amd64"
 fi
