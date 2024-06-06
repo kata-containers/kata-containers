@@ -28,7 +28,7 @@ toml = "0.5.8"
 serde-enum-str = "0.4"
 sysinfo = "0.30.5"
 
-oci = { path = "../oci" }
+oci-spec = { git = "https://github.com/containers/oci-spec-rs.git", rev = "da761c5", features = ["runtime"] }
 safe-path = { path = "../safe-path" }
 
 [dev-dependencies]
