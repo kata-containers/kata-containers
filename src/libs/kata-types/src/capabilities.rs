@@ -127,7 +127,7 @@ mod tests {
         assert!(cap.is_fs_sharing_supported());
 
         // test set hybrid-vsock support
-        cap.set(CapabilityBits::HybridVsockSupport);
+        cap.add(CapabilityBits::HybridVsockSupport);
         assert!(cap.is_hybrid_vsock_supported());
         // test append capabilities
         cap.add(CapabilityBits::GuestMemoryProbe);
