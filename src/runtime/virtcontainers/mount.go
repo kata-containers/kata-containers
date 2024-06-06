@@ -388,7 +388,11 @@ func countFiles(path string, limit int) (numFiles int, err error) {
 		if file.IsDir() {
 			inc, err := countFiles(filepath.Join(path, file.Name()), (limit - numFiles))
 			if err != nil {
-				return numFiles, err
+				return 0, err
+			}
+			// exceeded limit
+			if inc == -1 {
+				return -1, nil
 			}
 			numFiles = numFiles + inc
 		} else {
