@@ -80,6 +80,22 @@ function handle_error() {
 }
 trap 'handle_error $LINENO' ERR
 
+# A wrapper function for kubectl with retry logic
+# runs the command up to 3 times with a 5-second interval
+# to ensure successful execution
+function kubectl_retry() {
+	local max_tries=3
+	local interval=5
+	local i=0
+	while true; do
+		kubectl $@ && return 0 || true
+		i=$((i + 1))
+		[ $i -lt $max_tries ] && echo "'kubectl $@' failed, retrying in $interval seconds" 1>&2 || break
+		sleep $interval
+	done
+	echo "'kubectl $@' failed after $max_tries tries" 1>&2 && return 1
+}
+
 function waitForProcess() {
 	wait_time="$1"
 	sleep_time="$2"
