@@ -16,7 +16,7 @@ async-trait = { version = "0.1.42", optional = true }
 protobuf = { version = "3.2.0" }
 serde = { version = "1.0.130", features = ["derive"], optional = true }
 serde_json = { version = "1.0.68", optional = true }
-oci = { path = "../oci" }
+oci-spec = { git = "https://github.com/containers/oci-spec-rs.git", rev = "da761c5", features = ["runtime"] }
 
 [build-dependencies]
 ttrpc-codegen = "0.4.2"

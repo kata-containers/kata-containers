@@ -776,9 +776,10 @@ dependencies = [
  "libc",
  "nix 0.24.2",
  "num_cpus",
- "oci",
+ "oci-spec",
  "once_cell",
  "rand",
+ "runtime-spec",
  "safe-path",
  "serde",
  "serde_json",
@@ -1450,6 +1451,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.91",
+]
+
+[[package]]
+name = "runtime-spec"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "serde",
+ "serde_derive",
+ "serde_json",
 ]
 
 [[package]]
