@@ -251,7 +251,7 @@ function kbs_k8s_deploy() {
 		echo "Setting up custom PCCS for TDX"
 		cat <<- EOF > "${COCO_KBS_DIR}/config/kubernetes/custom_pccs/sgx_default_qcnl.conf"
 {
- "pccs_url": "https://localhost:8081/sgx/certification/v4/",
+ "pccs_url": "https://$(hostname -i):8081/sgx/certification/v4/",
 
  // To accept insecure HTTPS certificate, set this option to false
  "use_secure_cert": false
