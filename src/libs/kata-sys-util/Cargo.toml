@@ -31,7 +31,8 @@ thiserror = "1.0.30"
 hex = "0.4.3"
 
 kata-types = { path = "../kata-types" }
-oci = { path = "../oci" }
+oci-spec = { git = "https://github.com/containers/oci-spec-rs.git", rev = "da761c5", features = ["runtime"] }
+runtime-spec = { path = "../runtime-spec" }
 safe-path = { path = "../safe-path" }
 
 [dev-dependencies]

@@ -788,6 +788,21 @@ fn umount2<P: AsRef<Path>>(path: P, lazy_umount: bool) -> std::io::Result<()> {
     nix::mount::umount2(path.as_ref(), flags).map_err(io::Error::from)
 }
 
+pub fn get_mount_path(p: &Option<PathBuf>) -> String {
+    p.clone().unwrap_or_default().display().to_string()
+}
+
+pub fn get_mount_options(options: &Option<Vec<String>>) -> Vec<String> {
+    match options {
+        Some(o) => o.to_vec(),
+        None => vec![],
+    }
+}
+
+pub fn get_mount_type(typ: &Option<String>) -> String {
+    typ.clone().unwrap_or("bind".to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
