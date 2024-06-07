@@ -140,16 +140,21 @@ create_common_genpolicy_settings() {
 
 	# TODO: Remove once the Mariner host is reinstated, see #9593.
 	# Set the OCI version to 1.1.0 for "Mariner" (temporary using Ubuntu instead) host.
-	[ "${KATA_HOST_OS}" = "cbl-mariner" ] && sudo sed -i 's|"oci_version": "1\.1\.0-rc\.1"|"oci_version": "1\.1\.0"|' "${default_genpolicy_settings_dir}/genpolicy-settings.json"
+	[ "${KATA_HOST_OS}" = "cbl-mariner" ] && \
+	sudo sed -i 's|"oci_version": "1\.1\.0-rc\.1"|"oci_version": "1\.1\.0"|' "${default_genpolicy_settings_dir}/genpolicy-settings.json"
 
 	# Set the OCI version to 1.2.0 for "qemu-tdx" hypervisor.
-	[ "${KATA_HYPERVISOR}" = "qemu-tdx" ] && sudo sed -i 's|"oci_version": "1\.1\.0-rc\.1"|"oci_version": "1\.2\.0"|' "${default_genpolicy_settings_dir}/genpolicy-settings.json"
+	[ "${KATA_HYPERVISOR}" = "qemu-tdx" ] && \
+	sudo sed -i 's|"oci_version": "1\.1\.0-rc\.1"|"oci_version": "1\.2\.0"|' "${default_genpolicy_settings_dir}/genpolicy-settings.json"
 
-	# Set cpath to /run/kata-containers for "qemu-sev" hypervisor.
-	[ "${KATA_HYPERVISOR}" = "qemu-sev" ] && sudo sed -i 's|"cpath": "/run/kata-containers/shared/containers"|"cpath": "/run/kata-containers"|' "${default_genpolicy_settings_dir}/genpolicy-settings.json"
-
+	# Set cpath to /run/kata-containers, remove "watchable" from configmap mountpoint for "qemu-snp", "qemu-tdx, and ""qemu-sev" hypervisor.
+	{ [ "${KATA_HYPERVISOR}" = "qemu-snp" ] || [ "${KATA_HYPERVISOR}" = "qemu-tdx" ] || [ "${KATA_HYPERVISOR}" = "qemu-sev" ]; } && \
+	sudo sed -i 's|"cpath": "/run/kata-containers/shared/containers"|"cpath": "/run/kata-containers"|' "${default_genpolicy_settings_dir}/genpolicy-settings.json" && \
+	sudo sed -i 's|/watchable||g' "${default_genpolicy_settings_dir}/genpolicy-settings.json"
+	
 	# update the bundle path prefix for k3s
-	[ "${KUBERNETES}" = "k3s" ] && sudo sed -i 's|"bundle_path_prefix": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/"|"bundle_path_prefix": "/run/k3s/containerd/io.containerd.runtime.v2.task/k8s.io/"|' "${default_genpolicy_settings_dir}/genpolicy-settings.json"
+	[ "${KUBERNETES}" = "k3s" ] && \
+	sudo sed -i 's|"bundle_path_prefix": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/"|"bundle_path_prefix": "/run/k3s/containerd/io.containerd.runtime.v2.task/k8s.io/"|' "${default_genpolicy_settings_dir}/genpolicy-settings.json"
 	
 	cat "${default_genpolicy_settings_dir}/genpolicy-settings.json"
 	

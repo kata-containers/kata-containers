@@ -53,7 +53,7 @@ setup() {
 }
 
 @test "Successful pod with auto-generated policy and runtimeClassName filter" {
-	runtime_class_name=$(yq read "${testcase_pre_generate_pod_yaml}" "spec.runtimeClassName")
+	runtime_class_name=$(yq ".spec.runtimeClassName" < "${testcase_pre_generate_pod_yaml}" )
 
 	auto_generate_policy "${pod_config_dir}" "${testcase_pre_generate_pod_yaml}" "${testcase_pre_generate_configmap_yaml}" \
 		"--runtime-class-names=other-runtime-class-name --runtime-class-names=${runtime_class_name}" 
@@ -146,7 +146,7 @@ test_pod_policy_error() {
 
 @test "RuntimeClassName filter: no policy" {
 	# The policy should not be generated because the pod spec does not have a runtimeClassName.
-	runtime_class_name=$(yq read "${testcase_pre_generate_pod_yaml}" "spec.runtimeClassName")
+	runtime_class_name=$(yq ".spec.runtimeClassName" < "${testcase_pre_generate_pod_yaml}")
 
 	auto_generate_policy "${pod_config_dir}" "${testcase_pre_generate_pod_yaml}" "${testcase_pre_generate_configmap_yaml}" \
 		"--runtime-class-names=other-${runtime_class_name}"
