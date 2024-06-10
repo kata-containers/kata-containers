@@ -33,6 +33,7 @@ jobs:
           - clh
           - dragonball
           - qemu
+          - qemu-runtime-rs
         include:
           - host_os: cbl-mariner
             vmm: clh
