@@ -275,14 +275,15 @@ function run_tests() {
 	# and enable cri plugin in containerd config.
 	# TODO: enable testing auto-generated policy for other types of hosts too.
 
-	if [ "${KATA_HOST_OS}" = "cbl-mariner" ]; then
+	if [ "${KATA_HOST_OS}" = "cbl-mariner" ] || [ "${KATA_HYPERVISOR}" = "qemu-sev" ] ; then
 
 		export AUTO_GENERATE_POLICY="yes"
-
-		# set default containerd config
-		sudo containerd config default | sudo tee /etc/containerd/config.toml > /dev/null
-		echo "containerd config has been set to default"
-		sudo systemctl restart containerd && sudo systemctl is-active containerd
+		if [ "${GENPOLICY_PULL_METHOD}" = "containerd" ]; then
+			# set default containerd config
+			sudo containerd config default | sudo tee /etc/containerd/config.toml > /dev/null
+			echo "containerd config has been set to default"
+			sudo systemctl restart containerd && sudo systemctl is-active containerd
+		fi
 	fi
 
 	set_test_cluster_namespace

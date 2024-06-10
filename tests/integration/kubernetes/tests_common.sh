@@ -130,6 +130,26 @@ auto_generate_policy_enabled() {
 	[ "${AUTO_GENERATE_POLICY}" == "yes" ]
 }
 
+# adapt common policy settings for qemu-sev
+adapt_common_policy_settings_for_sev() {
+
+	local settings_dir=$1
+
+	info "Adapting common policy settings for SEV"
+	jq '.kata_config.oci_version = "1.1.0-rc.1" | .common.cpath = "/run/kata-containers" | .volumes.configMap.mount_point = "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-"' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+}
+
+# adapt common policy settings for various platforms
+adapt_common_policy_settings() {
+
+	local settings_dir=$1
+
+	case "${KATA_HYPERVISOR}" in
+  		"qemu-sev")
+			adapt_common_policy_settings_for_sev "${settings_dir}"
+	esac
+}
+
 # If auto-generated policy testing is enabled, make a copy of the genpolicy settings,
 # and change these settings to use Kata CI cluster's default namespace.
 create_common_genpolicy_settings() {
@@ -138,14 +158,18 @@ create_common_genpolicy_settings() {
 
 	auto_generate_policy_enabled || return 0
 
+	adapt_common_policy_settings "${default_genpolicy_settings_dir}"
+
 	cp "${default_genpolicy_settings_dir}/genpolicy-settings.json" "${genpolicy_settings_dir}"
 	cp "${default_genpolicy_settings_dir}/rules.rego" "${genpolicy_settings_dir}"
 
 	# Set the default namespace of Kata CI tests in the genpolicy settings.
 	set_namespace_to_policy_settings "${genpolicy_settings_dir}" "${TEST_CLUSTER_NAMESPACE}"
 
-	# allow genpolicy to access containerd without sudo
-	sudo chmod a+rw /var/run/containerd/containerd.sock
+	if [ "${GENPOLICY_PULL_METHOD}" == "containerd" ]; then
+		# allow genpolicy to access containerd without sudo
+		sudo chmod a+rw /var/run/containerd/containerd.sock
+	fi
 }
 
 # If auto-generated policy testing is enabled, make a copy of the common genpolicy settings
