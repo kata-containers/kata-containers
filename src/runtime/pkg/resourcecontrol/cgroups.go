@@ -192,7 +192,7 @@ func NewSandboxResourceController(path string, resources *specs.LinuxResources, 
 
 	// Create systemd cgroup
 	if cgroups.Mode() == cgroups.Legacy || cgroups.Mode() == cgroups.Hybrid {
-		cgHierarchy, cgPath, err := cgroupHierarchy(path)
+		cgHierarchy, cgPath, err := cgroupHierarchy(path, sandboxCgroupOnly)
 		if err != nil {
 			return nil, err
 		}
@@ -200,18 +200,21 @@ func NewSandboxResourceController(path string, resources *specs.LinuxResources, 
 		// load created cgroup and update with resources
 		cg, err := cgroups.Load(cgHierarchy, cgPath)
 		if err != nil {
-			if cg.Update(&sandboxResources); err != nil {
-				return nil, err
-			}
+			controllerLogger.WithField("source", "cgroups").Errorf("failed to load cgroup, path: %v cgPath: %v", path, cgPath)
+			return nil, err
+		}
+		if cg.Update(&sandboxResources); err != nil {
+			return nil, err
 		}
 		cgroup = cg
 	} else if cgroups.Mode() == cgroups.Unified {
 		// load created cgroup and update with resources
 		cg, err := cgroupsv2.LoadSystemd(slice, unit)
 		if err != nil {
-			if cg.Update(cgroupsv2.ToResources(&sandboxResources)); err != nil {
-				return nil, err
-			}
+			return nil, err
+		}
+		if cg.Update(cgroupsv2.ToResources(&sandboxResources)); err != nil {
+			return nil, err
 		}
 		cgroup = cg
 	} else {
@@ -226,19 +229,20 @@ func NewSandboxResourceController(path string, resources *specs.LinuxResources, 
 	}, nil
 }
 
-func LoadResourceController(path string) (ResourceController, error) {
+func LoadResourceController(path string, sandboxCgroupOnly bool) (ResourceController, error) {
 	var err error
 	var cgroup interface{}
 
 	// load created cgroup and update with resources
 	if cgroups.Mode() == cgroups.Legacy || cgroups.Mode() == cgroups.Hybrid {
-		cgHierarchy, cgPath, err := cgroupHierarchy(path)
+		cgHierarchy, cgPath, err := cgroupHierarchy(path, sandboxCgroupOnly)
 		if err != nil {
 			return nil, err
 		}
 
 		cgroup, err = cgroups.Load(cgHierarchy, cgPath)
 		if err != nil {
+			controllerLogger.WithField("source", "cgroups").Errorf("cgPath: %v", cgPath)
 			return nil, err
 		}
 	} else if cgroups.Mode() == cgroups.Unified {
@@ -331,10 +335,10 @@ func (c *LinuxCgroup) Update(resources *specs.LinuxResources) error {
 	}
 }
 
-func (c *LinuxCgroup) MoveTo(path string) error {
+func (c *LinuxCgroup) MoveTo(path string, sandboxCgroupOnly bool) error {
 	switch cg := c.cgroup.(type) {
 	case cgroups.Cgroup:
-		cgHierarchy, cgPath, err := cgroupHierarchy(path)
+		cgHierarchy, cgPath, err := cgroupHierarchy(path, sandboxCgroupOnly)
 		if err != nil {
 			return err
 		}

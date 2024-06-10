@@ -44,7 +44,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/annotations"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cpuset"
-	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 
@@ -1031,10 +1030,8 @@ func (s *Sandbox) Delete(ctx context.Context) error {
 		}
 	}
 
-	if !rootless.IsRootless() {
-		if err := s.resourceControllerDelete(); err != nil {
-			s.Logger().WithError(err).Errorf("failed to cleanup the %s resource controllers", s.sandboxController)
-		}
+	if err := s.resourceControllerDelete(); err != nil {
+		s.Logger().WithError(err).Errorf("failed to cleanup the %s resource controllers", s.sandboxController)
 	}
 
 	if s.monitor != nil {
@@ -2596,13 +2593,13 @@ func (s *Sandbox) resourceControllerDelete() error {
 		return nil
 	}
 
-	sandboxController, err := resCtrl.LoadResourceController(s.state.SandboxCgroupPath)
+	sandboxController, err := resCtrl.LoadResourceController(s.state.SandboxCgroupPath, s.config.SandboxCgroupOnly)
 	if err != nil {
 		return err
 	}
 
 	resCtrlParent := sandboxController.Parent()
-	if err := sandboxController.MoveTo(resCtrlParent); err != nil {
+	if err := sandboxController.MoveTo(resCtrlParent, s.config.SandboxCgroupOnly); err != nil {
 		return err
 	}
 
@@ -2611,13 +2608,13 @@ func (s *Sandbox) resourceControllerDelete() error {
 	}
 
 	if s.state.OverheadCgroupPath != "" {
-		overheadController, err := resCtrl.LoadResourceController(s.state.OverheadCgroupPath)
+		overheadController, err := resCtrl.LoadResourceController(s.state.OverheadCgroupPath, s.config.SandboxCgroupOnly)
 		if err != nil {
 			return err
 		}
 
 		resCtrlParent := overheadController.Parent()
-		if err := s.overheadController.MoveTo(resCtrlParent); err != nil {
+		if err := s.overheadController.MoveTo(resCtrlParent, s.config.SandboxCgroupOnly); err != nil {
 			return err
 		}
 

@@ -55,8 +55,8 @@ func newProperty(name string, units interface{}) systemdDbus.Property {
 	}
 }
 
-func cgroupHierarchy(path string) (cgroups.Hierarchy, cgroups.Path, error) {
-	if !IsSystemdCgroup(path) {
+func cgroupHierarchy(path string, sandboxCgroupOnly bool) (cgroups.Hierarchy, cgroups.Path, error) {
+	if !IsSystemdCgroup(path) || !sandboxCgroupOnly {
 		return cgroups.V1, cgroups.StaticPath(path), nil
 	} else {
 		slice, unit, err := getSliceAndUnit(path)
