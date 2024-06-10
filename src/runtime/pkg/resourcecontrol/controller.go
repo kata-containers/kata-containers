@@ -69,7 +69,7 @@ type ResourceController interface {
 	Update(*specs.LinuxResources) error
 
 	// MoveTo moves a controller to another one.
-	MoveTo(string) error
+	MoveTo(string, bool) error
 
 	// AddDevice adds a device resource to the controller.
 	AddDevice(string) error
