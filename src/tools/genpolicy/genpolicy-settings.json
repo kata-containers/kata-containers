@@ -269,7 +269,8 @@
         ]
     },
     "kata_config": {
-        "confidential_guest": false
+        "confidential_guest": false,
+        "oci_version": "1.1.0"
     },
     "cluster_config": {
         "default_namespace": "default",
