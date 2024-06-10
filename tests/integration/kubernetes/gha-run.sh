@@ -220,12 +220,12 @@ function deploy_kata() {
 	grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" || die "Failed to setup the tests image"
 	echo "::endgroup::"
 
-	kubectl apply -f "${tools_dir}/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
+	kubectl_retry apply -f "${tools_dir}/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
 	case "${KUBERNETES}" in
-		k0s) kubectl apply -k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k0s" ;;
-		k3s) kubectl apply -k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k3s" ;;
-		rke2) kubectl apply -k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/rke2" ;;
-		*) kubectl apply -f "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
+		k0s) kubectl_retry apply -k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k0s" ;;
+		k3s) kubectl_retry apply -k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k3s" ;;
+		rke2) kubectl_retry apply -k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/rke2" ;;
+		*) kubectl_retry apply -f "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 	esac
 
 	local cmd="kubectl -n kube-system get -l name=kata-deploy pod 2>/dev/null | grep '\<Running\>'"
@@ -241,11 +241,11 @@ function deploy_kata() {
 	fi
 
 	echo "::group::kata-deploy logs"
-	kubectl -n kube-system logs --tail=100 -l name=kata-deploy
+	kubectl_retry -n kube-system logs --tail=100 -l name=kata-deploy
 	echo "::endgroup::"
 
 	echo "::group::Runtime classes"
-	kubectl get runtimeclass
+	kubectl_retry get runtimeclass
 	echo "::endgroup::"
 }
 
@@ -395,7 +395,7 @@ function cleanup_kata_deploy() {
 	esac
 
 	# shellcheck disable=2086
-	kubectl delete ${deploy_spec}
+	kubectl_retry delete --ignore-not-found ${deploy_spec}
 	kubectl -n kube-system wait --timeout=10m --for=delete -l name=kata-deploy pod
 
 	# Let the `kata-deploy` script take care of the runtime class creation / removal
@@ -419,12 +419,12 @@ function cleanup_kata_deploy() {
 	cat "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
 	grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" || die "Failed to setup the tests image"
 	# shellcheck disable=2086
-	kubectl apply ${cleanup_spec}
+	kubectl_retry apply ${cleanup_spec}
 	sleep 180s
 
 	# shellcheck disable=2086
-	kubectl delete ${cleanup_spec}
-	kubectl delete -f "${tools_dir}/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
+	kubectl_retry delete --ignore-not-found ${cleanup_spec}
+	kubectl_retry delete --ignore-not-found -f "${tools_dir}/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
 }
 
 function cleanup() {
@@ -513,11 +513,11 @@ function deploy_nydus_snapshotter() {
 		misc/snapshotter/base/nydus-snapshotter.yaml
 
 	# Deploy nydus snapshotter as a daemonset
-	kubectl create -f "misc/snapshotter/nydus-snapshotter-rbac.yaml"
+	kubectl_retry create -f "misc/snapshotter/nydus-snapshotter-rbac.yaml"
 	if [ "${KUBERNETES}" = "k3s" ]; then
-		kubectl apply -k "misc/snapshotter/overlays/k3s"
+		kubectl_retry apply -k "misc/snapshotter/overlays/k3s"
 	else
-		kubectl apply -f "misc/snapshotter/base/nydus-snapshotter.yaml"
+		kubectl_retry apply -f "misc/snapshotter/base/nydus-snapshotter.yaml"
 	fi
 	popd
 
@@ -525,9 +525,9 @@ function deploy_nydus_snapshotter() {
 
 	echo "::endgroup::"
 	echo "::group::nydus snapshotter logs"
-	pods_name=$(kubectl get pods --selector=app=nydus-snapshotter -n nydus-system -o=jsonpath='{.items[*].metadata.name}')
-	kubectl logs "${pods_name}" -n nydus-system
-	kubectl describe pod "${pods_name}" -n nydus-system
+	pods_name=$(kubectl_retry get pods --selector=app=nydus-snapshotter -n nydus-system -o=jsonpath='{.items[*].metadata.name}')
+	kubectl_retry logs "${pods_name}" -n nydus-system
+	kubectl_retry describe pod "${pods_name}" -n nydus-system
 	echo "::endgroup::"
 }
 
@@ -542,13 +542,13 @@ function cleanup_nydus_snapshotter() {
 	pushd "$nydus_snapshotter_install_dir"
 
 	if [ "${KUBERNETES}" = "k3s" ]; then
-		kubectl delete -k "misc/snapshotter/overlays/k3s"
+		kubectl_retry delete --ignore-not-found -k "misc/snapshotter/overlays/k3s"
 	else
-		kubectl delete -f "misc/snapshotter/base/nydus-snapshotter.yaml"
+		kubectl_retry delete --ignore-not-found -f "misc/snapshotter/base/nydus-snapshotter.yaml"
 	fi
 	sleep 180s
-	kubectl delete -f "misc/snapshotter/nydus-snapshotter-rbac.yaml"
-	kubectl get namespace nydus-system -o json | jq 'del(.spec.finalizers)' | kubectl replace --raw "/api/v1/namespaces/nydus-system/finalize" -f - || true
+	kubectl_retry delete --ignore-not-found -f "misc/snapshotter/nydus-snapshotter-rbac.yaml"
+	kubectl_retry get namespace nydus-system -o json | jq 'del(.spec.finalizers)' | kubectl_retry replace --raw "/api/v1/namespaces/nydus-system/finalize" -f - || true
 	popd
 	sleep 30s
 	echo "::endgroup::"
