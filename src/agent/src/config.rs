@@ -66,6 +66,7 @@ const ERR_INVALID_GUEST_COMPONENTS_PROCS_VALUE: &str = "invalid guest components
 #[derive(Clone, Copy, Debug, Default, Display, Deserialize, EnumString, PartialEq)]
 // Features seem to typically be in kebab-case format, but we only have single words at the moment
 #[strum(serialize_all = "kebab-case")]
+#[serde(rename_all = "kebab-case")]
 pub enum GuestComponentsFeatures {
     All,
     Attestation,
@@ -76,6 +77,7 @@ pub enum GuestComponentsFeatures {
 #[derive(Clone, Copy, Debug, Default, Display, Deserialize, EnumString, PartialEq)]
 /// Attestation-related processes that we want to spawn as children of the agent
 #[strum(serialize_all = "kebab-case")]
+#[serde(rename_all = "kebab-case")]
 pub enum GuestComponentsProcs {
     None,
     /// ApiServerRest implies ConfidentialDataHub and AttestationAgent
@@ -224,6 +226,7 @@ impl FromStr for AgentConfig {
             agent_config,
             guest_components_rest_api
         );
+        config_override!(agent_config_builder, agent_config, guest_components_procs);
 
         Ok(agent_config)
     }
@@ -1655,6 +1658,8 @@ Caused by:
             r#"
                dev_mode = true
                server_addr = 'vsock://8:2048'
+               guest_components_procs = "api-server-rest"
+               guest_components_rest_api = "all"
               "#,
         )
         .unwrap();
@@ -1662,6 +1667,14 @@ Caused by:
         // Verify that the override worked
         assert!(config.dev_mode);
         assert_eq!(config.server_addr, "vsock://8:2048");
+        assert_eq!(
+            config.guest_components_procs,
+            GuestComponentsProcs::ApiServerRest
+        );
+        assert_eq!(
+            config.guest_components_rest_api,
+            GuestComponentsFeatures::All
+        );
 
         // Verify that the default values are valid
         assert_eq!(config.hotplug_timeout, DEFAULT_HOTPLUG_TIMEOUT);
