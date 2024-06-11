@@ -244,7 +244,7 @@ impl PCIeTopology {
         let to_string = |v: u32| -> String { to_pcipath(v).to_string() };
 
         // find the first available index as the allocated slot.
-        let allocated_slot = (0..PCIE_ROOT_BUS_SLOTS_CAPACITY).find(|&i| {
+        let allocated_slot = (1..PCIE_ROOT_BUS_SLOTS_CAPACITY).find(|&i| {
             !self
                 .root_complex
                 .root_bus_devices
