@@ -457,7 +457,7 @@ func failOutstandingCommands(cmdQueue *list.List) {
 		cmd := e.Value.(*qmpCommand)
 		select {
 		case cmd.res <- qmpResult{
-			err: errors.New("exitting QMP loop, command cancelled"),
+			err: errors.New("exiting QMP loop, command cancelled"),
 		}:
 		case <-cmd.ctx.Done():
 		}
@@ -626,7 +626,7 @@ func (q *QMP) executeCommandWithResponse(ctx context.Context, name string, args 
 	resCh := make(chan qmpResult)
 	select {
 	case <-q.disconnectedCh:
-		err = errors.New("exitting QMP loop, command cancelled")
+		err = errors.New("exiting QMP loop, command cancelled")
 	case q.cmdCh <- qmpCommand{
 		ctx:    ctx,
 		res:    resCh,
