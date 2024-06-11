@@ -57,9 +57,15 @@ pub struct ImageService {
 
 impl ImageService {
     pub fn new() -> Self {
+        let mut image_client = ImageClient::new(PathBuf::from(KATA_IMAGE_WORK_DIR));
+        let images = HashMap::new();
+        if let Some(registry_auth) = &AGENT_CONFIG.image_registry_auth {
+            debug!(sl(), "Set registry auth file {:?}", registry_auth);
+            image_client.config.file_paths.auth_file = registry_auth.to_string_lossy().into();
+        }
         Self {
-            image_client: ImageClient::new(PathBuf::from(KATA_IMAGE_WORK_DIR)),
-            images: HashMap::new(),
+            image_client,
+            images,
         }
     }
 
@@ -287,9 +293,16 @@ pub async fn merge_bundle_oci(container_oci: &mut oci::Spec) -> Result<()> {
 }
 
 /// Init the image service
-pub async fn init_image_service() {
+pub async fn init_image_service() -> Result<()> {
+    if let Some(file) = &AGENT_CONFIG.image_registry_auth {
+        if !file.exists() {
+            bail!("The image registry auth file {:?} does not exist", file);
+        }
+    }
+
     let image_service = ImageService::new();
     *IMAGE_SERVICE.lock().await = Some(image_service);
+    Ok(())
 }
 
 pub async fn pull_image(

@@ -7,6 +7,7 @@ use anyhow::{anyhow, bail, ensure, Context, Result};
 use serde::Deserialize;
 use std::env;
 use std::fs;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::time;
 use strum_macros::{Display, EnumString};
@@ -29,6 +30,8 @@ const UNIFIED_CGROUP_HIERARCHY_OPTION: &str = "systemd.unified_cgroup_hierarchy"
 const CONFIG_FILE: &str = "agent.config_file";
 const GUEST_COMPONENTS_REST_API_OPTION: &str = "agent.guest_components_rest_api";
 const GUEST_COMPONENTS_PROCS_OPTION: &str = "agent.guest_components_procs";
+#[cfg(feature = "guest-pull")]
+const IMAGE_REGISTRY_AUTH_OPTION: &str = "agent.image_registry_auth";
 
 // Configure the proxy settings for HTTPS requests in the guest,
 // to solve the problem of not being able to access the specified image in some cases.
@@ -104,6 +107,8 @@ pub struct AgentConfig {
     pub no_proxy: String,
     pub guest_components_rest_api: GuestComponentsFeatures,
     pub guest_components_procs: GuestComponentsProcs,
+    #[cfg(feature = "guest-pull")]
+    pub image_registry_auth: Option<PathBuf>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -123,6 +128,8 @@ pub struct AgentConfigBuilder {
     pub no_proxy: Option<String>,
     pub guest_components_rest_api: Option<GuestComponentsFeatures>,
     pub guest_components_procs: Option<GuestComponentsProcs>,
+    #[cfg(feature = "guest-pull")]
+    pub image_registry_auth: Option<Option<PathBuf>>,
 }
 
 macro_rules! config_override {
@@ -188,6 +195,8 @@ impl Default for AgentConfig {
             no_proxy: String::from(""),
             guest_components_rest_api: GuestComponentsFeatures::default(),
             guest_components_procs: GuestComponentsProcs::default(),
+            #[cfg(feature = "guest-pull")]
+            image_registry_auth: None,
         }
     }
 }
@@ -224,6 +233,7 @@ impl FromStr for AgentConfig {
             agent_config,
             guest_components_rest_api
         );
+        config_override!(agent_config_builder, agent_config, image_registry_auth);
 
         Ok(agent_config)
     }
@@ -336,6 +346,12 @@ impl AgentConfig {
                 GUEST_COMPONENTS_PROCS_OPTION,
                 config.guest_components_procs,
                 get_guest_components_procs_value
+            );
+            parse_cmdline_param!(
+                param,
+                IMAGE_REGISTRY_AUTH_OPTION,
+                config.image_registry_auth,
+                get_image_registry_auth_value
             );
         }
 
@@ -494,13 +510,29 @@ fn get_url_value(param: &str) -> Result<String> {
 fn get_guest_components_features_value(param: &str) -> Result<GuestComponentsFeatures> {
     let fields: Vec<&str> = param.split('=').collect();
     ensure!(fields.len() >= 2, ERR_INVALID_GET_VALUE_PARAM);
+    // We need name (but the value can be blank)
+    ensure!(!fields[0].is_empty(), ERR_INVALID_GET_VALUE_NO_NAME);
+    let value = fields[1..].join("=");
+    GuestComponentsFeatures::from_str(&value)
+        .map_err(|_| anyhow!(ERR_INVALID_GUEST_COMPONENTS_REST_API_VALUE))
+}
+
+#[cfg(feature = "guest-pull")]
+#[instrument]
+fn get_image_registry_auth_value(param: &str) -> Result<Option<PathBuf>> {
+    let fields: Vec<&str> = param.split('=').collect();
+    ensure!(fields.len() >= 2, ERR_INVALID_GET_VALUE_PARAM);
 
     // We need name (but the value can be blank)
     ensure!(!fields[0].is_empty(), ERR_INVALID_GET_VALUE_NO_NAME);
 
     let value = fields[1..].join("=");
-    GuestComponentsFeatures::from_str(&value)
-        .map_err(|_| anyhow!(ERR_INVALID_GUEST_COMPONENTS_REST_API_VALUE))
+
+    if value.is_empty() {
+        return Err(anyhow!(ERR_INVALID_GET_VALUE_NO_VALUE));
+    }
+
+    Ok(Some(value.into()))
 }
 
 #[instrument]
@@ -556,6 +588,7 @@ mod tests {
             no_proxy: &'a str,
             guest_components_rest_api: GuestComponentsFeatures,
             guest_components_procs: GuestComponentsProcs,
+            image_registry_auth: Option<&'a str>,
         }
 
         impl Default for TestData<'_> {
@@ -575,6 +608,7 @@ mod tests {
                     no_proxy: "",
                     guest_components_rest_api: GuestComponentsFeatures::default(),
                     guest_components_procs: GuestComponentsProcs::default(),
+                    image_registry_auth: None,
                 }
             }
         }
@@ -999,6 +1033,12 @@ mod tests {
                 guest_components_procs: GuestComponentsProcs::None,
                 ..Default::default()
             },
+            #[cfg(feature = "guest-pull")]
+            TestData {
+                contents: "agent.image_registry_auth=/root/.docker/config.json",
+                image_registry_auth: Some("/root/.docker/config.json"),
+                ..Default::default()
+            },
         ];
 
         let dir = tempdir().expect("failed to create tmpdir");
@@ -1055,6 +1095,12 @@ mod tests {
             );
             assert_eq!(
                 d.guest_components_procs, config.guest_components_procs,
+                "{}",
+                msg
+            );
+            assert_eq!(
+                d.image_registry_auth.map(|a| a.into()),
+                config.image_registry_auth,
                 "{}",
                 msg
             );
@@ -1580,6 +1626,53 @@ Caused by:
             let msg = format!("test[{}]: {:?}", i, d);
 
             let result = get_guest_components_features_value(d.param);
+
+            let msg = format!("{}: result: {:?}", msg, result);
+
+            assert_result!(d.result, result, msg);
+        }
+    }
+
+    #[cfg(feature = "guest-pull")]
+    #[test]
+    fn test_get_image_registry_auth_value() {
+        #[derive(Debug)]
+        struct TestData<'a> {
+            param: &'a str,
+            result: Result<Option<PathBuf>>,
+        }
+
+        let tests = &[
+            TestData {
+                param: "",
+                result: Err(anyhow!(ERR_INVALID_GET_VALUE_PARAM)),
+            },
+            TestData {
+                param: "=",
+                result: Err(anyhow!(ERR_INVALID_GET_VALUE_NO_NAME)),
+            },
+            TestData {
+                param: "==",
+                result: Err(anyhow!(ERR_INVALID_GET_VALUE_NO_NAME)),
+            },
+            TestData {
+                param: "x=/some/file",
+                result: Ok(Some("/some/file".into())),
+            },
+            TestData {
+                param: "x=a_file",
+                result: Ok(Some("a_file".into())),
+            },
+            TestData {
+                param: "x=",
+                result: Err(anyhow!(ERR_INVALID_GET_VALUE_NO_VALUE)),
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            let result = get_image_registry_auth_value(d.param);
 
             let msg = format!("{}: result: {:?}", msg, result);
 
