@@ -15,7 +15,7 @@ PROJECT_COMPONENT = kata-agent
 TARGET = $(PROJECT_COMPONENT)
 
 VERSION_FILE := ./VERSION
-VERSION := $(shell grep -v ^\# $(VERSION_FILE))
+VERSION := $(shell grep -v ^\# $(VERSION_FILE) 2>/dev/null || echo "unknown")
 COMMIT_NO := $(shell git rev-parse HEAD 2>/dev/null || true)
 COMMIT := $(if $(shell git status --porcelain --untracked-files=no 2>/dev/null || true),${COMMIT_NO}-dirty,${COMMIT_NO})
 COMMIT_MSG = $(if $(COMMIT),$(COMMIT),unknown)
