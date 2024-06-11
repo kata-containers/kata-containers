@@ -10,23 +10,38 @@ set -o nounset
 set -o pipefail
 set -o errtrace
 
+script_dir=$(dirname "$(readlink -f "$0")")
+
 # Explicitly export LC_ALL to ensure `sort` sorting is expected on
 # different environments.
 export LC_ALL=C
 
-pushd tools/packaging/kata-deploy/runtimeclasses/
+readonly generated_file="resultingRuntimeClasses.yaml"
+readonly original_file="kata-runtimeClasses.yaml"
+
+pushd "${script_dir}/../runtimeclasses/"
+rm -f $generated_file
+
 echo "::group::Combine runtime classes"
-for runtimeClass in `find . -type f \( -name "*.yaml" -and -not -name "kata-runtimeClasses.yaml" \) | sort`; do
-    echo "Adding ${runtimeClass} to the resultingRuntimeClasses.yaml"
-    cat ${runtimeClass} >> resultingRuntimeClasses.yaml;
+for runtimeClass in $(find . -type f \( -name "*.yaml" -and -not -name "kata-runtimeClasses.yaml" \) | sort); do
+    echo "Adding ${runtimeClass} to the $generated_file"
+    cat "${runtimeClass}" >> $generated_file;
 done
 echo "::endgroup::"
-echo "::group::Displaying the content of resultingRuntimeClasses.yaml"
-cat resultingRuntimeClasses.yaml
+
+echo "::group::Displaying the content of $generated_file"
+cat $generated_file
 echo "::endgroup::"
+
 echo ""
-echo "::group::Displaying the content of kata-runtimeClasses.yaml"
-cat kata-runtimeClasses.yaml
+echo "::group::Displaying the content of $original_file"
+cat $original_file
 echo "::endgroup::"
+
 echo ""
-diff resultingRuntimeClasses.yaml kata-runtimeClasses.yaml
+if ! diff $generated_file $original_file; then
+    echo ""
+    echo "CHECKER FAILED: files $(pwd)/$generated_file (GENERATED) and $(pwd)/$original_file differ"
+    exit 1
+fi
+echo "CHECKER PASSED"
