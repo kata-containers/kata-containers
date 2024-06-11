@@ -1,3 +1,5 @@
+name: Static checks
+
 on:
   pull_request:
     types:
@@ -5,7 +7,8 @@ on:
       - edited
       - reopened
       - synchronize
-
+    paths:
+      - 'tools/packaging/kata-deploy/runtimeclasses/**'
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
