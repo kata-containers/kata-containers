@@ -74,7 +74,7 @@ impl Settings {
             debug!("settings = {:?}", &settings);
             settings
         } else {
-            panic!("Cannot open file {}. Please copy it to the current directory or specify the path to it using the -p parameter.",
+            panic!("Cannot open file {}. Please copy it to the current directory or specify the path to it using the -j parameter.",
                 json_settings_path);
         }
     }
