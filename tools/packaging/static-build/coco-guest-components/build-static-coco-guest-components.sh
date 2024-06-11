@@ -28,11 +28,11 @@ build_coco_guest_components_from_source() {
 	git fetch --depth=1 origin "${coco_guest_components_version}"
 	git checkout FETCH_HEAD
 
-	DESTDIR="${DESTDIR}/usr/local/bin" TEE_PLATFORM=${TEE_PLATFORM} make build
+	DESTDIR="${DESTDIR}/usr/local/bin" RESOURCE_PROVIDER=${RESOURCE_PROVIDER} TEE_PLATFORM=${TEE_PLATFORM} make build
 	strip "target/${RUST_ARCH}-unknown-linux-${LIBC}/release/confidential-data-hub"
 	strip "target/${RUST_ARCH}-unknown-linux-${LIBC}/release/attestation-agent"
 	strip "target/${RUST_ARCH}-unknown-linux-${LIBC}/release/api-server-rest"
-	DESTDIR="${DESTDIR}/usr/local/bin" TEE_PLATFORM=${TEE_PLATFORM} make install
+	DESTDIR="${DESTDIR}/usr/local/bin" RESOURCE_PROVIDER=${RESOURCE_PROVIDER} TEE_PLATFORM=${TEE_PLATFORM} make install
 	popd
 }
 
