@@ -50,6 +50,7 @@ jobs:
           - stratovirt
           - rootfs-image
           - rootfs-image-confidential
+          - rootfs-image-mariner
           - rootfs-initrd
           - rootfs-initrd-confidential
           - rootfs-initrd-mariner
