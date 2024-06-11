@@ -280,3 +280,54 @@ This DaemonSet runs of the node has the label `katacontainers.io/kata-runtime=cl
 the `katacontainers.io/kata-runtime` label as well as restarts either CRI-O or `containerd` `systemctl`
 daemon. You cannot execute these resets during the `preStopHook` of the Kata installer DaemonSet,
 which necessitated this final cleanup DaemonSet.
+
+## Development
+
+This section is for developers who need to fix, extend and/or implement features to Kata deploy.
+
+### Adding a new runtimeClass
+
+Kata deploy installs and configures [Kubernetes runtime classes](https://kubernetes.io/docs/concepts/containers/runtime-class/)
+matching the several Kata Containers [runtime configuration files](../../../src/runtime/config/).
+
+The deployed runtimeClass yaml files are hosted at [`runtimeclasses`](./runtimeclasses/) directory. In particular,
+[`kata-runtimeClasses.yaml`](./runtimeclasses/kata-runtimeClasses.yaml) isn't properly a runtimeClass file but rather
+its content is just the concatenation of all other yaml files in the directory.
+
+If you need to add a new runtimeClass then do:
+
+ * Create the runtimeClass yaml file in [`runtimeclasses`](./runtimeclasses/). Follows the name convention of `kata-<MY-RUNTIME-CLASS-NAME>.yaml`.
+ * Update [`kata-runtimeClasses.yaml`](./runtimeclasses/kata-runtimeClasses.yaml). Notice that the entries are sorted by runtimeClass name.
+ * Update the list of `SHIMS` in [kata-deploy/base/kata-deploy.yaml](./kata-deploy/base/kata-deploy.yaml) and [kata-cleanup/base/kata-cleanup.yaml](./kata-cleanup/base/kata-cleanup.yaml)
+ * (Optional) If the new runtimeClass matches a [runtime-rs configuration file](../../../src/runtime-rs/config/) then you will need to extend the runtime-rs handlers in [scripts/kata-deploy.sh](./scripts/kata-deploy.sh). As an example, you can implement the same handlers in `get_kata_containers_config_path()` and `configure_different_shims_base()` as needed for the `dragonball` runtimeClass.
+ * Run the [`check-runtimeclasses.sh`](./local-build/check-runtimeclasses.sh) script ensure `kata-runtimeClasses.yaml` is correct. For example:
+   ```
+   $ ./tools/packaging/kata-deploy/local-build/check-runtimeclasses.sh
+   ~/src/github.com/kata-containers/kata-containers/tools/packaging/kata-deploy/runtimeclasses ~/src/github.com/kata-containers/kata-containers
+   ::group::Combine runtime classes
+   Adding ./kata-clh.yaml to the resultingRuntimeClasses.yaml
+   Adding ./kata-cloud-hypervisor.yaml to the resultingRuntimeClasses.yaml
+   Adding ./kata-dragonball.yaml to the resultingRuntimeClasses.yaml
+   Adding ./kata-fc.yaml to the resultingRuntimeClasses.yaml
+   Adding ./kata-qemu-coco-dev.yaml to the resultingRuntimeClasses.yaml
+   Adding ./kata-qemu-nvidia-gpu-snp.yaml to the resultingRuntimeClasses.yaml
+   Adding ./kata-qemu-nvidia-gpu-tdx.yaml to the resultingRuntimeClasses.yaml
+   Adding ./kata-qemu-nvidia-gpu.yaml to the resultingRuntimeClasses.yaml
+   Adding ./kata-qemu-se.yaml to the resultingRuntimeClasses.yaml
+   Adding ./kata-qemu-sev.yaml to the resultingRuntimeClasses.yaml
+   Adding ./kata-qemu-snp.yaml to the resultingRuntimeClasses.yaml
+   Adding ./kata-qemu-tdx.yaml to the resultingRuntimeClasses.yaml
+   Adding ./kata-qemu.yaml to the resultingRuntimeClasses.yaml
+   Adding ./kata-remote.yaml to the resultingRuntimeClasses.yaml
+   Adding ./kata-stratovirt.yaml to the resultingRuntimeClasses.yaml
+   ::endgroup::
+   ::group::Displaying the content of resultingRuntimeClasses.yaml
+   <OUTPUT OMITTED>
+   ::endgroup::
+
+   ::group::Displaying the content of kata-runtimeClasses.yaml
+   <OUTPUT OMITTED>
+   ::endgroup::
+
+   CHECKER PASSED
+   ```
