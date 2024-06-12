@@ -267,7 +267,7 @@ func (rh *remoteHypervisor) GetPids() []int {
 }
 
 func (rh *remoteHypervisor) GetVirtioFsPid() *int {
-	panic(notImplemented("GetVirtioFsPid"))
+	return nil
 }
 
 func (rh *remoteHypervisor) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, j []byte) error {
