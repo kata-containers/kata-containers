@@ -763,7 +763,7 @@ static_check_docs()
 
 	# All markdown docs are checked (not just those changed by a PR). This
 	# is necessary to guarantee that all docs are referenced.
-	md_docs_to_check="$all_docs"
+	IFS=" " read -r -a  md_docs_to_check <<< "$all_docs"
 
 	command -v kata-check-markdown &>/dev/null ||\
 		(cd "${test_dir}/cmd/check-markdown" && make)
@@ -771,9 +771,10 @@ static_check_docs()
 	command -v kata-check-markdown &>/dev/null || \
 		die 'kata-check-markdown command not found. Ensure that "$GOPATH/bin" is in your $PATH.'
 
-	for doc in $md_docs_to_check
+	for doc in "${md_docs_to_check[@]}"
 	do
-		kata-check-markdown check "$doc"
+		# Print the output only when it fails to avoid flooding the CI logs with INFO messages.
+		out=$(kata-check-markdown check "$doc") || { echo -e "$out"; false; }
 
 		# Get a link of all other markdown files this doc references
 		kata-check-markdown list links --format tsv --no-header "$doc" |\
@@ -813,7 +814,7 @@ static_check_docs()
 
 	# Every document in the repo (except a small handful of exceptions)
 	# should be referenced by another document.
-	for doc in $md_docs_to_check
+	for doc in "${md_docs_to_check[@]}"
 	do
 		# Check the ignore list for markdown files that do not need to
 		# be referenced by others.
@@ -822,6 +823,7 @@ static_check_docs()
 		grep -q "$doc" "$md_links" || die "Document $doc is not referenced"
 	done
 
+	info "Checked ${#md_docs_to_check[@]} markdown files successfuly"
 	# Checking document markdown references
 	section_end
 
