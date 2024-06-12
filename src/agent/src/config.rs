@@ -240,7 +240,10 @@ impl AgentConfig {
         let config_position = args.iter().position(|a| a == "--config" || a == "-c");
         if let Some(config_position) = config_position {
             if let Some(config_file) = args.get(config_position + 1) {
-                return AgentConfig::from_config_file(config_file).context("AgentConfig from args");
+                let mut config =
+                    AgentConfig::from_config_file(config_file).context("AgentConfig from args")?;
+                config.override_config_from_envs();
+                return Ok(config);
             } else {
                 panic!("The config argument wasn't formed properly: {:?}", args);
             }
@@ -342,21 +345,7 @@ impl AgentConfig {
             );
         }
 
-        if let Ok(addr) = env::var(SERVER_ADDR_ENV_VAR) {
-            config.server_addr = addr;
-        }
-
-        if let Ok(addr) = env::var(LOG_LEVEL_ENV_VAR) {
-            if let Ok(level) = logrus_to_slog_level(&addr) {
-                config.log_level = level;
-            }
-        }
-
-        if let Ok(value) = env::var(TRACING_ENV_VAR) {
-            let name_value = format!("{}={}", TRACING_ENV_VAR, value);
-
-            config.tracing = get_bool_value(&name_value)?;
-        }
+        config.override_config_from_envs();
 
         Ok(config)
     }
@@ -366,6 +355,25 @@ impl AgentConfig {
         let config = fs::read_to_string(file)
             .with_context(|| format!("Failed to read config file {}", file))?;
         AgentConfig::from_str(&config)
+    }
+
+    #[instrument]
+    fn override_config_from_envs(&mut self) {
+        if let Ok(addr) = env::var(SERVER_ADDR_ENV_VAR) {
+            self.server_addr = addr;
+        }
+
+        if let Ok(addr) = env::var(LOG_LEVEL_ENV_VAR) {
+            if let Ok(level) = logrus_to_slog_level(&addr) {
+                self.log_level = level;
+            }
+        }
+
+        if let Ok(value) = env::var(TRACING_ENV_VAR) {
+            let name_value = format!("{}={}", TRACING_ENV_VAR, value);
+
+            self.tracing = get_bool_value(&name_value).unwrap_or(false);
+        }
     }
 }
 
@@ -525,6 +533,7 @@ mod tests {
 
     use super::*;
     use anyhow::anyhow;
+    use serial_test::serial;
     use std::fs::File;
     use std::io::Write;
     use std::time;
@@ -540,6 +549,8 @@ mod tests {
     }
 
     #[test]
+    // Run in serial to stop the env set interfering with test_from_cmdline_with_args_overwrites
+    #[serial]
     fn test_from_cmdline() {
         const TEST_SERVER_ADDR: &str = "vsock://-1:1024";
 
@@ -784,6 +795,13 @@ mod tests {
                 contents: "",
                 env_vars: vec!["KATA_AGENT_SERVER_ADDR=unix://@/tmp/foo.socket"],
                 server_addr: "unix://@/tmp/foo.socket",
+                ..Default::default()
+            },
+            // Test that env_var has precedence over the command line (which is the current behaviour)
+            TestData {
+                contents: "agent.server_addr=unix:///tmp/ignored.socket",
+                env_vars: vec!["KATA_AGENT_SERVER_ADDR=unix:///tmp/foo.socket"],
+                server_addr: "unix:///tmp/foo.socket",
                 ..Default::default()
             },
             TestData {
@@ -1069,15 +1087,17 @@ mod tests {
     }
 
     #[test]
+    // Run in serial to stop the env set interfering with test_from_cmdline
+    #[serial]
     fn test_from_cmdline_with_args_overwrites() {
         let expected = AgentConfig {
             dev_mode: true,
-            server_addr: "unix://@/tmp/foo.socket".to_string(),
+            server_addr: "unix:///tmp/overwrite.socket".to_string(),
             ..Default::default()
         };
 
         let example_config_file_contents =
-            "dev_mode = true\nserver_addr = 'unix://@/tmp/foo.socket'";
+            "dev_mode = true\nserver_addr = 'unix:///tmp/ignored.socket'";
         let dir = tempdir().expect("failed to create tmpdir");
         let file_path = dir.path().join("config.toml");
         let filename = file_path.to_str().expect("failed to create filename");
@@ -1085,9 +1105,14 @@ mod tests {
         file.write_all(example_config_file_contents.as_bytes())
             .unwrap_or_else(|_| panic!("failed to write file contents"));
 
+        // Ensure that the env has precedence over agent config file
+        env::set_var("KATA_AGENT_SERVER_ADDR", "unix:///tmp/overwrite.socket");
+
         let config =
             AgentConfig::from_cmdline("", vec!["--config".to_string(), filename.to_string()])
                 .expect("Failed to parse command line");
+
+        env::remove_var("KATA_AGENT_SERVER_ADDR");
 
         assert_eq!(expected.debug_console, config.debug_console);
         assert_eq!(expected.dev_mode, config.dev_mode);
