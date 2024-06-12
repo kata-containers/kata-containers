@@ -180,6 +180,10 @@ pub struct KataLinux {
 
     /// ReadonlyPaths sets the provided paths as RO inside the container.
     pub ReadonlyPaths: Vec<String>,
+
+    /// Devices contains devices to be created inside the container.
+    #[serde(default)]
+    pub Devices: Vec<KataLinuxDevice>,
 }
 
 /// OCI container LinuxNamespace struct. This struct is similar to the LinuxNamespace
@@ -192,6 +196,18 @@ pub struct KataLinuxNamespace {
 
     /// Path is a path to an existing namespace persisted on disk that can be joined
     /// and is of the same type
+    pub Path: String,
+}
+
+/// OCI container LinuxDevice struct. This struct is similar to the LinuxDevice
+/// struct generated from oci.proto, but includes just the fields that are currently
+/// relevant for automatic generation of policy.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct KataLinuxDevice {
+    /// Type is the type of device.
+    pub Type: String,
+
+    /// Path is the path where the device should be created.
     pub Path: String,
 }
 
@@ -245,6 +261,9 @@ pub struct ContainerPolicy {
 
     /// Data compared with req.storages for CreateContainerRequest calls.
     storages: Vec<agent::Storage>,
+
+    /// Data compared with req.devices for CreateContainerRequest calls.
+    devices: Vec<agent::Device>,
 
     /// Data compared with req.sandbox_pidns for CreateContainerRequest calls.
     sandbox_pidns: bool,
@@ -556,6 +575,23 @@ impl AgentPolicy {
         };
         let exec_commands = yaml_container.get_exec_commands();
 
+        let mut devices: Vec<agent::Device> = vec![];
+        if let Some(volumeDevices) = &yaml_container.volumeDevices {
+            for volumeDevice in volumeDevices {
+                let mut device = agent::Device::new();
+                device.set_container_path(volumeDevice.devicePath.clone());
+                devices.push(device);
+
+                linux.Devices.push(KataLinuxDevice {
+                    Type: "".to_string(),
+                    Path: volumeDevice.devicePath.clone(),
+                })
+            }
+        }
+        for default_device in &c_settings.Linux.Devices {
+            linux.Devices.push(default_device.clone())
+        }
+
         ContainerPolicy {
             OCI: KataSpec {
                 Version: self.config.settings.kata_config.oci_version.clone(),
@@ -567,6 +603,7 @@ impl AgentPolicy {
                 Linux: linux,
             },
             storages,
+            devices,
             sandbox_pidns,
             exec_commands,
         }

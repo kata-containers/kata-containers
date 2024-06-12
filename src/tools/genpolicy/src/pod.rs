@@ -111,6 +111,9 @@ pub struct Container {
     pub volumeMounts: Option<Vec<VolumeMount>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub volumeDevices: Option<Vec<VolumeDevice>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
     env: Option<Vec<EnvVar>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -420,6 +423,13 @@ pub struct VolumeMount {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subPath: Option<String>,
     // TODO: additional fields.
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct VolumeDevice {
+    pub devicePath: String,
+    pub name: String,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
