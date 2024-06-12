@@ -40,6 +40,8 @@ Here are listed all the metrics gathered by `runtime-rs`.
 
 Different from golang runtime, hypervisor and shim in runtime-rs belong to the **same process**, so all previous metrics for hypervisor and shim only need to be gathered once. Thus, we currently only collect previous metrics in kata shim.
 
+#### Dragonball
+
 At the same time, we added the interface(`VmmAction::GetHypervisorMetrics`) to gather hypervisor metrics, in case we design tailor-made metrics for hypervisor in the future. Here're metrics exposed from [src/dragonball/src/metric.rs](https://github.com/kata-containers/kata-containers/blob/main/src/dragonball/src/metric.rs).
 
 | Metric name                                                  | Type       | Units | Labels                                                       |
@@ -48,3 +50,11 @@ At the same time, we added the interface(`VmmAction::GetHypervisorMetrics`) to g
 | `kata_hypervisor_vcpu`: <br>Hypervisor metrics specific to VCPUs' mode of functioning. | `IntGauge` |       | <ul><li>`item`<ul><li>`exit_io_in`</li><li>`exit_io_out`</li><li>`exit_mmio_read`</li><li>`exit_mmio_write`</li><li>`failures`</li><li>`filter_cpuid`</li></ul></li><li>`sandbox_id`</li></ul> |
 | `kata_hypervisor_seccomp`: <br> Hypervisor metrics for the seccomp filtering. | `IntGauge` |       | <ul><li>`item`<ul><li>`num_faults`</li></ul></li><li>`sandbox_id`</li></ul> |
 | `kata_hypervisor_seccomp`: <br> Hypervisor metrics for the seccomp filtering. | `IntGauge` |       | <ul><li>`item`<ul><li>`sigbus`</li><li>`sigsegv`</li></ul></li><li>`sandbox_id`</li></ul> |
+
+#### CloudHypervisor
+
+| Metric name                                                  | Type       | Units | Labels                                                       |
+| ------------------------------------------------------------ | ---------- | ----- | ------------------------------------------------------------ |
+| `kata_hypervisor_scrape_count`: <br> Metrics scrape count    | `COUNTER`  |       | <ul><li>`sandbox_id`</li></ul>                               |
+| `kata_hypervisor_netdev`: <br> Kata container guest network devices statistics. | `GAUGE`     |                | <ul><li>`device` (network device name)</li><li>`item`<ul><li>`rx_bytes`</li><li>`rx_frames`</li><li>`tx_bytes`</li><li>`tx_frames`</li></ul></li><li>`sandbox_id`</li></ul> |
+| `kata_hypervisor_blockdev`: <br> Kata container guest block devices statistics. | `GAUGE`     |                | <ul><li>`device` (network device name)</li><li>`item`<ul><li>`read_bytes`</li><li>`read_latency_avg`</li><li>`read_latency_max`</li><li>`read_latency_min`</li><li>`read_ops`</li><li>`read_bytes`</li><li>`read_latency_avg`</li><li>`read_latency_max`</li><li>`read_latency_min`</li><li>`read_ops`</li></ul></li><li>`sandbox_id`</li></ul> |
