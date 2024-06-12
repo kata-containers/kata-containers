@@ -24,6 +24,7 @@ spec:
               exec:
                 command: ["bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh cleanup"]
           command: ["bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh install"]
+          # NOTE: Please don't change the order of the environment variables below.
           env:
             - name: NODE_NAME
               valueFrom:
@@ -46,6 +47,8 @@ spec:
             - name: AGENT_HTTPS_PROXY
               value: ""
             - name: AGENT_NO_PROXY
+              value: ""
+            - name: PULL_TYPE_MAPPING
               value: ""
           securityContext:
             privileged: true
