@@ -333,7 +333,9 @@ jobs:
         run: bash tests/integration/nerdctl/gha-run.sh run
 
       - name: Collect artifacts ${{ matrix.vmm }}
+        if: always()
         run: bash tests/integration/nerdctl/gha-run.sh collect-artifacts
+        continue-on-error: true
 
       - name: Archive artifacts ${{ matrix.vmm }}
         uses: actions/upload-artifact@v4
