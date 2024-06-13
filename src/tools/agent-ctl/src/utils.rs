@@ -806,7 +806,8 @@ pub fn make_request<T: Default + DeserializeOwned>(args: &str) -> Result<T> {
         return Ok(Default::default());
     }
 
-    let (scheme, data) = split_uri(args)?;
+    let (scheme, data) =
+        split_uri(args).map_err(|e| anyhow!(e).context("Fail to build request"))?;
 
     match scheme.as_str() {
         "json" => Ok(serde_json::from_str(&data)?),
