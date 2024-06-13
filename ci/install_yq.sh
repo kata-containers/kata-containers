@@ -5,6 +5,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+[ -n "$DEBUG" ] && set -o xtrace
+
 # If we fail for any reason a message will be displayed
 die() {
 	msg="$*"
@@ -36,7 +38,7 @@ function install_yq() {
 			fi
 		fi
 	fi
-	[ -x  "${yq_path}" ] && [ "`${yq_path} --version`"X == "yq version ${yq_version}"X ] && return
+	[ -x  "${yq_path}" ] && [ "`${yq_path} --version`"X == "yq (https://github.com/mikefarah/yq/) version ${yq_version}"X ] && return
 
 	read -r -a sysInfo <<< "$(uname -sm)"
 
