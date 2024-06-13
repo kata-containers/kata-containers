@@ -274,7 +274,8 @@ function run_tests() {
 	# TODO: enable testing auto-generated policy for other types of hosts too.
 	if [ "${KATA_HOST_OS}" = "cbl-mariner" ] || \
 	   [ "${KATA_HYPERVISOR}" = "qemu-tdx" ] || \
-	   [ "${KATA_HYPERVISOR}" = "qemu-sev" ]; then
+	   [ "${KATA_HYPERVISOR}" = "qemu-sev" ] || \
+	   [ "${KATA_HYPERVISOR}" = "qemu-snp" ]; then
 		export AUTO_GENERATE_POLICY="yes"
 	fi
 
