@@ -130,12 +130,12 @@ auto_generate_policy_enabled() {
 	[ "${AUTO_GENERATE_POLICY}" == "yes" ]
 }
 
-# adapt common policy settings for qemu-sev
+# adapt common policy settings for qemu-sev/qemu-snp
 adapt_common_policy_settings_for_sev() {
 
 	local settings_dir=$1
 
-	info "Adapting common policy settings for SEV"
+	info "Adapting common policy settings for SEV(-SNP)"
 	jq '.kata_config.oci_version = "1.1.0-rc.1" | .common.cpath = "/run/kata-containers" | .volumes.configMap.mount_point = "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-"' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
 }
 
@@ -147,6 +147,10 @@ adapt_common_policy_settings() {
 	case "${KATA_HYPERVISOR}" in
   		"qemu-sev")
 			adapt_common_policy_settings_for_sev "${settings_dir}"
+			;;
+		"qemu-snp")
+			adapt_common_policy_settings_for_sev "${settings_dir}"
+			;;
 	esac
 }
 
