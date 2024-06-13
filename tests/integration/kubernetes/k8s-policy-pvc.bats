@@ -45,10 +45,9 @@ test_pod_policy_error() {
 
 @test "Policy failure: unexpected device mount" {
 	# Changing the location of a mounted device after policy generation should fail the policy check.
-	yq write -i \
+	yq -i \
+		'.spec.containers[0].volumeDevices.[0].devicePath = "/dev/unexpected"' \
 		"${incorrect_pod_yaml}" \
-		"spec.containers[0].volumeDevices.[0].devicePath" \
-		"/dev/unexpected"
 
 	test_pod_policy_error
 }
