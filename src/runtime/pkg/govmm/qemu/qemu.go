@@ -2684,9 +2684,6 @@ type Knobs struct {
 	// NoGraphic completely disables graphic output.
 	NoGraphic bool
 
-	// Daemonize will turn the qemu process into a daemon
-	Daemonize bool
-
 	// Both HugePages and MemPrealloc require the Memory.Size of the VM
 	// to be set, as they need to reserve the memory upfront in order
 	// for the VM to boot without errors.
@@ -2716,9 +2713,6 @@ type Knobs struct {
 	// Exit instead of rebooting
 	// Prevents QEMU from rebooting in the event of a Triple Fault.
 	NoReboot bool
-
-	// Don’t exit QEMU on guest shutdown, but instead only stop the emulation.
-	NoShutdown bool
 
 	// IOMMUPlatform will enable IOMMU for supported devices
 	IOMMUPlatform bool
@@ -3119,14 +3113,6 @@ func (config *Config) appendKnobs() {
 
 	if config.Knobs.NoReboot {
 		config.qemuParams = append(config.qemuParams, "--no-reboot")
-	}
-
-	if config.Knobs.NoShutdown {
-		config.qemuParams = append(config.qemuParams, "--no-shutdown")
-	}
-
-	if config.Knobs.Daemonize {
-		config.qemuParams = append(config.qemuParams, "-daemonize")
 	}
 
 	config.appendMemoryKnobs()
