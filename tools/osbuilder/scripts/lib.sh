@@ -225,14 +225,23 @@ generate_dockerfile()
 
 	[ -n "${http_proxy:-}" ] && readonly set_proxy="RUN sed -i '$ a proxy="${http_proxy:-}"' /etc/dnf/dnf.conf /etc/yum.conf; true"
 
-	# Rust agent
-	readonly install_rust="
+	# Only install Rust if agent needs to be built
+	local install_rust=""
+
+	if [ ! -z "${AGENT_SOURCE_BIN}" ] ; then
+		if [ "$RUST_VERSION" == "null" ]; then
+			detect_rust_version || \
+				die "Could not detect the required rust version for AGENT_VERSION='${AGENT_VERSION:-main}'."
+		fi
+		install_rust="
 ENV http_proxy=${http_proxy:-}
 ENV https_proxy=${http_proxy:-}
 RUN curl --proto '=https' --tlsv1.2 https://sh.rustup.rs -sSLf | \
     sh -s -- -y --default-toolchain ${RUST_VERSION} -t ${rustarch}-unknown-linux-${LIBC}
 RUN . /root/.cargo/env; cargo install cargo-when
 "
+	fi
+
 	pushd "${dir}"
 
 	sed \
