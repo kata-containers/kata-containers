@@ -1066,6 +1066,8 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid st
 		sandboxConfig.HypervisorConfig.NumVCPUsF += sandboxConfig.SandboxResources.WorkloadCPUs
 		sandboxConfig.HypervisorConfig.MemorySize += sandboxConfig.SandboxResources.WorkloadMemMB
 
+		sandboxConfig.HypervisorConfig.DefaultMaxVCPUs = sandboxConfig.HypervisorConfig.NumVCPUs()
+
 		ociLog.WithFields(logrus.Fields{
 			"workload cpu":       sandboxConfig.SandboxResources.WorkloadCPUs,
 			"default cpu":        sandboxConfig.SandboxResources.BaseCPUs,
