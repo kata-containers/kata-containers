@@ -16,18 +16,20 @@ import (
 
 // DiskConfig struct for DiskConfig
 type DiskConfig struct {
-	Path              string             `json:"path"`
-	Readonly          *bool              `json:"readonly,omitempty"`
-	Direct            *bool              `json:"direct,omitempty"`
-	Iommu             *bool              `json:"iommu,omitempty"`
-	NumQueues         *int32             `json:"num_queues,omitempty"`
-	QueueSize         *int32             `json:"queue_size,omitempty"`
-	VhostUser         *bool              `json:"vhost_user,omitempty"`
-	VhostSocket       *string            `json:"vhost_socket,omitempty"`
-	RateLimiterConfig *RateLimiterConfig `json:"rate_limiter_config,omitempty"`
-	PciSegment        *int32             `json:"pci_segment,omitempty"`
-	Id                *string            `json:"id,omitempty"`
-	Serial            *string            `json:"serial,omitempty"`
+	Path              string               `json:"path"`
+	Readonly          *bool                `json:"readonly,omitempty"`
+	Direct            *bool                `json:"direct,omitempty"`
+	Iommu             *bool                `json:"iommu,omitempty"`
+	NumQueues         *int32               `json:"num_queues,omitempty"`
+	QueueSize         *int32               `json:"queue_size,omitempty"`
+	VhostUser         *bool                `json:"vhost_user,omitempty"`
+	VhostSocket       *string              `json:"vhost_socket,omitempty"`
+	RateLimiterConfig *RateLimiterConfig   `json:"rate_limiter_config,omitempty"`
+	PciSegment        *int32               `json:"pci_segment,omitempty"`
+	Id                *string              `json:"id,omitempty"`
+	Serial            *string              `json:"serial,omitempty"`
+	RateLimitGroup    *string              `json:"rate_limit_group,omitempty"`
+	QueueAffinity     *[]VirtQueueAffinity `json:"queue_affinity,omitempty"`
 }
 
 // NewDiskConfig instantiates a new DiskConfig object
@@ -448,6 +450,70 @@ func (o *DiskConfig) SetSerial(v string) {
 	o.Serial = &v
 }
 
+// GetRateLimitGroup returns the RateLimitGroup field value if set, zero value otherwise.
+func (o *DiskConfig) GetRateLimitGroup() string {
+	if o == nil || o.RateLimitGroup == nil {
+		var ret string
+		return ret
+	}
+	return *o.RateLimitGroup
+}
+
+// GetRateLimitGroupOk returns a tuple with the RateLimitGroup field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *DiskConfig) GetRateLimitGroupOk() (*string, bool) {
+	if o == nil || o.RateLimitGroup == nil {
+		return nil, false
+	}
+	return o.RateLimitGroup, true
+}
+
+// HasRateLimitGroup returns a boolean if a field has been set.
+func (o *DiskConfig) HasRateLimitGroup() bool {
+	if o != nil && o.RateLimitGroup != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetRateLimitGroup gets a reference to the given string and assigns it to the RateLimitGroup field.
+func (o *DiskConfig) SetRateLimitGroup(v string) {
+	o.RateLimitGroup = &v
+}
+
+// GetQueueAffinity returns the QueueAffinity field value if set, zero value otherwise.
+func (o *DiskConfig) GetQueueAffinity() []VirtQueueAffinity {
+	if o == nil || o.QueueAffinity == nil {
+		var ret []VirtQueueAffinity
+		return ret
+	}
+	return *o.QueueAffinity
+}
+
+// GetQueueAffinityOk returns a tuple with the QueueAffinity field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *DiskConfig) GetQueueAffinityOk() (*[]VirtQueueAffinity, bool) {
+	if o == nil || o.QueueAffinity == nil {
+		return nil, false
+	}
+	return o.QueueAffinity, true
+}
+
+// HasQueueAffinity returns a boolean if a field has been set.
+func (o *DiskConfig) HasQueueAffinity() bool {
+	if o != nil && o.QueueAffinity != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetQueueAffinity gets a reference to the given []VirtQueueAffinity and assigns it to the QueueAffinity field.
+func (o *DiskConfig) SetQueueAffinity(v []VirtQueueAffinity) {
+	o.QueueAffinity = &v
+}
+
 func (o DiskConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if true {
@@ -485,6 +551,12 @@ func (o DiskConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.Serial != nil {
 		toSerialize["serial"] = o.Serial
+	}
+	if o.RateLimitGroup != nil {
+		toSerialize["rate_limit_group"] = o.RateLimitGroup
+	}
+	if o.QueueAffinity != nil {
+		toSerialize["queue_affinity"] = o.QueueAffinity
 	}
 	return json.Marshal(toSerialize)
 }

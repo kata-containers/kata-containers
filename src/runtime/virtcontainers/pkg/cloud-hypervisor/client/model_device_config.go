@@ -16,10 +16,11 @@ import (
 
 // DeviceConfig struct for DeviceConfig
 type DeviceConfig struct {
-	Path       string  `json:"path"`
-	Iommu      *bool   `json:"iommu,omitempty"`
-	PciSegment *int32  `json:"pci_segment,omitempty"`
-	Id         *string `json:"id,omitempty"`
+	Path               string  `json:"path"`
+	Iommu              *bool   `json:"iommu,omitempty"`
+	PciSegment         *int32  `json:"pci_segment,omitempty"`
+	Id                 *string `json:"id,omitempty"`
+	XNvGpudirectClique *int32  `json:"x_nv_gpudirect_clique,omitempty"`
 }
 
 // NewDeviceConfig instantiates a new DeviceConfig object
@@ -164,6 +165,38 @@ func (o *DeviceConfig) SetId(v string) {
 	o.Id = &v
 }
 
+// GetXNvGpudirectClique returns the XNvGpudirectClique field value if set, zero value otherwise.
+func (o *DeviceConfig) GetXNvGpudirectClique() int32 {
+	if o == nil || o.XNvGpudirectClique == nil {
+		var ret int32
+		return ret
+	}
+	return *o.XNvGpudirectClique
+}
+
+// GetXNvGpudirectCliqueOk returns a tuple with the XNvGpudirectClique field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *DeviceConfig) GetXNvGpudirectCliqueOk() (*int32, bool) {
+	if o == nil || o.XNvGpudirectClique == nil {
+		return nil, false
+	}
+	return o.XNvGpudirectClique, true
+}
+
+// HasXNvGpudirectClique returns a boolean if a field has been set.
+func (o *DeviceConfig) HasXNvGpudirectClique() bool {
+	if o != nil && o.XNvGpudirectClique != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetXNvGpudirectClique gets a reference to the given int32 and assigns it to the XNvGpudirectClique field.
+func (o *DeviceConfig) SetXNvGpudirectClique(v int32) {
+	o.XNvGpudirectClique = &v
+}
+
 func (o DeviceConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if true {
@@ -177,6 +210,9 @@ func (o DeviceConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.Id != nil {
 		toSerialize["id"] = o.Id
+	}
+	if o.XNvGpudirectClique != nil {
+		toSerialize["x_nv_gpudirect_clique"] = o.XNvGpudirectClique
 	}
 	return json.Marshal(toSerialize)
 }

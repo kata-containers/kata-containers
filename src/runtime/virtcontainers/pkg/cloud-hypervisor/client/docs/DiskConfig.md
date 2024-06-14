@@ -16,6 +16,8 @@ Name | Type | Description | Notes
 **PciSegment** | Pointer to **int32** |  | [optional] 
 **Id** | Pointer to **string** |  | [optional] 
 **Serial** | Pointer to **string** |  | [optional] 
+**RateLimitGroup** | Pointer to **string** |  | [optional] 
+**QueueAffinity** | Pointer to [**[]VirtQueueAffinity**](VirtQueueAffinity.md) |  | [optional] 
 
 ## Methods
 
@@ -330,6 +332,56 @@ SetSerial sets Serial field to given value.
 `func (o *DiskConfig) HasSerial() bool`
 
 HasSerial returns a boolean if a field has been set.
+
+### GetRateLimitGroup
+
+`func (o *DiskConfig) GetRateLimitGroup() string`
+
+GetRateLimitGroup returns the RateLimitGroup field if non-nil, zero value otherwise.
+
+### GetRateLimitGroupOk
+
+`func (o *DiskConfig) GetRateLimitGroupOk() (*string, bool)`
+
+GetRateLimitGroupOk returns a tuple with the RateLimitGroup field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetRateLimitGroup
+
+`func (o *DiskConfig) SetRateLimitGroup(v string)`
+
+SetRateLimitGroup sets RateLimitGroup field to given value.
+
+### HasRateLimitGroup
+
+`func (o *DiskConfig) HasRateLimitGroup() bool`
+
+HasRateLimitGroup returns a boolean if a field has been set.
+
+### GetQueueAffinity
+
+`func (o *DiskConfig) GetQueueAffinity() []VirtQueueAffinity`
+
+GetQueueAffinity returns the QueueAffinity field if non-nil, zero value otherwise.
+
+### GetQueueAffinityOk
+
+`func (o *DiskConfig) GetQueueAffinityOk() (*[]VirtQueueAffinity, bool)`
+
+GetQueueAffinityOk returns a tuple with the QueueAffinity field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetQueueAffinity
+
+`func (o *DiskConfig) SetQueueAffinity(v []VirtQueueAffinity)`
+
+SetQueueAffinity sets QueueAffinity field to given value.
+
+### HasQueueAffinity
+
+`func (o *DiskConfig) HasQueueAffinity() bool`
+
+HasQueueAffinity returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
