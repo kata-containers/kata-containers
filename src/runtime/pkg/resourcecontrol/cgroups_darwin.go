@@ -17,7 +17,7 @@ func RenameCgroupPath(path string) (string, error) {
 	return "", errors.New("RenameCgroupPath not supported on Darwin")
 }
 
-func NewResourceController(path string, resources *specs.LinuxResources) (ResourceController, error) {
+func NewResourceController(path string, resources *specs.LinuxResources, sandboxCgroupOnly bool) (ResourceController, error) {
 	return &DarwinResourceController{}, nil
 }
 
@@ -25,7 +25,7 @@ func NewSandboxResourceController(path string, resources *specs.LinuxResources, 
 	return &DarwinResourceController{}, nil
 }
 
-func LoadResourceController(path string) (ResourceController, error) {
+func LoadResourceController(path string, sandboxCgroupOnly bool) (ResourceController, error) {
 	return &DarwinResourceController{}, nil
 }
 
@@ -53,7 +53,7 @@ func (c *DarwinResourceController) Update(resources *specs.LinuxResources) error
 	return nil
 }
 
-func (c *DarwinResourceController) MoveTo(path string) error {
+func (c *DarwinResourceController) MoveTo(path string, sandboxCgroupOnly bool) error {
 	return nil
 }
 
@@ -83,4 +83,8 @@ func (c *DarwinResourceController) UpdateCpuSet(cpuset, memset string) error {
 
 func (c *DarwinResourceController) Path() string {
 	return ""
+}
+
+func (c *DarwinResourceController) CgroupType() (string, error) {
+	return "", nil
 }
