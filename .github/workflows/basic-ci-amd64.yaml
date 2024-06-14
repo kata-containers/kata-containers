@@ -216,9 +216,9 @@ jobs:
         vmm:
           - clh
           - qemu
-        exclude:
-          # TODO: enable with clh when https://github.com/kata-containers/kata-containers/issues/9764 is fixed
-          - vmm: clh
+    # TODO: enable with clh when https://github.com/kata-containers/kata-containers/issues/9764 is fixed
+    # TODO: enable with qemu when https://github.com/kata-containers/kata-containers/issues/9851 is fixed
+    if: false
     runs-on: garm-ubuntu-2304
     env:
       GOPATH: ${{ github.workspace }}
