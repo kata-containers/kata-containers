@@ -15,8 +15,16 @@ export KATA_HOST_OS="${KATA_HOST_OS:-}"
 export KATA_HYPERVISOR="${KATA_HYPERVISOR:-}"
 export PULL_TYPE="${PULL_TYPE:-default}"
 
+declare -r kubernetes_dir=$(dirname "$(readlink -f "$0")")
+declare -r runtimeclass_workloads_work_dir="${kubernetes_dir}/runtimeclass_workloads_work"
+declare -r runtimeclass_workloads_dir="${kubernetes_dir}/runtimeclass_workloads"
+declare -r kata_opa_dir="${kubernetes_dir}/../../../src/kata-opa"
+source "${kubernetes_dir}/../../common.bash"
+source "${kubernetes_dir}/tests_common.sh"
+
+
 if [ -n "${K8S_TEST_POLICY_FILES:-}" ]; then
-	K8S_TEST_POLICY_FILES=($K8S_TEST_POLICY_FILES)
+	K8S_TEST_POLICY_FILES=("${K8S_TEST_POLICY_FILES}")
 else
 	K8S_TEST_POLICY_FILES=( \
 		"allow-all.rego" \
@@ -24,29 +32,22 @@ else
     )
 fi
 
-declare -r kubernetes_dir=$(dirname "$(readlink -f "$0")")
-source "${kubernetes_dir}/../../common.bash"
-source "${kubernetes_dir}/tests_common.sh"
-
 reset_workloads_work_dir() {
-	rm -rf ${kubernetes_dir}/runtimeclass_workloads_work
-	cp -R ${kubernetes_dir}/runtimeclass_workloads ${kubernetes_dir}/runtimeclass_workloads_work
+	rm -rf "${runtimeclass_workloads_work_dir}"
+	cp -R "${runtimeclass_workloads_dir}" "${runtimeclass_workloads_work_dir}"
 	setup_policy_files
 }
 
 setup_policy_files() {
-	declare -r kata_opa_dir="${kubernetes_dir}/../../../src/kata-opa"
-	declare -r workloads_work_dir="${kubernetes_dir}/runtimeclass_workloads_work"
-
 	# Copy hard-coded policy files used for basic policy testing.
-	for policy_file in ${K8S_TEST_POLICY_FILES[@]}
+	for policy_file in "${K8S_TEST_POLICY_FILES[@]}"
 	do
-		cp "${kata_opa_dir}/${policy_file}" ${kubernetes_dir}/runtimeclass_workloads_work/
+		cp "${kata_opa_dir}/${policy_file}" "${runtimeclass_workloads_work_dir}"
 	done
 
 	# For testing more sophisticated policies, create genpolicy settings that are common for all tests.
 	# Some of the tests will make temporary copies of these common settings and customize them as needed.
-	create_common_genpolicy_settings "${workloads_work_dir}"
+	create_common_genpolicy_settings "${runtimeclass_workloads_work_dir}"
 }
 
 add_annotations_to_yaml() {
