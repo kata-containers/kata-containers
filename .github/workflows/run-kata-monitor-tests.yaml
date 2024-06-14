@@ -23,9 +23,10 @@ jobs:
         container_engine:
           - crio
           - containerd
-        include:
-          - container_engine: containerd
-            containerd_version: lts
+        # TODO: enable when https://github.com/kata-containers/kata-containers/issues/9853 is fixed
+        #include:
+        #  - container_engine: containerd
+        #    containerd_version: lts
         exclude:
           # TODO: enable with containerd when https://github.com/kata-containers/kata-containers/issues/9761 is fixed
           - container_engine: containerd
@@ -33,7 +34,7 @@ jobs:
     runs-on: garm-ubuntu-2204-smaller
     env:
       CONTAINER_ENGINE: ${{ matrix.container_engine }}
-      CONTAINERD_VERSION: ${{ matrix.containerd_version }}
+      #CONTAINERD_VERSION: ${{ matrix.containerd_version }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
       - uses: actions/checkout@v4
