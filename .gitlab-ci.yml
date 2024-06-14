@@ -1,0 +1,66 @@
+include: https://gitlab-templates.ddbuild.io/compute-delivery/v2/compute-delivery.yml
+
+variables:
+  CI_IMAGE: 1
+
+stages:
+  - ci-image
+  - build
+  - publish
+  - notify
+
+ci-image:
+  stage: ci-image
+  extends: .build-docker-image
+  when: manual
+  only:
+    - branches
+  variables:
+    IMAGE_NAME: "$CI_PROJECT_NAME/ci"
+    IMAGE_TAG: $CI_IMAGE
+    CONTEXT_DIR: "./tools/packaging/kernel"
+    TARGET: "build"
+
+build-kernel-amd64:
+  image: registry.ddbuild.io/$CI_PROJECT_NAME/ci:$CI_IMAGE
+  stage: build
+  tags: [ "arch:amd64" ]
+  script:
+    - cd tools/packaging/kernel
+    - ./build-kernel.sh setup
+    - ./build-kernel.sh build
+    - cp kata-linux-*/vmlinux ./vmlinux-amd64
+  artifacts:
+    paths:
+      - tools/packaging/kernel/vmlinux-amd64
+    expire_in: 1 week
+
+build-kernel-arm64:
+  image: registry.ddbuild.io/$CI_PROJECT_NAME/ci:$CI_IMAGE
+  stage: build
+  tags: [ "arch:arm64" ]
+  script:
+    - cd tools/packaging/kernel
+    - ./build-kernel.sh setup
+    - ./build-kernel.sh build
+    - cp kata-linux-*/vmlinux ./vmlinux-arm64
+  artifacts:
+    paths:
+      - tools/packaging/kernel/vmlinux-arm64
+    expire_in: 1 week
+
+publish-artifacts:
+  image: registry.ddbuild.io/$CI_PROJECT_NAME/ci:$CI_IMAGE
+  stage: publish
+  only:
+    - tags
+  tags: [ "arch:amd64" ]
+  dependencies:
+    - "build-kernel-amd64"
+    - "build-kernel-arm64"
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - aws s3 cp tools/packaging/kernel/vmlinux-amd64 s3://kata-containers-ci-artifacts/$CI_COMMIT_REF_NAME/amd64/vmlinux
+    - aws s3 cp tools/packaging/kernel/vmlinux-arm64 s3://kata-containers-ci-artifacts/$CI_COMMIT_REF_NAME/arm64/vmlinux
+    - echo $CI_COMMIT_REF_NAME > LATEST && aws s3 cp LATEST s3://kata-containers-ci-artifacts/LATEST
