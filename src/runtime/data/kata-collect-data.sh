@@ -5,8 +5,12 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+RUNTIME_VERSION_INFO=$( kata-runtime --version | sed -n 's/^.*: //p' )
+read -r VERSION COMMIT <<< $( echo $RUNTIME_VERSION_INFO )
+
+typeset -r project_name="Kata Containers"
 typeset -r script_name=${0##*/}
-typeset -r runtime_name="@RUNTIME_NAME@"
+typeset -r runtime_name="kata-runtime"
 typeset -r runtime_path=$(command -v "$runtime_name" 2>/dev/null)
 typeset -r runtime_snap_name="kata-containers.runtime"
 typeset -r runtime_snap_path=$(command -v "$runtime_snap_name" 2>/dev/null)
@@ -18,8 +22,8 @@ typeset -r containerd_shim_v2=$(command -v "$containerd_shim_v2_name" 2>/dev/nul
 typeset -r kata_monitor_name="kata-monitor"
 typeset -r kata_monitor=$(command -v "$kata_monitor_name" 2>/dev/null)
 
-typeset -r issue_url="@PROJECT_BUG_URL@"
-typeset -r script_version="@VERSION@ (commit @COMMIT@)"
+typeset -r issue_url="https://github.com/kata-containers/kata-containers/issues/new"
+typeset -r script_version="$VERSION (commit $COMMIT)"
 
 typeset -r unknown="unknown"
 
@@ -79,30 +83,33 @@ problem_exclude_pattern+=")"
 
 usage()
 {
-	cat <<EOT
-Usage: $script_name [options]
+	cat <<EOF
+Usage: $script_name [command] [options]
 
-Summary: Collect data about an installation of @PROJECT_NAME@.
+Summary: Collect data about an installation of $project_name.
 
 Description: Run this script as root to obtain a markdown-formatted summary
-  of the environment of the @PROJECT_NAME@ installation. The output of this script
+  of the environment of the $project_name installation. The output of this script
   can be pasted directly into a github issue at the address below:
 
       $issue_url
+
+Commands:
+ show-image-details : outputs the YAML describing the image
 
 Options:
 
  -h | --help    : show this usage summary.
  -v | --version : show program version.
 
-EOT
+EOF
 }
 
 version()
 {
-	cat <<EOT
+	cat <<EOF
 $script_name version $script_version
-EOT
+EOF
 }
 
 die()
@@ -142,21 +149,21 @@ start_section()
 {
 	local title="$1"
 
-	cat <<EOT
+	cat <<EOF
 <details>
 <summary>${title}</summary>
 <p>
 
-EOT
+EOF
 }
 
 end_section()
 {
-	cat <<EOT
+	cat <<EOF
 
 </p>
 </details>
-EOT
+EOF
 }
 
 show_header()
@@ -231,7 +238,7 @@ show_runtime_configs()
 
 	local configs config
 
-	configs=$($runtime --@PROJECT_TYPE@-show-default-config-paths)
+	configs=$($runtime --kata-show-default-config-paths)
 	if [ $? -ne 0 ]; then
 		version=$($runtime --version|tr '\n' ' ')
 		die "failed to check config files - runtime is probably too old ($version)"
@@ -242,10 +249,7 @@ show_runtime_configs()
 	show_quoted_text "" "$configs"
 
 	# add in the standard defaults for good measure "just in case"
-	configs+=" /etc/@PROJECT_TAG@/configuration.toml"
-	configs+=" /usr/share/defaults/@PROJECT_TAG@/configuration.toml"
-	configs+=" @CONFIG_PATH@"
-	configs+=" @SYSCONFIG@"
+	configs+=( "/etc/kata-containers/configuration.toml" "/usr/share/defaults/kata-containers/configuration.toml" )
 
 	# create a unique list of config files
 	configs=$(echo $configs|tr ' ' '\n'|sort -u)
@@ -306,17 +310,7 @@ show_runtime_log_details()
 	subheading "$title"
 
 	start_section "$title"
-	find_system_journal_problems "runtime" "@RUNTIME_NAME@"
-	end_section
-}
-
-show_throttler_log_details()
-{
-	local title="Throttler logs"
-	subheading "$title"
-
-	start_section "$title"
-	find_system_journal_problems "throttler" "@PROJECT_TYPE@-ksm-throttler"
+	find_system_journal_problems "runtime" "kata-runtime"
 	end_section
 }
 
@@ -328,7 +322,6 @@ show_log_details()
 	heading "$title"
 
 	show_runtime_log_details
-	show_throttler_log_details
 	show_containerd_shimv2_log_details
 
 	separator
@@ -354,10 +347,9 @@ show_package_versions()
 	pattern+="|runv"
 
 	# core components
-	for project in @PROJECT_TYPE@
+	for project in kata
 	do
 		pattern+="|${project}-runtime"
-		pattern+="|${project}-ksm-throttler"
 		pattern+="|${project}-containers-image"
 	done
 
@@ -496,7 +488,7 @@ show_meta()
 
 	date=$(date '+%Y-%m-%d.%H:%M:%S.%N%z')
 	msg "Running \`$script_name\` version \`$script_version\` at \`$date\`."
-
+	show_latest_kata_version
 	separator
 }
 
@@ -508,7 +500,7 @@ show_runtime()
 
 	msg "Runtime is \`$runtime\`."
 
-	cmd="@PROJECT_TYPE@-env"
+	cmd="kata-env"
 
 	heading "\`$cmd\`"
 
@@ -628,7 +620,7 @@ get_initrd_details()
 # Returns: Full path to the image file.
 get_image_file()
 {
-	local cmd="@PROJECT_TYPE@-env"
+	local cmd="kata-env"
 	local cmdline="$runtime $cmd"
 
 	local image=$(eval "$cmdline" 2>/dev/null |\
@@ -643,7 +635,7 @@ get_image_file()
 # Returns: Full path to the initrd file.
 get_initrd_file()
 {
-	local cmd="@PROJECT_TYPE@-env"
+	local cmd="kata-env"
 	local cmdline="$runtime $cmd"
 
 	local initrd=$(eval "$cmdline" 2>/dev/null |\
@@ -729,50 +721,6 @@ release_device()
 	losetup -d "$device"
 }
 
-show_throttler_details()
-{
-	start_section "KSM throttler"
-
-	heading "KSM throttler"
-
-	subheading "version"
-
-	local throttlers
-	local throttler
-
-	throttlers=$(find /usr/libexec /usr/lib* -type f |\
-		grep -v trigger |\
-		egrep "(cc|kata)-ksm-throttler" |\
-		sort -u)
-
-	echo "$throttlers" | while read throttler
-	do
-		[ -z "$throttler" ] && continue
-
-		local cmd
-		cmd="$throttler --version"
-		run_cmd_and_show_quoted_output "" "$cmd"
-	done
-
-	subheading "systemd service"
-
-	local unit
-
-	# Note: "vc-throttler" is the old CC service, replaced by
-	# "kata-vc-throttler".
-	for unit in \
-		"cc-ksm-throttler" \
-		"kata-ksm-throttler" \
-		"kata-vc-throttler" \
-		"vc-throttler"
-	do
-		have_service "${unit}" && \
-			run_cmd_and_show_quoted_output "" "systemctl show ${unit}"
-	done
-
-	end_section
-}
-
 show_kata_monitor_version()
 {
 	start_section "Kata Monitor"
@@ -790,13 +738,8 @@ show_kata_monitor_version()
 
 # Retrieve details of the image containing
 # the rootfs used to boot the virtual machine.
-show_image_details()
+image_details()
 {
-	local title="Image details"
-	start_section "$title"
-
-	heading "$title"
-
 	local image
 	local details
 
@@ -805,11 +748,29 @@ show_image_details()
 	if [ -n "$image" ]
 	then
 		details=$(get_image_details "$image")
-		show_quoted_text "yaml" "$details"
+		msg "$details"
 	else
 		msg "No image"
 	fi
 
+}
+
+show_image_details()
+{
+	local details
+
+	local title="Image details"
+	start_section "$title"
+
+	heading "$title"
+
+	details=$(image_details)
+	if [ "$details" != "No image" ]; then
+		show_quoted_text "yaml" "$details"
+	else
+		msg "$details"
+	fi
+	
 	separator
 
 	end_section
@@ -817,25 +778,39 @@ show_image_details()
 
 # Retrieve details of the initrd containing
 # the rootfs used to boot the virtual machine.
-show_initrd_details()
+initrd_details()
 {
-	start_section "Initrd details"
-
+	
 	local initrd
 	local details
 
 	initrd=$(get_initrd_file)
 
-	heading "Initrd details"
-
 	if [ -n "$initrd" ]
 	then
 		details=$(get_initrd_details "$initrd")
-		show_quoted_text "yaml" "$details"
+		msg "$details"
 	else
 		msg "No initrd"
 	fi
 
+}
+
+show_initrd_details()
+{
+	local details
+
+	start_section "Initrd details"
+	heading "Initrd details"
+
+	details=$(initrd_details)
+
+	if [ "$details" != "No initrd" ]; then
+		show_quoted_text "yaml" "$details"
+	else
+		msg "$details"
+	fi
+	
 	separator
 
 	end_section
@@ -854,6 +829,64 @@ read_osbuilder_file()
 	cat "$file"
 }
 
+show_latest_kata_version()
+{
+	if [ -z "$KATA_CHECK_NO_NETWORK" ]; then
+		local rc=0
+		local latest_version=$(sudo -u nobody kata-runtime kata-check --check-version-only 2>/dev/null || rc=$?)
+		if [ "$rc" -ne 0 ]; then
+			msg "Unable to check for latest version. Check if network is connected"
+		else
+			msg "$latest_version"
+		fi
+	else
+		msg "KATA_CHECK_NO_NETWORK is set. Latest release cannot not be checked"
+	fi
+}
+
+show_third_party_tools()
+{
+	not_found="Tool not found"
+	start_section "Third Party Tools"
+
+	conmon_version="$(conmon --version 2>/dev/null | awk -v FS="(^conmon version)|\n" '{print $2}' | xargs || true)"
+	[ -z $conmon_version ] && conmon_version=$not_found
+	msg "conmon version: $conmon_version"
+
+	crio_version="$(crio --version 2>/dev/null | awk -v FS="(^Version:)|\n" '{print $2}' | xargs || true)"
+	[ -z $crio_version ] && crio_version=$not_found
+	msg "cri-o version: $crio_version"
+
+	# Not in vagrant
+	containerd_version="$(containerd --version 2>/dev/null | awk -F ' ' 'NR==1{print $3}' | xargs || true)"
+	[ -z $containerd_version ] && $containerd_version=$not_found
+	msg "containerd version: $containerd_version"
+
+	critools_version="$(crictl --version 2>/dev/null | awk -v FS="(^crictl version)|\n" '{print $2}' | xargs || true)"
+	[ -z $critools_version ] && critools_version=$not_found
+	msg "critools version: $critools_version"
+
+	# Not in vagrant
+	gperf_version="$(gperf --version 2>/dev/null | awk -v FS="(GNU gperf)|\n" '{print $2}' | xargs || true)"
+	[ -z $gperf_version ] && gperf_version=$not_found
+	msg "gperf version: $gperf_version"
+
+	kubernetes_version="$(kubectl version --output=json 2>/dev/null | jq -r '.clientVersion.gitVersion' || true)"
+	[ -z $kubernetes_version ] && kubernetes_version=$not_found
+	msg "kubernetes version: $kubernetes_version"
+
+	libseccomp_version="$(runc --version 2>/dev/null | awk -v FS="(^libseccomp:)|\n" '{print $2}' | xargs || true)"
+	[ -z $libseccomp_version ] && libseccomp_version=$not_found
+	msg "libseccomp version: $libseccomp_version"
+
+	runc_version="$(runc --version 2>/dev/null | awk -v FS="(^runc version)|\n" '{print $2}' | xargs)"
+	[ -z $runc_version ] && runc_version=$not_found
+	msg "runc version: $runc_version"
+
+	end_section
+
+}
+
 show_details()
 {
 	show_header
@@ -862,19 +895,26 @@ show_details()
 	show_runtime
 	show_runtime_configs
 	show_containerd_shimv2
-	show_throttler_details
 	show_image_details
 	show_initrd_details
 	show_log_details
 	show_container_mgr_details
 	show_package_versions
 	show_kata_monitor_version
+	show_third_party_tools
 
 	show_footer
 }
 
 main()
 {
+	if [ "$1" = "show-image-details" ]; then
+		image_details && \
+		separator && \
+		initrd_details && \
+		exit 0 || die "failed to determine image details"
+	fi
+
 	args=$(getopt \
 		-n "$script_name" \
 		-a \
