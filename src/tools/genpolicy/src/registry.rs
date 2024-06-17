@@ -16,7 +16,7 @@ use docker_credential::{CredentialRetrievalError, DockerCredential};
 use fs2::FileExt;
 use log::{debug, info, warn, LevelFilter};
 use oci_distribution::{
-    client::{linux_amd64_resolver, ClientConfig},
+    client::{linux_amd64_resolver, ClientConfig, ClientProtocol},
     manifest,
     secrets::RegistryAuth,
     Client, Reference,
@@ -67,13 +67,14 @@ pub struct ImageLayer {
 }
 
 impl Container {
-    pub async fn new(use_cached_files: bool, image: &str) -> Result<Self> {
+    pub async fn new(config: &Config, image: &str) -> Result<Self> {
         info!("============================================");
         info!("Pulling manifest and config for {:?}", image);
         let reference: Reference = image.to_string().parse().unwrap();
         let auth = build_auth(&reference);
 
         let mut client = Client::new(ClientConfig {
+            protocol: ClientProtocol::HttpsExcept(config.insecure_registries.clone()),
             platform_resolver: Some(Box::new(linux_amd64_resolver)),
             ..Default::default()
         });
@@ -96,7 +97,7 @@ impl Container {
                 let config_layer: DockerConfigLayer =
                     serde_json::from_str(&config_layer_str).unwrap();
                 let image_layers = get_image_layers(
-                    use_cached_files,
+                    config.use_cache,
                     &mut client,
                     &reference,
                     &manifest,
@@ -459,7 +460,7 @@ pub async fn get_container(config: &Config, image: &str) -> Result<Container> {
     if let Some(socket_path) = &config.containerd_socket_path {
         return Container::new_containerd_pull(config.use_cache, image, socket_path).await;
     }
-    Container::new(config.use_cache, image).await
+    Container::new(config, image).await
 }
 
 fn build_auth(reference: &Reference) -> RegistryAuth {
