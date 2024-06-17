@@ -88,6 +88,14 @@ struct CommandLineOptions {
         help = "If specified, resources that have a runtimeClassName field defined will only receive a policy if the parameter is a prefix one of the given runtime class names."
     )]
     runtime_class_names: Vec<String>,
+
+    #[clap(
+        long,
+        help = "Path to the layers cache file. This file is used to store the layers cache information. The default value is ./layers-cache.json.",
+        default_missing_value = "./layers-cache.json",
+        require_equals = true
+    )]
+    layers_cache_file_path: Option<String>,
 }
 
 /// Application configuration, derived from on command line parameters.
@@ -106,6 +114,7 @@ pub struct Config {
     pub raw_out: bool,
     pub base64_out: bool,
     pub containerd_socket_path: Option<String>,
+    pub layers_cache_file_path: Option<String>,
 }
 
 impl Config {
@@ -123,6 +132,12 @@ impl Config {
             None
         };
 
+        let mut layers_cache_file_path = args.layers_cache_file_path;
+        // preserve backwards compatibility for only using the `use_cached_files` flag
+        if args.use_cached_files && layers_cache_file_path.is_none() {
+            layers_cache_file_path = Some(String::from("./layers-cache.json"));
+        }
+
         let settings = settings::Settings::new(&args.json_settings_path);
 
         Self {
@@ -137,6 +152,7 @@ impl Config {
             raw_out: args.raw_out,
             base64_out: args.base64_out,
             containerd_socket_path: args.containerd_socket_path,
+            layers_cache_file_path,
         }
     }
 }

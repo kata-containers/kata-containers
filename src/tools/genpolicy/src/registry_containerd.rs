@@ -28,7 +28,7 @@ use tower::service_fn;
 
 impl Container {
     pub async fn new_containerd_pull(
-        use_cached_files: bool,
+        layers_cache_file_path: Option<String>,
         image: &str,
         containerd_socket_path: &str,
     ) -> Result<Self> {
@@ -58,8 +58,13 @@ impl Container {
         let config_layer = get_config_layer(image_ref_str, k8_cri_image_client)
             .await
             .unwrap();
-        let image_layers =
-            get_image_layers(use_cached_files, &manifest, &config_layer, &ctrd_client).await?;
+        let image_layers = get_image_layers(
+            layers_cache_file_path,
+            &manifest,
+            &config_layer,
+            &ctrd_client,
+        )
+        .await?;
 
         Ok(Container {
             config_layer,
@@ -242,7 +247,7 @@ pub fn build_auth(reference: &Reference) -> Option<AuthConfig> {
 }
 
 pub async fn get_image_layers(
-    use_cached_files: bool,
+    layers_cache_file_path: Option<String>,
     manifest: &serde_json::Value,
     config_layer: &DockerConfigLayer,
     client: &containerd_client::Client,
@@ -261,7 +266,7 @@ pub async fn get_image_layers(
                 let imageLayer = ImageLayer {
                     diff_id: config_layer.rootfs.diff_ids[layer_index].clone(),
                     verity_hash: get_verity_hash(
-                        use_cached_files,
+                        layers_cache_file_path.clone(),
                         layer["digest"].as_str().unwrap(),
                         client,
                         &config_layer.rootfs.diff_ids[layer_index].clone(),
@@ -280,14 +285,13 @@ pub async fn get_image_layers(
 }
 
 async fn get_verity_hash(
-    use_cached_files: bool,
+    layers_cache_file_path: Option<String>,
     layer_digest: &str,
     client: &containerd_client::Client,
     diff_id: &str,
 ) -> Result<String> {
     let temp_dir = tempfile::tempdir_in(".")?;
     let base_dir = temp_dir.path();
-    let cache_file = "layers-cache.json";
     // Use file names supported by both Linux and Windows.
     let file_name = str::replace(layer_digest, ":", "-");
     let mut decompressed_path = base_dir.join(file_name);
@@ -300,8 +304,8 @@ async fn get_verity_hash(
     let mut error_message = "".to_string();
     let mut error = false;
 
-    if use_cached_files {
-        verity_hash = read_verity_from_store(cache_file, diff_id)?;
+    if let Some(path) = layers_cache_file_path.as_ref() {
+        verity_hash = read_verity_from_store(path, diff_id)?;
         info!("Using cache file");
         info!("dm-verity root hash: {verity_hash}");
     }
@@ -328,8 +332,8 @@ async fn get_verity_hash(
                 }
                 Ok(v) => {
                     verity_hash = v;
-                    if use_cached_files {
-                        add_verity_to_store(cache_file, diff_id, &verity_hash)?;
+                    if let Some(path) = layers_cache_file_path.as_ref() {
+                        add_verity_to_store(path, diff_id, &verity_hash)?;
                     }
                     info!("dm-verity root hash: {verity_hash}");
                 }
@@ -339,8 +343,8 @@ async fn get_verity_hash(
     temp_dir.close()?;
     if error {
         // remove the cache file if we're using it
-        if use_cached_files {
-            std::fs::remove_file(cache_file)?;
+        if let Some(path) = layers_cache_file_path.as_ref() {
+            std::fs::remove_file(path)?;
         }
         warn!("{error_message}");
     }
