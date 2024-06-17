@@ -532,9 +532,10 @@ function deploy_nydus_snapshotter() {
 
 	echo "::endgroup::"
 	echo "::group::nydus snapshotter logs"
-	pods_name=$(kubectl_retry get pods --selector=app=nydus-snapshotter -n nydus-system -o=jsonpath='{.items[*].metadata.name}')
-	kubectl_retry logs "${pods_name}" -n nydus-system
-	kubectl_retry describe pod "${pods_name}" -n nydus-system
+	kubectl_retry logs --selector=app=nydus-snapshotter -n nydus-system
+	echo "::endgroup::"
+	echo "::group::nydus snapshotter describe"
+	kubectl_retry describe pod --selector=app=nydus-snapshotter -n nydus-system
 	echo "::endgroup::"
 }
 
