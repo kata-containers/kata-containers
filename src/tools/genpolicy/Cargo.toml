@@ -44,7 +44,7 @@ openssl = { version = "0.10.54" }
 serde_ignored = "0.1.7"
 serde_json = "1.0.39"
 serde-transcode = "1.1.1"
-tokio = {version = "1.33.0", features = ["rt-multi-thread"]}
+tokio = {version = "1.38.0", features = ["rt-multi-thread"]}
 
 # OCI container specs.
 oci = { path = "../../libs/oci" }
