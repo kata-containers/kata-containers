@@ -424,7 +424,7 @@ impl DeviceOpContext {
     fn generate_virtio_device_info(&self) -> Result<HashMap<(DeviceType, String), MMIODeviceInfo>> {
         let mut dev_info = HashMap::new();
         #[cfg(feature = "dbs-virtio-devices")]
-        for (_index, device) in self.virtio_devices.iter().enumerate() {
+        for device in self.virtio_devices.iter() {
             let (mmio_base, mmio_size, irq) = DeviceManager::get_virtio_mmio_device_info(device)?;
             let dev_type;
             let device_id;

@@ -644,10 +644,7 @@ impl AddressSpaceMgr {
         guest_numa_node_id: u32,
         vcpu_ids: &[u32],
     ) {
-        let node = self
-            .numa_nodes
-            .entry(guest_numa_node_id)
-            .or_insert_with(NumaNode::new);
+        let node = self.numa_nodes.entry(guest_numa_node_id).or_default();
         node.add_info(&NumaNodeInfo {
             base: region.start_addr(),
             size: region.len(),

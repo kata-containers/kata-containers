@@ -369,12 +369,12 @@ languages:
   rust:
     description: "Rust language"
     notes: "'version' is the default minimum version used by this project."
-    version: "1.72.0"
+    version: "1.75.0"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.72.0"
+      newest-version: "1.75.0"
 
   golangci-lint:
     description: "golangci-lint"
