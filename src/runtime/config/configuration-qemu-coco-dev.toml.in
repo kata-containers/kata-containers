@@ -176,10 +176,10 @@ default_maxmemory = @DEFMAXMEMSZ@
 disable_block_device_use = @DEFDISABLEBLOCK@
 
 # Shared file system type:
-#   - virtio-fs (default)
+#   - virtio-fs
 #   - virtio-9p
 #   - virtio-fs-nydus
-#   - none
+#   - none (default)
 shared_fs = "@DEFSHAREDFS_QEMU_COCO_DEV_VIRTIOFS@"
 
 # Path to vhost-user-fs daemon.
