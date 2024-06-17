@@ -528,20 +528,6 @@ fn load_config(spec: &oci::Spec, option: &Option<Vec<u8>>) -> Result<TomlConfig>
     // validate configuration and return the error
     toml_config.validate()?;
 
-    // Sandbox sizing information *may* be provided in two scenarios:
-    //   1. The upper layer runtime (ie, containerd or crio) provide sandbox sizing information as an annotation
-    //	in the 'sandbox container's' spec. This would typically be a scenario where as part of a create sandbox
-    //	request the upper layer runtime receives this information as part of a pod, and makes it available to us
-    //	for sizing purposes.
-    //   2. If this is not a sandbox infrastructure container, but instead a standalone single container (analogous to "docker run..."),
-    //	then the container spec itself will contain appropriate sizing information for the entire sandbox (since it is
-    //	a single container.
-    let mut initial_size_manager =
-        InitialSizeManager::new(spec).context("failed to construct static resource manager")?;
-    initial_size_manager
-        .setup_config(&mut toml_config)
-        .context("failed to setup static resource mgmt config")?;
-
     info!(logger, "get config content {:?}", &toml_config);
     Ok(toml_config)
 }
