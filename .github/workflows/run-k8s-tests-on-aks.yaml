@@ -36,6 +36,7 @@ jobs:
           - clh
           - dragonball
           - qemu
+          - qemu-runtime-rs
           - stratovirt
           - cloud-hypervisor
         instance-type:
