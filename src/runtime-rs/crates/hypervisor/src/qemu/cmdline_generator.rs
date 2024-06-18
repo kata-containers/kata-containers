@@ -21,7 +21,7 @@ use tokio;
 const MI_B: u64 = 1024 * 1024;
 const GI_B: u64 = 1024 * MI_B;
 
-const QMP_SOCKET_FILE: &str = "qmp.sock";
+pub const QMP_SOCKET_FILE: &str = "qmp.sock";
 const DEBUG_MONITOR_SOCKET: &str = "debug-monitor.sock";
 
 // The approach taken here is inspired by govmm.  We build structs, each

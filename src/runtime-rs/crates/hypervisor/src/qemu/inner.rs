@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use super::cmdline_generator::QemuCmdLine;
+use super::cmdline_generator::{QemuCmdLine, QMP_SOCKET_FILE};
+use super::qmp::Qmp;
 use crate::{
     hypervisor_persist::HypervisorState, utils::enter_netns, HypervisorConfig, MemoryConfig,
     VcpuThreadIds, VsockDevice, HYPERVISOR_QEMU,
@@ -16,6 +17,7 @@ use kata_types::{
     config::KATA_PATH,
 };
 use persist::sandbox_persist::Persist;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::path::Path;
 use std::process::Stdio;
@@ -32,6 +34,7 @@ pub struct QemuInner {
     id: String,
 
     qemu_process: Option<Child>,
+    qmp: Option<Qmp>,
 
     config: HypervisorConfig,
     devices: Vec<DeviceType>,
@@ -43,6 +46,7 @@ impl QemuInner {
         QemuInner {
             id: "".to_string(),
             qemu_process: None,
+            qmp: None,
             config: Default::default(),
             devices: Vec::new(),
             netns: None,
@@ -149,6 +153,14 @@ impl QemuInner {
             tokio::spawn(log_qemu_stderr(qemu_process.stderr.take().unwrap()));
         }
 
+        match Qmp::new(QMP_SOCKET_FILE) {
+            Ok(qmp) => self.qmp = Some(qmp),
+            Err(e) => {
+                error!(sl!(), "couldn't initialise QMP: {:?}", e);
+                return Err(e);
+            }
+        }
+
         Ok(())
     }
 
@@ -233,15 +245,48 @@ impl QemuInner {
         Ok(())
     }
 
-    pub(crate) async fn resize_vcpu(&self, old_vcpus: u32, new_vcpus: u32) -> Result<(u32, u32)> {
+    pub(crate) async fn resize_vcpu(
+        &mut self,
+        old_vcpus: u32,
+        mut new_vcpus: u32,
+    ) -> Result<(u32, u32)> {
         info!(
             sl!(),
             "QemuInner::resize_vcpu(): {} -> {}", old_vcpus, new_vcpus
         );
+
+        // TODO The following sanity checks apparently have to be performed by
+        // any hypervisor - wouldn't it make sense to move them to the caller?
         if new_vcpus == old_vcpus {
             return Ok((old_vcpus, new_vcpus));
         }
-        todo!()
+
+        if new_vcpus == 0 {
+            return Err(anyhow!("resize to 0 vcpus requested"));
+        }
+
+        if new_vcpus > self.config.cpu_info.default_maxvcpus {
+            warn!(
+                sl!(),
+                "Cannot allocate more vcpus than the max allowed number of vcpus. The maximum allowed amount of vcpus will be used instead.");
+            new_vcpus = self.config.cpu_info.default_maxvcpus;
+        }
+
+        if let Some(ref mut qmp) = self.qmp {
+            match new_vcpus.cmp(&old_vcpus) {
+                Ordering::Greater => {
+                    let hotplugged = qmp.hotplug_vcpus(new_vcpus - old_vcpus)?;
+                    new_vcpus = old_vcpus + hotplugged;
+                }
+                Ordering::Less => {
+                    let hotunplugged = qmp.hotunplug_vcpus(old_vcpus - new_vcpus)?;
+                    new_vcpus = old_vcpus - hotunplugged;
+                }
+                Ordering::Equal => {}
+            }
+        }
+
+        Ok((old_vcpus, new_vcpus))
     }
 
     pub(crate) async fn get_pids(&self) -> Result<Vec<u32>> {
@@ -385,6 +430,7 @@ impl Persist for QemuInner {
         Ok(QemuInner {
             id: hypervisor_state.id,
             qemu_process: None,
+            qmp: None,
             config: hypervisor_state.config,
             devices: Vec::new(),
             netns: None,

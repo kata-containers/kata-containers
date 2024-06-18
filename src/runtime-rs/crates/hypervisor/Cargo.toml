@@ -43,6 +43,10 @@ safe-path = "0.1.0"
 crossbeam-channel = "0.5.6"
 tempdir = "0.3.7"
 
+qapi = { version = "0.14", features = [ "qmp", "async-tokio-all" ] }
+qapi-spec = "0.3.1"
+qapi-qmp = "0.14.0"
+
 [target.'cfg(not(target_arch = "s390x"))'.dependencies]
 dragonball = { path = "../../../dragonball", features = ["atomic-guest-memory", "virtio-vsock", "hotplug", "virtio-blk", "virtio-net", "virtio-fs", "vhost-net", "dbs-upcall", "virtio-mem", "virtio-balloon", "vhost-user-net", "host-device"] }
 

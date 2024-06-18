@@ -5,6 +5,7 @@
 
 mod cmdline_generator;
 mod inner;
+mod qmp;
 
 use crate::device::DeviceType;
 use crate::hypervisor_persist::HypervisorState;
@@ -127,7 +128,7 @@ impl Hypervisor for Qemu {
     }
 
     async fn resize_vcpu(&self, old_vcpus: u32, new_vcpus: u32) -> Result<(u32, u32)> {
-        let inner = self.inner.read().await;
+        let mut inner = self.inner.write().await;
         inner.resize_vcpu(old_vcpus, new_vcpus).await
     }
 

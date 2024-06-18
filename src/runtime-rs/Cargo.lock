@@ -1644,6 +1644,9 @@ dependencies = [
  "nix 0.24.3",
  "path-clean",
  "persist",
+ "qapi",
+ "qapi-qmp",
+ "qapi-spec",
  "rand 0.8.5",
  "rust-ini",
  "safe-path 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2957,6 +2960,65 @@ dependencies = [
  "protobuf 3.2.0",
  "ttrpc",
  "ttrpc-codegen",
+]
+
+[[package]]
+name = "qapi"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c6412bdd014ebee03ddbbe79ac03a0b622cce4d80ba45254f6357c847f06fa38"
+dependencies = [
+ "bytes",
+ "futures 0.3.28",
+ "log",
+ "memchr",
+ "qapi-qmp",
+ "qapi-spec",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+]
+
+[[package]]
+name = "qapi-codegen"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ba4de731473de4c8bd508ddb38a9049e999b8a7429f3c052ba8735a178ff68c"
+dependencies = [
+ "qapi-parser",
+]
+
+[[package]]
+name = "qapi-parser"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "80044db145aa2953ef5803d0376dcbca50f2763242547e856b7f37507adca677"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "qapi-qmp"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e8b944db7e544d2fa97595e9a000a6ba5c62c426fa185e7e00aabe4b5640b538"
+dependencies = [
+ "qapi-codegen",
+ "qapi-spec",
+ "serde",
+]
+
+[[package]]
+name = "qapi-spec"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b360919a24ea5fc02fa762cb01bd8f43b643fee51c585f763257773b4dc5a9e8"
+dependencies = [
+ "base64 0.13.1",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
