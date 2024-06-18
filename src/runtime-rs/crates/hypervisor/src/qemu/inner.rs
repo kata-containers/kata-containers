@@ -231,7 +231,7 @@ impl QemuInner {
                 );
                 Ok(qemu_pid)
             } else {
-                Err(anyhow!("cannot get qemu pid (though it seems running)"))
+                Err(anyhow!("QemuInner::get_vmm_master_tid(): qemu process isn't running (likely stopped already)"))
             }
         } else {
             Err(anyhow!("qemu process not running"))
