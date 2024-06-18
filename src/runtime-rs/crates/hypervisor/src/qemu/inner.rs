@@ -167,10 +167,19 @@ impl QemuInner {
     pub(crate) async fn stop_vm(&mut self) -> Result<()> {
         info!(sl!(), "Stopping QEMU VM");
         if let Some(ref mut qemu_process) = &mut self.qemu_process {
-            info!(sl!(), "QemuInner::stop_vm(): kill()'ing qemu");
-            qemu_process.kill().await.map_err(anyhow::Error::from)
+            let is_qemu_running = qemu_process.id().is_some();
+            if is_qemu_running {
+                info!(sl!(), "QemuInner::stop_vm(): kill()'ing qemu");
+                qemu_process.kill().await.map_err(anyhow::Error::from)
+            } else {
+                info!(
+                    sl!(),
+                    "QemuInner::stop_vm(): qemu process isn't running (likely stopped already)"
+                );
+                Ok(())
+            }
         } else {
-            Err(anyhow!("qemu process not running"))
+            Err(anyhow!("qemu process has not been started yet"))
         }
     }
 
