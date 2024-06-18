@@ -42,6 +42,10 @@ func TestMacvtapEndpointTypeSet(t *testing.T) {
 	testEndpointTypeSet(t, "macvtap", MacvtapEndpointType)
 }
 
+func TestVfioEndpointTypeSet(t *testing.T) {
+	testEndpointTypeSet(t, "vfio", VfioEndpointType)
+}
+
 func TestEndpointTypeSetFailure(t *testing.T) {
 	var endpointType EndpointType
 
