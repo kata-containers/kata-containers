@@ -81,7 +81,7 @@ func TestGenerateInterfacesAndRoutes(t *testing.T) {
 	assert.Nil(t, err)
 	nns.SetEndpoints(endpoints)
 
-	resInterfaces, resRoutes, resNeighs, err := generateVCNetworkStructures(context.Background(), nns)
+	resInterfaces, resRoutes, resNeighs, err := generateVCNetworkStructures(context.Background(), nns.Endpoints())
 
 	//
 	// Build expected results:
@@ -371,7 +371,13 @@ func TestAddEndpoints_Dan(t *testing.T) {
 	}
 
 	ctx := context.TODO()
-	_, err := network.AddEndpoints(ctx, nil, nil, true)
-	// TODO: this will be updated after adding supported DAN device
-	assert.ErrorContains(t, err, "unknown DAN device type")
+	eps, err := network.AddEndpoints(ctx, nil, nil, true)
+	assert.NoError(t, err)
+	assert.Len(t, eps, 1)
+
+	ep := eps[0]
+	assert.Equal(t, ep.Name(), "eth0")
+	assert.Equal(t, ep.HardwareAddr(), "0a:58:0a:0a:00:05")
+	assert.Equal(t, ep.Type(), VfioEndpointType)
+	assert.Equal(t, ep.PciPath().String(), "")
 }

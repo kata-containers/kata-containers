@@ -248,6 +248,11 @@ type Sandbox struct {
 	seccompSupported  bool
 	disableVMShutdown bool
 	isVCPUsPinningOn  bool
+
+	// hotplugNetworkConfigApplied prevents network config API being called
+	// multiple times for hot-plugged network device when Sandbox has multiple
+	// containers.
+	hotplugNetworkConfigApplied bool
 }
 
 // ID returns the sandbox identifier string.
@@ -2233,6 +2238,29 @@ func (s *Sandbox) AddDevice(ctx context.Context, info config.DeviceInfo) (api.De
 	}()
 
 	return add, nil
+}
+
+// GetVfioDeviceGuestPciPath return a device's guest PCI path by its host BDF
+func (s *Sandbox) GetVfioDeviceGuestPciPath(hostBDF string) types.PciPath {
+	devices := s.devManager.GetAllDevices()
+	for _, device := range devices {
+		switch device.DeviceType() {
+		case config.DeviceVFIO:
+			vfioDevices, ok := device.GetDeviceInfo().([]*config.VFIODev)
+			if !ok {
+				continue
+			}
+			for _, vfioDev := range vfioDevices {
+				if vfioDev.BDF == hostBDF {
+					return vfioDev.GuestPciPath
+				}
+			}
+		default:
+			continue
+		}
+	}
+
+	return types.PciPath{}
 }
 
 // updateResources will:
