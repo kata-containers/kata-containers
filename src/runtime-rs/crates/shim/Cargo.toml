@@ -27,7 +27,7 @@ slog-async = "2.5.2"
 slog-scope = "4.4.0"
 slog-stdlog = "4.1.0"
 thiserror = "1.0.30"
-tokio = { version = "1.28.1", features = [ "rt", "rt-multi-thread" ] }
+tokio = { version = "1.38.0", features = [ "rt", "rt-multi-thread" ] }
 unix_socket2 = "0.5.4"
 tracing = "0.1.36"
 tracing-opentelemetry = "0.18.0"
