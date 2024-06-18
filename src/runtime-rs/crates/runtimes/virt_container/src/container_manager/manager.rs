@@ -139,12 +139,11 @@ impl ContainerManager for VirtContainerManager {
                 // * should be run after the container is deleted but before delete operation returns
                 // * spec details: https://github.com/opencontainers/runtime-spec/blob/c1662686cff159595277b79322d0272f5182941b/config.md#poststop
                 let c_spec = c.spec().await;
-                let vmm_master_tid = self.hypervisor.get_vmm_master_tid().await?;
                 let state = oci::State {
                     version: c_spec.version.clone(),
                     id: c.container_id.to_string(),
                     status: oci::ContainerState::Stopped,
-                    pid: vmm_master_tid as i32,
+                    pid: self.pid as i32,
                     bundle: c.config().await.bundle,
                     annotations: c_spec.annotations.clone(),
                 };
