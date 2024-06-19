@@ -36,15 +36,10 @@ jobs:
         stage:
           - ${{ inputs.stage }}
     steps:
-      - name: Adjust a permission for repo
-        run: |
-          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
-
       - name: Prepare the self-hosted runner
         run: |
             ${HOME}/scripts/prepare_runner.sh
             sudo rm -rf $GITHUB_WORKSPACE/*
-
 
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
