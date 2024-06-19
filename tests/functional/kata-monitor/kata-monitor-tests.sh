@@ -139,7 +139,7 @@ start_workload() {
 	local sbfile=""
 	local cntfile=""
 
-	[ -n "$runtime" ] && args="-r $runtime"
+	[ -n "$runtime" ] && args="-r $runtime --cancel-timeout 10s"
 
 	sbfile="$(create_sandbox_json)"
 	cntfile="$(create_container_json)"

@@ -8,6 +8,7 @@
 set -o errexit
 set -o nounset
 set -o pipefail
+set -x
 
 kata_tarball_dir="${2:-kata-artifacts}"
 kata_monitor_dir="$(dirname "$(readlink -f "$0")")" 
