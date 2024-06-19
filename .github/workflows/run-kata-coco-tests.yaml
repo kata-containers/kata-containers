@@ -40,7 +40,7 @@ jobs:
   #      DOCKER_TAG: ${{ inputs.tag }}
   #      PR_NUMBER: ${{ inputs.pr-number }}
   #      KATA_HYPERVISOR: ${{ matrix.vmm }}
-  #      KUBERNETES: "k3s"
+  #      KUBERNETES: "vanilla"
   #      USING_NFD: "true"
   #      KBS: "true"
   #      K8S_TEST_HOST_TYPE: "baremetal"
