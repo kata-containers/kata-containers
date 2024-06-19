@@ -766,19 +766,21 @@ func (k *kataAgent) startSandbox(ctx context.Context, sandbox *Sandbox) error {
 
 	if sandbox.config.HypervisorType == RemoteHypervisor {
 		ctx = context.WithValue(ctx, customRequestTimeoutKey, remoteRequestTimeout)
-	} else {
-		// Check grpc server is serving
-		if err = k.check(ctx); err != nil {
+	}
+
+	// Check grpc server is serving
+	if err = k.check(ctx); err != nil {
+		return err
+	}
+
+	// If a Policy has been specified, send it to the agent.
+	if len(sandbox.config.AgentConfig.Policy) > 0 {
+		if err := sandbox.agent.setPolicy(ctx, sandbox.config.AgentConfig.Policy); err != nil {
 			return err
 		}
+	}
 
-		// If a Policy has been specified, send it to the agent.
-		if len(sandbox.config.AgentConfig.Policy) > 0 {
-			if err := sandbox.agent.setPolicy(ctx, sandbox.config.AgentConfig.Policy); err != nil {
-				return err
-			}
-		}
-
+	if sandbox.config.HypervisorType != RemoteHypervisor {
 		// Setup network interfaces and routes
 		interfaces, routes, neighs, err := generateVCNetworkStructures(ctx, sandbox.network)
 		if err != nil {
