@@ -40,10 +40,6 @@ jobs:
           - shim-v2
           - virtiofsd
     steps:
-      - name: Adjust a permission for repo
-        run: |
-          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
-
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
         uses: docker/login-action@v3
