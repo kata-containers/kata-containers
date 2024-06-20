@@ -27,4 +27,4 @@ spec:
         runAsUser: 1000
         seccompProfile:
           type: RuntimeDefault
-  runtimeClassName: kata-qemu
+  runtimeClassName: ${KATA_RUNTIME}
