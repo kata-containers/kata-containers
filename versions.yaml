@@ -213,6 +213,11 @@ assets:
 externals:
   description: "Third-party projects used by the system"
 
+  helm:
+    description: "Kubernetes package manager"
+    url: "https://get.helm.sh/"
+    version: "v3.15.2"
+
   cni-plugins:
     description: "CNI network plugins"
     url: "https://github.com/containernetworking/plugins"
