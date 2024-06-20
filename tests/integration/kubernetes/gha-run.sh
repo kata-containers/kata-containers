@@ -17,6 +17,7 @@ source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
 source "${kubernetes_dir}/confidential_kbs.sh"
 # shellcheck disable=2154
 tools_dir="${repo_root_dir}/tools"
+helm_chart_dir="${tools_dir}/packaging/kata-deploy/helm-chart/kata-deploy"
 kata_tarball_dir="${2:-kata-artifacts}"
 
 DOCKER_REGISTRY=${DOCKER_REGISTRY:-quay.io}
@@ -146,7 +147,7 @@ function deploy_coco_kbs() {
 
 function deploy_kata() {
 	platform="${1}"
-	ensure_yq
+	ensure_helm
 
 	[ "$platform" = "kcli" ] && \
 	export KUBECONFIG="$HOME/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
@@ -157,37 +158,15 @@ function deploy_kata() {
 
 	set_default_cluster_namespace
 
-	sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-
-	# Enable debug for Kata Containers
-	yq -i \
-	  '.spec.template.spec.containers[0].env[1].value = "true"' \
-	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-	# Create the runtime class only for the shim that's being tested
-	yq -i \
-	  ".spec.template.spec.containers[0].env[2].value = \"${KATA_HYPERVISOR}\"" \
-	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-	# Set the tested hypervisor as the default `kata` shim
-	yq -i \
-	  ".spec.template.spec.containers[0].env[3].value = \"${KATA_HYPERVISOR}\"" \
-	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-	# Let the `kata-deploy` script take care of the runtime class creation / removal
-	yq -i \
-	  '.spec.template.spec.containers[0].env[4].value = "true"' \
-	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-	# Let the `kata-deploy` create the default `kata` runtime class
-	yq -i \
-	  '.spec.template.spec.containers[0].env[5].value = "true"' \
-	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-	# Enable 'default_vcpus' hypervisor annotation
-	yq -i \
-	  '.spec.template.spec.containers[0].env[6].value = "default_vcpus"' \
-	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
+	SNAPSHOTTER_HANDLER_MAPPING=""
+	ALLOWED_HYPERVISOR_ANNOTATIONS="default_vcpus"
+	HOST_OS=""
+	AGENT_HTTPS_PROXY=""
+	AGENT_NO_PROXY=""
+	PULL_TYPE_MAPPING=""
 
 	if [ -n "${SNAPSHOTTER}" ]; then
-		yq -i \
-		  ".spec.template.spec.containers[0].env[7].value = \"${KATA_HYPERVISOR}:${SNAPSHOTTER}\"" \
-		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
+		SNAPSHOTTER_HANDLER_MAPPING="${KATA_HYPERVISOR}:${SNAPSHOTTER}"
 	fi
 
 	if [ "${KATA_HOST_OS}" = "cbl-mariner" ]; then
@@ -196,43 +175,51 @@ function deploy_kata() {
 	fi
 
 	if [ "${KATA_HYPERVISOR}" = "qemu" ]; then
-		yq -i \
-		  '.spec.template.spec.containers[0].env[6].value = "image initrd kernel default_vcpus"' \
-		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
+		ALLOWED_HYPERVISOR_ANNOTATIONS="image initrd kernel default_vcpus"
 	fi
 
 	if [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
-		yq -i \
-		  ".spec.template.spec.containers[0].env[8].value = \"${HTTPS_PROXY}\"" \
-		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-
-		yq -i \
-		  ".spec.template.spec.containers[0].env[9].value = \"${NO_PROXY}\"" \
-		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
+		AGENT_HTTPS_PROXY="${HTTPS_PROXY}"
+		AGENT_NO_PROXY="${NO_PROXY}"
 	fi
 
 	# Set the PULL_TYPE_MAPPING
 	if [ "${PULL_TYPE}" != "default" ]; then
-		yq -i \
-		  ".spec.template.spec.containers[0].env[10].value = \"${KATA_HYPERVISOR}:${PULL_TYPE}\"" \
-		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
+		PULL_TYPE_MAPPING="${KATA_HYPERVISOR}:${PULL_TYPE}"
 	fi
 
-	echo "::group::Final kata-deploy.yaml that is used in the test"
-	cat "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-	grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" || die "Failed to setup the tests image"
+	local values_yaml
+	values_yaml=$(mktemp /tmp/values_yaml.XXXXXX)
+
+	cat <<-EOF > "${values_yaml}"
+	k8sDistribution: ${KUBERNETES}
+	image:
+	  reference: ${DOCKER_REGISTRY}/${DOCKER_REPO}
+	  tag: ${DOCKER_TAG}
+	env:
+	  debug: "true"
+	  shims: "${KATA_HYPERVISOR}"
+	  defaultShim: "${KATA_HYPERVISOR}"
+	  createRuntimeClass: "true"
+	  createDefaultRuntimeClass: "true"
+	  allowedHypervisorAnnotations: "${ALLOWED_HYPERVISOR_ANNOTATIONS}"
+	  snapshotterHandlerMapping: "${SNAPSHOTTER_HANDLER_MAPPING}"
+	  agentHttpsProxy: "${AGENT_HTTPS_PROXY}"
+	  agentNoProxy: "${AGENT_NO_PROXY}"
+	  pullTypeMapping: "${PULL_TYPE_MAPPING}"
+	  hostOS: "${HOST_OS}"
+	EOF
+
+	echo "::group::Final kata-deploy templates used in the test"
+	helm template ./"${helm_chart_dir}" --set-file values.yaml="${values_yaml}" --namespace kube-system
+	sed -n "/reference: ${DOCKER_REGISTRY}\/${DOCKER_REPO}/{N;/\n[[:space:]]*tag: ${DOCKER_TAG}/p;}" "${values_yaml}"
 	echo "::endgroup::"
 
-	kubectl_retry apply -f "${tools_dir}/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
-	case "${KUBERNETES}" in
-		k0s) kubectl_retry apply -k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k0s" ;;
-		k3s) kubectl_retry apply -k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k3s" ;;
-		rke2) kubectl_retry apply -k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/rke2" ;;
-		*) kubectl_retry apply -f "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-	esac
-
-	local cmd="kubectl -n kube-system get -l name=kata-deploy pod 2>/dev/null | grep '\<Running\>'"
-	waitForProcess "${KATA_DEPLOY_WAIT_TIMEOUT}" 10 "$cmd"
+	# will wait until all Pods, PVCs, Services, and minimum number of Pods
+	# of a Deployment, StatefulSet, or ReplicaSet are in a ready state
+	# before marking the release as successful. It will wait for as long
+	# as --timeout -- Ready >> Running
+	helm install --wait --timeout 10m kata-deploy ./"${helm_chart_dir}" --set-file values.yaml="${values_yaml}" --namespace kube-system
 
 	# This is needed as the kata-deploy pod will be set to "Ready" when it starts running,
 	# which may cause issues like not having the node properly labeled or the artefacts
