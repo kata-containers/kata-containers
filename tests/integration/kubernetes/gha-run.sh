@@ -363,58 +363,11 @@ function collect_artifacts() {
 }
 
 function cleanup_kata_deploy() {
-	ensure_yq
+	ensure_helm
 
-	case "${KUBERNETES}" in
-		k0s)
-			deploy_spec="-k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k0s""
-			cleanup_spec="-k "${tools_dir}/packaging/kata-deploy/kata-cleanup/overlays/k0s""
-			;;
-		k3s)
-			deploy_spec="-k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k3s""
-			cleanup_spec="-k "${tools_dir}/packaging/kata-deploy/kata-cleanup/overlays/k3s""
-			;;
-		rke2)
-			deploy_spec="-k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/rke2""
-			cleanup_spec="-k "${tools_dir}/packaging/kata-deploy/kata-cleanup/overlays/rke2""
-			;;
-		*)
-			deploy_spec="-f "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml""
-			cleanup_spec="-f "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml""
-			;;
-	esac
-
-	# shellcheck disable=2086
-	kubectl_retry delete --ignore-not-found ${deploy_spec}
-	kubectl -n kube-system wait --timeout=10m --for=delete -l name=kata-deploy pod
-
-	# Let the `kata-deploy` script take care of the runtime class creation / removal
-	yq -i \
-	  '.spec.template.spec.containers[0].env[4].value = "true"' \
-	  "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
-	# Create the runtime class only for the shim that's being tested
-	yq -i \
-	  ".spec.template.spec.containers[0].env[2].value = \"${KATA_HYPERVISOR}\"" \
-	  "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
-	# Set the tested hypervisor as the default `kata` shim
-	yq -i \
-	  ".spec.template.spec.containers[0].env[3].value = \"${KATA_HYPERVISOR}\"" \
-	  "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
-	# Let the `kata-deploy` create the default `kata` runtime class
-	yq -i \
-	  '.spec.template.spec.containers[0].env[5].value = "true"' \
-	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-
-	sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
-	cat "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
-	grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" || die "Failed to setup the tests image"
-	# shellcheck disable=2086
-	kubectl_retry apply ${cleanup_spec}
-	sleep 180s
-
-	# shellcheck disable=2086
-	kubectl_retry delete --ignore-not-found ${cleanup_spec}
-	kubectl_retry delete --ignore-not-found -f "${tools_dir}/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
+	# Do not return after deleting only the parent object cascade=foreground
+	# means also wait for child/dependent object deletion
+	helm uninstall kata-deploy --ignore-not-found --wait --cascade foreground --timeout 10m --namespace kube-system
 }
 
 function cleanup() {
