@@ -183,7 +183,15 @@ function kbs_k8s_delete() {
 	kubectl delete -k config/kubernetes/overlays
 	# Verify that KBS namespace resources were properly deleted
 	cmd="kubectl get all -n $KBS_NS 2>&1 | grep 'No resources found'"
-	waitForProcess "120" "30" "$cmd"
+	waitForProcess "90" "30" "$cmd"
+
+	# This is not ideal, but this will avoid runs getting stuck
+	# till we debug why it's actually happening.
+	if kubectl get pods -n $KBS_NS | grep -q Terminating; then
+		pod=$(kubectl get pods -n $KBS_NS -o NAME)
+		cmd="kubectl delete $pod -n $KBS_NS --force"
+		waitForProcess "60" "15" "$cmd"
+	fi
 	popd
 }
 
