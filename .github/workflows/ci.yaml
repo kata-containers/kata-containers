@@ -18,9 +18,6 @@ on:
 
 jobs:
   build-and-publish-kata-deploy-helm-chart:
-    permissions:
-      contents: write
-      repository-projects: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout kata-containers
@@ -35,6 +32,7 @@ jobs:
         with:
           repository: "zvonkok/helm-charts"
           ref: main
+          token: ${{ secrets.HELM_CHARTS_GITHUB_TOKEN }}
           path: helm-charts
 
       - name: Rebase atop of the latest target branch
