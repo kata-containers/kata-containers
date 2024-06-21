@@ -196,7 +196,7 @@ install_cached_tarball_component() {
 	# "tarball1_name:tarball1_path tarball2_name:tarball2_path ... tarballN_name:tarballN_path"
 	local extra_tarballs="${6:-}"
 
-	sudo oras pull ${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) || return 1
+	oras pull ${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) || return 1
 
 	cached_version="$(cat ${component}-version)"
 	cached_image_version="$(cat ${component}-builder-image-version)"
@@ -238,8 +238,8 @@ get_coco_guest_components_tarball_path() {
 }
 
 get_latest_coco_guest_components_artefact_and_builder_image_version() {
-	local coco_guest_components_version=$(get_from_kata_deps "externals.coco-guest-components.version")
-	local coco_guest_components_toolchain=$(get_from_kata_deps "externals.coco-guest-components.toolchain")
+	local coco_guest_components_version=$(get_from_kata_deps ".externals.coco-guest-components.version")
+	local coco_guest_components_toolchain=$(get_from_kata_deps ".externals.coco-guest-components.toolchain")
 	local latest_coco_guest_components_artefact="${coco_guest_components_version}-${coco_guest_components_toolchain}"
 	local latest_coco_guest_components_builder_image="$(get_coco_guest_components_image_name)"
 
@@ -254,8 +254,8 @@ get_pause_image_tarball_path() {
 }
 
 get_latest_pause_image_artefact_and_builder_image_version() {
-	local pause_image_repo="$(get_from_kata_deps "externals.pause.repo")"
-	local pause_image_version=$(get_from_kata_deps "externals.pause.version")
+	local pause_image_repo="$(get_from_kata_deps ".externals.pause.repo")"
+	local pause_image_version=$(get_from_kata_deps ".externals.pause.version")
 	local latest_pause_image_artefact="${pause_image_repo}-${pause_image_version}"
 	local latest_pause_image_builder_image="$(get_pause_image_name)"
 
@@ -263,7 +263,7 @@ get_latest_pause_image_artefact_and_builder_image_version() {
 }
 
 get_latest_kernel_confidential_artefact_and_builder_image_version() {
-		local kernel_version=$(get_from_kata_deps "assets.kernel.confidential.version")
+		local kernel_version=$(get_from_kata_deps ".assets.kernel.confidential.version")
 		local kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
 		local latest_kernel_artefact="${kernel_version}-${kernel_kata_config_version}-$(get_last_modification $(dirname $kernel_builder))"
 		local latest_kernel_builder_image="$(get_kernel_image_name)"
@@ -285,9 +285,9 @@ install_image() {
 	local osbuilder_last_commit="$(get_last_modification "${repo_root_dir}/tools/osbuilder")"
 	local guest_image_last_commit="$(get_last_modification "${repo_root_dir}/tools/packaging/guest-image")"
 	local libs_last_commit="$(get_last_modification "${repo_root_dir}/src/libs")"
-	local gperf_version="$(get_from_kata_deps "externals.gperf.version")"
-	local libseccomp_version="$(get_from_kata_deps "externals.libseccomp.version")"
-	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
+	local gperf_version="$(get_from_kata_deps ".externals.gperf.version")"
+	local libseccomp_version="$(get_from_kata_deps ".externals.libseccomp.version")"
+	local rust_version="$(get_from_kata_deps ".languages.rust.meta.newest-version")"
 	local agent_last_commit=$(merge_two_hashes \
 		"$(get_last_modification "${repo_root_dir}/src/agent")" \
 		"$(get_last_modification "${repo_root_dir}/tools/packaging/static-build/agent")")
@@ -315,16 +315,16 @@ install_image() {
 	info "Create image"
 
 	if [ -n "${variant}" ]; then
-		os_name="$(get_from_kata_deps "assets.image.architecture.${ARCH}.${variant}.name")"
-		os_version="$(get_from_kata_deps "assets.image.architecture.${ARCH}.${variant}.version")"
+		os_name="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.${variant}.name")"
+		os_version="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.${variant}.version")"
 
 		if [ "${variant}" == "confidential" ]; then
 			export COCO_GUEST_COMPONENTS_TARBALL="$(get_coco_guest_components_tarball_path)"
 			export PAUSE_IMAGE_TARBALL="$(get_pause_image_tarball_path)"
 		fi
 	else
-		os_name="$(get_from_kata_deps "assets.image.architecture.${ARCH}.name")"
-		os_version="$(get_from_kata_deps "assets.image.architecture.${ARCH}.version")"
+		os_name="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.name")"
+		os_version="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.version")"
 	fi
 
 	export AGENT_TARBALL=$(get_agent_tarball_path)
@@ -354,9 +354,9 @@ install_initrd() {
 	local osbuilder_last_commit="$(get_last_modification "${repo_root_dir}/tools/osbuilder")"
 	local guest_image_last_commit="$(get_last_modification "${repo_root_dir}/tools/packaging/guest-image")"
 	local libs_last_commit="$(get_last_modification "${repo_root_dir}/src/libs")"
-	local gperf_version="$(get_from_kata_deps "externals.gperf.version")"
-	local libseccomp_version="$(get_from_kata_deps "externals.libseccomp.version")"
-	local rust_version="$(get_from_kata_deps "languages.rust.meta.newest-version")"
+	local gperf_version="$(get_from_kata_deps ".externals.gperf.version")"
+	local libseccomp_version="$(get_from_kata_deps ".externals.libseccomp.version")"
+	local rust_version="$(get_from_kata_deps ".languages.rust.meta.newest-version")"
 	local agent_last_commit=$(merge_two_hashes \
 		"$(get_last_modification "${repo_root_dir}/src/agent")" \
 		"$(get_last_modification "${repo_root_dir}/tools/packaging/static-build/agent")")
@@ -385,16 +385,16 @@ install_initrd() {
 	info "Create initrd"
 
 	if [ -n "${variant}" ]; then
-		os_name="$(get_from_kata_deps "assets.initrd.architecture.${ARCH}.${variant}.name")"
-		os_version="$(get_from_kata_deps "assets.initrd.architecture.${ARCH}.${variant}.version")"
+		os_name="$(get_from_kata_deps ".assets.initrd.architecture.${ARCH}.${variant}.name")"
+		os_version="$(get_from_kata_deps ".assets.initrd.architecture.${ARCH}.${variant}.version")"
 
 		if [ "${variant}" == "confidential" ]; then
 			export COCO_GUEST_COMPONENTS_TARBALL="$(get_coco_guest_components_tarball_path)"
 			export PAUSE_IMAGE_TARBALL="$(get_pause_image_tarball_path)"
 		fi
 	else
-		os_name="$(get_from_kata_deps "assets.initrd.architecture.${ARCH}.name")"
-		os_version="$(get_from_kata_deps "assets.initrd.architecture.${ARCH}.version")"
+		os_name="$(get_from_kata_deps ".assets.initrd.architecture.${ARCH}.name")"
+		os_version="$(get_from_kata_deps ".assets.initrd.architecture.${ARCH}.version")"
 	fi
 
 	export AGENT_TARBALL=$(get_agent_tarball_path)
@@ -493,11 +493,11 @@ install_kernel_helper() {
 	local extra_cmd="${3:-}"
 	local extra_tarballs=""
 
-	export kernel_version="$(get_from_kata_deps ${kernel_version_yaml_path})"
+	export kernel_version="$(get_from_kata_deps .${kernel_version_yaml_path})"
 	export kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
 
 	if [[ "${kernel_name}" == "kernel"*"-confidential" ]]; then
-		kernel_version="$(get_from_kata_deps assets.kernel.confidential.version)"
+		kernel_version="$(get_from_kata_deps .assets.kernel.confidential.version)"
 	fi
 
 	if [[ "${kernel_name}" == "kernel"*"-confidential" ]]; then
@@ -530,7 +530,7 @@ install_kernel() {
 }
 
 install_kernel_confidential() {
-	local kernel_url="$(get_from_kata_deps assets.kernel.confidential.url)"
+	local kernel_url="$(get_from_kata_deps .assets.kernel.confidential.url)"
 
 	export MEASURED_ROOTFS=yes
 
@@ -549,7 +549,7 @@ install_kernel_dragonball_experimental() {
 
 #Install GPU enabled kernel asset
 install_kernel_nvidia_gpu() {
-	local kernel_url="$(get_from_kata_deps assets.kernel.url)"
+	local kernel_url="$(get_from_kata_deps .assets.kernel.url)"
 
 	install_kernel_helper \
 		"assets.kernel.version" \
@@ -559,7 +559,7 @@ install_kernel_nvidia_gpu() {
 
 #Install GPU and TEE enabled kernel asset
 install_kernel_nvidia_gpu_confidential() {
-	local kernel_url="$(get_from_kata_deps assets.kernel.confidential.url)"
+	local kernel_url="$(get_from_kata_deps .assets.kernel.confidential.url)"
 
 	install_kernel_helper \
 		"assets.kernel.confidential.version" \
@@ -574,8 +574,8 @@ install_qemu_helper() {
 	local builder="${4}"
 	local qemu_tarball_name="${qemu_tarball_name:-kata-static-qemu.tar.gz}"
 
-	export qemu_repo="$(get_from_kata_deps ${qemu_repo_yaml_path})"
-	export qemu_version="$(get_from_kata_deps ${qemu_version_yaml_path})"
+	export qemu_repo="$(get_from_kata_deps .${qemu_repo_yaml_path})"
+	export qemu_version="$(get_from_kata_deps .${qemu_version_yaml_path})"
 
 	latest_artefact="${qemu_version}-$(calc_qemu_files_sha256sum)"
 	latest_builder_image="$(get_qemu_image_name)"
@@ -615,7 +615,7 @@ install_qemu_snp_experimental() {
 
 # Install static firecracker asset
 install_firecracker() {
-	local firecracker_version=$(get_from_kata_deps "assets.hypervisor.firecracker.version")
+	local firecracker_version=$(get_from_kata_deps ".assets.hypervisor.firecracker.version")
 
 	latest_artefact="${firecracker_version}"
 	latest_builder_image=""
@@ -632,8 +632,8 @@ install_firecracker() {
 	"${firecracker_builder}"
 	info "Install static firecracker"
 	mkdir -p "${destdir}/opt/kata/bin/"
-	sudo install -D --owner root --group root --mode "$default_binary_permissions" release-${firecracker_version}-${ARCH}/firecracker-${firecracker_version}-${ARCH} "${destdir}/opt/kata/bin/firecracker"
-	sudo install -D --owner root --group root --mode "$default_binary_permissions" release-${firecracker_version}-${ARCH}/jailer-${firecracker_version}-${ARCH} "${destdir}/opt/kata/bin/jailer"
+	install -D --mode "$default_binary_permissions" release-${firecracker_version}-${ARCH}/firecracker-${firecracker_version}-${ARCH} "${destdir}/opt/kata/bin/firecracker"
+	install -D --mode "$default_binary_permissions" release-${firecracker_version}-${ARCH}/jailer-${firecracker_version}-${ARCH} "${destdir}/opt/kata/bin/jailer"
 }
 
 install_clh_helper() {
@@ -641,7 +641,7 @@ install_clh_helper() {
 	features="${2}"
 	suffix="${3:-""}"
 
-	latest_artefact="$(get_from_kata_deps "assets.hypervisor.cloud_hypervisor.version")"
+	latest_artefact="$(get_from_kata_deps ".assets.hypervisor.cloud_hypervisor.version")"
 	latest_builder_image=""
 
 	install_cached_tarball_component \
@@ -656,7 +656,7 @@ install_clh_helper() {
 	libc="${libc}" features="${features}" "${clh_builder}"
 	info "Install static cloud-hypervisor"
 	mkdir -p "${destdir}/opt/kata/bin/"
-	sudo install -D --owner root --group root --mode "$default_binary_permissions" cloud-hypervisor/cloud-hypervisor "${destdir}/opt/kata/bin/cloud-hypervisor${suffix}"
+	install -D --mode "$default_binary_permissions" cloud-hypervisor/cloud-hypervisor "${destdir}/opt/kata/bin/cloud-hypervisor${suffix}"
 }
 
 # Install static cloud-hypervisor asset
@@ -683,7 +683,7 @@ install_clh_glibc() {
 
 # Install static stratovirt asset
 install_stratovirt() {
-	local stratovirt_version=$(get_from_kata_deps "assets.hypervisor.stratovirt.version")
+	local stratovirt_version=$(get_from_kata_deps ".assets.hypervisor.stratovirt.version")
 
 	latest_artefact="${stratovirt_version}"
 	latest_builder_image=""
@@ -700,12 +700,12 @@ install_stratovirt() {
 	"${stratovirt_builder}"
 	info "Install static stratovirt"
 	mkdir -p "${destdir}/opt/kata/bin/"
-	sudo install -D --owner root --group root --mode "$default_binary_permissions" static-stratovirt/stratovirt "${destdir}/opt/kata/bin/stratovirt"
+	install -D --mode "$default_binary_permissions" static-stratovirt/stratovirt "${destdir}/opt/kata/bin/stratovirt"
 }
 
 # Install static virtiofsd asset
 install_virtiofsd() {
-	latest_artefact="$(get_from_kata_deps "externals.virtiofsd.version")-$(get_from_kata_deps "externals.virtiofsd.toolchain")"
+	latest_artefact="$(get_from_kata_deps ".externals.virtiofsd.version")-$(get_from_kata_deps ".externals.virtiofsd.toolchain")"
 	latest_builder_image="$(get_virtiofsd_image_name)"
 
 	install_cached_tarball_component \
@@ -720,14 +720,14 @@ install_virtiofsd() {
 	"${virtiofsd_builder}"
 	info "Install static virtiofsd"
 	mkdir -p "${destdir}/opt/kata/libexec/"
-	sudo install -D --owner root --group root --mode "$default_binary_permissions" virtiofsd/virtiofsd "${destdir}/opt/kata/libexec/virtiofsd"
+	install -D --mode "$default_binary_permissions" virtiofsd/virtiofsd "${destdir}/opt/kata/libexec/virtiofsd"
 }
 
 # Install static nydus asset
 install_nydus() {
 	[ "${ARCH}" == "aarch64" ] && ARCH=arm64
 
-	latest_artefact="$(get_from_kata_deps "externals.nydus.version")"
+	latest_artefact="$(get_from_kata_deps ".externals.nydus.version")"
 	latest_builder_image=""
 
 	install_cached_tarball_component \
@@ -744,7 +744,7 @@ install_nydus() {
 	mkdir -p "${destdir}/opt/kata/libexec/"
 	ls -tl . || true
 	ls -tl nydus-static || true
-	sudo install -D --owner root --group root --mode "$default_binary_permissions" nydus-static/nydusd "${destdir}/opt/kata/libexec/nydusd"
+	install -D --mode "$default_binary_permissions" nydus-static/nydusd "${destdir}/opt/kata/libexec/nydusd"
 }
 
 #Install all components that are not assets
@@ -752,8 +752,8 @@ install_shimv2() {
 	local shim_v2_last_commit="$(get_last_modification "${repo_root_dir}/src/runtime")"
 	local runtime_rs_last_commit="$(get_last_modification "${repo_root_dir}/src/runtime-rs")"
 	local protocols_last_commit="$(get_last_modification "${repo_root_dir}/src/libs/protocols")"
-	local GO_VERSION="$(get_from_kata_deps "languages.golang.meta.newest-version")"
-	local RUST_VERSION="$(get_from_kata_deps "languages.rust.meta.newest-version")"
+	local GO_VERSION="$(get_from_kata_deps ".languages.golang.meta.newest-version")"
+	local RUST_VERSION="$(get_from_kata_deps ".languages.rust.meta.newest-version")"
 
 	latest_artefact="${shim_v2_last_commit}-${protocols_last_commit}-${runtime_rs_last_commit}-${GO_VERSION}-${RUST_VERSION}"
 	latest_builder_image="$(get_shim_v2_image_name)"
@@ -779,7 +779,7 @@ install_ovmf() {
 	local component_name="ovmf"
 	[ "${ovmf_type}" == "sev" ] && component_name="ovmf-sev"
 
-	latest_artefact="$(get_from_kata_deps "externals.ovmf.${ovmf_type}.version")"
+	latest_artefact="$(get_from_kata_deps ".externals.ovmf.${ovmf_type}.version")"
 	latest_builder_image="$(get_ovmf_image_name)"
 
 	install_cached_tarball_component \
@@ -801,7 +801,7 @@ install_ovmf_sev() {
 
 install_agent() {
 	latest_artefact="$(git log -1 --abbrev=9 --pretty=format:"%h" ${repo_root_dir}/src/agent)"
-	artefact_tag="$(git log -1 --abbrev=9 --pretty=format:"%h" ${repo_root_dir})"
+	artefact_tag="$(git log -1 --pretty=format:"%H" ${repo_root_dir})"
 	latest_builder_image="$(get_agent_image_name)"
 
 	install_cached_tarball_component \
@@ -812,18 +812,18 @@ install_agent() {
 		"${final_tarball_path}" \
 		&& return 0
 
-	export LIBSECCOMP_VERSION="$(get_from_kata_deps "externals.libseccomp.version")"
-	export LIBSECCOMP_URL="$(get_from_kata_deps "externals.libseccomp.url")"
-	export GPERF_VERSION="$(get_from_kata_deps "externals.gperf.version")"
-	export GPERF_URL="$(get_from_kata_deps "externals.gperf.url")"
+	export LIBSECCOMP_VERSION="$(get_from_kata_deps ".externals.libseccomp.version")"
+	export LIBSECCOMP_URL="$(get_from_kata_deps ".externals.libseccomp.url")"
+	export GPERF_VERSION="$(get_from_kata_deps ".externals.gperf.version")"
+	export GPERF_URL="$(get_from_kata_deps ".externals.gperf.url")"
 
 	info "build static agent"
 	DESTDIR="${destdir}" AGENT_POLICY="yes" PULL_TYPE=${PULL_TYPE} "${agent_builder}"
 }
 
 install_coco_guest_components() {
-	latest_artefact="$(get_from_kata_deps "externals.coco-guest-components.version")-$(get_from_kata_deps "externals.coco-guest-components.toolchain")"
-	artefact_tag="$(get_from_kata_deps "externals.coco-guest-components.version")"
+	latest_artefact="$(get_from_kata_deps ".externals.coco-guest-components.version")-$(get_from_kata_deps ".externals.coco-guest-components.toolchain")"
+	artefact_tag="$(get_from_kata_deps ".externals.coco-guest-components.version")"
 	latest_builder_image="$(get_coco_guest_components_image_name)"
 
 	install_cached_tarball_component \
@@ -839,7 +839,7 @@ install_coco_guest_components() {
 }
 
 install_pause_image() {
-	latest_artefact="$(get_from_kata_deps "externals.pause.repo")-$(get_from_kata_deps "externals.pause.version")"
+	latest_artefact="$(get_from_kata_deps ".externals.pause.repo")-$(get_from_kata_deps ".externals.pause.version")"
 	artefact_tag=${latest_artefact}
 	latest_builder_image="$(get_pause_image_name)"
 
@@ -886,9 +886,7 @@ install_script_helper() {
 
 	mkdir -p "$bin_dir"
 
-	sudo install -D \
-		--owner root \
-		--group root \
+	install -D \
 		--mode "${default_binary_permissions}" \
 		"${script_path}" \
 		"${bin_dir}/${script_file}"
@@ -898,7 +896,7 @@ install_script_helper() {
 	pushd "$bin_dir" &>/dev/null
 
 	# Create a sym-link with the extension removed
-	sudo ln -sf "$script_file" "$script_file_name"
+	ln -sf "$script_file" "$script_file_name"
 
 	popd &>/dev/null
 }
@@ -929,8 +927,8 @@ install_tools_helper() {
 	if [[ "${tool}" == "genpolicy" ]]; then
 		defaults_path="${destdir}/opt/kata/share/defaults/kata-containers"
 		mkdir -p "${defaults_path}"
-		sudo install -D --owner root --group root --mode 0644 ${repo_root_dir}/src/tools/${tool}/rules.rego "${defaults_path}/rules.rego"
-		sudo install -D --owner root --group root --mode 0644 ${repo_root_dir}/src/tools/${tool}/genpolicy-settings.json "${defaults_path}/genpolicy-settings.json"
+		install -D --mode 0644 ${repo_root_dir}/src/tools/${tool}/rules.rego "${defaults_path}/rules.rego"
+		install -D --mode 0644 ${repo_root_dir}/src/tools/${tool}/genpolicy-settings.json "${defaults_path}/genpolicy-settings.json"
 		binary_permissions="0755"
 	else
 		binary_permissions="$default_binary_permissions"
@@ -938,7 +936,7 @@ install_tools_helper() {
 
 	info "Install static ${tool_binary}"
 	mkdir -p "${destdir}/opt/kata/bin/"
-	sudo install -D --owner root --group root --mode ${binary_permissions} ${binary} "${destdir}/opt/kata/bin/${tool_binary}"
+	install -D --mode ${binary_permissions} ${binary} "${destdir}/opt/kata/bin/${tool_binary}"
 }
 
 install_agent_ctl() {
@@ -1089,7 +1087,7 @@ handle_build() {
 
 	if [ ! -f "${final_tarball_path}" ]; then
 		cd "${destdir}"
-		sudo tar cvfJ "${final_tarball_path}" "."
+		tar cvfJ "${final_tarball_path}" "."
 	fi
 	tar tvf "${final_tarball_path}"
 
@@ -1101,7 +1099,7 @@ handle_build() {
 				kernel_headers_dir=$(get_kernel_headers_dir "${build_target}")
 
 				pushd "${kernel_headers_dir}"
-				find . -type f -name "*.${KERNEL_HEADERS_PKG_TYPE}" -exec sudo tar cvfJ "${kernel_headers_final_tarball_path}" {} +
+				find . -type f -name "*.${KERNEL_HEADERS_PKG_TYPE}" -exec tar cvfJ "${kernel_headers_final_tarball_path}" {} +
 				popd
 			fi
 			tar tvf "${kernel_headers_final_tarball_path}"
@@ -1113,8 +1111,8 @@ handle_build() {
 				local modules_dir=$(get_kernel_modules_dir ${kernel_version} ${kernel_kata_config_version} ${build_target})
 
 				pushd "${modules_dir}"
-				sudo rm -f build
-				sudo tar cvfJ "${modules_final_tarball_path}" "."
+				rm -f build
+				tar cvfJ "${modules_final_tarball_path}" "."
 				popd
 			fi
 			tar tvf "${modules_final_tarball_path}"
@@ -1135,9 +1133,9 @@ handle_build() {
 			die "ARTEFACT_REGISTRY, ARTEFACT_REPOSITORY, ARTEFACT_REGISTRY_USERNAME, ARTEFACT_REGISTRY_PASSWORD and TARGET_BRANCH must be passed to the script when pushing the artefacts to the registry!"
 		fi
 
-		echo "${ARTEFACT_REGISTRY_PASSWORD}" | sudo oras login "${ARTEFACT_REGISTRY}" -u "${ARTEFACT_REGISTRY_USERNAME}" --password-stdin
+		echo "${ARTEFACT_REGISTRY_PASSWORD}" | oras login "${ARTEFACT_REGISTRY}" -u "${ARTEFACT_REGISTRY_USERNAME}" --password-stdin
 
-		tags=(latest-${TARGET_BRANCH}-$(uname -m))
+		tags=(latest-"${TARGET_BRANCH}")
 		if [ -n "${artefact_tag:-}" ]; then
 			tags+=("${artefact_tag}")
 		fi
@@ -1148,12 +1146,14 @@ handle_build() {
 		echo "Pushing ${build_target} with tags: ${tags[*]}"
 
 		for tag in "${tags[@]}"; do
-			# tags can only contain lowercase and uppercase letters, digits, underscores, periods, and hyphens, so
-			# filter out non-printable characers and then replace invalid printable characters with underscode
-			tag=("$(echo ${tag} | tr -dc '[:print:]' | tr -c '[a-zA-Z0-9\_\.\-]' _)")
+			# tags can only contain lowercase and uppercase letters, digits, underscores, periods, and hyphens
+			# and limited to 128 characters, so filter out non-printable characers, replace invalid printable
+			# characters with underscode and trim down to leave enough space for the arch suffix
+			tag_length_limit=$(expr 128 - $(echo "-$(uname -m)" | wc -c))
+			tag=("$(echo ${tag} | tr -dc '[:print:]' | tr -c '[a-zA-Z0-9\_\.\-]' _ | head -c ${tag_length_limit})-$(uname -m)")
 			case ${build_target} in
 				kernel-nvidia-gpu)
-					sudo oras push \
+					oras push \
 						${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:${tag} \
 						${final_tarball_name} \
 						"kata-static-${build_target}-headers.tar.xz" \
@@ -1162,7 +1162,7 @@ handle_build() {
 						${build_target}-sha256sum
 					;;
 				kernel-nvidia-gpu-confidential)
-					sudo oras push \
+					oras push \
 						${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:${tag} \
 						${final_tarball_name} \
 						"kata-static-${build_target}-modules.tar.xz" \
@@ -1172,7 +1172,7 @@ handle_build() {
 						${build_target}-sha256sum
 					;;
 				kernel*-confidential)
-					sudo oras push \
+					oras push \
 						${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:${tag} \
 						${final_tarball_name} \
 						"kata-static-${build_target}-modules.tar.xz" \
@@ -1181,7 +1181,7 @@ handle_build() {
 						${build_target}-sha256sum
 					;;
 				*)
-					sudo oras push \
+					oras push \
 						${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:${tag} \
 						${final_tarball_name} \
 						${build_target}-version \
@@ -1190,7 +1190,7 @@ handle_build() {
 					;;
 			esac
 		done
-		sudo oras logout "${ARTEFACT_REGISTRY}"
+		oras logout "${ARTEFACT_REGISTRY}"
 	fi
 
 	popd
@@ -1209,8 +1209,6 @@ silent_mode_error_trap() {
 }
 
 main() {
-	git config --global --add safe.directory ${repo_root_dir}
-
 	local build_targets
 	local silent
 	build_targets=(

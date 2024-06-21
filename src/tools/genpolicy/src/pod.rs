@@ -46,7 +46,7 @@ pub struct PodSpec {
     restartPolicy: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    runtimeClassName: Option<String>,
+    pub runtimeClassName: Option<String>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub initContainers: Option<Vec<Container>>,
@@ -109,6 +109,9 @@ pub struct Container {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub volumeMounts: Option<Vec<VolumeMount>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub volumeDevices: Option<Vec<VolumeDevice>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     env: Option<Vec<EnvVar>>,
@@ -420,6 +423,13 @@ pub struct VolumeMount {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subPath: Option<String>,
     // TODO: additional fields.
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct VolumeDevice {
+    pub devicePath: String,
+    pub name: String,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -754,6 +764,13 @@ impl yaml::K8sResource for Pod {
             return shared;
         }
         false
+    }
+
+    fn get_runtime_class_name(&self) -> Option<String> {
+        self.spec
+            .runtimeClassName
+            .clone()
+            .or_else(|| Some(String::new()))
     }
 }
 

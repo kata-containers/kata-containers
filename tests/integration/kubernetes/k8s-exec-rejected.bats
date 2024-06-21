@@ -19,9 +19,9 @@ setup() {
 
 @test "Kubectl exec rejected by policy" {
 	# Add to the YAML file a policy that rejects ExecProcessRequest.
-	yq write -i "${pod_yaml}" \
-		'metadata.annotations."io.katacontainers.config.agent.policy"' \
-		"${allow_all_except_exec_policy}"
+	yq -i \
+		".metadata.annotations.\"io.katacontainers.config.agent.policy\" = \"${allow_all_except_exec_policy}\"" \
+  "${pod_yaml}"
 
 	# Create the pod
 	kubectl create -f "${pod_yaml}"

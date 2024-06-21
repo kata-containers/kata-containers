@@ -16,26 +16,30 @@ import (
 
 // VmConfig Virtual machine configuration
 type VmConfig struct {
-	Cpus     *CpusConfig     `json:"cpus,omitempty"`
-	Memory   *MemoryConfig   `json:"memory,omitempty"`
-	Payload  PayloadConfig   `json:"payload"`
-	Disks    *[]DiskConfig   `json:"disks,omitempty"`
-	Net      *[]NetConfig    `json:"net,omitempty"`
-	Rng      *RngConfig      `json:"rng,omitempty"`
-	Balloon  *BalloonConfig  `json:"balloon,omitempty"`
-	Fs       *[]FsConfig     `json:"fs,omitempty"`
-	Pmem     *[]PmemConfig   `json:"pmem,omitempty"`
-	Serial   *ConsoleConfig  `json:"serial,omitempty"`
-	Console  *ConsoleConfig  `json:"console,omitempty"`
-	Devices  *[]DeviceConfig `json:"devices,omitempty"`
-	Vdpa     *[]VdpaConfig   `json:"vdpa,omitempty"`
-	Vsock    *VsockConfig    `json:"vsock,omitempty"`
-	SgxEpc   *[]SgxEpcConfig `json:"sgx_epc,omitempty"`
-	Numa     *[]NumaConfig   `json:"numa,omitempty"`
-	Iommu    *bool           `json:"iommu,omitempty"`
-	Watchdog *bool           `json:"watchdog,omitempty"`
-	Platform *PlatformConfig `json:"platform,omitempty"`
-	Tpm      *TpmConfig      `json:"tpm,omitempty"`
+	Cpus            *CpusConfig             `json:"cpus,omitempty"`
+	Memory          *MemoryConfig           `json:"memory,omitempty"`
+	Payload         PayloadConfig           `json:"payload"`
+	RateLimitGroups *[]RateLimitGroupConfig `json:"rate_limit_groups,omitempty"`
+	Disks           *[]DiskConfig           `json:"disks,omitempty"`
+	Net             *[]NetConfig            `json:"net,omitempty"`
+	Rng             *RngConfig              `json:"rng,omitempty"`
+	Balloon         *BalloonConfig          `json:"balloon,omitempty"`
+	Fs              *[]FsConfig             `json:"fs,omitempty"`
+	Pmem            *[]PmemConfig           `json:"pmem,omitempty"`
+	Serial          *ConsoleConfig          `json:"serial,omitempty"`
+	Console         *ConsoleConfig          `json:"console,omitempty"`
+	DebugConsole    *DebugConsoleConfig     `json:"debug_console,omitempty"`
+	Devices         *[]DeviceConfig         `json:"devices,omitempty"`
+	Vdpa            *[]VdpaConfig           `json:"vdpa,omitempty"`
+	Vsock           *VsockConfig            `json:"vsock,omitempty"`
+	SgxEpc          *[]SgxEpcConfig         `json:"sgx_epc,omitempty"`
+	Numa            *[]NumaConfig           `json:"numa,omitempty"`
+	Iommu           *bool                   `json:"iommu,omitempty"`
+	Watchdog        *bool                   `json:"watchdog,omitempty"`
+	Pvpanic         *bool                   `json:"pvpanic,omitempty"`
+	PciSegments     *[]PciSegmentConfig     `json:"pci_segments,omitempty"`
+	Platform        *PlatformConfig         `json:"platform,omitempty"`
+	Tpm             *TpmConfig              `json:"tpm,omitempty"`
 }
 
 // NewVmConfig instantiates a new VmConfig object
@@ -49,6 +53,8 @@ func NewVmConfig(payload PayloadConfig) *VmConfig {
 	this.Iommu = &iommu
 	var watchdog bool = false
 	this.Watchdog = &watchdog
+	var pvpanic bool = false
+	this.Pvpanic = &pvpanic
 	return &this
 }
 
@@ -61,6 +67,8 @@ func NewVmConfigWithDefaults() *VmConfig {
 	this.Iommu = &iommu
 	var watchdog bool = false
 	this.Watchdog = &watchdog
+	var pvpanic bool = false
+	this.Pvpanic = &pvpanic
 	return &this
 }
 
@@ -150,6 +158,38 @@ func (o *VmConfig) GetPayloadOk() (*PayloadConfig, bool) {
 // SetPayload sets field value
 func (o *VmConfig) SetPayload(v PayloadConfig) {
 	o.Payload = v
+}
+
+// GetRateLimitGroups returns the RateLimitGroups field value if set, zero value otherwise.
+func (o *VmConfig) GetRateLimitGroups() []RateLimitGroupConfig {
+	if o == nil || o.RateLimitGroups == nil {
+		var ret []RateLimitGroupConfig
+		return ret
+	}
+	return *o.RateLimitGroups
+}
+
+// GetRateLimitGroupsOk returns a tuple with the RateLimitGroups field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *VmConfig) GetRateLimitGroupsOk() (*[]RateLimitGroupConfig, bool) {
+	if o == nil || o.RateLimitGroups == nil {
+		return nil, false
+	}
+	return o.RateLimitGroups, true
+}
+
+// HasRateLimitGroups returns a boolean if a field has been set.
+func (o *VmConfig) HasRateLimitGroups() bool {
+	if o != nil && o.RateLimitGroups != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetRateLimitGroups gets a reference to the given []RateLimitGroupConfig and assigns it to the RateLimitGroups field.
+func (o *VmConfig) SetRateLimitGroups(v []RateLimitGroupConfig) {
+	o.RateLimitGroups = &v
 }
 
 // GetDisks returns the Disks field value if set, zero value otherwise.
@@ -408,6 +448,38 @@ func (o *VmConfig) SetConsole(v ConsoleConfig) {
 	o.Console = &v
 }
 
+// GetDebugConsole returns the DebugConsole field value if set, zero value otherwise.
+func (o *VmConfig) GetDebugConsole() DebugConsoleConfig {
+	if o == nil || o.DebugConsole == nil {
+		var ret DebugConsoleConfig
+		return ret
+	}
+	return *o.DebugConsole
+}
+
+// GetDebugConsoleOk returns a tuple with the DebugConsole field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *VmConfig) GetDebugConsoleOk() (*DebugConsoleConfig, bool) {
+	if o == nil || o.DebugConsole == nil {
+		return nil, false
+	}
+	return o.DebugConsole, true
+}
+
+// HasDebugConsole returns a boolean if a field has been set.
+func (o *VmConfig) HasDebugConsole() bool {
+	if o != nil && o.DebugConsole != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetDebugConsole gets a reference to the given DebugConsoleConfig and assigns it to the DebugConsole field.
+func (o *VmConfig) SetDebugConsole(v DebugConsoleConfig) {
+	o.DebugConsole = &v
+}
+
 // GetDevices returns the Devices field value if set, zero value otherwise.
 func (o *VmConfig) GetDevices() []DeviceConfig {
 	if o == nil || o.Devices == nil {
@@ -632,6 +704,70 @@ func (o *VmConfig) SetWatchdog(v bool) {
 	o.Watchdog = &v
 }
 
+// GetPvpanic returns the Pvpanic field value if set, zero value otherwise.
+func (o *VmConfig) GetPvpanic() bool {
+	if o == nil || o.Pvpanic == nil {
+		var ret bool
+		return ret
+	}
+	return *o.Pvpanic
+}
+
+// GetPvpanicOk returns a tuple with the Pvpanic field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *VmConfig) GetPvpanicOk() (*bool, bool) {
+	if o == nil || o.Pvpanic == nil {
+		return nil, false
+	}
+	return o.Pvpanic, true
+}
+
+// HasPvpanic returns a boolean if a field has been set.
+func (o *VmConfig) HasPvpanic() bool {
+	if o != nil && o.Pvpanic != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPvpanic gets a reference to the given bool and assigns it to the Pvpanic field.
+func (o *VmConfig) SetPvpanic(v bool) {
+	o.Pvpanic = &v
+}
+
+// GetPciSegments returns the PciSegments field value if set, zero value otherwise.
+func (o *VmConfig) GetPciSegments() []PciSegmentConfig {
+	if o == nil || o.PciSegments == nil {
+		var ret []PciSegmentConfig
+		return ret
+	}
+	return *o.PciSegments
+}
+
+// GetPciSegmentsOk returns a tuple with the PciSegments field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *VmConfig) GetPciSegmentsOk() (*[]PciSegmentConfig, bool) {
+	if o == nil || o.PciSegments == nil {
+		return nil, false
+	}
+	return o.PciSegments, true
+}
+
+// HasPciSegments returns a boolean if a field has been set.
+func (o *VmConfig) HasPciSegments() bool {
+	if o != nil && o.PciSegments != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetPciSegments gets a reference to the given []PciSegmentConfig and assigns it to the PciSegments field.
+func (o *VmConfig) SetPciSegments(v []PciSegmentConfig) {
+	o.PciSegments = &v
+}
+
 // GetPlatform returns the Platform field value if set, zero value otherwise.
 func (o *VmConfig) GetPlatform() PlatformConfig {
 	if o == nil || o.Platform == nil {
@@ -707,6 +843,9 @@ func (o VmConfig) MarshalJSON() ([]byte, error) {
 	if true {
 		toSerialize["payload"] = o.Payload
 	}
+	if o.RateLimitGroups != nil {
+		toSerialize["rate_limit_groups"] = o.RateLimitGroups
+	}
 	if o.Disks != nil {
 		toSerialize["disks"] = o.Disks
 	}
@@ -731,6 +870,9 @@ func (o VmConfig) MarshalJSON() ([]byte, error) {
 	if o.Console != nil {
 		toSerialize["console"] = o.Console
 	}
+	if o.DebugConsole != nil {
+		toSerialize["debug_console"] = o.DebugConsole
+	}
 	if o.Devices != nil {
 		toSerialize["devices"] = o.Devices
 	}
@@ -751,6 +893,12 @@ func (o VmConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.Watchdog != nil {
 		toSerialize["watchdog"] = o.Watchdog
+	}
+	if o.Pvpanic != nil {
+		toSerialize["pvpanic"] = o.Pvpanic
+	}
+	if o.PciSegments != nil {
+		toSerialize["pci_segments"] = o.PciSegments
 	}
 	if o.Platform != nil {
 		toSerialize["platform"] = o.Platform

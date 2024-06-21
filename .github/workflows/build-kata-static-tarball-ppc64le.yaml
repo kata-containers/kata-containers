@@ -36,15 +36,10 @@ jobs:
         stage:
           - ${{ inputs.stage }}
     steps:
-      - name: Adjust a permission for repo
-        run: |
-          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
-
       - name: Prepare the self-hosted runner
         run: |
             ${HOME}/scripts/prepare_runner.sh
             sudo rm -rf $GITHUB_WORKSPACE/*
-
 
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
@@ -70,8 +65,7 @@ jobs:
           make "${KATA_ASSET}-tarball"
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
-          sudo cp -r "${build_dir}" "kata-build"
-          sudo chown -R $(id -u):$(id -g) "kata-build"
+          mkdir -p kata-build && cp "${build_dir}"/kata-static-${KATA_ASSET}*.tar.* kata-build/.
         env:
           KATA_ASSET: ${{ matrix.asset }}
           TAR_OUTPUT: ${{ matrix.asset }}.tar.gz

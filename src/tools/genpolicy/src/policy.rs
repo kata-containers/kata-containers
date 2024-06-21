@@ -9,6 +9,7 @@
 use crate::config_map;
 use crate::containerd;
 use crate::mount_and_storage;
+use crate::no_policy;
 use crate::pod;
 use crate::policy;
 use crate::registry;
@@ -27,9 +28,6 @@ use std::boxed;
 use std::collections::BTreeMap;
 use std::fs::read_to_string;
 use std::io::Write;
-
-// TODO: load this value from the settings file.
-const DEFAULT_OCI_VERSION: &str = "1.1.0-rc.1";
 
 /// Intermediary format of policy data.
 pub struct AgentPolicy {
@@ -72,7 +70,7 @@ pub struct PolicyData {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct KataSpec {
     /// Version of the Open Container Initiative Runtime Specification with which the bundle complies.
-    #[serde(default = "version_default")]
+    #[serde(default)]
     pub Version: String,
 
     /// Process configures the container process.
@@ -97,10 +95,6 @@ pub struct KataSpec {
     /// Linux is platform-specific configuration for Linux based containers.
     #[serde(default)]
     pub Linux: KataLinux,
-}
-
-fn version_default() -> String {
-    DEFAULT_OCI_VERSION.to_string()
 }
 
 /// OCI container Process struct. This struct is very similar to the Process
@@ -186,6 +180,10 @@ pub struct KataLinux {
 
     /// ReadonlyPaths sets the provided paths as RO inside the container.
     pub ReadonlyPaths: Vec<String>,
+
+    /// Devices contains devices to be created inside the container.
+    #[serde(default)]
+    pub Devices: Vec<KataLinuxDevice>,
 }
 
 /// OCI container LinuxNamespace struct. This struct is similar to the LinuxNamespace
@@ -198,6 +196,18 @@ pub struct KataLinuxNamespace {
 
     /// Path is a path to an existing namespace persisted on disk that can be joined
     /// and is of the same type
+    pub Path: String,
+}
+
+/// OCI container LinuxDevice struct. This struct is similar to the LinuxDevice
+/// struct generated from oci.proto, but includes just the fields that are currently
+/// relevant for automatic generation of policy.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct KataLinuxDevice {
+    /// Type is the type of device.
+    pub Type: String,
+
+    /// Path is the path where the device should be created.
     pub Path: String,
 }
 
@@ -251,6 +261,9 @@ pub struct ContainerPolicy {
 
     /// Data compared with req.storages for CreateContainerRequest calls.
     storages: Vec<agent::Storage>,
+
+    /// Data compared with req.devices for CreateContainerRequest calls.
+    devices: Vec<agent::Device>,
 
     /// Data compared with req.sandbox_pidns for CreateContainerRequest calls.
     sandbox_pidns: bool,
@@ -380,6 +393,22 @@ impl AgentPolicy {
                 let yaml_string = serde_yaml::to_string(&doc_mapping)?;
                 let silent = config.silent_unsupported_fields;
                 let (mut resource, kind) = yaml::new_k8s_resource(&yaml_string, silent)?;
+
+                // Filter out resources that don't match the runtime class name.
+                if let Some(resource_runtime_name) = resource.get_runtime_class_name() {
+                    if !config.runtime_class_names.is_empty()
+                        && !config
+                            .runtime_class_names
+                            .iter()
+                            .any(|prefix| resource_runtime_name.starts_with(prefix))
+                    {
+                        resource =
+                            boxed::Box::new(no_policy::NoPolicyResource { yaml: yaml_string });
+                        resources.push(resource);
+                        continue;
+                    }
+                }
+
                 resource.init(config, &doc_mapping, silent).await;
 
                 // ConfigMap and Secret documents contain additional input for policy generation.
@@ -481,14 +510,14 @@ impl AgentPolicy {
         let mut root = c_settings.Root.clone();
         root.Readonly = yaml_container.read_only_root_filesystem();
 
-        let namespace = if let Some(ns) = resource.get_namespace() {
-            ns
-        } else {
-            self.config
+        let namespace = match resource.get_namespace() {
+            Some(ns) if !ns.is_empty() => ns,
+            _ => self
+                .config
                 .settings
                 .cluster_config
                 .default_namespace
-                .clone()
+                .clone(),
         };
 
         let use_host_network = resource.use_host_network();
@@ -546,9 +575,26 @@ impl AgentPolicy {
         };
         let exec_commands = yaml_container.get_exec_commands();
 
+        let mut devices: Vec<agent::Device> = vec![];
+        if let Some(volumeDevices) = &yaml_container.volumeDevices {
+            for volumeDevice in volumeDevices {
+                let mut device = agent::Device::new();
+                device.set_container_path(volumeDevice.devicePath.clone());
+                devices.push(device);
+
+                linux.Devices.push(KataLinuxDevice {
+                    Type: "".to_string(),
+                    Path: volumeDevice.devicePath.clone(),
+                })
+            }
+        }
+        for default_device in &c_settings.Linux.Devices {
+            linux.Devices.push(default_device.clone())
+        }
+
         ContainerPolicy {
             OCI: KataSpec {
-                Version: version_default(),
+                Version: self.config.settings.kata_config.oci_version.clone(),
                 Process: process,
                 Root: root,
                 Mounts: mounts,
@@ -557,6 +603,7 @@ impl AgentPolicy {
                 Linux: linux,
             },
             storages,
+            devices,
             sandbox_pidns,
             exec_commands,
         }

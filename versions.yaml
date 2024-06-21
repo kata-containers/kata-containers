@@ -75,7 +75,7 @@ assets:
       url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
       uscan-url: >-
         https://github.com/cloud-hypervisor/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
-      version: "v36.0"
+      version: "v39.0"
 
     firecracker:
       description: "Firecracker micro-VMM"
@@ -88,8 +88,8 @@ assets:
     qemu:
       description: "VMM that uses KVM"
       url: "https://github.com/qemu/qemu"
-      version: "v7.2.0"
-      tag: "v7.2.0"
+      version: "v8.2.4"
+      tag: "v8.2.4"
       # Do not include any non-full release versions
       # Break the line *without CR or space being appended*, to appease
       # yamllint, and note the deliberate ' ' at the end of the expression.
@@ -227,9 +227,9 @@ externals:
   coco-trustee:
     description: "Provides attestation and secret delivery components"
     url: "https://github.com/confidential-containers/trustee"
-    version: "18c8ee378c6d83446ee635a702d5dee389028d8f"
+    version: "6adb8383309cbb7279f1d8e1e4620556ac66481e"
     image: "ghcr.io/confidential-containers/staged-images/kbs"
-    image_tag: "18c8ee378c6d83446ee635a702d5dee389028d8f"
+    image_tag: "6adb8383309cbb7279f1d8e1e4620556ac66481e"
     toolchain: "1.74.0"
 
   crio:
@@ -324,12 +324,12 @@ externals:
     url: "https://github.com/tianocore/edk2"
     x86_64:
       description: "Vanilla firmware build"
-      version: "edk2-stable202202"
+      version: "edk2-stable202402"
       package: "OvmfPkg/OvmfPkgX64.dsc"
       package_output_dir: "OvmfX64"
     sev:
       description: "AmdSev build needed for SEV measured direct boot."
-      version: "edk2-stable202302"
+      version: "edk2-stable202402"
       package: "OvmfPkg/AmdSev/AmdSevX64.dsc"
       package_output_dir: "AmdSev"
 
@@ -369,12 +369,12 @@ languages:
   rust:
     description: "Rust language"
     notes: "'version' is the default minimum version used by this project."
-    version: "1.72.0"
+    version: "1.75.0"
     meta:
       description: |
         'newest-version' is the latest version known to work when
         building Kata
-      newest-version: "1.72.0"
+      newest-version: "1.75.0"
 
   golangci-lint:
     description: "golangci-lint"

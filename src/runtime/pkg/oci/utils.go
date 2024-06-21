@@ -463,6 +463,14 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		return err
 	}
 
+	if err := addHypervisorPCIeRootPortOverrides(ocispec, config); err != nil {
+		return err
+	}
+
+	if err := addHypervisorPCIeSwitchPortOverrides(ocispec, config); err != nil {
+		return err
+	}
+
 	if value, ok := ocispec.Annotations[vcAnnotations.MachineType]; ok {
 		if value != "" {
 			config.HypervisorConfig.HypervisorMachineType = value
@@ -605,10 +613,33 @@ func addHypervisorHotColdPlugVfioOverrides(ocispec specs.Spec, sbConfig *vc.Sand
 	return nil
 }
 
+func addHypervisorPCIeRootPortOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.PCIeRootPort).setUint(func(pcieRootPort uint64) {
+		if pcieRootPort > 0 {
+			sbConfig.HypervisorConfig.PCIeRootPort = uint32(pcieRootPort)
+		}
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
+func addHypervisorPCIeSwitchPortOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.PCIeSwitchPort).setUint(func(pcieSwitchPort uint64) {
+		if pcieSwitchPort > 0 {
+			sbConfig.HypervisorConfig.PCIeSwitchPort = uint32(pcieSwitchPort)
+		}
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
 func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig, runtime RuntimeConfig) error {
 
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.DefaultMemory).setUintWithCheck(func(memorySz uint64) error {
-		if memorySz < vc.MinHypervisorMemory {
+		if memorySz < vc.MinHypervisorMemory && sbConfig.HypervisorType != vc.RemoteHypervisor {
 			return fmt.Errorf("Memory specified in annotation %s is less than minimum required %d, please specify a larger value", vcAnnotations.DefaultMemory, vc.MinHypervisorMemory)
 		}
 		sbConfig.HypervisorConfig.MemorySize = uint32(memorySz)
@@ -689,7 +720,7 @@ func addHypervisorCPUOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) e
 	numCPUs := goruntime.NumCPU()
 
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.DefaultVCPUs).setFloat32WithCheck(func(vcpus float32) error {
-		if vcpus > float32(numCPUs) {
+		if vcpus > float32(numCPUs) && sbConfig.HypervisorType != vc.RemoteHypervisor {
 			return fmt.Errorf("Number of cpus %f specified in annotation default_vcpus is greater than the number of CPUs %d on the system", vcpus, numCPUs)
 		}
 		sbConfig.HypervisorConfig.NumVCPUsF = float32(vcpus)
@@ -701,11 +732,11 @@ func addHypervisorCPUOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) e
 	return newAnnotationConfiguration(ocispec, vcAnnotations.DefaultMaxVCPUs).setUintWithCheck(func(maxVCPUs uint64) error {
 		max := uint32(maxVCPUs)
 
-		if max > uint32(numCPUs) {
+		if max > uint32(numCPUs) && sbConfig.HypervisorType != vc.RemoteHypervisor {
 			return fmt.Errorf("Number of cpus %d in annotation default_maxvcpus is greater than the number of CPUs %d on the system", max, numCPUs)
 		}
 
-		if sbConfig.HypervisorType == vc.QemuHypervisor && max > govmm.MaxVCPUs() {
+		if sbConfig.HypervisorType == vc.QemuHypervisor && max > govmm.MaxVCPUs() && sbConfig.HypervisorType != vc.RemoteHypervisor {
 			return fmt.Errorf("Number of cpus %d in annotation default_maxvcpus is greater than max no of CPUs %d supported for qemu", max, govmm.MaxVCPUs())
 		}
 		sbConfig.HypervisorConfig.DefaultMaxVCPUs = max

@@ -52,9 +52,15 @@ default WriteStreamRequest := false
 default AllowRequestsFailingPolicy := false
 
 CreateContainerRequest {
+    # Check if the input request should be rejected even before checking the
+    # policy_data.containers information.
+    allow_create_container_input
+
     i_oci := input.OCI
     i_storages := input.storages
+    i_devices := input.devices
 
+    # Check if any element from the policy_data.containers array allows the input request.
     some p_container in policy_data.containers
     print("======== CreateContainerRequest: trying next policy container")
 
@@ -66,8 +72,7 @@ CreateContainerRequest {
     p_oci := p_container.OCI
 
     print("CreateContainerRequest: p Version =", p_oci.Version, "i Version =", i_oci.Version)
-    # TODO: Reenable when the Mariner host is reinstated, see #9593.
-    # p_oci.Version == i_oci.Version
+    p_oci.Version == i_oci.Version
 
     print("CreateContainerRequest: p Readonly =", p_oci.Root.Readonly, "i Readonly =", i_oci.Root.Readonly)
     p_oci.Root.Readonly == i_oci.Root.Readonly
@@ -77,9 +82,43 @@ CreateContainerRequest {
     p_storages := p_container.storages
     allow_by_anno(p_oci, i_oci, p_storages, i_storages)
 
+    p_devices := p_container.devices
+    allow_devices(p_devices, i_devices)
+
     allow_linux(p_oci, i_oci)
 
     print("CreateContainerRequest: true")
+}
+
+allow_create_container_input {
+    print("allow_create_container_input: input =", input)
+
+    count(input.shared_mounts) == 0
+    is_null(input.string_user)
+
+    i_oci := input.OCI
+    is_null(i_oci.Hooks)
+    is_null(i_oci.Solaris)
+    is_null(i_oci.Windows)
+
+    i_linux := i_oci.Linux
+    count(i_linux.GIDMappings) == 0
+    count(i_linux.MountLabel) == 0
+    count(i_linux.Resources.Devices) == 0
+    count(i_linux.RootfsPropagation) == 0
+    count(i_linux.UIDMappings) == 0
+    is_null(i_linux.IntelRdt)
+    is_null(i_linux.Resources.BlockIO)
+    is_null(i_linux.Resources.Network)
+    is_null(i_linux.Resources.Pids)
+    is_null(i_linux.Seccomp)
+    i_linux.Sysctl == {}
+
+    i_process := i_oci.Process
+    count(i_process.SelinuxLabel) == 0
+    count(i_process.User.Username) == 0
+
+    print("allow_create_container_input: true")
 }
 
 # Reject unexpected annotations.
@@ -328,6 +367,16 @@ allow_log_directory(p_oci, i_oci) {
     print("allow_log_directory: true")
 }
 
+allow_devices(p_devices, i_devices) {
+    print("allow_devices: start")
+    every i_device in i_devices {
+        print("allow_devices: i_device =", i_device)
+        some p_device in p_devices
+        p_device.container_path == i_device.container_path
+    }
+    print("allow_devices: true")
+}
+
 allow_linux(p_oci, i_oci) {
     p_namespaces := p_oci.Linux.Namespaces
     print("allow_linux: p namespaces =", p_namespaces)
@@ -339,6 +388,7 @@ allow_linux(p_oci, i_oci) {
 
     allow_masked_paths(p_oci, i_oci)
     allow_readonly_paths(p_oci, i_oci)
+    allow_linux_devices(p_oci.Linux.Devices, i_oci.Linux.Devices)
 
     print("allow_linux: true")
 }
@@ -425,6 +475,16 @@ allow_readonly_path(p_elem, i_array, masked_paths) {
     p_elem == i_masked
 
     print("allow_readonly_path 2: true")
+}
+
+allow_linux_devices(p_devices, i_devices) {
+    print("allow_linux_devices: start")
+    every i_device in i_devices {
+        print("allow_linux_devices: i_device =", i_device)
+        some p_device in p_devices
+        i_device.Path == p_device.Path
+    }
+    print("allow_linux_devices: true")
 }
 
 # Check the consistency of the input "io.katacontainers.pkg.oci.bundle_path"

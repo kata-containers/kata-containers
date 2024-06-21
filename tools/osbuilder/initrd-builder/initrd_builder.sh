@@ -73,7 +73,7 @@ OK "init is installed"
 OK "Agent is installed"
 
 # initramfs expects /init
-ln -sf /sbin/init "${ROOTFS}/init"
+sudo ln -sf /sbin/init "${ROOTFS}/init"
 
 info "Creating ${IMAGE_DIR}/${IMAGE_NAME} based on rootfs at ${ROOTFS}"
-( cd "${ROOTFS}" && find . | cpio -H newc -o | gzip -9 ) > "${IMAGE_DIR}"/"${IMAGE_NAME}"
+( cd "${ROOTFS}" && sudo find . | sudo cpio -H newc -o | gzip -9 ) > "${IMAGE_DIR}"/"${IMAGE_NAME}"

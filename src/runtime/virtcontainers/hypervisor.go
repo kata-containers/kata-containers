@@ -546,6 +546,12 @@ type HypervisorConfig struct {
 	// root port, switch or no port
 	ColdPlugVFIO config.PCIePort
 
+	// PCIeRootPort is the number of root-port to create for the VM
+	PCIeRootPort uint32
+
+	// PCIeSwitchPort is the number of switch-port to create for the VM
+	PCIeSwitchPort uint32
+
 	// NumVCPUs specifies default number of vCPUs for the VM.
 	NumVCPUsF float32
 
@@ -671,6 +677,9 @@ type HypervisorConfig struct {
 
 	// ExtraMonitorSocket allows to add an extra HMP or QMP socket when the VMM is Qemu
 	ExtraMonitorSocket govmmQemu.MonitorProtocol
+
+	// QgsPort defines Intel Quote Generation Service port exposed from the host
+	QgsPort uint32
 }
 
 // vcpu mapping from vcpu number to thread number

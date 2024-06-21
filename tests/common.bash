@@ -80,6 +80,22 @@ function handle_error() {
 }
 trap 'handle_error $LINENO' ERR
 
+# A wrapper function for kubectl with retry logic
+# runs the command up to 3 times with a 5-second interval
+# to ensure successful execution
+function kubectl_retry() {
+	local max_tries=3
+	local interval=5
+	local i=0
+	while true; do
+		kubectl $@ && return 0 || true
+		i=$((i + 1))
+		[ $i -lt $max_tries ] && echo "'kubectl $@' failed, retrying in $interval seconds" 1>&2 || break
+		sleep $interval
+	done
+	echo "'kubectl $@' failed after $max_tries tries" 1>&2 && return 1
+}
+
 function waitForProcess() {
 	wait_time="$1"
 	sleep_time="$2"
@@ -488,20 +504,28 @@ function check_containerd_config_for_kata() {
 }
 
 function ensure_yq() {
-    : "${GOPATH:=${GITHUB_WORKSPACE:-$HOME/go}}"
-    export GOPATH
-    export PATH="${GOPATH}/bin:${PATH}"
-    INSTALL_IN_GOPATH=true "${repo_root_dir}/ci/install_yq.sh"
-    hash -d yq 2> /dev/null || true # yq is preinstalled on GHA Ubuntu 22.04 runners so we clear Bash's PATH cache.
+	: "${GOPATH:=${GITHUB_WORKSPACE:-$HOME/go}}"
+	export GOPATH
+	export PATH="${GOPATH}/bin:${PATH}"
+	INSTALL_IN_GOPATH=true "${repo_root_dir}/ci/install_yq.sh"
+	hash -d yq 2> /dev/null || true # yq is preinstalled on GHA Ubuntu 22.04 runners so we clear Bash's PATH cache.
 }
 
 # dependency: What we want to get the version from the versions.yaml file
 function get_from_kata_deps() {
-        local dependency="$1"
         versions_file="${repo_root_dir}/versions.yaml"
 
         command -v yq &>/dev/null || die 'yq command is not in your $PATH'
-        result=$("yq" read -X "$versions_file" "$dependency")
+
+        yq_version=$(yq --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | cut -d. -f1)
+        if [ "$yq_version" -eq 3 ]; then
+          dependency=$(echo "$1" | sed "s/^\.//g")
+          result=$("yq" read "$versions_file" "$dependency")
+        else
+          dependency=$1
+          result=$("yq" "$dependency | explode (.)" "$versions_file")
+        fi
+
         [ "$result" = "null" ] && result=""
         echo "$result"
 }
@@ -743,7 +767,7 @@ function get_dep_from_yaml_db(){
 
         "${repo_root_dir}/ci/install_yq.sh" >&2
 
-        result=$("${GOPATH}/bin/yq" r -X "$versions_file" "$dependency")
+        result=$("${GOPATH}/bin/yq" "$dependency" "$versions_file")
         [ "$result" = "null" ] && result=""
         echo "$result"
 }
@@ -759,7 +783,7 @@ function get_test_version(){
 
         db="${cidir}/../versions.yaml"
 
-        get_dep_from_yaml_db "${db}" "${dependency}"
+        get_dep_from_yaml_db "${db}" ".${dependency}"
 }
 
 # Load vhost, vhost_net, vhost_vsock modules.

@@ -411,6 +411,20 @@ pub struct DebugInfo {
     /// much disk space.
     #[serde(default)]
     pub guest_memory_dump_path: String,
+
+    /// This option allows to add a debug monitor socket when `enable_debug = true`
+    /// WARNING: Anyone with access to the monitor socket can take full control of
+    /// Qemu. This is for debugging purpose only and must *NEVER* be used in
+    /// production.
+    /// Valid values are :
+    /// - "hmp"
+    /// - "qmp"
+    /// - "qmp-pretty" (same as "qmp" with pretty json formatting)
+    /// If set to the empty string "", no debug monitor socket is added. This is
+    /// the default.
+    /// dbg_monitor_socket = "hmp"
+    #[serde(default)]
+    pub dbg_monitor_socket: String,
 }
 
 impl DebugInfo {

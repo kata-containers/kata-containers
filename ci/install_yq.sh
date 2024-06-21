@@ -5,6 +5,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+[ -n "$DEBUG" ] && set -o xtrace
+
 # If we fail for any reason a message will be displayed
 die() {
 	msg="$*"
@@ -16,7 +18,7 @@ die() {
 # Install via binary download, as we may not have golang installed at this point
 function install_yq() {
 	local yq_pkg="github.com/mikefarah/yq"
-	local yq_version=3.4.1
+	local yq_version=v4.40.7
 	local precmd=""
 	INSTALL_IN_GOPATH=${INSTALL_IN_GOPATH:-true}
 
@@ -36,7 +38,7 @@ function install_yq() {
 			fi
 		fi
 	fi
-	[ -x  "${yq_path}" ] && [ "`${yq_path} --version`"X == "yq version ${yq_version}"X ] && return
+	[ -x  "${yq_path}" ] && [ "`${yq_path} --version`"X == "yq (https://github.com/mikefarah/yq/) version ${yq_version}"X ] && return
 
 	read -r -a sysInfo <<< "$(uname -sm)"
 

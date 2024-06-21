@@ -18,11 +18,11 @@ source "${script_dir}/../../scripts/lib.sh"
 
 info "Get stratovirt information from runtime versions.yaml"
 stratovirt_url="${stratovirt_url:-}"
-[ -n "$stratovirt_url" ] || stratovirt_url=$(get_from_kata_deps "assets.hypervisor.stratovirt.url")
+[ -n "$stratovirt_url" ] || stratovirt_url=$(get_from_kata_deps ".assets.hypervisor.stratovirt.url")
 [ -n "$stratovirt_url" ] || die "failed to get stratovirt url"
 
 stratovirt_version="${stratovirt_version:-}"
-[ -n "$stratovirt_version" ] || stratovirt_version=$(get_from_kata_deps "assets.hypervisor.stratovirt.version")
+[ -n "$stratovirt_version" ] || stratovirt_version=$(get_from_kata_deps ".assets.hypervisor.stratovirt.version")
 [ -n "$stratovirt_version" ] || die "failed to get stratovirt version"
 
 pull_stratovirt_released_binary() {

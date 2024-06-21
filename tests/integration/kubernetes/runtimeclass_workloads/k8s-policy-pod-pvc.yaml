@@ -1,0 +1,22 @@
+#
+# Copyright (c) 2024 Edgeless Systems GmbH
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: policy-pod-pvc
+spec:
+  terminationGracePeriodSeconds: 0
+  runtimeClassName: kata
+  containers:
+    - name: busybox
+      image: "quay.io/prometheus/busybox:latest"
+      volumeDevices:
+        - name: dev
+          devicePath: /dev/csi0
+  volumes:
+    - name: dev
+      persistentVolumeClaim:
+        claimName: policy-dev

@@ -176,6 +176,8 @@ jobs:
         vmm:
           - clh # cloud-hypervisor
           - qemu
+    # TODO: enable me when https://github.com/kata-containers/kata-containers/issues/9763 is fixed
+    if: false
     runs-on: garm-ubuntu-2204-smaller
     env:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
@@ -211,7 +213,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        vmm: ['clh', 'qemu']
+        vmm:
+          - clh
+          - qemu
+        exclude:
+          # TODO: enable with clh when https://github.com/kata-containers/kata-containers/issues/9764 is fixed
+          - vmm: clh
     runs-on: garm-ubuntu-2304
     env:
       GOPATH: ${{ github.workspace }}
@@ -326,7 +333,9 @@ jobs:
         run: bash tests/integration/nerdctl/gha-run.sh run
 
       - name: Collect artifacts ${{ matrix.vmm }}
+        if: always()
         run: bash tests/integration/nerdctl/gha-run.sh collect-artifacts
+        continue-on-error: true
 
       - name: Archive artifacts ${{ matrix.vmm }}
         uses: actions/upload-artifact@v4

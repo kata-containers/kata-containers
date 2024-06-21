@@ -19,7 +19,7 @@ spec:
       type: File
   containers:
   - name: busybox-file-volume-container
-    image: busybox
+    image: quay.io/prometheus/busybox:latest
     volumeMounts:
     - name: shared-file
       mountPath: MOUNT_PATH

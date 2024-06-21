@@ -445,13 +445,12 @@ func TestAppendEmptyDevice(t *testing.T) {
 }
 
 func TestAppendKnobsAllTrue(t *testing.T) {
-	var knobsString = "-no-user-config -nodefaults -nographic --no-reboot -daemonize -overcommit mem-lock=on -S"
+	var knobsString = "-no-user-config -nodefaults -nographic --no-reboot -overcommit mem-lock=on -S"
 	knobs := Knobs{
 		NoUserConfig:  true,
 		NoDefaults:    true,
 		NoGraphic:     true,
 		NoReboot:      true,
-		Daemonize:     true,
 		MemPrealloc:   true,
 		FileBackedMem: true,
 		MemShared:     true,

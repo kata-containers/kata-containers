@@ -62,14 +62,7 @@ function enable_cluster_http_application_routing() {
 }
 
 function install_azure_cli() {
-	# This is a workaround for https://github.com/Azure/azure-cli/issues/28984
-	# which ended up breaking our CI.
-	curl -sL https://aka.ms/InstallAzureCLIDeb -o installAzureCli.sh
-	sed -i '/curl -sLS https:\/\/packages.microsoft.com\/keys\/microsoft.asc |/d' installAzureCli.sh
-	sed -i '/gpg --dearmor -o \/etc\/apt\/keyrings\/microsoft.gpg/d' installAzureCli.sh
-	sed -i '/chmod go+r \/etc\/apt\/keyrings\/microsoft.gpg/d' installAzureCli.sh
-	sudo bash installAzureCli.sh
-
+	curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
 	# The aks-preview extension is required while the Mariner Kata host is in preview.
 	az extension add --name aks-preview
 }
@@ -134,9 +127,9 @@ function install_kustomize() {
 	fi
 
 	ensure_yq
-	version=$(get_from_kata_deps "externals.kustomize.version")
+	version=$(get_from_kata_deps ".externals.kustomize.version")
 	arch=$(arch_to_golang)
-	checksum=$(get_from_kata_deps "externals.kustomize.checksum.${arch}")
+	checksum=$(get_from_kata_deps ".externals.kustomize.checksum.${arch}")
 
 	local tarball="kustomize_${version}_linux_${arch}.tar.gz"
 	curl -Lf -o "$tarball" "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize/${version}/${tarball}"

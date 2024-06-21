@@ -28,6 +28,7 @@ const CONTAINER_PIPE_SIZE_OPTION: &str = "agent.container_pipe_size";
 const UNIFIED_CGROUP_HIERARCHY_OPTION: &str = "systemd.unified_cgroup_hierarchy";
 const CONFIG_FILE: &str = "agent.config_file";
 const GUEST_COMPONENTS_REST_API_OPTION: &str = "agent.guest_components_rest_api";
+const GUEST_COMPONENTS_PROCS_OPTION: &str = "agent.guest_components_procs";
 
 // Configure the proxy settings for HTTPS requests in the guest,
 // to solve the problem of not being able to access the specified image in some cases.
@@ -59,17 +60,32 @@ const ERR_INVALID_CONTAINER_PIPE_SIZE_PARAM: &str = "unable to parse container p
 const ERR_INVALID_CONTAINER_PIPE_SIZE_KEY: &str = "invalid container pipe size key name";
 const ERR_INVALID_CONTAINER_PIPE_NEGATIVE: &str = "container pipe size should not be negative";
 
-const ERR_INVALID_GUEST_COMPONENTS_REST_API_VALUE: &str = "invalid guest components rest api feature given. Valid values are `all`, `attestation`, `resource`, or `none`";
+const ERR_INVALID_GUEST_COMPONENTS_REST_API_VALUE: &str = "invalid guest components rest api feature given. Valid values are `all`, `attestation`, `resource`";
+const ERR_INVALID_GUEST_COMPONENTS_PROCS_VALUE: &str = "invalid guest components process param given. Valid values are `attestation-agent`, `confidential-data-hub`, `api-server-rest`, or `none`";
 
 #[derive(Clone, Copy, Debug, Default, Display, Deserialize, EnumString, PartialEq)]
 // Features seem to typically be in kebab-case format, but we only have single words at the moment
 #[strum(serialize_all = "kebab-case")]
+#[serde(rename_all = "kebab-case")]
 pub enum GuestComponentsFeatures {
     All,
     Attestation,
-    None,
     #[default]
     Resource,
+}
+
+#[derive(Clone, Copy, Debug, Default, Display, Deserialize, EnumString, PartialEq)]
+/// Attestation-related processes that we want to spawn as children of the agent
+#[strum(serialize_all = "kebab-case")]
+#[serde(rename_all = "kebab-case")]
+pub enum GuestComponentsProcs {
+    None,
+    /// ApiServerRest implies ConfidentialDataHub and AttestationAgent
+    #[default]
+    ApiServerRest,
+    AttestationAgent,
+    /// ConfidentialDataHub implies AttestationAgent
+    ConfidentialDataHub,
 }
 
 #[derive(Debug)]
@@ -89,6 +105,7 @@ pub struct AgentConfig {
     pub https_proxy: String,
     pub no_proxy: String,
     pub guest_components_rest_api: GuestComponentsFeatures,
+    pub guest_components_procs: GuestComponentsProcs,
 }
 
 #[derive(Debug, Deserialize)]
@@ -107,6 +124,7 @@ pub struct AgentConfigBuilder {
     pub https_proxy: Option<String>,
     pub no_proxy: Option<String>,
     pub guest_components_rest_api: Option<GuestComponentsFeatures>,
+    pub guest_components_procs: Option<GuestComponentsProcs>,
 }
 
 macro_rules! config_override {
@@ -171,6 +189,7 @@ impl Default for AgentConfig {
             https_proxy: String::from(""),
             no_proxy: String::from(""),
             guest_components_rest_api: GuestComponentsFeatures::default(),
+            guest_components_procs: GuestComponentsProcs::default(),
         }
     }
 }
@@ -207,6 +226,7 @@ impl FromStr for AgentConfig {
             agent_config,
             guest_components_rest_api
         );
+        config_override!(agent_config_builder, agent_config, guest_components_procs);
 
         Ok(agent_config)
     }
@@ -220,7 +240,10 @@ impl AgentConfig {
         let config_position = args.iter().position(|a| a == "--config" || a == "-c");
         if let Some(config_position) = config_position {
             if let Some(config_file) = args.get(config_position + 1) {
-                return AgentConfig::from_config_file(config_file).context("AgentConfig from args");
+                let mut config =
+                    AgentConfig::from_config_file(config_file).context("AgentConfig from args")?;
+                config.override_config_from_envs();
+                return Ok(config);
             } else {
                 panic!("The config argument wasn't formed properly: {:?}", args);
             }
@@ -314,23 +337,15 @@ impl AgentConfig {
                 config.guest_components_rest_api,
                 get_guest_components_features_value
             );
+            parse_cmdline_param!(
+                param,
+                GUEST_COMPONENTS_PROCS_OPTION,
+                config.guest_components_procs,
+                get_guest_components_procs_value
+            );
         }
 
-        if let Ok(addr) = env::var(SERVER_ADDR_ENV_VAR) {
-            config.server_addr = addr;
-        }
-
-        if let Ok(addr) = env::var(LOG_LEVEL_ENV_VAR) {
-            if let Ok(level) = logrus_to_slog_level(&addr) {
-                config.log_level = level;
-            }
-        }
-
-        if let Ok(value) = env::var(TRACING_ENV_VAR) {
-            let name_value = format!("{}={}", TRACING_ENV_VAR, value);
-
-            config.tracing = get_bool_value(&name_value)?;
-        }
+        config.override_config_from_envs();
 
         Ok(config)
     }
@@ -340,6 +355,25 @@ impl AgentConfig {
         let config = fs::read_to_string(file)
             .with_context(|| format!("Failed to read config file {}", file))?;
         AgentConfig::from_str(&config)
+    }
+
+    #[instrument]
+    fn override_config_from_envs(&mut self) {
+        if let Ok(addr) = env::var(SERVER_ADDR_ENV_VAR) {
+            self.server_addr = addr;
+        }
+
+        if let Ok(addr) = env::var(LOG_LEVEL_ENV_VAR) {
+            if let Ok(level) = logrus_to_slog_level(&addr) {
+                self.log_level = level;
+            }
+        }
+
+        if let Ok(value) = env::var(TRACING_ENV_VAR) {
+            let name_value = format!("{}={}", TRACING_ENV_VAR, value);
+
+            self.tracing = get_bool_value(&name_value).unwrap_or(false);
+        }
     }
 }
 
@@ -480,12 +514,26 @@ fn get_guest_components_features_value(param: &str) -> Result<GuestComponentsFea
         .map_err(|_| anyhow!(ERR_INVALID_GUEST_COMPONENTS_REST_API_VALUE))
 }
 
+#[instrument]
+fn get_guest_components_procs_value(param: &str) -> Result<GuestComponentsProcs> {
+    let fields: Vec<&str> = param.split('=').collect();
+    ensure!(fields.len() >= 2, ERR_INVALID_GET_VALUE_PARAM);
+
+    // We need name (but the value can be blank)
+    ensure!(!fields[0].is_empty(), ERR_INVALID_GET_VALUE_NO_NAME);
+
+    let value = fields[1..].join("=");
+    GuestComponentsProcs::from_str(&value)
+        .map_err(|_| anyhow!(ERR_INVALID_GUEST_COMPONENTS_PROCS_VALUE))
+}
+
 #[cfg(test)]
 mod tests {
     use test_utils::assert_result;
 
     use super::*;
     use anyhow::anyhow;
+    use serial_test::serial;
     use std::fs::File;
     use std::io::Write;
     use std::time;
@@ -501,6 +549,8 @@ mod tests {
     }
 
     #[test]
+    // Run in serial to stop the env set interfering with test_from_cmdline_with_args_overwrites
+    #[serial]
     fn test_from_cmdline() {
         const TEST_SERVER_ADDR: &str = "vsock://-1:1024";
 
@@ -519,6 +569,7 @@ mod tests {
             https_proxy: &'a str,
             no_proxy: &'a str,
             guest_components_rest_api: GuestComponentsFeatures,
+            guest_components_procs: GuestComponentsProcs,
         }
 
         impl Default for TestData<'_> {
@@ -537,6 +588,7 @@ mod tests {
                     https_proxy: "",
                     no_proxy: "",
                     guest_components_rest_api: GuestComponentsFeatures::default(),
+                    guest_components_procs: GuestComponentsProcs::default(),
                 }
             }
         }
@@ -745,6 +797,13 @@ mod tests {
                 server_addr: "unix://@/tmp/foo.socket",
                 ..Default::default()
             },
+            // Test that env_var has precedence over the command line (which is the current behaviour)
+            TestData {
+                contents: "agent.server_addr=unix:///tmp/ignored.socket",
+                env_vars: vec!["KATA_AGENT_SERVER_ADDR=unix:///tmp/foo.socket"],
+                server_addr: "unix:///tmp/foo.socket",
+                ..Default::default()
+            },
             TestData {
                 contents: "",
                 env_vars: vec!["KATA_AGENT_LOG_LEVEL="],
@@ -942,8 +1001,23 @@ mod tests {
                 ..Default::default()
             },
             TestData {
-                contents: "agent.guest_components_rest_api=none",
-                guest_components_rest_api: GuestComponentsFeatures::None,
+               contents: "agent.guest_components_procs=api-server-rest",
+               guest_components_procs: GuestComponentsProcs::ApiServerRest,
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.guest_components_procs=confidential-data-hub",
+                guest_components_procs: GuestComponentsProcs::ConfidentialDataHub,
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.guest_components_procs=attestation-agent",
+                guest_components_procs: GuestComponentsProcs::AttestationAgent,
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.guest_components_procs=none",
+                guest_components_procs: GuestComponentsProcs::None,
                 ..Default::default()
             },
         ];
@@ -1000,6 +1074,11 @@ mod tests {
                 "{}",
                 msg
             );
+            assert_eq!(
+                d.guest_components_procs, config.guest_components_procs,
+                "{}",
+                msg
+            );
 
             for v in vars_to_unset {
                 env::remove_var(v);
@@ -1008,15 +1087,17 @@ mod tests {
     }
 
     #[test]
+    // Run in serial to stop the env set interfering with test_from_cmdline
+    #[serial]
     fn test_from_cmdline_with_args_overwrites() {
         let expected = AgentConfig {
             dev_mode: true,
-            server_addr: "unix://@/tmp/foo.socket".to_string(),
+            server_addr: "unix:///tmp/overwrite.socket".to_string(),
             ..Default::default()
         };
 
         let example_config_file_contents =
-            "dev_mode = true\nserver_addr = 'unix://@/tmp/foo.socket'";
+            "dev_mode = true\nserver_addr = 'unix:///tmp/ignored.socket'";
         let dir = tempdir().expect("failed to create tmpdir");
         let file_path = dir.path().join("config.toml");
         let filename = file_path.to_str().expect("failed to create filename");
@@ -1024,9 +1105,14 @@ mod tests {
         file.write_all(example_config_file_contents.as_bytes())
             .unwrap_or_else(|_| panic!("failed to write file contents"));
 
+        // Ensure that the env has precedence over agent config file
+        env::set_var("KATA_AGENT_SERVER_ADDR", "unix:///tmp/overwrite.socket");
+
         let config =
             AgentConfig::from_cmdline("", vec!["--config".to_string(), filename.to_string()])
                 .expect("Failed to parse command line");
+
+        env::remove_var("KATA_AGENT_SERVER_ADDR");
 
         assert_eq!(expected.debug_console, config.debug_console);
         assert_eq!(expected.dev_mode, config.dev_mode);
@@ -1501,10 +1587,6 @@ Caused by:
                 result: Ok(GuestComponentsFeatures::Attestation),
             },
             TestData {
-                param: "x=none",
-                result: Ok(GuestComponentsFeatures::None),
-            },
-            TestData {
                 param: "x=resource",
                 result: Ok(GuestComponentsFeatures::Resource),
             },
@@ -1534,11 +1616,75 @@ Caused by:
     }
 
     #[test]
+    fn test_get_guest_components_procs_value() {
+        #[derive(Debug)]
+        struct TestData<'a> {
+            param: &'a str,
+            result: Result<GuestComponentsProcs>,
+        }
+
+        let tests = &[
+            TestData {
+                param: "",
+                result: Err(anyhow!(ERR_INVALID_GET_VALUE_PARAM)),
+            },
+            TestData {
+                param: "=",
+                result: Err(anyhow!(ERR_INVALID_GET_VALUE_NO_NAME)),
+            },
+            TestData {
+                param: "==",
+                result: Err(anyhow!(ERR_INVALID_GET_VALUE_NO_NAME)),
+            },
+            TestData {
+                param: "x=attestation-agent",
+                result: Ok(GuestComponentsProcs::AttestationAgent),
+            },
+            TestData {
+                param: "x=confidential-data-hub",
+                result: Ok(GuestComponentsProcs::ConfidentialDataHub),
+            },
+            TestData {
+                param: "x=none",
+                result: Ok(GuestComponentsProcs::None),
+            },
+            TestData {
+                param: "x=api-server-rest",
+                result: Ok(GuestComponentsProcs::ApiServerRest),
+            },
+            TestData {
+                param: "x===",
+                result: Err(anyhow!(ERR_INVALID_GUEST_COMPONENTS_PROCS_VALUE)),
+            },
+            TestData {
+                param: "x==x",
+                result: Err(anyhow!(ERR_INVALID_GUEST_COMPONENTS_PROCS_VALUE)),
+            },
+            TestData {
+                param: "x=x",
+                result: Err(anyhow!(ERR_INVALID_GUEST_COMPONENTS_PROCS_VALUE)),
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            let result = get_guest_components_procs_value(d.param);
+
+            let msg = format!("{}: result: {:?}", msg, result);
+
+            assert_result!(d.result, result, msg);
+        }
+    }
+
+    #[test]
     fn test_config_builder_from_string() {
         let config = AgentConfig::from_str(
             r#"
                dev_mode = true
                server_addr = 'vsock://8:2048'
+               guest_components_procs = "api-server-rest"
+               guest_components_rest_api = "all"
               "#,
         )
         .unwrap();
@@ -1546,6 +1692,14 @@ Caused by:
         // Verify that the override worked
         assert!(config.dev_mode);
         assert_eq!(config.server_addr, "vsock://8:2048");
+        assert_eq!(
+            config.guest_components_procs,
+            GuestComponentsProcs::ApiServerRest
+        );
+        assert_eq!(
+            config.guest_components_rest_api,
+            GuestComponentsFeatures::All
+        );
 
         // Verify that the default values are valid
         assert_eq!(config.hotplug_timeout, DEFAULT_HOTPLUG_TIMEOUT);

@@ -11,7 +11,7 @@ lazy_static = "1.4.0"
 netns-rs = "0.1.0"
 slog = "2.5.2"
 slog-scope = "4.4.0"
-tokio = { version = "1.28.1", features = ["rt-multi-thread"] }
+tokio = { version = "1.38.0", features = ["rt-multi-thread"] }
 tracing = "0.1.36"
 tracing-opentelemetry = "0.18.0"
 opentelemetry = { version = "0.18.0", features = ["rt-tokio-current-thread", "trace", "rt-tokio"] }

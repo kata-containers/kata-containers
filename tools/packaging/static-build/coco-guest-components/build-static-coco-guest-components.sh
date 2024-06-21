@@ -17,45 +17,21 @@ source "${script_dir}/../../scripts/lib.sh"
 
 [ -d "guest-components" ] && rm -rf  guest-components
 
-init_env() {
-	source "$HOME/.cargo/env"
-
-	export LIBC=gnu
-
-	ARCH=$(uname -m)
-	rust_arch=""
-	case ${ARCH} in
-		"aarch64")
-			rust_arch=${ARCH}
-			;;
-		"ppc64le")
-			rust_arch="powerpc64le"
-			;;
-		"x86_64")
-			rust_arch=${ARCH}
-			;;
-		"s390x")
-			rust_arch=${ARCH}
-			;;
-	esac
-	rustup target add ${rust_arch}-unknown-linux-${LIBC}
-}
-
 build_coco_guest_components_from_source() {
 	echo "build coco-guest-components from source"
 
-	init_env
+	. /etc/profile.d/rust.sh
 
-	git clone --depth 1 ${coco_guest_components_repo} guest-components
+	git clone --depth 1 "${coco_guest_components_repo}" guest-components
 	pushd guest-components
 
 	git fetch --depth=1 origin "${coco_guest_components_version}"
 	git checkout FETCH_HEAD
 
 	DESTDIR="${DESTDIR}/usr/local/bin" TEE_PLATFORM=${TEE_PLATFORM} make build
-	strip target/${rust_arch}-unknown-linux-${LIBC}/release/confidential-data-hub
-	strip target/${rust_arch}-unknown-linux-${LIBC}/release/attestation-agent
-	strip target/${rust_arch}-unknown-linux-${LIBC}/release/api-server-rest
+	strip "target/${RUST_ARCH}-unknown-linux-${LIBC}/release/confidential-data-hub"
+	strip "target/${RUST_ARCH}-unknown-linux-${LIBC}/release/attestation-agent"
+	strip "target/${RUST_ARCH}-unknown-linux-${LIBC}/release/api-server-rest"
 	DESTDIR="${DESTDIR}/usr/local/bin" TEE_PLATFORM=${TEE_PLATFORM} make install
 	popd
 }

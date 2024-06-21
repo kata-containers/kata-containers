@@ -9,6 +9,8 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
+	[ "${KATA_HYPERVISOR}" = "qemu-tdx" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/9665"
+
 	sleep_liveness=20
 	agnhost_name="${container_images_agnhost_name}"
 	agnhost_version="${container_images_agnhost_version}"
@@ -89,6 +91,8 @@ setup() {
 }
 
 teardown() {
+	[ "${KATA_HYPERVISOR}" = "qemu-tdx" ] && skip "See: https://github.com/kata-containers/kata-containers/issues/9665"
+
 	# Debugging information
 	kubectl describe "pod/$pod_name"
 

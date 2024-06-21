@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -830,6 +831,41 @@ func (c *Container) createDevices(contConfig *ContainerConfig) error {
 	}
 	deviceInfos := append(virtualVolumesDeviceInfos, contConfig.DeviceInfos...)
 
+	// If we have a confidential guest we need to cold-plug the PCIe VFIO devices
+	// until we have TDISP/IDE PCIe support.
+	coldPlugVFIO := (c.sandbox.config.HypervisorConfig.ColdPlugVFIO != config.NoPort)
+	// Aggregate all the containner devices for hot-plug and use them to dedcue
+	// the correct amount of ports to reserve for the hypervisor.
+	hotPlugVFIO := (c.sandbox.config.HypervisorConfig.HotPlugVFIO != config.NoPort)
+
+	hotPlugDevices := []config.DeviceInfo{}
+	coldPlugDevices := []config.DeviceInfo{}
+
+	for i, vfio := range deviceInfos {
+		// Only considering VFIO updates for Port and ColdPlug or
+		// HotPlug updates
+		isVFIODevice := deviceManager.IsVFIODevice(vfio.ContainerPath)
+		if hotPlugVFIO && isVFIODevice {
+			deviceInfos[i].ColdPlug = false
+			deviceInfos[i].Port = c.sandbox.config.HypervisorConfig.HotPlugVFIO
+			hotPlugDevices = append(hotPlugDevices, deviceInfos[i])
+			continue
+		}
+		// Device is already cold-plugged at sandbox creation time
+		// ignore it for the container creation
+		if coldPlugVFIO && isVFIODevice {
+			coldPlugDevices = append(coldPlugDevices, deviceInfos[i])
+			continue
+		}
+		hotPlugDevices = append(hotPlugDevices, deviceInfos[i])
+	}
+
+	// If modeVFIO is enabled we need 1st to attach the VFIO control group
+	// device /dev/vfio/vfio an 2nd the actuall device(s) afterwards.
+	// Sort the devices starting with device #1 being the VFIO control group
+	// device and the next the actuall device(s) /dev/vfio/<group>
+	deviceInfos = sortContainerVFIODevices(hotPlugDevices)
+
 	for _, info := range deviceInfos {
 		dev, err := c.sandbox.devManager.NewDevice(info)
 		if err != nil {
@@ -845,6 +881,11 @@ func (c *Container) createDevices(contConfig *ContainerConfig) error {
 		})
 	}
 	c.devices = filterDevices(c, storedDevices)
+
+	// If we're hot-plugging this will be a no-op because at this stage
+	// no devices are attached to the root-port or switch-port
+	c.annotateContainerWithVFIOMetadata(coldPlugDevices)
+
 	return nil
 }
 
@@ -889,17 +930,90 @@ func (c *Container) checkBlockDeviceSupport(ctx context.Context) bool {
 
 // Sort the devices starting with device #1 being the VFIO control group
 // device and the next the actuall device(s) e.g. /dev/vfio/<group>
-func sortContainerVFIODevices(devices []ContainerDevice) []ContainerDevice {
-	var vfioDevices []ContainerDevice
+func sortContainerVFIODevices(devices []config.DeviceInfo) []config.DeviceInfo {
+	var vfioDevices []config.DeviceInfo
 
 	for _, device := range devices {
 		if deviceManager.IsVFIOControlDevice(device.ContainerPath) {
-			vfioDevices = append([]ContainerDevice{device}, vfioDevices...)
+			vfioDevices = append([]config.DeviceInfo{device}, vfioDevices...)
 			continue
 		}
 		vfioDevices = append(vfioDevices, device)
 	}
 	return vfioDevices
+}
+
+type DeviceRelation struct {
+	Bus   string
+	Path  string
+	Index int
+}
+
+// Depending on the HW we might need to inject metadata into the container
+// In this case for the NV GPU we need to provide the correct mapping from
+// VFIO-<NUM> to GPU index inside of the VM when vfio_mode="guest-kernel",
+// otherwise we do not know which GPU is which.
+func (c *Container) annotateContainerWithVFIOMetadata(devices interface{}) {
+
+	modeIsGK := (c.sandbox.config.VfioMode == config.VFIOModeGuestKernel)
+
+	if modeIsGK {
+		// Hot plug is done let's update meta information about the
+		// hot plugged devices especially VFIO devices in modeIsGK
+		siblings := make([]DeviceRelation, 0)
+		// In the sandbox we first create the root-ports and secondly
+		// the switch-ports. The range over map is not deterministic
+		// so lets first iterate over all root-port devices and then
+		// switch-port devices no special handling for bridge-port (PCI)
+		for _, dev := range config.PCIeDevicesPerPort["root-port"] {
+			// For the NV GPU we need special handling let's use only those
+			if dev.VendorID == "0x10de" && strings.Contains(dev.Class, "0x030") {
+				siblings = append(siblings, DeviceRelation{Bus: dev.Bus, Path: dev.HostPath})
+			}
+		}
+		for _, dev := range config.PCIeDevicesPerPort["switch-port"] {
+			// For the NV GPU we need special handling let's use only those
+			if dev.VendorID == "0x10de" && strings.Contains(dev.Class, "0x030") {
+				siblings = append(siblings, DeviceRelation{Bus: dev.Bus, Path: dev.HostPath})
+			}
+		}
+		// We need to sort the VFIO devices by bus to get the correct
+		// ordering root-port < switch-port
+		sort.Slice(siblings, func(i, j int) bool {
+			return siblings[i].Bus < siblings[j].Bus
+		})
+
+		for i := range siblings {
+			siblings[i].Index = i
+		}
+
+		// Now that we have the index lets connect the /dev/vfio/<num>
+		// to the correct index
+		if devices, ok := devices.([]ContainerDevice); ok {
+			for _, dev := range devices {
+				c.siblingAnnotation(dev.ContainerPath, siblings)
+			}
+		}
+
+		if devices, ok := devices.([]config.DeviceInfo); ok {
+			for _, dev := range devices {
+				c.siblingAnnotation(dev.ContainerPath, siblings)
+			}
+
+		}
+
+	}
+}
+func (c *Container) siblingAnnotation(devPath string, siblings []DeviceRelation) {
+	for _, sibling := range siblings {
+		if sibling.Path == devPath {
+			vfioNum := filepath.Base(devPath)
+			annoKey := fmt.Sprintf("cdi.k8s.io/vfio%s", vfioNum)
+			annoValue := fmt.Sprintf("nvidia.com/gpu=%d", sibling.Index)
+			c.config.CustomSpec.Annotations[annoKey] = annoValue
+			c.Logger().Infof("annotated container with %s: %s", annoKey, annoValue)
+		}
+	}
 }
 
 // create creates and starts a container inside a Sandbox. It has to be
@@ -921,43 +1035,14 @@ func (c *Container) create(ctx context.Context) (err error) {
 		}
 	}
 
-	// If cold-plug we've attached the devices already, do not try to
-	// attach them a second time.
-	coldPlugVFIO := (c.sandbox.config.HypervisorConfig.ColdPlugVFIO != config.NoPort)
-	modeVFIO := (c.sandbox.config.VfioMode == config.VFIOModeVFIO)
-
-	if coldPlugVFIO {
-		var cntDevices []ContainerDevice
-		for _, dev := range c.devices {
-			isVFIOControlDevice := deviceManager.IsVFIOControlDevice(dev.ContainerPath)
-			if isVFIOControlDevice && modeVFIO {
-				cntDevices = append(cntDevices, dev)
-			}
-
-			if strings.HasPrefix(dev.ContainerPath, vfioPath) {
-				c.Logger().WithFields(logrus.Fields{
-					"device": dev,
-				}).Info("Remvoing device since we're cold-plugging no Attach needed")
-				continue
-			}
-			cntDevices = append(cntDevices, dev)
-		}
-		c.devices = cntDevices
-	}
-	// If modeVFIO is enabled we need 1st to attach the VFIO control group
-	// device /dev/vfio/vfio an 2nd the actuall device(s) afterwards.
-	// Sort the devices starting with device #1 being the VFIO control group
-	// device and the next the actuall device(s) /dev/vfio/<group>
-	if modeVFIO {
-		c.devices = sortContainerVFIODevices(c.devices)
-	}
-
 	c.Logger().WithFields(logrus.Fields{
 		"devices": c.devices,
 	}).Info("Attach devices")
 	if err = c.attachDevices(ctx); err != nil {
 		return
 	}
+
+	c.annotateContainerWithVFIOMetadata(c.devices)
 
 	// Deduce additional system mount info that should be handled by the agent
 	// inside the VM

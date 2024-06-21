@@ -151,82 +151,75 @@ function deploy_kata() {
 	[ "$platform" = "kcli" ] && \
 	export KUBECONFIG="$HOME/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
 
-	cleanup_kata_deploy || true
+	if [ "${K8S_TEST_HOST_TYPE}" = "baremetal" ]; then
+		cleanup_kata_deploy || true
+	fi
 
 	set_default_cluster_namespace
 
 	sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 
 	# Enable debug for Kata Containers
-	yq write -i \
-	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
-	  'spec.template.spec.containers[0].env[1].value' \
-	  --tag '!!str' "true"
+	yq -i \
+	  '.spec.template.spec.containers[0].env[1].value = "true"' \
+	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 	# Create the runtime class only for the shim that's being tested
-	yq write -i \
-	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
-	  'spec.template.spec.containers[0].env[2].value' \
-	  "${KATA_HYPERVISOR}"
+	yq -i \
+	  ".spec.template.spec.containers[0].env[2].value = \"${KATA_HYPERVISOR}\"" \
+	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 	# Set the tested hypervisor as the default `kata` shim
-	yq write -i \
-	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
-	  'spec.template.spec.containers[0].env[3].value' \
-	  "${KATA_HYPERVISOR}"
+	yq -i \
+	  ".spec.template.spec.containers[0].env[3].value = \"${KATA_HYPERVISOR}\"" \
+	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 	# Let the `kata-deploy` script take care of the runtime class creation / removal
-	yq write -i \
-	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
-	  'spec.template.spec.containers[0].env[4].value' \
-	  --tag '!!str' "true"
+	yq -i \
+	  '.spec.template.spec.containers[0].env[4].value = "true"' \
+	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 	# Let the `kata-deploy` create the default `kata` runtime class
-	yq write -i \
-	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
-	  'spec.template.spec.containers[0].env[5].value' \
-	  --tag '!!str' "true"
+	yq -i \
+	  '.spec.template.spec.containers[0].env[5].value = "true"' \
+	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 	# Enable 'default_vcpus' hypervisor annotation
-	yq write -i \
-	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
-	  'spec.template.spec.containers[0].env[6].value' \
-	  "default_vcpus"
+	yq -i \
+	  '.spec.template.spec.containers[0].env[6].value = "default_vcpus"' \
+	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 
 	if [ -n "${SNAPSHOTTER}" ]; then
-		yq write -i \
-		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
-		  'spec.template.spec.containers[0].env[7].value' \
-		  "${KATA_HYPERVISOR}:${SNAPSHOTTER}"
+		yq -i \
+		  ".spec.template.spec.containers[0].env[7].value = \"${KATA_HYPERVISOR}:${SNAPSHOTTER}\"" \
+		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 	fi
 
 	if [ "${KATA_HOST_OS}" = "cbl-mariner" ]; then
-		yq write -i \
-		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
-		  'spec.template.spec.containers[0].env[6].value' \
-		  "initrd kernel default_vcpus"
-		yq write -i \
-		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
-		  'spec.template.spec.containers[0].env[+].name' \
-		  "HOST_OS"
-		yq write -i \
-		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
-		  'spec.template.spec.containers[0].env[-1].value' \
-		  "${KATA_HOST_OS}"
+		yq -i \
+		  '.spec.template.spec.containers[0].env[6].value = "initrd kernel default_vcpus"' \
+		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
+		yq -i \
+		  ".spec.template.spec.containers[0].env += [{\"name\": \"HOST_OS\", \"value\": \"${KATA_HOST_OS}\"}]" \
+		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 	fi
 
 	if [ "${KATA_HYPERVISOR}" = "qemu" ]; then
-		yq write -i \
-		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
-		  'spec.template.spec.containers[0].env[6].value' \
-		  "image initrd kernel default_vcpus"
+		yq -i \
+		  '.spec.template.spec.containers[0].env[6].value = "image initrd kernel default_vcpus"' \
+		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 	fi
 
 	if [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
-		yq write -i \
-		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
-		  'spec.template.spec.containers[0].env[8].value' \
-		  "${HTTPS_PROXY}"
+		yq -i \
+		  ".spec.template.spec.containers[0].env[8].value = \"${HTTPS_PROXY}\"" \
+		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 
-		yq write -i \
-		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
-		  'spec.template.spec.containers[0].env[9].value' \
-		  "${NO_PROXY}"
+		yq -i \
+		  ".spec.template.spec.containers[0].env[9].value = \"${NO_PROXY}\"" \
+		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
+	fi
+
+	# Set the PULL_TYPE_MAPPING
+	if [ "${PULL_TYPE}" != "default" ]; then
+		yq -i \
+		  ".spec.template.spec.containers[0].env[10].value = \"${KATA_HYPERVISOR}:${PULL_TYPE}\"" \
+		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 	fi
 
 	echo "::group::Final kata-deploy.yaml that is used in the test"
@@ -234,12 +227,13 @@ function deploy_kata() {
 	grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" || die "Failed to setup the tests image"
 	echo "::endgroup::"
 
-	kubectl apply -f "${tools_dir}/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
-	if [ "${KUBERNETES}" = "k3s" ]; then
-		kubectl apply -k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k3s"
-	else
-		kubectl apply -f "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-	fi
+	kubectl_retry apply -f "${tools_dir}/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
+	case "${KUBERNETES}" in
+		k0s) kubectl_retry apply -k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k0s" ;;
+		k3s) kubectl_retry apply -k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k3s" ;;
+		rke2) kubectl_retry apply -k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/rke2" ;;
+		*) kubectl_retry apply -f "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
+	esac
 
 	local cmd="kubectl -n kube-system get -l name=kata-deploy pod 2>/dev/null | grep '\<Running\>'"
 	waitForProcess "${KATA_DEPLOY_WAIT_TIMEOUT}" 10 "$cmd"
@@ -254,16 +248,20 @@ function deploy_kata() {
 	fi
 
 	echo "::group::kata-deploy logs"
-	kubectl -n kube-system logs --tail=100 -l name=kata-deploy
+	kubectl_retry -n kube-system logs --tail=100 -l name=kata-deploy
 	echo "::endgroup::"
 
 	echo "::group::Runtime classes"
-	kubectl get runtimeclass
+	kubectl_retry get runtimeclass
 	echo "::endgroup::"
 }
 
 function install_kbs_client() {
 	kbs_install_cli
+}
+
+function uninstall_kbs_client() {
+	kbs_uninstall_cli
 }
 
 function run_tests() {
@@ -384,49 +382,56 @@ function collect_artifacts() {
 function cleanup_kata_deploy() {
 	ensure_yq
 
-	if [ "${KUBERNETES}" = "k3s" ]; then
-		deploy_spec="-k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k3s""
-		cleanup_spec="-k "${tools_dir}/packaging/kata-deploy/kata-cleanup/overlays/k3s""
-	else
-		deploy_spec="-f "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml""
-		cleanup_spec="-f "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml""
-	fi
+	case "${KUBERNETES}" in
+		k0s)
+			deploy_spec="-k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k0s""
+			cleanup_spec="-k "${tools_dir}/packaging/kata-deploy/kata-cleanup/overlays/k0s""
+			;;
+		k3s)
+			deploy_spec="-k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k3s""
+			cleanup_spec="-k "${tools_dir}/packaging/kata-deploy/kata-cleanup/overlays/k3s""
+			;;
+		rke2)
+			deploy_spec="-k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/rke2""
+			cleanup_spec="-k "${tools_dir}/packaging/kata-deploy/kata-cleanup/overlays/rke2""
+			;;
+		*)
+			deploy_spec="-f "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml""
+			cleanup_spec="-f "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml""
+			;;
+	esac
 
 	# shellcheck disable=2086
-	kubectl delete ${deploy_spec}
+	kubectl_retry delete --ignore-not-found ${deploy_spec}
 	kubectl -n kube-system wait --timeout=10m --for=delete -l name=kata-deploy pod
 
 	# Let the `kata-deploy` script take care of the runtime class creation / removal
-	yq write -i \
-	  "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" \
-	  'spec.template.spec.containers[0].env[4].value' \
-	  --tag '!!str' "true"
+	yq -i \
+	  '.spec.template.spec.containers[0].env[4].value = "true"' \
+	  "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
 	# Create the runtime class only for the shim that's being tested
-	yq write -i \
-	  "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" \
-	  'spec.template.spec.containers[0].env[2].value' \
-	  "${KATA_HYPERVISOR}"
+	yq -i \
+	  ".spec.template.spec.containers[0].env[2].value = \"${KATA_HYPERVISOR}\"" \
+	  "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
 	# Set the tested hypervisor as the default `kata` shim
-	yq write -i \
-	  "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" \
-	  'spec.template.spec.containers[0].env[3].value' \
-	  "${KATA_HYPERVISOR}"
+	yq -i \
+	  ".spec.template.spec.containers[0].env[3].value = \"${KATA_HYPERVISOR}\"" \
+	  "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
 	# Let the `kata-deploy` create the default `kata` runtime class
-	yq write -i \
-	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" \
-	  'spec.template.spec.containers[0].env[5].value' \
-	  --tag '!!str' "true"
+	yq -i \
+	  '.spec.template.spec.containers[0].env[5].value = "true"' \
+	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 
 	sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
 	cat "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
 	grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" || die "Failed to setup the tests image"
 	# shellcheck disable=2086
-	kubectl apply ${cleanup_spec}
+	kubectl_retry apply ${cleanup_spec}
 	sleep 180s
 
 	# shellcheck disable=2086
-	kubectl delete ${cleanup_spec}
-	kubectl delete -f "${tools_dir}/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
+	kubectl_retry delete --ignore-not-found ${cleanup_spec}
+	kubectl_retry delete --ignore-not-found -f "${tools_dir}/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
 }
 
 function cleanup() {
@@ -446,7 +451,7 @@ function cleanup() {
 	fi
 
 	# Switch back to the default namespace and delete the tests one
-	delete_test_cluster_namespace
+	delete_test_cluster_namespace || true
 
 	cleanup_kata_deploy
 }
@@ -478,44 +483,48 @@ function deploy_nydus_snapshotter() {
 		rm -rf "${nydus_snapshotter_install_dir}"
 	fi
 	mkdir -p "${nydus_snapshotter_install_dir}"
-	nydus_snapshotter_url=$(get_from_kata_deps "externals.nydus-snapshotter.url")
-	nydus_snapshotter_version=$(get_from_kata_deps "externals.nydus-snapshotter.version")
+	nydus_snapshotter_url=$(get_from_kata_deps ".externals.nydus-snapshotter.url")
+	nydus_snapshotter_version=$(get_from_kata_deps ".externals.nydus-snapshotter.version")
 	git clone -b "${nydus_snapshotter_version}" "${nydus_snapshotter_url}" "${nydus_snapshotter_install_dir}"
 
 	pushd "$nydus_snapshotter_install_dir"
-	cleanup_nydus_snapshotter || true
+	if [ "${K8S_TEST_HOST_TYPE}" = "baremetal" ]; then
+		cleanup_nydus_snapshotter || true
+	fi
 	if [ "${PULL_TYPE}" == "guest-pull" ]; then
 		# Enable guest pull feature in nydus snapshotter
-		yq write -i \
-		  misc/snapshotter/base/nydus-snapshotter.yaml \
-		  'data.FS_DRIVER' \
-		  "proxy" --style=double
+		yq -i \
+      'select(.kind == "ConfigMap").data.FS_DRIVER = "proxy"' \
+      misc/snapshotter/base/nydus-snapshotter.yaml
 	else
 		>&2 echo "Invalid pull type"; exit 2
 	fi
 
 	# Disable to read snapshotter config from configmap
-	yq write -i \
-	  misc/snapshotter/base/nydus-snapshotter.yaml \
-	  'data.ENABLE_CONFIG_FROM_VOLUME' \
-	  "false" --style=double
+	yq -i \
+    'select(.kind == "ConfigMap").data.ENABLE_CONFIG_FROM_VOLUME = "false"' \
+	  misc/snapshotter/base/nydus-snapshotter.yaml
 	# Enable to run snapshotter as a systemd service
-	yq write -i \
-	  misc/snapshotter/base/nydus-snapshotter.yaml \
-	  'data.ENABLE_SYSTEMD_SERVICE' \
-	  "true" --style=double
+	yq -i \
+    'select(.kind == "ConfigMap").data.ENABLE_SYSTEMD_SERVICE = "true"' \
+	  misc/snapshotter/base/nydus-snapshotter.yaml
 	# Enable "runtime specific snapshotter" feature in containerd when configuring containerd for snapshotter
-	yq write -i \
-	  misc/snapshotter/base/nydus-snapshotter.yaml \
-	  'data.ENABLE_RUNTIME_SPECIFIC_SNAPSHOTTER' \
-	  "true" --style=double
+	yq -i \
+    'select(.kind == "ConfigMap").data.ENABLE_RUNTIME_SPECIFIC_SNAPSHOTTER = "true"' \
+	  misc/snapshotter/base/nydus-snapshotter.yaml
+
+	# Pin the version of nydus-snapshotter image.
+	# TODO: replace with a definitive solution (see https://github.com/kata-containers/kata-containers/issues/9742)
+	yq -i \
+		"select(.kind == \"DaemonSet\").spec.template.spec.containers[0].image = \"ghcr.io/containerd/nydus-snapshotter:${nydus_snapshotter_version}\"" \
+		misc/snapshotter/base/nydus-snapshotter.yaml
 
 	# Deploy nydus snapshotter as a daemonset
-	kubectl create -f "misc/snapshotter/nydus-snapshotter-rbac.yaml"
+	kubectl_retry create -f "misc/snapshotter/nydus-snapshotter-rbac.yaml"
 	if [ "${KUBERNETES}" = "k3s" ]; then
-		kubectl apply -k "misc/snapshotter/overlays/k3s"
+		kubectl_retry apply -k "misc/snapshotter/overlays/k3s"
 	else
-		kubectl apply -f "misc/snapshotter/base/nydus-snapshotter.yaml"
+		kubectl_retry apply -f "misc/snapshotter/base/nydus-snapshotter.yaml"
 	fi
 	popd
 
@@ -523,9 +532,10 @@ function deploy_nydus_snapshotter() {
 
 	echo "::endgroup::"
 	echo "::group::nydus snapshotter logs"
-	pods_name=$(kubectl get pods --selector=app=nydus-snapshotter -n nydus-system -o=jsonpath='{.items[*].metadata.name}')
-	kubectl logs "${pods_name}" -n nydus-system
-	kubectl describe pod "${pods_name}" -n nydus-system
+	kubectl_retry logs --selector=app=nydus-snapshotter -n nydus-system
+	echo "::endgroup::"
+	echo "::group::nydus snapshotter describe"
+	kubectl_retry describe pod --selector=app=nydus-snapshotter -n nydus-system
 	echo "::endgroup::"
 }
 
@@ -540,13 +550,13 @@ function cleanup_nydus_snapshotter() {
 	pushd "$nydus_snapshotter_install_dir"
 
 	if [ "${KUBERNETES}" = "k3s" ]; then
-		kubectl delete -k "misc/snapshotter/overlays/k3s"
+		kubectl_retry delete --ignore-not-found -k "misc/snapshotter/overlays/k3s"
 	else
-		kubectl delete -f "misc/snapshotter/base/nydus-snapshotter.yaml"
+		kubectl_retry delete --ignore-not-found -f "misc/snapshotter/base/nydus-snapshotter.yaml"
 	fi
 	sleep 180s
-	kubectl delete -f "misc/snapshotter/nydus-snapshotter-rbac.yaml"
-	kubectl get namespace nydus-system -o json | jq 'del(.spec.finalizers)' | kubectl replace --raw "/api/v1/namespaces/nydus-system/finalize" -f - || true
+	kubectl_retry delete --ignore-not-found -f "misc/snapshotter/nydus-snapshotter-rbac.yaml"
+	kubectl_retry get namespace nydus-system -o json | jq 'del(.spec.finalizers)' | kubectl_retry replace --raw "/api/v1/namespaces/nydus-system/finalize" -f - || true
 	popd
 	sleep 30s
 	echo "::endgroup::"
@@ -594,6 +604,7 @@ function main() {
 		delete-coco-kbs) delete_coco_kbs ;;
 		delete-cluster) cleanup "aks" ;;
 		delete-cluster-kcli) delete_cluster_kcli ;;
+		uninstall-kbs-client) uninstall_kbs_client ;;
 		*) >&2 echo "Invalid argument"; exit 2 ;;
 	esac
 }

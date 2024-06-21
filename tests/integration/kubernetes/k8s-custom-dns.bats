@@ -7,8 +7,12 @@
 
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
+load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 
 setup() {
+	is_confidential_runtime_class && \
+		skip "See: https://github.com/kata-containers/kata-containers/issues/9663"
+
 	pod_name="custom-dns-test"
 	file_name="/etc/resolv.conf"
 	get_pod_config_dir
@@ -37,6 +41,9 @@ setup() {
 }
 
 teardown() {
+	is_confidential_runtime_class && \
+		skip "See: https://github.com/kata-containers/kata-containers/issues/9663"
+
 	# Debugging information
 	kubectl describe "pod/$pod_name"
 

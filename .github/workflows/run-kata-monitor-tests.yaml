@@ -26,6 +26,10 @@ jobs:
         include:
           - container_engine: containerd
             containerd_version: lts
+        exclude:
+          # TODO: enable with containerd when https://github.com/kata-containers/kata-containers/issues/9761 is fixed
+          - container_engine: containerd
+            vmm: qemu
     runs-on: garm-ubuntu-2204-smaller
     env:
       CONTAINER_ENGINE: ${{ matrix.container_engine }}

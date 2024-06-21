@@ -22,7 +22,7 @@ serde_json = ">=1.0.9"
 slog = "2.5.2"
 slog-scope = "4.4.0"
 thiserror = "1.0"
-tokio = { version = "1.28.1", features = ["sync", "fs", "process", "io-util"] }
+tokio = { version = "1.38.0", features = ["sync", "fs", "process", "io-util"] }
 vmm-sys-util = "0.11.0"
 rand = "0.8.4"
 path-clean = "1.0.1"
@@ -42,6 +42,10 @@ futures = "0.3.25"
 safe-path = "0.1.0"
 crossbeam-channel = "0.5.6"
 tempdir = "0.3.7"
+
+qapi = { version = "0.14", features = [ "qmp", "async-tokio-all" ] }
+qapi-spec = "0.3.1"
+qapi-qmp = "0.14.0"
 
 [target.'cfg(not(target_arch = "s390x"))'.dependencies]
 dragonball = { path = "../../../dragonball", features = ["atomic-guest-memory", "virtio-vsock", "hotplug", "virtio-blk", "virtio-net", "virtio-fs", "vhost-net", "dbs-upcall", "virtio-mem", "virtio-balloon", "vhost-user-net", "host-device"] }

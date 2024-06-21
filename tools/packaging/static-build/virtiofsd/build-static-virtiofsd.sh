@@ -44,48 +44,20 @@ pull_virtiofsd_released_binary() {
 	popd
 }
 
-init_env() {
-	source "$HOME/.cargo/env"
-
-	extra_rust_flags=" -C link-self-contained=yes"
-	case ${ARCH} in
-		"aarch64")
-			LIBC="musl"
-			ARCH_LIBC=""
-			;;
-		"ppc64le")
-			LIBC="gnu"
-			ARCH="powerpc64le"
-			ARCH_LIBC=${ARCH}-linux-${LIBC}
-			extra_rust_flags=""
-			;;
-		"s390x")
-			LIBC="gnu"
-			ARCH_LIBC=${ARCH}-linux-${LIBC}
-			extra_rust_flags=""
-			;;
-		"x86_64")
-			LIBC="musl"
-			ARCH_LIBC=""
-			;;
-	esac
-
-}
-
 build_virtiofsd_from_source() {
 	echo "build viriofsd from source"
-	init_env
+	. /etc/profile.d/rust.sh
 
 	git clone --depth 1 --branch ${virtiofsd_version} ${virtiofsd_repo} virtiofsd
 	pushd virtiofsd
 
-	export RUSTFLAGS='-C target-feature=+crt-static'${extra_rust_flags}
+	export RUSTFLAGS='-C target-feature=+crt-static'${EXTRA_RUST_FLAGS}
 	export LIBSECCOMP_LINK_TYPE=static
 	export LIBSECCOMP_LIB_PATH=/usr/lib/${ARCH_LIBC}
 	export LIBCAPNG_LINK_TYPE=static
 	export LIBCAPNG_LIB_PATH=/usr/lib/${ARCH_LIBC}
 
-	cargo build --release --target ${ARCH}-unknown-linux-${LIBC}
+	cargo build --release --target ${RUST_ARCH}-unknown-linux-${LIBC}
 
 	binary=$(find ./ -name virtiofsd)
 	mv -f ${binary} .

@@ -239,9 +239,18 @@ container_pipe_size=@PIPESIZE@
 
 #debug_console_enabled = true
 
-# Agent connection dialing timeout value in seconds
-# (default: 45)
-dial_timeout = 45
+# Agent dial timeout in millisecond.
+# (default: 10)
+#dial_timeout_ms = 10
+
+# Agent reconnect timeout in millisecond.
+# Retry times = reconnect_timeout_ms / dial_timeout_ms (default: 300)
+# If you find pod cannot connect to the agent when starting, please
+# consider increasing this value to increase the retry times.
+# You'd better not change the value of dial_timeout_ms, unless you have an
+# idea of what you are doing.
+# (default: 3000)
+#reconnect_timeout_ms = 3000
 
 [runtime]
 # If enabled, the runtime will log additional debug messages to the

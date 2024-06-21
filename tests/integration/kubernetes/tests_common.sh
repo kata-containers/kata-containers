@@ -48,6 +48,14 @@ setup_common() {
 	node=$(get_one_kata_node)
 	[ -n "$node" ]
 	node_start_time=$(exec_host "$node" date +\"%Y-%m-%d %H:%M:%S\")
+	# If node_start_time is empty, try again 3 times with a 5 seconds sleep between each try.
+	count=0
+	while [ -z "$node_start_time" ] && [ $count -lt 3 ]; do
+		echo "node_start_time is empty, trying again..."
+		sleep 5
+		node_start_time=$(exec_host "$node" date +\"%Y-%m-%d %H:%M:%S\")
+		count=$((count + 1))
+	done
 	[ -n "$node_start_time" ]
 	export node node_start_time
 
@@ -103,7 +111,7 @@ exec_host() {
 	# [bats-exec-test:38] INFO: k8s configured to use runtimeclass
 	# bash: line 1: $'\r': command not found
 	# ```
-	output="$(kubectl debug -qit "node/${node}" --image=alpine:latest -- chroot /host bash -c "${command}" | tr -d '\r')"
+	output="$(kubectl debug -qit "node/${node}" --image=ghcr.io/linuxcontainers/alpine:latest -- chroot /host bash -c "${command}" | tr -d '\r')"
 
 	# Get the updated list of debugger pods.
 	declare -a new_debugger_pods=( $(kubectl get pods -o name | grep node-debugger) )
@@ -171,6 +179,7 @@ auto_generate_policy() {
 	declare -r settings_dir="$1"
 	declare -r yaml_file="$2"
 	declare -r config_map_yaml_file="$3"
+	declare -r additional_flags="$4"
 
 	auto_generate_policy_enabled || return 0
 	local genpolicy_command="RUST_LOG=info /opt/kata/bin/genpolicy -u -y ${yaml_file}"
@@ -184,6 +193,8 @@ auto_generate_policy() {
 	if [ "${GENPOLICY_PULL_METHOD}" == "containerd" ]; then
 		genpolicy_command+=" -d"
 	fi
+
+	genpolicy_command+=" ${additional_flags}"
 
 	info "Executing: ${genpolicy_command}"
 	eval "${genpolicy_command}"
@@ -266,30 +277,34 @@ set_namespace_to_policy_settings() {
 policy_tests_enabled() {
 	# The Guest images for these platforms have been built using AGENT_POLICY=yes -
 	# see kata-deploy-binaries.sh.
-	[ "${KATA_HYPERVISOR}" == "qemu-sev" ] || [ "${KATA_HYPERVISOR}" == "qemu-snp" ] || \
-		[ "${KATA_HYPERVISOR}" == "qemu-tdx" ] || [ "${KATA_HOST_OS}" == "cbl-mariner" ]
+	local enabled_hypervisors="qemu-coco-dev qemu-sev qemu-snp qemu-tdx"
+	[[ " $enabled_hypervisors " =~ " ${KATA_HYPERVISOR} " ]] || \
+		[ "${KATA_HOST_OS}" == "cbl-mariner" ]
 }
 
 add_allow_all_policy_to_yaml() {
 	policy_tests_enabled || return 0
 
 	local yaml_file="$1"
-	local resource_kind="$(yq read ${yaml_file} kind)"
+	# Previous version of yq was not ready to handle multiple objects in a single yaml.
+	# By default was changing only the first object.
+	# With yq>4 we need to make it explicit during the read and write.
+	local resource_kind="$(yq .kind ${yaml_file} | head -1)"
 
 	case "${resource_kind}" in
 
 	Pod)
 		info "Adding allow all policy to ${resource_kind} from ${yaml_file}"
-		ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY}" yq write -i "${yaml_file}" \
-			'metadata.annotations."io.katacontainers.config.agent.policy"' \
-			"${ALLOW_ALL_POLICY}"
+		ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY}" yq -i \
+			".metadata.annotations.\"io.katacontainers.config.agent.policy\" = \"${ALLOW_ALL_POLICY}\"" \
+      "${yaml_file}"
 		;;
 
 	Deployment|Job|ReplicationController)
 		info "Adding allow all policy to ${resource_kind} from ${yaml_file}"
-		ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY}" yq write -i "${yaml_file}" \
-			'spec.template.metadata.annotations."io.katacontainers.config.agent.policy"' \
-			"${ALLOW_ALL_POLICY}"
+		ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY}" yq -i \
+			".spec.template.metadata.annotations.\"io.katacontainers.config.agent.policy\" = \"${ALLOW_ALL_POLICY}\"" \
+      "${yaml_file}"
 		;;
 
 	List)

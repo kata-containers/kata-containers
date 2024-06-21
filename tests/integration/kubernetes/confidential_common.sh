@@ -38,21 +38,21 @@ function get_remote_command_per_hypervisor() {
 	echo "${REMOTE_COMMAND_PER_HYPERVISOR[${KATA_HYPERVISOR}]}"
 }
 
-# This function verifies whether the input hypervisor supports confidential tests and 
+# This function verifies whether the input hypervisor supports confidential tests and
 # relies on `KATA_HYPERVISOR` being an environment variable
 function check_hypervisor_for_confidential_tests() {
 	local kata_hypervisor="${1}"
 	# This check must be done with "<SPACE>${KATA_HYPERVISOR}<SPACE>" to avoid
 	# having substrings, like qemu, being matched with qemu-$something.
-    if check_hypervisor_for_confidential_tests_tee_only "${kata_hypervisor}" ||\
-       [[ " ${SUPPORTED_NON_TEE_HYPERVISORS[*]} " =~ " ${kata_hypervisor} " ]]; then        
-        return 0
-    else
-        return 1
-    fi
+	if check_hypervisor_for_confidential_tests_tee_only "${kata_hypervisor}" ||\
+	[[ " ${SUPPORTED_NON_TEE_HYPERVISORS[*]} " =~ " ${kata_hypervisor} " ]]; then
+		return 0
+	else
+		return 1
+	fi
 }
 
-# This function verifies whether the input hypervisor supports confidential tests and 
+# This function verifies whether the input hypervisor supports confidential tests and
 # relies on `KATA_HYPERVISOR` being an environment variable
 function check_hypervisor_for_confidential_tests_tee_only() {
 	local kata_hypervisor="${1}"

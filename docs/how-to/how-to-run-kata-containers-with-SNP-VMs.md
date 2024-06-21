@@ -44,8 +44,8 @@ $ popd
 - Build a custom QEMU
 ```bash
 $ source kata-containers/tools/packaging/scripts/lib.sh
-$ qemu_url="$(get_from_kata_deps "assets.hypervisor.qemu-snp-experimental.url")"
-$ qemu_tag="$(get_from_kata_deps "assets.hypervisor.qemu-snp-experimental.tag")"
+$ qemu_url="$(get_from_kata_deps ".assets.hypervisor.qemu-snp-experimental.url")"
+$ qemu_tag="$(get_from_kata_deps ".assets.hypervisor.qemu-snp-experimental.tag")"
 $ git clone "${qemu_url}"
 $ pushd qemu
 $ git checkout "${qemu_tag}"

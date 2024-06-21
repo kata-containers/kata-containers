@@ -6,6 +6,7 @@
 
 Ansible/B
 AppArmor/B
+bisecter/B
 blogbench/B
 BusyBox/B
 Cassandra/B
@@ -62,6 +63,7 @@ Netlify/B
 Nginx/B
 OpenCensus/B
 OpenPGP/B
+openshift/B  # lower-case used for some sub-projects
 OpenShift/B
 OpenSSL/B
 OpenStack/B

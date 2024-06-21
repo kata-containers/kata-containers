@@ -13,6 +13,7 @@ source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
 # shellcheck disable=1091
 source "${kubernetes_dir}/../../../ci/lib.sh"
 
+KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 # Where the trustee (includes kbs) sources will be cloned
 readonly COCO_TRUSTEE_DIR="/tmp/trustee"
 # Where the kbs sources will be cloned
@@ -23,6 +24,8 @@ readonly KBS_NS="coco-tenant"
 readonly KBS_PRIVATE_KEY="${COCO_KBS_DIR}/config/kubernetes/base/kbs.key"
 # The kbs service name
 readonly KBS_SVC_NAME="kbs"
+# The kbs ingress name
+readonly KBS_INGRESS_NAME="kbs"
 
 # Set "allow all" policy to resources.
 #
@@ -124,21 +127,31 @@ kbs_set_resource_from_file() {
 kbs_install_cli() {
 	command -v kbs-client >/dev/null && return
 
-	if ! command -v apt >/dev/null; then
-		>&2 echo "ERROR: running on unsupported distro"
-		return 1
-	fi
+	source /etc/os-release || source /usr/lib/os-release
+	case "${ID}" in
+		ubuntu)
+			local pkgs="build-essential"
 
-	local pkgs="build-essential"
+			sudo apt-get update -y
+			# shellcheck disable=2086
+			sudo apt-get install -y $pkgs
+			;;
+		centos)
+			local pkgs="make"
 
-	sudo apt-get update -y
-	# shellcheck disable=2086
-	sudo apt-get install -y $pkgs
+			# shellcheck disable=2086
+			sudo dnf install -y $pkgs
+			;;
+		*)
+			>&2 echo "ERROR: running on unsupported distro"
+			return 1
+			;;
+	esac
 
 	# Mininum required version to build the client (read from versions.yaml)
 	local rust_version
 	ensure_yq
-	rust_version=$(get_from_kata_deps "externals.coco-kbs.toolchain")
+	rust_version=$(get_from_kata_deps ".externals.coco-trustee.toolchain")
 	# Currently kata version from version.yaml is 1.72.0
 	# which doesn't match the requirement, so let's pass
 	# the required version.
@@ -152,9 +165,13 @@ kbs_install_cli() {
 }
 
 kbs_uninstall_cli() {
-	pushd "${COCO_KBS_DIR}"
-	sudo make uninstall
-	popd
+	if [ -d "${COCO_KBS_DIR}" ]; then
+		pushd "${COCO_KBS_DIR}"
+		sudo make uninstall
+		popd
+	else
+		echo "${COCO_KBS_DIR} does not exist in the machine, skip uninstalling the kbs cli"
+	fi
 }
 
 # Delete the kbs on Kubernetes
@@ -164,8 +181,8 @@ kbs_uninstall_cli() {
 function kbs_k8s_delete() {
 	pushd "$COCO_KBS_DIR"
 	kubectl delete -k config/kubernetes/overlays
-	# Verify that coco-tenant resources were properly deleted
-	cmd="kubectl get all -n coco-tenant 2>&1 | grep 'No resources found'"
+	# Verify that KBS namespace resources were properly deleted
+	cmd="kubectl get all -n $KBS_NS 2>&1 | grep 'No resources found'"
 	waitForProcess "120" "30" "$cmd"
 	popd
 }
@@ -190,10 +207,10 @@ function kbs_k8s_deploy() {
 	ensure_yq
 
 	# Read from versions.yaml
-	repo=$(get_from_kata_deps "externals.coco-trustee.url")
-	version=$(get_from_kata_deps "externals.coco-trustee.version")
-	image=$(get_from_kata_deps "externals.coco-trustee.image")
-	image_tag=$(get_from_kata_deps "externals.coco-trustee.image_tag")
+	repo=$(get_from_kata_deps ".externals.coco-trustee.url")
+	version=$(get_from_kata_deps ".externals.coco-trustee.version")
+	image=$(get_from_kata_deps ".externals.coco-trustee.image")
+	image_tag=$(get_from_kata_deps ".externals.coco-trustee.image_tag")
 
 	# The ingress handler for AKS relies on the cluster's name which in turn
 	# contain the HEAD commit of the kata-containers repository (supposedly the
@@ -228,10 +245,22 @@ function kbs_k8s_deploy() {
 	kustomize edit set image "kbs-container-image=${image}:${image_tag}"
 	popd
 	echo "::endgroup::"
-
 	[ -n "$ingress" ] && _handle_ingress "$ingress"
 
 	echo "::group::Deploy the KBS"
+	if [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
+		echo "Setting up custom PCCS for TDX"
+		cat <<- EOF > "${COCO_KBS_DIR}/config/kubernetes/custom_pccs/sgx_default_qcnl.conf"
+{
+ "pccs_url": "https://$(hostname -i):8081/sgx/certification/v4/",
+
+ // To accept insecure HTTPS certificate, set this option to false
+ "use_secure_cert": false
+}
+EOF
+		export DEPLOYMENT_DIR=custom_pccs
+	fi
+
 	./deploy-kbs.sh
 	popd
 
@@ -257,6 +286,7 @@ function kbs_k8s_deploy() {
 	echo "::group::Check the service healthy"
 	kbs_ip=$(kubectl get -o jsonpath='{.spec.clusterIP}' svc "$KBS_SVC_NAME" -n "$KBS_NS" 2>/dev/null)
 	kbs_port=$(kubectl get -o jsonpath='{.spec.ports[0].port}' svc "$KBS_SVC_NAME" -n "$KBS_NS" 2>/dev/null)
+
 	local pod=kbs-checker-$$
 	kubectl run "$pod" --image=quay.io/prometheus/busybox --restart=Never -- \
 		sh -c "wget -O- --timeout=5 \"${kbs_ip}:${kbs_port}\" || true"
@@ -299,15 +329,14 @@ function kbs_k8s_deploy() {
 #
 kbs_k8s_svc_host() {
 	if kubectl get ingress -n "$KBS_NS" 2>/dev/null | grep -q kbs; then
-		kubectl get ingress kbs -n "$KBS_NS" \
+		kubectl get ingress "$KBS_INGRESS_NAME" -n "$KBS_NS" \
 			-o jsonpath='{.spec.rules[0].host}' 2>/dev/null
-	elif kubectl get svc kbs-nodeport -n "$KBS_NS" &>/dev/null; then
+	elif kubectl get svc "$KBS_SVC_NAME" -n "$KBS_NS" &>/dev/null; then
 			local host
-			host=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalIP")].address}' -n "$KBS_NS")
-			[ -z "$host"] && host=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' -n "$KBS_NS")
+			host=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}' -n "$KBS_NS")
 			echo "$host"
 	else
-		kubectl get svc kbs -n "$KBS_NS" \
+		kubectl get svc "$KBS_SVC_NAME" -n "$KBS_NS" \
 			-o jsonpath='{.spec.clusterIP}' 2>/dev/null
 	fi
 }
@@ -319,10 +348,10 @@ kbs_k8s_svc_port() {
 	if kubectl get ingress -n "$KBS_NS" 2>/dev/null | grep -q kbs; then
 		# Assume served on default HTTP port 80
 		echo "80"
-	elif kubectl get svc kbs-nodeport -n "$KBS_NS" &>/dev/null; then
-		kubectl get -o jsonpath='{.spec.ports[0].nodePort}' svc kbs-nodeport -n "$KBS_NS"
+	elif kubectl get svc "$KBS_SVC_NAME" -n "$KBS_NS" &>/dev/null; then
+		kubectl get svc "$KBS_SVC_NAME" -n "$KBS_NS" -o jsonpath='{.spec.ports[0].nodePort}'
 	else
-		kubectl get svc kbs -n "$KBS_NS" \
+		kubectl get svc "$KBS_SVC_NAME" -n "$KBS_NS" \
 			-o jsonpath='{.spec.ports[0].port}' 2>/dev/null
 	fi
 }
@@ -422,28 +451,8 @@ _handle_ingress_aks() {
 }
 
 # Implements the ingress handler for servernode
-# this is useful on kcli or anywhere where cluster IPs are accessible
-# from the testing machines.
 #
 _handle_ingress_nodeport() {
-	pushd "${COCO_KBS_DIR}/config/kubernetes/overlays"
-
-	cat > nodeport_service.yaml <<EOF
-# Service to expose the KBS on nodes
-apiVersion: v1
-kind: Service
-metadata:
-  name: kbs-nodeport
-  namespace: "$KBS_NS"
-spec:
-  selector:
-    app: kbs
-  ports:
-  - protocol: TCP
-    port: 8080
-    targetPort: 8080
-  type: NodePort
-EOF
-	kustomize edit add resource nodeport_service.yaml
-	popd
+	# By exporting this variable the kbs deploy script will install the nodeport service
+	export DEPLOYMENT_DIR=nodeport
 }

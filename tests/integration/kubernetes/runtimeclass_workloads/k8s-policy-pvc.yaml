@@ -1,0 +1,16 @@
+#
+# Copyright (c) 2024 Edgeless Systems GmbH
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: policy-dev
+spec:
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Block
+  resources:
+    requests:
+      storage: 1Mi

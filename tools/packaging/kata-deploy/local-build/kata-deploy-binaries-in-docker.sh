@@ -68,6 +68,7 @@ if [ ! -d "$HOME/.docker" ]; then
 	remove_dot_docker_dir=true
 fi
 
+"${script_dir}"/kata-deploy-copy-yq-installer.sh
 docker build -q -t build-kata-deploy \
 	--build-arg IMG_USER="${USER}" \
 	--build-arg UID=${uid} \

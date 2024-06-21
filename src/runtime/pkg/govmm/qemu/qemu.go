@@ -15,6 +15,7 @@ package qemu
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -42,6 +43,12 @@ type Machine struct {
 const (
 	// MachineTypeMicrovm is the QEMU microvm machine type for amd64
 	MachineTypeMicrovm string = "microvm"
+)
+
+const (
+	// Well known vsock CID for host system.
+	// https://man7.org/linux/man-pages/man7/vsock.7.html
+	VsockHostCid uint64 = 2
 )
 
 // Device is the qemu device interface.
@@ -306,6 +313,9 @@ type Object struct {
 
 	// Prealloc enables memory preallocation
 	Prealloc bool
+
+	// QgsPort defines Intel Quote Generation Service port exposed from the host
+	QgsPort uint32
 }
 
 // Valid returns true if the Object structure is valid and complete.
@@ -316,7 +326,7 @@ func (object Object) Valid() bool {
 	case MemoryBackendEPC:
 		return object.ID != "" && object.Size != 0
 	case TDXGuest:
-		return object.ID != "" && object.File != "" && object.DeviceID != ""
+		return object.ID != "" && object.File != "" && object.DeviceID != "" && object.QgsPort != 0
 	case SEVGuest:
 		fallthrough
 	case SNPGuest:
@@ -362,19 +372,22 @@ func (object Object) QemuParams(config *Config) []string {
 		}
 
 	case TDXGuest:
-		objectParams = append(objectParams, string(object.Type))
-		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
-		if object.Debug {
-			objectParams = append(objectParams, "debug=on")
-		}
+		objectParams = append(objectParams, prepareObjectWithTdxQgs(object))
 		config.Bios = object.File
 	case SEVGuest:
-		fallthrough
+		objectParams = append(objectParams, string(object.Type))
+		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
+		objectParams = append(objectParams, fmt.Sprintf("cbitpos=%d", object.CBitPos))
+		objectParams = append(objectParams, fmt.Sprintf("reduced-phys-bits=%d", object.ReducedPhysBits))
+
+		driveParams = append(driveParams, "if=pflash,format=raw,readonly=on")
+		driveParams = append(driveParams, fmt.Sprintf("file=%s", object.File))
 	case SNPGuest:
 		objectParams = append(objectParams, string(object.Type))
 		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
 		objectParams = append(objectParams, fmt.Sprintf("cbitpos=%d", object.CBitPos))
 		objectParams = append(objectParams, fmt.Sprintf("reduced-phys-bits=%d", object.ReducedPhysBits))
+		objectParams = append(objectParams, "kernel-hashes=on")
 
 		driveParams = append(driveParams, "if=pflash,format=raw,readonly=on")
 		driveParams = append(driveParams, fmt.Sprintf("file=%s", object.File))
@@ -406,6 +419,52 @@ func (object Object) QemuParams(config *Config) []string {
 	}
 
 	return qemuParams
+}
+
+type SocketAddress struct {
+	Type string `json:"type"`
+	Cid  string `json:"cid"`
+	Port string `json:"port"`
+}
+
+type TdxQomObject struct {
+	QomType               string        `json:"qom-type"`
+	Id                    string        `json:"id"`
+	QuoteGenerationSocket SocketAddress `json:"quote-generation-socket"`
+	Debug                 *bool         `json:"debug,omitempty"`
+}
+
+func (this *SocketAddress) String() string {
+	b, err := json.Marshal(*this)
+
+	if err != nil {
+		log.Fatalf("Unable to marshal SocketAddress object: %s", err.Error())
+		return ""
+	}
+
+	return string(b)
+}
+
+func (this *TdxQomObject) String() string {
+	b, err := json.Marshal(*this)
+
+	if err != nil {
+		log.Fatalf("Unable to marshal TDX QOM object: %s", err.Error())
+		return ""
+	}
+
+	return string(b)
+}
+
+func prepareObjectWithTdxQgs(object Object) string {
+	qgsSocket := SocketAddress{"vsock", fmt.Sprint(VsockHostCid), fmt.Sprint(object.QgsPort)}
+	tdxObject := TdxQomObject{string(object.Type), object.ID, qgsSocket, nil}
+
+	if object.Debug {
+		*tdxObject.Debug = true
+	}
+
+	return tdxObject.String()
 }
 
 // Virtio9PMultidev filesystem behaviour to deal
@@ -2625,9 +2684,6 @@ type Knobs struct {
 	// NoGraphic completely disables graphic output.
 	NoGraphic bool
 
-	// Daemonize will turn the qemu process into a daemon
-	Daemonize bool
-
 	// Both HugePages and MemPrealloc require the Memory.Size of the VM
 	// to be set, as they need to reserve the memory upfront in order
 	// for the VM to boot without errors.
@@ -2657,9 +2713,6 @@ type Knobs struct {
 	// Exit instead of rebooting
 	// Prevents QEMU from rebooting in the event of a Triple Fault.
 	NoReboot bool
-
-	// Don’t exit QEMU on guest shutdown, but instead only stop the emulation.
-	NoShutdown bool
 
 	// IOMMUPlatform will enable IOMMU for supported devices
 	IOMMUPlatform bool
@@ -3060,14 +3113,6 @@ func (config *Config) appendKnobs() {
 
 	if config.Knobs.NoReboot {
 		config.qemuParams = append(config.qemuParams, "--no-reboot")
-	}
-
-	if config.Knobs.NoShutdown {
-		config.qemuParams = append(config.qemuParams, "--no-shutdown")
-	}
-
-	if config.Knobs.Daemonize {
-		config.qemuParams = append(config.qemuParams, "-daemonize")
 	}
 
 	config.appendMemoryKnobs()

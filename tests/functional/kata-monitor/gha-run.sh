@@ -36,15 +36,15 @@ function install_dependencies() {
 	# - cri-tools
 	# - containerd
 	#   - cri-container-cni release tarball already includes CNI plugins
-	cri_tools_version=$(get_from_kata_deps "externals.critools.latest")
+	cri_tools_version=$(get_from_kata_deps ".externals.critools.latest")
 	declare -a github_deps
 	github_deps[0]="cri_tools:${cri_tools_version}"
 	case "${CONTAINER_ENGINE}" in
 		containerd)
-			github_deps[1]="cri_containerd:$(get_from_kata_deps "externals.containerd.${CONTAINERD_VERSION}")"
+			github_deps[1]="cri_containerd:$(get_from_kata_deps ".externals.containerd.${CONTAINERD_VERSION}")"
 			;;
 		crio)
-			github_deps[1]="cni_plugins:$(get_from_kata_deps "externals.cni-plugins.version")"
+			github_deps[1]="cni_plugins:$(get_from_kata_deps ".externals.cni-plugins.version")"
 			;;
 	esac
 

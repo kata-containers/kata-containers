@@ -140,6 +140,7 @@ The table below lists the remaining parts of the project:
 | [`trace-forwarder`](src/tools/trace-forwarder) | utility | Agent tracing helper. |
 | [`runk`](src/tools/runk) | utility | Standard OCI container runtime based on the agent. |
 | [`ci`](.github/workflows) | CI | Continuous Integration configuration files and scripts. |
+| [`ocp-ci`](ci/openshift-ci/README.md) | CI | Continuous Integration configuration for the OpenShift pipelines. |
 | [`katacontainers.io`](https://github.com/kata-containers/www.katacontainers.io) | Source for the [`katacontainers.io`](https://www.katacontainers.io) site. |
 | [`Webhook`](tools/testing/kata-webhook/README.md) | utility | Example of a simple admission controller webhook to annotate pods with the Kata runtime class |
 

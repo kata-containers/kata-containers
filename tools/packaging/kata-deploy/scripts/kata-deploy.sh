@@ -32,6 +32,9 @@ snapshotters_delimiter=':'
 AGENT_HTTPS_PROXY="${AGENT_HTTPS_PROXY:-}"
 AGENT_NO_PROXY="${AGENT_NO_PROXY:-}"
 
+PULL_TYPE_MAPPING="${PULL_TYPE_MAPPING:-}"
+IFS=',' read -a pull_types <<< "$PULL_TYPE_MAPPING"
+
 # If we fail for any reason a message will be displayed
 die() {
         msg="$*"
@@ -151,7 +154,7 @@ function get_kata_containers_config_path() {
 	# Map the runtime shim name to the appropriate configuration
 	# file directory.
 	case "$shim" in
-		cloud-hypervisor | dragonball) config_path="$rust_config_path" ;;
+		cloud-hypervisor | dragonball | qemu-runtime-rs) config_path="$rust_config_path" ;;
 		*) config_path="$golang_config_path" ;;
 	esac
 
@@ -250,6 +253,7 @@ function install_artifacts() {
 		fi
 
 		if grep -q "tdx" <<< "$shim"; then
+  			VERSION_ID=version_unset # VERSION_ID may be unset, see https://www.freedesktop.org/software/systemd/man/latest/os-release.html#Notes
 			source /host/etc/os-release || source /host/usr/lib/os-release
 			case ${ID} in
 				ubuntu)
@@ -359,7 +363,7 @@ function configure_different_shims_base() {
 		# Map the runtime shim name to the appropriate
 		# containerd-shim-kata-v2 binary
 		case "$shim" in
-			cloud-hypervisor | dragonball)
+			cloud-hypervisor | dragonball | qemu-runtime-rs)
 				ln -sf /opt/kata/runtime-rs/bin/containerd-shim-kata-v2 "${shim_file}" ;;
 			*)
 				ln -sf /opt/kata/bin/containerd-shim-kata-v2 "${shim_file}" ;;
@@ -425,6 +429,27 @@ function configure_crio_runtime() {
 	runtime_config_path = "${kata_config_path}"
 	privileged_without_host_devices = true
 EOF
+
+	local key
+	local value
+	if [ -n "${PULL_TYPE_MAPPING}" ]; then
+		for m in "${pull_types[@]}"; do
+			key="${m%"$snapshotters_delimiter"*}"
+			value="${m#*"$snapshotters_delimiter"}"
+
+			if [[ "${value}" = "default" || "${key}" != "${shim}" ]]; then
+				continue
+			fi
+
+			if [ "${value}" == "guest-pull" ]; then
+				echo -e "\truntime_pull_image = true" | \
+					tee -a "$crio_drop_in_conf_file"
+			else
+				die "Unsupported pull type '$value' for ${shim}"
+			fi
+			break
+		done
+	fi
 }
 
 function configure_crio() {
@@ -458,12 +483,13 @@ function configure_containerd_runtime() {
 	local runtime="kata-${shim}"
 	local configuration="configuration-${shim}"
 	local pluginid=cri
-	
+
 	# if we are running k0s auto containerd.toml generation, the base template is by default version 2
 	# we can safely assume to reference the newer version of cri
 	if grep -q "version = 2\>" $containerd_conf_file || [ "$1" == "k0s-worker" ] || [ "$1" == "k0s-controller" ]; then
 		pluginid=\"io.containerd.grpc.v1.cri\"
 	fi
+
 	local runtime_table=".plugins.${pluginid}.containerd.runtimes.\"${runtime}\""
 	local runtime_options_table="${runtime_table}.options"
 	local runtime_type=\"io.containerd."${runtime}".v2\"
@@ -614,6 +640,7 @@ function main() {
 	echo "* SNAPSHOTTER_HANDLER_MAPPING: ${SNAPSHOTTER_HANDLER_MAPPING}"
 	echo "* AGENT_HTTPS_PROXY: ${AGENT_HTTPS_PROXY}"
 	echo "* AGENT_NO_PROXY: ${AGENT_NO_PROXY}"
+	echo "* PULL_TYPE_MAPPING: ${PULL_TYPE_MAPPING}"
 
 	# script requires that user is root
 	euid=$(id -u)
@@ -639,6 +666,7 @@ function main() {
 		# This works by k0s creating a special directory in /etc/k0s/containerd.d/ where user can drop-in partial containerd configuration snippets.
 		# k0s will automatically pick up these files and adds these in containerd configuration imports list.
 		containerd_conf_file="/etc/containerd/kata-containers.toml"
+		touch "$containerd_conf_file"
 	else
 		# runtime == containerd
 		if [ ! -f "$containerd_conf_file" ] && [ -d $(dirname "$containerd_conf_file") ] && \

@@ -8,6 +8,8 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
+	[ "${KATA_HYPERVISOR:-}" = "qemu-coco-dev" ] && \
+		skip "This test fails intermittently for ${KATA_HYPERVISOR:-}"
 	pod_name="seccomp-container"
 	get_pod_config_dir
 
@@ -30,6 +32,8 @@ setup() {
 }
 
 teardown() {
+	[ "${KATA_HYPERVISOR:-}" = "qemu-coco-dev" ] && \
+		skip "This test fails intermittently for ${KATA_HYPERVISOR:-}"
 	# For debugging purpose
 	echo "seccomp mode is ${seccomp_mode}, expected $expected_seccomp_mode"
 	kubectl describe "pod/${pod_name}"

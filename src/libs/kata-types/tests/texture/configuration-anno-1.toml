@@ -83,6 +83,7 @@ sandbox_bind_mounts=["/proc/self"]
 vfio_mode="vfio"
 experimental=["a", "b"]
 enable_pprof = true
+name="virt-container"
 hypervisor_name = "qemu"
 agent_name = "agent0"
 

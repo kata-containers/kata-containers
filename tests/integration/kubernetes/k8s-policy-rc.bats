@@ -48,7 +48,7 @@ test_rc_policy() {
     # Create replication controller
     if [ "${expect_denied_create_container}" = "true" ]; then
         kubectl create -f "${incorrect_yaml}"
-    else 
+    else
         kubectl create -f "${correct_yaml}"
     fi
 
@@ -92,65 +92,49 @@ test_rc_policy() {
 
 @test "Policy failure: unexpected container command" {
     # Changing the template spec after generating its policy will cause CreateContainer to be denied.
-    yq write -i \
-            "${incorrect_yaml}" \
-            "spec.template.spec.containers[0].command.[+]" \
-            "ls"
+    yq -i \
+      '.spec.template.spec.containers[0].command += ["ls"]' \
+      "${incorrect_yaml}"
 
     test_rc_policy true
 }
 
 @test "Policy failure: unexpected volume mountPath" {
     # Changing the template spec after generating its policy will cause CreateContainer to be denied.
-    yq write -i \
-            "${incorrect_yaml}" \
-            "spec.template.spec.containers[0].volumeMounts[0].mountPath" \
-            "/host/unexpected"
+    yq -i \
+      '.spec.template.spec.containers[0].volumeMounts[0].mountPath = "/host/unexpected"' \
+      "${incorrect_yaml}"
 
     test_rc_policy true
 }
 
 @test "Policy failure: unexpected host device mapping" {
     # Changing the template spec after generating its policy will cause CreateContainer to be denied.
-    yq write -i \
-            "${incorrect_yaml}" \
-            "spec.template.spec.containers[0].volumeMounts.[+].mountPath" \
-            "/dev/ttyS0"
+  yq -i \
+      '.spec.template.spec.containers[0].volumeMounts += [{"mountPath": "/dev/ttyS0", "name": "dev-ttys0"}]' \
+      "${incorrect_yaml}"
 
-    yq write -i \
-            "${incorrect_yaml}" \
-            "spec.template.spec.containers[0].volumeMounts.[-1].name" \
-            "dev-ttys0"
-
-    yq write -i \
-            "${incorrect_yaml}" \
-            "spec.template.spec.volumes.[+].name" \
-            "dev-ttys0"
-
-    yq write -i \
-            "${incorrect_yaml}" \
-            "spec.template.spec.volumes.[-1].hostPath.path" \
-            "/dev/ttyS0"
+  yq -i \
+      '.spec.template.spec.volumes += [{"name": "dev-ttys0", "hostPath": {"path": "/dev/ttyS0"}}]' \
+      "${incorrect_yaml}"
 
     test_rc_policy true
 }
 
 @test "Policy failure: unexpected securityContext.allowPrivilegeEscalation" {
     # Changing the template spec after generating its policy will cause CreateContainer to be denied.
-    yq write -i \
-            "${incorrect_yaml}" \
-            "spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation" \
-            "false"
+    yq -i \
+      '.spec.template.spec.containers[0].securityContext.allowPrivilegeEscalation = false' \
+      "${incorrect_yaml}"
 
     test_rc_policy true
 }
 
 @test "Policy failure: unexpected capability" {
     # Changing the template spec after generating its policy will cause CreateContainer to be denied.
-    yq write -i \
-            "${incorrect_yaml}" \
-            "spec.template.spec.containers[0].securityContext.capabilities.add.[+]" \
-            "CAP_SYS_CHROOT"
+    yq -i \
+      '.spec.template.spec.containers[0].securityContext.capabilities.add += ["CAP_SYS_CHROOT"]' \
+      "${incorrect_yaml}"
 
     test_rc_policy true
 }

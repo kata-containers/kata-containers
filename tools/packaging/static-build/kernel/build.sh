@@ -42,30 +42,35 @@ if [ "${CROSS_BUILD}" == "true" ]; then
        fi
 fi
 
-sudo docker pull ${container_image} || \
-	(sudo docker ${BUILDX} build ${PLATFORM} \
+docker pull ${container_image} || \
+	(docker ${BUILDX} build ${PLATFORM} \
 	--build-arg ARCH=${ARCH} -t "${container_image}" "${script_dir}" && \
 	 # No-op unless PUSH_TO_REGISTRY is exported as "yes"
 	 push_to_registry "${container_image}")
 
-sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
+docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
+	--user "$(id -u)":"$(id -g)" \
 	"${container_image}" \
 	bash -c "${kernel_builder} ${kernel_builder_args} setup"
 
-sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
+docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
+	--user "$(id -u)":"$(id -g)" \
 	"${container_image}" \
 	bash -c "${kernel_builder} ${kernel_builder_args} build"
 
-sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
+docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
 	--env DESTDIR="${DESTDIR}" --env PREFIX="${PREFIX}" \
+	--user "$(id -u)":"$(id -g)" \
 	"${container_image}" \
 	bash -c "${kernel_builder} ${kernel_builder_args} install"
 
-sudo docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
+docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
 	--env DESTDIR="${DESTDIR}" --env PREFIX="${PREFIX}" \
+	--env USER="${USER}" \
+	--user "$(id -u)":"$(id -g)" \
 	"${container_image}" \
 	bash -c "${kernel_builder} ${kernel_builder_args} build-headers"

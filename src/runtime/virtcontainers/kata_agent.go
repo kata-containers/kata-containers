@@ -6,6 +6,7 @@
 package virtcontainers
 
 import (
+	"context"
 	b64 "encoding/base64"
 	"encoding/json"
 	"errors"
@@ -33,8 +34,6 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/rootless"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
-
-	"context"
 
 	ctrAnnotations "github.com/containerd/containerd/pkg/cri/annotations"
 	podmanAnnotations "github.com/containers/podman/v4/pkg/annotations"
@@ -767,19 +766,21 @@ func (k *kataAgent) startSandbox(ctx context.Context, sandbox *Sandbox) error {
 
 	if sandbox.config.HypervisorType == RemoteHypervisor {
 		ctx = context.WithValue(ctx, customRequestTimeoutKey, remoteRequestTimeout)
-	} else {
-		// Check grpc server is serving
-		if err = k.check(ctx); err != nil {
+	}
+
+	// Check grpc server is serving
+	if err = k.check(ctx); err != nil {
+		return err
+	}
+
+	// If a Policy has been specified, send it to the agent.
+	if len(sandbox.config.AgentConfig.Policy) > 0 {
+		if err := sandbox.agent.setPolicy(ctx, sandbox.config.AgentConfig.Policy); err != nil {
 			return err
 		}
+	}
 
-		// If a Policy has been specified, send it to the agent.
-		if len(sandbox.config.AgentConfig.Policy) > 0 {
-			if err := sandbox.agent.setPolicy(ctx, sandbox.config.AgentConfig.Policy); err != nil {
-				return err
-			}
-		}
-
+	if sandbox.config.HypervisorType != RemoteHypervisor {
 		// Setup network interfaces and routes
 		interfaces, routes, neighs, err := generateVCNetworkStructures(ctx, sandbox.network)
 		if err != nil {
@@ -1200,8 +1201,6 @@ func (k *kataAgent) appendVfioDevice(dev ContainerDevice, device api.Device, c *
 }
 
 func (k *kataAgent) appendDevices(deviceList []*grpc.Device, c *Container) []*grpc.Device {
-	var kataDevice *grpc.Device
-
 	for _, dev := range c.devices {
 		device := c.sandbox.devManager.GetDeviceByID(dev.ID)
 		if device == nil {
@@ -1212,6 +1211,8 @@ func (k *kataAgent) appendDevices(deviceList []*grpc.Device, c *Container) []*gr
 		if strings.HasPrefix(dev.ContainerPath, defaultKataGuestVirtualVolumedir) {
 			continue
 		}
+
+		var kataDevice *grpc.Device
 
 		switch device.DeviceType() {
 		case config.DeviceBlock:

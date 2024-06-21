@@ -1,0 +1,24 @@
+# Copyright (c) 2024 Red Hat
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+# Configuration file with rules for the actionlint tool.
+#
+self-hosted-runner:
+  # Labels of self-hosted runner that linter should ignore
+  labels:
+    - arm64-builder
+    - garm-ubuntu-2004
+    - garm-ubuntu-2004-smaller
+    - garm-ubuntu-2204
+    - garm-ubuntu-2304
+    - garm-ubuntu-2304-smaller
+    - garm-ubuntu-2204-smaller
+    - k8s-ppc64le
+    - metrics
+    - ppc64le
+    - sev
+    - sev-snp
+    - s390x
+    - s390x-large
+    - tdx

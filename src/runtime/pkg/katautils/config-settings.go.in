@@ -58,6 +58,7 @@ var systemdUnitName = "kata-containers.target"
 
 const defaultKernelParams = ""
 const defaultMachineType = "q35"
+const defaultQgsPort = 4050
 
 const defaultVCPUCount uint32 = 1
 const defaultMaxVCPUCount uint32 = 0
@@ -110,6 +111,9 @@ var defaultRuntimeConfiguration = "@CONFIG_PATH@"
 
 const defaultHotPlugVFIO = config.NoPort
 const defaultColdPlugVFIO = config.NoPort
+
+const defaultPCIeRootPort = 0
+const defaultPCIeSwitchPort = 0
 
 const defaultRemoteHypervisorSocket = "/run/peerpod/hypervisor.sock"
 const defaultRemoteHypervisorTimeout = 600

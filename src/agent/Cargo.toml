@@ -34,8 +34,8 @@ async-recursion = "0.3.2"
 futures = "0.3.30"
 
 # Async runtime
-tokio = { version = "1.28.1", features = ["full"] }
-tokio-vsock = "0.3.1"
+tokio = { version = "1.38.0", features = ["full"] }
+tokio-vsock = "0.3.4"
 
 netlink-sys = { version = "0.7.0", features = ["tokio_socket"] }
 rtnetlink = "0.8.0"
@@ -85,7 +85,10 @@ image-rs = { git = "https://github.com/confidential-containers/guest-components"
 openssl = { version = "0.10.54", features = ["vendored"], optional = true }
 
 # Agent Policy
-regorus = { version = "0.1.4", default-features = false, features = ["arc", "regex"], optional = true }
+regorus = { version = "0.1.4", default-features = false, features = [
+    "arc",
+    "regex",
+], optional = true }
 
 [dev-dependencies]
 tempfile = "3.1.0"

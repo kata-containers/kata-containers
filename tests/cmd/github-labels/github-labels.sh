@@ -48,7 +48,7 @@ merge_yaml()
 	[ -n "$out" ] || die "need output file"
 
 	need_yq
-	yq merge "$file1" --append "$file2" > "$out"
+  yq eval-all '. as $item ireduce ({}; . *+ $item)' "$file1" "$file2" > "$out"
 }
 
 check_yaml()
@@ -58,7 +58,7 @@ check_yaml()
 	[ -n "$file" ] || die "need file to check"
 
 	need_yq
-	yq read "$file" >/dev/null
+	yq "$file" >/dev/null
 
 	[ -z "$(command -v yamllint)" ] && die "need yamllint installed"
 

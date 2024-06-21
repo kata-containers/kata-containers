@@ -12,9 +12,19 @@ DEBUG="${DEBUG:-}"
 
 export AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-no}"
 export KATA_HOST_OS="${KATA_HOST_OS:-}"
+export KATA_HYPERVISOR="${KATA_HYPERVISOR:-}"
+export PULL_TYPE="${PULL_TYPE:-default}"
+
+declare -r kubernetes_dir=$(dirname "$(readlink -f "$0")")
+declare -r runtimeclass_workloads_work_dir="${kubernetes_dir}/runtimeclass_workloads_work"
+declare -r runtimeclass_workloads_dir="${kubernetes_dir}/runtimeclass_workloads"
+declare -r kata_opa_dir="${kubernetes_dir}/../../../src/kata-opa"
+source "${kubernetes_dir}/../../common.bash"
+source "${kubernetes_dir}/tests_common.sh"
+
 
 if [ -n "${K8S_TEST_POLICY_FILES:-}" ]; then
-	K8S_TEST_POLICY_FILES=($K8S_TEST_POLICY_FILES)
+	K8S_TEST_POLICY_FILES=("${K8S_TEST_POLICY_FILES}")
 else
 	K8S_TEST_POLICY_FILES=( \
 		"allow-all.rego" \
@@ -22,65 +32,60 @@ else
     )
 fi
 
-declare -r kubernetes_dir=$(dirname "$(readlink -f "$0")")
-source "${kubernetes_dir}/../../common.bash"
-source "${kubernetes_dir}/tests_common.sh"
-
 reset_workloads_work_dir() {
-	rm -rf ${kubernetes_dir}/runtimeclass_workloads_work
-	cp -R ${kubernetes_dir}/runtimeclass_workloads ${kubernetes_dir}/runtimeclass_workloads_work
+	rm -rf "${runtimeclass_workloads_work_dir}"
+	cp -R "${runtimeclass_workloads_dir}" "${runtimeclass_workloads_work_dir}"
 	setup_policy_files
 }
 
 setup_policy_files() {
-	declare -r kata_opa_dir="${kubernetes_dir}/../../../src/kata-opa"
-	declare -r workloads_work_dir="${kubernetes_dir}/runtimeclass_workloads_work"
-
 	# Copy hard-coded policy files used for basic policy testing.
-	for policy_file in ${K8S_TEST_POLICY_FILES[@]}
+	for policy_file in "${K8S_TEST_POLICY_FILES[@]}"
 	do
-		cp "${kata_opa_dir}/${policy_file}" ${kubernetes_dir}/runtimeclass_workloads_work/
+		cp "${kata_opa_dir}/${policy_file}" "${runtimeclass_workloads_work_dir}"
 	done
 
 	# For testing more sophisticated policies, create genpolicy settings that are common for all tests.
 	# Some of the tests will make temporary copies of these common settings and customize them as needed.
-	create_common_genpolicy_settings "${workloads_work_dir}"
+	create_common_genpolicy_settings "${runtimeclass_workloads_work_dir}"
 }
 
 add_annotations_to_yaml() {
 	local yaml_file="$1"
 	local annotation_name="$2"
 	local annotation_value="$3"
-	local resource_kind="$(yq read ${yaml_file} kind)"
+
+	# Previous version of yq was not ready to handle multiple objects in a single yaml.
+	# By default was changing only the first object.
+	# With yq>4 we need to make it explicit during the read and write.
+	local resource_kind="$(yq .kind ${yaml_file} | head -1)"
 
 	case "${resource_kind}" in
 
 	Pod)
-		echo "Adding kernel and initrd annotations to ${resource_kind} from ${yaml_file}"
-		yq write -i \
-		  "${K8S_TEST_YAML}" \
-		  "metadata.annotations[${annotation_name}]" \
-		  "${annotation_value}"
+		info "Adding \"${annotation_name}=${annotation_value}\" to ${resource_kind} from ${yaml_file}"
+		yq -i \
+		  ".metadata.annotations.\"${annotation_name}\" = \"${annotation_value}\"" \
+		  "${K8S_TEST_YAML}"
 		;;
 
 	Deployment|Job|ReplicationController)
-		echo "Adding kernel and initrd annotations to ${resource_kind} from ${yaml_file}"
-		yq write -i \
-		  "${K8S_TEST_YAML}" \
-		  "spec.template.metadata.annotations[${annotation_name}]" \
-		  "${annotation_value}"
+		info "Adding \"${annotation_name}=${annotation_value}\" to ${resource_kind} from ${yaml_file}"
+		yq -i \
+		  ".spec.template.metadata.annotations.\"${annotation_name}\" = \"${annotation_value}\"" \
+		  "${K8S_TEST_YAML}"
 		;;
 
 	List)
-		echo "Issue #7765: adding kernel and initrd annotations to ${resource_kind} from ${yaml_file} is not implemented yet"
+		info "Issue #7765: adding annotations to ${resource_kind} from ${yaml_file} is not implemented yet"
 		;;
 
 	ConfigMap|LimitRange|Namespace|PersistentVolume|PersistentVolumeClaim|RuntimeClass|Secret|Service)
-		echo "Kernel and initrd annotations are not required for ${resource_kind} from ${yaml_file}"
+		info "Annotations are not required for ${resource_kind} from ${yaml_file}"
 		;;
 
 	*)
-		echo "k8s resource type ${resource_kind} from ${yaml_file} is not yet supported for kernel and initrd annotations testing"
+		info "k8s resource type ${resource_kind} from ${yaml_file} is not yet supported for annotations testing"
 		return 1
 		;;
 	esac
@@ -102,10 +107,31 @@ add_cbl_mariner_kernel_initrd_annotations() {
 	fi
 }
 
+add_runtime_handler_annotations() {
+	local handler_annotation="io.containerd.cri.runtime-handler"
+
+	if [ "$PULL_TYPE" != "guest-pull" ]; then
+		info "Not adding $handler_annotation annotation for $PULL_TYPE pull type"
+		return
+	fi
+
+	case "${KATA_HYPERVISOR}" in
+		qemu-coco-dev | qemu-sev | qemu-snp | qemu-tdx)
+			info "Add runtime handler annotations for ${KATA_HYPERVISOR}"
+			local handler_value="kata-${KATA_HYPERVISOR}"
+			for K8S_TEST_YAML in runtimeclass_workloads_work/*.yaml
+			do
+				add_annotations_to_yaml "${K8S_TEST_YAML}" "${handler_annotation}" "${handler_value}"
+			done
+			;;
+	esac
+}
+
 main() {
 	ensure_yq
 	reset_workloads_work_dir
 	add_cbl_mariner_kernel_initrd_annotations
+	add_runtime_handler_annotations
 }
 
 main "$@"

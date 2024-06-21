@@ -252,7 +252,7 @@ function init() {
 }
 
 # Computes the average of the data
-calc_avg_array() {
+function calc_avg_array() {
 	data=("$@")
 	avg=0
 	LSCALE=6
@@ -268,7 +268,7 @@ calc_avg_array() {
 
 
 # Computes the standard deviation of the data
-calc_sd_array() {
+function calc_sd_array() {
 	data=("$@")
 	sum_sqr_n=0
 	size="${#data[@]}"
@@ -315,7 +315,7 @@ calc_sd_array() {
 
 # Computes the Coefficient of variation.
 # The result is given as percentage.
-calc_cov_array() {
+function calc_cov_array() {
 	sd=$1
 	mean=$2
 
@@ -342,7 +342,7 @@ calc_cov_array() {
 
 # Writes a JSON with the statistics results
 # for each launch time metric
-write_stats_results() {
+function write_stats_results() {
 	size="${#total_result_ds[@]}"
 	avg_total_result=$(calc_avg_array "${total_result_ds[@]}")
 	avg_to_workload=$(calc_avg_array "${to_workload_ds[@]}")
@@ -396,7 +396,7 @@ EOF
 	metrics_json_add_array_element "$json"
 }
 
-help() {
+function help() {
 	usage=$(cat << EOF
 Usage: $0 [-h] [options]
    Description:
@@ -412,7 +412,7 @@ EOF
 	echo "$usage"
 }
 
-main() {
+function main() {
 	local OPTIND
 	while getopts "dhi:n:s" opt;do
 		case ${opt} in

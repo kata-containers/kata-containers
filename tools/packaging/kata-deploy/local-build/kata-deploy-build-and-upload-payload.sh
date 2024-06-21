@@ -25,8 +25,6 @@ arch=$(uname -m)
 [ "$arch" = "x86_64" ] && arch="amd64"
 IMAGE_TAG="${REGISTRY}:kata-containers-$(git rev-parse HEAD)-${arch}"
 
-sudo chown -R $USER $HOME/.docker
-
 echo "Building the image"
 docker build --tag ${IMAGE_TAG} .
 
