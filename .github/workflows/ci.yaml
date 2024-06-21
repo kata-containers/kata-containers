@@ -18,6 +18,8 @@ on:
 
 jobs:
   build-and-publish-kata-deploy-helm-chart:
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout kata-containers
@@ -65,6 +67,9 @@ jobs:
           cd ./helm-charts
           git commit -am "Update Kata Deploy Helm Chart"
           git push
+
+
+
 
   # build-kata-static-tarball-amd64-nvidia-gpu:
   #   uses: ./.github/workflows/build-kata-static-tarball-amd64-nvidia-gpu.yaml
