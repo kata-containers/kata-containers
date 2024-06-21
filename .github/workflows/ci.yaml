@@ -64,6 +64,10 @@ jobs:
           sed -i "s/appVersion: .*/appVersion: ${VERSION}/g" ./kata-containers/tools/packaging/kata-deploy/helm-chart/kata-deploy/Chart.yaml
           sed -i "s/version: .*/version: ${VERSION}/g" ./kata-containers/tools/packaging/kata-deploy/helm-chart/kata-deploy/Chart.yaml
 
+          sed -i  "s/reference: .*/reference: ghcr.io\/${{ github.repository_owner }}\/kata-deploy-ci\/kata-deploy/g" ./kata-containers/tools/packaging/kata-deploy/helm-chart/kata-deploy/values.yaml
+          sed -i  "s/tag: .*/tag: ${{ inputs.tag }}/g" ./kata-containers/tools/packaging/kata-deploy/helm-chart/kata-deploy/values.yaml
+
+
           helm package ./kata-containers/tools/packaging/kata-deploy/helm-chart/kata-deploy -d ./helm-charts/
           helm repo index ./helm-charts/ --merge ./helm-charts/index.yaml --url https://zvonkok.github.io/helm-charts/
 
