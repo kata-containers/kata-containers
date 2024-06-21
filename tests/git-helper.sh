@@ -38,13 +38,24 @@ function rebase_atop_of_the_latest_target_branch() {
 
 function main() {
     action="${1:-}"
+    target_dir="${2:-}"
 
     add_kata_bot_info
+
+    if [ -n "${target_dir}" ]; then
+	pushd "${target_dir}" || exit 1
+    fi
 
     case "${action}" in
 	rebase-atop-of-the-latest-target-branch) rebase_atop_of_the_latest_target_branch;;
         *) >&2 echo "Invalid argument"; exit 2 ;;
     esac
+
+    if [ -n "${target_dir}" ]; then
+	popd "${target_dir}" || exit 1
+    fi
+
+
 }
 
 main "$@"
