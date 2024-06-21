@@ -59,7 +59,7 @@ jobs:
       - name: Helm package/index
         run: |
           VERSION=$(cat ./kata-containers/VERSION)
-          VERSION=${VERSION}-dev+${{ inputs.pr-number }}
+          VERSION=${VERSION}-dev+${{ inputs.tag }}
 
           sed -i "s/appVersion: .*/appVersion: ${VERSION}/g" ./kata-containers/tools/packaging/kata-deploy/helm-chart/kata-deploy/Chart.yaml
           sed -i "s/version: .*/version: ${VERSION}/g" ./kata-containers/tools/packaging/kata-deploy/helm-chart/kata-deploy/Chart.yaml
@@ -70,7 +70,7 @@ jobs:
       - name: Commit and push changes
         run: |
           VERSION=$(cat ./kata-containers/VERSION)
-          VERSION=${VERSION}-dev+${{ inputs.pr-number }}
+          VERSION=${VERSION}-dev+${{ inputs.tag }}
 
           cd ./helm-charts
           git add *
