@@ -52,7 +52,7 @@ function main() {
     esac
 
     if [ -n "${target_dir}" ]; then
-	popd "${target_dir}" || exit 1
+	popd || exit 1
     fi
 
 
