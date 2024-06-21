@@ -20,6 +20,7 @@ jobs:
   build-and-publish-kata-deploy-helm-chart:
     permissions:
       contents: write
+      repository-projects: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout kata-containers
@@ -38,13 +39,13 @@ jobs:
 
       - name: Rebase atop of the latest target branch
         run: |
-          ./kata-containers/tests/git-helper.sh "rebase-atop-of-the-latest-target-branch" kata-containers
+          ./kata-containers/tests/git-helper.sh "rebase-atop-of-the-latest-target-branch" "kata-containers"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Rebase atop of the latest target branch
         run: |
-          ./kata-containers/tests/git-helper.sh "rebase-atop-of-the-latest-target-branch" helm-charts
+          ./kata-containers/tests/git-helper.sh "rebase-atop-of-the-latest-target-branch" "helm-charts"
         env:
           TARGET_BRANCH: main
 
