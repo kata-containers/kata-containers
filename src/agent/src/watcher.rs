@@ -261,14 +261,6 @@ impl Storage {
                 debug!(logger, "New entry: {}", path.display());
                 update_list.push(PathBuf::from(&path))
             }
-
-            ensure!(
-                self.watched_files.len() <= MAX_ENTRIES_PER_STORAGE,
-                WatcherError::MountTooManyFiles {
-                    count: self.watched_files.len(),
-                    mnt: self.source_mount_point.display().to_string()
-                }
-            );
         } else {
             // Handling regular directories - check  to see if this directory is already being tracked, and
             // track if not:
@@ -294,6 +286,14 @@ impl Storage {
                 size += res_size;
             }
         }
+
+        ensure!(
+            self.watched_files.len() <= MAX_ENTRIES_PER_STORAGE,
+            WatcherError::MountTooManyFiles {
+                count: self.watched_files.len(),
+                mnt: self.source_mount_point.display().to_string()
+            }
+        );
 
         ensure!(
             size <= MAX_SIZE_PER_WATCHABLE_MOUNT,
@@ -1413,5 +1413,44 @@ mod tests {
 
         assert!(!dest_dir.path().exists());
         assert!(!is_mounted(dest_dir.path().to_str().unwrap()).unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_scan_path_empty_dirs() {
+        // Creating 20 empty dirs.
+        // Expecting that scan_path will return a MountTooManyFiles error.
+        let source_dir = tempfile::tempdir().unwrap();
+        let dest_dir = tempfile::tempdir().unwrap();
+        let mut entry = Storage::new(protos::Storage {
+            source: source_dir.path().display().to_string(),
+            mount_point: dest_dir.path().display().to_string(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+        let logger = slog::Logger::root(slog::Discard, o!());
+
+        // Creating 20 empty dirs(> MAX_ENTRIES_PER_STORAGE) without files
+        for i in 0..20 {
+            fs::create_dir_all(source_dir.path().join(format!("{}_dir", i))).unwrap();
+        }
+
+        let mut updated_files: Vec<PathBuf> = Vec::new();
+        // Expect to receive a MountTooManyFiles error
+        match entry
+            .scan_path(
+                &logger,
+                entry.source_mount_point.clone().as_path(),
+                &mut updated_files,
+            )
+            .await
+        {
+            Ok(_) => panic!("expected error"),
+            Err(e) => match e.downcast_ref::<WatcherError>() {
+                Some(WatcherError::MountTooManyFiles { .. }) => {}
+                _ => panic!("unexpected error"),
+            },
+        }
     }
 }
