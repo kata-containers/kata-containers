@@ -18,9 +18,6 @@ source "$kata_root_dir/ci/lib.sh"
 source "${packaging_root_dir}/scripts/lib.sh"
 
 ARCH=${ARCH:-$(uname -m)}
-if [ $(uname -m) == "${ARCH}" ]; then
-	[ "${ARCH}" == "s390x" ] || die "Building a Secure Execution image is currently only supported on s390x."
-fi
 
 finish() {
 	if [ -e "${parmfile}" ]; then
@@ -36,8 +33,8 @@ Usage:
   ${script_name} [options]
 
 Options:
-  --builddir=${builddir}
-  --destdir=${destdir}
+  --builddir={builddir}
+  --destdir={destdir}
 
 Environment variables:
   HKD_PATH (required): a path for a directory which includes at least one host key document
@@ -164,6 +161,9 @@ main() {
 			;;
 		esac
 	done
+	if [ $(uname -m) == "${ARCH}" ]; then
+		[ "${ARCH}" == "s390x" ] || die "Building a Secure Execution image is currently only supported on s390x."
+	fi
 	readonly destdir
 	readonly builddir
 
