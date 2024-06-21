@@ -20,7 +20,6 @@ jobs:
   build-and-publish-kata-deploy-helm-chart:
     permissions:
       contents: write
-      pages: write
     runs-on: ubuntu-latest
     steps:
       - name: Checkout kata-containers
@@ -48,7 +47,7 @@ jobs:
         run: |
           ./kata-containers/tests/git-helper.sh "rebase-atop-of-the-latest-target-branch" helm-charts
         env:
-          TARGET_BRANCH: gh-pages
+          TARGET_BRANCH: main
 
       - name: Set up Helm
         uses: azure/setup-helm@v1
@@ -65,7 +64,8 @@ jobs:
           helm repo index ./helm-charts/ --merge ./helm-charts/index.yaml --url https://zvonkok.github.io/helm-charts/
 
       - name: Commit and push changes
-        run: |
+        uses: actions/checkout@v4
+      - run: |
           cd ./helm-charts
           git commit -am "Update Kata Deploy Helm Chart"
           git push
