@@ -33,7 +33,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: "zvonkok/helm-charts"
-          token: ${{ secrets.GITHUB_TOKEN }}
           ref: main
           path: helm-charts
 
@@ -64,8 +63,7 @@ jobs:
           helm repo index ./helm-charts/ --merge ./helm-charts/index.yaml --url https://zvonkok.github.io/helm-charts/
 
       - name: Commit and push changes
-        uses: actions/checkout@v4
-      - run: |
+        run: |
           cd ./helm-charts
           git commit -am "Update Kata Deploy Helm Chart"
           git push
