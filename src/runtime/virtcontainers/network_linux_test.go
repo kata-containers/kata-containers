@@ -7,13 +7,18 @@ package virtcontainers
 
 import (
 	"context"
+	"encoding/json"
 	"net"
+	"os"
 	"reflect"
 	"testing"
+
+	"golang.org/x/sys/unix"
 
 	"github.com/containernetworking/plugins/pkg/ns"
 	ktu "github.com/kata-containers/kata-containers/src/runtime/pkg/katatestutils"
 	pbTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/agent/protocols"
+	vctypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/vishvananda/netlink"
@@ -321,4 +326,52 @@ func TestTxRateLimiter(t *testing.T) {
 	// Remove the veth created for testing.
 	err = netHandle.LinkDel(link)
 	assert.NoError(err)
+}
+
+func TestConvertDanDeviceToNetworkInfo(t *testing.T) {
+
+	jsonData, err := os.ReadFile("testdata/dan-config.json")
+	assert.NoError(t, err)
+	var config vctypes.DanConfig
+	err = json.Unmarshal([]byte(jsonData), &config)
+	assert.NoError(t, err)
+
+	ni, err := convertDanDeviceToNetworkInfo(&config.Devices[0])
+	assert.NoError(t, err)
+	assert.Equal(t, 1500, ni.Iface.MTU)
+
+	assert.Len(t, ni.Addrs, 1)
+	assert.Equal(t, "10.10.0.5/24", ni.Addrs[0].String())
+
+	dest, _ := netlink.ParseIPNet("10.10.0.0/16")
+	dest.IP = dest.IP.To4()
+	routes := []netlink.Route{
+		{Family: unix.AF_INET, Dst: nil, Gw: net.ParseIP("10.0.0.1"), Src: nil, Scope: 0},
+		{Family: unix.AF_INET, Dst: dest, Gw: net.ParseIP("10.0.0.1"), Src: nil, Scope: 0},
+	}
+	assert.Equal(t, routes, ni.Routes)
+
+	neighMac, _ := net.ParseMAC("0a:58:0a:0a:0a:0a")
+	neigh := netlink.Neigh{
+		HardwareAddr: neighMac,
+		IP:           net.ParseIP("10.10.10.10"),
+	}
+	assert.Len(t, ni.Neighbors, 1)
+	assert.Equal(t, neigh, ni.Neighbors[0])
+}
+
+func TestAddEndpoints_Dan(t *testing.T) {
+
+	network := &LinuxNetwork{
+		"net-123",
+		[]Endpoint{},
+		NetXConnectDefaultModel,
+		true,
+		"testdata/dan-config.json",
+	}
+
+	ctx := context.TODO()
+	_, err := network.AddEndpoints(ctx, nil, nil, true)
+	// TODO: this will be updated after adding supported DAN device
+	assert.ErrorContains(t, err, "unknown DAN device type")
 }

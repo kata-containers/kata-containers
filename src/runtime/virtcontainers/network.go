@@ -195,6 +195,8 @@ type NetworkConfig struct {
 	InterworkingModel NetInterworkingModel
 	NetworkCreated    bool
 	DisableNewNetwork bool
+	// if DAN config exists, use it to config network
+	DanConfigPath string
 }
 
 type Network interface {
