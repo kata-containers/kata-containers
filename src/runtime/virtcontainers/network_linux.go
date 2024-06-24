@@ -7,6 +7,7 @@ package virtcontainers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"net"
@@ -26,6 +27,7 @@ import (
 
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
+	vctypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 )
 
@@ -41,6 +43,7 @@ type LinuxNetwork struct {
 	eps               []Endpoint
 	interworkingModel NetInterworkingModel
 	netNSCreated      bool
+	danConfigPath     string
 }
 
 // NewNetwork creates a new Linux Network from a NetworkConfig.
@@ -68,6 +71,7 @@ func NewNetwork(configs ...*NetworkConfig) (Network, error) {
 		[]Endpoint{},
 		config.InterworkingModel,
 		config.NetworkCreated,
+		config.DanConfigPath,
 	}, nil
 }
 
@@ -376,6 +380,102 @@ func (n *LinuxNetwork) addAllEndpoints(ctx context.Context, s *Sandbox, hotplug 
 	return nil
 }
 
+func convertDanDeviceToNetworkInfo(device *vctypes.DanDevice) (*NetworkInfo, error) {
+	var netInfo NetworkInfo
+	var err error
+	netInfo.Iface.Name = device.Name
+	if netInfo.Iface.HardwareAddr, err = net.ParseMAC(device.GuestMac); err != nil {
+		return nil, fmt.Errorf("bad mac address in DAN config: %v", err)
+	}
+	netInfo.Iface.MTU = int(device.NetworkInfo.Interface.MTU)
+	netInfo.Iface.Flags = net.Flags(device.NetworkInfo.Interface.Flags)
+
+	for _, addr := range device.NetworkInfo.Interface.IPAddresses {
+		a, err := netlink.ParseAddr(addr)
+		if err != nil {
+			return nil, fmt.Errorf("bad IP address in DAN config: %v", err)
+		}
+
+		netInfo.Addrs = append(netInfo.Addrs, *a)
+	}
+
+	for _, route := range device.NetworkInfo.Routes {
+		var r netlink.Route
+		if len(route.Dest) > 0 {
+			if _, r.Dst, err = net.ParseCIDR(route.Dest); err != nil {
+				return nil, fmt.Errorf("bad route dest in DAN config: %v", err)
+			}
+		}
+		r.Src = net.ParseIP(route.Source)
+		r.Gw = net.ParseIP(route.Gateway)
+		r.Scope = netlink.Scope(route.Scope)
+		if len(r.Gw.To4()) == net.IPv4len {
+			r.Family = unix.AF_INET
+		} else {
+			r.Family = unix.AF_INET6
+		}
+
+		netInfo.Routes = append(netInfo.Routes, r)
+	}
+
+	for _, neigh := range device.NetworkInfo.Neighbors {
+		var n netlink.Neigh
+		n.State = int(neigh.State)
+		n.Flags = int(neigh.Flags)
+		if n.HardwareAddr, err = net.ParseMAC(neigh.HardwareAddr); err != nil {
+			return nil, fmt.Errorf("bad neighbor hardware address in DAN config: %v", err)
+		}
+
+		n.IP = net.ParseIP(neigh.IPAddress)
+		netInfo.Neighbors = append(netInfo.Neighbors, n)
+	}
+
+	return &netInfo, nil
+}
+
+// Load network config in DAN config
+// Create the endpoints for the interfaces in Dan.
+func (n *LinuxNetwork) addDanEndpoints() error {
+
+	jsonData, err := os.ReadFile(n.danConfigPath)
+	if err != nil {
+		return fmt.Errorf("fail to load DAN config file: %v", err)
+	}
+
+	var config vctypes.DanConfig
+	err = json.Unmarshal([]byte(jsonData), &config)
+	if err != nil {
+		return fmt.Errorf("fail to unmarshal DAN config: %v", err)
+	}
+
+	for _, device := range config.Devices {
+		var endpoint Endpoint
+		networkLogger().WithField("interface", device.Name).Info("DAN interface found")
+
+		_, err := convertDanDeviceToNetworkInfo(&device)
+		if err != nil {
+			return err
+		}
+
+		// TODO: Add endpoints that are supported via DAN
+		switch device.Device.Type {
+		default:
+			return fmt.Errorf("unknown DAN device type: '%s'", device.Device.Type)
+		}
+
+		// TODO: remove below `nolink` directive after one `case` is added for
+		// above `switch` block.
+		//nolint: govet
+		n.eps = append(n.eps, endpoint)
+	}
+
+	sort.Slice(n.eps, func(i, j int) bool {
+		return n.eps[i].Name() < n.eps[j].Name()
+	})
+
+	return nil
+}
+
 // Run runs a callback in the specified network namespace.
 func (n *LinuxNetwork) Run(ctx context.Context, cb func() error) error {
 	span, _ := n.trace(ctx, "Run")
@@ -393,8 +493,15 @@ func (n *LinuxNetwork) AddEndpoints(ctx context.Context, s *Sandbox, endpointsIn
 	defer span.End()
 
 	if endpointsInfo == nil {
-		if err := n.addAllEndpoints(ctx, s, hotplug); err != nil {
-			return nil, err
+		// If a sandbox has a DAN configuration, it takes priority and will be used exclusively.
+		if n.danConfigPath != "" {
+			if err := n.addDanEndpoints(); err != nil {
+				return nil, err
+			}
+		} else {
+			if err := n.addAllEndpoints(ctx, s, hotplug); err != nil {
+				return nil, err
+			}
 		}
 	} else {
 		for _, ep := range endpointsInfo {
