@@ -5,6 +5,9 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+# The kata shim to be used
+export KATA_RUNTIME=${KATA_RUNTIME:-kata-qemu}
+
 script_dir=$(dirname $0)
 source ${script_dir}/lib.sh
 

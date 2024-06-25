@@ -15,7 +15,9 @@ pod='http-server'
 # Create a pod.
 #
 info "Creating the ${pod} pod"
-oc apply -f ${script_dir}/smoke/${pod}.yaml || \
+[ -z "$KATA_RUNTIME" ] && die "Please set the KATA_RUNTIME first"
+envsubst < "${script_dir}/smoke/${pod}.yaml.in" | \
+	oc apply -f - || \
 	die "failed to create ${pod} pod"
 
 # Check it eventually goes to 'running'
