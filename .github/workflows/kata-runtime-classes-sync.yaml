@@ -19,6 +19,13 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-    - name: Ensure the split out runtime classes match the all-in-one file
+
+    - name: Install yq
+      run: |
+        ./ci/install_yq.sh
+      env:
+        INSTALL_IN_GOPATH: false
+
+    - name: Run checker on runtime classes to ensure consistency
       run: |
         ./tools/packaging/kata-deploy/local-build/check-runtimeclasses.sh

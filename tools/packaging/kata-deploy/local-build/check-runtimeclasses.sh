@@ -19,11 +19,17 @@ export LC_ALL=C
 readonly generated_file="resultingRuntimeClasses.yaml"
 readonly original_file="kata-runtimeClasses.yaml"
 
+if ! command -v yq >/dev/null; then
+    echo "ERROR: 'yq' not found. This script needs that tool" >&2
+    exit 1
+fi
+
 pushd "${script_dir}/../runtimeclasses/"
 rm -f $generated_file
+runtimeClass_files="$(find . -type f \( -name "*.yaml" -and -not -name "kata-runtimeClasses.yaml" \) | sort)"
 
 echo "::group::Combine runtime classes"
-for runtimeClass in $(find . -type f \( -name "*.yaml" -and -not -name "kata-runtimeClasses.yaml" \) | sort); do
+for runtimeClass in $runtimeClass_files; do
     echo "Adding ${runtimeClass} to the $generated_file"
     cat "${runtimeClass}" >> $generated_file;
 done
@@ -44,4 +50,30 @@ if ! diff $generated_file $original_file; then
     echo "CHECKER FAILED: files $(pwd)/$generated_file (GENERATED) and $(pwd)/$original_file differ"
     exit 1
 fi
+popd
+
+#
+# Checking the lists of SHIMS in the deployment files are up-to-dated.
+#
+for yaml in kata-deploy/base/kata-deploy.yaml \
+            kata-cleanup/base/kata-cleanup.yaml;do
+    # Get the current list of shims
+    shim_list="$(yq '.spec.template.spec.containers[0].env[] | select(.name=="SHIMS").value' $yaml)"
+
+    for file in $runtimeClass_files; do
+        # shellcheck disable=2001
+        shim="$(echo "$file" | sed 's/.*kata-\(.*\).yaml/\1/g')"
+
+        # Ignore shims that shouldn't be in the list
+        # shellcheck disable=2076
+        [[  " qemu-se remote " =~ " $shim " ]] && continue
+
+        # shellcheck disable=2076
+        [[ " $shim_list " =~ " $shim " ]] && continue
+        echo ""
+        echo "CHECKER FAILED: '$shim' not found on list of SHIMS in $yaml"
+        exit 1
+    done
+done
+
 echo "CHECKER PASSED"
