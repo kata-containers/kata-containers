@@ -23,6 +23,7 @@ source "/etc/os-release" || source "/usr/lib/os-release"
 readonly MONITOR_HTTP_ENDPOINT="127.0.0.1:8090"
 # we should collect few hundred metrics, let's put a reasonable minimum
 readonly MONITOR_MIN_METRICS_NUM=200
+readonly TIMEOUT="20s"
 CONTAINER_ENGINE=${CONTAINER_ENGINE:-"containerd"}
 CRICTL_RUNTIME=${CRICTL_RUNTIME:-"kata"}
 KATA_MONITOR_BIN="${KATA_MONITOR_BIN:-$(command -v kata-monitor || true)}"
@@ -144,9 +145,9 @@ start_workload() {
 	sbfile="$(create_sandbox_json)"
 	cntfile="$(create_container_json)"
 
-	POD_ID=$(sudo crictl runp $args $sbfile)
-	CID=$(sudo crictl create $POD_ID $cntfile $sbfile)
-	qcrictl start $CID
+	POD_ID=$(sudo crictl --timeout=$TIMEOUT runp $args $sbfile)
+	CID=$(sudo crictl --timeout=$TIMEOUT create $POD_ID $cntfile $sbfile)
+	qcrictl --timeout=$TIMEOUT start $CID
 }
 
 stop_workload() {
@@ -155,14 +156,14 @@ stop_workload() {
 	local check
 
 	[ -z "$pod_id" ] && return
-	check=$(sudo crictl pods -q -id $pod_id)
+	check=$(sudo crictl --timeout=$TIMEOUT pods -q -id $pod_id)
 	[ -z "$check" ] && return
 
-	qcrictl stop $cid
-	qcrictl rm $cid
+	qcrictl --timeout=$TIMEOUT stop $cid
+	qcrictl --timeout=$TIMEOUT rm $cid
 
-	qcrictl stopp $pod_id
-	qcrictl rmp $pod_id
+	qcrictl --timeout=$TIMEOUT stopp $pod_id
+	qcrictl --timeout=$TIMEOUT rmp $pod_id
 }
 
 is_sandbox_there() {
@@ -214,12 +215,12 @@ main() {
 	title "pre-checks"
 
 	CURRENT_TASK="connect to the container engine"
-	qcrictl pods
+	qcrictl --timeout=$TIMEOUT pods
 	echo_ok "$CURRENT_TASK"
 
 	###########################
 	title "pull the image to be used"
-	sudo crictl pull busybox
+	sudo crictl --timeout=$TIMEOUT pull busybox
 
 	###########################
 	title "create workloads"
