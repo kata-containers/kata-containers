@@ -130,7 +130,11 @@ fn count_files<P: AsRef<Path>>(path: P, limit: i32) -> std::io::Result<i32> {
         let file = entry?;
         let p = file.path();
         if p.is_dir() {
-            num_files += count_files(&p, limit)?;
+            let inc = count_files(&p, limit - num_files)?;
+            if inc == -1 {
+                return Ok(-1);
+            }
+            num_files += inc;
         } else {
             num_files += 1;
         }
@@ -164,6 +168,40 @@ mod tests {
     use crate::{annotations, container};
     use std::fs;
     use test_utils::skip_if_not_root;
+
+    #[test]
+    fn test_count_files() {
+        let limit = 8;
+        let test_tmp_dir = tempfile::tempdir().expect("failed to create tempdir");
+        let work_path = test_tmp_dir.path().join("work");
+
+        let result = fs::create_dir_all(&work_path);
+        assert!(result.is_ok());
+
+        let origin_dir = work_path.join("origin_dir");
+        let result = fs::create_dir_all(&origin_dir);
+        assert!(result.is_ok());
+        for n in 0..limit {
+            let tmp_file = origin_dir.join(format!("file{}", n));
+            let res = fs::File::create(tmp_file);
+            assert!(res.is_ok());
+        }
+
+        let symlink_origin_dir = work_path.join("symlink_origin_dir");
+        let result = std::os::unix::fs::symlink(&origin_dir, &symlink_origin_dir);
+        assert!(result.is_ok());
+        for n in 0..2 {
+            let tmp_file = work_path.join(format!("file{}", n));
+            let res = fs::File::create(tmp_file);
+            assert!(res.is_ok());
+        }
+
+        let count = count_files(&work_path, limit).unwrap_or(0);
+        assert_eq!(count, -1);
+
+        let count = count_files(&origin_dir, limit).unwrap_or(0);
+        assert_eq!(count, limit);
+    }
 
     #[test]
     fn test_is_watchable_mount() {
