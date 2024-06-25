@@ -7,7 +7,6 @@ on:
 jobs:
   cleanup-resources:
     runs-on: ubuntu-latest
-    secrets: inherit
     steps:
       - name: Log into Azure
         env:
