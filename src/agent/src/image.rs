@@ -57,9 +57,19 @@ pub struct ImageService {
 
 impl ImageService {
     pub fn new() -> Self {
+        let mut image_client = ImageClient::new(PathBuf::from(KATA_IMAGE_WORK_DIR));
+        let images = HashMap::new();
+        #[cfg(feature = "guest-pull")]
+        if !&AGENT_CONFIG.image_registry_auth.is_empty() {
+            let registry_auth = &AGENT_CONFIG.image_registry_auth;
+            debug!(sl(), "Set registry auth file {:?}", registry_auth);
+            image_client.config.file_paths.auth_file = registry_auth.clone();
+            image_client.config.auth = true;
+        }
+
         Self {
-            image_client: ImageClient::new(PathBuf::from(KATA_IMAGE_WORK_DIR)),
-            images: HashMap::new(),
+            image_client,
+            images,
         }
     }
 
