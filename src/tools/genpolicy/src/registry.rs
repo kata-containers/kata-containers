@@ -97,7 +97,7 @@ impl Container {
                 let config_layer: DockerConfigLayer =
                     serde_json::from_str(&config_layer_str).unwrap();
                 let image_layers = get_image_layers(
-                    config.use_cache,
+                    config.layers_cache_file_path.clone(),
                     &mut client,
                     &reference,
                     &manifest,
@@ -228,7 +228,7 @@ impl Container {
 }
 
 async fn get_image_layers(
-    use_cached_files: bool,
+    layers_cache_file_path: Option<String>,
     client: &mut Client,
     reference: &Reference,
     manifest: &manifest::OciImageManifest,
@@ -247,7 +247,7 @@ async fn get_image_layers(
                 layers.push(ImageLayer {
                     diff_id: config_layer.rootfs.diff_ids[layer_index].clone(),
                     verity_hash: get_verity_hash(
-                        use_cached_files,
+                        layers_cache_file_path.clone(),
                         client,
                         reference,
                         &layer.digest,
@@ -267,7 +267,7 @@ async fn get_image_layers(
 }
 
 async fn get_verity_hash(
-    use_cached_files: bool,
+    layers_cache_file_path: Option<String>,
     client: &mut Client,
     reference: &Reference,
     layer_digest: &str,
@@ -275,7 +275,6 @@ async fn get_verity_hash(
 ) -> Result<String> {
     let temp_dir = tempfile::tempdir_in(".")?;
     let base_dir = temp_dir.path();
-    let cache_file = "layers-cache.json";
     // Use file names supported by both Linux and Windows.
     let file_name = str::replace(layer_digest, ":", "-");
     let mut decompressed_path = base_dir.join(file_name);
@@ -289,8 +288,8 @@ async fn get_verity_hash(
     let mut error = false;
 
     // get value from store and return if it exists
-    if use_cached_files {
-        verity_hash = read_verity_from_store(cache_file, diff_id)?;
+    if let Some(path) = layers_cache_file_path.as_ref() {
+        verity_hash = read_verity_from_store(path, diff_id)?;
         info!("Using cache file");
         info!("dm-verity root hash: {verity_hash}");
     }
@@ -318,8 +317,8 @@ async fn get_verity_hash(
                 }
                 Ok(v) => {
                     verity_hash = v;
-                    if use_cached_files {
-                        add_verity_to_store(cache_file, diff_id, &verity_hash)?;
+                    if let Some(path) = layers_cache_file_path.as_ref() {
+                        add_verity_to_store(path, diff_id, &verity_hash)?;
                     }
                     info!("dm-verity root hash: {verity_hash}");
                 }
@@ -330,8 +329,8 @@ async fn get_verity_hash(
     temp_dir.close()?;
     if error {
         // remove the cache file if we're using it
-        if use_cached_files {
-            std::fs::remove_file(cache_file)?;
+        if let Some(path) = layers_cache_file_path.as_ref() {
+            std::fs::remove_file(path)?;
         }
         warn!("{error_message}");
     }
@@ -458,7 +457,12 @@ pub fn get_verity_hash_value(path: &Path) -> Result<String> {
 
 pub async fn get_container(config: &Config, image: &str) -> Result<Container> {
     if let Some(socket_path) = &config.containerd_socket_path {
-        return Container::new_containerd_pull(config.use_cache, image, socket_path).await;
+        return Container::new_containerd_pull(
+            config.layers_cache_file_path.clone(),
+            image,
+            socket_path,
+        )
+        .await;
     }
     Container::new(config, image).await
 }

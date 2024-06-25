@@ -63,6 +63,20 @@ setup() {
 	kubectl wait --for=condition=Ready "--timeout=${timeout}" pod "${pod_name}"
 }
 
+@test "Successful pod with auto-generated policy and custom layers cache path" {
+	tmp_path=$(mktemp -d)
+
+	auto_generate_policy "${pod_config_dir}" "${testcase_pre_generate_pod_yaml}" "${testcase_pre_generate_configmap_yaml}" \
+		"--layers-cache-file-path=${tmp_path}/cache.json"
+
+	[ -f "${tmp_path}/cache.json" ]
+	rm -r "${tmp_path}"
+
+	kubectl create -f "${testcase_pre_generate_configmap_yaml}"
+	kubectl create -f "${testcase_pre_generate_pod_yaml}"
+	kubectl wait --for=condition=Ready "--timeout=${timeout}" pod "${pod_name}"
+}
+
 # Common function for several test cases from this bats script.
 test_pod_policy_error() {
 	kubectl create -f "${correct_configmap_yaml}"
