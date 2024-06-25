@@ -51,10 +51,12 @@ kbs_set_resources_policy() {
 		>&2 echo "ERROR: policy file '$file' does not exist"
 		return 1
 	fi
-
-	kbs-client --url "$(kbs_k8s_svc_http_addr)" config \
-		--auth-private-key "$KBS_PRIVATE_KEY" set-resource-policy \
-		--policy-file "$file"
+	kbs_policy_cm=$(kubectl get cm -n "$KBS_NS" -o json \
+		| jq -r '.items[].metadata.name' \
+		| grep '^policy-config')
+	kubectl get cm "$kbs_policy_cm" -n "$KBS_NS" -o json \
+		| jq --rawfile policy "$file" '.data["policy.rego"] = $policy' \
+		| kubectl apply -f -
 }
 
 # Set resource data.

@@ -221,15 +221,15 @@ externals:
   coco-guest-components:
     description: "Provides attested key unwrapping for image decryption"
     url: "https://github.com/confidential-containers/guest-components/"
-    version: "adca2f94091d73c0b0c96a7789322a801c15811b"
+    version: "df60725afe0ba452a25a740cf460c2855442c49a"
     toolchain: "1.76.0"
 
   coco-trustee:
     description: "Provides attestation and secret delivery components"
     url: "https://github.com/confidential-containers/trustee"
-    version: "6adb8383309cbb7279f1d8e1e4620556ac66481e"
+    version: "7675644a0319a76e50cec520bdd570dc66d2908f"
     image: "ghcr.io/confidential-containers/staged-images/kbs"
-    image_tag: "6adb8383309cbb7279f1d8e1e4620556ac66481e"
+    image_tag: "7675644a0319a76e50cec520bdd570dc66d2908f"
     toolchain: "1.74.0"
 
   crio:
