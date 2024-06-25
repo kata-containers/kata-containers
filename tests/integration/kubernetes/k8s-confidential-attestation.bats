@@ -47,7 +47,10 @@ setup() {
 }
 
 @test "Get CDH resource" {
-	kbs_set_allow_all_resources
+	if ! is_confidential_hardware; then
+		kbs_set_allow_all_resources
+	fi
+
 	kubectl apply -f "${K8S_TEST_YAML}"
 
 	# Retrieve pod name, wait for it to come up, retrieve pod ip
