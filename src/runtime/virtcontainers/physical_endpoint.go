@@ -123,13 +123,65 @@ func (endpoint *PhysicalEndpoint) Detach(ctx context.Context, netNsCreated bool,
 }
 
 // HotAttach for physical endpoint not supported yet
-func (endpoint *PhysicalEndpoint) HotAttach(ctx context.Context, h Hypervisor) error {
-	return fmt.Errorf("PhysicalEndpoint does not support Hot attach")
+func (endpoint *PhysicalEndpoint) HotAttach(ctx context.Context, s *Sandbox) error {
+	span, ctx := physicalTrace(ctx, "HotAttach", endpoint)
+	defer span.End()
+
+	// Unbind physical interface from host driver and bind to vfio
+	// so that it can be passed to the hypervisor.
+	vfioPath, err := bindNICToVFIO(endpoint)
+	if err != nil {
+		return err
+	}
+
+	c, err := resCtrl.DeviceToCgroupDeviceRule(vfioPath)
+	if err != nil {
+		return err
+	}
+
+	d := config.DeviceInfo{
+		ContainerPath: vfioPath,
+		DevType:       string(c.Type),
+		Major:         c.Major,
+		Minor:         c.Minor,
+		ColdPlug:      false,
+	}
+
+	_, err = s.AddDevice(ctx, d)
+	return err
 }
 
 // HotDetach for physical endpoint not supported yet
-func (endpoint *PhysicalEndpoint) HotDetach(ctx context.Context, h Hypervisor, netNsCreated bool, netNsPath string) error {
-	return fmt.Errorf("PhysicalEndpoint does not support Hot detach")
+func (endpoint *PhysicalEndpoint) HotDetach(ctx context.Context, s *Sandbox, netNsCreated bool, netNsPath string) error {
+	span, _ := physicalTrace(ctx, "HotDetach", endpoint)
+	defer span.End()
+
+	var vfioPath string
+	var err error
+
+	if vfioPath, err = drivers.GetVFIODevPath(endpoint.BDF); err != nil {
+		return err
+	}
+
+	c, err := resCtrl.DeviceToCgroupDeviceRule(vfioPath)
+	if err != nil {
+		return err
+	}
+
+	d := config.DeviceInfo{
+		ContainerPath: vfioPath,
+		DevType:       string(c.Type),
+		Major:         c.Major,
+		Minor:         c.Minor,
+		ColdPlug:      false,
+	}
+
+	device := s.devManager.FindDevice(&d)
+	s.devManager.RemoveDevice(device.DeviceID())
+
+	// We do not need to enter the network namespace to bind back the
+	// physical interface to host driver.
+	return bindNICToHost(endpoint)
 }
 
 // isPhysicalIface checks if an interface is a physical device.
@@ -218,11 +270,11 @@ func createPhysicalEndpoint(netInfo NetworkInfo) (*PhysicalEndpoint, error) {
 }
 
 func bindNICToVFIO(endpoint *PhysicalEndpoint) (string, error) {
-	return drivers.BindDevicetoVFIO(endpoint.BDF, endpoint.Driver, endpoint.VendorDeviceID)
+	return drivers.BindDevicetoVFIO(endpoint.BDF, endpoint.Driver)
 }
 
 func bindNICToHost(endpoint *PhysicalEndpoint) error {
-	return drivers.BindDevicetoHost(endpoint.BDF, endpoint.Driver, endpoint.VendorDeviceID)
+	return drivers.BindDevicetoHost(endpoint.BDF, endpoint.Driver)
 }
 
 func (endpoint *PhysicalEndpoint) save() persistapi.NetworkEndpoint {
