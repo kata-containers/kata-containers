@@ -95,16 +95,30 @@ impl Handle {
         let mut new_link = None;
         if link.name() != iface.name {
             if let Ok(link) = self.find_link(LinkFilter::Name(iface.name.as_str())).await {
+                // Bring down interface if it is UP
+                if link.is_up() {
+                    self.enable_link(link.index(), false).await?;
+                }
+
                 // update the existing interface name with a temporary name, otherwise
                 // it would failed to udpate this interface with an existing name.
                 let mut request = self.handle.link().set(link.index());
                 request.message_mut().header = link.header.clone();
+                let link_name = link.name();
+                let temp_name = link_name.clone() + "_temp";
 
                 request
-                    .name(format!("{}_temp", link.name()))
-                    .up()
+                    .name(temp_name.clone())
                     .execute()
-                    .await?;
+                    .await
+                    .map_err(|err| {
+                        anyhow!(
+                            "Failed to rename interface {} to {}with error: {}",
+                            link_name,
+                            temp_name,
+                            err
+                        )
+                    })?;
 
                 new_link = Some(link);
             }
