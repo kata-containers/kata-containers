@@ -134,14 +134,33 @@ impl Handle {
             .arp(iface.raw_flags & libc::IFF_NOARP as u32 == 0)
             .up()
             .execute()
-            .await?;
+            .await
+            .map_err(|err| {
+                anyhow!(
+                    "Failure in LinkSetRequest for interface {}: {}",
+                    iface.name.as_str(),
+                    err
+                )
+            })?;
 
         // swap the updated iface's name.
         if let Some(nlink) = new_link {
             let mut request = self.handle.link().set(nlink.index());
             request.message_mut().header = nlink.header.clone();
 
-            request.name(link.name()).up().execute().await?;
+            request
+                .name(link.name())
+                .up()
+                .execute()
+                .await
+                .map_err(|err| {
+                    anyhow!(
+                        "Error swapping back interface name {} to {}: {}",
+                        nlink.name().as_str(),
+                        link.name(),
+                        err
+                    )
+                })?;
         }
 
         Ok(())
