@@ -380,6 +380,51 @@ pub async fn wait_for_pci_device(
 }
 
 #[derive(Debug)]
+struct NetPciMatcher {
+    devpath: String,
+}
+
+impl NetPciMatcher {
+    fn new(relpath: &str) -> NetPciMatcher {
+        let root_bus = create_pci_root_bus_path();
+        let path = Path::new(root_bus.as_str()).join(relpath);
+        let path_str = path.to_str().unwrap();
+
+        NetPciMatcher {
+            devpath: String::from(path_str),
+        }
+    }
+}
+
+impl UeventMatcher for NetPciMatcher {
+    fn is_match(&self, uev: &Uevent) -> bool {
+        uev.devpath == self.devpath && uev.subsystem == "net" && !uev.interface.is_empty()
+    }
+}
+
+pub async fn wait_for_net_interface(
+    sandbox: &Arc<Mutex<Sandbox>>,
+    pcipath: &pci::Path,
+) -> Result<()> {
+    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path());
+    let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?;
+
+    let matcher = NetPciMatcher::new(&sysfs_rel_path);
+
+    // Check if the interface is already added in case network is cold-plugged
+    // or the uevent loop is started before network is added.
+    let sys_path = Path::new("/sys").join(matcher.devpath.as_str()).canonicalize()?;
+
+    if sys_path.as_path().exists() {
+        return Ok(());
+    }
+
+    let _uev = wait_for_uevent(sandbox, matcher).await?;
+
+    Ok(())
+}
+
+#[derive(Debug)]
 struct VfioMatcher {
     syspath: String,
 }
@@ -1684,6 +1729,28 @@ mod tests {
         let mut uev_b = uev_a.clone();
         uev_b.devpath = format!("/devices/virtual/vfio/{}", grpb);
         let matcher_b = VfioMatcher::new(grpb);
+
+        assert!(matcher_a.is_match(&uev_a));
+        assert!(matcher_b.is_match(&uev_b));
+        assert!(!matcher_b.is_match(&uev_a));
+        assert!(!matcher_a.is_match(&uev_b));
+    }
+
+    #[tokio::test]
+    #[allow(clippy::redundant_clone)]
+    async fn test_net_pci_matcher() {
+        let devpath = "/devices/pci0000:00/0000:00:02.0/0000:01:01.0";
+        let mut uev_a = crate::uevent::Uevent::default();
+        uev_a.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
+        uev_a.devpath = String::from(devpath);
+        uev_a.subsystem = String::from("net");
+        uev_a.interface = String::from("eth0");
+        let matcher_a = NetPciMatcher::new(devpath);
+
+        let devpath_b = "/devices/pci0000:00/0000:00:02.0/0000:01:02.0";
+        let mut uev_b = uev_a.clone();
+        uev_b.devpath = String::from(devpath_b);
+        let matcher_b = NetPciMatcher::new(devpath_b);
 
         assert!(matcher_a.is_match(&uev_a));
         assert!(matcher_b.is_match(&uev_b));
