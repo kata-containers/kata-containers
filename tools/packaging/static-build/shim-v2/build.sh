@@ -37,7 +37,7 @@ if [ "${MEASURED_ROOTFS}" == "yes" ]; then
 	EXTRA_OPTS+=" ROOTMEASURECONFIG=\"${root_measure_config}\""
 fi
 
-docker pull ${container_image} || \
+pull_from_registry ${container_image} || \
 	(docker ${BUILDX} build ${PLATFORM}  \
 		--build-arg GO_VERSION="${GO_VERSION}" \
 		--build-arg RUST_VERSION="${RUST_VERSION}" \

@@ -16,7 +16,7 @@ source "${script_dir}/../../scripts/lib.sh"
 container_image="${AGENT_CONTAINER_BUILDER:-$(get_agent_image_name)}"
 [ "${CROSS_BUILD}" == "true" ] && container_image="${container_image}-cross-build"
 
-docker pull ${container_image} || \
+pull_from_registry ${container_image} || \
 	(docker $BUILDX build $PLATFORM \
 	    	--build-arg RUST_TOOLCHAIN="$(get_from_kata_deps ".languages.rust.meta.newest-version")" \
 		-t "${container_image}" "${script_dir}" && \

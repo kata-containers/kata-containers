@@ -51,7 +51,7 @@ esac
 container_image="${VIRTIOFSD_CONTAINER_BUILDER:-$(get_virtiofsd_image_name)}"
 [ "${CROSS_BUILD}" == "true" ] && container_image="${container_image}-cross-build"
 
-docker pull ${container_image} || \
+pull_from_registry ${container_image} || \
 	(docker $BUILDX build $PLATFORM \
 		--build-arg RUST_TOOLCHAIN="${virtiofsd_toolchain}" \
 		-t "${container_image}" "${script_dir}/${libc}" && \

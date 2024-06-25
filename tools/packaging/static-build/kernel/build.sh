@@ -42,7 +42,7 @@ if [ "${CROSS_BUILD}" == "true" ]; then
        fi
 fi
 
-docker pull ${container_image} || \
+pull_from_registry ${container_image} || \
 	(docker ${BUILDX} build ${PLATFORM} \
 	--build-arg ARCH=${ARCH} -t "${container_image}" "${script_dir}" && \
 	 # No-op unless PUSH_TO_REGISTRY is exported as "yes"
