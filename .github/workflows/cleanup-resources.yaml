@@ -1,0 +1,13 @@
+name: Cleanup dangling Azure resources
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+jobs:
+  cleanup-resources:
+    runs-on: ubuntu-latest
+    secrets: inherit
+    steps:
+      - name: Cleanup resources
+        run: python3 tests/cleanup_resources.py
