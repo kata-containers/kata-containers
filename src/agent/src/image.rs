@@ -54,9 +54,16 @@ pub struct ImageService {
 
 impl ImageService {
     pub fn new() -> Self {
-        Self {
-            image_client: ImageClient::new(PathBuf::from(KATA_IMAGE_WORK_DIR)),
+        let mut image_client = ImageClient::new(PathBuf::from(KATA_IMAGE_WORK_DIR));
+        #[cfg(feature = "guest-pull")]
+        if !AGENT_CONFIG.image_registry_auth.is_empty() {
+            let registry_auth = &AGENT_CONFIG.image_registry_auth;
+            debug!(sl(), "Set registry auth file {:?}", registry_auth);
+            image_client.config.file_paths.auth_file = registry_auth.clone();
+            image_client.config.auth = true;
         }
+
+        Self { image_client }
     }
 
     /// pause image is packaged in rootfs
