@@ -50,8 +50,7 @@ impl ShimExecutor {
                 let sid = id
                     .ok_or(Error::InvalidArgument)
                     .context("get sid for container")?;
-                let (address, pid) = self.get_shim_info_from_sandbox(&sid)?;
-                self.write_pid_file(&bundle_path, pid)?;
+                let address = self.socket_address(&sid).context("socket address")?;
                 self.write_address(&bundle_path, &address)?;
                 Ok(address)
             }
@@ -105,22 +104,6 @@ impl ShimExecutor {
 
         Ok(child.id())
     }
-
-    fn get_shim_info_from_sandbox(&self, sandbox_id: &str) -> Result<(PathBuf, u32)> {
-        // All containers of a pod share the same pod socket address.
-        let address = self.socket_address(sandbox_id).context("socket address")?;
-        let bundle_path = get_bundle_path().context("get bundle path")?;
-        let parent_bundle_path = Path::new(&bundle_path)
-            .parent()
-            .unwrap_or_else(|| Path::new(""));
-        let sandbox_bundle_path = parent_bundle_path
-            .join(sandbox_id)
-            .canonicalize()
-            .context(Error::GetBundlePath)?;
-        let pid = self.read_pid_file(&sandbox_bundle_path)?;
-
-        Ok((address, pid))
-    }
 }
 
 fn new_listener(address: &Path) -> Result<UnixListener> {
@@ -139,7 +122,6 @@ mod tests {
     use std::path::Path;
 
     use serial_test::serial;
-    use tests_utils::gen_id;
 
     use super::*;
     use crate::Args;
@@ -171,50 +153,6 @@ mod tests {
         assert_eq!(cmd.get_args().len(), 9);
         assert_eq!(cmd.get_envs().len(), 1);
         assert_eq!(cmd.get_current_dir().unwrap(), get_bundle_path().unwrap());
-    }
-
-    #[test]
-    #[serial]
-    fn test_get_info_from_sandbox() {
-        let dir = tempfile::tempdir().unwrap();
-        let sandbox_id = gen_id(16);
-        let bundle_path = &dir.path().join(&sandbox_id);
-        std::fs::create_dir(bundle_path).unwrap();
-        std::env::set_current_dir(bundle_path).unwrap();
-
-        let args = Args {
-            id: sandbox_id.to_owned(),
-            namespace: "default_namespace".into(),
-            address: "default_address".into(),
-            publish_binary: "containerd".into(),
-            bundle: bundle_path.to_str().unwrap().into(),
-            ..Default::default()
-        };
-        let executor = ShimExecutor::new(args);
-
-        let addr = executor.socket_address(&executor.args.id).unwrap();
-        executor.write_address(bundle_path, &addr).unwrap();
-        executor.write_pid_file(bundle_path, 1267).unwrap();
-
-        let container_id = gen_id(16);
-        let bundle_path2 = &dir.path().join(&container_id);
-        std::fs::create_dir(bundle_path2).unwrap();
-        std::env::set_current_dir(bundle_path2).unwrap();
-
-        let args = Args {
-            id: container_id,
-            namespace: "default_namespace".into(),
-            address: "default_address".into(),
-            publish_binary: "containerd".into(),
-            bundle: bundle_path2.to_str().unwrap().into(),
-            ..Default::default()
-        };
-        let executor2 = ShimExecutor::new(args);
-
-        let (address, pid) = executor2.get_shim_info_from_sandbox(&sandbox_id).unwrap();
-
-        assert_eq!(pid, 1267);
-        assert_eq!(&address, &addr);
     }
 
     #[test]
