@@ -81,3 +81,40 @@ EOF
 		return 1
 	fi
 }
+
+function repack_secure_image() {
+	kernel_params_value="${1:-}"
+	build_dir="${2:-}"
+	for_kbs="${3:-false}"
+	if [ -z "${build_dir}" ]; then
+		>&2 echo "ERROR: build_dir for secure image is not specified"
+		return 1
+	fi
+	config_file_path="/opt/kata/share/defaults/kata-containers/configuration-qemu-se.toml"
+	if [ ! -f "${config_file_path}" ]; then
+		>&2 echo "ERROR: config file not found: ${config_file_path}"
+		return 1
+	fi
+	kernel_base_dir=$(dirname $(kata-runtime --config ${config_file_path} env --json | jq -r '.Kernel.Path'))
+	# Make sure ${build_dir}/hdr exists
+	mkdir -p "${build_dir}/hdr"
+	# Prepare required files for building the secure image
+	cp "${kernel_base_dir}/vmlinuz-confidential.container" "${build_dir}/hdr/"
+	cp "${kernel_base_dir}/kata-containers-initrd-confidential.img" "${build_dir}/hdr/"
+	# Build the secure image
+	build_secure_image "${kernel_params_value}" "${build_dir}/hdr" "${build_dir}/hdr"
+	# Get the secure image updated back to the kernel base directory
+	if [ ! -f "${build_dir}/hdr/kata-containers-se.img" ]; then
+		>&2 echo "ERROR: secure image not found: ${build_dir}/hdr/kata-containers-se.img"
+		return 1
+	fi
+	sudo cp "${build_dir}/hdr/kata-containers-se.img" "${kernel_base_dir}/"
+	if [ "${for_kbs}" == "true" ]; then
+		# Rename kata-containers-se.img to hdr.bin and clean up kernel and initrd
+		mv "${build_dir}/hdr/kata-containers-se.img" "${build_dir}/hdr/hdr.bin"
+		rm -f ${build_dir}/hdr/{vmlinuz-confidential.container,kata-containers-initrd-confidential.img}
+	else
+		# Clean up the build directory completely
+		rm -rf "${build_dir}"
+	fi
+}

@@ -47,6 +47,15 @@ setup() {
 	set_metadata_annotation "${K8S_TEST_YAML}" \
 		"${kernel_params_annotation}" \
 		"${kernel_params_value}"
+
+	# A secure boot image for IBM SE should be rebuilt according to the KBS configuration.
+	if [ "${KATA_HYPERVISOR}" == "qemu-se" ]; then
+		if [ -z "${IBM_SE_CREDS_DIR:-}" ]; then
+			>&2 echo "ERROR: IBM_SE_CREDS_DIR is empty"
+			return 1
+		fi
+		repack_secure_image "${kernel_params_value}" "${IBM_SE_CREDS_DIR}" "true"
+	fi
 }
 
 @test "Get CDH resource" {
