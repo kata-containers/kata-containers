@@ -180,7 +180,7 @@ kbs_uninstall_cli() {
 #
 function kbs_k8s_delete() {
 	pushd "$COCO_KBS_DIR"
-	kubectl delete -k config/kubernetes/overlays
+	kubectl delete -k config/kubernetes/overlays/$(uname -m)
 	# Verify that KBS namespace resources were properly deleted
 	cmd="kubectl get all -n $KBS_NS 2>&1 | grep 'No resources found'"
 	waitForProcess "120" "30" "$cmd"
@@ -237,7 +237,7 @@ function kbs_k8s_deploy() {
 
 	# Tests should fill kbs resources later, however, the deployment
 	# expects at least one secret served at install time.
-	echo "somesecret" > overlays/key.bin
+	echo "somesecret" > overlays/$(uname -m)/key.bin
 
 	echo "::group::Update the kbs container image"
 	install_kustomize
@@ -437,7 +437,7 @@ _handle_ingress_aks() {
 		return 1
 	fi
 
-	pushd "${COCO_KBS_DIR}/config/kubernetes/overlays"
+	pushd "${COCO_KBS_DIR}/config/kubernetes/overlays/common"
 
 	echo "::group::$(pwd)/ingress.yaml"
 	KBS_INGRESS_CLASS="addon-http-application-routing" \
