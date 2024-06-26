@@ -12,6 +12,9 @@ kubernetes_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
 # shellcheck disable=1091
 source "${kubernetes_dir}/../../../tests/common.bash"
+source "${kubernetes_dir}/../../../tools/packaging/guest-image/lib_se.sh"
+# For kata-runtime
+export PATH="${PATH}:/opt/kata/bin"
 
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 # Where the trustee (includes kbs) sources will be cloned
@@ -245,6 +248,14 @@ function kbs_k8s_deploy() {
 		echo "somesecret" > overlays/key.bin
 	fi
 
+	# For qemu-se runtime, prepare the necessary resources
+	if [ "${KATA_HYPERVISOR}" == "qemu-se" ]; then
+		prepare_credentials_for_qemu_se
+		# SE_SKIP_CERTS_VERIFICATION should be set to true
+		# to skip the verification of the certificates
+		sed -i "s/false/true/g" overlays/s390x/patch.yaml
+	fi
+
 	echo "::group::Update the kbs container image"
 	install_kustomize
 	pushd base
@@ -314,6 +325,29 @@ EOF
 		if [ -z "$svc_host" ]; then
 			echo "ERROR: service host not found"
 			return 1
+		fi
+
+		# A secure boot image for IBM SE should be rebuilt according to the KBS configuration.
+		if [ "${KATA_HYPERVISOR}" == "qemu-se" ]; then
+			if [ -z "${IBM_SE_CREDS_DIR:-}" ]; then
+				>&2 echo "ERROR: IBM_SE_CREDS_DIR is empty"
+				return 1
+			fi
+			creds_dir="${IBM_SE_CREDS_DIR}"
+			kernel_params_value="agent.guest_components_rest_api=resource agent.aa_kbc_params=cc_kbc::${svc_host}"
+			config_file_path="/opt/kata/share/defaults/kata-containers/configuration-qemu-se.toml"
+			if [ ! -f "${config_file_path}" ]; then
+				>&2 echo "ERROR: config file not found: ${config_file_path}"
+				return 1
+			fi
+			kata_base_dir=$(dirname $(kata-runtime --config ${config_file_path} env --json | jq -r '.Kernel.Path'))
+			cp "${kata_base_dir}/kata-containers-se.img" "${creds_dir}/hdr/"
+			cp "${kata_base_dir}/vmlinuz-confidential.container" "${creds_dir}/hdr/"
+			cp "${kata_base_dir}/kata-containers-initrd-confidential.img" "${creds_dir}/hdr/"
+			build_secure_image "${kernel_params_value}" "${creds_dir}/hdr" "${creds_dir}/hdr"
+			sudo cp "${creds_dir}/hdr/kata-containers-se.img" "${kata_base_dir}/"
+			mv "${creds_dir}/hdr/kata-containers-se.img" "${creds_dir}/hdr/hdr.bin"
+			rm -f "${kata_base_dir}/{vmlinuz-confidential.container,kata-containers-initrd-confidential.img}"
 		fi
 
 		# AZ DNS can take several minutes to update its records so that
@@ -461,4 +495,31 @@ _handle_ingress_aks() {
 _handle_ingress_nodeport() {
 	# By exporting this variable the kbs deploy script will install the nodeport service
 	export DEPLOYMENT_DIR=nodeport
+}
+
+
+# Prepare necessary resources for qemu-se runtime
+# Documentation: https://github.com/confidential-containers/trustee/tree/main/attestation-service/verifier/src/se
+prepare_credentials_for_qemu_se() {
+	echo "::group::Prepare credentials for qemu-se runtime"
+	config_file_path="/opt/kata/share/defaults/kata-containers/configuration-qemu-se.toml"
+	kata_base_dir=$(dirname $(kata-runtime --config ${config_file_path} env --json | jq -r '.Kernel.Path'))
+	if [ ! -d ${HKD_PATH} ]; then
+		>&2 echo "ERROR: HKD_PATH is not set"
+		return 1
+	fi
+	ibmse_creds_dir=$(mktemp -d -t ibmse.creds.XXXXXXXXXX)
+	export IBM_SE_CREDS_DIR="${ibmse_creds_dir}"
+	pushd "${ibmse_creds_dir}"
+	mkdir {certs,crls,hdr,hkds,rsa}
+	openssl genrsa -aes256 -passout pass:test1234 -out encrypt_key-psw.pem 4096
+	openssl rsa -in encrypt_key-psw.pem -passin pass:test1234 -pubout -out rsa/encrypt_key.pub
+	openssl rsa -in encrypt_key-psw.pem -passin pass:test1234 -out rsa/encrypt_key.pem
+	cp ${kata_base_dir}/kata-containers-se.img hdr/hdr.bin
+	cp ${HKD_PATH}/HKD-*.crt hkds/
+	cp ${HKD_PATH}/ibm-z-host-key-gen2.crl crls/
+	cp ${HKD_PATH}/DigiCertCA.crt ${HKD_PATH}/ibm-z-host-key-signing-gen2.crt certs/
+	popd
+	ls -R ${ibmse_creds_dir}
+	echo "::endgroup::"
 }
