@@ -542,7 +542,7 @@ kernel_modules=[]
 
 # Agent connection dialing timeout value in seconds
 # (default: 90)
-dial_timeout = @DEFAULTTIMEOUT_NV
+dial_timeout = @DEFAULTTIMEOUT_NV@
 
 [runtime]
 # If enabled, the runtime will log additional debug messages to the
