@@ -40,6 +40,10 @@ packages=libtdx-attest=1.20\*
 EOF
 	fi
 
+	# This fixes the spurious error
+	# E: Can't find a source to download version '2021.03.26' of 'ubuntu-keyring:amd64'
+	apt update
+
 	if ! multistrap -a "$DEB_ARCH" -d "$rootfs_dir" -f "$multistrap_conf"; then
 		build_dbus $rootfs_dir
 	fi
