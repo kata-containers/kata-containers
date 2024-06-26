@@ -266,7 +266,8 @@
             "CAP_PERFMON",
             "CAP_BPF",
             "CAP_CHECKPOINT_RESTORE"
-        ]
+        ],
+        "ignore_sandbox_name": false
     },
     "kata_config": {
         "confidential_guest": false,
