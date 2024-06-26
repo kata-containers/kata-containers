@@ -237,7 +237,13 @@ function kbs_k8s_deploy() {
 
 	# Tests should fill kbs resources later, however, the deployment
 	# expects at least one secret served at install time.
-	echo "somesecret" > overlays/key.bin
+	if [ -d "overlays/$(uname -m)" ]; then
+		# KBS deployment is enabled for multi-arch
+		echo "somesecret" > overlays/$(uname -m)/key.bin
+	else
+		# KBS deployment is not yet enabled for multi-arch, no arch-specific
+		echo "somesecret" > overlays/key.bin
+	fi
 
 	echo "::group::Update the kbs container image"
 	install_kustomize
