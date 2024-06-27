@@ -88,10 +88,6 @@ jobs:
     runs-on: arm64-builder
     needs: build-asset
     steps:
-      - name: Adjust a permission for repo
-        run: |
-          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
-
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.commit-hash }}
