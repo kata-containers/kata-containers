@@ -40,6 +40,28 @@ rootfs_type=@DEFROOTFSTYPE@
 # Default false
 # confidential_guest = true
 
+# Enable pre-attestation for AMD SEV and SEV-ES guests.
+# Applies only if confidential_guest is true.
+# (default: false)
+#guest_pre_attestation = true
+#
+# A remote key broker server (KBS) is required to validate the attestation
+# measurement and inject a secret key.  
+# See https://github.com/confidential-containers/simple-kbs
+#guest_pre_attestation_kbs_uri = "@DEFGUESTPREATTESTATIONPROXY@"
+#
+# The simple-kbs can be run in "online" and "offline" modes
+#guest_pre_attestation_kbs_mode="@DEFGUESTPREATTESTATIONMODE@" 
+#
+# Keyset ID of the injected secret (offline kbs)
+#guest_pre_attestation_keyset = "@DEFGUESTPREATTESTATIONKEYSET@"
+#
+# SEV guest policy
+#sev_guest_policy = @DEFSEVGUESTPOLICY@
+
+# SEV certificate chain path 
+#sev_cert_chain="@DEFSEVCERTCHAIN@"
+
 # Choose AMD SEV-SNP confidential guests
 # In case of using confidential guests on AMD hardware that supports both SEV
 # and SEV-SNP, the following enables SEV-SNP guests. SEV guests are default.
