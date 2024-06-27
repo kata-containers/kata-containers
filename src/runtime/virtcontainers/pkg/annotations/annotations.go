@@ -148,7 +148,7 @@ const (
 	// DefaultVCPUs is a sandbox annotation for passing the default vcpus assigned for a VM by the hypervisor.
 	DefaultVCPUs = kataAnnotHypervisorPrefix + "default_vcpus"
 
-	// DefaultVCPUs is a sandbox annotation that specifies the maximum number of vCPUs allocated for the VM by the hypervisor.
+	// DefaultMaxVCPUs is a sandbox annotation that specifies the maximum number of vCPUs allocated for the VM by the hypervisor.
 	DefaultMaxVCPUs = kataAnnotHypervisorPrefix + "default_max_vcpus"
 
 	//
@@ -243,6 +243,9 @@ const (
 
 	// EnableRootlessHypervisor is a sandbox annotation to enable rootless hypervisor (only supported in QEMU currently).
 	EnableRootlessHypervisor = kataAnnotHypervisorPrefix + "rootless"
+
+	// NetworkQueues is a sandbox annotation for passing the default number of queues assigned for the tap interface by the hypervisor.
+	NetworkQueues = kataAnnotHypervisorPrefix + "network_queues"
 )
 
 // Runtime related annotations

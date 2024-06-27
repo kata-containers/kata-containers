@@ -14,6 +14,29 @@ use std::fmt;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::ops::Deref;
 use std::str::{self, FromStr};
+use libc::{ioctl, ifreq, SIOCETHTOOL, __u32, c_char};
+use nix::sys::socket::{socket, AddressFamily, SockFlag, SockType};
+use nix::unistd::close;
+use crate::util::IoctlRequestType;
+
+/// Constants and struct to handle eth channel ioctl
+/// Found in linux/include/uapi/linux/ethtool.h
+const ETHTOOL_GCHANNELS: __u32 = 0x3c;
+const ETHTOOL_SCHANNELS: __u32 = 0x3d;
+
+#[derive(Debug, Copy, Clone, Default)]
+#[repr(C)]
+struct EthtoolChannels {
+    cmd: __u32,
+    max_rx: __u32,
+    max_tx: __u32,
+    max_other: __u32,
+    max_combined: __u32,
+    rx_count: __u32,
+    tx_count: __u32,
+    other_count: __u32,
+    combined_count: __u32,
+}
 
 /// Search criteria to use when looking for a link in `find_link`.
 pub enum LinkFilter<'a> {
@@ -130,7 +153,41 @@ impl Handle {
             request.name(link.name()).up().execute().await?;
         }
 
-        Ok(())
+		// set iface combined count to max
+		let sock = socket(
+			AddressFamily::Inet,
+			SockType::Datagram,
+			SockFlag::empty(),
+			None,
+			);
+		let fd = sock.unwrap();
+
+		let mut channels: EthtoolChannels = Default::default();
+		let mut ifr = {
+			ifreq {
+				ifr_name: Default::default(),
+				ifr_ifru:  libc::__c_anonymous_ifr_ifru {
+					ifru_data: { &mut channels as *mut EthtoolChannels as *mut _},
+				},
+			}
+		};
+		iface.name
+			.bytes()
+			.zip(ifr.ifr_name.iter_mut())
+			.for_each(|(i, c)| *c = i as c_char);
+
+		channels.cmd = ETHTOOL_GCHANNELS;
+		let res = unsafe { ioctl(fd, SIOCETHTOOL as IoctlRequestType, &ifr) };
+
+		if res == 0 {
+			channels.cmd = ETHTOOL_SCHANNELS;
+			channels.combined_count = channels.max_combined;
+			unsafe { ioctl(fd, SIOCETHTOOL as IoctlRequestType, &ifr) };
+		}
+
+		close(fd)?;
+
+		Ok(())
     }
 
     pub async fn handle_localhost(&self) -> Result<()> {
