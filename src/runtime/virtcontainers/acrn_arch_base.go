@@ -426,7 +426,7 @@ func (netdev NetDevice) AcrnNetdevParam() []string {
 		deviceParams = append(deviceParams, netdev.IFName)
 		deviceParams = append(deviceParams, fmt.Sprintf(",mac=%s", netdev.MACAddress))
 	case MACVTAP:
-		deviceParams = append(deviceParams, netdev.IFName)
+		deviceParams = append(deviceParams, fmt.Sprintf("tap=%s", netdev.IFName))
 		deviceParams = append(deviceParams, fmt.Sprintf(",mac=%s", netdev.MACAddress))
 	default:
 		deviceParams = append(deviceParams, netdev.IFName)
