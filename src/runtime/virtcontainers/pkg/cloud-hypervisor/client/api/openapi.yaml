@@ -655,7 +655,7 @@ components:
             guest_numa_id: 3
           rng:
             iommu: false
-            src: /dev/urandom
+            src: src
           sgx_epc:
           - prefault: false
             size: 7
@@ -1082,7 +1082,7 @@ components:
           guest_numa_id: 3
         rng:
           iommu: false
-          src: /dev/urandom
+          src: src
         sgx_epc:
         - prefault: false
           size: 7
@@ -1366,11 +1366,9 @@ components:
           - 3
       properties:
         boot_vcpus:
-          default: 1
           minimum: 1
           type: integer
         max_vcpus:
-          default: 1
           minimum: 1
           type: integer
         topology:
@@ -1794,10 +1792,9 @@ components:
     RngConfig:
       example:
         iommu: false
-        src: /dev/urandom
+        src: src
       properties:
         src:
-          default: /dev/urandom
           type: string
         iommu:
           default: false
