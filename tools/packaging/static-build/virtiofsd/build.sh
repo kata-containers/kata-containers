@@ -60,6 +60,7 @@ pull_from_registry ${container_image} || \
 
 docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
+	--env USE_CACHE="${USE_CACHE:-"yes"}" \
 	--env DESTDIR="${DESTDIR}" \
 	--env PREFIX="${PREFIX}" \
 	--env virtiofsd_repo="${virtiofsd_repo}" \
