@@ -113,6 +113,8 @@ jobs:
           file: tests/integration/kubernetes/runtimeclass_workloads/confidential/unencrypted/Dockerfile
 
   run-kata-deploy-tests-on-aks:
+    # TODO: Reenable when Azure CI budget is secured (see #9939).
+    if: false
     needs: publish-kata-deploy-payload-amd64
     uses: ./.github/workflows/run-kata-deploy-tests-on-aks.yaml
     with:
@@ -125,6 +127,8 @@ jobs:
     secrets: inherit
 
   run-kata-deploy-tests-on-garm:
+    # TODO: Transition to free runner (see #9940).
+    if: false
     needs: publish-kata-deploy-payload-amd64
     uses: ./.github/workflows/run-kata-deploy-tests-on-garm.yaml
     with:
