@@ -8,7 +8,7 @@
 script_dir=$(dirname "$(readlink -f "$0")")
 parent_dir=$(realpath "${script_dir}/../..")
 cidir="${parent_dir}/ci"
-source "${cidir}/lib.sh"
+source "${cidir}/../tests/common.bash"
 
 cargo_deny_file="${script_dir}/action.yaml"
 

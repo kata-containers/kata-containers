@@ -26,11 +26,6 @@ jobs:
       with:
         fetch-depth: 0
         path: ./src/github.com/${{ github.repository }}
-    - name: Setup
-      run: |
-        cd ${GOPATH}/src/github.com/${{ github.repository }} && ./ci/setup.sh
-      env:
-        GOPATH: ${{ runner.workspace }}/kata-containers
     # docs url alive check
     - name: Docs URL Alive Check
       run: |

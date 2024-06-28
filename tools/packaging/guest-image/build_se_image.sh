@@ -14,7 +14,7 @@ readonly script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly packaging_root_dir="$(cd "${script_dir}/../" && pwd)"
 readonly kata_root_dir="$(cd "${packaging_root_dir}/../../" && pwd)"
 
-source "$kata_root_dir/ci/lib.sh"
+source "$kata_root_dir/tests/common.bash"
 source "${packaging_root_dir}/scripts/lib.sh"
 
 ARCH=${ARCH:-$(uname -m)}
