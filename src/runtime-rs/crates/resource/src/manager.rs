@@ -14,7 +14,7 @@ use hypervisor::device::device_manager::DeviceManager;
 use hypervisor::Hypervisor;
 use kata_types::config::TomlConfig;
 use kata_types::mount::Mount;
-use oci::{Linux, LinuxResources};
+use oci::LinuxResources;
 use persist::sandbox_persist::Persist;
 use tokio::sync::RwLock;
 use tracing::instrument;
@@ -115,9 +115,9 @@ impl ResourceManager {
         inner.handler_volumes(cid, spec).await
     }
 
-    pub async fn handler_devices(&self, cid: &str, linux: &Linux) -> Result<Vec<Device>> {
+    pub async fn handler_devices(&self, cid: &str, spec: &oci::Spec) -> Result<Vec<Device>> {
         let inner = self.inner.read().await;
-        inner.handler_devices(cid, linux).await
+        inner.handler_devices(cid, spec).await
     }
 
     pub async fn dump(&self) {
