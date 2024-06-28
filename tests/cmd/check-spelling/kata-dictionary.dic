@@ -331,6 +331,7 @@ rootfs/AB
 runV/B
 runc/B
 runtime/AB
+runtimeClass
 rustlang/B
 s390x/B
 scalability
