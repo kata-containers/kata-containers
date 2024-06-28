@@ -242,6 +242,32 @@ need_chronic() {
 		"Usually it is distributed with the 'moreutils' package of your Linux distribution."
 }
 
+# Mark a section begin.
+#
+# If running within a Github Action then it will start grouping log lines, else
+# just print the section title.
+#
+# Parameters:
+#	$*: the section title
+#
+section_begin() {
+	if [ -n "${GITHUB_ACTION:-}" ];then
+		echo "::group::${*}"
+	else
+		info "$@"
+	fi
+}
+
+# Mark a section end.
+# On Github Action it will close the grouping of log lines, else just print newline.
+#
+section_end() {
+	if [ "${CI:-}" = "true" ];then
+		echo "::endgroup::"
+	else
+		echo ""
+	fi
+}
 
 static_check_go_arch_specific()
 {
@@ -731,13 +757,13 @@ static_check_docs()
 	local md_links=$(mktemp)
 	files_to_remove+=("${url_map}" "${invalid_urls}" "${md_links}")
 
-	info "Checking document markdown references"
+	section_begin "Checking document markdown references"
 
 	local md_docs_to_check
 
 	# All markdown docs are checked (not just those changed by a PR). This
 	# is necessary to guarantee that all docs are referenced.
-	md_docs_to_check="$all_docs"
+	IFS=" " read -r -a  md_docs_to_check <<< "$all_docs"
 
 	command -v kata-check-markdown &>/dev/null ||\
 		(cd "${test_dir}/cmd/check-markdown" && make)
@@ -745,9 +771,10 @@ static_check_docs()
 	command -v kata-check-markdown &>/dev/null || \
 		die 'kata-check-markdown command not found. Ensure that "$GOPATH/bin" is in your $PATH.'
 
-	for doc in $md_docs_to_check
+	for doc in "${md_docs_to_check[@]}"
 	do
-		kata-check-markdown check "$doc"
+		# Print the output only when it fails to avoid flooding the CI logs with INFO messages.
+		out=$(kata-check-markdown check "$doc") || { echo -e "$out"; false; }
 
 		# Get a link of all other markdown files this doc references
 		kata-check-markdown list links --format tsv --no-header "$doc" |\
@@ -787,7 +814,7 @@ static_check_docs()
 
 	# Every document in the repo (except a small handful of exceptions)
 	# should be referenced by another document.
-	for doc in $md_docs_to_check
+	for doc in "${md_docs_to_check[@]}"
 	do
 		# Check the ignore list for markdown files that do not need to
 		# be referenced by others.
@@ -796,7 +823,11 @@ static_check_docs()
 		grep -q "$doc" "$md_links" || die "Document $doc is not referenced"
 	done
 
-	info "Checking document code blocks"
+	info "Checked ${#md_docs_to_check[@]} markdown files successfuly"
+	# Checking document markdown references
+	section_end
+
+	section_begin "Checking document code blocks"
 
 	local doc_to_script_cmd="${cidir}/kata-doc-to-script.sh"
 
@@ -814,10 +845,13 @@ static_check_docs()
 		done
 	done
 
+	# Checking document code blocks
+	section_end
+
 	# Get unique list of URLs
 	urls=$(awk '{print $1}' "$url_map" | sort -u)
 
-	info "Checking all document URLs"
+	section_begin "Checking all document URLs"
 	local invalid_urls_dir=$(mktemp -d)
 	files_to_remove+=("${invalid_urls_dir}")
 
@@ -889,7 +923,10 @@ static_check_docs()
 
 		exit 1
 	fi
+	# Checking all document URLs
+	section_end
 
+	section_begin "Spell check"
 	# Now, spell check the docs
 	cmd="${test_dir}/cmd/check-spelling/kata-spell-check.sh"
 
@@ -907,6 +944,8 @@ static_check_docs()
         url='https://github.com/kata-containers/kata-containers/blob/main/docs/Documentation-Requirements.md#spelling'
         die "spell check failed, See $url for more information."
     }
+	# Spell check
+	section_end
 }
 
 static_check_eof()
@@ -1392,9 +1431,9 @@ run_or_list_check_function()
 		echo "$func"
 		return 0
 	fi
-
-	info "Running '$func' function"
+	section_begin "Running '$func' function"
 	eval "$func"
+	section_end
 }
 
 setup()
