@@ -10,7 +10,7 @@ spec:
   runtimeClassName: kata
   containers:
     - name: bash-curl
-      image: storytel/alpine-bash-curl:latest
+      image: quay.io/kata-containers/alpine-bash-curl:latest
       imagePullPolicy: Always
       command:
         - sh
