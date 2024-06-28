@@ -9,7 +9,6 @@ mod utils;
 
 use std::{
     collections::{HashMap, HashSet},
-    error::Error,
     io,
     iter::FromIterator,
     sync::Arc,
@@ -18,7 +17,9 @@ use std::{
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use cgroup_persist::CgroupState;
-use cgroups_rs::{cgroup_builder::CgroupBuilder, Cgroup, CgroupPid, CpuResources, Resources};
+use cgroups::{
+    cgroup_builder::CgroupBuilder, hierarchies, Cgroup, CgroupPid, CpuResources, Resources,
+};
 use hypervisor::Hypervisor;
 use kata_sys_util::spec::load_oci_spec;
 use kata_types::config::TomlConfig;
@@ -35,30 +36,35 @@ pub struct CgroupArgs {
     pub config: TomlConfig,
 }
 
+#[derive(Default)]
 pub struct CgroupConfig {
     pub path: String,
     pub overhead_path: String,
     pub sandbox_cgroup_only: bool,
+    pub threaded_mode: bool,
+    pub specified_controllers: Option<Vec<String>>,
 }
 
 impl CgroupConfig {
     fn new(sid: &str, toml_config: &TomlConfig) -> Result<Self> {
-        let overhead_path = utils::gen_overhead_path(sid);
         let spec = load_oci_spec()?;
-        let path = spec
-            .linux
-            // The trim of '/' is important, because cgroup_path is a relative path.
-            .map(|linux| linux.cgroups_path.trim_start_matches('/').to_string())
-            .unwrap_or_default();
+        let v2 = hierarchies::is_cgroup2_unified_mode();
+        let threaded_mode = v2 && !toml_config.runtime.sandbox_cgroup_only;
+
+        let (sandbox_path, overhead_path) = utils::generate_paths(sid, &spec, threaded_mode);
+        let specified_controllers = utils::determine_controllers(threaded_mode);
 
         Ok(Self {
-            path,
+            path: sandbox_path,
             overhead_path,
             sandbox_cgroup_only: toml_config.runtime.sandbox_cgroup_only,
+            threaded_mode,
+            specified_controllers,
         })
     }
 }
 
+#[derive(Default)]
 pub struct CgroupsResource {
     resources: Arc<RwLock<HashMap<String, Resources>>>,
     cgroup_manager: Cgroup,
@@ -74,34 +80,16 @@ impl CgroupsResource {
         // Depending on the sandbox_cgroup_only value, this cgroup
         // will either hold all the pod threads (sandbox_cgroup_only is true)
         // or only the virtual CPU ones (sandbox_cgroup_only is false).
-        let hier = cgroups_rs::hierarchies::auto();
-        let cgroup_manager = CgroupBuilder::new(&config.path).build(hier)?;
+        let cgroup_manager = Self::new_cgroup_manager(&config)?;
 
         // The shim configuration is requesting that we do not put all threads
         // into the sandbox resource controller.
         // We're creating an overhead controller, with no constraints. Everything but
         // the vCPU threads will eventually make it there.
-        let overhead_cgroup_manager = if !config.sandbox_cgroup_only {
-            let hier = cgroups_rs::hierarchies::auto();
-            Some(CgroupBuilder::new(&config.overhead_path).build(hier)?)
-        } else {
-            None
-        };
+        let overhead_cgroup_manager = Self::new_overhead_cgroup_manager(&config)?;
 
-        // Add the runtime to the VMM sandbox resource controller
-
-        // By adding the runtime process to either the sandbox or overhead controller, we are making
-        // sure that any child process of the runtime (i.e. *all* processes serving a Kata pod)
-        // will initially live in this controller. Depending on the sandbox_cgroup_only settings, we will
-        // then move the vCPU threads between resource controllers.
-        let pid = CgroupPid { pid: 0 };
-        if let Some(manager) = overhead_cgroup_manager.as_ref() {
-            manager.add_task_by_tgid(pid).context("add task by tgid")?;
-        } else {
-            cgroup_manager
-                .add_task_by_tgid(pid)
-                .context("add task by tgid with sandbox only")?;
-        }
+        Self::configure_cgroup_mode(&config, &cgroup_manager, &overhead_cgroup_manager)?;
+        Self::add_runtime_to_cgroup(&cgroup_manager, &overhead_cgroup_manager)?;
 
         Ok(Self {
             cgroup_manager,
@@ -111,38 +99,87 @@ impl CgroupsResource {
         })
     }
 
+    fn new_cgroup_manager(config: &CgroupConfig) -> Result<Cgroup> {
+        let mut cgbuilder = CgroupBuilder::new(&config.path);
+        if config.threaded_mode {
+            cgbuilder =
+                cgbuilder.set_specified_controllers(config.specified_controllers.clone().ok_or(
+                    anyhow!("unable to match specified controller as allowed by thread mode"),
+                )?);
+        }
+        let hier = hierarchies::auto();
+        let cgmgr = cgbuilder.build(hier)?;
+
+        Ok(cgmgr)
+    }
+
+    fn new_overhead_cgroup_manager(config: &CgroupConfig) -> Result<Option<Cgroup>> {
+        if config.sandbox_cgroup_only {
+            Ok(None)
+        } else {
+            let mut cgbuilder = CgroupBuilder::new(&config.overhead_path);
+            if config.threaded_mode {
+                cgbuilder = cgbuilder.set_specified_controllers(
+                    config.specified_controllers.clone().ok_or(anyhow!(
+                        "unable to match specified controller as allowed by threaded mode"
+                    ))?,
+                );
+            }
+            let hier = hierarchies::auto();
+            let overhead_cgmgr = cgbuilder.build(hier)?;
+
+            Ok(Some(overhead_cgmgr))
+        }
+    }
+
+    // Configure the cgroup mode for the sandbox and overhead cgroups.
+    fn configure_cgroup_mode(
+        config: &CgroupConfig,
+        cgroup_manager: &Cgroup,
+        overhead_cgroup_manager: &Option<Cgroup>,
+    ) -> Result<()> {
+        if config.threaded_mode {
+            let cgroup_type = "threaded";
+            cgroup_manager
+                .set_cgroup_type(cgroup_type)
+                .context("set cgroup mode to threaded for sandbox cgroup")?;
+
+            if let Some(manager) = overhead_cgroup_manager.as_ref() {
+                manager
+                    .set_cgroup_type(cgroup_type)
+                    .context("set cgroup mode to threaded for overhead cgroup")?;
+            }
+        }
+
+        Ok(())
+    }
+
+    // Add the runtime to the VMM sandbox resource controller
+    // By adding the runtime process to either the sandbox or overhead controller, we are making
+    // sure that any child process of the runtime (i.e. *all* processes serving a Kata pod)
+    // will initially live in this controller. Depending on the sandbox_cgroup_only settings, we will
+    // then move the vCPU threads between resource controllers.
+    fn add_runtime_to_cgroup(
+        cgroup_manager: &Cgroup,
+        overhead_cgroup_manager: &Option<Cgroup>,
+    ) -> Result<()> {
+        let pid = CgroupPid { pid: 0 };
+        if let Some(manager) = overhead_cgroup_manager.as_ref() {
+            manager.add_task_by_tgid(pid).context("add task by tgid")?;
+        } else {
+            cgroup_manager
+                .add_task_by_tgid(pid)
+                .context("add task by tgid with sandbox only")?;
+        }
+
+        Ok(())
+    }
+
     /// delete will move the running processes in the cgroup_manager and
     /// overhead_cgroup_manager to the parent and then delete the cgroups.
     pub async fn delete(&self) -> Result<()> {
-        for cg_pid in self.cgroup_manager.tasks() {
-            // For now, we can't guarantee that the thread in cgroup_manager does still
-            // exist. Once it exit, we should ignore that error returned by remove_task
-            // to let it go.
-            if let Err(error) = self.cgroup_manager.remove_task(cg_pid) {
-                match error.source() {
-                    Some(err) => match err.downcast_ref::<io::Error>() {
-                        Some(e) => {
-                            if e.raw_os_error() != Some(OS_ERROR_NO_SUCH_PROCESS) {
-                                return Err(error.into());
-                            }
-                        }
-                        None => return Err(error.into()),
-                    },
-                    None => return Err(error.into()),
-                }
-            }
-        }
-
-        self.cgroup_manager
-            .delete()
-            .context("delete cgroup manager")?;
-
-        if let Some(overhead) = self.overhead_cgroup_manager.as_ref() {
-            for cg_pid in overhead.tasks() {
-                overhead.remove_task(cg_pid)?;
-            }
-            overhead.delete().context("delete overhead")?;
-        }
+        let version_operator = operation_version();
+        version_operator.do_delete_cgroups(self)?;
 
         Ok(())
     }
@@ -273,6 +310,131 @@ impl CgroupsResource {
     }
 }
 
+trait CgroupOperator {
+    fn do_delete_cgroups(&self, resource: &CgroupsResource) -> Result<()>;
+
+    fn move_tasks_to_root(&self, cgroup_manager: &Cgroup) -> Result<()> {
+        for cg_tid in cgroup_manager.tasks() {
+            if let Err(error) = cgroup_manager
+                .remove_task(cg_tid)
+                .context("move threads to root cgroup manager")
+            {
+                ignore_cgroup_move_error(error)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn move_procs_to_root(&self, cgroup_manager: &Cgroup) -> Result<()> {
+        for cg_tgid in cgroup_manager.procs() {
+            if let Err(error) = cgroup_manager
+                .remove_task_by_tgid(cg_tgid)
+                .context("move procs to root cgroup manager")
+            {
+                ignore_cgroup_move_error(error)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn move_tasks_to_parent(&self, cgroup_manager: &Cgroup) -> Result<()> {
+        for cg_tid in cgroup_manager.tasks() {
+            if let Err(error) = cgroup_manager
+                .move_task_to_parent(cg_tid)
+                .context("move threads to parent cgroup manager")
+            {
+                ignore_cgroup_move_error(error)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn delete_cgroup_manager(&self, cgroup_manager: &Cgroup) -> Result<()> {
+        cgroup_manager.delete().context("delete cgroup manager")
+    }
+}
+
+struct CgroupOperatorV1;
+struct CgroupOperatorV2;
+
+fn operation_version() -> Box<dyn CgroupOperator> {
+    match hierarchies::is_cgroup2_unified_mode() {
+        true => Box::new(CgroupOperatorV2),
+        false => Box::new(CgroupOperatorV1),
+    }
+}
+
+impl CgroupOperator for CgroupOperatorV1 {
+    fn do_delete_cgroups(&self, resource: &CgroupsResource) -> Result<()> {
+        self.move_tasks_to_root(&resource.cgroup_manager)?;
+        self.delete_cgroup_manager(&resource.cgroup_manager)?;
+
+        if let Some(overhead) = resource.overhead_cgroup_manager.as_ref() {
+            self.move_tasks_to_root(overhead)?;
+            self.delete_cgroup_manager(overhead)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl CgroupOperator for CgroupOperatorV2 {
+    fn do_delete_cgroups(&self, resource: &CgroupsResource) -> Result<()> {
+        let mut cgmgr = resource.cgroup_manager.clone();
+
+        // If the cgroup manager is in threaded mode, we need to delete the parent cgroup manager.
+        // The hierarchy of cgroups in thread mode look like this:
+        //           ┌──────────────────────────┐
+        //           │ cgroup:/container-cgroup │
+        //           │  type:domain-threaded    │
+        //           └──┬────────────────────┬──┘
+        //              │                    │
+        //              │                    │
+        //  ┌───────────▼───┐              ┌─▼─────────────┐
+        //  │   overhead    │              │   sandbox     │
+        //  │ type:threaded │              │ type:threaded │
+        //  └───────────────┘              └───────────────┘
+        if resource.cgroup_config.threaded_mode {
+            // Delete sandbox cgroup
+            self.move_tasks_to_parent(&cgmgr)?;
+            self.delete_cgroup_manager(&cgmgr)?;
+            // Delete overhead cgroup if exists
+            if let Some(overhead) = resource.overhead_cgroup_manager.as_ref() {
+                self.move_tasks_to_parent(overhead)?;
+                self.delete_cgroup_manager(overhead)?;
+            }
+            cgmgr = resource.cgroup_manager.parent_control_group();
+        }
+
+        // Delete parent cgroup
+        self.move_procs_to_root(&cgmgr)?;
+        self.delete_cgroup_manager(&cgmgr)?;
+
+        Ok(())
+    }
+}
+
+// For now, we can't guarantee that the process or thread in cgroup_manager does still
+// exist. Once it exit, we should ignore that error returned by to let it go.
+fn ignore_cgroup_move_error(error: anyhow::Error) -> Result<(), anyhow::Error> {
+    match error.source() {
+        Some(err) => match err.downcast_ref::<io::Error>() {
+            Some(e) => {
+                if e.raw_os_error() != Some(OS_ERROR_NO_SUCH_PROCESS) {
+                    return Err(error);
+                }
+            }
+            None => return Err(error),
+        },
+        None => return Err(error),
+    }
+
+    Ok(())
+}
+
 #[async_trait]
 impl Persist for CgroupsResource {
     type State = CgroupState;
@@ -283,17 +445,20 @@ impl Persist for CgroupsResource {
             path: Some(self.cgroup_config.path.clone()),
             overhead_path: Some(self.cgroup_config.overhead_path.clone()),
             sandbox_cgroup_only: self.cgroup_config.sandbox_cgroup_only,
+            threaded_mode: self.cgroup_config.threaded_mode,
         })
     }
+
     /// Restore a component from a specified state.
     async fn restore(
         cgroup_args: Self::ConstructorArgs,
         cgroup_state: Self::State,
     ) -> Result<Self> {
-        let hier = cgroups_rs::hierarchies::auto();
+        let hier = hierarchies::auto();
         let config = CgroupConfig::new(&cgroup_args.sid, &cgroup_args.config)?;
         let path = cgroup_state.path.unwrap_or_default();
         let cgroup_manager = Cgroup::load(hier, path.as_str());
+
         Ok(Self {
             cgroup_manager,
             resources: Arc::new(RwLock::new(HashMap::new())),

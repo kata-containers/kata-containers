@@ -10,4 +10,5 @@ pub struct CgroupState {
     pub path: Option<String>,
     pub overhead_path: Option<String>,
     pub sandbox_cgroup_only: bool,
+    pub threaded_mode: bool,
 }
