@@ -15,6 +15,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, bail, Context, Result};
 use image_rs::image::ImageClient;
 use kata_sys_util::validate::verify_id;
+use oci_spec::runtime as oci;
 use tokio::sync::Mutex;
 
 use crate::rpc::CONTAINER_BASE;
@@ -86,7 +87,7 @@ impl ImageService {
         })?)
         .context("load image config file")?;
 
-        let image_oci_process = image_oci.process.ok_or_else(|| {
+        let image_oci_process = image_oci.process().as_ref().ok_or_else(|| {
             anyhow!("The guest pause image config does not contain a process specification. Please check the pause image.")
         })?;
         info!(
@@ -96,11 +97,14 @@ impl ImageService {
         );
 
         // Ensure that the args vector is not empty before accessing its elements.
-        let args = image_oci_process.args;
+        //let args_vec = image_oci_process.args();
         // Check the number of arguments.
-        if args.is_empty() {
+        let args = if let Some(args_vec) = image_oci_process.args() {
+            args_vec
+        } else {
             bail!("The number of args should be greater than or equal to one! Please check the pause image.");
-        }
+        };
+        // let args = args_vec.clone().unwrap();
 
         let container_bundle = scoped_join(CONTAINER_BASE, cid)?;
         fs::create_dir_all(&container_bundle)?;
@@ -187,23 +191,28 @@ impl ImageService {
     /// Partially merge an OCI process specification into another one.
     fn merge_oci_process(&self, target: &mut oci::Process, source: &oci::Process) {
         // Override the target args only when the target args is empty and source.args is not empty
-        if target.args.is_empty() && !source.args.is_empty() {
-            target.args.append(&mut source.args.clone());
+        if target.args().is_none() && source.args().is_some() {
+            // target.args().append(&mut source.args().clone());
+            target.args().clone_from(&source.args());
         }
 
         // Override the target cwd only when the target cwd is blank and source.cwd is not blank
-        if target.cwd == "/" && source.cwd != "/" {
-            target.cwd = String::from(&source.cwd);
+        let target_cwd = target.cwd();
+        let source_cwd = source.cwd();
+        if target_cwd == &PathBuf::from("/") && source_cwd != &PathBuf::from("/") {
+            target.set_cwd(source_cwd.clone());
         }
 
-        for source_env in &source.env {
+        let mut env_vec: Vec<String> = target.env_mut().get_or_insert_with(Vec::new).to_vec();
+        let source_envs = source.env().clone().unwrap_or_default();
+        for source_env in source_envs {
             if let Some((variable_name, variable_value)) = source_env.split_once('=') {
                 debug!(
                     sl(),
                     "source spec environment variable: {variable_name:?} : {variable_value:?}"
                 );
-                if !target.env.iter().any(|i| i.contains(variable_name)) {
-                    target.env.push(source_env.to_string());
+                if !env_vec.iter().any(|i| i.contains(variable_name)) {
+                    env_vec.push(source_env.to_string());
                 }
             }
         }
@@ -245,7 +254,12 @@ pub async fn merge_bundle_oci(container_oci: &mut oci::Spec) -> Result<()> {
     let image_service = image_service
         .as_mut()
         .expect("Image Service not initialized");
-    if let Some(image_name) = container_oci.annotations.get(ANNO_K8S_IMAGE_NAME) {
+    let default_annotations = HashMap::new();
+    let oci_annotations = container_oci
+        .annotations()
+        .as_ref()
+        .unwrap_or(&default_annotations);
+    if let Some(image_name) = oci_annotations.get(ANNO_K8S_IMAGE_NAME) {
         if let Some(container_id) = image_service.images.get(image_name) {
             let image_oci_config_path = Path::new(CONTAINER_BASE)
                 .join(container_id)
@@ -264,20 +278,18 @@ pub async fn merge_bundle_oci(container_oci: &mut oci::Spec) -> Result<()> {
             .context("load image bundle")?;
 
             if let (Some(container_root), Some(image_root)) =
-                (container_oci.root.as_mut(), image_oci.root.as_ref())
+                (container_oci.root_mut().as_mut(), image_oci.root().as_ref())
             {
                 let root_path = Path::new(CONTAINER_BASE)
                     .join(container_id)
-                    .join(image_root.path.clone());
-                container_root.path =
-                    String::from(root_path.to_str().ok_or_else(|| {
-                        anyhow!("Invalid container image root path {:?}", root_path)
-                    })?);
+                    .join(image_root.path().clone());
+                container_root.set_path(root_path);
             }
 
-            if let (Some(container_process), Some(image_process)) =
-                (container_oci.process.as_mut(), image_oci.process.as_ref())
-            {
+            if let (Some(container_process), Some(image_process)) = (
+                container_oci.process_mut().as_mut(),
+                image_oci.process().as_ref(),
+            ) {
                 image_service.merge_oci_process(container_process, image_process);
             }
         }
@@ -309,6 +321,7 @@ pub async fn pull_image(
 #[cfg(test)]
 mod tests {
     use super::ImageService;
+    use oci_spec::runtime as oci;
     use rstest::rstest;
 
     #[rstest]
@@ -322,16 +335,16 @@ mod tests {
         #[case] expected: &str,
     ) {
         let image_service = ImageService::new();
-        let mut container_process = oci::Process {
-            cwd: container_process_cwd.to_string(),
-            ..Default::default()
-        };
-        let image_process = oci::Process {
-            cwd: image_process_cwd.to_string(),
-            ..Default::default()
-        };
+        let mut container_process = oci::Process::default();
+        container_process.set_cwd(container_process_cwd.to_string().into());
+        let mut image_process = oci::Process::default();
+        image_process.set_cwd(image_process_cwd.to_string().into());
+
         image_service.merge_oci_process(&mut container_process, &image_process);
-        assert_eq!(expected, container_process.cwd);
+        assert_eq!(
+            expected,
+            container_process.cwd().display().to_string().as_str()
+        );
     }
 
     #[rstest]
@@ -361,15 +374,13 @@ mod tests {
         #[case] expected: Vec<String>,
     ) {
         let image_service = ImageService::new();
-        let mut container_process = oci::Process {
-            env: container_process_env,
-            ..Default::default()
-        };
-        let image_process = oci::Process {
-            env: image_process_env,
-            ..Default::default()
-        };
+
+        let mut container_process = oci::Process::default();
+        container_process.set_env(Some(container_process_env));
+        let mut image_process = oci::Process::default();
+        image_process.set_env(Some(image_process_env));
+
         image_service.merge_oci_process(&mut container_process, &image_process);
-        assert_eq!(expected, container_process.env);
+        assert_eq!(expected, container_process.env().clone().unwrap());
     }
 }

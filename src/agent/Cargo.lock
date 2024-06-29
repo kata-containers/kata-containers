@@ -1871,7 +1871,7 @@ dependencies = [
  "loopdev",
  "nix 0.26.4",
  "oci-distribution",
- "oci-spec",
+ "oci-spec 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "ocicrypt-rs",
  "prost 0.11.9",
  "serde",
@@ -2123,8 +2123,8 @@ dependencies = [
  "netlink-packet-utils",
  "netlink-sys",
  "nix 0.24.2",
- "oci",
  "oci-distribution",
+ "oci-spec 0.6.5 (git+https://github.com/containers/oci-spec-rs.git?rev=da761c5)",
  "openssl",
  "opentelemetry",
  "procfs",
@@ -2135,6 +2135,7 @@ dependencies = [
  "regorus",
  "rstest",
  "rtnetlink",
+ "runtime-spec",
  "rustjail",
  "safe-path",
  "scan_fmt",
@@ -2178,9 +2179,10 @@ dependencies = [
  "lazy_static",
  "libc",
  "nix 0.24.2",
- "oci",
+ "oci-spec 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "once_cell",
  "rand",
+ "runtime-spec",
  "safe-path",
  "serde",
  "serde_json",
@@ -2201,7 +2203,7 @@ dependencies = [
  "glob",
  "lazy_static",
  "num_cpus",
- "oci",
+ "oci-spec 0.6.5 (git+https://github.com/containers/oci-spec-rs.git?rev=da761c5)",
  "regex",
  "safe-path",
  "serde",
@@ -2844,6 +2846,18 @@ name = "oci-spec"
 version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e423c4f827362c0d8d8da4b1f571270f389ebde73bcd3240a3d23c6d6f61d0f0"
+dependencies = [
+ "derive_builder",
+ "getset",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "oci-spec"
+version = "0.6.5"
+source = "git+https://github.com/containers/oci-spec-rs.git?rev=da761c5#da761c536a9ed4ca9f21b9d6ca96d5d34371733c"
 dependencies = [
  "derive_builder",
  "getset",
@@ -3933,6 +3947,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "runtime-spec"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "serde",
+ "serde_derive",
+ "serde_json",
+]
+
+[[package]]
 name = "rust_decimal"
 version = "1.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4009,12 +4033,13 @@ dependencies = [
  "libc",
  "libseccomp",
  "nix 0.24.2",
- "oci",
+ "oci-spec 0.6.5 (git+https://github.com/containers/oci-spec-rs.git?rev=da761c5)",
  "path-absolutize",
  "protobuf 3.2.0",
  "protocols",
  "regex",
  "rlimit",
+ "runtime-spec",
  "scan_fmt",
  "scopeguard",
  "serde",

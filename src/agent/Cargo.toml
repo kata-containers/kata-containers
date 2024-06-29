@@ -6,7 +6,8 @@ edition = "2018"
 license = "Apache-2.0"
 
 [dependencies]
-oci = { path = "../libs/oci" }
+runtime-spec = { path = "../libs/runtime-spec" }
+oci-spec = { git = "https://github.com/containers/oci-spec-rs.git", rev = "da761c5", features = ["runtime"] }
 rustjail = { path = "rustjail" }
 protocols = { path = "../libs/protocols", features = ["async", "with-serde"] }
 lazy_static = "1.3.0"

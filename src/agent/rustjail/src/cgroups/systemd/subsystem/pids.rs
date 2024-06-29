@@ -9,6 +9,7 @@ use super::transformer::Transformer;
 
 use anyhow::Result;
 use oci::{LinuxPids, LinuxResources};
+use oci_spec::runtime as oci;
 use zbus::zvariant::Value;
 
 pub struct Pids {}
@@ -20,7 +21,7 @@ impl Transformer for Pids {
         _: &CgroupHierarchy,
         _: &str,
     ) -> Result<()> {
-        if let Some(pids_resources) = &r.pids {
+        if let Some(pids_resources) = &r.pids() {
             Self::apply(pids_resources, properties)?;
         }
 
@@ -31,8 +32,8 @@ impl Transformer for Pids {
 // pids.limit <-> TasksMax
 impl Pids {
     fn apply(pids_resources: &LinuxPids, properties: &mut Properties) -> Result<()> {
-        let limit = if pids_resources.limit > 0 {
-            pids_resources.limit as u64
+        let limit = if pids_resources.limit() > 0 {
+            pids_resources.limit() as u64
         } else {
             u64::MAX
         };
@@ -47,10 +48,13 @@ mod tests {
     use super::Pids;
     use super::Properties;
     use super::Value;
+    use oci_spec::runtime as oci;
 
     #[test]
     fn test_subsystem_workflow() {
-        let pids_resources = oci::LinuxPids { limit: 0 };
+        let mut pids_resources = oci::LinuxPids::default();
+        pids_resources.set_limit(0 as i64);
+
         let mut properties: Properties = vec![];
 
         assert_eq!(true, Pids::apply(&pids_resources, &mut properties).is_ok());

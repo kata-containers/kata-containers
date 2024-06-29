@@ -11,6 +11,7 @@ use anyhow::Result;
 use cgroups::freezer::FreezerState;
 use libc::{self, pid_t};
 use oci::{LinuxResources, Spec};
+use oci_spec::runtime as oci;
 use std::any::Any;
 use std::collections::HashMap;
 use std::string::String;

@@ -8,6 +8,7 @@ use super::transformer::Transformer;
 
 use anyhow::{bail, Result};
 use oci::{LinuxCpu, LinuxResources};
+use oci_spec::runtime as oci;
 use zbus::zvariant::Value;
 
 const BASIC_SYSTEMD_VERSION: &str = "242";
@@ -25,7 +26,7 @@ impl Transformer for Cpu {
         cgroup_hierarchy: &CgroupHierarchy,
         systemd_version: &str,
     ) -> Result<()> {
-        if let Some(cpu_resources) = &r.cpu {
+        if let Some(cpu_resources) = &r.cpu() {
             match cgroup_hierarchy {
                 CgroupHierarchy::Legacy => {
                     Self::legacy_apply(cpu_resources, properties, systemd_version)?
@@ -50,7 +51,7 @@ impl Cpu {
         properties: &mut Properties,
         systemd_version: &str,
     ) -> Result<()> {
-        if let Some(shares) = cpu_resources.shares {
+        if let Some(shares) = cpu_resources.shares() {
             // Minimum value of CPUShares should be 2, see https://github.com/systemd/systemd/blob/d19434fbf81db04d03c8cffa87821f754a86635b/src/basic/cgroup-util.h#L122
             let shares = match shares {
                 0 => 1024,
@@ -60,14 +61,14 @@ impl Cpu {
             properties.push(("CPUShares", Value::U64(shares)));
         }
 
-        if let Some(period) = cpu_resources.period {
+        if let Some(period) = cpu_resources.period() {
             if period != 0 && systemd_version >= BASIC_SYSTEMD_VERSION {
                 properties.push(("CPUQuotaPeriodUSec", Value::U64(period)));
             }
         }
 
-        if let Some(quota) = cpu_resources.quota {
-            let period = cpu_resources.period.unwrap_or(DEFAULT_CPUQUOTAPERIOD);
+        if let Some(quota) = cpu_resources.quota() {
+            let period = cpu_resources.period().unwrap_or(DEFAULT_CPUQUOTAPERIOD);
             if period != 0 {
                 let cpu_quota_per_sec_usec = resolve_cpuquota(quota, period);
                 properties.push(("CPUQuotaPerSecUSec", Value::U64(cpu_quota_per_sec_usec)));
@@ -86,19 +87,19 @@ impl Cpu {
         properties: &mut Properties,
         systemd_version: &str,
     ) -> Result<()> {
-        if let Some(shares) = cpu_resources.shares {
+        if let Some(shares) = cpu_resources.shares() {
             let weight = shares_to_weight(shares).unwrap();
             properties.push(("CPUWeight", Value::U64(weight)));
         }
 
-        if let Some(period) = cpu_resources.period {
+        if let Some(period) = cpu_resources.period() {
             if period != 0 && systemd_version >= BASIC_SYSTEMD_VERSION {
                 properties.push(("CPUQuotaPeriodUSec", Value::U64(period)));
             }
         }
 
-        if let Some(quota) = cpu_resources.quota {
-            let period = cpu_resources.period.unwrap_or(DEFAULT_CPUQUOTAPERIOD);
+        if let Some(quota) = cpu_resources.quota() {
+            let period = cpu_resources.period().unwrap_or(DEFAULT_CPUQUOTAPERIOD);
             if period != 0 {
                 let cpu_quota_per_sec_usec = resolve_cpuquota(quota, period);
                 properties.push(("CPUQuotaPerSecUSec", Value::U64(cpu_quota_per_sec_usec)));

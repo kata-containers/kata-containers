@@ -5,7 +5,7 @@
 
 use anyhow::{anyhow, Result};
 use core::fmt::Debug;
-use oci::{LinuxDeviceCgroup, LinuxResources};
+use oci_spec::runtime::{LinuxDeviceCgroup, LinuxResources};
 use protocols::agent::CgroupStats;
 use std::any::Any;
 
@@ -80,10 +80,11 @@ impl Debug for dyn Manager + Send + Sync {
 /// - Linux: a *:* rwm
 #[inline]
 fn rule_for_all_devices(dev_cgroup: &LinuxDeviceCgroup) -> bool {
-    dev_cgroup.major.unwrap_or(0) == 0
-        && dev_cgroup.minor.unwrap_or(0) == 0
-        && (dev_cgroup.r#type.as_str() == "" || dev_cgroup.r#type.as_str() == "a")
-        && dev_cgroup.access.contains('r')
-        && dev_cgroup.access.contains('w')
-        && dev_cgroup.access.contains('m')
+    let cgrp_access = dev_cgroup.access().clone().unwrap_or_default();
+    dev_cgroup.major().unwrap_or(0) == 0
+        && dev_cgroup.minor().unwrap_or(0) == 0
+        && (dev_cgroup.typ().is_none() || dev_cgroup.typ().unwrap().as_str() == "a")
+        && cgrp_access.contains('r')
+        && cgrp_access.contains('w')
+        && cgrp_access.contains('m')
 }

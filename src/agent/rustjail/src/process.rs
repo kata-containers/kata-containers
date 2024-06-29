@@ -16,6 +16,7 @@ use nix::unistd::{self, Pid};
 use nix::Result;
 
 use oci::Process as OCIProcess;
+use oci_spec::runtime as oci;
 use slog::Logger;
 
 use crate::pipestream::PipeStream;
@@ -147,7 +148,7 @@ impl Process {
             exit_tx: Some(exit_tx),
             exit_rx: Some(exit_rx),
             extra_files: Vec::new(),
-            tty: ocip.terminal,
+            tty: ocip.terminal().unwrap_or_default(),
             term_master: None,
             parent_stdin: None,
             parent_stdout: None,

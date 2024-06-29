@@ -10,6 +10,7 @@ use super::transformer::Transformer;
 use anyhow::{bail, Result};
 use bit_vec::BitVec;
 use oci::{LinuxCpu, LinuxResources};
+use oci_spec::runtime as oci;
 use std::convert::{TryFrom, TryInto};
 use zbus::zvariant::Value;
 
@@ -24,7 +25,7 @@ impl Transformer for CpuSet {
         _: &CgroupHierarchy,
         systemd_version: &str,
     ) -> Result<()> {
-        if let Some(cpuset_resources) = &r.cpu {
+        if let Some(cpuset_resources) = &r.cpu() {
             Self::apply(cpuset_resources, properties, systemd_version)?;
         }
 
@@ -45,15 +46,13 @@ impl CpuSet {
             return Ok(());
         }
 
-        let cpus = cpuset_resources.cpus.as_str();
-        if !cpus.is_empty() {
-            let cpus_vec: BitMask = cpus.try_into()?;
+        if let Some(cpus) = cpuset_resources.cpus().as_ref() {
+            let cpus_vec: BitMask = cpus.as_str().try_into()?;
             properties.push(("AllowedCPUs", Value::Array(cpus_vec.0.into())));
         }
 
-        let mems = cpuset_resources.mems.as_str();
-        if !mems.is_empty() {
-            let mems_vec: BitMask = mems.try_into()?;
+        if let Some(mems) = cpuset_resources.mems().as_ref() {
+            let mems_vec: BitMask = mems.as_str().try_into()?;
             properties.push(("AllowedMemoryNodes", Value::Array(mems_vec.0.into())));
         }
 

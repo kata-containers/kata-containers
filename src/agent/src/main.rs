@@ -6,7 +6,6 @@
 #[macro_use]
 extern crate lazy_static;
 extern crate capctl;
-extern crate oci;
 extern crate prometheus;
 extern crate protocols;
 extern crate regex;
