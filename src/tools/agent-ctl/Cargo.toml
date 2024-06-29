@@ -13,7 +13,7 @@ license = "Apache-2.0"
 [dependencies]
 protocols = { path = "../../libs/protocols", features = ["with-serde"] }
 rustjail = { path = "../../agent/rustjail" }
-oci = { path = "../../libs/oci" }
+oci-spec = { git = "https://github.com/containers/oci-spec-rs.git", rev = "da761c5", features = ["runtime"] }
 
 clap = "2.33.0"
 lazy_static = "1.4.0"
