@@ -14,7 +14,6 @@ pub(crate) fn set_logger(path: &str, sid: &str, is_debug: bool) -> Result<slog_a
     let fifo = std::fs::OpenOptions::new()
         .custom_flags(libc::O_NONBLOCK)
         .create(true)
-        .write(true)
         .append(true)
         .open(path)
         .context(Error::FileOpen(path.to_string()))?;

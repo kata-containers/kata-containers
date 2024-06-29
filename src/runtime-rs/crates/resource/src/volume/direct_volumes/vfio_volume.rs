@@ -4,10 +4,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::path::PathBuf;
+
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use tokio::sync::RwLock;
-
 use hypervisor::{
     device::{
         device_manager::{do_handle_device, DeviceManager},
@@ -15,7 +15,10 @@ use hypervisor::{
     },
     get_vfio_device, VfioConfig,
 };
+use kata_sys_util::mount::get_mount_type;
 use kata_types::mount::DirectVolumeMountInfo;
+use oci_spec::runtime as oci;
+use tokio::sync::RwLock;
 
 use crate::volume::{
     utils::{generate_shared_path, DEFAULT_VOLUME_FS_TYPE},
@@ -72,27 +75,26 @@ impl VfioVolume {
         }
 
         // generate host guest shared path
-        let guest_path = generate_shared_path(m.destination.clone(), read_only, &device_id, sid)
+        let guest_path = generate_shared_path(m.destination().clone(), read_only, &device_id, sid)
             .await
             .context("generate host-guest shared path failed")?;
         storage.mount_point = guest_path.clone();
 
-        if m.r#type != "bind" {
+        if get_mount_type(m.typ()).as_str() != "bind" {
             storage.fs_type = mount_info.fs_type.clone();
         } else {
             storage.fs_type = DEFAULT_VOLUME_FS_TYPE.to_string();
         }
 
-        let mount = oci::Mount {
-            destination: m.destination.clone(),
-            r#type: mount_info.fs_type.clone(),
-            source: guest_path,
-            options: m.options.clone(),
-        };
+        let mut oci_mount = oci::Mount::default();
+        oci_mount.set_destination(m.destination().clone());
+        oci_mount.set_typ(Some(mount_info.fs_type.clone()));
+        oci_mount.set_source(Some(PathBuf::from(&guest_path)));
+        oci_mount.set_options(m.options().clone());
 
         Ok(Self {
             storage: Some(storage),
-            mount,
+            mount: oci_mount,
             device_id,
         })
     }

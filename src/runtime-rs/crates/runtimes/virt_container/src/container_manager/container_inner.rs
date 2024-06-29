@@ -4,8 +4,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{collections::HashMap, sync::Arc};
-
 use agent::Agent;
 use anyhow::{anyhow, Context, Result};
 use common::{
@@ -15,7 +13,9 @@ use common::{
 use hypervisor::device::device_manager::DeviceManager;
 use nix::sys::signal::Signal;
 use oci::LinuxResources;
+use oci_spec::runtime as oci;
 use resource::{rootfs::Rootfs, volume::Volume};
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::RwLock;
 
 use crate::container_manager::logger_with_process;

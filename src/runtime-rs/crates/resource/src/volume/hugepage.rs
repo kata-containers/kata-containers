@@ -10,17 +10,20 @@ use std::{
     io::{BufRead, BufReader},
 };
 
+use super::{Volume, BIND};
 use crate::share_fs::EPHEMERAL_PATH;
 use agent::Storage;
 use anyhow::{anyhow, Context, Ok, Result};
 use async_trait::async_trait;
 use byte_unit::Byte;
 use hypervisor::{device::device_manager::DeviceManager, HUGETLBFS};
-use kata_sys_util::{fs::get_base_name, mount::PROC_MOUNTS_FILE};
+use kata_sys_util::{
+    fs::get_base_name,
+    mount::{get_mount_path, PROC_MOUNTS_FILE},
+};
 use kata_types::mount::KATA_EPHEMERAL_VOLUME_TYPE;
+use oci_spec::runtime as oci;
 use tokio::sync::RwLock;
-
-use super::{Volume, BIND};
 
 type PageSize = Byte;
 type Limit = u64;
@@ -48,14 +51,16 @@ impl Hugepage {
             .get(&page_size)
             .map(|limit| format!("pagesize={},size={}", page_size.get_bytes(), limit))
             .context("failed to get hugepage option")?;
-        let base_name = get_base_name(mount.source.clone())?
+        let base_name = get_base_name(get_mount_path(mount.source()).clone())?
             .into_string()
             .map_err(|e| anyhow!("failed to convert to string{:?}", e))?;
         let mut mount = mount.clone();
         // Set the mount source path to a path that resides inside the VM
-        mount.source = format!("{}{}{}", EPHEMERAL_PATH, "/", base_name);
+        mount.set_source(Some(
+            format!("{}{}{}", EPHEMERAL_PATH, "/", base_name).into(),
+        ));
         // Set the mount type to "bind"
-        mount.r#type = BIND.to_string();
+        mount.set_typ(Some(BIND.to_string()));
 
         // Create a storage struct so that kata agent is able to create
         // hugetlbfs backed volume inside the VM
@@ -63,7 +68,7 @@ impl Hugepage {
             driver: KATA_EPHEMERAL_VOLUME_TYPE.to_string(),
             source: NODEV.to_string(),
             fs_type: HUGETLBFS.to_string(),
-            mount_point: mount.source.clone(),
+            mount_point: get_mount_path(mount.source()).clone(),
             options: vec![option],
             ..Default::default()
         };
@@ -99,14 +104,14 @@ impl Volume for Hugepage {
 }
 
 pub(crate) fn get_huge_page_option(m: &oci::Mount) -> Result<Option<Vec<String>>> {
-    if m.source.is_empty() {
+    if m.source().is_none() {
         return Err(anyhow!("empty mount source"));
     }
     let file = File::open(PROC_MOUNTS_FILE).context("failed open file")?;
     let reader = BufReader::new(file);
-    for line in reader.lines().flatten() {
+    for line in reader.lines().map_while(Result::ok) {
         let items: Vec<&str> = line.split(' ').collect();
-        if m.source == items[1] && items[2] == HUGETLBFS {
+        if get_mount_path(m.source()).as_str() == items[1] && items[2] == HUGETLBFS {
             let fs_options: Vec<&str> = items[3].split(',').collect();
             return Ok(Some(
                 fs_options
@@ -122,21 +127,27 @@ pub(crate) fn get_huge_page_option(m: &oci::Mount) -> Result<Option<Vec<String>>
 // TODO add hugepage limit to sandbox memory once memory hotplug is enabled
 // https://github.com/kata-containers/kata-containers/issues/5880
 pub(crate) fn get_huge_page_limits_map(spec: &oci::Spec) -> Result<HashMap<PageSize, Limit>> {
-    let mut hugepage_limits_map: HashMap<PageSize, Limit> = HashMap::new();
-    if let Some(l) = &spec.linux {
-        if let Some(r) = &l.resources {
-            let hugepage_limits = r.hugepage_limits.clone();
-            for hugepage_limit in hugepage_limits {
-                // the pagesize send from oci spec is MB or GB, change it to Mi and Gi
-                let page_size = hugepage_limit.page_size.replace('B', "i");
-                let page_size = Byte::from_str(page_size)
-                    .context("failed to create Byte object from String")?;
-                hugepage_limits_map.insert(page_size, hugepage_limit.limit);
-            }
-            return Ok(hugepage_limits_map);
-        }
-        return Ok(hugepage_limits_map);
-    }
+    let hugepage_limits_map = spec
+        .linux()
+        .as_ref()
+        .and_then(|linux| linux.resources().as_ref())
+        .map(|resources| {
+            resources
+                .hugepage_limits()
+                .clone()
+                .unwrap_or_default()
+                .into_iter()
+                .map(|hugepage_limit| {
+                    // the pagesize send from oci spec is MB or GB, change it to Mi and Gi
+                    let page_size_str = hugepage_limit.page_size().replace('B', "i");
+                    let page_size = Byte::from_str(page_size_str)
+                        .context("failed to create Byte object from String")?;
+                    Ok((page_size, hugepage_limit.limit() as u64))
+                })
+                .collect::<Result<HashMap<_, _>>>()
+        })
+        .unwrap_or_else(|| Ok(HashMap::new()))?;
+
     Ok(hugepage_limits_map)
 }
 
@@ -157,15 +168,18 @@ fn get_page_size(fs_options: Vec<String>) -> Result<Byte> {
 
 #[cfg(test)]
 mod tests {
-
-    use std::{collections::HashMap, fs};
+    use super::*;
+    use std::{collections::HashMap, fs, path::PathBuf};
 
     use crate::volume::hugepage::{get_page_size, HUGETLBFS, NODEV};
 
     use super::{get_huge_page_limits_map, get_huge_page_option};
     use byte_unit::Byte;
     use nix::mount::{mount, umount, MsFlags};
-    use oci::{Linux, LinuxHugepageLimit, LinuxResources};
+    use oci::{
+        LinuxBuilder, LinuxHugepageLimit, LinuxHugepageLimitBuilder, LinuxResourcesBuilder,
+        SpecBuilder,
+    };
     use test_utils::skip_if_not_root;
 
     #[test]
@@ -173,22 +187,28 @@ mod tests {
         let format_sizes = ["1GB", "2MB"];
         let mut huge_page_limits: Vec<LinuxHugepageLimit> = vec![];
         for format_size in format_sizes {
-            huge_page_limits.push(LinuxHugepageLimit {
-                page_size: format_size.to_string(),
-                limit: 100000,
-            });
+            let hugetlb = LinuxHugepageLimitBuilder::default()
+                .page_size(format_size.to_string())
+                .limit(100000)
+                .build()
+                .unwrap();
+            huge_page_limits.push(hugetlb);
         }
 
-        let spec = oci::Spec {
-            linux: Some(Linux {
-                resources: Some(LinuxResources {
-                    hugepage_limits: huge_page_limits,
-                    ..Default::default()
-                }),
-                ..Default::default()
-            }),
-            ..Default::default()
-        };
+        let spec = SpecBuilder::default()
+            .linux(
+                LinuxBuilder::default()
+                    .resources(
+                        LinuxResourcesBuilder::default()
+                            .hugepage_limits(huge_page_limits)
+                            .build()
+                            .unwrap(),
+                    )
+                    .build()
+                    .unwrap(),
+            )
+            .build()
+            .unwrap();
 
         assert!(get_huge_page_limits_map(&spec).is_ok());
 
@@ -214,10 +234,9 @@ mod tests {
                 Some(format!("pagesize={}", format_size).as_str()),
             )
             .unwrap();
-            let mount = oci::Mount {
-                source: dst.to_str().unwrap().to_string(),
-                ..Default::default()
-            };
+            let mut mount = oci::Mount::default();
+            mount.set_source(Some(PathBuf::from(dst.to_str().unwrap())));
+
             let option = get_huge_page_option(&mount).unwrap().unwrap();
             let page_size = get_page_size(option).unwrap();
             assert_eq!(page_size, Byte::from_str(format_size).unwrap());

@@ -17,14 +17,15 @@ use agent::Agent;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::device::device_manager::DeviceManager;
+use kata_sys_util::mount::{get_mount_options, get_mount_path, get_mount_type};
 use tokio::sync::RwLock;
 
 use super::Volume;
-use crate::share_fs::{MountedInfo, ShareFs, ShareFsVolumeConfig};
-use kata_types::mount;
-
 use crate::share_fs::DEFAULT_KATA_GUEST_SANDBOX_DIR;
 use crate::share_fs::PASSTHROUGH_FS_DIR;
+use crate::share_fs::{MountedInfo, ShareFs, ShareFsVolumeConfig};
+use kata_types::mount;
+use oci_spec::runtime as oci;
 
 const SYS_MOUNT_PREFIX: [&str; 2] = ["/proc", "/sys"];
 
@@ -49,7 +50,12 @@ impl ShareFsVolume {
         agent: Arc<dyn Agent>,
     ) -> Result<Self> {
         // The file_name is in the format of "sandbox-{uuid}-{file_name}"
-        let file_name = Path::new(&m.source).file_name().unwrap().to_str().unwrap();
+        let source_path = get_mount_path(m.source());
+        let file_name = Path::new(&source_path)
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap();
         let file_name = generate_mount_path("sandbox", file_name);
 
         let mut volume = Self {
@@ -59,11 +65,11 @@ impl ShareFsVolume {
         };
         match share_fs {
             None => {
-                let src = match std::fs::canonicalize(&m.source) {
+                let src = match std::fs::canonicalize(&source_path) {
                     Err(err) => {
                         return Err(anyhow!(format!(
                             "failed to canonicalize file {} {:?}",
-                            &m.source, err
+                            &source_path, err
                         )))
                     }
                     Ok(src) => src,
@@ -82,7 +88,7 @@ impl ShareFsVolume {
                     debug!(
                         sl!(),
                         "copy local file {:?} to guest {:?}",
-                        &m.source,
+                        &source_path,
                         dest.clone()
                     );
 
@@ -121,12 +127,12 @@ impl ShareFsVolume {
                     })?;
 
                     // append oci::Mount structure to volume mounts
-                    volume.mounts.push(oci::Mount {
-                        destination: m.destination.clone(),
-                        r#type: "bind".to_string(),
-                        source: dest.clone(),
-                        options: m.options.clone(),
-                    })
+                    let mut oci_mount = oci::Mount::default();
+                    oci_mount.set_destination(m.destination().clone());
+                    oci_mount.set_typ(Some("bind".to_string()));
+                    oci_mount.set_source(Some(PathBuf::from(&dest)));
+                    oci_mount.set_options(m.options().clone());
+                    volume.mounts.push(oci_mount);
                 } else {
                     // If not, we can ignore it. Let's issue a warning so that the user knows.
                     warn!(
@@ -139,7 +145,7 @@ impl ShareFsVolume {
                 let share_fs_mount = share_fs.get_share_fs_mount();
                 let mounted_info_set = share_fs.mounted_info_set();
                 let mut mounted_info_set = mounted_info_set.lock().await;
-                if let Some(mut mounted_info) = mounted_info_set.get(&m.source).cloned() {
+                if let Some(mut mounted_info) = mounted_info_set.get(&source_path).cloned() {
                     // Mounted at least once
                     let guest_path = mounted_info
                         .guest_path
@@ -168,24 +174,25 @@ impl ShareFsVolume {
                     } else {
                         mounted_info.rw_ref_count += 1;
                     }
-                    mounted_info_set.insert(m.source.clone(), mounted_info);
+                    mounted_info_set.insert(source_path.clone(), mounted_info);
 
-                    volume.mounts.push(oci::Mount {
-                        destination: m.destination.clone(),
-                        r#type: "bind".to_string(),
-                        source: guest_path,
-                        options: m.options.clone(),
-                    })
+                    let mut oci_mount = oci::Mount::default();
+                    oci_mount.set_destination(m.destination().clone());
+                    oci_mount.set_typ(Some("bind".to_string()));
+                    oci_mount.set_source(Some(PathBuf::from(&guest_path)));
+                    oci_mount.set_options(m.options().clone());
+
+                    volume.mounts.push(oci_mount);
                 } else {
                     // Not mounted ever
                     let mount_result = share_fs_mount
                         .share_volume(&ShareFsVolumeConfig {
                             // The scope of shared volume is sandbox
                             cid: String::from(""),
-                            source: m.source.clone(),
+                            source: source_path.clone(),
                             target: file_name.clone(),
                             readonly,
-                            mount_options: m.options.clone(),
+                            mount_options: get_mount_options(m.options()).clone(),
                             mount: m.clone(),
                             is_rafs: false,
                         })
@@ -196,17 +203,18 @@ impl ShareFsVolume {
                             .context("convert guest path")?,
                         readonly,
                     );
-                    mounted_info_set.insert(m.source.clone(), mounted_info);
+                    mounted_info_set.insert(source_path.clone(), mounted_info);
                     // set storages for the volume
                     volume.storages = mount_result.storages;
 
                     // set mount for the volume
-                    volume.mounts.push(oci::Mount {
-                        destination: m.destination.clone(),
-                        r#type: "bind".to_string(),
-                        source: mount_result.guest_path,
-                        options: m.options.clone(),
-                    });
+                    let mut oci_mount = oci::Mount::default();
+                    oci_mount.set_destination(m.destination().clone());
+                    oci_mount.set_typ(Some("bind".to_string()));
+                    oci_mount.set_source(Some(PathBuf::from(&mount_result.guest_path)));
+                    oci_mount.set_options(m.options().clone());
+
+                    volume.mounts.push(oci_mount);
                 }
             }
         }
@@ -235,22 +243,24 @@ impl Volume for ShareFsVolume {
         for m in self.mounts.iter() {
             let (host_source, mut mounted_info) = match mounted_info_set
                 .iter()
-                .find(|entry| entry.1.guest_path.as_os_str().to_str().unwrap() == m.source)
+                .find(|entry| {
+                    entry.1.guest_path.as_os_str().to_str().unwrap() == get_mount_path(m.source())
+                })
                 .map(|entry| (entry.0.to_owned(), entry.1.clone()))
             {
                 Some(entry) => entry,
                 None => {
                     warn!(
                         sl!(),
-                        "The mounted info for guest path {} not found", m.source
+                        "The mounted info for guest path {} not found",
+                        &get_mount_path(m.source())
                     );
                     continue;
                 }
             };
 
             let old_readonly = mounted_info.readonly();
-
-            if m.options.iter().any(|opt| *opt == "ro") {
+            if get_mount_options(m.options()).contains(&"ro".to_owned()) {
                 mounted_info.ro_ref_count -= 1;
             } else {
                 mounted_info.rw_ref_count -= 1;
@@ -298,9 +308,10 @@ impl Volume for ShareFsVolume {
 }
 
 pub(crate) fn is_share_fs_volume(m: &oci::Mount) -> bool {
-    (m.r#type == "bind" || m.r#type == mount::KATA_EPHEMERAL_VOLUME_TYPE)
-        && !is_host_device(&m.destination)
-        && !is_system_mount(&m.source)
+    (get_mount_type(m.typ()).as_str() == "bind"
+        || get_mount_type(m.typ()).as_str() == mount::KATA_EPHEMERAL_VOLUME_TYPE)
+        && !is_host_device(&get_mount_path(&Some(m.destination().clone())))
+        && !is_system_mount(&get_mount_path(m.source()))
 }
 
 fn is_host_device(dest: &str) -> bool {

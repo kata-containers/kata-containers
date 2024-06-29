@@ -17,14 +17,15 @@ pub mod direct_volumes;
 
 use std::{sync::Arc, vec::Vec};
 
-use anyhow::{Context, Result};
-use async_trait::async_trait;
-use tokio::sync::RwLock;
-
 use self::hugepage::{get_huge_page_limits_map, get_huge_page_option};
 use crate::{share_fs::ShareFs, volume::block_volume::is_block_volume};
 use agent::Agent;
+use anyhow::{Context, Result};
+use async_trait::async_trait;
 use hypervisor::device::device_manager::DeviceManager;
+use kata_sys_util::mount::get_mount_options;
+use oci_spec::runtime as oci;
+use tokio::sync::RwLock;
 
 const BIND: &str = "bind";
 
@@ -61,11 +62,11 @@ impl VolumeResource {
         agent: Arc<dyn Agent>,
     ) -> Result<Vec<Arc<dyn Volume>>> {
         let mut volumes: Vec<Arc<dyn Volume>> = vec![];
-        let oci_mounts = &spec.mounts;
+        let oci_mounts = &spec.mounts().clone().unwrap_or_default();
         info!(sl!(), " oci mount is : {:?}", oci_mounts.clone());
         // handle mounts
         for m in oci_mounts {
-            let read_only = m.options.iter().any(|opt| opt == "ro");
+            let read_only = get_mount_options(m.options()).iter().any(|opt| opt == "ro");
             let volume: Arc<dyn Volume> = if shm_volume::is_shm_volume(m) {
                 let shm_size = shm_volume::DEFAULT_SHM_SIZE;
                 Arc::new(

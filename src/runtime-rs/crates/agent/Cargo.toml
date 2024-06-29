@@ -25,7 +25,7 @@ nix = "0.24.2"
 
 kata-types = { path = "../../../libs/kata-types"}
 logging = { path = "../../../libs/logging"}
-oci = { path = "../../../libs/oci" }
+oci-spec = { git = "https://github.com/containers/oci-spec-rs.git", rev = "da761c5", features = ["runtime"] }
 protocols = { path = "../../../libs/protocols", features=["async"] }
 
 [features]

@@ -21,6 +21,7 @@ use kata_types::config::hypervisor::{
 };
 use kata_types::mount::Mount;
 use nix::sys::stat::{self, SFlag};
+use oci_spec::runtime as oci;
 use std::fs;
 use tokio::sync::RwLock;
 
@@ -99,9 +100,7 @@ impl BlockRootfs {
         Ok(Self {
             guest_path: container_path.clone(),
             device_id,
-            mount: oci::Mount {
-                ..Default::default()
-            },
+            mount: oci::Mount::default(),
             storage: Some(storage),
         })
     }

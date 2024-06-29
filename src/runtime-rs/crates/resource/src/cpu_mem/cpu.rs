@@ -4,17 +4,17 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use anyhow::{Context, Ok, Result};
+use hypervisor::Hypervisor;
+use kata_types::{config::TomlConfig, cpu::LinuxContainerCpuResources};
+use oci::LinuxCpu;
+use oci_spec::runtime as oci;
 use std::{
     cmp,
     collections::{HashMap, HashSet},
     convert::TryFrom,
     sync::Arc,
 };
-
-use anyhow::{Context, Ok, Result};
-use hypervisor::Hypervisor;
-use kata_types::{config::TomlConfig, cpu::LinuxContainerCpuResources};
-use oci::LinuxCpu;
 use tokio::sync::RwLock;
 
 use crate::ResourceUpdateOp;

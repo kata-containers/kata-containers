@@ -30,7 +30,8 @@ common = { path = "./common" }
 kata-types = { path = "../../../libs/kata-types" }
 kata-sys-util = { path = "../../../libs/kata-sys-util" }
 logging = { path = "../../../libs/logging"}
-oci = { path = "../../../libs/oci" }
+runtime-spec = { path = "../../../libs/runtime-spec" }
+oci-spec = { git = "https://github.com/containers/oci-spec-rs.git", rev = "da761c5", features = ["runtime"] }
 shim-interface = { path = "../../../libs/shim-interface" }
 persist = { path = "../persist" }
 hypervisor = { path = "../hypervisor" }

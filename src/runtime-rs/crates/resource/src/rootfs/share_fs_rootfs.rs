@@ -6,16 +6,16 @@
 
 use std::sync::Arc;
 
+use super::{Rootfs, ROOTFS};
+use crate::share_fs::{ShareFs, ShareFsRootfsConfig};
 use agent::Storage;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use hypervisor::device::device_manager::DeviceManager;
 use kata_sys_util::mount::{umount_timeout, Mounter};
 use kata_types::mount::Mount;
+use oci_spec::runtime as oci;
 use tokio::sync::RwLock;
-
-use super::{Rootfs, ROOTFS};
-use crate::share_fs::{ShareFs, ShareFsRootfsConfig};
 
 pub(crate) struct ShareFsRootfs {
     guest_path: String,

@@ -6,6 +6,8 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
+use oci_spec::runtime as oci;
+use runtime_spec as spec;
 
 #[derive(Clone)]
 pub struct SandboxNetworkEnv {
@@ -28,7 +30,7 @@ pub trait Sandbox: Send + Sync {
         &self,
         dns: Vec<String>,
         spec: &oci::Spec,
-        state: &oci::State,
+        state: &spec::State,
         network_env: SandboxNetworkEnv,
     ) -> Result<()>;
     async fn stop(&self) -> Result<()>;
