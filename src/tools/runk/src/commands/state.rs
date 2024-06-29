@@ -7,7 +7,7 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use libcontainer::{container::Container, status::Status};
 use liboci_cli::State;
-use oci::ContainerState;
+use runtime_spec::ContainerState;
 use serde::{Deserialize, Serialize};
 use slog::{info, Logger};
 use std::path::{Path, PathBuf};
@@ -62,7 +62,7 @@ pub fn get_container_state_name(state: ContainerState) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use oci::ContainerState;
+    use runtime_spec::ContainerState;
 
     #[test]
     fn test_get_container_state_name() {

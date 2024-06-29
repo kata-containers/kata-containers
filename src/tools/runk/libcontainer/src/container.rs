@@ -15,8 +15,8 @@ use nix::{
     sys::signal::SIGKILL,
     unistd::{chdir, unlink, Pid},
 };
-use oci::{ContainerState, State as OCIState};
 use procfs;
+use runtime_spec::{ContainerState, State as OCIState};
 use rustjail::cgroups::fs::Manager as CgroupManager;
 use rustjail::{
     container::{BaseContainer, LinuxContainer, EXEC_FIFO_FILENAME},
@@ -59,15 +59,18 @@ impl Container {
             .as_ref()
             .ok_or_else(|| anyhow!("spec config was not present"))?;
         let linux = spec
-            .linux
+            .linux()
             .as_ref()
             .ok_or_else(|| anyhow!("linux config was not present"))?;
-        let cpath = if linux.cgroups_path.is_empty() {
+        let cpath = if linux.cgroups_path().is_none() {
             id.to_string()
         } else {
             linux
-                .cgroups_path
+                .cgroups_path()
                 .clone()
+                .unwrap_or_default()
+                .display()
+                .to_string()
                 .trim_start_matches('/')
                 .to_string()
         };
@@ -142,13 +145,16 @@ impl Container {
                 .to_str()
                 .ok_or_else(|| anyhow!("invalid bundle path"))?
                 .to_string(),
-            annotations: spec.annotations.clone(),
+            annotations: spec.annotations().clone().unwrap_or_default(),
         };
 
-        if let Some(hooks) = spec.hooks.as_ref() {
+        if let Some(hooks) = spec.hooks().as_ref() {
             info!(&logger, "Poststop Hooks");
             let mut poststop_hookstates = HookStates::new();
-            poststop_hookstates.execute_hooks(&hooks.poststop, Some(oci_state.clone()))?;
+            poststop_hookstates.execute_hooks(
+                &hooks.poststop().clone().unwrap_or_default(),
+                Some(oci_state.clone()),
+            )?;
         }
 
         match oci_state.status {
@@ -281,12 +287,10 @@ impl ContainerLauncher {
     /// Generate rustjail::Process from OCI::Process
     fn get_process(&self, logger: &Logger) -> Result<Process> {
         let spec = self.runner.config.spec.as_ref().unwrap();
-        if spec.process.is_some() {
+        if spec.process().is_some() {
             Ok(Process::new(
                 logger,
-                spec.process
-                    .as_ref()
-                    .ok_or_else(|| anyhow!("process config was not present in the spec file"))?,
+                spec.process().as_ref().unwrap(),
                 // rustjail::LinuxContainer use the exec_id to identify processes in a container,
                 // so we can get the spawned process by ctr.get_process(exec_id) later.
                 // Since LinuxContainer is temporarily created to spawn one process in each runk invocation,
