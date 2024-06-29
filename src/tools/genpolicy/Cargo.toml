@@ -47,7 +47,7 @@ serde-transcode = "1.1.1"
 tokio = {version = "1.33.0", features = ["rt-multi-thread"]}
 
 # OCI container specs.
-oci = { path = "../../libs/oci" }
+oci-spec = { git = "https://github.com/containers/oci-spec-rs.git", rev = "da761c5", features = ["runtime"] }
 
 # Kata Agent protocol.
 protocols = { path = "../../libs/protocols", features = ["with-serde"] }
