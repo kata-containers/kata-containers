@@ -21,6 +21,7 @@ TARGET_ROOTFS         := $(ROOTFS_BUILD_DEST)/$(DISTRO)_rootfs
 TARGET_ROOTFS_MARKER  := $(ROOTFS_BUILD_DEST)/.$(DISTRO)$(ROOTFS_MARKER_SUFFIX)
 TARGET_IMAGE          := $(IMAGES_BUILD_DEST)/kata-containers.img
 TARGET_INITRD         := $(IMAGES_BUILD_DEST)/kata-containers-initrd.img
+ARTEFACT_VERSION      ?= none
 
 VERSION_FILE   := ./VERSION
 VERSION        := $(shell grep -v ^\# $(VERSION_FILE) 2>/dev/null || echo "unknown")
@@ -95,7 +96,7 @@ rootfs-%: $(ROOTFS_BUILD_DEST)/.%$(ROOTFS_MARKER_SUFFIX)
 $(ROOTFS_BUILD_DEST)/.%$(ROOTFS_MARKER_SUFFIX):: rootfs-builder/%
 	mkdir -p $(ROOTFS_BUILD_DEST)
 	$(call silent_run,Creating rootfs for "$*",$(ROOTFS_BUILDER) -o $(VERSION_COMMIT) -r $(ROOTFS_BUILD_DEST)/$*_rootfs $*)
-	@touch $@
+	@echo "$(ARTEFACT_VERSION)" >$@
 
 # To generate a dracut rootfs, we first generate a dracut initrd and then
 # extract it in a local folder.
@@ -106,7 +107,7 @@ ifeq (dracut,$(BUILD_METHOD))
 $(ROOTFS_BUILD_DEST)/.dracut$(ROOTFS_MARKER_SUFFIX): $(TARGET_INITRD)
 	mkdir -p $(TARGET_ROOTFS)
 	(cd $(TARGET_ROOTFS); cat $< | cpio --extract --preserve-modification-time --make-directories)
-	@touch $@
+	@echo "$(ARTEFACT_VERSION)" >$@
 endif
 
 image-%: $(IMAGES_BUILD_DEST)/kata-containers-image-%.img
@@ -125,6 +126,16 @@ $(IMAGES_BUILD_DEST)/kata-containers-initrd-%.img: rootfs-%
 
 .PHONY: rootfs
 rootfs: $(TARGET_ROOTFS_MARKER)
+
+# Invalidate rootfs unless artefact version is defined and matches to saved in marker
+.PHONY: invalidate-rootfs
+invalidate-rootfs:
+	@if [ "$(ARTEFACT_VERSION)" = "none" -o "$(ARTEFACT_VERSION)" != "$$(cat $(TARGET_ROOTFS_MARKER))" ] ; then \
+		echo "Invalidate rootfs $(TARGET_ROOTFS)" ; \
+		rm -f $(TARGET_ROOTFS_MARKER) ; \
+	else \
+		echo "Preserve rootfs $(TARGET_ROOTFS)" ; \
+	fi
 
 .PHONY: image
 image: $(TARGET_IMAGE)
