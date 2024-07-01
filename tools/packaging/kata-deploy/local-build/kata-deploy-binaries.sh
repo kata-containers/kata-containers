@@ -299,9 +299,9 @@ install_image() {
 	if [ "${variant}" == "confidential" ]; then
 		# For the confidential image we depend on the kernel built in order to ensure that
 		# measured boot is used
-		latest_artefacts+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
-		latest_artefacts+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
-		latest_artefacts+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
 	fi
 
 	latest_builder_image=""
@@ -367,9 +367,9 @@ install_initrd() {
 	if [ "${variant}" == "confidential" ]; then
 		# For the confidential initrd we depend on the kernel built in order to ensure that
 		# measured boot is used
-		latest_artefacts+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
-		latest_artefacts+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
-		latest_artefacts+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
 	fi
 
 	latest_builder_image=""
