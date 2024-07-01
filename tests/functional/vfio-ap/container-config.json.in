@@ -1,0 +1,33 @@
+#
+# Copyright (c) 2024 IBM Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+{
+    "metadata": {
+      "name": "test-container",
+      "namespace": "default"
+    },
+    "image": {
+      "image": "$IMAGE_NAME"
+    },
+    "command": [
+      "sh",
+      "-c",
+      "sleep 3600"
+    ],
+    "mounts": [],
+    "log_path": "test-container.log",
+    "linux": {
+      "security_context": {
+        "privileged": true
+      }
+    },
+    "devices": [
+      {
+        "container_path": "/dev/vfio/$DEVICE_INDEX",
+        "host_path": "/dev/vfio/$DEVICE_INDEX",
+        "permissions": "rwm"
+      }
+    ]
+  }

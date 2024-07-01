@@ -933,7 +933,11 @@ async fn vfio_ap_device_handler(
     for apqn in device.options.iter() {
         wait_for_ap_device(sandbox, ap::Address::from_str(apqn)?).await?;
     }
-    Ok(Default::default())
+    let dev_update = Some(DevUpdate::new(Z9_CRYPT_DEV_PATH, Z9_CRYPT_DEV_PATH)?);
+    Ok(SpecUpdate {
+        dev: dev_update,
+        pci: Vec::new(),
+    })
 }
 
 #[cfg(not(target_arch = "s390x"))]

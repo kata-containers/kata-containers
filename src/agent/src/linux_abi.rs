@@ -71,6 +71,7 @@ cfg_if! {
         pub const CCW_ROOT_BUS_PATH: &str = "/devices/css0";
         pub const AP_ROOT_BUS_PATH: &str = "/devices/ap";
         pub const AP_SCANS_PATH: &str = "/sys/bus/ap/scans";
+        pub const Z9_CRYPT_DEV_PATH: &str = "/dev/z90crypt";
     }
 }
 
