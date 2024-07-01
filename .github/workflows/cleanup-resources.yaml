@@ -7,7 +7,6 @@ on:
 jobs:
   cleanup-resources:
     runs-on: ubuntu-latest
-    secrets: inherit
     steps:
       - name: Cleanup resources
         run: python3 tests/cleanup_resources.py
