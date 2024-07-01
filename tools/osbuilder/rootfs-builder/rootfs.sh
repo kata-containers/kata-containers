@@ -651,7 +651,7 @@ EOF
 				detect_rust_version || \
 					die "Could not detect the required rust version for AGENT_VERSION='${AGENT_VERSION:-main}'."
 			fi
-			bash ${script_dir}/../../../ci/install_rust.sh ${RUST_VERSION}
+			bash ${script_dir}/../../../tests/install_rust.sh ${RUST_VERSION}
 		fi
 		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
 

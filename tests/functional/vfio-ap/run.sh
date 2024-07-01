@@ -26,19 +26,8 @@ test_category="[kata][vfio-ap][containerd]"
 
 trap cleanup EXIT
 
-# Check if the given function exists.
-function_exists() {
-    [[ "$(type -t $1)" == "function" ]]
-}
-
-if ! function_exists get_test_version; then
-    source "${script_path}/../../.ci/lib.sh"
-fi
-
 # Prevent the program from exiting on error
 trap - ERR
-image_version=$(get_test_version "docker_images.registry_ibm.version")
-registry_image=$(get_test_version "docker_images.registry_ibm.registry_url"):"${image_version}"
 
 setup_config_file() {
     local target_item=$1

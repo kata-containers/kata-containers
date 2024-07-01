@@ -11,7 +11,7 @@ kubernetes_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=1091
 source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
 # shellcheck disable=1091
-source "${kubernetes_dir}/../../../ci/lib.sh"
+source "${kubernetes_dir}/../../../tests/common.bash"
 
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 # Where the trustee (includes kbs) sources will be cloned
