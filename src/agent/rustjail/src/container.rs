@@ -151,7 +151,7 @@ lazy_static! {
     };
 
     pub static ref DEFAULT_DEVICES: Vec<LinuxDevice> = {
-        vec![
+        let mut devices = vec![
             LinuxDevice {
                 path: "/dev/null".to_string(),
                 r#type: "c".to_string(),
@@ -206,7 +206,23 @@ lazy_static! {
                 uid: Some(0xffffffff),
                 gid: Some(0xffffffff),
             },
-        ]
+        ];
+        
+        let sev_guest_path = "/dev/sev-guest";
+        if let Ok(sev_guest_attr) = fs::metadata(sev_guest_path) {
+            let sev_guest_devid = sev_guest_attr.rdev();
+            devices.push(LinuxDevice {
+                path: sev_guest_path.to_string(),
+                r#type: "c".to_string(),
+                major: stat::major(sev_guest_devid) as i64,
+                minor: stat::minor(sev_guest_devid) as i64,
+                file_mode: Some(0o666),
+                uid: Some(sev_guest_attr.uid()),
+                gid: Some(sev_guest_attr.gid()),
+            });
+        };
+
+        devices
     };
 
     pub static ref SYSTEMD_CGROUP_PATH_FORMAT:Regex = Regex::new(r"^[\w\-.]*:[\w\-.]*:[\w\-.]*$").unwrap();
