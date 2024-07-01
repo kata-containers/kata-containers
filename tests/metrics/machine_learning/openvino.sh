@@ -42,7 +42,7 @@ function help(){
 cat << EOF
 Usage: $0
    Description:
-       Runs onednn benchmark.
+       Runs openvino benchmark.
 EOF
 }
 
