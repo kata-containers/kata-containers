@@ -36,7 +36,7 @@ build_initrd() {
 	info "Build initrd"
 	info "initrd os: $os_name"
 	info "initrd os version: $os_version"
-	make initrd \
+	make invalidate-rootfs initrd \
 		DISTRO="$os_name" \
 		DEBUG="${DEBUG:-}" \
 		OS_VERSION="${os_version}" \
@@ -46,6 +46,7 @@ build_initrd() {
 		AGENT_INIT="yes" \
 		AGENT_POLICY="${AGENT_POLICY:-}" \
 		PULL_TYPE="${PULL_TYPE:-default}" \
+		ARTEFACT_VERSION="${artefact_version}" \
 		COCO_GUEST_COMPONENTS_TARBALL="${COCO_GUEST_COMPONENTS_TARBALL:-}" \
 		PAUSE_IMAGE_TARBALL="${PAUSE_IMAGE_TARBALL:-}"
 	mv "kata-containers-initrd.img" "${install_dir}/${artifact_name}"
@@ -59,7 +60,7 @@ build_image() {
 	info "Build image"
 	info "image os: $os_name"
 	info "image os version: $os_version"
-	make image \
+	make invalidate-rootfs image \
 		DISTRO="${os_name}" \
 		DEBUG="${DEBUG:-}" \
 		USE_DOCKER="1" \
@@ -68,6 +69,7 @@ build_image() {
 		AGENT_TARBALL="${AGENT_TARBALL}" \
 		AGENT_POLICY="${AGENT_POLICY:-}" \
 		PULL_TYPE="${PULL_TYPE:-default}" \
+		ARTEFACT_VERSION="${artefact_version}" \
 		COCO_GUEST_COMPONENTS_TARBALL="${COCO_GUEST_COMPONENTS_TARBALL:-}" \
 		PAUSE_IMAGE_TARBALL="${PAUSE_IMAGE_TARBALL:-}"
 	mv -f "kata-containers.img" "${install_dir}/${artifact_name}"
@@ -96,6 +98,7 @@ Options:
  --prefix=${prefix}
  --destdir=${destdir}
  --image_initrd_suffix=${image_initrd_suffix}
+ --artefact_version=${artefact_version}
 EOF
 
 	exit "${return_code}"
@@ -107,6 +110,7 @@ main() {
 	prefix="/opt/kata"
 	image_suffix=""
 	image_initrd_suffix=""
+	artefact_version=""
 	builddir="${PWD}"
 	while getopts "h-:" opt; do
 		case "$opt" in
@@ -126,6 +130,9 @@ main() {
 				;;
 			image_initrd_suffix=*)
 				image_initrd_suffix=${OPTARG#*=}
+				;;
+			artefact_version=*)
+				artefact_version=${OPTARG#*=}
 				;;
 			prefix=*)
 				prefix=${OPTARG#*=}

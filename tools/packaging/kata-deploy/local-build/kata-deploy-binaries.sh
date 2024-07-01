@@ -332,7 +332,8 @@ install_image() {
 	export AGENT_TARBALL=$(get_agent_tarball_path)
 	export AGENT_POLICY=yes
 
-	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
+	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --artefact_version="${latest_artefact}" \
+	    --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
 
 #Install guest image for confidential guests
@@ -402,7 +403,8 @@ install_initrd() {
 	export AGENT_TARBALL=$(get_agent_tarball_path)
 	export AGENT_POLICY=yes
 
-	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
+	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --artefact_version="${latest_artefact}" \
+	    --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
 
 #Install guest initrd for confidential guests

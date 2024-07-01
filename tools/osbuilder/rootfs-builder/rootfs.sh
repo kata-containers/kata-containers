@@ -398,12 +398,6 @@ build_rootfs_distro()
 		trap error_handler ERR
 	fi
 
-	if [ -d "${ROOTFS_DIR}" ] && [ "${ROOTFS_DIR}" != "/" ]; then
-		rm -rf "${ROOTFS_DIR}"/*
-	else
-		mkdir -p ${ROOTFS_DIR}
-	fi
-
 	if [ "${SELINUX}" == "yes" ]; then
 		if [ "${AGENT_INIT}" == "yes" ]; then
 			die "Guest SELinux with the agent init is not supported yet"
@@ -414,6 +408,13 @@ build_rootfs_distro()
 	fi
 
 	if [ -z "${USE_DOCKER}" ] && [ -z "${USE_PODMAN}" ]; then
+
+		if [ -d "${ROOTFS_DIR}" ] && [ "${ROOTFS_DIR}" != "/" ]; then
+			rm -rf "${ROOTFS_DIR}"/*
+		else
+			mkdir -p ${ROOTFS_DIR}
+		fi
+
 		info "build directly"
 		build_rootfs ${ROOTFS_DIR}
 	else
