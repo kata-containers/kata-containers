@@ -12,8 +12,16 @@ concurrency:
 
 name: Static checks self-hosted
 jobs:
-  build-checks:
+  skipper:
     if: ${{ contains(github.event.pull_request.labels.*.name, 'ok-to-test') }}
+    uses: ./.github/workflows/gatekeeper-skipper.yaml
+    with:
+      commit-hash: ${{ github.event.pull_request.head.sha }}
+      target-branch: ${{ github.event.pull_request.base.ref }}
+
+  build-checks:
+    needs: skipper
+    if: ${{ needs.skipper.outputs.skip_static != 'yes' }}
     strategy:
       fail-fast: false
       matrix:
