@@ -43,10 +43,6 @@ func NewCpusConfig(bootVcpus int32, maxVcpus int32) *CpusConfig {
 // but it doesn't guarantee that properties required by API are set
 func NewCpusConfigWithDefaults() *CpusConfig {
 	this := CpusConfig{}
-	var bootVcpus int32 = 1
-	this.BootVcpus = bootVcpus
-	var maxVcpus int32 = 1
-	this.MaxVcpus = maxVcpus
 	var kvmHyperv bool = false
 	this.KvmHyperv = &kvmHyperv
 	return &this
