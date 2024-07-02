@@ -657,8 +657,10 @@ impl AgentPolicy {
 
         substitute_env_variables(&mut process.Env);
         substitute_args_env_variables(&mut process.Args, &process.Env);
+
         c_settings.get_process_fields(&mut process);
-        process.NoNewPrivileges = !yaml_container.allow_privilege_escalation();
+        resource.get_process_fields(&mut process);
+        yaml_container.get_process_fields(&mut process);
 
         process
     }

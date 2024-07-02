@@ -32,7 +32,7 @@ pub fn get_process(privileged_container: bool, common: &policy::CommonData) -> p
         Env: Vec::new(),
         Cwd: "/".to_string(),
         Capabilities: capabilities,
-        NoNewPrivileges: true,
+        NoNewPrivileges: false,
     }
 }
 
