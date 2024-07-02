@@ -340,6 +340,11 @@ install_image_confidential() {
 	install_image "confidential"
 }
 
+#Install guest image for Mariner
+install_image_mariner() {
+	install_image "mariner"
+}
+
 #Install guest initrd
 install_initrd() {
 	local variant="${1:-}"
@@ -989,6 +994,7 @@ handle_build() {
 		install_firecracker
 		install_image
 		install_image_confidential
+		install_image_mariner
 		install_initrd
 		install_initrd_confidential
 		install_initrd_mariner
@@ -1057,6 +1063,8 @@ handle_build() {
 	rootfs-image) install_image ;;
 
 	rootfs-image-confidential) install_image_confidential ;;
+
+	rootfs-image-mariner) install_image_mariner ;;
 
 	rootfs-initrd) install_initrd ;;
 
