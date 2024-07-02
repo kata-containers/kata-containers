@@ -8,5 +8,24 @@ jobs:
   cleanup-resources:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Log into Azure
+        env:
+          AZ_APPID: ${{ secrets.AZ_APPID }}
+          AZ_PASSWORD: ${{ secrets.AZ_PASSWORD }}
+          AZ_TENANT_ID: ${{ secrets.AZ_TENANT_ID }}
+          AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
+        run: bash tests/integration/kubernetes/gha-run.sh login-azure
+
+      - name: Install Python dependencies
+        run: |
+          pip3 install --user --upgrade \
+            azure-identity==1.16.0 \
+            azure-mgmt-resource==23.0.1
+
       - name: Cleanup resources
+        env:
+          AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
+          CLEANUP_AFTER_HOURS: 6 # Clean up resources created more than this many hours ago.
         run: python3 tests/cleanup_resources.py
