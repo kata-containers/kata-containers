@@ -95,16 +95,30 @@ impl Handle {
         let mut new_link = None;
         if link.name() != iface.name {
             if let Ok(link) = self.find_link(LinkFilter::Name(iface.name.as_str())).await {
+                // Bring down interface if it is UP
+                if link.is_up() {
+                    self.enable_link(link.index(), false).await?;
+                }
+
                 // update the existing interface name with a temporary name, otherwise
                 // it would failed to udpate this interface with an existing name.
                 let mut request = self.handle.link().set(link.index());
                 request.message_mut().header = link.header.clone();
+                let link_name = link.name();
+                let temp_name = link_name.clone() + "_temp";
 
                 request
-                    .name(format!("{}_temp", link.name()))
-                    .up()
+                    .name(temp_name.clone())
                     .execute()
-                    .await?;
+                    .await
+                    .map_err(|err| {
+                        anyhow!(
+                            "Failed to rename interface {} to {}with error: {}",
+                            link_name,
+                            temp_name,
+                            err
+                        )
+                    })?;
 
                 new_link = Some(link);
             }
@@ -120,14 +134,33 @@ impl Handle {
             .arp(iface.raw_flags & libc::IFF_NOARP as u32 == 0)
             .up()
             .execute()
-            .await?;
+            .await
+            .map_err(|err| {
+                anyhow!(
+                    "Failure in LinkSetRequest for interface {}: {}",
+                    iface.name.as_str(),
+                    err
+                )
+            })?;
 
         // swap the updated iface's name.
         if let Some(nlink) = new_link {
             let mut request = self.handle.link().set(nlink.index());
             request.message_mut().header = nlink.header.clone();
 
-            request.name(link.name()).up().execute().await?;
+            request
+                .name(link.name())
+                .up()
+                .execute()
+                .await
+                .map_err(|err| {
+                    anyhow!(
+                        "Error swapping back interface name {} to {}: {}",
+                        nlink.name().as_str(),
+                        link.name(),
+                        err
+                    )
+                })?;
         }
 
         Ok(())
