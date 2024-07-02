@@ -17,8 +17,6 @@ image="${image:-instrumentisto/nmap:latest}"
 function install_dependencies() {
 	info "Installing the dependencies needed for running the docker smoke test"
 
-	install_docker
-
 	sudo -E docker pull "${image}"
 }
 

@@ -251,8 +251,6 @@ jobs:
         run: bash tests/functional/vfio/gha-run.sh run
 
   run-docker-tests:
-    # TODO: Transition to free runner (see #9940).
-    if: false
     strategy:
       # We can set this to true whenever we're 100% sure that
       # all the tests are not flaky, otherwise we'll fail them
@@ -262,7 +260,7 @@ jobs:
         vmm:
           - clh
           - qemu
-    runs-on: garm-ubuntu-2304-smaller
+    runs-on: ubuntu-22.04
     env:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
