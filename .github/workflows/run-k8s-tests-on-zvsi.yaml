@@ -28,8 +28,13 @@ jobs:
       fail-fast: false
       matrix:
         snapshotter:
+          - overlayfs
           - devmapper
           - nydus
+        vmm:
+          - qemu
+          - qemu-runtime-rs
+          - qemu-coco-dev
         k8s:
           - k3s
         include:
@@ -37,12 +42,23 @@ jobs:
             pull-type: default
             using-nfd: true
             deploy-cmd: configure-snapshotter
-            vmm: qemu
           - snapshotter: nydus
             pull-type: guest-pull
             using-nfd: false
             deploy-cmd: deploy-snapshotter
+        exclude:
+          - snapshotter: overlayfs
+            vmm: qemu
+          - snapshotter: overlayfs
             vmm: qemu-coco-dev
+          - snapshotter: devmapper
+            vmm: qemu-runtime-rs
+          - snapshotter: devmapper
+            vmm: qemu-coco-dev
+          - snapshotter: nydus
+            vmm: qemu
+          - snapshotter: nydus
+            vmm: qemu-runtime-rs
     runs-on: s390x-large
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
@@ -52,7 +68,7 @@ jobs:
       GH_PR_NUMBER: ${{ inputs.pr-number }}
       KATA_HOST_OS: "ubuntu"
       KATA_HYPERVISOR: ${{ matrix.vmm }}
-      KUBERNETES: "k3s"
+      KUBERNETES: ${{ matrix.k8s }}
       PULL_TYPE: ${{ matrix.pull-type }}
       SNAPSHOTTER: ${{ matrix.snapshotter }}
       USING_NFD: ${{ matrix.using-nfd }}
@@ -75,11 +91,18 @@ jobs:
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
+      - name: Set SNAPSHOTTER to empty if overlayfs
+        run: echo "SNAPSHOTTER=" >> $GITHUB_ENV
+        if: ${{ matrix.snapshotter == 'overlayfs' }}
+
       - name: Deploy ${{ matrix.k8s }}
         run: bash tests/integration/kubernetes/gha-run.sh deploy-k8s
 
+      # qemu-runtime-rs only works with overlayfs
+      # See: https://github.com/kata-containers/kata-containers/issues/10066
       - name: Configure the ${{ matrix.snapshotter }} snapshotter
         run: bash tests/integration/kubernetes/gha-run.sh ${{ matrix.deploy-cmd }}
+        if: ${{ matrix.snapshotter != 'overlayfs' }}
 
       - name: Deploy Kata
         timeout-minutes: 10
