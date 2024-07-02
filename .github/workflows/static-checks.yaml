@@ -40,6 +40,8 @@ jobs:
       instance: ubuntu-20.04
 
   build-checks-depending-on-kvm:
+    # TODO: Transition to free runner (see #9940).
+    if: false
     runs-on: garm-ubuntu-2004-smaller
     strategy:
       fail-fast: false

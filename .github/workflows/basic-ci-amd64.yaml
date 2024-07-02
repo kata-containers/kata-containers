@@ -15,6 +15,8 @@ on:
 
 jobs:
   run-cri-containerd:
+    # TODO: Transition to free runner (see #9940).
+    if: false
     strategy:
       # We can set this to true whenever we're 100% sure that
       # the all the tests are not flaky, otherwise we'll fail
@@ -57,6 +59,8 @@ jobs:
         run: bash tests/integration/cri-containerd/gha-run.sh run
 
   run-containerd-stability:
+    # TODO: Transition to free runner (see #9940).
+    if: false
     strategy:
       fail-fast: false
       matrix:
@@ -96,6 +100,8 @@ jobs:
         run: bash tests/stability/gha-run.sh run
 
   run-nydus:
+    # TODO: Transition to free runner (see #9940).
+    if: false
     strategy:
       # We can set this to true whenever we're 100% sure that
       # the all the tests are not flaky, otherwise we'll fail
@@ -138,6 +144,8 @@ jobs:
         run: bash tests/integration/nydus/gha-run.sh run
 
   run-runk:
+    # TODO: Transition to free runner (see #9940).
+    if: false
     runs-on: garm-ubuntu-2204-smaller
     env:
       CONTAINERD_VERSION: lts
@@ -177,6 +185,7 @@ jobs:
           - clh # cloud-hypervisor
           - qemu
     # TODO: enable me when https://github.com/kata-containers/kata-containers/issues/9763 is fixed
+    # TODO: Transition to free runner (see #9940).
     if: false
     runs-on: garm-ubuntu-2204-smaller
     env:
@@ -218,6 +227,7 @@ jobs:
           - qemu
     # TODO: enable with clh when https://github.com/kata-containers/kata-containers/issues/9764 is fixed
     # TODO: enable with qemu when https://github.com/kata-containers/kata-containers/issues/9851 is fixed
+    # TODO: Transition to free runner (see #9940).
     if: false
     runs-on: garm-ubuntu-2304
     env:
@@ -249,6 +259,8 @@ jobs:
         run: bash tests/functional/vfio/gha-run.sh run
 
   run-docker-tests:
+    # TODO: Transition to free runner (see #9940).
+    if: false
     strategy:
       # We can set this to true whenever we're 100% sure that
       # all the tests are not flaky, otherwise we'll fail them
@@ -290,6 +302,8 @@ jobs:
         run: bash tests/integration/docker/gha-run.sh run
 
   run-nerdctl-tests:
+    # TODO: Transition to free runner (see #9940).
+    if: false
     strategy:
       # We can set this to true whenever we're 100% sure that
       # all the tests are not flaky, otherwise we'll fail them
