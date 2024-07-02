@@ -82,7 +82,7 @@ strum_macros = "0.26.2"
 
 # Image pull/decrypt
 # Note: this is the last commit before an issue with whiteout causes problems with some tests
-image-rs = { git = "https://github.com/confidential-containers/guest-components", rev = "413295415d800481ddbf85aa6b0364de58bff4c9", default-features = true, optional = true }
+image-rs = { git = "https://github.com/stevenhorsman/cc-guest-components", rev = "f185c8881336ea458b60f2859139cc266e4a367f", default-features = true, optional = true }
 openssl = { version = "0.10.54", features = ["vendored"], optional = true }
 
 # Agent Policy
