@@ -1,7 +1,7 @@
 name: Cleanup dangling Azure resources
 on:
   schedule:
-    - cron: "0 */6 * * *"
+    - cron: "0 0 * * *"
   workflow_dispatch:
 
 jobs:
@@ -27,5 +27,5 @@ jobs:
       - name: Cleanup resources
         env:
           AZ_SUBSCRIPTION_ID: ${{ secrets.AZ_SUBSCRIPTION_ID }}
-          CLEANUP_AFTER_HOURS: 6 # Clean up resources created more than this many hours ago.
+          CLEANUP_AFTER_HOURS: 24 # Clean up resources created more than this many hours ago.
         run: python3 tests/cleanup_resources.py
