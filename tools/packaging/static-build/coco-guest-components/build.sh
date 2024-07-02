@@ -41,9 +41,13 @@ docker pull ${container_image} || \
 # Temp settings until we have a matching TEE_PLATFORM
 TEE_PLATFORM=""
 RESOURCE_PROVIDER="kbs,sev"
-ATTESTER="none"
 # snp-attester and tdx-attester crates require packages only available on x86
-[ "$(uname -m)" == "x86_64" ] && ATTESTER="snp-attester,tdx-attester"
+# se-attester crate requires packages only available on s390x
+case "$(uname -m)" in
+	x86_64) ATTESTER="snp-attester,tdx-attester" ;;
+	s390x) ATTESTER="se-attester" ;;
+	*) ATTESTER="none" ;;
+esac
 
 docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
