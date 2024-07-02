@@ -52,7 +52,9 @@ use nix::sys::{stat, statfs};
 use nix::unistd::{self, Pid};
 use rustjail::process::ProcessOperations;
 
-use crate::device::{add_devices, get_virtio_blk_pci_device_name, update_env_pci};
+use crate::device::{
+    add_devices, get_virtio_blk_pci_device_name, update_env_pci, wait_for_interface,
+};
 use crate::features::get_build_features;
 use crate::linux_abi::*;
 use crate::metrics::get_metrics;
@@ -121,6 +123,8 @@ const ERR_NO_SANDBOX_PIDNS: &str = "Sandbox does not have sandbox_pidns";
 // filesystem lock. Based on this, 5 seconds seems a resonable timeout period in case the lock is
 // not available.
 const IPTABLES_RESTORE_WAIT_SEC: u64 = 5;
+
+const IFACE_TYPE_VFIO: &str = "vfio";
 
 // Convenience function to obtain the scope logger.
 fn sl() -> slog::Logger {
@@ -914,6 +918,16 @@ impl agent_ttrpc::AgentService for AgentService {
             ttrpc::Code::INVALID_ARGUMENT,
             "empty update interface request",
         )?;
+
+        // It may be necessary to wait for the network interface to become available
+        // before configuring it. This is particularly true for VFIO devices, as
+        // the guest kernel may need additional time to recognize and initialize
+        // them as network interfaces.
+        if interface.type_() == IFACE_TYPE_VFIO {
+            wait_for_interface(&self.sandbox, interface.name())
+                .await
+                .map_ttrpc_err(|e| format!("interface not available: {:?}", e))?;
+        }
 
         self.sandbox
             .lock()

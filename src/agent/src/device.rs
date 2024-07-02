@@ -32,7 +32,10 @@ fn sl() -> slog::Logger {
     slog_scope::logger().new(o!("subsystem" => "device"))
 }
 
+// uevent subsystems
 const BLOCK: &str = "block";
+const NET: &str = "net";
+
 pub const DRIVER_9P_TYPE: &str = "9p";
 pub const DRIVER_VIRTIOFS_TYPE: &str = "virtio-fs";
 pub const DRIVER_BLK_PCI_TYPE: &str = "blk";
@@ -377,6 +380,32 @@ pub async fn wait_for_pci_device(
         .ok_or_else(|| anyhow!("Bad device path {:?} in uevent", &uev.devpath))?;
     let addr = pci::Address::from_str(addr)?;
     Ok(addr)
+}
+
+#[derive(Debug)]
+struct InterfaceMatcher {
+    interface: String,
+}
+
+impl InterfaceMatcher {
+    fn new(name: &str) -> InterfaceMatcher {
+        InterfaceMatcher {
+            interface: name.into(),
+        }
+    }
+}
+
+impl UeventMatcher for InterfaceMatcher {
+    fn is_match(&self, uev: &Uevent) -> bool {
+        uev.action == "add" && uev.subsystem == NET && uev.interface == self.interface
+    }
+}
+
+pub async fn wait_for_interface(sandbox: &Arc<Mutex<Sandbox>>, name: &str) -> Result<()> {
+    let matcher = InterfaceMatcher::new(name);
+    wait_for_uevent(sandbox, matcher).await?;
+
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -1830,5 +1859,30 @@ mod tests {
         let mut uev_other_device = uev.clone();
         uev_other_device.devpath = format!("{}/card{}/{}.0002", AP_ROOT_BUS_PATH, card, card);
         assert!(!matcher.is_match(&uev_other_device));
+    }
+
+    #[tokio::test]
+    #[allow(clippy::redundant_clone)]
+    async fn test_interface_matcher() {
+        let iface1 = "eth0";
+        let mut uev_a = crate::uevent::Uevent::default();
+        uev_a.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
+        uev_a.devpath = format!(
+            "/devices/pci0000:00/0000:00:05.0/0000:02:00.0/net/{}",
+            iface1
+        );
+        uev_a.subsystem = NET.into();
+        uev_a.interface = iface1.into();
+        let matcher_a = InterfaceMatcher::new(iface1);
+
+        let iface2 = "net1";
+        let mut uev_b = uev_a.clone();
+        uev_b.interface = iface2.into();
+        let matcher_b = InterfaceMatcher::new(iface2);
+
+        assert!(matcher_a.is_match(&uev_a));
+        assert!(matcher_b.is_match(&uev_b));
+        assert!(!matcher_b.is_match(&uev_a));
+        assert!(!matcher_a.is_match(&uev_b));
     }
 }
