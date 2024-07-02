@@ -118,6 +118,11 @@ impl KernelParams {
         self.params.append(&mut params.params);
     }
 
+    #[cfg(not(target_arch = "s390x"))]
+    pub(crate) fn push(&mut self, new_param: Param) {
+        self.params.push(new_param);
+    }
+
     pub(crate) fn from_string(params_string: &str) -> Self {
         let mut params = vec![];
 
