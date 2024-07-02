@@ -138,9 +138,7 @@ jobs:
         run: bash tests/integration/nydus/gha-run.sh run
 
   run-runk:
-    # TODO: Transition to free runner (see #9940).
-    if: false
-    runs-on: garm-ubuntu-2204-smaller
+    runs-on: ubuntu-22.04
     env:
       CONTAINERD_VERSION: lts
     steps:
