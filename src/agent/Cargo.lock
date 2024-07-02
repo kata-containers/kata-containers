@@ -2142,6 +2142,7 @@ dependencies = [
  "cgroups-rs",
  "clap",
  "const_format",
+ "derivative",
  "futures",
  "image-rs",
  "ipnetwork",

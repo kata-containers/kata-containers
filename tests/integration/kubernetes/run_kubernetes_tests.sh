@@ -28,6 +28,7 @@ else
 		"k8s-guest-pull-image.bats" \
 		"k8s-confidential-attestation.bats" \
 		"k8s-confidential.bats" \
+		"k8s-sealed-secret.bats" \
 		"k8s-attach-handlers.bats" \
 		"k8s-caps.bats" \
 		"k8s-configmap.bats" \
