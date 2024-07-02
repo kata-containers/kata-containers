@@ -27,3 +27,16 @@ spec:
       securityContext:
         seccompProfile:
           type: RuntimeDefault
+      envFrom:
+      - configMapRef:
+          name: policy-configmap
+      command: [ "sh", "-c" ]
+      args:
+        - |
+          if [ "$(printenv data-3)" != "value-3" ]; then
+            echo "Environment variable data-3 is not set to value-3"
+            exit 1
+          else
+            echo "Environment variable data-3 is correctly set to value-3"
+            sleep 3600  # Keep the pod running for observation
+          fi
