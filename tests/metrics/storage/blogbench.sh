@@ -40,7 +40,7 @@ function main() {
 	metrics_json_init
 
 	info "Running Blogbench test"
-	local output=$(sudo -E ${CTR_EXE} run --rm --runtime=${CTR_RUNTIME} ${IMAGE} test ${CMD})
+	local output=$(sudo -E ${CTR_EXE} run --rm --runtime=${CTR_RUNTIME} ${IMAGE} $(random_name) ${CMD})
 
 	# Save configuration
 	metrics_json_start_array
