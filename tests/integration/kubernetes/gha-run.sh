@@ -554,11 +554,10 @@ function cleanup_nydus_snapshotter() {
 	else
 		kubectl_retry delete --ignore-not-found -f "misc/snapshotter/base/nydus-snapshotter.yaml"
 	fi
-	sleep 180s
+
 	kubectl_retry delete --ignore-not-found -f "misc/snapshotter/nydus-snapshotter-rbac.yaml"
-	kubectl_retry get namespace nydus-system -o json | jq 'del(.spec.finalizers)' | kubectl_retry replace --raw "/api/v1/namespaces/nydus-system/finalize" -f - || true
 	popd
-	sleep 30s
+
 	echo "::endgroup::"
 }
 
