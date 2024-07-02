@@ -202,11 +202,6 @@ attributes of each environment (local and CI):
 - The hardware architecture.
 - Number (and spec) of the CPUs.
 
-## Gotchas (part 3)
-
-If in doubt, look at the
-["test artifacts" attached to the failing CI test](http://jenkins.katacontainers.io).
-
 ## Before raising a PR
 
 - Remember to check that the test runs locally:
