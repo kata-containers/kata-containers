@@ -7,9 +7,10 @@
 TARGET = kata-log-parser
 SOURCES = $(shell find . 2>&1 | grep -E '.*\.go$$')
 
-VERSION := ${shell cat ./VERSION}
-COMMIT_NO := $(shell git rev-parse HEAD 2> /dev/null || true)
-COMMIT := $(if $(shell git status --porcelain --untracked-files=no),"${COMMIT_NO}-dirty","${COMMIT_NO}")
+VERSION_FILE := ./VERSION
+VERSION := $(shell grep -v ^\# $(VERSION_FILE) 2>/dev/null || echo "unknown")
+COMMIT_NO := $(shell git rev-parse HEAD 2>/dev/null || true)
+COMMIT := $(if $(shell git status --porcelain --untracked-files=no 2>/dev/null || true),"${COMMIT_NO}-dirty","${COMMIT_NO}")
 
 BINDIR := $(GOPATH)/bin
 DESTTARGET := $(abspath $(BINDIR)/$(TARGET))
