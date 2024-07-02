@@ -584,24 +584,31 @@ impl AgentService {
         let cid = req.container_id;
         let eid = req.exec_id;
 
-        let writer = {
-            let mut sandbox = self.sandbox.lock().await;
-            let p = sandbox.find_container_process(cid.as_str(), eid.as_str())?;
-
-            // use ptmx io
-            if p.term_master.is_some() {
-                p.get_writer(StreamType::TermMaster)
-            } else {
-                // use piped io
-                p.get_writer(StreamType::ParentStdin)
-            }
-        };
-
-        let writer = writer.ok_or_else(|| anyhow!(ERR_CANNOT_GET_WRITER))?;
-        writer.lock().await.write_all(req.data.as_slice()).await?;
-
         let mut resp = WriteStreamResponse::new();
         resp.set_len(req.data.len() as u32);
+
+        // EOF of stdin
+        if req.data.is_empty() {
+            let mut sandbox = self.sandbox.lock().await;
+            let p = sandbox.find_container_process(cid.as_str(), eid.as_str())?;
+            p.close_stdin().await;
+        } else {
+            let writer = {
+                let mut sandbox = self.sandbox.lock().await;
+                let p = sandbox.find_container_process(cid.as_str(), eid.as_str())?;
+
+                // use ptmx io
+                if p.term_master.is_some() {
+                    p.get_writer(StreamType::TermMaster)
+                } else {
+                    // use piped io
+                    p.get_writer(StreamType::ParentStdin)
+                }
+            };
+
+            let writer = writer.ok_or_else(|| anyhow!(ERR_CANNOT_GET_WRITER))?;
+            writer.lock().await.write_all(req.data.as_slice()).await?;
+        }
 
         Ok(resp)
     }
@@ -645,6 +652,7 @@ impl AgentService {
             biased;
             v = read_stream(&reader, req.len as usize)  => {
                 let vector = v?;
+
                 let mut resp = ReadStreamResponse::new();
                 resp.set_data(vector);
 
@@ -845,6 +853,9 @@ impl agent_ttrpc::AgentService for AgentService {
         ctx: &TtrpcContext,
         req: protocols::agent::CloseStdinRequest,
     ) -> ttrpc::Result<Empty> {
+        // The stdin will be closed when EOF is got in rpc `write_stdin`[runtime-rs]
+        // so this rpc will not be called anymore by runtime-rs.
+
         trace_rpc_call!(ctx, "close_stdin", req);
         is_allowed(&req).await?;
 

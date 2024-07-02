@@ -200,15 +200,8 @@ impl Process {
     }
 
     pub async fn close_stdin(&mut self) {
-        // stdin will be closed automatically in passfd-io senario
-        if self.proc_io.is_some() {
-            return;
-        }
-
         close_process_stream!(self, term_master, TermMaster);
         close_process_stream!(self, parent_stdin, ParentStdin);
-
-        self.notify_term_close();
     }
 
     pub fn cleanup_process_stream(&mut self) {
