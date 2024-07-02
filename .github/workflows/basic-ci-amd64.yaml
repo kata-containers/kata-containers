@@ -57,14 +57,12 @@ jobs:
         run: bash tests/integration/cri-containerd/gha-run.sh run
 
   run-containerd-stability:
-    # TODO: Transition to free runner (see #9940).
-    if: false
     strategy:
       fail-fast: false
       matrix:
         containerd_version: ['lts', 'active']
         vmm: ['clh', 'cloud-hypervisor', 'dragonball', 'qemu', 'stratovirt']
-    runs-on: garm-ubuntu-2204-smaller
+    runs-on: ubuntu-22.04
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
       GOPATH: ${{ github.workspace }}
