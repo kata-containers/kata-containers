@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta, timezone
 import os
 
+from azure.core.exceptions import ResourceNotFoundError
 from azure.identity import AzureCliCredential
 from azure.mgmt.resource import ResourceManagementClient
 
@@ -44,12 +45,19 @@ for resource in resources:
     # /subscriptions/(subscriptionId)/resourceGroups/(resourceGroupName)/providers/(resourceProviderNamespace)/(resourceType)/(resourceName)
     rg_id, _, _ = resource.id.partition("/providers/")
     _, _, rg_name = rg_id.partition("/resourceGroups/")
-    rg_resources = client.resources.list_by_resource_group(rg_name)
+
+    try:
+        num_rg_resources = len(list(client.resources.list_by_resource_group(rg_name)))
+    except ResourceNotFoundError:
+        # Some resource names seem to be lingering in Azure limbo but do
+        # not map to any actual resources, so we ignore those.
+        print(f"{resource.name}: not found, ignored")
+        continue
 
     # XXX DANGER ZONE: Delete the resource. If it's the only resource
     # in its resource group, the entire resource group is deleted.
 
-    if len(list(rg_resources)) == 1:
+    if num_rg_resources == 1:
         client.resource_groups.begin_delete(rg_name)
         print(f"{resource.name}: deleted resource group")
     else:
