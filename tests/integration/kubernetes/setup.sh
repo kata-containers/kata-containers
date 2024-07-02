@@ -26,9 +26,10 @@ source "${kubernetes_dir}/tests_common.sh"
 if [ -n "${K8S_TEST_POLICY_FILES:-}" ]; then
 	K8S_TEST_POLICY_FILES=("${K8S_TEST_POLICY_FILES}")
 else
-	K8S_TEST_POLICY_FILES=( \
-		"allow-all.rego" \
-		"allow-all-except-exec-process.rego" \
+    K8S_TEST_POLICY_FILES=( \
+        "allow-all.rego" \
+        "allow-all-except-exec-process.rego" \
+        "allow-set-policy.rego" \
     )
 fi
 
