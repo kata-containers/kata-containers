@@ -289,7 +289,7 @@ impl TryFrom<(MemoryInfo, GuestProtection)> for MemoryConfig {
 // method is available in the rust language.
 //
 // See: https://github.com/rust-lang/rust/issues/88581
-fn checked_next_multiple_of(value: u64, multiple: u64) -> Option<u64> {
+pub fn checked_next_multiple_of(value: u64, multiple: u64) -> Option<u64> {
     match value.checked_rem(multiple) {
         None => Some(value),
         Some(r) => value.checked_add(multiple - r),
