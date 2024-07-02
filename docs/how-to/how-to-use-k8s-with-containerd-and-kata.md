@@ -45,7 +45,7 @@ In order to allow Kubelet to use containerd (using the CRI interface), configure
   $ sudo mkdir -p  /etc/systemd/system/kubelet.service.d/
   $ cat << EOF | sudo tee  /etc/systemd/system/kubelet.service.d/0-containerd.conf
   [Service]                                                 
-  Environment="KUBELET_EXTRA_ARGS=--container-runtime=remote --runtime-request-timeout=15m --container-runtime-endpoint=unix:///run/containerd/containerd.sock"
+  Environment="KUBELET_EXTRA_ARGS=--runtime-request-timeout=15m --container-runtime-endpoint=unix:///run/containerd/containerd.sock"
   EOF
   ```
 
