@@ -339,6 +339,9 @@ pub struct RequestDefaults {
     /// Allow Host reading from Guest containers stdout and stderr.
     pub ReadStreamRequest: bool,
 
+    /// Allow Host to update Guest mounts.
+    pub UpdateEphemeralMountsRequest: bool,
+
     /// Allow Host writing to Guest containers stdin.
     pub WriteStreamRequest: bool,
 }
@@ -348,6 +351,9 @@ pub struct RequestDefaults {
 pub struct CommonData {
     /// Path to the shared container files - e.g., "/run/kata-containers/shared/containers".
     pub cpath: String,
+
+    /// Path to the shared container files for mount sources - e.g., "/run/kata-containers/shared/containers".
+    pub mount_source_cpath: String,
 
     /// Regex prefix for shared file paths - e.g., "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-".
     pub sfprefix: String,
