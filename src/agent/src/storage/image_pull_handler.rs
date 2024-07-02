@@ -52,11 +52,12 @@ impl StorageHandler for ImagePullHandler {
         let bundle_path = image::pull_image(image_name, &cid, &image_pull_volume.metadata).await?;
 
         storage.source = bundle_path;
-        storage.options = vec!["bind".to_string(), "ro".to_string()];
+        storage.fstype = "bind".to_string();
+        storage.options = vec!["bind".to_string()];
 
-        common_storage_handler(ctx.logger, &storage)?;
+        let path = common_storage_handler(ctx.logger, &storage)?;
 
-        new_device(storage.mount_point)
+        new_device(path)
     }
 }
 
