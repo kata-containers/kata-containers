@@ -77,6 +77,9 @@ agent-tarball: copy-scripts-for-the-agent-build
 agent-ctl-tarball:
 	${MAKE} $@-build
 
+busybox-tarball: 
+	${MAKE} $@-build
+	
 coco-guest-components-tarball:
 	${MAKE} $@-build
 

@@ -213,6 +213,11 @@ assets:
 externals:
   description: "Third-party projects used by the system"
 
+  busybox:
+    desc: "The Swiss Army Knife of Embedded Linux"
+    version: "1.36.1"
+    url: "https://busybox.net/downloads"
+
   cni-plugins:
     description: "CNI network plugins"
     url: "https://github.com/containernetworking/plugins"
