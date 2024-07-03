@@ -17,7 +17,7 @@ spec:
       hostPID: true
       containers:
         - name: kube-kata
-          image: quay.io/kata-containers/kata-deploy:latest
+          image: ghcr.io/kata-containers/kata-deploy-ci:e94490232e24e4ebb63a97467a586a62e6069d08-nightly-amd64
           imagePullPolicy: Always
           lifecycle:
             preStop:
@@ -31,17 +31,17 @@ spec:
                 fieldRef:
                   fieldPath: spec.nodeName
             - name: DEBUG
-              value: "false"
+              value: "true"
             - name: SHIMS
-              value: "clh cloud-hypervisor dragonball fc qemu qemu-coco-dev qemu-runtime-rs qemu-sev qemu-snp qemu-tdx stratovirt qemu-nvidia-gpu qemu-nvidia-gpu-snp qemu-nvidia-gpu-tdx"
+              value: "clh"
             - name: DEFAULT_SHIM
-              value: "qemu"
+              value: "clh"
             - name: CREATE_RUNTIMECLASSES
-              value: "false"
+              value: "true"
             - name: CREATE_DEFAULT_RUNTIMECLASS
-              value: "false"
+              value: "true"
             - name: ALLOWED_HYPERVISOR_ANNOTATIONS
-              value: ""
+              value: "default_vcpus"
             - name: SNAPSHOTTER_HANDLER_MAPPING
               value: ""
             - name: AGENT_HTTPS_PROXY

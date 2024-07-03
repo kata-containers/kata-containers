@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::Result;
+use anyhow::{bail, Result};
 use protobuf::MessageDyn;
 use serde::{Deserialize, Serialize};
 use slog::Drain;
@@ -137,14 +137,22 @@ impl AgentPolicy {
         let query = format!("data.agent_policy.{ep}");
         self.engine.set_input_json(ep_input)?;
 
-        let mut allow = match self.engine.eval_bool_query(query, false) {
-            Ok(a) => a,
-            Err(e) => {
-                if !self.allow_failures {
-                    return Err(e);
-                }
-                false
-            }
+        let results = self.engine.eval_query(query, false)?;
+        if results.result.len() != 1 {
+            bail!("policy check: unexpected eval_query results {:?}", results);
+        }
+        if results.result[0].expressions.len() != 1 {
+            bail!(
+                "policy check: unexpected eval_query result expressions {:?}",
+                results
+            );
+        }
+        let mut allow = match results.result[0].expressions[0].value {
+            regorus::Value::Bool(b) => b,
+            _ => bail!(
+                "policy check: unexpected eval_query result type {:?}",
+                results
+            ),
         };
 
         if !allow && self.allow_failures {
