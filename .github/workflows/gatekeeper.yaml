@@ -12,6 +12,10 @@ on:
       - reopened
       - labeled
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   gatekeeper:
     runs-on: ubuntu-latest
