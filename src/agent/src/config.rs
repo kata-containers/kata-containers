@@ -27,6 +27,7 @@ const LOG_VPORT_OPTION: &str = "agent.log_vport";
 const CONTAINER_PIPE_SIZE_OPTION: &str = "agent.container_pipe_size";
 const UNIFIED_CGROUP_HIERARCHY_OPTION: &str = "systemd.unified_cgroup_hierarchy";
 const CONFIG_FILE: &str = "agent.config_file";
+const ENABLE_SIGNATURE_VERIFICATION: &str = "agent.enable_signature_verification";
 const GUEST_COMPONENTS_REST_API_OPTION: &str = "agent.guest_components_rest_api";
 const GUEST_COMPONENTS_PROCS_OPTION: &str = "agent.guest_components_procs";
 
@@ -104,6 +105,7 @@ pub struct AgentConfig {
     pub supports_seccomp: bool,
     pub https_proxy: String,
     pub no_proxy: String,
+    pub enable_signature_verification: bool,
     pub guest_components_rest_api: GuestComponentsFeatures,
     pub guest_components_procs: GuestComponentsProcs,
 }
@@ -123,6 +125,7 @@ pub struct AgentConfigBuilder {
     pub tracing: Option<bool>,
     pub https_proxy: Option<String>,
     pub no_proxy: Option<String>,
+    pub enable_signature_verification: Option<bool>,
     pub guest_components_rest_api: Option<GuestComponentsFeatures>,
     pub guest_components_procs: Option<GuestComponentsProcs>,
 }
@@ -188,6 +191,7 @@ impl Default for AgentConfig {
             supports_seccomp: rpc::have_seccomp(),
             https_proxy: String::from(""),
             no_proxy: String::from(""),
+            enable_signature_verification: true,
             guest_components_rest_api: GuestComponentsFeatures::default(),
             guest_components_procs: GuestComponentsProcs::default(),
         }
@@ -221,6 +225,11 @@ impl FromStr for AgentConfig {
         config_override!(agent_config_builder, agent_config, tracing);
         config_override!(agent_config_builder, agent_config, https_proxy);
         config_override!(agent_config_builder, agent_config, no_proxy);
+        config_override!(
+            agent_config_builder,
+            agent_config,
+            enable_signature_verification
+        );
         config_override!(
             agent_config_builder,
             agent_config,
@@ -331,6 +340,14 @@ impl AgentConfig {
             );
             parse_cmdline_param!(param, HTTPS_PROXY, config.https_proxy, get_url_value);
             parse_cmdline_param!(param, NO_PROXY, config.no_proxy, get_string_value);
+
+            parse_cmdline_param!(
+                param,
+                ENABLE_SIGNATURE_VERIFICATION,
+                config.enable_signature_verification,
+                get_bool_value
+            );
+
             parse_cmdline_param!(
                 param,
                 GUEST_COMPONENTS_REST_API_OPTION,
@@ -546,6 +563,7 @@ mod tests {
         assert!(!config.dev_mode);
         assert_eq!(config.log_level, DEFAULT_LOG_LEVEL);
         assert_eq!(config.hotplug_timeout, DEFAULT_HOTPLUG_TIMEOUT);
+        assert!(config.enable_signature_verification);
     }
 
     #[test]
@@ -568,6 +586,7 @@ mod tests {
             tracing: bool,
             https_proxy: &'a str,
             no_proxy: &'a str,
+            enable_signature_verification: bool,
             guest_components_rest_api: GuestComponentsFeatures,
             guest_components_procs: GuestComponentsProcs,
         }
@@ -587,6 +606,7 @@ mod tests {
                     tracing: false,
                     https_proxy: "",
                     no_proxy: "",
+                    enable_signature_verification: true,
                     guest_components_rest_api: GuestComponentsFeatures::default(),
                     guest_components_procs: GuestComponentsProcs::default(),
                 }
@@ -986,6 +1006,26 @@ mod tests {
                 ..Default::default()
             },
             TestData {
+                contents: "agent.enable_signature_verification=false",
+                enable_signature_verification: false,
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.enable_signature_verification=0",
+                enable_signature_verification: false,
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.enable_signature_verification=1",
+                enable_signature_verification: true,
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.enable_signature_verification=foo",
+                enable_signature_verification: false,
+                ..Default::default()
+            },
+            TestData {
                contents: "agent.guest_components_rest_api=attestation",
                guest_components_rest_api: GuestComponentsFeatures::Attestation,
                 ..Default::default()
@@ -1069,6 +1109,11 @@ mod tests {
             assert_eq!(d.tracing, config.tracing, "{}", msg);
             assert_eq!(d.https_proxy, config.https_proxy, "{}", msg);
             assert_eq!(d.no_proxy, config.no_proxy, "{}", msg);
+            assert_eq!(
+                d.enable_signature_verification, config.enable_signature_verification,
+                "{}",
+                msg
+            );
             assert_eq!(
                 d.guest_components_rest_api, config.guest_components_rest_api,
                 "{}",
