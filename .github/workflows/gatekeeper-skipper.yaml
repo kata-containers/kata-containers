@@ -31,7 +31,6 @@ on:
       skip_static:
         value: ${{ jobs.skipper.outputs.skip_static }}
 
-
 jobs:
   skipper:
     runs-on: ubuntu-latest
