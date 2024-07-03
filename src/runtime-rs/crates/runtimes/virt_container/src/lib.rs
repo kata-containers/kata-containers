@@ -23,9 +23,13 @@ use common::{message::Message, RuntimeHandler, RuntimeInstance};
 use hypervisor::Hypervisor;
 #[cfg(not(target_arch = "s390x"))]
 use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
+#[cfg(not(target_arch = "s390x"))]
+use hypervisor::{firecracker::Firecracker, HYPERVISOR_FIRECRACKER};
 use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
 #[cfg(not(target_arch = "s390x"))]
 use kata_types::config::DragonballConfig;
+#[cfg(not(target_arch = "s390x"))]
+use kata_types::config::FirecrackerConfig;
 use kata_types::config::{hypervisor::register_hypervisor_plugin, QemuConfig, TomlConfig};
 
 #[cfg(all(feature = "cloud-hypervisor", not(target_arch = "s390x")))]
@@ -55,6 +59,9 @@ impl RuntimeHandler for VirtContainer {
         {
             let dragonball_config = Arc::new(DragonballConfig::new());
             register_hypervisor_plugin("dragonball", dragonball_config);
+
+            let firecracker_config = Arc::new(FirecrackerConfig::new());
+            register_hypervisor_plugin("firecracker", firecracker_config);
         }
 
         let qemu_config = Arc::new(QemuConfig::new());
@@ -155,6 +162,14 @@ async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>>
         }
         HYPERVISOR_QEMU => {
             let mut hypervisor = Qemu::new();
+            hypervisor
+                .set_hypervisor_config(hypervisor_config.clone())
+                .await;
+            Ok(Arc::new(hypervisor))
+        }
+        #[cfg(not(target_arch = "s390x"))]
+        HYPERVISOR_FIRECRACKER => {
+            let mut hypervisor = Firecracker::new();
             hypervisor
                 .set_hypervisor_config(hypervisor_config.clone())
                 .await;
