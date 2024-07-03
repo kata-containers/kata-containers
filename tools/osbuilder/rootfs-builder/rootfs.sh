@@ -495,7 +495,6 @@ build_rootfs_distro()
 			--env AGENT_BIN="${AGENT_BIN}" \
 			--env AGENT_INIT="${AGENT_INIT}" \
 			--env ARCH="${ARCH}" \
-			--env CI="${CI}" \
 			--env MEASURED_ROOTFS="${MEASURED_ROOTFS}" \
 			--env KERNEL_MODULES_DIR="${KERNEL_MODULES_DIR}" \
 			--env LIBC="${LIBC}" \
