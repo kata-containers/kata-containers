@@ -25,7 +25,7 @@ use protocols::oci::{
 };
 use rand::Rng;
 use serde::de::DeserializeOwned;
-use slog::{debug, warn};
+use slog::{debug, info, warn};
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::os::unix::fs::MetadataExt;
@@ -241,7 +241,8 @@ pub fn random_container_id() -> String {
 
 fn config_file_from_bundle_dir(bundle_dir: &str) -> Result<String> {
     if bundle_dir.is_empty() {
-        return Err(anyhow!("missing bundle directory"));
+        info!(sl!(), "bundle dir is empty");
+        return Ok("".to_owned());
     }
 
     let config_path = PathBuf::from(&bundle_dir).join(CONFIG_FILE);
@@ -730,6 +731,11 @@ pub fn spec_file_to_string(spec_file: String) -> Result<String> {
 
 pub fn get_oci_spec_json(cfg: &Config) -> Result<String> {
     let spec_file = config_file_from_bundle_dir(&cfg.bundle_dir)?;
+
+    if spec_file.is_empty() {
+        info!(sl!(), "Empty bundle dir");
+        return Ok("".to_owned());
+    }
 
     spec_file_to_string(spec_file)
 }
