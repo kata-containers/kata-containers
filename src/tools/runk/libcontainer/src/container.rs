@@ -15,7 +15,7 @@ use nix::{
     sys::signal::SIGKILL,
     unistd::{chdir, unlink, Pid},
 };
-use oci::{ContainerState, State as OCIState};
+use oci::{ContainerState, LinuxResources, State as OCIState};
 use procfs;
 use rustjail::cgroups::fs::Manager as CgroupManager;
 use rustjail::{
@@ -201,6 +201,11 @@ impl Container {
     pub fn destroy(&self) -> Result<()> {
         remove_cgroup_dir(&self.cgroup)?;
         self.status.remove_dir()
+    }
+
+    pub fn update(&self, resources: LinuxResources, logger: &Logger) -> Result<()> {
+        let mut container_resources = load_linux_container(&self.status, None, logger)?;
+        container_resources.set(resources)
     }
 }
 
