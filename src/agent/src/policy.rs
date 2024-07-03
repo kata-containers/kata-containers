@@ -5,6 +5,7 @@
 
 use anyhow::Result;
 use protobuf::MessageDyn;
+use serde::{Deserialize, Serialize};
 use slog::Drain;
 use tokio::io::AsyncWriteExt;
 
@@ -20,8 +21,12 @@ macro_rules! sl {
     };
 }
 
-async fn allow_request(policy: &mut AgentPolicy, ep: &str, request: &str) -> ttrpc::Result<()> {
-    match policy.allow_request(ep, request).await {
+async fn allow_request(
+    policy: &mut AgentPolicy,
+    ep: &str,
+    req: &(impl MessageDyn + serde::Serialize),
+) -> ttrpc::Result<()> {
+    match policy.allow_request(ep, req).await {
         Ok((allowed, prints)) => {
             if allowed {
                 Ok(())
@@ -40,19 +45,23 @@ async fn allow_request(policy: &mut AgentPolicy, ep: &str, request: &str) -> ttr
 }
 
 pub async fn is_allowed(req: &(impl MessageDyn + serde::Serialize)) -> ttrpc::Result<()> {
-    let request = serde_json::to_string(req).unwrap();
     let mut policy = AGENT_POLICY.lock().await;
-    allow_request(&mut policy, req.descriptor_dyn().name(), &request).await
+    allow_request(&mut policy, req.descriptor_dyn().name(), req).await
 }
 
 pub async fn do_set_policy(req: &protocols::agent::SetPolicyRequest) -> ttrpc::Result<()> {
-    let request = serde_json::to_string(req).unwrap();
     let mut policy = AGENT_POLICY.lock().await;
-    allow_request(&mut policy, "SetPolicyRequest", &request).await?;
+    allow_request(&mut policy, "SetPolicyRequest", req).await?;
     policy
         .set_policy(&req.policy)
         .await
         .map_err(|e| ttrpc_error(ttrpc::Code::INVALID_ARGUMENT, e))
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+struct AgentPolicyState {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sandbox_name: Option<String>,
 }
 
 /// Singleton policy object.
@@ -66,6 +75,8 @@ pub struct AgentPolicy {
 
     /// Regorus engine
     engine: regorus::Engine,
+
+    state: AgentPolicyState,
 }
 
 impl AgentPolicy {
@@ -101,11 +112,25 @@ impl AgentPolicy {
 
         self.engine.add_policy_from_file(default_policy_file)?;
         self.update_allow_failures_flag().await?;
+        self.engine.set_input_json("{}")?;
         Ok(())
     }
 
     /// Ask regorus if an API call should be allowed or not.
-    async fn allow_request(&mut self, ep: &str, ep_input: &str) -> Result<(bool, String)> {
+    // async fn allow_request(&mut self, ep: &str, ep_input: &str) -> Result<(bool, String)> {
+    async fn allow_request(
+        &mut self,
+        ep: &str,
+        req: &(impl MessageDyn + serde::Serialize),
+    ) -> Result<(bool, String)> {
+        let mut root_value = serde_json::to_value(req).unwrap();
+        root_value["policy_state"] = serde_json::to_value(&self.state).unwrap();
+        let ep_input = serde_json::to_string(&root_value).unwrap();
+
+        return self.allow_request_string(ep, &ep_input).await;
+    }
+
+    async fn allow_request_string(&mut self, ep: &str, ep_input: &str) -> Result<(bool, String)> {
         debug!(sl!(), "policy check: {ep}");
         self.log_eval_input(ep, ep_input).await;
 
@@ -169,18 +194,18 @@ impl AgentPolicy {
     }
 
     async fn update_allow_failures_flag(&mut self) -> Result<()> {
-        self.allow_failures = match self.allow_request("AllowRequestsFailingPolicy", "{}").await {
-            Ok((allowed, _prints)) => {
-                if allowed {
-                    warn!(
-                        sl!(),
-                        "policy: AllowRequestsFailingPolicy is enabled - will ignore errors"
-                    );
-                }
-                allowed
-            }
-            Err(_) => false,
-        };
+        // self.allow_failures = match self.allow_request("AllowRequestsFailingPolicy", "{}").await {
+        //     Ok((allowed, _prints)) => {
+        //         if allowed {
+        //             warn!(
+        //                 sl!(),
+        //                 "policy: AllowRequestsFailingPolicy is enabled - will ignore errors"
+        //             );
+        //         }
+        //         allowed
+        //     }
+        //     Err(_) => false,
+        // };
         Ok(())
     }
 }
