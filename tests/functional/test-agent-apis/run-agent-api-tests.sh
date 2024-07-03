@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# Copyright (c) 2024 Microsoft Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+
 set -e
 
 test_agent_apis_dir="$(dirname "$(readlink -f "$0")")"
