@@ -19,6 +19,7 @@ use kata_types::{
 use persist::sandbox_persist::Persist;
 use std::cmp::Ordering;
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::path::Path;
 use std::process::Stdio;
 use tokio::{
@@ -466,6 +467,18 @@ impl QemuInner {
                     sl!(),
                     "hotunplugging {} B of memory",
                     cur_hotplugged_memory - new_hotplugged_mem
+                );
+                let res =
+                    qmp.hotunplug_memory((cur_hotplugged_memory - new_hotplugged_mem).try_into()?);
+                if let Err(err) = res {
+                    info!(sl!(), "hotunplugging failed: {:?}", err);
+                } else {
+                    new_total_mem_mb = bytes_to_megs(coldplugged_mem + new_hotplugged_mem);
+                }
+                info!(
+                    sl!(),
+                    "hotplugged memory after hotunplugging: {}",
+                    qmp.hotplugged_memory_size()?
                 );
             }
             Ordering::Equal => info!(
