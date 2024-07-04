@@ -59,6 +59,16 @@ impl ImageService {
         }
     }
 
+    fn get_security_config(&mut self) {
+        // Read enable signature verification from the agent config and set it in the image_client
+        let enable_signature_verification = &AGENT_CONFIG.enable_signature_verification;
+        info!(
+            sl(),
+            "enable_signature_verification set to: {}", enable_signature_verification
+        );
+        self.image_client.config.security_validate = *enable_signature_verification;
+    }
+
     /// pause image is packaged in rootfs
     fn unpack_pause_image(cid: &str) -> Result<String> {
         verify_id(cid).context("The guest pause image cid contains invalid characters.")?;
@@ -145,6 +155,8 @@ impl ImageService {
         let bundle_path = scoped_join(CONTAINER_BASE, cid)?;
         fs::create_dir_all(&bundle_path)?;
         info!(sl(), "pull image {image:?}, bundle path {bundle_path:?}");
+
+        self.get_security_config();
 
         let res = self
             .image_client
