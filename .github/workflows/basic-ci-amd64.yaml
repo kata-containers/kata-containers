@@ -15,8 +15,6 @@ on:
 
 jobs:
   run-cri-containerd:
-    # TODO: Transition to free runner (see #9940).
-    if: false
     strategy:
       # We can set this to true whenever we're 100% sure that
       # the all the tests are not flaky, otherwise we'll fail
@@ -25,7 +23,7 @@ jobs:
       matrix:
         containerd_version: ['lts', 'active']
         vmm: ['clh', 'dragonball', 'qemu', 'stratovirt', 'cloud-hypervisor', 'qemu-runtime-rs']
-    runs-on: garm-ubuntu-2204-smaller
+    runs-on: ubuntu-22.04
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
       GOPATH: ${{ github.workspace }}
@@ -59,14 +57,12 @@ jobs:
         run: bash tests/integration/cri-containerd/gha-run.sh run
 
   run-containerd-stability:
-    # TODO: Transition to free runner (see #9940).
-    if: false
     strategy:
       fail-fast: false
       matrix:
         containerd_version: ['lts', 'active']
         vmm: ['clh', 'cloud-hypervisor', 'dragonball', 'qemu', 'stratovirt']
-    runs-on: garm-ubuntu-2204-smaller
+    runs-on: ubuntu-22.04
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
       GOPATH: ${{ github.workspace }}
@@ -100,8 +96,6 @@ jobs:
         run: bash tests/stability/gha-run.sh run
 
   run-nydus:
-    # TODO: Transition to free runner (see #9940).
-    if: false
     strategy:
       # We can set this to true whenever we're 100% sure that
       # the all the tests are not flaky, otherwise we'll fail
@@ -110,7 +104,7 @@ jobs:
       matrix:
         containerd_version: ['lts', 'active']
         vmm: ['clh', 'qemu', 'dragonball', 'stratovirt']
-    runs-on: garm-ubuntu-2204-smaller
+    runs-on: ubuntu-22.04
     env:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
       GOPATH: ${{ github.workspace }}
@@ -144,9 +138,7 @@ jobs:
         run: bash tests/integration/nydus/gha-run.sh run
 
   run-runk:
-    # TODO: Transition to free runner (see #9940).
-    if: false
-    runs-on: garm-ubuntu-2204-smaller
+    runs-on: ubuntu-22.04
     env:
       CONTAINERD_VERSION: lts
     steps:
@@ -259,8 +251,6 @@ jobs:
         run: bash tests/functional/vfio/gha-run.sh run
 
   run-docker-tests:
-    # TODO: Transition to free runner (see #9940).
-    if: false
     strategy:
       # We can set this to true whenever we're 100% sure that
       # all the tests are not flaky, otherwise we'll fail them
@@ -270,7 +260,7 @@ jobs:
         vmm:
           - clh
           - qemu
-    runs-on: garm-ubuntu-2304-smaller
+    runs-on: ubuntu-22.04
     env:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
@@ -302,8 +292,6 @@ jobs:
         run: bash tests/integration/docker/gha-run.sh run
 
   run-nerdctl-tests:
-    # TODO: Transition to free runner (see #9940).
-    if: false
     strategy:
       # We can set this to true whenever we're 100% sure that
       # all the tests are not flaky, otherwise we'll fail them
@@ -318,7 +306,7 @@ jobs:
         # TODO: enable with clh when https://github.com/kata-containers/kata-containers/issues/9852 is fixed
         exclude:
           - vmm: clh
-    runs-on: garm-ubuntu-2304-smaller
+    runs-on: ubuntu-22.04
     env:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
