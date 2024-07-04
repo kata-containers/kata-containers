@@ -334,19 +334,31 @@ impl QemuInner {
         todo!()
     }
 
-    pub(crate) fn set_guest_memory_block_size(&mut self, _size: u32) {
-        warn!(
-            sl!(),
-            "QemuInner::set_guest_memory_block_size(): NOT YET IMPLEMENTED"
-        );
+    pub(crate) fn set_guest_memory_block_size(&mut self, size: u32) {
+        if let Some(ref mut qmp) = self.qmp {
+            info!(
+                sl!(),
+                "QemuInner::set_guest_memory_block_size(): block size set to {}", size
+            );
+            qmp.set_guest_memory_block_size(size.into());
+        } else {
+            warn!(
+                sl!(),
+                "QemuInner::set_guest_memory_block_size(): QMP not initialized"
+            );
+        }
     }
 
-    pub(crate) fn guest_memory_block_size_mb(&self) -> u32 {
-        warn!(
-            sl!(),
-            "QemuInner::guest_memory_block_size_mb(): NOT YET IMPLEMENTED"
-        );
-        0
+    pub(crate) fn guest_memory_block_size(&self) -> u32 {
+        if let Some(qmp) = &self.qmp {
+            qmp.guest_memory_block_size() as u32
+        } else {
+            warn!(
+                sl!(),
+                "QemuInner::guest_memory_block_size(): QMP not initialized"
+            );
+            0
+        }
     }
 
     pub(crate) fn resize_memory(&self, _new_mem_mb: u32) -> Result<(u32, MemoryConfig)> {

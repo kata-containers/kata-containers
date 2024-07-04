@@ -14,6 +14,18 @@ use qapi_spec::Dictionary;
 
 pub struct Qmp {
     qmp: qapi::Qmp<qapi::Stream<BufReader<UnixStream>, UnixStream>>,
+
+    // This is basically the output of
+    // `cat /sys/devices/system/memory/block_size_bytes`
+    // on the guest.  Note a slightly peculiar behaviour with relation to
+    // the size of hotplugged memory blocks: if an amount of memory is being
+    // hotplugged whose size is not an integral multiple of page size
+    // (4k usually) hotplugging fails immediately.  However, if the amount
+    // is fine wrt the page size *but* isn't wrt this "guest memory block size"
+    // hotplugging apparently succeeds, even though none of the hotplugged
+    // blocks seem ever to be onlined in the guest by kata-agent.
+    // Store as u64 to keep up the convention of bytes being represented as u64.
+    guest_memory_block_size: u64,
 }
 
 // We have to implement Debug since the Hypervisor trait requires it and Qmp
@@ -43,6 +55,7 @@ impl Qmp {
                 BufReader::new(stream.try_clone()?),
                 stream,
             )),
+            guest_memory_block_size: 0,
         };
 
         let info = qmp.qmp.handshake()?;
@@ -127,6 +140,14 @@ impl Qmp {
         );
 
         Ok(hotunplugged)
+    }
+
+    pub fn set_guest_memory_block_size(&mut self, size: u64) {
+        self.guest_memory_block_size = size;
+    }
+
+    pub fn guest_memory_block_size(&self) -> u64 {
+        self.guest_memory_block_size
     }
 }
 
