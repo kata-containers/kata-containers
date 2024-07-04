@@ -361,14 +361,120 @@ impl QemuInner {
         }
     }
 
-    pub(crate) fn resize_memory(&self, _new_mem_mb: u32) -> Result<(u32, MemoryConfig)> {
-        warn!(sl!(), "QemuInner::resize_memory(): NOT YET IMPLEMENTED");
-        Ok((
-            _new_mem_mb,
-            MemoryConfig {
-                ..Default::default()
-            },
-        ))
+    pub(crate) fn resize_memory(
+        &mut self,
+        mut new_total_mem_mb: u32,
+    ) -> Result<(u32, MemoryConfig)> {
+        info!(
+            sl!(),
+            "QemuInner::resize_memory(): asked to resize memory to {} MB", new_total_mem_mb
+        );
+
+        // stick to the apparent de facto convention and represent megabytes
+        // as u32 and bytes as u64
+        fn bytes_to_megs(bytes: u64) -> u32 {
+            (bytes / (1 << 20)) as u32
+        }
+        fn megs_to_bytes(bytes: u32) -> u64 {
+            bytes as u64 * (1 << 20)
+        }
+
+        let qmp = match self.qmp {
+            Some(ref mut qmp) => qmp,
+            None => {
+                warn!(sl!(), "QemuInner::resize_memory(): QMP not initialized");
+                return Err(anyhow!("QMP not initialized"));
+            }
+        };
+
+        let coldplugged_mem = megs_to_bytes(self.config.memory_info.default_memory);
+        let new_total_mem = megs_to_bytes(new_total_mem_mb);
+
+        if new_total_mem < coldplugged_mem {
+            return Err(anyhow!(
+                "asked to resize to {} M but that is less than cold-plugged memory size ({})",
+                new_total_mem_mb,
+                bytes_to_megs(coldplugged_mem)
+            ));
+        }
+
+        let guest_mem_block_size = qmp.guest_memory_block_size();
+
+        let mut new_hotplugged_mem = new_total_mem - coldplugged_mem;
+
+        info!(
+            sl!(),
+            "new hotplugged mem before alignment: {} B ({} MB)",
+            new_hotplugged_mem,
+            bytes_to_megs(new_hotplugged_mem)
+        );
+
+        let is_unaligned = new_hotplugged_mem % guest_mem_block_size != 0;
+        if is_unaligned {
+            new_hotplugged_mem = ch_config::convert::checked_next_multiple_of(
+                new_hotplugged_mem,
+                guest_mem_block_size,
+            )
+            .ok_or(anyhow!(format!(
+                "alignment of {} B to the block size of {} B failed",
+                new_hotplugged_mem, guest_mem_block_size
+            )))?
+        }
+        let new_hotplugged_mem = new_hotplugged_mem;
+
+        info!(
+            sl!(),
+            "new hotplugged mem after alignment: {} B ({} MB)",
+            new_hotplugged_mem,
+            bytes_to_megs(new_hotplugged_mem)
+        );
+
+        let max_total_mem = megs_to_bytes(self.config.memory_info.default_maxmemory);
+        if coldplugged_mem + new_hotplugged_mem > max_total_mem {
+            return Err(anyhow!(
+                "requested memory ({} M) is greater than maximum allowed ({} M)",
+                bytes_to_megs(coldplugged_mem + new_hotplugged_mem),
+                bytes_to_megs(max_total_mem)
+            ));
+        }
+
+        let cur_hotplugged_memory = qmp.hotplugged_memory_size()?;
+        info!(
+            sl!(),
+            "hotplug memory {} -> {}", cur_hotplugged_memory, new_hotplugged_mem
+        );
+
+        match new_hotplugged_mem.cmp(&cur_hotplugged_memory) {
+            Ordering::Greater => {
+                info!(
+                    sl!(),
+                    "hotplugging {} B of memory",
+                    new_hotplugged_mem - cur_hotplugged_memory
+                );
+                qmp.hotplug_memory(new_hotplugged_mem - cur_hotplugged_memory)
+                    .context("qemu hotplug memory")?;
+                info!(
+                    sl!(),
+                    "hotplugged memory after hotplugging: {}",
+                    qmp.hotplugged_memory_size()?
+                );
+
+                new_total_mem_mb = bytes_to_megs(coldplugged_mem + new_hotplugged_mem);
+            }
+            Ordering::Less => {
+                info!(
+                    sl!(),
+                    "hotunplugging {} B of memory",
+                    cur_hotplugged_memory - new_hotplugged_mem
+                );
+            }
+            Ordering::Equal => info!(
+                sl!(),
+                "VM already has the requested amount of memory, nothing to do"
+            ),
+        }
+
+        Ok((new_total_mem_mb, MemoryConfig::default()))
     }
 }
 

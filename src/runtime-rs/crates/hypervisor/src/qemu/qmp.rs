@@ -151,7 +151,36 @@ impl Qmp {
         self.guest_memory_block_size
     }
 
-    #[allow(dead_code)]
+    pub fn hotplugged_memory_size(&mut self) -> Result<u64> {
+        let memory_frontends = self.qmp.execute(&qapi_qmp::query_memory_devices {})?;
+
+        let mut hotplugged_mem_size = 0_u64;
+
+        info!(sl!(), "hotplugged_memory_size(): iterating over dimms");
+        for mem_frontend in &memory_frontends {
+            if let qapi_qmp::MemoryDeviceInfo::dimm(dimm_info) = mem_frontend {
+                let id = match dimm_info.data.id {
+                    Some(ref id) => id.clone(),
+                    None => "".to_owned(),
+                };
+
+                info!(
+                    sl!(),
+                    "dimm id: {} size={}, hotplugged: {}",
+                    id,
+                    dimm_info.data.size,
+                    dimm_info.data.hotplugged
+                );
+
+                if dimm_info.data.hotpluggable && dimm_info.data.hotplugged {
+                    hotplugged_mem_size += dimm_info.data.size as u64;
+                }
+            }
+        }
+
+        Ok(hotplugged_mem_size)
+    }
+
     pub fn hotplug_memory(&mut self, size: u64) -> Result<()> {
         let memdev_idx = self
             .qmp
