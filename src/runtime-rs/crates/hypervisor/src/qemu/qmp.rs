@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::fmt::{Debug, Error, Formatter};
 use std::io::BufReader;
 use std::os::unix::net::UnixStream;
@@ -233,6 +233,62 @@ impl Qmp {
             arguments: mem_frontend_args,
         })?;
 
+        Ok(())
+    }
+
+    pub fn hotunplug_memory(&mut self, size: i64) -> Result<()> {
+        let frontend = self
+            .qmp
+            .execute(&qapi_qmp::query_memory_devices {})?
+            .into_iter()
+            .find(|memdev| {
+                if let qapi_qmp::MemoryDeviceInfo::dimm(dimm_info) = memdev {
+                    let dimm_id = match dimm_info.data.id {
+                        Some(ref id) => id,
+                        None => return false,
+                    };
+                    if dimm_info.data.hotpluggable
+                        && dimm_info.data.hotplugged
+                        && dimm_info.data.size == size
+                        && dimm_id.starts_with("frontend-to-hotplugged-")
+                    {
+                        return true;
+                    }
+                }
+                false
+            });
+
+        if let Some(frontend) = frontend {
+            if let qapi_qmp::MemoryDeviceInfo::dimm(frontend) = frontend {
+                info!(sl!(), "found frontend to hotunplug: {:#?}", frontend);
+
+                let frontend_id = match frontend.data.id {
+                    Some(id) => id,
+                    // This shouldn't happen as it was checked by find() above already.
+                    None => return Err(anyhow!("memory frontend to hotunplug has empty id")),
+                };
+
+                let backend_id = match frontend_id.strip_prefix("frontend-to-") {
+                    Some(id) => id.to_owned(),
+                    // This shouldn't happen as it was checked by find() above already.
+                    None => {
+                        return Err(anyhow!(
+                        "memory backend to hotunplug has id that doesn't have the expected prefix"
+                    ))
+                    }
+                };
+
+                self.qmp.execute(&qmp::device_del { id: frontend_id })?;
+                self.qmp.execute(&qmp::object_del { id: backend_id })?;
+            } else {
+                // This shouldn't happen as it was checked by find() above already.
+                return Err(anyhow!("memory device to hotunplug is not a dimm"));
+            }
+        } else {
+            return Err(anyhow!(
+                "couldn't find a suitable memory device to hotunplug"
+            ));
+        }
         Ok(())
     }
 }
