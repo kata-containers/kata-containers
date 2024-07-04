@@ -10,6 +10,7 @@ use std::os::unix::net::UnixStream;
 use std::time::Duration;
 
 use qapi::qmp;
+use qapi_qmp;
 use qapi_spec::Dictionary;
 
 pub struct Qmp {
@@ -148,6 +149,62 @@ impl Qmp {
 
     pub fn guest_memory_block_size(&self) -> u64 {
         self.guest_memory_block_size
+    }
+
+    #[allow(dead_code)]
+    pub fn hotplug_memory(&mut self, size: u64) -> Result<()> {
+        let memdev_idx = self
+            .qmp
+            .execute(&qapi_qmp::query_memory_devices {})?
+            .into_iter()
+            .filter(|memdev| {
+                if let qapi_qmp::MemoryDeviceInfo::dimm(dimm_info) = memdev {
+                    return dimm_info.data.hotpluggable && dimm_info.data.hotplugged;
+                }
+                false
+            })
+            .count();
+
+        let memory_backend_id = format!("hotplugged-{}", memdev_idx);
+
+        let memory_backend = qmp::object_add(qapi_qmp::ObjectOptions::memory_backend_file {
+            id: memory_backend_id.clone(),
+            memory_backend_file: qapi_qmp::MemoryBackendFileProperties {
+                base: qapi_qmp::MemoryBackendProperties {
+                    dump: None,
+                    host_nodes: None,
+                    merge: None,
+                    policy: None,
+                    prealloc: None,
+                    prealloc_context: None,
+                    prealloc_threads: None,
+                    reserve: None,
+                    share: Some(true),
+                    x_use_canonical_path_for_ramblock_id: None,
+                    size,
+                },
+                align: None,
+                discard_data: None,
+                offset: None,
+                pmem: None,
+                readonly: None,
+                mem_path: "/dev/shm".to_owned(),
+            },
+        });
+        self.qmp.execute(&memory_backend)?;
+
+        let memory_frontend_id = format!("frontend-to-{}", memory_backend_id);
+
+        let mut mem_frontend_args = Dictionary::new();
+        mem_frontend_args.insert("memdev".to_owned(), memory_backend_id.into());
+        self.qmp.execute(&qmp::device_add {
+            bus: None,
+            id: Some(memory_frontend_id),
+            driver: "pc-dimm".to_owned(),
+            arguments: mem_frontend_args,
+        })?;
+
+        Ok(())
     }
 }
 
