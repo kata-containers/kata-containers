@@ -50,6 +50,12 @@ jobs:
           registry: quay.io
           username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
           password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+      
+      # Cleanup current workspace dir
+      - name: Cleanup workspace
+        run: |
+          sudo rm -rf ${{ github.workspace }}/*
+          sudo rm -rf ${{ github.workspace }}/.??*
 
       - uses: actions/checkout@v4
         with:
@@ -93,6 +99,12 @@ jobs:
     steps:
       - name: Take a pre-action for self-hosted runner
         run: ${HOME}/script/pre_action.sh ubuntu-2204
+
+      # Cleanup current workspace dir
+      - name: Cleanup workspace
+        run: |
+          sudo rm -rf ${{ github.workspace }}/*
+          sudo rm -rf ${{ github.workspace }}/.??*
 
       - uses: actions/checkout@v4
 

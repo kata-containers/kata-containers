@@ -48,6 +48,12 @@ jobs:
           username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
           password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
 
+      # Cleanup current workspace dir
+      - name: Cleanup workspace
+        run: |
+          sudo rm -rf ${{ github.workspace }}/*
+          sudo rm -rf ${{ github.workspace }}/.??*
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.commit-hash }}
@@ -88,6 +94,12 @@ jobs:
     runs-on: arm64-builder
     needs: build-asset
     steps:
+      # Cleanup current workspace dir
+      - name: Cleanup workspace
+        run: |
+          sudo rm -rf ${{ github.workspace }}/*
+          sudo rm -rf ${{ github.workspace }}/.??*
+
       - name: Adjust a permission for repo
         run: |
           sudo chown -R $USER:$USER $GITHUB_WORKSPACE
