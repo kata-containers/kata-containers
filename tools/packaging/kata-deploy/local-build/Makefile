@@ -104,6 +104,9 @@ kata-ctl-tarball:
 kata-manager-tarball:
 	${MAKE} $@-build
 
+kernel-nvidia-gpu-dragonball-experimental-tarball:
+	${MAKE} $@-build
+
 kernel-dragonball-experimental-tarball:
 	${MAKE} $@-build
 

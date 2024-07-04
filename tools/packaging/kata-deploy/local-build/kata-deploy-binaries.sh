@@ -549,6 +549,13 @@ install_kernel_dragonball_experimental() {
 		"-e -t dragonball"
 }
 
+install_kernel_nvidia_gpu_dragonball_experimental() {
+	install_kernel_helper \
+		"assets.kernel-dragonball-experimental.version" \
+		"kernel-dragonball-experimental" \
+		"-e -t dragonball -g nvidia -H deb"
+}
+
 #Install GPU enabled kernel asset
 install_kernel_nvidia_gpu() {
 	local kernel_url="$(get_from_kata_deps .assets.kernel.url)"
@@ -1055,6 +1062,7 @@ handle_build() {
 	kernel-confidential) install_kernel_confidential ;;
 
 	kernel-dragonball-experimental) install_kernel_dragonball_experimental ;;
+	kernel-nvidia-gpu-dragonball-experimental) install_kernel_nvidia_gpu_dragonball_experimental ;;
 
 	kernel-nvidia-gpu) install_kernel_nvidia_gpu ;;
 
