@@ -129,7 +129,7 @@ index ebcb6ef74285..210ef5d6c9d5 100644
 +	 */
 +	lock_device_hotplug();
 +	cpu_maps_update_begin();
-+	cpu_hotplug_begin();
++	cpus_write_lock();
 +
 +	cpu_id = generic_processor_info(apic_id, apic_ver);
 +	if (cpu_id < 0) {
@@ -149,7 +149,7 @@ index ebcb6ef74285..210ef5d6c9d5 100644
 +		goto rollback_register_cpu;
 +	}
 +
-+	cpu_hotplug_done();
++	cpus_write_unlock();
 +	cpu_maps_update_done();
 +	unlock_device_hotplug();
 +
@@ -172,7 +172,7 @@ index ebcb6ef74285..210ef5d6c9d5 100644
 +	per_cpu(x86_cpu_to_apicid, cpu_id) = -1;
 +	num_processors--;
 +rollback_generic_cpu:
-+	cpu_hotplug_done();
++	cpus_write_unlock();
 +	cpu_maps_update_done();
 +	unlock_device_hotplug();
 +	return ret;
@@ -196,14 +196,14 @@ index ebcb6ef74285..210ef5d6c9d5 100644
 +
 +	lock_device_hotplug();
 +	cpu_maps_update_begin();
-+	cpu_hotplug_begin();
++	cpus_write_lock();
 +
 +	arch_unregister_cpu(cpu_id);
 +	set_cpu_present(cpu_id, false);
 +	per_cpu(x86_cpu_to_apicid, cpu_id) = -1;
 +	num_processors--;
 +
-+	cpu_hotplug_done();
++	cpus_write_unlock();
 +	cpu_maps_update_done();
 +	unlock_device_hotplug();
 +
