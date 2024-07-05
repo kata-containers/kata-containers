@@ -12,8 +12,6 @@ TEST_INITRD="${TEST_INITRD:-no}"
 setup() {
 	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
-	[[ "${KATA_HYPERVISOR}" == "qemu-tdx" || "${KATA_HYPERVISOR}" == "qemu-coco-dev" ]] && \
-		skip "See: https://github.com/kata-containers/kata-containers/issues/9667"
 
 	pod_name="test-file-volume"
 	container_name="busybox-file-volume-container"
@@ -60,8 +58,6 @@ setup() {
 teardown() {
 	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
-	[[ "${KATA_HYPERVISOR}" == "qemu-tdx" || "${KATA_HYPERVISOR}" == "qemu-coco-dev" ]] && \
-		skip "See: https://github.com/kata-containers/kata-containers/issues/9667"
 
 	kubectl describe pod "$pod_name"
 

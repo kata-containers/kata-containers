@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use super::new_device;
 use crate::image;
 use crate::storage::{StorageContext, StorageHandler};
 use anyhow::{anyhow, Result};
@@ -11,8 +12,6 @@ use kata_types::mount::{ImagePullVolume, StorageDevice};
 use protocols::agent::Storage;
 use std::sync::Arc;
 use tracing::instrument;
-
-use super::{common_storage_handler, new_device};
 
 #[derive(Debug)]
 pub struct ImagePullHandler {}
@@ -36,7 +35,7 @@ impl StorageHandler for ImagePullHandler {
     #[instrument]
     async fn create_device(
         &self,
-        mut storage: Storage,
+        storage: Storage,
         ctx: &mut StorageContext,
     ) -> Result<Arc<dyn StorageDevice>> {
         //Currently the image metadata is not used to pulling image in the guest.
@@ -51,12 +50,7 @@ impl StorageHandler for ImagePullHandler {
             .ok_or_else(|| anyhow!("failed to get container id"))?;
         let bundle_path = image::pull_image(image_name, &cid, &image_pull_volume.metadata).await?;
 
-        storage.source = bundle_path;
-        storage.options = vec!["bind".to_string(), "ro".to_string()];
-
-        common_storage_handler(ctx.logger, &storage)?;
-
-        new_device(storage.mount_point)
+        new_device(bundle_path)
     }
 }
 

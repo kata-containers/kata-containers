@@ -210,11 +210,6 @@ impl AgentService {
             "receive createcontainer, storages: {:?}", &req.storages
         );
 
-        // In case of pulling image inside guest, we need to merge the image bundle OCI spec
-        // into the container creation request OCI spec.
-        #[cfg(feature = "guest-pull")]
-        image::merge_bundle_oci(&mut oci).await?;
-
         // Some devices need some extra processing (the ones invoked with
         // --device for instance), and that's what this call is doing. It
         // updates the devices listed in the OCI spec, so that they actually
@@ -1920,21 +1915,28 @@ pub fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
         return Err(anyhow!(nix::Error::EINVAL));
     };
 
-    let spec_root_path = Path::new(&spec_root.path);
-
     let bundle_path = Path::new(CONTAINER_BASE).join(cid);
     let config_path = bundle_path.join("config.json");
     let rootfs_path = bundle_path.join("rootfs");
+    let spec_root_path = Path::new(&spec_root.path);
 
-    fs::create_dir_all(&rootfs_path)?;
-    baremount(
-        spec_root_path,
-        &rootfs_path,
-        "bind",
-        MsFlags::MS_BIND,
-        "",
-        &sl(),
-    )?;
+    let rootfs_exists = Path::new(&rootfs_path).exists();
+    info!(
+        sl(),
+        "The rootfs_path is {:?} and exists: {}", rootfs_path, rootfs_exists
+    );
+
+    if !rootfs_exists {
+        fs::create_dir_all(&rootfs_path)?;
+        baremount(
+            spec_root_path,
+            &rootfs_path,
+            "bind",
+            MsFlags::MS_BIND,
+            "",
+            &sl(),
+        )?;
+    }
 
     let rootfs_path_name = rootfs_path
         .to_str()
