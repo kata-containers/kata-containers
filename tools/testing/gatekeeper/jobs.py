@@ -42,6 +42,7 @@ _GH_RUNS_URL = ("https://api.github.com/repos/"
 class Checker:
     """Object to keep watching required GH action workflows"""
     def __init__(self):
+        self.latest_commit_sha = os.getenv("COMMIT_HASH")
         required_jobs = os.getenv("REQUIRED_JOBS")
         if required_jobs:
             required_jobs = required_jobs.split(",")
@@ -151,10 +152,9 @@ class Checker:
         :returns: 0 - all passing; 1 - any failure; 127 some jobs running
         """
         # TODO: Check if we need pagination here as well
-        latest_commit_sha = os.getenv("COMMIT_HASH")
         response = requests.get(
             _GH_RUNS_URL,
-            params={"head_sha": latest_commit_sha},
+            params={"head_sha": self.latest_commit_sha},
             headers=_GH_HEADERS,
             timeout=60
         )
@@ -174,6 +174,7 @@ class Checker:
 
         :returns: 0 on success; 1 on failure
         """
+        print(f"Gatekeeper for project={os.environ['GITHUB_REPOSITORY']} and SHA={self.latest_commit_sha}")
         while True:
             ret = self.check_workflow_runs_status()
             if ret == RUNNING:
