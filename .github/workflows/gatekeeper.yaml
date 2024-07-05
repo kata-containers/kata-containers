@@ -28,6 +28,7 @@ jobs:
         env:
           TARGET_BRANCH: ${{ github.event.pull_request.base.ref }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMIT_HASH: ${{ github.event.pull_request.head.sha }}
         run: |
           #!/usr/bin/env bash -x
           mapfile -t lines < <(python3 tools/testing/gatekeeper/skips.py -t)
