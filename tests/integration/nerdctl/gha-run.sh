@@ -31,10 +31,7 @@ function install_dependencies() {
 	sudo apt -y install "${system_deps[@]}"
 
 	# Install lastversion from pip
-	#
-	# --break-system-packages is, unfortunately, needed here as it'll also
-	# bring in some python3 dependencies on its own
-	pip install lastversion --break-system-packages
+	pip install lastversion
 
 	# As the command above will install lastversion on $HOME/.local/bin, we
 	# need to add it to the PATH
