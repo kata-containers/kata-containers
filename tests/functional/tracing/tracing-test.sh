@@ -116,15 +116,6 @@ cleanup()
 		return 0
 	fi
 
-	if [ -n "${CI:-}" ]; then
-		# Running under the CI, so copy the logs to allow them
-		# to be added as test artifacts.
-		sudo mkdir -p "$TRACE_LOG_DIR"
-		sudo cp -a "$logdir"/* "$TRACE_LOG_DIR"
-
-		dest="$TRACE_LOG_DIR"
-	fi
-
 	eval "$fp" "test $result - logs left in '$dest'"
 }
 
