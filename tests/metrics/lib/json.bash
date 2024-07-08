@@ -60,7 +60,12 @@ EOF
 			"HypervisorVersion": "${HYPERVISOR_VERSION}",
 			"Shim": "${SHIM_PATH}",
 			"ShimVersion": "${SHIM_VERSION}",
-			"machinename": "$(uname -n)"
+			"machinename": "$(uname -n)",
+			"SharedFs": "${SHARED_FS}",
+			"ReqMemKB": "${REQ_MEMORY}",
+			"ReqNumVcpus": "${REQ_NUM_VCPUS}",
+			"MeasuredTotalMem": "${MEASURED_CONTAINER_TOTAL_MEM}",
+			"MeasuredNumVcpus": "${MEASURED_CONTAINER_NUM_VCPUS}"
 		}
 EOF
 )"

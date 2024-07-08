@@ -45,6 +45,11 @@ quay.io/libpod"
 readonly DEFAULT_KATA_CONFIG_DIR="/opt/kata/share/defaults/kata-containers"
 readonly DEFAULT_KATA_CONFIG_FNAME="configuration.toml"
 
+# Global variables used to retrieve two values: the count of Vcpus and the
+# total memory available inside a container.
+MEASURED_CONTAINER_NUM_VCPUS=""
+MEASURED_CONTAINER_TOTAL_MEM=""
+
 # This function checks existence of commands.
 # They can be received standalone or as an array, e.g.
 #
@@ -478,7 +483,7 @@ function clean_cache() {
 }
 
 # This function receives as a single parameter the path to a valid kata configuration file
-# that will be set as the configuration used to start new Kata containers.
+# that will be set as the configuration used to start a new kata container.
 function set_kata_config_file() {
 	NEW_KATA_CONFIG=${1}
 
@@ -512,4 +517,32 @@ function get_current_kata_config_file() {
 # if that is not the case, the function exits with an error message.
 function check_if_root() {
 	[ "$EUID" -ne 0 ] && die "Please run as root or use sudo."
+}
+
+# This function launches a kata container using a Busybox image,
+# then collects the current number of vcpus and the free memory from the container.
+# Finalliy fullfills the global variables 'MEASURED_CONTAINER_NUM_VCPUS' and 'MEASURED_CONTAINER_TOTAL_MEM'
+function get_kata_memory_and_vcpus() {
+	local busybox_img="quay.io/prometheus/busybox:latest"
+	local container_name="kata-busybox_${RANDOM}"
+	local PAYLOAD_ARGS="tail -f /dev/null"
+	local remove_img=1
+
+	IMG_EXIST="$(sudo ctr i list | grep -c $busybox_img)" || true
+
+	# Pull image if it does not exist.
+	[ "${IMG_EXIST}" -eq 0 ] && ${CTR_EXE} i pull "${busybox_img}"
+
+	sudo -E ${CTR_EXE} run -d --runtime "${CTR_RUNTIME}" "${busybox_img}" "${container_name}" sh -c "${PAYLOAD_ARGS}"
+
+	MEASURED_CONTAINER_NUM_VCPUS="$(sudo -E ${CTR_EXE} t exec --exec-id ${RANDOM} ${container_name} sh -c "nproc")"
+	MEASURED_CONTAINER_TOTAL_MEM="$(sudo -E ${CTR_EXE} t exec --exec-id ${RANDOM} ${container_name} sh -c "free -h" | grep -i "Mem:" | awk '{print $2}')"
+	sudo ${CTR_EXE} t kill -a -s SIGKILL "${container_name}"
+
+	# Delete the busubox image only if it was previously extracted.
+	# Otherwise do not remove.
+	[ ${IMG_EXIST} -eq 0 ] && ${CTR_EXE} i rm "${busybox_img}"
+
+	sleep 1
+	sudo ${CTR_EXE} c rm "${container_name}"
 }
