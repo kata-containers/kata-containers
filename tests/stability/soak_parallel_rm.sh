@@ -53,7 +53,7 @@ function check_vsock_active() {
 }
 
 function count_containers() {
-	sudo ctr c list -q | wc -l
+	sudo "${CTR_EXE}" c list -q | wc -l
 }
 
 function check_all_running() {
@@ -124,7 +124,7 @@ function go() {
 		local i
 		for ((i=1; i<= ${MAX_CONTAINERS}; i++)); do
 			containers+=($(random_name))
-			sudo ctr run --runtime=${CTR_RUNTIME} -d ${nginx_image} ${containers[-1]} sh -c ${COMMAND}
+			sudo "${CTR_EXE}" run --runtime="${CTR_RUNTIME}" -d "${nginx_image}" "${containers[-1]}" sh -c "${COMMAND}"
 			((how_many++))
 		done
 
@@ -177,7 +177,7 @@ function init() {
 	nginx_image="docker.io/library/nginx:$nginx_version"
 
 	# Pull nginx image
-	sudo ctr image pull ${nginx_image}
+	sudo "${CTR_EXE}" image pull "${nginx_image}"
 	if [ $? != 0 ]; then
 		die "Unable to retry docker image ${nginx_image}"
 	fi
