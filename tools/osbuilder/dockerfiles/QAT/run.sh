@@ -86,7 +86,7 @@ build_qat_drivers()
     KERNEL_ROOTFS_DIR=${KERNEL_MAJOR_VERSION}.${KERNEL_PATHLEVEL}.${KERNEL_SUBLEVEL}${KERNEL_EXTRAVERSION}
     cd $QAT_SRC
     KERNEL_SOURCE_ROOT=${linux_kernel_path} ./configure ${QAT_CONFIGURE_OPTIONS}
-    make all -j $($(nproc ${CI:+--ignore 1})) 
+    make all -j $(nproc) 
 }
 
 add_qat_to_rootfs()
