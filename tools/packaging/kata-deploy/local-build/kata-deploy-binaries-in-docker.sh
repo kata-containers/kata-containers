@@ -79,7 +79,6 @@ docker build -q -t build-kata-deploy \
 	--build-arg ARCH="${ARCH}" \
 	"${script_dir}/dockerbuild/"
 
-CI="${CI:-}"
 ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY:-}"
 ARTEFACT_REPOSITORY="${ARTEFACT_REPOSITORY:-}"
 ARTEFACT_REGISTRY_USERNAME="${ARTEFACT_REGISTRY_USERNAME:-}"
@@ -106,7 +105,6 @@ docker run \
 	-v $HOME/.docker:/root/.docker \
 	-v /var/run/docker.sock:/var/run/docker.sock \
 	-v "${kata_dir}:${kata_dir}" \
-	--env CI="${CI}" \
 	--env USER=${USER} \
 	--env ARTEFACT_REGISTRY="${ARTEFACT_REGISTRY}" \
 	--env ARTEFACT_REPOSITORY="${ARTEFACT_REPOSITORY}" \
