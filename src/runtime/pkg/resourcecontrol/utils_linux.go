@@ -9,6 +9,8 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/containerd/cgroups"
@@ -73,6 +75,25 @@ func cgroupHierarchy(path string, sandboxCgroupOnly bool) (cgroups.Hierarchy, cg
 	}
 }
 
+// checkSystemd should be used temporarily to decide
+// available resource control properties.
+// This is not ideal but is temporary fixed for deciding between subsystem IOAccounting and BlockIOAccounting
+func ParseSystemdVersion(systemdVersion string) (int, error) {
+	// version get returned as quoted string: "219" instead of 219
+	ver := strings.Trim(systemdVersion, `"`)
+	re := regexp.MustCompile(`^(\d+)`)
+	subStringMatch := re.FindStringSubmatch(ver)
+	if len(subStringMatch) < 2 {
+		return 0, fmt.Errorf("error parsing systemd version with regex, substring: %v", subStringMatch)
+	}
+	version, err := strconv.Atoi(subStringMatch[1])
+	if err != nil {
+		return 0, fmt.Errorf("error parsing systemd version: %v", err)
+	}
+
+	return version, nil
+}
+
 func createCgroupsSystemd(slice string, unit string, pid int) error {
 	ctx := context.TODO()
 	conn, err := systemdDbus.NewWithContext(ctx)
@@ -86,7 +107,25 @@ func createCgroupsSystemd(slice string, unit string, pid int) error {
 		newProperty("DefaultDependencies", false),
 		newProperty("MemoryAccounting", true),
 		newProperty("CPUAccounting", true),
-		newProperty("IOAccounting", true),
+	}
+
+	systemdVersion, err := conn.GetManagerProperty("Version")
+	if err != nil {
+		return fmt.Errorf("error getting systemd version: %v", err)
+	}
+
+	var ver int
+	if ver, err = ParseSystemdVersion(systemdVersion); err != nil {
+		return err
+	}
+	// BlockIOAccounting has been replaced with IOAccounting in newer version
+	// if IOAccounting is used it breaks the cgroup creation in older versions of systemd.
+	// Below is changelog for systemd, when IOAccounting was introduced:
+	// https://github.com/systemd/systemd/commit/13c31542cc57e1454dccd6383bfdac98cbee5bb1#diff-8bd72c8fe1849563e9978d5f71[…]ee9371c9e94a0e35159a5735244c216
+	if ver < 252 {
+		properties = append(properties, newProperty("BlockIOAccounting", true))
+	} else {
+		properties = append(properties, newProperty("IOAccounting", true))
 	}
 
 	if strings.HasSuffix(unit, ".slice") {

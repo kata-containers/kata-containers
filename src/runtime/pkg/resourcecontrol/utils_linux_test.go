@@ -171,3 +171,49 @@ func TestDeviceToLinuxDevice(t *testing.T) {
 	assert.NotEmpty(dev.Access)
 	assert.True(dev.Allow)
 }
+
+func TestParseSystemdVersion(t *testing.T) {
+
+	type testCase struct {
+		name            string
+		version         string
+		wantError       bool
+		expectedVersion int
+	}
+
+	testcases := []testCase{
+		{
+			name:            "Amazon linux - valid version",
+			version:         "219",
+			wantError:       false,
+			expectedVersion: 219,
+		},
+		{
+			name:            "Ubuntu systemd Azure - version",
+			version:         "249.11-0ubuntu3.12",
+			wantError:       false,
+			expectedVersion: 249,
+		},
+		{
+			name:            "Ubuntu systemd Azure - version",
+			version:         "239-41.el8_5.3",
+			wantError:       false,
+			expectedVersion: 239,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert := assert.New(t)
+			version, err := ParseSystemdVersion(tc.version)
+
+			if tc.wantError {
+				assert.Error(err)
+			} else {
+				assert.NoError(err)
+				assert.Equal(tc.expectedVersion, version)
+			}
+
+		})
+	}
+}

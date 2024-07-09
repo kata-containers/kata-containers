@@ -2593,6 +2593,27 @@ func (s *Sandbox) resourceControllerDelete() error {
 		return nil
 	}
 
+	/*
+		- TLDR: As systemd manages the cgroups, it takes care of deletion of scopes and slices, so we should skip deletion.
+		- When we enable sandbox_cgroup_only = True and cgroups is managed by systemd, below code LoadResourceController:
+		tries to load systemd cgroup hierarchy. Ex:
+		/kubepods.slice/kubepods-besteffort.slice/kubepods-besteffort-poddxxxb399e709b.slice/cri-containerd8xx22.scope/
+		Followed by MoveTO is called on the above hierarchy. MoveTO internally calls cgroups.Load and cgroups.MoveTO which
+		part of containerd package.
+		- Problem with cgroup.Load and cgroup.MoveTO is, this functions calls traverse recursively on all the child
+		hierarchies, which is problematic in case of systemd.
+		-As these groups are created by systemd, systemd thinks it's in charge of cleanup. So it automatically cleans up
+		this `groups / dirs` when process exits inside this scope/slices. (kubepods-besteffort-poddf8c4759_6a18_4e94_9c37_ab4b399e709b.slice & cri-containerd-45870473a3369e7901290af4501202b485535762aca96b0437672e1b3817f322.scope/)
+		which consists of scope as well slice.
+		- Now as these groups are automatically cleaned up when cgroup.load or cgroup.move tries to do any operation
+		it throws error `failed to clean up the files, /sys/fs/cgroup/<subsystem>/kubepods.slice/kube-{besteffor/burst}/kubepods-best-122/cri--container-1223.scope/`
+		- With below condition, it entirely skips the delete operation if we are using systemd and relies on systemd for cleanup.
+	*/
+	if resCtrl.IsSystemdCgroup(s.state.SandboxCgroupPath) && s.config.SandboxCgroupOnly {
+		s.Logger().Debugf("skipping delete as cgroup is managed by systemd")
+		return nil
+	}
+
 	sandboxController, err := resCtrl.LoadResourceController(s.state.SandboxCgroupPath, s.config.SandboxCgroupOnly)
 	if err != nil {
 		return err
