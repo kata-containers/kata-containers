@@ -20,6 +20,9 @@ setup() {
 	if [ "${KBS}" = "false" ]; then
 		skip "Test skipped as KBS not setup"
 	fi
+	if [ "${KATA_HYPERVISOR}" = "qemu-snp" ]; then
+		skip "Test skipped as SNP attestation not setup"
+	fi
 
 	setup_common
 	get_pod_config_dir
@@ -89,6 +92,9 @@ teardown() {
 
 	if [ "${KBS}" = "false" ]; then
 		skip "Test skipped as KBS not setup"
+	fi
+	if [ "${KATA_HYPERVISOR}" = "qemu-snp" ]; then
+		skip "Test skipped as SNP attestation not setup"
 	fi
 
 	[ -n "${pod_name:-}" ] && kubectl describe "pod/${pod_name}" || true
