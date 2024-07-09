@@ -25,6 +25,7 @@ else
 	# by other cases which are using 'alpine' and 'quay.io/prometheus/busybox:latest' image.
 	# more details https://github.com/kata-containers/kata-containers/issues/8337
 	K8S_TEST_SMALL_HOST_UNION=( \
+		"k8s-guest-pull-image-encrypted.bats" \
 		"k8s-guest-pull-image.bats" \
 		"k8s-confidential-attestation.bats" \
 		"k8s-confidential.bats" \
