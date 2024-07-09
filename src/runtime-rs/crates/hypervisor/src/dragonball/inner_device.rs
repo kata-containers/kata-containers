@@ -141,24 +141,27 @@ impl DragonballInner {
         // As it has been assigned in vfio device manager.
         let pci_path = primary_device.guest_pci_path.unwrap();
         let guest_dev_id = pci_path.get_device_slot().unwrap().0;
-
+        let clique_id = vfio_device.config.clique_id;
         info!(
             sl!(),
             "insert host device. 
             host device id: {:?}, 
             bus_slot_func: {:?}, 
             guest device id: {:?}, 
-            vendor/device id: {:?}",
+            vendor/device id: {:?},
+            nvidia gpudirect clique id: {:?}",
             primary_device.hostdev_id,
             primary_device.bus_slot_func,
             guest_dev_id,
             vendor_device_id,
+            clique_id,
         );
 
         let vfio_dev_config = VfioPciDeviceConfig {
             bus_slot_func: primary_device.bus_slot_func,
             vendor_device_id,
             guest_dev_id: Some(guest_dev_id),
+            clique_id,
             ..Default::default()
         };
         let host_dev_config = HostDeviceConfig {
