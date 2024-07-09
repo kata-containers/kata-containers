@@ -62,6 +62,37 @@ kbs_set_resources_policy() {
 		--policy-file "$file"
 }
 
+# Set resource data in base64 encoded.
+#
+# Parameters:
+#	$1 - repository name (optional)
+#	$2 - resource type (mandatory)
+#	$3 - tag (mandatory)
+#	$4 - resource data in base64
+#
+kbs_set_resource_base64() {
+	local repository="${1:-}"
+	local type="${2:-}"
+	local tag="${3:-}"
+	local data="${4:-}"
+	local file
+	local rc=0
+
+	if [ -z "$data" ]; then
+		>&2 echo "ERROR: missing data parameter"
+		return 1
+	fi
+
+	file=$(mktemp -t kbs-resource-XXXXX)
+	echo "$data" | base64 -d > "$file"
+
+	kbs_set_resource_from_file "$repository" "$type" "$tag" "$file" || \
+		rc=$?
+
+	rm -f "$file"
+	return $rc
+}
+
 # Set resource data.
 #
 # Parameters:
