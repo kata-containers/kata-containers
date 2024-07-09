@@ -1,0 +1,13 @@
+{
+    "metadata": {
+        "name": "test-sandbox",
+        "namespace": "default",
+        "uid": "0"
+    },
+    "log_directory": "/tmp",
+    "linux": {
+        "security_context": {
+           "privileged": true
+       }
+    }
+}
