@@ -24,7 +24,6 @@ export PATH="$PATH:/usr/local/go/bin"
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 RUNTIME=${RUNTIME:-containerd-shim-kata-${KATA_HYPERVISOR}-v2}
 FACTORY_TEST=${FACTORY_TEST:-""}
-USE_DEVMAPPER="${USE_DEVMAPPER:-false}"
 ARCH=$(uname -m)
 
 containerd_runtime_type="io.containerd.kata-${KATA_HYPERVISOR}.v2"
@@ -119,13 +118,6 @@ cat << EOF | sudo tee "${CONTAINERD_CONFIG_FILE}"
 [plugins.linux]
        shim = "${containerd_shim_path}"
 EOF
-
-if [ "$USE_DEVMAPPER" == "true" ]; then
-	sudo sed -i 's|^\(\[plugins\]\).*|\1\n  \[plugins.devmapper\]\n    pool_name = \"contd-thin-pool\"\n    base_image_size = \"4096MB\"|' ${CONTAINERD_CONFIG_FILE}
-	echo "Devicemapper configured"
-	cat "${CONTAINERD_CONFIG_FILE}"
-fi
-
 }
 
 function cleanup() {
