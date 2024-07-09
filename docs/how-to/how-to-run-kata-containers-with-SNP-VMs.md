@@ -53,7 +53,14 @@ $ ./configure --enable-virtfs --target-list=x86_64-softmmu --enable-debug
 $ make -j "$(nproc)"
 $ popd
 ```
-
+- Create cert-chain for SNP attestation ( using [snphost](https://github.com/virtee/snphost/blob/main/docs/snphost.1.adoc) )
+```bash
+$ git clone https://github.com/virtee/snphost.git && cd snphost/
+$ cargo build
+$ mkdir /tmp/certs
+$ ./target/debug/snphost fetch vcek der /tmp/certs
+$ ./target/debug/snphost import /tmp/certs /opt/snp/cert_chain.cert
+```
 ### Kata Containers Configuration for SNP
 
 The configuration file located at `/etc/kata-containers/configuration.toml` must be adapted as follows to support SNP-VMs:
@@ -100,6 +107,10 @@ sev_snp_guest = true
   - Configure an OVMF (add path)
 ```toml
 firmware = "/path/to/kata-containers/tools/packaging/static-build/ovmf/opt/kata/share/ovmf/OVMF.fd"
+```
+  - SNP attestation (add cert-chain to default path or add the path with cert-chain)
+```toml
+snp_certs_path = "/path/to/cert-chain"
 ```
 
 ## Test Kata Containers with Containerd
