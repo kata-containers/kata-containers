@@ -33,31 +33,3 @@ distro_in_set() {
 	done
 	return 1
 }
-
-if [ -n "${CI:-}" ]; then
-	# Since too many distros timeout for now, we only test clearlinux and ubuntu. We can enable other distros when we fix timeout problem.
-	for distro in "${distros[@]}"; do
-		if distro_in_set "${distro}" "${test_distros[@]}"; then
-			continue
-		fi
-		skipWhenTestingAll+=("${distro}")
-	done
-
-	# add skipForRustDistros to skipWhenTestingAll if it is not
-	for td in "${skipForRustDistros[@]}"; do
-		if distro_in_set "${td}" "${skipWhenTestingAll[@]}"; then
-			continue
-		fi
-		# not found in skipWhenTestingAll, add to it
-		skipWhenTestingAll+=("${td}")
-	done
-
-	if distro_in_set "${arch}" "${skipForRustArch[@]}"; then
-		for distro in "${test_distros[@]}"; do
-			if distro_in_set "${distro}" "${skipWhenTestingAll[@]}"; then
-				continue
-			fi
-			skipWhenTestingAll+=("${distro}")
-		done
-	fi
-fi
