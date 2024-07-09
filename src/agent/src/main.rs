@@ -38,6 +38,7 @@ use std::process::Command;
 use std::sync::Arc;
 use tracing::{instrument, span};
 
+mod cdh;
 mod config;
 mod console;
 mod device;
@@ -59,6 +60,7 @@ mod util;
 mod version;
 mod watcher;
 
+use cdh::CDHClient;
 use config::GuestComponentsProcs;
 use mount::{cgroups_mount, general_mount};
 use sandbox::Sandbox;
@@ -104,6 +106,7 @@ const AA_ATTESTATION_URI: &str = concatcp!(UNIX_SOCKET_PREFIX, AA_ATTESTATION_SO
 
 const CDH_PATH: &str = "/usr/local/bin/confidential-data-hub";
 const CDH_SOCKET: &str = "/run/confidential-containers/cdh.sock";
+const CDH_SOCKET_URI: &str = concatcp!(UNIX_SOCKET_PREFIX, CDH_SOCKET);
 
 const API_SERVER_PATH: &str = "/usr/local/bin/api-server-rest";
 
@@ -403,6 +406,7 @@ async fn start_sandbox(
     let (tx, rx) = tokio::sync::oneshot::channel();
     sandbox.lock().await.sender = Some(tx);
 
+    let mut cdh_client = None;
     let gc_procs = config.guest_components_procs;
     if gc_procs != GuestComponentsProcs::None {
         if !attestation_binaries_available(logger, &gc_procs) {
@@ -411,12 +415,19 @@ async fn start_sandbox(
                 "attestation binaries requested for launch not available"
             );
         } else {
-            init_attestation_components(logger, config)?;
+            cdh_client = init_attestation_components(logger, config)?;
         }
     }
 
     // vsock:///dev/vsock, port
-    let mut server = rpc::start(sandbox.clone(), config.server_addr.as_str(), init_mode).await?;
+    let mut server = rpc::start(
+        sandbox.clone(),
+        config.server_addr.as_str(),
+        init_mode,
+        cdh_client,
+    )
+    .await?;
+
     server.start().await?;
 
     rx.await?;
@@ -445,10 +456,11 @@ fn attestation_binaries_available(logger: &Logger, procs: &GuestComponentsProcs)
 // Start-up attestation-agent, CDH and api-server-rest if they are packaged in the rootfs
 // and the corresponding procs are enabled in the agent configuration. the process will be
 // launched in the background and the function will return immediately.
-fn init_attestation_components(logger: &Logger, config: &AgentConfig) -> Result<()> {
+// If the CDH is started, a CDH client will be instantiated and returned.
+fn init_attestation_components(logger: &Logger, config: &AgentConfig) -> Result<Option<CDHClient>> {
     // skip launch of any guest-component
     if config.guest_components_procs == GuestComponentsProcs::None {
-        return Ok(());
+        return Ok(None);
     }
 
     debug!(logger, "spawning attestation-agent process {}", AA_PATH);
@@ -463,7 +475,7 @@ fn init_attestation_components(logger: &Logger, config: &AgentConfig) -> Result<
 
     // skip launch of confidential-data-hub and api-server-rest
     if config.guest_components_procs == GuestComponentsProcs::AttestationAgent {
-        return Ok(());
+        return Ok(None);
     }
 
     debug!(
@@ -479,9 +491,11 @@ fn init_attestation_components(logger: &Logger, config: &AgentConfig) -> Result<
     )
     .map_err(|e| anyhow!("launch_process {} failed: {:?}", CDH_PATH, e))?;
 
+    let cdh_client = CDHClient::new().context("Failed to create CDH Client")?;
+
     // skip launch of api-server-rest
     if config.guest_components_procs == GuestComponentsProcs::ConfidentialDataHub {
-        return Ok(());
+        return Ok(Some(cdh_client));
     }
 
     let features = config.guest_components_rest_api;
@@ -498,7 +512,7 @@ fn init_attestation_components(logger: &Logger, config: &AgentConfig) -> Result<
     )
     .map_err(|e| anyhow!("launch_process {} failed: {:?}", API_SERVER_PATH, e))?;
 
-    Ok(())
+    Ok(Some(cdh_client))
 }
 
 fn wait_for_path_to_exist(logger: &Logger, path: &str, timeout_secs: i32) -> Result<()> {
