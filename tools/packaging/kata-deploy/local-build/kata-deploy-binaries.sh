@@ -887,14 +887,7 @@ install_script_helper() {
 
 	local script_path
 
-	# If the script isn't specified as an absolute or relative path,
-	# find it.
-	if grep -q '/' <<< "$script"
-	then
-		script_path="$script"
-	else
-		script_path=$(find "${repo_root_dir}/" -type f -name "$script")
-	fi
+	script_path="${repo_root_dir}/$script"
 
 	local script_file
 	script_file=$(basename "$script_path")
@@ -977,7 +970,7 @@ install_kata_ctl() {
 }
 
 install_kata_manager() {
-	install_script_helper "kata-manager.sh"
+	install_script_helper "utils/kata-manager.sh"
 }
 
 install_runk() {
