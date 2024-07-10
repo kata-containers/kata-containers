@@ -34,7 +34,7 @@ NO_PROXY="${NO_PROXY:-${no_proxy:-}}"
 PULL_TYPE="${PULL_TYPE:-default}"
 export AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-no}"
 export TEST_CLUSTER_NAMESPACE="${TEST_CLUSTER_NAMESPACE:-kata-containers-k8s-tests}"
-export GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-oci-distribution-client}"
+export GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-oci-distribution}"
 
 function configure_devmapper() {
 	sudo mkdir -p /var/lib/containerd/devmapper
