@@ -44,6 +44,11 @@ confidential_guest = true
 # enable SEV SNP VMs
 sev_snp_guest = true
 
+# The path to the file containing the SNP certificate chain (including
+# VCEK/VLEK certificates). This wil be used to get the extended attestation
+# report from the guest. The default path is @SNPCERTSPATH@.
+snp_certs_path = "@SNPCERTSPATH@"
+
 # Enable running QEMU VMM as a non-root user.
 # By default QEMU VMM run as root. When this is set to true, QEMU VMM process runs as
 # a non-root random user. See documentation for the limitations of this mode.
