@@ -176,11 +176,6 @@ function extract_kata_env() {
 	RUNTIME_PATH="$(echo "${kata_env}" | jq -r ${runtime_path})"
 	SHARED_FS="$(echo "${kata_env}" | jq -r ${shared_fs})"
 
-	# get_kata_memory_and_vcpus() function measures the memory and the number of vcpus
-	# from a kata container, and saves these values ​​in the variables:
-	# 'MEASURED_CONTAINER_NUM_VCPUS' and 'MEASURED_CONTAINER_TOTAL_MEM'
-	get_kata_memory_and_vcpus
-
 	# get the requested memory and num of vcpus from the kata config file.
 	config_content="$(cat ${RUNTIME_CONFIG_PATH} | grep -vE "^#")"
 	REQ_MEMORY="$(echo "${config_content}" | grep -i default_memory | cut -d  "=" -f2 | awk '{print $1}')"
