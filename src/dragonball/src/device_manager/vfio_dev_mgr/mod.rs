@@ -255,7 +255,7 @@ impl VfioDeviceMgr {
     pub fn insert_device(
         &mut self,
         ctx: &mut DeviceOpContext,
-        config: HostDeviceConfig,
+        config: &mut HostDeviceConfig,
     ) -> Result<()> {
         if !cfg!(feature = "hotplug") && ctx.is_hotplug {
             return Err(VfioDeviceError::UpdateNotAllowedPostBoot);
@@ -267,7 +267,7 @@ impl VfioDeviceMgr {
             "hostdev_id" => &config.hostdev_id,
             "bdf" => &config.dev_config.bus_slot_func,
         );
-        let device_index = self.info_list.insert_or_update(&config)?;
+        let device_index = self.info_list.insert_or_update(config)?;
         // Handle device hotplug case
         if ctx.is_hotplug {
             slog::info!(
@@ -277,7 +277,7 @@ impl VfioDeviceMgr {
                 "hostdev_id" => &config.hostdev_id,
                 "bdf" => &config.dev_config.bus_slot_func,
             );
-            self.add_device(ctx, &config, device_index)?;
+            self.add_device(ctx, config, device_index)?;
         }
 
         Ok(())
@@ -438,7 +438,7 @@ impl VfioDeviceMgr {
     fn add_device(
         &mut self,
         ctx: &mut DeviceOpContext,
-        cfg: &HostDeviceConfig,
+        cfg: &mut HostDeviceConfig,
         idx: usize,
     ) -> Result<()> {
         let dev = self.create_device(cfg, ctx, idx)?;
@@ -450,8 +450,13 @@ impl VfioDeviceMgr {
 
             self.register_memory(vm_memory.deref())?;
         }
-        ctx.insert_hotplug_pci_device(&dev, None)
-            .map_err(VfioDeviceError::VfioDeviceMgr)
+        let slot = ctx
+            .insert_hotplug_pci_device(&dev, None)
+            .map_err(VfioDeviceError::VfioDeviceMgr)?;
+
+        cfg.dev_config.guest_dev_id = Some(slot);
+
+        Ok(())
     }
 
     /// Gets the index of the device with the specified `hostdev_id` if it exists in the list.
