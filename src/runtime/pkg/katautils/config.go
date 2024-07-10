@@ -189,6 +189,7 @@ type runtime struct {
 	EnablePprof               bool     `toml:"enable_pprof"`
 	DisableGuestEmptyDir      bool     `toml:"disable_guest_empty_dir"`
 	CreateContainerTimeout    uint64   `toml:"create_container_timeout"`
+	DanConf                   string   `toml:"dan_conf"`
 }
 
 type agent struct {
@@ -1662,6 +1663,7 @@ func LoadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 
 	config.DisableGuestEmptyDir = tomlConf.Runtime.DisableGuestEmptyDir
 
+	config.DanConfig = tomlConf.Runtime.DanConf
 	if err := checkConfig(config); err != nil {
 		return "", config, err
 	}
