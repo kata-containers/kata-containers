@@ -361,8 +361,8 @@ function set_default_cluster_namespace() {
 }
 
 function delete_test_cluster_namespace() {
-	set_default_cluster_namespace
 	kubectl delete namespace "${TEST_CLUSTER_NAMESPACE}"
+	set_default_cluster_namespace
 }
 
 function delete_test_runners(){
