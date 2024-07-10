@@ -583,25 +583,8 @@ cleanup()
 		warn "Not cleaning up to help debug failure:"
 		warn ""
 
-		if [ "${CI:-}" = "true" ]
-		then
-			show_procs
-
-			info "VSOCK details"
-			ss -Hp --vsock || true
-
-			info "agent-ctl log file"
-			sudo cat "${ctl_log_file}" || true
-			echo
-
-			info "agent log file"
-			sudo cat "${agent_log_file}" || true
-			echo
-
-		else
-			info "agent-ctl log file   : ${ctl_log_file}"
-			info "agent log file       : ${agent_log_file}"
-		fi
+		info "agent-ctl log file   : ${ctl_log_file}"
+		info "agent log file       : ${agent_log_file}"
 
 		info "OCI bundle directory : ${bundle_dir}"
 
