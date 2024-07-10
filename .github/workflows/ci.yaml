@@ -43,7 +43,7 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
     secrets: inherit
-  
+
   build-kata-static-tarball-ppc64le:
     uses: ./.github/workflows/build-kata-static-tarball-ppc64le.yaml
     with:
@@ -62,7 +62,7 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       target-branch: ${{ inputs.target-branch }}
     secrets: inherit
-  
+
   publish-kata-deploy-payload-ppc64le:
     needs: build-kata-static-tarball-ppc64le
     uses: ./.github/workflows/publish-kata-deploy-payload-ppc64le.yaml
@@ -207,7 +207,8 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
-      
+    secrets: inherit
+
   run-k8s-tests-on-ppc64le:
     needs: publish-kata-deploy-payload-ppc64le
     uses: ./.github/workflows/run-k8s-tests-on-ppc64le.yaml
