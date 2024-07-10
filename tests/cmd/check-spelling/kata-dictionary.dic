@@ -1,4 +1,4 @@
-387
+392
 ACPI/AB
 ACS/AB
 API/AB
@@ -340,6 +340,7 @@ serverless
 signoff/A
 snapcraft/B
 snapd/B
+snphost/B
 stalebot/B
 startup
 stderr/AB
