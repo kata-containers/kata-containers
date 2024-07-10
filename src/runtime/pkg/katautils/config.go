@@ -1341,6 +1341,7 @@ func newRemoteHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		RemoteHypervisorSocket:  h.getRemoteHypervisorSocket(),
 		RemoteHypervisorTimeout: h.getRemoteHypervisorTimeout(),
 		DisableGuestSeLinux:     true, // The remote hypervisor has a different guest, so Guest SELinux config doesn't work
+		SharedFS:                config.NoSharedFS,
 
 		// No valid value so avoid to append block device to list in kata_agent.appendDevices
 		BlockDeviceDriver: "dummy",
