@@ -110,6 +110,9 @@ const CDH_SOCKET_URI: &str = concatcp!(UNIX_SOCKET_PREFIX, CDH_SOCKET);
 
 const API_SERVER_PATH: &str = "/usr/local/bin/api-server-rest";
 
+/// Path of ocicrypt config file. This is used by image-rs when decrypting image.
+const OCICRYPT_CONFIG_PATH: &str = "/tmp/ocicrypt_config.json";
+
 const DEFAULT_LAUNCH_PROCESS_TIMEOUT: i32 = 6;
 
 lazy_static! {
@@ -477,6 +480,17 @@ fn init_attestation_components(logger: &Logger, config: &AgentConfig) -> Result<
     if config.guest_components_procs == GuestComponentsProcs::AttestationAgent {
         return Ok(None);
     }
+
+    let ocicrypt_config = serde_json::json!({
+        "key-providers": {
+            "attestation-agent":{
+                "ttrpc":CDH_SOCKET_URI
+            }
+        }
+    });
+
+    fs::write(OCICRYPT_CONFIG_PATH, ocicrypt_config.to_string().as_bytes())?;
+    env::set_var("OCICRYPT_KEYPROVIDER_CONFIG", OCICRYPT_CONFIG_PATH);
 
     debug!(
         logger,
