@@ -361,6 +361,17 @@ function set_default_cluster_namespace() {
 }
 
 function delete_test_cluster_namespace() {
-	set_default_cluster_namespace
 	kubectl delete namespace "${TEST_CLUSTER_NAMESPACE}"
+	set_default_cluster_namespace
+}
+
+function delete_test_runners(){
+	echo "Delete test scripts"
+	local scripts_names=( "run_kubernetes_tests.sh" "bats" )
+	for script_name in "${scripts_names[@]}"; do
+		pids=$(pgrep -f ${script_name})
+		if [ -n "$pids" ]; then
+			echo "$pids" | xargs sudo kill -SIGTERM >/dev/null 2>&1 || true
+		fi
+	done
 }
