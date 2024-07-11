@@ -271,15 +271,21 @@ function run_tests() {
 	[ "$platform" = "kcli" ] && \
 		export KUBECONFIG="$HOME/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
 
-	# Enable auto-generated policy for CI images that support policy
-	# and enable cri plugin in containerd config.
 	# TODO: enable testing auto-generated policy for other types of hosts too.
-
 	if [ "${KATA_HOST_OS}" = "cbl-mariner" ]; then
-
 		export AUTO_GENERATE_POLICY="yes"
+	fi
 
-		# set default containerd config
+	if [ "${AUTO_GENERATE_POLICY}" = "yes" ] && [ "${GENPOLICY_PULL_METHOD}" = "containerd" ]; then
+		# containerd's config on the local machine (where kubectl and genpolicy are executed by CI),
+		# might have been provided by a distro-specific package that disables the cri plug-in by using:
+		#
+		# disabled_plugins = ["cri"]
+		#
+		# When testing genpolicy's container image pull through containerd the cri plug-in must be
+		# enabled. Therefore, use containerd's default settings instead of distro's defaults. Note that
+		# the k8s test cluster nodes have their own containerd settings (created by kata-deploy),
+		# independent from the local settings being created here.
 		sudo containerd config default | sudo tee /etc/containerd/config.toml > /dev/null
 		echo "containerd config has been set to default"
 		sudo systemctl restart containerd && sudo systemctl is-active containerd
