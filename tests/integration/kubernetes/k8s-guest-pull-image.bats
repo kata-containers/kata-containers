@@ -16,8 +16,12 @@ setup() {
     [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
 
     setup_common
+    get_pod_config_dir
     unencrypted_image="quay.io/prometheus/busybox:latest"
-    large_image="quay.io/confidential-containers/test-images:largeimage"
+    image_pulled_time_less_than_default_time="ghcr.io/confidential-containers/test-container:rust-1.79.0" # unpacked size: 1.41GB
+    large_image="quay.io/confidential-containers/test-images:largeimage" # unpacked size: 2.15GB
+    pod_config_template="${pod_config_dir}/pod-guest-pull-in-trusted-storage.yaml.in"
+    storage_config_template="${pod_config_dir}/confidential/trusted-storage.yaml.in"
 }
 
 @test "Test we can pull an unencrypted image outside the guest with runc and then inside the guest successfully" {
@@ -57,42 +61,66 @@ setup() {
     k8s_create_pod "$kata_pod_with_nydus_config"
 }
 
-@test "Test we can pull a large image inside the guest" {
-    [[ " ${SUPPORTED_NON_TEE_HYPERVISORS} " =~ " ${KATA_HYPERVISOR} " ]] && skip "Test not supported for ${KATA_HYPERVISOR}."
-    skip "This test requires large memory, which the encrypted memory is typically small and valuable in TEE. \
-          The test will be skiped until https://github.com/kata-containers/kata-containers/issues/8142 is addressed."
-    kata_pod_with_nydus_config="$(new_pod_config "$large_image" "kata-${KATA_HYPERVISOR}")"
-    set_node "$kata_pod_with_nydus_config" "$node"
-    set_container_command "$kata_pod_with_nydus_config" "0" "sleep" "30"
+@test "Test we cannot pull an image that exceeds the memory limit inside the guest" {
+    # The image pulled in the guest will be downloaded and unpacked in the `/run/kata-containers/image` directory. 
+    # However, by default, systemd allocates 50% of the available physical RAM to the `/run` directory using a `tmpfs` filesystem. 
+    # It means that if we run a kata container with the default configuration (where the default memory assigned for a VM is 2048 MiB), 
+    # `/run` would be allocated around 1024 MiB. Consequently, we can only pull images up to 1024 MiB in the guest. 
+    # However, the unpacked size of image "ghcr.io/confidential-containers/test-container:rust-1.79.0" is 1.41GB. 
+    # It will fail to run the pod with pulling the image in the memory in the guest by default. 
+
+    pod_config="$(new_pod_config "$image_pulled_time_less_than_default_time" "kata-${KATA_HYPERVISOR}")"
+    set_node "$pod_config" "$node"
+    set_container_command "$pod_config" "0" "sleep" "30"
 
     # Set annotation to pull image in guest
-    set_metadata_annotation "$kata_pod_with_nydus_config" \
+    set_metadata_annotation "${pod_config}" \
         "io.containerd.cri.runtime-handler" \
         "kata-${KATA_HYPERVISOR}"
 
     # For debug sake
-    echo "Pod $kata_pod_with_nydus_config file:"
-    cat $kata_pod_with_nydus_config
+    echo "Pod $pod_config file:"
+    cat $pod_config
 
-    # The pod should be failed because the default timeout of CreateContainerRequest is 60s
-    assert_pod_fail "$kata_pod_with_nydus_config"
+    # The pod should be failed because the unpacked image size is larger than the memory size in the guest.
+    assert_pod_fail "$pod_config"
     assert_logs_contain "$node" kata "$node_start_time" \
-		'context deadline exceeded'
+		'No space left on device'
+}
 
-    kubectl delete -f $kata_pod_with_nydus_config
-
-    # Set CreateContainerRequest timeout in the annotation to pull large image in guest
-    create_container_timeout=300
-    set_metadata_annotation "$kata_pod_with_nydus_config" \
-        "io.katacontainers.config.runtime.create_container_timeout" \
-        "${create_container_timeout}"
+@test "Test we can pull an image inside the guest using trusted storage" {
+    # The image pulled in the guest will be downloaded and unpacked in the `/run/kata-containers/image` directory. 
+    # The tests will use `cryptsetup` to encrypt a block device and mount it at `/run/kata-containers/image`.
+    storage_config=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${storage_config_template}").XXX")
+    local_device=$(create_loop_device)
+    LOCAL_DEVICE="$local_device" NODE_NAME="$node" envsubst < "$storage_config_template" > "$storage_config"
 
     # For debug sake
-    echo "Pod $kata_pod_with_nydus_config file:"
-    cat $kata_pod_with_nydus_config
+    echo "Trusted storage $storage_config file:"
+    cat $storage_config
 
-    add_allow_all_policy_to_yaml "$kata_pod_with_nydus_config"
-    k8s_create_pod "$kata_pod_with_nydus_config"
+    # Create persistent volume and persistent volume claim
+    kubectl create -f $storage_config
+
+    pod_config=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${pod_config_template}").XXX")
+    IMAGE="$image_pulled_time_less_than_default_time" NODE_NAME="$node" envsubst < "$pod_config_template" > "$pod_config"
+
+    # Enable dm-integrity in guest
+    set_metadata_annotation "${pod_config}" \
+        "io.katacontainers.config.hypervisor.kernel_params" \
+        "agent.secure_storage_integrity=true"
+
+    # Set annotation to pull image in guest
+    set_metadata_annotation "${pod_config}" \
+        "io.containerd.cri.runtime-handler" \
+        "kata-${KATA_HYPERVISOR}"
+
+    # For debug sake
+    echo "Pod $pod_config file:"
+    cat $pod_config
+
+    add_allow_all_policy_to_yaml "$pod_config"
+    k8s_create_pod "$pod_config"
 }
 
 teardown() {
@@ -102,6 +130,10 @@ teardown() {
 
     [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
 
-    kubectl describe pod "$pod_name"
+    kubectl describe pods
     k8s_delete_all_pods_if_any_exists || true
+    kubectl delete --ignore-not-found pvc trusted-pvc
+    kubectl delete --ignore-not-found pv trusted-block-pv
+    kubectl delete --ignore-not-found storageclass local-storage
+    cleanup_loop_device || true
 }
