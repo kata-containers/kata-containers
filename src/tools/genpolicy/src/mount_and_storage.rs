@@ -106,6 +106,11 @@ pub fn get_mount_and_storage(
     yaml_volume: &volume::Volume,
     yaml_mount: &pod::VolumeMount,
 ) {
+    debug!(
+        "get_mount_and_storage: adding mount and storage for: {:?}",
+        &yaml_volume
+    );
+
     if let Some(emptyDir) = &yaml_volume.emptyDir {
         let settings_volumes = &settings.volumes;
         let mut volume: Option<&settings::EmptyDirVolume> = None;
@@ -350,4 +355,59 @@ fn get_downward_api_mount(yaml_mount: &pod::VolumeMount, p_mounts: &mut Vec<poli
             options,
         });
     }
+}
+
+pub fn get_image_mount_and_storage(
+    settings: &settings::Settings,
+    p_mounts: &mut Vec<policy::KataMount>,
+    storages: &mut Vec<agent::Storage>,
+    destination: &str,
+) {
+    // https://github.com/kubernetes/examples/blob/master/cassandra/image/Dockerfile
+    // has a volume mount starting with two '/' characters:
+    //
+    // CASSANDRA_DATA=/cassandra_data
+    // VOLUME ["/$CASSANDRA_DATA"]
+    let mut destination_string = destination.to_string();
+    while destination_string.contains("//") {
+        destination_string = destination_string.replace("//", "/");
+    }
+    debug!("get_image_mount_and_storage: image dest = {destination}, dest = {destination_string}");
+
+    for mount in &mut *p_mounts {
+        if mount.destination == destination_string {
+            debug!(
+                "get_image_mount_and_storage: mount {destination_string} already defined by YAML"
+            );
+            return;
+        }
+    }
+
+    let settings_image = &settings.volumes.image_volume;
+    debug!(
+        "get_image_mount_and_storage: settings for container image volumes: {:?}",
+        settings_image
+    );
+
+    storages.push(agent::Storage {
+        driver: settings_image.driver.clone(),
+        driver_options: Vec::new(),
+        source: settings_image.source.clone(),
+        fstype: settings_image.fstype.clone(),
+        options: settings_image.options.clone(),
+        mount_point: destination_string.clone(),
+        fs_group: protobuf::MessageField::none(),
+        special_fields: ::protobuf::SpecialFields::new(),
+    });
+
+    let file_name = Path::new(&destination_string).file_name().unwrap();
+    let name = OsString::from(file_name).into_string().unwrap();
+    let source = format!("{}{name}$", &settings_image.mount_source);
+
+    p_mounts.push(policy::KataMount {
+        destination: destination_string,
+        type_: settings_image.fstype.clone(),
+        source,
+        options: settings_image.options.clone(),
+    });
 }

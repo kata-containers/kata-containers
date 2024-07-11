@@ -189,6 +189,18 @@
                 "rprivate",
                 "ro"
             ]
+        },
+        "image_volume": {
+            "mount_type": "bind",
+            "mount_source": "$(sfprefix)",
+            "driver": "local",
+            "source": "local",
+            "fstype": "bind",
+            "options": [
+                "rbind",
+                "rprivate",
+                "rw"
+            ]
         }
     },
     "mount_destinations": [

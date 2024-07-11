@@ -278,21 +278,38 @@ pub fn get_container_mounts_and_storages(
     storages: &mut Vec<agent::Storage>,
     container: &pod::Container,
     settings: &settings::Settings,
-    volumes: &Vec<volume::Volume>,
+    volumes_option: &Option<Vec<volume::Volume>>,
 ) {
-    if let Some(volume_mounts) = &container.volumeMounts {
-        for volume in volumes {
-            for volume_mount in volume_mounts {
-                if volume_mount.name.eq(&volume.name) {
-                    mount_and_storage::get_mount_and_storage(
-                        settings,
-                        policy_mounts,
-                        storages,
-                        volume,
-                        volume_mount,
-                    );
+    if let Some(volumes) = volumes_option {
+        if let Some(volume_mounts) = &container.volumeMounts {
+            for volume in volumes {
+                for volume_mount in volume_mounts {
+                    if volume_mount.name.eq(&volume.name) {
+                        mount_and_storage::get_mount_and_storage(
+                            settings,
+                            policy_mounts,
+                            storages,
+                            volume,
+                            volume_mount,
+                        );
+                    }
                 }
             }
+        }
+    }
+
+    // Add storage and mount for each volume defined in the docker container image
+    // configuration layer.
+    if let Some(volumes) = &container.registry.config_layer.config.Volumes {
+        for volume in volumes {
+            debug!("get_container_mounts_and_storages: {:?}", &volume);
+
+            mount_and_storage::get_image_mount_and_storage(
+                settings,
+                policy_mounts,
+                storages,
+                volume.0,
+            );
         }
     }
 }
