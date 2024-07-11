@@ -66,15 +66,13 @@ impl yaml::K8sResource for ReplicaSet {
         container: &pod::Container,
         settings: &settings::Settings,
     ) {
-        if let Some(volumes) = &self.spec.template.spec.volumes {
-            yaml::get_container_mounts_and_storages(
-                policy_mounts,
-                storages,
-                container,
-                settings,
-                volumes,
-            );
-        }
+        yaml::get_container_mounts_and_storages(
+            policy_mounts,
+            storages,
+            container,
+            settings,
+            &self.spec.template.spec.volumes,
+        );
     }
 
     fn generate_policy(&self, agent_policy: &policy::AgentPolicy) -> String {
