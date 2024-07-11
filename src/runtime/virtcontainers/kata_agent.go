@@ -715,7 +715,7 @@ func (k *kataAgent) reuseAgent(agent agent) error {
 		return fmt.Errorf("Bug: get a wrong type of agent")
 	}
 
-	k.installReqFunc(a.client)
+	k.installReqFunc()
 	k.client = a.client
 	return nil
 }
@@ -2003,7 +2003,7 @@ func (k *kataAgent) connect(ctx context.Context) error {
 		return err
 	}
 
-	k.installReqFunc(client)
+	k.installReqFunc()
 	k.client = client
 
 	return nil
@@ -2090,120 +2090,120 @@ func (k *kataAgent) removeStaleVirtiofsShareMounts(ctx context.Context) error {
 	return err
 }
 
-type reqFunc func(context.Context, interface{}) (interface{}, error)
+type reqFunc func(context.Context, interface{}, *kataclient.AgentClient) (interface{}, error)
 
-func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
+func (k *kataAgent) installReqFunc() {
 	k.reqHandlers = make(map[string]reqFunc)
-	k.reqHandlers[grpcCheckRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.HealthClient.Check(ctx, req.(*grpc.CheckRequest))
+	k.reqHandlers[grpcCheckRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.HealthClient.Check(ctx, req.(*grpc.CheckRequest))
 	}
-	k.reqHandlers[grpcExecProcessRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.ExecProcess(ctx, req.(*grpc.ExecProcessRequest))
+	k.reqHandlers[grpcExecProcessRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.ExecProcess(ctx, req.(*grpc.ExecProcessRequest))
 	}
-	k.reqHandlers[grpcCreateSandboxRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.CreateSandbox(ctx, req.(*grpc.CreateSandboxRequest))
+	k.reqHandlers[grpcCreateSandboxRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.CreateSandbox(ctx, req.(*grpc.CreateSandboxRequest))
 	}
-	k.reqHandlers[grpcDestroySandboxRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.DestroySandbox(ctx, req.(*grpc.DestroySandboxRequest))
+	k.reqHandlers[grpcDestroySandboxRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.DestroySandbox(ctx, req.(*grpc.DestroySandboxRequest))
 	}
-	k.reqHandlers[grpcCreateContainerRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.CreateContainer(ctx, req.(*grpc.CreateContainerRequest))
+	k.reqHandlers[grpcCreateContainerRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.CreateContainer(ctx, req.(*grpc.CreateContainerRequest))
 	}
-	k.reqHandlers[grpcStartContainerRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.StartContainer(ctx, req.(*grpc.StartContainerRequest))
+	k.reqHandlers[grpcStartContainerRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.StartContainer(ctx, req.(*grpc.StartContainerRequest))
 	}
-	k.reqHandlers[grpcRemoveContainerRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.RemoveContainer(ctx, req.(*grpc.RemoveContainerRequest))
+	k.reqHandlers[grpcRemoveContainerRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.RemoveContainer(ctx, req.(*grpc.RemoveContainerRequest))
 	}
-	k.reqHandlers[grpcSignalProcessRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.SignalProcess(ctx, req.(*grpc.SignalProcessRequest))
+	k.reqHandlers[grpcSignalProcessRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.SignalProcess(ctx, req.(*grpc.SignalProcessRequest))
 	}
-	k.reqHandlers[grpcUpdateRoutesRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.UpdateRoutes(ctx, req.(*grpc.UpdateRoutesRequest))
+	k.reqHandlers[grpcUpdateRoutesRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.UpdateRoutes(ctx, req.(*grpc.UpdateRoutesRequest))
 	}
-	k.reqHandlers[grpcUpdateInterfaceRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.UpdateInterface(ctx, req.(*grpc.UpdateInterfaceRequest))
+	k.reqHandlers[grpcUpdateInterfaceRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.UpdateInterface(ctx, req.(*grpc.UpdateInterfaceRequest))
 	}
-	k.reqHandlers[grpcUpdateEphemeralMountsRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.UpdateEphemeralMounts(ctx, req.(*grpc.UpdateEphemeralMountsRequest))
+	k.reqHandlers[grpcUpdateEphemeralMountsRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.UpdateEphemeralMounts(ctx, req.(*grpc.UpdateEphemeralMountsRequest))
 	}
-	k.reqHandlers[grpcListInterfacesRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.ListInterfaces(ctx, req.(*grpc.ListInterfacesRequest))
+	k.reqHandlers[grpcListInterfacesRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.ListInterfaces(ctx, req.(*grpc.ListInterfacesRequest))
 	}
-	k.reqHandlers[grpcListRoutesRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.ListRoutes(ctx, req.(*grpc.ListRoutesRequest))
+	k.reqHandlers[grpcListRoutesRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.ListRoutes(ctx, req.(*grpc.ListRoutesRequest))
 	}
-	k.reqHandlers[grpcAddARPNeighborsRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.AddARPNeighbors(ctx, req.(*grpc.AddARPNeighborsRequest))
+	k.reqHandlers[grpcAddARPNeighborsRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.AddARPNeighbors(ctx, req.(*grpc.AddARPNeighborsRequest))
 	}
-	k.reqHandlers[grpcOnlineCPUMemRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.OnlineCPUMem(ctx, req.(*grpc.OnlineCPUMemRequest))
+	k.reqHandlers[grpcOnlineCPUMemRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.OnlineCPUMem(ctx, req.(*grpc.OnlineCPUMemRequest))
 	}
-	k.reqHandlers[grpcUpdateContainerRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.UpdateContainer(ctx, req.(*grpc.UpdateContainerRequest))
+	k.reqHandlers[grpcUpdateContainerRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.UpdateContainer(ctx, req.(*grpc.UpdateContainerRequest))
 	}
-	k.reqHandlers[grpcWaitProcessRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.WaitProcess(ctx, req.(*grpc.WaitProcessRequest))
+	k.reqHandlers[grpcWaitProcessRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.WaitProcess(ctx, req.(*grpc.WaitProcessRequest))
 	}
-	k.reqHandlers[grpcTtyWinResizeRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.TtyWinResize(ctx, req.(*grpc.TtyWinResizeRequest))
+	k.reqHandlers[grpcTtyWinResizeRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.TtyWinResize(ctx, req.(*grpc.TtyWinResizeRequest))
 	}
-	k.reqHandlers[grpcWriteStreamRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.WriteStdin(ctx, req.(*grpc.WriteStreamRequest))
+	k.reqHandlers[grpcWriteStreamRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.WriteStdin(ctx, req.(*grpc.WriteStreamRequest))
 	}
-	k.reqHandlers[grpcCloseStdinRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.CloseStdin(ctx, req.(*grpc.CloseStdinRequest))
+	k.reqHandlers[grpcCloseStdinRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.CloseStdin(ctx, req.(*grpc.CloseStdinRequest))
 	}
-	k.reqHandlers[grpcStatsContainerRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.StatsContainer(ctx, req.(*grpc.StatsContainerRequest))
+	k.reqHandlers[grpcStatsContainerRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.StatsContainer(ctx, req.(*grpc.StatsContainerRequest))
 	}
-	k.reqHandlers[grpcPauseContainerRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.PauseContainer(ctx, req.(*grpc.PauseContainerRequest))
+	k.reqHandlers[grpcPauseContainerRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.PauseContainer(ctx, req.(*grpc.PauseContainerRequest))
 	}
-	k.reqHandlers[grpcResumeContainerRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.ResumeContainer(ctx, req.(*grpc.ResumeContainerRequest))
+	k.reqHandlers[grpcResumeContainerRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.ResumeContainer(ctx, req.(*grpc.ResumeContainerRequest))
 	}
-	k.reqHandlers[grpcReseedRandomDevRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.ReseedRandomDev(ctx, req.(*grpc.ReseedRandomDevRequest))
+	k.reqHandlers[grpcReseedRandomDevRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.ReseedRandomDev(ctx, req.(*grpc.ReseedRandomDevRequest))
 	}
-	k.reqHandlers[grpcGuestDetailsRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.GetGuestDetails(ctx, req.(*grpc.GuestDetailsRequest))
+	k.reqHandlers[grpcGuestDetailsRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.GetGuestDetails(ctx, req.(*grpc.GuestDetailsRequest))
 	}
-	k.reqHandlers[grpcMemHotplugByProbeRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.MemHotplugByProbe(ctx, req.(*grpc.MemHotplugByProbeRequest))
+	k.reqHandlers[grpcMemHotplugByProbeRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.MemHotplugByProbe(ctx, req.(*grpc.MemHotplugByProbeRequest))
 	}
-	k.reqHandlers[grpcCopyFileRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.CopyFile(ctx, req.(*grpc.CopyFileRequest))
+	k.reqHandlers[grpcCopyFileRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.CopyFile(ctx, req.(*grpc.CopyFileRequest))
 	}
-	k.reqHandlers[grpcSetGuestDateTimeRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.SetGuestDateTime(ctx, req.(*grpc.SetGuestDateTimeRequest))
+	k.reqHandlers[grpcSetGuestDateTimeRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.SetGuestDateTime(ctx, req.(*grpc.SetGuestDateTimeRequest))
 	}
-	k.reqHandlers[grpcGetOOMEventRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.GetOOMEvent(ctx, req.(*grpc.GetOOMEventRequest))
+	k.reqHandlers[grpcGetOOMEventRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.GetOOMEvent(ctx, req.(*grpc.GetOOMEventRequest))
 	}
-	k.reqHandlers[grpcGetMetricsRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.GetMetrics(ctx, req.(*grpc.GetMetricsRequest))
+	k.reqHandlers[grpcGetMetricsRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.GetMetrics(ctx, req.(*grpc.GetMetricsRequest))
 	}
-	k.reqHandlers[grpcAddSwapRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.AddSwap(ctx, req.(*grpc.AddSwapRequest))
+	k.reqHandlers[grpcAddSwapRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.AddSwap(ctx, req.(*grpc.AddSwapRequest))
 	}
-	k.reqHandlers[grpcVolumeStatsRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.GetVolumeStats(ctx, req.(*grpc.VolumeStatsRequest))
+	k.reqHandlers[grpcVolumeStatsRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.GetVolumeStats(ctx, req.(*grpc.VolumeStatsRequest))
 	}
-	k.reqHandlers[grpcResizeVolumeRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.ResizeVolume(ctx, req.(*grpc.ResizeVolumeRequest))
+	k.reqHandlers[grpcResizeVolumeRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.ResizeVolume(ctx, req.(*grpc.ResizeVolumeRequest))
 	}
-	k.reqHandlers[grpcGetIPTablesRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.GetIPTables(ctx, req.(*grpc.GetIPTablesRequest))
+	k.reqHandlers[grpcGetIPTablesRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.GetIPTables(ctx, req.(*grpc.GetIPTablesRequest))
 	}
-	k.reqHandlers[grpcSetIPTablesRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.SetIPTables(ctx, req.(*grpc.SetIPTablesRequest))
+	k.reqHandlers[grpcSetIPTablesRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.SetIPTables(ctx, req.(*grpc.SetIPTablesRequest))
 	}
-	k.reqHandlers[grpcRemoveStaleVirtiofsShareMountsRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.RemoveStaleVirtiofsShareMounts(ctx, req.(*grpc.RemoveStaleVirtiofsShareMountsRequest))
+	k.reqHandlers[grpcRemoveStaleVirtiofsShareMountsRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.RemoveStaleVirtiofsShareMounts(ctx, req.(*grpc.RemoveStaleVirtiofsShareMountsRequest))
 	}
-	k.reqHandlers[grpcSetPolicyRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
-		return k.client.AgentServiceClient.SetPolicy(ctx, req.(*grpc.SetPolicyRequest))
+	k.reqHandlers[grpcSetPolicyRequest] = func(ctx context.Context, req interface{}, client *kataclient.AgentClient) (interface{}, error) {
+		return client.AgentServiceClient.SetPolicy(ctx, req.(*grpc.SetPolicyRequest))
 	}
 }
 
@@ -2242,11 +2242,12 @@ func (k *kataAgent) sendReq(spanCtx context.Context, request interface{}) (inter
 
 	k.Lock()
 
-	if k.reqHandlers == nil {
+	if k.reqHandlers == nil || k.client == nil {
 		k.Unlock()
 		return nil, errors.New("Client has already disconnected")
 	}
 
+	client := k.client
 	handler := k.reqHandlers[msgName]
 	if msgName == "" || handler == nil {
 		k.Unlock()
@@ -2270,7 +2271,7 @@ func (k *kataAgent) sendReq(spanCtx context.Context, request interface{}) (inter
 	defer func() {
 		agentRPCDurationsHistogram.WithLabelValues(msgName).Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
 	}()
-	return handler(ctx, request)
+	return handler(ctx, request, client)
 }
 
 // readStdout and readStderr are special that we cannot differentiate them with the request types...
@@ -2282,7 +2283,14 @@ func (k *kataAgent) readProcessStdout(ctx context.Context, c *Container, process
 		defer k.disconnect(ctx)
 	}
 
-	return k.readProcessStream(c.id, processID, data, k.client.AgentServiceClient.ReadStdout)
+	k.Lock()
+	client := k.client
+	k.Unlock()
+	if client == nil {
+		return 0, errors.New("Agent client has already disconnected")
+	}
+
+	return k.readProcessStream(c.id, processID, data, client.AgentServiceClient.ReadStdout)
 }
 
 // readStdout and readStderr are special that we cannot differentiate them with the request types...
@@ -2294,7 +2302,14 @@ func (k *kataAgent) readProcessStderr(ctx context.Context, c *Container, process
 		defer k.disconnect(ctx)
 	}
 
-	return k.readProcessStream(c.id, processID, data, k.client.AgentServiceClient.ReadStderr)
+	k.Lock()
+	client := k.client
+	k.Unlock()
+	if client == nil {
+		return 0, errors.New("Agent client has already disconnected")
+	}
+
+	return k.readProcessStream(c.id, processID, data, client.AgentServiceClient.ReadStderr)
 }
 
 type readFn func(context.Context, *grpc.ReadStreamRequest) (*grpc.ReadStreamResponse, error)
