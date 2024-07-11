@@ -289,6 +289,12 @@ function run_tests() {
 		sudo containerd config default | sudo tee /etc/containerd/config.toml > /dev/null
 		echo "containerd config has been set to default"
 		sudo systemctl restart containerd && sudo systemctl is-active containerd
+
+		# Allow genpolicy to access the containerd image pull APIs without sudo.
+		local socket_wait_time=30
+		local socket_sleep_time=3
+		local cmd="sudo chmod a+rw /var/run/containerd/containerd.sock"
+		waitForProcess "${socket_wait_time}" "${socket_sleep_time}" "$cmd"
 	fi
 
 	set_test_cluster_namespace
