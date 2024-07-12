@@ -152,6 +152,7 @@ function extract_kata_env() {
 			hypervisor_path=".hypervisor.path"
 			virtio_fs_daemon_path=".hypervisor.virtio_fs_daemon"
 			initrd_path=".initrd.path"
+			shared_fs=".hypervisor.shared_fs"
 			;;
 		*)
 			cmd=kata-runtime
