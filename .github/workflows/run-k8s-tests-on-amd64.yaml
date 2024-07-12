@@ -1,4 +1,4 @@
-name: CI | Run kubernetes tests
+name: CI | Run kubernetes tests on amd64
 on:
   workflow_call:
     inputs:
@@ -23,7 +23,7 @@ on:
         default: ""
 
 jobs:
-  run-k8s-tests:
+  run-k8s-tests-amd64:
     strategy:
       fail-fast: false
       matrix:
@@ -33,12 +33,20 @@ jobs:
           - fc #firecracker
           - qemu
           - cloud-hypervisor
+        container_runtime:
+          - containerd
         snapshotter:
           - devmapper
         k8s:
           - k3s
         instance:
           - ubuntu-22.04
+        include:
+          - vmm: qemu
+            container_runtime: crio
+            snapshotter: ""
+            instance: ubuntu-22.04
+            k8s: k0s
     runs-on: ${{ matrix.instance }}
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
@@ -47,6 +55,7 @@ jobs:
       PR_NUMBER: ${{ inputs.pr-number }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
       KUBERNETES: ${{ matrix.k8s }}
+      KUBERNETES_EXTRA_PARAMS: ${{ matrix.container_runtime != 'crio' && '' || '--cri-socket remote:unix:///var/run/crio/crio.sock --kubelet-extra-args --cgroup-driver="systemd"' }}
       SNAPSHOTTER: ${{ matrix.snapshotter }}
       USING_NFD: "false"
       K8S_TEST_HOST_TYPE: all
@@ -62,10 +71,15 @@ jobs:
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
+      - name: Configure CRI-O
+        if: matrix.container_runtime == 'crio'
+        run: bash tests/integration/kubernetes/gha-run.sh setup-crio
+
       - name: Deploy ${{ matrix.k8s }}
         run: bash tests/integration/kubernetes/gha-run.sh deploy-k8s
 
       - name: Configure the ${{ matrix.snapshotter }} snapshotter
+        if: matrix.snapshotter != ''
         run: bash tests/integration/kubernetes/gha-run.sh configure-snapshotter
 
       - name: Deploy Kata
