@@ -1,4 +1,4 @@
-name: CI | Run kubernetes tests, using CRI-O, on GARM
+name: CI | Run kubernetes tests, using CRI-O
 on:
   workflow_call:
     inputs:
@@ -32,13 +32,8 @@ jobs:
         k8s:
           - k0s
         instance:
-          - garm-ubuntu-2204
-          - garm-ubuntu-2204-smaller
+          - ubuntu-22.04
         include:
-          - instance: garm-ubuntu-2204
-            instance-type: normal
-          - instance: garm-ubuntu-2204-smaller
-            instance-type: small
           - k8s: k0s
             k8s-extra-params: '--cri-socket remote:unix:///var/run/crio/crio.sock --kubelet-extra-args --cgroup-driver="systemd"'
     runs-on: ${{ matrix.instance }}
@@ -51,7 +46,7 @@ jobs:
       KUBERNETES: ${{ matrix.k8s }}
       KUBERNETES_EXTRA_PARAMS: ${{ matrix.k8s-extra-params }}
       USING_NFD: "false"
-      K8S_TEST_HOST_TYPE: ${{ matrix.instance-type }}
+      K8S_TEST_HOST_TYPE: all
     steps:
       - uses: actions/checkout@v4
         with:
@@ -72,7 +67,7 @@ jobs:
 
       - name: Deploy Kata
         timeout-minutes: 10
-        run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-garm
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-kata
 
       - name: Install `bats`
         run: bash tests/integration/kubernetes/gha-run.sh install-bats
@@ -83,4 +78,4 @@ jobs:
   
       - name: Delete kata-deploy
         if: always()
-        run: bash tests/integration/kubernetes/gha-run.sh cleanup-garm
+        run: bash tests/integration/kubernetes/gha-run.sh cleanup
