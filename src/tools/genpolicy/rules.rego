@@ -540,9 +540,7 @@ allow_user(p_process, i_process) {
     p_user := p_process.User
     i_user := i_process.User
 
-    # TODO: track down the reason for mcr.microsoft.com/oss/bitnami/redis:6.0.8 being
-    #       executed with uid = 0 despite having "User": "1001" in its container image
-    #       config.
+    # TODO: remove this workaround when fixing https://github.com/kata-containers/kata-containers/issues/9928.
     #print("allow_user: input uid =", i_user.UID, "policy uid =", p_user.UID)
     #p_user.UID == i_user.UID
 
