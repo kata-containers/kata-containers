@@ -123,6 +123,86 @@ setup() {
     k8s_create_pod "$pod_config"
 }
 
+@test "Test we cannot pull a large image that pull time exceeds createcontainer timeout inside the guest" {
+    storage_config=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${storage_config_template}").XXX")
+    local_device=$(create_loop_device)
+    LOCAL_DEVICE="$local_device" NODE_NAME="$node" envsubst < "$storage_config_template" > "$storage_config"
+
+    # For debug sake
+    echo "Trusted storage $storage_config file:"
+    cat $storage_config
+    
+    # Create persistent volume and persistent volume claim
+    kubectl create -f $storage_config
+
+    pod_config=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${pod_config_template}").XXX")
+    IMAGE="$large_image" NODE_NAME="$node" envsubst < "$pod_config_template" > "$pod_config"
+
+    # Set a short CreateContainerRequest timeout in the annotation to fail to pull image in guest
+    create_container_timeout=10
+    set_metadata_annotation "$pod_config" \
+        "io.katacontainers.config.runtime.create_container_timeout" \
+        "${create_container_timeout}"
+
+    # Enable dm-integrity in guest
+    set_metadata_annotation "${pod_config}" \
+        "io.katacontainers.config.hypervisor.kernel_params" \
+        "agent.secure_storage_integrity=true"
+
+    # Set annotation to pull image in guest
+    set_metadata_annotation "${pod_config}" \
+        "io.containerd.cri.runtime-handler" \
+        "kata-${KATA_HYPERVISOR}"
+
+    # For debug sake
+    echo "Pod $pod_config file:"
+    cat $pod_config
+
+    # The pod should be failed because the default timeout of CreateContainerRequest is 60s
+    assert_pod_fail "$pod_config"
+    assert_logs_contain "$node" kata "$node_start_time" \
+		'context deadline exceeded'
+}
+
+@test "Test we can pull a large image inside the guest with large createcontainer timeout" {    
+    storage_config=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${storage_config_template}").XXX")
+    local_device=$(create_loop_device)
+    LOCAL_DEVICE="$local_device" NODE_NAME="$node" envsubst < "$storage_config_template" > "$storage_config"
+
+    # For debug sake
+    echo "Trusted storage $storage_config file:"
+    cat $storage_config
+    
+    # Create persistent volume and persistent volume claim
+    kubectl create -f $storage_config
+
+    pod_config=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${pod_config_template}").XXX")
+    IMAGE="$large_image" NODE_NAME="$node" envsubst < "$pod_config_template" > "$pod_config"
+
+    # Set CreateContainerRequest timeout in the annotation to pull large image in guest
+    create_container_timeout=120
+    set_metadata_annotation "$pod_config" \
+        "io.katacontainers.config.runtime.create_container_timeout" \
+        "${create_container_timeout}"
+
+    # Enable dm-integrity in guest
+    set_metadata_annotation "${pod_config}" \
+        "io.katacontainers.config.hypervisor.kernel_params" \
+        "agent.secure_storage_integrity=true"
+
+    # Set annotation to pull image in guest
+    set_metadata_annotation "${pod_config}" \
+        "io.containerd.cri.runtime-handler" \
+        "kata-${KATA_HYPERVISOR}"
+
+    # For debug sake
+    echo "Pod $pod_config file:"
+    cat $pod_config
+
+    add_allow_all_policy_to_yaml "$pod_config"
+    k8s_create_pod "$pod_config"
+}
+
 teardown() {
     if ! is_confidential_runtime_class; then
         skip "Test not supported for ${KATA_HYPERVISOR}."
