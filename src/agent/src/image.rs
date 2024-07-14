@@ -57,13 +57,27 @@ impl ImageService {
     pub fn new() -> Self {
         let mut image_client = ImageClient::new(PathBuf::from(KATA_IMAGE_WORK_DIR));
         #[cfg(feature = "guest-pull")]
-        if !AGENT_CONFIG.image_registry_auth.is_empty() {
-            let registry_auth = &AGENT_CONFIG.image_registry_auth;
-            debug!(sl(), "Set registry auth file {:?}", registry_auth);
-            image_client.config.file_paths.auth_file = registry_auth.clone();
-            image_client.config.auth = true;
-        }
+        {
+            if !AGENT_CONFIG.image_registry_auth.is_empty() {
+                let registry_auth = &AGENT_CONFIG.image_registry_auth;
+                debug!(sl(), "Set registry auth file {:?}", registry_auth);
+                image_client.config.file_paths.auth_file = registry_auth.clone();
+                image_client.config.auth = true;
+            }
 
+            let enable_signature_verification = &AGENT_CONFIG.enable_signature_verification;
+            debug!(
+                sl(),
+                "Enable image signature verification: {:?}", enable_signature_verification
+            );
+            image_client.config.security_validate = *enable_signature_verification;
+
+            if !AGENT_CONFIG.image_policy_file.is_empty() {
+                let image_policy_file = &AGENT_CONFIG.image_policy_file;
+                debug!(sl(), "Use imagepolicy file {:?}", image_policy_file);
+                image_client.config.file_paths.policy_path = image_policy_file.clone();
+            }
+        }
         Self { image_client }
     }
 
