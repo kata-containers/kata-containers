@@ -130,6 +130,26 @@ auto_generate_policy_enabled() {
 	[ "${AUTO_GENERATE_POLICY}" == "yes" ]
 }
 
+# adapt common policy settings for tdx
+adapt_common_policy_settings_for_tdx() {
+
+	local settings_dir=$1
+
+	info "Adapting common policy settings for TDX"
+	jq '.common.cpath = "/run/kata-containers" | .volumes.configMap.mount_point = "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-"' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+}
+
+# adapt common policy settings for various platforms
+adapt_common_policy_settings() {
+
+	local settings_dir=$1
+
+	case "${KATA_HYPERVISOR}" in
+  		"qemu-tdx")
+			adapt_common_policy_settings_for_tdx "${settings_dir}"
+	esac
+}
+
 # If auto-generated policy testing is enabled, make a copy of the genpolicy settings,
 # and change these settings to use Kata CI cluster's default namespace.
 create_common_genpolicy_settings() {
@@ -137,6 +157,8 @@ create_common_genpolicy_settings() {
 	declare -r default_genpolicy_settings_dir="/opt/kata/share/defaults/kata-containers"
 
 	auto_generate_policy_enabled || return 0
+
+	adapt_common_policy_settings "${default_genpolicy_settings_dir}"
 
 	cp "${default_genpolicy_settings_dir}/genpolicy-settings.json" "${genpolicy_settings_dir}"
 	cp "${default_genpolicy_settings_dir}/rules.rego" "${genpolicy_settings_dir}"
