@@ -153,8 +153,8 @@ FIRMWARESNPPATH := $(PREFIXDEPS)/share/ovmf/AMDSEV.fd
 SNPCERTSPATH := /opt/snp/cert_chain.cert
 
 ROOTMEASURECONFIG ?= ""
-KERNELPARAMS += $(ROOTMEASURECONFIG)
-KERNELTDXPARAMS += $(ROOTMEASURECONFIG)
+KERNELPARAMS += $(ROOTMEASURECONFIG) agent.enable_signature_verification=false
+KERNELTDXPARAMS += $(ROOTMEASURECONFIG) agent.enable_signature_verification=false
 
 # Name of default configuration file the runtime will use.
 CONFIG_FILE = configuration.toml
