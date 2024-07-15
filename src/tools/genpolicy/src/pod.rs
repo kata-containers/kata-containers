@@ -614,36 +614,36 @@ impl Container {
         (yaml_has_command, yaml_has_args)
     }
 
-    pub fn get_exec_commands(&self) -> Vec<String> {
+    pub fn get_exec_commands(&self) -> Vec<Vec<String>> {
         let mut commands = Vec::new();
 
         if let Some(probe) = &self.livenessProbe {
             if let Some(exec) = &probe.exec {
-                commands.push(exec.command.join(" "));
+                commands.push(exec.command.clone());
             }
         }
 
         if let Some(probe) = &self.readinessProbe {
             if let Some(exec) = &probe.exec {
-                commands.push(exec.command.join(" "));
+                commands.push(exec.command.clone());
             }
         }
 
         if let Some(probe) = &self.startupProbe {
             if let Some(exec) = &probe.exec {
-                commands.push(exec.command.join(" "));
+                commands.push(exec.command.clone());
             }
         }
 
         if let Some(lifecycle) = &self.lifecycle {
             if let Some(postStart) = &lifecycle.postStart {
                 if let Some(exec) = &postStart.exec {
-                    commands.push(exec.command.join(" "));
+                    commands.push(exec.command.clone());
                 }
             }
             if let Some(preStop) = &lifecycle.preStop {
                 if let Some(exec) = &preStop.exec {
-                    commands.push(exec.command.join(" "));
+                    commands.push(exec.command.clone());
                 }
             }
         }

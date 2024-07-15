@@ -1124,15 +1124,12 @@ ExecProcessRequest {
     print("ExecProcessRequest 2: input =", input)
 
     # TODO: match input container ID with its corresponding container.exec_commands.
-    i_command = concat(" ", input.process.Args)
-    print("ExecProcessRequest 3: i_command =", i_command)
-
     some container in policy_data.containers
     some p_command in container.exec_commands
     print("ExecProcessRequest 2: p_command =", p_command)
 
     # TODO: should other input data fields be validated as well?
-    p_command == i_command
+    p_command == input.process.Args
 
     print("ExecProcessRequest 2: true")
 }
