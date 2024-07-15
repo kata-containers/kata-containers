@@ -12,7 +12,14 @@ setup() {
 	get_pod_config_dir
 
 	yaml_file="${pod_config_dir}/pod-security-context.yaml"
-	add_allow_all_policy_to_yaml "${yaml_file}"
+	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
+
+	cmd="ps --user 1000 -f"
+	exec_command="sh -c ${cmd}"
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
+
+	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
+	auto_generate_policy "${policy_settings_dir}" "${yaml_file}"
 }
 
 @test "Security context" {
@@ -25,7 +32,6 @@ setup() {
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
 
 	# Check user
-	cmd="ps --user 1000 -f"
 	process="tail -f /dev/null"
 	kubectl exec $pod_name -- sh -c $cmd | grep "$process"
 }
@@ -35,4 +41,5 @@ teardown() {
 	kubectl describe "pod/$pod_name"
 
 	kubectl delete pod "$pod_name"
+	delete_tmp_policy_settings_dir "${policy_settings_dir}"
 }

@@ -174,6 +174,24 @@ test_pod_policy_error() {
 	run ! grep -q "io.katacontainers.config.agent.policy" "${testcase_pre_generate_pod_yaml}"
 }
 
+@test "Successful pod due to runAsUser workaround from rules.rego" {
+	# This test case should fail, but it passes due to these lines being commented out in rules.rego:
+	#
+	# allow_user(p_process, i_process) {
+	#     #print("allow_user: input uid =", i_user.UID, "policy uid =", p_user.UID)
+	#     #p_user.UID == i_user.UID
+	#
+	# So this test case should be converted to use test_pod_policy_error when that workaround will
+	# be removed.
+	yq -i \
+		'.spec.containers[0].securityContext.runAsUser = 101' \
+		"${incorrect_pod_yaml}"
+
+	kubectl create -f "${correct_configmap_yaml}"
+	kubectl create -f "${incorrect_pod_yaml}"
+	kubectl wait --for=condition=Ready "--timeout=${timeout}" pod "${pod_name}"
+}
+
 teardown() {
 	auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
 
