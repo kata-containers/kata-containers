@@ -26,16 +26,17 @@ RUN mkdir ${RUSTUP_HOME} ${CARGO_HOME} && chmod -R a+rwX /opt
 RUN apt-get update && \
 	apt-get --no-install-recommends -y install \
 		ca-certificates \
+		clang \
 		curl \
 		g++ \
 		gcc \
+		libprotobuf-dev \
 		libssl-dev \
 		make \
 		musl-tools \
 		openssl \
 		perl \
-		protobuf-compiler \
-		clang && \
+		protobuf-compiler && \
 	apt-get clean && rm -rf /var/lib/apt/lists/ && \
 	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_TOOLCHAIN}
 

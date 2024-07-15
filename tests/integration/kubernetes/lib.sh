@@ -78,7 +78,7 @@ assert_logs_contain() {
 
 	# Note: with image-rs we get more than the default 1000 lines of logs
 	print_node_journal "$node" "$log_id" --since "$datetime" -n 100000 \
-		grep "$message"
+		| grep "$message"
 }
 
 # Create a pod then assert it fails to run. Use in tests that you expect the

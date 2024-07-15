@@ -9,10 +9,12 @@ load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 check_and_skip() {
-	# Currently the only kernel built with measured rootfs support is
-	# the kernel-tdx-experimental.
-	[ "${KATA_HYPERVISOR}" = "qemu-tdx" ] || \
-		skip "measured rootfs tests not implemented for hypervisor: $KATA_HYPERVISOR"
+	# Currently the kernel-confidential, isn't built withh measured rootfs support, so this test
+	# should be skipped until it is
+	# See https://github.com/kata-containers/kata-containers/issues/9612,
+	# https://github.com/kata-containers/kata-containers/issues/7235
+	# and https://github.com/kata-containers/kata-containers/issues/7415
+	skip "measured rootfs tests not implemented for hypervisor: $KATA_HYPERVISOR"
 }
 
 setup() {
