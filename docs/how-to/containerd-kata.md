@@ -40,7 +40,7 @@ use `RuntimeClass` instead of the deprecated annotations.
 ### Containerd Runtime V2 API: Shim V2 API
 
 The [`containerd-shim-kata-v2` (short as `shimv2` in this documentation)](../../src/runtime/cmd/containerd-shim-kata-v2/)
-implements the [Containerd Runtime V2 (Shim API)](https://github.com/containerd/containerd/tree/main/runtime/v2) for Kata.
+implements the [Containerd Runtime V2 (Shim API)](https://github.com/containerd/containerd/tree/main/core/runtime/v2) for Kata.
 With `shimv2`, Kubernetes can launch Pod and OCI-compatible containers with one shim per Pod. Prior to `shimv2`, `2N+1` 
 shims (i.e. a `containerd-shim` and a `kata-shim` for each container and the Pod sandbox itself) and no standalone `kata-proxy` 
 process were used, even with VSOCK not available.
@@ -132,9 +132,9 @@ The `RuntimeClass` is suggested.
 
 The following configuration includes two runtime classes:
 - `plugins.cri.containerd.runtimes.runc`: the runc, and it is the default runtime.
-- `plugins.cri.containerd.runtimes.kata`: The function in containerd (reference [the document here](https://github.com/containerd/containerd/tree/main/runtime/v2#binary-naming)) 
+- `plugins.cri.containerd.runtimes.kata`: The function in containerd (reference [the document here](https://github.com/containerd/containerd/tree/main/core/runtime/v2)) 
   where the dot-connected string `io.containerd.kata.v2` is translated to `containerd-shim-kata-v2` (i.e. the 
-  binary name of the Kata implementation of [Containerd Runtime V2 (Shim API)](https://github.com/containerd/containerd/tree/main/runtime/v2)).
+  binary name of the Kata implementation of [Containerd Runtime V2 (Shim API)](https://github.com/containerd/containerd/tree/main/core/runtime/v2)).
 
 ```toml
     [plugins.cri.containerd]
