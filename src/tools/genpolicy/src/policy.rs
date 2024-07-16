@@ -20,6 +20,7 @@ use crate::yaml;
 use anyhow::Result;
 use base64::{engine::general_purpose, Engine as _};
 use log::debug;
+use oci_spec::runtime as oci;
 use protocols::agent;
 use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
