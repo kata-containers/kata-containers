@@ -4,6 +4,7 @@ members = [
     "kata-types",
     "logging",
     "oci",
+    "runtime-spec",
     "protocols",
     "safe-path",
     "shim-interface",
