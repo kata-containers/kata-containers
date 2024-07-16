@@ -7,12 +7,12 @@
 use anyhow::anyhow;
 #[cfg(any(target_arch = "s390x", target_arch = "x86_64", target_arch = "aarch64"))]
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 #[cfg(target_arch = "x86_64")]
 use std::path::Path;
 use std::path::PathBuf;
 use thiserror::Error;
-use serde::{Deserialize, Serialize};
 
 #[cfg(any(target_arch = "s390x", target_arch = "powerpc64le"))]
 use nix::unistd::Uid;

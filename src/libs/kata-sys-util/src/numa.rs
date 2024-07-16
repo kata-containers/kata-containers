@@ -84,7 +84,7 @@ pub fn get_node_map(cpus: &str) -> Result<HashMap<u32, Vec<u32>>> {
 
     for c in cpuset.iter() {
         let node_id = get_node_id(*c)?;
-        node_map.entry(node_id).or_insert_with(Vec::new).push(*c);
+        node_map.entry(node_id).or_default().push(*c);
     }
 
     Ok(node_map)
