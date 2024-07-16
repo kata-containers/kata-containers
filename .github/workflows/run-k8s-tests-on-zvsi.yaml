@@ -61,7 +61,8 @@ jobs:
       AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
     steps:
       - name: Take a pre-action for self-hosted runner
-        run: ${HOME}/script/pre_action.sh ubuntu-2204
+        run: |
+          "${HOME}/script/pre_action.sh" ubuntu-2204
 
       - uses: actions/checkout@v4
         with:
@@ -92,4 +93,4 @@ jobs:
         if: always()
         run: |
           bash tests/integration/kubernetes/gha-run.sh cleanup-zvsi || true
-          ${HOME}/script/post_action.sh ubuntu-2204
+          "${HOME}/script/post_action.sh" ubuntu-2204
