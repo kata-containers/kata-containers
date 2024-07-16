@@ -72,6 +72,24 @@ pub async fn get_vsock_stream(fd: RawFd) -> Result<VsockStream> {
     Ok(stream?)
 }
 
+pub fn merge<T>(v1: &mut Option<Vec<T>>, v2: &Option<Vec<T>>) -> Option<Vec<T>>
+where
+    T: Clone,
+{
+    let mut result = v1.clone().map(|mut vec| {
+        if let Some(ref other) = v2 {
+            vec.extend(other.iter().cloned());
+        }
+        vec
+    });
+
+    if result.is_none() {
+        result.clone_from(v2);
+    }
+
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

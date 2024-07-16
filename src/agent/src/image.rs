@@ -15,6 +15,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, bail, Context, Result};
 use image_rs::image::ImageClient;
 use kata_sys_util::validate::verify_id;
+use oci_spec::runtime as oci;
 use tokio::sync::Mutex;
 
 use crate::rpc::CONTAINER_BASE;
@@ -78,7 +79,7 @@ impl ImageService {
         })?)
         .context("load image config file")?;
 
-        let image_oci_process = image_oci.process.ok_or_else(|| {
+        let image_oci_process = image_oci.process().as_ref().ok_or_else(|| {
             anyhow!("The guest pause image config does not contain a process specification. Please check the pause image.")
         })?;
         info!(
@@ -88,11 +89,12 @@ impl ImageService {
         );
 
         // Ensure that the args vector is not empty before accessing its elements.
-        let args = image_oci_process.args;
         // Check the number of arguments.
-        if args.is_empty() {
+        let args = if let Some(args_vec) = image_oci_process.args() {
+            args_vec
+        } else {
             bail!("The number of args should be greater than or equal to one! Please check the pause image.");
-        }
+        };
 
         let pause_bundle = scoped_join(CONTAINER_BASE, cid)?;
         fs::create_dir_all(&pause_bundle)?;

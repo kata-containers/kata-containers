@@ -8,6 +8,7 @@ use rustjail::{pipestream::PipeStream, process::StreamType};
 use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf};
 use tokio::sync::Mutex;
 
+use std::convert::TryFrom;
 use std::ffi::{CString, OsStr};
 use std::fmt::Debug;
 use std::io;
@@ -22,7 +23,8 @@ use ttrpc::{
 
 use anyhow::{anyhow, Context, Result};
 use cgroups::freezer::FreezerState;
-use oci::{LinuxNamespace, Root, Spec};
+use oci::{Hooks, LinuxNamespace, Spec};
+use oci_spec::runtime as oci;
 use protobuf::MessageField;
 use protocols::agent::{
     AddSwapRequest, AgentDetails, CopyFileRequest, GetIPTablesRequest, GetIPTablesResponse,
@@ -64,6 +66,7 @@ use crate::pci;
 use crate::random;
 use crate::sandbox::Sandbox;
 use crate::storage::{add_storages, update_ephemeral_mounts, STORAGE_HANDLERS};
+use crate::util;
 use crate::version::{AGENT_VERSION, API_VERSION};
 use crate::AGENT_CONFIG;
 
@@ -194,11 +197,10 @@ impl AgentService {
 
         kata_sys_util::validate::verify_id(&cid)?;
 
-        let mut oci_spec = req.OCI.clone();
         let use_sandbox_pidns = req.sandbox_pidns();
 
-        let mut oci = match oci_spec.as_mut() {
-            Some(spec) => rustjail::grpc_to_oci(spec),
+        let mut oci = match req.OCI.into_option() {
+            Some(spec) => spec.into(),
             None => {
                 error!(sl(), "no oci spec in the create container request!");
                 return Err(anyhow!(nix::Error::EINVAL));
@@ -222,15 +224,17 @@ impl AgentService {
 
         if let Some(cdh) = self.cdh_client.as_ref() {
             let process = oci
-                .process
+                .process_mut()
                 .as_mut()
                 .ok_or_else(|| anyhow!("Spec didn't contain process field"))?;
 
-            for env in process.env.iter_mut() {
-                match cdh.unseal_env(env).await {
-                    Ok(unsealed_env) => *env = unsealed_env.to_string(),
-                    Err(e) => {
-                        warn!(sl(), "Failed to unseal secret: {}", e)
+            if let Some(envs) = process.env_mut().as_mut() {
+                for env in envs.iter_mut() {
+                    match cdh.unseal_env(env).await {
+                        Ok(unsealed_env) => *env = unsealed_env.to_string(),
+                        Err(e) => {
+                            warn!(sl(), "Failed to unseal secret: {}", e)
+                        }
                     }
                 }
             }
@@ -263,7 +267,13 @@ impl AgentService {
         // systemd: "[slice]:[prefix]:[name]"
         // fs: "/path_a/path_b"
         // If agent is init we can't use systemd cgroup mode, no matter what the host tells us
-        let cgroups_path = oci.linux.as_ref().map_or("", |linux| &linux.cgroups_path);
+        let cgroups_path = &oci
+            .linux()
+            .as_ref()
+            .and_then(|linux| linux.cgroups_path().as_ref())
+            .map(|cgrps_path| cgrps_path.display().to_string())
+            .unwrap_or_default();
+
         let use_systemd_cgroup = if self.init_mode {
             false
         } else {
@@ -291,8 +301,8 @@ impl AgentService {
 
         let pipe_size = AGENT_CONFIG.container_pipe_size;
 
-        let p = if let Some(p) = oci.process {
-            Process::new(&sl(), &p, cid.as_str(), true, pipe_size, proc_io)?
+        let p = if let Some(p) = oci.process() {
+            Process::new(&sl(), p, cid.as_str(), true, pipe_size, proc_io)?
         } else {
             info!(sl(), "no process configurations!");
             return Err(anyhow!(nix::Error::EINVAL));
@@ -408,8 +418,7 @@ impl AgentService {
         update_env_pci(&mut process.Env, &sandbox.pcimap)?;
 
         let pipe_size = AGENT_CONFIG.container_pipe_size;
-        let ocip = rustjail::process_grpc_to_oci(&process);
-
+        let ocip = process.into();
         let p = Process::new(&sl(), &ocip, exec_id.as_str(), false, pipe_size, proc_io)?;
 
         let ctr = sandbox
@@ -759,7 +768,7 @@ impl agent_ttrpc::AgentService for AgentService {
             .get_container(&req.container_id)
             .map_ttrpc_err(ttrpc::Code::INVALID_ARGUMENT, "invalid container id")?;
         if let Some(res) = req.resources.as_ref() {
-            let oci_res = rustjail::resources_grpc_to_oci(res);
+            let oci_res = res.clone().into();
             ctr.set(oci_res).map_ttrpc_err(same)?;
         }
 
@@ -1668,41 +1677,45 @@ fn update_container_namespaces(
     sandbox_pidns: bool,
 ) -> Result<()> {
     let linux = spec
-        .linux
+        .linux_mut()
         .as_mut()
         .ok_or_else(|| anyhow!(ERR_NO_LINUX_FIELD))?;
 
-    let namespaces = linux.namespaces.as_mut_slice();
-    for namespace in namespaces.iter_mut() {
-        if namespace.r#type == NSTYPEIPC {
-            namespace.path = sandbox.shared_ipcns.path.clone();
-            continue;
+    if let Some(namespaces) = linux.namespaces_mut() {
+        for namespace in namespaces.iter_mut() {
+            if namespace.typ().to_string() == NSTYPEIPC {
+                namespace.set_path(Some(PathBuf::from(&sandbox.shared_ipcns.path.clone())));
+                namespace.set_path(None);
+                continue;
+            }
+            if namespace.typ().to_string() == NSTYPEUTS {
+                namespace.set_path(Some(PathBuf::from(&sandbox.shared_utsns.path.clone())));
+                namespace.set_path(None);
+                continue;
+            }
         }
-        if namespace.r#type == NSTYPEUTS {
-            namespace.path = sandbox.shared_utsns.path.clone();
-            continue;
+
+        // update pid namespace
+        let mut pid_ns = LinuxNamespace::default();
+        pid_ns.set_typ(oci::LinuxNamespaceType::try_from(NSTYPEPID).unwrap());
+
+        // Use shared pid ns if useSandboxPidns has been set in either
+        // the create_sandbox request or create_container request.
+        // Else set this to empty string so that a new pid namespace is
+        // created for the container.
+        if sandbox_pidns {
+            if let Some(ref pidns) = &sandbox.sandbox_pidns {
+                if !pidns.path.is_empty() {
+                    pid_ns.set_path(Some(PathBuf::from(&pidns.path)));
+                }
+            } else {
+                return Err(anyhow!(ERR_NO_SANDBOX_PIDNS));
+            }
         }
+
+        namespaces.push(pid_ns);
     }
 
-    // update pid namespace
-    let mut pid_ns = LinuxNamespace {
-        r#type: NSTYPEPID.to_string(),
-        ..Default::default()
-    };
-
-    // Use shared pid ns if useSandboxPidns has been set in either
-    // the create_sandbox request or create_container request.
-    // Else set this to empty string so that a new pid namespace is
-    // created for the container.
-    if sandbox_pidns {
-        if let Some(ref pidns) = &sandbox.sandbox_pidns {
-            pid_ns.path = String::from(pidns.path.as_str());
-        } else {
-            return Err(anyhow!(ERR_NO_SANDBOX_PIDNS));
-        }
-    }
-
-    linux.namespaces.push(pid_ns);
     Ok(())
 }
 
@@ -1737,11 +1750,18 @@ async fn remove_container_resources(sandbox: &mut Sandbox, cid: &str) -> Result<
 
 fn append_guest_hooks(s: &Sandbox, oci: &mut Spec) -> Result<()> {
     if let Some(ref guest_hooks) = s.hooks {
-        let mut hooks = oci.hooks.take().unwrap_or_default();
-        hooks.prestart.append(&mut guest_hooks.prestart.clone());
-        hooks.poststart.append(&mut guest_hooks.poststart.clone());
-        hooks.poststop.append(&mut guest_hooks.poststop.clone());
-        oci.hooks = Some(hooks);
+        if let Some(hooks) = oci.hooks_mut() {
+            util::merge(hooks.poststart_mut(), guest_hooks.prestart());
+            util::merge(hooks.poststart_mut(), guest_hooks.poststart());
+            util::merge(hooks.poststop_mut(), guest_hooks.poststop());
+        } else {
+            let _oci_hooks = oci.set_hooks(Some(Hooks::default()));
+            if let Some(hooks) = oci.hooks_mut() {
+                hooks.set_prestart(guest_hooks.prestart().clone());
+                hooks.set_poststart(guest_hooks.poststart().clone());
+                hooks.set_poststop(guest_hooks.poststop().clone());
+            }
+        }
     }
 
     Ok(())
@@ -1941,7 +1961,7 @@ async fn do_add_swap(sandbox: &Arc<Mutex<Sandbox>>, req: &AddSwapRequest) -> Res
 // - container rootfs bind mounted at /<CONTAINER_BASE>/<cid>/rootfs
 // - modify container spec root to point to /<CONTAINER_BASE>/<cid>/rootfs
 pub fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
-    let spec_root = if let Some(sr) = &spec.root {
+    let spec_root = if let Some(sr) = &spec.root() {
         sr
     } else {
         return Err(anyhow!(nix::Error::EINVAL));
@@ -1950,7 +1970,7 @@ pub fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
     let bundle_path = Path::new(CONTAINER_BASE).join(cid);
     let config_path = bundle_path.join("config.json");
     let rootfs_path = bundle_path.join("rootfs");
-    let spec_root_path = Path::new(&spec_root.path);
+    let spec_root_path = spec_root.path();
 
     let rootfs_exists = Path::new(&rootfs_path).exists();
     info!(
@@ -1970,15 +1990,10 @@ pub fn setup_bundle(cid: &str, spec: &mut Spec) -> Result<PathBuf> {
         )?;
     }
 
-    let rootfs_path_name = rootfs_path
-        .to_str()
-        .ok_or_else(|| anyhow!("failed to convert rootfs to unicode"))?
-        .to_string();
-
-    spec.root = Some(Root {
-        path: rootfs_path_name,
-        readonly: spec_root.readonly,
-    });
+    let mut oci_root = oci::Root::default();
+    oci_root.set_path(rootfs_path);
+    oci_root.set_readonly(spec_root.readonly());
+    spec.set_root(Some(oci_root));
 
     let _ = spec.save(
         config_path
@@ -2045,7 +2060,11 @@ mod tests {
     use crate::{namespace::Namespace, protocols::agent_ttrpc_async::AgentService as _};
     use nix::mount;
     use nix::sched::{unshare, CloneFlags};
-    use oci::{Hook, Hooks, Linux, LinuxDeviceCgroup, LinuxNamespace, LinuxResources};
+    use oci::{
+        HookBuilder, HooksBuilder, Linux, LinuxBuilder, LinuxDeviceCgroupBuilder, LinuxNamespace,
+        LinuxNamespaceBuilder, LinuxResourcesBuilder, SpecBuilder,
+    };
+    use oci_spec::runtime::{LinuxNamespaceType, Root};
     use tempfile::{tempdir, TempDir};
     use test_utils::{assert_result, skip_if_not_root};
     use ttrpc::{r#async::TtrpcContext, MessageHeader};
@@ -2072,21 +2091,17 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards");
 
-        let root = Root {
-            path: String::from("/"),
-            ..Default::default()
-        };
+        let mut root = Root::default();
+        root.set_path(PathBuf::from("/"));
 
-        let linux_resources = LinuxResources {
-            devices: vec![LinuxDeviceCgroup {
-                allow: true,
-                r#type: String::new(),
-                major: None,
-                minor: None,
-                access: String::from("rwm"),
-            }],
-            ..Default::default()
-        };
+        let linux_resources = LinuxResourcesBuilder::default()
+            .devices(vec![LinuxDeviceCgroupBuilder::default()
+                .allow(true)
+                .access("rwm")
+                .build()
+                .unwrap()])
+            .build()
+            .unwrap();
 
         let cgroups_path = format!(
             "/{}/dummycontainer{}",
@@ -2094,15 +2109,17 @@ mod tests {
             since_the_epoch.as_millis()
         );
 
-        let spec = Spec {
-            linux: Some(Linux {
-                cgroups_path,
-                resources: Some(linux_resources),
-                ..Default::default()
-            }),
-            root: Some(root),
-            ..Default::default()
-        };
+        let spec = SpecBuilder::default()
+            .linux(
+                LinuxBuilder::default()
+                    .cgroups_path(cgroups_path)
+                    .resources(linux_resources)
+                    .build()
+                    .unwrap(),
+            )
+            .root(root)
+            .build()
+            .unwrap();
 
         CreateOpts {
             cgroup_name: "".to_string(),
@@ -2160,18 +2177,18 @@ mod tests {
     async fn test_append_guest_hooks() {
         let logger = slog::Logger::root(slog::Discard, o!());
         let mut s = Sandbox::new(&logger).unwrap();
-        s.hooks = Some(Hooks {
-            prestart: vec![Hook {
-                path: "foo".to_string(),
-                ..Default::default()
-            }],
-            ..Default::default()
-        });
-        let mut oci = Spec {
-            ..Default::default()
-        };
+        let hooks = HooksBuilder::default()
+            .prestart(vec![HookBuilder::default()
+                .path(PathBuf::from("foo"))
+                .build()
+                .unwrap()])
+            .build()
+            .unwrap();
+        s.hooks = Some(hooks);
+
+        let mut oci = Spec::default();
         append_guest_hooks(&s, &mut oci).unwrap();
-        assert_eq!(s.hooks, oci.hooks);
+        assert_eq!(s.hooks, oci.hooks().clone());
     }
 
     #[tokio::test]
@@ -2399,30 +2416,32 @@ mod tests {
                     has_linux_in_spec: true,
                     sandbox_pidns_path: Some("sharedpidns"),
                     namespaces: vec![
-                        LinuxNamespace {
-                            r#type: NSTYPEIPC.to_string(),
-                            path: "ipcpath".to_string(),
-                        },
-                        LinuxNamespace {
-                            r#type: NSTYPEUTS.to_string(),
-                            path: "utspath".to_string(),
-                        },
+                        LinuxNamespaceBuilder::default()
+                            .typ(LinuxNamespaceType::Ipc)
+                            .path("ipcpath")
+                            .build()
+                            .unwrap(),
+                        LinuxNamespaceBuilder::default()
+                            .typ(LinuxNamespaceType::Uts)
+                            .path("utspath")
+                            .build()
+                            .unwrap(),
                     ],
                     use_sandbox_pidns: false,
                     result: Ok(()),
                     expected_namespaces: vec![
-                        LinuxNamespace {
-                            r#type: NSTYPEIPC.to_string(),
-                            path: "".to_string(),
-                        },
-                        LinuxNamespace {
-                            r#type: NSTYPEUTS.to_string(),
-                            path: "".to_string(),
-                        },
-                        LinuxNamespace {
-                            r#type: NSTYPEPID.to_string(),
-                            path: "".to_string(),
-                        },
+                        LinuxNamespaceBuilder::default()
+                            .typ(LinuxNamespaceType::Ipc)
+                            .build()
+                            .unwrap(),
+                        LinuxNamespaceBuilder::default()
+                            .typ(LinuxNamespaceType::Uts)
+                            .build()
+                            .unwrap(),
+                        LinuxNamespaceBuilder::default()
+                            .typ(LinuxNamespaceType::Pid)
+                            .build()
+                            .unwrap(),
                     ],
                 }
             }
@@ -2435,37 +2454,39 @@ mod tests {
             TestData {
                 use_sandbox_pidns: true,
                 expected_namespaces: vec![
-                    LinuxNamespace {
-                        r#type: NSTYPEIPC.to_string(),
-                        path: "".to_string(),
-                    },
-                    LinuxNamespace {
-                        r#type: NSTYPEUTS.to_string(),
-                        path: "".to_string(),
-                    },
-                    LinuxNamespace {
-                        r#type: NSTYPEPID.to_string(),
-                        path: "sharedpidns".to_string(),
-                    },
+                    LinuxNamespaceBuilder::default()
+                        .typ(LinuxNamespaceType::Ipc)
+                        .build()
+                        .unwrap(),
+                    LinuxNamespaceBuilder::default()
+                        .typ(LinuxNamespaceType::Uts)
+                        .build()
+                        .unwrap(),
+                    LinuxNamespaceBuilder::default()
+                        .typ(LinuxNamespaceType::Pid)
+                        .path("sharedpidns")
+                        .build()
+                        .unwrap(),
                 ],
                 ..Default::default()
             },
             TestData {
                 namespaces: vec![],
                 use_sandbox_pidns: true,
-                expected_namespaces: vec![LinuxNamespace {
-                    r#type: NSTYPEPID.to_string(),
-                    path: "sharedpidns".to_string(),
-                }],
+                expected_namespaces: vec![LinuxNamespaceBuilder::default()
+                    .typ(LinuxNamespaceType::Pid)
+                    .path("sharedpidns")
+                    .build()
+                    .unwrap()],
                 ..Default::default()
             },
             TestData {
                 namespaces: vec![],
                 use_sandbox_pidns: false,
-                expected_namespaces: vec![LinuxNamespace {
-                    r#type: NSTYPEPID.to_string(),
-                    path: "".to_string(),
-                }],
+                expected_namespaces: vec![LinuxNamespaceBuilder::default()
+                    .typ(LinuxNamespaceType::Pid)
+                    .build()
+                    .unwrap()],
                 ..Default::default()
             },
             TestData {
@@ -2495,11 +2516,11 @@ mod tests {
             }
 
             let mut oci = Spec::default();
+            oci.set_linux(None);
             if d.has_linux_in_spec {
-                oci.linux = Some(Linux {
-                    namespaces: d.namespaces.clone(),
-                    ..Default::default()
-                });
+                let mut linux = Linux::default();
+                linux.set_namespaces(Some(d.namespaces.clone()));
+                oci.set_linux(Some(linux));
             }
 
             let result = update_container_namespaces(&sandbox, &mut oci, d.use_sandbox_pidns);
@@ -2507,8 +2528,13 @@ mod tests {
             let msg = format!("{}, result: {:?}", msg, result);
 
             assert_result!(d.result, result, msg);
-            if let Some(linux) = oci.linux {
-                assert_eq!(d.expected_namespaces, linux.namespaces, "{}", msg);
+            if let Some(linux) = oci.linux() {
+                assert_eq!(
+                    d.expected_namespaces,
+                    linux.namespaces().clone().unwrap(),
+                    "{}",
+                    msg
+                );
             }
         }
     }

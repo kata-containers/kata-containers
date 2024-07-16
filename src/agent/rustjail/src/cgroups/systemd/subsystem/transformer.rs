@@ -6,6 +6,7 @@
 use super::super::common::{CgroupHierarchy, Properties};
 use anyhow::Result;
 use oci::LinuxResources;
+use oci_spec::runtime as oci;
 
 pub trait Transformer {
     fn apply(
