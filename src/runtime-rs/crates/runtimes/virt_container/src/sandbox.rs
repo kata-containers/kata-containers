@@ -4,8 +4,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::sync::Arc;
-
 use agent::kata::KataAgent;
 use agent::types::KernelModule;
 use agent::{
@@ -27,10 +25,13 @@ use kata_types::capabilities::CapabilityBits;
 #[cfg(not(target_arch = "s390x"))]
 use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
 use kata_types::config::TomlConfig;
+use oci_spec::runtime as oci;
 use persist::{self, sandbox_persist::Persist};
 use resource::manager::ManagerArgs;
 use resource::network::{dan_config_path, DanNetworkConfig, NetworkConfig, NetworkWithNetNsConfig};
 use resource::{ResourceConfig, ResourceManager};
+use runtime_spec as spec;
+use std::sync::Arc;
 use tokio::sync::{mpsc::Sender, Mutex, RwLock};
 use tracing::instrument;
 
@@ -179,7 +180,7 @@ impl VirtSandbox {
         &self,
         prestart_hooks: &[oci::Hook],
         create_runtime_hooks: &[oci::Hook],
-        state: &oci::State,
+        state: &spec::State,
     ) -> Result<()> {
         let mut st = state.clone();
         // for dragonball, we use vmm_master_tid
@@ -306,7 +307,7 @@ impl Sandbox for VirtSandbox {
         &self,
         dns: Vec<String>,
         spec: &oci::Spec,
-        state: &oci::State,
+        state: &spec::State,
         network_env: SandboxNetworkEnv,
     ) -> Result<()> {
         let id = &self.sid;
@@ -340,10 +341,15 @@ impl Sandbox for VirtSandbox {
         info!(sl!(), "start vm");
 
         // execute pre-start hook functions, including Prestart Hooks and CreateRuntime Hooks
-        let (prestart_hooks, create_runtime_hooks) = match spec.hooks.as_ref() {
-            Some(hooks) => (hooks.prestart.clone(), hooks.create_runtime.clone()),
-            None => (Vec::new(), Vec::new()),
+        let (prestart_hooks, create_runtime_hooks) = if let Some(hooks) = spec.hooks().as_ref() {
+            (
+                hooks.prestart().clone().unwrap_or_default(),
+                hooks.create_runtime().clone().unwrap_or_default(),
+            )
+        } else {
+            (Vec::new(), Vec::new())
         };
+
         self.execute_oci_hook_functions(&prestart_hooks, &create_runtime_hooks, state)
             .await?;
 
@@ -393,7 +399,7 @@ impl Sandbox for VirtSandbox {
         let agent_config = self.agent.agent_config().await;
         let kernel_modules = KernelModule::set_kernel_modules(agent_config.kernel_modules)?;
         let req = agent::CreateSandboxRequest {
-            hostname: spec.hostname.clone(),
+            hostname: spec.hostname().clone().unwrap_or_default(),
             dns,
             storages: self
                 .resource_manager

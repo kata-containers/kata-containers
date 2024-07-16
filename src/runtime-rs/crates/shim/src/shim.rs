@@ -9,11 +9,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{anyhow, Context, Result};
-use sha2::Digest;
-
 use crate::{Args, Error};
-
+use anyhow::{anyhow, Context, Result};
+use oci_spec::runtime as oci;
+use runtime_spec as spec;
+use sha2::Digest;
 const SOCKET_ROOT: &str = "/run/containerd";
 const SHIM_PID_FILE: &str = "shim.pid";
 
@@ -32,7 +32,7 @@ impl ShimExecutor {
     }
 
     pub(crate) fn load_oci_spec(&self, path: &Path) -> Result<oci::Spec> {
-        let spec_file = path.join(oci::OCI_SPEC_CONFIG_FILE_NAME);
+        let spec_file = path.join(spec::OCI_SPEC_CONFIG_FILE_NAME);
         oci::Spec::load(spec_file.to_str().unwrap_or_default()).context("load spec")
     }
 

@@ -18,8 +18,8 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hypervisor::{device::device_manager::DeviceManager, Hypervisor};
 use kata_types::mount::{Mount, NydusExtraOptions};
+use oci_spec::runtime as oci;
 use tokio::sync::RwLock;
-
 // Used for nydus rootfs
 pub(crate) const NYDUS_ROOTFS_TYPE: &str = "fuse.nydus-overlayfs";
 // Used for Nydus v5 rootfs version

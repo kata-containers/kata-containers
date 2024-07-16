@@ -6,9 +6,6 @@
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use nix::sys::{stat, stat::SFlag};
-use tokio::sync::RwLock;
-
 use hypervisor::{
     device::{
         device_manager::{do_handle_device, get_block_driver, DeviceManager},
@@ -17,6 +14,9 @@ use hypervisor::{
     BlockConfig,
 };
 use kata_types::mount::DirectVolumeMountInfo;
+use nix::sys::{stat, stat::SFlag};
+use oci_spec::runtime as oci;
+use tokio::sync::RwLock;
 
 use crate::volume::{direct_volumes::KATA_DIRECT_VOLUME_TYPE, utils::handle_block_volume, Volume};
 

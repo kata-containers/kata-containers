@@ -32,9 +32,10 @@ common = { path = "../common" }
 hypervisor = { path = "../../hypervisor", features = ["cloud-hypervisor"] }
 kata-sys-util = { path = "../../../../libs/kata-sys-util" }
 kata-types = { path = "../../../../libs/kata-types" }
-logging = { path = "../../../../libs/logging" }
-oci = { path = "../../../../libs/oci" }
-persist = { path = "../../persist" }
+logging = { path = "../../../../libs/logging"}
+runtime-spec = { path = "../../../../libs/runtime-spec" }
+oci-spec = { version = "0.6.8", features = ["runtime"] }
+persist = { path = "../../persist"}
 resource = { path = "../../resource" }
 
 [features]
