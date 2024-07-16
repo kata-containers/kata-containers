@@ -6,7 +6,7 @@
 use crate::container::{load_linux_container, Container, ContainerLauncher};
 use anyhow::{anyhow, Result};
 use derive_builder::Builder;
-use oci::ContainerState;
+use runtime_spec::ContainerState;
 use slog::{debug, Logger};
 use std::path::PathBuf;
 
@@ -113,11 +113,10 @@ mod tests {
         let pid = getpid().as_raw();
 
         let mut spec = create_dummy_spec();
-        spec.root.as_mut().unwrap().path = bundle_dir
-            .path()
-            .join(TEST_ROOTFS_PATH)
-            .to_string_lossy()
-            .to_string();
+        spec.root_mut()
+            .as_mut()
+            .unwrap()
+            .set_path(bundle_dir.path().join(TEST_ROOTFS_PATH));
 
         let status = create_custom_dummy_status(&id, pid, root.path(), &spec);
         status.save().unwrap();

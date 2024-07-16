@@ -8,7 +8,8 @@ edition = "2018"
 
 [dependencies]
 rustjail = { path = "../../../agent/rustjail", features = ["standard-oci-runtime"] }
-oci = { path = "../../../libs/oci" }
+runtime-spec = { path = "../../../libs/runtime-spec" }
+oci-spec = { version = "0.6.8", features = ["runtime"] }
 kata-sys-util = { path = "../../../libs/kata-sys-util" }
 logging = { path = "../../../libs/logging" }
 derive_builder = "0.10.2"
@@ -26,3 +27,4 @@ procfs = "0.14.0"
 [dev-dependencies]
 tempfile = "3.3.0"
 test-utils = { path = "../../../libs/test-utils" }
+protocols = { path ="../../../libs/protocols" }

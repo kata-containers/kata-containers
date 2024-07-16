@@ -7,7 +7,7 @@ use super::state::get_container_state_name;
 use anyhow::Result;
 use libcontainer::container::Container;
 use liboci_cli::List;
-use oci::ContainerState;
+use runtime_spec::ContainerState;
 use slog::{info, Logger};
 use std::fmt::Write as _;
 use std::{fs, os::unix::prelude::MetadataExt, path::Path};
