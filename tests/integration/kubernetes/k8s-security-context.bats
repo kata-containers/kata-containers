@@ -33,7 +33,7 @@ setup() {
 
 	# Check user
 	process="tail -f /dev/null"
-	kubectl exec $pod_name -- sh -c $cmd | grep "$process"
+	kubectl exec $pod_name -- sh -c "$cmd" | grep "$process"
 }
 
 teardown() {
