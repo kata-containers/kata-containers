@@ -3,7 +3,6 @@ members = [
     "kata-sys-util",
     "kata-types",
     "logging",
-    "oci",
     "runtime-spec",
     "protocols",
     "safe-path",
