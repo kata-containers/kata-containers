@@ -198,7 +198,6 @@ fn real_main() -> Result<(), std::io::Error> {
     // generate async
     #[cfg(feature = "async")]
     {
-
         codegen(
             "src",
             &[
