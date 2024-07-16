@@ -25,6 +25,7 @@ dbs-utils = { path = "./src/dbs_utils" }
 dbs-virtio-devices = { path = "./src/dbs_virtio_devices", optional = true, features = [
     "virtio-mmio",
 ] }
+dbs-tdshim = { path = "./src/dbs_tdshim", option = true }
 dbs-pci = { path = "./src/dbs_pci", optional = true }
 derivative = "2.2.0"
 kvm-bindings = "0.6.0"
