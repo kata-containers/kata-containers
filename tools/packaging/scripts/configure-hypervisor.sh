@@ -445,6 +445,9 @@ generate_qemu_options() {
 	qemu_options+=(functionality:--enable-cap-ng)
 	qemu_options+=(functionality:--enable-seccomp)
 
+	# Support NUMA topology
+	qemu_options+=(functionality:--enable-numa)
+
 	# AVX2 is enabled by default by x86_64, make sure it's enabled only
 	# for that architecture
 	if [ "$arch" == x86_64 ]; then

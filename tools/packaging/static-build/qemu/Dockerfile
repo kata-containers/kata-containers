@@ -50,6 +50,7 @@ RUN apt-get update && apt-get upgrade -y && \
 	    libglib2.0-dev${DPKG_ARCH} git \
 	    libltdl-dev${DPKG_ARCH} \
 	    libmount-dev${DPKG_ARCH} \
+	    libnuma-dev${DPKG_ARCH} \
 	    libpixman-1-dev${DPKG_ARCH} \
 	    libselinux1-dev${DPKG_ARCH} \
 	    libtool${DPKG_ARCH} \
