@@ -28,6 +28,27 @@ spec:
         runAsUser: 1000
         seccompProfile:
           type: RuntimeDefault
+      livenessProbe:
+        exec:
+          command:
+            - echo
+            - livenessProbe
+            - test
+        failureThreshold: 1
+        periodSeconds: 5
+        timeoutSeconds: 10
+      readinessProbe:
+        exec:
+          command:
+            - "sh"
+            - "-c"
+            - "ls -l /"
+      startupProbe:
+        exec:
+          command:
+            - echo
+            - startupProbe
+            - test
   topologySpreadConstraints:
     - maxSkew: 2
       topologyKey: kubernetes.io/hostname
