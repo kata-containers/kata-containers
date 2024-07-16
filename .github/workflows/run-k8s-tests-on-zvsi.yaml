@@ -57,6 +57,8 @@ jobs:
       SNAPSHOTTER: ${{ matrix.snapshotter }}
       USING_NFD: ${{ matrix.using-nfd }}
       TARGET_ARCH: "s390x"
+      AUTHENTICATED_IMAGE_USER: ${{ secrets.AUTHENTICATED_IMAGE_USER }}
+      AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
     steps:
       - name: Take a pre-action for self-hosted runner
         run: ${HOME}/script/pre_action.sh ubuntu-2204
