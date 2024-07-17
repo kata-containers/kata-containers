@@ -14,5 +14,5 @@ spec:
     runAsUser: 1000
   containers:
   - name: sec-text
-    image: quay.io/prometheus/busybox:latest
+    image: quay.io/kata-containers/sysbench-kata:latest
     command: ["tail", "-f", "/dev/null"]
