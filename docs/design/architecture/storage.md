@@ -32,7 +32,7 @@ For virtio-fs, the [runtime](README.md#runtime) starts one `virtiofsd` daemon
 ## Devicemapper
 
 The
-[devicemapper `snapshotter`](https://github.com/containerd/containerd/tree/main/snapshots/devmapper)
+[devicemapper `snapshotter`](https://github.com/containerd/containerd/blob/main/docs/snapshotters/devmapper.md)
 is a special case. The `snapshotter` uses dedicated block devices
 rather than formatted filesystems, and operates at the block level
 rather than the file level. This knowledge is used to directly use the
