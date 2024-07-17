@@ -133,12 +133,14 @@ impl VirtSandbox {
         resource_configs.push(virtio_fs_config);
 
         // prepare VM rootfs device config
-        let vm_rootfs = ResourceConfig::VmRootfs(
-            self.prepare_rootfs_config()
-                .await
-                .context("failed to prepare rootfs device config")?,
-        );
-        resource_configs.push(vm_rootfs);
+        if let Some(block_config) = self
+            .prepare_rootfs_config()
+            .await
+            .context("failed to prepare rootfs device config")?
+        {
+            let vm_rootfs = ResourceConfig::VmRootfs(block_config);
+            resource_configs.push(vm_rootfs);
+        }
 
         Ok(resource_configs)
     }
@@ -243,28 +245,23 @@ impl VirtSandbox {
         Ok(())
     }
 
-    async fn prepare_rootfs_config(&self) -> Result<BlockConfig> {
+    async fn prepare_rootfs_config(&self) -> Result<Option<BlockConfig>> {
         let boot_info = self.hypervisor.hypervisor_config().await.boot_info;
 
-        let image = {
-            let initrd_path = boot_info.initrd.clone();
-            let image_path = boot_info.image;
-            if !initrd_path.is_empty() {
-                Ok(initrd_path)
-            } else if !image_path.is_empty() {
-                Ok(image_path)
-            } else {
-                Err(anyhow!("failed to get image"))
-            }
+        if !boot_info.initrd.is_empty() {
+            return Ok(None);
         }
-        .context("get image")?;
 
-        Ok(BlockConfig {
-            path_on_host: image,
+        if boot_info.image.is_empty() {
+            return Err(anyhow!("both of image and initrd isn't set"));
+        }
+
+        Ok(Some(BlockConfig {
+            path_on_host: boot_info.image.clone(),
             is_readonly: true,
             driver_option: boot_info.vm_rootfs_driver,
             ..Default::default()
-        })
+        }))
     }
 
     async fn prepare_vm_socket_config(&self) -> Result<ResourceConfig> {

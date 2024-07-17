@@ -31,6 +31,7 @@ use std::cmp::Ordering;
 use std::{collections::HashSet, fs::create_dir_all};
 
 const DRAGONBALL_KERNEL: &str = "vmlinux";
+const DRAGONBALL_INITRD: &str = "initrd";
 const DRAGONBALL_ROOT_FS: &str = "rootfs";
 const BALLOON_DEVICE_ID: &str = "balloon0";
 const MEM_DEVICE_ID: &str = "memmr0";
@@ -121,15 +122,19 @@ impl DragonballInner {
 
         self.set_vm_base_config().context("set vm base config")?;
 
-        // get rootfs driver
-        let rootfs_driver = self.config.blockdev_info.block_device_driver.clone();
-
         // get kernel params
         let mut kernel_params = KernelParams::new(self.config.debug_info.enable_debug);
-        kernel_params.append(&mut KernelParams::new_rootfs_kernel_params(
-            &rootfs_driver,
-            &self.config.boot_info.rootfs_type,
-        )?);
+
+        if self.config.boot_info.initrd.is_empty() {
+            // get rootfs driver
+            let rootfs_driver = self.config.blockdev_info.block_device_driver.clone();
+
+            kernel_params.append(&mut KernelParams::new_rootfs_kernel_params(
+                &rootfs_driver,
+                &self.config.boot_info.rootfs_type,
+            )?);
+        }
+
         kernel_params.append(&mut KernelParams::from_string(
             &self.config.boot_info.kernel_params,
         ));
@@ -141,10 +146,7 @@ impl DragonballInner {
         }
         info!(sl!(), "prepared kernel_params={:?}", kernel_params);
 
-        // set boot source
-        let kernel_path = self.config.boot_info.kernel.clone();
         self.set_boot_source(
-            &kernel_path,
             &kernel_params
                 .to_string()
                 .context("kernel params to string")?,
@@ -259,16 +261,33 @@ impl DragonballInner {
         Ok(abs_path)
     }
 
-    fn set_boot_source(&mut self, kernel_path: &str, kernel_params: &str) -> Result<()> {
+    fn set_boot_source(&mut self, kernel_params: &str) -> Result<()> {
+        // set boot source
+        let kernel_path = self.config.boot_info.kernel.as_str();
+        let initrd_path = self.config.boot_info.initrd.as_str();
+
         info!(
             sl!(),
-            "kernel path {} kernel params {}", kernel_path, kernel_params
+            "kernel path {}, initrd path {}, kernel params {}",
+            kernel_path,
+            initrd_path,
+            kernel_params
         );
+
+        let mut initrd = None;
+
+        if !initrd_path.is_empty() {
+            initrd = Some(
+                self.get_resource(initrd_path, DRAGONBALL_INITRD)
+                    .context("get initrd resource")?,
+            );
+        }
 
         let mut boot_cfg = BootSourceConfig {
             kernel_path: self
                 .get_resource(kernel_path, DRAGONBALL_KERNEL)
-                .context("get resource")?,
+                .context("get kernel resource")?,
+            initrd_path: initrd,
             ..Default::default()
         };
 
