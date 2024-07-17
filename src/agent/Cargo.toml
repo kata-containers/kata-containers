@@ -97,6 +97,7 @@ members = ["rustjail"]
 [profile.release]
 lto = true
 
+# Update /src/agent/src/features.rs when adding a new feature
 [features]
 # The default-pull feature would support all pull types, including sharing images by virtio-fs and pulling images in the guest
 default-pull = ["guest-pull"]
