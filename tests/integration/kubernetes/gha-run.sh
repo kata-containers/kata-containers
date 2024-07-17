@@ -272,7 +272,7 @@ function run_tests() {
 		export KUBECONFIG="$HOME/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
 
 	# TODO: enable testing auto-generated policy for other types of hosts too.
-	if [ "${KATA_HOST_OS}" = "cbl-mariner" ]; then
+	if [ "${KATA_HOST_OS}" = "cbl-mariner" ] || [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
 		export AUTO_GENERATE_POLICY="yes"
 	fi
 

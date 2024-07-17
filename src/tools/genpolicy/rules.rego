@@ -803,7 +803,7 @@ check_mount(p_mount, i_mount, bundle_id, sandbox_id) {
 mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) {
     regex1 := p_mount.source
     regex2 := replace(regex1, "$(sfprefix)", policy_data.common.sfprefix)
-    regex3 := replace(regex2, "$(cpath)", policy_data.common.cpath)
+    regex3 := replace(regex2, "$(cpath)", policy_data.common.mount_source_cpath)
     regex4 := replace(regex3, "$(bundle-id)", bundle_id)
 
     print("mount_source_allows 1: regex4 =", regex4)
@@ -814,7 +814,7 @@ mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) {
 mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) {
     regex1 := p_mount.source
     regex2 := replace(regex1, "$(sfprefix)", policy_data.common.sfprefix)
-    regex3 := replace(regex2, "$(cpath)", policy_data.common.cpath)
+    regex3 := replace(regex2, "$(cpath)", policy_data.common.mount_source_cpath)
     regex4 := replace(regex3, "$(sandbox-id)", sandbox_id)
 
     print("mount_source_allows 2: regex4 =", regex4)
