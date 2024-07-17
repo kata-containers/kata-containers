@@ -12,9 +12,9 @@ export KBS="${KBS:-false}"
 
 setup() {
     # Log checking not working on TDX
-    if [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
-	    skip "Test skipped on ${KATA_HYPERVISOR}, see https://github.com/kata-containers/kata-containers/issues/10011"
-    fi
+#    if [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
+#	    skip "Test skipped on ${KATA_HYPERVISOR}, see https://github.com/kata-containers/kata-containers/issues/10011"
+#    fi
 
     if ! is_confidential_runtime_class; then
         skip "Test not supported for ${KATA_HYPERVISOR}."
@@ -111,17 +111,22 @@ function create_pod_yaml_with_private_image() {
 
     k8s_create_pod "${kata_pod_with_private_image}"
     echo "Kata pod test-e2e from authenticated image is running"
+    kubectl get pods -A
 }
 
 @test "Test that creating a container from an authenticated image, with incorrect credentials fails" {
 
     setup_kbs_credentials "${AUTHENTICATED_IMAGE}" ${AUTHENTICATED_IMAGE_USER} "junk"
     create_pod_yaml_with_private_image "${AUTHENTICATED_IMAGE}"
+    kubectl get pods -A
 
     # For debug sake
     echo "Pod ${kata_pod_with_private_image}: $(cat ${kata_pod_with_private_image})"
 
     assert_pod_fail "${kata_pod_with_private_image}"
+    kubectl get pods -A
+    kubectl get nodes
+    echo "Node name is $node"
     assert_logs_contain "${node}" kata "${node_start_time}" "failed to pull manifest Not authorized"
 }
 
@@ -129,18 +134,22 @@ function create_pod_yaml_with_private_image() {
 
     # Create pod config, but don't add agent.image_registry_auth annotation
     create_pod_yaml_with_private_image "${AUTHENTICATED_IMAGE}" false
+    kubectl get pods -A
 
     # For debug sake
     echo "Pod ${kata_pod_with_private_image}: $(cat ${kata_pod_with_private_image})"
 
     assert_pod_fail "${kata_pod_with_private_image}"
+    kubectl get pods -A
+    kubectl get nodes
+    echo "Node name is $node"
     assert_logs_contain "${node}" kata "${node_start_time}" "failed to pull manifest Not authorized"
 }
 
 teardown() {
-    if [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
-	    skip "Test skipped on ${KATA_HYPERVISOR}, see https://github.com/kata-containers/kata-containers/issues/10011"
-    fi
+#    if [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
+#	    skip "Test skipped on ${KATA_HYPERVISOR}, see https://github.com/kata-containers/kata-containers/issues/10011"
+#    fi
 
     if ! is_confidential_runtime_class; then
         skip "Test not supported for ${KATA_HYPERVISOR}."

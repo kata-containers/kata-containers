@@ -241,7 +241,7 @@ print_node_journal() {
 	shift 2
 	local img="quay.io/prometheus/busybox"
 
-	kubectl debug --image "$img" -q -it "node/${node}" \
+	kubectl debug --image "$img" -q -i "node/${node}" \
 		-- chroot /host journalctl -x -t "$id" --no-pager "$@"
 	# Delete the debugger pod
 	kubectl get pods -o name | grep "node-debugger-${node}" | \

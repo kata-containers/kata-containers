@@ -454,8 +454,11 @@ function cleanup() {
 	[ "$platform" = "kcli" ] && \
 		export KUBECONFIG="$HOME/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
 
-	echo "Gather information about the nodes and pods before cleaning up the node"
-	get_nodes_and_pods_info
+#	echo "Gather information about the nodes and pods before cleaning up the node"
+#	get_nodes_and_pods_info
+
+	echo "Gather containerd information"
+	sudo journalctl --since="$start_time" --no-pager -u containerd
 
 	if [ "${platform}" = "aks" ]; then
 		delete_cluster "${test_type}"
@@ -580,6 +583,8 @@ function cleanup_nydus_snapshotter() {
 function main() {
 	export KATA_HOST_OS="${KATA_HOST_OS:-}"
 	export K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-}"
+	start_time=$(date '+%Y-%m-%d %H:%M:%S')
+	export start_time
 
 	action="${1:-}"
 
