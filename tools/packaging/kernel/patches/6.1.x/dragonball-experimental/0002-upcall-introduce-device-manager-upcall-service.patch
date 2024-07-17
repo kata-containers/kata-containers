@@ -1,0 +1,330 @@
+From 66e67cc3ebbebc9d138fff084c487d6b9d21f60c Mon Sep 17 00:00:00 2001
+From: Chao Wu <chaowu@linux.alibaba.com>
+Date: Mon, 21 Nov 2022 19:19:26 +0800
+Subject: [PATCH 2/4] upcall: introduce device manager upcall service
+
+Different services are registered into upcall server to handle the
+request from the client side. This commit introduces devic manager
+upcall service and when new message gets into upcall server, cmd `d` is
+used for identifying the device manager service.
+
+After a request is sent to device manager service, db_devmgr_handler
+will start handle the request. A kthread `db_devmgr_server` will be
+created and it will send CONNECT message to the client side to notify
+the client start sending message for device management operations.
+`db_devmgr_process` will be used for determining which device operations
+will be triggered through msg_type. `get_action` will find out the
+action for dealing with the operation and `action` fn will execute the
+actual device management operation in the device manager service.
+
+Signed-off-by: Liu Jiang <gerry@linux.alibaba.com>
+Signed-off-by: Zizheng Bian <zizheng.bian@linux.alibaba.com>
+Signed-off-by: Chao Wu <chaowu@linux.alibaba.com>
+Signed-off-by: WangYu <WangYu@linux.alibaba.com>
+Signed-off-by: Xingjun Liu <xingjun.liu@linux.alibaba.com>
+---
+ drivers/misc/dragonball/upcall_srv/Kconfig    |  12 +
+ drivers/misc/dragonball/upcall_srv/Makefile   |   1 +
+ .../upcall_srv/dragonball_device_manager.c    | 235 ++++++++++++++++++
+ include/dragonball/device_manager.h           |  18 ++
+ 4 files changed, 266 insertions(+)
+ create mode 100644 drivers/misc/dragonball/upcall_srv/dragonball_device_manager.c
+ create mode 100644 include/dragonball/device_manager.h
+
+diff --git a/drivers/misc/dragonball/upcall_srv/Kconfig b/drivers/misc/dragonball/upcall_srv/Kconfig
+index b00bf1f8637d..6554a9741c00 100644
+--- a/drivers/misc/dragonball/upcall_srv/Kconfig
++++ b/drivers/misc/dragonball/upcall_srv/Kconfig
+@@ -12,3 +12,15 @@ config DRAGONBALL_UPCALL_SRV
+ 	  Sockets communication channels between guest and host/vmm.
+ 
+ 	  If unsure, say N.
++
++config DRAGONBALL_DEVICE_MANAGER
++	bool "Vsock Service to Handle Dragonball Device Management Requests"
++	depends on DRAGONBALL_UPCALL_SRV
++	depends on VIRTIO_VSOCKETS
++	default y
++	help
++	  This configure implements a vsock service to handle Dragonball device
++	  management requests, such as getting device information, hot-plugging
++	  devices etc.
++
++	  If unsure, say N.
+diff --git a/drivers/misc/dragonball/upcall_srv/Makefile b/drivers/misc/dragonball/upcall_srv/Makefile
+index 4102e6c7edef..409c0c11e2e6 100644
+--- a/drivers/misc/dragonball/upcall_srv/Makefile
++++ b/drivers/misc/dragonball/upcall_srv/Makefile
+@@ -11,3 +11,4 @@
+ #
+ 
+ obj-$(CONFIG_DRAGONBALL_UPCALL_SRV) 	+= dragonball_upcall_srv.o
++obj-$(CONFIG_DRAGONBALL_DEVICE_MANAGER)	+= dragonball_device_manager.o
+diff --git a/drivers/misc/dragonball/upcall_srv/dragonball_device_manager.c b/drivers/misc/dragonball/upcall_srv/dragonball_device_manager.c
+new file mode 100644
+index 000000000000..ebcb6ef74285
+--- /dev/null
++++ b/drivers/misc/dragonball/upcall_srv/dragonball_device_manager.c
+@@ -0,0 +1,235 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * drivers/misc/dragonball/vsock_srv/dragonball_device_manager.c
++ * vsock service for device management.
++ *
++ * Copyright (C) 2022 Alibaba Cloud, Inc
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License
++ * as published by the Free Software Foundation; either version
++ * 2 of the License, or (at your option) any later version.
++ *
++ */
++
++#define pr_fmt(fmt) "db-dev-mgr: " fmt
++
++#include <linux/kthread.h>
++#include <linux/module.h>
++#include <linux/platform_device.h>
++#include <linux/slab.h>
++#include <linux/virtio_mmio.h>
++#include <linux/cpu.h>
++#include <linux/cpumask.h>
++#include <linux/cpuhotplug.h>
++#include <asm/cpu.h>
++#include <dragonball/upcall_srv.h>
++#include <dragonball/device_manager.h>
++#ifdef CONFIG_ARM64
++#include <linux/irqdomain.h>
++#include <linux/irq.h>
++#endif
++#include <linux/percpu.h>
++#include <linux/device.h>
++#include <asm/numa.h>
++
++/*
++ * Following designs are adopted to simplify implementation:
++ * 1) fix size messages with padding to ease receiving logic.
++ * 2) binary encoding instead of string encoding because it's on the same host.
++ * 3) synchronous communication in ping-pong mode, one in-fly request at most.
++ * 4) do not support module unloading
++ */
++
++/* These definitions are synchronized with dragonball */
++#define DEV_MGR_MSG_SIZE			0x400
++#define DEVMGR_CMD_BYTE			'd'
++#define DEVMGR_MAGIC_VERSION		0x444D0100 /* 'DM' + Version 1.0 */
++#define SHARED_IRQ_NO			5
++
++/* Type of request and reply messages. */
++enum devmgr_msg_type {
++	CONNECT			= 0x00000000,
++	ADD_CPU			= 0x00000001,
++	DEL_CPU			= 0x00000002,
++	ADD_MEM			= 0x00000003,
++	DEL_MEM			= 0x00000004,
++	ADD_MMIO		= 0x00000005,
++	DEL_MMIO		= 0x00000006,
++	ADD_PCI			= 0x00000007,
++	DEL_PCI			= 0x00000008,
++};
++
++struct devmgr_msg_header {
++	/* magic version for identifying upcall */
++	uint32_t	magic_version;
++	/* size of the upcall message */
++	uint32_t	msg_size;
++	/* type for the message to identify its usage */
++	uint32_t	msg_type;
++	/* flag for extra information */
++	uint32_t	msg_flags;
++};
++
++struct devmgr_req {
++	struct devmgr_msg_header msg_header;
++	union {
++		char	pad[DEV_MGR_MSG_SIZE - sizeof(struct devmgr_msg_header)];
++	} msg_load;
++};
++
++struct devmgr_reply {
++	struct devmgr_msg_header msg_header;
++	/*
++	 * if ret is 0, it means the operation is successful.
++	 * if ret is not 0, return value will be error code.
++	 */
++	int32_t ret;
++	union {
++		char	pad[DEV_MGR_MSG_SIZE - sizeof(struct devmgr_msg_header) - sizeof(int32_t)];
++	} msg_load;
++};
++
++struct task_res {
++	struct task_struct	*task;
++	struct socket		*sock;
++	struct devmgr_req	req;
++	struct devmgr_reply	reply;
++};
++
++typedef int (*action_route_t) (struct devmgr_req *req,
++			       struct devmgr_reply *rep);
++
++static void _fill_msg_header(struct devmgr_msg_header *msg, uint32_t msg_size,
++			     uint32_t msg_type, uint32_t msg_flags)
++{
++	msg->magic_version = DEVMGR_MAGIC_VERSION;
++	msg->msg_size      = msg_size;
++	msg->msg_type      = msg_type;
++	msg->msg_flags     = msg_flags;
++}
++
++static struct {
++	enum devmgr_msg_type cmd;
++	action_route_t fn;
++} opt_map[] = {
++};
++
++static action_route_t get_action(struct devmgr_req *req)
++{
++	int i;
++	action_route_t action = NULL;
++	int size_opt = ARRAY_SIZE(opt_map);
++
++	for (i = 0; i < size_opt; i++) {
++		if (opt_map[i].cmd == req->msg_header.msg_type) {
++			action = opt_map[i].fn;
++			break;
++		}
++	}
++	return action;
++}
++
++static void db_devmgr_process(struct devmgr_req *req,
++			      struct devmgr_reply *rep)
++{
++	int err;
++	action_route_t action;
++	struct devmgr_msg_header *req_mh = &req->msg_header;
++	struct devmgr_msg_header *rep_mh = &rep->msg_header;
++
++	if (req_mh->magic_version != DEVMGR_MAGIC_VERSION) {
++		_fill_msg_header(rep_mh, 0, req->msg_header.msg_type, 0);
++		return;
++	}
++
++	action = get_action(req);
++	if (action == NULL) {
++		pr_err("db_devmgr_process : Not found valid command");
++		rep->ret = -1;
++		_fill_msg_header(rep_mh, 0, req->msg_header.msg_type, 0);
++		return;
++	}
++
++	err = action(req, rep);
++	if (err) {
++		pr_err("db_devmgr_process : Command run failed, err: %d", err);
++		rep->ret = err;
++		_fill_msg_header(rep_mh, 0, req->msg_header.msg_type, 0);
++		return;
++	}
++}
++
++static int db_devmgr_server(void *data)
++{
++	struct task_res *res = (struct task_res *)data;
++	struct devmgr_msg_header *rep_mh = &res->reply.msg_header;
++	int len;
++
++	_fill_msg_header(rep_mh, 0, CONNECT, 0);
++	len = db_vsock_sendmsg(res->sock, (char *)&res->reply, DEV_MGR_MSG_SIZE);
++	if (len <= 0) {
++		pr_err("db_devmgr_server : Server send message failed, err: %d", len);
++		sock_release(res->sock);
++		kfree(res);
++		return len;
++	}
++
++	while (!kthread_should_stop()) {
++		len = db_vsock_recvmsg(res->sock, (char *)&res->req,
++				       DEV_MGR_MSG_SIZE, 0);
++		if (len <= 0)
++			break;
++
++		/* The result(OK or Error) will fill into res->reply field */
++		db_devmgr_process(&res->req, &res->reply);
++
++		len = db_vsock_sendmsg(res->sock, (char *)&res->reply,
++				       DEV_MGR_MSG_SIZE);
++		if (len <= 0)
++			break;
++	}
++
++	/* TODO: check who shutdown the socket, receiving or sending. */
++	sock_release(res->sock);
++	kfree(res);
++	return 0;
++}
++
++static int db_devmgr_handler(struct socket *sock)
++{
++	struct task_res *res;
++	struct task_struct *conn_task;
++
++	/* TODO: ensure singleton, only one server exists */
++	res = kzalloc(sizeof(*res), GFP_KERNEL);
++	if (!res)
++		return -ENOMEM;
++
++	res->sock = sock;
++	conn_task = kthread_create(db_devmgr_server, res, "db_dev_mgr");
++	if (IS_ERR(conn_task)) {
++		pr_err("db_devmgr_handler : Client process thread create failed, err: %d",
++		       (int)PTR_ERR(conn_task));
++		goto failed;
++	} else {
++		res->task = conn_task;
++		wake_up_process(conn_task);
++	}
++
++	return 0;
++failed:
++	kfree(res);
++	return PTR_ERR(conn_task);
++}
++
++static int __init db_device_manager_init(void)
++{
++	return register_db_vsock_service(DEVMGR_CMD_BYTE, db_devmgr_handler);
++}
++
++late_initcall(db_device_manager_init);
++
++MODULE_AUTHOR("Alibaba, Inc.");
++MODULE_DESCRIPTION("Dragonball Device Manager");
++MODULE_LICENSE("GPL v2");
+diff --git a/include/dragonball/device_manager.h b/include/dragonball/device_manager.h
+new file mode 100644
+index 000000000000..a1713e9f026d
+--- /dev/null
++++ b/include/dragonball/device_manager.h
+@@ -0,0 +1,18 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/*
++ * device_manager.h  Device Manager for Dragonball
++ *
++ * Copyright (C) 2022 Alibaba Cloud, Inc
++ *
++ * This program is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License as published by the Free
++ * Software Foundation; either version 2 of the License, or (at your option)
++ * any later version.
++ */
++
++#ifndef _DB_DEVICE_MANAGER_H
++#define _DB_DEVICE_MANAGER_H
++
++#include <linux/device.h>
++
++#endif /* _DB_DEVICE_MANAGER_H */
+-- 
+2.19.1.6.gb485710b
+
