@@ -27,6 +27,7 @@ else
 	K8S_TEST_SMALL_HOST_UNION=( \
 		"k8s-guest-pull-image-encrypted.bats" \
 		"k8s-guest-pull-image.bats" \
+		"k8s-guest-pull-image-authenticated.bats" \
 		"k8s-confidential-attestation.bats" \
 		"k8s-confidential.bats" \
 		"k8s-sealed-secret.bats" \

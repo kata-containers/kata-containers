@@ -131,7 +131,7 @@ teardown() {
     kubectl describe pods
     k8s_delete_all_pods_if_any_exists || true
 
-    if [[ -n "${node_start_time}:-}" && -z "$BATS_TEST_COMPLETED" ]]; then
+    if [[ -n "${node_start_time:-}" && -z "$BATS_TEST_COMPLETED" ]]; then
         echo "DEBUG: system logs of node '$node' since test start time ($node_start_time)"
         print_node_journal "$node" "kata" --since "$node_start_time" || true
     fi
