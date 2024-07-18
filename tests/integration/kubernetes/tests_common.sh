@@ -159,6 +159,7 @@ adapt_common_policy_settings_for_cbl_mariner() {
 
 	info "Adapting common policy settings for CBL-Mariner"
 	jq '.request_defaults.UpdateEphemeralMountsRequest = true' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+	jq '.kata_config.oci_version = "1.1.0-rc.1"' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
 }
 
 # adapt common policy settings for various platforms
