@@ -66,7 +66,7 @@ class Checks:
             if values.get("regexps"):
                 required_regexps.add(values["regexps"])
         print(';'.join(required_tests))
-        print('|'.join(required_regexps))
+        print(';'.join(required_regexps))
         return 0
 
     def get_features(self, target_branch):
