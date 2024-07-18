@@ -25,6 +25,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	"github.com/pbnjay/memory"
 	"github.com/sirupsen/logrus"
@@ -155,6 +156,8 @@ type hypervisor struct {
 	VirtioMem                      bool                      `toml:"enable_virtio_mem"`
 	IOMMU                          bool                      `toml:"enable_iommu"`
 	IOMMUPlatform                  bool                      `toml:"enable_iommu_platform"`
+	NUMA                           bool                      `toml:"enable_numa"`
+	NUMAMapping                    []string                  `toml:"numa_mapping"`
 	Debug                          bool                      `toml:"enable_debug"`
 	DisableNestingChecks           bool                      `toml:"disable_nesting_checks"`
 	EnableIOThreads                bool                      `toml:"enable_iothreads"`
@@ -724,6 +727,18 @@ func (h hypervisor) getIOMMUPlatform() bool {
 	return h.IOMMUPlatform
 }
 
+func (h hypervisor) defaultGuestNUMANodes() []types.GuestNUMANode {
+	if !h.NUMA {
+		return nil
+	}
+	numaNodes, err := utils.GetGuestNUMANodes(h.NUMAMapping)
+	if err != nil {
+		kataUtilsLogger.WithError(err).Warn("Cannot construct guest NUMA nodes.")
+		return nil
+	}
+	return numaNodes
+}
+
 func (h hypervisor) getRemoteHypervisorSocket() string {
 	if h.RemoteHypervisorSocket == "" {
 		return defaultRemoteHypervisorSocket
@@ -981,6 +996,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		HugePages:                h.HugePages,
 		IOMMU:                    h.IOMMU,
 		IOMMUPlatform:            h.getIOMMUPlatform(),
+		GuestNUMANodes:           h.defaultGuestNUMANodes(),
 		FileBackedMemRootDir:     h.FileBackedMemRootDir,
 		FileBackedMemRootList:    h.FileBackedMemRootList,
 		Debug:                    h.Debug,
