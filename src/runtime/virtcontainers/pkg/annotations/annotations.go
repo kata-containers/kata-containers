@@ -179,6 +179,9 @@ const (
 	// FileBackedMemRootDir is a sandbox annotation to soecify file based memory backend root directory
 	FileBackedMemRootDir = kataAnnotHypervisorPrefix + "file_mem_backend"
 
+	// NUMAMapping is a sandbox annotation that specifies mapping VM NUMA nodes to host NUMA nodes.
+	NUMAMapping = kataAnnotHypervisorPrefix + "numa_mapping"
+
 	//
 	// Shared File System related annotations
 	//

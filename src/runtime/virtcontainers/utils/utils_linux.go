@@ -19,6 +19,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sys/unix"
+
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/cpuset"
 )
 
 var ioctlFunc = Ioctl
@@ -196,4 +198,25 @@ func waitForProcessCompletion(pid int, timeoutSecs uint, logger *logrus.Entry) b
 	}
 
 	return pidRunning
+}
+
+func getHostNUMANodes() ([]int, error) {
+	data, err := os.ReadFile("/sys/devices/system/node/online")
+	if err != nil {
+		return nil, err
+	}
+	nodes, err := cpuset.Parse(strings.TrimSuffix(string(data), "\n"))
+	if err != nil {
+		return nil, err
+	}
+	return nodes.ToSlice(), nil
+}
+
+func getHostNUMANodeCPUs(nodeId int) (string, error) {
+	fileName := fmt.Sprintf("/sys/devices/system/node/node%v/cpulist", nodeId)
+	data, err := os.ReadFile(fileName)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSuffix(string(data), "\n"), nil
 }

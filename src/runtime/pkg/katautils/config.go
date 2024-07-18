@@ -25,6 +25,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	"github.com/pbnjay/memory"
 	"github.com/sirupsen/logrus"
@@ -63,6 +64,8 @@ const (
 
 	// the maximum valid loglevel for the hypervisor
 	maxHypervisorLoglevel uint32 = 3
+	// the maximum number of NUMA nodes in Linux kernel: 1 << CONFIG_NODES_SHIFT, which is up to 10.
+	maxNumNUMA uint32 = 1024
 
 	errInvalidHypervisorPrefix = "configuration file contains invalid hypervisor section"
 )
@@ -149,6 +152,8 @@ type hypervisor struct {
 	VirtioMem                      bool                      `toml:"enable_virtio_mem"`
 	IOMMU                          bool                      `toml:"enable_iommu"`
 	IOMMUPlatform                  bool                      `toml:"enable_iommu_platform"`
+	NUMA                           bool                      `toml:"enable_numa"`
+	NUMAMapping                    []string                  `toml:"numa_mapping"`
 	Debug                          bool                      `toml:"enable_debug"`
 	DisableNestingChecks           bool                      `toml:"disable_nesting_checks"`
 	EnableIOThreads                bool                      `toml:"enable_iothreads"`
@@ -693,6 +698,18 @@ func (h hypervisor) getIOMMUPlatform() bool {
 		kataUtilsLogger.Info("IOMMUPlatform is disabled by default.")
 	}
 	return h.IOMMUPlatform
+}
+
+func (h hypervisor) defaultNUMANodes() []types.NUMANode {
+	if !h.NUMA {
+		return nil
+	}
+	numaNodes, err := utils.GetNUMANodes(h.NUMAMapping)
+	if err != nil {
+		kataUtilsLogger.WithError(err).Warn("Cannot construct NUMA nodes.")
+		return nil
+	}
+	return numaNodes
 }
 
 func (h hypervisor) getRemoteHypervisorSocket() string {
