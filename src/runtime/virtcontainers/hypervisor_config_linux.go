@@ -44,6 +44,10 @@ func validateHypervisorConfig(conf *HypervisorConfig) error {
 		conf.MemorySize = defaultMemSzMiB
 	}
 
+	if uint64(conf.MemorySize) > conf.DefaultMaxMemorySize {
+		conf.MemorySize = uint32(conf.DefaultMaxMemorySize)
+	}
+
 	if conf.DefaultBridges == 0 {
 		conf.DefaultBridges = defaultBridges
 	}
