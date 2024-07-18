@@ -271,7 +271,7 @@ pub struct ContainerPolicy {
     /// Allow list of ommand lines that are allowed to be executed using
     /// ExecProcessRequest. By default, all ExecProcessRequest calls are blocked
     /// by the policy.
-    exec_commands: Vec<String>,
+    exec_commands: Vec<Vec<String>>,
 }
 
 /// See Reference / Kubernetes API / Config and Storage Resources / Volume.

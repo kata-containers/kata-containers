@@ -343,10 +343,39 @@ add_allow_all_policy_to_yaml() {
 
 # Execute "kubectl describe ${pod}" in a loop, until its output contains "${endpoint} is blocked by policy"
 wait_for_blocked_request() {
-	endpoint="$1"
-	pod="$2"
+	local -r endpoint="$1"
+	local -r pod="$2"
 
-	command="kubectl describe pod ${pod} | grep \"${endpoint} is blocked by policy\""
+	local -r command="kubectl describe pod ${pod} | grep \"${endpoint} is blocked by policy\""
 	info "Waiting ${wait_time} seconds for: ${command}"
 	waitForProcess "${wait_time}" "$sleep_time" "${command}" >/dev/null 2>/dev/null
+}
+
+# Execute in a pod a command that is allowed by policy.
+pod_exec_allowed_command() {
+	local -r pod_name="$1"
+	shift
+
+	local -r exec_output=$(kubectl exec "${pod_name}" -- "${@}" 2>&1)
+
+	local -r exec_args=$(printf '"%s",' "${@}")
+	info "Pod ${pod_name}: <${exec_args::-1}>:"
+	info "${exec_output}"
+
+	(echo "${exec_output}" | grep "policy") && die "exec was blocked by policy!"
+	return 0
+}
+
+# Execute in a pod a command that is blocked by policy.
+pod_exec_blocked_command() {
+	local -r pod_name="$1"
+	shift
+
+	local -r exec_output=$(kubectl exec "${pod_name}" -- "${@}" 2>&1)
+
+	local -r exec_args=$(printf '"%s",' "${@}")
+	info "Pod ${pod_name}: <${exec_args::-1}>:"
+	info "${exec_output}"
+
+	(echo "${exec_output}" | grep "ExecProcessRequest is blocked by policy" > /dev/null) || die "exec was not blocked by policy!"
 }

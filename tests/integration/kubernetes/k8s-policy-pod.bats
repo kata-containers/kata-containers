@@ -46,10 +46,15 @@ setup() {
 	cp "${pre_generate_pod_yaml}" "${testcase_pre_generate_pod_yaml}"
 }
 
-@test "Successful pod with auto-generated policy" {
+# Common function for several test cases from this bats script.
+wait_for_pod_ready() {
 	kubectl create -f "${correct_configmap_yaml}"
 	kubectl create -f "${correct_pod_yaml}"
 	kubectl wait --for=condition=Ready "--timeout=${timeout}" pod "${pod_name}"
+}
+
+@test "Successful pod with auto-generated policy" {
+	wait_for_pod_ready
 }
 
 @test "Successful pod with auto-generated policy and runtimeClassName filter" {
@@ -190,6 +195,22 @@ test_pod_policy_error() {
 	kubectl create -f "${correct_configmap_yaml}"
 	kubectl create -f "${incorrect_pod_yaml}"
 	kubectl wait --for=condition=Ready "--timeout=${timeout}" pod "${pod_name}"
+}
+
+@test "ExecProcessRequest tests" {
+	wait_for_pod_ready
+
+	# Execute commands allowed by the policy.
+	pod_exec_allowed_command "${pod_name}" "echo" "livenessProbe" "test"
+	pod_exec_allowed_command "${pod_name}" "sh" "-c" "ls -l /"
+	pod_exec_allowed_command "${pod_name}" "echo" "startupProbe" "test"
+
+	# Try to execute commands disallowed by the policy.
+	pod_exec_blocked_command "${pod_name}" "echo" "livenessProbe test"
+	pod_exec_blocked_command "${pod_name}" "echo" "livenessProbe" "test2"
+	pod_exec_blocked_command "${pod_name}" "echo" "livenessProbe" "test" "yes"
+	pod_exec_blocked_command "${pod_name}" "echo" "livenessProbe" "test foo"
+	pod_exec_blocked_command "${pod_name}" "echo" "hello"
 }
 
 teardown() {
