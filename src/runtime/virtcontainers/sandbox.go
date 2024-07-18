@@ -2793,11 +2793,12 @@ func (s *Sandbox) fetchContainers(ctx context.Context) error {
 // is set to true. Then it fetches sandbox's number of vCPU threads
 // and number of CPUs in CPUSet. If the two are equal, each vCPU thread
 // is then pinned to one fixed CPU in CPUSet.
+// For enforcing NUMA topology vCPU threads are pinned to related host CPUs.
 func (s *Sandbox) checkVCPUsPinning(ctx context.Context) error {
 	if s.config == nil {
 		return fmt.Errorf("no sandbox config found")
 	}
-	if !s.config.EnableVCPUsPinning {
+	if !s.config.EnableVCPUsPinning && s.config.HypervisorConfig.NumNUMA() == 0 {
 		return nil
 	}
 
@@ -2816,23 +2817,59 @@ func (s *Sandbox) checkVCPUsPinning(ctx context.Context) error {
 	}
 	cpuSetSlice := cpuSet.ToSlice()
 
-	// check if vCPU thread numbers and CPU numbers are equal
-	numVCPUs, numCPUs := len(vCPUThreadsMap.vcpus), len(cpuSetSlice)
-	// if not equal, we should reset threads scheduling to random pattern
-	if numVCPUs != numCPUs {
-		if s.isVCPUsPinningOn {
-			s.isVCPUsPinningOn = false
-			return s.resetVCPUsPinning(ctx, vCPUThreadsMap, cpuSetSlice)
+	// build NUMA topology mapping, or fake single node if NUMA is not enabled.
+	numNodes := max(s.config.HypervisorConfig.NumNUMA(), 1)
+
+	numaNodeVCPUs := make([][]int, numNodes)
+	for vcpuId := range vCPUThreadsMap.vcpus {
+		nodeId, ok := vCPUThreadsMap.vcpuToNodeId[vcpuId]
+		if !ok || nodeId > numNodes {
+			nodeId = 0
 		}
-		return nil
+		numaNodeVCPUs[nodeId] = append(numaNodeVCPUs[nodeId], vcpuId)
 	}
-	// if equal, we can use vCPU thread pinning
-	for i, tid := range vCPUThreadsMap.vcpus {
-		if err := resCtrl.SetThreadAffinity(tid, cpuSetSlice[i:i+1]); err != nil {
-			if err := s.resetVCPUsPinning(ctx, vCPUThreadsMap, cpuSetSlice); err != nil {
-				return err
+
+	numaNodeCPUs := make([][]int, numNodes)
+	numaNodeCPUs[0] = cpuSetSlice
+	for i, numaNode := range s.config.HypervisorConfig.NUMANodes {
+		nodeHostCPUs, err := cpuset.Parse(numaNode.HostCPUs)
+		if err != nil {
+			return fmt.Errorf("failed to parse NUMA CPUSet string: %v", err)
+		}
+		if !cpuSet.IsEmpty() {
+			nodeHostCPUs = cpuSet.Intersection(nodeHostCPUs)
+		}
+		numaNodeCPUs[i] = nodeHostCPUs.ToSlice()
+	}
+
+	// check if vCPU threads have enough host CPUs in each NUMA node
+	// if not enough, we should reset threads affinity.
+	for nodeId := range numaNodeVCPUs {
+		numVCPUs, numCPUs := len(numaNodeVCPUs[nodeId]), len(numaNodeCPUs[nodeId])
+		if s.config.EnableVCPUsPinning && numVCPUs != numCPUs || numVCPUs > numCPUs {
+			if s.isVCPUsPinningOn {
+				s.isVCPUsPinningOn = false
+				return s.resetVCPUsPinning(ctx, vCPUThreadsMap, cpuSetSlice)
 			}
-			return fmt.Errorf("failed to set vcpu thread %d affinity to cpu %d: %v", tid, cpuSetSlice[i], err)
+			virtLog.Warningf("cannot pin vcpus in vm numa node %d", nodeId)
+			return nil
+		}
+	}
+
+	for nodeId := range numaNodeVCPUs {
+		nodeCpuSetSlice := numaNodeCPUs[nodeId]
+		for i, vcpuId := range numaNodeVCPUs[nodeId] {
+			tid := vCPUThreadsMap.vcpus[vcpuId]
+			affinity := nodeCpuSetSlice
+			if s.config.EnableVCPUsPinning {
+				affinity = affinity[i : i+1]
+			}
+			if err := resCtrl.SetThreadAffinity(tid, affinity); err != nil {
+				if err := s.resetVCPUsPinning(ctx, vCPUThreadsMap, cpuSetSlice); err != nil {
+					return err
+				}
+				return fmt.Errorf("failed to set vcpu thread %d cpu affinity to %v: %v", tid, affinity, err)
+			}
 		}
 	}
 	s.isVCPUsPinningOn = true
