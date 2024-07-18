@@ -29,13 +29,16 @@ jobs:
           TARGET_BRANCH: ${{ github.event.pull_request.base.ref }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COMMIT_HASH: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           #!/usr/bin/env bash -x
           mapfile -t lines < <(python3 tools/testing/gatekeeper/skips.py -t)
           export REQUIRED_JOBS="${lines[0]}"
           export REQUIRED_REGEXPS="${lines[1]}"
+          export REQUIRED_LABELS="${lines[2]}"
           echo "REQUIRED_JOBS: $REQUIRED_JOBS"
           echo "REQUIRED_REGEXPS: $REQUIRED_REGEXPS"
+          echo "REQUIRED_LABELS: $REQUIRED_LABELS"
           python3 tools/testing/gatekeeper/jobs.py
           exit $?
         shell: /usr/bin/bash -x {0}

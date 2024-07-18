@@ -14,10 +14,10 @@ Env variables:
 * GITHUB_REPOSITORY: Github repository (user/repo)
 Sample execution (GH token can be excluded):
 GITHUB_TOKEN="..." REQUIRED_JOBS="skipper / skipper"
-REQUIRED_REGEXPS=".*"
+REQUIRED_REGEXPS=".*" REQUIRED_LABELS="ok-to-test;bar"
 COMMIT_HASH=b8382cea886ad9a8f77d237bcfc0eba0c98775dd
 GITHUB_REPOSITORY=kata-containers/kata-containers
-python3 jobs.py
+PR_NUMBER=123 python3 jobs.py
 """
 
 import os
@@ -35,14 +35,20 @@ RUNNING = 127
 _GH_HEADERS = {"Accept": "application/vnd.github.v3+json"}
 if os.environ.get("GITHUB_TOKEN"):
     _GH_HEADERS["Authorization"] = f"token {os.environ['GITHUB_TOKEN']}"
-_GH_RUNS_URL = ("https://api.github.com/repos/"
-                f"{os.environ['GITHUB_REPOSITORY']}/actions/runs")
+_GH_API_URL = f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}"
+_GH_RUNS_URL = f"{_GH_API_URL}/actions/runs"
 
 
 class Checker:
     """Object to keep watching required GH action workflows"""
     def __init__(self):
         self.latest_commit_sha = os.getenv("COMMIT_HASH")
+        self.pr_number = os.getenv("PR_NUMBER")
+        required_labels = os.getenv("REQUIRED_LABELS")
+        if required_labels:
+            self.required_labels = set(required_labels.split(";"))
+        else:
+            self.required_labels = []
         required_jobs = os.getenv("REQUIRED_JOBS")
         if required_jobs:
             required_jobs = required_jobs.split(";")
@@ -131,11 +137,9 @@ class Checker:
         jobs = []
         page = 1
         while True:
-            response = requests.get(
-                f"{_GH_RUNS_URL}/{run_id}/jobs?per_page=100&page={page}",
-                headers=_GH_HEADERS,
-                timeout=60
-            )
+            url = f"{_GH_RUNS_URL}/{run_id}/jobs?per_page=100&page={page}"
+            print(url, file=sys.stderr)
+            response = requests.get(url, headers=_GH_HEADERS, timeout=60)
             response.raise_for_status()
             output = response.json()
             jobs.extend(output["jobs"])
@@ -168,14 +172,12 @@ class Checker:
         print(self)
         return self.status()
 
-    def run(self):
+    def wait_for_required_tests(self):
         """
-        Keep checking the PR until all required jobs finish
+        Wait for all required tests to pass or failfast
 
-        :returns: 0 on success; 1 on failure
+        :return: 0 - all passing; 1 - any failure
         """
-        print(f"Gatekeeper for project={os.environ['GITHUB_REPOSITORY']} and "
-              f"SHA={self.latest_commit_sha}")
         while True:
             ret = self.check_workflow_runs_status()
             if ret == RUNNING:
@@ -185,7 +187,48 @@ class Checker:
                 print(f"{running_jobs} jobs are still running...")
                 time.sleep(180)
                 continue
-            sys.exit(ret)
+            return ret
+
+    def check_required_labels(self):
+        """
+        Check if all expected labels are present
+
+        :return: True on success, False on failure
+        """
+        if not self.required_labels:
+            # No required labels, exit
+            return True
+
+        if not self.pr_number:
+            print("The PR_NUMBER not specified, skipping the "
+                  f"required-labels-check ({self.required_labels})")
+            return True
+
+        response = requests.get(
+            f"{_GH_API_URL}/issues/{self.pr_number}",
+            headers=_GH_HEADERS,
+            timeout=60
+        )
+        response.raise_for_status()
+        labels = set(_["name"] for _ in response.json()["labels"])
+        if self.required_labels.issubset(labels):
+            return True
+        print(f"To run all required tests the PR{self.pr_number} must have "
+              f"{', '.join(self.required_labels.difference(labels))} labels "
+              "set.")
+        return False
+
+    def run(self):
+        """
+        Keep checking the PR until all required jobs finish
+
+        :returns: 0 on success; 1 on check failure; 2 when PR missing labels
+        """
+        print(f"Gatekeeper for project={os.environ['GITHUB_REPOSITORY']} and "
+              f"SHA={self.latest_commit_sha} PR={self.pr_number}")
+        if not self.check_required_labels():
+            sys.exit(2)
+        sys.exit(self.wait_for_required_tests())
 
 
 if __name__ == "__main__":
