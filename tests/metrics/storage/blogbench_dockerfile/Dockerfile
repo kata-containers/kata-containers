@@ -15,7 +15,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # URL for blogbench test and blogbench version
 ENV BLOGBENCH_URL "https://download.pureftpd.org/pub/blogbench"
-ENV BLOGBENCH_VERSION 1.1
+ENV BLOGBENCH_VERSION 1.2
 
 RUN apt-get update && \
 	apt-get install -y --no-install-recommends build-essential curl && \
