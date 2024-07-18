@@ -686,7 +686,8 @@ type HypervisorConfig struct {
 
 // vcpu mapping from vcpu number to thread number
 type VcpuThreadIDs struct {
-	vcpus map[int]int
+	vcpus        map[int]int
+	vcpuToNodeId map[int]uint32
 }
 
 func (conf *HypervisorConfig) CheckTemplateConfig() error {
