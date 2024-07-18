@@ -14,3 +14,11 @@ func GetDevicePathAndFsTypeOptions(mountPoint string) (devicePath, fsType string
 func waitForProcessCompletion(pid int, timeoutSecs uint, logger *logrus.Entry) bool {
 	return waitProcessUsingWaitLoop(pid, timeoutSecs, logger)
 }
+
+func getHostNUMANodes() ([]int, error) {
+	return nil, nil
+}
+
+func getHostNUMANodeCPUs(nodeId int) (string, error) {
+	return "", nil
+}
