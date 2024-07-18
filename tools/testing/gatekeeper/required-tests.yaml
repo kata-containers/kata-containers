@@ -26,11 +26,17 @@ mapping:
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-ppc64le / run-k8s-tests (qemu, kubeadm)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (ubuntu, qemu, small)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-with-crio-on-garm / run-k8s-tests (qemu, k0s, garm-ubuntu-2204)
+    required-labels:
+      - ok-to-test
     # TODO: Add support for "depends" to automatically add dependant set-of-tests
     #       (eg. "build" is required for "test")
   build:
     # Checks that the kata-containers static tarball is created
     regexps: "Kata Containers CI / .*build-kata-static-tarball.*"
+    required-labels:
+      - ok-to-test
   static:
     # Checks that static checks are passing
     regexps: "Static checks.*"
+    required-labels:
+      - ok-to-test

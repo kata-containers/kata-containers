@@ -59,14 +59,18 @@ class Checks:
             return 0
         required_tests = set(self.required_tests)
         required_regexps = set(self.required_regexps)
+        required_labels = set()
         for feature in enabled_features:
             values = self.mapping.get(feature, {})
             if values.get("names"):
                 required_tests.update(values["names"])
             if values.get("regexps"):
                 required_regexps.add(values["regexps"])
+            if values.get("required-labels"):
+                required_labels.update(values["required-labels"])
         print(';'.join(required_tests))
         print(';'.join(required_regexps))
+        print(';'.join(required_labels))
         return 0
 
     def get_features(self, target_branch):
