@@ -30,7 +30,6 @@ LIBC=${LIBC:-musl}
 SECCOMP=${SECCOMP:-"yes"}
 SELINUX=${SELINUX:-"no"}
 AGENT_POLICY=${AGENT_POLICY:-no}
-AGENT_POLICY_FILE=${AGENT_POLICY_FILE:-"${script_dir}/../../../src/kata-opa/allow-all.rego"}
 AGENT_SOURCE_BIN=${AGENT_SOURCE_BIN:-""}
 AGENT_TARBALL=${AGENT_TARBALL:-""}
 COCO_GUEST_COMPONENTS_TARBALL=${COCO_GUEST_COMPONENTS_TARBALL:-""}
@@ -40,7 +39,7 @@ PAUSE_IMAGE_TARBALL=${PAUSE_IMAGE_TARBALL:-""}
 lib_file="${script_dir}/../scripts/lib.sh"
 source "$lib_file"
 
-agent_policy_file="$(readlink -f "${AGENT_POLICY_FILE}")"
+agent_policy_file="$(readlink -f -v "${AGENT_POLICY_FILE:-"${script_dir}/../../../src/kata-opa/allow-all.rego"}")"
 
 #For cross build
 CROSS_BUILD=${CROSS_BUILD:-false}
