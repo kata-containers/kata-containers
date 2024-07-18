@@ -662,6 +662,16 @@ func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig
 		return err
 	}
 
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.DefaultMaxMemory).setUintWithCheck(func(memorySz uint64) error {
+		if memorySz < vc.MinHypervisorMemory && sbConfig.HypervisorType != vc.RemoteHypervisor {
+			return fmt.Errorf("Memory specified in annotation %s is less than minimum required %d, please specify a larger value", vcAnnotations.DefaultMemory, vc.MinHypervisorMemory)
+		}
+		sbConfig.HypervisorConfig.DefaultMaxMemorySize = memorySz
+		return nil
+	}); err != nil {
+		return err
+	}
+
 	if err := newAnnotationConfiguration(ocispec, vcAnnotations.MemSlots).setUint(func(mslots uint64) {
 		if mslots > 0 {
 			sbConfig.HypervisorConfig.MemSlots = uint32(mslots)

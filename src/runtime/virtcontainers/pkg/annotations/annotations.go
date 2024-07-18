@@ -155,6 +155,9 @@ const (
 	// DefaultMemory is a sandbox annotation for the memory assigned for a VM by the hypervisor.
 	DefaultMemory = kataAnnotHypervisorPrefix + "default_memory"
 
+	// MaxMemory is a sandbox annotation for the maximum memory assigned for a VM by the hypervisor.
+	DefaultMaxMemory = kataAnnotHypervisorPrefix + "default_maxmemory"
+
 	// MemSlots is a sandbox annotation to specify the memory slots assigned to the VM by the hypervisor.
 	MemSlots = kataAnnotHypervisorPrefix + "memory_slots"
 
