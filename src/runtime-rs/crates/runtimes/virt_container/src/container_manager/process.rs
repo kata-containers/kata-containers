@@ -11,7 +11,7 @@ use agent::Agent;
 use anyhow::{Context, Result};
 use awaitgroup::{WaitGroup, Worker as WaitGroupWorker};
 use common::types::{ContainerProcess, ProcessExitStatus, ProcessStateInfo, ProcessStatus, PID};
-use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
+use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::sync::{watch, RwLock};
 
 use super::container::Container;
@@ -22,13 +22,6 @@ pub type ProcessWatcher = (
     Option<watch::Receiver<bool>>,
     Arc<RwLock<ProcessExitStatus>>,
 );
-
-#[derive(Debug, PartialEq)]
-enum StdIoType {
-    Stdin,
-    Stdout,
-    Stderr,
-}
 
 #[derive(Debug)]
 pub struct Process {
@@ -69,6 +62,10 @@ pub struct Process {
     pub exit_status: Arc<RwLock<ProcessExitStatus>>,
     pub exit_watcher_rx: Option<watch::Receiver<bool>>,
     pub exit_watcher_tx: Option<watch::Sender<bool>>,
+    // used to sync between stdin io copy thread(tokio) and the close it call.
+    // close io call should wait until the stdin io copy finished to
+    // prevent stdin data lost.
+    pub wg_stdin: WaitGroup,
 
     // io streams using vsock fd passthrough feature
     pub passfd_io: Option<PassfdIo>,
@@ -122,6 +119,7 @@ impl Process {
             exit_status: Arc::new(RwLock::new(ProcessExitStatus::new())),
             exit_watcher_rx: Some(receiver),
             exit_watcher_tx: Some(sender),
+            wg_stdin: WaitGroup::new(),
             passfd_io: None,
         }
     }
@@ -248,8 +246,9 @@ impl Process {
         self.post_fifos_open()?;
 
         // start io copy for stdin
+        let wgw_stdin = self.wg_stdin.worker();
         if let Some(stdin) = shim_io.stdin {
-            self.run_io_copy(StdIoType::Stdin, None, stdin, container_io.stdin)
+            self.run_io_copy("stdin", wgw_stdin, stdin, container_io.stdin)
                 .await?;
         }
 
@@ -259,19 +258,14 @@ impl Process {
 
         // start io copy for stdout
         if let Some(stdout) = shim_io.stdout {
-            self.run_io_copy(
-                StdIoType::Stdout,
-                Some(wgw.clone()),
-                container_io.stdout,
-                stdout,
-            )
-            .await?;
+            self.run_io_copy("stdout", wgw.clone(), container_io.stdout, stdout)
+                .await?;
         }
 
         // start io copy for stderr
         if !self.terminal {
             if let Some(stderr) = shim_io.stderr {
-                self.run_io_copy(StdIoType::Stderr, Some(wgw), container_io.stderr, stderr)
+                self.run_io_copy("stderr", wgw, container_io.stderr, stderr)
                     .await?;
             }
         }
@@ -282,51 +276,27 @@ impl Process {
         Ok(())
     }
 
-    async fn run_io_copy(
-        &self,
-        io_type: StdIoType,
-        wgw: Option<WaitGroupWorker>,
+    async fn run_io_copy<'a>(
+        &'a self,
+        io_name: &'a str,
+        wgw: WaitGroupWorker,
         mut reader: Box<dyn AsyncRead + Send + Unpin>,
         mut writer: Box<dyn AsyncWrite + Send + Unpin>,
     ) -> Result<()> {
-        let io_name = format!("{:?}", io_type);
-
-        info!(self.logger, "run_io_copy[{}] starts", io_name);
-        let logger = self.logger.new(o!("io_name" => io_name.clone()));
-
+        info!(self.logger, "run io copy for {}", io_name);
+        let io_name = io_name.to_string();
+        let logger = self.logger.new(o!("io_name" => io_name));
         tokio::spawn(async move {
             match tokio::io::copy(&mut reader, &mut writer).await {
                 Err(e) => {
-                    warn!(
-                        logger,
-                        "run_io_copy[{}]: failed to copy stream: {}", io_name, e
-                    );
+                    warn!(logger, "run_io_copy: failed to copy stream: {}", e);
                 }
                 Ok(length) => {
-                    info!(
-                        logger,
-                        "run_io_copy[{}]: stop to copy stream length {}", io_name, length
-                    );
-                    // Send EOF to agent by calling rpc write_stdin with 0 length data
-                    if io_type == StdIoType::Stdin {
-                        writer
-                            .shutdown()
-                            .await
-                            .map_err(|e| {
-                                error!(
-                                    logger,
-                                    "run_io_copy[{}]: failed to shutdown: {:?}", io_name, e
-                                );
-                                e
-                            })
-                            .ok();
-                    }
+                    info!(logger, "run_io_copy: stop to copy stream length {}", length)
                 }
             };
 
-            if let Some(w) = wgw {
-                w.done()
-            }
+            wgw.done();
         });
 
         Ok(())
@@ -430,13 +400,24 @@ impl Process {
     }
 
     /// Close the stdin of the process in container.
-    pub async fn close_io(&mut self, _agent: Arc<dyn Agent>) {
+    pub async fn close_io(&mut self, agent: Arc<dyn Agent>) {
         // Close the stdin writer keeper so that
         // the end signal could be received in the read side
         self.stdin_w.take();
 
-        // The stdin will be closed when EOF is got in rpc `read_stdout` of agent
-        // so we will not call agent.close_stdin anymore.
+        // In passfd io mode, the stdin close and sync logic is handled
+        // in the agent side.
+        if self.passfd_io.is_none() {
+            self.wg_stdin.wait().await;
+        }
+
+        let req = agent::CloseStdinRequest {
+            process_id: self.process.clone().into(),
+        };
+
+        if let Err(e) = agent.close_stdin(req).await {
+            warn!(self.logger, "failed close process io: {:?}", e);
+        }
     }
 
     pub async fn get_status(&self) -> ProcessStatus {
