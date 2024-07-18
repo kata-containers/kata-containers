@@ -45,7 +45,7 @@ class Checker:
         self.latest_commit_sha = os.getenv("COMMIT_HASH")
         required_jobs = os.getenv("REQUIRED_JOBS")
         if required_jobs:
-            required_jobs = required_jobs.split(",")
+            required_jobs = required_jobs.split(";")
         else:
             required_jobs = []
         required_regexps = os.getenv("REQUIRED_REGEXPS")
@@ -53,7 +53,7 @@ class Checker:
         # TODO: Add way to specify minimum amount of tests
         # (eg. via \d+: prefix) and check it in status
         if required_regexps:
-            for regexp in required_regexps.split(","):
+            for regexp in required_regexps.split(";"):
                 self.required_regexps.append(re.compile(regexp))
         if not required_jobs and not self.required_regexps:
             raise RuntimeError("No REQUIRED_JOBS or REQUIRED_REGEXPS defined")
