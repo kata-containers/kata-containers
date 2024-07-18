@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   add-new-issues-to-backlog:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Install hub
         run: |
