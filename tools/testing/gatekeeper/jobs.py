@@ -79,6 +79,8 @@ class Checker:
             else:
                 # Not a required job
                 return
+        print(f"{job_name} - {job['status']} {job['conclusion']} {job['id']}",
+              file=sys.stderr)
         if job["status"] != "completed":
             self.results[job_name] = RUNNING
             return
@@ -156,6 +158,7 @@ class Checker:
         :returns: 0 - all passing; 1 - any failure; 127 some jobs running
         """
         # TODO: Check if we need pagination here as well
+        print(_GH_RUNS_URL, file=sys.stderr)
         response = requests.get(
             _GH_RUNS_URL,
             params={"head_sha": self.latest_commit_sha},
