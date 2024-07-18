@@ -727,6 +727,14 @@ func addHypervisorMemoryOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig
 		return err
 	}
 
+	if annotation, ok := ocispec.Annotations[vcAnnotations.NUMAMapping]; ok {
+		numaNodes, err := vcutils.GetNUMANodes(strings.Fields(annotation))
+		if err != nil {
+			return err
+		}
+		sbConfig.HypervisorConfig.NUMANodes = numaNodes
+	}
+
 	return nil
 }
 
