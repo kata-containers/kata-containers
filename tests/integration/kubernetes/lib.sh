@@ -191,6 +191,15 @@ set_metadata_annotation() {
 	# yq set annotations in yaml. Quoting the key because it can have
 	# dots.
 	yq -i ".${annotation_key} = \"${value}\"" "${yaml}"
+
+	if [[ "${key}" =~ kernel_params ]] && [[ "${KATA_HYPERVISOR}" == "qemu-se" ]]; then
+		# A secure boot image for IBM SE should be rebuilt according to the KBS configuration.
+		if [ -z "${IBM_SE_CREDS_DIR:-}" ]; then
+			>&2 echo "ERROR: IBM_SE_CREDS_DIR is empty"
+			return 1
+		fi
+		repack_secure_image "${value}" "${IBM_SE_CREDS_DIR}" "true"
+	fi
 }
 
 # Set the command for container spec.

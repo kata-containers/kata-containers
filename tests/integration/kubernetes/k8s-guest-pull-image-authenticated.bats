@@ -90,15 +90,6 @@ function create_pod_yaml_with_private_image() {
         "${kernel_params_annotation}" \
         "${kernel_params_value}"
 
-    # A secure boot image for IBM SE should be rebuilt according to the KBS configuration.
-    if [ "${KATA_HYPERVISOR}" == "qemu-se" ]; then
-        if [ -z "${IBM_SE_CREDS_DIR:-}" ]; then
-            >&2 echo "ERROR: IBM_SE_CREDS_DIR is empty"
-            return 1
-        fi
-        repack_secure_image "${kernel_params_value} agent.log=debug" "${IBM_SE_CREDS_DIR}" "true"
-    fi
-
     # Set annotation to pull image in guest
     set_metadata_annotation "${kata_pod_with_private_image}" \
         "io.containerd.cri.runtime-handler" \
