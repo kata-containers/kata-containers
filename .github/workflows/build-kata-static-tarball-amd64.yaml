@@ -23,7 +23,7 @@ on:
 
 jobs:
   build-asset:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     strategy:
       matrix:
         asset:
@@ -108,7 +108,7 @@ jobs:
           if-no-files-found: error
 
   create-kata-tarball:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: build-asset
     steps:
       - uses: actions/checkout@v4

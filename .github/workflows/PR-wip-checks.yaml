@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   pr_wip_check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     name: WIP Check
     steps:
     - name: WIP Check
