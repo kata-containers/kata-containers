@@ -546,6 +546,18 @@ impl Container {
     pub async fn spec(&self) -> oci::Spec {
         self.spec.clone()
     }
+
+    pub async fn cleanup(&mut self) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        let device_manager = self.resource_manager.get_device_manager().await;
+        inner
+            .cleanup_container(
+                self.container_id.container_id.as_str(),
+                true,
+                &device_manager,
+            )
+            .await
+    }
 }
 
 fn amend_spec(spec: &mut oci::Spec, disable_guest_seccomp: bool) -> Result<()> {

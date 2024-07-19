@@ -177,7 +177,7 @@ impl ContainerInner {
         }
     }
 
-    async fn cleanup_container(
+    pub(crate) async fn cleanup_container(
         &mut self,
         cid: &str,
         force: bool,
