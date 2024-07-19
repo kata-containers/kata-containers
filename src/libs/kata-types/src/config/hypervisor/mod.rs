@@ -59,9 +59,6 @@ pub const VIRTIO_SCSI: &str = "virtio-scsi";
 /// Virtual PMEM device driver.
 pub const VIRTIO_PMEM: &str = "virtio-pmem";
 
-mod firecracker;
-pub use self::firecracker::{FirecrackerConfig, HYPERVISOR_NAME_FIRECRACKER};
-
 const VIRTIO_9P: &str = "virtio-9p";
 const VIRTIO_FS: &str = "virtio-fs";
 const VIRTIO_FS_INLINE: &str = "inline-virtio-fs";
@@ -533,7 +530,6 @@ impl TopologyConfigInfo {
             HYPERVISOR_NAME_QEMU,
             HYPERVISOR_NAME_CH,
             HYPERVISOR_NAME_DRAGONBALL,
-            HYPERVISOR_NAME_FIRECRACKER,
         ];
         let hypervisor_name = toml_config.runtime.hypervisor_name.as_str();
         if !hypervisor_names.contains(&hypervisor_name) {

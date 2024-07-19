@@ -14,14 +14,9 @@ pub const PERSIST_FILE: &str = "state.json";
 use kata_sys_util::validate::verify_id;
 use safe_path::scoped_join;
 
-pub fn to_disk<T: serde::Serialize>(value: &T, sid: &str, jailer_path: &str) -> Result<()> {
+pub fn to_disk<T: serde::Serialize>(value: &T, sid: &str) -> Result<()> {
     verify_id(sid).context("failed to verify sid")?;
-    // FIXME: handle jailed case
-    let mut path = match jailer_path {
-        "" => scoped_join(KATA_PATH, sid)?,
-        _ => scoped_join(jailer_path, "root")?,
-    };
-    //let mut path = scoped_join(KATA_PATH, sid)?;
+    let mut path = scoped_join(KATA_PATH, sid)?;
     if path.exists() {
         path.push(PERSIST_FILE);
         let f = File::create(path)
@@ -67,10 +62,10 @@ mod tests {
             key: 1,
         };
         // invalid sid
-        assert!(to_disk(&data, "..3", "").is_err());
-        assert!(to_disk(&data, "../../../3", "").is_err());
-        assert!(to_disk(&data, "a/b/c", "").is_err());
-        assert!(to_disk(&data, ".#cdscd.", "").is_err());
+        assert!(to_disk(&data, "..3").is_err());
+        assert!(to_disk(&data, "../../../3").is_err());
+        assert!(to_disk(&data, "a/b/c").is_err());
+        assert!(to_disk(&data, ".#cdscd.").is_err());
 
         let sid = "aadede";
         let sandbox_dir = [KATA_PATH, sid].join("/");
@@ -79,7 +74,7 @@ mod tests {
             .create(&sandbox_dir)
             .is_ok()
         {
-            assert!(to_disk(&data, sid, "").is_ok());
+            assert!(to_disk(&data, sid).is_ok());
             if let Ok(result) = from_disk::<Kata>(sid) {
                 assert_eq!(result.name, data.name);
                 assert_eq!(result.key, data.key);

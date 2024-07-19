@@ -13,5 +13,3 @@ QEMUCMD := qemu-system-aarch64
 
 # dragonball binary name
 DBCMD := dragonball
-FCCMD := firecracker
-FCJAILERCMD := jailer
