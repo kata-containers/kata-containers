@@ -15,7 +15,7 @@ default AddSwapRequest := false
 default CloseStdinRequest := false
 default CopyFileRequest := false
 default CreateContainerRequest := false
-default CreateSandboxRequest := true
+default CreateSandboxRequest := false
 default DestroySandboxRequest := true
 default ExecProcessRequest := false
 default GetOOMEventRequest := true
@@ -1116,6 +1116,9 @@ CopyFileRequest {
 CreateSandboxRequest {
     print("CreateSandboxRequest: input.guest_hook_path =", input.guest_hook_path)
     count(input.guest_hook_path) == 0
+
+    print("CreateSandboxRequest: input.kernel_modules =", input.kernel_modules)
+    count(input.kernel_modules) == 0
 
     i_pidns := input.sandbox_pidns
     print("CreateSandboxRequest: i_pidns =", i_pidns)
