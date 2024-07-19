@@ -233,10 +233,21 @@ auto_generate_policy() {
 # Change genpolicy settings to allow "kubectl exec" to execute a command
 # and to read console output from a test pod.
 add_exec_to_policy_settings() {
-	declare -r settings_dir="$1"
-	declare -r allowed_exec="$2"
-
 	auto_generate_policy_enabled || return 0
+
+	local -r settings_dir="$1"
+
+	# TODO: teach genpolicy to work with an array of args, instead of joining the args here.
+	shift
+	if [ "${#@}" -gt "1" ]; then
+		# Join all the exec args.
+		local allowed_exec=$(printf '%s ' "${@}")
+
+		# Remove the trailing space character.
+		allowed_exec="${allowed_exec::-1}"
+	else
+		local -r allowed_exec="$1"
+	fi
 
 	# Change genpolicy settings to allow kubectl to exec the command specified by the caller.
 	info "${settings_dir}/genpolicy-settings.json: allowing exec: ${allowed_exec}"
