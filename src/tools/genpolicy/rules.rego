@@ -1092,12 +1092,23 @@ match_caps(p_caps, i_caps) {
 }
 
 ######################################################################
+
+check_directory_traversal(i_path) {
+    not regex.match("(^|/)..($|/)", i_path)
+}
+
 CopyFileRequest {
     print("CopyFileRequest: input.path =", input.path)
 
+    check_directory_traversal(input.path)
+
     some regex1 in policy_data.request_defaults.CopyFileRequest
-    regex2 := replace(regex1, "$(cpath)", policy_data.common.cpath)
-    regex.match(regex2, input.path)
+    regex2 := replace(regex1, "$(sfprefix)", policy_data.common.sfprefix)
+    regex3 := replace(regex2, "$(cpath)", policy_data.common.mount_source_cpath)
+    regex4 := replace(regex3, "$(bundle-id)", "[a-z0-9]{64}")
+    print("CopyFileRequest: regex4 =", regex4)
+
+    regex.match(regex4, input.path)
 
     print("CopyFileRequest: true")
 }

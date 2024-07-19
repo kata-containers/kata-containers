@@ -296,7 +296,7 @@
             ]
         },
         "CopyFileRequest": [
-            "^$(cpath)/"
+            "$(sfprefix)"
         ],
         "ExecProcessRequest": {
             "allowed_commands": [],
