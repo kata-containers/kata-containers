@@ -5,5 +5,28 @@
     "request": {
       "sandbox_pidns": false
     }
+  },
+  {
+    "description": "pidns",
+    "allowed": false,
+    "request": {
+      "sandbox_pidns": true
+    }
+  },
+  {
+    "description": "kernel modules",
+    "allowed": false,
+    "request": {
+      "sandbox_pidns": false,
+      "kernel_modules": [{"name": "evil.ko"}]
+    }
+  },
+  {
+    "description": "guest hooks",
+    "allowed": false,
+    "request": {
+      "sandbox_pidns": false,
+      "guest_hook_path": "/attacker/controlled/path"
+    }
   }
 ]
