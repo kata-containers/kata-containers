@@ -202,7 +202,7 @@ func (n *LinuxNetwork) addSingleEndpoint(ctx context.Context, s *Sandbox, netInf
 
 	networkLogger().WithField("endpoint-type", endpoint.Type()).WithField("hotplug", hotplug).Info("Attaching endpoint")
 	if hotplug {
-		if err := endpoint.HotAttach(ctx, s.hypervisor); err != nil {
+		if err := endpoint.HotAttach(ctx, s); err != nil {
 			return nil, err
 		}
 	} else {
@@ -265,7 +265,7 @@ func (n *LinuxNetwork) removeSingleEndpoint(ctx context.Context, s *Sandbox, end
 	// if required.
 	networkLogger().WithField("endpoint-type", endpoint.Type()).Info("Detaching endpoint")
 	if hotplug && s != nil {
-		if err := endpoint.HotDetach(ctx, s.hypervisor, n.netNSCreated, n.netNSPath); err != nil {
+		if err := endpoint.HotDetach(ctx, s, n.netNSCreated, n.netNSPath); err != nil {
 			return err
 		}
 	} else {
