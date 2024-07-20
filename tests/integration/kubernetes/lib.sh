@@ -77,8 +77,7 @@ assert_logs_contain() {
 	local message="$4"
 
 	# Note: with image-rs we get more than the default 1000 lines of logs
-	print_node_journal "$node" "$log_id" --since "$datetime" -n 100000 \
-		| grep "$message"
+	print_node_journal "$node" "$log_id" --since "$datetime" | grep "$message"
 }
 
 # Create a pod then assert it fails to run. Use in tests that you expect the
@@ -250,7 +249,7 @@ print_node_journal() {
 	shift 2
 	local img="quay.io/prometheus/busybox"
 
-	kubectl debug --image "$img" -q -it "node/${node}" \
+	kubectl debug --image "$img" -q -i "node/${node}" \
 		-- chroot /host journalctl -x -t "$id" --no-pager "$@"
 	# Delete the debugger pod
 	kubectl get pods -o name | grep "node-debugger-${node}" | \

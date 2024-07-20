@@ -11,11 +11,6 @@ load "${BATS_TEST_DIRNAME}/confidential_kbs.sh"
 export KBS="${KBS:-false}"
 
 setup() {
-    # Log checking not working on TDX
-    if [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
-	    skip "Test skipped on ${KATA_HYPERVISOR}, see https://github.com/kata-containers/kata-containers/issues/10011"
-    fi
-
     if ! is_confidential_runtime_class; then
         skip "Test not supported for ${KATA_HYPERVISOR}."
     fi
@@ -138,10 +133,6 @@ function create_pod_yaml_with_private_image() {
 }
 
 teardown() {
-    if [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
-	    skip "Test skipped on ${KATA_HYPERVISOR}, see https://github.com/kata-containers/kata-containers/issues/10011"
-    fi
-
     if ! is_confidential_runtime_class; then
         skip "Test not supported for ${KATA_HYPERVISOR}."
     fi
