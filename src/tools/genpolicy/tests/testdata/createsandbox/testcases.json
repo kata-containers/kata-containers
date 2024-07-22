@@ -1,0 +1,9 @@
+[
+  {
+    "description": "no pidns",
+    "allowed": true,
+    "request": {
+      "sandbox_pidns": false
+    }
+  }
+]
