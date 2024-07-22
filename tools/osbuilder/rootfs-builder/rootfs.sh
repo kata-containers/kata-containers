@@ -39,6 +39,8 @@ PAUSE_IMAGE_TARBALL=${PAUSE_IMAGE_TARBALL:-""}
 lib_file="${script_dir}/../scripts/lib.sh"
 source "$lib_file"
 
+agent_policy_file="$(readlink -f -v "${AGENT_POLICY_FILE:-"${script_dir}/../../../src/kata-opa/allow-all.rego"}")"
+
 #For cross build
 CROSS_BUILD=${CROSS_BUILD:-false}
 BUILDX=""
@@ -129,6 +131,11 @@ AGENT_BIN           Name of the agent binary (used when running sanity checks on
 AGENT_INIT          When set to "yes", use ${AGENT_BIN} as init process in place
                     of systemd.
                     Default value: no
+
+AGENT_POLICY_FILE   Path to the agent policy rego file to be set in the rootfs.
+                    If defined, this overwrites the default setting of the
+                    permissive policy file.
+                    Default value: allow-all.rego
 
 AGENT_SOURCE_BIN    Path to the directory of agent binary.
                     If set, use the binary as agent but not build agent package.
@@ -355,6 +362,8 @@ check_env_variables()
 
 	[ -n "${KERNEL_MODULES_DIR}" ] && [ ! -d "${KERNEL_MODULES_DIR}" ] && die "KERNEL_MODULES_DIR defined but is not an existing directory"
 
+	[ ! -f "${agent_policy_file}" ] && die "agent policy file not found in '${agent_policy_file}'"
+
 	[ -n "${OSBUILDER_VERSION}" ] || die "need osbuilder version"
 }
 
@@ -494,6 +503,7 @@ build_rootfs_distro()
 			--env ROOTFS_DIR="/rootfs" \
 			--env AGENT_BIN="${AGENT_BIN}" \
 			--env AGENT_INIT="${AGENT_INIT}" \
+			--env AGENT_POLICY_FILE="${AGENT_POLICY_FILE}" \
 			--env ARCH="${ARCH}" \
 			--env MEASURED_ROOTFS="${MEASURED_ROOTFS}" \
 			--env KERNEL_MODULES_DIR="${KERNEL_MODULES_DIR}" \
@@ -701,13 +711,12 @@ EOF
 	if [ "${AGENT_POLICY}" == "yes" ]; then
 		info "Install the default policy"
 		# Install default settings for the kata-opa service.
-		local kata_opa_in_dir="${script_dir}/../../../src/kata-opa"
 		local opa_settings_dir="/etc/kata-opa"
-		local policy_file="allow-all.rego"
+		local policy_file_name="$(basename ${agent_policy_file})"
 		local policy_dir="${ROOTFS_DIR}/${opa_settings_dir}"
 		mkdir -p "${policy_dir}"
-		install -D -o root -g root -m 0644 "${kata_opa_in_dir}/${policy_file}" -T "${policy_dir}/${policy_file}"
-		ln -sf "${policy_file}" "${policy_dir}/default-policy.rego"
+		install -D -o root -g root -m 0644 "${agent_policy_file}" -T "${policy_dir}/${policy_file_name}"
+		ln -sf "${policy_file_name}" "${policy_dir}/default-policy.rego"
 	fi
 
 	info "Check init is installed"
