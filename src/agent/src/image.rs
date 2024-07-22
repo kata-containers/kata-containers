@@ -21,7 +21,7 @@ use tokio::sync::Mutex;
 use crate::rpc::CONTAINER_BASE;
 use crate::AGENT_CONFIG;
 
-const KATA_IMAGE_WORK_DIR: &str = "/run/kata-containers/image/";
+pub const KATA_IMAGE_WORK_DIR: &str = "/run/kata-containers/image/";
 const CONFIG_JSON: &str = "config.json";
 const KATA_PAUSE_BUNDLE: &str = "/pause_bundle";
 

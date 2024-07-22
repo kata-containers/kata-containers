@@ -11,7 +11,7 @@ use anyhow::Result;
 use derivative::Derivative;
 use protocols::{
     confidential_data_hub, confidential_data_hub_ttrpc_async,
-    confidential_data_hub_ttrpc_async::SealedSecretServiceClient,
+    confidential_data_hub_ttrpc_async::{SealedSecretServiceClient, SecureMountServiceClient},
 };
 
 use crate::CDH_SOCKET_URI;
@@ -25,15 +25,20 @@ const SEALED_SECRET_PREFIX: &str = "sealed.";
 pub struct CDHClient {
     #[derivative(Debug = "ignore")]
     sealed_secret_client: SealedSecretServiceClient,
+    #[derivative(Debug = "ignore")]
+    secure_mount_client: SecureMountServiceClient,
 }
 
 impl CDHClient {
     pub fn new() -> Result<Self> {
         let client = ttrpc::asynchronous::Client::connect(CDH_SOCKET_URI)?;
         let sealed_secret_client =
-            confidential_data_hub_ttrpc_async::SealedSecretServiceClient::new(client);
+            confidential_data_hub_ttrpc_async::SealedSecretServiceClient::new(client.clone());
+        let secure_mount_client =
+            confidential_data_hub_ttrpc_async::SecureMountServiceClient::new(client);
         Ok(CDHClient {
             sealed_secret_client,
+            secure_mount_client,
         })
     }
 
@@ -59,6 +64,26 @@ impl CDHClient {
         }
 
         Ok((*env.to_owned()).to_string())
+    }
+
+    pub async fn secure_mount(
+        &self,
+        volume_type: &str,
+        options: &std::collections::HashMap<String, String>,
+        flags: Vec<String>,
+        mount_point: &str,
+    ) -> Result<()> {
+        let req = confidential_data_hub::SecureMountRequest {
+            volume_type: volume_type.to_string(),
+            options: options.clone(),
+            flags,
+            mount_point: mount_point.to_string(),
+            ..Default::default()
+        };
+        self.secure_mount_client
+            .secure_mount(ttrpc::context::with_timeout(CDH_API_TIMEOUT), &req)
+            .await?;
+        Ok(())
     }
 }
 

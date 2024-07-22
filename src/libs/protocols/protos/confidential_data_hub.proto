@@ -17,6 +17,21 @@ message UnsealSecretOutput {
     bytes plaintext = 1;
 }
 
+message SecureMountRequest {
+    string volume_type = 1;
+    map<string, string> options = 2;
+    repeated string flags = 3;
+    string mount_point = 4;
+}
+
+message SecureMountResponse {
+    string mount_path = 1;
+}
+
 service SealedSecretService {
     rpc UnsealSecret(UnsealSecretInput) returns (UnsealSecretOutput) {};
+}
+
+service SecureMountService {
+    rpc SecureMount(SecureMountRequest) returns (SecureMountResponse) {};
 }
