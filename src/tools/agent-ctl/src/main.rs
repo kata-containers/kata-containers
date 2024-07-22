@@ -78,7 +78,7 @@ fn make_examples_text(program_name: &str) -> String {
 
 - List all available (built-in and Kata Agent API) commands:
 
-  $ {program} connect --server-address "{vsock_server_address}" --cmd list
+  $ {program} cmd-list
 
 - Generate a random container ID:
 
@@ -90,11 +90,11 @@ fn make_examples_text(program_name: &str) -> String {
 
 - Attempt to create 7 sandboxes, ignoring any errors:
 
-  $ {program} connect --server-address "{vsock_server_address}" --repeat 7 --cmd CreateSandbox
+  $ {program} connect --server-address "{vsock_server_address}" --cmd "repeat 7" --cmd CreateSandbox
 
 - Query guest details forever:
 
-  $ {program} connect --server-address "{vsock_server_address}" --repeat -1 --cmd GetGuestDetails
+  $ {program} connect --server-address "{vsock_server_address}" --cmd "repeat -1" --cmd GetGuestDetails
 
 - Query guest details, asking for full details by specifying the API request object in JSON format:
 
@@ -141,7 +141,7 @@ fn connect(name: &str, global_args: clap::ArgMatches) -> Result<()> {
 
     let server_address = args
         .value_of("server-address")
-        .ok_or_else(|| anyhow!("need server adddress"))?
+        .ok_or_else(|| anyhow!("need server address"))?
         .to_string();
 
     let mut commands: Vec<&str> = Vec::new();
@@ -270,6 +270,7 @@ fn real_main() -> Result<()> {
                     Arg::with_name("server-address")
                     .long("server-address")
                     .help("server URI (vsock:// or unix://)")
+                    .required(true)
                     .takes_value(true)
                     .value_name("URI"),
                     )
@@ -288,6 +289,10 @@ fn real_main() -> Result<()> {
                 .subcommand(
                     SubCommand::with_name("generate-sid")
                     .about("Create a random sandbox ID")
+                )
+                .subcommand(
+                    SubCommand::with_name("cmd-list")
+                    .about("List all available commands")
                 )
                 .subcommand(
                     SubCommand::with_name("examples")
@@ -314,6 +319,10 @@ fn real_main() -> Result<()> {
             Ok(())
         }
         "connect" => connect(name, args),
+        "cmd-list" => {
+            client::command::cmd_list();
+            Ok(())
+        }
         _ => Err(anyhow!(format!("invalid sub-command: {:?}", subcmd))),
     }
 }
