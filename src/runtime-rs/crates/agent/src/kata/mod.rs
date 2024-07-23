@@ -113,7 +113,13 @@ impl KataAgent {
             sock::new(&inner.socket_address, inner.config.server_port).context("new sock")?;
         let stream = sock.connect(&config).await.context("connect")?;
         let fd = stream.into_raw_fd();
-        info!(sl!(), "get stream raw fd {:?}", fd);
+        info!(
+            sl!(),
+            "get stream raw fd {:?} with socket address: {:?} and server_port {:?}",
+            fd,
+            &inner.socket_address,
+            inner.config.server_port
+        );
         let c = Client::new(fd);
         inner.client = Some(c);
         inner.client_fd = fd;

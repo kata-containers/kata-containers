@@ -382,7 +382,10 @@ impl Sandbox for VirtSandbox {
             .get_agent_socket()
             .await
             .context("get agent socket")?;
-        self.agent.start(&address).await.context("connect")?;
+        self.agent
+            .start(&address)
+            .await
+            .context(format!("connect to address {:?}", &address))?;
 
         self.resource_manager
             .setup_after_start_vm()
