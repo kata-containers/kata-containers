@@ -100,6 +100,10 @@ pub trait K8sResource {
         // No need to implement support for securityContext or similar fields
         // for some of the K8s resource types.
     }
+
+    fn get_sysctls(&self) -> Vec<pod::Sysctl> {
+        vec![]
+    }
 }
 
 /// See Reference / Kubernetes API / Common Definitions / LabelSelector.
@@ -388,4 +392,13 @@ pub fn get_process_fields(
             process.User.UID = uid.try_into().unwrap();
         }
     }
+}
+
+pub fn get_sysctls(security_context: &Option<pod::PodSecurityContext>) -> Vec<pod::Sysctl> {
+    if let Some(context) = security_context {
+        if let Some(ref sysctls) = context.sysctls {
+            return sysctls.clone();
+        }
+    }
+    vec![]
 }

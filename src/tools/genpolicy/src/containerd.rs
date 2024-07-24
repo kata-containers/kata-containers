@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::collections::BTreeMap;
+
 use crate::policy;
 
 // Default process field from containerd.
@@ -153,6 +155,7 @@ pub fn get_linux(privileged_container: bool) -> policy::KataLinux {
                 "/proc/sysrq-trigger".to_string(),
             ],
             Devices: vec![],
+            Sysctl: BTreeMap::new(),
         }
     } else {
         policy::KataLinux {
@@ -160,6 +163,7 @@ pub fn get_linux(privileged_container: bool) -> policy::KataLinux {
             MaskedPaths: vec![],
             ReadonlyPaths: vec![],
             Devices: vec![],
+            Sysctl: BTreeMap::new(),
         }
     }
 }
