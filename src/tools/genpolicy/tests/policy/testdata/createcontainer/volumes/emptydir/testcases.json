@@ -6,7 +6,7 @@
     "request": {
       "OCI": {
         "Annotations": {
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/bundle-id",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "io.katacontainers.pkg.oci.container_type": "pod_container",
           "io.kubernetes.cri.container-name": "dummy",
           "io.kubernetes.cri.container-type": "container",
@@ -159,7 +159,7 @@
           }
         },
         "Root": {
-          "Path": "/run/kata-containers/bundle-id/rootfs",
+          "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
           "Readonly": false
         },
         "Version": "1.1.0"
@@ -219,7 +219,7 @@
     "request": {
       "OCI": {
         "Annotations": {
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/bundle-id",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "io.katacontainers.pkg.oci.container_type": "pod_container",
           "io.kubernetes.cri.container-name": "dummy",
           "io.kubernetes.cri.container-type": "container",
@@ -352,7 +352,7 @@
           }
         },
         "Root": {
-          "Path": "/run/kata-containers/bundle-id/rootfs",
+          "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
           "Readonly": false
         },
         "Version": "1.1.0"
@@ -412,7 +412,7 @@
     "request": {
       "OCI": {
         "Annotations": {
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/bundle-id",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "io.katacontainers.pkg.oci.container_type": "pod_container",
           "io.kubernetes.cri.container-name": "dummy",
           "io.kubernetes.cri.container-type": "container",
@@ -555,7 +555,7 @@
           }
         },
         "Root": {
-          "Path": "/run/kata-containers/bundle-id/rootfs",
+          "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
           "Readonly": false
         },
         "Version": "1.1.0"
@@ -615,7 +615,7 @@
     "request": {
       "OCI": {
         "Annotations": {
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/bundle-id",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "io.katacontainers.pkg.oci.container_type": "pod_container",
           "io.kubernetes.cri.container-name": "dummy",
           "io.kubernetes.cri.container-type": "container",
@@ -742,7 +742,7 @@
           }
         },
         "Root": {
-          "Path": "/run/kata-containers/bundle-id/rootfs",
+          "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
           "Readonly": false
         },
         "Version": "1.1.0"
@@ -802,7 +802,7 @@
     "request": {
       "OCI": {
         "Annotations": {
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/bundle-id",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "io.katacontainers.pkg.oci.container_type": "pod_container",
           "io.kubernetes.cri.container-name": "dummy",
           "io.kubernetes.cri.container-type": "container",
@@ -945,7 +945,7 @@
           }
         },
         "Root": {
-          "Path": "/run/kata-containers/bundle-id/rootfs",
+          "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
           "Readonly": false
         },
         "Version": "1.1.0"
@@ -959,7 +959,7 @@
     "request": {
       "OCI": {
         "Annotations": {
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/bundle-id",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "io.katacontainers.pkg.oci.container_type": "pod_container",
           "io.kubernetes.cri.container-name": "dummy",
           "io.kubernetes.cri.container-type": "container",
@@ -1102,7 +1102,7 @@
           }
         },
         "Root": {
-          "Path": "/run/kata-containers/bundle-id/rootfs",
+          "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
           "Readonly": false
         },
         "Version": "1.1.0"
@@ -1116,7 +1116,7 @@
     "request": {
       "OCI": {
         "Annotations": {
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/bundle-id",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "io.katacontainers.pkg.oci.container_type": "pod_container",
           "io.kubernetes.cri.container-name": "dummy",
           "io.kubernetes.cri.container-type": "container",
@@ -1289,7 +1289,7 @@
           }
         },
         "Root": {
-          "Path": "/run/kata-containers/bundle-id/rootfs",
+          "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
           "Readonly": false
         },
         "Version": "1.1.0"
@@ -1349,7 +1349,7 @@
     "request": {
       "OCI": {
         "Annotations": {
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/bundle-id",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "io.katacontainers.pkg.oci.container_type": "pod_container",
           "io.kubernetes.cri.container-name": "dummy",
           "io.kubernetes.cri.container-type": "container",
@@ -1482,7 +1482,7 @@
           }
         },
         "Root": {
-          "Path": "/run/kata-containers/bundle-id/rootfs",
+          "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
           "Readonly": false
         },
         "Version": "1.1.0"
@@ -1542,7 +1542,7 @@
     "request": {
       "OCI": {
         "Annotations": {
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/bundle-id",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "io.katacontainers.pkg.oci.container_type": "pod_container",
           "io.kubernetes.cri.container-name": "dummy",
           "io.kubernetes.cri.container-type": "container",
@@ -1675,7 +1675,7 @@
           }
         },
         "Root": {
-          "Path": "/run/kata-containers/bundle-id/rootfs",
+          "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
           "Readonly": false
         },
         "Version": "1.1.0"

@@ -781,9 +781,6 @@ allow_linux_sysctl(p_linux, i_linux) if {
 allow_by_bundle_or_sandbox_id(p_oci, i_oci, p_storages, i_storages) if {
     print("allow_by_bundle_or_sandbox_id: start")
 
-    bundle_path := i_oci.Annotations["io.katacontainers.pkg.oci.bundle_path"]
-    bundle_id := replace(bundle_path, "/run/containerd/io.containerd.runtime.v2.task/k8s.io/", "")
-
     key := "io.kubernetes.cri.sandbox-id"
 
     p_regex := p_oci.Annotations[key]
@@ -792,7 +789,15 @@ allow_by_bundle_or_sandbox_id(p_oci, i_oci, p_storages, i_storages) if {
     print("allow_by_bundle_or_sandbox_id: sandbox_id =", sandbox_id, "regex =", p_regex)
     regex.match(p_regex, sandbox_id)
 
-    allow_root_path(p_oci, i_oci, bundle_id)
+    i_root := i_oci.Root.Path
+    p_root_pattern1 := p_oci.Root.Path
+    p_root_pattern2 := replace(p_root_pattern1, "$(root_path)", policy_data.common.root_path)
+    # Bundle path segment can be a 64-char hex (OCI bundle ID) or the runtime's container/bundle identifier used in paths (e.g. short ID or CRI container ID).
+    p_root_pattern3 := replace(p_root_pattern2, "$(bundle-id)", "([0-9a-f]{64}|[a-z0-9][a-z0-9.-]*)")
+    print("allow_by_bundle_or_sandbox_id: i_root =", i_root, "regex =", p_root_pattern3)
+
+    # Verify that the root path matches the substituted pattern and extract the bundle-id.
+    bundle_id := regex.find_all_string_submatch_n(p_root_pattern3, i_root, 1)[0][1]
 
     # Match each input mount with a Policy mount.
     # Reject possible attempts to match multiple input mounts with a single Policy mount.
@@ -1089,23 +1094,6 @@ is_ip_other_byte(component) if {
     number = to_number(component)
     number >= 0
     number <= 255
-}
-
-# OCI root.Path
-allow_root_path(p_oci, i_oci, bundle_id) if {
-    i_path := i_oci.Root.Path
-    p_path1 := p_oci.Root.Path
-    print("allow_root_path: i_path =", i_path, "p_path1 =", p_path1)
-
-    p_path2 := replace(p_path1, "$(root_path)", policy_data.common.root_path)
-    print("allow_root_path: p_path2 =", p_path2)
-
-    p_path3 := replace(p_path2, "$(bundle-id)", bundle_id)
-    print("allow_root_path: p_path3 =", p_path3)
-
-    p_path3 == i_path
-
-    print("allow_root_path: true")
 }
 
 # device mounts

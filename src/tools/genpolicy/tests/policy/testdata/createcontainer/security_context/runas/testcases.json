@@ -254,7 +254,7 @@
     "request": {
       "OCI": {
         "Annotations": {
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/dummy",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "io.katacontainers.pkg.oci.container_type": "pod_container",
           "io.kubernetes.cri.container-name": "dummy",
           "io.kubernetes.cri.container-type": "container",
@@ -411,7 +411,7 @@
               "rprivate",
               "rw"
             ],
-            "source": "/run/kata-containers/shared/containers/dummy-c26fcab88aa5d50b-data",
+            "source": "/run/kata-containers/shared/containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855-c26fcab88aa5d50b-data",
             "type_": "bind"
           },
           {
@@ -421,7 +421,7 @@
               "rprivate",
               "rw"
             ],
-            "source": "/run/kata-containers/shared/containers/dummy-d62fcc4f2e8b5659-node-conf",
+            "source": "/run/kata-containers/shared/containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855-d62fcc4f2e8b5659-node-conf",
             "type_": "bind"
           },
           {
@@ -431,7 +431,7 @@
               "rprivate",
               "rw"
             ],
-            "source": "/run/kata-containers/shared/containers/dummy-dc49e1ba3ec278c5-hosts",
+            "source": "/run/kata-containers/shared/containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855-dc49e1ba3ec278c5-hosts",
             "type_": "bind"
           },
           {
@@ -441,7 +441,7 @@
               "rprivate",
               "rw"
             ],
-            "source": "/run/kata-containers/shared/containers/dummy-2e8b2725e7ce6844-termination-log",
+            "source": "/run/kata-containers/shared/containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855-2e8b2725e7ce6844-termination-log",
             "type_": "bind"
           },
           {
@@ -451,7 +451,7 @@
               "rprivate",
               "rw"
             ],
-            "source": "/run/kata-containers/shared/containers/dummy-717ad4c50963e851-hostname",
+            "source": "/run/kata-containers/shared/containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855-717ad4c50963e851-hostname",
             "type_": "bind"
           },
           {
@@ -461,7 +461,7 @@
               "rprivate",
               "rw"
             ],
-            "source": "/run/kata-containers/shared/containers/dummy-d8f5f7c88a297469-resolv.conf",
+            "source": "/run/kata-containers/shared/containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855-d8f5f7c88a297469-resolv.conf",
             "type_": "bind"
           },
           {
@@ -479,7 +479,7 @@
               "rprivate",
               "ro"
             ],
-            "source": "/run/kata-containers/shared/containers/dummy-4db7c43db401ed9e-serviceaccount",
+            "source": "/run/kata-containers/shared/containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855-4db7c43db401ed9e-serviceaccount",
             "type_": "bind"
           }
         ],
@@ -570,7 +570,7 @@
           }
         },
         "Root": {
-          "Path": "/run/kata-containers/dummy/rootfs",
+          "Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs",
           "Readonly": false
         },
         "Solaris": null,

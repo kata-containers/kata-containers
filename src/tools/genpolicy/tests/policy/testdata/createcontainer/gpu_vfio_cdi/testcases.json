@@ -9,7 +9,7 @@
         "Annotations": {
           "cdi.k8s.io/vfio1": "nvidia.com/gpu=0",
           "cdi.k8s.io/vfio2": "nvidia.com/gpu=1",
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/gpu-container",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "io.katacontainers.pkg.oci.container_type": "pod_container",
           "io.kubernetes.cri.container-name": "gpu-container",
           "io.kubernetes.cri.container-type": "container",
@@ -73,7 +73,7 @@
           "Terminal": false,
           "User": {"AdditionalGids": [0], "GID": 0, "UID": 65535, "Username": ""}
         },
-        "Root": {"Path": "/run/kata-containers/gpu-container/rootfs", "Readonly": false},
+        "Root": {"Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs", "Readonly": false},
         "Solaris": null,
         "Version": "1.1.0",
         "Windows": null
@@ -115,7 +115,7 @@
         "Annotations": {
           "cdi.k8s.io/vfio1": "nvidia.com/gpu=0",
           "cdi.k8s.io/vfio3": "nvidia.com/gpu=2",
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/gpu-container",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "io.katacontainers.pkg.oci.container_type": "pod_container",
           "io.kubernetes.cri.container-name": "gpu-container",
           "io.kubernetes.cri.container-type": "container",
@@ -179,7 +179,7 @@
           "Terminal": false,
           "User": {"AdditionalGids": [0], "GID": 0, "UID": 65535, "Username": ""}
         },
-        "Root": {"Path": "/run/kata-containers/gpu-container/rootfs", "Readonly": false},
+        "Root": {"Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs", "Readonly": false},
         "Solaris": null,
         "Version": "1.1.0",
         "Windows": null
@@ -219,7 +219,7 @@
       "type": "CreateContainer",
       "OCI": {
         "Annotations": {
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/gpu-container",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "io.katacontainers.pkg.oci.container_type": "pod_container",
           "io.kubernetes.cri.container-name": "gpu-container",
           "io.kubernetes.cri.container-type": "container",
@@ -283,7 +283,7 @@
           "Terminal": false,
           "User": {"AdditionalGids": [0], "GID": 0, "UID": 65535, "Username": ""}
         },
-        "Root": {"Path": "/run/kata-containers/gpu-container/rootfs", "Readonly": false},
+        "Root": {"Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs", "Readonly": false},
         "Solaris": null,
         "Version": "1.1.0",
         "Windows": null
@@ -325,7 +325,7 @@
         "Annotations": {
           "cdi.k8s.io/vfio1": "nvidia.com/gpu=0",
           "cdi.k8s.io/vfioABC": "nvidia.com/gpu=1",
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/gpu-container",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "io.katacontainers.pkg.oci.container_type": "pod_container",
           "io.kubernetes.cri.container-name": "gpu-container",
           "io.kubernetes.cri.container-type": "container",
@@ -389,7 +389,7 @@
           "Terminal": false,
           "User": {"AdditionalGids": [0], "GID": 0, "UID": 65535, "Username": ""}
         },
-        "Root": {"Path": "/run/kata-containers/gpu-container/rootfs", "Readonly": false},
+        "Root": {"Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs", "Readonly": false},
         "Solaris": null,
         "Version": "1.1.0",
         "Windows": null
@@ -431,7 +431,7 @@
         "Annotations": {
           "cdi.k8s.io/vfio1": "invalid-format",
           "cdi.k8s.io/vfio2": "nvidia.com/gpu=1",
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/gpu-container",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "io.katacontainers.pkg.oci.container_type": "pod_container",
           "io.kubernetes.cri.container-name": "gpu-container",
           "io.kubernetes.cri.container-type": "container",
@@ -495,7 +495,7 @@
           "Terminal": false,
           "User": {"AdditionalGids": [0], "GID": 0, "UID": 65535, "Username": ""}
         },
-        "Root": {"Path": "/run/kata-containers/gpu-container/rootfs", "Readonly": false},
+        "Root": {"Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs", "Readonly": false},
         "Solaris": null,
         "Version": "1.1.0",
         "Windows": null
@@ -536,7 +536,7 @@
       "OCI": {
         "Annotations": {
           "cdi.k8s.io/vfio1": "nvidia.com/gpu=0",
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/gpu-container",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "io.katacontainers.pkg.oci.container_type": "pod_container",
           "io.kubernetes.cri.container-name": "gpu-container",
           "io.kubernetes.cri.container-type": "container",
@@ -600,7 +600,7 @@
           "Terminal": false,
           "User": {"AdditionalGids": [0], "GID": 0, "UID": 65535, "Username": ""}
         },
-        "Root": {"Path": "/run/kata-containers/gpu-container/rootfs", "Readonly": false},
+        "Root": {"Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs", "Readonly": false},
         "Solaris": null,
         "Version": "1.1.0",
         "Windows": null
@@ -642,7 +642,7 @@
         "Annotations": {
           "cdi.k8s.io/vfio1": "nvidia.com/gpu=0",
           "cdi.k8s.io/vfio3": "nvidia.com/gpu=1",
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/gpu-container",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "io.katacontainers.pkg.oci.container_type": "pod_container",
           "io.kubernetes.cri.container-name": "gpu-container",
           "io.kubernetes.cri.container-type": "container",
@@ -706,7 +706,7 @@
           "Terminal": false,
           "User": {"AdditionalGids": [0], "GID": 0, "UID": 65535, "Username": ""}
         },
-        "Root": {"Path": "/run/kata-containers/gpu-container/rootfs", "Readonly": false},
+        "Root": {"Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs", "Readonly": false},
         "Solaris": null,
         "Version": "1.1.0",
         "Windows": null
@@ -748,7 +748,7 @@
         "Annotations": {
           "cdi.k8s.io/vfio1": "nvidia.com/gpu=0",
           "cdi.k8s.io/vfio2": "nvidia.com/gpu=1",
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/gpu-container",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "io.katacontainers.pkg.oci.container_type": "pod_container",
           "io.kubernetes.cri.container-name": "gpu-container",
           "io.kubernetes.cri.container-type": "container",
@@ -812,7 +812,7 @@
           "Terminal": false,
           "User": {"AdditionalGids": [0], "GID": 0, "UID": 65535, "Username": ""}
         },
-        "Root": {"Path": "/run/kata-containers/gpu-container/rootfs", "Readonly": false},
+        "Root": {"Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs", "Readonly": false},
         "Solaris": null,
         "Version": "1.1.0",
         "Windows": null
@@ -854,7 +854,7 @@
         "Annotations": {
           "cdi.k8s.io/vfio1": "nvidia.com/gpu=0",
           "cdi.k8s.io/vfio2": "nvidia.com/gpu=1",
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/gpu-container",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "io.katacontainers.pkg.oci.container_type": "pod_container",
           "io.kubernetes.cri.container-name": "gpu-container",
           "io.kubernetes.cri.container-type": "container",
@@ -918,7 +918,7 @@
           "Terminal": false,
           "User": {"AdditionalGids": [0], "GID": 0, "UID": 65535, "Username": ""}
         },
-        "Root": {"Path": "/run/kata-containers/gpu-container/rootfs", "Readonly": false},
+        "Root": {"Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs", "Readonly": false},
         "Solaris": null,
         "Version": "1.1.0",
         "Windows": null
@@ -944,7 +944,7 @@
       "OCI": {
         "Annotations": {
           "cdi.k8s.io/vfio1": "nvidia.com/gpu=0",
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/gpu-container",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "io.katacontainers.pkg.oci.container_type": "pod_container",
           "io.kubernetes.cri.container-name": "gpu-container",
           "io.kubernetes.cri.container-type": "container",
@@ -1008,7 +1008,7 @@
           "Terminal": false,
           "User": {"AdditionalGids": [0], "GID": 0, "UID": 65535, "Username": ""}
         },
-        "Root": {"Path": "/run/kata-containers/gpu-container/rootfs", "Readonly": false},
+        "Root": {"Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs", "Readonly": false},
         "Solaris": null,
         "Version": "1.1.0",
         "Windows": null
@@ -1033,7 +1033,7 @@
       "type": "CreateContainer",
       "OCI": {
         "Annotations": {
-          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/gpu-container",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
           "io.katacontainers.pkg.oci.container_type": "pod_container",
           "io.kubernetes.cri.container-name": "gpu-container",
           "io.kubernetes.cri.container-type": "container",
@@ -1097,7 +1097,7 @@
           "Terminal": false,
           "User": {"AdditionalGids": [0], "GID": 0, "UID": 65535, "Username": ""}
         },
-        "Root": {"Path": "/run/kata-containers/gpu-container/rootfs", "Readonly": false},
+        "Root": {"Path": "/run/kata-containers/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855/rootfs", "Readonly": false},
         "Solaris": null,
         "Version": "1.1.0",
         "Windows": null
