@@ -15,8 +15,8 @@ setup() {
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
 
 	cmd="ps --user 1000 -f"
-	exec_command="sh -c ${cmd}"
-	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
+	exec_command=(sh -c "${cmd}")
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command[@]}"
 
 	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
 	auto_generate_policy "${policy_settings_dir}" "${yaml_file}"
@@ -33,7 +33,7 @@ setup() {
 
 	# Check user
 	process="tail -f /dev/null"
-	kubectl exec $pod_name -- sh -c "$cmd" | grep "$process"
+	kubectl exec $pod_name -- "${exec_command[@]}" | grep "$process"
 }
 
 teardown() {

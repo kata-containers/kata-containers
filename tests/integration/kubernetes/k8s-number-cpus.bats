@@ -19,8 +19,8 @@ setup() {
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
 
 	num_cpus_cmd='cat /proc/cpuinfo |grep processor|wc -l'
-	exec_command="sh -c ${num_cpus_cmd}"
-	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
+	exec_command=(sh -c "${num_cpus_cmd}")
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command[@]}"
 
 	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
 	auto_generate_policy "${policy_settings_dir}" "${yaml_file}"
@@ -40,7 +40,7 @@ setup() {
 	for _ in $(seq 1 "$retries"); do
 		# Get number of cpus
 		number_cpus=$(kubectl exec pod/"$pod_name" -c "$container_name" \
-			-- sh -c "$num_cpus_cmd")
+			-- "${exec_command[@]}")
 		if [[ "$number_cpus" =~ ^[0-9]+$ ]]; then
 			# Verify number of cpus
 			[ "$number_cpus" -le "$max_number_cpus" ]

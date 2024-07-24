@@ -25,8 +25,8 @@ setup() {
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
 	
 	display_message="cat /usr/share/message"
-	exec_command="sh -c ${display_message}"
-	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
+	exec_command=(sh -c "${display_message}")
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command[@]}"
 	
 	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
 	auto_generate_policy "${policy_settings_dir}" "${yaml_file}"
@@ -40,7 +40,7 @@ setup() {
 	kubectl wait --for=condition=Ready --timeout=$timeout pod $pod_name
 
 	# Check postStart message
-	check_postStart=$(kubectl exec $pod_name -- sh -c "$display_message")
+	check_postStart=$(kubectl exec $pod_name -- "${exec_command[@]}")
 	echo "check_postStart=$check_postStart"
 	echo "$check_postStart" | grep "Hello from the postStart handler"
 }

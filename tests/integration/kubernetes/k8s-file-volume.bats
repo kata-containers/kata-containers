@@ -34,8 +34,8 @@ setup() {
 	# Add policy to the yaml file
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
 
-	command="cat $mount_path"
-	add_exec_to_policy_settings "${policy_settings_dir}" "${command}"
+	command=(cat "$mount_path")
+	add_exec_to_policy_settings "${policy_settings_dir}" "${command[@]}"
 
 	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
 	auto_generate_policy "${policy_settings_dir}" "${test_yaml}"
@@ -51,7 +51,7 @@ setup() {
 	kubectl wait --for=condition=Ready --timeout=$timeout pod "$pod_name"
 
 	# Validate file volume body inside the pod
-	file_in_container=$(kubectl exec $pod_name -- $command)
+	file_in_container=$(kubectl exec $pod_name -- "${command[@]}")
 	[ "$file_body" == "$file_in_container" ]
 }
 
