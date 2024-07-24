@@ -64,7 +64,8 @@ class Checker:
         if not required_jobs and not self.required_regexps:
             raise RuntimeError("No REQUIRED_JOBS or REQUIRED_REGEXPS defined")
         # Set all required jobs as RUNNING to enforce waiting for them
-        self.results = {job: RUNNING for job in required_jobs}
+        self.results = {job: {"status": "EXPECTED", "run_id": -1}
+                        for job in required_jobs}
 
     def record(self, workflow, job):
         """
@@ -79,15 +80,25 @@ class Checker:
             else:
                 # Not a required job
                 return
+        # TODO: Check if multiple re-runs use the same "run_id". If so use
+        #       job['run_attempt'] in case of matching "run_id".
+        elif job['run_id'] <= self.results[job_name]['run_id']:
+            # Newer results already stored
+            print(f"older {job_name} - {job['status']} {job['conclusion']} "
+                  f"{job['id']}", file=sys.stderr)
+            return
         print(f"{job_name} - {job['status']} {job['conclusion']} {job['id']}",
               file=sys.stderr)
+        self.results[job_name] = job
+
+    @staticmethod
+    def _job_status(job):
+        """Map job status to our status"""
         if job["status"] != "completed":
-            self.results[job_name] = RUNNING
-            return
+            return RUNNING
         if job["conclusion"] != "success":
-            self.results[job_name] = job['conclusion']
-            return
-        self.results[job_name] = PASS
+            return job['conclusion']
+        return PASS
 
     def status(self):
         """
@@ -98,7 +109,8 @@ class Checker:
         if not self.results:
             # No results reported so far
             return FAIL
-        for status in self.results.values():
+        for job in self.results.values():
+            status = self._job_status(job)
             if status == RUNNING:
                 running |= True
             elif status != PASS:
@@ -113,13 +125,14 @@ class Checker:
         good = []
         bad = []
         warn = []
-        for job, status in self.results.items():
+        for name, job in self.results.items():
+            status = self._job_status(job)
             if status == RUNNING:
-                warn.append(f"WARN: {job} - Still running")
+                warn.append(f"WARN: {name} - Still running")
             elif status == PASS:
-                good.append(f"PASS: {job} - success")
+                good.append(f"PASS: {name} - success")
             else:
-                bad.append(f"FAIL: {job} - Not passed - {status}")
+                bad.append(f"FAIL: {name} - Not passed - {status}")
         out = '\n'.join(sorted(good) + sorted(warn) + sorted(bad))
         stat = self.status()
         if stat == RUNNING:
@@ -167,8 +180,7 @@ class Checker:
         )
         response.raise_for_status()
         workflow_runs = response.json()["workflow_runs"]
-
-        for run in workflow_runs:
+        for i, run in enumerate(workflow_runs):
             jobs = self.get_jobs_for_workflow_run(run["id"])
             for job in jobs:
                 self.record(run["name"], job)
@@ -184,9 +196,9 @@ class Checker:
         while True:
             ret = self.check_workflow_runs_status()
             if ret == RUNNING:
-                running_jobs = len([job
-                                    for job, status in self.results.items()
-                                    if status == RUNNING])
+                running_jobs = len([name
+                                    for name, job in self.results.items()
+                                    if self._job_status(job) == RUNNING])
                 print(f"{running_jobs} jobs are still running...")
                 time.sleep(180)
                 continue
