@@ -9,14 +9,16 @@ use std::path;
 use std::process::Command;
 use std::str;
 
-use protocols::agent::{CopyFileRequest, CreateSandboxRequest};
+use protocols::agent::{CopyFileRequest, CreateContainerRequest, CreateSandboxRequest};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct TestCase<T> {
     description: String,
     allowed: bool,
+    state: Option<Value>,
     request: T,
 }
 
@@ -82,11 +84,29 @@ where
 
         let v = serde_json::to_value(&test_case.request).unwrap();
         pol.set_input(v.into());
+
+        pol.clear_data();
+        if let Some(state) = test_case.state {
+            pol.add_data(json!({"pstate": state}).into()).unwrap();
+        }
         let query = format!(
             "data.agent_policy.{}",
             any::type_name::<T>().split("::").last().unwrap()
         );
-        assert_eq!(test_case.allowed, pol.eval_deny_query(query, true));
+        let results = pol.eval_query(query, true).unwrap().result;
+        assert_eq!(1, results.len());
+        assert_eq!(1, results[0].expressions.len());
+        let value = &results[0].expressions[0].value;
+        // value is either a simple boolean or an object with an `allowed` key and state updates.
+        if let Ok(allowed) = value.as_bool() {
+            assert_eq!(test_case.allowed, *allowed);
+        } else if let Ok(object) = value.as_object() {
+            if let Some(Ok(allowed)) = object.get(&"allowed".into()).map(|v| v.as_bool()) {
+                assert_eq!(test_case.allowed, *allowed);
+            }
+        } else {
+            panic!("unexpected value {}", value)
+        }
     }
 }
 
@@ -98,4 +118,9 @@ fn test_copyfile() {
 #[test]
 fn test_create_sandbox() {
     runtests::<CreateSandboxRequest>("createsandbox");
+}
+
+#[test]
+fn test_create_container() {
+    runtests::<CreateContainerRequest>("createcontainer");
 }
