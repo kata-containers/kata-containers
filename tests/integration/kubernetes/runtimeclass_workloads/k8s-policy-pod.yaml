@@ -49,6 +49,9 @@ spec:
             - echo
             - startupProbe
             - test
+      envFrom:
+      - configMapRef:
+          name: policy-configmap
   topologySpreadConstraints:
     - maxSkew: 2
       topologyKey: kubernetes.io/hostname
