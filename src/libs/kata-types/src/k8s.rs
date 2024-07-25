@@ -8,8 +8,8 @@ use std::path::Path;
 
 use crate::annotations;
 use crate::container::ContainerType;
+use oci_spec::runtime as oci;
 use std::str::FromStr;
-
 // K8S_EMPTY_DIR is the K8s specific path for `empty-dir` volumes
 const K8S_EMPTY_DIR: &str = "kubernetes.io~empty-dir";
 // K8S_CONFIGMAP is the K8s specific path for `configmap` volumes
@@ -62,9 +62,11 @@ pub fn container_type(spec: &oci::Spec) -> ContainerType {
     ]
     .iter()
     {
-        if let Some(v) = spec.annotations.get(k.to_owned()) {
-            if let Ok(t) = ContainerType::from_str(v) {
-                return t;
+        if let Some(annotations) = spec.annotations() {
+            if let Some(v) = annotations.get(k.to_owned()) {
+                if let Ok(t) = ContainerType::from_str(v) {
+                    return t;
+                }
             }
         }
     }
@@ -80,8 +82,10 @@ pub fn container_name(spec: &oci::Spec) -> String {
     ]
     .iter()
     {
-        if let Some(v) = spec.annotations.get(k.to_owned()) {
-            return v.clone();
+        if let Some(annotations) = spec.annotations() {
+            if let Some(v) = annotations.get(k.to_owned()) {
+                return v.clone();
+            }
         }
     }
 
@@ -102,9 +106,11 @@ pub fn container_type_with_id(spec: &oci::Spec) -> (ContainerType, Option<String
         ]
         .iter()
         {
-            if let Some(id) = spec.annotations.get(k.to_owned()) {
-                sid = Some(id.to_string());
-                break;
+            if let Some(annotations) = spec.annotations() {
+                if let Some(id) = annotations.get(k.to_owned()) {
+                    sid = Some(id.to_string());
+                    break;
+                }
             }
         }
     }
@@ -327,96 +333,108 @@ mod tests {
         );
 
         // crio sandbox
-        spec.annotations = [(
-            annotations::crio::CONTAINER_TYPE_LABEL_KEY.to_string(),
-            container::SANDBOX.to_string(),
-        )]
-        .iter()
-        .cloned()
-        .collect();
+        spec.set_annotations(Some(
+            [(
+                annotations::crio::CONTAINER_TYPE_LABEL_KEY.to_string(),
+                container::SANDBOX.to_string(),
+            )]
+            .iter()
+            .cloned()
+            .collect(),
+        ));
         assert_eq!(
             container_type_with_id(&spec),
             (ContainerType::PodSandbox, None)
         );
 
         // cri containerd sandbox
-        spec.annotations = [(
-            annotations::crio::CONTAINER_TYPE_LABEL_KEY.to_string(),
-            container::POD_SANDBOX.to_string(),
-        )]
-        .iter()
-        .cloned()
-        .collect();
+        spec.set_annotations(Some(
+            [(
+                annotations::crio::CONTAINER_TYPE_LABEL_KEY.to_string(),
+                container::POD_SANDBOX.to_string(),
+            )]
+            .iter()
+            .cloned()
+            .collect(),
+        ));
         assert_eq!(
             container_type_with_id(&spec),
             (ContainerType::PodSandbox, None)
         );
 
         // docker shim sandbox
-        spec.annotations = [(
-            annotations::crio::CONTAINER_TYPE_LABEL_KEY.to_string(),
-            container::PODSANDBOX.to_string(),
-        )]
-        .iter()
-        .cloned()
-        .collect();
+        spec.set_annotations(Some(
+            [(
+                annotations::crio::CONTAINER_TYPE_LABEL_KEY.to_string(),
+                container::PODSANDBOX.to_string(),
+            )]
+            .iter()
+            .cloned()
+            .collect(),
+        ));
         assert_eq!(
             container_type_with_id(&spec),
             (ContainerType::PodSandbox, None)
         );
 
         // crio container
-        spec.annotations = [
-            (
-                annotations::crio::CONTAINER_TYPE_LABEL_KEY.to_string(),
-                container::CONTAINER.to_string(),
-            ),
-            (
-                annotations::crio::SANDBOX_ID_LABEL_KEY.to_string(),
-                sid.clone(),
-            ),
-        ]
-        .iter()
-        .cloned()
-        .collect();
+        spec.set_annotations(Some(
+            [
+                (
+                    annotations::crio::CONTAINER_TYPE_LABEL_KEY.to_string(),
+                    container::CONTAINER.to_string(),
+                ),
+                (
+                    annotations::crio::SANDBOX_ID_LABEL_KEY.to_string(),
+                    sid.clone(),
+                ),
+            ]
+            .iter()
+            .cloned()
+            .collect(),
+        ));
         assert_eq!(
             container_type_with_id(&spec),
             (ContainerType::PodContainer, Some(sid.clone()))
         );
 
         // cri containerd container
-        spec.annotations = [
-            (
-                annotations::cri_containerd::CONTAINER_TYPE_LABEL_KEY.to_string(),
-                container::POD_CONTAINER.to_string(),
-            ),
-            (
-                annotations::cri_containerd::SANDBOX_ID_LABEL_KEY.to_string(),
-                sid.clone(),
-            ),
-        ]
-        .iter()
-        .cloned()
-        .collect();
+        spec.set_annotations(Some(
+            [
+                (
+                    annotations::cri_containerd::CONTAINER_TYPE_LABEL_KEY.to_string(),
+                    container::POD_CONTAINER.to_string(),
+                ),
+                (
+                    annotations::cri_containerd::SANDBOX_ID_LABEL_KEY.to_string(),
+                    sid.clone(),
+                ),
+            ]
+            .iter()
+            .cloned()
+            .collect(),
+        ));
         assert_eq!(
             container_type_with_id(&spec),
             (ContainerType::PodContainer, Some(sid.clone()))
         );
 
         // docker shim container
-        spec.annotations = [
-            (
-                annotations::dockershim::CONTAINER_TYPE_LABEL_KEY.to_string(),
-                container::CONTAINER.to_string(),
-            ),
-            (
-                annotations::dockershim::SANDBOX_ID_LABEL_KEY.to_string(),
-                sid.clone(),
-            ),
-        ]
-        .iter()
-        .cloned()
-        .collect();
+        spec.set_annotations(Some(
+            [
+                (
+                    annotations::dockershim::CONTAINER_TYPE_LABEL_KEY.to_string(),
+                    container::CONTAINER.to_string(),
+                ),
+                (
+                    annotations::dockershim::SANDBOX_ID_LABEL_KEY.to_string(),
+                    sid.clone(),
+                ),
+            ]
+            .iter()
+            .cloned()
+            .collect(),
+        ));
         assert_eq!(
             container_type_with_id(&spec),
             (ContainerType::PodContainer, Some(sid))

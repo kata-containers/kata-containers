@@ -14,8 +14,8 @@ use nix::{
     sys::{signal::kill, stat::Mode},
     unistd::Pid,
 };
-use oci::{ContainerState, State as OCIState};
 use procfs::process::ProcState;
+use runtime_spec::{ContainerState, State as OCIState};
 use rustjail::{cgroups::fs::Manager as CgroupManager, specconv::CreateOpts};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -60,10 +60,10 @@ impl Status {
             .clone()
             .spec
             .ok_or_else(|| anyhow!("spec config was not present"))?
-            .root
+            .root()
             .as_ref()
             .ok_or_else(|| anyhow!("root config was not present in the spec"))?
-            .path
+            .path()
             .clone();
 
         Ok(Self {
@@ -72,7 +72,7 @@ impl Status {
             pid: oci_state.pid,
             root: root.to_path_buf(),
             bundle: bundle.to_path_buf(),
-            rootfs,
+            rootfs: rootfs.display().to_string(),
             process_start_time,
             created,
             cgroup_manager: cgroup_mg,
@@ -187,7 +187,7 @@ mod tests {
     use ::test_utils::skip_if_not_root;
     use chrono::{DateTime, Utc};
     use nix::unistd::getpid;
-    use oci::ContainerState;
+    use runtime_spec::ContainerState;
     use rustjail::cgroups::fs::Manager as CgroupManager;
     use scopeguard::defer;
     use std::path::Path;

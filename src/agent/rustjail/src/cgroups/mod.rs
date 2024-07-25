@@ -5,7 +5,7 @@
 
 use anyhow::{anyhow, Result};
 use core::fmt::Debug;
-use oci::{LinuxDeviceCgroup, LinuxResources};
+use oci_spec::runtime::{LinuxDeviceCgroup, LinuxDeviceType, LinuxResources};
 use protocols::agent::CgroupStats;
 use std::any::Any;
 
@@ -75,15 +75,20 @@ impl Debug for dyn Manager + Send + Sync {
 ///
 /// The formats representing all devices between OCI spec and cgroups-rs
 /// are different.
-/// - OCI spec: major: 0, minor: 0, type: "", access: "rwm";
+/// - OCI spec: major: Some(0), minor: Some(0), type: Some(A), access: Some("rwm");
 /// - Cgroups-rs: major: -1, minor: -1, type: "a", access: "rwm";
 /// - Linux: a *:* rwm
 #[inline]
 fn rule_for_all_devices(dev_cgroup: &LinuxDeviceCgroup) -> bool {
-    dev_cgroup.major.unwrap_or(0) == 0
-        && dev_cgroup.minor.unwrap_or(0) == 0
-        && (dev_cgroup.r#type.as_str() == "" || dev_cgroup.r#type.as_str() == "a")
-        && dev_cgroup.access.contains('r')
-        && dev_cgroup.access.contains('w')
-        && dev_cgroup.access.contains('m')
+    let cgrp_access = dev_cgroup.access().clone().unwrap_or_default();
+    let dev_type = dev_cgroup
+        .typ()
+        .as_ref()
+        .map_or(LinuxDeviceType::default(), |x| *x);
+    dev_cgroup.major().unwrap_or(0) == 0
+        && dev_cgroup.minor().unwrap_or(0) == 0
+        && dev_type == LinuxDeviceType::A
+        && cgrp_access.contains('r')
+        && cgrp_access.contains('w')
+        && cgrp_access.contains('m')
 }

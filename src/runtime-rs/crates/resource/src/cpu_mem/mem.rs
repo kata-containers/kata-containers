@@ -4,12 +4,12 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::collections::HashMap;
-use std::sync::Arc;
-
 use anyhow::{Context, Ok, Result};
 use hypervisor::Hypervisor;
 use oci::LinuxResources;
+use oci_spec::runtime as oci;
+use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::cpu_mem::initial_size::InitialSizeManager;
@@ -66,14 +66,15 @@ impl MemResource {
         let resources = self.container_mem_resources.read().await;
 
         for (_, r) in resources.iter() {
-            for l in &r.hugepage_limits {
-                mem_sandbox += l.limit;
+            let hugepage_limits = r.hugepage_limits().clone().unwrap_or_default();
+            for l in hugepage_limits {
+                mem_sandbox += l.limit();
             }
 
-            if let Some(memory) = &r.memory {
+            if let Some(memory) = &r.memory() {
                 // set current_limit to 0 if memory limit is not set to container
-                let _current_limit = memory.limit.map_or(0, |limit| {
-                    mem_sandbox += limit as u64;
+                let _current_limit = memory.limit().map_or(0, |limit| {
+                    mem_sandbox += limit;
                     info!(sl!(), "memory sb: {}, memory limit: {}", mem_sandbox, limit);
                     limit
                 });

@@ -8,7 +8,9 @@ use crate::status::Status;
 use crate::utils::validate_spec;
 use anyhow::{anyhow, Result};
 use derive_builder::Builder;
-use oci::{ContainerState, Process as OCIProcess, Spec};
+use oci::{Process as OCIProcess, Spec};
+use oci_spec::runtime as oci;
+use runtime_spec::ContainerState;
 use rustjail::container::update_namespaces;
 use slog::{debug, Logger};
 use std::fs::File;
@@ -105,8 +107,8 @@ impl ActivatedContainer {
         // If with --process, load process from file.
         // Otherwise, update process with args and other options.
         if let Some(process_path) = self.process.as_ref() {
-            spec.process = Some(Self::get_process(process_path)?);
-        } else if let Some(process) = spec.process.as_mut() {
+            spec.set_process(Some(Self::get_process(process_path)?));
+        } else if let Some(process) = spec.process_mut().as_mut() {
             self.update_process(process)?;
         } else {
             return Err(anyhow!("process is empty in spec"));
@@ -118,15 +120,15 @@ impl ActivatedContainer {
 
     /// Update process with args and other options.
     fn update_process(&self, process: &mut OCIProcess) -> Result<()> {
-        process.args = self.args.clone();
-        process.no_new_privileges = self.no_new_privs;
-        process.terminal = self.tty;
+        process.set_args(Some(self.args.clone()));
+        process.set_no_new_privileges(Some(self.no_new_privs));
+        process.set_terminal(Some(self.tty));
         if let Some(cwd) = self.cwd.as_ref() {
-            process.cwd = cwd.as_path().display().to_string();
+            process.set_cwd(cwd.as_path().to_path_buf());
         }
-        process
-            .env
-            .extend(self.env.iter().map(|kv| format!("{}={}", kv.0, kv.1)));
+        if let Some(process_env) = process.env_mut() {
+            process_env.extend(self.env.iter().map(|kv| format!("{}={}", kv.0, kv.1)));
+        }
         Ok(())
     }
 
@@ -143,7 +145,7 @@ mod tests {
     use crate::status::Status;
     use crate::utils::test_utils::*;
     use nix::unistd::getpid;
-    use oci::{Linux, LinuxNamespace, User};
+    use oci_spec::runtime::{LinuxBuilder, LinuxNamespaceBuilder, ProcessBuilder, User};
     use rustjail::container::TYPETONAME;
     use scopeguard::defer;
     use slog::o;
@@ -193,11 +195,10 @@ mod tests {
         let pid = getpid().as_raw();
 
         let mut spec = create_dummy_spec();
-        spec.root.as_mut().unwrap().path = bundle_dir
-            .path()
-            .join(TEST_ROOTFS_PATH)
-            .to_string_lossy()
-            .to_string();
+        spec.root_mut()
+            .as_mut()
+            .unwrap()
+            .set_path(bundle_dir.path().join(TEST_ROOTFS_PATH));
 
         let status = create_custom_dummy_status(&id, pid, root.path(), &spec);
         status.save().unwrap();
@@ -223,36 +224,39 @@ mod tests {
             .build()
             .unwrap();
 
-        let linux = Linux {
-            namespaces: TYPETONAME
-                .iter()
-                .filter(|&(_, &name)| name != "user")
-                .map(|ns| LinuxNamespace {
-                    r#type: ns.0.to_string(),
-                    path: format!("/proc/{}/ns/{}", pid, ns.1),
-                })
-                .collect(),
-            ..Default::default()
-        };
-        spec.linux = Some(linux);
-        spec.process = Some(OCIProcess {
-            terminal: result.tty,
-            console_size: None,
-            user: User::default(),
-            args: result.args.clone(),
-            cwd: result.cwd.clone().unwrap().to_string_lossy().to_string(),
-            env: vec![
+        let linux = LinuxBuilder::default()
+            .namespaces(
+                TYPETONAME
+                    .iter()
+                    .filter(|&(_, &name)| name != "user")
+                    .map(|ns| {
+                        LinuxNamespaceBuilder::default()
+                            .typ(ns.0.clone())
+                            .path(PathBuf::from(&format!("/proc/{}/ns/{}", pid, ns.1)))
+                            .build()
+                            .unwrap()
+                    })
+                    .collect::<Vec<_>>(),
+            )
+            .build()
+            .unwrap();
+
+        spec.set_linux(Some(linux));
+        let process = ProcessBuilder::default()
+            .terminal(result.tty)
+            .user(User::default())
+            .args(result.args.clone())
+            .cwd(result.cwd.clone().unwrap().to_string_lossy().to_string())
+            .env(vec![
                 "PATH=/bin:/usr/bin".to_string(),
                 "K1=V1".to_string(),
                 "K2=V2".to_string(),
-            ],
-            capabilities: None,
-            rlimits: Vec::new(),
-            no_new_privileges: result.no_new_privs,
-            apparmor_profile: "".to_string(),
-            oom_score_adj: None,
-            selinux_label: "".to_string(),
-        });
+            ])
+            .no_new_privileges(result.no_new_privs)
+            .build()
+            .unwrap();
+
+        spec.set_process(Some(process));
         let launcher = result.clone().create_launcher(&logger).unwrap();
         assert!(!launcher.init);
         assert_eq!(launcher.runner.config.spec.unwrap(), spec);
@@ -269,11 +273,11 @@ mod tests {
         skip_if_not_root!();
         let bundle_dir = tempdir().unwrap();
         let process_file = bundle_dir.path().join(TEST_PROCESS_FILE_NAME);
-        let process_template = OCIProcess {
-            args: vec!["sleep".to_string(), "10".to_string()],
-            cwd: "/".to_string(),
-            ..Default::default()
-        };
+
+        let mut process_template = OCIProcess::default();
+        process_template.set_args(Some(vec!["sleep".to_string(), "10".to_string()]));
+        process_template.set_cwd(PathBuf::from("/"));
+
         let file = File::create(process_file.clone()).unwrap();
         serde_json::to_writer(&file, &process_template).unwrap();
 
@@ -284,11 +288,10 @@ mod tests {
         let id = "test_activated_container_create_with_process".to_string();
         let pid = getpid().as_raw();
         let mut spec = create_dummy_spec();
-        spec.root.as_mut().unwrap().path = bundle_dir
-            .path()
-            .join(TEST_ROOTFS_PATH)
-            .to_string_lossy()
-            .to_string();
+        spec.root_mut()
+            .as_mut()
+            .unwrap()
+            .set_path(bundle_dir.path().join(TEST_ROOTFS_PATH));
         create_activated_dirs(root.path(), &id, bundle_dir.path());
 
         let status = create_custom_dummy_status(&id, pid, root.path(), &spec);
@@ -300,7 +303,7 @@ mod tests {
         let launcher = ActivatedContainerBuilder::default()
             .id(id)
             .root(root.into_path())
-            .console_socket(None)
+            .console_socket(Some(PathBuf::from(TEST_CONSOLE_SOCKET_PATH)))
             .pid_file(None)
             .tty(true)
             .cwd(Some(PathBuf::from(TEST_BUNDLE_PATH)))
@@ -319,7 +322,14 @@ mod tests {
         assert!(!launcher.init);
 
         assert_eq!(
-            launcher.runner.config.spec.unwrap().process.unwrap(),
+            launcher
+                .runner
+                .config
+                .spec
+                .unwrap()
+                .process()
+                .clone()
+                .unwrap(),
             process_template
         );
     }

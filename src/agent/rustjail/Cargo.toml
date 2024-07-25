@@ -10,7 +10,8 @@ awaitgroup = "0.6.0"
 serde = "1.0.91"
 serde_json = "1.0.39"
 serde_derive = "1.0.91"
-oci = { path = "../../libs/oci" }
+runtime-spec = { path = "../../libs/runtime-spec" }
+oci-spec = { version = "0.6.8", features = ["runtime"] }
 protocols = { path ="../../libs/protocols" }
 kata-sys-util = { path = "../../libs/kata-sys-util" }
 caps = "0.5.0"
@@ -44,6 +45,7 @@ xattr = "0.2.3"
 serial_test = "0.5.0"
 tempfile = "3.1.0"
 test-utils = { path = "../../libs/test-utils" }
+protocols = { path ="../../libs/protocols" }
 
 [features]
 seccomp = ["libseccomp"]

@@ -7,10 +7,10 @@
 use hypervisor::device::device_manager::DeviceManager;
 use tokio::sync::RwLock;
 
+use super::Volume;
 use anyhow::Result;
 use async_trait::async_trait;
-
-use super::Volume;
+use oci_spec::runtime as oci;
 
 #[derive(Debug)]
 pub(crate) struct DefaultVolume {
