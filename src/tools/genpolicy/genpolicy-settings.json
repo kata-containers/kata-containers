@@ -299,7 +299,7 @@
             "^$(cpath)/"
         ],
         "ExecProcessRequest": {
-            "commands": [],
+            "allowed_commands": [],
             "regex": []
         },
         "CloseStdinRequest": false,

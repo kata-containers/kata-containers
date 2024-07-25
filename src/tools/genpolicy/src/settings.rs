@@ -73,6 +73,7 @@ impl Settings {
         if let Ok(file) = File::open(json_settings_path) {
             let settings: Self = serde_json::from_reader(file).unwrap();
             debug!("settings = {:?}", &settings);
+            Self::validate_settings(&settings);
             settings
         } else {
             panic!("Cannot open file {}. Please copy it to the current directory or specify the path to it using the -j parameter.",
@@ -85,6 +86,15 @@ impl Settings {
             &self.pause_container
         } else {
             &self.other_container
+        }
+    }
+
+    fn validate_settings(settings: &Self) {
+        if let Some(commands) = &settings.request_defaults.ExecProcessRequest.commands {
+            if !commands.is_empty() {
+                panic!("The settings field <request_defaults.ExecProcessRequest.commands> has been deprecated. \
+                    Please use <request_defaults.ExecProcessRequest.allowed_commands> instead.");
+            }
         }
     }
 }

@@ -236,23 +236,15 @@ add_exec_to_policy_settings() {
 	auto_generate_policy_enabled || return 0
 
 	local -r settings_dir="$1"
-
-	# TODO: teach genpolicy to work with an array of args, instead of joining the args here.
 	shift
-	if [ "${#@}" -gt "1" ]; then
-		# Join all the exec args.
-		local allowed_exec=$(printf '%s ' "${@}")
 
-		# Remove the trailing space character.
-		allowed_exec="${allowed_exec::-1}"
-	else
-		local -r allowed_exec="$1"
-	fi
+	# Create a JSON array of strings containing all the args of the command to be allowed.
+	local exec_args=$(printf "%s\n" "$@" | jq -R | jq -sc)
 
 	# Change genpolicy settings to allow kubectl to exec the command specified by the caller.
-	info "${settings_dir}/genpolicy-settings.json: allowing exec: ${allowed_exec}"
-	jq --arg allowed_exec "${allowed_exec}" \
-		'.request_defaults.ExecProcessRequest.commands |= . + [$allowed_exec]' \
+	local jq_command=".request_defaults.ExecProcessRequest.allowed_commands |= . + [${exec_args}]"
+	info "${settings_dir}/genpolicy-settings.json: executing jq command: ${jq_command}"
+	jq "${jq_command}" \
 		"${settings_dir}/genpolicy-settings.json" > \
 		"${settings_dir}/new-genpolicy-settings.json"
 	mv "${settings_dir}/new-genpolicy-settings.json" \
@@ -281,29 +273,28 @@ add_requests_to_policy_settings() {
 # Change genpolicy settings to allow executing on the Guest VM the commands
 # used by "kubectl cp" from the Host to the Guest.
 add_copy_from_host_to_policy_settings() {
-	declare -r genpolicy_settings_dir="$1"
+	local -r genpolicy_settings_dir="$1"
 
-	exec_command="test -d /tmp"
-	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
-	exec_command="tar -xmf - -C /tmp"
-	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
+	local exec_command=(test -d /tmp)
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command[@]}"
+	exec_command=(tar -xmf - -C /tmp)
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command[@]}"
 }
 
 # Change genpolicy settings to allow executing on the Guest VM the commands
 # used by "kubectl cp" from the Guest to the Host.
 add_copy_from_guest_to_policy_settings() {
-	declare -r genpolicy_settings_dir="$1"
-	declare -r copied_file="$2"
+	local -r genpolicy_settings_dir="$1"
+	local -r copied_file="$2"
 
-	exec_command="tar cf - ${copied_file}"
-	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
+	exec_command=(tar cf - "${copied_file}")
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command[@]}"
 }
 
-# Change genpolicy settings to allow "kubectl exec" to execute a command
-# and to read console output from a test pod.
+# Change genpolicy settings to use a pod namespace different than "default".
 set_namespace_to_policy_settings() {
-	declare -r settings_dir="$1"
-	declare -r namespace="$2"
+	local -r settings_dir="$1"
+	local -r namespace="$2"
 
 	auto_generate_policy_enabled || return 0
 
