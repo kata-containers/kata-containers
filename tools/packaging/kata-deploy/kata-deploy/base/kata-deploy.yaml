@@ -17,7 +17,7 @@ spec:
       hostPID: true
       containers:
         - name: kube-kata
-          image: ghcr.io/kata-containers/kata-deploy-ci:e94490232e24e4ebb63a97467a586a62e6069d08-nightly-amd64
+          image: ghcr.io/kata-containers/kata-deploy-ci:d7637f93f9ac0aa5a57496f25ffd68b5d302a7a6-nightly-amd64
           imagePullPolicy: Always
           lifecycle:
             preStop:
@@ -41,7 +41,7 @@ spec:
             - name: CREATE_DEFAULT_RUNTIMECLASS
               value: "true"
             - name: ALLOWED_HYPERVISOR_ANNOTATIONS
-              value: "default_vcpus"
+              value: "initrd kernel default_vcpus"
             - name: SNAPSHOTTER_HANDLER_MAPPING
               value: ""
             - name: AGENT_HTTPS_PROXY
@@ -50,6 +50,12 @@ spec:
               value: ""
             - name: PULL_TYPE_MAPPING
               value: ""
+            - name: HOST_OS
+              value: cbl-mariner
+            - name: HOST_OS
+              value: cbl-mariner
+            - name: HOST_OS
+              value: cbl-mariner
           securityContext:
             privileged: true
           volumeMounts:

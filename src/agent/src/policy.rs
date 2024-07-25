@@ -6,6 +6,7 @@
 use anyhow::{bail, Result};
 use protobuf::MessageDyn;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use slog::Drain;
 use tokio::io::AsyncWriteExt;
 
@@ -79,6 +80,22 @@ pub struct AgentPolicy {
     state: AgentPolicyState,
 }
 
+#[allow(unused)]
+#[derive(serde::Deserialize, Debug)]
+struct MetadataResponse {
+    allowed: bool,
+    metadata: Option<Vec<Option<Metadata>>>,
+}
+
+#[allow(unused)]
+#[derive(serde::Deserialize, Debug)]
+struct Metadata {
+    action: String,
+    name: String,
+    key: String,
+    value: serde_json::Value,
+}
+
 impl AgentPolicy {
     /// Create AgentPolicy object.
     pub fn new() -> Self {
@@ -130,6 +147,63 @@ impl AgentPolicy {
         return self.allow_request_string(ep, &ep_input).await;
     }
 
+    async fn process_metadata(&mut self, metadata: Vec<Option<Metadata>>) -> Result<()> {
+        // Iterate over each metadataAction in the metadata map
+        for action in metadata {
+            // Check if the action is "add"
+            if let Some(metadata_action) = action {
+                match metadata_action.action.as_str() {
+                    "add" => {
+                        self.log_eval_input("process_metadata", "add").await;
+                        // Create the JSON value with the action's key and name
+                        let json_value = json!({
+                            metadata_action.name: {
+                                metadata_action.key: metadata_action.value
+                            }
+                        });
+
+                        // Add data to the engine using the JSON value
+                        self.engine.add_data(regorus::Value::from(json_value))?;
+
+                        self.log_eval_input("process_metadata", "added!").await;
+                    }
+
+                    "remove" => {
+                        self.log_eval_input("process_metadata", "remove").await;
+
+                        // get_data()
+                        // patch data
+                        // clear_data()
+                        // add_data(patch)
+
+                        self.log_eval_input("process_metadata", "removed!").await;
+                    }
+
+                    "update" => {
+                        self.log_eval_input("process_metadata", "update").await;
+
+                        // get_data()
+                        // patch data
+                        // clear_data()
+                        // add_data(patch)
+
+                        self.log_eval_input("process_metadata", "updated!").await;
+                    }
+
+                    _ => {
+                        self.log_eval_input("process_metadata", "not handled").await;
+                        // Handle other actions or do nothing
+                    }
+                }
+            } else {
+                self.log_eval_input("process_metadata", "detected null action")
+                    .await;
+            }
+        }
+
+        Ok(())
+    }
+
     async fn allow_request_string(&mut self, ep: &str, ep_input: &str) -> Result<(bool, String)> {
         debug!(sl!(), "policy check: {ep}");
         self.log_eval_input(ep, ep_input).await;
@@ -138,6 +212,7 @@ impl AgentPolicy {
         self.engine.set_input_json(ep_input)?;
 
         let results = self.engine.eval_query(query, false)?;
+
         if results.result.len() != 1 {
             bail!("policy check: unexpected eval_query results {:?}", results);
         }
@@ -147,12 +222,35 @@ impl AgentPolicy {
                 results
             );
         }
-        let mut allow = match results.result[0].expressions[0].value {
-            regorus::Value::Bool(b) => b,
-            _ => bail!(
-                "policy check: unexpected eval_query result type {:?}",
-                results
-            ),
+
+        let mut allow = match &results.result[0].expressions[0].value {
+            regorus::Value::Bool(b) => *b,
+
+            // Match against a specific variant that could be interpreted as MetadataResponse
+            regorus::Value::Object(obj) => {
+                let json_str = serde_json::to_string(obj)?;
+
+                let metadata_response: MetadataResponse = serde_json::from_str(&json_str)?;
+
+                let obj_str = format!("metadata_response found: {:?}", metadata_response);
+                self.log_eval_input("allow_request_string", &obj_str).await;
+
+                if metadata_response.allowed {
+                    if let Some(metadata) = metadata_response.metadata {
+                        // perform state changes based on metadata
+                        self.process_metadata(metadata).await?;
+                    }
+                }
+                metadata_response.allowed
+            }
+
+            _ => {
+                self.log_eval_input("allow_request_string", "bailing").await;
+                bail!(
+                    "policy check: unexpected eval_query result type {:?}",
+                    results
+                );
+            }
         };
 
         if !allow && self.allow_failures {
@@ -164,6 +262,8 @@ impl AgentPolicy {
             Ok(p) => p.join(" "),
             Err(e) => format!("Failed to get policy log: {e}"),
         };
+
+        // self.log_eval_input("rego prints: ", &prints).await;
 
         Ok((allow, prints))
     }
@@ -202,18 +302,21 @@ impl AgentPolicy {
     }
 
     async fn update_allow_failures_flag(&mut self) -> Result<()> {
-        // self.allow_failures = match self.allow_request("AllowRequestsFailingPolicy", "{}").await {
-        //     Ok((allowed, _prints)) => {
-        //         if allowed {
-        //             warn!(
-        //                 sl!(),
-        //                 "policy: AllowRequestsFailingPolicy is enabled - will ignore errors"
-        //             );
-        //         }
-        //         allowed
-        //     }
-        //     Err(_) => false,
-        // };
+        self.allow_failures = match self
+            .allow_request_string("AllowRequestsFailingPolicy", "{}")
+            .await
+        {
+            Ok((allowed, _prints)) => {
+                if allowed {
+                    warn!(
+                        sl!(),
+                        "policy: AllowRequestsFailingPolicy is enabled - will ignore errors"
+                    );
+                }
+                allowed
+            }
+            Err(_) => false,
+        };
         Ok(())
     }
 }
