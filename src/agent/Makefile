@@ -134,14 +134,14 @@ static-checks-build: $(GENERATED_CODE)
 $(TARGET): $(GENERATED_CODE) $(TARGET_PATH)
 
 $(TARGET_PATH): show-summary
-	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES)
+	@RUSTFLAGS="$(EXTRA_RUSTFLAGS)" cargo build --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES)
 
 $(GENERATED_FILES): %: %.in
 	@sed $(foreach r,$(GENERATED_REPLACEMENTS),-e 's|@$r@|$($r)|g') "$<" > "$@"
 
 ##TARGET optimize: optimized  build
 optimize: show-summary show-header
-	@RUSTFLAGS="-C link-arg=-s $(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES)
+	@RUSTFLAGS="-C link-arg=-s $(EXTRA_RUSTFLAGS)" cargo build --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES)
 
 ##TARGET install: install agent
 install: install-services

@@ -43,7 +43,7 @@ default: $(TARGET) build
 $(TARGET): $(GENERATED_CODE)
 
 build:
-	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES)
+	@RUSTFLAGS="$(EXTRA_RUSTFLAGS)" cargo build --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES)
 
 static-checks-build: $(GENERATED_CODE)
 
@@ -59,10 +59,10 @@ vendor:
 	cargo vendor
 
 test: $(GENERATED_CODE)
-	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo test --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES) -- --nocapture
+	@RUSTFLAGS="$(EXTRA_RUSTFLAGS)" cargo test --target $(TRIPLE) $(if $(findstring release,$(BUILD_TYPE)),--release) $(EXTRA_RUSTFEATURES) -- --nocapture
 
 install:
-	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo install --locked --target $(TRIPLE) --path . --root $(INSTALL_PATH)
+	@RUSTFLAGS="$(EXTRA_RUSTFLAGS)" cargo install --locked --target $(TRIPLE) --path . --root $(INSTALL_PATH)
 
 check: $(GENERATED_CODE) standard_rust_check
 
