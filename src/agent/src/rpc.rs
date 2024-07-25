@@ -14,6 +14,7 @@ use std::fmt::Debug;
 use std::io;
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
+use std::str::FromStr;
 use std::sync::Arc;
 use ttrpc::{
     self,
@@ -54,7 +55,9 @@ use nix::sys::{stat, statfs};
 use nix::unistd::{self, Pid};
 use rustjail::process::ProcessOperations;
 
-use crate::device::{add_devices, get_virtio_blk_pci_device_name, update_env_pci};
+use crate::device::{
+    add_devices, get_virtio_blk_pci_device_name, update_env_pci, wait_for_net_interface,
+};
 use crate::features::get_build_features;
 use crate::linux_abi::*;
 use crate::metrics::get_metrics;
@@ -948,6 +951,17 @@ impl agent_ttrpc::AgentService for AgentService {
             ttrpc::Code::INVALID_ARGUMENT,
             "empty update interface request",
         )?;
+
+        // For network devices passed on the pci bus, check for the network interface
+        // to be available first.
+        if !interface.pciPath.is_empty() {
+            let pcipath = pci::Path::from_str(&interface.pciPath)
+                .map_ttrpc_err(|e| format!("Unexpected pci-path for network interface: {:?}", e))?;
+
+            wait_for_net_interface(&self.sandbox, &pcipath)
+                .await
+                .map_ttrpc_err(|e| format!("interface not available: {:?}", e))?;
+        }
 
         self.sandbox
             .lock()

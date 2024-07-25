@@ -90,6 +90,7 @@ pub const SYSFS_MEMORY_HOTPLUG_PROBE_PATH: &str = "/sys/devices/system/memory/pr
 pub const SYSFS_MEMORY_ONLINE_PATH: &str = "/sys/devices/system/memory";
 
 pub const SYSFS_SCSI_HOST_PATH: &str = "/sys/class/scsi_host";
+pub const SYSFS_NET_PATH: &str = "/sys/class/net";
 
 pub const SYSFS_BUS_PCI_PATH: &str = "/sys/bus/pci";
 

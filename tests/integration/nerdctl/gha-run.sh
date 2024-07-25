@@ -90,6 +90,12 @@ function run() {
 	info "Creating macvlan network with eth0 interface on host as parent"
 	sudo nerdctl network create ${macvlan_net_name} --driver ipvlan --subnet=10.8.0.0/24 -o parent=${parent_interface}
 
+	# Create two bridge networks for testing multiple networks with Kata
+	local net1="foo"
+	local net2="bar"
+	sudo nerdctl network create ${net1}
+	sudo nerdctl network create ${net2}
+
 	enabling_hypervisor
 
 	if [ -n "${GITHUB_ENV:-}" ]; then
@@ -102,6 +108,9 @@ function run() {
 
 	info "Running nerdctl with Kata Containers (${KATA_HYPERVISOR})"
 	sudo nerdctl run --rm --runtime io.containerd.kata-${KATA_HYPERVISOR}.v2 --entrypoint nping instrumentisto/nmap --tcp-connect -c 2 -p 80 www.github.com
+
+	info "Running nerdctl with Kata Containers (${KATA_HYPERVISOR}) and multiple bridge nwtorks"
+	sudo nerdctl run --rm --net ${net1} --net ${net2} --runtime io.containerd.kata-${KATA_HYPERVISOR}.v2 alpine ip a
 
 	info "Running nerdctl with Kata Containers (${KATA_HYPERVISOR}) and ipvlan network"
 	sudo nerdctl run  --rm --net ${ipvlan_net_name}  --runtime io.containerd.kata-${KATA_HYPERVISOR}.v2 alpine ip a | grep "eth0"
