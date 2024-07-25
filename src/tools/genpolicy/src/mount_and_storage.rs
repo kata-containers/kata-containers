@@ -57,8 +57,8 @@ pub fn get_policy_mounts(
                 .find(|m| m.destination.eq(&s_mount.destination))
             {
                 // Update an already existing mount.
-                policy_mount.type_ = mount.type_.clone();
-                policy_mount.source = mount.source.clone();
+                policy_mount.type_.clone_from(&mount.type_);
+                policy_mount.source.clone_from(&mount.source);
                 policy_mount.options = mount.options.iter().map(String::from).collect();
             } else {
                 // Add a new mount.
@@ -94,7 +94,7 @@ fn keep_settings_mount(
 fn adjust_termination_path(mount: &mut policy::KataMount, yaml_container: &pod::Container) {
     if mount.destination == "/dev/termination-log" {
         if let Some(path) = &yaml_container.terminationMessagePath {
-            mount.destination = path.clone();
+            mount.destination.clone_from(path);
         }
     }
 }

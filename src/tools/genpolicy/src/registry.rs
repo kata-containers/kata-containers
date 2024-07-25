@@ -215,7 +215,7 @@ impl Container {
 
         if let Some(working_dir) = &docker_config.WorkingDir {
             if !working_dir.is_empty() {
-                process.Cwd = working_dir.clone();
+                process.Cwd.clone_from(working_dir);
             }
         }
 
@@ -344,6 +344,7 @@ pub fn add_verity_to_store(cache_file: &str, diff_id: &str, verity_hash: &str) -
         .read(true)
         .write(true)
         .create(true)
+        .truncate(false)
         .open(cache_file)?;
 
     let mut data: Vec<ImageLayer> = if let Ok(vec) = serde_json::from_reader(read_file) {

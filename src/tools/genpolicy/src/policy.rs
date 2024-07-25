@@ -570,10 +570,12 @@ impl AgentPolicy {
         linux.Namespaces = get_kata_namespaces(is_pause_container, use_host_network);
 
         if !c_settings.Linux.MaskedPaths.is_empty() {
-            linux.MaskedPaths = c_settings.Linux.MaskedPaths.clone();
+            linux.MaskedPaths.clone_from(&c_settings.Linux.MaskedPaths);
         }
         if !c_settings.Linux.ReadonlyPaths.is_empty() {
-            linux.ReadonlyPaths = c_settings.Linux.ReadonlyPaths.clone();
+            linux
+                .ReadonlyPaths
+                .clone_from(&c_settings.Linux.ReadonlyPaths);
         }
 
         let sandbox_pidns = if is_pause_container {
@@ -722,7 +724,7 @@ fn get_image_layer_storages(
             "previous_chain_id = {}, chain_id = {}",
             &previous_chain_id, &chain_id
         );
-        previous_chain_id = chain_id.clone();
+        previous_chain_id.clone_from(&chain_id);
 
         layer_names.push(name_to_hash(&chain_id));
         layer_hashes.push(layer.verity_hash.to_string());
