@@ -702,12 +702,27 @@ EOF
 	if [ "${AGENT_INIT}" == "yes" ]; then
 		setup_agent_init "${AGENT_DEST}" "${init}"
 	else
+		info "Setup systemd-base environment for kata-agent"
 		# Setup systemd-based environment for kata-agent
 		mkdir -p "${ROOTFS_DIR}/etc/systemd/system/basic.target.wants"
 		ln -sf "/usr/lib/systemd/system/kata-containers.target" "${ROOTFS_DIR}/etc/systemd/system/basic.target.wants/kata-containers.target"
 		mkdir -p "${ROOTFS_DIR}/etc/systemd/system/kata-containers.target.wants"
 		ln -sf "/usr/lib/systemd/system/dbus.socket" "${ROOTFS_DIR}/etc/systemd/system/kata-containers.target.wants/dbus.socket"
 		chmod g+rx,o+x "${ROOTFS_DIR}"
+
+		if [ "${CONFIDENTIAL_GUEST}" == "yes" ]; then
+			info "Tweaking /run to use 50% of the available memory"
+			# Tweak the kata-agent service to have /run using 50% of the memory available
+			# This is needed as, by default, systemd would only allow 10%, which is way
+			# too low, even for very small test images
+			fstab_file="${ROOTFS_DIR}/etc/fstab"
+			[ -e ${fstab_file} ] && sed -i '/\/run/d' ${fstab_file}
+			echo "tmpfs /run tmpfs nodev,nosuid,size=50% 0 0" >> ${fstab_file}
+
+			kata_systemd_target="${ROOTFS_DIR}/usr/lib/systemd/system/kata-containers.target"
+			grep -qE "^Requires=.*systemd-remount-fs.service.*" ${kata_systemd_target} || \
+				echo "Requires=systemd-remount-fs.service" >> ${kata_systemd_target}
+		fi
 	fi
 
 	if [ "${AGENT_POLICY}" == "yes" ]; then
