@@ -64,7 +64,7 @@ wait_for_pod_ready() {
 
 @test "Able to read env variables sourced from configmap using envFrom" {
 	wait_for_pod_ready
-	expected_env_var=$(kubectl exec "${pod_name}" -- ${exec_command[@]})
+	expected_env_var=$(kubectl exec "${pod_name}" -- "${exec_command[@]}")
 	[ "$expected_env_var" = "value-3" ] || fail "expected_env_var is not equal to value-3"
 }
 
