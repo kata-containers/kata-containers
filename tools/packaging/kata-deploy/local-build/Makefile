@@ -60,7 +60,7 @@ copy-scripts-for-the-agent-build:
 	${MK_DIR}/kata-deploy-copy-libseccomp-installer.sh
 
 all-parallel:
-	${MAKE} -f $(MK_PATH) all -j $(shell nproc ${CI:+--ignore 1}) V=
+	${MAKE} -f $(MK_PATH) all -j $(shell nproc) V=
 
 all: ${BASE_TARBALLS}
 
@@ -77,6 +77,9 @@ agent-tarball: copy-scripts-for-the-agent-build
 agent-ctl-tarball:
 	${MAKE} $@-build
 
+busybox-tarball: 
+	${MAKE} $@-build
+	
 coco-guest-components-tarball:
 	${MAKE} $@-build
 
@@ -99,6 +102,9 @@ kata-ctl-tarball:
 	${MAKE} $@-build
 
 kata-manager-tarball:
+	${MAKE} $@-build
+
+kernel-nvidia-gpu-dragonball-experimental-tarball:
 	${MAKE} $@-build
 
 kernel-dragonball-experimental-tarball:

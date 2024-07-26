@@ -35,8 +35,8 @@ setup() {
 	add_copy_from_host_to_policy_settings "${policy_settings_dir}"
 
 	cat_command="cat /tmp/$file_name"
-	exec_command="sh -c ${cat_command}"
-	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
+	exec_command=(sh -c "${cat_command}")
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command[@]}"
 
 	auto_generate_policy "${policy_settings_dir}" "${pod_config}"
 
@@ -53,7 +53,7 @@ setup() {
 	kubectl cp "$file_name" $pod_name:/tmp
 
 	# Print environment variables
-	kubectl exec $pod_name -- sh -c "${cat_command}" | grep $content
+	kubectl exec $pod_name -- "${exec_command[@]}" | grep $content
 }
 
 @test "Copy from pod to host" {
@@ -72,8 +72,8 @@ setup() {
 	add_copy_from_guest_to_policy_settings "${policy_settings_dir}" "/tmp/file.txt"
 
 	guest_command="cd /tmp && echo $content > $file_name"
-	exec_command="sh -c ${guest_command}"
-	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
+	exec_command=(sh -c "${guest_command}")
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command[@]}"
 
 	auto_generate_policy "${policy_settings_dir}" "${pod_config}"
 
@@ -88,7 +88,7 @@ setup() {
 	kubectl get pods --all-namespaces
 
 	# Create a file in the pod
-	kubectl exec "$pod_name" -- sh -c "$guest_command"
+	kubectl exec "$pod_name" -- "${exec_command[@]}"
 
 	kubectl logs "$pod_name" || true
 	kubectl describe pod "$pod_name" || true

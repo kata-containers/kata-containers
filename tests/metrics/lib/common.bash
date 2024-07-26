@@ -45,6 +45,11 @@ quay.io/libpod"
 readonly DEFAULT_KATA_CONFIG_DIR="/opt/kata/share/defaults/kata-containers"
 readonly DEFAULT_KATA_CONFIG_FNAME="configuration.toml"
 
+# Global variables used to retrieve two values: the count of Vcpus and the
+# total memory available inside a container.
+MEASURED_CONTAINER_NUM_VCPUS=""
+MEASURED_CONTAINER_TOTAL_MEM=""
+
 # This function checks existence of commands.
 # They can be received standalone or as an array, e.g.
 #
@@ -128,8 +133,9 @@ function build_dockerfile_image()
 		|| die "Failed to docker build image $image"
 }
 
-# This function removes the ctr image, builds a new one using a dockerfile
-# and imports the image from docker to ctr
+# This function deletes any existing ctr image passed as a parameter,
+# then creates a new image using a dockerfile, and finally exports
+# a new version of the docker image to ctr.
 function check_ctr_images()
 {
 	local ctr_image="$1"
@@ -437,11 +443,11 @@ function check_containers_are_running() {
 	fi
 }
 
-# This function receives an identifier used to name a performance Kata configuration file.
-# The current kata configuration is copied to a new kata config file with the difference
-# that the parameters 'default_vcpus' and 'default_memory' will be updated with the values
-# of the max vcpus and the available memory in the system.
-# Finally it makes Kata point to the new configuration file.
+# This function generates a new kata configuration file based on the current configuration file,
+# with the update of two parameters: 'default_vcpus' and 'default_memory'.
+# These parameters are updated so that they point to the maximum number of vcpus available
+# on the system and to use all the available memory on the system.
+# Finally, a link to the new configuration file is created for kata to use in creating containers.
 set_kata_configuration_performance() {
 	WORKLOAD_CONFIG_FILE="${1}"
 
@@ -476,8 +482,8 @@ function clean_cache() {
         sudo sync; echo 1 > /proc/sys/vm/drop_caches
 }
 
-# This function receives as single parameter, the name of a valid Kata configuration file
-# which will be established as the default Kata configuration to start new Kata containers.
+# This function receives as a single parameter the path to a valid kata configuration file
+# that will be set as the configuration used to start a new kata container.
 function set_kata_config_file() {
 	NEW_KATA_CONFIG=${1}
 
@@ -495,6 +501,8 @@ function set_kata_config_file() {
         popd > /dev/null
 }
 
+# This function returns the path to the symbolic link pointed to by the kata
+# configuration file: configuration.toml.
 function get_current_kata_config_file() {
 	declare -n current_config_file=$1
 
@@ -505,6 +513,36 @@ function get_current_kata_config_file() {
 	current_config_file="${KATA_CONFIG_FNAME}"
 }
 
+# This function checks if the current session is runnin as root, 
+# if that is not the case, the function exits with an error message.
 function check_if_root() {
 	[ "$EUID" -ne 0 ] && die "Please run as root or use sudo."
+}
+
+# This function launches a kata container using a Busybox image,
+# then collects the current number of vcpus and the free memory from the container.
+# Finalliy fullfills the global variables 'MEASURED_CONTAINER_NUM_VCPUS' and 'MEASURED_CONTAINER_TOTAL_MEM'
+function get_kata_memory_and_vcpus() {
+	local busybox_img="quay.io/prometheus/busybox:latest"
+	local container_name="kata-busybox_${RANDOM}"
+	local PAYLOAD_ARGS="tail -f /dev/null"
+	local remove_img=1
+
+	IMG_EXIST="$(sudo ctr i list | grep -c $busybox_img)" || true
+
+	# Pull image if it does not exist.
+	[ "${IMG_EXIST}" -eq 0 ] && ${CTR_EXE} i pull "${busybox_img}"
+
+	sudo -E ${CTR_EXE} run -d --runtime "${CTR_RUNTIME}" "${busybox_img}" "${container_name}" sh -c "${PAYLOAD_ARGS}"
+
+	MEASURED_CONTAINER_NUM_VCPUS="$(sudo -E ${CTR_EXE} t exec --exec-id ${RANDOM} ${container_name} sh -c "nproc")"
+	MEASURED_CONTAINER_TOTAL_MEM="$(sudo -E ${CTR_EXE} t exec --exec-id ${RANDOM} ${container_name} sh -c "free -h" | grep -i "Mem:" | awk '{print $2}')"
+	sudo ${CTR_EXE} t kill -a -s SIGKILL "${container_name}"
+
+	# Delete the busubox image only if it was previously extracted.
+	# Otherwise do not remove.
+	[ ${IMG_EXIST} -eq 0 ] && ${CTR_EXE} i rm "${busybox_img}"
+
+	sleep 1
+	sudo ${CTR_EXE} c rm "${container_name}"
 }

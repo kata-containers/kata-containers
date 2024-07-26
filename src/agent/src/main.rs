@@ -6,7 +6,6 @@
 #[macro_use]
 extern crate lazy_static;
 extern crate capctl;
-extern crate oci;
 extern crate prometheus;
 extern crate protocols;
 extern crate regex;
@@ -109,6 +108,9 @@ const CDH_SOCKET: &str = "/run/confidential-containers/cdh.sock";
 const CDH_SOCKET_URI: &str = concatcp!(UNIX_SOCKET_PREFIX, CDH_SOCKET);
 
 const API_SERVER_PATH: &str = "/usr/local/bin/api-server-rest";
+
+/// Path of ocicrypt config file. This is used by image-rs when decrypting image.
+const OCICRYPT_CONFIG_PATH: &str = "/tmp/ocicrypt_config.json";
 
 const DEFAULT_LAUNCH_PROCESS_TIMEOUT: i32 = 6;
 
@@ -478,10 +480,22 @@ fn init_attestation_components(logger: &Logger, config: &AgentConfig) -> Result<
         return Ok(None);
     }
 
+    let ocicrypt_config = serde_json::json!({
+        "key-providers": {
+            "attestation-agent":{
+                "ttrpc":CDH_SOCKET_URI
+            }
+        }
+    });
+
+    fs::write(OCICRYPT_CONFIG_PATH, ocicrypt_config.to_string().as_bytes())?;
+    env::set_var("OCICRYPT_KEYPROVIDER_CONFIG", OCICRYPT_CONFIG_PATH);
+
     debug!(
         logger,
         "spawning confidential-data-hub process {}", CDH_PATH
     );
+
     launch_process(
         logger,
         CDH_PATH,

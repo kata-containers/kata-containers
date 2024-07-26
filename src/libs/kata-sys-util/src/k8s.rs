@@ -10,7 +10,7 @@
 //! to detect K8S EmptyDir medium type from `oci::spec::Mount` objects.
 
 use kata_types::mount;
-use oci::Spec;
+use oci_spec::runtime::Spec;
 
 use crate::mount::get_linux_mount_info;
 
@@ -55,17 +55,24 @@ pub fn is_host_empty_dir(path: &str) -> bool {
 // backed by tmpfs inside the VM. For successive containers
 // of the same pod the already existing volume is reused.
 pub fn update_ephemeral_storage_type(oci_spec: &mut Spec) {
-    for m in oci_spec.mounts.iter_mut() {
-        if mount::is_kata_guest_mount_volume(&m.r#type) {
-            continue;
-        }
+    if let Some(mounts) = oci_spec.mounts_mut() {
+        for m in mounts.iter_mut() {
+            if let Some(typ) = &m.typ() {
+                if mount::is_kata_guest_mount_volume(typ) {
+                    continue;
+                }
+            }
 
-        if is_ephemeral_volume(&m.source) {
-            m.r#type = String::from(mount::KATA_EPHEMERAL_VOLUME_TYPE);
-        } else if is_host_empty_dir(&m.source) {
-            // FIXME support disable_guest_empty_dir
-            // https://github.com/kata-containers/kata-containers/blob/02a51e75a7e0c6fce5e8abe3b991eeac87e09645/src/runtime/pkg/katautils/create.go#L105
-            m.r#type = String::from(mount::KATA_HOST_DIR_VOLUME_TYPE);
+            if let Some(source) = &m.source() {
+                let mnt_src = &source.display().to_string();
+                if is_ephemeral_volume(mnt_src) {
+                    m.set_typ(Some(String::from(mount::KATA_EPHEMERAL_VOLUME_TYPE)));
+                } else if is_host_empty_dir(mnt_src) {
+                    // FIXME support disable_guest_empty_dir
+                    // https://github.com/kata-containers/kata-containers/blob/02a51e75a7e0c6fce5e8abe3b991eeac87e09645/src/runtime/pkg/katautils/create.go#L105
+                    m.set_typ(Some(String::from(mount::KATA_HOST_DIR_VOLUME_TYPE)));
+                }
+            }
         }
     }
 }

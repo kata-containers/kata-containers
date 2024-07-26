@@ -5,8 +5,10 @@
 
 use anyhow::{anyhow, Result};
 use libseccomp::*;
-use oci::{LinuxSeccomp, LinuxSeccompArg};
 use std::str::FromStr;
+
+use oci::{LinuxSeccomp, LinuxSeccompArg};
+use oci_spec::runtime as oci;
 
 fn get_filter_attr_from_flag(flag: &str) -> Result<ScmpFilterAttr> {
     match flag {
@@ -22,19 +24,15 @@ fn get_rule_conditions(args: &[LinuxSeccompArg]) -> Result<Vec<ScmpArgCompare>> 
     let mut conditions: Vec<ScmpArgCompare> = Vec::new();
 
     for arg in args {
-        if arg.op.is_empty() {
-            return Err(anyhow!("seccomp opreator is required"));
-        }
-
-        let mut op = ScmpCompareOp::from_str(&arg.op)?;
-        let mut value = arg.value;
+        let mut op = ScmpCompareOp::from_str(&arg.op().to_string())?;
+        let mut value = arg.value();
         // For SCMP_CMP_MASKED_EQ, arg.value is the mask and arg.value_two is the value
         if op == ScmpCompareOp::MaskedEqual(u64::default()) {
-            op = ScmpCompareOp::MaskedEqual(arg.value);
-            value = arg.value_two;
+            op = ScmpCompareOp::MaskedEqual(arg.value());
+            value = arg.value_two().unwrap_or(0);
         }
 
-        let cond = ScmpArgCompare::new(arg.index, op, value);
+        let cond = ScmpArgCompare::new(arg.index() as u32, op, value);
 
         conditions.push(cond);
     }
@@ -44,9 +42,9 @@ fn get_rule_conditions(args: &[LinuxSeccompArg]) -> Result<Vec<ScmpArgCompare>> 
 
 pub fn get_unknown_syscalls(scmp: &LinuxSeccomp) -> Option<Vec<String>> {
     let mut unknown_syscalls: Vec<String> = Vec::new();
-
-    for syscall in &scmp.syscalls {
-        for name in &syscall.names {
+    let scmp_syscalls = scmp.syscalls().clone().unwrap_or_default();
+    for syscall in scmp_syscalls.iter() {
+        for name in syscall.names().iter() {
             if ScmpSyscall::from_name(name).is_err() {
                 unknown_syscalls.push(name.to_string());
             }
@@ -63,14 +61,15 @@ pub fn get_unknown_syscalls(scmp: &LinuxSeccomp) -> Option<Vec<String>> {
 // init_seccomp creates a seccomp filter and loads it for the current process
 // including all the child processes.
 pub fn init_seccomp(scmp: &LinuxSeccomp) -> Result<()> {
-    let def_action = ScmpAction::from_str(scmp.default_action.as_str(), Some(libc::EPERM))?;
+    let def_action = ScmpAction::from_str(&scmp.default_action().to_string(), Some(libc::EPERM))?;
 
     // Create a new filter context
     let mut filter = ScmpFilterContext::new_filter(def_action)?;
 
     // Add extra architectures
-    for arch in &scmp.architectures {
-        let scmp_arch = ScmpArch::from_str(arch)?;
+    let architectures = scmp.architectures().clone().unwrap_or_default();
+    for arch in architectures {
+        let scmp_arch = ScmpArch::from_str(&arch.to_string())?;
         filter.add_arch(scmp_arch)?;
     }
 
@@ -78,17 +77,23 @@ pub fn init_seccomp(scmp: &LinuxSeccomp) -> Result<()> {
     filter.set_ctl_nnp(false)?;
 
     // Add a rule for each system call
-    for syscall in &scmp.syscalls {
-        if syscall.names.is_empty() {
+    let scmp_syscalls = scmp.syscalls().clone().unwrap_or_default();
+    for syscall in scmp_syscalls {
+        if syscall.names().is_empty() {
             return Err(anyhow!("syscall name is required"));
         }
 
-        let action = ScmpAction::from_str(&syscall.action, Some(syscall.errno_ret as i32))?;
+        let action = ScmpAction::from_str(
+            &syscall.action().to_string(),
+            syscall
+                .errno_ret()
+                .map_or(Some(libc::EPERM), |x| Some(x as i32)),
+        )?;
         if action == def_action {
             continue;
         }
 
-        for name in &syscall.names {
+        for name in syscall.names() {
             let syscall_num = match ScmpSyscall::from_name(name) {
                 Ok(num) => num,
                 Err(_) => {
@@ -98,18 +103,20 @@ pub fn init_seccomp(scmp: &LinuxSeccomp) -> Result<()> {
                 }
             };
 
-            if syscall.args.is_empty() {
+            if syscall.args().is_none() {
                 filter.add_rule(action, syscall_num)?;
             } else {
-                let conditions = get_rule_conditions(&syscall.args)?;
+                let syscall_args = syscall.args().clone().unwrap_or_default();
+                let conditions = get_rule_conditions(&syscall_args)?;
                 filter.add_rule_conditional(action, syscall_num, &conditions)?;
             }
         }
     }
 
     // Set filter attributes for each seccomp flag
-    for flag in &scmp.flags {
-        let scmp_attr = get_filter_attr_from_flag(flag)?;
+    let flags = scmp.flags().clone().unwrap_or_default();
+    for flag in flags {
+        let scmp_attr = get_filter_attr_from_flag(&flag.to_string())?;
         filter.set_filter_attr(scmp_attr, 1)?;
     }
 
@@ -123,6 +130,7 @@ pub fn init_seccomp(scmp: &LinuxSeccomp) -> Result<()> {
 mod tests {
     use super::*;
     use libc::{dup3, process_vm_readv, EPERM, O_CLOEXEC};
+    use oci_spec::runtime as oci;
     use std::io::Error;
     use std::ptr::null;
     use test_utils::skip_if_not_root;
@@ -233,21 +241,23 @@ mod tests {
         if cfg!(target_endian = "little") {
             // For little-endian architectures
             arch = vec![
-                "SCMP_ARCH_X86".to_string(),
-                "SCMP_ARCH_X32".to_string(),
-                "SCMP_ARCH_X86_64".to_string(),
-                "SCMP_ARCH_AARCH64".to_string(),
-                "SCMP_ARCH_ARM".to_string(),
-                "SCMP_ARCH_PPC64LE".to_string(),
+                "SCMP_ARCH_X86".parse::<oci::Arch>().unwrap(),
+                "SCMP_ARCH_X32".parse::<oci::Arch>().unwrap(),
+                "SCMP_ARCH_X86_64".parse::<oci::Arch>().unwrap(),
+                "SCMP_ARCH_AARCH64".parse::<oci::Arch>().unwrap(),
+                "SCMP_ARCH_ARM".parse::<oci::Arch>().unwrap(),
+                "SCMP_ARCH_PPC64LE".parse::<oci::Arch>().unwrap(),
             ];
         } else {
             // For big-endian architectures
-            arch = vec!["SCMP_ARCH_S390X".to_string()];
+            arch = vec!["SCMP_ARCH_S390X".parse::<oci::Arch>().unwrap()];
         }
 
-        scmp.architectures.append(&mut arch);
+        let mut archs = scmp.architectures().clone().unwrap();
+        archs.append(&mut arch);
+        scmp.set_architectures(Some(archs));
 
-        init_seccomp(&scmp).unwrap();
+        assert!(init_seccomp(&scmp).is_ok());
 
         // Basic syscall with simple rule
         syscall_assert!(unsafe { dup3(0, 1, O_CLOEXEC) }, -EPERM);

@@ -20,6 +20,7 @@ use crate::yaml;
 use anyhow::Result;
 use base64::{engine::general_purpose, Engine as _};
 use log::debug;
+use oci_spec::runtime as oci;
 use protocols::agent;
 use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
@@ -271,7 +272,7 @@ pub struct ContainerPolicy {
     /// Allow list of ommand lines that are allowed to be executed using
     /// ExecProcessRequest. By default, all ExecProcessRequest calls are blocked
     /// by the policy.
-    exec_commands: Vec<String>,
+    exec_commands: Vec<Vec<String>>,
 }
 
 /// See Reference / Kubernetes API / Config and Storage Resources / Volume.
@@ -348,6 +349,9 @@ pub struct RequestDefaults {
 pub struct CommonData {
     /// Path to the shared container files - e.g., "/run/kata-containers/shared/containers".
     pub cpath: String,
+
+    /// Path to the shared container files for mount sources - e.g., "/run/kata-containers/shared/containers".
+    pub mount_source_cpath: String,
 
     /// Regex prefix for shared file paths - e.g., "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-".
     pub sfprefix: String,
@@ -657,8 +661,10 @@ impl AgentPolicy {
 
         substitute_env_variables(&mut process.Env);
         substitute_args_env_variables(&mut process.Args, &process.Env);
+
         c_settings.get_process_fields(&mut process);
-        process.NoNewPrivileges = !yaml_container.allow_privilege_escalation();
+        resource.get_process_fields(&mut process);
+        yaml_container.get_process_fields(&mut process);
 
         process
     }

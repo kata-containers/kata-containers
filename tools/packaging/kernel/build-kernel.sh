@@ -32,9 +32,9 @@ readonly default_kernel_config_dir="${script_dir}/configs"
 readonly default_config_frags_dir="${script_dir}/configs/fragments"
 readonly default_config_whitelist="${script_dir}/configs/fragments/whitelist.conf"
 readonly default_initramfs="${script_dir}/initramfs.cpio.gz"
-# GPU vendor
-readonly GV_INTEL="intel"
-readonly GV_NVIDIA="nvidia"
+# xPU vendor
+readonly VENDOR_INTEL="intel"
+readonly VENDOR_NVIDIA="nvidia"
 
 #Path to kernel directory
 kernel_path=""
@@ -44,6 +44,8 @@ build_type=""
 force_setup_generate_config="false"
 #GPU kernel support
 gpu_vendor=""
+#DPU kernel support
+dpu_vendor=""
 #Confidential guest type
 conf_guest=""
 #
@@ -96,6 +98,7 @@ Options:
 	-a <arch>   	: Arch target to build the kernel, such as aarch64/ppc64le/s390x/x86_64.
 	-b <type>    	: Enable optional config type.
 	-c <path>   	: Path to config file to build the kernel.
+	-D <vendor> 	: DPU/SmartNIC vendor, only nvidia.
 	-d          	: Enable bash debug.
 	-e          	: Enable experimental kernel.
 	-E          	: Enable arch-specific experimental kernel, arch info offered by "-a".
@@ -224,6 +227,7 @@ get_kernel_frag_path() {
 	local arch_path="$1"
 	local common_path="${arch_path}/../common"
 	local gpu_path="${arch_path}/../gpu"
+	local dpu_path="${arch_path}/../dpu"
 
 	local kernel_path="$2"
 	local arch="$3"
@@ -278,6 +282,12 @@ get_kernel_frag_path() {
 		unset CONF_GUEST_SUFFIX
 
 		all_configs="${all_configs} ${gpu_configs}"
+	fi
+
+	if [[ "${dpu_vendor}" != "" ]]; then
+		info "Add kernel config for DPU/SmartNIC due to '-n ${dpu_vendor}'"
+		local dpu_configs="${dpu_path}/${dpu_vendor}.conf"
+		all_configs="${all_configs} ${dpu_configs}"
 	fi
 
 	if [ "${measured_rootfs}" == "true" ]; then
@@ -470,9 +480,9 @@ build_kernel() {
 	[ -n "${arch_target}" ] || arch_target="$(uname -m)"
 	arch_target=$(arch_to_kernel "${arch_target}")
 	pushd "${kernel_path}" >>/dev/null
-	make -j $(nproc ${CI:+--ignore 1}) ARCH="${arch_target}" ${CROSS_BUILD_ARG}
+	make -j $(nproc) ARCH="${arch_target}" ${CROSS_BUILD_ARG}
 	if [ "${conf_guest}" == "confidential" ]; then
-		make -j $(nproc ${CI:+--ignore 1}) INSTALL_MOD_STRIP=1 INSTALL_MOD_PATH=${kernel_path} modules_install
+		make -j $(nproc) INSTALL_MOD_STRIP=1 INSTALL_MOD_PATH=${kernel_path} modules_install
 	fi
 	[ "$arch_target" != "powerpc" ] && ([ -e "arch/${arch_target}/boot/bzImage" ] || [ -e "arch/${arch_target}/boot/Image.gz" ])
 	[ -e "vmlinux" ]
@@ -490,10 +500,10 @@ build_kernel_headers() {
 
 	if [ "$linux_headers" == "deb" ]; then
 		export KBUILD_BUILD_USER="${USER}"
-		make -j $(nproc ${CI:+--ignore 1}) bindeb-pkg ARCH="${arch_target}"
+		make -j $(nproc) bindeb-pkg ARCH="${arch_target}"
 	fi
 	if [ "$linux_headers" == "rpm" ]; then
-		make -j $(nproc ${CI:+--ignore 1}) rpm-pkg ARCH="${arch_target}"
+		make -j $(nproc) rpm-pkg ARCH="${arch_target}"
 	fi
 
 	popd >>/dev/null
@@ -560,7 +570,7 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:b:c:deEfg:hH:k:mp:st:u:v:x" opt; do
+	while getopts "a:b:c:dD:eEfg:hH:k:mp:st:u:v:x" opt; do
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
@@ -575,6 +585,10 @@ main() {
 				PS4=' Line ${LINENO}: '
 				set -x
 				;;
+			D)
+				dpu_vendor="${OPTARG}"
+				[[ "${dpu_vendor}" == "${VENDOR_NVIDIA}" ]] || die "DPU vendor only support nvidia"
+				;;
 			e)
 				build_type="experimental"
 				;;
@@ -586,7 +600,7 @@ main() {
 				;;
 			g)
 				gpu_vendor="${OPTARG}"
-				[[ "${gpu_vendor}" == "${GV_INTEL}" || "${gpu_vendor}" == "${GV_NVIDIA}" ]] || die "GPU vendor only support intel and nvidia"
+				[[ "${gpu_vendor}" == "${VENDOR_INTEL}" || "${gpu_vendor}" == "${VENDOR_NVIDIA}" ]] || die "GPU vendor only support intel and nvidia"
 				;;
 			h)
 				usage 0
@@ -636,7 +650,7 @@ main() {
 		if [ -n "$kernel_version" ];  then
 			kernel_major_version=$(get_major_kernel_version "${kernel_version}")
 			if [[ ${kernel_major_version} != "5.10" ]]; then
-				info "dragonball-experimental kernel patches are only tested on 5.10.x kernel now, other kernel version may cause confliction"	
+				info "dragonball-experimental kernel patches are only tested on 5.10.x kernel now, other kernel version may cause confliction"
 			fi
 		fi
 	fi

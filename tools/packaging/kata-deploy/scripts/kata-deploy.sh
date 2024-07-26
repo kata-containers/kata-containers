@@ -465,10 +465,18 @@ function configure_crio() {
 	rm -f "$crio_drop_in_conf_file_debug"
 	touch "$crio_drop_in_conf_file_debug"
 
+	# configure storage option for crio
+	cat <<EOF | tee -a "$crio_drop_in_conf_file"
+[crio]
+  storage_option = [
+	"overlay.skip_mount_home=true",
+  ]
+EOF
+
+	# configure runtimes for crio
 	for shim in "${shims[@]}"; do
 		configure_crio_runtime $shim
 	done
-
 
 	if [ "${DEBUG}" == "true" ]; then
 		cat <<EOF | tee $crio_drop_in_conf_file_debug

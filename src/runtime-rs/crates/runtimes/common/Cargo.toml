@@ -25,5 +25,6 @@ persist = { path = "../../persist" }
 agent = { path = "../../agent" }
 kata-sys-util = { path = "../../../../libs/kata-sys-util" }
 kata-types = { path = "../../../../libs/kata-types" }
-oci = { path = "../../../../libs/oci" }
+runtime-spec = { path = "../../../../libs/runtime-spec" }
+oci-spec = { version = "0.6.8", features = ["runtime"] }
 resource = { path = "../../resource" }

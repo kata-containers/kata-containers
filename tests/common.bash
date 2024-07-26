@@ -137,6 +137,10 @@ function extract_kata_env() {
 	local hypervisor_path
 	local virtiofsd_path
 	local initrd_path
+	local kata_env
+	local req_memory_amount
+	local req_num_vcpus
+
 	case "${KATA_HYPERVISOR}" in
 		dragonball)
 			cmd=kata-ctl
@@ -148,6 +152,7 @@ function extract_kata_env() {
 			hypervisor_path=".hypervisor.path"
 			virtio_fs_daemon_path=".hypervisor.virtio_fs_daemon"
 			initrd_path=".initrd.path"
+			shared_fs=".hypervisor.shared_fs"
 			;;
 		*)
 			cmd=kata-runtime
@@ -159,12 +164,23 @@ function extract_kata_env() {
 			hypervisor_path=".Hypervisor.Path"
 			virtio_fs_daemon_path=".Hypervisor.VirtioFSDaemon"
 			initrd_path=".Initrd.Path"
+			shared_fs=".Hypervisor.SharedFS"
+			req_memory_amount=".Host.Memory.Total"
+			req_num_vcpus=""
 			;;
 	esac
-	RUNTIME_CONFIG_PATH=$(sudo ${cmd} env --json | jq -r ${config_path})
-	RUNTIME_VERSION=$(sudo ${cmd} env --json | jq -r ${runtime_version} | grep ${runtime_version_semver} | cut -d'"' -f4)
-	RUNTIME_COMMIT=$(sudo ${cmd} env --json | jq -r ${runtime_version} | grep ${runtime_version_commit} | cut -d'"' -f4)
-	RUNTIME_PATH=$(sudo ${cmd} env --json | jq -r ${runtime_path})
+	kata_env="$(sudo ${cmd} env --json)"
+
+	RUNTIME_CONFIG_PATH="$(echo "${kata_env}" | jq -r ${config_path})"
+	RUNTIME_VERSION="$(echo "${kata_env}" | jq -r ${runtime_version} | grep ${runtime_version_semver} | cut -d'"' -f4)"
+	RUNTIME_COMMIT="$(echo "${kata_env}" | jq -r ${runtime_version} | grep ${runtime_version_commit} | cut -d'"' -f4)"
+	RUNTIME_PATH="$(echo "${kata_env}" | jq -r ${runtime_path})"
+	SHARED_FS="$(echo "${kata_env}" | jq -r ${shared_fs})"
+
+	# get the requested memory and num of vcpus from the kata config file.
+	config_content="$(cat ${RUNTIME_CONFIG_PATH} | grep -vE "^#")"
+	REQ_MEMORY="$(echo "${config_content}" | grep -i default_memory | cut -d  "=" -f2 | awk '{print $1}')"
+	REQ_NUM_VCPUS="$(echo "${config_content}" | grep -i default_vcpus | cut -d  "=" -f2 | awk '{print $1}')"
 
 	# Shimv2 path is being affected by https://github.com/kata-containers/kata-containers/issues/1151
 	SHIM_PATH=$(command -v containerd-shim-kata-v2)

@@ -15,6 +15,7 @@ use hypervisor::Hypervisor;
 use kata_types::config::TomlConfig;
 use kata_types::mount::Mount;
 use oci::{Linux, LinuxResources};
+use oci_spec::runtime as oci;
 use persist::sandbox_persist::Persist;
 use tokio::sync::RwLock;
 use tracing::instrument;

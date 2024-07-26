@@ -77,8 +77,7 @@ assert_logs_contain() {
 	local message="$4"
 
 	# Note: with image-rs we get more than the default 1000 lines of logs
-	print_node_journal "$node" "$log_id" --since "$datetime" -n 100000 \
-		grep "$message"
+	print_node_journal "$node" "$log_id" --since "$datetime" | grep "$message"
 }
 
 # Create a pod then assert it fails to run. Use in tests that you expect the
@@ -191,6 +190,15 @@ set_metadata_annotation() {
 	# yq set annotations in yaml. Quoting the key because it can have
 	# dots.
 	yq -i ".${annotation_key} = \"${value}\"" "${yaml}"
+
+	if [[ "${key}" =~ kernel_params ]] && [[ "${KATA_HYPERVISOR}" == "qemu-se" ]]; then
+		# A secure boot image for IBM SE should be rebuilt according to the KBS configuration.
+		if [ -z "${IBM_SE_CREDS_DIR:-}" ]; then
+			>&2 echo "ERROR: IBM_SE_CREDS_DIR is empty"
+			return 1
+		fi
+		repack_secure_image "${value}" "${IBM_SE_CREDS_DIR}" "true"
+	fi
 }
 
 # Set the command for container spec.
@@ -241,7 +249,7 @@ print_node_journal() {
 	shift 2
 	local img="quay.io/prometheus/busybox"
 
-	kubectl debug --image "$img" -q -it "node/${node}" \
+	kubectl debug --image "$img" -q -i "node/${node}" \
 		-- chroot /host journalctl -x -t "$id" --no-pager "$@"
 	# Delete the debugger pod
 	kubectl get pods -o name | grep "node-debugger-${node}" | \

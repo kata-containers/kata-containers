@@ -34,7 +34,7 @@ NO_PROXY="${NO_PROXY:-${no_proxy:-}}"
 PULL_TYPE="${PULL_TYPE:-default}"
 export AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-no}"
 export TEST_CLUSTER_NAMESPACE="${TEST_CLUSTER_NAMESPACE:-kata-containers-k8s-tests}"
-export GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-oci-distribution-client}"
+export GENPOLICY_PULL_METHOD="${GENPOLICY_PULL_METHOD:-oci-distribution}"
 
 function configure_devmapper() {
 	sudo mkdir -p /var/lib/containerd/devmapper
@@ -271,18 +271,33 @@ function run_tests() {
 	[ "$platform" = "kcli" ] && \
 		export KUBECONFIG="$HOME/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
 
-	# Enable auto-generated policy for CI images that support policy
-	# and enable cri plugin in containerd config.
 	# TODO: enable testing auto-generated policy for other types of hosts too.
-
-	if [ "${KATA_HOST_OS}" = "cbl-mariner" ]; then
-
+	if [ "${KATA_HOST_OS}" = "cbl-mariner" ] || \
+	   [ "${KATA_HYPERVISOR}" = "qemu-tdx" ] || \
+	   [ "${KATA_HYPERVISOR}" = "qemu-sev" ] || \
+	   [ "${KATA_HYPERVISOR}" = "qemu-snp" ]; then
 		export AUTO_GENERATE_POLICY="yes"
+	fi
 
-		# set default containerd config
+	if [ "${AUTO_GENERATE_POLICY}" = "yes" ] && [ "${GENPOLICY_PULL_METHOD}" = "containerd" ]; then
+		# containerd's config on the local machine (where kubectl and genpolicy are executed by CI),
+		# might have been provided by a distro-specific package that disables the cri plug-in by using:
+		#
+		# disabled_plugins = ["cri"]
+		#
+		# When testing genpolicy's container image pull through containerd the cri plug-in must be
+		# enabled. Therefore, use containerd's default settings instead of distro's defaults. Note that
+		# the k8s test cluster nodes have their own containerd settings (created by kata-deploy),
+		# independent from the local settings being created here.
 		sudo containerd config default | sudo tee /etc/containerd/config.toml > /dev/null
 		echo "containerd config has been set to default"
 		sudo systemctl restart containerd && sudo systemctl is-active containerd
+
+		# Allow genpolicy to access the containerd image pull APIs without sudo.
+		local socket_wait_time=30
+		local socket_sleep_time=3
+		local cmd="sudo chmod a+rw /var/run/containerd/containerd.sock"
+		waitForProcess "${socket_wait_time}" "${socket_sleep_time}" "$cmd"
 	fi
 
 	set_test_cluster_namespace
@@ -450,6 +465,10 @@ function cleanup() {
 		return
 	fi
 
+	# In case of canceling workflow manually, 'run_kubernetes_tests.sh' continues running and triggers new tests, 
+	# resulting in the CI being in an unexpected state. So we need kill all running test scripts before cleaning up the node. 
+	# See issue https://github.com/kata-containers/kata-containers/issues/9980
+	delete_test_runners	|| true
 	# Switch back to the default namespace and delete the tests one
 	delete_test_cluster_namespace || true
 

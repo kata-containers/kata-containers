@@ -130,6 +130,37 @@ auto_generate_policy_enabled() {
 	[ "${AUTO_GENERATE_POLICY}" == "yes" ]
 }
 
+# adapt common policy settings for tdx or snp
+adapt_common_policy_settings_for_tdx() {
+	local settings_dir=$1
+
+	info "Adapting common policy settings for TDX or SNP"
+	jq '.common.cpath = "/run/kata-containers" | .volumes.configMap.mount_point = "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-"' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+}
+
+# adapt common policy settings for qemu-sev
+adapt_common_policy_settings_for_sev() {
+	local settings_dir=$1
+
+	info "Adapting common policy settings for SEV"
+	jq '.kata_config.oci_version = "1.1.0-rc.1" | .common.cpath = "/run/kata-containers" | .volumes.configMap.mount_point = "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-"' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+}
+
+# adapt common policy settings for various platforms
+adapt_common_policy_settings() {
+
+	local settings_dir=$1
+
+	case "${KATA_HYPERVISOR}" in
+  		"qemu-tdx"|"qemu-snp")
+			adapt_common_policy_settings_for_tdx "${settings_dir}"
+			;;
+  		"qemu-sev")
+			adapt_common_policy_settings_for_sev "${settings_dir}"
+			;;
+	esac
+}
+
 # If auto-generated policy testing is enabled, make a copy of the genpolicy settings,
 # and change these settings to use Kata CI cluster's default namespace.
 create_common_genpolicy_settings() {
@@ -138,14 +169,13 @@ create_common_genpolicy_settings() {
 
 	auto_generate_policy_enabled || return 0
 
+	adapt_common_policy_settings "${default_genpolicy_settings_dir}"
+
 	cp "${default_genpolicy_settings_dir}/genpolicy-settings.json" "${genpolicy_settings_dir}"
 	cp "${default_genpolicy_settings_dir}/rules.rego" "${genpolicy_settings_dir}"
 
 	# Set the default namespace of Kata CI tests in the genpolicy settings.
 	set_namespace_to_policy_settings "${genpolicy_settings_dir}" "${TEST_CLUSTER_NAMESPACE}"
-
-	# allow genpolicy to access containerd without sudo
-	sudo chmod a+rw /var/run/containerd/containerd.sock
 }
 
 # If auto-generated policy testing is enabled, make a copy of the common genpolicy settings
@@ -203,10 +233,21 @@ auto_generate_policy() {
 # Change genpolicy settings to allow "kubectl exec" to execute a command
 # and to read console output from a test pod.
 add_exec_to_policy_settings() {
-	declare -r settings_dir="$1"
-	declare -r allowed_exec="$2"
-
 	auto_generate_policy_enabled || return 0
+
+	local -r settings_dir="$1"
+
+	# TODO: teach genpolicy to work with an array of args, instead of joining the args here.
+	shift
+	if [ "${#@}" -gt "1" ]; then
+		# Join all the exec args.
+		local allowed_exec=$(printf '%s ' "${@}")
+
+		# Remove the trailing space character.
+		allowed_exec="${allowed_exec::-1}"
+	else
+		local -r allowed_exec="$1"
+	fi
 
 	# Change genpolicy settings to allow kubectl to exec the command specified by the caller.
 	info "${settings_dir}/genpolicy-settings.json: allowing exec: ${allowed_exec}"
@@ -324,10 +365,39 @@ add_allow_all_policy_to_yaml() {
 
 # Execute "kubectl describe ${pod}" in a loop, until its output contains "${endpoint} is blocked by policy"
 wait_for_blocked_request() {
-	endpoint="$1"
-	pod="$2"
+	local -r endpoint="$1"
+	local -r pod="$2"
 
-	command="kubectl describe pod ${pod} | grep \"${endpoint} is blocked by policy\""
+	local -r command="kubectl describe pod ${pod} | grep \"${endpoint} is blocked by policy\""
 	info "Waiting ${wait_time} seconds for: ${command}"
 	waitForProcess "${wait_time}" "$sleep_time" "${command}" >/dev/null 2>/dev/null
+}
+
+# Execute in a pod a command that is allowed by policy.
+pod_exec_allowed_command() {
+	local -r pod_name="$1"
+	shift
+
+	local -r exec_output=$(kubectl exec "${pod_name}" -- "${@}" 2>&1)
+
+	local -r exec_args=$(printf '"%s",' "${@}")
+	info "Pod ${pod_name}: <${exec_args::-1}>:"
+	info "${exec_output}"
+
+	(echo "${exec_output}" | grep "policy") && die "exec was blocked by policy!"
+	return 0
+}
+
+# Execute in a pod a command that is blocked by policy.
+pod_exec_blocked_command() {
+	local -r pod_name="$1"
+	shift
+
+	local -r exec_output=$(kubectl exec "${pod_name}" -- "${@}" 2>&1)
+
+	local -r exec_args=$(printf '"%s",' "${@}")
+	info "Pod ${pod_name}: <${exec_args::-1}>:"
+	info "${exec_output}"
+
+	(echo "${exec_output}" | grep "ExecProcessRequest is blocked by policy" > /dev/null) || die "exec was not blocked by policy!"
 }

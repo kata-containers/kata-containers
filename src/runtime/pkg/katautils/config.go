@@ -106,6 +106,7 @@ type hypervisor struct {
 	SeccompSandbox                 string                    `toml:"seccompsandbox"`
 	BlockDeviceAIO                 string                    `toml:"block_device_aio"`
 	RemoteHypervisorSocket         string                    `toml:"remote_hypervisor_socket"`
+	SnpCertsPath                   string                    `toml:"snp_certs_path"`
 	HypervisorPathList             []string                  `toml:"valid_hypervisor_paths"`
 	JailerPathList                 []string                  `toml:"valid_jailer_paths"`
 	CtlPathList                    []string                  `toml:"valid_ctlpaths"`
@@ -188,6 +189,7 @@ type runtime struct {
 	EnablePprof               bool     `toml:"enable_pprof"`
 	DisableGuestEmptyDir      bool     `toml:"disable_guest_empty_dir"`
 	CreateContainerTimeout    uint64   `toml:"create_container_timeout"`
+	DanConf                   string   `toml:"dan_conf"`
 }
 
 type agent struct {
@@ -293,6 +295,24 @@ func (h hypervisor) firmware() (string, error) {
 	}
 
 	return ResolvePath(p)
+}
+
+func (h hypervisor) snpCertsPath() (string, error) {
+	p := h.SnpCertsPath
+
+	if p == "" {
+		p = defaultSnpCertsPath
+	}
+
+	path, err := ResolvePath(p)
+	if err != nil {
+		if p == defaultSnpCertsPath {
+			msg := fmt.Sprintf("failed to resolve SNP certificates path: %s", defaultSnpCertsPath)
+			kataUtilsLogger.Warn(msg)
+			return "", nil
+		}
+	}
+	return path, err
 }
 
 func (h hypervisor) coldPlugVFIO() config.PCIePort {
@@ -850,6 +870,11 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		return vc.HypervisorConfig{}, err
 	}
 
+	snpCertsPath, err := h.snpCertsPath()
+	if err != nil {
+		return vc.HypervisorConfig{}, err
+	}
+
 	machineAccelerators := h.machineAccelerators()
 	cpuFeatures := h.cpuFeatures()
 	kernelParams := h.kernelParams()
@@ -914,6 +939,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		RootfsType:               rootfsType,
 		FirmwarePath:             firmware,
 		FirmwareVolumePath:       firmwareVolume,
+		SnpCertsPath:             snpCertsPath,
 		PFlash:                   pflashes,
 		MachineAccelerators:      machineAccelerators,
 		CPUFeatures:              cpuFeatures,
@@ -1315,6 +1341,7 @@ func newRemoteHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		RemoteHypervisorSocket:  h.getRemoteHypervisorSocket(),
 		RemoteHypervisorTimeout: h.getRemoteHypervisorTimeout(),
 		DisableGuestSeLinux:     true, // The remote hypervisor has a different guest, so Guest SELinux config doesn't work
+		SharedFS:                config.NoSharedFS,
 
 		// No valid value so avoid to append block device to list in kata_agent.appendDevices
 		BlockDeviceDriver: "dummy",
@@ -1637,6 +1664,7 @@ func LoadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 
 	config.DisableGuestEmptyDir = tomlConf.Runtime.DisableGuestEmptyDir
 
+	config.DanConfig = tomlConf.Runtime.DanConf
 	if err := checkConfig(config); err != nil {
 		return "", config, err
 	}

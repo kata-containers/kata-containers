@@ -21,7 +21,9 @@ use common::{
 };
 use hypervisor::Hypervisor;
 use oci::Process as OCIProcess;
+use oci_spec::runtime as oci;
 use resource::ResourceManager;
+use runtime_spec as spec;
 use tokio::sync::RwLock;
 use tracing::instrument;
 
@@ -44,6 +46,13 @@ impl std::fmt::Debug for VirtContainerManager {
             .field("sid", &self.sid)
             .field("pid", &self.pid)
             .finish()
+    }
+}
+
+fn from_hooks(hooks: &Option<Vec<oci::Hook>>) -> &[oci::Hook] {
+    match hooks {
+        Some(hooks_vec) => hooks_vec.as_slice(),
+        None => &[],
     }
 }
 
@@ -70,7 +79,7 @@ impl VirtContainerManager {
 impl ContainerManager for VirtContainerManager {
     #[instrument]
     async fn create_container(&self, config: ContainerConfig, spec: oci::Spec) -> Result<PID> {
-        let container = Container::new(
+        let mut container = Container::new(
             self.pid,
             config.clone(),
             spec.clone(),
@@ -88,26 +97,34 @@ impl ContainerManager for VirtContainerManager {
         let vmm_master_tid = self.hypervisor.get_vmm_master_tid().await?;
         let vmm_ns_path = self.hypervisor.get_ns_path().await?;
         let vmm_netns_path = format!("{}/{}", vmm_ns_path, "net");
-        let state = oci::State {
-            version: spec.version.clone(),
+        let state = spec::State {
+            version: spec.version().clone(),
             id: config.container_id.clone(),
-            status: oci::ContainerState::Creating,
+            status: spec::ContainerState::Creating,
             pid: vmm_master_tid as i32,
             bundle: config.bundle.clone(),
-            annotations: spec.annotations.clone(),
+            annotations: spec.annotations().clone().unwrap_or_default(),
         };
 
         // new scope, CreateContainer hooks in which will execute in a new network namespace
         {
             let _netns_guard = NetnsGuard::new(&vmm_netns_path).context("vmm netns guard")?;
-            if let Some(hooks) = spec.hooks.as_ref() {
+            if let Some(hooks) = spec.hooks().as_ref() {
                 let mut create_container_hook_states = HookStates::new();
-                create_container_hook_states.execute_hooks(&hooks.create_container, Some(state))?;
+                create_container_hook_states
+                    .execute_hooks(from_hooks(hooks.create_container()), Some(state))?;
             }
         }
 
         let mut containers = self.containers.write().await;
-        container.create(spec).await.context("create")?;
+        if let Err(e) = container.create(spec).await {
+            if let Err(inner_e) = container.cleanup().await {
+                warn!(sl!(), "failed to cleanup container {:?}", inner_e);
+            }
+
+            return Err(e);
+        }
+
         containers.insert(container.container_id.to_string(), container);
         Ok(PID { pid: self.pid })
     }
@@ -139,17 +156,19 @@ impl ContainerManager for VirtContainerManager {
                 // * should be run after the container is deleted but before delete operation returns
                 // * spec details: https://github.com/opencontainers/runtime-spec/blob/c1662686cff159595277b79322d0272f5182941b/config.md#poststop
                 let c_spec = c.spec().await;
-                let state = oci::State {
-                    version: c_spec.version.clone(),
+
+                let state = spec::State {
+                    version: c_spec.version().clone(),
                     id: c.container_id.to_string(),
-                    status: oci::ContainerState::Stopped,
+                    status: spec::ContainerState::Stopped,
                     pid: self.pid as i32,
                     bundle: c.config().await.bundle,
-                    annotations: c_spec.annotations.clone(),
+                    annotations: c_spec.annotations().clone().unwrap_or_default(),
                 };
-                if let Some(hooks) = c_spec.hooks.as_ref() {
+                if let Some(hooks) = c_spec.hooks().as_ref() {
                     let mut poststop_hook_states = HookStates::new();
-                    poststop_hook_states.execute_hooks(&hooks.poststop, Some(state))?;
+                    poststop_hook_states
+                        .execute_hooks(from_hooks(hooks.poststop()), Some(state))?;
                 }
 
                 c.state_process(process).await.context("state process")
@@ -261,17 +280,17 @@ impl ContainerManager for VirtContainerManager {
         // * spec details: https://github.com/opencontainers/runtime-spec/blob/c1662686cff159595277b79322d0272f5182941b/config.md#poststart
         let c_spec = c.spec().await;
         let vmm_master_tid = self.hypervisor.get_vmm_master_tid().await?;
-        let state = oci::State {
-            version: c_spec.version.clone(),
+        let state = spec::State {
+            version: c_spec.version().clone(),
             id: c.container_id.to_string(),
-            status: oci::ContainerState::Running,
+            status: spec::ContainerState::Running,
             pid: vmm_master_tid as i32,
             bundle: c.config().await.bundle,
-            annotations: c_spec.annotations.clone(),
+            annotations: c_spec.annotations().clone().unwrap_or_default(),
         };
-        if let Some(hooks) = c_spec.hooks.as_ref() {
+        if let Some(hooks) = c_spec.hooks().as_ref() {
             let mut poststart_hook_states = HookStates::new();
-            poststart_hook_states.execute_hooks(&hooks.poststart, Some(state))?;
+            poststart_hook_states.execute_hooks(from_hooks(hooks.poststart()), Some(state))?;
         }
 
         Ok(PID { pid: self.pid })

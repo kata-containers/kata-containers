@@ -540,9 +540,7 @@ allow_user(p_process, i_process) {
     p_user := p_process.User
     i_user := i_process.User
 
-    # TODO: track down the reason for mcr.microsoft.com/oss/bitnami/redis:6.0.8 being
-    #       executed with uid = 0 despite having "User": "1001" in its container image
-    #       config.
+    # TODO: remove this workaround when fixing https://github.com/kata-containers/kata-containers/issues/9928.
     #print("allow_user: input uid =", i_user.UID, "policy uid =", p_user.UID)
     #p_user.UID == i_user.UID
 
@@ -805,7 +803,7 @@ check_mount(p_mount, i_mount, bundle_id, sandbox_id) {
 mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) {
     regex1 := p_mount.source
     regex2 := replace(regex1, "$(sfprefix)", policy_data.common.sfprefix)
-    regex3 := replace(regex2, "$(cpath)", policy_data.common.cpath)
+    regex3 := replace(regex2, "$(cpath)", policy_data.common.mount_source_cpath)
     regex4 := replace(regex3, "$(bundle-id)", bundle_id)
 
     print("mount_source_allows 1: regex4 =", regex4)
@@ -816,7 +814,7 @@ mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) {
 mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) {
     regex1 := p_mount.source
     regex2 := replace(regex1, "$(sfprefix)", policy_data.common.sfprefix)
-    regex3 := replace(regex2, "$(cpath)", policy_data.common.cpath)
+    regex3 := replace(regex2, "$(cpath)", policy_data.common.mount_source_cpath)
     regex4 := replace(regex3, "$(sandbox-id)", sandbox_id)
 
     print("mount_source_allows 2: regex4 =", regex4)
@@ -1126,15 +1124,12 @@ ExecProcessRequest {
     print("ExecProcessRequest 2: input =", input)
 
     # TODO: match input container ID with its corresponding container.exec_commands.
-    i_command = concat(" ", input.process.Args)
-    print("ExecProcessRequest 3: i_command =", i_command)
-
     some container in policy_data.containers
     some p_command in container.exec_commands
     print("ExecProcessRequest 2: p_command =", p_command)
 
     # TODO: should other input data fields be validated as well?
-    p_command == i_command
+    p_command == input.process.Args
 
     print("ExecProcessRequest 2: true")
 }

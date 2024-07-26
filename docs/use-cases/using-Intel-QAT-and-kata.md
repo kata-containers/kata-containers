@@ -279,8 +279,8 @@ $ export KERNEL_EXTRAVERSION=$(awk '/^EXTRAVERSION =/{print $NF}' $GOPATH/$LINUX
 $ export KERNEL_ROOTFS_DIR=${KERNEL_MAJOR_VERSION}.${KERNEL_PATHLEVEL}.${KERNEL_SUBLEVEL}${KERNEL_EXTRAVERSION}
 $ cd $QAT_SRC
 $ KERNEL_SOURCE_ROOT=$GOPATH/$LINUX_VER ./configure --enable-icp-sriov=guest
-$ sudo -E make all -j $($(nproc ${CI:+--ignore 1}))
-$ sudo -E make INSTALL_MOD_PATH=$ROOTFS_DIR qat-driver-install -j $($(nproc ${CI:+--ignore 1}))
+$ sudo -E make all -j $(nproc)
+$ sudo -E make INSTALL_MOD_PATH=$ROOTFS_DIR qat-driver-install -j $(nproc)
 ```
 
 The `usdm_drv` module also needs to be copied into the rootfs modules path and

@@ -4,12 +4,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::path::PathBuf;
+
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use kata_types::mount::DirectVolumeMountInfo;
-use nix::sys::{stat, stat::SFlag};
-use tokio::sync::RwLock;
-
 use hypervisor::{
     device::{
         device_manager::{do_handle_device, get_block_driver, DeviceManager},
@@ -17,6 +15,11 @@ use hypervisor::{
     },
     VhostUserConfig, VhostUserType,
 };
+use kata_sys_util::mount::{get_mount_options, get_mount_path, get_mount_type};
+use kata_types::mount::DirectVolumeMountInfo;
+use nix::sys::{stat, stat::SFlag};
+use oci_spec::runtime as oci;
+use tokio::sync::RwLock;
 
 use crate::volume::{
     direct_volumes::{KATA_SPDK_VOLUME_TYPE, KATA_SPOOL_VOLUME_TYPE},
@@ -117,33 +120,32 @@ impl SPDKVolume {
         }
 
         // generate host guest shared path
-        let guest_path = generate_shared_path(m.destination.clone(), read_only, &device_id, sid)
+        let guest_path = generate_shared_path(m.destination().clone(), read_only, &device_id, sid)
             .await
             .context("generate host-guest shared path failed")?;
         storage.mount_point = guest_path.clone();
 
-        if m.r#type != "bind" {
+        if get_mount_type(m.typ()).as_str() != "bind" {
             storage.fs_type = mount_info.fs_type.clone();
         } else {
             storage.fs_type = DEFAULT_VOLUME_FS_TYPE.to_string();
         }
 
-        if m.destination.clone().starts_with("/dev") {
+        if get_mount_path(&Some(m.destination().clone())).starts_with("/dev") {
             storage.fs_type = "bind".to_string();
-            storage.options.append(&mut m.options.clone());
+            storage.options.append(&mut get_mount_options(m.options()));
         }
 
         storage.fs_group = None;
-        let mount = oci::Mount {
-            destination: m.destination.clone(),
-            r#type: storage.fs_type.clone(),
-            source: guest_path,
-            options: m.options.clone(),
-        };
+        let mut oci_mount = oci::Mount::default();
+        oci_mount.set_destination(m.destination().clone());
+        oci_mount.set_typ(Some(storage.fs_type.clone()));
+        oci_mount.set_source(Some(PathBuf::from(&guest_path)));
+        oci_mount.set_options(m.options().clone());
 
         Ok(Self {
             storage: Some(storage),
-            mount,
+            mount: oci_mount,
             device_id,
         })
     }

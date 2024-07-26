@@ -29,6 +29,8 @@ const UNIFIED_CGROUP_HIERARCHY_OPTION: &str = "systemd.unified_cgroup_hierarchy"
 const CONFIG_FILE: &str = "agent.config_file";
 const GUEST_COMPONENTS_REST_API_OPTION: &str = "agent.guest_components_rest_api";
 const GUEST_COMPONENTS_PROCS_OPTION: &str = "agent.guest_components_procs";
+#[cfg(feature = "guest-pull")]
+const IMAGE_REGISTRY_AUTH_OPTION: &str = "agent.image_registry_auth";
 
 // Configure the proxy settings for HTTPS requests in the guest,
 // to solve the problem of not being able to access the specified image in some cases.
@@ -106,6 +108,8 @@ pub struct AgentConfig {
     pub no_proxy: String,
     pub guest_components_rest_api: GuestComponentsFeatures,
     pub guest_components_procs: GuestComponentsProcs,
+    #[cfg(feature = "guest-pull")]
+    pub image_registry_auth: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -125,6 +129,8 @@ pub struct AgentConfigBuilder {
     pub no_proxy: Option<String>,
     pub guest_components_rest_api: Option<GuestComponentsFeatures>,
     pub guest_components_procs: Option<GuestComponentsProcs>,
+    #[cfg(feature = "guest-pull")]
+    pub image_registry_auth: Option<String>,
 }
 
 macro_rules! config_override {
@@ -190,6 +196,8 @@ impl Default for AgentConfig {
             no_proxy: String::from(""),
             guest_components_rest_api: GuestComponentsFeatures::default(),
             guest_components_procs: GuestComponentsProcs::default(),
+            #[cfg(feature = "guest-pull")]
+            image_registry_auth: String::from(""),
         }
     }
 }
@@ -227,6 +235,8 @@ impl FromStr for AgentConfig {
             guest_components_rest_api
         );
         config_override!(agent_config_builder, agent_config, guest_components_procs);
+        #[cfg(feature = "guest-pull")]
+        config_override!(agent_config_builder, agent_config, image_registry_auth);
 
         Ok(agent_config)
     }
@@ -316,7 +326,6 @@ impl AgentConfig {
                 get_vsock_port,
                 |port| port > 0
             );
-
             parse_cmdline_param!(
                 param,
                 CONTAINER_PIPE_SIZE_OPTION,
@@ -342,6 +351,13 @@ impl AgentConfig {
                 GUEST_COMPONENTS_PROCS_OPTION,
                 config.guest_components_procs,
                 get_guest_components_procs_value
+            );
+            #[cfg(feature = "guest-pull")]
+            parse_cmdline_param!(
+                param,
+                IMAGE_REGISTRY_AUTH_OPTION,
+                config.image_registry_auth,
+                get_string_value
             );
         }
 
@@ -505,10 +521,8 @@ fn get_url_value(param: &str) -> Result<String> {
 fn get_guest_components_features_value(param: &str) -> Result<GuestComponentsFeatures> {
     let fields: Vec<&str> = param.split('=').collect();
     ensure!(fields.len() >= 2, ERR_INVALID_GET_VALUE_PARAM);
-
     // We need name (but the value can be blank)
     ensure!(!fields[0].is_empty(), ERR_INVALID_GET_VALUE_NO_NAME);
-
     let value = fields[1..].join("=");
     GuestComponentsFeatures::from_str(&value)
         .map_err(|_| anyhow!(ERR_INVALID_GUEST_COMPONENTS_REST_API_VALUE))
@@ -570,6 +584,8 @@ mod tests {
             no_proxy: &'a str,
             guest_components_rest_api: GuestComponentsFeatures,
             guest_components_procs: GuestComponentsProcs,
+            #[cfg(feature = "guest-pull")]
+            image_registry_auth: &'a str,
         }
 
         impl Default for TestData<'_> {
@@ -589,6 +605,8 @@ mod tests {
                     no_proxy: "",
                     guest_components_rest_api: GuestComponentsFeatures::default(),
                     guest_components_procs: GuestComponentsProcs::default(),
+                    #[cfg(feature = "guest-pull")]
+                    image_registry_auth: "",
                 }
             }
         }
@@ -1020,6 +1038,18 @@ mod tests {
                 guest_components_procs: GuestComponentsProcs::None,
                 ..Default::default()
             },
+            #[cfg(feature = "guest-pull")]
+            TestData {
+                contents: "agent.image_registry_auth=file:///root/.docker/config.json",
+                image_registry_auth: "file:///root/.docker/config.json",
+                ..Default::default()
+            },
+            #[cfg(feature = "guest-pull")]
+            TestData {
+                contents: "agent.image_registry_auth=kbs:///default/credentials/test",
+                image_registry_auth: "kbs:///default/credentials/test",
+                ..Default::default()
+            },
         ];
 
         let dir = tempdir().expect("failed to create tmpdir");
@@ -1079,6 +1109,8 @@ mod tests {
                 "{}",
                 msg
             );
+            #[cfg(feature = "guest-pull")]
+            assert_eq!(d.image_registry_auth, config.image_registry_auth, "{}", msg);
 
             for v in vars_to_unset {
                 env::remove_var(v);

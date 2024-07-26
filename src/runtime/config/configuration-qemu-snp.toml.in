@@ -44,6 +44,11 @@ confidential_guest = true
 # enable SEV SNP VMs
 sev_snp_guest = true
 
+# The path to the file containing the SNP certificate chain (including
+# VCEK/VLEK certificates). This wil be used to get the extended attestation
+# report from the guest. The default path is @SNPCERTSPATH@.
+snp_certs_path = "@SNPCERTSPATH@"
+
 # Enable running QEMU VMM as a non-root user.
 # By default QEMU VMM run as root. When this is set to true, QEMU VMM process runs as
 # a non-root random user. See documentation for the limitations of this mode.
@@ -670,3 +675,12 @@ experimental=@DEFAULTEXPFEATURES@
 # (https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/#:~:text=runtime%2Drequest%2Dtimeout) and create_container_timeout. 
 # In essence, the timeout used for guest pull=runtime-request-timeout<create_container_timeout?runtime-request-timeout:create_container_timeout.
 create_container_timeout = @DEFCREATECONTAINERTIMEOUT@
+
+# Base directory of directly attachable network config.
+# Network devices for VM-based containers are allowed to be placed in the
+# host netns to eliminate as many hops as possible, which is what we
+# called a "Directly Attachable Network". The config, set by special CNI
+# plugins, is used to tell the Kata containers what devices are attached
+# to the hypervisor.
+# (default: /run/kata-containers/dans)
+dan_conf = "@DEFDANCONF@"

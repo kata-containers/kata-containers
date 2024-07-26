@@ -3,17 +3,30 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::fmt::{Debug, Error, Formatter};
 use std::io::BufReader;
 use std::os::unix::net::UnixStream;
 use std::time::Duration;
 
 use qapi::qmp;
+use qapi_qmp;
 use qapi_spec::Dictionary;
 
 pub struct Qmp {
     qmp: qapi::Qmp<qapi::Stream<BufReader<UnixStream>, UnixStream>>,
+
+    // This is basically the output of
+    // `cat /sys/devices/system/memory/block_size_bytes`
+    // on the guest.  Note a slightly peculiar behaviour with relation to
+    // the size of hotplugged memory blocks: if an amount of memory is being
+    // hotplugged whose size is not an integral multiple of page size
+    // (4k usually) hotplugging fails immediately.  However, if the amount
+    // is fine wrt the page size *but* isn't wrt this "guest memory block size"
+    // hotplugging apparently succeeds, even though none of the hotplugged
+    // blocks seem ever to be onlined in the guest by kata-agent.
+    // Store as u64 to keep up the convention of bytes being represented as u64.
+    guest_memory_block_size: u64,
 }
 
 // We have to implement Debug since the Hypervisor trait requires it and Qmp
@@ -43,6 +56,7 @@ impl Qmp {
                 BufReader::new(stream.try_clone()?),
                 stream,
             )),
+            guest_memory_block_size: 0,
         };
 
         let info = qmp.qmp.handshake()?;
@@ -127,6 +141,155 @@ impl Qmp {
         );
 
         Ok(hotunplugged)
+    }
+
+    pub fn set_guest_memory_block_size(&mut self, size: u64) {
+        self.guest_memory_block_size = size;
+    }
+
+    pub fn guest_memory_block_size(&self) -> u64 {
+        self.guest_memory_block_size
+    }
+
+    pub fn hotplugged_memory_size(&mut self) -> Result<u64> {
+        let memory_frontends = self.qmp.execute(&qapi_qmp::query_memory_devices {})?;
+
+        let mut hotplugged_mem_size = 0_u64;
+
+        info!(sl!(), "hotplugged_memory_size(): iterating over dimms");
+        for mem_frontend in &memory_frontends {
+            if let qapi_qmp::MemoryDeviceInfo::dimm(dimm_info) = mem_frontend {
+                let id = match dimm_info.data.id {
+                    Some(ref id) => id.clone(),
+                    None => "".to_owned(),
+                };
+
+                info!(
+                    sl!(),
+                    "dimm id: {} size={}, hotplugged: {}",
+                    id,
+                    dimm_info.data.size,
+                    dimm_info.data.hotplugged
+                );
+
+                if dimm_info.data.hotpluggable && dimm_info.data.hotplugged {
+                    hotplugged_mem_size += dimm_info.data.size as u64;
+                }
+            }
+        }
+
+        Ok(hotplugged_mem_size)
+    }
+
+    pub fn hotplug_memory(&mut self, size: u64) -> Result<()> {
+        let memdev_idx = self
+            .qmp
+            .execute(&qapi_qmp::query_memory_devices {})?
+            .into_iter()
+            .filter(|memdev| {
+                if let qapi_qmp::MemoryDeviceInfo::dimm(dimm_info) = memdev {
+                    return dimm_info.data.hotpluggable && dimm_info.data.hotplugged;
+                }
+                false
+            })
+            .count();
+
+        let memory_backend_id = format!("hotplugged-{}", memdev_idx);
+
+        let memory_backend = qmp::object_add(qapi_qmp::ObjectOptions::memory_backend_file {
+            id: memory_backend_id.clone(),
+            memory_backend_file: qapi_qmp::MemoryBackendFileProperties {
+                base: qapi_qmp::MemoryBackendProperties {
+                    dump: None,
+                    host_nodes: None,
+                    merge: None,
+                    policy: None,
+                    prealloc: None,
+                    prealloc_context: None,
+                    prealloc_threads: None,
+                    reserve: None,
+                    share: Some(true),
+                    x_use_canonical_path_for_ramblock_id: None,
+                    size,
+                },
+                align: None,
+                discard_data: None,
+                offset: None,
+                pmem: None,
+                readonly: None,
+                mem_path: "/dev/shm".to_owned(),
+            },
+        });
+        self.qmp.execute(&memory_backend)?;
+
+        let memory_frontend_id = format!("frontend-to-{}", memory_backend_id);
+
+        let mut mem_frontend_args = Dictionary::new();
+        mem_frontend_args.insert("memdev".to_owned(), memory_backend_id.into());
+        self.qmp.execute(&qmp::device_add {
+            bus: None,
+            id: Some(memory_frontend_id),
+            driver: "pc-dimm".to_owned(),
+            arguments: mem_frontend_args,
+        })?;
+
+        Ok(())
+    }
+
+    pub fn hotunplug_memory(&mut self, size: i64) -> Result<()> {
+        let frontend = self
+            .qmp
+            .execute(&qapi_qmp::query_memory_devices {})?
+            .into_iter()
+            .find(|memdev| {
+                if let qapi_qmp::MemoryDeviceInfo::dimm(dimm_info) = memdev {
+                    let dimm_id = match dimm_info.data.id {
+                        Some(ref id) => id,
+                        None => return false,
+                    };
+                    if dimm_info.data.hotpluggable
+                        && dimm_info.data.hotplugged
+                        && dimm_info.data.size == size
+                        && dimm_id.starts_with("frontend-to-hotplugged-")
+                    {
+                        return true;
+                    }
+                }
+                false
+            });
+
+        if let Some(frontend) = frontend {
+            if let qapi_qmp::MemoryDeviceInfo::dimm(frontend) = frontend {
+                info!(sl!(), "found frontend to hotunplug: {:#?}", frontend);
+
+                let frontend_id = match frontend.data.id {
+                    Some(id) => id,
+                    // This shouldn't happen as it was checked by find() above already.
+                    None => return Err(anyhow!("memory frontend to hotunplug has empty id")),
+                };
+
+                let backend_id = match frontend_id.strip_prefix("frontend-to-") {
+                    Some(id) => id.to_owned(),
+                    // This shouldn't happen as it was checked by find() above already.
+                    None => {
+                        return Err(anyhow!(
+                        "memory backend to hotunplug has id that doesn't have the expected prefix"
+                    ))
+                    }
+                };
+
+                self.qmp.execute(&qmp::device_del { id: frontend_id })?;
+                self.qmp.execute(&qmp::object_del { id: backend_id })?;
+            } else {
+                // This shouldn't happen as it was checked by find() above already.
+                return Err(anyhow!("memory device to hotunplug is not a dimm"));
+            }
+        } else {
+            return Err(anyhow!(
+                "couldn't find a suitable memory device to hotunplug"
+            ));
+        }
+        Ok(())
     }
 }
 

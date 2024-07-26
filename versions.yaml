@@ -208,10 +208,15 @@ assets:
   kernel-dragonball-experimental:
     description: "Linux kernel with Dragonball VMM optimizations like upcall"
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
-    version: "v5.10.25"
+    version: "v6.1.62"
 
 externals:
   description: "Third-party projects used by the system"
+
+  busybox:
+    desc: "The Swiss Army Knife of Embedded Linux"
+    version: "1.36.1"
+    url: "https://busybox.net/downloads"
 
   cni-plugins:
     description: "CNI network plugins"
@@ -227,9 +232,9 @@ externals:
   coco-trustee:
     description: "Provides attestation and secret delivery components"
     url: "https://github.com/confidential-containers/trustee"
-    version: "v0.9.0"
-    image: "ghcr.io/confidential-containers/key-broker-service"
-    image_tag: "built-in-as-v0.9.0"
+    version: "e890fc90c384207668fa3a4d6a2f2a2d652797ee"
+    image: "ghcr.io/confidential-containers/staged-images/kbs"
+    image_tag: "e890fc90c384207668fa3a4d6a2f2a2d652797ee"
     toolchain: "1.74.0"
 
   crio:

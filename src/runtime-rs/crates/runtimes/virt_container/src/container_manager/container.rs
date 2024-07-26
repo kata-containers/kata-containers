@@ -18,6 +18,7 @@ use common::{
 };
 use kata_sys_util::k8s::update_ephemeral_storage_type;
 use kata_types::k8s;
+use oci_spec::runtime as oci;
 
 use oci::{LinuxResources, Process as OCIProcess};
 use resource::{ResourceManager, ResourceUpdateOp};
@@ -68,9 +69,9 @@ impl Container {
             config.terminal,
         );
         let linux_resources = spec
-            .linux
+            .linux()
             .as_ref()
-            .and_then(|linux| linux.resources.clone());
+            .and_then(|linux| linux.resources().clone());
 
         Ok(Self {
             pid,
@@ -99,7 +100,7 @@ impl Container {
         amend_spec(&mut spec, toml_config.runtime.disable_guest_seccomp).context("amend spec")?;
 
         // get mutable root from oci spec
-        let root = match spec.root.as_mut() {
+        let root = match spec.root_mut() {
             Some(root) => root,
             None => return Err(anyhow!("spec miss root field")),
         };
@@ -117,10 +118,13 @@ impl Container {
             .context("handler rootfs")?;
 
         // update rootfs
-        root.path = rootfs
-            .get_guest_rootfs_path()
-            .await
-            .context("get guest rootfs path")?;
+        root.set_path(
+            rootfs
+                .get_guest_rootfs_path()
+                .await
+                .context("get guest rootfs path")?
+                .into(),
+        );
 
         let mut storages = vec![];
         if let Some(storage) = rootfs.get_storage().await {
@@ -147,10 +151,10 @@ impl Container {
             }
             inner.volumes.push(v);
         }
-        spec.mounts = oci_mounts;
+        spec.set_mounts(Some(oci_mounts));
 
         let linux = spec
-            .linux
+            .linux()
             .as_ref()
             .context("OCI spec missing linux field")?;
 
@@ -168,8 +172,8 @@ impl Container {
                 ResourceUpdateOp::Add,
             )
             .await?;
-        if let Some(linux) = &mut spec.linux {
-            linux.resources = resources;
+        if let Some(linux) = &mut spec.linux_mut() {
+            linux.set_resources(resources);
         }
 
         let container_name = k8s::container_name(&spec);
@@ -546,54 +550,63 @@ impl Container {
     pub async fn spec(&self) -> oci::Spec {
         self.spec.clone()
     }
+
+    pub async fn cleanup(&mut self) -> Result<()> {
+        let mut inner = self.inner.write().await;
+        let device_manager = self.resource_manager.get_device_manager().await;
+        inner
+            .cleanup_container(
+                self.container_id.container_id.as_str(),
+                true,
+                &device_manager,
+            )
+            .await
+    }
 }
 
 fn amend_spec(spec: &mut oci::Spec, disable_guest_seccomp: bool) -> Result<()> {
     // Only the StartContainer hook needs to be reserved for execution in the guest
-    let start_container_hooks = match spec.hooks.as_ref() {
-        Some(hooks) => hooks.start_container.clone(),
-        None => Vec::new(),
+    let start_container_hooks = if let Some(hooks) = spec.hooks().as_ref() {
+        hooks.start_container().clone()
+    } else {
+        None
     };
 
-    spec.hooks = if start_container_hooks.is_empty() {
-        None
-    } else {
-        Some(oci::Hooks {
-            start_container: start_container_hooks,
-            ..Default::default()
-        })
-    };
+    let mut oci_hooks = oci::Hooks::default();
+    oci_hooks.set_start_container(start_container_hooks);
+    spec.set_hooks(Some(oci_hooks));
 
     // special process K8s ephemeral volumes.
     update_ephemeral_storage_type(spec);
 
-    if let Some(linux) = spec.linux.as_mut() {
+    if let Some(linux) = spec.linux_mut() {
         if disable_guest_seccomp {
-            linux.seccomp = None;
+            linux.set_seccomp(None);
         }
 
-        if let Some(resource) = linux.resources.as_mut() {
-            resource.devices = Vec::new();
-            resource.pids = None;
-            resource.block_io = None;
-            resource.network = None;
-            resource.rdma = HashMap::new();
+        if let Some(_resource) = linux.resources_mut() {
+            LinuxResources::default();
         }
 
         // Host pidns path does not make sense in kata. Let's just align it with
         // sandbox namespace whenever it is set.
-        let mut ns: Vec<oci::LinuxNamespace> = Vec::new();
-        for n in linux.namespaces.iter() {
-            match n.r#type.as_str() {
-                oci::PIDNAMESPACE | oci::NETWORKNAMESPACE => continue,
-                _ => ns.push(oci::LinuxNamespace {
-                    r#type: n.r#type.clone(),
-                    path: "".to_string(),
-                }),
-            }
-        }
+        let ns: Vec<oci::LinuxNamespace> = linux
+            .namespaces()
+            .clone()
+            .unwrap_or_default()
+            .iter()
+            .filter(|n| {
+                n.typ() != oci::LinuxNamespaceType::Pid
+                    && n.typ() != oci::LinuxNamespaceType::Network
+            })
+            .map(|n| {
+                let mut ns = oci::LinuxNamespace::default();
+                ns.set_typ(n.typ());
+                ns
+            })
+            .collect();
 
-        linux.namespaces = ns;
+        linux.set_namespaces(if ns.is_empty() { None } else { Some(ns) });
     }
 
     Ok(())
@@ -602,10 +615,11 @@ fn amend_spec(spec: &mut oci::Spec, disable_guest_seccomp: bool) -> Result<()> {
 // is_pid_namespace_enabled checks if Pid namespace for a container needs to be shared with its sandbox
 // pid namespace.
 fn is_pid_namespace_enabled(spec: &oci::Spec) -> bool {
-    if let Some(linux) = spec.linux.as_ref() {
-        for n in linux.namespaces.iter() {
-            if n.r#type.as_str() == oci::PIDNAMESPACE {
-                return !n.path.is_empty();
+    if let Some(linux) = spec.linux().as_ref() {
+        let namespaces = linux.namespaces().clone().unwrap_or_default();
+        for n in namespaces.iter() {
+            if n.typ() == oci::LinuxNamespaceType::Pid {
+                return !n.path().is_none();
             }
         }
     }
@@ -617,25 +631,26 @@ fn is_pid_namespace_enabled(spec: &oci::Spec) -> bool {
 mod tests {
     use super::amend_spec;
     use super::is_pid_namespace_enabled;
+    use super::*;
+    use oci_spec::runtime::LinuxNamespaceType;
+    use oci_spec::runtime::{LinuxBuilder, LinuxNamespaceBuilder};
+
     #[test]
     fn test_amend_spec_disable_guest_seccomp() {
-        let mut spec = oci::Spec {
-            linux: Some(oci::Linux {
-                seccomp: Some(oci::LinuxSeccomp::default()),
-                ..Default::default()
-            }),
-            ..Default::default()
-        };
+        let mut spec = oci::Spec::default();
+        let mut linux = oci::Linux::default();
+        linux.set_seccomp(Some(oci::LinuxSeccomp::default()));
+        spec.set_linux(Some(linux));
 
-        assert!(spec.linux.as_ref().unwrap().seccomp.is_some());
+        assert!(spec.linux().as_ref().unwrap().seccomp().is_some());
 
         // disable_guest_seccomp = false
         amend_spec(&mut spec, false).unwrap();
-        assert!(spec.linux.as_ref().unwrap().seccomp.is_some());
+        assert!(spec.linux().as_ref().unwrap().seccomp().is_some());
 
         // disable_guest_seccomp = true
         amend_spec(&mut spec, true).unwrap();
-        assert!(spec.linux.as_ref().unwrap().seccomp.is_none());
+        assert!(spec.linux().as_ref().unwrap().seccomp().is_none());
     }
 
     #[test]
@@ -649,37 +664,40 @@ mod tests {
         let tests = &[
             TestData {
                 desc: "no pid namespace",
-                namespaces: vec![oci::LinuxNamespace {
-                    r#type: "network".to_string(),
-                    path: "".to_string(),
-                }],
+                namespaces: vec![LinuxNamespaceBuilder::default()
+                    .typ(LinuxNamespaceType::Network)
+                    .path("/dev/null")
+                    .build()
+                    .unwrap()],
                 result: false,
             },
             TestData {
                 desc: "empty pid namespace path",
                 namespaces: vec![
-                    oci::LinuxNamespace {
-                        r#type: "pid".to_string(),
-                        path: "".to_string(),
-                    },
-                    oci::LinuxNamespace {
-                        r#type: "network".to_string(),
-                        path: "".to_string(),
-                    },
+                    LinuxNamespaceBuilder::default()
+                        .typ(LinuxNamespaceType::Network)
+                        .build()
+                        .unwrap(),
+                    LinuxNamespaceBuilder::default()
+                        .typ(LinuxNamespaceType::Pid)
+                        .build()
+                        .unwrap(),
                 ],
                 result: false,
             },
             TestData {
                 desc: "pid namespace is set",
                 namespaces: vec![
-                    oci::LinuxNamespace {
-                        r#type: "pid".to_string(),
-                        path: "/some/path".to_string(),
-                    },
-                    oci::LinuxNamespace {
-                        r#type: "network".to_string(),
-                        path: "".to_string(),
-                    },
+                    LinuxNamespaceBuilder::default()
+                        .typ(LinuxNamespaceType::Network)
+                        .path("/some/path")
+                        .build()
+                        .unwrap(),
+                    LinuxNamespaceBuilder::default()
+                        .typ(LinuxNamespaceType::Pid)
+                        .path("/dev/null")
+                        .build()
+                        .unwrap(),
                 ],
                 result: true,
             },
@@ -688,10 +706,16 @@ mod tests {
         let mut spec = oci::Spec::default();
 
         for (i, d) in tests.iter().enumerate() {
-            spec.linux = Some(oci::Linux {
-                namespaces: d.namespaces.clone(),
-                ..Default::default()
-            });
+            spec.set_linux(Some(
+                LinuxBuilder::default()
+                    .namespaces(d.namespaces.clone())
+                    .build()
+                    .unwrap(),
+            ));
+            // spec.linux = Some(oci::Linux {
+            //     namespaces: d.namespaces.clone(),
+            //     ..Default::default()
+            // });
 
             assert_eq!(
                 d.result,

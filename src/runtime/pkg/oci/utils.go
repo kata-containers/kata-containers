@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"regexp"
 	goruntime "runtime"
@@ -160,6 +161,9 @@ type RuntimeConfig struct {
 	// CreateContainer timeout which, if provided, indicates the createcontainer request timeout
 	// needed for the workload ( Mostly used for pulling images in the guest )
 	CreateContainerTimeout uint64
+
+	// Base directory of directly attachable network config
+	DanConfig string
 }
 
 // AddKernelParam allows the addition of new kernel parameters to an existing
@@ -331,7 +335,11 @@ func containerDeviceInfos(spec specs.Spec) ([]config.DeviceInfo, error) {
 	return devices, nil
 }
 
-func networkConfig(ocispec specs.Spec, config RuntimeConfig) (vc.NetworkConfig, error) {
+func getDanConfigPath(danConfigDir string, sandboxID string) string {
+	return filepath.Join(danConfigDir, sandboxID+".json")
+}
+
+func networkConfig(ocispec specs.Spec, sandboxID string, config RuntimeConfig) (vc.NetworkConfig, error) {
 	linux := ocispec.Linux
 	if linux == nil {
 		return vc.NetworkConfig{}, ErrNoLinux
@@ -350,6 +358,12 @@ func networkConfig(ocispec specs.Spec, config RuntimeConfig) (vc.NetworkConfig, 
 	}
 	netConf.InterworkingModel = config.InterNetworkModel
 	netConf.DisableNewNetwork = config.DisableNewNetNs
+
+	// if dan config exits, it will be used to config network in guest VM
+	danConfig := getDanConfigPath(config.DanConfig, sandboxID)
+	if _, err := os.Stat(danConfig); err == nil {
+		netConf.DanConfigPath = danConfig
+	}
 
 	return netConf, nil
 }
@@ -1005,7 +1019,7 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid st
 		return vc.SandboxConfig{}, err
 	}
 
-	networkConfig, err := networkConfig(ocispec, runtime)
+	networkConfig, err := networkConfig(ocispec, cid, runtime)
 	if err != nil {
 		return vc.SandboxConfig{}, err
 	}

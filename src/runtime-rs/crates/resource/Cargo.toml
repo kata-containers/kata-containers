@@ -39,8 +39,8 @@ hypervisor = { path = "../hypervisor" }
 kata-types = { path = "../../../libs/kata-types" }
 kata-sys-util = { path = "../../../libs/kata-sys-util" }
 logging = { path = "../../../libs/logging" }
-oci = { path = "../../../libs/oci" }
-persist = { path = "../persist" }
+oci-spec = { version = "0.6.8", features = ["runtime"] }
+persist = { path = "../persist"}
 tests_utils = { path = "../../tests/utils" }
 
 [features]

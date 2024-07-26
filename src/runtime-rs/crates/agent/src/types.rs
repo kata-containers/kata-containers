@@ -9,6 +9,8 @@ use std::convert::TryFrom;
 
 use serde::{Deserialize, Serialize};
 
+use oci_spec::runtime as oci;
+
 pub const DEFAULT_REMOVE_CONTAINER_REQUEST_TIMEOUT: u32 = 10;
 
 #[derive(PartialEq, Clone, Default)]

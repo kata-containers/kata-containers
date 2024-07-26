@@ -16,6 +16,9 @@ source "${cri_containerd_dir}/../../common.bash"
 function install_dependencies() {
 	info "Installing the dependencies needed for running the cri-containerd tests"
 
+	# Remove Docker if it's installed as it conflicts with podman-docker
+	sudo apt-get remove -y docker-ce-cli || true
+
 	# Dependency list of projects that we can rely on the system packages
 	# - build-essential
 	#   - Theoretically we only need `make`, but doesn't hurt to install

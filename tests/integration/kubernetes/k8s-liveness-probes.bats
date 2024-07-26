@@ -99,7 +99,7 @@ teardown() {
 
 	rm -f "${yaml_file}"
 
-	if [[ -n "${node_start_time}:-}" && -z "$BATS_TEST_COMPLETED" ]]; then
+	if [[ -n "${node_start_time:-}" && -z "$BATS_TEST_COMPLETED" ]]; then
 		echo "DEBUG: system logs of node '$node' since test start time ($node_start_time)"
 		print_node_journal "$node" "kata" --since "$node_start_time" || true
 	fi

@@ -23,10 +23,10 @@ tracing = "0.1.36"
 url = "2.2.2"
 nix = "0.24.2"
 
-kata-types = { path = "../../../libs/kata-types" }
-logging = { path = "../../../libs/logging" }
-oci = { path = "../../../libs/oci" }
-protocols = { path = "../../../libs/protocols", features = ["async"] }
+kata-types = { path = "../../../libs/kata-types"}
+logging = { path = "../../../libs/logging"}
+oci-spec = { version = "0.6.8", features = ["runtime"] }
+protocols = { path = "../../../libs/protocols", features=["async"] }
 
 [features]
 default = []

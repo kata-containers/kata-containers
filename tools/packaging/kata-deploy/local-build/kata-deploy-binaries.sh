@@ -22,6 +22,7 @@ readonly static_build_dir="${repo_root_dir}/tools/packaging/static-build"
 readonly version_file="${repo_root_dir}/VERSION"
 readonly versions_yaml="${repo_root_dir}/versions.yaml"
 
+readonly busybox_builder="${static_build_dir}/busybox/build.sh"
 readonly agent_builder="${static_build_dir}/agent/build.sh"
 readonly coco_guest_components_builder="${static_build_dir}/coco-guest-components/build.sh"
 readonly clh_builder="${static_build_dir}/cloud-hypervisor/build-static-clh.sh"
@@ -40,6 +41,7 @@ readonly tools_builder="${static_build_dir}/tools/build.sh"
 readonly se_image_builder="${repo_root_dir}/tools/packaging/guest-image/build_se_image.sh"
 
 ARCH=${ARCH:-$(uname -m)}
+BUSYBOX_CONF_FILE="${BUSYBOX_CONF_FILE:-}"
 MEASURED_ROOTFS=${MEASURED_ROOTFS:-no}
 PULL_TYPE=${PULL_TYPE:-default}
 USE_CACHE="${USE_CACHE:-"yes"}"
@@ -547,6 +549,13 @@ install_kernel_dragonball_experimental() {
 		"-e -t dragonball"
 }
 
+install_kernel_nvidia_gpu_dragonball_experimental() {
+	install_kernel_helper \
+		"assets.kernel-dragonball-experimental.version" \
+		"kernel-dragonball-experimental" \
+		"-e -t dragonball -g nvidia -H deb"
+}
+
 #Install GPU enabled kernel asset
 install_kernel_nvidia_gpu() {
 	local kernel_url="$(get_from_kata_deps .assets.kernel.url)"
@@ -799,6 +808,22 @@ install_ovmf_sev() {
 	install_ovmf "sev" "edk2-sev.tar.gz"
 }
 
+install_busybox() {
+	latest_artefact="$(get_from_kata_deps ".externals.busybox.version")"
+	latest_builder_image="$(get_busybox_image_name)"
+
+	install_cached_tarball_component \
+		"${build_target}" \
+		"${latest_artefact}" \
+		"${latest_builder_image}" \
+		"${final_tarball_name}" \
+		"${final_tarball_path}" \
+		&& return 0
+
+	info "build static busybox"
+	DESTDIR=${destdir} BUSYBOX_CONF_FILE=${BUSYBOX_CONF_FILE:?} "${busybox_builder}"
+}
+
 install_agent() {
 	latest_artefact="$(git log -1 --abbrev=9 --pretty=format:"%h" ${repo_root_dir}/src/agent)"
 	artefact_tag="$(git log -1 --pretty=format:"%H" ${repo_root_dir})"
@@ -1014,6 +1039,8 @@ handle_build() {
 
 	agent-ctl) install_agent_ctl ;;
 
+	busybox) install_busybox ;;
+
 	boot-image-se) install_se_image ;;
 
 	coco-guest-components) install_coco_guest_components ;;
@@ -1035,6 +1062,7 @@ handle_build() {
 	kernel-confidential) install_kernel_confidential ;;
 
 	kernel-dragonball-experimental) install_kernel_dragonball_experimental ;;
+	kernel-nvidia-gpu-dragonball-experimental) install_kernel_nvidia_gpu_dragonball_experimental ;;
 
 	kernel-nvidia-gpu) install_kernel_nvidia_gpu ;;
 

@@ -94,6 +94,11 @@ pub trait K8sResource {
     fn get_runtime_class_name(&self) -> Option<String> {
         None
     }
+
+    fn get_process_fields(&self, _process: &mut policy::KataProcess) {
+        // Just Pods can have a PodSecurityContext field, so the other
+        // resources can use this default get_process_fields implementation.
+    }
 }
 
 /// See Reference / Kubernetes API / Common Definitions / LabelSelector.

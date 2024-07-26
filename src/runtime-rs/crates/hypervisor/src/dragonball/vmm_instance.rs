@@ -197,12 +197,17 @@ impl VmmInstance {
         Err(anyhow!("Failed to get machine info"))
     }
 
-    pub fn insert_host_device(&self, device_cfg: HostDeviceConfig) -> Result<()> {
-        self.handle_request_with_retry(Request::Sync(VmmAction::InsertHostDevice(
-            device_cfg.clone(),
-        )))
-        .with_context(|| format!("Failed to insert host device {:?}", device_cfg))?;
-        Ok(())
+    pub fn insert_host_device(&self, device_cfg: HostDeviceConfig) -> Result<Option<u8>> {
+        if let VmmData::VfioDeviceData(guest_dev_id) = self.handle_request_with_retry(
+            Request::Sync(VmmAction::InsertHostDevice(device_cfg.clone())),
+        )? {
+            Ok(guest_dev_id)
+        } else {
+            Err(anyhow!(format!(
+                "Failed to insert host device {:?}",
+                device_cfg
+            )))
+        }
     }
 
     pub fn prepare_remove_host_device(&self, id: &str) -> Result<()> {

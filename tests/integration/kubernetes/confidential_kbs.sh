@@ -12,6 +12,9 @@ kubernetes_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
 # shellcheck disable=1091
 source "${kubernetes_dir}/../../../tests/common.bash"
+source "${kubernetes_dir}/../../../tools/packaging/guest-image/lib_se.sh"
+# For kata-runtime
+export PATH="${PATH}:/opt/kata/bin"
 
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 # Where the trustee (includes kbs) sources will be cloned
@@ -57,6 +60,37 @@ kbs_set_resources_policy() {
 	kbs-client --url "$(kbs_k8s_svc_http_addr)" config \
 		--auth-private-key "$KBS_PRIVATE_KEY" set-resource-policy \
 		--policy-file "$file"
+}
+
+# Set resource data in base64 encoded.
+#
+# Parameters:
+#	$1 - repository name (optional)
+#	$2 - resource type (mandatory)
+#	$3 - tag (mandatory)
+#	$4 - resource data in base64
+#
+kbs_set_resource_base64() {
+	local repository="${1:-}"
+	local type="${2:-}"
+	local tag="${3:-}"
+	local data="${4:-}"
+	local file
+	local rc=0
+
+	if [ -z "$data" ]; then
+		>&2 echo "ERROR: missing data parameter"
+		return 1
+	fi
+
+	file=$(mktemp -t kbs-resource-XXXXX)
+	echo "$data" | base64 -d > "$file"
+
+	kbs_set_resource_from_file "$repository" "$type" "$tag" "$file" || \
+		rc=$?
+
+	rm -f "$file"
+	return $rc
 }
 
 # Set resource data.
@@ -180,7 +214,7 @@ kbs_uninstall_cli() {
 #
 function kbs_k8s_delete() {
 	pushd "$COCO_KBS_DIR"
-	kubectl delete -k config/kubernetes/overlays
+	kubectl delete -k config/kubernetes/overlays/$(uname -m)
 	# Verify that KBS namespace resources were properly deleted
 	cmd="kubectl get all -n $KBS_NS 2>&1 | grep 'No resources found'"
 	waitForProcess "120" "30" "$cmd"
@@ -237,7 +271,15 @@ function kbs_k8s_deploy() {
 
 	# Tests should fill kbs resources later, however, the deployment
 	# expects at least one secret served at install time.
-	echo "somesecret" > overlays/key.bin
+	echo "somesecret" > overlays/$(uname -m)/key.bin
+
+	# For qemu-se runtime, prepare the necessary resources
+	if [ "${KATA_HYPERVISOR}" == "qemu-se" ]; then
+		prepare_credentials_for_qemu_se
+		# SE_SKIP_CERTS_VERIFICATION should be set to true
+		# to skip the verification of the certificates
+		sed -i "s/false/true/g" overlays/s390x/patch.yaml
+	fi
 
 	echo "::group::Update the kbs container image"
 	install_kustomize
@@ -437,7 +479,7 @@ _handle_ingress_aks() {
 		return 1
 	fi
 
-	pushd "${COCO_KBS_DIR}/config/kubernetes/overlays"
+	pushd "${COCO_KBS_DIR}/config/kubernetes/overlays/common"
 
 	echo "::group::$(pwd)/ingress.yaml"
 	KBS_INGRESS_CLASS="addon-http-application-routing" \
@@ -455,4 +497,33 @@ _handle_ingress_aks() {
 _handle_ingress_nodeport() {
 	# By exporting this variable the kbs deploy script will install the nodeport service
 	export DEPLOYMENT_DIR=nodeport
+}
+
+
+# Prepare necessary resources for qemu-se runtime
+# Documentation: https://github.com/confidential-containers/trustee/tree/main/attestation-service/verifier/src/se
+prepare_credentials_for_qemu_se() {
+	echo "::group::Prepare credentials for qemu-se runtime"
+	if [ -z "${IBM_SE_CREDS_DIR:-}" ]; then
+		>&2 echo "ERROR: IBM_SE_CREDS_DIR is empty"
+		return 1
+	fi
+	config_file_path="/opt/kata/share/defaults/kata-containers/configuration-qemu-se.toml"
+	kata_base_dir=$(dirname $(kata-runtime --config ${config_file_path} env --json | jq -r '.Kernel.Path'))
+	if [ ! -d ${HKD_PATH} ]; then
+		>&2 echo "ERROR: HKD_PATH is not set"
+		return 1
+	fi
+	pushd "${IBM_SE_CREDS_DIR}"
+	mkdir {certs,crls,hdr,hkds,rsa}
+	openssl genrsa -aes256 -passout pass:test1234 -out encrypt_key-psw.pem 4096
+	openssl rsa -in encrypt_key-psw.pem -passin pass:test1234 -pubout -out rsa/encrypt_key.pub
+	openssl rsa -in encrypt_key-psw.pem -passin pass:test1234 -out rsa/encrypt_key.pem
+	cp ${kata_base_dir}/kata-containers-se.img hdr/hdr.bin
+	cp ${HKD_PATH}/HKD-*.crt hkds/
+	cp ${HKD_PATH}/ibm-z-host-key-gen2.crl crls/
+	cp ${HKD_PATH}/DigiCertCA.crt ${HKD_PATH}/ibm-z-host-key-signing-gen2.crt certs/
+	popd
+	ls -R ${IBM_SE_CREDS_DIR}
+	echo "::endgroup::"
 }

@@ -173,11 +173,11 @@ impl Hypervisor for Qemu {
 
     async fn guest_memory_block_size(&self) -> u32 {
         let inner = self.inner.read().await;
-        inner.guest_memory_block_size_mb()
+        inner.guest_memory_block_size()
     }
 
     async fn resize_memory(&self, new_mem_mb: u32) -> Result<(u32, MemoryConfig)> {
-        let inner = self.inner.read().await;
+        let mut inner = self.inner.write().await;
         inner.resize_memory(new_mem_mb)
     }
 

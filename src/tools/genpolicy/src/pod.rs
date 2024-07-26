@@ -92,6 +92,9 @@ pub struct PodSpec {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     topologySpreadConstraints: Option<Vec<TopologySpreadConstraint>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    securityContext: Option<PodSecurityContext>,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -118,6 +121,9 @@ pub struct Container {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     env: Option<Vec<EnvVar>>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    envFrom: Option<Vec<EnvFromSource>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     resources: Option<ResourceRequirements>,
@@ -231,7 +237,7 @@ struct Probe {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     tcpSocket: Option<TCPSocketAction>,
-    // TODO: additional fiels.
+    // TODO: additional fields.
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -259,7 +265,7 @@ struct HTTPGetAction {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     httpHeaders: Option<Vec<HTTPHeader>>,
-    // TODO: additional fiels.
+    // TODO: additional fields.
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -303,6 +309,14 @@ struct SeccompProfile {
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
+struct PodSecurityContext {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    runAsUser: Option<i64>,
+    // TODO: additional fields.
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct Lifecycle {
     #[serde(skip_serializing_if = "Option::is_none")]
     postStart: Option<LifecycleHandler>,
@@ -316,7 +330,7 @@ struct Lifecycle {
 struct LifecycleHandler {
     #[serde(skip_serializing_if = "Option::is_none")]
     exec: Option<ExecAction>,
-    // TODO: additional fiels.
+    // TODO: additional fields.
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -400,6 +414,37 @@ pub struct ConfigMapKeySelector {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    optional: Option<bool>,
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EnvFromSource {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub configMapRef: Option<ConfigMapEnvSource>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secretRef: Option<SecretEnvSource>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prefix: Option<String>,
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SecretEnvSource {
+    pub name: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    optional: Option<bool>,
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ConfigMapEnvSource {
+    pub name: String,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     optional: Option<bool>,
@@ -560,6 +605,18 @@ impl Container {
                 }
             }
         }
+
+        if let Some(env_from_sources) = &self.envFrom {
+            for env_from_source in env_from_sources {
+                let env_from_source_values = env_from_source.get_values(config_maps, secrets);
+
+                for value in env_from_source_values {
+                    if !dest_env.contains(&value) {
+                        dest_env.push(value.clone());
+                    }
+                }
+            }
+        }
     }
 
     pub fn is_privileged(&self) -> bool {
@@ -569,15 +626,6 @@ impl Container {
             }
         }
         false
-    }
-
-    pub fn allow_privilege_escalation(&self) -> bool {
-        if let Some(context) = &self.securityContext {
-            if let Some(allow) = context.allowPrivilegeEscalation {
-                return allow;
-            }
-        }
-        true
     }
 
     pub fn read_only_root_filesystem(&self) -> bool {
@@ -612,41 +660,72 @@ impl Container {
         (yaml_has_command, yaml_has_args)
     }
 
-    pub fn get_exec_commands(&self) -> Vec<String> {
+    pub fn get_exec_commands(&self) -> Vec<Vec<String>> {
         let mut commands = Vec::new();
 
         if let Some(probe) = &self.livenessProbe {
             if let Some(exec) = &probe.exec {
-                commands.push(exec.command.join(" "));
+                commands.push(exec.command.clone());
             }
         }
 
         if let Some(probe) = &self.readinessProbe {
             if let Some(exec) = &probe.exec {
-                commands.push(exec.command.join(" "));
+                commands.push(exec.command.clone());
             }
         }
 
         if let Some(probe) = &self.startupProbe {
             if let Some(exec) = &probe.exec {
-                commands.push(exec.command.join(" "));
+                commands.push(exec.command.clone());
             }
         }
 
         if let Some(lifecycle) = &self.lifecycle {
             if let Some(postStart) = &lifecycle.postStart {
                 if let Some(exec) = &postStart.exec {
-                    commands.push(exec.command.join(" "));
+                    commands.push(exec.command.clone());
                 }
             }
             if let Some(preStop) = &lifecycle.preStop {
                 if let Some(exec) = &preStop.exec {
-                    commands.push(exec.command.join(" "));
+                    commands.push(exec.command.clone());
                 }
             }
         }
 
         commands
+    }
+}
+
+impl EnvFromSource {
+    pub fn get_values(
+        &self,
+        config_maps: &Vec<config_map::ConfigMap>,
+        secrets: &Vec<secret::Secret>,
+    ) -> Vec<String> {
+        if let Some(config_map_env_source) = &self.configMapRef {
+            if let Some(value) = config_map::get_values(&config_map_env_source.name, config_maps) {
+                return value.clone();
+            } else {
+                panic!(
+                    "Couldn't get values from configmap ref: {}",
+                    &config_map_env_source.name
+                );
+            }
+        }
+
+        if let Some(secret_env_source) = &self.secretRef {
+            if let Some(value) = secret::get_values(&secret_env_source.name, secrets) {
+                return value.clone();
+            } else {
+                panic!(
+                    "Couldn't get values from secret ref: {}",
+                    &secret_env_source.name
+                );
+            }
+        }
+        panic!("envFrom: no configmap or secret source found!");
     }
 }
 
@@ -811,6 +890,14 @@ impl yaml::K8sResource for Pod {
             .clone()
             .or_else(|| Some(String::new()))
     }
+
+    fn get_process_fields(&self, process: &mut policy::KataProcess) {
+        if let Some(context) = &self.spec.securityContext {
+            if let Some(uid) = context.runAsUser {
+                process.User.UID = uid.try_into().unwrap();
+            }
+        }
+    }
 }
 
 impl Container {
@@ -857,6 +944,17 @@ impl Container {
             }
         }
         compress_default_capabilities(capabilities, defaults);
+    }
+
+    pub fn get_process_fields(&self, process: &mut policy::KataProcess) {
+        if let Some(context) = &self.securityContext {
+            if let Some(uid) = context.runAsUser {
+                process.User.UID = uid.try_into().unwrap();
+            }
+            if let Some(allow) = context.allowPrivilegeEscalation {
+                process.NoNewPrivileges = !allow
+            }
+        }
     }
 }
 

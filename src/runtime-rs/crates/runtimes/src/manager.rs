@@ -4,8 +4,6 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{collections::HashMap, path::PathBuf, str::from_utf8, sync::Arc};
-
 use anyhow::{anyhow, Context, Result};
 use common::{
     message::Message,
@@ -13,7 +11,7 @@ use common::{
     RuntimeHandler, RuntimeInstance, Sandbox, SandboxNetworkEnv,
 };
 use hypervisor::Param;
-use kata_sys_util::spec::load_oci_spec;
+use kata_sys_util::{mount::get_mount_path, spec::load_oci_spec};
 use kata_types::{
     annotations::Annotation, config::default::DEFAULT_GUEST_DNS_FILE, config::TomlConfig,
 };
@@ -21,12 +19,20 @@ use kata_types::{
 use linux_container::LinuxContainer;
 use logging::FILTER_RULE;
 use netns_rs::NetNs;
+use oci_spec::runtime as oci;
 use persist::sandbox_persist::Persist;
 use resource::{
     cpu_mem::initial_size::InitialSizeManager,
     network::{dan_config_path, generate_netns_name},
 };
+use runtime_spec as spec;
 use shim_interface::shim_mgmt::ERR_NO_SHIM_SERVER;
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    str::from_utf8,
+    sync::Arc,
+};
 use tokio::fs;
 use tokio::sync::{mpsc::Sender, Mutex, RwLock};
 use tracing::instrument;
@@ -87,7 +93,7 @@ impl RuntimeHandlerManagerInner {
     async fn init_runtime_handler(
         &mut self,
         spec: &oci::Spec,
-        state: &oci::State,
+        state: &spec::State,
         network_env: SandboxNetworkEnv,
         dns: Vec<String>,
         config: Arc<TomlConfig>,
@@ -145,7 +151,7 @@ impl RuntimeHandlerManagerInner {
     async fn try_init(
         &mut self,
         spec: &oci::Spec,
-        state: &oci::State,
+        state: &spec::State,
         options: &Option<Vec<u8>>,
     ) -> Result<()> {
         // return if runtime instance has init
@@ -162,9 +168,10 @@ impl RuntimeHandlerManagerInner {
         #[cfg(feature = "virt")]
         VirtContainer::init().context("init virt container")?;
 
-        for m in &spec.mounts {
-            if m.destination == DEFAULT_GUEST_DNS_FILE {
-                let contents = fs::read_to_string(&m.source).await?;
+        let spec_mounts = spec.mounts().clone().unwrap_or_default();
+        for m in &spec_mounts {
+            if get_mount_path(&Some(m.destination().clone())) == DEFAULT_GUEST_DNS_FILE {
+                let contents = fs::read_to_string(&Path::new(&get_mount_path(m.source()))).await?;
                 dns = contents.split('\n').map(|e| e.to_string()).collect();
             }
         }
@@ -197,21 +204,21 @@ impl RuntimeHandlerManagerInner {
             None
         } else {
             let mut netns_path = None;
-            if let Some(linux) = &spec.linux {
-                for ns in &linux.namespaces {
-                    if ns.r#type.as_str() != oci::NETWORKNAMESPACE {
+            if let Some(linux) = &spec.linux() {
+                let linux_namespaces = linux.namespaces().clone().unwrap_or_default();
+                for ns in &linux_namespaces {
+                    if ns.typ() != oci::LinuxNamespaceType::Network {
                         continue;
                     }
                     // get netns path from oci spec
-                    if !ns.path.is_empty() {
-                        netns_path = Some(ns.path.clone());
+                    if ns.path().is_some() {
+                        netns_path = ns.path().clone().map(|p| p.display().to_string());
                     }
                     // if we get empty netns from oci spec, we need to create netns for the VM
                     else {
                         let ns_name = generate_netns_name();
                         let netns = NetNs::new(ns_name)?;
-                        let path = PathBuf::from(netns.path()).to_str().map(|s| s.to_string());
-                        info!(sl!(), "the netns path is {:?}", path);
+                        let path = Some(PathBuf::from(netns.path()).display().to_string());
                         netns_path = path;
                         network_created = true;
                     }
@@ -346,7 +353,7 @@ impl RuntimeHandlerManager {
     async fn try_init_runtime_instance(
         &self,
         spec: &oci::Spec,
-        state: &oci::State,
+        state: &spec::State,
         options: &Option<Vec<u8>>,
     ) -> Result<()> {
         let mut inner = self.inner.write().await;
@@ -360,16 +367,16 @@ impl RuntimeHandlerManager {
             let bundler_path = format!(
                 "{}/{}",
                 container_config.bundle,
-                oci::OCI_SPEC_CONFIG_FILE_NAME
+                spec::OCI_SPEC_CONFIG_FILE_NAME
             );
             let spec = oci::Spec::load(&bundler_path).context("load spec")?;
-            let state = oci::State {
-                version: spec.version.clone(),
+            let state = spec::State {
+                version: spec.version().clone(),
                 id: container_config.container_id.to_string(),
-                status: oci::ContainerState::Creating,
+                status: spec::ContainerState::Creating,
                 pid: 0,
                 bundle: container_config.bundle.clone(),
-                annotations: spec.annotations.clone(),
+                annotations: spec.annotations().clone().unwrap_or_default(),
             };
 
             self.try_init_runtime_instance(&spec, &state, &container_config.options)
@@ -498,7 +505,7 @@ impl RuntimeHandlerManager {
 #[instrument]
 fn load_config(spec: &oci::Spec, option: &Option<Vec<u8>>) -> Result<TomlConfig> {
     const KATA_CONF_FILE: &str = "KATA_CONF_FILE";
-    let annotation = Annotation::new(spec.annotations.clone());
+    let annotation = Annotation::new(spec.annotations().clone().unwrap_or_default());
     let config_path = if let Some(path) = annotation.get_sandbox_config_path() {
         path
     } else if let Ok(path) = std::env::var(KATA_CONF_FILE) {

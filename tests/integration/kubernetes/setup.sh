@@ -29,6 +29,7 @@ else
 	K8S_TEST_POLICY_FILES=( \
 		"allow-all.rego" \
 		"allow-all-except-exec-process.rego" \
+		"allow-set-policy.rego" \
     )
 fi
 

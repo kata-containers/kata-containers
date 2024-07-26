@@ -23,7 +23,8 @@ use crate::sandbox::Sandbox;
 use crate::uevent::{wait_for_uevent, Uevent, UeventMatcher};
 use anyhow::{anyhow, Context, Result};
 use cfg_if::cfg_if;
-use oci::{LinuxDeviceCgroup, LinuxResources, Spec};
+use oci::{LinuxDeviceCgroup, Spec};
+use oci_spec::runtime as oci;
 use protocols::agent::Device;
 use tracing::instrument;
 
@@ -380,6 +381,65 @@ pub async fn wait_for_pci_device(
 }
 
 #[derive(Debug)]
+struct NetPciMatcher {
+    devpath: String,
+}
+
+impl NetPciMatcher {
+    fn new(relpath: &str) -> NetPciMatcher {
+        let root_bus = create_pci_root_bus_path();
+
+        NetPciMatcher {
+            devpath: format!("{}{}", root_bus, relpath),
+        }
+    }
+}
+
+impl UeventMatcher for NetPciMatcher {
+    fn is_match(&self, uev: &Uevent) -> bool {
+        uev.devpath.starts_with(self.devpath.as_str())
+            && uev.subsystem == "net"
+            && !uev.interface.is_empty()
+            && uev.action == "add"
+    }
+}
+
+pub async fn wait_for_net_interface(
+    sandbox: &Arc<Mutex<Sandbox>>,
+    pcipath: &pci::Path,
+) -> Result<()> {
+    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path());
+    let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?;
+
+    let matcher = NetPciMatcher::new(&sysfs_rel_path);
+
+    // Check if the interface is already added in case network is cold-plugged
+    // or the uevent loop is started before network is added.
+    // We check for the pci deive in the sysfs directory for network devices.
+    let pattern = format!(
+        r"[./]+{}/[a-z0-9/]*net/[a-z0-9/]*",
+        matcher.devpath.as_str()
+    );
+    let re = Regex::new(&pattern).expect("BUG: Failed to compile regex for NetPciMatcher");
+
+    for entry in fs::read_dir(SYSFS_NET_PATH)? {
+        let entry = entry?;
+        let path = entry.path();
+        let target_path = fs::read_link(path)?;
+        let target_path_str = target_path
+            .to_str()
+            .ok_or_else(|| anyhow!("Expected symlink in dir {}", SYSFS_NET_PATH))?;
+
+        if re.is_match(target_path_str) {
+            return Ok(());
+        }
+    }
+    let _uev = wait_for_uevent(sandbox, matcher).await?;
+
+    Ok(())
+}
+
+#[derive(Debug)]
 struct VfioMatcher {
     syspath: String,
 }
@@ -621,21 +681,25 @@ impl<T: Into<DevUpdate>> From<T> for SpecUpdate {
 #[instrument]
 fn update_spec_devices(spec: &mut Spec, mut updates: HashMap<&str, DevUpdate>) -> Result<()> {
     let linux = spec
-        .linux
+        .linux_mut()
         .as_mut()
         .ok_or_else(|| anyhow!("Spec didn't contain linux field"))?;
-    let mut res_updates = HashMap::<(&str, i64, i64), DeviceInfo>::with_capacity(updates.len());
+    let mut res_updates = HashMap::<(String, i64, i64), DeviceInfo>::with_capacity(updates.len());
 
-    for specdev in &mut linux.devices {
-        if let Some(update) = updates.remove(specdev.path.as_str()) {
-            let host_major = specdev.major;
-            let host_minor = specdev.minor;
+    let mut default_devices = Vec::new();
+    let linux_devices = linux.devices_mut().as_mut().unwrap_or(&mut default_devices);
+    for specdev in linux_devices.iter_mut() {
+        let devtype = specdev.typ().as_str().to_string();
+        if let Some(update) = updates.remove(specdev.path().clone().display().to_string().as_str())
+        {
+            let host_major = specdev.major();
+            let host_minor = specdev.minor();
 
             info!(
                 sl(),
                 "update_spec_devices() updating device";
-                "container_path" => &specdev.path,
-                "type" => &specdev.r#type,
+                "container_path" => &specdev.path().display().to_string(),
+                "type" => &devtype,
                 "host_major" => host_major,
                 "host_minor" => host_minor,
                 "guest_major" => update.info.guest_major,
@@ -643,17 +707,14 @@ fn update_spec_devices(spec: &mut Spec, mut updates: HashMap<&str, DevUpdate>) -
                 "final_path" => update.final_path.as_ref(),
             );
 
-            specdev.major = update.info.guest_major;
-            specdev.minor = update.info.guest_minor;
+            specdev.set_major(update.info.guest_major);
+            specdev.set_minor(update.info.guest_minor);
             if let Some(final_path) = update.final_path {
-                specdev.path = final_path;
+                specdev.set_path(PathBuf::from(&final_path));
             }
 
             if res_updates
-                .insert(
-                    (specdev.r#type.as_str(), host_major, host_minor),
-                    update.info,
-                )
+                .insert((devtype, host_major, host_minor), update.info)
                 .is_some()
             {
                 return Err(anyhow!(
@@ -677,23 +738,27 @@ fn update_spec_devices(spec: &mut Spec, mut updates: HashMap<&str, DevUpdate>) -
         ));
     }
 
-    if let Some(resources) = linux.resources.as_mut() {
-        for r in &mut resources.devices {
-            if let (Some(host_major), Some(host_minor)) = (r.major, r.minor) {
-                if let Some(update) = res_updates.get(&(r.r#type.as_str(), host_major, host_minor))
-                {
-                    info!(
-                        sl(),
-                        "update_spec_devices() updating resource";
-                        "type" => &r.r#type,
-                        "host_major" => host_major,
-                        "host_minor" => host_minor,
-                        "guest_major" => update.guest_major,
-                        "guest_minor" => update.guest_minor,
-                    );
+    if let Some(resources) = linux.resources_mut().as_mut() {
+        if let Some(resources_devices) = resources.devices_mut().as_mut() {
+            for d in resources_devices.iter_mut() {
+                let dev_type = d.typ().unwrap_or_default().as_str().to_string();
+                if let (Some(host_major), Some(host_minor)) = (d.major(), d.minor()) {
+                    if let Some(update) =
+                        res_updates.get(&(dev_type.clone(), host_major, host_minor))
+                    {
+                        info!(
+                            sl(),
+                            "update_spec_devices() updating resource";
+                            "type" => &dev_type,
+                            "host_major" => host_major,
+                            "host_minor" => host_minor,
+                            "guest_major" => update.guest_major,
+                            "guest_minor" => update.guest_minor,
+                        );
 
-                    r.major = Some(update.guest_major);
-                    r.minor = Some(update.guest_minor);
+                        d.set_major(Some(update.guest_major));
+                        d.set_minor(Some(update.guest_minor));
+                    }
                 }
             }
         }
@@ -933,7 +998,11 @@ async fn vfio_ap_device_handler(
     for apqn in device.options.iter() {
         wait_for_ap_device(sandbox, ap::Address::from_str(apqn)?).await?;
     }
-    Ok(Default::default())
+    let dev_update = Some(DevUpdate::new(Z9_CRYPT_DEV_PATH, Z9_CRYPT_DEV_PATH)?);
+    Ok(SpecUpdate {
+        dev: dev_update,
+        pci: Vec::new(),
+    })
 }
 
 #[cfg(not(target_arch = "s390x"))]
@@ -980,8 +1049,10 @@ pub async fn add_devices(
         }
     }
 
-    if let Some(process) = spec.process.as_mut() {
-        update_env_pci(&mut process.env, &sandbox.lock().await.pcimap)?
+    if let Some(process) = spec.process_mut() {
+        let env_vec: &mut Vec<String> =
+            &mut process.env_mut().get_or_insert_with(Vec::new).to_vec();
+        update_env_pci(env_vec, &sandbox.lock().await.pcimap)?
     }
     update_spec_devices(spec, dev_updates)
 }
@@ -1027,31 +1098,40 @@ pub fn insert_devices_cgroup_rule(
     access: &str,
 ) -> Result<()> {
     let linux = spec
-        .linux
+        .linux_mut()
         .as_mut()
         .ok_or_else(|| anyhow!("Spec didn't container linux field"))?;
-
-    let resources = linux.resources.get_or_insert(LinuxResources::default());
-
-    let cgroup = LinuxDeviceCgroup {
-        allow,
-        major: Some(dev_info.guest_major),
-        minor: Some(dev_info.guest_minor),
-        r#type: dev_info.cgroup_type.clone(),
-        access: access.to_owned(),
-    };
+    let devcgrp_type = dev_info
+        .cgroup_type
+        .parse::<oci::LinuxDeviceType>()
+        .context(format!(
+            "Failed to parse {:?} to Enum LinuxDeviceType",
+            dev_info.cgroup_type
+        ))?;
+    let linux_resource = &mut oci::LinuxResources::default();
+    let resource = linux.resources_mut().as_mut().unwrap_or(linux_resource);
+    let mut device_cgrp = LinuxDeviceCgroup::default();
+    device_cgrp.set_allow(allow);
+    device_cgrp.set_major(Some(dev_info.guest_major));
+    device_cgrp.set_minor(Some(dev_info.guest_minor));
+    device_cgrp.set_typ(Some(devcgrp_type));
+    device_cgrp.set_access(Some(access.to_owned()));
 
     debug!(
         sl(),
         "Insert a devices cgroup rule";
-        "linux_device_cgroup" => cgroup.allow,
-        "guest_major" => cgroup.major,
-        "guest_minor" => cgroup.minor,
-        "type" => cgroup.r#type.as_str(),
-        "access" => cgroup.access.as_str(),
+        "linux_device_cgroup" => device_cgrp.allow(),
+        "guest_major" => device_cgrp.major(),
+        "guest_minor" => device_cgrp.minor(),
+        "type" => device_cgrp.typ().unwrap().as_str(),
+        "access" => device_cgrp.access().as_ref().unwrap().as_str(),
     );
 
-    resources.devices.push(cgroup);
+    if let Some(devices) = resource.devices_mut() {
+        devices.push(device_cgrp);
+    } else {
+        resource.set_devices(Some(vec![device_cgrp]));
+    }
 
     Ok(())
 }
@@ -1060,7 +1140,11 @@ pub fn insert_devices_cgroup_rule(
 mod tests {
     use super::*;
     use crate::uevent::spawn_test_watcher;
-    use oci::Linux;
+    use oci::{
+        Linux, LinuxBuilder, LinuxDeviceBuilder, LinuxDeviceCgroupBuilder, LinuxDeviceType,
+        LinuxResources, LinuxResourcesBuilder, SpecBuilder,
+    };
+    use oci_spec::runtime as oci;
     use std::iter::FromIterator;
     use tempfile::tempdir;
 
@@ -1068,15 +1152,23 @@ mod tests {
 
     #[test]
     fn test_update_device_cgroup() {
-        let mut spec = Spec {
-            linux: Some(Linux::default()),
-            ..Default::default()
-        };
+        let mut linux = Linux::default();
+        linux.set_resources(Some(LinuxResources::default()));
+        let mut spec = SpecBuilder::default().linux(linux).build().unwrap();
 
         let dev_info = DeviceInfo::new(VM_ROOTFS, false).unwrap();
         insert_devices_cgroup_rule(&mut spec, &dev_info, false, "rw").unwrap();
 
-        let devices = spec.linux.unwrap().resources.unwrap().devices;
+        let devices = spec
+            .linux()
+            .as_ref()
+            .unwrap()
+            .resources()
+            .as_ref()
+            .unwrap()
+            .devices()
+            .clone()
+            .unwrap();
         assert_eq!(devices.len(), 1);
 
         let meta = fs::metadata(VM_ROOTFS).unwrap();
@@ -1084,8 +1176,8 @@ mod tests {
         let major = stat::major(rdev) as i64;
         let minor = stat::minor(rdev) as i64;
 
-        assert_eq!(devices[0].major, Some(major));
-        assert_eq!(devices[0].minor, Some(minor));
+        assert_eq!(devices[0].major(), Some(major));
+        assert_eq!(devices[0].minor(), Some(minor));
     }
 
     #[test]
@@ -1109,7 +1201,7 @@ mod tests {
         );
         assert!(res.is_err());
 
-        spec.linux = Some(Linux::default());
+        spec.set_linux(Some(Linux::default()));
 
         // linux.devices doesn't contain the updated device
         let res = update_spec_devices(
@@ -1121,12 +1213,15 @@ mod tests {
         );
         assert!(res.is_err());
 
-        spec.linux.as_mut().unwrap().devices = vec![oci::LinuxDevice {
-            path: "/dev/null2".to_string(),
-            major,
-            minor,
-            ..oci::LinuxDevice::default()
-        }];
+        spec.linux_mut()
+            .as_mut()
+            .unwrap()
+            .set_devices(Some(vec![LinuxDeviceBuilder::default()
+                .path(PathBuf::from("/dev/null2"))
+                .major(major)
+                .minor(minor)
+                .build()
+                .unwrap()]));
 
         // guest and host path are not the same
         let res = update_spec_devices(
@@ -1144,7 +1239,13 @@ mod tests {
             spec
         );
 
-        spec.linux.as_mut().unwrap().devices[0].path = container_path.to_string();
+        spec.linux_mut()
+            .as_mut()
+            .unwrap()
+            .devices_mut()
+            .as_mut()
+            .unwrap()[0]
+            .set_path(PathBuf::from(container_path));
 
         // spec.linux.resources is empty
         let res = update_spec_devices(
@@ -1157,21 +1258,26 @@ mod tests {
         assert!(res.is_ok());
 
         // update both devices and cgroup lists
-        spec.linux.as_mut().unwrap().devices = vec![oci::LinuxDevice {
-            path: container_path.to_string(),
-            major,
-            minor,
-            ..oci::LinuxDevice::default()
-        }];
+        spec.linux_mut()
+            .as_mut()
+            .unwrap()
+            .set_devices(Some(vec![LinuxDeviceBuilder::default()
+                .path(PathBuf::from(container_path))
+                .major(major)
+                .minor(minor)
+                .build()
+                .unwrap()]));
 
-        spec.linux.as_mut().unwrap().resources = Some(oci::LinuxResources {
-            devices: vec![oci::LinuxDeviceCgroup {
-                major: Some(major),
-                minor: Some(minor),
-                ..oci::LinuxDeviceCgroup::default()
-            }],
-            ..oci::LinuxResources::default()
-        });
+        spec.linux_mut().as_mut().unwrap().set_resources(Some(
+            oci::LinuxResourcesBuilder::default()
+                .devices(vec![LinuxDeviceCgroupBuilder::default()
+                    .major(major)
+                    .minor(minor)
+                    .build()
+                    .unwrap()])
+                .build()
+                .unwrap(),
+        ));
 
         let res = update_spec_devices(
             &mut spec,
@@ -1194,45 +1300,49 @@ mod tests {
         let host_major_b = stat::major(zero_rdev) as i64;
         let host_minor_b = stat::minor(zero_rdev) as i64;
 
-        let mut spec = Spec {
-            linux: Some(Linux {
-                devices: vec![
-                    oci::LinuxDevice {
-                        path: "/dev/a".to_string(),
-                        r#type: "c".to_string(),
-                        major: host_major_a,
-                        minor: host_minor_a,
-                        ..oci::LinuxDevice::default()
-                    },
-                    oci::LinuxDevice {
-                        path: "/dev/b".to_string(),
-                        r#type: "c".to_string(),
-                        major: host_major_b,
-                        minor: host_minor_b,
-                        ..oci::LinuxDevice::default()
-                    },
-                ],
-                resources: Some(LinuxResources {
-                    devices: vec![
-                        oci::LinuxDeviceCgroup {
-                            r#type: "c".to_string(),
-                            major: Some(host_major_a),
-                            minor: Some(host_minor_a),
-                            ..oci::LinuxDeviceCgroup::default()
-                        },
-                        oci::LinuxDeviceCgroup {
-                            r#type: "c".to_string(),
-                            major: Some(host_major_b),
-                            minor: Some(host_minor_b),
-                            ..oci::LinuxDeviceCgroup::default()
-                        },
-                    ],
-                    ..LinuxResources::default()
-                }),
-                ..Linux::default()
-            }),
-            ..Spec::default()
-        };
+        let mut spec = SpecBuilder::default()
+            .linux(
+                LinuxBuilder::default()
+                    .devices(vec![
+                        LinuxDeviceBuilder::default()
+                            .path(PathBuf::from("/dev/a"))
+                            .typ(LinuxDeviceType::C)
+                            .major(host_major_a)
+                            .minor(host_minor_a)
+                            .build()
+                            .unwrap(),
+                        LinuxDeviceBuilder::default()
+                            .path(PathBuf::from("/dev/b"))
+                            .typ(LinuxDeviceType::C)
+                            .major(host_major_b)
+                            .minor(host_minor_b)
+                            .build()
+                            .unwrap(),
+                    ])
+                    .resources(
+                        LinuxResourcesBuilder::default()
+                            .devices(vec![
+                                LinuxDeviceCgroupBuilder::default()
+                                    .typ(LinuxDeviceType::C)
+                                    .major(host_major_a)
+                                    .minor(host_minor_a)
+                                    .build()
+                                    .unwrap(),
+                                LinuxDeviceCgroupBuilder::default()
+                                    .typ(LinuxDeviceType::C)
+                                    .major(host_major_b)
+                                    .minor(host_minor_b)
+                                    .build()
+                                    .unwrap(),
+                            ])
+                            .build()
+                            .unwrap(),
+                    )
+                    .build()
+                    .unwrap(),
+            )
+            .build()
+            .unwrap();
 
         let container_path_a = "/dev/a";
         let vm_path_a = "/dev/zero";
@@ -1246,17 +1356,26 @@ mod tests {
         let guest_major_b = stat::major(full_rdev) as i64;
         let guest_minor_b = stat::minor(full_rdev) as i64;
 
-        let specdevices = &spec.linux.as_ref().unwrap().devices;
-        assert_eq!(host_major_a, specdevices[0].major);
-        assert_eq!(host_minor_a, specdevices[0].minor);
-        assert_eq!(host_major_b, specdevices[1].major);
-        assert_eq!(host_minor_b, specdevices[1].minor);
+        let specdevices = &spec.linux().as_ref().unwrap().devices().clone().unwrap();
+        assert_eq!(host_major_a, specdevices[0].major());
+        assert_eq!(host_minor_a, specdevices[0].minor());
+        assert_eq!(host_major_b, specdevices[1].major());
+        assert_eq!(host_minor_b, specdevices[1].minor());
 
-        let specresources = spec.linux.as_ref().unwrap().resources.as_ref().unwrap();
-        assert_eq!(Some(host_major_a), specresources.devices[0].major);
-        assert_eq!(Some(host_minor_a), specresources.devices[0].minor);
-        assert_eq!(Some(host_major_b), specresources.devices[1].major);
-        assert_eq!(Some(host_minor_b), specresources.devices[1].minor);
+        let specresources_devices = spec
+            .linux()
+            .as_ref()
+            .unwrap()
+            .resources()
+            .as_ref()
+            .unwrap()
+            .devices()
+            .clone()
+            .unwrap();
+        assert_eq!(Some(host_major_a), specresources_devices[0].major());
+        assert_eq!(Some(host_minor_a), specresources_devices[0].minor());
+        assert_eq!(Some(host_major_b), specresources_devices[1].major());
+        assert_eq!(Some(host_minor_b), specresources_devices[1].minor());
 
         let updates = HashMap::from_iter(vec![
             (
@@ -1271,17 +1390,26 @@ mod tests {
         let res = update_spec_devices(&mut spec, updates);
         assert!(res.is_ok());
 
-        let specdevices = &spec.linux.as_ref().unwrap().devices;
-        assert_eq!(guest_major_a, specdevices[0].major);
-        assert_eq!(guest_minor_a, specdevices[0].minor);
-        assert_eq!(guest_major_b, specdevices[1].major);
-        assert_eq!(guest_minor_b, specdevices[1].minor);
+        let specdevices = &spec.linux().as_ref().unwrap().devices().clone().unwrap();
+        assert_eq!(guest_major_a, specdevices[0].major());
+        assert_eq!(guest_minor_a, specdevices[0].minor());
+        assert_eq!(guest_major_b, specdevices[1].major());
+        assert_eq!(guest_minor_b, specdevices[1].minor());
 
-        let specresources = spec.linux.as_ref().unwrap().resources.as_ref().unwrap();
-        assert_eq!(Some(guest_major_a), specresources.devices[0].major);
-        assert_eq!(Some(guest_minor_a), specresources.devices[0].minor);
-        assert_eq!(Some(guest_major_b), specresources.devices[1].major);
-        assert_eq!(Some(guest_minor_b), specresources.devices[1].minor);
+        let specresources_devices = spec
+            .linux()
+            .as_ref()
+            .unwrap()
+            .resources()
+            .as_ref()
+            .unwrap()
+            .devices()
+            .clone()
+            .unwrap();
+        assert_eq!(Some(guest_major_a), specresources_devices[0].major());
+        assert_eq!(Some(guest_minor_a), specresources_devices[0].minor());
+        assert_eq!(Some(guest_major_b), specresources_devices[1].major());
+        assert_eq!(Some(guest_minor_b), specresources_devices[1].minor());
     }
 
     #[test]
@@ -1293,54 +1421,67 @@ mod tests {
         let host_major: i64 = 99;
         let host_minor: i64 = 99;
 
-        let mut spec = Spec {
-            linux: Some(Linux {
-                devices: vec![
-                    oci::LinuxDevice {
-                        path: "/dev/char".to_string(),
-                        r#type: "c".to_string(),
-                        major: host_major,
-                        minor: host_minor,
-                        ..oci::LinuxDevice::default()
-                    },
-                    oci::LinuxDevice {
-                        path: "/dev/block".to_string(),
-                        r#type: "b".to_string(),
-                        major: host_major,
-                        minor: host_minor,
-                        ..oci::LinuxDevice::default()
-                    },
-                ],
-                resources: Some(LinuxResources {
-                    devices: vec![
-                        LinuxDeviceCgroup {
-                            r#type: "c".to_string(),
-                            major: Some(host_major),
-                            minor: Some(host_minor),
-                            ..LinuxDeviceCgroup::default()
-                        },
-                        LinuxDeviceCgroup {
-                            r#type: "b".to_string(),
-                            major: Some(host_major),
-                            minor: Some(host_minor),
-                            ..LinuxDeviceCgroup::default()
-                        },
-                    ],
-                    ..LinuxResources::default()
-                }),
-                ..Linux::default()
-            }),
-            ..Spec::default()
-        };
+        let mut spec = SpecBuilder::default()
+            .linux(
+                LinuxBuilder::default()
+                    .devices(vec![
+                        LinuxDeviceBuilder::default()
+                            .path(PathBuf::from("/dev/char"))
+                            .typ(LinuxDeviceType::C)
+                            .major(host_major)
+                            .minor(host_minor)
+                            .build()
+                            .unwrap(),
+                        LinuxDeviceBuilder::default()
+                            .path(PathBuf::from("/dev/block"))
+                            .typ(LinuxDeviceType::B)
+                            .major(host_major)
+                            .minor(host_minor)
+                            .build()
+                            .unwrap(),
+                    ])
+                    .resources(
+                        LinuxResourcesBuilder::default()
+                            .devices(vec![
+                                LinuxDeviceCgroupBuilder::default()
+                                    .typ(LinuxDeviceType::C)
+                                    .major(host_major)
+                                    .minor(host_minor)
+                                    .build()
+                                    .unwrap(),
+                                LinuxDeviceCgroupBuilder::default()
+                                    .typ(LinuxDeviceType::B)
+                                    .major(host_major)
+                                    .minor(host_minor)
+                                    .build()
+                                    .unwrap(),
+                            ])
+                            .build()
+                            .unwrap(),
+                    )
+                    .build()
+                    .unwrap(),
+            )
+            .build()
+            .unwrap();
 
         let container_path = "/dev/char";
         let vm_path = "/dev/null";
 
-        let specresources = spec.linux.as_ref().unwrap().resources.as_ref().unwrap();
-        assert_eq!(Some(host_major), specresources.devices[0].major);
-        assert_eq!(Some(host_minor), specresources.devices[0].minor);
-        assert_eq!(Some(host_major), specresources.devices[1].major);
-        assert_eq!(Some(host_minor), specresources.devices[1].minor);
+        let specresources_devices = spec
+            .linux()
+            .as_ref()
+            .unwrap()
+            .resources()
+            .as_ref()
+            .unwrap()
+            .devices()
+            .clone()
+            .unwrap();
+        assert_eq!(Some(host_major), specresources_devices[0].major());
+        assert_eq!(Some(host_minor), specresources_devices[0].minor());
+        assert_eq!(Some(host_major), specresources_devices[1].major());
+        assert_eq!(Some(host_minor), specresources_devices[1].minor());
 
         let res = update_spec_devices(
             &mut spec,
@@ -1352,11 +1493,20 @@ mod tests {
         assert!(res.is_ok());
 
         // Only the char device, not the block device should be updated
-        let specresources = spec.linux.as_ref().unwrap().resources.as_ref().unwrap();
-        assert_eq!(Some(guest_major), specresources.devices[0].major);
-        assert_eq!(Some(guest_minor), specresources.devices[0].minor);
-        assert_eq!(Some(host_major), specresources.devices[1].major);
-        assert_eq!(Some(host_minor), specresources.devices[1].minor);
+        let specresources_devices = spec
+            .linux()
+            .as_ref()
+            .unwrap()
+            .resources()
+            .as_ref()
+            .unwrap()
+            .devices()
+            .clone()
+            .unwrap();
+        assert_eq!(Some(guest_major), specresources_devices[0].major());
+        assert_eq!(Some(guest_minor), specresources_devices[0].minor());
+        assert_eq!(Some(host_major), specresources_devices[1].major());
+        assert_eq!(Some(host_minor), specresources_devices[1].minor());
     }
 
     #[test]
@@ -1369,19 +1519,21 @@ mod tests {
         let host_major: i64 = 99;
         let host_minor: i64 = 99;
 
-        let mut spec = Spec {
-            linux: Some(Linux {
-                devices: vec![oci::LinuxDevice {
-                    path: container_path.to_string(),
-                    r#type: "c".to_string(),
-                    major: host_major,
-                    minor: host_minor,
-                    ..oci::LinuxDevice::default()
-                }],
-                ..Linux::default()
-            }),
-            ..Spec::default()
-        };
+        let mut spec = SpecBuilder::default()
+            .linux(
+                LinuxBuilder::default()
+                    .devices(vec![LinuxDeviceBuilder::default()
+                        .path(PathBuf::from(container_path))
+                        .typ(LinuxDeviceType::C)
+                        .major(host_major)
+                        .minor(host_minor)
+                        .build()
+                        .unwrap()])
+                    .build()
+                    .unwrap(),
+            )
+            .build()
+            .unwrap();
 
         let vm_path = "/dev/null";
         let final_path = "/dev/new";
@@ -1395,10 +1547,10 @@ mod tests {
         );
         assert!(res.is_ok());
 
-        let specdevices = &spec.linux.as_ref().unwrap().devices;
-        assert_eq!(guest_major, specdevices[0].major);
-        assert_eq!(guest_minor, specdevices[0].minor);
-        assert_eq!(final_path, specdevices[0].path);
+        let specdevices = &spec.linux().as_ref().unwrap().devices().clone().unwrap();
+        assert_eq!(guest_major, specdevices[0].major());
+        assert_eq!(guest_minor, specdevices[0].minor());
+        assert_eq!(&PathBuf::from(final_path), specdevices[0].path());
     }
 
     #[test]
@@ -1689,6 +1841,41 @@ mod tests {
         assert!(matcher_b.is_match(&uev_b));
         assert!(!matcher_b.is_match(&uev_a));
         assert!(!matcher_a.is_match(&uev_b));
+    }
+
+    #[tokio::test]
+    #[allow(clippy::redundant_clone)]
+    async fn test_net_pci_matcher() {
+        let root_bus = create_pci_root_bus_path();
+        let relpath_a = "/0000:00:02.0/0000:01:01.0";
+
+        let mut uev_a = crate::uevent::Uevent::default();
+        uev_a.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
+        uev_a.devpath = format!("{}{}", root_bus, relpath_a);
+        uev_a.subsystem = String::from("net");
+        uev_a.interface = String::from("eth0");
+        let matcher_a = NetPciMatcher::new(relpath_a);
+        println!("Matcher a : {}", matcher_a.devpath);
+
+        let relpath_b = "/0000:00:02.0/0000:01:02.0";
+        let mut uev_b = uev_a.clone();
+        uev_b.devpath = format!("{}{}", root_bus, relpath_b);
+        let matcher_b = NetPciMatcher::new(relpath_b);
+
+        assert!(matcher_a.is_match(&uev_a));
+        assert!(matcher_b.is_match(&uev_b));
+        assert!(!matcher_b.is_match(&uev_a));
+        assert!(!matcher_a.is_match(&uev_b));
+
+        let relpath_c = "/0000:00:02.0/0000:01:03.0";
+        let net_substr = "/net/eth0";
+        let mut uev_c = uev_a.clone();
+        uev_c.devpath = format!("{}{}{}", root_bus, relpath_c, net_substr);
+        let matcher_c = NetPciMatcher::new(relpath_c);
+
+        assert!(matcher_c.is_match(&uev_c));
+        assert!(!matcher_a.is_match(&uev_c));
+        assert!(!matcher_b.is_match(&uev_c));
     }
 
     #[tokio::test]
