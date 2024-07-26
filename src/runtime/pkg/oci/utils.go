@@ -556,6 +556,9 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 
 		config.HypervisorConfig.SGXEPCSize = size
 	}
+	if initdata, ok := ocispec.Annotations[vcAnnotations.Initdata]; ok {
+		config.HypervisorConfig.Initdata = initdata
+	}
 
 	return nil
 }

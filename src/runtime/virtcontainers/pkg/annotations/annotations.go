@@ -243,6 +243,9 @@ const (
 
 	// EnableRootlessHypervisor is a sandbox annotation to enable rootless hypervisor (only supported in QEMU currently).
 	EnableRootlessHypervisor = kataAnnotHypervisorPrefix + "rootless"
+
+	// Initdata is the initdata passed in when CreateVM
+	Initdata = kataConfAnnotationsPrefix + "runtime.cc_init_data"
 )
 
 // Runtime related annotations

@@ -684,6 +684,9 @@ type HypervisorConfig struct {
 
 	// QgsPort defines Intel Quote Generation Service port exposed from the host
 	QgsPort uint32
+
+	// Initdata defines the initdata passed into guest when CreateVM
+	Initdata string
 }
 
 // vcpu mapping from vcpu number to thread number
