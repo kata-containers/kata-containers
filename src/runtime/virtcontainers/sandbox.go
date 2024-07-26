@@ -2320,30 +2320,25 @@ func (s *Sandbox) updateResources(ctx context.Context) error {
 	//
 	// If virtio-mem is being used, there isn't such a limitation - we can hotplug the maximum allowed memory at a single time.
 	//
-	newMemoryMB := uint32(sandboxMemoryByte >> utils.MibToBytesShift)
-	finalMemoryMB := newMemoryMB
+	finalMemoryMB := uint32(sandboxMemoryByte >> utils.MibToBytesShift)
 
 	hconfig := s.hypervisor.HypervisorConfig()
 
 	for {
 		currentMemoryMB := s.hypervisor.GetTotalMemoryMB(ctx)
 
-		maxhotPluggableMemoryMB := currentMemoryMB * acpiMemoryHotplugFactor
+		newMemoryMB := finalMemoryMB
 
 		// In the case of virtio-mem, we don't have a restriction on how much can be hotplugged at
 		// a single time. As a result, the max hotpluggable is only limited by the maximum memory size
 		// of the guest.
-		if hconfig.VirtioMem {
-			maxhotPluggableMemoryMB = uint32(hconfig.DefaultMaxMemorySize) - currentMemoryMB
-		}
-
-		deltaMB := int32(finalMemoryMB - currentMemoryMB)
-
-		if deltaMB > int32(maxhotPluggableMemoryMB) {
-			s.Logger().Warnf("Large hotplug. Adding %d MB of %d total memory", maxhotPluggableMemoryMB, deltaMB)
-			newMemoryMB = currentMemoryMB + maxhotPluggableMemoryMB
-		} else {
-			newMemoryMB = finalMemoryMB
+		if !hconfig.VirtioMem {
+			maxhotPluggableMemoryMB := currentMemoryMB * acpiMemoryHotplugFactor
+			deltaMB := int32(finalMemoryMB - currentMemoryMB)
+			if deltaMB > int32(maxhotPluggableMemoryMB) {
+				s.Logger().Warnf("Large hotplug. Adding %d MB of %d total memory", maxhotPluggableMemoryMB, deltaMB)
+				newMemoryMB = currentMemoryMB + maxhotPluggableMemoryMB
+			}
 		}
 
 		// Add the memory to the guest and online the memory:
