@@ -777,6 +777,7 @@ func TestAddRemoteHypervisorAnnotations(t *testing.T) {
 	// When initdata specified, remote hypervisor annotations do have the annotation added.
 	ocispec.Annotations[vcAnnotations.Initdata] = "initdata"
 	err = addAnnotations(ocispec, &sbConfig, runtimeConfig)
+	assert.NoError(err)
 	assert.Equal(sbConfig.HypervisorConfig.Initdata, "initdata")
 }
 
