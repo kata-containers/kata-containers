@@ -908,8 +908,10 @@ func (q *qemu) getMemArgs() (bool, string, string, error) {
 }
 
 func (q *qemu) setupVirtioMem(ctx context.Context) error {
-	// backend memory size must be multiple of 4Mib
-	sizeMB := (int(q.config.DefaultMaxMemorySize) - int(q.config.MemorySize)) >> 2 << 2
+	sizeMB := int(q.getMaxHotplugMemoryMB())
+	if sizeMB == 0 {
+		return nil
+	}
 
 	share, target, memoryBack, err := q.getMemArgs()
 	if err != nil {
@@ -2354,6 +2356,15 @@ func (q *qemu) GetTotalMemoryMB(ctx context.Context) uint32 {
 	return q.config.MemorySize + uint32(q.state.HotpluggedMemory)
 }
 
+func (q *qemu) getMaxHotplugMemoryMB() uint32 {
+	maxHotplugMemorySize := uint32(q.config.DefaultMaxMemorySize) - q.config.MemorySize
+	if q.config.VirtioMem {
+		// backend memory size must be multiple of 4Mib
+		maxHotplugMemorySize -= maxHotplugMemorySize % 4
+	}
+	return maxHotplugMemorySize
+}
+
 // ResizeMemory gets a request to update the VM memory to reqMemMB
 // Memory update is managed with two approaches
 // Add memory to VM:
@@ -2370,6 +2381,10 @@ func (q *qemu) ResizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSiz
 	currentMemory := q.GetTotalMemoryMB(ctx)
 	if err := q.qmpSetup(); err != nil {
 		return 0, MemoryDevice{}, err
+	}
+	maxHotplugMemory := q.getMaxHotplugMemoryMB()
+	if reqMemMB > q.config.MemorySize+maxHotplugMemory {
+		reqMemMB = q.config.MemorySize + maxHotplugMemory
 	}
 	var addMemDevice MemoryDevice
 	if q.config.VirtioMem && currentMemory != reqMemMB {
@@ -2388,10 +2403,6 @@ func (q *qemu) ResizeMemory(ctx context.Context, reqMemMB uint32, memoryBlockSiz
 	case currentMemory < reqMemMB:
 		//hotplug
 		addMemMB := reqMemMB - currentMemory
-
-		if currentMemory+addMemMB > uint32(q.config.DefaultMaxMemorySize) {
-			addMemMB = uint32(q.config.DefaultMaxMemorySize) - currentMemory
-		}
 
 		memHotplugMB, err := calcHotplugMemMiBSize(addMemMB, memoryBlockSizeMB)
 		if err != nil {
