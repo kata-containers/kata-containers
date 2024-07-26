@@ -14,9 +14,10 @@ use crate::VM_ROOTFS_DRIVER_PMEM;
 use crate::{VcpuThreadIds, VmmState};
 use anyhow::{anyhow, Context, Result};
 use ch_config::ch_api::{
-    cloud_hypervisor_vm_create, cloud_hypervisor_vm_start, cloud_hypervisor_vmm_ping,
-    cloud_hypervisor_vmm_shutdown,
+    cloud_hypervisor_vm_create, cloud_hypervisor_vm_resize, cloud_hypervisor_vm_start,
+    cloud_hypervisor_vmm_ping, cloud_hypervisor_vmm_shutdown, VmResizeData,
 };
+use ch_config::convert::checked_next_multiple_of;
 use ch_config::{guest_protection_is_tdx, NamedHypervisorConfig, VmConfig};
 use core::future::poll_fn;
 use futures::executor::block_on;
@@ -761,17 +762,109 @@ impl CloudHypervisorInner {
     }
 
     pub(crate) fn set_guest_memory_block_size(&mut self, size: u32) {
-        self._guest_memory_block_size_mb = size;
+        self.guest_memory_block_size_mb = size;
     }
 
     pub(crate) fn guest_memory_block_size_mb(&self) -> u32 {
-        self._guest_memory_block_size_mb
+        self.guest_memory_block_size_mb
     }
 
-    pub(crate) fn resize_memory(&self, _new_mem_mb: u32) -> Result<(u32, MemoryConfig)> {
-        warn!(sl!(), "CH memory resize not implemented - see https://github.com/kata-containers/kata-containers/issues/8801");
+    pub(crate) async fn resize_memory(
+        &mut self,
+        mut new_mem_mb: u32,
+    ) -> Result<(u32, MemoryConfig)> {
+        // check for probe in memory_config
+        let caps = &self.capabilities;
+        if caps.is_mem_hotplug_probe_supported() {
+            warn!(sl!(), "probe memory is not supported for cloud hypervisor");
+            return Ok((0, MemoryConfig::default()));
+        }
 
-        Ok((0, MemoryConfig::default()))
+        // check for resizing to 0
+        if new_mem_mb == 0 {
+            error!(sl!(), "Cannot resize memory to 0");
+            return Ok((0, MemoryConfig::default()));
+        }
+
+        // get hotplug size
+        let max_hotplug_size_mb = self.hypervisor_config().memory_info.default_maxmemory;
+
+        // get mem size
+        let default_mem_size_mb = self.hypervisor_config().memory_info.default_memory;
+        let current_hotplug_size_mb = self.mem_hotplug_size_mb;
+        let current_mem_size_mb = default_mem_size_mb + current_hotplug_size_mb;
+
+        if new_mem_mb < current_mem_size_mb {
+            warn!(sl!(), "Remove memory is not supported, nothing to do");
+            return Ok((current_mem_size_mb, MemoryConfig::default()));
+        }
+
+        let block_size_mb = self.guest_memory_block_size_mb;
+
+        let new_hotplug_size_mb = new_mem_mb - current_mem_size_mb;
+
+        // checked_next multiple_of() will align 0 to the block size, which we don't want here,
+        // so run check to avoid that
+        let mut aligned_new_hotplug_size_mb = None;
+        if new_hotplug_size_mb != 0 {
+            aligned_new_hotplug_size_mb =
+                checked_next_multiple_of(new_hotplug_size_mb.into(), block_size_mb.into());
+        }
+
+        if let Some(aligned_value_mb) = aligned_new_hotplug_size_mb {
+            let aligned_request = current_mem_size_mb + aligned_value_mb as u32;
+            if new_mem_mb < aligned_request {
+                info!(
+                    sl!(),
+                    "Aligning VM memory request {} to {} with block size {}", new_mem_mb, aligned_request, block_size_mb;
+                );
+                new_mem_mb = aligned_request;
+            }
+        }
+
+        // Checks after memory alignment
+        if new_mem_mb == current_mem_size_mb {
+            info!(sl!(), "VM already has requested memory {}", new_mem_mb);
+            return Ok((current_mem_size_mb, MemoryConfig::default()));
+        }
+        if new_mem_mb > max_hotplug_size_mb {
+            warn!(
+                sl!(),
+                "Memory size unchanged; memory requested {} is greater than max memory {}",
+                new_mem_mb,
+                max_hotplug_size_mb
+            );
+            return Ok((current_mem_size_mb, MemoryConfig::default()));
+        }
+
+        // update hotplug size
+        self.mem_hotplug_size_mb = new_mem_mb - self.hypervisor_config().memory_info.default_memory;
+
+        // resize to bytes for VM resize
+        let resize_mem = new_mem_mb as u64 * 1024 * 1024;
+
+        let socket = self
+            .api_socket
+            .as_ref()
+            .ok_or("missing socket")
+            .map_err(|e| anyhow!(e))?;
+
+        let resize_mem_data = VmResizeData {
+            desired_ram: Some(resize_mem),
+            ..Default::default()
+        };
+
+        let response = cloud_hypervisor_vm_resize(
+            socket.try_clone().context("failed to clone socket")?,
+            resize_mem_data,
+        )
+        .await?;
+
+        if let Some(detail) = response {
+            debug!(sl!(), "vm resize memory response: {:?}", detail);
+        }
+
+        Ok((new_mem_mb, MemoryConfig::default()))
     }
 }
 
@@ -967,7 +1060,9 @@ mod tests {
     #[cfg(target_arch = "x86_64")]
     use kata_sys_util::protection::TDX_SYS_FIRMWARE_DIR;
 
-    use kata_types::config::hypervisor::{Hypervisor as HypervisorConfig, SecurityInfo};
+    use kata_types::config::hypervisor::{
+        Hypervisor as HypervisorConfig, MemoryInfo, SecurityInfo,
+    };
     use serial_test::serial;
     #[cfg(target_arch = "x86_64")]
     use std::path::PathBuf;
@@ -1207,6 +1302,113 @@ mod tests {
 
         // Reset
         set_fake_guest_protection(None);
+    }
+
+    #[actix_rt::test]
+    async fn test_resize_memory() {
+        #[derive(Debug)]
+        struct TestData {
+            new_mem_mb: u32,
+            probe: bool,
+            default_maxmemory: u32,
+            default_memory: u32,
+            mem_hotplug_size_mb: u32,
+            guest_memory_block_size_mb: u32,
+            result: u32,
+        }
+
+        let tests = &[
+            // tests for failure cases
+            // probe failure
+            TestData {
+                new_mem_mb: 1024,
+                probe: true,
+                default_maxmemory: 2048,
+                default_memory: 512,
+                mem_hotplug_size_mb: 0,
+                guest_memory_block_size_mb: 128,
+                result: 0,
+            },
+            // resize to 0 failure
+            TestData {
+                new_mem_mb: 0,
+                probe: false,
+                default_maxmemory: 2048,
+                default_memory: 512,
+                mem_hotplug_size_mb: 0,
+                guest_memory_block_size_mb: 128,
+                result: 0,
+            },
+            // new_mem_mb > max_hotplug_size_mb failure, no alignment
+            TestData {
+                new_mem_mb: 4096,
+                probe: false,
+                default_maxmemory: 2048,
+                default_memory: 512,
+                mem_hotplug_size_mb: 0,
+                guest_memory_block_size_mb: 128,
+                result: 512,
+            },
+            // new_mem_mb == current_mem_size_mb failure, no alignment
+            TestData {
+                new_mem_mb: 1024,
+                probe: false,
+                default_maxmemory: 2048,
+                default_memory: 512,
+                mem_hotplug_size_mb: 512,
+                guest_memory_block_size_mb: 128,
+                result: 1024,
+            },
+            // new_mem_mb > max_hotplug_size_mb failure after alignment
+            TestData {
+                new_mem_mb: 1023,
+                probe: false,
+                default_maxmemory: 2048,
+                default_memory: 512,
+                mem_hotplug_size_mb: 512,
+                guest_memory_block_size_mb: 128,
+                result: 1024,
+            },
+            // new_mem_mb == current_mem_size_mb failure after alignment
+            TestData {
+                new_mem_mb: 2048,
+                probe: false,
+                default_maxmemory: 2048,
+                default_memory: 1023,
+                mem_hotplug_size_mb: 0,
+                guest_memory_block_size_mb: 128,
+                result: 1023,
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+
+            let mut ch = CloudHypervisorInner::default();
+            let mut hypervisor_config = HypervisorConfig::default();
+            let mut mem_info = MemoryInfo::default();
+            let mut capabilities = Capabilities::new();
+
+            mem_info.default_maxmemory = d.default_maxmemory;
+            mem_info.default_memory = d.default_memory;
+
+            hypervisor_config.memory_info = mem_info;
+            ch.config = Some(hypervisor_config);
+
+            ch.mem_hotplug_size_mb = d.mem_hotplug_size_mb;
+            ch.guest_memory_block_size_mb = d.guest_memory_block_size_mb;
+
+            if d.probe {
+                capabilities.set(CapabilityBits::GuestMemoryProbe);
+            }
+
+            ch.capabilities = capabilities;
+
+            let result = ch.resize_memory(d.new_mem_mb).await.unwrap();
+            let (mem_mb, _) = result;
+
+            assert_eq!(d.result, mem_mb, "{}", msg);
+        }
     }
 
     #[actix_rt::test]
