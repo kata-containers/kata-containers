@@ -41,7 +41,6 @@ else
 		"k8s-empty-dirs.bats" \
 		"k8s-env.bats" \
 		"k8s-exec.bats" \
-		"k8s-exec-rejected.bats" \
 		"k8s-file-volume.bats" \
 		"k8s-inotify.bats" \
 		"k8s-job.bats" \
@@ -56,6 +55,7 @@ else
 		"k8s-optional-empty-secret.bats" \
 		"k8s-pid-ns.bats" \
 		"k8s-pod-quota.bats" \
+		"k8s-policy-hard-coded.bats" \
 		"k8s-policy-job.bats" \
 		"k8s-policy-pod.bats" \
 		"k8s-policy-pvc.bats" \

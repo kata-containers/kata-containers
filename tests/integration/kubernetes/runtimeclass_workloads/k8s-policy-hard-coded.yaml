@@ -6,7 +6,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: policy-exec-rejected
+  name: hard-coded-policy-pod
 spec:
   terminationGracePeriodSeconds: 0
   shareProcessNamespace: true
