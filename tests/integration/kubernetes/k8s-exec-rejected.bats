@@ -9,7 +9,7 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	policy_tests_enabled || skip "Policy tests are disabled."
+	hard_coded_policy_tests_enabled || skip "Policy tests are disabled."
 
 	get_pod_config_dir
 	pod_name="policy-exec-rejected"
@@ -38,7 +38,7 @@ setup() {
 }
 
 teardown() {
-	policy_tests_enabled || skip "Policy tests are disabled."
+	hard_coded_policy_tests_enabled || skip "Policy tests are disabled."
 
 	# Debugging information
 	kubectl describe "pod/$pod_name"
