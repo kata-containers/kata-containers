@@ -1111,12 +1111,9 @@ CreateSandboxRequest {
 ExecProcessRequest {
     print("ExecProcessRequest 1: input =", input)
 
-    i_command = concat(" ", input.process.Args)
-    print("ExecProcessRequest 1: i_command =", i_command)
-
-    some p_command in policy_data.request_defaults.ExecProcessRequest.commands
+    some p_command in policy_data.request_defaults.ExecProcessRequest.allowed_commands
     print("ExecProcessRequest 1: p_command =", p_command)
-    p_command == i_command
+    p_command == input.process.Args
 
     print("ExecProcessRequest 1: true")
 }

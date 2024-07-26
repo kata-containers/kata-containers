@@ -17,8 +17,8 @@ setup() {
 	get_pod_config_dir
 	policy_settings_dir="$(create_tmp_policy_settings_dir "${pod_config_dir}")"
 	
-	exec_command="printenv data-3"
-	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command}"
+	exec_command=(printenv data-3)
+	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command[@]}"
 	add_requests_to_policy_settings "${policy_settings_dir}" "ReadStreamRequest"
 
 	correct_configmap_yaml="${pod_config_dir}/k8s-policy-configmap.yaml"
@@ -63,10 +63,8 @@ wait_for_pod_ready() {
 }
 
 @test "Able to read env variables sourced from configmap using envFrom" {
-	kubectl create -f "${correct_configmap_yaml}"
-	kubectl create -f "${correct_pod_yaml}"
-	kubectl wait --for=condition=Ready "--timeout=${timeout}" pod "${pod_name}"
-	expected_env_var=$(kubectl exec "${pod_name}" -- printenv data-3)
+	wait_for_pod_ready
+	expected_env_var=$(kubectl exec "${pod_name}" -- ${exec_command[@]})
 	[ "$expected_env_var" = "value-3" ] || fail "expected_env_var is not equal to value-3"
 }
 
