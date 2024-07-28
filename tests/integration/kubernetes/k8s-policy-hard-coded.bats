@@ -9,19 +9,19 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	policy_tests_enabled || skip "Policy tests are disabled."
+	hard_coded_policy_tests_enabled || skip "Policy tests are disabled."
 
 	get_pod_config_dir
-	pod_name="policy-exec-rejected"
-	pod_yaml="${pod_config_dir}/k8s-policy-exec-rejected.yaml"
-	allow_all_except_exec_policy=$(base64 -w 0 "${pod_config_dir}/allow-all-except-exec-process.rego")
+	pod_name="hard-coded-policy-pod"
+	pod_yaml="${pod_config_dir}/k8s-policy-hard-coded.yaml"
 }
 
 @test "Kubectl exec rejected by policy" {
 	# Add to the YAML file a policy that rejects ExecProcessRequest.
+	allow_all_except_exec_policy=$(base64 -w 0 "${pod_config_dir}/allow-all-except-exec-process.rego")
 	yq -i \
 		".metadata.annotations.\"io.katacontainers.config.agent.policy\" = \"${allow_all_except_exec_policy}\"" \
-  "${pod_yaml}"
+		"${pod_yaml}"
 
 	# Create the pod
 	kubectl create -f "${pod_yaml}"
@@ -38,7 +38,7 @@ setup() {
 }
 
 teardown() {
-	policy_tests_enabled || skip "Policy tests are disabled."
+	hard_coded_policy_tests_enabled || skip "Policy tests are disabled."
 
 	# Debugging information
 	kubectl describe "pod/$pod_name"

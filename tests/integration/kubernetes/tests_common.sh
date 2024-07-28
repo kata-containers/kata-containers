@@ -306,16 +306,18 @@ set_namespace_to_policy_settings() {
 	mv "${settings_dir}/new-genpolicy-settings.json" "${settings_dir}/genpolicy-settings.json"
 }
 
-policy_tests_enabled() {
-	# The Guest images for these platforms have been built using AGENT_POLICY=yes -
-	# see kata-deploy-binaries.sh.
+hard_coded_policy_tests_enabled() {
+	# CI is testing hard-coded policies just on a the platforms listed here. Outside of CI,
+	# users can enable testing of the same policies (plus the auto-generated policies) by
+	# specifying AUTO_GENERATE_POLICY=yes.
 	local enabled_hypervisors="qemu-coco-dev qemu-sev qemu-snp qemu-tdx"
 	[[ " $enabled_hypervisors " =~ " ${KATA_HYPERVISOR} " ]] || \
-		[ "${KATA_HOST_OS}" == "cbl-mariner" ]
+		[ "${KATA_HOST_OS}" == "cbl-mariner" ] || \
+		auto_generate_policy_enabled
 }
 
 add_allow_all_policy_to_yaml() {
-	policy_tests_enabled || return 0
+	hard_coded_policy_tests_enabled || return 0
 
 	local yaml_file="$1"
 	# Previous version of yq was not ready to handle multiple objects in a single yaml.
