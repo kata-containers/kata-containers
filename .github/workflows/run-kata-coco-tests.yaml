@@ -154,6 +154,13 @@ jobs:
         if: always()
         run: bash tests/integration/kubernetes/gha-run.sh cleanup-snapshotter
 
+      - name: Take a post-action
+        if: always()
+        run:
+          if [ -f ${HOME}/script/post_action.sh ]; then
+            ${HOME}/script/post_action.sh sev
+          fi
+
   run-k8s-tests-sev-snp:
     strategy:
       fail-fast: false
@@ -228,6 +235,13 @@ jobs:
       - name: Delete CoCo KBS
         if: always()
         run: bash tests/integration/kubernetes/gha-run.sh delete-coco-kbs
+
+      - name: Take a post-action
+        if: always()
+        run:
+          if [ -f ${HOME}/script/post_action.sh ]; then
+            ${HOME}/script/post_action.sh sev-snp
+          fi
 
   # Generate jobs for testing CoCo on non-TEE environments
   run-k8s-tests-coco-nontee:
