@@ -275,6 +275,10 @@ impl ContainerInner {
         signal: u32,
         all: bool,
     ) -> Result<()> {
+        if self.check_state(vec![ProcessStatus::Stopped]).await.is_ok() {
+            return Ok(());
+        }
+
         let mut process_id: agent::ContainerProcessID = process.clone().into();
         if all {
             // force signal init process

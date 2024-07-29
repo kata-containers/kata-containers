@@ -471,8 +471,15 @@ impl Sandbox for VirtSandbox {
     }
 
     async fn stop(&self) -> Result<()> {
-        info!(sl!(), "begin stop sandbox");
-        self.hypervisor.stop_vm().await.context("stop vm")?;
+        let mut sandbox_inner = self.inner.write().await;
+
+        if sandbox_inner.state != SandboxState::Stopped {
+            info!(sl!(), "begin stop sandbox");
+            self.hypervisor.stop_vm().await.context("stop vm")?;
+            sandbox_inner.state = SandboxState::Stopped;
+            info!(sl!(), "sandbox stopped");
+        }
+
         Ok(())
     }
 
