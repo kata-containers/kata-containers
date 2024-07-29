@@ -7,6 +7,8 @@
 
 set -o errexit
 
+[ -n "${DEBUG:-}" ] && set -o xtrace
+
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 script_name="$(basename "${BASH_SOURCE[0]}")"
 
