@@ -26,9 +26,6 @@ jobs:
   kata-payload:
     runs-on: s390x
     steps:
-      - name: Take a pre-action for self-hosted runner
-        run: ${HOME}/script/pre_action.sh ubuntu-2204
-
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.commit-hash }}

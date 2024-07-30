@@ -18,9 +18,6 @@ jobs:
     needs: build-kata-static-tarball-s390x
     runs-on: s390x
     steps:
-      - name: Take a pre-action for self-hosted runner
-        run: ${HOME}/script/pre_action.sh ubuntu-2204
-
       - name: Login to Kata Containers docker.io
         uses: docker/login-action@v3
         with:

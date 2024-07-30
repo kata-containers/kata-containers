@@ -29,9 +29,6 @@ jobs:
       GOPATH: ${{ github.workspace }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
-      - name: Take a pre-action for self-hosted runner
-        run: ${HOME}/script/pre_action.sh ubuntu-2204
-
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.commit-hash }}
@@ -57,7 +54,3 @@ jobs:
 
       - name: Run cri-containerd tests
         run: bash tests/integration/cri-containerd/gha-run.sh run
-
-      - name: Take a post-action for self-hosted runner
-        if: always()
-        run: ${HOME}/script/post_action.sh ubuntu-2204
