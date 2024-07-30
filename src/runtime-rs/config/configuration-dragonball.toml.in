@@ -16,6 +16,7 @@ path = "@DBPATH@"
 ctlpath = "@DBCTLPATH@"
 kernel = "@KERNELPATH_DB@"
 image = "@IMAGEPATH@"
+# initrd = "@INITRDPATH@"
 
 # rootfs filesystem type:
 #   - ext4 (default)
