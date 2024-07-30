@@ -51,7 +51,7 @@ valid_jailer_paths = @FCVALIDJAILERPATHS@
 # may stop the virtual machine from booting.
 # To see the list of default parameters, enable hypervisor debug, create a
 # container and look for 'default-kernel-parameters' log entries.
-kernel_params = "@KERNELPARAMS@"
+kernel_params = "@KERNELPARAMS_FC@"
 
 # Default number of vCPUs per SB/VM:
 # unspecified or 0                --> will be set to @DEFVCPUS@
