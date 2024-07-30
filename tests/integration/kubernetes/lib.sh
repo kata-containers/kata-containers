@@ -111,12 +111,21 @@ assert_rootfs_count() {
 	local expect_count="$3"
 	local allrootfs=""
 
+	echo "sandbox id is: $sandbox_id"
+	echo "node is $node"
+	echo "expect count is: $expect_count"
+
 	# verify that the sandbox_id is not empty;
 	# otherwise, the command $(exec_host $node "find /run/kata-containers/shared/sandboxes/${sandbox_id} -name rootfs -type d")
 	# may yield an unexpected count of rootfs.
 	if [ -z "$sandbox_id" ]; then
 		return 1
 	fi
+	cmdrootfs=$(sudo ls /run/kata-containers/shared/sandboxes)
+	echo "rootfs ls is: $cmdrootfs"
+
+	cmdsandbox=$(sudo find /run/kata-containers/shared/sandboxes/${sandbox_id})
+	echo "sandbox find is: $cmdsandbox"
 
 	# Max loop 3 times to get all pulled rootfs for given sandbox_id
 	for _ in {1..3}
