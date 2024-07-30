@@ -60,10 +60,6 @@ jobs:
       AUTHENTICATED_IMAGE_USER: ${{ secrets.AUTHENTICATED_IMAGE_USER }}
       AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
     steps:
-      - name: Take a pre-action for self-hosted runner
-        run: |
-          "${HOME}/script/pre_action.sh" ubuntu-2204
-
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.commit-hash }}
@@ -88,9 +84,3 @@ jobs:
       - name: Run tests
         timeout-minutes: 60
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
-
-      - name: Take a post-action
-        if: always()
-        run: |
-          bash tests/integration/kubernetes/gha-run.sh cleanup-zvsi || true
-          "${HOME}/script/post_action.sh" ubuntu-2204

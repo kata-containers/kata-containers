@@ -40,9 +40,6 @@ jobs:
           - shim-v2
           - virtiofsd
     steps:
-      - name: Take a pre-action for self-hosted runner
-        run: ${HOME}/script/pre_action.sh ubuntu-2204
-
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
         uses: docker/login-action@v3
@@ -91,9 +88,6 @@ jobs:
     runs-on: s390x
     needs: build-asset
     steps:
-      - name: Take a pre-action for self-hosted runner
-        run: ${HOME}/script/pre_action.sh ubuntu-2204
-
       - uses: actions/checkout@v4
 
       - name: get-artifacts
@@ -136,9 +130,6 @@ jobs:
     runs-on: s390x
     needs: [build-asset, build-asset-boot-image-se]
     steps:
-      - name: Take a pre-action for self-hosted runner
-        run: ${HOME}/script/pre_action.sh ubuntu-2204
-
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.commit-hash }}
