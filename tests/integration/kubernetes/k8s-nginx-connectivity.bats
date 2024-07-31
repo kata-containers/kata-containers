@@ -11,7 +11,7 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 setup() {
 	nginx_version="${docker_images_nginx_version}"
 	nginx_image="nginx:$nginx_version"
-	busybox_image="busybox"
+	busybox_image="quay.io/prometheus/busybox:latest"
 	deployment="nginx-deployment"
 
 	get_pod_config_dir
