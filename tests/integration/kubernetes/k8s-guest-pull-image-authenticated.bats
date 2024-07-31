@@ -129,6 +129,8 @@ function create_pod_yaml_with_private_image() {
     echo "Pod ${kata_pod_with_private_image}: $(cat ${kata_pod_with_private_image})"
 
     assert_pod_fail "${kata_pod_with_private_image}"
+    echo "${node}"
+    echo "${node_start_time}"
     assert_logs_contain "${node}" kata "${node_start_time}" "failed to pull manifest Not authorized"
 }
 
