@@ -2609,7 +2609,7 @@ func (s *Sandbox) resourceControllerDelete() error {
 		it throws error `failed to clean up the files, /sys/fs/cgroup/<subsystem>/kubepods.slice/kube-{besteffor/burst}/kubepods-best-122/cri--container-1223.scope/`
 		- With below condition, it entirely skips the delete operation if we are using systemd and relies on systemd for cleanup.
 	*/
-	if resCtrl.IsSystemdCgroup(s.state.SandboxCgroupPath) {
+	if resCtrl.IsSystemdCgroup(s.state.SandboxCgroupPath) && s.config.SandboxCgroupOnly {
 		s.Logger().Debugf("skipping delete as cgroup is managed by systemd")
 		return nil
 	}
