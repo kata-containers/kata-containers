@@ -833,6 +833,34 @@ install_kata()
 		sudo ln -sf "$from_path" "$link_dir"
 	done
 
+	local tdx_qemu_config="/opt/kata/share/defaults/kata-containers/configuration-qemu-tdx.toml"
+	local tdx_qemu_path_from_distro="NOT_SUPPORTED"
+	local tdx_ovmf_path_from_distro="NOT_SUPPORTED"
+	if [ -e $tdx_qemu_config ]; then
+		source /etc/os-release || source /usr/lib/os-release
+		case $ID in
+			ubuntu)
+				case $VERSION_ID in
+					24.04)
+						tdx_qemu_path_from_distro="/usr/bin/qemu-system-x86_64"
+						tdx_ovmf_path_from_distro="/usr/share/ovmf/OVMF.fd"
+						;;
+				esac
+				;;
+			centos)
+				case $VERSION_ID in
+					9)
+						tdx_qemu_path_from_distro="/usr/libexec/qemu-kvm"
+						tdx_ovmf_path_from_distro="/usr/share/edk2/ovmf/OVMF.inteltdx.fd"
+						;;
+				esac
+				;;
+		esac
+
+		sudo sed -i -e "s|PLACEHOLDER_FOR_DISTRO_QEMU_WITH_TDX_SUPPORT|$tdx_qemu_path_from_distro|g" $tdx_qemu_config
+		sudo sed -i -e "s|PLACEHOLDER_FOR_DISTRO_OVMF_WITH_TDX_SUPPORT|$tdx_ovmf_path_from_distro|g" $tdx_qemu_config
+	fi
+
 	info "$project installed\n"
 }
 
