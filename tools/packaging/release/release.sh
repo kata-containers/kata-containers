@@ -142,7 +142,7 @@ function _publish_multiarch_manifest()
 		for tag in ${IMAGE_TAGS[@]}; do
 			docker manifest create ${registry}:${tag} \
 				--amend ${registry}:${tag}-amd64 \
-				--amend ${registry}:${tag}-arm64 \
+	#			--amend ${registry}:${tag}-arm64 \
 				--amend ${registry}:${tag}-s390x \
 				--amend ${registry}:${tag}-ppc64le
 
