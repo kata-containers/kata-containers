@@ -1103,6 +1103,9 @@ CopyFileRequest {
 }
 
 CreateSandboxRequest {
+    print("CreateSandboxRequest: input.guest_hook_path =", input.guest_hook_path)
+    count(input.guest_hook_path) == 0
+
     i_pidns := input.sandbox_pidns
     print("CreateSandboxRequest: i_pidns =", i_pidns)
     i_pidns == false
