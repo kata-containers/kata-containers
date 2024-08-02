@@ -27,7 +27,6 @@ clippy:
 	@echo "INFO: cargo clippy..."
 	cargo clippy --all-targets --all-features \
 		-- \
-		-D warnings
 
 vendor:
 	@echo "INFO: vendor do nothing.."

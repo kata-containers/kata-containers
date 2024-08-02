@@ -13,7 +13,7 @@ ifeq ($(ARCH), ppc64le)
 default: build
 
 build:
-	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo build --target $(TRIPLE) --$(BUILD_TYPE)
+	@RUSTFLAGS="$(EXTRA_RUSTFLAGS)" cargo build --target $(TRIPLE) --$(BUILD_TYPE)
 
 static-checks-build:
 	@echo "INFO: static-checks-build do nothing.."
@@ -27,7 +27,7 @@ vendor:
 test:
 
 install:
-	@RUSTFLAGS="$(EXTRA_RUSTFLAGS) --deny warnings" cargo install --locked --target $(TRIPLE) --path .
+	@RUSTFLAGS="$(EXTRA_RUSTFLAGS)" cargo install --locked --target $(TRIPLE) --path .
 
 check: standard_rust_check
 

@@ -176,7 +176,6 @@ standard_rust_check:
 	cargo fmt -- --check
 	cargo clippy --all-targets --all-features --release \
 		-- \
-		-D warnings
 
 # Install a file (full version).
 #

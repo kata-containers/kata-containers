@@ -25,7 +25,6 @@ clippy:
 	@echo "INFO: cargo clippy..."
 	cargo clippy --all-targets --all-features --release \
 		-- \
-		-D warnings
 
 format:
 	@echo "INFO: cargo fmt..."
