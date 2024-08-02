@@ -100,11 +100,7 @@ impl AgentPolicy {
         }
 
         self.engine.add_policy_from_file(default_policy_file)?;
-        self.engine.set_input_json("{}")?;
-        self.allow_failures = match self.allow_request("AllowRequestsFailingPolicy", "{}").await {
-            Ok((allowed, _prints)) => allowed,
-            Err(_) => false,
-        };
+        self.update_allow_failures_flag().await?;
         Ok(())
     }
 
@@ -116,8 +112,18 @@ impl AgentPolicy {
         let query = format!("data.agent_policy.{ep}");
         self.engine.set_input_json(ep_input)?;
 
-        let mut allow = self.engine.eval_bool_query(query, false)?;
+        let mut allow = match self.engine.eval_bool_query(query, false) {
+            Ok(a) => a,
+            Err(e) => {
+                if !self.allow_failures {
+                    return Err(e);
+                }
+                false
+            }
+        };
+
         if !allow && self.allow_failures {
+            warn!(sl!(), "policy: ignoring error for {ep}");
             allow = true;
         }
 
@@ -134,6 +140,7 @@ impl AgentPolicy {
         self.engine = Self::new_engine();
         self.engine
             .add_policy("agent_policy".to_string(), policy.to_string())?;
+        self.update_allow_failures_flag().await?;
         Ok(())
     }
 
@@ -159,5 +166,21 @@ impl AgentPolicy {
                 }
             }
         }
+    }
+
+    async fn update_allow_failures_flag(&mut self) -> Result<()> {
+        self.allow_failures = match self.allow_request("AllowRequestsFailingPolicy", "{}").await {
+            Ok((allowed, _prints)) => {
+                if allowed {
+                    warn!(
+                        sl!(),
+                        "policy: AllowRequestsFailingPolicy is enabled - will ignore errors"
+                    );
+                }
+                allowed
+            }
+            Err(_) => false,
+        };
+        Ok(())
     }
 }
