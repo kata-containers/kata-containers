@@ -16,6 +16,7 @@ K8S_TEST_DEBUG="${K8S_TEST_DEBUG:-false}"
 K8S_TEST_HOST_TYPE="${K8S_TEST_HOST_TYPE:-small}"
 # Setting to "yes" enables fail fast, stopping execution at the first failed test.
 K8S_TEST_FAIL_FAST="${K8S_TEST_FAIL_FAST:-no}"
+K8S_TEST_UNION="k8s-guest-pull-image-encrypted.bats"
 
 if [ -n "${K8S_TEST_UNION:-}" ]; then
 	K8S_TEST_UNION=($K8S_TEST_UNION)
