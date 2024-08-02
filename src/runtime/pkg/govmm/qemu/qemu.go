@@ -1298,10 +1298,6 @@ func (blkdev BlockDevice) QemuParams(config *Config) []string {
 		deviceParams = append(deviceParams, s)
 	}
 	deviceParams = append(deviceParams, fmt.Sprintf("drive=%s", blkdev.ID))
-	if !blkdev.SCSI {
-		deviceParams = append(deviceParams, "scsi=off")
-	}
-
 	if !blkdev.WCE {
 		deviceParams = append(deviceParams, "config-wce=off")
 	}

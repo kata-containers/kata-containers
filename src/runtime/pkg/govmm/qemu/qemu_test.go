@@ -281,7 +281,6 @@ func TestAppendDeviceBlock(t *testing.T) {
 		AIO:           Threads,
 		Format:        QCOW2,
 		Interface:     NoInterface,
-		SCSI:          false,
 		WCE:           false,
 		DisableModern: true,
 		ROMFile:       romfile,
