@@ -164,7 +164,7 @@ kbs_install_cli() {
 	source /etc/os-release || source /usr/lib/os-release
 	case "${ID}" in
 		ubuntu)
-			local pkgs="build-essential"
+			local pkgs="build-essential pkg-config libssl-dev"
 
 			sudo apt-get update -y
 			# shellcheck disable=2086
