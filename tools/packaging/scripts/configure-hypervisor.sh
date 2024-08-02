@@ -356,11 +356,6 @@ generate_qemu_options() {
 	# Disable XEN driver
 	qemu_options+=(size:--disable-xen)
 
-	# FIXME: why is this disabled?
-	# (for reference, it's explicitly enabled in Ubuntu 17.10 and
-	# implicitly enabled in Fedora 27).
-	qemu_options+=(size:--disable-linux-aio)
-
 	# Disable Capstone
 	qemu_options+=(size:--disable-capstone)
 
@@ -411,6 +406,9 @@ generate_qemu_options() {
 
 	# Required for fast network access
 	qemu_options+=(speed:--enable-vhost-net)
+
+	# Support Linux AIO (native)
+	qemu_options+=(size:--enable-linux-aio)
 
 	# Support Ceph RADOS Block Device (RBD)
 	[ -z "${static}" ] && qemu_options+=(functionality:--enable-rbd)
