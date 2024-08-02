@@ -265,6 +265,17 @@ function uninstall_kbs_client() {
 }
 
 function run_tests() {
+	if [ "${K8S_TEST_HOST_TYPE}" = "baremetal" ]; then
+		# Baremetal self-hosted runners end up accumulating way too much log
+		# and when those get displayed it's very hard to understand what's
+		# part of the current run and what's something from the past coming
+		# to haunt us.
+		#
+		# With this in mind, let's ensure we do rotate the logs on every single
+		# run of the tests, as its first step.
+		sudo journalctl --vacuum-time 1s --rotate
+	fi
+
 	ensure_yq
 	platform="${1:-}"
 
