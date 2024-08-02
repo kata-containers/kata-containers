@@ -820,7 +820,6 @@ impl ToQemuParams for BlockBackend {
 struct DeviceVirtioBlk {
     bus_type: VirtioBusType,
     id: String,
-    scsi: bool,
     config_wce: bool,
     share_rw: bool,
 }
@@ -830,16 +829,9 @@ impl DeviceVirtioBlk {
         DeviceVirtioBlk {
             bus_type,
             id: id.to_owned(),
-            scsi: false,
             config_wce: false,
             share_rw: true,
         }
-    }
-
-    #[allow(dead_code)]
-    fn set_scsi(&mut self, scsi: bool) -> &mut Self {
-        self.scsi = scsi;
-        self
     }
 
     #[allow(dead_code)]
@@ -861,11 +853,6 @@ impl ToQemuParams for DeviceVirtioBlk {
         let mut params = Vec::new();
         params.push(format!("virtio-blk-{}", self.bus_type));
         params.push(format!("drive=image-{}", self.id));
-        if self.scsi {
-            params.push("scsi=on".to_owned());
-        } else {
-            params.push("scsi=off".to_owned());
-        }
         if self.config_wce {
             params.push("config-wce=on".to_owned());
         } else {
