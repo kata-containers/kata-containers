@@ -179,8 +179,8 @@ function extract_kata_env() {
 
 	# get the requested memory and num of vcpus from the kata config file.
 	config_content="$(cat ${RUNTIME_CONFIG_PATH} | grep -vE "^#")"
-	REQ_MEMORY="$(echo "${config_content}" | grep -i default_memory | cut -d  "=" -f2 | awk '{print $1}')"
-	REQ_NUM_VCPUS="$(echo "${config_content}" | grep -i default_vcpus | cut -d  "=" -f2 | awk '{print $1}')"
+	REQ_MEMORY="$(echo "${config_content}" | grep -i 'default_memory =' | cut -d  "=" -f2 | awk '{print $1}')"
+	REQ_NUM_VCPUS="$(echo "${config_content}" | grep -i 'default_vcpus =' | cut -d  "=" -f2 | awk '{print $1}')"
 
 	# Shimv2 path is being affected by https://github.com/kata-containers/kata-containers/issues/1151
 	SHIM_PATH=$(command -v containerd-shim-kata-v2)
@@ -188,7 +188,10 @@ function extract_kata_env() {
 
 	SHIM_VERSION=${RUNTIME_VERSION}
 
-	HYPERVISOR_PATH=$(sudo ${cmd} env --json | jq -r ${hypervisor_path})
+	HYPERVISOR_PATH=$(echo "${kata_env}" | jq -r ${hypervisor_path})
+	VIRTIOFSD_PATH=$(echo "${kata_env}" | jq -r ${virtio_fs_daemon_path})
+	INITRD_PATH=$(echo "${kata_env}" | jq -r ${initrd_path})
+
 	# TODO: there is no ${cmd} of rust version currently
 	if [ "${KATA_HYPERVISOR}" != "dragonball" ]; then
 		if [ "${KATA_HYPERVISOR}" = "stratovirt" ]; then
@@ -197,9 +200,6 @@ function extract_kata_env() {
 			HYPERVISOR_VERSION=$(sudo -E ${HYPERVISOR_PATH} --version | head -n1)
 		fi
 	fi
-	VIRTIOFSD_PATH=$(sudo ${cmd} env --json | jq -r ${virtio_fs_daemon_path})
-
-	INITRD_PATH=$(sudo ${cmd} env --json | jq -r ${initrd_path})
 }
 
 # Checks that processes are not running

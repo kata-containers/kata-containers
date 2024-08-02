@@ -49,20 +49,11 @@ EOF
 function save_config() {
 	metrics_json_start_array
 
-	pushd "${DEFAULT_KATA_CONFIG_DIR}"
-	local MEM_AVAIL_MB="$(cat ${DEFAULT_KATA_CONFIG_FNAME} | grep -i "default_memory =" | cut -d "=" -f2 | tr -d ' ' | tr -d '"')"
-	local NUM_CPUS="$(cat ${DEFAULT_KATA_CONFIG_FNAME} | grep -i "default_vcpus =" | cut -d "=" -f2 | tr -d ' ' | tr -d '"')"
-	local SHARED_FS="$(cat ${DEFAULT_KATA_CONFIG_FNAME} | grep shared_fs | cut -d "=" -f2 | tr -d ' ' | tr -d '"')"
-	popd
-
 	local json="$(cat << EOF
 	{
 		"image": "${IMAGE}",
 		"units": "ms",
 		"mode": "Lower Is Better",
-		"shared-fs": "${SHARED_FS}",
-		"num-vcpus": "${NUM_CPUS}",
-		"memory-available-mb": "${MEM_AVAIL_MB}"
 	}
 EOF
 )"
