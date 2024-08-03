@@ -1,0 +1,12 @@
+// Copyright (c) 2020 Intel Corporation
+// Portions Copyright (c) Microsoft Corporation.
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+
+//
+// WARNING: This file is auto-generated - DO NOT EDIT!
+//
+
+#![allow(dead_code)]
+pub const COMMIT_INFO: &str = "@COMMIT_INFO@";
