@@ -131,34 +131,6 @@ jobs:
           platforms: linux/amd64, linux/s390x
           file: tests/integration/kubernetes/runtimeclass_workloads/confidential/unencrypted/Dockerfile
 
-  run-kata-deploy-tests-on-aks:
-    # TODO: Reenable when Azure CI budget is secured (see #9939).
-    if: false
-    needs: publish-kata-deploy-payload-amd64
-    uses: ./.github/workflows/run-kata-deploy-tests-on-aks.yaml
-    with:
-      registry: ghcr.io
-      repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-amd64
-      commit-hash: ${{ inputs.commit-hash }}
-      pr-number: ${{ inputs.pr-number }}
-      target-branch: ${{ inputs.target-branch }}
-    secrets: inherit
-
-  run-kata-deploy-tests-on-garm:
-    # TODO: Transition to free runner (see #9940).
-    if: false
-    needs: publish-kata-deploy-payload-amd64
-    uses: ./.github/workflows/run-kata-deploy-tests-on-garm.yaml
-    with:
-      registry: ghcr.io
-      repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-amd64
-      commit-hash: ${{ inputs.commit-hash }}
-      pr-number: ${{ inputs.pr-number }}
-      target-branch: ${{ inputs.target-branch }}
-    secrets: inherit
-
   run-kata-monitor-tests:
     needs: build-kata-static-tarball-amd64
     uses: ./.github/workflows/run-kata-monitor-tests.yaml
