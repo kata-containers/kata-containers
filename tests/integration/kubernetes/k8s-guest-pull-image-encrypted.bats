@@ -11,10 +11,6 @@ load "${BATS_TEST_DIRNAME}/confidential_kbs.sh"
 export KBS="${KBS:-false}"
 
 setup() {
-    if is_confidential_hardware; then
-        skip "Due to issues related to pull-image integration skip tests for ${KATA_HYPERVISOR}."
-    fi
-
     if ! is_confidential_runtime_class; then
         skip "Test not supported for ${KATA_HYPERVISOR}."
     fi
@@ -114,10 +110,6 @@ function create_pod_yaml_with_encrypted_image() {
 }
 
 teardown() {
-    if is_confidential_hardware; then
-        skip "Due to issues related to pull-image integration skip tests for ${KATA_HYPERVISOR}."
-    fi
-
     if ! is_confidential_runtime_class; then
         skip "Test not supported for ${KATA_HYPERVISOR}."
     fi
