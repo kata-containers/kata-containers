@@ -1596,6 +1596,11 @@ func (s *Sandbox) CreateContainer(ctx context.Context, contConfig ContainerConfi
 
 			logger.Debug("Removing stopped container from sandbox store")
 			s.removeContainer(c.id)
+			// flush data to storage, cleanup removed container
+			// here can ignore the error
+			if errSave := s.Save(); errSave != nil {
+				logger.WithError(errSave).Warn("Failed to save sanbox to persist.json")
+			}
 		}
 	}()
 
