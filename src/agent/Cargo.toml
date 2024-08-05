@@ -84,6 +84,8 @@ regorus = { version = "0.1.4", default-features = false, features = [
     "arc",
     "regex",
 ], optional = true }
+#cdi = { git = "https://github.com/cncf-tags/container-device-interface-rs", rev = "19763bcf0de62599ce8b88558418b4dac1154745" }
+cdi = { git = "https://github.com/zvonkok/container-device-interface-rs", branch = "rename-with-auto-refresh" }
 
 [dev-dependencies]
 tempfile = "3.1.0"
