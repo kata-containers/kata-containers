@@ -58,7 +58,7 @@ use rustjail::process::ProcessOperations;
 use crate::cdh;
 use crate::device::block_device_handler::get_virtio_blk_pci_device_name;
 use crate::device::network_device_handler::wait_for_net_interface;
-use crate::device::{add_devices, update_env_pci};
+use crate::device::{add_devices, handle_cdi_devices, update_env_pci};
 use crate::features::get_build_features;
 use crate::image::KATA_IMAGE_WORK_DIR;
 use crate::linux_abi::*;
@@ -223,6 +223,14 @@ impl AgentService {
         // match real devices inside the VM. This step is necessary since we
         // cannot predict everything from the caller.
         add_devices(&sl(), &req.devices, &mut oci, &self.sandbox).await?;
+
+        // In guest-kernel mode some devices need extra handling. Taking the
+        // GPU as an example the shim will inject CDI annotations that will
+        // be used by the kata-agent to do containerEdits according to the
+        // CDI spec coming from a registry that is created on the fly by UDEV
+        // or other entities for a specifc device.
+        handle_cdi_devices(&sl(), &req.devices, &mut oci, &self.sandbox).await?;
+        info!(sl(), "modified CDI container spec: {:?}", &oci);
 
         cdh_handler(&mut oci).await?;
 
