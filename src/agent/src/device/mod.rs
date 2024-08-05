@@ -11,6 +11,8 @@ use self::vfio_device_handler::{VfioApDeviceHandler, VfioPciDeviceHandler};
 use crate::pci;
 use crate::sandbox::Sandbox;
 use anyhow::{anyhow, Context, Result};
+use cdi::annotations::parse_annotations;
+use cdi::default_cache::inject_devices;
 use kata_types::device::DeviceHandlerManager;
 use nix::sys::stat;
 use oci::{LinuxDeviceCgroup, Spec};
@@ -25,6 +27,8 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio::time;
+use tokio::time::Duration;
 use tracing::instrument;
 
 pub mod block_device_handler;
@@ -34,6 +38,8 @@ pub mod scsi_device_handler;
 pub mod vfio_device_handler;
 
 pub const BLOCK: &str = "block";
+
+const CDI_TIMEOUT_LIMIT: u64 = 100;
 
 #[derive(Debug, Clone)]
 pub struct DeviceInfo {
@@ -236,6 +242,43 @@ pub async fn add_devices(
         update_env_pci(env_vec, &sandbox.lock().await.pcimap)?
     }
     update_spec_devices(logger, spec, dev_updates)
+}
+
+#[instrument]
+pub async fn handle_cdi_devices(logger: &Logger, spec: &mut Spec) -> Result<()> {
+    if let Some(container_type) = spec
+        .annotations()
+        .as_ref()
+        .and_then(|a| a.get("io.katacontainers.pkg.oci.container_type"))
+    {
+        if container_type == "pod_sandbox" {
+            return Ok(());
+        }
+    }
+
+    let (_, devices) = parse_annotations(&spec.annotations().as_ref().unwrap())?;
+
+    if devices.is_empty() {
+        info!(logger, "no CDI annotations, no devices to inject");
+        return Ok(());
+    }
+
+    for _ in 0..=CDI_TIMEOUT_LIMIT {
+        match inject_devices(spec, devices.clone()) {
+            Ok(_) => {
+                info!(logger, "all devices injected successfully, modified CDI container spec: {:?}", &spec);
+                return Ok(());
+            }
+            Err(e) => {
+                info!(logger, "error injecting devices: {:?}", e);
+            }
+        }
+        time::sleep(Duration::from_millis(1000)).await;
+    }
+    Err(anyhow!(
+        "failed to inject devices after CDI timeout of {} seconds",
+        CDI_TIMEOUT_LIMIT
+    ))
 }
 
 #[instrument]
