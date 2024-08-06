@@ -470,6 +470,9 @@ func (s *service) Start(ctx context.Context, r *taskAPI.StartRequest) (_ *taskAP
 
 	start := time.Now()
 	defer func() {
+		if err != nil {
+			shimLog.WithField("container", r.ID).WithError(err).Error("Start container failed")
+		}
 		err = toGRPC(err)
 		rpcDurationsHistogram.WithLabelValues("start").Observe(float64(time.Since(start).Nanoseconds() / int64(time.Millisecond)))
 	}()
