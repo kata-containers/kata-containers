@@ -23,6 +23,10 @@ impl FcInner {
         debug!(sl(), "Preparing Firecracker");
 
         self.id = id.to_string();
+        let vm_path = [KATA_PATH, &self.id].join("/");
+        fs::create_dir_all(&vm_path)
+            .await
+            .context(format!("failed to create vm path {:?}", &vm_path))?;
 
         if !self.config.jailer_path.is_empty() {
             debug!(sl(), "Running jailed");
@@ -40,7 +44,7 @@ impl FcInner {
             debug!(sl(), "Rundir: {:?}", self.run_dir);
             let _ = self.remount_jailer_with_exec().await;
         } else {
-            self.vm_path = [KATA_PATH.to_string(), id.to_string()].join("/");
+            self.vm_path = vm_path;
             debug!(sl(), "VM Path: {:?}", self.vm_path);
             self.run_dir = [self.vm_path.clone(), "run".to_string()].join("/");
             debug!(sl(), "Rundir: {:?}", self.run_dir);
