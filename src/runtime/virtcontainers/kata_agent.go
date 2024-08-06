@@ -1613,13 +1613,25 @@ func handleImageGuestPullBlockVolume(c *Container, virtualVolumeInfo *types.Kata
 	if containerType == string(PodSandbox) {
 		image_ref = "pause"
 	} else {
+		const kubernetesCRIImageName = "io.kubernetes.cri.image-name"
+		const kubernetesCRIOImageName = "io.kubernetes.cri-o.ImageName"
+
 		switch criContainerType {
 		case ctrAnnotations.ContainerType:
-			image_ref = container_annotations["io.kubernetes.cri.image-name"]
+			image_ref = container_annotations[kubernetesCRIImageName]
 		case podmanAnnotations.ContainerType:
-			image_ref = container_annotations["io.kubernetes.cri-o.ImageName"]
+			image_ref = container_annotations[kubernetesCRIOImageName]
 		default:
-			image_ref = ""
+			// There are cases, like when using nerdctl, where the criContainerType
+			// will never be set, leading to this code path.
+			//
+			// nerdctl also doesn't set any mechanism for automatically setting the
+			// image, but as part of it's v2.0.0 release it allows the user to set
+			// any kind of OCI annotation, which we can take advantage of and use.
+			//
+			// With this in mind, let's "fallback" to the default k8s cri image-name
+			// annotation, as documented on our image-pull documentation.
+			image_ref = container_annotations[kubernetesCRIImageName]
 		}
 
 		if image_ref == "" {
