@@ -218,6 +218,11 @@ externals:
     version: "1.36.1"
     url: "https://busybox.net/downloads"
 
+  helm:
+    description: "Kubernetes package manager"
+    url: "https://get.helm.sh/"
+    version: "v3.15.2"
+
   cni-plugins:
     description: "CNI network plugins"
     url: "https://github.com/containernetworking/plugins"
