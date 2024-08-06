@@ -7,6 +7,7 @@ package virtcontainers
 
 import (
 	"context"
+	"os"
 	"runtime"
 
 	deviceApi "github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
@@ -137,6 +138,15 @@ func CleanupContainer(ctx context.Context, sandboxID, containerID string, force 
 
 	s, err := fetchSandbox(ctx, sandboxID)
 	if err != nil {
+		if os.IsNotExist(err) {
+			// the sandbox store may be destroyed
+			// when the monitor watches that sandbox stopped unexpectedly
+			virtLog.WithFields(logrus.Fields{
+				"sandboxId":   sandboxID,
+				"containerID": containerID,
+			}).Info("sandbox was already destroyed")
+			return nil
+		}
 		return err
 	}
 	defer s.Release(ctx)
