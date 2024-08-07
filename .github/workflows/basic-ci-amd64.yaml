@@ -334,9 +334,6 @@ jobs:
           - dragonball
           - qemu
           - cloud-hypervisor
-        # TODO: enable with clh when https://github.com/kata-containers/kata-containers/issues/9852 is fixed
-        exclude:
-          - vmm: clh
     runs-on: ubuntu-22.04
     env:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
