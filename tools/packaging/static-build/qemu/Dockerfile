@@ -37,6 +37,7 @@ RUN apt-get update && apt-get upgrade -y && \
 	    dpkg-dev \
 	    flex \
 	    gawk \
+	    libaio-dev${DPKG_ARCH} \
 	    libaudit-dev${DPKG_ARCH} \
 	    libblkid-dev${DPKG_ARCH} \
 	    libcap-dev${DPKG_ARCH} \
