@@ -32,6 +32,8 @@ default: all
 include utils.mk
 include ./tools/packaging/kata-deploy/local-build/Makefile
 
+all: all-base-tarballs
+
 # Create the rules
 $(eval $(call create_all_rules,$(COMPONENTS),$(TOOLS),$(STANDARD_TARGETS)))
 
