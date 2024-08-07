@@ -39,15 +39,12 @@ jobs:
           - devmapper
         k8s:
           - k3s
-        instance:
-          - ubuntu-22.04
         include:
           - vmm: qemu
             container_runtime: crio
             snapshotter: ""
-            instance: ubuntu-22.04
             k8s: k0s
-    runs-on: ${{ matrix.instance }}
+    runs-on: ubuntu-22.04
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
