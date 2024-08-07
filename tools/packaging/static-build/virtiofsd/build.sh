@@ -51,7 +51,7 @@ esac
 container_image="${VIRTIOFSD_CONTAINER_BUILDER:-$(get_virtiofsd_image_name)}"
 [ "${CROSS_BUILD}" == "true" ] && container_image="${container_image}-cross-build"
 
-docker pull ${container_image} || \
+pull_from_registry ${container_image} || \
 	(docker $BUILDX build $PLATFORM \
 		--build-arg RUST_TOOLCHAIN="${virtiofsd_toolchain}" \
 		-t "${container_image}" "${script_dir}/${libc}" && \
@@ -60,6 +60,7 @@ docker pull ${container_image} || \
 
 docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
 	-w "${PWD}" \
+	--env USE_CACHE="${USE_CACHE:-"yes"}" \
 	--env DESTDIR="${DESTDIR}" \
 	--env PREFIX="${PREFIX}" \
 	--env virtiofsd_repo="${virtiofsd_repo}" \

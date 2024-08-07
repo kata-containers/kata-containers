@@ -24,6 +24,10 @@ cloud_hypervisor_version="${cloud_hypervisor_version:-}"
 cloud_hypervisor_pr="${cloud_hypervisor_pr:-}"
 cloud_hypervisor_pull_ref_branch="${cloud_hypervisor_pull_ref_branch:-main}"
 
+if [ "${USE_CACHE:-"yes"}" != "yes" ]; then
+	force_build_from_source=true
+fi
+
 if [ -z "$cloud_hypervisor_repo" ]; then
 	info "Get cloud_hypervisor information from runtime versions.yaml"
 	cloud_hypervisor_url=$(get_from_kata_deps ".assets.hypervisor.cloud_hypervisor.url")
@@ -73,11 +77,16 @@ build_clh_from_source() {
 		git checkout "${cloud_hypervisor_version}"
 	fi
 
+	dev_options=""
+	if [ "${USE_CACHE:-"yes"}" != "yes" ]; then
+	    dev_options+=" --local"
+	fi
+
 	if [ -n "${features}" ]; then
 		info "Build cloud-hypervisor enabling the following features: ${features}"
-		./scripts/dev_cli.sh build --release --libc "${libc}" --features "${features}"
+		./scripts/dev_cli.sh ${dev_options} build --release --libc "${libc}" --features "${features}"
 	else
-		./scripts/dev_cli.sh build --release --libc "${libc}"
+		./scripts/dev_cli.sh ${dev_options} build --release --libc "${libc}"
 	fi
 	rm -f cloud-hypervisor
 	cp build/cargo_target/$(uname -m)-unknown-linux-${libc}/release/cloud-hypervisor .

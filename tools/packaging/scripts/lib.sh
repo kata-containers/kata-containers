@@ -115,6 +115,15 @@ get_last_modification() {
 	popd &> /dev/null
 }
 
+# $1 - The tag to be pulled from the registry
+pull_from_registry() {
+	local tag="${1}"
+
+	[ "${USE_CACHE:-"yes"}" != "yes" ] && return 1
+
+	docker pull "${tag}"
+}
+
 # $1 - The tag to be pushed to the registry
 # $2 - "yes" to use sudo, "no" otherwise
 push_to_registry() {
