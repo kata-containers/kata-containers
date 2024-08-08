@@ -336,7 +336,7 @@ impl ResourceManagerInner {
                     let host_path = get_host_path(DEVICE_TYPE_CHAR, d.major(), d.minor())
                         .context("get host path failed")?;
                     // First of all, filter vfio devices.
-                    if !host_path.starts_with("/dev/vfio") {
+                    if !host_path.starts_with("/dev/vfio") || host_path == "/dev/vfio/vfio" {
                         continue;
                     }
 
