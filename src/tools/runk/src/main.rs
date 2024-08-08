@@ -25,7 +25,8 @@ enum SubCommand {
     #[clap(flatten)]
     Standard(StandardCmd),
     #[clap(flatten)]
-    Common(CommonCmd),
+    // Having a large enum like CommonCmd can penalize the memory layout of SubCommand enum, as enum size is bounded by the largest variant.
+    Common(Box<CommonCmd>),
     /// Launch an init process (do not call it outside of runk)
     Init {},
 }
@@ -58,7 +59,7 @@ async fn cmd_run(subcmd: SubCommand, root_path: &Path, logger: &Logger) -> Resul
             StandardCmd::State(state) => commands::state::run(state, root_path, logger),
             StandardCmd::Kill(kill) => commands::kill::run(kill, root_path, logger),
         },
-        SubCommand::Common(cmd) => match cmd {
+        SubCommand::Common(cmd) => match *cmd {
             CommonCmd::Run(run) => commands::run::run(run, root_path, logger).await,
             CommonCmd::Spec(spec) => commands::spec::run(spec, logger),
             CommonCmd::List(list) => commands::list::run(list, root_path, logger),
@@ -66,6 +67,7 @@ async fn cmd_run(subcmd: SubCommand, root_path: &Path, logger: &Logger) -> Resul
             CommonCmd::Ps(ps) => commands::ps::run(ps, root_path, logger),
             CommonCmd::Pause(pause) => commands::pause::run(pause, root_path, logger),
             CommonCmd::Resume(resume) => commands::resume::run(resume, root_path, logger),
+            CommonCmd::Events(events) => commands::events::run(events, root_path, logger),
             _ => Err(anyhow!("command is not implemented yet")),
         },
         _ => unreachable!(),
