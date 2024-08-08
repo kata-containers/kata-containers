@@ -295,7 +295,7 @@ install_image() {
 		"$(get_last_modification "${repo_root_dir}/tools/packaging/static-build/agent")")
 
 
-	latest_artefact="${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${image_type}"
+	latest_artefact="$(get_kata_version)-${osbuilder_last_commit}-${guest_image_last_commit}-${agent_last_commit}-${libs_last_commit}-${gperf_version}-${libseccomp_version}-${rust_version}-${image_type}"
 	if [ "${variant}" == "confidential" ]; then
 		# For the confidential image we depend on the kernel built in order to ensure that
 		# measured boot is used
@@ -764,7 +764,7 @@ install_shimv2() {
 	local GO_VERSION="$(get_from_kata_deps ".languages.golang.meta.newest-version")"
 	local RUST_VERSION="$(get_from_kata_deps ".languages.rust.meta.newest-version")"
 
-	latest_artefact="${shim_v2_last_commit}-${protocols_last_commit}-${runtime_rs_last_commit}-${GO_VERSION}-${RUST_VERSION}"
+	latest_artefact="$(get_kata_version)-${shim_v2_last_commit}-${protocols_last_commit}-${runtime_rs_last_commit}-${GO_VERSION}-${RUST_VERSION}"
 	latest_builder_image="$(get_shim_v2_image_name)"
 
 	install_cached_tarball_component \
@@ -825,7 +825,7 @@ install_busybox() {
 }
 
 install_agent() {
-	latest_artefact="$(git log -1 --abbrev=9 --pretty=format:"%h" ${repo_root_dir}/src/agent)"
+	latest_artefact="$(get_kata_version)-$(git log -1 --abbrev=9 --pretty=format:"%h" ${repo_root_dir}/src/agent)"
 	artefact_tag="$(git log -1 --pretty=format:"%H" ${repo_root_dir})"
 	latest_builder_image="$(get_agent_image_name)"
 
@@ -929,7 +929,7 @@ install_script_helper() {
 install_tools_helper() {
 	tool=${1}
 
-	latest_artefact="$(git log -1 --abbrev=9 --pretty=format:"%h" ${repo_root_dir}/src/tools/${tool})"
+	latest_artefact="$(get_kata_version)-$(git log -1 --abbrev=9 --pretty=format:"%h" ${repo_root_dir}/src/tools/${tool})"
 	latest_builder_image="$(get_tools_image_name)"
 
 	install_cached_tarball_component \
