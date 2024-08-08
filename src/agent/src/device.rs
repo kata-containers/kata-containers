@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use cdi::annotations::parse_annotations;
+use cdi::default_cache::inject_devices;
 use nix::sys::stat;
 use regex::Regex;
 use std::collections::HashMap;
@@ -1008,6 +1010,51 @@ async fn vfio_ap_device_handler(
 #[cfg(not(target_arch = "s390x"))]
 async fn vfio_ap_device_handler(_: &Device, _: &Arc<Mutex<Sandbox>>) -> Result<SpecUpdate> {
     Err(anyhow!("AP is only supported on s390x"))
+}
+
+use tokio::time::{self, Duration};
+const TIMEOUT_LIMIT: usize = 100;
+
+#[instrument]
+pub async fn handle_cdi_devices(
+    devices: &[Device],
+    spec: &mut Spec,
+    sandbox: &Arc<Mutex<Sandbox>>,
+) -> Result<()> {
+    if let Some(container_type) = spec
+        .annotations()
+        .as_ref()
+        .unwrap()
+        .get("io.katacontainers.pkg.oci.container_type")
+    {
+        if container_type == "pod_sandbox" {
+            return Ok(());
+        }
+    }
+
+    let (_keys, devices) = parse_annotations(&spec.annotations().as_ref().unwrap())?;
+
+    if devices.is_empty() {
+        info!(sl(), "no CDI annotations, no devices to inject");
+        return Ok(());
+    }
+
+    for _ in 0..=TIMEOUT_LIMIT {
+        match inject_devices(spec, devices.clone()) {
+            Ok(_) => {
+                info!(sl(), "all devices injected successfully");
+                return Ok(());
+            }
+            Err(e) => {
+                info!(sl(), "error injecting devices: {:?}", e);
+            }
+        }
+        time::sleep(Duration::from_millis(1000)).await;
+    }
+    Err(anyhow!(
+        "failed to inject devices after CDI timeout of {} seconds",
+        TIMEOUT_LIMIT
+    ))
 }
 
 #[instrument]
