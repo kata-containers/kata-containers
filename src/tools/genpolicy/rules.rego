@@ -51,12 +51,18 @@ default WriteStreamRequest := false
 # them and inspect OPA logs for the root cause of a failure.
 default AllowRequestsFailingPolicy := false
 
-CreateContainerRequest {
+CreateContainerRequest:= {"metadata": [addSandboxName], "allowed": true} {
     # Check if the input request should be rejected even before checking the
     # policy_data.containers information.
     allow_create_container_input
 
     i_oci := input.OCI
+
+    sandbox_name = i_oci.Annotations["io.kubernetes.cri.sandbox-name"]
+    addSandboxName := allow_sandbox_name2(sandbox_name)
+
+    print("addSandboxName = ", addSandboxName)
+
     i_storages := input.storages
     i_devices := input.devices
 
@@ -88,6 +94,27 @@ CreateContainerRequest {
     allow_linux(p_oci, i_oci)
 
     print("CreateContainerRequest: true")
+}
+
+allow_sandbox_name2(s_name) = addSandboxName {
+    print("searching sandbox name in data = ", data.sandbox)
+    # validates all containers have the same sandox name
+    s_name == data.sandbox["name"]
+    print("found sandbox_name match on state = ", s_name) 
+    addSandboxName := null
+}
+
+allow_sandbox_name2(s_name) = addSandboxName {
+    print("checking sandbox name doesn't exist in data = ", data.sandbox) 
+    not data.sandbox["name"]
+    print("sandbox name not found in state. Adding name = ", s_name)
+    # save the sandbox name for future reference
+    addSandboxName := {
+        "name": "sandbox",
+        "action": "add",
+        "key": "name", 
+        "value": s_name,
+    }
 }
 
 allow_create_container_input {
