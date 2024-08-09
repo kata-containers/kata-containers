@@ -146,7 +146,7 @@ function deploy_coco_kbs() {
 }
 
 function deploy_kata() {
-	platform="${1}"
+	platform="${1:-}"
 	ensure_helm
 	ensure_yq
 
@@ -389,7 +389,7 @@ function cleanup_kata_deploy() {
 }
 
 function cleanup() {
-	platform="${1}"
+	platform="${1:-}"
 	test_type="${2:-k8s}"
 	ensure_yq
 
@@ -559,6 +559,7 @@ function main() {
 		install-kbs-client) install_kbs_client ;;
 		install-kubectl) install_kubectl ;;
 		get-cluster-credentials) get_cluster_credentials ;;
+		deploy-kata) deploy_kata ;;
 		deploy-kata-aks) deploy_kata "aks" ;;
 		deploy-kata-kcli) deploy_kata "kcli" ;;
 		deploy-kata-kubeadm) deploy_kata "kubeadm" ;;
@@ -571,6 +572,7 @@ function main() {
 		run-tests) run_tests ;;
 		run-tests-kcli) run_tests "kcli" ;;
 		collect-artifacts) collect_artifacts ;;
+		cleanup) cleanup ;;
 		cleanup-kcli) cleanup "kcli" ;;
 		cleanup-sev) cleanup "sev" ;;
 		cleanup-snp) cleanup "snp" ;;

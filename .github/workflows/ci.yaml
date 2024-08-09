@@ -152,21 +152,9 @@ jobs:
       target-branch: ${{ inputs.target-branch }}
     secrets: inherit
 
-  run-k8s-tests-on-garm:
+  run-k8s-tests-on-amd64:
     needs: publish-kata-deploy-payload-amd64
-    uses: ./.github/workflows/run-k8s-tests-on-garm.yaml
-    with:
-      registry: ghcr.io
-      repo: ${{ github.repository_owner }}/kata-deploy-ci
-      tag: ${{ inputs.tag }}-amd64
-      commit-hash: ${{ inputs.commit-hash }}
-      pr-number: ${{ inputs.pr-number }}
-      target-branch: ${{ inputs.target-branch }}
-    secrets: inherit
-
-  run-k8s-tests-with-crio-on-garm:
-    needs: publish-kata-deploy-payload-amd64
-    uses: ./.github/workflows/run-k8s-tests-with-crio-on-garm.yaml
+    uses: ./.github/workflows/run-k8s-tests-on-amd64.yaml
     with:
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci

@@ -1,4 +1,4 @@
-name: CI | Run kubernetes tests, using CRI-O, on GARM
+name: CI | Run kubernetes tests on amd64
 on:
   workflow_call:
     inputs:
@@ -23,25 +23,28 @@ on:
         default: ""
 
 jobs:
-  run-k8s-tests:
+  run-k8s-tests-amd64:
     strategy:
       fail-fast: false
       matrix:
         vmm:
+          - clh #cloud-hypervisor
+          - dragonball
+          - fc #firecracker
           - qemu
+          - cloud-hypervisor
+        container_runtime:
+          - containerd
+        snapshotter:
+          - devmapper
         k8s:
-          - k0s
-        instance:
-          - garm-ubuntu-2204
-          - garm-ubuntu-2204-smaller
+          - k3s
         include:
-          - instance: garm-ubuntu-2204
-            instance-type: normal
-          - instance: garm-ubuntu-2204-smaller
-            instance-type: small
-          - k8s: k0s
-            k8s-extra-params: '--cri-socket remote:unix:///var/run/crio/crio.sock --kubelet-extra-args --cgroup-driver="systemd"'
-    runs-on: ${{ matrix.instance }}
+          - vmm: qemu
+            container_runtime: crio
+            snapshotter: ""
+            k8s: k0s
+    runs-on: ubuntu-22.04
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
@@ -49,9 +52,10 @@ jobs:
       PR_NUMBER: ${{ inputs.pr-number }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
       KUBERNETES: ${{ matrix.k8s }}
-      KUBERNETES_EXTRA_PARAMS: ${{ matrix.k8s-extra-params }}
+      KUBERNETES_EXTRA_PARAMS: ${{ matrix.container_runtime != 'crio' && '' || '--cri-socket remote:unix:///var/run/crio/crio.sock --kubelet-extra-args --cgroup-driver="systemd"' }}
+      SNAPSHOTTER: ${{ matrix.snapshotter }}
       USING_NFD: "false"
-      K8S_TEST_HOST_TYPE: ${{ matrix.instance-type }}
+      K8S_TEST_HOST_TYPE: all
     steps:
       - uses: actions/checkout@v4
         with:
@@ -65,14 +69,19 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Configure CRI-O
+        if: matrix.container_runtime == 'crio'
         run: bash tests/integration/kubernetes/gha-run.sh setup-crio
 
       - name: Deploy ${{ matrix.k8s }}
         run: bash tests/integration/kubernetes/gha-run.sh deploy-k8s
 
+      - name: Configure the ${{ matrix.snapshotter }} snapshotter
+        if: matrix.snapshotter != ''
+        run: bash tests/integration/kubernetes/gha-run.sh configure-snapshotter
+
       - name: Deploy Kata
         timeout-minutes: 10
-        run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-garm
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-kata
 
       - name: Install `bats`
         run: bash tests/integration/kubernetes/gha-run.sh install-bats
@@ -81,6 +90,18 @@ jobs:
         timeout-minutes: 30
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
   
+      - name: Collect artifacts ${{ matrix.vmm }}
+        if: always()
+        run: bash tests/integration/kubernetes/gha-run.sh collect-artifacts
+        continue-on-error: true
+
+      - name: Archive artifacts ${{ matrix.vmm }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: k8s-tests-${{ matrix.vmm }}-${{ matrix.snapshotter }}-${{ matrix.k8s }}-${{ matrix.instance }}-${{ inputs.tag }}
+          path: /tmp/artifacts
+          retention-days: 1
+
       - name: Delete kata-deploy
         if: always()
-        run: bash tests/integration/kubernetes/gha-run.sh cleanup-garm
+        run: bash tests/integration/kubernetes/gha-run.sh cleanup
