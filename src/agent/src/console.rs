@@ -11,7 +11,7 @@ use nix::libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO};
 use nix::pty::{openpty, OpenptyResult};
 use nix::sys::socket::{self, AddressFamily, SockFlag, SockType, VsockAddr};
 use nix::sys::stat::Mode;
-use nix::sys::wait;
+use nix::sys::{signal, wait};
 use nix::unistd::{self, close, dup2, fork, setsid, ForkResult, Pid};
 use rustjail::pipestream::PipeStream;
 use slog::Logger;
@@ -178,6 +178,13 @@ async fn run_in_parent<T: AsyncRead + AsyncWrite>(
             );
         }
         res = tokio::io::copy(&mut socket_reader, &mut master_writer) => {
+            // the shell run in child may not be exited, in some scenes
+            // eg. directly Ctrl-C in the host to terminate the kata-runtime process
+            // that will block this task，while waiting for the child to exit.
+            //
+            let _ = signal::kill(child_pid, Some(signal::Signal::SIGKILL))
+                .map_err(|e| warn!(logger, "kill child shell process {:?}", e));
+
             info!(
                 logger,
                 "socket closed: {:?}", res
