@@ -15,8 +15,6 @@ on:
 
 jobs:
   run-monitor:
-    # TODO: Transition to free runner (see #9940).
-    if: false
     strategy:
       fail-fast: false
       matrix:
@@ -33,7 +31,7 @@ jobs:
           # TODO: enable with containerd when https://github.com/kata-containers/kata-containers/issues/9761 is fixed
           - container_engine: containerd
             vmm: qemu
-    runs-on: garm-ubuntu-2204-smaller
+    runs-on: ubuntu-22.04
     env:
       CONTAINER_ENGINE: ${{ matrix.container_engine }}
       #CONTAINERD_VERSION: ${{ matrix.containerd_version }}

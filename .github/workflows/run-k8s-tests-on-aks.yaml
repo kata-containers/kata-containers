@@ -54,7 +54,7 @@ jobs:
           - host_os: cbl-mariner
             vmm: clh
             instance-type: normal
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
