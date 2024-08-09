@@ -112,7 +112,9 @@ Options:
 	-s          	: Skip .config checks
 	-t <hypervisor>	: Hypervisor_target.
 	-u <url>	: Kernel URL to be used to download the kernel tarball.
+	-U <git_url>	: Kernel Git URL to be used to download the kernel tarball.
 	-v <version>	: Kernel version to use if kernel path not provided.
+	-V <git_rev>	: Kernel Git revision to be used to checkout kernel.
 	-x       	: All the confidential guest protection type for a specific architecture.
 EOF
 	exit "$exit_code"
@@ -159,11 +161,34 @@ get_tee_kernel() {
 	tar --strip-components=1 -xf ${kernel_tarball} -C ${kernel_path}
 }
 
+get_git_kernel() {
+	local version="${1}"
+	local kernel_path="${2}"
+	local tee="${3}"
+
+	if [ -d "${kernel_path}" ] ; then
+		pushd "${kernel_path}" ;
+		git fetch ;
+		popd ;
+	else
+		git clone ${kernel_git} ${kernel_path} ;
+	fi
+	pushd "${kernel_path}"
+	git checkout ${kernel_revision}
+	popd
+}
+
 get_kernel() {
 	local version="${1:-}"
 
 	local kernel_path=${2:-}
 	[ -n "${kernel_path}" ] || die "kernel_path not provided"
+
+	if [ "${kernel_git}" != "" ]; then
+		get_git_kernel ${version} ${kernel_path} ${conf_guest}
+		return
+	fi
+
 	[ ! -d "${kernel_path}" ] || die "kernel_path already exist"
 
 	if [ "${conf_guest}" != "" ]; then
@@ -305,6 +330,9 @@ get_kernel_frag_path() {
 		info "Enabling config for '${conf_guest}' confidential guest protection"
 		local conf_configs="$(ls ${arch_path}/${conf_guest}/*.conf)"
 		all_configs="${all_configs} ${conf_configs}"
+		if [ -f "${arch_path}/${conf_guest}/.config" ]; then
+			cp "${arch_path}/${conf_guest}/.config" ${config_path}
+		fi
 	fi
 
 	if [[ "$force_setup_generate_config" == "true" ]]; then
@@ -567,7 +595,7 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:b:c:dD:eEfg:hH:k:mp:st:u:v:x" opt; do
+	while getopts "a:b:c:dD:eEfg:hH:k:mp:st:u:U:v:V:x" opt; do
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
@@ -623,8 +651,14 @@ main() {
 			u)
 				kernel_url="${OPTARG}"
 				;;
+			U)
+				kernel_git="${OPTARG}"
+				;;
 			v)
 				kernel_version="${OPTARG}"
+				;;
+			V)
+				kernel_revision="${OPTARG}"
 				;;
 			x)
 				conf_guest="confidential"
