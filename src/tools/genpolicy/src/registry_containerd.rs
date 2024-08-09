@@ -46,7 +46,8 @@ impl Container {
         let ctrd_client = containerd_client::Client::from(containerd_channel.clone());
         let k8_cri_image_client = ImageServiceClient::new(containerd_channel);
 
-        let image_ref: Reference = image.to_string().parse().unwrap();
+        let image_str = image.to_string();
+        let image_ref: Reference = image_str.parse().unwrap();
 
         info!("Pulling image: {:?}", image_ref);
 
@@ -67,6 +68,7 @@ impl Container {
         .await?;
 
         Ok(Container {
+            image: image_str,
             config_layer,
             image_layers,
         })

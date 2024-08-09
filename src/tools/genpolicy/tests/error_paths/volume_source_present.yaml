@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: azurite-pod
+spec:
+  containers:
+    - name: azurite
+      image: mcr.microsoft.com/azure-storage/azurite:latest
+      command: ["tail", "-f", "/dev/null"]
+      volumeMounts:
+        - name: data-volume
+          mountPath: /data
+  volumes:
+    - name: data-volume
+      emptyDir: {}
