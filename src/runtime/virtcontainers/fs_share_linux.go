@@ -42,7 +42,7 @@ import (
 // /var/lib/kubelet/pods/f51ae853-557e-4ce1-b60b-a1101b555612/volumes/kubernetes.io~secret
 // /var/lib/kubelet/pods/f51ae853-557e-4ce1-b60b-a1101b555612/volumes/kubernetes.io~projected
 // /var/lib/kubelet/pods/f51ae853-557e-4ce1-b60b-a1101b555612/volumes/kubernetes.io~downward-api
-var configVolRegexString = "^/var/lib/kubelet/pods/[a-fA-F0-9\\-]{36}/volumes/kubernetes\\.io~(configmap|secret|projected|downward-api)"
+var configVolRegexString = ".*/pods/[a-fA-F0-9\\-]{36}/volumes/kubernetes\\.io~(configmap|secret|projected|downward-api)"
 var configVolRegex = regexp.MustCompile(configVolRegexString)
 
 // timestampDirRegex: Regex to match only the timestamped directory inside the above volume mount
