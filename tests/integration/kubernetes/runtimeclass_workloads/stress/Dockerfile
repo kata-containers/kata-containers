@@ -5,7 +5,7 @@
 
 # The image has only the 'latest' tag so it needs to ignore DL3007
 #hadolint ignore=DL3007
-FROM quay.io/libpod/ubuntu:latest
+FROM quay.io/bedrock/ubuntu:latest
 RUN apt-get -y update && \
     apt-get -y upgrade && \
     apt-get -y --no-install-recommends install stress && \
