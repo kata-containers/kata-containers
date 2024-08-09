@@ -69,5 +69,8 @@ tonic = "0.9.2"
 tower = "0.4.13"
 containerd-client = "0.4.0"
 
+# username to UID:GID mapping support
+tar = "0.4.41"
+
 [dev-dependencies]
 regorus = { version = "0.1.4", default-features = false, features = ["arc", "regex"]}
