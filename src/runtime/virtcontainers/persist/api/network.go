@@ -79,6 +79,10 @@ type VhostUserEndpoint struct {
 	PCIPath   vcTypes.PciPath
 }
 
+type VfioEndpoint struct {
+	IfaceName string
+}
+
 // NetworkEndpoint contains network interface information
 type NetworkEndpoint struct {
 	// One and only one of these below are not nil according to Type.
@@ -90,6 +94,7 @@ type NetworkEndpoint struct {
 	Tap       *TapEndpoint       `json:",omitempty"`
 	IPVlan    *IPVlanEndpoint    `json:",omitempty"`
 	Tuntap    *TuntapEndpoint    `json:",omitempty"`
+	Vfio      *VfioEndpoint      `json:",omitempty"`
 
 	Type string
 }

@@ -65,6 +65,9 @@ const (
 
 	// IPVlanEndpointType is ipvlan network interface.
 	IPVlanEndpointType EndpointType = "ipvlan"
+
+	// VfioEndpointType is VFIO device claimed as network interface by guest kernel
+	VfioEndpointType EndpointType = "vfio"
 )
 
 // Set sets an endpoint type based on the input string.
@@ -94,6 +97,9 @@ func (endpointType *EndpointType) Set(value string) error {
 	case "ipvlan":
 		*endpointType = IPVlanEndpointType
 		return nil
+	case "vfio":
+		*endpointType = VfioEndpointType
+		return nil
 	default:
 		return fmt.Errorf("Unknown endpoint type %s", value)
 	}
@@ -118,6 +124,8 @@ func (endpointType *EndpointType) String() string {
 		return string(TuntapEndpointType)
 	case IPVlanEndpointType:
 		return string(IPVlanEndpointType)
+	case VfioEndpointType:
+		return string(VfioEndpointType)
 	default:
 		return ""
 	}
