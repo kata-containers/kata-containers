@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -68,8 +69,6 @@ const (
 
 	// path to vfio devices
 	vfioPath = "/dev/vfio/"
-
-	NydusRootFSType = "fuse.nydus-overlayfs"
 
 	VirtualVolumePrefix = "io.katacontainers.volume="
 
@@ -2625,4 +2624,19 @@ func (k *kataAgent) setPolicy(ctx context.Context, policy string) error {
 		return status.Errorf(codes.DeadlineExceeded, "SetPolicyRequest timed out")
 	}
 	return err
+}
+
+// IsNydusRootFSType checks if the given mount type indicates Nydus is used.
+// By default, Nydus will use "fuse.nydus-overlayfs" as the mount type, but
+// we also accept binaries which have "nydus-overlayfs" prefix, so you can,
+// for example, place a nydus-overlayfs-abcde binary in the PATH and use
+// "fuse.nydus-overlayfs-abcde" as the mount type.
+// Further, we allow passing the full path to a Nydus binary as the mount type,
+// so "fuse./usr/local/bin/nydus-overlayfs" is also recognized.
+func IsNydusRootFSType(s string) bool {
+	if !strings.HasPrefix(s, "fuse.") {
+		return false
+	}
+	s = strings.TrimPrefix(s, "fuse.")
+	return strings.HasPrefix(path.Base(s), "nydus-overlayfs")
 }

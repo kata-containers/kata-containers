@@ -1202,3 +1202,19 @@ func TestKataAgentDirs(t *testing.T) {
 	expected := "/rafs/123/lowerdir"
 	assert.Equal(rafsMountPath(cid), expected)
 }
+
+func TestIsNydusRootFSType(t *testing.T) {
+	testCases := map[string]bool{
+		"nydus":                               false,
+		"nydus-overlayfs":                     false,
+		"fuse.nydus-overlayfs":                true,
+		"fuse./usr/local/bin/nydus-overlayfs": true,
+		"fuse.nydus-overlayfs-e0ae398a2":      true,
+	}
+
+	for test, exp := range testCases {
+		t.Run(test, func(t *testing.T) {
+			assert.Equal(t, exp, IsNydusRootFSType(test))
+		})
+	}
+}

@@ -318,7 +318,7 @@ func checkAndMount(s *service, r *taskAPI.CreateTaskRequest) (bool, error) {
 			return false, nil
 		}
 
-		if m.Type == vc.NydusRootFSType {
+		if vc.IsNydusRootFSType(m.Type) {
 			// if kata + nydus, do not mount
 			return false, nil
 		}
