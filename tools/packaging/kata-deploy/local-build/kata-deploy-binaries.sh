@@ -299,9 +299,9 @@ install_image() {
 	if [ "${variant}" == "confidential" ]; then
 		# For the confidential image we depend on the kernel built in order to ensure that
 		# measured boot is used
-		latest_artefacts+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
-		latest_artefacts+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
-		latest_artefacts+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
 	fi
 
 	latest_builder_image=""
@@ -332,7 +332,8 @@ install_image() {
 	export AGENT_TARBALL=$(get_agent_tarball_path)
 	export AGENT_POLICY=yes
 
-	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
+	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --artefact_version="${latest_artefact}" \
+	    --imagetype=image --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
 
 #Install guest image for confidential guests
@@ -367,9 +368,9 @@ install_initrd() {
 	if [ "${variant}" == "confidential" ]; then
 		# For the confidential initrd we depend on the kernel built in order to ensure that
 		# measured boot is used
-		latest_artefacts+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
-		latest_artefacts+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
-		latest_artefacts+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_kernel_confidential_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_coco_guest_components_artefact_and_builder_image_version)"
+		latest_artefact+="-$(get_latest_pause_image_artefact_and_builder_image_version)"
 	fi
 
 	latest_builder_image=""
@@ -402,7 +403,8 @@ install_initrd() {
 	export AGENT_TARBALL=$(get_agent_tarball_path)
 	export AGENT_POLICY=yes
 
-	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
+	"${rootfs_builder}" --osname="${os_name}" --osversion="${os_version}" --artefact_version="${latest_artefact}" \
+	    --imagetype=initrd --prefix="${prefix}" --destdir="${destdir}" --image_initrd_suffix="${variant}"
 }
 
 #Install guest initrd for confidential guests
