@@ -15,9 +15,10 @@ use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
 use persist::sandbox_persist::Persist;
 use std::collections::HashMap;
 use std::os::unix::net::UnixStream;
-use tokio::process::Child;
 use tokio::sync::watch::{channel, Receiver, Sender};
+use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
+use tokio::{process::Child, sync::mpsc};
 
 #[derive(Debug)]
 pub struct CloudHypervisorInner {
@@ -76,6 +77,9 @@ pub struct CloudHypervisorInner {
 
     /// Size of memory block of guest OS in MB (currently unused)
     pub(crate) _guest_memory_block_size_mb: u32,
+
+    pub(crate) exit_notify: Option<mpsc::Sender<i32>>,
+    pub(crate) exit_waiter: Mutex<(mpsc::Receiver<i32>, i32)>,
 }
 
 const CH_DEFAULT_TIMEOUT_SECS: u32 = 10;
@@ -91,6 +95,7 @@ impl CloudHypervisorInner {
         );
 
         let (tx, rx) = channel(true);
+        let (exit_notify, exit_waiter) = mpsc::channel(1);
 
         Self {
             api_socket: None,
@@ -116,6 +121,9 @@ impl CloudHypervisorInner {
             guest_protection_to_use: GuestProtection::NoProtection,
             ch_features: None,
             _guest_memory_block_size_mb: 0,
+
+            exit_notify: Some(exit_notify),
+            exit_waiter: Mutex::new((exit_waiter, 0)),
         }
     }
 
@@ -162,6 +170,7 @@ impl Persist for CloudHypervisorInner {
         hypervisor_state: Self::State,
     ) -> Result<Self> {
         let (tx, rx) = channel(true);
+        let (exit_notify, exit_waiter) = mpsc::channel(1);
 
         let mut ch = Self {
             config: Some(hypervisor_state.config),
@@ -180,6 +189,8 @@ impl Persist for CloudHypervisorInner {
             timeout_secs: CH_DEFAULT_TIMEOUT_SECS as i32,
             jailer_root: String::default(),
             ch_features: None,
+            exit_notify: Some(exit_notify),
+            exit_waiter: Mutex::new((exit_waiter, 0)),
 
             ..Default::default()
         };

@@ -22,6 +22,7 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::path::Path;
 use std::process::Stdio;
+use tokio::sync::{mpsc, Mutex};
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::{Child, ChildStderr, Command},
@@ -34,23 +35,31 @@ pub struct QemuInner {
     /// sandbox id
     id: String,
 
-    qemu_process: Option<Child>,
+    qemu_process: Mutex<Option<Child>>,
     qmp: Option<Qmp>,
 
     config: HypervisorConfig,
     devices: Vec<DeviceType>,
     netns: Option<String>,
+
+    exit_notify: Option<mpsc::Sender<()>>,
+    exit_waiter: Mutex<(mpsc::Receiver<()>, i32)>,
 }
 
 impl QemuInner {
     pub fn new() -> QemuInner {
+        let (exit_notify, exit_waiter) = mpsc::channel(1);
+
         QemuInner {
             id: "".to_string(),
-            qemu_process: None,
+            qemu_process: Mutex::new(None),
             qmp: None,
             config: Default::default(),
             devices: Vec::new(),
             netns: None,
+
+            exit_notify: Some(exit_notify),
+            exit_waiter: Mutex::new((exit_waiter, 0)),
         }
     }
 
@@ -147,12 +156,18 @@ impl QemuInner {
             });
         }
 
-        self.qemu_process = Some(command.stderr(Stdio::piped()).spawn()?);
+        let mut qemu_process = command.stderr(Stdio::piped()).spawn()?;
+        let stderr = qemu_process.stderr.take().unwrap();
+        self.qemu_process = Mutex::new(Some(qemu_process));
+
         info!(sl!(), "qemu process started");
 
-        if let Some(ref mut qemu_process) = &mut self.qemu_process {
-            tokio::spawn(log_qemu_stderr(qemu_process.stderr.take().unwrap()));
-        }
+        let exit_notify: mpsc::Sender<()> = self
+            .exit_notify
+            .take()
+            .ok_or_else(|| anyhow!("no exit notify"))?;
+
+        tokio::spawn(log_qemu_stderr(stderr, exit_notify));
 
         match Qmp::new(QMP_SOCKET_FILE) {
             Ok(qmp) => self.qmp = Some(qmp),
@@ -167,7 +182,9 @@ impl QemuInner {
 
     pub(crate) async fn stop_vm(&mut self) -> Result<()> {
         info!(sl!(), "Stopping QEMU VM");
-        if let Some(ref mut qemu_process) = &mut self.qemu_process {
+
+        let mut qemu_process = self.qemu_process.lock().await;
+        if let Some(qemu_process) = qemu_process.as_mut() {
             let is_qemu_running = qemu_process.id().is_some();
             if is_qemu_running {
                 info!(sl!(), "QemuInner::stop_vm(): kill()'ing qemu");
@@ -182,6 +199,25 @@ impl QemuInner {
         } else {
             Err(anyhow!("qemu process has not been started yet"))
         }
+    }
+
+    pub(crate) async fn wait_vm(&self) -> Result<i32> {
+        info!(sl!(), "Wait QEMU VM");
+
+        let mut waiter = self.exit_waiter.lock().await;
+
+        //wait until the qemu process exited.
+        waiter.0.recv().await;
+
+        let mut qemu_process = self.qemu_process.lock().await;
+
+        if let Some(mut qemu_process) = qemu_process.take() {
+            if let Ok(status) = qemu_process.wait().await {
+                waiter.1 = status.code().unwrap_or(0);
+            }
+        }
+
+        Ok(waiter.1)
     }
 
     pub(crate) fn pause_vm(&self) -> Result<()> {
@@ -224,7 +260,7 @@ impl QemuInner {
 
     pub(crate) async fn get_vmm_master_tid(&self) -> Result<u32> {
         info!(sl!(), "QemuInner::get_vmm_master_tid()");
-        if let Some(qemu_process) = &self.qemu_process {
+        if let Some(qemu_process) = self.qemu_process.lock().await.as_ref() {
             if let Some(qemu_pid) = qemu_process.id() {
                 info!(
                     sl!(),
@@ -491,7 +527,7 @@ impl QemuInner {
     }
 }
 
-async fn log_qemu_stderr(stderr: ChildStderr) -> Result<()> {
+async fn log_qemu_stderr(stderr: ChildStderr, exit_notify: mpsc::Sender<()>) -> Result<()> {
     info!(sl!(), "starting reading qemu stderr");
 
     let stderr_reader = BufReader::new(stderr);
@@ -504,6 +540,9 @@ async fn log_qemu_stderr(stderr: ChildStderr) -> Result<()> {
     {
         info!(sl!(), "qemu stderr: {:?}", buffer);
     }
+
+    // Notfiy the waiter the process exit.
+    let _ = exit_notify.try_send(());
 
     info!(sl!(), "finished reading qemu stderr");
     Ok(())
@@ -567,13 +606,18 @@ impl Persist for QemuInner {
         _hypervisor_args: Self::ConstructorArgs,
         hypervisor_state: Self::State,
     ) -> Result<Self> {
+        let (exit_notify, exit_waiter) = mpsc::channel(1);
+
         Ok(QemuInner {
             id: hypervisor_state.id,
-            qemu_process: None,
+            qemu_process: Mutex::new(None),
             qmp: None,
             config: hypervisor_state.config,
             devices: Vec::new(),
             netns: None,
+
+            exit_notify: Some(exit_notify),
+            exit_waiter: Mutex::new((exit_waiter, 0)),
         })
     }
 }

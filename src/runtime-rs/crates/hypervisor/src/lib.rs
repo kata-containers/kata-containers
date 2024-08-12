@@ -96,6 +96,7 @@ pub trait Hypervisor: std::fmt::Debug + Send + Sync {
     async fn prepare_vm(&self, id: &str, netns: Option<String>) -> Result<()>;
     async fn start_vm(&self, timeout: i32) -> Result<()>;
     async fn stop_vm(&self) -> Result<()>;
+    async fn wait_vm(&self) -> Result<i32>;
     async fn pause_vm(&self) -> Result<()>;
     async fn save_vm(&self) -> Result<()>;
     async fn resume_vm(&self) -> Result<()>;

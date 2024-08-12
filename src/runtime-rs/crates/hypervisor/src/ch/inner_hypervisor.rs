@@ -37,13 +37,13 @@ use std::os::unix::net::UnixStream;
 use std::path::Path;
 use std::process::Stdio;
 use std::sync::{Arc, RwLock};
-use tokio::io::AsyncBufReadExt;
 use tokio::io::BufReader;
 use tokio::process::{Child, Command};
 use tokio::sync::watch::Receiver;
 use tokio::task;
 use tokio::task::JoinHandle;
 use tokio::time::Duration;
+use tokio::{io::AsyncBufReadExt, sync::mpsc};
 
 const CH_NAME: &str = "cloud-hypervisor";
 
@@ -410,7 +410,13 @@ impl CloudHypervisorInner {
             .map_err(|e| anyhow!(e))?
             .clone();
 
-        let ch_outputlogger_task = tokio::spawn(cloud_hypervisor_log_output(child, shutdown));
+        let exit_notify: mpsc::Sender<i32> = self
+            .exit_notify
+            .take()
+            .ok_or_else(|| anyhow!("no exit notify"))?;
+
+        let ch_outputlogger_task =
+            tokio::spawn(cloud_hypervisor_log_output(child, shutdown, exit_notify));
 
         let tasks = vec![ch_outputlogger_task];
 
@@ -651,6 +657,16 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
+    pub(crate) async fn wait_vm(&self) -> Result<i32> {
+        debug!(sl!(), "Waiting CH vmm");
+        let mut waiter = self.exit_waiter.lock().await;
+        if let Some(exitcode) = waiter.0.recv().await {
+            waiter.1 = exitcode;
+        }
+
+        Ok(waiter.1)
+    }
+
     pub(crate) fn pause_vm(&self) -> Result<()> {
         Ok(())
     }
@@ -778,7 +794,11 @@ impl CloudHypervisorInner {
 // Log all output from the CH process until a shutdown signal is received.
 // When that happens, stop logging and wait for the child process to finish
 // before returning.
-async fn cloud_hypervisor_log_output(mut child: Child, mut shutdown: Receiver<bool>) -> Result<()> {
+async fn cloud_hypervisor_log_output(
+    mut child: Child,
+    mut shutdown: Receiver<bool>,
+    exit_notify: mpsc::Sender<i32>,
+) -> Result<()> {
     let stdout = child
         .stdout
         .as_mut()
@@ -833,7 +853,10 @@ async fn cloud_hypervisor_log_output(mut child: Child, mut shutdown: Receiver<bo
     }
 
     // Note that this kills _and_ waits for the process!
-    child.kill().await?;
+    let _ = child.kill().await;
+    if let Ok(status) = child.wait().await {
+        let _ = exit_notify.try_send(status.code().unwrap_or(0));
+    }
 
     Ok(())
 }

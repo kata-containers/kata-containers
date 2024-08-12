@@ -23,13 +23,14 @@ use dragonball::api::v1::{
 };
 use kata_types::capabilities::{Capabilities, CapabilityBits};
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
-use tokio::sync::RwLock;
+use tokio::sync::{mpsc, Mutex, RwLock};
 use tracing::instrument;
 
 use crate::{DeviceType, Hypervisor, MemoryConfig, NetworkConfig, VcpuThreadIds};
 
 pub struct Dragonball {
     inner: Arc<RwLock<DragonballInner>>,
+    exit_waiter: Mutex<(mpsc::Receiver<i32>, i32)>,
 }
 
 impl std::fmt::Debug for Dragonball {
@@ -46,8 +47,11 @@ impl Default for Dragonball {
 
 impl Dragonball {
     pub fn new() -> Self {
+        let (exit_notify, exit_waiter) = mpsc::channel(1);
+
         Self {
-            inner: Arc::new(RwLock::new(DragonballInner::new())),
+            inner: Arc::new(RwLock::new(DragonballInner::new(exit_notify))),
+            exit_waiter: Mutex::new((exit_waiter, 0)),
         }
     }
 
@@ -79,6 +83,15 @@ impl Hypervisor for Dragonball {
     async fn stop_vm(&self) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.stop_vm()
+    }
+
+    async fn wait_vm(&self) -> Result<i32> {
+        let mut waiter = self.exit_waiter.lock().await;
+        if let Some(exit_code) = waiter.0.recv().await {
+            waiter.1 = exit_code;
+        }
+
+        Ok(waiter.1)
     }
 
     async fn pause_vm(&self) -> Result<()> {
@@ -218,12 +231,15 @@ impl Persist for Dragonball {
     }
     /// Restore a component from a specified state.
     async fn restore(
-        hypervisor_args: Self::ConstructorArgs,
+        _hypervisor_args: Self::ConstructorArgs,
         hypervisor_state: Self::State,
     ) -> Result<Self> {
-        let inner = DragonballInner::restore(hypervisor_args, hypervisor_state).await?;
+        let (exit_notify, exit_waiter) = mpsc::channel(1);
+
+        let inner = DragonballInner::restore(exit_notify, hypervisor_state).await?;
         Ok(Self {
             inner: Arc::new(RwLock::new(inner)),
+            exit_waiter: Mutex::new((exit_waiter, 0)),
         })
     }
 }

@@ -78,15 +78,45 @@ impl FcInner {
         debug!(sl(), "Stopping sandbox");
         if self.state != VmmState::VmRunning {
             debug!(sl(), "VM not running!");
-        } else if let Some(pid_to_kill) = &self.pid {
-            let pid = ::nix::unistd::Pid::from_raw(*pid_to_kill as i32);
-            if let Err(err) = ::nix::sys::signal::kill(pid, nix::sys::signal::SIGKILL) {
-                if err != ::nix::Error::ESRCH {
-                    debug!(sl(), "Failed to kill VMM with pid {} {:?}", pid, err);
+        } else {
+            let mut fc_process = self.fc_process.lock().await;
+            if let Some(fc_process) = fc_process.as_mut() {
+                if fc_process.id().is_some() {
+                    info!(sl!(), "FcInner::stop_vm(): kill()'ing fc");
+                    return fc_process.kill().await.map_err(anyhow::Error::from);
+                } else {
+                    info!(
+                        sl!(),
+                        "FcInner::stop_vm(): fc process isn't running (likely stopped already)"
+                    );
                 }
+            } else {
+                info!(
+                    sl!(),
+                    "FcInner::stop_vm(): fc process isn't running (likely stopped already)"
+                );
             }
         }
+
         Ok(())
+    }
+
+    pub(crate) async fn wait_vm(&self) -> Result<i32> {
+        debug!(sl(), "Wait fc sandbox");
+        let mut waiter = self.exit_waiter.lock().await;
+
+        //wait until the fc process exited.
+        waiter.0.recv().await;
+
+        let mut fc_process = self.fc_process.lock().await;
+
+        if let Some(mut fc_process) = fc_process.take() {
+            if let Ok(status) = fc_process.wait().await {
+                waiter.1 = status.code().unwrap_or(0);
+            }
+        }
+
+        Ok(waiter.1)
     }
 
     pub(crate) fn pause_vm(&self) -> Result<()> {
