@@ -681,7 +681,7 @@ func (q *qemu) CreateVM(ctx context.Context, id string, network Network, hypervi
 		Debug:          hypervisorConfig.Debug,
 	}
 
-	qemuConfig.Devices, qemuConfig.Bios, err = q.arch.appendProtectionDevice(qemuConfig.Devices, firmwarePath, firmwareVolumePath)
+	qemuConfig.Devices, qemuConfig.Bios, err = q.arch.appendProtectionDevice(qemuConfig.Devices, firmwarePath, firmwareVolumePath, q.config.InitdataDigest)
 	if err != nil {
 		return err
 	}

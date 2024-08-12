@@ -320,6 +320,11 @@ type Object struct {
 
 	// QgsPort defines Intel Quote Generation Service port exposed from the host
 	QgsPort uint32
+
+	// InitdataDigest represents opaque binary data attached to a TEE and typically used
+	// for Guest attestation. This is only relevant for sev-snp-guest and tdx-guest
+	// objects and is encoded in the format expected by QEMU for each TEE type.
+	InitdataDigest string
 }
 
 // Valid returns true if the Object structure is valid and complete.
@@ -398,6 +403,9 @@ func (object Object) QemuParams(config *Config) []string {
 
 		driveParams = append(driveParams, "if=pflash,format=raw,readonly=on")
 		driveParams = append(driveParams, fmt.Sprintf("file=%s", object.File))
+		if len(object.InitdataDigest) > 0 {
+			objectParams = append(objectParams, fmt.Sprintf("host-data=%s", object.InitdataDigest))
+		}
 	case SecExecGuest:
 		objectParams = append(objectParams, string(object.Type))
 		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
@@ -469,12 +477,12 @@ func (this *TdxQomObject) String() string {
 func prepareTDXObject(object Object) string {
 	qgsSocket := SocketAddress{"vsock", fmt.Sprint(VsockHostCid), fmt.Sprint(object.QgsPort)}
 	tdxObject := TdxQomObject{
-		string(object.Type), // qom-type
-		object.ID,           // id
-		"",                  // mrconfigid
-		"",                  // mrowner
-		"",                  // mrownerconfig
-		qgsSocket,           // quote-generation-socket
+		string(object.Type),   // qom-type
+		object.ID,             // id
+		object.InitdataDigest, // mrconfigid
+		"",                    // mrowner
+		"",                    // mrownerconfig
+		qgsSocket,             // quote-generation-socket
 		nil}
 
 	if object.Debug {

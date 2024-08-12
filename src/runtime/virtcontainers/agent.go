@@ -211,4 +211,7 @@ type agent interface {
 
 	// setPolicy sends a new policy to the guest agent
 	setPolicy(ctx context.Context, policy string) error
+
+	// setInitdata sends the TOML initdata to the guest agent
+	setInitdata(ctx context.Context, initdata string) error
 }

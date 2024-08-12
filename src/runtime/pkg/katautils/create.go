@@ -166,6 +166,8 @@ func CreateSandbox(ctx context.Context, vci vc.VC, ociSpec specs.Spec, runtimeCo
 	// The value of this annotation is sent to the sandbox using SetPolicy.
 	delete(ociSpec.Annotations, vcAnnotations.Policy)
 	delete(sandboxConfig.Annotations, vcAnnotations.Policy)
+	delete(ociSpec.Annotations, vcAnnotations.Initdata)
+	delete(sandboxConfig.Annotations, vcAnnotations.Initdata)
 
 	sandbox, err := vci.CreateSandbox(ctx, sandboxConfig, func(ctx context.Context) error {
 		// Run pre-start OCI hooks, in the runtime namespace.

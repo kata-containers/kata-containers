@@ -245,6 +245,7 @@ const (
 	EnableRootlessHypervisor = kataAnnotHypervisorPrefix + "rootless"
 
 	// Initdata is the initdata passed in when CreateVM
+	// Initdata spec https://github.com/confidential-containers/trustee/blob/47d7a2338e0be76308ac19be5c0c172c592780aa/kbs/docs/initdata.md
 	Initdata = kataConfAnnotationsPrefix + "runtime.cc_init_data"
 )
 

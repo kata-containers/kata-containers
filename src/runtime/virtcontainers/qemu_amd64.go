@@ -9,6 +9,7 @@ package virtcontainers
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"time"
 
@@ -268,8 +269,17 @@ func (q *qemuAmd64) enableProtection() error {
 	}
 }
 
+func adjustProperLength(data []byte, len int) []byte {
+	adjusted := make([]byte, len)
+	copy(adjusted, data)
+	return adjusted
+}
+
 // append protection device
-func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware, firmwareVolume string) ([]govmmQemu.Device, string, error) {
+// parameter initdataDigest is the value that will be set as TEE initdata.
+// different platform supports different length of TEE initdata, thus
+// proper truncate (if longer) or padding '\0' (if shorter) will be applied.
+func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware, firmwareVolume string, initdataDigest []byte) ([]govmmQemu.Device, string, error) {
 	if q.sgxEPCSize != 0 {
 		devices = append(devices,
 			govmmQemu.Object{
@@ -284,6 +294,10 @@ func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 	case tdxProtection:
 		id := q.devLoadersCount
 		q.devLoadersCount += 1
+		// due to https://github.com/intel-staging/qemu-tdx/blob/tdx-qemu-upstream-2023.9.21-v8.1.0/qapi/qom.json#L880
+		// mrconfigid in TDX should be exactly 48 bytes
+		mrconfigid := adjustProperLength(initdataDigest, 48)
+		mrconfigidBase64 := base64.StdEncoding.EncodeToString(mrconfigid)
 		return append(devices,
 			govmmQemu.Object{
 				Driver:         govmmQemu.Loader,
@@ -294,6 +308,7 @@ func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 				Debug:          false,
 				File:           firmware,
 				FirmwareVolume: firmwareVolume,
+				InitdataDigest: mrconfigidBase64,
 			}), "", nil
 	case sevProtection:
 		return append(devices,
@@ -306,6 +321,10 @@ func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 				ReducedPhysBits: 1,
 			}), "", nil
 	case snpProtection:
+		// due to https://github.com/confidential-containers/qemu/blob/amd-snp-202402240000/qapi/qom.json#L926-L929
+		// hostdata in SEV-SNP should be exactly 32 bytes
+		hostdata := adjustProperLength(initdataDigest, 32)
+		hostdataBase64 := base64.StdEncoding.EncodeToString(hostdata)
 		return append(devices,
 			govmmQemu.Object{
 				Type:            govmmQemu.SNPGuest,
@@ -315,6 +334,7 @@ func (q *qemuAmd64) appendProtectionDevice(devices []govmmQemu.Device, firmware,
 				CBitPos:         cpuid.AMDMemEncrypt.CBitPosition,
 				ReducedPhysBits: 1,
 				SnpCertsPath:    q.snpCertsPath,
+				InitdataDigest:  hostdataBase64,
 			}), "", nil
 	case noneProtection:
 
