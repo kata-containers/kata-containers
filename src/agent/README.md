@@ -134,6 +134,7 @@ The kata agent has the ability to configure agent options in guest kernel comman
 | `agent.log_vport` | Log port | Allow to specify the `vsock` port to read logs | integer | `0` |
 | `agent.no_proxy` | NO proxy | Allow to configure `no_proxy` in the guest | string | `""` |
 | `agent.passfd_listener_port` | File descriptor passthrough IO listener port | Allow to set the file descriptor passthrough IO listener port | integer | `0` |
+| `agent.secure_image_storage_integrity` | Image storage integrity | Allow to use `dm-integrity` to protect the integrity of encrypted block volume | boolean | `false` |
 | `agent.server_addr` | Server address | Allow the ttRPC server address to be specified | string | `"vsock://-1:1024"` |
 | `agent.trace` | Trace mode | Allow to static tracing | boolean | `false` |
 | `systemd.unified_cgroup_hierarchy` | `Cgroup hierarchy` | Allow to setup v2 cgroups | boolean | `false` |
