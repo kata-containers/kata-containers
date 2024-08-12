@@ -19,7 +19,7 @@ macro_rules! sl {
     };
 }
 
-async fn allow_request(policy: &mut AgentPolicy, ep: &str, request: &str) -> ttrpc::Result<()> {
+pub async fn allow_request(policy: &mut AgentPolicy, ep: &str, request: &str) -> ttrpc::Result<()> {
     match policy.allow_request(ep, request).await {
         Ok((allowed, prints)) => {
             if allowed {

@@ -73,6 +73,7 @@ service AgentService {
 	rpc GetVolumeStats(VolumeStatsRequest) returns (VolumeStatsResponse);
 	rpc ResizeVolume(ResizeVolumeRequest) returns (google.protobuf.Empty);
 	rpc SetPolicy(SetPolicyRequest) returns (google.protobuf.Empty);
+	rpc SetInitdata(SetInitdataRequest) returns (google.protobuf.Empty);
 }
 
 message CreateContainerRequest {
@@ -610,4 +611,8 @@ message ResizeVolumeRequest {
 
 message SetPolicyRequest {
 	string policy = 1;
+}
+
+message SetInitdataRequest {
+	string initdata = 1;
 }

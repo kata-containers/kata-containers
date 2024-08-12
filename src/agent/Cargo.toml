@@ -85,6 +85,10 @@ regorus = { version = "0.1.4", default-features = false, features = [
     "regex",
 ], optional = true }
 
+# Initdata
+base64 = "0.22"
+sha2 = "0.10.8"
+
 [dev-dependencies]
 tempfile = "3.1.0"
 test-utils = { path = "../libs/test-utils" }
