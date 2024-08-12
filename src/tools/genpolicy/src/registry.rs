@@ -15,7 +15,7 @@ use anyhow::{anyhow, Result};
 use docker_credential::{CredentialRetrievalError, DockerCredential};
 use fs2::FileExt;
 use log::{debug, info, warn, LevelFilter};
-use oci_distribution::{
+use oci_client::{
     client::{linux_amd64_resolver, ClientConfig, ClientProtocol},
     manifest,
     secrets::RegistryAuth,
@@ -159,7 +159,7 @@ impl Container {
                     image_layers,
                 })
             }
-            Err(oci_distribution::errors::OciDistributionError::AuthenticationFailure(message)) => {
+            Err(oci_client::errors::OciDistributionError::AuthenticationFailure(message)) => {
                 panic!("Container image registry authentication failure ({}). Are docker credentials set-up for current user?", &message);
             }
             Err(e) => {
