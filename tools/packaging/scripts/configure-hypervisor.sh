@@ -426,6 +426,7 @@ generate_qemu_options() {
 	# AVX2 is enabled by default by x86_64, make sure it's enabled only
 	# for that architecture
 	if [ "$arch" == x86_64 ]; then
+		qemu_options+=(speed:--enable-avx)
 		qemu_options+=(speed:--enable-avx2)
 		qemu_options+=(speed:--enable-avx512f)
 		# According to QEMU's nvdimm documentation: When 'pmem' is 'on' and QEMU is
