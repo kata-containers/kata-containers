@@ -37,6 +37,7 @@ else
 		"k8s-copy-file.bats" \
 		"k8s-cpu-ns.bats" \
 		"k8s-credentials-secrets.bats" \
+		"k8s-cron-job.bats" \
 		"k8s-custom-dns.bats" \
 		"k8s-empty-dirs.bats" \
 		"k8s-env.bats" \

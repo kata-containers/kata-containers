@@ -1,0 +1,15 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cron-job-pi-test
+spec:
+  schedule: "* * * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: pi
+            image: quay.io/prometheus/busybox:latest
+            command: ["/bin/sh", "-c", "echo 'scale=5; 4*a(1)' | bc -l"]
+          restartPolicy: OnFailure
