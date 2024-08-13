@@ -803,20 +803,23 @@ install_kata()
 	local from_dir
 	from_dir=$(printf "%s/bin" "$kata_install_dir")
 
-	info "Checking file '$file'"
-
-	# Since we're unpacking to the root directory, perform a sanity check
-	# on the archive first.
-	local unexpected
-	unexpected=$(tar -tf "${file}" |\
-		grep -Ev "^(\./$|\./opt/$|\.${kata_install_dir}/)" || true)
-
-	[ -n "$unexpected" ] && die "File '$file' contains unexpected paths: '$unexpected'"
-
 	if [ -n "$kata_tarball" ]
 	then
 		info "Installing $project release from $file"
 	else
+		# Only do the checking in case the tarball was not explicitly passed
+		# by the user.  We have no control of what's passed and we cannot
+		# expect that all the files are going to be under /opt.
+		info "Checking file '$file'"
+
+		# Since we're unpacking to the root directory, perform a sanity check
+		# on the archive first.
+		local unexpected
+		unexpected=$(tar -tf "${file}" |\
+			grep -Ev "^(\./$|\./opt/$|\.${kata_install_dir}/)" || true)
+
+		[ -n "$unexpected" ] && die "File '$file' contains unexpected paths: '$unexpected'"
+
 		info "Installing $project release $version from $file"
 	fi
 
