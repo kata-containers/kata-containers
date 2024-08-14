@@ -270,6 +270,9 @@ const (
 
 	// PEFGuest represent ppc64le PEF(Protected Execution Facility) object.
 	PEFGuest ObjectType = "pef-guest"
+
+	// CCAGuest represent Arm64 CCA RME(Realm Management Extension) object.
+	CCAGuest ObjectType = "rme-guest"
 )
 
 // Object is a qemu object representation.
@@ -335,6 +338,10 @@ type Object struct {
 
 	// Raw byte slice of initdata digest
 	InitdataDigest []byte
+
+	// MeasurementAlgo is the algorithm for measurement
+	// This is only relevant for cca-guest objects
+	MeasurementAlgo string
 }
 
 // Valid returns true if the Object structure is valid and complete.
@@ -354,6 +361,8 @@ func (object Object) Valid() bool {
 		return object.ID != ""
 	case PEFGuest:
 		return object.ID != "" && object.File != ""
+	case CCAGuest:
+		return object.ID != "" && object.MeasurementAlgo != ""
 
 	default:
 		return false
@@ -439,6 +448,16 @@ func (object Object) QemuParams(config *Config) []string {
 		deviceParams = append(deviceParams, string(object.Driver))
 		deviceParams = append(deviceParams, fmt.Sprintf("id=%s", object.DeviceID))
 		deviceParams = append(deviceParams, fmt.Sprintf("host-path=%s", object.File))
+	case CCAGuest:
+		objectParams = append(objectParams, string(object.Type))
+		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
+		objectParams = append(objectParams, fmt.Sprintf("measurement-algorithm=%s", object.MeasurementAlgo))
+		if len(object.InitdataDigest) > 0 {
+			// PersonalizationValue in Arm-CCA should be exactly 64 bytes
+			personalizationValueSlice := adjustProperLength(object.InitdataDigest, 64)
+			personalizationValue := base64.StdEncoding.EncodeToString(personalizationValueSlice)
+			objectParams = append(objectParams, fmt.Sprintf("personalization-value=%s", personalizationValue))
+		}
 	}
 
 	if len(deviceParams) > 0 {
