@@ -1072,6 +1072,10 @@ const (
 	// https://www.kernel.org/doc/html/latest/virt/kvm/s390-pv.html
 	// Exclude from lint checking for it won't be used on arm64 code
 	seProtection
+
+	// Arm Realm Management Extension (Arm Confidential Computing Architecture)
+	// https://www.arm.com/architecture/security-features/arm-confidential-compute-architecture
+	rmeProtection
 )
 
 var guestProtectionStr = [...]string{
@@ -1081,6 +1085,7 @@ var guestProtectionStr = [...]string{
 	sevProtection:  "sev",
 	snpProtection:  "snp",
 	tdxProtection:  "tdx",
+	rmeProtection:  "rme",
 }
 
 func (gp guestProtection) String() string {
