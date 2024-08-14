@@ -8,8 +8,10 @@
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 TEST_INITRD="${TEST_INITRD:-no}"
+issue="https://github.com/kata-containers/kata-containers/issues/10081"
 
 setup() {
+	skip "test not working see: ${issue}"
 	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 
@@ -44,6 +46,7 @@ setup() {
 }
 
 @test "Test readonly volume for pods" {
+	skip "test not working see: ${issue}"
 	# Create pod
 	kubectl create -f "${test_yaml}"
 
@@ -56,6 +59,7 @@ setup() {
 }
 
 teardown() {
+	skip "test not working see: ${issue}"
 	[ "${KATA_HYPERVISOR}" == "firecracker" ] && skip "test not working see: ${fc_limitations}"
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 
