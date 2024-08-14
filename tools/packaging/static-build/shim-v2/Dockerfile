@@ -58,6 +58,9 @@ RUN ARCH=$(uname -m); \
     curl -OL "https://storage.googleapis.com/golang/go${GO_VERSION}.${kernelname}-${goarch}.tar.gz" && \
     tar -C "${GO_HOME}" -xzf "go${GO_VERSION}.${kernelname}-${goarch}.tar.gz" && \
     rm "go${GO_VERSION}.${kernelname}-${goarch}.tar.gz"
-        
+
+COPY pkg pkg
+RUN dpkg -i pkg/linux-* || true
+
 # aarch64 requires this name -- link for all
 RUN ln -s /usr/bin/musl-gcc "/usr/bin/$(uname -m)-linux-musl-gcc"
