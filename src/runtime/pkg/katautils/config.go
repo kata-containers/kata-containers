@@ -110,6 +110,7 @@ type hypervisor struct {
 	SnpIdBlock                     string                    `toml:"snp_id_block"`
 	SnpIdAuth                      string                    `toml:"snp_id_auth"`
 	SnpGuestPolicy                 *uint64                   `toml:"snp_guest_policy"`
+	MeasurementAlgo                string                    `toml:"measurement_algo"`
 	HypervisorPathList             []string                  `toml:"valid_hypervisor_paths"`
 	JailerPathList                 []string                  `toml:"valid_jailer_paths"`
 	VirtioFSDaemonList             []string                  `toml:"valid_virtio_fs_daemon_paths"`
@@ -406,6 +407,14 @@ func (h hypervisor) GetEntropySource() string {
 	}
 
 	return h.EntropySource
+}
+
+func (h hypervisor) GetMeasurementAlgo() string {
+	if h.MeasurementAlgo == "" {
+		return defaultMeasurementAlgo
+	}
+
+	return h.MeasurementAlgo
 }
 
 var procCPUInfo = "/proc/cpuinfo"
@@ -994,6 +1003,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		SnpIdBlock:               h.SnpIdBlock,
 		SnpIdAuth:                h.SnpIdAuth,
 		SnpGuestPolicy:           h.SnpGuestPolicy,
+		MeasurementAlgo:          h.GetMeasurementAlgo(),
 	}, nil
 }
 
@@ -1120,6 +1130,7 @@ func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		DiskRateLimiterBwOneTimeBurst:  h.getDiskRateLimiterBwOneTimeBurst(),
 		DiskRateLimiterOpsMaxRate:      h.getDiskRateLimiterOpsMaxRate(),
 		DiskRateLimiterOpsOneTimeBurst: h.getDiskRateLimiterOpsOneTimeBurst(),
+		MeasurementAlgo:                h.GetMeasurementAlgo(),
 	}, nil
 }
 
