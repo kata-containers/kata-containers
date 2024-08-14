@@ -190,6 +190,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (testConfig testRuntime
 		PFlash:                []string{},
 		SGXEPCSize:            epcSize,
 		QgsPort:               defaultQgsPort,
+		MeasurementAlgo:       defaultMeasurementAlgo,
 	}
 
 	if goruntime.GOARCH == "arm64" && len(hypervisorConfig.PFlash) == 0 && hypervisorConfig.FirmwarePath == "" {
