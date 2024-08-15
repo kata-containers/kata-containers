@@ -120,7 +120,6 @@ impl QemuInner {
                     let _netns_guard = NetnsGuard::new(&netns).context("new netns guard")?;
 
                     cmdline.add_network_device(
-                        network.config.index,
                         &network.config.host_dev_name,
                         network.config.guest_mac.clone().unwrap(),
                     )?;

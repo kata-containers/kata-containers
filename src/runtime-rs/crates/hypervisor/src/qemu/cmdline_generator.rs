@@ -1717,14 +1717,9 @@ impl<'a> QemuCmdLine<'a> {
         ));
     }
 
-    pub fn add_network_device(
-        &mut self,
-        dev_index: u64,
-        host_dev_name: &str,
-        guest_mac: Address,
-    ) -> Result<()> {
+    pub fn add_network_device(&mut self, host_dev_name: &str, guest_mac: Address) -> Result<()> {
         let (netdev, virtio_net_device) =
-            get_network_device(self.config, dev_index, host_dev_name, guest_mac)?;
+            get_network_device(self.config, host_dev_name, guest_mac)?;
 
         self.devices.push(Box::new(netdev));
         self.devices.push(Box::new(virtio_net_device));
@@ -1779,12 +1774,11 @@ impl<'a> QemuCmdLine<'a> {
 
 pub fn get_network_device(
     config: &HypervisorConfig,
-    dev_index: u64,
     host_dev_name: &str,
     guest_mac: Address,
 ) -> Result<(Netdev, DeviceVirtioNet)> {
     let mut netdev = Netdev::new(
-        &format!("network-{}", dev_index),
+        &format!("network-{}", host_dev_name),
         host_dev_name,
         config.network_info.network_queues,
     )?;
