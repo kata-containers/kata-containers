@@ -32,35 +32,48 @@ import (
 )
 
 // Splitting Regex pattern:
-// configVolRegex: Regex to match directory structure for k8's volume mounts.
 // Use regex for strict matching instead of strings.Contains
 // match for kubernetes.io~configmap, kubernetes.io~secret, kubernetes.io~projected, kubernetes.io~downward-api
 // as recommended in review comments for PR #7211
+
+// Default K8S root directory
+var defaultKubernetesRootDir = "/var/lib/kubelet"
 
 // Example directory structure for the volume mounts.
 // /var/lib/kubelet/pods/f51ae853-557e-4ce1-b60b-a1101b555612/volumes/kubernetes.io~configmap
 // /var/lib/kubelet/pods/f51ae853-557e-4ce1-b60b-a1101b555612/volumes/kubernetes.io~secret
 // /var/lib/kubelet/pods/f51ae853-557e-4ce1-b60b-a1101b555612/volumes/kubernetes.io~projected
 // /var/lib/kubelet/pods/f51ae853-557e-4ce1-b60b-a1101b555612/volumes/kubernetes.io~downward-api
-var configVolRegexString = "^/var/lib/kubelet/pods/[a-fA-F0-9\\-]{36}/volumes/kubernetes\\.io~(configmap|secret|projected|downward-api)"
-var configVolRegex = regexp.MustCompile(configVolRegexString)
+var configVolRegexString = "/pods/[a-fA-F0-9\\-]{36}/volumes/kubernetes\\.io~(configmap|secret|projected|downward-api)"
 
-// timestampDirRegex: Regex to match only the timestamped directory inside the above volume mount
 // Regex for the temp directory with timestamp that is used to handle the updates by K8s
 // Examples
 // /var/lib/kubelet/pods/e33907eb-54c7-4113-a3dc-447f247084cc/volumes/kubernetes.io~secret/foosecret/..2023_07_27_07_13_00.1257228
 // /var/lib/kubelet/pods/e33907eb-54c7-4113-a3dc-447f247084cc/volumes/kubernetes.io~downward-api/fooinfo/..2023_07_27_07_13_00.3704578339
 // The timestamp is of the format 2023_07_27_07_13_00.3704578339 or 2023_07_27_07_13_00.1257228
 var timestampDirRegexString = ".*[0-9]{4}_[0-9]{2}_[0-9]{2}_[0-9]{2}_[0-9]{2}_[0-9]{2}.[0-9]+$"
-var timestampDirRegex = regexp.MustCompile(configVolRegexString + timestampDirRegexString)
 
 func unmountNoFollow(path string) error {
 	return syscall.Unmount(path, syscall.MNT_DETACH|UmountNoFollow)
 }
 
+// Resolve the K8S root dir if it is a symbolic link
+func resolveRootDir() string {
+	rootDir, err := os.Readlink(defaultKubernetesRootDir)
+	if err != nil {
+		// Use the default root dir in case of any errors resolving the root dir symlink
+		return defaultKubernetesRootDir
+	}
+	return rootDir
+}
+
 type FilesystemShare struct {
 	sandbox *Sandbox
 	watcher *fsnotify.Watcher
+	// Regex to match directory structure for k8's volume mounts.
+	configVolRegex *regexp.Regexp
+	// Regex to match only the timestamped directory inside the k8's volume mount
+	timestampDirRegex *regexp.Regexp
 	// The same volume mount can be shared by multiple containers in the same sandbox (pod)
 	srcDstMap            map[string][]string
 	srcDstMapLock        sync.Mutex
@@ -77,12 +90,18 @@ func NewFilesystemShare(s *Sandbox) (FilesystemSharer, error) {
 		return nil, fmt.Errorf("Creating watcher returned error %w", err)
 	}
 
+	kubernetesRootDir := resolveRootDir()
+	configVolRegex := regexp.MustCompile("^" + kubernetesRootDir + configVolRegexString)
+	timestampDirRegex := regexp.MustCompile("^" + kubernetesRootDir + configVolRegexString + timestampDirRegexString)
+
 	return &FilesystemShare{
 		prepared:           false,
 		sandbox:            s,
 		watcherDoneChannel: make(chan bool),
 		srcDstMap:          make(map[string][]string),
 		watcher:            watcher,
+		configVolRegex:     configVolRegex,
+		timestampDirRegex:  timestampDirRegex,
 	}, nil
 }
 
@@ -318,14 +337,14 @@ func (f *FilesystemShare) ShareFile(ctx context.Context, c *Container, m *Mount)
 				return err
 			}
 
-			if configVolRegex.MatchString(srcPath) {
+			if f.configVolRegex.MatchString(srcPath) {
 				// fsNotify doesn't add watcher recursively.
 				// So we need to add the watcher for directories under kubernetes.io~configmap, kubernetes.io~secret,
 				// kubernetes.io~downward-api and kubernetes.io~projected
 
 				// Add watcher only to the timestamped directory containing secrets to prevent
 				// multiple events received from also watching the parent directory.
-				if info.Mode().IsDir() && timestampDirRegex.MatchString(srcPath) {
+				if info.Mode().IsDir() && f.timestampDirRegex.MatchString(srcPath) {
 					// The cm dir is of the form /var/lib/kubelet/pods/<uid>/volumes/kubernetes.io~configmap/foo/{..data, key1, key2,...}
 					// The secret dir is of the form /var/lib/kubelet/pods/<uid>/volumes/kubernetes.io~secret/foo/{..data, key1, key2,...}
 					// The projected dir is of the form /var/lib/kubelet/pods/<uid>/volumes/kubernetes.io~projected/foo/{..data, key1, key2,...}
@@ -753,7 +772,7 @@ func (f *FilesystemShare) StartFileEventWatcher(ctx context.Context) error {
 
 				source := event.Name
 				f.Logger().Infof("StartFileEventWatcher: source for the event: %s", source)
-				if timestampDirRegex.FindString(source) != "" {
+				if f.timestampDirRegex.FindString(source) != "" {
 					// This block will be entered when the timestamped directory is removed.
 					// This also indicates that foo/..data contains the updated info
 
