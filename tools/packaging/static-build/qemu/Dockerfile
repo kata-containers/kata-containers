@@ -2,7 +2,7 @@
 # Copyright (c) 2020 Ant Group
 #
 # SPDX-License-Identifier: Apache-2.0
-from ubuntu:20.04
+FROM ubuntu:20.04
 
 # CACHE_TIMEOUT: date to invalid cache, if the date changes the image will be rebuild
 # This is required to keep build dependencies with security fixes.

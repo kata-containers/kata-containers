@@ -5,7 +5,7 @@
 
 # openSUSE Tumbleweed image has only 'latest' tag so ignore DL3006 rule.
 # hadolint ignore=DL3006
-from opensuse/tumbleweed
+FROM opensuse/tumbleweed
 
 # zypper -y or --non-interactive can be used interchangeably here so ignore
 # DL3034 rule.
