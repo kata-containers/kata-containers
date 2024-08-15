@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use crate::qemu::cmdline_generator::{DeviceVirtioNet, Netdev};
+
 use anyhow::{anyhow, Result};
 use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
 use std::fmt::{Debug, Error, Formatter};
@@ -294,7 +296,6 @@ impl Qmp {
         Ok(())
     }
 
-    #[allow(dead_code)]
     fn find_free_slot(&mut self) -> Result<(String, i64)> {
         let pci = self.qmp.execute(&qapi_qmp::query_pci {})?;
         for pci_info in &pci {
@@ -336,7 +337,6 @@ impl Qmp {
         Err(anyhow!("no free slots on PCI bridges"))
     }
 
-    #[allow(dead_code)]
     fn pass_fd(&mut self, fd: RawFd, fdname: &str) -> Result<()> {
         info!(sl!(), "passing fd {:?} as {}", fd, fdname);
 
@@ -371,6 +371,102 @@ impl Qmp {
             }
             Err(err) => Err(anyhow!("failed to pass {} ({}): {}", fdname, fd, err)),
         }
+    }
+
+    #[allow(dead_code)]
+    pub fn hotplug_network_device(
+        &mut self,
+        netdev: &Netdev,
+        virtio_net_device: &DeviceVirtioNet,
+    ) -> Result<()> {
+        debug!(
+            sl!(),
+            "hotplug_network_device(): PCI before {}: {:#?}",
+            virtio_net_device.get_netdev_id(),
+            self.qmp.execute(&qapi_qmp::query_pci {})?
+        );
+
+        let (bus, slot) = self.find_free_slot()?;
+
+        let mut fd_names = vec![];
+        for (idx, fd) in netdev.get_fds().iter().enumerate() {
+            let fdname = format!("fd{}", idx);
+            self.pass_fd(fd.as_raw_fd(), fdname.as_ref())?;
+            fd_names.push(fdname);
+        }
+
+        let mut vhostfd_names = vec![];
+        for (idx, fd) in netdev.get_vhostfds().iter().enumerate() {
+            let vhostfdname = format!("vhostfd{}", idx);
+            self.pass_fd(fd.as_raw_fd(), vhostfdname.as_ref())?;
+            vhostfd_names.push(vhostfdname);
+        }
+
+        self.qmp
+            .execute(&qapi_qmp::netdev_add(qapi_qmp::Netdev::tap {
+                id: netdev.get_id().clone(),
+                tap: qapi_qmp::NetdevTapOptions {
+                    br: None,
+                    downscript: None,
+                    fd: None,
+                    // Logic in cmdline_generator::Netdev::new() seems to
+                    // guarantee that there will always be at least one fd.
+                    fds: Some(fd_names.join(",")),
+                    helper: None,
+                    ifname: None,
+                    poll_us: None,
+                    queues: None,
+                    script: None,
+                    sndbuf: None,
+                    vhost: if vhostfd_names.is_empty() {
+                        None
+                    } else {
+                        Some(true)
+                    },
+                    vhostfd: None,
+                    vhostfds: if vhostfd_names.is_empty() {
+                        None
+                    } else {
+                        Some(vhostfd_names.join(","))
+                    },
+                    vhostforce: None,
+                    vnet_hdr: None,
+                },
+            }))?;
+
+        let mut netdev_frontend_args = Dictionary::new();
+        netdev_frontend_args.insert(
+            "netdev".to_owned(),
+            virtio_net_device.get_netdev_id().clone().into(),
+        );
+        netdev_frontend_args.insert("addr".to_owned(), format!("{:02}", slot).into());
+        netdev_frontend_args.insert("mac".to_owned(), virtio_net_device.get_mac_addr().into());
+        netdev_frontend_args.insert("mq".to_owned(), "on".into());
+        // As the golang runtime documents the vectors computation, it's
+        // 2N+2 vectors, N for tx queues, N for rx queues, 1 for config, and one for possible control vq
+        netdev_frontend_args.insert(
+            "vectors".to_owned(),
+            (2 * virtio_net_device.get_num_queues() + 2).into(),
+        );
+        if virtio_net_device.get_disable_modern() {
+            netdev_frontend_args.insert("disable-modern".to_owned(), true.into());
+        }
+
+        self.qmp.execute(&qmp::device_add {
+            bus: Some(bus),
+            id: Some(format!("frontend-{}", virtio_net_device.get_netdev_id())),
+            driver: virtio_net_device.get_device_driver().clone(),
+            arguments: netdev_frontend_args,
+        })?;
+
+        debug!(
+            sl!(),
+            "hotplug_network_device(): PCI after {}: {:#?}",
+            virtio_net_device.get_netdev_id(),
+            self.qmp.execute(&qapi_qmp::query_pci {})?
+        );
+
+        Ok(())
     }
 }
 

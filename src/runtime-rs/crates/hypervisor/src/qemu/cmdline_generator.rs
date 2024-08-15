@@ -1021,6 +1021,18 @@ impl Netdev {
         self.disable_vhost_net = disable_vhost_net;
         self
     }
+
+    pub fn get_id(&self) -> &String {
+        &self.id
+    }
+
+    pub fn get_fds(&self) -> &Vec<File> {
+        &self.fds["fds"]
+    }
+
+    pub fn get_vhostfds(&self) -> &Vec<File> {
+        &self.fds["vhostfds"]
+    }
 }
 
 #[async_trait]
@@ -1088,6 +1100,26 @@ impl DeviceVirtioNet {
     fn set_iommu_platform(&mut self, iommu_platform: bool) -> &mut Self {
         self.iommu_platform = iommu_platform;
         self
+    }
+
+    pub fn get_netdev_id(&self) -> &String {
+        &self.netdev_id
+    }
+
+    pub fn get_device_driver(&self) -> &String {
+        &self.device_driver
+    }
+
+    pub fn get_mac_addr(&self) -> String {
+        format!("{:?}", self.mac_address)
+    }
+
+    pub fn get_num_queues(&self) -> u32 {
+        self.num_queues
+    }
+
+    pub fn get_disable_modern(&self) -> bool {
+        self.disable_modern
     }
 }
 
