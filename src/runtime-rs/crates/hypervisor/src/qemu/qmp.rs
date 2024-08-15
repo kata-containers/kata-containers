@@ -4,8 +4,10 @@
 //
 
 use anyhow::{anyhow, Result};
+use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
 use std::fmt::{Debug, Error, Formatter};
 use std::io::BufReader;
+use std::os::fd::{AsRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 use std::time::Duration;
 
@@ -290,6 +292,85 @@ impl Qmp {
             ));
         }
         Ok(())
+    }
+
+    #[allow(dead_code)]
+    fn find_free_slot(&mut self) -> Result<(String, i64)> {
+        let pci = self.qmp.execute(&qapi_qmp::query_pci {})?;
+        for pci_info in &pci {
+            for pci_dev in &pci_info.devices {
+                let pci_bridge = match &pci_dev.pci_bridge {
+                    Some(bridge) => bridge,
+                    None => continue,
+                };
+
+                info!(sl!(), "found PCI bridge: {}", pci_dev.qdev_id);
+
+                if let Some(bridge_devices) = &pci_bridge.devices {
+                    let occupied_slots = bridge_devices
+                        .iter()
+                        .map(|pci_dev| pci_dev.slot)
+                        .collect::<Vec<_>>();
+
+                    info!(
+                        sl!(),
+                        "already occupied slots on bridge {}: {:#?}",
+                        pci_dev.qdev_id,
+                        occupied_slots
+                    );
+
+                    // from virtcontainers' bridges.go
+                    let pci_bridge_max_capacity = 30;
+                    for slot in 0..pci_bridge_max_capacity {
+                        if !occupied_slots.iter().any(|elem| *elem == slot) {
+                            info!(
+                                sl!(),
+                                "found free slot on bridge {}: {}", pci_dev.qdev_id, slot
+                            );
+                            return Ok((pci_dev.qdev_id.clone(), slot));
+                        }
+                    }
+                }
+            }
+        }
+        Err(anyhow!("no free slots on PCI bridges"))
+    }
+
+    #[allow(dead_code)]
+    fn pass_fd(&mut self, fd: RawFd, fdname: &str) -> Result<()> {
+        info!(sl!(), "passing fd {:?} as {}", fd, fdname);
+
+        // Put the QMP 'getfd' command itself into the message payload.
+        let getfd_cmd = format!(
+            "{{ \"execute\": \"getfd\", \"arguments\": {{ \"fdname\": \"{}\" }} }}",
+            fdname
+        );
+        let buf = getfd_cmd.as_bytes();
+        let bufs = &mut [std::io::IoSlice::new(buf)][..];
+
+        debug!(sl!(), "bufs: {:?}", bufs);
+
+        let fds = [fd];
+        let cmsg = [ControlMessage::ScmRights(&fds)];
+
+        let result = sendmsg::<()>(
+            self.qmp.inner_mut().get_mut_write().as_raw_fd(),
+            bufs,
+            &cmsg,
+            MsgFlags::empty(),
+            None,
+        );
+        info!(sl!(), "sendmsg() result: {:#?}", result);
+
+        let result = self.qmp.read_response::<&qmp::getfd>();
+
+        match result {
+            Ok(_) => {
+                info!(sl!(), "successfully passed {} ({})", fdname, fd);
+                Ok(())
+            }
+            Err(err) => Err(anyhow!("failed to pass {} ({}): {}", fdname, fd, err)),
+        }
     }
 }
 
