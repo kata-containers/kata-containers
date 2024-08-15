@@ -1290,6 +1290,74 @@ impl ToQemuParams for DeviceIntelIommu {
     }
 }
 
+#[derive(Debug)]
+struct DevicePciBridge {
+    driver: String,
+    bus: String,
+    id: String,
+    chassis_nr: u32,
+    shpc: bool,
+    addr: u32,
+    io_reserve: String,
+    mem_reserve: String,
+    pref64_reserve: String,
+}
+
+impl DevicePciBridge {
+    fn new(config: &HypervisorConfig, bridge_idx: u32) -> DevicePciBridge {
+        DevicePciBridge {
+            // The go runtime doesn't support bridges other than PCI although
+            // PCIe should also be available.  Stick with the legacy behaviour
+            // of ignoring PCIe since it's not clear to me how to decide
+            // between the two.
+            driver: "pci-bridge".to_owned(),
+            bus: match config.machine_info.machine_type.as_str() {
+                "q35" | "virt" => "pcie.0",
+                _ => "pci.0",
+            }
+            .to_owned(),
+            id: format!("pci-bridge-{}", bridge_idx),
+            // Each bridge is required to be assigned a unique chassis id > 0.
+            chassis_nr: bridge_idx + 1,
+            shpc: false,
+            // 2 is documented by the go runtime as the first slot available
+            // for a bridge (on x86_64)
+            // (https://github.com/kata-containers/kata-containers/blob/99730256a2899c82d111400024621519d17ea15d/src/runtime/virtcontainers/qemu_arch_base.go#L212)
+            addr: 2 + bridge_idx,
+            // Values taken from the go runtime implementation which comments
+            // the choices as follows:
+            // Certain guest BIOS versions think !SHPC means no hotplug, and
+            // won't reserve the IO and memory windows that will be needed for
+            // devices added underneath this bridge.  This will only break for
+            // certain combinations of exact qemu, BIOS and guest kernel
+            // versions, but for consistency, just hint the usual default
+            // windows for a bridge (as the BIOS would use with SHPC) so that
+            // we can do ACPI hotplug.
+            // (https://github.com/kata-containers/kata-containers/blob/99730256a2899c82d111400024621519d17ea15d/src/runtime/virtcontainers/qemu.go#L2474)
+            io_reserve: "4k".to_owned(),
+            mem_reserve: "1m".to_owned(),
+            pref64_reserve: "1m".to_owned(),
+        }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for DevicePciBridge {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push(self.driver.clone());
+        params.push(format!("bus={}", self.bus));
+        params.push(format!("id={}", self.id));
+        params.push(format!("chassis_nr={}", self.chassis_nr));
+        params.push(format!("shpc={}", if self.shpc { "on" } else { "off" }));
+        params.push(format!("addr={}", self.addr));
+        params.push(format!("io-reserve={}", self.io_reserve));
+        params.push(format!("mem-reserve={}", self.mem_reserve));
+        params.push(format!("pref64-reserve={}", self.pref64_reserve));
+        Ok(vec!["-device".to_owned(), params.join(",")])
+    }
+}
+
 // Qemu provides methods and types for managing QEMU instances.
 // To manage a qemu instance after it has been launched you need
 // to pass the -qmp option during launch requesting the qemu instance
@@ -1484,6 +1552,11 @@ impl<'a> QemuCmdLine<'a> {
             qemu_cmd_line.add_rng();
         }
 
+        if qemu_cmd_line.bus_type() != VirtioBusType::Ccw && config.device_info.default_bridges > 0
+        {
+            qemu_cmd_line.add_bridges(config.device_info.default_bridges);
+        }
+
         Ok(qemu_cmd_line)
     }
 
@@ -1524,6 +1597,13 @@ impl<'a> QemuCmdLine<'a> {
             .append(&mut KernelParams::from_string("intel_iommu=on iommu=pt"));
 
         self.machine.set_kernel_irqchip("split");
+    }
+
+    fn add_bridges(&mut self, count: u32) {
+        for idx in 0..count {
+            let bridge = DevicePciBridge::new(self.config, idx);
+            self.devices.push(Box::new(bridge));
+        }
     }
 
     pub fn add_virtiofs_share(
