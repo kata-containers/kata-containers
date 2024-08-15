@@ -7,6 +7,7 @@
 #![allow(non_snake_case)]
 
 use crate::config_map;
+use crate::cronjob;
 use crate::daemon_set;
 use crate::deployment;
 use crate::job;
@@ -162,6 +163,14 @@ pub fn new_k8s_resource(
             .unwrap();
             debug!("{:#?}", &job);
             Ok((boxed::Box::new(job), header.kind))
+        }
+        "CronJob" => {
+            let cronJob: cronjob::CronJob = serde_ignored::deserialize(d, |path| {
+                handle_unused_field(&path.to_string(), silent_unsupported_fields);
+            })
+            .unwrap();
+            debug!("{:#?}", &cronJob);
+            Ok((boxed::Box::new(cronJob), header.kind))
         }
         "List" => {
             let list: list::List = serde_ignored::deserialize(d, |path| {

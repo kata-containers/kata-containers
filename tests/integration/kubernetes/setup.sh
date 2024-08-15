@@ -77,6 +77,13 @@ add_annotations_to_yaml() {
 		  "${K8S_TEST_YAML}"
 		;;
 
+	CronJob)
+		info "Adding \"${annotation_name}=${annotation_value}\" to ${resource_kind} from ${yaml_file}"
+		yq -i \
+		  ".spec.jobTemplate.spec.template.metadata.annotations.\"${annotation_name}\" = \"${annotation_value}\"" \
+		  "${K8S_TEST_YAML}"
+		;;
+
 	List)
 		info "Issue #7765: adding annotations to ${resource_kind} from ${yaml_file} is not implemented yet"
 		;;
