@@ -8,7 +8,7 @@ use crate::HypervisorState;
 use crate::MemoryConfig;
 use crate::HYPERVISOR_FIRECRACKER;
 use crate::{device::DeviceType, VmmState};
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use hyper::Client;
 use hyperlocal::{UnixClientExt, UnixConnector};
@@ -19,7 +19,12 @@ use kata_types::{
 use nix::sched::{setns, CloneFlags};
 use persist::sandbox_persist::Persist;
 use std::os::unix::io::AsRawFd;
-use tokio::process::Command;
+use std::process::Stdio;
+use tokio::io::AsyncBufReadExt;
+use tokio::io::BufReader;
+use tokio::process::{Child, ChildStderr, Command};
+use tokio::sync::mpsc;
+use tokio::sync::Mutex;
 
 unsafe impl Send for FcInner {}
 unsafe impl Sync for FcInner {}
@@ -39,12 +44,17 @@ pub struct FcInner {
     pub(crate) run_dir: String,
     pub(crate) pending_devices: Vec<DeviceType>,
     pub(crate) capabilities: Capabilities,
+    pub(crate) fc_process: Mutex<Option<Child>>,
+    pub(crate) exit_notify: Option<mpsc::Sender<()>>,
+    pub(crate) exit_waiter: Mutex<(mpsc::Receiver<()>, i32)>,
 }
 
 impl FcInner {
     pub fn new() -> FcInner {
         let mut capabilities = Capabilities::new();
         capabilities.set(CapabilityBits::BlockDeviceSupport);
+        let (exit_notify, exit_waiter) = mpsc::channel(1);
+
         FcInner {
             id: String::default(),
             asock_path: String::default(),
@@ -59,6 +69,9 @@ impl FcInner {
             run_dir: String::default(),
             pending_devices: vec![],
             capabilities,
+            fc_process: Mutex::new(None),
+            exit_notify: Some(exit_notify),
+            exit_waiter: Mutex::new((exit_waiter, 0)),
         }
     }
 
@@ -108,7 +121,15 @@ impl FcInner {
             });
         }
 
-        let mut child = cmd.spawn()?;
+        let mut child = cmd.stderr(Stdio::piped()).spawn()?;
+
+        let stderr = child.stderr.take().unwrap();
+        let exit_notify: mpsc::Sender<()> = self
+            .exit_notify
+            .take()
+            .ok_or_else(|| anyhow!("no exit notify"))?;
+
+        tokio::spawn(log_fc_stderr(stderr, exit_notify));
 
         match child.id() {
             Some(id) => {
@@ -122,8 +143,12 @@ impl FcInner {
             None => {
                 let exit_status = child.wait().await?;
                 error!(sl(), "Process exited, status: {:?}", exit_status);
+                return Err(anyhow!("fc vmm start failed with: {:?}", exit_status));
             }
         };
+
+        self.fc_process = Mutex::new(Some(child));
+
         Ok(())
     }
 
@@ -167,6 +192,27 @@ impl FcInner {
     }
 }
 
+async fn log_fc_stderr(stderr: ChildStderr, exit_notify: mpsc::Sender<()>) -> Result<()> {
+    info!(sl!(), "starting reading fc stderr");
+
+    let stderr_reader = BufReader::new(stderr);
+    let mut stderr_lines = stderr_reader.lines();
+
+    while let Some(buffer) = stderr_lines
+        .next_line()
+        .await
+        .context("next_line() failed on fc stderr")?
+    {
+        info!(sl!(), "fc stderr: {:?}", buffer);
+    }
+
+    // Notfiy the waiter the process exit.
+    let _ = exit_notify.try_send(());
+
+    info!(sl!(), "finished reading fc stderr");
+    Ok(())
+}
+
 #[async_trait]
 impl Persist for FcInner {
     type State = HypervisorState;
@@ -189,6 +235,8 @@ impl Persist for FcInner {
         _hypervisor_args: Self::ConstructorArgs,
         hypervisor_state: Self::State,
     ) -> Result<Self> {
+        let (exit_notify, exit_waiter) = mpsc::channel(1);
+
         Ok(FcInner {
             id: hypervisor_state.id,
             asock_path: String::default(),
@@ -203,6 +251,9 @@ impl Persist for FcInner {
             pending_devices: vec![],
             run_dir: hypervisor_state.run_dir,
             capabilities: Capabilities::new(),
+            fc_process: Mutex::new(None),
+            exit_notify: Some(exit_notify),
+            exit_waiter: Mutex::new((exit_waiter, 0)),
         })
     }
 }

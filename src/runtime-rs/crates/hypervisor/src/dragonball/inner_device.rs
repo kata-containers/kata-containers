@@ -7,6 +7,13 @@
 use std::convert::TryFrom;
 use std::path::PathBuf;
 
+use super::{build_dragonball_network_config, DragonballInner};
+use crate::device::pci_path::PciPath;
+use crate::VhostUserConfig;
+use crate::{
+    device::DeviceType, HybridVsockConfig, NetworkConfig, ShareFsConfig, ShareFsMountConfig,
+    ShareFsMountOperation, ShareFsMountType, VfioDevice, VmmState, JAILER_ROOT,
+};
 use anyhow::{anyhow, Context, Result};
 use dbs_utils::net::MacAddr;
 use dragonball::api::v1::VhostUserConfig as DragonballVhostUserConfig;
@@ -17,14 +24,6 @@ use dragonball::api::v1::{
 use dragonball::device_manager::{
     blk_dev_mgr::BlockDeviceType,
     vfio_dev_mgr::{HostDeviceConfig, VfioPciDeviceConfig},
-};
-
-use super::{build_dragonball_network_config, DragonballInner};
-use crate::device::pci_path::PciPath;
-use crate::VhostUserConfig;
-use crate::{
-    device::DeviceType, HybridVsockConfig, NetworkConfig, ShareFsConfig, ShareFsMountConfig,
-    ShareFsMountOperation, ShareFsMountType, VfioDevice, VmmState, JAILER_ROOT,
 };
 
 const MB_TO_B: u32 = 1024 * 1024;
@@ -431,12 +430,14 @@ impl DragonballInner {
 #[cfg(test)]
 mod tests {
     use dragonball::api::v1::FsDeviceConfigInfo;
+    use tokio::sync::mpsc;
 
     use crate::dragonball::DragonballInner;
 
     #[test]
     fn test_parse_inline_virtiofs_args() {
-        let mut dragonball = DragonballInner::new();
+        let (tx, _) = mpsc::channel(1);
+        let mut dragonball = DragonballInner::new(tx);
         let mut fs_cfg = FsDeviceConfigInfo::default();
 
         // no_open and writeback_cache is the default, so test open and no_writeback_cache. "-d"
