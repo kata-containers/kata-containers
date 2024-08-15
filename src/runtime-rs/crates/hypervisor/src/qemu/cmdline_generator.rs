@@ -49,7 +49,7 @@ trait ToQemuParams: Send + Sync {
     async fn qemu_params(&self) -> Result<Vec<String>>;
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 enum VirtioBusType {
     Pci,
     Ccw,
@@ -67,6 +67,14 @@ impl VirtioBusType {
 impl Display for VirtioBusType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.as_str())
+    }
+}
+
+fn bus_type(config: &HypervisorConfig) -> VirtioBusType {
+    if config.machine_info.machine_type.contains("-ccw-") {
+        VirtioBusType::Ccw
+    } else {
+        VirtioBusType::Pci
     }
 }
 
@@ -1548,12 +1556,11 @@ impl<'a> QemuCmdLine<'a> {
 
         qemu_cmd_line.add_rtc();
 
-        if qemu_cmd_line.bus_type() != VirtioBusType::Ccw {
+        if bus_type(config) != VirtioBusType::Ccw {
             qemu_cmd_line.add_rng();
         }
 
-        if qemu_cmd_line.bus_type() != VirtioBusType::Ccw && config.device_info.default_bridges > 0
-        {
+        if bus_type(config) != VirtioBusType::Ccw && config.device_info.default_bridges > 0 {
             qemu_cmd_line.add_bridges(config.device_info.default_bridges);
         }
 
@@ -1578,14 +1585,6 @@ impl<'a> QemuCmdLine<'a> {
 
         self.devices.push(Box::new(rng_object));
         self.devices.push(Box::new(rng_device));
-    }
-
-    fn bus_type(&self) -> VirtioBusType {
-        if self.config.machine_info.machine_type.contains("-ccw-") {
-            VirtioBusType::Ccw
-        } else {
-            VirtioBusType::Pci
-        }
     }
 
     fn add_iommu(&mut self) {
@@ -1622,9 +1621,11 @@ impl<'a> QemuCmdLine<'a> {
 
         self.devices.push(Box::new(virtiofsd_socket_chardev));
 
-        let mut virtiofs_device = DeviceVhostUserFs::new(chardev_name, mount_tag, self.bus_type());
+        let bus_type = bus_type(self.config);
+
+        let mut virtiofs_device = DeviceVhostUserFs::new(chardev_name, mount_tag, bus_type);
         virtiofs_device.set_queue_size(queue_size);
-        if self.config.device_info.enable_iommu_platform && self.bus_type() == VirtioBusType::Ccw {
+        if self.config.device_info.enable_iommu_platform && bus_type == VirtioBusType::Ccw {
             virtiofs_device.set_iommu_platform(true);
         }
         self.devices.push(Box::new(virtiofs_device));
@@ -1638,7 +1639,7 @@ impl<'a> QemuCmdLine<'a> {
         //self.devices.push(Box::new(mem_file));
         self.memory.set_memory_backend_file(&mem_file);
 
-        match self.bus_type() {
+        match bus_type {
             VirtioBusType::Pci => {
                 self.machine.set_nvdimm(true);
                 self.devices.push(Box::new(NumaNode::new(&mem_file.id)));
@@ -1652,7 +1653,7 @@ impl<'a> QemuCmdLine<'a> {
     pub fn add_vsock(&mut self, vhostfd: tokio::fs::File, guest_cid: u32) -> Result<()> {
         clear_cloexec(vhostfd.as_raw_fd()).context("clearing O_CLOEXEC failed on vsock fd")?;
 
-        let mut vhost_vsock_pci = VhostVsock::new(vhostfd, guest_cid, self.bus_type());
+        let mut vhost_vsock_pci = VhostVsock::new(vhostfd, guest_cid, bus_type(self.config));
 
         if !self.config.disable_nesting_checks && should_disable_modern() {
             vhost_vsock_pci.set_disable_modern(true);
@@ -1699,8 +1700,10 @@ impl<'a> QemuCmdLine<'a> {
     pub fn add_block_device(&mut self, device_id: &str, path: &str) -> Result<()> {
         self.devices
             .push(Box::new(BlockBackend::new(device_id, path)));
-        self.devices
-            .push(Box::new(DeviceVirtioBlk::new(device_id, self.bus_type())));
+        self.devices.push(Box::new(DeviceVirtioBlk::new(
+            device_id,
+            bus_type(self.config),
+        )));
         Ok(())
     }
 
@@ -1734,7 +1737,9 @@ impl<'a> QemuCmdLine<'a> {
         if should_disable_modern() {
             virtio_net_device.set_disable_modern(true);
         }
-        if self.config.device_info.enable_iommu_platform && self.bus_type() == VirtioBusType::Ccw {
+        if self.config.device_info.enable_iommu_platform
+            && bus_type(self.config) == VirtioBusType::Ccw
+        {
             virtio_net_device.set_iommu_platform(true);
         }
         if self.config.network_info.network_queues > 1 {
@@ -1747,8 +1752,10 @@ impl<'a> QemuCmdLine<'a> {
     }
 
     pub fn add_console(&mut self, console_socket_path: &str) {
-        let mut serial_dev = DeviceVirtioSerial::new("serial0", self.bus_type());
-        if self.config.device_info.enable_iommu_platform && self.bus_type() == VirtioBusType::Ccw {
+        let mut serial_dev = DeviceVirtioSerial::new("serial0", bus_type(self.config));
+        if self.config.device_info.enable_iommu_platform
+            && bus_type(self.config) == VirtioBusType::Ccw
+        {
             serial_dev.set_iommu_platform(true);
         }
         self.devices.push(Box::new(serial_dev));
