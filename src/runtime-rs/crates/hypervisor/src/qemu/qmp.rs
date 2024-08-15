@@ -373,7 +373,6 @@ impl Qmp {
         }
     }
 
-    #[allow(dead_code)]
     pub fn hotplug_network_device(
         &mut self,
         netdev: &Netdev,

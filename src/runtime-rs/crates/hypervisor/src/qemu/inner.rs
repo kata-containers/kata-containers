@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use super::cmdline_generator::{QemuCmdLine, QMP_SOCKET_FILE};
+use super::cmdline_generator::{get_network_device, QemuCmdLine, QMP_SOCKET_FILE};
 use super::qmp::Qmp;
 use crate::{
     hypervisor_persist::HypervisorState, utils::enter_netns, HypervisorConfig, MemoryConfig,
@@ -539,9 +539,16 @@ use crate::device::DeviceType;
 
 // device manager part of Hypervisor
 impl QemuInner {
-    pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<DeviceType> {
+    pub(crate) async fn add_device(&mut self, mut device: DeviceType) -> Result<DeviceType> {
         info!(sl!(), "QemuInner::add_device() {}", device);
-        self.devices.push(device.clone());
+        let is_qemu_ready_to_hotplug = self.qmp.is_some();
+        if is_qemu_ready_to_hotplug {
+            // hypervisor is running already
+            device = self.hotplug_device(device)?;
+        } else {
+            // store the device to coldplug it later, on hypervisor launch
+            self.devices.push(device.clone());
+        }
         Ok(device)
     }
 
@@ -551,6 +558,26 @@ impl QemuInner {
             "QemuInner::remove_device({}): Not yet implemented",
             device
         ))
+    }
+
+    fn hotplug_device(&mut self, device: DeviceType) -> Result<DeviceType> {
+        let qmp = match self.qmp {
+            Some(ref mut qmp) => qmp,
+            None => return Err(anyhow!("QMP not initialized")),
+        };
+
+        match device {
+            DeviceType::Network(ref network_device) => {
+                let (netdev, virtio_net_device) = get_network_device(
+                    &self.config,
+                    &network_device.config.host_dev_name,
+                    network_device.config.guest_mac.clone().unwrap(),
+                )?;
+                qmp.hotplug_network_device(&netdev, &virtio_net_device)?
+            }
+            _ => info!(sl!(), "hotplugging of {:#?} is unsupported", device),
+        }
+        Ok(device)
     }
 }
 
