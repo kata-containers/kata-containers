@@ -663,7 +663,7 @@ function main() {
 		runtime="crio"
 	elif [ "$runtime" == "k3s" ] || [ "$runtime" == "k3s-agent" ] || [ "$runtime" == "rke2-agent" ] || [ "$runtime" == "rke2-server" ]; then
 		containerd_conf_tmpl_file="${containerd_conf_file}.tmpl"
-		if [ ! -f "$containerd_conf_tmpl_file" ]; then
+		if [ ! -f "$containerd_conf_tmpl_file" ] && [ -f "$containerd_conf_file" ]; then
 			cp "$containerd_conf_file" "$containerd_conf_tmpl_file"
 		fi
 
