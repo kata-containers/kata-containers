@@ -983,7 +983,7 @@ fn format_fds(files: &[File]) -> String {
 }
 
 #[derive(Debug)]
-struct Netdev {
+pub struct Netdev {
     id: String,
 
     // File descriptors for vhost multi-queue support.
@@ -1723,28 +1723,8 @@ impl<'a> QemuCmdLine<'a> {
         host_dev_name: &str,
         guest_mac: Address,
     ) -> Result<()> {
-        let mut netdev = Netdev::new(
-            &format!("network-{}", dev_index),
-            host_dev_name,
-            self.config.network_info.network_queues,
-        )?;
-        if self.config.network_info.disable_vhost_net {
-            netdev.set_disable_vhost_net(true);
-        }
-
-        let mut virtio_net_device = DeviceVirtioNet::new(&netdev.id, guest_mac);
-
-        if should_disable_modern() {
-            virtio_net_device.set_disable_modern(true);
-        }
-        if self.config.device_info.enable_iommu_platform
-            && bus_type(self.config) == VirtioBusType::Ccw
-        {
-            virtio_net_device.set_iommu_platform(true);
-        }
-        if self.config.network_info.network_queues > 1 {
-            virtio_net_device.set_num_queues(self.config.network_info.network_queues);
-        }
+        let (netdev, virtio_net_device) =
+            get_network_device(self.config, dev_index, host_dev_name, guest_mac)?;
 
         self.devices.push(Box::new(netdev));
         self.devices.push(Box::new(virtio_net_device));
@@ -1795,4 +1775,34 @@ impl<'a> QemuCmdLine<'a> {
 
         Ok(result)
     }
+}
+
+pub fn get_network_device(
+    config: &HypervisorConfig,
+    dev_index: u64,
+    host_dev_name: &str,
+    guest_mac: Address,
+) -> Result<(Netdev, DeviceVirtioNet)> {
+    let mut netdev = Netdev::new(
+        &format!("network-{}", dev_index),
+        host_dev_name,
+        config.network_info.network_queues,
+    )?;
+    if config.network_info.disable_vhost_net {
+        netdev.set_disable_vhost_net(true);
+    }
+
+    let mut virtio_net_device = DeviceVirtioNet::new(&netdev.id, guest_mac);
+
+    if should_disable_modern() {
+        virtio_net_device.set_disable_modern(true);
+    }
+    if config.device_info.enable_iommu_platform && bus_type(config) == VirtioBusType::Ccw {
+        virtio_net_device.set_iommu_platform(true);
+    }
+    if config.network_info.network_queues > 1 {
+        virtio_net_device.set_num_queues(config.network_info.network_queues);
+    }
+
+    Ok((netdev, virtio_net_device))
 }
