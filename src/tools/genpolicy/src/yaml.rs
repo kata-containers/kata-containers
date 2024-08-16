@@ -229,6 +229,7 @@ pub fn new_k8s_resource(
         | "PersistentVolumeClaim"
         | "PriorityClass"
         | "ResourceQuota"
+        | "Role"
         | "RoleBinding"
         | "Service"
         | "ServiceAccount" => {
