@@ -23,12 +23,15 @@ use oci_distribution::{
 };
 use serde::{Deserialize, Serialize};
 use sha2::{digest::typenum::Unsigned, digest::OutputSizeUser, Sha256};
-use std::{fs::OpenOptions, io, io::BufWriter, io::Seek, io::Write, path::Path};
+use std::{
+    collections::BTreeMap, fs::OpenOptions, io, io::BufWriter, io::Seek, io::Write, path::Path,
+};
 use tokio::io::AsyncWriteExt;
 
 /// Container image properties obtained from an OCI repository.
 #[derive(Clone, Debug, Default)]
 pub struct Container {
+    pub image: String,
     pub config_layer: DockerConfigLayer,
     pub image_layers: Vec<ImageLayer>,
 }
@@ -37,19 +40,20 @@ pub struct Container {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct DockerConfigLayer {
     architecture: String,
-    config: DockerImageConfig,
+    pub config: DockerImageConfig,
     pub rootfs: DockerRootfs,
 }
 
-/// Image config properties.
+/// See: https://docs.docker.com/reference/dockerfile/.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-struct DockerImageConfig {
+pub struct DockerImageConfig {
     User: Option<String>,
     Tty: Option<bool>,
     Env: Option<Vec<String>>,
     Cmd: Option<Vec<String>>,
     WorkingDir: Option<String>,
     Entrypoint: Option<Vec<String>>,
+    pub Volumes: Option<BTreeMap<String, DockerVolumeHostDirectory>>,
 }
 
 /// Container rootfs information.
@@ -66,11 +70,21 @@ pub struct ImageLayer {
     pub verity_hash: String,
 }
 
+/// See https://docs.docker.com/reference/dockerfile/#volume.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct DockerVolumeHostDirectory {
+    // This struct is empty because, according to the documentation:
+    // "The VOLUME instruction does not support specifying a host-dir
+    // parameter. You must specify the mountpoint when you create or
+    // run the container."
+}
+
 impl Container {
     pub async fn new(config: &Config, image: &str) -> Result<Self> {
         info!("============================================");
-        info!("Pulling manifest and config for {:?}", image);
-        let reference: Reference = image.to_string().parse().unwrap();
+        info!("Pulling manifest and config for {image}");
+        let image_string = image.to_string();
+        let reference: Reference = image_string.parse().unwrap();
         let auth = build_auth(&reference);
 
         let mut client = Client::new(ClientConfig {
@@ -96,6 +110,8 @@ impl Container {
 
                 let config_layer: DockerConfigLayer =
                     serde_json::from_str(&config_layer_str).unwrap();
+                debug!("config_layer: {:?}", &config_layer);
+
                 let image_layers = get_image_layers(
                     config.layers_cache_file_path.clone(),
                     &mut client,
@@ -107,6 +123,7 @@ impl Container {
                 .unwrap();
 
                 Ok(Container {
+                    image: image_string,
                     config_layer,
                     image_layers,
                 })
