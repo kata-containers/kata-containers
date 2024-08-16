@@ -706,7 +706,6 @@ function main() {
 			cleanup_cri_runtime "$runtime"
 			kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=cleanup
 			remove_artifacts
-			reset_runtime "$runtime"
 			;;
 		reset)
 			reset_runtime $runtime
