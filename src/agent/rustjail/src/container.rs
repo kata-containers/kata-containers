@@ -1306,7 +1306,14 @@ impl BaseContainer for LinuxContainer {
                 .to_string()
                 .as_str(),
             MntFlags::MNT_DETACH,
-        )?;
+        )
+        .or_else(|e| {
+            if e.ne(&nix::Error::EINVAL) {
+                return Err(anyhow!(e));
+            }
+            warn!(self.logger, "rootfs not mounted");
+            Ok(())
+        })?;
         fs::remove_dir_all(&self.root)?;
 
         let cgm = self.cgroup_manager.as_mut();
