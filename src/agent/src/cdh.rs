@@ -10,13 +10,14 @@
 use anyhow::Result;
 use derivative::Derivative;
 use protocols::{
-    sealed_secret, sealed_secret_ttrpc_async, sealed_secret_ttrpc_async::SealedSecretServiceClient,
+    confidential_data_hub, confidential_data_hub_ttrpc_async,
+    confidential_data_hub_ttrpc_async::{SealedSecretServiceClient, SecureMountServiceClient},
 };
 
 use crate::CDH_SOCKET_URI;
 
 // Nanoseconds
-const CDH_UNSEAL_TIMEOUT: i64 = 50 * 1000 * 1000 * 1000;
+const CDH_API_TIMEOUT: i64 = 50 * 1000 * 1000 * 1000;
 const SEALED_SECRET_PREFIX: &str = "sealed.";
 
 #[derive(Derivative)]
@@ -24,26 +25,30 @@ const SEALED_SECRET_PREFIX: &str = "sealed.";
 pub struct CDHClient {
     #[derivative(Debug = "ignore")]
     sealed_secret_client: SealedSecretServiceClient,
+    #[derivative(Debug = "ignore")]
+    secure_mount_client: SecureMountServiceClient,
 }
 
 impl CDHClient {
     pub fn new() -> Result<Self> {
         let client = ttrpc::asynchronous::Client::connect(CDH_SOCKET_URI)?;
         let sealed_secret_client =
-            sealed_secret_ttrpc_async::SealedSecretServiceClient::new(client);
-
+            confidential_data_hub_ttrpc_async::SealedSecretServiceClient::new(client.clone());
+        let secure_mount_client =
+            confidential_data_hub_ttrpc_async::SecureMountServiceClient::new(client);
         Ok(CDHClient {
             sealed_secret_client,
+            secure_mount_client,
         })
     }
 
     pub async fn unseal_secret_async(&self, sealed_secret: &str) -> Result<Vec<u8>> {
-        let mut input = sealed_secret::UnsealSecretInput::new();
+        let mut input = confidential_data_hub::UnsealSecretInput::new();
         input.set_secret(sealed_secret.into());
 
         let unsealed_secret = self
             .sealed_secret_client
-            .unseal_secret(ttrpc::context::with_timeout(CDH_UNSEAL_TIMEOUT), &input)
+            .unseal_secret(ttrpc::context::with_timeout(CDH_API_TIMEOUT), &input)
             .await?;
         Ok(unsealed_secret.plaintext)
     }
@@ -60,6 +65,26 @@ impl CDHClient {
 
         Ok((*env.to_owned()).to_string())
     }
+
+    pub async fn secure_mount(
+        &self,
+        volume_type: &str,
+        options: &std::collections::HashMap<String, String>,
+        flags: Vec<String>,
+        mount_point: &str,
+    ) -> Result<()> {
+        let req = confidential_data_hub::SecureMountRequest {
+            volume_type: volume_type.to_string(),
+            options: options.clone(),
+            flags,
+            mount_point: mount_point.to_string(),
+            ..Default::default()
+        };
+        self.secure_mount_client
+            .secure_mount(ttrpc::context::with_timeout(CDH_API_TIMEOUT), &req)
+            .await?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -69,7 +94,7 @@ mod tests {
     use crate::cdh::CDH_ADDR;
     use anyhow::anyhow;
     use async_trait::async_trait;
-    use protocols::{sealed_secret, sealed_secret_ttrpc_async};
+    use protocols::{confidential_data_hub, confidential_data_hub_ttrpc_async};
     use std::sync::Arc;
     use test_utils::skip_if_not_root;
     use tokio::signal::unix::{signal, SignalKind};
@@ -77,13 +102,13 @@ mod tests {
     struct TestService;
 
     #[async_trait]
-    impl sealed_secret_ttrpc_async::SealedSecretService for TestService {
+    impl confidential_data_hub_ttrpc_async::SealedSecretService for TestService {
         async fn unseal_secret(
             &self,
             _ctx: &::ttrpc::asynchronous::TtrpcContext,
-            _req: sealed_secret::UnsealSecretInput,
-        ) -> ttrpc::error::Result<sealed_secret::UnsealSecretOutput> {
-            let mut output = sealed_secret::UnsealSecretOutput::new();
+            _req: confidential_data_hub::UnsealSecretInput,
+        ) -> ttrpc::error::Result<confidential_data_hub::UnsealSecretOutput> {
+            let mut output = confidential_data_hub::UnsealSecretOutput::new();
             output.set_plaintext("unsealed".into());
             Ok(output)
         }
@@ -104,9 +129,9 @@ mod tests {
     fn start_ttrpc_server() {
         tokio::spawn(async move {
             let ss = Box::new(TestService {})
-                as Box<dyn sealed_secret_ttrpc_async::SealedSecretService + Send + Sync>;
+                as Box<dyn confidential_data_hub_ttrpc_async::SealedSecretService + Send + Sync>;
             let ss = Arc::new(ss);
-            let ss_service = sealed_secret_ttrpc_async::create_sealed_secret_service(ss);
+            let ss_service = confidential_data_hub_ttrpc_async::create_sealed_secret_service(ss);
 
             remove_if_sock_exist(CDH_ADDR).unwrap();
 

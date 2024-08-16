@@ -1,0 +1,37 @@
+//
+// Copyright (c) 2024 IBM
+// Copyright (c) 2024 Intel Corporation
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+
+syntax = "proto3";
+
+package api;
+
+message UnsealSecretInput {
+    bytes secret = 1;
+}
+
+message UnsealSecretOutput {
+    bytes plaintext = 1;
+}
+
+message SecureMountRequest {
+    string volume_type = 1;
+    map<string, string> options = 2;
+    repeated string flags = 3;
+    string mount_point = 4;
+}
+
+message SecureMountResponse {
+    string mount_path = 1;
+}
+
+service SealedSecretService {
+    rpc UnsealSecret(UnsealSecretInput) returns (UnsealSecretOutput) {};
+}
+
+service SecureMountService {
+    rpc SecureMount(SecureMountRequest) returns (SecureMountResponse) {};
+}

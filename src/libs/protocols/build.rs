@@ -203,7 +203,7 @@ fn real_main() -> Result<(), std::io::Error> {
             &[
                 "protos/agent.proto",
                 "protos/health.proto",
-                "protos/sealed_secret.proto",
+                "protos/confidential_data_hub.proto",
             ],
             true,
         )?;
@@ -211,8 +211,8 @@ fn real_main() -> Result<(), std::io::Error> {
         fs::rename("src/agent_ttrpc.rs", "src/agent_ttrpc_async.rs")?;
         fs::rename("src/health_ttrpc.rs", "src/health_ttrpc_async.rs")?;
         fs::rename(
-            "src/sealed_secret_ttrpc.rs",
-            "src/sealed_secret_ttrpc_async.rs",
+            "src/confidential_data_hub_ttrpc.rs",
+            "src/confidential_data_hub_ttrpc_async.rs",
         )?;
     }
 
@@ -221,7 +221,7 @@ fn real_main() -> Result<(), std::io::Error> {
         &[
             "protos/agent.proto",
             "protos/health.proto",
-            "protos/sealed_secret.proto",
+            "protos/confidential_data_hub.proto",
         ],
         false,
     )?;

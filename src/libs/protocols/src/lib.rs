@@ -28,8 +28,8 @@ pub use serde_config::{
     serialize_message_field,
 };
 
-pub mod sealed_secret;
-pub mod sealed_secret_ttrpc;
+pub mod confidential_data_hub;
+pub mod confidential_data_hub_ttrpc;
 
 #[cfg(feature = "async")]
-pub mod sealed_secret_ttrpc_async;
+pub mod confidential_data_hub_ttrpc_async;
