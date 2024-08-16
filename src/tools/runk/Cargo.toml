@@ -12,8 +12,8 @@ rustjail = { path = "../../agent/rustjail", features = ["standard-oci-runtime"] 
 runtime-spec = { path = "../../libs/runtime-spec" }
 oci-spec = { version = "0.6.8", features = ["runtime"] }
 logging = { path = "../../libs/logging" }
-liboci-cli = "0.0.4"
-clap = { version = "3.0.6", features = ["derive", "cargo"] }
+liboci-cli = "0.2.0"
+clap = { version = "4.3.24", features = ["derive", "cargo"] }
 libc = "0.2.108"
 nix = "0.23.0"
 anyhow = "1.0.52"
@@ -25,6 +25,8 @@ serde = { version = "1.0.133", features = ["derive"] }
 serde_json = "1.0.74"
 users = "0.11.0"
 tabwriter = "1.2.1"
+cgroups = { package = "cgroups-rs", version = "0.3.2" }
+protocols = {path = "../../libs/protocols"}
 
 [features]
 seccomp = ["rustjail/seccomp"]
