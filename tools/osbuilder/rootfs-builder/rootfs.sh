@@ -750,11 +750,6 @@ EOF
 		tar xvJpf ${COCO_GUEST_COMPONENTS_TARBALL} -C ${ROOTFS_DIR}
 	fi
 
-	if [ "${MEASURED_ROOTFS}" == "yes" ]; then
-		info "Install init_trusted_storage script"
-		install -o root -g root -m 0500 "${script_dir}/scripts/init_trusted_storage.sh" "${ROOTFS_DIR}/usr/local/bin/luks-encrypt-storage"
-	fi
-
 	# Create an empty /etc/resolv.conf, to allow agent to bind mount container resolv.conf to Kata VM
 	dns_file="${ROOTFS_DIR}/etc/resolv.conf"
 	if [ -L "$dns_file" ]; then
