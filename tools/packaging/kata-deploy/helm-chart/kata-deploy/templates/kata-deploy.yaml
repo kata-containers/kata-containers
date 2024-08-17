@@ -65,8 +65,6 @@ spec:
           mountPath: /etc/containerd/
         - name: kata-artifacts
           mountPath: /opt/kata/
-        - name: local-bin
-          mountPath: /usr/local/bin/
         - name: host
           mountPath: /host/
       volumes:
@@ -80,9 +78,6 @@ spec:
         hostPath:
           path: /opt/kata/
           type: DirectoryOrCreate
-      - name: local-bin
-        hostPath:
-          path: /usr/local/bin/
       - name: host
         hostPath:
           path: /
