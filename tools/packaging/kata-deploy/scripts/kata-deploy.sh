@@ -161,6 +161,22 @@ function get_kata_containers_config_path() {
 	echo "$config_path"
 }
 
+function get_kata_containers_runtime_path() {
+	local shim="$1"
+
+	local runtime_path
+	case "$shim" in
+		cloud-hypervisor | dragonball | qemu-runtime-rs)
+			runtime_path="/opt/kata/runtime-rs/bin/containerd-shim-kata-v2"
+			;;
+		*)
+			runtime_path="/opt/kata/bin/containerd-shim-kata-v2"
+			;;
+	esac
+
+	echo "$runtime_path"
+}
+
 function tdx_not_supported() {
 	distro="${1}"
 	version="${2}"
@@ -502,8 +518,10 @@ function configure_containerd_runtime() {
 	local runtime_options_table="${runtime_table}.options"
 	local runtime_type=\"io.containerd."${runtime}".v2\"
 	local runtime_config_path=\"$(get_kata_containers_config_path "${shim}")/${configuration}.toml\"
+	local runtime_path=\"$(get_kata_containers_runtime_path "${shim}")\"
 	
 	tomlq -i -t $(printf '%s.runtime_type=%s' ${runtime_table} ${runtime_type}) ${containerd_conf_file}
+	tomlq -i -t $(printf '%s.runtime_path=%s' ${runtime_table} ${runtime_path}) ${containerd_conf_file}
 	tomlq -i -t $(printf '%s.privileged_without_host_devices=true' ${runtime_table}) ${containerd_conf_file}
 	tomlq -i -t $(printf '%s.pod_annotations=["io.katacontainers.*"]' ${runtime_table}) ${containerd_conf_file}
 	tomlq -i -t $(printf '%s.ConfigPath=%s' ${runtime_options_table} ${runtime_config_path}) ${containerd_conf_file}
