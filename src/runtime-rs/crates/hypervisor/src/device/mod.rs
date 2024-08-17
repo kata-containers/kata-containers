@@ -22,6 +22,8 @@ pub mod driver;
 pub mod pci_path;
 pub mod topology;
 pub mod util;
+mod tap;
+pub use self::tap::{Error as TapError, Tap};
 
 #[derive(Debug)]
 pub enum DeviceConfig {
