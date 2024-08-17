@@ -21,12 +21,12 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use common::{message::Message, RuntimeHandler, RuntimeInstance};
 use hypervisor::Hypervisor;
-#[cfg(not(target_arch = "s390x"))]
+#[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
 use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
 #[cfg(not(target_arch = "s390x"))]
 use hypervisor::{firecracker::Firecracker, HYPERVISOR_FIRECRACKER};
 use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
-#[cfg(not(target_arch = "s390x"))]
+#[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
 use kata_types::config::DragonballConfig;
 #[cfg(not(target_arch = "s390x"))]
 use kata_types::config::FirecrackerConfig;
@@ -57,7 +57,9 @@ impl RuntimeHandler for VirtContainer {
         // register
         #[cfg(not(target_arch = "s390x"))]
         {
+            #[cfg(feature = "dragonball")]
             let dragonball_config = Arc::new(DragonballConfig::new());
+            #[cfg(feature = "dragonball")]
             register_hypervisor_plugin("dragonball", dragonball_config);
 
             let firecracker_config = Arc::new(FirecrackerConfig::new());
@@ -147,7 +149,7 @@ async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>>
     // TODO: support other hypervisor
     // issue: https://github.com/kata-containers/kata-containers/issues/4634
     match hypervisor_name.as_str() {
-        #[cfg(not(target_arch = "s390x"))]
+        #[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
         HYPERVISOR_DRAGONBALL => {
             let mut hypervisor = Dragonball::new();
             hypervisor

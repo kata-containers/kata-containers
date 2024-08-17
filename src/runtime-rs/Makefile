@@ -88,6 +88,8 @@ HYPERVISOR_FC = firecracker
 HYPERVISOR_QEMU = qemu
 HYPERVISOR_CLH = cloud-hypervisor
 
+# When set to true, builds the built-in Dragonball hypervisor
+USE_BUILDIN_DB := true
 
 DEFAULT_HYPERVISOR ?= $(HYPERVISOR_DB)
 
@@ -185,8 +187,6 @@ VERSION := ${shell cat ./VERSION}
 CONFIGS =
 CONFIG_PATHS =
 SYSCONFIG_PATHS =
-# List of hypervisors known for the current architecture
-KNOWN_HYPERVISORS =
 # List of hypervisors known for the current architecture
 KNOWN_HYPERVISORS =
 
@@ -337,6 +337,7 @@ USER_VARS += CONFIG_PATH
 USER_VARS += CONFIG_QEMU_IN
 USER_VARS += DESTDIR
 USER_VARS += DEFAULT_HYPERVISOR
+USER_VARS += USE_BUILDIN_DB
 USER_VARS += DBCMD
 USER_VARS += DBCTLCMD
 USER_VARS += FCCTLCMD
@@ -474,6 +475,11 @@ COMMIT := $(if $(shell git status --porcelain --untracked-files=no 2>/dev/null |
 COMMIT_MSG = $(if $(COMMIT),$(COMMIT),unknown)
 
 EXTRA_RUSTFEATURES :=
+
+# if use dragonball hypervisor, add the feature to build dragonball in runtime
+ifeq ($(USE_BUILDIN_DB),true)
+    EXTRA_RUSTFEATURES +=  dragonball
+endif
 
 ifneq ($(EXTRA_RUSTFEATURES),)
     override EXTRA_RUSTFEATURES := --features $(EXTRA_RUSTFEATURES)

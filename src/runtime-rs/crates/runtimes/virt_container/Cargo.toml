@@ -43,3 +43,6 @@ default = ["cloud-hypervisor"]
 
 # Enable the Cloud Hypervisor driver
 cloud-hypervisor = []
+
+# Enable the build-in VMM Dragtonball
+dragonball = []
