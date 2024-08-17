@@ -198,7 +198,7 @@ jobs:
 
       - name: Run stdio tests
         timeout-minutes: 10
-        run: bash tests/integration/stdio/gha-run.sh
+        run: bash tests/integration/stdio/gha-run.sh run
 
   run-tracing:
     strategy:
