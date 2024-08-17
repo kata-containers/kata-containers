@@ -432,7 +432,7 @@ function configure_crio_runtime() {
 
 	local config_path=$(get_kata_containers_config_path "${shim}")
 
-	local kata_path="/usr/local/bin/containerd-shim-${runtime}-v2"
+	local kata_path=$(get_kata_containers_runtime_path "${shim}")
 	local kata_conf="crio.runtime.runtimes.${runtime}"
 	local kata_config_path="${config_path}/${configuration}.toml"
 
