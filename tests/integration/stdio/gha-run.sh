@@ -10,9 +10,9 @@ set -o nounset
 set -o pipefail
 
 kata_tarball_dir="${2:-kata-artifacts}"
-runk_dir="$(dirname "$(readlink -f "$0")")" 
-source "${runk_dir}/../../common.bash"
-source "${runk_dir}/../../gha-run-k8s-common.sh"
+stdio_dir="$(dirname "$(readlink -f "$0")")" 
+source "${stdio_dir}/../../common.bash"
+source "${stdio_dir}/../../gha-run-k8s-common.sh"
 
 function install_dependencies() {
 	info "Installing the dependencies needed for running the stdio tests"
@@ -47,7 +47,7 @@ function install_dependencies() {
 function run() {
 	info "Running stdio tests"
 
-	bats "${runk_dir}/stdio-tests.bats"
+	bats "${stdio_dir}/stdio-tests.bats"
 }
 
 function main() {
