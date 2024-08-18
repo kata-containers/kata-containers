@@ -39,15 +39,12 @@ function install_dependencies() {
 		IFS=":" read -r -a dep <<< "${github_dep}"
 		install_${dep[0]} "${dep[1]}"
 	done
-
-	# Requires bats to run the tests
-	install_bats
 }
 
 function run() {
 	info "Running stdio tests"
 
-	bats "${stdio_dir}/stdio-tests.bats"
+	bash -c ${stdio_dir}/stdio-tests.sh
 }
 
 function main() {
