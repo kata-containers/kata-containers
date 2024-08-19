@@ -75,16 +75,7 @@ pub struct AgentPolicy {
 #[derive(serde::Deserialize, Debug)]
 struct MetadataResponse {
     allowed: bool,
-    metadata: Option<Vec<Option<Metadata>>>,
-}
-
-#[allow(unused)]
-#[derive(serde::Deserialize, Debug)]
-struct Metadata {
-    action: String,
-    name: String,
-    key: String,
-    value: serde_json::Value,
+    ops: Option<json_patch::Patch>,
 }
 
 impl AgentPolicy {
@@ -153,40 +144,6 @@ impl AgentPolicy {
         Ok(())
     }
 
-    async fn process_metadata(&mut self, metadata: Vec<Option<Metadata>>) -> Result<()> {
-        // Iterate over each metadataAction in the metadata map
-        for action in metadata {
-            if let Some(metadata_action) = action {
-                match metadata_action.action.as_str() {
-                    "add" | "update" => {
-                        let patch = serde_json::from_value(serde_json::json!([
-                            { "op": "add", "path": format!("/{}", metadata_action.key), "value": metadata_action.value },
-                        ]))?;
-
-                        self.apply_patch_to_state(patch).await?;
-                    }
-
-                    "remove" => {
-                        let patch = serde_json::from_value(serde_json::json!([
-                        { "op": "remove", "path": format!("/{}", metadata_action.key) },
-                        ]))?;
-
-                        self.apply_patch_to_state(patch).await?;
-                    }
-
-                    _ => {
-                        bail!(
-                            "Received unknown metadata action: {} in metadata",
-                            metadata_action.action
-                        );
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
     async fn allow_request_string(&mut self, ep: &str, ep_input: &str) -> Result<(bool, String)> {
         debug!(sl!(), "policy check: {ep}");
         self.log_eval_input(ep, ep_input).await;
@@ -219,9 +176,8 @@ impl AgentPolicy {
                 self.log_eval_input("allow_request_string", &obj_str).await;
 
                 if metadata_response.allowed {
-                    if let Some(metadata) = metadata_response.metadata {
-                        // perform state changes based on metadata
-                        self.process_metadata(metadata).await?;
+                    if let Some(ops) = metadata_response.ops {
+                        self.apply_patch_to_state(ops).await?;
                     }
                 }
                 metadata_response.allowed
@@ -245,6 +201,8 @@ impl AgentPolicy {
             Ok(p) => p.join(" "),
             Err(e) => format!("Failed to get policy log: {e}"),
         };
+
+        self.log_eval_input("policy prints", &prints).await;
 
         Ok((allow, prints))
     }

@@ -51,10 +51,12 @@ default WriteStreamRequest := false
 # them and inspect OPA logs for the root cause of a failure.
 default AllowRequestsFailingPolicy := false
 
-CreateContainerRequest:= {"metadata": [addSandboxName], "allowed": true} {
+CreateContainerRequest:= {"ops": ops, "allowed": true} {
     # Check if the input request should be rejected even before checking the
     # policy_data.containers information.
     allow_create_container_input
+
+    initial_ops := []
 
     i_oci := input.OCI
 
@@ -62,6 +64,9 @@ CreateContainerRequest:= {"metadata": [addSandboxName], "allowed": true} {
     addSandboxName := allow_sandbox_name(sandbox_name)
 
     print("addSandboxName = ", addSandboxName)
+
+    ops := concat_op_if_not_null(initial_ops, addSandboxName)
+    print("ops = ", ops)
 
     i_storages := input.storages
     i_devices := input.devices
@@ -96,6 +101,18 @@ CreateContainerRequest:= {"metadata": [addSandboxName], "allowed": true} {
     print("CreateContainerRequest: true")
 }
 
+# Helper functions to conditionally concatenate if op is not null
+concat_op_if_not_null(ops, op) = result {
+    op == null
+    result := ops
+}
+
+concat_op_if_not_null(ops, op) = result {
+    op != null
+    result := array.concat(ops, [op])
+}
+
+
 allow_sandbox_name(s_name) = addSandboxName {
     print("searching sandbox name in data = ", data)
     # validates all containers have the same sandox name
@@ -110,9 +127,8 @@ allow_sandbox_name(s_name) = addSandboxName {
     print("sandbox name not found in state. Adding name = ", s_name)
     # save the sandbox name for future reference
     addSandboxName := {
-        "name": "sandboxName",
-        "action": "add",
-        "key": "sandboxName", 
+        "op": "add",
+        "path": "/sandboxName", 
         "value": s_name,
     }
 }
