@@ -24,7 +24,7 @@ readonly COCO_KBS_DIR="${COCO_TRUSTEE_DIR}/kbs"
 # The k8s namespace where the kbs service is deployed
 readonly KBS_NS="coco-tenant"
 # The private key file used for CLI authentication
-readonly KBS_PRIVATE_KEY="${COCO_KBS_DIR}/config/kubernetes/base/kbs.key"
+readonly KBS_PRIVATE_KEY="${KBS_PRIVATE_KEY:-/opt/trustee/install/kbs.key}"
 # The kbs service name
 readonly KBS_SVC_NAME="kbs"
 # The kbs ingress name
@@ -304,6 +304,17 @@ EOF
 	fi
 
 	./deploy-kbs.sh
+
+	# Check the private key used to install the KBS exist and save it in a
+	# well-known location. That's the access key used by the kbs-client.
+	local install_key="${PWD}/base/kbs.key"
+	if [ ! -f "$install_key" ]; then
+		echo "ERROR: KBS private key not found at ${install_key}"
+		return 1
+	fi
+	sudo mkdir -p "$(dirname "$KBS_PRIVATE_KEY")"
+	sudo cp -f "${install_key}" "$KBS_PRIVATE_KEY"
+
 	popd
 
 	if ! waitForProcess "120" "10" "kubectl -n \"$KBS_NS\" get pods | \
