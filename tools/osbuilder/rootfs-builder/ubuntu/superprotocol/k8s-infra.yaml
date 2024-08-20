@@ -87,8 +87,10 @@ spec:
       defaultClassReplicaCount: 1
     longhornUI:
       replicas: 1
-    #defaultSettings:
-    #  defaultDataPath: /data/longhorn
+    defaultSettings:
+      #defaultDataPath: /data/longhorn
+      storageOverProvisioningPercentage: 300 # default 100
+      storageMinimalAvailablePercentage: 5   # default 25
 
 ---
 
@@ -140,25 +142,25 @@ spec:
 
 ---
 
-apiVersion: helm.cattle.io/v1
-kind: HelmChart
-metadata:
-  name: argocd-image-updater
-  namespace: kube-system
-spec:
-  repo: https://argoproj.github.io/argo-helm
-  chart: argocd-image-updater
-  version: 0.11.0
-  targetNamespace: argocd
-  valuesContent: |-
-    config:
-      registries:
-      - name: GitHub Container Registry
-        prefix: ghcr.io
-        api_url: https://ghcr.io
-        ping: no
-        credentials: pullsecret:argocd/argocd-image-updater-ghcr-secret
-        insecure: true
+#apiVersion: helm.cattle.io/v1
+#kind: HelmChart
+#metadata:
+#  name: argocd-image-updater
+#  namespace: kube-system
+#spec:
+#  repo: https://argoproj.github.io/argo-helm
+#  chart: argocd-image-updater
+#  version: 0.11.0
+#  targetNamespace: argocd
+#  valuesContent: |-
+#    config:
+#      registries:
+#      - name: GitHub Container Registry
+#        prefix: ghcr.io
+#        api_url: https://ghcr.io
+#        ping: no
+#        credentials: pullsecret:argocd/argocd-image-updater-ghcr-secret
+#        insecure: true
 
 ---
 
@@ -231,7 +233,7 @@ metadata:
   name: gpu-operator
   namespace: gpu-operator
 spec:
-  repo: https://helm.ngc.nvidia.com/nvidia
+  repo: https://nvidia.github.io/gpu-operator
   version: v24.3.0
   chart: gpu-operator
   targetNamespace: gpu-operator
