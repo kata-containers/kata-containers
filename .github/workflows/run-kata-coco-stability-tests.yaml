@@ -1,4 +1,4 @@
-name: CI | Run kata coco stability tests
+name: CI | Run Kata CoCo k8s Stability Tests
 on:
   workflow_call:
     inputs:
@@ -105,8 +105,8 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh install-kbs-client
 
       - name: Run stability tests
-        timeout-minutes: 80
-        run: bash tests/stability/gha-stability-run.sh  run-tests
+        timeout-minutes: 100
+        run: bash tests/stability/gha-stability-run.sh run-tests
 
       - name: Delete AKS cluster
         if: always()
