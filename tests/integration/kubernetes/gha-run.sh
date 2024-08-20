@@ -207,11 +207,12 @@ function deploy_kata() {
 	[ "$(yq .image.tag ${values_yaml})" = "${DOCKER_TAG}" ] || die "Failed to set image tag"
 	echo "::endgroup::"
 
-	# will wait until all Pods, PVCs, Services, and minimum number of Pods
-	# of a Deployment, StatefulSet, or ReplicaSet are in a ready state
-	# before marking the release as successful. It will wait for as long
-	# as --timeout -- Ready >> Running
-	helm install --wait --timeout 10m kata-deploy "${helm_chart_dir}" --values "${values_yaml}" --namespace kube-system
+	helm install kata-deploy "${helm_chart_dir}" --values "${values_yaml}" --namespace kube-system
+
+	# `helm install --wait` does not take effect on single replicas and maxUnavailable=1 DaemonSets
+	# like kata-deploy on CI. So wait for pods being Running in the "tradicional" way.
+	local cmd="kubectl -n kube-system get -l name=kata-deploy pod 2>/dev/null | grep '\<Running\>'"
+	waitForProcess "${KATA_DEPLOY_WAIT_TIMEOUT}" 10 "$cmd"
 
 	# This is needed as the kata-deploy pod will be set to "Ready" when it starts running,
 	# which may cause issues like not having the node properly labeled or the artefacts
