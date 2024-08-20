@@ -575,6 +575,15 @@ function snapshotter_handler_mapping_validation_check() {
 }
 
 function main() {
+	action=${1:-}
+	if [ -z "$action" ]; then
+		print_usage
+		die "invalid arguments"
+	fi
+
+	echo "Action:"
+	echo "* $action"
+	echo ""
 	echo "Environment variables passed to this script"
 	echo "* NODE_NAME: ${NODE_NAME}"
 	echo "* DEBUG: ${DEBUG}"
@@ -607,12 +616,6 @@ function main() {
 		# This works by k0s creating a special directory in /etc/k0s/containerd.d/ where user can drop-in partial containerd configuration snippets.
 		# k0s will automatically pick up these files and adds these in containerd configuration imports list.
 		containerd_conf_file="/etc/containerd/kata-containers.toml"
-	fi
-
-	action=${1:-}
-	if [ -z "$action" ]; then
-		print_usage
-		die "invalid arguments"
 	fi
 
 	# only install / remove / update if we are dealing with CRIO or containerd
