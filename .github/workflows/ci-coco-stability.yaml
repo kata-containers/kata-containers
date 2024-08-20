@@ -1,4 +1,4 @@
-name: Kata Containers CoCo stability tests weekly
+name: Kata Containers CoCo Stability Tests Weekly
 on:
   schedule:
     - cron: '0 0 * * 0'
