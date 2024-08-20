@@ -13,6 +13,7 @@ crio_drop_in_conf_file="${crio_drop_in_conf_dir}/99-kata-deploy"
 crio_drop_in_conf_file_debug="${crio_drop_in_conf_dir}/100-debug"
 containerd_conf_file="/etc/containerd/config.toml"
 containerd_conf_file_backup="${containerd_conf_file}.bak"
+containerd_conf_tmpl_file=""
 
 IFS=' ' read -a shims <<< "$SHIMS"
 default_shim="$DEFAULT_SHIM"
@@ -600,24 +601,12 @@ function main() {
 		runtime="crio"
 	elif [[ "$runtime" =~ ^(k3s|k3s-agent|rke2-agent|rke2-server)$ ]]; then
 		containerd_conf_tmpl_file="${containerd_conf_file}.tmpl"
-		if [ ! -f "$containerd_conf_tmpl_file" ] && [ -f "$containerd_conf_file" ]; then
-			cp "$containerd_conf_file" "$containerd_conf_tmpl_file"
-		fi
-
-		containerd_conf_file="${containerd_conf_tmpl_file}"
-		containerd_conf_file_backup="${containerd_conf_file}.bak"
+		containerd_conf_file_backup="${containerd_conf_tmpl_file}.bak"
 	elif [[ "$runtime" =~ ^(k0s-worker|k0s-controller)$ ]]; then
 		# From 1.27.1 onwards k0s enables dynamic configuration on containerd CRI runtimes. 
 		# This works by k0s creating a special directory in /etc/k0s/containerd.d/ where user can drop-in partial containerd configuration snippets.
 		# k0s will automatically pick up these files and adds these in containerd configuration imports list.
 		containerd_conf_file="/etc/containerd/kata-containers.toml"
-		touch "$containerd_conf_file"
-	else
-		# runtime == containerd
-		if [ ! -f "$containerd_conf_file" ] && [ -d $(dirname "$containerd_conf_file") ] && \
-			[ -x $(command -v containerd) ]; then
-			containerd config default > "$containerd_conf_file"
-		fi
 	fi
 
 	action=${1:-}
@@ -635,11 +624,32 @@ function main() {
 
 		case "$action" in
 		install)
+			if [[ "$runtime" =~ ^(k3s|k3s-agent|rke2-agent|rke2-server)$ ]]; then
+			       if [ ! -f "$containerd_conf_tmpl_file" ] && [ -f "$containerd_conf_file" ]; then
+				       cp "$containerd_conf_file" "$containerd_conf_tmpl_file"
+			       fi
+			       # Only set the containerd_conf_file to its new value after
+			       # copying the file to the template location
+			       containerd_conf_file="${containerd_conf_tmpl_file}"
+			       containerd_conf_file_backup="${containerd_conf_tmpl_file}.bak"
+			elif [[ "$runtime" =~ ^(k0s-worker|k0s-controller)$ ]]; then
+			       touch "$containerd_conf_file"
+			elif [[ "$runtime" == "containerd" ]]; then
+			       if [ ! -f "$containerd_conf_file" ] && [ -d $(dirname "$containerd_conf_file") ] && [ -x $(command -v containerd) ]; then
+					containerd config default > "$containerd_conf_file"
+			       fi
+			fi
+
 			install_artifacts
 			configure_cri_runtime "$runtime"
 			kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=true
 			;;
 		cleanup)
+			if [[ "$runtime" =~ ^(k3s|k3s-agent|rke2-agent|rke2-server)$ ]]; then
+			       containerd_conf_file_backup="${containerd_conf_tmpl_file}.bak"
+			       containerd_conf_file="${containerd_conf_tmpl_file}"
+			fi
+
 			cleanup_cri_runtime "$runtime"
 			kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=cleanup
 			remove_artifacts
