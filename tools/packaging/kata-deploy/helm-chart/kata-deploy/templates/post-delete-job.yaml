@@ -1,28 +1,68 @@
-apiVersion: apps/v1
-kind: DaemonSet
+apiVersion: v1
+kind: ServiceAccount
 metadata:
-  name: {{ .Chart.Name }}
+  name: {{ .Chart.Name }}-sa-cleanup
   namespace: {{ .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": post-delete
+    "helm.sh/hook-weight": "-3"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ .Chart.Name }}-role-cleanup
+  annotations:
+    "helm.sh/hook": post-delete
+    "helm.sh/hook-weight": "-2"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+rules:
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "patch"]
+- apiGroups: ["node.k8s.io"]
+  resources: ["runtimeclasses"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: {{ .Chart.Name }}-rb-cleanup
+  annotations:
+    "helm.sh/hook": post-delete
+    "helm.sh/hook-weight": "-1"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Chart.Name }}-role-cleanup
+subjects:
+- kind: ServiceAccount
+  name: {{ .Chart.Name }}-sa-cleanup
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Chart.Name }}-cleanup
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    "helm.sh/hook": post-delete
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
-  selector:
-    matchLabels:
-      name: {{ .Chart.Name }}
   template:
     metadata:
       labels:
-        name: {{ .Chart.Name }}
+        role: cleanup
     spec:
-{{- with .Values.imagePullSecrets }}
-      imagePullSecrets:
-{{- toYaml . | nindent 6 }}
-{{- end }}
-      serviceAccountName: {{ .Chart.Name }}-sa
+      serviceAccountName: {{ .Chart.Name }}-sa-cleanup
       hostPID: true
       containers:
-      - name: kube-kata
+      - name: kube-kata-cleanup
         image: {{ .Values.image.reference }}:{{ default .Chart.AppVersion .Values.image.tag }}
-        imagePullPolicy: {{ .Values.imagePullPolicy }}
-        command: ["bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh install"]
+        imagePullPolicy: IfNotPresent
+        command: ["bash", "-c", "/opt/kata-artifacts/scripts/kata-deploy.sh cleanup"]
         env:
         - name: NODE_NAME
           valueFrom:
@@ -48,8 +88,8 @@ spec:
           value: {{ .Values.env.agentNoProxy | quote }}
         - name: PULL_TYPE_MAPPING
           value: {{ .Values.env.pullTypeMapping | quote }}
-        - name: INSTALLATION_PREFIX
-          value: {{ .Values.env.installationPrefix | quote }}
+        - name: HELM_POST_DELETE_HOOK
+          value: "true"
 {{- with .Values.env.hostOS }}
         - name: HOST_OS
           value: {{ . | quote }}
@@ -73,7 +113,4 @@ spec:
       - name: host
         hostPath:
           path: /
-  updateStrategy:
-    rollingUpdate:
-      maxUnavailable: 1
-    type: RollingUpdate
+      restartPolicy: Never 
