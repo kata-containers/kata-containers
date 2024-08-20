@@ -1,0 +1,67 @@
+name: Build SuperProtocol OS image
+on:
+  workflow_call:
+  workflow_dispatch:
+    inputs:
+      debug:
+        required: false
+        type: string
+        default: false
+      push-to-registry:
+        required: false
+        type: string
+        default: no
+      target-branch:
+        required: false
+        type: string
+        default: ""
+      runs-on:
+        required: true
+        type: choice
+        description: github runner for build
+        options:
+        - arc-self-hosted
+        - ubuntu-latest
+
+jobs:
+  build-asset:
+    runs-on: ${{ inputs.runs-on }}
+
+    steps:
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0 # This is needed in order to keep the commit ids history
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build
+        run: |
+          ls -la .
+          sudo apt-get update
+          sudo apt-get -y install curl
+          sudo bash -c ./sp-build.sh
+          build_dir=$(readlink -f build)
+          ls -la $build_dir
+          sudo rm -rf $build_dir/rootfs
+        env:
+          PUSH_TO_REGISTRY: ${{ inputs.push-to-registry }}
+          ARTEFACT_REGISTRY: ghcr.io
+          ARTEFACT_REGISTRY_USERNAME: ${{ github.actor }}
+          ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+          RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
+          DEBUG: ${{ inputs.debug }}
+
+      - name: store-artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          #name: super-amd64${{ inputs.tarball-suffix }}
+          path: build/**
+          retention-days: 1
+          if-no-files-found: error

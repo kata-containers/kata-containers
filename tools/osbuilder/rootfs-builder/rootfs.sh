@@ -35,6 +35,7 @@ AGENT_TARBALL=${AGENT_TARBALL:-""}
 COCO_GUEST_COMPONENTS_TARBALL=${COCO_GUEST_COMPONENTS_TARBALL:-""}
 CONFIDENTIAL_GUEST="${CONFIDENTIAL_GUEST:-no}"
 PAUSE_IMAGE_TARBALL=${PAUSE_IMAGE_TARBALL:-""}
+PROVIDER_CONFIG_DST=${PROVIDER_CONFIG_DST:-""}
 
 lib_file="${script_dir}/../scripts/lib.sh"
 source "$lib_file"
@@ -389,11 +390,11 @@ build_rootfs_distro()
 		trap error_handler ERR
 	fi
 
-	if [ -d "${ROOTFS_DIR}" ] && [ "${ROOTFS_DIR}" != "/" ]; then
-		rm -rf "${ROOTFS_DIR}"/*
-	else
-		mkdir -p ${ROOTFS_DIR}
-	fi
+	#if [ -d "${ROOTFS_DIR}" ] && [ "${ROOTFS_DIR}" != "/" ]; then
+	#	rm -rf "${ROOTFS_DIR}"/*
+	#else
+	#	mkdir -p ${ROOTFS_DIR}
+	#fi
 
 	# need to detect rustc's version too?
 	detect_rust_version ||
@@ -517,6 +518,7 @@ build_rootfs_distro()
 			--env HOME="/root" \
 			--env AGENT_POLICY="${AGENT_POLICY}" \
 			--env CONFIDENTIAL_GUEST="${CONFIDENTIAL_GUEST}" \
+			--env PROVIDER_CONFIG_DST="${PROVIDER_CONFIG_DST}" \
 			-v "${repo_dir}":"/kata-containers" \
 			-v "${ROOTFS_DIR}":"/rootfs" \
 			-v "${script_dir}/../scripts":"/scripts" \
@@ -670,17 +672,17 @@ EOF
 		fi
 
 		info "Build agent"
-		pushd "${agent_dir}"
-		if [ -n "${AGENT_VERSION}" ]; then
-			git checkout "${AGENT_VERSION}" && OK "git checkout successful" || die "checkout agent ${AGENT_VERSION} failed!"
-		fi
-		make clean
-		make LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP} AGENT_POLICY=${AGENT_POLICY} PULL_TYPE=${PULL_TYPE}
-		make install DESTDIR="${ROOTFS_DIR}" LIBC=${LIBC} INIT=${AGENT_INIT}
-		if [ "${SECCOMP}" == "yes" ]; then
-			rm -rf "${libseccomp_install_dir}" "${gperf_install_dir}"
-		fi
-		popd
+		#pushd "${agent_dir}"
+		#if [ -n "${AGENT_VERSION}" ]; then
+		#	git checkout "${AGENT_VERSION}" && OK "git checkout successful" || die "checkout agent ${AGENT_VERSION} failed!"
+		#fi
+		#make clean
+		#make LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP} AGENT_POLICY=${AGENT_POLICY} PULL_TYPE=${PULL_TYPE}
+		#make install DESTDIR="${ROOTFS_DIR}" LIBC=${LIBC} INIT=${AGENT_INIT}
+		#if [ "${SECCOMP}" == "yes" ]; then
+		#	rm -rf "${libseccomp_install_dir}" "${gperf_install_dir}"
+		#fi
+		#popd
 	elif [ -n "${AGENT_SOURCE_BIN}" ]; then
 		mkdir -p ${AGENT_DIR}
 		cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}
@@ -689,20 +691,20 @@ EOF
 		tar xvJpf ${AGENT_TARBALL} -C ${ROOTFS_DIR}
 	fi
 
-	${stripping_tool} ${ROOTFS_DIR}/usr/bin/kata-agent
+	#${stripping_tool} ${ROOTFS_DIR}/usr/bin/kata-agent
 
-	[ -x "${AGENT_DEST}" ] || die "${AGENT_DEST} is not installed in ${ROOTFS_DIR}"
-	OK "Agent installed"
+	#[ -x "${AGENT_DEST}" ] || die "${AGENT_DEST} is not installed in ${ROOTFS_DIR}"
+	#OK "Agent installed"
 
 	if [ "${AGENT_INIT}" == "yes" ]; then
 		setup_agent_init "${AGENT_DEST}" "${init}"
-	else
+	#else
 		# Setup systemd-based environment for kata-agent
-		mkdir -p "${ROOTFS_DIR}/etc/systemd/system/basic.target.wants"
-		ln -sf "/usr/lib/systemd/system/kata-containers.target" "${ROOTFS_DIR}/etc/systemd/system/basic.target.wants/kata-containers.target"
-		mkdir -p "${ROOTFS_DIR}/etc/systemd/system/kata-containers.target.wants"
-		ln -sf "/usr/lib/systemd/system/dbus.socket" "${ROOTFS_DIR}/etc/systemd/system/kata-containers.target.wants/dbus.socket"
-		chmod g+rx,o+x "${ROOTFS_DIR}"
+		#mkdir -p "${ROOTFS_DIR}/etc/systemd/system/basic.target.wants"
+		#ln -sf "/usr/lib/systemd/system/kata-containers.target" "${ROOTFS_DIR}/etc/systemd/system/basic.target.wants/kata-containers.target"
+		#mkdir -p "${ROOTFS_DIR}/etc/systemd/system/kata-containers.target.wants"
+		#ln -sf "/usr/lib/systemd/system/dbus.socket" "${ROOTFS_DIR}/etc/systemd/system/kata-containers.target.wants/dbus.socket"
+		#chmod g+rx,o+x "${ROOTFS_DIR}"
 	fi
 
 	if [ "${AGENT_POLICY}" == "yes" ]; then

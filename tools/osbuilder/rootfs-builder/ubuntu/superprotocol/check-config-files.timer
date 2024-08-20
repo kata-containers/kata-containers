@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Check and Copy Config Files Service every minute
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+Unit=check-config-files.service
+
+[Install]
+WantedBy=timers.target

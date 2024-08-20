@@ -56,13 +56,10 @@ endef
 
 kata-tarball: | all-parallel merge-builds
 
-$(MK_DIR)/dockerbuild/install_yq.sh:
-	$(MK_DIR)/kata-deploy-copy-yq-installer.sh
-
 copy-scripts-for-the-agent-build:
 	${MK_DIR}/kata-deploy-copy-libseccomp-installer.sh
 
-all-parallel: $(MK_DIR)/dockerbuild/install_yq.sh
+all-parallel:
 	${MAKE} -f $(MK_PATH) all -j $(shell nproc ${CI:+--ignore 1}) V=
 
 all: ${BASE_TARBALLS}
@@ -71,7 +68,7 @@ serial-targets:
 	${MAKE} -f $(MK_PATH) -j 1 V= \
 	${BASE_SERIAL_TARBALLS}
 
-%-tarball-build: $(MK_DIR)/dockerbuild/install_yq.sh
+%-tarball-build:
 	$(call BUILD,$*)
 
 agent-tarball: copy-scripts-for-the-agent-build

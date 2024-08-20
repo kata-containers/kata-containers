@@ -1,0 +1,257 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: rke2-cilium
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    operator:
+      replicas: 1
+    cni:
+      confPath: /var/lib/cni/net.d
+
+---
+
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: rke2-coredns
+  namespace: kube-system
+spec:
+  valuesContent: |
+    #nodelocal:
+    #  enabled: true
+    servers:
+    - zones:
+      - zone: .
+      port: 53
+      # If serviceType is nodePort you can specify nodePort here
+      # nodePort: 30053
+      plugins:
+      - name: errors
+      # Serves a /health endpoint on :8080, required for livenessProbe
+      - name: health
+        configBlock: |-
+          lameduck 5s
+      # Serves a /ready endpoint on :8181, required for readinessProbe
+      - name: ready
+      # Required to query kubernetes API for data
+      - name: kubernetes
+        parameters: cluster.local in-addr.arpa ip6.arpa
+        configBlock: |-
+          pods insecure
+          fallthrough in-addr.arpa ip6.arpa
+          ttl 30
+      # Serves a /metrics endpoint on :9153, required for serviceMonitor
+      - name: prometheus
+        parameters: 0.0.0.0:9153
+      - name: forward
+        parameters: . /etc/resolv.conf
+      - name: cache
+        parameters: 30
+      - name: loop
+      - name: reload
+      - name: loadbalance
+      - name: hosts
+        configBlock: |-
+          10.0.2.15  registry.dev.superprotocol.ltd
+          fallthrough
+
+
+---
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: longhorn-system
+
+---
+
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: longhorn
+  namespace: kube-system
+spec:
+  repo: https://charts.longhorn.io
+  chart: longhorn
+  version: 1.6.2
+  targetNamespace: longhorn-system
+  valuesContent: |-
+    csi:
+      attacherReplicaCount: 1
+      provisionerReplicaCount: 1
+      resizerReplicaCount: 1
+      snapshotterReplicaCount: 1
+    persistence:
+      defaultClassReplicaCount: 1
+    longhornUI:
+      replicas: 1
+    #defaultSettings:
+    #  defaultDataPath: /data/longhorn
+
+---
+
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: sealed-secrets
+  namespace: kube-system
+spec:
+  repo: https://bitnami-labs.github.io/sealed-secrets
+  chart: sealed-secrets
+  version: 2.16.1
+  targetNamespace: kube-system
+  valuesContent: |-
+    fullnameOverride: sealed-secrets-controller
+    #image:
+    #  tag: v0.19.3
+
+---
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: argocd
+
+---
+
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: argocd
+  namespace: kube-system
+spec:
+  repo: https://argoproj.github.io/argo-helm
+  chart: argo-cd
+  version: 7.3.8
+  targetNamespace: argocd
+  valuesContent: |-
+    configs:
+      cm:
+        ui.bannercontent: "SP-CC-VM"
+        ui.bannerurl: ""
+        ui.bannerpermanent: "true"
+        ui.bannerposition: "both"
+    notifications:
+      enabled: false
+    dex:
+      enabled: false
+
+---
+
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: argocd-image-updater
+  namespace: kube-system
+spec:
+  repo: https://argoproj.github.io/argo-helm
+  chart: argocd-image-updater
+  version: 0.11.0
+  targetNamespace: argocd
+  valuesContent: |-
+    config:
+      registries:
+      - name: GitHub Container Registry
+        prefix: ghcr.io
+        api_url: https://ghcr.io
+        ping: no
+        credentials: pullsecret:argocd/argocd-image-updater-ghcr-secret
+        insecure: true
+
+---
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cert-manager
+
+---
+
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: cert-manager
+  namespace: kube-system
+spec:
+  repo: https://charts.jetstack.io
+  chart: cert-manager
+  version: v1.15.1
+  targetNamespace: cert-manager
+  valuesContent: |-
+    installCRDs: true
+
+---
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: logs
+
+---
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+
+---
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gpu-operator
+
+---
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: time-slicing-config-all
+  namespace: gpu-operator
+data:
+  any: |-
+    version: v1
+    flags:
+      migStrategy: none
+    sharing:
+      timeSlicing:
+        renameByDefault: false
+        failRequestsGreaterThanOne: false
+        resources:
+          - name: nvidia.com/gpu
+            replicas: 1000
+
+---
+
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: gpu-operator
+  namespace: gpu-operator
+spec:
+  repo: https://helm.ngc.nvidia.com/nvidia
+  version: v24.3.0
+  chart: gpu-operator
+  targetNamespace: gpu-operator
+  valuesContent: |-
+    driver:
+      enabled: false
+    #nfd:
+    #  nodefeaturerules: true
+    devicePlugin:
+      config:
+        name: time-slicing-config-all
+        default: any
+    toolkit:
+      installDir: "/opt/nvidia"
+      env:
+      - name: CONTAINERD_CONFIG
+        value: /var/lib/rancher/rke2/agent/etc/containerd/config.toml.tmpl
+      - name: CONTAINERD_SOCKET
+        value: /run/k3s/containerd/containerd.sock
+      - name: CONTAINERD_RUNTIME_CLASS
+        value: nvidia
+      - name: CONTAINERD_SET_AS_DEFAULT
+        value: "true"

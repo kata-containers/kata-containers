@@ -52,26 +52,26 @@ readonly dax_alignment=2
 
 # The list of systemd units and files that are not needed in Kata Containers
 readonly -a systemd_units=(
-	"systemd-coredump@"
-	"systemd-journald"
-	"systemd-journald-dev-log"
-	"systemd-journal-flush"
-	"systemd-random-seed"
-	"systemd-timesyncd"
-	"systemd-tmpfiles-setup"
-	"systemd-udevd"
-	"systemd-udevd-control"
-	"systemd-udevd-kernel"
-	"systemd-udev-trigger"
-	"systemd-update-utmp"
+	#"systemd-coredump@"
+	#"systemd-journald"
+	#"systemd-journald-dev-log"
+	#"systemd-journal-flush"
+	#"systemd-random-seed"
+	#"systemd-timesyncd"
+	#"systemd-tmpfiles-setup"
+	#"systemd-udevd"
+	#"systemd-udevd-control"
+	#"systemd-udevd-kernel"
+	#"systemd-udev-trigger"
+	#"systemd-update-utmp"
 )
 
 readonly -a systemd_files=(
-	"systemd-bless-boot-generator"
-	"systemd-fstab-generator"
-	"systemd-getty-generator"
-	"systemd-gpt-auto-generator"
-	"systemd-tmpfiles-cleanup.timer"
+	#"systemd-bless-boot-generator"
+	#"systemd-fstab-generator"
+	#"systemd-getty-generator"
+	#"systemd-gpt-auto-generator"
+	#"systemd-tmpfiles-cleanup.timer"
 )
 
 # Set a default value

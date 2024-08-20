@@ -1,0 +1,6 @@
+[Unit]
+Description=Check and Copy Config Files Service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/check-config-files.sh

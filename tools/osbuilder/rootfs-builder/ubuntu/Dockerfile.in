@@ -29,7 +29,8 @@ RUN apt-get update && \
     multistrap \
     musl-tools \
     protobuf-compiler \
-    xz-utils
+    xz-utils \
+    libclang-dev
 # aarch64 requires this name -- link for all
 RUN if [ ! -f "/usr/bin/$(uname -m)-linux-musl-gcc" ]; then ln -s /usr/bin/musl-gcc "/usr/bin/$(uname -m)-linux-musl-gcc"; fi
 

@@ -1,0 +1,11 @@
+[Unit]
+Description=NVIDIA Persistence Daemon
+Wants=syslog.target
+StopWhenUnneeded=true
+Before=systemd-backlight@backlight:nvidia_0.service
+
+[Service]
+Type=forking
+ExecStartPre=/usr/bin/nvidia-persistenced --user nvidia-persistenced --uvm-persistence-mode --verbose
+ExecStart=/usr/bin/nvidia-smi conf-compute -srs 1
+ExecStopPost=/bin/rm -rf /var/run/nvidia-persistenced

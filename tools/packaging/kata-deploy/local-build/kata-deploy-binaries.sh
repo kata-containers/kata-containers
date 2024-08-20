@@ -561,6 +561,8 @@ install_kernel_nvidia_gpu() {
 install_kernel_nvidia_gpu_confidential() {
 	local kernel_url="$(get_from_kata_deps .assets.kernel.confidential.url)"
 
+	export MEASURED_ROOTFS=yes
+
 	install_kernel_helper \
 		"assets.kernel.confidential.version" \
 		"kernel-nvidia-gpu-confidential" \

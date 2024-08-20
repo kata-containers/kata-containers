@@ -1,0 +1,8 @@
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    eth0:
+      match:
+        name: "en*"
+      dhcp4: yes

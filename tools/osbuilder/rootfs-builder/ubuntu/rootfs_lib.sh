@@ -15,15 +15,20 @@ build_rootfs() {
 	# For simplicity's sake, use multistrap for foreign and native bootstraps.
 	cat > "$multistrap_conf" << EOF
 [General]
-cleanup=true
-aptsources=Ubuntu
+aptsources=Ubuntu Ubuntu-updates
 bootstrap=Ubuntu
+
+
+[Ubuntu-updates]
+source=$REPO_URL
+keyring=ubuntu-keyring
+suite=$UBUNTU_CODENAME-updates
 
 [Ubuntu]
 source=$REPO_URL
-keyring=ubuntu-keyring
 suite=$UBUNTU_CODENAME
 packages=$PACKAGES $EXTRA_PKGS
+
 EOF
 
 	if [ "${CONFIDENTIAL_GUEST}" == "yes" ] && [ "${DEB_ARCH}" == "amd64" ]; then
@@ -59,4 +64,8 @@ EOF
 	pushd $rootfs_dir/dev
 	MAKEDEV -v console tty ttyS null zero fd
 	popd
+
+	local script_dir=$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")
+	source ${script_dir}/superprotocol/postbuild.sh
+	run_postbuild ${rootfs_dir}
 }

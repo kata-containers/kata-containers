@@ -312,6 +312,7 @@ get_kernel_frag_path() {
 
 	local results
 	results=$( ${cmdpath} -r -n ${all_configs} )
+	#results=$( ${cmdpath} -r -n ${all_configs} | tee /dev/stderr) #for debug merging
 	# Only consider results highlighting "not in final"
 	results=$(grep "${not_in_string}" <<< "$results")
 	# Do not care about options that are in whitelist

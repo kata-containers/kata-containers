@@ -1,0 +1,11 @@
+[Unit]
+Description=Create LUKS partition
+Before=local-fs.target cryptsetup.target
+DefaultDependencies=no
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/state_disk_mount.sh
+
+[Install]
+WantedBy=multi-user.target
