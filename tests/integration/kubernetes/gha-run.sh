@@ -207,7 +207,7 @@ function deploy_kata() {
 	[ "$(yq .image.tag ${values_yaml})" = "${DOCKER_TAG}" ] || die "Failed to set image tag"
 	echo "::endgroup::"
 
-	helm install kata-deploy "${helm_chart_dir}" --values "${values_yaml}" --namespace kube-system
+	helm install kata-deploy "${helm_chart_dir}" --values "${values_yaml}" --namespace kube-system --debug
 
 	# `helm install --wait` does not take effect on single replicas and maxUnavailable=1 DaemonSets
 	# like kata-deploy on CI. So wait for pods being Running in the "tradicional" way.
@@ -386,7 +386,7 @@ function cleanup_kata_deploy() {
 
 	# Do not return after deleting only the parent object cascade=foreground
 	# means also wait for child/dependent object deletion
-	helm uninstall kata-deploy --ignore-not-found --wait --cascade foreground --timeout 10m --namespace kube-system
+	helm uninstall kata-deploy --ignore-not-found --wait --cascade foreground --timeout 10m --namespace kube-system --debug
 }
 
 function cleanup() {
