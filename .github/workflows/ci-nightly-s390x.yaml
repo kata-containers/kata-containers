@@ -1,6 +1,6 @@
 on:
-  schedule:
-    - cron: '0 5 * * *'
+  #schedule:
+  #  - cron: '0 5 * * *'
 
 name: Nightly CI for s390x
 jobs:
