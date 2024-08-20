@@ -191,8 +191,12 @@ function deploy_kata() {
 	fi
 
 	if [ "${KATA_HOST_OS}" = "cbl-mariner" ]; then
-		ALLOWED_HYPERVISOR_ANNOTATIONS="initrd kernel default_vcpus"
-		HOST_OS=${KATA_HOST_OS}
+		yq -i \
+		  '.spec.template.spec.containers[0].env[6].value = "initrd kernel default_vcpus"' \
+		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
+		yq -i \
+		  ".spec.template.spec.containers[0].env += [{\"name\": \"HOST_OS\", \"value\": \"${KATA_HOST_OS}\"}]" \
+		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
 	fi
 
 	if [ "${KATA_HYPERVISOR}" = "qemu" ]; then
