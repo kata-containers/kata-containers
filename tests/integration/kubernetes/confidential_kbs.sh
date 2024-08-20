@@ -154,6 +154,15 @@ kbs_set_resource_from_file() {
 	kbs-client --url "$(kbs_k8s_svc_http_addr)" config \
 		--auth-private-key "$KBS_PRIVATE_KEY" set-resource \
 		--path "$path" --resource-file "$file"
+
+	kbs_pod=$(kubectl -n $KBS_NS get pods -o NAME)
+	kbs_repo_path="/opt/confidential-containers/kbs/repository"
+	# Waiting for the resource to be created on the kbs pod
+	if ! kubectl -n $KBS_NS exec -it "$kbs_pod" -- bash -c "for i in {1..30}; do [ -e '$kbs_repo_path/$path' ] && exit 0; sleep 0.5; done; exit -1"; then
+		echo "ERROR: resource '$path' not created in 15s"
+		kubectl -n $KBS_NS exec -it "$kbs_pod" -- bash -c "find $kbs_repo_path"
+		return 1
+	fi
 }
 
 # Build and install the kbs-client binary, unless it is already present.
