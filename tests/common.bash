@@ -529,6 +529,29 @@ function ensure_yq() {
 	hash -d yq 2> /dev/null || true # yq is preinstalled on GHA Ubuntu 22.04 runners so we clear Bash's PATH cache.
 }
 
+function ensure_helm() {
+	ensure_yq
+	# The get-helm-3 script will take care of downloaading and installing Helm
+	# properly on the system respecting ARCH, OS and other configurations.
+	DESIRED_VERSION=$(get_from_kata_deps ".externals.helm.version")
+	export DESIRED_VERSION
+
+	# Check if helm is available in the system's PATH
+	if ! command -v helm &> /dev/null; then
+		echo "Helm is not installed. Installing Helm..."
+		curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+		# Verify the installation
+		if command -v helm &> /dev/null; then
+			echo "Helm installed successfully."
+		else
+			echo "Failed to install Helm."
+			exit 1
+		fi
+	else
+		echo "Helm is already installed."
+	fi
+}
+
 # dependency: What we want to get the version from the versions.yaml file
 function get_from_kata_deps() {
         versions_file="${repo_root_dir}/versions.yaml"
