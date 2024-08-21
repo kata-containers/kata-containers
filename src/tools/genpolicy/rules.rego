@@ -39,7 +39,7 @@ default StatsContainerRequest := true
 default StopTracingRequest := false
 default TtyWinResizeRequest := true
 default UpdateContainerRequest := false
-default UpdateEphemeralMountsRequest := true
+default UpdateEphemeralMountsRequest := false
 default UpdateInterfaceRequest := true
 default UpdateRoutesRequest := true
 default WaitProcessRequest := true
@@ -1167,6 +1167,10 @@ CloseStdinRequest {
 
 ReadStreamRequest {
     policy_data.request_defaults.ReadStreamRequest == true
+}
+
+UpdateEphemeralMountsRequest {
+    policy_data.request_defaults.UpdateEphemeralMountsRequest == true
 }
 
 WriteStreamRequest {
