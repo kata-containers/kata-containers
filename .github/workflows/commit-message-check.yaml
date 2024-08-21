@@ -34,7 +34,10 @@ jobs:
         #
         # Revert "<original-subject-line>"
         #
-        filter_out_pattern: '^Revert "'
+        # The format of a re-re-vert commit as follows:
+        #
+        # Reapply "<original-subject-line>"
+        filter_out_pattern: '^Revert "|^Reapply "'
 
     - name: DCO Check
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
