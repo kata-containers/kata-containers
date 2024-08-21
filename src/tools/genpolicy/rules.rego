@@ -51,12 +51,18 @@ default WriteStreamRequest := false
 # them and inspect OPA logs for the root cause of a failure.
 default AllowRequestsFailingPolicy := false
 
-CreateContainerRequest {
+CreateContainerRequest:= {"metadata": [addSandboxName], "allowed": true} {
     # Check if the input request should be rejected even before checking the
     # policy_data.containers information.
     allow_create_container_input
 
     i_oci := input.OCI
+
+    sandbox_name = i_oci.Annotations["io.kubernetes.cri.sandbox-name"]
+    addSandboxName := allow_sandbox_name(sandbox_name)
+
+    print("addSandboxName = ", addSandboxName)
+
     i_storages := input.storages
     i_devices := input.devices
 
@@ -88,6 +94,27 @@ CreateContainerRequest {
     allow_linux(p_oci, i_oci)
 
     print("CreateContainerRequest: true")
+}
+
+allow_sandbox_name(s_name) = addSandboxName {
+    print("searching sandbox name in data = ", data)
+    # validates all containers have the same sandox name
+    s_name == data.sandboxName
+    print("found sandbox_name match on state = ", s_name) 
+    addSandboxName := null
+}
+
+allow_sandbox_name(s_name) = addSandboxName {
+    print("checking sandbox name doesn't exist in data = ", data) 
+    not data.sandboxName
+    print("sandbox name not found in state. Adding name = ", s_name)
+    # save the sandbox name for future reference
+    addSandboxName := {
+        "name": "sandboxName",
+        "action": "add",
+        "key": "sandboxName", 
+        "value": s_name,
+    }
 }
 
 allow_create_container_input {
@@ -184,7 +211,6 @@ allow_by_anno(p_oci, i_oci, p_storages, i_storages) {
     i_s_name := i_oci.Annotations[s_name]
     print("allow_by_anno 2: i_s_name =", i_s_name, "p_s_name =", p_s_name)
 
-    allow_sandbox_name(p_s_name, i_s_name)
     allow_by_sandbox_name(p_oci, i_oci, p_storages, i_storages, i_s_name)
 
     print("allow_by_anno 2: true")
@@ -205,22 +231,6 @@ allow_by_sandbox_name(p_oci, i_oci, p_storages, i_storages, s_name) {
     allow_process(p_oci, i_oci, s_name)
 
     print("allow_by_sandbox_name: true")
-}
-
-allow_sandbox_name(p_s_name, i_s_name) {
-    print("allow_sandbox_name 1: start")
-
-    p_s_name == i_s_name
-
-    print("allow_sandbox_name 1: true")
-}
-allow_sandbox_name(p_s_name, i_s_name) {
-    print("allow_sandbox_name 2: start")
-
-    # TODO: should generated names be handled differently?
-    contains(p_s_name, "$(generated-name)")
-
-    print("allow_sandbox_name 2: true")
 }
 
 # Check that the "io.kubernetes.cri.container-type" and
