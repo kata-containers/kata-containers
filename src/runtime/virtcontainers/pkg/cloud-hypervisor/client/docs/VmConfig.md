@@ -28,6 +28,8 @@ Name | Type | Description | Notes
 **PciSegments** | Pointer to [**[]PciSegmentConfig**](PciSegmentConfig.md) |  | [optional] 
 **Platform** | Pointer to [**PlatformConfig**](PlatformConfig.md) |  | [optional] 
 **Tpm** | Pointer to [**TpmConfig**](TpmConfig.md) |  | [optional] 
+**LandlockEnable** | Pointer to **bool** |  | [optional] [default to false]
+**LandlockRules** | Pointer to [**[]LandlockConfig**](LandlockConfig.md) |  | [optional] 
 
 ## Methods
 
@@ -642,6 +644,56 @@ SetTpm sets Tpm field to given value.
 `func (o *VmConfig) HasTpm() bool`
 
 HasTpm returns a boolean if a field has been set.
+
+### GetLandlockEnable
+
+`func (o *VmConfig) GetLandlockEnable() bool`
+
+GetLandlockEnable returns the LandlockEnable field if non-nil, zero value otherwise.
+
+### GetLandlockEnableOk
+
+`func (o *VmConfig) GetLandlockEnableOk() (*bool, bool)`
+
+GetLandlockEnableOk returns a tuple with the LandlockEnable field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetLandlockEnable
+
+`func (o *VmConfig) SetLandlockEnable(v bool)`
+
+SetLandlockEnable sets LandlockEnable field to given value.
+
+### HasLandlockEnable
+
+`func (o *VmConfig) HasLandlockEnable() bool`
+
+HasLandlockEnable returns a boolean if a field has been set.
+
+### GetLandlockRules
+
+`func (o *VmConfig) GetLandlockRules() []LandlockConfig`
+
+GetLandlockRules returns the LandlockRules field if non-nil, zero value otherwise.
+
+### GetLandlockRulesOk
+
+`func (o *VmConfig) GetLandlockRulesOk() (*[]LandlockConfig, bool)`
+
+GetLandlockRulesOk returns a tuple with the LandlockRules field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetLandlockRules
+
+`func (o *VmConfig) SetLandlockRules(v []LandlockConfig)`
+
+SetLandlockRules sets LandlockRules field to given value.
+
+### HasLandlockRules
+
+`func (o *VmConfig) HasLandlockRules() bool`
+
+HasLandlockRules returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

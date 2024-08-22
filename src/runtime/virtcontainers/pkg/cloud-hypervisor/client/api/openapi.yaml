@@ -469,15 +469,6 @@ components:
         memory_actual_size: 4
         state: Created
         config:
-          console:
-            mode: "Off"
-            file: file
-            iommu: false
-            socket: socket
-          balloon:
-            size: 6
-            deflate_on_oom: false
-            free_page_reporting: false
           memory:
             hugepages: false
             shared: false
@@ -573,6 +564,144 @@ components:
             serial: serial
             vhost_user: false
             id: id
+          sgx_epc:
+          - prefault: false
+            size: 7
+            id: id
+          - prefault: false
+            size: 7
+            id: id
+          fs:
+          - pci_segment: 6
+            num_queues: 6
+            queue_size: 5
+            tag: tag
+            socket: socket
+            id: id
+          - pci_segment: 6
+            num_queues: 6
+            queue_size: 5
+            tag: tag
+            socket: socket
+            id: id
+          vsock:
+            pci_segment: 8
+            iommu: false
+            socket: socket
+            id: id
+            cid: 3
+          platform:
+            iommu_segments:
+            - 1
+            - 1
+            num_pci_segments: 4
+            oem_strings:
+            - oem_strings
+            - oem_strings
+            tdx: false
+            serial_number: serial_number
+            uuid: uuid
+          pmem:
+          - pci_segment: 3
+            file: file
+            size: 3
+            iommu: false
+            id: id
+            discard_writes: false
+          - pci_segment: 3
+            file: file
+            size: 3
+            iommu: false
+            id: id
+            discard_writes: false
+          iommu: false
+          payload:
+            cmdline: cmdline
+            kernel: kernel
+            initramfs: initramfs
+            firmware: firmware
+          rate_limit_groups:
+          - id: id
+            rate_limiter_config:
+              ops:
+                size: 0
+                one_time_burst: 0
+                refill_time: 0
+              bandwidth:
+                size: 0
+                one_time_burst: 0
+                refill_time: 0
+          - id: id
+            rate_limiter_config:
+              ops:
+                size: 0
+                one_time_burst: 0
+                refill_time: 0
+              bandwidth:
+                size: 0
+                one_time_burst: 0
+                refill_time: 0
+          debug_console:
+            mode: "Off"
+            iobase: 7
+            file: file
+          net:
+          - tap: tap
+            host_mac: host_mac
+            num_queues: 6
+            queue_size: 1
+            ip: 192.168.249.1
+            rate_limiter_config:
+              ops:
+                size: 0
+                one_time_burst: 0
+                refill_time: 0
+              bandwidth:
+                size: 0
+                one_time_burst: 0
+                refill_time: 0
+            mac: mac
+            mtu: 3
+            pci_segment: 2
+            vhost_mode: Client
+            iommu: false
+            vhost_socket: vhost_socket
+            vhost_user: false
+            id: id
+            mask: 255.255.255.0
+          - tap: tap
+            host_mac: host_mac
+            num_queues: 6
+            queue_size: 1
+            ip: 192.168.249.1
+            rate_limiter_config:
+              ops:
+                size: 0
+                one_time_burst: 0
+                refill_time: 0
+              bandwidth:
+                size: 0
+                one_time_burst: 0
+                refill_time: 0
+            mac: mac
+            mtu: 3
+            pci_segment: 2
+            vhost_mode: Client
+            iommu: false
+            vhost_socket: vhost_socket
+            vhost_user: false
+            id: id
+            mask: 255.255.255.0
+          pvpanic: false
+          console:
+            mode: "Off"
+            file: file
+            iommu: false
+            socket: socket
+          balloon:
+            size: 6
+            deflate_on_oom: false
+            free_page_reporting: false
           cpus:
             features:
               amx: true
@@ -656,60 +785,9 @@ components:
           rng:
             iommu: false
             src: src
-          sgx_epc:
-          - prefault: false
-            size: 7
-            id: id
-          - prefault: false
-            size: 7
-            id: id
-          fs:
-          - pci_segment: 6
-            num_queues: 6
-            queue_size: 5
-            tag: tag
-            socket: socket
-            id: id
-          - pci_segment: 6
-            num_queues: 6
-            queue_size: 5
-            tag: tag
-            socket: socket
-            id: id
-          vsock:
-            pci_segment: 8
-            iommu: false
-            socket: socket
-            id: id
-            cid: 3
-          platform:
-            iommu_segments:
-            - 1
-            - 1
-            num_pci_segments: 4
-            oem_strings:
-            - oem_strings
-            - oem_strings
-            tdx: false
-            serial_number: serial_number
-            uuid: uuid
           tpm:
             socket: socket
-          pmem:
-          - pci_segment: 3
-            file: file
-            size: 3
-            iommu: false
-            id: id
-            discard_writes: false
-          - pci_segment: 3
-            file: file
-            size: 3
-            iommu: false
-            id: id
-            discard_writes: false
           watchdog: false
-          iommu: false
           pci_segments:
           - pci_segment: 4
             mmio32_aperture_weight: 0
@@ -717,89 +795,17 @@ components:
           - pci_segment: 4
             mmio32_aperture_weight: 0
             mmio64_aperture_weight: 6
-          payload:
-            cmdline: cmdline
-            kernel: kernel
-            initramfs: initramfs
-            firmware: firmware
+          landlock_enable: false
           serial:
             mode: "Off"
             file: file
             iommu: false
             socket: socket
-          rate_limit_groups:
-          - id: id
-            rate_limiter_config:
-              ops:
-                size: 0
-                one_time_burst: 0
-                refill_time: 0
-              bandwidth:
-                size: 0
-                one_time_burst: 0
-                refill_time: 0
-          - id: id
-            rate_limiter_config:
-              ops:
-                size: 0
-                one_time_burst: 0
-                refill_time: 0
-              bandwidth:
-                size: 0
-                one_time_burst: 0
-                refill_time: 0
-          debug_console:
-            mode: "Off"
-            iobase: 7
-            file: file
-          net:
-          - tap: tap
-            host_mac: host_mac
-            num_queues: 6
-            queue_size: 1
-            ip: 192.168.249.1
-            rate_limiter_config:
-              ops:
-                size: 0
-                one_time_burst: 0
-                refill_time: 0
-              bandwidth:
-                size: 0
-                one_time_burst: 0
-                refill_time: 0
-            mac: mac
-            mtu: 3
-            pci_segment: 2
-            vhost_mode: Client
-            iommu: false
-            vhost_socket: vhost_socket
-            vhost_user: false
-            id: id
-            mask: 255.255.255.0
-          - tap: tap
-            host_mac: host_mac
-            num_queues: 6
-            queue_size: 1
-            ip: 192.168.249.1
-            rate_limiter_config:
-              ops:
-                size: 0
-                one_time_burst: 0
-                refill_time: 0
-              bandwidth:
-                size: 0
-                one_time_burst: 0
-                refill_time: 0
-            mac: mac
-            mtu: 3
-            pci_segment: 2
-            vhost_mode: Client
-            iommu: false
-            vhost_socket: vhost_socket
-            vhost_user: false
-            id: id
-            mask: 255.255.255.0
-          pvpanic: false
+          landlock_rules:
+          - path: path
+            access: access
+          - path: path
+            access: access
         device_tree:
           key:
             children:
@@ -896,15 +902,6 @@ components:
     VmConfig:
       description: Virtual machine configuration
       example:
-        console:
-          mode: "Off"
-          file: file
-          iommu: false
-          socket: socket
-        balloon:
-          size: 6
-          deflate_on_oom: false
-          free_page_reporting: false
         memory:
           hugepages: false
           shared: false
@@ -1000,6 +997,144 @@ components:
           serial: serial
           vhost_user: false
           id: id
+        sgx_epc:
+        - prefault: false
+          size: 7
+          id: id
+        - prefault: false
+          size: 7
+          id: id
+        fs:
+        - pci_segment: 6
+          num_queues: 6
+          queue_size: 5
+          tag: tag
+          socket: socket
+          id: id
+        - pci_segment: 6
+          num_queues: 6
+          queue_size: 5
+          tag: tag
+          socket: socket
+          id: id
+        vsock:
+          pci_segment: 8
+          iommu: false
+          socket: socket
+          id: id
+          cid: 3
+        platform:
+          iommu_segments:
+          - 1
+          - 1
+          num_pci_segments: 4
+          oem_strings:
+          - oem_strings
+          - oem_strings
+          tdx: false
+          serial_number: serial_number
+          uuid: uuid
+        pmem:
+        - pci_segment: 3
+          file: file
+          size: 3
+          iommu: false
+          id: id
+          discard_writes: false
+        - pci_segment: 3
+          file: file
+          size: 3
+          iommu: false
+          id: id
+          discard_writes: false
+        iommu: false
+        payload:
+          cmdline: cmdline
+          kernel: kernel
+          initramfs: initramfs
+          firmware: firmware
+        rate_limit_groups:
+        - id: id
+          rate_limiter_config:
+            ops:
+              size: 0
+              one_time_burst: 0
+              refill_time: 0
+            bandwidth:
+              size: 0
+              one_time_burst: 0
+              refill_time: 0
+        - id: id
+          rate_limiter_config:
+            ops:
+              size: 0
+              one_time_burst: 0
+              refill_time: 0
+            bandwidth:
+              size: 0
+              one_time_burst: 0
+              refill_time: 0
+        debug_console:
+          mode: "Off"
+          iobase: 7
+          file: file
+        net:
+        - tap: tap
+          host_mac: host_mac
+          num_queues: 6
+          queue_size: 1
+          ip: 192.168.249.1
+          rate_limiter_config:
+            ops:
+              size: 0
+              one_time_burst: 0
+              refill_time: 0
+            bandwidth:
+              size: 0
+              one_time_burst: 0
+              refill_time: 0
+          mac: mac
+          mtu: 3
+          pci_segment: 2
+          vhost_mode: Client
+          iommu: false
+          vhost_socket: vhost_socket
+          vhost_user: false
+          id: id
+          mask: 255.255.255.0
+        - tap: tap
+          host_mac: host_mac
+          num_queues: 6
+          queue_size: 1
+          ip: 192.168.249.1
+          rate_limiter_config:
+            ops:
+              size: 0
+              one_time_burst: 0
+              refill_time: 0
+            bandwidth:
+              size: 0
+              one_time_burst: 0
+              refill_time: 0
+          mac: mac
+          mtu: 3
+          pci_segment: 2
+          vhost_mode: Client
+          iommu: false
+          vhost_socket: vhost_socket
+          vhost_user: false
+          id: id
+          mask: 255.255.255.0
+        pvpanic: false
+        console:
+          mode: "Off"
+          file: file
+          iommu: false
+          socket: socket
+        balloon:
+          size: 6
+          deflate_on_oom: false
+          free_page_reporting: false
         cpus:
           features:
             amx: true
@@ -1083,60 +1218,9 @@ components:
         rng:
           iommu: false
           src: src
-        sgx_epc:
-        - prefault: false
-          size: 7
-          id: id
-        - prefault: false
-          size: 7
-          id: id
-        fs:
-        - pci_segment: 6
-          num_queues: 6
-          queue_size: 5
-          tag: tag
-          socket: socket
-          id: id
-        - pci_segment: 6
-          num_queues: 6
-          queue_size: 5
-          tag: tag
-          socket: socket
-          id: id
-        vsock:
-          pci_segment: 8
-          iommu: false
-          socket: socket
-          id: id
-          cid: 3
-        platform:
-          iommu_segments:
-          - 1
-          - 1
-          num_pci_segments: 4
-          oem_strings:
-          - oem_strings
-          - oem_strings
-          tdx: false
-          serial_number: serial_number
-          uuid: uuid
         tpm:
           socket: socket
-        pmem:
-        - pci_segment: 3
-          file: file
-          size: 3
-          iommu: false
-          id: id
-          discard_writes: false
-        - pci_segment: 3
-          file: file
-          size: 3
-          iommu: false
-          id: id
-          discard_writes: false
         watchdog: false
-        iommu: false
         pci_segments:
         - pci_segment: 4
           mmio32_aperture_weight: 0
@@ -1144,89 +1228,17 @@ components:
         - pci_segment: 4
           mmio32_aperture_weight: 0
           mmio64_aperture_weight: 6
-        payload:
-          cmdline: cmdline
-          kernel: kernel
-          initramfs: initramfs
-          firmware: firmware
+        landlock_enable: false
         serial:
           mode: "Off"
           file: file
           iommu: false
           socket: socket
-        rate_limit_groups:
-        - id: id
-          rate_limiter_config:
-            ops:
-              size: 0
-              one_time_burst: 0
-              refill_time: 0
-            bandwidth:
-              size: 0
-              one_time_burst: 0
-              refill_time: 0
-        - id: id
-          rate_limiter_config:
-            ops:
-              size: 0
-              one_time_burst: 0
-              refill_time: 0
-            bandwidth:
-              size: 0
-              one_time_burst: 0
-              refill_time: 0
-        debug_console:
-          mode: "Off"
-          iobase: 7
-          file: file
-        net:
-        - tap: tap
-          host_mac: host_mac
-          num_queues: 6
-          queue_size: 1
-          ip: 192.168.249.1
-          rate_limiter_config:
-            ops:
-              size: 0
-              one_time_burst: 0
-              refill_time: 0
-            bandwidth:
-              size: 0
-              one_time_burst: 0
-              refill_time: 0
-          mac: mac
-          mtu: 3
-          pci_segment: 2
-          vhost_mode: Client
-          iommu: false
-          vhost_socket: vhost_socket
-          vhost_user: false
-          id: id
-          mask: 255.255.255.0
-        - tap: tap
-          host_mac: host_mac
-          num_queues: 6
-          queue_size: 1
-          ip: 192.168.249.1
-          rate_limiter_config:
-            ops:
-              size: 0
-              one_time_burst: 0
-              refill_time: 0
-            bandwidth:
-              size: 0
-              one_time_burst: 0
-              refill_time: 0
-          mac: mac
-          mtu: 3
-          pci_segment: 2
-          vhost_mode: Client
-          iommu: false
-          vhost_socket: vhost_socket
-          vhost_user: false
-          id: id
-          mask: 255.255.255.0
-        pvpanic: false
+        landlock_rules:
+        - path: path
+          access: access
+        - path: path
+          access: access
       properties:
         cpus:
           $ref: '#/components/schemas/CpusConfig'
@@ -1299,6 +1311,13 @@ components:
           $ref: '#/components/schemas/PlatformConfig'
         tpm:
           $ref: '#/components/schemas/TpmConfig'
+        landlock_enable:
+          default: false
+          type: boolean
+        landlock_rules:
+          items:
+            $ref: '#/components/schemas/LandlockConfig'
+          type: array
       required:
       - payload
       type: object
@@ -2187,4 +2206,17 @@ components:
           type: string
       required:
       - socket
+      type: object
+    LandlockConfig:
+      example:
+        path: path
+        access: access
+      properties:
+        path:
+          type: string
+        access:
+          type: string
+      required:
+      - access
+      - path
       type: object

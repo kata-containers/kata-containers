@@ -626,6 +626,13 @@ components:
           $ref: "#/components/schemas/PlatformConfig"
         tpm:
           $ref: "#/components/schemas/TpmConfig"
+        landlock_enable:
+          type: boolean
+          default: false
+        landlock_rules:
+          type: array
+          items:
+            $ref: "#/components/schemas/LandlockConfig"
       description: Virtual machine configuration
 
     CpuAffinity:
@@ -1260,4 +1267,15 @@ components:
       type: object
       properties:
         socket:
+          type: string
+
+    LandlockConfig:
+      required:
+        - path
+        - access
+      type: object
+      properties:
+        path:
+          type: string
+        access:
           type: string

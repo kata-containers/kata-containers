@@ -122,6 +122,7 @@ Class | Method | HTTP request | Description
  - [DeviceNode](docs/DeviceNode.md)
  - [DiskConfig](docs/DiskConfig.md)
  - [FsConfig](docs/FsConfig.md)
+ - [LandlockConfig](docs/LandlockConfig.md)
  - [MemoryConfig](docs/MemoryConfig.md)
  - [MemoryZoneConfig](docs/MemoryZoneConfig.md)
  - [NetConfig](docs/NetConfig.md)

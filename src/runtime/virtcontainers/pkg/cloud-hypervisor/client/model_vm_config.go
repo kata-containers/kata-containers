@@ -40,6 +40,8 @@ type VmConfig struct {
 	PciSegments     *[]PciSegmentConfig     `json:"pci_segments,omitempty"`
 	Platform        *PlatformConfig         `json:"platform,omitempty"`
 	Tpm             *TpmConfig              `json:"tpm,omitempty"`
+	LandlockEnable  *bool                   `json:"landlock_enable,omitempty"`
+	LandlockRules   *[]LandlockConfig       `json:"landlock_rules,omitempty"`
 }
 
 // NewVmConfig instantiates a new VmConfig object
@@ -55,6 +57,8 @@ func NewVmConfig(payload PayloadConfig) *VmConfig {
 	this.Watchdog = &watchdog
 	var pvpanic bool = false
 	this.Pvpanic = &pvpanic
+	var landlockEnable bool = false
+	this.LandlockEnable = &landlockEnable
 	return &this
 }
 
@@ -69,6 +73,8 @@ func NewVmConfigWithDefaults() *VmConfig {
 	this.Watchdog = &watchdog
 	var pvpanic bool = false
 	this.Pvpanic = &pvpanic
+	var landlockEnable bool = false
+	this.LandlockEnable = &landlockEnable
 	return &this
 }
 
@@ -832,6 +838,70 @@ func (o *VmConfig) SetTpm(v TpmConfig) {
 	o.Tpm = &v
 }
 
+// GetLandlockEnable returns the LandlockEnable field value if set, zero value otherwise.
+func (o *VmConfig) GetLandlockEnable() bool {
+	if o == nil || o.LandlockEnable == nil {
+		var ret bool
+		return ret
+	}
+	return *o.LandlockEnable
+}
+
+// GetLandlockEnableOk returns a tuple with the LandlockEnable field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *VmConfig) GetLandlockEnableOk() (*bool, bool) {
+	if o == nil || o.LandlockEnable == nil {
+		return nil, false
+	}
+	return o.LandlockEnable, true
+}
+
+// HasLandlockEnable returns a boolean if a field has been set.
+func (o *VmConfig) HasLandlockEnable() bool {
+	if o != nil && o.LandlockEnable != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetLandlockEnable gets a reference to the given bool and assigns it to the LandlockEnable field.
+func (o *VmConfig) SetLandlockEnable(v bool) {
+	o.LandlockEnable = &v
+}
+
+// GetLandlockRules returns the LandlockRules field value if set, zero value otherwise.
+func (o *VmConfig) GetLandlockRules() []LandlockConfig {
+	if o == nil || o.LandlockRules == nil {
+		var ret []LandlockConfig
+		return ret
+	}
+	return *o.LandlockRules
+}
+
+// GetLandlockRulesOk returns a tuple with the LandlockRules field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *VmConfig) GetLandlockRulesOk() (*[]LandlockConfig, bool) {
+	if o == nil || o.LandlockRules == nil {
+		return nil, false
+	}
+	return o.LandlockRules, true
+}
+
+// HasLandlockRules returns a boolean if a field has been set.
+func (o *VmConfig) HasLandlockRules() bool {
+	if o != nil && o.LandlockRules != nil {
+		return true
+	}
+
+	return false
+}
+
+// SetLandlockRules gets a reference to the given []LandlockConfig and assigns it to the LandlockRules field.
+func (o *VmConfig) SetLandlockRules(v []LandlockConfig) {
+	o.LandlockRules = &v
+}
+
 func (o VmConfig) MarshalJSON() ([]byte, error) {
 	toSerialize := map[string]interface{}{}
 	if o.Cpus != nil {
@@ -905,6 +975,12 @@ func (o VmConfig) MarshalJSON() ([]byte, error) {
 	}
 	if o.Tpm != nil {
 		toSerialize["tpm"] = o.Tpm
+	}
+	if o.LandlockEnable != nil {
+		toSerialize["landlock_enable"] = o.LandlockEnable
+	}
+	if o.LandlockRules != nil {
+		toSerialize["landlock_rules"] = o.LandlockRules
 	}
 	return json.Marshal(toSerialize)
 }
