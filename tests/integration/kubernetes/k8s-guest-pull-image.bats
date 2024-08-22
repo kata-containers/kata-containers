@@ -7,6 +7,7 @@
 
 load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/confidential_common.sh"
+load "${BATS_TEST_DIRNAME}/confidential_kbs.sh"
 
 setup() {
     if ! is_confidential_runtime_class; then
