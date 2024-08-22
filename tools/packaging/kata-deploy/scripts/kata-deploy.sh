@@ -36,6 +36,8 @@ AGENT_NO_PROXY="${AGENT_NO_PROXY:-}"
 PULL_TYPE_MAPPING="${PULL_TYPE_MAPPING:-}"
 IFS=',' read -a pull_types <<< "$PULL_TYPE_MAPPING"
 
+dest_dir="/opt/kata"
+
 # If we fail for any reason a message will be displayed
 die() {
         msg="$*"
@@ -130,7 +132,7 @@ function get_kata_containers_config_path() {
 	local shim="$1"
 
 	# Directory holding pristine configuration files for the current default golang runtime.
-	local golang_config_path="/opt/kata/share/defaults/kata-containers/"
+	local golang_config_path="${dest_dir}/share/defaults/kata-containers/"
 
 	# Directory holding pristine configuration files for the new rust runtime.
 	#
@@ -168,10 +170,10 @@ function get_kata_containers_runtime_path() {
 	local runtime_path
 	case "$shim" in
 		cloud-hypervisor | dragonball | qemu-runtime-rs)
-			runtime_path="/opt/kata/runtime-rs/bin/containerd-shim-kata-v2"
+			runtime_path="${dest_dir}/runtime-rs/bin/containerd-shim-kata-v2"
 			;;
 		*)
-			runtime_path="/opt/kata/bin/containerd-shim-kata-v2"
+			runtime_path="${dest_dir}/bin/containerd-shim-kata-v2"
 			;;
 	esac
 
@@ -237,10 +239,10 @@ function get_tdx_ovmf_path_from_distro() {
 
 function install_artifacts() {
 	echo "copying kata artifacts onto host"
-	cp -au /opt/kata-artifacts/opt/kata/* /opt/kata/
-	chmod +x /opt/kata/bin/*
-	[ -d /opt/kata/runtime-rs/bin ] && \
-		chmod +x /opt/kata/runtime-rs/bin/*
+	cp -au /opt/kata-artifacts/opt/kata/* ${dest_dir}/
+	chmod +x ${dest_dir}/bin/*
+	[ -d ${dest_dir}/runtime-rs/bin ] && \
+		chmod +x ${dest_dir}/runtime-rs/bin/*
 
 	local config_path
 
@@ -302,8 +304,8 @@ function install_artifacts() {
 
 	# Allow Mariner to use custom configuration.
 	if [ "${HOST_OS:-}" == "cbl-mariner" ]; then
-		config_path="/opt/kata/share/defaults/kata-containers/configuration-clh.toml"
-		clh_path="/opt/kata/bin/cloud-hypervisor-glibc"
+		config_path="${dest_dir}/share/defaults/kata-containers/configuration-clh.toml"
+		clh_path="${dest_dir}/bin/cloud-hypervisor-glibc"
 		sed -i -E "s|(valid_hypervisor_paths) = .+|\1 = [\"${clh_path}\"]|" "${config_path}"
 		sed -i -E "s|(path) = \".+/cloud-hypervisor\"|\1 = \"${clh_path}\"|" "${config_path}"
 	fi
@@ -481,7 +483,7 @@ function configure_containerd() {
 
 function remove_artifacts() {
 	echo "deleting kata artifacts"
-	rm -rf /opt/kata/*
+	rm -rf ${dest_dir}/*
 
 	if [[ "${CREATE_RUNTIMECLASSES}" == "true" ]]; then
 		delete_runtimeclasses
