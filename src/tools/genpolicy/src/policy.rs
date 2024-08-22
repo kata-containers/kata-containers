@@ -522,7 +522,7 @@ impl AgentPolicy {
         root.Readonly = yaml_container.read_only_root_filesystem();
 
         let namespace = match resource.get_namespace() {
-            Some(ns) if !ns.is_empty() => ns,
+            Some(ns) => ns,
             _ => self
                 .config
                 .settings

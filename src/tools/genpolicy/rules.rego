@@ -232,6 +232,14 @@ allow_by_anno(p_oci, i_oci, p_storages, i_storages) {
     print("allow_by_anno 2: true")
 }
 
+check_namespace(p_namespace, i_namespace){
+    p_namespace == i_namespace
+}
+
+check_namespace(p_namespace, i_namespace){
+    p_namespace == ""
+}
+
 allow_by_sandbox_name(p_oci, i_oci, p_storages, i_storages, s_name) {
     print("allow_by_sandbox_name: start")
 
@@ -240,7 +248,16 @@ allow_by_sandbox_name(p_oci, i_oci, p_storages, i_storages, s_name) {
     p_namespace := p_oci.Annotations[s_namespace]
     i_namespace := i_oci.Annotations[s_namespace]
     print("allow_by_sandbox_name: p_namespace =", p_namespace, "i_namespace =", i_namespace)
-    p_namespace == i_namespace
+
+    # todo: currently we are strictly checking namespace from the input against the policy
+    # we should only do this if namespace is explictly set in the policy
+    # otherwise, we should allow any namespace:
+    
+    # if p_namespace not present: if first container doesn't have a default ns, save to state: namespace = i_namespace.
+    # otherwise check i == p
+
+    # redo: maybe we don't need to save anything to state?
+    check_namespace(p_namespace, i_namespace)
 
     allow_by_container_types(p_oci, i_oci, s_name, p_namespace)
     allow_by_bundle_or_sandbox_id(p_oci, i_oci, p_storages, i_storages)
