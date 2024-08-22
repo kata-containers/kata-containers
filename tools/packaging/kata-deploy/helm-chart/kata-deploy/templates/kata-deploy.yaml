@@ -63,8 +63,6 @@ spec:
           mountPath: /etc/crio/
         - name: containerd-conf
           mountPath: /etc/containerd/
-        - name: kata-artifacts
-          mountPath: /opt/kata/
         - name: host
           mountPath: /host/
       volumes:
@@ -74,10 +72,6 @@ spec:
       - name: containerd-conf
         hostPath:
           path: '{{- template "containerdConfPath" .Values }}'
-      - name: kata-artifacts
-        hostPath:
-          path: /opt/kata/
-          type: DirectoryOrCreate
       - name: host
         hostPath:
           path: /

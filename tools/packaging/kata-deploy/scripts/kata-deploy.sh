@@ -37,6 +37,7 @@ PULL_TYPE_MAPPING="${PULL_TYPE_MAPPING:-}"
 IFS=',' read -a pull_types <<< "$PULL_TYPE_MAPPING"
 
 dest_dir="/opt/kata"
+host_install_dir="/host/${dest_dir}"
 
 # If we fail for any reason a message will be displayed
 die() {
@@ -239,15 +240,17 @@ function get_tdx_ovmf_path_from_distro() {
 
 function install_artifacts() {
 	echo "copying kata artifacts onto host"
-	cp -au /opt/kata-artifacts/opt/kata/* ${dest_dir}/
-	chmod +x ${dest_dir}/bin/*
-	[ -d ${dest_dir}/runtime-rs/bin ] && \
-		chmod +x ${dest_dir}/runtime-rs/bin/*
+
+	mkdir -p ${host_install_dir}
+	cp -au /opt/kata-artifacts/opt/kata/* ${host_install_dir}/
+	chmod +x ${host_install_dir}/bin/*
+	[ -d ${host_install_dir}/runtime-rs/bin ] && \
+		chmod +x ${host_install_dir}/runtime-rs/bin/*
 
 	local config_path
 
 	for shim in "${shims[@]}"; do
-		config_path=$(get_kata_containers_config_path "${shim}")
+		config_path="/host/$(get_kata_containers_config_path "${shim}")"
 		mkdir -p "$config_path"
 
 		local kata_config_file="${config_path}/configuration-${shim}.toml"
@@ -304,7 +307,7 @@ function install_artifacts() {
 
 	# Allow Mariner to use custom configuration.
 	if [ "${HOST_OS:-}" == "cbl-mariner" ]; then
-		config_path="${dest_dir}/share/defaults/kata-containers/configuration-clh.toml"
+		config_path="${host_install_dir}/share/defaults/kata-containers/configuration-clh.toml"
 		clh_path="${dest_dir}/bin/cloud-hypervisor-glibc"
 		sed -i -E "s|(valid_hypervisor_paths) = .+|\1 = [\"${clh_path}\"]|" "${config_path}"
 		sed -i -E "s|(path) = \".+/cloud-hypervisor\"|\1 = \"${clh_path}\"|" "${config_path}"
@@ -483,7 +486,8 @@ function configure_containerd() {
 
 function remove_artifacts() {
 	echo "deleting kata artifacts"
-	rm -rf ${dest_dir}/*
+
+	rm -rf ${host_install_dir}
 
 	if [[ "${CREATE_RUNTIMECLASSES}" == "true" ]]; then
 		delete_runtimeclasses
