@@ -52,6 +52,8 @@ spec:
           value: {{ .Values.env.agentNoProxy | quote }}
         - name: PULL_TYPE_MAPPING
           value: {{ .Values.env.pullTypeMapping | quote }}
+        - name: INSTALLATION_PREFIX
+          value: {{ .Values.env.installationPrefix | quote }}
 {{- with .Values.env.hostOS }}
         - name: HOST_OS
           value: {{ . | quote }}
