@@ -13,6 +13,7 @@ crio_drop_in_conf_file="${crio_drop_in_conf_dir}/99-kata-deploy"
 crio_drop_in_conf_file_debug="${crio_drop_in_conf_dir}/100-debug"
 containerd_conf_file="/etc/containerd/config.toml"
 containerd_conf_file_backup="${containerd_conf_file}.bak"
+containerd_conf_tmpl_file=""
 
 IFS=' ' read -a shims <<< "$SHIMS"
 default_shim="$DEFAULT_SHIM"
@@ -574,6 +575,15 @@ function snapshotter_handler_mapping_validation_check() {
 }
 
 function main() {
+	action=${1:-}
+	if [ -z "$action" ]; then
+		print_usage
+		die "invalid arguments"
+	fi
+
+	echo "Action:"
+	echo "* $action"
+	echo ""
 	echo "Environment variables passed to this script"
 	echo "* NODE_NAME: ${NODE_NAME}"
 	echo "* DEBUG: ${DEBUG}"
@@ -598,32 +608,14 @@ function main() {
 	# CRI-O isn't consistent with the naming -- let's use crio to match the service file
 	if [ "$runtime" == "cri-o" ]; then
 		runtime="crio"
-	elif [ "$runtime" == "k3s" ] || [ "$runtime" == "k3s-agent" ] || [ "$runtime" == "rke2-agent" ] || [ "$runtime" == "rke2-server" ]; then
+	elif [[ "$runtime" =~ ^(k3s|k3s-agent|rke2-agent|rke2-server)$ ]]; then
 		containerd_conf_tmpl_file="${containerd_conf_file}.tmpl"
-		if [ ! -f "$containerd_conf_tmpl_file" ] && [ -f "$containerd_conf_file" ]; then
-			cp "$containerd_conf_file" "$containerd_conf_tmpl_file"
-		fi
-
-		containerd_conf_file="${containerd_conf_tmpl_file}"
-		containerd_conf_file_backup="${containerd_conf_file}.bak"
-	elif [ "$runtime" == "k0s-worker" ] || [ "$runtime" == "k0s-controller" ]; then
+		containerd_conf_file_backup="${containerd_conf_tmpl_file}.bak"
+	elif [[ "$runtime" =~ ^(k0s-worker|k0s-controller)$ ]]; then
 		# From 1.27.1 onwards k0s enables dynamic configuration on containerd CRI runtimes. 
 		# This works by k0s creating a special directory in /etc/k0s/containerd.d/ where user can drop-in partial containerd configuration snippets.
 		# k0s will automatically pick up these files and adds these in containerd configuration imports list.
 		containerd_conf_file="/etc/containerd/kata-containers.toml"
-		touch "$containerd_conf_file"
-	else
-		# runtime == containerd
-		if [ ! -f "$containerd_conf_file" ] && [ -d $(dirname "$containerd_conf_file") ] && \
-			[ -x $(command -v containerd) ]; then
-			containerd config default > "$containerd_conf_file"
-		fi
-	fi
-
-	action=${1:-}
-	if [ -z "$action" ]; then
-		print_usage
-		die "invalid arguments"
 	fi
 
 	# only install / remove / update if we are dealing with CRIO or containerd
@@ -635,11 +627,32 @@ function main() {
 
 		case "$action" in
 		install)
+			if [[ "$runtime" =~ ^(k3s|k3s-agent|rke2-agent|rke2-server)$ ]]; then
+			       if [ ! -f "$containerd_conf_tmpl_file" ] && [ -f "$containerd_conf_file" ]; then
+				       cp "$containerd_conf_file" "$containerd_conf_tmpl_file"
+			       fi
+			       # Only set the containerd_conf_file to its new value after
+			       # copying the file to the template location
+			       containerd_conf_file="${containerd_conf_tmpl_file}"
+			       containerd_conf_file_backup="${containerd_conf_tmpl_file}.bak"
+			elif [[ "$runtime" =~ ^(k0s-worker|k0s-controller)$ ]]; then
+			       touch "$containerd_conf_file"
+			elif [[ "$runtime" == "containerd" ]]; then
+			       if [ ! -f "$containerd_conf_file" ] && [ -d $(dirname "$containerd_conf_file") ] && [ -x $(command -v containerd) ]; then
+					containerd config default > "$containerd_conf_file"
+			       fi
+			fi
+
 			install_artifacts
 			configure_cri_runtime "$runtime"
 			kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=true
 			;;
 		cleanup)
+			if [[ "$runtime" =~ ^(k3s|k3s-agent|rke2-agent|rke2-server)$ ]]; then
+			       containerd_conf_file_backup="${containerd_conf_tmpl_file}.bak"
+			       containerd_conf_file="${containerd_conf_tmpl_file}"
+			fi
+
 			cleanup_cri_runtime "$runtime"
 			kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=cleanup
 			remove_artifacts
