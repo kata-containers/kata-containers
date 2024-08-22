@@ -14,10 +14,13 @@ use protocols::{
     confidential_data_hub_ttrpc_async::{SealedSecretServiceClient, SecureMountServiceClient},
 };
 
+use crate::AGENT_CONFIG;
 use crate::CDH_SOCKET_URI;
 
 // Nanoseconds
-const CDH_API_TIMEOUT: i64 = 50 * 1000 * 1000 * 1000;
+lazy_static! {
+    static ref CDH_API_TIMEOUT: i64 = AGENT_CONFIG.cdh_api_timeout.as_nanos() as i64;
+}
 const SEALED_SECRET_PREFIX: &str = "sealed.";
 
 #[derive(Derivative)]
@@ -48,7 +51,7 @@ impl CDHClient {
 
         let unsealed_secret = self
             .sealed_secret_client
-            .unseal_secret(ttrpc::context::with_timeout(CDH_API_TIMEOUT), &input)
+            .unseal_secret(ttrpc::context::with_timeout(*CDH_API_TIMEOUT), &input)
             .await?;
         Ok(unsealed_secret.plaintext)
     }
@@ -81,7 +84,7 @@ impl CDHClient {
             ..Default::default()
         };
         self.secure_mount_client
-            .secure_mount(ttrpc::context::with_timeout(CDH_API_TIMEOUT), &req)
+            .secure_mount(ttrpc::context::with_timeout(*CDH_API_TIMEOUT), &req)
             .await?;
         Ok(())
     }
