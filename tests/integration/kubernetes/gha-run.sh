@@ -514,22 +514,6 @@ function cleanup_snapshotter() {
 	echo "::endgroup::"
 }
 
-# Check existing images to ensure all content is available locally before running tests
-function image_check() {
-	local ctr_args="sudo ctr "
-	if [[ " k3s rke2 " =~ " ${KUBERNETES} " ]]; then
-		ctr_args+="--address /run/k3s/containerd/containerd.sock "
-	fi
-	ctr_args+="--namespace k8s.io "
-	local incomplete_images=$($ctr_args image check | grep "incomplete" | awk '{print $1}')
-	if [ -z "$incomplete_images" ]; then
-		return
-	fi
-	for incomplete_image in $incomplete_images; do
-		$ctr_args content fetch $incomplete_image || true
-	done
-}
-
 function deploy_nydus_snapshotter() {
 	echo "::group::deploy_nydus_snapshotter"
 	ensure_yq
@@ -592,10 +576,6 @@ function deploy_nydus_snapshotter() {
 	echo "::endgroup::"
 	echo "::group::nydus snapshotter describe"
 	kubectl_retry describe pod --selector=app=nydus-snapshotter -n nydus-system
-	echo "::endgroup::"
-
-	echo "::group::image check"
-	image_check
 	echo "::endgroup::"
 }
 
