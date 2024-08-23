@@ -1,0 +1,24 @@
+# Copyright (c) 2024 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deploymenttest
+spec:
+  selector:
+    matchLabels:
+      purpose: pod-test
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        purpose: pod-test
+    spec:
+      terminationGracePeriodSeconds: 0
+      runtimeClassName: kata
+      containers:
+      - name: pod-test
+        image: quay.io/prometheus/busybox:latest
+        command: ["tail", "-f", "/dev/null"]
