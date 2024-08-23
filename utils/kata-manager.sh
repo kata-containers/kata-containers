@@ -1035,7 +1035,7 @@ test_installation()
 
 	sudo kata-runtime check -v
 
-	local image="docker.io/library/busybox:latest"
+	local image="quay.io/prometheus/busybox:latest"
 	sudo $tool image pull "$image"
 
 	local container_name="${script_name/./-}-test-kata"
