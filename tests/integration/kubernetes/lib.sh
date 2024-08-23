@@ -37,9 +37,11 @@ k8s_wait_pod_be_ready() {
 #
 # Parameters:
 #	$1 - the pod configuration file.
+#	$2 - wait time in seconds. Defaults to 120. (optional)
 #
 k8s_create_pod() {
 	local config_file="$1"
+	local wait_time="${2:-120}"
 	local pod_name=""
 
 	if [ ! -f "${config_file}" ]; then
@@ -53,11 +55,11 @@ k8s_create_pod() {
 		return 1
 	fi
 
-	if ! k8s_wait_pod_be_ready "$pod_name"; then
+	if ! k8s_wait_pod_be_ready "${pod_name}" "${wait_time}"; then
 		# TODO: run this command for debugging. Maybe it should be
 		#       guarded by DEBUG=true?
-		kubectl get pods "$pod_name"
-		kubectl describe pod "$pod_name"
+		kubectl get pods "${pod_name}"
+		kubectl describe pod "${pod_name}"
 		return 1
 	fi
 }
