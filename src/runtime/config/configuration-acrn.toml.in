@@ -157,6 +157,10 @@ disable_selinux=@DEFDISABLESELINUX@
 # (default: 45)
 dial_timeout = 45
 
+# Confidential Data Hub API timeout value in seconds
+# (default: 50)
+#cdh_api_timeout = 50
+
 [runtime]
 # If enabled, the runtime will log additional debug messages to the
 # system log

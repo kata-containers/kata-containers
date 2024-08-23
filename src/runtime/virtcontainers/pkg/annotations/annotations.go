@@ -309,6 +309,8 @@ const (
 	AgentContainerPipeSize       = kataAnnotAgentPrefix + ContainerPipeSizeOption
 	ContainerPipeSizeOption      = "container_pipe_size"
 	ContainerPipeSizeKernelParam = "agent." + ContainerPipeSizeOption
+	CdhApiTimeoutOption          = "cdh_api_timeout"
+	CdhApiTimeoutKernelParam     = "agent." + CdhApiTimeoutOption
 
 	// Policy is an annotation containing the contents of an agent policy file, base64 encoded.
 	Policy = kataAnnotAgentPrefix + "policy"

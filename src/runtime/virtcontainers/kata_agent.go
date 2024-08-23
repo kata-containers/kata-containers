@@ -283,6 +283,7 @@ type KataAgentConfig struct {
 	KernelModules      []string
 	ContainerPipeSize  uint32
 	DialTimeout        uint32
+	CdhApiTimeout      uint32
 	LongLiveConn       bool
 	Debug              bool
 	Trace              bool
@@ -346,6 +347,11 @@ func KataAgentKernelParams(config KataAgentConfig) []Param {
 	if config.EnableDebugConsole {
 		params = append(params, Param{Key: kernelParamDebugConsole, Value: ""})
 		params = append(params, Param{Key: kernelParamDebugConsoleVPort, Value: kernelParamDebugConsoleVPortValue})
+	}
+
+	if config.CdhApiTimeout > 0 {
+		cdhApiTimeout := strconv.FormatUint(uint64(config.CdhApiTimeout), 10)
+		params = append(params, Param{Key: vcAnnotations.CdhApiTimeoutKernelParam, Value: cdhApiTimeout})
 	}
 
 	return params

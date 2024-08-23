@@ -22,6 +22,7 @@ const LOG_LEVEL_OPTION: &str = "agent.log";
 const SERVER_ADDR_OPTION: &str = "agent.server_addr";
 const PASSFD_LISTENER_PORT: &str = "agent.passfd_listener_port";
 const HOTPLUG_TIMOUT_OPTION: &str = "agent.hotplug_timeout";
+const CDH_API_TIMOUT_OPTION: &str = "agent.cdh_api_timeout";
 const DEBUG_CONSOLE_VPORT_OPTION: &str = "agent.debug_console_vport";
 const LOG_VPORT_OPTION: &str = "agent.log_vport";
 const CONTAINER_PIPE_SIZE_OPTION: &str = "agent.container_pipe_size";
@@ -40,6 +41,7 @@ const NO_PROXY: &str = "agent.no_proxy";
 
 const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
 const DEFAULT_HOTPLUG_TIMEOUT: time::Duration = time::Duration::from_secs(3);
+const DEFAULT_CDH_API_TIMEOUT: time::Duration = time::Duration::from_secs(50);
 const DEFAULT_CONTAINER_PIPE_SIZE: i32 = 0;
 const VSOCK_ADDR: &str = "vsock://-1";
 
@@ -54,9 +56,9 @@ const ERR_INVALID_GET_VALUE_PARAM: &str = "expected name=value";
 const ERR_INVALID_GET_VALUE_NO_NAME: &str = "name=value parameter missing name";
 const ERR_INVALID_GET_VALUE_NO_VALUE: &str = "name=value parameter missing value";
 const ERR_INVALID_LOG_LEVEL_KEY: &str = "invalid log level key name";
-const ERR_INVALID_HOTPLUG_TIMEOUT: &str = "invalid hotplug timeout parameter";
-const ERR_INVALID_HOTPLUG_TIMEOUT_PARAM: &str = "unable to parse hotplug timeout";
-const ERR_INVALID_HOTPLUG_TIMEOUT_KEY: &str = "invalid hotplug timeout key name";
+const ERR_INVALID_TIMEOUT: &str = "invalid timeout parameter";
+const ERR_INVALID_TIMEOUT_PARAM: &str = "unable to parse timeout";
+const ERR_INVALID_TIMEOUT_KEY: &str = "invalid timeout key name";
 
 const ERR_INVALID_CONTAINER_PIPE_SIZE: &str = "invalid container pipe size parameter";
 const ERR_INVALID_CONTAINER_PIPE_SIZE_PARAM: &str = "unable to parse container pipe size";
@@ -97,6 +99,7 @@ pub struct AgentConfig {
     pub dev_mode: bool,
     pub log_level: slog::Level,
     pub hotplug_timeout: time::Duration,
+    pub cdh_api_timeout: time::Duration,
     pub debug_console_vport: i32,
     pub log_vport: i32,
     pub container_pipe_size: i32,
@@ -120,6 +123,7 @@ pub struct AgentConfigBuilder {
     pub dev_mode: Option<bool>,
     pub log_level: Option<String>,
     pub hotplug_timeout: Option<time::Duration>,
+    pub cdh_api_timeout: Option<time::Duration>,
     pub debug_console_vport: Option<i32>,
     pub log_vport: Option<i32>,
     pub container_pipe_size: Option<i32>,
@@ -187,6 +191,7 @@ impl Default for AgentConfig {
             dev_mode: false,
             log_level: DEFAULT_LOG_LEVEL,
             hotplug_timeout: DEFAULT_HOTPLUG_TIMEOUT,
+            cdh_api_timeout: DEFAULT_CDH_API_TIMEOUT,
             debug_console_vport: 0,
             log_vport: 0,
             container_pipe_size: DEFAULT_CONTAINER_PIPE_SIZE,
@@ -224,6 +229,7 @@ impl FromStr for AgentConfig {
             logrus_to_slog_level
         );
         config_override!(agent_config_builder, agent_config, hotplug_timeout);
+        config_override!(agent_config_builder, agent_config, cdh_api_timeout);
         config_override!(agent_config_builder, agent_config, debug_console_vport);
         config_override!(agent_config_builder, agent_config, log_vport);
         config_override!(agent_config_builder, agent_config, container_pipe_size);
@@ -304,8 +310,17 @@ impl AgentConfig {
                 param,
                 HOTPLUG_TIMOUT_OPTION,
                 config.hotplug_timeout,
-                get_hotplug_timeout,
+                get_timeout,
                 |hotplug_timeout: time::Duration| hotplug_timeout.as_secs() > 0
+            );
+
+            // ensure the timeout is a positive value
+            parse_cmdline_param!(
+                param,
+                CDH_API_TIMOUT_OPTION,
+                config.cdh_api_timeout,
+                get_timeout,
+                |cdh_api_timeout: time::Duration| cdh_api_timeout.as_secs() > 0
             );
 
             // vsock port should be positive values
@@ -447,17 +462,17 @@ fn get_log_level(param: &str) -> Result<slog::Level> {
 }
 
 #[instrument]
-fn get_hotplug_timeout(param: &str) -> Result<time::Duration> {
+fn get_timeout(param: &str) -> Result<time::Duration> {
     let fields: Vec<&str> = param.split('=').collect();
-    ensure!(fields.len() == 2, ERR_INVALID_HOTPLUG_TIMEOUT);
+    ensure!(fields.len() == 2, ERR_INVALID_TIMEOUT);
     ensure!(
-        fields[0] == HOTPLUG_TIMOUT_OPTION,
-        ERR_INVALID_HOTPLUG_TIMEOUT_KEY
+        matches!(fields[0], HOTPLUG_TIMOUT_OPTION | CDH_API_TIMOUT_OPTION),
+        ERR_INVALID_TIMEOUT_KEY
     );
 
     let value = fields[1]
         .parse::<u64>()
-        .with_context(|| ERR_INVALID_HOTPLUG_TIMEOUT_PARAM)?;
+        .with_context(|| ERR_INVALID_TIMEOUT_PARAM)?;
 
     Ok(time::Duration::from_secs(value))
 }
@@ -1370,7 +1385,7 @@ mod tests {
     }
 
     #[test]
-    fn test_get_hotplug_timeout() {
+    fn test_get_timeout() {
         #[derive(Debug)]
         struct TestData<'a> {
             param: &'a str,
@@ -1380,19 +1395,23 @@ mod tests {
         let tests = &[
             TestData {
                 param: "",
-                result: Err(anyhow!(ERR_INVALID_HOTPLUG_TIMEOUT)),
+                result: Err(anyhow!(ERR_INVALID_TIMEOUT)),
             },
             TestData {
                 param: "agent.hotplug_timeout",
-                result: Err(anyhow!(ERR_INVALID_HOTPLUG_TIMEOUT)),
+                result: Err(anyhow!(ERR_INVALID_TIMEOUT)),
             },
             TestData {
                 param: "foo=bar",
-                result: Err(anyhow!(ERR_INVALID_HOTPLUG_TIMEOUT_KEY)),
+                result: Err(anyhow!(ERR_INVALID_TIMEOUT_KEY)),
             },
             TestData {
                 param: "agent.hotplug_timeot=1",
-                result: Err(anyhow!(ERR_INVALID_HOTPLUG_TIMEOUT_KEY)),
+                result: Err(anyhow!(ERR_INVALID_TIMEOUT_KEY)),
+            },
+            TestData {
+                param: "agent.chd_api_timeout=1",
+                result: Err(anyhow!(ERR_INVALID_TIMEOUT_KEY)),
             },
             TestData {
                 param: "agent.hotplug_timeout=1",
@@ -1407,13 +1426,17 @@ mod tests {
                 result: Ok(time::Duration::from_secs(3600)),
             },
             TestData {
+                param: "agent.cdh_api_timeout=600",
+                result: Ok(time::Duration::from_secs(600)),
+            },
+            TestData {
                 param: "agent.hotplug_timeout=0",
                 result: Ok(time::Duration::from_secs(0)),
             },
             TestData {
                 param: "agent.hotplug_timeout=-1",
                 result: Err(anyhow!(
-                    "unable to parse hotplug timeout
+                    "unable to parse timeout
 
 Caused by:
     invalid digit found in string"
@@ -1422,7 +1445,7 @@ Caused by:
             TestData {
                 param: "agent.hotplug_timeout=4jbsdja",
                 result: Err(anyhow!(
-                    "unable to parse hotplug timeout
+                    "unable to parse timeout
 
 Caused by:
     invalid digit found in string"
@@ -1431,7 +1454,7 @@ Caused by:
             TestData {
                 param: "agent.hotplug_timeout=foo",
                 result: Err(anyhow!(
-                    "unable to parse hotplug timeout
+                    "unable to parse timeout
 
 Caused by:
     invalid digit found in string"
@@ -1440,7 +1463,7 @@ Caused by:
             TestData {
                 param: "agent.hotplug_timeout=j",
                 result: Err(anyhow!(
-                    "unable to parse hotplug timeout
+                    "unable to parse timeout
 
 Caused by:
     invalid digit found in string"
@@ -1451,7 +1474,7 @@ Caused by:
         for (i, d) in tests.iter().enumerate() {
             let msg = format!("test[{}]: {:?}", i, d);
 
-            let result = get_hotplug_timeout(d.param);
+            let result = get_timeout(d.param);
 
             let msg = format!("{}: result: {:?}", msg, result);
 
