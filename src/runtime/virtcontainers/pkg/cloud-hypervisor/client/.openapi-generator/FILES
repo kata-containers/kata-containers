@@ -18,6 +18,7 @@ docs/DeviceConfig.md
 docs/DeviceNode.md
 docs/DiskConfig.md
 docs/FsConfig.md
+docs/LandlockConfig.md
 docs/MemoryConfig.md
 docs/MemoryZoneConfig.md
 docs/NetConfig.md
@@ -63,6 +64,7 @@ model_device_config.go
 model_device_node.go
 model_disk_config.go
 model_fs_config.go
+model_landlock_config.go
 model_memory_config.go
 model_memory_zone_config.go
 model_net_config.go
