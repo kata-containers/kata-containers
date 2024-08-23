@@ -1226,20 +1226,20 @@ func (q *qemu) StopVM(ctx context.Context, waitOnly bool) (err error) {
 		return errors.New("cannot determine QEMU PID")
 	}
 	pid := pids[0]
-
-	if waitOnly {
-		err := utils.WaitLocalProcess(pid, qemuStopSandboxTimeoutSecs, syscall.Signal(0), q.Logger())
-		if err != nil {
-			return err
-		}
-	} else {
-		err = syscall.Kill(pid, syscall.SIGKILL)
-		if err != nil {
-			q.Logger().WithError(err).Error("Fail to send SIGKILL to qemu")
-			return err
+	if pid > 0 {
+		if waitOnly {
+			err := utils.WaitLocalProcess(pid, qemuStopSandboxTimeoutSecs, syscall.Signal(0), q.Logger())
+			if err != nil {
+				return err
+			}
+		} else {
+			err = syscall.Kill(pid, syscall.SIGKILL)
+			if err != nil {
+				q.Logger().WithError(err).Error("Fail to send SIGKILL to qemu")
+				return err
+			}
 		}
 	}
-
 	if q.config.SharedFS == config.VirtioFS || q.config.SharedFS == config.VirtioFSNydus {
 		if err := q.stopVirtiofsDaemon(ctx); err != nil {
 			return err
