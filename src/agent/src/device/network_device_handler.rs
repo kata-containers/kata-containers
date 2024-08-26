@@ -72,3 +72,43 @@ impl UeventMatcher for NetPciMatcher {
             && uev.action == "add"
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    #[allow(clippy::redundant_clone)]
+    async fn test_net_pci_matcher() {
+        let root_bus = create_pci_root_bus_path();
+        let relpath_a = "/0000:00:02.0/0000:01:01.0";
+
+        let mut uev_a = crate::uevent::Uevent::default();
+        uev_a.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
+        uev_a.devpath = format!("{}{}", root_bus, relpath_a);
+        uev_a.subsystem = String::from("net");
+        uev_a.interface = String::from("eth0");
+        let matcher_a = NetPciMatcher::new(relpath_a);
+        println!("Matcher a : {}", matcher_a.devpath);
+
+        let relpath_b = "/0000:00:02.0/0000:01:02.0";
+        let mut uev_b = uev_a.clone();
+        uev_b.devpath = format!("{}{}", root_bus, relpath_b);
+        let matcher_b = NetPciMatcher::new(relpath_b);
+
+        assert!(matcher_a.is_match(&uev_a));
+        assert!(matcher_b.is_match(&uev_b));
+        assert!(!matcher_b.is_match(&uev_a));
+        assert!(!matcher_a.is_match(&uev_b));
+
+        let relpath_c = "/0000:00:02.0/0000:01:03.0";
+        let net_substr = "/net/eth0";
+        let mut uev_c = uev_a.clone();
+        uev_c.devpath = format!("{}{}{}", root_bus, relpath_c, net_substr);
+        let matcher_c = NetPciMatcher::new(relpath_c);
+
+        assert!(matcher_c.is_match(&uev_c));
+        assert!(!matcher_a.is_match(&uev_c));
+        assert!(!matcher_b.is_match(&uev_c));
+    }
+}
