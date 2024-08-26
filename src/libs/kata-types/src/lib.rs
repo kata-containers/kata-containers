@@ -23,6 +23,9 @@ pub mod container;
 /// Constants and data types related to CPU.
 pub mod cpu;
 
+/// Constants and data types related to handler.
+pub mod handler;
+
 /// Constants and data types related to Kubernetes/kubelet.
 pub mod k8s;
 
