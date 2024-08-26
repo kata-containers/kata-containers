@@ -12,13 +12,19 @@ pub struct HandlerManager<H> {
     handlers: HashMap<String, H>,
 }
 
-impl<H> Default for HandlerManager<H> {
+impl<H> Default for HandlerManager<H> 
+where
+    H: Clone,
+{
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H> HandlerManager<H> {
+impl<H> HandlerManager<H> 
+where
+    H: Clone,
+{
     /// Create a new instance of `HandlerManager`.
     pub fn new() -> Self {
         Self {
@@ -27,14 +33,18 @@ impl<H> HandlerManager<H> {
     }
 
     /// Register a handler.
-    pub fn add_handler(&mut self, id: &str, handler: H) -> Result<()> {
-        match self.handlers.entry(id.to_string()) {
-            Entry::Occupied(_) => Err(anyhow!("handler for {} already exists", id)),
-            Entry::Vacant(entry) => {
-                entry.insert(handler);
-                Ok(())
+    pub fn add_handler(&mut self, ids: &[&str], handler: H) -> Result<()> {
+        for &id in ids {
+            match self.handlers.entry(id.to_string()) {
+                Entry::Occupied(_) => {
+                    return Err(anyhow!("handler for {} already exists", id));
+                }
+                Entry::Vacant(entry) => {
+                    entry.insert(handler.clone());
+                }
             }
         }
+        Ok(())
     }
 
     /// Get handler with specified `id`.
