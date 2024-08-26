@@ -10,7 +10,7 @@ concurrency:
 
 jobs:
   kata-containers-ci-on-push:
-    uses: ./.github/workflows/run-kata-coco-stability-tests.yaml
+    uses: ./.github/workflows/ci-weekly.yaml
     with:
       commit-hash: ${{ github.sha }}
       pr-number: "weekly"
