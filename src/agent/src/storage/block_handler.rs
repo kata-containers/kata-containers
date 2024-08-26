@@ -19,14 +19,17 @@ use kata_types::mount::StorageDevice;
 use protocols::agent::Storage;
 use tracing::instrument;
 
-use crate::device::{
-    get_scsi_device_name, get_virtio_blk_pci_device_name, get_virtio_mmio_device_name,
-    wait_for_pmem_device,
+#[cfg(target_arch = "s390x")]
+use crate::ccw;
+#[cfg(target_arch = "s390x")]
+use crate::device::block_device_handler::get_virtio_blk_ccw_device_name;
+use crate::device::block_device_handler::{
+    get_virtio_blk_mmio_device_name, get_virtio_blk_pci_device_name,
 };
+use crate::device::nvdimm_device_handler::wait_for_pmem_device;
+use crate::device::scsi_device_handler::get_scsi_device_name;
 use crate::pci;
 use crate::storage::{common_storage_handler, new_device, StorageContext, StorageHandler};
-#[cfg(target_arch = "s390x")]
-use crate::{ccw, device::get_virtio_blk_ccw_device_name};
 
 #[derive(Debug)]
 pub struct VirtioBlkMmioHandler {}
@@ -45,7 +48,7 @@ impl StorageHandler for VirtioBlkMmioHandler {
         ctx: &mut StorageContext,
     ) -> Result<Arc<dyn StorageDevice>> {
         if !Path::new(&storage.source).exists() {
-            get_virtio_mmio_device_name(ctx.sandbox, &storage.source)
+            get_virtio_blk_mmio_device_name(ctx.sandbox, &storage.source)
                 .await
                 .context("failed to get mmio device name")?;
         }
