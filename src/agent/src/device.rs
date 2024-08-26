@@ -29,8 +29,8 @@ use protocols::agent::Device;
 use tracing::instrument;
 
 use kata_types::device::{
-    DRIVER_BLK_CCW_TYPE, DRIVER_BLK_MMIO_TYPE, DRIVER_BLK_PCI_TYPE, DRIVER_NVDIMM_TYPE,
-    DRIVER_SCSI_TYPE, DRIVER_VFIO_AP_TYPE, DRIVER_VFIO_PCI_GK_TYPE, DRIVER_VFIO_PCI_TYPE,
+    DRIVER_NVDIMM_TYPE, DRIVER_SCSI_TYPE, DRIVER_VFIO_AP_TYPE, DRIVER_VFIO_PCI_GK_TYPE,
+    DRIVER_VFIO_PCI_TYPE,
 };
 
 // Convenience function to obtain the scope logger.
@@ -43,7 +43,6 @@ const BLOCK: &str = "block";
 cfg_if! {
     if #[cfg(target_arch = "s390x")] {
         use crate::ap;
-        use crate::ccw;
     }
 }
 
@@ -204,82 +203,6 @@ pub async fn get_scsi_device_name(
     scan_scsi_bus(scsi_addr)?;
     let uev = wait_for_uevent(sandbox, matcher).await?;
     Ok(format!("{}/{}", SYSTEM_DEV_PATH, &uev.devname))
-}
-
-#[derive(Debug)]
-struct VirtioBlkPciMatcher {
-    rex: Regex,
-}
-
-impl VirtioBlkPciMatcher {
-    fn new(relpath: &str) -> VirtioBlkPciMatcher {
-        let root_bus = create_pci_root_bus_path();
-        let re = format!(r"^{}{}/virtio[0-9]+/block/", root_bus, relpath);
-
-        VirtioBlkPciMatcher {
-            rex: Regex::new(&re).expect("BUG: failed to compile VirtioBlkPciMatcher regex"),
-        }
-    }
-}
-
-impl UeventMatcher for VirtioBlkPciMatcher {
-    fn is_match(&self, uev: &Uevent) -> bool {
-        uev.subsystem == BLOCK && self.rex.is_match(&uev.devpath) && !uev.devname.is_empty()
-    }
-}
-
-#[instrument]
-pub async fn get_virtio_blk_pci_device_name(
-    sandbox: &Arc<Mutex<Sandbox>>,
-    pcipath: &pci::Path,
-) -> Result<String> {
-    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path());
-    let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?;
-    let matcher = VirtioBlkPciMatcher::new(&sysfs_rel_path);
-
-    let uev = wait_for_uevent(sandbox, matcher).await?;
-    Ok(format!("{}/{}", SYSTEM_DEV_PATH, &uev.devname))
-}
-
-#[cfg(target_arch = "s390x")]
-#[derive(Debug)]
-struct VirtioBlkCCWMatcher {
-    rex: Regex,
-}
-
-#[cfg(target_arch = "s390x")]
-impl VirtioBlkCCWMatcher {
-    fn new(root_bus_path: &str, device: &ccw::Device) -> Self {
-        let re = format!(
-            r"^{}/0\.[0-3]\.[0-9a-f]{{1,4}}/{}/virtio[0-9]+/block/",
-            root_bus_path, device
-        );
-        VirtioBlkCCWMatcher {
-            rex: Regex::new(&re).expect("BUG: failed to compile VirtioBlkCCWMatcher regex"),
-        }
-    }
-}
-
-#[cfg(target_arch = "s390x")]
-impl UeventMatcher for VirtioBlkCCWMatcher {
-    fn is_match(&self, uev: &Uevent) -> bool {
-        uev.action == "add" && self.rex.is_match(&uev.devpath) && !uev.devname.is_empty()
-    }
-}
-
-#[cfg(target_arch = "s390x")]
-#[instrument]
-pub async fn get_virtio_blk_ccw_device_name(
-    sandbox: &Arc<Mutex<Sandbox>>,
-    device: &ccw::Device,
-) -> Result<String> {
-    let matcher = VirtioBlkCCWMatcher::new(CCW_ROOT_BUS_PATH, device);
-    let uev = wait_for_uevent(sandbox, matcher).await?;
-    let devname = uev.devname;
-    return match Path::new(SYSTEM_DEV_PATH).join(&devname).to_str() {
-        Some(path) => Ok(String::from(path)),
-        None => Err(anyhow!("CCW device name {} is not valid UTF-8", &devname)),
-    };
 }
 
 #[derive(Debug)]
@@ -483,48 +406,6 @@ impl UeventMatcher for ApMatcher {
 async fn wait_for_ap_device(sandbox: &Arc<Mutex<Sandbox>>, address: ap::Address) -> Result<()> {
     let matcher = ApMatcher::new(address);
     wait_for_uevent(sandbox, matcher).await?;
-    Ok(())
-}
-
-#[derive(Debug)]
-struct MmioBlockMatcher {
-    suffix: String,
-}
-
-impl MmioBlockMatcher {
-    fn new(devname: &str) -> MmioBlockMatcher {
-        MmioBlockMatcher {
-            suffix: format!(r"/block/{}", devname),
-        }
-    }
-}
-
-impl UeventMatcher for MmioBlockMatcher {
-    fn is_match(&self, uev: &Uevent) -> bool {
-        uev.subsystem == BLOCK && uev.devpath.ends_with(&self.suffix) && !uev.devname.is_empty()
-    }
-}
-
-#[instrument]
-pub async fn get_virtio_mmio_device_name(
-    sandbox: &Arc<Mutex<Sandbox>>,
-    devpath: &str,
-) -> Result<()> {
-    let devname = devpath
-        .strip_prefix("/dev/")
-        .ok_or_else(|| anyhow!("Storage source '{}' must start with /dev/", devpath))?;
-
-    let matcher = MmioBlockMatcher::new(devname);
-    let uev = wait_for_uevent(sandbox, matcher)
-        .await
-        .context("failed to wait for uevent")?;
-    if uev.devname != devname {
-        return Err(anyhow!(
-            "Unexpected device name {} for mmio device (expected {})",
-            uev.devname,
-            devname
-        ));
-    }
     Ok(())
 }
 
@@ -818,61 +699,6 @@ pub fn update_env_pci(
     }
 
     Ok(())
-}
-
-// device.Id should be the predicted device name (vda, vdb, ...)
-// device.VmPath already provides a way to send it in
-#[instrument]
-async fn virtiommio_blk_device_handler(
-    device: &Device,
-    sandbox: &Arc<Mutex<Sandbox>>,
-) -> Result<SpecUpdate> {
-    if device.vm_path.is_empty() {
-        return Err(anyhow!("Invalid path for virtio mmio blk device"));
-    }
-
-    if !Path::new(&device.vm_path).exists() {
-        get_virtio_mmio_device_name(sandbox, &device.vm_path.to_string())
-            .await
-            .context("failed to get mmio device name")?;
-    }
-
-    Ok(DeviceInfo::new(device.vm_path(), true)
-        .context("New device info")?
-        .into())
-}
-
-// device.Id should be a PCI path string
-#[instrument]
-async fn virtio_blk_device_handler(
-    device: &Device,
-    sandbox: &Arc<Mutex<Sandbox>>,
-) -> Result<SpecUpdate> {
-    let pcipath = pci::Path::from_str(&device.id)?;
-    let vm_path = get_virtio_blk_pci_device_name(sandbox, &pcipath).await?;
-
-    Ok(DeviceInfo::new(&vm_path, true)
-        .context("New device info")?
-        .into())
-}
-
-// device.id should be a CCW path string
-#[cfg(target_arch = "s390x")]
-#[instrument]
-async fn virtio_blk_ccw_device_handler(
-    device: &Device,
-    sandbox: &Arc<Mutex<Sandbox>>,
-) -> Result<SpecUpdate> {
-    let ccw_device = ccw::Device::from_str(&device.id)?;
-    let vm_path = get_virtio_blk_ccw_device_name(sandbox, &ccw_device).await?;
-
-    Ok(DeviceInfo::new(&vm_path, true)?.into())
-}
-
-#[cfg(not(target_arch = "s390x"))]
-#[instrument]
-async fn virtio_blk_ccw_device_handler(_: &Device, _: &Arc<Mutex<Sandbox>>) -> Result<SpecUpdate> {
-    Err(anyhow!("CCW is only supported on s390x"))
 }
 
 // device.Id should be the SCSI address of the disk in the format "scsiID:lunID"
