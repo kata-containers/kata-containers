@@ -16,6 +16,7 @@ use crate::pci;
 use crate::sandbox::Sandbox;
 use crate::uevent::{wait_for_uevent, Uevent, UeventMatcher};
 use anyhow::{anyhow, Context, Result};
+use kata_types::device::{DRIVER_BLK_CCW_TYPE, DRIVER_BLK_MMIO_TYPE, DRIVER_BLK_PCI_TYPE};
 use protocols::agent::Device;
 use regex::Regex;
 use std::path::Path;
@@ -36,6 +37,11 @@ pub struct VirtioBlkMmioDeviceHandler {}
 #[async_trait::async_trait]
 impl DeviceHandler for VirtioBlkPciDeviceHandler {
     #[instrument]
+    fn driver_types(&self) -> &[&str] {
+        &[DRIVER_BLK_PCI_TYPE]
+    }
+
+    #[instrument]
     async fn device_handler(&self, device: &Device, ctx: &mut DeviceContext) -> Result<SpecUpdate> {
         let pcipath = pci::Path::from_str(&device.id)?;
         let vm_path = get_virtio_blk_pci_device_name(ctx.sandbox, &pcipath).await?;
@@ -48,6 +54,11 @@ impl DeviceHandler for VirtioBlkPciDeviceHandler {
 
 #[async_trait::async_trait]
 impl DeviceHandler for VirtioBlkCcwDeviceHandler {
+    #[instrument]
+    fn driver_types(&self) -> &[&str] {
+        &[DRIVER_BLK_CCW_TYPE]
+    }
+
     #[cfg(target_arch = "s390x")]
     #[instrument]
     async fn device_handler(&self, device: &Device, ctx: &mut DeviceContext) -> Result<SpecUpdate> {
@@ -71,6 +82,11 @@ impl DeviceHandler for VirtioBlkCcwDeviceHandler {
 
 #[async_trait::async_trait]
 impl DeviceHandler for VirtioBlkMmioDeviceHandler {
+    #[instrument]
+    fn driver_types(&self) -> &[&str] {
+        &[DRIVER_BLK_MMIO_TYPE]
+    }
+
     #[instrument]
     async fn device_handler(&self, device: &Device, ctx: &mut DeviceContext) -> Result<SpecUpdate> {
         if device.vm_path.is_empty() {

@@ -9,6 +9,7 @@ use crate::linux_abi::ACPI_DEV_PATH;
 use crate::sandbox::Sandbox;
 use crate::uevent::{wait_for_uevent, Uevent, UeventMatcher};
 use anyhow::{anyhow, Context, Result};
+use kata_types::device::DRIVER_NVDIMM_TYPE;
 use protocols::agent::Device;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -19,6 +20,11 @@ pub struct VirtioNvdimmDeviceHandler {}
 
 #[async_trait::async_trait]
 impl DeviceHandler for VirtioNvdimmDeviceHandler {
+    #[instrument]
+    fn driver_types(&self) -> &[&str] {
+        &[DRIVER_NVDIMM_TYPE]
+    }
+
     #[instrument]
     async fn device_handler(&self, device: &Device, ctx: &mut DeviceContext) -> Result<SpecUpdate> {
         if device.vm_path.is_empty() {

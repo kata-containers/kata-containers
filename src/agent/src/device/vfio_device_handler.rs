@@ -6,14 +6,13 @@
 
 #[cfg(target_arch = "s390x")]
 use crate::ap;
-use crate::device::{
-    pcipath_to_sysfs, DevUpdate, DeviceContext, DeviceHandler, SpecUpdate, DRIVER_VFIO_PCI_GK_TYPE,
-};
+use crate::device::{pcipath_to_sysfs, DevUpdate, DeviceContext, DeviceHandler, SpecUpdate};
 use crate::linux_abi::*;
 use crate::pci;
 use crate::sandbox::Sandbox;
 use crate::uevent::{wait_for_uevent, Uevent, UeventMatcher};
 use anyhow::{anyhow, Context, Result};
+use kata_types::device::{DRIVER_VFIO_AP_TYPE, DRIVER_VFIO_PCI_GK_TYPE, DRIVER_VFIO_PCI_TYPE};
 use protocols::agent::Device;
 use slog::Logger;
 use std::ffi::OsStr;
@@ -34,6 +33,11 @@ pub struct VfioApDeviceHandler {}
 
 #[async_trait::async_trait]
 impl DeviceHandler for VfioPciDeviceHandler {
+    #[instrument]
+    fn driver_types(&self) -> &[&str] {
+        &[DRIVER_VFIO_PCI_GK_TYPE, DRIVER_VFIO_PCI_TYPE]
+    }
+
     #[instrument]
     async fn device_handler(&self, device: &Device, ctx: &mut DeviceContext) -> Result<SpecUpdate> {
         let vfio_in_guest = device.type_ != DRIVER_VFIO_PCI_GK_TYPE;
@@ -88,6 +92,11 @@ impl DeviceHandler for VfioPciDeviceHandler {
 
 #[async_trait::async_trait]
 impl DeviceHandler for VfioApDeviceHandler {
+    #[instrument]
+    fn driver_types(&self) -> &[&str] {
+        &[DRIVER_VFIO_AP_TYPE]
+    }
+
     #[cfg(target_arch = "s390x")]
     #[instrument]
     async fn device_handler(&self, device: &Device, ctx: &mut DeviceContext) -> Result<SpecUpdate> {

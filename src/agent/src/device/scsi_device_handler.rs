@@ -9,6 +9,7 @@ use crate::linux_abi::*;
 use crate::sandbox::Sandbox;
 use crate::uevent::{wait_for_uevent, Uevent, UeventMatcher};
 use anyhow::{anyhow, Context, Result};
+use kata_types::device::DRIVER_SCSI_TYPE;
 use protocols::agent::Device;
 use std::fs;
 use std::path::PathBuf;
@@ -21,6 +22,11 @@ pub struct ScsiDeviceHandler {}
 
 #[async_trait::async_trait]
 impl DeviceHandler for ScsiDeviceHandler {
+    #[instrument]
+    fn driver_types(&self) -> &[&str] {
+        &[DRIVER_SCSI_TYPE]
+    }
+
     #[instrument]
     async fn device_handler(&self, device: &Device, ctx: &mut DeviceContext) -> Result<SpecUpdate> {
         let vm_path = get_scsi_device_name(ctx.sandbox, &device.id).await?;
