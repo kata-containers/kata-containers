@@ -10,6 +10,8 @@ use std::{
     os::fd::{AsRawFd, RawFd},
 };
 
+use crate::qemu::cmdline_generator::QemuCmdLine;
+use crate::HypervisorConfig;
 use anyhow::{anyhow, Context, Result};
 use dbs_utils::net::Tap;
 use kata_types::config::KATA_PATH;
@@ -17,6 +19,8 @@ use nix::{
     fcntl,
     sched::{setns, CloneFlags},
 };
+
+use tokio::runtime::Runtime;
 
 use crate::{DEFAULT_HYBRID_VSOCK_NAME, JAILER_ROOT};
 
@@ -141,6 +145,15 @@ fn create_fds(device: &str, num_fds: usize) -> Result<Vec<File>> {
     }
 
     Ok(fds)
+}
+
+#[allow(dead_code)]
+fn get_cmd_output(id: &str, config: &HypervisorConfig) -> Result<String> {
+    let rt = Runtime::new().unwrap();
+    let qemu_cmdline = QemuCmdLine::new(id, config).unwrap();
+    let output = rt.block_on(qemu_cmdline.build()).unwrap();
+
+    Ok(output.join(" ").to_owned())
 }
 
 #[cfg(test)]
