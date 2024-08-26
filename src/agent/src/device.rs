@@ -28,9 +28,7 @@ use oci_spec::runtime as oci;
 use protocols::agent::Device;
 use tracing::instrument;
 
-use kata_types::device::{
-    DRIVER_SCSI_TYPE, DRIVER_VFIO_AP_TYPE, DRIVER_VFIO_PCI_GK_TYPE, DRIVER_VFIO_PCI_TYPE,
-};
+use kata_types::device::{DRIVER_VFIO_AP_TYPE, DRIVER_VFIO_PCI_GK_TYPE, DRIVER_VFIO_PCI_TYPE};
 
 // Convenience function to obtain the scope logger.
 fn sl() -> slog::Logger {
@@ -169,39 +167,6 @@ pub fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<Str
     }
 
     Ok(relpath)
-}
-
-// FIXME: This matcher is only correct if the guest has at most one
-// SCSI host.
-#[derive(Debug)]
-struct ScsiBlockMatcher {
-    search: String,
-}
-
-impl ScsiBlockMatcher {
-    fn new(scsi_addr: &str) -> ScsiBlockMatcher {
-        let search = format!(r"/0:0:{}/block/", scsi_addr);
-
-        ScsiBlockMatcher { search }
-    }
-}
-
-impl UeventMatcher for ScsiBlockMatcher {
-    fn is_match(&self, uev: &Uevent) -> bool {
-        uev.subsystem == BLOCK && uev.devpath.contains(&self.search) && !uev.devname.is_empty()
-    }
-}
-
-#[instrument]
-pub async fn get_scsi_device_name(
-    sandbox: &Arc<Mutex<Sandbox>>,
-    scsi_addr: &str,
-) -> Result<String> {
-    let matcher = ScsiBlockMatcher::new(scsi_addr);
-
-    scan_scsi_bus(scsi_addr)?;
-    let uev = wait_for_uevent(sandbox, matcher).await?;
-    Ok(format!("{}/{}", SYSTEM_DEV_PATH, &uev.devname))
 }
 
 #[derive(Debug)]
@@ -359,39 +324,6 @@ impl UeventMatcher for ApMatcher {
 async fn wait_for_ap_device(sandbox: &Arc<Mutex<Sandbox>>, address: ap::Address) -> Result<()> {
     let matcher = ApMatcher::new(address);
     wait_for_uevent(sandbox, matcher).await?;
-    Ok(())
-}
-
-/// Scan SCSI bus for the given SCSI address(SCSI-Id and LUN)
-#[instrument]
-fn scan_scsi_bus(scsi_addr: &str) -> Result<()> {
-    let tokens: Vec<&str> = scsi_addr.split(':').collect();
-    if tokens.len() != 2 {
-        return Err(anyhow!(
-            "Unexpected format for SCSI Address: {}, expect SCSIID:LUA",
-            scsi_addr
-        ));
-    }
-
-    // Scan scsi host passing in the channel, SCSI id and LUN.
-    // Channel is always 0 because we have only one SCSI controller.
-    let scan_data = &format!("0 {} {}", tokens[0], tokens[1]);
-
-    for entry in fs::read_dir(SYSFS_SCSI_HOST_PATH)? {
-        let host = entry?.file_name();
-
-        let host_str = host.to_str().ok_or_else(|| {
-            anyhow!(
-                "failed to convert directory entry to unicode for file {:?}",
-                host
-            )
-        })?;
-
-        let scan_path = PathBuf::from(&format!("{}/{}/{}", SYSFS_SCSI_HOST_PATH, host_str, "scan"));
-
-        fs::write(scan_path, scan_data)?;
-    }
-
     Ok(())
 }
 
@@ -652,19 +584,6 @@ pub fn update_env_pci(
     }
 
     Ok(())
-}
-
-// device.Id should be the SCSI address of the disk in the format "scsiID:lunID"
-#[instrument]
-async fn virtio_scsi_device_handler(
-    device: &Device,
-    sandbox: &Arc<Mutex<Sandbox>>,
-) -> Result<SpecUpdate> {
-    let vm_path = get_scsi_device_name(sandbox, &device.id).await?;
-
-    Ok(DeviceInfo::new(&vm_path, true)
-        .context("New device info")?
-        .into())
 }
 
 fn split_vfio_pci_option(opt: &str) -> Option<(&str, &str)> {
