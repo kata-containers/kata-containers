@@ -23,6 +23,9 @@ pub mod container;
 /// Constants and data types related to CPU.
 pub mod cpu;
 
+/// Contants and data types related to device.
+pub mod device;
+
 /// Constants and data types related to handler.
 pub mod handler;
 

@@ -28,30 +28,17 @@ use oci_spec::runtime as oci;
 use protocols::agent::Device;
 use tracing::instrument;
 
+use kata_types::device::{
+    DRIVER_BLK_CCW_TYPE, DRIVER_BLK_MMIO_TYPE, DRIVER_BLK_PCI_TYPE, DRIVER_NVDIMM_TYPE,
+    DRIVER_SCSI_TYPE, DRIVER_VFIO_AP_TYPE, DRIVER_VFIO_PCI_GK_TYPE, DRIVER_VFIO_PCI_TYPE,
+};
+
 // Convenience function to obtain the scope logger.
 fn sl() -> slog::Logger {
     slog_scope::logger().new(o!("subsystem" => "device"))
 }
 
 const BLOCK: &str = "block";
-pub const DRIVER_9P_TYPE: &str = "9p";
-pub const DRIVER_VIRTIOFS_TYPE: &str = "virtio-fs";
-pub const DRIVER_BLK_PCI_TYPE: &str = "blk";
-pub const DRIVER_BLK_CCW_TYPE: &str = "blk-ccw";
-pub const DRIVER_BLK_MMIO_TYPE: &str = "mmioblk";
-pub const DRIVER_SCSI_TYPE: &str = "scsi";
-pub const DRIVER_NVDIMM_TYPE: &str = "nvdimm";
-pub const DRIVER_EPHEMERAL_TYPE: &str = "ephemeral";
-pub const DRIVER_LOCAL_TYPE: &str = "local";
-pub const DRIVER_WATCHABLE_BIND_TYPE: &str = "watchable-bind";
-// VFIO PCI device to be bound to a guest kernel driver
-pub const DRIVER_VFIO_PCI_GK_TYPE: &str = "vfio-pci-gk";
-// VFIO PCI device to be bound to vfio-pci and made available inside the
-// container as a VFIO device node
-pub const DRIVER_VFIO_PCI_TYPE: &str = "vfio-pci";
-pub const DRIVER_VFIO_AP_TYPE: &str = "vfio-ap";
-pub const DRIVER_OVERLAYFS_TYPE: &str = "overlayfs";
-pub const FS_TYPE_HUGETLB: &str = "hugetlbfs";
 
 cfg_if! {
     if #[cfg(target_arch = "s390x")] {

@@ -8,14 +8,13 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::sync::Arc;
 
-use crate::device::DRIVER_LOCAL_TYPE;
+use crate::storage::{new_device, parse_options, StorageContext, StorageHandler, MODE_SETGID};
 use anyhow::{Context, Result};
+use kata_types::device::DRIVER_LOCAL_TYPE;
 use kata_types::mount::{StorageDevice, KATA_MOUNT_OPTION_FS_GID};
 use nix::unistd::Gid;
 use protocols::agent::Storage;
 use tracing::instrument;
-
-use crate::storage::{new_device, parse_options, StorageContext, StorageHandler, MODE_SETGID};
 
 #[derive(Debug)]
 pub struct LocalHandler {}

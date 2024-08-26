@@ -10,11 +10,11 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use crate::device::{
+use anyhow::{anyhow, Context, Result};
+use kata_types::device::{
     DRIVER_BLK_CCW_TYPE, DRIVER_BLK_MMIO_TYPE, DRIVER_BLK_PCI_TYPE, DRIVER_NVDIMM_TYPE,
     DRIVER_SCSI_TYPE,
 };
-use anyhow::{anyhow, Context, Result};
 use kata_types::mount::StorageDevice;
 use protocols::agent::Storage;
 use tracing::instrument;

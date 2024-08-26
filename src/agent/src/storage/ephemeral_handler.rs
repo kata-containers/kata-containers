@@ -20,13 +20,14 @@ use slog::Logger;
 use tokio::sync::Mutex;
 use tracing::instrument;
 
-use crate::device::{DRIVER_EPHEMERAL_TYPE, FS_TYPE_HUGETLB};
 use crate::mount::baremount;
 use crate::sandbox::Sandbox;
 use crate::storage::{
     common_storage_handler, new_device, parse_options, StorageContext, StorageHandler, MODE_SETGID,
 };
+use kata_types::device::DRIVER_EPHEMERAL_TYPE;
 
+const FS_TYPE_HUGETLB: &str = "hugetlbfs";
 const FS_GID_EQ: &str = "fsgid=";
 const SYS_FS_HUGEPAGES_PREFIX: &str = "/sys/kernel/mm/hugepages";
 
