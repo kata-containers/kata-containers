@@ -29,8 +29,7 @@ use protocols::agent::Device;
 use tracing::instrument;
 
 use kata_types::device::{
-    DRIVER_NVDIMM_TYPE, DRIVER_SCSI_TYPE, DRIVER_VFIO_AP_TYPE, DRIVER_VFIO_PCI_GK_TYPE,
-    DRIVER_VFIO_PCI_TYPE,
+    DRIVER_SCSI_TYPE, DRIVER_VFIO_AP_TYPE, DRIVER_VFIO_PCI_GK_TYPE, DRIVER_VFIO_PCI_TYPE,
 };
 
 // Convenience function to obtain the scope logger.
@@ -203,52 +202,6 @@ pub async fn get_scsi_device_name(
     scan_scsi_bus(scsi_addr)?;
     let uev = wait_for_uevent(sandbox, matcher).await?;
     Ok(format!("{}/{}", SYSTEM_DEV_PATH, &uev.devname))
-}
-
-#[derive(Debug)]
-struct PmemBlockMatcher {
-    suffix: String,
-}
-
-impl PmemBlockMatcher {
-    fn new(devname: &str) -> PmemBlockMatcher {
-        let suffix = format!(r"/block/{}", devname);
-
-        PmemBlockMatcher { suffix }
-    }
-}
-
-impl UeventMatcher for PmemBlockMatcher {
-    fn is_match(&self, uev: &Uevent) -> bool {
-        uev.subsystem == BLOCK
-            && uev.devpath.starts_with(ACPI_DEV_PATH)
-            && uev.devpath.ends_with(&self.suffix)
-            && !uev.devname.is_empty()
-    }
-}
-
-#[instrument]
-pub async fn wait_for_pmem_device(sandbox: &Arc<Mutex<Sandbox>>, devpath: &str) -> Result<()> {
-    let devname = match devpath.strip_prefix("/dev/") {
-        Some(dev) => dev,
-        None => {
-            return Err(anyhow!(
-                "Storage source '{}' must start with /dev/",
-                devpath
-            ))
-        }
-    };
-
-    let matcher = PmemBlockMatcher::new(devname);
-    let uev = wait_for_uevent(sandbox, matcher).await?;
-    if uev.devname != devname {
-        return Err(anyhow!(
-            "Unexpected device name {} for pmem device (expected {})",
-            uev.devname,
-            devname
-        ));
-    }
-    Ok(())
 }
 
 #[derive(Debug)]
@@ -710,20 +663,6 @@ async fn virtio_scsi_device_handler(
     let vm_path = get_scsi_device_name(sandbox, &device.id).await?;
 
     Ok(DeviceInfo::new(&vm_path, true)
-        .context("New device info")?
-        .into())
-}
-
-#[instrument]
-async fn virtio_nvdimm_device_handler(
-    device: &Device,
-    _sandbox: &Arc<Mutex<Sandbox>>,
-) -> Result<SpecUpdate> {
-    if device.vm_path.is_empty() {
-        return Err(anyhow!("Invalid path for nvdimm device"));
-    }
-
-    Ok(DeviceInfo::new(device.vm_path(), true)
         .context("New device info")?
         .into())
 }
