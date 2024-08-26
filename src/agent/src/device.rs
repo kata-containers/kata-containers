@@ -28,8 +28,6 @@ use oci_spec::runtime as oci;
 use protocols::agent::Device;
 use tracing::instrument;
 
-use kata_types::device::{DRIVER_VFIO_AP_TYPE, DRIVER_VFIO_PCI_GK_TYPE, DRIVER_VFIO_PCI_TYPE};
-
 // Convenience function to obtain the scope logger.
 fn sl() -> slog::Logger {
     slog_scope::logger().new(o!("subsystem" => "device"))
@@ -37,93 +35,10 @@ fn sl() -> slog::Logger {
 
 const BLOCK: &str = "block";
 
-cfg_if! {
-    if #[cfg(target_arch = "s390x")] {
-        use crate::ap;
-    }
-}
-
 #[instrument]
 pub fn online_device(path: &str) -> Result<()> {
     fs::write(path, "1")?;
     Ok(())
-}
-
-// Force a given PCI device to bind to the given driver, does
-// basically the same thing as
-//    driverctl set-override <PCI address> <driver>
-#[instrument]
-pub fn pci_driver_override<T, U>(syspci: T, dev: pci::Address, drv: U) -> Result<()>
-where
-    T: AsRef<OsStr> + std::fmt::Debug,
-    U: AsRef<OsStr> + std::fmt::Debug,
-{
-    let syspci = Path::new(&syspci);
-    let drv = drv.as_ref();
-    info!(sl(), "rebind_pci_driver: {} => {:?}", dev, drv);
-
-    let devpath = syspci.join("devices").join(dev.to_string());
-    let overridepath = &devpath.join("driver_override");
-
-    fs::write(overridepath, drv.as_bytes())?;
-
-    let drvpath = &devpath.join("driver");
-    let need_unbind = match fs::read_link(drvpath) {
-        Ok(d) if d.file_name() == Some(drv) => return Ok(()), // Nothing to do
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => false, // No current driver
-        Err(e) => return Err(anyhow!("Error checking driver on {}: {}", dev, e)),
-        Ok(_) => true, // Current driver needs unbinding
-    };
-    if need_unbind {
-        let unbindpath = &drvpath.join("unbind");
-        fs::write(unbindpath, dev.to_string())?;
-    }
-    let probepath = syspci.join("drivers_probe");
-    fs::write(probepath, dev.to_string())?;
-    Ok(())
-}
-
-// Represents an IOMMU group
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct IommuGroup(u32);
-
-impl fmt::Display for IommuGroup {
-    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        write!(f, "{}", self.0)
-    }
-}
-
-// Determine the IOMMU group of a PCI device
-#[instrument]
-fn pci_iommu_group<T>(syspci: T, dev: pci::Address) -> Result<Option<IommuGroup>>
-where
-    T: AsRef<OsStr> + std::fmt::Debug,
-{
-    let syspci = Path::new(&syspci);
-    let grouppath = syspci
-        .join("devices")
-        .join(dev.to_string())
-        .join("iommu_group");
-
-    match fs::read_link(&grouppath) {
-        // Device has no group
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(e) => Err(anyhow!("Error reading link {:?}: {}", &grouppath, e)),
-        Ok(group) => {
-            if let Some(group) = group.file_name() {
-                if let Some(group) = group.to_str() {
-                    if let Ok(group) = group.parse::<u32>() {
-                        return Ok(Some(IommuGroup(group)));
-                    }
-                }
-            }
-            Err(anyhow!(
-                "Unexpected IOMMU group link {:?} => {:?}",
-                grouppath,
-                group
-            ))
-        }
-    }
 }
 
 // pcipath_to_sysfs fetches the sysfs path for a PCI path, relative to
@@ -167,45 +82,6 @@ pub fn pcipath_to_sysfs(root_bus_sysfs: &str, pcipath: &pci::Path) -> Result<Str
     }
 
     Ok(relpath)
-}
-
-#[derive(Debug)]
-struct PciMatcher {
-    devpath: String,
-}
-
-impl PciMatcher {
-    fn new(relpath: &str) -> Result<PciMatcher> {
-        let root_bus = create_pci_root_bus_path();
-        Ok(PciMatcher {
-            devpath: format!("{}{}", root_bus, relpath),
-        })
-    }
-}
-
-impl UeventMatcher for PciMatcher {
-    fn is_match(&self, uev: &Uevent) -> bool {
-        uev.devpath == self.devpath
-    }
-}
-
-pub async fn wait_for_pci_device(
-    sandbox: &Arc<Mutex<Sandbox>>,
-    pcipath: &pci::Path,
-) -> Result<pci::Address> {
-    let root_bus_sysfs = format!("{}{}", SYSFS_DIR, create_pci_root_bus_path());
-    let sysfs_rel_path = pcipath_to_sysfs(&root_bus_sysfs, pcipath)?;
-    let matcher = PciMatcher::new(&sysfs_rel_path)?;
-
-    let uev = wait_for_uevent(sandbox, matcher).await?;
-
-    let addr = uev
-        .devpath
-        .rsplit('/')
-        .next()
-        .ok_or_else(|| anyhow!("Bad device path {:?} in uevent", &uev.devpath))?;
-    let addr = pci::Address::from_str(addr)?;
-    Ok(addr)
 }
 
 #[derive(Debug)]
@@ -264,66 +140,6 @@ pub async fn wait_for_net_interface(
     }
     let _uev = wait_for_uevent(sandbox, matcher).await?;
 
-    Ok(())
-}
-
-#[derive(Debug)]
-struct VfioMatcher {
-    syspath: String,
-}
-
-impl VfioMatcher {
-    fn new(grp: IommuGroup) -> VfioMatcher {
-        VfioMatcher {
-            syspath: format!("/devices/virtual/vfio/{}", grp),
-        }
-    }
-}
-
-impl UeventMatcher for VfioMatcher {
-    fn is_match(&self, uev: &Uevent) -> bool {
-        uev.devpath == self.syspath
-    }
-}
-
-#[instrument]
-async fn get_vfio_device_name(sandbox: &Arc<Mutex<Sandbox>>, grp: IommuGroup) -> Result<String> {
-    let matcher = VfioMatcher::new(grp);
-
-    let uev = wait_for_uevent(sandbox, matcher).await?;
-    Ok(format!("{}/{}", SYSTEM_DEV_PATH, &uev.devname))
-}
-
-#[cfg(target_arch = "s390x")]
-#[derive(Debug)]
-struct ApMatcher {
-    syspath: String,
-}
-
-#[cfg(target_arch = "s390x")]
-impl ApMatcher {
-    fn new(address: ap::Address) -> ApMatcher {
-        ApMatcher {
-            syspath: format!(
-                "{}/card{:02x}/{}",
-                AP_ROOT_BUS_PATH, address.adapter_id, address
-            ),
-        }
-    }
-}
-
-#[cfg(target_arch = "s390x")]
-impl UeventMatcher for ApMatcher {
-    fn is_match(&self, uev: &Uevent) -> bool {
-        uev.action == "add" && uev.devpath == self.syspath
-    }
-}
-
-#[cfg(target_arch = "s390x")]
-#[instrument]
-async fn wait_for_ap_device(sandbox: &Arc<Mutex<Sandbox>>, address: ap::Address) -> Result<()> {
-    let matcher = ApMatcher::new(address);
-    wait_for_uevent(sandbox, matcher).await?;
     Ok(())
 }
 
@@ -584,101 +400,6 @@ pub fn update_env_pci(
     }
 
     Ok(())
-}
-
-fn split_vfio_pci_option(opt: &str) -> Option<(&str, &str)> {
-    let mut tokens = opt.split('=');
-    let hostbdf = tokens.next()?;
-    let path = tokens.next()?;
-    if tokens.next().is_some() {
-        None
-    } else {
-        Some((hostbdf, path))
-    }
-}
-
-// device.options should have one entry for each PCI device in the VFIO group
-// Each option should have the form "DDDD:BB:DD.F=<pcipath>"
-//     DDDD:BB:DD.F is the device's PCI address in the host
-//     <pcipath> is a PCI path to the device in the guest (see pci.rs)
-#[instrument]
-async fn vfio_pci_device_handler(
-    device: &Device,
-    sandbox: &Arc<Mutex<Sandbox>>,
-) -> Result<SpecUpdate> {
-    let vfio_in_guest = device.type_ != DRIVER_VFIO_PCI_GK_TYPE;
-    let mut pci_fixups = Vec::<(pci::Address, pci::Address)>::new();
-    let mut group = None;
-
-    for opt in device.options.iter() {
-        let (host, pcipath) = split_vfio_pci_option(opt)
-            .ok_or_else(|| anyhow!("Malformed VFIO PCI option {:?}", opt))?;
-        let host =
-            pci::Address::from_str(host).context("Bad host PCI address in VFIO option {:?}")?;
-        let pcipath = pci::Path::from_str(pcipath)?;
-
-        let guestdev = wait_for_pci_device(sandbox, &pcipath).await?;
-        if vfio_in_guest {
-            pci_driver_override(SYSFS_BUS_PCI_PATH, guestdev, "vfio-pci")?;
-
-            // Devices must have an IOMMU group to be usable via VFIO
-            let devgroup = pci_iommu_group(SYSFS_BUS_PCI_PATH, guestdev)?
-                .ok_or_else(|| anyhow!("{} has no IOMMU group", guestdev))?;
-
-            if let Some(g) = group {
-                if g != devgroup {
-                    return Err(anyhow!("{} is not in guest IOMMU group {}", guestdev, g));
-                }
-            }
-
-            group = Some(devgroup);
-        }
-
-        // collect PCI address mapping for both vfio-pci-gk and vfio-pci device
-        pci_fixups.push((host, guestdev));
-    }
-
-    let dev_update = if vfio_in_guest {
-        // If there are any devices at all, logic above ensures that group is not None
-        let group = group.ok_or_else(|| anyhow!("failed to get VFIO group"))?;
-
-        let vm_path = get_vfio_device_name(sandbox, group).await?;
-
-        Some(DevUpdate::new(&vm_path, &vm_path)?)
-    } else {
-        None
-    };
-
-    Ok(SpecUpdate {
-        dev: dev_update,
-        pci: pci_fixups,
-    })
-}
-
-// The VFIO AP (Adjunct Processor) device handler takes all the APQNs provided as device options
-// and awaits them. It sets the minimum AP rescan time of 5 seconds and temporarily adds that
-// amount to the hotplug timeout.
-#[cfg(target_arch = "s390x")]
-#[instrument]
-async fn vfio_ap_device_handler(
-    device: &Device,
-    sandbox: &Arc<Mutex<Sandbox>>,
-) -> Result<SpecUpdate> {
-    // Force AP bus rescan
-    fs::write(AP_SCANS_PATH, "1")?;
-    for apqn in device.options.iter() {
-        wait_for_ap_device(sandbox, ap::Address::from_str(apqn)?).await?;
-    }
-    let dev_update = Some(DevUpdate::new(Z9_CRYPT_DEV_PATH, Z9_CRYPT_DEV_PATH)?);
-    Ok(SpecUpdate {
-        dev: dev_update,
-        pci: Vec::new(),
-    })
-}
-
-#[cfg(not(target_arch = "s390x"))]
-async fn vfio_ap_device_handler(_: &Device, _: &Arc<Mutex<Sandbox>>) -> Result<SpecUpdate> {
-    Err(anyhow!("AP is only supported on s390x"))
 }
 
 #[instrument]
