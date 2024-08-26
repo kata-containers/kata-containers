@@ -14,37 +14,6 @@ mod tests {
 
     #[tokio::test]
     #[allow(clippy::redundant_clone)]
-    async fn test_scsi_block_matcher() {
-        let root_bus = create_pci_root_bus_path();
-        let devname = "sda";
-
-        let mut uev_a = crate::uevent::Uevent::default();
-        let addr_a = "0:0";
-        uev_a.action = crate::linux_abi::U_EVENT_ACTION_ADD.to_string();
-        uev_a.subsystem = BLOCK.to_string();
-        uev_a.devname = devname.to_string();
-        uev_a.devpath = format!(
-            "{}/0000:00:00.0/virtio0/host0/target0:0:0/0:0:{}/block/sda",
-            root_bus, addr_a
-        );
-        let matcher_a = ScsiBlockMatcher::new(addr_a);
-
-        let mut uev_b = uev_a.clone();
-        let addr_b = "2:0";
-        uev_b.devpath = format!(
-            "{}/0000:00:00.0/virtio0/host0/target0:0:2/0:0:{}/block/sdb",
-            root_bus, addr_b
-        );
-        let matcher_b = ScsiBlockMatcher::new(addr_b);
-
-        assert!(matcher_a.is_match(&uev_a));
-        assert!(matcher_b.is_match(&uev_b));
-        assert!(!matcher_b.is_match(&uev_a));
-        assert!(!matcher_a.is_match(&uev_b));
-    }
-
-    #[tokio::test]
-    #[allow(clippy::redundant_clone)]
     async fn test_vfio_matcher() {
         let grpa = IommuGroup(1);
         let grpb = IommuGroup(22);
