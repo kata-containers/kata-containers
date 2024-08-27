@@ -11,12 +11,13 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
-use dbs_utils::net::Tap;
 use kata_types::config::KATA_PATH;
 use nix::{
     fcntl,
     sched::{setns, CloneFlags},
 };
+
+use crate::device::Tap;
 
 use crate::{DEFAULT_HYBRID_VSOCK_NAME, JAILER_ROOT};
 
