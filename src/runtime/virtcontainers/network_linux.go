@@ -25,6 +25,7 @@ import (
 	otelTrace "go.opentelemetry.io/otel/trace"
 	"golang.org/x/sys/unix"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	persistapi "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist/api"
 	vctypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
@@ -128,6 +129,11 @@ func (n *LinuxNetwork) addSingleEndpoint(ctx context.Context, s *Sandbox, netInf
 	}
 
 	if isPhysical {
+		if s.config.HypervisorConfig.ColdPlugVFIO == config.NoPort {
+			// When `cold_plug_vfio` is set to "no-port", the PhysicalEndpoint's VFIO device cannot be attached to the guest VM.
+			// Fail early to prevent the VF interface from being unbound and rebound to the VFIO driver.
+			return nil, fmt.Errorf("unable to add PhysicalEndpoint %s because cold_plug_vfio is disabled", netInfo.Iface.Name)
+		}
 		networkLogger().WithField("interface", netInfo.Iface.Name).Info("Physical network interface found")
 		endpoint, err = createPhysicalEndpoint(netInfo)
 	} else {
