@@ -144,6 +144,7 @@ impl QemuInner {
         info!(sl!(), "qemu args: {}", cmdline.build().await?.join(" "));
         let mut command = Command::new(&self.config.path);
         command.args(cmdline.build().await?);
+        command.uid(1000);
 
         info!(sl!(), "qemu cmd: {:?}", command);
 
