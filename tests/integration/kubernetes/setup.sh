@@ -88,7 +88,7 @@ add_annotations_to_yaml() {
 		info "Issue #7765: adding annotations to ${resource_kind} from ${yaml_file} is not implemented yet"
 		;;
 
-	ConfigMap|LimitRange|Namespace|PersistentVolume|PersistentVolumeClaim|RuntimeClass|Secret|Service)
+	ConfigMap|LimitRange|Namespace|PersistentVolume|PersistentVolumeClaim|PriorityClass|RuntimeClass|Secret|Service)
 		info "Annotations are not required for ${resource_kind} from ${yaml_file}"
 		;;
 

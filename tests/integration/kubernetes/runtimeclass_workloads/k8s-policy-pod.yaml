@@ -56,3 +56,4 @@ spec:
     - maxSkew: 2
       topologyKey: kubernetes.io/hostname
       whenUnsatisfiable: ScheduleAnyway
+  priorityClassName: test-high-priority
