@@ -44,6 +44,9 @@ pub use self::qemu::{QemuConfig, HYPERVISOR_NAME_QEMU};
 mod ch;
 pub use self::ch::{CloudHypervisorConfig, HYPERVISOR_NAME_CH};
 
+mod remote;
+pub use self::remote::{RemoteConfig, HYPERVISOR_NAME_REMOTE};
+
 /// Virtual PCI block device driver.
 pub const VIRTIO_BLK_PCI: &str = "virtio-blk-pci";
 
@@ -540,6 +543,7 @@ impl TopologyConfigInfo {
             HYPERVISOR_NAME_CH,
             HYPERVISOR_NAME_DRAGONBALL,
             HYPERVISOR_NAME_FIRECRACKER,
+            HYPERVISOR_NAME_REMOTE,
         ];
         let hypervisor_name = toml_config.runtime.hypervisor_name.as_str();
         if !hypervisor_names.contains(&hypervisor_name) {
@@ -1130,6 +1134,14 @@ pub struct Hypervisor {
     #[serde(default)]
     pub prefetch_list_path: String,
 
+    /// remote hypervisor socket (without unix:// prefix)
+    #[serde(default)]
+    pub remote_hypervisor_socket: String,
+    
+    /// remote hyperisor timeout (in milliseconds)
+    #[serde(default)]
+    pub remote_hypervisor_timeout: i32,
+
     /// Vendor customized runtime configuration.
     #[serde(default, flatten)]
     pub vendor: HypervisorVendor,
@@ -1164,6 +1176,7 @@ impl ConfigOps for Hypervisor {
     fn adjust_config(conf: &mut TomlConfig) -> Result<()> {
         HypervisorVendor::adjust_config(conf)?;
         let hypervisors: Vec<String> = conf.hypervisor.keys().cloned().collect();
+        info!(sl!(), "Adjusting hypervisor configuration {:?}", hypervisors);
         for hypervisor in hypervisors.iter() {
             if let Some(plugin) = get_hypervisor_plugin(hypervisor) {
                 plugin.adjust_config(conf)?;

@@ -1,0 +1,297 @@
+# Copyright 2024 Kata Contributors
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+
+# XXX: WARNING: this file is auto-generated.
+# XXX:
+# XXX: Source file: "@CONFIG_REMOTE_IN@"
+# XXX: Project:
+# XXX:   Name: @PROJECT_NAME@
+# XXX:   Type: @PROJECT_TYPE@
+
+
+[hypervisor.remote]
+# Default VM information query service unix domain socket, created by cloud-api-adaptor
+# Ref: https://github.com/confidential-containers/cloud-api-adaptor/blob/main/src/cloud-api-adaptor/docs/vminfo.md
+remote_hypervisor_socket = "/run/peerpod/hypervisor.sock"
+# Timeout in seconds for creating a remote hypervisor, 600s(10min) by default
+remote_hypervisor_timeout = 600
+
+
+# Enable confidential guest support.
+# Toggling that setting may trigger different hardware features, ranging
+# from memory encryption to both memory and CPU-state encryption and integrity.
+# The Kata Containers runtime dynamically detects the available feature set and
+# aims at enabling the largest possible one, returning an error if none is
+# available, or none is supported by the hypervisor.
+#
+# Known limitations:
+# * Does not work by design:
+#   - CPU Hotplug 
+#   - Memory Hotplug
+#   - NVDIMM devices
+#
+# Default false
+# confidential_guest = true
+
+
+# List of valid annotation names for the hypervisor
+# Each member of the list is a regular expression, which is the base name
+# of the annotation, e.g. "path" for io.katacontainers.config.hypervisor.path"
+# Note: Remote hypervisor is only handling the following annotations
+enable_annotations = ["machine_type", "default_memory", "default_vcpus"]
+
+# Optional space-separated list of options to pass to the guest kernel.
+# For example, use `kernel_params = "vsyscall=emulate"` if you are having
+# trouble running pre-2.15 glibc.
+#
+# WARNING: - any parameter specified here will take priority over the default
+# parameter value of the same name used to start the virtual machine.
+# Do not set values here unless you understand the impact of doing so as you
+# may stop the virtual machine from booting.
+# To see the list of default parameters, enable hypervisor debug, create a
+# container and look for 'default-kernel-parameters' log entries.
+# NOTE: kernel_params are not currently passed over in remote hypervisor
+# kernel_params = ""
+
+# Path to the firmware.
+# If you want that qemu uses the default firmware leave this option empty
+firmware = "@FIRMWAREPATH@"
+
+# Default number of vCPUs per SB/VM:
+# unspecified or 0                --> will be set to @DEFVCPUS@
+# < 0                             --> will be set to the actual number of physical cores
+# > 0 <= number of physical cores --> will be set to the specified number
+# > number of physical cores      --> will be set to the actual number of physical cores
+# default_vcpus = 1
+
+# Default maximum number of vCPUs per SB/VM:
+# unspecified or == 0             --> will be set to the actual number of physical cores or to the maximum number
+#                                     of vCPUs supported by KVM if that number is exceeded
+# > 0 <= number of physical cores --> will be set to the specified number
+# > number of physical cores      --> will be set to the actual number of physical cores or to the maximum number
+#                                     of vCPUs supported by KVM if that number is exceeded
+# WARNING: Depending of the architecture, the maximum number of vCPUs supported by KVM is used when
+# the actual number of physical cores is greater than it.
+# WARNING: Be aware that this value impacts the virtual machine's memory footprint and CPU
+# the hotplug functionality. For example, `default_maxvcpus = 240` specifies that until 240 vCPUs
+# can be added to a SB/VM, but the memory footprint will be big. Another example, with
+# `default_maxvcpus = 8` the memory footprint will be small, but 8 will be the maximum number of
+# vCPUs supported by the SB/VM. In general, we recommend that you do not edit this variable,
+# unless you know what are you doing.
+# NOTICE: on arm platform with gicv2 interrupt controller, set it to 8.
+# default_maxvcpus = @DEFMAXVCPUS@
+
+# Bridges can be used to hot plug devices.
+# Limitations:
+# * Currently only pci bridges are supported
+# * Until 30 devices per bridge can be hot plugged.
+# * Until 5 PCI bridges can be cold plugged per VM.
+#   This limitation could be a bug in qemu or in the kernel
+# Default number of bridges per SB/VM:
+# unspecified or 0   --> will be set to @DEFBRIDGES@
+# > 1 <= 5           --> will be set to the specified number
+# > 5                --> will be set to 5
+default_bridges = @DEFBRIDGES@
+
+# Default memory size in MiB for SB/VM.
+# If unspecified then it will be set @DEFMEMSZ@ MiB.
+# Note: the remote hypervisor uses the peer pod config to determine the memory of the VM
+# default_memory = @DEFMEMSZ@
+#
+# Default memory slots per SB/VM.
+# If unspecified then it will be set @DEFMEMSLOTS@.
+# This is will determine the times that memory will be hotadded to sandbox/VM.
+# Note: the remote hypervisor uses the peer pod config to determine the memory of the VM
+#memory_slots = @DEFMEMSLOTS@
+
+# This option changes the default hypervisor and kernel parameters
+# to enable debug output where available. And Debug also enable the hmp socket.
+#
+# Default false
+# enable_debug = true
+
+# Path to OCI hook binaries in the *guest rootfs*.
+# This does not affect host-side hooks which must instead be added to
+# the OCI spec passed to the runtime.
+#
+# You can create a rootfs with hooks by customizing the osbuilder scripts:
+# https://github.com/kata-containers/kata-containers/tree/main/tools/osbuilder
+#
+# Hooks must be stored in a subdirectory of guest_hook_path according to their
+# hook type, i.e. "guest_hook_path/{prestart,poststart,poststop}".
+# The agent will scan these directories for executable files and add them, in
+# lexicographical order, to the lifecycle of the guest container.
+# Hooks are executed in the runtime namespace of the guest. See the official documentation:
+# https://github.com/opencontainers/runtime-spec/blob/v1.0.1/config.md#posix-platform-hooks
+# Warnings will be logged if any error is encountered while scanning for hooks,
+# but it will not abort container execution.
+#guest_hook_path = "/usr/share/oci/hooks"
+
+# disable applying SELinux on the VMM process (default false)
+disable_selinux=@DEFDISABLESELINUX@
+
+# disable applying SELinux on the container process
+# If set to false, the type `container_t` is applied to the container process by default.
+# Note: To enable guest SELinux, the guest rootfs must be CentOS that is created and built
+# with `SELINUX=yes`.
+# (default: true)
+# Note: The remote hypervisor has a different guest, so currently requires this to be disabled
+disable_guest_selinux = true
+
+[agent.@PROJECT_TYPE@]
+# If enabled, make the agent display debug-level messages.
+# (default: disabled)
+# enable_debug = true
+
+# Enable agent tracing.
+#
+# If enabled, the agent will generate OpenTelemetry trace spans.
+#
+# Notes:
+#
+# - If the runtime also has tracing enabled, the agent spans will be
+#   associated with the appropriate runtime parent span.
+# - If enabled, the runtime will wait for the container to shutdown,
+#   increasing the container shutdown time slightly.
+#
+# (default: disabled)
+# enable_tracing = true
+
+# Enable debug console.
+
+# If enabled, user can connect guest OS running inside hypervisor
+# through "kata-runtime exec <sandbox-id>" command
+
+#debug_console_enabled = true
+
+# Agent connection dialing timeout value in seconds
+# (default: 30)
+#dial_timeout = 30
+
+[runtime]
+# If enabled, the runtime will log additional debug messages to the
+# system log
+# (default: disabled)
+# enable_debug = true
+#
+# Internetworking model
+# Determines how the VM should be connected to the
+# the container network interface
+# Options:
+#
+#   - macvtap
+#     Used when the Container network interface can be bridged using
+#     macvtap.
+#
+#   - none
+#     Used when customize network. Only creates a tap device. No veth pair.
+#
+#   - tcfilter
+#     Uses tc filter rules to redirect traffic from the network interface
+#     provided by plugin to a tap interface connected to the VM.
+#
+# Note: The remote hypervisor, uses it's own network, so "none" is required
+internetworking_model="none"
+
+name="virt_container"
+hypervisor_name="remote"
+agent_name="kata"
+
+# disable guest seccomp
+# Determines whether container seccomp profiles are passed to the virtual
+# machine and applied by the kata agent. If set to true, seccomp is not applied
+# within the guest
+# (default: true)
+# Note: The remote hypervisor has a different guest, so currently requires this to be set to true
+disable_guest_seccomp=true
+
+
+# Apply a custom SELinux security policy to the container process inside the VM.
+# This is used when you want to apply a type other than the default `container_t`,
+# so general users should not uncomment and apply it.
+# (format: "user:role:type")
+# Note: You cannot specify MCS policy with the label because the sensitivity levels and
+# categories are determined automatically by high-level container runtimes such as containerd.
+#guest_selinux_label="@DEFGUESTSELINUXLABEL@"
+
+# If enabled, the runtime will create opentracing.io traces and spans.
+# (See https://www.jaegertracing.io/docs/getting-started).
+# (default: disabled)
+#enable_tracing = true
+
+# Set the full url to the Jaeger HTTP Thrift collector.
+# The default if not set will be "http://localhost:14268/api/traces"
+#jaeger_endpoint = ""
+
+# Sets the username to be used if basic auth is required for Jaeger.
+#jaeger_user = ""
+
+# Sets the password to be used if basic auth is required for Jaeger.
+#jaeger_password = ""
+
+# If enabled, the runtime will not create a network namespace for shim and hypervisor processes.
+# This option may have some potential impacts to your host. It should only be used when you know what you're doing.
+# `disable_new_netns` conflicts with `internetworking_model=tcfilter` and `internetworking_model=macvtap`. It works only
+# with `internetworking_model=none`. The tap device will be in the host network namespace and can connect to a bridge
+# (like OVS) directly.
+# (default: false)
+# Note: The remote hypervisor has a different networking model, which requires true 
+disable_new_netns = false
+
+# if enabled, the runtime will add all the kata processes inside one dedicated cgroup.
+# The container cgroups in the host are not created, just one single cgroup per sandbox.
+# The runtime caller is free to restrict or collect cgroup stats of the overall Kata sandbox.
+# The sandbox cgroup path is the parent cgroup of a container with the PodSandbox annotation.
+# The sandbox cgroup is constrained if there is no container type annotation.
+# See: https://pkg.go.dev/github.com/kata-containers/kata-containers/src/runtime/virtcontainers#ContainerType
+sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY_REMOTE@
+
+# If enabled, the runtime will attempt to determine appropriate sandbox size (memory, CPU) before booting the virtual machine. In
+# this case, the runtime will not dynamically update the amount of memory and CPU in the virtual machine. This is generally helpful
+# when a hardware architecture or hypervisor solutions is utilized which does not support CPU and/or memory hotplug.
+# Compatibility for determining appropriate sandbox (VM) size:
+# - When running with pods, sandbox sizing information will only be available if using Kubernetes >= 1.23 and containerd >= 1.6. CRI-O
+#   does not yet support sandbox sizing annotations.
+# - When running single containers using a tool like ctr, container sizing information will be available.
+# Note: the remote hypervisor uses the peer pod config to determine the sandbox size, so requires this to be set to true
+static_sandbox_resource_mgmt=true
+
+# VFIO Mode
+# Determines how VFIO devices should be be presented to the container.
+# Options:
+#
+#  - vfio
+#    Matches behaviour of OCI runtimes (e.g. runc) as much as
+#    possible.  VFIO devices will appear in the container as VFIO
+#    character devices under /dev/vfio.  The exact names may differ
+#    from the host (they need to match the VM's IOMMU group numbers
+#    rather than the host's)
+#
+#  - guest-kernel
+#    This is a Kata-specific behaviour that's useful in certain cases.
+#    The VFIO device is managed by whatever driver in the VM kernel
+#    claims it.  This means it will appear as one or more device nodes
+#    or network interfaces depending on the nature of the device.
+#    Using this mode requires specially built workloads that know how
+#    to locate the relevant device interfaces within the VM.
+#
+vfio_mode="@DEFVFIOMODE@"
+
+# If enabled, the runtime will not create Kubernetes emptyDir mounts on the guest filesystem. Instead, emptyDir mounts will
+# be created on the host and shared via virtio-fs. This is potentially slower, but allows sharing of files from host to guest.
+# Note: remote hypervisor has no sharing of emptydir mounts from host to guest
+disable_guest_empty_dir=false
+
+# Enabled experimental feature list, format: ["a", "b"].
+# Experimental features are features not stable enough for production,
+# they may break compatibility, and are prepared for a big version bump.
+# Supported experimental features:
+# (default: [])
+experimental=@DEFAULTEXPFEATURES@
+
+# If enabled, user can run pprof tools with shim v2 process through kata-monitor.
+# (default: false)
+# enable_pprof = true
