@@ -35,7 +35,7 @@ async-recursion = "0.3.2"
 futures = "0.3.30"
 
 # Async runtime
-tokio = { version = "1.38.0", features = ["full"] }
+tokio = { version = "1.39.0", features = ["full"] }
 tokio-vsock = "0.3.4"
 
 netlink-sys = { version = "0.7.0", features = ["tokio_socket"] }
@@ -77,7 +77,7 @@ strum = "0.26.2"
 strum_macros = "0.26.2"
 
 # Image pull/decrypt
-image-rs = { git = "https://github.com/confidential-containers/guest-components", rev = "51e967045296570abb4ad8bef215e92323306ed4", default-features = false, optional = true }
+image-rs = { git = "https://github.com/confidential-containers/guest-components", rev = "70f570eb50f1791ff3b2a5e941b662a7bd3c46bd", default-features = false, optional = true }
 
 # Agent Policy
 regorus = { version = "0.1.4", default-features = false, features = [
