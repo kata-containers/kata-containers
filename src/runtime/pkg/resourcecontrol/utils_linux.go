@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -77,18 +78,19 @@ func cgroupHierarchy(path string, sandboxCgroupOnly bool) (cgroups.Hierarchy, cg
 // checkSystemd should be used temporarily to decide
 // available resource control properties.
 // This is not ideal but is temporary fixed for deciding between subsystem IOAccounting and BlockIOAccounting
-func checkSystemdVersion(ctx context.Context, conn *systemdDbus.Conn) (int, error) {
-	ver, err := conn.GetManagerProperty("Version")
-	if err != nil {
-		return 0, fmt.Errorf("error getting systemd version: %v", err)
-	}
-
+func ParseSystemdVersion(systemdVersion string) (int, error) {
 	// version get returned as quoted string: "219" instead of 219
-	ver = strings.Trim(ver, `"`)
-	version, err := strconv.Atoi(ver)
+	ver := strings.Trim(systemdVersion, `"`)
+	re := regexp.MustCompile(`^(\d+)`)
+	subStringMatch := re.FindStringSubmatch(ver)
+	if len(subStringMatch) < 2 {
+		return 0, fmt.Errorf("error parsing systemd version with regex, substring: %v", subStringMatch)
+	}
+	version, err := strconv.Atoi(subStringMatch[1])
 	if err != nil {
 		return 0, fmt.Errorf("error parsing systemd version: %v", err)
 	}
+
 	return version, nil
 }
 
@@ -107,8 +109,13 @@ func createCgroupsSystemd(slice string, unit string, pid int) error {
 		newProperty("CPUAccounting", true),
 	}
 
+	systemdVersion, err := conn.GetManagerProperty("Version")
+	if err != nil {
+		return fmt.Errorf("error getting systemd version: %v", err)
+	}
+
 	var ver int
-	if ver, err = checkSystemdVersion(ctx, conn); err != nil {
+	if ver, err = ParseSystemdVersion(systemdVersion); err != nil {
 		return err
 	}
 	// BlockIOAccounting has been replaced with IOAccounting in newer version
