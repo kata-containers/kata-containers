@@ -28,11 +28,15 @@ rand = "0.8.4"
 path-clean = "1.0.1"
 lazy_static = "1.4"
 tracing = "0.1.36"
+ttrpc = {version = "0.8.1", features = ["async"] }
+protobuf = "3.1.0"
 
 kata-sys-util = { path = "../../../libs/kata-sys-util" }
 kata-types = { path = "../../../libs/kata-types" }
 logging = { path = "../../../libs/logging" }
+protocols = { path = "../../../libs/protocols", features = ["async"] }
 shim-interface = { path = "../../../libs/shim-interface" }
+oci-spec = { version = "0.6.8", features = ["runtime"] }
 
 ch-config = { path = "ch-config", optional = true }
 tests_utils = { path = "../../tests/utils" }
@@ -68,3 +72,7 @@ hypervisor = { path = ".", features = ["cloud-hypervisor"] }
 test-utils = { path = "../../../libs/test-utils" }
 
 serial_test = "2.0.0"
+
+
+[build-dependencies]
+ttrpc-codegen = "0.4.2"

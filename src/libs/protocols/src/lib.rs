@@ -21,6 +21,10 @@ pub mod oci;
 mod serde_config;
 pub mod trans;
 pub mod types;
+pub mod remote;
+pub mod remote_ttrpc;
+#[cfg(feature = "async")]
+pub mod remote_ttrpc_async;
 
 #[cfg(feature = "with-serde")]
 pub use serde_config::{
