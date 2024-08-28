@@ -1130,6 +1130,14 @@ pub struct Hypervisor {
     #[serde(default)]
     pub prefetch_list_path: String,
 
+    /// remote hypervisor socket (without unix:// prefix)
+    #[serde(default)]
+    pub remote_hypervisor_socket: String,
+    
+    /// remote hyperisor timeout (in milliseconds)
+    #[serde(default)]
+    pub remote_hypervisor_timeout: i32,
+
     /// Vendor customized runtime configuration.
     #[serde(default, flatten)]
     pub vendor: HypervisorVendor,
