@@ -26,7 +26,7 @@ pub use self::agent::Agent;
 use self::default::DEFAULT_AGENT_DBG_CONSOLE_PORT;
 pub use self::hypervisor::{
     BootInfo, CloudHypervisorConfig, DragonballConfig, FirecrackerConfig, Hypervisor, QemuConfig,
-    HYPERVISOR_NAME_DRAGONBALL, HYPERVISOR_NAME_FIRECRACKER, HYPERVISOR_NAME_QEMU,
+    RemoteConfig, HYPERVISOR_NAME_DRAGONBALL, HYPERVISOR_NAME_FIRECRACKER, HYPERVISOR_NAME_QEMU,
 };
 
 mod runtime;

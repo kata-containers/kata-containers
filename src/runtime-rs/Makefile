@@ -327,6 +327,9 @@ endif
 ifeq ($(HYPERVISOR),$(HYPERVISOR_FC))
     DEFAULT_HYPERVISOR_CONFIG = $(CONFIG_FILE_FC)
 endif
+ifeq ($(DEFAULT_HYPERVISOR),$(HYPERVISOR_REMOTE))
+    DEFAULT_HYPERVISOR_CONFIG = $(CONFIG_FILE_REMOTE)
+endif
 # list of variables the user may wish to override
 USER_VARS += ARCH
 USER_VARS += BINDIR
