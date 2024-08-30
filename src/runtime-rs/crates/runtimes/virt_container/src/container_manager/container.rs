@@ -97,7 +97,23 @@ impl Container {
         let toml_config = self.resource_manager.config().await;
         let config = &self.config;
         let sandbox_pidns = is_pid_namespace_enabled(&spec);
-        amend_spec(&mut spec, toml_config.runtime.disable_guest_seccomp).context("amend spec")?;
+        let disable_guest_selinux = match toml_config
+            .hypervisor
+            .get(&toml_config.runtime.hypervisor_name)
+        {
+            Some(hypervisor_config) => hypervisor_config.disable_guest_selinux,
+            // This shouldn't happen due to how logic in the config crate works
+            // but we need to handle it anyway so we stick with the default
+            // value of disable_guest_selinux in configuration.toml which
+            // is 'true'.
+            None => true,
+        };
+        amend_spec(
+            &mut spec,
+            toml_config.runtime.disable_guest_seccomp,
+            disable_guest_selinux,
+        )
+        .context("amend spec")?;
 
         // get mutable root from oci spec
         let root = match spec.root_mut() {
@@ -564,7 +580,11 @@ impl Container {
     }
 }
 
-fn amend_spec(spec: &mut oci::Spec, disable_guest_seccomp: bool) -> Result<()> {
+fn amend_spec(
+    spec: &mut oci::Spec,
+    disable_guest_seccomp: bool,
+    disable_guest_selinux: bool,
+) -> Result<()> {
     // Only the StartContainer hook needs to be reserved for execution in the guest
     let start_container_hooks = if let Some(hooks) = spec.hooks().as_ref() {
         hooks.start_container().clone()
@@ -609,6 +629,15 @@ fn amend_spec(spec: &mut oci::Spec, disable_guest_seccomp: bool) -> Result<()> {
         linux.set_namespaces(if ns.is_empty() { None } else { Some(ns) });
     }
 
+    if disable_guest_selinux {
+        if let Some(ref mut process) = spec.process_mut() {
+            process.set_selinux_label(None);
+        }
+        if let Some(ref mut linux) = spec.linux_mut() {
+            linux.set_mount_label(None);
+        }
+    }
+
     Ok(())
 }
 
@@ -645,12 +674,41 @@ mod tests {
         assert!(spec.linux().as_ref().unwrap().seccomp().is_some());
 
         // disable_guest_seccomp = false
-        amend_spec(&mut spec, false).unwrap();
+        amend_spec(&mut spec, false, false).unwrap();
         assert!(spec.linux().as_ref().unwrap().seccomp().is_some());
 
         // disable_guest_seccomp = true
-        amend_spec(&mut spec, true).unwrap();
+        amend_spec(&mut spec, true, false).unwrap();
         assert!(spec.linux().as_ref().unwrap().seccomp().is_none());
+    }
+
+    #[test]
+    fn test_amend_spec_disable_guest_selinux() {
+        let mut spec = oci::SpecBuilder::default()
+            .process(
+                oci::ProcessBuilder::default()
+                    .selinux_label("xxx".to_owned())
+                    .build()
+                    .unwrap(),
+            )
+            .linux(
+                oci::LinuxBuilder::default()
+                    .mount_label("yyy".to_owned())
+                    .build()
+                    .unwrap(),
+            )
+            .build()
+            .unwrap();
+
+        // disable_guest_selinux = false, selinux labels are left alone
+        amend_spec(&mut spec, false, false).unwrap();
+        assert!(spec.process().as_ref().unwrap().selinux_label() == &Some("xxx".to_owned()));
+        assert!(spec.linux().as_ref().unwrap().mount_label() == &Some("yyy".to_owned()));
+
+        // disable_guest_selinux = true, selinux labels are reset
+        amend_spec(&mut spec, false, true).unwrap();
+        assert!(spec.process().as_ref().unwrap().selinux_label().is_none());
+        assert!(spec.linux().as_ref().unwrap().mount_label().is_none());
     }
 
     #[test]
