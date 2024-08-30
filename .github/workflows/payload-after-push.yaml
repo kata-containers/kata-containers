@@ -86,7 +86,7 @@ jobs:
     secrets: inherit
 
   publish-manifest:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs: [publish-kata-deploy-payload-amd64, publish-kata-deploy-payload-arm64, publish-kata-deploy-payload-s390x, publish-kata-deploy-payload-ppc64le]
     steps:
       - name: Checkout repository

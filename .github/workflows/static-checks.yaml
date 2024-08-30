@@ -13,7 +13,7 @@ concurrency:
 name: Static checks
 jobs:
   check-kernel-config-version:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout the code
         uses: actions/checkout@v4
@@ -40,9 +40,7 @@ jobs:
       instance: ubuntu-20.04
 
   build-checks-depending-on-kvm:
-    # TODO: Transition to free runner (see #9940).
-    if: false
-    runs-on: garm-ubuntu-2004-smaller
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
