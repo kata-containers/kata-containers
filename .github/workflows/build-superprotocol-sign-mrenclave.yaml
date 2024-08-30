@@ -1,0 +1,24 @@
+name: Sign SuperProtocol MrEnclave
+
+on:
+  workflow_dispatch:
+    inputs:
+      base64_input:
+        description: 'Base64 Encoded Input'
+        required: true
+        type: string
+
+jobs:
+  process_input:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Decode Base64 input
+      run: echo "${{ github.event.inputs.base64_input }}" | base64 --decode
+
+    - name: Use decoded input (example)
+      run: |
+        decoded_value=$(echo "${{ github.event.inputs.base64_input }}" | base64 --decode)
+        echo "The decoded value is: $decoded_value"
