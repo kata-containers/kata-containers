@@ -5,11 +5,10 @@
 
 use anyhow::Result;
 use protobuf::MessageDyn;
-use slog::Drain;
 use tokio::io::AsyncWriteExt;
 
 use crate::rpc::ttrpc_error;
-use crate::AGENT_POLICY;
+use crate::{AGENT_CONFIG, AGENT_POLICY};
 
 static POLICY_LOG_FILE: &str = "/tmp/policy.txt";
 
@@ -87,7 +86,7 @@ impl AgentPolicy {
 
     /// Initialize regorus.
     pub async fn initialize(&mut self, default_policy_file: &str) -> Result<()> {
-        if sl!().is_enabled(slog::Level::Debug) {
+        if AGENT_CONFIG.log_level.as_usize() >= slog::Level::Debug.as_usize() {
             self.log_file = Some(
                 tokio::fs::OpenOptions::new()
                     .write(true)
