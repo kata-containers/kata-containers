@@ -62,7 +62,6 @@ EOF
 }
 
 function main() {
-	local i=0
 	local cmds=("docker")
 	local RES_DIR="/var/lib/phoronix-test-suite/test-results"
 
