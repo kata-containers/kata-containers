@@ -1,4 +1,6 @@
-// Copyright 2021 Alibaba Cloud. All Rights Reserved.
+// Copyright 2024 Alibaba Cloud. All Rights Reserved.
+// Copyright © 2024, Institute of Software, CAS. All rights reserved.
+//
 // SPDX-License-Identifier: Apache-2.0
 
 //! VM boot related constants and utilities for `riscv64` architecture.
@@ -6,8 +8,8 @@
 use vm_fdt::Error as VmFdtError;
 use vm_memory::{Address, GuestAddress, GuestMemory, GuestMemoryError};
 
-// /// Magic addresses externally used to lay out riscv64 VMs.
-// pub mod layout;
+/// Magic addresses externally used to lay out riscv64 VMs.
+pub mod layout;
 
 /// FDT is used to inform the guest kernel of device tree information.
 pub mod fdt;
