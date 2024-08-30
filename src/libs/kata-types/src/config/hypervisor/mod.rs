@@ -1133,6 +1133,14 @@ pub struct Hypervisor {
     /// Vendor customized runtime configuration.
     #[serde(default, flatten)]
     pub vendor: HypervisorVendor,
+
+    /// Disable applying SELinux on the container process.
+    #[serde(default = "yes")]
+    pub disable_guest_selinux: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 impl Hypervisor {
