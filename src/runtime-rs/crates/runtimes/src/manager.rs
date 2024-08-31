@@ -7,7 +7,7 @@
 use anyhow::{anyhow, Context, Result};
 use common::{
     message::Message,
-    types::{Request, Response},
+    types::{TaskRequest, TaskResponse},
     RuntimeHandler, RuntimeInstance, Sandbox, SandboxNetworkEnv,
 };
 use hypervisor::Param;
@@ -361,8 +361,8 @@ impl RuntimeHandlerManager {
     }
 
     #[instrument(parent = &*(ROOTSPAN))]
-    pub async fn handler_message(&self, req: Request) -> Result<Response> {
-        if let Request::CreateContainer(container_config) = req {
+    pub async fn handler_message(&self, req: TaskRequest) -> Result<TaskResponse> {
+        if let TaskRequest::CreateContainer(container_config) = req {
             // get oci spec
             let bundler_path = format!(
                 "{}/{}",
@@ -393,14 +393,16 @@ impl RuntimeHandlerManager {
                 .await
                 .context("create container")?;
 
-            Ok(Response::CreateContainer(shim_pid))
+            Ok(TaskResponse::CreateContainer(shim_pid))
         } else {
-            self.handler_request(req).await.context("handler request")
+            self.handler_request(req)
+                .await
+                .context("handler TaskRequest")
         }
     }
 
     #[instrument(parent = &(*ROOTSPAN))]
-    pub async fn handler_request(&self, req: Request) -> Result<Response> {
+    pub async fn handler_request(&self, req: TaskRequest) -> Result<TaskResponse> {
         let instance = self
             .get_runtime_instance()
             .await
@@ -409,24 +411,24 @@ impl RuntimeHandlerManager {
         let cm = instance.container_manager.clone();
 
         match req {
-            Request::CreateContainer(req) => Err(anyhow!("Unreachable request {:?}", req)),
-            Request::CloseProcessIO(process_id) => {
+            TaskRequest::CreateContainer(req) => Err(anyhow!("Unreachable TaskRequest {:?}", req)),
+            TaskRequest::CloseProcessIO(process_id) => {
                 cm.close_process_io(&process_id).await.context("close io")?;
-                Ok(Response::CloseProcessIO)
+                Ok(TaskResponse::CloseProcessIO)
             }
-            Request::DeleteProcess(process_id) => {
+            TaskRequest::DeleteProcess(process_id) => {
                 let resp = cm.delete_process(&process_id).await.context("do delete")?;
-                Ok(Response::DeleteProcess(resp))
+                Ok(TaskResponse::DeleteProcess(resp))
             }
-            Request::ExecProcess(req) => {
+            TaskRequest::ExecProcess(req) => {
                 cm.exec_process(req).await.context("exec")?;
-                Ok(Response::ExecProcess)
+                Ok(TaskResponse::ExecProcess)
             }
-            Request::KillProcess(req) => {
+            TaskRequest::KillProcess(req) => {
                 cm.kill_process(&req).await.context("kill process")?;
-                Ok(Response::KillProcess)
+                Ok(TaskResponse::KillProcess)
             }
-            Request::ShutdownContainer(req) => {
+            TaskRequest::ShutdownContainer(req) => {
                 if cm.need_shutdown_sandbox(&req).await {
                     sandbox.shutdown().await.context("do shutdown")?;
 
@@ -435,59 +437,59 @@ impl RuntimeHandlerManager {
                     let tracer = kata_tracer.lock().await;
                     tracer.trace_end();
                 }
-                Ok(Response::ShutdownContainer)
+                Ok(TaskResponse::ShutdownContainer)
             }
-            Request::WaitProcess(process_id) => {
+            TaskRequest::WaitProcess(process_id) => {
                 let exit_status = cm.wait_process(&process_id).await.context("wait process")?;
                 if cm.is_sandbox_container(&process_id).await {
                     sandbox.stop().await.context("stop sandbox")?;
                 }
-                Ok(Response::WaitProcess(exit_status))
+                Ok(TaskResponse::WaitProcess(exit_status))
             }
-            Request::StartProcess(process_id) => {
+            TaskRequest::StartProcess(process_id) => {
                 let shim_pid = cm
                     .start_process(&process_id)
                     .await
                     .context("start process")?;
-                Ok(Response::StartProcess(shim_pid))
+                Ok(TaskResponse::StartProcess(shim_pid))
             }
 
-            Request::StateProcess(process_id) => {
+            TaskRequest::StateProcess(process_id) => {
                 let state = cm
                     .state_process(&process_id)
                     .await
                     .context("state process")?;
-                Ok(Response::StateProcess(state))
+                Ok(TaskResponse::StateProcess(state))
             }
-            Request::PauseContainer(container_id) => {
+            TaskRequest::PauseContainer(container_id) => {
                 cm.pause_container(&container_id)
                     .await
                     .context("pause container")?;
-                Ok(Response::PauseContainer)
+                Ok(TaskResponse::PauseContainer)
             }
-            Request::ResumeContainer(container_id) => {
+            TaskRequest::ResumeContainer(container_id) => {
                 cm.resume_container(&container_id)
                     .await
                     .context("resume container")?;
-                Ok(Response::ResumeContainer)
+                Ok(TaskResponse::ResumeContainer)
             }
-            Request::ResizeProcessPTY(req) => {
+            TaskRequest::ResizeProcessPTY(req) => {
                 cm.resize_process_pty(&req).await.context("resize pty")?;
-                Ok(Response::ResizeProcessPTY)
+                Ok(TaskResponse::ResizeProcessPTY)
             }
-            Request::StatsContainer(container_id) => {
+            TaskRequest::StatsContainer(container_id) => {
                 let stats = cm
                     .stats_container(&container_id)
                     .await
                     .context("stats container")?;
-                Ok(Response::StatsContainer(stats))
+                Ok(TaskResponse::StatsContainer(stats))
             }
-            Request::UpdateContainer(req) => {
+            TaskRequest::UpdateContainer(req) => {
                 cm.update_container(req).await.context("update container")?;
-                Ok(Response::UpdateContainer)
+                Ok(TaskResponse::UpdateContainer)
             }
-            Request::Pid => Ok(Response::Pid(cm.pid().await.context("pid")?)),
-            Request::ConnectContainer(container_id) => Ok(Response::ConnectContainer(
+            TaskRequest::Pid => Ok(TaskResponse::Pid(cm.pid().await.context("pid")?)),
+            TaskRequest::ConnectContainer(container_id) => Ok(TaskResponse::ConnectContainer(
                 cm.connect_container(&container_id)
                     .await
                     .context("connect")?,
