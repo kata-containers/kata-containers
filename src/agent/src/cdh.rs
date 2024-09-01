@@ -7,19 +7,20 @@
 // Confidential Data Hub is a service running inside guest to provide resource related APIs.
 // https://github.com/confidential-containers/guest-components/tree/main/confidential-data-hub
 
-use anyhow::Result;
+use crate::AGENT_CONFIG;
+use crate::CDH_SOCKET_URI;
+use anyhow::{Context, Result};
 use derivative::Derivative;
 use protocols::{
     confidential_data_hub, confidential_data_hub_ttrpc_async,
     confidential_data_hub_ttrpc_async::{SealedSecretServiceClient, SecureMountServiceClient},
 };
-
-use crate::AGENT_CONFIG;
-use crate::CDH_SOCKET_URI;
+use tokio::sync::OnceCell;
 
 // Nanoseconds
 lazy_static! {
     static ref CDH_API_TIMEOUT: i64 = AGENT_CONFIG.cdh_api_timeout.as_nanos() as i64;
+    pub static ref CDH_CLIENT: OnceCell<CDHClient> = OnceCell::new();
 }
 const SEALED_SECRET_PREFIX: &str = "sealed.";
 
@@ -88,6 +89,13 @@ impl CDHClient {
             .await?;
         Ok(())
     }
+}
+
+pub async fn init_cdh_client() -> Result<()> {
+    CDH_CLIENT
+        .get_or_try_init(|| async { CDHClient::new().context("Failed to create CDH Client") })
+        .await?;
+    Ok(())
 }
 
 #[cfg(test)]
