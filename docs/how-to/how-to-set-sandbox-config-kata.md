@@ -46,7 +46,6 @@ There are several kinds of Kata configurations and they are listed below.
 | `io.katacontainers.config.hypervisor.block_device_cache_set` | `boolean` | cache-related options will be set to block devices or not |
 | `io.katacontainers.config.hypervisor.block_device_driver` | string | the driver to be used for block device, valid values are `virtio-blk`, `virtio-scsi`, `nvdimm`|
 | `io.katacontainers.config.hypervisor.cpu_features` | `string` | Comma-separated list of CPU features to pass to the CPU (QEMU) |
-| `io.katacontainers.config.hypervisor.ctlpath` (R) | `string` | Path to the `acrnctl` binary for the ACRN hypervisor |
 | `io.katacontainers.config.hypervisor.default_max_vcpus` | uint32| the maximum number of vCPUs allocated for the VM by the hypervisor |
 | `io.katacontainers.config.hypervisor.default_memory` | uint32| the memory assigned for a VM by the hypervisor in `MiB` |
 | `io.katacontainers.config.hypervisor.default_vcpus` | float32| the default vCPUs assigned for a VM by the hypervisor |
@@ -209,7 +208,6 @@ the configuration entry:
 
 | Key | Config file entry | Comments |
 |-------| ----- | ----- |
-| `ctlpath`  | `valid_ctlpaths` | Valid paths for `acrnctl` binary |
 | `entropy_source` | `valid_entropy_sources` | Valid entropy sources, e.g. `/dev/random` |
 | `file_mem_backend`  | `valid_file_mem_backends` | Valid locations for the file-based memory backend root directory |
 | `jailer_path`  | `valid_jailer_paths`| Valid paths for the jailer constraining the container VM (Firecracker) |

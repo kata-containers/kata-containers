@@ -916,7 +916,6 @@ func TestGetHypervisorInfoSocket(t *testing.T) {
 	}
 
 	hypervisors := []TestHypervisorDetails{
-		{vc.AcrnHypervisor, false},
 		{vc.ClhHypervisor, true},
 		{vc.FirecrackerHypervisor, true},
 		{vc.MockHypervisor, false},

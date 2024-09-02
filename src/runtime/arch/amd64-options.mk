@@ -20,10 +20,6 @@ FCCMD := firecracker
 # Firecracker's jailer binary name
 FCJAILERCMD := jailer
 
-#ACRN binary name
-ACRNCMD := acrn-dm
-ACRNCTLCMD := acrnctl
-
 # cloud-hypervisor binary name
 CLHCMD := cloud-hypervisor
 

@@ -483,9 +483,6 @@ func TestAddAssetAnnotations(t *testing.T) {
 		vcAnnotations.HypervisorPath: fakeAssetFile,
 		vcAnnotations.HypervisorHash: "bbbbb",
 
-		vcAnnotations.HypervisorCtlPath: fakeAssetFile,
-		vcAnnotations.HypervisorCtlHash: "cc",
-
 		vcAnnotations.ImagePath: fakeAssetFile,
 		vcAnnotations.ImageHash: "52ss2550983",
 
@@ -533,7 +530,6 @@ func TestAddAssetAnnotations(t *testing.T) {
 	// Check that it works if all path lists are enabled
 	runtimeConfig.HypervisorConfig.HypervisorPathList = []string{tmpdirGlob}
 	runtimeConfig.HypervisorConfig.JailerPathList = []string{tmpdirGlob}
-	runtimeConfig.HypervisorConfig.HypervisorCtlPathList = []string{tmpdirGlob}
 
 	err = addAnnotations(ocispec, &config, runtimeConfig)
 	assert.NoError(err)

@@ -83,7 +83,6 @@ LOCALSTATEDIR := /var
 CONFIG_FILE = configuration.toml
 RUNTIMENAME := virt_container
 HYPERVISOR_DB = dragonball
-HYPERVISOR_ACRN = acrn
 HYPERVISOR_FC = firecracker
 HYPERVISOR_QEMU = qemu
 HYPERVISOR_CLH = cloud-hypervisor
@@ -92,7 +91,7 @@ HYPERVISOR_CLH = cloud-hypervisor
 DEFAULT_HYPERVISOR ?= $(HYPERVISOR_DB)
 
 ##VAR HYPERVISOR=<hypervisor_name> List of hypervisors this build system can generate configuration for.
-HYPERVISORS := $(HYPERVISOR_DB) $(HYPERVISOR_ACRN) $(HYPERVISOR_FC) $(HYPERVISOR_QEMU) $(HYPERVISOR_CLH)
+HYPERVISORS := $(HYPERVISOR_DB) $(HYPERVISOR_FC) $(HYPERVISOR_QEMU) $(HYPERVISOR_CLH)
 
 CLHPATH := $(CLHBINDIR)/$(CLHCMD)
 CLHVALIDHYPERVISORPATHS := [\"$(CLHPATH)\"]
@@ -399,7 +398,6 @@ USER_VARS += SYSCONFDIR
 USER_VARS += DEFVCPUS
 USER_VARS += DEFVCPUS_QEMU
 USER_VARS += DEFMAXVCPUS
-USER_VARS += DEFMAXVCPUS_ACRN
 USER_VARS += DEFMAXVCPUS_DB
 USER_VARS += DEFMAXVCPUS_QEMU
 USER_VARS += DEFMEMSZ
@@ -647,9 +645,6 @@ ifneq (,$(findstring $(HYPERVISOR_CLH),$(KNOWN_HYPERVISORS)))
 endif
 ifneq (,$(findstring $(HYPERVISOR_FC),$(KNOWN_HYPERVISORS)))
 	@printf "\t$(HYPERVISOR_FC) hypervisor path (FCPATH) : %s\n" $(abspath $(FCPATH))
-endif
-ifneq (,$(findstring $(HYPERVISOR_ACRN),$(KNOWN_HYPERVISORS)))
-	@printf "\t$(HYPERVISOR_ACRN) hypervisor path (ACRNPATH) : %s\n" $(abspath $(ACRNPATH))
 endif
 	@printf "\tassets path (PKGDATADIR) : %s\n" $(abspath $(PKGDATADIR))
 	@printf "\tshim path (PKGLIBEXECDIR) : %s\n" $(abspath $(PKGLIBEXECDIR))

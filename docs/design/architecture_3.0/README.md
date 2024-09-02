@@ -103,7 +103,6 @@ In our case, there will be a variety of resources, and every resource has severa
 | `Cgroup V2`                |                     | Stage 2               |  🚧        |
 | Hypervisor                 | `Dragonball`        | Stage 1               |  🚧        |
 |                            | QEMU                | Stage 2               |  🚫        |
-|                            | ACRN                | Stage 3               |  🚫        |
 |                            | Cloud Hypervisor    | Stage 3               |  🚫        |
 |                            | Firecracker         | Stage 3               |  🚫        |
 

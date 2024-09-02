@@ -50,7 +50,6 @@ const (
 	firecrackerHypervisorTableType = "firecracker"
 	clhHypervisorTableType         = "clh"
 	qemuHypervisorTableType        = "qemu"
-	acrnHypervisorTableType        = "acrn"
 	dragonballHypervisorTableType  = "dragonball"
 	stratovirtHypervisorTableType  = "stratovirt"
 	remoteHypervisorTableType      = "remote"
@@ -83,7 +82,6 @@ type hypervisor struct {
 	Path                           string                    `toml:"path"`
 	JailerPath                     string                    `toml:"jailer_path"`
 	Kernel                         string                    `toml:"kernel"`
-	CtlPath                        string                    `toml:"ctlpath"`
 	Initrd                         string                    `toml:"initrd"`
 	Image                          string                    `toml:"image"`
 	RootfsType                     string                    `toml:"rootfs_type"`
@@ -109,7 +107,6 @@ type hypervisor struct {
 	SnpCertsPath                   string                    `toml:"snp_certs_path"`
 	HypervisorPathList             []string                  `toml:"valid_hypervisor_paths"`
 	JailerPathList                 []string                  `toml:"valid_jailer_paths"`
-	CtlPathList                    []string                  `toml:"valid_ctlpaths"`
 	VirtioFSDaemonList             []string                  `toml:"valid_virtio_fs_daemon_paths"`
 	VirtioFSExtraArgs              []string                  `toml:"virtio_fs_extra_args"`
 	PFlashList                     []string                  `toml:"pflashes"`
@@ -220,16 +217,6 @@ func (h hypervisor) path() (string, error) {
 
 	if h.Path == "" {
 		p = defaultHypervisorPath
-	}
-
-	return ResolvePath(p)
-}
-
-func (h hypervisor) ctlpath() (string, error) {
-	p := h.CtlPath
-
-	if h.CtlPath == "" {
-		p = defaultHypervisorCtlPath
 	}
 
 	return ResolvePath(p)
@@ -1022,79 +1009,6 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	}, nil
 }
 
-func newAcrnHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
-	hypervisor, err := h.path()
-	if err != nil {
-		return vc.HypervisorConfig{}, err
-	}
-
-	hypervisorctl, err := h.ctlpath()
-	if err != nil {
-		return vc.HypervisorConfig{}, err
-	}
-
-	kernel, err := h.kernel()
-	if err != nil {
-		return vc.HypervisorConfig{}, err
-	}
-
-	image, err := h.image()
-	if err != nil {
-		return vc.HypervisorConfig{}, err
-	}
-
-	if image == "" {
-		return vc.HypervisorConfig{},
-			errors.New("image must be defined in the configuration file")
-	}
-
-	rootfsType, err := h.rootfsType()
-	if err != nil {
-		return vc.HypervisorConfig{}, err
-	}
-
-	firmware, err := h.firmware()
-	if err != nil {
-		return vc.HypervisorConfig{}, err
-	}
-
-	kernelParams := h.kernelParams()
-
-	blockDriver, err := h.blockDeviceDriver()
-	if err != nil {
-		return vc.HypervisorConfig{}, err
-	}
-
-	return vc.HypervisorConfig{
-		HypervisorPath:        hypervisor,
-		HypervisorPathList:    h.HypervisorPathList,
-		KernelPath:            kernel,
-		ImagePath:             image,
-		RootfsType:            rootfsType,
-		HypervisorCtlPath:     hypervisorctl,
-		HypervisorCtlPathList: h.CtlPathList,
-		FirmwarePath:          firmware,
-		KernelParams:          vc.DeserializeParams(vc.KernelParamFields(kernelParams)),
-		NumVCPUsF:             h.defaultVCPUs(),
-		DefaultMaxVCPUs:       h.defaultMaxVCPUs(),
-		MemorySize:            h.defaultMemSz(),
-		MemSlots:              h.defaultMemSlots(),
-		DefaultMaxMemorySize:  h.defaultMaxMemSz(),
-		EntropySource:         h.GetEntropySource(),
-		EntropySourceList:     h.EntropySourceList,
-		DefaultBridges:        h.defaultBridges(),
-		HugePages:             h.HugePages,
-		Debug:                 h.Debug,
-		DisableNestingChecks:  h.DisableNestingChecks,
-		BlockDeviceDriver:     blockDriver,
-		DisableVhostNet:       h.DisableVhostNet,
-		GuestHookPath:         h.guestHookPath(),
-		DisableSeLinux:        h.DisableSeLinux,
-		EnableAnnotations:     h.EnableAnnotations,
-		DisableGuestSeLinux:   true, // Guest SELinux is not supported in ACRN
-	}, nil
-}
-
 func newClhHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 	hypervisor, err := h.path()
 	if err != nil {
@@ -1393,9 +1307,6 @@ func updateRuntimeConfigHypervisor(configPath string, tomlConf tomlConfig, confi
 		case qemuHypervisorTableType:
 			config.HypervisorType = vc.QemuHypervisor
 			hConfig, err = newQemuHypervisorConfig(hypervisor)
-		case acrnHypervisorTableType:
-			config.HypervisorType = vc.AcrnHypervisor
-			hConfig, err = newAcrnHypervisorConfig(hypervisor)
 		case clhHypervisorTableType:
 			config.HypervisorType = vc.ClhHypervisor
 			hConfig, err = newClhHypervisorConfig(hypervisor)
