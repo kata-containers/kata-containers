@@ -93,6 +93,6 @@ See [the `kata-manager` documentation](../utils/README.md#choose-a-hypervisor) f
 [Cloud Hypervisor]: https://github.com/cloud-hypervisor/cloud-hypervisor
 [Firecracker]: https://github.com/firecracker-microvm/firecracker
 [KVM]: https://en.wikipedia.org/wiki/Kernel-based_Virtual_Machine
-[QEMU]: http://www.qemu-project.org
+[QEMU]: http://www.qemu.org
 [`Dragonball`]: https://github.com/kata-containers/kata-containers/blob/main/src/dragonball
 [StratoVirt]: https://gitee.com/openeuler/stratovirt
