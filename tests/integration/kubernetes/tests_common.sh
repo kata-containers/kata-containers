@@ -76,19 +76,6 @@ get_one_kata_node() {
 	echo "${resource_name/"node/"}"
 }
 
-# Get the new debugger pod that wasn't present in the old_pods array.
-get_new_debugger_pod() {
-    local old_pods=("$@")
-    local new_pod_list=($(kubectl get pods -o name | grep node-debugger))
-
-    for new_pod in "${new_pod_list[@]}"; do
-        if [[ ! " ${old_pods[*]} " =~ " ${new_pod} " ]]; then
-            echo "${new_pod}"
-            return
-        fi
-    done
-}
-
 # Runs a command in the host filesystem.
 #
 # Parameters:
@@ -99,18 +86,18 @@ exec_host() {
 	# `kubectl debug` always returns 0, so we hack it to return the right exit code.
 	local command="${@:2}"
 	command+='; echo -en \\n$?'
-
-	# Get the already existing debugger pods
-	local old_debugger_pods=($(kubectl get pods -o name | grep node-debugger))
+	# Make 7 character hash from the node name
+	local pod_name="custom-node-debugger-$(echo -n "$node" | sha1sum | cut -c1-7)"
 
 	# Run a debug pod
-	NODE_NAME="${node}" envsubst < runtimeclass_workloads/custom-node-debugger.yaml | kubectl apply -f - > /dev/null
-
-	# Identify the new debugger pod
-	local new_debugger_pod=$(get_new_debugger_pod "${old_debugger_pods[@]}")
-
-	# Wait for the newly created pod to be ready
-	kubectl wait --timeout="30s" --for=condition=ready "${new_debugger_pod}" > /dev/null
+	# Check if there is an existing node debugger pod and reuse it
+	# Otherwise, create a new one
+	if ! kubectl get pod -n kube-system "${pod_name}" > /dev/null 2>&1; then
+		POD_NAME="${pod_name}" NODE_NAME="${node}" envsubst < runtimeclass_workloads/custom-node-debugger.yaml | \
+			kubectl apply -n kube-system -f - > /dev/null
+		# Wait for the newly created pod to be ready
+		kubectl wait pod -n kube-system --timeout="30s" --for=condition=ready "${pod_name}" > /dev/null
+	fi
 
 	# Execute the command and capture the output
 	# We're trailing the `\r` here due to: https://github.com/kata-containers/kata-containers/issues/8051
@@ -122,10 +109,7 @@ exec_host() {
 	# [bats-exec-test:38] INFO: k8s configured to use runtimeclass
 	# bash: line 1: $'\r': command not found
 	# ```
-	local output="$(kubectl exec -qi "${new_debugger_pod}" -- chroot /host bash -c "${command}" | tr -d '\r')"
-
-	# Delete the newly created pod
-	kubectl delete "${new_debugger_pod}" >&2
+	local output="$(kubectl exec -qi -n kube-system "${pod_name}" -- chroot /host bash -c "${command}" | tr -d '\r')"
 
 	# Output the command result
 	local exit_code="$(echo "${output}" | tail -1)"

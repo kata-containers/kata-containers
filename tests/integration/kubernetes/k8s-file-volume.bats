@@ -16,7 +16,8 @@ setup() {
 	pod_name="test-file-volume"
 	container_name="busybox-file-volume-container"
 	node="$(get_one_kata_node)"
-	tmp_file=$(exec_host "$node" mktemp /tmp/file-volume-test-foo.XXXXX)
+	tmp_file=$(mktemp -u /tmp/file-volume-test-foo.XXXXX)
+	exec_host "$node" touch $tmp_file
 	mount_path="/tmp/foo.txt"
 	file_body="test"
 	get_pod_config_dir
