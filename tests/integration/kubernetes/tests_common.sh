@@ -104,7 +104,7 @@ exec_host() {
 	local old_debugger_pods=($(kubectl get pods -o name | grep node-debugger))
 
 	# Run a debug pod
-	kubectl debug -q "node/${node}" --image=quay.io/bedrock/ubuntu:latest -- chroot /host bash -c "sleep infinity" >&2
+	NODE_NAME="${node}" envsubst < runtimeclass_workloads/custom-node-debugger.yaml | kubectl apply -f - > /dev/null
 
 	# Identify the new debugger pod
 	local new_debugger_pod=$(get_new_debugger_pod "${old_debugger_pods[@]}")
