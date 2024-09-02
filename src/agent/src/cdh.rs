@@ -57,19 +57,6 @@ impl CDHClient {
         Ok(unsealed_secret.plaintext)
     }
 
-    pub async fn unseal_env(&self, env: &str) -> Result<String> {
-        if let Some((key, value)) = env.split_once('=') {
-            if value.starts_with(SEALED_SECRET_PREFIX) {
-                let unsealed_value = self.unseal_secret_async(value).await?;
-                let unsealed_env = format!("{}={}", key, std::str::from_utf8(&unsealed_value)?);
-
-                return Ok(unsealed_env);
-            }
-        }
-
-        Ok((*env.to_owned()).to_string())
-    }
-
     pub async fn secure_mount(
         &self,
         volume_type: &str,
@@ -94,6 +81,38 @@ impl CDHClient {
 pub async fn init_cdh_client() -> Result<()> {
     CDH_CLIENT
         .get_or_try_init(|| async { CDHClient::new().context("Failed to create CDH Client") })
+        .await?;
+    Ok(())
+}
+
+pub async fn unseal_env(env: &str) -> Result<String> {
+    let cdh_client = CDH_CLIENT
+        .get()
+        .expect("Confidential Data Hub not initialized");
+
+    if let Some((key, value)) = env.split_once('=') {
+        if value.starts_with(SEALED_SECRET_PREFIX) {
+            let unsealed_value = cdh_client.unseal_secret_async(value).await?;
+            let unsealed_env = format!("{}={}", key, std::str::from_utf8(&unsealed_value)?);
+
+            return Ok(unsealed_env);
+        }
+    }
+    Ok((*env.to_owned()).to_string())
+}
+
+pub async fn secure_mount(
+    volume_type: &str,
+    options: &std::collections::HashMap<String, String>,
+    flags: Vec<String>,
+    mount_point: &str,
+) -> Result<()> {
+    let cdh_client = CDH_CLIENT
+        .get()
+        .expect("Confidential Data Hub not initialized");
+
+    cdh_client
+        .secure_mount(volume_type, options, flags, mount_point)
         .await?;
     Ok(())
 }
