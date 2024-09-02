@@ -228,13 +228,14 @@ impl AgentService {
             .process_mut()
             .as_mut()
             .ok_or_else(|| anyhow!("Spec didn't contain process field"))?;
-
-        if let Some(envs) = process.env_mut().as_mut() {
-            for env in envs.iter_mut() {
-                match cdh::unseal_env(env).await {
-                    Ok(unsealed_env) => *env = unsealed_env.to_string(),
-                    Err(e) => {
-                        warn!(sl(), "Failed to unseal secret: {}", e)
+        if cdh::is_cdh_client_initialized().await {
+            if let Some(envs) = process.env_mut().as_mut() {
+                for env in envs.iter_mut() {
+                    match cdh::unseal_env(env).await {
+                        Ok(unsealed_env) => *env = unsealed_env.to_string(),
+                        Err(e) => {
+                            warn!(sl(), "Failed to unseal secret: {}", e)
+                        }
                     }
                 }
             }
@@ -244,26 +245,30 @@ impl AgentService {
             .linux()
             .as_ref()
             .ok_or_else(|| anyhow!("Spec didn't contain linux field"))?;
-        if let Some(devices) = linux.devices() {
-            for specdev in devices.iter() {
-                if specdev.path().as_path().to_str() == Some(TRUSTED_IMAGE_STORAGE_DEVICE) {
-                    let dev_major_minor = format!("{}:{}", specdev.major(), specdev.minor());
-                    let secure_storage_integrity =
-                        AGENT_CONFIG.secure_storage_integrity.to_string();
-                    info!(
-                        sl(),
-                        "trusted_store device major:min {}, enable data integrity {}",
-                        dev_major_minor,
-                        secure_storage_integrity
-                    );
 
-                    let options = std::collections::HashMap::from([
-                        ("deviceId".to_string(), dev_major_minor),
-                        ("encryptType".to_string(), "LUKS".to_string()),
-                        ("dataIntegrity".to_string(), secure_storage_integrity),
-                    ]);
-                    cdh::secure_mount("BlockDevice", &options, vec![], KATA_IMAGE_WORK_DIR).await?;
-                    break;
+        if cdh::is_cdh_client_initialized().await {
+            if let Some(devices) = linux.devices() {
+                for specdev in devices.iter() {
+                    if specdev.path().as_path().to_str() == Some(TRUSTED_IMAGE_STORAGE_DEVICE) {
+                        let dev_major_minor = format!("{}:{}", specdev.major(), specdev.minor());
+                        let secure_storage_integrity =
+                            AGENT_CONFIG.secure_storage_integrity.to_string();
+                        info!(
+                            sl(),
+                            "trusted_store device major:min {}, enable data integrity {}",
+                            dev_major_minor,
+                            secure_storage_integrity
+                        );
+
+                        let options = std::collections::HashMap::from([
+                            ("deviceId".to_string(), dev_major_minor),
+                            ("encryptType".to_string(), "LUKS".to_string()),
+                            ("dataIntegrity".to_string(), secure_storage_integrity),
+                        ]);
+                        cdh::secure_mount("BlockDevice", &options, vec![], KATA_IMAGE_WORK_DIR)
+                            .await?;
+                        break;
+                    }
                 }
             }
         }

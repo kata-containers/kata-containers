@@ -85,6 +85,11 @@ pub async fn init_cdh_client() -> Result<()> {
     Ok(())
 }
 
+/// Check if the CDH client is initialized
+pub async fn is_cdh_client_initialized() -> bool {
+    CDH_CLIENT.get().is_some() // Returns true if CDH_CLIENT is initialized, false otherwise
+}
+
 pub async fn unseal_env(env: &str) -> Result<String> {
     let cdh_client = CDH_CLIENT
         .get()
