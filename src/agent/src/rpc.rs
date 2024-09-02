@@ -55,6 +55,7 @@ use nix::sys::{stat, statfs};
 use nix::unistd::{self, Pid};
 use rustjail::process::ProcessOperations;
 
+use crate::cdh;
 use crate::device::{
     add_devices, get_virtio_blk_pci_device_name, update_env_pci, wait_for_net_interface,
 };
@@ -82,8 +83,6 @@ use crate::policy::{do_set_policy, is_allowed};
 
 #[cfg(feature = "guest-pull")]
 use crate::image;
-
-use crate::cdh::CDHClient;
 
 use opentelemetry::global;
 use tracing::span;
@@ -180,7 +179,6 @@ impl<T> OptionToTtrpcResult<T> for Option<T> {
 pub struct AgentService {
     sandbox: Arc<Mutex<Sandbox>>,
     init_mode: bool,
-    cdh_client: Option<CDHClient>,
 }
 
 impl AgentService {
@@ -226,19 +224,17 @@ impl AgentService {
         // cannot predict everything from the caller.
         add_devices(&req.devices, &mut oci, &self.sandbox).await?;
 
-        if let Some(cdh) = self.cdh_client.as_ref() {
-            let process = oci
-                .process_mut()
-                .as_mut()
-                .ok_or_else(|| anyhow!("Spec didn't contain process field"))?;
+        let process = oci
+            .process_mut()
+            .as_mut()
+            .ok_or_else(|| anyhow!("Spec didn't contain process field"))?;
 
-            if let Some(envs) = process.env_mut().as_mut() {
-                for env in envs.iter_mut() {
-                    match cdh.unseal_env(env).await {
-                        Ok(unsealed_env) => *env = unsealed_env.to_string(),
-                        Err(e) => {
-                            warn!(sl(), "Failed to unseal secret: {}", e)
-                        }
+        if let Some(envs) = process.env_mut().as_mut() {
+            for env in envs.iter_mut() {
+                match cdh::unseal_env(env).await {
+                    Ok(unsealed_env) => *env = unsealed_env.to_string(),
+                    Err(e) => {
+                        warn!(sl(), "Failed to unseal secret: {}", e)
                     }
                 }
             }
@@ -261,16 +257,13 @@ impl AgentService {
                         secure_storage_integrity
                     );
 
-                    if let Some(cdh) = self.cdh_client.as_ref() {
-                        let options = std::collections::HashMap::from([
-                            ("deviceId".to_string(), dev_major_minor),
-                            ("encryptType".to_string(), "LUKS".to_string()),
-                            ("dataIntegrity".to_string(), secure_storage_integrity),
-                        ]);
-                        cdh.secure_mount("BlockDevice", &options, vec![], KATA_IMAGE_WORK_DIR)
-                            .await?;
-                        break;
-                    }
+                    let options = std::collections::HashMap::from([
+                        ("deviceId".to_string(), dev_major_minor),
+                        ("encryptType".to_string(), "LUKS".to_string()),
+                        ("dataIntegrity".to_string(), secure_storage_integrity),
+                    ]);
+                    cdh::secure_mount("BlockDevice", &options, vec![], KATA_IMAGE_WORK_DIR).await?;
+                    break;
                 }
             }
         }
@@ -1681,12 +1674,10 @@ pub async fn start(
     s: Arc<Mutex<Sandbox>>,
     server_address: &str,
     init_mode: bool,
-    cdh_client: Option<CDHClient>,
 ) -> Result<TtrpcServer> {
     let agent_service = Box::new(AgentService {
         sandbox: s,
         init_mode,
-        cdh_client,
     }) as Box<dyn agent_ttrpc::AgentService + Send + Sync>;
     let aservice = agent_ttrpc::create_agent_service(Arc::new(agent_service));
 
@@ -2245,7 +2236,6 @@ mod tests {
         let agent_service = Box::new(AgentService {
             sandbox: Arc::new(Mutex::new(sandbox)),
             init_mode: true,
-            cdh_client: None,
         });
 
         let req = protocols::agent::UpdateInterfaceRequest::default();
@@ -2263,7 +2253,6 @@ mod tests {
         let agent_service = Box::new(AgentService {
             sandbox: Arc::new(Mutex::new(sandbox)),
             init_mode: true,
-            cdh_client: None,
         });
 
         let req = protocols::agent::UpdateRoutesRequest::default();
@@ -2281,7 +2270,6 @@ mod tests {
         let agent_service = Box::new(AgentService {
             sandbox: Arc::new(Mutex::new(sandbox)),
             init_mode: true,
-            cdh_client: None,
         });
 
         let req = protocols::agent::AddARPNeighborsRequest::default();
@@ -2420,7 +2408,6 @@ mod tests {
             let agent_service = Box::new(AgentService {
                 sandbox: Arc::new(Mutex::new(sandbox)),
                 init_mode: true,
-                cdh_client: None,
             });
 
             let result = agent_service
@@ -2919,7 +2906,6 @@ OtherField:other
         let agent_service = Box::new(AgentService {
             sandbox: Arc::new(Mutex::new(sandbox)),
             init_mode: true,
-            cdh_client: None,
         });
 
         let ctx = mk_ttrpc_context();

@@ -59,7 +59,6 @@ mod util;
 mod version;
 mod watcher;
 
-use cdh::CDHClient;
 use config::GuestComponentsProcs;
 use mount::{cgroups_mount, general_mount};
 use sandbox::Sandbox;
@@ -408,7 +407,6 @@ async fn start_sandbox(
     let (tx, rx) = tokio::sync::oneshot::channel();
     sandbox.lock().await.sender = Some(tx);
 
-    let mut cdh_client = None;
     let gc_procs = config.guest_components_procs;
     if gc_procs != GuestComponentsProcs::None {
         if !attestation_binaries_available(logger, &gc_procs) {
@@ -417,18 +415,12 @@ async fn start_sandbox(
                 "attestation binaries requested for launch not available"
             );
         } else {
-            cdh_client = init_attestation_components(logger, config)?;
+            init_attestation_components(logger, config).await?;
         }
     }
 
     // vsock:///dev/vsock, port
-    let mut server = rpc::start(
-        sandbox.clone(),
-        config.server_addr.as_str(),
-        init_mode,
-        cdh_client,
-    )
-    .await?;
+    let mut server = rpc::start(sandbox.clone(), config.server_addr.as_str(), init_mode).await?;
 
     server.start().await?;
 
@@ -459,10 +451,10 @@ fn attestation_binaries_available(logger: &Logger, procs: &GuestComponentsProcs)
 // and the corresponding procs are enabled in the agent configuration. the process will be
 // launched in the background and the function will return immediately.
 // If the CDH is started, a CDH client will be instantiated and returned.
-fn init_attestation_components(logger: &Logger, config: &AgentConfig) -> Result<Option<CDHClient>> {
+async fn init_attestation_components(logger: &Logger, config: &AgentConfig) -> Result<()> {
     // skip launch of any guest-component
     if config.guest_components_procs == GuestComponentsProcs::None {
-        return Ok(None);
+        return Ok(());
     }
 
     debug!(logger, "spawning attestation-agent process {}", AA_PATH);
@@ -477,7 +469,7 @@ fn init_attestation_components(logger: &Logger, config: &AgentConfig) -> Result<
 
     // skip launch of confidential-data-hub and api-server-rest
     if config.guest_components_procs == GuestComponentsProcs::AttestationAgent {
-        return Ok(None);
+        return Ok(());
     }
 
     let ocicrypt_config = serde_json::json!({
@@ -505,11 +497,12 @@ fn init_attestation_components(logger: &Logger, config: &AgentConfig) -> Result<
     )
     .map_err(|e| anyhow!("launch_process {} failed: {:?}", CDH_PATH, e))?;
 
-    let cdh_client = CDHClient::new().context("Failed to create CDH Client")?;
+    // initialize cdh client
+    cdh::init_cdh_client().await?;
 
     // skip launch of api-server-rest
     if config.guest_components_procs == GuestComponentsProcs::ConfidentialDataHub {
-        return Ok(Some(cdh_client));
+        return Ok(());
     }
 
     let features = config.guest_components_rest_api;
@@ -526,7 +519,7 @@ fn init_attestation_components(logger: &Logger, config: &AgentConfig) -> Result<
     )
     .map_err(|e| anyhow!("launch_process {} failed: {:?}", API_SERVER_PATH, e))?;
 
-    Ok(Some(cdh_client))
+    Ok(())
 }
 
 fn wait_for_path_to_exist(logger: &Logger, path: &str, timeout_secs: i32) -> Result<()> {
