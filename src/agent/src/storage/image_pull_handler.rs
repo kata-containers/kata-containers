@@ -33,6 +33,11 @@ impl ImagePullHandler {
 #[async_trait::async_trait]
 impl StorageHandler for ImagePullHandler {
     #[instrument]
+    fn driver_types(&self) -> &[&str] {
+        &[KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL]
+    }
+
+    #[instrument]
     async fn create_device(
         &self,
         storage: Storage,

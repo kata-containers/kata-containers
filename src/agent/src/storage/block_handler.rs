@@ -10,6 +10,10 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use crate::device::{
+    DRIVER_BLK_CCW_TYPE, DRIVER_BLK_MMIO_TYPE, DRIVER_BLK_PCI_TYPE, DRIVER_NVDIMM_TYPE,
+    DRIVER_SCSI_TYPE,
+};
 use anyhow::{anyhow, Context, Result};
 use kata_types::mount::StorageDevice;
 use protocols::agent::Storage;
@@ -29,6 +33,11 @@ pub struct VirtioBlkMmioHandler {}
 
 #[async_trait::async_trait]
 impl StorageHandler for VirtioBlkMmioHandler {
+    #[instrument]
+    fn driver_types(&self) -> &[&str] {
+        &[DRIVER_BLK_MMIO_TYPE]
+    }
+
     #[instrument]
     async fn create_device(
         &self,
@@ -50,6 +59,11 @@ pub struct VirtioBlkPciHandler {}
 
 #[async_trait::async_trait]
 impl StorageHandler for VirtioBlkPciHandler {
+    #[instrument]
+    fn driver_types(&self) -> &[&str] {
+        &[DRIVER_BLK_PCI_TYPE]
+    }
+
     #[instrument]
     async fn create_device(
         &self,
@@ -81,6 +95,11 @@ pub struct VirtioBlkCcwHandler {}
 
 #[async_trait::async_trait]
 impl StorageHandler for VirtioBlkCcwHandler {
+    #[instrument]
+    fn driver_types(&self) -> &[&str] {
+        &[DRIVER_BLK_CCW_TYPE]
+    }
+
     #[cfg(target_arch = "s390x")]
     #[instrument]
     async fn create_device(
@@ -112,6 +131,11 @@ pub struct ScsiHandler {}
 #[async_trait::async_trait]
 impl StorageHandler for ScsiHandler {
     #[instrument]
+    fn driver_types(&self) -> &[&str] {
+        &[DRIVER_SCSI_TYPE]
+    }
+
+    #[instrument]
     async fn create_device(
         &self,
         mut storage: Storage,
@@ -131,6 +155,11 @@ pub struct PmemHandler {}
 
 #[async_trait::async_trait]
 impl StorageHandler for PmemHandler {
+    #[instrument]
+    fn driver_types(&self) -> &[&str] {
+        &[DRIVER_NVDIMM_TYPE]
+    }
+
     #[instrument]
     async fn create_device(
         &self,

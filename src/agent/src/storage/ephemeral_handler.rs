@@ -36,6 +36,11 @@ pub struct EphemeralHandler {}
 #[async_trait::async_trait]
 impl StorageHandler for EphemeralHandler {
     #[instrument]
+    fn driver_types(&self) -> &[&str] {
+        &[DRIVER_EPHEMERAL_TYPE]
+    }
+
+    #[instrument]
     async fn create_device(
         &self,
         mut storage: Storage,
