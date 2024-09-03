@@ -491,6 +491,12 @@ pub struct DeviceInfo {
     /// Enabling this will result in the VM device having iommu_platform=on set
     #[serde(default)]
     pub enable_iommu_platform: bool,
+
+    /// Enable balloon f_reporting, default false
+    ///
+    /// Enabling this will result in the VM balloon device having f_reporting=on set
+    #[serde(default)]
+    pub enable_balloon_f_reporting: bool,
 }
 
 impl DeviceInfo {
