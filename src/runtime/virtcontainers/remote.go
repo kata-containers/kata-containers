@@ -77,6 +77,7 @@ func (rh *remoteHypervisor) CreateVM(ctx context.Context, id string, network Net
 	annotations[cri.SandboxName] = hypervisorConfig.SandboxName
 	annotations[cri.SandboxNamespace] = hypervisorConfig.SandboxNamespace
 	annotations[hypannotations.MachineType] = hypervisorConfig.HypervisorMachineType
+	annotations[hypannotations.ImagePath] = hypervisorConfig.ImagePath
 	annotations[hypannotations.DefaultVCPUs] = strconv.FormatUint(uint64(hypervisorConfig.NumVCPUs()), 10)
 	annotations[hypannotations.DefaultMemory] = strconv.FormatUint(uint64(hypervisorConfig.MemorySize), 10)
 	annotations[hypannotations.Initdata] = hypervisorConfig.Initdata

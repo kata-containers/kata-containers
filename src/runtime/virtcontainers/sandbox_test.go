@@ -771,6 +771,24 @@ func TestSandboxCreateAssets(t *testing.T) {
 		err = createAssets(context.Background(), config)
 		assert.Error(err, msg)
 	}
+
+	// Remote Hypervisor scenario for ImagePath
+	msg := "test[image]: imagePath"
+	imagePathData := &testData{
+		assetType: types.ImageAsset,
+		annotations: map[string]string{
+			annotations.ImagePath: "rhel9-os",
+		},
+	}
+
+	config := &SandboxConfig{
+		Annotations:      imagePathData.annotations,
+		HypervisorConfig: hc,
+		HypervisorType:   RemoteHypervisor,
+	}
+
+	err = createAssets(context.Background(), config)
+	assert.NoError(err, msg)
 }
 
 func testFindContainerFailure(t *testing.T, sandbox *Sandbox, cid string) {
