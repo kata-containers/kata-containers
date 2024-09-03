@@ -110,6 +110,15 @@ setup() {
     pod_config=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${pod_config_template}").XXX")
     IMAGE="$image_pulled_time_less_than_default_time" NODE_NAME="$node" envsubst < "$pod_config_template" > "$pod_config"
 
+
+    # Set CreateContainerRequest timeout for qemu-coco-dev
+    if [ "${KATA_HYPERVISOR}" == "qemu-coco-dev" ]; then
+        create_container_timeout=300
+        set_metadata_annotation "$pod_config" \
+            "io.katacontainers.config.runtime.create_container_timeout" \
+            "${create_container_timeout}"
+    fi
+
     # Enable dm-integrity in guest
     set_metadata_annotation "${pod_config}" \
         "io.katacontainers.config.hypervisor.kernel_params" \
@@ -125,7 +134,9 @@ setup() {
     cat $pod_config
 
     add_allow_all_policy_to_yaml "$pod_config"
-    k8s_create_pod "$pod_config"
+    local wait_time=120
+    [ "${KATA_HYPERVISOR}" == "qemu-coco-dev" ] && wait_time=300
+    k8s_create_pod "$pod_config" "$wait_time"
 }
 
 @test "Test we cannot pull a large image that pull time exceeds createcontainer timeout inside the guest" {
@@ -195,6 +206,7 @@ setup() {
 
     # Set CreateContainerRequest timeout in the annotation to pull large image in guest
     create_container_timeout=120
+    [ "${KATA_HYPERVISOR}" == "qemu-coco-dev" ] && create_container_timeout=600
     set_metadata_annotation "$pod_config" \
         "io.katacontainers.config.runtime.create_container_timeout" \
         "${create_container_timeout}"
@@ -214,7 +226,9 @@ setup() {
     cat $pod_config
 
     add_allow_all_policy_to_yaml "$pod_config"
-    k8s_create_pod "$pod_config"
+    local wait_time=120
+    [ "${KATA_HYPERVISOR}" == "qemu-coco-dev" ] && wait_time=600
+    k8s_create_pod "$pod_config" "$wait_time"
 }
 
 teardown() {
