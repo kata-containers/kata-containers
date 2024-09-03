@@ -48,6 +48,7 @@ ALLOW_ALL_POLICY="${ALLOW_ALL_POLICY:-$(base64 -w 0 "${K8S_TEST_DIR}/../../../sr
 setup_common() {
 	node=$(get_one_kata_node)
 	[ -n "$node" ]
+	export node=${node}
 	node_start_time=$(exec_host "$node" date +\"%Y-%m-%d %H:%M:%S\")
 	# If node_start_time is empty, try again 3 times with a 5 seconds sleep between each try.
 	count=0
@@ -58,7 +59,7 @@ setup_common() {
 		count=$((count + 1))
 	done
 	[ -n "$node_start_time" ]
-	export node node_start_time
+	export node_start_time=${node_start_time}
 
 	k8s_delete_all_pods_if_any_exists || true
 }
