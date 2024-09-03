@@ -36,6 +36,18 @@ AGENT_NO_PROXY="${AGENT_NO_PROXY:-}"
 PULL_TYPE_MAPPING="${PULL_TYPE_MAPPING:-}"
 IFS=',' read -a pull_types <<< "$PULL_TYPE_MAPPING"
 
+INSTALLATION_PREFIX="${INSTALLATION_PREFIX:-}"
+default_dest_dir="/opt/kata"
+dest_dir="${default_dest_dir}"
+if [ -n "${INSTALLATION_PREFIX}" ]; then
+	# There's no `/` in between ${INSTALLATION_PREFIX} and ${default_dest_dir}
+	# as, otherwise, we'd have it doubled there, as: `/foo/bar//opt/kata`
+	dest_dir="${INSTALLATION_PREFIX}${default_dest_dir}"
+fi
+# Here, again, there's no `/` between /host and ${dest_dir}, otherwise we'd have it
+# doubled here as well, as: `/host//opt/kata`
+host_install_dir="/host${dest_dir}"
+
 # If we fail for any reason a message will be displayed
 die() {
         msg="$*"
@@ -130,7 +142,7 @@ function get_kata_containers_config_path() {
 	local shim="$1"
 
 	# Directory holding pristine configuration files for the current default golang runtime.
-	local golang_config_path="/opt/kata/share/defaults/kata-containers/"
+	local golang_config_path="${dest_dir}/share/defaults/kata-containers/"
 
 	# Directory holding pristine configuration files for the new rust runtime.
 	#
@@ -168,10 +180,10 @@ function get_kata_containers_runtime_path() {
 	local runtime_path
 	case "$shim" in
 		cloud-hypervisor | dragonball | qemu-runtime-rs)
-			runtime_path="/opt/kata/runtime-rs/bin/containerd-shim-kata-v2"
+			runtime_path="${dest_dir}/runtime-rs/bin/containerd-shim-kata-v2"
 			;;
 		*)
-			runtime_path="/opt/kata/bin/containerd-shim-kata-v2"
+			runtime_path="${dest_dir}/bin/containerd-shim-kata-v2"
 			;;
 	esac
 
@@ -235,17 +247,56 @@ function get_tdx_ovmf_path_from_distro() {
 	esac
 }
 
+function adjust_qemu_cmdline() {
+	shim="${1}"
+	config_path="${2}"
+	qemu_share="${shim}"
+
+	# The paths on the kata-containers tarball side look like:
+	# ${dest_dir}/opt/kata/share/kata-qemu/qemu
+	# ${dest_dir}/opt/kata/share/kata-qemu-snp-experimnental/qemu
+	[[ "${shim}" =~ ^(qemu-snp|qemu-nvidia-snp)$ ]] && qemu_share=${shim}-experimental
+		
+	qemu_binary=$(tomlq '.hypervisor.qemu.path' ${config_path} | tr -d \")
+	qemu_binary_script="${qemu_binary}-installation-prefix"
+	qemu_binary_script_host_path="/host/${qemu_binary_script}"
+
+	if [[ ! -f ${qemu_binary_script_host_path} ]]; then
+		# From the QEMU man page:
+		# ```
+		# -L  path
+		# 	Set the directory for the BIOS, VGA BIOS and keymaps.
+		# 	To list all the data directories, use -L help.
+		# ```
+		#
+		# The reason we have to do this here, is because otherwise QEMU
+		# will only look for those files in specific paths, which are
+		# tied to the location of the PREFIX used during build time
+		# (/opt/kata, in our case).
+		cat <<EOF >${qemu_binary_script_host_path}
+#!/usr/bin/env bash
+
+exec ${qemu_binary} "\$@" -L ${dest_dir}/share/kata-${qemu_share}/qemu/
+EOF
+		chmod +x ${qemu_binary_script_host_path}
+	fi
+
+	sed -i -e "s|${qemu_binary}|${qemu_binary_script}|" ${config_path}
+}
+
 function install_artifacts() {
 	echo "copying kata artifacts onto host"
-	cp -au /opt/kata-artifacts/opt/kata/* /opt/kata/
-	chmod +x /opt/kata/bin/*
-	[ -d /opt/kata/runtime-rs/bin ] && \
-		chmod +x /opt/kata/runtime-rs/bin/*
+
+	mkdir -p ${host_install_dir}
+	cp -au /opt/kata-artifacts/opt/kata/* ${host_install_dir}/
+	chmod +x ${host_install_dir}/bin/*
+	[ -d ${host_install_dir}/runtime-rs/bin ] && \
+		chmod +x ${host_install_dir}/runtime-rs/bin/*
 
 	local config_path
 
 	for shim in "${shims[@]}"; do
-		config_path=$(get_kata_containers_config_path "${shim}")
+		config_path="/host/$(get_kata_containers_config_path "${shim}")"
 		mkdir -p "$config_path"
 
 		local kata_config_file="${config_path}/configuration-${shim}.toml"
@@ -298,12 +349,22 @@ function install_artifacts() {
 					;;
 			esac	
 		fi
+
+		if [ -n "${INSTALLATION_PREFIX}" ]; then
+			# We could always do this sed, regardless, but I have a strong preference
+			# on not touching the configuration files unless extremelly needed
+			sed -i -e "s|${default_dest_dir}|${dest_dir}|g" "${kata_config_file}"
+
+			# Let's only adjust qemu_cmdline for the QEMUs that we build and ship ourselves
+			[[ "${shim}" =~ ^(qemu|qemu-snp|qemu-nvidia-gpu|qemu-nvidia-gpu-snp|qemu-sev|qemu-se)$ ]] && \
+				adjust_qemu_cmdline "${shim}" "${kata_config_file}"
+		fi
 	done
 
 	# Allow Mariner to use custom configuration.
 	if [ "${HOST_OS:-}" == "cbl-mariner" ]; then
-		config_path="/opt/kata/share/defaults/kata-containers/configuration-clh.toml"
-		clh_path="/opt/kata/bin/cloud-hypervisor-glibc"
+		config_path="${host_install_dir}/share/defaults/kata-containers/configuration-clh.toml"
+		clh_path="${dest_dir}/bin/cloud-hypervisor-glibc"
 		sed -i -E "s|(valid_hypervisor_paths) = .+|\1 = [\"${clh_path}\"]|" "${config_path}"
 		sed -i -E "s|(path) = \".+/cloud-hypervisor\"|\1 = \"${clh_path}\"|" "${config_path}"
 	fi
@@ -481,7 +542,8 @@ function configure_containerd() {
 
 function remove_artifacts() {
 	echo "deleting kata artifacts"
-	rm -rf /opt/kata/*
+
+	rm -rf ${host_install_dir}
 
 	if [[ "${CREATE_RUNTIMECLASSES}" == "true" ]]; then
 		delete_runtimeclasses
@@ -596,6 +658,7 @@ function main() {
 	echo "* AGENT_HTTPS_PROXY: ${AGENT_HTTPS_PROXY}"
 	echo "* AGENT_NO_PROXY: ${AGENT_NO_PROXY}"
 	echo "* PULL_TYPE_MAPPING: ${PULL_TYPE_MAPPING}"
+	echo "* INSTALLATION_PREFIX: ${INSTALLATION_PREFIX}"
 
 	# script requires that user is root
 	euid=$(id -u)
