@@ -91,6 +91,12 @@ jobs:
         run: echo "SNAPSHOTTER=" >> $GITHUB_ENV
         if: ${{ matrix.snapshotter == 'overlayfs' }}
 
+      - name: Set KBS and KBS_INGRESS if qemu-coco-dev
+        run: |
+          echo "KBS=true" >> $GITHUB_ENV
+          echo "KBS_INGRESS=nodeport" >> $GITHUB_ENV
+        if: ${{ matrix.vmm == 'qemu-coco-dev' }}
+
       - name: Deploy ${{ matrix.k8s }}
         run: bash tests/integration/kubernetes/gha-run.sh deploy-k8s
 
@@ -104,6 +110,21 @@ jobs:
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-zvsi
 
+      - name: Uninstall previous `kbs-client`
+        timeout-minutes: 10
+        run: bash tests/integration/kubernetes/gha-run.sh uninstall-kbs-client
+        if: ${{ matrix.vmm == 'qemu-coco-dev' }}
+
+      - name: Deploy CoCo KBS
+        timeout-minutes: 10
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-coco-kbs
+        if: ${{ matrix.vmm == 'qemu-coco-dev' }}
+
+      - name: Install `kbs-client`
+        timeout-minutes: 10
+        run: bash tests/integration/kubernetes/gha-run.sh install-kbs-client
+        if: ${{ matrix.vmm == 'qemu-coco-dev' }}
+
       - name: Run tests
         timeout-minutes: 60
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
@@ -111,3 +132,10 @@ jobs:
       - name: Delete kata-deploy
         if: always()
         run: bash tests/integration/kubernetes/gha-run.sh cleanup-zvsi
+
+      - name: Delete CoCo KBS
+        if: always()
+        run: |
+          if [ "${KBS}" == "true" ]; then
+            bash tests/integration/kubernetes/gha-run.sh delete-coco-kbs
+          fi
