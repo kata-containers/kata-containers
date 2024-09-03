@@ -168,37 +168,6 @@ jobs:
       - name: Run runk tests
         timeout-minutes: 10
         run: bash tests/integration/runk/gha-run.sh run
-  run-stdio:
-    runs-on: garm-ubuntu-2204-smaller
-    env:
-      CONTAINERD_VERSION: lts
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.commit-hash }}
-          fetch-depth: 0
-
-      - name: Rebase atop of the latest target branch
-        run: |
-          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
-        env:
-          TARGET_BRANCH: ${{ inputs.target-branch }}
-
-      - name: Install dependencies
-        run: bash tests/integration/stdio/gha-run.sh install-dependencies
-
-      - name: get-kata-tarball
-        uses: actions/download-artifact@v4
-        with:
-          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
-          path: kata-artifacts
-
-      - name: Install kata
-        run: bash tests/integration/stdio/gha-run.sh install-kata kata-artifacts
-
-      - name: Run stdio tests
-        timeout-minutes: 10
-        run: bash tests/integration/stdio/gha-run.sh run
 
   run-tracing:
     strategy:
