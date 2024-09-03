@@ -139,20 +139,20 @@ pub trait StorageHandler: Send + Sync {
 lazy_static! {
     pub static ref STORAGE_HANDLERS: StorageHandlerManager<Arc<dyn StorageHandler>> = {
         let mut manager: StorageHandlerManager<Arc<dyn StorageHandler>> = StorageHandlerManager::new();
-        manager.add_handler(DRIVER_9P_TYPE, Arc::new(Virtio9pHandler{})).unwrap();
+        manager.add_handler(&[DRIVER_9P_TYPE], Arc::new(Virtio9pHandler{})).unwrap();
         #[cfg(target_arch = "s390x")]
-        manager.add_handler(crate::device::DRIVER_BLK_CCW_TYPE, Arc::new(self::block_handler::VirtioBlkCcwHandler{})).unwrap();
-        manager.add_handler(DRIVER_BLK_MMIO_TYPE, Arc::new(VirtioBlkMmioHandler{})).unwrap();
-        manager.add_handler(DRIVER_BLK_PCI_TYPE, Arc::new(VirtioBlkPciHandler{})).unwrap();
-        manager.add_handler(DRIVER_EPHEMERAL_TYPE, Arc::new(EphemeralHandler{})).unwrap();
-        manager.add_handler(DRIVER_LOCAL_TYPE, Arc::new(LocalHandler{})).unwrap();
-        manager.add_handler(DRIVER_NVDIMM_TYPE, Arc::new(PmemHandler{})).unwrap();
-        manager.add_handler(DRIVER_OVERLAYFS_TYPE, Arc::new(OverlayfsHandler{})).unwrap();
-        manager.add_handler(DRIVER_SCSI_TYPE, Arc::new(ScsiHandler{})).unwrap();
-        manager.add_handler(DRIVER_VIRTIOFS_TYPE, Arc::new(VirtioFsHandler{})).unwrap();
-        manager.add_handler(DRIVER_WATCHABLE_BIND_TYPE, Arc::new(BindWatcherHandler{})).unwrap();
+        manager.add_handler(&[crate::device::DRIVER_BLK_CCW_TYPE], Arc::new(self::block_handler::VirtioBlkCcwHandler{})).unwrap();
+        manager.add_handler(&[DRIVER_BLK_MMIO_TYPE], Arc::new(VirtioBlkMmioHandler{})).unwrap();
+        manager.add_handler(&[DRIVER_BLK_PCI_TYPE], Arc::new(VirtioBlkPciHandler{})).unwrap();
+        manager.add_handler(&[DRIVER_EPHEMERAL_TYPE], Arc::new(EphemeralHandler{})).unwrap();
+        manager.add_handler(&[DRIVER_LOCAL_TYPE], Arc::new(LocalHandler{})).unwrap();
+        manager.add_handler(&[DRIVER_NVDIMM_TYPE], Arc::new(PmemHandler{})).unwrap();
+        manager.add_handler(&[DRIVER_OVERLAYFS_TYPE], Arc::new(OverlayfsHandler{})).unwrap();
+        manager.add_handler(&[DRIVER_SCSI_TYPE], Arc::new(ScsiHandler{})).unwrap();
+        manager.add_handler(&[DRIVER_VIRTIOFS_TYPE], Arc::new(VirtioFsHandler{})).unwrap();
+        manager.add_handler(&[DRIVER_WATCHABLE_BIND_TYPE], Arc::new(BindWatcherHandler{})).unwrap();
         #[cfg(feature = "guest-pull")]
-        manager.add_handler(KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL, Arc::new(ImagePullHandler{})).unwrap();
+        manager.add_handler(&[KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL], Arc::new(ImagePullHandler{})).unwrap();
         manager
     };
 }
