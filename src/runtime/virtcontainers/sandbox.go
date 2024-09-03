@@ -186,6 +186,9 @@ type SandboxConfig struct {
 	// Create container timeout which, if provided, indicates the create container timeout
 	// needed for the workload(s)
 	CreateContainerTimeout uint64
+
+	HeartbeatCheckInterval uint64
+	HeartbeatCheckTimeout  uint64
 }
 
 // valid checks that the sandbox configuration is valid.

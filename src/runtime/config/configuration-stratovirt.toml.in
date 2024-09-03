@@ -413,3 +413,10 @@ create_container_timeout = @DEFCREATECONTAINERTIMEOUT@
 # to the hypervisor.
 # (default: /run/kata-containers/dans)
 dan_conf = "@DEFDANCONF@"
+
+# The heartbeat check interval between kata-shim and kata-agent. unit: seconds
+# If heartbeat_check_interval is set to 0, it means that no heartbeat check will be performed.
+heartbeat_check_interval = 5
+# The timeout for sending gRPC checkrequest. unit: seconds.
+# If heartbeat_check_interval is set to 0, this parameter does not take effect.
+heartbeat_check_timeout = 30

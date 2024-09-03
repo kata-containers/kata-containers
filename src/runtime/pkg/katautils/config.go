@@ -187,6 +187,8 @@ type runtime struct {
 	DisableGuestEmptyDir      bool     `toml:"disable_guest_empty_dir"`
 	CreateContainerTimeout    uint64   `toml:"create_container_timeout"`
 	DanConf                   string   `toml:"dan_conf"`
+	HeartbeatCheckInterval    uint64   `toml:"heartbeat_check_interval"`
+	HeartbeatCheckTimeout     uint64   `toml:"heartbeat_check_timeout"`
 }
 
 type agent struct {
@@ -1577,6 +1579,8 @@ func LoadConfiguration(configPath string, ignoreLogging bool) (resolvedConfigPat
 	config.JaegerUser = tomlConf.Runtime.JaegerUser
 	config.JaegerPassword = tomlConf.Runtime.JaegerPassword
 	config.CreateContainerTimeout = tomlConf.Runtime.CreateContainerTimeout
+	config.HeartbeatCheckInterval = tomlConf.Runtime.HeartbeatCheckInterval
+	config.HeartbeatCheckTimeout = tomlConf.Runtime.HeartbeatCheckTimeout
 	for _, f := range tomlConf.Runtime.Experimental {
 		feature := exp.Get(f)
 		if feature == nil {

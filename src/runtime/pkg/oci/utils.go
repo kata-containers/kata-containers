@@ -164,6 +164,9 @@ type RuntimeConfig struct {
 
 	// Base directory of directly attachable network config
 	DanConfig string
+
+	HeartbeatCheckInterval uint64
+	HeartbeatCheckTimeout  uint64
 }
 
 // AddKernelParam allows the addition of new kernel parameters to an existing
@@ -1084,6 +1087,10 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid st
 		Experimental: runtime.Experimental,
 
 		CreateContainerTimeout: runtime.CreateContainerTimeout,
+
+		HeartbeatCheckInterval: runtime.HeartbeatCheckInterval,
+
+		HeartbeatCheckTimeout: runtime.HeartbeatCheckTimeout,
 	}
 
 	if err := addAnnotations(ocispec, &sandboxConfig, runtime); err != nil {

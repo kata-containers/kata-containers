@@ -383,6 +383,8 @@ func (k *kataAgent) init(ctx context.Context, sandbox *Sandbox, config KataAgent
 	k.dialTimout = config.DialTimeout
 
 	createContainerRequestTimeout = time.Duration(sandbox.config.CreateContainerTimeout) * time.Second
+	checkRequestTimeout = time.Duration(sandbox.config.HeartbeatCheckTimeout) * time.Second
+
 	k.Logger().WithFields(logrus.Fields{
 		"createContainerRequestTimeout": fmt.Sprintf("%+v", createContainerRequestTimeout),
 	}).Info("The createContainerRequestTimeout has been set ")
