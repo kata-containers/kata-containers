@@ -607,6 +607,10 @@ func (h hypervisor) extraMonitorSocket() (govmmQemu.MonitorProtocol, error) {
 func (h hypervisor) sharedFS() (string, error) {
 	supportedSharedFS := []string{config.Virtio9P, config.VirtioFS, config.VirtioFSNydus, config.NoSharedFS}
 
+	if h.ConfidentialGuest && h.SharedFS != config.NoSharedFS {
+		return "", fmt.Errorf("Confidential Guests must use `shared_fs=none`")
+	}
+
 	if h.SharedFS == "" {
 		return config.VirtioFS, nil
 	}
