@@ -181,6 +181,14 @@ fn get_empty_dir_mount_and_storage(
         &settings_empty_dir.mount_type
     };
 
+    let access = match yaml_mount.readOnly {
+        Some(true) => {
+            debug!("setting read only access for emptyDir mount");
+            "ro"
+        }
+        _ => "rw",
+    };
+
     p_mounts.push(policy::KataMount {
         destination: yaml_mount.mountPath.to_string(),
         type_: mount_type.to_string(),
@@ -188,7 +196,7 @@ fn get_empty_dir_mount_and_storage(
         options: vec![
             "rbind".to_string(),
             "rprivate".to_string(),
-            "rw".to_string(),
+            access.to_string(),
         ],
     });
 }

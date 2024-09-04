@@ -27,6 +27,9 @@ spec:
         volumeMounts:
           - name: host-empty-vol
             mountPath: "/host/cache"
+          - name: host-empty-vol
+            mountPath: "/host/cache-read-only"
+            readOnly: true
           - mountPath: /tmp/results
             name: hostpath-vol
           - mountPath: /tmp/results-read-only
