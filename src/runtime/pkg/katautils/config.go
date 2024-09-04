@@ -299,6 +299,16 @@ func (h hypervisor) firmware() (string, error) {
 }
 
 func (h hypervisor) snpCertsPath() (string, error) {
+	// snpCertsPath only matter when using Confidential Guests
+	if !h.ConfidentialGuest {
+		return "", nil
+	}
+
+	// snpCertsPath only matter for SNP guests
+	if !h.SevSnpGuest {
+		return "", nil
+	}
+
 	p := h.SnpCertsPath
 
 	if p == "" {
