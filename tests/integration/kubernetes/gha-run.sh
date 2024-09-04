@@ -17,6 +17,7 @@ source "${kubernetes_dir}/../../gha-run-k8s-common.sh"
 source "${kubernetes_dir}/confidential_kbs.sh"
 # shellcheck disable=2154
 tools_dir="${repo_root_dir}/tools"
+helm_chart_dir="${tools_dir}/packaging/kata-deploy/helm-chart/kata-deploy"
 kata_tarball_dir="${2:-kata-artifacts}"
 
 DOCKER_REGISTRY=${DOCKER_REGISTRY:-quay.io}
@@ -146,6 +147,7 @@ function deploy_coco_kbs() {
 
 function deploy_kata() {
 	platform="${1:-}"
+	ensure_helm
 	ensure_yq
 
 	[ "$platform" = "kcli" ] && \
@@ -157,84 +159,58 @@ function deploy_kata() {
 
 	set_default_cluster_namespace
 
-	sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
+	local values_yaml
+	values_yaml=$(mktemp /tmp/values_yaml.XXXXXX)
 
-	# Enable debug for Kata Containers
-	yq -i \
-	  '.spec.template.spec.containers[0].env[1].value = "true"' \
-	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-	# Create the runtime class only for the shim that's being tested
-	yq -i \
-	  ".spec.template.spec.containers[0].env[2].value = \"${KATA_HYPERVISOR}\"" \
-	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-	# Set the tested hypervisor as the default `kata` shim
-	yq -i \
-	  ".spec.template.spec.containers[0].env[3].value = \"${KATA_HYPERVISOR}\"" \
-	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-	# Let the `kata-deploy` script take care of the runtime class creation / removal
-	yq -i \
-	  '.spec.template.spec.containers[0].env[4].value = "true"' \
-	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-	# Let the `kata-deploy` create the default `kata` runtime class
-	yq -i \
-	  '.spec.template.spec.containers[0].env[5].value = "true"' \
-	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-	# Enable 'default_vcpus' hypervisor annotation
-	yq -i \
-	  '.spec.template.spec.containers[0].env[6].value = "default_vcpus"' \
-	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
+	yq -i ".k8sDistribution = \"${KUBERNETES}\""                     "${values_yaml}"
+	yq -i ".image.reference = \"${DOCKER_REGISTRY}/${DOCKER_REPO}\"" "${values_yaml}"
+	yq -i ".image.tag = \"${DOCKER_TAG}\""                           "${values_yaml}"
+	yq -i ".env.debug = \"true\""                                    "${values_yaml}"
+	yq -i ".env.shims = \"${KATA_HYPERVISOR}\""                      "${values_yaml}"
+	yq -i ".env.defaultShim = \"${KATA_HYPERVISOR}\""                "${values_yaml}"
+	yq -i ".env.createRuntimeClasses = \"true\""                     "${values_yaml}"
+	yq -i ".env.createDefaultRuntimeClass = \"true\""                "${values_yaml}"
+	yq -i ".env.allowedHypervisorAnnotations = \"default_vcpus\""    "${values_yaml}"
+	yq -i ".env.snapshotterHandlerMapping = \"\""                    "${values_yaml}"
+	yq -i ".env.agentHttpsProxy = \"\""                              "${values_yaml}"
+	yq -i ".env.agentNoProxy = \"\""                                 "${values_yaml}"
+	yq -i ".env.pullTypeMapping = \"\""                              "${values_yaml}"
+	yq -i ".env.hostOS = \"\""                                       "${values_yaml}"
 
 	if [ -n "${SNAPSHOTTER}" ]; then
-		yq -i \
-		  ".spec.template.spec.containers[0].env[7].value = \"${KATA_HYPERVISOR}:${SNAPSHOTTER}\"" \
-		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
+		yq -i ".env.snapshotterHandlerMapping = \"${KATA_HYPERVISOR}:${SNAPSHOTTER}\"" "${values_yaml}"
 	fi
 
 	if [ "${KATA_HOST_OS}" = "cbl-mariner" ]; then
-		yq -i \
-		  '.spec.template.spec.containers[0].env[6].value = "initrd kernel default_vcpus"' \
-		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-		yq -i \
-		  ".spec.template.spec.containers[0].env += [{\"name\": \"HOST_OS\", \"value\": \"${KATA_HOST_OS}\"}]" \
-		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
+		yq -i ".env.allowedHypervisorAnnotations = \"initrd kernel default_vcpus\"" "${values_yaml}"
+		yq -i ".env.hostOS = \"${KATA_HOST_OS}\""                                   "${values_yaml}"
 	fi
 
 	if [ "${KATA_HYPERVISOR}" = "qemu" ]; then
-		yq -i \
-		  '.spec.template.spec.containers[0].env[6].value = "image initrd kernel default_vcpus"' \
-		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
+		yq -i ".env.allowedHypervisorAnnotations = \"image initrd kernel default_vcpus\"" "${values_yaml}"
 	fi
 
 	if [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
-		yq -i \
-		  ".spec.template.spec.containers[0].env[8].value = \"${HTTPS_PROXY}\"" \
-		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-
-		yq -i \
-		  ".spec.template.spec.containers[0].env[9].value = \"${NO_PROXY}\"" \
-		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
+		yq -i ".env.agentHttpsProxy = \"${HTTPS_PROXY}\"" "${values_yaml}"
+		yq -i ".env.agentNoProxy = \"${NO_PROXY}\""       "${values_yaml}"
 	fi
 
 	# Set the PULL_TYPE_MAPPING
 	if [ "${PULL_TYPE}" != "default" ]; then
-		yq -i \
-		  ".spec.template.spec.containers[0].env[10].value = \"${KATA_HYPERVISOR}:${PULL_TYPE}\"" \
-		  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
+		yq -i ".env.pullTypeMapping = \"${KATA_HYPERVISOR}:${PULL_TYPE}\"" "${values_yaml}"
 	fi
 
-	echo "::group::Final kata-deploy.yaml that is used in the test"
-	cat "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-	grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml" || die "Failed to setup the tests image"
+	echo "::group::Final kata-deploy manifests used in the test"
+	cat "${values_yaml}"
+	helm template "${helm_chart_dir}" --values "${values_yaml}" --namespace kube-system
+	[ "$(yq .image.reference ${values_yaml})" = "${DOCKER_REGISTRY}/${DOCKER_REPO}" ] || die "Failed to set image reference"
+	[ "$(yq .image.tag ${values_yaml})" = "${DOCKER_TAG}" ] || die "Failed to set image tag"
 	echo "::endgroup::"
 
-	kubectl_retry apply -f "${tools_dir}/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
-	case "${KUBERNETES}" in
-		k0s) kubectl_retry apply -k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k0s" ;;
-		k3s) kubectl_retry apply -k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k3s" ;;
-		rke2) kubectl_retry apply -k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/rke2" ;;
-		*) kubectl_retry apply -f "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-	esac
+	helm install kata-deploy "${helm_chart_dir}" --values "${values_yaml}" --namespace kube-system --debug
 
+	# `helm install --wait` does not take effect on single replicas and maxUnavailable=1 DaemonSets
+	# like kata-deploy on CI. So wait for pods being Running in the "tradicional" way.
 	local cmd="kubectl -n kube-system get -l name=kata-deploy pod 2>/dev/null | grep '\<Running\>'"
 	waitForProcess "${KATA_DEPLOY_WAIT_TIMEOUT}" 10 "$cmd"
 
@@ -406,58 +382,11 @@ function collect_artifacts() {
 }
 
 function cleanup_kata_deploy() {
-	ensure_yq
+	ensure_helm
 
-	case "${KUBERNETES}" in
-		k0s)
-			deploy_spec="-k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k0s""
-			cleanup_spec="-k "${tools_dir}/packaging/kata-deploy/kata-cleanup/overlays/k0s""
-			;;
-		k3s)
-			deploy_spec="-k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/k3s""
-			cleanup_spec="-k "${tools_dir}/packaging/kata-deploy/kata-cleanup/overlays/k3s""
-			;;
-		rke2)
-			deploy_spec="-k "${tools_dir}/packaging/kata-deploy/kata-deploy/overlays/rke2""
-			cleanup_spec="-k "${tools_dir}/packaging/kata-deploy/kata-cleanup/overlays/rke2""
-			;;
-		*)
-			deploy_spec="-f "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml""
-			cleanup_spec="-f "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml""
-			;;
-	esac
-
-	# shellcheck disable=2086
-	kubectl_retry delete --ignore-not-found ${deploy_spec}
-	kubectl -n kube-system wait --timeout=10m --for=delete -l name=kata-deploy pod
-
-	# Let the `kata-deploy` script take care of the runtime class creation / removal
-	yq -i \
-	  '.spec.template.spec.containers[0].env[4].value = "true"' \
-	  "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
-	# Create the runtime class only for the shim that's being tested
-	yq -i \
-	  ".spec.template.spec.containers[0].env[2].value = \"${KATA_HYPERVISOR}\"" \
-	  "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
-	# Set the tested hypervisor as the default `kata` shim
-	yq -i \
-	  ".spec.template.spec.containers[0].env[3].value = \"${KATA_HYPERVISOR}\"" \
-	  "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
-	# Let the `kata-deploy` create the default `kata` runtime class
-	yq -i \
-	  '.spec.template.spec.containers[0].env[5].value = "true"' \
-	  "${tools_dir}/packaging/kata-deploy/kata-deploy/base/kata-deploy.yaml"
-
-	sed -i -e "s|quay.io/kata-containers/kata-deploy:latest|${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}|g" "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
-	cat "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml"
-	grep "${DOCKER_REGISTRY}/${DOCKER_REPO}:${DOCKER_TAG}" "${tools_dir}/packaging/kata-deploy/kata-cleanup/base/kata-cleanup.yaml" || die "Failed to setup the tests image"
-	# shellcheck disable=2086
-	kubectl_retry apply ${cleanup_spec}
-	sleep 180s
-
-	# shellcheck disable=2086
-	kubectl_retry delete --ignore-not-found ${cleanup_spec}
-	kubectl_retry delete --ignore-not-found -f "${tools_dir}/packaging/kata-deploy/kata-rbac/base/kata-rbac.yaml"
+	# Do not return after deleting only the parent object cascade=foreground
+	# means also wait for child/dependent object deletion
+	helm uninstall kata-deploy --ignore-not-found --wait --cascade foreground --timeout 10m --namespace kube-system --debug
 }
 
 function cleanup() {

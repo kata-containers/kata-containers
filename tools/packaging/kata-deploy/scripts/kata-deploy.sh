@@ -48,6 +48,8 @@ fi
 # doubled here as well, as: `/host//opt/kata`
 host_install_dir="/host${dest_dir}"
 
+HELM_POST_DELETE_HOOK="${HELM_POST_DELETE_HOOK:-"false"}"
+
 # If we fail for any reason a message will be displayed
 die() {
         msg="$*"
@@ -550,6 +552,18 @@ function remove_artifacts() {
 	fi
 }
 
+function restart_cri_runtime() {
+	local runtime="${1}"
+
+	if [ "${runtime}" == "k0s-worker" ] || [ "${runtime}" == "k0s-controller" ]; then
+		# do nothing, k0s will automatically unload the config on the fly
+		:
+	else
+		host_systemctl daemon-reload
+		host_systemctl restart "${runtime}"
+	fi
+}
+
 function cleanup_cri_runtime() {
 	case $1 in
 	crio)
@@ -560,6 +574,10 @@ function cleanup_cri_runtime() {
 		;;
 	esac
 
+	[ "${HELM_POST_DELETE_HOOK}" == "false" ] && return
+
+	# Only run this code in the HELM_POST_DELETE_HOOK
+	restart_cri_runtime "$1"
 }
 
 function cleanup_crio() {
@@ -578,13 +596,7 @@ function cleanup_containerd() {
 
 function reset_runtime() {
 	kubectl label node "$NODE_NAME" katacontainers.io/kata-runtime-
-	if [ "$1" == "k0s-worker" ] || [ "$1" == "k0s-controller" ]; then
-		# do nothing, k0s will auto restart
-		:
-	else
-		host_systemctl daemon-reload
-		host_systemctl restart "$1"
-	fi
+	restart_cri_runtime "$1"
 
 	if [ "$1" == "crio" ] || [ "$1" == "containerd" ]; then
 		host_systemctl restart kubelet
@@ -659,6 +671,7 @@ function main() {
 	echo "* AGENT_NO_PROXY: ${AGENT_NO_PROXY}"
 	echo "* PULL_TYPE_MAPPING: ${PULL_TYPE_MAPPING}"
 	echo "* INSTALLATION_PREFIX: ${INSTALLATION_PREFIX}"
+	echo "* HELM_POST_DELETE_HOOK: ${HELM_POST_DELETE_HOOK}"
 
 	# script requires that user is root
 	euid=$(id -u)
@@ -716,9 +729,24 @@ function main() {
 			       containerd_conf_file="${containerd_conf_tmpl_file}"
 			fi
 
+			if [ "${HELM_POST_DELETE_HOOK}" == "true" ]; then
+				# Remove the label as the first thing, so we ensure no more kata-containers
+				# pods would be scheduled here.
+				kubectl label node "$NODE_NAME" katacontainers.io/kata-runtime-
+			fi
+
 			cleanup_cri_runtime "$runtime"
-			kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=cleanup
+			if [ "${HELM_POST_DELETE_HOOK}" == "false" ]; then
+				# The Confidential Containers operator relies on this label
+				kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=cleanup
+			fi
 			remove_artifacts
+
+			if [ "${HELM_POST_DELETE_HOOK}" == "true" ]; then
+				# After everything was cleaned up, there's no reason to continue
+				# and sleep forever.  Let's just return success..
+				exit 0
+			fi
 			;;
 		reset)
 			reset_runtime $runtime
