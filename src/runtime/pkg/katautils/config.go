@@ -1341,7 +1341,10 @@ func newStratovirtHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 }
 
 func newRemoteHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
-	machineType := h.machineType()
+	// the default machine type doesn't make sense for remote hypervisor,
+	// since the remote component owns the infrastructure, so we do not
+	// use the generic default (e.g. "q35" here)
+	machineType := h.MachineType
 
 	return vc.HypervisorConfig{
 		RemoteHypervisorSocket:  h.getRemoteHypervisorSocket(),
