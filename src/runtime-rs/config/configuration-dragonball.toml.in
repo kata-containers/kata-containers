@@ -98,6 +98,12 @@ default_maxvcpus = @DEFMAXVCPUS_DB@
 # > 5                --> will be set to 5
 default_bridges = @DEFBRIDGES@
 
+# Enable balloon f_reporting, default false
+# Enabling this will result in the VM balloon device having f_reporting=on set
+#
+# Default false
+#enable_balloon_f_reporting = true
+
 # Default memory size in MiB for SB/VM.
 # If unspecified then it will be set @DEFMEMSZ@ MiB.
 default_memory = @DEFMEMSZ@
