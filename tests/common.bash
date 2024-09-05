@@ -302,7 +302,7 @@ function kill_kata_components() {
 	# iterate over the list of kata components and stop them
 	for (( i=1; i<=ATTEMPTS; i++ )); do
 		for PID_NAME in "${PID_NAMES[@]}"; do
-			[[ ! -z "$(pidof ${PID_NAME})" ]] && sudo killall "${PID_NAME}" >/dev/null 2>&1 || true
+			[[ ! -z "$(pidof ${PID_NAME})" ]] && sudo killall -w -s SIGKILL "${PID_NAME}" >/dev/null 2>&1 || true
 		done
 		sleep 1
 	done
