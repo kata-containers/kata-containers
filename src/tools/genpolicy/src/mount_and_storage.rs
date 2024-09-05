@@ -181,6 +181,14 @@ fn get_empty_dir_mount_and_storage(
         &settings_empty_dir.mount_type
     };
 
+    let access = match yaml_mount.readOnly {
+        Some(true) => {
+            debug!("setting read only access for emptyDir mount");
+            "ro"
+        }
+        _ => "rw",
+    };
+
     p_mounts.push(policy::KataMount {
         destination: yaml_mount.mountPath.to_string(),
         type_: mount_type.to_string(),
@@ -188,7 +196,7 @@ fn get_empty_dir_mount_and_storage(
         options: vec![
             "rbind".to_string(),
             "rprivate".to_string(),
-            "rw".to_string(),
+            access.to_string(),
         ],
     });
 }
@@ -209,6 +217,13 @@ fn get_host_path_mount(
         }
     }
 
+    let access = match yaml_mount.readOnly {
+        Some(true) => {
+            debug!("setting read only access for host path mount");
+            "ro"
+        }
+        _ => "rw",
+    };
     // TODO:
     //
     // - When volume.hostPath.path: /dev/ttyS0
@@ -220,7 +235,7 @@ fn get_host_path_mount(
     if !path.starts_with("/dev/") && !path.starts_with("/sys/") {
         debug!("get_host_path_mount: calling get_shared_bind_mount");
         let propagation = if biderectional { "rshared" } else { "rprivate" };
-        get_shared_bind_mount(yaml_mount, p_mounts, propagation, "rw");
+        get_shared_bind_mount(yaml_mount, p_mounts, propagation, access);
     } else {
         let dest = yaml_mount.mountPath.clone();
         let type_ = "bind".to_string();
@@ -228,7 +243,7 @@ fn get_host_path_mount(
         let options = vec![
             "rbind".to_string(),
             mount_option.to_string(),
-            "rw".to_string(),
+            access.to_string(),
         ];
 
         if let Some(policy_mount) = p_mounts.iter_mut().find(|m| m.destination.eq(&dest)) {
