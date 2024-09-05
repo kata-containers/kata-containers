@@ -345,3 +345,34 @@ jobs:
           name: nerdctl-tests-garm-${{ matrix.vmm }}
           path: /tmp/artifacts
           retention-days: 1
+
+  run-kata-agent-apis:
+    strategy:
+      fail-fast: false
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: Install dependencies
+        run: bash tests/functional/kata-agent-apis/gha-run.sh install-dependencies
+
+      - name: get-kata-tarball
+        uses: actions/download-artifact@v3
+        with:
+          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
+          path: kata-artifacts
+
+      - name: Install kata
+        run: bash tests/functional/kata-agent-apis/gha-run.sh install-kata kata-artifacts
+
+      - name: Run kata agent api tests with agent-ctl
+        run: bash tests/functional/kata-agent-apis/gha-run.sh run
