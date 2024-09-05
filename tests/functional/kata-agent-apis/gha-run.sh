@@ -26,7 +26,7 @@ function install_dependencies() {
 }
 
 function run() {
-	exit 0
+	bash -c ${kata_agent_apis_dir}/run-agent-api-tests.sh
 }
 
 function main() {
