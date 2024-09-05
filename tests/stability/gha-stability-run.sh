@@ -16,6 +16,9 @@ source "${stability_dir}/../metrics/lib/common.bash"
 function run_tests() {
 	info "Running scability test using ${KATA_HYPERVISOR} hypervisor"
 	bash "${stability_dir}/kubernetes_stability.sh"
+
+	info "Running soak stability test using ${KATA_HYPERVISOR} hypervisor"
+	bash "${stability_dir}/kubernetes_soak_test.sh"
 }
 
 function main() {
