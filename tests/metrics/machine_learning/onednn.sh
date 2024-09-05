@@ -6,7 +6,7 @@
 
 # Description of the test:
 # This test runs the 'onednn benchmark'
-# https://github.com/v8/web-tooling-benchmark
+# https://openbenchmarking.org/test/pts/onednn
 
 set -o pipefail
 
