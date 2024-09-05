@@ -283,8 +283,16 @@ function kbs_k8s_deploy() {
 	echo "somesecret" > overlays/$(uname -m)/key.bin
 
 	# For qemu-se runtime, prepare the necessary resources
-	if [ "${KATA_HYPERVISOR}" == "qemu-se" ]; then
-		prepare_credentials_for_qemu_se
+	if [ "$(uname -m)" == "s390x" ]; then
+		if [ "${KATA_HYPERVISOR}" == "qemu-se" ]; then
+			prepare_credentials_for_qemu_se
+		elif [ "${KATA_HYPERVISOR}" == "qemu-coco-dev" ]; then
+			# Create an empty directory just for deployment
+			export IBM_SE_CREDS_DIR="$(mktemp -d -t ibmse.creds.XXXXXXXXXX)"
+		else
+			echo "ERROR: KBS deployment for ${KATA_HYPERVISOR} is not supported" >&2
+			return 1
+		fi
 		# SE_SKIP_CERTS_VERIFICATION should be set to true
 		# to skip the verification of the certificates
 		sed -i "s/false/true/g" overlays/s390x/patch.yaml
