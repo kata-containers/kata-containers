@@ -33,7 +33,9 @@ EOF
 }
 
 run_tests() {
-    info "placeholder: no tests"
+    info "Running agent API tests"
+
+    bats "${kata_agent_apis_dir}/api-tests"
 }
 
 main()
