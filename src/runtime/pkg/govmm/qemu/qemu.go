@@ -440,7 +440,7 @@ type TdxQomObject struct {
 	MrConfigId            string        `json:"mrconfigid,omitempty"`
 	MrOwner               string        `json:"mrowner,omitempty"`
 	MrOwnerConfig         string        `json:"mrownerconfig,omitempty"`
-	QuoteGenerationSocket SocketAddress `json:"quote-generation-socket"`
+	QuoteGenerationSocket SocketAddress `json:"quote-generation-socket,omitempty"`
 	Debug                 *bool         `json:"debug,omitempty"`
 }
 
