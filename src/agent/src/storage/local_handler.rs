@@ -8,6 +8,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::sync::Arc;
 
+use crate::device::DRIVER_LOCAL_TYPE;
 use anyhow::{Context, Result};
 use kata_types::mount::{StorageDevice, KATA_MOUNT_OPTION_FS_GID};
 use nix::unistd::Gid;
@@ -21,6 +22,11 @@ pub struct LocalHandler {}
 
 #[async_trait::async_trait]
 impl StorageHandler for LocalHandler {
+    #[instrument]
+    fn driver_types(&self) -> &[&str] {
+        &[DRIVER_LOCAL_TYPE]
+    }
+
     #[instrument]
     async fn create_device(
         &self,

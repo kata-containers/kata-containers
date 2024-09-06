@@ -4,6 +4,8 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use crate::device::DRIVER_WATCHABLE_BIND_TYPE;
+use crate::storage::{new_device, StorageContext, StorageHandler};
 use anyhow::Result;
 use kata_types::mount::StorageDevice;
 use protocols::agent::Storage;
@@ -11,13 +13,16 @@ use std::iter;
 use std::sync::Arc;
 use tracing::instrument;
 
-use crate::storage::{new_device, StorageContext, StorageHandler};
-
 #[derive(Debug)]
 pub struct BindWatcherHandler {}
 
 #[async_trait::async_trait]
 impl StorageHandler for BindWatcherHandler {
+    #[instrument]
+    fn driver_types(&self) -> &[&str] {
+        &[DRIVER_WATCHABLE_BIND_TYPE]
+    }
+
     #[instrument]
     async fn create_device(
         &self,

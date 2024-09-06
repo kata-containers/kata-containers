@@ -446,13 +446,19 @@ pub struct StorageHandlerManager<H> {
     handlers: HashMap<String, H>,
 }
 
-impl<H> Default for StorageHandlerManager<H> {
+impl<H> Default for StorageHandlerManager<H> 
+where
+    H: Clone,
+{
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<H> StorageHandlerManager<H> {
+impl<H> StorageHandlerManager<H> 
+where
+    H: Clone,
+{
     /// Create a new instance of `StorageHandlerManager`.
     pub fn new() -> Self {
         Self {
@@ -461,14 +467,18 @@ impl<H> StorageHandlerManager<H> {
     }
 
     /// Register a storage device handler.
-    pub fn add_handler(&mut self, id: &str, handler: H) -> Result<()> {
-        match self.handlers.entry(id.to_string()) {
-            Entry::Occupied(_) => Err(anyhow!("storage handler for {} already exists", id)),
-            Entry::Vacant(entry) => {
-                entry.insert(handler);
-                Ok(())
+    pub fn add_handler(&mut self, ids: &[&str], handler: H) -> Result<()> {
+        for &id in ids {
+            match self.handlers.entry(id.to_string()) {
+                Entry::Occupied(_) => {
+                    return Err(anyhow!("storage handler for {} already exists", id));
+                }
+                Entry::Vacant(entry) => {
+                    entry.insert(handler.clone());
+                }
             }
         }
+        Ok(())
     }
 
     /// Get storage handler with specified `id`.
