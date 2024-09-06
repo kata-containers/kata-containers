@@ -376,7 +376,7 @@ func (object Object) QemuParams(config *Config) []string {
 		}
 
 	case TDXGuest:
-		objectParams = append(objectParams, prepareObjectWithTdxQgs(object))
+		objectParams = append(objectParams, prepareTDXObject(object))
 		config.Bios = object.File
 	case SEVGuest:
 		objectParams = append(objectParams, string(object.Type))
@@ -463,7 +463,7 @@ func (this *TdxQomObject) String() string {
 	return string(b)
 }
 
-func prepareObjectWithTdxQgs(object Object) string {
+func prepareTDXObject(object Object) string {
 	qgsSocket := SocketAddress{"vsock", fmt.Sprint(VsockHostCid), fmt.Sprint(object.QgsPort)}
 	tdxObject := TdxQomObject{string(object.Type), object.ID, qgsSocket, nil}
 
