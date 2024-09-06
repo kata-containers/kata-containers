@@ -437,6 +437,9 @@ type SocketAddress struct {
 type TdxQomObject struct {
 	QomType               string        `json:"qom-type"`
 	Id                    string        `json:"id"`
+	MrConfigId            string        `json:"mrconfigid,omitempty"`
+	MrOwner               string        `json:"mrowner,omitempty"`
+	MrOwnerConfig         string        `json:"mrownerconfig,omitempty"`
 	QuoteGenerationSocket SocketAddress `json:"quote-generation-socket"`
 	Debug                 *bool         `json:"debug,omitempty"`
 }
@@ -465,7 +468,14 @@ func (this *TdxQomObject) String() string {
 
 func prepareTDXObject(object Object) string {
 	qgsSocket := SocketAddress{"vsock", fmt.Sprint(VsockHostCid), fmt.Sprint(object.QgsPort)}
-	tdxObject := TdxQomObject{string(object.Type), object.ID, qgsSocket, nil}
+	tdxObject := TdxQomObject{
+		string(object.Type), // qom-type
+		object.ID,           // id
+		"",                  // mrconfigid
+		"",                  // mrowner
+		"",                  // mrownerconfig
+		qgsSocket,           // quote-generation-socket
+		nil}
 
 	if object.Debug {
 		*tdxObject.Debug = true
