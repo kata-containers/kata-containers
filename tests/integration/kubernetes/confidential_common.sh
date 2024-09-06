@@ -87,27 +87,30 @@ function is_confidential_hardware() {
 
 function create_loop_device(){
 	local loop_file="${1:-/tmp/trusted-image-storage.img}"
+	local node="$(get_one_kata_node)"
 	cleanup_loop_device "$loop_file"
 
-	sudo dd if=/dev/zero of=$loop_file bs=1M count=2500
-	sudo losetup -fP $loop_file >/dev/null 2>&1
-	local device=$(sudo losetup -j $loop_file | awk -F'[: ]' '{print $1}')
+	exec_host "$node" "dd if=/dev/zero of=$loop_file bs=1M count=2500"
+	exec_host "$node" "losetup -fP $loop_file >/dev/null 2>&1"
+	local device=$(exec_host "$node" losetup -j $loop_file | awk -F'[: ]' '{print $1}')
+
 	echo $device
 }
 
 function cleanup_loop_device(){
 	local loop_file="${1:-/tmp/trusted-image-storage.img}"
+	local node="$(get_one_kata_node)"
 	# Find all loop devices associated with $loop_file
-	local existed_devices=$(sudo losetup -j $loop_file | awk -F'[: ]' '{print $1}')
+	local existed_devices=$(exec_host "$node" losetup -j $loop_file | awk -F'[: ]' '{print $1}')
 
 	if [ -n "$existed_devices" ]; then
 		# Iterate over each found loop device and detach it
 		for d in $existed_devices; do
-			sudo losetup -d "$d" >/dev/null 2>&1
+			exec_host "$node" "losetup -d "$d" >/dev/null 2>&1"
 		done
 	fi
 
-	sudo rm -f "$loop_file" >/dev/null 2>&1 || true
+	exec_host "$node" "rm -f "$loop_file" >/dev/null 2>&1 || true"
 }
 
 # This function creates pod yaml. Parameters

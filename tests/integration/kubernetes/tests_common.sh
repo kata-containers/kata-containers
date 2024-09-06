@@ -85,7 +85,6 @@ exec_host() {
 	local node="$1"
 	# `kubectl debug` always returns 0, so we hack it to return the right exit code.
 	local command="${@:2}"
-	command+='; echo -en \\n$?'
 	# Make 7 character hash from the node name
 	local pod_name="custom-node-debugger-$(echo -n "$node" | sha1sum | cut -c1-7)"
 
@@ -97,6 +96,11 @@ exec_host() {
 			kubectl apply -n kube-system -f - > /dev/null
 		# Wait for the newly created pod to be ready
 		kubectl wait pod -n kube-system --timeout="30s" --for=condition=ready "${pod_name}" > /dev/null
+		# Manually check the exit status of the previous command to handle errors explicitly
+		# since `set -e` is not enabled, allowing subsequent commands to run if needed.
+		if [ $? -ne 0 ]; then
+			return $?
+		fi
 	fi
 
 	# Execute the command and capture the output
@@ -109,12 +113,7 @@ exec_host() {
 	# [bats-exec-test:38] INFO: k8s configured to use runtimeclass
 	# bash: line 1: $'\r': command not found
 	# ```
-	local output="$(kubectl exec -qi -n kube-system "${pod_name}" -- chroot /host bash -c "${command}" | tr -d '\r')"
-
-	# Output the command result
-	local exit_code="$(echo "${output}" | tail -1)"
-	echo "$(echo "${output}" | head -n -1)"
-	return ${exit_code}
+	kubectl exec -qi -n kube-system "${pod_name}" -- chroot /host bash -c "${command}" | tr -d '\r'
 }
 
 auto_generate_policy_enabled() {
