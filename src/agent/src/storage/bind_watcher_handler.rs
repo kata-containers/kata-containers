@@ -4,9 +4,9 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use crate::device::DRIVER_WATCHABLE_BIND_TYPE;
 use crate::storage::{new_device, StorageContext, StorageHandler};
 use anyhow::Result;
+use kata_types::device::DRIVER_WATCHABLE_BIND_TYPE;
 use kata_types::mount::StorageDevice;
 use protocols::agent::Storage;
 use std::iter;

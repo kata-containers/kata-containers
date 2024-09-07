@@ -56,9 +56,9 @@ use nix::unistd::{self, Pid};
 use rustjail::process::ProcessOperations;
 
 use crate::cdh;
-use crate::device::{
-    add_devices, get_virtio_blk_pci_device_name, update_env_pci, wait_for_net_interface,
-};
+use crate::device::block_device_handler::get_virtio_blk_pci_device_name;
+use crate::device::network_device_handler::wait_for_net_interface;
+use crate::device::{add_devices, update_env_pci};
 use crate::features::get_build_features;
 use crate::image::KATA_IMAGE_WORK_DIR;
 use crate::linux_abi::*;
@@ -222,7 +222,7 @@ impl AgentService {
         // updates the devices listed in the OCI spec, so that they actually
         // match real devices inside the VM. This step is necessary since we
         // cannot predict everything from the caller.
-        add_devices(&req.devices, &mut oci, &self.sandbox).await?;
+        add_devices(&sl(), &req.devices, &mut oci, &self.sandbox).await?;
 
         let process = oci
             .process_mut()
