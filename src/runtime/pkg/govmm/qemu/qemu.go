@@ -376,7 +376,7 @@ func (object Object) QemuParams(config *Config) []string {
 		}
 
 	case TDXGuest:
-		objectParams = append(objectParams, prepareObjectWithTdxQgs(object))
+		objectParams = append(objectParams, prepareTDXObject(object))
 		config.Bios = object.File
 	case SEVGuest:
 		objectParams = append(objectParams, string(object.Type))
@@ -437,7 +437,10 @@ type SocketAddress struct {
 type TdxQomObject struct {
 	QomType               string        `json:"qom-type"`
 	Id                    string        `json:"id"`
-	QuoteGenerationSocket SocketAddress `json:"quote-generation-socket"`
+	MrConfigId            string        `json:"mrconfigid,omitempty"`
+	MrOwner               string        `json:"mrowner,omitempty"`
+	MrOwnerConfig         string        `json:"mrownerconfig,omitempty"`
+	QuoteGenerationSocket SocketAddress `json:"quote-generation-socket,omitempty"`
 	Debug                 *bool         `json:"debug,omitempty"`
 }
 
@@ -463,9 +466,16 @@ func (this *TdxQomObject) String() string {
 	return string(b)
 }
 
-func prepareObjectWithTdxQgs(object Object) string {
+func prepareTDXObject(object Object) string {
 	qgsSocket := SocketAddress{"vsock", fmt.Sprint(VsockHostCid), fmt.Sprint(object.QgsPort)}
-	tdxObject := TdxQomObject{string(object.Type), object.ID, qgsSocket, nil}
+	tdxObject := TdxQomObject{
+		string(object.Type), // qom-type
+		object.ID,           // id
+		"",                  // mrconfigid
+		"",                  // mrowner
+		"",                  // mrownerconfig
+		qgsSocket,           // quote-generation-socket
+		nil}
 
 	if object.Debug {
 		*tdxObject.Debug = true
