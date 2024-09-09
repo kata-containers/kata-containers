@@ -77,7 +77,26 @@ impl Hypervisor for Dragonball {
     #[instrument]
     async fn start_vm(&self, timeout: i32) -> Result<()> {
         let mut inner = self.inner.write().await;
-        inner.start_vm(timeout).await
+        let ret = inner.start_vm(timeout).await;
+
+        if ret.is_ok() && inner.config.device_info.enable_balloon_f_reporting {
+            // The virtio-balloon device must be inserted into dragonball and
+            // recognized by the guest kernel only after the dragonball upcall is ready.
+            // The dragonball upcall is not ready immediately after the VM starts,
+            // so here we create an asynchronous task that waits for 5 seconds before
+            // inserting the virtio-balloon device.
+            let inner_clone = self.inner.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                inner_clone
+                    .write()
+                    .await
+                    .try_insert_balloon_f_reporting()
+                    .await;
+            });
+        }
+
+        ret
     }
 
     async fn stop_vm(&self) -> Result<()> {

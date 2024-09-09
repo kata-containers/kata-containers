@@ -6,8 +6,9 @@
 
 use super::vmm_instance::VmmInstance;
 use crate::{
-    device::DeviceType, hypervisor_persist::HypervisorState, kernel_param::KernelParams,
-    MemoryConfig, VmmState, DEV_HUGEPAGES, HUGETLBFS, HUGE_SHMEM, HYPERVISOR_DRAGONBALL, SHMEM,
+    device::DeviceType, firecracker::sl, hypervisor_persist::HypervisorState,
+    kernel_param::KernelParams, MemoryConfig, VmmState, DEV_HUGEPAGES, HUGETLBFS, HUGE_SHMEM,
+    HYPERVISOR_DRAGONBALL, SHMEM,
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
@@ -115,6 +116,20 @@ impl DragonballInner {
             mem_hotplug_size_mb: 0,
             balloon_size: 0,
             passfd_listener_port: None,
+        }
+    }
+
+    pub(crate) async fn try_insert_balloon_f_reporting(&mut self) {
+        let balloon_config = BalloonDeviceConfigInfo {
+            balloon_id: BALLOON_DEVICE_ID.to_owned(),
+            size_mib: 0,
+            use_shared_irq: None,
+            use_generic_irq: None,
+            f_deflate_on_oom: false,
+            f_reporting: true,
+        };
+        if let Err(e) = self.vmm_instance.insert_balloon_device(balloon_config) {
+            error!(sl(), "failed to insert f_reporting balloon device: {:?}", e);
         }
     }
 
@@ -415,7 +430,7 @@ impl DragonballInner {
                         use_shared_irq: None,
                         use_generic_irq: None,
                         f_deflate_on_oom: false,
-                        f_reporting: false,
+                        f_reporting: self.config.device_info.enable_balloon_f_reporting,
                     };
                     self.vmm_instance
                         .insert_balloon_device(balloon_config)
@@ -447,7 +462,7 @@ impl DragonballInner {
                     use_shared_irq: None,
                     use_generic_irq: None,
                     f_deflate_on_oom: false,
-                    f_reporting: false,
+                    f_reporting: self.config.device_info.enable_balloon_f_reporting,
                 };
                 self.balloon_size = had_mem_mb - new_mem_mb;
                 self.vmm_instance
