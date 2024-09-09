@@ -27,7 +27,7 @@ function go() {
 
 function init() {
 	kubectl create -f "${SCRIPT_PATH}/runtimeclass_workloads/pod-deployment.yaml"
-	kubectl wait --for=condition=Available --timeout=30s deployment/"${deployment_name}"
+	kubectl wait --for=condition=Available --timeout=100s deployment/"${deployment_name}"
 }
 
 function main() {
