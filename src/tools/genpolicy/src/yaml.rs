@@ -97,8 +97,8 @@ pub trait K8sResource {
     }
 
     fn get_process_fields(&self, _process: &mut policy::KataProcess) {
-        // Just Pods can have a PodSecurityContext field, so the other
-        // resources can use this default get_process_fields implementation.
+        // No need to implement support for securityContext or similar fields
+        // for some of the K8s resource types.
     }
 }
 
@@ -376,5 +376,16 @@ pub fn remove_policy_annotation(annotations: &mut BTreeMap<String, String>) {
 fn handle_unused_field(path: &str, silent_unsupported_fields: bool) {
     if !silent_unsupported_fields {
         panic!("Unsupported field: {}", path);
+    }
+}
+
+pub fn get_process_fields(
+    process: &mut policy::KataProcess,
+    security_context: &Option<pod::PodSecurityContext>,
+) {
+    if let Some(context) = security_context {
+        if let Some(uid) = context.runAsUser {
+            process.User.UID = uid.try_into().unwrap();
+        }
     }
 }
