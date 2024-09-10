@@ -19,6 +19,9 @@ function run_tests() {
 
 	info "Running soak stability test using ${KATA_HYPERVISOR} hypervisor"
 	bash "${stability_dir}/kubernetes_soak_test.sh"
+
+	info "Running stressng stability test using ${KATA_HYPERVISOR} hypervisor"
+	bash "${stability_dir}/kubernetes_stressng.sh"
 }
 
 function main() {
