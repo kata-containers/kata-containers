@@ -6,7 +6,6 @@
 package volume
 
 import (
-	b64 "encoding/base64"
 	"encoding/json"
 	"errors"
 	"os"
@@ -45,12 +44,12 @@ func TestAdd(t *testing.T) {
 	assert.Equal(t, expected.Options, actual.Options)
 	assert.Equal(t, expected.Metadata, actual.Metadata)
 
-	_, err = os.Stat(filepath.Join(kataDirectVolumeRootPath, b64.URLEncoding.EncodeToString([]byte(volumePath))))
+	_, err = os.Stat(filepath.Join(kataDirectVolumeRootPath, getHashDirectoryName(volumePath)))
 	assert.Nil(t, err)
 	// Remove the file
 	err = Remove(volumePath)
 	assert.Nil(t, err)
-	_, err = os.Stat(filepath.Join(kataDirectVolumeRootPath, b64.URLEncoding.EncodeToString([]byte(volumePath))))
+	_, err = os.Stat(filepath.Join(kataDirectVolumeRootPath, getHashDirectoryName(volumePath)))
 	assert.True(t, errors.Is(err, os.ErrNotExist))
 	_, err = os.Stat(filepath.Join(kataDirectVolumeRootPath))
 	assert.Nil(t, err)
