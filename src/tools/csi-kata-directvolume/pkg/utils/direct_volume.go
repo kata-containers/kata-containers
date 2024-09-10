@@ -5,7 +5,8 @@
 package utils
 
 import (
-	b64 "encoding/base64"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -35,9 +36,15 @@ type MountInfo struct {
 	Options []string `json:"options,omitempty"`
 }
 
+// Function to generate a short hash-based directory name
+func getHashDirectoryName(volumePath string) string {
+	hash := sha256.Sum256([]byte(volumePath))
+	return hex.EncodeToString(hash[:])
+}
+
 // Add writes the mount info of a direct volume into a filesystem path known to Kata Container.
 func Add(volumePath string, mountInfo string) error {
-	volumeDir := filepath.Join(kataDirectVolumeRootPath, b64.URLEncoding.EncodeToString([]byte(volumePath)))
+	volumeDir := filepath.Join(kataDirectVolumeRootPath, getHashDirectoryName(volumePath))
 	stat, err := os.Stat(volumeDir)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
@@ -61,5 +68,5 @@ func Add(volumePath string, mountInfo string) error {
 
 // Remove deletes the direct volume path including all the files inside it.
 func Remove(volumePath string) error {
-	return os.RemoveAll(filepath.Join(kataDirectVolumeRootPath, b64.URLEncoding.EncodeToString([]byte(volumePath))))
+	return os.RemoveAll(filepath.Join(kataDirectVolumeRootPath, getHashDirectoryName(volumePath)))
 }
