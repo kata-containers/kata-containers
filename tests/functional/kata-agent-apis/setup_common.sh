@@ -32,6 +32,9 @@ agent_log_file="${PWD}/kata-agent.log"
 agent_log_level="debug"
 keep_logs=false
 
+local_policy_file="/opt/kata/test.rego"
+policy_file="/etc/kata-opa/default-policy.rego"
+
 cleanup()
 {
 	info "cleaning resources..."
@@ -39,6 +42,10 @@ cleanup()
 	local failure_ret="$?"
 
 	stop_agent
+
+	sudo unlink $policy_file
+	sudo rm $local_policy_file
+	sudo rm -rf $(dirname ${policy_file})
 
 	local sandbox_dir="/run/sandbox-ns/"
 	sudo umount -f "${sandbox_dir}/uts" "${sandbox_dir}/ipc" &>/dev/null || true
@@ -172,4 +179,35 @@ setup_agent() {
 	start_agent $agent_log_file
 
 	info "Setup done."
+}
+
+# The setup attempts to start kata-agent as standalone process instead of inside a UVM.
+# Hence, the contents of the UVM rootfs is not available here.
+# Initing Agent policy with a relaxed `allow-all.rego`
+install_policy_doc()
+{
+	info "Installing local policy document"
+
+	allow_all_rego_file="${repo_root_dir}/src/kata-opa/allow-all.rego"
+	[ ! -f $allow_all_rego_file ] && die "Failed to locate allow-all.rego file"
+
+	sudo mkdir -p $(dirname ${policy_file})
+
+	sudo cp $allow_all_rego_file $local_policy_file
+
+	sudo ln -s $local_policy_file $policy_file
+}
+
+# Same reason as above, we do not have the necessary components to start the coco processes
+# in this setup. So removing them before starting kata agent process
+try_and_remove_coco_attestation_procs()
+{
+	info "Removing coco attestation process for now"
+	coco_procs=( "attestation-agent" "confidential-data-hub" "api-server-rest")
+	local procs_path="/usr/local/bin/"
+
+	for i in "${coco_procs[@]}"; do
+		info "Moving ${i} to /tmp"
+		[ -f "${procs_path}${i}" ] && sudo mv "${procs_path}${i}" /tmp || true
+	done
 }
