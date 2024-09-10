@@ -156,7 +156,7 @@ pub fn get_sandbox_id_for_volume(volume_path: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kata_types::mount::DirectVolumeMountInfo;
+    use kata_types::mount::{sha256_hex_digest, DirectVolumeMountInfo};
     use serial_test::serial;
     use std::{collections::HashMap, fs, path::PathBuf};
     use tempfile::tempdir;
@@ -207,13 +207,13 @@ mod tests {
         let root_fs_str = root_fs.to_str().unwrap();
 
         let relative_secret_path = "../../etc/passwd";
-        let b64_relative_secret_path =
-            base64::encode_config(relative_secret_path, base64::URL_SAFE);
+        let sha256_relative_secret_path = sha256_hex_digest(relative_secret_path);
 
         // byte array of "abcdddd"
-        let b64_abs_path = vec![97, 98, 99, 100, 100, 100, 100];
-        // b64urlencoded string of "abcdddd"
-        let b64urlencodes_relative_path = "YWJjZGRkZA==";
+        let sha256_abs_path = vec![97, 98, 99, 100, 100, 100, 100];
+        // sha256 encoded string of "abcdddd"
+        let sha256_encodes_relative_path =
+            "856846854ff608f27262bdb77114f603aeefabc8ec178f10d2e79b9f3366b3cb";
 
         let tests = &[
             TestData {
@@ -224,12 +224,12 @@ mod tests {
             TestData {
                 rootfs: root_fs_str,
                 volume_path: relative_secret_path,
-                result: Ok(root_fs.join(b64_relative_secret_path)),
+                result: Ok(root_fs.join(sha256_relative_secret_path)),
             },
             TestData {
                 rootfs: root_fs_str,
-                volume_path: unsafe { std::str::from_utf8_unchecked(&b64_abs_path) },
-                result: Ok(root_fs.join(b64urlencodes_relative_path)),
+                volume_path: unsafe { std::str::from_utf8_unchecked(&sha256_abs_path) },
+                result: Ok(root_fs.join(sha256_encodes_relative_path)),
             },
         ];
 
