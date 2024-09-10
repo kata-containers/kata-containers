@@ -23,7 +23,7 @@ pub fn volume_mount_info(volume_path: &str) -> Result<DirectVolumeMountInfo> {
     get_volume_mount_info(volume_path)
 }
 
-// get direct volume path whose volume_path encoded with base64
+// get direct volume path whose volume_path encoded with sha256
 pub fn get_direct_volume_path(volume_path: &str) -> Result<String> {
     let volume_full_path =
         join_path(KATA_DIRECT_VOLUME_ROOT_PATH, volume_path).context("failed to join path.")?;

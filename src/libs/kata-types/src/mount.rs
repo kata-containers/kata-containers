@@ -5,6 +5,7 @@
 //
 
 use anyhow::{anyhow, Context, Error, Result};
+use sha2::{Digest, Sha256};
 use std::convert::TryFrom;
 use std::{collections::HashMap, fs, path::PathBuf};
 
@@ -445,16 +446,24 @@ pub trait StorageDevice: Send + Sync {
     fn cleanup(&self) -> Result<()>;
 }
 
+/// Create a SHA-256 hash of input
+pub fn sha256_hex_digest(input: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(input.as_bytes());
+    hex::encode(hasher.finalize())
+}
+
 /// Join user provided volume path with kata direct-volume root path.
 ///
-/// The `volume_path` is base64-url-encoded and then safely joined to the `prefix`
+/// The `volume_path` is sha256-encoded and then safely joined to the `prefix`
 pub fn join_path(prefix: &str, volume_path: &str) -> Result<PathBuf> {
     if volume_path.is_empty() {
         return Err(anyhow!(std::io::ErrorKind::NotFound));
     }
-    let b64_url_encoded_path = base64::encode_config(volume_path.as_bytes(), base64::URL_SAFE);
+    
+    let encoded_path = sha256_hex_digest(volume_path);
 
-    Ok(safe_path::scoped_join(prefix, b64_url_encoded_path)?)
+    Ok(safe_path::scoped_join(prefix, encoded_path)?)
 }
 
 /// get DirectVolume mountInfo from mountinfo.json.
