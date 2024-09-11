@@ -209,6 +209,40 @@ test_pod_policy_error() {
 	pod_exec_blocked_command "${pod_name}" "echo" "hello"
 }
 
+@test "Successful pod: runAsUser having the same value as the UID from the container image" {
+	# This container image specifies user = "nobody" that corresponds to UID = 65534. Setting
+	# the same value for runAsUser in the YAML file doesn't change the auto-generated Policy.
+	yq -i \
+		'.spec.containers[0].securityContext.runAsUser = 65534' \
+		"${incorrect_pod_yaml}"
+
+	kubectl create -f "${correct_configmap_yaml}"
+	kubectl create -f "${incorrect_pod_yaml}"
+	kubectl wait --for=condition=Ready "--timeout=${timeout}" pod "${pod_name}"
+}
+
+@test "Policy failure: unexpected UID = 0" {
+	# Change the container UID to 0 after the policy has been generated, and verify that the
+	# change gets rejected by the policy. UID = 0 is the default value from genpolicy, but
+	# this container image specifies user = "nobody" that corresponds to UID = 65534.
+	yq -i \
+		'.spec.containers[0].securityContext.runAsUser = 0' \
+		"${incorrect_pod_yaml}"
+
+	test_pod_policy_error
+}
+
+@test "Policy failure: unexpected UID = 1234" {
+	# Change the container UID to 1234 after the policy has been generated, and verify that the
+	# change gets rejected by the policy. This container image specifies user = "nobody" that
+	# corresponds to UID = 65534.
+	yq -i \
+		'.spec.containers[0].securityContext.runAsUser = 1234' \
+		"${incorrect_pod_yaml}"
+
+	test_pod_policy_error
+}
+
 teardown() {
 	auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
 
