@@ -48,6 +48,8 @@ main()
 
 	trap cleanup EXIT
 
+	install_policy_doc
+
 	setup_agent
 
 	run_tests
