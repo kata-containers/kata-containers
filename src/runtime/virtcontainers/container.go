@@ -1010,6 +1010,9 @@ func (c *Container) siblingAnnotation(devPath string, siblings []DeviceRelation)
 			vfioNum := filepath.Base(devPath)
 			annoKey := fmt.Sprintf("cdi.k8s.io/vfio%s", vfioNum)
 			annoValue := fmt.Sprintf("nvidia.com/gpu=%d", sibling.Index)
+			if c.config.CustomSpec.Annotations == nil {
+				c.config.CustomSpec.Annotations = make(map[string]string)
+			}
 			c.config.CustomSpec.Annotations[annoKey] = annoValue
 			c.Logger().Infof("annotated container with %s: %s", annoKey, annoValue)
 		}
