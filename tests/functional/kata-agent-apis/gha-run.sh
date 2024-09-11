@@ -11,6 +11,7 @@ set -o pipefail
 kata_tarball_dir="${2:-kata-artifacts}"
 kata_agent_apis_dir="$(dirname "$(readlink -f "$0")")"
 source "${kata_agent_apis_dir}/../../common.bash"
+source "${kata_agent_apis_dir}/../../gha-run-k8s-common.sh"
 
 function install_dependencies() {
 	info "Installing dependencies needed for testing individual agent apis using agent-ctl"
@@ -23,6 +24,9 @@ function install_dependencies() {
 
 	sudo apt-get update
 	sudo apt-get -y install "${deps[@]}"
+
+	info "Installing bats"
+	install_bats
 }
 
 function run() {
