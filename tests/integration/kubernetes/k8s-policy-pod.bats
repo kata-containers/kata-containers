@@ -216,7 +216,7 @@ test_pod_policy_error() {
 
 	# Execute commands allowed by the policy.
 	pod_exec_allowed_command "${pod_name}" "echo" "livenessProbe" "test"
-	pod_exec_allowed_command "${pod_name}" "sh" "-c" "ls -l /"
+	pod_exec_allowed_command "${pod_name}" "echo" "-n" "readinessProbe with space characters"
 	pod_exec_allowed_command "${pod_name}" "echo" "startupProbe" "test"
 
 	# Try to execute commands disallowed by the policy.
