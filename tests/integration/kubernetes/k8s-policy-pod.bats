@@ -35,15 +35,6 @@ setup() {
 
 	kubectl create -f "${priority_class_yaml}"
 
-	# This container image specifies user = "nobody", that corresponds to UID = 65534.
-	# genpolicy doesn't know yet how to convert the user name to UID (as described by
-	# https://github.com/kata-containers/kata-containers/issues/9928), so temporarily
-	# work around that limitation of the tool by explicitly settings runAsUser = 65534
-	# in the YAML file.
-	yq -i \
-		'.spec.containers[0].securityContext.runAsUser = 65534' \
-		"${correct_pod_yaml}"
-
     # Save some time by executing genpolicy a single time.
     if [ "${BATS_TEST_NUMBER}" == "1" ]; then
 		# Save pre-generated yaml files
