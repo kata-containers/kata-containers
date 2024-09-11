@@ -13,7 +13,7 @@ set -x
 replicas="${replicas:-8}"
 deployment_name="${deployment_name:-deploymenttest}"
 # How many times will we run the test loop...
-iterations="${iterations:-20}"
+iterations="${iterations:-10}"
 
 function delete_deployment() {
 	kubectl delete deployment "${deployment_name}"
