@@ -79,7 +79,8 @@ function create_pod_yaml_with_encrypted_image() {
     echo "Pod ${kata_pod_with_encrypted_image}: $(cat ${kata_pod_with_encrypted_image})"
 
     assert_pod_fail "${kata_pod_with_encrypted_image}"
-    assert_logs_contain "${node}" kata "${node_start_time}" 'failed to get decrypt key no suitable key found for decrypting layer key'
+    assert_logs_contain "${node}" kata "${node_start_time}" 'failed to get decrypt key'
+    assert_logs_contain "${node}" kata "${node_start_time}" 'no suitable key found for decrypting layer key'
 }
 
 
@@ -106,7 +107,8 @@ function create_pod_yaml_with_encrypted_image() {
     echo "Pod ${kata_pod_with_encrypted_image}: $(cat ${kata_pod_with_encrypted_image})"
 
     assert_pod_fail "${kata_pod_with_encrypted_image}"
-    assert_logs_contain "${node}" kata "${node_start_time}" 'failed to get decrypt key no suitable key found for decrypting layer key'
+    assert_logs_contain "${node}" kata "${node_start_time}" 'failed to get decrypt key'
+    assert_logs_contain "${node}" kata "${node_start_time}" 'no suitable key found for decrypting layer key'
 }
 
 teardown() {
