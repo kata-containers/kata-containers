@@ -35,6 +35,15 @@ setup() {
 
 	kubectl create -f "${priority_class_yaml}"
 
+	# This container image specifies user = "nobody", that corresponds to UID = 65534.
+	# genpolicy doesn't know yet how to convert the user name to UID (as described by
+	# https://github.com/kata-containers/kata-containers/issues/9928), so temporarily
+	# work around that limitation of the tool by explicitly settings runAsUser = 65534
+	# in the YAML file.
+	yq -i \
+		'.spec.containers[0].securityContext.runAsUser = 65534' \
+		"${correct_pod_yaml}"
+
     # Save some time by executing genpolicy a single time.
     if [ "${BATS_TEST_NUMBER}" == "1" ]; then
 		# Save pre-generated yaml files
@@ -191,24 +200,6 @@ test_pod_policy_error() {
 
 	# Check that the pod yaml does not contain a policy annotation.
 	run ! grep -q "io.katacontainers.config.agent.policy" "${testcase_pre_generate_pod_yaml}"
-}
-
-@test "Successful pod due to runAsUser workaround from rules.rego" {
-	# This test case should fail, but it passes due to these lines being commented out in rules.rego:
-	#
-	# allow_user(p_process, i_process) {
-	#     #print("allow_user: input uid =", i_user.UID, "policy uid =", p_user.UID)
-	#     #p_user.UID == i_user.UID
-	#
-	# So this test case should be converted to use test_pod_policy_error when that workaround will
-	# be removed.
-	yq -i \
-		'.spec.containers[0].securityContext.runAsUser = 101' \
-		"${incorrect_pod_yaml}"
-
-	kubectl create -f "${correct_configmap_yaml}"
-	kubectl create -f "${incorrect_pod_yaml}"
-	kubectl wait --for=condition=Ready "--timeout=${timeout}" pod "${pod_name}"
 }
 
 @test "ExecProcessRequest tests" {

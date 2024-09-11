@@ -27,7 +27,6 @@ spec:
               name: policy-configmap
               key: data-2
       securityContext:
-        runAsUser: 1000
         seccompProfile:
           type: RuntimeDefault
       livenessProbe:
