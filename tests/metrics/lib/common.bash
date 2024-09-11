@@ -526,7 +526,6 @@ function get_kata_memory_and_vcpus() {
 	local busybox_img="quay.io/prometheus/busybox:latest"
 	local container_name="kata-busybox_${RANDOM}"
 	local PAYLOAD_ARGS="tail -f /dev/null"
-	local remove_img=1
 
 	IMG_EXIST="$(sudo ctr i list | grep -c $busybox_img)" || true
 
