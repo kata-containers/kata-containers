@@ -7,7 +7,7 @@
 use anyhow::{anyhow, Context, Result};
 use common::{
     message::Message,
-    types::{TaskRequest, TaskResponse},
+    types::{ContainerProcess, TaskRequest, TaskResponse},
     RuntimeHandler, RuntimeInstance, Sandbox, SandboxNetworkEnv,
 };
 use hypervisor::Param;
@@ -387,11 +387,26 @@ impl RuntimeHandlerManager {
                 .await
                 .context("get runtime instance")?;
 
+            let container_id = container_config.container_id.clone();
             let shim_pid = instance
                 .container_manager
                 .create_container(container_config, spec)
                 .await
                 .context("create container")?;
+
+            let container_manager = instance.container_manager.clone();
+            let process_id =
+                ContainerProcess::new(&container_id, "").context("create container process")?;
+            let pid = shim_pid.pid;
+            tokio::spawn(async move {
+                let result = instance
+                    .sandbox
+                    .wait_process(container_manager, process_id, pid)
+                    .await;
+                if let Err(e) = result {
+                    error!(sl!(), "sandbox wait process error: {:?}", e);
+                }
+            });
 
             Ok(TaskResponse::CreateContainer(shim_pid))
         } else {
@@ -451,6 +466,14 @@ impl RuntimeHandlerManager {
                     .start_process(&process_id)
                     .await
                     .context("start process")?;
+
+                let pid = shim_pid.pid;
+                tokio::spawn(async move {
+                    let result = sandbox.wait_process(cm, process_id, pid).await;
+                    if let Err(e) = result {
+                        error!(sl!(), "sandbox wait process error: {:?}", e);
+                    }
+                });
                 Ok(TaskResponse::StartProcess(shim_pid))
             }
 

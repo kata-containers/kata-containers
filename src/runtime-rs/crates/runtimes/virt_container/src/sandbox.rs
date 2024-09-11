@@ -12,8 +12,10 @@ use agent::{
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use common::message::{Action, Message};
-use common::{Sandbox, SandboxNetworkEnv};
-use containerd_shim_protos::events::task::TaskOOM;
+use common::types::utils::option_system_time_into;
+use common::types::ContainerProcess;
+use common::{ContainerManager, Sandbox, SandboxNetworkEnv};
+use containerd_shim_protos::events::task::{TaskExit, TaskOOM};
 use hypervisor::VsockConfig;
 #[cfg(not(target_arch = "s390x"))]
 use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL, HYPERVISOR_FIRECRACKER};
@@ -27,6 +29,7 @@ use kata_types::config::hypervisor::HYPERVISOR_NAME_CH;
 use kata_types::config::TomlConfig;
 use oci_spec::runtime as oci;
 use persist::{self, sandbox_persist::Persist};
+use protobuf::SpecialFields;
 use resource::manager::ManagerArgs;
 use resource::network::{dan_config_path, DanNetworkConfig, NetworkConfig, NetworkWithNetNsConfig};
 use resource::{ResourceConfig, ResourceManager};
@@ -516,6 +519,44 @@ impl Sandbox for VirtSandbox {
             .context("resource clean up")?;
 
         // TODO: cleanup other sandbox resource
+        Ok(())
+    }
+
+    async fn wait_process(
+        &self,
+        cm: Arc<dyn ContainerManager>,
+        process_id: ContainerProcess,
+        shim_pid: u32,
+    ) -> Result<()> {
+        let exit_status = cm.wait_process(&process_id).await?;
+        info!(sl!(), "container process exited with {:?}", exit_status);
+
+        if cm.is_sandbox_container(&process_id).await {
+            self.stop().await.context("stop sandbox")?;
+        }
+
+        let cid = process_id.container_id();
+        if cid.is_empty() {
+            return Err(anyhow!("container id is empty"));
+        }
+        let eid = process_id.exec_id();
+        let id = if eid.is_empty() {
+            cid.to_string()
+        } else {
+            eid.to_string()
+        };
+
+        let event = TaskExit {
+            container_id: cid.to_string(),
+            id,
+            pid: shim_pid,
+            exit_status: exit_status.exit_code as u32,
+            exited_at: option_system_time_into(exit_status.exit_time),
+            special_fields: SpecialFields::new(),
+        };
+        let msg = Message::new(Action::Event(Arc::new(event)));
+        let lock_sender = self.msg_sender.lock().await;
+        lock_sender.send(msg).await.context("send exit event")?;
         Ok(())
     }
 

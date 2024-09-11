@@ -4,10 +4,12 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use crate::{types::ContainerProcess, ContainerManager};
 use anyhow::Result;
 use async_trait::async_trait;
 use oci_spec::runtime as oci;
 use runtime_spec as spec;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct SandboxNetworkEnv {
@@ -43,6 +45,12 @@ pub trait Sandbox: Send + Sync {
     async fn direct_volume_stats(&self, volume_path: &str) -> Result<String>;
     async fn direct_volume_resize(&self, resize_req: agent::ResizeVolumeRequest) -> Result<()>;
     async fn agent_sock(&self) -> Result<String>;
+    async fn wait_process(
+        &self,
+        cm: Arc<dyn ContainerManager>,
+        process_id: ContainerProcess,
+        shim_pid: u32,
+    ) -> Result<()>;
 
     // metrics function
     async fn agent_metrics(&self) -> Result<String>;
