@@ -180,10 +180,6 @@ impl Container {
         debug!("Getting process field from docker config layer...");
         let docker_config = &self.config_layer.config;
 
-        // Defaults to start with if we can't work out the correct values.
-        process.User.UID = 0;
-        process.User.GID = 0;
-
         /*
          * The user field may:
          *
