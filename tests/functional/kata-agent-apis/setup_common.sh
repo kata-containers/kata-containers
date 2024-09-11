@@ -198,3 +198,17 @@ install_policy_doc()
 
 	[ ! -f $policy_file ] && sudo ln -s $local_policy_file $policy_file || die "Failed to setup local policy file, exists: $policy_file"
 }
+
+# Same reason as above, we do not have the necessary components to start the coco processes
+# in this setup. So removing them before starting kata agent process
+try_and_remove_coco_attestation_procs()
+{
+	info "Removing coco attestation process for now"
+	coco_procs=( "attestation-agent" "confidential-data-hub" "api-server-rest")
+	local procs_path="/usr/local/bin/"
+
+	for i in "${coco_procs[@]}"; do
+		info "Moving ${i} to /tmp"
+		[ -f "${procs_path}${i}" ] && sudo mv "${procs_path}${i}" /tmp || true
+	done
+}

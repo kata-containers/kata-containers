@@ -50,6 +50,8 @@ main()
 
 	install_policy_doc
 
+	try_and_remove_coco_attestation_procs
+
 	setup_agent
 
 	run_tests
