@@ -380,9 +380,9 @@ checksum = "8b75356056920673b02621b35afd0f7dda9306d03c79a30f5c56c44cf256e3de"
 
 [[package]]
 name = "async-trait"
-version = "0.1.81"
+version = "0.1.82"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e0c28dcc82d7c8ead5cb13beb15405b57b8546e93215673ff8ca0349a028107"
+checksum = "a27b8a3a6e1a44fa4c8baf1f653e4172e81486d4941f2237e20dc2d0cf4ddff1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -398,7 +398,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 [[package]]
 name = "attester"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/guest-components?rev=02af65abc984f91eb97ac7a6b7ff3acce9746334#02af65abc984f91eb97ac7a6b7ff3acce9746334"
+source = "git+https://github.com/confidential-containers/guest-components?rev=1db6c3a87665dde58d0efa56f4e4af5fcd19620e#1db6c3a87665dde58d0efa56f4e4af5fcd19620e"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1157,7 +1157,7 @@ checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 [[package]]
 name = "crypto"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/guest-components?rev=02af65abc984f91eb97ac7a6b7ff3acce9746334#02af65abc984f91eb97ac7a6b7ff3acce9746334"
+source = "git+https://github.com/confidential-containers/guest-components?rev=1db6c3a87665dde58d0efa56f4e4af5fcd19620e#1db6c3a87665dde58d0efa56f4e4af5fcd19620e"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -2463,7 +2463,7 @@ dependencies = [
 [[package]]
 name = "image-rs"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/guest-components?rev=02af65abc984f91eb97ac7a6b7ff3acce9746334#02af65abc984f91eb97ac7a6b7ff3acce9746334"
+source = "git+https://github.com/confidential-containers/guest-components?rev=1db6c3a87665dde58d0efa56f4e4af5fcd19620e#1db6c3a87665dde58d0efa56f4e4af5fcd19620e"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -2484,7 +2484,7 @@ dependencies = [
  "oci-client",
  "oci-spec",
  "ocicrypt-rs",
- "protobuf 3.5.0",
+ "protobuf 3.5.1",
  "reqwest",
  "sequoia-openpgp",
  "serde",
@@ -2800,7 +2800,7 @@ dependencies = [
  "opentelemetry",
  "procfs 0.12.0",
  "prometheus",
- "protobuf 3.5.0",
+ "protobuf 3.5.1",
  "protocols",
  "regex",
  "regorus",
@@ -2890,7 +2890,7 @@ dependencies = [
 [[package]]
 name = "kbc"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/guest-components?rev=02af65abc984f91eb97ac7a6b7ff3acce9746334#02af65abc984f91eb97ac7a6b7ff3acce9746334"
+source = "git+https://github.com/confidential-containers/guest-components?rev=1db6c3a87665dde58d0efa56f4e4af5fcd19620e#1db6c3a87665dde58d0efa56f4e4af5fcd19620e"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2919,7 +2919,7 @@ dependencies = [
 [[package]]
 name = "kbs_protocol"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/guest-components?rev=02af65abc984f91eb97ac7a6b7ff3acce9746334#02af65abc984f91eb97ac7a6b7ff3acce9746334"
+source = "git+https://github.com/confidential-containers/guest-components?rev=1db6c3a87665dde58d0efa56f4e4af5fcd19620e#1db6c3a87665dde58d0efa56f4e4af5fcd19620e"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2942,13 +2942,14 @@ dependencies = [
 
 [[package]]
 name = "krata-tokio-tar"
-version = "0.4.0"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba844968838c1c5892da2116e5f744bceab2b43af34539abdd6cd3975eaca973"
+checksum = "e8bd5fee9b96acb5fc36b401896d601e6fdcce52b0e651ce24a3b21fb524e79f"
 dependencies = [
  "filetime",
  "futures-core",
  "libc",
+ "portable-atomic",
  "redox_syscall 0.3.5",
  "tokio",
  "tokio-stream",
@@ -3699,7 +3700,7 @@ dependencies = [
 [[package]]
 name = "ocicrypt-rs"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/guest-components?rev=02af65abc984f91eb97ac7a6b7ff3acce9746334#02af65abc984f91eb97ac7a6b7ff3acce9746334"
+source = "git+https://github.com/confidential-containers/guest-components?rev=1db6c3a87665dde58d0efa56f4e4af5fcd19620e#1db6c3a87665dde58d0efa56f4e4af5fcd19620e"
 dependencies = [
  "aes",
  "anyhow",
@@ -3712,7 +3713,7 @@ dependencies = [
  "kbc",
  "lazy_static",
  "pin-project-lite",
- "protobuf 3.5.0",
+ "protobuf 3.5.1",
  "ring",
  "serde",
  "serde_json",
@@ -4120,6 +4121,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "portable-atomic"
+version = "1.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da544ee218f0d287a911e9c99a39a8c9bc8fcad3cb8db5959940044ecfc67265"
+
+[[package]]
 name = "powerfmt"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4312,9 +4319,9 @@ checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
 
 [[package]]
 name = "protobuf"
-version = "3.5.0"
+version = "3.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df67496db1a89596beaced1579212e9b7c53c22dca1d9745de00ead76573d514"
+checksum = "0bcc343da15609eaecd65f8aa76df8dc4209d325131d8219358c0aaaebab0bf6"
 dependencies = [
  "once_cell",
  "protobuf-support",
@@ -4332,13 +4339,13 @@ dependencies = [
 
 [[package]]
 name = "protobuf-codegen"
-version = "3.5.0"
+version = "3.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eab09155fad2d39333d3796f67845d43e29b266eea74f7bc93f153f707f126dc"
+checksum = "c4d0cde5642ea4df842b13eb9f59ea6fafa26dcb43e3e1ee49120e9757556189"
 dependencies = [
  "anyhow",
  "once_cell",
- "protobuf 3.5.0",
+ "protobuf 3.5.1",
  "protobuf-parse",
  "regex",
  "tempfile",
@@ -4347,14 +4354,14 @@ dependencies = [
 
 [[package]]
 name = "protobuf-parse"
-version = "3.5.0"
+version = "3.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a16027030d4ec33e423385f73bb559821827e9ec18c50e7874e4d6de5a4e96f"
+checksum = "1b0e9b447d099ae2c4993c0cbb03c7a9d6c937b17f2d56cfc0b1550e6fcfdb76"
 dependencies = [
  "anyhow",
  "indexmap 2.2.6",
  "log",
- "protobuf 3.5.0",
+ "protobuf 3.5.1",
  "protobuf-support",
  "tempfile",
  "thiserror",
@@ -4363,9 +4370,9 @@ dependencies = [
 
 [[package]]
 name = "protobuf-support"
-version = "3.5.0"
+version = "3.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "70e2d30ab1878b2e72d1e2fc23ff5517799c9929e2cf81a8516f9f4dcf2b9cf3"
+checksum = "f0766e3675a627c327e4b3964582594b0e8741305d628a98a5de75a1d15f99b9"
 dependencies = [
  "thiserror",
 ]
@@ -4377,7 +4384,7 @@ dependencies = [
  "async-trait",
  "kata-sys-util",
  "oci-spec",
- "protobuf 3.5.0",
+ "protobuf 3.5.1",
  "serde",
  "serde_json",
  "ttrpc",
@@ -4704,7 +4711,7 @@ dependencies = [
 [[package]]
 name = "resource_uri"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/guest-components?rev=02af65abc984f91eb97ac7a6b7ff3acce9746334#02af65abc984f91eb97ac7a6b7ff3acce9746334"
+source = "git+https://github.com/confidential-containers/guest-components?rev=1db6c3a87665dde58d0efa56f4e4af5fcd19620e#1db6c3a87665dde58d0efa56f4e4af5fcd19620e"
 dependencies = [
  "anyhow",
  "serde",
@@ -4944,7 +4951,7 @@ dependencies = [
  "nix 0.24.3",
  "oci-spec",
  "path-absolutize",
- "protobuf 3.5.0",
+ "protobuf 3.5.1",
  "protocols",
  "regex",
  "rlimit",
@@ -6185,8 +6192,8 @@ dependencies = [
  "libc",
  "log",
  "nix 0.26.4",
- "protobuf 3.5.0",
- "protobuf-codegen 3.5.0",
+ "protobuf 3.5.1",
+ "protobuf-codegen 3.5.1",
  "thiserror",
  "tokio",
  "tokio-vsock 0.4.0",
@@ -6200,7 +6207,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94d7f7631d7a9ebed715a47cd4cb6072cbc7ae1d4ec01598971bbec0024340c2"
 dependencies = [
  "protobuf 2.28.0",
- "protobuf-codegen 3.5.0",
+ "protobuf-codegen 3.5.1",
  "protobuf-support",
  "ttrpc-compiler",
 ]
