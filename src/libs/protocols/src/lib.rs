@@ -25,6 +25,7 @@ pub mod remote;
 pub mod remote_ttrpc;
 #[cfg(feature = "async")]
 pub mod remote_ttrpc_async;
+pub mod api;
 
 #[cfg(feature = "with-serde")]
 pub use serde_config::{
