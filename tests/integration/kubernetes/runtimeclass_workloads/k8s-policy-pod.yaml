@@ -11,8 +11,10 @@ spec:
   terminationGracePeriodSeconds: 0
   runtimeClassName: kata
   containers:
-    - name: busybox
-      image: quay.io/prometheus/busybox:latest
+    - name: prometheus
+      image: quay.io/prometheus/prometheus:latest
+      command:
+        - /bin/sh
       env:
         - name: KUBE_CONFIG_1
           valueFrom:
@@ -25,7 +27,6 @@ spec:
               name: policy-configmap
               key: data-2
       securityContext:
-        runAsUser: 1000
         seccompProfile:
           type: RuntimeDefault
       livenessProbe:
@@ -40,9 +41,9 @@ spec:
       readinessProbe:
         exec:
           command:
-            - "sh"
-            - "-c"
-            - "ls -l /"
+            - "echo"
+            - "-n"
+            - "readinessProbe with space characters"
       startupProbe:
         exec:
           command:

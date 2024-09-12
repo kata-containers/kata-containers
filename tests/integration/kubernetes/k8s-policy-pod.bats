@@ -8,6 +8,8 @@
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
+issue="https://github.com/kata-containers/kata-containers/issues/10297"
+
 setup() {
 	auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
 
@@ -37,6 +39,9 @@ setup() {
 
     # Save some time by executing genpolicy a single time.
     if [ "${BATS_TEST_NUMBER}" == "1" ]; then
+		# Work around #10297 if needed.
+		prometheus_image_supported || replace_prometheus_image
+
 		# Save pre-generated yaml files
 		cp "${correct_configmap_yaml}" "${pre_generate_configmap_yaml}" 
 		cp "${correct_pod_yaml}" "${pre_generate_pod_yaml}"
@@ -52,6 +57,22 @@ setup() {
 	# Also give each testcase a copy of the pre-generated yaml files.
 	cp "${pre_generate_configmap_yaml}" "${testcase_pre_generate_configmap_yaml}"
 	cp "${pre_generate_pod_yaml}" "${testcase_pre_generate_pod_yaml}"
+}
+
+prometheus_image_supported() {
+	[[ "${SNAPSHOTTER:-}" == "nydus" ]] && return 1
+	return 0
+}
+
+replace_prometheus_image() {
+	info "Replacing prometheus image with busybox to work around ${issue}"
+
+	yq -i \
+		'.spec.containers[0].name = "busybox"' \
+		"${correct_pod_yaml}"
+	yq -i \
+		'.spec.containers[0].image = "quay.io/prometheus/busybox:latest"' \
+		"${correct_pod_yaml}"
 }
 
 # Common function for several test cases from this bats script.
@@ -193,30 +214,12 @@ test_pod_policy_error() {
 	run ! grep -q "io.katacontainers.config.agent.policy" "${testcase_pre_generate_pod_yaml}"
 }
 
-@test "Successful pod due to runAsUser workaround from rules.rego" {
-	# This test case should fail, but it passes due to these lines being commented out in rules.rego:
-	#
-	# allow_user(p_process, i_process) {
-	#     #print("allow_user: input uid =", i_user.UID, "policy uid =", p_user.UID)
-	#     #p_user.UID == i_user.UID
-	#
-	# So this test case should be converted to use test_pod_policy_error when that workaround will
-	# be removed.
-	yq -i \
-		'.spec.containers[0].securityContext.runAsUser = 101' \
-		"${incorrect_pod_yaml}"
-
-	kubectl create -f "${correct_configmap_yaml}"
-	kubectl create -f "${incorrect_pod_yaml}"
-	kubectl wait --for=condition=Ready "--timeout=${timeout}" pod "${pod_name}"
-}
-
 @test "ExecProcessRequest tests" {
 	wait_for_pod_ready
 
 	# Execute commands allowed by the policy.
 	pod_exec_allowed_command "${pod_name}" "echo" "livenessProbe" "test"
-	pod_exec_allowed_command "${pod_name}" "sh" "-c" "ls -l /"
+	pod_exec_allowed_command "${pod_name}" "echo" "-n" "readinessProbe with space characters"
 	pod_exec_allowed_command "${pod_name}" "echo" "startupProbe" "test"
 
 	# Try to execute commands disallowed by the policy.
@@ -225,6 +228,44 @@ test_pod_policy_error() {
 	pod_exec_blocked_command "${pod_name}" "echo" "livenessProbe" "test" "yes"
 	pod_exec_blocked_command "${pod_name}" "echo" "livenessProbe" "test foo"
 	pod_exec_blocked_command "${pod_name}" "echo" "hello"
+}
+
+@test "Successful pod: runAsUser having the same value as the UID from the container image" {
+	prometheus_image_supported || skip "Test case not supported due to ${issue}"
+
+	# This container image specifies user = "nobody" that corresponds to UID = 65534. Setting
+	# the same value for runAsUser in the YAML file doesn't change the auto-generated Policy.
+	yq -i \
+		'.spec.containers[0].securityContext.runAsUser = 65534' \
+		"${incorrect_pod_yaml}"
+
+	kubectl create -f "${correct_configmap_yaml}"
+	kubectl create -f "${incorrect_pod_yaml}"
+	kubectl wait --for=condition=Ready "--timeout=${timeout}" pod "${pod_name}"
+}
+
+@test "Policy failure: unexpected UID = 0" {
+	prometheus_image_supported || skip "Test case not supported due to ${issue}"
+
+	# Change the container UID to 0 after the policy has been generated, and verify that the
+	# change gets rejected by the policy. UID = 0 is the default value from genpolicy, but
+	# this container image specifies user = "nobody" that corresponds to UID = 65534.
+	yq -i \
+		'.spec.containers[0].securityContext.runAsUser = 0' \
+		"${incorrect_pod_yaml}"
+
+	test_pod_policy_error
+}
+
+@test "Policy failure: unexpected UID = 1234" {
+	# Change the container UID to 1234 after the policy has been generated, and verify that the
+	# change gets rejected by the policy. This container image specifies user = "nobody" that
+	# corresponds to UID = 65534.
+	yq -i \
+		'.spec.containers[0].securityContext.runAsUser = 1234' \
+		"${incorrect_pod_yaml}"
+
+	test_pod_policy_error
 }
 
 teardown() {

@@ -24,7 +24,8 @@ use oci_distribution::{
 use serde::{Deserialize, Serialize};
 use sha2::{digest::typenum::Unsigned, digest::OutputSizeUser, Sha256};
 use std::{
-    collections::BTreeMap, fs::OpenOptions, io, io::BufWriter, io::Seek, io::Write, path::Path,
+    collections::BTreeMap, fs::OpenOptions, io, io::BufWriter, io::Read, io::Seek, io::Write,
+    path::Path,
 };
 use tokio::io::AsyncWriteExt;
 
@@ -68,6 +69,7 @@ pub struct DockerRootfs {
 pub struct ImageLayer {
     pub diff_id: String,
     pub verity_hash: String,
+    pub passwd: String,
 }
 
 /// See https://docs.docker.com/reference/dockerfile/#volume.
@@ -78,6 +80,34 @@ pub struct DockerVolumeHostDirectory {
     // parameter. You must specify the mountpoint when you create or
     // run the container."
 }
+
+/// A single record in a Unix passwd file.
+#[derive(Debug)]
+struct PasswdRecord {
+    pub user: String,
+    #[allow(dead_code)]
+    pub validate: bool,
+    pub uid: u32,
+    pub gid: u32,
+    #[allow(dead_code)]
+    pub gecos: String,
+    #[allow(dead_code)]
+    pub home: String,
+    #[allow(dead_code)]
+    pub shell: String,
+}
+
+/// Path to /etc/passwd in a container layer's tar file.
+const PASSWD_FILE_TAR_PATH: &str = "etc/passwd";
+
+/// Path to a file indicating a whiteout of the /etc/passwd file in a container
+/// layer's tar file (i.e., /etc/passwd was deleted in the layer).
+const PASSWD_FILE_WHITEOUT_TAR_PATH: &str = "etc/.wh.passwd";
+
+/// A marker used to track whether a particular container layer has had its
+/// /etc/passwd file deleted, and thus any such files read from previous, lower
+/// layers should be discarded.
+const WHITEOUT_MARKER: &str = "WHITEOUT";
 
 impl Container {
     pub async fn new(config: &Config, image: &str) -> Result<Self> {
@@ -150,28 +180,83 @@ impl Container {
         debug!("Getting process field from docker config layer...");
         let docker_config = &self.config_layer.config;
 
+        /*
+         * The user field may:
+         *
+         * 1. Be empty
+         * 2. Contain only a UID
+         * 3. Contain a UID:GID pair, in that format
+         * 4. Contain a user name, which we need to translate into a UID/GID pair
+         * 5. Be erroneus, somehow
+         */
         if let Some(image_user) = &docker_config.User {
             if !image_user.is_empty() {
-                debug!("Splitting Docker config user = {:?}", image_user);
-                let user: Vec<&str> = image_user.split(':').collect();
-                if !user.is_empty() {
-                    debug!("Parsing uid from user[0] = {}", &user[0]);
-                    match user[0].parse() {
-                        Ok(id) => process.User.UID = id,
-                        Err(e) => {
-                            // "image: prom/prometheus" has user = "nobody", but
-                            // process.User.UID is an u32 value.
-                            warn!(
-                                "Failed to parse {} as u32, using uid = 0 - error {e}",
-                                &user[0]
-                            );
-                            process.User.UID = 0;
+                if image_user.contains(':') {
+                    debug!("Splitting Docker config user = {:?}", image_user);
+                    let user: Vec<&str> = image_user.split(':').collect();
+                    let parts_count = user.len();
+                    if parts_count != 2 {
+                        warn!(
+                            "Failed to split user, expected two parts, got {}, using uid = gid = 0",
+                            parts_count
+                        );
+                    } else {
+                        debug!("Parsing uid from user[0] = {}", &user[0]);
+                        match user[0].parse() {
+                            Ok(id) => process.User.UID = id,
+                            Err(e) => {
+                                warn!(
+                                    "Failed to parse {} as u32, using uid = 0 - error {e}",
+                                    &user[0]
+                                );
+                            }
+                        }
+
+                        debug!("Parsing gid from user[1] = {:?}", user[1]);
+                        match user[1].parse() {
+                            Ok(id) => process.User.GID = id,
+                            Err(e) => {
+                                warn!(
+                                    "Failed to parse {} as u32, using gid = 0 - error {e}",
+                                    &user[0]
+                                );
+                            }
                         }
                     }
-                }
-                if user.len() > 1 {
-                    debug!("Parsing gid from user[1] = {:?}", user[1]);
-                    process.User.GID = user[1].parse().unwrap();
+                } else {
+                    match image_user.parse::<u32>() {
+                        Ok(uid) => process.User.UID = uid,
+                        Err(outer_e) => {
+                            // Find the last layer with an /etc/passwd file,
+                            // respecting whiteouts.
+                            let mut passwd = "".to_string();
+                            for layer in self.get_image_layers() {
+                                if !layer.passwd.is_empty() {
+                                    passwd = layer.passwd
+                                } else if layer.passwd == WHITEOUT_MARKER {
+                                    passwd = "".to_string();
+                                }
+                            }
+
+                            if passwd.is_empty() {
+                                warn!("Failed to parse {} as u32 - error {outer_e} - and no /etc/passwd file is available, using uid = gid = 0", image_user);
+                            } else {
+                                match parse_passwd_file(passwd) {
+                                    Ok(records) => {
+                                        if let Some(record) =
+                                            records.iter().find(|&r| r.user == *image_user)
+                                        {
+                                            process.User.UID = record.uid;
+                                            process.User.GID = record.gid;
+                                        }
+                                    }
+                                    Err(inner_e) => {
+                                        warn!("Failed to parse {} as u32 - error {outer_e} - and failed to parse /etc/passwd - error {inner_e}, using uid = gid = 0", image_user);
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -261,16 +346,18 @@ async fn get_image_layers(
             || layer.media_type.eq(manifest::IMAGE_LAYER_GZIP_MEDIA_TYPE)
         {
             if layer_index < config_layer.rootfs.diff_ids.len() {
+                let (verity_hash, passwd) = get_verity_and_users(
+                    layers_cache_file_path.clone(),
+                    client,
+                    reference,
+                    &layer.digest,
+                    &config_layer.rootfs.diff_ids[layer_index].clone(),
+                )
+                .await?;
                 layers.push(ImageLayer {
                     diff_id: config_layer.rootfs.diff_ids[layer_index].clone(),
-                    verity_hash: get_verity_hash(
-                        layers_cache_file_path.clone(),
-                        client,
-                        reference,
-                        &layer.digest,
-                        &config_layer.rootfs.diff_ids[layer_index].clone(),
-                    )
-                    .await?,
+                    verity_hash: verity_hash.to_owned(),
+                    passwd: passwd.to_owned(),
                 });
             } else {
                 return Err(anyhow!("Too many Docker gzip layers"));
@@ -283,13 +370,13 @@ async fn get_image_layers(
     Ok(layers)
 }
 
-async fn get_verity_hash(
+async fn get_verity_and_users(
     layers_cache_file_path: Option<String>,
     client: &mut Client,
     reference: &Reference,
     layer_digest: &str,
     diff_id: &str,
-) -> Result<String> {
+) -> Result<(String, String)> {
     let temp_dir = tempfile::tempdir_in(".")?;
     let base_dir = temp_dir.path();
     // Use file names supported by both Linux and Windows.
@@ -301,12 +388,15 @@ async fn get_verity_hash(
     compressed_path.set_extension("gz");
 
     let mut verity_hash = "".to_string();
+    let mut passwd = "".to_string();
     let mut error_message = "".to_string();
     let mut error = false;
 
     // get value from store and return if it exists
     if let Some(path) = layers_cache_file_path.as_ref() {
-        verity_hash = read_verity_from_store(path, diff_id)?;
+        let res = read_verity_and_users_from_store(path, diff_id)?;
+        verity_hash = res.0;
+        passwd = res.1;
         info!("Using cache file");
         info!("dm-verity root hash: {verity_hash}");
     }
@@ -327,15 +417,16 @@ async fn get_verity_hash(
         };
 
         if !error {
-            match get_verity_hash_value(&decompressed_path) {
+            match get_verity_hash_and_users(&decompressed_path) {
                 Err(e) => {
                     error_message = format!("Failed to get verity hash {e}");
                     error = true;
                 }
-                Ok(v) => {
-                    verity_hash = v;
+                Ok(res) => {
+                    verity_hash = res.0;
+                    passwd = res.1;
                     if let Some(path) = layers_cache_file_path.as_ref() {
-                        add_verity_to_store(path, diff_id, &verity_hash)?;
+                        add_verity_and_users_to_store(path, diff_id, &verity_hash, &passwd)?;
                     }
                     info!("dm-verity root hash: {verity_hash}");
                 }
@@ -351,11 +442,16 @@ async fn get_verity_hash(
         }
         warn!("{error_message}");
     }
-    Ok(verity_hash)
+    Ok((verity_hash, passwd))
 }
 
 // the store is a json file that matches layer hashes to verity hashes
-pub fn add_verity_to_store(cache_file: &str, diff_id: &str, verity_hash: &str) -> Result<()> {
+pub fn add_verity_and_users_to_store(
+    cache_file: &str,
+    diff_id: &str,
+    verity_hash: &str,
+    passwd: &str,
+) -> Result<()> {
     // open the json file in read mode, create it if it doesn't exist
     let read_file = OpenOptions::new()
         .read(true)
@@ -375,6 +471,7 @@ pub fn add_verity_to_store(cache_file: &str, diff_id: &str, verity_hash: &str) -
     data.push(ImageLayer {
         diff_id: diff_id.to_string(),
         verity_hash: verity_hash.to_string(),
+        passwd: passwd.to_string(),
     });
 
     // Serialize in pretty format
@@ -399,26 +496,29 @@ pub fn add_verity_to_store(cache_file: &str, diff_id: &str, verity_hash: &str) -
 
 // helper function to read the verity hash from the store
 // returns empty string if not found or file does not exist
-pub fn read_verity_from_store(cache_file: &str, diff_id: &str) -> Result<String> {
+pub fn read_verity_and_users_from_store(
+    cache_file: &str,
+    diff_id: &str,
+) -> Result<(String, String)> {
     match OpenOptions::new().read(true).open(cache_file) {
         Ok(file) => match serde_json::from_reader(file) {
             Result::<Vec<ImageLayer>, _>::Ok(layers) => {
                 for layer in layers {
                     if layer.diff_id == diff_id {
-                        return Ok(layer.verity_hash);
+                        return Ok((layer.verity_hash, layer.passwd));
                     }
                 }
             }
             Err(e) => {
-                warn!("read_verity_from_store: failed to read cached image layers: {e}");
+                warn!("read_verity_and_users_from_store: failed to read cached image layers: {e}");
             }
         },
         Err(e) => {
-            info!("read_verity_from_store: failed to open cache file: {e}");
+            info!("read_verity_and_users_from_store: failed to open cache file: {e}");
         }
     }
 
-    Ok(String::new())
+    Ok((String::new(), String::new()))
 }
 
 async fn create_decompressed_layer_file(
@@ -457,7 +557,7 @@ async fn create_decompressed_layer_file(
     Ok(())
 }
 
-pub fn get_verity_hash_value(path: &Path) -> Result<String> {
+pub fn get_verity_hash_and_users(path: &Path) -> Result<(String, String)> {
     info!("Calculating dm-verity root hash");
     let mut file = std::fs::File::open(path)?;
     let size = file.seek(std::io::SeekFrom::End(0))?;
@@ -470,7 +570,23 @@ pub fn get_verity_hash_value(path: &Path) -> Result<String> {
     let hash = verity::traverse_file(&mut file, 0, false, v, &mut verity::no_write)?;
     let result = format!("{:x}", hash);
 
-    Ok(result)
+    file.seek(std::io::SeekFrom::Start(0))?;
+
+    let mut passwd = String::new();
+    for entry_wrap in tar::Archive::new(file).entries()? {
+        let mut entry = entry_wrap?;
+        let entry_path = entry.header().path()?;
+        let path_str = entry_path.to_str().unwrap();
+        if path_str == PASSWD_FILE_TAR_PATH {
+            entry.read_to_string(&mut passwd)?;
+            break;
+        } else if path_str == PASSWD_FILE_WHITEOUT_TAR_PATH {
+            passwd = WHITEOUT_MARKER.to_owned();
+            break;
+        }
+    }
+
+    Ok((result, passwd))
 }
 
 pub async fn get_container(config: &Config, image: &str) -> Result<Container> {
@@ -524,4 +640,32 @@ fn build_auth(reference: &Reference) -> RegistryAuth {
     }
 
     RegistryAuth::Anonymous
+}
+
+fn parse_passwd_file(passwd: String) -> Result<Vec<PasswdRecord>> {
+    let mut records = Vec::new();
+
+    for rec in passwd.lines() {
+        let fields: Vec<&str> = rec.split(':').collect();
+
+        let field_count = fields.len();
+        if field_count != 7 {
+            return Err(anyhow!(
+                "Incorrect passwd record, expected 7 fields, got {}",
+                field_count
+            ));
+        }
+
+        records.push(PasswdRecord {
+            user: fields[0].to_string(),
+            validate: fields[1] == "x",
+            uid: fields[2].parse().unwrap(),
+            gid: fields[3].parse().unwrap(),
+            gecos: fields[4].to_string(),
+            home: fields[5].to_string(),
+            shell: fields[6].to_string(),
+        });
+    }
+
+    Ok(records)
 }
