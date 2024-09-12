@@ -7,8 +7,6 @@
 use crate::{types::ContainerProcess, ContainerManager};
 use anyhow::Result;
 use async_trait::async_trait;
-use oci_spec::runtime as oci;
-use runtime_spec as spec;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -28,13 +26,7 @@ impl std::fmt::Debug for SandboxNetworkEnv {
 
 #[async_trait]
 pub trait Sandbox: Send + Sync {
-    async fn start(
-        &self,
-        dns: Vec<String>,
-        spec: &oci::Spec,
-        state: &spec::State,
-        network_env: SandboxNetworkEnv,
-    ) -> Result<()>;
+    async fn start(&self) -> Result<()>;
     async fn stop(&self) -> Result<()>;
     async fn cleanup(&self) -> Result<()>;
     async fn shutdown(&self) -> Result<()>;

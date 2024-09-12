@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use common::{message::Message, RuntimeHandler, RuntimeInstance};
+use common::{message::Message, types::SandboxConfig, RuntimeHandler, RuntimeInstance};
 use kata_types::config::TomlConfig;
 use resource::cpu_mem::initial_size::InitialSizeManager;
 use tokio::sync::mpsc::Sender;
@@ -33,6 +33,7 @@ impl RuntimeHandler for WasmContainer {
         _msg_sender: Sender<Message>,
         _config: Arc<TomlConfig>,
         _init_size_manager: InitialSizeManager,
+        _sandbox_config: SandboxConfig,
     ) -> Result<RuntimeInstance> {
         todo!()
     }

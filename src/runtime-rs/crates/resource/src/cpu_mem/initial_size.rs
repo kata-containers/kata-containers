@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::convert::TryFrom;
+use std::{collections::HashMap, convert::TryFrom};
 
 use anyhow::{Context, Result};
 use kata_types::{
@@ -22,6 +22,34 @@ struct InitialSize {
     orig_toml_default_mem: u32,
 }
 
+// generate initial resource(vcpu and memory in MiB) from annotations
+impl TryFrom<&HashMap<String, String>> for InitialSize {
+    type Error = anyhow::Error;
+    fn try_from(an: &HashMap<String, String>) -> Result<Self> {
+        let mut vcpu: u32 = 0;
+
+        let annotation = Annotation::new(an.clone());
+        let (period, quota, memory) =
+            get_sizing_info(annotation).context("failed to get sizing info")?;
+        let mut cpu = oci::LinuxCpu::default();
+        cpu.set_period(Some(period));
+        cpu.set_quota(Some(quota));
+
+        // although it may not be actually a linux container, we are only using the calculation inside
+        // LinuxContainerCpuResources::try_from to generate our vcpu number
+        if let Ok(cpu_resource) = LinuxContainerCpuResources::try_from(&cpu) {
+            vcpu = get_nr_vcpu(&cpu_resource);
+        }
+        let mem_mb = convert_memory_to_mb(memory);
+
+        Ok(Self {
+            vcpu,
+            mem_mb,
+            orig_toml_default_mem: 0,
+        })
+    }
+}
+
 // generate initial resource(vcpu and memory in MiB) from spec's information
 impl TryFrom<&oci::Spec> for InitialSize {
     type Error = anyhow::Error;
@@ -32,19 +60,7 @@ impl TryFrom<&oci::Spec> for InitialSize {
             // podsandbox, from annotation
             ContainerType::PodSandbox => {
                 let spec_annos = spec.annotations().clone().unwrap_or_default();
-                let annotation = Annotation::new(spec_annos);
-                let (period, quota, memory) =
-                    get_sizing_info(annotation).context("failed to get sizing info")?;
-                let mut cpu = oci::LinuxCpu::default();
-                cpu.set_period(Some(period));
-                cpu.set_quota(Some(quota));
-
-                // although it may not be actually a linux container, we are only using the calculation inside
-                // LinuxContainerCpuResources::try_from to generate our vcpu number
-                if let Ok(cpu_resource) = LinuxContainerCpuResources::try_from(&cpu) {
-                    vcpu = get_nr_vcpu(&cpu_resource);
-                }
-                mem_mb = convert_memory_to_mb(memory);
+                return InitialSize::try_from(&spec_annos);
             }
             // single container, from container spec
             _ => {
@@ -104,6 +120,13 @@ impl InitialSizeManager {
     pub fn new(spec: &oci::Spec) -> Result<Self> {
         Ok(Self {
             resource: InitialSize::try_from(spec).context("failed to construct static resource")?,
+        })
+    }
+
+    pub fn new_from(annotation: &HashMap<String, String>) -> Result<Self> {
+        Ok(Self {
+            resource: InitialSize::try_from(annotation)
+                .context("failed to construct static resource")?,
         })
     }
 
