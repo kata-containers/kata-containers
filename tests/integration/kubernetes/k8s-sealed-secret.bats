@@ -9,7 +9,6 @@
 
 load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/confidential_common.sh"
-load "${BATS_TEST_DIRNAME}/confidential_kbs.sh"
 
 export KBS="${KBS:-false}"
 export KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"

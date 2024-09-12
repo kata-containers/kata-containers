@@ -7,7 +7,6 @@
 
 load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/confidential_common.sh"
-load "${BATS_TEST_DIRNAME}/confidential_kbs.sh"
 
 setup() {
     if ! is_confidential_runtime_class; then
@@ -63,12 +62,12 @@ setup() {
 }
 
 @test "Test we cannot pull an image that exceeds the memory limit inside the guest" {
-    # The image pulled in the guest will be downloaded and unpacked in the `/run/kata-containers/image` directory. 
-    # However, by default, systemd allocates 50% of the available physical RAM to the `/run` directory using a `tmpfs` filesystem. 
-    # It means that if we run a kata container with the default configuration (where the default memory assigned for a VM is 2048 MiB), 
-    # `/run` would be allocated around 1024 MiB. Consequently, we can only pull images up to 1024 MiB in the guest. 
-    # However, the unpacked size of image "ghcr.io/confidential-containers/test-container:rust-1.79.0" is 1.41GB. 
-    # It will fail to run the pod with pulling the image in the memory in the guest by default. 
+    # The image pulled in the guest will be downloaded and unpacked in the `/run/kata-containers/image` directory.
+    # However, by default, systemd allocates 50% of the available physical RAM to the `/run` directory using a `tmpfs` filesystem.
+    # It means that if we run a kata container with the default configuration (where the default memory assigned for a VM is 2048 MiB),
+    # `/run` would be allocated around 1024 MiB. Consequently, we can only pull images up to 1024 MiB in the guest.
+    # However, the unpacked size of image "ghcr.io/confidential-containers/test-container:rust-1.79.0" is 1.41GB.
+    # It will fail to run the pod with pulling the image in the memory in the guest by default.
 
     pod_config="$(new_pod_config "$image_pulled_time_less_than_default_time" "kata-${KATA_HYPERVISOR}")"
     set_node "$pod_config" "$node"
@@ -90,13 +89,13 @@ setup() {
 }
 
 @test "Test we can pull an image inside the guest using trusted storage" {
-    # The image pulled in the guest will be downloaded and unpacked in the `/run/kata-containers/image` directory. 
+    # The image pulled in the guest will be downloaded and unpacked in the `/run/kata-containers/image` directory.
     # The tests will use `cryptsetup` to encrypt a block device and mount it at `/run/kata-containers/image`.
-    
+
     if [ "${KATA_HYPERVISOR}" = "qemu-coco-dev" ]; then
         skip "skip this specific one due to issue https://github.com/kata-containers/kata-containers/issues/10133"
     fi
-    
+
     storage_config=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${storage_config_template}").XXX")
     local_device=$(create_loop_device)
     LOCAL_DEVICE="$local_device" NODE_NAME="$node" envsubst < "$storage_config_template" > "$storage_config"
@@ -142,7 +141,7 @@ setup() {
     # For debug sake
     echo "Trusted storage $storage_config file:"
     cat $storage_config
-    
+
     # Create persistent volume and persistent volume claim
     kubectl create -f $storage_config
 
@@ -187,7 +186,7 @@ setup() {
     # For debug sake
     echo "Trusted storage $storage_config file:"
     cat $storage_config
-    
+
     # Create persistent volume and persistent volume claim
     kubectl create -f $storage_config
 
