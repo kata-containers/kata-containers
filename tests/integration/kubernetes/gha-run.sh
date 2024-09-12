@@ -30,6 +30,7 @@ KBS=${KBS:-false}
 KBS_INGRESS=${KBS_INGRESS:-}
 KUBERNETES="${KUBERNETES:-}"
 SNAPSHOTTER="${SNAPSHOTTER:-}"
+ITA_KEY="${ITA_KEY:-}"
 HTTPS_PROXY="${HTTPS_PROXY:-${https_proxy:-}}"
 NO_PROXY="${NO_PROXY:-${no_proxy:-}}"
 PULL_TYPE="${PULL_TYPE:-default}"
