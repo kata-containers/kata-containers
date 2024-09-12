@@ -33,7 +33,6 @@ agent_log_level="debug"
 keep_logs=false
 
 local_policy_file="/opt/kata/test.rego"
-policy_file="/etc/kata-opa/default-policy.rego"
 
 cleanup()
 {
@@ -43,9 +42,7 @@ cleanup()
 
 	stop_agent
 
-	sudo unlink $policy_file
 	sudo rm $local_policy_file
-	sudo rm -rf $(dirname ${policy_file})
 
 	local sandbox_dir="/run/sandbox-ns/"
 	sudo umount -f "${sandbox_dir}/uts" "${sandbox_dir}/ipc" &>/dev/null || true
@@ -166,6 +163,7 @@ start_agent()
 			RUST_BACKTRACE=full \
 			KATA_AGENT_LOG_LEVEL=${agent_log_level} \
 			KATA_AGENT_SERVER_ADDR=${local_agent_server_addr} \
+			KATA_AGENT_POLICY_FILE=${local_policy_file} \
 			${agent_binary} \
 			&> ${log_file} \
 			&
@@ -191,12 +189,7 @@ install_policy_doc()
 	allow_all_rego_file="${repo_root_dir}/src/kata-opa/allow-all.rego"
 	[ ! -f $allow_all_rego_file ] && die "Failed to locate allow-all.rego file"
 
-	local policy_dir=$(dirname ${policy_file})
-	[ ! -d $policy_dir ] && sudo mkdir -p $policy_dir || true
-
 	sudo cp $allow_all_rego_file $local_policy_file
-
-	[ ! -f $policy_file ] && sudo ln -s $local_policy_file $policy_file || die "Failed to setup local policy file, exists: $policy_file"
 }
 
 # Same reason as above, we do not have the necessary components to start the coco processes

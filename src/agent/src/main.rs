@@ -600,11 +600,7 @@ fn init_agent_as_init(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result
 
 #[cfg(feature = "agent-policy")]
 async fn initialize_policy() -> Result<()> {
-    AGENT_POLICY
-        .lock()
-        .await
-        .initialize("/etc/kata-opa/default-policy.rego")
-        .await
+    AGENT_POLICY.lock().await.initialize().await
 }
 
 // The Rust standard library had suppressed the default SIGPIPE behavior,

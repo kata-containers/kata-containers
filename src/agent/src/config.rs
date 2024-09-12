@@ -55,6 +55,10 @@ const VSOCK_ADDR: &str = "vsock://-1";
 const SERVER_ADDR_ENV_VAR: &str = "KATA_AGENT_SERVER_ADDR";
 const LOG_LEVEL_ENV_VAR: &str = "KATA_AGENT_LOG_LEVEL";
 const TRACING_ENV_VAR: &str = "KATA_AGENT_TRACING";
+#[cfg(feature = "agent-policy")]
+// Policy file environment variable to pass a policy document
+// to initialize agent policy engine.
+const POLICY_FILE_VAR: &str = "KATA_AGENT_POLICY_FILE";
 
 const ERR_INVALID_LOG_LEVEL: &str = "invalid log level";
 const ERR_INVALID_LOG_LEVEL_PARAM: &str = "invalid log level parameter";
@@ -125,6 +129,8 @@ pub struct AgentConfig {
     pub enable_signature_verification: bool,
     #[cfg(feature = "guest-pull")]
     pub image_policy_file: String,
+    #[cfg(feature = "agent-policy")]
+    pub policy_file: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -152,6 +158,8 @@ pub struct AgentConfigBuilder {
     pub enable_signature_verification: Option<bool>,
     #[cfg(feature = "guest-pull")]
     pub image_policy_file: Option<String>,
+    #[cfg(feature = "agent-policy")]
+    pub policy_file: Option<String>,
 }
 
 macro_rules! config_override {
@@ -225,6 +233,8 @@ impl Default for AgentConfig {
             enable_signature_verification: false,
             #[cfg(feature = "guest-pull")]
             image_policy_file: String::from(""),
+            #[cfg(feature = "agent-policy")]
+            policy_file: String::from(""),
         }
     }
 }
@@ -275,6 +285,8 @@ impl FromStr for AgentConfig {
         }
         config_override!(agent_config_builder, agent_config, secure_storage_integrity);
 
+        #[cfg(feature = "agent-policy")]
+        config_override!(agent_config_builder, agent_config, policy_file);
         Ok(agent_config)
     }
 }
@@ -455,6 +467,11 @@ impl AgentConfig {
             let name_value = format!("{}={}", TRACING_ENV_VAR, value);
 
             self.tracing = get_bool_value(&name_value).unwrap_or(false);
+        }
+
+        #[cfg(feature = "agent-policy")]
+        if let Ok(policy_file) = env::var(POLICY_FILE_VAR) {
+            self.policy_file = policy_file;
         }
     }
 }
@@ -662,6 +679,8 @@ mod tests {
             enable_signature_verification: bool,
             #[cfg(feature = "guest-pull")]
             image_policy_file: &'a str,
+            #[cfg(feature = "agent-policy")]
+            policy_file: &'a str,
         }
 
         impl Default for TestData<'_> {
@@ -688,6 +707,8 @@ mod tests {
                     enable_signature_verification: false,
                     #[cfg(feature = "guest-pull")]
                     image_policy_file: "",
+                    #[cfg(feature = "agent-policy")]
+                    policy_file: "",
                 }
             }
         }
@@ -1174,6 +1195,14 @@ mod tests {
                 image_policy_file: "file:///etc/image-policy.json",
                 ..Default::default()
             },
+            #[cfg(feature = "agent-policy")]
+            // Test environment
+            TestData {
+                contents: "",
+                env_vars: vec!["KATA_AGENT_POLICY_FILE=/tmp/policy.rego"],
+                policy_file: "/tmp/policy.rego",
+                ..Default::default()
+            },
         ];
 
         let dir = tempdir().expect("failed to create tmpdir");
@@ -1248,6 +1277,9 @@ mod tests {
                 "{}",
                 msg
             );
+            #[cfg(feature = "agent-policy")]
+            assert_eq!(d.policy_file, config.policy_file, "{}", msg);
+
             for v in vars_to_unset {
                 env::remove_var(v);
             }
