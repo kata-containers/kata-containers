@@ -32,8 +32,10 @@ setup() {
         # Update configmap
         kubectl apply -f "${pod_config_dir}"/inotify-updated-configmap.yaml
 
-        # Ideally we'd wait for the pod to complete...
-        sleep 120
+        # Wait for the pod to complete
+        command="kubectl describe pod ${pod_name} | grep \"State: \+Terminated\""
+        info "Waiting ${wait_time} seconds for: ${command}"
+        waitForProcess "${wait_time}" "$sleep_time" "${command}"
 
         # Verify we saw the update
         result=$(kubectl get pod "$pod_name" --output="jsonpath={.status.containerStatuses[]}")
