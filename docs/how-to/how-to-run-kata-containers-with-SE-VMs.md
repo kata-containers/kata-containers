@@ -88,19 +88,19 @@ However, if any of these components are absent, they must be built from the
 ```
 $ # Assume that the project is cloned at $GOPATH/src/github.com/kata-containers
 $ cd $GOPATH/src/github.com/kata-containers/kata-containers
-$ sudo -E PATH=$PATH make kernel-confidential-tarball
-$ sudo -E PATH=$PATH make rootfs-initrd-confidential-tarball
+$ make rootfs-initrd-confidential-tarball
 $ tar -tf build/kata-static-kernel-confidential.tar.xz | grep vmlinuz
 ./opt/kata/share/kata-containers/vmlinuz-confidential.container
-./opt/kata/share/kata-containers/vmlinuz-6.1.62-121-confidential
+./opt/kata/share/kata-containers/vmlinuz-6.7-136-confidential
+$ kernel_version=6.7-136
 $ tar -tf build/kata-static-rootfs-initrd-confidential.tar.xz | grep initrd
 ./opt/kata/share/kata-containers/kata-containers-initrd-confidential.img
 ./opt/kata/share/kata-containers/kata-ubuntu-20.04-confidential.initrd
 $ mkdir artifacts
-$ tar -xvf build/kata-static-kernel-confidential.tar.xz -C artifacts ./opt/kata/share/kata-containers/vmlinuz-6.1.62-121-confidential
+$ tar -xvf build/kata-static-kernel-confidential.tar.xz -C artifacts ./opt/kata/share/kata-containers/vmlinuz-${kernel_version}-confidential
 $ tar -xvf build/kata-static-rootfs-initrd-confidential.tar.xz -C artifacts ./opt/kata/share/kata-containers/kata-ubuntu-20.04-confidential.initrd
 $ ls artifacts/opt/kata/share/kata-containers/
-kata-ubuntu-20.04-confidential.initrd  vmlinuz-6.1.62-121-confidential
+kata-ubuntu-20.04-confidential.initrd  vmlinuz-${kernel_version}-confidential
 ```
 
 3. Secure Image Generation Tool
@@ -156,7 +156,7 @@ you can construct a secure image using the following procedure:
 $ # Change a directory to the project root
 $ cd $GOPATH/src/github.com/kata-containers/kata-containers
 $ host_key_document=$HOME/host-key-document/HKD-0000-0000000.crt
-$ kernel_image=artifacts/opt/kata/share/kata-containers/vmlinuz-6.1.62-121-confidential
+$ kernel_image=artifacts/opt/kata/share/kata-containers/vmlinuz-${kernel_version}-confidential
 $ initrd_image=artifacts/opt/kata/share/kata-containers/kata-ubuntu-20.04-confidential.initrd
 $ echo "panic=1 scsi_mod.scan=none swiotlb=262144 agent.log=debug" > parmfile
 $ genprotimg --host-key-document=${host_key_document} \
@@ -216,8 +216,9 @@ CROSS_BUILD=true TARGET_ARCH=s390x ARCH=s390x
 There still remains an opportunity to fine-tune the configuration file:
 
 ```
+$ export PATH=$PATH:/opt/kata/bin
 $ runtime_config_path=$(kata-runtime kata-env --json | jq -r '.Runtime.Config.Path')
-$ cp ${runtime_config_path} ${runtime_config_path}.old
+$ sudo cp ${runtime_config_path} ${runtime_config_path}.old
 $ # Make the following adjustment to the original config file
 $ diff ${runtime_config_path}.old ${runtime_config_path}
 16,17c16,17
@@ -259,6 +260,13 @@ $ sudo $hypervisor_command -machine confidential-guest-support=pv0 \
 ... log skipped ...
 
 $ # Press ctrl + a + x to exit
+```
+
+Unless the host key document is legitimate, you will encounter the following error message:
+
+```
+qemu-system-s390x: KVM PV command 2 (KVM_PV_SET_SEC_PARMS) failed: header rc 108 rrc 5 IOCTL rc: -22
+Protected boot has failed: 0xa02
 ```
 
 If the hypervisor log does not indicate any errors, it provides assurance that the image
@@ -321,7 +329,7 @@ binary artifacts such as kernel, shim-v2, and more.
 This section will explain how to build a payload image
 (i.e., `kata-deploy`) for confidential containers. For the remaining instructions,
 please refer to the
-[documentation](https://github.com/confidential-containers/operator/blob/main/docs/how-to/INSTALL-CC-WITH-IBM-SE.md)
+[documentation](https://github.com/confidential-containers/confidential-containers/blob/main/guides/ibm-se.md)
 for confidential containers.
 
 
@@ -330,12 +338,10 @@ $ cd $GOPATH/src/github.com/kata-containers/kata-containers
 $ host_key_document=$HOME/host-key-document/HKD-0000-0000000.crt
 $ mkdir hkd_dir && cp $host_key_document hkd_dir
 $ # kernel-confidential and rootfs-initrd-confidential are built automactially by the command below
-$ sudo -E PATH=$PATH HKD_PATH=hkd_dir SE_KERNEL_PARAMS="agent.log=debug" \
-make boot-image-se-tarball
-$ sudo -E PATH=$PATH make qemu-tarball
-$ sudo -E PATH=$PATH make virtiofsd-tarball
-$ # shim-v2 should be built after kernel due to dependency
-$ sudo -E PATH=$PATH make shim-v2-tarball
+$ HKD_PATH=hkd_dir SE_KERNEL_PARAMS="agent.log=debug" make boot-image-se-tarball
+$ make qemu-tarball
+$ make virtiofsd-tarball
+$ make shim-v2-tarball
 $ mkdir kata-artifacts
 $ build_dir=$(readlink -f build)
 $ cp -r $build_dir/*.tar.xz kata-artifacts
@@ -343,6 +349,7 @@ $ ls -1 kata-artifacts
 kata-static-agent.tar.xz
 kata-static-boot-image-se.tar.xz
 kata-static-coco-guest-components.tar.xz
+kata-static-kernel-confidential-modules.tar.xz
 kata-static-kernel-confidential.tar.xz
 kata-static-pause-image.tar.xz
 kata-static-qemu.tar.xz
@@ -359,7 +366,7 @@ If a rootfs-image is required for other available runtime classes (e.g. `kata` a
 command before running `kata-deploy-merge-builds.sh`:
 
 ```
-$ sudo -E PATH=$PATH make rootfs-image-tarball
+$ make rootfs-image-tarball
 ```
 
 At this point, you should have an archive file named `kata-static.tar.xz` at the project root,
@@ -374,7 +381,7 @@ Build and push a payload image with the name `localhost:5000/build-kata-deploy` 
 `latest` using the following:
 
 ```
-$ sudo -E PATH=$PATH ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh kata-static.tar.xz localhost:5000/build-kata-deploy latest
+$ ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh kata-static.tar.xz localhost:5000/build-kata-deploy latest
 ... logs ...
 Pushing the image localhost:5000/build-kata-deploy:latest to the registry
 The push refers to repository [localhost:5000/build-kata-deploy]
