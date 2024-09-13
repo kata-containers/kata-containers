@@ -205,3 +205,16 @@ try_and_remove_coco_attestation_procs()
 		[ -f "${procs_path}${i}" ] && sudo mv "${procs_path}${i}" /tmp || true
 	done
 }
+
+deny_single_api_in_policy()
+{
+	info "Setting default deny for single API in policy"
+	local pol_file=$1
+	local deny_req=$2
+
+	[ ! -f $local_policy_file ] && install_policy_doc
+
+	info "Not allowing ${deny_req}"
+	sudo cp $local_policy_file $pol_file
+	sed -i "s/\(.*$deny_req.*:= \)\(.*\)/\1false/" $pol_file
+}
