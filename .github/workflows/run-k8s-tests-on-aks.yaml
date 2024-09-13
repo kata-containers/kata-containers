@@ -47,13 +47,16 @@ jobs:
             vmm: clh
             instance-type: small
             genpolicy-pull-method: oci-distribution
+            auto-generate-policy: yes
           - host_os: cbl-mariner
             vmm: clh
             instance-type: small
             genpolicy-pull-method: containerd
+            auto-generate-policy: yes
           - host_os: cbl-mariner
             vmm: clh
             instance-type: normal
+            auto-generate-policy: yes
     runs-on: ubuntu-22.04
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
@@ -66,6 +69,7 @@ jobs:
       USING_NFD: "false"
       K8S_TEST_HOST_TYPE: ${{ matrix.instance-type }}
       GENPOLICY_PULL_METHOD: ${{ matrix.genpolicy-pull-method }}
+      AUTO_GENERATE_POLICY: ${{ matrix.auto-generate-policy }}
     steps:
       - uses: actions/checkout@v4
         with:
