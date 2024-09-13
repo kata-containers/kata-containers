@@ -398,7 +398,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 [[package]]
 name = "attester"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/guest-components?rev=1db6c3a87665dde58d0efa56f4e4af5fcd19620e#1db6c3a87665dde58d0efa56f4e4af5fcd19620e"
+source = "git+https://github.com/confidential-containers/guest-components?rev=v0.10.0#075b9a9ee77227d9d92b6f3649ef69de5e72d204"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -644,7 +644,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6362ed55def622cddc70a4746a68554d7b687713770de539e59a739b249f8ed"
 dependencies = [
  "borsh-derive",
- "cfg_aliases 0.2.1",
+ "cfg_aliases",
 ]
 
 [[package]]
@@ -849,12 +849,6 @@ name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
-
-[[package]]
-name = "cfg_aliases"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd16c4719339c4530435d38e511904438d07cce7950afa3718a84ac36c10e89e"
 
 [[package]]
 name = "cfg_aliases"
@@ -1157,7 +1151,7 @@ checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 [[package]]
 name = "crypto"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/guest-components?rev=1db6c3a87665dde58d0efa56f4e4af5fcd19620e#1db6c3a87665dde58d0efa56f4e4af5fcd19620e"
+source = "git+https://github.com/confidential-containers/guest-components?rev=v0.10.0#075b9a9ee77227d9d92b6f3649ef69de5e72d204"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -2463,7 +2457,7 @@ dependencies = [
 [[package]]
 name = "image-rs"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/guest-components?rev=1db6c3a87665dde58d0efa56f4e4af5fcd19620e#1db6c3a87665dde58d0efa56f4e4af5fcd19620e"
+source = "git+https://github.com/confidential-containers/guest-components?rev=v0.10.0#075b9a9ee77227d9d92b6f3649ef69de5e72d204"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -2480,7 +2474,7 @@ dependencies = [
  "lazy_static",
  "log",
  "loopdev",
- "nix 0.28.0",
+ "nix 0.29.0",
  "oci-client",
  "oci-spec",
  "ocicrypt-rs",
@@ -2890,7 +2884,7 @@ dependencies = [
 [[package]]
 name = "kbc"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/guest-components?rev=1db6c3a87665dde58d0efa56f4e4af5fcd19620e#1db6c3a87665dde58d0efa56f4e4af5fcd19620e"
+source = "git+https://github.com/confidential-containers/guest-components?rev=v0.10.0#075b9a9ee77227d9d92b6f3649ef69de5e72d204"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2919,7 +2913,7 @@ dependencies = [
 [[package]]
 name = "kbs_protocol"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/guest-components?rev=1db6c3a87665dde58d0efa56f4e4af5fcd19620e#1db6c3a87665dde58d0efa56f4e4af5fcd19620e"
+source = "git+https://github.com/confidential-containers/guest-components?rev=v0.10.0#075b9a9ee77227d9d92b6f3649ef69de5e72d204"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3451,13 +3445,13 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.28.0"
+version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab2156c4fce2f8df6c499cc1c763e4394b7482525bf2a9701c9d79d215f519e4"
+checksum = "71e2746dc3a24dd78b3cfcb7be93368c6de9963d30f43a6a73998a9cf4b17b46"
 dependencies = [
  "bitflags 2.6.0",
  "cfg-if 1.0.0",
- "cfg_aliases 0.1.1",
+ "cfg_aliases",
  "libc",
 ]
 
@@ -3700,7 +3694,7 @@ dependencies = [
 [[package]]
 name = "ocicrypt-rs"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/guest-components?rev=1db6c3a87665dde58d0efa56f4e4af5fcd19620e#1db6c3a87665dde58d0efa56f4e4af5fcd19620e"
+source = "git+https://github.com/confidential-containers/guest-components?rev=v0.10.0#075b9a9ee77227d9d92b6f3649ef69de5e72d204"
 dependencies = [
  "aes",
  "anyhow",
@@ -4711,7 +4705,7 @@ dependencies = [
 [[package]]
 name = "resource_uri"
 version = "0.1.0"
-source = "git+https://github.com/confidential-containers/guest-components?rev=1db6c3a87665dde58d0efa56f4e4af5fcd19620e#1db6c3a87665dde58d0efa56f4e4af5fcd19620e"
+source = "git+https://github.com/confidential-containers/guest-components?rev=v0.10.0#075b9a9ee77227d9d92b6f3649ef69de5e72d204"
 dependencies = [
  "anyhow",
  "serde",
