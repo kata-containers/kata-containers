@@ -5,6 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
@@ -12,7 +13,7 @@ issue="https://github.com/kata-containers/kata-containers/issues/10297"
 
 setup() {
 	auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
-
+	setup_common
 	configmap_name="policy-configmap"
 	pod_name="policy-pod"
 	priority_class_name="test-high-priority"
@@ -273,7 +274,10 @@ teardown() {
 
 	# Debugging information. Don't print the "Message:" line because it contains a truncated policy log.
 	kubectl describe pod "${pod_name}" | grep -v "Message:"
-
+	if [[ -n "${node_start_time:-}" && -z "$BATS_TEST_COMPLETED" ]]; then
+		echo "DEBUG: system logs of node '$node' since test start time ($node_start_time)"
+		print_node_journal "$node" "kata" --since "$node_start_time" || true
+	fi
 	# Clean-up
 	kubectl delete pod "${pod_name}"
 	kubectl delete configmap "${configmap_name}"
