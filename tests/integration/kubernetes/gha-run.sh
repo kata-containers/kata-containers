@@ -207,7 +207,25 @@ function deploy_kata() {
 	[ "$(yq .image.tag ${values_yaml})" = "${DOCKER_TAG}" ] || die "Failed to set image tag"
 	echo "::endgroup::"
 
-	helm install kata-deploy "${helm_chart_dir}" --values "${values_yaml}" --namespace kube-system --debug
+	local max_tries=3
+	local interval=10
+	local i=0
+	# Retry loop for helm install to prevent transient failures due to instantly unreachable cluster
+	set +e # Disable immediate exit on failure
+	while true; do
+		helm upgrade --install kata-deploy "${helm_chart_dir}" --values "${values_yaml}" --namespace kube-system --debug
+		if [ $? -eq 0 ]; then
+			echo "Helm install succeeded!"
+			break
+		fi
+		i=$((i+1))
+		[ $i -lt $max_tries ] && echo "Retrying after $interval seconds (Attempt $i of $(($max_tries - 1)))" || break
+		sleep $interval
+	done
+	set -e # Re-enable immediate exit on failure
+	if [ $i -eq $max_tries ]; then
+		die "Failed to deploy kata-deploy after $max_tries tries"
+	fi
 
 	# `helm install --wait` does not take effect on single replicas and maxUnavailable=1 DaemonSets
 	# like kata-deploy on CI. So wait for pods being Running in the "tradicional" way.
