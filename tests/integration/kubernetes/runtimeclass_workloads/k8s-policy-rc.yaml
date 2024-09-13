@@ -17,6 +17,8 @@ spec:
       labels:
         app: policy-nginx-rc
     spec:
+      securityContext:
+        runAsUser: 123
       terminationGracePeriodSeconds: 0
       runtimeClassName: kata
       containers:
