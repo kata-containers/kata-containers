@@ -25,6 +25,8 @@ spec:
     spec:
       terminationGracePeriodSeconds: 0
       runtimeClassName: kata
+      securityContext:
+        runAsUser: 1000
       containers:
       - name: master
         image: quay.io/opstree/redis
