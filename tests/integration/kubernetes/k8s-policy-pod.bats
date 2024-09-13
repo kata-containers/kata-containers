@@ -9,8 +9,6 @@ load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
-issue="https://github.com/kata-containers/kata-containers/issues/10297"
-
 setup() {
 	auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
 	setup_common
@@ -40,9 +38,6 @@ setup() {
 
     # Save some time by executing genpolicy a single time.
     if [ "${BATS_TEST_NUMBER}" == "1" ]; then
-		# Work around #10297 if needed.
-		prometheus_image_supported || replace_prometheus_image
-
 		# Save pre-generated yaml files
 		cp "${correct_configmap_yaml}" "${pre_generate_configmap_yaml}" 
 		cp "${correct_pod_yaml}" "${pre_generate_pod_yaml}"
@@ -58,22 +53,6 @@ setup() {
 	# Also give each testcase a copy of the pre-generated yaml files.
 	cp "${pre_generate_configmap_yaml}" "${testcase_pre_generate_configmap_yaml}"
 	cp "${pre_generate_pod_yaml}" "${testcase_pre_generate_pod_yaml}"
-}
-
-prometheus_image_supported() {
-	[[ "${SNAPSHOTTER:-}" == "nydus" ]] && return 1
-	return 0
-}
-
-replace_prometheus_image() {
-	info "Replacing prometheus image with busybox to work around ${issue}"
-
-	yq -i \
-		'.spec.containers[0].name = "busybox"' \
-		"${correct_pod_yaml}"
-	yq -i \
-		'.spec.containers[0].image = "quay.io/prometheus/busybox:latest"' \
-		"${correct_pod_yaml}"
 }
 
 # Common function for several test cases from this bats script.
@@ -232,8 +211,6 @@ test_pod_policy_error() {
 }
 
 @test "Successful pod: runAsUser having the same value as the UID from the container image" {
-	prometheus_image_supported || skip "Test case not supported due to ${issue}"
-
 	# This container image specifies user = "nobody" that corresponds to UID = 65534. Setting
 	# the same value for runAsUser in the YAML file doesn't change the auto-generated Policy.
 	yq -i \
@@ -246,8 +223,6 @@ test_pod_policy_error() {
 }
 
 @test "Policy failure: unexpected UID = 0" {
-	prometheus_image_supported || skip "Test case not supported due to ${issue}"
-
 	# Change the container UID to 0 after the policy has been generated, and verify that the
 	# change gets rejected by the policy. UID = 0 is the default value from genpolicy, but
 	# this container image specifies user = "nobody" that corresponds to UID = 65534.
