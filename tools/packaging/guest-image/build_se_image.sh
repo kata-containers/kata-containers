@@ -37,6 +37,7 @@ Environment variables:
                   for information on how to retrieve and verify this document.
   SIGNING_KEY_CERT_PATH: a path for the IBM zSystem signing key certificate
   INTERMEDIATE_CA_CERT_PATH: a path for the intermediate CA certificate signed by the root CA
+  HOST_KEY_CRL_PATH: a path for the host key CRL
   DEBUG         : If set, display debug information.
 EOF
 	exit "${1:-0}"

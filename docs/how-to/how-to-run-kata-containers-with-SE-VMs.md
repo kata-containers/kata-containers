@@ -114,7 +114,7 @@ Here is an example of a native build from the source:
 
 ```
 $ sudo apt-get install gcc libglib2.0-dev libssl-dev libcurl4-openssl-dev
-$ tool_version=v2.25.0
+$ tool_version=v2.34.0
 $ git clone -b $tool_version https://github.com/ibm-s390-linux/s390-tools.git
 $ pushd s390-tools/genprotimg && make && sudo make install && popd
 $ rm -rf s390-tools
@@ -125,14 +125,15 @@ $ rm -rf s390-tools
 A host key document is a public key employed for encrypting a secure image, which is
 subsequently decrypted using a corresponding private key during the VM bootstrap process.
 You can obtain the host key document either through IBM's designated
-[Resource Link](http://www.ibm.com/servers/resourcelink) or by requesting it from the
+[Resource Link](http://www.ibm.com/servers/resourcelink)(you need to log in to access it) or by requesting it from the
 cloud provider responsible for the IBM Z and LinuxONE instances where your workloads are intended to run.
 
-To ensure security, it is essential to verify the authenticity and integrity of the host key document
-belonging to an authentic IBM machine. To achieve this, please additionally obtain the following
-certificates from the Resource Link:
+To ensure security, it is essential to verify the authenticity and integrity of the host
+key document belonging to an authentic IBM machine. To achieve this, please additionally
+obtain the following files from the Resource Link:
 
 - IBM Z signing key certificate
+- IBM Z host key certificate revocation list
 - `DigiCert` intermediate CA certificate
 
 These files will be used for verification during secure image construction in the next section.
@@ -143,10 +144,11 @@ Assuming you have placed a host key document at `$HOME/host-key-document`:
 
 - Host key document as `HKD-0000-0000000.crt`
 
-and two certificates at `$HOME/certificates`:
+and two certificates and one revocation list at `$HOME/certificates`:
 
+- IBM Z signing-key certificate as `ibm-z-host-key-signing-gen2.crt`
 - `DigiCert` intermediate CA certificate as `DigiCertCA.crt`
-- IBM Z signing-key certificate as `ibm-z-host-key-signing.crt`
+- IBM Z host key certificate revocation list as `ibm-z-host-key-gen2.crl`
 
 you can construct a secure image using the following procedure:
 
@@ -173,11 +175,12 @@ In production, the image construction should incorporate the verification
 in the following manner:
 
 ```
+$ signcert=$HOME/certificates/ibm-z-host-key-signing-gen2.crt
 $ cacert=$HOME/certificates/DigiCertCA.crt
-$ signcert=$HOME/certificates/ibm-z-host-key-signing.crt
+$ crl=$HOME/certificates/ibm-z-host-key-gen2.crl
 $ genprotimg --host-key-document=${host_key_document} \
 --output=kata-containers-se.img --image=${kernel_image} --ramdisk=${initrd_image} \
---cert=${cacert} --cert=${signcert} --parmfile=parmfile
+--cert=${cacert} --cert=${signcert} --crl=${crl} --parmfile=parmfile
 ```
 
 The steps with no verification, including the dependencies for the kernel and initrd,
@@ -186,20 +189,20 @@ can be easily accomplished by issuing the following make target:
 ```
 $ cd $GOPATH/src/github.com/kata-containers/kata-containers
 $ mkdir hkd_dir && cp $host_key_document hkd_dir
-$ sudo -E PATH=$PATH HKD_PATH=hkd_dir SE_KERNEL_PARAMS="agent.log=debug" \
-make boot-image-se-tarball
+$ HKD_PATH=hkd_dir SE_KERNEL_PARAMS="agent.log=debug" make boot-image-se-tarball
 $ ls build/kata-static-boot-image-se.tar.xz
 build/kata-static-boot-image-se.tar.xz
 ```
 
 `SE_KERNEL_PARAMS` could be used to add any extra kernel parameters. If no additional kernel configuration is required, this can be omitted.
 
-In production, you could build an image by running the same command, but with two
-additional environment variables for key verification:
+In production, you could build an image by running the same command, but with the
+following environment variables for key verification:
 
 ```
-$ export SIGNING_KEY_CERT_PATH=$HOME/certificates/ibm-z-host-key-signing.crt
+$ export SIGNING_KEY_CERT_PATH=$HOME/certificates/ibm-z-host-key-signing-gen2.crt
 $ export INTERMEDIATE_CA_CERT_PATH=$HOME/certificates/DigiCertCA.crt
+$ export HOST_KEY_CRL_PATH=$HOME/certificates/ibm-z-host-key-gen2.crl
 ```
 
 To build an image on the `x86_64` platform, set the following environment variables together with the variables above before `make boot-image-se-tarball`:
@@ -349,11 +352,11 @@ kata-static-virtiofsd.tar.xz
 $ ./tools/packaging/kata-deploy/local-build/kata-deploy-merge-builds.sh kata-artifacts
 ```
 
-In production, the environment variables `SIGNING_KEY_CERT_PATH` and
-`INTERMEDIATE_CA_CERT_PATH` should be exported like the manual configuration.
-If a rootfs-image is required for other available runtime classes (e.g. `kata` and `kata-qemu`)
-without the Secure Execution functionality, please run the following command
-before running `kata-deploy-merge-builds.sh`:
+In production, the environment variables `SIGNING_KEY_CERT_PATH`, `INTERMEDIATE_CA_CERT_PATH`
+and `SIGNING_KEY_CERT_PATH` should be exported like the manual configuration.
+If a rootfs-image is required for other available runtime classes (e.g. `kata` and
+`kata-qemu`) without the Secure Execution functionality, please run the following
+command before running `kata-deploy-merge-builds.sh`:
 
 ```
 $ sudo -E PATH=$PATH make rootfs-image-tarball

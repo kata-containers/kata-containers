@@ -27,12 +27,16 @@ build_secure_image() {
 	install_dest_dir="${3:-}"
 	key_verify_option="--no-verify" # no verification for CI testing purposes
 
-	if [ -n "${SIGNING_KEY_CERT_PATH:-}" ] && [ -n "${INTERMEDIATE_CA_CERT_PATH:-}" ]; then
-		if [ -e "${SIGNING_KEY_CERT_PATH}" ] && [ -e "${INTERMEDIATE_CA_CERT_PATH}" ]; then
-			key_verify_option="--cert=${SIGNING_KEY_CERT_PATH} --cert=${INTERMEDIATE_CA_CERT_PATH}"
+	if [ -n "${SIGNING_KEY_CERT_PATH:-}" ] && [ -n "${INTERMEDIATE_CA_CERT_PATH:-}" ] && [ -n "${HOST_KEY_CRL_PATH:-}" ]; then
+		if [ -e "${SIGNING_KEY_CERT_PATH}" ] && [ -e "${INTERMEDIATE_CA_CERT_PATH}" ] && [ -e "${HOST_KEY_CRL_PATH}" ]; then
+			key_verify_option="--cert=${SIGNING_KEY_CERT_PATH} --cert=${INTERMEDIATE_CA_CERT_PATH} --crl=${HOST_KEY_CRL_PATH}"
 		else
 			die "Specified certificate(s) not found"
 		fi
+	elif [ -n "${SIGNING_KEY_CERT_PATH}" ] || [ -n "${INTERMEDIATE_CA_CERT_PATH}" ] || [ -n "${HOST_KEY_CRL_PATH}" ]; then
+		die "All of SIGNING_KEY_CERT_PATH, INTERMEDIATE_CA_CERT_PATH, and HOST_KEY_CRL_PATH must be specified"
+	else
+		echo "No certificate specified. Using --no-verify option"
 	fi
 
 	if [ ! -f "${install_src_dir}/vmlinuz-confidential.container" ] ||
