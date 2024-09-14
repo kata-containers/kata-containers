@@ -25,28 +25,11 @@ setup() {
 }
 
 @test "Test we can pull an unencrypted image outside the guest with runc and then inside the guest successfully" {
-    # 1. Create one runc pod with the $unencrypted_image image
-    # We want to have one runc pod, so we pass a fake runtimeclass "runc" and then delete the runtimeClassName,
-    # because the runtimeclass is not optional in new_pod_config function.
-    runc_pod_config="$(new_pod_config "$unencrypted_image" "runc")"
-    sed -i '/runtimeClassName:/d' $runc_pod_config
-    set_node "$runc_pod_config" "$node"
-    set_container_command "$runc_pod_config" "0" "sleep" "30"
-
-    # For debug sake
-    echo "Pod $runc_pod_config file:"
-    cat $runc_pod_config
-
-    add_allow_all_policy_to_yaml "$runc_pod_config"
-    k8s_create_pod "$runc_pod_config"
-
-    echo "Runc pod test-e2e is running"
-    kubectl delete -f "$runc_pod_config"
 
     # 2. Create one kata pod with the $unencrypted_image image and nydus annotation
     kata_pod_with_nydus_config="$(new_pod_config "$unencrypted_image" "kata-${KATA_HYPERVISOR}")"
     set_node "$kata_pod_with_nydus_config" "$node"
-    set_container_command "$kata_pod_with_nydus_config" "0" "sleep" "30"
+    set_container_command "$kata_pod_with_nydus_config" "0" "sleep" "300"
 
     # Set annotation to pull image in guest
     set_metadata_annotation "$kata_pod_with_nydus_config" \
@@ -57,7 +40,7 @@ setup() {
     echo "Pod $kata_pod_with_nydus_config file:"
     cat $kata_pod_with_nydus_config
 
-    add_allow_all_policy_to_yaml "$kata_pod_with_nydus_config"
+    # add_allow_all_policy_to_yaml "$kata_pod_with_nydus_config"
     k8s_create_pod "$kata_pod_with_nydus_config"
 }
 
@@ -69,6 +52,14 @@ teardown() {
     [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
 
     kubectl describe pods
+
+    if [[ -n "${node_start_time:-}" && -z "$BATS_TEST_COMPLETED" ]]; then
+		echo "DEBUG: system logs of node '$node' since test start time ($node_start_time)"
+		print_node_journal "$node" "kata" --since "$node_start_time" || true
+        print_node_journal "$node" "containerd" --since "$node_start_time" || true
+        print_node_journal "$node" "nydus-snapshotter" --since "$node_start_time" || true
+	fi
+
     k8s_delete_all_pods_if_any_exists || true
     kubectl delete --ignore-not-found pvc trusted-pvc
     kubectl delete --ignore-not-found pv trusted-block-pv

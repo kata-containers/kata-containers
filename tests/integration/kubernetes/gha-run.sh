@@ -248,6 +248,8 @@ function deploy_kata() {
 	echo "::group::Runtime classes"
 	kubectl_retry get runtimeclass
 	echo "::endgroup::"
+
+	sudo crictl -r unix:///run/containerd/containerd.sock rmi quay.io/prometheus/prometheus:latest || true
 }
 
 function install_kbs_client() {
