@@ -131,6 +131,8 @@ The kata agent has the ability to configure agent options in guest kernel comman
 | `agent.cdh_api_timeout` | Confidential Data Hub (CDH) API timeout | Allow to configure CDH API timeout(seconds) | integer | `50` |
 | `agent.https_proxy` | HTTPS proxy | Allow to configure `https_proxy` in the guest | string | `""` |
 | `agent.image_registry_auth` | Image registry credential URI | The URI to where image-rs can find the credentials for pulling images from private registries e.g. `file:///root/.docker/config.json` to read from a file in the guest image, or `kbs:///default/credentials/test` to get the file from the KBS| string | `""` |
+| `agent.enable_signature_verification` | Image security policy flag | Whether enable image security policy enforcement. If `true`, the resource indexed by URI `agent.image_policy_file` will be got to work as image pulling policy. | string | `""` |
+| `agent.image_policy_file` | Image security policy URI | The URI to where image-rs Typical policy URIs are like `file:///etc/image.json` to read from a file in the guest image, or `kbs:///default/security-policy/test` to get the file from the KBS| string | `""` |
 | `agent.log` | Log level | Allow the agent log level to be changed (produces more or less output) | string | `"info"` |
 | `agent.log_vport` | Log port | Allow to specify the `vsock` port to read logs | integer | `0` |
 | `agent.no_proxy` | NO proxy | Allow to configure `no_proxy` in the guest | string | `""` |

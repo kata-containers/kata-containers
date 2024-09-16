@@ -6,7 +6,6 @@
 
 load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/confidential_common.sh"
-load "${BATS_TEST_DIRNAME}/confidential_kbs.sh"
 
 export KBS="${KBS:-false}"
 
@@ -39,32 +38,6 @@ function setup_kbs_decryption_key() {
     kbs_set_resource_base64 "default" "key" "${decryption_key_id}" "${decryption_key}"
 }
 
-function create_pod_yaml_with_encrypted_image() {
-    image=$1
-
-    # Note: this is not local as we use it in the caller test
-    kata_pod_with_encrypted_image="$(new_pod_config "$image" "kata-${KATA_HYPERVISOR}")"
-    set_node "${kata_pod_with_encrypted_image}" "$node"
-    set_container_command "${kata_pod_with_encrypted_image}" "0" "sleep" "30"
-
-    local CC_KBS_ADDR
-    export CC_KBS_ADDR=$(kbs_k8s_svc_http_addr)
-    kernel_params_annotation="io.katacontainers.config.hypervisor.kernel_params"
-    kernel_params_value+=" agent.guest_components_procs=confidential-data-hub"
-    kernel_params_value+=" agent.aa_kbc_params=cc_kbc::${CC_KBS_ADDR}"
-
-    set_metadata_annotation "${kata_pod_with_encrypted_image}" \
-        "${kernel_params_annotation}" \
-        "${kernel_params_value}"
-
-    # Set annotation to pull image in guest
-    set_metadata_annotation "${kata_pod_with_encrypted_image}" \
-        "io.containerd.cri.runtime-handler" \
-        "kata-${KATA_HYPERVISOR}"
-
-    add_allow_all_policy_to_yaml "${kata_pod_with_encrypted_image}"
-}
-
 @test "Test that creating a container from an encrypted image, with no decryption key fails" {
 
     # TODO - there is now delete KBS resource to ensure there is no key, so we need to keep
@@ -73,12 +46,12 @@ function create_pod_yaml_with_encrypted_image() {
     # policy, so for TEE tests we'd stay remaining with reject all, which could cause other
     # subsequent tests to fail
 
-    create_pod_yaml_with_encrypted_image "${ENCRYPTED_IMAGE}"
+    create_coco_pod_yaml "${ENCRYPTED_IMAGE}" "" "" "confidential-data-hub" "" "$node"
 
     # For debug sake
-    echo "Pod ${kata_pod_with_encrypted_image}: $(cat ${kata_pod_with_encrypted_image})"
+    echo "Pod ${kata_pod}: $(cat ${kata_pod})"
 
-    assert_pod_fail "${kata_pod_with_encrypted_image}"
+    assert_pod_fail "${kata_pod}"
     assert_logs_contain "${node}" kata "${node_start_time}" 'failed to get decrypt key'
     assert_logs_contain "${node}" kata "${node_start_time}" 'no suitable key found for decrypting layer key'
 }
@@ -88,12 +61,12 @@ function create_pod_yaml_with_encrypted_image() {
 
     setup_kbs_decryption_key "${DECRYPTION_KEY}" "${DECRYPTION_KEY_ID}"
 
-    create_pod_yaml_with_encrypted_image "${ENCRYPTED_IMAGE}"
+    create_coco_pod_yaml "${ENCRYPTED_IMAGE}" "" "" "confidential-data-hub" "" "$node"
 
     # For debug sake
-    echo "Pod ${kata_pod_with_encrypted_image}: $(cat ${kata_pod_with_encrypted_image})"
+    echo "Pod ${kata_pod}: $(cat ${kata_pod})"
 
-    k8s_create_pod "${kata_pod_with_encrypted_image}"
+    k8s_create_pod "${kata_pod}"
     echo "Kata pod test-e2e from encrypted image is running"
 }
 
@@ -101,12 +74,12 @@ function create_pod_yaml_with_encrypted_image() {
 
     setup_kbs_decryption_key "anVua19rZXk=" "${DECRYPTION_KEY_ID}"
 
-    create_pod_yaml_with_encrypted_image "${ENCRYPTED_IMAGE}"
+    create_coco_pod_yaml "${ENCRYPTED_IMAGE}" "" "" "confidential-data-hub" "" "$node"
 
     # For debug sake
-    echo "Pod ${kata_pod_with_encrypted_image}: $(cat ${kata_pod_with_encrypted_image})"
+    echo "Pod ${kata_pod}: $(cat ${kata_pod})"
 
-    assert_pod_fail "${kata_pod_with_encrypted_image}"
+    assert_pod_fail "${kata_pod}"
     assert_logs_contain "${node}" kata "${node_start_time}" 'failed to get decrypt key'
     assert_logs_contain "${node}" kata "${node_start_time}" 'no suitable key found for decrypting layer key'
 }

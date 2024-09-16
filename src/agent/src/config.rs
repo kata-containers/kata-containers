@@ -34,6 +34,12 @@ const GUEST_COMPONENTS_PROCS_OPTION: &str = "agent.guest_components_procs";
 const IMAGE_REGISTRY_AUTH_OPTION: &str = "agent.image_registry_auth";
 const SECURE_STORAGE_INTEGRITY_OPTION: &str = "agent.secure_storage_integrity";
 
+#[cfg(feature = "guest-pull")]
+const ENABLE_SIGNATURE_VERIFICATION: &str = "agent.enable_signature_verification";
+
+#[cfg(feature = "guest-pull")]
+const IMAGE_POLICY_FILE: &str = "agent.image_policy_file";
+
 // Configure the proxy settings for HTTPS requests in the guest,
 // to solve the problem of not being able to access the specified image in some cases.
 const HTTPS_PROXY: &str = "agent.https_proxy";
@@ -115,6 +121,10 @@ pub struct AgentConfig {
     #[cfg(feature = "guest-pull")]
     pub image_registry_auth: String,
     pub secure_storage_integrity: bool,
+    #[cfg(feature = "guest-pull")]
+    pub enable_signature_verification: bool,
+    #[cfg(feature = "guest-pull")]
+    pub image_policy_file: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -138,6 +148,10 @@ pub struct AgentConfigBuilder {
     #[cfg(feature = "guest-pull")]
     pub image_registry_auth: Option<String>,
     pub secure_storage_integrity: Option<bool>,
+    #[cfg(feature = "guest-pull")]
+    pub enable_signature_verification: Option<bool>,
+    #[cfg(feature = "guest-pull")]
+    pub image_policy_file: Option<String>,
 }
 
 macro_rules! config_override {
@@ -207,6 +221,10 @@ impl Default for AgentConfig {
             #[cfg(feature = "guest-pull")]
             image_registry_auth: String::from(""),
             secure_storage_integrity: false,
+            #[cfg(feature = "guest-pull")]
+            enable_signature_verification: false,
+            #[cfg(feature = "guest-pull")]
+            image_policy_file: String::from(""),
         }
     }
 }
@@ -246,8 +264,17 @@ impl FromStr for AgentConfig {
         );
         config_override!(agent_config_builder, agent_config, guest_components_procs);
         #[cfg(feature = "guest-pull")]
-        config_override!(agent_config_builder, agent_config, image_registry_auth);
+        {
+            config_override!(agent_config_builder, agent_config, image_registry_auth);
+            config_override!(
+                agent_config_builder,
+                agent_config,
+                enable_signature_verification
+            );
+            config_override!(agent_config_builder, agent_config, image_policy_file);
+        }
         config_override!(agent_config_builder, agent_config, secure_storage_integrity);
+
         Ok(agent_config)
     }
 }
@@ -372,12 +399,26 @@ impl AgentConfig {
                 get_guest_components_procs_value
             );
             #[cfg(feature = "guest-pull")]
-            parse_cmdline_param!(
-                param,
-                IMAGE_REGISTRY_AUTH_OPTION,
-                config.image_registry_auth,
-                get_string_value
-            );
+            {
+                parse_cmdline_param!(
+                    param,
+                    IMAGE_REGISTRY_AUTH_OPTION,
+                    config.image_registry_auth,
+                    get_string_value
+                );
+                parse_cmdline_param!(
+                    param,
+                    ENABLE_SIGNATURE_VERIFICATION,
+                    config.enable_signature_verification,
+                    get_bool_value
+                );
+                parse_cmdline_param!(
+                    param,
+                    IMAGE_POLICY_FILE,
+                    config.image_policy_file,
+                    get_string_value
+                );
+            }
             parse_cmdline_param!(
                 param,
                 SECURE_STORAGE_INTEGRITY_OPTION,
@@ -585,6 +626,11 @@ mod tests {
         assert!(!config.dev_mode);
         assert_eq!(config.log_level, DEFAULT_LOG_LEVEL);
         assert_eq!(config.hotplug_timeout, DEFAULT_HOTPLUG_TIMEOUT);
+        #[cfg(feature = "guest-pull")]
+        {
+            assert!(!config.enable_signature_verification);
+            assert_eq!(config.image_policy_file, "");
+        }
     }
 
     #[test]
@@ -612,6 +658,10 @@ mod tests {
             #[cfg(feature = "guest-pull")]
             image_registry_auth: &'a str,
             secure_storage_integrity: bool,
+            #[cfg(feature = "guest-pull")]
+            enable_signature_verification: bool,
+            #[cfg(feature = "guest-pull")]
+            image_policy_file: &'a str,
         }
 
         impl Default for TestData<'_> {
@@ -634,6 +684,10 @@ mod tests {
                     #[cfg(feature = "guest-pull")]
                     image_registry_auth: "",
                     secure_storage_integrity: false,
+                    #[cfg(feature = "guest-pull")]
+                    enable_signature_verification: false,
+                    #[cfg(feature = "guest-pull")]
+                    image_policy_file: "",
                 }
             }
         }
@@ -1102,6 +1156,24 @@ mod tests {
                 secure_storage_integrity: false,
                 ..Default::default()
             },
+            #[cfg(feature = "guest-pull")]
+            TestData {
+                contents: "agent.enable_signature_verification=true",
+                enable_signature_verification: true,
+                ..Default::default()
+            },
+            #[cfg(feature = "guest-pull")]
+            TestData {
+                contents: "agent.image_policy_file=kbs:///default/image-policy/test",
+                image_policy_file: "kbs:///default/image-policy/test",
+                ..Default::default()
+            },
+            #[cfg(feature = "guest-pull")]
+            TestData {
+                contents: "agent.image_policy_file=file:///etc/image-policy.json",
+                image_policy_file: "file:///etc/image-policy.json",
+                ..Default::default()
+            },
         ];
 
         let dir = tempdir().expect("failed to create tmpdir");
@@ -1162,13 +1234,20 @@ mod tests {
                 msg
             );
             #[cfg(feature = "guest-pull")]
-            assert_eq!(d.image_registry_auth, config.image_registry_auth, "{}", msg);
+            {
+                assert_eq!(d.image_registry_auth, config.image_registry_auth, "{}", msg);
+                assert_eq!(
+                    d.enable_signature_verification, config.enable_signature_verification,
+                    "{}",
+                    msg
+                );
+                assert_eq!(d.image_policy_file, config.image_policy_file, "{}", msg);
+            }
             assert_eq!(
                 d.secure_storage_integrity, config.secure_storage_integrity,
                 "{}",
                 msg
             );
-
             for v in vars_to_unset {
                 env::remove_var(v);
             }
