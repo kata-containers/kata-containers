@@ -239,7 +239,7 @@ The agent is built with a statically linked `musl.` The default `libc` used is `
 ```bash
 $ export ARCH="$(uname -m)"
 $ if [ "$ARCH" = "ppc64le" -o "$ARCH" = "s390x" ]; then export LIBC=gnu; else export LIBC=musl; fi
-$ [ "${ARCH}" == "ppc64le" ] && export ARCH=powerpc64le
+$ [ "${ARCH}" == "ppc64le" ] && export ARCH=powerpc64
 $ rustup target add "${ARCH}-unknown-linux-${LIBC}"
 ```
 
@@ -268,7 +268,7 @@ to install `libseccomp` for the agent.
 
 ```bash
 $ mkdir -p ${seccomp_install_path} ${gperf_install_path}
-$ pushd kata-containers/ci 
+$ pushd kata-containers/ci
 $ script -fec 'sudo -E ./install_libseccomp.sh ${seccomp_install_path} ${gperf_install_path}"'
 $ export LIBSECCOMP_LIB_PATH="${seccomp_install_path}/lib"
 $ popd
@@ -415,11 +415,11 @@ $ script -fec 'sudo -E AGENT_INIT=yes USE_DOCKER=true SECCOMP=no ./rootfs.sh "${
 > - Check the [compatibility matrix](../tools/osbuilder/README.md#platform-distro-compatibility-matrix) before creating rootfs.
 
 Optionally, add your custom agent binary to the rootfs with the following commands. The default `$LIBC` used
-is `musl`, but on ppc64le and s390x, `gnu` should be used. Also, Rust refers to ppc64le as `powerpc64le`:
+is `musl`, but on ppc64le and s390x, `gnu` should be used. Also, Rust refers to ppc64le as `powerpc64`:
 ```bash
 $ export ARCH="$(uname -m)"
 $ [ "${ARCH}" == "ppc64le" ] || [ "${ARCH}" == "s390x" ] && export LIBC=gnu || export LIBC=musl
-$ [ "${ARCH}" == "ppc64le" ] && export ARCH=powerpc64le
+$ [ "${ARCH}" == "ppc64le" ] && export ARCH=powerpc64
 $ sudo install -o root -g root -m 0550 -T "${ROOTFS_DIR}/../../../../src/agent/target/${ARCH}-unknown-linux-${LIBC}/release/kata-agent" "${ROOTFS_DIR}/sbin/init"
 ```
 
