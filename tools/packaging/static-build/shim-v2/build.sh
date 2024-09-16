@@ -48,7 +48,7 @@ docker pull ${container_image} || \
 arch=${ARCH:-$(uname -m)}
 GCC_ARCH=${arch}
 if [ ${arch} = "ppc64le" ]; then
-	GCC_ARCH="powerpc64le"
+	GCC_ARCH="powerpc64"
 	arch="ppc64"
 fi
 

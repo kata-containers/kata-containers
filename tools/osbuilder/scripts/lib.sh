@@ -221,7 +221,7 @@ generate_dockerfile()
 	[ -d "${dir}" ] || die "${dir}: not a directory"
 
 	local rustarch="$ARCH"
-	[ "$ARCH" = ppc64le ] && rustarch=powerpc64le
+	[ "$ARCH" = ppc64le ] && rustarch=powerpc64
 
 	[ -n "${http_proxy:-}" ] && readonly set_proxy="RUN sed -i '$ a proxy="${http_proxy:-}"' /etc/dnf/dnf.conf /etc/yum.conf; true"
 

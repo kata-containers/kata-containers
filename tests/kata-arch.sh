@@ -46,7 +46,7 @@ function arch_to_rust() {
 	local arch="$1"
 
 	if [ "${arch}" == "ppc64le" ]; then
-		arch="powerpc64le"
+		arch="powerpc64"
 	fi
 
 	echo "${arch}"

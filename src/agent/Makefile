@@ -54,7 +54,7 @@ endif
 include ../../utils.mk
 
 ifeq ($(ARCH), ppc64le)
-    override ARCH = powerpc64le
+    override ARCH = powerpc64
 endif
 
 ##VAR STANDARD_OCI_RUNTIME=yes|no define if agent enables standard oci runtime feature

@@ -18,7 +18,7 @@ CONTAINERD_RUNTIME_NAME = io.containerd.kata.v2
 include ../../utils.mk
 
 ifeq ($(ARCH), ppc64le)
-    override ARCH = powerpc64le
+    override ARCH = powerpc64
 endif
 
 ARCH_DIR = arch
@@ -31,7 +31,7 @@ test:
 	@echo "s390x is not currently supported"
 	exit 0
 install: install-runtime install-configs
-else ifeq ($(ARCH), powerpc64le)
+else ifeq ($(ARCH), powerpc64)
 default:
 	@echo "PowerPC 64 LE is not currently supported"
 	exit 0
