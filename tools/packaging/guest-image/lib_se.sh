@@ -33,7 +33,7 @@ build_secure_image() {
 		else
 			die "Specified certificate(s) not found"
 		fi
-	elif [ -n "${SIGNING_KEY_CERT_PATH}" ] || [ -n "${INTERMEDIATE_CA_CERT_PATH}" ] || [ -n "${HOST_KEY_CRL_PATH}" ]; then
+	elif [ -n "${SIGNING_KEY_CERT_PATH:-}" ] || [ -n "${INTERMEDIATE_CA_CERT_PATH:-}" ] || [ -n "${HOST_KEY_CRL_PATH:-}" ]; then
 		die "All of SIGNING_KEY_CERT_PATH, INTERMEDIATE_CA_CERT_PATH, and HOST_KEY_CRL_PATH must be specified"
 	else
 		echo "No certificate specified. Using --no-verify option"
