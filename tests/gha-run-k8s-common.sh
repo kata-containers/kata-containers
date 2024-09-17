@@ -217,7 +217,7 @@ function deploy_k0s() {
 		ARCH=amd64
 	fi
 	kubectl_version=$(sudo k0s kubectl version 2>/dev/null | grep "Client Version" | sed -e 's/Client Version: //')
-	sudo curl -fL --progress-bar -o /usr/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/${kubectl_version}/bin/linux/${ARCH}/kubectl
+	sudo curl -fL --progress-bar -o /usr/bin/kubectl https://dl.k8s.io/release/${kubectl_version}/bin/linux/${ARCH}/kubectl
 	sudo chmod +x /usr/bin/kubectl
 
 	mkdir -p ~/.kube
@@ -245,7 +245,7 @@ function deploy_k3s() {
 		ARCH=amd64
 	fi
 	kubectl_version=$(/usr/local/bin/k3s kubectl version --client=true 2>/dev/null | grep "Client Version" | sed -e 's/Client Version: //' -e 's/+k3s[0-9]\+//')
-	sudo curl -fL --progress-bar -o /usr/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/${kubectl_version}/bin/linux/${ARCH}/kubectl
+	sudo curl -fL --progress-bar -o /usr/bin/kubectl https://dl.k8s.io/release/${kubectl_version}/bin/linux/${ARCH}/kubectl
 	sudo chmod +x /usr/bin/kubectl
 	sudo rm -rf /usr/local/bin/kubectl
 
