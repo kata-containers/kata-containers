@@ -11,6 +11,7 @@ use crate::rpc::ttrpc_error;
 use crate::{AGENT_CONFIG, AGENT_POLICY};
 
 static POLICY_LOG_FILE: &str = "/tmp/policy.txt";
+static POLICY_DEFAULT_FILE: &str = "/etc/kata-opa/default-policy.rego";
 
 /// Convenience macro to obtain the scope logger
 macro_rules! sl {
@@ -85,7 +86,7 @@ impl AgentPolicy {
     }
 
     /// Initialize regorus.
-    pub async fn initialize(&mut self, default_policy_file: &str) -> Result<()> {
+    pub async fn initialize(&mut self) -> Result<()> {
         if AGENT_CONFIG.log_level.as_usize() >= slog::Level::Debug.as_usize() {
             self.log_file = Some(
                 tokio::fs::OpenOptions::new()
@@ -97,6 +98,14 @@ impl AgentPolicy {
             );
             debug!(sl!(), "policy: log file: {}", POLICY_LOG_FILE);
         }
+
+        // Check if policy file has been set via AgentConfig
+        // If empty, use default file.
+        let mut default_policy_file = AGENT_CONFIG.policy_file.clone();
+        if default_policy_file.is_empty() {
+            default_policy_file = POLICY_DEFAULT_FILE.to_string();
+        }
+        info!(sl!(), "default policy: {default_policy_file}");
 
         self.engine.add_policy_from_file(default_policy_file)?;
         self.update_allow_failures_flag().await?;
