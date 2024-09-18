@@ -724,9 +724,20 @@ fn get_cpuacct_stats(cg: &cgroups::Cgroup) -> MessageField<CpuUsage> {
     let cpu_controller: &CpuController = get_controller_or_return_singular_none!(cg);
     let stat = cpu_controller.cpu().stat;
     let h = lines_to_map(&stat);
-    let usage_in_usermode = *h.get("user_usec").unwrap_or(&0);
-    let usage_in_kernelmode = *h.get("system_usec").unwrap_or(&0);
-    let total_usage = *h.get("usage_usec").unwrap_or(&0);
+    // All fields in CpuUsage are expressed in nanoseconds (ns).
+    //
+    // For cgroup v1 (cpuacct controller):
+    // kata-agent reads the cpuacct.stat file, which reports the number of ticks
+    // consumed by the processes in the cgroup. It then converts these ticks to nanoseconds.
+    // Ref: https://www.kernel.org/doc/Documentation/cgroup-v1/cpuacct.txt
+    //
+    // For cgroup v2 (cpu controller):
+    // kata-agent reads the cpu.stat file, which reports the time consumed by the
+    // processes in the cgroup in microseconds (us). It then converts microseconds to nanoseconds.
+    // Ref: https://www.kernel.org/doc/Documentation/cgroup-v2.txt, section 5-1-1. CPU Interface Files
+    let usage_in_usermode = *h.get("user_usec").unwrap_or(&0) * 1000;
+    let usage_in_kernelmode = *h.get("system_usec").unwrap_or(&0) * 1000;
+    let total_usage = *h.get("usage_usec").unwrap_or(&0) * 1000;
     let percpu_usage = vec![];
 
     MessageField::some(CpuUsage {
