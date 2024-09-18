@@ -10,10 +10,10 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use containerd_shim_protos::api;
+use containerd_shim_protos::{api, sandbox_api};
 
 use super::utils::option_system_time_into;
-use super::{ProcessExitStatus, ProcessStateInfo, ProcessStatus, TaskResponse};
+use super::{ProcessExitStatus, ProcessStateInfo, ProcessStatus, SandboxResponse, TaskResponse};
 use crate::error::Error;
 
 impl From<ProcessExitStatus> for api::WaitResponse {
@@ -22,6 +22,133 @@ impl From<ProcessExitStatus> for api::WaitResponse {
             exit_status: from.exit_code as u32,
             exited_at: option_system_time_into(from.exit_time),
             ..Default::default()
+        }
+    }
+}
+
+impl TryFrom<SandboxResponse> for sandbox_api::CreateSandboxResponse {
+    type Error = anyhow::Error;
+    fn try_from(from: SandboxResponse) -> Result<Self> {
+        match from {
+            SandboxResponse::CreateSandbox => Ok(Self::new()),
+            _ => Err(anyhow!(Error::UnexpectedSandboxResponse(
+                from,
+                type_name::<Self>().to_string()
+            ))),
+        }
+    }
+}
+
+impl TryFrom<SandboxResponse> for sandbox_api::StartSandboxResponse {
+    type Error = anyhow::Error;
+    fn try_from(from: SandboxResponse) -> Result<Self> {
+        match from {
+            SandboxResponse::StartSandbox(resp) => Ok(Self {
+                pid: resp.pid,
+                created_at: option_system_time_into(resp.create_time),
+                ..Default::default()
+            }),
+            _ => Err(anyhow!(Error::UnexpectedSandboxResponse(
+                from,
+                type_name::<Self>().to_string()
+            ))),
+        }
+    }
+}
+
+impl TryFrom<SandboxResponse> for sandbox_api::PlatformResponse {
+    type Error = anyhow::Error;
+    fn try_from(from: SandboxResponse) -> Result<Self> {
+        match from {
+            SandboxResponse::Platform(resp) => {
+                let mut sandbox_resp = Self::new();
+                sandbox_resp.mut_platform().set_os(resp.os);
+                sandbox_resp
+                    .mut_platform()
+                    .set_architecture(resp.architecture);
+
+                Ok(sandbox_resp)
+            }
+            _ => Err(anyhow!(Error::UnexpectedSandboxResponse(
+                from,
+                type_name::<Self>().to_string()
+            ))),
+        }
+    }
+}
+
+impl TryFrom<SandboxResponse> for sandbox_api::StopSandboxResponse {
+    type Error = anyhow::Error;
+    fn try_from(from: SandboxResponse) -> Result<Self> {
+        match from {
+            SandboxResponse::StopSandbox => Ok(Self::new()),
+            _ => Err(anyhow!(Error::UnexpectedSandboxResponse(
+                from,
+                type_name::<Self>().to_string()
+            ))),
+        }
+    }
+}
+
+impl TryFrom<SandboxResponse> for sandbox_api::WaitSandboxResponse {
+    type Error = anyhow::Error;
+    fn try_from(from: SandboxResponse) -> Result<Self> {
+        match from {
+            SandboxResponse::WaitSandbox(resp) => Ok(Self {
+                exit_status: resp.exit_status,
+                exited_at: option_system_time_into(resp.exited_at),
+                ..Default::default()
+            }),
+            _ => Err(anyhow!(Error::UnexpectedSandboxResponse(
+                from,
+                type_name::<Self>().to_string()
+            ))),
+        }
+    }
+}
+
+impl TryFrom<SandboxResponse> for sandbox_api::SandboxStatusResponse {
+    type Error = anyhow::Error;
+    fn try_from(from: SandboxResponse) -> Result<Self> {
+        match from {
+            SandboxResponse::SandboxStatus(resp) => Ok(Self {
+                sandbox_id: resp.sandbox_id,
+                pid: resp.pid,
+                state: resp.state,
+                created_at: option_system_time_into(resp.created_at),
+                exited_at: option_system_time_into(resp.exited_at),
+                ..Default::default()
+            }),
+            _ => Err(anyhow!(Error::UnexpectedSandboxResponse(
+                from,
+                type_name::<Self>().to_string()
+            ))),
+        }
+    }
+}
+
+impl TryFrom<SandboxResponse> for sandbox_api::PingResponse {
+    type Error = anyhow::Error;
+    fn try_from(from: SandboxResponse) -> Result<Self> {
+        match from {
+            SandboxResponse::Ping => Ok(Self::new()),
+            _ => Err(anyhow!(Error::UnexpectedSandboxResponse(
+                from,
+                type_name::<Self>().to_string()
+            ))),
+        }
+    }
+}
+
+impl TryFrom<SandboxResponse> for sandbox_api::ShutdownSandboxResponse {
+    type Error = anyhow::Error;
+    fn try_from(from: SandboxResponse) -> Result<Self> {
+        match from {
+            SandboxResponse::ShutdownSandbox => Ok(Self::new()),
+            _ => Err(anyhow!(Error::UnexpectedSandboxResponse(
+                from,
+                type_name::<Self>().to_string()
+            ))),
         }
     }
 }

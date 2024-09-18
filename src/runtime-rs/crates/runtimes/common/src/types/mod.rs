@@ -141,6 +141,32 @@ pub struct ContainerConfig {
     pub stderr: Option<String>,
 }
 
+#[derive(Debug, Clone, Display)]
+pub enum SandboxRequest {
+    CreateSandbox(Box<SandboxConfig>),
+    StartSandbox(SandboxID),
+    Platform(SandboxID),
+    StopSandbox(StopSandboxRequest),
+    WaitSandbox(SandboxID),
+    SandboxStatus(SandboxStatusRequest),
+    Ping(SandboxID),
+    ShutdownSandbox(SandboxID),
+}
+
+/// Response: sandbox response to shim
+/// Request and Response messages need to be paired
+#[derive(Debug, Clone, Display)]
+pub enum SandboxResponse {
+    CreateSandbox,
+    StartSandbox(StartSandboxInfo),
+    Platform(PlatformInfo),
+    StopSandbox,
+    WaitSandbox(SandboxExitInfo),
+    SandboxStatus(SandboxStatusInfo),
+    Ping,
+    ShutdownSandbox,
+}
+
 #[derive(Clone, Debug)]
 pub struct SandboxConfig {
     pub sandbox_id: String,
@@ -150,6 +176,50 @@ pub struct SandboxConfig {
     pub annotations: HashMap<String, String, RandomState>,
     pub hooks: Option<oci::Hooks>,
     pub state: runtime_spec::State,
+}
+
+#[derive(Clone, Debug)]
+pub struct SandboxID {
+    pub sandbox_id: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct StartSandboxInfo {
+    pub pid: u32,
+    pub create_time: Option<std::time::SystemTime>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PlatformInfo {
+    pub os: String,
+    pub architecture: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct StopSandboxRequest {
+    pub sandbox_id: String,
+    pub timeout_secs: u32,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct SandboxExitInfo {
+    pub exit_status: u32,
+    pub exited_at: Option<std::time::SystemTime>,
+}
+
+#[derive(Clone, Debug)]
+pub struct SandboxStatusRequest {
+    pub sandbox_id: String,
+    pub verbose: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct SandboxStatusInfo {
+    pub sandbox_id: String,
+    pub pid: u32,
+    pub state: String,
+    pub created_at: Option<std::time::SystemTime>,
+    pub exited_at: Option<std::time::SystemTime>,
 }
 
 #[derive(Debug, Clone)]
