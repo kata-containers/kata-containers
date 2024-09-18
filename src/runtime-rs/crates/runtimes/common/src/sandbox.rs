@@ -4,7 +4,10 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use crate::{types::ContainerProcess, ContainerManager};
+use crate::{
+    types::{ContainerProcess, SandboxExitInfo},
+    ContainerManager,
+};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
@@ -13,6 +16,14 @@ use std::sync::Arc;
 pub struct SandboxNetworkEnv {
     pub netns: Option<String>,
     pub network_created: bool,
+}
+
+#[derive(Default, Clone, Debug)]
+pub struct SandboxStatus {
+    pub sandbox_id: String,
+    pub pid: u32,
+    pub state: String,
+    pub info: std::collections::HashMap<String, String>,
 }
 
 impl std::fmt::Debug for SandboxNetworkEnv {
@@ -27,6 +38,8 @@ impl std::fmt::Debug for SandboxNetworkEnv {
 #[async_trait]
 pub trait Sandbox: Send + Sync {
     async fn start(&self) -> Result<()>;
+    async fn status(&self) -> Result<SandboxStatus>;
+    async fn wait(&self) -> Result<SandboxExitInfo>;
     async fn stop(&self) -> Result<()>;
     async fn cleanup(&self) -> Result<()>;
     async fn shutdown(&self) -> Result<()>;

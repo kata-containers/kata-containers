@@ -11,6 +11,7 @@ logging::logger_with_subsystem!(sl, "service");
 
 mod event;
 mod manager;
+mod sandbox_service;
 mod task_service;
 
 pub use manager::ServiceManager;
