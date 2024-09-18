@@ -3,17 +3,18 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use crate::types::{Config, CopyFileInput, Options};
+use crate::types::{Config, CopyFileInput, Options, SetPolicyInput};
 use anyhow::{anyhow, Result};
 use oci::{Root as ociRoot, Spec as ociSpec};
 use oci_spec::runtime as oci;
-use protocols::agent::CopyFileRequest;
+use protocols::agent::{CopyFileRequest, SetPolicyRequest};
 use protocols::oci::{Mount as ttrpcMount, Root as ttrpcRoot, Spec as ttrpcSpec};
 use rand::Rng;
 use serde::de::DeserializeOwned;
 use slog::{debug, warn};
 use std::collections::HashMap;
 use std::fs::{self, File};
+use std::io::Read;
 use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -466,5 +467,28 @@ pub fn make_copy_file_request(input: &CopyFileInput) -> Result<CopyFileRequest> 
         req.set_file_size(src_meta.size() as i64);
     }
 
+    Ok(req)
+}
+
+pub fn make_set_policy_request(input: &SetPolicyInput) -> Result<SetPolicyRequest> {
+    let mut policy_file = File::open(&input.policy_file)?;
+    let metadata = policy_file.metadata()?;
+
+    let mut policy_data = String::new();
+    match policy_file.read_to_string(&mut policy_data) {
+        Ok(bytes_read) => {
+            if bytes_read != metadata.len() as usize {
+                return Err(anyhow!(
+                    "Failed to read all policy data, size {} read {}",
+                    metadata.len(),
+                    bytes_read
+                ));
+            }
+        }
+        Err(e) => return Err(anyhow!("Error reading policy file: {}", e)),
+    }
+
+    let mut req = SetPolicyRequest::default();
+    req.set_policy(policy_data);
     Ok(req)
 }
