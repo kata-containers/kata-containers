@@ -67,3 +67,10 @@ spec:
     targetPort: 8080
   selector:
     app: pod-annotate-webhook
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kata-webhook
+data:
+  runtime_class: kata
