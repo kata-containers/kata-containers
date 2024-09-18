@@ -29,6 +29,7 @@ use tokio::sync::RwLock;
 use crate::ResourceUpdateOp;
 
 const OS_ERROR_NO_SUCH_PROCESS: i32 = 3;
+const SANDBOXED_CGROUP_PATH: &str = "kata_sandboxed_pod";
 
 pub struct CgroupArgs {
     pub sid: String,
@@ -44,19 +45,21 @@ pub struct CgroupConfig {
 impl CgroupConfig {
     fn new(sid: &str, toml_config: &TomlConfig) -> Result<Self> {
         let overhead_path = utils::gen_overhead_path(sid);
-        let spec = load_oci_spec()?;
-        let path = spec
-            .linux()
-            .clone()
-            .and_then(|linux| linux.cgroups_path().clone())
-            .map(|path| {
-                // The trim of '/' is important, because cgroup_path is a relative path.
-                path.display()
-                    .to_string()
-                    .trim_start_matches('/')
-                    .to_string()
-            })
-            .unwrap_or_default();
+        let path = if let Ok(spec) = load_oci_spec() {
+            spec.linux()
+                .clone()
+                .and_then(|linux| linux.cgroups_path().clone())
+                .map(|path| {
+                    // The trim of '/' is important, because cgroup_path is a relative path.
+                    path.display()
+                        .to_string()
+                        .trim_start_matches('/')
+                        .to_string()
+                })
+                .unwrap_or_default()
+        } else {
+            format!("{}/{}", SANDBOXED_CGROUP_PATH, sid)
+        };
 
         Ok(Self {
             path,

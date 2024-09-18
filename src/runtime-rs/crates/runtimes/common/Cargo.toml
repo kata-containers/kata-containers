@@ -28,3 +28,4 @@ kata-types = { path = "../../../../libs/kata-types" }
 runtime-spec = { path = "../../../../libs/runtime-spec" }
 oci-spec = { version = "0.6.8", features = ["runtime"] }
 resource = { path = "../../resource" }
+protocols = { path = "../../../../libs/protocols"}

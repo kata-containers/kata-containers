@@ -67,9 +67,9 @@ impl ResourceManagerInner {
             .await
             .context("failed to create device manager")?;
 
-        let cgroups_resource = CgroupsResource::new(sid, &toml_config)?;
-        let cpu_resource = CpuResource::new(toml_config.clone())?;
-        let mem_resource = MemResource::new(init_size_manager)?;
+        let cgroups_resource = CgroupsResource::new(sid, &toml_config).context("load cgroup")?;
+        let cpu_resource = CpuResource::new(toml_config.clone()).context("load cpu resource")?;
+        let mem_resource = MemResource::new(init_size_manager).context("load memory resources")?;
         Ok(Self {
             sid: sid.to_string(),
             toml_config,
