@@ -145,4 +145,8 @@ impl yaml::K8sResource for Deployment {
             .clone()
             .or_else(|| Some(String::new()))
     }
+
+    fn get_process_fields(&self, process: &mut policy::KataProcess) {
+        yaml::get_process_fields(process, &self.spec.template.spec.securityContext);
+    }
 }

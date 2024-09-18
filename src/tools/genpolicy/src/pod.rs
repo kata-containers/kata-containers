@@ -94,7 +94,7 @@ pub struct PodSpec {
     topologySpreadConstraints: Option<Vec<TopologySpreadConstraint>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    securityContext: Option<PodSecurityContext>,
+    pub securityContext: Option<PodSecurityContext>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     priorityClassName: Option<String>,
@@ -312,9 +312,9 @@ struct SeccompProfile {
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-struct PodSecurityContext {
+pub struct PodSecurityContext {
     #[serde(skip_serializing_if = "Option::is_none")]
-    runAsUser: Option<i64>,
+    pub runAsUser: Option<i64>,
     // TODO: additional fields.
 }
 
@@ -893,11 +893,7 @@ impl yaml::K8sResource for Pod {
     }
 
     fn get_process_fields(&self, process: &mut policy::KataProcess) {
-        if let Some(context) = &self.spec.securityContext {
-            if let Some(uid) = context.runAsUser {
-                process.User.UID = uid.try_into().unwrap();
-            }
-        }
+        yaml::get_process_fields(process, &self.spec.securityContext);
     }
 }
 

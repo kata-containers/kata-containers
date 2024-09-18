@@ -131,6 +131,15 @@ test_job_policy_error() {
     test_job_policy_error
 }
 
+@test "Policy failure: unexpected UID = 222" {
+    # Changing the job spec after generating its policy will cause CreateContainer to be denied.
+    yq -i \
+        '.spec.template.spec.securityContext.runAsUser = 222' \
+        "${incorrect_yaml}"
+
+    test_job_policy_error
+}
+
 teardown() {
     auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
 
