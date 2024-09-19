@@ -46,14 +46,12 @@ pub struct FcInner {
     pub(crate) capabilities: Capabilities,
     pub(crate) fc_process: Mutex<Option<Child>>,
     pub(crate) exit_notify: Option<mpsc::Sender<()>>,
-    pub(crate) exit_waiter: Mutex<(mpsc::Receiver<()>, i32)>,
 }
 
 impl FcInner {
-    pub fn new() -> FcInner {
+    pub fn new(exit_notify: mpsc::Sender<()>) -> FcInner {
         let mut capabilities = Capabilities::new();
         capabilities.set(CapabilityBits::BlockDeviceSupport);
-        let (exit_notify, exit_waiter) = mpsc::channel(1);
 
         FcInner {
             id: String::default(),
@@ -71,7 +69,6 @@ impl FcInner {
             capabilities,
             fc_process: Mutex::new(None),
             exit_notify: Some(exit_notify),
-            exit_waiter: Mutex::new((exit_waiter, 0)),
         }
     }
 
@@ -124,11 +121,10 @@ impl FcInner {
         let mut child = cmd.stderr(Stdio::piped()).spawn()?;
 
         let stderr = child.stderr.take().unwrap();
-        let exit_notify: mpsc::Sender<()> = self
+        let exit_notify = self
             .exit_notify
             .take()
             .ok_or_else(|| anyhow!("no exit notify"))?;
-
         tokio::spawn(log_fc_stderr(stderr, exit_notify));
 
         match child.id() {
@@ -216,7 +212,7 @@ async fn log_fc_stderr(stderr: ChildStderr, exit_notify: mpsc::Sender<()>) -> Re
 #[async_trait]
 impl Persist for FcInner {
     type State = HypervisorState;
-    type ConstructorArgs = ();
+    type ConstructorArgs = mpsc::Sender<()>;
 
     async fn save(&self) -> Result<Self::State> {
         Ok(HypervisorState {
@@ -231,12 +227,7 @@ impl Persist for FcInner {
             ..Default::default()
         })
     }
-    async fn restore(
-        _hypervisor_args: Self::ConstructorArgs,
-        hypervisor_state: Self::State,
-    ) -> Result<Self> {
-        let (exit_notify, exit_waiter) = mpsc::channel(1);
-
+    async fn restore(exit_notify: mpsc::Sender<()>, hypervisor_state: Self::State) -> Result<Self> {
         Ok(FcInner {
             id: hypervisor_state.id,
             asock_path: String::default(),
@@ -253,7 +244,6 @@ impl Persist for FcInner {
             capabilities: Capabilities::new(),
             fc_process: Mutex::new(None),
             exit_notify: Some(exit_notify),
-            exit_waiter: Mutex::new((exit_waiter, 0)),
         })
     }
 }

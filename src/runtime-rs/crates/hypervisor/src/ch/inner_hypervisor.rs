@@ -657,14 +657,9 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub(crate) async fn wait_vm(&self) -> Result<i32> {
-        debug!(sl!(), "Waiting CH vmm");
-        let mut waiter = self.exit_waiter.lock().await;
-        if let Some(exitcode) = waiter.0.recv().await {
-            waiter.1 = exitcode;
-        }
-
-        Ok(waiter.1)
+        Ok(0)
     }
 
     pub(crate) fn pause_vm(&self) -> Result<()> {

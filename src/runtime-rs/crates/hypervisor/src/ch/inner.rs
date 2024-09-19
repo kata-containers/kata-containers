@@ -16,7 +16,6 @@ use persist::sandbox_persist::Persist;
 use std::collections::HashMap;
 use std::os::unix::net::UnixStream;
 use tokio::sync::watch::{channel, Receiver, Sender};
-use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tokio::{process::Child, sync::mpsc};
 
@@ -79,13 +78,12 @@ pub struct CloudHypervisorInner {
     pub(crate) _guest_memory_block_size_mb: u32,
 
     pub(crate) exit_notify: Option<mpsc::Sender<i32>>,
-    pub(crate) exit_waiter: Mutex<(mpsc::Receiver<i32>, i32)>,
 }
 
 const CH_DEFAULT_TIMEOUT_SECS: u32 = 10;
 
 impl CloudHypervisorInner {
-    pub fn new() -> Self {
+    pub fn new(exit_notify: Option<mpsc::Sender<i32>>) -> Self {
         let mut capabilities = Capabilities::new();
         capabilities.set(
             CapabilityBits::BlockDeviceSupport
@@ -95,7 +93,6 @@ impl CloudHypervisorInner {
         );
 
         let (tx, rx) = channel(true);
-        let (exit_notify, exit_waiter) = mpsc::channel(1);
 
         Self {
             api_socket: None,
@@ -122,8 +119,7 @@ impl CloudHypervisorInner {
             ch_features: None,
             _guest_memory_block_size_mb: 0,
 
-            exit_notify: Some(exit_notify),
-            exit_waiter: Mutex::new((exit_waiter, 0)),
+            exit_notify,
         }
     }
 
@@ -138,14 +134,14 @@ impl CloudHypervisorInner {
 
 impl Default for CloudHypervisorInner {
     fn default() -> Self {
-        Self::new()
+        Self::new(None)
     }
 }
 
 #[async_trait]
 impl Persist for CloudHypervisorInner {
     type State = HypervisorState;
-    type ConstructorArgs = ();
+    type ConstructorArgs = mpsc::Sender<i32>;
 
     // Return a state object that will be saved by the caller.
     async fn save(&self) -> Result<Self::State> {
@@ -166,11 +162,10 @@ impl Persist for CloudHypervisorInner {
 
     // Set the hypervisor state to the specified state
     async fn restore(
-        _hypervisor_args: Self::ConstructorArgs,
+        exit_notify: mpsc::Sender<i32>,
         hypervisor_state: Self::State,
     ) -> Result<Self> {
         let (tx, rx) = channel(true);
-        let (exit_notify, exit_waiter) = mpsc::channel(1);
 
         let mut ch = Self {
             config: Some(hypervisor_state.config),
@@ -190,7 +185,6 @@ impl Persist for CloudHypervisorInner {
             jailer_root: String::default(),
             ch_features: None,
             exit_notify: Some(exit_notify),
-            exit_waiter: Mutex::new((exit_waiter, 0)),
 
             ..Default::default()
         };
@@ -207,7 +201,9 @@ mod tests {
 
     #[actix_rt::test]
     async fn test_save_clh() {
-        let mut clh = CloudHypervisorInner::new();
+        let (exit_notify, _exit_waiter) = mpsc::channel(1);
+
+        let mut clh = CloudHypervisorInner::new(Some(exit_notify.clone()));
         clh.id = String::from("123456");
         clh.netns = Some(String::from("/var/run/netns/testnet"));
         clh.vm_path = String::from("/opt/kata/bin/cloud-hypervisor");
@@ -229,7 +225,7 @@ mod tests {
         assert!(!state.jailed);
         assert_eq!(state.hypervisor_type, HYPERVISOR_NAME_CH.to_string());
 
-        let clh = CloudHypervisorInner::restore((), state.clone())
+        let clh = CloudHypervisorInner::restore(exit_notify, state.clone())
             .await
             .unwrap();
         assert_eq!(clh.id, state.id);

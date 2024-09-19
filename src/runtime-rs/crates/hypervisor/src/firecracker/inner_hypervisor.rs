@@ -102,21 +102,14 @@ impl FcInner {
     }
 
     pub(crate) async fn wait_vm(&self) -> Result<i32> {
-        debug!(sl(), "Wait fc sandbox");
-        let mut waiter = self.exit_waiter.lock().await;
-
-        //wait until the fc process exited.
-        waiter.0.recv().await;
-
         let mut fc_process = self.fc_process.lock().await;
 
         if let Some(mut fc_process) = fc_process.take() {
-            if let Ok(status) = fc_process.wait().await {
-                waiter.1 = status.code().unwrap_or(0);
-            }
+            let status = fc_process.wait().await?;
+            Ok(status.code().unwrap_or(0))
+        } else {
+            Err(anyhow!("the process has been reaped"))
         }
-
-        Ok(waiter.1)
     }
 
     pub(crate) fn pause_vm(&self) -> Result<()> {

@@ -19,11 +19,14 @@ use kata_types::capabilities::Capabilities;
 use kata_types::capabilities::CapabilityBits;
 use persist::sandbox_persist::Persist;
 use std::sync::Arc;
+use tokio::sync::mpsc;
+use tokio::sync::Mutex;
 use tokio::sync::RwLock;
 
 #[derive(Debug)]
 pub struct Firecracker {
     inner: Arc<RwLock<FcInner>>,
+    exit_waiter: Mutex<(mpsc::Receiver<()>, i32)>,
 }
 
 // Convenience function to set the scope.
@@ -39,8 +42,11 @@ impl Default for Firecracker {
 
 impl Firecracker {
     pub fn new() -> Self {
+        let (exit_notify, exit_waiter) = mpsc::channel(1);
+
         Self {
-            inner: Arc::new(RwLock::new(FcInner::new())),
+            inner: Arc::new(RwLock::new(FcInner::new(exit_notify))),
+            exit_waiter: Mutex::new((exit_waiter, 0)),
         }
     }
 
@@ -68,8 +74,18 @@ impl Hypervisor for Firecracker {
     }
 
     async fn wait_vm(&self) -> Result<i32> {
+        debug!(sl(), "Wait fc sandbox");
+        let mut waiter = self.exit_waiter.lock().await;
+
+        //wait until the fc process exited.
+        waiter.0.recv().await;
+
         let inner = self.inner.read().await;
-        inner.wait_vm().await
+        if let Ok(exit_code) = inner.wait_vm().await {
+            waiter.1 = exit_code;
+        }
+
+        Ok(waiter.1)
     }
 
     async fn pause_vm(&self) -> Result<()> {
@@ -209,12 +225,15 @@ impl Persist for Firecracker {
     }
     /// Restore a component from a specified state.
     async fn restore(
-        hypervisor_args: Self::ConstructorArgs,
+        _hypervisor_args: Self::ConstructorArgs,
         hypervisor_state: Self::State,
     ) -> Result<Self> {
-        let inner = FcInner::restore(hypervisor_args, hypervisor_state).await?;
+        let (exit_notify, exit_waiter) = mpsc::channel(1);
+        let inner = FcInner::restore(exit_notify, hypervisor_state).await?;
+
         Ok(Self {
             inner: Arc::new(RwLock::new(inner)),
+            exit_waiter: Mutex::new((exit_waiter, 0)),
         })
     }
 }

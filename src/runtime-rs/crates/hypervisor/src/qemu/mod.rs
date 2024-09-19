@@ -20,10 +20,12 @@ use async_trait::async_trait;
 
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use tokio::sync::{mpsc, Mutex};
 
 #[derive(Debug)]
 pub struct Qemu {
     inner: Arc<RwLock<QemuInner>>,
+    exit_waiter: Mutex<(mpsc::Receiver<()>, i32)>,
 }
 
 impl Default for Qemu {
@@ -34,8 +36,11 @@ impl Default for Qemu {
 
 impl Qemu {
     pub fn new() -> Self {
+        let (exit_notify, exit_waiter) = mpsc::channel(1);
+
         Self {
-            inner: Arc::new(RwLock::new(QemuInner::new())),
+            inner: Arc::new(RwLock::new(QemuInner::new(exit_notify))),
+            exit_waiter: Mutex::new((exit_waiter, 0)),
         }
     }
 
@@ -63,8 +68,19 @@ impl Hypervisor for Qemu {
     }
 
     async fn wait_vm(&self) -> Result<i32> {
+        info!(sl!(), "Wait QEMU VM");
+
+        let mut waiter = self.exit_waiter.lock().await;
+
+        //wait until the qemu process exited.
+        waiter.0.recv().await;
+
         let inner = self.inner.read().await;
-        inner.wait_vm().await
+        if let Ok(exit_code) = inner.wait_vm().await {
+            waiter.1 = exit_code;
+        }
+
+        Ok(waiter.1)
     }
 
     async fn pause_vm(&self) -> Result<()> {
@@ -204,12 +220,15 @@ impl Persist for Qemu {
 
     /// Restore a component from a specified state.
     async fn restore(
-        hypervisor_args: Self::ConstructorArgs,
+        _hypervisor_args: Self::ConstructorArgs,
         hypervisor_state: Self::State,
     ) -> Result<Self> {
-        let inner = QemuInner::restore(hypervisor_args, hypervisor_state).await?;
+        let (exit_notify, exit_waiter) = mpsc::channel(1);
+
+        let inner = QemuInner::restore(exit_notify, hypervisor_state).await?;
         Ok(Self {
             inner: Arc::new(RwLock::new(inner)),
+            exit_waiter: Mutex::new((exit_waiter, 0)),
         })
     }
 }

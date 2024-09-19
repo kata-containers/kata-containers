@@ -43,13 +43,10 @@ pub struct QemuInner {
     netns: Option<String>,
 
     exit_notify: Option<mpsc::Sender<()>>,
-    exit_waiter: Mutex<(mpsc::Receiver<()>, i32)>,
 }
 
 impl QemuInner {
-    pub fn new() -> QemuInner {
-        let (exit_notify, exit_waiter) = mpsc::channel(1);
-
+    pub fn new(exit_notify: mpsc::Sender<()>) -> QemuInner {
         QemuInner {
             id: "".to_string(),
             qemu_process: Mutex::new(None),
@@ -59,7 +56,6 @@ impl QemuInner {
             netns: None,
 
             exit_notify: Some(exit_notify),
-            exit_waiter: Mutex::new((exit_waiter, 0)),
         }
     }
 
@@ -202,22 +198,14 @@ impl QemuInner {
     }
 
     pub(crate) async fn wait_vm(&self) -> Result<i32> {
-        info!(sl!(), "Wait QEMU VM");
-
-        let mut waiter = self.exit_waiter.lock().await;
-
-        //wait until the qemu process exited.
-        waiter.0.recv().await;
-
         let mut qemu_process = self.qemu_process.lock().await;
 
         if let Some(mut qemu_process) = qemu_process.take() {
-            if let Ok(status) = qemu_process.wait().await {
-                waiter.1 = status.code().unwrap_or(0);
-            }
+            let status = qemu_process.wait().await?;
+            Ok(status.code().unwrap_or(0))
+        } else {
+            Err(anyhow!("the process has been reaped"))
         }
-
-        Ok(waiter.1)
     }
 
     pub(crate) fn pause_vm(&self) -> Result<()> {
@@ -589,7 +577,7 @@ impl QemuInner {
 #[async_trait]
 impl Persist for QemuInner {
     type State = HypervisorState;
-    type ConstructorArgs = ();
+    type ConstructorArgs = mpsc::Sender<()>;
 
     /// Save a state of hypervisor
     async fn save(&self) -> Result<Self::State> {
@@ -602,12 +590,7 @@ impl Persist for QemuInner {
     }
 
     /// Restore hypervisor
-    async fn restore(
-        _hypervisor_args: Self::ConstructorArgs,
-        hypervisor_state: Self::State,
-    ) -> Result<Self> {
-        let (exit_notify, exit_waiter) = mpsc::channel(1);
-
+    async fn restore(exit_notify: mpsc::Sender<()>, hypervisor_state: Self::State) -> Result<Self> {
         Ok(QemuInner {
             id: hypervisor_state.id,
             qemu_process: Mutex::new(None),
@@ -617,7 +600,6 @@ impl Persist for QemuInner {
             netns: None,
 
             exit_notify: Some(exit_notify),
-            exit_waiter: Mutex::new((exit_waiter, 0)),
         })
     }
 }
