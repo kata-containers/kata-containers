@@ -687,6 +687,27 @@ type HypervisorConfig struct {
 
 	// Initdata defines the initdata passed into guest when CreateVM
 	Initdata string
+
+	// Keyset value for the pre-attestation secret
+	GuestPreAttestationKeyset string
+
+	// Proxy address for the Key Broker
+	GuestPreAttestationURI string
+
+	// Key Broker mode
+	GuestPreAttestationMode string
+
+	// Path to the SEV CA authority file (ASK/ARK)
+	SEVCertChainPath string
+
+	// SEV Policy bits
+	SEVGuestPolicy uint32
+
+	// SNP Policy bits
+	SNPGuestPolicy uint64
+
+	// Turn guest pre-attestation on or off
+	GuestPreAttestation bool
 }
 
 // vcpu mapping from vcpu number to thread number
@@ -1104,6 +1125,7 @@ func AvailableGuestProtections() (protections []string) {
 type Hypervisor interface {
 	CreateVM(ctx context.Context, id string, network Network, hypervisorConfig *HypervisorConfig) error
 	StartVM(ctx context.Context, timeout int) error
+	AttestVM(ctx context.Context) error
 
 	// If wait is set, don't actively stop the sandbox:
 	// just perform cleanup.

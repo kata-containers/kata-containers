@@ -15,7 +15,6 @@
 [hypervisor.qemu]
 path = "@QEMUSNPPATH@"
 kernel = "@KERNELCONFIDENTIALPATH@"
-#image = "@IMAGEPATH@"
 initrd = "@INITRDCONFIDENTIALPATH@"
 machine_type = "@MACHINETYPE@"
 
@@ -79,7 +78,7 @@ kernel_params = "@KERNELPARAMS@"
 
 # Path to the firmware.
 # If you want that qemu uses the default firmware leave this option empty
-firmware = "@FIRMWARESNPPATH@"
+firmware = "@FIRMWARESEVPATH@"
 
 # Path to the firmware volume.
 # firmware TDVF or OVMF can be split into FIRMWARE_VARS.fd (UEFI variables

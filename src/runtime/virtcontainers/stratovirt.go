@@ -1114,6 +1114,10 @@ func (s *stratovirt) ResumeVM(ctx context.Context) error {
 	return nil
 }
 
+func (s *stratovirt) AttestVM(ctx context.Context) error {
+	return nil
+}
+
 func (s *stratovirt) AddDevice(ctx context.Context, devInfo interface{}, devType DeviceType) error {
 	span, _ := katatrace.Trace(ctx, s.Logger(), "AddDevice", stratovirtTracingTags, map[string]string{"sandbox_id": s.id})
 	defer span.End()

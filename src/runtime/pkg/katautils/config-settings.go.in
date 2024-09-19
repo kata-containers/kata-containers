@@ -100,6 +100,13 @@ const defaultDisableSeccomp = false
 const defaultDisableGuestSeLinux = true
 const defaultVfioMode = "guest-kernel"
 const defaultLegacySerial = false
+const defaultGuestPreAttestation = false
+const defaultGuestPreAttestationURI string = ""
+const defaultGuestPreAttestationMode string = ""
+const defaultGuestPreAttestationKeyset string = ""
+const defaultSEVCertChainPath string = ""
+const defaultSEVGuestPolicy uint32 = 0
+const defaultSNPGuestPolicy uint64 = 0x30000
 
 var defaultSGXEPCSize = int64(0)
 
