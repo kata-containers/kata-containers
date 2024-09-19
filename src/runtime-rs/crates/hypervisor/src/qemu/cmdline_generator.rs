@@ -176,6 +176,10 @@ impl Kernel {
         kernel_params.append(&mut KernelParams::from_string(
             &config.boot_info.kernel_params,
         ));
+        kernel_params.append(&mut KernelParams::from_string(&format!(
+            "selinux={}",
+            if config.disable_guest_selinux { 0 } else { 1 }
+        )));
 
         Ok(Kernel {
             path: config.boot_info.kernel.clone(),

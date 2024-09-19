@@ -71,7 +71,7 @@ impl ShareVirtioFsStandalone {
         })
     }
 
-    fn virtiofsd_args(&self, sock_path: &str) -> Result<Vec<String>> {
+    fn virtiofsd_args(&self, sock_path: &str, disable_guest_selinux: bool) -> Result<Vec<String>> {
         let source_path = get_host_ro_shared_path(&self.config.id);
         ensure_dir_exist(&source_path)?;
         let shared_dir = source_path
@@ -96,12 +96,19 @@ impl ShareVirtioFsStandalone {
             args.append(&mut extra_args);
         }
 
+        if !disable_guest_selinux {
+            args.push(String::from("--xattr"));
+        }
+
         Ok(args)
     }
 
     async fn setup_virtiofsd(&self, h: &dyn Hypervisor) -> Result<()> {
         let sock_path = generate_sock_path(&h.get_jailer_root().await?);
-        let args = self.virtiofsd_args(&sock_path).context("virtiofsd args")?;
+        let disable_guest_selinux = h.hypervisor_config().await.disable_guest_selinux;
+        let args = self
+            .virtiofsd_args(&sock_path, disable_guest_selinux)
+            .context("virtiofsd args")?;
 
         let mut cmd = Command::new(&self.config.virtio_fs_daemon);
         let child_cmd = cmd.args(&args).stderr(Stdio::piped());
