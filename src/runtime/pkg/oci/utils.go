@@ -578,13 +578,6 @@ func addHypervisorPathOverrides(ocispec specs.Spec, config *vc.SandboxConfig, ru
 		config.HypervisorConfig.JailerPath = value
 	}
 
-	if value, ok := ocispec.Annotations[vcAnnotations.CtlPath]; ok {
-		if !checkPathIsInGlobs(runtime.HypervisorConfig.HypervisorCtlPathList, value) {
-			return fmt.Errorf("hypervisor control %v required from annotation is not valid", value)
-		}
-		config.HypervisorConfig.HypervisorCtlPath = value
-	}
-
 	if value, ok := ocispec.Annotations[vcAnnotations.KernelParams]; ok {
 		if value != "" {
 			params := vc.DeserializeParams(strings.Fields(value))

@@ -673,17 +673,15 @@ func TestSandboxCreateAssets(t *testing.T) {
 	originalInitrdPath := filepath.Join(testDir, testInitrd)
 	originalFirmwarePath := filepath.Join(testDir, testFirmware)
 	originalHypervisorPath := filepath.Join(testDir, testHypervisor)
-	originalHypervisorCtlPath := filepath.Join(testDir, testHypervisorCtl)
 	originalJailerPath := filepath.Join(testDir, testJailer)
 
 	hc := HypervisorConfig{
-		KernelPath:        originalKernelPath,
-		ImagePath:         originalImagePath,
-		InitrdPath:        originalInitrdPath,
-		FirmwarePath:      originalFirmwarePath,
-		HypervisorPath:    originalHypervisorPath,
-		HypervisorCtlPath: originalHypervisorCtlPath,
-		JailerPath:        originalJailerPath,
+		KernelPath:     originalKernelPath,
+		ImagePath:      originalImagePath,
+		InitrdPath:     originalInitrdPath,
+		FirmwarePath:   originalFirmwarePath,
+		HypervisorPath: originalHypervisorPath,
+		JailerPath:     originalJailerPath,
 	}
 
 	data := []testData{
@@ -699,13 +697,6 @@ func TestSandboxCreateAssets(t *testing.T) {
 			map[string]string{
 				annotations.HypervisorPath: filename,
 				annotations.HypervisorHash: assetContentHash,
-			},
-		},
-		{
-			types.HypervisorCtlAsset,
-			map[string]string{
-				annotations.HypervisorCtlPath: filename,
-				annotations.HypervisorCtlHash: assetContentHash,
 			},
 		},
 		{

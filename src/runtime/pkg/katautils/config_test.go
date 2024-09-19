@@ -1770,9 +1770,6 @@ func TestUpdateRuntimeConfigHypervisor(t *testing.T) {
 
 	configFile := "/some/where/configuration.toml"
 
-	// Note: We cannot test acrnHypervisorTableType since
-	// newAcrnHypervisorConfig() expects ACRN binaries to be
-	// installed.
 	var entries = []tableTypeEntry{
 		{clhHypervisorTableType, true},
 		{dragonballHypervisorTableType, true},

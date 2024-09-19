@@ -102,9 +102,6 @@ const (
 	// QemuHypervisor is the QEMU hypervisor.
 	QemuHypervisor HypervisorType = "qemu"
 
-	// AcrnHypervisor is the ACRN hypervisor.
-	AcrnHypervisor HypervisorType = "acrn"
-
 	// ClhHypervisor is the ICH hypervisor.
 	ClhHypervisor HypervisorType = "clh"
 
@@ -172,12 +169,6 @@ type HypervisorConfig struct {
 
 	// HypervisorPathList is the list of hypervisor paths names allowed in annotations
 	HypervisorPathList []string
-
-	// HypervisorCtlPathList is the list of hypervisor control paths names allowed in annotations
-	HypervisorCtlPathList []string
-
-	// HypervisorCtlPath is the hypervisor ctl executable host path.
-	HypervisorCtlPath string
 
 	// JailerPath is the jailer executable host path.
 	JailerPath string

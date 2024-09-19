@@ -88,12 +88,6 @@ pub const KATA_ANNO_CFG_HYPERVISOR_PREFIX: &str = "io.katacontainers.config.hype
 pub const KATA_ANNO_CFG_HYPERVISOR_PATH: &str = "io.katacontainers.config.hypervisor.path";
 /// A sandbox annotation for passing a container hypervisor binary SHA-512 hash value.
 pub const KATA_ANNO_CFG_HYPERVISOR_HASH: &str = "io.katacontainers.config.hypervisor.path_hash";
-/// A sandbox annotation for passing a per container path pointing at the hypervisor control binary
-/// that will run the container VM.
-pub const KATA_ANNO_CFG_HYPERVISOR_CTLPATH: &str = "io.katacontainers.config.hypervisor.ctlpath";
-/// A sandbox annotation for passing a container hypervisor control binary SHA-512 hash value.
-pub const KATA_ANNO_CFG_HYPERVISOR_CTLHASH: &str =
-    "io.katacontainers.config.hypervisor.hypervisorctl_hash";
 /// A sandbox annotation for passing a per container path pointing at the jailer that will constrain
 /// the container VM.
 pub const KATA_ANNO_CFG_HYPERVISOR_JAILER_PATH: &str =
@@ -505,10 +499,6 @@ impl Annotation {
                     KATA_ANNO_CFG_HYPERVISOR_PATH => {
                         hv.validate_hypervisor_path(value)?;
                         hv.path = value.to_string();
-                    }
-                    KATA_ANNO_CFG_HYPERVISOR_CTLPATH => {
-                        hv.validate_hypervisor_ctlpath(value)?;
-                        hv.ctlpath = value.to_string();
                     }
 
                     KATA_ANNO_CFG_HYPERVISOR_JAILER_PATH => {

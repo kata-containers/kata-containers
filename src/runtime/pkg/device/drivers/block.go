@@ -60,12 +60,6 @@ func (device *BlockDevice) Attach(ctx context.Context, devReceiver api.DeviceRec
 		return err
 	}
 
-	hypervisorType := devReceiver.GetHypervisorType()
-	if hypervisorType == "acrn" {
-		deviceLogger().Debug("Special casing for ACRN to increment BlockIndex")
-		index = index + 1
-	}
-
 	drive := &config.BlockDrive{
 		File:     device.DeviceInfo.HostPath,
 		Format:   "raw",

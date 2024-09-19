@@ -36,10 +36,6 @@ type HypervisorConfig struct {
 	// HypervisorPath is the hypervisor executable host path.
 	HypervisorPath string
 
-	// HypervisorCtlPath is the hypervisor ctl executable host path.
-	HypervisorCtlPath string
-
-	// HypervisorCtlPath is the hypervisor ctl executable host path.
 	// JailerPath is the jailer executable host path.
 	JailerPath string
 
@@ -93,9 +89,6 @@ type HypervisorConfig struct {
 
 	// HypervisorPathList is the list of hypervisor paths names allowed in annotations
 	HypervisorPathList []string
-
-	// HypervisorCtlPathList is the list of hypervisor control paths names allowed in annotations
-	HypervisorCtlPathList []string
 
 	// JailerPathList is the list of jailer paths names allowed in annotations
 	JailerPathList []string

@@ -28,7 +28,6 @@ const testHypervisor = "hypervisor"
 const testJailer = "jailer"
 const testFirmware = "firmware"
 const testVirtiofsd = "virtiofsd"
-const testHypervisorCtl = "hypervisorctl"
 const testBundle = "bundle"
 
 const testDisabledAsNonRoot = "Test disabled as requires root privileges"
@@ -44,10 +43,6 @@ var testClhKernelPath = ""
 var testClhImagePath = ""
 var testClhInitrdPath = ""
 var testClhPath = ""
-var testAcrnKernelPath = ""
-var testAcrnImagePath = ""
-var testAcrnPath = ""
-var testAcrnCtlPath = ""
 var testStratovirtKernelPath = ""
 var testStratovirtImagePath = ""
 var testStratovirtInitrdPath = ""
@@ -61,18 +56,6 @@ func setup() {
 	os.Mkdir(filepath.Join(testDir, testBundle), DirMode)
 
 	for _, filename := range []string{testQemuKernelPath, testQemuInitrdPath, testQemuImagePath, testQemuPath} {
-		_, err := os.Create(filename)
-		if err != nil {
-			fmt.Printf("Could not recreate %s:%v", filename, err)
-			os.Exit(1)
-		}
-	}
-}
-
-func setupAcrn() {
-	os.Mkdir(filepath.Join(testDir, testBundle), DirMode)
-
-	for _, filename := range []string{testAcrnKernelPath, testAcrnImagePath, testAcrnPath, testAcrnCtlPath} {
 		_, err := os.Create(filename)
 		if err != nil {
 			fmt.Printf("Could not recreate %s:%v", filename, err)
@@ -149,13 +132,6 @@ func TestMain(m *testing.M) {
 	testQemuPath = filepath.Join(testDir, testHypervisor)
 
 	setup()
-
-	testAcrnKernelPath = filepath.Join(testDir, testKernel)
-	testAcrnImagePath = filepath.Join(testDir, testImage)
-	testAcrnPath = filepath.Join(testDir, testHypervisor)
-	testAcrnCtlPath = filepath.Join(testDir, testHypervisorCtl)
-
-	setupAcrn()
 
 	testVirtiofsdPath = filepath.Join(testDir, testBundle, testVirtiofsd)
 	testClhKernelPath = filepath.Join(testDir, testBundle, testKernel)

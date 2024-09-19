@@ -30,7 +30,7 @@ type CPUDevice struct {
 
 type HypervisorState struct {
 	BlockIndexMap map[int]struct{}
-	// Type of hypervisor, E.g. qemu/firecracker/acrn.
+	// Type of hypervisor, E.g. qemu/firecracker
 	Type string
 	UUID string
 	// clh sepcific: refer to 'virtcontainers/clh.go:CloudHypervisorState'
