@@ -448,13 +448,25 @@ func createAssets(ctx context.Context, sandboxConfig *SandboxConfig) error {
 	defer span.End()
 
 	for _, name := range types.AssetTypes() {
-		a, err := types.NewAsset(sandboxConfig.Annotations, name)
+		annotation, _, err := name.Annotations()
 		if err != nil {
 			return err
 		}
+		// For remote hypervisor donot check for Absolute Path incase of ImagePath, as it denotes the name of the image.
+		if sandboxConfig.HypervisorType == RemoteHypervisor && annotation == annotations.ImagePath {
+			value := sandboxConfig.Annotations[annotation]
+			if value != "" {
+				sandboxConfig.HypervisorConfig.ImagePath = value
+			}
+		} else {
+			a, err := types.NewAsset(sandboxConfig.Annotations, name)
+			if err != nil {
+				return err
+			}
 
-		if err := sandboxConfig.HypervisorConfig.AddCustomAsset(a); err != nil {
-			return err
+			if err := sandboxConfig.HypervisorConfig.AddCustomAsset(a); err != nil {
+				return err
+			}
 		}
 	}
 
