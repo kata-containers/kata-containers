@@ -162,6 +162,7 @@ const (
 	grpcGetIPTablesRequest                    = "grpc.GetIPTablesRequest"
 	grpcSetIPTablesRequest                    = "grpc.SetIPTablesRequest"
 	grpcSetPolicyRequest                      = "grpc.SetPolicyRequest"
+	grpcSetInitdataRequest                    = "grpc.SetInitdataRequest"
 )
 
 // newKataAgent returns an agent from an agent type.
@@ -809,6 +810,14 @@ func (k *kataAgent) startSandbox(ctx context.Context, sandbox *Sandbox) error {
 	}
 
 	if sandbox.config.HypervisorType != RemoteHypervisor {
+		// If no initdata is given, an empty SetInitData will be performed to
+		// trigger initialization of guest-components.
+		// For legacy kata, this will also be performed but nothing will happen
+		// inside guest.
+		if err = sandbox.agent.setInitdata(ctx, sandbox.config.HypervisorConfig.Initdata); err != nil {
+			return err
+		}
+
 		// Setup network interfaces and routes
 		interfaces, routes, neighs, err := generateVCNetworkStructures(ctx, sandbox.network)
 		if err != nil {
@@ -2300,6 +2309,9 @@ func (k *kataAgent) installReqFunc(c *kataclient.AgentClient) {
 	k.reqHandlers[grpcSetPolicyRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
 		return k.client.AgentServiceClient.SetPolicy(ctx, req.(*grpc.SetPolicyRequest))
 	}
+	k.reqHandlers[grpcSetInitdataRequest] = func(ctx context.Context, req interface{}) (interface{}, error) {
+		return k.client.AgentServiceClient.SetInitdata(ctx, req.(*grpc.SetInitdataRequest))
+	}
 }
 
 func (k *kataAgent) getReqContext(ctx context.Context, reqName string) (newCtx context.Context, cancel context.CancelFunc) {
@@ -2624,5 +2636,10 @@ func (k *kataAgent) setPolicy(ctx context.Context, policy string) error {
 	if err != nil && err.Error() == context.DeadlineExceeded.Error() {
 		return status.Errorf(codes.DeadlineExceeded, "SetPolicyRequest timed out")
 	}
+	return err
+}
+
+func (k *kataAgent) setInitdata(ctx context.Context, initdata string) error {
+	_, err := k.sendReq(ctx, &grpc.SetInitdataRequest{Initdata: initdata})
 	return err
 }

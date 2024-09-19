@@ -8,8 +8,7 @@
 // https://github.com/confidential-containers/guest-components/tree/main/confidential-data-hub
 
 use crate::AGENT_CONFIG;
-use crate::CDH_SOCKET_URI;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use derivative::Derivative;
 use protocols::{
     confidential_data_hub, confidential_data_hub_ttrpc_async,
@@ -17,12 +16,21 @@ use protocols::{
 };
 use tokio::sync::OnceCell;
 
+use crate::initdata::CDH_SOCKET_URI;
+
 // Nanoseconds
 lazy_static! {
     static ref CDH_API_TIMEOUT: i64 = AGENT_CONFIG.cdh_api_timeout.as_nanos() as i64;
-    pub static ref CDH_CLIENT: OnceCell<CDHClient> = OnceCell::new();
 }
+
 const SEALED_SECRET_PREFIX: &str = "sealed.";
+
+pub static CDH_CLIENT: OnceCell<CDHClient> = OnceCell::const_new();
+
+// Convenience function to obtain the scope logger.
+fn sl() -> slog::Logger {
+    slog_scope::logger()
+}
 
 #[derive(Derivative)]
 #[derivative(Clone, Debug)]
@@ -78,32 +86,29 @@ impl CDHClient {
     }
 }
 
-pub async fn init_cdh_client() -> Result<()> {
-    CDH_CLIENT
-        .get_or_try_init(|| async { CDHClient::new().context("Failed to create CDH Client") })
-        .await?;
-    Ok(())
-}
-
-/// Check if the CDH client is initialized
-pub async fn is_cdh_client_initialized() -> bool {
-    CDH_CLIENT.get().is_some() // Returns true if CDH_CLIENT is initialized, false otherwise
-}
-
 pub async fn unseal_env(env: &str) -> Result<String> {
-    let cdh_client = CDH_CLIENT
-        .get()
-        .expect("Confidential Data Hub not initialized");
+    match CDH_CLIENT.get() {
+        Some(client) => {
+            if let Some((key, value)) = env.split_once('=') {
+                if value.starts_with(SEALED_SECRET_PREFIX) {
+                    let unsealed_value = client.unseal_secret_async(value).await?;
+                    let unsealed_env = format!("{}={}", key, std::str::from_utf8(&unsealed_value)?);
 
-    if let Some((key, value)) = env.split_once('=') {
-        if value.starts_with(SEALED_SECRET_PREFIX) {
-            let unsealed_value = cdh_client.unseal_secret_async(value).await?;
-            let unsealed_env = format!("{}={}", key, std::str::from_utf8(&unsealed_value)?);
+                    info!(sl(), "Unseal secret of key `{key}` successfully");
+                    return Ok(unsealed_env);
+                }
+            }
 
-            return Ok(unsealed_env);
+            Ok(env.to_string())
+        }
+        None => {
+            info!(
+                sl(),
+                "No CDH client initialized, env `{env}` will be used without unsealing."
+            );
+            Ok(env.to_string())
         }
     }
-    Ok((*env.to_owned()).to_string())
 }
 
 pub async fn secure_mount(
@@ -112,13 +117,24 @@ pub async fn secure_mount(
     flags: Vec<String>,
     mount_point: &str,
 ) -> Result<()> {
-    let cdh_client = CDH_CLIENT
-        .get()
-        .expect("Confidential Data Hub not initialized");
+    match CDH_CLIENT.get() {
+        Some(cdh_client) => {
+            cdh_client
+                .secure_mount(volume_type, options, flags, mount_point)
+                .await?;
+            info!(
+                sl(),
+                "Secure mount of volume type `{volume_type}` successfully"
+            );
+        }
+        None => {
+            warn!(
+                sl(),
+                "No CDH client initialized, secure mount of volume type `{volume_type}` will be ignored"
+            );
+        }
+    }
 
-    cdh_client
-        .secure_mount(volume_type, options, flags, mount_point)
-        .await?;
     Ok(())
 }
 
