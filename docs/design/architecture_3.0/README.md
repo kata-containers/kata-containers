@@ -50,7 +50,7 @@ We provide `Dragonball` Sandbox to enable built-in VMM by integrating VMM's func
 #### How To Support Async
 The kata-runtime is controlled by TOKIO_RUNTIME_WORKER_THREADS to run the OS thread, which is 2 threads by default. For TTRPC and container-related threads run in the `tokio` thread in a unified manner, and related dependencies need to be switched to Async, such as Timer, File, Netlink, etc. With the help of Async, we can easily support no-block I/O and timer. Currently, we only utilize Async for kata-runtime. The built-in VMM keeps the OS thread because it can ensure that the threads are controllable.
 
-**For N tokio worker threads and M containers**
+**For N `tokio` worker threads and M containers**
 
 - Sync runtime(both OS thread and `tokio` task are OS thread but without `tokio` worker thread)  OS thread number:  4 + 12*M
 - Async runtime(only OS thread is OS thread) OS thread number: 2 + N
