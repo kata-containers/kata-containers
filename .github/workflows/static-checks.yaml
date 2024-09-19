@@ -37,7 +37,7 @@ jobs:
   build-checks:
     uses: ./.github/workflows/build-checks.yaml
     with:
-      instance: ubuntu-20.04
+      instance: ubuntu-22.04
 
   build-checks-depending-on-kvm:
     runs-on: ubuntu-22.04
@@ -77,7 +77,7 @@ jobs:
           RUST_BACKTRACE: "1"
 
   static-checks:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
