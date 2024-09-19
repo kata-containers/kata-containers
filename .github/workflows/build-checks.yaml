@@ -57,7 +57,6 @@ jobs:
           sudo chown -R $USER:$USER $GITHUB_WORKSPACE $HOME
           sudo rm -rf $GITHUB_WORKSPACE/* && echo "GITHUB_WORKSPACE removed" || { sleep 10 && sudo rm -rf $GITHUB_WORKSPACE/*; }
           sudo rm -f /tmp/kata_hybrid*  # Sometime we got leftover from test_setup_hvsock_failed()
-        if: ${{ inputs.instance != 'ubuntu-20.04' }}
 
       - name: Checkout the code
         uses: actions/checkout@v4
