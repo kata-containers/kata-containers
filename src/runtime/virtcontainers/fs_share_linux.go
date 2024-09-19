@@ -541,7 +541,7 @@ func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container)
 		return f.shareRootFilesystemWithVirtualVolume(ctx, c)
 	}
 
-	if c.rootFs.Type == NydusRootFSType {
+	if IsNydusRootFSType(c.rootFs.Type) {
 		return f.shareRootFilesystemWithNydus(ctx, c)
 	}
 	rootfsGuestPath := filepath.Join(kataGuestSharedDir(), c.id, c.rootfsSuffix)
@@ -641,7 +641,7 @@ func (f *FilesystemShare) ShareRootFilesystem(ctx context.Context, c *Container)
 }
 
 func (f *FilesystemShare) UnshareRootFilesystem(ctx context.Context, c *Container) error {
-	if c.rootFs.Type == NydusRootFSType {
+	if IsNydusRootFSType(c.rootFs.Type) {
 		if err2 := nydusContainerCleanup(ctx, getMountPath(c.sandbox.id), c); err2 != nil {
 			f.Logger().WithError(err2).Error("rollback failed nydusContainerCleanup")
 		}
