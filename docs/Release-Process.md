@@ -28,10 +28,22 @@ Bug fixes are released as part of `MINOR` or `MAJOR` releases only. `PATCH` is a
 
 ## Release Process
 
-### Bump the `VERSION` file
+### Bump the `VERSION` and `Chart.yaml` file
 
 When the `kata-containers/kata-containers` repository is ready for a new release,
-first create a PR to set the release in the `VERSION` file and have it merged.
+first create a PR to set the release in the [`VERSION`](./../VERSION) file and update the
+`version` and `appVersion` in the
+[`Chart.yaml`](./../tools/packaging/kata-deploy/helm-chart/kata-deploy/Chart.yaml) file and
+have it merged.
+
+### Lock the `main` branch
+
+In order to prevent any PRs getting merged during the release process, and slowing the release
+process down, by impacting the payload caches, we have recently trailed setting the `main`
+branch to read only whilst the release action runs.
+
+> [!NOTE]
+> Admin permission is needed to complete this task.
 
 ### Check GitHub Actions
 
@@ -39,6 +51,9 @@ We make use of [GitHub actions](https://github.com/features/actions) in the
 [release](https://github.com/kata-containers/kata-containers/actions/workflows/release.yaml)
 file from the `kata-containers/kata-containers` repository to build and upload
 release artifacts.
+
+> [!NOTE]
+> Write permissions to trigger the action.
 
 The action is manually triggered and is responsible for generating a new
 release (including a new tag), pushing those to the
@@ -58,6 +73,11 @@ timeout, simply re-run the failed jobs until they eventually succeed.
 If for some reason you need to cancel the workflow or re-run it entirely, go first
 to the [Release page](https://github.com/kata-containers/kata-containers/releases) and
 delete the draft release from the previous run.
+
+### Unlock the `main` branch
+
+After the release process has concluded, either unlock the `main` branch, or ask
+an admin to do it.
 
 ### Improve the release notes
 
