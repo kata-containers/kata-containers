@@ -91,7 +91,7 @@ HYPERVISOR_CLH = cloud-hypervisor
 # When set to true, builds the built-in Dragonball hypervisor
 USE_BUILDIN_DB := true
 
-DEFAULT_HYPERVISOR ?= $(HYPERVISOR_DB)
+HYPERVISOR ?= $(HYPERVISOR_DB)
 
 ##VAR HYPERVISOR=<hypervisor_name> List of hypervisors this build system can generate configuration for.
 HYPERVISORS := $(HYPERVISOR_DB) $(HYPERVISOR_ACRN) $(HYPERVISOR_FC) $(HYPERVISOR_QEMU) $(HYPERVISOR_CLH)
@@ -318,14 +318,14 @@ ifneq (,$(FCCMD))
     DEFSTATICRESOURCEMGMT_FC := true
 endif
 
-ifeq ($(DEFAULT_HYPERVISOR),$(HYPERVISOR_DB))
+ifeq ($(HYPERVISOR),$(HYPERVISOR_DB))
     DEFAULT_HYPERVISOR_CONFIG = $(CONFIG_FILE_DB)
 endif
 
-ifeq ($(DEFAULT_HYPERVISOR),$(HYPERVISOR_QEMU))
+ifeq ($(HYPERVISOR),$(HYPERVISOR_QEMU))
     DEFAULT_HYPERVISOR_CONFIG = $(CONFIG_FILE_QEMU)
 endif
-ifeq ($(DEFAULT_HYPERVISOR),$(HYPERVISOR_FC))
+ifeq ($(HYPERVISOR),$(HYPERVISOR_FC))
     DEFAULT_HYPERVISOR_CONFIG = $(CONFIG_FILE_FC)
 endif
 # list of variables the user may wish to override
@@ -336,7 +336,7 @@ USER_VARS += CONFIG_FC_IN
 USER_VARS += CONFIG_PATH
 USER_VARS += CONFIG_QEMU_IN
 USER_VARS += DESTDIR
-USER_VARS += DEFAULT_HYPERVISOR
+USER_VARS += HYPERVISOR
 USER_VARS += USE_BUILDIN_DB
 USER_VARS += DBCMD
 USER_VARS += DBCTLCMD
@@ -620,7 +620,7 @@ show-summary: show-header
 	@printf "  %s\n" "$(call get_toolchain_version)"
 	@printf "\n"
 	@printf "• Hypervisors:\n"
-	@printf "\tDefault: $(DEFAULT_HYPERVISOR)\n"
+	@printf "\tDefault: $(HYPERVISOR)\n"
 	@printf "\tKnown: $(sort $(HYPERVISORS))\n"
 	@printf "\tAvailable for this architecture: $(sort $(KNOWN_HYPERVISORS))\n"
 	@printf "\n"
@@ -640,7 +640,7 @@ show-summary: show-header
 	@printf "\talternate config paths (SYSCONFIG_PATHS) : %s\n"
 	@printf \
 	  "$(foreach c,$(sort $(SYSCONFIG_PATHS)),$(shell printf "\\t - $(c)\\\n"))"
-	@printf "\tdefault install path for $(DEFAULT_HYPERVISOR) (CONFIG_PATH) : %s\n" $(abspath $(CONFIG_PATH))
+	@printf "\tdefault install path for $(HYPERVISOR) (CONFIG_PATH) : %s\n" $(abspath $(CONFIG_PATH))
 	@printf "\tdefault alternate config path (SYSCONFIG) : %s\n" $(abspath $(SYSCONFIG))
 ifneq (,$(findstring $(HYPERVISOR_QEMU),$(KNOWN_HYPERVISORS)))
 	@printf "\t$(HYPERVISOR_QEMU) hypervisor path (QEMUPATH) : %s\n" $(abspath $(QEMUPATH))

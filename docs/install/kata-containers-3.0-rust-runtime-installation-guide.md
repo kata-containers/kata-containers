@@ -90,14 +90,14 @@ By default, runtime-rs includes the `Dragonball` VMM. To build without the built
 $ cd kata-containers/src/runtime-rs
 $ make USE_BUILDIN_DB=false
 ```
-After building, specify the desired hypervisor during installation using `DEFAULT_HYPERVISOR`. For example, to use `qemu` or `cloud-hypervisor`:
+After building, specify the desired hypervisor during installation using `HYPERVISOR`. For example, to use `qemu` or `cloud-hypervisor`:
 
 ```
-sudo make install DEFAULT_HYPERVISOR=qemu
+sudo make install HYPERVISOR=qemu
 ```
 or
 ```
-sudo make install DEFAULT_HYPERVISOR=cloud-hypervisor
+sudo make install HYPERVISOR=cloud-hypervisor
 ```
 
 ### Build Kata Containers Kernel
