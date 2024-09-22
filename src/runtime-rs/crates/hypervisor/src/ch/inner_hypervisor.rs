@@ -19,7 +19,6 @@ use ch_config::ch_api::{
 };
 use ch_config::{guest_protection_is_tdx, NamedHypervisorConfig, VmConfig};
 use core::future::poll_fn;
-use futures::executor::block_on;
 use futures::future::join_all;
 use kata_sys_util::protection::{available_guest_protection, GuestProtection};
 use kata_types::capabilities::{Capabilities, CapabilityBits};
@@ -640,7 +639,7 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
-    pub(crate) fn stop_vm(&mut self) -> Result<()> {
+    pub(crate) async fn stop_vm(&mut self) -> Result<()> {
         // If the container workload exits, this method gets called. However,
         // the container manager always makes a ShutdownContainer request,
         // which results in this method being called potentially a second
@@ -652,7 +651,7 @@ impl CloudHypervisorInner {
 
         self.state = VmmState::NotReady;
 
-        block_on(self.cloud_hypervisor_shutdown()).map_err(|e| anyhow!(e))?;
+        self.cloud_hypervisor_shutdown().await?;
 
         Ok(())
     }
