@@ -61,7 +61,7 @@ impl Hypervisor for CloudHypervisor {
 
     async fn stop_vm(&self) -> Result<()> {
         let mut inner = self.inner.write().await;
-        inner.stop_vm()
+        inner.stop_vm().await
     }
 
     async fn wait_vm(&self) -> Result<i32> {
