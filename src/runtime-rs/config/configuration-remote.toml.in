@@ -13,7 +13,10 @@
 
 
 [hypervisor.remote]
+# Default VM information query service unix domain socket, created by cloud-api-adaptor
+# Ref: https://github.com/confidential-containers/cloud-api-adaptor/blob/main/src/cloud-api-adaptor/docs/vminfo.md
 remote_hypervisor_socket = "/run/peerpod/hypervisor.sock"
+# Timeout in seconds for creating a remote hypervisor, 600s(10min) by default
 remote_hypervisor_timeout = 600
 
 
@@ -244,7 +247,7 @@ disable_new_netns = false
 # The sandbox cgroup path is the parent cgroup of a container with the PodSandbox annotation.
 # The sandbox cgroup is constrained if there is no container type annotation.
 # See: https://pkg.go.dev/github.com/kata-containers/kata-containers/src/runtime/virtcontainers#ContainerType
-sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY@
+sandbox_cgroup_only=@DEFSANDBOXCGROUPONLY_REMOTE@
 
 # If enabled, the runtime will attempt to determine appropriate sandbox size (memory, CPU) before booting the virtual machine. In
 # this case, the runtime will not dynamically update the amount of memory and CPU in the virtual machine. This is generally helpful
@@ -292,11 +295,3 @@ experimental=@DEFAULTEXPFEATURES@
 # If enabled, user can run pprof tools with shim v2 process through kata-monitor.
 # (default: false)
 # enable_pprof = true
-
-# Indicates the CreateContainer request timeout needed for the workload(s)
-# It using guest_pull this includes the time to pull the image inside the guest
-# Defaults to @DEFCREATECONTAINERTIMEOUT@ second(s)  
-# Note: The effective timeout is determined by the lesser of two values: runtime-request-timeout from kubelet config 
-# (https://kubernetes.io/docs/reference/command-line-tools-reference/kubelet/#:~:text=runtime%2Drequest%2Dtimeout) and create_container_timeout. 
-# In essence, the timeout used for guest pull=runtime-request-timeout<create_container_timeout?runtime-request-timeout:create_container_timeout.
-create_container_timeout = @DEFCREATECONTAINERTIMEOUT@
