@@ -129,6 +129,11 @@ do
 	fi
 done
 
+# Clean up all node debugger pods whose name starts with `custom-node-debugger` if pods exist
+pods_to_be_deleted=$(kubectl get pods -n kube-system --no-headers -o custom-columns=:metadata.name \
+	| grep '^custom-node-debugger' || true)
+[ -n "$pods_to_be_deleted" ] && kubectl delete pod -n kube-system $pods_to_be_deleted || true
+
 [ ${#tests_fail[@]} -ne 0 ] && die "Tests FAILED from suites: ${tests_fail[*]}"
 
 info "All tests SUCCEEDED"

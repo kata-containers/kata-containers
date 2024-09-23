@@ -16,7 +16,8 @@ setup() {
 	get_pod_config_dir
 
 	node=$(get_one_kata_node)
-	tmp_file=$(exec_host "$node" mktemp -d /tmp/data.XXXX)
+	tmp_file=$(mktemp -u /tmp/data.XXXX)
+	exec_host "$node" mkdir $tmp_file
 	pv_yaml=$(mktemp --tmpdir pv_config.XXXXXX.yaml)
 	pod_yaml=$(mktemp --tmpdir pod_config.XXXXXX.yaml)
 	msg="Hello from Kubernetes"
