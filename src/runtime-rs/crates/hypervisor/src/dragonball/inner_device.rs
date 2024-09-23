@@ -147,8 +147,8 @@ impl DragonballInner {
         // And the the first one is Primary device.
         // safe here, devices is not empty.
         let primary_device = device.devices.first_mut().unwrap();
-        let vendor_device_id = if let Some(vd) = primary_device.device_vendor.as_ref() {
-            vd.get_device_vendor_id()?
+        let vendor_device_id = if let Some(vdc) = primary_device.device_vendor_class.as_ref() {
+            vdc.get_device_vendor_id()?
         } else {
             0
         };

@@ -21,7 +21,9 @@ use kata_types::k8s;
 use oci_spec::runtime as oci;
 
 use oci::{LinuxResources, Process as OCIProcess};
-use resource::{ResourceManager, ResourceUpdateOp};
+use resource::{
+    cdi_devices::container_device::annotate_container_devices, ResourceManager, ResourceUpdateOp,
+};
 use tokio::sync::RwLock;
 
 use super::{
@@ -174,10 +176,12 @@ impl Container {
             .as_ref()
             .context("OCI spec missing linux field")?;
 
-        let devices_agent = self
+        let container_devices = self
             .resource_manager
             .handler_devices(&config.container_id, linux)
             .await?;
+        let devices_agent = annotate_container_devices(&mut spec, container_devices)
+            .context("annotate container devices failed")?;
 
         // update vcpus, mems and host cgroups
         let resources = self

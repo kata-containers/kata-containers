@@ -25,6 +25,7 @@ use persist::sandbox_persist::Persist;
 use tokio::{runtime, sync::RwLock};
 
 use crate::{
+    cdi_devices::{sort_options_by_pcipath, ContainerDevice, DeviceInfo},
     cgroups::{CgroupArgs, CgroupsResource},
     cpu_mem::{cpu::CpuResource, initial_size::InitialSizeManager, mem::MemResource},
     manager::ManagerArgs,
@@ -292,7 +293,7 @@ impl ResourceManagerInner {
             .await
     }
 
-    pub async fn handler_devices(&self, _cid: &str, linux: &Linux) -> Result<Vec<Device>> {
+    pub async fn handler_devices(&self, _cid: &str, linux: &Linux) -> Result<Vec<ContainerDevice>> {
         let mut devices = vec![];
 
         let linux_devices = linux.devices().clone().unwrap_or_default();
@@ -329,7 +330,10 @@ impl ResourceManagerInner {
                             vm_path: device.config.virt_path,
                             ..Default::default()
                         };
-                        devices.push(agent_device);
+                        devices.push(ContainerDevice {
+                            device_info: None,
+                            device: agent_device,
+                        });
                     }
                 }
                 LinuxDeviceType::C => {
@@ -361,14 +365,33 @@ impl ResourceManagerInner {
 
                     // create agent device
                     if let DeviceType::Vfio(device) = device_info {
+                        let device_options = sort_options_by_pcipath(device.device_options);
                         let agent_device = Device {
                             id: device.device_id, // just for kata-agent
                             container_path: d.path().display().to_string().clone(),
                             field_type: vfio_mode,
-                            options: device.device_options,
+                            options: device_options,
                             ..Default::default()
                         };
-                        devices.push(agent_device);
+
+                        let vendor_class = device
+                            .devices
+                            .first()
+                            .unwrap()
+                            .device_vendor_class
+                            .as_ref()
+                            .unwrap()
+                            .get_vendor_class_id()
+                            .context("get vendor class failed")?;
+                        let device_info = Some(DeviceInfo {
+                            vendor_id: vendor_class.0.to_owned(),
+                            class_id: vendor_class.1.to_owned(),
+                            host_path: d.path().clone(),
+                        });
+                        devices.push(ContainerDevice {
+                            device_info,
+                            device: agent_device,
+                        });
                     }
                 }
                 _ => {

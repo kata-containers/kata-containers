@@ -115,12 +115,12 @@ pub enum VfioDeviceType {
     Mediated,
 }
 
-// DeviceVendor represents a PCI device's device id and vendor id
-// DeviceVendor: (device, vendor)
+// DeviceVendorClass represents a PCI device's deviceID, vendorID and classID
+// DeviceVendorClass: (device, vendor, class)
 #[derive(Clone, Debug)]
-pub struct DeviceVendor(String, String);
+pub struct DeviceVendorClass(String, String, String);
 
-impl DeviceVendor {
+impl DeviceVendorClass {
     pub fn get_device_vendor(&self) -> Result<(u32, u32)> {
         // default value is 0 when vendor_id or device_id is empty
         if self.0.is_empty() || self.1.is_empty() {
@@ -140,6 +140,10 @@ impl DeviceVendor {
         let vendor = do_convert(&self.1).context("convert vendor failed")?;
 
         Ok((device, vendor))
+    }
+
+    pub fn get_vendor_class_id(&self) -> Result<(&str, &str)> {
+        Ok((&self.1, &self.2))
     }
 
     pub fn get_device_vendor_id(&self) -> Result<u32> {
@@ -163,8 +167,8 @@ pub struct HostDevice {
     /// PCI device information (BDF): "bus:slot:function"
     pub bus_slot_func: String,
 
-    /// device_vendor: device id and vendor id
-    pub device_vendor: Option<DeviceVendor>,
+    /// device_vendor_class: (device, vendor, class)
+    pub device_vendor_class: Option<DeviceVendorClass>,
 
     /// type of vfio device
     pub vfio_type: VfioDeviceType,
@@ -336,13 +340,14 @@ impl VfioDevice {
     }
 
     // read vendor and deviceor from /sys/bus/pci/devices/BDF/X
-    fn get_vfio_device_vendor(&self, bdf: &str) -> Result<DeviceVendor> {
+    fn get_vfio_device_vendor_class(&self, bdf: &str) -> Result<DeviceVendorClass> {
         let device =
             get_device_property(bdf, "device").context("get device from syspath failed")?;
         let vendor =
             get_device_property(bdf, "vendor").context("get vendor from syspath failed")?;
+        let class = get_device_property(bdf, "class").context("get class from syspath failed")?;
 
-        Ok(DeviceVendor(device, vendor))
+        Ok(DeviceVendorClass(device, vendor, class))
     }
 
     fn set_vfio_config(
@@ -356,13 +361,13 @@ impl VfioDevice {
 
         // It's safe as BDF really exists.
         let dev_bdf = vfio_dev_details.0.unwrap();
-        let dev_vendor = self
-            .get_vfio_device_vendor(&dev_bdf)
+        let dev_vendor_class = self
+            .get_vfio_device_vendor_class(&dev_bdf)
             .context("get property device and vendor failed")?;
 
         let vfio_dev = HostDevice {
             bus_slot_func: dev_bdf.clone(),
-            device_vendor: Some(dev_vendor),
+            device_vendor_class: Some(dev_vendor_class),
             sysfs_path: vfio_dev_details.1,
             vfio_type: vfio_dev_details.2,
             ..Default::default()

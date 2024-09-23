@@ -42,7 +42,7 @@ pub struct StringUser {
     pub additional_gids: Vec<String>,
 }
 
-#[derive(PartialEq, Clone, Default)]
+#[derive(PartialEq, Clone, Debug, Default)]
 pub struct Device {
     pub id: String,
     pub field_type: String,
