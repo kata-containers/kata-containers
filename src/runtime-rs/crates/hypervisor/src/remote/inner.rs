@@ -1,11 +1,24 @@
+// Copyright 2024 Kata Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+
 use crate::{
     device::DeviceType, hypervisor_persist::HypervisorState,
     remote::protocols::hypervisor::CreateVMRequest, HypervisorConfig, HYPERVISOR_REMOTE,
 };
 use crate::{MemoryConfig, VcpuThreadIds};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use async_trait::async_trait;
-use kata_types::capabilities::{Capabilities, CapabilityBits};
+use kata_types::annotations::cri_containerd::SANDBOX_NAME_LABEL_KEY;
+use kata_types::{
+    annotations::{
+        cri_containerd::SANDBOX_NAMESPACE_LABEL_KEY, KATA_ANNO_HYPERVISOR_DEFAULT_MEMORY,
+        KATA_ANNO_HYPERVISOR_DEFAULT_VCPUS, KATA_ANNO_HYPERVISOR_MACHINE_TYPE,
+    },
+    capabilities::{Capabilities, CapabilityBits},
+};
+use oci_spec::runtime as oci;
 use persist::sandbox_persist::Persist;
 use std::path::Path;
 use std::{collections::HashMap, time};
@@ -55,23 +68,23 @@ impl RemoteInner {
         }
     }
 
+    fn new_ttrpc_client(&self) -> Result<HypervisorClient> {
+        let c = Client::connect(&format!("unix://{}", &self.config.remote_hypervisor_socket))?;
+        Ok(HypervisorClient::new(c))
+    }
+
     pub(crate) async fn prepare_vm(&mut self, id: &str, netns: Option<String>) -> Result<()> {
         info!(sl!(), "Preparing REMOTE VM");
         self.id = id.to_string();
-        let c = Client::connect(&format!("unix://{}", &self.config.remote_hypervisor_socket))?;
-        let client = HypervisorClient::new(c.clone());
 
         if let Some(netns_path) = &netns {
             debug!(sl!(), "set netns for vmm master {:?}", &netns_path);
-            let netns_fd = std::fs::File::open(netns_path);
-            if netns_fd.is_err() {
-                error!(sl!(), "failed to open netns file {:?}", netns_path);
-            } else {
-                info!(sl!(), "set netns for vmm master {:?}", &netns_path);
-            }
+            std::fs::metadata(netns_path).context("check netns path")?;
         }
 
-        let ctx = context::with_timeout(10_0000_0000);
+        let client = self.new_ttrpc_client()?;
+        
+        let ctx = context::Context::default();
         let req = CreateVMRequest {
             id: id.to_string(),
             annotations: self.annotations.clone(),
@@ -79,7 +92,7 @@ impl RemoteInner {
             ..Default::default()
         };
         info!(sl!(), "Preparing REMOTE VM req: {:?}", req.clone());
-        let resp = client.create_vm(ctx, &req).await.unwrap();
+        let resp = client.create_vm(ctx, &req).await?;
         info!(sl!(), "Preparing REMOTE VM resp: {:?}", resp.clone());
         self.agent_socket_path = resp.agentSocketPath;
         self.netns = netns;
@@ -95,8 +108,7 @@ impl RemoteInner {
         }
         let timeout = min_timeout;
 
-        let c = Client::connect(&format!("unix://{}", &self.config.remote_hypervisor_socket))?;
-        let client = HypervisorClient::new(c.clone());
+        let client = self.new_ttrpc_client()?;
 
         let req = StartVMRequest {
             id: self.id.clone(),
@@ -104,16 +116,7 @@ impl RemoteInner {
         };
         let ctx =
             context::with_timeout(time::Duration::from_secs(timeout as u64).as_nanos() as i64);
-        // info!(sl!(), "Starting remote vm {}", self.id.clone());
-        let resp = client.start_vm(ctx, &req).await;
-        match resp {
-            Ok(r) => {
-                info!(sl!(), "Started remote vm {}", r);
-            }
-            Err(e) => {
-                error!(sl!(), "Failed to start remote vm: {:?}", e);
-            }
-        }
+        let _resp = client.start_vm(ctx, &req).await?;
 
         let paths = fs::read_dir(Path::new(&self.agent_socket_path).parent().unwrap()).unwrap();
         for path in paths {
@@ -125,8 +128,7 @@ impl RemoteInner {
     pub(crate) async fn stop_vm(&mut self) -> Result<()> {
         info!(sl!(), "Stopping REMOTE VM");
 
-        let c = Client::connect(&format!("unix://{}", &self.config.remote_hypervisor_socket))?;
-        let client = HypervisorClient::new(c.clone());
+        let client = self.new_ttrpc_client()?;
 
         let ctx = context::with_timeout(time::Duration::from_secs(1).as_nanos() as i64);
         let req = StopVMRequest {
@@ -291,6 +293,40 @@ impl RemoteInner {
                 ..Default::default()
             },
         ))
+    }
+
+    pub(crate) fn set_oci_spec(&mut self, spec: &oci::Spec) {
+        let mut annotations: HashMap<String, String> = HashMap::new();
+        let config = &self.config;
+        info!(sl!(), "set_oci_spec: {:?}", spec);
+        let oci_annotations = spec.annotations().clone().unwrap_or_default();
+        annotations.insert(
+            SANDBOX_NAME_LABEL_KEY.to_string(),
+            oci_annotations
+                .get(SANDBOX_NAME_LABEL_KEY)
+                .cloned()
+                .unwrap_or_default(),
+        );
+        annotations.insert(
+            SANDBOX_NAMESPACE_LABEL_KEY.to_string(),
+            oci_annotations
+                .get(SANDBOX_NAMESPACE_LABEL_KEY)
+                .cloned()
+                .unwrap_or_default(),
+        );
+        annotations.insert(
+            KATA_ANNO_HYPERVISOR_MACHINE_TYPE.to_string(),
+            config.machine_info.machine_type.to_string(),
+        );
+        annotations.insert(
+            KATA_ANNO_HYPERVISOR_DEFAULT_VCPUS.to_string(),
+            "0".to_string(),
+        );
+        annotations.insert(
+            KATA_ANNO_HYPERVISOR_DEFAULT_MEMORY.to_string(),
+            "0".to_string(),
+        );
+        self.annotations = annotations;
     }
 }
 

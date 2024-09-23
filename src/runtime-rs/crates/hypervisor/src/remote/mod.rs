@@ -1,21 +1,18 @@
+// Copyright 2024 Kata Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+
+
 use super::HypervisorState;
 use crate::{device::DeviceType, Hypervisor, HypervisorConfig, MemoryConfig, VcpuThreadIds};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use inner::RemoteInner;
-use kata_types::{
-    annotations::{
-        cri_containerd::{SANDBOX_NAMESPACE_LABEL_KEY, SANDBOX_NAME_LABEL_KEY},
-        KATA_ANNO_HYPERVISOR_DEFAULT_MEMORY, KATA_ANNO_HYPERVISOR_DEFAULT_VCPUS,
-        KATA_ANNO_HYPERVISOR_MACHINE_TYPE,
-    },
-    capabilities::{Capabilities, CapabilityBits},
-};
-use oci_spec::runtime as oci;
+use kata_types::capabilities::{Capabilities, CapabilityBits};
 use persist::sandbox_persist::Persist;
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 use tokio::sync::RwLock;
-use tracing::instrument;
 
 mod inner;
 pub mod protocols;
@@ -187,43 +184,6 @@ impl Hypervisor for Remote {
 
     async fn get_passfd_listener_addr(&self) -> Result<(String, u32)> {
         Err(anyhow::anyhow!("Not yet supported"))
-    }
-
-    /// This function is used to set annotations from the OCI spec for the hypervisor. And only return true for remote hypervisor.
-    #[instrument(name = "remote: set_oci_spec")]
-    async fn set_oci_spec(&self, spec: &oci::Spec) -> bool {
-        let mut annotations: HashMap<String, String> = HashMap::new();
-        let config = self.hypervisor_config().await;
-        info!(sl!(), "set_oci_spec: {:?}", spec);
-        let oci_annotations = spec.annotations().clone().unwrap_or_default();
-        annotations.insert(
-            SANDBOX_NAME_LABEL_KEY.to_string(),
-            oci_annotations
-                .get(SANDBOX_NAME_LABEL_KEY)
-                .cloned()
-                .unwrap_or_default(),
-        );
-        annotations.insert(
-            SANDBOX_NAMESPACE_LABEL_KEY.to_string(),
-            oci_annotations
-                .get(SANDBOX_NAMESPACE_LABEL_KEY)
-                .cloned()
-                .unwrap_or_default(),
-        );
-        annotations.insert(
-            KATA_ANNO_HYPERVISOR_MACHINE_TYPE.to_string(),
-            config.machine_info.machine_type.to_string(),
-        );
-        annotations.insert(
-            KATA_ANNO_HYPERVISOR_DEFAULT_VCPUS.to_string(),
-            "0".to_string(),
-        );
-        annotations.insert(
-            KATA_ANNO_HYPERVISOR_DEFAULT_MEMORY.to_string(),
-            "0".to_string(),
-        );
-        self.inner.write().await.annotations = annotations;
-        true
     }
 }
 

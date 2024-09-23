@@ -1,3 +1,8 @@
+// Copyright 2024 Kata Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+//
+
 use std::io::Result;
 use std::path::Path;
 use std::sync::Arc;
