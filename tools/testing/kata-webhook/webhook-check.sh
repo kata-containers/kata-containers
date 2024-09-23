@@ -16,7 +16,7 @@ source "${webhook_dir}/common.bash"
 
 readonly hello_pod="hello-kata-webhook"
 # The Pod RuntimeClassName for Kata Containers.
-RUNTIME_CLASS="${RUNTIME_CLASS:-"kata"}"
+RUNTIME_CLASS="${RUNTIME_CLASS:-$(kubectl get configmap kata-webhook -o jsonpath='{.data.runtime_class}' 2>/dev/null || echo "kata")}"
 
 cleanup() {
 	{
