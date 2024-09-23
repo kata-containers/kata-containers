@@ -499,19 +499,6 @@ If you do not want to install the respective QEMU version, the configuration fil
 
 See the [static-build script for QEMU](../tools/packaging/static-build/qemu/build-static-qemu.sh) for a reference on how to get, setup, configure and build QEMU for Kata.
 
-### Build a custom QEMU for aarch64/arm64 - REQUIRED
-> **Note:**
->
-> - You should only do this step if you are on aarch64/arm64.
-> - You should include [Eric Auger's latest PCDIMM/NVDIMM patches](https://patchwork.kernel.org/cover/10647305/) which are
->   under upstream review for supporting NVDIMM on aarch64.
->
-You could build the custom `qemu-system-aarch64` as required with the following command:
-```bash
-$ git clone https://github.com/kata-containers/tests.git
-$ script -fec 'sudo -E tests/.ci/install_qemu.sh'
-```
-
 ## Build `virtiofsd`
 
 When using the file system type virtio-fs (default), `virtiofsd` is required
