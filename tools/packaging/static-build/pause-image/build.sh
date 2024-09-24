@@ -28,7 +28,7 @@ package_output_dir="${package_output_dir:-}"
 container_image="${PAUSE_IMAGE_CONTAINER_BUILDER:-$(get_pause_image_name)}"
 [ "${CROSS_BUILD}" == "true" ] && container_image="${container_image}-cross-build"
 
-docker pull ${container_image} || \
+pull_from_registry ${container_image} || \
 	(docker $BUILDX build $PLATFORM \
 		-t "${container_image}" "${script_dir}" && \
 	 # No-op unless PUSH_TO_REGISTRY is exported as "yes"
