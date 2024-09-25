@@ -632,7 +632,7 @@ func addHypervisorVolumeNameOverrides(ocispec specs.Spec, sbConfig *vc.SandboxCo
 
 func addHypervisorSRIOVOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
 	if _, ok := ocispec.Annotations[vcAnnotations.SRIOV]; ok {
-		if err:= newAnnotationConfiguration(ocispec, vcAnnotations.SRIOV).setUintWithCheck(func(sriovDevices uint64) error {
+		if err := newAnnotationConfiguration(ocispec, vcAnnotations.SRIOV).setUintWithCheck(func(sriovDevices uint64) error {
 			sbConfig.HypervisorConfig.SRIOV = uint32(sriovDevices)
 			return nil
 		}); err != nil {
@@ -642,7 +642,7 @@ func addHypervisorSRIOVOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig)
 	return nil
 }
 
-func addHypervisorVMTypeOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+func addHypervisorVMTypeOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) {
 	if value, ok := ocispec.Annotations[vcAnnotations.VMType]; ok {
 		if value != "" {
 			sbConfig.HypervisorConfig.VMType = value
