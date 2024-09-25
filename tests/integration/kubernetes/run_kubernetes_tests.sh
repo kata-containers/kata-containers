@@ -10,6 +10,15 @@ set -e
 kubernetes_dir=$(dirname "$(readlink -f "$0")")
 source "${kubernetes_dir}/../../common.bash"
 
+cleanup() {
+	# Clean up all node debugger pods whose name starts with `custom-node-debugger` if pods exist
+	pods_to_be_deleted=$(kubectl get pods -n kube-system --no-headers -o custom-columns=:metadata.name \
+		| grep '^custom-node-debugger' || true)
+	[ -n "$pods_to_be_deleted" ] && kubectl delete pod -n kube-system $pods_to_be_deleted || true
+}
+
+trap cleanup EXIT
+
 TARGET_ARCH="${TARGET_ARCH:-x86_64}"
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 K8S_TEST_DEBUG="${K8S_TEST_DEBUG:-false}"
@@ -128,11 +137,6 @@ do
 		[ "${K8S_TEST_FAIL_FAST}" = "yes" ] && break
 	fi
 done
-
-# Clean up all node debugger pods whose name starts with `custom-node-debugger` if pods exist
-pods_to_be_deleted=$(kubectl get pods -n kube-system --no-headers -o custom-columns=:metadata.name \
-	| grep '^custom-node-debugger' || true)
-[ -n "$pods_to_be_deleted" ] && kubectl delete pod -n kube-system $pods_to_be_deleted || true
 
 [ ${#tests_fail[@]} -ne 0 ] && die "Tests FAILED from suites: ${tests_fail[*]}"
 
