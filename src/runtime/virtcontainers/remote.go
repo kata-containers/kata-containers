@@ -80,6 +80,8 @@ func (rh *remoteHypervisor) CreateVM(ctx context.Context, id string, network Net
 	annotations[hypannotations.DefaultVCPUs] = strconv.FormatUint(uint64(hypervisorConfig.NumVCPUs), 10)
 	annotations[hypannotations.DefaultMemory] = strconv.FormatUint(uint64(hypervisorConfig.MemorySize), 10)
 	annotations[hypannotations.VolumeName] = hypervisorConfig.VolumeName
+	annotations[hypannotations.SRIOV] = strconv.FormatUint(uint64(hypervisorConfig.SRIOV), 10)
+	annotations[hypannotations.VMType] = hypervisorConfig.VMType
 
 	req := &pb.CreateVMRequest{
 		Id:                   id,

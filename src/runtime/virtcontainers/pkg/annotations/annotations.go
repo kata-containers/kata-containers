@@ -57,6 +57,12 @@ const (
 	// VolumeName is a sandbox annotation for passing a per container name pointing at the guest volume that will attach to the container VM.
 	VolumeName = kataAnnotHypervisorPrefix + "volume_name"
 
+	// SRIOV is a sandbox annotation for passing a per container name pointing at the number of SRIOV Interfaces it will have
+	SRIOV = kataAnnotHypervisorPrefix + "sriov"
+
+	// VMType is a sandbox annotation for passing a per container name pointing at the type of VM it will be
+	VMType = kataAnnotHypervisorPrefix + "vm_type"
+
 	// InitrdPath is a sandbox annotation for passing a per container path pointing at the guest initrd image that will run in the container VM.
 	InitrdPath = kataAnnotHypervisorPrefix + "initrd"
 

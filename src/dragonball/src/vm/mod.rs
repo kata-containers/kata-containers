@@ -226,10 +226,10 @@ impl Vm {
                 #[cfg(not(any(target_arch = "x86_64")))]
                 {
                     error!(
-                        "confidential-vm-type {} only can be used in x86_64",
+                        logger, "confidential-vm-type {} only can be used in x86_64",
                         confidential_vm_type as u64
                     );
-                    return Err(Error::ConfidentialVmType);
+                    return Err(crate::error::Error::ConfidentialVmType);
                 }
                 #[cfg(target_arch = "x86_64")]
                 Arc::new(kvm.create_vm_with_type(confidential_vm_type as u64)?)
