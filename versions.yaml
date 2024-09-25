@@ -120,10 +120,10 @@ assets:
         version: &default-image-version "latest"
         nvidia-gpu:
           name: *default-image-name
-          version: "jammy"
+          version: "noble"
         nvidia-gpu-confidential:
           name: *default-image-name
-          version: "jammy"
+          version: "noble"
       ppc64le:
         name: *default-image-name
         version: *default-image-version
@@ -141,10 +141,10 @@ assets:
           version: *default-image-version
         nvidia-gpu:
           name: *default-image-name
-          version: "jammy"
+          version: "noble"
         nvidia-gpu-confidential:
           name: *default-image-name
-          version: "jammy"
+          version: "noble"
 
     meta:
       image-type: *default-image-name
@@ -160,10 +160,10 @@ assets:
         version: &default-initrd-version "3.18"
         nvidia-gpu:
           name: "ubuntu"
-          version: "jammy"
+          version: "noble"
         nvidia-gpu-confidential:
           name: "ubuntu"
-          version: "jammy"
+          version: "noble"
       # Do not use Alpine on ppc64le & s390x, the agent cannot use musl because
       # there is no such Rust target
       ppc64le:
@@ -186,10 +186,10 @@ assets:
           version: "2.0"
         nvidia-gpu:
           name: *glibc-initrd-name
-          version: "jammy"
+          version: "noble"
         nvidia-gpu-confidential:
           name: *glibc-initrd-name
-          version: "jammy"
+          version: "noble"
 
   kernel:
     description: "Linux kernel optimised for virtual machines"
@@ -198,7 +198,7 @@ assets:
     confidential:
       description: "Linux kernel with x86_64 TEEs (SEV, SNP, and TDX) support"
       url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-      version: "v6.9.12"
+      version: "v6.11"
 
   kernel-arm-experimental:
     description: "Linux kernel with cpu/mem hotplug support on arm64"

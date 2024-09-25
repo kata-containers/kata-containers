@@ -10,44 +10,20 @@ build_dbus() {
 
 build_rootfs() {
 	local rootfs_dir=$1
-	local multistrap_conf=multistrap.conf
+	read -r -a packages <<< "${PACKAGES} ${EXTRA_PKGS}"
+	IFS=,
+	local comma_separated_packages="${packages[*]}"
+	unset IFS
 
-	# For simplicity's sake, use multistrap for foreign and native bootstraps.
-	cat > "$multistrap_conf" << EOF
-[General]
-aptsources=Ubuntu Ubuntu-updates
-bootstrap=Ubuntu
-
-
-[Ubuntu-updates]
-source=$REPO_URL
-keyring=ubuntu-keyring
-suite=$UBUNTU_CODENAME-updates
-
-[Ubuntu]
-source=$REPO_URL
-suite=$UBUNTU_CODENAME
-packages=$PACKAGES $EXTRA_PKGS
-
-EOF
-
-	if [ "${CONFIDENTIAL_GUEST}" == "yes" ] && [ "${DEB_ARCH}" == "amd64" ]; then
-		mkdir -p $rootfs_dir/etc/apt/trusted.gpg.d/
-		curl -fsSL https://download.01.org/intel-sgx/sgx_repo/ubuntu/intel-sgx-deb.key |
-			gpg --dearmour -o $rootfs_dir/etc/apt/trusted.gpg.d/intel-sgx-deb.gpg
-		sed -i -e "s/bootstrap=Ubuntu/bootstrap=Ubuntu intel-sgx/" $multistrap_conf
-		cat >> $multistrap_conf << EOF
-
-[intel-sgx]
-source=https://download.01.org/intel-sgx/sgx_repo/ubuntu
-suite=$UBUNTU_CODENAME
-packages=libtdx-attest=1.20\*
-EOF
+	debootstrap --arch=amd64 --variant=minbase --include=${comma_separated_packages} --components=main,universe \
+		$UBUNTU_CODENAME ${rootfs_dir} http://us.archive.ubuntu.com/ubuntu/
+	
+	ret=$?
+	if [ ${ret} -ne 0 ]; then
+		echo "FAILED TO BUILD ROOTFS. DEBOOTSTRAP return ${ret}"
+  		exit ${ret}
 	fi
 
-	if ! multistrap -a "$DEB_ARCH" -d "$rootfs_dir" -f "$multistrap_conf"; then
-		build_dbus $rootfs_dir
-	fi
 	rm -rf "$rootfs_dir/var/run"
 	ln -s /run "$rootfs_dir/var/run"
 	cp --remove-destination /etc/resolv.conf "$rootfs_dir/etc"

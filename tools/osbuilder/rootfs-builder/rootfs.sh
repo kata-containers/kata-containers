@@ -27,7 +27,7 @@ export GOPATH=${GOPATH:-${HOME}/go}
 LIBC=${LIBC:-musl}
 # The kata agent enables seccomp feature.
 # However, it is not enforced by default: you need to enable that in the main configuration file.
-SECCOMP=${SECCOMP:-"yes"}
+SECCOMP=${SECCOMP:-"no"}
 SELINUX=${SELINUX:-"no"}
 AGENT_POLICY=${AGENT_POLICY:-no}
 AGENT_SOURCE_BIN=${AGENT_SOURCE_BIN:-""}
@@ -671,18 +671,18 @@ EOF
 			export LIBSECCOMP_LIB_PATH="${libseccomp_install_dir}/lib"
 		fi
 
-		info "Build agent"
-		#pushd "${agent_dir}"
-		#if [ -n "${AGENT_VERSION}" ]; then
-		#	git checkout "${AGENT_VERSION}" && OK "git checkout successful" || die "checkout agent ${AGENT_VERSION} failed!"
-		#fi
-		#make clean
-		#make LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP} AGENT_POLICY=${AGENT_POLICY} PULL_TYPE=${PULL_TYPE}
-		#make install DESTDIR="${ROOTFS_DIR}" LIBC=${LIBC} INIT=${AGENT_INIT}
-		#if [ "${SECCOMP}" == "yes" ]; then
-		#	rm -rf "${libseccomp_install_dir}" "${gperf_install_dir}"
-		#fi
-		#popd
+		# info "Build agent"
+		# pushd "${agent_dir}"
+		# if [ -n "${AGENT_VERSION}" ]; then
+		# 	git checkout "${AGENT_VERSION}" && OK "git checkout successful" || die "checkout agent ${AGENT_VERSION} failed!"
+		# fi
+		# make clean
+		# make LIBC=${LIBC} INIT=${AGENT_INIT} SECCOMP=${SECCOMP} AGENT_POLICY=${AGENT_POLICY} PULL_TYPE=${PULL_TYPE}
+		# make install DESTDIR="${ROOTFS_DIR}" LIBC=${LIBC} INIT=${AGENT_INIT}
+		# if [ "${SECCOMP}" == "yes" ]; then
+		# 	rm -rf "${libseccomp_install_dir}" "${gperf_install_dir}"
+		# fi
+		# popd
 	elif [ -n "${AGENT_SOURCE_BIN}" ]; then
 		mkdir -p ${AGENT_DIR}
 		cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}
@@ -691,21 +691,21 @@ EOF
 		tar xvJpf ${AGENT_TARBALL} -C ${ROOTFS_DIR}
 	fi
 
-	#${stripping_tool} ${ROOTFS_DIR}/usr/bin/kata-agent
+	# ${stripping_tool} ${ROOTFS_DIR}/usr/bin/kata-agent
 
-	#[ -x "${AGENT_DEST}" ] || die "${AGENT_DEST} is not installed in ${ROOTFS_DIR}"
-	#OK "Agent installed"
+	# [ -x "${AGENT_DEST}" ] || die "${AGENT_DEST} is not installed in ${ROOTFS_DIR}"
+	# OK "Agent installed"
 
-	if [ "${AGENT_INIT}" == "yes" ]; then
-		setup_agent_init "${AGENT_DEST}" "${init}"
-	#else
-		# Setup systemd-based environment for kata-agent
-		#mkdir -p "${ROOTFS_DIR}/etc/systemd/system/basic.target.wants"
-		#ln -sf "/usr/lib/systemd/system/kata-containers.target" "${ROOTFS_DIR}/etc/systemd/system/basic.target.wants/kata-containers.target"
-		#mkdir -p "${ROOTFS_DIR}/etc/systemd/system/kata-containers.target.wants"
-		#ln -sf "/usr/lib/systemd/system/dbus.socket" "${ROOTFS_DIR}/etc/systemd/system/kata-containers.target.wants/dbus.socket"
-		#chmod g+rx,o+x "${ROOTFS_DIR}"
-	fi
+	# if [ "${AGENT_INIT}" == "yes" ]; then
+	# 	setup_agent_init "${AGENT_DEST}" "${init}"
+	# else
+	# 	Setup systemd-based environment for kata-agent
+	# 	mkdir -p "${ROOTFS_DIR}/etc/systemd/system/basic.target.wants"
+	# 	ln -sf "/usr/lib/systemd/system/kata-containers.target" "${ROOTFS_DIR}/etc/systemd/system/basic.target.wants/kata-containers.target"
+	# 	mkdir -p "${ROOTFS_DIR}/etc/systemd/system/kata-containers.target.wants"
+	# 	ln -sf "/usr/lib/systemd/system/dbus.socket" "${ROOTFS_DIR}/etc/systemd/system/kata-containers.target.wants/dbus.socket"
+	# 	chmod g+rx,o+x "${ROOTFS_DIR}"
+	# fi
 
 	if [ "${AGENT_POLICY}" == "yes" ]; then
 		info "Install the default policy"
