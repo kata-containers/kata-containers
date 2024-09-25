@@ -1458,6 +1458,8 @@ func (s *Sandbox) startVM(ctx context.Context, prestartHookFunc func(context.Con
 
 	defer func() {
 		if err != nil {
+			// Log error, otherwise nobody might see it - StopVM could kill this process.
+			s.Logger().WithError(err).Error("Cannot start VM")
 			s.hypervisor.StopVM(ctx, false)
 		}
 	}()
