@@ -71,6 +71,10 @@ k8s_create_pod() {
 #
 exec_host() {
 	local node="$1"
+	# Validate the node
+	if ! kubectl get node "${node}" > /dev/null 2>&1; then
+		die "A given node ${node} is not valid"
+	fi
 	# `kubectl debug` always returns 0, so we hack it to return the right exit code.
 	local command="${@:2}"
 	# Make 7 character hash from the node name
