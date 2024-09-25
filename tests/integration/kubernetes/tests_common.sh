@@ -76,46 +76,6 @@ get_one_kata_node() {
 	echo "${resource_name/"node/"}"
 }
 
-# Runs a command in the host filesystem.
-#
-# Parameters:
-#	$1 - the node name
-#
-exec_host() {
-	local node="$1"
-	# `kubectl debug` always returns 0, so we hack it to return the right exit code.
-	local command="${@:2}"
-	# Make 7 character hash from the node name
-	local pod_name="custom-node-debugger-$(echo -n "$node" | sha1sum | cut -c1-7)"
-
-	# Run a debug pod
-	# Check if there is an existing node debugger pod and reuse it
-	# Otherwise, create a new one
-	if ! kubectl get pod -n kube-system "${pod_name}" > /dev/null 2>&1; then
-		POD_NAME="${pod_name}" NODE_NAME="${node}" envsubst < runtimeclass_workloads/custom-node-debugger.yaml | \
-			kubectl apply -n kube-system -f - > /dev/null
-		# Wait for the newly created pod to be ready
-		kubectl wait pod -n kube-system --timeout="30s" --for=condition=ready "${pod_name}" > /dev/null
-		# Manually check the exit status of the previous command to handle errors explicitly
-		# since `set -e` is not enabled, allowing subsequent commands to run if needed.
-		if [ $? -ne 0 ]; then
-			return $?
-		fi
-	fi
-
-	# Execute the command and capture the output
-	# We're trailing the `\r` here due to: https://github.com/kata-containers/kata-containers/issues/8051
-	# tl;dr: When testing with CRI-O we're facing the following error:
-	# ```
-	# (from function `exec_host' in file tests_common.sh, line 51,
-	# in test file k8s-file-volume.bats, line 25)
-	# `exec_host "echo "$file_body" > $tmp_file"' failed with status 127
-	# [bats-exec-test:38] INFO: k8s configured to use runtimeclass
-	# bash: line 1: $'\r': command not found
-	# ```
-	kubectl exec -qi -n kube-system "${pod_name}" -- chroot /host bash -c "${command}" | tr -d '\r'
-}
-
 auto_generate_policy_enabled() {
 	[ "${AUTO_GENERATE_POLICY}" == "yes" ]
 }

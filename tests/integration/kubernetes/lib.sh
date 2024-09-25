@@ -64,6 +64,46 @@ k8s_create_pod() {
 	fi
 }
 
+# Runs a command in the host filesystem.
+#
+# Parameters:
+#	$1 - the node name
+#
+exec_host() {
+	local node="$1"
+	# `kubectl debug` always returns 0, so we hack it to return the right exit code.
+	local command="${@:2}"
+	# Make 7 character hash from the node name
+	local pod_name="custom-node-debugger-$(echo -n "$node" | sha1sum | cut -c1-7)"
+
+	# Run a debug pod
+	# Check if there is an existing node debugger pod and reuse it
+	# Otherwise, create a new one
+	if ! kubectl get pod -n kube-system "${pod_name}" > /dev/null 2>&1; then
+		POD_NAME="${pod_name}" NODE_NAME="${node}" envsubst < runtimeclass_workloads/custom-node-debugger.yaml | \
+			kubectl apply -n kube-system -f - > /dev/null
+		# Wait for the newly created pod to be ready
+		kubectl wait pod -n kube-system --timeout="30s" --for=condition=ready "${pod_name}" > /dev/null
+		# Manually check the exit status of the previous command to handle errors explicitly
+		# since `set -e` is not enabled, allowing subsequent commands to run if needed.
+		if [ $? -ne 0 ]; then
+			return $?
+		fi
+	fi
+
+	# Execute the command and capture the output
+	# We're trailing the `\r` here due to: https://github.com/kata-containers/kata-containers/issues/8051
+	# tl;dr: When testing with CRI-O we're facing the following error:
+	# ```
+	# (from function `exec_host' in file tests_common.sh, line 51,
+	# in test file k8s-file-volume.bats, line 25)
+	# `exec_host "echo "$file_body" > $tmp_file"' failed with status 127
+	# [bats-exec-test:38] INFO: k8s configured to use runtimeclass
+	# bash: line 1: $'\r': command not found
+	# ```
+	kubectl exec -qi -n kube-system "${pod_name}" -- chroot /host bash -c "${command}" | tr -d '\r'
+}
+
 # Check the logged messages on host have a given message.
 #
 # Parameters:
@@ -79,7 +119,7 @@ assert_logs_contain() {
 	local message="$4"
 
 	# Note: with image-rs we get more than the default 1000 lines of logs
-	print_node_journal "$node" "$log_id" --since "$datetime" | grep "$message"
+	exec_host "${node}" journalctl -x -t $log_id --since '"'$datetime'"' | grep "$message"
 }
 
 # Create a pod then assert it fails to run. Use in tests that you expect the
@@ -90,15 +130,39 @@ assert_logs_contain() {
 #
 # Parameters:
 #	$1 - the pod configuration file.
+# 	$2 - the duration to wait for the container to fail. Defaults to 120. (optional)
 #
 assert_pod_fail() {
 	local container_config="$1"
+	local duration="${2:-120}"
+
 	echo "In assert_pod_fail: $container_config"
-
 	echo "Attempt to create the container but it should fail"
-	! k8s_create_pod "$container_config" || /bin/false
-}
 
+	kubectl apply -f "${container_config}"
+	if ! pod_name=$(kubectl get pods -o jsonpath='{.items..metadata.name}'); then
+		echo "Failed to create the pod"
+		return 1
+	fi
+
+	local elapsed_time=0
+	local sleep_time=5
+	while true; do
+		echo "Waiting for a container to fail"
+		sleep ${sleep_time}
+		elapsed_time=$((elapsed_time+sleep_time))
+		if [[ $(kubectl get pod "${pod_name}" \
+			-o jsonpath='{.status.containerStatuses[0].state.waiting.reason}') = *BackOff* ]]; then
+			return 0
+		fi
+		if [ $elapsed_time -gt $duration ]; then
+			echo "The container does not get into a failing state" >&2
+			break
+		fi
+	done
+	return 1
+
+}
 
 # Check the pulled rootfs on host for given node and sandbox_id
 #
@@ -237,27 +301,6 @@ set_node() {
     ".spec.nodeName = \"$node\"" \
     "${yaml}"
 }
-
-# Get the systemd's journal from a worker node
-#
-# Parameters:
-#	$1 - the k8s worker node name
-#	$2 - the syslog identifier as in journalctl's -t option
-#	$N - (optional) any extra parameters to journalctl
-#
-print_node_journal() {
-	local node="$1"
-	local id="$2"
-	shift 2
-	local img="quay.io/prometheus/busybox"
-
-	kubectl debug --image "$img" -q -i "node/${node}" \
-		-- chroot /host journalctl -x -t "$id" --no-pager "$@"
-	# Delete the debugger pod
-	kubectl get pods -o name | grep "node-debugger-${node}" | \
-		xargs kubectl delete > /dev/null
-}
-
 
 # Get the sandbox id for kata container from a worker node
 #

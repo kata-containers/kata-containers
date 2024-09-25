@@ -5,6 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 TEST_INITRD="${TEST_INITRD:-no}"
