@@ -20,6 +20,10 @@ type DanDevice struct {
 // DanDeviceType identifies the type of the network interface.
 type DanDeviceType string
 
+const (
+	VfioDanDeviceType DanDeviceType = "vfio"
+)
+
 type Device struct {
 	Type        DanDeviceType `json:"type"`
 	Path        string        `json:"path,omitempty"`

@@ -809,20 +809,10 @@ func (k *kataAgent) startSandbox(ctx context.Context, sandbox *Sandbox) error {
 
 	if sandbox.config.HypervisorType != RemoteHypervisor {
 		// Setup network interfaces and routes
-		interfaces, routes, neighs, err := generateVCNetworkStructures(ctx, sandbox.network)
+		err = k.setupNetworks(ctx, sandbox, nil)
 		if err != nil {
 			return err
 		}
-		if err = k.updateInterfaces(ctx, interfaces); err != nil {
-			return err
-		}
-		if _, err = k.updateRoutes(ctx, routes); err != nil {
-			return err
-		}
-		if err = k.addARPNeighbors(ctx, neighs); err != nil {
-			return err
-		}
-
 		kmodules = setupKernelModules(k.kmodules)
 	}
 
@@ -1282,6 +1272,67 @@ func (k *kataAgent) rollbackFailingContainerCreation(ctx context.Context, c *Con
 	}
 }
 
+func (k *kataAgent) setupNetworks(ctx context.Context, sandbox *Sandbox, c *Container) error {
+	if sandbox.network.NetworkID() == "" {
+		return nil
+	}
+
+	var err error
+	var endpoints []Endpoint
+	if c == nil || c.id == sandbox.id {
+		// TODO: VFIO network deivce has not been hotplugged when creating the Sandbox,
+		// so need to skip VFIO endpoint here.
+		// After KEP #4113(https://github.com/kubernetes/enhancements/pull/4113)
+		// is implemented, the VFIO network devices will be attached before container
+		// creation, so no need to skip them here anymore.
+		for _, ep := range sandbox.network.Endpoints() {
+			if ep.Type() != VfioEndpointType {
+				endpoints = append(endpoints, ep)
+			}
+		}
+	} else if !sandbox.hotplugNetworkConfigApplied {
+		// Apply VFIO network devices' configuration after they are hot-plugged.
+		for _, ep := range sandbox.network.Endpoints() {
+			if ep.Type() == VfioEndpointType {
+				hostBDF := ep.(*VfioEndpoint).HostBDF
+				pciPath := sandbox.GetVfioDeviceGuestPciPath(hostBDF)
+				if pciPath.IsNil() {
+					return fmt.Errorf("PCI path for VFIO interface '%s' not found", ep.Name())
+				}
+				ep.SetPciPath(pciPath)
+				endpoints = append(endpoints, ep)
+			}
+		}
+
+		defer func() {
+			if err == nil {
+				sandbox.hotplugNetworkConfigApplied = true
+			}
+		}()
+	}
+
+	if len(endpoints) == 0 {
+		return nil
+	}
+
+	interfaces, routes, neighs, err := generateVCNetworkStructures(ctx, endpoints)
+	if err != nil {
+		return err
+	}
+
+	if err = k.updateInterfaces(ctx, interfaces); err != nil {
+		return err
+	}
+	if _, err = k.updateRoutes(ctx, routes); err != nil {
+		return err
+	}
+	if err = k.addARPNeighbors(ctx, neighs); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Container) (p *Process, err error) {
 	span, ctx := katatrace.Trace(ctx, k.Logger(), "createContainer", kataAgentTracingTags)
 	defer span.End()
@@ -1429,6 +1480,11 @@ func (k *kataAgent) createContainer(ctx context.Context, sandbox *Sandbox, c *Co
 		}
 		return nil, err
 	}
+
+	if err = k.setupNetworks(ctx, sandbox, c); err != nil {
+		return nil, err
+	}
+
 	return buildProcessFromExecID(req.ExecId)
 }
 

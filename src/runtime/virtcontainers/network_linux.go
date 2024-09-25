@@ -442,6 +442,10 @@ func convertDanDeviceToNetworkInfo(device *vctypes.DanDevice) (*NetworkInfo, err
 // Load network config in DAN config
 // Create the endpoints for the interfaces in Dan.
 func (n *LinuxNetwork) addDanEndpoints() error {
+	if len(n.eps) > 0 {
+		// only load DAN config once
+		return nil
+	}
 
 	jsonData, err := os.ReadFile(n.danConfigPath)
 	if err != nil {
@@ -458,20 +462,21 @@ func (n *LinuxNetwork) addDanEndpoints() error {
 		var endpoint Endpoint
 		networkLogger().WithField("interface", device.Name).Info("DAN interface found")
 
-		_, err := convertDanDeviceToNetworkInfo(&device)
+		netInfo, err := convertDanDeviceToNetworkInfo(&device)
 		if err != nil {
 			return err
 		}
 
-		// TODO: Add endpoints that are supported via DAN
 		switch device.Device.Type {
+		case vctypes.VfioDanDeviceType:
+			endpoint, err = createVfioEndpoint(device.Device.PciDeviceID, netInfo)
+			if err != nil {
+				return err
+			}
 		default:
 			return fmt.Errorf("unknown DAN device type: '%s'", device.Device.Type)
 		}
 
-		// TODO: remove below `nolink` directive after one `case` is added for
-		// above `switch` block.
-		//nolint: govet
 		n.eps = append(n.eps, endpoint)
 	}
 
