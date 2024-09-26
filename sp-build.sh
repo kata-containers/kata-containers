@@ -54,7 +54,7 @@ NVIDIA_PASSTHROUGH="-object iommufd,id=iommufd0 \\
 QEMU_COMMAND="
 qemu-system-x86_64 \\
 -enable-kvm \\
--append \"root=/dev/vda1 console=ttyS0 clearcpuid=mtrr,avx,avx2 systemd.log_level=trace systemd.log_target=log rootfs_verity.scheme=dm-verity rootfs_verity.hash=${ROOT_HASH}\" \\
+-append \"root=/dev/vda1 console=ttyS0 clearcpuid=mtrr systemd.log_level=trace systemd.log_target=log rootfs_verity.scheme=dm-verity rootfs_verity.hash=${ROOT_HASH}\" \\
 -drive file=\$SCRIPT_DIR/rootfs.img,if=virtio,format=raw \\
 -drive file=\$SCRIPT_DIR/state.qcow2,if=virtio,format=qcow2 \\
 -kernel \$SCRIPT_DIR/vmlinuz \\
