@@ -6,36 +6,15 @@
 
 use std::{
     any::type_name,
-    convert::{Into, TryFrom, TryInto},
-    time,
+    convert::{Into, TryFrom},
 };
 
 use anyhow::{anyhow, Result};
 use containerd_shim_protos::api;
 
+use super::utils::option_system_time_into;
 use super::{ProcessExitStatus, ProcessStateInfo, ProcessStatus, TaskResponse};
 use crate::error::Error;
-
-fn system_time_into(time: time::SystemTime) -> ::protobuf::well_known_types::timestamp::Timestamp {
-    let mut proto_time = ::protobuf::well_known_types::timestamp::Timestamp::new();
-    proto_time.seconds = time
-        .duration_since(time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_secs()
-        .try_into()
-        .unwrap_or_default();
-
-    proto_time
-}
-
-fn option_system_time_into(
-    time: Option<time::SystemTime>,
-) -> protobuf::MessageField<protobuf::well_known_types::timestamp::Timestamp> {
-    match time {
-        Some(v) => ::protobuf::MessageField::some(system_time_into(v)),
-        None => ::protobuf::MessageField::none(),
-    }
-}
 
 impl From<ProcessExitStatus> for api::WaitResponse {
     fn from(from: ProcessExitStatus) -> Self {

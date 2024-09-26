@@ -8,6 +8,7 @@ mod trans_from_agent;
 mod trans_from_shim;
 mod trans_into_agent;
 mod trans_into_shim;
+pub mod utils;
 
 use std::fmt;
 
