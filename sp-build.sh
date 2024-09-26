@@ -27,7 +27,7 @@ wget "https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64
 popd
 
 pushd "${SCRIPT_DIR}/tools/osbuilder/rootfs-builder"
-script -fec 'sudo -E USE_DOCKER=true PROVIDER_CONFIG_DST="${PROVIDER_CONFIG_DST}" CONFIDENTIAL_GUEST=yes MEASURED_ROOTFS=yes EXTRA_PKGS="init openssh-server netplan.io curl htop open-iscsi cryptsetup ca-certificates gnupg2" ./rootfs.sh "${DISTRO}"'
+script -fec 'sudo -E USE_DOCKER=true PROVIDER_CONFIG_DST="${PROVIDER_CONFIG_DST}" CONFIDENTIAL_GUEST=yes MEASURED_ROOTFS=yes EXTRA_PKGS="init openssh-server netplan.io curl htop open-iscsi cryptsetup ca-certificates gnupg2 kmod" ./rootfs.sh "${DISTRO}"'
 popd
 
 pushd "${SCRIPT_DIR}/tools/osbuilder/image-builder"
@@ -62,7 +62,7 @@ qemu-system-x86_64 \\
 -m ${VM_MEMORY}G \\
 -cpu host \\
 -object '{\"qom-type\":\"tdx-guest\",\"id\":\"tdx\",\"quote-generation-socket\":{\"type\": \"vsock\", \"cid\":\"2\",\"port\":\"4050\"}}' \\
--netdev user,id=n1,ipv6=off,hostfwd=tcp::2222-:22 \\
+-netdev user,id=n1,ipv6=off,hostfwd=tcp:127.0.0.1:2222-:22 \\
 -device virtio-net-pci,netdev=n1 \\
 -nographic \\
 -object memory-backend-ram,id=mem0,size=${VM_MEMORY}G \\

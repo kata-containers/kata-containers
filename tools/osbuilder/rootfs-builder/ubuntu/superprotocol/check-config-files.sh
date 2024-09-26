@@ -4,7 +4,7 @@
 declare -A files=(
     ["/etc/super/var/lib/rancher/rke2/rke2-pss.yaml"]="/var/lib/rancher/rke2/rke2-pss.yaml"
     ["/etc/super/var/lib/rancher/rke2/server/manifests/k8s-infra.yaml"]="/var/lib/rancher/rke2/server/manifests/k8s-infra.yaml"
-    ["/etc/super/var/lib/rancher/rke2/agent/etc/containerd/config.toml.tmpl"]="/var/lib/rancher/rke2/agent/etc/containerd/config.toml.tmpl"
+    #:["/etc/super/var/lib/rancher/rke2/agent/etc/containerd/config.toml.tmpl"]="/var/lib/rancher/rke2/agent/etc/containerd/config.toml.tmpl"
     ["/etc/super/etc/iscsi/iscsid.conf"]="/etc/iscsi/iscsid.conf"
     ["/etc/super/etc/iscsi/initiatorname.iscsi"]="/etc/iscsi/initiatorname.iscsi"
 )
