@@ -25,6 +25,7 @@ import (
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	vc "github.com/kata-containers/kata-containers/src/runtime/virtcontainers"
 	exp "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/experimental"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/utils"
 	"github.com/pbnjay/memory"
 	"github.com/sirupsen/logrus"
@@ -60,6 +61,9 @@ const (
 	// https://github.com/kata-containers/kata-containers/blob/main/docs/design/kata-vra.md#hypervisor-resource-limits
 	maxPCIeRootPorts   uint32 = 16
 	maxPCIeSwitchPorts uint32 = 16
+
+	// the maximum number of NUMA nodes in Linux kernel: 1 << CONFIG_NODES_SHIFT, which is up to 10.
+	maxNumNUMA uint32 = 1024
 
 	errInvalidHypervisorPrefix = "configuration file contains invalid hypervisor section"
 )
@@ -146,6 +150,8 @@ type hypervisor struct {
 	VirtioMem                      bool                      `toml:"enable_virtio_mem"`
 	IOMMU                          bool                      `toml:"enable_iommu"`
 	IOMMUPlatform                  bool                      `toml:"enable_iommu_platform"`
+	NUMA                           bool                      `toml:"enable_numa"`
+	NUMAMapping                    []string                  `toml:"numa_mapping"`
 	Debug                          bool                      `toml:"enable_debug"`
 	DisableNestingChecks           bool                      `toml:"disable_nesting_checks"`
 	EnableIOThreads                bool                      `toml:"enable_iothreads"`
@@ -712,6 +718,18 @@ func (h hypervisor) getIOMMUPlatform() bool {
 	return h.IOMMUPlatform
 }
 
+func (h hypervisor) defaultNUMANodes() []types.NUMANode {
+	if !h.NUMA {
+		return nil
+	}
+	numaNodes, err := utils.GetNUMANodes(h.NUMAMapping)
+	if err != nil {
+		kataUtilsLogger.WithError(err).Warn("Cannot construct NUMA nodes.")
+		return nil
+	}
+	return numaNodes
+}
+
 func (h hypervisor) getRemoteHypervisorSocket() string {
 	if h.RemoteHypervisorSocket == "" {
 		return defaultRemoteHypervisorSocket
@@ -970,6 +988,7 @@ func newQemuHypervisorConfig(h hypervisor) (vc.HypervisorConfig, error) {
 		HugePages:                h.HugePages,
 		IOMMU:                    h.IOMMU,
 		IOMMUPlatform:            h.getIOMMUPlatform(),
+		NUMANodes:                h.defaultNUMANodes(),
 		FileBackedMemRootDir:     h.FileBackedMemRootDir,
 		FileBackedMemRootList:    h.FileBackedMemRootList,
 		Debug:                    h.Debug,
