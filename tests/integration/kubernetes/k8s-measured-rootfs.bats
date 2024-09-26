@@ -22,13 +22,6 @@ setup() {
 	setup_common
 }
 
-teardown() {
-	check_and_skip
-
-	kubectl describe -f "${pod_config}" || true
-	kubectl delete -f "${pod_config}" || true
-}
-
 @test "Test cannnot launch pod with measured boot enabled and incorrect hash" {
 	pod_config="$(new_pod_config nginx "kata-${KATA_HYPERVISOR}")"
 
@@ -56,4 +49,10 @@ teardown() {
 
 	assert_logs_contain "$node" kata "$node_start_time" \
 		'verity: .* metadata block .* is corrupted'
+}
+
+teardown() {
+	check_and_skip
+
+	teardown_common "${node}" "${node_start_time:-}"
 }

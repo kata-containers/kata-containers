@@ -230,8 +230,7 @@ teardown() {
 
     [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
 
-    kubectl describe pods
-    k8s_delete_all_pods_if_any_exists || true
+    teardown_common "${node}" "${node_start_time:-}"
     kubectl delete --ignore-not-found pvc trusted-pvc
     kubectl delete --ignore-not-found pv trusted-block-pv
     kubectl delete --ignore-not-found storageclass local-storage

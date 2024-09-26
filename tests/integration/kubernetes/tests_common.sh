@@ -359,3 +359,23 @@ pod_exec_blocked_command() {
 
 	(echo "${exec_output}" | grep "ExecProcessRequest is blocked by policy" > /dev/null) || die "exec was not blocked by policy!"
 }
+
+# Common teardown for tests.
+#
+# Parameters:
+#	$1	- node name where kata is installed
+#	$2	- start time at the node for the sake of fetching logs
+#
+teardown_common() {
+	local node="$1"
+	local node_start_time="$2"
+
+	kubectl describe pods
+	k8s_delete_all_pods_if_any_exists || true
+
+	# Print the node journal since the test start time if a bats test is not completed
+	if [[ -n "${node_start_time}" && -z "$BATS_TEST_COMPLETED" ]]; then
+		echo "DEBUG: system logs of node '$node' since test start time ($node_start_time)"
+		exec_host "${node}" journalctl -x -t "kata" --since '"'$node_start_time'"' || true
+	fi
+}

@@ -110,13 +110,6 @@ teardown() {
 
     [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
 
+    teardown_common "${node}" "${node_start_time:-}"
     kubectl delete secret cococred --ignore-not-found
-
-    kubectl describe pods
-    k8s_delete_all_pods_if_any_exists || true
-
-    if [[ -n "${node_start_time:-}" && -z "$BATS_TEST_COMPLETED" ]]; then
-		echo "DEBUG: system logs of node '$node' since test start time ($node_start_time)"
-		exec_host "${node}" journalctl -x -t "kata" --since '"'$node_start_time'"' || true
-	fi
 }

@@ -107,14 +107,7 @@ teardown() {
 		skip "Test skipped as KBS not setup"
 	fi
 
-	[ -n "${pod_name:-}" ] && kubectl describe "pod/${pod_name}" || true
-	[ -n "${pod_config_dir:-}" ] && kubectl delete -f "${K8S_TEST_YAML}" || true
-
+	teardown_common "${node}" "${node_start_time:-}"
 	kubectl delete secret sealed-secret --ignore-not-found
 	kubectl delete secret not-sealed-secret --ignore-not-found
-
-	if [[ -n "${node_start_time:-}" && -z "$BATS_TEST_COMPLETED" ]]; then
-		echo "DEBUG: system logs of node '$node' since test start time ($node_start_time)"
-		exec_host "${node}" journalctl -x -t "kata" --since '"'$node_start_time'"' || true
-	fi
 }
