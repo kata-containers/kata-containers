@@ -184,3 +184,220 @@ pub fn setup_vendor_devices(bdfs: &[String]) -> Result<()> {
 
 //     Ok(())
 // }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use protocols::agent::Device;
+    use std::fs;
+    use std::fs::File;
+    use std::io::Write;
+    use std::os::unix::fs::PermissionsExt;
+    use tempfile::{self, tempdir};
+
+    const VDCTL_CONFIG: &str = r#"
+    {
+        "vendor_ctl": {
+            "/path/to/vendor_ctl": ["arg1", "arg2"]
+        },
+        "cdi_path": "/etc/cdi",
+        "policy": "default",
+        "options": {
+            "key": "value"
+        }
+    }
+    "#;
+
+    fn create_fake_vendor_tool(vdctl_dir: PathBuf) -> PathBuf {
+        let script_content = "#!/bin/bash\necho \"Hello, $1!\"";
+        // config_path/vendor-tool
+        let vdctl_path = vdctl_dir.join("vendor-tool");
+
+        let mut file = File::create(&vdctl_path).unwrap();
+        file.write_all(script_content.as_bytes()).unwrap();
+
+        println!("Shell script 'vendor-tool' has been created.");
+
+        #[cfg(unix)]
+        {
+            let mut perms = file.metadata().unwrap().permissions();
+            perms.set_mode(0o755); // This sets the file permissions to rwxr-xr-x
+            std::fs::set_permissions(&vdctl_path, perms).unwrap();
+            println!("execution permissions have been set.");
+        }
+
+        vdctl_path
+    }
+
+    fn setup_config_path() -> PathBuf {
+        let tempdir = tempdir().unwrap();
+        fs::create_dir_all(tempdir.path()).unwrap();
+        let path = tempdir.path().join("configure.json");
+        let mut file = fs::File::create(&path).unwrap();
+        file.write_all(VDCTL_CONFIG.as_bytes()).unwrap();
+
+        path
+    }
+
+    #[test]
+    fn test_load_vendor_tool_config_success() {
+        let tempdir = tempdir().unwrap();
+        fs::create_dir_all(tempdir.path()).unwrap();
+        let config_path = tempdir.path().join("configure.json");
+        let mut file = fs::File::create(&config_path).unwrap();
+        file.write_all(VDCTL_CONFIG.as_bytes()).unwrap();
+        println!("load_vendor_tool_config: {:?}", &config_path);
+
+        let config_result = VendorToolConfig::load(config_path);
+        assert!(config_result.is_ok());
+        let config = config_result.unwrap();
+
+        assert_eq!(config.vendor_ctl.len(), 1);
+        assert_eq!(config.cdi_path, PathBuf::from("/etc/cdi"));
+        assert_eq!(config.policy, "default");
+    }
+
+    #[test]
+    fn test_load_vendor_tool_config_missing_file() {
+        let result = VendorToolConfig::load(PathBuf::from("/path/to/non-extisting-path"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_validate_vendor_tool_config_no_vendor_ctl() {
+        let config = VendorToolConfig {
+            vendor_ctl: HashMap::new(),
+            cdi_path: PathBuf::from(DEFAULT_CDI_PATH_STATIC),
+            policy: String::new(),
+            options: HashMap::new(),
+        };
+
+        let result = config.validate();
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "vendor tool doesn't exist."
+        );
+    }
+
+    #[test]
+    fn test_extract_pci_paths_success() {
+        let options = vec![
+            "Host_BDF1=PCI_Guest_Path1".to_string(),
+            "Host_BDF2=PCI_Guest_Path2".to_string(),
+        ];
+
+        let pci_paths_result = extract_pci_paths(&options);
+        assert!(pci_paths_result.is_ok());
+        let pci_paths = pci_paths_result.unwrap();
+        assert_eq!(
+            pci_paths,
+            vec!["PCI_Guest_Path1".to_string(), "PCI_Guest_Path2".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_extract_pci_paths_malformed() {
+        let options = vec!["malformed_option".to_string()];
+
+        let result = extract_pci_paths(&options);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "malformed vfio PCI path \"malformed_option\""
+        );
+    }
+
+    #[test]
+    fn test_extract_pci_paths_empty_options() {
+        let options = vec![];
+
+        let result = extract_pci_paths(&options);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_get_vendor_devices() {
+        let devices = vec![Device {
+            options: vec!["Host_BDF1=PCI_Guest_Path1".to_string()],
+            ..Default::default()
+        }];
+
+        let devices_bdfs = get_vendor_devices(&devices).unwrap();
+
+        assert_eq!(devices_bdfs, vec!["PCI_Guest_Path1".to_string()]);
+
+        let devices2 = vec![Device {
+            options: vec![],
+            ..Default::default()
+        }];
+        let devices_bdfs2 = get_vendor_devices(&devices2).unwrap();
+
+        assert!(devices_bdfs2.is_empty());
+    }
+
+    #[test]
+    fn test_get_vendor_devices_without_cdi_devices() {
+        let devices: Vec<Device> = vec![
+            Device {
+                id: "dev001".to_string(),
+                options: vec![],
+                ..Default::default()
+            },
+            Device {
+                id: "dev002".to_string(),
+                options: vec![],
+                ..Default::default()
+            },
+            Device {
+                id: "dev003".to_string(),
+                options: vec![],
+                ..Default::default()
+            },
+        ];
+
+        let devices_bdfs = get_vendor_devices(&devices).unwrap();
+        assert!(devices_bdfs.is_empty());
+    }
+
+    #[test]
+    fn test_setup_vendor_devices_success() {
+        let tempdir = tempdir().unwrap();
+        fs::create_dir_all(tempdir.path()).unwrap();
+
+        // create config path with config file
+        let config_path = tempdir.path().join("configure.json");
+        let mut file = fs::File::create(&config_path).unwrap();
+        file.write_all(VDCTL_CONFIG.as_bytes()).unwrap();
+        println!("setup_vendor_devices: {:?}", &config_path);
+
+        // create vendor tool path with vendor tool
+        let root_path = tempdir.path().join("vdctlpath");
+        fs::create_dir_all(&root_path).unwrap();
+        println!("vendor tool path: {:?}", &root_path);
+        let vdctl_path = create_fake_vendor_tool(root_path);
+
+        // create devices with cdi devices options with elements
+        let devices = vec![Device {
+            options: vec!["Host_BDF1=PCI_Guest_Path1".to_string()],
+            ..Default::default()
+        }];
+
+        // get vendor cdi devices
+        let devices_bdfs = get_vendor_devices(&devices).unwrap();
+
+        // new VendorDevice
+        let vd_res = VendorDevice::new(config_path.display().to_string().as_str());
+        assert!(vd_res.is_ok());
+
+        // fill the real vendor tool path with args("")
+        let mut vendor_device = vd_res.unwrap();
+        vendor_device.config.vendor_ctl = HashMap::from([(vdctl_path, vec!["".to_string()])]);
+
+        // setup device just print hello
+        let result2 = vendor_device.setup_vendor_devices(devices_bdfs.as_slice());
+        assert!(result2.is_ok());
+    }
+}
