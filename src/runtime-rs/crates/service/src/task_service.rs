@@ -10,7 +10,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use common::types::{Request, Response};
+use common::types::{TaskRequest, TaskResponse};
 use containerd_shim_protos::{api, shim_async};
 use ttrpc::{self, r#async::TtrpcContext};
 
@@ -31,10 +31,10 @@ impl TaskService {
         req: TtrpcReq,
     ) -> ttrpc::Result<TtrpcResp>
     where
-        Request: TryFrom<TtrpcReq>,
-        <Request as TryFrom<TtrpcReq>>::Error: std::fmt::Debug,
-        TtrpcResp: TryFrom<Response>,
-        <TtrpcResp as TryFrom<Response>>::Error: std::fmt::Debug,
+        TaskRequest: TryFrom<TtrpcReq>,
+        <TaskRequest as TryFrom<TtrpcReq>>::Error: std::fmt::Debug,
+        TtrpcResp: TryFrom<TaskResponse>,
+        <TtrpcResp as TryFrom<TaskResponse>>::Error: std::fmt::Debug,
     {
         let r = req.try_into().map_err(|err| {
             ttrpc::Error::Others(format!("failed to translate from shim {:?}", err))

@@ -16,10 +16,10 @@ use kata_sys_util::validate;
 use kata_types::mount::Mount;
 use strum::Display;
 
-/// Request: request from shim
-/// Request and Response messages need to be paired
+/// TaskRequest: TaskRequest from shim
+/// TaskRequest and TaskResponse messages need to be paired
 #[derive(Debug, Clone, Display)]
-pub enum Request {
+pub enum TaskRequest {
     CreateContainer(ContainerConfig),
     CloseProcessIO(ContainerProcess),
     DeleteProcess(ContainerProcess),
@@ -38,10 +38,10 @@ pub enum Request {
     ConnectContainer(ContainerID),
 }
 
-/// Response: response to shim
-/// Request and Response messages need to be paired
+/// TaskResponse: TaskResponse to shim
+/// TaskRequest and TaskResponse messages need to be paired
 #[derive(Debug, Clone, Display)]
-pub enum Response {
+pub enum TaskResponse {
     CreateContainer(PID),
     CloseProcessIO,
     DeleteProcess(ProcessStateInfo),

@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use crate::types::{ContainerProcess, Response};
+use crate::types::{ContainerProcess, TaskResponse};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -13,5 +13,5 @@ pub enum Error {
     #[error("failed to find process {0}")]
     ProcessNotFound(ContainerProcess),
     #[error("unexpected response {0} to shim {1}")]
-    UnexpectedResponse(Response, String),
+    UnexpectedResponse(TaskResponse, String),
 }
