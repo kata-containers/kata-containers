@@ -17,6 +17,7 @@ source "${kubernetes_dir}/../../../tools/packaging/guest-image/lib_se.sh"
 export PATH="${PATH}:/opt/kata/bin"
 
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
+ITA_KEY="${ITA_KEY:-}"
 # Where the trustee (includes kbs) sources will be cloned
 readonly COCO_TRUSTEE_DIR="/tmp/trustee"
 # Where the kbs sources will be cloned
@@ -223,7 +224,12 @@ kbs_uninstall_cli() {
 #
 function kbs_k8s_delete() {
 	pushd "$COCO_KBS_DIR"
-	kubectl delete -k config/kubernetes/overlays/$(uname -m)
+	if [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
+		kubectl delete -k config/kubernetes/ita
+	else
+		kubectl delete -k config/kubernetes/overlays/$(uname -m)
+	fi
+
 	# Verify that KBS namespace resources were properly deleted
 	cmd="kubectl get all -n $KBS_NS 2>&1 | grep 'No resources found'"
 	waitForProcess "120" "30" "$cmd"
@@ -254,6 +260,13 @@ function kbs_k8s_deploy() {
 	version=$(get_from_kata_deps ".externals.coco-trustee.version")
 	image=$(get_from_kata_deps ".externals.coco-trustee.image")
 	image_tag=$(get_from_kata_deps ".externals.coco-trustee.image_tag")
+
+	# Image tag for TDX
+	if [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
+		# The ITA / ITTS images are named as:
+		# ita-as-${image_tag}
+		image_tag=$(echo ${image_tag} | sed 's/built-in/ita/g')
+	fi
 
 	# The ingress handler for AKS relies on the cluster's name which in turn
 	# contain the HEAD commit of the kata-containers repository (supposedly the
@@ -308,16 +321,14 @@ function kbs_k8s_deploy() {
 
 	echo "::group::Deploy the KBS"
 	if [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
-		echo "Setting up custom PCCS for TDX"
-		cat <<- EOF > "${COCO_KBS_DIR}/config/kubernetes/custom_pccs/sgx_default_qcnl.conf"
-{
- "pccs_url": "https://$(hostname -i | grep -o "^[0-9.]*"):8081/sgx/certification/v4/",
-
- // To accept insecure HTTPS certificate, set this option to false
- "use_secure_cert": false
-}
-EOF
-		export DEPLOYMENT_DIR=custom_pccs
+		echo "::group::Setting up ITA/ITTS for TDX"
+		pushd "${COCO_KBS_DIR}/config/kubernetes/ita/"
+			# Let's replace the "tBfd5kKX2x9ahbodKV1..." sample
+			# `api_key`property by a valid ITA/ITTS API key, in the
+			# ITA/ITTS specific configuration
+			sed -i -e "s/tBfd5kKX2x9ahbodKV1.../${ITA_KEY}/g" kbs-config.toml
+		popd
+		export DEPLOYMENT_DIR=ita
 	fi
 
 	./deploy-kbs.sh
