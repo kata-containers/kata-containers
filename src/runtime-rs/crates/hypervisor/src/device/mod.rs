@@ -20,6 +20,8 @@ use self::topology::PCIeTopology;
 pub mod device_manager;
 pub mod driver;
 pub mod pci_path;
+mod tap;
+pub use self::tap::{Error as TapError, Tap};
 pub mod topology;
 pub mod util;
 
