@@ -14,7 +14,7 @@ use async_trait::async_trait;
 use common::message::{Action, Message};
 use common::types::utils::option_system_time_into;
 use common::types::ContainerProcess;
-use common::{ContainerManager, Sandbox, SandboxNetworkEnv};
+use common::{types::SandboxConfig, ContainerManager, Sandbox, SandboxNetworkEnv};
 use containerd_shim_protos::events::task::{TaskExit, TaskOOM};
 use hypervisor::VsockConfig;
 #[cfg(not(target_arch = "s390x"))]
@@ -76,6 +76,7 @@ pub struct VirtSandbox {
     agent: Arc<dyn Agent>,
     hypervisor: Arc<dyn Hypervisor>,
     monitor: Arc<HealthCheck>,
+    sandbox_config: Option<SandboxConfig>,
 }
 
 impl std::fmt::Debug for VirtSandbox {
@@ -94,6 +95,7 @@ impl VirtSandbox {
         agent: Arc<dyn Agent>,
         hypervisor: Arc<dyn Hypervisor>,
         resource_manager: Arc<ResourceManager>,
+        sandbox_config: SandboxConfig,
     ) -> Result<Self> {
         let config = resource_manager.config().await;
         let keep_abnormal = config.runtime.keep_abnormal;
@@ -105,6 +107,7 @@ impl VirtSandbox {
             hypervisor,
             resource_manager,
             monitor: Arc::new(HealthCheck::new(true, keep_abnormal)),
+            sandbox_config: Some(sandbox_config),
         })
     }
 
@@ -293,8 +296,8 @@ impl VirtSandbox {
 
     fn has_prestart_hooks(
         &self,
-        prestart_hooks: Vec<oci::Hook>,
-        create_runtime_hooks: Vec<oci::Hook>,
+        prestart_hooks: &[oci::Hook],
+        create_runtime_hooks: &[oci::Hook],
     ) -> bool {
         !prestart_hooks.is_empty() || !create_runtime_hooks.is_empty()
     }
@@ -303,32 +306,32 @@ impl VirtSandbox {
 #[async_trait]
 impl Sandbox for VirtSandbox {
     #[instrument(name = "sb: start")]
-    async fn start(
-        &self,
-        dns: Vec<String>,
-        spec: &oci::Spec,
-        state: &spec::State,
-        network_env: SandboxNetworkEnv,
-    ) -> Result<()> {
+    async fn start(&self) -> Result<()> {
         let id = &self.sid;
 
-        // if sandbox running, return
-        // if sandbox not running try to start sandbox
+        if self.sandbox_config.is_none() {
+            return Err(anyhow!("sandbox config is missing"));
+        }
+        let sandbox_config = self.sandbox_config.as_ref().unwrap();
+
+        // if sandbox is not in SandboxState::Init then return,
+        // otherwise try to create sandbox
+
         let mut inner = self.inner.write().await;
-        if inner.state == SandboxState::Running {
-            warn!(sl!(), "sandbox is running, no need to start");
+        if inner.state != SandboxState::Init {
+            warn!(sl!(), "sandbox is started");
             return Ok(());
         }
 
         self.hypervisor
-            .prepare_vm(id, network_env.netns.clone())
+            .prepare_vm(id, sandbox_config.network_env.netns.clone())
             .await
             .context("prepare vm")?;
 
         // generate device and setup before start vm
         // should after hypervisor.prepare_vm
         let resources = self
-            .prepare_for_start_sandbox(id, network_env.clone())
+            .prepare_for_start_sandbox(id, sandbox_config.network_env.clone())
             .await?;
 
         self.resource_manager
@@ -341,28 +344,33 @@ impl Sandbox for VirtSandbox {
         info!(sl!(), "start vm");
 
         // execute pre-start hook functions, including Prestart Hooks and CreateRuntime Hooks
-        let (prestart_hooks, create_runtime_hooks) = if let Some(hooks) = spec.hooks().as_ref() {
-            (
-                hooks.prestart().clone().unwrap_or_default(),
-                hooks.create_runtime().clone().unwrap_or_default(),
-            )
-        } else {
-            (Vec::new(), Vec::new())
-        };
+        let (prestart_hooks, create_runtime_hooks) =
+            if let Some(hooks) = sandbox_config.hooks.as_ref() {
+                (
+                    hooks.prestart().clone().unwrap_or_default(),
+                    hooks.create_runtime().clone().unwrap_or_default(),
+                )
+            } else {
+                (Vec::new(), Vec::new())
+            };
 
-        self.execute_oci_hook_functions(&prestart_hooks, &create_runtime_hooks, state)
-            .await?;
+        self.execute_oci_hook_functions(
+            &prestart_hooks,
+            &create_runtime_hooks,
+            &sandbox_config.state,
+        )
+        .await?;
 
         // 1. if there are pre-start hook functions, network config might have been changed.
         //    We need to rescan the netns to handle the change.
         // 2. Do not scan the netns if we want no network for the VM.
         // TODO In case of vm factory, scan the netns to hotplug interfaces after the VM is started.
         let config = self.resource_manager.config().await;
-        if self.has_prestart_hooks(prestart_hooks, create_runtime_hooks)
+        if self.has_prestart_hooks(&prestart_hooks, &create_runtime_hooks)
             && !config.runtime.disable_new_netns
             && !dan_config_path(&config, &self.sid).exists()
         {
-            if let Some(netns_path) = network_env.netns {
+            if let Some(netns_path) = &sandbox_config.network_env.netns {
                 let network_resource = NetworkConfig::NetNs(NetworkWithNetNsConfig {
                     network_model: config.runtime.internetworking_model.clone(),
                     netns_path: netns_path.to_owned(),
@@ -372,7 +380,7 @@ impl Sandbox for VirtSandbox {
                         .await
                         .network_info
                         .network_queues as usize,
-                    network_created: network_env.network_created,
+                    network_created: sandbox_config.network_env.network_created,
                 });
                 self.resource_manager
                     .handle_network(network_resource)
@@ -402,8 +410,8 @@ impl Sandbox for VirtSandbox {
         let agent_config = self.agent.agent_config().await;
         let kernel_modules = KernelModule::set_kernel_modules(agent_config.kernel_modules)?;
         let req = agent::CreateSandboxRequest {
-            hostname: spec.hostname().clone().unwrap_or_default(),
-            dns,
+            hostname: sandbox_config.hostname.clone(),
+            dns: sandbox_config.dns.clone(),
             storages: self
                 .resource_manager
                 .get_storage_for_sandbox()
@@ -700,6 +708,7 @@ impl Persist for VirtSandbox {
             hypervisor,
             resource_manager,
             monitor: Arc::new(HealthCheck::new(true, keep_abnormal)),
+            sandbox_config: None,
         })
     }
 }

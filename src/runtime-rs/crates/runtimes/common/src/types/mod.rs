@@ -10,11 +10,17 @@ mod trans_into_agent;
 mod trans_into_shim;
 pub mod utils;
 
-use std::fmt;
+use std::{
+    collections::{hash_map::RandomState, HashMap},
+    fmt,
+};
+
+use crate::SandboxNetworkEnv;
 
 use anyhow::{Context, Result};
 use kata_sys_util::validate;
 use kata_types::mount::Mount;
+use oci_spec::runtime as oci;
 use strum::Display;
 
 /// TaskRequest: TaskRequest from shim
@@ -133,6 +139,17 @@ pub struct ContainerConfig {
     pub stdin: Option<String>,
     pub stdout: Option<String>,
     pub stderr: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct SandboxConfig {
+    pub sandbox_id: String,
+    pub hostname: String,
+    pub dns: Vec<String>,
+    pub network_env: SandboxNetworkEnv,
+    pub annotations: HashMap<String, String, RandomState>,
+    pub hooks: Option<oci::Hooks>,
+    pub state: runtime_spec::State,
 }
 
 #[derive(Debug, Clone)]

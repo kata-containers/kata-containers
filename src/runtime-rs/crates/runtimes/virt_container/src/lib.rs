@@ -19,7 +19,7 @@ use std::sync::Arc;
 use agent::{kata::KataAgent, AGENT_KATA};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use common::{message::Message, RuntimeHandler, RuntimeInstance};
+use common::{message::Message, types::SandboxConfig, RuntimeHandler, RuntimeInstance};
 use hypervisor::Hypervisor;
 #[cfg(not(target_arch = "s390x"))]
 use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
@@ -91,6 +91,7 @@ impl RuntimeHandler for VirtContainer {
         msg_sender: Sender<Message>,
         config: Arc<TomlConfig>,
         init_size_manager: InitialSizeManager,
+        sandbox_config: SandboxConfig,
     ) -> Result<RuntimeInstance> {
         let hypervisor = new_hypervisor(&config).await.context("new hypervisor")?;
 
@@ -114,6 +115,7 @@ impl RuntimeHandler for VirtContainer {
             agent.clone(),
             hypervisor.clone(),
             resource_manager.clone(),
+            sandbox_config,
         )
         .await
         .context("new virt sandbox")?;

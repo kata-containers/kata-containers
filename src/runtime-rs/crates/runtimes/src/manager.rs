@@ -7,7 +7,7 @@
 use anyhow::{anyhow, Context, Result};
 use common::{
     message::Message,
-    types::{ContainerProcess, TaskRequest, TaskResponse},
+    types::{ContainerProcess, SandboxConfig, TaskRequest, TaskResponse},
     RuntimeHandler, RuntimeInstance, Sandbox, SandboxNetworkEnv,
 };
 use hypervisor::Param;
@@ -92,10 +92,7 @@ impl RuntimeHandlerManagerInner {
     #[instrument]
     async fn init_runtime_handler(
         &mut self,
-        spec: &oci::Spec,
-        state: &spec::State,
-        network_env: SandboxNetworkEnv,
-        dns: Vec<String>,
+        sandbox_config: SandboxConfig,
         config: Arc<TomlConfig>,
         init_size_manager: InitialSizeManager,
     ) -> Result<()> {
@@ -117,6 +114,7 @@ impl RuntimeHandlerManagerInner {
                 self.msg_sender.clone(),
                 config.clone(),
                 init_size_manager,
+                sandbox_config,
             )
             .await
             .context("new runtime instance")?;
@@ -137,29 +135,28 @@ impl RuntimeHandlerManagerInner {
         let instance = Arc::new(runtime_instance);
         self.runtime_instance = Some(instance.clone());
 
-        // start sandbox
-        instance
-            .sandbox
-            .start(dns, spec, state, network_env)
-            .await
-            .context("start sandbox")?;
+        Ok(())
+    }
 
+    #[instrument]
+    async fn start_runtime_handler(&self) -> Result<()> {
+        if let Some(instance) = self.runtime_instance.as_ref() {
+            instance.sandbox.start().await.context("start sandbox")?;
+        }
         Ok(())
     }
 
     #[instrument]
     async fn try_init(
         &mut self,
-        spec: &oci::Spec,
-        state: &spec::State,
+        mut sandbox_config: SandboxConfig,
+        spec: Option<&oci::Spec>,
         options: &Option<Vec<u8>>,
     ) -> Result<()> {
         // return if runtime instance has init
         if self.runtime_instance.is_some() {
             return Ok(());
         }
-
-        let mut dns: Vec<String> = vec![];
 
         #[cfg(feature = "linux")]
         LinuxContainer::init().context("init linux container")?;
@@ -168,15 +165,8 @@ impl RuntimeHandlerManagerInner {
         #[cfg(feature = "virt")]
         VirtContainer::init().context("init virt container")?;
 
-        let spec_mounts = spec.mounts().clone().unwrap_or_default();
-        for m in &spec_mounts {
-            if get_mount_path(&Some(m.destination().clone())) == DEFAULT_GUEST_DNS_FILE {
-                let contents = fs::read_to_string(&Path::new(&get_mount_path(m.source()))).await?;
-                dns = contents.split('\n').map(|e| e.to_string()).collect();
-            }
-        }
-
-        let mut config = load_config(spec, options).context("load config")?;
+        let mut config =
+            load_config(&sandbox_config.annotations, options).context("load config")?;
 
         // Sandbox sizing information *may* be provided in two scenarios:
         //   1. The upper layer runtime (ie, containerd or crio) provide sandbox sizing information as an annotation
@@ -186,8 +176,14 @@ impl RuntimeHandlerManagerInner {
         //   2. If this is not a sandbox infrastructure container, but instead a standalone single container (analogous to "docker run..."),
         //	then the container spec itself will contain appropriate sizing information for the entire sandbox (since it is
         //	a single container.
-        let mut initial_size_manager =
-            InitialSizeManager::new(spec).context("failed to construct static resource manager")?;
+
+        let mut initial_size_manager = if let Some(spec) = spec {
+            InitialSizeManager::new(spec).context("failed to construct static resource manager")?
+        } else {
+            InitialSizeManager::new_from(&sandbox_config.annotations)
+                .context("failed to construct static resource manager")?
+        };
+
         initial_size_manager
             .setup_config(&mut config)
             .context("failed to setup static resource mgmt config")?;
@@ -195,53 +191,18 @@ impl RuntimeHandlerManagerInner {
         update_component_log_level(&config);
 
         let dan_path = dan_config_path(&config, &self.id);
-        let mut network_created = false;
         // set netns to None if we want no network for the VM
-        let netns = if config.runtime.disable_new_netns {
-            None
-        } else if dan_path.exists() {
-            info!(sl!(), "Do not create a netns due to DAN");
-            None
-        } else {
-            let mut netns_path = None;
-            if let Some(linux) = &spec.linux() {
-                let linux_namespaces = linux.namespaces().clone().unwrap_or_default();
-                for ns in &linux_namespaces {
-                    if ns.typ() != oci::LinuxNamespaceType::Network {
-                        continue;
-                    }
-                    // get netns path from oci spec
-                    if ns.path().is_some() {
-                        netns_path = ns.path().clone().map(|p| p.display().to_string());
-                    }
-                    // if we get empty netns from oci spec, we need to create netns for the VM
-                    else {
-                        let ns_name = generate_netns_name();
-                        let netns = NetNs::new(ns_name)?;
-                        let path = Some(PathBuf::from(netns.path()).display().to_string());
-                        netns_path = path;
-                        network_created = true;
-                    }
-                    break;
-                }
-            }
-            netns_path
-        };
+        if config.runtime.disable_new_netns || dan_path.exists() {
+            sandbox_config.network_env.netns = None;
+        }
 
-        let network_env = SandboxNetworkEnv {
-            netns,
-            network_created,
-        };
-        self.init_runtime_handler(
-            spec,
-            state,
-            network_env,
-            dns,
-            Arc::new(config),
-            initial_size_manager,
-        )
-        .await
-        .context("init runtime handler")?;
+        self.init_runtime_handler(sandbox_config, Arc::new(config), initial_size_manager)
+            .await
+            .context("init runtime handler")?;
+
+        self.start_runtime_handler()
+            .await
+            .context("start runtime handler")?;
 
         // the sandbox creation can reach here only once and the sandbox is created
         // so we can safely create the shim management socket right now
@@ -294,7 +255,8 @@ impl RuntimeHandlerManager {
             .context("failed to load the sandbox state")?;
 
         let config = if let Ok(spec) = load_oci_spec() {
-            load_config(&spec, &None).context("load config")?
+            let annotations = spec.annotations().clone().unwrap_or_default();
+            load_config(&annotations, &None).context("load config")?
         } else {
             TomlConfig::default()
         };
@@ -350,14 +312,76 @@ impl RuntimeHandlerManager {
     }
 
     #[instrument]
-    async fn try_init_runtime_instance(
+    async fn task_init_runtime_instance(
         &self,
         spec: &oci::Spec,
         state: &spec::State,
         options: &Option<Vec<u8>>,
     ) -> Result<()> {
+        let mut dns: Vec<String> = vec![];
+
+        let spec_mounts = spec.mounts().clone().unwrap_or_default();
+        for m in &spec_mounts {
+            if get_mount_path(&Some(m.destination().clone())) == DEFAULT_GUEST_DNS_FILE {
+                let contents = fs::read_to_string(&Path::new(&get_mount_path(m.source()))).await?;
+                dns = contents.split('\n').map(|e| e.to_string()).collect();
+            }
+        }
+
+        let mut network_created = false;
+        let mut netns = None;
+        if let Some(linux) = &spec.linux() {
+            let linux_namespaces = linux.namespaces().clone().unwrap_or_default();
+            for ns in &linux_namespaces {
+                if ns.typ() != oci::LinuxNamespaceType::Network {
+                    continue;
+                }
+                // get netns path from oci spec
+                if ns.path().is_some() {
+                    netns = ns.path().clone().map(|p| p.display().to_string());
+                }
+                // if we get empty netns from oci spec, we need to create netns for the VM
+                else {
+                    let ns_name = generate_netns_name();
+                    let raw_netns = NetNs::new(ns_name)?;
+                    let path = Some(PathBuf::from(raw_netns.path()).display().to_string());
+                    netns = path;
+                    network_created = true;
+                }
+                break;
+            }
+        }
+
+        let network_env = SandboxNetworkEnv {
+            netns,
+            network_created,
+        };
+
+        let mut inner: tokio::sync::RwLockWriteGuard<'_, RuntimeHandlerManagerInner> =
+            self.inner.write().await;
+
+        let sandbox_config = SandboxConfig {
+            sandbox_id: inner.id.clone(),
+            dns,
+            hostname: spec.hostname().clone().unwrap_or_default(),
+            network_env,
+            annotations: spec.annotations().clone().unwrap_or_default(),
+            hooks: spec.hooks().clone(),
+            state: state.clone(),
+        };
+
+        inner.try_init(sandbox_config, Some(spec), options).await
+    }
+
+    #[instrument]
+    async fn init_runtime_instance(
+        &self,
+        sandbox_config: SandboxConfig,
+        spec: Option<&oci::Spec>,
+        options: &Option<Vec<u8>>,
+    ) -> Result<()> {
         let mut inner = self.inner.write().await;
-        inner.try_init(spec, state, options).await
+        inner.try_init(sandbox_config, spec, options).await
     }
 
     #[instrument(parent = &*(ROOTSPAN))]
@@ -379,7 +403,7 @@ impl RuntimeHandlerManager {
                 annotations: spec.annotations().clone().unwrap_or_default(),
             };
 
-            self.try_init_runtime_instance(&spec, &state, &container_config.options)
+            self.task_init_runtime_instance(&spec, &state, &container_config.options)
                 .await
                 .context("try init runtime instance")?;
             let instance = self
@@ -528,9 +552,10 @@ impl RuntimeHandlerManager {
 /// 4. If above three are not set, then get default path from DEFAULT_RUNTIME_CONFIGURATIONS
 /// in kata-containers/src/libs/kata-types/src/config/default.rs, in array order.
 #[instrument]
-fn load_config(spec: &oci::Spec, option: &Option<Vec<u8>>) -> Result<TomlConfig> {
+fn load_config(an: &HashMap<String, String>, option: &Option<Vec<u8>>) -> Result<TomlConfig> {
     const KATA_CONF_FILE: &str = "KATA_CONF_FILE";
-    let annotation = Annotation::new(spec.annotations().clone().unwrap_or_default());
+    let annotation = Annotation::new(an.clone());
+
     let config_path = if let Some(path) = annotation.get_sandbox_config_path() {
         path
     } else if let Ok(path) = std::env::var(KATA_CONF_FILE) {
