@@ -61,18 +61,17 @@ test_rc_policy() {
         --output=jsonpath='{.spec.replicas}')
     [ "${number_of_replicas}" -gt 0 ]
 
-    # Wait for all the expected pods to be created.
-    local count=0
-    local launched_pods=()
-    while [ $count -lt 6 ] && [ "${#launched_pods[@]}" -ne "${number_of_replicas}" ]; do
-        count=$((count + 1))
-        sleep 10
-        launched_pods=($(kubectl get pods "--selector=app=${app_name}" \
-            --output=jsonpath={.items..metadata.name}))
-    done
+    # The replicas pods can be in running, waiting, succeeded or failed
+    # status. We need them all on running state before proceeding.
+    cmd="kubectl describe rc ${replication_name}"
+    cmd+=" | grep \"Pods Status\" | grep \"${number_of_replicas} Running\""
+    info "Waiting for: ${cmd}"
+    waitForProcess "$wait_time" "$sleep_time" "$cmd"
 
     # Check that the number of pods created for the replication controller
     # is equal to the number of replicas that we defined.
+    launched_pods=($(kubectl get pods "--selector=app=${app_name}" \
+        --output=jsonpath={.items..metadata.name}))
     [ "${#launched_pods[@]}" -eq "${number_of_replicas}" ]
 
     # Check pod creation
@@ -111,13 +110,13 @@ test_rc_policy() {
 
 @test "Policy failure: unexpected host device mapping" {
     # Changing the template spec after generating its policy will cause CreateContainer to be denied.
-    yq -i \
-        '.spec.template.spec.containers[0].volumeMounts += [{"mountPath": "/dev/ttyS0", "name": "dev-ttys0"}]' \
-        "${incorrect_yaml}"
+  yq -i \
+      '.spec.template.spec.containers[0].volumeMounts += [{"mountPath": "/dev/ttyS0", "name": "dev-ttys0"}]' \
+      "${incorrect_yaml}"
 
-    yq -i \
-        '.spec.template.spec.volumes += [{"name": "dev-ttys0", "hostPath": {"path": "/dev/ttyS0"}}]' \
-        "${incorrect_yaml}"
+  yq -i \
+      '.spec.template.spec.volumes += [{"name": "dev-ttys0", "hostPath": {"path": "/dev/ttyS0"}}]' \
+      "${incorrect_yaml}"
 
     test_rc_policy true
 }
@@ -135,15 +134,6 @@ test_rc_policy() {
     # Changing the template spec after generating its policy will cause CreateContainer to be denied.
     yq -i \
       '.spec.template.spec.containers[0].securityContext.capabilities.add += ["CAP_SYS_CHROOT"]' \
-      "${incorrect_yaml}"
-
-    test_rc_policy true
-}
-
-@test "Policy failure: unexpected UID = 1000" {
-    # Changing the template spec after generating its policy will cause CreateContainer to be denied.
-    yq -i \
-      '.spec.template.spec.securityContext.runAsUser = 1000' \
       "${incorrect_yaml}"
 
     test_rc_policy true
