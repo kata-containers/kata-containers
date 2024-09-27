@@ -1750,7 +1750,7 @@ fn update_container_namespaces(
                 if !pidns.path.is_empty() {
                     pid_ns.set_path(Some(PathBuf::from(&pidns.path)));
                 }
-            } else {
+            } else if !sandbox.containers.is_empty() {
                 return Err(anyhow!(ERR_NO_SANDBOX_PIDNS));
             }
         }
@@ -2525,14 +2525,6 @@ mod tests {
                     .typ(LinuxNamespaceType::Pid)
                     .build()
                     .unwrap()],
-                ..Default::default()
-            },
-            TestData {
-                namespaces: vec![],
-                sandbox_pidns_path: None,
-                use_sandbox_pidns: true,
-                result: Err(anyhow!(ERR_NO_SANDBOX_PIDNS)),
-                expected_namespaces: vec![],
                 ..Default::default()
             },
             TestData {
