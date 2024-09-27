@@ -224,7 +224,12 @@ kbs_uninstall_cli() {
 #
 function kbs_k8s_delete() {
 	pushd "$COCO_KBS_DIR"
-	kubectl delete -k config/kubernetes/overlays/$(uname -m)
+	if [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
+		kubectl delete -k config/kubernetes/ita
+	else
+		kubectl delete -k config/kubernetes/overlays/$(uname -m)
+	fi
+
 	# Verify that KBS namespace resources were properly deleted
 	cmd="kubectl get all -n $KBS_NS 2>&1 | grep 'No resources found'"
 	waitForProcess "120" "30" "$cmd"
