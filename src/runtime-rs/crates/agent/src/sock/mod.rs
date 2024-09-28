@@ -8,6 +8,8 @@ mod hybrid_vsock;
 pub use hybrid_vsock::HybridVsock;
 mod vsock;
 pub use vsock::Vsock;
+mod remote;
+pub use remote::Remote;
 
 use std::{
     pin::Pin,
@@ -28,6 +30,7 @@ use url::Url;
 
 const VSOCK_SCHEME: &str = "vsock";
 const HYBRID_VSOCK_SCHEME: &str = "hvsock";
+const REMOTE_SCHEME: &str = "remote";
 
 /// Socket stream
 pub enum Stream {
@@ -98,6 +101,7 @@ impl ConnectConfig {
 enum SockType {
     Vsock(Vsock),
     HybridVsock(HybridVsock),
+    Remote(Remote),
 }
 
 #[async_trait]
@@ -114,6 +118,7 @@ pub fn new(address: &str, port: u32) -> Result<Arc<dyn Sock>> {
     match parse(address, port).context("parse url")? {
         SockType::Vsock(sock) => Ok(Arc::new(sock)),
         SockType::HybridVsock(sock) => Ok(Arc::new(sock)),
+        SockType::Remote(sock) => Ok(Arc::new(sock)),
     }
 }
 
@@ -135,6 +140,13 @@ fn parse(address: &str, port: u32) -> Result<SockType> {
             }
             let uds = path[0];
             Ok(SockType::HybridVsock(HybridVsock::new(uds, port)))
+        }
+        REMOTE_SCHEME => {
+            let path: Vec<&str> = url.path().split(':').collect();
+            if path.len() != 1 {
+                return Err(anyhow!("invalid path {:?}", path));
+            }
+            Ok(SockType::Remote(Remote::new(path[0].to_string())))
         }
         _ => Err(anyhow!("Unsupported scheme")),
     }
