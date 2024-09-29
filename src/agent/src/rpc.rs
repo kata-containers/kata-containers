@@ -241,6 +241,28 @@ impl AgentService {
             }
         }
 
+        let mounts = oci
+            .mounts_mut()
+            .as_mut()
+            .ok_or_else(|| anyhow!("Spec didn't contain mounts field"))?;
+        if cdh::is_cdh_client_initialized().await {
+            for m in mounts.iter_mut() {
+                if m.destination().starts_with("/sealed") {
+                    info!(
+                        sl(),
+                        "sealed mount destination: {:?} source: {:?}",
+                        m.destination(),
+                        m.source()
+                    );
+                    if let Some(source_str) = m.source().as_ref().and_then(|p| p.to_str()) {
+                        cdh::unseal_file(source_str).await?;
+                    } else {
+                        warn!(sl(), "Failed to unseal: Mount source is None or invalid");
+                    }
+                }
+            }
+        }
+
         let linux = oci
             .linux()
             .as_ref()
