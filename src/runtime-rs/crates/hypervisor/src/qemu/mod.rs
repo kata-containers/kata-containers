@@ -20,6 +20,7 @@ use async_trait::async_trait;
 
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use oci_spec::runtime as oci;
 
 #[derive(Debug)]
 pub struct Qemu {
@@ -47,7 +48,7 @@ impl Qemu {
 
 #[async_trait]
 impl Hypervisor for Qemu {
-    async fn prepare_vm(&self, id: &str, netns: Option<String>) -> Result<()> {
+    async fn prepare_vm(&self, id: &str, netns: Option<String>, _spec: &oci::Spec) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.prepare_vm(id, netns).await
     }

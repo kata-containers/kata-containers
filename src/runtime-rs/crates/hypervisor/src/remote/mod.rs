@@ -13,6 +13,7 @@ use kata_types::capabilities::{Capabilities, CapabilityBits};
 use persist::sandbox_persist::Persist;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use oci_spec::runtime as oci;
 
 mod inner;
 pub mod protocols;
@@ -43,8 +44,9 @@ impl Remote {
 
 #[async_trait]
 impl Hypervisor for Remote {
-    async fn prepare_vm(&self, id: &str, netns: Option<String>) -> Result<()> {
+    async fn prepare_vm(&self, id: &str, netns: Option<String>, spec: &oci::Spec) -> Result<()> {
         let mut inner = self.inner.write().await;
+        inner.set_oci_spec(spec);
         inner.prepare_vm(id, netns).await
     }
 

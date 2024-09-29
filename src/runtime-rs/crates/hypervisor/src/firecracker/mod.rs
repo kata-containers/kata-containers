@@ -20,6 +20,7 @@ use kata_types::capabilities::CapabilityBits;
 use persist::sandbox_persist::Persist;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use oci_spec::runtime as oci;
 
 #[derive(Debug)]
 pub struct Firecracker {
@@ -52,7 +53,7 @@ impl Firecracker {
 
 #[async_trait]
 impl Hypervisor for Firecracker {
-    async fn prepare_vm(&self, id: &str, netns: Option<String>) -> Result<()> {
+    async fn prepare_vm(&self, id: &str, netns: Option<String>, _spec: &oci::Spec) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.prepare_vm(id, netns).await
     }

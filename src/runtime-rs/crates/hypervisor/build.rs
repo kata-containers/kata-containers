@@ -5,7 +5,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Codegen::new()
         .out_dir("src/remote/protocols")
-        .inputs(&[
+        .inputs([
             "src/remote/protocols/hypervisor.proto",
         ])
         .include("src/remote/protocols")

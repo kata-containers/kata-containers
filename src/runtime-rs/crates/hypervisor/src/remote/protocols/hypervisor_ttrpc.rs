@@ -30,7 +30,7 @@ pub struct HypervisorClient {
 impl HypervisorClient {
     pub fn new(client: ::ttrpc::r#async::Client) -> Self {
         HypervisorClient {
-            client: client,
+                    client: client,
         }
     }
 

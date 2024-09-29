@@ -18,6 +18,7 @@ pub mod dragonball;
 #[cfg(not(target_arch = "s390x"))]
 pub mod firecracker;
 mod kernel_param;
+use oci_spec::runtime as oci;
 pub mod qemu;
 pub mod remote;
 pub use kernel_param::Param;
@@ -95,7 +96,7 @@ pub struct MemoryConfig {
 #[async_trait]
 pub trait Hypervisor: std::fmt::Debug + Send + Sync {
     // vm manager
-    async fn prepare_vm(&self, id: &str, netns: Option<String>) -> Result<()>;
+    async fn prepare_vm(&self, id: &str, netns: Option<String>, spec: &oci::Spec) -> Result<()>;
     async fn start_vm(&self, timeout: i32) -> Result<()>;
     async fn stop_vm(&self) -> Result<()>;
     async fn wait_vm(&self) -> Result<i32>;

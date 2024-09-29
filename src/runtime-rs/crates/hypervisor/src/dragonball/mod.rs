@@ -25,6 +25,7 @@ use kata_types::capabilities::{Capabilities, CapabilityBits};
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use tokio::sync::{mpsc, Mutex, RwLock};
 use tracing::instrument;
+use oci_spec::runtime as oci;
 
 use crate::{DeviceType, Hypervisor, MemoryConfig, NetworkConfig, VcpuThreadIds};
 
@@ -69,7 +70,7 @@ impl Dragonball {
 #[async_trait]
 impl Hypervisor for Dragonball {
     #[instrument]
-    async fn prepare_vm(&self, id: &str, netns: Option<String>) -> Result<()> {
+    async fn prepare_vm(&self, id: &str, netns: Option<String>, _spec: &oci::Spec) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.prepare_vm(id, netns).await
     }

@@ -13,6 +13,7 @@ use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use persist::sandbox_persist::Persist;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+use oci_spec::runtime as oci;
 
 // Convenience macro to obtain the scope logger
 #[macro_export]
@@ -49,7 +50,7 @@ impl CloudHypervisor {
 
 #[async_trait]
 impl Hypervisor for CloudHypervisor {
-    async fn prepare_vm(&self, id: &str, netns: Option<String>) -> Result<()> {
+    async fn prepare_vm(&self, id: &str, netns: Option<String>, _spec: &oci::Spec) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.prepare_vm(id, netns).await
     }
