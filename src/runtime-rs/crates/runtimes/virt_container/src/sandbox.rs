@@ -18,7 +18,9 @@ use common::{types::SandboxConfig, ContainerManager, Sandbox, SandboxNetworkEnv}
 use containerd_shim_protos::events::task::{TaskExit, TaskOOM};
 use hypervisor::VsockConfig;
 #[cfg(not(target_arch = "s390x"))]
-use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL, HYPERVISOR_FIRECRACKER};
+use hypervisor::HYPERVISOR_FIRECRACKER;
+#[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
+use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
 use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
 use hypervisor::{utils::get_hvsock_path, HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID};
 use hypervisor::{BlockConfig, Hypervisor};
@@ -640,7 +642,7 @@ impl Persist for VirtSandbox {
             resource: Some(self.resource_manager.save().await?),
             hypervisor: match hypervisor_state.hypervisor_type.as_str() {
                 // TODO support other hypervisors
-                #[cfg(not(target_arch = "s390x"))]
+                #[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
                 HYPERVISOR_DRAGONBALL => Ok(Some(hypervisor_state)),
                 #[cfg(not(target_arch = "s390x"))]
                 HYPERVISOR_NAME_CH => Ok(Some(hypervisor_state)),
@@ -679,7 +681,7 @@ impl Persist for VirtSandbox {
         let h = sandbox_state.hypervisor.unwrap_or_default();
         let hypervisor = match h.hypervisor_type.as_str() {
             // TODO support other hypervisors
-            #[cfg(not(target_arch = "s390x"))]
+            #[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
             HYPERVISOR_DRAGONBALL => {
                 let hypervisor = Arc::new(Dragonball::restore((), h).await?) as Arc<dyn Hypervisor>;
                 Ok(hypervisor)

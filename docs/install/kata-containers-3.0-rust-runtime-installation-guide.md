@@ -83,6 +83,23 @@ $ make && sudo make install
 ```
 After running the command above, the default config file `configuration.toml` will be installed under `/usr/share/defaults/kata-containers/`,  the binary file `containerd-shim-kata-v2` will be installed under `/usr/local/bin/` .
 
+### Install Shim Without Builtin Dragonball VMM
+
+By default, runtime-rs includes the `Dragonball` VMM. To build without the built-in `Dragonball` hypervisor, use `make USE_BUILDIN_DB=false`:
+```bash
+$ cd kata-containers/src/runtime-rs
+$ make USE_BUILDIN_DB=false
+```
+After building, specify the desired hypervisor during installation using `HYPERVISOR`. For example, to use `qemu` or `cloud-hypervisor`:
+
+```
+sudo make install HYPERVISOR=qemu
+```
+or
+```
+sudo make install HYPERVISOR=cloud-hypervisor
+```
+
 ### Build Kata Containers Kernel
 Follow the [Kernel installation guide](/tools/packaging/kernel/README.md).
 

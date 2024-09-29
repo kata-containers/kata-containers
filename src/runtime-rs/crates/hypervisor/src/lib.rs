@@ -13,7 +13,7 @@ pub mod device;
 pub mod hypervisor_persist;
 pub use device::driver::*;
 use device::DeviceType;
-#[cfg(not(target_arch = "s390x"))]
+#[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
 pub mod dragonball;
 #[cfg(not(target_arch = "s390x"))]
 pub mod firecracker;
@@ -53,12 +53,14 @@ const VM_ROOTFS_FILESYSTEM_EROFS: &str = "erofs";
 // /dev/hugepages will be the mount point
 // mkdir -p /dev/hugepages
 // mount -t hugetlbfs none /dev/hugepages
-#[cfg(not(target_arch = "s390x"))]
-const DEV_HUGEPAGES: &str = "/dev/hugepages";
 pub const HUGETLBFS: &str = "hugetlbfs";
-#[cfg(not(target_arch = "s390x"))]
+// Constants required for Dragonball VMM when enabled and not on s390x.
+// Not needed when the built-in VMM is not used.
+#[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
+const DEV_HUGEPAGES: &str = "/dev/hugepages";
+#[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
 const SHMEM: &str = "shmem";
-#[cfg(not(target_arch = "s390x"))]
+#[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
 const HUGE_SHMEM: &str = "hugeshmem";
 
 pub const HYPERVISOR_DRAGONBALL: &str = "dragonball";
