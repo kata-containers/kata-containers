@@ -56,6 +56,49 @@ jobs:
         timeout-minutes: 10
         run: bash tests/integration/cri-containerd/gha-run.sh run
 
+  run-containerd-sandboxapi:
+    strategy:
+      # We can set this to true whenever we're 100% sure that
+      # the all the tests are not flaky, otherwise we'll fail
+      # all the tests due to a single flaky instance.
+      fail-fast: false
+      matrix:
+        containerd_version: ['latest']
+        vmm: ['dragonball', 'cloud-hypervisor', 'qemu-runtime-rs']
+    runs-on: ubuntu-22.04
+    env:
+      CONTAINERD_VERSION: ${{ matrix.containerd_version }}
+      GOPATH: ${{ github.workspace }}
+      KATA_HYPERVISOR: ${{ matrix.vmm }}
+      SANDBOXER: "shim"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: Install dependencies
+        run: bash tests/integration/cri-containerd/gha-run.sh install-dependencies
+
+      - name: get-kata-tarball
+        uses: actions/download-artifact@v4
+        with:
+          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
+          path: kata-artifacts
+
+      - name: Install kata
+        run: bash tests/integration/cri-containerd/gha-run.sh install-kata kata-artifacts
+
+      - name: Run containerd-sandboxapi tests
+        timeout-minutes: 10
+        run: bash tests/integration/cri-containerd/gha-run.sh run
+
   run-containerd-stability:
     strategy:
       fail-fast: false
@@ -67,6 +110,7 @@ jobs:
       CONTAINERD_VERSION: ${{ matrix.containerd_version }}
       GOPATH: ${{ github.workspace }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
+      SANDBOXER: "podsandbox"
     steps:
       - uses: actions/checkout@v4
         with:
