@@ -62,6 +62,7 @@ use kata_types::config::hypervisor::TopologyConfigInfo;
 use super::pci_path::PciPath;
 
 const DEFAULT_PCIE_ROOT_BUS: &str = "pcie.0";
+pub const DEFAULT_BRIDGE_BUS: &str = "pcie.0";
 // Currently, CLH and Dragonball support device attachment solely on the root bus.
 const DEFAULT_PCIE_ROOT_BUS_ADDRESS: &str = "0000:00";
 pub const PCIE_ROOT_BUS_SLOTS_CAPACITY: u32 = 32;
@@ -123,6 +124,53 @@ macro_rules! unregister_pcie_device {
             None => Ok(()),
         }
     };
+}
+
+/// PCIePortBusPrefix defines the naming scheme for PCIe ports.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum PCIePortBusPrefix {
+    RootPort,
+    SwitchPort,
+    SwitchUpstreamPort,
+    SwitchDownstreamPort,
+    BridgePort,
+}
+
+impl std::fmt::Display for PCIePortBusPrefix {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let prefix = match self {
+            PCIePortBusPrefix::RootPort => "rp",
+            PCIePortBusPrefix::SwitchPort => "sw",
+            PCIePortBusPrefix::SwitchUpstreamPort => "swup",
+            PCIePortBusPrefix::SwitchDownstreamPort => "swdp",
+            PCIePortBusPrefix::BridgePort => "bp",
+        };
+        write!(f, "{}", prefix)
+    }
+}
+
+/// PCIePort distinguishes between different types of PCIe ports.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum PCIePort {
+    #[default]
+    NoPort,
+    RootPort,
+    SwitchPort,
+    BridgePort,
+    InvalidPort,
+}
+
+impl std::fmt::Display for PCIePort {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let port = match self {
+            PCIePort::NoPort => "no-port",
+            PCIePort::RootPort => "root-port",
+            PCIePort::SwitchPort => "switch-port",
+            PCIePort::BridgePort => "bridge-port",
+            PCIePort::InvalidPort => "invalid-port",
+        };
+        write!(f, "{}", port)
+    }
 }
 
 pub trait PCIeDevice: Send + Sync {
@@ -203,14 +251,26 @@ pub struct PCIeRootComplex {
     pub root_bus_devices: HashMap<String, PCIeEndpoint>,
 }
 
-#[derive(Debug, Default)]
+/// TopologyPortDevice represents a PCIe device used for hotplugging.
+#[derive(Default, Clone, Debug)]
+pub struct TopologyPortDevice {
+    pub id: String,
+    pub bus: String,
+    pub port: PCIePort,
+    pub occupied: bool,
+}
+#[derive(Clone, Debug, Default)]
 pub struct PCIeTopology {
     pub hypervisor_name: String,
     pub root_complex: PCIeRootComplex,
 
     pub bridges: u32,
     pub pcie_root_ports: u32,
+    pub pcie_switch_ports: u32,
     pub hotplug_vfio_on_root_bus: bool,
+
+    /// pcie_devices_per_port keeps track of the devices attached to different types of PCI ports.
+    pub pcie_devices_per_port: HashMap<PCIePort, Vec<TopologyPortDevice>>,
 }
 
 impl PCIeTopology {
@@ -225,13 +285,34 @@ impl PCIeTopology {
             root_bus_devices: HashMap::with_capacity(PCIE_ROOT_BUS_SLOTS_CAPACITY as usize),
         };
 
+        // initialize port devices within PCIe Topology
+        let total_rp: usize = topo_config.device_info.pcie_root_port as usize;
+        let total_sp: usize = topo_config.device_info.pcie_switch_port as usize;
+        let total_bp: usize = topo_config.device_info.pcie_bridge_port as usize;
+        let mut devices_per_port: HashMap<PCIePort, Vec<TopologyPortDevice>> = HashMap::new();
+        devices_per_port.insert(PCIePort::RootPort, Vec::with_capacity(total_rp));
+        devices_per_port.insert(PCIePort::SwitchPort, Vec::with_capacity(total_sp));
+        devices_per_port.insert(PCIePort::BridgePort, Vec::with_capacity(total_bp));
+
         Some(Self {
             hypervisor_name: topo_config.hypervisor_name.to_owned(),
             root_complex,
             bridges: topo_config.device_info.default_bridges,
             pcie_root_ports: topo_config.device_info.pcie_root_port,
+            pcie_switch_ports: topo_config.device_info.pcie_switch_port,
             hotplug_vfio_on_root_bus: topo_config.device_info.hotplug_vfio_on_root_bus,
+            pcie_devices_per_port: devices_per_port,
         })
+    }
+
+    pub fn get_pcie_port(&self) -> PCIePort {
+        match (self.pcie_root_ports, self.pcie_switch_ports) {
+            (0, 0) => PCIePort::NoPort,
+            (r, s) if r > 0 && s > 0 => PCIePort::InvalidPort,
+            (r, _) if r > 0 => PCIePort::RootPort,
+            (_, s) if s > 0 => PCIePort::SwitchPort,
+            _ => PCIePort::InvalidPort,
+        }
     }
 
     pub fn insert_device(&mut self, ep: &mut PCIeEndpoint) -> Option<PciPath> {
@@ -299,6 +380,24 @@ impl PCIeTopology {
                 Some(pci_addr)
             }
         }
+    }
+
+    pub fn find_vacant_port(
+        &mut self,
+        port_type: PCIePort,
+        device_id: &str,
+    ) -> Option<TopologyPortDevice> {
+        if let Some(port_devices) = self.pcie_devices_per_port.get_mut(&port_type) {
+            for port in port_devices.iter_mut() {
+                info!(sl!(), "Checking port with device_id: {:?}.", &device_id);
+                if !port.occupied {
+                    port.occupied = true;
+                    return Some(port.clone()); // Return cloned port immediately
+                }
+            }
+        }
+
+        None
     }
 
     pub fn find_device(&mut self, device_id: &str) -> bool {

@@ -5,6 +5,7 @@
 
 use super::cmdline_generator::{QemuCmdLine, QMP_SOCKET_FILE};
 use super::qmp::Qmp;
+use crate::device::topology::PCIePort;
 use crate::{
     hypervisor_persist::HypervisorState, utils::enter_netns, HypervisorConfig, MemoryConfig,
     VcpuThreadIds, VsockDevice, HYPERVISOR_QEMU,
@@ -124,6 +125,29 @@ impl QemuInner {
                         &network.config.host_dev_name,
                         network.config.guest_mac.clone().unwrap(),
                     )?;
+                }
+                DeviceType::PortDevice(port_device) => {
+                    let total_ports = port_device.config.total_ports;
+                    let port_type = port_device.config.port_type;
+                    let machine_type = port_device.config.machine_type.clone();
+                    let memsz_32b = port_device.config.mem_size_32bit as u32;
+                    let memsz_64b = port_device.config.mem_size_64bit;
+
+                    if port_type == PCIePort::RootPort {
+                        cmdline.add_pcie_root_port(
+                            total_ports,
+                            &machine_type,
+                            memsz_32b,
+                            memsz_64b,
+                        )?;
+                    } else if port_type == PCIePort::SwitchPort {
+                        cmdline.add_pcie_switch_port(
+                            total_ports,
+                            &machine_type,
+                            memsz_32b,
+                            memsz_64b,
+                        )?;
+                    }
                 }
                 _ => info!(sl!(), "qemu cmdline: unsupported device: {:?}", device),
             }
@@ -542,8 +566,47 @@ use crate::device::DeviceType;
 impl QemuInner {
     pub(crate) async fn add_device(&mut self, device: DeviceType) -> Result<DeviceType> {
         info!(sl!(), "QemuInner::add_device() {}", device);
-        self.devices.push(device.clone());
-        Ok(device)
+        if self.qmp.is_none() {
+            info!(sl!(), "VMM not ready, queueing device {}", device);
+
+            // add the pending device by reverse order, thus the
+            // start_vm would pop the devices in an right order
+            // to add the devices.
+            self.devices.insert(0, device.clone());
+            return Ok(device);
+        }
+
+        info!(sl!(), "qmp hotplug device {:?}", &device);
+        match device {
+            DeviceType::Vfio(mut vfiodev) => {
+                let primary_device = vfiodev.devices.first_mut().unwrap();
+                info!(
+                    sl!(),
+                    "qmp hotplug vfio primary_device {:?}", &primary_device
+                );
+                // (bus: &str, id: &str, driver: &str, romfile: &str, bdf: &str)
+                let qmp_chan = self.qmp.as_mut().unwrap();
+                qmp_chan
+                    .execute_vfio_device_add(
+                        &vfiodev.bus,
+                        &primary_device.hostdev_id,
+                        &vfiodev.driver_type,
+                        &primary_device.bus_slot_func,
+                        "",
+                    )
+                    .context("exec vfio device add")?;
+
+                let pci_path = qmp_chan
+                    .qom_get_pci_path(&primary_device.hostdev_id)
+                    .context("qom get pci path failed")?;
+                info!(sl!(), "qmp get vfio pci path {:?}", &pci_path);
+
+                primary_device.guest_pci_path = Some(pci_path);
+
+                Ok(DeviceType::Vfio(vfiodev))
+            }
+            _ => todo!(),
+        }
     }
 
     pub(crate) async fn remove_device(&mut self, device: DeviceType) -> Result<()> {

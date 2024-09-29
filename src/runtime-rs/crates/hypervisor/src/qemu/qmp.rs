@@ -3,15 +3,22 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use std::fmt::{Debug, Error, Formatter};
 use std::io::BufReader;
 use std::os::unix::net::UnixStream;
 use std::time::Duration;
 
+use crate::device::pci_path::{PciPath, PciSlot};
 use qapi::qmp;
 use qapi_qmp;
+use qapi_spec::Any;
 use qapi_spec::Dictionary;
+use regex::Regex;
+use serde_json::Value;
+use std::convert::TryInto;
+
+const MAX_PCI_E_TOPO_DEPTH: usize = 10;
 
 pub struct Qmp {
     qmp: qapi::Qmp<qapi::Stream<BufReader<UnixStream>, UnixStream>>,
@@ -63,6 +70,227 @@ impl Qmp {
         info!(sl!(), "QMP initialized: {:#?}", info);
 
         Ok(qmp)
+    }
+
+    pub fn exec_qom_get(&mut self, path: String, property: String) -> Result<Any> {
+        let value = self
+            .qmp
+            .execute(&qmp::qom_get { path, property })
+            .context("exec qom get failed")?;
+
+        Ok(value)
+    }
+
+    #[allow(dead_code)]
+    pub fn exec_qom_set(&mut self, path: String, property: String, value_u64: u64) -> Result<()> {
+        let _value = self
+            .qmp
+            .execute(&qmp::qom_set {
+                path,
+                property,
+                value: value_u64.into(),
+            })
+            .context("exec qom set failed")?;
+
+        Ok(())
+    }
+
+    fn qom_get_slot(&mut self, qom_path: &str) -> Result<PciSlot> {
+        let addr = self.exec_qom_get(qom_path.to_string(), "addr".to_string())?;
+
+        let safe_convert = |value: i64| -> Result<i32, String> {
+            value
+                .try_into()
+                .map_err(|_| format!("value {} is out of i32 range", value))
+        };
+
+        if let Value::Number(addr_value) = addr {
+            // FIXME: drangerous with unwrap()
+            let addr_i64 = addr_value.as_i64().unwrap();
+            // FIXME: Drangerous with directly unwrap()
+            let addr_i32: i32 = safe_convert(addr_i64).unwrap();
+            let slot_num = (addr_i32 >> 3) as u8;
+            let func_num = (addr_i32 & 0x7) as u8;
+
+            if func_num != 0 {
+                return Err(anyhow!(format!(
+                    "unexpected non-zero pci function ({:02x}.{:x}) on {}",
+                    slot_num, func_num, qom_path
+                )));
+            }
+
+            Ok(PciSlot::new(slot_num))
+        } else {
+            Err(anyhow!("no address found for QOM path"))
+        }
+    }
+
+    // Query QMP to find a device's PCI Path given its qemu_id
+    pub fn qom_get_pci_path(&mut self, qemu_id: &str) -> Result<PciPath> {
+        let mut slots = Vec::new();
+        let dev_slot = self
+            .qom_get_slot(qemu_id)
+            .context("qom get dev slot failed")?;
+        slots.push(dev_slot);
+
+        // This only works for Q35 and Virt
+        let regex = Regex::new(r"^/machine/.*/pcie\.0")?;
+        let mut parent_path: String = qemu_id.to_string();
+
+        // We do not want to use a forever loop here, a deeper PCIe topology
+        // than 5 is already not advisable just for the sake of having enough
+        // buffer we limit ourselves to 10 and leave the loop early if we hit
+        // the root bus.
+        for _ in 0..MAX_PCI_E_TOPO_DEPTH {
+            let parent_bus_qom =
+                self.exec_qom_get(parent_path.clone(), "parent_bus".to_string())?;
+            let bus_qom_str = format!("{:?}", parent_bus_qom.clone());
+
+            // If it reaches /machine/q35/pcie.0 the work is done. That is the root bus expected.
+            if regex.is_match(&bus_qom_str) {
+                break;
+            }
+
+            // `bus` is the QOM path of the QOM bus object, but we need the PCI parent_bus.
+            // We can just rfind the first part of the string.
+            let parent_bus = bus_qom_str
+                .rfind('/')
+                .map(|idx| &bus_qom_str[..idx])
+                .ok_or_else(|| anyhow!(format!("bus has unexpected QOM path {}", bus_qom_str)))?;
+
+            let parent_slot = self
+                .qom_get_slot(parent_bus)
+                .context("qom get parent slot failed")?;
+
+            // Prepend the slot
+            slots.insert(0, parent_slot);
+            parent_path = parent_bus.to_string();
+        }
+
+        // It's safe to directly unwrap as slots is some.
+        Ok(PciPath::new(slots).unwrap())
+    }
+
+    pub fn execute_vfio_device_add(
+        &mut self,
+        bus: &str,
+        id: &str,
+        driver: &str,
+        bdf: &str,
+        romfile: &str,
+    ) -> Result<()> {
+        // if transport.isVirtioCCW(nil) {
+        //     driver = string(VfioCCW)
+        // } else {
+        //     driver = string(VfioPCI)
+        // }
+        info!(
+            sl!(),
+            "execute_vfio_device_add bus: {:?}, id: {:?}, driver: {:?}, host: {:?}",
+            bus,
+            id,
+            driver,
+            bdf
+        );
+        let mut vfio_args = Dictionary::new();
+
+        let normalize = |bdf: &str| -> String {
+            if !bdf.starts_with("0000") {
+                format!("0000:{}", bdf)
+            } else {
+                bdf.to_string()
+            }
+        };
+
+        if !bdf.is_empty() {
+            vfio_args.insert("host".to_owned(), normalize(bdf).into());
+        }
+
+        if !romfile.is_empty() {
+            vfio_args.insert("romfile".to_owned(), romfile.into());
+        }
+
+        // "bus: \"rp0\", id: \"vfio_device_0\", driver: \"vfio-pci\", host: \"0000:c1:00.0\"
+        let try_status = self.qmp.execute(&qmp::query_status {}).unwrap();
+        info!(sl!(), "qmp status: {:?}", try_status);
+
+        let vfio_device_add = qmp::device_add {
+            bus: if !bus.is_empty() {
+                Some(bus.to_string())
+            } else {
+                None
+            },
+            id: Some(id.to_string()),
+            driver: driver.to_string(),
+            arguments: vfio_args,
+        };
+
+        self.qmp
+            .execute(&vfio_device_add)
+            .map_err(|e| anyhow!(format!("{:?}", e)))?;
+
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    fn execute_pci_vfio_device_add(
+        &mut self,
+        bus: &str,
+        id: &str,
+        driver: &str,
+        addr: &str,
+        romfile: &str,
+        bdf: &str,
+    ) -> Result<()> {
+        let mut vfio_args = Dictionary::new();
+        vfio_args.insert("host".to_owned(), bdf.into());
+        vfio_args.insert("romfile".to_owned(), romfile.into());
+        vfio_args.insert("addr".to_owned(), addr.into());
+
+        self.qmp.execute(&qmp::device_add {
+            bus: if !bus.is_empty() {
+                Some(bus.to_string())
+            } else {
+                None
+            },
+            id: Some(id.to_string()),
+            driver: driver.to_string(),
+            arguments: vfio_args,
+        })?;
+
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    fn execute_pci_vfio_mediated_device_add(
+        &mut self,
+        bus: &str,
+        id: &str,
+        sys_fsdev: &str,
+        addr: &str,
+        romfile: &str,
+        bdf: &str,
+    ) -> Result<()> {
+        let mut vfio_args = Dictionary::new();
+        vfio_args.insert("host".to_owned(), bdf.into());
+        vfio_args.insert("romfile".to_owned(), romfile.into());
+        if !addr.is_empty() {
+            vfio_args.insert("addr".to_owned(), addr.into());
+        }
+        vfio_args.insert("sys_fsdev".to_owned(), sys_fsdev.into());
+
+        self.qmp.execute(&qmp::device_add {
+            bus: if !bus.is_empty() {
+                Some(bus.to_string())
+            } else {
+                None
+            },
+            id: Some(id.to_string()),
+            driver: "vfio-pci".to_string(),
+            arguments: vfio_args,
+        })?;
+
+        Ok(())
     }
 
     pub fn hotplug_vcpus(&mut self, vcpu_cnt: u32) -> Result<u32> {

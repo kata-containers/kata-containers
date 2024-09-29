@@ -29,6 +29,7 @@ path-clean = "1.0.1"
 lazy_static = "1.4"
 tracing = "0.1.36"
 
+regex = "1.10.3"
 kata-sys-util = { path = "../../../libs/kata-sys-util" }
 kata-types = { path = "../../../libs/kata-types" }
 logging = { path = "../../../libs/logging" }
