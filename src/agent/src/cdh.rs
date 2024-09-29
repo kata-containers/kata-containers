@@ -9,12 +9,15 @@
 
 use crate::AGENT_CONFIG;
 use crate::CDH_SOCKET_URI;
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use derivative::Derivative;
 use protocols::{
     confidential_data_hub, confidential_data_hub_ttrpc_async,
     confidential_data_hub_ttrpc_async::{SealedSecretServiceClient, SecureMountServiceClient},
 };
+use std::fs;
+use std::os::unix::fs::symlink;
+use std::path::Path;
 use tokio::sync::OnceCell;
 
 // Nanoseconds
@@ -22,7 +25,13 @@ lazy_static! {
     static ref CDH_API_TIMEOUT: i64 = AGENT_CONFIG.cdh_api_timeout.as_nanos() as i64;
     pub static ref CDH_CLIENT: OnceCell<CDHClient> = OnceCell::new();
 }
+
 const SEALED_SECRET_PREFIX: &str = "sealed.";
+
+// Convenience function to obtain the scope logger.
+fn sl() -> slog::Logger {
+    slog_scope::logger().new(o!("subsystem" => "cdh"))
+}
 
 #[derive(Derivative)]
 #[derivative(Clone, Debug)]
@@ -104,6 +113,74 @@ pub async fn unseal_env(env: &str) -> Result<String> {
         }
     }
     Ok((*env.to_owned()).to_string())
+}
+
+pub async fn unseal_file(path: &str) -> Result<()> {
+    let cdh_client = CDH_CLIENT
+        .get()
+        .expect("Confidential Data Hub not initialized");
+
+    if !Path::new(path).exists() {
+        bail!("sealed secret file {:?} does not exist", path);
+    }
+
+    // Iterate over all entries to handle the sealed secret file.
+    // For example, the directory is as follows:
+    // The secret directory in the guest: /run/kata-containers/shared/containers/21bbf0d932b70263d65d7052ecfd72ee46de03f766650cb378e93852ddb30a54-5063be11b6800f96-sealed-secret-target/:
+    // - ..2024_09_30_02_55_58.2237819815
+    // - ..data -> ..2024_09_30_02_55_58.2237819815
+    // - secret -> ..2024_09_30_02_55_58.2237819815/secret
+    //
+    // The directory "..2024_09_30_02_55_58.2237819815":
+    // - secret
+    for entry in fs::read_dir(path)? {
+        let entry = entry?;
+        let entry_type = entry.file_type()?;
+        if !entry_type.is_symlink() && !entry_type.is_file() {
+            debug!(
+                sl(),
+                "skipping sealed source entry {:?} because its file type is {:?}",
+                entry,
+                entry_type
+            );
+            continue;
+        }
+
+        let target_path = fs::canonicalize(&entry.path())?;
+        info!(sl(), "sealed source entry target path: {:?}", target_path);
+
+        // Skip if the target path is not a file (e.g., it's a symlink pointing to the secret file).
+        if !target_path.is_file() {
+            debug!(sl(), "sealed source is not a file: {:?}", target_path);
+            continue;
+        }
+
+        let secret_name = entry.file_name();
+        let contents = fs::read_to_string(&target_path)?;
+        if contents.starts_with(SEALED_SECRET_PREFIX) {
+            // Get the directory name of the sealed secret file
+            let dir_name = target_path
+                .parent()
+                .and_then(|p| p.file_name())
+                .map(|name| name.to_string_lossy().to_string())
+                .unwrap_or_default();
+
+            // Create the unsealed file name in the same directory, which will be written the unsealed data.
+            let unsealed_filename = format!("{}.unsealed", target_path.to_string_lossy());
+            // Create the unsealed file symlink, which is used for reading the unsealed data in the container.
+            let unsealed_filename_symlink =
+                format!("{}/{}.unsealed", dir_name, secret_name.to_string_lossy());
+
+            // Unseal the secret and write it to the unsealed file
+            let unsealed_value = cdh_client.unseal_secret_async(&contents).await?;
+            fs::write(&unsealed_filename, unsealed_value)?;
+
+            // Remove the original sealed symlink and create a symlink to the unsealed file
+            fs::remove_file(&entry.path())?;
+            symlink(unsealed_filename_symlink, &entry.path())?;
+        }
+    }
+    Ok(())
 }
 
 pub async fn secure_mount(
