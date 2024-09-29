@@ -25,6 +25,7 @@ KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 RUNTIME=${RUNTIME:-containerd-shim-kata-${KATA_HYPERVISOR}-v2}
 FACTORY_TEST=${FACTORY_TEST:-""}
 ARCH=$(uname -m)
+SANDBOXER=${SANDBOXER:-"podsandbox"}
 
 containerd_runtime_type="io.containerd.kata-${KATA_HYPERVISOR}.v2"
 
@@ -108,6 +109,7 @@ cat << EOF | sudo tee "${CONTAINERD_CONFIG_FILE}"
         default_runtime_name = "$runtime"
       [plugins.cri.containerd.runtimes.${runtime}]
         runtime_type = "${runtime_type}"
+        sandboxer = "${SANDBOXER}"
         $( [ $kata_annotations -eq 1 ] && \
         echo 'pod_annotations = ["io.katacontainers.*"]' && \
         echo '        container_annotations = ["io.katacontainers.*"]'
