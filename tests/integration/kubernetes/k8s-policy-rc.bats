@@ -44,6 +44,7 @@ setup() {
 # Common function for all test cases from this bats script.
 test_rc_policy() {
     expect_denied_create_container=$1
+    bats_unbuffered_info "test_rc_policy: denied=${expect_denied_create_container}: starting"
 
     # Create replication controller
     if [ "${expect_denied_create_container}" = "true" ]; then
@@ -54,21 +55,29 @@ test_rc_policy() {
 
     # Check replication controller
     local cmd="kubectl describe rc ${replication_name} | grep replication-controller"
-    info "Waiting for: ${cmd}"
+    bats_unbuffered_info "Waiting for: ${cmd}"
     waitForProcess "$wait_time" "$sleep_time" "$cmd"
 
+    bats_unbuffered_info "Getting number of replicas"
     number_of_replicas=$(kubectl get rc ${replication_name} \
         --output=jsonpath='{.spec.replicas}')
+    bats_unbuffered_info "number_of_replicas=${number_of_replicas}"
     [ "${number_of_replicas}" -gt 0 ]
 
     # Wait for all the expected pods to be created.
+    local pod_creation_sleep="10"
     local count=0
     local launched_pods=()
     while [ $count -lt 6 ] && [ "${#launched_pods[@]}" -ne "${number_of_replicas}" ]; do
-        count=$((count + 1))
-        sleep 10
+        bats_unbuffered_info "sleep count=${count}, launched ${#launched_pods[@]} pods, sleeping ${pod_creation_sleep}..."
+        sleep "${pod_creation_sleep}"
+
+        bats_unbuffered_info "Getting the list of launched pods"
         launched_pods=($(kubectl get pods "--selector=app=${app_name}" \
             --output=jsonpath={.items..metadata.name}))
+        bats_unbuffered_info "Launched ${#launched_pods[@]} pods: ${launched_pods}"
+
+        count=$((count + 1))
     done
 
     # Check that the number of pods created for the replication controller
@@ -78,13 +87,16 @@ test_rc_policy() {
     # Check pod creation
     for pod_name in ${launched_pods[@]}; do
         if [ "${expect_denied_create_container}" = "true" ]; then
+            bats_unbuffered_info "Waiting for blocked pod: ${pod_name}"
             wait_for_blocked_request "CreateContainerRequest" "${pod_name}"
         else
-            cmd="kubectl wait --for=condition=Ready --timeout=${timeout} pod ${pod_name}"
-            info "Waiting for: ${cmd}"
+            cmd="kubectl wait --for=condition=Ready --timeout=0s pod ${pod_name}"
+            bats_unbuffered_info "Waiting for: ${cmd}"
             waitForProcess "${wait_time}" "${sleep_time}" "${cmd}"
         fi
     done
+
+    bats_unbuffered_info "test_rc_policy: denied=${expect_denied_create_container}: success"
 }
 
 @test "Successful replication controller with auto-generated policy" {
