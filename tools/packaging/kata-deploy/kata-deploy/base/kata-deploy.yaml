@@ -17,7 +17,7 @@ spec:
       hostPID: true
       containers:
         - name: kube-kata
-          image: quay.io/kata-containers/kata-deploy:latest
+          image: quay.io/kata-containers/kata-deploy-ci:kata-containers-amd64
           imagePullPolicy: Always
           lifecycle:
             preStop:
