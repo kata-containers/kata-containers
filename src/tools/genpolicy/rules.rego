@@ -823,7 +823,7 @@ mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) {
 }
 
 ######################################################################
-# Storages
+# Create container Storages
 
 allow_storages(p_storages, i_storages, bundle_id, sandbox_id) {
     p_count := count(p_storages)
@@ -1096,6 +1096,27 @@ check_directory_traversal(i_path) {
     not regex.match("(^|/)..($|/)", i_path)
 }
 
+allow_sandbox_storages(i_storages) {
+    print("allow_sandbox_storages: i_storages =", i_storages)
+
+    p_storages := policy_data.sandbox.storages
+    every i_storage in i_storages {
+        allow_sandbox_storage(p_storages, i_storage)
+    }
+
+    print("allow_sandbox_storages: true")
+}
+
+allow_sandbox_storage(p_storages, i_storage) {
+    print("allow_sandbox_storage: i_storage =", i_storage)
+
+    some p_storage in p_storages
+    print("allow_sandbox_storage: p_storage =", p_storage)
+    i_storage == p_storage
+
+    print("allow_sandbox_storage: true")
+}
+
 CopyFileRequest {
     print("CopyFileRequest: input.path =", input.path)
 
@@ -1122,6 +1143,7 @@ CreateSandboxRequest {
     i_pidns := input.sandbox_pidns
     print("CreateSandboxRequest: i_pidns =", i_pidns)
     i_pidns == false
+    allow_sandbox_storages(input.storages)
 }
 
 ExecProcessRequest {

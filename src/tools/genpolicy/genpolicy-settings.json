@@ -213,6 +213,25 @@
         "/var/run/secrets/kubernetes.io/serviceaccount",
         "/var/run/secrets/azure/tokens"
     ],
+    "sandbox": {
+        "storages": [
+            {
+                "driver": "ephemeral",
+                "driver_options": [],
+                "source": "shm",
+                "fstype": "tmpfs",
+                "options": [
+                    "noexec",
+                    "nosuid",
+                    "nodev",
+                    "mode=1777",
+                    "size=67108864"
+                ],
+                "mount_point": "/run/kata-containers/sandbox/shm",
+                "fs_group": null
+            }
+        ]
+    },
     "common": {
         "cpath": "/run/kata-containers/shared/containers",
         "mount_source_cpath": "/run/kata-containers/shared/containers",
