@@ -922,6 +922,15 @@ func (s *Sandbox) createResourceController() error {
 		}
 	}
 
+	// Since cgroup v2 does not allow processes and threads to be placed in different cgroups,
+	// and kata requires overhead controller to manage processes other than virtual CPU threads,
+	// therefore, when supporting cgroup v2, a separate path needs to be designed.
+	// For details, please refer to https://github.com/kata-containers/kata-containers/issues/4886.
+	overheadPath := fmt.Sprintf("%s%s", resCtrlKataOverheadID, s.id)
+	cgroupPath, overheadPath, err = resCtrl.SandboxAndOverheadPath(cgroupPath, overheadPath, s.config.SandboxCgroupOnly)
+	if err != nil {
+		return err
+	}
 	// Create the sandbox resource controller (cgroups on Linux).
 	// Depending on the SandboxCgroupOnly value, this cgroup
 	// will either hold all the pod threads (SandboxCgroupOnly is true)
@@ -942,7 +951,7 @@ func (s *Sandbox) createResourceController() error {
 		// into the sandbox resource controller.
 		// We're creating an overhead controller, with no constraints. Everything but
 		// the vCPU threads will eventually make it there.
-		overheadController, err := resCtrl.NewResourceController(fmt.Sprintf("%s%s", resCtrlKataOverheadID, s.id), &specs.LinuxResources{})
+		overheadController, err := resCtrl.NewResourceController(overheadPath, &specs.LinuxResources{}, s.config.SandboxCgroupOnly)
 		// TODO: support systemd cgroups overhead cgroup
 		// https://github.com/kata-containers/kata-containers/issues/2963
 		if err != nil {
@@ -2590,39 +2599,96 @@ func (s *Sandbox) resourceControllerUpdate(ctx context.Context) error {
 // resourceControllerDelete will move the running processes in the sandbox resource
 // cvontroller to the parent and then delete the sandbox controller.
 func (s *Sandbox) resourceControllerDelete() error {
-	s.Logger().Debugf("Deleting sandbox %s resource controler", s.sandboxController)
+	s.Logger().Debugf("Deleting sandbox %s resource controller", s.sandboxController)
 	if s.state.SandboxCgroupPath == "" {
-		s.Logger().Warnf("sandbox %s resource controler path is empty", s.sandboxController)
+		s.Logger().Warnf("sandbox %s resource controller path is empty", s.sandboxController)
 		return nil
 	}
 
-	sandboxController, err := resCtrl.LoadResourceController(s.state.SandboxCgroupPath)
+	sandboxController, err := resCtrl.LoadResourceController(s.state.SandboxCgroupPath, s.config.SandboxCgroupOnly)
 	if err != nil {
 		return err
 	}
 
-	resCtrlParent := sandboxController.Parent()
-	if err := sandboxController.MoveTo(resCtrlParent); err != nil {
+	isCgroupV1, err := resCtrl.IsCgroupV1()
+	if err != nil {
 		return err
 	}
 
-	if err := sandboxController.Delete(); err != nil {
-		return err
-	}
+	if isCgroupV1 {
+		resCtrlParent := sandboxController.Parent()
+		if err := sandboxController.MoveTo(resCtrlParent, s.config.SandboxCgroupOnly); err != nil {
+			return err
+		}
 
-	if s.state.OverheadCgroupPath != "" {
-		overheadController, err := resCtrl.LoadResourceController(s.state.OverheadCgroupPath)
+		if err := sandboxController.Delete(); err != nil {
+			return err
+		}
+
+		if s.state.OverheadCgroupPath != "" {
+			overheadController, err := resCtrl.LoadResourceController(s.state.OverheadCgroupPath, s.config.SandboxCgroupOnly)
+			if err != nil {
+				return err
+			}
+
+			resCtrlParent := overheadController.Parent()
+			if err := s.overheadController.MoveTo(resCtrlParent, s.config.SandboxCgroupOnly); err != nil {
+				return err
+			}
+
+			if err := overheadController.Delete(); err != nil {
+				return err
+			}
+		}
+	} else {
+		cgroupRootPath := "/"
+		sandboxControllerCgroupType, err := resCtrl.GetThreadedMode(s.state.SandboxCgroupPath)
 		if err != nil {
 			return err
 		}
+		if sandboxControllerCgroupType == string(resCtrl.CgroupModeThreaded) {
+			resCtrlParent := sandboxController.Parent()
+			resCtrlParentCgroupType, err := resCtrl.GetThreadedMode(resCtrlParent)
+			if err != nil {
+				return err
+			}
+			if resCtrlParentCgroupType == string(resCtrl.CgroupModeDomainThreaded) {
+				resCtrlParentController, err := resCtrl.LoadResourceController(resCtrlParent, s.config.SandboxCgroupOnly)
+				if err != nil {
+					return err
+				}
 
-		resCtrlParent := overheadController.Parent()
-		if err := s.overheadController.MoveTo(resCtrlParent); err != nil {
-			return err
-		}
+				if err := resCtrlParentController.MoveTo(cgroupRootPath, s.config.SandboxCgroupOnly); err != nil {
+					return err
+				}
 
-		if err := overheadController.Delete(); err != nil {
-			return err
+				if err := resCtrlParentController.Delete(); err != nil {
+					return err
+				}
+			}
+		} else {
+			if err := sandboxController.MoveTo(cgroupRootPath, s.config.SandboxCgroupOnly); err != nil {
+				return err
+			}
+
+			if err := sandboxController.Delete(); err != nil {
+				return err
+			}
+
+			if s.state.OverheadCgroupPath != "" {
+				overheadController, err := resCtrl.LoadResourceController(s.state.OverheadCgroupPath, s.config.SandboxCgroupOnly)
+				if err != nil {
+					return err
+				}
+
+				if err := s.overheadController.MoveTo(cgroupRootPath, s.config.SandboxCgroupOnly); err != nil {
+					return err
+				}
+
+				if err := overheadController.Delete(); err != nil {
+					return err
+				}
+			}
 		}
 	}
 
