@@ -217,7 +217,7 @@ function grab_system() {
 	((anon*=1024))
 
 	# Mapped pages
-	local mapped=$(egrep "^Mapped:" /proc/meminfo | awk '{print $2}')
+	local mapped=$(grep "^Mapped:" /proc/meminfo | awk '{print $2}')
 	((mapped*=1024))
 
 	# Cached
