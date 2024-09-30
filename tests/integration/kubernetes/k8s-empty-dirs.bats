@@ -18,10 +18,6 @@ assert_equal() {
 }
 
 setup() {
-	[ "${KATA_HYPERVISOR:-}" = "qemu-tdx" ] && \
-		skip "This test has failed for ${KATA_HYPERVISOR:-}"
-	[ "${KATA_HYPERVISOR:-}" = "qemu-coco-dev" ] && \
-		skip "This test has failed for ${KATA_HYPERVISOR:-}"
 	[ "${KATA_HYPERVISOR}" = "qemu-se" ] && \
 		skip "See: https://github.com/kata-containers/kata-containers/issues/10002"
 	pod_name="sharevol-kata"
@@ -74,10 +70,6 @@ setup() {
 }
 
 teardown() {
-	[ "${KATA_HYPERVISOR:-}" = "qemu-tdx" ] && \
-		skip "This test has failed for ${KATA_HYPERVISOR:-}"
-	[ "${KATA_HYPERVISOR:-}" = "qemu-coco-dev" ] && \
-		skip "This test has failed for ${KATA_HYPERVISOR:-}"
 	[ "${KATA_HYPERVISOR}" = "qemu-se" ] && \
 		skip "See: https://github.com/kata-containers/kata-containers/issues/10002"
 	# Debugging information
