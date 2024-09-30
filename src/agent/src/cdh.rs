@@ -8,7 +8,6 @@
 // https://github.com/confidential-containers/guest-components/tree/main/confidential-data-hub
 
 use crate::AGENT_CONFIG;
-use crate::CDH_SOCKET_URI;
 use anyhow::{bail, Context, Result};
 use derivative::Derivative;
 use protocols::{
@@ -43,8 +42,8 @@ pub struct CDHClient {
 }
 
 impl CDHClient {
-    pub fn new() -> Result<Self> {
-        let client = ttrpc::asynchronous::Client::connect(CDH_SOCKET_URI)?;
+    pub fn new(cdh_socket_uri: &str) -> Result<Self> {
+        let client = ttrpc::asynchronous::Client::connect(cdh_socket_uri)?;
         let sealed_secret_client =
             confidential_data_hub_ttrpc_async::SealedSecretServiceClient::new(client.clone());
         let secure_mount_client =
@@ -87,9 +86,11 @@ impl CDHClient {
     }
 }
 
-pub async fn init_cdh_client() -> Result<()> {
+pub async fn init_cdh_client(cdh_socket_uri: &str) -> Result<()> {
     CDH_CLIENT
-        .get_or_try_init(|| async { CDHClient::new().context("Failed to create CDH Client") })
+        .get_or_try_init(|| async {
+            CDHClient::new(cdh_socket_uri).context("Failed to create CDH Client")
+        })
         .await?;
     Ok(())
 }

@@ -498,7 +498,7 @@ async fn init_attestation_components(logger: &Logger, config: &AgentConfig) -> R
     .map_err(|e| anyhow!("launch_process {} failed: {:?}", CDH_PATH, e))?;
 
     // initialize cdh client
-    cdh::init_cdh_client().await?;
+    cdh::init_cdh_client(CDH_SOCKET_URI).await?;
 
     // skip launch of api-server-rest
     if config.guest_components_procs == GuestComponentsProcs::ConfidentialDataHub {
