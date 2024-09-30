@@ -201,17 +201,15 @@ pub async fn secure_mount(
 }
 
 #[cfg(test)]
-#[cfg(feature = "sealed-secret")]
 mod tests {
-    use crate::cdh::CDHClient;
-    use crate::cdh::CDH_ADDR;
-    use anyhow::anyhow;
+    use super::*;
     use async_trait::async_trait;
-    use protocols::{confidential_data_hub, confidential_data_hub_ttrpc_async};
+    use std::fs::File;
+    use std::io::{Read, Write};
     use std::sync::Arc;
+    use tempfile::tempdir;
     use test_utils::skip_if_not_root;
     use tokio::signal::unix::{signal, SignalKind};
-
     struct TestService;
 
     #[async_trait]
@@ -239,17 +237,17 @@ mod tests {
         Ok(())
     }
 
-    fn start_ttrpc_server() {
+    fn start_ttrpc_server(cdh_socket_uri: String) {
         tokio::spawn(async move {
             let ss = Box::new(TestService {})
                 as Box<dyn confidential_data_hub_ttrpc_async::SealedSecretService + Send + Sync>;
             let ss = Arc::new(ss);
             let ss_service = confidential_data_hub_ttrpc_async::create_sealed_secret_service(ss);
 
-            remove_if_sock_exist(CDH_ADDR).unwrap();
+            remove_if_sock_exist(&cdh_socket_uri).unwrap();
 
             let mut server = ttrpc::asynchronous::Server::new()
-                .bind(CDH_ADDR)
+                .bind(&cdh_socket_uri)
                 .unwrap()
                 .register_service(ss_service);
 
@@ -267,20 +265,74 @@ mod tests {
     #[tokio::test]
     async fn test_unseal_env() {
         skip_if_not_root!();
+        let test_dir = tempdir().expect("failed to create tmpdir");
+        let cdh_sock_uri = test_dir.path().join("cdh.sock");
+        let cdh_sock_uri = &format!("unix://{}", cdh_sock_uri.to_str().unwrap());
 
         let rt = tokio::runtime::Runtime::new().unwrap();
         let _guard = rt.enter();
-        start_ttrpc_server();
+        start_ttrpc_server(cdh_sock_uri.to_string());
         std::thread::sleep(std::time::Duration::from_secs(2));
 
-        let cc = Some(CDHClient::new().unwrap());
-        let cdh_client = cc.as_ref().ok_or(anyhow!("get cdh_client failed")).unwrap();
         let sealed_env = String::from("key=sealed.testdata");
-        let unsealed_env = cdh_client.unseal_env(&sealed_env).await.unwrap();
+        if !is_cdh_client_initialized().await {
+            init_cdh_client(cdh_sock_uri).await.unwrap();
+        }
+        let unsealed_env = unseal_env(&sealed_env).await.unwrap();
         assert_eq!(unsealed_env, String::from("key=unsealed"));
         let normal_env = String::from("key=testdata");
-        let unchanged_env = cdh_client.unseal_env(&normal_env).await.unwrap();
+        let unchanged_env = unseal_env(&normal_env).await.unwrap();
         assert_eq!(unchanged_env, String::from("key=testdata"));
+
+        rt.shutdown_background();
+        std::thread::sleep(std::time::Duration::from_secs(2));
+    }
+
+    #[tokio::test]
+    async fn test_unseal_file() {
+        skip_if_not_root!();
+
+        let test_dir = tempdir().expect("failed to create tmpdir");
+        let test_dir_path = test_dir.path();
+        let cdh_sock_uri = &format!(
+            "unix://{}",
+            test_dir_path.join("cdh.sock").to_str().unwrap()
+        );
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let _guard = rt.enter();
+        start_ttrpc_server(cdh_sock_uri.to_string());
+        std::thread::sleep(std::time::Duration::from_secs(2));
+
+        let sealed_dir = test_dir_path.join("..test");
+        fs::create_dir(&sealed_dir).unwrap();
+        let sealed_filename = sealed_dir.join("secret");
+        let mut sealed_file = File::create(sealed_filename.clone()).unwrap();
+        sealed_file.write_all(b"sealed.testdata").unwrap();
+        let secret_symlink = test_dir_path.join("secret");
+        symlink(&sealed_filename, &secret_symlink).unwrap();
+        if !is_cdh_client_initialized().await {
+            init_cdh_client(cdh_sock_uri).await.unwrap();
+        }
+        unseal_file(test_dir_path.to_str().unwrap()).await.unwrap();
+
+        let unsealed_filename = test_dir_path.join("secret");
+        let mut unsealed_file = File::open(unsealed_filename.clone()).unwrap();
+        let mut contents = String::new();
+        unsealed_file.read_to_string(&mut contents).unwrap();
+        assert_eq!(contents, String::from("unsealed"));
+        fs::remove_file(sealed_filename).unwrap();
+        fs::remove_file(unsealed_filename).unwrap();
+
+        let normal_filename = test_dir_path.join("secret");
+        let mut normal_file = File::create(normal_filename.clone()).unwrap();
+        normal_file.write_all(b"testdata").unwrap();
+        unseal_file(test_dir_path.to_str().unwrap()).await.unwrap();
+        let mut contents = String::new();
+        let mut normal_file = File::open(normal_filename.clone()).unwrap();
+        normal_file.read_to_string(&mut contents).unwrap();
+        assert_eq!(contents, String::from("testdata"));
+        fs::remove_file(normal_filename).unwrap();
 
         rt.shutdown_background();
         std::thread::sleep(std::time::Duration::from_secs(2));
