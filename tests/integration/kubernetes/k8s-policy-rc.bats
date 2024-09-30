@@ -10,6 +10,8 @@ load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
     auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
+    ( [ "${KATA_HYPERVISOR}" == "qemu-snp" ] || [ "${KATA_HYPERVISOR}" == "qemu-sev" ]  ) \
+		&& skip "https://github.com/kata-containers/kata-containers/issues/10367"
 
     replication_name="policy-rc-test"
     app_name="policy-nginx-rc"
@@ -151,6 +153,8 @@ test_rc_policy() {
 
 teardown() {
     auto_generate_policy_enabled || skip "Auto-generated policy tests are disabled."
+    ( [ "${KATA_HYPERVISOR}" == "qemu-snp" ] || [ "${KATA_HYPERVISOR}" == "qemu-sev" ]  ) \
+		&& skip "https://github.com/kata-containers/kata-containers/issues/10367"
 
     # Debugging information
     kubectl describe rc "${replication_name}"
