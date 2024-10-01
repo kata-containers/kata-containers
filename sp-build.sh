@@ -7,8 +7,10 @@ VM_CPU=8
 export DISTRO="ubuntu"
 SCRIPT_DIR="$( cd "$( dirname "$0" )" && pwd )"
 export ROOTFS_DIR="${SCRIPT_DIR}/build/rootfs"
-#export PROVIDER_CONFIG_DST="/provider_config"
-#PROVIDER_CONFIG_SRC="/etc"
+
+if [ -n "$1" ]; then
+  export PROVIDER_CONFIG_DST="$1"
+fi
 
 KERNEL_NAME=nvidia-gpu-confidential
 
@@ -75,7 +77,8 @@ ${NVIDIA_PASSTHROUGH} \\
 -device vhost-vsock-pci,guest-cid=3 \\
 "
 
-if [ -n "${PROVIDER_CONFIG_SRC}" ] && [ -n "${PROVIDER_CONFIG_DST}" ]; then
+if [ -n "${PROVIDER_CONFIG_DST}" ]; then
+    PROVIDER_CONFIG_SRC="\${SCRIPT_DIR}/config"
     QEMU_COMMAND+=" -fsdev local,security_model=passthrough,id=fsdev0,path=${PROVIDER_CONFIG_SRC} \\
                   -device virtio-9p-pci,fsdev=fsdev0,mount_tag=sharedfolder"
 fi
