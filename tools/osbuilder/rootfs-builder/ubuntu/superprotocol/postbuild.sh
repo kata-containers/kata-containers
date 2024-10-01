@@ -9,7 +9,7 @@ run_postbuild() {
 
 	if [[ -n "${PROVIDER_CONFIG_DST}" ]]; then
 		mkdir -p "${rootfs_dir}/${PROVIDER_CONFIG_DST}"
-		echo "sharedfolder   ${PROVIDER_CONFIG_DST}  9p   ro,defaults,_netdev   0   0" >> "${rootfs_dir}/etc/fstab"
+		echo "sharedfolder   ${PROVIDER_CONFIG_DST}  9p   ro,defaults,_netdev,x-systemd.automount   0   0" >> "${rootfs_dir}/etc/fstab"
 	fi
 
 	cp ${script_dir}/tdx-attest.conf ${rootfs_dir}/etc
@@ -18,8 +18,8 @@ run_postbuild() {
 	cp ${script_dir}/state_disk_mount.sh ${rootfs_dir}/usr/local/bin
 	ln -s /etc/systemd/system/state_disk_mount.service "$rootfs_dir/etc/systemd/system/multi-user.target.wants/state_disk_mount.service"
 	chmod +x ${rootfs_dir}/usr/local/bin/state_disk_mount.sh
-	
-	cp ${script_dir}/install_tdx_packages.sh ${rootfs_dir} 
+
+	cp ${script_dir}/install_tdx_packages.sh ${rootfs_dir}
 	cp ${script_dir}/install_nvidia_drivers.sh ${rootfs_dir}
 
 	mount -t sysfs -o ro none ${rootfs_dir}/sys
@@ -30,10 +30,8 @@ run_postbuild() {
 
 	chroot "$rootfs_dir" /bin/bash "/install_tdx_packages.sh"
 	chroot "$rootfs_dir" /bin/bash "/install_nvidia_drivers.sh"
-	
 	rm -f "${rootfs_dir}/install_tdx_packages.sh"
 	rm -f "${rootfs_dir}/install_nvidia_drivers.sh"
-	
 	cp ${script_dir}/nvidia-persistenced.service ${rootfs_dir}/usr/lib/systemd/system/
 
 	echo 'root:123456' | chroot $rootfs_dir chpasswd
