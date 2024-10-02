@@ -74,6 +74,12 @@ function info() {
 	echo -e "[$(basename $0):${BASH_LINENO[0]}] INFO: $msg"
 }
 
+function bats_unbuffered_info() {
+	local msg="$*"
+	# Ask bats to print this text immediately rather than buffering until the end of a test case.
+	echo -e "[$(basename $0):${BASH_LINENO[0]}] UNBUFFERED: INFO: $msg" >&3
+}
+
 function handle_error() {
 	local exit_code="${?}"
 	local line_number="${1:-}"
