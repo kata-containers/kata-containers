@@ -96,20 +96,26 @@ adapt_common_policy_settings_for_sev() {
 	jq '.kata_config.oci_version = "1.1.0-rc.1" | .common.cpath = "/run/kata-containers" | .volumes.configMap.mount_point = "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-"' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
 }
 
-# adapt common policy settings for CBL-Mariner https://github.com/kata-containers/kata-containers/issues/10189
-adapt_common_policy_settings_for_cbl_mariner() {
+# adapt common policy settings for pod VMs using "shared_fs = virtio-fs" (https://github.com/kata-containers/kata-containers/issues/10189)
+adapt_common_policy_settings_for_virtio_fs() {
 	local settings_dir=$1
 
-	info "Adapting common policy settings for CBL-Mariner"
+	info "Adapting common policy settings for shared_fs=virtio-fs"
 	jq '.request_defaults.UpdateEphemeralMountsRequest = true' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
-	jq '.kata_config.oci_version = "1.1.0-rc.1"' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
 	jq '.sandbox.storages += [{"driver":"virtio-fs","driver_options":[],"fs_group":null,"fstype":"virtiofs","mount_point":"/run/kata-containers/shared/containers/","options":[],"source":"kataShared"}]' \
 	"${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
 }
 
+# adapt common policy settings for CBL-Mariner Hosts
+adapt_common_policy_settings_for_cbl_mariner() {
+	local settings_dir=$1
+
+	info "Adapting common policy settings for KATA_HOST_OS=cbl-mariner"
+	jq '.kata_config.oci_version = "1.1.0-rc.1"' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+}
+
 # adapt common policy settings for various platforms
 adapt_common_policy_settings() {
-
 	local settings_dir=$1
 
 	case "${KATA_HYPERVISOR}" in
@@ -118,6 +124,15 @@ adapt_common_policy_settings() {
 			;;
   		"qemu-sev")
 			adapt_common_policy_settings_for_sev "${settings_dir}"
+			;;
+		*)
+			# AUTO_GENERATE_POLICY=yes is currently supported by this script when testing:
+			# - The SEV, SNP, or TDX platforms above, that are using "shared_fs = none".
+			# - Other platforms that are using "shared_fs = virtio-fs".
+			# Attempting to test using AUTO_GENERATE_POLICY=yes on platforms that are not
+			# supported yet is likely to result in test failures due to incorrectly auto-
+			# generated policies.
+			adapt_common_policy_settings_for_virtio_fs "${settings_dir}"
 			;;
 	esac
 
