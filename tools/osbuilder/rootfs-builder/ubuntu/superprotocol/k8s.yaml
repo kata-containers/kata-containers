@@ -54,9 +54,24 @@ spec:
       - name: loadbalance
       - name: hosts
         configBlock: |-
-          10.0.2.15  registry.dev.superprotocol.ltd
+          10.0.2.15  registry.superprotocol.local
           fallthrough
 
+---
+
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: rke2-ingress-nginx
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    controller:
+      hostPort:
+        enabled: true
+        ports:
+          http: 8880
+          https: 44443
 
 ---
 
@@ -75,9 +90,16 @@ metadata:
 spec:
   repo: https://charts.longhorn.io
   chart: longhorn
-  version: 1.6.2
+  version: 1.7.1
   targetNamespace: longhorn-system
+  # use only with klipper-helm:0.9.2+
+  #oci://hauler.local:5000/hauler/longhorn
+  #insecureSkipTLSVerify: true
+  #plainHTTP: true
   valuesContent: |-
+    #global:
+    #  cattle:
+    #    systemDefaultRegistry: "hauler.local:5000"
     csi:
       attacherReplicaCount: 1
       provisionerReplicaCount: 1
@@ -94,6 +116,20 @@ spec:
 
 ---
 
+apiVersion: longhorn.io/v1beta1
+kind: RecurringJob
+metadata:
+  name: filesystem-trim
+  namespace: longhorn-system
+spec:
+  cron: "22 4 * * *"
+  task: "filesystem-trim"
+  groups:
+  - default
+  concurrency: 2
+
+---
+
 apiVersion: helm.cattle.io/v1
 kind: HelmChart
 metadata:
@@ -106,8 +142,8 @@ spec:
   targetNamespace: kube-system
   valuesContent: |-
     fullnameOverride: sealed-secrets-controller
-    #image:
-    #  tag: v0.19.3
+    image:
+      tag: 0.27.1@sha256:6df8cb77885e17dd6cf9b782468504364c0dd03186711a85f1c3b45bc5843a5a
 
 ---
 
@@ -124,9 +160,10 @@ metadata:
   name: argocd
   namespace: kube-system
 spec:
+  #chart: oci://ghcr.io/argoproj/argo-helm/argo-cd:7.6.5
   repo: https://argoproj.github.io/argo-helm
   chart: argo-cd
-  version: 7.3.8
+  version: 7.6.5
   targetNamespace: argocd
   valuesContent: |-
     configs:
@@ -139,28 +176,49 @@ spec:
       enabled: false
     dex:
       enabled: false
+    global:
+      image:
+        #tag: quay.io/argoproj/argocd:v2.12.4
+        tag: v2.12.4
+        digest: sha256:4fa3135b836a32c1b366375c6697cddbe279cb6fc315acb11a5395c300f23967
+    redis:
+      image:
+        #tag: public.ecr.aws/docker/library/redis:7.2.4-alpine
+        tag: 7.2.4-alpine
+        digest: sha256:c8bb255c3559b3e458766db810aa7b3c7af1235b204cfdb304e79ff388fe1a5a
 
 ---
 
-#apiVersion: helm.cattle.io/v1
-#kind: HelmChart
-#metadata:
-#  name: argocd-image-updater
-#  namespace: kube-system
-#spec:
-#  repo: https://argoproj.github.io/argo-helm
-#  chart: argocd-image-updater
-#  version: 0.11.0
-#  targetNamespace: argocd
-#  valuesContent: |-
-#    config:
-#      registries:
-#      - name: GitHub Container Registry
-#        prefix: ghcr.io
-#        api_url: https://ghcr.io
-#        ping: no
-#        credentials: pullsecret:argocd/argocd-image-updater-ghcr-secret
-#        insecure: true
+apiVersion: helm.cattle.io/v1
+kind: HelmChart
+metadata:
+  name: argo-workflows
+  namespace: kube-system
+spec:
+  repo: https://argoproj.github.io/argo-helm
+  chart: argo-workflows
+  version: 0.42.4
+  targetNamespace: argocd
+  valuesContent: |-
+    workflow:
+      serviceAccount:
+        create: true
+        name: "argo-workflow"
+      rbac:
+        create: true
+    controller:
+      image:
+        tag: v3.5.11@sha256:b7462c43623506d05865bfe7ab5b3b3e1f9c8b3ee019bc74239e1b7f766db73c
+      workflowNamespaces:
+        - super-protocol
+    executor:
+      image:
+        tag: v3.5.11@sha256:4a576a3fe37bf8351117d00be6febf2a93f70840736469be2eeb7c21a6b368e0
+    server:
+      image:
+        tag: v3.5.11@sha256:a5ec2d37d9fe80e0144098f1cdcac4626113cb41e0c5a69e213480d4322782f8
+      authModes:
+        - server
 
 ---
 
@@ -179,24 +237,30 @@ metadata:
 spec:
   repo: https://charts.jetstack.io
   chart: cert-manager
-  version: v1.15.1
+  version: v1.15.3
   targetNamespace: cert-manager
   valuesContent: |-
     installCRDs: true
+    image: # cert-manager-controller
+      tag: v1.15.3@sha256:eee34b3de2dd63f7e5ac459fc2d407662d433fd267d574557b76ee3c7d4bc44f
+    cainjector:
+      image:
+        tag: v1.15.3@sha256:e0ce8ae280c8d7263663b6a6d3ea5e122632936cde9bdd5321cf7109199f51aa
+    webhook:
+      image:
+        tag: v1.15.3@sha256:fdcb9ac4963fa1bb0c9d7cad38f0ba2c65328aa436f8653c998594d936a96488
+    acmesolver:
+      image:
+        tag: v1.15.3@sha256:71468feed486c4cf3ca431d93f996771531ab2e68f261f1a15be845720802a8a
 
 ---
 
-apiVersion: v1
-kind: Namespace
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
 metadata:
-  name: logs
-
----
-
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: monitoring
+  name: self-signed
+spec:
+  selfSigned: {}
 
 ---
 
@@ -257,3 +321,58 @@ spec:
         value: nvidia
       - name: CONTAINERD_SET_AS_DEFAULT
         value: "true"
+
+#---
+#
+#apiVersion: v1
+#kind: Namespace
+#metadata:
+#  name: logs
+#
+#---
+#
+#apiVersion: v1
+#kind: Namespace
+#metadata:
+#  name: monitoring
+#
+---
+
+##################
+# SUPER-PROTOCOL #
+##################
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: super-protocol
+
+---
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sp-root
+  namespace: argocd
+spec:
+  destination:
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    path: argo/clusters/golden
+    repoURL: git@github.com:Super-Protocol/sp-golden-image.git
+    targetRevision: HEAD
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+        limit: -1 # unlimited
+        backoff:
+          duration: 5s # the amount to back off. Default unit is seconds, but could also be a duration (e.g. "2m", "1h")
+          factor: 2 # a factor to multiply the base duration after each failed retry
+          maxDuration: 24h # the maximum amount of time allowed for the backoff strategy
+    syncOptions:
+      - CreateNamespace=true
+      - Replace=true
+      - PruneLast=true

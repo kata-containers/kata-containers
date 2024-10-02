@@ -1,0 +1,9 @@
+[Unit]
+Description=Run local registry & fileserver by using Hauler.
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/local-registry.sh
+
+[Install]
+WantedBy=multi-user.target

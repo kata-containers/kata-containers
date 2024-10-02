@@ -285,10 +285,12 @@ calculate_required_disk_size() {
 	readonly image="$(mktemp)"
 	readonly mount_dir="$(mktemp -d)"
 	readonly max_tries=20
-	readonly increment=10
+	increment=$((rootfs_size_mb / 200))
+	increment=$((increment > 0 ? increment : 1))
 
 	for i in $(seq 1 $max_tries); do
 		local img_size="$((rootfs_size_mb + (i * increment)))"
+		increment=$((increment + 1))
 		create_disk "${image}" "${img_size}" "${fs_type}" "${rootfs_start}" > /dev/null 2>&1
 		if ! device="$(setup_loop_device "${image}")"; then
 			continue
