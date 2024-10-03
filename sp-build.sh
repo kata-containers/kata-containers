@@ -8,9 +8,8 @@ export DISTRO="ubuntu"
 SCRIPT_DIR="$( cd "$( dirname "$0" )" && pwd )"
 export ROOTFS_DIR="${SCRIPT_DIR}/build/rootfs"
 
-if [ -n "$1" ]; then
-  export PROVIDER_CONFIG_DST="$1"
-fi
+PROVIDER_CONFIG_DST="${1:-/sp}"
+export PROVIDER_CONFIG_DST
 
 KERNEL_NAME=nvidia-gpu-confidential
 

@@ -376,3 +376,96 @@ spec:
       - CreateNamespace=true
       - Replace=true
       - PruneLast=true
+
+---
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: super-aw-sa
+  namespace: argocd
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: super-aw-role
+  namespace: argocd
+rules:
+- apiGroups: [""]
+  resources: ["pods", "configmaps", "secrets"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
+- apiGroups: ["apps", "extensions"]
+  resources: ["deployments", "deployments/rollback", "deployments/scale", "statefulsets", "daemonsets"]
+  verbs: ["get", "list", "watch", "create", "delete", "update", "patch", "scale"]
+
+- apiGroups: ["argoproj.io"]
+  resources: ["workflowtaskresults"]
+  verbs: ["create", "patch"]
+- apiGroups: ["argoproj.io"]
+  resources: ["workflowartifactgctasks", "workflowartifactgctasks"]
+  verbs: ["list", "watch"]
+- apiGroups: ["argoproj.io"]
+  resources: ["workflowtasksets/status", "workflowartifactgctasks/status"]
+  verbs: ["patch"]
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: super-aw-binding
+  namespace: argocd
+subjects:
+- kind: ServiceAccount
+  name: super-aw-sa
+  namespace: argocd
+roleRef:
+  kind: Role
+  name: super-aw-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+
+apiVersion: argoproj.io/v1alpha1
+kind: CronWorkflow
+metadata:
+  name: super-init-manifests
+  namespace: argocd
+spec:
+  schedule: '*/5 * * * *'
+  timezone: 'UTC'
+  concurrencyPolicy: "Replace"      # Default to "Allow"
+  successfulJobsHistoryLimit: 2     # Default 3
+  suspend: false                    # Set to "true" to suspend scheduling
+  workflowSpec:
+    serviceAccountName: super-aw-sa
+    entrypoint: main
+    templates:
+      - name: main
+        dag:
+          tasks:
+            - name: apply-manifests-from-host
+              template: apply-manifests-from-host
+
+      - name: apply-manifests-from-host
+        container:
+          image: bitnami/kubectl
+          command: [sh, -c]
+          args:
+            - |
+              cd /super-protocol-mounted-directory/init
+              ls -la
+              for file in *.yaml; do
+                kubectl apply -f "$file"
+              done
+          volumeMounts:
+          - name: sp-config-volume
+            mountPath: /super-protocol-mounted-directory
+
+    volumes:
+    - name: sp-config-volume
+      hostPath:
+        path: /super-protocol-mounted-directory
+        type: Directory

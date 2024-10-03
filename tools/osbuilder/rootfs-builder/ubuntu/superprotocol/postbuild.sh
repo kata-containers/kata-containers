@@ -10,6 +10,7 @@ run_postbuild() {
 	if [[ -n "${PROVIDER_CONFIG_DST}" ]]; then
 		mkdir -p "${rootfs_dir}/${PROVIDER_CONFIG_DST}"
 		echo "sharedfolder   ${PROVIDER_CONFIG_DST}  9p   ro,defaults,_netdev,x-systemd.automount   0   0" >> "${rootfs_dir}/etc/fstab"
+		sed -i "s|/super-protocol-mounted-directory|${PROVIDER_CONFIG_DST}|g" ${script_dir}/k8s.yaml
 	fi
 
 	cp ${script_dir}/tdx-attest.conf ${rootfs_dir}/etc
