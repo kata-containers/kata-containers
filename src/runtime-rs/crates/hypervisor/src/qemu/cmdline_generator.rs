@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use crate::device::topology::{PCIePortBusPrefix, DEFAULT_BRIDGE_BUS};
 use crate::utils::{clear_cloexec, create_vhost_net_fds, open_named_tuntap};
 use crate::{kernel_param::KernelParams, Address, HypervisorConfig};
 
@@ -1405,6 +1406,216 @@ impl ToQemuParams for QmpSocket {
     }
 }
 
+// DeviceDriver is the device driver string.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+pub enum DeviceDriver {
+    PCIBridge,
+    PCIePCIBridge,
+    RootPort,
+    SwitchUpstreamPort,
+    SwitchDownstreamPort,
+}
+
+impl std::fmt::Display for DeviceDriver {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let driver = match self {
+            DeviceDriver::PCIBridge => "pci-bridge",
+            DeviceDriver::PCIePCIBridge => "pcie-pci-bridge",
+            DeviceDriver::RootPort => "pcie-root-port",
+            DeviceDriver::SwitchUpstreamPort => "x3130-upstream",
+            DeviceDriver::SwitchDownstreamPort => "xio3130-downstream",
+        };
+        write!(f, "{}", driver)
+    }
+}
+
+// PCIeRootPortDevice directly attached onto the root bus
+#[derive(Debug, Default)]
+pub struct PCIeRootPortDevice {
+    pub id: String,
+    pub bus: String,
+    pub chassis: String,
+    pub slot: String,
+    pub multifunction: bool,
+    pub addr: String,
+    pub bus_reserve: String,
+    pub pref64_reserve: String,
+    pub pref32_reserve: String,
+    pub mem_reserve: String,
+    pub io_reserve: String,
+}
+
+#[async_trait]
+impl ToQemuParams for PCIeRootPortDevice {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut qemu_params = Vec::new();
+        let mut device_params = Vec::new();
+
+        device_params.push(format!("{},id={}", DeviceDriver::RootPort, self.id));
+
+        let bus = if self.bus.is_empty() {
+            "pcie.0"
+        } else {
+            &self.bus
+        };
+
+        device_params.push(format!("bus={}", bus));
+
+        let chassis = if self.chassis.is_empty() {
+            "0x00"
+        } else {
+            &self.chassis
+        };
+        device_params.push(format!("chassis={}", chassis));
+
+        let slot = if self.slot.is_empty() {
+            "0x00"
+        } else {
+            &self.slot
+        };
+        device_params.push(format!("slot={}", slot));
+
+        let multifunction = if self.multifunction { "on" } else { "off" };
+
+        if self.multifunction {
+            let addr = if self.addr.is_empty() {
+                "0x00"
+            } else {
+                &self.addr
+            };
+            device_params.push(format!("addr={}", addr));
+        }
+
+        device_params.push(format!("multifunction={}", multifunction));
+
+        if !self.bus_reserve.is_empty() {
+            device_params.push(format!("bus-reserve={}", self.bus_reserve));
+        }
+
+        if !self.pref64_reserve.is_empty() {
+            device_params.push(format!("pref64-reserve={}", self.pref64_reserve));
+        }
+
+        if !self.pref32_reserve.is_empty() {
+            device_params.push(format!("pref32-reserve={}", self.pref32_reserve));
+        }
+
+        if !self.mem_reserve.is_empty() {
+            device_params.push(format!("mem-reserve={}", self.mem_reserve));
+        }
+
+        if !self.io_reserve.is_empty() {
+            device_params.push(format!("io-reserve={}", self.io_reserve));
+        }
+
+        qemu_params.push("-device".to_string());
+        qemu_params.push(device_params.join(","));
+
+        Ok(qemu_params)
+    }
+}
+// PCIeSwitchUpstreamPortDevice is the port attached to the root port.
+#[derive(Debug, Default)]
+pub struct PCIeSwitchUpstreamPortDevice {
+    pub id: String,
+    pub bus: String,
+}
+
+#[async_trait]
+impl ToQemuParams for PCIeSwitchUpstreamPortDevice {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut qemu_params = Vec::new();
+        let mut device_params = Vec::new();
+
+        device_params.push(format!(
+            "{},id={}",
+            DeviceDriver::SwitchUpstreamPort,
+            self.id
+        ));
+        device_params.push(format!("bus={}", self.bus));
+
+        qemu_params.push("-device".to_string());
+        qemu_params.push(device_params.join(","));
+
+        Ok(qemu_params)
+    }
+}
+
+// PCIeSwitchDownstreamPortDevice is the port attached to the root port.
+#[derive(Debug, Default)]
+pub struct PCIeSwitchDownstreamPortDevice {
+    // format: sup{n}, n>=0
+    pub id: String,
+
+    // default is rp0
+    pub bus: String,
+
+    // (slot, chassis) pair is mandatory and must be unique for each downstream port, >=0, default is 0x00
+    pub chassis: String,
+
+    // >=0, default is 0x00
+    pub slot: String,
+
+    // This to work needs patches to QEMU
+    pub bus_reserve: String,
+
+    // Pref64 and Pref32 are not allowed to be set simultaneously
+    // reserve prefetched MMIO aperture, 64-bit
+    pub pref64_reserve: String,
+
+    // reserve prefetched MMIO aperture, 32-bit
+    pub pref32_reserve: String,
+
+    // reserve non-prefetched MMIO aperture, 32-bit *only*
+    pub mem_reserve: String,
+
+    // IO reservation
+    pub io_reserve: String,
+}
+
+#[async_trait]
+impl ToQemuParams for PCIeSwitchDownstreamPortDevice {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut qemu_params = Vec::new();
+        let mut device_params = Vec::new();
+
+        device_params.push(format!(
+            "{},id={}",
+            DeviceDriver::SwitchDownstreamPort,
+            self.id
+        ));
+        device_params.push(format!("bus={}", self.bus));
+        device_params.push(format!("chassis={}", self.chassis));
+        device_params.push(format!("slot={}", self.slot));
+
+        if !self.bus_reserve.is_empty() {
+            device_params.push(format!("bus-reserve={}", self.bus_reserve));
+        }
+
+        if !self.pref64_reserve.is_empty() {
+            device_params.push(format!("pref64-reserve={}", self.pref64_reserve));
+        }
+
+        if !self.pref32_reserve.is_empty() {
+            device_params.push(format!("pref32-reserve={}", self.pref32_reserve));
+        }
+
+        if !self.mem_reserve.is_empty() {
+            device_params.push(format!("mem-reserve={}", self.mem_reserve));
+        }
+
+        if !self.io_reserve.is_empty() {
+            device_params.push(format!("io-reserve={}", self.io_reserve));
+        }
+
+        qemu_params.push("-device".to_string());
+        qemu_params.push(device_params.join(","));
+
+        Ok(qemu_params)
+    }
+}
+
 fn is_running_in_vm() -> Result<bool> {
     let res = read_to_string("/proc/cpuinfo")?
         .lines()
@@ -1684,6 +1895,106 @@ impl<'a> QemuCmdLine<'a> {
         console_socket_chardev.set_server(true);
         console_socket_chardev.set_wait(false);
         self.devices.push(Box::new(console_socket_chardev));
+    }
+
+    pub fn add_pcie_root_port(
+        &mut self,
+        total_ports: u32,
+        machine_type: &str,
+        memsz_32bit: u32,
+        memsz_64bit: u64,
+    ) -> Result<()> {
+        let (bus, chassis, multi_function, addr) = match machine_type {
+            "QemuQ35" | "QemuVirt" => (
+                DEFAULT_BRIDGE_BUS.to_string(),
+                "0".to_string(),
+                false,
+                "0".to_string(),
+            ),
+            _ => return Ok(()),
+        };
+
+        for index in 0..total_ports {
+            self.devices.push(Box::new(PCIeRootPortDevice {
+                id: format!("{}{}", PCIePortBusPrefix::RootPort, index),
+                bus: bus.clone(),
+                chassis: chassis.clone(),
+                slot: index.to_string(),
+                multifunction: multi_function,
+                addr: addr.clone(),
+                io_reserve: String::new(),
+                bus_reserve: String::new(),
+                pref32_reserve: String::new(),
+                pref64_reserve: format!("{}B", memsz_64bit),
+                mem_reserve: format!("{}B", memsz_32bit),
+            }));
+        }
+
+        Ok(())
+    }
+
+    pub fn add_pcie_switch_port(
+        &mut self,
+        number: u32,
+        machine_type: &str,
+        memsz_32bit: u32,
+        memsz_64bit: u64,
+    ) -> Result<()> {
+        if machine_type != "QemuQ35" && machine_type != "QemuVirt" {
+            return Ok(());
+        }
+
+        let pcie_root_port = PCIeRootPortDevice {
+            // "sw-rp0"
+            id: format!(
+                "{}-{}{}",
+                PCIePortBusPrefix::SwitchPort,
+                PCIePortBusPrefix::RootPort,
+                0
+            ),
+            bus: DEFAULT_BRIDGE_BUS.to_string(),
+            chassis: "1".to_string(),
+            slot: "0".to_string(),
+            multifunction: false,
+            addr: "0".to_string(),
+            io_reserve: String::new(),
+            bus_reserve: String::new(),
+            pref32_reserve: String::new(),
+            pref64_reserve: format!("{}B", memsz_64bit),
+            mem_reserve: format!("{}B", memsz_32bit),
+        };
+
+        self.devices.push(Box::new(pcie_root_port));
+
+        let pcie_switch_upstream_port = PCIeSwitchUpstreamPortDevice {
+            // "swup0"
+            id: format!("{}{}", PCIePortBusPrefix::SwitchUpstreamPort, 0),
+            // "sw-rp0"
+            bus: format!(
+                "{}-{}{}",
+                PCIePortBusPrefix::SwitchPort,
+                PCIePortBusPrefix::RootPort,
+                0
+            ),
+        };
+        self.devices.push(Box::new(pcie_switch_upstream_port));
+
+        let next_chassis = 1;
+
+        for index in 0..number {
+            let pcie_switch_downstream_port = PCIeSwitchDownstreamPortDevice {
+                // "swdp{i}"
+                id: format!("{}{}", PCIePortBusPrefix::SwitchDownstreamPort, index),
+                // "swup0"
+                bus: format!("{}{}", PCIePortBusPrefix::SwitchUpstreamPort, 0),
+                chassis: next_chassis.to_string(),
+                slot: index.to_string(),
+                ..Default::default()
+            };
+            self.devices.push(Box::new(pcie_switch_downstream_port));
+        }
+
+        Ok(())
     }
 
     pub async fn build(&self) -> Result<Vec<String>> {

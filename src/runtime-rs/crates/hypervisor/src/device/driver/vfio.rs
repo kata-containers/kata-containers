@@ -19,7 +19,7 @@ use kata_sys_util::fs::get_base_name;
 use crate::{
     device::{
         pci_path::PciPath,
-        topology::{do_add_pcie_endpoint, PCIeTopology},
+        topology::{do_add_pcie_endpoint, PCIePort, PCIeTopology},
         util::{do_decrease_count, do_increase_count},
         Device, DeviceType, PCIeDevice,
     },
@@ -40,6 +40,29 @@ const SYS_CLASS_IOMMU: &str = "/sys/class/iommu";
 const INTEL_IOMMU_PREFIX: &str = "dmar";
 const AMD_IOMMU_PREFIX: &str = "ivhd";
 const ARM_IOMMU_PREFIX: &str = "smmu";
+
+const PCI_DEV_DOMAIN: &str = "0000";
+const PCI_CONFIG_SPACE_SZ: u64 = 256;
+
+/// Checks if the given BDF corresponds to a PCIe device.
+#[allow(dead_code)]
+pub fn is_pcie_device(bdf: &str) -> bool {
+    let bdf_with_domain = if bdf.split(':').count() == 2 {
+        format!("{}:{}", PCI_DEV_DOMAIN, bdf)
+    } else {
+        bdf.to_string()
+    };
+
+    let config_path = PathBuf::from(SYS_BUS_PCI_DEVICES)
+        .join(bdf_with_domain)
+        .join("config");
+
+    match fs::metadata(config_path) {
+        Ok(metadata) => metadata.len() > PCI_CONFIG_SPACE_SZ,
+        // Error reading the file, assume it's not a PCIe device
+        Err(_) => false,
+    }
+}
 
 pub fn do_check_iommu_on() -> Result<bool> {
     let element = std::fs::read_dir(SYS_CLASS_IOMMU)?
@@ -221,6 +244,22 @@ pub struct VfioDevice {
     pub devices: Vec<HostDevice>,
     // options for vfio pci handler in kata-agent
     pub device_options: Vec<String>,
+
+    // cold_plug specifies whether the device must be
+    // cold plugged (true) or hot plugged (false).
+    pub cold_plug: bool,
+
+    // specifies the PCIe port type to which the device is attached
+    pub port: PCIePort,
+
+    // bus of VFIO PCIe device
+    pub bus: String,
+
+    // is_pcie specifies device is PCIe or PCI
+    pub is_pcie: bool,
+
+    // Indicated host device allocated or not.
+    pub allocated: bool,
 }
 
 impl VfioDevice {
@@ -243,6 +282,8 @@ impl VfioDevice {
             config: dev_info.clone(),
             devices,
             device_options,
+            allocated: false,
+            ..Default::default()
         };
 
         vfio_device
@@ -478,6 +519,7 @@ impl Device for VfioDevice {
                 if let DeviceType::Vfio(vfio) = dev {
                     self.config = vfio.config;
                     self.devices = vfio.devices;
+                    self.allocated = true;
                 }
 
                 update_pcie_device!(self, pcie_topo)?;
@@ -545,6 +587,31 @@ impl PCIeDevice for VfioDevice {
     async fn register(&mut self, pcie_topo: &mut PCIeTopology) -> Result<()> {
         if self.bus_mode != VfioBusMode::PCI {
             return Ok(());
+        }
+
+        // handle port devices
+        if !self.allocated {
+            let port_type = pcie_topo.get_pcie_port();
+            info!(sl!(), "XXXport type: {:?}", port_type);
+            let avail_port = match port_type {
+                PCIePort::NoPort => return Ok(()),
+                PCIePort::InvalidPort => {
+                    return Err(anyhow!("You can not set both RootPort|SwitchPort"))
+                }
+                PCIePort::RootPort | PCIePort::SwitchPort | PCIePort::BridgePort => {
+                    pcie_topo.find_vacant_port(port_type, &self.device_id)
+                }
+            };
+            self.port = port_type;
+            // vfio device attached onto port(root port | switch port)
+            if let Some(port_device) = avail_port {
+                self.bus = port_device.id;
+            }
+            self.allocated = true;
+            info!(
+                sl!(),
+                "XXX self.bus: {:?}, port type: {:?}", &self.bus, &self.port
+            );
         }
 
         self.device_options.clear();
