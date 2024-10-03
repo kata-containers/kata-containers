@@ -71,7 +71,6 @@ handle_error() {
 trap 'handle_error $LINENO' ERR
 
 # Default architecture
-export ARCH=${ARCH:-$(uname -m)}
 if [ "$ARCH" == "ppc64le" ] || [ "$ARCH" == "s390x" ]; then
 	LIBC=gnu
 	echo "WARNING: Forcing LIBC=gnu because $ARCH has no musl Rust target"
@@ -650,7 +649,7 @@ EOF
 
 	if [ -z "${AGENT_SOURCE_BIN}" ] && [ -z "${AGENT_TARBALL}" ] ; then
 		test -r "${HOME}/.cargo/env" && source "${HOME}/.cargo/env"
-		# rust agent needs ${arch}-unknown-linux-${LIBC}
+		# rust agent needs ${ARCH}-unknown-linux-${LIBC}
 		if ! (rustup show | grep -v linux-${LIBC} > /dev/null); then
 			if [ "$RUST_VERSION" == "null" ]; then
 				detect_rust_version || \
@@ -782,7 +781,6 @@ parse_arguments()
 
 	shift $(($OPTIND - 1))
 	distro="$1"
-	arch=$(uname -m)
 }
 
 detect_host_distro()
