@@ -49,7 +49,7 @@ trait ToQemuParams: Send + Sync {
     async fn qemu_params(&self) -> Result<Vec<String>>;
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 enum VirtioBusType {
     Pci,
     Ccw,
@@ -67,6 +67,14 @@ impl VirtioBusType {
 impl Display for VirtioBusType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.as_str())
+    }
+}
+
+fn bus_type(config: &HypervisorConfig) -> VirtioBusType {
+    if config.machine_info.machine_type.contains("-ccw-") {
+        VirtioBusType::Ccw
+    } else {
+        VirtioBusType::Pci
     }
 }
 
@@ -975,7 +983,7 @@ fn format_fds(files: &[File]) -> String {
 }
 
 #[derive(Debug)]
-struct Netdev {
+pub struct Netdev {
     id: String,
 
     // File descriptors for vhost multi-queue support.
@@ -1012,6 +1020,18 @@ impl Netdev {
     fn set_disable_vhost_net(&mut self, disable_vhost_net: bool) -> &mut Self {
         self.disable_vhost_net = disable_vhost_net;
         self
+    }
+
+    pub fn get_id(&self) -> &String {
+        &self.id
+    }
+
+    pub fn get_fds(&self) -> &Vec<File> {
+        &self.fds["fds"]
+    }
+
+    pub fn get_vhostfds(&self) -> &Vec<File> {
+        &self.fds["vhostfds"]
     }
 }
 
@@ -1080,6 +1100,26 @@ impl DeviceVirtioNet {
     fn set_iommu_platform(&mut self, iommu_platform: bool) -> &mut Self {
         self.iommu_platform = iommu_platform;
         self
+    }
+
+    pub fn get_netdev_id(&self) -> &String {
+        &self.netdev_id
+    }
+
+    pub fn get_device_driver(&self) -> &String {
+        &self.device_driver
+    }
+
+    pub fn get_mac_addr(&self) -> String {
+        format!("{:?}", self.mac_address)
+    }
+
+    pub fn get_num_queues(&self) -> u32 {
+        self.num_queues
+    }
+
+    pub fn get_disable_modern(&self) -> bool {
+        self.disable_modern
     }
 }
 
@@ -1290,6 +1330,74 @@ impl ToQemuParams for DeviceIntelIommu {
     }
 }
 
+#[derive(Debug)]
+struct DevicePciBridge {
+    driver: String,
+    bus: String,
+    id: String,
+    chassis_nr: u32,
+    shpc: bool,
+    addr: u32,
+    io_reserve: String,
+    mem_reserve: String,
+    pref64_reserve: String,
+}
+
+impl DevicePciBridge {
+    fn new(config: &HypervisorConfig, bridge_idx: u32) -> DevicePciBridge {
+        DevicePciBridge {
+            // The go runtime doesn't support bridges other than PCI although
+            // PCIe should also be available.  Stick with the legacy behaviour
+            // of ignoring PCIe since it's not clear to me how to decide
+            // between the two.
+            driver: "pci-bridge".to_owned(),
+            bus: match config.machine_info.machine_type.as_str() {
+                "q35" | "virt" => "pcie.0",
+                _ => "pci.0",
+            }
+            .to_owned(),
+            id: format!("pci-bridge-{}", bridge_idx),
+            // Each bridge is required to be assigned a unique chassis id > 0.
+            chassis_nr: bridge_idx + 1,
+            shpc: false,
+            // 2 is documented by the go runtime as the first slot available
+            // for a bridge (on x86_64)
+            // (https://github.com/kata-containers/kata-containers/blob/99730256a2899c82d111400024621519d17ea15d/src/runtime/virtcontainers/qemu_arch_base.go#L212)
+            addr: 2 + bridge_idx,
+            // Values taken from the go runtime implementation which comments
+            // the choices as follows:
+            // Certain guest BIOS versions think !SHPC means no hotplug, and
+            // won't reserve the IO and memory windows that will be needed for
+            // devices added underneath this bridge.  This will only break for
+            // certain combinations of exact qemu, BIOS and guest kernel
+            // versions, but for consistency, just hint the usual default
+            // windows for a bridge (as the BIOS would use with SHPC) so that
+            // we can do ACPI hotplug.
+            // (https://github.com/kata-containers/kata-containers/blob/99730256a2899c82d111400024621519d17ea15d/src/runtime/virtcontainers/qemu.go#L2474)
+            io_reserve: "4k".to_owned(),
+            mem_reserve: "1m".to_owned(),
+            pref64_reserve: "1m".to_owned(),
+        }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for DevicePciBridge {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push(self.driver.clone());
+        params.push(format!("bus={}", self.bus));
+        params.push(format!("id={}", self.id));
+        params.push(format!("chassis_nr={}", self.chassis_nr));
+        params.push(format!("shpc={}", if self.shpc { "on" } else { "off" }));
+        params.push(format!("addr={}", self.addr));
+        params.push(format!("io-reserve={}", self.io_reserve));
+        params.push(format!("mem-reserve={}", self.mem_reserve));
+        params.push(format!("pref64-reserve={}", self.pref64_reserve));
+        Ok(vec!["-device".to_owned(), params.join(",")])
+    }
+}
+
 // Qemu provides methods and types for managing QEMU instances.
 // To manage a qemu instance after it has been launched you need
 // to pass the -qmp option during launch requesting the qemu instance
@@ -1480,8 +1588,12 @@ impl<'a> QemuCmdLine<'a> {
 
         qemu_cmd_line.add_rtc();
 
-        if qemu_cmd_line.bus_type() != VirtioBusType::Ccw {
+        if bus_type(config) != VirtioBusType::Ccw {
             qemu_cmd_line.add_rng();
+        }
+
+        if bus_type(config) != VirtioBusType::Ccw && config.device_info.default_bridges > 0 {
+            qemu_cmd_line.add_bridges(config.device_info.default_bridges);
         }
 
         Ok(qemu_cmd_line)
@@ -1507,14 +1619,6 @@ impl<'a> QemuCmdLine<'a> {
         self.devices.push(Box::new(rng_device));
     }
 
-    fn bus_type(&self) -> VirtioBusType {
-        if self.config.machine_info.machine_type.contains("-ccw-") {
-            VirtioBusType::Ccw
-        } else {
-            VirtioBusType::Pci
-        }
-    }
-
     fn add_iommu(&mut self) {
         let dev_iommu = DeviceIntelIommu::new();
         self.devices.push(Box::new(dev_iommu));
@@ -1524,6 +1628,13 @@ impl<'a> QemuCmdLine<'a> {
             .append(&mut KernelParams::from_string("intel_iommu=on iommu=pt"));
 
         self.machine.set_kernel_irqchip("split");
+    }
+
+    fn add_bridges(&mut self, count: u32) {
+        for idx in 0..count {
+            let bridge = DevicePciBridge::new(self.config, idx);
+            self.devices.push(Box::new(bridge));
+        }
     }
 
     pub fn add_virtiofs_share(
@@ -1542,9 +1653,11 @@ impl<'a> QemuCmdLine<'a> {
 
         self.devices.push(Box::new(virtiofsd_socket_chardev));
 
-        let mut virtiofs_device = DeviceVhostUserFs::new(chardev_name, mount_tag, self.bus_type());
+        let bus_type = bus_type(self.config);
+
+        let mut virtiofs_device = DeviceVhostUserFs::new(chardev_name, mount_tag, bus_type);
         virtiofs_device.set_queue_size(queue_size);
-        if self.config.device_info.enable_iommu_platform && self.bus_type() == VirtioBusType::Ccw {
+        if self.config.device_info.enable_iommu_platform && bus_type == VirtioBusType::Ccw {
             virtiofs_device.set_iommu_platform(true);
         }
         self.devices.push(Box::new(virtiofs_device));
@@ -1558,7 +1671,7 @@ impl<'a> QemuCmdLine<'a> {
         //self.devices.push(Box::new(mem_file));
         self.memory.set_memory_backend_file(&mem_file);
 
-        match self.bus_type() {
+        match bus_type {
             VirtioBusType::Pci => {
                 self.machine.set_nvdimm(true);
                 self.devices.push(Box::new(NumaNode::new(&mem_file.id)));
@@ -1572,7 +1685,7 @@ impl<'a> QemuCmdLine<'a> {
     pub fn add_vsock(&mut self, vhostfd: tokio::fs::File, guest_cid: u32) -> Result<()> {
         clear_cloexec(vhostfd.as_raw_fd()).context("clearing O_CLOEXEC failed on vsock fd")?;
 
-        let mut vhost_vsock_pci = VhostVsock::new(vhostfd, guest_cid, self.bus_type());
+        let mut vhost_vsock_pci = VhostVsock::new(vhostfd, guest_cid, bus_type(self.config));
 
         if !self.config.disable_nesting_checks && should_disable_modern() {
             vhost_vsock_pci.set_disable_modern(true);
@@ -1619,8 +1732,10 @@ impl<'a> QemuCmdLine<'a> {
     pub fn add_block_device(&mut self, device_id: &str, path: &str) -> Result<()> {
         self.devices
             .push(Box::new(BlockBackend::new(device_id, path)));
-        self.devices
-            .push(Box::new(DeviceVirtioBlk::new(device_id, self.bus_type())));
+        self.devices.push(Box::new(DeviceVirtioBlk::new(
+            device_id,
+            bus_type(self.config),
+        )));
         Ok(())
     }
 
@@ -1634,32 +1749,9 @@ impl<'a> QemuCmdLine<'a> {
         ));
     }
 
-    pub fn add_network_device(
-        &mut self,
-        dev_index: u64,
-        host_dev_name: &str,
-        guest_mac: Address,
-    ) -> Result<()> {
-        let mut netdev = Netdev::new(
-            &format!("network-{}", dev_index),
-            host_dev_name,
-            self.config.network_info.network_queues,
-        )?;
-        if self.config.network_info.disable_vhost_net {
-            netdev.set_disable_vhost_net(true);
-        }
-
-        let mut virtio_net_device = DeviceVirtioNet::new(&netdev.id, guest_mac);
-
-        if should_disable_modern() {
-            virtio_net_device.set_disable_modern(true);
-        }
-        if self.config.device_info.enable_iommu_platform && self.bus_type() == VirtioBusType::Ccw {
-            virtio_net_device.set_iommu_platform(true);
-        }
-        if self.config.network_info.network_queues > 1 {
-            virtio_net_device.set_num_queues(self.config.network_info.network_queues);
-        }
+    pub fn add_network_device(&mut self, host_dev_name: &str, guest_mac: Address) -> Result<()> {
+        let (netdev, virtio_net_device) =
+            get_network_device(self.config, host_dev_name, guest_mac)?;
 
         self.devices.push(Box::new(netdev));
         self.devices.push(Box::new(virtio_net_device));
@@ -1667,8 +1759,10 @@ impl<'a> QemuCmdLine<'a> {
     }
 
     pub fn add_console(&mut self, console_socket_path: &str) {
-        let mut serial_dev = DeviceVirtioSerial::new("serial0", self.bus_type());
-        if self.config.device_info.enable_iommu_platform && self.bus_type() == VirtioBusType::Ccw {
+        let mut serial_dev = DeviceVirtioSerial::new("serial0", bus_type(self.config));
+        if self.config.device_info.enable_iommu_platform
+            && bus_type(self.config) == VirtioBusType::Ccw
+        {
             serial_dev.set_iommu_platform(true);
         }
         self.devices.push(Box::new(serial_dev));
@@ -1708,4 +1802,33 @@ impl<'a> QemuCmdLine<'a> {
 
         Ok(result)
     }
+}
+
+pub fn get_network_device(
+    config: &HypervisorConfig,
+    host_dev_name: &str,
+    guest_mac: Address,
+) -> Result<(Netdev, DeviceVirtioNet)> {
+    let mut netdev = Netdev::new(
+        &format!("network-{}", host_dev_name),
+        host_dev_name,
+        config.network_info.network_queues,
+    )?;
+    if config.network_info.disable_vhost_net {
+        netdev.set_disable_vhost_net(true);
+    }
+
+    let mut virtio_net_device = DeviceVirtioNet::new(&netdev.id, guest_mac);
+
+    if should_disable_modern() {
+        virtio_net_device.set_disable_modern(true);
+    }
+    if config.device_info.enable_iommu_platform && bus_type(config) == VirtioBusType::Ccw {
+        virtio_net_device.set_iommu_platform(true);
+    }
+    if config.network_info.network_queues > 1 {
+        virtio_net_device.set_num_queues(config.network_info.network_queues);
+    }
+
+    Ok((netdev, virtio_net_device))
 }
