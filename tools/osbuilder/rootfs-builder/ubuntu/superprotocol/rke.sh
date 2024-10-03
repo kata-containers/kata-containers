@@ -302,3 +302,4 @@ hauler store save --store rke2-store --filename rke2-airgap.tar.zst
 
 mkdir -p $SUPER_SCRIPT_DIR/opt/hauler
 cp *.tar.zst $SUPER_SCRIPT_DIR/opt/hauler/
+rm -rf /opt/hauler/*
