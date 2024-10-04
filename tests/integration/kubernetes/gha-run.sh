@@ -277,14 +277,6 @@ function run_tests() {
 	[ "$platform" = "kcli" ] && \
 		export KUBECONFIG="$HOME/.kcli/clusters/${CLUSTER_NAME:-kata-k8s}/auth/kubeconfig"
 
-	# TODO: enable testing auto-generated policy for other types of hosts too.
-	if [ "${KATA_HOST_OS}" = "cbl-mariner" ] || \
-	   [ "${KATA_HYPERVISOR}" = "qemu-tdx" ] || \
-	   [ "${KATA_HYPERVISOR}" = "qemu-sev" ] || \
-	   [ "${KATA_HYPERVISOR}" = "qemu-snp" ]; then
-		export AUTO_GENERATE_POLICY="yes"
-	fi
-
 	if [ "${AUTO_GENERATE_POLICY}" = "yes" ] && [ "${GENPOLICY_PULL_METHOD}" = "containerd" ]; then
 		# containerd's config on the local machine (where kubectl and genpolicy are executed by CI),
 		# might have been provided by a distro-specific package that disables the cri plug-in by using:
