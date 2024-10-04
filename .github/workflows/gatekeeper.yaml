@@ -1,0 +1,44 @@
+name: Gatekeeper
+
+# Gatekeeper uses the "skips.py" to determine which job names/regexps are
+# required for given PR and waits for them to either complete or fail
+# reporting the status.
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gatekeeper:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - id: gatekeeper
+        env:
+          TARGET_BRANCH: ${{ github.event.pull_request.base.ref }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMIT_HASH: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          #!/usr/bin/env bash -x
+          mapfile -t lines < <(python3 tools/testing/gatekeeper/skips.py -t)
+          export REQUIRED_JOBS="${lines[0]}"
+          export REQUIRED_REGEXPS="${lines[1]}"
+          export REQUIRED_LABELS="${lines[2]}"
+          echo "REQUIRED_JOBS: $REQUIRED_JOBS"
+          echo "REQUIRED_REGEXPS: $REQUIRED_REGEXPS"
+          echo "REQUIRED_LABELS: $REQUIRED_LABELS"
+          python3 tools/testing/gatekeeper/jobs.py
+          exit $?
+        shell: /usr/bin/bash -x {0}
