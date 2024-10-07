@@ -39,7 +39,9 @@ PAUSE_IMAGE_TARBALL=${PAUSE_IMAGE_TARBALL:-""}
 lib_file="${script_dir}/../scripts/lib.sh"
 source "$lib_file"
 
-agent_policy_file="$(readlink -f -v "${AGENT_POLICY_FILE:-"${script_dir}/../../../src/kata-opa/allow-all.rego"}")"
+if [[ "${AGENT_POLICY}" == "yes" ]]; then
+	agent_policy_file="$(readlink -f -v "${AGENT_POLICY_FILE:-"${script_dir}/../../../src/kata-opa/allow-all.rego"}")"
+fi
 
 #For cross build
 CROSS_BUILD=${CROSS_BUILD:-false}
@@ -361,7 +363,9 @@ check_env_variables()
 
 	[ -n "${KERNEL_MODULES_DIR}" ] && [ ! -d "${KERNEL_MODULES_DIR}" ] && die "KERNEL_MODULES_DIR defined but is not an existing directory"
 
-	[ ! -f "${agent_policy_file}" ] && die "agent policy file not found in '${agent_policy_file}'"
+	if [[ "${AGENT_POLICY}" == "yes" ]]; then
+		[ ! -f "${agent_policy_file}" ] && die "agent policy file not found in '${agent_policy_file}'"
+	fi
 
 	[ -n "${OSBUILDER_VERSION}" ] || die "need osbuilder version"
 }
@@ -724,7 +728,7 @@ EOF
 		fi
 	fi
 
-	if [ "${AGENT_POLICY}" == "yes" ]; then
+	if [[ "${AGENT_POLICY}" == "yes" ]]; then
 		info "Install the default policy"
 		# Install default settings for the kata-opa service.
 		local opa_settings_dir="/etc/kata-opa"
