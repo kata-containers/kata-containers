@@ -2,7 +2,7 @@
 set -x
 
 RND_SEED=$(LC_ALL=C tr -dc '[:lower:]' < /dev/urandom | head -c 6)
-NODE_NAME="sp-tdx-h100-vm-$RND_SEED"
+NODE_NAME="sp-tdx-h100-vm"
 echo $NODE_NAME > /etc/hostname
 
 LOCAL_REGISTRY_HOST="hauler.local"
