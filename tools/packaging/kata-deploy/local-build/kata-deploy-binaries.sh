@@ -121,7 +121,6 @@ options:
 	rootfs-image-mariner
 	rootfs-initrd
 	rootfs-initrd-confidential
-	rootfs-initrd-mariner
 	runk
 	shim-v2
 	trace-forwarder
@@ -416,11 +415,6 @@ install_initrd_confidential() {
 	export MEASURED_ROOTFS=yes
 	export PULL_TYPE=default
 	install_initrd "confidential"
-}
-
-#Install Mariner guest initrd
-install_initrd_mariner() {
-	install_initrd "mariner"
 }
 
 #Instal NVIDIA GPU image
@@ -1097,8 +1091,6 @@ handle_build() {
 	rootfs-initrd) install_initrd ;;
 
 	rootfs-initrd-confidential) install_initrd_confidential ;;
-
-	rootfs-initrd-mariner) install_initrd_mariner ;;
 
 	rootfs-nvidia-gpu-image) install_image_nvidia_gpu ;;
 
