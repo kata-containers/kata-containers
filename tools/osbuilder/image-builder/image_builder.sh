@@ -29,7 +29,6 @@ readonly lib_file="${script_dir}/../scripts/lib.sh"
 
 readonly ext4_format="ext4"
 readonly xfs_format="xfs"
-readonly erofs_format="erofs"
 
 # ext4: percentage of the filesystem which may only be allocated by privileged processes.
 readonly reserved_blocks_percentage=3
