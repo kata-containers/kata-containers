@@ -139,6 +139,9 @@ assets:
         confidential:
           name: *default-image-name
           version: *default-image-version
+        mariner:
+          name: "cbl-mariner"
+          version: "2.0"
         nvidia-gpu:
           name: *default-image-name
           version: "jammy"
