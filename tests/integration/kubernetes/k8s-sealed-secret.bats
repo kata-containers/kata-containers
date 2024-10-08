@@ -24,10 +24,12 @@ setup() {
 	setup_common
 	get_pod_config_dir
 
-	export K8S_TEST_YAML="${pod_config_dir}/pod-sealed-secret.yaml"
+	export K8S_TEST_ENV_YAML="${pod_config_dir}/pod-sealed-secret.yaml"
+	export K8S_TEST_FILE_YAML="${pod_config_dir}/pod-sealed-secret-as-file.yaml"
 	# Schedule on a known node so that later it can print the system's logs for
 	# debugging.
-	set_node "$K8S_TEST_YAML" "$node"
+	set_node "$K8S_TEST_ENV_YAML" "$node"
+	set_node "$K8S_TEST_FILE_YAML" "$node"
 
 	local CC_KBS_ADDR
 	export CC_KBS_ADDR=$(kbs_k8s_svc_http_addr)
@@ -38,7 +40,10 @@ setup() {
 	if [ "${AA_KBC}" = "cc_kbc" ]; then
 		kernel_params_value+=" agent.aa_kbc_params=cc_kbc::${CC_KBS_ADDR}"
 	fi
-	set_metadata_annotation "${K8S_TEST_YAML}" \
+	set_metadata_annotation "${K8S_TEST_ENV_YAML}" \
+		"${kernel_params_annotation}" \
+		"${kernel_params_value}"
+	set_metadata_annotation "${K8S_TEST_FILE_YAML}" \
 		"${kernel_params_annotation}" \
 		"${kernel_params_value}"
 
@@ -69,13 +74,7 @@ setup() {
 }
 
 @test "Cannot Unseal Env Secrets with CDH without key" {
-	[ "${KATA_HYPERVISOR}" = "qemu-coco-dev" ] || skip "Test not ready yet for ${KATA_HYPERVISOR}"
-
-	if [ "${KBS}" = "false" ]; then
-		skip "Test skipped as KBS not setup"
-	fi
-
-	k8s_create_pod "${K8S_TEST_YAML}"
+	k8s_create_pod "${K8S_TEST_ENV_YAML}"
 
 	kubectl logs secret-test-pod-cc
 	kubectl logs secret-test-pod-cc | grep -q "UNPROTECTED_SECRET = not_sealed_secret"
@@ -86,14 +85,17 @@ setup() {
 
 
 @test "Unseal Env Secrets with CDH" {
-	[ "${KATA_HYPERVISOR}" = "qemu-coco-dev" ] || skip "Test not ready yet for ${KATA_HYPERVISOR}"
-
-	if [ "${KBS}" = "false" ]; then
-		skip "Test skipped as KBS not setup"
-	fi
-
 	kbs_set_resource "default" "sealed-secret" "test" "unsealed_secret"
-	k8s_create_pod "${K8S_TEST_YAML}"
+	k8s_create_pod "${K8S_TEST_ENV_YAML}"
+
+	kubectl logs secret-test-pod-cc
+	kubectl logs secret-test-pod-cc | grep -q "UNPROTECTED_SECRET = not_sealed_secret"
+	kubectl logs secret-test-pod-cc | grep -q "PROTECTED_SECRET = unsealed_secret"
+}
+
+@test "Unseal File Secrets with CDH" {
+	kbs_set_resource "default" "sealed-secret" "test" "unsealed_secret"
+	k8s_create_pod "${K8S_TEST_FILE_YAML}"
 
 	kubectl logs secret-test-pod-cc
 	kubectl logs secret-test-pod-cc | grep -q "UNPROTECTED_SECRET = not_sealed_secret"
