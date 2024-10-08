@@ -5,7 +5,7 @@
 
 // Description: Client side of ttRPC comms
 
-use crate::types::{Config, CopyFileInput, Options, SetPolicyInput};
+use crate::types::*;
 use crate::utils;
 use anyhow::{anyhow, Result};
 use byteorder::ByteOrder;
@@ -34,7 +34,7 @@ macro_rules! run_if_auto_values {
         let cfg = $ctx.metadata.get(METADATA_CFG_NS);
 
         if let Some(v) = cfg {
-            if v.contains(&NO_AUTO_VALUES_CFG_NAME.to_string()) {
+            if v.contains(&AUTO_VALUES_CFG_NAME.to_string()) {
                 debug!(sl!(), "Running closure to generate values");
 
                 $closure()?;
@@ -103,9 +103,9 @@ const ERR_API_FAILED: &str = "API failed";
 // Value used as a "namespace" in the ttRPC Context's metadata.
 const METADATA_CFG_NS: &str = "agent-ctl-cfg";
 
-// Special value which if found means do not generate any values
+// Special value which if found means generate any values
 // automatically.
-const NO_AUTO_VALUES_CFG_NAME: &str = "no-auto-values";
+const AUTO_VALUES_CFG_NAME: &str = "auto-values";
 
 static AGENT_CMDS: &[AgentCmd] = &[
     AgentCmd {
@@ -640,7 +640,7 @@ pub fn client(cfg: &Config, commands: Vec<&str>) -> Result<()> {
     // of this option.
 
     if !cfg.no_auto_values {
-        ttrpc_ctx.add(METADATA_CFG_NS.into(), NO_AUTO_VALUES_CFG_NAME.to_string());
+        ttrpc_ctx.add(METADATA_CFG_NS.into(), AUTO_VALUES_CFG_NAME.to_string());
 
         debug!(sl!(), "Automatic value generation disabled");
     }
@@ -921,19 +921,17 @@ fn agent_cmd_sandbox_create(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    options: &mut Options,
+    _options: &mut Options,
     args: &str,
 ) -> Result<()> {
     let mut req: CreateSandboxRequest = utils::make_request(args)?;
 
+    // Generate sandbox_id if it is empty
+    if req.sandbox_id.is_empty() {
+        req.set_sandbox_id(utils::random_sandbox_id());
+    }
+
     let ctx = clone_context(ctx);
-
-    run_if_auto_values!(ctx, || -> Result<()> {
-        let sid = utils::get_option("sid", options, args)?;
-        req.set_sandbox_id(sid);
-
-        Ok(())
-    });
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -974,26 +972,19 @@ fn agent_cmd_container_create(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    options: &mut Options,
+    _options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req: CreateContainerRequest = utils::make_request(args)?;
+    let input: CreateContainerInput = utils::make_request(args)?;
+
+    if input.image.is_empty() {
+        info!(sl!(), "create container: error image is empty");
+        return Err(anyhow!("CreateContainer needs image reference"));
+    }
 
     let ctx = clone_context(ctx);
 
-    // FIXME: container create: add back "spec=file:///" support
-
-    run_if_auto_values!(ctx, || -> Result<()> {
-        let cid = utils::get_option("cid", options, args)?;
-        let exec_id = utils::get_option("exec_id", options, args)?;
-        let ttrpc_spec = utils::get_ttrpc_spec(options, &cid).map_err(|e| anyhow!(e))?;
-
-        req.set_container_id(cid);
-        req.set_exec_id(exec_id);
-        req.set_OCI(ttrpc_spec);
-
-        Ok(())
-    });
+    let req = utils::make_create_container_request(input)?;
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -1011,18 +1002,12 @@ fn agent_cmd_container_remove(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    options: &mut Options,
+    _options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req: RemoveContainerRequest = utils::make_request(args)?;
+    let req: RemoveContainerRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
-
-    run_if_auto_values!(ctx, || -> Result<()> {
-        let cid = utils::get_option("cid", options, args)?;
-        req.set_container_id(cid);
-        Ok(())
-    });
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
@@ -1032,6 +1017,9 @@ fn agent_cmd_container_remove(
 
     info!(sl!(), "response received";
         "response" => format!("{:?}", reply));
+
+    // Un-mount the rootfs mount point.
+    utils::remove_container_image_mount(req.container_id())?;
 
     Ok(())
 }
@@ -1180,19 +1168,12 @@ fn agent_cmd_container_start(
     ctx: &Context,
     client: &AgentServiceClient,
     _health: &HealthClient,
-    options: &mut Options,
+    _options: &mut Options,
     args: &str,
 ) -> Result<()> {
-    let mut req: StartContainerRequest = utils::make_request(args)?;
+    let req: StartContainerRequest = utils::make_request(args)?;
 
     let ctx = clone_context(ctx);
-
-    run_if_auto_values!(ctx, || -> Result<()> {
-        let cid = utils::get_option("cid", options, args)?;
-
-        req.set_container_id(cid);
-        Ok(())
-    });
 
     debug!(sl!(), "sending request"; "request" => format!("{:?}", req));
 
