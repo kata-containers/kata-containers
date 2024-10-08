@@ -67,6 +67,7 @@ finish() {
 trap finish EXIT
 
 build_and_install_gperf() {
+    set -x
     echo "Build and install gperf version ${gperf_version}"
     mkdir -p "${gperf_install_dir}"
     curl -sLO "${gperf_tarball_url}"
@@ -97,6 +98,7 @@ build_and_install_libseccomp() {
 }
 
 main() {
+    set -x
     local libseccomp_install_dir="${1:-}"
     local gperf_install_dir="${2:-}"
 
@@ -111,4 +113,5 @@ main() {
     popd
 }
 
+set -x
 main "$@"

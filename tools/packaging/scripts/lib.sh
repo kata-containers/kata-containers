@@ -5,10 +5,10 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+set -x
+
 export GOPATH=${GOPATH:-${HOME}/go}
-export tests_repo="${tests_repo:-github.com/kata-containers/tests}"
-export tests_repo_dir="$GOPATH/src/$tests_repo"
-export CC_BUILDER_REGISTRY="${CC_BUILDER_REGISTRY:-quay.io/kata-containers/cc-builders}"
+export BUILDER_REGISTRY="${BUILDER_REGISTRY:-quay.io/kata-containers/builders}"
 export PUSH_TO_REGISTRY="${PUSH_TO_REGISTRY:-"no"}"
 
 this_script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -17,15 +17,7 @@ export repo_root_dir="$(cd "${this_script_dir}/../../../" && pwd)"
 
 short_commit_length=10
 
-hub_bin="hub-bin"
-
-patches_path=""
-default_patches_dir="${repo_root_dir}/tools/packaging/kernel/patches"
-
-# Jenkins URL
-jenkins_url="http://jenkins.katacontainers.io"
-# Path where cached artifacts are found.
-cached_artifacts_path="lastSuccessfulBuild/artifact/artifacts"
+gh_cli="gh-cli"
 
 #for cross build
 CROSS_BUILD=${CROSS_BUILD-:}
@@ -37,19 +29,8 @@ ARCH=${ARCH:-$(uname -m)}
 TARGET_OS=${TARGET_OS:-linux}
 [ "${CROSS_BUILD}" == "true" ] && BUILDX=buildx && PLATFORM="--platform=${TARGET_OS}/${TARGET_ARCH}"
 
-clone_tests_repo() {
-	# KATA_CI_NO_NETWORK is (has to be) ignored if there is
-	# no existing clone.
-	if [ -d "${tests_repo_dir}" ] && [ -n "${KATA_CI_NO_NETWORK:-}" ]; then
-		return
-	fi
-
-	go get -d -u "$tests_repo" || true
-}
-
 install_yq() {
-	clone_tests_repo
-	pushd "$tests_repo_dir"
+	pushd "${repo_root_dir}"
 	.ci/install_yq.sh
 	popd
 }
@@ -59,7 +40,7 @@ get_from_kata_deps() {
 	versions_file="${this_script_dir}/../../../versions.yaml"
 
 	command -v yq &>/dev/null || die 'yq command is not in your $PATH'
-	result=$("yq" read -X "$versions_file" "$dependency")
+	result=$("yq" eval -e  ".$dependency" "$versions_file")
 	[ "$result" = "null" ] && result=""
 	echo "$result"
 }
@@ -81,26 +62,6 @@ get_repo_hash() {
 	popd >>/dev/null
 }
 
-build_hub() {
-	info "Get hub"
-
-	if cmd=$(command -v hub); then
-		hub_bin="${cmd}"
-		return
-	else
-		hub_bin="${tmp_dir:-/tmp}/hub-bin"
-	fi
-
-	local hub_repo="github.com/github/hub"
-	local hub_repo_dir="${GOPATH}/src/${hub_repo}"
-	[ -d "${hub_repo_dir}" ] || git clone --quiet --depth 1 "https://${hub_repo}.git" "${hub_repo_dir}"
-	pushd "${hub_repo_dir}" >>/dev/null
-	git checkout master
-	git pull
-	./script/build -o "${hub_bin}"
-	popd >>/dev/null
-}
-
 arch_to_golang()
 {
 	local -r arch="$1"
@@ -114,26 +75,26 @@ arch_to_golang()
 	esac
 }
 
+get_gh() {
+	info "Get gh"
+
+	if cmd=$(command -v gh); then
+		gh_cli="${cmd}"
+		return
+	else
+		gh_cli="${tmp_dir:-/tmp}/gh-cli"
+	fi
+
+	local goarch=$(arch_to_golang $(uname -m))
+	curl -sSL https://github.com/cli/cli/releases/download/v2.37.0/gh_2.37.0_linux_${goarch}.tar.gz | tar -xz
+	mv gh_2.37.0_linux_${goarch}/bin/gh "${gh_cli}"
+	rm -rf gh_2.37.0_linux_amd64
+}
+
 get_kata_hash() {
 	repo=$1
 	ref=$2
 	git ls-remote --heads --tags "https://github.com/${project}/${repo}.git" | grep "${ref}" | awk '{print $1}'
-}
-
-get_config_and_patches() {
-	if [ -z "${patches_path}" ]; then
-		patches_path="${default_patches_dir}"
-	fi
-}
-
-get_config_version() {
-	get_config_and_patches
-	config_version_file="${repo_root_dir}/tools/packaging/kernel/kata_config_version"
-	if [ -f "${config_version_file}" ]; then
-		cat "${config_version_file}"
-	else
-		die "failed to find ${config_version_file}"
-	fi
 }
 
 # $1 - The file we're looking for the last modification
@@ -147,7 +108,7 @@ get_last_modification() {
 	dirty=""
 	[ $(git status --porcelain | grep "${file#${repo_root_dir}/}" | wc -l) -gt 0 ] && dirty="-dirty"
 
-	echo "$(git log -1 --pretty=format:"%H" ${file})${dirty}"
+	echo "$(git log -1 --pretty=format:"%h" ${file})${dirty}"
 	popd &> /dev/null
 }
 
@@ -164,6 +125,11 @@ push_to_registry() {
 			docker push ${tag}
 		fi
 	fi
+}
+
+get_kernel_image_name() {
+	kernel_script_dir="${repo_root_dir}/tools/packaging/static-build/kernel"
+	echo "${BUILDER_REGISTRY}:kernel-$(get_last_modification ${kernel_script_dir})-$(uname -m)"
 }
 
 sha256sum_from_files() {
@@ -195,46 +161,26 @@ sha256sum_from_files() {
 }
 
 calc_qemu_files_sha256sum() {
-	local files="${this_script_dir}/tools/packaging/qemu  \
-		${this_script_dir}/../tools/packaging/static-build/qemu.blacklist \
-		${this_script_dir}/../tools/packaging/static-build/scripts"
+	local files="${repo_root_dir}/tools/packaging/qemu \
+		${repo_root_dir}/tools/packaging/static-build/qemu.blacklist \
+		${repo_root_dir}/tools/packaging/static-build/scripts"
 
 	sha256sum_from_files "$files"
 }
 
-get_initramfs_image_name() {
-	initramfs_script_dir="${this_script_dir}/../static-build/initramfs"
-	echo "${CC_BUILDER_REGISTRY}:initramfs-cryptosetup$(get_from_kata_deps "externals.cryptsetup.version")-lvm2-$(get_from_kata_deps "externals.lvm2.version")-$(get_last_modification ${initramfs_script_dir})-$(uname -m)"
-}
-
-get_kernel_image_name() {
-	kernel_script_dir="${repo_root_dir}/tools/packaging/static-build/kernel"
-	echo "${CC_BUILDER_REGISTRY}:kernel-$(get_last_modification ${kernel_script_dir})-$(uname -m)"
-}
-
-get_ovmf_image_name() {
-	ovmf_script_dir="${this_script_dir}/../static-build/ovmf"
-	echo "${CC_BUILDER_REGISTRY}:ovmf-$(get_last_modification ${ovmf_script_dir})-$(uname -m)"
-}
-
 get_qemu_image_name() {
 	qemu_script_dir="${repo_root_dir}/tools/packaging/static-build/qemu"
-	echo "${CC_BUILDER_REGISTRY}:qemu-$(get_last_modification ${qemu_script_dir})-$(uname -m)"
+	echo "${BUILDER_REGISTRY}:qemu-$(get_last_modification ${qemu_script_dir})-$(uname -m)"
 }
 
 get_shim_v2_image_name() {
 	shim_v2_script_dir="${repo_root_dir}/tools/packaging/static-build/shim-v2"
-	echo "${CC_BUILDER_REGISTRY}:shim-v2-go-$(get_from_kata_deps "languages.golang.meta.newest-version")-rust-$(get_from_kata_deps "languages.rust.meta.newest-version")-$(get_last_modification ${shim_v2_script_dir})-$(uname -m)"
-}
-
-get_td_shim_image_name() {
-	td_shim_script_dir="${this_script_dir}/../static-build/td-shim"
-	echo "${CC_BUILDER_REGISTRY}:td-shim-$(get_from_kata_deps "externals.td-shim.toolchain")-$(get_last_modification ${td_shim_script_dir})-$(uname -m)"
+	echo "${BUILDER_REGISTRY}:shim-v2-go-$(get_from_kata_deps "languages.golang.meta.newest-version")-rust-$(get_from_kata_deps "languages.rust.meta.newest-version")-$(get_last_modification ${shim_v2_script_dir})-$(uname -m)"
 }
 
 get_ovmf_image_name() {
 	ovmf_script_dir="${repo_root_dir}/tools/packaging/static-build/ovmf"
-	echo "${CC_BUILDER_REGISTRY}:ovmf-$(get_last_modification ${ovmf_script_dir})-$(uname -m)"
+	echo "${BUILDER_REGISTRY}:ovmf-$(get_last_modification ${ovmf_script_dir})-$(uname -m)"
 }
 
 get_virtiofsd_image_name() {
@@ -255,5 +201,20 @@ get_virtiofsd_image_name() {
 	esac
 
 	virtiofsd_script_dir="${repo_root_dir}/tools/packaging/static-build/virtiofsd"
-	echo "${CC_BUILDER_REGISTRY}:virtiofsd-$(get_from_kata_deps "externals.virtiofsd.toolchain")-${libc}-$(get_last_modification ${virtiofsd_script_dir})-$(uname -m)"
+	echo "${BUILDER_REGISTRY}:virtiofsd-$(get_from_kata_deps "externals.virtiofsd.toolchain")-${libc}-$(get_last_modification ${virtiofsd_script_dir})-$(uname -m)"
+}
+
+get_tools_image_name() {
+	tools_dir="${repo_root_dir}/src/tools"
+	libs_dir="${repo_root_dir}/src/libs"
+	agent_dir="${repo_root_dir}/src/agent"
+
+	echo "${BUILDER_REGISTRY}:tools-$(get_last_modification ${tools_dir})-$(get_last_modification ${libs_dir})-$(get_last_modification ${agent_dir})"
+}
+
+get_agent_image_name() {
+	libs_dir="${repo_root_dir}/src/libs"
+	agent_dir="${repo_root_dir}/src/agent"
+
+	echo "${BUILDER_REGISTRY}:agent-$(get_last_modification ${libs_dir})-$(get_last_modification ${agent_dir})"
 }

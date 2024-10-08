@@ -3,10 +3,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+set -x
 set -o nounset
 
 export tests_repo="${tests_repo:-github.com/kata-containers/tests}"
-export tests_repo_dir="$GOPATH/src/$tests_repo"
+export tests_repo_dir="${tests_repo_dir:-$GOPATH/src/$tests_repo}"
 export branch="${target_branch:-main}"
 
 # Clones the tests repository and checkout to the branch pointed out by
@@ -26,8 +27,8 @@ clone_tests_repo()
 			git config --global --add safe.directory ${tests_repo_dir}
 		fi
 		pushd "${tests_repo_dir}"
-		git checkout "${branch}"
-		git pull
+		# git checkout "${branch}"
+		# git pull
 		popd
 	else
 		git clone -q "https://${tests_repo}" "$tests_repo_dir"

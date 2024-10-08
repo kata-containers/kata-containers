@@ -240,7 +240,16 @@ fn real_main() -> Result<(), std::io::Error> {
         "self: Box<Self>",
         "self: ::std::boxed::Box<Self>",
     )?;
-
+    
+    replace_text_in_file("src/agent.rs", "#![allow(box_pointers)]", "")?;
+    replace_text_in_file("src/csi.rs", "#![allow(box_pointers)]", "")?;
+    replace_text_in_file("src/empty.rs", "#![allow(box_pointers)]", "")?;
+    replace_text_in_file("src/gogo.rs", "#![allow(box_pointers)]", "")?;
+    replace_text_in_file("src/health.rs", "#![allow(box_pointers)]", "")?;
+    replace_text_in_file("src/image.rs", "#![allow(box_pointers)]", "")?;
+    replace_text_in_file("src/oci.rs", "#![allow(box_pointers)]", "")?;
+    replace_text_in_file("src/types.rs", "#![allow(box_pointers)]", "")?;
+    replace_text_in_file("src/sealed_secret.rs", "#![allow(box_pointers)]", "")?;
     Ok(())
 }
 

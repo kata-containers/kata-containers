@@ -3,6 +3,9 @@
 ## SPDX-License-Identifier: Apache-2.0
 ##
 
+[net]
+git-fetch-with-cli = true
+
 [target.aarch64-unknown-linux-musl]
 ## Only setting linker with `aarch64-linux-musl-gcc`, the
 ## `rust-agent` could be totally statically linked.

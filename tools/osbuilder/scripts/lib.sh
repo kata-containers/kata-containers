@@ -257,6 +257,7 @@ RUN . /root/.cargo/env; cargo install cargo-when
 
 get_package_version_from_kata_yaml()
 {
+	set -x
     local yq_path="$1"
     local yq_version
     local yq_args
@@ -267,6 +268,7 @@ get_package_version_from_kata_yaml()
 	fi
 
     yq_version=$($yq -V)
+	echo $yq_version
     case $yq_version in
     *"version "[1-3]*)
         yq_args="r -X - ${yq_path}"
@@ -294,6 +296,7 @@ detect_rust_version()
 
 detect_libseccomp_info()
 {
+	set -x
 	info "Detecting libseccomp version"
 
 	info "Get libseccomp version and url from ${kata_versions_file}"
