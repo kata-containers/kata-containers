@@ -227,8 +227,10 @@ function kbs_k8s_delete() {
 	pushd "$COCO_KBS_DIR"
 	if [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
 		kubectl delete -k config/kubernetes/ita
+	elif [ "${KATA_HYPERVISOR}" = "qemu-se" ]; then
+		kubectl delete -k config/kubernetes/overlays/ibm-se
 	else
-		kubectl delete -k config/kubernetes/overlays/$(uname -m)
+		kubectl delete -k config/kubernetes/overlays/
 	fi
 
 	# Verify that KBS namespace resources were properly deleted
@@ -294,22 +296,15 @@ function kbs_k8s_deploy() {
 
 	# Tests should fill kbs resources later, however, the deployment
 	# expects at least one secret served at install time.
-	echo "somesecret" > overlays/$(uname -m)/key.bin
+	echo "somesecret" > overlays/key.bin
 
 	# For qemu-se runtime, prepare the necessary resources
-	if [ "$(uname -m)" == "s390x" ]; then
-		if [ "${KATA_HYPERVISOR}" == "qemu-se" ]; then
-			prepare_credentials_for_qemu_se
-		elif [ "${KATA_HYPERVISOR}" == "qemu-coco-dev" ]; then
-			# Create an empty directory just for deployment
-			export IBM_SE_CREDS_DIR="$(mktemp -d -t ibmse.creds.XXXXXXXXXX)"
-		else
-			echo "ERROR: KBS deployment for ${KATA_HYPERVISOR} is not supported" >&2
-			return 1
-		fi
+	if [ "${KATA_HYPERVISOR}" == "qemu-se" ]; then
+		mv overlays/key.bin overlays/ibm-se/key.bin
+		prepare_credentials_for_qemu_se
 		# SE_SKIP_CERTS_VERIFICATION should be set to true
 		# to skip the verification of the certificates
-		sed -i "s/false/true/g" overlays/s390x/patch.yaml
+		sed -i "s/false/true/g" overlays/ibm-se/patch.yaml
 	fi
 
 	echo "::group::Update the kbs container image"
@@ -519,7 +514,7 @@ _handle_ingress_aks() {
 		return 1
 	fi
 
-	pushd "${COCO_KBS_DIR}/config/kubernetes/overlays/common"
+	pushd "${COCO_KBS_DIR}/config/kubernetes/overlays/"
 
 	echo "::group::$(pwd)/ingress.yaml"
 	KBS_INGRESS_CLASS="addon-http-application-routing" \
