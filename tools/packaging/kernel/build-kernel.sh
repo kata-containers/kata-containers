@@ -376,9 +376,6 @@ get_default_kernel_config() {
 	[ -n "${hypervisor}" ] || die "hypervisor not provided"
 	[ -n "${kernel_arch}" ] || die "kernel arch not provided"
 
-	local kernel_ver
-	kernel_ver=$(get_major_kernel_version "${version}")
-
 	archfragdir="${default_config_frags_dir}/${kernel_arch}"
 	if [ -d "${archfragdir}" ]; then
 		config="$(get_kernel_frag_path ${archfragdir} ${kernel_path} ${kernel_arch})"
