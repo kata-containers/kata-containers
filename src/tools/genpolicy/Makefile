@@ -7,7 +7,7 @@
 include ../../../utils.mk
 
 ifeq ($(ARCH), ppc64le)
-     override ARCH = powerpc64le
+     override ARCH = powerpc64
  endif
 
 COMMIT_HASH := $(shell git rev-parse HEAD 2>/dev/null || true)
