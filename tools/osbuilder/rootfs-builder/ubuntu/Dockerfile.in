@@ -28,6 +28,7 @@ RUN [ -x /usr/bin/systemd-detect-virt ] || ( echo "echo docker" >/usr/bin/system
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive \
     apt-get --no-install-recommends -y install \
+    apt-transport-https \
     ca-certificates \
     curl \
     g++ \
@@ -40,6 +41,7 @@ RUN apt-get update && \
          echo "gcc-$gcc_arch-linux-gnu libc6-dev-$libc_arch-cross")) \
     git \
     gnupg2 \
+    libclang1 \
     make \
     makedev \
     multistrap \
@@ -50,9 +52,16 @@ RUN apt-get update && \
     xz-utils \
     pip \
     python3-dev \
+    wget \
     zstd && \
     apt-get clean && rm -rf /var/lib/apt/lists/&& \
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_TOOLCHAIN}
+
+RUN wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | tee /usr/share/keyrings/trivy.gpg > /dev/null && \
+    echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" | tee -a /etc/apt/sources.list.d/trivy.list && \
+    apt-get update && apt-get install -y --no-install-recommends trivy && \
+    apt-get clean && rm -rf /var/lib/apt/lists/
+
 
 RUN ARCH=$(uname -m); \
     goarch=""; \
