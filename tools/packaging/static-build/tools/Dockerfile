@@ -20,6 +20,7 @@ RUN mkdir ${RUSTUP_HOME} ${CARGO_HOME} && chmod -R a+rwX ${RUSTUP_HOME} ${CARGO_
 
 RUN apk --no-cache add \
         bash \
+        clang \
         cmake \
         curl \
         gcc \
