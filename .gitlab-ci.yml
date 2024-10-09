@@ -2,6 +2,7 @@ include: https://gitlab-templates.ddbuild.io/compute-delivery/v2/compute-deliver
 
 variables:
   CI_IMAGE: 1
+  KERNEL_VERSION: 6.8
 
 stages:
   - ci-image
@@ -27,8 +28,8 @@ build-kernel-amd64:
   tags: [ "arch:amd64" ]
   script:
     - cd tools/packaging/kernel
-    - ./build-kernel.sh setup
-    - ./build-kernel.sh build
+    - ./build-kernel.sh -v $KERNEL_VERSION setup
+    - ./build-kernel.sh -v $KERNEL_VERSION build
     - cp kata-linux-*/vmlinux ./vmlinux-amd64
   artifacts:
     paths:
@@ -41,8 +42,8 @@ build-kernel-arm64:
   tags: [ "arch:arm64" ]
   script:
     - cd tools/packaging/kernel
-    - ./build-kernel.sh setup
-    - ./build-kernel.sh build
+    - ./build-kernel.sh -v $KERNEL_VERSION setup
+    - ./build-kernel.sh -v $KERNEL_VERSION build
     - cp kata-linux-*/vmlinux ./vmlinux-arm64
   artifacts:
     paths:
