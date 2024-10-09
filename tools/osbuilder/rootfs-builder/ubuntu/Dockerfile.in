@@ -27,16 +27,17 @@ RUN [ -x /usr/bin/systemd-detect-virt ] || ( echo "echo docker" >/usr/bin/system
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive \
     apt-get --no-install-recommends -y install \
+    apt-transport-https \
     ca-certificates \
     curl \
     g++ \
     $(gcc_arch="@ARCH@" && [ "$(uname -m)" != "$gcc_arch" ] && ( \
-         libc_arch="$gcc_arch" && \
-         [ "$gcc_arch" = aarch64 ] && libc_arch=arm64; \
-         [ "$gcc_arch" = ppc64le ] && gcc_arch=powerpc64le && libc_arch=ppc64el; \
-         [ "$gcc_arch" = s390x ] && gcc_arch=s390x && libc_arch=s390x; \
-         [ "$gcc_arch" = x86_64 ] && gcc_arch=x86-64 && libc_arch=amd64; \
-         echo "gcc-$gcc_arch-linux-gnu libc6-dev-$libc_arch-cross")) \
+    libc_arch="$gcc_arch" && \
+    [ "$gcc_arch" = aarch64 ] && libc_arch=arm64; \
+    [ "$gcc_arch" = ppc64le ] && gcc_arch=powerpc64le && libc_arch=ppc64el; \
+    [ "$gcc_arch" = s390x ] && gcc_arch=s390x && libc_arch=s390x; \
+    [ "$gcc_arch" = x86_64 ] && gcc_arch=x86-64 && libc_arch=amd64; \
+    echo "gcc-$gcc_arch-linux-gnu libc6-dev-$libc_arch-cross")) \
     git \
     gnupg2 \
     libclang-dev \
@@ -52,19 +53,26 @@ RUN apt-get update && \
     python3-dev \
     libclang-dev \
     file \
+    wget \
     zstd && \
     apt-get clean && rm -rf /var/lib/apt/lists/&& \
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_TOOLCHAIN}
+
+RUN wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor | tee /usr/share/keyrings/trivy.gpg > /dev/null && \
+    echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" | tee -a /etc/apt/sources.list.d/trivy.list && \
+    apt-get update && apt-get install -y --no-install-recommends trivy && \
+    apt-get clean && rm -rf /var/lib/apt/lists/
+
 
 RUN ARCH=$(uname -m); \
     goarch=""; \
     kernelname=$(uname -s | tr '[:upper:]' '[:lower:]'); \
     case "${ARCH}" in \
-        "aarch64") goarch="arm64" ;; \
-        "ppc64le") goarch=${ARCH} ;; \
-        "x86_64") goarch="amd64" ;; \
-        "s390x") goarch=${ARCH} ;; \
-        *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
+    "aarch64") goarch="arm64" ;; \
+    "ppc64le") goarch=${ARCH} ;; \
+    "x86_64") goarch="amd64" ;; \
+    "s390x") goarch=${ARCH} ;; \
+    *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
     esac; \
     curl -fsSOL "https://go.dev/dl/go${GO_VERSION}.${kernelname}-${goarch}.tar.gz" && \
     tar -C "${GO_HOME}" -xzf "go${GO_VERSION}.${kernelname}-${goarch}.tar.gz" && \
@@ -74,15 +82,15 @@ RUN ARCH=$(uname -m); \
 RUN if [ ! -f "/usr/bin/$(uname -m)-linux-musl-gcc" ]; then ln -s /usr/bin/musl-gcc "/usr/bin/$(uname -m)-linux-musl-gcc"; fi
 
 RUN ARCH=$(uname -m); \
-	rust_arch=""; \
+    rust_arch=""; \
     libc=""; \
     case "${ARCH}" in \
-        "aarch64") rust_arch="${ARCH}"; libc="musl"; ;; \
-        "ppc64le") rust_arch="powerpc64le"; libc="gnu"; ;; \
-        "x86_64") rust_arch="${ARCH}"; libc="musl"; ;; \
-        "s390x") rust_arch="${ARCH}"; libc="gnu"; ;; \
-        *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
-	esac; \
+    "aarch64") rust_arch="${ARCH}"; libc="musl"; ;; \
+    "ppc64le") rust_arch="powerpc64le"; libc="gnu"; ;; \
+    "x86_64") rust_arch="${ARCH}"; libc="musl"; ;; \
+    "s390x") rust_arch="${ARCH}"; libc="gnu"; ;; \
+    *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
+    esac; \
     rustup target add "${rust_arch}-unknown-linux-${libc}"
 
 RUN pip install --no-cache-dir pyinstaller==6.9.0 || pip install --no-cache-dir pyinstaller==6.9.0 --break-system-packages
