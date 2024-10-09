@@ -99,19 +99,22 @@ add_annotations_to_yaml() {
 	esac
 }
 
-add_cbl_mariner_kernel_initrd_annotations() {
+add_cbl_mariner_specific_annotations() {
 	if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
-		info "Add kernel and initrd path and annotations for cbl-mariner"
+		info "Add kernel and image path and annotations for cbl-mariner"
 		local mariner_annotation_kernel="io.katacontainers.config.hypervisor.kernel"
 		local mariner_kernel_path="/usr/share/cloud-hypervisor/vmlinux.bin"
 
-		local mariner_annotation_initrd="io.katacontainers.config.hypervisor.initrd"
-		local mariner_initrd_path="/opt/kata/share/kata-containers/kata-containers-initrd-mariner.img"
+		local mariner_annotation_image="io.katacontainers.config.hypervisor.image"
+		local mariner_image_path="/opt/kata/share/kata-containers/kata-containers-mariner.img"
 
+		local mariner_annotation_kernel_params="io.katacontainers.config.hypervisor.kernel_params"
+		local mariner_kernel_params="SYSTEMD_CGROUP_ENABLE_LEGACY_FORCE=1 systemd.legacy_systemd_cgroup_controller=yes systemd.unified_cgroup_hierarchy=0"
 		for K8S_TEST_YAML in runtimeclass_workloads_work/*.yaml
 		do
 			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_kernel}" "${mariner_kernel_path}"
-			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_initrd}" "${mariner_initrd_path}"
+			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_image}" "${mariner_image_path}"
+			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_kernel_params}" "${mariner_kernel_params}"
 		done
 	fi
 }
@@ -139,7 +142,7 @@ add_runtime_handler_annotations() {
 main() {
 	ensure_yq
 	reset_workloads_work_dir
-	add_cbl_mariner_kernel_initrd_annotations
+	add_cbl_mariner_specific_annotations
 	add_runtime_handler_annotations
 }
 

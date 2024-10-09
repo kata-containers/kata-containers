@@ -53,7 +53,6 @@ jobs:
           - rootfs-image-mariner
           - rootfs-initrd
           - rootfs-initrd-confidential
-          - rootfs-initrd-mariner
           - runk
           - shim-v2
           - trace-forwarder
