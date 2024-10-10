@@ -89,7 +89,7 @@ pub enum GuestComponentsFeatures {
     Resource,
 }
 
-#[derive(Clone, Copy, Debug, Default, Display, Deserialize, EnumString, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Display, Deserialize, EnumString, PartialEq, Eq)]
 /// Attestation-related processes that we want to spawn as children of the agent
 #[strum(serialize_all = "kebab-case")]
 #[serde(rename_all = "kebab-case")]
@@ -630,6 +630,7 @@ mod tests {
 
     use super::*;
     use anyhow::anyhow;
+    use rstest::*;
     use serial_test::serial;
     use std::fs::File;
     use std::io::Write;
@@ -1327,562 +1328,193 @@ mod tests {
         assert_eq!(expected.tracing, config.tracing);
     }
 
-    #[test]
-    fn test_logrus_to_slog_level() {
-        #[derive(Debug)]
-        struct TestData<'a> {
-            logrus_level: &'a str,
-            result: Result<slog::Level>,
-        }
-
-        let tests = &[
-            TestData {
-                logrus_level: "",
-                result: Err(anyhow!(ERR_INVALID_LOG_LEVEL)),
-            },
-            TestData {
-                logrus_level: "foo",
-                result: Err(anyhow!(ERR_INVALID_LOG_LEVEL)),
-            },
-            TestData {
-                logrus_level: "debugging",
-                result: Err(anyhow!(ERR_INVALID_LOG_LEVEL)),
-            },
-            TestData {
-                logrus_level: "xdebug",
-                result: Err(anyhow!(ERR_INVALID_LOG_LEVEL)),
-            },
-            TestData {
-                logrus_level: "trace",
-                result: Ok(slog::Level::Trace),
-            },
-            TestData {
-                logrus_level: "debug",
-                result: Ok(slog::Level::Debug),
-            },
-            TestData {
-                logrus_level: "info",
-                result: Ok(slog::Level::Info),
-            },
-            TestData {
-                logrus_level: "warn",
-                result: Ok(slog::Level::Warning),
-            },
-            TestData {
-                logrus_level: "warning",
-                result: Ok(slog::Level::Warning),
-            },
-            TestData {
-                logrus_level: "error",
-                result: Ok(slog::Level::Error),
-            },
-            TestData {
-                logrus_level: "critical",
-                result: Ok(slog::Level::Critical),
-            },
-            TestData {
-                logrus_level: "fatal",
-                result: Ok(slog::Level::Critical),
-            },
-            TestData {
-                logrus_level: "panic",
-                result: Ok(slog::Level::Critical),
-            },
-        ];
-
-        for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
-
-            let result = logrus_to_slog_level(d.logrus_level);
-
-            let msg = format!("{}: result: {:?}", msg, result);
-
-            assert_result!(d.result, result, msg);
-        }
+    #[rstest]
+    #[case("", Err(anyhow!(ERR_INVALID_LOG_LEVEL)))]
+    #[case("foo", Err(anyhow!(ERR_INVALID_LOG_LEVEL)))]
+    #[case("debugging", Err(anyhow!(ERR_INVALID_LOG_LEVEL)))]
+    #[case("xdebug", Err(anyhow!(ERR_INVALID_LOG_LEVEL)))]
+    #[case("trace", Ok(slog::Level::Trace))]
+    #[case("debug", Ok(slog::Level::Debug))]
+    #[case("info", Ok(slog::Level::Info))]
+    #[case("warn", Ok(slog::Level::Warning))]
+    #[case("warning", Ok(slog::Level::Warning))]
+    #[case("error", Ok(slog::Level::Error))]
+    #[case("critical", Ok(slog::Level::Critical))]
+    #[case("fatal", Ok(slog::Level::Critical))]
+    #[case("panic", Ok(slog::Level::Critical))]
+    fn test_logrus_to_slog_level(#[case] input: &str, #[case] expected: Result<slog::Level>) {
+        let result = logrus_to_slog_level(input);
+        let msg = format!("expected: {:?}, result: {:?}", expected, result);
+        assert_result!(expected, result, msg);
     }
 
-    #[test]
-    fn test_get_log_level() {
-        #[derive(Debug)]
-        struct TestData<'a> {
-            param: &'a str,
-            result: Result<slog::Level>,
-        }
-
-        let tests = &[
-            TestData {
-                param: "",
-                result: Err(anyhow!(ERR_INVALID_LOG_LEVEL_PARAM)),
-            },
-            TestData {
-                param: "=",
-                result: Err(anyhow!(ERR_INVALID_LOG_LEVEL_KEY)),
-            },
-            TestData {
-                param: "x=",
-                result: Err(anyhow!(ERR_INVALID_LOG_LEVEL_KEY)),
-            },
-            TestData {
-                param: "=y",
-                result: Err(anyhow!(ERR_INVALID_LOG_LEVEL_KEY)),
-            },
-            TestData {
-                param: "==",
-                result: Err(anyhow!(ERR_INVALID_LOG_LEVEL_PARAM)),
-            },
-            TestData {
-                param: "= =",
-                result: Err(anyhow!(ERR_INVALID_LOG_LEVEL_PARAM)),
-            },
-            TestData {
-                param: "x=y",
-                result: Err(anyhow!(ERR_INVALID_LOG_LEVEL_KEY)),
-            },
-            TestData {
-                param: "agent=debug",
-                result: Err(anyhow!(ERR_INVALID_LOG_LEVEL_KEY)),
-            },
-            TestData {
-                param: "agent.logg=debug",
-                result: Err(anyhow!(ERR_INVALID_LOG_LEVEL_KEY)),
-            },
-            TestData {
-                param: "agent.log=trace",
-                result: Ok(slog::Level::Trace),
-            },
-            TestData {
-                param: "agent.log=debug",
-                result: Ok(slog::Level::Debug),
-            },
-            TestData {
-                param: "agent.log=info",
-                result: Ok(slog::Level::Info),
-            },
-            TestData {
-                param: "agent.log=warn",
-                result: Ok(slog::Level::Warning),
-            },
-            TestData {
-                param: "agent.log=warning",
-                result: Ok(slog::Level::Warning),
-            },
-            TestData {
-                param: "agent.log=error",
-                result: Ok(slog::Level::Error),
-            },
-            TestData {
-                param: "agent.log=critical",
-                result: Ok(slog::Level::Critical),
-            },
-            TestData {
-                param: "agent.log=fatal",
-                result: Ok(slog::Level::Critical),
-            },
-            TestData {
-                param: "agent.log=panic",
-                result: Ok(slog::Level::Critical),
-            },
-        ];
-
-        for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
-
-            let result = get_log_level(d.param);
-
-            let msg = format!("{}: result: {:?}", msg, result);
-
-            assert_result!(d.result, result, msg);
-        }
+    #[rstest]
+    #[case("",Err(anyhow!(ERR_INVALID_LOG_LEVEL_PARAM)))]
+    #[case("=",Err(anyhow!(ERR_INVALID_LOG_LEVEL_KEY)))]
+    #[case("x=",Err(anyhow!(ERR_INVALID_LOG_LEVEL_KEY)))]
+    #[case("=y",Err(anyhow!(ERR_INVALID_LOG_LEVEL_KEY)))]
+    #[case("==",Err(anyhow!(ERR_INVALID_LOG_LEVEL_PARAM)))]
+    #[case("= =",Err(anyhow!(ERR_INVALID_LOG_LEVEL_PARAM)))]
+    #[case("x=y",Err(anyhow!(ERR_INVALID_LOG_LEVEL_KEY)))]
+    #[case("agent=debug",Err(anyhow!(ERR_INVALID_LOG_LEVEL_KEY)))]
+    #[case("agent.logg=debug",Err(anyhow!(ERR_INVALID_LOG_LEVEL_KEY)))]
+    #[case("agent.log=trace", Ok(slog::Level::Trace))]
+    #[case("agent.log=debug", Ok(slog::Level::Debug))]
+    #[case("agent.log=info", Ok(slog::Level::Info))]
+    #[case("agent.log=warn", Ok(slog::Level::Warning))]
+    #[case("agent.log=warning", Ok(slog::Level::Warning))]
+    #[case("agent.log=error", Ok(slog::Level::Error))]
+    #[case("agent.log=critical", Ok(slog::Level::Critical))]
+    #[case("agent.log=fatal", Ok(slog::Level::Critical))]
+    #[case("agent.log=panic", Ok(slog::Level::Critical))]
+    fn test_get_log_level(#[case] input: &str, #[case] expected: Result<slog::Level>) {
+        let result = get_log_level(input);
+        let msg = format!("expected: {:?}, result: {:?}", expected, result);
+        assert_result!(expected, result, msg);
     }
 
-    #[test]
-    fn test_get_timeout() {
-        #[derive(Debug)]
-        struct TestData<'a> {
-            param: &'a str,
-            result: Result<time::Duration>,
-        }
-
-        let tests = &[
-            TestData {
-                param: "",
-                result: Err(anyhow!(ERR_INVALID_TIMEOUT)),
-            },
-            TestData {
-                param: "agent.hotplug_timeout",
-                result: Err(anyhow!(ERR_INVALID_TIMEOUT)),
-            },
-            TestData {
-                param: "foo=bar",
-                result: Err(anyhow!(ERR_INVALID_TIMEOUT_KEY)),
-            },
-            TestData {
-                param: "agent.hotplug_timeot=1",
-                result: Err(anyhow!(ERR_INVALID_TIMEOUT_KEY)),
-            },
-            TestData {
-                param: "agent.chd_api_timeout=1",
-                result: Err(anyhow!(ERR_INVALID_TIMEOUT_KEY)),
-            },
-            TestData {
-                param: "agent.hotplug_timeout=1",
-                result: Ok(time::Duration::from_secs(1)),
-            },
-            TestData {
-                param: "agent.hotplug_timeout=3",
-                result: Ok(time::Duration::from_secs(3)),
-            },
-            TestData {
-                param: "agent.hotplug_timeout=3600",
-                result: Ok(time::Duration::from_secs(3600)),
-            },
-            TestData {
-                param: "agent.cdh_api_timeout=600",
-                result: Ok(time::Duration::from_secs(600)),
-            },
-            TestData {
-                param: "agent.hotplug_timeout=0",
-                result: Ok(time::Duration::from_secs(0)),
-            },
-            TestData {
-                param: "agent.hotplug_timeout=-1",
-                result: Err(anyhow!(
-                    "unable to parse timeout
+    #[rstest]
+    #[case("", Err(anyhow!(ERR_INVALID_TIMEOUT)))]
+    #[case("agent.hotplug_timeout", Err(anyhow!(ERR_INVALID_TIMEOUT)))]
+    #[case("foo=bar", Err(anyhow!(ERR_INVALID_TIMEOUT_KEY)))]
+    #[case("agent.hotplug_timeot=1", Err(anyhow!(ERR_INVALID_TIMEOUT_KEY)))]
+    #[case("agent.hotplug_timeout=1", Ok(time::Duration::from_secs(1)))]
+    #[case("agent.hotplug_timeout=3", Ok(time::Duration::from_secs(3)))]
+    #[case("agent.hotplug_timeout=3600", Ok(time::Duration::from_secs(3600)))]
+    #[case("agent.hotplug_timeout=0", Ok(time::Duration::from_secs(0)))]
+    #[case("agent.hotplug_timeout=-1", Err(anyhow!(
+        "unable to parse timeout
 
 Caused by:
     invalid digit found in string"
-                )),
-            },
-            TestData {
-                param: "agent.hotplug_timeout=4jbsdja",
-                result: Err(anyhow!(
-                    "unable to parse timeout
+    )))]
+    #[case("agent.hotplug_timeout=4jbsdja", Err(anyhow!(
+        "unable to parse timeout
 
 Caused by:
     invalid digit found in string"
-                )),
-            },
-            TestData {
-                param: "agent.hotplug_timeout=foo",
-                result: Err(anyhow!(
-                    "unable to parse timeout
+    )))]
+    #[case("agent.hotplug_timeout=foo", Err(anyhow!(
+        "unable to parse timeout
 
 Caused by:
     invalid digit found in string"
-                )),
-            },
-            TestData {
-                param: "agent.hotplug_timeout=j",
-                result: Err(anyhow!(
-                    "unable to parse timeout
+    )))]
+    #[case("agent.hotplug_timeout=j", Err(anyhow!(
+        "unable to parse timeout
 
 Caused by:
     invalid digit found in string"
-                )),
-            },
-        ];
-
-        for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
-
-            let result = get_timeout(d.param);
-
-            let msg = format!("{}: result: {:?}", msg, result);
-
-            assert_result!(d.result, result, msg);
-        }
+    )))]
+    #[case("agent.chd_api_timeout=1", Err(anyhow!(ERR_INVALID_TIMEOUT_KEY)))]
+    #[case("agent.cdh_api_timeout=600", Ok(time::Duration::from_secs(600)))]
+    fn test_timeout(#[case] param: &str, #[case] expected: Result<time::Duration>) {
+        let result = get_timeout(param);
+        let msg = format!("expected: {:?}, result: {:?}", expected, result);
+        assert_result!(expected, result, msg);
     }
 
-    #[test]
-    fn test_get_container_pipe_size() {
-        #[derive(Debug)]
-        struct TestData<'a> {
-            param: &'a str,
-            result: Result<i32>,
-        }
-
-        let tests = &[
-            TestData {
-                param: "",
-                result: Err(anyhow!(ERR_INVALID_CONTAINER_PIPE_SIZE)),
-            },
-            TestData {
-                param: "agent.container_pipe_size",
-                result: Err(anyhow!(ERR_INVALID_CONTAINER_PIPE_SIZE)),
-            },
-            TestData {
-                param: "foo=bar",
-                result: Err(anyhow!(ERR_INVALID_CONTAINER_PIPE_SIZE_KEY)),
-            },
-            TestData {
-                param: "agent.container_pip_siz=1",
-                result: Err(anyhow!(ERR_INVALID_CONTAINER_PIPE_SIZE_KEY)),
-            },
-            TestData {
-                param: "agent.container_pipe_size=1",
-                result: Ok(1),
-            },
-            TestData {
-                param: "agent.container_pipe_size=3",
-                result: Ok(3),
-            },
-            TestData {
-                param: "agent.container_pipe_size=2097152",
-                result: Ok(2097152),
-            },
-            TestData {
-                param: "agent.container_pipe_size=0",
-                result: Ok(0),
-            },
-            TestData {
-                param: "agent.container_pipe_size=-1",
-                result: Err(anyhow!(ERR_INVALID_CONTAINER_PIPE_NEGATIVE)),
-            },
-            TestData {
-                param: "agent.container_pipe_size=foobar",
-                result: Err(anyhow!(
-                    "unable to parse container pipe size
+    #[rstest]
+    #[case("", Err(anyhow!(ERR_INVALID_CONTAINER_PIPE_SIZE)))]
+    #[case("agent.container_pipe_size", Err(anyhow!(ERR_INVALID_CONTAINER_PIPE_SIZE)))]
+    #[case("foo=bar", Err(anyhow!(ERR_INVALID_CONTAINER_PIPE_SIZE_KEY)))]
+    #[case("agent.container_pip_siz=1", Err(anyhow!(ERR_INVALID_CONTAINER_PIPE_SIZE_KEY)))]
+    #[case("agent.container_pipe_size=1", Ok(1))]
+    #[case("agent.container_pipe_size=3", Ok(3))]
+    #[case("agent.container_pipe_size=2097152", Ok(2097152))]
+    #[case("agent.container_pipe_size=0", Ok(0))]
+    #[case("agent.container_pipe_size=-1", Err(anyhow!(ERR_INVALID_CONTAINER_PIPE_NEGATIVE)))]
+    #[case("agent.container_pipe_size=foobar", Err(anyhow!(
+        "unable to parse container pipe size
 
 Caused by:
     invalid digit found in string"
-                )),
-            },
-            TestData {
-                param: "agent.container_pipe_size=j",
-                result: Err(anyhow!(
-                    "unable to parse container pipe size
+    )))]
+    #[case("agent.container_pipe_size=j", Err(anyhow!(
+        "unable to parse container pipe size
 
 Caused by:
     invalid digit found in string",
-                )),
-            },
-            TestData {
-                param: "agent.container_pipe_size=4jbsdja",
-                result: Err(anyhow!(
-                    "unable to parse container pipe size
+    )))]
+    #[case("agent.container_pipe_size=4jbsdja", Err(anyhow!(
+        "unable to parse container pipe size
 
 Caused by:
     invalid digit found in string"
-                )),
-            },
-            TestData {
-                param: "agent.container_pipe_size=4294967296",
-                result: Err(anyhow!(
-                    "unable to parse container pipe size
+    )))]
+    #[case("agent.container_pipe_size=4294967296", Err(anyhow!(
+        "unable to parse container pipe size
 
 Caused by:
     number too large to fit in target type"
-                )),
-            },
-        ];
-
-        for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
-
-            let result = get_container_pipe_size(d.param);
-
-            let msg = format!("{}: result: {:?}", msg, result);
-
-            assert_result!(d.result, result, msg);
-        }
+    )))]
+    fn test_get_container_pipe_size(#[case] param: &str, #[case] expected: Result<i32>) {
+        let result = get_container_pipe_size(param);
+        let msg = format!("expected: {:?}, result: {:?}", expected, result);
+        assert_result!(expected, result, msg);
     }
 
-    #[test]
-    fn test_get_string_value() {
-        #[derive(Debug)]
-        struct TestData<'a> {
-            param: &'a str,
-            result: Result<String>,
-        }
-
-        let tests = &[
-            TestData {
-                param: "",
-                result: Err(anyhow!(ERR_INVALID_GET_VALUE_PARAM)),
-            },
-            TestData {
-                param: "=",
-                result: Err(anyhow!(ERR_INVALID_GET_VALUE_NO_NAME)),
-            },
-            TestData {
-                param: "==",
-                result: Err(anyhow!(ERR_INVALID_GET_VALUE_NO_NAME)),
-            },
-            TestData {
-                param: "x=",
-                result: Err(anyhow!(ERR_INVALID_GET_VALUE_NO_VALUE)),
-            },
-            TestData {
-                param: "x==",
-                result: Ok("=".into()),
-            },
-            TestData {
-                param: "x===",
-                result: Ok("==".into()),
-            },
-            TestData {
-                param: "x==x",
-                result: Ok("=x".into()),
-            },
-            TestData {
-                param: "x=x",
-                result: Ok("x".into()),
-            },
-            TestData {
-                param: "x=x=",
-                result: Ok("x=".into()),
-            },
-            TestData {
-                param: "x=x=x",
-                result: Ok("x=x".into()),
-            },
-            TestData {
-                param: "foo=bar",
-                result: Ok("bar".into()),
-            },
-            TestData {
-                param: "x= =",
-                result: Ok(" =".into()),
-            },
-            TestData {
-                param: "x= =",
-                result: Ok(" =".into()),
-            },
-            TestData {
-                param: "x= = ",
-                result: Ok(" = ".into()),
-            },
-        ];
-
-        for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
-
-            let result = get_string_value(d.param);
-
-            let msg = format!("{}: result: {:?}", msg, result);
-
-            assert_result!(d.result, result, msg);
-        }
+    #[rstest]
+    #[case("", Err(anyhow!(ERR_INVALID_GET_VALUE_PARAM)))]
+    #[case("=", Err(anyhow!(ERR_INVALID_GET_VALUE_NO_NAME)))]
+    #[case("==", Err(anyhow!(ERR_INVALID_GET_VALUE_NO_NAME)))]
+    #[case("x=", Err(anyhow!(ERR_INVALID_GET_VALUE_NO_VALUE)))]
+    #[case("x==", Ok("=".into()))]
+    #[case("x===", Ok("==".into()))]
+    #[case("x==x", Ok("=x".into()))]
+    #[case("x=x", Ok("x".into()))]
+    #[case("x=x=", Ok("x=".into()))]
+    #[case("x=x=x", Ok("x=x".into()))]
+    #[case("foo=bar", Ok("bar".into()))]
+    #[case("x= =", Ok(" =".into()))]
+    #[case("x= =", Ok(" =".into()))]
+    #[case("x= = ", Ok(" = ".into()))]
+    fn test_get_string_value(#[case] param: &str, #[case] expected: Result<String>) {
+        let result = get_string_value(param);
+        let msg = format!("expected: {:?}, result: {:?}", expected, result);
+        assert_result!(expected, result, msg);
     }
 
-    #[test]
-    fn test_get_guest_components_features_value() {
-        #[derive(Debug)]
-        struct TestData<'a> {
-            param: &'a str,
-            result: Result<GuestComponentsFeatures>,
-        }
-
-        let tests = &[
-            TestData {
-                param: "",
-                result: Err(anyhow!(ERR_INVALID_GET_VALUE_PARAM)),
-            },
-            TestData {
-                param: "=",
-                result: Err(anyhow!(ERR_INVALID_GET_VALUE_NO_NAME)),
-            },
-            TestData {
-                param: "==",
-                result: Err(anyhow!(ERR_INVALID_GET_VALUE_NO_NAME)),
-            },
-            TestData {
-                param: "x=all",
-                result: Ok(GuestComponentsFeatures::All),
-            },
-            TestData {
-                param: "x=attestation",
-                result: Ok(GuestComponentsFeatures::Attestation),
-            },
-            TestData {
-                param: "x=resource",
-                result: Ok(GuestComponentsFeatures::Resource),
-            },
-            TestData {
-                param: "x===",
-                result: Err(anyhow!(ERR_INVALID_GUEST_COMPONENTS_REST_API_VALUE)),
-            },
-            TestData {
-                param: "x==x",
-                result: Err(anyhow!(ERR_INVALID_GUEST_COMPONENTS_REST_API_VALUE)),
-            },
-            TestData {
-                param: "x=x",
-                result: Err(anyhow!(ERR_INVALID_GUEST_COMPONENTS_REST_API_VALUE)),
-            },
-        ];
-
-        for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
-
-            let result = get_guest_components_features_value(d.param);
-
-            let msg = format!("{}: result: {:?}", msg, result);
-
-            assert_result!(d.result, result, msg);
-        }
+    #[rstest]
+    #[case("", Err(anyhow!(ERR_INVALID_GET_VALUE_PARAM)))]
+    #[case("=", Err(anyhow!(ERR_INVALID_GET_VALUE_NO_NAME)))]
+    #[case("==", Err(anyhow!(ERR_INVALID_GET_VALUE_NO_NAME)))]
+    #[case("x=all", Ok(GuestComponentsFeatures::All))]
+    #[case("x=attestation", Ok(GuestComponentsFeatures::Attestation))]
+    #[case("x=resource", Ok(GuestComponentsFeatures::Resource))]
+    #[case("x===", Err(anyhow!(ERR_INVALID_GUEST_COMPONENTS_REST_API_VALUE)))]
+    #[case("x==x", Err(anyhow!(ERR_INVALID_GUEST_COMPONENTS_REST_API_VALUE)))]
+    #[case("x=x", Err(anyhow!(ERR_INVALID_GUEST_COMPONENTS_REST_API_VALUE)))]
+    fn test_get_guest_components_features_value(
+        #[case] input: &str,
+        #[case] expected: Result<GuestComponentsFeatures>,
+    ) {
+        let result = get_guest_components_features_value(input);
+        let msg = format!("expected: {:?}, result: {:?}", expected, result);
+        assert_result!(expected, result, msg);
     }
 
-    #[test]
-    fn test_get_guest_components_procs_value() {
-        #[derive(Debug)]
-        struct TestData<'a> {
-            param: &'a str,
-            result: Result<GuestComponentsProcs>,
-        }
-
-        let tests = &[
-            TestData {
-                param: "",
-                result: Err(anyhow!(ERR_INVALID_GET_VALUE_PARAM)),
-            },
-            TestData {
-                param: "=",
-                result: Err(anyhow!(ERR_INVALID_GET_VALUE_NO_NAME)),
-            },
-            TestData {
-                param: "==",
-                result: Err(anyhow!(ERR_INVALID_GET_VALUE_NO_NAME)),
-            },
-            TestData {
-                param: "x=attestation-agent",
-                result: Ok(GuestComponentsProcs::AttestationAgent),
-            },
-            TestData {
-                param: "x=confidential-data-hub",
-                result: Ok(GuestComponentsProcs::ConfidentialDataHub),
-            },
-            TestData {
-                param: "x=none",
-                result: Ok(GuestComponentsProcs::None),
-            },
-            TestData {
-                param: "x=api-server-rest",
-                result: Ok(GuestComponentsProcs::ApiServerRest),
-            },
-            TestData {
-                param: "x===",
-                result: Err(anyhow!(ERR_INVALID_GUEST_COMPONENTS_PROCS_VALUE)),
-            },
-            TestData {
-                param: "x==x",
-                result: Err(anyhow!(ERR_INVALID_GUEST_COMPONENTS_PROCS_VALUE)),
-            },
-            TestData {
-                param: "x=x",
-                result: Err(anyhow!(ERR_INVALID_GUEST_COMPONENTS_PROCS_VALUE)),
-            },
-        ];
-
-        for (i, d) in tests.iter().enumerate() {
-            let msg = format!("test[{}]: {:?}", i, d);
-
-            let result = get_guest_components_procs_value(d.param);
-
-            let msg = format!("{}: result: {:?}", msg, result);
-
-            assert_result!(d.result, result, msg);
-        }
+    #[rstest]
+    #[case("", Err(anyhow!(ERR_INVALID_GET_VALUE_PARAM)))]
+    #[case("=", Err(anyhow!(ERR_INVALID_GET_VALUE_NO_NAME)))]
+    #[case("==", Err(anyhow!(ERR_INVALID_GET_VALUE_NO_NAME)))]
+    #[case("x=attestation-agent", Ok(GuestComponentsProcs::AttestationAgent))]
+    #[case(
+        "x=confidential-data-hub",
+        Ok(GuestComponentsProcs::ConfidentialDataHub)
+    )]
+    #[case("x=none", Ok(GuestComponentsProcs::None))]
+    #[case("x=api-server-rest", Ok(GuestComponentsProcs::ApiServerRest))]
+    #[case("x===", Err(anyhow!(ERR_INVALID_GUEST_COMPONENTS_PROCS_VALUE)))]
+    #[case("x==x", Err(anyhow!(ERR_INVALID_GUEST_COMPONENTS_PROCS_VALUE)))]
+    #[case("x=x", Err(anyhow!(ERR_INVALID_GUEST_COMPONENTS_PROCS_VALUE)))]
+    fn test_get_guest_components_procs_value(
+        #[case] param: &str,
+        #[case] expected: Result<GuestComponentsProcs>,
+    ) {
+        let result = get_guest_components_procs_value(param);
+        let msg = format!("expected: {:?}, result: {:?}", expected, result);
+        assert_result!(expected, result, msg);
     }
 
     #[test]
