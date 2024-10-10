@@ -40,8 +40,6 @@ setup() {
         # Verify we saw the update
         result=$(kubectl get pod "$pod_name" --output="jsonpath={.status.containerStatuses[]}")
         echo $result | grep -vq Error
-
-        kubectl delete configmap cm
 }
 
 teardown() {
@@ -49,7 +47,10 @@ teardown() {
 	[ "${KATA_HYPERVISOR}" == "fc" ] && skip "test not working see: ${fc_limitations}"
 	issue_url="https://github.com/kata-containers/kata-containers/issues/8906"
 	[ "${KATA_HYPERVISOR}" == "qemu-se" ] && skip "test not working for IBM Z LPAR (see ${issue_url})"
+
 	# Debugging information
 	kubectl describe "pod/$pod_name"
+
 	kubectl delete pod "$pod_name"
+	kubectl delete configmap cm
 }
