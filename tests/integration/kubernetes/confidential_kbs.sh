@@ -266,9 +266,8 @@ function kbs_k8s_deploy() {
 
 	# Image tag for TDX
 	if [ "${KATA_HYPERVISOR}" = "qemu-tdx" ]; then
-		# The ITA / ITTS images are named as:
-		# ita-as-${image_tag}
-		image_tag=$(echo ${image_tag} | sed 's/built-in/ita/g')
+		image=$(get_from_kata_deps ".externals.coco-trustee.ita_image")
+		image_tag=$(get_from_kata_deps ".externals.coco-trustee.ita_image_tag")
 	fi
 
 	# The ingress handler for AKS relies on the cluster's name which in turn
