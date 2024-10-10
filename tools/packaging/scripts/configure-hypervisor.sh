@@ -222,9 +222,6 @@ generate_qemu_options() {
 
 	# Disabled options
 
-	# Disable block migration in the main migration stream
-	qemu_options+=(size:--disable-live-block-migration)
-
 	# braille support not required
 	qemu_options+=(size:--disable-brlapi)
 
@@ -397,6 +394,14 @@ generate_qemu_options() {
 	qemu_options+=(size:--disable-vhdx)
 	qemu_options+=(size:--disable-hv-balloon)
 
+	# Disable new available features from 8.2.4
+	# Disable Query Processing Library support
+	qemu_options+=(size:--disable-qpl)
+	# Disable UADK Library support
+	qemu_options+=(size:--disable-uadk)
+	# Disable syscall buffer debugging support
+	qemu_options+=(size:--disable-debug-remap)
+
 	#---------------------------------------------------------------------
 	# Enabled options
 
@@ -427,7 +432,6 @@ generate_qemu_options() {
 	# for that architecture
 	if [ "$arch" == x86_64 ]; then
 		qemu_options+=(speed:--enable-avx2)
-		qemu_options+=(speed:--enable-avx512f)
 		# According to QEMU's nvdimm documentation: When 'pmem' is 'on' and QEMU is
 		# built with libpmem support, QEMU will take necessary operations to guarantee
 		# the persistence of its own writes to the vNVDIMM backend.
