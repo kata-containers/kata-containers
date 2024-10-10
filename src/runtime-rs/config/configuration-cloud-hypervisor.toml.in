@@ -222,7 +222,7 @@ container_pipe_size=@PIPESIZE@
 # Enable debug console.
 
 # If enabled, user can connect guest OS running inside hypervisor
-# through "kata-runtime exec <sandbox-id>" command
+# through "kata-ctl exec <sandbox-id>" command
 
 #debug_console_enabled = true
 
