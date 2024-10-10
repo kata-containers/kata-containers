@@ -184,9 +184,6 @@ assets:
         confidential:
           name: *glibc-initrd-name
           version: *glibc-initrd-version
-        mariner:
-          name: "cbl-mariner"
-          version: "2.0"
         nvidia-gpu:
           name: *glibc-initrd-name
           version: "jammy"
