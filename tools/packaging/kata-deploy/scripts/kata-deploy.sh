@@ -366,6 +366,8 @@ function install_artifacts() {
 	# Allow Mariner to use custom configuration.
 	if [ "${HOST_OS:-}" == "cbl-mariner" ]; then
 		config_path="${host_install_dir}/share/defaults/kata-containers/configuration-clh.toml"
+		sed -i -E "s|(static_sandbox_resource_mgmt)=false|\1=true|" "${config_path}"
+
 		clh_path="${dest_dir}/bin/cloud-hypervisor-glibc"
 		sed -i -E "s|(valid_hypervisor_paths) = .+|\1 = [\"${clh_path}\"]|" "${config_path}"
 		sed -i -E "s|(path) = \".+/cloud-hypervisor\"|\1 = \"${clh_path}\"|" "${config_path}"
