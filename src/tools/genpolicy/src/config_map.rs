@@ -28,8 +28,10 @@ pub struct ConfigMap {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<BTreeMap<String, String>>,
 
+    // When parsing a YAML file, binaryData is encoded as base64.
+    // Therefore, this is a BTreeMap<String, String> instead of BTreeMap<String, Vec<u8>>.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub binaryData: Option<BTreeMap<String, Vec<u8>>>,
+    pub binaryData: Option<BTreeMap<String, String>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     immutable: Option<bool>,
