@@ -263,35 +263,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_unseal_env() {
+    async fn test_sealed_secret() {
         skip_if_not_root!();
-        let test_dir = tempdir().expect("failed to create tmpdir");
-        let cdh_sock_uri = test_dir.path().join("cdh.sock");
-        let cdh_sock_uri = &format!("unix://{}", cdh_sock_uri.to_str().unwrap());
-
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let _guard = rt.enter();
-        start_ttrpc_server(cdh_sock_uri.to_string());
-        std::thread::sleep(std::time::Duration::from_secs(2));
-
-        let sealed_env = String::from("key=sealed.testdata");
-        if !is_cdh_client_initialized().await {
-            init_cdh_client(cdh_sock_uri).await.unwrap();
-        }
-        let unsealed_env = unseal_env(&sealed_env).await.unwrap();
-        assert_eq!(unsealed_env, String::from("key=unsealed"));
-        let normal_env = String::from("key=testdata");
-        let unchanged_env = unseal_env(&normal_env).await.unwrap();
-        assert_eq!(unchanged_env, String::from("key=testdata"));
-
-        rt.shutdown_background();
-        std::thread::sleep(std::time::Duration::from_secs(2));
-    }
-
-    #[tokio::test]
-    async fn test_unseal_file() {
-        skip_if_not_root!();
-
         let test_dir = tempdir().expect("failed to create tmpdir");
         let test_dir_path = test_dir.path();
         let cdh_sock_uri = &format!(
@@ -303,7 +276,17 @@ mod tests {
         let _guard = rt.enter();
         start_ttrpc_server(cdh_sock_uri.to_string());
         std::thread::sleep(std::time::Duration::from_secs(2));
+        init_cdh_client(cdh_sock_uri).await.unwrap();
 
+        // Test sealed secret as env vars
+        let sealed_env = String::from("key=sealed.testdata");
+        let unsealed_env = unseal_env(&sealed_env).await.unwrap();
+        assert_eq!(unsealed_env, String::from("key=unsealed"));
+        let normal_env = String::from("key=testdata");
+        let unchanged_env = unseal_env(&normal_env).await.unwrap();
+        assert_eq!(unchanged_env, String::from("key=testdata"));
+
+        // Test sealed secret as files
         let sealed_dir = test_dir_path.join("..test");
         fs::create_dir(&sealed_dir).unwrap();
         let sealed_filename = sealed_dir.join("secret");
@@ -311,9 +294,7 @@ mod tests {
         sealed_file.write_all(b"sealed.testdata").unwrap();
         let secret_symlink = test_dir_path.join("secret");
         symlink(&sealed_filename, &secret_symlink).unwrap();
-        if !is_cdh_client_initialized().await {
-            init_cdh_client(cdh_sock_uri).await.unwrap();
-        }
+
         unseal_file(test_dir_path.to_str().unwrap()).await.unwrap();
 
         let unsealed_filename = test_dir_path.join("secret");
