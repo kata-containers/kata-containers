@@ -29,16 +29,16 @@ __SNP-specific steps:__
 - Build the SNP-specific kernel as shown below (see this [guide](../../tools/packaging/kernel/README.md#build-kata-containers-kernel) for more information)
 ```bash
 $ pushd kata-containers/tools/packaging/
-$ ./kernel/build-kernel.sh -a x86_64 -x snp setup
-$ ./kernel/build-kernel.sh -a x86_64 -x snp build
-$ sudo -E PATH="${PATH}" ./kernel/build-kernel.sh -x snp install
+$ ./kernel/build-kernel.sh -a x86_64 -x setup
+$ ./kernel/build-kernel.sh -a x86_64 -x build
+$ sudo -E PATH="${PATH}" ./kernel/build-kernel.sh -x install
 $ popd
 ```
 - Build a current OVMF capable of SEV-SNP:
 ```bash
 $ pushd kata-containers/tools/packaging/static-build/ovmf
-$ ./build.sh
-$ tar -xvf edk2-x86_64.tar.gz
+$ ovmf_build=sev ./build.sh
+$ tar -xvf edk2-sev.tar.gz
 $ popd
 ```
 - Build a custom QEMU
@@ -106,7 +106,7 @@ sev_snp_guest = true
 ```
   - Configure an OVMF (add path)
 ```toml
-firmware = "/path/to/kata-containers/tools/packaging/static-build/ovmf/opt/kata/share/ovmf/OVMF.fd"
+firmware = "/path/to/kata-containers/tools/packaging/static-build/ovmf/opt/kata/share/ovmf/AMDSEV.fd"
 ```
   - SNP attestation (add cert-chain to default path or add the path with cert-chain)
 ```toml
