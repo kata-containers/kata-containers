@@ -50,6 +50,18 @@ build-kernel-arm64:
       - tools/packaging/kernel/vmlinux-arm64
     expire_in: 1 week
 
+build-img-amd64:
+  image: registry.ddbuild.io/$CI_PROJECT_NAME/ci:$CI_IMAGE
+  stage: build
+  tags: [ "arch:arm64" ]
+  script:
+    - cd tools/osbuilder
+    - USE_DOCKER=false make -j$(nproc) build-ubuntu
+  artifacts:
+    paths:
+      - tools/osbuilder/kata-*
+    expire_in: 1 week
+
 publish-artifacts:
   image: registry.ddbuild.io/$CI_PROJECT_NAME/ci:$CI_IMAGE
   stage: publish
