@@ -8,6 +8,7 @@ use crate::{kernel_param::KernelParams, Address, HypervisorConfig};
 
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
+use kata_types::config::hypervisor::VIRTIO_SCSI;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fs::{read_to_string, File};
@@ -1513,6 +1514,66 @@ impl ToQemuParams for QmpSocket {
     }
 }
 
+#[derive(Debug)]
+struct DeviceVirtioScsi {
+    bus_type: VirtioBusType,
+    id: String,
+    disable_modern: bool,
+    iothread: String,
+}
+
+impl DeviceVirtioScsi {
+    fn new(id: &str, disable_modern: bool, bus_type: VirtioBusType) -> Self {
+        DeviceVirtioScsi {
+            bus_type,
+            id: id.to_owned(),
+            disable_modern,
+            iothread: "".to_owned(),
+        }
+    }
+
+    fn set_iothread(&mut self, iothread: &str) {
+        self.iothread = iothread.to_owned();
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for DeviceVirtioScsi {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push(format!("virtio-scsi-{}", self.bus_type));
+        params.push(format!("id={}", self.id));
+        if self.disable_modern {
+            params.push("disable-modern=true".to_owned());
+        }
+        if !self.iothread.is_empty() {
+            params.push(format!("iothread={}", self.iothread));
+        }
+        Ok(vec!["-device".to_owned(), params.join(",")])
+    }
+}
+
+#[derive(Debug)]
+struct ObjectIoThread {
+    id: String,
+}
+
+impl ObjectIoThread {
+    fn new(id: &str) -> Self {
+        ObjectIoThread { id: id.to_owned() }
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for ObjectIoThread {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        let mut params = Vec::new();
+        params.push("iothread".to_owned());
+        params.push(format!("id={}", self.id));
+        Ok(vec!["-object".to_owned(), params.join(",")])
+    }
+}
+
 fn is_running_in_vm() -> Result<bool> {
     let res = read_to_string("/proc/cpuinfo")?
         .lines()
@@ -1596,6 +1657,10 @@ impl<'a> QemuCmdLine<'a> {
             qemu_cmd_line.add_bridges(config.device_info.default_bridges);
         }
 
+        if config.blockdev_info.block_device_driver == VIRTIO_SCSI {
+            qemu_cmd_line.add_scsi_controller();
+        }
+
         Ok(qemu_cmd_line)
     }
 
@@ -1635,6 +1700,18 @@ impl<'a> QemuCmdLine<'a> {
             let bridge = DevicePciBridge::new(self.config, idx);
             self.devices.push(Box::new(bridge));
         }
+    }
+
+    fn add_scsi_controller(&mut self) {
+        let mut virtio_scsi =
+            DeviceVirtioScsi::new("scsi0", should_disable_modern(), bus_type(self.config));
+        if self.config.enable_iothreads {
+            let iothread_id = "scsi-io-thread";
+            let iothread = ObjectIoThread::new(iothread_id);
+            virtio_scsi.set_iothread(iothread_id);
+            self.devices.push(Box::new(iothread));
+        }
+        self.devices.push(Box::new(virtio_scsi));
     }
 
     pub fn add_virtiofs_share(
