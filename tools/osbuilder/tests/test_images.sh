@@ -209,7 +209,7 @@ exit_handler()
 	sudo -E kata-collect-data.sh >&2
 
 	info "processes:"
-	sudo -E ps -efwww | egrep "docker|kata" >&2
+	sudo -E ps -efwww | grep -E "docker|kata" >&2
 
 	# Restore the default image in config file
 	run_mgr configure-image
