@@ -1679,13 +1679,19 @@ fn update_container_namespaces(
     if let Some(namespaces) = linux.namespaces_mut() {
         for namespace in namespaces.iter_mut() {
             if namespace.typ().to_string() == NSTYPEIPC {
-                namespace.set_path(Some(PathBuf::from(&sandbox.shared_ipcns.path.clone())));
-                namespace.set_path(None);
+                namespace.set_path(if !sandbox.shared_ipcns.path.is_empty() {
+                    Some(PathBuf::from(&sandbox.shared_ipcns.path))
+                } else {
+                    None
+                });
                 continue;
             }
             if namespace.typ().to_string() == NSTYPEUTS {
-                namespace.set_path(Some(PathBuf::from(&sandbox.shared_utsns.path.clone())));
-                namespace.set_path(None);
+                namespace.set_path(if !sandbox.shared_utsns.path.is_empty() {
+                    Some(PathBuf::from(&sandbox.shared_utsns.path))
+                } else {
+                    None
+                });
                 continue;
             }
         }
