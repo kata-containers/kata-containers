@@ -39,11 +39,11 @@ func SetLogger(logger *logrus.Entry) {
 // PmemDeviceInfo returns a DeviceInfo if a loop device
 // is mounted on source, and the backing file of the loop device
 // has the PFN signature.
-func PmemDeviceInfo(source, destination string) (*DeviceInfo, error) {
+func PmemDeviceInfo(source, destination string) (*DeviceInfo, string, error) {
 	stat := syscall.Stat_t{}
 	err := syscall.Stat(source, &stat)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	// device object is still incomplete,
@@ -65,14 +65,14 @@ func PmemDeviceInfo(source, destination string) (*DeviceInfo, error) {
 
 	device.HostPath, err = getBackingFile(*device)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	pmemLog.WithField("backing-file", device.HostPath).
 		Debug("backing file found: looking for PFN signature")
 
 	if !hasPFNSignature(device.HostPath) {
-		return nil, fmt.Errorf("backing file %v has not PFN signature", device.HostPath)
+		return nil, "", fmt.Errorf("backing file %v has not PFN signature", device.HostPath)
 	}
 
 	_, fstype, _, err := utils.GetDevicePathAndFsTypeOptions(source)
@@ -81,10 +81,9 @@ func PmemDeviceInfo(source, destination string) (*DeviceInfo, error) {
 		fstype = "ext4"
 	}
 
-	pmemLog.WithField(FsTypeOpt, fstype).Debug("filesystem for mount point")
-	device.DriverOptions[FsTypeOpt] = fstype
+	pmemLog.WithField("fstype", fstype).Debug("filesystem for mount point")
 
-	return device, nil
+	return device, fstype, nil
 }
 
 // returns true if the file/device path has the PFN signature
