@@ -563,7 +563,7 @@ install_kernel_nvidia_gpu() {
 	install_kernel_helper \
 		"assets.kernel.version" \
 		"kernel-nvidia-gpu" \
-		"-g nvidia -u ${kernel_url} -H deb"
+		"-g nvidia -D nvidia -u ${kernel_url} -H deb"
 }
 
 #Install GPU and TEE enabled kernel asset
@@ -573,7 +573,7 @@ install_kernel_nvidia_gpu_confidential() {
 	install_kernel_helper \
 		"assets.kernel.confidential.version" \
 		"kernel-nvidia-gpu-confidential" \
-		"-x -g nvidia -u ${kernel_url} -H deb"
+		"-x -g nvidia -D nvidia -u ${kernel_url} -H deb"
 }
 
 install_qemu_helper() {
