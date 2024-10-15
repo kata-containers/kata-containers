@@ -212,10 +212,8 @@ function deploy_k0s() {
 
 	# Download the kubectl binary into /usr/bin so we can avoid depending
 	# on `k0s kubectl` command
-	ARCH=$(uname -m)
-	if [ "${ARCH}" = "x86_64" ]; then
-		ARCH=amd64
-	fi
+	ARCH=$(arch_to_golang)
+
 	kubectl_version=$(sudo k0s kubectl version 2>/dev/null | grep "Client Version" | sed -e 's/Client Version: //')
 	sudo curl -fL --progress-bar -o /usr/bin/kubectl https://dl.k8s.io/release/${kubectl_version}/bin/linux/${ARCH}/kubectl
 	sudo chmod +x /usr/bin/kubectl
@@ -240,10 +238,8 @@ function deploy_k3s() {
 	# Which happens basically because k3s links `/usr/local/bin/kubectl`
 	# to `/usr/local/bin/k3s`, and that does extra stuff that vanilla
 	# `kubectl` doesn't do.
-	ARCH=$(uname -m)
-	if [ "${ARCH}" = "x86_64" ]; then
-		ARCH=amd64
-	fi
+	ARCH=$(arch_to_golang)
+
 	kubectl_version=$(/usr/local/bin/k3s kubectl version --client=true 2>/dev/null | grep "Client Version" | sed -e 's/Client Version: //' -e 's/+k3s[0-9]\+//')
 	sudo curl -fL --progress-bar -o /usr/bin/kubectl https://dl.k8s.io/release/${kubectl_version}/bin/linux/${ARCH}/kubectl
 	sudo chmod +x /usr/bin/kubectl
