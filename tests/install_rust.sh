@@ -35,8 +35,10 @@ export PATH="${PATH}:${HOME}/.cargo/bin"
 rustup toolchain install "${version}"
 rustup default "${version}"
 if [[ "${rustarch}" == "x86_64" || "${rustarch}" == "aarch64" ]] ; then
-	rustup target add "${rustarch}-unknown-linux-musl"
-	$([[ "$(whoami)" != "root" ]] && echo sudo) ln -sf /usr/bin/g++ /bin/musl-g++
+	if [[ "$(uname -s)" != "Darwin" ]]; then
+		rustup target add "${rustarch}-unknown-linux-musl"
+		$([[ "$(whoami)" != "root" ]] && echo sudo) ln -sf /usr/bin/g++ /bin/musl-g++
+	fi
 else
 	rustup target add "${rustarch}-unknown-linux-gnu"
 fi
