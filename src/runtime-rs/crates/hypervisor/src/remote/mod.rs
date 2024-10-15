@@ -51,6 +51,7 @@ impl Hypervisor for Remote {
         annotations: &HashMap<String, String>,
     ) -> Result<()> {
         let mut inner = self.inner.write().await;
+        inner.set_annotations(annotations);
         inner.prepare_vm(id, netns).await
     }
 

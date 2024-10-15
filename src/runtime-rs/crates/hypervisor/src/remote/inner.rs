@@ -18,7 +18,6 @@ use kata_types::{
     },
     capabilities::{Capabilities, CapabilityBits},
 };
-use oci_spec::runtime as oci;
 use persist::sandbox_persist::Persist;
 use std::path::Path;
 use std::{collections::HashMap, time};
@@ -83,7 +82,7 @@ impl RemoteInner {
         }
 
         let client = self.new_ttrpc_client()?;
-        
+
         let ctx = context::Context::default();
         let req = CreateVMRequest {
             id: id.to_string(),
@@ -295,11 +294,9 @@ impl RemoteInner {
         ))
     }
 
-    pub(crate) fn set_oci_spec(&mut self, spec: &oci::Spec) {
+    pub(crate) fn set_annotations(&mut self, oci_annotations: &HashMap<String, String>) {
         let mut annotations: HashMap<String, String> = HashMap::new();
         let config = &self.config;
-        info!(sl!(), "set_oci_spec: {:?}", spec);
-        let oci_annotations = spec.annotations().clone().unwrap_or_default();
         annotations.insert(
             SANDBOX_NAME_LABEL_KEY.to_string(),
             oci_annotations
