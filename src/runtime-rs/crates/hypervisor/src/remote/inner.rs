@@ -10,7 +10,14 @@ use crate::{
 use crate::{MemoryConfig, VcpuThreadIds};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use kata_types::capabilities::{Capabilities, CapabilityBits};
+use kata_types::annotations::cri_containerd::SANDBOX_NAME_LABEL_KEY;
+use kata_types::{
+    annotations::{
+        cri_containerd::SANDBOX_NAMESPACE_LABEL_KEY, KATA_ANNO_HYPERVISOR_DEFAULT_MEMORY,
+        KATA_ANNO_HYPERVISOR_DEFAULT_VCPUS, KATA_ANNO_HYPERVISOR_MACHINE_TYPE,
+    },
+    capabilities::{Capabilities, CapabilityBits},
+};
 use persist::sandbox_persist::Persist;
 use std::path::Path;
 use std::{collections::HashMap, time};
@@ -285,6 +292,38 @@ impl RemoteInner {
                 ..Default::default()
             },
         ))
+    }
+
+    pub(crate) fn set_annotations(&mut self, oci_annotations: &HashMap<String, String>) {
+        let mut annotations: HashMap<String, String> = HashMap::new();
+        let config = &self.config;
+        annotations.insert(
+            SANDBOX_NAME_LABEL_KEY.to_string(),
+            oci_annotations
+                .get(SANDBOX_NAME_LABEL_KEY)
+                .cloned()
+                .unwrap_or_default(),
+        );
+        annotations.insert(
+            SANDBOX_NAMESPACE_LABEL_KEY.to_string(),
+            oci_annotations
+                .get(SANDBOX_NAMESPACE_LABEL_KEY)
+                .cloned()
+                .unwrap_or_default(),
+        );
+        annotations.insert(
+            KATA_ANNO_HYPERVISOR_MACHINE_TYPE.to_string(),
+            config.machine_info.machine_type.to_string(),
+        );
+        annotations.insert(
+            KATA_ANNO_HYPERVISOR_DEFAULT_VCPUS.to_string(),
+            "0".to_string(),
+        );
+        annotations.insert(
+            KATA_ANNO_HYPERVISOR_DEFAULT_MEMORY.to_string(),
+            "0".to_string(),
+        );
+        self.annotations = annotations;
     }
 }
 
