@@ -9,7 +9,14 @@ use crate::{
 use crate::{MemoryConfig, VcpuThreadIds};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use kata_types::capabilities::{Capabilities, CapabilityBits};
+use kata_types::{
+    annotations::{
+        cri_containerd::{SANDBOX_NAMESPACE_LABEL_KEY, SANDBOX_NAME_LABEL_KEY},
+        KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY, KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS,
+        KATA_ANNO_CFG_HYPERVISOR_IMAGE_PATH, KATA_ANNO_CFG_HYPERVISOR_MACHINE_TYPE,
+    },
+    capabilities::{Capabilities, CapabilityBits},
+};
 use persist::sandbox_persist::Persist;
 use protocols::{
     remote::{CreateVMRequest, StartVMRequest, StopVMRequest},
@@ -30,8 +37,6 @@ pub struct RemoteInner {
     pub(crate) config: HypervisorConfig,
     /// agent socket path
     pub(crate) agent_socket_path: String,
-    /// sandbox annotations
-    pub(crate) annotations: HashMap<String, String>,
     /// netns path
     pub(crate) netns: Option<String>,
     /// hypervisor unix client
@@ -47,7 +52,6 @@ impl std::fmt::Debug for RemoteInner {
             .field("id", &self.id)
             .field("config", &self.config)
             .field("agent_socket_path", &self.agent_socket_path)
-            .field("annotations", &self.annotations)
             .field("netns", &self.netns)
             .finish()
     }
@@ -61,7 +65,6 @@ impl RemoteInner {
             id: "".to_string(),
             config: HypervisorConfig::default(),
             agent_socket_path: "".to_string(),
-            annotations: HashMap::new(),
             netns: None,
             client: None,
 
@@ -85,7 +88,51 @@ impl RemoteInner {
         }
     }
 
-    pub(crate) async fn prepare_vm(&mut self, id: &str, netns: Option<String>) -> Result<()> {
+    fn prepare_annotations(
+        &self,
+        oci_annotations: &HashMap<String, String>,
+    ) -> HashMap<String, String> {
+        let mut annotations: HashMap<String, String> = HashMap::new();
+        let config = &self.config;
+        annotations.insert(
+            SANDBOX_NAME_LABEL_KEY.to_string(),
+            oci_annotations
+                .get(SANDBOX_NAME_LABEL_KEY)
+                .cloned()
+                .unwrap_or_default(),
+        );
+        annotations.insert(
+            SANDBOX_NAMESPACE_LABEL_KEY.to_string(),
+            oci_annotations
+                .get(SANDBOX_NAMESPACE_LABEL_KEY)
+                .cloned()
+                .unwrap_or_default(),
+        );
+        annotations.insert(
+            KATA_ANNO_CFG_HYPERVISOR_MACHINE_TYPE.to_string(),
+            config.machine_info.machine_type.to_string(),
+        );
+        annotations.insert(
+            KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS.to_string(),
+            config.cpu_info.default_vcpus.to_string(),
+        );
+        annotations.insert(
+            KATA_ANNO_CFG_HYPERVISOR_DEFAULT_MEMORY.to_string(),
+            config.memory_info.default_memory.to_string(),
+        );
+        annotations.insert(
+            KATA_ANNO_CFG_HYPERVISOR_IMAGE_PATH.to_string(),
+            config.boot_info.image.to_string(),
+        );
+        annotations
+    }
+
+    pub(crate) async fn prepare_vm(
+        &mut self,
+        id: &str,
+        netns: Option<String>,
+        annotations: &HashMap<String, String>,
+    ) -> Result<()> {
         info!(sl!(), "Preparing REMOTE VM");
         self.id = id.to_string();
 
@@ -99,7 +146,7 @@ impl RemoteInner {
         let ctx = context::Context::default();
         let req = CreateVMRequest {
             id: id.to_string(),
-            annotations: self.annotations.clone(),
+            annotations: self.prepare_annotations(annotations),
             networkNamespacePath: netns.clone().unwrap_or_default(),
             ..Default::default()
         };
@@ -181,12 +228,12 @@ impl RemoteInner {
 
     pub(crate) async fn remove_device(&self, _device: DeviceType) -> Result<()> {
         warn!(sl!(), "RemoteInner::remove_device(): NOT YET IMPLEMENTED");
-        todo!()
+        Ok(())
     }
 
     pub(crate) async fn update_device(&self, _device: DeviceType) -> Result<()> {
         warn!(sl!(), "RemoteInner::update_device(): NOT YET IMPLEMENTED");
-        todo!()
+        Ok(())
     }
 
     pub(crate) async fn get_agent_socket(&self) -> Result<String> {
@@ -331,7 +378,6 @@ impl Persist for RemoteInner {
             id: hypervisor_state.id,
             config: hypervisor_state.config,
             agent_socket_path: "".to_string(),
-            annotations: HashMap::new(),
             netns: hypervisor_state.netns,
             client: None,
             exit_notify: Some(exit_notify),

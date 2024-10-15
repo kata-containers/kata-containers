@@ -11,6 +11,7 @@ use async_trait::async_trait;
 use kata_types::capabilities::{Capabilities, CapabilityBits};
 use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use persist::sandbox_persist::Persist;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex, RwLock};
 
@@ -59,7 +60,12 @@ impl Default for CloudHypervisor {
 
 #[async_trait]
 impl Hypervisor for CloudHypervisor {
-    async fn prepare_vm(&self, id: &str, netns: Option<String>) -> Result<()> {
+    async fn prepare_vm(
+        &self,
+        id: &str,
+        netns: Option<String>,
+        _annotations: &HashMap<String, String>,
+    ) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.prepare_vm(id, netns).await
     }

@@ -12,6 +12,7 @@ use inner::DragonballInner;
 use persist::sandbox_persist::Persist;
 pub mod vmm_instance;
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -69,7 +70,12 @@ impl Dragonball {
 #[async_trait]
 impl Hypervisor for Dragonball {
     #[instrument]
-    async fn prepare_vm(&self, id: &str, netns: Option<String>) -> Result<()> {
+    async fn prepare_vm(
+        &self,
+        id: &str,
+        netns: Option<String>,
+        _annotations: &HashMap<String, String>,
+    ) -> Result<()> {
         let mut inner = self.inner.write().await;
         inner.prepare_vm(id, netns).await
     }

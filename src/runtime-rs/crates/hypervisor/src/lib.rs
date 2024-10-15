@@ -97,7 +97,12 @@ pub struct MemoryConfig {
 #[async_trait]
 pub trait Hypervisor: std::fmt::Debug + Send + Sync {
     // vm manager
-    async fn prepare_vm(&self, id: &str, netns: Option<String>) -> Result<()>;
+    async fn prepare_vm(
+        &self,
+        id: &str,
+        netns: Option<String>,
+        annotations: &HashMap<String, String>,
+    ) -> Result<()>;
     async fn start_vm(&self, timeout: i32) -> Result<()>;
     async fn stop_vm(&self) -> Result<()>;
     async fn wait_vm(&self) -> Result<i32>;

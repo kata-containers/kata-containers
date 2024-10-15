@@ -10,6 +10,8 @@ use async_trait::async_trait;
 use inner::RemoteInner;
 use kata_types::capabilities::{Capabilities, CapabilityBits};
 use persist::sandbox_persist::Persist;
+use std::collections::HashMap;
+
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -41,9 +43,14 @@ impl Remote {
 
 #[async_trait]
 impl Hypervisor for Remote {
-    async fn prepare_vm(&self, id: &str, netns: Option<String>) -> Result<()> {
+    async fn prepare_vm(
+        &self,
+        id: &str,
+        netns: Option<String>,
+        annotations: &HashMap<String, String>,
+    ) -> Result<()> {
         let mut inner = self.inner.write().await;
-        inner.prepare_vm(id, netns).await
+        inner.prepare_vm(id, netns, annotations).await
     }
 
     async fn start_vm(&self, timeout: i32) -> Result<()> {
