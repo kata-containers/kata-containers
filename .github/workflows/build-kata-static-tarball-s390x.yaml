@@ -24,6 +24,11 @@ on:
 jobs:
   build-asset:
     runs-on: s390x
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     strategy:
       matrix:
         asset:
@@ -60,11 +65,16 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Build ${{ matrix.asset }}
+        id: build
         run: |
           make "${KATA_ASSET}-tarball"
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
           mkdir -p kata-build && cp "${build_dir}"/kata-static-${KATA_ASSET}*.tar.* kata-build/.
+          # export oci name and digest for attestation
+          oci_image="$(<"${build_dir}/${KATA_ASSET}-oci-image")"
+          echo "oci-name=${oci_image%@*}" >> $GITHUB_OUTPUT
+          echo "oci-digest=${oci_image#*@}" >> $GITHUB_OUTPUT
         env:
           KATA_ASSET: ${{ matrix.asset }}
           TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
@@ -74,6 +84,21 @@ jobs:
           ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           TARGET_BRANCH: ${{ inputs.target-branch }}
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
+
+      # for pushing attestations to the registry
+      - uses: docker/login-action@v3
+        if: (matrix.asset == 'agent') && (inputs.push-to-registry == 'yes')
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/attest-build-provenance@v1
+        if: (matrix.asset == 'agent') && (inputs.push-to-registry == 'yes')
+        with:
+          subject-name: ${{ steps.build.outputs.oci-name }}
+          subject-digest: ${{ steps.build.outputs.oci-digest }}
+          push-to-registry: true
 
       - name: store-artifact ${{ matrix.asset }}
         if: ${{ inputs.stage != 'release' || (matrix.asset != 'agent' && matrix.asset != 'coco-guest-components' && matrix.asset != 'pause-image') }}
