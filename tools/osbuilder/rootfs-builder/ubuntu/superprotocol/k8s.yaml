@@ -349,6 +349,17 @@ metadata:
 
 ---
 
+apiVersion: v1
+kind: Secret
+metadata:
+  name: regcred
+  namespace: super-protocol
+type: kubernetes.io/dockerconfigjson
+data:
+  .dockerconfigjson: e30=
+
+---
+
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

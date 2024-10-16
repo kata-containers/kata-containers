@@ -1,0 +1,13 @@
+[Unit]
+Description=SuperProtocol add trusted self-signed certificate
+After=multi-user.target
+Wants=rke2-server.service
+After=rke2-server.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/superprotocol-certs.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
