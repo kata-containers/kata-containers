@@ -18,7 +18,7 @@ ifeq ($(CROSS_BUILD),false)
 endif
 
 ifeq ($(ARCH), x86_64)
-BASE_TARBALLS = serial-targets \
+BASE_TARBALLS = \
 	firecracker-tarball \
 	kernel-confidential-tarball \
 	kernel-dragonball-experimental-tarball \
@@ -41,7 +41,7 @@ BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	cloud-hypervisor-tarball \
 	cloud-hypervisor-glibc-tarball
 else ifeq ($(ARCH), s390x)
-BASE_TARBALLS = serial-targets \
+BASE_TARBALLS = \
 	kernel-tarball \
 	qemu-tarball \
 	shim-v2-tarball \
@@ -54,17 +54,17 @@ define BUILD
 	$(MK_DIR)/kata-deploy-binaries-in-docker.sh $(if $(V),,-s) --build=$1
 endef
 
-kata-tarball: | all-parallel merge-builds
+kata-tarball: | all-base-tarballs-parallel merge-builds
 
 copy-scripts-for-the-agent-build:
 	${MK_DIR}/kata-deploy-copy-libseccomp-installer.sh
 
-all-parallel:
-	${MAKE} -f $(MK_PATH) all -j $(shell nproc) V=
+all-base-tarballs-parallel:
+	${MAKE} -f $(MK_PATH) all-base-tarballs -j $(shell nproc) V=
 
-all: ${BASE_TARBALLS}
+all-base-tarballs: ${BASE_TARBALLS} base-serial-tarballs
 
-serial-targets:
+base-serial-tarballs:
 	${MAKE} -f $(MK_PATH) -j 1 V= \
 	${BASE_SERIAL_TARBALLS}
 
