@@ -107,6 +107,11 @@ impl FcInner {
             .get_resource(&self.config.boot_info.image, FC_ROOT_FS)
             .context("get resource ROOTFS")?;
 
+        let body_config: String = json!({
+            "mem_size_mib": self.config.memory_info.default_memory,
+            "vcpu_count": self.config.cpu_info.default_vcpus,
+        })
+        .to_string();
         let body_kernel: String = json!({
             "kernel_image_path": kernel,
             "boot_args": parameters,
@@ -123,6 +128,8 @@ impl FcInner {
 
         info!(sl(), "Before first request");
         self.request_with_retry(Method::PUT, "/boot-source", body_kernel)
+            .await?;
+        self.request_with_retry(Method::PUT, "/machine-config", body_config)
             .await?;
         self.request_with_retry(Method::PUT, "/drives/rootfs", body_rootfs)
             .await?;
