@@ -79,7 +79,7 @@ run_agent_ctl()
 
 	[ -n "$cmds" ] || die "need commands for agent control tool"
 
-	local redirect="&>\"${ctl_log_file}\""
+	local redirect=">> ${ctl_log_file} 2>&1"
 
 	local server_address="--server-address ${local_agent_server_addr}"
 
