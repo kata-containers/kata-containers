@@ -213,7 +213,7 @@ generate_qemu_options() {
 	if [ $arch != $host ];then
 		case $arch in
 			aarch64) qemu_options+=(size:--cross-prefix=aarch64-linux-gnu-);;
-			ppc64le) qemu_options+=(size:--cross-prefix=powerpc64le-linux-gnu-);;
+			ppc64le) qemu_options+=(size:--cross-prefix=powerpc64-linux-gnu-);;
 			s390x) exit;;
 			x86_64);;
 			*) exit;;
