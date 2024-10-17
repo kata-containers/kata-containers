@@ -23,6 +23,7 @@ ca-initializer-linux ${SUPER_CERT_INITIALIZER_URL} /usr/local/share/ca-certifica
 ls -la ${SUPER_CERTS_DIR}
 
 # create kubernetes secret with TLS for docker registry
-/var/lib/rancher/rke2/bin/kubectl create secret tls docker-registry-tls --namespace super-protocol --cert=${SUPER_CERT_FILEPATH}.crt --key=${SUPER_CERT_FILEPATH}.key --dry-run=client --output=yaml > /var/lib/rancher/rke2/server/manifests/docker-registry-tls.yaml
+cat ${SUPER_CERT_FILEPATH}.crt ${SUPER_CERT_FILEPATH}.ca.crt > ${SUPER_CERT_FILEPATH}.bundle.crt
+/var/lib/rancher/rke2/bin/kubectl create secret tls docker-registry-tls --namespace super-protocol --cert=${SUPER_CERT_FILEPATH}.bundle.crt --key=${SUPER_CERT_FILEPATH}.key --dry-run=client --output=yaml > /var/lib/rancher/rke2/server/manifests/docker-registry-tls.yaml
 
 set +x
