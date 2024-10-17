@@ -1391,7 +1391,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "byteorder",
- "cgroups-rs",
  "chrono",
  "common-path",
  "fail",
@@ -2068,9 +2067,10 @@ dependencies = [
 name = "protocols"
 version = "0.1.0"
 dependencies = [
- "kata-sys-util",
  "oci-spec",
  "protobuf 3.5.0",
+ "serde",
+ "serde_json",
  "ttrpc",
  "ttrpc-codegen",
 ]

@@ -37,7 +37,7 @@ rustup toolchain install ${version}
 rustup default ${version}
 if [ "${rustarch}" == "powerpc64le" ] || [ "${rustarch}" == "s390x" ] ; then
 	rustup target add ${rustarch}-unknown-linux-gnu
-else
+elif [ "$(uname -s)" != "Darwin" ]; then
 	rustup target add ${rustarch}-unknown-linux-musl
 	$([ "$(whoami)" != "root" ] && echo sudo) ln -sf /usr/bin/g++ /bin/musl-g++
 fi
