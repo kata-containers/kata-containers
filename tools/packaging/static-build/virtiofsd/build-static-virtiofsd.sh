@@ -24,12 +24,13 @@ virtiofsd_zip="${virtiofsd_zip:-}"
 [ -n "$virtiofsd_version" ] || die "failed to get virtiofsd version"
 [ -n "${virtiofsd_zip}" ] || die "failed to get virtiofsd binary URL"
 
-[ -d "virtiofsd" ] && rm -r virtiofsd
+[ -d "virtiofsd" ] && rm -rf virtiofsd
 
 pull_virtiofsd_released_binary() {
 	if [ "${ARCH}" != "x86_64" ]; then
 		info "Only x86_64 binaries are distributed as part of the virtiofsd releases" && return 1
 	fi
+	[ "${USE_CACHE:-"yes"}" != "yes" ] && return 1
 	info "Download virtiofsd version: ${virtiofsd_version}"
 
 	mkdir -p virtiofsd
