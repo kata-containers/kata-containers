@@ -108,6 +108,7 @@ cat << EOF | sudo tee "${CONTAINERD_CONFIG_FILE}"
         default_runtime_name = "$runtime"
       [plugins.cri.containerd.runtimes.${runtime}]
         runtime_type = "${runtime_type}"
+        sandboxer = "${SANDBOXER}"
         $( [ $kata_annotations -eq 1 ] && \
         echo 'pod_annotations = ["io.katacontainers.*"]' && \
         echo '        container_annotations = ["io.katacontainers.*"]'

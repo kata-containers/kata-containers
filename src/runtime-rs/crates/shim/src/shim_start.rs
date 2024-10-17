@@ -34,8 +34,13 @@ impl ShimExecutor {
 
     fn do_start(&mut self) -> Result<PathBuf> {
         let bundle_path = get_bundle_path().context("get bundle path")?;
-        let spec = self.load_oci_spec(&bundle_path)?;
-        let (container_type, id) = k8s::container_type_with_id(&spec);
+
+        let mut container_type = ContainerType::PodSandbox;
+        let mut id = None;
+
+        if let Ok(spec) = self.load_oci_spec(&bundle_path) {
+            (container_type, id) = k8s::container_type_with_id(&spec);
+        }
 
         match container_type {
             ContainerType::PodSandbox | ContainerType::SingleContainer => {
