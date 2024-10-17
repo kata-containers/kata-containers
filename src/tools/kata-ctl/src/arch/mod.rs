@@ -8,9 +8,9 @@ pub mod aarch64;
 #[cfg(target_arch = "aarch64")]
 pub use aarch64 as arch_specific;
 
-#[cfg(target_arch = "powerpc64le")]
+#[cfg(all(target_arch = "powerpc64", target_endian = "little"))]
 pub mod powerpc64le;
-#[cfg(target_arch = "powerpc64le")]
+#[cfg(all(target_arch = "powerpc64", target_endian = "little"))]
 pub use powerpc64le as arch_specific;
 
 #[cfg(target_arch = "s390x")]

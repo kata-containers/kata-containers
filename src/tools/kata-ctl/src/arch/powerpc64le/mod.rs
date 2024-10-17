@@ -4,7 +4,7 @@
 //
 
 use crate::types::*;
-#[cfg(target_arch = "powerpc64le")]
+#[cfg(all(target_arch = "powerpc64", target_endian = "little"))]yyyyyy
 pub use arch_specific::*;
 
 mod arch_specific {
