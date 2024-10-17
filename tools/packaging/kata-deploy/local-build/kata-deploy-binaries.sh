@@ -1173,51 +1173,48 @@ handle_build() {
 
 		echo "Pushing ${build_target} with tags: ${tags[*]}"
 
+		normalized_tags=""
 		for tag in "${tags[@]}"; do
 			# tags can only contain lowercase and uppercase letters, digits, underscores, periods, and hyphens
 			# and limited to 128 characters, so filter out non-printable characers, replace invalid printable
 			# characters with underscode and trim down to leave enough space for the arch suffix
-			tag_length_limit=$(expr 128 - $(echo "-$(uname -m)" | wc -c))
-			tag=("$(echo ${tag} | tr -dc '[:print:]' | tr -c '[a-zA-Z0-9\_\.\-]' _ | head -c ${tag_length_limit})-$(uname -m)")
-			case ${build_target} in
-				kernel-nvidia-gpu)
-					oras push \
-						${ARTEFACT_REGISTRY}/kata-containers/cached-artefacts/${build_target}:${tag} \
-						${final_tarball_name} \
-						"kata-static-${build_target}-headers.tar.xz" \
-						${build_target}-version \
-						${build_target}-builder-image-version \
-						${build_target}-sha256sum
-					;;
-				kernel-nvidia-gpu-confidential)
-					oras push \
-						${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:${tag} \
-						${final_tarball_name} \
-						"kata-static-${build_target}-modules.tar.xz" \
-						"kata-static-${build_target}-headers.tar.xz" \
-						${build_target}-version \
-						${build_target}-builder-image-version \
-						${build_target}-sha256sum
-					;;
-				kernel*-confidential)
-					oras push \
-						${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:${tag} \
-						${final_tarball_name} \
-						"kata-static-${build_target}-modules.tar.xz" \
-						${build_target}-version \
-						${build_target}-builder-image-version \
-						${build_target}-sha256sum
-					;;
-				*)
-					oras push \
-						${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:${tag} \
-						${final_tarball_name} \
-						${build_target}-version \
-						${build_target}-builder-image-version \
-						${build_target}-sha256sum
-					;;
-			esac
+			tag_length_limit="$(expr 128 - $(echo "-$(uname -m)" | wc -c))"
+			normalized_tag="$(echo "${tag}" \
+				| tr -dc '[:print:]' \
+				| tr -c '[a-zA-Z0-9\_\.\-]' _ \
+				| head -c "${tag_length_limit}" \
+			)-$(uname -m)"
+			normalized_tags="${normalized_tags},${normalized_tag}"
 		done
+		declare -a files_to_push=(
+			"${final_tarball_name}"
+			"${build_target}-version"
+			"${build_target}-builder-image-version"
+			"${build_target}-sha256sum"
+		)
+		oci_image="${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:${normalized_tags}"
+		case ${build_target} in
+			kernel-nvidia-gpu)
+				files_to_push+=(
+					"kata-static-${build_target}-headers.tar.xz"
+				)
+				;;
+			kernel-nvidia-gpu-confidential)
+				files_to_push+=(
+					"kata-static-${build_target}-modules.tar.xz"
+					"kata-static-${build_target}-headers.tar.xz"
+				)
+				;;
+			kernel*-confidential)
+				files_to_push+=(
+					"kata-static-${build_target}-modules.tar.xz"
+				)
+				;;
+			*)
+				;;
+		esac
+		oci_sha="$(oras push "${oci_image}" "${files_to_push[@]}" --format go-template='{{.reference}}' --no-tty)"
+		echo "${oci_sha}" > "${build_target}-oci-image"
 		oras logout "${ARTEFACT_REGISTRY}"
 	fi
 
