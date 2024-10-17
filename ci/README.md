@@ -55,14 +55,14 @@ of a PR review), the following tests will be executed:
 - Run the following tests:
   - Tests depending on the generated tarball
     - Metrics (runs on bare-metal)
-    - `docker` (runs on Azure small instances)
-    - `nerdctl` (runs on Azure small instances)
-    - `kata-monitor` (runs on Azure small instances)
-    - `cri-containerd` (runs on Azure small instances)
-    - `nydus` (runs on Azure small instances)
-    - `vfio` (runs on Azure normal instances)
+    - `docker` (runs on cost free runners)
+    - `nerdctl` (runs on cost free runners)
+    - `kata-monitor` (runs on cost free runners)
+    - `cri-containerd` (runs on cost free runners)
+    - `nydus` (runs on cost free runners)
+    - `vfio` (runs on cost free runners)
   - Tests depending on the generated kata-deploy payload
-    - kata-deploy (runs on Azure small instances)
+    - kata-deploy (runs on cost free runners)
       - Tests are performed using different "Kubernetes flavors", such as k0s, k3s, rke2, and Azure Kubernetes Service (AKS).
     - Kubernetes (runs in Azure small and medium instances depending on what's required by each test, and on TEE bare-metal machines)
       - Tests are performed with different runtime engines, such as CRI-O and containerd.
