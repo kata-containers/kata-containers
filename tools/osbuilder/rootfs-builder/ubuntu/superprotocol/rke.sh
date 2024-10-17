@@ -25,6 +25,11 @@ node-label:
 EOF
 cat > "/etc/rancher/rke2/registries.yaml" <<EOF
 configs:
+  "$SUPER_REGISTRY_HOST:32443":
+    tls:
+      ca_file: /opt/super/certs/$SUPER_REGISTRY_HOST.ca.crt
+      key_file: /opt/super/certs/$SUPER_REGISTRY_HOST.key
+      cert_file: /opt/super/certs/$SUPER_REGISTRY_HOST.crt
   "$LOCAL_REGISTRY_HOST:5000":
     tls:
       insecure_skip_verify: true
@@ -121,11 +126,8 @@ version = 2
   enable_unprivileged_icmp = true
   sandbox_image = "index.docker.io/rancher/mirrored-pause:3.6"
   [plugins."io.containerd.grpc.v1.cri".registry]
+    config_path = "/var/lib/rancher/rke2/agent/etc/containerd/certs.d"
     [plugins."io.containerd.grpc.v1.cri".registry.mirrors]
-      [plugins."io.containerd.grpc.v1.cri".registry.mirrors."$SUPER_REGISTRY_HOST:32443"]
-        endpoint = ["https://$SUPER_REGISTRY_HOST:32443"]
-      [plugins."io.containerd.grpc.v1.cri".registry.configs."$SUPER_REGISTRY_HOST:32443".tls]
-        insecure_skip_verify = true
       [plugins."io.containerd.grpc.v1.cri".registry.mirrors."$LOCAL_REGISTRY_HOST:5000"]
         endpoint = ["https://$LOCAL_REGISTRY_HOST:5000"]
       [plugins."io.containerd.grpc.v1.cri".registry.configs."$LOCAL_REGISTRY_HOST:5000".tls]
