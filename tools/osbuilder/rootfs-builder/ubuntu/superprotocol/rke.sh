@@ -206,6 +206,11 @@ sed -i 's|[#]*PasswordAuthentication .*|PasswordAuthentication yes|g' /etc/ssh/s
 sed -i 's|[#]*PermitRootLogin .*|PermitRootLogin yes|g' /etc/ssh/sshd_config
 sed -i 's|[#]*KbdInteractiveAuthentication .*|KbdInteractiveAuthentication yes|g' /etc/ssh/sshd_config
 
+cat >> /etc/sysctl.conf <<EOF
+fs.inotify.max_user_instances=512
+vm.swappiness=0
+EOF
+
 # HAULER
 ### Setup Directories
 mkdir -p /opt/hauler/.hauler
