@@ -241,19 +241,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
-name = "cgroups-rs"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b098e7c3a70d03c288fa0a96ccf13e770eb3d78c4cc0e1549b3c13215d5f965"
-dependencies = [
- "libc",
- "log",
- "nix 0.25.1",
- "regex",
- "thiserror",
-]
-
-[[package]]
 name = "chrono"
 version = "0.4.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -814,7 +801,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "byteorder",
- "cgroups-rs",
  "chrono",
  "common-path",
  "fail",
@@ -973,18 +959,6 @@ dependencies = [
  "cfg-if",
  "libc",
  "memoffset 0.6.5",
-]
-
-[[package]]
-name = "nix"
-version = "0.25.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f346ff70e7dbfd675fe90590b92d59ef2de15a8779ae305ebcbfd3f0caf59be4"
-dependencies = [
- "autocfg",
- "bitflags",
- "cfg-if",
- "libc",
 ]
 
 [[package]]
@@ -1316,7 +1290,6 @@ name = "protocols"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "kata-sys-util",
  "oci-spec",
  "protobuf 3.2.0",
  "serde",

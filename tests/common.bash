@@ -738,7 +738,7 @@ function arch_to_golang() {
 	local arch="$(uname -m)"
 
 	case "${arch}" in
-		aarch64) echo "arm64";;
+		aarch64 | arm64) echo "arm64";;
 		ppc64le) echo "${arch}";;
 		x86_64) echo "amd64";;
 		s390x) echo "s390x";;
@@ -751,7 +751,7 @@ function arch_to_rust() {
 	local -r arch="$(uname -m)"
 
 	case "${arch}" in
-		aarch64) echo "${arch}";;
+		aarch64 | arm64) echo "${arch}";;
 		ppc64le) echo "powerpc64le";;
 		x86_64) echo "${arch}";;
 		s390x) echo "${arch}";;
@@ -764,7 +764,7 @@ function arch_to_kernel() {
 	local -r arch="$(uname -m)"
 
 	case "${arch}" in
-		aarch64) echo "arm64";;
+		aarch64 | arm64) echo "arm64";;
 		ppc64le) echo "powerpc";;
 		x86_64) echo "${arch}";;
 		s390x) echo "s390x";;

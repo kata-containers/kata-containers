@@ -19,7 +19,16 @@ jobs:
       uses: actions/setup-go@v2
       with:
         go-version: 1.22.2
+    - name: Install Protoc
+      run: |
+        f=$(mktemp)
+        curl -sSLo "$f" https://github.com/protocolbuffers/protobuf/releases/download/v28.2/protoc-28.2-osx-aarch_64.zip
+        mkdir -p $HOME/.local
+        unzip -d $HOME/.local "$f"
+        echo "/usr/local/bin" >> $GITHUB_PATH
     - name: Checkout code
       uses: actions/checkout@v4
+    - name: Install Rust
+      run: ./tests/install_rust.sh
     - name: Build utils
       run: ./ci/darwin-test.sh

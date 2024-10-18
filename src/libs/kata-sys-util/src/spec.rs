@@ -97,11 +97,3 @@ pub fn load_oci_spec() -> Result<oci::Spec, OciSpecError> {
 
     oci::Spec::load(spec_file.to_str().unwrap_or_default())
 }
-
-/// handle string parsing for input possibly be JSON string.
-pub fn parse_json_string(input: &str) -> &str {
-    let json_str: &str = serde_json::from_str(input).unwrap_or(input);
-    let stripped_str = json_str.strip_prefix("CAP_").unwrap_or(json_str);
-
-    stripped_str
-}
