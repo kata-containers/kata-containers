@@ -80,21 +80,37 @@ EOF
 			containerd_config_file="/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl"
 			sudo cp /var/lib/rancher/k3s/agent/etc/containerd/config.toml "${containerd_config_file}"
 			;;
+		kubeadm)
+			containerd_config_file="/etc/containerd/config.toml"
+			;;
 		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
 	esac
 
 	# We're not using this with baremetal machines, so we're fine on cutting
 	# corners here and just append this to the configuration file.
-	cat<<EOF | sudo tee -a "${containerd_config_file}"
+	# Check if the "devmapper" plugin section exists in the file
+	if grep -q 'plugins."io.containerd.snapshotter.v1.devmapper"' "${containerd_config_file}"; then
+	    echo "devmapper section found. Updating pool_name and base_image_size..."
+	    sudo sed -i '/\[plugins."io.containerd.snapshotter.v1.devmapper"\]/,/\[plugins\./ {
+	        s/pool_name = ".*"/pool_name = "contd-thin-pool"/
+	        s/base_image_size = ".*"/base_image_size = "4096MB"/
+	    }' "${containerd_config_file}"
+	else
+	    echo "devmapper section not found. Appending to the config file..."
+		cat<<EOF | sudo tee -a "${containerd_config_file}"
 [plugins."io.containerd.snapshotter.v1.devmapper"]
   pool_name = "contd-thin-pool"
   base_image_size = "4096MB"
 EOF
+	fi
 
 	case "${KUBERNETES}" in
 		k3s)
 			sudo sed -i -e 's/snapshotter = "overlayfs"/snapshotter = "devmapper"/g' "${containerd_config_file}"
 			sudo systemctl restart k3s ;;
+		kubeadm)
+			sudo sed -i -e 's/snapshotter = "overlayfs"/snapshotter = "devmapper"/g' "${containerd_config_file}"
+			sudo systemctl restart containerd ;;
 		*) >&2 echo "${KUBERNETES} flavour is not supported"; exit 2 ;;
 	esac
 
