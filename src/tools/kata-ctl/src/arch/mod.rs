@@ -8,10 +8,10 @@ pub mod aarch64;
 #[cfg(target_arch = "aarch64")]
 pub use aarch64 as arch_specific;
 
-#[cfg(target_arch = "powerpc64le")]
-pub mod powerpc64le;
-#[cfg(target_arch = "powerpc64le")]
-pub use powerpc64le as arch_specific;
+#[cfg(all(target_arch = "powerpc64"))]
+pub mod powerpc64;
+#[cfg(all(target_arch = "powerpc64"))]
+pub use powerpc64 as arch_specific;
 
 #[cfg(target_arch = "s390x")]
 pub mod s390x;
@@ -25,7 +25,7 @@ pub use x86_64 as arch_specific;
 
 #[cfg(not(any(
     target_arch = "aarch64",
-    target_arch = "powerpc64le",
+    target_arch = "powerpc64",
     target_arch = "s390x",
     target_arch = "x86_64"
 )))]
