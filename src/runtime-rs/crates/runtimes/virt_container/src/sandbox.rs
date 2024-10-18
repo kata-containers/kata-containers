@@ -326,7 +326,11 @@ impl Sandbox for VirtSandbox {
         }
 
         self.hypervisor
-            .prepare_vm(id, sandbox_config.network_env.netns.clone())
+            .prepare_vm(
+                id,
+                sandbox_config.network_env.netns.clone(),
+                &sandbox_config.annotations,
+            )
             .await
             .context("prepare vm")?;
 

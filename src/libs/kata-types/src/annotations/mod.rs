@@ -316,6 +316,13 @@ pub const KATA_ANNO_CFG_HYPERVISOR_PREFETCH_FILES_LIST: &str =
 pub const KATA_ANNO_CFG_SANDBOX_BIND_MOUNTS: &str =
     "io.katacontainers.config.runtime.sandbox_bind_mounts";
 
+/// A sandbox annotation to specify the type of machine being emulated by the hypervisor.
+pub const KATA_ANNO_HYPERVISOR_MACHINE_TYPE: &str = "io.katacontainers.hypervisor.machine_type";
+/// A sandbox annotation for passing the default vcpus assigned for a VM by the hypervisor.
+pub const KATA_ANNO_HYPERVISOR_DEFAULT_VCPUS: &str = "io.katacontainers.hypervisor.default_vcpus";
+/// A sandbox annotation for the memory assigned for a VM by the hypervisor.
+pub const KATA_ANNO_HYPERVISOR_DEFAULT_MEMORY: &str = "io.katacontainers.hypervisor.default_memory";
+
 /// A helper structure to query configuration information by check annotations.
 #[derive(Debug, Default, Deserialize)]
 pub struct Annotation {
