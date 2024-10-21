@@ -77,8 +77,8 @@ them to merely debug issues.
 
 In the previous section we've mentioned using different runners, now in this section we'll go through each type of runner used.
 
-- Cost free runners:  Those are the runners provided by GIthub itself, and
-  those are fairly small machines with no virtualization capabilities enabled - 
+- Cost free runners:  Those are the runners provided by Github itself, and
+  those are fairly small machines with virtualization capabilities enabled. 
 - Azure small instances: Those are runners which have virtualization
   capabilities enabled, 2 CPUs, and 8GB of RAM.  These runners have a "-smaller"
   suffix to their name. 
