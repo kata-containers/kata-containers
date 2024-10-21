@@ -44,6 +44,8 @@ jobs:
           - rootfs-initrd-confidential
           - shim-v2
           - virtiofsd
+    env:
+      PERFORM_ATTESTATION: ${{ matrix.asset == 'agent' && inputs.push-to-registry == 'yes' && 'yes' || 'no' }}
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
@@ -71,10 +73,6 @@ jobs:
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
           mkdir -p kata-build && cp "${build_dir}"/kata-static-${KATA_ASSET}*.tar.* kata-build/.
-          # export oci name and digest for attestation
-          oci_image="$(<"${build_dir}/${KATA_ASSET}-oci-image")"
-          echo "oci-name=${oci_image%@*}" >> $GITHUB_OUTPUT
-          echo "oci-digest=${oci_image#*@}" >> $GITHUB_OUTPUT
         env:
           KATA_ASSET: ${{ matrix.asset }}
           TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
@@ -85,19 +83,27 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
 
+      - name: Parse OCI image name and digest
+        id: parse-oci-segments
+        if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
+        run: |
+          oci_image="$(<"build/${{ matrix.asset }}-oci-image")"
+          echo "oci-name=${oci_image%@*}" >> "$GITHUB_OUTPUT"
+          echo "oci-digest=${oci_image#*@}" >> "$GITHUB_OUTPUT"
+
       # for pushing attestations to the registry
       - uses: docker/login-action@v3
-        if: (matrix.asset == 'agent') && (inputs.push-to-registry == 'yes')
+        if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/attest-build-provenance@v1
-        if: (matrix.asset == 'agent') && (inputs.push-to-registry == 'yes')
+        if: ${{ env.PERFORM_ATTESTATION == 'yes' }}
         with:
-          subject-name: ${{ steps.build.outputs.oci-name }}
-          subject-digest: ${{ steps.build.outputs.oci-digest }}
+          subject-name: ${{ steps.parse-oci-segments.outputs.oci-name }}
+          subject-digest: ${{ steps.parse-oci-segments.outputs.oci-digest }}
           push-to-registry: true
 
       - name: store-artifact ${{ matrix.asset }}
