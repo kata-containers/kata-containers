@@ -37,7 +37,6 @@ jobs:
           - stratovirt
           - rootfs-image
           - rootfs-initrd
-          - shim-v2
           - virtiofsd
     steps:
       - name: Login to Kata Containers quay.io
@@ -84,9 +83,57 @@ jobs:
           retention-days: 15
           if-no-files-found: error
 
-  create-kata-tarball:
+  build-asset-shim-v2:
     runs-on: arm64-builder
     needs: build-asset
+    steps:
+      - name: Login to Kata Containers quay.io
+        if: ${{ inputs.push-to-registry == 'yes' }}
+        uses: docker/login-action@v3
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
+          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0 # This is needed in order to keep the commit ids history
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: Build shim-v2
+        run: |
+          make "${KATA_ASSET}-tarball"
+          build_dir=$(readlink -f build)
+          # store-artifact does not work with symlink
+          mkdir -p kata-build && cp "${build_dir}"/kata-static-${KATA_ASSET}*.tar.* kata-build/.
+        env:
+          KATA_ASSET: shim-v2
+          TAR_OUTPUT: shim-v2.tar.gz
+          PUSH_TO_REGISTRY: ${{ inputs.push-to-registry }}
+          ARTEFACT_REGISTRY: ghcr.io
+          ARTEFACT_REGISTRY_USERNAME: ${{ github.actor }}
+          ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+          RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
+
+      - name: store-artifact shim-v2
+        if: ${{ inputs.stage != 'release' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: kata-artifacts-arm64-shim-v2${{ inputs.tarball-suffix }}
+          path: kata-build/kata-static-shim-v2.tar.xz
+          retention-days: 15
+          if-no-files-found: error
+
+  create-kata-tarball:
+    runs-on: arm64-builder
+    needs: [build-asset, build-asset-shim-v2]
     steps:
       - name: Adjust a permission for repo
         run: |
