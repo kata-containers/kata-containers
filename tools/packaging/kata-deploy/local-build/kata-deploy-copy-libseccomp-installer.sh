@@ -13,7 +13,7 @@ set -o errtrace
 
 script_dir=$(dirname "$(readlink -f "$0")")
 install_libseccomp_script_src="${script_dir}/../../../../ci/install_libseccomp.sh"
-install_libseccomp_script_dest="${script_dir}/../../static-build/agent/install_libseccomp.sh"
+install_libseccomp_script_dest="${script_dir}/../../static-build/$1/install_libseccomp.sh"
 
 cp "${install_libseccomp_script_src}" "${install_libseccomp_script_dest}"
 
