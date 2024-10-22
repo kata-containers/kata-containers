@@ -1734,7 +1734,7 @@ func (clh *cloudHypervisor) cleanupVM(force bool) error {
 	}
 
 	if clh.config.VMid != "" {
-		dir = filepath.Join(clh.config.VMStorePath, clh.config.VMid)
+		dir = filepath.Join(clh.config.RunStorePath, clh.config.VMid)
 		if err := os.RemoveAll(dir); err != nil {
 			if !force {
 				return err
