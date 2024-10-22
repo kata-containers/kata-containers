@@ -33,7 +33,7 @@ RUN ARCH=$(uname -m); \
     	extra_rust_flags=" -C link-self-contained=yes"; \
        	case "${ARCH}" in \
             "aarch64") rust_arch="${ARCH}"; libc="musl"; arch_libc="" ;; \
-            "ppc64le") rust_arch="powerpc64le"; libc="gnu"; arch_libc=${rust_arch}-linux-${libc}; extra_rust_flags="" ;; \
+            "ppc64le") rust_arch="powerpc64"; libc="gnu"; arch_libc=${rust_arch}-linux-${libc}; extra_rust_flags="" ;; \
             "x86_64") rust_arch="${ARCH}"; libc="musl"; arch_libc="" ;; \
             "s390x") rust_arch="${ARCH}"; libc="gnu"; arch_libc=${rust_arch}-linux-${libc}; extra_rust_flags="" ;; \
             *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
