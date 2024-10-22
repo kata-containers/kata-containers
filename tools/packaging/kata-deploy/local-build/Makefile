@@ -57,7 +57,10 @@ endef
 kata-tarball: | all-parallel merge-builds
 
 copy-scripts-for-the-agent-build:
-	${MK_DIR}/kata-deploy-copy-libseccomp-installer.sh
+	${MK_DIR}/kata-deploy-copy-libseccomp-installer.sh "agent"
+
+copy-scripts-for-the-tools-build:
+	${MK_DIR}/kata-deploy-copy-libseccomp-installer.sh "tools"
 
 all-parallel:
 	${MAKE} -f $(MK_PATH) all -j $(shell nproc) V=
@@ -74,7 +77,7 @@ serial-targets:
 agent-tarball: copy-scripts-for-the-agent-build
 	${MAKE} $@-build
 
-agent-ctl-tarball:
+agent-ctl-tarball: copy-scripts-for-the-tools-build
 	${MAKE} $@-build
 
 busybox-tarball: 
@@ -92,13 +95,13 @@ cloud-hypervisor-glibc-tarball:
 firecracker-tarball:
 	${MAKE} $@-build
 
-genpolicy-tarball:
+genpolicy-tarball: copy-scripts-for-the-tools-build
 	${MAKE} $@-build
 
 pause-image-tarball:
 	${MAKE} $@-build
 
-kata-ctl-tarball:
+kata-ctl-tarball: copy-scripts-for-the-tools-build
 	${MAKE} $@-build
 
 kata-manager-tarball:
@@ -158,13 +161,13 @@ rootfs-initrd-confidential-tarball: agent-tarball pause-image-tarball coco-guest
 rootfs-initrd-tarball: agent-tarball
 	${MAKE} $@-build
 
-runk-tarball:
+runk-tarball: copy-scripts-for-the-tools-build
 	${MAKE} $@-build
 
 shim-v2-tarball:
 	${MAKE} $@-build
 
-trace-forwarder-tarball:
+trace-forwarder-tarball: copy-scripts-for-the-tools-build
 	${MAKE} $@-build
 
 virtiofsd-tarball:

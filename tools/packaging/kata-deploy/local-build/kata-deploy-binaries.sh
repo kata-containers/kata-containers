@@ -985,6 +985,10 @@ install_tools_helper() {
 		"${final_tarball_path}" \
 		&& return 0
 
+	export LIBSECCOMP_VERSION="$(get_from_kata_deps ".externals.libseccomp.version")"
+	export LIBSECCOMP_URL="$(get_from_kata_deps ".externals.libseccomp.url")"
+	export GPERF_VERSION="$(get_from_kata_deps ".externals.gperf.version")"
+	export GPERF_URL="$(get_from_kata_deps ".externals.gperf.url")"
 
 	info "build static ${tool}"
 	${tools_builder} ${tool}
