@@ -24,6 +24,19 @@ paths:
 
 mapping:
   # Mapping of set-of-tests to required test names and/or test name regexps
+  #
+  # Format is (test name includes workflow!):
+  # {set-of-tests-label}:
+  #   names:
+  #     - {required-test-name1}
+  #     - {required-test-name2}
+  #   regexps: "{python-regular-expression-matching-required-tests}|{another-regexp}|{yet-another-regexp}"
+  #   required-labels:
+  #     - {label-required-to-run-those-tests}
+  #
+  # TODO: Add support for "depends" to automatically add dependant set-of-tests
+  #       (eg. "build" is required for "test")
+  # TODO: Add support for "ignore:" to remove individual tests from regexps
   test:
     # Checks the basic functional tests work
     names:
@@ -83,8 +96,6 @@ mapping:
       - Kata Containers CI / kata-containers-ci-on-push / run-metrics-tests / run-metrics (qemu)
     required-labels:
       - ok-to-test
-    # TODO: Add support for "depends" to automatically add dependant set-of-tests
-    #       (eg. "build" is required for "test")
   build:
     # Checks that the kata-containers static tarball is created
     names:
