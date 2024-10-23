@@ -1145,6 +1145,21 @@ handle_build() {
 			fi
 			tar tvf "${modules_final_tarball_path}"
 			;;
+		shim-v2)
+			if [ "${MEASURED_ROOTFS}" = "yes" ]; then
+				local image_conf_tarball="${workdir}/kata-static-rootfs-image-confidential.tar.xz"
+				if [ ! -f "${image_conf_tarball}" ]; then
+					die "Building the shim-v2 with MEASURED_ROOTFS support requires a rootfs confidential image tarball"
+				fi
+
+				local root_hash_basedir="./opt/kata/share/kata-containers/"
+				if ! tar xvf ${image_conf_tarball} ${root_hash_basedir}root_hash.txt --transform s,${root_hash_basedir},,; then
+					die "Building the shim-v2 with MEASURED_ROOTFS support requres a rootfs confidential image tarball built with MEASURED_ROOTFS support"
+				fi
+
+				mv root_hash.txt shim-v2-root_hash.txt
+			fi
+			;;
 	esac
 
 	pushd ${workdir}
@@ -1209,6 +1224,13 @@ handle_build() {
 				files_to_push+=(
 					"kata-static-${build_target}-modules.tar.xz"
 				)
+				;;
+			shim-v2)
+				if [ "${MEASURED_ROOTFS}" = "yes" ]; then
+					files_to_push+=(
+						"shim-v2-root_hash.txt"
+					)
+				fi
 				;;
 			*)
 				;;
