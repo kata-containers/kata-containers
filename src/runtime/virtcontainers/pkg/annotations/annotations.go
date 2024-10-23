@@ -132,6 +132,12 @@ const (
 	// UseLegacySerial sets legacy serial device for guest console if available and implemented for architecture
 	UseLegacySerial = kataAnnotHypervisorPrefix + "use_legacy_serial"
 
+	// GPU specific annotations used by remote hypervisor for instance selection
+	// Number of GPUs required in the Kata VM
+	DefaultGPUs = kataAnnotHypervisorPrefix + "default_gpus"
+	// GPU model - tesla, h100, radeon etc..
+	DefaultGPUModel = kataAnnotHypervisorPrefix + "default_gpu_model"
+
 	//
 	// CPU Annotations
 	//

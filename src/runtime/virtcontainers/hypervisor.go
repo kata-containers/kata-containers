@@ -673,6 +673,12 @@ type HypervisorConfig struct {
 
 	// Initdata defines the initdata passed into guest when CreateVM
 	Initdata string
+
+	// GPU specific annotations (currently only applicable for Remote Hypervisor)
+	//DefaultGPUs specifies the number of GPUs required for the Kata VM
+	DefaultGPUs uint32
+	// DefaultGPUModel specifies GPU model like tesla, h100, readeon etc.
+	DefaultGPUModel string
 }
 
 // vcpu mapping from vcpu number to thread number
