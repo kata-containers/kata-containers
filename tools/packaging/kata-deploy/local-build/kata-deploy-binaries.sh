@@ -1145,6 +1145,36 @@ handle_build() {
 			fi
 			tar tvf "${modules_final_tarball_path}"
 			;;
+		shim-v2)
+			if [ "${MEASURED_ROOTFS}" = "yes" ]; then
+				local image_conf_exists=false
+				local image_conf_tarball="kata-static-rootfs-image-confidential.tar.xz"
+
+				local initrd_conf_exists=false
+				local initrd_conf_tarball="kata-static-rootfs-initrd-confidential.tar.xz"
+
+				local root_hash_basedir="./opt/kata/share/kata-containers/"
+
+				if [ -f "${image_conf_tarball}" ]; then
+					tar xvf ${image_conf_tarball} ${root_hash_basedir}root_hash.txt --transform s,${root_hash_basedir},,
+					mv root_hash.txt agent-root_hash_image.txt
+
+					image_conf_tarball=true
+				fi
+				
+				if [ -f "${initrd_conf_tarball}" ]; then
+					tar xvf ${initrd_conf_tarball} ${root_hash_basedir}root_hash.txt --transform s,${root_hash_basedir},,
+					mv root_hash.txt agent-root_hash_initrd.txt
+
+					initrd_conf_tarball=true
+				fi
+
+				if [[ ${image_conf_tarball} = false && ${initrd_conf_tarball} = false ]]; then
+					rm -f "${final_tarball_path}"
+					die "Building the shim-v2 with MEASURED_ROOTFS support requires either a confidential image or a confidential initrd root_hash.txt"
+				fi
+			fi
+			;;
 	esac
 
 	pushd ${workdir}
@@ -1209,6 +1239,21 @@ handle_build() {
 				files_to_push+=(
 					"kata-static-${build_target}-modules.tar.xz"
 				)
+				;;
+			shim-v2)
+				if [ "${MEASURED_ROOTFS}" = "yes" ]; then
+					if [ -f "agent-root_hash_image.txt" ]; then
+						files_to_push+=(
+							"agent-root_hash_image.txt"
+						)
+					fi
+
+					if [ -f "agent-root_hash_initrd.txt" ]; then
+						files_to_push+=(
+							"agent-root_hash_initrd.txt"
+						)
+					fi
+				fi
 				;;
 			*)
 				;;
