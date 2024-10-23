@@ -26,18 +26,23 @@ jobs:
     runs-on: arm64-builder
     strategy:
       matrix:
+        measured-rootfs:
+          - no
         asset:
           - agent
           - cloud-hypervisor
           - firecracker
-          - kernel
           - kernel-dragonball-experimental
           - nydus
           - qemu
           - stratovirt
-          - rootfs-image
           - rootfs-initrd
           - virtiofsd
+        include:
+          - measured-rootfs: yes
+            asset: kernel
+          - measured-rootfs: yes
+            asset: rootfs-image
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
@@ -73,6 +78,7 @@ jobs:
           ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           TARGET_BRANCH: ${{ inputs.target-branch }}
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
+          MEASURED_ROOTFS: ${{ matrix.measured-rootfs }}
 
       - name: store-artifact ${{ matrix.asset }}
         if: ${{ inputs.stage != 'release' || matrix.asset != 'agent' }}
@@ -121,6 +127,7 @@ jobs:
           ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           TARGET_BRANCH: ${{ inputs.target-branch }}
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
+          MEASURED_ROOTFS: yes
 
       - name: store-artifact shim-v2
         if: ${{ inputs.stage != 'release' }}

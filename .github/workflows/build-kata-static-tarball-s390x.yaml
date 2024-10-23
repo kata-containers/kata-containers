@@ -31,18 +31,25 @@ jobs:
       attestations: write
     strategy:
       matrix:
+        measured-rootfs:
+          - no
         asset:
           - agent
           - coco-guest-components
-          - kernel
-          - kernel-confidential
           - pause-image
           - qemu
-          - rootfs-image
-          - rootfs-image-confidential
           - rootfs-initrd
           - rootfs-initrd-confidential
           - virtiofsd
+        include:
+          - measured-rootfs: yes
+            asset: kernel
+          - measured-rootfs: yes
+            asset: kernel-confidential
+          - measured-rootfs: yes
+            asset: rootfs-image
+          - measured-rootfs: yes
+            asset: rootfs-image-confidential
     env:
       PERFORM_ATTESTATION: ${{ matrix.asset == 'agent' && inputs.push-to-registry == 'yes' && 'yes' || 'no' }}
     steps:
@@ -81,6 +88,7 @@ jobs:
           ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           TARGET_BRANCH: ${{ inputs.target-branch }}
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
+          MEASURED_ROOTFS: ${{ matrix.measured-rootfs }}
 
       - name: Parse OCI image name and digest
         id: parse-oci-segments
@@ -201,6 +209,7 @@ jobs:
           ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           TARGET_BRANCH: ${{ inputs.target-branch }}
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
+          MEASURED_ROOTFS: yes
 
       - name: store-artifact shim-v2
         if: ${{ inputs.stage != 'release' }}
