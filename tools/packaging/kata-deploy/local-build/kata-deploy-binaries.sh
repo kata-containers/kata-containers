@@ -206,8 +206,8 @@ install_cached_tarball_component() {
 	rm -f ${component}-version
 	rm -f ${component}-builder-image-version
 
-	[ "${cached_image_version}" != "${current_image_version}" ] && return 1
-	[ "${cached_version}" != "${current_version}" ] && return 1
+	[ "${cached_image_version}" != "${current_image_version}" ] && return $(cleanup_and_fail "${component_tarball_path}" "${extra_tarballs}")
+	[ "${cached_version}" != "${current_version}" ] && return $(cleanup_and_fail "${component_tarball_path}" "${extra_tarballs}")
 	sha256sum -c "${component}-sha256sum" || return $(cleanup_and_fail "${component_tarball_path}" "${extra_tarballs}")
 
 	info "Using cached tarball of ${component}"
