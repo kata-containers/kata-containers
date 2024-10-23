@@ -68,7 +68,7 @@ impl RemoteInner {
     }
 
     fn new_ttrpc_client(&self) -> Result<HypervisorClient> {
-        let c = Client::connect(&format!("unix://{}", &self.config.remote_hypervisor_socket))?;
+        let c = Client::connect(&format!("unix://{}", &self.config.remote_info.hypervisor_socket))?;
         Ok(HypervisorClient::new(c))
     }
 
@@ -102,8 +102,8 @@ impl RemoteInner {
         info!(sl!(), "Starting REMOTE VM");
 
         let mut min_timeout = DEFAULT_MIN_TIMEOUT;
-        if self.config.remote_hypervisor_timeout > 0 {
-            min_timeout = self.config.remote_hypervisor_timeout.min(timeout);
+        if self.config.remote_info.hypervisor_timeout > 0 {
+            min_timeout = self.config.remote_info.hypervisor_timeout.min(timeout);
         }
         let timeout = min_timeout;
 
@@ -172,12 +172,12 @@ impl RemoteInner {
 
     pub(crate) async fn remove_device(&self, _device: DeviceType) -> Result<()> {
         warn!(sl!(), "RemoteInner::remove_device(): NOT YET IMPLEMENTED");
-        todo!()
+        Ok(())
     }
 
     pub(crate) async fn update_device(&self, _device: DeviceType) -> Result<()> {
         warn!(sl!(), "RemoteInner::update_device(): NOT YET IMPLEMENTED");
-        todo!()
+        Ok(())
     }
 
     pub(crate) async fn get_agent_socket(&self) -> Result<String> {

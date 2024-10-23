@@ -47,16 +47,19 @@ impl ConfigPlugin for RemoteConfig {
     /// Adjust the configuration information after loading from configuration file.
     fn adjust_config(&self, conf: &mut crate::config::TomlConfig) -> Result<()> {
         if let Some(remote) = conf.hypervisor.get_mut(HYPERVISOR_NAME_REMOTE) {
-            if remote.remote_hypervisor_socket.is_empty() {
-                remote.remote_hypervisor_socket =
+            if remote.remote_info.hypervisor_socket.is_empty() {
+                remote.remote_info.hypervisor_socket =
                     default::DEFAULT_REMOTE_HYPERVISOR_SOCKET.to_string();
             }
+            if remote.remote_info.hypervisor_timeout == 0 {
+                remote.remote_info.hypervisor_timeout = default::DEFAULT_REMOTE_HYPERVISOR_TIMEOUT;
+            }
             resolve_path!(
-                remote.remote_hypervisor_socket,
+                remote.remote_info.hypervisor_socket,
                 "Remote hypervisor socket `{}` is invalid: {}"
             )?;
-            if remote.remote_hypervisor_timeout == 0 {
-                remote.remote_hypervisor_timeout = default::DEFAULT_REMOTE_HYPERVISOR_TIMEOUT;
+            if remote.remote_info.hypervisor_timeout == 0 {
+                remote.remote_info.hypervisor_timeout = default::DEFAULT_REMOTE_HYPERVISOR_TIMEOUT;
             }
             if remote.memory_info.default_memory == 0 {
                 remote.memory_info.default_memory = default::MIN_REMOTE_MEMORY_SIZE_MB;
@@ -93,7 +96,14 @@ impl ConfigPlugin for RemoteConfig {
             if !remote.boot_info.rootfs_type.is_empty() {
                 return Err(eother!("Remote hypervisor does not support rootfs_type"));
             }
+            if remote.memory_info.default_memory < MIN_REMOTE_MEMORY_SIZE_MB {
+                return Err(eother!(
+                    "Remote hypervisor has minimal memory limitation {}",
+                    MIN_REMOTE_MEMORY_SIZE_MB
+                ));
+            }
         }
+
         Ok(())
     }
 

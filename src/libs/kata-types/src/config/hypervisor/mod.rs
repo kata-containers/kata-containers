@@ -1044,6 +1044,18 @@ impl SharedFsInfo {
     }
 }
 
+/// Configuration information for remote hypervisor type.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct RemoteInfo {
+    /// Remote hypervisor socket path
+    #[serde(default)]
+    pub hypervisor_socket: String,
+
+    /// Remote hyperisor timeout of creating (in seconds)
+    #[serde(default)]
+    pub hypervisor_timeout: i32,
+}
+
 /// Common configuration information for hypervisors.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Hypervisor {
@@ -1127,20 +1139,16 @@ pub struct Hypervisor {
     #[serde(default, flatten)]
     pub shared_fs: SharedFsInfo,
 
+    /// Remote hypervisor configuration information.
+    #[serde(default, flatten)]
+    pub remote_info: RemoteInfo,
+
     /// A sandbox annotation used to specify prefetch_files.list host path container image
     /// being used, and runtime will pass it to Hypervisor to  search for corresponding
     /// prefetch list file:
     ///   prefetch_list_path = /path/to/<uid>/xyz.com/fedora:36/prefetch_file.list
     #[serde(default)]
     pub prefetch_list_path: String,
-
-    /// remote hypervisor socket (without unix:// prefix)
-    #[serde(default)]
-    pub remote_hypervisor_socket: String,
-    
-    /// remote hyperisor timeout (in milliseconds)
-    #[serde(default)]
-    pub remote_hypervisor_timeout: i32,
 
     /// Vendor customized runtime configuration.
     #[serde(default, flatten)]
@@ -1176,7 +1184,10 @@ impl ConfigOps for Hypervisor {
     fn adjust_config(conf: &mut TomlConfig) -> Result<()> {
         HypervisorVendor::adjust_config(conf)?;
         let hypervisors: Vec<String> = conf.hypervisor.keys().cloned().collect();
-        info!(sl!(), "Adjusting hypervisor configuration {:?}", hypervisors);
+        info!(
+            sl!(),
+            "Adjusting hypervisor configuration {:?}", hypervisors
+        );
         for hypervisor in hypervisors.iter() {
             if let Some(plugin) = get_hypervisor_plugin(hypervisor) {
                 plugin.adjust_config(conf)?;
