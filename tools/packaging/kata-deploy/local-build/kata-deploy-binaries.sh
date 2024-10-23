@@ -815,6 +815,7 @@ install_shimv2() {
 
 	export GO_VERSION
 	export RUST_VERSION
+	export MEASURED_ROOTFS
 
 	DESTDIR="${destdir}" PREFIX="${prefix}" "${shimv2_builder}"
 }
