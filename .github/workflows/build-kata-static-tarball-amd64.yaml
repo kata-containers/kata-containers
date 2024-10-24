@@ -53,11 +53,6 @@ jobs:
           - qemu
           - qemu-snp-experimental
           - stratovirt
-          - rootfs-image
-          - rootfs-image-confidential
-          - rootfs-image-mariner
-          - rootfs-initrd
-          - rootfs-initrd-confidential
           - runk
           - trace-forwarder
           - virtiofsd
@@ -142,6 +137,70 @@ jobs:
           retention-days: 15
           if-no-files-found: error
 
+  build-asset-rootfs:
+    runs-on: ubuntu-22.04
+    needs: build-asset
+    strategy:
+      matrix:
+        asset:
+          - rootfs-image
+          - rootfs-image-confidential
+          - rootfs-image-mariner
+          - rootfs-initrd
+          - rootfs-initrd-confidential
+    steps:
+      - name: Login to Kata Containers quay.io
+        if: ${{ inputs.push-to-registry == 'yes' }}
+        uses: docker/login-action@v3
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
+          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0 # This is needed in order to keep the commit ids history
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: get-artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: kata-artifacts-amd64-*${{ inputs.tarball-suffix }}
+          path: kata-artifacts
+          merge-multiple: true
+
+      - name: Build ${{ matrix.asset }}
+        id: build
+        run: |
+          ./tests/gha-adjust-to-use-prebuilt-components.sh kata-artifacts "${KATA_ASSET}"
+          make "${KATA_ASSET}-tarball"
+          build_dir=$(readlink -f build)
+          # store-artifact does not work with symlink
+          mkdir -p kata-build && cp "${build_dir}"/kata-static-${KATA_ASSET}*.tar.* kata-build/.
+        env:
+          KATA_ASSET: ${{ matrix.asset }}
+          TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
+          PUSH_TO_REGISTRY: ${{ inputs.push-to-registry }}
+          ARTEFACT_REGISTRY: ghcr.io
+          ARTEFACT_REGISTRY_USERNAME: ${{ github.actor }}
+          ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+          RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
+
+      - name: store-artifact ${{ matrix.asset }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: kata-artifacts-amd64-${{ matrix.asset }}${{ inputs.tarball-suffix }}
+          path: kata-build/kata-static-${{ matrix.asset }}.tar.xz
+          retention-days: 15
+          if-no-files-found: error
+
   build-asset-shim-v2:
     runs-on: ubuntu-22.04
     needs: build-asset
@@ -192,7 +251,7 @@ jobs:
 
   create-kata-tarball:
     runs-on: ubuntu-22.04
-    needs: [build-asset, build-asset-shim-v2]
+    needs: [build-asset, build-asset-rootfs, build-asset-shim-v2]
     steps:
       - uses: actions/checkout@v4
         with:
