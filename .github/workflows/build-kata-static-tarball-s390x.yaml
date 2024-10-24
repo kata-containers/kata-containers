@@ -219,7 +219,7 @@ jobs:
 
   build-asset-shim-v2:
     runs-on: s390x
-    needs: build-asset
+    needs: [build-asset, build-asset-rootfs]
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
