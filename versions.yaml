@@ -262,6 +262,9 @@ externals:
     version: "v1.6.8"
     lts: "v1.6"
     active: "v1.7"
+    # since containerd 2.0 hasn't been released, thus here use the 2.0-rc
+    # for sandbox api test.
+    rc: "v2.0.0-rc"
 
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"

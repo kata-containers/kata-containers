@@ -21,6 +21,7 @@ pub mod oci;
 mod serde_config;
 pub mod trans;
 pub mod types;
+pub mod api;
 
 #[cfg(feature = "with-serde")]
 pub use serde_config::{
