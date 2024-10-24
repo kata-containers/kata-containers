@@ -33,3 +33,10 @@ pub struct CopyFileInput {
 pub struct SetPolicyInput {
     pub policy_file: String,
 }
+
+// CreateContainer input
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct CreateContainerInput {
+    pub image: String,
+    pub id: String,
+}
