@@ -20,15 +20,15 @@ function main() {
         kubectl wait --for=condition=Ready --timeout=30s pod "${pod_name}"
 
 	echo "Running stress matrix test"
-        cmd1="stress-ng --matrix 0 -t 60m"
+        cmd1="stress-ng --matrix 0 -t 90m"
         kubectl exec "${pod_name}" -- /bin/bash -c "${cmd1}"
 
 	echo "Running stress cpu test"
-        cmd2="stress-ng --cpu 0 --vm 2 -t 60m"
+        cmd2="stress-ng --cpu 0 --vm 2 -t 90m"
         kubectl exec "${pod_name}" -- /bin/bash -c "${cmd2}"
 
 	echo "Running stress io test"
-        cmd3="stress-ng --io 2 -t 60m"
+        cmd3="stress-ng --io 2 -t 90m"
         kubectl exec "${pod_name}" -- /bin/bash -c "${cmd3}"
 
         kubectl delete -f "${SCRIPT_PATH}/runtimeclass_workloads/stress-test.yaml"
