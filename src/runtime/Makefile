@@ -151,7 +151,6 @@ FIRMWARESNPPATH := $(PREFIXDEPS)/share/ovmf/AMDSEV.fd
 SNPCERTSPATH := /opt/snp/cert_chain.cert
 
 ROOTMEASURECONFIG ?= ""
-KERNELPARAMS += $(ROOTMEASURECONFIG)
 KERNELTDXPARAMS += $(ROOTMEASURECONFIG)
 
 # Name of default configuration file the runtime will use.
