@@ -11,10 +11,11 @@ FROM ${IMAGE_REGISTRY}/fedora:30
 RUN dnf -y update && dnf install -y \
     autoconf \
     automake \
+    bash \
     binutils \
     chrony \
+    clang \
     coreutils \
-    curl \
     curl \
     gcc \
     gcc-c++ \
@@ -28,6 +29,7 @@ RUN dnf -y update && dnf install -y \
     libstdc++-static \
     m4 \
     make \
+    musl-gcc \
     pkgconfig \
     sed \
     systemd \
