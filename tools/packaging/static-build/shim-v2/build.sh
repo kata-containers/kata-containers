@@ -34,7 +34,7 @@ if [ "${MEASURED_ROOTFS}" == "yes" ]; then
 
 	root_hash=$(sed -e 's/Root hash:\s*//g;t;d' "${root_hash_file}")
 	root_measure_config="rootfs_verity.scheme=dm-verity rootfs_verity.hash=${root_hash}"
-	EXTRA_OPTS+=" ROOTMEASURECONFIG=\"${root_measure_config}\""
+	EXTRA_OPTS+=" ROOTIMAGEMEASURECONFIG=\"${root_measure_config}\""
 fi
 
 docker pull ${container_image} || \
