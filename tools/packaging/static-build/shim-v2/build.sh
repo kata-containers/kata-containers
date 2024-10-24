@@ -34,6 +34,12 @@ if [ "${MEASURED_ROOTFS}" == "yes" ]; then
 	root_hash_initrd_file="${root_hashes_dir}/root_hash_initrd.txt"
 
 	if [[ ! -f "${root_hash_image_file}" && ! -f "${root_hash_initrd_file}" ]]; then
+
+		set -x
+		ls -lhaR "${root_hashes_dir}/"
+		set +x
+
+
 		die "Root hash file for measured rootfs not found for image (root_hash_image.txt) nor initrd (root_hash_initrd.txt) at ${root_hashes_dir}"
 	fi
 

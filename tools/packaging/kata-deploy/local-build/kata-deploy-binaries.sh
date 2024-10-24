@@ -195,11 +195,19 @@ install_cached_shim_v2_tarball_specifics() {
 
 	local root_hash_basedir="./opt/kata/share/kata-containers/"
 
+	set -x
+	ls -lhaR "${tarball_dir}/"
+	set +x
+
 	tar xvf "${tarball_dir}/${image_conf_tarball}" ${root_hash_basedir}root_hash.txt --transform s,${root_hash_basedir},,
 	mv root_hash.txt "${tarball_dir}/root_hash_image.txt"
 
 	tar xvf "${tarball_dir}/${initrd_conf_tarball}" ${root_hash_basedir}root_hash.txt --transform s,${root_hash_basedir},,
 	mv root_hash.txt "${tarball_dir}/root_hash_initrd.txt"
+
+	set -x
+	ls -lhaR "${tarball_dir}/"
+	set +x
 
 	[ -f agent-root_hash_image.txt ] || return 1
 	[ -f agent-root_hash_initrd.txt ] || return 1
