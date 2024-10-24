@@ -101,14 +101,11 @@ function create_cluster() {
 }
 
 function install_bats() {
-	# Installing bats from the lunar repo.
-	# This installs newer version of the bats which supports setup_file and teardown_file functions.
-	# These functions are helpful when adding new tests that require one time setup.
-
+	# Installing bats from the noble repo.
 	sudo apt install -y software-properties-common
-	sudo add-apt-repository 'deb http://archive.ubuntu.com/ubuntu/ lunar universe'
+	sudo add-apt-repository 'deb http://archive.ubuntu.com/ubuntu/ noble universe'
 	sudo apt install -y bats
-	sudo add-apt-repository --remove 'deb http://archive.ubuntu.com/ubuntu/ lunar universe'
+	sudo add-apt-repository --remove 'deb http://archive.ubuntu.com/ubuntu/ noble universe'
 }
 
 function install_kubectl() {
