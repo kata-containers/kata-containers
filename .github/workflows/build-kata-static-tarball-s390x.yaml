@@ -106,7 +106,7 @@ jobs:
           push-to-registry: true
 
       - name: store-artifact ${{ matrix.asset }}
-        if: ${{ inputs.stage != 'release' || (matrix.asset != 'agent' && matrix.asset != 'coco-guest-components' && matrix.asset != 'pause-image') }}
+        if: ${{ inputs.stage != 'release' }}
         uses: actions/upload-artifact@v4
         with:
           name: kata-artifacts-s390x-${{ matrix.asset }}${{ inputs.tarball-suffix }}
