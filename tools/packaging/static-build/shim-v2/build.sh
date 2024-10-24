@@ -28,13 +28,26 @@ EXTRA_OPTS="${EXTRA_OPTS:-""}"
 if [ "${MEASURED_ROOTFS}" == "yes" ]; then
 	info "Enable rootfs measurement config"
 
-	root_hash_file="${repo_root_dir}/tools/osbuilder/root_hash.txt"
-	[ -f "$root_hash_file" ] || \
-		die "Root hash file for measured rootfs not found at ${root_hash_file}"
+	root_hashes_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
 
-	root_hash=$(sed -e 's/Root hash:\s*//g;t;d' "${root_hash_file}")
-	root_measure_config="rootfs_verity.scheme=dm-verity rootfs_verity.hash=${root_hash}"
-	EXTRA_OPTS+=" ROOTIMAGEMEASURECONFIG=\"${root_measure_config}\""
+	root_hash_image_file="${root_hashes_dir}/root_hash_image.txt"
+	root_hash_initrd_file="${root_hashes_dir}/root_hash_initrd.txt"
+
+	if [[ ! -f "${root_hash_image_file}" && ! -f "${root_hash_initrd_file}" ]]; then
+		die "Root hash file for measured rootfs not found for image (root_hash_image.txt) nor initrd (root_hash_initrd.txt) at ${root_hashes_dir}"
+	fi
+
+	if [ -f "${root_hash_image_file}" ]; then
+		root_hash_image=$(sed -e 's/Root hash:\s*//g;t;d' "${root_hash_image_file}")
+		root_image_measure_config="rootfs_verity.scheme=dm-verity rootfs_verity.hash=${root_hash_image}"
+		EXTRA_OPTS+=" ROOTIMAGEMEASURECONFIG=\"${root_image_measure_config}\""
+	fi
+
+	if [ -f "${root_hash_initrd_file}" ]; then
+		root_hash_initrd=$(sed -e 's/Root hash:\s*//g;t;d' "${root_hash_initrd_file}")
+		root_initrd_measure_config="rootfs_verity.scheme=dm-verity rootfs_verity.hash=${root_hash_initrd}"
+		EXTRA_OPTS+=" ROOTINITRDMEASURECONFIG=\"${root_initrd_measure_config}\""
+	fi
 fi
 
 docker pull ${container_image} || \
