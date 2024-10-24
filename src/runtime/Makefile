@@ -152,7 +152,6 @@ SNPCERTSPATH := /opt/snp/cert_chain.cert
 
 ROOTIMAGEMEASURECONFIG ?= ""
 ROOTINITRDMEASURECONFIG ?= ""
-KERNELPARAMS += $(ROOTIMAGEMEASURECONFIG)
 KERNELTDXPARAMS += $(ROOTIMAGEMEASURECONFIG)
 
 # Name of default configuration file the runtime will use.
