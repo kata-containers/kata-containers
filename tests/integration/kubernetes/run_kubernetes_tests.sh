@@ -129,6 +129,8 @@ fi
 
 ensure_yq
 
+info "Running tests with bats version: $(bats --version)"
+
 tests_fail=()
 for K8S_TEST_ENTRY in ${K8S_TEST_UNION[@]}
 do
