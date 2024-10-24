@@ -22,6 +22,7 @@ use hypervisor::HYPERVISOR_FIRECRACKER;
 #[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
 use hypervisor::{dragonball::Dragonball, HYPERVISOR_DRAGONBALL};
 use hypervisor::{qemu::Qemu, HYPERVISOR_QEMU};
+use hypervisor::HYPERVISOR_REMOTE;
 use hypervisor::{utils::get_hvsock_path, HybridVsockConfig, DEFAULT_GUEST_VSOCK_CID};
 use hypervisor::{BlockConfig, Hypervisor};
 use kata_sys_util::hooks::HookStates;
@@ -326,7 +327,11 @@ impl Sandbox for VirtSandbox {
         }
 
         self.hypervisor
-            .prepare_vm(id, sandbox_config.network_env.netns.clone())
+            .prepare_vm(
+                id,
+                sandbox_config.network_env.netns.clone(),
+                &sandbox_config.annotations,
+            )
             .await
             .context("prepare vm")?;
 
@@ -649,6 +654,7 @@ impl Persist for VirtSandbox {
                 #[cfg(not(target_arch = "s390x"))]
                 HYPERVISOR_FIRECRACKER => Ok(Some(hypervisor_state)),
                 HYPERVISOR_QEMU => Ok(Some(hypervisor_state)),
+                HYPERVISOR_REMOTE => Ok(Some(hypervisor_state)),
                 _ => Err(anyhow!(
                     "Unsupported hypervisor {}",
                     hypervisor_state.hypervisor_type
