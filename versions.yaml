@@ -117,7 +117,7 @@ assets:
     architecture:
       aarch64:
         name: &default-image-name "ubuntu"
-        version: &default-image-version "latest"
+        version: &default-image-version "focal"
         nvidia-gpu:
           name: *default-image-name
           version: "jammy"
