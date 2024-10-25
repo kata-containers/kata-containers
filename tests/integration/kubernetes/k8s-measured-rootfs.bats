@@ -10,9 +10,14 @@ load "${BATS_TEST_DIRNAME}/lib.sh"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 check_and_skip() {
-	if [ "${KATA_HYPERVISOR}" != "qemu-tdx" ]; then
-		skip "measured rootfs tests not implemented for hypervisor: $KATA_HYPERVISOR"
-	fi
+	case "${KATA_HYPERVISOR}" in
+		qemu-tdx|qemu-coco-dev)
+			return
+			;;
+		*)
+			skip "measured rootfs tests not implemented for hypervisor: $KATA_HYPERVISOR"
+			;;
+	esac
 }
 
 setup() {
