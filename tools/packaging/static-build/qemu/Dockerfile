@@ -2,7 +2,7 @@
 # Copyright (c) 2020 Ant Group
 #
 # SPDX-License-Identifier: Apache-2.0
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 
 # CACHE_TIMEOUT: date to invalid cache, if the date changes the image will be rebuild
 # This is required to keep build dependencies with security fixes.
@@ -62,6 +62,7 @@ RUN apt-get update && apt-get upgrade -y && \
 	    python3 \
 	    python3-dev \
 	    python3-venv \
+	    python3-tomli \
 	    rsync \
 	    zlib1g-dev${DPKG_ARCH} && \
     if [ "${ARCH}" != s390x ]; then apt-get install -y --no-install-recommends libpmem-dev${DPKG_ARCH}; fi && \
