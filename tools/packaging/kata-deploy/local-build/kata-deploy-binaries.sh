@@ -167,7 +167,7 @@ get_kernel_modules_dir() {
 }
 
 cleanup_and_fail_shim_v2_specifics() {
-	rm -f "${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/shim-v2-root_hash.txt"
+	rm -f "${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/shim-v2-root_hash.txt" || true
 
 	return $(cleanup_and_fail "${1:-}" "${2:-}")
 }
