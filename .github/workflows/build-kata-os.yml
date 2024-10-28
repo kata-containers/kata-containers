@@ -1,0 +1,72 @@
+name: Build Kata OS
+run-name: Build Kata OS
+on: [push]
+jobs:
+  build:
+    strategy:
+      matrix:
+        runner: [ubuntu-latest, arm-8core-linux]
+        include:
+          - runner: ubuntu-latest
+            arch: amd64
+            kernel_version: 6.8
+          - runner: arm-8core-linux
+            arch: arm64
+            kernel_version: 6.8
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libelf-dev flex bison
+      - name: Build Ubuntu image ${{ matrix.arch }}
+        run: cd tools/osbuilder && sudo make USE_DOCKER=true image-ubuntu
+      - name: Build Kernel ${{ matrix.kernel_version }}
+        run: |
+          cd tools/packaging/kernel
+          sudo ./build-kernel.sh -v ${{ matrix.kernel_version }} setup
+          sudo ./build-kernel.sh -v ${{ matrix.kernel_version }} build
+      - name: Bundle artifacts
+        run: |
+          cp tools/packaging/kernel/kata-linux-*/vmlinux /tmp/vmlinux
+          cp tools/osbuilder/kata-containers-image-ubuntu.img /tmp/kata-containers-image-ubuntu.img
+          cp sbom.json /tmp/sbom.json
+          mkdir -p /tmp/artifacts
+          zip -j /tmp/artifacts/artifacts-${{ matrix.arch }}.zip /tmp/vmlinux /tmp/kata-containers-image-ubuntu.img /tmp/sbom.json
+          cd /tmp/artifacts
+          sha256sum artifacts-${{ matrix.arch }}.zip > checksum-${{ matrix.arch }}.sha256
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-${{ matrix.arch }}
+          path: /tmp/artifacts
+          retention-days: 1
+  release:
+    runs-on: ubuntu-latest
+    needs: build
+    # Only create a release when a new tag is created
+    if: ${{ startsWith(github.ref, 'refs/tags/') }}
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+      - name: Download artifacts amd64
+        uses: actions/download-artifact@v4
+        with:
+          name: artifacts-amd64
+      - name: Download artifacts arm64
+        uses: actions/download-artifact@v4
+        with:
+          name: artifacts-arm64
+      - name: 'Create New Release'
+        env:
+          GH_TOKEN: ${{ secrets.WORKFLOW_TOKEN }}
+        run: |
+          RELEASE_VERSION=$(echo ${{ github.ref }} | sed 's/refs\/tags\///')
+          echo "Creating release $RELEASE_VERSION"
+          gh release create ${RELEASE_VERSION} -t ${RELEASE_VERSION} --draft
+          gh release upload "${RELEASE_VERSION}" artifacts-amd64.zip
+          gh release upload "${RELEASE_VERSION}" artifacts-arm64.zip
+          gh release upload "${RELEASE_VERSION}" checksum-amd64.sha256
+          gh release upload "${RELEASE_VERSION}" checksum-arm64.sha256
+          gh release edit ${RELEASE_VERSION} --verify-tag	--draft=false
+
