@@ -166,6 +166,12 @@ get_kernel_modules_dir() {
 	echo ${kernel_modules_dir}
 }
 
+cleanup_and_fail_shim_v2_specifics() {
+	rm -f "${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/shim-v2-root_hash.txt"
+
+	return $(cleanup_and_fail "${1:-}" "${2:-}")
+}
+
 cleanup_and_fail() {
 	local component_tarball_name="${1:-}"
 	local extra_tarballs="${2:-}"
@@ -184,6 +190,36 @@ cleanup_and_fail() {
 	return 1
 }
 
+install_cached_shim_v2_tarball_get_root_hash() {
+	if [ "${MEASURED_ROOTFS}" != "yes" ]; then
+		return 0
+	fi
+
+	local tarball_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
+	local image_conf_tarball="kata-static-rootfs-image-confidential.tar.xz"
+
+	local root_hash_basedir="./opt/kata/share/kata-containers/"
+
+	tar xvf "${tarball_dir}/${image_conf_tarball}" ${root_hash_basedir}root_hash.txt --transform s,${root_hash_basedir},,
+	mv root_hash.txt "${tarball_dir}/root_hash.txt"
+
+	return 0
+}
+
+install_cached_shim_v2_tarball_compare_root_hashes() {
+	if [ "${MEASURED_ROOTFS}" != "yes" ]; then
+		return 0
+	fi
+
+	local tarball_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build"
+
+	[ -f shim-v2-root_hash.txt ] || return 1
+
+	diff "${tarball_dir}/root_hash.txt" shim-v2-root_hash.txt || return 1
+
+	return 0
+}
+
 install_cached_tarball_component() {
 	if [ "${USE_CACHE}" != "yes" ]; then
 		return 1
@@ -198,6 +234,10 @@ install_cached_tarball_component() {
 	# "tarball1_name:tarball1_path tarball2_name:tarball2_path ... tarballN_name:tarballN_path"
 	local extra_tarballs="${6:-}"
 
+	if [ "${component}" = "shim-v2" ]; then
+		install_cached_shim_v2_tarball_get_root_hash
+	fi
+
 	oras pull ${ARTEFACT_REGISTRY}/${ARTEFACT_REPOSITORY}/cached-artefacts/${build_target}:latest-${TARGET_BRANCH}-$(uname -m) || return 1
 
 	cached_version="$(cat ${component}-version)"
@@ -206,9 +246,13 @@ install_cached_tarball_component() {
 	rm -f ${component}-version
 	rm -f ${component}-builder-image-version
 
-	[ "${cached_image_version}" != "${current_image_version}" ] && return 1
-	[ "${cached_version}" != "${current_version}" ] && return 1
+	[ "${cached_image_version}" != "${current_image_version}" ] && return $(cleanup_and_fail "${component_tarball_path}" "${extra_tarballs}")
+	[ "${cached_version}" != "${current_version}" ] && return $(cleanup_and_fail "${component_tarball_path}" "${extra_tarballs}")
 	sha256sum -c "${component}-sha256sum" || return $(cleanup_and_fail "${component_tarball_path}" "${extra_tarballs}")
+
+	if [ "${component}" = "shim-v2" ]; then
+		install_cached_shim_v2_tarball_compare_root_hashes || return $(cleanup_and_fail_shim_v2_specifics "${component_tarball_path}" "${extra_tarballs}")
+	fi
 
 	info "Using cached tarball of ${component}"
 	mv "${component_tarball_name}" "${component_tarball_path}"
@@ -777,6 +821,7 @@ install_shimv2() {
 
 	export GO_VERSION
 	export RUST_VERSION
+	export MEASURED_ROOTFS
 
 	DESTDIR="${destdir}" PREFIX="${prefix}" "${shimv2_builder}"
 }
@@ -1145,6 +1190,21 @@ handle_build() {
 			fi
 			tar tvf "${modules_final_tarball_path}"
 			;;
+		shim-v2)
+			if [ "${MEASURED_ROOTFS}" = "yes" ]; then
+				local image_conf_tarball="${workdir}/kata-static-rootfs-image-confidential.tar.xz"
+				if [ ! -f "${image_conf_tarball}" ]; then
+					die "Building the shim-v2 with MEASURED_ROOTFS support requires a rootfs confidential image tarball"
+				fi
+
+				local root_hash_basedir="./opt/kata/share/kata-containers/"
+				if ! tar xvf ${image_conf_tarball} ${root_hash_basedir}root_hash.txt --transform s,${root_hash_basedir},,; then
+					die "Building the shim-v2 with MEASURED_ROOTFS support requres a rootfs confidential image tarball built with MEASURED_ROOTFS support"
+				fi
+
+				mv root_hash.txt shim-v2-root_hash.txt
+			fi
+			;;
 	esac
 
 	pushd ${workdir}
@@ -1209,6 +1269,13 @@ handle_build() {
 				files_to_push+=(
 					"kata-static-${build_target}-modules.tar.xz"
 				)
+				;;
+			shim-v2)
+				if [ "${MEASURED_ROOTFS}" = "yes" ]; then
+					files_to_push+=(
+						"shim-v2-root_hash.txt"
+					)
+				fi
 				;;
 			*)
 				;;

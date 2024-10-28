@@ -30,7 +30,6 @@ jobs:
           - agent
           - kernel
           - qemu
-          - rootfs-initrd
           - virtiofsd
         stage:
           - ${{ inputs.stage }}
@@ -76,7 +75,7 @@ jobs:
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
 
       - name: store-artifact ${{ matrix.asset }}
-        if: ${{ inputs.stage != 'release' || matrix.asset != 'agent' }}
+        if: ${{ inputs.stage != 'release' }}
         uses: actions/upload-artifact@v4
         with:
           name: kata-artifacts-ppc64le-${{ matrix.asset }}${{ inputs.tarball-suffix }}
@@ -84,9 +83,15 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
-  build-asset-shim-v2:
+  build-asset-rootfs:
     runs-on: ppc64le
     needs: build-asset
+    strategy:
+      matrix:
+        asset:
+          - rootfs-initrd
+        stage:
+          - ${{ inputs.stage }}
     steps:
       - name: Prepare the self-hosted runner
         run: |
@@ -112,8 +117,76 @@ jobs:
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
+      - name: get-artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: kata-artifacts-ppc64le-*${{ inputs.tarball-suffix }}
+          path: kata-artifacts
+          merge-multiple: true
+
+      - name: Build ${{ matrix.asset }}
+        run: |
+          ./tests/gha-adjust-to-use-prebuilt-components.sh kata-artifacts "${KATA_ASSET}"
+          make "${KATA_ASSET}-tarball"
+          build_dir=$(readlink -f build)
+          # store-artifact does not work with symlink
+          mkdir -p kata-build && cp "${build_dir}"/kata-static-${KATA_ASSET}*.tar.* kata-build/.
+        env:
+          KATA_ASSET: ${{ matrix.asset }}
+          TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
+          PUSH_TO_REGISTRY: ${{ inputs.push-to-registry }}
+          ARTEFACT_REGISTRY: ghcr.io
+          ARTEFACT_REGISTRY_USERNAME: ${{ github.actor }}
+          ARTEFACT_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+          RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
+
+      - name: store-artifact ${{ matrix.asset }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: kata-artifacts-ppc64le-${{ matrix.asset }}${{ inputs.tarball-suffix }}
+          path: kata-build/kata-static-${{ matrix.asset }}.tar.xz
+          retention-days: 1
+          if-no-files-found: error
+
+  build-asset-shim-v2:
+    runs-on: ppc64le
+    needs: [build-asset, build-asset-rootfs]
+    steps:
+      - name: Prepare the self-hosted runner
+        run: |
+            ${HOME}/scripts/prepare_runner.sh
+            sudo rm -rf $GITHUB_WORKSPACE/*
+
+      - name: Login to Kata Containers quay.io
+        if: ${{ inputs.push-to-registry == 'yes' }}
+        uses: docker/login-action@v3
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
+          password: ${{ secrets.QUAY_DEPLOYER_PASSWORD }}
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit-hash }}
+          fetch-depth: 0 # This is needed in order to keep the commit ids history
+
+      - name: Rebase atop of the latest target branch
+        run: |
+          ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: get-artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: kata-artifacts-ppc64le-*${{ inputs.tarball-suffix }}
+          path: kata-artifacts
+          merge-multiple: true
+
       - name: Build shim-v2
         run: |
+          ./tests/gha-adjust-to-use-prebuilt-components.sh kata-artifacts "${KATA_ASSET}"
           make "${KATA_ASSET}-tarball"
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
@@ -138,7 +211,7 @@ jobs:
 
   create-kata-tarball:
     runs-on: ppc64le
-    needs: [build-asset, build-asset-shim-v2]
+    needs: [build-asset, build-asset-rootfs, build-asset-shim-v2]
     steps:
       - name: Adjust a permission for repo
         run: |
