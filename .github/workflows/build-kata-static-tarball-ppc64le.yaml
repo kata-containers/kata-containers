@@ -129,7 +129,6 @@ jobs:
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
 
       - name: store-artifact shim-v2
-        if: ${{ inputs.stage != 'release' }}
         uses: actions/upload-artifact@v4
         with:
           name: kata-artifacts-ppc64le-shim-v2${{ inputs.tarball-suffix }}
