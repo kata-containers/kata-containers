@@ -280,15 +280,26 @@ data:
   any: |-
     version: v1
     flags:
-      migStrategy: none
+      migStrategy: mixed
     sharing:
       timeSlicing:
         renameByDefault: false
         failRequestsGreaterThanOne: false
         resources:
-          - name: nvidia.com/gpu
-            replicas: 1000
-
+        - name: nvidia.com/gpu
+          replicas: 1000
+        - name: nvidia.com/mig-1g.12gb
+          replicas: 7
+        - name: nvidia.com/mig-1g.24gb
+          replicas: 4
+        - name: nvidia.com/mig-2g.24gb
+          replicas: 3
+        - name: nvidia.com/mig-3g.47gb
+          replicas: 2
+        - name: nvidia.com/mig-4g.47gb
+          replicas: 1
+        - name: nvidia.com/mig-7g.94gb
+          replicas: 1
 ---
 
 apiVersion: helm.cattle.io/v1
