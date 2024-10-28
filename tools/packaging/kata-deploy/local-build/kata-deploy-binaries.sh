@@ -1202,7 +1202,7 @@ handle_build() {
 					die "Building the shim-v2 with MEASURED_ROOTFS support requres a rootfs confidential image tarball built with MEASURED_ROOTFS support"
 				fi
 
-				mv root_hash.txt shim-v2-root_hash.txt
+				mv root_hash.txt ${workdir}/shim-v2-root_hash.txt
 			fi
 			;;
 	esac
