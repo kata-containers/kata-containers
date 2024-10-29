@@ -16,7 +16,7 @@ setup() {
 
     [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
 
-    setup_common
+    setup_common || die "setup_common failed"
     AUTHENTICATED_IMAGE="${AUTHENTICATED_IMAGE:-quay.io/kata-containers/confidential-containers-auth:test}"
     AUTHENTICATED_IMAGE_USER=${AUTHENTICATED_IMAGE_USER:-}
     AUTHENTICATED_IMAGE_PASSWORD=${AUTHENTICATED_IMAGE_PASSWORD:-}
