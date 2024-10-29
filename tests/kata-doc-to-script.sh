@@ -168,7 +168,6 @@ doc_to_script()
 
 	all=$(mktemp)
 	body=$(mktemp)
-	trap 'rm -f $body $all' EXIT
 
 	cat "$file" |\
 		sed -n "/^ *${bash_block_open}/,/^ *${block_close}/ p" |\
@@ -189,6 +188,9 @@ doc_to_script()
 
 	# create output file
 	[ "$check_only" = "no" ] && cp "$all" "$outfile"
+
+	# clean up
+	rm -f "$body" "$all"
 }
 
 main()
