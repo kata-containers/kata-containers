@@ -36,7 +36,7 @@ jobs:
           - qemu-runtime-rs
           - qemu-coco-dev
         k8s:
-          - k3s
+          - kubeadm
         include:
           - snapshotter: devmapper
             pull-type: default
@@ -96,9 +96,6 @@ jobs:
           echo "KBS=true" >> $GITHUB_ENV
           echo "KBS_INGRESS=nodeport" >> $GITHUB_ENV
         if: ${{ matrix.vmm == 'qemu-coco-dev' }}
-
-      - name: Deploy ${{ matrix.k8s }}
-        run: bash tests/integration/kubernetes/gha-run.sh deploy-k8s
 
       # qemu-runtime-rs only works with overlayfs
       # See: https://github.com/kata-containers/kata-containers/issues/10066
