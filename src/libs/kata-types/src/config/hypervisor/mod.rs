@@ -44,6 +44,9 @@ pub use self::qemu::{QemuConfig, HYPERVISOR_NAME_QEMU};
 mod ch;
 pub use self::ch::{CloudHypervisorConfig, HYPERVISOR_NAME_CH};
 
+mod remote;
+pub use self::remote::{RemoteConfig, HYPERVISOR_NAME_REMOTE};
+
 /// Virtual PCI block device driver.
 pub const VIRTIO_BLK_PCI: &str = "virtio-blk-pci";
 
@@ -540,6 +543,7 @@ impl TopologyConfigInfo {
             HYPERVISOR_NAME_CH,
             HYPERVISOR_NAME_DRAGONBALL,
             HYPERVISOR_NAME_FIRECRACKER,
+            HYPERVISOR_NAME_REMOTE,
         ];
         let hypervisor_name = toml_config.runtime.hypervisor_name.as_str();
         if !hypervisor_names.contains(&hypervisor_name) {
@@ -1040,6 +1044,18 @@ impl SharedFsInfo {
     }
 }
 
+/// Configuration information for remote hypervisor type.
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct RemoteInfo {
+    /// Remote hypervisor socket path
+    #[serde(default)]
+    pub hypervisor_socket: String,
+
+    /// Remote hyperisor timeout of creating (in seconds)
+    #[serde(default)]
+    pub hypervisor_timeout: i32,
+}
+
 /// Common configuration information for hypervisors.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct Hypervisor {
@@ -1123,6 +1139,10 @@ pub struct Hypervisor {
     #[serde(default, flatten)]
     pub shared_fs: SharedFsInfo,
 
+    /// Remote hypervisor configuration information.
+    #[serde(default, flatten)]
+    pub remote_info: RemoteInfo,
+
     /// A sandbox annotation used to specify prefetch_files.list host path container image
     /// being used, and runtime will pass it to Hypervisor to  search for corresponding
     /// prefetch list file:
@@ -1164,6 +1184,10 @@ impl ConfigOps for Hypervisor {
     fn adjust_config(conf: &mut TomlConfig) -> Result<()> {
         HypervisorVendor::adjust_config(conf)?;
         let hypervisors: Vec<String> = conf.hypervisor.keys().cloned().collect();
+        info!(
+            sl!(),
+            "Adjusting hypervisor configuration {:?}", hypervisors
+        );
         for hypervisor in hypervisors.iter() {
             if let Some(plugin) = get_hypervisor_plugin(hypervisor) {
                 plugin.adjust_config(conf)?;

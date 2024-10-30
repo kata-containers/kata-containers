@@ -1685,8 +1685,11 @@ dependencies = [
  "libc",
  "logging",
  "nix 0.24.3",
+ "oci-spec",
  "path-clean",
  "persist",
+ "protobuf 3.2.0",
+ "protocols",
  "qapi",
  "qapi-qmp",
  "qapi-spec",
@@ -1706,6 +1709,8 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+ "ttrpc",
+ "ttrpc-codegen",
  "vmm-sys-util 0.11.1",
 ]
 

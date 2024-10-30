@@ -1,48 +1,37 @@
-// Copyright (c) 2019-2022 Alibaba Cloud
-// Copyright (c) 2022 Intel Corporation
+// Copyright 2024 Kata Contributors
 //
 // SPDX-License-Identifier: Apache-2.0
+//
 
 use super::HypervisorState;
-use crate::device::DeviceType;
-use crate::{Hypervisor, MemoryConfig, VcpuThreadIds};
+use crate::{device::DeviceType, Hypervisor, HypervisorConfig, MemoryConfig, VcpuThreadIds};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
+use inner::RemoteInner;
 use kata_types::capabilities::{Capabilities, CapabilityBits};
-use kata_types::config::hypervisor::Hypervisor as HypervisorConfig;
 use persist::sandbox_persist::Persist;
 use std::collections::HashMap;
-use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex, RwLock};
 
-// Convenience macro to obtain the scope logger
-#[macro_export]
-macro_rules! sl {
-      () => {
-          slog_scope::logger().new(o!("subsystem" => "cloud-hypervisor"))
-      };
-  }
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 mod inner;
-mod inner_device;
-mod inner_hypervisor;
-mod utils;
-
-use inner::CloudHypervisorInner;
 
 #[derive(Debug)]
-pub struct CloudHypervisor {
-    inner: Arc<RwLock<CloudHypervisorInner>>,
-    exit_waiter: Mutex<(mpsc::Receiver<i32>, i32)>,
+pub struct Remote {
+    inner: Arc<RwLock<RemoteInner>>,
 }
 
-impl CloudHypervisor {
-    pub fn new() -> Self {
-        let (exit_notify, exit_waiter) = mpsc::channel(1);
+impl Default for Remote {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
+impl Remote {
+    pub fn new() -> Self {
         Self {
-            inner: Arc::new(RwLock::new(CloudHypervisorInner::new(Some(exit_notify)))),
-            exit_waiter: Mutex::new((exit_waiter, 0)),
+            inner: Arc::new(RwLock::new(RemoteInner::new())),
         }
     }
 
@@ -52,22 +41,16 @@ impl CloudHypervisor {
     }
 }
 
-impl Default for CloudHypervisor {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[async_trait]
-impl Hypervisor for CloudHypervisor {
+impl Hypervisor for Remote {
     async fn prepare_vm(
         &self,
         id: &str,
         netns: Option<String>,
-        _annotations: &HashMap<String, String>,
+        annotations: &HashMap<String, String>,
     ) -> Result<()> {
         let mut inner = self.inner.write().await;
-        inner.prepare_vm(id, netns).await
+        inner.prepare_vm(id, netns, annotations).await
     }
 
     async fn start_vm(&self, timeout: i32) -> Result<()> {
@@ -81,47 +64,42 @@ impl Hypervisor for CloudHypervisor {
     }
 
     async fn wait_vm(&self) -> Result<i32> {
-        debug!(sl!(), "Waiting CH vmm");
-        let mut waiter = self.exit_waiter.lock().await;
-        if let Some(exitcode) = waiter.0.recv().await {
-            waiter.1 = exitcode;
-        }
-
-        Ok(waiter.1)
+        let inner = self.inner.read().await;
+        inner.wait_vm().await
     }
 
     async fn pause_vm(&self) -> Result<()> {
-        let inner = self.inner.write().await;
-        inner.pause_vm()
+        let inner = self.inner.read().await;
+        inner.pause_vm().await
     }
 
     async fn resume_vm(&self) -> Result<()> {
-        let inner = self.inner.write().await;
-        inner.resume_vm()
+        let inner = self.inner.read().await;
+        inner.resume_vm().await
     }
 
     async fn save_vm(&self) -> Result<()> {
-        let inner = self.inner.write().await;
+        let inner = self.inner.read().await;
         inner.save_vm().await
     }
 
     async fn add_device(&self, device: DeviceType) -> Result<DeviceType> {
-        let mut inner = self.inner.write().await;
+        let inner = self.inner.write().await;
         inner.add_device(device).await
     }
 
     async fn remove_device(&self, device: DeviceType) -> Result<()> {
-        let mut inner = self.inner.write().await;
+        let inner = self.inner.write().await;
         inner.remove_device(device).await
     }
 
     async fn update_device(&self, device: DeviceType) -> Result<()> {
-        let mut inner = self.inner.write().await;
+        let inner = self.inner.write().await;
         inner.update_device(device).await
     }
 
     async fn get_agent_socket(&self) -> Result<String> {
-        let inner = self.inner.write().await;
+        let inner = self.inner.read().await;
         inner.get_agent_socket().await
     }
 
@@ -131,28 +109,13 @@ impl Hypervisor for CloudHypervisor {
     }
 
     async fn hypervisor_config(&self) -> HypervisorConfig {
-        let inner = self.inner.write().await;
+        let inner = self.inner.read().await;
         inner.hypervisor_config()
     }
 
     async fn get_thread_ids(&self) -> Result<VcpuThreadIds> {
         let inner = self.inner.read().await;
         inner.get_thread_ids().await
-    }
-
-    async fn cleanup(&self) -> Result<()> {
-        let inner = self.inner.read().await;
-        inner.cleanup().await
-    }
-
-    async fn resize_vcpu(&self, old_vcpu: u32, new_vcpu: u32) -> Result<(u32, u32)> {
-        let inner = self.inner.read().await;
-        inner.resize_vcpu(old_vcpu, new_vcpu).await
-    }
-
-    async fn get_pids(&self) -> Result<Vec<u32>> {
-        let inner = self.inner.read().await;
-        inner.get_pids().await
     }
 
     async fn get_vmm_master_tid(&self) -> Result<u32> {
@@ -163,6 +126,21 @@ impl Hypervisor for CloudHypervisor {
     async fn get_ns_path(&self) -> Result<String> {
         let inner = self.inner.read().await;
         inner.get_ns_path().await
+    }
+
+    async fn cleanup(&self) -> Result<()> {
+        let inner = self.inner.read().await;
+        inner.cleanup().await
+    }
+
+    async fn resize_vcpu(&self, old_vcpus: u32, new_vcpus: u32) -> Result<(u32, u32)> {
+        let mut inner = self.inner.write().await;
+        inner.resize_vcpu(old_vcpus, new_vcpus).await
+    }
+
+    async fn get_pids(&self) -> Result<Vec<u32>> {
+        let inner = self.inner.read().await;
+        inner.get_pids().await
     }
 
     async fn check(&self) -> Result<()> {
@@ -215,25 +193,24 @@ impl Hypervisor for CloudHypervisor {
 }
 
 #[async_trait]
-impl Persist for CloudHypervisor {
+impl Persist for Remote {
     type State = HypervisorState;
     type ConstructorArgs = ();
 
+    /// Save a state of the component.
     async fn save(&self) -> Result<Self::State> {
         let inner = self.inner.read().await;
-        inner.save().await.context("save CH hypervisor state")
+        inner.save().await.context("save remote hypervisor state")
     }
 
+    /// Restore a component from a specified state.
     async fn restore(
-        _hypervisor_args: Self::ConstructorArgs,
+        hypervisor_args: Self::ConstructorArgs,
         hypervisor_state: Self::State,
     ) -> Result<Self> {
-        let (exit_notify, exit_waiter) = mpsc::channel(1);
-
-        let inner = CloudHypervisorInner::restore(exit_notify, hypervisor_state).await?;
+        let inner = RemoteInner::restore(hypervisor_args, hypervisor_state).await?;
         Ok(Self {
             inner: Arc::new(RwLock::new(inner)),
-            exit_waiter: Mutex::new((exit_waiter, 0)),
         })
     }
 }
