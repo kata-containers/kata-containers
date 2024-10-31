@@ -886,7 +886,7 @@ dependencies = [
 [[package]]
 name = "cdi"
 version = "0.1.0"
-source = "git+https://github.com/cncf-tags/container-device-interface-rs?rev=19763bcf0de62599ce8b88558418b4dac1154745#19763bcf0de62599ce8b88558418b4dac1154745"
+source = "git+https://github.com/cncf-tags/container-device-interface-rs?rev=fba5677a8e7cc962fc6e495fcec98d7d765e332a#fba5677a8e7cc962fc6e495fcec98d7d765e332a"
 dependencies = [
  "anyhow",
  "clap 4.5.13",
@@ -5411,7 +5411,7 @@ dependencies = [
  "aes",
  "aes-gcm",
  "anyhow",
- "base64 0.22.1",
+ "base64 0.21.7",
  "block-padding",
  "blowfish",
  "buffered-reader",
