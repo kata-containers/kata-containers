@@ -11,6 +11,8 @@ load "${BATS_TEST_DIRNAME}/confidential_common.sh"
 export KBS="${KBS:-false}"
 
 setup() {
+    bats_unbuffered_info "test ${BATS_TEST_NUMBER}: setup starting"
+
     if ! is_confidential_runtime_class; then
         skip "Test not supported for ${KATA_HYPERVISOR}."
     fi
@@ -28,6 +30,8 @@ setup() {
     COSIGN_SIGNED_PROTECTED_REGISTRY_IMAGE="ghcr.io/confidential-containers/test-container-image-rs:cosign-signed${tag_suffix}"
     COSIGNED_SIGNED_PROTECTED_REGISTRY_WRONG_KEY_IMAGE="ghcr.io/confidential-containers/test-container-image-rs:cosign-signed-key2${tag_suffix}"
     SECURITY_POLICY_KBS_URI="kbs:///default/security-policy/test"
+
+    bats_unbuffered_info "test ${BATS_TEST_NUMBER}: setup succeeded"
 }
 
 function setup_kbs_image_policy() {
@@ -75,6 +79,8 @@ EOF
 }
 
 @test "Create a pod from an unsigned image, on an insecureAcceptAnything registry works" {
+    bats_unbuffered_info "test ${BATS_TEST_NUMBER}: starting"
+
     # We want to set the default policy to be reject to rule out false positives
     setup_kbs_image_policy "reject"
 
@@ -85,9 +91,13 @@ EOF
 
     k8s_create_pod "${kata_pod}"
     echo "Kata pod test-e2e from image security policy is running"
+
+    bats_unbuffered_info "test ${BATS_TEST_NUMBER}: succeeded"
 }
 
 @test "Create a pod from an unsigned image, on a 'restricted registry' is rejected" {
+    bats_unbuffered_info "test ${BATS_TEST_NUMBER}: starting"
+
     # We want to leave the default policy to be insecureAcceptAnything to rule out false negatives
     setup_kbs_image_policy
 
@@ -98,9 +108,13 @@ EOF
 
     assert_pod_fail "${kata_pod}"
     assert_logs_contain "${node}" kata "${node_start_time}" "Security validate failed: Validate image failed: Cannot pull manifest"
+
+    bats_unbuffered_info "test ${BATS_TEST_NUMBER}: succeeded"
 }
 
 @test "Create a pod from a signed image, on a 'restricted registry' is successful" {
+    bats_unbuffered_info "test ${BATS_TEST_NUMBER}: starting"
+
     # We want to set the default policy to be reject to rule out false positives
     setup_kbs_image_policy "reject"
 
@@ -111,9 +125,13 @@ EOF
 
     k8s_create_pod "${kata_pod}"
     echo "Kata pod test-e2e from image security policy is running"
+
+    bats_unbuffered_info "test ${BATS_TEST_NUMBER}: succeeded"
 }
 
 @test "Create a pod from a signed image, on a 'restricted registry', but with the wrong key is rejected" {
+    bats_unbuffered_info "test ${BATS_TEST_NUMBER}: starting"
+
     # We want to leave the default policy to be insecureAcceptAnything to rule out false negatives
     setup_kbs_image_policy
 
@@ -124,9 +142,13 @@ EOF
 
     assert_pod_fail "${kata_pod}"
     assert_logs_contain "${node}" kata "${node_start_time}" "Security validate failed: Validate image failed: \[PublicKeyVerifier"
+
+    bats_unbuffered_info "test ${BATS_TEST_NUMBER}: succeeded"
 }
 
 @test "Create a pod from an unsigned image, on a 'restricted registry' works if policy files isn't set" {
+    bats_unbuffered_info "test ${BATS_TEST_NUMBER}: starting"
+
     # We want to set the default policy to be reject to rule out false positives
     setup_kbs_image_policy "reject"
 
@@ -137,9 +159,13 @@ EOF
 
     k8s_create_pod "${kata_pod}"
     echo "Kata pod test-e2e from image security policy is running"
+
+    bats_unbuffered_info "test ${BATS_TEST_NUMBER}: succeeded"
 }
 
 teardown() {
+    bats_unbuffered_info "test ${BATS_TEST_NUMBER}: teardown starting"
+
     if ! is_confidential_runtime_class; then
         skip "Test not supported for ${KATA_HYPERVISOR}."
     fi
@@ -147,4 +173,6 @@ teardown() {
     [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
 
     teardown_common "${node}" "${node_start_time:-}"
+
+    bats_unbuffered_info "test ${BATS_TEST_NUMBER}: teardown succeeded"
 }
