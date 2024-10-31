@@ -123,7 +123,15 @@ assert_logs_contain() {
 	local message="$4"
 
 	# Note: with image-rs we get more than the default 1000 lines of logs
-	exec_host "${node}" journalctl -x -t $log_id --since '"'$datetime'"' | grep "$message"
+	if ! exec_output=$(exec_host "${node}" journalctl -x -t $log_id --since '"'$datetime'"'); then
+		bats_unbuffered_info "exec_host failed"
+		return 1
+	fi
+
+	if ! (echo "${exec_output}" | grep "${message}"); then
+		bats_unbuffered_info "log doesn't contain: ${message}"
+		return 1
+	fi
 }
 
 # Create a pod then assert it fails to run. Use in tests that you expect the
