@@ -2835,7 +2835,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "byteorder",
- "cgroups-rs",
  "chrono",
  "common-path",
  "fail",
@@ -4376,7 +4375,6 @@ name = "protocols"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "kata-sys-util",
  "oci-spec",
  "protobuf 3.5.1",
  "serde",
