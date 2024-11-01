@@ -534,12 +534,12 @@ install_cached_kernel_tarball_component() {
 
 #Install kernel asset
 install_kernel_helper() {
-	local kernel_version_yaml_path="${1}"
+	local kernel_yaml_path="${1}"
 	local kernel_name="${2}"
 	local extra_cmd="${3:-}"
 	local extra_tarballs=""
 
-	export kernel_version="$(get_from_kata_deps .${kernel_version_yaml_path})"
+	export kernel_version="$(get_from_kata_deps .${kernel_yaml_path}.version)"
 	export kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
 
 	if [[ "${kernel_name}" == "kernel"*"-confidential" ]]; then
@@ -570,7 +570,7 @@ install_kernel_helper() {
 #Install kernel asset
 install_kernel() {
 	install_kernel_helper \
-		"assets.kernel.version" \
+		"assets.kernel" \
 		"kernel" \
 		""
 }
@@ -581,21 +581,21 @@ install_kernel_confidential() {
 	export MEASURED_ROOTFS=yes
 
 	install_kernel_helper \
-		"assets.kernel.confidential.version" \
+		"assets.kernel.confidential" \
 		"kernel-confidential" \
 		"-x -u ${kernel_url}"
 }
 
 install_kernel_dragonball_experimental() {
 	install_kernel_helper \
-		"assets.kernel-dragonball-experimental.version" \
+		"assets.kernel-dragonball-experimental" \
 		"kernel-dragonball-experimental" \
 		"-e -t dragonball"
 }
 
 install_kernel_nvidia_gpu_dragonball_experimental() {
 	install_kernel_helper \
-		"assets.kernel-dragonball-experimental.version" \
+		"assets.kernel-dragonball-experimental" \
 		"kernel-dragonball-experimental" \
 		"-e -t dragonball -g nvidia -H deb"
 }
@@ -605,7 +605,7 @@ install_kernel_nvidia_gpu() {
 	local kernel_url="$(get_from_kata_deps .assets.kernel.url)"
 
 	install_kernel_helper \
-		"assets.kernel.version" \
+		"assets.kernel" \
 		"kernel-nvidia-gpu" \
 		"-g nvidia -u ${kernel_url} -H deb"
 }
@@ -615,7 +615,7 @@ install_kernel_nvidia_gpu_confidential() {
 	local kernel_url="$(get_from_kata_deps .assets.kernel.confidential.url)"
 
 	install_kernel_helper \
-		"assets.kernel.confidential.version" \
+		"assets.kernel.confidential" \
 		"kernel-nvidia-gpu-confidential" \
 		"-x -g nvidia -u ${kernel_url} -H deb"
 }
