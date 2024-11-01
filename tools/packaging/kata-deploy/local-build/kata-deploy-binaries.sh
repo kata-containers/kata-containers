@@ -564,7 +564,7 @@ install_kernel_helper() {
 
 	info "build ${kernel_name}"
 	info "Kernel version ${kernel_version}"
-	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -v "${kernel_version}" ${extra_cmd}
+	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -v "${kernel_version}" -f "${extra_cmd}"
 }
 
 #Install kernel asset
@@ -572,7 +572,7 @@ install_kernel() {
 	install_kernel_helper \
 		"assets.kernel.version" \
 		"kernel" \
-		"-f"
+		""
 }
 
 install_kernel_confidential() {
