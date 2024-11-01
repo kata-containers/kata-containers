@@ -26,6 +26,10 @@ docker pull ${container_image} || \
 	 push_to_registry "${container_image}")
 
 docker run --rm -i -v "${repo_root_dir}:${repo_root_dir}" \
+	--env LIBSECCOMP_VERSION=${LIBSECCOMP_VERSION} \
+	--env LIBSECCOMP_URL=${LIBSECCOMP_URL} \
+	--env GPERF_VERSION=${GPERF_VERSION} \
+	--env GPERF_URL=${GPERF_URL} \
 	-w "${repo_root_dir}" \
 	--user "$(id -u)":"$(id -g)" \
 	"${container_image}" \
