@@ -540,10 +540,12 @@ install_kernel_helper() {
 	local extra_tarballs=""
 
 	export kernel_version="$(get_from_kata_deps .${kernel_yaml_path}.version)"
+	export kernel_url="$(get_from_kata_deps .${kernel_yaml_path}.url)"
 	export kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
 
 	if [[ "${kernel_name}" == "kernel"*"-confidential" ]]; then
 		kernel_version="$(get_from_kata_deps .assets.kernel.confidential.version)"
+		kernel_url="$(get_from_kata_deps .assets.kernel.confidential.url)"
 	fi
 
 	if [[ "${kernel_name}" == "kernel"*"-confidential" ]]; then
@@ -564,7 +566,7 @@ install_kernel_helper() {
 
 	info "build ${kernel_name}"
 	info "Kernel version ${kernel_version}"
-	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -v "${kernel_version}" -f "${extra_cmd}"
+	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -v "${kernel_version}" -f -u "${kernel_url}" "${extra_cmd}"
 }
 
 #Install kernel asset
@@ -576,14 +578,12 @@ install_kernel() {
 }
 
 install_kernel_confidential() {
-	local kernel_url="$(get_from_kata_deps .assets.kernel.confidential.url)"
-
 	export MEASURED_ROOTFS=yes
 
 	install_kernel_helper \
 		"assets.kernel.confidential" \
 		"kernel-confidential" \
-		"-x -u ${kernel_url}"
+		"-x"
 }
 
 install_kernel_dragonball_experimental() {
@@ -602,22 +602,18 @@ install_kernel_nvidia_gpu_dragonball_experimental() {
 
 #Install GPU enabled kernel asset
 install_kernel_nvidia_gpu() {
-	local kernel_url="$(get_from_kata_deps .assets.kernel.url)"
-
 	install_kernel_helper \
 		"assets.kernel" \
 		"kernel-nvidia-gpu" \
-		"-g nvidia -u ${kernel_url} -H deb"
+		"-g nvidia -H deb"
 }
 
 #Install GPU and TEE enabled kernel asset
 install_kernel_nvidia_gpu_confidential() {
-	local kernel_url="$(get_from_kata_deps .assets.kernel.confidential.url)"
-
 	install_kernel_helper \
 		"assets.kernel.confidential" \
 		"kernel-nvidia-gpu-confidential" \
-		"-x -g nvidia -u ${kernel_url} -H deb"
+		"-x -g nvidia -H deb"
 }
 
 install_qemu_helper() {
