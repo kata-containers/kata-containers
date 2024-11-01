@@ -134,39 +134,12 @@ check_initramfs_or_die() {
 		die "Initramfs for measured rootfs not found at ${default_initramfs}"
 }
 
-get_tee_kernel() {
-	local version="${1}"
-	local kernel_path="${2}"
-	local tee="${3}"
-
-	mkdir -p ${kernel_path}
-
-	if [ -z "${kernel_url}" ]; then
-		kernel_url=$(get_from_kata_deps ".assets.kernel.${tee}.url")
-	fi
-
-	local kernel_tarball="${version}.tar.gz"
-
-	# Depending on where we're getting the tarball from it may have a
-	# different name, such as linux-${version}.tar.gz or simply
-	# ${version}.tar.gz.  Let's try both before failing.
-	curl --fail -L "${kernel_url}/linux-${kernel_tarball}" -o ${kernel_tarball} || curl --fail -OL "${kernel_url}/${kernel_tarball}"
-
-	mkdir -p ${kernel_path}
-	tar --strip-components=1 -xf ${kernel_tarball} -C ${kernel_path}
-}
-
 get_kernel() {
 	local version="${1:-}"
 
 	local kernel_path=${2:-}
 	[ -n "${kernel_path}" ] || die "kernel_path not provided"
 	[ ! -d "${kernel_path}" ] || die "kernel_path already exist"
-
-	if [ "${conf_guest}" != "" ]; then
-		get_tee_kernel ${version} ${kernel_path} ${conf_guest}
-		return
-	fi
 
 	#Remove extra 'v'
 	version=${version#v}
