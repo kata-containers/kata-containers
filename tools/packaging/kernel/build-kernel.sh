@@ -166,9 +166,13 @@ get_kernel() {
 		rm -f "${kernel_tarball}"
 	fi
 	if [ ! -f "${kernel_tarball}" ]; then
+		kernel_tarball_url="https://www.kernel.org/pub/linux/kernel/v${major_version}.x/${kernel_tarball}"
+		if [ -n "${kernel_url}" ]; then
+			kernel_tarball_url="${kernel_url}${kernel_tarball}"
+		fi
 		info "Download kernel version ${version}"
-		info "Download kernel"
-		curl --fail -OL "https://www.kernel.org/pub/linux/kernel/v${major_version}.x/${kernel_tarball}"
+		info "Download kernel from: ${kernel_tarball_url}"
+		curl --fail -OL "${kernel_tarball_url}"
 	else
 		info "kernel tarball already downloaded"
 	fi
