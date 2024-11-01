@@ -151,8 +151,17 @@ get_kernel_modules_dir() {
 	local numeric_final_version=${version}
 
 	# Every first release of a kernel is x.y, while the resulting folder would be x.y.0
+	local rc=$(echo ${version} | grep -oE "\-rc[0-9]+$")
+	if [ -n "${rc}" ]; then
+		numeric_final_version="${numeric_final_version%"${rc}"}"
+	fi
+
 	local dots=$(echo ${version} | grep -o '\.' | wc -l)
-	[ "${dots}" == "1" ] && numeric_final_version="${version}.0"
+	[ "${dots}" == "1" ] && numeric_final_version="${numeric_final_version}.0"
+
+	if [ -n "${rc}" ]; then
+		numeric_final_version="${numeric_final_version}${rc}"
+	fi
 
 	local kernel_modules_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/${kernel_name}/builddir/kata-linux-${version}-${kernel_kata_config_version}/lib/modules/${numeric_final_version}"
 	case ${kernel_name} in

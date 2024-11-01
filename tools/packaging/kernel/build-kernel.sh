@@ -144,26 +144,38 @@ get_kernel() {
 	#Remove extra 'v'
 	version=${version#v}
 
-	major_version=$(echo "${version}" | cut -d. -f1)
-	kernel_tarball="linux-${version}.tar.xz"
+	local major_version=$(echo "${version}" | cut -d. -f1)
+	local rc=$(echo "${version}" | grep -oE "\-rc[0-9]+$")
 
-	if [[ -f "${kernel_tarball}.sha256" ]] && (grep -qF "${kernel_tarball}" "${kernel_tarball}.sha256"); then
-		info "Restore valid ${kernel_tarball}.sha256 to sha256sums.asc"
-		cp -f "${kernel_tarball}.sha256" sha256sums.asc
-	else
-		shasum_url="https://cdn.kernel.org/pub/linux/kernel/v${major_version}.x/sha256sums.asc"
-		info "Download kernel checksum file: sha256sums.asc from ${shasum_url}"
-		curl --fail -OL "${shasum_url}"
-		if (grep -F "${kernel_tarball}" sha256sums.asc >"${kernel_tarball}.sha256"); then
-			info "sha256sums.asc is valid, ${kernel_tarball}.sha256 generated"
+	local tar_suffix="tar.xz"
+	if [ -n "${rc}" ]; then
+		tar_suffix="tar.gz"
+	fi
+	kernel_tarball="linux-${version}.${tar_suffix}"
+
+	if [ -z "${rc}" ]; then
+		if [[ -f "${kernel_tarball}.sha256" ]] && (grep -qF "${kernel_tarball}" "${kernel_tarball}.sha256"); then
+			info "Restore valid ${kernel_tarball}.sha256 to sha256sums.asc"
+			cp -f "${kernel_tarball}.sha256" sha256sums.asc
 		else
-			die "sha256sums.asc is invalid"
+			shasum_url="https://cdn.kernel.org/pub/linux/kernel/v${major_version}.x/sha256sums.asc"
+			info "Download kernel checksum file: sha256sums.asc from ${shasum_url}"
+			curl --fail -OL "${shasum_url}"
+			if (grep -F "${kernel_tarball}" sha256sums.asc >"${kernel_tarball}.sha256"); then
+				info "sha256sums.asc is valid, ${kernel_tarball}.sha256 generated"
+			else
+				die "sha256sums.asc is invalid"
+			fi
 		fi
+	else
+		info "Release candidate kernels are not part of the official sha256sums.asc -- skipping sha256sum validation"
 	fi
 
-	if [ -f "${kernel_tarball}" ] && ! sha256sum -c "${kernel_tarball}.sha256"; then
-		info "invalid kernel tarball ${kernel_tarball} removing "
-		rm -f "${kernel_tarball}"
+	if [ -f "${kernel_tarball}" ]; then
+	       	if [ -n "${rc}" ] && ! sha256sum -c "${kernel_tarball}.sha256"; then
+			info "invalid kernel tarball ${kernel_tarball} removing "
+			rm -f "${kernel_tarball}"
+		fi
 	fi
 	if [ ! -f "${kernel_tarball}" ]; then
 		kernel_tarball_url="https://www.kernel.org/pub/linux/kernel/v${major_version}.x/${kernel_tarball}"
@@ -177,7 +189,9 @@ get_kernel() {
 		info "kernel tarball already downloaded"
 	fi
 
-	sha256sum -c "${kernel_tarball}.sha256"
+	if [ -z "${rc}" ]; then
+		sha256sum -c "${kernel_tarball}.sha256"
+	fi
 
 	tar xf "${kernel_tarball}"
 
