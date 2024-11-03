@@ -11,11 +11,11 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"runtime"
 	"time"
 
 	govmmQemu "github.com/kata-containers/kata-containers/src/runtime/pkg/govmm/qemu"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
+	"github.com/sirupsen/logrus"
 )
 
 type qemuArm64 struct {
@@ -63,6 +63,17 @@ func newQemuArch(config HypervisorConfig) (qemuArch, error) {
 			protection:           noneProtection,
 			legacySerial:         config.LegacySerial,
 		},
+	}
+
+	if config.ConfidentialGuest {
+		if err := q.enableProtection(); err != nil {
+			return nil, err
+		}
+
+		if !q.qemuArchBase.disableNvdimm {
+			hvLogger.WithField("subsystem", "qemuAmd64").Warn("Nvdimm is not supported with confidential guest, disabling it.")
+			q.qemuArchBase.disableNvdimm = true
+		}
 	}
 
 	if err := q.handleImagePath(config); err != nil {
@@ -148,16 +159,41 @@ func (q *qemuArm64) getPFlash() ([]string, error) {
 func (q *qemuArm64) enableProtection() error {
 	q.protection, _ = availableGuestProtection()
 	if q.protection != noneProtection {
-		return fmt.Errorf("Protection %v is not supported on arm64", q.protection)
+		var err error
+		q.protection, err = availableGuestProtection()
+		if err != nil {
+			return err
+		}
 	}
+	logger := hvLogger.WithFields(logrus.Fields{
+		"subsystem":               "qemuArm64",
+		"machine":                 q.qemuMachine,
+		"kernel-params-debug":     q.kernelParamsDebug,
+		"kernel-params-non-debug": q.kernelParamsNonDebug,
+		"kernel-params":           q.kernelParams})
+	if q.qemuMachine.Options != "" {
+		q.qemuMachine.Options += ","
+	}
+	q.qemuMachine.Options += "confidential-guest-support=rme0,acpi=off"
+	logger.Info("Enabling Arm CCA Realm protection")
 
 	return nil
 }
 
 func (q *qemuArm64) appendProtectionDevice(devices []govmmQemu.Device, firmware, firmwareVolume string) ([]govmmQemu.Device, string, error) {
-	err := q.enableProtection()
-	if err != nil {
-		hvLogger.WithField("arch", runtime.GOARCH).Error(err)
+	switch q.protection {
+	case rmeProtection:
+		return append(devices,
+			govmmQemu.Object{
+				Type:            govmmQemu.RMEGuest,
+				ID:              "rme0",
+				Debug:           false,
+				File:            firmware,
+				MeasurementAlgo: "sha256",
+			}), "", nil
+	case noneProtection:
+		return devices, firmware, nil
+	default:
+		return devices, "", fmt.Errorf("Unsupported guest protection technology: %v", q.protection)
 	}
-	return devices, firmware, err
 }

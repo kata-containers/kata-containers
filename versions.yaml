@@ -99,6 +99,11 @@ assets:
         https://github.com/qemu/qemu/tags
         .*/v?(\d\S+)\.tar\.gz
 
+    qemu-cca-experimental:
+     description: "QEMU with experimental CCA support"
+     url: "https://git.codelinaro.org/linaro/dcap/qemu.git"
+     tag: "28a876475d00ad941fa6c5ee5a9b37ec9592d1e1"
+
     qemu-snp-experimental:
       description: "QEMU with SNP support"
       url: "https://github.com/confidential-containers/qemu.git"
@@ -118,6 +123,9 @@ assets:
       aarch64:
         name: &default-image-name "ubuntu"
         version: &default-image-version "latest"
+        cca:
+          name: *default-image-name
+          version: "jammy"
         nvidia-gpu:
           name: *default-image-name
           version: "jammy"
@@ -161,6 +169,9 @@ assets:
       aarch64:
         name: &default-initrd-name "alpine"
         version: &default-initrd-version "3.18"
+        cca:
+          name: &glibc-initrd-name "ubuntu"
+          version: &glibc-initrd-version "jammy"
         nvidia-gpu:
           name: "ubuntu"
           version: "jammy"
@@ -204,6 +215,10 @@ assets:
     description: "Linux kernel with cpu/mem hotplug support on arm64"
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
     version: "v5.15.138"
+    confidential:
+      description: "Linux kernel with RME support on arm64"
+      url: "https://gitlab.arm.com/linux-arm/linux-cca"
+      version: "d901c27a1783a88ee32339a5b4bfa2ac8e70e597"
 
   kernel-dragonball-experimental:
     description: "Linux kernel with Dragonball VMM optimizations like upcall"
@@ -231,7 +246,7 @@ externals:
   coco-guest-components:
     description: "Provides attested key unwrapping for image decryption"
     url: "https://github.com/confidential-containers/guest-components/"
-    version: "v0.10.0"
+    version: "5ecf0908142897c09a34769de8081d4335db7f52"
     toolchain: "1.76.0"
 
   coco-trustee:
