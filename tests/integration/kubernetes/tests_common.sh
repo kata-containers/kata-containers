@@ -84,7 +84,7 @@ auto_generate_policy_enabled() {
 adapt_common_policy_settings_for_tdx() {
 	local settings_dir=$1
 
-	info "Adapting common policy settings for TDX or SNP"
+	info "Adapting common policy settings for TDX, SNP, or the non-TEE development environment"
 	jq '.common.cpath = "/run/kata-containers" | .volumes.configMap.mount_point = "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-"' "${settings_dir}/genpolicy-settings.json" > temp.json && sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
 }
 
@@ -119,7 +119,7 @@ adapt_common_policy_settings() {
 	local settings_dir=$1
 
 	case "${KATA_HYPERVISOR}" in
-  		"qemu-tdx"|"qemu-snp")
+  		"qemu-tdx"|"qemu-snp"|"qemu-coco-dev")
 			adapt_common_policy_settings_for_tdx "${settings_dir}"
 			;;
   		"qemu-sev")
