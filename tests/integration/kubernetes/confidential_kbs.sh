@@ -85,13 +85,12 @@ kbs_set_resource_base64() {
 	fi
 
 	file=$(mktemp -t kbs-resource-XXXXX)
-	trap "rm -f $file" EXIT
-
 	echo "$data" | base64 -d > "$file"
 
 	kbs_set_resource_from_file "$repository" "$type" "$tag" "$file" || \
 		rc=$?
 
+	rm -f "$file"
 	return $rc
 }
 
@@ -117,12 +116,12 @@ kbs_set_resource() {
 	fi
 
 	file=$(mktemp -t kbs-resource-XXXXX)
-	trap "rm -f $file" EXIT
 	echo "$data" > "$file"
 
 	kbs_set_resource_from_file "$repository" "$type" "$tag" "$file" || \
 		rc=$?
 
+	rm -f "$file"
 	return $rc
 }
 

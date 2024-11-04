@@ -15,7 +15,7 @@ setup() {
 
     [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
 
-    setup_common
+    setup_common || die "setup_common failed"
     get_pod_config_dir
     unencrypted_image="quay.io/prometheus/busybox:latest"
     image_pulled_time_less_than_default_time="ghcr.io/confidential-containers/test-container:rust-1.79.0" # unpacked size: 1.41GB

@@ -22,7 +22,7 @@ check_and_skip() {
 
 setup() {
 	check_and_skip
-	setup_common
+	setup_common || die "setup_common failed"
 }
 
 @test "Test cannnot launch pod with measured boot enabled and incorrect hash" {
