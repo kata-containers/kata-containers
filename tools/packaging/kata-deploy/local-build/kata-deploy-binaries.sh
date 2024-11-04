@@ -1008,6 +1008,12 @@ install_tools_helper() {
 		binary_permissions="$default_binary_permissions"
 	fi
 
+	if [[ "${tool}" == "agent-ctl" ]]; then
+		defaults_path="${destdir}/opt/kata/share/defaults/kata-containers/agent-ctl"
+		mkdir -p "${defaults_path}"
+		install -D --mode 0644 ${repo_root_dir}/src/tools/${tool}/template/oci_config.json "${defaults_path}/oci_config.json"
+	fi
+
 	info "Install static ${tool_binary}"
 	mkdir -p "${destdir}/opt/kata/bin/"
 	install -D --mode ${binary_permissions} ${binary} "${destdir}/opt/kata/bin/${tool_binary}"

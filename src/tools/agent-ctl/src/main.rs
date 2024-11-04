@@ -21,6 +21,7 @@ macro_rules! sl {
 }
 
 mod client;
+mod image;
 mod rpc;
 mod types;
 mod utils;
