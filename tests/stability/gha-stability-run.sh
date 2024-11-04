@@ -10,10 +10,8 @@ set -o nounset
 set -o pipefail
 
 stability_dir="$(dirname "$(readlink -f "$0")")"
-source "${stability_dir}/../common.bash"
 source "${stability_dir}/../metrics/lib/common.bash"
 source "${stability_dir}/../gha-run-k8s-common.sh"
-source "${stability_dir}/../integration/kubernetes/gha-run.sh"
 
 function run_tests() {
 	info "Running scability test using ${KATA_HYPERVISOR} hypervisor"
