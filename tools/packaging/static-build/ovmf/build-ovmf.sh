@@ -38,6 +38,9 @@ build_root=$(mktemp -d)
 pushd $build_root
 git clone --single-branch --depth 1 -b "${ovmf_version}" "${ovmf_repo}"
 cd "${ovmf_dir}"
+# TODO: Remove this line after bumping to a newer release of OVMF.
+# Reference: https://github.com/tianocore/edk2/pull/6402
+sed -i -e "s|https://github.com/Zeex/subhook.git|https://github.com/tianocore/edk2-subhook.git|g" .gitmodules
 git submodule init
 git submodule update
 
