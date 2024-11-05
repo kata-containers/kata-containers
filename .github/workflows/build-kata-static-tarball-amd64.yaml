@@ -47,8 +47,6 @@ jobs:
           - kernel-nvidia-gpu
           - kernel-nvidia-gpu-confidential
           - nydus
-          - ovmf
-          - ovmf-sev
           - pause-image
           - qemu
           - qemu-snp-experimental
