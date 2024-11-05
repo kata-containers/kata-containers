@@ -151,8 +151,17 @@ get_kernel_modules_dir() {
 	local numeric_final_version=${version}
 
 	# Every first release of a kernel is x.y, while the resulting folder would be x.y.0
+	local rc=$(echo ${version} | grep -oE "\-rc[0-9]+$")
+	if [ -n "${rc}" ]; then
+		numeric_final_version="${numeric_final_version%"${rc}"}"
+	fi
+
 	local dots=$(echo ${version} | grep -o '\.' | wc -l)
-	[ "${dots}" == "1" ] && numeric_final_version="${version}.0"
+	[ "${dots}" == "1" ] && numeric_final_version="${numeric_final_version}.0"
+
+	if [ -n "${rc}" ]; then
+		numeric_final_version="${numeric_final_version}${rc}"
+	fi
 
 	local kernel_modules_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/${kernel_name}/builddir/kata-linux-${version}-${kernel_kata_config_version}/lib/modules/${numeric_final_version}"
 	case ${kernel_name} in
@@ -534,16 +543,18 @@ install_cached_kernel_tarball_component() {
 
 #Install kernel asset
 install_kernel_helper() {
-	local kernel_version_yaml_path="${1}"
+	local kernel_yaml_path="${1}"
 	local kernel_name="${2}"
 	local extra_cmd="${3:-}"
 	local extra_tarballs=""
 
-	export kernel_version="$(get_from_kata_deps .${kernel_version_yaml_path})"
+	export kernel_version="$(get_from_kata_deps .${kernel_yaml_path}.version)"
+	export kernel_url="$(get_from_kata_deps .${kernel_yaml_path}.url)"
 	export kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
 
 	if [[ "${kernel_name}" == "kernel"*"-confidential" ]]; then
 		kernel_version="$(get_from_kata_deps .assets.kernel.confidential.version)"
+		kernel_url="$(get_from_kata_deps .assets.kernel.confidential.url)"
 	fi
 
 	if [[ "${kernel_name}" == "kernel"*"-confidential" ]]; then
@@ -564,60 +575,54 @@ install_kernel_helper() {
 
 	info "build ${kernel_name}"
 	info "Kernel version ${kernel_version}"
-	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -v "${kernel_version}" ${extra_cmd}
+	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -v "${kernel_version}" -f -u "${kernel_url}" "${extra_cmd}"
 }
 
 #Install kernel asset
 install_kernel() {
 	install_kernel_helper \
-		"assets.kernel.version" \
+		"assets.kernel" \
 		"kernel" \
-		"-f"
+		""
 }
 
 install_kernel_confidential() {
-	local kernel_url="$(get_from_kata_deps .assets.kernel.confidential.url)"
-
 	export MEASURED_ROOTFS=yes
 
 	install_kernel_helper \
-		"assets.kernel.confidential.version" \
+		"assets.kernel.confidential" \
 		"kernel-confidential" \
-		"-x -u ${kernel_url}"
+		"-x"
 }
 
 install_kernel_dragonball_experimental() {
 	install_kernel_helper \
-		"assets.kernel-dragonball-experimental.version" \
+		"assets.kernel-dragonball-experimental" \
 		"kernel-dragonball-experimental" \
 		"-e -t dragonball"
 }
 
 install_kernel_nvidia_gpu_dragonball_experimental() {
 	install_kernel_helper \
-		"assets.kernel-dragonball-experimental.version" \
+		"assets.kernel-dragonball-experimental" \
 		"kernel-dragonball-experimental" \
 		"-e -t dragonball -g nvidia -H deb"
 }
 
 #Install GPU enabled kernel asset
 install_kernel_nvidia_gpu() {
-	local kernel_url="$(get_from_kata_deps .assets.kernel.url)"
-
 	install_kernel_helper \
-		"assets.kernel.version" \
+		"assets.kernel" \
 		"kernel-nvidia-gpu" \
-		"-g nvidia -u ${kernel_url} -H deb"
+		"-g nvidia -H deb"
 }
 
 #Install GPU and TEE enabled kernel asset
 install_kernel_nvidia_gpu_confidential() {
-	local kernel_url="$(get_from_kata_deps .assets.kernel.confidential.url)"
-
 	install_kernel_helper \
-		"assets.kernel.confidential.version" \
+		"assets.kernel.confidential" \
 		"kernel-nvidia-gpu-confidential" \
-		"-x -g nvidia -u ${kernel_url} -H deb"
+		"-x -g nvidia -H deb"
 }
 
 install_qemu_helper() {
