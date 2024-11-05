@@ -31,6 +31,7 @@ function main() {
 		login-azure) login_azure ;;
 		create-cluster) create_cluster ;;
 		install-bats) install_bats ;;
+		install-kata-tools) install_kata_tools ;;
 		install-kubectl) install_kubectl ;;
 		get-cluster-credentials) get_cluster_credentials ;;
 		deploy-snapshotter) deploy_snapshotter ;;
