@@ -170,7 +170,7 @@ impl EphemeralHandler {
         let size = size_str
             .unwrap()
             .parse::<u64>()
-            .context(format!("parse size: {:?}", &pagesize_str))?;
+            .context(format!("parse size: {:?}", &size_str))?;
 
         Ok((pagesize, size))
     }
