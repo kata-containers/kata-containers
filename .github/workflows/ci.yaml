@@ -176,6 +176,7 @@ jobs:
     needs: [publish-kata-deploy-payload-amd64, build-and-publish-tee-confidential-unencrypted-image]
     uses: ./.github/workflows/run-kata-coco-tests.yaml
     with:
+      tarball-suffix: -${{ inputs.tag }}
       registry: ghcr.io
       repo: ${{ github.repository_owner }}/kata-deploy-ci
       tag: ${{ inputs.tag }}-amd64

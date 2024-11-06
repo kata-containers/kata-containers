@@ -2,6 +2,9 @@ name: CI | Run kata coco tests
 on:
   workflow_call:
     inputs:
+      tarball-suffix:
+        required: false
+        type: string
       registry:
         required: true
         type: string
@@ -262,6 +265,7 @@ jobs:
       AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
       SNAPSHOTTER: ${{ matrix.snapshotter }}
       USING_NFD: "false"
+      AUTO_GENERATE_POLICY: "yes"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -273,6 +277,15 @@ jobs:
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: get-kata-tarball
+        uses: actions/download-artifact@v4
+        with:
+          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
+          path: kata-artifacts
+
+      - name: Install kata
+        run: bash tests/integration/kubernetes/gha-run.sh install-kata-tools kata-artifacts
 
       - name: Download Azure CLI
         run: bash tests/integration/kubernetes/gha-run.sh install-azure-cli
@@ -315,7 +328,7 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh install-kbs-client
 
       - name: Run tests
-        timeout-minutes: 60
+        timeout-minutes: 80
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
 
       - name: Delete AKS cluster
