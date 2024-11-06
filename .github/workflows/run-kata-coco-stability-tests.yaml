@@ -64,6 +64,9 @@ jobs:
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
+      - name: Install kata
+        run: bash tests/integration/kubernetes/gha-run.sh install-kata-tools
+
       - name: Download Azure CLI
         run: bash tests/integration/kubernetes/gha-run.sh install-azure-cli
 
