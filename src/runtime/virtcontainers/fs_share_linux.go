@@ -64,6 +64,14 @@ func resolveRootDir() string {
 		// Use the default root dir in case of any errors resolving the root dir symlink
 		return defaultKubernetesRootDir
 	}
+	// Make root dir an absolute path if needed
+	if !filepath.IsAbs(rootDir) {
+		rootDir, err = filepath.Abs(filepath.Join(filepath.Dir(defaultKubernetesRootDir), rootDir))
+		if err != nil {
+			// Use the default root dir in case of any errors resolving the root dir symlink
+			return defaultKubernetesRootDir
+		}
+	}
 	return rootDir
 }
 
