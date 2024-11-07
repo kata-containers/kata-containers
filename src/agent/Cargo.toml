@@ -84,6 +84,7 @@ regorus = { version = "0.1.4", default-features = false, features = [
     "arc",
     "regex",
 ], optional = true }
+cdi = { git = "https://github.com/cncf-tags/container-device-interface-rs", rev = "fba5677a8e7cc962fc6e495fcec98d7d765e332a" }
 
 [dev-dependencies]
 tempfile = "3.1.0"
