@@ -12,6 +12,7 @@ set -o pipefail
 stability_dir="$(dirname "$(readlink -f "$0")")"
 source "${stability_dir}/../metrics/lib/common.bash"
 source "${stability_dir}/../gha-run-k8s-common.sh"
+kata_tarball_dir="${2:-kata-artifacts}"
 
 function run_tests() {
 	info "Running scability test using ${KATA_HYPERVISOR} hypervisor"
