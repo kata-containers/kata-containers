@@ -53,7 +53,6 @@ jobs:
           - qemu
           - qemu-snp-experimental
           - stratovirt
-          - runk
           - trace-forwarder
           - virtiofsd
         stage:

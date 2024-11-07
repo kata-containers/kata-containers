@@ -138,6 +138,8 @@ jobs:
         run: bash tests/integration/nydus/gha-run.sh run
 
   run-runk:
+    # Skip runk tests as we have no maintainers. TODO: Decide when to remove altogether
+    if: false
     runs-on: ubuntu-22.04
     env:
       CONTAINERD_VERSION: lts
