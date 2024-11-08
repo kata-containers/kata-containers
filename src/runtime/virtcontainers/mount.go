@@ -272,6 +272,11 @@ type Mount struct {
 	// FSGroupChangePolicy specifies the policy that will be used when applying
 	// group id ownership change for a volume.
 	FSGroupChangePolicy volume.FSGroupChangePolicy
+
+	// EncryptionKey is the encryption key used for the volume.
+	// Currently, valid values are "" for no encryption or "ephemeral"
+	// to instruct the agent to generate a one-time key.
+	EncryptionKey string
 }
 
 func isSymlink(path string) bool {

@@ -66,6 +66,10 @@ const (
 	// containers.
 	KataLocalDevType = "local"
 
+	// encryptionKeyDriverOption is the driver option used to specify
+	// an encryption key for a Storage struct.
+	encryptionKeyDriverOption = "encryption_key"
+
 	// Allocating an FSGroup that owns the pod's volumes
 	fsGid = "fsgid"
 
@@ -1816,6 +1820,11 @@ func (k *kataAgent) handleDeviceBlockVolume(c *Container, m Mount, device api.De
 			GroupId:           safeFsgroup,
 			GroupChangePolicy: getFSGroupChangePolicy(m.FSGroupChangePolicy),
 		}
+	}
+
+	if m.EncryptionKey != "" {
+		option := fmt.Sprintf("%s=%s", encryptionKeyDriverOption, m.EncryptionKey)
+		vol.DriverOptions = append(vol.DriverOptions, option)
 	}
 
 	return vol, nil
