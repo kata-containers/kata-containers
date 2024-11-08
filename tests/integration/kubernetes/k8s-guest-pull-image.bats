@@ -171,10 +171,10 @@ setup() {
     echo "Pod $pod_config file:"
     cat $pod_config
 
-    # The pod should be failed because the default timeout of CreateContainerRequest is 60s
+    # The pod should be failed because the image is too large to be pulled in the timeout
     assert_pod_fail "$pod_config"
-    assert_logs_contain "$node" kata "$node_start_time" \
-		'CreateContainerRequest timed out'
+    assert_logs_contain "$node" kata "$node_start_time" 'createContainer failed'
+    assert_logs_contain "$node" kata "$node_start_time" 'timeout'
 }
 
 @test "Test we can pull a large image inside the guest with large createcontainer timeout" {
