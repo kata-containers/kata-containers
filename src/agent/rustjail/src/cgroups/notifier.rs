@@ -159,7 +159,7 @@ async fn register_memory_event(
 
     fs::write(&event_control_path, data)?;
 
-    let mut eventfd_stream = unsafe { PipeStream::from_raw_fd(eventfd) };
+    let mut eventfd_stream = PipeStream::from_owned_fd(eventfd);
 
     let (sender, receiver) = tokio::sync::mpsc::channel(100);
     let containere_id = cid.to_string();
