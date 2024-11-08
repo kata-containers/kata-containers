@@ -305,6 +305,20 @@ type ContainerDevice struct {
 
 	// GID is group ID in the container namespace
 	GID uint32
+
+	// Shared indicates whether the device is shared across containers.
+	Shared bool
+}
+
+// EphemeralDisk holds information about an ephemeral disk created for
+// block-based emptyDir volumes.
+type EphemeralDisk struct {
+	// DiskPath is the path to the disk image file.
+	DiskPath string
+
+	// SourcePath is the emptyDir source path, ie. the folder created by
+	// Kubelet on the host.
+	SourcePath string
 }
 
 // RootFs describes the container's rootfs.
@@ -660,6 +674,8 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 
 			for key, value := range mntInfo.Metadata {
 				switch key {
+				case volume.EncryptionKeyMetadataKey:
+					c.mounts[i].EncryptionKey = value
 				case volume.FSGroupMetadataKey:
 					gid, err := strconv.Atoi(value)
 					if err != nil {
@@ -767,6 +783,10 @@ func newContainer(ctx context.Context, sandbox *Sandbox, contConfig *ContainerCo
 		return nil, err
 	}
 
+	if err := c.createEphemeralDisks(); err != nil {
+		return nil, err
+	}
+
 	// If mounts are block devices, add to devmanager
 	if err := c.createMounts(ctx); err != nil {
 		return nil, err
@@ -830,6 +850,85 @@ func (c *Container) createVirtualVolumeDevices() ([]config.DeviceInfo, error) {
 		}
 	}
 	return deviceInfos, nil
+}
+
+// getFilesystemCapacity return the total size in bytes of the filesystem
+// under path.
+func getFilesystemCapacity(path string) (uint64, error) {
+	var stat unix.Statfs_t
+	if err := unix.Statfs(path, &stat); err != nil {
+		return 0, err
+	}
+	return stat.Blocks * uint64(stat.Bsize), nil
+}
+
+func (c *Container) createEphemeralDisks() error {
+	if c.sandbox.config.EmptyDirMode != EmptyDirModeVirtioBlkEncrypted {
+		return nil
+	}
+
+	for i := range c.mounts {
+		if !Isk8sHostEmptyDir(c.mounts[i].Source) {
+			continue
+		}
+
+		// Mark the mount as shared so the block device isn't removed when a container stops.
+		c.mounts[i].Shared = true
+
+		// Reset the mount type so that we don't handle it as a shared filesystem later.
+		c.mounts[i].Type = "bind"
+
+		if mounted, err := volume.IsVolumeMounted(c.mounts[i].Source); err != nil {
+			return err
+		} else if mounted {
+			continue
+		}
+
+		// Create the disk file in the same folder as the original
+		// emptyDir mount so that Kubelet can enforce the sizeLimit.
+		diskPath := filepath.Join(c.mounts[i].Source, "disk.img")
+		f, err := os.Create(diskPath)
+		if err != nil {
+			c.Logger().WithError(err).Errorf("failed to create disk file at %s", diskPath)
+			return err
+		}
+
+		defer func() {
+			if err := f.Close(); err != nil {
+				c.Logger().WithError(err).Errorf("failed to close disk file, continuing")
+			}
+		}()
+
+		emptyDirFsCapacity, err := getFilesystemCapacity(c.mounts[i].Source)
+		if err != nil {
+			c.Logger().WithError(err).Errorf("failed to get filesystem capacity for mount %s", c.mounts[i].Source)
+			return err
+		}
+
+		if err := f.Truncate(int64(emptyDirFsCapacity)); err != nil {
+			c.Logger().WithError(err).Errorf("failed to truncate disk file")
+			return err
+		}
+
+		if err := volume.AddMountInfo(c.mounts[i].Source, volume.MountInfo{
+			VolumeType: "blk",
+			Device:     diskPath,
+			FsType:     "ext4",
+			Metadata: map[string]string{
+				volume.EncryptionKeyMetadataKey: "ephemeral",
+			},
+		}); err != nil {
+			c.Logger().WithError(err).Errorf("failed to assign direct volume for mount %s", c.mounts[i].Source)
+			return err
+		}
+
+		c.sandbox.ephemeralDisks = append(c.sandbox.ephemeralDisks, EphemeralDisk{
+			DiskPath:   diskPath,
+			SourcePath: c.mounts[i].Source,
+		})
+	}
+
+	return nil
 }
 
 func (c *Container) createMounts(ctx context.Context) error {
@@ -1736,6 +1835,13 @@ func (c *Container) attachDevices(ctx context.Context) error {
 
 func (c *Container) detachDevices(ctx context.Context) error {
 	for _, dev := range c.devices {
+		// Skip detaching shared devices - they are shared across
+		// containers (e.g., block-based emptyDirs) and will be cleaned
+		// up when the sandbox is deleted.
+		if dev.Shared {
+			continue
+		}
+
 		err := c.sandbox.devManager.DetachDevice(ctx, dev.ID, c.sandbox)
 		if err != nil && err != manager.ErrDeviceNotAttached {
 			return err
