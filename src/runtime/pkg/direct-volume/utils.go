@@ -17,6 +17,8 @@ import (
 const (
 	mountInfoFileName = "mountInfo.json"
 
+	ConfidentialMetadataKey        = "confidential"
+	EphemeralMetadataKey           = "ephemeral"
 	FSGroupMetadataKey             = "fsGroup"
 	FSGroupChangePolicyMetadataKey = "fsGroupChangePolicy"
 )
