@@ -304,6 +304,20 @@ type ContainerDevice struct {
 
 	// GID is group ID in the container namespace
 	GID uint32
+
+	// Shared indicates whether the device is shared across containers.
+	Shared bool
+}
+
+// EphemeralDisk holds information about an ephemeral disk created for
+// block-based emptyDir volumes.
+type EphemeralDisk struct {
+	// DiskPath is the path to the disk image file.
+	DiskPath string
+
+	// SourcePath is the emptyDir source path, ie. the folder created by
+	// Kubelet on the host.
+	SourcePath string
 }
 
 // RootFs describes the container's rootfs.
@@ -604,13 +618,16 @@ func filterDevices(c *Container, devices []ContainerDevice) (ret []ContainerDevi
 // device ID for the particular mount. This'll occur when the mountpoint source
 // is a block device.
 func (c *Container) createBlockDevices(ctx context.Context) error {
-	if !c.checkBlockDeviceSupport(ctx) {
-		c.Logger().Warn("Block device not supported")
-		return nil
-	}
-
 	// iterate all mounts and create block device if it's block based.
 	for i := range c.mounts {
+		// If block devices are disabled, we selectively only hotplug if
+		// the mount is an encrypted block-based emptyDir, to avoid
+		// cases that could regress 20ca4d2.
+		if !c.checkBlockDeviceSupport(ctx) && (c.sandbox.config.EmptyDirMode != EmptyDirModeVirtioBlkEncrypted || !Isk8sHostEmptyDir(c.mounts[i].Source)) {
+			c.Logger().Warn("Block device not supported")
+			continue
+		}
+
 		if len(c.mounts[i].BlockDeviceID) > 0 {
 			// Non-empty m.BlockDeviceID indicates there's already one device
 			// associated with the mount,so no need to create a new device for it
@@ -659,6 +676,8 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 
 			for key, value := range mntInfo.Metadata {
 				switch key {
+				case volume.EncryptionKeyMetadataKey:
+					c.mounts[i].EncryptionKey = value
 				case volume.FSGroupMetadataKey:
 					gid, err := strconv.Atoi(value)
 					if err != nil {
@@ -766,6 +785,10 @@ func newContainer(ctx context.Context, sandbox *Sandbox, contConfig *ContainerCo
 		return nil, err
 	}
 
+	if err := c.createEphemeralDisks(); err != nil {
+		return nil, err
+	}
+
 	// If mounts are block devices, add to devmanager
 	if err := c.createMounts(ctx); err != nil {
 		return nil, err
@@ -829,6 +852,109 @@ func (c *Container) createVirtualVolumeDevices() ([]config.DeviceInfo, error) {
 		}
 	}
 	return deviceInfos, nil
+}
+
+// getFilesystemCapacity return the total size in bytes of the filesystem
+// under path.
+func getFilesystemCapacity(path string) (uint64, error) {
+	var stat unix.Statfs_t
+	if err := unix.Statfs(path, &stat); err != nil {
+		return 0, err
+	}
+	return stat.Blocks * uint64(stat.Bsize), nil
+}
+
+func (c *Container) createEphemeralDisks() error {
+	if c.sandbox.config.EmptyDirMode != EmptyDirModeVirtioBlkEncrypted {
+		return nil
+	}
+
+	for i := range c.mounts {
+		if !Isk8sHostEmptyDir(c.mounts[i].Source) {
+			continue
+		}
+
+		// Mark the mount as shared so the block device isn't removed when a container stops.
+		c.mounts[i].Shared = true
+
+		if mounted, err := volume.IsVolumeMounted(c.mounts[i].Source); err != nil {
+			return err
+		} else if mounted {
+			continue
+		}
+
+		diskPath, err := c.setupEphemeralDisk(c.mounts[i].Source)
+		if err != nil {
+			return err
+		}
+
+		c.sandbox.ephemeralDisks = append(c.sandbox.ephemeralDisks, EphemeralDisk{
+			DiskPath:   diskPath,
+			SourcePath: c.mounts[i].Source,
+		})
+	}
+
+	return nil
+}
+
+// setupEphemeralDisk creates and configures an ephemeral disk image
+// inside the given emptyDir. It returns the path to the created disk
+// image. The fd is always closed and the disk image is removed if any
+// step after creation fails.
+func (c *Container) setupEphemeralDisk(emptyDirPath string) (diskPath string, err error) {
+	// Create the disk file in the same folder as the original
+	// emptyDir mount so that Kubelet can enforce the sizeLimit.
+	diskPath = filepath.Join(emptyDirPath, "disk.img")
+	f, err := os.Create(diskPath)
+	if err != nil {
+		c.Logger().WithError(err).Errorf("failed to create disk file at %s", diskPath)
+		return
+	}
+	defer f.Close()
+
+	defer func() {
+		if err != nil {
+			if removeErr := os.Remove(diskPath); removeErr != nil {
+				c.Logger().WithError(removeErr).Errorf("failed to clean up disk file %s after error", diskPath)
+			}
+		}
+	}()
+
+	emptyDirFsCapacity, err := getFilesystemCapacity(emptyDirPath)
+	if err != nil {
+		c.Logger().WithError(err).Errorf("failed to get filesystem capacity for mount %s", emptyDirPath)
+		return
+	}
+
+	if err = f.Truncate(int64(emptyDirFsCapacity)); err != nil {
+		c.Logger().WithError(err).Errorf("failed to truncate disk file")
+		return
+	}
+
+	var sourceStat unix.Stat_t
+	if err = unix.Stat(emptyDirPath, &sourceStat); err != nil {
+		c.Logger().WithError(err).Errorf("failed to stat mount source: %s", emptyDirPath)
+		return
+	}
+
+	metadata := map[string]string{
+		volume.EncryptionKeyMetadataKey: "ephemeral",
+	}
+	if sourceStat.Gid != 0 {
+		metadata[volume.FSGroupMetadataKey] = strconv.FormatUint(uint64(sourceStat.Gid), 10)
+	}
+
+	if err = volume.AddMountInfo(emptyDirPath, volume.MountInfo{
+		VolumeType: "blk",
+		Device:     diskPath,
+		FsType:     "ext4",
+		Metadata:   metadata,
+	}); err != nil {
+		c.Logger().WithError(err).Errorf("failed to assign direct volume for mount %s", emptyDirPath)
+		return
+	}
+
+	return
 }
 
 func (c *Container) createMounts(ctx context.Context) error {
@@ -1735,6 +1861,13 @@ func (c *Container) attachDevices(ctx context.Context) error {
 
 func (c *Container) detachDevices(ctx context.Context) error {
 	for _, dev := range c.devices {
+		// Skip detaching shared devices - they are shared across
+		// containers (e.g., block-based emptyDirs) and will be cleaned
+		// up when the sandbox is deleted.
+		if dev.Shared {
+			continue
+		}
+
 		err := c.sandbox.devManager.DetachDevice(ctx, dev.ID, c.sandbox)
 		if err != nil && err != deviceManager.ErrDeviceNotAttached {
 			return err

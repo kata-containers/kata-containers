@@ -262,6 +262,18 @@ vfio_mode = "@DEFVFIOMODE@"
 # Note: remote hypervisor has no sharing of emptydir mounts from host to guest
 disable_guest_empty_dir = false
 
+# Specifies how Kubernetes emptyDir volumes are handled.
+# Options:
+#
+#   - shared-fs (default)
+#     Shares the emptyDir folder with the guest using the method given
+#     by the `shared_fs` setting.
+#
+#   - block-encrypted
+#     Plugs a block device to be encrypted in the guest.
+#
+emptydir_mode = "@DEFEMPTYDIRMODE@"
+
 # Enabled experimental feature list, format: ["a", "b"].
 # Experimental features are features not stable enough for production,
 # they may break compatibility, and are prepared for a big version bump.

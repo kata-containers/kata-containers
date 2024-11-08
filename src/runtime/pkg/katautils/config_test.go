@@ -218,6 +218,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (testConfig testRuntime
 		JaegerPassword:  jaegerPassword,
 
 		FactoryConfig: factoryConfig,
+		EmptyDirMode:  vc.EmptyDirModeSharedFs,
 	}
 
 	err = SetKernelParams(&runtimeConfig)
@@ -599,6 +600,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		AgentConfig: expectedAgentConfig,
 
 		FactoryConfig: expectedFactoryConfig,
+		EmptyDirMode:  vc.EmptyDirModeSharedFs,
 	}
 	err = SetKernelParams(&expectedConfig)
 	if err != nil {
@@ -1606,6 +1608,39 @@ func TestCheckNetNsConfig(t *testing.T) {
 		InterNetworkModel: vc.NetXConnectDefaultModel,
 	}
 	err = checkNetNsConfig(config)
+	assert.Error(err)
+}
+
+func TestCheckEmptyDirMode(t *testing.T) {
+	assert := assert.New(t)
+
+	// Valid values
+	r := runtime{EmptyDirMode: vc.EmptyDirModeSharedFs}
+	mode, err := r.emptyDirMode()
+	assert.NoError(err)
+	assert.Equal(vc.EmptyDirModeSharedFs, mode)
+
+	r = runtime{EmptyDirMode: vc.EmptyDirModeVirtioBlkEncrypted}
+	mode, err = r.emptyDirMode()
+	assert.NoError(err)
+	assert.Equal(vc.EmptyDirModeVirtioBlkEncrypted, mode)
+
+	r = runtime{}
+	mode, err = r.emptyDirMode()
+	assert.NoError(err)
+	assert.Equal(vc.EmptyDirModeSharedFs, mode)
+
+	// Invalid values
+	r = runtime{EmptyDirMode: "invalid"}
+	_, err = r.emptyDirMode()
+	assert.Error(err)
+
+	r = runtime{EmptyDirMode: "shared_fs"}
+	_, err = r.emptyDirMode()
+	assert.Error(err)
+
+	r = runtime{EmptyDirMode: "block_encrypted"}
+	_, err = r.emptyDirMode()
 	assert.Error(err)
 }
 
