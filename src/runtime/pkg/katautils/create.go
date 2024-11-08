@@ -98,12 +98,12 @@ func HandleFactory(ctx context.Context, vci vc.VC, runtimeConfig *oci.RuntimeCon
 // For the given pod ephemeral volume is created only once
 // backed by tmpfs inside the VM. For successive containers
 // of the same pod the already existing volume is reused.
-func SetEphemeralStorageType(ociSpec specs.Spec, disableGuestEmptyDir bool) specs.Spec {
+func SetEphemeralStorageType(ociSpec specs.Spec, disableGuestEmptyDir bool, emptyDirMode string) specs.Spec {
 	for idx, mnt := range ociSpec.Mounts {
 		if vc.IsEphemeralStorage(mnt.Source) {
 			ociSpec.Mounts[idx].Type = vc.KataEphemeralDevType
 		}
-		if vc.Isk8sHostEmptyDir(mnt.Source) && !disableGuestEmptyDir {
+		if vc.Isk8sHostEmptyDir(mnt.Source) && !disableGuestEmptyDir && emptyDirMode != vc.EmptyDirModeVirtioBlkEncrypted {
 			ociSpec.Mounts[idx].Type = vc.KataLocalDevType
 		}
 	}
@@ -243,7 +243,8 @@ func CreateContainer(ctx context.Context, sandbox vc.VCSandbox, ociSpec specs.Sp
 	// The value of this annotation is sent to the sandbox using init data.
 	delete(ociSpec.Annotations, vcAnnotations.Initdata)
 
-	ociSpec = SetEphemeralStorageType(ociSpec, disableGuestEmptyDir)
+	emptyDirMode := sandbox.Status().EmptyDirMode
+	ociSpec = SetEphemeralStorageType(ociSpec, disableGuestEmptyDir, emptyDirMode)
 
 	contConfig, err := oci.ContainerConfig(ociSpec, bundlePath, containerID, disableOutput)
 	if err != nil {

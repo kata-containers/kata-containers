@@ -218,6 +218,7 @@ func createAllRuntimeConfigFiles(dir, hypervisor string) (testConfig testRuntime
 		JaegerPassword:  jaegerPassword,
 
 		FactoryConfig: factoryConfig,
+		EmptyDirMode:  vc.EmptyDirModeSharedFs,
 	}
 
 	err = SetKernelParams(&runtimeConfig)
@@ -599,6 +600,7 @@ func TestMinimalRuntimeConfig(t *testing.T) {
 		AgentConfig: expectedAgentConfig,
 
 		FactoryConfig: expectedFactoryConfig,
+		EmptyDirMode:  vc.EmptyDirModeSharedFs,
 	}
 	err = SetKernelParams(&expectedConfig)
 	if err != nil {
@@ -1607,6 +1609,20 @@ func TestCheckNetNsConfig(t *testing.T) {
 	}
 	err = checkNetNsConfig(config)
 	assert.Error(err)
+}
+
+func TestCheckEmptyDirMode(t *testing.T) {
+	assert := assert.New(t)
+
+	// Valid values
+	assert.NoError(checkEmptyDirMode(vc.EmptyDirModeSharedFs))
+	assert.NoError(checkEmptyDirMode(vc.EmptyDirModeVirtioBlkEncrypted))
+
+	// Invalid values
+	assert.Error(checkEmptyDirMode(""))
+	assert.Error(checkEmptyDirMode("invalid"))
+	assert.Error(checkEmptyDirMode("shared_fs"))
+	assert.Error(checkEmptyDirMode("block_encrypted"))
 }
 
 func TestCheckFactoryConfig(t *testing.T) {
