@@ -34,7 +34,7 @@ on:
 
 jobs:
   skipper:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     outputs:
       skip_build: ${{ steps.skipper.outputs.skip_build }}
       skip_test: ${{ steps.skipper.outputs.skip_test }}
