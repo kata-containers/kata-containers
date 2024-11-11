@@ -627,7 +627,7 @@ the following steps (using rootfs or initrd image).
 >
 > Look for `INIT_PROCESS=systemd` in the `config.sh` osbuilder rootfs config file
 > to verify an osbuilder distro supports systemd for the distro you want to build rootfs for.
-> For an example, see the [Clear Linux config.sh file](../tools/osbuilder/rootfs-builder/clearlinux/config.sh).
+> For an example, see the [Ubuntu config.sh file](../tools/osbuilder/rootfs-builder/ubuntu/config.sh).
 >
 > For a non-systemd-based distro, create an equivalent system
 > service using that distro’s init system syntax. Alternatively, you can build a distro
