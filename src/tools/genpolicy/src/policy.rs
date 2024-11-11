@@ -993,5 +993,10 @@ pub fn get_kata_namespaces(
         Path: "".to_string(),
     });
 
+    namespaces.push(KataLinuxNamespace {
+        Type: "network".to_string(),
+        Path: "/run/netns/podns".to_string(),
+    });
+
     namespaces
 }
