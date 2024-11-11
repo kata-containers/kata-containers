@@ -208,15 +208,15 @@ spec:
         create: true
     controller:
       image:
-        tag: v3.5.11@sha256:b7462c43623506d05865bfe7ab5b3b3e1f9c8b3ee019bc74239e1b7f766db73c
+        tag: v3.6.0-rc3@sha256:d98a9c2c0062fbf8d92035099215a65be600754c4bec785f42f53b7b123fbacb
       workflowNamespaces:
         - super-protocol
     executor:
       image:
-        tag: v3.5.11@sha256:4a576a3fe37bf8351117d00be6febf2a93f70840736469be2eeb7c21a6b368e0
+        tag: v3.6.0-rc3@sha256:f5431cdf52db35e03f6979ba60097dae3d354561a8b3645717b72ca191514bd3
     server:
       image:
-        tag: v3.5.11@sha256:a5ec2d37d9fe80e0144098f1cdcac4626113cb41e0c5a69e213480d4322782f8
+        tag: v3.6.0-rc3@sha256:b1b4e421430f2fc4d2534b0dd888c3a6fa2329a5abb1e4fe273f673775fa645d
       authModes:
         - server
 
@@ -410,7 +410,7 @@ metadata:
 ---
 
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
+kind: ClusterRole
 metadata:
   name: super-aw-role
   namespace: argocd
@@ -421,6 +421,10 @@ rules:
 - apiGroups: ["apps", "extensions"]
   resources: ["deployments", "deployments/rollback", "deployments/scale", "statefulsets", "daemonsets"]
   verbs: ["get", "list", "watch", "create", "delete", "update", "patch", "scale"]
+
+- apiGroups: ["argoproj.io"]
+  resources: ["applications", "applicationsets", "appprojects"]
+  verbs: ["create", "delete", "get", "list", "patch", "update", "watch"]
 
 - apiGroups: ["argoproj.io"]
   resources: ["workflowtaskresults"]
@@ -435,7 +439,7 @@ rules:
 ---
 
 apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
+kind: ClusterRoleBinding
 metadata:
   name: super-aw-binding
   namespace: argocd
@@ -444,7 +448,7 @@ subjects:
   name: super-aw-sa
   namespace: argocd
 roleRef:
-  kind: Role
+  kind: ClusterRole
   name: super-aw-role
   apiGroup: rbac.authorization.k8s.io
 
@@ -459,8 +463,10 @@ spec:
   schedule: '*/5 * * * *'
   timezone: 'UTC'
   concurrencyPolicy: "Replace"      # Default to "Allow"
-  successfulJobsHistoryLimit: 2     # Default 3
+  successfulJobsHistoryLimit: 1     # Default 3
   suspend: false                    # Set to "true" to suspend scheduling
+  stopStrategy:
+    condition: "cronworkflow.succeeded >= 1"     # Run this workflow only once, for first init of provider config
   workflowSpec:
     serviceAccountName: super-aw-sa
     entrypoint: main
@@ -477,7 +483,7 @@ spec:
           command: [sh, -c]
           args:
             - |
-              cd /super-protocol-mounted-directory/init
+              cd /super-protocol-mounted-directory/manifests
               ls -la
               for file in *.yaml; do
                 kubectl apply -f "$file"
