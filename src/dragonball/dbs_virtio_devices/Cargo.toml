@@ -1,0 +1,69 @@
+[package]
+name = "dbs-virtio-devices"
+version = "0.3.1"
+authors = ["Alibaba Dragonball Team"]
+license = "Apache-2.0 AND BSD-3-Clause"
+edition = "2018"
+description = "Virtio device backend driver framework and device drivers"
+homepage = "https://github.com/openanolis/dragonball-sandbox"
+repository = "https://github.com/openanolis/dragonball-sandbox/tree/main/crates/dbs-virtio-devices"
+keywords = ["dragonball", "secure-sandbox", "devices", "virtio"]
+readme = "README.md"
+
+[dependencies]
+byteorder = "1.4.3"
+caps = "0.5.3"
+dbs-device = { path = "../dbs_device" }
+dbs-interrupt = { path = "../dbs_interrupt", features = [
+  "kvm-legacy-irq",
+  "kvm-msi-irq",
+] }
+dbs-utils = { path = "../dbs_utils" }
+dbs-address-space = { path = "../dbs_address_space" }
+dbs-boot = { path = "../dbs_boot" }
+epoll = ">=4.3.1, <4.3.2"
+io-uring = "0.5.2"
+fuse-backend-rs = { version = "0.10.5", optional = true }
+kvm-bindings = { workspace = true }
+kvm-ioctls = { workspace = true }
+libc = "0.2.119"
+log = "0.4.14"
+nix = "0.24.3"
+nydus-api = "0.3.1"
+nydus-rafs = "0.3.2"
+nydus-storage = "0.6.4"
+rlimit = "0.7.0"
+serde = "1.0.27"
+serde_json = "1.0.9"
+thiserror = "1"
+threadpool = "1"
+virtio-bindings = { workspace = true }
+virtio-queue = { workspace = true }
+vmm-sys-util = { workspace = true }
+vm-memory = { workspace = true, features = ["backend-mmap"] }
+sendfd = "0.4.3"
+vhost-rs = { version = "0.6.1", package = "vhost", optional = true }
+timerfd = "1.0"
+
+[dev-dependencies]
+vm-memory = { workspace = true, features = ["backend-mmap", "backend-atomic"] }
+
+[features]
+virtio-mmio = []
+virtio-vsock = ["virtio-mmio"]
+virtio-net = ["virtio-mmio"]
+virtio-blk = ["virtio-mmio"]
+virtio-fs = ["virtio-mmio", "fuse-backend-rs/virtiofs", "nydus-rafs/virtio-fs"]
+virtio-fs-pro = [
+  "virtio-fs",
+  "nydus-storage/backend-registry",
+  "nydus-storage/backend-oss",
+]
+virtio-mem = ["virtio-mmio"]
+virtio-balloon = ["virtio-mmio"]
+vhost = ["virtio-mmio", "vhost-rs/vhost-user-master", "vhost-rs/vhost-kern"]
+vhost-net = ["vhost", "vhost-rs/vhost-net"]
+vhost-user = ["vhost"]
+vhost-user-fs = ["vhost-user"]
+vhost-user-net = ["vhost-user"]
+vhost-user-blk = ["vhost-user"]

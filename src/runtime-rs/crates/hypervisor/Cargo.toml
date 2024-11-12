@@ -52,7 +52,7 @@ qapi-qmp = "0.14.0"
 
 [target.'cfg(not(target_arch = "s390x"))'.dependencies]
 dragonball = { path = "../../../dragonball", features = ["atomic-guest-memory", "virtio-vsock", "hotplug", "virtio-blk", "virtio-net", "virtio-fs", "vhost-net", "dbs-upcall", "virtio-mem", "virtio-balloon", "vhost-user-net", "host-device"], optional = true }
-dbs-utils = { path = "../../../dragonball/src/dbs_utils" }
+dbs-utils = { path = "../../../dragonball/dbs_utils" }
 hyperlocal = "0.8.0"
 hyper = {version = "0.14.18", features = ["client"]}
 
