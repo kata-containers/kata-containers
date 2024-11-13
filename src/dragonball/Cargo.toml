@@ -102,16 +102,17 @@ resolver = "2"
 
 # Rust-VMM crates
 [workspace.dependencies]
-event-manager = "0.2.1"
-kvm-bindings = "0.6.0"
-kvm-ioctls = "0.12.0"
-linux-loader = "0.8.0"
-seccompiler = "0.2.0"
-vfio-bindings = "0.3.0"
-vfio-ioctls = "0.1.0"
-virtio-bindings = "0.1.0"
-virtio-queue = "0.7.0"
-vm-fdt = "0.2.0"
-vm-memory = "0.10.0"
-vm-superio = "0.5.0"
-vmm-sys-util = "0.11.0"
+event-manager = "0.4.0"
+kvm-bindings = "0.10.0"
+kvm-ioctls = "0.19.0"
+linux-loader = "0.13.0"
+seccompiler = "0.4.0"
+vfio-bindings = { git = "https://github.com/rust-vmm/vfio", branch = "main" }
+# vfio-ioctls defaults to `kvm` instead of `mshv`
+vfio-ioctls = { git = "https://github.com/rust-vmm/vfio", branch = "main"}
+virtio-bindings = "0.2.4"
+virtio-queue = "0.14.0"
+vm-fdt = { git = "https://github.com/rust-vmm/vm-fdt", branch = "main" }
+vm-memory = "0.16.0"
+vm-superio = "0.8.0"
+vmm-sys-util = "0.12.1"
