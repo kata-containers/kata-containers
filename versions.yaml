@@ -127,6 +127,9 @@ assets:
       ppc64le:
         name: *default-image-name
         version: *default-image-version
+      riscv64:
+        name: *default-image-name
+        version: *default-image-version
       s390x:
         name: *default-image-name
         version: *default-image-version
@@ -172,6 +175,9 @@ assets:
       ppc64le:
         name: &glibc-initrd-name "ubuntu"
         version: &glibc-initrd-version "20.04"
+      riscv64:
+        name: *glibc-initrd-name
+        version: *glibc-initrd-version
       s390x:
         name: *glibc-initrd-name
         version: *glibc-initrd-version
