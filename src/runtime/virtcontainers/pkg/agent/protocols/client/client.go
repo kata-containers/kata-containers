@@ -41,6 +41,9 @@ const (
 var defaultDialTimeout = 30 * time.Second
 
 var hybridVSockPort uint32
+var hybridVSockErrors uint32 = 0
+
+const hybridVSockErrorsSkip uint32 = 128
 
 var agentClientFields = logrus.Fields{
 	"name":   "agent-client",
@@ -425,9 +428,16 @@ func HybridVSockDialer(sock string, timeout time.Duration) (net.Conn, error) {
 		case err = <-errChan:
 			if err != nil {
 				conn.Close()
-				agentClientLog.WithField("Error", err).Debug("HybridVsock trivial handshake failed")
-				return nil, err
 
+				// With full debug logging enabled there might be around 1,500 redials in a tight loop, so
+				// skip logging some of these failures to avoid flooding the log.
+				errorsCount := hybridVSockErrors
+				if errorsCount%hybridVSockErrorsSkip == 0 {
+					agentClientLog.WithField("Error", err).WithField("count", errorsCount).Debug("HybridVsock trivial handshake failed")
+				}
+				hybridVSockErrors = errorsCount + 1
+
+				return nil, err
 			}
 			return conn, nil
 		case <-time.After(handshakeTimeout):
