@@ -36,7 +36,15 @@ jobs:
           - nydus
         pull-type:
           - guest-pull
-    runs-on: tdx
+        k8s-test-host-type:
+          - baremetal-attestation
+          - baremetal-no-attestation
+        include:
+          - k8s-test-host-type: baremetal-attestation
+            machine: tdx-attestation
+          - k8s-test-host-type: baremetal-no-attestation
+            machine: tdx-no-attestation
+    runs-on: ${{ matrix.machine }}
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
@@ -46,7 +54,7 @@ jobs:
       KUBERNETES: "vanilla"
       USING_NFD: "true"
       KBS: "true"
-      K8S_TEST_HOST_TYPE: "baremetal"
+      K8S_TEST_HOST_TYPE: ${{ matrix.k8s-test-host-type }}
       KBS_INGRESS: "nodeport"
       SNAPSHOTTER: ${{ matrix.snapshotter }}
       PULL_TYPE: ${{ matrix.pull-type }}
@@ -75,14 +83,17 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-tdx
 
       - name: Uninstall previous `kbs-client`
+        if: ${{ matrix.machine != 'tdx-no-attestation' }}
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh uninstall-kbs-client
 
       - name: Deploy CoCo KBS
+        if: ${{ matrix.machine != 'tdx-no-attestation' }}
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh deploy-coco-kbs
 
       - name: Install `kbs-client`
+        if: ${{ matrix.machine != 'tdx-no-attestation' }}
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh install-kbs-client
 
@@ -99,7 +110,7 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh cleanup-snapshotter
 
       - name: Delete CoCo KBS
-        if: always()
+        if: ${{ always() && matrix.machine != 'tdx-no-attestation' }}
         run: bash tests/integration/kubernetes/gha-run.sh delete-coco-kbs
 
   run-k8s-tests-on-sev:

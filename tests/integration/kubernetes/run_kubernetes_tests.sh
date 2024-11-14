@@ -33,12 +33,15 @@ else
 	# we need run k8s-guest-pull-image.bats test first, otherwise the test result will be affected
 	# by other cases which are using 'alpine' and 'quay.io/prometheus/busybox:latest' image.
 	# more details https://github.com/kata-containers/kata-containers/issues/8337
-	K8S_TEST_SMALL_HOST_UNION=( \
+	K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION=( \
 		"k8s-guest-pull-image-encrypted.bats" \
-		"k8s-guest-pull-image.bats" \
 		"k8s-guest-pull-image-authenticated.bats" \
 		"k8s-guest-pull-image-signature.bats" \
 		"k8s-confidential-attestation.bats" \
+	)
+
+	K8S_TEST_SMALL_HOST_UNION=( \
+		"k8s-guest-pull-image.bats" \
 		"k8s-confidential.bats" \
 		"k8s-sealed-secret.bats" \
 		"k8s-attach-handlers.bats" \
@@ -95,14 +98,19 @@ else
 
 	case ${K8S_TEST_HOST_TYPE} in
 		small)
-			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_UNION[@]})
+			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION[@]} ${K8S_TEST_SMALL_HOST_UNION[@]})
 			;;
 		normal)
 			K8S_TEST_UNION=(${K8S_TEST_NORMAL_HOST_UNION[@]})
 			;;
 		all|baremetal)
+			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION[@]} ${K8S_TEST_SMALL_HOST_UNION[@]} ${K8S_TEST_NORMAL_HOST_UNION[@]})
+			;;
+		baremetal-attestation)
+			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_ATTESTATION_REQUIRED_UNION[@]})
+			;;
+		baremetal-no-attestation)
 			K8S_TEST_UNION=(${K8S_TEST_SMALL_HOST_UNION[@]} ${K8S_TEST_NORMAL_HOST_UNION[@]})
-
 			;;
 		*)
 			echo "${K8S_TEST_HOST_TYPE} is an invalid K8S_TEST_HOST_TYPE option. Valid options are: small | normal | all | baremetal"
