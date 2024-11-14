@@ -1,0 +1,13 @@
+[Unit]
+Description=Service to run VM hardening checks
+Before=getty@tty1.service
+Wants=getty@tty1.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/hardening-vm.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+

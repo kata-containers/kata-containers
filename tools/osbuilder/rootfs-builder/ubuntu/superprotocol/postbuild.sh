@@ -61,6 +61,11 @@ run_postbuild() {
 	cp "${script_dir}/local-registry.sh" "${rootfs_dir}/usr/local/bin/"
 	ln -s /etc/systemd/system/local-registry.service "$rootfs_dir/etc/systemd/system/multi-user.target.wants/local-registry.service"
 
+	echo "tty1" > "${rootfs_dir}/etc/securetty"
+	cp "${script_dir}/hardening-vm.service" "${rootfs_dir}/etc/systemd/system"
+	cp "${script_dir}/hardening-vm.sh" "${rootfs_dir}/usr/local/bin/"
+	ln -s /etc/systemd/system/hardening-vm.service "$rootfs_dir/etc/systemd/system/multi-user.target.wants/hardening-vm.service"
+
 	set +x
 
 	umount ${rootfs_dir}/dev/pts
