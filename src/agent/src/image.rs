@@ -21,6 +21,9 @@ use tokio::sync::Mutex;
 use crate::rpc::CONTAINER_BASE;
 use crate::AGENT_CONFIG;
 
+use kata_types::mount::KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL;
+use protocols::agent::Storage;
+
 pub const KATA_IMAGE_WORK_DIR: &str = "/run/kata-containers/image/";
 const CONFIG_JSON: &str = "config.json";
 const KATA_PAUSE_BUNDLE: &str = "/pause_bundle";
@@ -81,6 +84,28 @@ impl ImageService {
         Self { image_client }
     }
 
+    /// get guest pause image process specification
+    fn get_pause_image_process() -> Result<oci::Process> {
+        let guest_pause_bundle = Path::new(KATA_PAUSE_BUNDLE);
+        if !guest_pause_bundle.exists() {
+            bail!("Pause image not present in rootfs");
+        }
+        let guest_pause_config = scoped_join(guest_pause_bundle, CONFIG_JSON)?;
+
+        let image_oci = oci::Spec::load(guest_pause_config.to_str().ok_or_else(|| {
+            anyhow!(
+                "Failed to load the guest pause image config from {:?}",
+                guest_pause_config
+            )
+        })?)
+        .context("load image config file")?;
+
+        let image_oci_process = image_oci.process().as_ref().ok_or_else(|| {
+            anyhow!("The guest pause image config does not contain a process specification. Please check the pause image.")
+        })?;
+        Ok(image_oci_process.clone())
+    }
+
     /// pause image is packaged in rootfs
     fn unpack_pause_image(cid: &str) -> Result<String> {
         verify_id(cid).context("The guest pause image cid contains invalid characters.")?;
@@ -132,6 +157,20 @@ impl ImageService {
         Ok(pause_rootfs.display().to_string())
     }
 
+    /// check whether the image is for sandbox or for container.
+    fn is_sandbox(image_metadata: &HashMap<String, String>) -> bool {
+        let mut is_sandbox = false;
+        for key in K8S_CONTAINER_TYPE_KEYS.iter() {
+            if let Some(value) = image_metadata.get(key as &str) {
+                if value == "sandbox" {
+                    is_sandbox = true;
+                    break;
+                }
+            }
+        }
+        is_sandbox
+    }
+
     /// pull_image is used for call image-rs to pull image in the guest.
     /// # Parameters
     /// - `image`: Image name (exp: quay.io/prometheus/busybox:latest)
@@ -147,18 +186,7 @@ impl ImageService {
     ) -> Result<String> {
         info!(sl(), "image metadata: {image_metadata:?}");
 
-        //Check whether the image is for sandbox or for container.
-        let mut is_sandbox = false;
-        for key in K8S_CONTAINER_TYPE_KEYS.iter() {
-            if let Some(value) = image_metadata.get(key as &str) {
-                if value == "sandbox" {
-                    is_sandbox = true;
-                    break;
-                }
-            }
-        }
-
-        if is_sandbox {
+        if Self::is_sandbox(image_metadata) {
             let mount_path = Self::unpack_pause_image(cid)?;
             return Ok(mount_path);
         }
@@ -192,6 +220,32 @@ impl ImageService {
         let image_bundle_path = scoped_join(&bundle_path, "rootfs")?;
         Ok(image_bundle_path.as_path().display().to_string())
     }
+}
+
+/// get_process overrides the OCI process spec with pause image process spec if needed
+pub fn get_process(
+    ocip: &oci::Process,
+    oci: &oci::Spec,
+    storages: Vec<Storage>,
+) -> Result<oci::Process> {
+    let mut guest_pull = false;
+    for storage in storages {
+        if storage.driver == KATA_VIRTUAL_VOLUME_IMAGE_GUEST_PULL {
+            guest_pull = true;
+            break;
+        }
+    }
+    if guest_pull {
+        match oci.annotations() {
+            Some(a) => {
+                if ImageService::is_sandbox(a) {
+                    return ImageService::get_pause_image_process();
+                }
+            }
+            None => {}
+        }
+    }
+    Ok(ocip.clone())
 }
 
 /// Set proxy environment from AGENT_CONFIG

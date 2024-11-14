@@ -244,7 +244,13 @@ impl AgentService {
         // After all those storages have been processed, no matter the order
         // here, the agent will rely on rustjail (using the oci.Mounts
         // list) to bind mount all of them inside the container.
-        let m = add_storages(sl(), req.storages, &self.sandbox, Some(req.container_id)).await?;
+        let m = add_storages(
+            sl(),
+            req.storages.clone(),
+            &self.sandbox,
+            Some(req.container_id),
+        )
+        .await?;
 
         let mut s = self.sandbox.lock().await;
         s.container_mounts.insert(cid.clone(), m);
@@ -299,6 +305,13 @@ impl AgentService {
         let pipe_size = AGENT_CONFIG.container_pipe_size;
 
         let p = if let Some(p) = oci.process() {
+            #[cfg(feature = "guest-pull")]
+            {
+                let new_p = image::get_process(p, &oci, req.storages.clone())?;
+                Process::new(&sl(), &new_p, cid.as_str(), true, pipe_size, proc_io)?
+            }
+
+            #[cfg(not(feature = "guest-pull"))]
             Process::new(&sl(), p, cid.as_str(), true, pipe_size, proc_io)?
         } else {
             info!(sl(), "no process configurations!");
