@@ -10,6 +10,7 @@ RequiresMountsFor=/dev/vdb
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/local/bin/state_disk_mount.sh
+TimeoutStartSec=300
 
 [Install]
 WantedBy=multi-user.target
