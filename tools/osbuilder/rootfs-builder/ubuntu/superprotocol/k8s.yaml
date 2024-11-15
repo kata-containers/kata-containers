@@ -525,7 +525,7 @@ spec:
               type=$(yq eval '.stringData.type' "$CHALLENGE_FILE")
               # Is the VM running in debug mode?
               SP_DEBUG=$(grep -oP 'sp-debug=\K\S+' /host-kernel-cmdline)
-              if [ $SP_DEBUG = "true" ]; then; 
+              if [ $SP_DEBUG = "true" ]; then
                 type="untrusted"
               fi
               # update configmap
