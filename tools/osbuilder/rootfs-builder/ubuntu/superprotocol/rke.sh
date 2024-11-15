@@ -1,8 +1,11 @@
 #!/bin/bash
 set -x
 
+apt-get install -y python3-pip
+pip3 install faker
+
 RND_SEED=$(LC_ALL=C tr -dc '[:lower:]' < /dev/urandom | head -c 6)
-NODE_NAME="sp-tdx-h100-vm"
+NODE_NAME=$(python3 -c 'from faker import Faker; fake = Faker(); print(f"sp-{fake.first_name().lower()}-{fake.last_name().lower()}")')
 echo $NODE_NAME > /etc/hostname
 
 LOCAL_REGISTRY_HOST="hauler.local"
