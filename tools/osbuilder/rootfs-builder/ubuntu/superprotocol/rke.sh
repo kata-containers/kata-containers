@@ -1,10 +1,9 @@
 #!/bin/bash
 set -x
 
-apt-get install petname
+apt-get install -y petname
 
-NODE_NAME="sp-$(petname)-$(petname)"
-echo $NODE_NAME > /etc/hostname
+NODE_NAME="sp-$(petname)"
 echo $NODE_NAME > /etc/hostname
 
 LOCAL_REGISTRY_HOST="hauler.local"
