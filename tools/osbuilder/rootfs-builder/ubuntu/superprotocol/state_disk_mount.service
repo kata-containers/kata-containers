@@ -12,4 +12,4 @@ RemainAfterExit=yes
 ExecStart=/usr/local/bin/state_disk_mount.sh
 
 [Install]
-WantedBy=sysinit.target
+WantedBy=multi-user.target
