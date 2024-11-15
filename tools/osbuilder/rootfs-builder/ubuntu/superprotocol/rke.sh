@@ -219,7 +219,7 @@ cd /opt/hauler
 ln -s /opt/hauler/.hauler ~/.hauler
 
 ### Download and Install Hauler
-vHauler=1.0.8
+vHauler=1.1.0
 curl -sfL https://get.hauler.dev | HAULER_VERSION=${vHauler} bash
 
 ### Fetch Rancher Airgap Manifests
@@ -301,6 +301,8 @@ spec:
 EOF
 
 hauler store sync --store rke2-store --platform linux/amd64 --files rke2-airgap.yaml
+hauler store add --store rke2-store image ghcr.io/super-protocol/tee-pki-curl:v1.4.4 --platform linux/amd64
+
 hauler store save --store rke2-store --filename rke2-airgap.tar.zst
 # @TODO add argo-cd, argo-workflows, cert-manager, gpu-operator, longhorn charts
 

@@ -130,23 +130,6 @@ spec:
 
 ---
 
-apiVersion: helm.cattle.io/v1
-kind: HelmChart
-metadata:
-  name: sealed-secrets
-  namespace: kube-system
-spec:
-  repo: https://bitnami-labs.github.io/sealed-secrets
-  chart: sealed-secrets
-  version: 2.16.1
-  targetNamespace: kube-system
-  valuesContent: |-
-    fullnameOverride: sealed-secrets-controller
-    image:
-      tag: 0.27.1@sha256:6df8cb77885e17dd6cf9b782468504364c0dd03186711a85f1c3b45bc5843a5a
-
----
-
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -360,17 +343,6 @@ metadata:
 
 ---
 
-apiVersion: v1
-kind: Secret
-metadata:
-  name: regcred
-  namespace: super-protocol
-type: kubernetes.io/dockerconfigjson
-data:
-  .dockerconfigjson: e30=
-
----
-
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -454,19 +426,61 @@ roleRef:
 
 ---
 
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pki-curl-config
+  namespace: argocd
+data:
+  default.conf: |-
+    clientCertProvider:
+      type: pki-ca
+      challenge:
+        type: tdx
+        idHex: ""
+        commonIdHex: ""
+      baseUrl: https://ca-subroot1.tee-dev.superprotocol.com:44443/api/v1/pki/
+      caBundle: |
+        -----BEGIN CERTIFICATE-----
+        MIID7TCCAtWgAwIBAgIBATANBgkqhkiG9w0BAQsFADB2MSIwIAYDVQQDExlTdXBl
+        clByb3RvY29sIFRFRSBSb290IENBMQswCQYDVQQGEwJVUzELMAkGA1UECBMCTlkx
+        ETAPBgNVBAcTCE5ldyBZb3JrMRYwFAYDVQQKEw1TdXBlclByb3RvY29sMQswCQYD
+        VQQLEwJJVDAeFw0yNDA4MDEwMDAwMDBaFw0zNDA4MDEwMDAwMDBaMHYxIjAgBgNV
+        BAMTGVN1cGVyUHJvdG9jb2wgVEVFIFJvb3QgQ0ExCzAJBgNVBAYTAlVTMQswCQYD
+        VQQIEwJOWTERMA8GA1UEBxMITmV3IFlvcmsxFjAUBgNVBAoTDVN1cGVyUHJvdG9j
+        b2wxCzAJBgNVBAsTAklUMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA
+        vyaTmEnNuXjj3m80DLYpQkO2PZhT6C0YdQgLxilyUsRUtQinS88Q2Eof3h0NeqB2
+        OMlDMFHRVsIYoi9sdPCINuyYajGy2XUL69al2a2OwiThbZtG6etUEOsBAJmLtnTt
+        IDVmzC8p8C+ZMSpu8bZ3AZNeLxHFY2FdZhqYj3FuWgTLwkvERBnJeVMMsSrz99qD
+        0hLUDo3iGXw99qsGCLlJC3p+S8NoClc9VjOA7x0+nE9zYrSHqwhwRC+tHdMOBUvd
+        5/tPZuDgS3TU++0reo2qnd/O0U59C8XsjP1CrXkz5LDzPSZmMWlaB7hU6edOiUQS
+        h8gskt4JNsFCnc0NamCstwIDAQABo4GFMIGCMAwGA1UdEwQFMAMBAf8wCwYDVR0P
+        BAQDAgL0MB0GA1UdJQQWMBQGCCsGAQUFBwMBBggrBgEFBQcDAjAdBgNVHQ4EFgQU
+        jBSiEoknNMPDd9iKVPz0xmseNF4wJwYDVR0RBCAwHoIcY2EudGVlLWRldi5zdXBl
+        cnByb3RvY29sLmNvbTANBgkqhkiG9w0BAQsFAAOCAQEAPBNZ5xm893wUFxKvxbeW
+        V8iPL5rOcACIsPzTo7taF8imkb8UQGA6ofpPPZz59YFayNkVV2xKIi9N1x8iI8lg
+        szGfsvGm9vvgREl+U5tml1guOxv+DTNAR+vYh91VN/Fg3EoMBomMscQccIHMiuFQ
+        C6ru6D0x7aXX8VhYVeDJaJJd+Il/DV3xaFPcMRFhrXLJTBb+JOsnT0kTw5C3RREb
+        DVeduduR+4w6Xdz5XUn34iognpSl05ByO8pGQc2NgZIdpyLIIetFPFwITnrFJOV/
+        XryT5KVK0PaBSuGAMCCV2wQS9TYVDJwn/Kv7fAJ8Kte4UBBC7vSfEtdGXdT5dcYE
+        fw==
+        -----END CERTIFICATE-----
+
+---
+
 apiVersion: argoproj.io/v1alpha1
 kind: CronWorkflow
 metadata:
   name: super-init-manifests
   namespace: argocd
 spec:
+  concurrencyPolicy: 'Replace'
   schedule: '*/5 * * * *'
-  timezone: 'UTC'
-  concurrencyPolicy: "Replace"      # Default to "Allow"
-  successfulJobsHistoryLimit: 1     # Default 3
-  suspend: false                    # Set to "true" to suspend scheduling
   stopStrategy:
-    condition: "cronworkflow.succeeded >= 1"     # Run this workflow only once, for first init of provider config
+    expression: 'cronworkflow.succeeded >= 1'
+  successfulJobsHistoryLimit: 1
+  suspend: false
+  timezone: 'UTC'
   workflowSpec:
     serviceAccountName: super-aw-sa
     entrypoint: main
@@ -474,26 +488,167 @@ spec:
       - name: main
         dag:
           tasks:
-            - name: apply-manifests-from-host
-              template: apply-manifests-from-host
+            - name: pki-config-challenge
+              template: pki-config-challenge
 
-      - name: apply-manifests-from-host
+            - name: get-secrets-for-tdx
+              template: get-secrets-for-tdx
+              depends: pki-config-challenge
+              when: "{{tasks.pki-config-challenge.outputs.parameters.challenge-type}} == tdx"
+
+            - name: get-secrets-for-untrusted
+              template: get-secrets-for-untrusted
+              depends: pki-config-challenge
+              when: "{{tasks.pki-config-challenge.outputs.parameters.challenge-type}} == untrusted"
+
+            - name: apply-secrets
+              template: apply-secrets
+              depends: "get-secrets-for-tdx.Succeeded || get-secrets-for-untrusted.Succeeded"
+
+
+      - name: pki-config-challenge
+        script:
+          # TODO pin tag
+          image: bitnami/kubectl
+          command: [sh, -c]
+          source: |
+            set -e
+            NAMESPACE="argocd"
+            PKI_CONFIGMAP_NAME="pki-curl-config"
+            CHALLENGE_FILE="secret.sp-pki-challenge.yaml"
+            cd /super-protocol-mounted-directory/manifests
+
+            # Is PKI challenge overridden via custom / developer tokens? 
+            if [ -f $CHALLENGE_FILE ]; then
+              idHex=$(yq eval '.stringData.idHex' "$CHALLENGE_FILE")
+              commonIdHex=$(yq eval '.stringData.commonIdHex' "$CHALLENGE_FILE")
+              type=$(yq eval '.stringData.type' "$CHALLENGE_FILE")
+              # Is the VM running in debug mode?
+              SP_DEBUG=$(grep -oP 'sp-debug=\K\S+' /host-kernel-cmdline)
+              if [ $SP_DEBUG = "true" ]; then; 
+                type="untrusted"
+              fi
+              # update configmap
+              filtered_configmap=$(kubectl get configmap "$PKI_CONFIGMAP_NAME" -n $NAMESPACE -o yaml | \
+                yq eval "del(.metadata) | .metadata.name = \"$PKI_CONFIGMAP_NAME\"" - | \
+                sed -e "s/idHex: .*/idHex: $idHex/" \
+                    -e "s/commonIdHex: .*/commonIdHex: $commonIdHex/" \
+                    -e "/challenge:/,/^$/s/type: [^ ]*/type: $type/")      
+              echo "$filtered_configmap" | kubectl apply -n $NAMESPACE -f -
+            fi
+
+            # get challenge and pass it as result output to next steps
+            type=$(kubectl get configmap pki-curl-config -n argocd -o jsonpath='{.data.default\.conf}' | yq e '.clientCertProvider.challenge.type' -)
+            if [ $type = "tdx" ]; then
+              echo "tdx" > /tmp/challenge-type
+            else
+              echo "untrusted" > /tmp/challenge-type
+            fi
+          volumeMounts:
+            - name: sp-config-volume
+              mountPath: /super-protocol-mounted-directory
+            - name: host-kernel-cmdline
+              mountPath: /host-kernel-cmdline
+              readOnly: true
+        outputs:
+          parameters:
+            - name: challenge-type
+              valueFrom:
+                path: /tmp/challenge-type
+
+
+      - name: get-secrets-for-tdx
         container:
+          image: registry.superprotocol.local:5000/super-protocol/tee-pki-curl:v1.4.4
+          command: [sh, -c]
+          args:
+            - |
+              set -e
+              SD=/opt/super/deploy
+              rm -rf $SD && mkdir -p $SD
+              node dist/app.js https://secrets.tee-dev.superprotocol.com:44443/repos/Super-Protocol/tdx-vm-secrets/tarball/main --config /pki-config/default.conf > $SD/secrets_repo.tar.gz
+              mkdir -p $SD/secrets_repo && cd $SD/secrets_repo
+              tar -xzf $SD/secrets_repo.tar.gz
+              inner_dir=$(find ./ -mindepth 1 -maxdepth 1 -type d)
+              cd $inner_dir
+              cp -r k8s/* $SD/
+          volumeMounts:
+            - name: sp-deploy
+              mountPath: /opt/super
+            - name: pki-config
+              mountPath: /pki-config
+              readOnly: true
+            - name: dev-tdx-guest
+              mountPath: /dev/tdx_guest
+            - name: tdx-attest-conf
+              readOnly: true
+              mountPath: /etc/tdx-attest.conf
+          securityContext:
+            privileged: true
+
+
+      - name: get-secrets-for-untrusted
+        container:
+          image: registry.superprotocol.local:5000/super-protocol/tee-pki-curl:v1.4.4
+          command: [sh, -c]
+          args:
+            - |
+              set -e
+              SD=/opt/super/deploy
+              rm -rf $SD && mkdir -p $SD
+              node dist/app.js https://secrets.tee-dev.superprotocol.com:44443/repos/Super-Protocol/tdx-vm-secrets/tarball/main --config /pki-config/default.conf > $SD/secrets_repo.tar.gz
+              mkdir -p $SD/secrets_repo && cd $SD/secrets_repo
+              tar -xzf $SD/secrets_repo.tar.gz
+              inner_dir=$(find ./ -mindepth 1 -maxdepth 1 -type d)
+              cd $inner_dir
+              cp -r k8s/* $SD/
+          volumeMounts:
+            - name: sp-deploy
+              mountPath: /opt/super
+            - name: pki-config
+              mountPath: /pki-config
+              readOnly: true
+
+
+      - name: apply-secrets
+        container:
+          # TODO pin tag
           image: bitnami/kubectl
           command: [sh, -c]
           args:
             - |
-              cd /super-protocol-mounted-directory/manifests
-              ls -la
+              set -e
+              cd /opt/super/deploy
               for file in *.yaml; do
                 kubectl apply -f "$file"
               done
+              rm -rf /opt/super/deploy
           volumeMounts:
-          - name: sp-config-volume
-            mountPath: /super-protocol-mounted-directory
+            - name: sp-deploy
+              mountPath: /opt/super
+
 
     volumes:
     - name: sp-config-volume
       hostPath:
         path: /super-protocol-mounted-directory
         type: Directory
+    - name: sp-deploy
+      hostPath:
+        path: /opt/super
+        type: Directory
+    - name: pki-config
+      configMap:
+        name: pki-curl-config
+    - name: host-kernel-cmdline
+      hostPath:
+        path: /proc/cmdline
+        type: File
+    - name: tdx-attest-conf
+      hostPath:
+        path: /etc/tdx-attest.conf
+        type: File
+    - name: dev-tdx-guest
+      hostPath:
+        path: /dev/tdx_guest
+        type: ''
