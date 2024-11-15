@@ -1,11 +1,15 @@
 [Unit]
-Description=Create LUKS partition
-Before=local-fs.target cryptsetup.target
+Description=Create LUKS partition with session key
 DefaultDependencies=no
+Before=local-fs.target cryptsetup.target
+After=systemd-udevd.service
+Conflicts=shutdown.target
+RequiresMountsFor=/dev/vdb
 
 [Service]
 Type=oneshot
+RemainAfterExit=yes
 ExecStart=/usr/local/bin/state_disk_mount.sh
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=sysinit.target
