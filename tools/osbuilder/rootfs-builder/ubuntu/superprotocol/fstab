@@ -1,4 +1,4 @@
-/dev/mapper/crypto       /run/state         ext4    defaults,x-systemd.makefs,x-mount.mkdir    0    1
+/dev/mapper/crypto       /run/state         ext4    defaults,x-systemd.makefs,x-mount.mkdir,x-systemd.requires=state-disk-mount.service    0    1
 /run/state/var           /var               none    defaults,bind,x-mount.mkdir                0    0
 /run/state/kubernetes    /etc/kubernetes    none    defaults,bind,x-mount.mkdir                0    0
 #/run/state/etccni        /etc/cni/          none    defaults,bind,x-mount.mkdir                0    0
