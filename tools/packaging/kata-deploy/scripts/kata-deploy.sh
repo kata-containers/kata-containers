@@ -14,7 +14,6 @@ crio_drop_in_conf_file_debug="${crio_drop_in_conf_dir}/100-debug"
 containerd_conf_file="/etc/containerd/config.toml"
 containerd_conf_file_backup="${containerd_conf_file}.bak"
 containerd_conf_tmpl_file=""
-containerd_drop_in_conf_file="/opt/kata/containerd/config.d/kata-deploy.toml"
 use_containerd_drop_in_conf_file="false"
 
 IFS=' ' read -a shims <<< "$SHIMS"
@@ -46,6 +45,14 @@ if [ -n "${INSTALLATION_PREFIX}" ]; then
 	# as, otherwise, we'd have it doubled there, as: `/foo/bar//opt/kata`
 	dest_dir="${INSTALLATION_PREFIX}${default_dest_dir}"
 fi
+
+MULTI_INSTALL_SUFFIX="${MULTI_INSTALL_SUFFIX:-}"
+if [ -n "${MULTI_INSTALL_SUFFIX}" ]; then
+	dest_dir="${dest_dir}-${MULTI_INSTALL_SUFFIX}"
+	crio_drop_in_conf_file="${crio_drop_in_conf_file}-${MULTI_INSTALL_SUFFIX}"
+fi
+containerd_drop_in_conf_file="${dest_dir}/containerd/config.d/kata-deploy.toml"
+
 # Here, again, there's no `/` between /host and ${dest_dir}, otherwise we'd have it
 # doubled here as well, as: `/host//opt/kata`
 host_install_dir="/host${dest_dir}"
@@ -82,10 +89,29 @@ function create_runtimeclasses() {
 
 	for shim in "${shims[@]}"; do
 		echo "Creating the kata-${shim} runtime class"
+		if [ -n "${MULTI_INSTALL_SUFFIX}" ]; then
+			sed -i -e "s|kata-${shim}|kata-${shim}-${MULTI_INSTALL_SUFFIX}|g" /opt/kata-artifacts/runtimeclasses/kata-${shim}.yaml
+		fi
 		kubectl apply -f /opt/kata-artifacts/runtimeclasses/kata-${shim}.yaml
+
+		if [ -n "${MULTI_INSTALL_SUFFIX}" ]; then
+			# Move the file back to its original state, as the deletion is done
+			# differently in the helm and in the kata-deploy daemonset case, meaning
+			# that we should assume those files are always as they were during the
+			# time the image was built
+			sed -i -e "s|kata-${shim}-${MULTI_INSTALL_SUFFIX}|kata-${shim}|g" /opt/kata-artifacts/runtimeclasses/kata-${shim}.yaml
+		fi
+
 	done
 
 	if [[ "${CREATE_DEFAULT_RUNTIMECLASS}" == "true" ]]; then
+		if [ -n "${MULTI_INSTALL_SUFFIX}" ]; then
+			warn "CREATE_DEFAULT_RUNTIMECLASS is being ignored!"
+			warn "multi installation does not support creating a default runtime class"
+
+			return
+		fi
+
 		echo "Creating the kata runtime class for the default shim (an alias for kata-${default_shim})"
 		cp /opt/kata-artifacts/runtimeclasses/kata-${default_shim}.yaml /tmp/kata.yaml
 		sed -i -e 's/name: kata-'${default_shim}'/name: kata/g' /tmp/kata.yaml
@@ -99,11 +125,20 @@ function delete_runtimeclasses() {
 
 	for shim in "${shims[@]}"; do
 		echo "Deleting the kata-${shim} runtime class"
+		if [ -n "${MULTI_INSTALL_SUFFIX}" ]; then
+			sed -i -e "s|kata-${shim}|kata-${shim}-${MULTI_INSTALL_SUFFIX}|g" /opt/kata-artifacts/runtimeclasses/kata-${shim}.yaml
+		fi
 		kubectl delete -f /opt/kata-artifacts/runtimeclasses/kata-${shim}.yaml
 	done
 
 
 	if [[ "${CREATE_DEFAULT_RUNTIMECLASS}" == "true" ]]; then
+		if [ -n "${MULTI_INSTALL_SUFFIX}" ]; then
+			# There's nothing to be done here, as a default runtime class is never created
+			# for multi installations
+			return
+		fi
+
 		echo "Deleting the kata runtime class for the default shim (an alias for kata-${default_shim})"
 		cp /opt/kata-artifacts/runtimeclasses/kata-${default_shim}.yaml /tmp/kata.yaml
 		sed -i -e 's/name: kata-'${default_shim}'/name: kata/g' /tmp/kata.yaml
@@ -389,7 +424,7 @@ function install_artifacts() {
 			esac	
 		fi
 
-		if [ -n "${INSTALLATION_PREFIX}" ]; then
+		if [ "${dest_dir}" != "${default_dest_dir}" ]; then
 			# We could always do this sed, regardless, but I have a strong preference
 			# on not touching the configuration files unless extremelly needed
 			sed -i -e "s|${default_dest_dir}|${dest_dir}|g" "${kata_config_file}"
@@ -447,7 +482,11 @@ function configure_cri_runtime() {
 
 function configure_crio_runtime() {
 	local shim="${1}"
-	local runtime="kata-${shim}"
+	local adjusted_shim_to_multi_install="${shim}"
+	if [ -n "${MULTI_INSTALL_SUFFIX}" ]; then
+		adjusted_shim_to_multi_install="${shim}-${MULTI_INSTALL_SUFFIX}"
+	fi
+	local runtime="kata-${adjusted_shim_to_multi_install}"
 	local configuration="configuration-${shim}"
 
 	local config_path=$(get_kata_containers_config_path "${shim}")
@@ -524,7 +563,11 @@ EOF
 
 function configure_containerd_runtime() {
 	local shim="$2"
-	local runtime="kata-${shim}"
+	local adjusted_shim_to_multi_install="${shim}"
+	if [ -n "${MULTI_INSTALL_SUFFIX}" ]; then
+		adjusted_shim_to_multi_install="${shim}-${MULTI_INSTALL_SUFFIX}"
+	fi
+	local runtime="kata-${adjusted_shim_to_multi_install}"
 	local configuration="configuration-${shim}"
 	local pluginid=cri
 	local configuration_file="${containerd_conf_file}"
@@ -736,6 +779,7 @@ function main() {
 	echo "* AGENT_NO_PROXY: ${AGENT_NO_PROXY}"
 	echo "* PULL_TYPE_MAPPING: ${PULL_TYPE_MAPPING}"
 	echo "* INSTALLATION_PREFIX: ${INSTALLATION_PREFIX}"
+	echo "* MULTI_INSTALL_SUFFIX: ${MULTI_INSTALL_SUFFIX}"
 	echo "* HELM_POST_DELETE_HOOK: ${HELM_POST_DELETE_HOOK}"
 
 	# script requires that user is root
@@ -757,6 +801,9 @@ function main() {
 		# This works by k0s creating a special directory in /etc/k0s/containerd.d/ where user can drop-in partial containerd configuration snippets.
 		# k0s will automatically pick up these files and adds these in containerd configuration imports list.
 		containerd_conf_file="/etc/containerd/containerd.d/kata-containers.toml"
+		if [ -n "$MULTI_INSTALL_SUFFIX" ]; then
+			containerd_conf_file="/etc/containerd/containerd.d/kata-containers-$MULTI_INSTALL_SUFFIX.toml"
+		fi
 		containerd_conf_file_backup="${containerd_conf_tmpl_file}.bak"
 	fi
 
@@ -769,6 +816,13 @@ function main() {
 
 			use_containerd_drop_in_conf_file=$(is_containerd_capable_of_using_drop_in_files "$runtime")
 			echo "Using containerd drop-in files: $use_containerd_drop_in_conf_file"
+
+			if [[ ! "$runtime" =~ ^(k0s-worker|k0s-controller)$ ]]; then
+				# We skip this check for k0s, as they handle things differently on their side
+				if [ -n "$MULTI_INSTALL_SUFFIX" ] && [ $use_containerd_drop_in_conf_file = "false" ]; then
+					die "Multi installation can only be done if $runtime supports drop-in configuration files"
+				fi
+			fi
 		fi
 
 		case "$action" in
@@ -805,16 +859,27 @@ function main() {
 			       containerd_conf_file="${containerd_conf_tmpl_file}"
 			fi
 
+			local kata_deploy_installations=$(kubectl -n kube-system get ds | grep kata-deploy | wc -l)
+
 			if [ "${HELM_POST_DELETE_HOOK}" == "true" ]; then
 				# Remove the label as the first thing, so we ensure no more kata-containers
 				# pods would be scheduled here.
-				kubectl label node "$NODE_NAME" katacontainers.io/kata-runtime-
+				#
+				# If we still have any other installation here, it means we'll break them
+				# removing the label, so we just don't do it.
+				if [ $kata_deploy_installations -eq 0 ]; then
+					kubectl label node "$NODE_NAME" katacontainers.io/kata-runtime-
+				fi
 			fi
 
 			cleanup_cri_runtime "$runtime"
 			if [ "${HELM_POST_DELETE_HOOK}" == "false" ]; then
-				# The Confidential Containers operator relies on this label
-				kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=cleanup
+				# If we still have any other installation here, it means we'll break them
+				# removing the label, so we just don't do it.
+				if [ $kata_deploy_installations -eq 0 ]; then
+					# The Confidential Containers operator relies on this label
+					kubectl label node "$NODE_NAME" --overwrite katacontainers.io/kata-runtime=cleanup
+				fi
 			fi
 			remove_artifacts
 
