@@ -90,6 +90,8 @@ spec:
           value: {{ .Values.env.pullTypeMapping | quote }}
         - name: HELM_POST_DELETE_HOOK
           value: "true"
+        - name: INSTALLATION_PREFIX
+          value: {{ .Values.env.installationPrefix | quote }}
 {{- with .Values.env.hostOS }}
         - name: HOST_OS
           value: {{ . | quote }}
