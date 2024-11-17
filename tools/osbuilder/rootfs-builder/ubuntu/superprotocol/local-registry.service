@@ -1,9 +1,14 @@
 [Unit]
-Description=Run local registry & fileserver by using Hauler.
+Description=Run local registry & fileserver by using Hauler
+After=network.target state_disk_mount.service
+Before=rke2-server.service
+Requires=state_disk_mount.service
 
 [Service]
 Type=simple
 ExecStart=/usr/local/bin/local-registry.sh
+Restart=always
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
