@@ -59,6 +59,7 @@ run_postbuild() {
 
 	cp "${script_dir}/local-registry.service" "${rootfs_dir}/etc/systemd/system"
 	cp "${script_dir}/local-registry.sh" "${rootfs_dir}/usr/local/bin/"
+ 	chmod +x "${rootfs_dir}/usr/local/bin/local-registry.sh"
 	ln -s /etc/systemd/system/local-registry.service "$rootfs_dir/etc/systemd/system/multi-user.target.wants/local-registry.service"
 
 	echo "tty1" > "${rootfs_dir}/etc/securetty"
