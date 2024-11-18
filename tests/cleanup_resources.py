@@ -47,16 +47,31 @@ for resource in resources:
     _, _, rg_name = rg_id.partition("/resourceGroups/")
 
     try:
-        num_rg_resources = len(list(client.resources.list_by_resource_group(rg_name)))
+        rg = client.resource_groups.get(rg_name)
     except ResourceNotFoundError:
         # Some resource names seem to be lingering in Azure limbo but do
         # not map to any actual resources, so we ignore those.
         print(f"{resource.name}: not found, ignored")
         continue
 
+    # If the resource group has a tag SkipAutoDeleteTill=YYYY-MM-DD, we
+    # don't delete it until the specified date.
+    skip_delete_till = rg.tags.get('SkipAutoDeleteTill')
+    if skip_delete_till:
+        try:
+            skip_delete_date = datetime.strptime(skip_delete_till, '%Y-%m-%d').date()
+        except ValueError:
+            print(f"{resource.name}: resource group {rg_name} tag SkipAutoDeleteTill={skip_delete_till} is malformed, skipping deletion")
+            continue
+        else:
+            if utc_now < skip_delete_date:
+                print(f"{resource.name}: resource group {rg_name} has tag SkipAutoDeleteTill={skip_delete_till}, skipping deletion")
+                continue
+
     # XXX DANGER ZONE: Delete the resource. If it's the only resource
     # in its resource group, the entire resource group is deleted.
 
+    num_rg_resources = len(list(client.resources.list_by_resource_group(rg_name)))
     if num_rg_resources == 1:
         client.resource_groups.begin_delete(rg_name)
         print(f"{resource.name}: deleted resource group")
