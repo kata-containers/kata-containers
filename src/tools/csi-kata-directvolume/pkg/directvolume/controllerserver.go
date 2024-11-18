@@ -62,6 +62,8 @@ func (dv *directVolume) CreateVolume(ctx context.Context, req *csi.CreateVolumeR
 			volumeCtx[utils.KataContainersDirectFsType] = value
 		case utils.KataContainersDirectLoop:
 			volumeCtx[utils.KataContainersDirectLoop] = value
+		case utils.KataContainersDirectCoCoEphemeral:
+			volumeCtx[utils.KataContainersDirectCoCoEphemeral] = value
 		default:
 			klog.Warningf("unknown parameter: %s", key)
 		}
