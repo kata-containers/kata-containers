@@ -1359,11 +1359,10 @@ func (clh *cloudHypervisor) launchClh() error {
 	if clh.config.Debug {
 		// Cloud hypervisor log levels
 		// 'v' occurrences increase the level
-		//0 =>  Error
-		//1 =>  Warn
-		//2 =>  Info
-		//3 =>  Debug
-		//4+ => Trace
+		//0 =>  Warn
+		//1 =>  Info
+		//2 =>  Debug
+		//3+ => Trace
 		// Use Info, the CI runs with debug enabled
 		// a high level of logging increases the boot time
 		// and in a nested environment this could increase
