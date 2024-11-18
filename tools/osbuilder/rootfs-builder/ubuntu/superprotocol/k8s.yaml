@@ -622,7 +622,7 @@ spec:
               for file in *.yaml; do
                 kubectl apply -f "$file"
               done
-              rm -rf /opt/super/deploy
+              rm -rf /opt/super/deploy/*
           volumeMounts:
             - name: sp-deploy
               mountPath: /opt/super
