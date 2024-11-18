@@ -180,7 +180,7 @@ metadata:
 spec:
   repo: https://argoproj.github.io/argo-helm
   chart: argo-workflows
-  version: 0.42.4
+  version: 0.42.7
   targetNamespace: argocd
   valuesContent: |-
     workflow:
@@ -191,15 +191,15 @@ spec:
         create: true
     controller:
       image:
-        tag: v3.6.0-rc3@sha256:d98a9c2c0062fbf8d92035099215a65be600754c4bec785f42f53b7b123fbacb
+        tag: v3.6.0@sha256:75fb7784fb1798ce1a83fff330a49670dc97020d9e436bc6df6b19f920f93425
       workflowNamespaces:
         - super-protocol
     executor:
       image:
-        tag: v3.6.0-rc3@sha256:f5431cdf52db35e03f6979ba60097dae3d354561a8b3645717b72ca191514bd3
+        tag: v3.6.0@sha256:cc13a35ec64ccad8fb5a6980502e573f39f4ff28358eca778fe867e62905d053
     server:
       image:
-        tag: v3.6.0-rc3@sha256:b1b4e421430f2fc4d2534b0dd888c3a6fa2329a5abb1e4fe273f673775fa645d
+        tag: v3.6.0@sha256:2d9fff5414fa34a3fe56576bbd855233cddcf486081b8232e4f36f64ec0b217c
       authModes:
         - server
 
