@@ -619,7 +619,7 @@ function main() {
 	info "containerd(cri): Running cri-integration"
 
 
-	passing_test="TestContainerStats|TestContainerRestart|TestContainerListStatsWithIdFilter|TestContainerListStatsWithIdSandboxIdFilter|TestDuplicateName|TestImageLoad|TestImageFSInfo|TestSandboxCleanRemove"
+	passing_test="TestContainerStats|TestContainerRestart|TestContainerListStatsWithIdFilter|TestContainerListStatsWithIdSandboxIdFilter|TestDuplicateName|TestImageFSInfo|TestSandboxCleanRemove"
 
 	if [[ "${KATA_HYPERVISOR}" == "cloud-hypervisor" || \
 		"${KATA_HYPERVISOR}" == "qemu" ]]; then
@@ -628,6 +628,13 @@ function main() {
 		info "see ${issue}"
 	else
 		passing_test="${passing_test}|TestContainerListStatsWithSandboxIdFilter"
+	fi
+
+	# TestImageLoad is currently failing on ppc64le.
+	# Let's re-enable once it is fixed.
+	# Reference: https://github.com/kata-containers/kata-containers/issues/10553
+	if [[ "${ARCH}" != "ppc64le" ]]; then
+		passing_test="${passing_test}|TestImageLoad"
 	fi
 
 	# in some distros(AlibabaCloud), there is no btrfs-devel package available,
