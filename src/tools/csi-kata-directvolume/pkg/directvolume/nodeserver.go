@@ -133,6 +133,11 @@ func (dv *directVolume) NodePublishVolume(ctx context.Context, req *csi.NodePubl
 		guestOptions = options
 	}
 
+	if isCoCoEphemeralVolume(attrib) {
+		attrib["confidential"] = "true"
+		attrib["ephemeral"] = "true"
+	}
+
 	// kata-containers DirectVolume add
 	mountInfo := utils.MountInfo{
 		VolumeType: volType,
@@ -250,6 +255,10 @@ func isDirectVolume(VolumeCtx map[string]string) bool {
 
 func isLoopDevice(VolumeCtx map[string]string) bool {
 	return parseBool(VolumeCtx[utils.KataContainersDirectLoop])
+}
+
+func isCoCoEphemeralVolume(VolumeCtx map[string]string) bool {
+	return parseBool(VolumeCtx[utils.KataContainersDirectCoCoEphemeral])
 }
 
 // getDeviceSymlinkPath returns the path of the symlink that is used to
