@@ -68,16 +68,10 @@ for resource in resources:
                 print(f"{resource.name}: resource group {rg_name} has tag SkipAutoDeleteTill={skip_delete_till}, skipping deletion")
                 continue
 
-    # XXX DANGER ZONE: Delete the resource. If it's the only resource
-    # in its resource group, the entire resource group is deleted.
-
-    num_rg_resources = len(list(client.resources.list_by_resource_group(rg_name)))
-    if num_rg_resources == 1:
-        client.resource_groups.begin_delete(rg_name)
-        print(f"{resource.name}: deleted resource group")
-    else:
-        client.resources.begin_delete_by_id(resource.id)
-        print(f"{resource.name}: deleted resource")
+    # XXX DANGER ZONE: Delete the resource. We don't delete dangling
+    # resource groups since they may have metadata that we may want to
+    # preserve (e.g. role assignments).
+    client.resources.begin_delete_by_id(resource.id)
 
     num_deleted += 1
 
