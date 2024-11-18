@@ -3,10 +3,10 @@ kind: StorageClass
 metadata:
   name: csi-kata-directvolume-sc
 parameters:
-  katacontainers.direct.volume/volumetype: directvol
+  katacontainers.direct.volume/volumetype: blk
   katacontainers.direct.volume/fstype: ext4
+  katacontainers.direct.volume/loop: 'True'
 provisioner: directvolume.csi.katacontainers.io
 reclaimPolicy: Delete
 volumeBindingMode: Immediate
 allowVolumeExpansion: false 
-

@@ -26,6 +26,7 @@ import (
 const (
 	KataContainersDirectVolumeType = "katacontainers.direct.volume/volumetype"
 	KataContainersDirectFsType     = "katacontainers.direct.volume/fstype"
+	KataContainersDirectLoop       = "katacontainers.direct.volume/loop"
 	DirectVolumeTypeName           = "directvol"
 	IsDirectVolume                 = "is_directvolume"
 )
