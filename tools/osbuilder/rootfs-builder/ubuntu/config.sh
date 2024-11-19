@@ -22,7 +22,7 @@ esac
 
 if [ "$(uname -m)" != "$ARCH" ]; then
 	case "$ARCH" in
-		ppc64le) cc_arch=powerpc64le;;
+		ppc64le) cc_arch=powerpc64;;
 		x86_64) cc_arch=x86-64;;
 		*) cc_arch="$ARCH"
 	esac

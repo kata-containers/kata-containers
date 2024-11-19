@@ -601,7 +601,7 @@ function clone_cri_containerd() {
 # version: the version of the tarball that will be downloaded
 # tarball-name: the name of the tarball that will be downloaded
 function download_github_project_tarball() {
-	project="${1}" 
+	project="${1}"
 	version="${2}"
 	tarball_name="${3}"
 
@@ -752,7 +752,7 @@ function arch_to_rust() {
 
 	case "${arch}" in
 		aarch64) echo "${arch}";;
-		ppc64le) echo "powerpc64le";;
+		ppc64le) echo "powerpc64";;
 		x86_64) echo "${arch}";;
 		s390x) echo "${arch}";;
 		*) die "unsupported architecture: ${arch}";;

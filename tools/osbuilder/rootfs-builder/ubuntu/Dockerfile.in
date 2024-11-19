@@ -33,7 +33,7 @@ RUN apt-get update && \
     $(gcc_arch="@ARCH@" && [ "$(uname -m)" != "$gcc_arch" ] && ( \
          libc_arch="$gcc_arch" && \
          [ "$gcc_arch" = aarch64 ] && libc_arch=arm64; \
-         [ "$gcc_arch" = ppc64le ] && gcc_arch=powerpc64le && libc_arch=ppc64el; \
+         [ "$gcc_arch" = ppc64le ] && gcc_arch=powerpc64 && libc_arch=ppc64el; \
          [ "$gcc_arch" = s390x ] && gcc_arch=s390x && libc_arch=s390x; \
          [ "$gcc_arch" = x86_64 ] && gcc_arch=x86-64 && libc_arch=amd64; \
          echo "gcc-$gcc_arch-linux-gnu libc6-dev-$libc_arch-cross")) \
@@ -76,7 +76,7 @@ RUN ARCH=$(uname -m); \
     libc=""; \
     case "${ARCH}" in \
         "aarch64") rust_arch="${ARCH}"; libc="musl"; ;; \
-        "ppc64le") rust_arch="powerpc64le"; libc="gnu"; ;; \
+        "ppc64le") rust_arch="powerpc64"; libc="gnu"; ;; \
         "x86_64") rust_arch="${ARCH}"; libc="musl"; ;; \
         "s390x") rust_arch="${ARCH}"; libc="gnu"; ;; \
         *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \

@@ -45,7 +45,7 @@ RUN ARCH=$(uname -m); \
 	libc=""; \
     	case "${ARCH}" in \
 	        "aarch64") rust_arch="${ARCH}"; libc="musl" ;; \
-	        "ppc64le") rust_arch="powerpc64le"; libc="gnu" ;; \
+	        "ppc64le") rust_arch="powerpc64"; libc="gnu" ;; \
 	        "x86_64") rust_arch="${ARCH}"; libc="musl" ;; \
 	        "s390x") rust_arch="${ARCH}"; libc="gnu" ;; \
 	        *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \

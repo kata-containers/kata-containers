@@ -35,7 +35,7 @@ export PATH="${PATH}:${HOME}/.cargo/bin"
 ## this command will not take too long to run.
 rustup toolchain install ${version}
 rustup default ${version}
-if [ "${rustarch}" == "powerpc64le" ] || [ "${rustarch}" == "s390x" ] ; then
+if [ "${rustarch}" == "powerpc64" ] || [ "${rustarch}" == "s390x" ] ; then
 	rustup target add ${rustarch}-unknown-linux-gnu
 else
 	rustup target add ${rustarch}-unknown-linux-musl
