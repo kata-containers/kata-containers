@@ -45,6 +45,7 @@ jobs:
           - kernel
           - kernel-dragonball-experimental
           - kernel-nvidia-gpu
+          - kernel-cca-confidential
           - nydus
           - ovmf
           - qemu
