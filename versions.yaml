@@ -206,6 +206,11 @@ assets:
     description: "Linux kernel with cpu/mem hotplug support on arm64"
     url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
     version: "v5.15.138"
+    confidential:
+      description: "Linux kernel with RME support on arm64"
+      url: "https://gitlab.arm.com/linux-arm/linux-cca"
+      version: "v6.10.0-rc1-d901c27a1783a88ee32339a5b4bfa2ac8e70e597"
+      ref: "d901c27a1783a88ee32339a5b4bfa2ac8e70e597"
 
   kernel-dragonball-experimental:
     description: "Linux kernel with Dragonball VMM optimizations like upcall"
