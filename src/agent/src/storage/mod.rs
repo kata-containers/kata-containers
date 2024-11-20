@@ -369,7 +369,7 @@ pub fn recursive_ownership_change(
     read_only: bool,
 ) -> Result<()> {
     let mut mask = if read_only { RO_MASK } else { RW_MASK };
-    if path.is_dir() {
+    if path.is_dir() && !path.is_symlink() {
         for entry in fs::read_dir(path)? {
             recursive_ownership_change(entry?.path().as_path(), uid, gid, read_only)?;
         }
@@ -688,6 +688,15 @@ mod tests {
                         .unwrap_or_else(|_| panic!("{}: failed to create file", msg));
                     file_mode = filename.as_path().metadata().unwrap().permissions().mode();
                 }
+            }
+
+            // create super long nested directory symlinks
+            let mut original = mount_dir.clone();
+            for n in 1..COUNT {
+                let link_dir = original.join(format!("super_long_name{}", n));
+                std::os::unix::fs::symlink(&original, &link_dir)
+                    .unwrap_or_else(|e| panic!("{}: failed to create symlink, {}", msg, e));
+                original = link_dir;
             }
 
             let uid = if d.uid > 0 {
