@@ -159,17 +159,22 @@ get_kernel_modules_dir() {
 	local version=${kernel_version#v}
 	local numeric_final_version=${version}
 
-	# Every first release of a kernel is x.y, while the resulting folder would be x.y.0
-	local rc=$(echo ${version} | grep -oE "\-rc[0-9]+$")
-	if [ -n "${rc}" ]; then
-		numeric_final_version="${numeric_final_version%"${rc}"}"
-	fi
+	if [ -z "${kernel_ref}" ]; then
+		# Every first release of a kernel is x.y, while the resulting folder would be x.y.0
+		local rc=$(echo ${version} | grep -oE "\-rc[0-9]+$")
+		if [ -n "${rc}" ]; then
+			numeric_final_version="${numeric_final_version%"${rc}"}"
+		fi
 
-	local dots=$(echo ${version} | grep -o '\.' | wc -l)
-	[ "${dots}" == "1" ] && numeric_final_version="${numeric_final_version}.0"
+		local dots=$(echo ${version} | grep -o '\.' | wc -l)
+		[ "${dots}" == "1" ] && numeric_final_version="${numeric_final_version}.0"
 
-	if [ -n "${rc}" ]; then
-		numeric_final_version="${numeric_final_version}${rc}"
+		if [ -n "${rc}" ]; then
+			numeric_final_version="${numeric_final_version}${rc}"
+		fi
+	else
+		# kernel_version should be vx.y.z-rcn-hash format when git is used
+		numeric_final_version="${numeric_final_version%-*}+"
 	fi
 
 	local kernel_modules_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/${kernel_name}/builddir/kata-linux-${version}-${kernel_kata_config_version}/lib/modules/${numeric_final_version}"
@@ -631,14 +636,15 @@ install_kernel_helper() {
 
 	export kernel_version="$(get_from_kata_deps .${kernel_yaml_path}.version)"
 	export kernel_url="$(get_from_kata_deps .${kernel_yaml_path}.url)"
+	export kernel_ref="$(get_from_kata_deps .${kernel_yaml_path}.ref)"
 	export kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
 
-	if [[ "${kernel_name}" == "kernel"*"-confidential" ]]; then
+	if [[ "${kernel_name}" == "kernel"*"-confidential" ]] && [[ "${ARCH}" == "x86_64" ]]; then
 		kernel_version="$(get_from_kata_deps .assets.kernel.confidential.version)"
 		kernel_url="$(get_from_kata_deps .assets.kernel.confidential.url)"
 	fi
 
-	if [[ "${kernel_name}" == "kernel"*"-confidential" ]]; then
+	if [[ "${kernel_name}" == "kernel"*"-confidential" ]] && [[ "${ARCH}" == "x86_64" ]]; then
 		local kernel_modules_tarball_name="kata-static-${kernel_name}-modules.tar.xz"
 		local kernel_modules_tarball_path="${workdir}/${kernel_modules_tarball_name}"
 		extra_tarballs="${kernel_modules_tarball_name}:${kernel_modules_tarball_path}"
@@ -656,6 +662,9 @@ install_kernel_helper() {
 
 	info "build ${kernel_name}"
 	info "Kernel version ${kernel_version}"
+	if [ -n "${kernel_ref}" ]; then
+		extra_cmd+=" -r ${kernel_ref}"
+	fi
 	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -v "${kernel_version}" -f -u "${kernel_url}" "${extra_cmd}"
 }
 
@@ -674,8 +683,12 @@ install_kernel_confidential() {
 		export MEASURED_ROOTFS=yes
 	fi
 
+	local kernel_yaml_path="assets.kernel.confidential"
+	if [[ "${ARCH}" == "aarch64" ]]; then
+		local kernel_yaml_path="assets.kernel-arm-experimental.confidential"
+	fi
 	install_kernel_helper \
-		"assets.kernel.confidential" \
+		"${kernel_yaml_path}" \
 		"kernel-confidential" \
 		"-x"
 }
