@@ -22,6 +22,7 @@ RUN apt-get update && \
 	    kmod \
 	    libelf-dev \
 	    libssl-dev \
+	    python3 \
 	    gettext \
 	    rsync \
 	    cpio \
