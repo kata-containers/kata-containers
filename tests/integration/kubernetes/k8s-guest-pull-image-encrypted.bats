@@ -19,6 +19,7 @@ setup() {
     fi
 
     [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
+    [ "${KATA_HYPERVISOR}" == "qemu-snp" ] && skip "Refer https://github.com/kata-containers/kata-containers/issues/10549"
 
     setup_common || die "setup_common failed"
     ENCRYPTED_IMAGE="${ENCRYPTED_IMAGE:-ghcr.io/confidential-containers/test-container:multi-arch-encrypted}"
@@ -94,6 +95,7 @@ teardown() {
     fi
 
     [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
+    [ "${KATA_HYPERVISOR}" == "qemu-snp" ] && skip "Refer https://github.com/kata-containers/kata-containers/issues/10549"
 
     teardown_common "${node}" "${node_start_time:-}"
 }
