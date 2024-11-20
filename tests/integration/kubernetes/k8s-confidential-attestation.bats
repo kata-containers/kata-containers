@@ -20,8 +20,6 @@ setup() {
 		skip "Test skipped as KBS not setup"
 	fi
 
-	[ "${KATA_HYPERVISOR}" == "qemu-snp" ] && skip "Refer https://github.com/kata-containers/kata-containers/issues/10549"
-
 	setup_common
 	get_pod_config_dir
 
@@ -91,8 +89,6 @@ teardown() {
 	if [ "${KBS}" = "false" ]; then
 		skip "Test skipped as KBS not setup"
 	fi
-
-	[ "${KATA_HYPERVISOR}" == "qemu-snp" ] && skip "Refer https://github.com/kata-containers/kata-containers/issues/10549"
 
 	teardown_common "${node}" "${node_start_time:-}"
 }
