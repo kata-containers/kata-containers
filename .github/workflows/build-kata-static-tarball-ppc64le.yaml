@@ -75,7 +75,6 @@ jobs:
           RELEASE: ${{ inputs.stage == 'release' && 'yes' || 'no' }}
 
       - name: store-artifact ${{ matrix.asset }}
-        if: ${{ inputs.stage != 'release' }}
         uses: actions/upload-artifact@v4
         with:
           name: kata-artifacts-ppc64le-${{ matrix.asset }}${{ inputs.tarball-suffix }}

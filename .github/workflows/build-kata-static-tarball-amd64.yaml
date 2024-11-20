@@ -128,7 +128,6 @@ jobs:
           push-to-registry: true
 
       - name: store-artifact ${{ matrix.asset }}
-        if: ${{ matrix.stage != 'release' }}
         uses: actions/upload-artifact@v4
         with:
           name: kata-artifacts-amd64-${{ matrix.asset }}${{ inputs.tarball-suffix }}
