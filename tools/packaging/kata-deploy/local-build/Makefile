@@ -49,6 +49,15 @@ BASE_TARBALLS = serial-targets \
 	virtiofsd-tarball
 BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	rootfs-initrd-tarball
+else ifeq ($(ARCH), aarch64)
+BASE_TARBALLS = serial-targets \
+	kernel-confidential-tarball \
+	kernel-tarball \
+	qemu-tarball \
+	shim-v2-tarball \
+	virtiofsd-tarball
+BASE_SERIAL_TARBALLS = rootfs-image-tarball \
+	rootfs-initrd-tarball
 endif
 
 define BUILD
