@@ -1260,7 +1260,7 @@ mod tests {
 
         let env = spec.process().as_ref().unwrap().env().as_ref().unwrap();
 
-        // find string TEST_OUTER_ENV in evn
+        // find string TEST_OUTER_ENV in env
         let outer_env = env.iter().find(|e| e.starts_with("TEST_OUTER_ENV"));
         assert!(outer_env.is_some(), "TEST_OUTER_ENV not found in env");
 
