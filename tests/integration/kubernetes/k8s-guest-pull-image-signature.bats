@@ -16,7 +16,6 @@ setup() {
     fi
 
     [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
-    [ "${KATA_HYPERVISOR}" == "qemu-snp" ] && skip "Refer https://github.com/kata-containers/kata-containers/issues/10549"
 
     tag_suffix=""
     if [ "$(uname -m)" != "x86_64" ]; then
@@ -146,7 +145,6 @@ teardown() {
     fi
 
     [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
-    [ "${KATA_HYPERVISOR}" == "qemu-snp" ] && skip "Refer https://github.com/kata-containers/kata-containers/issues/10549"
 
     teardown_common "${node}" "${node_start_time:-}"
 }
