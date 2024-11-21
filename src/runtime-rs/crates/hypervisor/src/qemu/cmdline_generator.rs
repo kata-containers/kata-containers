@@ -739,10 +739,16 @@ struct DeviceVhostUserFs {
     queue_size: u64,
     romfile: String,
     iommu_platform: bool,
+    devno: Option<String>,
 }
 
 impl DeviceVhostUserFs {
-    fn new(chardev: &str, tag: &str, bus_type: VirtioBusType) -> DeviceVhostUserFs {
+    fn new(
+        chardev: &str,
+        tag: &str,
+        bus_type: VirtioBusType,
+        devno: Option<String>,
+    ) -> DeviceVhostUserFs {
         DeviceVhostUserFs {
             bus_type,
             chardev: chardev.to_owned(),
@@ -750,6 +756,7 @@ impl DeviceVhostUserFs {
             queue_size: 0,
             romfile: String::new(),
             iommu_platform: false,
+            devno,
         }
     }
 
@@ -796,6 +803,9 @@ impl ToQemuParams for DeviceVhostUserFs {
         }
         if self.iommu_platform {
             params.push("iommu_platform=on".to_owned());
+        }
+        if let Some(devno) = &self.devno {
+            params.push(format!("devno={}", devno));
         }
         Ok(vec!["-device".to_owned(), params.join(",")])
     }
@@ -1838,8 +1848,20 @@ impl<'a> QemuCmdLine<'a> {
         self.devices.push(Box::new(virtiofsd_socket_chardev));
 
         let bus_type = bus_type(self.config);
-
-        let mut virtiofs_device = DeviceVhostUserFs::new(chardev_name, mount_tag, bus_type);
+        let devno = match &mut self.ccw_subchannel {
+            Some(subchannel) => match subchannel.add_device(chardev_name) {
+                Ok(slot) => {
+                    let addr = subchannel.address_format_ccw(slot);
+                    Some(addr)
+                }
+                Err(err) => {
+                    info!(sl!(), "failed to add device to subchannel: {:?}", err);
+                    None
+                }
+            },
+            None => None,
+        };
+        let mut virtiofs_device = DeviceVhostUserFs::new(chardev_name, mount_tag, bus_type, devno);
         virtiofs_device.set_queue_size(queue_size);
         if self.config.device_info.enable_iommu_platform && bus_type == VirtioBusType::Ccw {
             virtiofs_device.set_iommu_platform(true);
