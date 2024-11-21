@@ -123,6 +123,9 @@ assets:
       aarch64:
         name: "ubuntu"
         version: "jammy"  # 22.04 LTS
+        confidential:
+          name: "ubuntu"
+          version: "jammy" # 22.04 LTS
         nvidia-gpu:
           name: "ubuntu"
           version: "jammy"  # 22.04 LTS
@@ -163,6 +166,9 @@ assets:
       aarch64:
         name: "alpine"
         version: "3.18"
+        confidential:
+          name: "ubuntu"
+          version: "jammy"  # 22.04 LTS
         nvidia-gpu:
           name: "ubuntu"
           version: "jammy"  # 22.04 LTS
