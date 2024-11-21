@@ -56,6 +56,8 @@ BASE_TARBALLS = serial-targets \
 	shim-v2-tarball \
 	virtiofsd-tarball
 BASE_SERIAL_TARBALLS = rootfs-image-tarball \
+	rootfs-image-confidential-tarball \
+	rootfs-initrd-confidential-tarball \
 	rootfs-initrd-tarball
 endif
 
