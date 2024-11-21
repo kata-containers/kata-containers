@@ -1631,20 +1631,29 @@ struct DeviceVirtioScsi {
     id: String,
     disable_modern: bool,
     iothread: String,
+    iommu_platform: bool,
+    devno: Option<String>,
 }
 
 impl DeviceVirtioScsi {
-    fn new(id: &str, disable_modern: bool, bus_type: VirtioBusType) -> Self {
+    fn new(id: &str, disable_modern: bool, bus_type: VirtioBusType, devno: Option<String>) -> Self {
         DeviceVirtioScsi {
             bus_type,
             id: id.to_owned(),
             disable_modern,
             iothread: "".to_owned(),
+            iommu_platform: false,
+            devno,
         }
     }
 
     fn set_iothread(&mut self, iothread: &str) {
         self.iothread = iothread.to_owned();
+    }
+
+    fn set_iommu_platform(&mut self, iommu_platform: bool) -> &mut Self {
+        self.iommu_platform = iommu_platform;
+        self
     }
 }
 
@@ -1659,6 +1668,12 @@ impl ToQemuParams for DeviceVirtioScsi {
         }
         if !self.iothread.is_empty() {
             params.push(format!("iothread={}", self.iothread));
+        }
+        if self.iommu_platform {
+            params.push("iommu_platform=on".to_owned());
+        }
+        if let Some(devno) = &self.devno {
+            params.push(format!("devno={}", devno));
         }
         Ok(vec!["-device".to_owned(), params.join(",")])
     }
@@ -1820,8 +1835,32 @@ impl<'a> QemuCmdLine<'a> {
     }
 
     fn add_scsi_controller(&mut self) {
-        let mut virtio_scsi =
-            DeviceVirtioScsi::new("scsi0", should_disable_modern(), bus_type(self.config));
+        let devno = match &mut self.ccw_subchannel {
+            Some(subchannel) => match subchannel.add_device("scsi0") {
+                Ok(slot) => {
+                    let addr = subchannel.address_format_ccw(slot);
+                    Some(addr)
+                }
+                Err(err) => {
+                    info!(sl!(), "failed to add device to subchannel: {:?}", err);
+                    None
+                }
+            },
+            None => None,
+        };
+        let mut virtio_scsi = DeviceVirtioScsi::new(
+            "scsi0",
+            should_disable_modern(),
+            bus_type(self.config),
+            devno,
+        );
+
+        if self.config.device_info.enable_iommu_platform
+            && bus_type(self.config) == VirtioBusType::Ccw
+        {
+            virtio_scsi.set_iommu_platform(true);
+        }
+
         if self.config.enable_iothreads {
             let iothread_id = "scsi-io-thread";
             let iothread = ObjectIoThread::new(iothread_id);
