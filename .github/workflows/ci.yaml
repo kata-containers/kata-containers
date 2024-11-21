@@ -135,6 +135,17 @@ jobs:
           platforms: linux/amd64, linux/s390x
           file: tests/integration/kubernetes/runtimeclass_workloads/confidential/unencrypted/Dockerfile
 
+  publish-csi-driver-amd64:
+    needs: publish-kata-deploy-payload-amd64
+    uses: ./.github/workflows/publish-csi-driver-amd64.yaml
+    with:
+      commit-hash: ${{ inputs.commit-hash }}
+      pr-number: ${{ inputs.pr-number }}
+      registry: ghcr.io
+      tarball-suffix: -${{ inputs.tag }}
+      target-branch: ${{ inputs.target-branch }}
+    secrets: inherit
+
   run-kata-monitor-tests:
     if: ${{ inputs.skip-test != 'yes' }}
     needs: build-kata-static-tarball-amd64
