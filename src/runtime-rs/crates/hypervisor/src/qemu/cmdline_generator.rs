@@ -1240,14 +1240,16 @@ struct DeviceVirtioSerial {
     id: String,
     bus_type: VirtioBusType,
     iommu_platform: bool,
+    devno: Option<String>,
 }
 
 impl DeviceVirtioSerial {
-    fn new(id: &str, bus_type: VirtioBusType) -> DeviceVirtioSerial {
+    fn new(id: &str, bus_type: VirtioBusType, devno: Option<String>) -> DeviceVirtioSerial {
         DeviceVirtioSerial {
             id: id.to_owned(),
             bus_type,
             iommu_platform: false,
+            devno,
         }
     }
 
@@ -1265,6 +1267,9 @@ impl ToQemuParams for DeviceVirtioSerial {
         params.push(format!("id={}", self.id));
         if self.iommu_platform {
             params.push("iommu_platform=on".to_owned());
+        }
+        if let Some(devno) = &self.devno {
+            params.push(format!("devno={}", devno));
         }
         Ok(vec!["-device".to_owned(), params.join(",")])
     }
@@ -1942,7 +1947,20 @@ impl<'a> QemuCmdLine<'a> {
     }
 
     pub fn add_console(&mut self, console_socket_path: &str) {
-        let mut serial_dev = DeviceVirtioSerial::new("serial0", bus_type(self.config));
+        let devno = match &mut self.ccw_subchannel {
+            Some(subchannel) => match subchannel.add_device("serial0") {
+                Ok(slot) => {
+                    let addr = subchannel.address_format_ccw(slot);
+                    Some(addr)
+                }
+                Err(err) => {
+                    info!(sl!(), "failed to add device to subchannel: {:?}", err);
+                    None
+                }
+            },
+            None => None,
+        };
+        let mut serial_dev = DeviceVirtioSerial::new("serial0", bus_type(self.config), devno);
         if self.config.device_info.enable_iommu_platform
             && bus_type(self.config) == VirtioBusType::Ccw
         {
