@@ -974,16 +974,23 @@ struct VhostVsock {
     guest_cid: u32,
     disable_modern: bool,
     iommu_platform: bool,
+    devno: Option<String>,
 }
 
 impl VhostVsock {
-    fn new(vhostfd: tokio::fs::File, guest_cid: u32, bus_type: VirtioBusType) -> VhostVsock {
+    fn new(
+        vhostfd: tokio::fs::File,
+        guest_cid: u32,
+        bus_type: VirtioBusType,
+        devno: Option<String>,
+    ) -> VhostVsock {
         VhostVsock {
             bus_type,
             vhostfd,
             guest_cid,
             disable_modern: false,
             iommu_platform: false,
+            devno,
         }
     }
 
@@ -1008,6 +1015,9 @@ impl ToQemuParams for VhostVsock {
         }
         if self.iommu_platform {
             params.push("iommu_platform=on".to_owned());
+        }
+        if let Some(devno) = &self.devno {
+            params.push(format!("devno={}", devno));
         }
         params.push(format!("vhostfd={}", self.vhostfd.as_raw_fd()));
         params.push(format!("guest-cid={}", self.guest_cid));
@@ -1859,13 +1869,28 @@ impl<'a> QemuCmdLine<'a> {
     pub fn add_vsock(&mut self, vhostfd: tokio::fs::File, guest_cid: u32) -> Result<()> {
         clear_cloexec(vhostfd.as_raw_fd()).context("clearing O_CLOEXEC failed on vsock fd")?;
 
-        let mut vhost_vsock_pci = VhostVsock::new(vhostfd, guest_cid, bus_type(self.config));
+        let devno = match &mut self.ccw_subchannel {
+            Some(subchannel) => match subchannel.add_device("vsock-0") {
+                Ok(slot) => {
+                    let addr = subchannel.address_format_ccw(slot);
+                    Some(addr)
+                }
+                Err(err) => {
+                    info!(sl!(), "failed to add device to subchannel {:?}", err);
+                    None
+                }
+            },
+            None => None,
+        };
+        let mut vhost_vsock_pci = VhostVsock::new(vhostfd, guest_cid, bus_type(self.config), devno);
 
         if !self.config.disable_nesting_checks && should_disable_modern() {
             vhost_vsock_pci.set_disable_modern(true);
         }
 
-        if self.config.device_info.enable_iommu_platform {
+        if self.config.device_info.enable_iommu_platform
+            && bus_type(self.config) == VirtioBusType::Ccw
+        {
             vhost_vsock_pci.set_iommu_platform(true);
         }
 
