@@ -917,15 +917,17 @@ struct DeviceVirtioBlk {
     id: String,
     config_wce: bool,
     share_rw: bool,
+    devno: Option<String>,
 }
 
 impl DeviceVirtioBlk {
-    fn new(id: &str, bus_type: VirtioBusType) -> DeviceVirtioBlk {
+    fn new(id: &str, bus_type: VirtioBusType, devno: Option<String>) -> DeviceVirtioBlk {
         DeviceVirtioBlk {
             bus_type,
             id: id.to_owned(),
             config_wce: false,
             share_rw: true,
+            devno,
         }
     }
 
@@ -959,7 +961,9 @@ impl ToQemuParams for DeviceVirtioBlk {
             params.push("share-rw=off".to_owned());
         }
         params.push(format!("serial=image-{}", self.id));
-
+        if let Some(devno) = &self.devno {
+            params.push(format!("devno={}", devno));
+        }
         Ok(vec!["-device".to_owned(), params.join(",")])
     }
 }
@@ -1897,9 +1901,23 @@ impl<'a> QemuCmdLine<'a> {
     pub fn add_block_device(&mut self, device_id: &str, path: &str) -> Result<()> {
         self.devices
             .push(Box::new(BlockBackend::new(device_id, path)));
+        let devno = match &mut self.ccw_subchannel {
+            Some(subchannel) => match subchannel.add_device(device_id) {
+                Ok(slot) => {
+                    let addr = subchannel.address_format_ccw(slot);
+                    Some(addr)
+                }
+                Err(err) => {
+                    info!(sl!(), "failed to add device to subchannel: {:?}", err);
+                    None
+                }
+            },
+            None => None,
+        };
         self.devices.push(Box::new(DeviceVirtioBlk::new(
             device_id,
             bus_type(self.config),
+            devno,
         )));
         Ok(())
     }
