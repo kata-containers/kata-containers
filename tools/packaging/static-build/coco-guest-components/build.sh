@@ -46,6 +46,7 @@ RESOURCE_PROVIDER="kbs,sev"
 case "$(uname -m)" in
 	x86_64) ATTESTER="snp-attester,tdx-attester,nvidia-attester" ;;
 	s390x) ATTESTER="se-attester" ;;
+	aarch64) ATTESTER="cca-attester" ;;
 	*) ATTESTER="none" ;;
 esac
 
