@@ -92,6 +92,9 @@ cloud-hypervisor-tarball:
 cloud-hypervisor-glibc-tarball:
 	${MAKE} $@-build
 
+csi-kata-directvolume-tarball: copy-scripts-for-the-tools-build
+	exit 0
+
 firecracker-tarball:
 	${MAKE} $@-build
 

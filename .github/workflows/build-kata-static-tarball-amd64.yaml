@@ -37,6 +37,7 @@ jobs:
           - cloud-hypervisor
           - cloud-hypervisor-glibc
           - coco-guest-components
+          - csi-kata-directvolume
           - firecracker
           - genpolicy
           - kata-ctl
