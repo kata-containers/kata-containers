@@ -1335,6 +1335,10 @@ handle_build() {
 
 	rootfs-initrd-nvidia-gpu-confidential) install_initrd_nvidia_gpu_confidential ;;
 
+	rootfs-cca-confidential-image) install_image_confidential ;;
+
+	rootfs-cca-confidential-initrd) install_initrd_confidential ;;
+
 	runk) install_runk ;;
 
 	shim-v2) install_shimv2 ;;

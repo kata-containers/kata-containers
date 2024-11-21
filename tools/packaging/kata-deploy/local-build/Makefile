@@ -57,6 +57,8 @@ BASE_TARBALLS = serial-targets \
 	shim-v2-tarball \
 	virtiofsd-tarball
 BASE_SERIAL_TARBALLS = rootfs-image-tarball \
+	rootfs-cca-confidential-image-tarball \
+	rootfs-cca-confidential-initrd-tarball \
 	rootfs-initrd-tarball
 endif
 
@@ -198,6 +200,12 @@ rootfs-image-nvidia-gpu-confidential-tarball: agent-tarball busybox-tarball paus
 	${MAKE} $@-build
 
 rootfs-initrd-nvidia-gpu-confidential-tarball: agent-tarball busybox-tarball pause-image-tarball coco-guest-components-tarball kernel-nvidia-gpu-confidential-tarball
+	${MAKE} $@-build
+
+rootfs-cca-confidential-image-tarball: agent-tarball pause-image-tarball coco-guest-components-tarball kernel-cca-confidential-tarball
+	${MAKE} $@-build
+
+rootfs-cca-confidential-initrd-tarball: agent-tarball pause-image-tarball coco-guest-components-tarball kernel-cca-confidential-tarball
 	${MAKE} $@-build
 
 shim-v2-tarball:
