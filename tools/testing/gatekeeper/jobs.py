@@ -83,7 +83,7 @@ class Checker:
         elif job['run_id'] < self.results[job_name]['run_id']:
             # Newer results already stored
             print(f"older {job_name} - {job['status']} {job['conclusion']} "
-                  f"{job['id']}", file=sys.stderr)
+                  f"{job['id']} (newer_id={self.results[job_name]['id']})", file=sys.stderr)
             return
         print(f"{job_name} - {job['status']} {job['conclusion']} {job['id']}",
               file=sys.stderr)
