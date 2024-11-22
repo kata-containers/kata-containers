@@ -80,9 +80,7 @@ class Checker:
             else:
                 # Not a required job
                 return
-        # TODO: Check if multiple re-runs use the same "run_id". If so use
-        #       job['run_attempt'] in case of matching "run_id".
-        elif job['run_id'] <= self.results[job_name]['run_id']:
+        elif job['run_id'] < self.results[job_name]['run_id']:
             # Newer results already stored
             print(f"older {job_name} - {job['status']} {job['conclusion']} "
                   f"{job['id']}", file=sys.stderr)
