@@ -178,7 +178,7 @@ class Checker:
         )
         response.raise_for_status()
         workflow_runs = response.json()["workflow_runs"]
-        for i, run in enumerate(workflow_runs):
+        for run in workflow_runs:
             jobs = self.get_jobs_for_workflow_run(run["id"])
             for job in jobs:
                 self.record(run["name"], job)
