@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+pub mod port_device;
 mod vfio;
 mod vhost_user;
 pub mod vhost_user_blk;
