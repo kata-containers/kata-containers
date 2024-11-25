@@ -96,7 +96,9 @@ impl Device for PCIePortDevice {
                 };
             }
             info!(sl!(), "add_device for PortDevice: {:?}", self.clone());
-            // TODO: add_device
+            h.add_device(DeviceType::PortDevice(self.clone()))
+                .await
+                .context("add port devices.")?;
         }
 
         Ok(())
