@@ -474,13 +474,17 @@ pub struct DeviceInfo {
     #[serde(default)]
     pub hotplug_vfio_on_root_bus: bool,
 
-    /// Before hot plugging a PCIe device, you need to add a pcie_root_port device.
-    ///
-    /// Use this parameter when using some large PCI bar devices, such as Nvidia GPU.
-    /// The value means the number of pcie_root_port.
-    /// This value is valid when hotplug_vfio_on_root_bus is true and machine_type is "q35"
+    /// This value of pcie_root_port device indicates that how many root ports to
+    /// be created when VM creation.
+    /// It's valid when hotplug_vfio_on_root_bus is true and machine_type is "q35".
     #[serde(default)]
     pub pcie_root_port: u32,
+
+    /// This value of pcie_switch_port device indicates that how many switch ports to
+    /// be created when VM creation.
+    /// It's valid when hotplug_vfio_on_root_bus is true, and machine_type is "q35".
+    #[serde(default)]
+    pub pcie_switch_port: u32,
 
     /// Enable vIOMMU, default false
     ///
