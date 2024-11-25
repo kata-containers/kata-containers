@@ -635,13 +635,13 @@ impl Annotation {
                     KATA_ANNO_CFG_HYPERVISOR_CPU_FEATURES => {
                         hv.cpu_info.cpu_features = value.to_string();
                     }
-                    KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS => match self.get_value::<i32>(key) {
+                    KATA_ANNO_CFG_HYPERVISOR_DEFAULT_VCPUS => match self.get_value::<f32>(key) {
                         Ok(num_cpus) => {
                             let num_cpus = num_cpus.unwrap_or_default();
                             if num_cpus
                                 > get_hypervisor_plugin(hypervisor_name)
                                     .unwrap()
-                                    .get_max_cpus() as i32
+                                    .get_max_cpus() as f32
                             {
                                 return Err(io::Error::new(
                                     io::ErrorKind::InvalidData,

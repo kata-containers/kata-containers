@@ -141,7 +141,7 @@ impl InitialSizeManager {
             .context("failed to get hypervisor config")?;
 
         if self.resource.vcpu > 0 {
-            hv.cpu_info.default_vcpus = self.resource.vcpu as i32
+            hv.cpu_info.default_vcpus = self.resource.vcpu as f32
         }
         self.resource.orig_toml_default_mem = hv.memory_info.default_memory;
         if self.resource.mem_mb > 0 {

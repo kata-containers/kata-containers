@@ -128,7 +128,7 @@ impl ConfigPlugin for QemuConfig {
                 }
             }
 
-            if (qemu.cpu_info.default_vcpus > 0
+            if (qemu.cpu_info.default_vcpus > 0.0
                 && qemu.cpu_info.default_vcpus as u32 > default::MAX_QEMU_VCPUS)
                 || qemu.cpu_info.default_maxvcpus > default::MAX_QEMU_VCPUS
             {
