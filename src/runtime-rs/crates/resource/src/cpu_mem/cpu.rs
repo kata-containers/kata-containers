@@ -25,7 +25,7 @@ pub struct CpuResource {
     pub(crate) current_vcpu: Arc<RwLock<u32>>,
 
     /// Default number of vCPUs
-    pub(crate) default_vcpu: u32,
+    pub(crate) default_vcpu: f32,
 
     /// CpuResource of each container
     pub(crate) container_cpu_resources: Arc<RwLock<HashMap<String, LinuxContainerCpuResources>>>,
@@ -40,7 +40,7 @@ impl CpuResource {
             .context(format!("failed to get hypervisor {}", hypervisor_name))?;
         Ok(Self {
             current_vcpu: Arc::new(RwLock::new(hypervisor_config.cpu_info.default_vcpus as u32)),
-            default_vcpu: hypervisor_config.cpu_info.default_vcpus as u32,
+            default_vcpu: hypervisor_config.cpu_info.default_vcpus,
             container_cpu_resources: Arc::new(RwLock::new(HashMap::new())),
         })
     }
@@ -119,7 +119,7 @@ impl CpuResource {
     async fn calc_cpu_resources(&self) -> Result<u32> {
         let resources = self.container_cpu_resources.read().await;
         if resources.is_empty() {
-            return Ok(self.default_vcpu);
+            return Ok(self.default_vcpu.ceil() as u32);
         }
 
         // If requests of individual containers are expresses with different
@@ -156,7 +156,6 @@ impl CpuResource {
             let quota = cpu_resource.quota() as f64;
             let period = cpu_resource.period() as f64;
             if quota >= 0.0 && period != 0.0 {
-                info!(sl!(), "total_quota={}, adding {}/{} == {}", total_quota, quota, period, quota * (max_period / period));
                 total_quota += quota * (max_period / period);
             }
         }
@@ -199,7 +198,7 @@ impl CpuResource {
 
         // do not reduce computing power
         // the number of vcpus would not be lower than the default size
-        let new_vcpus = cmp::max(new_vcpus, self.default_vcpu);
+        let new_vcpus = cmp::max(new_vcpus, self.default_vcpu.ceil() as u32);
 
         let (_, new) = hypervisor
             .resize_vcpu(old_vcpus, new_vcpus)
@@ -216,7 +215,7 @@ mod tests {
     use kata_types::config::{Hypervisor, TomlConfig};
     use oci::LinuxCpu;
 
-    fn get_cpu_resource_with_default_vcpus(default_vcpus: i32) -> CpuResource {
+    fn get_cpu_resource_with_default_vcpus(default_vcpus: f32) -> CpuResource {
         let mut config = TomlConfig::default();
         config
             .hypervisor
@@ -244,7 +243,7 @@ mod tests {
     // calc_cpu_resources() implementation is better than a f32-based one.
     #[tokio::test]
     async fn test_rounding() {
-        let mut cpu_resource = get_cpu_resource_with_default_vcpus(0);
+        let mut cpu_resource = get_cpu_resource_with_default_vcpus(0.0);
 
         // A f32-based calc_cpu_resources() implementation would fail this
         // test (adding 0.1 ten times gives roughly 1.0000001).
@@ -274,9 +273,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_big_allocation_1() {
-        let default_vcpus = 10;
+        let default_vcpus = 10.0;
 
-        let mut cpu_resource = get_cpu_resource_with_default_vcpus(default_vcpus as i32);
+        let mut cpu_resource = get_cpu_resource_with_default_vcpus(default_vcpus);
         add_linux_container_cpu_resources(
             &mut cpu_resource,
             vec![
@@ -289,14 +288,14 @@ mod tests {
 
         assert_eq!(
             cpu_resource.calc_cpu_resources().await.unwrap(),
-            128 + default_vcpus
+            128 + default_vcpus as u32
         );
     }
 
     #[tokio::test]
     async fn test_big_allocation_2() {
-        let default_vcpus = 10;
-        let mut cpu_resource = get_cpu_resource_with_default_vcpus(default_vcpus as i32);
+        let default_vcpus = 10.0;
+        let mut cpu_resource = get_cpu_resource_with_default_vcpus(default_vcpus);
         add_linux_container_cpu_resources(
             &mut cpu_resource,
             vec![
@@ -309,26 +308,26 @@ mod tests {
 
         assert_eq!(
             cpu_resource.calc_cpu_resources().await.unwrap(),
-            (33 + 31 + 77 + 1) + default_vcpus
+            (33 + 31 + 77 + 1) + default_vcpus as u32
         );
     }
 
     #[tokio::test]
     async fn test_big_allocation_3() {
-        let default_vcpus = 10;
-        let mut cpu_resource = get_cpu_resource_with_default_vcpus(default_vcpus as i32);
+        let default_vcpus = 10.0;
+        let mut cpu_resource = get_cpu_resource_with_default_vcpus(default_vcpus);
         add_linux_container_cpu_resources(&mut cpu_resource, vec![(141_000_008, 1_000_000)]).await;
 
         assert_eq!(
             cpu_resource.calc_cpu_resources().await.unwrap(),
-            142 + default_vcpus
+            142 + default_vcpus as u32
         );
     }
 
     #[tokio::test]
     async fn test_big_allocation_4() {
-        let default_vcpus = 10;
-        let mut cpu_resource = get_cpu_resource_with_default_vcpus(default_vcpus as i32);
+        let default_vcpus = 10.0;
+        let mut cpu_resource = get_cpu_resource_with_default_vcpus(default_vcpus);
         add_linux_container_cpu_resources(
             &mut cpu_resource,
             vec![
@@ -342,14 +341,14 @@ mod tests {
 
         assert_eq!(
             cpu_resource.calc_cpu_resources().await.unwrap(),
-            (4 * 17 + 1) + default_vcpus
+            (4 * 17 + 1) + default_vcpus as u32
         );
     }
 
     #[tokio::test]
     async fn test_divisible_periods() {
-        let default_vcpus = 3;
-        let mut cpu_resource = get_cpu_resource_with_default_vcpus(default_vcpus as i32);
+        let default_vcpus = 3.0;
+        let mut cpu_resource = get_cpu_resource_with_default_vcpus(default_vcpus);
         add_linux_container_cpu_resources(
             &mut cpu_resource,
             vec![(1_000_000, 1_000_000), (1_000_000, 500_000)],
@@ -358,10 +357,10 @@ mod tests {
 
         assert_eq!(
             cpu_resource.calc_cpu_resources().await.unwrap(),
-            3 + default_vcpus
+            3 + default_vcpus as u32
         );
 
-        let mut cpu_resource = get_cpu_resource_with_default_vcpus(default_vcpus as i32);
+        let mut cpu_resource = get_cpu_resource_with_default_vcpus(default_vcpus);
         add_linux_container_cpu_resources(
             &mut cpu_resource,
             vec![(3_000_000, 1_500_000), (1_000_000, 500_000)],
@@ -370,14 +369,14 @@ mod tests {
 
         assert_eq!(
             cpu_resource.calc_cpu_resources().await.unwrap(),
-            4 + default_vcpus
+            4 + default_vcpus as u32
         );
     }
 
     #[tokio::test]
     async fn test_indivisible_periods() {
-        let default_vcpus = 1;
-        let mut cpu_resource = get_cpu_resource_with_default_vcpus(default_vcpus as i32);
+        let default_vcpus = 1.0;
+        let mut cpu_resource = get_cpu_resource_with_default_vcpus(default_vcpus);
         add_linux_container_cpu_resources(
             &mut cpu_resource,
             vec![(1_000_000, 1_000_000), (900_000, 300_000)],
@@ -386,10 +385,10 @@ mod tests {
 
         assert_eq!(
             cpu_resource.calc_cpu_resources().await.unwrap(),
-            4 + default_vcpus
+            4 + default_vcpus as u32
         );
 
-        let mut cpu_resource = get_cpu_resource_with_default_vcpus(default_vcpus as i32);
+        let mut cpu_resource = get_cpu_resource_with_default_vcpus(default_vcpus);
         add_linux_container_cpu_resources(
             &mut cpu_resource,
             vec![(1_000_000, 1_000_000), (900_000, 299_999)],
@@ -398,7 +397,7 @@ mod tests {
 
         assert_eq!(
             cpu_resource.calc_cpu_resources().await.unwrap(),
-            5 + default_vcpus
+            5 + default_vcpus as u32
         );
     }
 }
