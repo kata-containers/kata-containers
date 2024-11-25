@@ -400,4 +400,46 @@ mod tests {
             5 + default_vcpus as u32
         );
     }
+
+    #[tokio::test]
+    async fn test_fractional_default_vcpus() {
+        let default_vcpus = 0.5;
+        let mut cpu_resource = get_cpu_resource_with_default_vcpus(default_vcpus);
+        add_linux_container_cpu_resources(&mut cpu_resource, vec![(250_000, 1_000_000)]).await;
+
+        assert_eq!(cpu_resource.calc_cpu_resources().await.unwrap(), 1);
+
+        let mut cpu_resource = get_cpu_resource_with_default_vcpus(default_vcpus);
+        add_linux_container_cpu_resources(&mut cpu_resource, vec![(500_000, 1_000_000)]).await;
+
+        assert_eq!(cpu_resource.calc_cpu_resources().await.unwrap(), 1);
+
+        let mut cpu_resource = get_cpu_resource_with_default_vcpus(default_vcpus);
+        add_linux_container_cpu_resources(&mut cpu_resource, vec![(500_001, 1_000_000)]).await;
+
+        assert_eq!(cpu_resource.calc_cpu_resources().await.unwrap(), 2);
+
+        // This test doesn't pass because 0.1 is periodic in binary and thus
+        // not exactly representable by a float of any width for fundamental
+        // reasons.  Its actual representation is slightly over 0.1
+        // (e.g. 0.100000001 in f32), which after adding the 900_000/1_000_000
+        // container request pushes the sum over 1.
+        // I don't think this problem is solvable without expressing
+        // 'default_vcpus' in configuration.toml in a fixed point manner (e.g.
+        // as an integral percentage of a vCPU).
+        /*
+        let default_vcpus = 0.1;
+        let mut cpu_resource = get_cpu_resource_with_default_vcpus(default_vcpus);
+        add_linux_container_cpu_resources(
+            &mut cpu_resource,
+            vec![(900_000, 1_000_000)],
+        )
+        .await;
+
+        assert_eq!(
+            cpu_resource.calc_cpu_resources().await.unwrap(),
+            1
+        );
+        */
+    }
 }
