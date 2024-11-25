@@ -57,6 +57,9 @@ RUN apt-get update && \
     cpio \
     gcc \
     unzip \
+    git \
+    make \
+    wget \
     xz-utils && \
     if [ "${ARCH}" != "$(uname -m)" ] && [ "${ARCH}" == "s390x" ]; then \
         apt-get install -y --no-install-recommends \
