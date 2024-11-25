@@ -5,7 +5,6 @@
 //
 
 use std::{
-    ffi::OsStr,
     fs,
     path::{Path, PathBuf},
     process::Command,
@@ -17,6 +16,7 @@ use path_clean::PathClean;
 
 use kata_sys_util::fs::get_base_name;
 
+use crate::device::topology::AvailabledNode;
 use crate::{
     device::{
         pci_path::PciPath,
@@ -26,7 +26,6 @@ use crate::{
     },
     register_pcie_device, unregister_pcie_device, update_pcie_device, Hypervisor as hypervisor,
 };
-
 pub const SYS_BUS_PCI_DRIVER_PROBE: &str = "/sys/bus/pci/drivers_probe";
 pub const SYS_BUS_PCI_DEVICES: &str = "/sys/bus/pci/devices";
 pub const SYS_KERN_IOMMU_GROUPS: &str = "/sys/kernel/iommu_groups";
@@ -559,6 +558,41 @@ impl PCIeDevice for VfioDevice {
     async fn register(&mut self, pcie_topo: &mut PCIeTopology) -> Result<()> {
         if self.bus_mode != VfioBusMode::PCI {
             return Ok(());
+        }
+
+        // handle port devices
+        if !self.allocated {
+            if let Some((port_type, _)) = pcie_topo.get_pcie_port() {
+                let avail_port = match port_type {
+                    PCIePort::RootPort | PCIePort::SwitchPort => pcie_topo.find_available_node(),
+                    _ => {
+                        info!(
+                            sl!(),
+                            "There's no need to set ports used to hot-plug vfio devices"
+                        );
+                        None
+                    }
+                };
+
+                self.port = port_type;
+
+                // vfio device attached onto port(root port | switch port)
+                if let Some(port_device) = avail_port {
+                    self.bus = match port_device {
+                        AvailabledNode::TopologyPortDevice(root_port) => root_port.bus(),
+                        AvailabledNode::SwitchDownPort(swdown_port) => swdown_port.bus(),
+                    };
+                } else {
+                    return Err(anyhow!(
+                        "No available node found for {:?} device",
+                        port_type
+                    ));
+                }
+            } else {
+                return Err(anyhow!("No validated port type supported."));
+            }
+            self.allocated = true;
+            info!(sl!(), "bus: {:?}, port type: {:?}", &self.bus, &self.port);
         }
 
         self.device_options.clear();

@@ -203,6 +203,13 @@ pub struct PCIeRootComplex {
     pub root_bus_devices: HashMap<String, PCIeEndpoint>,
 }
 
+/// Represents an available node in the PCIe topology.
+#[derive(Clone, Debug)]
+pub enum AvailabledNode {
+    TopologyPortDevice(TopologyPortDevice),
+    SwitchDownPort(SwitchDownPort),
+}
+
 #[derive(Debug, Default)]
 pub struct PCIeTopology {
     pub hypervisor_name: String,
@@ -340,6 +347,31 @@ impl PCIeTopology {
         };
 
         Ok(pci_path)
+    }
+
+    /// Finds an availabled node in the PCIe topology.
+    /// Returns the first available node found, either a TopologyPortDevice or a SwitchDownPort.
+    pub fn find_available_node(&mut self) -> Option<AvailabledNode> {
+        // search in pcie_port_devices
+        for port_device in self.pcie_port_devices.values_mut() {
+            if !port_device.allocated {
+                port_device.allocated = true;
+                return Some(AvailabledNode::TopologyPortDevice(port_device.clone()));
+            }
+
+            // search in connected switch's downstream ports
+            if let Some(switch) = &mut port_device.connected_switch {
+                for switch_port in switch.switch_ports.values_mut() {
+                    if !switch_port.allocated {
+                        switch_port.allocated = true;
+                        return Some(AvailabledNode::SwitchDownPort(switch_port.clone()));
+                    }
+                }
+            }
+        }
+
+        // No available node found
+        None
     }
 }
 
