@@ -795,9 +795,6 @@ detect_host_distro()
 		"*suse*")
 			distro="suse"
 			;;
-		"clear-linux-os")
-			distro="clearlinux"
-			;;
 		*)
 			distro="$ID"
 			;;
