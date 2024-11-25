@@ -5,6 +5,7 @@
 #![allow(dead_code)]
 
 use crate::qemu::cmdline_generator::{DeviceVirtioNet, Netdev};
+use crate::VfioDevice;
 
 use anyhow::{anyhow, Result};
 use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
@@ -513,6 +514,51 @@ impl Qmp {
         }
 
         Err(anyhow!("no target device found"))
+    }
+
+    pub fn hotplug_vfio_device(&mut self, vfiodev: &mut VfioDevice) -> Result<()> {
+        // FIXME: the first one might not the true device we want to passthrough.
+        // TODO multifunction=on case
+        let primary_device = vfiodev.devices.first_mut().unwrap();
+        info!(
+            sl!(),
+            "qmp hotplug vfio primary_device {:?}", &primary_device
+        );
+
+        let mut vfio_args = Dictionary::new();
+        let bdf = if !primary_device.bus_slot_func.clone().starts_with("0000") {
+            format!("0000:{}", primary_device.bus_slot_func.clone())
+        } else {
+            primary_device.bus_slot_func.clone()
+        };
+        vfio_args.insert("host".to_owned(), bdf.into());
+        vfio_args.insert("multifunction".to_owned(), "off".into());
+
+        let vfio_dev_add = VfioDeviceAdd {
+            driver: vfiodev.driver_type.clone(),
+            bus: if vfiodev.bus.is_empty() {
+                None
+            } else {
+                Some(vfiodev.bus.clone())
+            },
+            id: if primary_device.hostdev_id.is_empty() {
+                None
+            } else {
+                Some(primary_device.hostdev_id.clone())
+            },
+            arguments: vfio_args,
+        };
+
+        self.execute_vfio_device_add(vfio_dev_add)
+            .context("exec vfio device add")?;
+
+        let vfio_device_pci_path = self
+            .get_device_by_qdev_id(&primary_device.hostdev_id)
+            .context("get device by qdev_id failed")?;
+
+        primary_device.guest_pci_path = Some(vfio_device_pci_path);
+
+        Ok(())
     }
 }
 
