@@ -559,6 +559,33 @@ impl PCIeDevice for VfioDevice {
             return Ok(());
         }
 
+        // handle port devices
+        if !self.allocated {
+            let port_type = pcie_topo.get_pcie_port();
+            let avail_port = match port_type {
+                PCIePort::NoPort => {
+                    info!(
+                        sl!(),
+                        "There's no need to set ports used to hot-plug vfio devices"
+                    );
+                    None
+                }
+                PCIePort::InvalidPort => {
+                    return Err(anyhow!("RootPort or SwitchPort needs be set"))
+                }
+                PCIePort::RootPort | PCIePort::SwitchPort => {
+                    pcie_topo.find_vacant_port(port_type)
+                }
+            };
+            self.port = port_type;
+            // vfio device attached onto port(root port | switch port)
+            if let Some(port_device) = avail_port {
+                self.bus = port_device.get_id();
+            }
+            self.allocated = true;
+            info!(sl!(), "bus: {:?}, port type: {:?}", &self.bus, &self.port);
+        }
+
         self.device_options.clear();
         for hostdev in self.devices.iter_mut() {
             let pci_path = do_add_pcie_endpoint(
