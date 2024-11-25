@@ -28,6 +28,8 @@ use tokio::{
 };
 use url::Url;
 
+use tokio_vsock::VsockStream;
+
 const VSOCK_SCHEME: &str = "vsock";
 const HYBRID_VSOCK_SCHEME: &str = "hvsock";
 const REMOTE_SCHEME: &str = "remote";
@@ -39,7 +41,7 @@ pub enum Stream {
     // and AF_VSOCK sockets (on the guest end).
     Unix(UnixStream),
     // vsock://<cid>:<port>
-    Vsock(UnixStream),
+    Vsock(VsockStream),
 }
 
 impl Stream {
@@ -50,7 +52,8 @@ impl Stream {
     ) -> Poll<std::io::Result<()>> {
         // Safety: `UnixStream::read` correctly handles reads into uninitialized memory
         match self {
-            Stream::Unix(stream) | Stream::Vsock(stream) => Pin::new(stream).poll_read(cx, buf),
+            Stream::Unix(stream)  => Pin::new(stream).poll_read(cx, buf),
+            Stream::Vsock(stream) => Pin::new(stream).poll_read(cx, buf),
         }
     }
 }
@@ -58,13 +61,14 @@ impl Stream {
 impl IntoRawFd for Stream {
     fn into_raw_fd(self) -> RawFd {
         match self {
-            Stream::Unix(stream) | Stream::Vsock(stream) => match stream.into_std() {
+            Stream::Unix(stream)  => match stream.into_std() {
                 Ok(stream) => stream.into_raw_fd(),
                 Err(err) => {
                     error!(sl!(), "failed to into std unix stream {:?}", err);
                     -1
                 }
             },
+            Stream::Vsock(stream) => stream.into_raw_fd()
         }
     }
 }
