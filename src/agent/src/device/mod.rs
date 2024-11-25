@@ -1192,9 +1192,8 @@ mod tests {
         );
         spec.set_annotations(Some(annotations));
 
-        // create a file in /tmp/cdi with nvidia.json content
-        let cdi_dir = PathBuf::from("/tmp/cdi");
-        let cdi_file = cdi_dir.join("kata.json");
+        let temp_dir = tempdir().expect("Failed to create temporary directory");
+        let cdi_file = temp_dir.path().join("kata.json");
 
         let cdi_version = "0.6.0";
         let kind = "kata.com/gpu";
@@ -1242,10 +1241,10 @@ mod tests {
         }}"#
         );
 
-        fs::create_dir_all(&cdi_dir).unwrap();
-        fs::write(&cdi_file, cdi_content).unwrap();
+        fs::write(&cdi_file, cdi_content).expect("Failed to write CDI file");
 
-        let res = handle_cdi_devices(&logger, &mut spec, "/tmp/cdi", 0).await;
+        let res =
+            handle_cdi_devices(&logger, &mut spec, temp_dir.path().to_str().unwrap(), 0).await;
         println!("modfied spec {:?}", spec);
         assert!(res.is_ok(), "{}", res.err().unwrap());
 
@@ -1261,7 +1260,7 @@ mod tests {
 
         let env = spec.process().as_ref().unwrap().env().as_ref().unwrap();
 
-        // find string TEST_OUTER_ENV in evn
+        // find string TEST_OUTER_ENV in env
         let outer_env = env.iter().find(|e| e.starts_with("TEST_OUTER_ENV"));
         assert!(outer_env.is_some(), "TEST_OUTER_ENV not found in env");
 
