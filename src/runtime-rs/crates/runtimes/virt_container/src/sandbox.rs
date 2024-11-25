@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use crate::health_check::HealthCheck;
 use agent::kata::KataAgent;
 use agent::types::KernelModule;
 use agent::{
@@ -16,6 +17,8 @@ use common::types::utils::option_system_time_into;
 use common::types::ContainerProcess;
 use common::{types::SandboxConfig, ContainerManager, Sandbox, SandboxNetworkEnv};
 use containerd_shim_protos::events::task::{TaskExit, TaskOOM};
+use hypervisor::device::topology::PCIePort;
+use hypervisor::port_device::PortDeviceConfig;
 use hypervisor::VsockConfig;
 #[cfg(not(target_arch = "s390x"))]
 use hypervisor::HYPERVISOR_FIRECRACKER;
@@ -40,8 +43,6 @@ use runtime_spec as spec;
 use std::sync::Arc;
 use tokio::sync::{mpsc::Sender, Mutex, RwLock};
 use tracing::instrument;
-
-use crate::health_check::HealthCheck;
 
 pub(crate) const VIRTCONTAINER: &str = "virt_container";
 
@@ -151,7 +152,49 @@ impl VirtSandbox {
             resource_configs.push(vm_rootfs);
         }
 
+        // prepare pcie port device configs
+        if let Some(port_configs) = self.prepare_pcie_port_devices().await {
+            resource_configs.extend(port_configs);
+        }
+
         Ok(resource_configs)
+    }
+
+    async fn prepare_pcie_port_devices(&self) -> Option<Vec<ResourceConfig>> {
+        let mut port_configs = vec![];
+        let device_manager = self.resource_manager.get_device_manager().await;
+        let dm = device_manager.read().await;
+
+        if let Some(topo) = dm.get_pcie_topology() {
+            let (root_ports, switch_ports) = (topo.pcie_root_ports, topo.pcie_switch_ports);
+            if root_ports > 0 {
+                info!(
+                    sl!(),
+                    "prepare {} pcie root port devices for VM.", root_ports
+                );
+                let root_port_config = ResourceConfig::PortDevice(PortDeviceConfig::new(
+                    PCIePort::RootPort,
+                    root_ports,
+                ));
+
+                port_configs.push(root_port_config);
+            }
+            if switch_ports > 0 {
+                info!(
+                    sl!(),
+                    "prepare {} pcie switch port devices for VM.", switch_ports
+                );
+                let switch_port_config = ResourceConfig::PortDevice(PortDeviceConfig::new(
+                    PCIePort::SwitchPort,
+                    switch_ports,
+                ));
+
+                port_configs.push(switch_port_config);
+            }
+            Some(port_configs)
+        } else {
+            None
+        }
     }
 
     async fn prepare_network_resource(
