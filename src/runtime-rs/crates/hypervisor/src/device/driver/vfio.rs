@@ -19,7 +19,7 @@ use kata_sys_util::fs::get_base_name;
 use crate::{
     device::{
         pci_path::PciPath,
-        topology::{do_add_pcie_endpoint, PCIeTopology},
+        topology::{do_add_pcie_endpoint, PCIePort, PCIeTopology},
         util::{do_decrease_count, do_increase_count},
         Device, DeviceType, PCIeDevice,
     },
@@ -221,6 +221,15 @@ pub struct VfioDevice {
     pub devices: Vec<HostDevice>,
     // options for vfio pci handler in kata-agent
     pub device_options: Vec<String>,
+
+    // specifies the PCIe port type to which the device is attached
+    pub port: PCIePort,
+
+    // bus of VFIO PCIe device
+    pub bus: String,
+
+    // Indicated host device allocated or not.
+    pub allocated: bool,
 }
 
 impl VfioDevice {
@@ -243,6 +252,8 @@ impl VfioDevice {
             config: dev_info.clone(),
             devices,
             device_options,
+            allocated: false,
+            ..Default::default()
         };
 
         vfio_device
@@ -478,6 +489,7 @@ impl Device for VfioDevice {
                 if let DeviceType::Vfio(vfio) = dev {
                     self.config = vfio.config;
                     self.devices = vfio.devices;
+                    self.allocated = true;
                 }
 
                 update_pcie_device!(self, pcie_topo)?;
