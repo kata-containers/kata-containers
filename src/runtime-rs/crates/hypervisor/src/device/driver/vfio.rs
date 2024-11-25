@@ -438,7 +438,7 @@ impl VfioDevice {
             let mut hostdev: HostDevice = self
                 .set_vfio_config(iommu_devs_path.clone(), device)
                 .context("set vfio config failed")?;
-            let dev_prefix = self.get_vfio_prefix();
+            let dev_prefix = format!("{}_{}", self.get_vfio_prefix(), &vfio_group);
             hostdev.hostdev_id = make_device_nameid(&dev_prefix, index, MAX_DEV_ID_SIZE);
 
             self.devices.push(hostdev);
