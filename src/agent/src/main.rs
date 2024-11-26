@@ -519,14 +519,13 @@ async fn launch_guest_component_procs(logger: &Logger, config: &AgentConfig) -> 
 async fn init_attestation_components(logger: &Logger, config: &AgentConfig) -> Result<()> {
     launch_guest_component_procs(logger, config).await?;
 
-    fs::write(OCICRYPT_CONFIG_PATH, OCICRYPT_CONFIG.as_bytes())?;
-    env::set_var("OCICRYPT_KEYPROVIDER_CONFIG", OCICRYPT_CONFIG_PATH);
-
-    // If a CDH socket exists, initialize the CDH client
+    // If a CDH socket exists, initialize the CDH client and enable ocicrypt
     match tokio::fs::metadata(CDH_SOCKET).await {
         Ok(md) => {
             if md.file_type().is_socket() {
                 cdh::init_cdh_client(CDH_SOCKET_URI).await?;
+                fs::write(OCICRYPT_CONFIG_PATH, OCICRYPT_CONFIG.as_bytes())?;
+                env::set_var("OCICRYPT_KEYPROVIDER_CONFIG", OCICRYPT_CONFIG_PATH);
             } else {
                 debug!(logger, "File {} is not a socket", CDH_SOCKET);
             }
