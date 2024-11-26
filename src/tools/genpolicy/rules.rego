@@ -7,8 +7,6 @@ package agent_policy
 import future.keywords.in
 import future.keywords.every
 
-import input
-
 # Default values, returned by OPA when rules cannot be evaluated to true.
 default AddARPNeighborsRequest := false
 default AddSwapRequest := false
