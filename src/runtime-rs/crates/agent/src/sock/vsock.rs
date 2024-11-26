@@ -4,16 +4,13 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use std::{
-    os::unix::prelude::AsRawFd,
-    time::Duration,
-};
+use std::{os::unix::prelude::AsRawFd, time::Duration};
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use tokio_vsock::VsockAddr;
+use tokio_vsock::{VsockAddr, VsockListener};
 
-use super::{ConnectConfig, Sock, Stream};
+use super::{ConnectConfig, Listener, Sock, Stream};
 
 #[derive(Debug, PartialEq)]
 pub struct Vsock {
@@ -54,5 +51,12 @@ impl Sock for Vsock {
             "cannot connect vsock to agent ttrpc server {:?}",
             config
         ))
+    }
+
+    async fn listen(&self) -> Result<Listener> {
+        let addr = VsockAddr::new(tokio_vsock::VMADDR_CID_HOST, self.port);
+        let listener = VsockListener::bind(addr).context("connection failed")?;
+
+        Ok(Listener::Vsock(listener))
     }
 }
