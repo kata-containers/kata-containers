@@ -9,6 +9,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use std::result::Result::Ok;
+
 use anyhow::Result;
 use kata_sys_util::mount;
 use nix::mount::MsFlags;

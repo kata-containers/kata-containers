@@ -24,13 +24,20 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use tokio::{
     io::{AsyncRead, ReadBuf},
-    net::UnixStream,
+    net::{UnixListener, UnixStream},
 };
+use tokio_vsock::VsockListener;
 use url::Url;
 
 const VSOCK_SCHEME: &str = "vsock";
 const HYBRID_VSOCK_SCHEME: &str = "hvsock";
 const REMOTE_SCHEME: &str = "remote";
+
+/// Socket Listener
+pub enum Listener {
+    Unix(UnixListener),
+    Vsock(VsockListener),
+}
 
 /// Socket stream
 pub enum Stream {
@@ -107,6 +114,7 @@ enum SockType {
 #[async_trait]
 pub trait Sock: Send + Sync {
     async fn connect(&self, config: &ConnectConfig) -> Result<Stream>;
+    async fn listen(&self) -> Result<Listener>;
 }
 
 // Supported sock address formats are:

@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+mod share_uds;
 mod share_virtio_fs;
 pub use share_virtio_fs::rafs_mount;
 mod share_virtio_fs_inline;
@@ -137,6 +138,13 @@ impl MountedInfo {
 pub trait ShareFsMount: Send + Sync {
     async fn share_rootfs(&self, config: &ShareFsRootfsConfig) -> Result<ShareFsMountResult>;
     async fn share_volume(&self, config: &ShareFsVolumeConfig) -> Result<ShareFsMountResult>;
+    async fn share_uds(
+        &self,
+        source: &str,
+        target: &str,
+        sock_addr: &str,
+    ) -> Result<ShareFsMountResult>;
+    async fn unshare_uds(&self, host_src: &str) -> Result<()>;
     /// Upgrade to readwrite permission
     async fn upgrade_to_rw(&self, file_name: &str) -> Result<()>;
     /// Downgrade to readonly permission
