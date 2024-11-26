@@ -10,7 +10,7 @@ set -o pipefail
 DEBUG="${DEBUG:-}"
 [ -n "$DEBUG" ] && set -x
 
-export AUTO_GENERATE_POLICY="${AUTO_GENERATE_POLICY:-no}"
+export AUTO_GENERATE_POLICY="no"
 export KATA_HOST_OS="${KATA_HOST_OS:-}"
 export KATA_HYPERVISOR="${KATA_HYPERVISOR:-}"
 export PULL_TYPE="${PULL_TYPE:-default}"

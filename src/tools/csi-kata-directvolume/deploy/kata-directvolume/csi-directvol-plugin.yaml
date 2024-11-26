@@ -87,7 +87,7 @@ spec:
 
         - name: kata-directvolume
           # build and push it into registry
-          image: localhost/kata-directvolume:v1.0.18
+          imagePullPolicy: Always
           args:
             - --drivername=directvolume.csi.katacontainers.io
             - --v=5
@@ -187,4 +187,3 @@ spec:
             path: /run/kata-containers/shared/direct-volumes/
             type: DirectoryOrCreate
           name: shared-directvols
-

@@ -273,6 +273,13 @@ type Mount struct {
 	// FSGroupChangePolicy specifies the policy that will be used when applying
 	// group id ownership change for a volume.
 	FSGroupChangePolicy volume.FSGroupChangePolicy
+
+	// Confidential specifies whether the underlying storage is encrypted.
+	Confidential bool
+
+	// Ephemeral specifies whether the underlying storage is ephemeral:
+	// https://kubernetes.io/docs/concepts/storage/ephemeral-volumes/
+	Ephemeral bool
 }
 
 func isSymlink(path string) bool {
