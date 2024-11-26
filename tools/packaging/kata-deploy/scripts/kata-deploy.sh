@@ -497,6 +497,10 @@ function configure_containerd_runtime() {
 		pluginid=\"io.containerd.grpc.v1.cri\"
 	fi
 
+	if grep -q "version = 3\>" $containerd_conf_file; then
+		pluginid=\"io.containerd.cri.v1.runtime\"
+	fi
+
 	local runtime_table=".plugins.${pluginid}.containerd.runtimes.\"${runtime}\""
 	local runtime_options_table="${runtime_table}.options"
 	local runtime_type=\"io.containerd."${runtime}".v2\"
