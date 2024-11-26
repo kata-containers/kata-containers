@@ -491,13 +491,16 @@ function configure_containerd_runtime() {
 	local configuration="configuration-${shim}"
 	local pluginid=cri
 
-	# if we are running k0s auto containerd.toml generation, the base template is by default version 2
-	# we can safely assume to reference the newer version of cri
-	if grep -q "version = 2\>" $containerd_conf_file || [ "$1" == "k0s-worker" ] || [ "$1" == "k0s-controller" ]; then
+	local containerd_root_conf_file="$containerd_conf_file"
+	if [[ "$1" =~ ^(k0s-worker|k0s-controller)$ ]]; then
+		containerd_root_conf_file="/etc/containerd/containerd.toml"
+	fi
+
+	if grep -q "version = 2\>" $containerd_root_conf_file; then
 		pluginid=\"io.containerd.grpc.v1.cri\"
 	fi
 
-	if grep -q "version = 3\>" $containerd_conf_file; then
+	if grep -q "version = 3\>" $containerd_root_conf_file; then
 		pluginid=\"io.containerd.cri.v1.runtime\"
 	fi
 
@@ -697,7 +700,8 @@ function main() {
 		# From 1.27.1 onwards k0s enables dynamic configuration on containerd CRI runtimes. 
 		# This works by k0s creating a special directory in /etc/k0s/containerd.d/ where user can drop-in partial containerd configuration snippets.
 		# k0s will automatically pick up these files and adds these in containerd configuration imports list.
-		containerd_conf_file="/etc/containerd/kata-containers.toml"
+		containerd_conf_file="/etc/containerd/containerd.d/kata-containers.toml"
+		containerd_conf_file_backup="${containerd_conf_tmpl_file}.bak"
 	fi
 
 	# only install / remove / update if we are dealing with CRIO or containerd
@@ -718,6 +722,7 @@ function main() {
 			       containerd_conf_file="${containerd_conf_tmpl_file}"
 			       containerd_conf_file_backup="${containerd_conf_tmpl_file}.bak"
 			elif [[ "$runtime" =~ ^(k0s-worker|k0s-controller)$ ]]; then
+			       mkdir -p $(dirname "$containerd_conf_file")
 			       touch "$containerd_conf_file"
 			elif [[ "$runtime" == "containerd" ]]; then
 			       if [ ! -f "$containerd_conf_file" ] && [ -d $(dirname "$containerd_conf_file") ] && [ -x $(command -v containerd) ]; then
