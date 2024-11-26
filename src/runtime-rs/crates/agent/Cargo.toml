@@ -23,6 +23,7 @@ tracing = { workspace = true }
 url = { workspace = true }
 nix = { workspace = true }
 oci-spec = { workspace = true }
+tokio-vsock = { workspace = true }
 
 # Local dependencies
 kata-types = { workspace = true }

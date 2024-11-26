@@ -13,8 +13,9 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use nix::sys::socket::{connect, socket, AddressFamily, SockFlag, SockType, VsockAddr};
 use tokio::net::UnixStream;
+use tokio_vsock::VsockListener;
 
-use super::{ConnectConfig, Sock, Stream};
+use super::{ConnectConfig, Listener, Sock, Stream};
 
 #[derive(Debug, PartialEq)]
 pub struct Vsock {
@@ -79,5 +80,12 @@ impl Sock for Vsock {
             "cannot connect vsock to agent ttrpc server {:?}",
             config
         ))
+    }
+
+    async fn listen(&self) -> Result<Listener> {
+        let addr = tokio_vsock::VsockAddr::new(tokio_vsock::VMADDR_CID_HOST, self.port);
+        let listener = VsockListener::bind(addr).context("connection failed")?;
+
+        Ok(Listener::Vsock(listener))
     }
 }

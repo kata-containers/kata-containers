@@ -6,6 +6,7 @@
 
 use std::{
     fs,
+    os::unix::fs::FileTypeExt,
     path::{Path, PathBuf},
 };
 
@@ -131,4 +132,15 @@ pub async fn handle_block_volume(
     mount.set_options(m.options().clone());
 
     Ok((storage, mount, device_id))
+}
+
+// check whether a file is unix domain socket
+pub fn is_unix_socket(dir_path: &str) -> bool {
+    let path = Path::new(dir_path);
+
+    if let Ok(true) = std::fs::metadata(path).map(|meta| meta.file_type().is_socket()) {
+        return true;
+    }
+
+    false
 }

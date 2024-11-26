@@ -4,13 +4,16 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use super::share_uds::UdsShare;
 use agent::Storage;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use kata_sys_util::mount::{bind_remount, umount_all, umount_timeout};
 use kata_types::k8s::is_watchable_mount;
+use kata_types::mount;
 use std::fs;
 use std::path::Path;
+use tokio::sync::Mutex;
 
 const WATCHABLE_PATH_NAME: &str = "watchable";
 const WATCHABLE_BIND_DEV_TYPE: &str = "watchable-bind";
@@ -29,11 +32,15 @@ use super::{
 #[derive(Debug)]
 pub struct VirtiofsShareMount {
     id: String,
+    uds_share: Mutex<UdsShare>,
 }
 
 impl VirtiofsShareMount {
     pub fn new(id: &str) -> Self {
-        Self { id: id.to_string() }
+        Self {
+            id: id.to_string(),
+            uds_share: Mutex::new(UdsShare::new()),
+        }
     }
 }
 
@@ -122,6 +129,48 @@ impl ShareFsMount for VirtiofsShareMount {
             guest_path,
             storages: vec![],
         })
+    }
+
+    async fn share_uds(
+        &self,
+        source: &str,
+        target: &str,
+        sock_addr: &str,
+    ) -> Result<ShareFsMountResult> {
+        let vport = if let Some((sock_addr, _)) = sock_addr.rsplit_once(':') {
+            let mut uds_share = self.uds_share.lock().await;
+            uds_share.share_uds(source, sock_addr).await?
+        } else {
+            error!(sl!(), "got wrong agent sock address: {}", sock_addr);
+            return Err(anyhow!("failed to share uds {}", source));
+        };
+
+        let guest_path = Path::new(EPHEMERAL_PATH)
+            .join(target)
+            .into_os_string()
+            .into_string()
+            .map_err(|e| anyhow!("failed to get uds path {:?} in guest", e))?;
+
+        // Create a storage struct so that kata agent is able to create
+        // uds backed volume inside the VM
+        let uds_storage = agent::Storage {
+            driver: String::from(mount::KATA_UDS_VOLUME_TYPE),
+            driver_options: vec![format!("{}", vport.unwrap_or_default())],
+            mount_point: guest_path.clone(),
+            ..Default::default()
+        };
+
+        let storages = vec![uds_storage];
+
+        Ok(ShareFsMountResult {
+            guest_path,
+            storages,
+        })
+    }
+
+    async fn unshare_uds(&self, host_src: &str) -> Result<()> {
+        let mut uds_share = self.uds_share.lock().await;
+        uds_share.cleanup_uds_pass(host_src).await
     }
 
     async fn upgrade_to_rw(&self, file_name: &str) -> Result<()> {

@@ -22,6 +22,9 @@ pub const KATA_SHAREDFS_GUEST_PREMOUNT_TAG: &str = "kataShared";
 /// KATA_EPHEMERAL_VOLUME_TYPE creates a tmpfs backed volume for sharing files between containers.
 pub const KATA_EPHEMERAL_VOLUME_TYPE: &str = "ephemeral";
 
+/// KATA_UDS_VOLUME_TYPE creates a uds backed volume for sharing uds between host and containers.
+pub const KATA_UDS_VOLUME_TYPE: &str = "uds";
+
 /// KATA_HOST_DIR_TYPE use for host empty dir
 pub const KATA_HOST_DIR_VOLUME_TYPE: &str = "kata:hostdir";
 
