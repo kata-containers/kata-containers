@@ -58,6 +58,8 @@ CreateContainerRequest:= {"ops": ops, "allowed": true} {
     i_storages := input.storages
     i_devices := input.devices
 
+    print("policy state = ", get_state())
+
     # array of possible state operations
     ops_builder := []
 
@@ -154,7 +156,7 @@ get_state() = state {
 }
 
 get_state_path(key) = path {
-    path := concat("/", ["", key]) # prepend "/" to key
+    path := concat("/pstate/", ["", key]) # prepend "/pstate/" to key
 }
 
 # Helper functions to conditionally concatenate if op is not null
