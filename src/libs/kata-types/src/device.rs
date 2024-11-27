@@ -31,6 +31,8 @@ pub const DRIVER_VFIO_AP_COLD_TYPE: &str = "vfio-ap-cold";
 pub const DRIVER_9P_TYPE: &str = "9p";
 /// DRIVER_EPHEMERAL_TYPE is the driver for ephemeral volume.
 pub const DRIVER_EPHEMERAL_TYPE: &str = "ephemeral";
+/// DRIVER_UDS_TYPE is the driver for uds volume.
+pub const DRIVER_UDS_TYPE: &str = "uds";
 /// DRIVER_LOCAL_TYPE is the driver for local volume.
 pub const DRIVER_LOCAL_TYPE: &str = "local";
 /// DRIVER_OVERLAYFS_TYPE is the driver for overlayfs volume.
