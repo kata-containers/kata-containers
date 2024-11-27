@@ -14,6 +14,8 @@ crio_drop_in_conf_file_debug="${crio_drop_in_conf_dir}/100-debug"
 containerd_conf_file="/etc/containerd/config.toml"
 containerd_conf_file_backup="${containerd_conf_file}.bak"
 containerd_conf_tmpl_file=""
+containerd_drop_in_conf_file="/opt/kata/containerd/config.d/kata-deploy.toml"
+use_containerd_drop_in_conf_file="false"
 
 IFS=' ' read -a shims <<< "$SHIMS"
 default_shim="$DEFAULT_SHIM"
@@ -138,6 +140,37 @@ function get_container_runtime() {
 	else
 		echo "$runtime" | awk -F '[:]' '{print $1}'
 	fi
+}
+
+function is_containerd_capable_of_using_drop_in_files() {
+	local runtime="$1"
+
+	if [ "$runtime" == "crio" ]; then
+		# This should never happen but better be safe than sorry
+		echo "false"
+		return
+	fi
+
+	if [[ "$runtime" =~ ^(k0s-worker|k0s-controller)$ ]]; then
+		# k0s does the work of using drop-in files better than any other "k8s distro", so
+		# we don't mess up with what's being correctly done.
+		echo "false"
+		return
+	fi
+
+	local version_major=$(kubectl get node $NODE_NAME -o jsonpath='{.status.nodeInfo.containerRuntimeVersion}' | grep -oE '[0-9]+\.[0-9]+' | cut -d'.' -f1)
+	if [ $version_major -lt 2 ]; then
+		# Only containerd 2.0 does the merge of the plugins section from different snippets,
+		# instead of overwritting the whole section, which makes things considerably more
+		# complicated for us to deal with.
+		#
+		# It's been discussed with containerd community, and the patch needed will **NOT** be
+		# backported to the release 1.7, as that breaks the behaviour from an existing release.
+		echo "false"
+		return
+	fi
+
+	echo "true"
 }
 
 function get_kata_containers_config_path() {
@@ -490,6 +523,12 @@ function configure_containerd_runtime() {
 	local runtime="kata-${shim}"
 	local configuration="configuration-${shim}"
 	local pluginid=cri
+	local configuration_file="${containerd_conf_file}"
+
+	# Properly set the configuration file in case drop-in files are supported
+	if [ $use_containerd_drop_in_conf_file = "true" ]; then
+		configuration_file="/host${containerd_drop_in_conf_file}"
+	fi
 
 	local containerd_root_conf_file="$containerd_conf_file"
 	if [[ "$1" =~ ^(k0s-worker|k0s-controller)$ ]]; then
@@ -510,14 +549,14 @@ function configure_containerd_runtime() {
 	local runtime_config_path=\"$(get_kata_containers_config_path "${shim}")/${configuration}.toml\"
 	local runtime_path=\"$(get_kata_containers_runtime_path "${shim}")\"
 	
-	tomlq -i -t $(printf '%s.runtime_type=%s' ${runtime_table} ${runtime_type}) ${containerd_conf_file}
-	tomlq -i -t $(printf '%s.runtime_path=%s' ${runtime_table} ${runtime_path}) ${containerd_conf_file}
-	tomlq -i -t $(printf '%s.privileged_without_host_devices=true' ${runtime_table}) ${containerd_conf_file}
-	tomlq -i -t $(printf '%s.pod_annotations=["io.katacontainers.*"]' ${runtime_table}) ${containerd_conf_file}
-	tomlq -i -t $(printf '%s.ConfigPath=%s' ${runtime_options_table} ${runtime_config_path}) ${containerd_conf_file}
+	tomlq -i -t $(printf '%s.runtime_type=%s' ${runtime_table} ${runtime_type}) ${configuration_file}
+	tomlq -i -t $(printf '%s.runtime_path=%s' ${runtime_table} ${runtime_path}) ${configuration_file}
+	tomlq -i -t $(printf '%s.privileged_without_host_devices=true' ${runtime_table}) ${configuration_file}
+	tomlq -i -t $(printf '%s.pod_annotations=["io.katacontainers.*"]' ${runtime_table}) ${configuration_file}
+	tomlq -i -t $(printf '%s.ConfigPath=%s' ${runtime_options_table} ${runtime_config_path}) ${configuration_file}
 	
 	if [ "${DEBUG}" == "true" ]; then
-		tomlq -i -t '.debug.level = "debug"' ${containerd_conf_file}
+		tomlq -i -t '.debug.level = "debug"' ${configuration_file}
 	fi
 
 	if [ -n "${SNAPSHOTTER_HANDLER_MAPPING}" ]; then
@@ -529,7 +568,7 @@ function configure_containerd_runtime() {
 			fi
 
 			value="${m#*$snapshotters_delimiter}"
-			tomlq -i -t $(printf '%s.snapshotter="%s"' ${runtime_table} ${value}) ${containerd_conf_file}
+			tomlq -i -t $(printf '%s.snapshotter="%s"' ${runtime_table} ${value}) ${configuration_file}
 			break
 		done
 	fi
@@ -541,9 +580,14 @@ function configure_containerd() {
 
 	mkdir -p /etc/containerd/
 
-	if [ -f "$containerd_conf_file" ]; then
-		# backup the config.toml only if a backup doesn't already exist (don't override original)
+	if [ $use_containerd_drop_in_conf_file = "false" ] && [ -f "$containerd_conf_file" ]; then
+		# only backup in case drop-in files are not supported, and when doing the backup
+		# only do it if a backup doesn't already exist (don't override original)
 		cp -n "$containerd_conf_file" "$containerd_conf_file_backup"
+	fi
+
+	if [ $use_containerd_drop_in_conf_file = "true" ]; then
+		tomlq -i -t $(printf '.imports|=.+["%s"]' ${containerd_drop_in_conf_file}) ${containerd_conf_file}
 	fi
 
 	for shim in "${shims[@]}"; do
@@ -597,6 +641,14 @@ function cleanup_crio() {
 }
 
 function cleanup_containerd() {
+	if [ $use_containerd_drop_in_conf_file = "true" ]; then
+		# There's no need to remove the drop-in file, as it'll be removed as
+		# part of the artefacts removal.  Thus, simply remove the file from
+		# the imports line of the containerd configuration and return.
+		tomlq -i -t $(printf '.imports|=.-["%s"]' ${containerd_drop_in_conf_file}) ${containerd_conf_file}
+		return
+	fi
+
 	rm -f $containerd_conf_file
 	if [ -f "$containerd_conf_file_backup" ]; then
 		mv "$containerd_conf_file_backup" "$containerd_conf_file"
@@ -704,11 +756,15 @@ function main() {
 		containerd_conf_file_backup="${containerd_conf_tmpl_file}.bak"
 	fi
 
+
 	# only install / remove / update if we are dealing with CRIO or containerd
 	if [[ "$runtime" =~ ^(crio|containerd|k3s|k3s-agent|rke2-agent|rke2-server|k0s-worker|k0s-controller)$ ]]; then
 		if [ "$runtime" != "crio" ]; then
 			containerd_snapshotter_version_check
 			snapshotter_handler_mapping_validation_check
+
+			use_containerd_drop_in_conf_file=$(is_containerd_capable_of_using_drop_in_files "$runtime")
+			echo "Using containerd drop-in files: $use_containerd_drop_in_conf_file"
 		fi
 
 		case "$action" in
@@ -728,6 +784,11 @@ function main() {
 			       if [ ! -f "$containerd_conf_file" ] && [ -d $(dirname "$containerd_conf_file") ] && [ -x $(command -v containerd) ]; then
 					containerd config default > "$containerd_conf_file"
 			       fi
+			fi
+
+			if [ $use_containerd_drop_in_conf_file = "true" ]; then
+				mkdir -p $(dirname "/host$containerd_drop_in_conf_file")
+				touch "/host$containerd_drop_in_conf_file"
 			fi
 
 			install_artifacts
