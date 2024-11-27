@@ -97,6 +97,10 @@ jobs:
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh install-kbs-client
 
+      - name: Deploy CSI driver
+        timeout-minutes: 5
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-csi-driver
+
       - name: Run tests
         timeout-minutes: 100
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
@@ -112,6 +116,10 @@ jobs:
       - name: Delete CoCo KBS
         if: ${{ always() && matrix.machine != 'tdx-no-attestation' }}
         run: bash tests/integration/kubernetes/gha-run.sh delete-coco-kbs
+
+      - name: Delete CSI driver
+        timeout-minutes: 5
+        run: bash tests/integration/kubernetes/gha-run.sh delete-csi-driver
 
   run-k8s-tests-on-sev:
     strategy:
@@ -159,9 +167,17 @@ jobs:
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-sev
 
+      - name: Deploy CSI driver
+        timeout-minutes: 5
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-csi-driver
+
       - name: Run tests
         timeout-minutes: 50
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
+
+      - name: Delete CSI driver
+        timeout-minutes: 5
+        run: bash tests/integration/kubernetes/gha-run.sh delete-csi-driver
 
       - name: Delete kata-deploy
         if: always()
@@ -231,6 +247,10 @@ jobs:
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh install-kbs-client
 
+      - name: Deploy CSI driver
+        timeout-minutes: 5
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-csi-driver
+
       - name: Run tests
         timeout-minutes: 50
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
@@ -246,6 +266,10 @@ jobs:
       - name: Delete CoCo KBS
         if: always()
         run: bash tests/integration/kubernetes/gha-run.sh delete-coco-kbs
+
+      - name: Delete CSI driver
+        timeout-minutes: 5
+        run: bash tests/integration/kubernetes/gha-run.sh delete-csi-driver
 
   # Generate jobs for testing CoCo on non-TEE environments
   run-k8s-tests-coco-nontee:
@@ -337,6 +361,10 @@ jobs:
       - name: Install `kbs-client`
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh install-kbs-client
+
+      - name: Deploy CSI driver
+        timeout-minutes: 5
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-csi-driver
 
       - name: Run tests
         timeout-minutes: 80
