@@ -140,6 +140,19 @@ jobs:
           retention-days: 15
           if-no-files-found: error
 
+  # We don't need the binaries installed in the rootfs as part of the tarball, so can delete them now we've built the rootfs
+  remove-rootfs-binary-artifacts:
+    runs-on: ubuntu-22.04
+    needs: build-asset-rootfs
+    strategy:
+      matrix:
+        asset:
+          - agent
+    steps:
+      - uses: geekyeggo/delete-artifact@v5
+        with:
+          name: kata-artifacts-s390x-${{ matrix.asset}}-*
+
   build-asset-shim-v2:
     runs-on: arm64-builder
     needs: [build-asset, build-asset-rootfs]
@@ -197,7 +210,7 @@ jobs:
 
   create-kata-tarball:
     runs-on: arm64-builder
-    needs: [build-asset, build-asset-rootfs, build-asset-shim-v2]
+    needs: [build-asset, build-asset-rootfs, build-asset-shim-v2, remove-rootfs-binary-artifacts]
     steps:
       - name: Adjust a permission for repo
         run: |
