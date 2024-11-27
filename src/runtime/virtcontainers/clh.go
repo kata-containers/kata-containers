@@ -1627,7 +1627,7 @@ func (clh *cloudHypervisor) getDiskRateLimiterConfig() *chclient.RateLimiterConf
 }
 
 func (clh *cloudHypervisor) addNet(e Endpoint) error {
-	clh.Logger().WithField("endpoint-type", e).Debugf("Adding Endpoint of type %v", e)
+	clh.Logger().WithField("endpoint", e).Debugf("Adding Endpoint of type %v", e.Type())
 
 	mac := e.HardwareAddr()
 	netPair := e.NetworkPair()
