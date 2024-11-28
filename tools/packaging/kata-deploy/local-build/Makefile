@@ -54,6 +54,11 @@ define BUILD
 	$(MK_DIR)/kata-deploy-binaries-in-docker.sh $(if $(V),,-s) --build=$1
 endef
 
+define DUMMY
+	$(call BUILD,"dummy")
+	mv $(MK_DIR)/build/kata-static-dummy.tar.xz $(MK_DIR)/build/kata-static-$(patsubst %-tarball,%,$1).tar.xz
+endef
+
 kata-tarball: | all-parallel merge-builds
 
 copy-scripts-for-the-agent-build:
@@ -94,7 +99,7 @@ cloud-hypervisor-glibc-tarball:
 	${MAKE} $@-build
 
 csi-kata-directvolume-tarball: copy-scripts-for-the-tools-build
-	exit 0
+	$(call DUMMY,$@)
 
 firecracker-tarball:
 	${MAKE} $@-build
