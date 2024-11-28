@@ -63,7 +63,7 @@ jobs:
           make "${KATA_ASSET}-tarball"
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
-          cp -r --no-clobber "${build_dir}" "kata-build"
+          mkdir -p kata-build && cp "${build_dir}"/kata-static-${KATA_ASSET}*.tar.* kata-build/.
         env:
           KATA_ASSET: ${{ matrix.asset }}
           TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
@@ -129,7 +129,7 @@ jobs:
           make "${KATA_ASSET}-tarball"
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
-          cp -r --no-clobber "${build_dir}" "kata-build"
+          mkdir -p kata-build && cp "${build_dir}"/kata-static-${KATA_ASSET}*.tar.* kata-build/.
         env:
           KATA_ASSET: ${{ matrix.asset }}
           TAR_OUTPUT: ${{ matrix.asset }}.tar.gz
@@ -202,7 +202,7 @@ jobs:
           make "${KATA_ASSET}-tarball"
           build_dir=$(readlink -f build)
           # store-artifact does not work with symlink
-          cp -r --no-clobber "${build_dir}" "kata-build"
+          mkdir -p kata-build && cp "${build_dir}"/kata-static-${KATA_ASSET}*.tar.* kata-build/.
         env:
           KATA_ASSET: shim-v2
           TAR_OUTPUT: shim-v2.tar.gz

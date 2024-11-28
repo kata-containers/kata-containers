@@ -1191,6 +1191,10 @@ handle_build() {
 
 	virtiofsd) install_virtiofsd ;;
 
+	dummy)
+		tar cvfJ ${final_tarball_path} --files-from /dev/null
+	       	;;
+
 	*)
 		die "Invalid build target ${build_target}"
 		;;
@@ -1365,6 +1369,7 @@ main() {
 		shim-v2
 		trace-forwarder
 		virtiofsd
+		dummy
 	)
 	silent=false
 	while getopts "hs-:" opt; do
