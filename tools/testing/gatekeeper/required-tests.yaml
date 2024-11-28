@@ -90,6 +90,7 @@ mapping:
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (ubuntu, dragonball, small)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (ubuntu, qemu, normal)
       - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-aks / run-k8s-tests (ubuntu, qemu, small)
+      - Kata Containers CI / kata-containers-ci-on-push / run-k8s-tests-on-zvsi / run-k8s-tests (devmapper, qemu, kubeadm)
       - Kata Containers CI / kata-containers-ci-on-push / run-kata-monitor-tests / run-monitor (qemu, crio)
       - Kata Containers CI / kata-containers-ci-on-push / run-metrics-tests / Kata Setup
       - Kata Containers CI / kata-containers-ci-on-push / run-metrics-tests / run-metrics (clh)
