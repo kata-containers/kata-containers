@@ -7,10 +7,13 @@
 
 use nix::unistd;
 use std::{
-    fmt, io,
-    io::{Read, Result, Write},
+    fmt,
+    io::{self, Read, Result, Write},
     mem,
-    os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd},
+    os::{
+        fd::OwnedFd,
+        unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd},
+    },
     pin::Pin,
     task::{Context, Poll},
 };
@@ -79,6 +82,10 @@ impl PipeStream {
 
     pub fn from_fd(fd: RawFd) -> Self {
         unsafe { Self::from_raw_fd(fd) }
+    }
+
+    pub fn from_owned_fd(owned_fd: OwnedFd) -> Self {
+        Ok(unsafe { Self::from_raw_fd(owned_fd.into_raw_fd()) })
     }
 }
 
