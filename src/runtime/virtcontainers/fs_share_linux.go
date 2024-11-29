@@ -406,6 +406,18 @@ func (f *FilesystemShare) ShareFile(ctx context.Context, c *Container, m *Mount)
 			}
 			defer func() {
 				unmountNoFollow(privateDest)
+				s, err := os.Stat(privateDest)
+				if err != nil {
+					f.Logger().Errorf("Could not stat host-path %v, %s", privateDest, err)
+					return
+				}
+				// Remove the empty file or directory
+				if s.Mode().IsRegular() && s.Size() == 0 {
+					os.Remove(privateDest)
+				}
+				if s.Mode().IsDir() {
+					syscall.Rmdir(privateDest)
+				}
 			}()
 
 			if err := bindMount(ctx, privateDest, mountDest, false, "private"); err != nil {
