@@ -204,7 +204,6 @@ func (km *KataMonitor) aggregateSandboxMetrics(encoder expfmt.Encoder, filterFam
 
 	wg.Wait()
 	monitorLog.Debug("all job finished")
-	close(results)
 
 	// get all job result from chan
 	for sandboxMetrics := range results {
@@ -212,6 +211,8 @@ func (km *KataMonitor) aggregateSandboxMetrics(encoder expfmt.Encoder, filterFam
 			sandboxMetricsList = append(sandboxMetricsList, sandboxMetrics)
 		}
 	}
+
+	close(results)
 
 	if len(sandboxMetricsList) == 0 {
 		return nil
