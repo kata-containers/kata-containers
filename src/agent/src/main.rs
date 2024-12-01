@@ -428,6 +428,18 @@ async fn start_sandbox(
         init_attestation_components(logger, config).await?;
     }
 
+    let mut _oma = None;
+    if let Some(c) = &config.mem_agent {
+        let (ma, rt) =
+            mem_agent::agent::MemAgent::new(c.memcg_config.clone(), c.compact_config.clone())
+                .map_err(|e| {
+                    error!(logger, "MemAgent::new fail: {}", e);
+                    e
+                })
+                .context("start mem-agent")?;
+        _oma = Some((ma, rt));
+    }
+
     // vsock:///dev/vsock, port
     let mut server = rpc::start(sandbox.clone(), config.server_addr.as_str(), init_mode).await?;
 
