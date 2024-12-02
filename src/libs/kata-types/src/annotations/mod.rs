@@ -999,6 +999,9 @@ impl Annotation {
                 }
             }
         }
+
+        config.adjust_config()?;
+
         Ok(())
     }
 }
