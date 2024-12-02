@@ -154,7 +154,8 @@ get_state() = state {
 }
 
 get_state_path(key) = path {
-    path := concat("/", ["", key]) # prepend "/" to key
+    # prepend "/pstate/" to key
+    path := concat("/", ["/pstate", key])
 }
 
 # Helper functions to conditionally concatenate if op is not null
