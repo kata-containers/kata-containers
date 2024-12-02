@@ -373,7 +373,7 @@ install_image() {
 		os_name="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.${variant}.name")"
 		os_version="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.${variant}.version")"
 
-		if [ "${variant}" == "confidential" ]; then
+		if [[ "${variant}" == *confidential ]]; then
 			export COCO_GUEST_COMPONENTS_TARBALL="$(get_coco_guest_components_tarball_path)"
 			export PAUSE_IMAGE_TARBALL="$(get_pause_image_tarball_path)"
 		fi
@@ -448,7 +448,7 @@ install_initrd() {
 		os_name="$(get_from_kata_deps ".assets.initrd.architecture.${ARCH}.${variant}.name")"
 		os_version="$(get_from_kata_deps ".assets.initrd.architecture.${ARCH}.${variant}.version")"
 
-		if [[ "${variant}" == *-confidential ]]; then
+		if [[ "${variant}" == *confidential ]]; then
 			export COCO_GUEST_COMPONENTS_TARBALL="$(get_coco_guest_components_tarball_path)"
 			export PAUSE_IMAGE_TARBALL="$(get_pause_image_tarball_path)"
 		fi
