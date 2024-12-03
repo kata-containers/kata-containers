@@ -95,6 +95,12 @@ test-utils = { path = "../libs/test-utils" }
 which = "4.3.0"
 rstest = "0.18.0"
 async-std = { version = "1.12.0", features = ["attributes"] }
+regorus = { version = "0.2.8", default-features = false, features = [
+    "arc",
+    "regex",
+] }
+base64 = "0.22.1"
+genpolicy = { path = "../tools/genpolicy" }
 
 [workspace]
 members = ["rustjail", "policy"]
