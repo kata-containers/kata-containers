@@ -160,6 +160,13 @@ jobs:
       - name: Install tools
         run: bash tests/integration/kubernetes/gha-run.sh install-kata-tools kata-artifacts
 
+      - name: Link binary into Docker context
+        run: |
+          mkdir -p src/tools/csi-kata-directvolume/bin/
+          # Hard link (Docker doesn't follow symlinks) to the location
+          # where the Dockerfile expects to find the binary.
+          ln -f /opt/kata/bin/csi-kata-directvolume src/tools/csi-kata-directvolume/bin/directvolplugin
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -178,8 +185,6 @@ jobs:
           context: src/tools/csi-kata-directvolume/
           platforms: linux/amd64
           file: src/tools/csi-kata-directvolume/Dockerfile
-          build-args: |
-            binary=/opt/kata/bin/csi-kata-directvolume
 
   run-kata-monitor-tests:
     if: ${{ inputs.skip-test != 'yes' }}
