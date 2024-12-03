@@ -3020,6 +3020,7 @@ dependencies = [
  "image-rs",
  "ipnetwork",
  "json-patch",
+ "kata-agent-policy",
  "kata-sys-util",
  "kata-types",
  "lazy_static",
@@ -3067,6 +3068,23 @@ dependencies = [
  "url",
  "vsock-exporter",
  "which",
+]
+
+[[package]]
+name = "kata-agent-policy"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "json-patch",
+ "logging",
+ "regorus",
+ "serde",
+ "serde_json",
+ "slog",
+ "slog-scope",
+ "slog-term",
+ "tokio",
+ "tokio-vsock 0.3.4",
 ]
 
 [[package]]
