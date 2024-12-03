@@ -134,4 +134,9 @@ mod tests {
     async fn test_create_sandbox() {
         runtests::<CreateSandboxRequest>("createsandbox").await;
     }
+
+    #[tokio::test]
+    async fn test_create_container_network_namespace() {
+        runtests::<CreateContainerRequest>("createcontainer/network_namespace").await;
+    }
 }
