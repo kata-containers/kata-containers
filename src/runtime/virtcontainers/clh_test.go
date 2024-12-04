@@ -105,6 +105,11 @@ func (c *clhClientMock) VmResizePut(ctx context.Context, vmResize chclient.VmRes
 }
 
 //nolint:golint
+func (c *clhClientMock) VmResizeZonePut(ctx context.Context, vmResize chclient.VmResizeZone) (*http.Response, error) {
+	return nil, nil
+}
+
+//nolint:golint
 func (c *clhClientMock) VmAddDevicePut(ctx context.Context, deviceConfig chclient.DeviceConfig) (chclient.PciDeviceInfo, *http.Response, error) {
 	return chclient.PciDeviceInfo{}, nil, nil
 }
