@@ -99,7 +99,7 @@ cloud-hypervisor-glibc-tarball:
 	${MAKE} $@-build
 
 csi-kata-directvolume-tarball: copy-scripts-for-the-tools-build
-	$(call DUMMY,$@)
+	${MAKE} $@-build
 
 firecracker-tarball:
 	${MAKE} $@-build

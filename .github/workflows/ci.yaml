@@ -223,7 +223,10 @@ jobs:
 
   run-kata-coco-tests:
     if: ${{ inputs.skip-test != 'yes' }}
-    needs: [publish-kata-deploy-payload-amd64, build-and-publish-tee-confidential-unencrypted-image]
+    needs:
+     - publish-kata-deploy-payload-amd64
+     - build-and-publish-tee-confidential-unencrypted-image
+     - publish-csi-driver-amd64
     uses: ./.github/workflows/run-kata-coco-tests.yaml
     with:
       tarball-suffix: -${{ inputs.tag }}

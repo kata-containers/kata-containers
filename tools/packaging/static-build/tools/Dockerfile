@@ -10,9 +10,12 @@ COPY install_libseccomp.sh /usr/bin/install_libseccomp.sh
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+ENV GO_HOME="/opt"
+ENV GOCACHE="${GO_HOME}/.cache"
+ENV GOMODCACHE="${GO_HOME}/.modcache"
 ENV RUSTUP_HOME="/opt/rustup"
 ENV CARGO_HOME="/opt/cargo"
-ENV PATH="/opt/cargo/bin/:${PATH}"
+ENV PATH="/opt/cargo/bin/:/opt/go/bin:${PATH}"
 ENV OPT_LIB="/opt/lib"
 
 ENV LIBSECCOMP_LINK_TYPE=static
@@ -43,6 +46,11 @@ RUN apt-get update && \
 
 # Tools only build for x86_64
 RUN rustup target add x86_64-unknown-linux-musl
+
+RUN kernelname=$(uname -s | tr '[:upper:]' '[:lower:]'); \
+    curl -OL "https://storage.googleapis.com/golang/go${GO_TOOLCHAIN}.${kernelname}-amd64.tar.gz" && \
+    tar -C "${GO_HOME}" -xzf "go${GO_TOOLCHAIN}.${kernelname}-amd64.tar.gz" && \
+    rm "go${GO_TOOLCHAIN}.${kernelname}-amd64.tar.gz"
 
 # cmake looks for musl binutils
 # For setting CMAKE_AR, find_program searches for musl-ar.
