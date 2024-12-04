@@ -76,3 +76,85 @@ pub fn get_bars_max_addressable_memory() -> (u64, u64) {
 
     (max_32bit, max_64bit)
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+
+    use super::*;
+    use crate::pcilibs::pci_manager::{
+        MemoryResource, MemoryResources, MockPCIDevices, PCI_BASE_ADDRESS_MEM_TYPE32,
+        PCI_BASE_ADDRESS_MEM_TYPE64,
+    };
+    use mockall::predicate::*;
+
+    #[test]
+    fn test_get_bars_max_addressable_memory() {
+        let pci_device = PCIDevice {
+            device_path: PathBuf::new(),
+            address: "0000:00:00.0".to_string(),
+            vendor: PCI_NVIDIA_VENDOR_ID,
+            class: PCI3D_CONTROLLER_CLASS,
+            class_name: "3D Controller".to_string(),
+            device: 0x1c82,
+            device_name: "NVIDIA Device".to_string(),
+            driver: "nvidia".to_string(),
+            iommu_group: 0,
+            numa_node: 0,
+            resources: MemoryResources::default(),
+        };
+        let devices = vec![pci_device.clone()];
+
+        // Mock PCI device manager and devices
+        let mut mock_pci_manager = MockPCIDevices::default();
+        // Setting up Mock to return a device
+        mock_pci_manager
+            .expect_get_pci_devices()
+            .with(eq(Some(PCI_NVIDIA_VENDOR_ID)))
+            .returning(move |_| devices.clone());
+
+        // Create NvidiaPCIDevice
+        let nvidia_device = NvidiaPCIDevice::new(PCI_NVIDIA_VENDOR_ID, PCI3D_CONTROLLER_CLASS);
+
+        // Prepare memory resources
+        let mut resources: MemoryResources = HashMap::new();
+        // resource0 memsz = end - start => 1024
+        resources.insert(
+            0,
+            MemoryResource {
+                start: 0,
+                end: 1023,
+                flags: PCI_BASE_ADDRESS_MEM_TYPE32,
+                path: PathBuf::from("/fake/path/resource0"),
+            },
+        );
+        // resource1 memsz = end - start => 1024
+        resources.insert(
+            1,
+            MemoryResource {
+                start: 1024,
+                end: 2047,
+                flags: PCI_BASE_ADDRESS_MEM_TYPE64,
+                path: PathBuf::from("/fake/path/resource1"),
+            },
+        );
+
+        let pci_device_with_resources = PCIDevice {
+            resources: resources.clone(),
+            ..pci_device
+        };
+
+        mock_pci_manager
+            .expect_get_pci_devices()
+            .with(eq(Some(PCI_NVIDIA_VENDOR_ID)))
+            .returning(move |_| vec![pci_device_with_resources.clone()]);
+
+        // Call the function under test
+        let (max_32bit, max_64bit) = nvidia_device.get_bars_max_addressable_memory();
+
+        // Assert the results
+        assert_eq!(max_32bit, 2 * 2 * 1024 * 1024);
+        assert_eq!(max_64bit, 2 * 1024 * 1024);
+    }
+}
