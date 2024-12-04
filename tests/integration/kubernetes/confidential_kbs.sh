@@ -18,6 +18,7 @@ export PATH="${PATH}:/opt/kata/bin"
 
 KATA_HYPERVISOR="${KATA_HYPERVISOR:-qemu}"
 ITA_KEY="${ITA_KEY:-}"
+HTTPS_PROXY="${HTTPS_PROXY:-}"
 # Where the trustee (includes kbs) sources will be cloned
 readonly COCO_TRUSTEE_DIR="/tmp/trustee"
 # Where the kbs sources will be cloned
@@ -85,13 +86,12 @@ kbs_set_resource_base64() {
 	fi
 
 	file=$(mktemp -t kbs-resource-XXXXX)
-	trap "rm -f $file" EXIT
-
 	echo "$data" | base64 -d > "$file"
 
 	kbs_set_resource_from_file "$repository" "$type" "$tag" "$file" || \
 		rc=$?
 
+	rm -f "$file"
 	return $rc
 }
 
@@ -117,12 +117,12 @@ kbs_set_resource() {
 	fi
 
 	file=$(mktemp -t kbs-resource-XXXXX)
-	trap "rm -f $file" EXIT
 	echo "$data" > "$file"
 
 	kbs_set_resource_from_file "$repository" "$type" "$tag" "$file" || \
 		rc=$?
 
+	rm -f "$file"
 	return $rc
 }
 
@@ -323,6 +323,20 @@ function kbs_k8s_deploy() {
 			# ITA/ITTS specific configuration
 			sed -i -e "s/tBfd5kKX2x9ahbodKV1.../${ITA_KEY}/g" kbs-config.toml
 		popd
+		
+		if [ -n "${HTTPS_PROXY}" ]; then
+			# Ideally this should be something kustomizable on trustee side.
+			#
+			# However, for now let's take the bullet and do it here, and revert this as
+			# soon as https://github.com/confidential-containers/trustee/issues/567 is
+			# solved.
+			pushd "${COCO_KBS_DIR}/config/kubernetes/base/"
+				ensure_yq
+				
+				yq e ".spec.template.spec.containers[0].env += [{\"name\": \"https_proxy\", \"value\": \"$HTTPS_PROXY\"}]" -i deployment.yaml
+			popd
+		fi
+
 		export DEPLOYMENT_DIR=ita
 	fi
 

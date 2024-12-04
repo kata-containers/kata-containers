@@ -21,7 +21,7 @@ extern crate slog;
 use anyhow::{anyhow, Context, Result};
 use cfg_if::cfg_if;
 use clap::{AppSettings, Parser};
-use const_format::concatcp;
+use const_format::{concatcp, formatcp};
 use nix::fcntl::OFlag;
 use nix::sys::reboot::{reboot, RebootMode};
 use nix::sys::socket::{self, AddressFamily, SockFlag, SockType, VsockAddr};
@@ -29,7 +29,7 @@ use nix::unistd::{self, dup, sync, Pid};
 use std::env;
 use std::ffi::OsStr;
 use std::fs::{self, File};
-use std::os::unix::fs as unixfs;
+use std::os::unix::fs::{self as unixfs, FileTypeExt};
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
 use std::process::exit;
@@ -109,7 +109,18 @@ const CDH_SOCKET_URI: &str = concatcp!(UNIX_SOCKET_PREFIX, CDH_SOCKET);
 const API_SERVER_PATH: &str = "/usr/local/bin/api-server-rest";
 
 /// Path of ocicrypt config file. This is used by image-rs when decrypting image.
-const OCICRYPT_CONFIG_PATH: &str = "/tmp/ocicrypt_config.json";
+const OCICRYPT_CONFIG_PATH: &str = "/run/confidential-containers/ocicrypt_config.json";
+
+const OCICRYPT_CONFIG: &str = formatcp!(
+    r#"{{
+    "key-providers": {{
+        "attestation-agent": {{
+            "ttrpc": "{}"
+        }}
+    }}
+}}"#,
+    CDH_SOCKET_URI
+);
 
 const DEFAULT_LAUNCH_PROCESS_TIMEOUT: i32 = 6;
 
@@ -408,15 +419,13 @@ async fn start_sandbox(
     sandbox.lock().await.sender = Some(tx);
 
     let gc_procs = config.guest_components_procs;
-    if gc_procs != GuestComponentsProcs::None {
-        if !attestation_binaries_available(logger, &gc_procs) {
-            warn!(
-                logger,
-                "attestation binaries requested for launch not available"
-            );
-        } else {
-            init_attestation_components(logger, config).await?;
-        }
+    if !attestation_binaries_available(logger, &gc_procs) {
+        warn!(
+            logger,
+            "attestation binaries requested for launch not available"
+        );
+    } else {
+        init_attestation_components(logger, config).await?;
     }
 
     // vsock:///dev/vsock, port
@@ -447,12 +456,7 @@ fn attestation_binaries_available(logger: &Logger, procs: &GuestComponentsProcs)
     true
 }
 
-// Start-up attestation-agent, CDH and api-server-rest if they are packaged in the rootfs
-// and the corresponding procs are enabled in the agent configuration. the process will be
-// launched in the background and the function will return immediately.
-// If the CDH is started, a CDH client will be instantiated and returned.
-async fn init_attestation_components(logger: &Logger, config: &AgentConfig) -> Result<()> {
-    // skip launch of any guest-component
+async fn launch_guest_component_procs(logger: &Logger, config: &AgentConfig) -> Result<()> {
     if config.guest_components_procs == GuestComponentsProcs::None {
         return Ok(());
     }
@@ -472,17 +476,6 @@ async fn init_attestation_components(logger: &Logger, config: &AgentConfig) -> R
         return Ok(());
     }
 
-    let ocicrypt_config = serde_json::json!({
-        "key-providers": {
-            "attestation-agent":{
-                "ttrpc":CDH_SOCKET_URI
-            }
-        }
-    });
-
-    fs::write(OCICRYPT_CONFIG_PATH, ocicrypt_config.to_string().as_bytes())?;
-    env::set_var("OCICRYPT_KEYPROVIDER_CONFIG", OCICRYPT_CONFIG_PATH);
-
     debug!(
         logger,
         "spawning confidential-data-hub process {}", CDH_PATH
@@ -496,9 +489,6 @@ async fn init_attestation_components(logger: &Logger, config: &AgentConfig) -> R
         DEFAULT_LAUNCH_PROCESS_TIMEOUT,
     )
     .map_err(|e| anyhow!("launch_process {} failed: {:?}", CDH_PATH, e))?;
-
-    // initialize cdh client
-    cdh::init_cdh_client(CDH_SOCKET_URI).await?;
 
     // skip launch of api-server-rest
     if config.guest_components_procs == GuestComponentsProcs::ConfidentialDataHub {
@@ -518,6 +508,33 @@ async fn init_attestation_components(logger: &Logger, config: &AgentConfig) -> R
         0,
     )
     .map_err(|e| anyhow!("launch_process {} failed: {:?}", API_SERVER_PATH, e))?;
+
+    Ok(())
+}
+
+// Start-up attestation-agent, CDH and api-server-rest if they are packaged in the rootfs
+// and the corresponding procs are enabled in the agent configuration. the process will be
+// launched in the background and the function will return immediately.
+// If the CDH is started, a CDH client will be instantiated and returned.
+async fn init_attestation_components(logger: &Logger, config: &AgentConfig) -> Result<()> {
+    launch_guest_component_procs(logger, config).await?;
+
+    // If a CDH socket exists, initialize the CDH client and enable ocicrypt
+    match tokio::fs::metadata(CDH_SOCKET).await {
+        Ok(md) => {
+            if md.file_type().is_socket() {
+                cdh::init_cdh_client(CDH_SOCKET_URI).await?;
+                fs::write(OCICRYPT_CONFIG_PATH, OCICRYPT_CONFIG.as_bytes())?;
+                env::set_var("OCICRYPT_KEYPROVIDER_CONFIG", OCICRYPT_CONFIG_PATH);
+            } else {
+                debug!(logger, "File {} is not a socket", CDH_SOCKET);
+            }
+        }
+        Err(err) => warn!(
+            logger,
+            "Failed to probe CDH socket file {}: {:?}", CDH_SOCKET, err
+        ),
+    }
 
     Ok(())
 }

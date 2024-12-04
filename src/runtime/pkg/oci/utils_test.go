@@ -775,6 +775,23 @@ func TestAddRemoteHypervisorAnnotations(t *testing.T) {
 	err = addAnnotations(ocispec, &sbConfig, runtimeConfig)
 	assert.NoError(err)
 	assert.Equal(sbConfig.HypervisorConfig.Initdata, "initdata")
+
+	// When GPU annotations are specified, remote hypervisor annotations have the annotation added
+	ocispec.Annotations[vcAnnotations.DefaultGPUs] = "-1"
+	err = addAnnotations(ocispec, &sbConfig, runtimeConfig)
+	assert.Error(err)
+
+	ocispec.Annotations[vcAnnotations.DefaultGPUs] = "1"
+	err = addAnnotations(ocispec, &sbConfig, runtimeConfig)
+	assert.NoError(err)
+	assert.Equal(sbConfig.HypervisorConfig.DefaultGPUs, uint32(1))
+
+	// When GPU annotations are specified, remote hypervisor annotations have the annotation added
+	ocispec.Annotations[vcAnnotations.DefaultGPUModel] = "tesla"
+	err = addAnnotations(ocispec, &sbConfig, runtimeConfig)
+	assert.NoError(err)
+	assert.Equal(sbConfig.HypervisorConfig.DefaultGPUModel, "tesla")
+
 }
 
 func TestAddProtectedHypervisorAnnotations(t *testing.T) {

@@ -7,8 +7,6 @@ package agent_policy
 import future.keywords.in
 import future.keywords.every
 
-import input
-
 # Default values, returned by OPA when rules cannot be evaluated to true.
 default AddARPNeighborsRequest := false
 default AddSwapRequest := false
@@ -51,7 +49,11 @@ default WriteStreamRequest := false
 # them and inspect OPA logs for the root cause of a failure.
 default AllowRequestsFailingPolicy := false
 
-CreateContainerRequest {
+# Constants
+S_NAME_KEY = "io.kubernetes.cri.sandbox-name"
+S_NAMESPACE_KEY = "io.kubernetes.cri.sandbox-namespace"
+
+CreateContainerRequest:= {"ops": ops, "allowed": true} {
     # Check if the input request should be rejected even before checking the
     # policy_data.containers information.
     allow_create_container_input
@@ -59,6 +61,14 @@ CreateContainerRequest {
     i_oci := input.OCI
     i_storages := input.storages
     i_devices := input.devices
+
+    # array of possible state operations
+    ops_builder := []
+
+    # check sandbox name
+    sandbox_name = i_oci.Annotations[S_NAME_KEY]
+    add_sandbox_name_to_state := state_allows("sandbox_name", sandbox_name)
+    ops := concat_op_if_not_null(ops_builder, add_sandbox_name_to_state)
 
     # Check if any element from the policy_data.containers array allows the input request.
     some p_container in policy_data.containers
@@ -121,6 +131,48 @@ allow_create_container_input {
     print("allow_create_container_input: true")
 }
 
+# value hasn't been seen before, save it to state
+state_allows(key, value) = action {
+  state := get_state()
+  not state[key]
+  print("state_allows: saving to state key =", key, "value =", value)
+  path := get_state_path(key) 
+  action := {
+    "op": "add",
+    "path": path, 
+    "value": value,
+  }
+}
+
+# value matches what's in state, allow it
+state_allows(key, value) = action {
+  state := get_state()
+  value == state[key]
+  print("state_allows: found key =", key, "value =", value, " in state")
+  action := null
+}
+
+# helper functions to interact with the state
+get_state() = state {
+  state := data["pstate"]
+}
+
+get_state_path(key) = path {
+    # prepend "/pstate/" to key
+    path := concat("/", ["/pstate", key])
+}
+
+# Helper functions to conditionally concatenate if op is not null
+concat_op_if_not_null(ops, op) = result {
+    op == null
+    result := ops
+}
+
+concat_op_if_not_null(ops, op) = result {
+    op != null
+    result := array.concat(ops, [op])
+}
+
 # Reject unexpected annotations.
 allow_anno(p_oci, i_oci) {
     print("allow_anno 1: start")
@@ -159,16 +211,14 @@ allow_anno_key(i_key, p_oci) {
     print("allow_anno_key 2: true")
 }
 
-# Get the value of the "io.kubernetes.cri.sandbox-name" annotation and
+# Get the value of the S_NAME_KEY annotation and
 # correlate it with other annotations and process fields.
 allow_by_anno(p_oci, i_oci, p_storages, i_storages) {
     print("allow_by_anno 1: start")
 
-    s_name := "io.kubernetes.cri.sandbox-name"
+    not p_oci.Annotations[S_NAME_KEY]
 
-    not p_oci.Annotations[s_name]
-
-    i_s_name := i_oci.Annotations[s_name]
+    i_s_name := i_oci.Annotations[S_NAME_KEY]
     print("allow_by_anno 1: i_s_name =", i_s_name)
 
     allow_by_sandbox_name(p_oci, i_oci, p_storages, i_storages, i_s_name)
@@ -178,10 +228,8 @@ allow_by_anno(p_oci, i_oci, p_storages, i_storages) {
 allow_by_anno(p_oci, i_oci, p_storages, i_storages) {
     print("allow_by_anno 2: start")
 
-    s_name := "io.kubernetes.cri.sandbox-name"
-
-    p_s_name := p_oci.Annotations[s_name]
-    i_s_name := i_oci.Annotations[s_name]
+    p_s_name := p_oci.Annotations[S_NAME_KEY]
+    i_s_name := i_oci.Annotations[S_NAME_KEY]
     print("allow_by_anno 2: i_s_name =", i_s_name, "p_s_name =", p_s_name)
 
     allow_sandbox_name(p_s_name, i_s_name)
@@ -193,10 +241,8 @@ allow_by_anno(p_oci, i_oci, p_storages, i_storages) {
 allow_by_sandbox_name(p_oci, i_oci, p_storages, i_storages, s_name) {
     print("allow_by_sandbox_name: start")
 
-    s_namespace := "io.kubernetes.cri.sandbox-namespace"
-
-    p_namespace := p_oci.Annotations[s_namespace]
-    i_namespace := i_oci.Annotations[s_namespace]
+    p_namespace := p_oci.Annotations[S_NAMESPACE_KEY]
+    i_namespace := i_oci.Annotations[S_NAMESPACE_KEY]
     print("allow_by_sandbox_name: p_namespace =", p_namespace, "i_namespace =", i_namespace)
     p_namespace == i_namespace
 

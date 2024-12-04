@@ -80,10 +80,13 @@ strum_macros = "0.26.2"
 image-rs = { git = "https://github.com/confidential-containers/guest-components", rev = "v0.10.0", default-features = false, optional = true }
 
 # Agent Policy
-regorus = { version = "0.1.4", default-features = false, features = [
+regorus = { version = "0.2.6", default-features = false, features = [
     "arc",
     "regex",
+    "std",
 ], optional = true }
+cdi = { git = "https://github.com/cncf-tags/container-device-interface-rs", rev = "fba5677a8e7cc962fc6e495fcec98d7d765e332a" }
+json-patch = "2.0.0"
 
 [dev-dependencies]
 tempfile = "3.1.0"

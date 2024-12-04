@@ -58,7 +58,7 @@ use rustjail::process::ProcessOperations;
 use crate::cdh;
 use crate::device::block_device_handler::get_virtio_blk_pci_device_name;
 use crate::device::network_device_handler::wait_for_net_interface;
-use crate::device::{add_devices, update_env_pci};
+use crate::device::{add_devices, handle_cdi_devices, update_env_pci};
 use crate::features::get_build_features;
 use crate::image::KATA_IMAGE_WORK_DIR;
 use crate::linux_abi::*;
@@ -129,6 +129,8 @@ const ERR_NO_SANDBOX_PIDNS: &str = "Sandbox does not have sandbox_pidns";
 // filesystem lock. Based on this, 5 seconds seems a resonable timeout period in case the lock is
 // not available.
 const IPTABLES_RESTORE_WAIT_SEC: u64 = 5;
+
+const CDI_TIMEOUT_LIMIT: u64 = 100;
 
 // Convenience function to obtain the scope logger.
 fn sl() -> slog::Logger {
@@ -224,6 +226,15 @@ impl AgentService {
         // cannot predict everything from the caller.
         add_devices(&sl(), &req.devices, &mut oci, &self.sandbox).await?;
 
+        // In guest-kernel mode some devices need extra handling. Taking the
+        // GPU as an example the shim will inject CDI annotations that will
+        // be used by the kata-agent to do containerEdits according to the
+        // CDI spec coming from a registry that is created on the fly by UDEV
+        // or other entities for a specifc device.
+        // In Kata we only consider the directory "/var/run/cdi", "/etc" may be
+        // readonly
+        handle_cdi_devices(&sl(), &mut oci, "/var/run/cdi", CDI_TIMEOUT_LIMIT).await?;
+
         cdh_handler(&mut oci).await?;
 
         // Both rootfs and volumes (invoked with --volume for instance) will
@@ -233,7 +244,13 @@ impl AgentService {
         // After all those storages have been processed, no matter the order
         // here, the agent will rely on rustjail (using the oci.Mounts
         // list) to bind mount all of them inside the container.
-        let m = add_storages(sl(), req.storages, &self.sandbox, Some(req.container_id)).await?;
+        let m = add_storages(
+            sl(),
+            req.storages.clone(),
+            &self.sandbox,
+            Some(req.container_id),
+        )
+        .await?;
 
         let mut s = self.sandbox.lock().await;
         s.container_mounts.insert(cid.clone(), m);
@@ -288,6 +305,13 @@ impl AgentService {
         let pipe_size = AGENT_CONFIG.container_pipe_size;
 
         let p = if let Some(p) = oci.process() {
+            #[cfg(feature = "guest-pull")]
+            {
+                let new_p = image::get_process(p, &oci, req.storages.clone())?;
+                Process::new(&sl(), &new_p, cid.as_str(), true, pipe_size, proc_io)?
+            }
+
+            #[cfg(not(feature = "guest-pull"))]
             Process::new(&sl(), p, cid.as_str(), true, pipe_size, proc_io)?
         } else {
             info!(sl(), "no process configurations!");

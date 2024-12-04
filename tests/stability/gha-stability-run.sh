@@ -10,10 +10,9 @@ set -o nounset
 set -o pipefail
 
 stability_dir="$(dirname "$(readlink -f "$0")")"
-source "${stability_dir}/../common.bash"
 source "${stability_dir}/../metrics/lib/common.bash"
 source "${stability_dir}/../gha-run-k8s-common.sh"
-source "${stability_dir}/../integration/kubernetes/gha-run.sh"
+kata_tarball_dir="${2:-kata-artifacts}"
 
 function run_tests() {
 	info "Running scability test using ${KATA_HYPERVISOR} hypervisor"
@@ -33,6 +32,7 @@ function main() {
 		login-azure) login_azure ;;
 		create-cluster) create_cluster ;;
 		install-bats) install_bats ;;
+		install-kata-tools) install_kata_tools ;;
 		install-kubectl) install_kubectl ;;
 		get-cluster-credentials) get_cluster_credentials ;;
 		deploy-snapshotter) deploy_snapshotter ;;

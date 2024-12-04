@@ -21,7 +21,7 @@ setup() {
 		skip "Test skipped as KBS not setup"
 	fi
 
-	setup_common
+	setup_common || die "setup_common failed"
 	get_pod_config_dir
 
 	export K8S_TEST_ENV_YAML="${pod_config_dir}/pod-sealed-secret.yaml"

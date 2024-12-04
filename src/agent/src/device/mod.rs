@@ -11,6 +11,9 @@ use self::vfio_device_handler::{VfioApDeviceHandler, VfioPciDeviceHandler};
 use crate::pci;
 use crate::sandbox::Sandbox;
 use anyhow::{anyhow, Context, Result};
+use cdi::annotations::parse_annotations;
+use cdi::cache::{new_cache, with_auto_refresh, CdiOption};
+use cdi::spec_dirs::with_spec_dirs;
 use kata_types::device::DeviceHandlerManager;
 use nix::sys::stat;
 use oci::{LinuxDeviceCgroup, Spec};
@@ -25,6 +28,8 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio::time;
+use tokio::time::Duration;
 use tracing::instrument;
 
 pub mod block_device_handler;
@@ -236,6 +241,69 @@ pub async fn add_devices(
         update_env_pci(env_vec, &sandbox.lock().await.pcimap)?
     }
     update_spec_devices(logger, spec, dev_updates)
+}
+
+#[instrument]
+pub async fn handle_cdi_devices(
+    logger: &Logger,
+    spec: &mut Spec,
+    spec_dir: &str,
+    cdi_timeout: u64,
+) -> Result<()> {
+    if let Some(container_type) = spec
+        .annotations()
+        .as_ref()
+        .and_then(|a| a.get("io.katacontainers.pkg.oci.container_type"))
+    {
+        if container_type == "pod_sandbox" {
+            return Ok(());
+        }
+    }
+
+    let (_, devices) = parse_annotations(spec.annotations().as_ref().unwrap())?;
+
+    if devices.is_empty() {
+        info!(logger, "no CDI annotations, no devices to inject");
+        return Ok(());
+    }
+    // Explicitly set the cache options to disable auto-refresh and
+    // to use the single spec dir "/var/run/cdi" for tests it can be overridden
+    let options: Vec<CdiOption> = vec![with_auto_refresh(false), with_spec_dirs(&[spec_dir])];
+    let cache: Arc<std::sync::Mutex<cdi::cache::Cache>> = new_cache(options);
+
+    for _ in 0..=cdi_timeout {
+        let inject_result = {
+            // Lock cache within this scope, std::sync::Mutex has no Send
+            // and await will not work with time::sleep
+            let mut cache = cache.lock().unwrap();
+            match cache.refresh() {
+                Ok(_) => {}
+                Err(e) => {
+                    return Err(anyhow!("error refreshing cache: {:?}", e));
+                }
+            }
+            cache.inject_devices(Some(spec), devices.clone())
+        };
+
+        match inject_result {
+            Ok(_) => {
+                info!(
+                    logger,
+                    "all devices injected successfully, modified CDI container spec: {:?}", &spec
+                );
+                return Ok(());
+            }
+            Err(e) => {
+                info!(logger, "error injecting devices: {:?}", e);
+                println!("error injecting devices: {:?}", e);
+            }
+        }
+        time::sleep(Duration::from_millis(1000)).await;
+    }
+    Err(anyhow!(
+        "failed to inject devices after CDI timeout of {} seconds",
+        cdi_timeout
+    ))
 }
 
 #[instrument]
@@ -1109,5 +1177,95 @@ mod tests {
         let name = example_get_device_name(&sandbox, relpath).await;
         assert!(name.is_ok(), "{}", name.unwrap_err());
         assert_eq!(name.unwrap(), devname);
+    }
+
+    #[tokio::test]
+    async fn test_handle_cdi_devices() {
+        let logger = slog::Logger::root(slog::Discard, o!());
+        let mut spec = Spec::default();
+
+        let mut annotations = HashMap::new();
+        // cdi.k8s.io/vendor1_devices: vendor1.com/device=foo
+        annotations.insert(
+            "cdi.k8s.io/vfio17".to_string(),
+            "kata.com/gpu=0".to_string(),
+        );
+        spec.set_annotations(Some(annotations));
+
+        let temp_dir = tempdir().expect("Failed to create temporary directory");
+        let cdi_file = temp_dir.path().join("kata.json");
+
+        let cdi_version = "0.6.0";
+        let kind = "kata.com/gpu";
+        let device_name = "0";
+        let annotation_whatever = "false";
+        let annotation_whenever = "true";
+        let inner_env = "TEST_INNER_ENV=TEST_INNER_ENV_VALUE";
+        let outer_env = "TEST_OUTER_ENV=TEST_OUTER_ENV_VALUE";
+        let inner_device = "/dev/zero";
+        let outer_device = "/dev/null";
+
+        let cdi_content = format!(
+            r#"{{
+            "cdiVersion": "{cdi_version}",
+            "kind": "{kind}",
+            "devices": [
+                {{
+                    "name": "{device_name}",
+                    "annotations": {{
+                        "whatever": "{annotation_whatever}",
+                        "whenever": "{annotation_whenever}"
+                    }},
+                    "containerEdits": {{
+                        "env": [
+                            "{inner_env}"
+                        ],
+                        "deviceNodes": [
+                            {{
+                                "path": "{inner_device}"
+                            }}
+                        ]
+                    }}
+                }}
+            ],
+            "containerEdits": {{
+                "env": [
+                    "{outer_env}"
+                ],
+                "deviceNodes": [
+                    {{
+                        "path": "{outer_device}"
+                    }}
+                ]
+            }}
+        }}"#
+        );
+
+        fs::write(&cdi_file, cdi_content).expect("Failed to write CDI file");
+
+        let res =
+            handle_cdi_devices(&logger, &mut spec, temp_dir.path().to_str().unwrap(), 0).await;
+        println!("modfied spec {:?}", spec);
+        assert!(res.is_ok(), "{}", res.err().unwrap());
+
+        let linux = spec.linux().as_ref().unwrap();
+        let devices = linux
+            .resources()
+            .as_ref()
+            .unwrap()
+            .devices()
+            .as_ref()
+            .unwrap();
+        assert_eq!(devices.len(), 2);
+
+        let env = spec.process().as_ref().unwrap().env().as_ref().unwrap();
+
+        // find string TEST_OUTER_ENV in env
+        let outer_env = env.iter().find(|e| e.starts_with("TEST_OUTER_ENV"));
+        assert!(outer_env.is_some(), "TEST_OUTER_ENV not found in env");
+
+        // find TEST_INNER_ENV in env
+        let inner_env = env.iter().find(|e| e.starts_with("TEST_INNER_ENV"));
+        assert!(inner_env.is_some(), "TEST_INNER_ENV not found in env");
     }
 }

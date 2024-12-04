@@ -560,6 +560,10 @@ func addHypervisorConfigOverrides(ocispec specs.Spec, config *vc.SandboxConfig, 
 		config.HypervisorConfig.Initdata = initdata
 	}
 
+	if err := addHypervisorGPUOverrides(ocispec, config); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -752,6 +756,26 @@ func addHypervisorCPUOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) e
 		sbConfig.HypervisorConfig.DefaultMaxVCPUs = max
 		return nil
 	})
+}
+
+func addHypervisorGPUOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
+	if sbConfig.HypervisorType != vc.RemoteHypervisor {
+		return nil
+	}
+
+	if err := newAnnotationConfiguration(ocispec, vcAnnotations.DefaultGPUs).setUint(func(gpus uint64) {
+		sbConfig.HypervisorConfig.DefaultGPUs = uint32(gpus)
+	}); err != nil {
+		return err
+	}
+
+	if value, ok := ocispec.Annotations[vcAnnotations.DefaultGPUModel]; ok {
+		if value != "" {
+			sbConfig.HypervisorConfig.DefaultGPUModel = value
+		}
+	}
+
+	return nil
 }
 
 func addHypervisorBlockOverrides(ocispec specs.Spec, sbConfig *vc.SandboxConfig) error {
@@ -1075,6 +1099,8 @@ func SandboxConfig(ocispec specs.Spec, runtime RuntimeConfig, bundlePath, cid st
 
 		sandboxConfig.HypervisorConfig.NumVCPUsF += sandboxConfig.SandboxResources.WorkloadCPUs
 		sandboxConfig.HypervisorConfig.MemorySize += sandboxConfig.SandboxResources.WorkloadMemMB
+
+		sandboxConfig.HypervisorConfig.DefaultMaxVCPUs = sandboxConfig.HypervisorConfig.NumVCPUs()
 
 		ociLog.WithFields(logrus.Fields{
 			"workload cpu":       sandboxConfig.SandboxResources.WorkloadCPUs,

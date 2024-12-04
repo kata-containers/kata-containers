@@ -3,20 +3,24 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
-use crate::types::{Config, CopyFileInput, Options, SetPolicyInput};
+use crate::image;
+use crate::types::*;
 use anyhow::{anyhow, Result};
 use oci::{Root as ociRoot, Spec as ociSpec};
 use oci_spec::runtime as oci;
-use protocols::agent::{CopyFileRequest, SetPolicyRequest};
-use protocols::oci::{Mount as ttrpcMount, Root as ttrpcRoot, Spec as ttrpcSpec};
+use protocols::agent::{CopyFileRequest, CreateContainerRequest, SetPolicyRequest};
+use protocols::oci::{
+    Mount as ttrpcMount, Process as ttrpcProcess, Root as ttrpcRoot, Spec as ttrpcSpec,
+};
 use rand::Rng;
+use safe_path::scoped_join;
 use serde::de::DeserializeOwned;
 use slog::{debug, warn};
 use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::Read;
 use std::os::unix::fs::MetadataExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 // Length of a sandbox identifier
@@ -29,6 +33,10 @@ const MIN_HOSTNAME_LEN: u8 = 8;
 
 // Name of the OCI configuration file found at the root of an OCI bundle.
 const CONFIG_FILE: &str = "config.json";
+
+// Path to OCI configuration template
+const OCI_CONFIG_TEMPLATE: &str =
+    "/opt/kata/share/defaults/kata-containers/agent-ctl/oci_config.json";
 
 lazy_static! {
     // Create a mutable hash map statically
@@ -491,4 +499,68 @@ pub fn make_set_policy_request(input: &SetPolicyInput) -> Result<SetPolicyReques
     let mut req = SetPolicyRequest::default();
     req.set_policy(policy_data);
     Ok(req)
+}
+
+fn fix_oci_process_args(spec: &mut ttrpcSpec, bundle: &str) -> Result<()> {
+    let config_path = scoped_join(bundle, CONFIG_FILE)?;
+
+    let file = File::open(config_path)?;
+    let oci_from_config: ociSpec = serde_json::from_reader(file)?;
+
+    let mut process: ttrpcProcess = match &oci_from_config.process() {
+        Some(p) => p.clone().into(),
+        None => {
+            return Err(anyhow!("Failed to set container process args"));
+        }
+    };
+
+    spec.take_Process().set_Args(process.take_Args());
+    Ok(())
+}
+
+// Helper function to generate create container request
+pub fn make_create_container_request(
+    input: CreateContainerInput,
+) -> Result<CreateContainerRequest> {
+    // read in the oci configuration template
+    if !Path::new(OCI_CONFIG_TEMPLATE).exists() {
+        warn!(sl!(), "make_create_container_request: Missig template file");
+        return Err(anyhow!("Missing OCI Config template file"));
+    }
+
+    let file = File::open(OCI_CONFIG_TEMPLATE)?;
+    let spec: ociSpec = serde_json::from_reader(file)?;
+
+    let mut req = CreateContainerRequest::default();
+
+    let c_id = if !input.id.is_empty() {
+        input.id
+    } else {
+        random_container_id()
+    };
+
+    debug!(
+        sl!(),
+        "make_create_container_request: pulling container image"
+    );
+
+    // Pull and unpack the container image
+    let bundle = image::pull_image(&input.image, &c_id)?;
+
+    let mut ttrpc_spec = oci_to_ttrpc(&bundle, &c_id, &spec)?;
+
+    // Rootfs has been handled with bundle after pulling image
+    // Fix the container process argument.
+    fix_oci_process_args(&mut ttrpc_spec, &bundle)?;
+
+    req.set_container_id(c_id);
+    req.set_OCI(ttrpc_spec);
+
+    debug!(sl!(), "CreateContainer request generated successfully");
+
+    Ok(req)
+}
+
+pub fn remove_container_image_mount(c_id: &str) -> Result<()> {
+    image::remove_image_mount(c_id)
 }

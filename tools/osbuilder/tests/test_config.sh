@@ -12,7 +12,6 @@ for distro in $(${sdir}/../rootfs-builder/rootfs.sh -l); do
 	distros+=("${distro}")
 done
 test_distros=()
-test_distros+=("clearlinux")
 test_distros+=("ubuntu")
 
 skipForRustDistros=()

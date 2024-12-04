@@ -26,6 +26,9 @@ pub struct ObjectMeta {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub namespace: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uid: Option<String>,
 }
 
 impl ObjectMeta {

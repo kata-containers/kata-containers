@@ -19,7 +19,6 @@ jobs:
           - runtime-rs
           - agent-ctl
           - kata-ctl
-          - runk
           - trace-forwarder
           - genpolicy
         command:
@@ -40,14 +39,10 @@ jobs:
             component-path: src/tools/agent-ctl
           - component: kata-ctl
             component-path: src/tools/kata-ctl
-          - component: runk
-            component-path: src/tools/runk
           - component: trace-forwarder
             component-path: src/tools/trace-forwarder
           - install-libseccomp: no
           - component: agent
-            install-libseccomp: yes
-          - component: runk
             install-libseccomp: yes
           - component: genpolicy
             component-path: src/tools/genpolicy
@@ -94,7 +89,7 @@ jobs:
           echo "LIBSECCOMP_LINK_TYPE=static" >> $GITHUB_ENV
           echo "LIBSECCOMP_LIB_PATH=${libseccomp_install_dir}/lib" >> $GITHUB_ENV
       - name: Install protobuf-compiler
-        if: ${{ matrix.command != 'make vendor' && (matrix.component == 'agent' || matrix.component == 'runk' || matrix.component == 'genpolicy' || matrix.component == 'agent-ctl') }}
+        if: ${{ matrix.command != 'make vendor' && (matrix.component == 'agent' || matrix.component == 'genpolicy' || matrix.component == 'agent-ctl') }}
         run: sudo apt-get -y install protobuf-compiler
       - name: Install clang
         if: ${{ matrix.command == 'make check' && (matrix.component == 'agent' || matrix.component == 'agent-ctl') }}

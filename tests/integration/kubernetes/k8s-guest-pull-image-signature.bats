@@ -16,13 +16,14 @@ setup() {
     fi
 
     [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
+    [ "${KATA_HYPERVISOR}" == "qemu-snp" ] && skip "Refer https://github.com/kata-containers/kata-containers/issues/10549"
 
     tag_suffix=""
     if [ "$(uname -m)" != "x86_64" ]; then
         tag_suffix="-$(uname -m)"
     fi
 
-    setup_common
+    setup_common || die "setup_common failed"
     UNSIGNED_UNPROTECTED_REGISTRY_IMAGE="quay.io/prometheus/busybox:latest"
     UNSIGNED_PROTECTED_REGISTRY_IMAGE="ghcr.io/confidential-containers/test-container-image-rs:unsigned${tag_suffix}"
     COSIGN_SIGNED_PROTECTED_REGISTRY_IMAGE="ghcr.io/confidential-containers/test-container-image-rs:cosign-signed${tag_suffix}"
@@ -145,6 +146,7 @@ teardown() {
     fi
 
     [ "${SNAPSHOTTER:-}" = "nydus" ] || skip "None snapshotter was found but this test requires one"
+    [ "${KATA_HYPERVISOR}" == "qemu-snp" ] && skip "Refer https://github.com/kata-containers/kata-containers/issues/10549"
 
     teardown_common "${node}" "${node_start_time:-}"
 }

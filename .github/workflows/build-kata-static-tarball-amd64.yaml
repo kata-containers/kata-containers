@@ -37,6 +37,7 @@ jobs:
           - cloud-hypervisor
           - cloud-hypervisor-glibc
           - coco-guest-components
+          - csi-kata-directvolume
           - firecracker
           - genpolicy
           - kata-ctl
@@ -53,7 +54,6 @@ jobs:
           - qemu
           - qemu-snp-experimental
           - stratovirt
-          - runk
           - trace-forwarder
           - virtiofsd
         stage:
@@ -129,7 +129,6 @@ jobs:
           push-to-registry: true
 
       - name: store-artifact ${{ matrix.asset }}
-        if: ${{ matrix.stage != 'release' }}
         uses: actions/upload-artifact@v4
         with:
           name: kata-artifacts-amd64-${{ matrix.asset }}${{ inputs.tarball-suffix }}
@@ -201,6 +200,21 @@ jobs:
           retention-days: 15
           if-no-files-found: error
 
+  # We don't need the binaries installed in the rootfs as part of the tarball, so can delete them now we've built the rootfs
+  remove-rootfs-binary-artifacts:
+    runs-on: ubuntu-22.04
+    needs: build-asset-rootfs
+    strategy:
+      matrix:
+        asset:
+          - agent
+          - coco-guest-components
+          - pause-image
+    steps:
+      - uses: geekyeggo/delete-artifact@v5
+        with:
+          name: kata-artifacts-amd64-${{ matrix.asset}}${{ inputs.tarball-suffix }}
+
   build-asset-shim-v2:
     runs-on: ubuntu-22.04
     needs: [build-asset, build-asset-rootfs]
@@ -260,7 +274,7 @@ jobs:
 
   create-kata-tarball:
     runs-on: ubuntu-22.04
-    needs: [build-asset, build-asset-rootfs, build-asset-shim-v2]
+    needs: [build-asset, build-asset-rootfs, build-asset-shim-v2, remove-rootfs-binary-artifacts]
     steps:
       - uses: actions/checkout@v4
         with:

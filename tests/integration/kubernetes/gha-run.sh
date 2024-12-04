@@ -26,6 +26,7 @@ DOCKER_TAG=${DOCKER_TAG:-kata-containers-latest}
 KATA_DEPLOY_WAIT_TIMEOUT=${KATA_DEPLOY_WAIT_TIMEOUT:-600}
 SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT=${SNAPSHOTTER_DEPLOY_WAIT_TIMEOUT:-8m}
 KATA_HYPERVISOR=${KATA_HYPERVISOR:-qemu}
+CONTAINER_RUNTIME=${CONTAINER_RUNTIME:-containerd}
 KBS=${KBS:-false}
 KBS_INGRESS=${KBS_INGRESS:-}
 KUBERNETES="${KUBERNETES:-}"
@@ -577,6 +578,7 @@ function main() {
 		install-kbs-client) install_kbs_client ;;
 		install-kubectl) install_kubectl ;;
 		get-cluster-credentials) get_cluster_credentials ;;
+		deploy-csi-driver) return 0 ;;
 		deploy-kata) deploy_kata ;;
 		deploy-kata-aks) deploy_kata "aks" ;;
 		deploy-kata-kcli) deploy_kata "kcli" ;;
@@ -598,6 +600,7 @@ function main() {
 		cleanup-garm) cleanup "garm" ;;
 		cleanup-zvsi) cleanup "zvsi" ;;
 		cleanup-snapshotter) cleanup_snapshotter ;;
+		delete-csi-driver) return 0 ;;
 		delete-coco-kbs) delete_coco_kbs ;;
 		delete-cluster) cleanup "aks" ;;
 		delete-cluster-kcli) delete_cluster_kcli ;;

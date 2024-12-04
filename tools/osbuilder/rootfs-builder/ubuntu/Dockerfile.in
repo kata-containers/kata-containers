@@ -14,7 +14,6 @@ ENV PATH="/opt/cargo/bin/:/opt/go/bin:${PATH}"
 
 ARG GO_VERSION
 ARG RUST_TOOLCHAIN
-ENV GO_HOME="/opt"
 ENV PATH="/opt/go/bin:${PATH}"
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -40,6 +39,7 @@ RUN apt-get update && \
          echo "gcc-$gcc_arch-linux-gnu libc6-dev-$libc_arch-cross")) \
     git \
     gnupg2 \
+    libclang-dev \
     make \
     makedev \
     multistrap \
@@ -50,6 +50,7 @@ RUN apt-get update && \
     xz-utils \
     pip \
     python3-dev \
+    libclang-dev \
     zstd && \
     apt-get clean && rm -rf /var/lib/apt/lists/&& \
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain ${RUST_TOOLCHAIN}

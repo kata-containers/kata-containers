@@ -54,6 +54,11 @@ define BUILD
 	$(MK_DIR)/kata-deploy-binaries-in-docker.sh $(if $(V),,-s) --build=$1
 endef
 
+define DUMMY
+	$(call BUILD,"dummy")
+	mv $(MK_DIR)/build/kata-static-dummy.tar.xz $(MK_DIR)/build/kata-static-$(patsubst %-tarball,%,$1).tar.xz
+endef
+
 kata-tarball: | all-parallel merge-builds
 
 copy-scripts-for-the-agent-build:
@@ -80,8 +85,9 @@ agent-tarball: copy-scripts-for-the-agent-build
 agent-ctl-tarball: copy-scripts-for-the-tools-build
 	${MAKE} $@-build
 
+BUSYBOX_CONF_FILE ?= busybox.nvidia.conf
 busybox-tarball: 
-	${MAKE} $@-build
+	${MAKE} BUSYBOX_CONF_FILE=${BUSYBOX_CONF_FILE} $@-build
 	
 coco-guest-components-tarball:
 	${MAKE} $@-build
@@ -90,6 +96,9 @@ cloud-hypervisor-tarball:
 	${MAKE} $@-build
 
 cloud-hypervisor-glibc-tarball:
+	${MAKE} $@-build
+
+csi-kata-directvolume-tarball: copy-scripts-for-the-tools-build
 	${MAKE} $@-build
 
 firecracker-tarball:
@@ -162,6 +171,17 @@ rootfs-initrd-tarball: agent-tarball
 	${MAKE} $@-build
 
 runk-tarball: copy-scripts-for-the-tools-build
+	${MAKE} $@-build
+rootfs-nvidia-gpu-image-tarball: agent-tarball busybox-tarball
+	${MAKE} $@-build
+
+rootfs-nvidia-gpu-initrd-tarball: agent-tarball busybox-tarball
+	${MAKE} $@-build
+
+rootfs-nvidia-gpu-confidential-image-tarball: agent-tarball busybox-tarball pause-image-tarball coco-guest-components-tarball kernel-nvidia-gpu-confidential-tarball
+	${MAKE} $@-build
+
+rootfs-nvidia-gpu-confidential-initrd-tarball: agent-tarball busybox-tarball pause-image-tarball coco-guest-components-tarball kernel-nvidia-gpu-confidential-tarball
 	${MAKE} $@-build
 
 shim-v2-tarball:

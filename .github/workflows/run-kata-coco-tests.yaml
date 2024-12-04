@@ -2,6 +2,9 @@ name: CI | Run kata coco tests
 on:
   workflow_call:
     inputs:
+      tarball-suffix:
+        required: false
+        type: string
       registry:
         required: true
         type: string
@@ -33,7 +36,15 @@ jobs:
           - nydus
         pull-type:
           - guest-pull
-    runs-on: tdx
+        k8s-test-host-type:
+          - baremetal-attestation
+          - baremetal-no-attestation
+        include:
+          - k8s-test-host-type: baremetal-attestation
+            machine: tdx-attestation
+          - k8s-test-host-type: baremetal-no-attestation
+            machine: tdx-no-attestation
+    runs-on: ${{ matrix.machine }}
     env:
       DOCKER_REGISTRY: ${{ inputs.registry }}
       DOCKER_REPO: ${{ inputs.repo }}
@@ -43,7 +54,7 @@ jobs:
       KUBERNETES: "vanilla"
       USING_NFD: "true"
       KBS: "true"
-      K8S_TEST_HOST_TYPE: "baremetal"
+      K8S_TEST_HOST_TYPE: ${{ matrix.k8s-test-host-type }}
       KBS_INGRESS: "nodeport"
       SNAPSHOTTER: ${{ matrix.snapshotter }}
       PULL_TYPE: ${{ matrix.pull-type }}
@@ -72,16 +83,23 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-tdx
 
       - name: Uninstall previous `kbs-client`
+        if: ${{ matrix.machine != 'tdx-no-attestation' }}
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh uninstall-kbs-client
 
       - name: Deploy CoCo KBS
+        if: ${{ matrix.machine != 'tdx-no-attestation' }}
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh deploy-coco-kbs
 
       - name: Install `kbs-client`
+        if: ${{ matrix.machine != 'tdx-no-attestation' }}
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh install-kbs-client
+
+      - name: Deploy CSI driver
+        timeout-minutes: 5
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-csi-driver
 
       - name: Run tests
         timeout-minutes: 100
@@ -96,8 +114,12 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh cleanup-snapshotter
 
       - name: Delete CoCo KBS
-        if: always()
+        if: ${{ always() && matrix.machine != 'tdx-no-attestation' }}
         run: bash tests/integration/kubernetes/gha-run.sh delete-coco-kbs
+
+      - name: Delete CSI driver
+        timeout-minutes: 5
+        run: bash tests/integration/kubernetes/gha-run.sh delete-csi-driver
 
   run-k8s-tests-on-sev:
     if: ${{ !inputs.run_only_tdx_tests }}
@@ -146,9 +168,17 @@ jobs:
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh deploy-kata-sev
 
+      - name: Deploy CSI driver
+        timeout-minutes: 5
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-csi-driver
+
       - name: Run tests
         timeout-minutes: 50
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
+
+      - name: Delete CSI driver
+        timeout-minutes: 5
+        run: bash tests/integration/kubernetes/gha-run.sh delete-csi-driver
 
       - name: Delete kata-deploy
         if: always()
@@ -219,6 +249,10 @@ jobs:
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh install-kbs-client
 
+      - name: Deploy CSI driver
+        timeout-minutes: 5
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-csi-driver
+
       - name: Run tests
         timeout-minutes: 50
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
@@ -234,6 +268,10 @@ jobs:
       - name: Delete CoCo KBS
         if: always()
         run: bash tests/integration/kubernetes/gha-run.sh delete-coco-kbs
+
+      - name: Delete CSI driver
+        timeout-minutes: 5
+        run: bash tests/integration/kubernetes/gha-run.sh delete-csi-driver
 
   # Generate jobs for testing CoCo on non-TEE environments
   run-k8s-tests-coco-nontee:
@@ -265,6 +303,7 @@ jobs:
       AUTHENTICATED_IMAGE_PASSWORD: ${{ secrets.AUTHENTICATED_IMAGE_PASSWORD }}
       SNAPSHOTTER: ${{ matrix.snapshotter }}
       USING_NFD: "false"
+      AUTO_GENERATE_POLICY: "yes"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -276,6 +315,15 @@ jobs:
           ./tests/git-helper.sh "rebase-atop-of-the-latest-target-branch"
         env:
           TARGET_BRANCH: ${{ inputs.target-branch }}
+
+      - name: get-kata-tarball
+        uses: actions/download-artifact@v4
+        with:
+          name: kata-static-tarball-amd64${{ inputs.tarball-suffix }}
+          path: kata-artifacts
+
+      - name: Install kata
+        run: bash tests/integration/kubernetes/gha-run.sh install-kata-tools kata-artifacts
 
       - name: Download Azure CLI
         run: bash tests/integration/kubernetes/gha-run.sh install-azure-cli
@@ -317,8 +365,12 @@ jobs:
         timeout-minutes: 10
         run: bash tests/integration/kubernetes/gha-run.sh install-kbs-client
 
+      - name: Deploy CSI driver
+        timeout-minutes: 5
+        run: bash tests/integration/kubernetes/gha-run.sh deploy-csi-driver
+
       - name: Run tests
-        timeout-minutes: 60
+        timeout-minutes: 80
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
 
       - name: Delete AKS cluster

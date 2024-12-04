@@ -99,6 +99,7 @@ options:
 	coco-guest-components
 	cloud-hypervisor
 	cloud-hypervisor-glibc
+	csi-kata-directvolume
 	firecracker
 	genpolicy
 	kata-ctl
@@ -151,8 +152,17 @@ get_kernel_modules_dir() {
 	local numeric_final_version=${version}
 
 	# Every first release of a kernel is x.y, while the resulting folder would be x.y.0
+	local rc=$(echo ${version} | grep -oE "\-rc[0-9]+$")
+	if [ -n "${rc}" ]; then
+		numeric_final_version="${numeric_final_version%"${rc}"}"
+	fi
+
 	local dots=$(echo ${version} | grep -o '\.' | wc -l)
-	[ "${dots}" == "1" ] && numeric_final_version="${version}.0"
+	[ "${dots}" == "1" ] && numeric_final_version="${numeric_final_version}.0"
+
+	if [ -n "${rc}" ]; then
+		numeric_final_version="${numeric_final_version}${rc}"
+	fi
 
 	local kernel_modules_dir="${repo_root_dir}/tools/packaging/kata-deploy/local-build/build/${kernel_name}/builddir/kata-linux-${version}-${kernel_kata_config_version}/lib/modules/${numeric_final_version}"
 	case ${kernel_name} in
@@ -364,7 +374,7 @@ install_image() {
 		os_name="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.${variant}.name")"
 		os_version="$(get_from_kata_deps ".assets.image.architecture.${ARCH}.${variant}.version")"
 
-		if [ "${variant}" == "confidential" ]; then
+		if [[ "${variant}" == *confidential ]]; then
 			export COCO_GUEST_COMPONENTS_TARBALL="$(get_coco_guest_components_tarball_path)"
 			export PAUSE_IMAGE_TARBALL="$(get_pause_image_tarball_path)"
 		fi
@@ -439,7 +449,7 @@ install_initrd() {
 		os_name="$(get_from_kata_deps ".assets.initrd.architecture.${ARCH}.${variant}.name")"
 		os_version="$(get_from_kata_deps ".assets.initrd.architecture.${ARCH}.${variant}.version")"
 
-		if [ "${variant}" == "confidential" ]; then
+		if [[ "${variant}" == *confidential ]]; then
 			export COCO_GUEST_COMPONENTS_TARBALL="$(get_coco_guest_components_tarball_path)"
 			export PAUSE_IMAGE_TARBALL="$(get_pause_image_tarball_path)"
 		fi
@@ -461,35 +471,57 @@ install_initrd_confidential() {
 	install_initrd "confidential"
 }
 
-#Instal NVIDIA GPU image
+# For all nvidia_gpu targets we can customize the stack that is enbled
+# in the VM by setting the NVIDIA_GPU_STACK= environment variable
+#
+# latest | lts -> use the latest and greatest driver or lts release
+# debug        -> enable debugging support
+# compute      -> enable the compute GPU stack, includes utility
+# graphics     -> enable the graphics GPU stack, includes compute
+# dcgm         -> enable the DCGM stack + DGCM exporter
+# nvswitch     -> enable DGX like systems
+# gpudirect    -> enable use-cases like GPUDirect RDMA, GPUDirect GDS
+# dragonball   -> enable dragonball support
+#
+# The full stack can be enabled by setting all the options like:
+#
+# NVIDIA_GPU_STACK="latest,compute,dcgm,nvswitch,gpudirect"
+#
+# Install NVIDIA GPU image
 install_image_nvidia_gpu() {
 	export AGENT_POLICY="yes"
 	export AGENT_INIT="yes"
-	export EXTRA_PKGS="apt udev"
+	export EXTRA_PKGS="apt"
+	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm"}
 	install_image "nvidia-gpu"
 }
 
-#Install NVIDIA GPU initrd
+# Install NVIDIA GPU initrd
 install_initrd_nvidia_gpu() {
 	export AGENT_POLICY="yes"
 	export AGENT_INIT="yes"
-	export EXTRA_PKGS="apt udev"
+	export EXTRA_PKGS="apt"
+	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute,dcgm"}
 	install_initrd "nvidia-gpu"
 }
 
-#Instal NVIDIA GPU confidential image
+# Instal NVIDIA GPU confidential image
 install_image_nvidia_gpu_confidential() {
 	export AGENT_POLICY="yes"
 	export AGENT_INIT="yes"
-	export EXTRA_PKGS="apt udev"
+	export EXTRA_PKGS="apt"
+	# TODO: export MEASURED_ROOTFS=yes
+	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute"}
 	install_image "nvidia-gpu-confidential"
 }
 
-#Install NVIDIA GPU confidential initrd
+# Install NVIDIA GPU confidential initrd
 install_initrd_nvidia_gpu_confidential() {
 	export AGENT_POLICY="yes"
 	export AGENT_INIT="yes"
-	export EXTRA_PKGS="apt udev"
+	export EXTRA_PKGS="apt"
+	# TODO: export MEASURED_ROOTFS=yes
+	NVIDIA_GPU_STACK=${NVIDIA_GPU_STACK:-"latest,compute"}
 	install_initrd "nvidia-gpu-confidential"
 }
 
@@ -534,16 +566,18 @@ install_cached_kernel_tarball_component() {
 
 #Install kernel asset
 install_kernel_helper() {
-	local kernel_version_yaml_path="${1}"
+	local kernel_yaml_path="${1}"
 	local kernel_name="${2}"
 	local extra_cmd="${3:-}"
 	local extra_tarballs=""
 
-	export kernel_version="$(get_from_kata_deps .${kernel_version_yaml_path})"
+	export kernel_version="$(get_from_kata_deps .${kernel_yaml_path}.version)"
+	export kernel_url="$(get_from_kata_deps .${kernel_yaml_path}.url)"
 	export kernel_kata_config_version="$(cat ${repo_root_dir}/tools/packaging/kernel/kata_config_version)"
 
 	if [[ "${kernel_name}" == "kernel"*"-confidential" ]]; then
 		kernel_version="$(get_from_kata_deps .assets.kernel.confidential.version)"
+		kernel_url="$(get_from_kata_deps .assets.kernel.confidential.url)"
 	fi
 
 	if [[ "${kernel_name}" == "kernel"*"-confidential" ]]; then
@@ -564,60 +598,54 @@ install_kernel_helper() {
 
 	info "build ${kernel_name}"
 	info "Kernel version ${kernel_version}"
-	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -v "${kernel_version}" ${extra_cmd}
+	DESTDIR="${destdir}" PREFIX="${prefix}" "${kernel_builder}" -v "${kernel_version}" -f -u "${kernel_url}" "${extra_cmd}"
 }
 
 #Install kernel asset
 install_kernel() {
 	install_kernel_helper \
-		"assets.kernel.version" \
+		"assets.kernel" \
 		"kernel" \
-		"-f"
+		""
 }
 
 install_kernel_confidential() {
-	local kernel_url="$(get_from_kata_deps .assets.kernel.confidential.url)"
-
 	export MEASURED_ROOTFS=yes
 
 	install_kernel_helper \
-		"assets.kernel.confidential.version" \
+		"assets.kernel.confidential" \
 		"kernel-confidential" \
-		"-x -u ${kernel_url}"
+		"-x"
 }
 
 install_kernel_dragonball_experimental() {
 	install_kernel_helper \
-		"assets.kernel-dragonball-experimental.version" \
+		"assets.kernel-dragonball-experimental" \
 		"kernel-dragonball-experimental" \
 		"-e -t dragonball"
 }
 
 install_kernel_nvidia_gpu_dragonball_experimental() {
 	install_kernel_helper \
-		"assets.kernel-dragonball-experimental.version" \
+		"assets.kernel-dragonball-experimental" \
 		"kernel-dragonball-experimental" \
 		"-e -t dragonball -g nvidia -H deb"
 }
 
 #Install GPU enabled kernel asset
 install_kernel_nvidia_gpu() {
-	local kernel_url="$(get_from_kata_deps .assets.kernel.url)"
-
 	install_kernel_helper \
-		"assets.kernel.version" \
+		"assets.kernel" \
 		"kernel-nvidia-gpu" \
-		"-g nvidia -u ${kernel_url} -H deb"
+		"-g nvidia -H deb"
 }
 
 #Install GPU and TEE enabled kernel asset
 install_kernel_nvidia_gpu_confidential() {
-	local kernel_url="$(get_from_kata_deps .assets.kernel.confidential.url)"
-
 	install_kernel_helper \
-		"assets.kernel.confidential.version" \
+		"assets.kernel.confidential" \
 		"kernel-nvidia-gpu-confidential" \
-		"-x -g nvidia -u ${kernel_url} -H deb"
+		"-x -g nvidia -H deb"
 }
 
 install_qemu_helper() {
@@ -995,6 +1023,7 @@ install_tools_helper() {
 
 	tool_binary=${tool}
 	[ ${tool} = "agent-ctl" ] && tool_binary="kata-agent-ctl"
+	[ ${tool} = "csi-kata-directvolume" ] && tool_binary="directvolplugin"
 	[ ${tool} = "trace-forwarder" ] && tool_binary="kata-trace-forwarder"
 	binary=$(find ${repo_root_dir}/src/tools/${tool}/ -type f -name ${tool_binary})
 
@@ -1008,8 +1037,15 @@ install_tools_helper() {
 		binary_permissions="$default_binary_permissions"
 	fi
 
+	if [[ "${tool}" == "agent-ctl" ]]; then
+		defaults_path="${destdir}/opt/kata/share/defaults/kata-containers/agent-ctl"
+		mkdir -p "${defaults_path}"
+		install -D --mode 0644 ${repo_root_dir}/src/tools/${tool}/template/oci_config.json "${defaults_path}/oci_config.json"
+	fi
+
 	info "Install static ${tool_binary}"
 	mkdir -p "${destdir}/opt/kata/bin/"
+	[ ${tool} = "csi-kata-directvolume" ] && tool_binary="csi-kata-directvolume"
 	install -D --mode ${binary_permissions} ${binary} "${destdir}/opt/kata/bin/${tool_binary}"
 }
 
@@ -1019,6 +1055,10 @@ install_agent_ctl() {
 
 install_genpolicy() {
 	install_tools_helper "genpolicy"
+}
+
+install_csi_kata_directvolume() {
+	install_tools_helper "csi-kata-directvolume"
 }
 
 install_kata_ctl() {
@@ -1098,6 +1138,8 @@ handle_build() {
 
 	cloud-hypervisor-glibc) install_clh_glibc ;;
 
+	csi-kata-directvolume) install_csi_kata_directvolume ;;
+
 	firecracker) install_firecracker ;;
 
 	genpolicy) install_genpolicy ;;
@@ -1111,6 +1153,7 @@ handle_build() {
 	kernel-confidential) install_kernel_confidential ;;
 
 	kernel-dragonball-experimental) install_kernel_dragonball_experimental ;;
+
 	kernel-nvidia-gpu-dragonball-experimental) install_kernel_nvidia_gpu_dragonball_experimental ;;
 
 	kernel-nvidia-gpu) install_kernel_nvidia_gpu ;;
@@ -1156,6 +1199,10 @@ handle_build() {
 	trace-forwarder) install_trace_forwarder ;;
 
 	virtiofsd) install_virtiofsd ;;
+
+	dummy)
+		tar cvfJ ${final_tarball_path} --files-from /dev/null
+	       	;;
 
 	*)
 		die "Invalid build target ${build_target}"
@@ -1312,6 +1359,7 @@ main() {
 		agent-ctl
 		cloud-hypervisor
 		coco-guest-components
+		csi-kata-directvolume
 		firecracker
 		genpolicy
 		kata-ctl
@@ -1331,6 +1379,7 @@ main() {
 		shim-v2
 		trace-forwarder
 		virtiofsd
+		dummy
 	)
 	silent=false
 	while getopts "hs-:" opt; do
