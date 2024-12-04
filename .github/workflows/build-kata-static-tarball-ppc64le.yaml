@@ -159,7 +159,7 @@ jobs:
     steps:
       - uses: geekyeggo/delete-artifact@v5
         with:
-          name: kata-artifacts-s390x-${{ matrix.asset}}-*
+          name: kata-artifacts-ppc64le-${{ matrix.asset}}${{ inputs.tarball-suffix }}
 
   build-asset-shim-v2:
     runs-on: ppc64le

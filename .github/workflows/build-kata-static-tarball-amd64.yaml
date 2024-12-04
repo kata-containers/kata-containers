@@ -213,7 +213,7 @@ jobs:
     steps:
       - uses: geekyeggo/delete-artifact@v5
         with:
-          name: kata-artifacts-amd64-${{ matrix.asset}}-*
+          name: kata-artifacts-amd64-${{ matrix.asset}}${{ inputs.tarball-suffix }}
 
   build-asset-shim-v2:
     runs-on: ubuntu-22.04
