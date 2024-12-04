@@ -3,11 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 #![allow(dead_code)]
+
 use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
 
+use mockall::automock;
 use pci_ids::{Classes, Vendors};
 
 const PCI_DEV_DOMAIN: &str = "0000";
@@ -96,6 +98,7 @@ impl MemoryResourceTrait for MemoryResources {
     }
 }
 
+#[automock]
 pub trait PCIDevices {
     fn get_pci_devices(&self, vendor: Option<u16>) -> Vec<PCIDevice>;
 }
