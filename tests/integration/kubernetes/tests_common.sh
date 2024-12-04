@@ -80,8 +80,8 @@ auto_generate_policy_enabled() {
 	[ "${AUTO_GENERATE_POLICY}" == "yes" ]
 }
 
-# adapt common policy settings for tdx or snp
-adapt_common_policy_settings_for_tdx() {
+# adapt common policy settings for tdx, snp, or non-TEE dev environment
+adapt_common_policy_settings_coco() {
 	local settings_dir=$1
 
 	info "Adapting common policy settings for TDX, SNP, or the non-TEE development environment"
@@ -120,7 +120,7 @@ adapt_common_policy_settings() {
 
 	case "${KATA_HYPERVISOR}" in
   		"qemu-tdx"|"qemu-snp"|"qemu-coco-dev")
-			adapt_common_policy_settings_for_tdx "${settings_dir}"
+			adapt_common_policy_settings_coco "${settings_dir}"
 			;;
   		"qemu-sev")
 			adapt_common_policy_settings_for_sev "${settings_dir}"
