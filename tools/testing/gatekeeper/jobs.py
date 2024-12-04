@@ -80,12 +80,10 @@ class Checker:
             else:
                 # Not a required job
                 return
-        # TODO: Check if multiple re-runs use the same "run_id". If so use
-        #       job['run_attempt'] in case of matching "run_id".
-        elif job['run_id'] <= self.results[job_name]['run_id']:
+        elif job['run_id'] < self.results[job_name]['run_id']:
             # Newer results already stored
             print(f"older {job_name} - {job['status']} {job['conclusion']} "
-                  f"{job['id']}", file=sys.stderr)
+                  f"{job['id']} (newer_id={self.results[job_name]['id']})", file=sys.stderr)
             return
         print(f"{job_name} - {job['status']} {job['conclusion']} {job['id']}",
               file=sys.stderr)
@@ -180,7 +178,7 @@ class Checker:
         )
         response.raise_for_status()
         workflow_runs = response.json()["workflow_runs"]
-        for i, run in enumerate(workflow_runs):
+        for run in workflow_runs:
             jobs = self.get_jobs_for_workflow_run(run["id"])
             for job in jobs:
                 self.record(run["name"], job)
