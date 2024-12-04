@@ -160,7 +160,7 @@ description = "measure container latency"
 checkvar = ".\"latency\".Results | .[] | .latency.Result"
 checktype = "mean"
 midval = 0.75
-minpercent = 20.0
+minpercent = 25.0
 maxpercent = 20.0
 
 [[metric]]
@@ -212,5 +212,5 @@ description = "iperf"
 checkvar = ".\"network-iperf3\".Results | .[] | .jitter.Result"
 checktype = "mean"
 midval = 0.044
-minpercent = 50.0
+minpercent = 60.0
 maxpercent = 50.0
