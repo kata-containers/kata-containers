@@ -293,6 +293,16 @@ static AGENT_CMDS: &[AgentCmd] = &[
         st: ServiceType::Agent,
         fp: agent_cmd_sandbox_set_policy,
     },
+    AgentCmd {
+        name: "MemAgentMemcgSet",
+        st: ServiceType::Agent,
+        fp: agent_cmd_mem_agent_memcg_set,
+    },
+    AgentCmd {
+        name: "MemAgentCompactSet",
+        st: ServiceType::Agent,
+        fp: agent_cmd_mem_agent_compact_set,
+    },
 ];
 
 static BUILTIN_CMDS: & [BuiltinCmd] = &[
@@ -2119,6 +2129,53 @@ fn agent_cmd_sandbox_set_policy(
 
     let reply = client
         .set_policy(ctx, &req)
+        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
+
+    info!(sl!(), "response received";
+        "response" => format!("{:?}", reply));
+
+    Ok(())
+}
+
+fn agent_cmd_mem_agent_memcg_set(
+    ctx: &Context,
+    client: &AgentServiceClient,
+    _health: &HealthClient,
+    _options: &mut Options,
+    args: &str,
+) -> Result<()> {
+    //let req = MemAgentMemcgConfig::default();
+    let req: MemAgentMemcgConfig = utils::make_request(args)?;
+
+    let ctx = clone_context(ctx);
+
+    info!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
+    let reply = client
+        .mem_agent_memcg_set(ctx, &req)
+        .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
+
+    info!(sl!(), "response received";
+        "response" => format!("{:?}", reply));
+
+    Ok(())
+}
+
+fn agent_cmd_mem_agent_compact_set(
+    ctx: &Context,
+    client: &AgentServiceClient,
+    _health: &HealthClient,
+    _options: &mut Options,
+    args: &str,
+) -> Result<()> {
+    let req: MemAgentCompactConfig = utils::make_request(args)?;
+
+    let ctx = clone_context(ctx);
+
+    info!(sl!(), "sending request"; "request" => format!("{:?}", req));
+
+    let reply = client
+        .mem_agent_compact_set(ctx, &req)
         .map_err(|e| anyhow!("{:?}", e).context(ERR_API_FAILED))?;
 
     info!(sl!(), "response received";
