@@ -33,7 +33,7 @@ use std::io::Write;
 /// Intermediary format of policy data.
 pub struct AgentPolicy {
     /// K8s resources described by the input YAML file.
-    resources: Vec<boxed::Box<dyn yaml::K8sResource + Send + Sync>>,
+    pub resources: Vec<boxed::Box<dyn yaml::K8sResource + Send + Sync>>,
 
     /// K8s ConfigMap resources described by an additional input YAML file
     /// or by the "main" input YAML file, containing additional pod settings.
