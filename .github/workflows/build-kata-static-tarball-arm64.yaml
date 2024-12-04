@@ -151,7 +151,7 @@ jobs:
     steps:
       - uses: geekyeggo/delete-artifact@v5
         with:
-          name: kata-artifacts-s390x-${{ matrix.asset}}-*
+          name: kata-artifacts-arm64-${{ matrix.asset}}${{ inputs.tarball-suffix }}
 
   build-asset-shim-v2:
     runs-on: arm64-builder
