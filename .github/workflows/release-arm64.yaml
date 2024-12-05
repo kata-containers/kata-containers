@@ -51,9 +51,9 @@ jobs:
           fi
           for tag in ${tags[@]}; do
               ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
-                  $(pwd)/kata-static.tar.xz "docker.io/katadocker/kata-deploy" \
+                  "$(pwd)"/kata-static.tar.xz "docker.io/katadocker/kata-deploy" \
                   "${tag}-${{ inputs.target-arch }}"
               ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
-                  $(pwd)/kata-static.tar.xz "quay.io/kata-containers/kata-deploy" \
+                  "$(pwd)"/kata-static.tar.xz "quay.io/kata-containers/kata-deploy" \
                   "${tag}-${{ inputs.target-arch }}"
           done

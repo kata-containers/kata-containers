@@ -204,7 +204,7 @@ jobs:
           make boot-image-se-tarball
           build_dir=$(readlink -f build)
           sudo cp -r "${build_dir}" "kata-build"
-          sudo chown -R $(id -u):$(id -g) "kata-build"
+          sudo chown -R "$(id -u)":"$(id -g)" "kata-build"
         env:
           HKD_PATH: "host-key-document"
 

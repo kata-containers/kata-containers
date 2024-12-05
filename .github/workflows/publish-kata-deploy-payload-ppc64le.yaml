@@ -71,5 +71,5 @@ jobs:
         id: build-and-push-kata-payload
         run: |
           ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
-          $(pwd)/kata-static.tar.xz \
+          "$(pwd)"/kata-static.tar.xz \
           ${{ inputs.registry }}/${{ inputs.repo }} ${{ inputs.tag }}

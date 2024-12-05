@@ -36,7 +36,7 @@ jobs:
         run: |
           # Clone into a temporary directory to avoid overwriting
           # any existing github directory.
-          pushd $(mktemp -d) &>/dev/null
+          pushd "$(mktemp -d)" &>/dev/null
           git clone --single-branch --depth 1 "https://github.com/kata-containers/.github" && cd .github/scripts
           sudo install pr-add-size-label.sh /usr/local/bin
           popd &>/dev/null
