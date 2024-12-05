@@ -83,4 +83,5 @@ jobs:
       commit-hash: ${{ inputs.commit-hash }}
       pr-number: ${{ inputs.pr-number }}
       target-branch: ${{ inputs.target-branch }}
+      tarball-suffix: -${{ inputs.tag }}
     secrets: inherit

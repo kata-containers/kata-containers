@@ -16,7 +16,7 @@ jobs:
       with:
         go-version: 1.22.2
       env:
-        GOPATH: ${{ runner.workspace }}/kata-containers
+        GOPATH: ${{ github.workspace }}/kata-containers
     - name: Set env
       run: |
         echo "GOPATH=${{ github.workspace }}" >> "$GITHUB_ENV"
