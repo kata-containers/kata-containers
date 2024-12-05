@@ -205,6 +205,16 @@ function _upload_libseccomp_tarball()
 	gh release upload "${RELEASE_VERSION}" "${asc}"
 }
 
+function _upload_helm_chart_tarball()
+{
+	_check_required_env_var "GH_TOKEN"
+
+	RELEASE_VERSION="$(_release_version)"
+
+	helm package ${repo_root_dir}/tools/packaging/kata-deploy/helm-chart/kata-deploy
+	gh release upload "${RELEASE_VERSION}" "kata-deploy-${RELEASE_VERSION}.tgz"
+}
+
 function main()
 {
 	action="${1:-}"
@@ -217,6 +227,7 @@ function main()
 		upload-versions-yaml-file) _upload_versions_yaml_file ;;
 		upload-vendored-code-tarball) _upload_vendored_code_tarball ;;
 		upload-libseccomp-tarball) _upload_libseccomp_tarball ;;
+		upload-helm-chart-tarball) _upload_helm_chart_tarball ;;
 		publish-release) _publish_release ;;
 		*) >&2 _die "Invalid argument" ;;
 	esac
