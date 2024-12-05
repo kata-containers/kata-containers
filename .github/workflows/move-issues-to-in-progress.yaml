@@ -72,7 +72,7 @@ jobs:
           project_type="org"
           project_column="In progress"
 
-          for issue_url in $(echo "$linked_issue_urls")
+          for issue_url in $linked_issue_urls
           do
             issue=$(echo "$issue_url"| awk -F\/ '{print $NF}' || true)
 
