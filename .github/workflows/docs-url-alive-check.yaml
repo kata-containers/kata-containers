@@ -19,8 +19,8 @@ jobs:
         GOPATH: ${{ runner.workspace }}/kata-containers
     - name: Set env
       run: |
-        echo "GOPATH=${{ github.workspace }}" >> $GITHUB_ENV
-        echo "${{ github.workspace }}/bin" >> $GITHUB_PATH
+        echo "GOPATH=${{ github.workspace }}" >> "$GITHUB_ENV"
+        echo "${{ github.workspace }}/bin" >> "$GITHUB_PATH"
     - name: Checkout code
       uses: actions/checkout@v4
       with:
@@ -29,4 +29,4 @@ jobs:
     # docs url alive check
     - name: Docs URL Alive Check
       run: |
-        cd ${GOPATH}/src/github.com/${{ github.repository }} && make docs-url-alive-check
+        cd "${GOPATH}/src/github.com/${{ github.repository }}" && make docs-url-alive-check

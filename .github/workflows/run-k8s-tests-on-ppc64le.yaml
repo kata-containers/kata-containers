@@ -44,9 +44,9 @@ jobs:
       TARGET_ARCH: "ppc64le"
     steps:
       - name: Prepare the self-hosted runner
-        run: | 
-          bash ${HOME}/scripts/prepare_runner.sh kubernetes
-          sudo rm -rf $GITHUB_WORKSPACE/*
+        run: |
+          bash "${HOME}/scripts/prepare_runner.sh" kubernetes
+          sudo rm -rf "$GITHUB_WORKSPACE"/*
 
       - uses: actions/checkout@v4
         with:
@@ -62,13 +62,13 @@ jobs:
       - name: Install golang
         run: |
           ./tests/install_go.sh -f -p
-          echo "/usr/local/go/bin" >> $GITHUB_PATH
+          echo "/usr/local/go/bin" >> "$GITHUB_PATH"
 
       - name: Prepare the runner for k8s cluster creation
-        run: bash ${HOME}/scripts/k8s_cluster_cleanup.sh
+        run: bash "${HOME}/scripts/k8s_cluster_cleanup.sh"
 
       - name: Create k8s cluster using kubeadm
-        run: bash ${HOME}/scripts/k8s_cluster_create.sh
+        run: bash "${HOME}/scripts/k8s_cluster_create.sh"
 
       - name: Deploy Kata
         timeout-minutes: 10
@@ -79,4 +79,4 @@ jobs:
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
 
       - name: Delete cluster and post cleanup actions
-        run: bash ${HOME}/scripts/k8s_cluster_cleanup.sh
+        run: bash "${HOME}/scripts/k8s_cluster_cleanup.sh"

@@ -30,12 +30,12 @@ jobs:
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
       - name: Adjust a permission for repo
-        run: sudo chown -R $USER:$USER $GITHUB_WORKSPACE
-  
+        run: sudo chown -R "$USER":"$USER" "$GITHUB_WORKSPACE"
+
       - name: Prepare the self-hosted runner
         run: |
-          bash ${HOME}/scripts/prepare_runner.sh cri-containerd
-          sudo rm -rf $GITHUB_WORKSPACE/*
+          bash "${HOME}/scripts/prepare_runner.sh" cri-containerd
+          sudo rm -rf "$GITHUB_WORKSPACE"/*
 
       - uses: actions/checkout@v4
         with:
@@ -62,6 +62,6 @@ jobs:
 
       - name: Run cri-containerd tests
         run: bash tests/integration/cri-containerd/gha-run.sh run
-      
+
       - name: Cleanup actions for the self hosted runner
-        run: ${HOME}/scripts/cleanup_runner.sh
+        run: bash "${HOME}/scripts/cleanup_runner.sh"

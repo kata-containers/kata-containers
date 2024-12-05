@@ -31,8 +31,8 @@ jobs:
         run: |
           kernel_dir="tools/packaging/kernel/"
           kernel_version_file="${kernel_dir}kata_config_version"
-          modified_files=$(git diff --name-only origin/$GITHUB_BASE_REF..HEAD)
-          if git diff --name-only origin/$GITHUB_BASE_REF..HEAD "${kernel_dir}" | grep "${kernel_dir}"; then
+          modified_files=$(git diff --name-only origin/"$GITHUB_BASE_REF"..HEAD)
+          if git diff --name-only origin/"$GITHUB_BASE_REF"..HEAD "${kernel_dir}" | grep "${kernel_dir}"; then
             echo "Kernel directory has changed, checking if $kernel_version_file has been updated"
             if echo "$modified_files" | grep -v "README.md" | grep "${kernel_dir}" >>"/dev/null"; then
               echo "$modified_files" | grep "$kernel_version_file" >>/dev/null || ( echo "Please bump version in $kernel_version_file" && exit 1)
@@ -107,19 +107,19 @@ jobs:
           path: ./src/github.com/${{ github.repository }}
       - name: Install yq
         run: |
-          cd ${GOPATH}/src/github.com/${{ github.repository }}
+          cd "${GOPATH}/src/github.com/${{ github.repository }}"
           ./ci/install_yq.sh
         env:
           INSTALL_IN_GOPATH: false
       - name: Install golang
         run: |
-          cd ${GOPATH}/src/github.com/${{ github.repository }}
+          cd "${GOPATH}/src/github.com/${{ github.repository }}"
           ./tests/install_go.sh -f -p
-          echo "/usr/local/go/bin" >> $GITHUB_PATH
+          echo "/usr/local/go/bin" >> "$GITHUB_PATH"
       - name: Install system dependencies
         run: |
           sudo apt-get -y install moreutils hunspell hunspell-en-gb hunspell-en-us pandoc
       - name: Run check
         run: |
-          export PATH=${PATH}:${GOPATH}/bin
-          cd ${GOPATH}/src/github.com/${{ github.repository }} && ${{ matrix.cmd }}
+          export PATH="${PATH}:${GOPATH}/bin"
+          cd "${GOPATH}/src/github.com/${{ github.repository }}" && ${{ matrix.cmd }}

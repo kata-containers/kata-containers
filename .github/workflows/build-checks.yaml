@@ -49,8 +49,8 @@ jobs:
     steps:
       - name: Adjust a permission for repo
         run: |
-          sudo chown -R $USER:$USER $GITHUB_WORKSPACE $HOME
-          sudo rm -rf $GITHUB_WORKSPACE/* && echo "GITHUB_WORKSPACE removed" || { sleep 10 && sudo rm -rf $GITHUB_WORKSPACE/*; }
+          sudo chown -R "$USER":"$USER" "$GITHUB_WORKSPACE" "$HOME"
+          sudo rm -rf "$GITHUB_WORKSPACE"/* && echo "GITHUB_WORKSPACE removed" || { sleep 10 && sudo rm -rf "$GITHUB_WORKSPACE"/*; }
           sudo rm -f /tmp/kata_hybrid*  # Sometime we got leftover from test_setup_hvsock_failed()
 
       - name: Checkout the code
@@ -67,12 +67,12 @@ jobs:
         if: ${{ matrix.component == 'runtime' }}
         run: |
           ./tests/install_go.sh -f -p
-          echo "/usr/local/go/bin" >> $GITHUB_PATH
+          echo "/usr/local/go/bin" >> "$GITHUB_PATH"
       - name: Install rust
         if: ${{ matrix.component != 'runtime' }}
         run: |
           ./tests/install_rust.sh
-          echo "${HOME}/.cargo/bin" >> $GITHUB_PATH
+          echo "${HOME}/.cargo/bin" >> "$GITHUB_PATH"
       - name: Install musl-tools
         if: ${{ matrix.component != 'runtime' }}
         run: sudo apt-get -y install musl-tools
@@ -86,8 +86,8 @@ jobs:
           gperf_install_dir=$(mktemp -d -t gperf.XXXXXXXXXX)
           ./ci/install_libseccomp.sh "${libseccomp_install_dir}" "${gperf_install_dir}"
           echo "Set environment variables for the libseccomp crate to link the libseccomp library statically"
-          echo "LIBSECCOMP_LINK_TYPE=static" >> $GITHUB_ENV
-          echo "LIBSECCOMP_LIB_PATH=${libseccomp_install_dir}/lib" >> $GITHUB_ENV
+          echo "LIBSECCOMP_LINK_TYPE=static" >> "$GITHUB_ENV"
+          echo "LIBSECCOMP_LIB_PATH=${libseccomp_install_dir}/lib" >> "$GITHUB_ENV"
       - name: Install protobuf-compiler
         if: ${{ matrix.command != 'make vendor' && (matrix.component == 'agent' || matrix.component == 'genpolicy' || matrix.component == 'agent-ctl') }}
         run: sudo apt-get -y install protobuf-compiler
@@ -97,8 +97,8 @@ jobs:
       - name: Setup XDG_RUNTIME_DIR for the `runtime` tests
         if: ${{ matrix.command != 'make vendor' && matrix.command != 'make check' && matrix.component == 'runtime' }}
         run: |
-          XDG_RUNTIME_DIR=$(mktemp -d /tmp/kata-tests-$USER.XXX | tee >(xargs chmod 0700))
-          echo "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}" >> $GITHUB_ENV
+          XDG_RUNTIME_DIR=$(mktemp -d "/tmp/kata-tests-$USER.XXX" | tee >(xargs chmod 0700))
+          echo "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR}" >> "$GITHUB_ENV"
       - name: Running `${{ matrix.command }}` for ${{ matrix.component }}
         run: |
           cd ${{ matrix.component-path }}

@@ -42,7 +42,7 @@ jobs:
         run: |
           # We need to do such trick here as the format of the $GITHUB_REF
           # is "refs/tags/<tag>"
-          tag=$(echo $GITHUB_REF | cut -d/ -f3-)
+          tag=$(echo "$GITHUB_REF" | cut -d/ -f3-)
           if [ "${tag}" = "main" ]; then
               tag=$(./tools/packaging/release/release.sh release-version)
               tags=(${tag} "latest")
