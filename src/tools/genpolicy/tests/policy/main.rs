@@ -258,8 +258,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_create_sandbox() {
-        runtests("createsandbox").await;
+    async fn test_create_sandbox_default() {
+        runtests("createsandbox/default").await;
+    }
+
+    #[tokio::test]
+    async fn test_create_sandbox_custom_settings() {
+        runtests("createsandbox/custom-settings").await;
     }
 
     #[tokio::test]

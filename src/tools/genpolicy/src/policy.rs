@@ -447,6 +447,8 @@ pub struct ClusterConfig {
 pub struct SandboxData {
     /// Expected value of the CreateSandboxRequest storages field.
     pub storages: Vec<agent::Storage>,
+    /// Guest hook paths that are allowed to be set in all CreateContainerRequests.
+    pub allowed_guest_hooks: Vec<String>,
 }
 
 enum K8sEnvFromSource {

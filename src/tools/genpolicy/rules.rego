@@ -1262,7 +1262,7 @@ CopyFileRequest if {
 
 CreateSandboxRequest if {
     print("CreateSandboxRequest: input.guest_hook_path =", input.guest_hook_path)
-    count(input.guest_hook_path) == 0
+    allow_hook(input.guest_hook_path)
 
     print("CreateSandboxRequest: input.kernel_modules =", input.kernel_modules)
     count(input.kernel_modules) == 0
@@ -1271,6 +1271,15 @@ CreateSandboxRequest if {
     print("CreateSandboxRequest: i_pidns =", i_pidns)
     i_pidns == false
     allow_sandbox_storages(input.storages)
+}
+
+allow_hook(i_hook) {
+    print("allow_hook: start")
+    p_hooks := policy_data.sandbox.allowed_guest_hooks
+    print("allow_hook: p_hooks =", p_hooks)
+    print("allow_hook: i_hook =", i_hook)
+    i_hook in p_hooks
+    print("allow_hook: true")
 }
 
 allow_exec(p_container, i_process) if {

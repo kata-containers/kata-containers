@@ -1,0 +1,20 @@
+[
+  {
+    "description": "forbidden guest hook",
+    "allowed": false,
+    "request": {
+      "type": "CreateSandbox",
+      "sandbox_pidns": false,
+      "guest_hook_path": ""
+    }
+  },
+  {
+    "description": "allowed guest hook",
+    "allowed": true,
+    "request": {
+      "type": "CreateSandbox",
+      "sandbox_pidns": false,
+      "guest_hook_path": "/expected/hook/path"
+    }
+  }
+]
