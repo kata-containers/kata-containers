@@ -524,6 +524,13 @@ impl DeviceInfo {
                 self.default_bridges
             ));
         }
+        // It's not allowed to set PCIe RootPort and SwitchPort at the same time.
+        if self.pcie_root_port > 0 && self.pcie_switch_port > 0 {
+            return Err(eother!(
+                "Root Port and Switch Port set at the same time is forbidden."
+            ));
+        }
+
         Ok(())
     }
 }
