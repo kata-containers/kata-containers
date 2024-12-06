@@ -20,7 +20,7 @@ jobs:
       run: |
         pushd tools/packaging/kata-deploy/runtimeclasses/
         echo "::group::Combine runtime classes"
-        for runtimeClass in `find . -type f \( -name "*.yaml" -and -not -name "kata-runtimeClasses.yaml" \) | sort`; do
+        for runtimeClass in $(find . -type f \( -name "*.yaml" -and -not -name "kata-runtimeClasses.yaml" \) | sort); do
             echo "Adding ${runtimeClass} to the resultingRuntimeClasses.yaml"
             cat "${runtimeClass}" >> resultingRuntimeClasses.yaml;
         done
