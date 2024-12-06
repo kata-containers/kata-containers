@@ -68,7 +68,7 @@ CreateContainerRequest:= {"ops": ops, "allowed": true} {
     # check sandbox name
     sandbox_name = i_oci.Annotations[S_NAME_KEY]
     add_sandbox_name_to_state := state_allows("sandbox_name", sandbox_name)
-    ops := concat_op_if_not_null(ops_builder, add_sandbox_name_to_state)
+    ops_builder1 := concat_op_if_not_null(ops_builder, add_sandbox_name_to_state)
 
     # Check if any element from the policy_data.containers array allows the input request.
     some p_container in policy_data.containers
@@ -80,6 +80,13 @@ CreateContainerRequest:= {"ops": ops, "allowed": true} {
     p_pidns == i_pidns
 
     p_oci := p_container.OCI
+
+    # check namespace
+    p_namespace := p_oci.Annotations[S_NAMESPACE_KEY]
+    i_namespace := i_oci.Annotations[S_NAMESPACE_KEY]
+    print ("CreateContainerRequest: p_namespace =", p_namespace, "i_namespace =", i_namespace)
+    add_namespace_to_state := allow_namespace(p_namespace, i_namespace)
+    ops := concat_op_if_not_null(ops_builder1, add_namespace_to_state)
 
     print("CreateContainerRequest: p Version =", p_oci.Version, "i Version =", i_oci.Version)
     p_oci.Version == i_oci.Version
@@ -129,6 +136,18 @@ allow_create_container_input {
     count(i_process.User.Username) == 0
 
     print("allow_create_container_input: true")
+}
+
+allow_namespace(p_namespace, i_namespace) = add_namespace {
+    p_namespace == i_namespace
+    add_namespace := null
+    print("allow_namespace 1: input namespace matches policy data")
+}
+
+allow_namespace(p_namespace, i_namespace) = add_namespace {
+    p_namespace == ""
+    print("allow_namespace 2: no namespace found on policy data")
+    add_namespace := state_allows("namespace", i_namespace)
 }
 
 # value hasn't been seen before, save it to state
@@ -241,12 +260,9 @@ allow_by_anno(p_oci, i_oci, p_storages, i_storages) {
 allow_by_sandbox_name(p_oci, i_oci, p_storages, i_storages, s_name) {
     print("allow_by_sandbox_name: start")
 
-    p_namespace := p_oci.Annotations[S_NAMESPACE_KEY]
     i_namespace := i_oci.Annotations[S_NAMESPACE_KEY]
-    print("allow_by_sandbox_name: p_namespace =", p_namespace, "i_namespace =", i_namespace)
-    p_namespace == i_namespace
 
-    allow_by_container_types(p_oci, i_oci, s_name, p_namespace)
+    allow_by_container_types(p_oci, i_oci, s_name, i_namespace)
     allow_by_bundle_or_sandbox_id(p_oci, i_oci, p_storages, i_storages)
     allow_process(p_oci, i_oci, s_name)
 

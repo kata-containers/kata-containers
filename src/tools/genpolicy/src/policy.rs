@@ -388,8 +388,6 @@ pub struct CommonData {
 /// Configuration from "kubectl config".
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ClusterConfig {
-    default_namespace: String,
-
     /// Pause container image reference.
     pub pause_container_image: String,
 }
@@ -532,15 +530,7 @@ impl AgentPolicy {
         let mut root = c_settings.Root.clone();
         root.Readonly = yaml_container.read_only_root_filesystem();
 
-        let namespace = match resource.get_namespace() {
-            Some(ns) if !ns.is_empty() => ns,
-            _ => self
-                .config
-                .settings
-                .cluster_config
-                .default_namespace
-                .clone(),
-        };
+        let namespace = resource.get_namespace().unwrap_or_default();
 
         let use_host_network = resource.use_host_network();
         let annotations = get_container_annotations(
