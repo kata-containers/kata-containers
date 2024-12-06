@@ -222,9 +222,6 @@ generate_qemu_options() {
 
 	# Disabled options
 
-	# Disable block migration in the main migration stream
-	qemu_options+=(size:--disable-live-block-migration)
-
 	# braille support not required
 	qemu_options+=(size:--disable-brlapi)
 
@@ -397,6 +394,22 @@ generate_qemu_options() {
 	qemu_options+=(size:--disable-vhdx)
 	qemu_options+=(size:--disable-hv-balloon)
 
+	# Disable new available features from 8.2.4
+	if gt_eq "${qemu_version}" "8.2.4" ; then
+		# Disable Query Processing Library support
+		qemu_options+=(size:--disable-qpl)
+		# Disable UADK Library support
+		qemu_options+=(size:--disable-uadk)
+		# Disable syscall buffer debugging support
+		qemu_options+=(size:--disable-debug-remap)
+	fi
+
+	# Disable gio support
+	qemu_options+=(size:--disable-gio)
+	# Disable libdaxctl part of ndctl support
+	qemu_options+=(size:--disable-libdaxctl)
+	qemu_options+=(size:--disable-oss)
+
 	#---------------------------------------------------------------------
 	# Enabled options
 
@@ -409,6 +422,7 @@ generate_qemu_options() {
 
 	# Support Linux AIO (native)
 	qemu_options+=(size:--enable-linux-aio)
+	qemu_options+=(size:--enable-linux-io-uring)
 
 	# Support Ceph RADOS Block Device (RBD)
 	[ -z "${static}" ] && qemu_options+=(functionality:--enable-rbd)
@@ -427,7 +441,7 @@ generate_qemu_options() {
 	# for that architecture
 	if [ "$arch" == x86_64 ]; then
 		qemu_options+=(speed:--enable-avx2)
-		qemu_options+=(speed:--enable-avx512f)
+		qemu_options+=(speed:--enable-avx512bw)
 		# According to QEMU's nvdimm documentation: When 'pmem' is 'on' and QEMU is
 		# built with libpmem support, QEMU will take necessary operations to guarantee
 		# the persistence of its own writes to the vNVDIMM backend.
