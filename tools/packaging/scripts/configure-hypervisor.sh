@@ -434,8 +434,11 @@ generate_qemu_options() {
 		qemu_options+=(functionality:--enable-libpmem)
 	else
 		qemu_options+=(speed:--disable-avx2)
-		qemu_options+=(functionality:--disable-libpmem)
 	fi
+	# We're disabling pmem support, it is heavilly broken with
+	# Ubuntu's static build of QEMU￼
+	qemu_options+=(functionality:--disable-libpmem)
+
 	# Enable libc malloc_trim() for memory optimization.
 	qemu_options+=(speed:--enable-malloc-trim)
 
