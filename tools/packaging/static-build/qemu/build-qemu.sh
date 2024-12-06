@@ -8,7 +8,9 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-kata_packaging_dir="/root/kata-containers/tools/packaging"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+kata_packaging_dir="${script_dir}/../.."
 kata_packaging_scripts="${kata_packaging_dir}/scripts"
 
 kata_static_build_dir="${kata_packaging_dir}/static-build"
