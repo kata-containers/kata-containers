@@ -50,7 +50,7 @@ jobs:
       - name: Adjust a permission for repo
         run: |
           sudo chown -R "$USER":"$USER" "$GITHUB_WORKSPACE" "$HOME"
-          sudo rm -rf "$GITHUB_WORKSPACE"/* && echo "GITHUB_WORKSPACE removed" || { sleep 10 && sudo rm -rf "$GITHUB_WORKSPACE"/*; }
+          sudo rm -rf "$GITHUB_WORKSPACE"/* || { sleep 10 && sudo rm -rf "$GITHUB_WORKSPACE"/*; }
           sudo rm -f /tmp/kata_hybrid*  # Sometime we got leftover from test_setup_hvsock_failed()
 
       - name: Checkout the code
