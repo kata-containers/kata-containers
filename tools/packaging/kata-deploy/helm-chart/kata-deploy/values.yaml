@@ -18,3 +18,4 @@ env:
   pullTypeMapping: ""
   installationPrefix: ""
   hostOS: ""
+  multiInstallSuffix: ""
