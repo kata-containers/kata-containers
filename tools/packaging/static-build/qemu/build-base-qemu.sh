@@ -73,5 +73,5 @@ ${container_engine} pull ${container_image} || ("${container_engine}" build \
 	-w "${PWD}" \
 	-v "${repo_root_dir}:${repo_root_dir}" \
 	-v "${PWD}":/share "${container_image}" \
-	bash -c "/root/kata-containers/tools/packaging/static-build/qemu/build-qemu.sh"
+	bash -c "${qemu_builder}"
 
