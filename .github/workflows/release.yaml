@@ -175,6 +175,23 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+  upload-helm-chart-tarball:
+    needs: release
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install helm
+        uses: azure/setup-helm@v4.2.0
+        id: install
+
+      - name: Generate and upload helm chart tarball
+        run: |
+          ./tools/packaging/release/release.sh upload-helm-chart-tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   publish-release:
     needs: [ build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le, publish-multi-arch-images, upload-multi-arch-static-tarball, upload-versions-yaml, upload-cargo-vendored-tarball, upload-libseccomp-tarball ]
     runs-on: ubuntu-22.04
