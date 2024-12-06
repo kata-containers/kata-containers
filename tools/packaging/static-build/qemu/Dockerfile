@@ -53,6 +53,7 @@ RUN apt-get update && apt-get upgrade -y && \
 	    libpixman-1-dev${DPKG_ARCH} \
 	    libselinux1-dev${DPKG_ARCH} \
 	    libtool${DPKG_ARCH} \
+	    liburing-dev${DPKG_ARCH} \
 	    make \
 	    ninja-build \
 	    pkg-config${DPKG_ARCH} \
@@ -69,10 +70,3 @@ RUN apt-get update && apt-get upgrade -y && \
     if [ "${ARCH}" != "$(uname -m)" ]; then apt-get install --no-install-recommends -y gcc-"${GCC_ARCH}"-linux-gnu; fi && \
     apt-get clean && rm -rf /var/lib/apt/lists/
 
-RUN git clone  https://github.com/axboe/liburing/ ~/liburing && \
-    cd ~/liburing && \
-    git checkout tags/liburing-2.1 && \
-    GCC_ARCH="${ARCH}" && if [ "${ARCH}" = "ppc64le" ]; then GCC_ARCH="powerpc64le"; fi && \
-    if [ "${ARCH}" != "$(uname -m)" ]; then PREFIX="${GCC_ARCH}-linux-gnu"; fi && \
-    ./configure --cc=${GCC_ARCH}-linux-gnu-gcc --cxx=${GCC_ARCH}-linux-gnu-cpp --prefix=/usr/${PREFIX}/ && \
-    make && make install && ldconfig
