@@ -428,14 +428,13 @@ generate_qemu_options() {
 	if [ "$arch" == x86_64 ]; then
 		qemu_options+=(speed:--enable-avx2)
 		qemu_options+=(speed:--enable-avx512f)
-		# According to QEMU's nvdimm documentation: When 'pmem' is 'on' and QEMU is
-		# built with libpmem support, QEMU will take necessary operations to guarantee
-		# the persistence of its own writes to the vNVDIMM backend.
-		qemu_options+=(functionality:--enable-libpmem)
 	else
 		qemu_options+=(speed:--disable-avx2)
-		qemu_options+=(functionality:--disable-libpmem)
 	fi
+	# We're disabling pmem support, it is heavilly broken with
+	# Ubuntu's static build of QEMU
+	qemu_options+=(functionality:--disable-libpmem)
+
 	# Enable libc malloc_trim() for memory optimization.
 	qemu_options+=(speed:--enable-malloc-trim)
 
