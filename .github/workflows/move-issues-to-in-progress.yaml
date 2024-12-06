@@ -74,7 +74,7 @@ jobs:
 
           for issue_url in $linked_issue_urls
           do
-            issue=$(echo "$issue_url"| awk -F\/ '{print $NF}' || true)
+            issue=$(echo "$issue_url"| awk -F/ '{print $NF}' || true)
 
             [ -z "$issue" ] && {
               echo "::error::Cannot determine issue number from $issue_url for PR $pr"
