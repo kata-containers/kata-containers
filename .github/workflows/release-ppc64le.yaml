@@ -50,9 +50,9 @@ jobs:
           tag=$(echo "$GITHUB_REF" | cut -d/ -f3-)
           if [ "${tag}" = "main" ]; then
               tag=$(./tools/packaging/release/release.sh release-version)
-              tags=(${tag} "latest")
+              tags=("${tag}" "latest")
           else
-              tags=(${tag})
+              tags=("${tag}")
           fi
           for tag in "${tags[@]}"; do
               ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
