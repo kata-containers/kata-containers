@@ -7,6 +7,7 @@ license = "Apache-2.0"
 
 [dependencies]
 runtime-spec = { path = "../libs/runtime-spec" }
+mem-agent = { path = "../mem-agent" }
 oci-spec = { version = "0.6.8", features = ["runtime"] }
 rustjail = { path = "rustjail" }
 protocols = { path = "../libs/protocols", features = ["async", "with-serde"] }

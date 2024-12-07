@@ -1,0 +1,36 @@
+[package]
+name = "mem-agent-bin"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+slog = "2.5.2"
+slog-scope = "4.1.2"
+slog-term = "2.9.0"
+slog-async = "2.7"
+structopt = "0.3"
+anyhow = "1.0"
+libc = "0.2"
+page_size = "0.6"
+chrono = "0.4"
+maplit = "1.0"
+ttrpc = { version = "0.8", features = ["async"] }
+tokio = { version = "1.33", features = ["full"] }
+async-trait = "0.1"
+byteorder = "1.5"
+protobuf = "3.1"
+lazy_static = "1.4"
+# Rust 1.68 doesn't support 0.5.9
+home = "=0.5.5"
+mem-agent = { path = "../" }
+
+[[example]]
+name = "mem-agent-srv"
+path = "./srv.rs"
+
+[[example]]
+name = "mem-agent-ctl"
+path = "./ctl.rs"
+
+[build-dependencies]
+ttrpc-codegen = "0.4"
