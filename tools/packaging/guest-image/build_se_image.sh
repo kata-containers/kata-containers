@@ -27,8 +27,8 @@ Usage:
   ${script_name} [options]
 
 Options:
-  --builddir=${builddir}
-  --destdir=${destdir}
+  --builddir=\${builddir}
+  --destdir=\${destdir}
 
 Environment variables:
   HKD_PATH (required): a path for a directory which includes at least one host key document
