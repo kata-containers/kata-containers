@@ -163,7 +163,7 @@ jobs:
 
   build-asset-shim-v2:
     runs-on: ppc64le
-    needs: [build-asset, build-asset-rootfs]
+    needs: [build-asset, build-asset-rootfs, remove-rootfs-binary-artifacts]
     steps:
       - name: Prepare the self-hosted runner
         run: |
