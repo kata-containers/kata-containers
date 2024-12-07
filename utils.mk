@@ -155,6 +155,12 @@ ifeq ($(ARCH), s390x)
     $(warning "WARNING: s390x-unknown-linux-musl target is unavailable")
 endif
 
+ifeq ($(ARCH), riscv64)
+    # Rust requires riscv64gc as the target arch for riscv64
+    override ARCH = riscv64gc
+    override LIBC = gnu
+    $(warning "WARNING: riscv64-unknown-linux-musl target is unavailable")
+endif
 
 EXTRA_RUSTFLAGS :=
 
