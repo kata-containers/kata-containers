@@ -262,6 +262,8 @@ externals:
     version: "v1.6.8"
     lts: "v1.6"
     active: "v1.7"
+    # add containerd 2.0.0 for sandbox api test
+    latest: "v2.0.0"
 
   critools:
     description: "CLI tool for Container Runtime Interface (CRI)"
