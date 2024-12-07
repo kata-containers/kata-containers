@@ -96,7 +96,7 @@ impl DragonballInner {
                     .context("add vhost-user-net device")?;
                 Ok(DeviceType::VhostUserNetwork(dev))
             }
-            DeviceType::Vsock(_) => todo!(),
+	    DeviceType::Vsock(_) | DeviceType::PortDevice(_) => todo!(),
         }
     }
 

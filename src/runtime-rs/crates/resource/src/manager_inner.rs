@@ -146,6 +146,14 @@ impl ResourceManagerInner {
                         .await
                         .context("do handle vsock device failed.")?;
                 }
+                ResourceConfig::PortDevice(pd) => {
+                    do_handle_device(
+                        &self.device_manager,
+                        &DeviceConfig::PortDeviceCfg(pd.clone()),
+                    )
+                    .await
+                    .context("do handle port device failed.")?;
+                }
             };
         }
 
