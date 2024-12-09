@@ -341,9 +341,9 @@ spec:
     server: https://kubernetes.default.svc
   project: default
   source:
-    path: argo/clusters/golden
-    repoURL: git@github.com:Super-Protocol/sp-golden-image.git
-    targetRevision: HEAD
+    path: argo/clusters/virtual-machine
+    repoURL: git@github.com:Super-Protocol/argo-vm.git
+    targetRevision: main # argo-vm-selected-branch
   syncPolicy:
     automated:
       prune: true

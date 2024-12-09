@@ -22,3 +22,16 @@ for src in "${!files[@]}"; do
         cp -v "$src" "$dest"
     fi
 done
+
+
+K8S="/var/lib/rancher/rke2/server/manifests/k8s.yaml"
+ARGO_BRANCH=$(cat /proc/cmdline | grep -o 'argo_branch=[^ ]*' | cut -d= -f2)
+if [[ -z "$ARGO_BRANCH" ]]; then
+    ARGO_BRANCH="main"
+fi
+CMDLINE=$(cat /proc/cmdline)
+if [[ "$CMDLINE" == *"sp-debug=true"* ]]; then
+    sed -i "s/targetRevision: main # argo-vm-selected-branch/targetRevision: $ARGO_BRANCH/" $K8S
+else
+    echo "k8s.yaml not patched, sp-debug=false"
+fi
