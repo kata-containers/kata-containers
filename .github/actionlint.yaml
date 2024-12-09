@@ -21,4 +21,5 @@ self-hosted-runner:
     - sev-snp
     - s390x
     - s390x-large
-    - tdx
+    - tdx-no-attestation
+    - tdx-attestation

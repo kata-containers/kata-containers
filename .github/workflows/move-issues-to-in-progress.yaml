@@ -31,7 +31,7 @@ jobs:
         run: |
           # Clone into a temporary directory to avoid overwriting
           # any existing github directory.
-          pushd $(mktemp -d) &>/dev/null
+          pushd "$(mktemp -d)" &>/dev/null
           git clone --single-branch --depth 1 "https://github.com/kata-containers/.github" && cd .github/scripts
           sudo install hub-util.sh /usr/local/bin
           popd &>/dev/null
@@ -72,9 +72,9 @@ jobs:
           project_type="org"
           project_column="In progress"
 
-          for issue_url in $(echo "$linked_issue_urls")
+          for issue_url in $linked_issue_urls
           do
-            issue=$(echo "$issue_url"| awk -F\/ '{print $NF}' || true)
+            issue=$(echo "$issue_url"| awk -F/ '{print $NF}' || true)
 
             [ -z "$issue" ] && {
               echo "::error::Cannot determine issue number from $issue_url for PR $pr"

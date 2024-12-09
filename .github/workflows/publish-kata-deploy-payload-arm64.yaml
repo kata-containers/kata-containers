@@ -28,7 +28,7 @@ jobs:
     steps:
       - name: Adjust a permission for repo
         run: |
-          sudo chown -R $USER:$USER $GITHUB_WORKSPACE
+          sudo chown -R "$USER":"$USER" "$GITHUB_WORKSPACE"
 
       - uses: actions/checkout@v4
         with:
@@ -66,6 +66,5 @@ jobs:
         id: build-and-push-kata-payload
         run: |
           ./tools/packaging/kata-deploy/local-build/kata-deploy-build-and-upload-payload.sh \
-          $(pwd)/kata-static.tar.xz \
+          "$(pwd)"/kata-static.tar.xz \
           ${{ inputs.registry }}/${{ inputs.repo }} ${{ inputs.tag }}
-

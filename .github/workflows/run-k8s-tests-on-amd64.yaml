@@ -86,11 +86,11 @@ jobs:
 
       - name: Install `bats`
         run: bash tests/integration/kubernetes/gha-run.sh install-bats
-  
+
       - name: Run tests
         timeout-minutes: 30
         run: bash tests/integration/kubernetes/gha-run.sh run-tests
-  
+
       - name: Collect artifacts ${{ matrix.vmm }}
         if: always()
         run: bash tests/integration/kubernetes/gha-run.sh collect-artifacts
@@ -99,7 +99,7 @@ jobs:
       - name: Archive artifacts ${{ matrix.vmm }}
         uses: actions/upload-artifact@v4
         with:
-          name: k8s-tests-${{ matrix.vmm }}-${{ matrix.snapshotter }}-${{ matrix.k8s }}-${{ matrix.instance }}-${{ inputs.tag }}
+          name: k8s-tests-${{ matrix.vmm }}-${{ matrix.snapshotter }}-${{ matrix.k8s }}-${{ inputs.tag }}
           path: /tmp/artifacts
           retention-days: 1
 
