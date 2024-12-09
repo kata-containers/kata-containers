@@ -155,7 +155,7 @@ jobs:
 
   build-asset-shim-v2:
     runs-on: arm64-builder
-    needs: [build-asset, build-asset-rootfs]
+    needs: [build-asset, build-asset-rootfs, remove-rootfs-binary-artifacts]
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
