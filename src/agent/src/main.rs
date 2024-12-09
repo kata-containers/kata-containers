@@ -18,10 +18,11 @@ extern crate scopeguard;
 #[macro_use]
 extern crate slog;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use cfg_if::cfg_if;
 use clap::{AppSettings, Parser};
 use const_format::{concatcp, formatcp};
+use initdata::{AA_CONFIG_PATH, CDH_CONFIG_PATH, INITDATA};
 use nix::fcntl::OFlag;
 use nix::sys::reboot::{reboot, RebootMode};
 use nix::sys::socket::{self, AddressFamily, SockFlag, SockType, VsockAddr};
@@ -33,7 +34,6 @@ use std::os::unix::fs::{self as unixfs, FileTypeExt};
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
 use std::process::exit;
-use std::process::Command;
 use std::sync::Arc;
 use tracing::{instrument, span};
 
@@ -42,6 +42,7 @@ mod config;
 mod console;
 mod device;
 mod features;
+mod initdata;
 mod linux_abi;
 mod metrics;
 mod mount;
@@ -249,6 +250,7 @@ async fn real_main(init_mode: bool) -> std::result::Result<(), Box<dyn std::erro
         logging::create_logger(NAME, "agent", config.log_level, writer);
 
     announce(&logger, config);
+    initdata::initialize_initdata(&logger).await?;
 
     // This variable is required as it enables the global (and crucially static) logger,
     // which is required to satisfy the the lifetime constraints of the auto-generated gRPC code.
@@ -462,13 +464,21 @@ async fn launch_guest_component_procs(logger: &Logger, config: &AgentConfig) -> 
     }
 
     debug!(logger, "spawning attestation-agent process {}", AA_PATH);
+    let mut aa_args = vec!["--attestation_sock", AA_ATTESTATION_URI];
+    if let Some(initdata_hash) = INITDATA.get() {
+        aa_args.push("--initdata");
+        aa_args.push(initdata_hash);
+    }
+
     launch_process(
         logger,
         AA_PATH,
-        &vec!["--attestation_sock", AA_ATTESTATION_URI],
+        aa_args,
+        Some(AA_CONFIG_PATH),
         AA_ATTESTATION_SOCKET,
         DEFAULT_LAUNCH_PROCESS_TIMEOUT,
     )
+    .await
     .map_err(|e| anyhow!("launch_process {} failed: {:?}", AA_PATH, e))?;
 
     // skip launch of confidential-data-hub and api-server-rest
@@ -484,10 +494,12 @@ async fn launch_guest_component_procs(logger: &Logger, config: &AgentConfig) -> 
     launch_process(
         logger,
         CDH_PATH,
-        &vec![],
+        vec![],
+        Some(CDH_CONFIG_PATH),
         CDH_SOCKET,
         DEFAULT_LAUNCH_PROCESS_TIMEOUT,
     )
+    .await
     .map_err(|e| anyhow!("launch_process {} failed: {:?}", CDH_PATH, e))?;
 
     // skip launch of api-server-rest
@@ -503,10 +515,12 @@ async fn launch_guest_component_procs(logger: &Logger, config: &AgentConfig) -> 
     launch_process(
         logger,
         API_SERVER_PATH,
-        &vec!["--features", &features.to_string()],
+        vec!["--features", &features.to_string()],
+        None,
         "",
         0,
     )
+    .await
     .map_err(|e| anyhow!("launch_process {} failed: {:?}", API_SERVER_PATH, e))?;
 
     Ok(())
@@ -539,11 +553,11 @@ async fn init_attestation_components(logger: &Logger, config: &AgentConfig) -> R
     Ok(())
 }
 
-fn wait_for_path_to_exist(logger: &Logger, path: &str, timeout_secs: i32) -> Result<()> {
+async fn wait_for_path_to_exist(logger: &Logger, path: &str, timeout_secs: i32) -> Result<()> {
     let p = Path::new(path);
     let mut attempts = 0;
     loop {
-        std::thread::sleep(std::time::Duration::from_secs(1));
+        tokio::time::sleep(std::time::Duration::from_secs(1));
         if p.exists() {
             return Ok(());
         }
@@ -560,22 +574,32 @@ fn wait_for_path_to_exist(logger: &Logger, path: &str, timeout_secs: i32) -> Res
     Err(anyhow!("wait for {} to exist timeout.", path))
 }
 
-fn launch_process(
+async fn launch_process(
     logger: &Logger,
     path: &str,
-    args: &Vec<&str>,
+    mut args: Vec<&str>,
+    config: Option<&str>,
     unix_socket_path: &str,
     timeout_secs: i32,
 ) -> Result<()> {
     if !Path::new(path).exists() {
-        return Err(anyhow!("path {} does not exist.", path));
+        bail!("path {} does not exist.", path);
     }
+
+    if let Some(config_path) = config {
+        if Path::new(config_path).exists() {
+            args.push("-c");
+            args.push(config_path);
+        }
+    }
+
     if !unix_socket_path.is_empty() && Path::new(unix_socket_path).exists() {
-        fs::remove_file(unix_socket_path)?;
+        tokio::fs::remove_file(unix_socket_path).await?;
     }
-    Command::new(path).args(args).spawn()?;
+
+    tokio::process::Command::new(path).args(args).spawn()?;
     if !unix_socket_path.is_empty() && timeout_secs > 0 {
-        wait_for_path_to_exist(logger, unix_socket_path, timeout_secs)?;
+        wait_for_path_to_exist(logger, unix_socket_path, timeout_secs).await?;
     }
 
     Ok(())
