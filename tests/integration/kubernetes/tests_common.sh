@@ -155,9 +155,6 @@ create_common_genpolicy_settings() {
 
 	cp "${default_genpolicy_settings_dir}/genpolicy-settings.json" "${genpolicy_settings_dir}"
 	cp "${default_genpolicy_settings_dir}/rules.rego" "${genpolicy_settings_dir}"
-
-	# Set the default namespace of Kata CI tests in the genpolicy settings.
-	set_namespace_to_policy_settings "${genpolicy_settings_dir}" "${TEST_CLUSTER_NAMESPACE}"
 }
 
 # If auto-generated policy testing is enabled, make a copy of the common genpolicy settings
@@ -271,21 +268,6 @@ add_copy_from_guest_to_policy_settings() {
 
 	exec_command=(tar cf - "${copied_file}")
 	add_exec_to_policy_settings "${policy_settings_dir}" "${exec_command[@]}"
-}
-
-# Change genpolicy settings to use a pod namespace different than "default".
-set_namespace_to_policy_settings() {
-	local -r settings_dir="$1"
-	local -r namespace="$2"
-
-	auto_generate_policy_enabled || return 0
-
-	info "${settings_dir}/genpolicy-settings.json: namespace: ${namespace}"
-	jq --arg namespace "${namespace}" \
-		'.cluster_config.default_namespace |= $namespace' \
-		"${settings_dir}/genpolicy-settings.json" > \
-		"${settings_dir}/new-genpolicy-settings.json"
-	mv "${settings_dir}/new-genpolicy-settings.json" "${settings_dir}/genpolicy-settings.json"
 }
 
 hard_coded_policy_tests_enabled() {
