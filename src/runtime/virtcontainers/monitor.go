@@ -14,8 +14,7 @@ import (
 )
 
 const (
-	defaultCheckInterval = 5 * time.Second
-	watcherChannelSize   = 128
+	watcherChannelSize = 128
 )
 
 var monitorLog = virtLog.WithField("subsystem", "virtcontainers/monitor")
@@ -29,7 +28,7 @@ type monitor struct {
 	sync.Mutex
 
 	stopCh        chan bool
-	checkInterval time.Duration
+	checkInterval uint64
 
 	running bool
 }
@@ -40,7 +39,7 @@ func newMonitor(s *Sandbox) *monitor {
 	monitorLog = monitorLog.WithField("sandbox", s.ID())
 	return &monitor{
 		sandbox:       s,
-		checkInterval: defaultCheckInterval,
+		checkInterval: s.config.HeartbeatCheckInterval,
 		stopCh:        make(chan bool, 1),
 	}
 }
@@ -58,16 +57,22 @@ func (m *monitor) newWatcher(ctx context.Context) (chan error, error) {
 
 		// create and start agent watcher
 		go func() {
-			tick := time.NewTicker(m.checkInterval)
-			for {
-				select {
-				case <-m.stopCh:
-					tick.Stop()
-					m.wg.Done()
-					return
-				case <-tick.C:
-					m.watchHypervisor(ctx)
-					m.watchAgent(ctx)
+			if m.checkInterval == 0 {
+				<-m.stopCh
+				m.wg.Done()
+				return
+			} else {
+				tick := time.NewTicker(time.Duration(m.checkInterval) * time.Second)
+				for {
+					select {
+					case <-m.stopCh:
+						tick.Stop()
+						m.wg.Done()
+						return
+					case <-tick.C:
+						m.watchHypervisor(ctx)
+						m.watchAgent(ctx)
+					}
 				}
 			}
 		}()
