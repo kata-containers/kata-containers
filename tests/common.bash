@@ -623,12 +623,13 @@ function install_cni_plugins() {
 
 # base_version: The version to be intalled in the ${major}.${minor} format
 function install_cri_containerd() {
+	set -x
 	base_version="${1}"
 
 	project="containerd/containerd"
 	version=$(get_latest_patch_release_from_a_github_project "${project}" "${base_version}")
 
-	tarball_name="cri-containerd-cni-${version//v}-linux-$(${repo_root_dir}/tests/kata-arch.sh -g).tar.gz"
+	tarball_name="containerd-${version//v}-linux-$(${repo_root_dir}/tests/kata-arch.sh -g).tar.gz"
 
 	download_github_project_tarball "${project}" "${version}" "${tarball_name}"
 	sudo tar -xvf "${tarball_name}" -C /
