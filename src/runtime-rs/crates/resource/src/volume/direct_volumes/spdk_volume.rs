@@ -125,7 +125,7 @@ impl SPDKVolume {
             .context("generate host-guest shared path failed")?;
         storage.mount_point = guest_path.clone();
 
-        if get_mount_type(m.typ()).as_str() != "bind" {
+        if get_mount_type(m).as_str() != "bind" {
             storage.fs_type = mount_info.fs_type.clone();
         } else {
             storage.fs_type = DEFAULT_VOLUME_FS_TYPE.to_string();
