@@ -128,11 +128,13 @@ impl Process {
 
     pub fn pre_fifos_open(&mut self) -> Result<()> {
         if let Some(ref stdout) = self.stdout {
-            self.stdout_r = Some(open_fifo_read(stdout)?);
+            self.stdout_r = Some(open_fifo_read(stdout).context("open stdout")?);
         }
 
-        if let Some(ref stderr) = self.stderr {
-            self.stderr_r = Some(open_fifo_read(stderr)?);
+        if !self.terminal {
+            if let Some(ref stderr) = self.stderr {
+                self.stderr_r = Some(open_fifo_read(stderr).context("open stderr")?);
+            }
         }
 
         Ok(())
