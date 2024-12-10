@@ -1,0 +1,33 @@
+[package]
+name = "kata-agent-policy"
+version = "0.1.0"
+authors = ["The Kata Containers community <kata-dev@lists.katacontainers.io>"]
+edition = "2018"
+license = "Apache-2.0"
+
+[dependencies]
+# Async runtime
+tokio = { version = "1.39.0", features = ["full"] }
+tokio-vsock = "0.3.4"
+
+anyhow = "1"
+
+# Configuration
+serde = { version = "1.0.129", features = ["derive"] }
+serde_json = "1.0.39"
+
+# Agent Policy
+regorus = { version = "0.2.8", default-features = false, features = [
+    "arc",
+    "regex",
+    "std",
+] }
+json-patch = "2.0.0"
+
+
+# Note: this crate sets the slog 'max_*' features which allows the log level
+# to be modified at runtime.
+logging = { path = "../../libs/logging" }
+slog = "2.5.2"
+slog-scope = "4.1.2"
+slog-term = "2.9.0"

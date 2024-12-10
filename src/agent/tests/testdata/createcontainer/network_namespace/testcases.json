@@ -1,0 +1,522 @@
+[
+  {
+    "description": "one network namespace",
+    "allowed": true,
+    "request": {
+      "OCI": {
+        "Version": "1.1.0",
+        "Annotations": {
+          "io.kubernetes.cri.sandbox-name": "dummy",
+          "io.kubernetes.cri.sandbox-namespace": "default",
+          "io.kubernetes.cri.container-type": "sandbox",
+          "io.katacontainers.pkg.oci.container_type": "pod_sandbox",
+          "nerdctl/network-namespace": "/var/run/netns/cni-00000000-0000-0000-0000-000000000000",
+          "io.kubernetes.cri.sandbox-log-directory": "/var/log/pods/default_dummy_00000000-0000-0000-0000-000000000000",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/bundle-id",
+          "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "Linux": {
+          "GIDMappings": [],
+          "MountLabel": "",
+          "Resources": {
+            "Devices": []
+          },
+          "RootfsPropagation": "",
+          "Namespaces": [
+            {
+              "Path": "",
+              "Type": "ipc"
+            },
+            {
+              "Path": "",
+              "Type": "uts"
+            },
+            {
+              "Path": "",
+              "Type": "mount"
+            },
+            {
+              "Path": "/run/netns/podns",
+              "Type": "network"
+            }
+          ],
+          "MaskedPaths": [
+            "/proc/acpi",
+            "/proc/asound",
+            "/proc/kcore",
+            "/proc/keys",
+            "/proc/latency_stats",
+            "/proc/timer_list",
+            "/proc/timer_stats",
+            "/proc/sched_debug",
+            "/sys/firmware",
+            "/proc/scsi"
+          ],
+          "ReadonlyPaths": [
+            "/proc/bus",
+            "/proc/fs",
+            "/proc/irq",
+            "/proc/sys",
+            "/proc/sysrq-trigger"
+          ]
+        },
+        "Process": {
+          "SelinuxLabel": "",
+          "User": {
+            "Username": "",
+            "UID": 65535
+          },
+          "Args": [
+            "/pause"
+          ],
+          "Cwd": "/",
+          "NoNewPrivileges": true,
+          "Capabilities": {
+            "Ambient": [],
+            "Bounding": [
+              "CAP_CHOWN",
+              "CAP_DAC_OVERRIDE",
+              "CAP_FSETID",
+              "CAP_FOWNER",
+              "CAP_MKNOD",
+              "CAP_NET_RAW",
+              "CAP_SETGID",
+              "CAP_SETUID",
+              "CAP_SETFCAP",
+              "CAP_SETPCAP",
+              "CAP_NET_BIND_SERVICE",
+              "CAP_SYS_CHROOT",
+              "CAP_KILL",
+              "CAP_AUDIT_WRITE"
+            ],
+            "Effective": [
+              "CAP_CHOWN",
+              "CAP_DAC_OVERRIDE",
+              "CAP_FSETID",
+              "CAP_FOWNER",
+              "CAP_MKNOD",
+              "CAP_NET_RAW",
+              "CAP_SETGID",
+              "CAP_SETUID",
+              "CAP_SETFCAP",
+              "CAP_SETPCAP",
+              "CAP_NET_BIND_SERVICE",
+              "CAP_SYS_CHROOT",
+              "CAP_KILL",
+              "CAP_AUDIT_WRITE"
+            ],
+            "Permitted": [
+              "CAP_CHOWN",
+              "CAP_DAC_OVERRIDE",
+              "CAP_FSETID",
+              "CAP_FOWNER",
+              "CAP_MKNOD",
+              "CAP_NET_RAW",
+              "CAP_SETGID",
+              "CAP_SETUID",
+              "CAP_SETFCAP",
+              "CAP_SETPCAP",
+              "CAP_NET_BIND_SERVICE",
+              "CAP_SYS_CHROOT",
+              "CAP_KILL",
+              "CAP_AUDIT_WRITE"
+            ]
+          }
+        },
+        "Root": {
+          "Readonly": true,
+          "Path": "/run/kata-containers/shared/containers/bundle-id/rootfs"
+        }
+      }
+    }
+  },
+  {
+    "description": "same network namespace",
+    "allowed": true,
+    "request": {
+      "OCI": {
+        "Version": "1.1.0",
+        "Annotations": {
+          "io.kubernetes.cri.sandbox-name": "dummy",
+          "io.kubernetes.cri.sandbox-namespace": "default",
+          "io.kubernetes.cri.container-type": "sandbox",
+          "io.katacontainers.pkg.oci.container_type": "pod_sandbox",
+          "nerdctl/network-namespace": "/var/run/netns/cni-00000000-0000-0000-0000-000000000000",
+          "io.kubernetes.cri.sandbox-log-directory": "/var/log/pods/default_dummy_00000000-0000-0000-0000-000000000000",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/bundle-id",
+          "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "Linux": {
+          "GIDMappings": [],
+          "MountLabel": "",
+          "Resources": {
+            "Devices": []
+          },
+          "RootfsPropagation": "",
+          "Namespaces": [
+            {
+              "Path": "",
+              "Type": "ipc"
+            },
+            {
+              "Path": "",
+              "Type": "uts"
+            },
+            {
+              "Path": "",
+              "Type": "mount"
+            },
+            {
+              "Path": "/run/netns/podns",
+              "Type": "network"
+            }
+          ],
+          "MaskedPaths": [
+            "/proc/acpi",
+            "/proc/asound",
+            "/proc/kcore",
+            "/proc/keys",
+            "/proc/latency_stats",
+            "/proc/timer_list",
+            "/proc/timer_stats",
+            "/proc/sched_debug",
+            "/sys/firmware",
+            "/proc/scsi"
+          ],
+          "ReadonlyPaths": [
+            "/proc/bus",
+            "/proc/fs",
+            "/proc/irq",
+            "/proc/sys",
+            "/proc/sysrq-trigger"
+          ]
+        },
+        "Process": {
+          "SelinuxLabel": "",
+          "User": {
+            "Username": "",
+            "UID": 65535
+          },
+          "Args": [
+            "/pause"
+          ],
+          "Cwd": "/",
+          "NoNewPrivileges": true,
+          "Capabilities": {
+            "Ambient": [],
+            "Bounding": [
+              "CAP_CHOWN",
+              "CAP_DAC_OVERRIDE",
+              "CAP_FSETID",
+              "CAP_FOWNER",
+              "CAP_MKNOD",
+              "CAP_NET_RAW",
+              "CAP_SETGID",
+              "CAP_SETUID",
+              "CAP_SETFCAP",
+              "CAP_SETPCAP",
+              "CAP_NET_BIND_SERVICE",
+              "CAP_SYS_CHROOT",
+              "CAP_KILL",
+              "CAP_AUDIT_WRITE"
+            ],
+            "Effective": [
+              "CAP_CHOWN",
+              "CAP_DAC_OVERRIDE",
+              "CAP_FSETID",
+              "CAP_FOWNER",
+              "CAP_MKNOD",
+              "CAP_NET_RAW",
+              "CAP_SETGID",
+              "CAP_SETUID",
+              "CAP_SETFCAP",
+              "CAP_SETPCAP",
+              "CAP_NET_BIND_SERVICE",
+              "CAP_SYS_CHROOT",
+              "CAP_KILL",
+              "CAP_AUDIT_WRITE"
+            ],
+            "Permitted": [
+              "CAP_CHOWN",
+              "CAP_DAC_OVERRIDE",
+              "CAP_FSETID",
+              "CAP_FOWNER",
+              "CAP_MKNOD",
+              "CAP_NET_RAW",
+              "CAP_SETGID",
+              "CAP_SETUID",
+              "CAP_SETFCAP",
+              "CAP_SETPCAP",
+              "CAP_NET_BIND_SERVICE",
+              "CAP_SYS_CHROOT",
+              "CAP_KILL",
+              "CAP_AUDIT_WRITE"
+            ]
+          }
+        },
+        "Root": {
+          "Readonly": true,
+          "Path": "/run/kata-containers/shared/containers/bundle-id/rootfs"
+        }
+      }
+    }
+  },
+  {
+    "description": "no network namespace",
+    "allowed": false,
+    "request": {
+      "OCI": {
+        "Version": "1.1.0",
+        "Annotations": {
+          "io.kubernetes.cri.sandbox-name": "dummy",
+          "io.kubernetes.cri.sandbox-namespace": "default",
+          "io.kubernetes.cri.container-type": "sandbox",
+          "io.katacontainers.pkg.oci.container_type": "pod_sandbox",
+          "nerdctl/network-namespace": "/var/run/netns/cni-00000000-0000-0000-0000-000000000000",
+          "io.kubernetes.cri.sandbox-log-directory": "/var/log/pods/default_dummy_00000000-0000-0000-0000-000000000000",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/bundle-id",
+          "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "Linux": {
+          "GIDMappings": [],
+          "MountLabel": "",
+          "Resources": {
+            "Devices": []
+          },
+          "RootfsPropagation": "",
+          "Namespaces": [
+            {
+              "Path": "",
+              "Type": "ipc"
+            },
+            {
+              "Path": "",
+              "Type": "uts"
+            },
+            {
+              "Path": "",
+              "Type": "mount"
+            }
+          ],
+          "MaskedPaths": [
+            "/proc/acpi",
+            "/proc/asound",
+            "/proc/kcore",
+            "/proc/keys",
+            "/proc/latency_stats",
+            "/proc/timer_list",
+            "/proc/timer_stats",
+            "/proc/sched_debug",
+            "/sys/firmware",
+            "/proc/scsi"
+          ],
+          "ReadonlyPaths": [
+            "/proc/bus",
+            "/proc/fs",
+            "/proc/irq",
+            "/proc/sys",
+            "/proc/sysrq-trigger"
+          ]
+        },
+        "Process": {
+          "SelinuxLabel": "",
+          "User": {
+            "Username": "",
+            "UID": 65535
+          },
+          "Args": [
+            "/pause"
+          ],
+          "Cwd": "/",
+          "NoNewPrivileges": true,
+          "Capabilities": {
+            "Ambient": [],
+            "Bounding": [
+              "CAP_CHOWN",
+              "CAP_DAC_OVERRIDE",
+              "CAP_FSETID",
+              "CAP_FOWNER",
+              "CAP_MKNOD",
+              "CAP_NET_RAW",
+              "CAP_SETGID",
+              "CAP_SETUID",
+              "CAP_SETFCAP",
+              "CAP_SETPCAP",
+              "CAP_NET_BIND_SERVICE",
+              "CAP_SYS_CHROOT",
+              "CAP_KILL",
+              "CAP_AUDIT_WRITE"
+            ],
+            "Effective": [
+              "CAP_CHOWN",
+              "CAP_DAC_OVERRIDE",
+              "CAP_FSETID",
+              "CAP_FOWNER",
+              "CAP_MKNOD",
+              "CAP_NET_RAW",
+              "CAP_SETGID",
+              "CAP_SETUID",
+              "CAP_SETFCAP",
+              "CAP_SETPCAP",
+              "CAP_NET_BIND_SERVICE",
+              "CAP_SYS_CHROOT",
+              "CAP_KILL",
+              "CAP_AUDIT_WRITE"
+            ],
+            "Permitted": [
+              "CAP_CHOWN",
+              "CAP_DAC_OVERRIDE",
+              "CAP_FSETID",
+              "CAP_FOWNER",
+              "CAP_MKNOD",
+              "CAP_NET_RAW",
+              "CAP_SETGID",
+              "CAP_SETUID",
+              "CAP_SETFCAP",
+              "CAP_SETPCAP",
+              "CAP_NET_BIND_SERVICE",
+              "CAP_SYS_CHROOT",
+              "CAP_KILL",
+              "CAP_AUDIT_WRITE"
+            ]
+          }
+        },
+        "Root": {
+          "Readonly": true,
+          "Path": "/run/kata-containers/shared/containers/bundle-id/rootfs"
+        }
+      }
+    }
+  },
+  {
+    "description": "different network namespace",
+    "allowed": false,
+    "request": {
+      "OCI": {
+        "Version": "1.1.0",
+        "Annotations": {
+          "io.kubernetes.cri.sandbox-name": "dummy",
+          "io.kubernetes.cri.sandbox-namespace": "default",
+          "io.kubernetes.cri.container-type": "sandbox",
+          "io.katacontainers.pkg.oci.container_type": "pod_sandbox",
+          "nerdctl/network-namespace": "/var/run/netns/cni-00000000-0000-0000-0000-000000000000",
+          "io.kubernetes.cri.sandbox-log-directory": "/var/log/pods/default_dummy_00000000-0000-0000-0000-000000000000",
+          "io.katacontainers.pkg.oci.bundle_path": "/run/containerd/io.containerd.runtime.v2.task/k8s.io/bundle-id",
+          "io.kubernetes.cri.sandbox-id": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "Linux": {
+          "GIDMappings": [],
+          "MountLabel": "",
+          "Resources": {
+            "Devices": []
+          },
+          "RootfsPropagation": "",
+          "Namespaces": [
+            {
+              "Path": "",
+              "Type": "ipc"
+            },
+            {
+              "Path": "",
+              "Type": "uts"
+            },
+            {
+              "Path": "",
+              "Type": "mount"
+            },
+            {
+              "Path": "/run/netns/podns-diff",
+              "Type": "network"
+            }
+          ],
+          "MaskedPaths": [
+            "/proc/acpi",
+            "/proc/asound",
+            "/proc/kcore",
+            "/proc/keys",
+            "/proc/latency_stats",
+            "/proc/timer_list",
+            "/proc/timer_stats",
+            "/proc/sched_debug",
+            "/sys/firmware",
+            "/proc/scsi"
+          ],
+          "ReadonlyPaths": [
+            "/proc/bus",
+            "/proc/fs",
+            "/proc/irq",
+            "/proc/sys",
+            "/proc/sysrq-trigger"
+          ]
+        },
+        "Process": {
+          "SelinuxLabel": "",
+          "User": {
+            "Username": "",
+            "UID": 65535
+          },
+          "Args": [
+            "/pause"
+          ],
+          "Cwd": "/",
+          "NoNewPrivileges": true,
+          "Capabilities": {
+            "Ambient": [],
+            "Bounding": [
+              "CAP_CHOWN",
+              "CAP_DAC_OVERRIDE",
+              "CAP_FSETID",
+              "CAP_FOWNER",
+              "CAP_MKNOD",
+              "CAP_NET_RAW",
+              "CAP_SETGID",
+              "CAP_SETUID",
+              "CAP_SETFCAP",
+              "CAP_SETPCAP",
+              "CAP_NET_BIND_SERVICE",
+              "CAP_SYS_CHROOT",
+              "CAP_KILL",
+              "CAP_AUDIT_WRITE"
+            ],
+            "Effective": [
+              "CAP_CHOWN",
+              "CAP_DAC_OVERRIDE",
+              "CAP_FSETID",
+              "CAP_FOWNER",
+              "CAP_MKNOD",
+              "CAP_NET_RAW",
+              "CAP_SETGID",
+              "CAP_SETUID",
+              "CAP_SETFCAP",
+              "CAP_SETPCAP",
+              "CAP_NET_BIND_SERVICE",
+              "CAP_SYS_CHROOT",
+              "CAP_KILL",
+              "CAP_AUDIT_WRITE"
+            ],
+            "Permitted": [
+              "CAP_CHOWN",
+              "CAP_DAC_OVERRIDE",
+              "CAP_FSETID",
+              "CAP_FOWNER",
+              "CAP_MKNOD",
+              "CAP_NET_RAW",
+              "CAP_SETGID",
+              "CAP_SETUID",
+              "CAP_SETFCAP",
+              "CAP_SETPCAP",
+              "CAP_NET_BIND_SERVICE",
+              "CAP_SYS_CHROOT",
+              "CAP_KILL",
+              "CAP_AUDIT_WRITE"
+            ]
+          }
+        },
+        "Root": {
+          "Readonly": true,
+          "Path": "/run/kata-containers/shared/containers/bundle-id/rootfs"
+        }
+      }
+    }
+  }
+]
