@@ -233,7 +233,7 @@ pub fn init_rootfs(
         // bind may be only specified in the oci spec options -> flags update r#type
         let m = &{
             let mut mbind = m.clone();
-            if mbind.typ().is_none() && flags & MsFlags::MS_BIND == MsFlags::MS_BIND {
+            if is_none_mount_type(mbind.typ()) && flags & MsFlags::MS_BIND == MsFlags::MS_BIND {
                 mbind.set_typ(Some("bind".to_string()));
             }
             mbind
@@ -395,6 +395,13 @@ fn mount_cgroups_v2(cfd_log: RawFd, m: &Mount, rootfs: &str, flags: MsFlags) -> 
     }
 
     Ok(())
+}
+
+fn is_none_mount_type(typ: &Option<String>) -> bool {
+    match typ {
+        Some(t) => t == "none",
+        None => true,
+    }
 }
 
 fn mount_cgroups(
