@@ -8,9 +8,10 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::fmt;
 
 /// See ObjectMeta in the Kubernetes API reference.
-#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct ObjectMeta {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
@@ -44,5 +45,42 @@ impl ObjectMeta {
 
     pub fn get_namespace(&self) -> Option<String> {
         self.namespace.as_ref().cloned()
+    }
+}
+
+impl fmt::Debug for ObjectMeta {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut debug_struct = f.debug_struct("ObjectMeta");
+
+        if let Some(ref name) = self.name {
+            debug_struct.field("name", name);
+        }
+        if let Some(ref generate_name) = self.generateName {
+            debug_struct.field("generateName", generate_name);
+        }
+        if let Some(ref labels) = self.labels {
+            debug_struct.field("labels", labels);
+        }
+        if let Some(ref annotations) = self.annotations {
+            let truncated_annotations: BTreeMap<_, _> = annotations
+                .iter()
+                .map(|(key, value)| {
+                    if value.len() > 4096 {
+                        (
+                            key,
+                            format!("{}<... truncated ...>", &value[..4096].to_string()),
+                        )
+                    } else {
+                        (key, value.to_string())
+                    }
+                })
+                .collect();
+            debug_struct.field("annotations", &truncated_annotations);
+        }
+        if let Some(ref namespace) = self.namespace {
+            debug_struct.field("namespace", namespace);
+        }
+
+        debug_struct.finish()
     }
 }
