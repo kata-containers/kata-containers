@@ -200,7 +200,7 @@ jobs:
           retention-days: 15
           if-no-files-found: error
 
-  # We don't need the binaries installed in the rootfs as part of the tarball, so can delete them now we've built the rootfs
+  # We don't need the binaries installed in the rootfs as part of the release tarball, so can delete them now we've built the rootfs
   remove-rootfs-binary-artifacts:
     runs-on: ubuntu-22.04
     needs: build-asset-rootfs
@@ -212,6 +212,7 @@ jobs:
           - pause-image
     steps:
       - uses: geekyeggo/delete-artifact@v5
+        if: ${{ inputs.stage == 'release' }}
         with:
           name: kata-artifacts-amd64-${{ matrix.asset}}${{ inputs.tarball-suffix }}
 
