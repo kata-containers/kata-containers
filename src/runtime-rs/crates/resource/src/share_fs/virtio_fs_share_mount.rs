@@ -120,7 +120,7 @@ impl ShareFsMount for VirtiofsShareMount {
                 guest_path,
                 storages,
             });
-        } else if get_mount_type(config.mount.typ()).as_str() == mount::KATA_EPHEMERAL_VOLUME_TYPE {
+        } else if get_mount_type(&config.mount).as_str() == mount::KATA_EPHEMERAL_VOLUME_TYPE {
             // refer to the golang `handleEphemeralStorage` code at
             // https://github.com/kata-containers/kata-containers/blob/9516286f6dd5cfd6b138810e5d7c9e01cf6fc043/src/runtime/virtcontainers/kata_agent.go#L1354
 

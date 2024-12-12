@@ -115,5 +115,5 @@ impl Volume for ShmVolume {
 
 pub(crate) fn is_shm_volume(m: &oci::Mount) -> bool {
     get_mount_path(&Some(m.destination().clone())).as_str() == "/dev/shm"
-        && get_mount_type(m.typ()).as_str() != KATA_EPHEMERAL_DEV_TYPE
+        && get_mount_type(m).as_str() != KATA_EPHEMERAL_DEV_TYPE
 }
