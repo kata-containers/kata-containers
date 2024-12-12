@@ -219,7 +219,7 @@ jobs:
   # We don't need the binaries installed in the rootfs as part of the tarball, so can delete them now we've built the rootfs
   remove-rootfs-binary-artifacts:
     runs-on: ubuntu-22.04
-    needs: build-asset-rootfs
+    needs: [build-asset-rootfs, build-asset-boot-image-se]
     strategy:
       matrix:
         asset:
@@ -233,7 +233,7 @@ jobs:
 
   build-asset-shim-v2:
     runs-on: s390x
-    needs: [build-asset, build-asset-rootfs]
+    needs: [build-asset, build-asset-rootfs, remove-rootfs-binary-artifacts]
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
@@ -295,7 +295,6 @@ jobs:
       - build-asset-rootfs
       - build-asset-boot-image-se
       - build-asset-shim-v2
-      - remove-rootfs-binary-artifacts
     steps:
       - uses: actions/checkout@v4
         with:

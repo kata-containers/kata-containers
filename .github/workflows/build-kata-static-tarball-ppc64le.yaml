@@ -163,7 +163,7 @@ jobs:
 
   build-asset-shim-v2:
     runs-on: ppc64le
-    needs: [build-asset, build-asset-rootfs]
+    needs: [build-asset, build-asset-rootfs, remove-rootfs-binary-artifacts]
     steps:
       - name: Prepare the self-hosted runner
         run: |
@@ -223,7 +223,7 @@ jobs:
 
   create-kata-tarball:
     runs-on: ppc64le
-    needs: [build-asset, build-asset-rootfs, build-asset-shim-v2, remove-rootfs-binary-artifacts]
+    needs: [build-asset, build-asset-rootfs, build-asset-shim-v2]
     steps:
       - name: Adjust a permission for repo
         run: |

@@ -217,7 +217,7 @@ jobs:
 
   build-asset-shim-v2:
     runs-on: ubuntu-22.04
-    needs: [build-asset, build-asset-rootfs]
+    needs: [build-asset, build-asset-rootfs, remove-rootfs-binary-artifacts]
     steps:
       - name: Login to Kata Containers quay.io
         if: ${{ inputs.push-to-registry == 'yes' }}
@@ -274,7 +274,7 @@ jobs:
 
   create-kata-tarball:
     runs-on: ubuntu-22.04
-    needs: [build-asset, build-asset-rootfs, build-asset-shim-v2, remove-rootfs-binary-artifacts]
+    needs: [build-asset, build-asset-rootfs, build-asset-shim-v2]
     steps:
       - uses: actions/checkout@v4
         with:
