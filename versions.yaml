@@ -99,6 +99,11 @@ assets:
         https://github.com/qemu/qemu/tags
         .*/v?(\d\S+)\.tar\.gz
 
+    qemu-cca-experimental:
+      description: "QEMU with experimental CCA support"
+      url: "https://git.codelinaro.org/linaro/dcap/qemu.git"
+      tag: "97345ddc501d3eb45bbbf15d97608fba0c2c0c7b"
+
     qemu-snp-experimental:
       description: "QEMU with GPU+SNP support"
       url: "https://github.com/confidential-containers/qemu.git"
