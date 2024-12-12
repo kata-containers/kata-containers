@@ -341,9 +341,9 @@ spec:
     server: https://kubernetes.default.svc
   project: default
   source:
-    path: argo/clusters/golden
-    repoURL: git@github.com:Super-Protocol/sp-golden-image.git
-    targetRevision: HEAD
+    path: argo/clusters/virtual-machine
+    repoURL: git@github.com:Super-Protocol/argo-vm.git
+    targetRevision: main # argo-vm-selected-branch
   syncPolicy:
     automated:
       prune: true
@@ -493,6 +493,10 @@ spec:
               template: apply-secrets
               depends: "get-secrets-for-tdx.Succeeded || get-secrets-for-untrusted.Succeeded"
 
+            - name: force-sync-root-argocd-app
+              template: force-sync-root-argocd-app
+              depends: "apply-secrets.Succeeded"
+
 
       - name: pki-config-challenge
         script:
@@ -614,6 +618,24 @@ spec:
           volumeMounts:
             - name: sp-deploy
               mountPath: /opt/super
+
+
+      - name: force-sync-root-argocd-app
+        container:
+          image: quay.io/argoproj/argocd:v2.13.1@sha256:19608c266cc41e4986d9b1c2b79ea4c42bb9430269eefc5005e9d65be4d22868
+          command: [sh, -c]
+          args:
+            - |
+              set -e
+              ARGOCD_APP_NAME=sp-argo-vm
+              argocd login argocd-server.argocd.svc:80 --username admin --password $ARGOCD_PASSWORD --insecure
+              argocd app sync $ARGOCD_APP_NAME --force
+          env:
+          - name: ARGOCD_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: argocd-initial-admin-secret
+                key: password
 
 
     volumes:
