@@ -147,4 +147,11 @@ impl yaml::K8sResource for CronJob {
         }
         false
     }
+
+    fn get_process_fields(&self, process: &mut policy::KataProcess) {
+        yaml::get_process_fields(
+            process,
+            &self.spec.jobTemplate.spec.template.spec.securityContext,
+        );
+    }
 }
