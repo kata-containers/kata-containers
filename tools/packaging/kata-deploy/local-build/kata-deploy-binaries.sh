@@ -124,6 +124,7 @@ options:
 	ovmf
 	ovmf-sev
 	qemu
+	qemu-cca-experimental
 	qemu-snp-experimental
 	qemu-tdx-experimental
 	stratovirt
@@ -789,6 +790,17 @@ install_qemu() {
 		"${qemu_builder}"
 }
 
+install_qemu_cca_experimental() {
+	export qemu_suffix="cca-experimental"
+	export qemu_tarball_name="kata-static-qemu-${qemu_suffix}.tar.gz"
+
+	install_qemu_helper \
+		"assets.hypervisor.qemu-${qemu_suffix}.url" \
+		"assets.hypervisor.qemu-${qemu_suffix}.tag" \
+		"qemu-${qemu_suffix}" \
+		"${qemu_experimental_builder}"
+}
+
 install_qemu_snp_experimental() {
 	export qemu_suffix="snp-experimental"
 	export qemu_tarball_name="kata-static-qemu-${qemu_suffix}.tar.gz"
@@ -1310,6 +1322,8 @@ handle_build() {
 	pause-image) install_pause_image ;;
 
 	qemu) install_qemu ;;
+
+	qemu-cca-experimental) install_qemu_cca_experimental ;;
 
 	qemu-snp-experimental) install_qemu_snp_experimental ;;
 
