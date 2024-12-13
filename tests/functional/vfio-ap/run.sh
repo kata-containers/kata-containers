@@ -156,7 +156,9 @@ create_mediated_device() {
     _APID=${APQN//.*}
     _APQI=${APQN#*.}
     APID=$(echo ${_APID} | sed 's/^0*//')
+    APID=${APID:-0}
     APQI=$(echo ${_APQI} | sed 's/^0*//')
+    APQI=${APQI:-0}
 
     # Release the device from the host
     pushd ${sys_bus_base}
