@@ -178,135 +178,217 @@ Currently, the image pulled in the guest will be downloaded and unpacked in the 
 
 There are a lot of CSI Plugins that support block volumes: AWS EBS, Azure Disk, Open-Local and so on. But as an example, we use Local Persistent Volumes to use local disks as block storage with k8s cluster.
 
-1. Create an empty disk image and attach the image to a loop device, such as `/dev/loop0`
+1. Check docker image size
+   ```bash
+   docker image ls|grep "largeimage"
+   quay.io/confidential-containers/test-images               largeimage            00bc1f6c893a   4 months ago   2.15GB
+   ```
+
+2. Create an empty disk image and attach the image to a loop device
+
+   ```bash
+   loop_file="/tmp/trusted-image-storage.img"
+   sudo dd if=/dev/zero of=$loop_file bs=1M count=0 seek=2500
+   sudo losetup -fP $loop_file >/dev/null 2>&1
+   device=$(sudo losetup -j $loop_file | awk -F'[: ]' '{print $1}')
+   echo $device
+   ```
+
+3. You can verify that the block device is created
+
+   ```bash
+   losetup -a | grep -i $loop_file
+   sudo fdisk -l $device
+   ```
+   
+   Expected output (index number of loop device might be different):
+   ```text
+   /dev/loop0: []: (/tmp/trusted-image-storage.img)
+   Disk /dev/loop0: 2.44 GiB, 2621440000 bytes, 5120000 sectors
+   Units: sectors of 1 * 512 = 512 bytes
+   Sector size (logical/physical): 512 bytes / 512 bytes
+   I/O size (minimum/optimal): 512 bytes / 512 bytes
+   ```
+
+4. Export environment variables
+
+   ```bash
+   export NODE_NAME=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
+   export STORAGE_SIZE="10Gi"
+   export LOOP_DEVICE=$device
+   ```
+
+5. Create file `local-storage-class.yaml` to define Storage Class for the block device
+   ```yaml
+   apiVersion: storage.k8s.io/v1
+   kind: StorageClass
+   metadata:
+     name: local-storage
+   provisioner: kubernetes.io/no-provisioner
+   volumeBindingMode: WaitForFirstConsumer
+   ```
+
+6. Deploy
+
+    ```bash
+    kubectl apply -f local-storage-class.yaml
+    ```
+
+7. Create `trusted-storage-pv.yaml` file to define Persistent Volume (PV) for the block device
+   ```yaml
+   ---
+   apiVersion: v1
+   kind: PersistentVolume
+   metadata:
+     name: trusted-block-pv
+   spec:
+     capacity:
+       storage: ${STORAGE_SIZE}
+     volumeMode: Block
+     accessModes:
+       - ReadWriteOnce
+     persistentVolumeReclaimPolicy: Retain
+     storageClassName: local-storage
+     local:
+       path: ${LOOP_DEVICE}
+     nodeAffinity:
+       required:
+         nodeSelectorTerms:
+           - matchExpressions:
+               - key: kubernetes.io/hostname
+                 operator: In
+                 values:
+                   - ${NODE_NAME}
+   ```
+
+8. Deploy:
+
+   ```bash
+   envsubst < trusted-storage-pv.yaml | kubectl apply -f -
+   ```
+
+9. Create `trusted-storage-pvc.yaml` file to define Persistent Volume Claim (PVC) for the block device
+   ```yaml
+   ---
+   apiVersion: v1
+   kind: PersistentVolumeClaim
+   metadata:
+     name: trusted-pvc
+   spec:
+     accessModes:
+       - ReadWriteOnce
+     resources:
+       requests:
+         storage: ${STORAGE_SIZE}
+     volumeMode: Block
+     storageClassName: local-storage
+   ```
+
+10. Deploy:
+
+    ```bash
+    envsubst < trusted-storage-pvc.yaml | kubectl apply -f -
+    ```
+
+11. Create a file `trusted-storage-pod.yaml` with pulling large image in guest
+
+    ```yaml
+    ---
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: large-image-pod
+    spec:
+      runtimeClassName: kata-qemu
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values:
+                      - ${NODE_NAME}
+      volumes:
+        - name: trusted-storage
+          persistentVolumeClaim:
+            claimName: trusted-pvc
+      containers:
+        - name: app-container
+          image: quay.io/confidential-containers/test-images:largeimage
+          command: ["/bin/sh", "-c"]
+          args:
+            - sleep 6000
+          volumeDevices:
+            - devicePath: /dev/trusted_store
+              name: trusted-storage
+    ```
+
+12. Deploy:
+
+    ```bash
+    envsubst < trusted-storage-pod.yaml | kubectl apply -f -
+    ```
+
+13. When you enter the pod, you can see that the additional storage is present:
+
+    ```bash
+    df -h
+    ```
+
+    See `overlay` of size `10G` mounted on `/`:
+    ```text
+    Filesystem                Size      Used Available Use% Mounted on
+    overlay                   9.7G      2.0G      7.2G  22% /
+    tmpfs                    64.0M         0     64.0M   0% /dev
+    tmpfs                   927.8M         0    927.8M   0% /sys/fs/cgroup
+    (...)
+    ```
+   
+14. Check whether the device is encrypted and used by entering into the VM
+    ```bash
+    $ lsblk --fs
+    NAME                 FSTYPE LABEL UUID FSAVAIL FSUSE% MOUNTPOINT
+    sda                                                   
+    └─encrypted_disk_GsLDt
+                                              178M    87% /run/kata-containers/image
+   
+    $ cryptsetup status encrypted_disk_GsLDt
+    /dev/mapper/encrypted_disk_GsLDt is active and is in use.
+      type:    LUKS2
+      cipher:  aes-xts-plain64
+      keysize: 512 bits
+      key location: keyring
+      device:  /dev/sda
+      sector size:  4096
+      offset:  32768 sectors
+      size:    5087232 sectors
+      mode:    read/write
+   
+    $ mount|grep "encrypted_disk_GsLDt"
+    /dev/mapper/encrypted_disk_GsLDt on /run/kata-containers/image type ext4
+   
+    $ du -h --max-depth=1 /run/kata-containers/image/
+    16K     /run/kata-containers/image/lost+found
+    2.1G    /run/kata-containers/image/layers
+    60K     /run/kata-containers/image/overlay
+    2.1G    /run/kata-containers/image/
+   
+    $ free -m
+                  total        used        free      shared  buff/cache   available
+    Mem:           1989          52          43           0        1893        1904
+    Swap:             0           0           0
+    ```
+   
+### Cleanup
+
+To remove everything created in the previous steps, run the following commands:
+
 ```bash
-$ loop_file="/tmp/trusted-image-storage.img"
-$ sudo dd if=/dev/zero of=$loop_file bs=1M count=2500
-$ sudo losetup /dev/loop0 $loop_file
-```
-
-2. Create a Storage Class
-```yaml
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: local-storage
-provisioner: kubernetes.io/no-provisioner
-volumeBindingMode: WaitForFirstConsumer
-```
-
-3. Create Persistent Volume
-```yaml
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: trusted-block-pv
-spec:
-  capacity:
-    storage: 10Gi
-  volumeMode: Block
-  accessModes:
-    - ReadWriteOnce
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: local-storage
-  local:
-    path: /dev/loop0
-  nodeAffinity:
-    required:
-      nodeSelectorTerms:
-      - matchExpressions:
-        - key: kubernetes.io/hostname
-          operator: In
-          values:
-          - NODE_NAME
-```
-
-4. Create Persistent Volume Claim
-```yaml
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: trusted-pvc
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 1Gi
-  volumeMode: Block
-  storageClassName: local-storage
-```
-
-5. Run a pod with pulling large image in guest
-
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: large-image-pod
-spec:
-  runtimeClassName: kata-qemu
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-        - matchExpressions:
-          - key: kubernetes.io/hostname
-            operator: In
-            values:
-            - NODE_NAME
-  volumes:
-    - name: trusted-storage
-      persistentVolumeClaim:
-        claimName: trusted-pvc
-  containers:
-    - name: app-container
-      image: quay.io/confidential-containers/test-images:largeimage
-      command: ["/bin/sh", "-c"]
-      args:
-        - sleep 6000
-      volumeDevices:
-        - devicePath: /dev/trusted_store
-          name: trusted-image-storage
-```
-
-5. Docker image size
-```bash
-docker image ls|grep "largeimage"
-quay.io/confidential-containers/test-images               largeimage            00bc1f6c893a   4 months ago   2.15GB
-```
-
-6. Check whether the device is encrypted and used by entering into the VM
-```bash
-$ lsblk --fs
-NAME                 FSTYPE LABEL UUID FSAVAIL FSUSE% MOUNTPOINT
-sda                                                   
-└─encrypted_disk_GsLDt
-                                          178M    87% /run/kata-containers/image
-
-$ cryptsetup status encrypted_disk_GsLDt
-/dev/mapper/encrypted_disk_GsLDt is active and is in use.
-  type:    LUKS2
-  cipher:  aes-xts-plain64
-  keysize: 512 bits
-  key location: keyring
-  device:  /dev/sda
-  sector size:  4096
-  offset:  32768 sectors
-  size:    5087232 sectors
-  mode:    read/write
-
-$ mount|grep "encrypted_disk_GsLDt"
-/dev/mapper/encrypted_disk_GsLDt on /run/kata-containers/image type ext4
-
-$ du -h --max-depth=1 /run/kata-containers/image/
-16K     /run/kata-containers/image/lost+found
-2.1G    /run/kata-containers/image/layers
-60K     /run/kata-containers/image/overlay
-2.1G    /run/kata-containers/image/
-
-$ free -m
-              total        used        free      shared  buff/cache   available
-Mem:           1989          52          43           0        1893        1904
-Swap:             0           0           0
+kubectl delete -f trusted-storage-pod.yaml
+kubectl delete -f trusted-storage-pvc.yaml
+kubectl delete -f trusted-storage-pv.yaml
+kubectl delete -f local-storage-class.yaml
+sudo losetup -d $device
+sudo rm -f $loop_file
 ```
