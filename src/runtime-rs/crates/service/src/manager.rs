@@ -137,8 +137,7 @@ impl ServiceManager {
 
     fn registry_service(&mut self) -> Result<()> {
         if let Some(t) = self.server.take() {
-            let task_service = Arc::new(Box::new(TaskService::new(self.handler.clone()))
-                as Box<dyn shim_async::Task + Send + Sync>);
+            let task_service = Arc::new(TaskService::new(self.handler.clone()));
             let t = t.register_service(shim_async::create_task(task_service));
             self.server = Some(t);
         }

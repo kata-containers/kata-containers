@@ -10,7 +10,7 @@ license = "Apache-2.0"
 [dependencies]
 anyhow = "^1.0"
 async-trait = "0.1.48"
-containerd-shim-protos = { version = "0.6.0", features = ["async"] }
+containerd-shim-protos = { version = "0.7.2", features = ["async"] }
 lazy_static = "1.4.0"
 nix = "0.24.2"
 protobuf = "3.2.0"

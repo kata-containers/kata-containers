@@ -15,8 +15,8 @@ tracing = "0.1.36"
 ttrpc = "0.8"
 
 common = { path = "../runtimes/common" }
-containerd-shim-protos = { version = "0.6.0", features = ["async"] }
-containerd-shim = { version = "0.6.0", features = ["async"] }
+containerd-shim-protos = { version = "0.7.2", features = ["async"] }
+containerd-shim = { version = "0.7.4", features = ["async"] }
 logging = { path = "../../../libs/logging" }
 kata-types = { path = "../../../libs/kata-types" }
 runtimes = { path = "../runtimes" }
