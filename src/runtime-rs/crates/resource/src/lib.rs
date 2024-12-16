@@ -17,7 +17,7 @@ pub mod manager;
 mod manager_inner;
 pub mod network;
 pub mod resource_persist;
-use hypervisor::{BlockConfig, HybridVsockConfig, VsockConfig};
+use hypervisor::{port_device::PortDeviceConfig, BlockConfig, HybridVsockConfig, VsockConfig};
 use network::NetworkConfig;
 pub mod rootfs;
 pub mod share_fs;
@@ -35,6 +35,7 @@ pub enum ResourceConfig {
     VmRootfs(BlockConfig),
     HybridVsock(HybridVsockConfig),
     Vsock(VsockConfig),
+    PortDevice(PortDeviceConfig),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
