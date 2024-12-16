@@ -174,16 +174,22 @@ $ echo $rootfs_count
 
 Currently, the image pulled in the guest will be downloaded and unpacked in the `/run/kata-containers/image` directory. However, by default, in rootfs-confidential image, systemd allocates 50% of the available physical RAM to the `/run` directory using a `tmpfs` filesystem. As we all know, memory is valuable, especially for confidential containers. This means that if we run a kata container with the default configuration (where the default memory assigned for a VM is 2048 MiB), `/run` would be allocated around 1024 MiB. Consequently, we can only pull images up to 1024 MiB in the guest. So we can use a block volume from the host and use `dm-crypt` and `dm-integrity` to encrypt the block volume in the guest, providing a secure place to store downloaded container images.
 
-### Create block volume with k8s
+### Create block volume for k8s
 
 There are a lot of CSI Plugins that support block volumes: AWS EBS, Azure Disk, Open-Local and so on. But as an example, we use Local Persistent Volumes to use local disks as block storage with k8s cluster.
 
 1. Check docker image size
    ```bash
+   docker pull quay.io/confidential-containers/test-images:largeimage
    docker image ls|grep "largeimage"
-   quay.io/confidential-containers/test-images               largeimage            00bc1f6c893a   4 months ago   2.15GB
    ```
-
+   
+   Expected output:
+   ```text
+   (...)
+   quay.io/confidential-containers/test-images      largeimage      (...)     2.15GB
+   ```
+   
 2. Create an empty disk image and attach the image to a loop device
 
    ```bash
@@ -210,15 +216,17 @@ There are a lot of CSI Plugins that support block volumes: AWS EBS, Azure Disk, 
    I/O size (minimum/optimal): 512 bytes / 512 bytes
    ```
 
-4. Export environment variables
+### Deploy k8s resources and a pod
+
+1. Export environment variables
 
    ```bash
    export NODE_NAME=$(kubectl get nodes -o jsonpath='{.items[0].metadata.name}')
-   export STORAGE_SIZE="10Gi"
+   export STORAGE_SIZE="2500M"
    export LOOP_DEVICE=$device
    ```
 
-5. Create file `local-storage-class.yaml` to define Storage Class for the block device
+2. Create file `local-storage-class.yaml` to define Storage Class for the block device
    ```yaml
    apiVersion: storage.k8s.io/v1
    kind: StorageClass
@@ -228,13 +236,13 @@ There are a lot of CSI Plugins that support block volumes: AWS EBS, Azure Disk, 
    volumeBindingMode: WaitForFirstConsumer
    ```
 
-6. Deploy
+3. Deploy
 
     ```bash
     kubectl apply -f local-storage-class.yaml
     ```
 
-7. Create `trusted-storage-pv.yaml` file to define Persistent Volume (PV) for the block device
+4. Create `trusted-storage-pv.yaml` file to define Persistent Volume (PV) for the block device
    ```yaml
    ---
    apiVersion: v1
@@ -261,13 +269,13 @@ There are a lot of CSI Plugins that support block volumes: AWS EBS, Azure Disk, 
                    - ${NODE_NAME}
    ```
 
-8. Deploy:
+5. Deploy:
 
    ```bash
    envsubst < trusted-storage-pv.yaml | kubectl apply -f -
    ```
 
-9. Create `trusted-storage-pvc.yaml` file to define Persistent Volume Claim (PVC) for the block device
+6. Create `trusted-storage-pvc.yaml` file to define Persistent Volume Claim (PVC) for the block device
    ```yaml
    ---
    apiVersion: v1
@@ -284,101 +292,140 @@ There are a lot of CSI Plugins that support block volumes: AWS EBS, Azure Disk, 
      storageClassName: local-storage
    ```
 
-10. Deploy:
+7. Deploy:
 
-    ```bash
-    envsubst < trusted-storage-pvc.yaml | kubectl apply -f -
-    ```
+   ```bash
+   envsubst < trusted-storage-pvc.yaml | kubectl apply -f -
+   ```
 
-11. Create a file `trusted-storage-pod.yaml` with pulling large image in guest
+8. Create a file `trusted-storage-pod.yaml` with pulling large image in guest
 
-    ```yaml
-    ---
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: large-image-pod
-    spec:
-      runtimeClassName: kata-qemu
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: kubernetes.io/hostname
-                    operator: In
-                    values:
-                      - ${NODE_NAME}
-      volumes:
-        - name: trusted-storage
-          persistentVolumeClaim:
-            claimName: trusted-pvc
-      containers:
-        - name: app-container
-          image: quay.io/confidential-containers/test-images:largeimage
-          command: ["/bin/sh", "-c"]
-          args:
-            - sleep 6000
-          volumeDevices:
-            - devicePath: /dev/trusted_store
-              name: trusted-storage
-    ```
+   ```yaml
+   ---
+   apiVersion: v1
+   kind: Pod
+   metadata:
+     name: large-image-pod
+   spec:
+     runtimeClassName: kata-qemu-coco-dev
+     affinity:
+       nodeAffinity:
+         requiredDuringSchedulingIgnoredDuringExecution:
+           nodeSelectorTerms:
+             - matchExpressions:
+                 - key: kubernetes.io/hostname
+                   operator: In
+                   values:
+                     - ${NODE_NAME}
+     volumes:
+       - name: trusted-storage
+         persistentVolumeClaim:
+           claimName: trusted-pvc
+     containers:
+       - name: app-container
+         image: quay.io/confidential-containers/test-images:largeimage
+         command: ["/bin/sh", "-c"]
+         args:
+           - sleep 6000
+         volumeDevices:
+           - devicePath: /dev/trusted_store
+             name: trusted-storage
+   ```
 
-12. Deploy:
+9. Deploy:
 
-    ```bash
-    envsubst < trusted-storage-pod.yaml | kubectl apply -f -
-    ```
+   ```bash
+   envsubst < trusted-storage-pod.yaml | kubectl apply -f -
+   ```
 
-13. When you enter the pod, you can see that the additional storage is present:
+At this point the pod is running and pulling the large image in the guest.
 
-    ```bash
-    df -h
-    ```
+### Debug
 
-    See `overlay` of size `10G` mounted on `/`:
+For additional debug information about the block device follow the steps below:
+
+1. Enter the VM - to do this, you may need to [set up the debug console](https://github.com/kata-containers/kata-containers/blob/main/docs/Developer-Guide.md#set-up-a-debug-console)
+
+2. Run the command to see that the additional storage is present:
+
+   ```bash
+   df -h
+   ```
+
+   See `overlay` and `encrypted_disk_4SCA1` of size `2.4G` in the output:
+   ```text
+   Filesystem                        Size  Used Avail Use% Mounted on
+   /dev/mapper/encrypted_disk_4SCA1  2.4G  2.1G  179M  93% /run/kata-containers/image
+   overlay                           2.4G  2.1G  179M  93% /run/kata-containers/5148f4ffae34e247d93976e0a5473289be41b23cbd8fadab46a357a12d55f43d/rootfs
+   (...)
+   ```
+   
+3. List the block devices:
+   ```bash
+   lsblk --fs
+   ```
+    
+   Expected output:
+   ```text
+   NAME                 FSTYPE LABEL UUID FSAVAIL FSUSE% MOUNTPOINT
+   sda                                                   
+   └─encrypted_disk_4SCA1
+                                             178M    87% /run/kata-containers/image
+   ```
+
+4. Check whether the storage device is encrypted:
+   ```bash
+   cryptsetup status encrypted_disk_4SCA1
+   ```
+    
+   Expected output:
+   ```text
+   /dev/mapper/encrypted_disk_4SCA1 is active and is in use.
+     type:    LUKS2
+     cipher:  aes-xts-plain64
+     keysize: 512 bits
+     key location: keyring
+     device:  /dev/sda
+     sector size:  4096
+     offset:  32768 sectors
+     size:    5087232 sectors
+     mode:    read/write
+   ```
+
+5. Mount the storage device:
+   ```bash 
+   mount|grep "encrypted_disk_4SCA1"
+   ```
+    
+   Expected output:
+   ```text
+   /dev/mapper/encrypted_disk_4SCA1 on /run/kata-containers/image type ext4 (rw,relatime)
+   ```
+
+6. Check the size of the image in the guest:
+   ```bash
+   du -h --max-depth=1 /run/kata-containers/image/
+   ```
+   
+   Expected output:
+   ```text
+   16K	/run/kata-containers/image/lost+found
+   60K	/run/kata-containers/image/overlay
+   2.1G	/run/kata-containers/image/layers
+   2.1G	/run/kata-containers/image/
+   ```
+   
+7. Check the memory usage in the guest: 
+   ```bash
+   free -m
+   ```
+   
+    Expected output:
     ```text
-    Filesystem                Size      Used Available Use% Mounted on
-    overlay                   9.7G      2.0G      7.2G  22% /
-    tmpfs                    64.0M         0     64.0M   0% /dev
-    tmpfs                   927.8M         0    927.8M   0% /sys/fs/cgroup
-    (...)
-    ```
-   
-14. Check whether the device is encrypted and used by entering into the VM
-    ```bash
-    $ lsblk --fs
-    NAME                 FSTYPE LABEL UUID FSAVAIL FSUSE% MOUNTPOINT
-    sda                                                   
-    └─encrypted_disk_GsLDt
-                                              178M    87% /run/kata-containers/image
-   
-    $ cryptsetup status encrypted_disk_GsLDt
-    /dev/mapper/encrypted_disk_GsLDt is active and is in use.
-      type:    LUKS2
-      cipher:  aes-xts-plain64
-      keysize: 512 bits
-      key location: keyring
-      device:  /dev/sda
-      sector size:  4096
-      offset:  32768 sectors
-      size:    5087232 sectors
-      mode:    read/write
-   
-    $ mount|grep "encrypted_disk_GsLDt"
-    /dev/mapper/encrypted_disk_GsLDt on /run/kata-containers/image type ext4
-   
-    $ du -h --max-depth=1 /run/kata-containers/image/
-    16K     /run/kata-containers/image/lost+found
-    2.1G    /run/kata-containers/image/layers
-    60K     /run/kata-containers/image/overlay
-    2.1G    /run/kata-containers/image/
-   
-    $ free -m
-                  total        used        free      shared  buff/cache   available
-    Mem:           1989          52          43           0        1893        1904
-    Swap:             0           0           0
-    ```
+                 total        used        free      shared  buff/cache   available
+   Mem:           1989          52          43           0        1893        1904
+   Swap:             0           0           0
+   ```
    
 ### Cleanup
 
