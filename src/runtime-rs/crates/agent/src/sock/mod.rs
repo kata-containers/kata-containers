@@ -24,9 +24,11 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use tokio::{
     io::{AsyncRead, ReadBuf},
-    net::UnixStream,
+    net::{UnixListener, UnixStream},
 };
 use url::Url;
+
+use tokio_vsock::{VsockListener, VsockStream};
 
 const VSOCK_SCHEME: &str = "vsock";
 const HYBRID_VSOCK_SCHEME: &str = "hvsock";
@@ -39,7 +41,13 @@ pub enum Stream {
     // and AF_VSOCK sockets (on the guest end).
     Unix(UnixStream),
     // vsock://<cid>:<port>
-    Vsock(UnixStream),
+    Vsock(VsockStream),
+}
+
+/// Socket Listener
+pub enum Listener {
+    Unix(UnixListener),
+    Vsock(VsockListener),
 }
 
 impl Stream {
@@ -50,7 +58,8 @@ impl Stream {
     ) -> Poll<std::io::Result<()>> {
         // Safety: `UnixStream::read` correctly handles reads into uninitialized memory
         match self {
-            Stream::Unix(stream) | Stream::Vsock(stream) => Pin::new(stream).poll_read(cx, buf),
+            Stream::Unix(stream) => Pin::new(stream).poll_read(cx, buf),
+            Stream::Vsock(stream) => Pin::new(stream).poll_read(cx, buf),
         }
     }
 }
@@ -58,13 +67,14 @@ impl Stream {
 impl IntoRawFd for Stream {
     fn into_raw_fd(self) -> RawFd {
         match self {
-            Stream::Unix(stream) | Stream::Vsock(stream) => match stream.into_std() {
+            Stream::Unix(stream) => match stream.into_std() {
                 Ok(stream) => stream.into_raw_fd(),
                 Err(err) => {
                     error!(sl!(), "failed to into std unix stream {:?}", err);
                     -1
                 }
             },
+            Stream::Vsock(stream) => stream.into_raw_fd(),
         }
     }
 }
@@ -107,6 +117,7 @@ enum SockType {
 #[async_trait]
 pub trait Sock: Send + Sync {
     async fn connect(&self, config: &ConnectConfig) -> Result<Stream>;
+    async fn listen(&self) -> Result<Listener>;
 }
 
 // Supported sock address formats are:
