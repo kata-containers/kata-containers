@@ -48,6 +48,8 @@ function install_dependencies() {
 	declare -a github_deps
 	github_deps[0]="cri_containerd:$(get_from_kata_deps ".externals.containerd.${CONTAINERD_VERSION}")"
 	github_deps[1]="cri_tools:$(get_from_kata_deps ".externals.critools.latest")"
+	github_deps[2]="runc:$(get_from_kata_deps ".externals.runc.latest")"
+	github_deps[3]="cni_plugins:$(get_from_kata_deps ".externals.cni-plugins.version")"
 
 	for github_dep in "${github_deps[@]}"; do
 		IFS=":" read -r -a dep <<< "${github_dep}"
