@@ -369,7 +369,7 @@ mod drop_in_directory_handling {
                 config.hypervisor["qemu"].path,
                 "/usr/bin/qemu-kvm".to_string()
             );
-            assert_eq!(config.hypervisor["qemu"].cpu_info.default_vcpus, 2);
+            assert_eq!(config.hypervisor["qemu"].cpu_info.default_vcpus, 2.0);
             assert_eq!(config.hypervisor["qemu"].device_info.default_bridges, 4);
             assert_eq!(
                 config.hypervisor["qemu"].shared_fs.shared_fs.as_deref(),
