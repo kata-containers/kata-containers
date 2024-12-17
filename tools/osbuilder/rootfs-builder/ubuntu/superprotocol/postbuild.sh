@@ -67,6 +67,7 @@ run_postbuild() {
 	cp "${script_dir}/hardening-vm.sh" "${rootfs_dir}/usr/local/bin/"
 	ln -s /etc/systemd/system/hardening-vm.service "$rootfs_dir/etc/systemd/system/multi-user.target.wants/hardening-vm.service"
 
+    sed -i 's|root:x:0:0:root:/root:/bin/bash|root:x:0:0:root:/root:/usr/sbin/nologin|' "${rootfs_dir}/etc/passwd" &&  echo "Disable root access"
 	set +x
 
 	umount ${rootfs_dir}/dev/pts
