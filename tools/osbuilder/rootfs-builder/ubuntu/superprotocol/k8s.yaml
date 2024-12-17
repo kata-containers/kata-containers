@@ -334,7 +334,7 @@ metadata:
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: sp-root
+  name: sp-argo-vm
   namespace: argocd
 spec:
   destination:
