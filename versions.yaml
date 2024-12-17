@@ -271,6 +271,11 @@ externals:
     # create a "latest" entry and use that for the GitHub actions tests.
     latest: "v1.29"
 
+  runc:
+    description: "CLI tool for spawning and running containers"
+    url: "https://github.com/opencontainers/runc"
+    latest: "v1.2"
+
   cryptsetup:
     description: "A utility used to setup disk encryption, integrity protection"
     url: "https://gitlab.com/cryptsetup/cryptsetup"
