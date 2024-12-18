@@ -2101,18 +2101,40 @@ async fn cdh_handler(oci: &mut Spec) -> Result<()> {
         .ok_or_else(|| anyhow!("Spec didn't contain mounts field"))?;
 
     for m in mounts.iter_mut() {
-        if m.destination().starts_with("/sealed") {
-            info!(
-                sl(),
-                "sealed mount destination: {:?} source: {:?}",
-                m.destination(),
-                m.source()
-            );
-            if let Some(source_str) = m.source().as_ref().and_then(|p| p.to_str()) {
-                cdh::unseal_file(source_str).await?;
-            } else {
-                warn!(sl(), "Failed to unseal: Mount source is None or invalid");
+        if let Some(source_path) = m.source().as_ref().and_then(|p| p.to_str()) {
+            // Check if source_path starts with "/run/kata-containers/shared/containers"
+            // For a volume mount path /mydir,
+            // the secret file path will be like this under the /run/kata-containers/shared/containers dir
+            // a128482812bad768f404e063f225decd425fc94a673aec4add45a9caa1122ccb-75490e32e51da3ff-mydir
+            // We can ignore few paths like: resolv.conf, termination-log, hostname,hosts,serviceaccount
+            if source_path.starts_with("/run/kata-containers/shared/containers")
+                && !source_path.ends_with("resolv.conf")
+                && !source_path.ends_with("termination-log")
+                && !source_path.ends_with("hostname")
+                && !source_path.ends_with("hosts")
+                && !source_path.ends_with("serviceaccount")
+            {
+                info!(
+                    sl(),
+                    "source file: {:?} destination: {:?}",
+                    source_path,
+                    m.destination()
+                );
+                // Call unseal_file. This function checks the files under the source_path
+                // for the sealed secret header and unseal it if header is present.
+                // This is suboptimal as we are going through every file under the source path
+                // But currently there is no quick way to dtermine which volume-mount is referring
+                // to a sealed secret without reading the file
+                // And relying on file naming heuristic is inflexible.
+                if let Err(e) = cdh::unseal_file(source_path).await {
+                    warn!(
+                        sl(),
+                        "Failed to unseal file: {:?}, Error: {:?}", source_path, e
+                    );
+                }
             }
+        } else {
+            warn!(sl(), "Mount source is None or invalid");
         }
     }
 
