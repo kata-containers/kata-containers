@@ -668,22 +668,43 @@ allow_by_bundle_or_sandbox_id(p_oci, i_oci, p_storages, i_storages) {
     print("allow_by_bundle_or_sandbox_id: true")
 }
 
-allow_process(p_process, i_process, s_name) {
-    print("allow_process: i terminal =", i_process.Terminal, "p terminal =", p_process.Terminal)
-    p_process.Terminal == i_process.Terminal
+allow_process_common(p_process, i_process, s_name) {
+    print("allow_process_common: p_process =", p_process)
+    print("allow_process_common: i_process = ", i_process)
+    print("allow_process_common: s_name =", s_name)
 
-    print("allow_process: i cwd =", i_process.Cwd, "i cwd =", p_process.Cwd)
     p_process.Cwd == i_process.Cwd
-
-    print("allow_process: i noNewPrivileges =", i_process.NoNewPrivileges, "p noNewPrivileges =", p_process.NoNewPrivileges)
     p_process.NoNewPrivileges == i_process.NoNewPrivileges
 
-    allow_caps(p_process.Capabilities, i_process.Capabilities)
     allow_user(p_process, i_process)
-    allow_args(p_process, i_process, s_name)
     allow_env(p_process, i_process, s_name)
 
+    print("allow_process_common: true")
+}
+
+# Compare the OCI Process field of a policy container with the input OCI Process from a CreateContainerRequest
+allow_process(p_process, i_process, s_name) {
+    print("allow_process: start")
+
+    allow_process_common(p_process, i_process, s_name)
+    allow_caps(p_process.Capabilities, i_process.Capabilities)
+    p_process.Terminal == i_process.Terminal
+
     print("allow_process: true")
+}
+
+# Compare the OCI Process field of a policy container with the input process field from ExecProcessRequest
+allow_interactive_process(p_process, i_process, s_name) {
+    print("allow_interactive_process: start")
+
+    allow_args(p_process, i_process, s_name)
+    allow_process_common(p_process, i_process, s_name)
+    allow_exec_caps(i_process.Capabilities)
+
+    # These are commands enabled using ExecProcessRequest commands and/or regex from the settings file.
+    # They can be executed interactively so allow them to use any value for i_process.Terminal.
+
+    print("allow_interactive_process: true")
 }
 
 allow_user(p_process, i_process) {
@@ -1182,7 +1203,16 @@ allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id, layer_ids) {
     print("allow_mount_point 5: true")
 }
 
-# process.Capabilities
+# ExecProcessRequest.process.Capabilities
+allow_exec_caps(i_caps) {
+    not i_caps.Ambient
+    not i_caps.Bounding
+    not i_caps.Effective
+    not i_caps.Inheritable
+    not i_caps.Permitted
+}
+
+# OCI.Process.Capabilities
 allow_caps(p_caps, i_caps) {
     print("allow_caps: policy Ambient =", p_caps.Ambient)
     print("allow_caps: input Ambient =", i_caps.Ambient)
@@ -1291,6 +1321,32 @@ CreateSandboxRequest {
     allow_sandbox_storages(input.storages)
 }
 
+allow_exec(p_container, i_process) {
+    print("allow_exec: start")
+
+    p_oci = p_container.OCI
+    p_s_name = p_oci.Annotations[S_NAME_KEY]
+    allow_probe_process(p_oci.Process, i_process, p_s_name)
+
+    print("allow_exec: true")
+}
+
+allow_interactive_exec(p_container, i_process) {
+    print("allow_interactive_exec: start")
+
+    p_oci = p_container.OCI
+    p_s_name = p_oci.Annotations[S_NAME_KEY]
+    allow_interactive_process(p_oci.Process, i_process, p_s_name)
+
+    print("allow_interactive_exec: true")
+}
+
+# get p_container from state
+get_state_container(container_id):= p_container {
+    idx := get_state_val(container_id)
+    p_container := policy_data.containers[idx]
+}
+
 ExecProcessRequest {
     print("ExecProcessRequest 1: input =", input)
     allow_exec_process_input
@@ -1299,21 +1355,23 @@ ExecProcessRequest {
     print("ExecProcessRequest 1: p_command =", p_command)
     p_command == input.process.Args
 
+    p_container := get_state_container(input.container_id)
+    allow_interactive_exec(p_container, input.process)
+
     print("ExecProcessRequest 1: true")
 }
 ExecProcessRequest {
     print("ExecProcessRequest 2: input =", input)
     allow_exec_process_input
 
-    # get p_container from state
-    idx := get_state_val(input.container_id)
-    p_container := policy_data.containers[idx]
+    p_container := get_state_container(input.container_id)
 
     some p_command in p_container.exec_commands
     print("ExecProcessRequest 2: p_command =", p_command)
 
-    # TODO: should other input data fields be validated as well?
     p_command == input.process.Args
+
+    allow_exec(p_container, input.process)
 
     print("ExecProcessRequest 2: true")
 }
@@ -1328,6 +1386,10 @@ ExecProcessRequest {
     print("ExecProcessRequest 3: p_regex =", p_regex)
 
     regex.match(p_regex, i_command)
+
+    p_container := get_state_container(input.container_id)
+
+    allow_interactive_exec(p_container, input.process)
 
     print("ExecProcessRequest 3: true")
 }
