@@ -148,7 +148,7 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
-  # We don't need the binaries installed in the rootfs as part of the tarball, so can delete them now we've built the rootfs
+  # We don't need the binaries installed in the rootfs as part of the release tarball, so can delete them now we've built the rootfs
   remove-rootfs-binary-artifacts:
     runs-on: ubuntu-22.04
     needs: build-asset-rootfs
@@ -158,12 +158,13 @@ jobs:
           - agent
     steps:
       - uses: geekyeggo/delete-artifact@v5
+        if: ${{ inputs.stage == 'release' }}
         with:
           name: kata-artifacts-ppc64le-${{ matrix.asset}}${{ inputs.tarball-suffix }}
 
   build-asset-shim-v2:
     runs-on: ppc64le
-    needs: [build-asset, build-asset-rootfs]
+    needs: [build-asset, build-asset-rootfs, remove-rootfs-binary-artifacts]
     steps:
       - name: Prepare the self-hosted runner
         run: |
@@ -223,7 +224,7 @@ jobs:
 
   create-kata-tarball:
     runs-on: ppc64le
-    needs: [build-asset, build-asset-rootfs, build-asset-shim-v2, remove-rootfs-binary-artifacts]
+    needs: [build-asset, build-asset-rootfs, build-asset-shim-v2]
     steps:
       - name: Adjust a permission for repo
         run: |
