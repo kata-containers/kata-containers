@@ -107,6 +107,7 @@ $ popd
 By default, the configuration of containerd is located at `/etc/containerd/config.toml`, and the 
 `cri` plugins are placed in the following section:
 
+For containerd v1.x:
 ```toml
 [plugins]
   [plugins.cri]
@@ -117,6 +118,13 @@ By default, the configuration of containerd is located at `/etc/containerd/confi
     [plugins.cri.cni]
       # conf_dir is the directory in which the admin places a CNI conf.
       conf_dir = "/etc/cni/net.d"
+```
+For containerd v2.x:
+```toml
+[plugins]
+  [plugins.'io.containerd.cri.v1.runtime']
+    [plugins.'io.containerd.cri.v1.runtime'.containerd]
+      #default_runtime_name = 'runc'
 ```
 
 The following sections outline how to add Kata Containers to the configurations.
@@ -136,6 +144,7 @@ The following configuration includes two runtime classes:
   where the dot-connected string `io.containerd.kata.v2` is translated to `containerd-shim-kata-v2` (i.e. the 
   binary name of the Kata implementation of [Containerd Runtime V2 (Shim API)](https://github.com/containerd/containerd/tree/main/core/runtime/v2)).
 
+For containerd v1.x:
 ```toml
     [plugins.cri.containerd]
       no_pivot = false
@@ -156,6 +165,17 @@ The following configuration includes two runtime classes:
          container_annotations = ["io.katacontainers.*"]
          [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.kata.options]
             ConfigPath = "/opt/kata/share/defaults/kata-containers/configuration.toml"
+```
+
+For containerd v2.x:
+```toml
+      [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes]
+        [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.runc]
+          runtime_type = 'io.containerd.runc.v2'
+          runtime_path = ''
+        [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.kata]
+          runtime_type = 'io.containerd.kata.v2'
+          runtime_path = ''
 ```
 
 `privileged_without_host_devices` tells containerd that a privileged Kata container should not have direct access to all host devices. If unset, containerd will pass all host devices to Kata container, which may cause security issues.
@@ -191,10 +211,18 @@ You can find more information on the [Containerd config documentation](https://g
 
 If you want to set Kata Containers as the only runtime in the deployment, you can simply configure as follows:
 
+For containerd v1.x:
 ```toml
     [plugins.cri.containerd]
     [plugins.cri.containerd.default_runtime]
       runtime_type = "io.containerd.kata.v2"
+```
+For containerd v2.x:
+```toml
+[plugins]
+  [plugins.'io.containerd.cri.v1.runtime']
+    [plugins.'io.containerd.cri.v1.runtime'.containerd]
+      default_runtime_name = 'kata'
 ```
 
 ### Configuration for `cri-tools`
