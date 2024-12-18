@@ -684,6 +684,7 @@ allow_process_common(p_process, i_process, s_name) {
 allow_process(p_process, i_process, s_name) {
     print("allow_process: start")
 
+    allow_args(p_process, i_process, s_name)
     allow_process_common(p_process, i_process, s_name)
     allow_caps(p_process.Capabilities, i_process.Capabilities)
     p_process.Terminal == i_process.Terminal
@@ -695,7 +696,6 @@ allow_process(p_process, i_process, s_name) {
 allow_interactive_process(p_process, i_process, s_name) {
     print("allow_interactive_process: start")
 
-    allow_args(p_process, i_process, s_name)
     allow_process_common(p_process, i_process, s_name)
     allow_exec_caps(i_process.Capabilities)
 
@@ -703,6 +703,17 @@ allow_interactive_process(p_process, i_process, s_name) {
     # They can be executed interactively so allow them to use any value for i_process.Terminal.
 
     print("allow_interactive_process: true")
+}
+
+# Compare the OCI Process field of a policy container with the input process field from ExecProcessRequest
+allow_probe_process(p_process, i_process, s_name) {
+    print("allow_probe_process: start")
+
+    allow_process_common(p_process, i_process, s_name)
+    allow_exec_caps(i_process.Capabilities)
+    p_process.Terminal == i_process.Terminal
+
+    print("allow_probe_process: true")
 }
 
 allow_user(p_process, i_process) {
@@ -1321,6 +1332,16 @@ CreateSandboxRequest {
     allow_sandbox_storages(input.storages)
 }
 
+allow_exec(p_container, i_process) {
+    print("allow_exec: start")
+
+    p_oci = p_container.OCI
+    p_s_name = p_oci.Annotations[S_NAME_KEY]
+    allow_probe_process(p_oci.Process, i_process, p_s_name)
+
+    print("allow_exec: true")
+}
+
 allow_interactive_exec(p_container, i_process) {
     print("allow_interactive_exec: start")
 
@@ -1330,6 +1351,7 @@ allow_interactive_exec(p_container, i_process) {
 
     print("allow_interactive_exec: true")
 }
+
 
 ExecProcessRequest {
     print("ExecProcessRequest 1: input =", input)
@@ -1357,6 +1379,8 @@ ExecProcessRequest {
 
     # TODO: should other input data fields be validated as well?
     p_command == input.process.Args
+
+    allow_exec(p_container, input.process)
 
     print("ExecProcessRequest 2: true")
 }
