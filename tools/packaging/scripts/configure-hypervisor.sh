@@ -411,6 +411,13 @@ generate_qemu_options() {
 	qemu_options+=(size:--disable-libdaxctl)
 	qemu_options+=(size:--disable-oss)
 
+	# Building static binaries for aarch64 requires disabling PIE
+	# We get an GOT overflow and the OS libraries are only build with fpic
+	# and not with fPIC which enables unlimited sized GOT tables.
+	if [ "${static}" == "true" ] && [ "${arch}" == "aarch64" ]; then
+		qemu_options+=(arch:"--disable-pie")
+	fi
+
 	#---------------------------------------------------------------------
 	# Enabled options
 
