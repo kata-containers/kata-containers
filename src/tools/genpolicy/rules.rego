@@ -292,7 +292,7 @@ allow_by_sandbox_name(p_oci, i_oci, p_storages, i_storages, s_name) {
 
     allow_by_container_types(p_oci, i_oci, s_name, i_namespace)
     allow_by_bundle_or_sandbox_id(p_oci, i_oci, p_storages, i_storages)
-    allow_process(p_oci, i_oci, s_name)
+    allow_process(p_oci.Process, i_oci.Process, s_name)
 
     print("allow_by_sandbox_name: true")
 }
@@ -668,10 +668,7 @@ allow_by_bundle_or_sandbox_id(p_oci, i_oci, p_storages, i_storages) {
     print("allow_by_bundle_or_sandbox_id: true")
 }
 
-allow_process(p_oci, i_oci, s_name) {
-    p_process := p_oci.Process
-    i_process := i_oci.Process
-
+allow_process(p_process, i_process, s_name) {
     print("allow_process: i terminal =", i_process.Terminal, "p terminal =", p_process.Terminal)
     p_process.Terminal == i_process.Terminal
 
