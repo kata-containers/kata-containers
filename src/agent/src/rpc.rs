@@ -2158,6 +2158,25 @@ fn load_kernel_module(module: &protocols::agent::KernelModule) -> Result<()> {
     }
 }
 
+fn is_sealed_secret_path(source_path: &str) -> bool {
+    // Base path to check
+    let base_path = "/run/kata-containers/shared/containers";
+    // Paths to exclude
+    let excluded_suffixes = [
+        "resolv.conf",
+        "termination-log",
+        "hostname",
+        "hosts",
+        "serviceaccount",
+    ];
+
+    // Ensure the path starts with the base path and does not end with any excluded suffix
+    source_path.starts_with(base_path)
+        && !excluded_suffixes
+            .iter()
+            .any(|suffix| source_path.ends_with(suffix))
+}
+
 async fn cdh_handler(oci: &mut Spec) -> Result<()> {
     if !cdh::is_cdh_client_initialized().await {
         return Ok(());
@@ -2183,17 +2202,34 @@ async fn cdh_handler(oci: &mut Spec) -> Result<()> {
         .ok_or_else(|| anyhow!("Spec didn't contain mounts field"))?;
 
     for m in mounts.iter_mut() {
-        if m.destination().starts_with("/sealed") {
-            info!(
+        let Some(source_path) = m.source().as_ref().and_then(|p| p.to_str()) else {
+            warn!(sl(), "Mount source is None or invalid");
+            continue;
+        };
+
+        // Check if source_path starts with "/run/kata-containers/shared/containers"
+        // For a volume mount path /mydir,
+        // the secret file path will be like this under the /run/kata-containers/shared/containers dir
+        // a128482812bad768f404e063f225decd425fc94a673aec4add45a9caa1122ccb-75490e32e51da3ff-mydir
+        // We can ignore few paths like: resolv.conf, termination-log, hostname,hosts,serviceaccount
+        if is_sealed_secret_path(source_path) {
+            debug!(
                 sl(),
-                "sealed mount destination: {:?} source: {:?}",
-                m.destination(),
-                m.source()
+                "Calling unseal_file for - source: {:?} destination: {:?}",
+                source_path,
+                m.destination()
             );
-            if let Some(source_str) = m.source().as_ref().and_then(|p| p.to_str()) {
-                cdh::unseal_file(source_str).await?;
-            } else {
-                warn!(sl(), "Failed to unseal: Mount source is None or invalid");
+            // Call unseal_file. This function checks the files under the source_path
+            // for the sealed secret header and unseal it if the header is present.
+            // This is suboptimal as we are going through every file under the source_path.
+            // But currently there is no quick way to determine which volume-mount is referring
+            // to a sealed secret without reading the file.
+            // And relying on file naming heuristic is inflexible. So we are going with this approach.
+            if let Err(e) = cdh::unseal_file(source_path).await {
+                warn!(
+                    sl(),
+                    "Failed to unseal file: {:?}, Error: {:?}", source_path, e
+                );
             }
         }
     }
@@ -3191,5 +3227,55 @@ COMMIT
                 .contains("INPUT -s 2001:db8:100::1/128 -i sit+ -p tcp -m tcp --sport 512:65535"),
             "We should see the resulting rule"
         );
+    }
+
+    #[tokio::test]
+    async fn test_is_sealed_secret_path() {
+        #[derive(Debug)]
+        struct TestData<'a> {
+            source_path: &'a str,
+            result: bool,
+        }
+
+        let tests = &[
+            TestData {
+                source_path: "/run/kata-containers/shared/containers/somefile",
+                result: true,
+            },
+            TestData {
+                source_path: "/run/kata-containers/shared/containers/a128482812bad768f404e063f225decd425fc94a673aec4add45a9caa1122ccb-75490e32e51da3ff-resolv.conf",
+                result: false,
+            },
+            TestData {
+                source_path: "/run/kata-containers/shared/containers/a128482812bad768f404e063f225decd425fc94a673aec4add45a9caa1122ccb-75490e32e51da3ff-termination-log",
+                result: false,
+            },
+            TestData {
+                source_path: "/run/kata-containers/shared/containers/a128482812bad768f404e063f225decd425fc94a673aec4add45a9caa1122ccb-75490e32e51da3ff-hostname",
+                result: false,
+            },
+            TestData {
+                source_path: "/run/kata-containers/shared/containers/a128482812bad768f404e063f225decd425fc94a673aec4add45a9caa1122ccb-75490e32e51da3ff-hosts",
+                result: false,
+            },
+            TestData {
+                source_path: "/run/kata-containers/shared/containers/a128482812bad768f404e063f225decd425fc94a673aec4add45a9caa1122ccb-75490e32e51da3ff-serviceaccount",
+                result: false,
+            },
+            TestData {
+                source_path: "/run/kata-containers/shared/containers/a128482812bad768f404e063f225decd425fc94a673aec4add45a9caa1122ccb-75490e32e51da3ff-mysecret",
+                result: true,
+            },
+            TestData {
+                source_path: "/some/other/path",
+                result: false,
+            },
+        ];
+
+        for (i, d) in tests.iter().enumerate() {
+            let msg = format!("test[{}]: {:?}", i, d);
+            let result = is_sealed_secret_path(d.source_path);
+            assert_eq!(d.result, result, "{}", msg);
+        }
     }
 }
