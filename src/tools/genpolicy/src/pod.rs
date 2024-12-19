@@ -315,7 +315,17 @@ struct SeccompProfile {
 pub struct PodSecurityContext {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub runAsUser: Option<i64>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sysctls: Option<Vec<Sysctl>>,
     // TODO: additional fields.
+}
+
+/// See Reference / Kubernetes API / Workload Resources / Pod.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Sysctl {
+    pub name: String,
+    pub value: String,
 }
 
 /// See Reference / Kubernetes API / Workload Resources / Pod.
@@ -894,6 +904,10 @@ impl yaml::K8sResource for Pod {
 
     fn get_process_fields(&self, process: &mut policy::KataProcess) {
         yaml::get_process_fields(process, &self.spec.securityContext);
+    }
+
+    fn get_sysctls(&self) -> Vec<Sysctl> {
+        yaml::get_sysctls(&self.spec.securityContext)
     }
 }
 
