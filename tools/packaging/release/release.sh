@@ -63,7 +63,7 @@ function _create_our_own_notes()
 	libseccomp_version=$(get_from_kata_deps ".externals.libseccomp.version")
 	libseccomp_url=$(get_from_kata_deps ".externals.libseccomp.url")
 
-	cat >> /tmp/our_notes_${RELEASE_VERSION} <<EOF 
+	cat >> /tmp/our_notes_${RELEASE_VERSION} <<EOF
 ## Survey
 
 Please take the Kata Containers survey:
@@ -111,6 +111,11 @@ function _create_new_release()
 	_check_required_env_var "GH_TOKEN"
 
 	RELEASE_VERSION="$(_release_version)"
+
+	if gh release view ${RELEASE_VERSION}; then
+		echo "Release already exists, aborting"
+		exit 1
+	fi
 
 	_create_our_own_notes
 
