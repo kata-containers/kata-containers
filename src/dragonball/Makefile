@@ -35,7 +35,7 @@ vendor:
 format:
 	@echo "INFO: rust fmt..."
 	# This is kinda dirty step here simply because cargo fmt --all will apply fmt to all dependencies of dragonball which will include /src/libs/protocols with some file generated during compilation time and could not be formatted when you use cargo fmt --all before building the whole project. In order to avoid this problem, we do fmt check in this following way. 
-	rustfmt --edition 2018 ./src/dbs_address_space/src/lib.rs ./src/dbs_allocator/src/lib.rs ./src/dbs_arch/src/lib.rs ./src/dbs_boot/src/lib.rs ./src/dbs_device/src/lib.rs ./src/dbs_interrupt/src/lib.rs ./src/dbs_legacy_devices/src/lib.rs ./src/dbs_pci/src/lib.rs ./src/dbs_upcall/src/lib.rs ./src/dbs_utils/src/lib.rs ./src/dbs_virtio_devices/src/lib.rs ./src/lib.rs --check
+	rustfmt --edition 2018 ./dbs_address_space/src/lib.rs ./dbs_allocator/src/lib.rs ./dbs_arch/src/lib.rs ./dbs_boot/src/lib.rs ./dbs_device/src/lib.rs ./dbs_interrupt/src/lib.rs ./dbs_legacy_devices/src/lib.rs ./dbs_pci/src/lib.rs ./dbs_upcall/src/lib.rs ./dbs_utils/src/lib.rs ./dbs_virtio_devices/src/lib.rs ./src/lib.rs --check
 
 clean:
 	cargo clean
