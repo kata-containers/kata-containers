@@ -48,6 +48,18 @@ BASE_TARBALLS = serial-targets \
 	virtiofsd-tarball
 BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	rootfs-initrd-tarball
+else ifeq ($(ARCH), aarch64)
+BASE_TARBALLS = serial-targets \
+	kernel-confidential-tarball \
+	kernel-tarball \
+	qemu-tarball \
+	qemu-cca-experimental-tarball \
+	shim-v2-tarball \
+	virtiofsd-tarball
+BASE_SERIAL_TARBALLS = rootfs-image-tarball \
+	rootfs-image-confidential-tarball \
+	rootfs-initrd-confidential-tarball \
+	rootfs-initrd-tarball
 endif
 
 define BUILD
@@ -144,6 +156,9 @@ ovmf-tarball:
 	${MAKE} $@-build
 
 qemu-snp-experimental-tarball:
+	${MAKE} $@-build
+
+qemu-cca-experimental-tarball:
 	${MAKE} $@-build
 
 qemu-tarball:

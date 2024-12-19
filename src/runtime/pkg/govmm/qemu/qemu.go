@@ -265,6 +265,9 @@ const (
 
 	// PEFGuest represent ppc64le PEF(Protected Execution Facility) object.
 	PEFGuest ObjectType = "pef-guest"
+
+	// RMEGuest represent Arm64 RME(Realm Management Extension) object.
+	RMEGuest ObjectType = "rme-guest"
 )
 
 // Object is a qemu object representation.
@@ -320,6 +323,10 @@ type Object struct {
 
 	// QgsPort defines Intel Quote Generation Service port exposed from the host
 	QgsPort uint32
+
+	// MeasurementAlgo is the algorithm for measurement
+	// This is only relevant for rme-guest objects
+	MeasurementAlgo string
 }
 
 // Valid returns true if the Object structure is valid and complete.
@@ -339,6 +346,8 @@ func (object Object) Valid() bool {
 		return object.ID != ""
 	case PEFGuest:
 		return object.ID != "" && object.File != ""
+	case RMEGuest:
+		return object.ID != "" && object.MeasurementAlgo != ""
 
 	default:
 		return false
@@ -408,6 +417,10 @@ func (object Object) QemuParams(config *Config) []string {
 		deviceParams = append(deviceParams, string(object.Driver))
 		deviceParams = append(deviceParams, fmt.Sprintf("id=%s", object.DeviceID))
 		deviceParams = append(deviceParams, fmt.Sprintf("host-path=%s", object.File))
+	case RMEGuest:
+		objectParams = append(objectParams, string(object.Type))
+		objectParams = append(objectParams, fmt.Sprintf("id=%s", object.ID))
+		objectParams = append(objectParams, fmt.Sprintf("measurement-algorithm=%s", object.MeasurementAlgo))
 	}
 
 	if len(deviceParams) > 0 {
