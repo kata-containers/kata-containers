@@ -36,6 +36,7 @@ run_postbuild() {
 	cp ${script_dir}/nvidia-persistenced.service ${rootfs_dir}/usr/lib/systemd/system/
 
 	echo 'root:123456' | chroot $rootfs_dir chpasswd
+	chroot $rootfs_dir passwd -d root
 
 	set -x
 	cp "${script_dir}/cert/superprotocol-ca.crt" "${rootfs_dir}/usr/local/share/ca-certificates/superprotocol-ca.crt"
@@ -66,9 +67,6 @@ run_postbuild() {
 	cp "${script_dir}/hardening-vm.service" "${rootfs_dir}/etc/systemd/system"
 	cp "${script_dir}/hardening-vm.sh" "${rootfs_dir}/usr/local/bin/"
 	ln -s /etc/systemd/system/hardening-vm.service "$rootfs_dir/etc/systemd/system/multi-user.target.wants/hardening-vm.service"
-
-    sed -i 's|root:x:0:0:root:/root:/bin/bash|root:x:0:0:root:/root:/usr/sbin/nologin|' "${rootfs_dir}/etc/passwd" &&  echo "Disable root access"
-	set +x
 
 	umount ${rootfs_dir}/dev/pts
 	umount ${rootfs_dir}/dev
