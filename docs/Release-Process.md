@@ -45,6 +45,14 @@ branch to read only whilst the release action runs.
 > [!NOTE]
 > Admin permission is needed to complete this task.
 
+### Wait for the `VERSION` bump PR payload publish to complete
+
+To reduce the chance of need to re-run the release workflow, check the
+[CI | Publish Kata Containers payload](https://github.com/kata-containers/kata-containers/actions/workflows/payload-after-push.yaml)
+once the `VERSION` PR bump has merged to check that the assets build correctly
+and are cached, so that the release process can just download these artifacts
+rather than needing to build them all, which takes time and can reveal errors in infra.
+
 ### Check GitHub Actions
 
 We make use of [GitHub actions](https://github.com/features/actions) in the
