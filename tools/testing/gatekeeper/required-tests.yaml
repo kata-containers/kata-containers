@@ -15,10 +15,9 @@ paths:
   # CI
   - "^ci/openshift-ci/": []
   - "^\\.github/workflows/": []
+  - "\\.md$": ["static"]
   # TODO: Expand filters
-  # Documentation
   #- "\\.rst$": ["build"]
-  #- "\\.md$": ["build"]
   # Sources
   #- "^src/": ["static", "build", "test"]
 
