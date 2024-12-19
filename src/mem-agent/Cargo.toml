@@ -1,0 +1,22 @@
+[package]
+name = "mem-agent"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+slog = "2.5.2"
+slog-scope = "4.1.2"
+anyhow = "1.0"
+page_size = "0.6"
+chrono = "0.4"
+tokio = { version = "1.33", features = ["full"] }
+async-trait = "0.1"
+lazy_static = "1.4"
+nix = "0.23.2"
+
+[dev-dependencies]
+maplit = "1.0"
+slog-term = "2.9.0"
+slog-async = "2.7"
+once_cell = "1.9.0"
+

@@ -18,6 +18,44 @@ use crate::eother;
 /// agent name of Kata agent.
 pub const AGENT_NAME_KATA: &str = "kata";
 
+#[derive(Default, Debug, Deserialize, Serialize, Clone)]
+pub struct MemAgent {
+    #[serde(default, alias = "mem_agent_enable")]
+    pub enable: bool,
+
+    #[serde(default)]
+    pub memcg_disable: Option<bool>,
+    #[serde(default)]
+    pub memcg_swap: Option<bool>,
+    #[serde(default)]
+    pub memcg_swappiness_max: Option<u8>,
+    #[serde(default)]
+    pub memcg_period_secs: Option<u64>,
+    #[serde(default)]
+    pub memcg_period_psi_percent_limit: Option<u8>,
+    #[serde(default)]
+    pub memcg_eviction_psi_percent_limit: Option<u8>,
+    #[serde(default)]
+    pub memcg_eviction_run_aging_count_min: Option<u64>,
+
+    #[serde(default)]
+    pub compact_disable: Option<bool>,
+    #[serde(default)]
+    pub compact_period_secs: Option<u64>,
+    #[serde(default)]
+    pub compact_period_psi_percent_limit: Option<u8>,
+    #[serde(default)]
+    pub compact_psi_percent_limit: Option<u8>,
+    #[serde(default)]
+    pub compact_sec_max: Option<i64>,
+    #[serde(default)]
+    pub compact_order: Option<u8>,
+    #[serde(default)]
+    pub compact_threshold: Option<u64>,
+    #[serde(default)]
+    pub compact_force_times: Option<u64>,
+}
+
 /// Kata agent configuration information.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Agent {
@@ -98,6 +136,10 @@ pub struct Agent {
     /// container pipe size
     #[serde(default)]
     pub container_pipe_size: u32,
+
+    /// Memory agent configuration
+    #[serde(default)]
+    pub mem_agent: MemAgent,
 }
 
 impl std::default::Default for Agent {
@@ -116,6 +158,7 @@ impl std::default::Default for Agent {
             health_check_request_timeout_ms: 90_000,
             kernel_modules: Default::default(),
             container_pipe_size: 0,
+            mem_agent: MemAgent::default(),
         }
     }
 }

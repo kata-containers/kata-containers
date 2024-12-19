@@ -45,6 +45,27 @@ const IMAGE_POLICY_FILE: &str = "agent.image_policy_file";
 const HTTPS_PROXY: &str = "agent.https_proxy";
 const NO_PROXY: &str = "agent.no_proxy";
 
+const MEM_AGENT_ENABLE: &str = "agent.mem_agent_enable";
+const MEM_AGENT_MEMCG_DISABLE: &str = "agent.mem_agent_memcg_disable";
+const MEM_AGENT_MEMCG_SWAP: &str = "agent.mem_agent_memcg_swap";
+const MEM_AGENT_MEMCG_SWAPPINESS_MAX: &str = "agent.mem_agent_memcg_swappiness_max";
+const MEM_AGENT_MEMCG_PERIOD_SECS: &str = "agent.mem_agent_memcg_period_secs";
+const MEM_AGENT_MEMCG_PERIOD_PSI_PERCENT_LIMIT: &str =
+    "agent.mem_agent_memcg_period_psi_percent_limit";
+const MEM_AGENT_MEMCG_EVICTION_PSI_PERCENT_LIMIT: &str =
+    "agent.mem_agent_memcg_eviction_psi_percent_limit";
+const MEM_AGENT_MEMCG_EVICTION_RUN_AGING_COUNT_MIN: &str =
+    "agent.mem_agent_memcg_eviction_run_aging_count_min";
+const MEM_AGENT_COMPACT_DISABLE: &str = "agent.mem_agent_compact_disable";
+const MEM_AGENT_COMPACT_PERIOD_SECS: &str = "agent.mem_agent_compact_period_secs";
+const MEM_AGENT_COMPACT_PERIOD_PSI_PERCENT_LIMIT: &str =
+    "agent.mem_agent_compact_period_psi_percent_limit";
+const MEM_AGENT_COMPACT_PSI_PERCENT_LIMIT: &str = "agent.mem_agent_compact_psi_percent_limit";
+const MEM_AGENT_COMPACT_SEC_MAX: &str = "agent.mem_agent_compact_sec_max";
+const MEM_AGENT_COMPACT_ORDER: &str = "agent.mem_agent_compact_order";
+const MEM_AGENT_COMPACT_THRESHOLD: &str = "agent.mem_agent_compact_threshold";
+const MEM_AGENT_COMPACT_FORCE_TIMES: &str = "agent.mem_agent_compact_force_times";
+
 const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
 const DEFAULT_HOTPLUG_TIMEOUT: time::Duration = time::Duration::from_secs(3);
 const DEFAULT_CDH_API_TIMEOUT: time::Duration = time::Duration::from_secs(50);
@@ -131,6 +152,13 @@ pub struct AgentConfig {
     pub image_policy_file: String,
     #[cfg(feature = "agent-policy")]
     pub policy_file: String,
+    pub mem_agent: Option<MemAgentConfig>,
+}
+
+#[derive(Debug, Default, PartialEq)]
+pub struct MemAgentConfig {
+    pub memcg_config: mem_agent::memcg::Config,
+    pub compact_config: mem_agent::compact::Config,
 }
 
 #[derive(Debug, Deserialize)]
@@ -160,6 +188,22 @@ pub struct AgentConfigBuilder {
     pub image_policy_file: Option<String>,
     #[cfg(feature = "agent-policy")]
     pub policy_file: Option<String>,
+    pub mem_agent_enable: Option<bool>,
+    pub mem_agent_memcg_disable: Option<bool>,
+    pub mem_agent_memcg_swap: Option<bool>,
+    pub mem_agent_memcg_swappiness_max: Option<u8>,
+    pub mem_agent_memcg_period_secs: Option<u64>,
+    pub mem_agent_memcg_period_psi_percent_limit: Option<u8>,
+    pub mem_agent_memcg_eviction_psi_percent_limit: Option<u8>,
+    pub mem_agent_memcg_eviction_run_aging_count_min: Option<u64>,
+    pub mem_agent_compact_disable: Option<bool>,
+    pub mem_agent_compact_period_secs: Option<u64>,
+    pub mem_agent_compact_period_psi_percent_limit: Option<u8>,
+    pub mem_agent_compact_psi_percent_limit: Option<u8>,
+    pub mem_agent_compact_sec_max: Option<i64>,
+    pub mem_agent_compact_order: Option<u8>,
+    pub mem_agent_compact_threshold: Option<u64>,
+    pub mem_agent_compact_force_times: Option<u64>,
 }
 
 macro_rules! config_override {
@@ -172,6 +216,14 @@ macro_rules! config_override {
     ($builder:ident, $config:ident, $field:ident, $func: ident) => {
         if let Some(v) = $builder.$field {
             $config.$field = $func(&v)?;
+        }
+    };
+}
+
+macro_rules! mem_agent_config_override {
+    ($builder_v:expr, $mac_v:expr) => {
+        if let Some(v) = $builder_v {
+            $mac_v = v;
         }
     };
 }
@@ -235,6 +287,7 @@ impl Default for AgentConfig {
             image_policy_file: String::from(""),
             #[cfg(feature = "agent-policy")]
             policy_file: String::from(""),
+            mem_agent: None,
         }
     }
 }
@@ -287,6 +340,75 @@ impl FromStr for AgentConfig {
 
         #[cfg(feature = "agent-policy")]
         config_override!(agent_config_builder, agent_config, policy_file);
+
+        if agent_config_builder.mem_agent_enable.unwrap_or(false) {
+            let mut mac = MemAgentConfig::default();
+
+            mem_agent_config_override!(
+                agent_config_builder.mem_agent_memcg_disable,
+                mac.memcg_config.disabled
+            );
+            mem_agent_config_override!(
+                agent_config_builder.mem_agent_memcg_swap,
+                mac.memcg_config.swap
+            );
+            mem_agent_config_override!(
+                agent_config_builder.mem_agent_memcg_swappiness_max,
+                mac.memcg_config.swappiness_max
+            );
+            mem_agent_config_override!(
+                agent_config_builder.mem_agent_memcg_period_secs,
+                mac.memcg_config.period_secs
+            );
+            mem_agent_config_override!(
+                agent_config_builder.mem_agent_memcg_period_psi_percent_limit,
+                mac.memcg_config.period_psi_percent_limit
+            );
+            mem_agent_config_override!(
+                agent_config_builder.mem_agent_memcg_eviction_psi_percent_limit,
+                mac.memcg_config.eviction_psi_percent_limit
+            );
+            mem_agent_config_override!(
+                agent_config_builder.mem_agent_memcg_eviction_run_aging_count_min,
+                mac.memcg_config.eviction_run_aging_count_min
+            );
+
+            mem_agent_config_override!(
+                agent_config_builder.mem_agent_compact_disable,
+                mac.compact_config.disabled
+            );
+            mem_agent_config_override!(
+                agent_config_builder.mem_agent_compact_period_secs,
+                mac.compact_config.period_secs
+            );
+            mem_agent_config_override!(
+                agent_config_builder.mem_agent_compact_period_psi_percent_limit,
+                mac.compact_config.period_psi_percent_limit
+            );
+            mem_agent_config_override!(
+                agent_config_builder.mem_agent_compact_psi_percent_limit,
+                mac.compact_config.compact_psi_percent_limit
+            );
+            mem_agent_config_override!(
+                agent_config_builder.mem_agent_compact_sec_max,
+                mac.compact_config.compact_sec_max
+            );
+            mem_agent_config_override!(
+                agent_config_builder.mem_agent_compact_order,
+                mac.compact_config.compact_order
+            );
+            mem_agent_config_override!(
+                agent_config_builder.mem_agent_compact_threshold,
+                mac.compact_config.compact_threshold
+            );
+            mem_agent_config_override!(
+                agent_config_builder.mem_agent_compact_force_times,
+                mac.compact_config.compact_force_times
+            );
+
+            agent_config.mem_agent = Some(mac);
+        }
+
         Ok(agent_config)
     }
 }
@@ -311,6 +433,8 @@ impl AgentConfig {
         let mut config: AgentConfig = Default::default();
         let cmdline = fs::read_to_string(file)?;
         let params: Vec<&str> = cmdline.split_ascii_whitespace().collect();
+        let mut mem_agent_enable = false;
+        let mut mac = MemAgentConfig::default();
         for param in params.iter() {
             // If we get a configuration file path from the command line, we
             // generate our config from it.
@@ -367,21 +491,21 @@ impl AgentConfig {
                 param,
                 DEBUG_CONSOLE_VPORT_OPTION,
                 config.debug_console_vport,
-                get_vsock_port,
+                get_number_value,
                 |port| port > 0
             );
             parse_cmdline_param!(
                 param,
                 LOG_VPORT_OPTION,
                 config.log_vport,
-                get_vsock_port,
+                get_number_value,
                 |port| port > 0
             );
             parse_cmdline_param!(
                 param,
                 PASSFD_LISTENER_PORT,
                 config.passfd_listener_port,
-                get_vsock_port,
+                get_number_value,
                 |port| port > 0
             );
             parse_cmdline_param!(
@@ -437,6 +561,105 @@ impl AgentConfig {
                 config.secure_storage_integrity,
                 get_bool_value
             );
+
+            parse_cmdline_param!(param, MEM_AGENT_ENABLE, mem_agent_enable, get_bool_value);
+
+            if mem_agent_enable {
+                parse_cmdline_param!(
+                    param,
+                    MEM_AGENT_MEMCG_DISABLE,
+                    mac.memcg_config.disabled,
+                    get_number_value
+                );
+                parse_cmdline_param!(
+                    param,
+                    MEM_AGENT_MEMCG_SWAP,
+                    mac.memcg_config.swap,
+                    get_number_value
+                );
+                parse_cmdline_param!(
+                    param,
+                    MEM_AGENT_MEMCG_SWAPPINESS_MAX,
+                    mac.memcg_config.swappiness_max,
+                    get_number_value
+                );
+                parse_cmdline_param!(
+                    param,
+                    MEM_AGENT_MEMCG_PERIOD_SECS,
+                    mac.memcg_config.period_secs,
+                    get_number_value
+                );
+                parse_cmdline_param!(
+                    param,
+                    MEM_AGENT_MEMCG_PERIOD_PSI_PERCENT_LIMIT,
+                    mac.memcg_config.period_psi_percent_limit,
+                    get_number_value
+                );
+                parse_cmdline_param!(
+                    param,
+                    MEM_AGENT_MEMCG_EVICTION_PSI_PERCENT_LIMIT,
+                    mac.memcg_config.eviction_psi_percent_limit,
+                    get_number_value
+                );
+                parse_cmdline_param!(
+                    param,
+                    MEM_AGENT_MEMCG_EVICTION_RUN_AGING_COUNT_MIN,
+                    mac.memcg_config.eviction_run_aging_count_min,
+                    get_number_value
+                );
+                parse_cmdline_param!(
+                    param,
+                    MEM_AGENT_COMPACT_DISABLE,
+                    mac.compact_config.disabled,
+                    get_number_value
+                );
+                parse_cmdline_param!(
+                    param,
+                    MEM_AGENT_COMPACT_PERIOD_SECS,
+                    mac.compact_config.period_secs,
+                    get_number_value
+                );
+                parse_cmdline_param!(
+                    param,
+                    MEM_AGENT_COMPACT_PERIOD_PSI_PERCENT_LIMIT,
+                    mac.compact_config.period_psi_percent_limit,
+                    get_number_value
+                );
+                parse_cmdline_param!(
+                    param,
+                    MEM_AGENT_COMPACT_PSI_PERCENT_LIMIT,
+                    mac.compact_config.compact_psi_percent_limit,
+                    get_number_value
+                );
+                parse_cmdline_param!(
+                    param,
+                    MEM_AGENT_COMPACT_SEC_MAX,
+                    mac.compact_config.compact_sec_max,
+                    get_number_value
+                );
+                parse_cmdline_param!(
+                    param,
+                    MEM_AGENT_COMPACT_ORDER,
+                    mac.compact_config.compact_order,
+                    get_number_value
+                );
+                parse_cmdline_param!(
+                    param,
+                    MEM_AGENT_COMPACT_THRESHOLD,
+                    mac.compact_config.compact_threshold,
+                    get_number_value
+                );
+                parse_cmdline_param!(
+                    param,
+                    MEM_AGENT_COMPACT_FORCE_TIMES,
+                    mac.compact_config.compact_force_times,
+                    get_number_value
+                );
+            }
+        }
+
+        if mem_agent_enable {
+            config.mem_agent = Some(mac);
         }
 
         config.override_config_from_envs();
@@ -477,11 +700,19 @@ impl AgentConfig {
 }
 
 #[instrument]
-fn get_vsock_port(p: &str) -> Result<i32> {
+fn get_number_value<T>(p: &str) -> Result<T>
+where
+    T: std::str::FromStr,
+    <T as std::str::FromStr>::Err: std::fmt::Debug,
+{
     let fields: Vec<&str> = p.split('=').collect();
-    ensure!(fields.len() == 2, "invalid port parameter");
+    if fields.len() != 2 {
+        return Err(anyhow!("format of {} is invalid", p));
+    }
 
-    Ok(fields[1].parse::<i32>()?)
+    fields[1]
+        .parse::<T>()
+        .map_err(|e| anyhow!("parse from {} failed: {:?}", &fields[1], e))
 }
 
 // Map logrus (https://godoc.org/github.com/sirupsen/logrus)
@@ -682,6 +913,7 @@ mod tests {
             image_policy_file: &'a str,
             #[cfg(feature = "agent-policy")]
             policy_file: &'a str,
+            mem_agent: Option<MemAgentConfig>,
         }
 
         impl Default for TestData<'_> {
@@ -710,6 +942,7 @@ mod tests {
                     image_policy_file: "",
                     #[cfg(feature = "agent-policy")]
                     policy_file: "",
+                    mem_agent: None,
                 }
             }
         }
@@ -1204,6 +1437,40 @@ mod tests {
                 policy_file: "/tmp/policy.rego",
                 ..Default::default()
             },
+            TestData {
+                contents: "",
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.mem_agent_enable=1",
+                mem_agent: Some(MemAgentConfig::default()),
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.mem_agent_enable=1\nagent.mem_agent_memcg_period_secs=300",
+                mem_agent: Some(MemAgentConfig {
+                    memcg_config: mem_agent::memcg::Config {
+                        period_secs: 300,
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+            TestData {
+                contents: "agent.mem_agent_enable=1\nagent.mem_agent_memcg_period_secs=300\nagent.mem_agent_compact_order=6",
+                mem_agent: Some(MemAgentConfig {
+                    memcg_config: mem_agent::memcg::Config {
+                        period_secs: 300,
+                        ..Default::default()
+                    },
+                    compact_config: mem_agent::compact::Config {
+                        compact_order: 6,
+                        ..Default::default()
+                    },
+                }),
+                ..Default::default()
+            },
         ];
 
         let dir = tempdir().expect("failed to create tmpdir");
@@ -1280,6 +1547,8 @@ mod tests {
             );
             #[cfg(feature = "agent-policy")]
             assert_eq!(d.policy_file, config.policy_file, "{}", msg);
+
+            assert_eq!(d.mem_agent, config.mem_agent, "{}", msg);
 
             for v in vars_to_unset {
                 env::remove_var(v);
@@ -1525,6 +1794,7 @@ Caused by:
                server_addr = 'vsock://8:2048'
                guest_components_procs = "api-server-rest"
                guest_components_rest_api = "all"
+               mem_agent_enable = true
               "#,
         )
         .unwrap();
@@ -1543,5 +1813,7 @@ Caused by:
 
         // Verify that the default values are valid
         assert_eq!(config.hotplug_timeout, DEFAULT_HOTPLUG_TIMEOUT);
+
+        assert_eq!(config.mem_agent, Some(MemAgentConfig::default()),);
     }
 }
