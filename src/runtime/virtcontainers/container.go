@@ -644,6 +644,20 @@ func (c *Container) createBlockDevices(ctx context.Context) error {
 
 			for key, value := range mntInfo.Metadata {
 				switch key {
+				case volume.ConfidentialMetadataKey:
+					confidential, err := strconv.ParseBool(value)
+					if err != nil {
+						c.Logger().Errorf("invalid value %q for metadata key %q, expected boolean string", value, key)
+						continue
+					}
+					c.mounts[i].Confidential = confidential
+				case volume.EphemeralMetadataKey:
+					ephemeral, err := strconv.ParseBool(value)
+					if err != nil {
+						c.Logger().Errorf("invalid value %q for metadata key %q, expected boolean string", value, key)
+						continue
+					}
+					c.mounts[i].Ephemeral = ephemeral
 				case volume.FSGroupMetadataKey:
 					gid, err := strconv.Atoi(value)
 					if err != nil {

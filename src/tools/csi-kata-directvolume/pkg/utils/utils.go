@@ -24,10 +24,12 @@ import (
 )
 
 const (
-	KataContainersDirectVolumeType = "katacontainers.direct.volume/volumetype"
-	KataContainersDirectFsType     = "katacontainers.direct.volume/fstype"
-	DirectVolumeTypeName           = "directvol"
-	IsDirectVolume                 = "is_directvolume"
+	KataContainersDirectVolumeType    = "katacontainers.direct.volume/volumetype"
+	KataContainersDirectFsType        = "katacontainers.direct.volume/fstype"
+	KataContainersDirectLoop          = "katacontainers.direct.volume/loop"
+	KataContainersDirectCoCoEphemeral = "katacontainers.direct.volume/cocoephemeral"
+	DirectVolumeTypeName              = "directvol"
+	IsDirectVolume                    = "is_directvolume"
 )
 
 const (
