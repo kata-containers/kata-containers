@@ -36,8 +36,8 @@ run_postbuild() {
 	cp ${script_dir}/nvidia-persistenced.service ${rootfs_dir}/usr/lib/systemd/system/
 
 	echo 'root:123456' | chroot $rootfs_dir chpasswd
-	sed -i '1 s|^.*$|-:root:ALL|' /etc/security/access.conf
-	sed -i '1 s|^.*$|account required pam_access.so|' /etc/pam.d/login
+	chroot $rootfs_dir sed -i '1 s|^.*$|-:root:ALL|' /etc/security/access.conf
+	chroot $rootfs_dir sed -i '1 s|^.*$|account required pam_access.so|' /etc/pam.d/login
 
 	set -x
 	cp "${script_dir}/cert/superprotocol-ca.crt" "${rootfs_dir}/usr/local/share/ca-certificates/superprotocol-ca.crt"
