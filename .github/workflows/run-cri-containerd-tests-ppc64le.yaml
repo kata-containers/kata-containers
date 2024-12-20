@@ -33,6 +33,7 @@ jobs:
         run: sudo chown -R "$USER":"$USER" "$GITHUB_WORKSPACE"
 
       - name: Prepare the self-hosted runner
+        timeout-minutes: 15
         run: |
           bash "${HOME}/scripts/prepare_runner.sh" cri-containerd
           sudo rm -rf "$GITHUB_WORKSPACE"/*
@@ -49,6 +50,7 @@ jobs:
           TARGET_BRANCH: ${{ inputs.target-branch }}
 
       - name: Install dependencies
+        timeout-minutes: 15
         run: bash tests/integration/cri-containerd/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
