@@ -27,6 +27,7 @@ jobs:
     runs-on: ppc64le
     steps:
       - name: Prepare the self-hosted runner
+        timeout-minutes: 15
         run: |
           "${HOME}/scripts/prepare_runner.sh"
           sudo rm -rf "$GITHUB_WORKSPACE"/*

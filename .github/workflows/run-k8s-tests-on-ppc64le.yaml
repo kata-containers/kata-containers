@@ -44,6 +44,7 @@ jobs:
       TARGET_ARCH: "ppc64le"
     steps:
       - name: Prepare the self-hosted runner
+        timeout-minutes: 15
         run: |
           bash "${HOME}/scripts/prepare_runner.sh" kubernetes
           sudo rm -rf "$GITHUB_WORKSPACE"/*
