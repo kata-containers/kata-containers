@@ -104,12 +104,12 @@ Usage:
 ${script_name} [options]
 
 Options:
- --osname=${os_name}
- --osversion=${os_version}
- --imagetype=${image_type}
- --prefix=${prefix}
- --destdir=${destdir}
- --image_initrd_suffix=${image_initrd_suffix}
+ --osname=\${os_name}
+ --osversion=\${os_version}
+ --imagetype=\${image_type}
+ --prefix=\${prefix}
+ --destdir=\${destdir}
+ --image_initrd_suffix=\${image_initrd_suffix}
 EOF
 
 	exit "${return_code}"
