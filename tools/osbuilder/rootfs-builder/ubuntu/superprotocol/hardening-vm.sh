@@ -33,3 +33,8 @@ if ! grep -q 'sp-debug=true' /proc/cmdline; then
     iptables -I INPUT -s 10.42.0.0/16 -j ACCEPT
 fi
 
+if grep -q 'sp-debug=true' /proc/cmdline; then
+  sed -i '1 s|^.*$|AuthorizedKeysFile /sp/authorized_keys|' /etc/ssh/sshd_config
+  chmod 400 /sp/authorized_keys || echo 'authorized_keys not found'
+  systemctl restart sshd
+fi
