@@ -34,7 +34,5 @@ if ! grep -q 'sp-debug=true' /proc/cmdline; then
 fi
 
 if grep -q 'sp-debug=true' /proc/cmdline; then
-  sed -i '1 s|^.*$|AuthorizedKeysFile /sp/authorized_keys|' /etc/ssh/sshd_config
   chmod 400 /sp/authorized_keys || echo 'authorized_keys not found'
-  systemctl restart sshd
 fi
