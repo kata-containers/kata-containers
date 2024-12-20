@@ -606,6 +606,9 @@ install_kernel_helper() {
 
 #Install kernel asset
 install_kernel() {
+	export MEASURED_ROOTFS=yes
+	export DM_VERITY_FORMAT=kernelinit
+
 	install_kernel_helper \
 		"assets.kernel" \
 		"kernel" \

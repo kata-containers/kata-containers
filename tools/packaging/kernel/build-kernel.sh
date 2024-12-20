@@ -65,6 +65,8 @@ kernel_url=""
 linux_headers=""
 # Enable measurement of the guest rootfs at boot.
 measured_rootfs="false"
+# dm-verity partition format for measured_rootfs.
+dm_verity_format="veritysetup"
 
 CROSS_BUILD_ARG=""
 
@@ -109,6 +111,7 @@ Options:
 	-s          	: Skip .config checks
 	-t <hypervisor>	: Hypervisor_target.
 	-u <url>	: Kernel URL to be used to download the kernel tarball.
+	-V <format>     : dm-verity partition format for measured guest rootfs - kernelinit or veritysetup.
 	-v <version>	: Kernel version to use if kernel path not provided.
 	-x       	: All the confidential guest protection type for a specific architecture.
 EOF
@@ -279,14 +282,26 @@ get_kernel_frag_path() {
 	fi
 
 	if [ "${measured_rootfs}" == "true" ]; then
-		info "Enabling config for confidential guest trust storage protection"
-		local cryptsetup_configs="$(ls ${common_path}/confidential_containers/cryptsetup.conf)"
-		all_configs="${all_configs} ${cryptsetup_configs}"
+		case "${dm_verity_format}" in
+			"veritysetup")
+				info "Enabling config for confidential guest trusted storage protection"
+				local cryptsetup_configs="$(ls ${common_path}/confidential_containers/cryptsetup.conf)"
+				all_configs="${all_configs} ${cryptsetup_configs}"
 
-		check_initramfs_or_die
-		info "Enabling config for confidential guest measured boot"
-		local initramfs_configs="$(ls ${common_path}/confidential_containers/initramfs.conf)"
-		all_configs="${all_configs} ${initramfs_configs}"
+				check_initramfs_or_die
+				info "Enabling config for confidential guest measured boot initramfs"
+				local initramfs_configs="$(ls ${common_path}/confidential_containers/initramfs.conf)"
+				all_configs="${all_configs} ${initramfs_configs}"
+				;;
+			"kernelinit")
+				info "Enabling config for early creation of dm-verity protected mapped storage devices"
+				local dminit_configs="$(ls ${common_path}/confidential_containers/dminitverity.conf)"
+				all_configs="${all_configs} ${dminit_configs}"
+				;;
+			*)
+				die "Storage protection image format ${dm_verity_format} not supported"
+				;;
+		esac
 	fi
 
 	if [[ "${conf_guest}" != "" ]];then
@@ -446,7 +461,7 @@ setup_kernel() {
 	[ -n "${hypervisor_target}" ] || hypervisor_target="kvm"
 	[ -n "${kernel_config_path}" ] || kernel_config_path=$(get_default_kernel_config "${kernel_version}" "${hypervisor_target}" "${arch_target}" "${kernel_path}")
 
-	if [ "${measured_rootfs}" == "true" ]; then
+	if [ "${measured_rootfs}" == "true" ] && [ "${dm_verity_format}" == "veritysetup" ]; then
 		check_initramfs_or_die
 		info "Copying initramfs from: ${default_initramfs}"
 		cp "${default_initramfs}" ./
@@ -555,7 +570,7 @@ install_kata() {
 }
 
 main() {
-	while getopts "a:b:c:dD:eEfg:hH:k:mp:st:u:v:x" opt; do
+	while getopts "a:b:c:dD:eEfg:hH:k:mp:st:u:v:V:x" opt; do
 		case "$opt" in
 			a)
 				arch_target="${OPTARG}"
@@ -610,6 +625,13 @@ main() {
 				;;
 			u)
 				kernel_url="${OPTARG}"
+				;;
+			V)
+				dm_verity_format="${OPTARG}"
+				case "$dm_verity_format" in
+					kernelinit|veritysetup) ;;
+					*) die "Storage protection image format ${dm_verity_format} not supported" ;;
+				esac
 				;;
 			v)
 				kernel_version="${OPTARG}"
