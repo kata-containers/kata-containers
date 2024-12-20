@@ -56,12 +56,12 @@ impl Dragonball {
         }
     }
 
-    pub async fn set_hypervisor_config(&mut self, config: HypervisorConfig) {
+    pub async fn set_hypervisor_config(&self, config: HypervisorConfig) {
         let mut inner = self.inner.write().await;
         inner.set_hypervisor_config(config)
     }
 
-    pub async fn set_passfd_listener_port(&mut self, port: u32) {
+    pub async fn set_passfd_listener_port(&self, port: u32) {
         let mut inner = self.inner.write().await;
         inner.set_passfd_listener_port(port)
     }

@@ -158,7 +158,7 @@ async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>>
     match hypervisor_name.as_str() {
         #[cfg(all(feature = "dragonball", not(target_arch = "s390x")))]
         HYPERVISOR_DRAGONBALL => {
-            let mut hypervisor = Dragonball::new();
+            let hypervisor = Dragonball::new();
             hypervisor
                 .set_hypervisor_config(hypervisor_config.clone())
                 .await;
@@ -170,7 +170,7 @@ async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>>
             Ok(Arc::new(hypervisor))
         }
         HYPERVISOR_QEMU => {
-            let mut hypervisor = Qemu::new();
+            let hypervisor = Qemu::new();
             hypervisor
                 .set_hypervisor_config(hypervisor_config.clone())
                 .await;
@@ -178,7 +178,7 @@ async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>>
         }
         #[cfg(not(target_arch = "s390x"))]
         HYPERVISOR_FIRECRACKER => {
-            let mut hypervisor = Firecracker::new();
+            let hypervisor = Firecracker::new();
             hypervisor
                 .set_hypervisor_config(hypervisor_config.clone())
                 .await;
@@ -186,16 +186,14 @@ async fn new_hypervisor(toml_config: &TomlConfig) -> Result<Arc<dyn Hypervisor>>
         }
         #[cfg(all(feature = "cloud-hypervisor", not(target_arch = "s390x")))]
         HYPERVISOR_NAME_CH => {
-            let mut hypervisor = CloudHypervisor::new();
-
+            let hypervisor = CloudHypervisor::new();
             hypervisor
                 .set_hypervisor_config(hypervisor_config.clone())
                 .await;
-
             Ok(Arc::new(hypervisor))
         }
         HYPERVISOR_REMOTE => {
-            let mut hypervisor = Remote::new();
+            let hypervisor = Remote::new();
             hypervisor
                 .set_hypervisor_config(hypervisor_config.clone())
                 .await;

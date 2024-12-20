@@ -36,7 +36,7 @@ mod tests {
             .get(hypervisor_name)
             .ok_or_else(|| anyhow!("failed to get hypervisor for {}", &hypervisor_name))?;
 
-        let mut hypervisor = Qemu::new();
+        let hypervisor = Qemu::new();
         hypervisor
             .set_hypervisor_config(hypervisor_config.clone())
             .await;
