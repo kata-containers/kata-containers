@@ -9,7 +9,9 @@ load "${BATS_TEST_DIRNAME}/../../common.bash"
 load "${BATS_TEST_DIRNAME}/tests_common.sh"
 
 setup() {
-	[ "${KATA_HYPERVISOR}" = "qemu-coco-dev" ] || skip "Test not stable on qemu-coco-dev. See issue #10616"
+	if [ "${KATA_HYPERVISOR}" == "qemu-coco-dev" ]; then
+		skip "Test not stable on qemu-coco-dev. See issue #10616"
+	fi
 
 	get_pod_config_dir
 	job_name="job-pi-test"
@@ -40,7 +42,9 @@ setup() {
 }
 
 teardown() {
-	[ "${KATA_HYPERVISOR}" = "qemu-coco-dev" ] || skip "Test not ready yet for ${KATA_HYPERVISOR}"
+	if [ "${KATA_HYPERVISOR}" == "qemu-coco-dev" ]; then
+		skip "Test not stable on qemu-coco-dev. See issue #10616"
+	fi
 
 	# Debugging information
 	kubectl describe pod "$pod_name"
