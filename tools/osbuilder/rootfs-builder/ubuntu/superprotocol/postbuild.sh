@@ -70,6 +70,7 @@ run_postbuild() {
 	cp "${script_dir}/hardening-vm.sh" "${rootfs_dir}/usr/local/bin/"
 	ln -s /etc/systemd/system/hardening-vm.service "$rootfs_dir/etc/systemd/system/multi-user.target.wants/hardening-vm.service"
 
+	set +x
 	umount ${rootfs_dir}/dev/pts
 	umount ${rootfs_dir}/dev
 	umount ${rootfs_dir}/tmp
