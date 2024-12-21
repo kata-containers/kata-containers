@@ -101,19 +101,44 @@ add_annotations_to_yaml() {
 
 add_cbl_mariner_specific_annotations() {
 	if [[ "${KATA_HOST_OS}" = "cbl-mariner" ]]; then
-		info "Add kernel and image path and annotations for cbl-mariner"
+		local guest_image_dir="/opt/kata/share/kata-containers"
+
+		info "Adding annotations for cbl-mariner"
+
+		# Kernel path.
 		local mariner_annotation_kernel="io.katacontainers.config.hypervisor.kernel"
 		local mariner_kernel_path="/usr/share/cloud-hypervisor/vmlinux.bin"
 
+		# Rootfs image file.
 		local mariner_annotation_image="io.katacontainers.config.hypervisor.image"
-		local mariner_image_path="/opt/kata/share/kata-containers/kata-containers-mariner.img"
+		local mariner_image_path="${guest_image_dir}/kata-containers-mariner.img"
 
+		# Bypass GetKernelRootParams and use the root params from the kernel_params annotation.
+		local mariner_annotation_rootfs_type="io.katacontainers.config.hypervisor.rootfs_type"
+		local mariner_rootfs_type="custom"
+
+		# kernel_params.
 		local mariner_annotation_kernel_params="io.katacontainers.config.hypervisor.kernel_params"
 		local mariner_kernel_params="SYSTEMD_CGROUP_ENABLE_LEGACY_FORCE=1 systemd.legacy_systemd_cgroup_controller=yes systemd.unified_cgroup_hierarchy=0"
+
+		local root_hash_file="${guest_image_dir}/root_hash_kernelinit.txt"
+		[ -f "${root_hash_file}" ] || die "${root_hash_file} not found"
+
+		local root_hash=$(sed -e 's/Root hash:\s*//g;t;d' "${root_hash_file}")
+		local salt=$(sed -e 's/Salt:\s*//g;t;d' "${root_hash_file}")
+		local data_blocks=$(sed -e 's/Data blocks:\s*//g;t;d' "${root_hash_file}")
+		local data_block_size=$(sed -e 's/Data block size:\s*//g;t;d' "${root_hash_file}")
+		local data_sectors_per_block=$((data_block_size / 512))
+		local data_sectors=$((data_blocks * data_sectors_per_block))
+		local hash_block_size=$(sed -e 's/Hash block size:\s*//g;t;d' "${root_hash_file}")
+		mariner_kernel_params+=" dm-mod.create=\\\"dm-verity,,,ro,0 ${data_sectors} verity 1 /dev/pmem0p1 /dev/pmem0p2 ${data_block_size} ${hash_block_size} ${data_blocks} 0 sha256 ${root_hash} ${salt}\\\""
+		mariner_kernel_params+=" root=/dev/dm-0 rootflags=data=ordered,errors=remount-ro ro"
+
 		for K8S_TEST_YAML in runtimeclass_workloads_work/*.yaml
 		do
 			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_kernel}" "${mariner_kernel_path}"
 			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_image}" "${mariner_image_path}"
+			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_rootfs_type}" "${mariner_rootfs_type}"
 			add_annotations_to_yaml "${K8S_TEST_YAML}" "${mariner_annotation_kernel_params}" "${mariner_kernel_params}"
 		done
 	fi
