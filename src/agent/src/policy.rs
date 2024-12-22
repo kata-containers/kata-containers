@@ -3,10 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use std::path::Path;
+
 use anyhow::{bail, Result};
 use protobuf::MessageDyn;
 use tokio::io::AsyncWriteExt;
 
+use crate::initdata::POLICY_PATH;
 use crate::rpc::ttrpc_error;
 use crate::{AGENT_CONFIG, AGENT_POLICY};
 
@@ -122,6 +125,12 @@ impl AgentPolicy {
         if default_policy_file.is_empty() {
             default_policy_file = POLICY_DEFAULT_FILE.to_string();
         }
+
+        // If a policy file is delivered by initdata, the policy will be used instead.
+        if Path::new(POLICY_PATH).exists() {
+            default_policy_file = POLICY_PATH.to_string();
+        }
+
         info!(sl!(), "default policy: {default_policy_file}");
 
         self.engine.add_policy_from_file(default_policy_file)?;
