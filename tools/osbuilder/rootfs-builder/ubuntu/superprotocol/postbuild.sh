@@ -35,10 +35,9 @@ run_postbuild() {
 	rm -f "${rootfs_dir}/install_nvidia_drivers.sh"
 	cp ${script_dir}/nvidia-persistenced.service ${rootfs_dir}/usr/lib/systemd/system/
 
-	echo 'root:123456' | chroot $rootfs_dir chpasswd
 	chroot $rootfs_dir sed -i '1 s|^.*$|-:root:ALL|' /etc/security/access.conf
 	chroot $rootfs_dir sed -i '1 s|^.*$|account required pam_access.so|' /etc/pam.d/login
-    chroot $rootfs_dir sed -i '1 s|^.*$|AuthorizedKeysFile /sp/authorized_keys|' /etc/ssh/sshd_config
+	chroot $rootfs_dir sed -i '1 s|^.*$|AuthorizedKeysFile /sp/authorized_keys|' /etc/ssh/sshd_config
 
 	set -x
 	cp "${script_dir}/cert/superprotocol-ca.crt" "${rootfs_dir}/usr/local/share/ca-certificates/superprotocol-ca.crt"
