@@ -15,7 +15,9 @@ check_and_skip() {
 			return
 			;;
 		*)
-			skip "measured rootfs tests not implemented for hypervisor: $KATA_HYPERVISOR"
+			if [ "${KATA_HOST_OS}" != "cbl-mariner" ]; then
+				skip "measured rootfs tests not implemented for: (hypervisor: $KATA_HYPERVISOR, host os: $KATA_HOST_OS)"
+			fi
 			;;
 	esac
 }
@@ -25,16 +27,55 @@ setup() {
 	setup_common || die "setup_common failed"
 }
 
+get_kernel_params() {
+	case "${KATA_HYPERVISOR}" in
+		qemu-tdx|qemu-coco-dev)
+			local incorrect_hash="1111111111111111111111111111111111111111111111111111111111111111"
+			echo "rootfs_verity.scheme=dm-verity rootfs_verity.hash=$incorrect_hash"
+			;;
+		*)
+			if [ "${KATA_HOST_OS}" == "cbl-mariner" ]; then
+				echo "$(get_mariner_kernel_params true)"
+			fi
+			;;
+	esac
+}
+
+set_mariner_annotations() {
+	config_file="$1"
+
+	local mariner_kernel_path="/usr/share/cloud-hypervisor/vmlinux.bin"
+	set_metadata_annotation "$config_file" \
+		"io.katacontainers.config.hypervisor.kernel" \
+		"$mariner_kernel_path"
+
+	local mariner_image_path="/opt/kata/share/kata-containers/kata-containers-mariner.img"
+	set_metadata_annotation "$config_file" \
+		"io.katacontainers.config.hypervisor.image" \
+		"$mariner_image_path"
+
+	local mariner_rootfs_type="custom"
+	set_metadata_annotation "$config_file" \
+		"io.katacontainers.config.hypervisor.rootfs_type" \
+		"$mariner_rootfs_type"
+}
+
 @test "Test cannnot launch pod with measured boot enabled and incorrect hash" {
 	pod_config="$(new_pod_config nginx "kata-${KATA_HYPERVISOR}")"
 
-	incorrect_hash="1111111111111111111111111111111111111111111111111111111111111111"
-
 	# To avoid editing that file on the worker node, here it will be
 	# enabled via pod annotations.
+	local kernel_params="$(get_kernel_params)"
+	info "kernel_params = $kernel_params"
+
 	set_metadata_annotation "$pod_config" \
 		"io.katacontainers.config.hypervisor.kernel_params" \
-		"rootfs_verity.scheme=dm-verity rootfs_verity.hash=$incorrect_hash"
+		"$kernel_params"
+
+	if [ "${KATA_HOST_OS}" == "cbl-mariner" ]; then
+		set_mariner_annotations "$pod_config"
+	fi
+
 	# Run on a specific node so we know from where to inspect the logs
 	set_node "$pod_config" "$node"
 

@@ -378,3 +378,31 @@ teardown_common() {
 		exec_host "${node}" journalctl -x -t "kata" --since '"'$node_start_time'"' || true
 	fi
 }
+
+# Parse root_hash_kernelinit.txt and calculate the guest root device for mariner. Parameters
+# - $1: true if this function should corrupt the dm-verity root hash value, for testing purposes.
+function get_mariner_kernel_params() {
+	local inject_failure="$1"
+	local mariner_kernel_params="SYSTEMD_CGROUP_ENABLE_LEGACY_FORCE=1 systemd.legacy_systemd_cgroup_controller=yes systemd.unified_cgroup_hierarchy=0"
+
+	local root_hash_file="/opt/kata/share/kata-containers/root_hash_kernelinit.txt"
+	[ -f "${root_hash_file}" ] || die "${root_hash_file} not found"
+
+	if [ "${inject_failure}" == "true" ]; then
+		local root_hash="2222222222222222222222222222222222222222222222222222222222222222"
+	else
+		local root_hash=$(sed -e 's/Root hash:\s*//g;t;d' "${root_hash_file}")
+	fi
+
+	local salt=$(sed -e 's/Salt:\s*//g;t;d' "${root_hash_file}")
+	local data_blocks=$(sed -e 's/Data blocks:\s*//g;t;d' "${root_hash_file}")
+	local data_block_size=$(sed -e 's/Data block size:\s*//g;t;d' "${root_hash_file}")
+	local data_sectors_per_block=$((data_block_size / 512))
+	local data_sectors=$((data_blocks * data_sectors_per_block))
+	local hash_block_size=$(sed -e 's/Hash block size:\s*//g;t;d' "${root_hash_file}")
+
+	mariner_kernel_params+=" dm-mod.create=\\\"dm-verity,,,ro,0 ${data_sectors} verity 1 /dev/pmem0p1 /dev/pmem0p2 ${data_block_size} ${hash_block_size} ${data_blocks} 0 sha256 ${root_hash} ${salt}\\\""
+	mariner_kernel_params+=" root=/dev/dm-0 rootflags=data=ordered,errors=remount-ro ro"
+
+	echo "${mariner_kernel_params}"
+}
