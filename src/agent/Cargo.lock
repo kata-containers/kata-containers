@@ -3026,6 +3026,7 @@ dependencies = [
  "libc",
  "log",
  "logging",
+ "mem-agent",
  "netlink-packet-utils",
  "netlink-sys",
  "nix 0.24.3",
@@ -3481,6 +3482,21 @@ checksum = "d89e7ee0cfbedfc4da3340218492196241d89eefb6dab27de5df917a6d2e78cf"
 dependencies = [
  "cfg-if 1.0.0",
  "digest",
+]
+
+[[package]]
+name = "mem-agent"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "lazy_static",
+ "nix 0.23.2",
+ "page_size",
+ "slog",
+ "slog-scope",
+ "tokio",
 ]
 
 [[package]]
@@ -4106,6 +4122,16 @@ dependencies = [
  "primeorder",
  "rand_core",
  "sha2",
+]
+
+[[package]]
+name = "page_size"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30d5b2194ed13191c1999ae0704b7839fb18384fa22e49b57eeaa97d79ce40da"
+dependencies = [
+ "libc",
+ "winapi",
 ]
 
 [[package]]
