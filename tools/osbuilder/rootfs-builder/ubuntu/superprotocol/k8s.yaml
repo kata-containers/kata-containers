@@ -337,6 +337,14 @@ metadata:
   name: sp-argo-vm
   namespace: argocd
 spec:
+  ignoreDifferences:
+    - kind: Application
+      group: argoproj.io
+      jsonPointers:
+        - /metadata/annotations/argocd-image-updater.argoproj.io~1mediator.allow-tags
+        - /metadata/annotations/argocd-image-updater.argoproj.io~1loader.allow-tags
+        - /metadata/annotations/argocd-image-updater.argoproj.io~1ec.allow-tags
+        - /metadata/annotations/
   destination:
     server: https://kubernetes.default.svc
   project: default
