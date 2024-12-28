@@ -46,7 +46,7 @@ impl CloudHypervisor {
         }
     }
 
-    pub async fn set_hypervisor_config(&mut self, config: HypervisorConfig) {
+    pub async fn set_hypervisor_config(&self, config: HypervisorConfig) {
         let mut inner = self.inner.write().await;
         inner.set_hypervisor_config(config)
     }
