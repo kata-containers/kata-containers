@@ -23,7 +23,7 @@ use tokio::sync::RwLock;
 #[derive(Clone)]
 pub(crate) struct BlockVolume {
     storage: Option<agent::Storage>,
-    mount: oci::Mount,
+    mount: Option<oci::Mount>,
     device_id: String,
 }
 
@@ -69,7 +69,13 @@ impl BlockVolume {
 #[async_trait]
 impl Volume for BlockVolume {
     fn get_volume_mount(&self) -> Result<Vec<oci::Mount>> {
-        Ok(vec![self.mount.clone()])
+        let m = if let Some(m) = self.mount.as_ref() {
+            vec![m.clone()]
+        } else {
+            vec![]
+        };
+
+        Ok(m)
     }
 
     fn get_storage(&self) -> Result<Vec<agent::Storage>> {

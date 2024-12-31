@@ -27,6 +27,8 @@ pub const KATA_MOUNT_BIND_TYPE: &str = "bind";
 
 pub const KATA_BLK_DEV_TYPE: &str = "blk";
 
+const TRUSTED_IMAGE_STORAGE_DEVICE: &str = "/dev/trusted_store";
+
 pub fn get_file_name<P: AsRef<Path>>(src: P) -> Result<String> {
     let file_name = src
         .as_ref()
@@ -71,7 +73,7 @@ pub async fn handle_block_volume(
     read_only: bool,
     sid: &str,
     fstype: &str,
-) -> Result<(agent::Storage, oci::Mount, String)> {
+) -> Result<(agent::Storage, Option<oci::Mount>, String)> {
     // storage
     let mut storage = agent::Storage {
         options: if read_only {
@@ -104,10 +106,16 @@ pub async fn handle_block_volume(
         device_id = device.device_id;
     }
 
-    // generate host guest shared path
-    let guest_path = generate_shared_path(m.destination().clone(), read_only, &device_id, sid)
-        .await
-        .context("generate host-guest shared path failed")?;
+    let is_trustd_store = m.destination().to_string_lossy() == TRUSTED_IMAGE_STORAGE_DEVICE;
+
+    let guest_path = if is_trustd_store {
+        TRUSTED_IMAGE_STORAGE_DEVICE.to_string()
+    } else {
+        // generate host guest shared path
+        generate_shared_path(m.destination().clone(), read_only, &device_id, sid)
+            .await
+            .context("generate host-guest shared path failed")?
+    };
     storage.mount_point = guest_path.clone();
 
     // In some case, dest is device /dev/xxx
@@ -124,11 +132,16 @@ pub async fn handle_block_volume(
         storage.fs_type = fstype.to_owned();
     }
 
-    let mut mount = oci::Mount::default();
-    mount.set_destination(m.destination().clone());
-    mount.set_typ(Some(storage.fs_type.clone()));
-    mount.set_source(Some(PathBuf::from(&guest_path)));
-    mount.set_options(m.options().clone());
+    let mount_ret = if is_trustd_store {
+        None
+    } else {
+        let mut mount = oci::Mount::default();
+        mount.set_destination(m.destination().clone());
+        mount.set_typ(Some(storage.fs_type.clone()));
+        mount.set_source(Some(PathBuf::from(&guest_path)));
+        mount.set_options(m.options().clone());
+        Some(mount)
+    };
 
-    Ok((storage, mount, device_id))
+    Ok((storage, mount_ret, device_id))
 }

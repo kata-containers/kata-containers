@@ -23,7 +23,7 @@ use crate::volume::{direct_volumes::KATA_DIRECT_VOLUME_TYPE, utils::handle_block
 #[derive(Clone)]
 pub(crate) struct RawblockVolume {
     storage: Option<agent::Storage>,
-    mount: oci::Mount,
+    mount: Option<oci::Mount>,
     device_id: String,
 }
 
@@ -84,7 +84,13 @@ impl RawblockVolume {
 #[async_trait]
 impl Volume for RawblockVolume {
     fn get_volume_mount(&self) -> Result<Vec<oci::Mount>> {
-        Ok(vec![self.mount.clone()])
+        let m = if let Some(m) = self.mount.as_ref() {
+            vec![m.clone()]
+        } else {
+            vec![]
+        };
+
+        Ok(m)
     }
 
     fn get_storage(&self) -> Result<Vec<agent::Storage>> {
