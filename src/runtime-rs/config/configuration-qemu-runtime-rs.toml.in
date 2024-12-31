@@ -392,6 +392,13 @@ pflashes = []
 # Default 0
 #pcie_root_port = 2
 
+# Before hot plugging a PCIe device onto a switch port, you need add a pcie_switch_port device fist.
+# Use this parameter when using some large PCI bar devices, such as Nvidia GPU
+# The value means how many devices attached onto pcie_switch_port will be created.
+# This value is valid when hotplug_vfio_on_root_bus is true, and machine_type is "q35"
+# Default 0
+#pcie_switch_port = 2
+
 # If vhost-net backend for virtio-net is not desired, set to true. Default is false, which trades off
 # security (vhost-net runs ring0) for network I/O performance.
 #disable_vhost_net = true

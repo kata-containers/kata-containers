@@ -7,6 +7,7 @@
 use std::fmt;
 
 use crate::device::driver::vhost_user_blk::VhostUserBlkDevice;
+use crate::port_device::{PCIePortDevice, PortDeviceConfig};
 use crate::{
     BlockConfig, BlockDevice, HybridVsockConfig, HybridVsockDevice, Hypervisor as hypervisor,
     NetworkConfig, NetworkDevice, ShareFsConfig, ShareFsDevice, VfioConfig, VfioDevice,
@@ -23,6 +24,7 @@ pub mod pci_path;
 mod tap;
 pub use self::tap::{Error as TapError, Tap};
 pub mod topology;
+// pub mod bridges;
 pub mod util;
 
 #[derive(Debug)]
@@ -35,6 +37,7 @@ pub enum DeviceConfig {
     VfioCfg(VfioConfig),
     VsockCfg(VsockConfig),
     HybridVsockCfg(HybridVsockConfig),
+    PortDeviceCfg(PortDeviceConfig),
 }
 
 #[derive(Debug, Clone)]
@@ -47,6 +50,7 @@ pub enum DeviceType {
     ShareFs(ShareFsDevice),
     HybridVsock(HybridVsockDevice),
     Vsock(VsockDevice),
+    PortDevice(PCIePortDevice),
 }
 
 impl fmt::Display for DeviceType {
