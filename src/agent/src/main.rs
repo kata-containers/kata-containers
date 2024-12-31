@@ -38,6 +38,7 @@ use std::sync::Arc;
 use tracing::{instrument, span};
 
 mod cdh;
+mod cdi;
 mod config;
 mod console;
 mod device;
