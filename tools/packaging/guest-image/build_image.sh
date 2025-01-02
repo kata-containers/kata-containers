@@ -85,9 +85,15 @@ build_image() {
 	fi
 
 	mv -f "kata-containers.img" "${install_dir}/${artifact_name}"
-	if [ -e "root_hash.txt" ]; then
-	    cp root_hash.txt "${install_dir}/"
-	fi
+
+	local root_hash_files=("root_hash.txt" "root_hash_kernelinit.txt")
+	for root_hash_file in "${root_hash_files[@]}"
+	do
+		if [ -e "${root_hash_file}" ]; then
+			cp "${root_hash_file}" "${install_dir}/"
+		fi
+	done
+
 	(
 		cd "${install_dir}"
 		ln -sf "${artifact_name}" "${final_artifact_name}${image_initrd_extension}"
