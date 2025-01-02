@@ -113,7 +113,7 @@ use kata_types::k8s;
 pub const CONTAINER_BASE: &str = "/run/kata-containers";
 const MODPROBE_PATH: &str = "/sbin/modprobe";
 #[cfg(feature = "guest-pull")]
-const TRUSTED_IMAGE_STORAGE_DEVICE: &str = "/dev/trusted_store";
+pub const TRUSTED_IMAGE_STORAGE_DEVICE: &str = "/dev/trusted_store";
 /// the iptables seriers binaries could appear either in /sbin
 /// or /usr/sbin, we need to check both of them
 const USR_IPTABLES_SAVE: &str = "/usr/sbin/iptables-save";
@@ -2203,6 +2203,25 @@ fn is_sealed_secret_path(source_path: &str) -> bool {
             .any(|suffix| source_path.ends_with(suffix))
 }
 
+pub async fn cdh_secure_storage_handler(dev_major_minor: String) -> Result<&'static str> {
+    let secure_storage_integrity = AGENT_CONFIG.secure_storage_integrity.to_string();
+    info!(
+        sl(),
+        "trusted_store device major:min {}, enable data integrity {}",
+        dev_major_minor,
+        secure_storage_integrity
+    );
+
+    let options = std::collections::HashMap::from([
+        ("deviceId".to_string(), dev_major_minor),
+        ("encryptType".to_string(), "LUKS".to_string()),
+        ("dataIntegrity".to_string(), secure_storage_integrity),
+    ]);
+    cdh::secure_mount("BlockDevice", &options, vec![], KATA_IMAGE_WORK_DIR).await?;
+
+    Ok(KATA_IMAGE_WORK_DIR)
+}
+
 async fn cdh_handler(oci: &mut Spec) -> Result<()> {
     if !cdh::is_cdh_client_initialized().await {
         return Ok(());
@@ -2270,21 +2289,9 @@ async fn cdh_handler(oci: &mut Spec) -> Result<()> {
     if let Some(devices) = linux.devices() {
         for specdev in devices.iter() {
             if specdev.path().as_path().to_str() == Some(TRUSTED_IMAGE_STORAGE_DEVICE) {
-                let dev_major_minor = format!("{}:{}", specdev.major(), specdev.minor());
-                let secure_storage_integrity = AGENT_CONFIG.secure_storage_integrity.to_string();
-                info!(
-                    sl(),
-                    "trusted_store device major:min {}, enable data integrity {}",
-                    dev_major_minor,
-                    secure_storage_integrity
-                );
-
-                let options = std::collections::HashMap::from([
-                    ("deviceId".to_string(), dev_major_minor),
-                    ("encryptType".to_string(), "LUKS".to_string()),
-                    ("dataIntegrity".to_string(), secure_storage_integrity),
-                ]);
-                cdh::secure_mount("BlockDevice", &options, vec![], KATA_IMAGE_WORK_DIR).await?;
+                let _ =
+                    cdh_secure_storage_handler(format!("{}:{}", specdev.major(), specdev.minor()))
+                        .await?;
                 break;
             }
         }
