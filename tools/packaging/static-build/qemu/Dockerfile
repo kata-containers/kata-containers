@@ -62,6 +62,7 @@ RUN apt-get update && apt-get upgrade -y && \
 	    patch \
 	    python3 \
 	    python3-dev \
+	    python3-pip \
 	    python3-venv \
 	    python3-tomli \
 	    rsync \
@@ -69,5 +70,5 @@ RUN apt-get update && apt-get upgrade -y && \
     if [ "${ARCH}" != s390x ]; then apt-get install -y --no-install-recommends libpmem-dev${DPKG_ARCH}; fi && \
     GCC_ARCH="${ARCH}" && if [ "${ARCH}" = "ppc64le" ]; then GCC_ARCH="powerpc64le"; fi && \
     if [ "${ARCH}" != "$(uname -m)" ]; then apt-get install --no-install-recommends -y gcc-"${GCC_ARCH}"-linux-gnu; fi && \
-    apt-get clean && rm -rf /var/lib/apt/lists/
+    apt-get clean && rm -rf /var/lib/apt/lists/ && python3 -m pip install tomli
 
