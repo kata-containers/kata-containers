@@ -62,18 +62,21 @@ func (device *BlockDevice) Attach(ctx context.Context, devReceiver api.DeviceRec
 
 	drive := &config.BlockDrive{
 		File:     device.DeviceInfo.HostPath,
-		Format:   "raw",
+		Format:   config.FormatRaw,
 		ID:       utils.MakeNameID("drive", device.DeviceInfo.ID, maxDevIDSize),
 		Index:    index,
 		Pmem:     device.DeviceInfo.Pmem,
 		ReadOnly: device.DeviceInfo.ReadOnly,
 	}
 
-	if fs, ok := device.DeviceInfo.DriverOptions[config.FsTypeOpt]; ok {
-		drive.Format = fs
+	customOptions := device.DeviceInfo.DriverOptions
+	if device.DeviceInfo.Major == config.HostFileMajor {
+		drive.RegularFile = true
+		if format, ok := customOptions[config.FormatOpt]; ok {
+			drive.Format = format
+		}
 	}
 
-	customOptions := device.DeviceInfo.DriverOptions
 	if customOptions == nil ||
 		customOptions[config.BlockDriverOpt] == config.VirtioSCSI {
 		// User has not chosen a specific block device type
