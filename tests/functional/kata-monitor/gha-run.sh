@@ -42,6 +42,8 @@ function install_dependencies() {
 	case "${CONTAINER_ENGINE}" in
 		containerd)
 			github_deps[1]="cri_containerd:$(get_from_kata_deps ".externals.containerd.${CONTAINERD_VERSION}")"
+			github_deps[2]="runc:$(get_from_kata_deps ".externals.runc.latest")"
+			github_deps[3]="cni_plugins:$(get_from_kata_deps ".externals.cni-plugins.version")"
 			;;
 		crio)
 			github_deps[1]="cni_plugins:$(get_from_kata_deps ".externals.cni-plugins.version")"
