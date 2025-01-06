@@ -34,7 +34,7 @@ build_coco_guest_components_from_source() {
 	strip "target/${RUST_ARCH}-unknown-linux-${LIBC}/release/api-server-rest"
 	DESTDIR="${DESTDIR}/usr/local/bin" TEE_PLATFORM=${TEE_PLATFORM} make install
 
-	install -D -m0755 "confidential-data-hub/storage/scripts/luks-encrypt-storage" "${DESTDIR}/usr/local/bin/luks-encrypt-storage"
+	install -D -m0755 "confidential-data-hub/hub/src/storage/scripts/luks-encrypt-storage" "${DESTDIR}/usr/local/bin/luks-encrypt-storage"
 	popd
 }
 
