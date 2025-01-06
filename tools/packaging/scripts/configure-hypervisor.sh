@@ -209,6 +209,22 @@ show_array() {
 
 generate_qemu_options() {
 	#---------------------------------------------------------------------
+	#check if cross-compile is needed
+	host=$(uname -m)
+	if [[ "${arch}" != "${host}" ]]; then
+		case ${arch} in
+			aarch64) qemu_options+=(size:--cross-prefix=aarch64-linux-gnu-);;
+			ppc64le) qemu_options+=(size:--cross-prefix=powerpc64le-linux-gnu-);;
+			s390x) exit;;
+			x86_64);;
+			*) exit;;
+		esac
+	fi
+
+	# We're starting with the minimal set of options required to build
+	qemu_options+=(minimal:--without-default-features)
+	qemu_options+=(minimal:--without-default-devices)
+
 	# Disabled options
 
 	# braille support not required
