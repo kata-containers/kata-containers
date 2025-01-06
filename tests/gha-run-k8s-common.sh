@@ -35,7 +35,7 @@ function _print_cluster_name() {
 	if [ -n "${AKS_NAME:-}" ]; then
 		echo "$AKS_NAME"
 	else
-		short_sha="$(git rev-parse --short=12 HEAD)"
+		short_sha="$(git rev-parse --short=8 HEAD)"
 		echo "${test_type}-${GH_PR_NUMBER}-${short_sha}-${KATA_HYPERVISOR}-${KATA_HOST_OS}-amd64-${K8S_TEST_HOST_TYPE:0:1}-${GENPOLICY_PULL_METHOD:0:1}"
 	fi
 }
