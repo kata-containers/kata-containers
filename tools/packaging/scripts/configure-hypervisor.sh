@@ -220,6 +220,10 @@ generate_qemu_options() {
 		esac
 	fi
 
+	# We're starting with the minimal set of options required to build
+	qemu_options+=(minimal:--without-default-features)
+	qemu_options+=(minimal:--without-default-devices)
+
 	# Disabled options
 
 	# braille support not required
