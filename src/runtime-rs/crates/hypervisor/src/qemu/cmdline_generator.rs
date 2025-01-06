@@ -1793,6 +1793,10 @@ impl<'a> QemuCmdLine<'a> {
             qemu_cmd_line.add_scsi_controller();
         }
 
+        if config.device_info.reclaim_guest_freed_memory {
+            qemu_cmd_line.add_virtio_balloon();
+        }
+
         Ok(qemu_cmd_line)
     }
 
@@ -2007,6 +2011,11 @@ impl<'a> QemuCmdLine<'a> {
         self.devices.push(Box::new(console_socket_chardev));
     }
 
+    pub fn add_virtio_balloon(&mut self) {
+        let balloon_device = DeviceVirtioBalloon::new();
+        self.devices.push(Box::new(balloon_device));
+    }
+
     pub async fn build(&self) -> Result<Vec<String>> {
         let mut result = Vec::new();
 
@@ -2070,4 +2079,23 @@ fn get_devno_ccw(ccw_subchannel: &mut Option<CcwSubChannel>, device_name: &str) 
             |slot| Some(subchannel.address_format_ccw(slot)),
         )
     })
+}
+
+#[derive(Debug)]
+struct DeviceVirtioBalloon {}
+
+impl DeviceVirtioBalloon {
+    fn new() -> Self {
+        DeviceVirtioBalloon {}
+    }
+}
+
+#[async_trait]
+impl ToQemuParams for DeviceVirtioBalloon {
+    async fn qemu_params(&self) -> Result<Vec<String>> {
+        Ok(vec![
+            "-device".to_owned(),
+            "virtio-balloon,free-page-reporting=on".to_owned(),
+        ])
+    }
 }
