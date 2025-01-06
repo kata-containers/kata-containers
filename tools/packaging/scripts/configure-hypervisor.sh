@@ -435,12 +435,6 @@ generate_qemu_options() {
 	# Support Ceph RADOS Block Device (RBD)
 	[ -z "${static}" ] && qemu_options+=(functionality:--enable-rbd)
 
-	# In "passthrough" security mode
-	# (-fsdev "...,security_model=passthrough,..."), qemu uses a helper
-	# application called virtfs-proxy-helper(1) to make certain 9p
-	# operations safer.
-	qemu_options+=(functionality:--enable-virtfs)
-	qemu_options+=(functionality:--enable-attr)
 	# virtio-fs needs cap-ng and seccomp
 	qemu_options+=(functionality:--enable-cap-ng)
 	qemu_options+=(functionality:--enable-seccomp)
