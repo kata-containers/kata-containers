@@ -619,6 +619,63 @@ function install_cni_plugins() {
 	sudo mkdir -p /opt/cni/bin
 	sudo tar -xvf "${tarball_name}" -C /opt/cni/bin
 	rm -f "${tarball_name}"
+
+	cni_config="/etc/cni/net.d/10-containerd-net.conflist"
+	if [ ! -f ${cni_config} ];then
+		sudo mkdir -p /etc/cni/net.d
+		sudo tee "${cni_config}" << EOF
+{
+  "cniVersion": "1.0.0",
+  "name": "containerd-net",
+  "plugins": [
+    {
+      "type": "bridge",
+      "bridge": "cni0",
+      "isGateway": true,
+      "ipMasq": true,
+      "promiscMode": true,
+      "ipam": {
+        "type": "host-local",
+        "ranges": [
+          [{
+            "subnet": "10.88.0.0/16"
+          }],
+          [{
+            "subnet": "2001:4860:4860::/64"
+          }]
+        ],
+        "routes": [
+          { "dst": "0.0.0.0/0" },
+          { "dst": "::/0" }
+        ]
+      }
+    },
+    {
+      "type": "portmap",
+      "capabilities": {"portMappings": true}
+    }
+  ]
+}
+EOF
+	fi
+}
+
+# version: The version to be installed
+function install_runc() {
+	base_version="${1}"
+	project="opencontainers/runc"
+	version=$(get_latest_patch_release_from_a_github_project "${project}" "${base_version}")
+
+	if [ -f /usr/local/sbin/runc ]; then
+		return
+	fi
+
+	binary_name="runc.$(${repo_root_dir}/tests/kata-arch.sh -g)"
+	download_github_project_tarball "${project}" "${version}" "${binary_name}"
+
+	sudo mkdir -p /usr/local/sbin
+	sudo mv $binary_name /usr/local/sbin/runc
+	sudo chmod +x /usr/local/sbin/runc
 }
 
 # base_version: The version to be intalled in the ${major}.${minor} format
@@ -628,14 +685,53 @@ function install_cri_containerd() {
 	project="containerd/containerd"
 	version=$(get_latest_patch_release_from_a_github_project "${project}" "${base_version}")
 
-	tarball_name="cri-containerd-cni-${version//v}-linux-$(${repo_root_dir}/tests/kata-arch.sh -g).tar.gz"
+	tarball_name="containerd-${version//v}-linux-$(${repo_root_dir}/tests/kata-arch.sh -g).tar.gz"
 
 	download_github_project_tarball "${project}" "${version}" "${tarball_name}"
-	sudo tar -xvf "${tarball_name}" -C /
+	#add the "--keep-directory-symlink" option to make sure the untar wouldn't override the
+	#system rootfs's bin/sbin directory which would be a symbol link to /usr/bin or /usr/sbin.
+	if [ ! -f /usr/local ]; then
+		sudo mkdir -p /usr/local
+	fi
+	sudo tar --keep-directory-symlink -xvf "${tarball_name}" -C /usr/local/
 	rm -f "${tarball_name}"
 
 	sudo mkdir -p /etc/containerd
 	containerd config default | sudo tee /etc/containerd/config.toml
+
+	containerd_service="/etc/systemd/system/containerd.service"
+
+	if [ ! -f ${containerd_service} ]; then
+		sudo mkdir -p /etc/systemd/system
+		sudo tee ${containerd_service}  <<EOF
+[Unit]
+Description=containerd container runtime
+Documentation=https://containerd.io
+After=network.target local-fs.target
+
+[Service]
+ExecStartPre=-/sbin/modprobe overlay
+ExecStart=/usr/local/bin/containerd
+
+Type=notify
+Delegate=yes
+KillMode=process
+Restart=always
+RestartSec=5
+# Having non-zero Limit*s causes performance problems due to accounting overhead
+# in the kernel. We recommend using cgroups to do container-local accounting.
+LimitNPROC=infinity
+LimitCORE=infinity
+LimitNOFILE=infinity
+# Comment TasksMax if your systemd version does not supports it.
+# Only systemd 226 and above support this version.
+TasksMax=infinity
+OOMScoreAdjust=-999
+
+[Install]
+WantedBy=multi-user.target
+EOF
+	fi 
 }
 
 # base_version: The version to be intalled in the ${major}.${minor} format
