@@ -354,14 +354,9 @@ externals:
   virtiofsd:
     description: "vhost-user virtio-fs device backend written in Rust"
     url: "https://gitlab.com/virtio-fs/virtiofsd"
-    version: "v1.8.0"
-    toolchain: "1.72.0"
-    meta:
-      # From https://gitlab.com/virtio-fs/virtiofsd/-/releases/v1.8.0,
-      # this is the link labelled virtiofsd-v1.8.0.zip
-      #
-      # yamllint disable-line rule:line-length
-      binary: "https://gitlab.com/virtio-fs/virtiofsd/uploads/9ec473efd0203219d016e66aac4190aa/virtiofsd-v1.8.0.zip"
+    # v1.13.0 + seccomp patch allowing the tkill syscall
+    version: "cecc61bca981ab42aae6ec490dfd59965e79025e"
+    toolchain: "1.83.0"
 
   xurls:
     description: |
