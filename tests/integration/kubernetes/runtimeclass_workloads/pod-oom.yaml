@@ -16,7 +16,7 @@ spec:
       imagePullPolicy: IfNotPresent
       name: oom-test
       command: ["/bin/sh"]
-      args: ["-c", "sleep 2; stress --vm 2 --vm-bytes 400M --timeout 30s"]
+      args: ["-c", "sleep 2; stress --vm 2 --vm-bytes 500M --timeout 30s"]
       resources:
         limits:
           memory: 500Mi
