@@ -353,6 +353,9 @@ impl Sandbox {
         if let Ok(hook) = self.find_hooks(dir, "prestart") {
             hooks.set_prestart(Some(hook));
         }
+        if let Ok(hook) = self.find_hooks(dir, "create_container") {
+            hooks.set_create_container(Some(hook));
+        }
         if let Ok(hook) = self.find_hooks(dir, "poststart") {
             hooks.set_poststart(Some(hook));
         }

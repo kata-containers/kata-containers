@@ -1900,12 +1900,14 @@ fn append_guest_hooks(s: &Sandbox, oci: &mut Spec) -> Result<()> {
     if let Some(ref guest_hooks) = s.hooks {
         if let Some(hooks) = oci.hooks_mut() {
             util::merge(hooks.poststart_mut(), guest_hooks.prestart());
+            util::merge(hooks.poststart_mut(), guest_hooks.create_container());
             util::merge(hooks.poststart_mut(), guest_hooks.poststart());
             util::merge(hooks.poststop_mut(), guest_hooks.poststop());
         } else {
             let _oci_hooks = oci.set_hooks(Some(Hooks::default()));
             if let Some(hooks) = oci.hooks_mut() {
                 hooks.set_prestart(guest_hooks.prestart().clone());
+                hooks.set_create_container(guest_hooks.create_container().clone());
                 hooks.set_poststart(guest_hooks.poststart().clone());
                 hooks.set_poststop(guest_hooks.poststop().clone());
             }
