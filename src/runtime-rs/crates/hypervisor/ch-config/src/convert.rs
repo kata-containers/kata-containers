@@ -180,6 +180,15 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
 
         let platform = get_platform_cfg(guest_protection_to_use);
 
+        let balloon = if cfg.device_info.reclaim_guest_freed_memory {
+            Some(crate::BalloonConfig {
+                free_page_reporting: true,
+                ..Default::default()
+            })
+        } else {
+            None
+        };
+
         let cfg = VmConfig {
             cpus,
             memory,
@@ -193,6 +202,7 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
             vsock: Some(vsock),
             rng,
             platform,
+            balloon,
 
             ..Default::default()
         };

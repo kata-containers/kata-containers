@@ -158,6 +158,16 @@ virtio_fs_cache = "@DEFVIRTIOFSCACHE@"
 # > 5                --> will be set to 5
 default_bridges = @DEFBRIDGES@
 
+# Reclaim guest freed memory.
+# Enabling this will result in the VM balloon device having f_reporting=on set.
+# Then the hypervisor will use it to reclaim guest freed memory.
+# This is useful for reducing the amount of memory used by a VM.
+# Enabling this feature may sometimes reduce the speed of memory access in
+# the VM.
+#
+# Default false
+#reclaim_guest_freed_memory = true
+
 # Block storage driver to be used for the hypervisor in case the container
 # rootfs is backed by a block device.
 block_device_driver = "virtio-blk-pci"
