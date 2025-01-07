@@ -347,6 +347,7 @@ spec:
         - /metadata/annotations/
         - /spec/source/helm/valueFiles/0
         - /spec/source/helm/valueFiles/1
+        - /spec/source/helm/valueFiles/2
   destination:
     server: https://kubernetes.default.svc
   project: default
