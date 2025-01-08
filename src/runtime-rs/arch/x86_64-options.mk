@@ -5,7 +5,8 @@
 #
 
 MACHINETYPE := q35
-KERNELPARAMS :=
+KERNELPARAMS := cgroup_no_v1=all systemd.unified_cgroup_hierarchy=1
+KERNELTDXPARAMS := cgroup_no_v1=all systemd.unified_cgroup_hierarchy=1
 MACHINEACCELERATORS :=
 CPUFEATURES := pmu=off
 
