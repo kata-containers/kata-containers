@@ -45,8 +45,6 @@ setup() {
 }
 
 @test "Empty dir volume when FSGroup is specified with non-root container" {
-	skip "See: https://github.com/kata-containers/kata-containers/issues/10706"
-
 	# This is a reproducer of k8s e2e "[sig-storage] EmptyDir volumes when FSGroup is specified [LinuxOnly] [NodeFeature:FSGroup] new files should be created with FSGroup ownership when container is non-root" test
 	pod_file="${pod_config_dir}/pod-empty-dir-fsgroup.yaml"
 	agnhost_name="${container_images_agnhost_name}"
