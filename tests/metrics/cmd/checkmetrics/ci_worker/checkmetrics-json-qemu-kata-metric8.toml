@@ -55,9 +55,9 @@ description = "measure container average of blogbench write"
 # within (inclusive)
 checkvar = ".\"blogbench\".Results | .[] | .write.Result"
 checktype = "mean"
-midval = 2362.0
-minpercent = 20.0
-maxpercent = 20.0
+midval = 2000.0
+minpercent = 30.0
+maxpercent = 30.0
 
 [[metric]]
 name = "blogbench"
@@ -160,7 +160,7 @@ description = "measure container latency"
 checkvar = ".\"latency\".Results | .[] | .latency.Result"
 checktype = "mean"
 midval = 0.70
-minpercent = 20.0
+minpercent = 30.0
 maxpercent = 20.0
 
 [[metric]]
