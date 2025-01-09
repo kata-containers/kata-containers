@@ -31,12 +31,16 @@ function _print_instance_type() {
 function _print_cluster_name() {
 	local test_type="${1:-k8s}"
 	local short_sha
+	local metadata
 
 	if [ -n "${AKS_NAME:-}" ]; then
 		echo "$AKS_NAME"
 	else
 		short_sha="$(git rev-parse --short=12 HEAD)"
-		echo "${test_type}-${GH_PR_NUMBER}-${short_sha}-${KATA_HYPERVISOR}-${KATA_HOST_OS}-amd64-${K8S_TEST_HOST_TYPE:0:1}-${GENPOLICY_PULL_METHOD:0:1}"
+		metadata="${GH_PR_NUMBER}-${short_sha}-${KATA_HYPERVISOR}-${KATA_HOST_OS}-amd64-${K8S_TEST_HOST_TYPE:0:1}-${GENPOLICY_PULL_METHOD:0:1}"
+		# Compute the SHA1 digest of the metadata part to keep the name less
+		# than the limit of 63 chars of AKS
+		echo "${test_type}-$(sha1sum <<< "$metadata" | cut -d' ' -f1)"
 	fi
 }
 
@@ -80,11 +84,21 @@ function login_azure() {
 
 function create_cluster() {
 	test_type="${1:-k8s}"
+	local short_sha
+	local tags
 
 	# First ensure it didn't fail to get cleaned up from a previous run.
 	delete_cluster "${test_type}" || true
 
 	local rg="$(_print_rg_name ${test_type})"
+
+	short_sha="$(git rev-parse --short=12 HEAD)"
+	tags=("GH_PR_NUMBER=${GH_PR_NUMBER:-}" \
+		"SHORT_SHA=${short_sha}" \
+		"KATA_HYPERVISOR=${KATA_HYPERVISOR}"\
+		"KATA_HOST_OS=${KATA_HOST_OS:-}" \
+		"K8S_TEST_HOST_TYPE=${K8S_TEST_HOST_TYPE:0:1}" \
+		"GENPOLICY_PULL_METHOD=${GENPOLICY_PULL_METHOD:0:1}")
 
 	az group create \
 		-l eastus \
@@ -97,6 +111,7 @@ function create_cluster() {
 		-s "$(_print_instance_type)" \
 		--node-count 1 \
 		--generate-ssh-keys \
+		--tags "${tags[@]}" \
 		$([ "${KATA_HOST_OS}" = "cbl-mariner" ] && echo "--os-sku AzureLinux --workload-runtime KataMshvVmIsolation")
 }
 
