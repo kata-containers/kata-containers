@@ -792,6 +792,22 @@ func TestAddRemoteHypervisorAnnotations(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal(sbConfig.HypervisorConfig.DefaultGPUModel, "tesla")
 
+	// When GPU annotations are specified, remote hypervisor annotations have the annotation added
+	ocispec.Annotations[vcAnnotations.DefaultGPUModel] = "tesla"
+	err = addAnnotations(ocispec, &sbConfig, runtimeConfig)
+	assert.NoError(err)
+	assert.Equal(sbConfig.HypervisorConfig.DefaultGPUModel, "tesla")
+
+	// When RootVolumeSize annotations are specified, remote hypervisor annotations have it added
+	ocispec.Annotations[vcAnnotations.RootVolumeSize] = "-1"
+	err = addAnnotations(ocispec, &sbConfig, runtimeConfig)
+	assert.Error(err)
+
+	ocispec.Annotations[vcAnnotations.RootVolumeSize] = "10"
+	err = addAnnotations(ocispec, &sbConfig, runtimeConfig)
+	assert.NoError(err)
+	assert.Equal(sbConfig.HypervisorConfig.RootVolumeSize, uint32(10))
+
 }
 
 func TestAddProtectedHypervisorAnnotations(t *testing.T) {

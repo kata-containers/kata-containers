@@ -679,6 +679,10 @@ type HypervisorConfig struct {
 	DefaultGPUs uint32
 	// DefaultGPUModel specifies GPU model like tesla, h100, readeon etc.
 	DefaultGPUModel string
+
+	// Provide a hint to a remote hypervisor implementation which osdisk size should be
+	// allocated for the VM. It depends on the implementation whether this field is honored.
+	RootVolumeSize uint32
 }
 
 // vcpu mapping from vcpu number to thread number

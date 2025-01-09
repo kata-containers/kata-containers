@@ -83,6 +83,7 @@ func (rh *remoteHypervisor) CreateVM(ctx context.Context, id string, network Net
 	annotations[hypannotations.Initdata] = hypervisorConfig.Initdata
 	annotations[hypannotations.DefaultGPUs] = strconv.FormatUint(uint64(hypervisorConfig.DefaultGPUs), 10)
 	annotations[hypannotations.DefaultGPUModel] = hypervisorConfig.DefaultGPUModel
+	annotations[hypannotations.RootVolumeSize] = strconv.FormatUint(uint64(hypervisorConfig.RootVolumeSize), 10)
 
 	req := &pb.CreateVMRequest{
 		Id:                   id,
