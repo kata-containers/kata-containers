@@ -58,3 +58,22 @@ those with
 
 * `hostNetwork: true`
 * namespace: `rook-ceph` and `rook-ceph-system`
+
+## Enforcing a minimum memory limit
+
+Kata pods run inside a VM, so a memory limit that is comfortable under `runc`
+can be too small once the guest kernel and agent are accounted for. The webhook
+can raise any explicit memory limit that falls below a configured floor.
+
+No minimum is enforced by default. To enable it, set the `min_memory_limit` key
+of the `kata-webhook` ConfigMap in the [webhook file](deploy/webhook.yaml) to a
+[quantity](https://kubernetes.io/docs/reference/kubernetes-api/common-definitions/quantity/).
+
+Once configured, the webhook:
+
+* raises `limits.memory` on every container and init container whose limit is
+  below the minimum
+* leaves containers without an explicit `limits.memory` untouched
+* only applies to pods it actually moves to the Kata runtime class. Pods skipped
+  for any of the reasons listed above, pods in the `sonobuoy` namespace, and pods
+  that already set `runtimeClassName` keep their original limits
