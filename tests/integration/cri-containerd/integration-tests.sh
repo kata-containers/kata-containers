@@ -612,6 +612,12 @@ function main() {
 	# Make sure the right artifacts are going to be built
 	sudo make clean
 
+	# the latest containerd had an issue for its e2e test, thus we should do the following
+	# fix to workaround this issue. For much info about this issue, please see:
+	# https://github.com/containerd/containerd/pull/11240
+	# Once this pr was merged and release new version, we can remove this workaround.
+	sed -i 's/cat "\${config_file}"/cat "\${CONTAINERD_CONFIG_FILE}"/' script/test/utils.sh
+
 	check_daemon_setup
 
 	info "containerd(cri): testing using runtime: ${containerd_runtime_type}"
