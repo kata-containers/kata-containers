@@ -667,7 +667,7 @@ allow_by_bundle_or_sandbox_id(p_oci, i_oci, p_storages, i_storages) if {
 
     # Match each input mount with a Policy mount.
     # Reject possible attempts to match multiple input mounts with a single Policy mount.
-    p_matches := { p_index | some i_index; p_index = allow_mount(p_oci, input.OCI.Mounts[i_index], bundle_id, sandbox_id) }
+    p_matches := { p_index | some i_index; p_index = allow_mount(p_oci, input.OCI.Mounts[i_index], i_storages, bundle_id, sandbox_id) }
 
     print("allow_by_bundle_or_sandbox_id: p_matches =", p_matches)
     count(p_matches) == count(input.OCI.Mounts)
@@ -981,31 +981,33 @@ allow_root_path(p_oci, i_oci, bundle_id) if {
 
 # device mounts
 # allow_mount returns the policy index (p_index) if a given input mount matches a policy mount.
-allow_mount(p_oci, i_mount, bundle_id, sandbox_id):= p_index if {
+allow_mount(p_oci, i_mount, i_storages, bundle_id, sandbox_id):= p_index if {
     print("allow_mount: i_mount =", i_mount)
 
     some p_index, p_mount in p_oci.Mounts
+    some i_storage in i_storages
+
     print("allow_mount: p_index =", p_index, "p_mount =", p_mount)
-    check_mount(p_mount, i_mount, bundle_id, sandbox_id)
+    check_mount(p_mount, i_mount, i_storage, bundle_id, sandbox_id)
 
     print("allow_mount: true, p_index =", p_index)
 }
 
-check_mount(p_mount, i_mount, bundle_id, sandbox_id) if {
+check_mount(p_mount, i_mount, i_storage, bundle_id, sandbox_id) if {
     p_mount == i_mount
     print("check_mount 1: true")
 }
-check_mount(p_mount, i_mount, bundle_id, sandbox_id) if {
+check_mount(p_mount, i_mount, i_storage, bundle_id, sandbox_id) if {
     p_mount.destination == i_mount.destination
     p_mount.type_ == i_mount.type_
     p_mount.options == i_mount.options
 
-    mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id)
+    mount_source_allows(p_mount, i_mount, i_storage, bundle_id, sandbox_id)
 
     print("check_mount 2: true")
 }
 
-mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) if {
+mount_source_allows(p_mount, i_mount, i_storage, bundle_id, sandbox_id) if {
     regex1 := p_mount.source
     regex2 := replace(regex1, "$(sfprefix)", policy_data.common.sfprefix)
     regex3 := replace(regex2, "$(cpath)", policy_data.common.cpath)
@@ -1016,7 +1018,7 @@ mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) if {
 
     print("mount_source_allows 1: true")
 }
-mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) if {
+mount_source_allows(p_mount, i_mount, i_storage, bundle_id, sandbox_id) if {
     regex1 := p_mount.source
     regex2 := replace(regex1, "$(sfprefix)", policy_data.common.sfprefix)
     regex3 := replace(regex2, "$(cpath)", policy_data.common.cpath)
@@ -1026,6 +1028,16 @@ mount_source_allows(p_mount, i_mount, bundle_id, sandbox_id) if {
     regex.match(regex4, i_mount.source)
 
     print("mount_source_allows 2: true")
+}
+mount_source_allows(p_mount, i_mount, i_storage, bundle_id, sandbox_id) if {
+    regex1 := p_mount.source
+    regex2 := replace(regex1, "$(spath)", policy_data.common.spath)
+    regex3 := replace(regex2, "$(b64_device_id)", base64url.encode(i_storage.source))
+
+    print("mount_source_allows 3: regex3 =", regex3)
+    regex.match(regex3, i_storage.mount_point)
+
+    print("mount_source_allows 3: true")
 }
 
 ######################################################################
@@ -1101,11 +1113,18 @@ allow_storage_source(p_storage, i_storage, bundle_id) if {
 
     print("allow_storage_source 3: true")
 }
+allow_storage_source(p_storage, i_storage, bundle_id) if {
+    print("allow_storage_source 4: start")
+
+    p_storage.driver == "blk"
+    regex.match(p_storage.source, i_storage.source)
+
+    print("allow_storage_source 4: true")
+}
 
 allow_storage_options(p_storage, i_storage) if {
     print("allow_storage_options 1: start")
 
-    p_storage.driver != "blk"
     p_storage.driver != "overlayfs"
     p_storage.options == i_storage.options
 
@@ -1113,6 +1132,8 @@ allow_storage_options(p_storage, i_storage) if {
 }
 
 allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id) if {
+    print("allow_mount_point 1: start")
+
     p_storage.fstype == "local"
 
     mount1 := p_storage.mount_point
@@ -1129,6 +1150,8 @@ allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id) if {
     print("allow_mount_point 1: true")
 }
 allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id) if {
+    print("allow_mount_point 2: start")
+
     p_storage.fstype == "bind"
 
     mount1 := p_storage.mount_point
@@ -1145,6 +1168,8 @@ allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id) if {
     print("allow_mount_point 2: true")
 }
 allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id) if {
+    print("allow_mount_point 3: start")
+
     p_storage.fstype == "tmpfs"
 
     mount1 := p_storage.mount_point
@@ -1153,6 +1178,24 @@ allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id) if {
     regex.match(mount1, i_storage.mount_point)
 
     print("allow_mount_point 3: true")
+}
+allow_mount_point(p_storage, i_storage, bundle_id, sandbox_id) if {
+    print("allow_mount_point 4: start")
+
+    p_storage.driver == "blk"
+
+    mount1 := p_storage.mount_point
+    print("allow_mount_point 4: mount1 =", mount1)
+
+    mount2 := replace(mount1, "$(spath)", policy_data.common.spath)
+    print("allow_mount_point 4: mount2 =", mount2)
+
+    mount3 := replace(mount2, "$(b64_device_id)", base64url.encode(i_storage.source))
+    print("allow_mount_point 4: mount3 =", mount3)
+
+    mount3 == i_storage.mount_point
+
+    print("allow_mount_point 4: true")
 }
 
 # ExecProcessRequest.process.Capabilities
