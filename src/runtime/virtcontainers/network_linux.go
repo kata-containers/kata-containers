@@ -99,6 +99,8 @@ func LoadNetwork(netInfo persistapi.NetworkInfo) Network {
 			ep = &TapEndpoint{}
 		case IPVlanEndpointType:
 			ep = &IPVlanEndpoint{}
+		case VlanEndpointType:
+			ep = &VlanEndpoint{}
 		default:
 			networkLogger().WithField("endpoint-type", e.Type).Error("unknown endpoint type")
 			continue
@@ -195,6 +197,9 @@ func (n *LinuxNetwork) addSingleEndpoint(ctx context.Context, s *Sandbox, netInf
 		} else if netInfo.Iface.Type == "ipvlan" {
 			networkLogger().Info("ipvlan interface found")
 			endpoint, err = createIPVlanNetworkEndpoint(idx, netInfo.Iface.Name)
+		} else if netInfo.Iface.Type == "vlan" {
+			networkLogger().Info("vlan interface found")
+			endpoint, err = createVlanNetworkEndpoint(idx, netInfo.Iface.Name)
 		} else {
 			return nil, fmt.Errorf("Unsupported network interface: %s", netInfo.Iface.Type)
 		}
@@ -660,6 +665,8 @@ func getLinkForEndpoint(endpoint Endpoint, netHandle *netlink.Handle) (netlink.L
 		link = &netlink.Macvlan{}
 	case *IPVlanEndpoint:
 		link = &netlink.IPVlan{}
+	case *VlanEndpoint:
+		link = &netlink.Vlan{}
 	case *TuntapEndpoint:
 		link = &netlink.Tuntap{}
 	default:
@@ -694,6 +701,10 @@ func getLinkByName(netHandle *netlink.Handle, name string, expectedLink netlink.
 		}
 	case (&netlink.IPVlan{}).Type():
 		if l, ok := link.(*netlink.IPVlan); ok {
+			return l, nil
+		}
+	case (&netlink.Vlan{}).Type():
+		if l, ok := link.(*netlink.Vlan); ok {
 			return l, nil
 		}
 	default:
@@ -1297,7 +1308,7 @@ func networkInfoFromLink(handle *netlink.Handle, link netlink.Link) (NetworkInfo
 func addRxRateLimiter(endpoint Endpoint, maxRate uint64) error {
 	var linkName string
 	switch ep := endpoint.(type) {
-	case *VethEndpoint, *IPVlanEndpoint, *TuntapEndpoint, *MacvlanEndpoint:
+	case *VethEndpoint, *IPVlanEndpoint, *VlanEndpoint, *TuntapEndpoint, *MacvlanEndpoint:
 		netPair := endpoint.NetworkPair()
 		linkName = netPair.TapInterface.TAPIface.Name
 	case *MacvtapEndpoint, *TapEndpoint:
@@ -1454,7 +1465,7 @@ func addTxRateLimiter(endpoint Endpoint, maxRate uint64) error {
 	var netPair *NetworkInterfacePair
 	var linkName string
 	switch ep := endpoint.(type) {
-	case *VethEndpoint, *IPVlanEndpoint, *TuntapEndpoint, *MacvlanEndpoint:
+	case *VethEndpoint, *IPVlanEndpoint, *VlanEndpoint, *TuntapEndpoint, *MacvlanEndpoint:
 		netPair = endpoint.NetworkPair()
 		switch netPair.NetInterworkingModel {
 		// For those endpoints we've already used tcfilter as their inter-networking model,
@@ -1527,7 +1538,7 @@ func removeHTBQdisc(linkName string) error {
 func removeRxRateLimiter(endpoint Endpoint, networkNSPath string) error {
 	var linkName string
 	switch ep := endpoint.(type) {
-	case *VethEndpoint, *IPVlanEndpoint, *TuntapEndpoint, *MacvlanEndpoint:
+	case *VethEndpoint, *IPVlanEndpoint, *VlanEndpoint, *TuntapEndpoint, *MacvlanEndpoint:
 		netPair := endpoint.NetworkPair()
 		linkName = netPair.TapInterface.TAPIface.Name
 	case *MacvtapEndpoint, *TapEndpoint:
@@ -1548,7 +1559,7 @@ func removeRxRateLimiter(endpoint Endpoint, networkNSPath string) error {
 func removeTxRateLimiter(endpoint Endpoint, networkNSPath string) error {
 	var linkName string
 	switch ep := endpoint.(type) {
-	case *VethEndpoint, *IPVlanEndpoint, *TuntapEndpoint, *MacvlanEndpoint:
+	case *VethEndpoint, *IPVlanEndpoint, *VlanEndpoint, *TuntapEndpoint, *MacvlanEndpoint:
 		netPair := endpoint.NetworkPair()
 		switch netPair.NetInterworkingModel {
 		case NetXConnectTCFilterModel:

@@ -72,6 +72,10 @@ type IPVlanEndpoint struct {
 	NetPair NetworkInterfacePair
 }
 
+type VlanEndpoint struct {
+	NetPair NetworkInterfacePair
+}
+
 type VhostUserEndpoint struct {
 	// This is for showing information.
 	// Remove these fields won't impact anything.
@@ -93,6 +97,7 @@ type NetworkEndpoint struct {
 	Macvtap   *MacvtapEndpoint   `json:",omitempty"`
 	Tap       *TapEndpoint       `json:",omitempty"`
 	IPVlan    *IPVlanEndpoint    `json:",omitempty"`
+	Vlan      *VlanEndpoint      `json:",omitempty"`
 	Tuntap    *TuntapEndpoint    `json:",omitempty"`
 	Vfio      *VfioEndpoint      `json:",omitempty"`
 
