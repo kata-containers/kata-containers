@@ -417,6 +417,9 @@ pub struct CommonData {
     /// Regex prefix for shared file paths - e.g., "^$(cpath)/$(bundle-id)-[a-z0-9]{16}-".
     pub sfprefix: String,
 
+    /// Path to the shared sandbox storage - e.g., "/run/kata-containers/sandbox/storage".
+    pub spath: String,
+
     /// Regex for an IPv4 address.
     pub ipv4_a: String,
 
@@ -460,6 +463,10 @@ pub struct ClusterConfig {
     ///         - When changing the GID via runAsUser or runAsGroup, the new GID value *gets added
     ///           as the only value* in AdditionalGids.
     pub pause_container_id_policy: String,
+
+    /// Whether emptyDirs are encrypted with modified metadata in the
+    /// mount and a storage object for the block device.
+    pub encrypted_emptydir: bool,
 }
 
 /// VFIO device annotation patterns for runtime-assigned CDI annotations.

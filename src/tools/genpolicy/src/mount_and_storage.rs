@@ -113,19 +113,13 @@ pub fn get_mount_and_storage(
 
     if let Some(emptyDir) = &yaml_volume.emptyDir {
         let settings_volumes = &settings.volumes;
-        let mut volume: Option<&settings::EmptyDirVolume> = None;
+        let volume = match emptyDir.medium.as_deref() {
+            Some("Memory") => &settings_volumes.emptyDir_memory,
+            _ if settings.cluster_config.encrypted_emptydir => &settings_volumes.emptyDir_encrypted,
+            _ => &settings_volumes.emptyDir,
+        };
 
-        if let Some(medium) = &emptyDir.medium {
-            if medium == "Memory" {
-                volume = Some(&settings_volumes.emptyDir_memory);
-            }
-        }
-
-        if volume.is_none() {
-            volume = Some(&settings_volumes.emptyDir);
-        }
-
-        get_empty_dir_mount_and_storage(settings, p_mounts, storages, yaml_mount, volume.unwrap());
+        get_empty_dir_mount_and_storage(settings, p_mounts, storages, yaml_mount, volume);
     } else if yaml_volume.persistentVolumeClaim.is_some() || yaml_volume.azureFile.is_some() {
         get_shared_bind_mount(yaml_mount, p_mounts, "rprivate", "rw");
     } else if yaml_volume.hostPath.is_some() {
@@ -153,17 +147,23 @@ fn get_empty_dir_mount_and_storage(
     if yaml_mount.subPathExpr.is_none() {
         storages.push(agent::Storage {
             driver: settings_empty_dir.driver.clone(),
-            driver_options: Vec::new(),
+            driver_options: settings_empty_dir.driver_options.clone(),
             source: settings_empty_dir.source.clone(),
             fstype: settings_empty_dir.fstype.clone(),
             options: settings_empty_dir.options.clone(),
-            mount_point: format!("{}{}$", &settings_empty_dir.mount_point, &yaml_mount.name),
+            mount_point: if settings_empty_dir.mount_point.ends_with('$') {
+                settings_empty_dir.mount_point.clone()
+            } else {
+                format!("{}{}$", &settings_empty_dir.mount_point, &yaml_mount.name)
+            },
             fs_group: protobuf::MessageField::none(),
             special_fields: ::protobuf::SpecialFields::new(),
         });
     }
 
-    let source = if yaml_mount.subPathExpr.is_some() {
+    let source = if settings_empty_dir.mount_source.is_empty() {
+        String::new()
+    } else if yaml_mount.subPathExpr.is_some() {
         let file_name = Path::new(&yaml_mount.mountPath).file_name().unwrap();
         let name = OsString::from(file_name).into_string().unwrap();
         format!("{}{name}$", &settings.volumes.configMap.mount_source)
