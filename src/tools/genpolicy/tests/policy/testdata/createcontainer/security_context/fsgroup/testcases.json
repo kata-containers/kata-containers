@@ -163,8 +163,8 @@
               "rprivate",
               "rw"
             ],
-            "source": "/run/kata-containers/shared/containers/ba77faf442028eb9f3d849acb8ff55f3bc7e35d579dddcfec43fe75de2e7b2da/rootfs/local/tmp",
-            "type_": "local"
+            "source": "/run/kata-containers/sandbox/storage/MDAvMDA=",
+            "type_": "bind"
           },
           {
             "destination": "/etc/hosts",
@@ -337,19 +337,22 @@
           "fstype": "overlay",
           "mount_point": "/run/kata-containers/f86ec3cfa9c5e5a732744dbe844033126f0fdd84408df8809d19274b448e255d/rootfs",
           "options": [],
-          "source": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db"
+          "source": "registry.k8s.io/pause@sha256:3d380ca8864549e74af4b29c10f9cb0956236dfb01c40ca076fb6c37253234db",
+          "shared": false
         },
         {
-          "driver": "local",
-          "driver_options": [],
+          "driver": "blk",
+          "driver_options": [
+            "encryption_key=ephemeral"
+          ],
           "fs_group": null,
-          "fstype": "local",
-          "mount_point": "/run/kata-containers/shared/containers/ba77faf442028eb9f3d849acb8ff55f3bc7e35d579dddcfec43fe75de2e7b2da/rootfs/local/tmp",
+          "fstype": "ext4",
+          "mount_point": "/run/kata-containers/sandbox/storage/MDAvMDA=",
           "options": [
-            "mode=0777",
             "fsgid=1000"
           ],
-          "source": "local"
+          "source": "00/00",
+          "shared": true
         }
       ],
       "string_user": null

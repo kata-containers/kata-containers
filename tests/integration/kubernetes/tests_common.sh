@@ -137,6 +137,10 @@ adapt_common_policy_settings_for_non_coco() {
 	# Disable guest pull.
 	jq '.cluster_config.guest_pull = false' "${settings_dir}/genpolicy-settings.json" > temp.json
 	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
+
+	# Disable encrypted emptyDir.
+	jq '.cluster_config.encrypted_emptydir = false' "${settings_dir}/genpolicy-settings.json" > temp.json
+	sudo mv temp.json "${settings_dir}/genpolicy-settings.json"
 }
 
 # adapt common policy settings for AKS Hosts
