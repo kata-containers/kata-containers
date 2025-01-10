@@ -114,24 +114,18 @@ pub fn get_mount_and_storage(
 
     if let Some(emptyDir) = &yaml_volume.emptyDir {
         let settings_volumes = &settings.volumes;
-        let mut volume: Option<&settings::EmptyDirVolume> = None;
-
-        if let Some(medium) = &emptyDir.medium {
-            if medium == "Memory" {
-                volume = Some(&settings_volumes.emptyDir_memory);
-            }
-        }
-
-        if volume.is_none() {
-            volume = Some(&settings_volumes.emptyDir);
-        }
+        let volume = match emptyDir.medium.as_deref() {
+            Some("Memory") => &settings_volumes.emptyDir_memory,
+            _ if settings.cluster_config.encrypted_emptydir => &settings_volumes.emptyDir_encrypted,
+            _ => &settings_volumes.emptyDir,
+        };
 
         get_empty_dir_mount_and_storage(
             settings,
             p_mounts,
             storages,
             yaml_mount,
-            volume.unwrap(),
+            volume,
             pod_security_context,
         );
     } else if yaml_volume.persistentVolumeClaim.is_some() || yaml_volume.azureFile.is_some() {
@@ -170,12 +164,17 @@ fn get_empty_dir_mount_and_storage(
         }
         storages.push(agent::Storage {
             driver: settings_empty_dir.driver.clone(),
-            driver_options: Vec::new(),
+            driver_options: settings_empty_dir.driver_options.clone(),
             source: settings_empty_dir.source.clone(),
             fstype: settings_empty_dir.fstype.clone(),
             options,
-            mount_point: format!("{}{}$", &settings_empty_dir.mount_point, &yaml_mount.name),
+            mount_point: if settings_empty_dir.mount_point.ends_with('$') {
+                settings_empty_dir.mount_point.clone()
+            } else {
+                format!("{}{}$", &settings_empty_dir.mount_point, &yaml_mount.name)
+            },
             fs_group: protobuf::MessageField::none(),
+            shared: settings_empty_dir.shared,
             special_fields: ::protobuf::SpecialFields::new(),
         });
     }
@@ -184,6 +183,8 @@ fn get_empty_dir_mount_and_storage(
         let file_name = Path::new(&yaml_mount.mountPath).file_name().unwrap();
         let name = OsString::from(file_name).into_string().unwrap();
         format!("{}{name}$", &settings.volumes.configMap.mount_source)
+    } else if settings_empty_dir.mount_source.is_empty() {
+        String::new()
     } else {
         format!("{}{}$", &settings_empty_dir.mount_source, &yaml_mount.name)
     };
@@ -298,6 +299,7 @@ fn get_config_map_mount_and_storage(
             options: settings_config_map.options.clone(),
             mount_point: format!("{}{mount_path_str}$", &settings_config_map.mount_point),
             fs_group: protobuf::MessageField::none(),
+            shared: false,
             special_fields: ::protobuf::SpecialFields::new(),
         });
     }
