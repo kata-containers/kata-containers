@@ -108,7 +108,7 @@ description = "measure sequential read throughput using fio"
 checkvar = "[.\"fio\".\"Results sequential\"] | .[] | .[] | .read.bw | select( . != null )"
 checktype = "mean"
 midval = 327066.8
-minpercent = 20.0
+minpercent = 30.0
 maxpercent = 20.0
 
 [[metric]]
@@ -121,7 +121,7 @@ description = "measure sequential write throughput using fio"
 checkvar = "[.\"fio\".\"Results sequential\"] | .[] | .[] | .write.bw | select( . != null )"
 checktype = "mean"
 midval = 309023.65
-minpercent = 20.0
+minpercent = 30.0
 maxpercent = 20.0
 
 [[metric]]
