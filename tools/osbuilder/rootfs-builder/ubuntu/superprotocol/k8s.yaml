@@ -280,7 +280,7 @@ metadata:
   namespace: gpu-operator
 spec:
   repo: https://nvidia.github.io/gpu-operator
-  version: v24.3.0
+  version: v24.9.1
   chart: gpu-operator
   targetNamespace: gpu-operator
   valuesContent: |-
