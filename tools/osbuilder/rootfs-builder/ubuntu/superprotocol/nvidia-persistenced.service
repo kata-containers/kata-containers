@@ -9,5 +9,5 @@ Type=forking
 ExecStartPre=/usr/bin/nvidia-persistenced --uvm-persistence-mode --verbose
 ExecStart=/usr/bin/nvidia-smi conf-compute -srs 1
 ExecStopPost=/bin/rm -rf /var/run/nvidia-persistenced
-TimeoutStartSec=300
-TimeoutStopSec=300
+TimeoutStartSec=1000
+TimeoutStopSec=1000
