@@ -6,11 +6,8 @@ Before=systemd-backlight@backlight:nvidia_0.service
 
 [Service]
 Type=forking
-ExecStartPre=/usr/bin/nvidia-persistenced --uvm-persistence-mode --verbose
+ExecStartPre=/usr/bin/nvidia-persistenced --verbose
 ExecStart=/usr/bin/nvidia-smi conf-compute -srs 1
 ExecStopPost=/bin/rm -rf /var/run/nvidia-persistenced
 TimeoutStartSec=300
 TimeoutStopSec=300
-
-[Install]
-WantedBy=multi-user.target
