@@ -33,8 +33,6 @@ run_postbuild() {
 	chroot "$rootfs_dir" /bin/bash "/install_nvidia_drivers.sh"
 	rm -f "${rootfs_dir}/install_tdx_packages.sh"
 	rm -f "${rootfs_dir}/install_nvidia_drivers.sh"
- 	getent group nvidia-persistenced &>/dev/null || groupadd -g 143 nvidia-persistenced
-	getent passwd nvidia-persistenced &>/dev/null || useradd -c 'NVIDIA Persistence Daemon' -u 143 -g nvidia-persistenced -d '/' -s /sbin/nologin nvidia-persistenced
 	cp ${script_dir}/nvidia-persistenced.service ${rootfs_dir}/usr/lib/systemd/system/
 
 	chroot $rootfs_dir sed -i '1 s|^.*$|-:root:ALL|' /etc/security/access.conf
