@@ -64,7 +64,7 @@ setup() {
 	# "provider_settings": {},
 	# "annotations": {}
 	# }
-	kubectl create secret generic sealed-secret --from-literal='secret=sealed.fakejwsheader.ewogICAgInZlcnNpb24iOiAiMC4xLjAiLAogICAgInR5cGUiOiAidmF1bHQiLAogICAgIm5hbWUiOiAia2JzOi8vL2RlZmF1bHQvc2VhbGVkLXNlY3JldC90ZXN0IiwKICAgICJwcm92aWRlciI6ICJrYnMiLAogICAgInByb3ZpZGVyX3NldHRpbmdzIjoge30sCiAgICAiYW5ub3RhdGlvbnMiOiB7fQp9Cg==.fakesignature'
+	kubectl create secret generic sealed-secret --from-literal='secret=sealed.fakejwsheader.eyJ2ZXJzaW9uIjoiMC4xLjAiLCJ0eXBlIjoidmF1bHQiLCJuYW1lIjoia2JzOi8vL2RlZmF1bHQvc2VhbGVkLXNlY3JldC90ZXN0IiwicHJvdmlkZXIiOiJrYnMiLCJwcm92aWRlcl9zZXR0aW5ncyI6e30sImFubm90YXRpb25zIjp7fX0.fakesignature'
 
 	kubectl create secret generic not-sealed-secret --from-literal='secret=not_sealed_secret'
 
