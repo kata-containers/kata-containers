@@ -5,7 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 set -e
-set -x
+[ -n "$DEBUG" ] && set -x
 
 readonly BUILD_DIR="/kata-containers/tools/packaging/kata-deploy/local-build/build/"
 # catch errors and then assign
