@@ -101,7 +101,7 @@ setup() {
     cat $storage_config
 
     # Create persistent volume and persistent volume claim
-    kubectl create -f $storage_config
+    retry_kubectl_apply $storage_config
 
     pod_config=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${pod_config_template}").XXX")
     IMAGE="$image_pulled_time_less_than_default_time" NODE_NAME="$node" envsubst < "$pod_config_template" > "$pod_config"
@@ -146,7 +146,7 @@ setup() {
     cat $storage_config
 
     # Create persistent volume and persistent volume claim
-    kubectl create -f $storage_config
+    retry_kubectl_apply $storage_config
 
     pod_config=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${pod_config_template}").XXX")
     IMAGE="$large_image" NODE_NAME="$node" envsubst < "$pod_config_template" > "$pod_config"
@@ -191,7 +191,7 @@ setup() {
     cat $storage_config
 
     # Create persistent volume and persistent volume claim
-    kubectl create -f $storage_config
+    retry_kubectl_apply $storage_config
 
     pod_config=$(mktemp "${BATS_FILE_TMPDIR}/$(basename "${pod_config_template}").XXX")
     IMAGE="$large_image" NODE_NAME="$node" envsubst < "$pod_config_template" > "$pod_config"
